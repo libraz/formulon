@@ -41,15 +41,13 @@ struct PositionalArgSpec {
 // a larger value could not name the cursor the caller holds.
 constexpr double kMaxSafeInteger = 9007199254740991.0;
 
-bool RejectArgumentType(const Napi::CallbackInfo& info, std::size_t idx, const char* expected) {
+bool RejectArgumentType(const Napi::CallbackInfo& info, const char* expected) {
   Napi::TypeError::New(info.Env(), expected).ThrowAsJavaScriptException();
-  (void)idx;
   return false;
 }
 
-bool RejectArgumentRange(const Napi::CallbackInfo& info, std::size_t idx, const char* expected) {
+bool RejectArgumentRange(const Napi::CallbackInfo& info, const char* expected) {
   Napi::RangeError::New(info.Env(), expected).ThrowAsJavaScriptException();
-  (void)idx;
   return false;
 }
 
@@ -68,15 +66,26 @@ bool ValidatePositionalArgs(const Napi::CallbackInfo& info, const PositionalArgS
   const auto validate_integer = [&](std::size_t idx, double min_value, double max_value, const char* range_message) {
     const Napi::Value value = info[idx];
     if (!value.IsNumber()) {
-      return RejectArgumentType(info, idx, "positional argument must be a number");
+      return RejectArgumentType(info, "positional argument must be a number");
     }
     const double number = NumberValue(value, 0.0);
     if (!std::isfinite(number) || std::trunc(number) != number || number < min_value || number > max_value) {
-      return RejectArgumentRange(info, idx, range_message);
+      return RejectArgumentRange(info, range_message);
     }
     return true;
   };
-  constexpr double kU32Max = static_cast<double>(std::numeric_limits<std::uint32_t>::max());
+  // An optional position may be absent or `undefined`; `null` only when its bit is in `optional_null_mask`.
+  const auto validate_optional_integer = [&](std::size_t idx, std::uint64_t bit, double max_value,
+                                             const char* range_message) {
+    if (idx >= info.Length()) {
+      return true;
+    }
+    const Napi::Value value = info[idx];
+    if (value.IsNull() && (spec.optional_null_mask & bit) == 0) {
+      return RejectArgumentType(info, "positional argument must be a number");
+    }
+    return value.IsUndefined() || value.IsNull() || validate_integer(idx, 0.0, max_value, range_message);
+  };
 
   // Required positions are checked even past the supplied arguments, where
   // `info[idx]` reads `undefined`.
@@ -87,18 +96,12 @@ bool ValidatePositionalArgs(const Napi::CallbackInfo& info, const PositionalArgS
   for (std::size_t idx = 0; idx < positional_count; ++idx) {
     const std::uint64_t bit = std::uint64_t{1} << idx;
     if ((spec.u32_mask & bit) != 0 &&
-        !validate_integer(idx, 0.0, kU32Max, "positional argument is outside uint32 range")) {
+        !validate_integer(idx, 0.0, kUint32MaxNumber, "positional argument is outside uint32 range")) {
       return false;
     }
-    if ((spec.optional_u32_mask & bit) != 0 && idx < info.Length()) {
-      const Napi::Value value = info[idx];
-      if (value.IsNull() && (spec.optional_null_mask & bit) == 0) {
-        return RejectArgumentType(info, idx, "positional argument must be a number");
-      }
-      if (!value.IsUndefined() && !value.IsNull() &&
-          !validate_integer(idx, 0.0, kU32Max, "positional argument is outside uint32 range")) {
-        return false;
-      }
+    if ((spec.optional_u32_mask & bit) != 0 &&
+        !validate_optional_integer(idx, bit, kUint32MaxNumber, "positional argument is outside uint32 range")) {
+      return false;
     }
     if ((spec.i32_mask & bit) != 0 &&
         !validate_integer(idx, static_cast<double>(std::numeric_limits<std::int32_t>::min()),
@@ -110,27 +113,22 @@ bool ValidatePositionalArgs(const Napi::CallbackInfo& info, const PositionalArgS
         !validate_integer(idx, 0.0, kMaxSafeInteger, "positional argument is outside the safe-integer range")) {
       return false;
     }
-    if ((spec.optional_u64_mask & bit) != 0 && idx < info.Length()) {
-      const Napi::Value value = info[idx];
-      if (value.IsNull() && (spec.optional_null_mask & bit) == 0) {
-        return RejectArgumentType(info, idx, "positional argument must be a number");
-      }
-      if (!value.IsUndefined() && !value.IsNull() &&
-          !validate_integer(idx, 0.0, kMaxSafeInteger, "positional argument is outside the safe-integer range")) {
-        return false;
-      }
+    if ((spec.optional_u64_mask & bit) != 0 &&
+        !validate_optional_integer(idx, bit, kMaxSafeInteger,
+                                   "positional argument is outside the safe-integer range")) {
+      return false;
     }
     if ((spec.double_mask & bit) != 0 && !info[idx].IsNumber()) {
-      return RejectArgumentType(info, idx, "positional argument must be a number");
+      return RejectArgumentType(info, "positional argument must be a number");
     }
     if ((spec.string_mask & bit) != 0 && !info[idx].IsString()) {
-      return RejectArgumentType(info, idx, "positional argument must be a string");
+      return RejectArgumentType(info, "positional argument must be a string");
     }
     if ((spec.object_mask & bit) != 0 && !info[idx].IsObject()) {
-      return RejectArgumentType(info, idx, "positional argument must be an object");
+      return RejectArgumentType(info, "positional argument must be an object");
     }
     if ((spec.required_mask & bit) != 0 && info[idx].IsUndefined()) {
-      return RejectArgumentType(info, idx, "positional argument is required");
+      return RejectArgumentType(info, "positional argument is required");
     }
   }
   return true;
@@ -235,9 +233,7 @@ void Workbook::ApplyExternalMemoryEstimate(Napi::Env env, size_t bytes) {
 
 uint32_t Workbook::ArgU32(const Napi::CallbackInfo& info, size_t idx) {
   const double number = NumberArg(info, idx, 0.0);
-  return number >= 0.0 && number <= static_cast<double>(std::numeric_limits<uint32_t>::max())
-             ? static_cast<uint32_t>(number)
-             : 0U;
+  return number >= 0.0 && number <= kUint32MaxNumber ? static_cast<uint32_t>(number) : 0U;
 }
 
 int32_t Workbook::ArgI32(const Napi::CallbackInfo& info, size_t idx) {

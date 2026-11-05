@@ -38,6 +38,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -115,6 +116,24 @@ Napi::Object MakeStatus(Napi::Env env, fm_status_t code);
 /// way and the parity claim in `packages/npm-native/README.md` rests on it.
 Napi::Array FinishListResult(Napi::Env env, Napi::Array items, fm_status_t code);
 
+/// Fills `items` by asking `count_fn(size_t*)` for the element count and then
+/// `at_fn(size_t, Item*)` for each element, converting it with `to_js(item)`.
+/// Stops at the first failing status and returns it; returns 0 otherwise.
+template <typename Item, typename CountFn, typename AtFn, typename ToJs>
+fm_status_t CollectList(Napi::Array& items, CountFn count_fn, AtFn at_fn, ToJs to_js) {
+  std::size_t count = 0;
+  fm_status_t rc = count_fn(&count);
+  for (std::size_t i = 0; rc == 0 && i < count; ++i) {
+    Item item{};
+    rc = at_fn(i, &item);
+    if (rc != 0) {
+      break;
+    }
+    items.Set(static_cast<uint32_t>(i), to_js(item));
+  }
+  return rc;
+}
+
 /// Stamps an index getter's `status` onto the record it read, giving the
 /// `<Record> & {status}` result shape. A failed read passes the zero record,
 /// so every declared key is present on the failure path too.
@@ -180,6 +199,9 @@ Napi::Object MakeOptionalResult(Napi::Env env, fm_status_t code, int32_t present
 /// Builds the `{ status, rect: null, cells: [] }` placeholder for
 /// failure paths in `PivotLayout`.
 Napi::Object EmptyPivotLayoutResult(Napi::Env env, Napi::Object status);
+
+/// The largest uint32 value as a JS Number, the upper bound of uint32 checks.
+constexpr double kUint32MaxNumber = static_cast<double>(std::numeric_limits<std::uint32_t>::max());
 
 /// Translates an `fm_pivot_cell_t` into the JS shape.
 Napi::Object TranslatePivotCell(Napi::Env env, const fm_pivot_cell_t& cell);

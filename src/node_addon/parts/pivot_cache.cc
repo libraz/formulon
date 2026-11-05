@@ -50,15 +50,10 @@ Napi::Value Workbook::ListPivotCaches(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return FinishListResult(env, arr, kBindingInvalidHandle);
   }
-  std::size_t n = 0;
-  fm_status_t rc = fm_workbook_get_pivot_cache_count(handle_, &n);
-  for (std::size_t i = 0; rc == 0 && i < n; ++i) {
-    uint32_t cache_id = 0;
-    rc = fm_workbook_get_pivot_cache_id_at(handle_, i, &cache_id);
-    if (rc == 0) {
-      arr.Set(static_cast<uint32_t>(i), Napi::Number::New(env, cache_id));
-    }
-  }
+  const fm_status_t rc = CollectList<uint32_t>(
+      arr, [&](size_t* n) { return fm_workbook_get_pivot_cache_count(handle_, n); },
+      [&](size_t i, uint32_t* id) { return fm_workbook_get_pivot_cache_id_at(handle_, i, id); },
+      [&](uint32_t id) { return Napi::Number::New(env, id); });
   return FinishListResult(env, arr, rc);
 }
 

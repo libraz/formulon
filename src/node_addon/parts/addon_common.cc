@@ -368,7 +368,7 @@ uint32_t CheckedSpecReader::RequiredU32(const Napi::Object& owner, const char* k
     ReportType(key, "whole number");
     return 0U;
   }
-  if (number < 0.0 || number > static_cast<double>(std::numeric_limits<uint32_t>::max())) {
+  if (number < 0.0 || number > kUint32MaxNumber) {
     ReportRange(key, "uint32");
     return 0U;
   }

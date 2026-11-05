@@ -478,15 +478,10 @@ Napi::Value Workbook::ListPassthroughs(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return FinishListResult(env, arr, kBindingInvalidHandle);
   }
-  std::size_t n = 0;
-  fm_status_t rc = fm_workbook_get_passthrough_count(handle_, &n);
-  for (std::size_t i = 0; rc == 0 && i < n; ++i) {
-    const char* path = nullptr;
-    rc = fm_workbook_get_passthrough_at(handle_, i, &path);
-    if (rc == 0) {
-      arr.Set(static_cast<uint32_t>(i), JsString(env, path));
-    }
-  }
+  const fm_status_t rc = CollectList<const char*>(
+      arr, [&](size_t* n) { return fm_workbook_get_passthrough_count(handle_, n); },
+      [&](size_t i, const char** path) { return fm_workbook_get_passthrough_at(handle_, i, path); },
+      [&](const char* path) { return JsString(env, path); });
   return FinishListResult(env, arr, rc);
 }
 

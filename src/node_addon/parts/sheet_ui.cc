@@ -674,16 +674,10 @@ Napi::Value Workbook::GetThreadedComments(const Napi::CallbackInfo& info) {
     return MakeFieldResult(env, NullHandleError(env), "comments", arr);
   }
   const uint32_t sheet = ArgU32(info, 0);
-  size_t count = 0;
-  fm_status_t rc = fm_sheet_get_threaded_comment_count(handle_, sheet, &count);
-  for (size_t i = 0; rc == 0 && i < count; ++i) {
-    fm_threaded_comment_t c{};
-    rc = fm_sheet_get_threaded_comment_at(handle_, sheet, i, &c);
-    if (rc != 0) {
-      break;
-    }
-    arr.Set(static_cast<uint32_t>(i), ThreadedCommentToJs(env, c));
-  }
+  const fm_status_t rc = CollectList<fm_threaded_comment_t>(
+      arr, [&](size_t* n) { return fm_sheet_get_threaded_comment_count(handle_, sheet, n); },
+      [&](size_t i, fm_threaded_comment_t* c) { return fm_sheet_get_threaded_comment_at(handle_, sheet, i, c); },
+      [&](const fm_threaded_comment_t& c) { return ThreadedCommentToJs(env, c); });
   return MakeFieldResult(env, MakeStatus(env, rc), "comments", arr);
 }
 
@@ -781,16 +775,10 @@ Napi::Value Workbook::GetPersons(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeFieldResult(env, NullHandleError(env), "persons", arr);
   }
-  size_t count = 0;
-  fm_status_t rc = fm_workbook_get_person_count(handle_, &count);
-  for (size_t i = 0; rc == 0 && i < count; ++i) {
-    fm_person_t p{};
-    rc = fm_workbook_get_person_at(handle_, i, &p);
-    if (rc != 0) {
-      break;
-    }
-    arr.Set(static_cast<uint32_t>(i), PersonToJs(env, p));
-  }
+  const fm_status_t rc = CollectList<fm_person_t>(
+      arr, [&](size_t* n) { return fm_workbook_get_person_count(handle_, n); },
+      [&](size_t i, fm_person_t* p) { return fm_workbook_get_person_at(handle_, i, p); },
+      [&](const fm_person_t& p) { return PersonToJs(env, p); });
   return MakeFieldResult(env, MakeStatus(env, rc), "persons", arr);
 }
 

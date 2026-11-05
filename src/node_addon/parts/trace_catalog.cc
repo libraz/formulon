@@ -206,16 +206,10 @@ Napi::Value Workbook::FunctionMetadata(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::FunctionNames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
-  std::size_t n = 0;
-  fm_status_t rc = fm_get_function_count(&n);
-  for (std::size_t i = 0; rc == 0 && i < n; ++i) {
-    const char* name = nullptr;
-    rc = fm_get_function_name_at(i, &name);
-    if (rc != 0) {
-      break;
-    }
-    arr.Set(static_cast<uint32_t>(i), JsString(env, name));
-  }
+  const fm_status_t rc = CollectList<const char*>(
+      arr, [](size_t* n) { return fm_get_function_count(n); },
+      [](size_t i, const char** name) { return fm_get_function_name_at(i, name); },
+      [&](const char* name) { return JsString(env, name); });
   return FinishListResult(env, arr, rc);
 }
 

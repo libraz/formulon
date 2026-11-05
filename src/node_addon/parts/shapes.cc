@@ -182,16 +182,10 @@ Napi::Value Workbook::ListShapes(const Napi::CallbackInfo& info) {
     return FinishListResult(env, arr, kBindingInvalidHandle);
   }
   const uint32_t sheet = ArgU32(info, 0);
-  size_t count = 0;
-  fm_status_t rc = fm_sheet_get_shape_count(handle_, sheet, &count);
-  for (size_t i = 0; rc == 0 && i < count; ++i) {
-    fm_shape_t s{};
-    rc = fm_sheet_get_shape_at(handle_, sheet, i, &s);
-    if (rc != 0) {
-      break;
-    }
-    arr.Set(static_cast<uint32_t>(i), ShapeToJs(env, s));
-  }
+  const fm_status_t rc = CollectList<fm_shape_t>(
+      arr, [&](size_t* n) { return fm_sheet_get_shape_count(handle_, sheet, n); },
+      [&](size_t i, fm_shape_t* s) { return fm_sheet_get_shape_at(handle_, sheet, i, s); },
+      [&](const fm_shape_t& s) { return ShapeToJs(env, s); });
   return FinishListResult(env, arr, rc);
 }
 
