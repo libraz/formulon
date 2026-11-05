@@ -319,7 +319,12 @@ pugi::xml_node ensure_groups_list(pugi::xml_document& doc) {
   return list;
 }
 
-Expected<pugi::xml_node, Error> group_at(const pugi::xml_document& doc, std::size_t index) {
+// Parses `xml` into `doc` and returns its `index`-th group; a list that does
+// not parse holds no group.
+Expected<pugi::xml_node, Error> group_at(pugi::xml_document& doc, const std::string& xml, std::size_t index) {
+  if (!load(doc, xml)) {
+    return invalid("sparkline group: index out of range");
+  }
   const std::vector<pugi::xml_node> groups = group_nodes(doc);
   if (index >= groups.size()) {
     return invalid("sparkline group: index out of range");
@@ -365,10 +370,7 @@ Expected<void, Error> add_sparkline_group(std::string& ext_lst_xml, const Sparkl
 Expected<void, Error> update_sparkline_group(std::string& ext_lst_xml, std::size_t index, const SparklineGroup& group) {
   RETURN_IF_ERROR(validate_group(group));
   pugi::xml_document doc;
-  if (!load(doc, ext_lst_xml)) {
-    return invalid("sparkline group: index out of range");
-  }
-  ASSIGN_OR_RETURN(pugi::xml_node node, group_at(doc, index));
+  ASSIGN_OR_RETURN(pugi::xml_node node, group_at(doc, ext_lst_xml, index));
   apply_group(node, group);
   store(ext_lst_xml, doc);
   return Expected<void, Error>::Ok();
@@ -378,10 +380,7 @@ Expected<void, Error> set_group_sparklines(std::string& ext_lst_xml, std::size_t
                                            const std::vector<SparklineItem>& items) {
   RETURN_IF_ERROR(validate_items(items));
   pugi::xml_document doc;
-  if (!load(doc, ext_lst_xml)) {
-    return invalid("sparkline group: index out of range");
-  }
-  ASSIGN_OR_RETURN(pugi::xml_node node, group_at(doc, index));
+  ASSIGN_OR_RETURN(pugi::xml_node node, group_at(doc, ext_lst_xml, index));
   apply_items(node, items);
   store(ext_lst_xml, doc);
   return Expected<void, Error>::Ok();
@@ -389,10 +388,7 @@ Expected<void, Error> set_group_sparklines(std::string& ext_lst_xml, std::size_t
 
 Expected<void, Error> remove_sparkline_group(std::string& ext_lst_xml, std::size_t index) {
   pugi::xml_document doc;
-  if (!load(doc, ext_lst_xml)) {
-    return invalid("sparkline group: index out of range");
-  }
-  ASSIGN_OR_RETURN(pugi::xml_node node, group_at(doc, index));
+  ASSIGN_OR_RETURN(pugi::xml_node node, group_at(doc, ext_lst_xml, index));
   // Climb while the parent would be left without element children.
   pugi::xml_node doomed = node;
   while (doomed.parent() != doc.document_element()) {
