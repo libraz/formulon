@@ -445,16 +445,22 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     // cells actually emitted below; leading default-constructed slots must
     // not enlarge a span.
     spans.clear();
+    // Spans are kept ordered by segment as they are added.
     auto add_to_span = [&spans](std::uint32_t col) {
       const std::uint32_t segment = col / 1024U;
-      for (ColSpan& span : spans) {
-        if (span.segment == segment) {
-          span.first = std::min(span.first, col);
-          span.last = std::max(span.last, col);
-          return;
-        }
+      std::size_t at = 0;
+      while (at < spans.size() && spans[at].segment < segment) {
+        ++at;
+      }
+      if (at < spans.size() && spans[at].segment == segment) {
+        spans[at].first = std::min(spans[at].first, col);
+        spans[at].last = std::max(spans[at].last, col);
+        return;
       }
       spans.push_back(ColSpan{segment, col, col});
+      for (std::size_t i = spans.size() - 1U; i > at; --i) {
+        std::swap(spans[i], spans[i - 1U]);
+      }
     };
     if (row_cells != nullptr) {
       for (const auto& [col, cell] : *row_cells) {
@@ -470,7 +476,6 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
       }
     }
 
-    std::sort(spans.begin(), spans.end(), [](const ColSpan& a, const ColSpan& b) { return a.segment < b.segment; });
     EmitRowHeader(body, row, row_layout, sheet.format_defaults().zero_height, spans);
     // Ascending merge of stored entries and phantoms; a column in both takes the entry path unless it is style-only.
     RowCells::const_iterator entry_it = row_cells != nullptr ? row_cells->begin() : RowCells::const_iterator();
