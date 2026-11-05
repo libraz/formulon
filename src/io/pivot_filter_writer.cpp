@@ -3,7 +3,6 @@
 // serialised from the model, interleaved with retained source filters.
 
 #include <algorithm>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -68,18 +67,6 @@ bool ReEmitsSource(const pivot::PivotTable& table, const pivot::PivotFilter& fil
 }  // namespace detail
 
 namespace {
-
-/// A numeric filter payload; empty when unset, text, or not finite, which no
-/// file can spell.
-std::optional<double> FilterNumber(const std::variant<std::monostate, int, double, std::string>& value) {
-  if (const auto* d = std::get_if<double>(&value)) {
-    return std::isfinite(*d) ? std::optional<double>(*d) : std::nullopt;
-  }
-  if (const auto* i = std::get_if<int>(&value)) {
-    return static_cast<double>(*i);
-  }
-  return std::nullopt;
-}
 
 /// Appends `<customFilter operator="..." val="..."/>`; an empty `op` is the
 /// schema's default `equal` and is omitted, as Excel does.
@@ -178,8 +165,8 @@ bool AppendGeneratedFilter(std::string& out, const pivot::PivotFilter& filter, s
   const bool operandless = pivot::is_operandless_filter_type(type);
   const std::string* low_text = std::get_if<std::string>(&filter.value);
   const std::string* high_text = std::get_if<std::string>(&filter.value_high);
-  const std::optional<double> low = FilterNumber(filter.value);
-  const std::optional<double> high = FilterNumber(filter.value_high);
+  const std::optional<double> low = pivot::payload_number(filter.value);
+  const std::optional<double> high = pivot::payload_number(filter.value_high);
   if (caption ? low_text == nullptr || (ranged && high_text == nullptr)
               : !operandless && (!low.has_value() || (ranged && !high.has_value()))) {
     return false;

@@ -44,17 +44,6 @@ std::string_view payload_text(const std::variant<std::monostate, int, double, st
   return {};
 }
 
-// The numeric payload of `slot`; empty when unset, text, or not finite.
-std::optional<double> payload_number(const std::variant<std::monostate, int, double, std::string>& slot) {
-  if (const auto* d = std::get_if<double>(&slot)) {
-    return std::isfinite(*d) ? std::optional<double>(*d) : std::nullopt;
-  }
-  if (const auto* i = std::get_if<int>(&slot)) {
-    return static_cast<double>(*i);
-  }
-  return std::nullopt;
-}
-
 // The value a label comparison reads for `cell` of field `field_index`: a group
 // field's materialised number stands for its group item's text.
 Value label_value(const PivotCache& cache, std::size_t field_index, const Value& cell) {
@@ -452,6 +441,16 @@ bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
     }
   }
   return true;
+}
+
+std::optional<double> payload_number(const std::variant<std::monostate, int, double, std::string>& slot) {
+  if (const auto* d = std::get_if<double>(&slot)) {
+    return std::isfinite(*d) ? std::optional<double>(*d) : std::nullopt;
+  }
+  if (const auto* i = std::get_if<int>(&slot)) {
+    return static_cast<double>(*i);
+  }
+  return std::nullopt;
 }
 
 std::optional<std::string> caption_wildcard_pattern(FilterType type, std::string_view value) {

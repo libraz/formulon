@@ -23,6 +23,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 #include "eval/collated_wildcard.h"
@@ -134,6 +135,10 @@ DateWindow resolve_relative_period(FilterType type, const date_time::CivilTime& 
 /// `*` / `?` / `~` in `value` stays live. Empty for the other types, which
 /// do not match by an affixed pattern.
 std::optional<std::string> caption_wildcard_pattern(FilterType type, std::string_view value);
+
+/// The numeric payload of a filter operand slot; empty when unset, text, or
+/// not finite, which no file can spell.
+std::optional<double> payload_number(const std::variant<std::monostate, int, double, std::string>& slot);
 
 /// The index into `table.fields()` a filter applies to: the field its name
 /// resolves to, or, for a decoded entry whose name is still empty, its
