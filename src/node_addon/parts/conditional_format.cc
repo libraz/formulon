@@ -265,7 +265,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   formulon::c_api::BorrowedStringArena cfvo_strings;
   CheckedSpecReader reader(env);
   Napi::Array ranges_arr;
-  if (reader.Array(v, "ranges", &ranges_arr)) {
+  if (reader.RequiredArray(v, "ranges", &ranges_arr)) {
     const uint32_t n = ranges_arr.Length();
     if (!reader.ok()) {
       return env.Undefined();

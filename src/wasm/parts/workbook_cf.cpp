@@ -278,7 +278,11 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
   std::vector<fm_cf_icon_t> icon_set_icons;
   formulon::c_api::BorrowedStringArena cfvo_strings;
   JsNarrowNumericReader reader("addCfRule");
-  const std::vector<fm_cell_rect_t> merge_ranges = js_pull_ranges(v, "ranges", &reader);
+  const emscripten::val ranges_value = reader.value(v, "ranges", "rule.ranges");
+  std::vector<fm_cell_rect_t> merge_ranges;
+  if (reader.require_array(ranges_value, "rule.ranges")) {
+    merge_ranges = js_pull_range_array(ranges_value, "rule.ranges", &reader);
+  }
   std::vector<fm_cell_rect_t> ranges_buf;
   ranges_buf.reserve(merge_ranges.size());
   for (const fm_cell_rect_t& m : merge_ranges) {

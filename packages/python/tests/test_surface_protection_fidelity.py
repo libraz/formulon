@@ -6,6 +6,7 @@ import unittest
 
 from formulon import (
     CellRect,
+    ConditionalFormatInput,
     DataValidationInput,
     FormulonError,
     InvalidArgumentError,
@@ -106,6 +107,8 @@ class RangeInputTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             with self.assertRaises(TypeError):
                 DataValidationInput(type=3)  # type: ignore[call-arg]
+            with self.assertRaises(TypeError):
+                ConditionalFormatInput(type=0)  # type: ignore[call-arg]
             with self.assertRaises(TypeError):
                 wb.add_table(0, None, "T", "T", ["A"])  # type: ignore[arg-type]
             self.assertEqual(list(wb.iter_tables()), [])

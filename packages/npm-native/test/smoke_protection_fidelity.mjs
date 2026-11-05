@@ -154,6 +154,8 @@ test('range-list inputs need at least one rectangle', async () => {
   const wb = mod.Workbook.createDefault();
   assert.throws(() => wb.addProtectedRange(0, { name: 'Inputs' }), TypeError);
   assert.throws(() => wb.addValidation(0, { type: 3, formula1: '"A,B"' }), TypeError);
+  assert.throws(() => wb.addCfRule(0, { type: 0, formula1: 'TRUE' }), TypeError);
+  assert.equal(wb.getConditionalFormats(0).length, 0);
   assert.equal(wb.addValidation(0, { ranges: [], type: 3, formula1: '"A,B"' }).status, 2);
   assert.equal(wb.getValidations(0).length, 0);
   release(wb);
