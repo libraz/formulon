@@ -34,6 +34,8 @@ using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::text_or_empty;
+using formulon::c_api::parts::to_cell_rect;
+using formulon::c_api::parts::to_merge_range;
 using formulon::c_api::parts::validate_single_element_fragment;
 
 namespace {
@@ -86,19 +88,6 @@ fm_status_t require_typed(const Target& target, const char* api) {
                              (std::string(api) + ": AutoFilter did not parse into the typed model").c_str());
   }
   return 0;
-}
-
-fm_cell_rect_t to_fm(const formulon::MergeRange& r) {
-  return fm_cell_rect_t{r.first_row, r.first_col, r.last_row, r.last_col};
-}
-
-formulon::MergeRange from_fm(const fm_cell_rect_t& r) {
-  formulon::MergeRange out;
-  out.first_row = r.first_row;
-  out.first_col = r.first_col;
-  out.last_row = r.last_row;
-  out.last_col = r.last_col;
-  return out;
 }
 
 // --- model -> record --------------------------------------------------------
@@ -189,13 +178,13 @@ void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_aut
   }
 
   *out = fm_auto_filter_t{};
-  out->range = to_fm(filter.range);
+  out->range = to_cell_rect(filter.range);
   out->column_count = static_cast<uint32_t>(columns.size());
   out->columns = scratch->filter_column_scratch.adopt(std::move(columns));
   if (filter.sort.has_value()) {
     const formulon::SortState& sort = *filter.sort;
     out->has_sort = 1;
-    out->sort_ref = to_fm(sort.ref);
+    out->sort_ref = to_cell_rect(sort.ref);
     out->column_sort = sort.column_sort ? 1 : 0;
     out->case_sensitive = sort.case_sensitive ? 1 : 0;
     out->sort_method = static_cast<int32_t>(sort.sort_method);
@@ -203,7 +192,7 @@ void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_aut
     conditions.reserve(sort.conditions.size());
     for (const formulon::SortCondition& in : sort.conditions) {
       fm_sort_condition_t c{};
-      c.ref = to_fm(in.ref);
+      c.ref = to_cell_rect(in.ref);
       c.descending = in.descending ? 1 : 0;
       c.sort_by = static_cast<int32_t>(in.sort_by);
       c.custom_list = keep(in.custom_list);
@@ -352,7 +341,7 @@ fm_status_t sort_condition_from_fm(const fm_sort_condition_t& in, const char* ap
       rc != 0) {
     return rc;
   }
-  out->ref = from_fm(in.ref);
+  out->ref = to_merge_range(in.ref);
   out->descending = in.descending != 0;
   out->sort_by = static_cast<formulon::SortBy>(in.sort_by);
   out->custom_list = text_or_empty(in.custom_list);
@@ -374,7 +363,7 @@ fm_status_t filter_from_fm(const fm_auto_filter_t& in, const char* api, formulon
   if (auto rc = check_array(in.columns, in.column_count, api, "columns"); rc != 0) {
     return rc;
   }
-  out->range = from_fm(in.range);
+  out->range = to_merge_range(in.range);
   for (uint32_t i = 0; i < in.column_count; ++i) {
     formulon::FilterColumn column;
     if (auto rc = column_from_fm(in.columns[i], api, &column); rc != 0) {
@@ -394,7 +383,7 @@ fm_status_t filter_from_fm(const fm_auto_filter_t& in, const char* api, formulon
     return rc;
   }
   formulon::SortState sort;
-  sort.ref = from_fm(in.sort_ref);
+  sort.ref = to_merge_range(in.sort_ref);
   sort.column_sort = in.column_sort != 0;
   sort.case_sensitive = in.case_sensitive != 0;
   sort.sort_method = static_cast<formulon::SortMethod>(in.sort_method);

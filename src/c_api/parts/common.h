@@ -170,6 +170,14 @@ bool check_range_count(std::size_t n, const char* api);
 // ordered and inside the grid (`kInvalidArgument`).
 fm_status_t check_rect_list(const fm_cell_rect_t* ranges, std::size_t range_count, const char* api);
 
+// Field-for-field conversions between the engine range and the C rectangle.
+inline fm_cell_rect_t to_cell_rect(const formulon::MergeRange& r) {
+  return fm_cell_rect_t{r.first_row, r.first_col, r.last_row, r.last_col};
+}
+inline formulon::MergeRange to_merge_range(const fm_cell_rect_t& r) {
+  return formulon::MergeRange{r.first_row, r.first_col, r.last_row, r.last_col};
+}
+
 // Copies `ranges` into the handle's rectangle scratch (read-scratch-backed
 // lifetime) and returns the published array, or NULL when it is empty.
 const fm_cell_rect_t* publish_rects(const fm_workbook_t* wb, const std::vector<formulon::MergeRange>& ranges);

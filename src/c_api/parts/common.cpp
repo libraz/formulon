@@ -190,7 +190,7 @@ const fm_cell_rect_t* publish_rects(const fm_workbook_t* wb, const std::vector<f
   std::vector<fm_cell_rect_t> block;
   block.reserve(ranges.size());
   for (const formulon::MergeRange& r : ranges) {
-    block.push_back(fm_cell_rect_t{r.first_row, r.first_col, r.last_row, r.last_col});
+    block.push_back(to_cell_rect(r));
   }
   return scratch.adopt(std::move(block));
 }

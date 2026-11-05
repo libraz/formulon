@@ -61,15 +61,18 @@ fm_status_t set_invalid_error_code(const char* fn, fm_error_code_t error) {
                            (std::string(fn) + ": error code out of range").c_str(), "error=" + std::to_string(error));
 }
 
+fm_status_t cache_not_found(const char* fn, std::uint32_t cache_id) {
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                           (std::string(fn) + ": cache_id not found").c_str(), "cache_id=" + std::to_string(cache_id));
+}
+
 // Resolves `cache_id` to its cache, writing the binding error and returning
 // its status on a miss.
 fm_status_t resolve_cache(const fm_workbook_t* wb, std::uint32_t cache_id, const char* fn,
                           const formulon::pivot::PivotCache** out) {
   *out = find_cache(wb->workbook(), cache_id);
   if (*out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             (std::string(fn) + ": cache_id not found").c_str(),
-                             "cache_id=" + std::to_string(cache_id));
+    return cache_not_found(fn, cache_id);
   }
   return 0;
 }
@@ -82,9 +85,7 @@ fm_status_t resolve_cache_mut(fm_workbook_t* wb, std::uint32_t cache_id, const c
   }
   *out = find_cache_mut(wb->workbook(), cache_id);
   if (*out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             (std::string(fn) + ": cache_id not found").c_str(),
-                             "cache_id=" + std::to_string(cache_id));
+    return cache_not_found(fn, cache_id);
   }
   return 0;
 }
@@ -197,9 +198,7 @@ extern "C" fm_status_t fm_workbook_remove_pivot_cache(fm_workbook_t* wb, std::ui
       return 0;
     }
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                           "fm_workbook_remove_pivot_cache: cache_id not found",
-                           "cache_id=" + std::to_string(cache_id));
+  return cache_not_found("fm_workbook_remove_pivot_cache", cache_id);
 }
 
 extern "C" fm_status_t fm_workbook_get_pivot_cache_worksheet_source(const fm_workbook_t* wb, std::uint32_t cache_id,

@@ -38,6 +38,8 @@ using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::to_cell_rect;
+using formulon::c_api::parts::to_merge_range;
 
 namespace {
 
@@ -63,8 +65,7 @@ fm_status_t table_ref_text(const fm_cell_rect_t& rect, const char* api, std::str
     return rc;
   }
   out->clear();
-  formulon::append_a1_rectangle(*out,
-                                formulon::MergeRange{rect.first_row, rect.first_col, rect.last_row, rect.last_col});
+  formulon::append_a1_rectangle(*out, to_merge_range(rect));
   return 0;
 }
 
@@ -297,7 +298,7 @@ extern "C" fm_status_t fm_workbook_get_table(const fm_workbook_t* wb, size_t idx
   }
   *out_name = tables[idx].name.c_str();
   *out_display_name = tables[idx].display_name.c_str();
-  *out_rect = fm_cell_rect_t{rect->first_row, rect->first_col, rect->last_row, rect->last_col};
+  *out_rect = to_cell_rect(*rect);
   *out_sheet_index = tables[idx].sheet_index;
   return 0;
 }
