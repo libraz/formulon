@@ -17,6 +17,7 @@
 #include "eval/coerce.h"
 #include "eval/collation.h"
 #include "eval/dynamic_array/common.h"
+#include "eval/error_type_code.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
@@ -56,24 +57,7 @@ enum class XSearchMode : std::int8_t { FirstToLast = 1, LastToFirst = -1, Binary
 // Position of an error in ERROR.TYPE order (`#NULL!` 1 .. `#N/A` 7); other
 // errors sort after them.
 int error_order(ErrorCode code) {
-  switch (code) {
-    case ErrorCode::Null:
-      return 1;
-    case ErrorCode::Div0:
-      return 2;
-    case ErrorCode::Value:
-      return 3;
-    case ErrorCode::Ref:
-      return 4;
-    case ErrorCode::Name:
-      return 5;
-    case ErrorCode::Num:
-      return 6;
-    case ErrorCode::NA:
-      return 7;
-    default:
-      return 8;
-  }
+  return error_type_code(code).value_or(8);
 }
 
 // Three-way compare of (cell - lookup) honouring Excel 365's cross-type

@@ -123,10 +123,6 @@ bool sort_lane_less_keyed(const Value& key_a, const std::string* text_key_a, con
 int sort_lane_compare_keyed(const Value& key_a, const std::string* text_key_a, const Value& key_b,
                             const std::string* text_key_b, bool descending);
 
-/// Dynamic-array text order of the current eval profile. Returns `true` iff
-/// `a` sorts strictly before `b`.
-bool ascii_ci_less(std::string_view a, std::string_view b);
-
 /// Classifies `count` values into equivalence classes and writes one id per
 /// value to `out_ids`. Ids are dense from 0 in ascending SORT order (number <
 /// text < bool < error by code < blank); two values share an id iff they have

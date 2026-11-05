@@ -154,10 +154,6 @@ bool unique_lane_key(const ArrayValue& arr, std::uint32_t lane, bool by_col, std
   return true;
 }
 
-bool ascii_ci_less(std::string_view a, std::string_view b) {
-  return collate(a, b, current_eval_profile(), CollationStrength::kDynamic) < 0;
-}
-
 std::string sort_text_key(const Value& v) {
   if (!v.is_text()) {
     return std::string();
@@ -234,8 +230,6 @@ std::uint32_t collation_classes(const Value* values, std::size_t count, ExcelPro
   if (count == 0) {
     return 0;
   }
-  // Text keys follow the kind tag and the 8-byte length in the typed key.
-  constexpr std::size_t kTextKeyOffset = 1 + sizeof(std::uint64_t);
   std::unordered_map<std::string, std::uint32_t> provisional;
   std::vector<std::uint32_t> value_class(count);
   std::vector<const Value*> reps;
@@ -246,10 +240,10 @@ std::uint32_t collation_classes(const Value* values, std::size_t count, ExcelPro
     const bool ok = append_value_identity_key(values[i], profile, strength, &typed);
     assert(ok);
     (void)ok;
-    const auto inserted = provisional.emplace(typed, static_cast<std::uint32_t>(reps.size()));
+    const auto inserted = provisional.try_emplace(typed, static_cast<std::uint32_t>(reps.size()));
     if (inserted.second) {
       reps.push_back(&values[i]);
-      text_keys.push_back(values[i].is_text() ? typed.substr(kTextKeyOffset) : std::string());
+      text_keys.push_back(values[i].is_text() ? typed.substr(kValueIdentityTextKeyOffset) : std::string());
     }
     value_class[i] = inserted.first->second;
   }

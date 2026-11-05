@@ -11,6 +11,10 @@
 
 namespace formulon::eval {
 
+// Byte offset of a Text identity's collation key: the kind tag and the 8-byte
+// key length precede it.
+inline constexpr std::size_t kValueIdentityTextKeyOffset = 1 + sizeof(std::uint64_t);
+
 // Appends a typed, unambiguous identity for a scalar Value. The encoding is
 // shared by dynamic-array UNIQUE and callers that need keyed cell counts, so
 // both see the same kind-specific identity.

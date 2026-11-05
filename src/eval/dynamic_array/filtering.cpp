@@ -135,7 +135,7 @@ Value eval_unique_lazy(const parser::AstNode& call, Arena& arena, const Function
   std::string key;
   for (std::uint32_t i = 0; i < lanes; ++i) {
     if (dynamic_array::unique_lane_key(*array, i, by_col, &key)) {
-      const auto inserted = slot_of_key.emplace(key, static_cast<std::uint32_t>(distinct.size()));
+      const auto inserted = slot_of_key.try_emplace(key, static_cast<std::uint32_t>(distinct.size()));
       if (!inserted.second) {
         ++count[inserted.first->second];
         continue;

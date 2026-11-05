@@ -686,7 +686,6 @@ TEST(BuiltinsSortCollation, KeyedAndDirectComparatorsAgree) {
         EXPECT_EQ(sort_lane_less(b, a, desc), dynamic_array::sort_lane_less_keyed(b, &kb, a, &ka, desc));
       }
       EXPECT_EQ(sort_cell_less_asc(b, a), p.sort_first_is_b);
-      EXPECT_EQ(dynamic_array::ascii_ci_less(p.b, p.a), p.sort_first_is_b);
     }
   }
 }

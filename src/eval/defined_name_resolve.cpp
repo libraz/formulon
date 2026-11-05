@@ -77,7 +77,7 @@ bool current_sheet_index(const EvalContext& ctx, std::uint16_t* out) noexcept {
 const DefinedName* find_defined_name(const EvalContext& ctx, std::string_view name) noexcept {
   const Workbook* wb = ctx.workbook();
   std::uint16_t sheet_id = 0;
-  if (wb == nullptr || !current_sheet_index(ctx, &sheet_id)) {
+  if (wb == nullptr || wb->defined_names().empty() || !current_sheet_index(ctx, &sheet_id)) {
     return nullptr;
   }
   if (ctx.name_scope_sheet() >= 0) {

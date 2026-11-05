@@ -14,12 +14,14 @@
 
 #include <cmath>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 
 #include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
+#include "eval/error_type_code.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -180,39 +182,13 @@ Value ErrorType(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (v.kind() != ValueKind::Error) {
     return Value::error(ErrorCode::NA);
   }
-  switch (v.as_error()) {
-    case ErrorCode::Null:
-      return Value::number(1.0);
-    case ErrorCode::Div0:
-      return Value::number(2.0);
-    case ErrorCode::Value:
-      return Value::number(3.0);
-    case ErrorCode::Ref:
-      return Value::number(4.0);
-    case ErrorCode::Name:
-      return Value::number(5.0);
-    case ErrorCode::Num:
-      return Value::number(6.0);
-    case ErrorCode::NA:
-      return Value::number(7.0);
-    case ErrorCode::GettingData:
-      return Value::number(8.0);
-    // Newer Excel errors (Spill, Calc, Field, Blocked, Connect, External,
-    // Busy, Python, Unknown) are not in the classic 1..8 ERROR.TYPE table
-    // and Microsoft's ja-JP Excel 365 Mac surfaces varying codes for them
-    // depending on build. We fall through to #N/A (matching the
-    // "non-standard error -> N/A" safety rail) until the oracle corpus
-    // pins a definitive code.
-    case ErrorCode::Spill:
-    case ErrorCode::Calc:
-    case ErrorCode::Field:
-    case ErrorCode::Blocked:
-    case ErrorCode::Connect:
-    case ErrorCode::External:
-    case ErrorCode::Busy:
-    case ErrorCode::Python:
-    case ErrorCode::Unknown:
-      return Value::error(ErrorCode::NA);
+  // Newer Excel errors (Spill, Calc, Field, Blocked, Connect, External,
+  // Busy, Python, Unknown) are not in the classic 1..8 ERROR.TYPE table
+  // and Microsoft's ja-JP Excel 365 Mac surfaces varying codes for them
+  // depending on build. We answer #N/A (matching the "non-standard
+  // error -> N/A" safety rail) until the oracle corpus pins a definitive code.
+  if (const std::optional<int> code = error_type_code(v.as_error())) {
+    return Value::number(static_cast<double>(*code));
   }
   return Value::error(ErrorCode::NA);
 }

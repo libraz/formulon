@@ -150,6 +150,7 @@ bool append_expanded_range(const FunctionDef& def, const parser::Reference& lhs,
   }
   Value range_err = Value::blank();
   const std::vector<Value>& cells = expanded.value();
+  values->reserve(values->size() + cells.size());
   if (!append_range_sourced_values(def, cells.data(), cells.size(), values, &range_err)) {
     *immediate_return = range_err;
     return false;
@@ -518,6 +519,29 @@ enum class RangeArgOutcome {
   kReturn      // the call ends with `result`
 };
 
+// Ends a `collect_range_arg` branch on a failed argument: the error lands in
+// `values` per `propagate_errors`, else it is the call's result.
+RangeArgOutcome absorb_error_outcome(const FunctionDef& def, const Value& err, std::vector<Value>& values,
+                                     Value& result) {
+  if (!absorb_arg_error(def, err, &values)) {
+    result = err;
+    return RangeArgOutcome::kReturn;
+  }
+  return RangeArgOutcome::kCollected;
+}
+
+// Ends a `collect_range_arg` branch by appending `count` range cells through
+// `def`'s range filters.
+RangeArgOutcome append_sourced_outcome(const FunctionDef& def, const Value* cells, std::size_t count,
+                                       std::vector<Value>& values, Value& result) {
+  Value range_err = Value::blank();
+  if (!append_range_sourced_values(def, cells, count, &values, &range_err)) {
+    result = range_err;
+    return RangeArgOutcome::kReturn;
+  }
+  return RangeArgOutcome::kCollected;
+}
+
 // Collects the cells of an argument that denotes a range into `values`: for
 // a range-aware function every range-shaped spelling, for a scalar function
 // a bounded rectangle (which the caller then lifts element-wise). A failed
@@ -575,12 +599,7 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
     ErrorCode spill_err = ErrorCode::Ref;
     if (!resolve_spill_anchor_node(arg_node, arena, registry, ctx, &anchor_sheet, &anchor_row, &anchor_col,
                                    &spill_err)) {
-      const Value err = Value::error(spill_err);
-      if (!absorb_arg_error(def, err, &values)) {
-        result = err;
-        return RangeArgOutcome::kReturn;
-      }
-      return RangeArgOutcome::kCollected;
+      return absorb_error_outcome(def, Value::error(spill_err), values, result);
     }
     const Sheet* current = ctx.current_sheet();
     const Sheet* target = current;
@@ -595,31 +614,16 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
       }
     }
     if (target == nullptr || anchor_row >= Sheet::kMaxRows || anchor_col >= Sheet::kMaxCols) {
-      const Value err = Value::error(spill_err);
-      if (!absorb_arg_error(def, err, &values)) {
-        result = err;
-        return RangeArgOutcome::kReturn;
-      }
-      return RangeArgOutcome::kCollected;
+      return absorb_error_outcome(def, Value::error(spill_err), values, result);
     }
     // Copied out under the sheet lock, with Text payloads re-homed into
     // `arena`: the flattened values feed the whole call and outlive the
     // region they came from.
     std::vector<Value> region_cells;
     if (!ctx.read_spill_region(*target, anchor_row, anchor_col, arena, region_cells, nullptr, nullptr)) {
-      const Value err = Value::error(ErrorCode::Ref);
-      if (!absorb_arg_error(def, err, &values)) {
-        result = err;
-        return RangeArgOutcome::kReturn;
-      }
-      return RangeArgOutcome::kCollected;
+      return absorb_error_outcome(def, Value::error(ErrorCode::Ref), values, result);
     }
-    Value range_err = Value::blank();
-    if (!append_range_sourced_values(def, region_cells.data(), region_cells.size(), &values, &range_err)) {
-      result = range_err;
-      return RangeArgOutcome::kReturn;
-    }
-    return RangeArgOutcome::kCollected;
+    return append_sourced_outcome(def, region_cells.data(), region_cells.size(), values, result);
   }
   // 3-D reference argument (`SUM(Sheet2:Sheet3!A1)`): resolve the inclusive
   // sheet span by workbook order, read the referenced cell from each sheet,
@@ -632,20 +636,10 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
     std::vector<Value> ref3d_cells;
     ErrorCode ref3d_err = ErrorCode::Ref;
     if (!expand_ref3d_cells(arg_node, arena, registry, ctx, &ref3d_cells, &ref3d_err)) {
-      const Value err = Value::error(ref3d_err);
-      if (!absorb_arg_error(def, err, &values)) {
-        result = err;
-        return RangeArgOutcome::kReturn;
-      }
-      return RangeArgOutcome::kCollected;
+      return absorb_error_outcome(def, Value::error(ref3d_err), values, result);
     }
     had_range_shaped_arg = true;
-    Value range_err = Value::blank();
-    if (!append_range_sourced_values(def, ref3d_cells.data(), ref3d_cells.size(), &values, &range_err)) {
-      result = range_err;
-      return RangeArgOutcome::kReturn;
-    }
-    return RangeArgOutcome::kCollected;
+    return append_sourced_outcome(def, ref3d_cells.data(), ref3d_cells.size(), values, result);
   }
   // Cross-workbook 3-D reference (`SUM([Book.xlsx]S1:S2!A1)`): the same
   // flattening over the link's sheet order, read from its cache.
@@ -653,20 +647,10 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
       !arg_node.as_external_ref_sheet_end().empty()) {
     std::vector<Value> ref3d_cells;
     if (!collect_external_ref3d_cells(arg_node, arena, ctx, &ref3d_cells)) {
-      const Value err = Value::error(ErrorCode::Ref);
-      if (!absorb_arg_error(def, err, &values)) {
-        result = err;
-        return RangeArgOutcome::kReturn;
-      }
-      return RangeArgOutcome::kCollected;
+      return absorb_error_outcome(def, Value::error(ErrorCode::Ref), values, result);
     }
     had_range_shaped_arg = true;
-    Value range_err = Value::blank();
-    if (!append_range_sourced_values(def, ref3d_cells.data(), ref3d_cells.size(), &values, &range_err)) {
-      result = range_err;
-      return RangeArgOutcome::kReturn;
-    }
-    return RangeArgOutcome::kCollected;
+    return append_sourced_outcome(def, ref3d_cells.data(), ref3d_cells.size(), values, result);
   }
   if (def.accepts_ranges && arg_node.kind() == parser::NodeKind::RangeOp) {
     had_range_shaped_arg = true;
@@ -697,12 +681,7 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
       // validate sheet equality (mismatched qualifiers surface as #REF!).
       ErrorCode endpoint_err = ErrorCode::Ref;
       if (!union_endpoint_refs(arg_node, arena, registry, ctx, &chain_lhs, &chain_rhs, &endpoint_err)) {
-        const Value err = Value::error(endpoint_err);
-        if (!absorb_arg_error(def, err, &values)) {
-          result = err;
-          return RangeArgOutcome::kReturn;
-        }
-        return RangeArgOutcome::kCollected;
+        return absorb_error_outcome(def, Value::error(endpoint_err), values, result);
       }
     }
     Value range_return = Value::blank();
@@ -742,21 +721,11 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
       parser::Reference union_rhs{};
       ErrorCode endpoint_err = ErrorCode::Ref;
       if (!union_endpoint_refs(arg_node, arena, registry, ctx, &union_lhs, &union_rhs, &endpoint_err)) {
-        const Value err = Value::error(endpoint_err);
-        if (!absorb_arg_error(def, err, &values)) {
-          result = err;
-          return RangeArgOutcome::kReturn;
-        }
-        return RangeArgOutcome::kCollected;
+        return absorb_error_outcome(def, Value::error(endpoint_err), values, result);
       }
       auto expanded = ctx.expand_range(union_lhs, union_rhs, arena, registry);
       if (!expanded) {
-        const Value err = Value::error(expanded.error());
-        if (!absorb_arg_error(def, err, &values)) {
-          result = err;
-          return RangeArgOutcome::kReturn;
-        }
-        return RangeArgOutcome::kCollected;
+        return absorb_error_outcome(def, Value::error(expanded.error()), values, result);
       }
       const std::uint32_t rrows = union_rhs.row - union_lhs.row + 1u;
       const std::uint32_t rcols = union_rhs.col - union_lhs.col + 1u;
@@ -787,20 +756,10 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
     if (!compute_intersect_rect(arg_node.as_intersect_lhs(), arg_node.as_intersect_rhs(), arena, registry, ctx,
                                 &isect_sheet, &isect_r1, &isect_c1, &isect_r2, &isect_c2, &isect_disjoint,
                                 &isect_err)) {
-      const Value err = Value::error(isect_err);
-      if (!absorb_arg_error(def, err, &values)) {
-        result = err;
-        return RangeArgOutcome::kReturn;
-      }
-      return RangeArgOutcome::kCollected;
+      return absorb_error_outcome(def, Value::error(isect_err), values, result);
     }
     if (isect_disjoint) {
-      const Value err = Value::error(ErrorCode::Null);
-      if (!absorb_arg_error(def, err, &values)) {
-        result = err;
-        return RangeArgOutcome::kReturn;
-      }
-      return RangeArgOutcome::kCollected;
+      return absorb_error_outcome(def, Value::error(ErrorCode::Null), values, result);
     }
     had_range_shaped_arg = true;
     parser::Reference isect_lhs{};
@@ -876,12 +835,7 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
       strings::case_insensitive_eq(arg_node.as_call_name(), "IF")) {
     auto picked = resolve_range_arg(arg_node, arena, registry, ctx);
     if (!picked) {
-      const Value err = Value::error(picked.error());
-      if (!absorb_arg_error(def, err, &values)) {
-        result = err;
-        return RangeArgOutcome::kReturn;
-      }
-      return RangeArgOutcome::kCollected;
+      return absorb_error_outcome(def, Value::error(picked.error()), values, result);
     }
     if (picked.value().from_scalar && picked.value().cells.size() == 1U) {
       const Value& direct = picked.value().cells[0];
@@ -893,13 +847,7 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
       return RangeArgOutcome::kCollected;
     }
     had_range_shaped_arg = true;
-    Value range_err = Value::blank();
-    if (!append_range_sourced_values(def, picked.value().cells.data(), picked.value().cells.size(), &values,
-                                     &range_err)) {
-      result = range_err;
-      return RangeArgOutcome::kReturn;
-    }
-    return RangeArgOutcome::kCollected;
+    return append_sourced_outcome(def, picked.value().cells.data(), picked.value().cells.size(), values, result);
   }
   if (def.accepts_ranges && arg_node.kind() == parser::NodeKind::StructuredRef) {
     // Structured (table) reference argument: evaluate it and unpack the
@@ -922,12 +870,7 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
       had_range_shaped_arg = true;
       const ArrayValue* a = sr_val.as_array();
       const std::size_t sr_total = static_cast<std::size_t>(a->rows) * static_cast<std::size_t>(a->cols);
-      Value range_err = Value::blank();
-      if (!append_range_sourced_values(def, a->cells, sr_total, &values, &range_err)) {
-        result = range_err;
-        return RangeArgOutcome::kReturn;
-      }
-      return RangeArgOutcome::kCollected;
+      return append_sourced_outcome(def, a->cells, sr_total, values, result);
     }
     // Scalar single-cell result: push without range-filtering. Falling
     // through to the bottom-of-loop scalar handling would re-eval the
@@ -1243,7 +1186,7 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
     return fold_with_tails(*def, values, streamed);
   }
   if (lifted_last_arg != nullptr) {
-    return lift_last_arg_call(*def, values, *lifted_last_arg, arena);
+    return lift_last_arg_call(*def, std::move(values), *lifted_last_arg, arena);
   }
   // Hand the post-expansion size to the impl; aggregator bodies walk the
   // flattened vector directly.
