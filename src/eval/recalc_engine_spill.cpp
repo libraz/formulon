@@ -50,10 +50,6 @@ bool spill_intersects_range(const SpillFootprint& footprint, const CellRangeDepe
          static_cast<std::uint64_t>(range.col_first) < spill_col_end;
 }
 
-}  // namespace
-
-namespace {
-
 // Appends every populated coordinate of `range` to `out`. `extent` is the
 // rectangle's populated bounding box as reported by `Sheet::populated_extent`.
 // Walk the stored rows when that is the smaller set, matching Sheet's range
