@@ -95,9 +95,7 @@ std::string render_value(const fm_value_t& v) {
       out.append(v.u.boolean != 0 ? "TRUE" : "FALSE");
       return out;
     case FM_VAL_TEXT:
-      if (v.u.text != nullptr) {
-        out.append(v.u.text);
-      }
+      out.append(view_or_empty(v.u.text));
       return out;
     case FM_VAL_ERROR:
       out.append(error_display(v.u.error_code));

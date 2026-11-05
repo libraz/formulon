@@ -27,6 +27,14 @@ struct ValueArrayGuard {
   ~ValueArrayGuard() { fm_value_array_destroy(handle); }
 };
 
+struct PaginationGuard {
+  fm_pagination_t* handle = nullptr;
+  PaginationGuard() = default;
+  PaginationGuard(const PaginationGuard&) = delete;
+  PaginationGuard& operator=(const PaginationGuard&) = delete;
+  ~PaginationGuard() { fm_pagination_destroy(handle); }
+};
+
 struct SaveBuffer {
   std::uint8_t* data = nullptr;
   std::size_t len = 0;

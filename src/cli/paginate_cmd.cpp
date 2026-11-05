@@ -17,11 +17,6 @@
 namespace formulon::cli {
 namespace {
 
-struct PaginationGuard {
-  fm_pagination_t* handle = nullptr;
-  ~PaginationGuard() { fm_pagination_destroy(handle); }
-};
-
 void print_paginate_usage(std::ostream& out) {
   out << "Usage: formulon paginate [--sheet INDEX] [--] <in>\n"
       << "\n"
@@ -70,21 +65,14 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
       ++i;
       continue;
     }
-    if (!options_ended && !arg.empty() && arg[0] == '-') {
-      err << "formulon: paginate: unknown flag '" << arg << "'\n";
-      return kExitUsage;
-    }
-    if (input_seen) {
-      err << "formulon: paginate: only one input path may be supplied\n";
+    if (!accept_positional(arg, options_ended, input_seen, "paginate", "input path", err)) {
       return kExitUsage;
     }
     input_path.assign(arg);
     input_seen = true;
   }
   if (!input_seen) {
-    err << "formulon: paginate: missing input path\n";
-    print_paginate_usage(err);
-    return kExitUsage;
+    return missing_positional("paginate", "input path", print_paginate_usage, err);
   }
 
   WorkbookGuard workbook;

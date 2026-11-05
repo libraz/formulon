@@ -169,12 +169,7 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
       i = value_idx - 1;
       continue;
     }
-    if (!options_ended && !a.empty() && a[0] == '-') {
-      err << "formulon: eval: unknown flag '" << a << "'\n";
-      return kExitUsage;
-    }
-    if (formula_seen) {
-      err << "formulon: eval: only one formula may be supplied\n";
+    if (!accept_positional(a, options_ended, formula_seen, "eval", "formula", err)) {
       return kExitUsage;
     }
     formula = a;
@@ -182,9 +177,7 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
 
   if (!formula_seen) {
-    err << "formulon: eval: missing formula\n";
-    print_eval_usage(err);
-    return kExitUsage;
+    return missing_positional("eval", "formula", print_eval_usage, err);
   }
 
   WorkbookGuard wb;

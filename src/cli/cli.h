@@ -4,7 +4,7 @@
 // The CLI is a single-binary tool that drives the engine through the
 // stable C ABI declared in `c_api/formulon_c.h`. Each subcommand lives
 // in its own translation unit (`eval_cmd.cpp`, `recalc_cmd.cpp`,
-// `dump_cmd.cpp`); `main.cpp` parses `argv[1]`, dispatches to one of
+// `dump_cmd.cpp`, `paginate_cmd.cpp`); `main.cpp` parses `argv[1]`, dispatches to one of
 // the handlers below, and translates the returned `fm_status_t` into a
 // process exit code.
 //
@@ -235,6 +235,30 @@ inline CommonOption handle_common_option(const ArgList& args, std::size_t& index
     return CommonOption::kConsumed;
   }
   return CommonOption::kNotCommon;
+}
+
+/// Vets a non-option argument for a command taking exactly one positional
+/// operand named `noun`. Returns true when `arg` may be stored; otherwise
+/// writes the diagnostic and returns false, and the caller returns `kExitUsage`.
+inline bool accept_positional(std::string_view arg, bool options_ended, bool already_seen, std::string_view subcommand,
+                              std::string_view noun, std::ostream& err) {
+  if (!options_ended && !arg.empty() && arg[0] == '-') {
+    err << "formulon: " << subcommand << ": unknown flag '" << arg << "'\n";
+    return false;
+  }
+  if (already_seen) {
+    err << "formulon: " << subcommand << ": only one " << noun << " may be supplied\n";
+    return false;
+  }
+  return true;
+}
+
+/// Reports the missing positional operand, prints the usage text, and returns `kExitUsage`.
+inline int missing_positional(std::string_view subcommand, std::string_view noun, void (*print_usage_fn)(std::ostream&),
+                              std::ostream& err) {
+  err << "formulon: " << subcommand << ": missing " << noun << "\n";
+  print_usage_fn(err);
+  return kExitUsage;
 }
 
 /// `eval` handler: evaluate a single formula on a fresh empty workbook.

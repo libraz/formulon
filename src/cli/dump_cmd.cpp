@@ -232,12 +232,7 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
       }
       continue;
     }
-    if (!options_ended && !a.empty() && a[0] == '-') {
-      err << "formulon: dump: unknown flag '" << a << "'\n";
-      return kExitUsage;
-    }
-    if (input_seen) {
-      err << "formulon: dump: only one input path may be supplied\n";
+    if (!accept_positional(a, options_ended, input_seen, "dump", "input path", err)) {
       return kExitUsage;
     }
     input_path.assign(a);
@@ -245,9 +240,7 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
 
   if (!input_seen) {
-    err << "formulon: dump: missing input path\n";
-    print_dump_usage(err);
-    return kExitUsage;
+    return missing_positional("dump", "input path", print_dump_usage, err);
   }
 
   WorkbookGuard wb;

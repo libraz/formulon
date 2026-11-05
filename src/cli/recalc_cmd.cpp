@@ -155,12 +155,7 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
       ++i;
       continue;
     }
-    if (!options_ended && !a.empty() && a[0] == '-') {
-      err << "formulon: recalc: unknown flag '" << a << "'\n";
-      return kExitUsage;
-    }
-    if (input_seen) {
-      err << "formulon: recalc: only one input path may be supplied\n";
+    if (!accept_positional(a, options_ended, input_seen, "recalc", "input path", err)) {
       return kExitUsage;
     }
     input_path.assign(a);
@@ -168,9 +163,7 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
 
   if (!input_seen) {
-    err << "formulon: recalc: missing input path\n";
-    print_recalc_usage(err);
-    return kExitUsage;
+    return missing_positional("recalc", "input path", print_recalc_usage, err);
   }
   // "Never supplied" and "supplied as an empty string" are different
   // defects — the second usually means an unset shell variable expanded
@@ -237,10 +230,6 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
       err << "formulon: recalc: ok, wrote " << buf.len << " bytes to '" << output_path << "'\n";
     }
   }
-  // Suppress unused-stream warnings: the success path of `recalc` is
-  // intentionally silent on stdout. The block below is a no-op in
-  // release; in tests it lets the harness assert "no stdout chatter".
-  (void)out;
   return 0;
 }
 
