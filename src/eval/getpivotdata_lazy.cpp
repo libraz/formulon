@@ -88,6 +88,8 @@ namespace formulon {
 namespace eval {
 namespace {
 
+constexpr std::size_t kNoIndex = static_cast<std::size_t>(-1);
+
 // Mac's GETPIVOTDATA returns `#REF!` for nearly every error path: bad
 // anchor, unknown data field, unknown item label, partial address. The
 // only exception is an error argument (which propagates) and a
@@ -113,7 +115,7 @@ const parser::Reference* anchor_ref_of(const parser::AstNode& node) noexcept {
 
 // Locates `name` in `data_fields`, by display name first and then by the
 // name of the source field the entry aggregates. Returns the 0-based
-// index, or `static_cast<std::size_t>(-1)` when no data field matches.
+// index, or `kNoIndex` when no data field matches.
 //
 // Both spellings are accepted because Excel accepts both, and the one it
 // writes into a generated formula is the source-column name: a pivot
@@ -140,18 +142,18 @@ std::size_t find_data_field_index(const std::vector<pivot::PivotDataField>& data
       return i;
     }
   }
-  return static_cast<std::size_t>(-1);
+  return kNoIndex;
 }
 
 // Returns the depth (0-based) of `field_idx` inside `axis_order`, or
-// `static_cast<std::size_t>(-1)` when the field is not on this axis.
+// `kNoIndex` when the field is not on this axis.
 std::size_t depth_in_axis(const std::vector<std::uint32_t>& axis_order, std::size_t field_idx) noexcept {
   for (std::size_t i = 0; i < axis_order.size(); ++i) {
     if (axis_order[i] == field_idx) {
       return i;
     }
   }
-  return static_cast<std::size_t>(-1);
+  return kNoIndex;
 }
 
 struct LookupItem {
@@ -182,7 +184,7 @@ std::size_t axis_leaf_count(const pivot::AxisHierarchyNode& node) noexcept {
 // identifies one child uniquely. A renamed text item's label is its caption,
 // and its source text matches as a label too. Returns
 // the leaf index assigned to the matching leaf, or
-// `static_cast<std::size_t>(-1)` on any mismatch or ambiguity.
+// `kNoIndex` on any mismatch or ambiguity.
 //
 // The leaf index is computed by counting leaves in document order,
 // matching the dense indexing used by `pivot::evaluate` in
@@ -190,7 +192,7 @@ std::size_t axis_leaf_count(const pivot::AxisHierarchyNode& node) noexcept {
 std::size_t walk_hierarchy(const std::vector<pivot::AxisHierarchyNode>& roots,
                            const std::vector<LookupItem>& path) noexcept {
   if (path.empty() || roots.empty()) {
-    return static_cast<std::size_t>(-1);
+    return kNoIndex;
   }
   assert(eval_profile_scope_active());
   std::size_t leaf_index = 0;
@@ -221,12 +223,12 @@ std::size_t walk_hierarchy(const std::vector<pivot::AxisHierarchyNode>& roots,
     const pivot::AxisHierarchyNode* matched = nullptr;
     if (typed_matches != 0U) {
       if (typed_matches != 1U) {
-        return static_cast<std::size_t>(-1);
+        return kNoIndex;
       }
       matched = typed_match;
     } else {
       if (label_matches != 1U) {
-        return static_cast<std::size_t>(-1);
+        return kNoIndex;
       }
       matched = label_match;
     }
@@ -244,17 +246,17 @@ std::size_t walk_hierarchy(const std::vector<pivot::AxisHierarchyNode>& roots,
     if (depth + 1 == path.size()) {
       // Leaf level: this node must be a leaf for the path to be valid.
       if (!matched->children.empty()) {
-        return static_cast<std::size_t>(-1);
+        return kNoIndex;
       }
       return leaf_index;
     }
     if (matched->children.empty()) {
       // Path expects to descend further, but we're already at a leaf.
-      return static_cast<std::size_t>(-1);
+      return kNoIndex;
     }
     level = &matched->children;
   }
-  return static_cast<std::size_t>(-1);
+  return kNoIndex;
 }
 
 }  // namespace
@@ -389,14 +391,14 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
     const std::size_t row_depth = depth_in_axis(table->row_field_order(), *fi);
     const std::size_t col_depth = depth_in_axis(table->col_field_order(), *fi);
     LookupItem lookup_item{iv, std::move(item_text.value())};
-    if (row_depth != static_cast<std::size_t>(-1)) {
+    if (row_depth != kNoIndex) {
       if (row_path_set[row_depth]) {
         // Caller addressed the same field twice: ambiguous, refuse.
         return Value::error(kPivotRefError);
       }
       row_path[row_depth] = std::move(lookup_item);
       row_path_set[row_depth] = true;
-    } else if (col_depth != static_cast<std::size_t>(-1)) {
+    } else if (col_depth != kNoIndex) {
       if (col_path_set[col_depth]) {
         return Value::error(kPivotRefError);
       }
@@ -417,7 +419,7 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
   // fields the (row_leaf, col_leaf) coordinates address the correct
   // cell. Either way, the third index is the data-field slot.
   const std::size_t df_idx = find_data_field_index(table->data_fields(), table->fields(), data_field_text.value());
-  if (df_idx == static_cast<std::size_t>(-1)) {
+  if (df_idx == kNoIndex) {
     return Value::error(kPivotRefError);
   }
 
@@ -478,7 +480,7 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
       resolved_row_path.push_back(*item);
     }
     row_leaf = walk_hierarchy(pivot_result.rows, resolved_row_path);
-    if (row_leaf == static_cast<std::size_t>(-1)) {
+    if (row_leaf == kNoIndex) {
       return Value::error(kPivotRefError);
     }
   }
@@ -490,7 +492,7 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
       resolved_col_path.push_back(*item);
     }
     col_leaf = walk_hierarchy(pivot_result.cols, resolved_col_path);
-    if (col_leaf == static_cast<std::size_t>(-1)) {
+    if (col_leaf == kNoIndex) {
       return Value::error(kPivotRefError);
     }
   }
