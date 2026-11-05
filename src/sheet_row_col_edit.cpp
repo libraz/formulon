@@ -278,10 +278,6 @@ void ShiftConditionalFormats(std::vector<cf::ConditionalFormat>& formats, std::u
   formats = std::move(retained_formats);
 }
 
-void ShiftRowLayouts(std::vector<RowLayout>& rows, std::uint32_t index, std::uint32_t count, bool is_delete) {
-  ShiftRowAnchored(rows, index, count, is_delete);
-}
-
 void ShiftColumnLayouts(std::vector<ColumnLayout>& columns, std::uint32_t index, std::uint32_t count, bool is_delete) {
   std::vector<ColumnLayout> retained;
   retained.reserve(columns.size());
@@ -541,7 +537,7 @@ void Sheet::shift_sheet_metadata(const StructuralEdit& edit) {
                      validations_.end());
   ShiftConditionalFormats(conditional_formats_, index, count, is_delete, row_axis);
   if (row_axis) {
-    ShiftRowLayouts(layout_.row_overrides, index, count, is_delete);
+    ShiftRowAnchored(layout_.row_overrides, index, count, is_delete);
     ShiftAnchored(print_settings_.manual_row_breaks, &ManualBreak::id, index, count, is_delete, Sheet::kMaxRows);
   } else {
     ShiftColumnLayouts(layout_.columns, index, count, is_delete);
@@ -587,18 +583,17 @@ void Sheet::inherit_inserted_formatting_locked(const StructuralEdit& edit) {
     // Style and an explicit height carry over; hidden state and outline level do not.
     // Copied by value: inserting overrides below invalidates pointers into the list.
     const RowLayout* found = find_row_override(layout_, source);
-    const RowLayout styled_row = found != nullptr ? *found : RowLayout{};
-    const RowLayout* styled = &styled_row;
-    const bool inherits_height = styled->has_height && styled->custom_height;
-    if (styled->has_style || inherits_height) {
+    const RowLayout styled = found != nullptr ? *found : RowLayout{};
+    const bool inherits_height = styled.has_height && styled.custom_height;
+    if (styled.has_style || inherits_height) {
       for (std::uint32_t row = edit.index; row < end; ++row) {
         RowLayout entry;
         entry.row = row;
-        entry.has_style = styled->has_style;
-        entry.style_xf = styled->has_style ? styled->style_xf : 0U;
+        entry.has_style = styled.has_style;
+        entry.style_xf = styled.has_style ? styled.style_xf : 0U;
         if (inherits_height) {
           entry.has_height = true;
-          entry.height = styled->height;
+          entry.height = styled.height;
           entry.custom_height = true;
         }
         insert_row_override(layout_, entry);
