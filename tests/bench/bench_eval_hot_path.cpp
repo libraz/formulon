@@ -25,6 +25,7 @@
 #include <string_view>
 
 #include "eval/eval_context.h"
+#include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
 #include "parser/ast.h"
@@ -71,6 +72,11 @@ formulon::Workbook BuildFixture() {
     sh.set_cell_value(r, 0U, Value::number(static_cast<double>(r + 1)));
     sh.set_cell_value(r, 1U, Value::number(static_cast<double>(r + 1001)));
   }
+  // Text columns for the XLOOKUP scenarios: F is ASCII, G is kana; the last row is the one looked up.
+  for (std::uint32_t r = 0; r < 1000; ++r) {
+    sh.set_cell_value(r, 5U, Value::text("item" + std::to_string(r)));
+    sh.set_cell_value(r, 6U, Value::text("かな" + std::to_string(r)));
+  }
   // Lookup table: D1:E5 = (1, "one"), (2, "two"), ... (5, "five"). The
   // VLOOKUP scenario reads D2 -> E2 -> ... so the table must be sorted.
   static const char* kLabels[5] = {"one", "two", "three", "four", "five"};
@@ -98,6 +104,42 @@ void RunScenario(ankerl::nanobench::Bench& bench, const std::string& name, std::
       std::abort();
     }
     formulon::Arena eval_arena;
+    auto result = formulon::eval::evaluate(*root, eval_arena, formulon::eval::default_registry(), ctx);
+    ankerl::nanobench::doNotOptimizeAway(result);
+  });
+}
+
+// Twenty-sheet workbook for cross-sheet scenarios: Sheet12!A1:A1000 are formulas `=Sheet17!B1`, and
+// Sheet17!B1:B1000 hold numbers.
+formulon::Workbook BuildCrossSheetFixture() {
+  using formulon::Value;
+  formulon::Workbook wb = formulon::Workbook::create();
+  for (int i = 2; i <= 20; ++i) {
+    wb.add_sheet("Sheet" + std::to_string(i));
+  }
+  formulon::Sheet& src = wb.sheet(11);
+  formulon::Sheet& dst = wb.sheet(16);
+  for (std::uint32_t r = 0; r < 1000; ++r) {
+    dst.set_cell_value(r, 1U, Value::number(static_cast<double>(r + 1)));
+    src.set_cell_formula(r, 0U, "=Sheet17!B" + std::to_string(r + 1));
+  }
+  return wb;
+}
+
+// Evaluates `src` against a fresh recursion state each iteration so formula cells are not served from the memo.
+void RunStatefulScenario(ankerl::nanobench::Bench& bench, const std::string& name, std::string_view src,
+                         const formulon::Workbook& wb, const formulon::Sheet& current) {
+  bench.run(name, [&]() {
+    formulon::Arena parse_arena;
+    formulon::parser::Parser p(src, parse_arena);
+    formulon::parser::AstNode* root = p.parse();
+    if (root == nullptr) {
+      std::fprintf(stderr, "parse failed for: %.*s\n", static_cast<int>(src.size()), src.data());
+      std::abort();
+    }
+    formulon::Arena eval_arena;
+    formulon::eval::EvalState state;
+    const formulon::eval::EvalContext ctx(wb, current, state);
     auto result = formulon::eval::evaluate(*root, eval_arena, formulon::eval::default_registry(), ctx);
     ankerl::nanobench::doNotOptimizeAway(result);
   });
@@ -131,6 +173,18 @@ int main(int argc, char* argv[]) {
   RunScenario(bench, "branching IF(A1>0,A1*2,0)", "=IF(A1>0,A1*2,0)", ctx);
   RunScenario(bench, "VLOOKUP D2 against D1:E5", "=VLOOKUP(2,D1:E5,2,FALSE)", ctx);
   RunScenario(bench, "SUMIFS A1:A1000 by B>1500", "=SUMIFS(A1:A1000,B1:B1000,\">1500\")", ctx);
+
+  RunScenario(bench, "TEXT(A1:A1000,\"yyyy-mm-dd\")", "=TEXT(A1:A1000,\"yyyy-mm-dd\")", ctx);
+  RunScenario(bench, "TEXT(A1:A1000,\"#,##0.00\")", "=TEXT(A1:A1000,\"#,##0.00\")", ctx);
+
+  RunScenario(bench, "XLOOKUP ascii text over F1:F1000", "=XLOOKUP(\"item999\",F1:F1000,A1:A1000)", ctx);
+  RunScenario(bench, "XLOOKUP kana text over G1:G1000", "=XLOOKUP(\"かな999\",G1:G1000,A1:A1000)", ctx);
+
+  formulon::Workbook cross_wb = BuildCrossSheetFixture();
+  RunStatefulScenario(bench, "cross-sheet SUM(Sheet12!A1:A1000) of =Sheet17!B", "=SUM(Sheet12!A1:A1000)", cross_wb,
+                      cross_wb.sheet(0));
+  RunStatefulScenario(bench, "cross-sheet SUM(Sheet17!B1:B1000) literal", "=SUM(Sheet17!B1:B1000)", cross_wb,
+                      cross_wb.sheet(0));
 
   if (!json_path.empty()) {
     std::ofstream out(json_path);

@@ -7,6 +7,7 @@
 //   * COUNTIF shape: build the criterion key once, then compare every row's
 //     compare-strength key against it.
 //   * Classify shape: dense dynamic-strength class ids for every row.
+//   * Lookup shape: one prepared non-ASCII text query tested against every row (exact MATCH / XLOOKUP scan).
 // Rows mix kana, ideographs, full-width and ASCII text so both the ASCII fast
 // path and the general key path are exercised.
 
@@ -25,6 +26,7 @@
 
 #include "eval/collation.h"
 #include "eval/dynamic_array/common.h"
+#include "eval/lookups/common.h"
 #include "excel_profile.h"
 #include "value.h"
 
@@ -95,6 +97,23 @@ void ClassifyScenario(ankerl::nanobench::Bench& bench, const char* name, const s
   });
 }
 
+void LookupScenario(ankerl::nanobench::Bench& bench, const char* name, const std::vector<std::string>& rows,
+                    formulon::ExcelProfile profile, formulon::eval::CollationStrength strength) {
+  std::vector<formulon::Value> values;
+  values.reserve(rows.size());
+  for (const std::string& r : rows) {
+    values.push_back(formulon::Value::text(r));
+  }
+  bench.run(name, [&]() {
+    const formulon::eval::PreparedTextQuery query = formulon::eval::prepare_text_query("かあ", profile, strength);
+    std::size_t hits = 0;
+    for (const formulon::Value& v : values) {
+      hits += formulon::eval::prepared_text_query_matches(v, query, profile);
+    }
+    ankerl::nanobench::doNotOptimizeAway(hits);
+  });
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -123,6 +142,9 @@ int main(int argc, char* argv[]) {
   CountifScenario(bench, "COUNTIF 100k rows zh_CN", rows, zh);
   ClassifyScenario(bench, "CLASSIFY 100k rows ja_JP", rows, ja);
   ClassifyScenario(bench, "CLASSIFY 100k rows zh_CN", rows, zh);
+
+  LookupScenario(bench, "LOOKUP exact 100k rows ja_JP", rows, ja, formulon::eval::CollationStrength::kClassicExact);
+  LookupScenario(bench, "LOOKUP dynamic 100k rows zh_CN", rows, zh, formulon::eval::CollationStrength::kDynamic);
 
   if (!json_path.empty()) {
     std::ofstream out(json_path);
