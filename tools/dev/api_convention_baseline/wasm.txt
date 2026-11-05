@@ -1,0 +1,664 @@
+R0.coverage	active_sheet.get	activeSheet	`activeSheet` is a former name; the ledger has `getActiveSheet`
+R0.coverage	auto_filter_xml.get	getSheetAutoFilterXml	`getSheetAutoFilterXml` is a former name; the ledger has `getAutoFilterXml`
+R0.coverage	auto_filter_xml.set	setSheetAutoFilterXml	`setSheetAutoFilterXml` is a former name; the ledger has `setAutoFilterXml`
+R0.coverage	border.get_count	borderCount	`borderCount` is a former name; the ledger has `getBorderCount`
+R0.coverage	breaks.clear	clearSheetBreaks	`clearSheetBreaks` is a former name; the ledger has `clearBreaks`
+R0.coverage	calc_mode.get	calcMode	`calcMode` is a former name; the ledger has `getCalcMode`
+R0.coverage	calc_on_save.get	calcOnSave	`calcOnSave` is a former name; the ledger has `getCalcOnSave`
+R0.coverage	cell.get_at	cellAt	`cellAt` is a former name; the ledger has `getCellAt`
+R0.coverage	cell.get_count	cellCount	`cellCount` is a former name; the ledger has `getCellCount`
+R0.coverage	cell_style_xf.get_count	cellStyleXfCount	`cellStyleXfCount` is a former name; the ledger has `getCellStyleXfCount`
+R0.coverage	cell_xf.add	addXf	`addXf` is a former name; the ledger has `addCellXf`
+R0.coverage	cell_xf.get_count	xfCount	`xfCount` is a former name; the ledger has `getCellXfCount`
+R0.coverage	cf_formula.evaluate	evaluateConditionalFormula	`evaluateConditionalFormula` is a former name; the ledger has `evaluateCfFormula`
+R0.coverage	cf_rule.add	addConditionalFormat	`addConditionalFormat` is a former name; the ledger has `addCfRule`
+R0.coverage	cf_rule.clear	clearConditionalFormats	`clearConditionalFormats` is a former name; the ledger has `clearCfRules`
+R0.coverage	cf_rule.remove	removeConditionalFormatAt	`removeConditionalFormatAt` is a former name; the ledger has `removeCfRule`
+R0.coverage	chart.add	insertChart	`insertChart` is a former name; the ledger has `addChart`
+R0.coverage	chart_preview.get	previewChartData	`previewChartData` is a former name; the ledger has `getChartPreview`
+R0.coverage	col_break.add	addSheetColBreak	`addSheetColBreak` is a former name; the ledger has `addColBreak`
+R0.coverage	col_break.remove	removeSheetColBreak	`removeSheetColBreak` is a former name; the ledger has `removeColBreak`
+R0.coverage	col_breaks.list	getSheetColBreaks	`getSheetColBreaks` is a former name; the ledger has `listColBreaks`
+R0.coverage	col_overrides.list	getSheetColumns	`getSheetColumns` is a former name; the ledger has `listColOverrides`
+R0.coverage	collation_classes.get	collationClasses	`collationClasses` is a former name; the ledger has `getCollationClasses`
+R0.coverage	column_chars_to_pt.convert	columnCharsToPt	`columnCharsToPt` is a former name; the ledger has `convertColumnCharsToPt`
+R0.coverage	column_pt_to_chars.convert	columnPtToChars	`columnPtToChars` is a former name; the ledger has `convertColumnPtToChars`
+R0.coverage	comments.list	getComments	`getComments` is a former name; the ledger has `listComments`
+R0.coverage	date1904.get	date1904	`date1904` is a former name; the ledger has `getDate1904`
+R0.coverage	dependents.get	dependents	`dependents` is a former name; the ledger has `getDependents`
+R0.coverage	diagnostics.get	readDiagnostics	`readDiagnostics` is a former name; the ledger has `getDiagnostics`
+R0.coverage	dxf.get_count	dxfCount	`dxfCount` is a former name; the ledger has `getDxfCount`
+R0.coverage	error_display_name.get	errorDisplayName	`errorDisplayName` is a former name; the ledger has `getErrorDisplayName`
+R0.coverage	excel_profile_id.get	excelProfileId	`excelProfileId` is a former name; the ledger has `getExcelProfileId`
+R0.coverage	file_name.get	fileName	`fileName` is a former name; the ledger has `getFileName`
+R0.coverage	fill.get_count	fillCount	`fillCount` is a former name; the ledger has `getFillCount`
+R0.coverage	fit_to_page.set	setSheetFitToPage	`setSheetFitToPage` is a former name; the ledger has `setFitToPage`
+R0.coverage	font.get_count	fontCount	`fontCount` is a former name; the ledger has `getFontCount`
+R0.coverage	format_defaults.get	getSheetFormatDefaults	`getSheetFormatDefaults` is a former name; the ledger has `getFormatDefaults`
+R0.coverage	format_defaults.set	setSheetFormatDefaults	`setSheetFormatDefaults` is a former name; the ledger has `setFormatDefaults`
+R0.coverage	formula.evaluate	evaluateFormulaText	`evaluateFormulaText` is a former name; the ledger has `evaluateFormula`
+R0.coverage	freeze.set	setSheetFreeze	`setSheetFreeze` is a former name; the ledger has `setFreeze`
+R0.coverage	full_precision.get	fullPrecision	`fullPrecision` is a former name; the ledger has `getFullPrecision`
+R0.coverage	function_metadata.get	functionMetadata	`functionMetadata` is a former name; the ledger has `getFunctionMetadata`
+R0.coverage	function_names.list	functionNames	`functionNames` is a former name; the ledger has `listFunctionNames`
+R0.coverage	header_footer.set	setSheetHeaderFooter	`setSheetHeaderFooter` is a former name; the ledger has `setHeaderFooter`
+R0.coverage	header_footer_xml.get	getSheetHeaderFooterXml	`getSheetHeaderFooterXml` is a former name; the ledger has `getHeaderFooterXml`
+R0.coverage	header_footer_xml.set	setSheetHeaderFooterXml	`setSheetHeaderFooterXml` is a former name; the ledger has `setHeaderFooterXml`
+R0.coverage	hyperlinks.list	getHyperlinks	`getHyperlinks` is a former name; the ledger has `listHyperlinks`
+R0.coverage	image.add	insertImage	`insertImage` is a former name; the ledger has `addImage`
+R0.coverage	image_info.get	probeImage	`probeImage` is a former name; the ledger has `getImageInfo`
+R0.coverage	invalid_cells.get	listInvalidCells	`listInvalidCells` is a former name; the ledger has `getInvalidCells`
+R0.coverage	last_error_context.get	lastErrorContext	`lastErrorContext` is a former name; the ledger has `getLastErrorContext`
+R0.coverage	last_error_message.get	lastErrorMessage	`lastErrorMessage` is a former name; the ledger has `getLastErrorMessage`
+R0.coverage	locale_facts.get	localeFacts	`localeFacts` is a former name; the ledger has `getLocaleFacts`
+R0.coverage	merges.list	getMerges	`getMerges` is a former name; the ledger has `listMerges`
+R0.coverage	num_fmt_string.get	getNumFmt	`getNumFmt` is a former name; the ledger has `getNumFmtString`
+R0.coverage	page_margins.get	getSheetPageMargins	`getSheetPageMargins` is a former name; the ledger has `getPageMargins`
+R0.coverage	page_margins.set	setSheetPageMargins	`setSheetPageMargins` is a former name; the ledger has `setPageMargins`
+R0.coverage	page_margins_xml.get	getSheetPageMarginsXml	`getSheetPageMarginsXml` is a former name; the ledger has `getPageMarginsXml`
+R0.coverage	page_margins_xml.set	setSheetPageMarginsXml	`setSheetPageMarginsXml` is a former name; the ledger has `setPageMarginsXml`
+R0.coverage	page_setup.get	getSheetPageSetup	`getSheetPageSetup` is a former name; the ledger has `getPageSetup`
+R0.coverage	page_setup.set	setSheetPageSetup	`setSheetPageSetup` is a former name; the ledger has `setPageSetup`
+R0.coverage	page_setup_xml.get	getSheetPageSetupXml	`getSheetPageSetupXml` is a former name; the ledger has `getPageSetupXml`
+R0.coverage	page_setup_xml.set	setSheetPageSetupXml	`setSheetPageSetupXml` is a former name; the ledger has `setPageSetupXml`
+R0.coverage	pagination.get	paginate	`paginate` is a former name; the ledger has `getPagination`
+R0.coverage	pane_top_left.set	setSheetPaneTopLeft	`setSheetPaneTopLeft` is a former name; the ledger has `setPaneTopLeft`
+R0.coverage	partial.recalc	partialRecalc	`partialRecalc` is a former name; the ledger has `recalcViewport`
+R0.coverage	people.list	getPersons	`getPersons` is a former name; the ledger has `listPeople`
+R0.coverage	pinned_now.get	pinnedNow	`pinnedNow` is a former name; the ledger has `getPinnedNow`
+R0.coverage	pivot.create	pivotCreate	`pivotCreate` is a former name; the ledger has `addPivot`
+R0.coverage	pivot.get_count	pivotCount	`pivotCount` is a former name; the ledger has `getPivotCount`
+R0.coverage	pivot.remove	pivotRemove	`pivotRemove` is a former name; the ledger has `removePivot`
+R0.coverage	pivot_anchor.set	pivotSetAnchor	`pivotSetAnchor` is a former name; the ledger has `setPivotAnchor`
+R0.coverage	pivot_cache.create	pivotCacheCreate	`pivotCacheCreate` is a former name; the ledger has `addPivotCache`
+R0.coverage	pivot_cache.get_id	pivotCacheId	`pivotCacheId` is a former name; the ledger has `getPivotCacheId`
+R0.coverage	pivot_cache.remove	pivotCacheRemove	`pivotCacheRemove` is a former name; the ledger has `removePivotCache`
+R0.coverage	pivot_cache_calculated_field.add	pivotCacheCalculatedFieldAdd	`pivotCacheCalculatedFieldAdd` is a former name; the ledger has `addPivotCacheCalculatedField`
+R0.coverage	pivot_cache_calculated_field.remove	pivotCacheCalculatedFieldRemove	`pivotCacheCalculatedFieldRemove` is a former name; the ledger has `removePivotCacheCalculatedField`
+R0.coverage	pivot_cache_calculated_field_formula.set	pivotCacheCalculatedFieldSetFormula	`pivotCacheCalculatedFieldSetFormula` is a former name; the ledger has `setPivotCacheCalculatedFieldFormula`
+R0.coverage	pivot_cache_calculated_item.add	pivotCacheCalculatedItemAdd	`pivotCacheCalculatedItemAdd` is a former name; the ledger has `addPivotCacheCalculatedItem`
+R0.coverage	pivot_cache_calculated_item.get	pivotCacheCalculatedItemAt	`pivotCacheCalculatedItemAt` is a former name; the ledger has `getPivotCacheCalculatedItem`
+R0.coverage	pivot_cache_calculated_item.get_count	pivotCacheCalculatedItemCount	`pivotCacheCalculatedItemCount` is a former name; the ledger has `getPivotCacheCalculatedItemCount`
+R0.coverage	pivot_cache_calculated_item.move	pivotCacheCalculatedItemMove	`pivotCacheCalculatedItemMove` is a former name; the ledger has `movePivotCacheCalculatedItem`
+R0.coverage	pivot_cache_calculated_item.remove	pivotCacheCalculatedItemRemove	`pivotCacheCalculatedItemRemove` is a former name; the ledger has `removePivotCacheCalculatedItem`
+R0.coverage	pivot_cache_calculated_item_formula.set	pivotCacheCalculatedItemSetFormula	`pivotCacheCalculatedItemSetFormula` is a former name; the ledger has `setPivotCacheCalculatedItemFormula`
+R0.coverage	pivot_cache_field.add	pivotCacheFieldAdd	`pivotCacheFieldAdd` is a former name; the ledger has `addPivotCacheField`
+R0.coverage	pivot_cache_field.clear	pivotCacheFieldClear	`pivotCacheFieldClear` is a former name; the ledger has `clearPivotCacheFields`
+R0.coverage	pivot_cache_field.get_count	pivotCacheFieldCount	`pivotCacheFieldCount` is a former name; the ledger has `getPivotCacheFieldCount`
+R0.coverage	pivot_cache_field_formula.get	pivotCacheFieldFormula	`pivotCacheFieldFormula` is a former name; the ledger has `getPivotCacheFieldFormula`
+R0.coverage	pivot_cache_field_name.get	pivotCacheFieldName	`pivotCacheFieldName` is a former name; the ledger has `getPivotCacheFieldName`
+R0.coverage	pivot_cache_field_shared_item.get_count	pivotCacheFieldSharedItemCount	`pivotCacheFieldSharedItemCount` is a former name; the ledger has `getPivotCacheFieldSharedItemCount`
+R0.coverage	pivot_cache_field_shared_item_blank.add	pivotCacheFieldAddSharedItemBlank	`pivotCacheFieldAddSharedItemBlank` is a former name; the ledger has `addPivotCacheFieldSharedItemBlank`
+R0.coverage	pivot_cache_field_shared_item_bool.add	pivotCacheFieldAddSharedItemBool	`pivotCacheFieldAddSharedItemBool` is a former name; the ledger has `addPivotCacheFieldSharedItemBool`
+R0.coverage	pivot_cache_field_shared_item_date.add	pivotCacheFieldAddSharedItemDate	`pivotCacheFieldAddSharedItemDate` is a former name; the ledger has `addPivotCacheFieldSharedItemDate`
+R0.coverage	pivot_cache_field_shared_item_date.is	pivotCacheFieldSharedItemIsDate	`pivotCacheFieldSharedItemIsDate` is a former name; the ledger has `isPivotCacheFieldSharedItemDate`
+R0.coverage	pivot_cache_field_shared_item_error.add	pivotCacheFieldAddSharedItemError	`pivotCacheFieldAddSharedItemError` is a former name; the ledger has `addPivotCacheFieldSharedItemError`
+R0.coverage	pivot_cache_field_shared_item_number.add	pivotCacheFieldAddSharedItemNumber	`pivotCacheFieldAddSharedItemNumber` is a former name; the ledger has `addPivotCacheFieldSharedItemNumber`
+R0.coverage	pivot_cache_field_shared_item_text.add	pivotCacheFieldAddSharedItemText	`pivotCacheFieldAddSharedItemText` is a former name; the ledger has `addPivotCacheFieldSharedItemText`
+R0.coverage	pivot_cache_field_shared_item_value.get	pivotCacheFieldSharedItemValue	`pivotCacheFieldSharedItemValue` is a former name; the ledger has `getPivotCacheFieldSharedItemValue`
+R0.coverage	pivot_cache_field_shared_items.clear	pivotCacheFieldClearSharedItems	`pivotCacheFieldClearSharedItems` is a former name; the ledger has `clearPivotCacheFieldSharedItems`
+R0.coverage	pivot_cache_options.get	pivotCacheGetOptions	`pivotCacheGetOptions` is a former name; the ledger has `getPivotCacheOptions`
+R0.coverage	pivot_cache_options.set	pivotCacheSetOptions	`pivotCacheSetOptions` is a former name; the ledger has `setPivotCacheOptions`
+R0.coverage	pivot_cache_record.add	pivotCacheRecordAdd	`pivotCacheRecordAdd` is a former name; the ledger has `addPivotCacheRecord`
+R0.coverage	pivot_cache_record.clear	pivotCacheRecordClear	`pivotCacheRecordClear` is a former name; the ledger has `clearPivotCacheRecords`
+R0.coverage	pivot_cache_record.get_count	pivotCacheRecordCount	`pivotCacheRecordCount` is a former name; the ledger has `getPivotCacheRecordCount`
+R0.coverage	pivot_cache_record_blank.set	pivotCacheRecordSetBlank	`pivotCacheRecordSetBlank` is a former name; the ledger has `setPivotCacheRecordBlank`
+R0.coverage	pivot_cache_record_bool.set	pivotCacheRecordSetBool	`pivotCacheRecordSetBool` is a former name; the ledger has `setPivotCacheRecordBool`
+R0.coverage	pivot_cache_record_date.set	pivotCacheRecordSetDate	`pivotCacheRecordSetDate` is a former name; the ledger has `setPivotCacheRecordDate`
+R0.coverage	pivot_cache_record_error.set	pivotCacheRecordSetError	`pivotCacheRecordSetError` is a former name; the ledger has `setPivotCacheRecordError`
+R0.coverage	pivot_cache_record_number.set	pivotCacheRecordSetNumber	`pivotCacheRecordSetNumber` is a former name; the ledger has `setPivotCacheRecordNumber`
+R0.coverage	pivot_cache_record_text.set	pivotCacheRecordSetText	`pivotCacheRecordSetText` is a former name; the ledger has `setPivotCacheRecordText`
+R0.coverage	pivot_cache_worksheet_source.get	pivotCacheGetWorksheetSource	`pivotCacheGetWorksheetSource` is a former name; the ledger has `getPivotCacheWorksheetSource`
+R0.coverage	pivot_cache_worksheet_source.set	pivotCacheSetWorksheetSource	`pivotCacheSetWorksheetSource` is a former name; the ledger has `setPivotCacheWorksheetSource`
+R0.coverage	pivot_col_field_order.get	pivotColFieldOrder	`pivotColFieldOrder` is a former name; the ledger has `getPivotColFieldOrder`
+R0.coverage	pivot_col_field_order.set	pivotSetColFieldOrder	`pivotSetColFieldOrder` is a former name; the ledger has `setPivotColFieldOrder`
+R0.coverage	pivot_data_field.add	pivotDataFieldAdd	`pivotDataFieldAdd` is a former name; the ledger has `addPivotDataField`
+R0.coverage	pivot_data_field.clear	pivotDataFieldClear	`pivotDataFieldClear` is a former name; the ledger has `clearPivotDataFields`
+R0.coverage	pivot_data_field.get	pivotDataFieldAt	`pivotDataFieldAt` is a former name; the ledger has `getPivotDataField`
+R0.coverage	pivot_data_field.get_count	pivotDataFieldCount	`pivotDataFieldCount` is a former name; the ledger has `getPivotDataFieldCount`
+R0.coverage	pivot_data_field.set	pivotDataFieldSet	`pivotDataFieldSet` is a former name; the ledger has `setPivotDataField`
+R0.coverage	pivot_data_field_default_name.get	pivotDataFieldDefaultName	`pivotDataFieldDefaultName` is a former name; the ledger has `getPivotDataFieldDefaultName`
+R0.coverage	pivot_field.add	pivotFieldAdd	`pivotFieldAdd` is a former name; the ledger has `addPivotField`
+R0.coverage	pivot_field.clear	pivotFieldClear	`pivotFieldClear` is a former name; the ledger has `clearPivotFields`
+R0.coverage	pivot_field.get	pivotFieldAt	`pivotFieldAt` is a former name; the ledger has `getPivotField`
+R0.coverage	pivot_field.get_count	pivotFieldCount	`pivotFieldCount` is a former name; the ledger has `getPivotFieldCount`
+R0.coverage	pivot_field_axis.set	pivotFieldSetAxis	`pivotFieldSetAxis` is a former name; the ledger has `setPivotFieldAxis`
+R0.coverage	pivot_field_custom_name.set	pivotFieldSetCustomName	`pivotFieldSetCustomName` is a former name; the ledger has `setPivotFieldCustomName`
+R0.coverage	pivot_field_date_group.clear	pivotFieldClearDateGroup	`pivotFieldClearDateGroup` is a former name; the ledger has `clearPivotFieldDateGroup`
+R0.coverage	pivot_field_date_group.set	pivotFieldSetDateGroup	`pivotFieldSetDateGroup` is a former name; the ledger has `setPivotFieldDateGroup`
+R0.coverage	pivot_field_default_subtotal.set	pivotFieldSetDefaultSubtotal	`pivotFieldSetDefaultSubtotal` is a former name; the ledger has `setPivotFieldDefaultSubtotal`
+R0.coverage	pivot_field_fill_down_labels.set	pivotFieldSetFillDownLabels	`pivotFieldSetFillDownLabels` is a former name; the ledger has `setPivotFieldFillDownLabels`
+R0.coverage	pivot_field_insert_blank_row.set	pivotFieldSetInsertBlankRow	`pivotFieldSetInsertBlankRow` is a former name; the ledger has `setPivotFieldInsertBlankRow`
+R0.coverage	pivot_field_item.add	pivotFieldAddItem	`pivotFieldAddItem` is a former name; the ledger has `addPivotFieldItem`
+R0.coverage	pivot_field_item.add_at	pivotFieldAddItemAt	`pivotFieldAddItemAt` is a former name; the ledger has `addPivotFieldSharedItem`
+R0.coverage	pivot_field_item.get	pivotFieldItemAt	`pivotFieldItemAt` is a former name; the ledger has `getPivotFieldItem`
+R0.coverage	pivot_field_item.get_count	pivotFieldItemCount	`pivotFieldItemCount` is a former name; the ledger has `getPivotFieldItemCount`
+R0.coverage	pivot_field_item_caption.set	pivotFieldSetItemCaption	`pivotFieldSetItemCaption` is a former name; the ledger has `setPivotFieldItemCaption`
+R0.coverage	pivot_field_item_show_detail.set	pivotFieldSetItemShowDetail	`pivotFieldSetItemShowDetail` is a former name; the ledger has `setPivotFieldItemShowDetail`
+R0.coverage	pivot_field_item_visible.set	pivotFieldSetItemVisible	`pivotFieldSetItemVisible` is a former name; the ledger has `setPivotFieldItemVisible`
+R0.coverage	pivot_field_items.clear	pivotFieldClearItems	`pivotFieldClearItems` is a former name; the ledger has `clearPivotFieldItems`
+R0.coverage	pivot_field_number_format.set	pivotFieldSetNumberFormat	`pivotFieldSetNumberFormat` is a former name; the ledger has `setPivotFieldNumberFormat`
+R0.coverage	pivot_field_show_all.set	pivotFieldSetShowAll	`pivotFieldSetShowAll` is a former name; the ledger has `setPivotFieldShowAll`
+R0.coverage	pivot_field_show_detail.set	pivotFieldSetShowDetail	`pivotFieldSetShowDetail` is a former name; the ledger has `setPivotFieldShowDetail`
+R0.coverage	pivot_field_sort.set	pivotFieldSetSort	`pivotFieldSetSort` is a former name; the ledger has `setPivotFieldSort`
+R0.coverage	pivot_field_subtotal_fn.add	pivotFieldAddSubtotalFn	`pivotFieldAddSubtotalFn` is a former name; the ledger has `addPivotFieldSubtotalFn`
+R0.coverage	pivot_field_subtotal_fns.clear	pivotFieldClearSubtotalFns	`pivotFieldClearSubtotalFns` is a former name; the ledger has `clearPivotFieldSubtotalFns`
+R0.coverage	pivot_field_subtotal_top.set	pivotFieldSetSubtotalTop	`pivotFieldSetSubtotalTop` is a former name; the ledger has `setPivotFieldSubtotalTop`
+R0.coverage	pivot_filter.add	pivotFilterAdd	`pivotFilterAdd` is a former name; the ledger has `addPivotFilter`
+R0.coverage	pivot_filter.clear	pivotFilterClear	`pivotFilterClear` is a former name; the ledger has `clearPivotFilters`
+R0.coverage	pivot_filter.get	pivotFilterAt	`pivotFilterAt` is a former name; the ledger has `getPivotFilter`
+R0.coverage	pivot_filter.get_count	pivotFilterCount	`pivotFilterCount` is a former name; the ledger has `getPivotFilterCount`
+R0.coverage	pivot_filter.remove	pivotFilterRemoveAt	`pivotFilterRemoveAt` is a former name; the ledger has `removePivotFilter`
+R0.coverage	pivot_grand_totals.get	pivotGetGrandTotals	`pivotGetGrandTotals` is a former name; the ledger has `getPivotGrandTotals`
+R0.coverage	pivot_grand_totals.set	pivotSetGrandTotals	`pivotSetGrandTotals` is a former name; the ledger has `setPivotGrandTotals`
+R0.coverage	pivot_layout.get	pivotLayout	`pivotLayout` is a former name; the ledger has `getPivotLayout`
+R0.coverage	pivot_name.get	pivotName	`pivotName` is a former name; the ledger has `getPivotName`
+R0.coverage	pivot_name.set	pivotSetName	`pivotSetName` is a former name; the ledger has `setPivotName`
+R0.coverage	pivot_options.get	pivotGetOptions	`pivotGetOptions` is a former name; the ledger has `getPivotOptions`
+R0.coverage	pivot_options.set	pivotSetOptions	`pivotSetOptions` is a former name; the ledger has `setPivotOptions`
+R0.coverage	pivot_project.get	pivotProject	`pivotProject` is a former name; the ledger has `projectPivot`
+R0.coverage	pivot_projection_pending.get	pivotProjectionPending	`pivotProjectionPending` is a former name; the ledger has `isPivotProjectionPending`
+R0.coverage	pivot_report_layout.get	pivotGetLayout	`pivotGetLayout` is a former name; the ledger has `getPivotReportLayout`
+R0.coverage	pivot_report_layout.set	pivotSetLayout	`pivotSetLayout` is a former name; the ledger has `setPivotReportLayout`
+R0.coverage	pivot_row_field_order.get	pivotRowFieldOrder	`pivotRowFieldOrder` is a former name; the ledger has `getPivotRowFieldOrder`
+R0.coverage	pivot_row_field_order.set	pivotSetRowFieldOrder	`pivotSetRowFieldOrder` is a former name; the ledger has `setPivotRowFieldOrder`
+R0.coverage	pivot_show_details.get	pivotShowDetails	`pivotShowDetails` is a former name; the ledger has `showPivotDetails`
+R0.coverage	pivot_style_info.get	pivotGetStyleInfo	`pivotGetStyleInfo` is a former name; the ledger has `getPivotStyleInfo`
+R0.coverage	pivot_style_info.set	pivotSetStyleInfo	`pivotSetStyleInfo` is a former name; the ledger has `setPivotStyleInfo`
+R0.coverage	precedents.get	precedents	`precedents` is a former name; the ledger has `getPrecedents`
+R0.coverage	print_area.get	getSheetPrintArea	`getSheetPrintArea` is a former name; the ledger has `getPrintArea`
+R0.coverage	print_area.set	setSheetPrintArea	`setSheetPrintArea` is a former name; the ledger has `setPrintArea`
+R0.coverage	print_options.set	setSheetPrintOptions	`setSheetPrintOptions` is a former name; the ledger has `setPrintOptions`
+R0.coverage	print_options_xml.get	getSheetPrintOptionsXml	`getSheetPrintOptionsXml` is a former name; the ledger has `getPrintOptionsXml`
+R0.coverage	print_options_xml.set	setSheetPrintOptionsXml	`setSheetPrintOptionsXml` is a former name; the ledger has `setPrintOptionsXml`
+R0.coverage	print_titles.get	getSheetPrintTitles	`getSheetPrintTitles` is a former name; the ledger has `getPrintTitles`
+R0.coverage	print_titles.set	setSheetPrintTitles	`setSheetPrintTitles` is a former name; the ledger has `setPrintTitles`
+R0.coverage	range_style_bases.get	rangeStyleBases	`rangeStyleBases` is a former name; the ledger has `getRangeStyleBases`
+R0.coverage	range_style_bases_excluding.get	rangeStyleBasesExcluding	`rangeStyleBasesExcluding` is a former name; the ledger has `getRangeStyleBasesExcluding`
+R0.coverage	record.chart_insert	ChartInsertOptions	`ChartInsertOptions` is a former name; the ledger has `ChartInsertInput`
+R0.coverage	record.chart_preview_overrides	ChartPreviewOverrides	`ChartPreviewOverrides` is a former name; the ledger has `ChartPreviewOverridesInput`
+R0.coverage	record.comment	CommentEntry	`CommentEntry` is a former name; the ledger has `Comment`
+R0.coverage	record.data_validation	DataValidationEntry	`DataValidationEntry` is a former name; the ledger has `DataValidation`
+R0.coverage	record.hyperlink	HyperlinkEntry	`HyperlinkEntry` is a former name; the ledger has `Hyperlink`
+R0.coverage	record.image_insert	ImageInsertOptions	`ImageInsertOptions` is a former name; the ledger has `ImageInsertInput`
+R0.coverage	record.page_margins	PageMarginsInput	`PageMarginsInput` is a former name; the ledger has `PageMargins`
+R0.coverage	record.page_setup	PageSetupInput	`PageSetupInput` is a former name; the ledger has `PageSetup`
+R0.coverage	record.pivot_field_spec	PivotFieldSpec	`PivotFieldSpec` is a former name; the ledger has `PivotFieldSpecInput`
+R0.coverage	ref_mode.get	refMode	`refMode` is a former name; the ledger has `getRefMode`
+R0.coverage	right_to_left.set	setSheetRightToLeft	`setSheetRightToLeft` is a former name; the ledger has `setRightToLeft`
+R0.coverage	row_break.add	addSheetRowBreak	`addSheetRowBreak` is a former name; the ledger has `addRowBreak`
+R0.coverage	row_break.remove	removeSheetRowBreak	`removeSheetRowBreak` is a former name; the ledger has `removeRowBreak`
+R0.coverage	row_breaks.list	getSheetRowBreaks	`getSheetRowBreaks` is a former name; the ledger has `listRowBreaks`
+R0.coverage	row_overrides.list	getSheetRowOverrides	`getSheetRowOverrides` is a former name; the ledger has `listRowOverrides`
+R0.coverage	selection.get	getSheetSelection	`getSheetSelection` is a former name; the ledger has `getSelection`
+R0.coverage	selection.set	setSheetSelection	`setSheetSelection` is a former name; the ledger has `setSelection`
+R0.coverage	shape.add	insertShape	`insertShape` is a former name; the ledger has `addShape`
+R0.coverage	sheet.get_count	sheetCount	`sheetCount` is a former name; the ledger has `getSheetCount`
+R0.coverage	sheet_name.get	sheetName	`sheetName` is a former name; the ledger has `getSheetName`
+R0.coverage	sheet_pr_xml.get	getSheetSheetPrXml	`getSheetSheetPrXml` is a former name; the ledger has `getSheetPrXml`
+R0.coverage	sheet_pr_xml.set	setSheetSheetPrXml	`setSheetSheetPrXml` is a former name; the ledger has `setSheetPrXml`
+R0.coverage	show_formulas.set	setSheetShowFormulas	`setSheetShowFormulas` is a former name; the ledger has `setShowFormulas`
+R0.coverage	show_grid_lines.set	setSheetShowGridLines	`setSheetShowGridLines` is a former name; the ledger has `setShowGridLines`
+R0.coverage	show_outline_symbols.set	setSheetShowOutlineSymbols	`setSheetShowOutlineSymbols` is a former name; the ledger has `setShowOutlineSymbols`
+R0.coverage	show_row_col_headers.set	setSheetShowRowColHeaders	`setSheetShowRowColHeaders` is a former name; the ledger has `setShowRowColHeaders`
+R0.coverage	show_zeros.set	setSheetShowZeros	`setSheetShowZeros` is a former name; the ledger has `setShowZeros`
+R0.coverage	spill_info.get	spillInfo	`spillInfo` is a former name; the ledger has `getSpillInfo`
+R0.coverage	split.set	setSheetSplit	`setSheetSplit` is a former name; the ledger has `setSplit`
+R0.coverage	status_name.get	statusString	`statusString` is a former name; the ledger has `getStatusName`
+R0.coverage	tab_hidden.set	setSheetTabHidden	`setSheetTabHidden` is a former name; the ledger has `setTabHidden`
+R0.coverage	tab_selected.set	setSheetTabSelected	`setSheetTabSelected` is a former name; the ledger has `setTabSelected`
+R0.coverage	table.create	createTable	`createTable` is a former name; the ledger has `addTable`
+R0.coverage	table.get	tableAt	`tableAt` is a former name; the ledger has `getTable`
+R0.coverage	table.get_count	tableCount	`tableCount` is a former name; the ledger has `getTableCount`
+R0.coverage	theme.clear	resetTheme	`resetTheme` is a former name; the ledger has `clearTheme`
+R0.coverage	theme_fonts.get	getTheme	`getTheme` is a former name; the ledger has `getThemeFonts`
+R0.coverage	threaded_comment.update	editThreadedComment	`editThreadedComment` is a former name; the ledger has `updateThreadedComment`
+R0.coverage	threaded_comments.list	getThreadedComments	`getThreadedComments` is a former name; the ledger has `listThreadedComments`
+R0.coverage	top_left.set	setSheetTopLeft	`setSheetTopLeft` is a former name; the ledger has `setTopLeft`
+R0.coverage	validation.remove	removeValidationAt	`removeValidationAt` is a former name; the ledger has `removeValidation`
+R0.coverage	version.get	versionString	`versionString` is a former name; the ledger has `getVersion`
+R0.coverage	version.get.version	version	`version` is dropped from the wasm surface
+R0.coverage	view.get	getSheetView	`getSheetView` is a former name; the ledger has `getView`
+R0.coverage	view_mode.set	setSheetViewMode	`setSheetViewMode` is a former name; the ledger has `setViewMode`
+R0.coverage	visibility.set	setSheetVisibility	`setSheetVisibility` is a former name; the ledger has `setVisibility`
+R0.coverage	workbook.load	Workbook.loadBytes	`Workbook.loadBytes` is a former name; the ledger has `Workbook.load`
+R0.coverage	zoom.set	setSheetZoom	`setSheetZoom` is a former name; the ledger has `setZoom`
+R11.multi	print_area.set	rangesA1	`setSheetPrintArea(rangesA1: string)` should take `CellRect[]`
+R11.multi	record.conditional_format_entry	sqref	`ConditionalFormatEntry.sqref: ReadonlyArray<ConditionalFormatRange>` should be `ranges: CellRect[]`
+R11.multi	record.conditional_format_input	sqref	`ConditionalFormatInput.sqref: ReadonlyArray<ConditionalFormatRange>` should be `ranges: CellRect[]`
+R11.multi	record.protected_range	sqref	`ProtectedRange.sqref: string` should be `ranges: CellRect[]`
+R11.multi	record.sheet_print_area_result	ranges	`SheetPrintAreaResult.ranges: string` should be `ranges: CellRect[]`
+R11.multi	record.table_entry	ref	`TableEntry.ref: string` should be `ranges: CellRect[]`
+R11.multi	record.table_input	ref	`TableInput.ref: string` should be `ranges: CellRect[]`
+R11.multi	record.table_update_input	ref	`TableUpdateInput.ref: string` should be `ranges: CellRect[]`
+R11.sheet	record.chart_sheet_range	-	`ChartSheetRange` pairs a sheet with a rectangle; use `SheetRect`
+R11.sheet	record.viewport	-	`RecalcViewport` pairs a sheet with a rectangle; use `SheetRect`
+R12	enum.anchor_edit_as	module	`AnchorEditAs` is not on the module object
+R12	enum.anchor_kind	module	`AnchorKind` is not on the module object
+R12	enum.calc_mode	module	`CalcMode` is not on the module object
+R12	enum.cf_match_kind	module	`CfMatchKind` is not on the module object
+R12	enum.chart_axis_crosses	module	`ChartAxisCrosses` is not on the module object
+R12	enum.chart_axis_kind	module	`ChartAxisKind` is not on the module object
+R12	enum.chart_blanks_as	module	`ChartBlanksAs` is not on the module object
+R12	enum.chart_grouping	module	`ChartGrouping` is not on the module object
+R12	enum.chart_insert_kind	module	`ChartInsertKind` is not on the module object
+R12	enum.chart_label_position	module	`ChartLabelPosition` is not on the module object
+R12	enum.chart_legend_position	module	`ChartLegendPosition` is not on the module object
+R12	enum.chart_line_dash	module	`ChartLineDash` is not on the module object
+R12	enum.chart_marker_symbol	module	`ChartMarkerSymbol` is not on the module object
+R12	enum.chart_plot_type	module	`ChartPlotType` is not on the module object
+R12	enum.chart_point_state	module	`ChartPointState` is not on the module object
+R12	enum.chart_series_direction	module	`ChartSeriesDirection` is not on the module object
+R12	enum.chart_title_kind	module	`ChartTitleKind` is not on the module object
+R12	enum.collation_strength	module	`CollationStrength` is not on the module object
+R12	enum.color_context	module	`ColorContext` is not on the module object
+R12	enum.color_resolution	module	`ColorResolution` is not on the module object
+R12	enum.date_time_grouping	module	`DateTimeGrouping` is not on the module object
+R12	enum.display_status	module	`DisplayStatus` is not on the module object
+R12	enum.drawing_object_kind	module	`DrawingObjectKind` is not on the module object
+R12	enum.dynamic_filter_type	module	`DynamicFilterType` is not on the module object
+R12	enum.effective_style_source	module	`EffectiveStyleSource` is not on the module object
+R12	enum.external_link_kind	module	`ExternalLinkKind` is not on the module object
+R12	enum.filter_kind	module	`FilterKind` is not on the module object
+R12	enum.filter_operator	module	`FilterOperator` is not on the module object
+R12	enum.geometry_mode	module	`GeometryMode` is not on the module object
+R12	enum.image_format	module	`ImageFormat` is not on the module object
+R12	enum.log_level	module	`LogLevel` is not on the module object
+R12	enum.pivot_aggregation	module	`PivotAggregation` is not on the module object
+R12	enum.pivot_axis	module	`PivotAxis` is not on the module object
+R12	enum.pivot_calendar	module	`PivotCalendar` is not on the module object
+R12	enum.pivot_cell_kind	module	`PivotCellKind` is not on the module object
+R12	enum.pivot_date_period	module	`PivotDatePeriod` is not on the module object
+R12	enum.pivot_filter_type	module	`PivotFilterType` is not on the module object
+R12	enum.pivot_filter_value_kind	module	`PivotFilterValueKind` is not on the module object
+R12	enum.pivot_layout	module	`PivotReportLayout` is not on the module object
+R12	enum.pivot_show_as	module	`PivotShowValuesAs` is not on the module object
+R12	enum.pivot_sort_order	module	`PivotSortOrder` is not on the module object
+R12	enum.ref_mode	module	`RefMode` is not on the module object
+R12	enum.shape_paint	module	`ShapePaint` is not on the module object
+R12	enum.sheet_visibility	module	`SheetVisibility` is not on the module object
+R12	enum.slicer_cross_filter	module	`SlicerCrossFilter` is not on the module object
+R12	enum.slicer_sort	module	`SlicerSortOrder` is not on the module object
+R12	enum.sort_by	module	`SortBy` is not on the module object
+R12	enum.sort_method	module	`SortMethod` is not on the module object
+R12	enum.sparkline_axis_type	module	`SparklineAxisType` is not on the module object
+R12	enum.sparkline_empty_cells	module	`SparklineEmptyCells` is not on the module object
+R12	enum.sparkline_type	module	`SparklineType` is not on the module object
+R12	enum.status_code	module	`StatusCode` is not on the module object
+R12	enum.theme_source	module	`ThemeSource` is not on the module object
+R12	enum.validation_error_style	module	`ValidationErrorStyle` is not on the module object
+R12	enum.value_kind	module	`ValueKind` is not on the module object
+R12	enum.workbook_format	module	`WorkbookFormat` is not on the module object
+R12	type.error_code	module	`ErrorCode` is not on the module object
+R12	workbook.destroy	method	`dispose` is on native but not on wasm
+R5.derive	active_sheet.get	-	`activeSheet` does not derive from `fm_workbook_get_active_sheet` (`getActiveSheet`)
+R5.derive	auto_filter_xml.get	-	`getSheetAutoFilterXml` does not derive from `fm_sheet_get_auto_filter_xml` (`getAutoFilterXml`)
+R5.derive	auto_filter_xml.set	-	`setSheetAutoFilterXml` does not derive from `fm_sheet_set_auto_filter_xml` (`setAutoFilterXml`)
+R5.derive	border.add	-	`addBorder` does not derive from `fm_styles_add_border` (`stylesAddBorder`)
+R5.derive	border.get	-	`getBorder` does not derive from `fm_styles_get_border` (`stylesGetBorder`)
+R5.derive	border.get_count	-	`borderCount` does not derive from `fm_styles_get_border_count` (`stylesGetBorderCount`)
+R5.derive	breaks.clear	-	`clearSheetBreaks` does not derive from `fm_sheet_clear_breaks` (`clearBreaks`)
+R5.derive	cell_rect_pt.get	-	`getCellRectPt` does not derive from `fm_sheet_cell_rect_pt` (`cellRectPt`)
+R5.derive	cell_style.remove	-	`removeCellStyle` does not derive from `fm_styles_remove_cell_style` (`stylesRemoveCellStyle`)
+R5.derive	cell_style.set	-	`setCellStyle` does not derive from `fm_styles_set_cell_style` (`stylesSetCellStyle`)
+R5.derive	cell_style_xf.add	-	`addCellStyleXf` does not derive from `fm_styles_add_cell_style_xf` (`stylesAddCellStyleXf`)
+R5.derive	cell_style_xf.get	-	`getCellStyleXf` does not derive from `fm_styles_get_cell_style_xf` (`stylesGetCellStyleXf`)
+R5.derive	cell_style_xf.get_count	-	`cellStyleXfCount` does not derive from `fm_styles_get_cell_style_xf_count` (`stylesGetCellStyleXfCount`)
+R5.derive	cell_xf.add	-	`addXf` does not derive from `fm_styles_add_cell_xf` (`stylesAddCellXf`)
+R5.derive	cell_xf.get	-	`getCellXf` does not derive from `fm_styles_get_cell_xf` (`stylesGetCellXf`)
+R5.derive	cell_xf.get_count	-	`xfCount` does not derive from `fm_styles_get_cell_xf_count` (`stylesGetCellXfCount`)
+R5.derive	cell_xf_index.clear	-	`clearCellXfIndex` does not derive from `fm_cell_clear_xf_index` (`cellClearXfIndex`)
+R5.derive	cell_xf_index.get	-	`getCellXfIndex` does not derive from `fm_cell_get_xf_index` (`cellGetXfIndex`)
+R5.derive	cell_xf_index.set	-	`setCellXfIndex` does not derive from `fm_cell_set_xf_index` (`cellSetXfIndex`)
+R5.derive	cells_in_range.get	-	`getCellsInRange` does not derive from `fm_sheet_cells_in_range` (`cellsInRange`)
+R5.derive	cf_formula.evaluate	-	`evaluateConditionalFormula` does not derive from `fm_workbook_evaluate_cf_formula` (`evaluateCfFormula`)
+R5.derive	cf_range.evaluate	-	`evaluateCfRange` does not derive from `fm_workbook_cf_evaluate_range` (`cfEvaluateRange`)
+R5.derive	cf_rule.add	-	`addConditionalFormat` does not derive from `fm_sheet_cf_add_rule` (`cfAddRule`)
+R5.derive	cf_rule.clear	-	`clearConditionalFormats` does not derive from `fm_sheet_cf_clear` (`cfClear`)
+R5.derive	cf_rule.remove	-	`removeConditionalFormatAt` does not derive from `fm_sheet_cf_remove_at` (`cfRemoveAt`)
+R5.derive	chart.get	-	`getChart` does not derive from `fm_sheet_chart_open` (`chartOpen`)
+R5.derive	chart_data.get	-	`getChartData` does not derive from `fm_sheet_chart_data_open` (`chartDataOpen`)
+R5.derive	chart_preview.get	-	`previewChartData` does not derive from `fm_sheet_chart_preview_open` (`chartPreviewOpen`)
+R5.derive	col_break.add	-	`addSheetColBreak` does not derive from `fm_sheet_add_col_break` (`addColBreak`)
+R5.derive	col_break.remove	-	`removeSheetColBreak` does not derive from `fm_sheet_remove_col_break` (`removeColBreak`)
+R5.derive	column_width_pt.get	-	`getColumnWidthPt` does not derive from `fm_sheet_column_width_pt` (`columnWidthPt`)
+R5.derive	comment.get	-	`getComment` does not derive from `fm_sheet_get_comment_at` (`getCommentAt`)
+R5.derive	data_table.get	-	`getDataTable` does not derive from `fm_sheet_data_table_at` (`dataTableAt`)
+R5.derive	dxf.add	-	`addDxf` does not derive from `fm_styles_add_dxf` (`stylesAddDxf`)
+R5.derive	dxf.get	-	`getDxf` does not derive from `fm_styles_get_dxf` (`stylesGetDxf`)
+R5.derive	dxf.get_count	-	`dxfCount` does not derive from `fm_styles_get_dxf_count` (`stylesGetDxfCount`)
+R5.derive	enum.pivot_layout	-	`PivotReportLayout` does not derive from `fm_pivot_layout_t` (`PivotLayout`)
+R5.derive	enum.pivot_show_as	-	`PivotShowValuesAs` does not derive from `fm_pivot_show_as_t` (`PivotShowAs`)
+R5.derive	enum.slicer_sort	-	`SlicerSortOrder` does not derive from `fm_slicer_sort_t` (`SlicerSort`)
+R5.derive	fill.add	-	`addFill` does not derive from `fm_styles_add_fill` (`stylesAddFill`)
+R5.derive	fill.get	-	`getFill` does not derive from `fm_styles_get_fill` (`stylesGetFill`)
+R5.derive	fill.get_count	-	`fillCount` does not derive from `fm_styles_get_fill_count` (`stylesGetFillCount`)
+R5.derive	fit_to_page.set	-	`setSheetFitToPage` does not derive from `fm_sheet_set_fit_to_page` (`setFitToPage`)
+R5.derive	font.add	-	`addFont` does not derive from `fm_styles_add_font` (`stylesAddFont`)
+R5.derive	font.get	-	`getFont` does not derive from `fm_styles_get_font` (`stylesGetFont`)
+R5.derive	font.get_count	-	`fontCount` does not derive from `fm_styles_get_font_count` (`stylesGetFontCount`)
+R5.derive	font.set	-	`setFont` does not derive from `fm_styles_set_font` (`stylesSetFont`)
+R5.derive	format_defaults.get	-	`getSheetFormatDefaults` does not derive from `fm_sheet_get_format_defaults` (`getFormatDefaults`)
+R5.derive	format_defaults.set	-	`setSheetFormatDefaults` does not derive from `fm_sheet_set_format_defaults` (`setFormatDefaults`)
+R5.derive	formula.canonicalize	-	`canonicalizeFormula` does not derive from `fm_formula_canonicalize` (`formulaCanonicalize`)
+R5.derive	formula.evaluate	-	`evaluateFormulaText` does not derive from `fm_workbook_evaluate_formula` (`evaluateFormula`)
+R5.derive	formula.localize	-	`localizeFormula` does not derive from `fm_formula_localize` (`formulaLocalize`)
+R5.derive	freeze.set	-	`setSheetFreeze` does not derive from `fm_sheet_set_freeze` (`setFreeze`)
+R5.derive	function.canonicalize_name	-	`canonicalizeFunctionName` does not derive from `fm_function_canonicalize` (`functionCanonicalize`)
+R5.derive	function.localize_name	-	`localizeFunctionName` does not derive from `fm_function_localize` (`functionLocalize`)
+R5.derive	header_footer.set	-	`setSheetHeaderFooter` does not derive from `fm_sheet_set_header_footer` (`setHeaderFooter`)
+R5.derive	header_footer_xml.get	-	`getSheetHeaderFooterXml` does not derive from `fm_sheet_get_header_footer_xml` (`getHeaderFooterXml`)
+R5.derive	header_footer_xml.set	-	`setSheetHeaderFooterXml` does not derive from `fm_sheet_set_header_footer_xml` (`setHeaderFooterXml`)
+R5.derive	lambda_text.get	-	`getLambdaText` does not derive from `fm_workbook_lambda_text_at` (`lambdaTextAt`)
+R5.derive	merges_in_range.get	-	`getMergesInRange` does not derive from `fm_sheet_merges_in_range` (`mergesInRange`)
+R5.derive	num_fmt.add	-	`addNumFmt` does not derive from `fm_styles_add_num_fmt` (`stylesAddNumFmt`)
+R5.derive	num_fmt_string.get	-	`getNumFmt` does not derive from `fm_styles_get_num_fmt_string` (`stylesGetNumFmtString`)
+R5.derive	page_margins.get	-	`getSheetPageMargins` does not derive from `fm_sheet_get_page_margins` (`getPageMargins`)
+R5.derive	page_margins.set	-	`setSheetPageMargins` does not derive from `fm_sheet_set_page_margins` (`setPageMargins`)
+R5.derive	page_margins_xml.get	-	`getSheetPageMarginsXml` does not derive from `fm_sheet_get_page_margins_xml` (`getPageMarginsXml`)
+R5.derive	page_margins_xml.set	-	`setSheetPageMarginsXml` does not derive from `fm_sheet_set_page_margins_xml` (`setPageMarginsXml`)
+R5.derive	page_setup.get	-	`getSheetPageSetup` does not derive from `fm_sheet_get_page_setup` (`getPageSetup`)
+R5.derive	page_setup.set	-	`setSheetPageSetup` does not derive from `fm_sheet_set_page_setup` (`setPageSetup`)
+R5.derive	page_setup_xml.get	-	`getSheetPageSetupXml` does not derive from `fm_sheet_get_page_setup_xml` (`getPageSetupXml`)
+R5.derive	page_setup_xml.set	-	`setSheetPageSetupXml` does not derive from `fm_sheet_set_page_setup_xml` (`setPageSetupXml`)
+R5.derive	pane_top_left.set	-	`setSheetPaneTopLeft` does not derive from `fm_sheet_set_pane_top_left` (`setPaneTopLeft`)
+R5.derive	pivot_cache.get_id	-	`pivotCacheId` does not derive from `fm_workbook_pivot_get_cache_id` (`pivotGetCacheId`)
+R5.derive	pivot_col_field_order.get	-	`pivotColFieldOrder` does not derive from `fm_workbook_pivot_get_col_field_order` (`pivotGetColFieldOrder`)
+R5.derive	pivot_name.get	-	`pivotName` does not derive from `fm_workbook_pivot_get_name` (`pivotGetName`)
+R5.derive	pivot_row_field_order.get	-	`pivotRowFieldOrder` does not derive from `fm_workbook_pivot_get_row_field_order` (`pivotGetRowFieldOrder`)
+R5.derive	print_area.get	-	`getSheetPrintArea` does not derive from `fm_sheet_get_print_area` (`getPrintArea`)
+R5.derive	print_area.set	-	`setSheetPrintArea` does not derive from `fm_sheet_set_print_area` (`setPrintArea`)
+R5.derive	print_options.set	-	`setSheetPrintOptions` does not derive from `fm_sheet_set_print_options` (`setPrintOptions`)
+R5.derive	print_options_xml.get	-	`getSheetPrintOptionsXml` does not derive from `fm_sheet_get_print_options_xml` (`getPrintOptionsXml`)
+R5.derive	print_options_xml.set	-	`setSheetPrintOptionsXml` does not derive from `fm_sheet_set_print_options_xml` (`setPrintOptionsXml`)
+R5.derive	print_titles.get	-	`getSheetPrintTitles` does not derive from `fm_sheet_get_print_titles` (`getPrintTitles`)
+R5.derive	print_titles.set	-	`setSheetPrintTitles` does not derive from `fm_sheet_set_print_titles` (`setPrintTitles`)
+R5.derive	record.chart_insert	-	`ChartInsertOptions` does not derive from `fm_chart_insert` (`ChartInsertInput`)
+R5.derive	record.chart_preview_overrides	-	`ChartPreviewOverrides` does not derive from `fm_chart_preview_overrides` (`ChartPreviewOverridesInput`)
+R5.derive	record.comment	-	`CommentEntry` does not derive from `fm_comment` (`Comment`)
+R5.derive	record.data_validation	-	`DataValidationEntry` does not derive from `fm_data_validation` (`DataValidation`)
+R5.derive	record.hyperlink	-	`HyperlinkEntry` does not derive from `fm_hyperlink` (`Hyperlink`)
+R5.derive	record.image_insert	-	`ImageInsertOptions` does not derive from `fm_image_insert` (`ImageInsertInput`)
+R5.derive	record.page_margins	-	`PageMarginsInput` does not derive from `fm_page_margins_t` (`PageMargins`)
+R5.derive	record.page_setup	-	`PageSetupInput` does not derive from `fm_page_setup_t` (`PageSetup`)
+R5.derive	record.pivot_field_spec	-	`PivotFieldSpec` does not derive from `fm_pivot_field_spec_t` (`PivotFieldSpecInput`)
+R5.derive	record.reference	-	`ParsedReference` does not derive from `fm_reference_t` (`Reference`)
+R5.derive	right_to_left.set	-	`setSheetRightToLeft` does not derive from `fm_sheet_set_right_to_left` (`setRightToLeft`)
+R5.derive	row_break.add	-	`addSheetRowBreak` does not derive from `fm_sheet_add_row_break` (`addRowBreak`)
+R5.derive	row_break.remove	-	`removeSheetRowBreak` does not derive from `fm_sheet_remove_row_break` (`removeRowBreak`)
+R5.derive	row_height_pt.get	-	`getRowHeightPt` does not derive from `fm_sheet_row_height_pt` (`rowHeightPt`)
+R5.derive	selection.get	-	`getSheetSelection` does not derive from `fm_sheet_get_selection` (`getSelection`)
+R5.derive	selection.set	-	`setSheetSelection` does not derive from `fm_sheet_set_selection` (`setSelection`)
+R5.derive	sheet_pr_xml.get	-	`getSheetSheetPrXml` does not derive from `fm_sheet_get_sheet_pr_xml` (`getSheetPrXml`)
+R5.derive	sheet_pr_xml.set	-	`setSheetSheetPrXml` does not derive from `fm_sheet_set_sheet_pr_xml` (`setSheetPrXml`)
+R5.derive	sheet_protection.get	-	`getSheetProtection` does not derive from `fm_sheet_get_protection` (`getProtection`)
+R5.derive	sheet_protection.set	-	`setSheetProtection` does not derive from `fm_sheet_set_protection` (`setProtection`)
+R5.derive	show_formulas.set	-	`setSheetShowFormulas` does not derive from `fm_sheet_set_show_formulas` (`setShowFormulas`)
+R5.derive	show_grid_lines.set	-	`setSheetShowGridLines` does not derive from `fm_sheet_set_show_grid_lines` (`setShowGridLines`)
+R5.derive	show_outline_symbols.set	-	`setSheetShowOutlineSymbols` does not derive from `fm_sheet_set_show_outline_symbols` (`setShowOutlineSymbols`)
+R5.derive	show_row_col_headers.set	-	`setSheetShowRowColHeaders` does not derive from `fm_sheet_set_show_row_col_headers` (`setShowRowColHeaders`)
+R5.derive	show_zeros.set	-	`setSheetShowZeros` does not derive from `fm_sheet_set_show_zeros` (`setShowZeros`)
+R5.derive	split.set	-	`setSheetSplit` does not derive from `fm_sheet_set_split` (`setSplit`)
+R5.derive	tab_hidden.set	-	`setSheetTabHidden` does not derive from `fm_sheet_set_tab_hidden` (`setTabHidden`)
+R5.derive	tab_selected.set	-	`setSheetTabSelected` does not derive from `fm_sheet_set_tab_selected` (`setTabSelected`)
+R5.derive	table.create	-	`createTable` does not derive from `fm_workbook_table_create` (`tableCreate`)
+R5.derive	table.remove	-	`removeTable` does not derive from `fm_workbook_table_remove` (`tableRemove`)
+R5.derive	table.update	-	`updateTable` does not derive from `fm_workbook_table_update` (`tableUpdate`)
+R5.derive	table_auto_filter.apply	-	`applyTableAutoFilter` does not derive from `fm_table_apply_auto_filter` (`tableApplyAutoFilter`)
+R5.derive	table_auto_filter.clear	-	`clearTableAutoFilter` does not derive from `fm_table_clear_auto_filter` (`tableClearAutoFilter`)
+R5.derive	table_auto_filter.evaluate	-	`evaluateTableAutoFilter` does not derive from `fm_table_evaluate_auto_filter` (`tableEvaluateAutoFilter`)
+R5.derive	table_auto_filter.get	-	`getTableAutoFilter` does not derive from `fm_table_get_auto_filter` (`tableGetAutoFilter`)
+R5.derive	table_auto_filter.remove	-	`removeTableAutoFilter` does not derive from `fm_table_remove_auto_filter` (`tableRemoveAutoFilter`)
+R5.derive	table_auto_filter.set	-	`setTableAutoFilter` does not derive from `fm_table_set_auto_filter` (`tableSetAutoFilter`)
+R5.derive	table_column.rename	-	`renameTableColumn` does not derive from `fm_workbook_table_rename_column` (`tableRenameColumn`)
+R5.derive	table_column_totals.set	-	`setTableColumnTotals` does not derive from `fm_workbook_table_set_column_totals` (`tableSetColumnTotals`)
+R5.derive	table_style.remove	-	`removeTableStyle` does not derive from `fm_styles_remove_table_style` (`stylesRemoveTableStyle`)
+R5.derive	table_style.set	-	`setTableStyle` does not derive from `fm_styles_set_table_style` (`stylesSetTableStyle`)
+R5.derive	table_style_defaults.get	-	`getTableStyleDefaults` does not derive from `fm_styles_get_table_style_defaults` (`stylesGetTableStyleDefaults`)
+R5.derive	table_style_defaults.set	-	`setTableStyleDefaults` does not derive from `fm_styles_set_table_style_defaults` (`stylesSetTableStyleDefaults`)
+R5.derive	text.compare	-	`compareText` does not derive from `fm_text_compare` (`textCompare`)
+R5.derive	theme_fonts.get	-	`getTheme` does not derive from `fm_workbook_get_theme_fonts` (`getThemeFonts`)
+R5.derive	top_left.set	-	`setSheetTopLeft` does not derive from `fm_sheet_set_top_left` (`setTopLeft`)
+R5.derive	view.get	-	`getSheetView` does not derive from `fm_sheet_get_view` (`getView`)
+R5.derive	view_mode.set	-	`setSheetViewMode` does not derive from `fm_sheet_set_view_mode` (`setViewMode`)
+R5.derive	visibility.set	-	`setSheetVisibility` does not derive from `fm_sheet_set_visibility` (`setVisibility`)
+R5.derive	width_model.get	-	`getWidthModel` does not derive from `fm_sheet_width_model` (`widthModel`)
+R5.derive	workbook.create	-	`Workbook.createDefault` does not derive from `fm_workbook_create` (`Workbook.create`)
+R5.derive	workbook.load	-	`Workbook.loadBytes` does not derive from `fm_workbook_load` (`Workbook.load`)
+R5.derive	workbook_protection.get	-	`getWorkbookProtection` does not derive from `fm_workbook_get_protection` (`getProtection`)
+R5.derive	workbook_protection.set	-	`setWorkbookProtection` does not derive from `fm_workbook_set_protection` (`setProtection`)
+R5.derive	zoom.set	-	`setSheetZoom` does not derive from `fm_sheet_set_zoom` (`setZoom`)
+R5.list	cell_phonetic_run.list.get_cell_phonetic_runs	getCellPhoneticRuns	`getCellPhoneticRuns` is dropped from the wasm surface
+R5.list	cell_style.get_at	getCellStyle	`getCellStyle` is dropped from the wasm surface
+R5.list	cell_style.get_count	cellStyleCount	`cellStyleCount` is dropped from the wasm surface
+R5.list	cell_styles.list	missing	`listCellStyles` is not on the wasm Workbook
+R5.list	cf_rule.list.get_conditional_formats	getConditionalFormats	`getConditionalFormats` is dropped from the wasm surface
+R5.list	col_breaks.list	missing	`listColBreaks` is not on the wasm Workbook
+R5.list	col_overrides.list	missing	`listColOverrides` is not on the wasm Workbook
+R5.list	comments.list	missing	`listComments` is not on the wasm Workbook
+R5.list	defined_name.get_at	definedNameAt	`definedNameAt` is dropped from the wasm surface
+R5.list	defined_name.get_count	definedNameCount	`definedNameCount` is dropped from the wasm surface
+R5.list	defined_names.list	missing	`listDefinedNames` is not on the wasm Workbook
+R5.list	external_link.list.get_external_links	getExternalLinks	`getExternalLinks` is dropped from the wasm surface
+R5.list	function_names.list	missing	`listFunctionNames` is not on the wasm Workbook
+R5.list	function_names.list	name	`listFunctionNames` should be `listFunctions`
+R5.list	hyperlinks.list	missing	`listHyperlinks` is not on the wasm Workbook
+R5.list	locale_error_names.list	missing	`listLocaleErrorNames` is not on the wasm Workbook
+R5.list	merges.list	missing	`listMerges` is not on the wasm Workbook
+R5.list	passthrough.get_at	passthroughAt	`passthroughAt` is dropped from the wasm surface
+R5.list	passthrough.get_count	passthroughCount	`passthroughCount` is dropped from the wasm surface
+R5.list	passthroughs.list	missing	`listPassthroughs` is not on the wasm Workbook
+R5.list	people.list	missing	`listPeople` is not on the wasm Workbook
+R5.list	pivot_cache.get_count	pivotCacheCount	`pivotCacheCount` is dropped from the wasm surface
+R5.list	pivot_cache.get_id_at	pivotCacheIdAt	`pivotCacheIdAt` is dropped from the wasm surface
+R5.list	pivot_cache_ids.list	missing	`listPivotCacheIds` is not on the wasm Workbook
+R5.list	pivot_cache_ids.list	name	`listPivotCacheIds` should be `listPivotCaches`
+R5.list	protected_range.list.get_protected_ranges	getProtectedRanges	`getProtectedRanges` is dropped from the wasm surface
+R5.list	row_breaks.list	missing	`listRowBreaks` is not on the wasm Workbook
+R5.list	row_overrides.list	missing	`listRowOverrides` is not on the wasm Workbook
+R5.list	sparkline_group.list.list_sparkline_groups	listSparklineGroups	`listSparklineGroups` is dropped from the wasm surface
+R5.list	table_style.get_at	getTableStyle	`getTableStyle` is dropped from the wasm surface
+R5.list	table_style.get_count	tableStyleCount	`tableStyleCount` is dropped from the wasm surface
+R5.list	table_styles.list	missing	`listTableStyles` is not on the wasm Workbook
+R5.list	threaded_comments.list	missing	`listThreadedComments` is not on the wasm Workbook
+R5.list	validation.list.get_validations	getValidations	`getValidations` is dropped from the wasm surface
+R6.js	calc_on_save.get	return	`calcOnSave`: returns `NumberResult`; a boolean result is `BoolResult`
+R6.js	cell_show_phonetic.get	return	`getCellShowPhonetic`: returns `CellShowPhoneticResult`; a boolean result is `BoolResult`
+R6.js	cf_formula.evaluate	return	`evaluateConditionalFormula`: returns `EvalResult`; a boolean result is `BoolResult`
+R6.js	comment_visible.get	return	`getCommentVisible`: returns `NumberResult`; a boolean result is `BoolResult`
+R6.js	date1904.get	return	`date1904`: returns `NumberResult`; a boolean result is `BoolResult`
+R6.js	display_text.get	return	`getDisplayText`: returns `DisplayTextResult`; the ledger types it `DisplayStatus`
+R6.js	full_precision.get	return	`fullPrecision`: returns `NumberResult`; a boolean result is `BoolResult`
+R6.js	pivot_cache_field_shared_item_date.is	return	`pivotCacheFieldSharedItemIsDate`: returns `PivotCacheSharedItemIsDateResult`; a boolean result is `BoolResult`
+R6.js	pivot_field_date_group.set	periods	`pivotFieldSetDateGroup`: parameter `periods: number`; the ledger types it `PivotDatePeriod`
+R6.js	pivot_projection_pending.get	return	`pivotProjectionPending`: returns `PivotProjectionPendingResult`; a boolean result is `BoolResult`
+R6.js	pivot_report_layout.get	return	`pivotGetLayout`: returns `PivotReportLayoutResult`; the ledger types it `PivotReportLayout`
+R6.js	value.format	return	`formatValue`: returns `DisplayTextResult`; the ledger types it `DisplayStatus`
+R7.js	Patch	alias	declare `export type Patch<T> = { [K in keyof T]?: T[K] | null };` once
+R7.js	record.add_chart_series_result	readonly	`AddChartSeriesResult` is a result; `status` is not `readonly`
+R7.js	record.add_num_fmt_result	readonly	`AddNumFmtResult` is a result; `status` is not `readonly`
+R7.js	record.add_style_result	readonly	`AddStyleResult` is a result; `status` is not `readonly`
+R7.js	record.auto_filter	readonly	`AutoFilter` is a result; `range` is not `readonly`
+R7.js	record.auto_filter_eval_result	readonly	`AutoFilterEvalResult` is a result; `status` is not `readonly`
+R7.js	record.auto_filter_result	readonly	`AutoFilterResult` is a result; `status` is not `readonly`
+R7.js	record.border_record	readonly	`BorderRecord` is a result; `left` is not `readonly`
+R7.js	record.border_result	readonly	`BorderResult` is a result; `status` is not `readonly`
+R7.js	record.border_side	readonly	`BorderSide` is a result; `style` is not `readonly`
+R7.js	record.cell_rect_result	readonly	`CellRectResult` is a result; `status` is not `readonly`
+R7.js	record.cell_result	readonly	`CellResult` is a result; `status` is not `readonly`
+R7.js	record.cell_show_phonetic_result	readonly	`CellShowPhoneticResult` is a result; `status` is not `readonly`
+R7.js	record.cell_style_record	readonly	`CellStyleRecord` is a result; `name` is not `readonly`
+R7.js	record.cell_style_result	readonly	`CellStyleResult` is a result; `status` is not `readonly`
+R7.js	record.cell_xf	readonly	`CellXf` is a result; `fontIndex` is not `readonly`
+R7.js	record.cell_xf_index_result	readonly	`CellXfIndexResult` is a result; `status` is not `readonly`
+R7.js	record.cell_xf_result	readonly	`CellXfResult` is a result; `status` is not `readonly`
+R7.js	record.cells_in_range_result	readonly	`CellsInRangeResult` is a result; `status` is not `readonly`
+R7.js	record.cf_cell_result	readonly	`CfCellResult` is a result; `row` is not `readonly`
+R7.js	record.cf_color	readonly	`CfColor` is a result; `r` is not `readonly`
+R7.js	record.cf_match	readonly	`CfMatch` is a result; `kind` is not `readonly`
+R7.js	record.cf_range_result	readonly	`CfRangeResult` is a result; `status` is not `readonly`
+R7.js	record.chart_axis_patch	patch	`ChartAxisPatch` is not declared as `Patch<...>`
+R7.js	record.chart_data_result	readonly	`ChartDataResult` is a result; `status` is not `readonly`
+R7.js	record.chart_data_series	readonly	`ChartDataSeries` is a result; `plotIndex` is not `readonly`
+R7.js	record.chart_data_source	readonly	`ChartDataSource` is a result; `kind` is not `readonly`
+R7.js	record.chart_display_patch	patch	`ChartDisplayPatch` is not declared as `Patch<...>`
+R7.js	record.chart_fill_patch	patch	`ChartFillPatch` is not declared as `Patch<...>`
+R7.js	record.chart_info	readonly	`ChartInfo` is a result; `objectId` is not `readonly`
+R7.js	record.chart_insert	name	`ChartInsertOptions` is an input record; name it `<Name>Input`
+R7.js	record.chart_labels_patch	patch	`ChartLabelsPatch` is not declared as `Patch<...>`
+R7.js	record.chart_line_patch	patch	`ChartLinePatch` is not declared as `Patch<...>`
+R7.js	record.chart_marker_patch	patch	`ChartMarkerPatch` is not declared as `Patch<...>`
+R7.js	record.chart_plot_patch	patch	`ChartPlotPatch` is not declared as `Patch<...>`
+R7.js	record.chart_point_patch	patch	`ChartPointPatch` is not declared as `Patch<...>`
+R7.js	record.chart_preview_overrides	name	`ChartPreviewOverrides` is an input record; name it `<Name>Input`
+R7.js	record.chart_result	readonly	`ChartResult` is a result; `status` is not `readonly`
+R7.js	record.chart_series_patch	patch	`ChartSeriesPatch` is not declared as `Patch<...>`
+R7.js	record.civil_time	readonly	`CivilTime` is a result; `year` is not `readonly`
+R7.js	record.collation_classes_result	readonly	`CollationClassesResult` is a result; `status` is not `readonly`
+R7.js	record.color_spec	readonly	`ColorSpec` is a result; `kind` is not `readonly`
+R7.js	record.column_layout	readonly	`ColumnLayout` is a result; `first` is not `readonly`
+R7.js	record.columns_result	readonly	`ColumnsResult` is a result; `status` is not `readonly`
+R7.js	record.comment	readonly	`CommentEntry` is a result; `author` is not `readonly`
+R7.js	record.comment_result	readonly	`CommentResult` is a result; `status` is not `readonly`
+R7.js	record.compare_text_result	readonly	`CompareTextResult` is a result; `status` is not `readonly`
+R7.js	record.data_table	readonly	`DataTable` is a result; `firstRow` is not `readonly`
+R7.js	record.data_table_result	readonly	`DataTableResult` is a result; `status` is not `readonly`
+R7.js	record.display_text_result	readonly	`DisplayTextResult` is a result; `status` is not `readonly`
+R7.js	record.drawing_object	readonly	`DrawingObject` is a result; `objectId` is not `readonly`
+R7.js	record.dxf_record	readonly	`DxfRecord` is a result; `font` is not `readonly`
+R7.js	record.dxf_result	readonly	`DxfResult` is a result; `status` is not `readonly`
+R7.js	record.effective_style_result	readonly	`EffectiveStyleResult` is a result; `status` is not `readonly`
+R7.js	record.eval_array_result	readonly	`EvalArrayResult` is a result; `status` is not `readonly`
+R7.js	record.eval_result	readonly	`EvalResult` is a result; `status` is not `readonly`
+R7.js	record.external_link_record	readonly	`ExternalLinkRecord` is a result; `index` is not `readonly`
+R7.js	record.fill_record	readonly	`FillRecord` is a result; `pattern` is not `readonly`
+R7.js	record.fill_result	readonly	`FillResult` is a result; `status` is not `readonly`
+R7.js	record.font_record	readonly	`FontRecord` is a result; `name` is not `readonly`
+R7.js	record.font_result	readonly	`FontResult` is a result; `status` is not `readonly`
+R7.js	record.formula_result	readonly	`FormulaResult` is a result; `status` is not `readonly`
+R7.js	record.gradient_stop	readonly	`GradientStop` is a result; `position` is not `readonly`
+R7.js	record.hyperlink	readonly	`HyperlinkEntry` is a result; `row` is not `readonly`
+R7.js	record.image_info_result	readonly	`ImageInfoResult` is a result; `status` is not `readonly`
+R7.js	record.image_insert	name	`ImageInsertOptions` is an input record; name it `<Name>Input`
+R7.js	record.image_result	readonly	`ImageResult` is a result; `bytes` is not `readonly`
+R7.js	record.image_snapshot_result	readonly	`ImageSnapshotResult` is a result; `status` is not `readonly`
+R7.js	record.insert_chart_result	readonly	`InsertChartResult` is a result; `status` is not `readonly`
+R7.js	record.insert_image_result	readonly	`InsertImageResult` is a result; `status` is not `readonly`
+R7.js	record.iterative_settings_result	readonly	`IterativeSettingsResult` is a result; `status` is not `readonly`
+R7.js	record.lambda_text_result	readonly	`LambdaTextResult` is a result; `status` is not `readonly`
+R7.js	record.list_result	interface	`ListResult` is a type, not an interface
+R7.js	record.locale_facts_result	readonly	`LocaleFactsResult` is a result; `status` is not `readonly`
+R7.js	record.mention	readonly	`Mention` is a result; `personId` is not `readonly`
+R7.js	record.num_fmt_result	readonly	`NumFmtResult` is a result; `status` is not `readonly`
+R7.js	record.number_result	readonly	`NumberResult` is a result; `status` is not `readonly`
+R7.js	record.page_break	readonly	`PageBreak` is a result; `id` is not `readonly`
+R7.js	record.page_margins	name	`PageMarginsInput` is a result record; drop the `Input` / `Patch` suffix
+R7.js	record.page_margins	readonly	`PageMarginsInput` is a result; `left` is not `readonly`
+R7.js	record.page_setup	name	`PageSetupInput` is a result record; drop the `Input` / `Patch` suffix
+R7.js	record.page_setup	readonly	`PageSetupInput` is a result; `orientation` is not `readonly`
+R7.js	record.pagination_result	readonly	`PaginationResult` is a result; `status` is not `readonly`
+R7.js	record.parallel_recalc_result	readonly	`ParallelRecalcResult` is a result; `status` is not `readonly`
+R7.js	record.parallel_recalc_stats	readonly	`ParallelRecalcStats` is a result; `cellsEvaluated` is not `readonly`
+R7.js	record.partial_recalc_result	readonly	`PartialRecalcResult` is a result; `status` is not `readonly`
+R7.js	record.person	readonly	`Person` is a result; `id` is not `readonly`
+R7.js	record.persons_result	readonly	`PersonsResult` is a result; `status` is not `readonly`
+R7.js	record.phonetic_properties_result	readonly	`PhoneticPropertiesResult` is a result; `status` is not `readonly`
+R7.js	record.phonetic_run	readonly	`PhoneticRun` is a result; `sb` is not `readonly`
+R7.js	record.phonetic_runs_result	readonly	`PhoneticRunsResult` is a result; `status` is not `readonly`
+R7.js	record.pinned_now_result	readonly	`PinnedNowResult` is a result; `status` is not `readonly`
+R7.js	record.pivot_cache_options	readonly	`PivotCacheOptions` is a result; `saveData` is not `readonly`
+R7.js	record.pivot_cache_options_result	readonly	`PivotCacheOptionsResult` is a result; `status` is not `readonly`
+R7.js	record.pivot_cache_shared_item_is_date_result	readonly	`PivotCacheSharedItemIsDateResult` is a result; `status` is not `readonly`
+R7.js	record.pivot_calculated_item_result	readonly	`PivotCalculatedItemResult` is a result; `status` is not `readonly`
+R7.js	record.pivot_cell	readonly	`PivotCell` is a result; `row` is not `readonly`
+R7.js	record.pivot_data_field_result	readonly	`PivotDataFieldResult` is a result; `status` is not `readonly`
+R7.js	record.pivot_data_field_spec	readonly	`PivotDataFieldSpec` is a result; `name` is not `readonly`
+R7.js	record.pivot_field_order_result	readonly	`PivotFieldOrderResult` is a result; `status` is not `readonly`
+R7.js	record.pivot_field_result	readonly	`PivotFieldResult` is a result; `status` is not `readonly`
+R7.js	record.pivot_field_spec	name	`PivotFieldSpec` is an input record; name it `<Name>Input`
+R7.js	record.pivot_filter_result	readonly	`PivotFilterResult` is a result; `status` is not `readonly`
+R7.js	record.pivot_filter_spec	readonly	`PivotFilterSpec` is a result; `axis` is not `readonly`
+R7.js	record.pivot_grand_totals_result	readonly	`PivotGrandTotalsResult` is a result; `status` is not `readonly`
+R7.js	record.pivot_item_result	readonly	`PivotItemResult` is a result; `status` is not `readonly`
+R7.js	record.pivot_layout_result	readonly	`PivotLayoutResult` is a result; `status` is not `readonly`
+R7.js	record.pivot_options	readonly	`PivotOptions` is a result; `showError` is not `readonly`
+R7.js	record.pivot_options_result	readonly	`PivotOptionsResult` is a result; `status` is not `readonly`
+R7.js	record.pivot_projection_pending_result	readonly	`PivotProjectionPendingResult` is a result; `status` is not `readonly`
+R7.js	record.pivot_report_layout_result	readonly	`PivotReportLayoutResult` is a result; `status` is not `readonly`
+R7.js	record.pivot_style_info	readonly	`PivotStyleInfo` is a result; `name` is not `readonly`
+R7.js	record.pivot_style_info_result	readonly	`PivotStyleInfoResult` is a result; `status` is not `readonly`
+R7.js	record.pivot_worksheet_source_result	readonly	`PivotWorksheetSourceResult` is a result; `status` is not `readonly`
+R7.js	record.protected_range	readonly	`ProtectedRange` is a result; `name` is not `readonly`
+R7.js	record.range_style_bases_result	readonly	`RangeStyleBasesResult` is a result; `status` is not `readonly`
+R7.js	record.range_style_snapshot_result	readonly	`RangeStyleSnapshotResult` is a result; `status` is not `readonly`
+R7.js	record.read_diagnostics_result	readonly	`ReadDiagnosticsResult` is a result; `status` is not `readonly`
+R7.js	record.rect_pt	readonly	`RectPt` is a result; `x` is not `readonly`
+R7.js	record.reference	readonly	`ParsedReference` is a result; `sheetName` is not `readonly`
+R7.js	record.resolved_color_result	readonly	`ResolvedColorResult` is a result; `status` is not `readonly`
+R7.js	record.row_layout	readonly	`RowLayout` is a result; `row` is not `readonly`
+R7.js	record.rows_result	readonly	`RowsResult` is a result; `status` is not `readonly`
+R7.js	record.save_diagnostics_result	readonly	`SaveDiagnosticsResult` is a result; `downgradedFormulaCount` is not `readonly`
+R7.js	record.save_result	readonly	`SaveResult` is a result; `status` is not `readonly`
+R7.js	record.shape	readonly	`Shape` is a result; `objectId` is not `readonly`
+R7.js	record.sheet_auto_filter_xml_result	readonly	`SheetAutoFilterXmlResult` is a result; `status` is not `readonly`
+R7.js	record.sheet_format_defaults	readonly	`SheetFormatDefaults` is a result; `defaultColWidth` is not `readonly`
+R7.js	record.sheet_format_defaults_result	readonly	`SheetFormatDefaultsResult` is a result; `status` is not `readonly`
+R7.js	record.sheet_page_breaks_result	readonly	`SheetPageBreaksResult` is a result; `status` is not `readonly`
+R7.js	record.sheet_page_margins_result	readonly	`SheetPageMarginsResult` is a result; `status` is not `readonly`
+R7.js	record.sheet_page_setup_result	readonly	`SheetPageSetupResult` is a result; `status` is not `readonly`
+R7.js	record.sheet_print_area_result	readonly	`SheetPrintAreaResult` is a result; `status` is not `readonly`
+R7.js	record.sheet_print_titles_result	readonly	`SheetPrintTitlesResult` is a result; `status` is not `readonly`
+R7.js	record.sheet_print_xml_result	readonly	`SheetPrintXmlResult` is a result; `status` is not `readonly`
+R7.js	record.sheet_protection	readonly	`SheetProtection` is a result; `enabled` is not `readonly`
+R7.js	record.sheet_protection_result	readonly	`SheetProtectionResult` is a result; `status` is not `readonly`
+R7.js	record.sheet_selection_result	readonly	`SheetSelectionResult` is a result; `status` is not `readonly`
+R7.js	record.sheet_view	readonly	`SheetView` is a result; `zoomScale` is not `readonly`
+R7.js	record.sheet_view_result	readonly	`SheetViewResult` is a result; `status` is not `readonly`
+R7.js	record.slicer	readonly	`Slicer` is a result; `objectId` is not `readonly`
+R7.js	record.sparkline	readonly	`Sparkline` is a result; `formula` is not `readonly`
+R7.js	record.sparkline_group	readonly	`SparklineGroup` is a result; `type` is not `readonly`
+R7.js	record.string_result	readonly	`StringResult` is a result; `status` is not `readonly`
+R7.js	record.table_style	readonly	`TableStyle` is a result; `name` is not `readonly`
+R7.js	record.table_style_defaults_result	readonly	`TableStyleDefaultsResult` is a result; `status` is not `readonly`
+R7.js	record.table_style_element	readonly	`TableStyleElement` is a result; `type` is not `readonly`
+R7.js	record.table_style_result	readonly	`TableStyleResult` is a result; `status` is not `readonly`
+R7.js	record.theme_fonts	readonly	`ThemeFonts` is a result; `majorLatin` is not `readonly`
+R7.js	record.theme_result	readonly	`ThemeResult` is a result; `status` is not `readonly`
+R7.js	record.threaded_comment	readonly	`ThreadedComment` is a result; `id` is not `readonly`
+R7.js	record.threaded_comments_result	readonly	`ThreadedCommentsResult` is a result; `status` is not `readonly`
+R7.js	record.validation_outcome_result	readonly	`ValidationOutcomeResult` is a result; `status` is not `readonly`
+R7.js	record.value	readonly	`Value` is a result; `kind` is not `readonly`
+R7.js	record.width_model_result	readonly	`WidthModelResult` is a result; `status` is not `readonly`
+R7.js	record.workbook_protection	readonly	`WorkbookProtection` is a result; `lockStructure` is not `readonly`
+R7.js	record.workbook_protection_result	readonly	`WorkbookProtectionResult` is a result; `status` is not `readonly`
+R8.js	border.add	result	`addBorder` returns `AddStyleResult`, not `IndexResult`
+R8.js	cell_xf.add	result	`addXf` returns `AddStyleResult`, not `IndexResult`
+R8.js	cf_rule.add	result	`addConditionalFormat` returns `AddStyleResult`, not `IndexResult`
+R8.js	chart.add	result	`insertChart` returns `InsertChartResult`, not `ObjectIdResult`
+R8.js	chart.get	result	`getChart` returns `ChartResult`, not `OptionalResult`
+R8.js	comment.get	null	`getComment` returns `CommentEntry | null`; wrap it
+R8.js	comment.get	result	`getComment` returns `CommentEntry | null`, not `OptionalResult`
+R8.js	comment.get.get_comment_result	getCommentResult	`getCommentResult` is dropped from the wasm surface
+R8.js	data_table.get	result	`getDataTable` returns `DataTableResult`, not `OptionalResult`
+R8.js	dxf.add	result	`addDxf` returns `AddStyleResult`, not `IndexResult`
+R8.js	error_display_name.get	result	`errorDisplayName` returns `string`, not `OptionalResult`
+R8.js	field.status_code	code	`Status` should carry `code`, not `status`
+R8.js	fill.add	result	`addFill` returns `AddStyleResult`, not `IndexResult`
+R8.js	font.add	result	`addFont` returns `AddStyleResult`, not `IndexResult`
+R8.js	function_metadata.get	result	`functionMetadata` returns `FunctionMetadataResult`, not `OptionalResult`
+R8.js	image.add	result	`insertImage` returns `InsertImageResult`, not `ObjectIdResult`
+R8.js	image.get	result	`getImage` returns `ImageResult`, not `OptionalResult`
+R8.js	lambda_text.get	result	`getLambdaText` returns `LambdaTextResult`, not `OptionalResult`
+R8.js	num_fmt_string.get	result	`getNumFmt` returns `NumFmtResult`, not `OptionalResult`
+R8.js	pivot.create	result	`pivotCreate` returns `AddStyleResult`, not `IndexResult`
+R8.js	pivot_cache.get_id	result	`pivotCacheId` returns `AddStyleResult`, not `OptionalResult`
+R8.js	pivot_cache_calculated_field.add	result	`pivotCacheCalculatedFieldAdd` returns `AddStyleResult`, not `IndexResult`
+R8.js	reference.parse	null	`parseReference` returns `ParsedReference | null`; wrap it
+R8.js	shape.add	result	`insertShape` returns `InsertImageResult`, not `ObjectIdResult`
+R8.js	slicer.add	result	`addSlicer` returns `InsertImageResult`, not `ObjectIdResult`
+R8.js	table.create	result	`createTable` returns `AddStyleResult`, not `IndexResult`
+R8.js	value.get	result	`getValue` returns `CellResult`, not `OptionalResult`
+R8.js	workbook.create	result	`Workbook.createDefault` returns `Workbook`, not `OptionalResult`
+R8.js	workbook.create_empty	result	`Workbook.createEmpty` returns `Workbook`, not `OptionalResult`
+R8.js	workbook.create_for_profile	result	`Workbook.createForProfile` returns `Workbook`, not `OptionalResult`
+R8.js	workbook.load	result	`Workbook.loadBytes` returns `Workbook`, not `OptionalResult`
