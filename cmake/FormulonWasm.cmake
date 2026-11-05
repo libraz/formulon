@@ -202,8 +202,12 @@ else()
   # Cold eval families (special functions, financial, ETS, format parsing,
   # GROUPBY/PIVOTBY) join them, with PCRE2: Brotli -26 KB, results
   # bit-identical, per-call time within noise (measured 2026-10-25).
+  # Workbook/sheet structural-edit, copy, table, pivot-detail and print-area
+  # TUs join them: raw -55 KB, Brotli -12 KB; load, row edits, copySheet and
+  # structured-reference entry within noise (measured 2026-11-06).
   string(CONCAT _FM_WASM_COLD_SOURCE_REGEX
     "^src/(io|c_api|chart|drawing|pivot)/|"
+    "^src/(workbook_(copy_sheet|pivot_details|pivot_projection|tables|ref_rewrite|row_col_edit|table_loss|defined_names|merges_arrays)|sheet_(row_col_edit|copy_names)|threaded_comment|new_workbook_defaults|print/(page_setup|print_area))\\.cpp$|"
     "^src/eval/(stats/|builtins/(financial|engineering|complex_num|distributions|cube|web)|builtins/stats/stats_distributions|builtins/(math_combinatorics|text_dbcs|text_width)|text_format/|groupby_pivotby/)|"
     "^src/eval/(ets_series|ets_detect|ets_calendar|ets_grid|date_text_parse|regex_lazy|regex_replacement|locale_function_names|holt_winters|forecast_ets_lazy|financial_lazy|coupon_schedule|database_lazy|getpivotdata_lazy|hypothesis_lazy|linest_lazy|regression_lazy)\\.cpp$")
   set(_FM_WASM_HOT_LOAD_REGEX
