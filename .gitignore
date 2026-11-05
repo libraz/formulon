@@ -145,3 +145,6 @@ bench_results/
 # Excel owner-lock files, left behind whenever a probe drives Excel over a
 # fixture. Never part of a fixture, and 165 bytes of noise if committed.
 ~$*
+
+# Local config for the ../sendaway tool.
+.sendaway.yml
