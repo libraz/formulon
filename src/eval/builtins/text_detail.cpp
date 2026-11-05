@@ -1,8 +1,7 @@
 //
-// Shared definition of `read_int_arg` for the text builtin family. Hoisted
-// out of `text.cpp` into its own TU because the DBCS family (`text_dbcs.cpp`)
-// and the modern TEXTBEFORE/TEXTAFTER family (`text_modern.cpp`) both
-// reference it; keeping a single definition here avoids ODR violations.
+// Shared text-family helpers: DBCS byte widths, integer argument readers,
+// FIND/SEARCH argument parsing and matching, and window argument reading.
+//
 
 #include "eval/builtins/text_detail.h"
 

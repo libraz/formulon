@@ -354,7 +354,7 @@ Value MRound(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   // Mac Excel 16.112 ja-JP oracle-derived local cutoff: values below the
   // half boundary by at most C = 90 * 2^-54 = 0x1.68p-48 round up.
   constexpr double kMacExcelMRoundCutoff = 0x1.68p-48;
-  const bool round_up = fraction >= 0.5 || (fraction < 0.5 && 0.5 - fraction <= kMacExcelMRoundCutoff);
+  const bool round_up = fraction >= 0.5 || 0.5 - fraction <= kMacExcelMRoundCutoff;
   const double rounded_quotient = integer_quotient + (round_up ? 1.0 : 0.0);
   // Restore the sign only after choosing the nearest magnitude quotient.
   const double r = signum(n) * rounded_quotient * abs_m;
