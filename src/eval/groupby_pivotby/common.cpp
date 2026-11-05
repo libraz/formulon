@@ -182,10 +182,10 @@ std::string_view total_label(const EvalContext& ctx, bool with_subtotals) {
 bool resolve_aggregator(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx, Aggregator* out, Value* out_err) {
   // The arity depends on the callable, so read it before resolving at that
-  // arity; `resolve_callable` reports every error the peek skips.
+  // arity; `resolve_callable_value` reports every error the peek skips.
   const Value peek = eval_node(arg, arena, registry, ctx);
   const std::uint32_t arity = peek.is_lambda() ? aggregator_arity(*peek.as_lambda(), registry) : 1U;
-  out->fn = resolve_callable(arg, arity, arena, registry, ctx, out_err);
+  out->fn = resolve_callable_value(peek, arity, arena, out_err);
   out->arity = arity;
   out->all_by_column.clear();
   out->all_ast_by_column.clear();

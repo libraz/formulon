@@ -266,7 +266,10 @@ const LambdaValue* check_callable(const LambdaValue* lv, std::uint32_t call_arit
 const LambdaValue* resolve_callable(const parser::AstNode& arg, std::uint32_t call_arity, Arena& arena,
                                     const FunctionRegistry& registry, const EvalContext& ctx, Value* out_err) {
   // A bare built-in name evaluates to a function value like any LAMBDA.
-  const Value v = eval_node(arg, arena, registry, ctx);
+  return resolve_callable_value(eval_node(arg, arena, registry, ctx), call_arity, arena, out_err);
+}
+
+const LambdaValue* resolve_callable_value(const Value& v, std::uint32_t call_arity, Arena& arena, Value* out_err) {
   if (v.is_error()) {
     *out_err = v;
     return nullptr;

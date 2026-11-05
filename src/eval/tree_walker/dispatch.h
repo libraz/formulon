@@ -158,6 +158,10 @@ Value invoke_lambda_values(const LambdaValue* lv, std::uint32_t arity, const Val
 const LambdaValue* resolve_callable(const parser::AstNode& arg, std::uint32_t call_arity, Arena& arena,
                                     const FunctionRegistry& registry, const EvalContext& ctx, Value* out_err);
 
+/// `resolve_callable` for an argument the caller already evaluated, so a
+/// volatile argument is evaluated once. Same errors and result.
+const LambdaValue* resolve_callable_value(const Value& v, std::uint32_t call_arity, Arena& arena, Value* out_err);
+
 /// `invoke_lambda_values` with an optional parallel array of AST nodes
 /// (length `arity`) recorded alongside each binding. When non-null, the AST
 /// node lets range-aware consumers inside the lambda body see the binding as

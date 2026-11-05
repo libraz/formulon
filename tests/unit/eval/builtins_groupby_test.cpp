@@ -1535,6 +1535,32 @@ TEST(PivotByCollation, WindowsJaJpGroups) {
   EXPECT_EQ(EvalNumber("=ROWS(PIVOTBY({\"\xE3\x81\x82\";\"\xE3\x82\xA2\"},{\"X\";\"X\"},{1;2},SUM,0,0,,0))", win), 3.0);
 }
 
+// A volatile aggregator argument must be evaluated once: the arity peek and
+// the callable resolution would otherwise pick different LAMBDAs and disagree.
+TEST(GroupBy, VolatileAggregatorArgumentEvaluatedOnce) {
+  for (int i = 0; i < 200; ++i) {
+    const Value v = EvalSrc("=GROUPBY({1;1;2},{1;2;3},IF(RAND()<0.5,LAMBDA(x,SUM(x)),LAMBDA(x,y,SUM(x))),,0)");
+    ASSERT_TRUE(v.is_array()) << "iteration " << i << ": " << v.debug_to_string();
+    ASSERT_EQ(v.as_array_rows(), 2U);
+    ASSERT_EQ(v.as_array_cols(), 2U);
+    EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 3.0) << "iteration " << i;
+    EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 3.0) << "iteration " << i;
+  }
+}
+
+TEST(PivotBy, VolatileAggregatorArgumentEvaluatedOnce) {
+  for (int i = 0; i < 200; ++i) {
+    const Value v = EvalSrc(
+        "=PIVOTBY({1;1;2},{\"X\";\"X\";\"X\"},{1;2;3},IF(RAND()<0.5,LAMBDA(x,SUM(x)),LAMBDA(x,y,SUM(x))),0,0,,0)");
+    ASSERT_TRUE(v.is_array()) << "iteration " << i << ": " << v.debug_to_string();
+    // Column-header row, then one row per group.
+    ASSERT_EQ(v.as_array_rows(), 3U);
+    ASSERT_EQ(v.as_array_cols(), 2U);
+    EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 3.0) << "iteration " << i;
+    EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 3.0) << "iteration " << i;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
