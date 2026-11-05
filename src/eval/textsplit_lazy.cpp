@@ -94,6 +94,13 @@ std::vector<std::string> split_by_any(std::string_view text, const std::vector<s
     return tokens;
   }
 
+  std::string folded;
+  std::string_view hay = text;
+  if (fold_haystack) {
+    folded = strings::to_ascii_lower(text);
+    hay = folded;
+  }
+
   // The common scalar-delimiter path can use the string library's find loop;
   // unlike the general path it does not inspect every byte against every
   // delimiter. ASCII folding is byte-preserving, so offsets in `hay` are
@@ -103,12 +110,6 @@ std::vector<std::string> split_by_any(std::string_view text, const std::vector<s
     if (needle.empty()) {
       tokens.emplace_back(text);
       return tokens;
-    }
-    std::string folded;
-    std::string_view hay = text;
-    if (fold_haystack) {
-      folded = strings::to_ascii_lower_owned(std::string(text));
-      hay = folded;
     }
     std::size_t token_start = 0;
     std::size_t search_start = 0;
@@ -123,13 +124,6 @@ std::vector<std::string> split_by_any(std::string_view text, const std::vector<s
     }
     tokens.emplace_back(text.substr(token_start));
     return tokens;
-  }
-
-  std::string lowered;
-  std::string_view hay = text;
-  if (fold_haystack) {
-    lowered = strings::to_ascii_lower_owned(std::string(text));
-    hay = lowered;
   }
 
   std::size_t token_start = 0;
