@@ -325,11 +325,11 @@ class JsWorkbook {
   JsStatus clearColumnStyle(uint32_t sheet, uint32_t first, uint32_t last);
 
   emscripten::val getSheetRowOverrides(uint32_t sheet) const;
-  JsStatus setRowHeight(uint32_t sheet, uint32_t row, double height);
-  JsStatus setRowAutoHeight(uint32_t sheet, uint32_t row, double height);
-  JsStatus setRowHidden(uint32_t sheet, uint32_t row, bool hidden);
-  JsStatus setRowOutline(uint32_t sheet, uint32_t row, uint32_t level);
-  JsStatus setRowCollapsed(uint32_t sheet, uint32_t row, bool collapsed);
+  JsStatus setRowHeight(uint32_t sheet, uint32_t first, uint32_t last, double height);
+  JsStatus setRowAutoHeight(uint32_t sheet, uint32_t first, uint32_t last, double height);
+  JsStatus setRowHidden(uint32_t sheet, uint32_t first, uint32_t last, bool hidden);
+  JsStatus setRowOutline(uint32_t sheet, uint32_t first, uint32_t last, uint32_t level);
+  JsStatus setRowCollapsed(uint32_t sheet, uint32_t first, uint32_t last, bool collapsed);
   JsStatus setRowStyle(uint32_t sheet, uint32_t first, uint32_t last, uint32_t xfIndex);
   JsStatus clearRowStyle(uint32_t sheet, uint32_t first, uint32_t last);
   emscripten::val rangeStyleBases(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
@@ -343,7 +343,7 @@ class JsWorkbook {
                                      uint32_t lastCol) const;
   JsStatus restoreRangeStyle(uint32_t sheet, emscripten::val bytes);
   /// Drops the height override at `row`, returning it to the sheet default.
-  JsStatus clearRowHeight(uint32_t sheet, uint32_t row);
+  JsStatus clearRowHeight(uint32_t sheet, uint32_t first, uint32_t last);
   JsStatus clearColumnWidth(uint32_t sheet, uint32_t first, uint32_t last);
 
   /// Sheet default column / row metrics (`<sheetFormatPr>`).

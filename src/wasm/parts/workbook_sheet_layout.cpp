@@ -512,28 +512,29 @@ emscripten::val JsWorkbook::getSheetRowOverrides(uint32_t sheet) const {
   return entry_list(handle_, sheet, &fm_sheet_get_row_override_count, "rows", &row_entry);
 }
 
-JsStatus JsWorkbook::setRowHeight(uint32_t sheet, uint32_t row, double height) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_set_row_height(handle_, sheet, row, height)
+JsStatus JsWorkbook::setRowHeight(uint32_t sheet, uint32_t first, uint32_t last, double height) {
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_row_height(handle_, sheet, first, last, height)
                                            : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::setRowAutoHeight(uint32_t sheet, uint32_t row, double height) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_set_row_auto_height(handle_, sheet, row, height)
+JsStatus JsWorkbook::setRowAutoHeight(uint32_t sheet, uint32_t first, uint32_t last, double height) {
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_row_auto_height(handle_, sheet, first, last, height)
                                            : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::setRowHidden(uint32_t sheet, uint32_t row, bool hidden) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_set_row_hidden(handle_, sheet, row, hidden ? 1 : 0)
+JsStatus JsWorkbook::setRowHidden(uint32_t sheet, uint32_t first, uint32_t last, bool hidden) {
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_row_hidden(handle_, sheet, first, last, hidden ? 1 : 0)
                                            : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::setRowOutline(uint32_t sheet, uint32_t row, uint32_t level) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_set_row_outline(handle_, sheet, row, clamp_outline_level(level))
-                                           : kBindingInvalidHandle);
+JsStatus JsWorkbook::setRowOutline(uint32_t sheet, uint32_t first, uint32_t last, uint32_t level) {
+  return status_from_rc(handle_ != nullptr
+                            ? fm_sheet_set_row_outline(handle_, sheet, first, last, clamp_outline_level(level))
+                            : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::setRowCollapsed(uint32_t sheet, uint32_t row, bool collapsed) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_set_row_collapsed(handle_, sheet, row, collapsed ? 1 : 0)
+JsStatus JsWorkbook::setRowCollapsed(uint32_t sheet, uint32_t first, uint32_t last, bool collapsed) {
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_row_collapsed(handle_, sheet, first, last, collapsed ? 1 : 0)
                                            : kBindingInvalidHandle);
 }
 
@@ -675,8 +676,9 @@ JsStatus JsWorkbook::restoreRangeStyle(uint32_t sheet, emscripten::val bytes) {
   return status_from_rc(fm_sheet_restore_range_style(handle_, sheet, data.data(), data.size()));
 }
 
-JsStatus JsWorkbook::clearRowHeight(uint32_t sheet, uint32_t row) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_clear_row_height(handle_, sheet, row) : kBindingInvalidHandle);
+JsStatus JsWorkbook::clearRowHeight(uint32_t sheet, uint32_t first, uint32_t last) {
+  return status_from_rc(handle_ != nullptr ? fm_sheet_clear_row_height(handle_, sheet, first, last)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::clearColumnWidth(uint32_t sheet, uint32_t first, uint32_t last) {

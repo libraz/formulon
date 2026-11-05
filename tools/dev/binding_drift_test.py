@@ -496,6 +496,22 @@ class ApiConventionRuleTest(unittest.TestCase):
             [("fm_sheet_set_row_hidden", "-")],
         )
 
+    def test_r11_axis_auto_height_and_clear_height(self) -> None:
+        width = (
+            "FM_API fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last, double width);\n"  # noqa: E501
+            "FM_API fm_status_t fm_sheet_clear_column_width(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last);\n"  # noqa: E501
+        )
+        self.assert_rule(
+            "R11.axis",
+            width
+            + "FM_API fm_status_t fm_sheet_set_row_auto_height(fm_workbook_t* wb, size_t sheet_index, uint32_t row, double height);\n"  # noqa: E501
+            + "FM_API fm_status_t fm_sheet_clear_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t row);\n",  # noqa: E501
+            width
+            + "FM_API fm_status_t fm_sheet_set_row_auto_height(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last, double height);\n"  # noqa: E501
+            + "FM_API fm_status_t fm_sheet_clear_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last);\n",  # noqa: E501
+            [("fm_sheet_clear_row_height", "-"), ("fm_sheet_set_row_auto_height", "-")],
+        )
+
     def test_r11_rect(self) -> None:
         rect = "typedef struct {\n  uint32_t first_row;\n  uint32_t first_col;\n  uint32_t last_row;\n  uint32_t last_col;\n}"
         self.assert_rule(

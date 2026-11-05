@@ -508,7 +508,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   std::size_t new_index = 0;
-  fm_status_t rc = fm_sheet_add_cf_rule(handle_, sheet, rule, &new_index);
+  fm_status_t rc = fm_sheet_add_cf_rule(handle_, sheet, &rule, &new_index);
   return MakeNumberFieldResult(env, rc, "index", static_cast<double>(new_index));
 }
 

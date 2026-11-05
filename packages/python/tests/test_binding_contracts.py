@@ -1080,7 +1080,7 @@ class CollectionReaderAllocationTests(unittest.TestCase):
 
     def test_get_sheet_row_overrides_allocation_count_is_flat(self) -> None:
         self._assert_flat_in_item_count(
-            lambda wb, n: [wb.set_row_height(0, r, 15.0) for r in range(n)],
+            lambda wb, n: [wb.set_row_height(0, r, r, 15.0) for r in range(n)],
             lambda wb: wb.list_row_overrides(0),
         )
 

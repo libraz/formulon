@@ -214,8 +214,9 @@ Expected<void, Error> apply_layout(fm_workbook_t* wb, const JsonValue& spec) {
       if (!height.is_number()) {
         return invalid("row_heights['" + key + "'] is not a number");
       }
-      RETURN_IF_ERROR(checked(fm_sheet_set_row_height(wb, 0, static_cast<std::uint32_t>(row - 1), height.as_number()),
-                              "fm_sheet_set_row_height"));
+      const auto row0 = static_cast<std::uint32_t>(row - 1);
+      RETURN_IF_ERROR(
+          checked(fm_sheet_set_row_height(wb, 0, row0, row0, height.as_number()), "fm_sheet_set_row_height"));
     }
   }
   return {};

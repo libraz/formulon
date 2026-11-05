@@ -440,7 +440,7 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
   }
 
   std::size_t new_index = 0;
-  const fm_status_t rc = fm_sheet_add_cf_rule(handle_, sheet, rule, &new_index);
+  const fm_status_t rc = fm_sheet_add_cf_rule(handle_, sheet, &rule, &new_index);
   return index_result(rc, new_index);
 }
 

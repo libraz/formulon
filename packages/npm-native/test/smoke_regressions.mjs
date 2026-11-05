@@ -387,7 +387,7 @@ test('sheet-layout setters refuse coordinates and metrics Excel cannot open', as
     // `kInvalidArgument` while the text stopped matching. The status code
     // alone cannot tell a shared implementation from two that agree today.
     const kSpanRefused = 'column span out of range';
-    const kRowRefused = 'row index out of range';
+    const kRowSpanRefused = 'row span out of range';
     const kMetricRefused = 'value must be finite and non-negative';
     // These six setters answer with a bare Status, not a `{status}`
     // envelope, so the diagnostics are read off the returned object.
@@ -401,34 +401,34 @@ test('sheet-layout setters refuse coordinates and metrics Excel cannot open', as
     refused(wb.setColumnWidth(0, 0, 16384, 10), kSpanRefused, 'setColumnWidth past the grid');
     refused(wb.setColumnHidden(0, 0, 16384, true), kSpanRefused, 'setColumnHidden past the grid');
     refused(wb.setColumnOutline(0, 0, 16384, 1), kSpanRefused, 'setColumnOutline past the grid');
-    refused(wb.setRowHeight(0, 1048576, 10), kRowRefused, 'setRowHeight past the grid');
-    refused(wb.setRowHidden(0, 1048576, true), kRowRefused, 'setRowHidden past the grid');
-    refused(wb.setRowOutline(0, 1048576, 1), kRowRefused, 'setRowOutline past the grid');
+    refused(wb.setRowHeight(0, 0, 1048576, 10), kRowSpanRefused, 'setRowHeight past the grid');
+    refused(wb.setRowHidden(0, 0, 1048576, true), kRowSpanRefused, 'setRowHidden past the grid');
+    refused(wb.setRowOutline(0, 0, 1048576, 1), kRowSpanRefused, 'setRowOutline past the grid');
 
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1]) {
       refused(wb.setColumnWidth(0, 0, 2, bad), kMetricRefused, `setColumnWidth(${bad})`);
-      refused(wb.setRowHeight(0, 1, bad), kMetricRefused, `setRowHeight(${bad})`);
+      refused(wb.setRowHeight(0, 1, 1, bad), kMetricRefused, `setRowHeight(${bad})`);
     }
 
     // The context names the C ABI entry point that refused the call and
     // the values it saw, which is what makes a rejection actionable.
     const span = wb.setColumnWidth(0, 0, 16384, 10);
     assert.match(span.context, /fm_sheet_set_column_width: first=0 last=16384/);
-    const metric = wb.setRowHeight(0, 1, Number.NaN);
+    const metric = wb.setRowHeight(0, 1, 1, Number.NaN);
     assert.match(metric.context, /fm_sheet_set_row_height: height=/);
 
     // Zero is a real width and a real height, not a rejected one.
     assert.ok(wb.setColumnWidth(0, 0, 2, 0).ok);
-    assert.ok(wb.setRowHeight(0, 1, 0).ok);
+    assert.ok(wb.setRowHeight(0, 1, 1, 0).ok);
 
     // The last coordinates Excel does address stay accepted -- an
     // off-by-one in either bound would refuse them.
     assert.ok(wb.setColumnWidth(0, 16383, 16383, 10).ok);
     assert.ok(wb.setColumnHidden(0, 16383, 16383, true).ok);
     assert.ok(wb.setColumnOutline(0, 16383, 16383, 1).ok);
-    assert.ok(wb.setRowHeight(0, 1048575, 10).ok);
-    assert.ok(wb.setRowHidden(0, 1048575, true).ok);
-    assert.ok(wb.setRowOutline(0, 1048575, 1).ok);
+    assert.ok(wb.setRowHeight(0, 1048575, 1048575, 10).ok);
+    assert.ok(wb.setRowHidden(0, 1048575, 1048575, true).ok);
+    assert.ok(wb.setRowOutline(0, 1048575, 1048575, 1).ok);
   } finally {
     wb.dispose();
   }

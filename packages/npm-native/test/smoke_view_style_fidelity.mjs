@@ -25,8 +25,8 @@ const roundTrip = (mod, wb) => {
 test('collapsed reads back on rows and columns and survives save/load', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.ok(wb.setRowOutline(0, 1, 2).ok);
-  assert.ok(wb.setRowCollapsed(0, 3, true).ok);
+  assert.ok(wb.setRowOutline(0, 1, 1, 2).ok);
+  assert.ok(wb.setRowCollapsed(0, 3, 3, true).ok);
   assert.ok(wb.setColumnOutline(0, 2, 3, 3).ok);
   assert.ok(wb.setColumnCollapsed(0, 4, 4, true).ok);
   const collapsedRows = (b) =>
@@ -39,9 +39,9 @@ test('collapsed reads back on rows and columns and survives save/load', async ()
   assert.deepEqual(collapsedRows(loaded), [3]);
   assert.equal(loaded.listColOverrides(0).columns.filter((c) => c.collapsed).length, 1);
   // Clearing the flag drops an override that carries nothing else.
-  assert.ok(loaded.setRowCollapsed(0, 3, false).ok);
+  assert.ok(loaded.setRowCollapsed(0, 3, 3, false).ok);
   assert.deepEqual(collapsedRows(loaded), []);
-  assert.equal(wb.setRowCollapsed(9, 0, true).ok, false);
+  assert.equal(wb.setRowCollapsed(9, 0, 0, true).ok, false);
   assert.equal(wb.setColumnCollapsed(0, 3, 2, true).ok, false);
   release(loaded);
   release(wb);

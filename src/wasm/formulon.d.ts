@@ -5093,17 +5093,17 @@ export interface Workbook {
 
   /** Returns the row-layout overrides on `sheet`. */
   listRowOverrides(sheet: number): RowsResult;
-  /** Sets / replaces the row height at `row` as a manual height (`customHeight`), which stays put when the row's content or font changes. */
-  setRowHeight(sheet: number, row: number, height: number): Status;
-  /** Stores `height` as the cached value of `row`'s automatic height: saved as `ht` without `customHeight`, so the row keeps following its content and font. Row style, hidden, outline and collapsed state are kept; `clearRowHeight` drops it. */
-  setRowAutoHeight(sheet: number, row: number, height: number): Status;
-  /** Sets / replaces the row hidden flag at `row`. */
-  setRowHidden(sheet: number, row: number, hidden: boolean): Status;
-  /** Sets / replaces the row outline level at `row`. A level above 7, the
-   *  deepest Excel stores, fails with `kInvalidArgument`. */
-  setRowOutline(sheet: number, row: number, level: number): Status;
-  /** Sets / clears the row `collapsed` flag at `row`. */
-  setRowCollapsed(sheet: number, row: number, collapsed: boolean): Status;
+  /** Sets / replaces the row height on `[first, last]` as a manual height (`customHeight`), which stays put when the row's content or font changes. */
+  setRowHeight(sheet: number, first: number, last: number, height: number): Status;
+  /** Stores `height` as the cached automatic height of the rows on `[first, last]`: saved as `ht` without `customHeight`, so each row keeps following its content and font. Row style, hidden, outline and collapsed state are kept; `clearRowHeight` drops it. */
+  setRowAutoHeight(sheet: number, first: number, last: number, height: number): Status;
+  /** Sets / replaces the row hidden flag on `[first, last]`. */
+  setRowHidden(sheet: number, first: number, last: number, hidden: boolean): Status;
+  /** Sets / replaces the row outline level on `[first, last]`. A level
+   *  above 7, the deepest Excel stores, fails with `kInvalidArgument`. */
+  setRowOutline(sheet: number, first: number, last: number, level: number): Status;
+  /** Sets / clears the row `collapsed` flag on `[first, last]`. */
+  setRowCollapsed(sheet: number, first: number, last: number, collapsed: boolean): Status;
   /** Sets / replaces the cell-style XF of the inclusive row span `first..last`; index 0 is the default XF. A value later entered into an unstyled cell of a covered row takes this XF. Nothing changes on failure. */
   setRowStyle(sheet: number, first: number, last: number, xfIndex: number): Status;
   /** Removes the cell-style XF of the inclusive row span `first..last`, retaining other row attributes. */
@@ -5170,8 +5170,8 @@ export interface Workbook {
   ): RangeStyleSnapshotResult;
   /** Puts a `snapshotRangeStyle` capture back exactly. Values, formulas, phonetic runs and comments are not touched; nothing changes on failure. */
   restoreRangeStyle(sheet: number, bytes: Uint8Array): Status;
-  /** Removes the height override at `row`, returning it to the sheet default. */
-  clearRowHeight(sheet: number, row: number): Status;
+  /** Removes the height override on rows `first..last`, returning them to the sheet default height. */
+  clearRowHeight(sheet: number, first: number, last: number): Status;
   /** Removes the width override on columns `first..last`, returning them to the sheet default width. Hidden state, outline level and column style are kept. */
   clearColumnWidth(sheet: number, first: number, last: number): Status;
 

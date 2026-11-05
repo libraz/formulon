@@ -170,11 +170,11 @@ extern "C" fm_status_t fm_workbook_clear_theme(fm_workbook_t* wb) {
   return finish_status(wb->workbook().reset_theme());
 }
 
-extern "C" fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, fm_color_spec_t spec, int32_t context,
+extern "C" fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, const fm_color_spec_t* spec, int32_t context,
                                                  uint32_t* out_argb, int32_t* out_resolution) {
   static constexpr const char* kFn = "fm_workbook_resolve_color";
   clear_last_error();
-  if (wb == nullptr || out_argb == nullptr || out_resolution == nullptr) {
+  if (wb == nullptr || spec == nullptr || out_argb == nullptr || out_resolution == nullptr) {
     return null_argument("fm_workbook_resolve_color");
   }
   if (auto rc = check_enum_domain(context, static_cast<std::int64_t>(formulon::ColorContext::kBorder), kFn, "context");
@@ -182,20 +182,20 @@ extern "C" fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, fm_col
     return rc;
   }
   if (auto rc =
-          check_enum_domain(spec.kind, static_cast<std::int64_t>(formulon::ColorSpec::Kind::kAuto), kFn, "spec.kind");
+          check_enum_domain(spec->kind, static_cast<std::int64_t>(formulon::ColorSpec::Kind::kAuto), kFn, "spec.kind");
       rc != 0) {
     return rc;
   }
   formulon::ColorSpec model;
-  model.kind = static_cast<formulon::ColorSpec::Kind>(spec.kind);
-  model.rgb = spec.rgb;
-  model.theme = spec.theme;
-  model.indexed = spec.indexed;
+  model.kind = static_cast<formulon::ColorSpec::Kind>(spec->kind);
+  model.rgb = spec->rgb;
+  model.theme = spec->theme;
+  model.indexed = spec->indexed;
   if (model.kind == formulon::ColorSpec::Kind::kTheme) {
-    if (auto rc = check_finite(spec.tint, kFn, "spec.tint"); rc != 0) {
+    if (auto rc = check_finite(spec->tint, kFn, "spec.tint"); rc != 0) {
       return rc;
     }
-    model.tint = spec.tint;
+    model.tint = spec->tint;
   }
   const formulon::ResolvedColor resolved =
       formulon::resolve_color(wb->workbook(), model, static_cast<formulon::ColorContext>(context));

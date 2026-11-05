@@ -786,12 +786,17 @@ def _rule_lifetime_doc(ctx: Context) -> Iterable[Violation]:
             )
 
 
+# Row properties whose column counterpart has a different name; a row's height,
+# cached automatic height and cleared height all mirror the column width.
+_ROW_TO_COLUMN_PROPERTY = {"height": "width", "auto_height": "width"}
+
+
 def _counterpart_column(row_setter: str) -> Optional[str]:
-    match = re.fullmatch(r"(.*_set_)row_(\w+)", row_setter)
+    match = re.fullmatch(r"(.*_)(set|clear)_row_(\w+)", row_setter)
     if not match:
         return None
-    prop = "width" if match.group(2) == "height" else match.group(2)
-    return f"{match.group(1)}column_{prop}"
+    prop = _ROW_TO_COLUMN_PROPERTY.get(match.group(3), match.group(3))
+    return f"{match.group(1)}{match.group(2)}_column_{prop}"
 
 
 def _takes_span(fn: CFunction) -> bool:
@@ -801,7 +806,7 @@ def _takes_span(fn: CFunction) -> bool:
 
 @rule("R11.axis")
 def _rule_axis_symmetry(ctx: Context) -> Iterable[Violation]:
-    """A row setter takes the same `(first, last)` span as its column counterpart."""
+    """A row setter or clearer takes the same `(first, last)` span as its column counterpart."""
     by_target = {ctx.target_c(fn.name): fn for fn in ctx.functions}
     for target, fn in by_target.items():
         column = by_target.get(_counterpart_column(target) or "")

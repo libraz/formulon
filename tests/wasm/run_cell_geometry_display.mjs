@@ -222,30 +222,30 @@ export function registerCellGeometryDisplay(Module, test) {
 
   test('row heights: clearRowHeight and the has/custom flags on row overrides', () => {
     withWorkbook(Module, (wb) => {
-      assert.ok(wb.setRowHeight(0, 3, 30).ok);
+      assert.ok(wb.setRowHeight(0, 3, 3, 30).ok);
       const rows = wb.listRowOverrides(0).rows;
       assert.equal(rows.length, 1);
       assert.equal(rows[0].height, 30);
       assert.equal(rows[0].hasHeight, 1);
       assert.equal(rows[0].customHeight, 1);
-      assert.ok(wb.clearRowHeight(0, 3).ok);
+      assert.ok(wb.clearRowHeight(0, 3, 3).ok);
       assert.equal(wb.listRowOverrides(0).rows.length, 0);
-      assert.ok(wb.clearRowHeight(0, 3).ok);
-      assert.equal(wb.clearRowHeight(9, 0).ok, false);
+      assert.ok(wb.clearRowHeight(0, 3, 3).ok);
+      assert.equal(wb.clearRowHeight(9, 0, 0).ok, false);
     });
   });
 
   test('row heights: setRowAutoHeight caches the height and keeps the row automatic', () => {
     withWorkbook(Module, (wb) => {
-      assert.ok(wb.setRowHidden(0, 4, true).ok);
-      assert.ok(wb.setRowAutoHeight(0, 4, 31.5).ok);
+      assert.ok(wb.setRowHidden(0, 4, 4, true).ok);
+      assert.ok(wb.setRowAutoHeight(0, 4, 4, 31.5).ok);
       const rows = wb.listRowOverrides(0).rows;
       assert.equal(rows.length, 1);
       assert.equal(rows[0].height, 31.5);
       assert.equal(rows[0].hasHeight, 1);
       assert.equal(rows[0].customHeight, 0);
       assert.equal(rows[0].hidden, 1);
-      assert.equal(wb.setRowAutoHeight(0, 4, -1).ok, false);
+      assert.equal(wb.setRowAutoHeight(0, 4, 4, -1).ok, false);
     });
   });
 

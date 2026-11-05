@@ -121,7 +121,8 @@ def _apply_layout(wb: Any, case: Dict[str, Any]) -> None:
         col = _column_index(str(col_key))
         wb.set_column_width(0, col, col, float(width))
     for row_key, height in (case.get("row_heights") or {}).items():
-        wb.set_row_height(0, int(row_key) - 1, float(height))
+        row = int(row_key) - 1
+        wb.set_row_height(0, row, row, float(height))
 
 
 def _apply_print_settings(wb: Any, sheet: int, spec: Dict[str, Any]) -> None:

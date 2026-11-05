@@ -295,7 +295,7 @@ TEST(EvaluateFormulaArray, MergeAtAnchorBlocksVerticalSpill) {
   // Exact A1:B1 merge with a would-be A1:A2 spill. Ad-hoc evaluation is
   // read-only, but it must still surface Excel's #SPILL! collision result.
   const fm_merge_range merge{0U, 0U, 0U, 1U};
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, merge), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, &merge), 0);
 
   uint32_t rows = 0;
   uint32_t cols = 0;

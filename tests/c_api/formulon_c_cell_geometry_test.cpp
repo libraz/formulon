@@ -15,6 +15,7 @@
 
 #include "c_api/formulon_c.h"
 #include "formulon_c_count_of.h"
+#include "formulon_c_record_arg.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 
@@ -168,8 +169,8 @@ TEST(FormulonCApiCellGeometry, TrackSizesFollowOverridesAndHiddenState) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 1U, 1U, 20.0), 0);
   ASSERT_EQ(fm_sheet_set_column_hidden(wb.handle, 0, 2U, 2U, 1), 0);
-  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 1U, 30.0), 0);
-  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 2U, 1), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 1U, 1U, 30.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 2U, 2U, 1), 0);
 
   double width = 0.0;
   ASSERT_EQ(fm_sheet_get_column_width_pt(wb.handle, 0, 1U, FM_GEOMETRY_DISPLAY, &width), 0);
@@ -191,7 +192,7 @@ TEST(FormulonCApiCellGeometry, CellRectSpansRangeAndSkipsHiddenTracks) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 1U, 1U, 20.0), 0);
   ASSERT_EQ(fm_sheet_set_column_hidden(wb.handle, 0, 2U, 2U, 1), 0);
-  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 1U, 30.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 1U, 1U, 30.0), 0);
 
   double col_a = 0.0;
   double col_b = 0.0;
@@ -378,22 +379,24 @@ TEST(FormulonCApiCellRange, FormulaGettersReadA1AndR1C1) {
 TEST(FormulonCApiCellRange, MergesInRangeReportsIntersectingMerges) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, fm_merge_range{0U, 0U, 1U, 1U}), 0);
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, fm_merge_range{5U, 5U, 6U, 8U}), 0);
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, fm_merge_range{20U, 0U, 20U, 3U}), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_merge_range{0U, 0U, 1U, 1U})), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_merge_range{5U, 5U, 6U, 8U})), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_merge_range{20U, 0U, 20U, 3U})), 0);
 
   std::uint32_t total = 0;
   // Corners given transposed: rows 1..6, columns 1..6.
-  ASSERT_EQ(fm_sheet_get_merges_in_range(wb.handle, 0, fm_merge_range{6U, 6U, 1U, 1U}, nullptr, 0U, &total), 0);
+  ASSERT_EQ(fm_sheet_get_merges_in_range(wb.handle, 0, record_arg(fm_merge_range{6U, 6U, 1U, 1U}), nullptr, 0U, &total),
+            0);
   EXPECT_EQ(total, 2U);
   fm_merge_range out[1] = {};
-  ASSERT_EQ(fm_sheet_get_merges_in_range(wb.handle, 0, fm_merge_range{1U, 1U, 6U, 6U}, out, 1U, &total), 0);
+  ASSERT_EQ(fm_sheet_get_merges_in_range(wb.handle, 0, record_arg(fm_merge_range{1U, 1U, 6U, 6U}), out, 1U, &total), 0);
   EXPECT_EQ(total, 2U);
   EXPECT_EQ(out[0].first_row, 0U);
   EXPECT_EQ(out[0].last_col, 1U);
 
-  EXPECT_NE(fm_sheet_get_merges_in_range(wb.handle, 0, fm_merge_range{0U, 0U, 1U, 1U}, nullptr, 1U, &total), 0);
-  EXPECT_EQ(fm_sheet_get_merges_in_range(wb.handle, 9, fm_merge_range{0U, 0U, 1U, 1U}, nullptr, 0U, &total),
+  EXPECT_NE(fm_sheet_get_merges_in_range(wb.handle, 0, record_arg(fm_merge_range{0U, 0U, 1U, 1U}), nullptr, 1U, &total),
+            0);
+  EXPECT_EQ(fm_sheet_get_merges_in_range(wb.handle, 9, record_arg(fm_merge_range{0U, 0U, 1U, 1U}), nullptr, 0U, &total),
             FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 

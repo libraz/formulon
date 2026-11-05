@@ -57,12 +57,12 @@ uint32_t AddBoldDateStyleXf(fm_workbook_t* wb, std::size_t* out_font) {
   font.size = 11.0;
   font.bold = 1;
   font.has_bold = 1;
-  EXPECT_EQ(fm_workbook_add_font(wb, font, out_font), 0);
+  EXPECT_EQ(fm_workbook_add_font(wb, &font, out_font), 0);
   fm_cell_xf_t xf{};
   xf.font_index = static_cast<uint32_t>(*out_font);
   xf.num_fmt_id = 14;
   uint32_t xf_id = 0;
-  EXPECT_EQ(fm_workbook_add_cell_style_xf(wb, xf, &xf_id), 0);
+  EXPECT_EQ(fm_workbook_add_cell_style_xf(wb, &xf, &xf_id), 0);
   return xf_id;
 }
 
@@ -280,7 +280,7 @@ TEST(FormulonCApiNamedStyles, RemoveCellStyleRepointsXfs) {
   cell_xf.num_fmt_id = 14;
   cell_xf.apply_font = 1;
   std::size_t cell_xf_index = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, cell_xf, &cell_xf_index), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &cell_xf, &cell_xf_index), 0);
 
   std::size_t xf_count = 0;
   std::size_t style_xf_count = 0;
@@ -325,7 +325,7 @@ TEST(FormulonCApiNamedStyles, RemoveCellStyleKeepsXfsOfASharedStyleXf) {
   cell_xf.font_index = static_cast<uint32_t>(bold);
   cell_xf.num_fmt_id = 14;
   std::size_t cell_xf_index = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, cell_xf, &cell_xf_index), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &cell_xf, &cell_xf_index), 0);
 
   ASSERT_EQ(fm_workbook_remove_cell_style(wb.handle, "First"), 0);
   fm_cell_xf_t reread{};

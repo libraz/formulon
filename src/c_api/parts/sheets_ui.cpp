@@ -89,26 +89,29 @@ void fill_comment(const formulon::CellComment& c, fm_comment_t* out) {
 // Hyperlinks
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, std::size_t sheet_index, fm_hyperlink_t hl) {
+extern "C" fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, std::size_t sheet_index, const fm_hyperlink_t* hl) {
   clear_last_error();
+  if (hl == nullptr) {
+    return null_argument("fm_sheet_add_hyperlink", "hl");
+  }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_hyperlink"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_rect(hl.row, hl.col, hl.last_row, hl.last_col, "fm_sheet_add_hyperlink"); rc != 0) {
+  if (auto rc = check_sheet_rect(hl->row, hl->col, hl->last_row, hl->last_col, "fm_sheet_add_hyperlink"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8("fm_sheet_add_hyperlink", {hl.target, hl.location, hl.display, hl.tooltip}); rc != 0) {
+  if (auto rc = check_utf8("fm_sheet_add_hyperlink", {hl->target, hl->location, hl->display, hl->tooltip}); rc != 0) {
     return rc;
   }
   formulon::Hyperlink out;
-  out.row = hl.row;
-  out.col = hl.col;
-  out.last_row = hl.last_row;
-  out.last_col = hl.last_col;
-  out.target = text_or_empty(hl.target);
-  out.location = text_or_empty(hl.location);
-  out.display = text_or_empty(hl.display);
-  out.tooltip = text_or_empty(hl.tooltip);
+  out.row = hl->row;
+  out.col = hl->col;
+  out.last_row = hl->last_row;
+  out.last_col = hl->last_col;
+  out.target = text_or_empty(hl->target);
+  out.location = text_or_empty(hl->location);
+  out.display = text_or_empty(hl->display);
+  out.tooltip = text_or_empty(hl->tooltip);
   // rid stays empty; the writer mints a fresh rIdN on save.
   wb->workbook().sheet(sheet_index).mutable_hyperlinks().push_back(std::move(out));
   return 0;
@@ -178,24 +181,30 @@ extern "C" fm_status_t fm_sheet_get_hyperlink_count(const fm_workbook_t* wb, std
 // Merges
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, std::size_t sheet_index, fm_merge_range merge) {
+extern "C" fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, std::size_t sheet_index, const fm_merge_range* merge) {
   clear_last_error();
+  if (merge == nullptr) {
+    return null_argument("fm_sheet_add_merge", "merge");
+  }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_merge"); rc != 0) {
     return rc;
   }
-  const formulon::MergeRange m = normalized_merge(merge);
+  const formulon::MergeRange m = normalized_merge(*merge);
   if (auto rc = check_sheet_rect(m.first_row, m.first_col, m.last_row, m.last_col, "fm_sheet_add_merge"); rc != 0) {
     return rc;
   }
   return finish_status(wb->workbook().add_merge(sheet_index, m));
 }
 
-extern "C" fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, std::size_t sheet_index, fm_merge_range range) {
+extern "C" fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, std::size_t sheet_index, const fm_merge_range* range) {
   clear_last_error();
+  if (range == nullptr) {
+    return null_argument("fm_sheet_remove_merge", "range");
+  }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_remove_merge"); rc != 0) {
     return rc;
   }
-  const formulon::MergeRange q = normalized_merge(range);
+  const formulon::MergeRange q = normalized_merge(*range);
   return finish_status(wb->workbook().remove_merges_intersecting(sheet_index, q));
 }
 
@@ -244,16 +253,16 @@ extern "C" fm_status_t fm_sheet_get_merge_count(const fm_workbook_t* wb, std::si
 }
 
 extern "C" fm_status_t fm_sheet_get_merges_in_range(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                    fm_merge_range range, fm_merge_range* out, std::uint32_t capacity,
-                                                    std::uint32_t* out_count) {
+                                                    const fm_merge_range* range, fm_merge_range* out,
+                                                    std::uint32_t capacity, std::uint32_t* out_count) {
   clear_last_error();
-  if (out_count == nullptr || (out == nullptr && capacity > 0U)) {
+  if (range == nullptr || out_count == nullptr || (out == nullptr && capacity > 0U)) {
     return null_argument("fm_sheet_get_merges_in_range");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_merges_in_range"); rc != 0) {
     return rc;
   }
-  const formulon::MergeRange query = normalized_merge(range);
+  const formulon::MergeRange query = normalized_merge(*range);
   std::uint32_t count = 0;
   for (const formulon::MergeRange& m : wb->workbook().sheet(sheet_index).merges()) {
     if (m.last_row < query.first_row || m.first_row > query.last_row || m.last_col < query.first_col ||
@@ -489,15 +498,19 @@ extern "C" fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, std::siz
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::size_t sheet_index, fm_data_validation_t v) {
+extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::size_t sheet_index,
+                                               const fm_data_validation_t* v) {
   clear_last_error();
+  if (v == nullptr) {
+    return null_argument("fm_sheet_add_validation", "v");
+  }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_validation"); rc != 0) {
     return rc;
   }
-  if (auto rc = validate(v, "fm_sheet_add_validation"); rc != 0) {
+  if (auto rc = validate(*v, "fm_sheet_add_validation"); rc != 0) {
     return rc;
   }
-  const char* const formula_fields[] = {v.formula1, v.formula2};
+  const char* const formula_fields[] = {v->formula1, v->formula2};
   formulon::DataValidation out;
   std::string* const formula_slots[] = {&out.formula1, &out.formula2};
   for (std::size_t i = 0; i < 2; ++i) {
@@ -509,26 +522,26 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::size_t sh
       }
     }
   }
-  out.ranges.reserve(v.range_count);
-  for (std::uint32_t i = 0; i < v.range_count; ++i) {
+  out.ranges.reserve(v->range_count);
+  for (std::uint32_t i = 0; i < v->range_count; ++i) {
     formulon::MergeRange r;
-    r.first_row = v.ranges[i].first_row;
-    r.first_col = v.ranges[i].first_col;
-    r.last_row = v.ranges[i].last_row;
-    r.last_col = v.ranges[i].last_col;
+    r.first_row = v->ranges[i].first_row;
+    r.first_col = v->ranges[i].first_col;
+    r.last_row = v->ranges[i].last_row;
+    r.last_col = v->ranges[i].last_col;
     out.ranges.push_back(r);
   }
-  out.type = v.type;
-  out.op = v.op;
-  out.error_style = v.error_style;
-  out.allow_blank = v.allow_blank != 0;
-  out.show_input_message = v.show_input_message != 0;
-  out.show_error_message = v.show_error_message != 0;
-  out.show_dropdown = v.show_dropdown != 0;
-  out.error_title = text_or_empty(v.error_title);
-  out.error_message = text_or_empty(v.error_message);
-  out.prompt_title = text_or_empty(v.prompt_title);
-  out.prompt_message = text_or_empty(v.prompt_message);
+  out.type = v->type;
+  out.op = v->op;
+  out.error_style = v->error_style;
+  out.allow_blank = v->allow_blank != 0;
+  out.show_input_message = v->show_input_message != 0;
+  out.show_error_message = v->show_error_message != 0;
+  out.show_dropdown = v->show_dropdown != 0;
+  out.error_title = text_or_empty(v->error_title);
+  out.error_message = text_or_empty(v->error_message);
+  out.prompt_title = text_or_empty(v->prompt_title);
+  out.prompt_message = text_or_empty(v->prompt_message);
   for (std::size_t i = 0; i < 2; ++i) {
     if (formula_fields[i] != nullptr) {
       *formula_slots[i] = ingest_entered_formula(wb, formula_fields[i]);

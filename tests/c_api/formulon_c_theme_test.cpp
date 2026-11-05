@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_record_arg.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
 #include "io/zip_reader.h"
@@ -118,7 +119,7 @@ struct Resolved {
 
 Resolved Resolve(fm_workbook_t* wb, fm_color_spec_t spec, int32_t context) {
   Resolved out;
-  out.status = fm_workbook_resolve_color(wb, spec, context, &out.argb, &out.resolution);
+  out.status = fm_workbook_resolve_color(wb, &spec, context, &out.argb, &out.resolution);
   return out;
 }
 
@@ -397,9 +398,9 @@ TEST(FormulonCApiTheme, ResolveColorRejectsInvalidArguments) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   uint32_t argb = 0;
   int32_t resolution = 0;
-  EXPECT_EQ(fm_workbook_resolve_color(nullptr, ThemeSpec(4, 0.0), 0, &argb, &resolution), kNullPointer);
-  EXPECT_EQ(fm_workbook_resolve_color(wb.handle, ThemeSpec(4, 0.0), 0, nullptr, &resolution), kNullPointer);
-  EXPECT_EQ(fm_workbook_resolve_color(wb.handle, ThemeSpec(4, 0.0), 0, &argb, nullptr), kNullPointer);
+  EXPECT_EQ(fm_workbook_resolve_color(nullptr, record_arg(ThemeSpec(4, 0.0)), 0, &argb, &resolution), kNullPointer);
+  EXPECT_EQ(fm_workbook_resolve_color(wb.handle, record_arg(ThemeSpec(4, 0.0)), 0, nullptr, &resolution), kNullPointer);
+  EXPECT_EQ(fm_workbook_resolve_color(wb.handle, record_arg(ThemeSpec(4, 0.0)), 0, &argb, nullptr), kNullPointer);
   EXPECT_EQ(Resolve(wb.handle, ThemeSpec(4, 0.0), 4).status, kInvalidArgument);
   EXPECT_EQ(Resolve(wb.handle, ThemeSpec(4, 0.0), -1).status, kInvalidArgument);
   fm_color_spec_t unknown{};
@@ -428,20 +429,20 @@ PrecedenceXfs AddPrecedenceXfs(fm_workbook_t* wb) {
   font.color.theme = 4;
   font.color.tint = 0.4;
   std::size_t font_index = 0;
-  EXPECT_EQ(fm_workbook_add_font(wb, font, &font_index), 0);
+  EXPECT_EQ(fm_workbook_add_font(wb, &font, &font_index), 0);
   fm_fill_record_t fill{};
   fill.pattern = 1;
   fill.fg.kind = kFmColorRgb;
   fill.fg.rgb = 0xFFFF0000U;
   fill.fg_argb = 0xFFFF0000U;
   std::size_t fill_index = 0;
-  EXPECT_EQ(fm_workbook_add_fill(wb, fill, &fill_index), 0);
+  EXPECT_EQ(fm_workbook_add_fill(wb, &fill, &fill_index), 0);
   fm_border_record_t border{};
   border.left.style = 1;
   border.left.color.kind = kFmColorIndexed;
   border.left.color.indexed = 12;
   std::size_t border_index = 0;
-  EXPECT_EQ(fm_workbook_add_border(wb, border, &border_index), 0);
+  EXPECT_EQ(fm_workbook_add_border(wb, &border, &border_index), 0);
 
   PrecedenceXfs out;
   fm_cell_xf_t cell{};
@@ -452,13 +453,13 @@ PrecedenceXfs AddPrecedenceXfs(fm_workbook_t* wb) {
   cell.has_protection = 1;
   cell.locked = 0;
   cell.hidden = 1;
-  EXPECT_EQ(fm_workbook_add_cell_xf(wb, cell, &out.cell), 0);
+  EXPECT_EQ(fm_workbook_add_cell_xf(wb, &cell, &out.cell), 0);
   fm_cell_xf_t row{};
   row.num_fmt_id = 10;
-  EXPECT_EQ(fm_workbook_add_cell_xf(wb, row, &out.row), 0);
+  EXPECT_EQ(fm_workbook_add_cell_xf(wb, &row, &out.row), 0);
   fm_cell_xf_t column{};
   column.num_fmt_id = 3;
-  EXPECT_EQ(fm_workbook_add_cell_xf(wb, column, &out.column), 0);
+  EXPECT_EQ(fm_workbook_add_cell_xf(wb, &column, &out.column), 0);
   return out;
 }
 

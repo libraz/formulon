@@ -11,6 +11,7 @@
 
 #include "c_api/formulon_c.h"
 #include "formulon_c_pivot_test_helpers.h"
+#include "formulon_c_record_arg.h"
 #include "gtest/gtest.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
@@ -414,7 +415,7 @@ TEST(FormulonCApiTableStyles, CustomStyleRoundTripsAndATableUsesIt) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
   std::size_t dxf = 99;
-  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, FillDxf(), &dxf), 0);
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, record_arg(FillDxf()), &dxf), 0);
 
   const fm_table_style_element_t elements[] = {
       {"wholeTable", 1U, 1, static_cast<uint32_t>(dxf)},
@@ -486,7 +487,7 @@ TEST(FormulonCApiTableStyles, SetReplacesByNameAndValidates) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::size_t dxf = 0;
-  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, FillDxf(), &dxf), 0);
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, record_arg(FillDxf()), &dxf), 0);
   const fm_table_style_element_t one[] = {{"wholeTable", 1U, 1, static_cast<uint32_t>(dxf)}};
   fm_table_style_t style{"Mine", 1, 1, one, 1U};
   ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &style), 0);

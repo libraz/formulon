@@ -63,8 +63,8 @@ TEST(FormulonCApiStyles, AddDxfDedupsAndReadsBack) {
 
   std::size_t a = 0xFFFFFFFFU;
   std::size_t b = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, dxf, &a), 0);
-  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, dxf, &b), 0);
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &a), 0);
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &b), 0);
   EXPECT_EQ(a, b);
 
   std::size_t count = 0;
@@ -97,7 +97,7 @@ TEST(FormulonCApiStyles, DxfFontRoundTripsVerticalAlignmentThroughOoxml) {
   dxf.font.color_argb = 0xFF112233U;
   dxf.font.vert_align = 1;  // superscript
   std::size_t index = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, dxf, &index), 0);
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &index), 0);
 
   const std::string xml = formulon::io::write_styles(wb.handle->workbook().styles());
   EXPECT_NE(xml.find("<vertAlign val=\"superscript\"/>"), std::string::npos);
@@ -109,7 +109,7 @@ TEST(FormulonCApiStyles, DxfFontRoundTripsVerticalAlignmentThroughOoxml) {
   std::size_t count_before = 0;
   ASSERT_EQ(fm_workbook_get_dxf_count(wb.handle, &count_before), 0);
   std::size_t reindex = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, loaded, &reindex), 0);
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &loaded, &reindex), 0);
   EXPECT_EQ(reindex, index);
   std::size_t count_after = 0;
   ASSERT_EQ(fm_workbook_get_dxf_count(wb.handle, &count_after), 0);
@@ -129,8 +129,8 @@ TEST(FormulonCApiStyles, DxfAlignmentAndProtectionPreserveIdentityThroughOoxml) 
 
   std::size_t alignment_index = 0xFFFFFFFFU;
   std::size_t protection_index = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, alignment, &alignment_index), 0);
-  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, protection, &protection_index), 0);
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &alignment, &alignment_index), 0);
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &protection, &protection_index), 0);
   EXPECT_NE(alignment_index, protection_index);
   alignment_input = "caller-owned alignment text replaced";
   protection_input = "caller-owned protection text replaced";
@@ -150,8 +150,8 @@ TEST(FormulonCApiStyles, DxfAlignmentAndProtectionPreserveIdentityThroughOoxml) 
 
   std::size_t alignment_again = 0xFFFFFFFFU;
   std::size_t protection_again = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, got_alignment, &alignment_again), 0);
-  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, got_protection, &protection_again), 0);
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &got_alignment, &alignment_again), 0);
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &got_protection, &protection_again), 0);
   EXPECT_EQ(alignment_again, alignment_index);
   EXPECT_EQ(protection_again, protection_index);
 
@@ -176,8 +176,8 @@ TEST(FormulonCApiStyles, DxfAlignmentAndProtectionPreserveIdentityThroughOoxml) 
 
   std::size_t reloaded_alignment_again = 0xFFFFFFFFU;
   std::size_t reloaded_protection_again = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_workbook_add_dxf(reloaded.handle, reloaded_alignment, &reloaded_alignment_again), 0);
-  ASSERT_EQ(fm_workbook_add_dxf(reloaded.handle, reloaded_protection, &reloaded_protection_again), 0);
+  ASSERT_EQ(fm_workbook_add_dxf(reloaded.handle, &reloaded_alignment, &reloaded_alignment_again), 0);
+  ASSERT_EQ(fm_workbook_add_dxf(reloaded.handle, &reloaded_protection, &reloaded_protection_again), 0);
   EXPECT_EQ(reloaded_alignment_again, alignment_index);
   EXPECT_EQ(reloaded_protection_again, protection_index);
 
@@ -202,7 +202,7 @@ TEST(FormulonCApiStyles, DxfFontDistinguishesAnExplicitBoldOffFromAnAbsentToggle
   leave_bold_alone.font.size = 11.0;
   leave_bold_alone.font.color_argb = 0xFF000000U;
   std::size_t index = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, leave_bold_alone, &index), 0);
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &leave_bold_alone, &index), 0);
   EXPECT_NE(index, 0U);
 
   const std::string xml = formulon::io::write_styles(wb.handle->workbook().styles());
@@ -222,7 +222,7 @@ TEST(FormulonCApiStyles, DxfFontWithoutSizeRoundTripsAndCellFontKeepsSize) {
   dxf.font.color_argb = 0xFF000000U;
   ASSERT_EQ(dxf.font.has_size, 0);
   std::size_t index = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, dxf, &index), 0);
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &index), 0);
 
   fm_dxf_record_t loaded{};
   ASSERT_EQ(fm_workbook_get_dxf(wb.handle, index, &loaded), 0);
@@ -238,7 +238,7 @@ TEST(FormulonCApiStyles, DxfFontWithoutSizeRoundTripsAndCellFontKeepsSize) {
   dxf.font.has_size = 1;
   dxf.font.size = 13.0;
   std::size_t sized = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, dxf, &sized), 0);
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &sized), 0);
   EXPECT_NE(sized, index);
   ASSERT_EQ(fm_workbook_get_dxf(wb.handle, sized, &loaded), 0);
   EXPECT_EQ(loaded.font.has_size, 1);
@@ -249,7 +249,7 @@ TEST(FormulonCApiStyles, DxfFontWithoutSizeRoundTripsAndCellFontKeepsSize) {
   cell.size = 14.0;
   cell.color_argb = 0xFF000000U;
   std::size_t font_index = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_workbook_add_font(wb.handle, cell, &font_index), 0);
+  ASSERT_EQ(fm_workbook_add_font(wb.handle, &cell, &font_index), 0);
   fm_font_record_t font_out{};
   ASSERT_EQ(fm_workbook_get_font(wb.handle, font_index, &font_out), 0);
   EXPECT_EQ(font_out.has_size, 1);

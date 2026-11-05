@@ -1,7 +1,3 @@
-R11.axis	row_collapsed.set	-	fm_sheet_set_row_collapsed takes a single row while fm_sheet_set_column_collapsed takes a `(first, last)` span
-R11.axis	row_height.set	-	fm_sheet_set_row_height takes a single row while fm_sheet_set_column_width takes a `(first, last)` span
-R11.axis	row_hidden.set	-	fm_sheet_set_row_hidden takes a single row while fm_sheet_set_column_hidden takes a `(first, last)` span
-R11.axis	row_outline.set	-	fm_sheet_set_row_outline takes a single row while fm_sheet_set_column_outline takes a `(first, last)` span
 R11.multi	print_area.get	out_ranges_a1	fm_sheet_get_print_area: `const char** out_ranges_a1` is A1 text; take `const fm_cell_rect_t* ranges, size_t range_count`
 R11.multi	print_area.set	ranges_a1	fm_sheet_set_print_area: `const char* ranges_a1` is A1 text; take `const fm_cell_rect_t* ranges, size_t range_count`
 R11.multi	record.cf_rule	sqref	fm_cf_rule_t: `const fm_cf_cell_range_t* sqref, uint32_t sqref_count` should be `const fm_cell_rect_t* ranges, size_t range_count`
@@ -60,18 +56,3 @@ R3.keys	table_style	getter	natural-key collection `table_style` has no getter by
 R3.keys	theme_script_font	getter	natural-key collection `theme_script_font` has no getter by key
 R3.keys	threaded_comment	getter	natural-key collection `threaded_comment` has no getter by key
 R3.keys	validation.add	out-key	fm_sheet_add_validation: returns the allocated index through `out_index`
-R7.c.byptr	border.add	record	fm_styles_add_border: `fm_border_record record` passes a record by value; take `const fm_border_record*`
-R7.c.byptr	cell_style_xf.add	record	fm_styles_add_cell_style_xf: `fm_cell_xf record` passes a record by value; take `const fm_cell_xf*`
-R7.c.byptr	cell_xf.add	record	fm_styles_add_cell_xf: `fm_cell_xf record` passes a record by value; take `const fm_cell_xf*`
-R7.c.byptr	cf_rule.add	rule	fm_sheet_cf_add_rule: `fm_cf_rule_t rule` passes a record by value; take `const fm_cf_rule_t*`
-R7.c.byptr	color.resolve	spec	fm_workbook_resolve_color: `fm_color_spec spec` passes a record by value; take `const fm_color_spec*`
-R7.c.byptr	default_font.set	record	fm_workbook_set_default_font: `fm_font_record record` passes a record by value; take `const fm_font_record*`
-R7.c.byptr	dxf.add	record	fm_styles_add_dxf: `fm_dxf_record record` passes a record by value; take `const fm_dxf_record*`
-R7.c.byptr	fill.add	record	fm_styles_add_fill: `fm_fill_record record` passes a record by value; take `const fm_fill_record*`
-R7.c.byptr	font.add	record	fm_styles_add_font: `fm_font_record record` passes a record by value; take `const fm_font_record*`
-R7.c.byptr	font.set	record	fm_styles_set_font: `fm_font_record record` passes a record by value; take `const fm_font_record*`
-R7.c.byptr	hyperlink.add	hl	fm_sheet_add_hyperlink: `fm_hyperlink hl` passes a record by value; take `const fm_hyperlink*`
-R7.c.byptr	merge.add	merge	fm_sheet_add_merge: `fm_merge_range merge` passes a record by value; take `const fm_merge_range*`
-R7.c.byptr	merge.remove	range	fm_sheet_remove_merge: `fm_merge_range range` passes a record by value; take `const fm_merge_range*`
-R7.c.byptr	merges_in_range.get	range	fm_sheet_merges_in_range: `fm_merge_range range` passes a record by value; take `const fm_merge_range*`
-R7.c.byptr	validation.add	v	fm_sheet_add_validation: `fm_data_validation v` passes a record by value; take `const fm_data_validation*`

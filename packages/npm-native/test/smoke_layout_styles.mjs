@@ -130,7 +130,7 @@ test('sheet layout getters preserve explicit width presence flags', async () => 
   const wb = mod.Workbook.createDefault();
   assert.ok(wb.setColumnWidth(0, 0, 0, 0).ok);
   assert.ok(wb.setColumnHidden(0, 1, 1, true).ok);
-  assert.ok(wb.setRowHeight(0, 3, 30).ok);
+  assert.ok(wb.setRowHeight(0, 3, 3, 30).ok);
 
   const columns = wb.listColOverrides(0);
   assert.ok(columns.status.ok, `getSheetColumns: ${JSON.stringify(columns.status)}`);

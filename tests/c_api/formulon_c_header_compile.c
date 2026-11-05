@@ -24,13 +24,13 @@ int main(void) {
   fm_status_t (*read_diagnostics)(const fm_workbook_t*, fm_read_diagnostics_t*) = fm_workbook_get_diagnostics;
   fm_status_t (*save_as)(const fm_workbook_t*, int32_t, uint8_t**, size_t*) = fm_workbook_save_as;
   // Written out in full because these are the entry points a third-party C
-  // consumer binds by signature: the XF record crosses by value, so its width
-  // is part of the calling convention, and the sheet-view record is written
-  // through a caller-supplied pointer.
+  // consumer binds by signature: the XF record is read through a const
+  // pointer, and the sheet-view record is written through a caller-supplied
+  // pointer.
   fm_status_t (*get_cell_xf)(const fm_workbook_t*, size_t, fm_cell_xf_t*) = fm_workbook_get_cell_xf;
-  fm_status_t (*add_cell_xf)(fm_workbook_t*, fm_cell_xf_t, size_t*) = fm_workbook_add_cell_xf;
+  fm_status_t (*add_cell_xf)(fm_workbook_t*, const fm_cell_xf_t*, size_t*) = fm_workbook_add_cell_xf;
   fm_status_t (*get_cell_style_xf)(const fm_workbook_t*, size_t, fm_cell_xf_t*) = fm_workbook_get_cell_style_xf;
-  fm_status_t (*add_cell_style_xf)(fm_workbook_t*, fm_cell_xf_t, uint32_t*) = fm_workbook_add_cell_style_xf;
+  fm_status_t (*add_cell_style_xf)(fm_workbook_t*, const fm_cell_xf_t*, uint32_t*) = fm_workbook_add_cell_style_xf;
   fm_status_t (*get_view)(const fm_workbook_t*, size_t, fm_sheet_view_t*) = fm_sheet_get_view;
   fm_status_t (*defined_name_at)(const fm_workbook_t*, size_t, const char**, const char**, int32_t*) =
       fm_workbook_get_defined_name_at;
@@ -79,8 +79,10 @@ int main(void) {
   // Records the AutoFilter, validation and threaded-comment entry points read
   // and write. The pointer-bearing ones are pinned per target.
   _Static_assert(sizeof(fm_date_group_item_t) == 8, "fm_date_group_item_t ABI layout changed");
-  _Static_assert(sizeof(fm_filter_column_t) == (sizeof(void*) == 4 ? 152 : 192), "fm_filter_column_t ABI layout changed");
-  _Static_assert(sizeof(fm_sort_condition_t) == (sizeof(void*) == 4 ? 48 : 56), "fm_sort_condition_t ABI layout changed");
+  _Static_assert(sizeof(fm_filter_column_t) == (sizeof(void*) == 4 ? 152 : 192),
+                 "fm_filter_column_t ABI layout changed");
+  _Static_assert(sizeof(fm_sort_condition_t) == (sizeof(void*) == 4 ? 48 : 56),
+                 "fm_sort_condition_t ABI layout changed");
   _Static_assert(sizeof(fm_auto_filter_t) == (sizeof(void*) == 4 ? 64 : 80), "fm_auto_filter_t ABI layout changed");
   _Static_assert(sizeof(fm_validation_outcome_t) == 16, "fm_validation_outcome_t ABI layout changed");
   _Static_assert(sizeof(fm_mention_t) == (sizeof(void*) == 4 ? 16 : 24), "fm_mention_t ABI layout changed");
@@ -88,7 +90,8 @@ int main(void) {
                  "fm_threaded_comment_t ABI layout changed");
   _Static_assert(sizeof(fm_person_t) == 4 * sizeof(void*), "fm_person_t ABI layout changed");
   _Static_assert(sizeof(fm_image_info_t) == 12, "fm_image_info_t ABI layout changed");
-  _Static_assert(sizeof(fm_drawing_object_t) == (sizeof(void*) == 4 ? 96 : 112), "fm_drawing_object_t ABI layout changed");
+  _Static_assert(sizeof(fm_drawing_object_t) == (sizeof(void*) == 4 ? 96 : 112),
+                 "fm_drawing_object_t ABI layout changed");
   _Static_assert(sizeof(fm_image_insert_t) == (sizeof(void*) == 4 ? 56 : 64), "fm_image_insert_t ABI layout changed");
   _Static_assert(sizeof(fm_drawing_anchor_t) == 48, "fm_drawing_anchor_t ABI layout changed");
   _Static_assert(FM_DRAWING_RESTORE_NEW_ID == 1u, "FM_DRAWING_RESTORE_NEW_ID changed");
@@ -110,7 +113,8 @@ int main(void) {
   _Static_assert(sizeof(fm_protected_range_t) == (sizeof(void*) == 4 ? 32 : 64),
                  "fm_protected_range_t ABI layout changed");
   fm_status_t (*get_auto_filter)(const fm_workbook_t*, size_t, fm_auto_filter_t*, int32_t*) = fm_sheet_get_auto_filter;
-  fm_status_t (*set_table_auto_filter)(fm_workbook_t*, size_t, const fm_auto_filter_t*) = fm_workbook_set_table_auto_filter;
+  fm_status_t (*set_table_auto_filter)(fm_workbook_t*, size_t, const fm_auto_filter_t*) =
+      fm_workbook_set_table_auto_filter;
   fm_status_t (*evaluate_auto_filter)(const fm_workbook_t*, size_t, uint8_t*, size_t, size_t*, uint32_t*) =
       fm_sheet_evaluate_auto_filter;
   fm_status_t (*validate_value)(const fm_workbook_t*, size_t, uint32_t, uint32_t, const fm_value_t*,
@@ -119,8 +123,8 @@ int main(void) {
       fm_sheet_get_invalid_cells;
   fm_status_t (*add_threaded_comment)(fm_workbook_t*, size_t, const fm_threaded_comment_t*) =
       fm_sheet_add_threaded_comment;
-  fm_status_t (*edit_threaded_comment)(fm_workbook_t*, size_t, const char*, const char*, const fm_mention_t*, uint32_t) =
-      fm_sheet_update_threaded_comment;
+  fm_status_t (*edit_threaded_comment)(fm_workbook_t*, size_t, const char*, const char*, const fm_mention_t*,
+                                       uint32_t) = fm_sheet_update_threaded_comment;
   fm_status_t (*person_at)(const fm_workbook_t*, size_t, fm_person_t*) = fm_workbook_get_person_at;
   fm_status_t (*insert_image)(fm_workbook_t*, size_t, const uint8_t*, size_t, const fm_image_insert_t*, uint32_t*) =
       fm_sheet_add_image;

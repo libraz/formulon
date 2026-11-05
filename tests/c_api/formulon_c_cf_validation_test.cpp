@@ -19,19 +19,19 @@ TEST(FormulonCApiCfMutate, OutOfGridSqrefRejectedAndLeavesTheModelUnchanged) {
   fm_cf_cell_range_t past_last_col{0, formulon::Sheet::kMaxCols, formulon::Sheet::kMaxRows - 1U,
                                    formulon::Sheet::kMaxCols};
   rule.sqref = &past_last_col;
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, rule, &rule_index),
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 
   // One past the last row.
   fm_cf_cell_range_t past_last_row{0, 0, formulon::Sheet::kMaxRows, 0};
   rule.sqref = &past_last_row;
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, rule, &rule_index),
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 
   // Inverted rectangle.
   fm_cf_cell_range_t inverted{5, 0, 1, 0};
   rule.sqref = &inverted;
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, rule, &rule_index),
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 
   // A rejected range leaves no block behind, and the rejection is
@@ -43,7 +43,7 @@ TEST(FormulonCApiCfMutate, OutOfGridSqrefRejectedAndLeavesTheModelUnchanged) {
   // The widest legal whole-column range still round-trips.
   fm_cf_cell_range_t whole_col{0, 0, formulon::Sheet::kMaxRows - 1U, 0};
   rule.sqref = &whole_col;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, rule, &rule_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
 
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
@@ -64,7 +64,7 @@ TEST(FormulonCApiCfMutate, EmptySqrefRejected) {
   rule.sqref = nullptr;
   rule.sqref_count = 0;
   std::size_t rule_index = 0;
-  fm_status_t rc = fm_sheet_add_cf_rule(wb.handle, 0, rule, &rule_index);
+  fm_status_t rc = fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index);
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 
@@ -87,7 +87,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsExcessiveSqrefCount) {
   rule.sqref = &sqref;
   rule.sqref_count = 0xFFFFFFFFu;
   std::size_t rule_index = 0;
-  fm_status_t rc = fm_sheet_add_cf_rule(wb.handle, 0, rule, &rule_index);
+  fm_status_t rc = fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index);
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 
   std::size_t after = 0;
@@ -115,7 +115,7 @@ TEST(FormulonCApiCfMutate, GetAtDisengagesADxfIdTheStylesTableCannotResolve) {
   rule.sqref = &sqref;
   rule.sqref_count = 1;
   std::size_t rule_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, rule, &rule_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
 
   // Shrink the table under the rule, the way a package whose styles part
   // and worksheet part disagree arrives.
@@ -128,7 +128,7 @@ TEST(FormulonCApiCfMutate, GetAtDisengagesADxfIdTheStylesTableCannotResolve) {
   // The record still feeds straight back in, which is what the disengage
   // buys: with the raw index it would be rejected.
   std::size_t reinserted = 0;
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, out, &reinserted), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &out, &reinserted), 0) << fm_get_last_error_message();
 
   // A resolvable index is still reported.
   SeedDxfs(wb.handle, 2);
@@ -155,7 +155,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsNonGuidId) {
   for (const char* rejected : {"sales-databar", "{}", "FC000000-0000-0000-0000-000000000001",
                                "{FC000000-0000-0000-0000-00000000000}", "{GC000000-0000-0000-0000-000000000001}"}) {
     rule.id = rejected;
-    EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, rule, &rule_index),
+    EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index),
               static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument))
         << rejected;
   }
@@ -166,7 +166,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsNonGuidId) {
 
   // A GUID-shaped id is accepted and comes back verbatim.
   rule.id = "{3B4F1C22-0000-4000-8000-0123456789AB}";
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, rule, &rule_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
   fm_cf_rule_t out{};
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
   EXPECT_STREQ(out.id, "{3B4F1C22-0000-4000-8000-0123456789AB}");
@@ -174,7 +174,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsNonGuidId) {
   // An absent id is the "synthesize one for me" request, not a malformed
   // one, and the id it produces is itself GUID-shaped.
   rule.id = "";
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, rule, &rule_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, rule_index, &out), 0);
   ASSERT_NE(out.id, nullptr);
   const std::string synthesized(out.id);
@@ -199,7 +199,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsEnumOrdinalsPastTheirDomain) {
 
   const auto expect_rejected = [&wb](fm_cf_rule_t rule, const char* what) {
     std::size_t rule_index = 99U;
-    EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, rule, &rule_index),
+    EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index),
               static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument))
         << what;
   };
@@ -329,7 +329,7 @@ TEST(FormulonCApiCfMutate, DuplicatePredicateRulesGetDistinctStableIndices) {
   rule.sqref_count = 1;
 
   std::size_t first_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, rule, &first_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &first_index), 0) << fm_get_last_error_message();
 
   // Re-populate the rule: `fm_sheet_add_cf_rule` deep-copies string /
   // range payloads, but reuse a fresh `fm_cf_rule_t` to avoid relying on
@@ -345,7 +345,7 @@ TEST(FormulonCApiCfMutate, DuplicatePredicateRulesGetDistinctStableIndices) {
   rule2.sqref_count = 1;
 
   std::size_t second_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, rule2, &second_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule2, &second_index), 0) << fm_get_last_error_message();
 
   EXPECT_EQ(first_index, 0U);
   EXPECT_EQ(second_index, 1U);

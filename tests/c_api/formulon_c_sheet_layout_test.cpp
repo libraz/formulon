@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <limits>
 #include <string>
 #include <vector>
@@ -493,9 +494,9 @@ TEST(FormulonCApiSheetLayout, GetterNormalizesLegacyNonZeroWidthPresence) {
 TEST(FormulonCApiSheetLayout, RowOverridesUpsert) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 4U, 22.0), 0);
-  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 9U, 1), 0);
-  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 4U, 3U), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 4U, 4U, 22.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 9U, 9U, 1), 0);
+  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 4U, 4U, 3U), 0);
 
   size_t count = 0;
   ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
@@ -520,6 +521,70 @@ TEST(FormulonCApiSheetLayout, RowOverridesUpsert) {
   EXPECT_EQ(row9.style_xf, 0U);
 }
 
+TEST(FormulonCApiSheetLayout, RowSettersTakeAnInclusiveSpan) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 2U, 3U, 22.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 3U, 5U, 1), 0);
+  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 1U, 2U, 2U), 0);
+  ASSERT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 4U, 6U, 1), 0);
+
+  struct Expected {
+    uint32_t row;
+    int32_t has_height;
+    int32_t hidden;
+    uint32_t outline_level;
+    int32_t collapsed;
+  };
+  const Expected expected[] = {
+      {1U, 0, 0, 2U, 0}, {2U, 1, 0, 2U, 0}, {3U, 1, 1, 0U, 0}, {4U, 0, 1, 0U, 1}, {5U, 0, 1, 0U, 1}, {6U, 0, 0, 0U, 1},
+  };
+  size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(count, std::size(expected));
+  for (size_t i = 0; i < count; ++i) {
+    fm_row_layout_t row{};
+    ASSERT_EQ(fm_sheet_get_row_override_at(wb.handle, 0, i, &row), 0);
+    EXPECT_EQ(row.row, expected[i].row);
+    EXPECT_EQ(row.has_height, expected[i].has_height) << row.row;
+    EXPECT_EQ(row.hidden, expected[i].hidden) << row.row;
+    EXPECT_EQ(row.outline_level, expected[i].outline_level) << row.row;
+    EXPECT_EQ(row.collapsed, expected[i].collapsed) << row.row;
+  }
+
+  // Clearing `collapsed` over a span drops the rows it leaves with no state.
+  ASSERT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 0U, 10U, 0), 0);
+  ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 5U);
+
+  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 0, 4U, 3U, 10.0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 4U, 3U, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 4U, 3U, 1U), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 4U, 3U, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_auto_height(wb.handle, 0, 4U, 3U, 10.0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_clear_row_height(wb.handle, 0, 4U, 3U), kInvalidArgument);
+  ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 5U);
+
+  // An automatic height over rows 4..5 keeps them automatic; clearing the
+  // height over 1..5 then leaves only the hidden and outline state behind.
+  ASSERT_EQ(fm_sheet_set_row_auto_height(wb.handle, 0, 4U, 5U, 18.0), 0);
+  for (size_t i = 3; i < 5; ++i) {
+    fm_row_layout_t row{};
+    ASSERT_EQ(fm_sheet_get_row_override_at(wb.handle, 0, i, &row), 0);
+    EXPECT_EQ(row.has_height, 1) << row.row;
+    EXPECT_EQ(row.custom_height, 0) << row.row;
+  }
+  ASSERT_EQ(fm_sheet_clear_row_height(wb.handle, 0, 1U, 5U), 0);
+  ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(count, 5U);
+  for (size_t i = 0; i < count; ++i) {
+    fm_row_layout_t row{};
+    ASSERT_EQ(fm_sheet_get_row_override_at(wb.handle, 0, i, &row), 0);
+    EXPECT_EQ(row.has_height, 0) << row.row;
+  }
+}
+
 TEST(FormulonCApiSheetLayout, RowHiddenDirtiesSubtotalOverTheRow) {
   // SUBTOTAL(109, ...) sums while skipping manually hidden rows; that
   // dependency on row-visibility state is invisible to the ordinary
@@ -537,7 +602,7 @@ TEST(FormulonCApiSheetLayout, RowHiddenDirtiesSubtotalOverTheRow) {
   ASSERT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 30.0);
 
-  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 0U, 1), 0);
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 0U, 0U, 1), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 2, 0, &v), 0);
   ASSERT_EQ(v.kind, FM_VAL_NUMBER);
@@ -550,17 +615,17 @@ TEST(FormulonCApiSheetLayout, ZeroHeightSettersAndClearsPreserveEffectiveVisibil
   wb.handle->workbook().mutable_styles().cell_xfs.resize(2U);
   wb.handle->workbook().sheet(0).mutable_format_defaults().zero_height = true;
 
-  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 22.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 3U, 22.0), 0);
   EXPECT_EQ(RowOverride(wb, 3U).hidden, 1);
-  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 4U, 2U), 0);
+  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 4U, 4U, 2U), 0);
   EXPECT_EQ(RowOverride(wb, 4U).hidden, 1);
   ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 5U, 5U, 1U), 0);
   EXPECT_EQ(RowOverride(wb, 5U).hidden, 1);
 
-  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 7U, 0), 0);
-  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 7U, 30.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 7U, 7U, 0), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 7U, 7U, 30.0), 0);
   ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 7U, 7U, 1U), 0);
-  ASSERT_EQ(fm_sheet_clear_row_height(wb.handle, 0, 7U), 0);
+  ASSERT_EQ(fm_sheet_clear_row_height(wb.handle, 0, 7U, 7U), 0);
   ASSERT_EQ(fm_sheet_clear_row_style(wb.handle, 0, 7U, 7U), 0);
 
   const fm_row_layout_t visible = RowOverride(wb, 7U);
@@ -586,12 +651,12 @@ TEST(FormulonCApiSheetLayout, ZeroHeightVisibilitySetterDirtiesOnlyEffectiveTran
   EXPECT_DOUBLE_EQ(value.u.number, 0.0);
 
   // Row 0 is already effectively hidden through zeroHeight.
-  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 0U, 1), 0);
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 0U, 0U, 1), 0);
   auto unchanged = wb.handle->workbook().recalc(formulon::eval::default_registry());
   ASSERT_TRUE(static_cast<bool>(unchanged));
   EXPECT_EQ(unchanged.value().cells_evaluated, 0U);
 
-  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 0U, 0), 0);
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 0U, 0U, 0), 0);
   auto changed = wb.handle->workbook().recalc(formulon::eval::default_registry());
   ASSERT_TRUE(static_cast<bool>(changed));
   EXPECT_GT(changed.value().cells_evaluated, 0U);
@@ -599,7 +664,7 @@ TEST(FormulonCApiSheetLayout, ZeroHeightVisibilitySetterDirtiesOnlyEffectiveTran
   ASSERT_EQ(value.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(value.u.number, 10.0);
 
-  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 0U, 0), 0);
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 0U, 0U, 0), 0);
   unchanged = wb.handle->workbook().recalc(formulon::eval::default_registry());
   ASSERT_TRUE(static_cast<bool>(unchanged));
   EXPECT_EQ(unchanged.value().cells_evaluated, 0U);
@@ -623,9 +688,9 @@ TEST(FormulonCApiSheetLayout, InvalidSheetIndexRejected) {
 TEST(FormulonCApiSheetLayout, RowSettersRejectInvalidSheetIndex) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 99U, 0U, 20.0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_set_row_hidden(wb.handle, 99U, 0U, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_set_row_outline(wb.handle, 99U, 0U, 2U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 99U, 0U, 0U, 20.0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_row_hidden(wb.handle, 99U, 0U, 0U, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_row_outline(wb.handle, 99U, 0U, 0U, 2U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 
   // Sheet 0 exists and must not have absorbed any of the three.
   size_t count = 1U;
@@ -695,14 +760,14 @@ TEST(FormulonCApiSheetLayout, ColumnWidthRejectsNonFiniteOrNegativeWidth) {
 TEST(FormulonCApiSheetLayout, RowHeightRejectsNonFiniteOrNegativeHeight) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 22.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 3U, 22.0), 0);
 
-  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, kNaN), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, kInfinity), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, -kInfinity), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, -1.0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 3U, kNaN), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 3U, kInfinity), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 3U, -kInfinity), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 3U, -1.0), kInvalidArgument);
   // A refused height must not have created a second override either.
-  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 0, 7U, kNaN), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 0, 7U, 7U, kNaN), kInvalidArgument);
 
   size_t count = 0;
   ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
@@ -712,7 +777,7 @@ TEST(FormulonCApiSheetLayout, RowHeightRejectsNonFiniteOrNegativeHeight) {
   EXPECT_EQ(only.row, 3U);
   EXPECT_DOUBLE_EQ(only.height, 22.0);
 
-  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 0.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 3U, 0.0), 0);
 }
 
 // A span reaching past column XFD is written as a `<col min max>` pair
@@ -746,11 +811,11 @@ TEST(FormulonCApiSheetLayout, ColumnSettersRejectSpanPastTheGrid) {
 TEST(FormulonCApiSheetLayout, RowSettersRejectRowPastTheGrid) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 22.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 3U, 22.0), 0);
 
-  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 0, kLastRow + 1U, 10.0), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, kLastRow + 1U, 1), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_row_outline(wb.handle, 0, kLastRow + 1U, 2U), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 0, kLastRow + 1U, kLastRow + 1U, 10.0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, kLastRow + 1U, kLastRow + 1U, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_outline(wb.handle, 0, kLastRow + 1U, kLastRow + 1U, 2U), kInvalidArgument);
 
   size_t count = 0;
   ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
@@ -770,9 +835,9 @@ TEST(FormulonCApiSheetLayout, LastGridCoordinateIsStillAccepted) {
   ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, kLastColumn, kLastColumn, 11.0), 0);
   ASSERT_EQ(fm_sheet_set_column_hidden(wb.handle, 0, kLastColumn, kLastColumn, 1), 0);
   ASSERT_EQ(fm_sheet_set_column_outline(wb.handle, 0, kLastColumn, kLastColumn, 2U), 0);
-  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, kLastRow, 33.0), 0);
-  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, kLastRow, 1), 0);
-  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, kLastRow, 2U), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, kLastRow, kLastRow, 33.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, kLastRow, kLastRow, 1), 0);
+  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, kLastRow, kLastRow, 2U), 0);
 
   fm_column_layout_t column{};
   ASSERT_EQ(fm_sheet_get_col_override_at(wb.handle, 0, 0U, &column), 0);
@@ -803,7 +868,7 @@ TEST(FormulonCApiSheetLayout, RowOverrideReportsHeightPresenceAndCustomFlag) {
   ASSERT_TRUE(static_cast<bool>(source_bytes)) << source_bytes.error().message;
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_load(source_bytes.value().data(), source_bytes.value().size(), &wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 5U, 30.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 5U, 5U, 30.0), 0);
 
   size_t count = 0;
   ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
@@ -841,14 +906,14 @@ TEST(FormulonCApiSheetLayout, AutoRowHeightRefreshesTheCacheAndStaysAutomatic) {
   ASSERT_EQ(fm_workbook_load(source_bytes.value().data(), source_bytes.value().size(), &wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(2U);
 
-  ASSERT_EQ(fm_sheet_set_row_auto_height(wb.handle, 0, 2U, 31.5), 0);
-  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 4U, 25.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_auto_height(wb.handle, 0, 2U, 2U, 31.5), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 4U, 4U, 25.0), 0);
   // An auto height on a styled, hidden, outlined row keeps all of it.
   ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 6U, 6U, 1U), 0);
-  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 6U, 1), 0);
-  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 6U, 2U), 0);
-  ASSERT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 6U, 1), 0);
-  ASSERT_EQ(fm_sheet_set_row_auto_height(wb.handle, 0, 6U, 40.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 6U, 6U, 1), 0);
+  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 6U, 6U, 2U), 0);
+  ASSERT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 6U, 6U, 1), 0);
+  ASSERT_EQ(fm_sheet_set_row_auto_height(wb.handle, 0, 6U, 6U, 40.0), 0);
 
   for (const fm_row_layout_t& r : {RowOverride(wb, 2U), ReloadedRowOverride(wb, 2U)}) {
     EXPECT_EQ(r.has_height, 1);
@@ -870,28 +935,28 @@ TEST(FormulonCApiSheetLayout, AutoRowHeightRefreshesTheCacheAndStaysAutomatic) {
   }
 
   // Dropping the height keeps the row's other attributes.
-  ASSERT_EQ(fm_sheet_clear_row_height(wb.handle, 0, 6U), 0);
+  ASSERT_EQ(fm_sheet_clear_row_height(wb.handle, 0, 6U, 6U), 0);
   const fm_row_layout_t cleared = RowOverride(wb, 6U);
   EXPECT_EQ(cleared.has_height, 0);
   EXPECT_EQ(cleared.has_style, 1);
   EXPECT_EQ(cleared.hidden, 1);
 
-  EXPECT_EQ(fm_sheet_set_row_auto_height(wb.handle, 0, kLastRow + 1U, 10.0), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_row_auto_height(wb.handle, 7, 0U, 10.0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_set_row_auto_height(wb.handle, 0, 0U, -1.0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_auto_height(wb.handle, 0, kLastRow + 1U, kLastRow + 1U, 10.0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_auto_height(wb.handle, 7, 0U, 0U, 10.0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_row_auto_height(wb.handle, 0, 0U, 0U, -1.0), kInvalidArgument);
 }
 
 TEST(FormulonCApiSheetLayout, ClearRowHeightDropsBareOverride) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 25.0), 0);
-  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 4U, 25.0), 0);
-  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 4U, 1), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 3U, 25.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 4U, 4U, 25.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 4U, 4U, 1), 0);
 
-  ASSERT_EQ(fm_sheet_clear_row_height(wb.handle, 0, 3U), 0);
-  ASSERT_EQ(fm_sheet_clear_row_height(wb.handle, 0, 4U), 0);
+  ASSERT_EQ(fm_sheet_clear_row_height(wb.handle, 0, 3U, 3U), 0);
+  ASSERT_EQ(fm_sheet_clear_row_height(wb.handle, 0, 4U, 4U), 0);
   // A row without an override is a no-op.
-  ASSERT_EQ(fm_sheet_clear_row_height(wb.handle, 0, 9U), 0);
+  ASSERT_EQ(fm_sheet_clear_row_height(wb.handle, 0, 9U, 9U), 0);
 
   size_t count = 0;
   ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
@@ -903,8 +968,8 @@ TEST(FormulonCApiSheetLayout, ClearRowHeightDropsBareOverride) {
   EXPECT_EQ(r.has_height, 0);
   EXPECT_EQ(r.custom_height, 0);
 
-  EXPECT_EQ(fm_sheet_clear_row_height(wb.handle, 0, kLastRow + 1U), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_clear_row_height(wb.handle, 7, 0U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_clear_row_height(wb.handle, 0, kLastRow + 1U, kLastRow + 1U), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_clear_row_height(wb.handle, 7, 0U, 0U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
 namespace {
@@ -1021,9 +1086,9 @@ TEST(FormulonCApiSheetLayout, RowStyleUpsertAndClearPreserveOtherAttributes) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(2U);
 
-  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 4U, 22.0), 0);
-  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 4U, 1), 0);
-  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 4U, 3U), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 4U, 4U, 22.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 4U, 4U, 1), 0);
+  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 4U, 4U, 3U), 0);
   ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 4U, 5U, 1U), 0);
 
   size_t count = 0;
@@ -1067,7 +1132,7 @@ TEST(FormulonCApiSheetLayout, StyleOverridesSurviveSaveLoad) {
   wb.handle->workbook().mutable_styles().cell_xfs.resize(2U);
   ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 0U, 2U, 18.0), 0);
   ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 0U, 2U, 1U), 0);
-  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 24.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 3U, 24.0), 0);
   ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 3U, 3U, 1U), 0);
 
   for (const std::int32_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {

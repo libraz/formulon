@@ -17,11 +17,10 @@
 
 namespace {
 
-// `fm_workbook_add_cell_xf` takes this struct BY VALUE, so its size is part of
-// the calling convention rather than merely of a buffer: a caller compiled
-// against a different definition reads its arguments from the wrong registers
-// and stack slots with no diagnosable failure. Pin the layout here so a change
-// has to break the build and be acknowledged.
+// `fm_workbook_add_cell_xf` reads this struct through a pointer, so a caller
+// compiled against a different definition reads the wrong fields with no
+// diagnosable failure. Pin the layout here so a change has to break the build
+// and be acknowledged.
 static_assert(sizeof(fm_cell_xf_t) == 128U, "fm_cell_xf_t ABI layout changed");
 static_assert(offsetof(fm_cell_xf_t, font_index) == 0U, "fm_cell_xf_t.font_index offset changed");
 static_assert(offsetof(fm_cell_xf_t, fill_index) == 4U, "fm_cell_xf_t.fill_index offset changed");

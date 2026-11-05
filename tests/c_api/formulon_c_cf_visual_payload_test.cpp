@@ -25,7 +25,7 @@ TEST(FormulonCApiCfMutate, ZeroInitializedDataBarExtensionKeepsTheModelDefaults)
   fm_cf_cell_range_t sqref{0, 0, 9, 0};
   const fm_cf_rule_t rule = MakeDataBarRule(&sqref);
   std::size_t rule_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, rule, &rule_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
 
   const formulon::cf::DataBarSpec& spec = OnlyDataBarSpec(wb.handle);
   EXPECT_TRUE(spec.gradient);
@@ -62,7 +62,7 @@ TEST(FormulonCApiCfMutate, DataBarExtensionFieldsReachTheModelWhenEngaged) {
   rule.data_bar_axis_color = fm_cf_color_t{7, 8, 9, 255};
 
   std::size_t rule_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, rule, &rule_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
 
   const formulon::cf::DataBarSpec& spec = OnlyDataBarSpec(wb.handle);
   EXPECT_FALSE(spec.gradient);
@@ -101,7 +101,7 @@ TEST(FormulonCApiCfMutate, DataBarRuleSurvivesGetAtFedBackIntoAddRule) {
   seed.data_bar_axis_color_engaged = 1;
   seed.data_bar_axis_color = fm_cf_color_t{44, 55, 66, 255};
   std::size_t seed_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, seed, &seed_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &seed, &seed_index), 0) << fm_get_last_error_message();
 
   // Read it back, change one unrelated field, and write it out again.
   fm_cf_rule_t round_trip{};
@@ -123,7 +123,7 @@ TEST(FormulonCApiCfMutate, DataBarRuleSurvivesGetAtFedBackIntoAddRule) {
   round_trip.stop_if_true = 1;
   ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, 0), 0);
   std::size_t rewritten_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, round_trip, &rewritten_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &round_trip, &rewritten_index), 0) << fm_get_last_error_message();
 
   const formulon::cf::DataBarSpec& spec = OnlyDataBarSpec(wb.handle);
   EXPECT_FALSE(spec.gradient);
@@ -162,7 +162,7 @@ TEST(FormulonCApiCfMutate, GetAtRecordStaysReadableUntilTheNextGet) {
   seed.color_scale_colors = colors;
   seed.color_scale_count = 2;
   std::size_t seed_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, seed, &seed_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &seed, &seed_index), 0) << fm_get_last_error_message();
 
   fm_cf_rule_t held{};
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &held), 0);
@@ -190,7 +190,7 @@ TEST(FormulonCApiCfMutate, GetAtRecordStaysReadableUntilTheNextGet) {
   // Feeding the held record straight back is the documented edit path; it
   // must not need a caller-side copy of anything.
   std::size_t rewritten_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, held, &rewritten_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &held, &rewritten_index), 0) << fm_get_last_error_message();
   const auto& blocks = wb.handle->workbook().sheet(0).conditional_formats();
   ASSERT_EQ(blocks.size(), 1U);
   ASSERT_EQ(blocks[0].sqref.size(), 2U);
@@ -209,20 +209,20 @@ TEST(FormulonCApiCfMutate, DataBarRejectsInvertedLengthsAndUnknownAxisPosition) 
   inverted.data_bar_min_length_pct = 90;
   inverted.data_bar_max_length_pct = 10;
   std::size_t rule_index = 0;
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, inverted, &rule_index),
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &inverted, &rule_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 
   fm_cf_rule_t bad_axis = MakeDataBarRule(&sqref);
   bad_axis.data_bar_axis_position_engaged = 1;
   bad_axis.data_bar_axis_position = 3;  // one past `none`
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, bad_axis, &rule_index),
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &bad_axis, &rule_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 
   // An unengaged out-of-domain axis ordinal is ignored, not rejected: the
   // flag is what makes the value meaningful.
   fm_cf_rule_t stale_axis = MakeDataBarRule(&sqref);
   stale_axis.data_bar_axis_position = 3;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, stale_axis, &rule_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &stale_axis, &rule_index), 0) << fm_get_last_error_message();
   EXPECT_EQ(OnlyDataBarSpec(wb.handle).axis_position, formulon::cf::DataBarAxisPosition::Automatic);
 }
 
@@ -273,7 +273,7 @@ TEST(FormulonCApiCfMutate, ThresholdStringsStayLiveWhileLaterPayloadsArePulled) 
   rule.icon_set_threshold_count = 2;
 
   std::size_t rule_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, rule, &rule_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
 
   const auto& blocks = wb.handle->workbook().sheet(0).conditional_formats();
   ASSERT_EQ(blocks.size(), 1U);

@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_record_arg.h"
 #include "gtest/gtest.h"
 #include "io/zip_reader.h"
 #include "utils/error.h"
@@ -79,9 +80,9 @@ fm_row_layout_t RowOverride(const WorkbookGuard& wb, std::uint32_t row) {
 TEST(FormulonCApiOutline, CollapsedIsReadBackAndRoundTrips) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 1, 2), 0);
-  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 2, 1), 0);
-  ASSERT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 3, 1), 0);
+  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 1, 1, 2), 0);
+  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 2, 2, 1), 0);
+  ASSERT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 3, 3, 1), 0);
   ASSERT_EQ(fm_sheet_set_column_outline(wb.handle, 0, 2, 3, 3), 0);
   ASSERT_EQ(fm_sheet_set_column_collapsed(wb.handle, 0, 4, 4, 1), 0);
 
@@ -111,11 +112,11 @@ TEST(FormulonCApiOutline, CollapsedIsReadBackAndRoundTrips) {
 TEST(FormulonCApiOutline, ClearingCollapsedRemovesAnOtherwiseEmptyOverride) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 5, 1), 0);
+  ASSERT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 5, 5, 1), 0);
   ASSERT_EQ(fm_sheet_set_column_collapsed(wb.handle, 0, 1, 2, 1), 0);
-  ASSERT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 5, 0), 0);
+  ASSERT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 5, 5, 0), 0);
   ASSERT_EQ(fm_sheet_set_column_collapsed(wb.handle, 0, 1, 2, 0), 0);
-  ASSERT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 9, 0), 0);
+  ASSERT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 9, 9, 0), 0);
   size_t rows = 0;
   size_t cols = 0;
   ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &rows), 0);
@@ -127,8 +128,8 @@ TEST(FormulonCApiOutline, ClearingCollapsedRemovesAnOtherwiseEmptyOverride) {
 TEST(FormulonCApiOutline, CollapsedSettersRejectBadArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  EXPECT_EQ(fm_sheet_set_row_collapsed(wb.handle, 9, 0, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 1048576U, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_collapsed(wb.handle, 9, 0, 0, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 1048576U, 1048576U, 1), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_column_collapsed(wb.handle, 0, 3, 2, 1), kInvalidArgument);
 }
 
@@ -178,20 +179,20 @@ TEST(FormulonCApiFontToggles, OutlineShadowCondenseExtendRoundTrip) {
   font.has_extend = 1;
   font.extend = 1;
   std::size_t index = 0;
-  ASSERT_EQ(fm_workbook_add_font(wb.handle, font, &index), 0);
+  ASSERT_EQ(fm_workbook_add_font(wb.handle, &font, &index), 0);
   std::size_t same = 0;
-  ASSERT_EQ(fm_workbook_add_font(wb.handle, font, &same), 0);
+  ASSERT_EQ(fm_workbook_add_font(wb.handle, &font, &same), 0);
   EXPECT_EQ(same, index);
   font.extend = 0;
   std::size_t other = 0;
-  ASSERT_EQ(fm_workbook_add_font(wb.handle, font, &other), 0);
+  ASSERT_EQ(fm_workbook_add_font(wb.handle, &font, &other), 0);
   EXPECT_NE(other, index);
 
   fm_cell_xf_t xf{};
   xf.font_index = static_cast<uint32_t>(index);
   xf.apply_font = 1;
   std::size_t xf_index = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &xf_index), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_index), 0);
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, xf_index), 0);
 
   WorkbookGuard reloaded;
@@ -244,13 +245,13 @@ TEST(FormulonCApiGradientFill, AddGetAndDedup) {
   fm_fill_record_t fill = GradientFill(stops, 2);
 
   std::size_t index = 0;
-  ASSERT_EQ(fm_workbook_add_fill(wb.handle, fill, &index), 0);
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, &fill, &index), 0);
   std::size_t same = 0;
-  ASSERT_EQ(fm_workbook_add_fill(wb.handle, fill, &same), 0);
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, &fill, &same), 0);
   EXPECT_EQ(same, index);
   stops[1].position = 0.9;
   std::size_t other = 0;
-  ASSERT_EQ(fm_workbook_add_fill(wb.handle, fill, &other), 0);
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, &fill, &other), 0);
   EXPECT_NE(other, index);
 
   fm_fill_record_t back{};
@@ -284,7 +285,7 @@ TEST(FormulonCApiGradientFill, NonFiniteNumbersAndNullStopsAreSanitised) {
   fm_fill_record_t fill = GradientFill(nullptr, 5);
   fill.gradient_degree = std::numeric_limits<double>::infinity();
   std::size_t index = 0;
-  ASSERT_EQ(fm_workbook_add_fill(wb.handle, fill, &index), 0);
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, &fill, &index), 0);
   fm_fill_record_t back{};
   ASSERT_EQ(fm_workbook_get_fill(wb.handle, index, &back), 0);
   EXPECT_EQ(back.gradient_degree, 0.0);
@@ -303,12 +304,12 @@ TEST(FormulonCApiGradientFill, SurvivesSaveLoadOnCellsAndDxfs) {
   }
   fm_fill_record_t fill = GradientFill(stops, 3);
   std::size_t fill_index = 0;
-  ASSERT_EQ(fm_workbook_add_fill(wb.handle, fill, &fill_index), 0);
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, &fill, &fill_index), 0);
   fm_cell_xf_t xf{};
   xf.fill_index = static_cast<uint32_t>(fill_index);
   xf.apply_fill = 1;
   std::size_t xf_index = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &xf_index), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_index), 0);
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, xf_index), 0);
 
   fm_dxf_record_t dxf{};
@@ -318,7 +319,7 @@ TEST(FormulonCApiGradientFill, SurvivesSaveLoadOnCellsAndDxfs) {
   dxf.fill.gradient_degree = 45.0;
   dxf.fill.gradient_left = dxf.fill.gradient_right = dxf.fill.gradient_top = dxf.fill.gradient_bottom = 0.0;
   std::size_t dxf_index = 0;
-  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, dxf, &dxf_index), 0);
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &dxf_index), 0);
 
   WorkbookGuard reloaded;
   std::string xml;
@@ -379,7 +380,7 @@ TEST(FormulonCApiCustomIcons, RoundTripThroughSaveAndLoad) {
   fm_cfvo_t thresholds[2]{};
   const fm_cf_icon_t icons[3] = {{"3Triangles", 0}, {"NoIcons", 0}, {"5Boxes", 4}};
   size_t rule_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, IconRule(&sqref, thresholds, icons, 3), &rule_index), 0)
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, icons, 3)), &rule_index), 0)
       << fm_get_last_error_message();
 
   fm_cf_rule_t added{};
@@ -405,7 +406,7 @@ TEST(FormulonCApiCustomIcons, RulesWithoutIconsReportNone) {
   fm_cf_cell_range_t sqref{0, 0, 9, 0};
   fm_cfvo_t thresholds[2]{};
   size_t rule_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, IconRule(&sqref, thresholds, nullptr, 0), &rule_index), 0);
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, nullptr, 0)), &rule_index), 0);
   fm_cf_rule_t back{};
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, rule_index, &back), 0);
   EXPECT_EQ(back.icon_set_icon_count, 0U);
@@ -419,18 +420,18 @@ TEST(FormulonCApiCustomIcons, MalformedIconListsAreRejected) {
   fm_cfvo_t thresholds[2]{};
   size_t rule_index = 0;
   const fm_cf_icon_t too_few[2] = {{"3Arrows", 0}, {"3Arrows", 1}};
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, IconRule(&sqref, thresholds, too_few, 2), &rule_index),
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, too_few, 2)), &rule_index),
             kInvalidArgument);
   const fm_cf_icon_t unknown_set[3] = {{"3Arrows", 0}, {"7Dwarfs", 1}, {"3Arrows", 2}};
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, IconRule(&sqref, thresholds, unknown_set, 3), &rule_index),
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, unknown_set, 3)), &rule_index),
             kInvalidArgument);
   const fm_cf_icon_t id_out_of_set[3] = {{"3Arrows", 0}, {"3Arrows", 3}, {"3Arrows", 2}};
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, IconRule(&sqref, thresholds, id_out_of_set, 3), &rule_index),
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, id_out_of_set, 3)), &rule_index),
             kInvalidArgument);
   const fm_cf_icon_t null_set[3] = {{"3Arrows", 0}, {nullptr, 0}, {"3Arrows", 2}};
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, IconRule(&sqref, thresholds, null_set, 3), &rule_index),
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, null_set, 3)), &rule_index),
             kInvalidArgument);
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, IconRule(&sqref, thresholds, nullptr, 3), &rule_index),
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, nullptr, 3)), &rule_index),
             kInvalidArgument);
   size_t count = 0;
   ASSERT_EQ(fm_sheet_get_cf_rule_count(wb.handle, 0, &count), 0);

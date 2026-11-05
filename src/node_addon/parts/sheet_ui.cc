@@ -45,7 +45,7 @@ Napi::Value SheetListResult(const Napi::CallbackInfo& info, const fm_workbook_t*
 }
 
 // Shared body of the per-sheet merge add / remove entries taking `(sheet, range)`.
-using MergeEditFn = fm_status_t (*)(fm_workbook_t*, std::size_t, fm_merge_range);
+using MergeEditFn = fm_status_t (*)(fm_workbook_t*, std::size_t, const fm_merge_range*);
 
 // `handle` aliases the wrapper's member, so the C call sees the handle as it
 // is after the range getters ran, not a copy taken before them.
@@ -60,7 +60,7 @@ Napi::Value InvokeMergeEdit(const Napi::CallbackInfo& info, fm_workbook_t* const
     return env.Undefined();
   }
   const uint32_t sheet = Workbook::ArgU32(info, 0);
-  fm_status_t rc = fn(handle, sheet, range);
+  fm_status_t rc = fn(handle, sheet, &range);
   return MakeStatus(env, rc);
 }
 
@@ -99,13 +99,13 @@ Napi::Value Workbook::GetMergesInRange(const Napi::CallbackInfo& info) {
   }
   const uint32_t sheet = ArgU32(info, 0);
   uint32_t total = 0;
-  fm_status_t rc = fm_sheet_get_merges_in_range(handle_, sheet, range, nullptr, 0, &total);
+  fm_status_t rc = fm_sheet_get_merges_in_range(handle_, sheet, &range, nullptr, 0, &total);
   if (rc != 0) {
     return FinishListResult(env, arr, rc);
   }
   std::vector<fm_merge_range> merges(total);
   uint32_t again = 0;
-  rc = fm_sheet_get_merges_in_range(handle_, sheet, range, merges.data(), total, &again);
+  rc = fm_sheet_get_merges_in_range(handle_, sheet, &range, merges.data(), total, &again);
   if (rc != 0) {
     return FinishListResult(env, arr, rc);
   }
@@ -371,7 +371,7 @@ fm_status_t AddHyperlinkFromArgs(fm_workbook_t* wb, const Napi::CallbackInfo& in
   hl.location = location.empty() ? nullptr : location.c_str();
   hl.display = display.empty() ? nullptr : display.c_str();
   hl.tooltip = tooltip.empty() ? nullptr : tooltip.c_str();
-  return fm_sheet_add_hyperlink(wb, sheet, hl);
+  return fm_sheet_add_hyperlink(wb, sheet, &hl);
 }
 
 }  // namespace
@@ -540,7 +540,7 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  fm_status_t rc = fm_sheet_add_validation(handle_, sheet, dv);
+  fm_status_t rc = fm_sheet_add_validation(handle_, sheet, &dv);
   return MakeStatus(env, rc);
 }
 
@@ -691,8 +691,8 @@ Napi::Value Workbook::EditThreadedComment(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return MakeStatus(env, fm_sheet_update_threaded_comment(handle_, ArgU32(info, 0), id.c_str(), text.c_str(),
-                                                        mentions.empty() ? nullptr : mentions.data(),
-                                                        static_cast<uint32_t>(mentions.size())));
+                                                          mentions.empty() ? nullptr : mentions.data(),
+                                                          static_cast<uint32_t>(mentions.size())));
 }
 
 Napi::Value Workbook::SetThreadResolved(const Napi::CallbackInfo& info) {

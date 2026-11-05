@@ -197,7 +197,7 @@ TEST(FormulonCApiReadScratch, AllScratchProducersStayBoundedWhenAlternated) {
   cf_input.color_scale_colors = colors;
   cf_input.color_scale_count = 3;
   std::size_t cf_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, cf_input, &cf_index), 0);
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &cf_input, &cf_index), 0);
   ASSERT_EQ(cf_index, 0U);
 
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);

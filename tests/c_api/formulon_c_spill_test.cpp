@@ -5,6 +5,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "formulon_c_record_arg.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 
@@ -446,8 +447,8 @@ TEST(FormulonCApiSpill, OccupiedCellBlocksAnchorUntilCleared) {
 TEST(FormulonCApiSpill, MergedCellBlocksAnchor) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, fm_merge_range{3, 3, 3, 4}), 0);  // D4:E4
-  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1, 3, "=SEQUENCE(5)"), 0);      // D2
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_merge_range{3, 3, 3, 4})), 0);  // D4:E4
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1, 3, "=SEQUENCE(5)"), 0);                  // D2
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   ExpectBlocked(SpillAt(wb.handle, 1, 3), 1, 3, 5, 1);

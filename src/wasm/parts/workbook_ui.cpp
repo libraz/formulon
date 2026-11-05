@@ -25,7 +25,7 @@ namespace {
 
 // Reads `range` and hands it to `edit`, the add or remove half of the merge API.
 JsStatus edit_merge(fm_workbook_t* wb, uint32_t sheet, const emscripten::val& range, const char* operation,
-                    fm_status_t (*edit)(fm_workbook_t*, std::size_t, fm_merge_range)) {
+                    fm_status_t (*edit)(fm_workbook_t*, std::size_t, const fm_merge_range*)) {
   if (wb == nullptr) {
     return invalid_handle_status();
   }
@@ -34,7 +34,7 @@ JsStatus edit_merge(fm_workbook_t* wb, uint32_t sheet, const emscripten::val& ra
   if (!reader.ok()) {
     return reader.failure();
   }
-  return status_from_rc(edit(wb, sheet, m));
+  return status_from_rc(edit(wb, sheet, &m));
 }
 
 }  // namespace
@@ -119,11 +119,11 @@ emscripten::val JsWorkbook::getMergesInRange(uint32_t sheet, emscripten::val ran
     return arr;
   }
   uint32_t total = 0;
-  fm_status_t rc = fm_sheet_get_merges_in_range(handle_, sheet, query, nullptr, 0, &total);
+  fm_status_t rc = fm_sheet_get_merges_in_range(handle_, sheet, &query, nullptr, 0, &total);
   std::vector<fm_merge_range> found(rc == 0 ? total : 0);
   if (rc == 0 && total > 0) {
     uint32_t written = 0;
-    rc = fm_sheet_get_merges_in_range(handle_, sheet, query, found.data(), total, &written);
+    rc = fm_sheet_get_merges_in_range(handle_, sheet, &query, found.data(), total, &written);
     found.resize(rc == 0 ? written : 0);
   }
   if (rc != 0) {
@@ -383,7 +383,7 @@ JsStatus JsWorkbook::addHyperlinkRange(uint32_t sheet, uint32_t row, uint32_t co
   hl.location = location.empty() ? nullptr : location.c_str();
   hl.display = display.empty() ? nullptr : display.c_str();
   hl.tooltip = tooltip.empty() ? nullptr : tooltip.c_str();
-  fm_status_t rc = fm_sheet_add_hyperlink(handle_, sheet, hl);
+  fm_status_t rc = fm_sheet_add_hyperlink(handle_, sheet, &hl);
   return status_from_rc(rc);
 }
 
@@ -509,7 +509,7 @@ JsStatus JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
   dv.error_message = error_message.empty() ? nullptr : error_message.c_str();
   dv.prompt_title = prompt_title.empty() ? nullptr : prompt_title.c_str();
   dv.prompt_message = prompt_message.empty() ? nullptr : prompt_message.c_str();
-  fm_status_t rc = fm_sheet_add_validation(handle_, sheet, dv);
+  fm_status_t rc = fm_sheet_add_validation(handle_, sheet, &dv);
   return status_from_rc(rc);
 }
 

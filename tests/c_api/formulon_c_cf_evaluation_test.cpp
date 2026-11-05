@@ -257,7 +257,7 @@ TEST(FormulonCApiCf, ExpressionRuleEvaluatesFunctionsAndQualifiedRefs) {
   rule.sqref = &sqref;
   rule.sqref_count = 1;
   std::size_t rule_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, rule, &rule_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
   EXPECT_EQ(rule_index, 0U);
 
   CfResultsGuard results;
@@ -289,7 +289,7 @@ TEST(FormulonCApiCf, ExpressionRuleRecursivelyEvaluatesFormulaCells) {
   rule.sqref = &sqref;
   rule.sqref_count = 1;
   std::size_t rule_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, rule, &rule_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
   EXPECT_EQ(rule_index, 0U);
 
   // No explicit recalc: CF evaluation should use a recursive EvalState

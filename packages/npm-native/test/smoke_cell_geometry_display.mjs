@@ -50,26 +50,26 @@ test('getCellXf carries apply flags, quotePrefix and protection', async () => {
 test('row overrides report hasHeight / customHeight and clearRowHeight drops the height', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.ok(wb.setRowHeight(0, 3, 30).ok);
+  assert.ok(wb.setRowHeight(0, 3, 3, 30).ok);
   let rows = wb.listRowOverrides(0).rows;
   const row = rows.find((r) => r.row === 3);
   assert.ok(row);
   assert.equal(row.height, 30);
   assert.equal(row.hasHeight, 1);
   assert.equal(row.customHeight, 1);
-  assert.ok(wb.clearRowHeight(0, 3).ok);
+  assert.ok(wb.clearRowHeight(0, 3, 3).ok);
   rows = wb.listRowOverrides(0).rows;
   assert.equal(
     rows.find((r) => r.row === 3),
     undefined,
   );
-  assert.equal(wb.clearRowHeight(0, 2000000).ok, false);
+  assert.equal(wb.clearRowHeight(0, 2000000, 2000000).ok, false);
 });
 
 test('setRowAutoHeight caches the height and keeps the row automatic', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.ok(wb.setRowAutoHeight(0, 4, 31.5).ok);
+  assert.ok(wb.setRowAutoHeight(0, 4, 4, 31.5).ok);
   const row = wb.listRowOverrides(0).rows.find((r) => r.row === 4);
   assert.ok(row);
   assert.equal(row.height, 31.5);
@@ -136,8 +136,8 @@ test('sheet format defaults round-trip', async () => {
 test('geometry accessors agree with each other', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.ok(wb.setRowHeight(0, 0, 20).ok);
-  assert.ok(wb.setRowHeight(0, 1, 30).ok);
+  assert.ok(wb.setRowHeight(0, 0, 0, 20).ok);
+  assert.ok(wb.setRowHeight(0, 1, 1, 30).ok);
   const model = wb.getWidthModel(0, 0);
   assert.ok(model.status.ok, JSON.stringify(model.status));
   assert.equal(typeof model.pointsPerChar, 'number');

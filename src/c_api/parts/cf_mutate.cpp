@@ -425,33 +425,36 @@ extern "C" fm_status_t fm_sheet_get_cf_rule(const fm_workbook_t* wb, std::size_t
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet_index, fm_cf_rule_t rule,
+extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet_index, const fm_cf_rule_t* rule,
                                             std::size_t* out_index) {
   clear_last_error();
+  if (rule == nullptr) {
+    return null_argument("fm_sheet_add_cf_rule", "rule");
+  }
   if (out_index == nullptr) {
     return null_argument("fm_sheet_add_cf_rule", "out_index");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_cf_rule"); rc != 0) {
     return rc;
   }
-  if (auto rc = validate(rule, "fm_sheet_add_cf_rule"); rc != 0) {
+  if (auto rc = validate(*rule, "fm_sheet_add_cf_rule"); rc != 0) {
     return rc;
   }
 
   formulon::cf::ConditionalFormat new_block;
-  new_block.sqref.reserve(rule.sqref_count);
-  for (std::uint32_t i = 0; i < rule.sqref_count; ++i) {
+  new_block.sqref.reserve(rule->sqref_count);
+  for (std::uint32_t i = 0; i < rule->sqref_count; ++i) {
     formulon::cf::CFCellRange r;
-    r.first = formulon::CellAddress{rule.sqref[i].first_row, rule.sqref[i].first_col};
-    r.last = formulon::CellAddress{rule.sqref[i].last_row, rule.sqref[i].last_col};
+    r.first = formulon::CellAddress{rule->sqref[i].first_row, rule->sqref[i].first_col};
+    r.last = formulon::CellAddress{rule->sqref[i].last_row, rule->sqref[i].last_col};
     new_block.sqref.push_back(r);
   }
 
   formulon::cf::CFRule out_rule;
-  out_rule.type = static_cast<formulon::cf::RuleType>(rule.type);
+  out_rule.type = static_cast<formulon::cf::RuleType>(rule->type);
 
-  if (rule.priority > 0) {
-    out_rule.priority = rule.priority;
+  if (rule->priority > 0) {
+    out_rule.priority = rule->priority;
   } else {
     // Auto-assign priority to (max_existing + 1) when caller passed <= 0.
     std::int32_t max_priority = 0;
@@ -469,24 +472,24 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
     }
     out_rule.priority = max_priority + 1;
   }
-  out_rule.stop_if_true = rule.stop_if_true != 0;
-  if (rule.dxf_id_engaged != 0) {
+  out_rule.stop_if_true = rule->stop_if_true != 0;
+  if (rule->dxf_id_engaged != 0) {
     // A `dxfId` past the end of `<dxfs>` makes Excel treat the whole
     // `xl/styles.xml` reference as broken and strip every conditional format
     // from the workbook on open. The writer already refuses to emit an
     // unresolvable `dxfId`, but rejecting it here tells the caller at set
     // time which index was wrong instead of silently losing the format.
     const std::size_t dxf_count = wb->workbook().styles().dxfs.size();
-    if (static_cast<std::size_t>(rule.dxf_id) >= dxf_count) {
+    if (static_cast<std::size_t>(rule->dxf_id) >= dxf_count) {
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                                "fm_sheet_add_cf_rule: dxf_id out of range",
-                               "dxf_id=" + std::to_string(rule.dxf_id) + " dxfs_count=" + std::to_string(dxf_count));
+                               "dxf_id=" + std::to_string(rule->dxf_id) + " dxfs_count=" + std::to_string(dxf_count));
     }
-    out_rule.dxf_id = rule.dxf_id;
+    out_rule.dxf_id = rule->dxf_id;
   }
-  if (rule.id != nullptr && rule.id[0] != '\0') {
+  if (rule->id != nullptr && rule->id[0] != '\0') {
     // Already checked against the `ST_Guid` shape by `validate` above.
-    out_rule.id = rule.id;
+    out_rule.id = rule->id;
   } else {
     // Derived from the priority so add-then-list is deterministic; skips ids
     // already on the sheet's rules.
@@ -498,38 +501,38 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
     }
     out_rule.id = formulon::cf::x14_rule_id(sheet_index, static_cast<std::uint32_t>(out_rule.priority), used_ids);
   }
-  if (rule.formula1 != nullptr) {
-    if (auto rc =
-            check_stored_formula("fm_sheet_add_cf_rule", rule.formula1, "field=formula1", &out_rule.formula1.emplace());
+  if (rule->formula1 != nullptr) {
+    if (auto rc = check_stored_formula("fm_sheet_add_cf_rule", rule->formula1, "field=formula1",
+                                       &out_rule.formula1.emplace());
         rc != 0) {
       return rc;
     }
   }
-  if (rule.formula2 != nullptr) {
-    if (auto rc =
-            check_stored_formula("fm_sheet_add_cf_rule", rule.formula2, "field=formula2", &out_rule.formula2.emplace());
+  if (rule->formula2 != nullptr) {
+    if (auto rc = check_stored_formula("fm_sheet_add_cf_rule", rule->formula2, "field=formula2",
+                                       &out_rule.formula2.emplace());
         rc != 0) {
       return rc;
     }
   }
-  if (rule.op_engaged != 0) {
-    out_rule.op = static_cast<formulon::cf::CellIsOperator>(rule.op);
+  if (rule->op_engaged != 0) {
+    out_rule.op = static_cast<formulon::cf::CellIsOperator>(rule->op);
   }
-  if (rule.rank_engaged != 0) {
-    out_rule.rank = rule.rank;
+  if (rule->rank_engaged != 0) {
+    out_rule.rank = rule->rank;
   }
-  out_rule.percent = (rule.percent != 0);
-  out_rule.bottom = (rule.bottom != 0);
-  out_rule.above_average = (rule.above_average != 0);
-  out_rule.equal_average = (rule.equal_average != 0);
-  if (rule.std_dev_engaged != 0) {
-    out_rule.std_dev = rule.std_dev;
+  out_rule.percent = (rule->percent != 0);
+  out_rule.bottom = (rule->bottom != 0);
+  out_rule.above_average = (rule->above_average != 0);
+  out_rule.equal_average = (rule->equal_average != 0);
+  if (rule->std_dev_engaged != 0) {
+    out_rule.std_dev = rule->std_dev;
   }
-  if (rule.text != nullptr) {
-    out_rule.text = std::string(rule.text);
+  if (rule->text != nullptr) {
+    out_rule.text = std::string(rule->text);
   }
-  if (rule.time_period_engaged != 0) {
-    out_rule.time_period = static_cast<formulon::cf::TimePeriod>(rule.time_period);
+  if (rule->time_period_engaged != 0) {
+    out_rule.time_period = static_cast<formulon::cf::TimePeriod>(rule->time_period);
   }
   if (!out_rule.formula1.has_value() || out_rule.formula1->empty()) {
     // Excel stores a derived formula for these types and readers surface it.
@@ -537,15 +540,15 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
       out_rule.formula1 = std::move(*derived);
     }
   }
-  if (out_rule.type == formulon::cf::RuleType::ColorScale && !copy_color_scale_payload(rule, &out_rule)) {
+  if (out_rule.type == formulon::cf::RuleType::ColorScale && !copy_color_scale_payload(*rule, &out_rule)) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_sheet_add_cf_rule: invalid colorScale payload");
   }
-  if (out_rule.type == formulon::cf::RuleType::DataBar && !copy_data_bar_payload(rule, &out_rule)) {
+  if (out_rule.type == formulon::cf::RuleType::DataBar && !copy_data_bar_payload(*rule, &out_rule)) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_sheet_add_cf_rule: invalid dataBar payload");
   }
-  if (out_rule.type == formulon::cf::RuleType::IconSet && !copy_icon_set_payload(rule, &out_rule)) {
+  if (out_rule.type == formulon::cf::RuleType::IconSet && !copy_icon_set_payload(*rule, &out_rule)) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_sheet_add_cf_rule: invalid iconSet payload");
   }
@@ -553,11 +556,11 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
     return rc;
   }
   // Every check passed, so binding the books the formulas name commits nothing early.
-  if (rule.formula1 != nullptr && rule.formula1[0] != '\0') {
-    out_rule.formula1 = ingest_entered_formula(wb, rule.formula1);
+  if (rule->formula1 != nullptr && rule->formula1[0] != '\0') {
+    out_rule.formula1 = ingest_entered_formula(wb, rule->formula1);
   }
-  if (rule.formula2 != nullptr && rule.formula2[0] != '\0') {
-    out_rule.formula2 = ingest_entered_formula(wb, rule.formula2);
+  if (rule->formula2 != nullptr && rule->formula2[0] != '\0') {
+    out_rule.formula2 = ingest_entered_formula(wb, rule->formula2);
   }
 
   new_block.rules.push_back(std::move(out_rule));

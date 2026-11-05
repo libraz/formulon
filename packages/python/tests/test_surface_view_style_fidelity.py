@@ -26,8 +26,8 @@ from formulon.workbook import ColorSpec
 class OutlineTests(unittest.TestCase):
     def test_collapsed_is_read_back_and_survives_save_load(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_row_outline(0, 1, 2)
-            wb.set_row_collapsed(0, 3, True)
+            wb.set_row_outline(0, 1, 1, 2)
+            wb.set_row_collapsed(0, 3, 3, True)
             wb.set_column_outline(0, 2, 3, 3)
             wb.set_column_collapsed(0, 4, 4, True)
             rows = {r.row: r for r in wb.list_row_overrides(0)}
@@ -41,8 +41,8 @@ class OutlineTests(unittest.TestCase):
 
     def test_clearing_collapsed_drops_an_empty_override(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_row_collapsed(0, 5, True)
-            wb.set_row_collapsed(0, 5, False)
+            wb.set_row_collapsed(0, 5, 5, True)
+            wb.set_row_collapsed(0, 5, 5, False)
             wb.set_column_collapsed(0, 1, 2, True)
             wb.set_column_collapsed(0, 1, 2, False)
             self.assertEqual(wb.list_row_overrides(0), [])
@@ -51,7 +51,7 @@ class OutlineTests(unittest.TestCase):
     def test_bad_arguments_are_rejected(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.set_row_collapsed(9, 0, True)
+                wb.set_row_collapsed(9, 0, 0, True)
             with self.assertRaises(FormulonError):
                 wb.set_column_collapsed(0, 3, 2, True)
 

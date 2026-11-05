@@ -2032,12 +2032,12 @@ typedef struct {
  *        `(hl.row, hl.col)..(hl.last_row, hl.last_col)` to `sheet_index`.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `hl` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the hyperlink
  *         rectangle is inverted or outside the Excel grid.
  */
-FM_API fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, size_t sheet_index, fm_hyperlink_t hl);
+FM_API fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, size_t sheet_index, const fm_hyperlink_t* hl);
 
 /**
  * @brief Removes every hyperlink anchored at the exact `(row, col)`
@@ -2076,12 +2076,12 @@ FM_API fm_status_t fm_sheet_clear_hyperlinks(fm_workbook_t* wb, size_t sheet_ind
  *        rectangle must lie within the Excel grid.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `merge` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the merge
  *         rectangle is outside the Excel grid.
  */
-FM_API fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, size_t sheet_index, fm_merge_range merge);
+FM_API fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, size_t sheet_index, const fm_merge_range* merge);
 
 /**
  * @brief Removes every merge range on `sheet_index` that overlaps `range`
@@ -2091,10 +2091,10 @@ FM_API fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, size_t sheet_index, fm_
  *        mirroring fm_sheet_add_merge.
  *
  * @return `FM_STATUS_OK` (0) on success (including the no-overlap case);
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `range` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range.
  */
-FM_API fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, size_t sheet_index, fm_merge_range range);
+FM_API fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, size_t sheet_index, const fm_merge_range* range);
 
 /**
  * @brief Removes the merge at `index` on `sheet_index`. Mirrors the
@@ -2198,12 +2198,13 @@ FM_API fm_status_t fm_sheet_get_merge_count(const fm_workbook_t* wb, size_t shee
  * are normalised, mirroring `fm_sheet_remove_merge`.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_count` is `NULL`, or `out`
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `range` or `out_count` is `NULL`, or `out`
  *         is `NULL` while `capacity > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range.
  */
-FM_API fm_status_t fm_sheet_get_merges_in_range(const fm_workbook_t* wb, size_t sheet_index, fm_merge_range range,
-                                                fm_merge_range* out, uint32_t capacity, uint32_t* out_count);
+FM_API fm_status_t fm_sheet_get_merges_in_range(const fm_workbook_t* wb, size_t sheet_index,
+                                                const fm_merge_range* range, fm_merge_range* out, uint32_t capacity,
+                                                uint32_t* out_count);
 
 /**
  * @brief Inserts or replaces the comment at `(row, col)` on `sheet_index`.
@@ -2463,7 +2464,7 @@ FM_API fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, size_t sheet
  * `fm_sheet_set_formula` stores a cell formula.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `v` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `v.range_count > 0 && v.ranges == NULL` or `v.range_count`
  *         exceeds the per-call range cap, when any supplied range is
@@ -2472,7 +2473,7 @@ FM_API fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, size_t sheet
  *         `FM_STATUS_PARSER_UNEXPECTED_TOKEN` (1000) when a non-empty `v.formula1` or
  *         `v.formula2` does not parse (the rule is not stored).
  */
-FM_API fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, size_t sheet_index, fm_data_validation_t v);
+FM_API fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, size_t sheet_index, const fm_data_validation_t* v);
 
 /**
  * @brief Removes the validation rule at `index` on `sheet_index`.
@@ -4239,7 +4240,7 @@ FM_API fm_status_t fm_sheet_get_cf_rule(const fm_workbook_t* wb, size_t sheet_in
  * corner of the bounding box of `rule.sqref` (e.g. `NOT(ISERROR(SEARCH("ab",B1)))`).
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `out_index` is `NULL`, or
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `rule` or `out_index` is `NULL`, or
  *           `rule.sqref` is `NULL` while `rule.sqref_count > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `rule.sqref_count == 0` or exceeds the per-call range cap,
@@ -4258,7 +4259,8 @@ FM_API fm_status_t fm_sheet_get_cf_rule(const fm_workbook_t* wb, size_t sheet_in
  *           `rule.formula2` or formula-typed `fm_cfvo_t` value does not
  *           parse (the rule is not stored).
  */
-FM_API fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, size_t sheet_index, fm_cf_rule_t rule, size_t* out_index);
+FM_API fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, size_t sheet_index, const fm_cf_rule_t* rule,
+                                        size_t* out_index);
 
 /**
  * @brief Removes the `idx`-th CF rule (flattened order). When the
@@ -7173,68 +7175,74 @@ FM_API fm_status_t fm_sheet_set_column_style(fm_workbook_t* wb, size_t sheet_ind
 FM_API fm_status_t fm_sheet_clear_column_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last);
 
 /**
- * @brief Sets or replaces the row height override for `row`.
+ * @brief Sets or replaces the row height override for every row of the
+ *        inclusive span `[first, last]`.
  *
  * `height` is in points and is stored as a manual height
  * (`customHeight="1"`), which Excel keeps when the row's content or font
- * changes. A rejected call leaves the layout exactly as it was.
+ * changes. Every other row attribute is kept. A rejected call leaves the
+ * layout exactly as it was.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `row`
- *         is past the last row (1048575), or `height` is negative, NaN,
- *         or infinite.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `last < first`, `last` is past the last row (1048575), or
+ *         `height` is negative, NaN, or infinite.
  */
-FM_API fm_status_t fm_sheet_set_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t row, double height);
+FM_API fm_status_t fm_sheet_set_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
+                                           double height);
 
 /**
- * @brief Stores `height` as the cached value of `row`'s automatic height.
+ * @brief Stores `height` as the cached value of the automatic height of every
+ *        row of the inclusive span `[first, last]`.
  *
- * Same contract as `fm_sheet_set_row_height`, except the row stays
+ * Same contract as `fm_sheet_set_row_height`, except the rows stay
  * automatic (`custom_height == 0`): the height is saved as `ht` without
- * `customHeight`, so the row still follows its content and font. Row
+ * `customHeight`, so each row still follows its content and font. Row
  * style, hidden state, outline level and collapsed flag are kept. Use it
  * to refresh a derived height; `fm_sheet_clear_row_height` drops it.
  *
  * @return As `fm_sheet_set_row_height`.
  */
-FM_API fm_status_t fm_sheet_set_row_auto_height(fm_workbook_t* wb, size_t sheet_index, uint32_t row, double height);
+FM_API fm_status_t fm_sheet_set_row_auto_height(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
+                                                double height);
 
 /**
- * @brief Sets or replaces the row hidden flag for `row`.
+ * @brief Sets or replaces the row hidden flag for the inclusive row span
+ *        `[first, last]`.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `row`
- *         is past the last row (1048575).
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `last < first`, or `last` is past the last row (1048575).
  */
-FM_API fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_index, uint32_t row, int32_t hidden);
+FM_API fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
+                                           int32_t hidden);
 
 /**
- * @brief Sets or replaces the row outline level for `row`.
+ * @brief Sets or replaces the row outline level for the inclusive row span
+ *        `[first, last]`.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `row`
- *         is past the last row (1048575), or `level` is above 7, the
- *         deepest outline level Excel stores.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `last < first`, `last` is past the last row (1048575), or
+ *         `level` is above 7, the deepest outline level Excel stores.
  */
-FM_API fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint8_t level);
+FM_API fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
+                                            uint8_t level);
 
 /**
  * @brief Sets or clears the `collapsed` flag (the outline group summarised by
- *        the row is collapsed) for `row`.
+ *        the row is collapsed) for the inclusive row span `[first, last]`.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `row`
- *         is past the last row (1048575).
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `last < first`, or `last` is past the last row (1048575).
  */
-FM_API fm_status_t fm_sheet_set_row_collapsed(fm_workbook_t* wb, size_t sheet_index, uint32_t row, int32_t collapsed);
+FM_API fm_status_t fm_sheet_set_row_collapsed(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
+                                              int32_t collapsed);
 
 /**
  * @brief Sets or replaces the cell-style XF for the inclusive row span
@@ -7375,22 +7383,21 @@ FM_API fm_status_t fm_sheet_restore_range_style(fm_workbook_t* wb, size_t sheet_
                                                 size_t len);
 
 /**
- * @brief Removes the height override of `row`, returning it to the sheet
- *        default height.
+ * @brief Removes the height override of the inclusive row span
+ *        `[first, last]`, returning those rows to the sheet default height.
  *
  * Clears the stored height and its custom flag. A row override left with
  * no other state (visible, outline level 0, no row style) is dropped,
  * except on a zeroHeight sheet, where a visible override is the row's
- * exception to the hidden default and is kept. A row with no height
- * override is a no-op.
+ * exception to the hidden default and is kept. Rows with no height
+ * override are unaffected.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `row`
- *         is past the last row (1048575).
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `last < first`, or `last` is past the last row (1048575).
  */
-FM_API fm_status_t fm_sheet_clear_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t row);
+FM_API fm_status_t fm_sheet_clear_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last);
 
 /**
  * @brief Sheet default column / row metrics (`<sheetFormatPr>`).
@@ -8328,9 +8335,9 @@ FM_API fm_status_t fm_workbook_get_dxf(const fm_workbook_t* wb, size_t dxf_index
  * non-`NULL`; passing `NULL` stores an empty fragment.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_dxf_index` is `NULL`.
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `record` or `out_dxf_index` is `NULL`.
  */
-FM_API fm_status_t fm_workbook_add_dxf(fm_workbook_t* wb, fm_dxf_record_t record, size_t* out_dxf_index);
+FM_API fm_status_t fm_workbook_add_dxf(fm_workbook_t* wb, const fm_dxf_record_t* record, size_t* out_dxf_index);
 
 /**
  * @brief One region of a custom table style (`fm_table_style_t`).
@@ -8540,9 +8547,9 @@ FM_API fm_status_t fm_workbook_get_cell_style_xf(const fm_workbook_t* wb, size_t
  * returns.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_index` is `NULL`.
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `record` or `out_index` is `NULL`.
  */
-FM_API fm_status_t fm_workbook_add_font(fm_workbook_t* wb, fm_font_record_t record, size_t* out_index);
+FM_API fm_status_t fm_workbook_add_font(fm_workbook_t* wb, const fm_font_record_t* record, size_t* out_index);
 
 /**
  * @brief Overwrites the `font_index`-th font record in place.
@@ -8562,10 +8569,10 @@ FM_API fm_status_t fm_workbook_add_font(fm_workbook_t* wb, fm_font_record_t reco
  * into the styles table, `NULL` treated as the empty string.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `record` is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `font_index >= fonts.size()`.
  */
-FM_API fm_status_t fm_workbook_set_font(fm_workbook_t* wb, size_t font_index, fm_font_record_t record);
+FM_API fm_status_t fm_workbook_set_font(fm_workbook_t* wb, size_t font_index, const fm_font_record_t* record);
 
 /**
  * @brief Declares the workbook's default font.
@@ -8594,9 +8601,9 @@ FM_API fm_status_t fm_workbook_set_font(fm_workbook_t* wb, size_t font_index, fm
  * theme's body font.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`.
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `record` is `NULL`.
  */
-FM_API fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, fm_font_record_t record);
+FM_API fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, const fm_font_record_t* record);
 
 /**
  * @brief Adds a fill record to the workbook's styles table, deduplicating
@@ -8610,9 +8617,9 @@ FM_API fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, fm_font_recor
  * batch when possible.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_index` is `NULL`.
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `record` or `out_index` is `NULL`.
  */
-FM_API fm_status_t fm_workbook_add_fill(fm_workbook_t* wb, fm_fill_record_t record, size_t* out_index);
+FM_API fm_status_t fm_workbook_add_fill(fm_workbook_t* wb, const fm_fill_record_t* record, size_t* out_index);
 
 /**
  * @brief Adds a border record to the workbook's styles table, deduplicating
@@ -8626,9 +8633,9 @@ FM_API fm_status_t fm_workbook_add_fill(fm_workbook_t* wb, fm_fill_record_t reco
  * possible.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_index` is `NULL`.
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `record` or `out_index` is `NULL`.
  */
-FM_API fm_status_t fm_workbook_add_border(fm_workbook_t* wb, fm_border_record_t record, size_t* out_index);
+FM_API fm_status_t fm_workbook_add_border(fm_workbook_t* wb, const fm_border_record_t* record, size_t* out_index);
 
 /**
  * @brief Adds a number-format code to the workbook's styles table,
@@ -8685,15 +8692,15 @@ FM_API fm_status_t fm_workbook_add_num_fmt(fm_workbook_t* wb, const char* format
  *     matching presence flag is set.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_xf_index` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `record` or `out_xf_index` is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) for any out-of-range / unregistered field.
  */
-FM_API fm_status_t fm_workbook_add_cell_xf(fm_workbook_t* wb, fm_cell_xf_t record, size_t* out_xf_index);
+FM_API fm_status_t fm_workbook_add_cell_xf(fm_workbook_t* wb, const fm_cell_xf_t* record, size_t* out_xf_index);
 
 /** Adds and deduplicates a named-style xf including optional alignment
  * attributes. `has_alignment` preserves an explicit empty child. Invalid
  * Excel ranges return `FM_STATUS_INVALID_ARGUMENT` (2). */
-FM_API fm_status_t fm_workbook_add_cell_style_xf(fm_workbook_t* wb, fm_cell_xf_t record, uint32_t* out_xf_id);
+FM_API fm_status_t fm_workbook_add_cell_style_xf(fm_workbook_t* wb, const fm_cell_xf_t* record, uint32_t* out_xf_id);
 
 /**
  * @brief Adds or replaces the named `<cellStyle>` record `record->name`.
@@ -8963,7 +8970,7 @@ FM_API fm_status_t fm_workbook_clear_theme(fm_workbook_t* wb);
  *         `FM_STATUS_INVALID_ARGUMENT` (2) for an unknown `context` or `spec.kind`, or a
  *         non-finite theme tint.
  */
-FM_API fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, fm_color_spec_t spec, int32_t context,
+FM_API fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, const fm_color_spec_t* spec, int32_t context,
                                              uint32_t* out_argb, int32_t* out_resolution);
 
 /**

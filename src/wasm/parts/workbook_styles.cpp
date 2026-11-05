@@ -490,7 +490,7 @@ JsAddStyleResult JsWorkbook::addFont(emscripten::val record) {
     return r;
   }
   std::size_t idx = 0;
-  const fm_status_t rc = fm_workbook_add_font(handle_, fr, &idx);
+  const fm_status_t rc = fm_workbook_add_font(handle_, &fr, &idx);
   return index_result(rc, idx);
 }
 
@@ -505,7 +505,7 @@ JsStatus JsWorkbook::setFont(uint32_t font_index, emscripten::val record) {
   if (!reader.ok()) {
     return reader.failure();
   }
-  return status_from_rc(fm_workbook_set_font(handle_, font_index, fr));
+  return status_from_rc(fm_workbook_set_font(handle_, font_index, &fr));
 }
 
 JsStatus JsWorkbook::setDefaultFont(emscripten::val record) {
@@ -519,7 +519,7 @@ JsStatus JsWorkbook::setDefaultFont(emscripten::val record) {
   if (!reader.ok()) {
     return reader.failure();
   }
-  return status_from_rc(fm_workbook_set_default_font(handle_, fr));
+  return status_from_rc(fm_workbook_set_default_font(handle_, &fr));
 }
 
 JsAddStyleResult JsWorkbook::addFill(emscripten::val record) {
@@ -536,7 +536,7 @@ JsAddStyleResult JsWorkbook::addFill(emscripten::val record) {
     return r;
   }
   std::size_t idx = 0;
-  const fm_status_t rc = fm_workbook_add_fill(handle_, fr, &idx);
+  const fm_status_t rc = fm_workbook_add_fill(handle_, &fr, &idx);
   return index_result(rc, idx);
 }
 
@@ -553,7 +553,7 @@ JsAddStyleResult JsWorkbook::addBorder(emscripten::val record) {
     return r;
   }
   std::size_t idx = 0;
-  const fm_status_t rc = fm_workbook_add_border(handle_, br, &idx);
+  const fm_status_t rc = fm_workbook_add_border(handle_, &br, &idx);
   return index_result(rc, idx);
 }
 
@@ -588,7 +588,7 @@ JsAddStyleResult JsWorkbook::addXf(emscripten::val record) {
     return r;
   }
   std::size_t idx = 0;
-  const fm_status_t rc = fm_workbook_add_cell_xf(handle_, xf, &idx);
+  const fm_status_t rc = fm_workbook_add_cell_xf(handle_, &xf, &idx);
   return index_result(rc, idx);
 }
 
@@ -644,7 +644,7 @@ JsAddStyleResult JsWorkbook::addDxf(emscripten::val record) {
   }
 
   std::size_t idx = 0;
-  const fm_status_t rc = fm_workbook_add_dxf(handle_, dxf, &idx);
+  const fm_status_t rc = fm_workbook_add_dxf(handle_, &dxf, &idx);
   return index_result(rc, idx);
 }
 
@@ -722,7 +722,7 @@ JsAddStyleResult JsWorkbook::addCellStyleXf(emscripten::val record) {
     return out;
   }
   uint32_t index = 0;
-  const fm_status_t rc = fm_workbook_add_cell_style_xf(handle_, xf, &index);
+  const fm_status_t rc = fm_workbook_add_cell_style_xf(handle_, &xf, &index);
   return index_result(rc, index);
 }
 
@@ -997,7 +997,7 @@ emscripten::val JsWorkbook::resolveColor(emscripten::val spec, int32_t context) 
     o.set("resolution", 0);
     return o;
   }
-  const fm_status_t rc = fm_workbook_resolve_color(handle_, color, context, &argb, &resolution);
+  const fm_status_t rc = fm_workbook_resolve_color(handle_, &color, context, &argb, &resolution);
   o.set("status", status_from_rc(rc));
   o.set("argb", rc == 0 ? argb : 0U);
   o.set("resolution", rc == 0 ? resolution : 0);

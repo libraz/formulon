@@ -142,7 +142,7 @@ Napi::Object FillRecordToJs(Napi::Env env, const fm_fill_record_t& f) {
 /// Reads a fill record out of a JS object. `stops` owns the gradient stops
 /// for the duration of the C ABI call, which borrows the pointer.
 fm_fill_record_t PullFillRecord(CheckedSpecReader& reader, const Napi::Object& record,
-                              std::vector<fm_gradient_stop_t>* stops) {
+                                std::vector<fm_gradient_stop_t>* stops) {
   fm_fill_record_t out{};
   out.pattern = reader.U8(record, "pattern", 0U);
   out.fg_argb = reader.U32(record, "fgArgb", 0U);
@@ -548,7 +548,7 @@ Napi::Value Workbook::AddFont(const Napi::CallbackInfo& info) {
   fm_font_record_t fr{};
   return AddStyleRecord(
       info, [&](CheckedSpecReader& reader, const Napi::Object& record) { PullFontRecord(reader, record, &name, &fr); },
-      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_font(handle, fr, idx); });
+      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_font(handle, &fr, idx); });
 }
 
 Napi::Value Workbook::SetFont(const Napi::CallbackInfo& info) {
@@ -566,7 +566,7 @@ Napi::Value Workbook::SetFont(const Napi::CallbackInfo& info) {
     // See the matching guard in AddFont.
     return env.Undefined();
   }
-  return MakeStatus(env, fm_workbook_set_font(handle_, font_index, fr));
+  return MakeStatus(env, fm_workbook_set_font(handle_, font_index, &fr));
 }
 
 Napi::Value Workbook::SetDefaultFont(const Napi::CallbackInfo& info) {
@@ -583,7 +583,7 @@ Napi::Value Workbook::SetDefaultFont(const Napi::CallbackInfo& info) {
     // See the matching guard in AddFont.
     return env.Undefined();
   }
-  return MakeStatus(env, fm_workbook_set_default_font(handle_, fr));
+  return MakeStatus(env, fm_workbook_set_default_font(handle_, &fr));
 }
 
 Napi::Value Workbook::AddFill(const Napi::CallbackInfo& info) {
@@ -591,14 +591,14 @@ Napi::Value Workbook::AddFill(const Napi::CallbackInfo& info) {
   std::vector<fm_gradient_stop_t> stops;
   return AddStyleRecord(
       info, [&](CheckedSpecReader& reader, const Napi::Object& record) { fr = PullFillRecord(reader, record, &stops); },
-      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_fill(handle, fr, idx); });
+      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_fill(handle, &fr, idx); });
 }
 
 Napi::Value Workbook::AddBorder(const Napi::CallbackInfo& info) {
   fm_border_record_t br{};
   return AddStyleRecord(
       info, [&](CheckedSpecReader& reader, const Napi::Object& record) { br = PullBorderRecord(reader, record); },
-      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_border(handle, br, idx); });
+      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_border(handle, &br, idx); });
 }
 
 Napi::Value Workbook::AddNumFmt(const Napi::CallbackInfo& info) {
@@ -616,7 +616,7 @@ Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
   fm_cell_xf_t xf{};
   return AddStyleRecord(
       info, [&](CheckedSpecReader& reader, const Napi::Object& record) { PullCellXf(reader, record, &xf); },
-      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_cell_xf(handle, xf, idx); });
+      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_cell_xf(handle, &xf, idx); });
 }
 
 Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
@@ -660,7 +660,7 @@ Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
         dxf.alignment_xml = alignment_xml.c_str();
         dxf.protection_xml = protection_xml.c_str();
       },
-      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_dxf(handle, dxf, idx); });
+      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_dxf(handle, &dxf, idx); });
 }
 
 // ---- Style pool counts ----------------------------------------------
@@ -687,7 +687,8 @@ Napi::Value Workbook::GetCellStyle(const Napi::CallbackInfo& info) {
   Napi::Object out = Napi::Object::New(env);
   const uint32_t index = ArgU32(info, 0);
   fm_cell_style_record_t cs{};
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_cell_style_at(handle_, index, &cs) : kBindingInvalidHandle;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_get_cell_style_at(handle_, index, &cs) : kBindingInvalidHandle;
   if (rc != 0) {
     cs = fm_cell_style_record_t{};
   }
@@ -705,7 +706,8 @@ Napi::Value Workbook::GetCellStyleXf(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const uint32_t index = ArgU32(info, 0);
   fm_cell_xf_t xf{};
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_cell_style_xf(handle_, index, &xf) : kBindingInvalidHandle;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_get_cell_style_xf(handle_, index, &xf) : kBindingInvalidHandle;
   return CellXfResultToJs(env, rc, xf);
 }
 
@@ -751,7 +753,8 @@ Napi::Value Workbook::GetTableStyle(const Napi::CallbackInfo& info) {
   Napi::Object out = Napi::Object::New(env);
   const uint32_t index = ArgU32(info, 0);
   fm_table_style_t style{};
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_table_style_at(handle_, index, &style) : kBindingInvalidHandle;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_get_table_style_at(handle_, index, &style) : kBindingInvalidHandle;
   if (rc != 0) {
     style = fm_table_style_t{};
   }
@@ -858,7 +861,7 @@ Napi::Value Workbook::SetTableStyleDefaults(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return MakeStatus(env, fm_workbook_set_table_style_defaults(handle_, has_table ? table.c_str() : nullptr,
-                                                            has_pivot ? pivot.c_str() : nullptr));
+                                                              has_pivot ? pivot.c_str() : nullptr));
 }
 
 // ---- Theme, colour resolution, effective style ----------------------
@@ -981,7 +984,7 @@ Napi::Value Workbook::ResolveColor(const Napi::CallbackInfo& info) {
   uint32_t argb = 0;
   int32_t resolution = 0;
   const fm_status_t rc = handle_ != nullptr
-                             ? fm_workbook_resolve_color(handle_, spec, ArgI32(info, 1), &argb, &resolution)
+                             ? fm_workbook_resolve_color(handle_, &spec, ArgI32(info, 1), &argb, &resolution)
                              : kBindingInvalidHandle;
   if (rc != 0) {
     argb = 0;

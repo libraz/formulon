@@ -6747,11 +6747,11 @@ class Workbook:
             )
 
     # -- Geometry / display ------------------------------------------------
-    def clear_row_height(self, sheet: int, row: int) -> None:
-        """Remove the height override at ``row`` (back to the sheet default)."""
+    def clear_row_height(self, sheet: int, first: int, last: int) -> None:
+        """Remove the height override on ``[first, last]`` (back to the sheet default)."""
         h = self._require()
         _check(
-            LIB.fm_sheet_clear_row_height(h, _uint(sheet, "sheet_index"), _uint(row, "row")),
+            LIB.fm_sheet_clear_row_height(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last")),
             "fm_sheet_clear_row_height",
         )
 
@@ -9283,51 +9283,61 @@ class Workbook:
                 )
         return out
 
-    def set_row_height(self, sheet: int, row: int, height: float) -> None:
-        """Set the row height at ``row`` as a manual height (``customHeight``)."""
+    def set_row_height(self, sheet: int, first: int, last: int, height: float) -> None:
+        """Set the row height on ``[first, last]`` as a manual height (``customHeight``)."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_row_height(h, _uint(sheet, "sheet_index"), _uint(row, "row"), float(height)),
+            LIB.fm_sheet_set_row_height(
+                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), float(height)
+            ),
             "fm_sheet_set_row_height",
         )
 
-    def set_row_auto_height(self, sheet: int, row: int, height: float) -> None:
-        """Store ``height`` as the cached value of ``row``'s automatic height.
+    def set_row_auto_height(self, sheet: int, first: int, last: int, height: float) -> None:
+        """Store ``height`` as the cached automatic height of the rows on ``[first, last]``.
 
-        Saved as ``ht`` without ``customHeight``, so the row keeps following its
-        content and font; the row's other attributes are kept.
+        Saved as ``ht`` without ``customHeight``, so each row keeps following its
+        content and font; the rows' other attributes are kept.
         """
         h = self._require()
         _check(
-            LIB.fm_sheet_set_row_auto_height(h, _uint(sheet, "sheet_index"), _uint(row, "row"), float(height)),
+            LIB.fm_sheet_set_row_auto_height(
+                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), float(height)
+            ),
             "fm_sheet_set_row_auto_height",
         )
 
-    def set_row_hidden(self, sheet: int, row: int, hidden: bool) -> None:
-        """Set the row hidden flag at ``row``."""
+    def set_row_hidden(self, sheet: int, first: int, last: int, hidden: bool) -> None:
+        """Set the row hidden flag on ``[first, last]``."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_row_hidden(h, _uint(sheet, "sheet_index"), _uint(row, "row"), 1 if hidden else 0),
+            LIB.fm_sheet_set_row_hidden(
+                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), 1 if hidden else 0
+            ),
             "fm_sheet_set_row_hidden",
         )
 
-    def set_row_outline(self, sheet: int, row: int, level: int) -> None:
-        """Set the row outline level (0-7) at ``row``.
+    def set_row_outline(self, sheet: int, first: int, last: int, level: int) -> None:
+        """Set the row outline level (0-7) on ``[first, last]``.
 
         Raises:
           FormulonError: with ``kInvalidArgument`` when ``level`` exceeds 7.
         """
         h = self._require()
         _check(
-            LIB.fm_sheet_set_row_outline(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(level, "level", 8)),
+            LIB.fm_sheet_set_row_outline(
+                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), _uint(level, "level", 8)
+            ),
             "fm_sheet_set_row_outline",
         )
 
-    def set_row_collapsed(self, sheet: int, row: int, collapsed: bool) -> None:
-        """Set or clear the ``collapsed`` flag at ``row``."""
+    def set_row_collapsed(self, sheet: int, first: int, last: int, collapsed: bool) -> None:
+        """Set or clear the ``collapsed`` flag on ``[first, last]``."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_row_collapsed(h, _uint(sheet, "sheet_index"), _uint(row, "row"), 1 if collapsed else 0),
+            LIB.fm_sheet_set_row_collapsed(
+                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), 1 if collapsed else 0
+            ),
             "fm_sheet_set_row_collapsed",
         )
 

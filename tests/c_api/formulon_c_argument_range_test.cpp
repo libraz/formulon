@@ -67,7 +67,7 @@ TEST(FormulonCApiArgumentRange, OutlineLevelAboveSevenIsRejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   for (const std::uint8_t level : {std::uint8_t{8U}, std::uint8_t{255U}}) {
-    EXPECT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 3U, level), kInvalidArgument) << int{level};
+    EXPECT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 3U, 3U, level), kInvalidArgument) << int{level};
     EXPECT_EQ(fm_sheet_set_column_outline(wb.handle, 0, 2U, 4U, level), kInvalidArgument) << int{level};
   }
   std::size_t rows = 99U;
@@ -81,7 +81,7 @@ TEST(FormulonCApiArgumentRange, OutlineLevelAboveSevenIsRejected) {
 TEST(FormulonCApiArgumentRange, OutlineLevelSevenRoundTripsThroughBothFormats) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 3U, 7U), 0);
+  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 3U, 3U, 7U), 0);
   ASSERT_EQ(fm_sheet_set_column_outline(wb.handle, 0, 2U, 2U, 7U), 0);
 
   for (const std::int32_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {

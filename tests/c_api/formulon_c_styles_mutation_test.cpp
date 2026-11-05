@@ -1,5 +1,6 @@
 // Stable C ABI style mutation and round-trip tests.
 
+#include "formulon_c_record_arg.h"
 #include "formulon_c_styles_test_helpers.h"
 
 TEST(FormulonCApiStyles, FullLifecycleSurvivesSaveLoad) {
@@ -11,9 +12,9 @@ TEST(FormulonCApiStyles, FullLifecycleSurvivesSaveLoad) {
   std::size_t font_idx = 0;
   std::size_t fill_idx = 0;
   std::size_t border_idx = 0;
-  ASSERT_EQ(fm_workbook_add_font(wb.handle, MakeArial(), &font_idx), 0);
-  ASSERT_EQ(fm_workbook_add_fill(wb.handle, MakeRedFill(), &fill_idx), 0);
-  ASSERT_EQ(fm_workbook_add_border(wb.handle, MakeThinBoxBorder(), &border_idx), 0);
+  ASSERT_EQ(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), &font_idx), 0);
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_idx), 0);
+  ASSERT_EQ(fm_workbook_add_border(wb.handle, record_arg(MakeThinBoxBorder()), &border_idx), 0);
 
   fm_cell_xf_t xf{};
   xf.font_index = static_cast<uint32_t>(font_idx);
@@ -21,7 +22,7 @@ TEST(FormulonCApiStyles, FullLifecycleSurvivesSaveLoad) {
   xf.border_index = static_cast<uint32_t>(border_idx);
   xf.num_fmt_id = 0;
   std::size_t xf_idx = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &xf_idx), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_idx), 0);
 
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 1.5), 0);
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, xf_idx), 0);
@@ -50,8 +51,8 @@ TEST(FormulonCApiStyles, AddXfWithNonDefaultFontFillNumFmtRoundTripsThroughSaveL
   std::size_t font_idx = 0xFFFFFFFFU;
   std::size_t fill_idx = 0xFFFFFFFFU;
   uint32_t num_fmt_id = 0;
-  ASSERT_EQ(fm_workbook_add_font(wb.handle, MakeArial(), &font_idx), 0);
-  ASSERT_EQ(fm_workbook_add_fill(wb.handle, MakeRedFill(), &fill_idx), 0);
+  ASSERT_EQ(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), &font_idx), 0);
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_idx), 0);
   ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "0.00%", &num_fmt_id), 0);
 
   fm_cell_xf_t xf{};
@@ -60,13 +61,13 @@ TEST(FormulonCApiStyles, AddXfWithNonDefaultFontFillNumFmtRoundTripsThroughSaveL
   xf.border_index = 0;
   xf.num_fmt_id = static_cast<uint16_t>(num_fmt_id);
   std::size_t xf_idx = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &xf_idx), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_idx), 0);
   ASSERT_NE(xf_idx, 0U) << "non-default font/fill/numFmt must not dedup to the "
                            "all-zero placeholder xf at index 0";
 
   // Stability: re-adding the identical record must return the same index.
   std::size_t xf_idx_again = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &xf_idx_again), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_idx_again), 0);
   EXPECT_EQ(xf_idx, xf_idx_again);
 
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 1, 1, 0.4225), 0);
@@ -118,10 +119,10 @@ TEST(FormulonCApiStyles, JustifyLastLineRoundTripsThroughSaveLoad) {
   xf.justify_last_line = 1;
   xf.has_justify_last_line = 1;
   std::size_t xf_idx = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &xf_idx), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_idx), 0);
 
   std::size_t duplicate_idx = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &duplicate_idx), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &duplicate_idx), 0);
   EXPECT_EQ(duplicate_idx, xf_idx);
 
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "distributed"), 0);
@@ -148,7 +149,7 @@ TEST(FormulonCApiStyles, NamedCellStyleRoundTripsThroughSaveLoad) {
   style_xf.horizontal_align = 2;
   style_xf.has_horizontal_align = 1;
   uint32_t xf_id = 0;
-  ASSERT_EQ(fm_workbook_add_cell_style_xf(wb.handle, style_xf, &xf_id), 0);
+  ASSERT_EQ(fm_workbook_add_cell_style_xf(wb.handle, &style_xf, &xf_id), 0);
   fm_cell_style_record_t highlight{};
   highlight.name = "Highlight";
   highlight.xf_id = xf_id;
@@ -161,7 +162,7 @@ TEST(FormulonCApiStyles, NamedCellStyleRoundTripsThroughSaveLoad) {
   cell_xf.has_horizontal_align = 1;
   cell_xf.xf_id = xf_id;
   std::size_t cell_xf_id = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, cell_xf, &cell_xf_id), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &cell_xf, &cell_xf_id), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "styled"), 0);
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, cell_xf_id), 0);
 
@@ -191,20 +192,20 @@ TEST(FormulonCApiStyles, NamedStyleXfRejectsDanglingReferences) {
   fm_cell_xf_t cell_xf{};
   cell_xf.xf_id = 3;
   std::size_t cell_xf_index = 0;
-  EXPECT_NE(fm_workbook_add_cell_xf(wb.handle, cell_xf, &cell_xf_index), 0);
+  EXPECT_NE(fm_workbook_add_cell_xf(wb.handle, &cell_xf, &cell_xf_index), 0);
 
   // The named-style table validates its own font / fill / border / numFmt
   // references exactly like the cell-xf table does.
   fm_cell_xf_t style_xf{};
   style_xf.font_index = 9;
   uint32_t xf_id = 0;
-  EXPECT_NE(fm_workbook_add_cell_style_xf(wb.handle, style_xf, &xf_id), 0);
+  EXPECT_NE(fm_workbook_add_cell_style_xf(wb.handle, &style_xf, &xf_id), 0);
 
   style_xf.font_index = 0;
   style_xf.has_alignment = 1;
   style_xf.justify_last_line = 1;
   style_xf.has_justify_last_line = 1;
-  ASSERT_EQ(fm_workbook_add_cell_style_xf(wb.handle, style_xf, &xf_id), 0);
+  ASSERT_EQ(fm_workbook_add_cell_style_xf(wb.handle, &style_xf, &xf_id), 0);
   fm_cell_xf_t reread{};
   ASSERT_EQ(fm_workbook_get_cell_style_xf(wb.handle, xf_id, &reread), 0);
   EXPECT_EQ(reread.justify_last_line, 1);

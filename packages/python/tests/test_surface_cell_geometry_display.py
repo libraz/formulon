@@ -146,21 +146,21 @@ class GeometryTests(unittest.TestCase):
 
     def test_row_height_override_and_clear(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_row_height(0, 2, 30.0)
+            wb.set_row_height(0, 2, 2, 30.0)
             rows = wb.list_row_overrides(0)
             self.assertEqual(len(rows), 1)
             self.assertTrue(rows[0].has_height)
             self.assertTrue(rows[0].custom_height)
             self.assertEqual(rows[0].height, 30.0)
             self.assertEqual(wb.get_row_height_pt(0, 2), 30.0)
-            wb.clear_row_height(0, 2)
+            wb.clear_row_height(0, 2, 2)
             self.assertEqual(wb.list_row_overrides(0), [])
-            wb.clear_row_height(0, 2)
+            wb.clear_row_height(0, 2, 2)
 
     def test_row_auto_height_stays_automatic(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_row_hidden(0, 4, True)
-            wb.set_row_auto_height(0, 4, 31.5)
+            wb.set_row_hidden(0, 4, 4, True)
+            wb.set_row_auto_height(0, 4, 4, 31.5)
             rows = wb.list_row_overrides(0)
             self.assertEqual(len(rows), 1)
             self.assertTrue(rows[0].has_height)
@@ -170,8 +170,8 @@ class GeometryTests(unittest.TestCase):
 
     def test_cell_rect_and_widths(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_row_height(0, 0, 20.0)
-            wb.set_row_height(0, 1, 30.0)
+            wb.set_row_height(0, 0, 0, 20.0)
+            wb.set_row_height(0, 1, 1, 30.0)
             wb.set_column_width(0, 0, 0, 10.0)
             col0 = wb.get_column_width_pt(0, 0)
             col0_print = wb.get_column_width_pt(0, 0, GeometryMode.PRINT)

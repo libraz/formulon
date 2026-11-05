@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "formulon_c_pivot_test_helpers.h"
+#include "formulon_c_record_arg.h"
 
 namespace {
 
@@ -273,7 +274,8 @@ TEST(FormulonCApiPivotSaveShape, EditOverlappingAMergeIsRefusedAndUndone) {
   WorkbookGuard wb;
   BuildScratch(wb);
   const formulon::pivot::PivotTable* table = wb.handle->wb->sheet(0U).pivot_tables()[0].get();
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, fm_merge_range{0U, 5U, 1U, 5U}), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, record_arg(fm_merge_range{0U, 5U, 1U, 5U})), 0)
+      << fm_get_last_error_message();
 
   // A second data field widens the report into column F.
   fm_pivot_data_field_spec_t spec{};
@@ -304,7 +306,8 @@ TEST(FormulonCApiPivotSaveShape, EditOverlappingAMergeIsRefusedAndUndone) {
   fm_pivot_options_t options{};
   ASSERT_EQ(fm_sheet_get_pivot_options(wb.handle, 0U, 0U, &options), 0);
   options.grid_drop_zones = 1;
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, fm_merge_range{4U, 3U, 4U, 4U}), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, record_arg(fm_merge_range{4U, 3U, 4U, 4U})), 0)
+      << fm_get_last_error_message();
   EXPECT_EQ(fm_sheet_set_pivot_options(wb.handle, 0U, 0U, &options), kPreconditionFailed);
   ASSERT_EQ(fm_sheet_get_pivot_options(wb.handle, 0U, 0U, &options), 0);
   EXPECT_EQ(options.grid_drop_zones, 0);
@@ -389,7 +392,8 @@ TEST(FormulonCApiPivotSaveShape, AProjectionThatWouldOverlapStaysPending) {
   ASSERT_EQ(fm_workbook_add_pivot_cache_record(wb.handle, cache_id, &record), 0);
   ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, record, 0U, 2.0), 0);
   ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, record, 1U, 500.0), 0);
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, fm_merge_range{4U, 3U, 4U, 4U}), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, record_arg(fm_merge_range{4U, 3U, 4U, 4U})), 0)
+      << fm_get_last_error_message();
 
   EXPECT_EQ(fm_sheet_project_pivot(wb.handle, 0U, 0U), kPreconditionFailed);
   EXPECT_EQ(Pending(wb.handle), 1);

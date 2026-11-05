@@ -233,7 +233,7 @@ class SheetViewProtectionTests(unittest.TestCase):
             zero = next(c for c in wb.list_col_overrides(0) if c.first == 4 and c.last == 4)
             self.assertEqual(zero.width, 0.0)
             self.assertTrue(zero.has_width)
-            wb.set_row_height(0, 0, 30.0)
+            wb.set_row_height(0, 0, 0, 30.0)
             rows = wb.list_row_overrides(0)
             explicit_row = next(r for r in rows if abs(r.height - 30.0) < 1e-9)
             self.assertFalse(explicit_row.has_style)

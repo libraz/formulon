@@ -360,7 +360,7 @@ TEST(FormulonCApiRangeStyle, SparseWholeSheetOperationsPreserveVisibleRows) {
   WorkbookGuard wb;
   MakeWorkbook(wb);
   wb.handle->workbook().sheet(0).mutable_format_defaults().zero_height = true;
-  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 100U, 0), 0);
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 100U, 100U, 0), 0);
   ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 200U, 200U, 1U), 0);
 
   BufferGuard capture;
@@ -560,7 +560,7 @@ TEST(FormulonCApiRangeStyle, RestoreRejectsMalformedCaptures) {
 TEST(FormulonCApiRangeStyle, RowStyleSpanSetsAndClearsManyRows) {
   WorkbookGuard wb;
   MakeWorkbook(wb);
-  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 10U, 30.0), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 10U, 10U, 30.0), 0);
   ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 0U, 99999U, 1U), 0);
   size_t rows = 0;
   ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &rows), 0);

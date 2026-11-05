@@ -140,7 +140,7 @@ TEST(FormulonCApiCfMutate, DataBarExtensionFieldsSurviveSaveAndLoad) {
   rule.data_bar_axis_color = fm_cf_color_t{7, 8, 9, 255};
   rule.data_bar_direction = 2;  // right to left
   std::size_t rule_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, rule, &rule_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
 
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
@@ -188,7 +188,7 @@ TEST(FormulonCApiCfMutate, IconSetFloorSurvivesSaveAndLoad) {
   rule.icon_set_floor.value = "5";
   rule.icon_set_floor.gte = 0;
   std::size_t rule_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, rule, &rule_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
 
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
@@ -215,7 +215,7 @@ TEST(FormulonCApiCfMutate, UnengagedIconSetFloorIsExcelsDefault) {
   rule.icon_set_thresholds = thresholds;
   rule.icon_set_threshold_count = 2;
   std::size_t rule_index = 0;
-  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, rule, &rule_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
   const auto& floor = wb.handle->workbook().sheet(0).conditional_formats()[0].rules[0].icon_set->floor;
   EXPECT_EQ(floor.type, formulon::cf::CfvoType::Percent);
   EXPECT_EQ(floor.value, "0");

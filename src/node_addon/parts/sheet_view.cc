@@ -375,7 +375,8 @@ Napi::Value Workbook::SetSheetViewMode(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::GetSheetColumns(const Napi::CallbackInfo& info) {
-  return SheetLayoutList(info, handle_, "columns", &fm_sheet_get_col_override_count, &fm_sheet_get_col_override_at, &ColumnLayoutToJs);
+  return SheetLayoutList(info, handle_, "columns", &fm_sheet_get_col_override_count, &fm_sheet_get_col_override_at,
+                         &ColumnLayoutToJs);
 }
 
 Napi::Value Workbook::SetColumnWidth(const Napi::CallbackInfo& info) {
@@ -501,7 +502,7 @@ Napi::Value Workbook::GetCellRectPt(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
     const fm_status_t rc = fm_sheet_get_cell_rect_pt(handle_, ArgU32(info, 0), first_row, first_col, last_row, last_col,
-                                                 ArgMode(info, 2), &rect);
+                                                     ArgMode(info, 2), &rect);
     if (rc != 0) {
       rect = fm_rect_pt_t{};
     }
@@ -539,8 +540,9 @@ Napi::Value Workbook::GetRowHeightPt(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::GetWidthModel(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   fm_width_model_t model{};
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_width_model(handle_, ArgU32(info, 0), ArgMode(info, 1), &model)
-                                            : kBindingInvalidHandle;
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_sheet_get_width_model(handle_, ArgU32(info, 0), ArgMode(info, 1), &model)
+                             : kBindingInvalidHandle;
   if (rc != 0) {
     model = fm_width_model_t{};
   }
@@ -566,8 +568,9 @@ Napi::Value Workbook::ColumnPtToChars(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::SetRowHidden(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-    const uint32_t row = ArgU32(info, 1);
-    return fm_sheet_set_row_hidden(handle, sheet, row, ArgFlag(info, 2));
+    const uint32_t first = ArgU32(info, 1);
+    const uint32_t last = ArgU32(info, 2);
+    return fm_sheet_set_row_hidden(handle, sheet, first, last, ArgFlag(info, 3));
   });
 }
 
@@ -578,8 +581,9 @@ Napi::Value Workbook::SetRowOutline(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::SetRowCollapsed(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-    const uint32_t row = ArgU32(info, 1);
-    return fm_sheet_set_row_collapsed(handle, sheet, row, ArgFlag(info, 2));
+    const uint32_t first = ArgU32(info, 1);
+    const uint32_t last = ArgU32(info, 2);
+    return fm_sheet_set_row_collapsed(handle, sheet, first, last, ArgFlag(info, 3));
   });
 }
 
@@ -600,11 +604,11 @@ Napi::Object RangeStyleBasesResult(Napi::Env env, fm_workbook_t* handle, const u
   out.Set("xfIndices", Napi::Array::New(env));
   size_t len = 0;
   fm_status_t rc = fm_sheet_get_range_style_bases_excluding(handle, rect[0], rect[1], rect[2], rect[3], rect[4],
-                                                        rows.data(), cols.data(), rows.size(), nullptr, 0, &len);
+                                                            rows.data(), cols.data(), rows.size(), nullptr, 0, &len);
   std::vector<uint32_t> xfs(len);
   if (rc == 0 && len > 0) {
     rc = fm_sheet_get_range_style_bases_excluding(handle, rect[0], rect[1], rect[2], rect[3], rect[4], rows.data(),
-                                              cols.data(), rows.size(), xfs.data(), xfs.size(), &len);
+                                                  cols.data(), rows.size(), xfs.data(), xfs.size(), &len);
   }
   if (rc != 0) {
     out.Set("status", MakeStatus(env, rc));

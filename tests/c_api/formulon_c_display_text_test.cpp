@@ -157,7 +157,7 @@ TEST(FormulonCApiDisplayText, CellUsesItsNumberFormat) {
   fm_cell_xf_t xf{};
   xf.num_fmt_id = 2;  // built-in 0.00
   std::size_t xf_index = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &xf_index), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_index), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 1.5), 0);
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, xf_index), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 1, 0, "plain"), 0);
@@ -193,7 +193,7 @@ TEST(FormulonCApiDisplayText, SpillCellsDisplayResolvedValuesWithTheirOwnFormat)
   fm_cell_xf_t xf{};
   xf.num_fmt_id = 2;  // 0.00
   std::size_t xf_index = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &xf_index), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_index), 0);
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1, 1, xf_index), 0);
   ASSERT_EQ(fm_sheet_get_display_text(wb.handle, 0, 1, 1, &text, &status), 0);
   EXPECT_STREQ(text, "4.00");
@@ -214,15 +214,15 @@ TEST(FormulonCApiDisplayText, SpillPhantomsUseColumnRowAndCellStylePrecedence) {
   fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   std::size_t column_xf = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &percent, &column_xf), 0);
   fm_cell_xf_t decimal{};
   decimal.num_fmt_id = 2;  // 0.00
   std::size_t row_xf = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, decimal, &row_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &decimal, &row_xf), 0);
   fm_cell_xf_t explicit_cell{};
   explicit_cell.num_fmt_id = 9;  // 0%
   std::size_t cell_xf = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, explicit_cell, &cell_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &explicit_cell, &cell_xf), 0);
 
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(2,2)"), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 1, 2, 0.125), 0);
@@ -275,7 +275,7 @@ TEST(FormulonCApiDisplayText, SpillPhantomWithoutLayoutUsesDefaultXfZero) {
   fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // An unassigned non-default XF must not leak.
   std::size_t percent_xf = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &percent_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &percent, &percent_xf), 0);
   ASSERT_NE(percent_xf, 0U);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(2,2)"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
@@ -349,7 +349,7 @@ TEST(FormulonCApiDisplayText, MaterializedBlankGapDoesNotShadowColumnStyle) {
   fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   std::size_t column_xf = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &percent, &column_xf), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 2, "=B1"), 0);
   const std::string sheet =
@@ -385,7 +385,7 @@ TEST(FormulonCApiDisplayText, ExplicitDefaultCellXfOverridesInheritedColumnForma
   fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   std::size_t column_xf = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &percent, &column_xf), 0);
   ASSERT_NE(column_xf, 0U);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
 
@@ -429,7 +429,7 @@ TEST(FormulonCApiDisplayText, ExplicitDefaultRangeXfOverridesInheritedColumnForm
   fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   std::size_t column_xf = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &percent, &column_xf), 0);
   ASSERT_NE(column_xf, 0U);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
 
@@ -456,11 +456,11 @@ TEST(FormulonCApiDisplayText, XlsbPreservesNonDefaultXfOnBlankCell) {
   fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   std::size_t column_xf = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &percent, &column_xf), 0);
   fm_cell_xf_t decimal{};
   decimal.num_fmt_id = 2;  // 0.00
   std::size_t cell_xf = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, decimal, &cell_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &decimal, &cell_xf), 0);
   ASSERT_NE(cell_xf, 0U);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
 
@@ -492,7 +492,7 @@ TEST(FormulonCApiDisplayText, XlsbPreservesExplicitDefaultXfOnBlankCell) {
   fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   std::size_t column_xf = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &percent, &column_xf), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
 
   WorkbookGuard loaded;
@@ -523,7 +523,7 @@ TEST(FormulonCApiDisplayText, XlsbKeepsInheritedFormatOnUnstyledSpillPhantom) {
   fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   std::size_t column_xf = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &percent, &column_xf), 0);
   ASSERT_NE(column_xf, 0U);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
 
@@ -562,7 +562,7 @@ TEST(FormulonCApiDisplayText, XlsbKeepsExplicitDefaultXfOnSpillPhantom) {
   fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   std::size_t column_xf = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &percent, &column_xf), 0);
   ASSERT_NE(column_xf, 0U);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
 
@@ -606,7 +606,7 @@ TEST(FormulonCApiDisplayText, XlsxKeepsInheritedFormatOnUnstyledSpillPhantom) {
   fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   std::size_t column_xf = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &percent, &column_xf), 0);
   ASSERT_NE(column_xf, 0U);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
 
@@ -636,7 +636,7 @@ TEST(FormulonCApiDisplayText, XlsxKeepsExplicitDefaultXfOnSpillPhantom) {
   fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   std::size_t column_xf = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &percent, &column_xf), 0);
   ASSERT_NE(column_xf, 0U);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
 
@@ -667,10 +667,10 @@ TEST(FormulonCApiDisplayText, ReferencesPreserveValuesAndUseDestinationFormats) 
   fm_cell_xf_t xf{};
   xf.num_fmt_id = 2;  // 0.00
   std::size_t decimal_xf = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &decimal_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &decimal_xf), 0);
   xf.num_fmt_id = 10;  // 0.00%
   std::size_t percent_xf = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &percent_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &percent_xf), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 0.125), 0);
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, decimal_xf), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 1, 0, "0012.345"), 0);
