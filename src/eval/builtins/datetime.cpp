@@ -155,6 +155,24 @@ Expected<CoercedDateArg, ErrorCode> coerce_bounded_date_arg(const Value& v, bool
   return out.value();
 }
 
+struct BoundedDatePair {
+  CoercedDateArg first;
+  CoercedDateArg second;
+};
+
+// Coerces args[0] then args[1]; the first error wins.
+Expected<BoundedDatePair, ErrorCode> coerce_bounded_date_pair(const Value* args, bool date1904) {
+  auto first = coerce_bounded_date_arg(args[0], date1904);
+  if (!first) {
+    return std::move(first.error());
+  }
+  auto second = coerce_bounded_date_arg(args[1], date1904);
+  if (!second) {
+    return std::move(second.error());
+  }
+  return BoundedDatePair{first.value(), second.value()};
+}
+
 // Rounds a serial to the nearest whole second; DAY / MONTH / YEAR / WEEKDAY extract the date from the rounded value.
 double round_to_second(double serial) noexcept {
   return std::round(serial * static_cast<double>(kSecondsPerDay)) / static_cast<double>(kSecondsPerDay);
@@ -705,21 +723,19 @@ YearfracEndpoint make_yearfrac_endpoint(const CoercedDateArg& arg, bool date1904
 /// fraction of a year between two dates under one of five day-count
 /// conventions. Invalid basis codes yield `#NUM!`.
 Value Yearfrac_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto start = coerce_bounded_date_arg(args[0], date1904);
-  if (!start) {
-    return Value::error(start.error());
+  auto dates = coerce_bounded_date_pair(args, date1904);
+  if (!dates) {
+    return Value::error(dates.error());
   }
-  auto end = coerce_bounded_date_arg(args[1], date1904);
-  if (!end) {
-    return Value::error(end.error());
-  }
+  const CoercedDateArg& start = dates.value().first;
+  const CoercedDateArg& end = dates.value().second;
   auto basis_arg = read_optional_truncated_int_arg(args, arity, 2, 0, /*snap=*/false);
   if (!basis_arg) {
     return Value::error(basis_arg.error());
   }
   const int basis = basis_arg.value();
-  YearfracEndpoint start_endpoint = make_yearfrac_endpoint(start.value(), date1904);
-  YearfracEndpoint end_endpoint = make_yearfrac_endpoint(end.value(), date1904);
+  YearfracEndpoint start_endpoint = make_yearfrac_endpoint(start, date1904);
+  YearfracEndpoint end_endpoint = make_yearfrac_endpoint(end, date1904);
   if (start_endpoint.serial > end_endpoint.serial) {
     const YearfracEndpoint tmp = start_endpoint;
     start_endpoint = end_endpoint;
@@ -782,20 +798,18 @@ long long datedif_md_days(const date_time::YMD& a, const date_time::YMD& b) noex
 ///
 /// `end < start` yields `#NUM!`; an unknown unit also yields `#NUM!`.
 Value Datedif_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
-  auto start = coerce_bounded_date_arg(args[0], date1904);
-  if (!start) {
-    return Value::error(start.error());
+  auto dates = coerce_bounded_date_pair(args, date1904);
+  if (!dates) {
+    return Value::error(dates.error());
   }
-  auto end = coerce_bounded_date_arg(args[1], date1904);
-  if (!end) {
-    return Value::error(end.error());
-  }
+  const CoercedDateArg& start = dates.value().first;
+  const CoercedDateArg& end = dates.value().second;
   auto unit = coerce_to_text(args[2]);
   if (!unit) {
     return Value::error(unit.error());
   }
-  const double s = std::floor(normal_date_serial(start.value(), date1904));
-  const double e = std::floor(normal_date_serial(end.value(), date1904));
+  const double s = std::floor(normal_date_serial(start, date1904));
+  const double e = std::floor(normal_date_serial(end, date1904));
   if (e < s) {
     return Value::error(ErrorCode::Num);
   }
@@ -841,16 +855,13 @@ Value Datedif_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, boo
 /// DAYS(end, start). Both arguments are truncated to their date component;
 /// the result is the signed day difference and may be negative.
 Value Days_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
-  auto end = coerce_bounded_date_arg(args[0], date1904);
-  if (!end) {
-    return Value::error(end.error());
+  auto dates = coerce_bounded_date_pair(args, date1904);
+  if (!dates) {
+    return Value::error(dates.error());
   }
-  auto start = coerce_bounded_date_arg(args[1], date1904);
-  if (!start) {
-    return Value::error(start.error());
-  }
-  const double diff =
-      std::floor(normal_date_serial(end.value(), date1904)) - std::floor(normal_date_serial(start.value(), date1904));
+  const CoercedDateArg& end = dates.value().first;
+  const CoercedDateArg& start = dates.value().second;
+  const double diff = std::floor(normal_date_serial(end, date1904)) - std::floor(normal_date_serial(start, date1904));
   return Value::number(diff);
 }
 
@@ -869,14 +880,12 @@ Value Days_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool d
 ///
 /// European adjustments: any day of 31 is capped at 30 on both sides.
 Value Days360_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto start_n = coerce_bounded_date_arg(args[0], date1904);
-  if (!start_n) {
-    return Value::error(start_n.error());
+  auto dates = coerce_bounded_date_pair(args, date1904);
+  if (!dates) {
+    return Value::error(dates.error());
   }
-  auto end_n = coerce_bounded_date_arg(args[1], date1904);
-  if (!end_n) {
-    return Value::error(end_n.error());
-  }
+  const CoercedDateArg& start_n = dates.value().first;
+  const CoercedDateArg& end_n = dates.value().second;
   bool european = false;
   if (arity >= 3) {
     auto m = coerce_to_bool(args[2]);
@@ -886,8 +895,8 @@ Value Days360_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
     european = m.value();
   }
   // The date component is taken after rounding to the nearest second, and serial 0 reads as 1900-01-00.
-  const double start_f = std::floor(round_to_second(normal_date_serial(start_n.value(), date1904)));
-  const double end_f = std::floor(round_to_second(normal_date_serial(end_n.value(), date1904)));
+  const double start_f = std::floor(round_to_second(normal_date_serial(start_n, date1904)));
+  const double end_f = std::floor(round_to_second(normal_date_serial(end_n, date1904)));
   const date_time::YMD s = date_time::legacy_1900_ymd(start_f);
   const date_time::YMD e = date_time::legacy_1900_ymd(end_f);
   int sy = s.y;
