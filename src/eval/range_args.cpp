@@ -416,12 +416,11 @@ bool expand_resolved_rect_cells(std::string_view sheet, std::uint32_t top, std::
   rhs.sheet = sheet;
   rhs.row = bottom;
   rhs.col = right;
-  auto expanded = ctx.expand_range(lhs, rhs, arena, registry);
-  if (!expanded) {
-    *out_err_code = expanded.error();
+  std::uint32_t expanded_rows = 0;
+  std::uint32_t expanded_cols = 0;
+  if (!assign_expanded(ctx, lhs, rhs, arena, registry, out_cells, out_err_code, expanded_rows, expanded_cols)) {
     return false;
   }
-  *out_cells = std::move(expanded.value());
   if (out_rows != nullptr) {
     *out_rows = bottom - top + 1U;
   }
@@ -481,15 +480,14 @@ bool expand_ref3d_cells(const parser::AstNode& node, Arena& arena, const Functio
                         const EvalContext& ctx, std::vector<Value>* out, ErrorCode* out_err) {
   *out_err = ErrorCode::Ref;
   const Workbook* wb = ctx.workbook();
+  if (wb == nullptr) {
+    return false;
+  }
   const parser::Reference& cell = node.as_ref3d_cell();
   const bool is_range = node.as_ref3d_is_range();
   const parser::Reference& cell_end = node.as_ref3d_cell_end();
-  std::size_t begin_idx = static_cast<std::size_t>(-1);
-  std::size_t end_idx = static_cast<std::size_t>(-1);
-  if (wb != nullptr) {
-    begin_idx = wb->sheet_index_by_name(node.as_ref3d_sheet_begin());
-    end_idx = wb->sheet_index_by_name(node.as_ref3d_sheet_end());
-  }
+  const std::size_t begin_idx = wb->sheet_index_by_name(node.as_ref3d_sheet_begin());
+  const std::size_t end_idx = wb->sheet_index_by_name(node.as_ref3d_sheet_end());
   const bool full_col = cell.is_full_col || (is_range && cell_end.is_full_col);
   const bool full_row = cell.is_full_row || (is_range && cell_end.is_full_row);
   const bool incompatible_whole_shape =
@@ -501,11 +499,11 @@ bool expand_ref3d_cells(const parser::AstNode& node, Arena& arena, const Functio
       (!full_col && !full_row &&
        (cell.row >= Sheet::kMaxRows || cell.col >= Sheet::kMaxCols ||
         (is_range && (cell_end.row >= Sheet::kMaxRows || cell_end.col >= Sheet::kMaxCols))));
-  if (wb != nullptr && begin_idx != static_cast<std::size_t>(-1) && end_idx == static_cast<std::size_t>(-1)) {
+  if (begin_idx != static_cast<std::size_t>(-1) && end_idx == static_cast<std::size_t>(-1)) {
     *out_err = ErrorCode::Name;
     return false;
   }
-  if (wb == nullptr || begin_idx == static_cast<std::size_t>(-1) || end_idx == static_cast<std::size_t>(-1) ||
+  if (begin_idx == static_cast<std::size_t>(-1) || end_idx == static_cast<std::size_t>(-1) ||
       incompatible_whole_shape || corners_out_of_bounds) {
     return false;
   }
