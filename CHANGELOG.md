@@ -317,6 +317,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A column name containing `,` or `:` is read as one name in a structured
   reference (`t[a,b]`, `t[a:b]`), as Excel stores it, and `'` escapes are
   read the same way in formulas, files and table edits.
+- Formula entry refuses an argument Excel refuses for a parameter that takes
+  only a reference: an empty or constant argument, an operator, or a function
+  that never returns a reference, as in `=SUBTOTAL(9,)`, `=SUMIF(,1)` or
+  `=COUNTIF(1,1)`. The parameters are those of `SUMIF`, `COUNTIF`, the
+  `*IFS` and database functions, `SUBTOTAL`, `OFFSET`, `CELL`, `RANK`, `ROW`,
+  `COLUMN`, `AREAS`, `COUNTBLANK`, `FORMULATEXT`, `ISFORMULA` and
+  `PHONETIC`. Empty value arguments such as `=SUM(,)` are still accepted.
 
 ## [0.18.0] - 2026-10-26
 
