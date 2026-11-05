@@ -216,7 +216,7 @@ Expected<std::string, Error> resolve_relative_path(std::string_view base_dir, st
   std::vector<std::string> stack;
   // A leading '/' names a package-root-relative target, which OPC
   // (ECMA-376 Part 2) permits: Excel's own root `_rels/.rels` already
-  // resolves one (`ReadUnknownPackageRels` in ooxml_reader.cpp), and
+  // resolves one (`read_unknown_package_rels`, package_rels_reader.cpp), and
   // openpyxl / pandas routinely write them for workbook and sheet rels.
   // Root-relative resolution starts from an empty stack instead of
   // seeding it from `base_dir`; the '..' accounting below still refuses
