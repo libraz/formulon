@@ -341,60 +341,45 @@ Value Time_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return Value::number(days - std::floor(days));
 }
 
+// Number of one field of a decoded serial, or the coercion error.
+template <typename Parts, typename Field>
+Value serial_field(const Expected<Parts, ErrorCode>& parts, Field Parts::*field) {
+  if (!parts) {
+    return Value::error(parts.error());
+  }
+  return Value::number(static_cast<double>(parts.value().*field));
+}
+
 /// YEAR(serial). Returns the 4-digit Gregorian year. Extracts the date
 /// portion (fractional part discarded). Serial 0 is Excel's fictitious
 /// "1/0/1900": YEAR=1900, MONTH=1, DAY=0.
 Value Year_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
-  auto ymd = coerce_serial_ymd(args[0], date1904);
-  if (!ymd) {
-    return Value::error(ymd.error());
-  }
-  return Value::number(static_cast<double>(ymd.value().y));
+  return serial_field(coerce_serial_ymd(args[0], date1904), &date_time::YMD::y);
 }
 
 /// MONTH(serial). Returns 1..12.
 Value Month_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
-  auto ymd = coerce_serial_ymd(args[0], date1904);
-  if (!ymd) {
-    return Value::error(ymd.error());
-  }
-  return Value::number(static_cast<double>(ymd.value().m));
+  return serial_field(coerce_serial_ymd(args[0], date1904), &date_time::YMD::m);
 }
 
 /// DAY(serial). Returns 0..31 (0 only for the fictitious serial 0 alias).
 Value Day_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
-  auto ymd = coerce_serial_ymd(args[0], date1904);
-  if (!ymd) {
-    return Value::error(ymd.error());
-  }
-  return Value::number(static_cast<double>(ymd.value().d));
+  return serial_field(coerce_serial_ymd(args[0], date1904), &date_time::YMD::d);
 }
 
 /// HOUR(serial). Returns 0..23.
 Value Hour_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
-  auto hms = coerce_serial_hms(args[0], date1904);
-  if (!hms) {
-    return Value::error(hms.error());
-  }
-  return Value::number(static_cast<double>(hms.value().h));
+  return serial_field(coerce_serial_hms(args[0], date1904), &date_time::HMS::h);
 }
 
 /// MINUTE(serial). Returns 0..59.
 Value Minute_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
-  auto hms = coerce_serial_hms(args[0], date1904);
-  if (!hms) {
-    return Value::error(hms.error());
-  }
-  return Value::number(static_cast<double>(hms.value().m));
+  return serial_field(coerce_serial_hms(args[0], date1904), &date_time::HMS::m);
 }
 
 /// SECOND(serial). Returns 0..59.
 Value Second_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
-  auto hms = coerce_serial_hms(args[0], date1904);
-  if (!hms) {
-    return Value::error(hms.error());
-  }
-  return Value::number(static_cast<double>(hms.value().s));
+  return serial_field(coerce_serial_hms(args[0], date1904), &date_time::HMS::s);
 }
 
 // The `(serial, [return_type])` arguments of WEEKDAY / WEEKNUM; `return_type`

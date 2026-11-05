@@ -420,7 +420,7 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
       case Tok::Literal:
         // A kept full-width colon after a date field writes `:` (locale_tokens.text_fullwidth_time_colon).
         if (!tk.protected_literal && i > 0 && is_date_tok(section.tokens[i - 1].kind) &&
-            fmt.substr(tk.lit_begin, tk.lit_end - tk.lit_begin) == "\xEF\xBC\x9A") {
+            fmt.substr(tk.lit_begin, tk.lit_end - tk.lit_begin) == kFullwidthColon) {
           out.push_back(':');
         } else if (tk.lit_end > tk.lit_begin) {
           out.append(fmt.data() + tk.lit_begin, tk.lit_end - tk.lit_begin);

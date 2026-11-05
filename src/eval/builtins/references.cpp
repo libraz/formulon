@@ -70,6 +70,18 @@ void append_quoted_sheet(std::string* out, std::string_view name) {
   out->push_back('!');
 }
 
+// One R1C1 axis: the axis letter, then the index, bracketed when relative.
+void append_r1c1_axis(std::string& out, const LocaleFacts& facts, char axis, int index, bool absolute) {
+  out.push_back(axis);
+  if (absolute) {
+    out.append(std::to_string(index));
+  } else {
+    out.push_back(facts.r1c1_open);
+    out.append(std::to_string(index));
+    out.push_back(facts.r1c1_close);
+  }
+}
+
 // ADDRESS(row, col, [abs_num], [a1], [sheet_text])
 //
 // `abs_num` encodes which endpoints are absolute:
@@ -165,22 +177,8 @@ Value Address(const Value* args, std::uint32_t arity, Arena& arena) {
     // and the caller still asked for the relative form — this matches
     // Excel's "R[0]C[0] relative to the current cell" semantics.
     const LocaleFacts& facts = locale_facts(current_eval_profile());
-    out.push_back(facts.r1c1_row);
-    if (row_abs) {
-      out.append(std::to_string(row));
-    } else {
-      out.push_back(facts.r1c1_open);
-      out.append(std::to_string(row));
-      out.push_back(facts.r1c1_close);
-    }
-    out.push_back(facts.r1c1_col);
-    if (col_abs) {
-      out.append(std::to_string(col));
-    } else {
-      out.push_back(facts.r1c1_open);
-      out.append(std::to_string(col));
-      out.push_back(facts.r1c1_close);
-    }
+    append_r1c1_axis(out, facts, facts.r1c1_row, row, row_abs);
+    append_r1c1_axis(out, facts, facts.r1c1_col, col, col_abs);
   }
 
   return Value::text(arena.intern(out));

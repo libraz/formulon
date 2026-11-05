@@ -465,7 +465,6 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
       continue;
     }
     // A kept full-width percent sign scales and writes itself (locale_tokens.text_fullwidth_percent_syntax).
-    constexpr std::string_view kFullwidthPercent = "\xEF\xBC\x85";
     if (fmt.substr(i, kFullwidthPercent.size()) == kFullwidthPercent) {
       Token t;
       t.kind = Tok::Percent;
@@ -517,8 +516,6 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     }
     // Keep the slash's source range so the classifier can tell it from a quoted slash; a kept
     // full-width slash parses as `/` and writes itself (locale_tokens.text_fullwidth_date_syntax).
-    constexpr std::string_view kFullwidthSlash = "\xEF\xBC\x8F";
-    constexpr std::string_view kFullwidthColon = "\xEF\xBC\x9A";
     if (c == '/' || fmt.substr(i, kFullwidthSlash.size()) == kFullwidthSlash) {
       Token t;
       t.kind = Tok::Literal;

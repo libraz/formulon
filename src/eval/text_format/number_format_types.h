@@ -22,6 +22,11 @@ namespace formulon {
 namespace text_format {
 namespace number_format_detail {
 
+// UTF-8 spellings of the full-width characters a format string may keep.
+inline constexpr std::string_view kFullwidthPercent = "\xEF\xBC\x85";
+inline constexpr std::string_view kFullwidthSlash = "\xEF\xBC\x8F";
+inline constexpr std::string_view kFullwidthColon = "\xEF\xBC\x9A";
+
 // Keep the historic detail-namespace spelling available to number_format.cpp;
 // the single definition lives beside FormatLetters in excel_locale.h.
 using ::formulon::kInvariantFormatLetters;

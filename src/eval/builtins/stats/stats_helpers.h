@@ -144,11 +144,6 @@ Expected<CenteredScaled, ErrorCode> centered_and_scaled(const Value* args, std::
 // Arithmetic-mean helper used by DEVSQ / AVEDEV / SKEW / KURT.
 double mean_of(const std::vector<double>& xs) noexcept;
 
-// Helper: read the trailing scalar `k` argument for LARGE / SMALL /
-// PERCENTILE / QUARTILE. Returns the raw coerced double so each caller
-// applies its own range / truncation rules.
-Expected<double, ErrorCode> read_kth_arg(const Value& v);
-
 // Frequency table used by MODE / MODE.SNGL / MODE.MULT to identify the
 // values tied for the maximum count. Order of `values` / `counts` follows
 // first-occurrence in the input slice. `best_count` is the maximum across

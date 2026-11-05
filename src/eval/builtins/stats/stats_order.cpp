@@ -25,6 +25,7 @@
 
 #include "eval/array_alloc.h"
 #include "eval/builtins/stats/stats_helpers.h"
+#include "eval/coerce.h"
 #include "numeric_aggregate_kernels.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -127,7 +128,7 @@ Value ModeMult(const Value* args, std::uint32_t arity, Arena& arena) {
 // reaching this impl.
 static Value large_small(const Value* args, std::uint32_t arity, bool want_large) {
   const std::uint32_t data_count = arity - 1u;
-  auto k_raw = read_kth_arg(args[arity - 1u]);
+  auto k_raw = coerce_to_number(args[arity - 1u]);
   if (!k_raw) {
     return Value::error(k_raw.error());
   }
@@ -167,7 +168,7 @@ static Value percentile_of_data(const Value* args, std::uint32_t data_count, dou
 // the inclusive form requires it in [0, 1], the exclusive form leaves the
 // range check to the interpolation.
 static Value percentile_by_trailing_k(const Value* args, std::uint32_t arity, bool exclusive) {
-  auto k_raw = read_kth_arg(args[arity - 1u]);
+  auto k_raw = coerce_to_number(args[arity - 1u]);
   if (!k_raw) {
     return Value::error(k_raw.error());
   }
@@ -201,7 +202,7 @@ Value PercentileExc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // and is truncated toward zero before becoming the rank `quart / 4`.
 static Value quartile_of_data(const Value* args, std::uint32_t arity, double lo, double hi, bool exclusive) {
   const std::uint32_t data_count = arity - 1u;
-  auto q_raw = read_kth_arg(args[arity - 1u]);
+  auto q_raw = coerce_to_number(args[arity - 1u]);
   if (!q_raw) {
     return Value::error(q_raw.error());
   }
@@ -236,7 +237,7 @@ Value QuartileExc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // slice yields `#NUM!`.
 Value TrimMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const std::uint32_t data_count = arity - 1u;
-  auto p_raw = read_kth_arg(args[arity - 1u]);
+  auto p_raw = coerce_to_number(args[arity - 1u]);
   if (!p_raw) {
     return Value::error(p_raw.error());
   }

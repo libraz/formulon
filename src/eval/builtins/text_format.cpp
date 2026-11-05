@@ -536,45 +536,16 @@ Value parse_arraytotext_format(const parser::AstNode& call, Arena& arena, const 
   return Value::blank();
 }
 
-Value arraytotext_from_array(const ArrayValue& arr, bool strict, Arena& arena) {
+// Emits the rows x cols grid; fetch(r, c, &cell) returns false when the cell
+// is unusable, with *error holding the result error.
+template <typename Fetch>
+Value arraytotext_emit(std::uint32_t rows, std::uint32_t cols, bool strict, Arena& arena, Fetch fetch) {
   const LocaleFacts& facts = locale_facts(current_eval_profile());
   std::string out;
   if (strict) {
     out.push_back('{');
   }
   ErrorCode error = ErrorCode::Value;
-  for (std::uint32_t r = 0; r < arr.rows; ++r) {
-    for (std::uint32_t c = 0; c < arr.cols; ++c) {
-      if (r != 0U || c != 0U) {
-        if (strict) {
-          out.push_back(c == 0U ? facts.array_row_separator : facts.array_column_separator);
-        } else {
-          out.push_back(facts.list_separator);
-          out.push_back(' ');
-        }
-      }
-      const Value& cell = arr.cells[static_cast<std::size_t>(r) * arr.cols + c];
-      if (!append_arraytotext_cell(cell, strict, out, &error)) {
-        return Value::error(error);
-      }
-    }
-  }
-  if (strict) {
-    out.push_back('}');
-  }
-  return Value::text(arena.intern(out));
-}
-
-Value arraytotext_from_array_literal(const parser::AstNode& literal, bool strict, Arena& arena,
-                                     const FunctionRegistry& registry, const EvalContext& ctx) {
-  const LocaleFacts& facts = locale_facts(current_eval_profile());
-  std::string out;
-  if (strict) {
-    out.push_back('{');
-  }
-  ErrorCode error = ErrorCode::Value;
-  const std::uint32_t rows = literal.as_array_rows();
-  const std::uint32_t cols = literal.as_array_cols();
   for (std::uint32_t r = 0; r < rows; ++r) {
     for (std::uint32_t c = 0; c < cols; ++c) {
       if (r != 0U || c != 0U) {
@@ -585,11 +556,7 @@ Value arraytotext_from_array_literal(const parser::AstNode& literal, bool strict
           out.push_back(' ');
         }
       }
-      const Value cell = eval_node(literal.as_array_element(r, c), arena, registry, ctx);
-      if (cell.is_array()) {
-        return Value::error(ErrorCode::Value);
-      }
-      if (!append_arraytotext_cell(cell, strict, out, &error)) {
+      if (!fetch(r, c, out, &error)) {
         return Value::error(error);
       }
     }
@@ -598,6 +565,27 @@ Value arraytotext_from_array_literal(const parser::AstNode& literal, bool strict
     out.push_back('}');
   }
   return Value::text(arena.intern(out));
+}
+
+Value arraytotext_from_array(const ArrayValue& arr, bool strict, Arena& arena) {
+  return arraytotext_emit(arr.rows, arr.cols, strict, arena,
+                          [&](std::uint32_t r, std::uint32_t c, std::string& out, ErrorCode* error) {
+                            const Value& cell = arr.cells[static_cast<std::size_t>(r) * arr.cols + c];
+                            return append_arraytotext_cell(cell, strict, out, error);
+                          });
+}
+
+Value arraytotext_from_array_literal(const parser::AstNode& literal, bool strict, Arena& arena,
+                                     const FunctionRegistry& registry, const EvalContext& ctx) {
+  return arraytotext_emit(literal.as_array_rows(), literal.as_array_cols(), strict, arena,
+                          [&](std::uint32_t r, std::uint32_t c, std::string& out, ErrorCode* error) {
+                            const Value cell = eval_node(literal.as_array_element(r, c), arena, registry, ctx);
+                            if (cell.is_array()) {
+                              *error = ErrorCode::Value;
+                              return false;
+                            }
+                            return append_arraytotext_cell(cell, strict, out, error);
+                          });
 }
 
 // ARRAYTOTEXT(array, [format]) — scalar inputs mirror VALUETOTEXT except

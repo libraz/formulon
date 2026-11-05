@@ -696,10 +696,7 @@ Value Decimal(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     sum += static_cast<double>(d) * power;
     power *= base;
   }
-  if (!std::isfinite(sum)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(sum);
+  return to_finite_value(sum);
 }
 
 // ---------------------------------------------------------------------------

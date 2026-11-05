@@ -190,7 +190,7 @@ Value filterxml_value_from_text(std::string_view raw, Arena& arena) {
   if (parse_excel_readback_number(text, &number)) {
     return Value::number(number);
   }
-  return Value::text(arena.intern(std::string(text)));
+  return Value::text(arena.intern(text));
 }
 
 // Value of one XPath result: an element or document yields its direct text

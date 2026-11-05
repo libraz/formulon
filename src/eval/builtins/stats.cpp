@@ -106,11 +106,7 @@ MeanSS compute_mean_ss(const std::vector<double>& xs) {
   if (xs.empty()) {
     return {0.0, 0.0};
   }
-  double sum = 0.0;
-  for (double x : xs) {
-    sum += x;
-  }
-  const double mean = sum / static_cast<double>(xs.size());
+  const double mean = mean_of(xs);
   return {mean, numeric_aggregate_kernels::squared_deviation_sum(xs, mean)};
 }
 
@@ -153,10 +149,6 @@ static Value variance_or_stdev(const std::vector<double>& xs, bool sample, bool 
   const double variance = numeric_aggregate_kernels::dispersion_variance(xs, sample);
   const double r = square_root ? std::sqrt(variance) : variance;
   return to_finite_value(r);
-}
-
-Expected<double, ErrorCode> read_kth_arg(const Value& v) {
-  return coerce_to_number(v);
 }
 
 Value percentile_inc_sorted(const std::vector<double>& xs, double k) {
