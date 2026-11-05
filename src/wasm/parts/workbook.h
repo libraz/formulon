@@ -217,6 +217,8 @@ class JsWorkbook {
   /// Sets column `column`'s totals-row function / label from
   /// `{ function?, label?, formula? }`.
   JsStatus setTableColumnTotals(uint32_t idx, uint32_t column, emscripten::val totals);
+  /// Renames column `column` of table `idx`; `value` is the final name.
+  JsStringResult renameTableColumn(uint32_t idx, uint32_t column, const std::string& name);
 
   JsNumberResult passthroughCount() const;
   emscripten::val passthroughAt(uint32_t idx) const;

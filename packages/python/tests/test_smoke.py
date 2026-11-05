@@ -428,6 +428,18 @@ class IteratorHandleLivenessTests(unittest.TestCase):
         with self.assertRaises(FormulonError):
             next(it)
 
+    def test_table_rename_column_rewrites_structured_references(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_text(0, 0, 0, "Qty")
+            wb.set_number(0, 1, 0, 2)
+            wb.table_create(0, "A1:A2", "T", "T", ["Qty"])
+            wb.set_formula(0, 0, 2, "=SUM(T[Qty])")
+            self.assertEqual(wb.table_rename_column(0, 0, "Amount"), "Amount")
+            self.assertEqual(wb.get_formula(0, 0, 2), "=SUM(T[Amount])")
+            self.assertEqual(wb.table_rename_column(0, 0, ""), "Column1")
+            with self.assertRaises(FormulonError):
+                wb.table_rename_column(0, 1, "X")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -99,6 +99,7 @@ fm_workbook_table_get_info
 fm_workbook_table_get_column
 fm_workbook_table_set_style_info
 fm_workbook_table_rename
+fm_workbook_table_rename_column
 fm_workbook_table_set_column_totals
 fm_workbook_passthrough_count
 fm_workbook_passthrough_at

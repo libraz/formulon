@@ -211,7 +211,7 @@ TEST(FormulonCApiTable, ColumnTotalsWriteTheTotalsRowCells) {
   CreateSalesTable(wb, "TableStyleMedium2", 1, "A1:B4");
   ASSERT_EQ(fm_workbook_table_set_column_totals(wb.handle, 0, 0, nullptr, "Total", nullptr), 0);
   ASSERT_EQ(fm_workbook_table_set_column_totals(wb.handle, 0, 1, "sum", nullptr, nullptr), 0);
-  EXPECT_EQ(Formula(wb.handle, 3, 1), "=SUBTOTAL(109,Sales[Amount])");
+  EXPECT_EQ(Formula(wb.handle, 3, 1), "=SUBTOTAL(109,[Amount])");
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   fm_value_t total = Value(wb.handle, 3, 1);
   ASSERT_EQ(total.kind, FM_VAL_NUMBER);
@@ -237,16 +237,16 @@ TEST(FormulonCApiTable, ColumnTotalsWriteTheTotalsRowCells) {
   ASSERT_EQ(fm_workbook_table_get_column(reloaded.handle, 0, 1, &column), 0);
   EXPECT_STREQ(column.totals_row_function, "sum");
   EXPECT_EQ(Info(reloaded.handle).totals_row_count, 1U);
-  EXPECT_EQ(Formula(reloaded.handle, 3, 1), "=SUBTOTAL(109,Sales[Amount])");
+  EXPECT_EQ(Formula(reloaded.handle, 3, 1), "=SUBTOTAL(109,[Amount])");
 
   // Each built-in token maps to its SUBTOTAL number; `none` clears the cell.
   const struct {
     const char* token;
     const char* formula;
-  } kCases[] = {{"average", "=SUBTOTAL(101,Sales[Amount])"}, {"countNums", "=SUBTOTAL(102,Sales[Amount])"},
-                {"count", "=SUBTOTAL(103,Sales[Amount])"},   {"max", "=SUBTOTAL(104,Sales[Amount])"},
-                {"min", "=SUBTOTAL(105,Sales[Amount])"},     {"stdDev", "=SUBTOTAL(107,Sales[Amount])"},
-                {"var", "=SUBTOTAL(110,Sales[Amount])"}};
+  } kCases[] = {{"average", "=SUBTOTAL(101,[Amount])"}, {"countNums", "=SUBTOTAL(102,[Amount])"},
+                {"count", "=SUBTOTAL(103,[Amount])"},   {"max", "=SUBTOTAL(104,[Amount])"},
+                {"min", "=SUBTOTAL(105,[Amount])"},     {"stdDev", "=SUBTOTAL(107,[Amount])"},
+                {"var", "=SUBTOTAL(110,[Amount])"}};
   for (const auto& c : kCases) {
     ASSERT_EQ(fm_workbook_table_set_column_totals(reloaded.handle, 0, 1, c.token, nullptr, nullptr), 0) << c.token;
     EXPECT_EQ(Formula(reloaded.handle, 3, 1), c.formula);
@@ -266,8 +266,8 @@ TEST(FormulonCApiTable, CustomTotalsFormulaRoundTrips) {
   fm_table_column_info_t column{};
   ASSERT_EQ(fm_workbook_table_get_column(wb.handle, 0, 1, &column), 0);
   EXPECT_STREQ(column.totals_row_function, "custom");
-  EXPECT_STREQ(column.totals_row_formula, "SUM(Sales[Amount])*2");
-  EXPECT_EQ(Formula(wb.handle, 3, 1), "=SUM(Sales[Amount])*2");
+  EXPECT_STREQ(column.totals_row_formula, "SUM([Amount])*2");
+  EXPECT_EQ(Formula(wb.handle, 3, 1), "=SUM([Amount])*2");
 
   const std::vector<std::uint8_t> saved = Save(wb.handle);
   EXPECT_NE(ExtractZipEntry(saved, "xl/tables/table1.xml")
@@ -279,7 +279,7 @@ TEST(FormulonCApiTable, CustomTotalsFormulaRoundTrips) {
   Load(saved, reloaded);
   ASSERT_EQ(fm_workbook_table_get_column(reloaded.handle, 0, 1, &column), 0);
   EXPECT_STREQ(column.totals_row_function, "custom");
-  EXPECT_STREQ(column.totals_row_formula, "SUM(Sales[Amount])*2");
+  EXPECT_STREQ(column.totals_row_formula, "SUM([Amount])*2");
   ASSERT_EQ(fm_workbook_recalc(reloaded.handle), 0);
   const fm_value_t v = Value(reloaded.handle, 3, 1);
   ASSERT_EQ(v.kind, FM_VAL_NUMBER);
@@ -302,7 +302,7 @@ TEST(FormulonCApiTable, TurningTheTotalsRowOnRestoresItsCells) {
   WorkbookGuard wb;
   Load(patched, wb);
   ASSERT_EQ(fm_workbook_table_update(wb.handle, 0, "A1:B4", nullptr, -1, 1), 0);
-  EXPECT_EQ(Formula(wb.handle, 3, 1), "=SUBTOTAL(104,Sales[Amount])");
+  EXPECT_EQ(Formula(wb.handle, 3, 1), "=SUBTOTAL(104,[Amount])");
   const fm_value_t label = Value(wb.handle, 3, 0);
   ASSERT_EQ(label.kind, FM_VAL_TEXT);
   EXPECT_STREQ(label.u.text, "Total");
@@ -335,8 +335,8 @@ TEST(FormulonCApiTable, TotalsFormulaEscapesSpecialColumnNames) {
   ASSERT_EQ(fm_workbook_table_create(wb.handle, 0, "A1:B3", "T", "T", columns, 2, "", 1, 1, &index), 0);
   ASSERT_EQ(fm_workbook_table_set_column_totals(wb.handle, 0, 0, "sum", nullptr, nullptr), 0);
   ASSERT_EQ(fm_workbook_table_set_column_totals(wb.handle, 0, 1, "sum", nullptr, nullptr), 0);
-  EXPECT_EQ(Formula(wb.handle, 2, 0), "=SUBTOTAL(109,T[Q1 '#est])");
-  EXPECT_EQ(Formula(wb.handle, 2, 1), "=SUBTOTAL(109,T[[a,b]])");
+  EXPECT_EQ(Formula(wb.handle, 2, 0), "=SUBTOTAL(109,[Q1 '#est])");
+  EXPECT_EQ(Formula(wb.handle, 2, 1), "=SUBTOTAL(109,[a,b])");
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   fm_value_t v = Value(wb.handle, 2, 0);
   ASSERT_EQ(v.kind, FM_VAL_NUMBER);
@@ -373,7 +373,7 @@ TEST(FormulonCApiTable, RenameRewritesStructuredReferences) {
   EXPECT_STREQ(name, "Revenue");
   EXPECT_STREQ(display, "Revenue");
   EXPECT_EQ(Formula(wb.handle, 0, 3), "=SUM(Revenue[Amount])+COUNTA(Revenue[Product])");
-  EXPECT_EQ(Formula(wb.handle, 1, 3), "=Sales") << "a defined-name-like bare name is not a structured reference";
+  EXPECT_EQ(Formula(wb.handle, 1, 3), "=Revenue") << "an entered bare table name binds to the whole table";
   const char* dn_name = nullptr;
   const char* dn_formula = nullptr;
   int32_t scope = 0;

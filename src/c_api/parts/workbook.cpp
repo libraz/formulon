@@ -37,6 +37,7 @@ using formulon::c_api::parts::copy_owned_bytes;
 using formulon::c_api::parts::display_formula;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::may_respell_formula;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 
@@ -526,8 +527,8 @@ extern "C" fm_status_t fm_workbook_defined_name_at(const fm_workbook_t* wb, size
   }
   *out_name = names[idx].name.c_str();
   // Read scratch holds a respelled formula; any other one is the model's.
-  *out_formula = wb->workbook().spells_self_book_names(names[idx].formula)
-                     ? display_formula(wb->workbook(), names[idx].formula, fresh_read_scratch(wb))
+  *out_formula = may_respell_formula(names[idx].formula)
+                     ? display_formula(wb->workbook(), names[idx].formula, fresh_read_scratch(wb), {})
                      : names[idx].formula.c_str();
   if (out_local_sheet_id != nullptr) {
     *out_local_sheet_id = names[idx].local_sheet_id;

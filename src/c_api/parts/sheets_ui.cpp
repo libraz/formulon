@@ -25,6 +25,7 @@ using formulon::c_api::parts::display_formula;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::ingest_entered_formula;
+using formulon::c_api::parts::may_respell_formula;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::validate;
@@ -468,10 +469,10 @@ extern "C" fm_status_t fm_sheet_get_validation_at(fm_workbook_t* wb, std::uint32
   out->show_error_message = v.show_error_message ? 1 : 0;
   out->show_dropdown = v.show_dropdown ? 1 : 0;
   const formulon::Workbook& book = wb->workbook();
-  if (book.spells_self_book_names(v.formula1) || book.spells_self_book_names(v.formula2)) {
+  if (may_respell_formula(v.formula1) || may_respell_formula(v.formula2)) {
     formulon::c_api::parts::TextStore& store = fresh_read_scratch(wb);
-    out->formula1 = display_formula(book, v.formula1, store);
-    out->formula2 = display_formula(book, v.formula2, store);
+    out->formula1 = display_formula(book, v.formula1, store, {});
+    out->formula2 = display_formula(book, v.formula2, store, {});
   } else {
     out->formula1 = v.formula1.c_str();
     out->formula2 = v.formula2.c_str();

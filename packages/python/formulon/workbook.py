@@ -5631,6 +5631,28 @@ class Workbook:
                 "fm_workbook_table_rename",
             )
 
+    def table_rename_column(self, index: int, column: int, name: str) -> str:
+        """Rename column ``column`` (0-based) of table ``index`` and return the final name.
+
+        As typing over the header cell does: an empty ``name`` takes the
+        profile's ``Column<N>`` (``列<N>``) with the lowest unused N, a name
+        another column already has (ASCII case-insensitively) gains the
+        lowest unused N >= 2, and anything else is kept verbatim. Structured
+        references to the column through this table are rewritten in cell,
+        totals-row and defined-name formulas and chart series. Writing a
+        value to a header cell (``set_text``, ``set_number``, ...) renames the
+        same way.
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            name_ptr = scope.cstr(name)
+            out = scope.out_ptr()
+            _check(
+                LIB.fm_workbook_table_rename_column(h, _uint(index, "index"), _uint(column, "column"), name_ptr, out),
+                "fm_workbook_table_rename_column",
+            )
+            return LIB.read_cstr(LIB.read_u32(out))
+
     def table_set_column_totals(
         self,
         index: int,

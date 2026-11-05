@@ -634,7 +634,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             index = wb.table_create(0, "A1:B4", "Sales", "Sales", ["Product", "Amount"], totals_row=True)
             wb.table_set_column_totals(index, 0, label="Total")
             wb.table_set_column_totals(index, 1, "sum")
-            self.assertEqual(wb.get_formula(0, 3, 1), "=SUBTOTAL(109,Sales[Amount])")
+            self.assertEqual(wb.get_formula(0, 3, 1), "=SUBTOTAL(109,[Amount])")
             wb.recalc()
             self.assertEqual(wb.get_value(0, 3, 1).number, 30.0)
             with self.assertRaises(FormulonError):

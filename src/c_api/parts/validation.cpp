@@ -136,7 +136,7 @@ extern "C" fm_status_t fm_sheet_list_invalid_cells(const fm_workbook_t* wb, size
         // The page is full: the first further invalid cell is where the
         // next page resumes.
         handle->next_cursor = position;
-        handle->spell_formulas(book);
+        handle->spell_formulas(book, sheet_index);
         *out = handle.release();
         return 0;
       }
@@ -149,7 +149,7 @@ extern "C" fm_status_t fm_sheet_list_invalid_cells(const fm_workbook_t* wb, size
     }
     scan = next;
   }
-  handle->spell_formulas(book);
+  handle->spell_formulas(book, sheet_index);
   *out = handle.release();
   return 0;
 }

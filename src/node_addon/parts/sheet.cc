@@ -408,6 +408,19 @@ Napi::Value Workbook::SetTableColumnTotals(const Napi::CallbackInfo& info) {
                              has_label ? label.c_str() : nullptr, has_formula ? formula.c_str() : nullptr));
 }
 
+Napi::Value Workbook::RenameTableColumn(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeStringFieldResult(env, NullHandleError(env), "value", "");
+  }
+  const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t column = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::string name = ArgString(info, 2);
+  const char* final_name = nullptr;
+  const fm_status_t rc = fm_workbook_table_rename_column(handle_, idx, column, name.c_str(), &final_name);
+  return MakeStringResult(env, rc, final_name);
+}
+
 Napi::Value Workbook::PassthroughAt(const Napi::CallbackInfo& info) {
   const char* path = nullptr;
   return StatusObject(

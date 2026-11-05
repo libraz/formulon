@@ -83,7 +83,7 @@ test('setTableColumnTotals writes the totals-row cells', async () => {
   try {
     assert.ok(wb.setTableColumnTotals(0, 0, { label: 'Total' }).ok);
     assert.ok(wb.setTableColumnTotals(0, 1, { function: 'sum' }).ok);
-    assert.equal(wb.getFormula(0, 3, 1).formula, '=SUBTOTAL(109,Sales[Amount])');
+    assert.equal(wb.getFormula(0, 3, 1).formula, '=SUBTOTAL(109,[Amount])');
     assert.ok(wb.recalc().ok);
     assert.equal(wb.getValue(0, 3, 1).value.number, 30);
     assert.equal(wb.getValue(0, 3, 0).value.text, 'Total');
@@ -92,7 +92,7 @@ test('setTableColumnTotals writes the totals-row cells', async () => {
     assert.equal(columns[0].totalsRowLabel, 'Total');
     assert.equal(columns[1].totalsRowFunction, 'sum');
     assert.ok(wb.setTableColumnTotals(0, 1, { function: 'custom', formula: '=MAX(Sales[Amount])' }).ok);
-    assert.equal(wb.tableAt(0).columns[1].totalsRowFormula, 'MAX(Sales[Amount])');
+    assert.equal(wb.tableAt(0).columns[1].totalsRowFormula, 'MAX([Amount])');
   } finally {
     release(wb);
   }
@@ -113,6 +113,23 @@ test('updateTable renames the table and its structured references', async () => 
     // A clash is refused and leaves the rest of the update unapplied.
     assert.equal(wb.updateTable(other.index, { name: 'revenue', ref: 'F1:F5' }).ok, false);
     assert.equal(wb.tableAt(other.index).ref, 'F1:F2');
+  } finally {
+    release(wb);
+  }
+});
+
+test('renameTableColumn renames the column and its structured references', async () => {
+  const mod = await getModule();
+  const wb = salesWorkbook(mod);
+  try {
+    assert.ok(wb.setFormula(0, 0, 3, '=SUM(Sales[Amount])').ok);
+    const renamed = wb.renameTableColumn(0, 1, 'Revenue');
+    assert.ok(renamed.status.ok, JSON.stringify(renamed.status));
+    assert.equal(renamed.value, 'Revenue');
+    assert.equal(wb.getFormula(0, 0, 3).formula, '=SUM(Sales[Revenue])');
+    assert.equal(wb.getValue(0, 0, 1).value.text, 'Revenue');
+    assert.equal(wb.renameTableColumn(0, 1, '').value, 'Column1');
+    assert.equal(wb.renameTableColumn(0, 9, 'X').status.ok, false);
   } finally {
     release(wb);
   }

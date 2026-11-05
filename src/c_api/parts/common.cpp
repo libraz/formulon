@@ -20,6 +20,7 @@
 #include "eval/builtin_names.h"
 #include "num_fmt_locale.h"
 #include "parser/literal_spelling.h"
+#include "parser/structured_ref_spelling.h"
 #include "sheet.h"
 #include "sheet_name.h"
 #include "styles.h"
@@ -731,11 +732,6 @@ fm_status_t check_entered_formula_parses(const char* api, std::string_view formu
 
 }  // namespace
 
-fm_status_t check_formula_parses(const char* api, std::string_view formula, std::string_view context) {
-  std::string stored;
-  return check_entered_formula_parses(api, formula, context, &stored);
-}
-
 fm_status_t check_stored_formula(const char* api, std::string_view formula, std::string_view context,
                                  std::string* out) {
   if (formula.empty()) {
@@ -770,11 +766,38 @@ std::string ingest_entered_formula(fm_workbook_t* wb, std::string_view formula) 
   return text;
 }
 
-const char* display_formula(const formulon::Workbook& book, const std::string& model, TextStore& store) {
-  if (!book.spells_self_book_names(model)) {
+fm_status_t check_entered_cell_formula(const char* api, const fm_workbook_t* wb, std::size_t sheet, std::uint32_t row,
+                                       std::uint32_t col, std::string_view formula, std::string_view context,
+                                       std::string* bound) {
+  if (auto rc = check_utf8(formula, api, context); rc != 0) {
+    return rc;
+  }
+  *bound = wb->workbook().bind_entered_structured_refs(formula, sheet, row, col);
+  std::string stored;
+  return check_entered_formula_parses(api, *bound, context, &stored);
+}
+
+std::string_view table_display_name_at(const formulon::Workbook& book, std::size_t sheet, std::uint32_t row,
+                                       std::uint32_t col) {
+  const std::optional<std::size_t> table = book.table_containing(sheet, row, col);
+  return table ? std::string_view(book.tables()[*table].display_name) : std::string_view();
+}
+
+std::string display_formula_text(const formulon::Workbook& book, std::string_view model, std::string_view own_table) {
+  if (!may_respell_formula(model)) {
+    return std::string(model);
+  }
+  std::string shown = formulon::parser::display_structured_refs(model, own_table);
+  return book.spells_self_book_names(shown) ? book.spell_self_book_names(shown) : shown;
+}
+
+const char* display_formula(const formulon::Workbook& book, const std::string& model, TextStore& store,
+                            std::string_view own_table) {
+  if (!may_respell_formula(model)) {
     return model.c_str();
   }
-  return store.emplace_back(book.spell_self_book_names(model)).c_str();
+  std::string shown = display_formula_text(book, model, own_table);
+  return shown == model ? model.c_str() : store.emplace_back(std::move(shown)).c_str();
 }
 
 }  // namespace parts

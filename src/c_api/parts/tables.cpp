@@ -17,21 +17,24 @@
 #include "io/auto_filter_xml.h"
 #include "io/xlsb/table_records.h"
 #include "io/xml_escape.h"
+#include "parser/structured_ref_payload.h"
 #include "table.h"
 #include "utils/error.h"
 #include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_entered_cell_formula;
 using formulon::c_api::parts::check_index;
-using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::display_formula;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
-using formulon::c_api::parts::ingest_entered_formula;
+using formulon::c_api::parts::may_respell_formula;
+using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::set_last_error;
 
 namespace {
 
@@ -83,24 +86,6 @@ const TotalsFunction* find_totals_function(std::string_view token) {
   return nullptr;
 }
 
-/// Column name as it appears inside a structured reference's brackets:
-/// `'` escapes `[`, `]`, `#` and `'`, and a name the payload grammar would
-/// split or trim (a comma, a colon, edge whitespace) gets its own brackets.
-std::string structured_ref_column(std::string_view name) {
-  std::string escaped;
-  escaped.reserve(name.size() + 2U);
-  bool needs_brackets = !name.empty() && (name.front() == ' ' || name.back() == ' ');
-  for (const char ch : name) {
-    if (ch == '[' || ch == ']' || ch == '#' || ch == '\'') {
-      escaped.push_back('\'');
-    } else if (ch == ',' || ch == ':') {
-      needs_brackets = true;
-    }
-    escaped.push_back(ch);
-  }
-  return needs_brackets ? "[" + escaped + "]" : escaped;
-}
-
 /// Writes column `column`'s totals-row cell from its totals settings: the
 /// `SUBTOTAL` formula, the custom formula, the label, or nothing.
 fm_status_t write_totals_cell(formulon::Workbook& book, const formulon::TableMetadata& table, std::size_t column) {
@@ -114,9 +99,11 @@ fm_status_t write_totals_cell(formulon::Workbook& book, const formulon::TableMet
   const TotalsFunction* function = find_totals_function(col.totals_function.empty() ? "none" : col.totals_function);
   formulon::Expected<void, formulon::Error> written = formulon::Expected<void, formulon::Error>::Ok();
   if (function != nullptr && function->subtotal_code != 0) {
+    formulon::parser::StructuredRefPayload payload;
+    payload.columns.push_back(col.name);
     written = book.set_cell_formula(table.sheet_index, row, cell_col,
                                     "=SUBTOTAL(" + std::to_string(function->subtotal_code) + "," + table.display_name +
-                                        "[" + structured_ref_column(col.name) + "])");
+                                        "[" + formulon::parser::stored_payload(payload) + "])");
   } else if (col.totals_function == "custom" && !col.totals_row_formula.empty()) {
     written = book.set_cell_formula(table.sheet_index, row, cell_col, "=" + col.totals_row_formula);
   } else if (!col.totals_label.empty()) {
@@ -493,9 +480,11 @@ extern "C" fm_status_t fm_workbook_table_get_column(const fm_workbook_t* wb, siz
   out->totals_row_function = col.totals_function.empty() ? "none" : col.totals_function.c_str();
   out->totals_row_label = col.totals_label.c_str();
   // Read scratch holds a respelled formula; any other one is the model's.
-  out->totals_row_formula = wb->workbook().spells_self_book_names(col.totals_row_formula)
-                                ? display_formula(wb->workbook(), col.totals_row_formula, fresh_read_scratch(wb))
-                                : col.totals_row_formula.c_str();
+  // The formula sits in the table's totals row, so it is shown from inside the table.
+  out->totals_row_formula =
+      may_respell_formula(col.totals_row_formula)
+          ? display_formula(wb->workbook(), col.totals_row_formula, fresh_read_scratch(wb), tables[index].display_name)
+          : col.totals_row_formula.c_str();
   return 0;
 }
 
@@ -548,6 +537,32 @@ extern "C" fm_status_t fm_workbook_table_rename(fm_workbook_t* wb, size_t index,
   return finish_status(book.rename_table(index, next_name, next_display_name));
 }
 
+extern "C" fm_status_t fm_workbook_table_rename_column(fm_workbook_t* wb, size_t index, size_t column, const char* name,
+                                                       const char** out_name) {
+  clear_last_error();
+  if (wb == nullptr || name == nullptr || out_name == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_table_rename_column: NULL argument");
+  }
+  formulon::Workbook& book = wb->workbook();
+  if (auto rc = check_index(index, book.tables().size(), "fm_workbook_table_rename_column", "index"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_index(column, book.tables()[index].columns.size(), "fm_workbook_table_rename_column", "column");
+      rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8("fm_workbook_table_rename_column", {name}); rc != 0) {
+    return rc;
+  }
+  auto renamed = book.rename_table_column(index, column, name);
+  if (!renamed) {
+    return set_last_error(renamed.error());
+  }
+  *out_name = publish_scratch(wb, std::move(renamed.value()));
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_table_set_column_totals(fm_workbook_t* wb, size_t index, size_t column,
                                                            const char* function, const char* label,
                                                            const char* formula) {
@@ -580,12 +595,32 @@ extern "C" fm_status_t fm_workbook_table_set_column_totals(fm_workbook_t* wb, si
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                                "fm_workbook_table_set_column_totals: custom function needs a formula");
     }
-    if (auto rc = check_stored_formula("fm_workbook_table_set_column_totals", formula,
-                                       "column=" + std::to_string(column), &stored_formula);
+    // Entered at the column's totals cell, so `[Qty]` and `[@Qty]` bind to this table.
+    const std::optional<formulon::MergeRange> rect = formulon::parse_a1_rectangle(tables[index].ref);
+    if (!rect) {
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                               "fm_workbook_table_set_column_totals: table ref is not a range",
+                               "ref=" + tables[index].ref);
+    }
+    // The stored text drops one '=', so a second one would not survive.
+    if (formula[0] == '=' && formula[1] == '=') {
+      return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken,
+                               "fm_workbook_table_set_column_totals: formula does not parse",
+                               "column=" + std::to_string(column));
+    }
+    std::string bound;
+    if (auto rc = check_entered_cell_formula("fm_workbook_table_set_column_totals", wb, tables[index].sheet_index,
+                                             rect->last_row, rect->first_col + static_cast<std::uint32_t>(column),
+                                             formula, "column=" + std::to_string(column), &bound);
         rc != 0) {
       return rc;
     }
-    stored_formula = ingest_entered_formula(wb, formula);
+    stored_formula = book.bind_self_book_names(
+        formulon::Workbook::normalize_formula_text(std::move(bound), formulon::Workbook::FormulaSource::kEntered));
+    book.bind_external_books(std::string_view(stored_formula));
+    if (!stored_formula.empty() && stored_formula.front() == '=') {
+      stored_formula.erase(0, 1);
+    }
   }
   formulon::TableColumn& col = tables[index].columns[column];
   col.totals_function = token == "none" ? std::string() : std::string(token);

@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "auto_filter.h"
 #include "c_api/formulon_c.h"
 #include "c_api/parts/cell_range.h"
 #include "c_api/parts/common.h"
@@ -23,7 +24,9 @@
 #include "phonetic.h"
 #include "sheet.h"
 #include "style_resolve.h"
+#include "table.h"
 #include "utils/arena.h"
+#include "utils/double_format.h"
 #include "utils/error.h"
 #include "utils/formula_text.h"
 #include "utils/index_sort.h"
@@ -33,8 +36,8 @@
 using formulon::c_api::parts::cell_range_page_size;
 using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_cell_cursor;
+using formulon::c_api::parts::check_entered_cell_formula;
 using formulon::c_api::parts::check_finite;
-using formulon::c_api::parts::check_formula_parses;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
@@ -42,11 +45,13 @@ using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::display_formula;
+using formulon::c_api::parts::display_formula_text;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::table_display_name_at;
 using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::value_to_fm;
 
@@ -75,6 +80,33 @@ fm_status_t enter_cell(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint
   return 0;
 }
 
+// Table and column whose header cell is (`row`, `col`).
+struct HeaderCell {
+  std::size_t table;
+  std::size_t column;
+};
+
+std::optional<HeaderCell> table_header_cell(const formulon::Workbook& book, size_t sheet_index, uint32_t row,
+                                            uint32_t col) {
+  const std::optional<std::size_t> table = book.table_containing(sheet_index, row, col);
+  if (!table) {
+    return std::nullopt;
+  }
+  const formulon::TableMetadata& meta = book.tables()[*table];
+  const std::optional<formulon::MergeRange> rect = formulon::parse_a1_rectangle(meta.ref);
+  if (!meta.header_row || !rect || row != rect->first_row) {
+    return std::nullopt;
+  }
+  return HeaderCell{*table, static_cast<std::size_t>(col - rect->first_col)};
+}
+
+// A value entered into a table's header cell renames the column to its text,
+// as Excel does; the header cell then holds the final name.
+fm_status_t rename_from_header(fm_workbook_t* wb, const HeaderCell& header, std::string_view text) {
+  auto renamed = wb->workbook().rename_table_column(header.table, header.column, text);
+  return renamed ? 0 : set_last_error(renamed.error());
+}
+
 }  // namespace
 
 extern "C" fm_status_t fm_workbook_set_number(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -86,6 +118,11 @@ extern "C" fm_status_t fm_workbook_set_number(fm_workbook_t* wb, size_t sheet_in
   if (auto rc = check_finite(value, "fm_workbook_set_number", "value"); rc != 0) {
     return rc;
   }
+  if (const auto header = table_header_cell(wb->workbook(), sheet_index, row, col)) {
+    std::string text;
+    formulon::format_double(text, value);
+    return rename_from_header(wb, *header, text);
+  }
   return enter_cell(wb, sheet_index, row, col, [&](formulon::Workbook& book) {
     return book.set_cell_value(sheet_index, row, col, formulon::Value::number(value));
   });
@@ -96,6 +133,9 @@ extern "C" fm_status_t fm_workbook_set_bool(fm_workbook_t* wb, size_t sheet_inde
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_set_bool"); rc != 0) {
     return rc;
+  }
+  if (const auto header = table_header_cell(wb->workbook(), sheet_index, row, col)) {
+    return rename_from_header(wb, *header, value != 0 ? "TRUE" : "FALSE");
   }
   return enter_cell(wb, sheet_index, row, col, [&](formulon::Workbook& book) {
     return book.set_cell_value(sheet_index, row, col, formulon::Value::boolean(value != 0));
@@ -111,6 +151,9 @@ extern "C" fm_status_t fm_workbook_set_error(fm_workbook_t* wb, size_t sheet_ind
   if (error < 0 || error > static_cast<fm_error_code_t>(formulon::ErrorCode::Unknown)) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_workbook_set_error: error code out of range", "error=" + std::to_string(error));
+  }
+  if (const auto header = table_header_cell(wb->workbook(), sheet_index, row, col)) {
+    return rename_from_header(wb, *header, formulon::display_name(static_cast<formulon::ErrorCode>(error)));
   }
   return enter_cell(wb, sheet_index, row, col, [&](formulon::Workbook& book) {
     return book.set_cell_value(sheet_index, row, col, formulon::Value::error(static_cast<formulon::ErrorCode>(error)));
@@ -128,6 +171,9 @@ extern "C" fm_status_t fm_workbook_set_text(fm_workbook_t* wb, size_t sheet_inde
   }
   if (auto rc = check_utf8("fm_workbook_set_text", {utf8}); rc != 0) {
     return rc;
+  }
+  if (const auto header = table_header_cell(wb->workbook(), sheet_index, row, col)) {
+    return rename_from_header(wb, *header, utf8);
   }
   // Copy directly into the destination cell. Keeping every overwritten
   // input in a handle-global deque leaked one string per C-ABI write.
@@ -319,6 +365,9 @@ extern "C" fm_status_t fm_workbook_set_blank(fm_workbook_t* wb, size_t sheet_ind
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_set_blank"); rc != 0) {
     return rc;
   }
+  if (const auto header = table_header_cell(wb->workbook(), sheet_index, row, col)) {
+    return rename_from_header(wb, *header, std::string_view());
+  }
   return finish_status(wb->workbook().set_cell_value(sheet_index, row, col, formulon::Value::blank()));
 }
 
@@ -332,13 +381,14 @@ extern "C" fm_status_t fm_workbook_set_formula(fm_workbook_t* wb, size_t sheet_i
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_set_formula: formula is NULL");
   }
-  if (auto rc = check_formula_parses("fm_workbook_set_formula", formula,
-                                     "row=" + std::to_string(row) + " col=" + std::to_string(col));
+  std::string bound;
+  if (auto rc = check_entered_cell_formula("fm_workbook_set_formula", wb, sheet_index, row, col, formula,
+                                           "row=" + std::to_string(row) + " col=" + std::to_string(col), &bound);
       rc != 0) {
     return rc;
   }
   return enter_cell(wb, sheet_index, row, col, [&](formulon::Workbook& book) {
-    return book.set_cell_formula(sheet_index, row, col, std::string(formula));
+    return book.set_cell_formula(sheet_index, row, col, std::move(bound));
   });
 }
 
@@ -591,7 +641,8 @@ extern "C" fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet
   TextStore& store = fresh_read_scratch(wb);
   if (out_formula != nullptr) {
     *out_formula = (cell != nullptr && !cell->formula_text.empty())
-                       ? display_formula(wb->workbook(), cell->formula_text, store)
+                       ? display_formula(wb->workbook(), cell->formula_text, store,
+                                         table_display_name_at(wb->workbook(), sheet_index, row, col))
                        : nullptr;
   }
   // Use the spill-aware accessor so phantoms surface their owning anchor's
@@ -674,7 +725,9 @@ extern "C" fm_status_t fm_workbook_get_array_formula(const fm_workbook_t* wb, st
   out->anchor_col = info->anchor_col;
   out->rows = info->rows;
   out->cols = info->cols;
-  out->formula = publish_scratch(wb, wb->workbook().spell_self_book_names(info->formula));
+  out->formula = publish_scratch(
+      wb, display_formula_text(wb->workbook(), info->formula,
+                               table_display_name_at(wb->workbook(), sheet, info->anchor_row, info->anchor_col)));
   out->engaged = 1;
   return 0;
 }
@@ -693,13 +746,14 @@ extern "C" fm_status_t fm_workbook_set_array_formula(fm_workbook_t* wb, std::uin
   if (auto rc = check_cell_coord(row, col, "fm_workbook_set_array_formula"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_formula_parses("fm_workbook_set_array_formula", formula,
-                                     "row=" + std::to_string(row) + " col=" + std::to_string(col));
+  std::string bound;
+  if (auto rc = check_entered_cell_formula("fm_workbook_set_array_formula", wb, sheet, row, col, formula,
+                                           "row=" + std::to_string(row) + " col=" + std::to_string(col), &bound);
       rc != 0) {
     return rc;
   }
   return enter_cell(wb, sheet, row, col, [&](formulon::Workbook& book) {
-    return book.set_array_formula(sheet, row, col, rows, cols, std::string(formula));
+    return book.set_array_formula(sheet, row, col, rows, cols, std::move(bound));
   });
 }
 
@@ -743,7 +797,8 @@ extern "C" fm_status_t fm_workbook_get_formula(const fm_workbook_t* wb, size_t s
       rc != 0) {
     return rc;
   }
-  *out_formula = publish_scratch(wb, wb->workbook().spell_self_book_names(text));
+  *out_formula = publish_scratch(
+      wb, display_formula_text(wb->workbook(), text, table_display_name_at(wb->workbook(), sheet_index, row, col)));
   return 0;
 }
 
@@ -766,8 +821,9 @@ extern "C" fm_status_t fm_workbook_get_formula_r1c1(const fm_workbook_t* wb, siz
                              "fm_workbook_get_formula_r1c1: stored formula does not parse",
                              "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
-  *out_formula =
-      publish_scratch(wb, wb->workbook().spell_self_book_names(formulon::parser::format_formula_r1c1(*root, row, col)));
+  const formulon::parser::StructuredRefDisplay display{table_display_name_at(wb->workbook(), sheet_index, row, col)};
+  *out_formula = publish_scratch(
+      wb, wb->workbook().spell_self_book_names(formulon::parser::format_formula_r1c1(*root, row, col, &display)));
   return 0;
 }
 
@@ -805,7 +861,7 @@ extern "C" fm_status_t fm_sheet_cells_in_range(const fm_workbook_t* wb, size_t s
       entry.formula = handle->text.emplace_back(formulon::data_table_formula_text(*table)).c_str();
     }
   }
-  handle->spell_formulas(wb->workbook());
+  handle->spell_formulas(wb->workbook(), sheet_index);
   *out = handle.release();
   return 0;
 }

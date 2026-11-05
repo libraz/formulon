@@ -875,6 +875,10 @@ FM_API fm_status_t fm_workbook_delete_cols(fm_workbook_t* wb, uint32_t sheet, ui
  * downgraded, so `ISNUMBER`, arithmetic on the cell, and a save/reload
  * round trip never disagree about whether it is a number or an error.
  *
+ * A table's header cell takes the number in General format (`2024`) as text instead: the column is renamed
+ * to it (`fm_workbook_table_rename_column`), and the cell holds the final
+ * name.
+ *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
  *         `kInvalidArgument` when `sheet_index` is out of range, or
@@ -886,6 +890,10 @@ FM_API fm_status_t fm_workbook_set_number(fm_workbook_t* wb, size_t sheet_index,
 /**
  * @brief Stores a boolean literal. `value` is interpreted as a C
  *        boolean: `0` is FALSE, any non-zero is TRUE.
+ *
+ * A table's header cell takes `TRUE` or `FALSE` as text instead: the column is renamed
+ * to it (`fm_workbook_table_rename_column`), and the cell holds the final
+ * name.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
@@ -900,6 +908,10 @@ FM_API fm_status_t fm_workbook_set_bool(fm_workbook_t* wb, size_t sheet_index, u
  * This writes a cell whose value is `#DIV/0!`, `#VALUE!`, etc. It is
  * distinct from writing a formula that evaluates to an error.
  *
+ * A table's header cell takes the error's name (`#N/A`) as text instead: the column is renamed
+ * to it (`fm_workbook_table_rename_column`), and the cell holds the final
+ * name.
+ *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
  *         `kInvalidArgument` when `sheet_index` or `error` is out of range.
@@ -910,6 +922,10 @@ FM_API fm_status_t fm_workbook_set_error(fm_workbook_t* wb, size_t sheet_index, 
 /**
  * @brief Stores a text literal. The destination cell copies the UTF-8
  *        contents, so `utf8` does not need to outlive the call.
+ *
+ * A table's header cell takes `utf8` as text instead: the column is renamed
+ * to it (`fm_workbook_table_rename_column`), and the cell holds the final
+ * name.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -1055,6 +1071,10 @@ FM_API fm_status_t fm_workbook_set_cell_phonetic_properties(fm_workbook_t* wb, s
  * @brief Stores a `Blank` literal at `(row, col)`. Equivalent to
  *        clearing a cell.
  *
+ * A table's header cell is not cleared: the column takes the profile's
+ * default name (`Column1`, `列1`; `fm_workbook_table_rename_column` with an
+ * empty name), and the cell holds that name.
+ *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
  *         `kInvalidArgument` when `sheet_index` is out of range.
@@ -1075,6 +1095,13 @@ FM_API fm_status_t fm_workbook_set_blank(fm_workbook_t* wb, size_t sheet_index, 
  * back as `1.5`), a unary sign touching one absorbed (`+5` as `5`), and
  * whitespace Excel drops (trailing, before `,`, around `:`, inside array
  * constants) removed.
+ *
+ * Structured references are accepted in the formula-bar form the getters
+ * return and stored in Excel's long form: in a cell of table `T`, `[Qty]`
+ * and `[@Qty]` store as `T[Qty]` and `T[[#This Row],[Qty]]`; anywhere,
+ * `T[@Qty]` stores as `T[[#This Row],[Qty]]` and a bare table name `T` not
+ * hidden by a defined name as `T[]`. An unqualified `[Qty]` outside every
+ * table does not parse.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -1250,7 +1277,9 @@ FM_API fm_status_t fm_workbook_lambda_text_at(fm_workbook_t* wb, size_t sheet_in
  * relative to `(row, col)`, with full locale / coercion / 1904 fidelity
  * from the workbook profile. No cell value is written, no dynamic-array
  * spill is committed, and the dependency graph is untouched. The `const`
- * on `wb` is the ABI-level purity contract.
+ * on `wb` is the ABI-level purity contract. Structured references are bound
+ * at `(row, col)` as `fm_workbook_set_formula` binds them (`[@Qty]` in a
+ * table cell).
  *
  * An Array / spill result is reduced to its top-left element. This is a
  * pragmatic API-shape choice, NOT Excel implicit intersection (which
@@ -1500,16 +1529,20 @@ FM_API fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet_ind
 /**
  * @brief Reads the formula of the cell at `(row, col)` in A1 notation.
  *
- * The text is the stored formula verbatim, leading `=` included, as
- * `fm_workbook_cell_at` reports it. A cell that holds no formula (a literal,
- * a spill phantom, or no cell at all) yields `""`. A data table's result
+ * The text carries the leading `=`, as `fm_workbook_cell_at` reports it. A
+ * cell that holds no formula (a literal, a spill phantom, or no cell at
+ * all) yields `""`. A data table's result
  * cell yields the table's formula, `=TABLE(row_input,col_input)` with an
  * absent input left empty (`=TABLE(,B3)`) and a deleted one as `#REF!`; the
  * formula bar shows it in braces, as for a legacy array formula.
  *
- * The text is returned as entered. A formula loaded from a file shows the
- * formula-bar spelling: external references name the book (`[Book.xlsx]Sheet1!A1`),
- * never its `[N]` index.
+ * The text is the formula-bar spelling. External references name the book
+ * (`[Book.xlsx]Sheet1!A1`), never its `[N]` index. Structured references
+ * take the display form for this cell: `[#This Row]` is spelled `@`, inside
+ * the referenced table's own range a single-column reference with no
+ * specifier or `@` alone drops the table name (`[@Qty]`, `SUM([Qty])`;
+ * outside it `tblSales[@Qty]`), and `T[]` reads `T`.
+ * `fm_workbook_set_formula` accepts this text back.
  *
  * `*out_formula` is a read-scratch-backed view: valid until the next
  * successful scratch-backed read, any mutation, or handle destruction.
@@ -1527,7 +1560,8 @@ FM_API fm_status_t fm_workbook_get_formula(const fm_workbook_t* wb, size_t sheet
  *        relative to that cell.
  *
  * The text carries no leading `=`, and follows the A1 formatter's spacing
- * and case rules. Sheet and external qualifiers are quoted as a whole
+ * and case rules. Structured references take the display form
+ * `fm_workbook_get_formula` gives them at this cell. Sheet and external qualifiers are quoted as a whole
  * (`'[Book.xlsx]My Sheet'!R1C1`) only when the path, book or sheet name needs
  * it; a 3-D external reference with no path stays unquoted. A cell that holds no formula yields `""`. Lifetime as
  * `fm_workbook_get_formula`.
@@ -1799,6 +1833,9 @@ typedef struct {
  *                             leading `=`, empty otherwise, spelled as
  *                             `fm_workbook_get_formula` spells formulas.
  *
+ * `totals_row_formula` is spelled as at the column's totals cell, inside
+ * the table (`SUBTOTAL(109,[Qty])`).
+ *
  * Views share the lifetime of `fm_workbook_table_at`'s; none is `NULL`. A
  * `totals_row_formula` respelled from the model's (see
  * `fm_workbook_file_name`) is read-scratch-backed instead.
@@ -1862,12 +1899,41 @@ FM_API fm_status_t fm_workbook_table_rename(fm_workbook_t* wb, size_t index, con
                                             const char* display_name);
 
 /**
+ * @brief Renames column `column` (0-based) of table `index`, as typing over
+ *        its header cell does.
+ *
+ * The final name is `name` kept verbatim (spaces and a case-only change
+ * included), except that an empty `name` takes the profile's default
+ * `<word>N` (`Column1`, `列1`) with the lowest unused N >= 1, and a name
+ * another column of the table already has (ASCII case-insensitively)
+ * takes `<name>N` with the lowest unused N >= 2 (`Amount2` becomes
+ * `Amount22`). When it differs from the current name, every structured
+ * reference to the column through this table is rewritten: cell formulas
+ * on every sheet, totals-row formulas, defined names and chart series. A
+ * table with a header row has the final name written to the header cell,
+ * also when the name is unchanged. External-book references, `INDIRECT`
+ * text and pivot caches are not rewritten.
+ *
+ * `*out_name` receives the final name, read-scratch-backed: valid until the
+ * next successful scratch-backed read, any mutation, or handle destruction.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb`, `name` or `out_name` is `NULL`;
+ *         `kInvalidArgument` when `index` or `column` is out of range;
+ *         `kBindingUtf8EncodingError` when `name` is not valid UTF-8.
+ */
+FM_API fm_status_t fm_workbook_table_rename_column(fm_workbook_t* wb, size_t index, size_t column, const char* name,
+                                                   const char** out_name);
+
+/**
  * @brief Sets column `column`'s totals-row function and label.
  *
  * `function` is an `ST_TotalsRowFunction` token (see `fm_table_column_info_t`);
  * `NULL` means `none`. `formula` is required for `custom` and ignored
- * otherwise; it is stored without a leading `=`. `label` may be `NULL` or
- * empty for none.
+ * otherwise; it is stored without a leading `=`, its structured references
+ * bound as `fm_workbook_set_formula` binds them at the column's totals cell
+ * (`SUBTOTAL(109,[Qty])` stores `SUBTOTAL(109,Table[Qty])`). `label` may be
+ * `NULL` or empty for none.
  *
  * While the totals row is shown its cell on the last row of the table's
  * range follows, as the desktop application writes it: a built-in function
@@ -6030,7 +6096,8 @@ FM_API fm_status_t fm_workbook_get_array_formula(const fm_workbook_t* wb, uint32
  * result cannot reach. A block wholly inside the rectangle is replaced.
  * Writing a value, blank or formula to the anchor of a block replaces the
  * whole block, which is how a block is cleared; a write to any other cell
- * of a block is refused.
+ * of a block is refused. Structured references are bound at `(row, col)`
+ * as `fm_workbook_set_formula` binds them.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when `wb` or `formula` is `NULL`;

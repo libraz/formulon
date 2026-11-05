@@ -598,6 +598,14 @@ JsStatus JsWorkbook::removeTable(uint32_t idx) {
   return status_from_rc(handle_ != nullptr ? fm_workbook_table_remove(handle_, idx) : kBindingInvalidHandle);
 }
 
+JsStringResult JsWorkbook::renameTableColumn(uint32_t idx, uint32_t column, const std::string& name) {
+  const char* final_name = nullptr;
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_workbook_table_rename_column(handle_, idx, column, name.c_str(), &final_name)
+                             : kBindingInvalidHandle;
+  return string_result(rc, final_name);
+}
+
 emscripten::val JsWorkbook::passthroughAt(uint32_t idx) const {
   emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {

@@ -42,6 +42,7 @@ using formulon::c_api::parts::grow_record_cells;
 using formulon::c_api::parts::intern_cache_text;
 using formulon::c_api::parts::invalidate_pivot_results_for_cache;
 using formulon::c_api::parts::mark_cache_pivots_pending;
+using formulon::c_api::parts::may_respell_formula;
 using formulon::c_api::parts::mutable_pivot_caches;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -958,8 +959,8 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_formula(const fm_workbook_t
   }
   if (!field->formula.has_value()) {
     *out_utf8 = "";
-  } else if (wb->workbook().spells_self_book_names(*field->formula)) {
-    *out_utf8 = display_formula(wb->workbook(), *field->formula, fresh_read_scratch(wb));
+  } else if (may_respell_formula(*field->formula)) {
+    *out_utf8 = display_formula(wb->workbook(), *field->formula, fresh_read_scratch(wb), {});
   } else {
     *out_utf8 = field->formula->c_str();
   }

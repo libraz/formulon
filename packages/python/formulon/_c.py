@@ -693,6 +693,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_workbook_table_get_info",
     "fm_workbook_table_remove",
     "fm_workbook_table_rename",
+    "fm_workbook_table_rename_column",
     "fm_workbook_table_set_column_totals",
     "fm_workbook_table_set_style_info",
     "fm_workbook_table_update",

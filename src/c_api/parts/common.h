@@ -111,17 +111,9 @@ fm_status_t check_utf8(std::string_view text, const char* api, std::string_view 
 // NULL entries are left to the caller's own NULL rule.
 fm_status_t check_utf8(const char* api, std::initializer_list<const char*> texts);
 
-// Entry check for formula text a public setter is about to store: refuses the
-// malformed UTF-8 (`check_utf8`) and the whitespace Excel refuses
-// (`parser::has_refused_whitespace`: a tab, a carriage
-// return, a run between a built-in's name and its `(`), applies the storage
-// normalization `Workbook::set_cell_formula` applies, then requires
-// `eval::parse_formula_entry` to accept it. Returns 0, or sets
-// `kParserUnexpectedToken` ("<api>: formula does not parse") with `context`.
-fm_status_t check_formula_parses(const char* api, std::string_view formula, std::string_view context);
-
 // Entry form of formula text stored outside a cell (CF, DV, defined name, CF
-// threshold): a non-empty `formula` must pass `check_formula_parses`, and
+// threshold): a non-empty `formula` must pass the entry parse check
+// (`check_entered_cell_formula` without its bind), and
 // `*out` receives the stored spelling a cell would take
 // (`Workbook::normalize_formula_text`, `kEntered`) without its one leading
 // '=', the spelling files carry and readers produce; a second leading '=' is
@@ -133,10 +125,41 @@ fm_status_t check_stored_formula(const char* api, std::string_view formula, std:
 // names) without the one leading '='. An empty `formula` yields "".
 std::string ingest_entered_formula(fm_workbook_t* wb, std::string_view formula);
 
-// Model formula text as a getter hands it out: `model`'s own bytes when the
-// workbook spells it unchanged, else its `Workbook::spell_self_book_names`
-// spelling appended to `store`.
-const char* display_formula(const formulon::Workbook& book, const std::string& model, TextStore& store);
+// Entry check for formula text entered at (`sheet`, `row`, `col`): refuses
+// malformed UTF-8 (`check_utf8`), binds the structured references at that
+// cell (`Workbook::bind_entered_structured_refs`: `[@Qty]` and `ROWS(T)` take
+// their stored forms), then on the bound text refuses the whitespace Excel
+// refuses (`parser::has_refused_whitespace`: a tab, a carriage return, a run
+// between a built-in's name and its `(`) and requires
+// `eval::parse_formula_entry` to accept its storage normalization. Returns 0,
+// or sets `kParserUnexpectedToken` ("<api>: formula does not parse") with
+// `context`. `*bound` receives the bound text, not yet normalized, for
+// `Workbook::set_cell_formula`.
+fm_status_t check_entered_cell_formula(const char* api, const fm_workbook_t* wb, std::size_t sheet, std::uint32_t row,
+                                       std::uint32_t col, std::string_view formula, std::string_view context,
+                                       std::string* bound);
+
+// Display name of the table whose range holds (`sheet`, `row`, `col`), or ""
+// outside every table.
+std::string_view table_display_name_at(const formulon::Workbook& book, std::size_t sheet, std::uint32_t row,
+                                       std::uint32_t col);
+
+// Whether a getter may spell `model` differently from the model: both the
+// structured-reference display form and the self-book spelling need a `[`.
+inline bool may_respell_formula(std::string_view model) noexcept {
+  return model.find('[') != std::string_view::npos;
+}
+
+// `model` as the getters spell it for a formula in `own_table`'s range
+// (empty outside every table): `parser::display_structured_refs`, then
+// `Workbook::spell_self_book_names`.
+std::string display_formula_text(const formulon::Workbook& book, std::string_view model, std::string_view own_table);
+
+// Model formula text as a getter hands it out: `model`'s own bytes when
+// `display_formula_text` leaves it unchanged, else that spelling appended to
+// `store`.
+const char* display_formula(const formulon::Workbook& book, const std::string& model, TextStore& store,
+                            std::string_view own_table);
 
 // Returns the thread-local diagnostic message buffer (always non-null).
 const char* last_error_message();

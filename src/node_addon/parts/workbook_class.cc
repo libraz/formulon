@@ -777,6 +777,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::CreateTable, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("createTable"),
           GuardedInstanceMethod<&Workbook::UpdateTable, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("updateTable"),
           GuardedInstanceMethod<&Workbook::RemoveTable, 0x1ULL>("removeTable"),
+          GuardedInstanceMethod<&Workbook::RenameTableColumn, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("renameTableColumn"),
           GuardedInstanceMethod<&Workbook::SetTableColumnTotals, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setTableColumnTotals"),
           GuardedInstanceMethod<&Workbook::TableCount>("tableCount"),
           GuardedInstanceMethod<&Workbook::XfCount>("xfCount"),

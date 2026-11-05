@@ -4164,6 +4164,15 @@ export interface Workbook {
   updateTable(idx: number, input: TableUpdateInput): Status;
   /** Removes the table at `idx`. */
   removeTable(idx: number): Status;
+  /** Renames column `column` (0-based) of table `idx`, as typing over its
+   *  header cell does, and returns the final name in `value`. An empty
+   *  `name` takes the profile's `Column<N>` (`列<N>`) with the lowest unused
+   *  N, a name another column already has (ASCII case-insensitively) gains
+   *  the lowest unused N >= 2, and anything else is kept verbatim. Every
+   *  structured reference to the column through this table follows: cell,
+   *  totals-row and defined-name formulas and chart series. Writing a value
+   *  to a header cell (`setText`, `setNumber`, ...) renames the same way. */
+  renameTableColumn(idx: number, column: number, name: string): StringResult;
   /** Sets column `column`'s totals-row function and label. While the totals
    *  row is shown its cell follows, as the desktop application writes it:
    *  `SUBTOTAL(109,Table[Column])` and the other 1xx codes for a built-in

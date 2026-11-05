@@ -562,6 +562,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("removeTable", &JsWorkbook::removeTable)
       .function("removeValidationAt", &JsWorkbook::removeValidationAt)
       .function("renameSheet", &JsWorkbook::renameSheet)
+      .function("renameTableColumn", &JsWorkbook::renameTableColumn)
       .function("save", &JsWorkbook::save)
       .function("saveAs", &JsWorkbook::saveAs)
       .function("saveWithDiagnostics", &JsWorkbook::saveWithDiagnostics)

@@ -6,8 +6,10 @@
 #ifndef FORMULON_C_API_PARTS_CELL_RANGE_H_
 #define FORMULON_C_API_PARTS_CELL_RANGE_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "c_api/formulon_c.h"
@@ -67,11 +69,17 @@ struct fm_cell_range {
     entries.push_back(entry);
   }
 
-  // Respells every entry's formula as `book`'s getters hand formulas out.
-  void spell_formulas(const formulon::Workbook& book) {
+  // Respells every entry's formula as `book`'s getters hand formulas out at
+  // that entry's cell on `sheet_index`.
+  void spell_formulas(const formulon::Workbook& book, std::size_t sheet_index) {
     for (Entry& entry : entries) {
-      if (entry.formula != nullptr && book.spells_self_book_names(entry.formula)) {
-        entry.formula = text.emplace_back(book.spell_self_book_names(entry.formula)).c_str();
+      if (entry.formula == nullptr || !formulon::c_api::parts::may_respell_formula(entry.formula)) {
+        continue;
+      }
+      std::string shown = formulon::c_api::parts::display_formula_text(
+          book, entry.formula, formulon::c_api::parts::table_display_name_at(book, sheet_index, entry.row, entry.col));
+      if (shown != entry.formula) {
+        entry.formula = text.emplace_back(std::move(shown)).c_str();
       }
     }
   }
