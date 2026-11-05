@@ -6,10 +6,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "cell.h"
+#include "formulon_c_pivot_test_helpers.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
@@ -312,6 +314,43 @@ TEST(FormulonCApiStructuredRef, RenameColumnRewritesEveryReference) {
   ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, kOutsideRow, kOutsideCol, "=[@[Unit-Cost]]"), kParserUnexpectedToken);
   ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, kInsideRow, kInsideCol, "=[@[Unit-Cost]]"), 0);
   EXPECT_EQ(Stored(wb, 0, kInsideRow, kInsideCol), "=tblSales[[#This Row],[Unit-Cost]]");
+}
+
+std::vector<std::uint8_t> SaveAs(const WorkbookGuard& wb, int32_t format) {
+  BufferGuard saved;
+  EXPECT_EQ(fm_workbook_save_as(wb.handle, format, &saved.data, &saved.len), 0) << fm_last_error_message();
+  return std::vector<std::uint8_t>(saved.data, saved.data + saved.len);
+}
+
+// Excel's save after typing Amount over Qty: the table part names the column
+// and keeps the custom totals formula in long form, and cells store long form.
+TEST(FormulonCApiStructuredRef, RenamedColumnSavesInExcelsStoredForm) {
+  WorkbookGuard wb;
+  BuildSales(wb);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, kInsideRow, kInsideCol, "=[@Qty]"), 0);
+  ASSERT_EQ(fm_workbook_table_set_column_totals(wb.handle, 0, 0, "custom", nullptr, "=SUBTOTAL(109,[Qty])"), 0)
+      << fm_last_error_message();
+  ASSERT_EQ(Rename(wb, 0, "Amount"), "Amount");
+
+  const std::vector<std::uint8_t> xlsx = SaveAs(wb, FM_WORKBOOK_FORMAT_XLSX);
+  const std::string table = ExtractZipEntry(xlsx, "xl/tables/table1.xml");
+  EXPECT_NE(table.find("<tableColumn id=\"1\" name=\"Amount\" totalsRowFunction=\"custom\">"), std::string::npos)
+      << table;
+  EXPECT_NE(table.find("<totalsRowFormula>SUBTOTAL(109,tblSales[Amount])</totalsRowFormula>"), std::string::npos)
+      << table;
+  const std::string sheet = ExtractZipEntry(xlsx, "xl/worksheets/sheet1.xml");
+  EXPECT_NE(sheet.find("<f>tblSales[[#This Row],[Amount]]</f>"), std::string::npos) << sheet;
+  EXPECT_NE(sheet.find("<f>SUBTOTAL(109,tblSales[Amount])</f>"), std::string::npos) << sheet;
+
+  for (const int32_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+    const std::vector<std::uint8_t> bytes = SaveAs(wb, format);
+    WorkbookGuard reloaded;
+    ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &reloaded.handle), 0) << "format=" << format;
+    EXPECT_EQ(ColumnName(reloaded, 0), "Amount") << "format=" << format;
+    EXPECT_EQ(Stored(reloaded, 0, kInsideRow, kInsideCol), "=tblSales[[#This Row],[Amount]]") << "format=" << format;
+    EXPECT_EQ(Formula(reloaded, 0, kInsideRow, kInsideCol), "=[@Amount]") << "format=" << format;
+    EXPECT_EQ(Formula(reloaded, 0, 4, 0), "=SUBTOTAL(109,[Amount])") << "format=" << format;
+  }
 }
 
 TEST(FormulonCApiStructuredRef, RenameColumnNumbersEmptyAndDuplicateNames) {
