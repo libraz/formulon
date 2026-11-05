@@ -334,6 +334,18 @@ bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const F
     return true;
   };
 
+  // Errors propagate; only Number values contribute (Bool / Text / Blank are dropped).
+  auto add_number = [&](const Value& v, double& total) {
+    if (v.is_error()) {
+      *out_err = v;
+      return false;
+    }
+    if (v.is_number()) {
+      total += v.as_number();
+    }
+    return true;
+  };
+
   // Range-shaped args (and the reference-producing calls that expand to
   // rectangles) go through `resolve_range_arg`; cells receive the
   // numeric-only provenance filter.
@@ -347,15 +359,9 @@ bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const F
     }
     double total = 0.0;
     for (const Value& v : resolved.value().cells) {
-      if (v.is_error()) {
-        *out_err = v;
+      if (!add_number(v, total)) {
         return false;
       }
-      // Range-sourced provenance: only Number cells contribute.
-      if (!v.is_number()) {
-        continue;
-      }
-      total += v.as_number();
     }
     return finish_total(total);
   }
@@ -369,14 +375,9 @@ bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const F
     for (std::uint32_t r = 0; r < rows; ++r) {
       for (std::uint32_t c = 0; c < cols; ++c) {
         const Value v = eval_node(arg_node.as_array_element(r, c), arena, registry, ctx);
-        if (v.is_error()) {
-          *out_err = v;
+        if (!add_number(v, total)) {
           return false;
         }
-        if (!v.is_number()) {
-          continue;
-        }
-        total += v.as_number();
       }
     }
     return finish_total(total);
