@@ -159,11 +159,8 @@ std::string_view trim_ascii_ws(std::string_view s) noexcept {
   return s.substr(first, last - first);
 }
 
+// `s` is already trimmed and non-empty (filterxml_value_from_text).
 bool parse_excel_readback_number(std::string_view s, double* out) noexcept {
-  s = trim_ascii_ws(s);
-  if (s.empty()) {
-    return false;
-  }
   const ParsedDouble parsed = parse_double_prefix(s);
   if (parsed.out_of_range || parsed.consumed == 0 || parsed.consumed != s.size()) {
     return false;
