@@ -132,11 +132,14 @@ std::size_t find_folded(const std::string& haystack, const std::string& needle, 
   return collated_wildcard_find(needle, haystack, start_byte, profile, sbcs_question);
 }
 
-Value find_utf16_exact(const SearchArgs& args) {
+namespace {
+
+Value find_utf16(const SearchArgs& args, bool folded) {
   const TextIndexUnit unit = args.index_unit;
   const std::size_t start_byte =
       text_index_to_byte_offset(args.haystack, static_cast<std::uint32_t>(args.start - 1), unit);
-  const std::size_t pos = args.haystack.find(args.needle, start_byte);
+  const std::size_t pos = folded ? find_folded(args.haystack, args.needle, start_byte, SearchUnit::Utf16)
+                                 : args.haystack.find(args.needle, start_byte);
   if (pos == std::string::npos) {
     return Value::error(ErrorCode::Value);
   }
@@ -144,16 +147,14 @@ Value find_utf16_exact(const SearchArgs& args) {
   return Value::number(static_cast<double>(units + 1));
 }
 
+}  // namespace
+
+Value find_utf16_exact(const SearchArgs& args) {
+  return find_utf16(args, /*folded=*/false);
+}
+
 Value find_utf16_folded(const SearchArgs& args) {
-  const TextIndexUnit unit = args.index_unit;
-  const std::size_t start_byte =
-      text_index_to_byte_offset(args.haystack, static_cast<std::uint32_t>(args.start - 1), unit);
-  const std::size_t pos = find_folded(args.haystack, args.needle, start_byte, SearchUnit::Utf16);
-  if (pos == std::string::npos) {
-    return Value::error(ErrorCode::Value);
-  }
-  const std::uint32_t units = text_index_length(std::string_view(args.haystack).substr(0, pos), unit);
-  return Value::number(static_cast<double>(units + 1));
+  return find_utf16(args, /*folded=*/true);
 }
 
 Expected<TextWindowArgs, ErrorCode> read_text_window_args(const Value* args, std::uint32_t arity, bool snap_start) {
