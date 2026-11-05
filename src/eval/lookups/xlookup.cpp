@@ -54,10 +54,11 @@ enum class XMatchMode : std::int8_t { Exact = 0, Smaller = -1, Larger = 1, Wildc
 // a duplicate run resolves to whichever equal the probing path reaches.
 enum class XSearchMode : std::int8_t { FirstToLast = 1, LastToFirst = -1, BinaryAsc = 2, BinaryDesc = -2 };
 
-// Position of an error in ERROR.TYPE order (`#NULL!` 1 .. `#N/A` 7); other
-// errors sort after them.
+// Position of an error in ERROR.TYPE order (`#NULL!` 1 .. `#N/A` 7); every
+// later error sorts after them as one rank, its order among them unmeasured.
 int error_order(ErrorCode code) {
-  return error_type_code(code).value_or(8);
+  const int order = error_type_code(code).value_or(8);
+  return order < 8 ? order : 8;
 }
 
 // Three-way compare of (cell - lookup) honouring Excel 365's cross-type

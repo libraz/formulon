@@ -796,6 +796,26 @@ TEST(BuiltinsErrorType, TextIsNa) {
   EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
+// Mac Excel 365: a blocked spill gives 9, FIELDVALUE(1,"a") 13, FILTER({1},FALSE) 14.
+TEST(BuiltinsErrorType, DynamicArrayAndDataTypeErrorsHaveCodes) {
+  const struct {
+    const char* src;
+    double code;
+  } cases[] = {{"=ERROR.TYPE(#SPILL!)", 9.0}, {"=ERROR.TYPE(#FIELD!)", 13.0}, {"=ERROR.TYPE(#CALC!)", 14.0}};
+  for (const auto& c : cases) {
+    SCOPED_TRACE(c.src);
+    const Value v = EvalSource(c.src);
+    ASSERT_TRUE(v.is_number());
+    EXPECT_EQ(v.as_number(), c.code);
+  }
+}
+
+TEST(BuiltinsErrorType, FilterWithNoMatchIsFourteen) {
+  const Value v = EvalSource("=ERROR.TYPE(FILTER({1},FALSE))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 14.0);
+}
+
 // ---------------------------------------------------------------------------
 // TYPE
 // ---------------------------------------------------------------------------
