@@ -341,6 +341,26 @@ class CollectionTest(BindingRuleTestBase):
             ],
         )
 
+    def test_r3_keys_no_getter_exempts_the_getter(self) -> None:
+        def ledger(no_getter: bool) -> dict:
+            merge = {"key": "natural", "ops": ["merge.get_at"]}
+            if no_getter:
+                merge["no_getter"] = "the element is its rectangle"
+            return {
+                "collections": {"merge": merge},
+                "entries": {"merge.get_at": {"kind": "op", "c": "fm_sheet_get_merge_at"}},
+            }
+
+        header = (
+            "FM_API fm_status_t fm_sheet_get_merge_at(const fm_workbook_t* wb, size_t sheet_index, size_t index);\n"
+        )
+        self.assert_rule(
+            "R3.keys",
+            self.fixture.context(header, ledger(False)),
+            self.fixture.context(header, ledger(True)),
+            [("c", "merge", "getter")],
+        )
+
 
 class NounTest(BindingRuleTestBase):
     def test_r4_unique(self) -> None:
@@ -496,6 +516,30 @@ class DerivationTest(BindingRuleTestBase):
         self.assertEqual(hits(ctx, "R5.list"), [])
         self.assertEqual(hits(ctx, "R12"), [("native", "cf.get_at", "getCfAt"), ("wasm", "cf.get_at", "getCfAt")])
         self.assertNotIn(("wasm", "cf.get_at", "getCfAt"), hits(ctx, "R0.coverage"))
+
+
+class RoleSuffixDerivationTest(BindingRuleTestBase):
+    LEDGER = {
+        "entries": {
+            "record.print_options": {
+                "kind": "record",
+                "role": "input",
+                "c": "fm_print_options_t",
+                "js": "PrintOptionsInput",
+                "was": {"js": "PrintOptions"},
+            },
+        }
+    }
+    HEADER = "typedef struct {\n  uint32_t row;\n} fm_print_options_t;\n"
+
+    def test_r5_derive_applies_the_role_suffix(self) -> None:
+        bad = self.fixture.context(
+            self.HEADER, self.LEDGER, wasm="export interface PrintOptions { readonly row: number }\n"
+        )
+        good = self.fixture.context(
+            self.HEADER, self.LEDGER, wasm="export interface PrintOptionsInput { readonly row: number }\n"
+        )
+        self.assert_rule("R5.derive", bad, good, [("wasm", "record.print_options", "-")])
 
 
 class ScalarTypeTest(BindingRuleTestBase):

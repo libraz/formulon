@@ -6,6 +6,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from tools.dev.binding_drift import abi_checks, api_conventions, declaration_checks, readme_checks, ts_decl
@@ -233,6 +234,72 @@ def _rule_hits(ctx: api_conventions.Context, rule_id: str) -> list[tuple[str, st
     return [(v.op_key, v.discriminator) for v in api_conventions.collect(ctx, rules)]
 
 
+class LedgerRenameChainTest(unittest.TestCase):
+    @staticmethod
+    def _validate_names():
+        import importlib
+        import sys
+
+        api_dir = str(Path(__file__).resolve().parents[1] / "api")
+        if api_dir not in sys.path:
+            sys.path.insert(0, api_dir)
+        return importlib.import_module("validate_names")
+
+    @staticmethod
+    def _surfaces(**param_counts: int) -> SimpleNamespace:
+        fns = {name: SimpleNamespace(params=[None] * count) for name, count in param_counts.items()}
+        return SimpleNamespace(functions=fns)
+
+    @staticmethod
+    def _entries(surface: str = "c") -> dict:
+        return {
+            "a": {"kind": "op", "c": "fm_sheet_get_x", "surfaces": [surface], "was": {"c": "fm_sheet_get_x_at"}},
+            "b": {"kind": "op", "c": "fm_sheet_get_x_at", "surfaces": [surface], "was": {"c": "fm_sheet_get_x_idx"}},
+        }
+
+    def test_c_name_handed_over_with_other_parameters_is_allowed(self) -> None:
+        validate = self._validate_names()
+        surfaces = self._surfaces(fm_sheet_get_x_at=5, fm_sheet_get_x_idx=4)
+        self.assertEqual(validate.check_chains(self._entries(), surfaces), [])
+
+    def test_two_cycle_with_other_parameters_is_allowed(self) -> None:
+        validate = self._validate_names()
+        entries = {
+            "a": {"kind": "op", "c": "fm_sheet_get_p", "surfaces": ["c"], "was": {"c": "fm_sheet_get_q"}},
+            "b": {"kind": "op", "c": "fm_sheet_get_q", "surfaces": ["c"], "was": {"c": "fm_sheet_get_p"}},
+        }
+        self.assertEqual(validate.check_chains(entries, self._surfaces(fm_sheet_get_p=4, fm_sheet_get_q=5)), [])
+        self.assertTrue(validate.check_chains(entries, self._surfaces(fm_sheet_get_p=4, fm_sheet_get_q=4)))
+
+    def test_equal_parameter_counts_stay_a_chain(self) -> None:
+        validate = self._validate_names()
+        problems = validate.check_chains(self._entries(), self._surfaces(fm_sheet_get_x_at=4, fm_sheet_get_x_idx=4))
+        self.assertTrue(any("rename chain" in p for p in problems), problems)
+
+    def test_binding_name_handover_stays_a_chain(self) -> None:
+        validate = self._validate_names()
+        entries = {
+            "a": {"kind": "op", "js": "getX", "surfaces": ["wasm"], "was": {"js": "getXAt"}},
+            "b": {"kind": "op", "js": "getXAt", "surfaces": ["wasm"], "was": {"js": "getXIdx"}},
+        }
+        problems = validate.check_chains(entries, self._surfaces())
+        self.assertTrue(any("rename chain" in p for p in problems), problems)
+
+    def test_record_role_suffix_is_checked_against_the_type_name(self) -> None:
+        validate = self._validate_names()
+        entry = {
+            "kind": "record",
+            "role": "input",
+            "c": "fm_print_options_t",
+            "js": "PrintOptions",
+            "surfaces": ["c", "wasm"],
+        }
+        problems = validate.check_rules({"record.print_options": entry})
+        self.assertTrue(any("PrintOptionsInput" in p for p in problems), problems)
+        entry["js"] = "PrintOptionsInput"
+        self.assertEqual(validate.check_rules({"record.print_options": entry}), [])
+
+
 class ApiConventionNameTest(unittest.TestCase):
     def test_binding_names_derive_from_the_c_name(self) -> None:
         derive = api_conventions
@@ -245,6 +312,18 @@ class ApiConventionNameTest(unittest.TestCase):
         self.assertEqual(derive.derive_type("fm_cell_rect_t"), "CellRect")
         self.assertEqual(derive.derive_type("fm_value_kind_t"), "ValueKind")
         self.assertEqual(derive.derive_type("fm_cf_rule_t"), "CfRule")
+
+    def test_record_role_adds_a_suffix_once(self) -> None:
+        derive = api_conventions.derive_type
+        self.assertEqual(derive("fm_hyperlink_t", "result"), "Hyperlink")
+        self.assertEqual(derive("fm_print_options_t", "input"), "PrintOptionsInput")
+        self.assertEqual(derive("fm_hyperlink_input_t", "input"), "HyperlinkInput")
+        self.assertEqual(derive("fm_iterative_t", "patch"), "IterativePatch")
+        self.assertEqual(derive("fm_iterative_patch_t", "patch"), "IterativePatch")
+
+    def test_project_and_show_are_c_verbs(self) -> None:
+        self.assertEqual(api_conventions.check_c_name("fm_sheet_project_pivot"), [])
+        self.assertEqual(api_conventions.check_c_name("fm_sheet_show_pivot_details"), [])
 
     def test_check_c_name_separates_form_from_verb(self) -> None:
         self.assertEqual(api_conventions.check_c_name("fm_get_version"), [])
@@ -495,6 +574,32 @@ class ApiConventionBaselineTest(unittest.TestCase):
         ctx = _conventions(self.HEADER, ledger)
         problems = api_conventions.check_api_conventions(self.dir, ctx)
         self.assertTrue(any("both claim" in p for p in problems), problems)
+
+    def _handoff_ledger(self) -> dict:
+        return {
+            "entries": {
+                "by_cell": {"c": "fm_sheet_get_comment", "was": {"c": "fm_sheet_get_comment_at"}},
+                "by_index": {"c": "fm_sheet_get_comment_at", "was": {"c": "fm_sheet_get_comment_at_index"}},
+            }
+        }
+
+    def test_name_handed_to_a_function_with_other_parameters_is_not_a_double_claim(self) -> None:
+        header = (
+            "FM_API fm_status_t fm_sheet_get_comment_at(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col);\n"
+            "FM_API fm_status_t fm_sheet_get_comment_at_index(fm_workbook_t* wb, uint32_t sheet, uint32_t index);\n"
+        )
+        ctx = _conventions(header, self._handoff_ledger())
+        ctx.ledger.key_for("c", "")
+        self.assertEqual(ctx.ledger.problems, [])
+
+    def test_name_handed_to_a_function_with_equal_parameters_is_a_double_claim(self) -> None:
+        header = (
+            "FM_API fm_status_t fm_sheet_get_comment_at(fm_workbook_t* wb, uint32_t sheet, uint32_t row);\n"
+            "FM_API fm_status_t fm_sheet_get_comment_at_index(fm_workbook_t* wb, uint32_t sheet, uint32_t index);\n"
+        )
+        ctx = _conventions(header, self._handoff_ledger())
+        ctx.ledger.key_for("c", "")
+        self.assertTrue(any("both claim" in p for p in ctx.ledger.problems), ctx.ledger.problems)
 
     def test_absent_ledger_is_empty(self) -> None:
         ledger = api_conventions.load_ledger(Path(self._tmp.name) / "names.yaml")

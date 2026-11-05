@@ -67,7 +67,7 @@ C_VERBS = frozenset(
         "copy", "move", "rename", "load", "save", "recalc", "evaluate",
         "parse", "format", "convert", "resolve",
         "snapshot", "restore", "remap", "apply", "refresh", "validate", "match", "next",
-        "localize", "canonicalize", "compare", "group", "ungroup",
+        "localize", "canonicalize", "compare", "group", "ungroup", "project", "show",
     }
 )  # fmt: skip
 # Verbs that exist only on the binding surfaces.
@@ -179,12 +179,20 @@ def derive_js(c_name: str) -> str:
     return words[0] + "".join(_cap(word) for word in words[1:])
 
 
-def derive_type(c_typedef: str) -> str:
-    """JS / Python record or enum name of a C typedef: `fm_<name>_t` -> PascalCase."""
+_ROLE_SUFFIX = {"input": "Input", "patch": "Patch"}
+
+
+def derive_type(c_typedef: str, role: Optional[str] = None) -> str:
+    """JS / Python record or enum name of a C typedef: `fm_<name>_t` -> PascalCase.
+
+    A record of role `input` / `patch` takes an `Input` / `Patch` suffix unless the name already ends with it.
+    """
     body = c_typedef[3:] if c_typedef.startswith("fm_") else c_typedef
     if body.endswith("_t"):
         body = body[:-2]
-    return "".join(_cap(word) for word in body.split("_") if word)
+    name = "".join(_cap(word) for word in body.split("_") if word)
+    suffix = _ROLE_SUFFIX.get(role or "", "")
+    return name if name.endswith(suffix) else name + suffix
 
 
 # ---------------------------------------------------------------------------
@@ -202,6 +210,22 @@ class Ledger:
         self.collections: Dict[str, dict] = dict(data.get("collections") or {})
         self.problems: List[str] = []
         self._index: Dict[str, Dict[str, str]] = {}
+        self.c_param_counts: Dict[str, int] = {}
+
+    def _handed_over(self, a: str, b: str, name: str) -> bool:
+        """One entry renames C function `name` away and the other takes the name, with another parameter count."""
+        for giver, taker in ((a, b), (b, a)):
+            gave = (self.entry(giver).get("was") or {}).get("c")
+            took = (self.entry(taker).get("was") or {}).get("c")
+            counts = (self.c_param_counts.get(gave or ""), self.c_param_counts.get(took or ""))
+            if (
+                gave == name != self.entry(giver).get("c")
+                and self.entry(taker).get("c") == name
+                and None not in counts
+                and counts[0] != counts[1]
+            ):
+                return True
+        return False
 
     @property
     def present(self) -> bool:
@@ -220,7 +244,7 @@ class Ledger:
                     if not isinstance(name, str):
                         continue
                     owner = index.setdefault(name, key)
-                    if owner != key:
+                    if owner != key and not (name_field == "c" and self._handed_over(owner, key, name)):
                         self.problems.append(
                             f"api-conventions: ledger entries `{owner}` and `{key}` both claim "
                             f"{name_field} name `{name}`"
@@ -401,6 +425,7 @@ class Context:
 
     def __post_init__(self) -> None:
         self.functions, self.typedefs = parse_header(self.header)
+        self.ledger.c_param_counts = {fn.name: len(fn.params) for fn in self.functions}
         self.struct_names = {t.name for t in self.typedefs if t.kind == "struct"}
         self.enum_names = {t.name for t in self.typedefs if t.kind == "enum"}
 

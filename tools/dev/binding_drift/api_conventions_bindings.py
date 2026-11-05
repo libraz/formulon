@@ -725,7 +725,8 @@ def _rule_keys(ctx: Context) -> Iterable[Violation]:
         unsuffixed = [fn for fn in fns if not _suffixed(ctx.target_c(fn.name))]
         id_key = _id_key(fns) if key_kind == "natural" else None
         if key_kind == "natural":
-            if not any(_target_verb(ctx, fn) == "get" for fn in unsuffixed):
+            exempt = isinstance(ctx.ledger.collections.get(name), dict) and "no_getter" in ctx.ledger.collections[name]
+            if not exempt and not any(_target_verb(ctx, fn) == "get" for fn in unsuffixed):
                 yield _violation(
                     ctx, "R3.keys", "c", name, "getter", f"natural-key collection `{name}` has no getter by key"
                 )
@@ -839,7 +840,8 @@ def _rule_derive(ctx: Context) -> Iterable[Violation]:
             tree_c = next((n for n in _names(entry, "c") if n in typedefs), None)
             if tree_c is None or "replaced_by" in entry:
                 continue
-            wants = {"js": derive_type(tree_c), "py": derive_type(tree_c)}
+            typed = derive_type(tree_c, entry.get("role"))
+            wants = {"js": typed, "py": typed}
         else:
             continue
         for surface in BINDING_SURFACES:
