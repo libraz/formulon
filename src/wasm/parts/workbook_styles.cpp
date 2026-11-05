@@ -650,22 +650,16 @@ JsAddStyleResult JsWorkbook::addDxf(emscripten::val record) {
 // by the binding codegen (see `src/wasm/generated/styles_counts.cpp`).
 
 JsNumberResult JsWorkbook::dxfCount() const {
-  if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
-  }
   std::size_t n = 0;
-  const fm_status_t rc = fm_workbook_get_dxf_count(handle_, &n);
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_dxf_count(handle_, &n) : kBindingInvalidHandle;
   return number_result(rc, static_cast<double>(n));
 }
 // `cellStyleXfCount` stays here because it has no N-API counterpart and is
 // therefore not part of the cross-binding manifest.
 
 JsNumberResult JsWorkbook::cellStyleXfCount() const {
-  if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
-  }
   std::size_t n = 0;
-  const fm_status_t rc = fm_workbook_get_cell_style_xf_count(handle_, &n);
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_cell_style_xf_count(handle_, &n) : kBindingInvalidHandle;
   return number_result(rc, static_cast<double>(n));
 }
 

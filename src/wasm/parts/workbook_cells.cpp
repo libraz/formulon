@@ -449,7 +449,7 @@ fm_status_t apply_table_style_toggles(fm_workbook_t* handle, uint32_t idx, const
   }
   // A table without the element takes the creation defaults underneath.
   const bool present = info.style_present != 0;
-  const std::string name = info.style_name != nullptr ? info.style_name : "";
+  const std::string name = string_from_cstr(info.style_name);
   const auto pick = [](int32_t supplied, int32_t current) { return supplied >= 0 ? supplied : current; };
   return fm_workbook_set_table_style_info(handle, idx, name.c_str(), pick(toggles.first_column, info.show_first_column),
                                           pick(toggles.last_column, info.show_last_column),
@@ -571,8 +571,8 @@ JsStatus JsWorkbook::updateTable(uint32_t idx, emscripten::val spec) {
       lookup_rc != 0) {
     return status_from_rc(lookup_rc);
   }
-  const std::string old_name = current_name != nullptr ? current_name : "";
-  const std::string old_display_name = current_display_name != nullptr ? current_display_name : "";
+  const std::string old_name = string_from_cstr(current_name);
+  const std::string old_display_name = string_from_cstr(current_display_name);
   if (!has_rect) {
     rect = current_rect;
   }

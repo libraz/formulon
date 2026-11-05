@@ -134,11 +134,9 @@ JsStatus JsWorkbook::pivotCacheSetWorksheetSource(uint32_t cacheId, emscripten::
 }
 
 JsNumberResult JsWorkbook::pivotCacheFieldCount(uint32_t cacheId) const {
-  if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
-  }
   std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_get_pivot_cache_field_count(handle_, cacheId, &count);
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_get_pivot_cache_field_count(handle_, cacheId, &count) : kBindingInvalidHandle;
   return number_result(rc, static_cast<double>(count));
 }
 
@@ -166,11 +164,10 @@ JsStatus JsWorkbook::pivotCacheFieldClear(uint32_t cacheId) {
 }
 
 JsNumberResult JsWorkbook::pivotCacheFieldSharedItemCount(uint32_t cacheId, uint32_t fieldIdx) const {
-  if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
-  }
   std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_get_pivot_cache_field_shared_item_count(handle_, cacheId, fieldIdx, &count);
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_workbook_get_pivot_cache_field_shared_item_count(handle_, cacheId, fieldIdx, &count)
+                             : kBindingInvalidHandle;
   return number_result(rc, static_cast<double>(count));
 }
 
@@ -241,11 +238,9 @@ JsStatus JsWorkbook::pivotCacheFieldClearSharedItems(uint32_t cacheId, uint32_t 
 }
 
 JsNumberResult JsWorkbook::pivotCacheRecordCount(uint32_t cacheId) const {
-  if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
-  }
   std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_get_pivot_cache_record_count(handle_, cacheId, &count);
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_get_pivot_cache_record_count(handle_, cacheId, &count) : kBindingInvalidHandle;
   return number_result(rc, static_cast<double>(count));
 }
 
@@ -432,11 +427,9 @@ emscripten::val JsWorkbook::pivotGetStyleInfo(uint32_t sheet, uint32_t pivotIdx)
 }
 
 JsNumberResult JsWorkbook::pivotFieldCount(uint32_t sheet, uint32_t pivotIdx) const {
-  if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
-  }
   std::size_t count = 0;
-  const fm_status_t rc = fm_sheet_get_pivot_field_count(handle_, sheet, pivotIdx, &count);
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_pivot_field_count(handle_, sheet, pivotIdx, &count) : kBindingInvalidHandle;
   return number_result(rc, static_cast<double>(count));
 }
 
@@ -516,11 +509,10 @@ emscripten::val JsWorkbook::pivotFieldAt(uint32_t sheet, uint32_t pivotIdx, uint
 }
 
 JsNumberResult JsWorkbook::pivotFieldItemCount(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx) const {
-  if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
-  }
   std::size_t count = 0;
-  const fm_status_t rc = fm_sheet_get_pivot_field_item_count(handle_, sheet, pivotIdx, fieldIdx, &count);
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_sheet_get_pivot_field_item_count(handle_, sheet, pivotIdx, fieldIdx, &count)
+                             : kBindingInvalidHandle;
   return number_result(rc, static_cast<double>(count));
 }
 
@@ -817,11 +809,10 @@ JsAddStyleResult JsWorkbook::pivotCacheCalculatedItemAdd(uint32_t cacheId, uint3
 }
 
 JsNumberResult JsWorkbook::pivotCacheCalculatedItemCount(uint32_t cacheId) const {
-  if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
-  }
   std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_get_pivot_cache_calculated_item_count(handle_, cacheId, &count);
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_workbook_get_pivot_cache_calculated_item_count(handle_, cacheId, &count)
+                             : kBindingInvalidHandle;
   return number_result(rc, static_cast<double>(count));
 }
 
@@ -1039,11 +1030,9 @@ emscripten::val JsWorkbook::pivotColFieldOrder(uint32_t sheet, uint32_t pivotIdx
 }
 
 JsNumberResult JsWorkbook::pivotDataFieldCount(uint32_t sheet, uint32_t pivotIdx) const {
-  if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
-  }
   std::size_t count = 0;
-  const fm_status_t rc = fm_sheet_get_pivot_data_field_count(handle_, sheet, pivotIdx, &count);
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_pivot_data_field_count(handle_, sheet, pivotIdx, &count)
+                                            : kBindingInvalidHandle;
   return number_result(rc, static_cast<double>(count));
 }
 
@@ -1109,11 +1098,9 @@ JsStatus JsWorkbook::pivotDataFieldSet(uint32_t sheet, uint32_t pivotIdx, uint32
 }
 
 JsNumberResult JsWorkbook::pivotFilterCount(uint32_t sheet, uint32_t pivotIdx) const {
-  if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
-  }
   std::size_t count = 0;
-  const fm_status_t rc = fm_sheet_get_pivot_filter_count(handle_, sheet, pivotIdx, &count);
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_pivot_filter_count(handle_, sheet, pivotIdx, &count) : kBindingInvalidHandle;
   return number_result(rc, static_cast<double>(count));
 }
 

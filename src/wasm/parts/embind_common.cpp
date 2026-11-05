@@ -686,7 +686,7 @@ JsValue translate_value(const fm_value_t& v) {
       out.boolean = v.u.boolean;
       break;
     case FM_VAL_TEXT:
-      out.text = (v.u.text != nullptr) ? std::string(v.u.text) : std::string();
+      out.text = string_from_cstr(v.u.text);
       break;
     case FM_VAL_ERROR:
       out.errorCode = v.u.error_code;
