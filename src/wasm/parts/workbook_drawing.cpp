@@ -187,19 +187,13 @@ JsStatus JsWorkbook::setDrawingZOrder(uint32_t sheet, uint32_t objectId, uint32_
 }
 
 emscripten::val JsWorkbook::snapshotDrawing(uint32_t sheet, uint32_t objectId) const {
-  emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {
-    o.set("status", invalid_handle_status());
-    o.set("bytes", bytes_to_val(nullptr, 0));
-    return o;
+    return snapshot_bytes_result(kBindingInvalidHandle, nullptr, 0);
   }
   uint8_t* data = nullptr;
   size_t len = 0;
   const fm_status_t rc = fm_sheet_snapshot_drawing(handle_, sheet, objectId, &data, &len);
-  o.set("status", status_from_rc(rc));
-  o.set("bytes", bytes_to_val(rc == 0 ? data : nullptr, rc == 0 ? len : 0));
-  fm_buffer_free(data);
-  return o;
+  return snapshot_bytes_result(rc, data, len);
 }
 
 emscripten::val JsWorkbook::restoreDrawing(uint32_t sheet, emscripten::val bytes, emscripten::val opts) {

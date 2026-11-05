@@ -26,14 +26,12 @@ namespace parts {
 namespace {
 
 bool build_data_field_spec_checked(JsNarrowNumericReader& reader, const emscripten::val& spec,
-                                   fm_pivot_data_field_spec_t& out, std::string& name_buf, std::string& nfmt_buf,
-                                   bool& has_nfmt) {
+                                   fm_pivot_data_field_spec_t& out, std::string& name_buf, std::string& nfmt_buf) {
   // Read the optional strings before the numeric fields. Once the reader
   // rejects a numeric value, no further access to the caller's object is
   // allowed before returning the binding error.
   out.name = reader.optional_string(spec, "name", name_buf, "pivotDataField.name");
   out.number_format = reader.optional_string(spec, "numberFormat", nfmt_buf, "pivotDataField.numberFormat");
-  has_nfmt = out.number_format != nullptr;
   if (!reader.ok()) {
     return false;
   }
@@ -691,11 +689,11 @@ JsStatus JsWorkbook::pivotSetOptions(uint32_t sheet, uint32_t pivotIdx, emscript
   if (get_rc != 0) {
     return status_from_rc(get_rc);
   }
-  std::string error_caption = opt.error_caption != nullptr ? opt.error_caption : "";
-  std::string missing_caption = opt.missing_caption != nullptr ? opt.missing_caption : "";
-  std::string alt_text = opt.alt_text != nullptr ? opt.alt_text : "";
-  std::string alt_summary = opt.alt_text_summary != nullptr ? opt.alt_text_summary : "";
-  std::string grand_total = opt.grand_total_caption != nullptr ? opt.grand_total_caption : "";
+  std::string error_caption = string_from_cstr(opt.error_caption);
+  std::string missing_caption = string_from_cstr(opt.missing_caption);
+  std::string alt_text = string_from_cstr(opt.alt_text);
+  std::string alt_summary = string_from_cstr(opt.alt_text_summary);
+  std::string grand_total = string_from_cstr(opt.grand_total_caption);
 
   JsNarrowNumericReader reader("pivotSetOptions");
   const auto flag = [&](const char* key, int32_t current) {
@@ -1061,12 +1059,6 @@ JsNumberResult JsWorkbook::pivotDataFieldCount(uint32_t sheet, uint32_t pivotIdx
   return number_result(rc, static_cast<double>(count));
 }
 
-void JsWorkbook::build_data_field_spec(emscripten::val spec, fm_pivot_data_field_spec_t& out, std::string& name_buf,
-                                       std::string& nfmt_buf, bool& has_nfmt) {
-  JsNarrowNumericReader reader("buildDataFieldSpec");
-  (void)build_data_field_spec_checked(reader, spec, out, name_buf, nfmt_buf, has_nfmt);
-}
-
 JsAddStyleResult JsWorkbook::pivotDataFieldAdd(uint32_t sheet, uint32_t pivotIdx, emscripten::val spec) {
   JsAddStyleResult r;
   if (handle_ == nullptr) {
@@ -1076,9 +1068,8 @@ JsAddStyleResult JsWorkbook::pivotDataFieldAdd(uint32_t sheet, uint32_t pivotIdx
   fm_pivot_data_field_spec_t c_spec{};
   std::string name_buf;
   std::string nfmt_buf;
-  bool has_nfmt = false;
   JsNarrowNumericReader reader("pivotDataFieldAdd");
-  if (!build_data_field_spec_checked(reader, spec, c_spec, name_buf, nfmt_buf, has_nfmt)) {
+  if (!build_data_field_spec_checked(reader, spec, c_spec, name_buf, nfmt_buf)) {
     r.status = reader.failure();
     return r;
   }
@@ -1121,9 +1112,8 @@ JsStatus JsWorkbook::pivotDataFieldSet(uint32_t sheet, uint32_t pivotIdx, uint32
   fm_pivot_data_field_spec_t c_spec{};
   std::string name_buf;
   std::string nfmt_buf;
-  bool has_nfmt = false;
   JsNarrowNumericReader reader("pivotDataFieldSet");
-  if (!build_data_field_spec_checked(reader, spec, c_spec, name_buf, nfmt_buf, has_nfmt)) {
+  if (!build_data_field_spec_checked(reader, spec, c_spec, name_buf, nfmt_buf)) {
     return reader.failure();
   }
   fm_status_t rc = fm_workbook_pivot_data_field_set(handle_, sheet, pivotIdx, dataFieldIdx, &c_spec);

@@ -42,7 +42,6 @@ Napi::Value PivotCountResult(const Napi::CallbackInfo& info, const fm_workbook_t
   return MakeNumberResult(env, rc, static_cast<double>(count));
 }
 
-
 // The pivot options with their strings copied out of the model, so the
 // struct stays valid across the `set_options` call that rewrites them.
 struct OptionsSnapshot {
@@ -66,8 +65,7 @@ struct OptionsSnapshot {
   }
 };
 
-fm_status_t ReadOptions(const fm_workbook_t* handle, std::size_t sheet, std::size_t pivot_idx,
-                        OptionsSnapshot* out) {
+fm_status_t ReadOptions(const fm_workbook_t* handle, std::size_t sheet, std::size_t pivot_idx, OptionsSnapshot* out) {
   if (handle == nullptr) {
     return kBindingInvalidHandle;
   }
@@ -451,8 +449,8 @@ Napi::Value Workbook::PivotGetOptions(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   fm_pivot_options_t o{};
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_pivot_get_options(handle_, sheet, pivot_idx, &o)
-                                            : kBindingInvalidHandle;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_pivot_get_options(handle_, sheet, pivot_idx, &o) : kBindingInvalidHandle;
   if (rc != 0) {
     o = fm_pivot_options_t{};
   }
@@ -540,8 +538,8 @@ Napi::Value Workbook::PivotSetOptions(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PivotCacheGetOptions(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   fm_pivot_cache_options_t o{};
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_pivot_cache_get_options(handle_, ArgU32(info, 0), &o)
-                                            : kBindingInvalidHandle;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_pivot_cache_get_options(handle_, ArgU32(info, 0), &o) : kBindingInvalidHandle;
   if (rc != 0) {
     o = fm_pivot_cache_options_t{};
     o.missing_items_limit = -1;
@@ -593,9 +591,8 @@ Napi::Value Workbook::PivotCacheCalculatedFieldAdd(const Napi::CallbackInfo& inf
 Napi::Value Workbook::PivotCacheCalculatedFieldSetFormula(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const std::string formula = ArgString(info, 2);
-    return fm_workbook_pivot_cache_calculated_field_set_formula(handle, ArgU32(info, 0),
-                                                                static_cast<std::size_t>(ArgU32(info, 1)),
-                                                                formula.c_str());
+    return fm_workbook_pivot_cache_calculated_field_set_formula(
+        handle, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), formula.c_str());
   });
 }
 
@@ -609,10 +606,10 @@ Napi::Value Workbook::PivotCacheCalculatedFieldRemove(const Napi::CallbackInfo& 
 Napi::Value Workbook::PivotCacheFieldFormula(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const char* formula = nullptr;
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_pivot_cache_field_formula(handle_, ArgU32(info, 0),
-                                                                 static_cast<std::size_t>(ArgU32(info, 1)), &formula)
-                         : kBindingInvalidHandle;
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_workbook_pivot_cache_field_formula(
+                                   handle_, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), &formula)
+                             : kBindingInvalidHandle;
   return MakeStringResult(env, rc, rc == 0 ? formula : nullptr);
 }
 
@@ -620,9 +617,8 @@ Napi::Value Workbook::PivotCacheCalculatedItemAdd(const Napi::CallbackInfo& info
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const std::string name = ArgString(info, 2);
     const std::string formula = ArgString(info, 3);
-    return fm_workbook_pivot_cache_calculated_item_add(handle, ArgU32(info, 0),
-                                                       static_cast<std::size_t>(ArgU32(info, 1)), name.c_str(),
-                                                       formula.c_str());
+    return fm_workbook_pivot_cache_calculated_item_add(
+        handle, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), name.c_str(), formula.c_str());
   });
 }
 
@@ -639,10 +635,10 @@ Napi::Value Workbook::PivotCacheCalculatedItemCount(const Napi::CallbackInfo& in
 Napi::Value Workbook::PivotCacheCalculatedItemAt(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   fm_pivot_calculated_item_t item{};
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_pivot_cache_calculated_item_at(handle_, ArgU32(info, 0),
-                                                                      static_cast<std::size_t>(ArgU32(info, 1)), &item)
-                         : kBindingInvalidHandle;
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_workbook_pivot_cache_calculated_item_at(
+                                   handle_, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), &item)
+                             : kBindingInvalidHandle;
   if (rc != 0) {
     item = fm_pivot_calculated_item_t{};
   }
@@ -658,17 +654,15 @@ Napi::Value Workbook::PivotCacheCalculatedItemAt(const Napi::CallbackInfo& info)
 Napi::Value Workbook::PivotCacheCalculatedItemSetFormula(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const std::string formula = ArgString(info, 2);
-    return fm_workbook_pivot_cache_calculated_item_set_formula(handle, ArgU32(info, 0),
-                                                               static_cast<std::size_t>(ArgU32(info, 1)),
-                                                               formula.c_str());
+    return fm_workbook_pivot_cache_calculated_item_set_formula(
+        handle, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), formula.c_str());
   });
 }
 
 Napi::Value Workbook::PivotCacheCalculatedItemMove(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
-    return fm_workbook_pivot_cache_calculated_item_move(handle, ArgU32(info, 0),
-                                                        static_cast<std::size_t>(ArgU32(info, 1)),
-                                                        static_cast<std::size_t>(ArgU32(info, 2)));
+    return fm_workbook_pivot_cache_calculated_item_move(
+        handle, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), static_cast<std::size_t>(ArgU32(info, 2)));
   });
 }
 
@@ -683,8 +677,7 @@ Napi::Value Workbook::PivotFieldSetCustomName(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const PivotFieldArgs field = ReadPivotField(info);
     const std::string name = ArgString(info, 3);
-    return fm_workbook_pivot_field_set_custom_name(handle, field.sheet, field.pivot_idx, field.field_idx,
-                                                   name.c_str());
+    return fm_workbook_pivot_field_set_custom_name(handle, field.sheet, field.pivot_idx, field.field_idx, name.c_str());
   });
 }
 
@@ -881,9 +874,8 @@ Napi::Value Workbook::PivotDataFieldAdd(const Napi::CallbackInfo& info) {
   fm_pivot_data_field_spec_t c_spec{};
   std::string name_buf;
   std::string nfmt_buf;
-  bool has_nfmt = false;
   CheckedSpecReader reader(env);
-  BuildDataFieldSpec(reader, spec, c_spec, name_buf, nfmt_buf, has_nfmt);
+  BuildDataFieldSpec(reader, spec, c_spec, name_buf, nfmt_buf);
   if (!reader.ok()) {
     // A malformed field left a pending JS exception: stop before the C ABI
     // call commits a default value for it.
@@ -934,9 +926,8 @@ Napi::Value Workbook::PivotDataFieldSet(const Napi::CallbackInfo& info) {
   fm_pivot_data_field_spec_t c_spec{};
   std::string name_buf;
   std::string nfmt_buf;
-  bool has_nfmt = false;
   CheckedSpecReader reader(env);
-  BuildDataFieldSpec(reader, spec, c_spec, name_buf, nfmt_buf, has_nfmt);
+  BuildDataFieldSpec(reader, spec, c_spec, name_buf, nfmt_buf);
   if (!reader.ok()) {
     // See the matching guard in PivotDataFieldAdd.
     return env.Undefined();

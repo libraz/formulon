@@ -283,6 +283,8 @@ val fields_to_val(const void* base, const RdField* f) {
 
 // The six series inputs, in `fm_chart_role_t` order.
 constexpr const char* kRoleKeys[] = {"name", "categories", "values", "x", "y", "size"};
+constexpr int32_t kRoleCount = FM_CHART_ROLE_SIZE + 1;
+static_assert(sizeof(kRoleKeys) / sizeof(kRoleKeys[0]) == kRoleCount, "role keys must cover every fm_chart_role_t");
 constexpr const char* kSourceKinds[] = {"none", "ref", "literal"};
 constexpr const char* kAxisPositions[] = {"b", "t", "l", "r"};
 
@@ -310,7 +312,7 @@ val series_to_val(const fm_chart_t* chart, size_t plot, size_t index, fm_status_
   }
   val o = fields_to_val(&s, kSeriesRd);
   const fm_chart_data_source_t* const sources[] = {&s.name, &s.categories, &s.values, &s.x, &s.y, &s.size};
-  for (int32_t role = 0; role < 6; ++role) {
+  for (int32_t role = 0; role < kRoleCount; ++role) {
     put(o, kRoleKeys[role], source_to_val(chart, plot, index, role, *sources[role], rc));
   }
   val points = val::array();
@@ -454,7 +456,7 @@ val data_series_to_val(const fm_chart_data_t* data, size_t index, fm_status_t& r
   put(o, "x", pts.x != nullptr ? copy_doubles(pts.x, pts.count) : val::null());
   put(o, "sizes", pts.sizes != nullptr ? copy_doubles(pts.sizes, pts.count) : val::null());
   val ranges = val::object();
-  for (int32_t role = 0; role < 6; ++role) {
+  for (int32_t role = 0; role < kRoleCount; ++role) {
     val list = val::array();
     for (size_t i = 0; i < s.range_count[role]; ++i) {
       fm_chart_sheet_range_t r{};

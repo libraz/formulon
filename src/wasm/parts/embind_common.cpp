@@ -751,6 +751,14 @@ emscripten::val bytes_to_val(const uint8_t* data, std::size_t len) {
   return u8;
 }
 
+emscripten::val snapshot_bytes_result(fm_status_t rc, uint8_t* data, std::size_t len) {
+  emscripten::val o = emscripten::val::object();
+  o.set("status", status_from_rc(rc));
+  o.set("bytes", bytes_to_val(rc == 0 ? data : nullptr, rc == 0 ? len : 0));
+  fm_buffer_free(data);
+  return o;
+}
+
 fm_merge_range js_pull_range(const emscripten::val& v, JsNarrowNumericReader* reader) {
   if (reader == nullptr) {
     return fm_merge_range{};

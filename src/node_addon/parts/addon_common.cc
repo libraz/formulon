@@ -23,6 +23,18 @@ Napi::Uint8Array TakeSavedBytes(Napi::Env env, uint8_t* bytes, std::size_t len) 
   return copy;
 }
 
+Napi::Object SnapshotBytesResult(Napi::Env env, fm_status_t rc, uint8_t* bytes, std::size_t len) {
+  Napi::Object out = Napi::Object::New(env);
+  if (rc == 0) {
+    out.Set("bytes", TakeSavedBytes(env, bytes, len));
+  } else {
+    fm_buffer_free(bytes);
+    out.Set("bytes", Napi::Uint8Array::New(env, 0));
+  }
+  out.Set("status", MakeStatus(env, rc));
+  return out;
+}
+
 namespace {
 
 // Builds `{ ok, status, message, context }`; NULL strings become "".
@@ -607,12 +619,12 @@ Napi::Value JsBool(Napi::Env env, int32_t v) {
 }
 
 void BuildDataFieldSpec(CheckedSpecReader& reader, const Napi::Object& spec, fm_pivot_data_field_spec_t& out,
-                        std::string& name_buf, std::string& nfmt_buf, bool& has_nfmt) {
+                        std::string& name_buf, std::string& nfmt_buf) {
   // An omitted `name` passes NULL through rather than the coerced literal
   // string "undefined" `.ToString()` would otherwise produce, so the C ABI
   // derives the data field's name from the workbook profile.
   const bool has_name = reader.String(spec, "name", &name_buf);
-  has_nfmt = reader.String(spec, "numberFormat", &nfmt_buf);
+  const bool has_nfmt = reader.String(spec, "numberFormat", &nfmt_buf);
   out.name = has_name ? name_buf.c_str() : nullptr;
   out.field_index = reader.U32(spec, "fieldIndex", 0U);
   out.aggregation = static_cast<fm_pivot_aggregation_t>(reader.U32(spec, "aggregation", 0U));

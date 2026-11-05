@@ -460,9 +460,13 @@ struct JsBytesReadResult {
 /// callers can preserve their existing invalid-workbook contract.
 JsBytesReadResult val_to_bytes_checked(const emscripten::val& v);
 
-/// Materialises a fresh JS `Uint8Array` from a contiguous byte range.
-/// Element-by-element copy via `set(i, val)` for layout independence.
+/// Materialises a fresh JS `Uint8Array` from a contiguous byte range
+/// (a single bulk `set` from a transient WASM memory view).
 emscripten::val bytes_to_val(const uint8_t* data, std::size_t len);
+
+/// Builds `{ status, bytes }` for a snapshot call and releases `data`;
+/// `bytes` is empty when `rc` is non-zero.
+emscripten::val snapshot_bytes_result(fm_status_t rc, uint8_t* data, std::size_t len);
 
 // ---- JS field readers and record builders -----------------------------
 //

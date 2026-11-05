@@ -320,6 +320,8 @@ Napi::Object SheetRangeToJs(Napi::Env env, const fm_chart_sheet_range_t& r) {
 
 Napi::Object DataSeriesToJs(Napi::Env env, const fm_chart_data_t* data, size_t index, fm_status_t& rc) {
   static const char* const kRoleKeys[] = {"name", "categories", "values", "x", "y", "size"};
+  constexpr int32_t kRoleCount = FM_CHART_ROLE_SIZE + 1;
+  static_assert(sizeof(kRoleKeys) / sizeof(kRoleKeys[0]) == kRoleCount, "role keys must cover every fm_chart_role_t");
   Napi::Object o = Napi::Object::New(env);
   fm_chart_data_series_t s{};
   fm_chart_data_points_t pts{};
@@ -338,7 +340,7 @@ Napi::Object DataSeriesToJs(Napi::Env env, const fm_chart_data_t* data, size_t i
   o.Set("x", pts.x != nullptr ? Napi::Value(CopyDoubles(env, pts.x, pts.count)) : env.Null());
   o.Set("sizes", pts.sizes != nullptr ? Napi::Value(CopyDoubles(env, pts.sizes, pts.count)) : env.Null());
   Napi::Object ranges = Napi::Object::New(env);
-  for (int32_t role = 0; role < 6 && rc == 0; ++role) {
+  for (int32_t role = 0; role < kRoleCount && rc == 0; ++role) {
     Napi::Array list = Napi::Array::New(env);
     for (size_t i = 0; i < s.range_count[role] && rc == 0; ++i) {
       fm_chart_sheet_range_t r{};
@@ -696,19 +698,24 @@ Napi::Value Workbook::GetChart(const Napi::CallbackInfo& info) {
   return ReadResult(env, rc, "chart", value);
 }
 
-Napi::Value Workbook::GetChartData(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ReadResult(env, kBindingInvalidHandle, "data", env.Null());
-  }
-  fm_chart_data_t* raw = nullptr;
-  fm_status_t rc = fm_sheet_chart_data_open(handle_, ArgU32(info, 0), ArgU32(info, 1), &raw);
+// Takes ownership of an opened chart data handle and reads it into a `{ data, status }` result.
+static Napi::Value ReadOpenedChartData(Napi::Env env, fm_chart_data_t* raw, fm_status_t rc) {
   const ChartDataHandle data(raw);
   Napi::Value value = env.Null();
   if (rc == 0) {
     value = ChartDataToJs(env, data.get(), rc);
   }
   return ReadResult(env, rc, "data", value);
+}
+
+Napi::Value Workbook::GetChartData(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ReadResult(env, kBindingInvalidHandle, "data", env.Null());
+  }
+  fm_chart_data_t* raw = nullptr;
+  const fm_status_t rc = fm_sheet_chart_data_open(handle_, ArgU32(info, 0), ArgU32(info, 1), &raw);
+  return ReadOpenedChartData(env, raw, rc);
 }
 
 Napi::Value Workbook::PreviewChartData(const Napi::CallbackInfo& info) {
@@ -746,13 +753,8 @@ Napi::Value Workbook::PreviewChartData(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   fm_chart_data_t* raw = nullptr;
-  fm_status_t rc = fm_sheet_chart_preview_open(handle_, ArgU32(info, 0), ArgU32(info, 1), &overrides, &raw);
-  const ChartDataHandle data(raw);
-  Napi::Value value = env.Null();
-  if (rc == 0) {
-    value = ChartDataToJs(env, data.get(), rc);
-  }
-  return ReadResult(env, rc, "data", value);
+  const fm_status_t rc = fm_sheet_chart_preview_open(handle_, ArgU32(info, 0), ArgU32(info, 1), &overrides, &raw);
+  return ReadOpenedChartData(env, raw, rc);
 }
 
 // ---- Creation and edits ---------------------------------------------

@@ -52,6 +52,10 @@ Napi::Uint8Array CopyBytes(Napi::Env env, const uint8_t* bytes, std::size_t len)
 /// Copies an engine-owned buffer onto the JS heap and releases the source.
 Napi::Uint8Array TakeSavedBytes(Napi::Env env, uint8_t* bytes, std::size_t len);
 
+/// Builds `{ bytes, status }` for a snapshot call; `bytes` is released and
+/// replaced by an empty array when `rc` is non-zero.
+Napi::Object SnapshotBytesResult(Napi::Env env, fm_status_t rc, uint8_t* bytes, std::size_t len);
+
 using formulon::c_api::kBindingCallbackException;
 using formulon::c_api::kBindingInvalidHandle;
 using formulon::c_api::kInvalidArgument;
@@ -273,10 +277,9 @@ bool BytesArg(const Napi::CallbackInfo& info, size_t idx, Napi::Uint8Array* out)
 
 /// Builds an `fm_pivot_data_field_spec_t` from a JS spec object. The
 /// `name_buf` / `nfmt_buf` strings keep the borrowed `const char*`
-/// pointers alive for the caller; `has_nfmt` is set when the spec
-/// carries a non-null `numberFormat`.
+/// pointers alive for the caller.
 void BuildDataFieldSpec(CheckedSpecReader& reader, const Napi::Object& spec, fm_pivot_data_field_spec_t& out,
-                        std::string& name_buf, std::string& nfmt_buf, bool& has_nfmt);
+                        std::string& name_buf, std::string& nfmt_buf);
 
 }  // namespace formulon_node
 

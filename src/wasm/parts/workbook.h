@@ -726,10 +726,6 @@ class JsWorkbook {
   using TraceFn = fm_status_t (*)(const fm_workbook_t*, uint32_t, uint32_t, uint32_t, uint32_t, fm_cell_nodes_t**);
   emscripten::val trace_to_val(TraceFn fn, uint32_t sheet, uint32_t row, uint32_t col, uint32_t depth) const;
 
-  // Helpers used by pivot mutator implementations.
-  static void build_data_field_spec(emscripten::val spec, fm_pivot_data_field_spec_t& out, std::string& name_buf,
-                                    std::string& nfmt_buf, bool& has_nfmt);
-
   // Re-points the engine's `user_data` at this wrapper. Called after a
   // move, which leaves the C ABI holding the address of the object the
   // callback was registered from.

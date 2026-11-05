@@ -328,6 +328,82 @@ Napi::Array ThemeScriptFonts(Napi::Env env, const fm_workbook_t* handle, bool re
   return list;
 }
 
+// Explicit `has*` flag wins; otherwise the flag is implied by the fields it covers.
+inline int Implied(bool has_present, bool has_value, bool implied) {
+  return has_present ? (has_value ? 1 : 0) : (implied ? 1 : 0);
+}
+
+void PullCellXf(CheckedSpecReader& reader, const Napi::Object& record, fm_cell_xf* out) {
+  fm_cell_xf& xf = *out;
+  xf.font_index = reader.U32(record, "fontIndex", 0U);
+  xf.fill_index = reader.U32(record, "fillIndex", 0U);
+  xf.border_index = reader.U32(record, "borderIndex", 0U);
+  xf.num_fmt_id = reader.U16(record, "numFmtId", 0U);
+  bool horizontal_align_present = false;
+  bool vertical_align_present = false;
+  bool wrap_text_present = false;
+  bool justify_last_line_present = false;
+  xf.horizontal_align = reader.U8(record, "horizontalAlign", 0U, &horizontal_align_present);
+  xf.vertical_align = reader.U8(record, "verticalAlign", 2U, &vertical_align_present);
+  xf.wrap_text = reader.Bool(record, "wrapText", false, &wrap_text_present) ? 1 : 0;
+  xf.justify_last_line = reader.Bool(record, "justifyLastLine", false, &justify_last_line_present) ? 1 : 0;
+  xf.xf_id = reader.U32(record, "xfId", 0U);
+  bool has_horizontal_align_present = false;
+  bool has_vertical_align_present = false;
+  bool has_wrap_text_present = false;
+  bool has_justify_last_line_present = false;
+  const bool has_horizontal_align_value =
+      reader.Bool(record, "hasHorizontalAlign", false, &has_horizontal_align_present);
+  const bool has_vertical_align_value = reader.Bool(record, "hasVerticalAlign", false, &has_vertical_align_present);
+  const bool has_wrap_text_value = reader.Bool(record, "hasWrapText", false, &has_wrap_text_present);
+  const bool has_justify_last_line_value =
+      reader.Bool(record, "hasJustifyLastLine", false, &has_justify_last_line_present);
+  xf.has_horizontal_align = Implied(has_horizontal_align_present, has_horizontal_align_value, horizontal_align_present);
+  xf.has_vertical_align = Implied(has_vertical_align_present, has_vertical_align_value, vertical_align_present);
+  xf.has_wrap_text = Implied(has_wrap_text_present, has_wrap_text_value, wrap_text_present);
+  xf.has_justify_last_line =
+      Implied(has_justify_last_line_present, has_justify_last_line_value, justify_last_line_present);
+  bool has_alignment_present = false;
+  const bool has_alignment_value = reader.Bool(record, "hasAlignment", false, &has_alignment_present);
+  bool text_rotation_present = false;
+  bool indent_present = false;
+  bool relative_indent_present = false;
+  bool shrink_to_fit_present = false;
+  bool reading_order_present = false;
+  xf.text_rotation = reader.U32(record, "textRotation", 0U, &text_rotation_present);
+  xf.indent = reader.U32(record, "indent", 0U, &indent_present);
+  xf.relative_indent = reader.I32(record, "relativeIndent", 0, &relative_indent_present);
+  xf.shrink_to_fit = reader.Bool(record, "shrinkToFit", false, &shrink_to_fit_present) ? 1 : 0;
+  xf.reading_order = reader.U32(record, "readingOrder", 0U, &reading_order_present);
+  xf.has_text_rotation = text_rotation_present ? 1 : 0;
+  xf.has_indent = indent_present ? 1 : 0;
+  xf.has_relative_indent = relative_indent_present ? 1 : 0;
+  xf.has_shrink_to_fit = shrink_to_fit_present ? 1 : 0;
+  xf.has_reading_order = reading_order_present ? 1 : 0;
+  const bool has_supplied_alignment = horizontal_align_present || vertical_align_present || wrap_text_present ||
+                                      justify_last_line_present || text_rotation_present || indent_present ||
+                                      relative_indent_present || shrink_to_fit_present || reading_order_present ||
+                                      has_horizontal_align_present || has_vertical_align_present ||
+                                      has_wrap_text_present || has_justify_last_line_present;
+  xf.has_alignment = Implied(has_alignment_present, has_alignment_value, has_supplied_alignment);
+  xf.apply_number_format = reader.Bool(record, "applyNumberFormat", false) ? 1 : 0;
+  xf.apply_font = reader.Bool(record, "applyFont", false) ? 1 : 0;
+  xf.apply_fill = reader.Bool(record, "applyFill", false) ? 1 : 0;
+  xf.apply_border = reader.Bool(record, "applyBorder", false) ? 1 : 0;
+  xf.apply_alignment = reader.Bool(record, "applyAlignment", false) ? 1 : 0;
+  xf.apply_protection = reader.Bool(record, "applyProtection", false) ? 1 : 0;
+  xf.quote_prefix = reader.Bool(record, "quotePrefix", false) ? 1 : 0;
+  bool has_protection_present = false;
+  bool locked_present = false;
+  bool hidden_present = false;
+  const bool has_protection_value = reader.Bool(record, "hasProtection", false, &has_protection_present);
+  const bool locked_value = reader.Bool(record, "locked", true, &locked_present);
+  const bool hidden_value = reader.Bool(record, "hidden", false, &hidden_present);
+  xf.has_protection = Implied(has_protection_present, has_protection_value, locked_present || hidden_present);
+  xf.locked = locked_value ? 1 : 0;
+  xf.hidden = hidden_value ? 1 : 0;
+}
+
 }  // namespace
 
 // ---- Cell-XF index --------------------------------------------------
@@ -539,80 +615,7 @@ Napi::Value Workbook::AddNumFmt(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
   fm_cell_xf xf{};
   return AddStyleRecord(
-      info,
-      [&](CheckedSpecReader& reader, const Napi::Object& record) {
-        xf.font_index = reader.U32(record, "fontIndex", 0U);
-        xf.fill_index = reader.U32(record, "fillIndex", 0U);
-        xf.border_index = reader.U32(record, "borderIndex", 0U);
-        xf.num_fmt_id = reader.U16(record, "numFmtId", 0U);
-        bool horizontal_align_present = false;
-        bool vertical_align_present = false;
-        bool wrap_text_present = false;
-        bool justify_last_line_present = false;
-        xf.horizontal_align = reader.U8(record, "horizontalAlign", 0U, &horizontal_align_present);
-        xf.vertical_align = reader.U8(record, "verticalAlign", 2U, &vertical_align_present);
-        xf.wrap_text = reader.Bool(record, "wrapText", false, &wrap_text_present) ? 1 : 0;
-        xf.justify_last_line = reader.Bool(record, "justifyLastLine", false, &justify_last_line_present) ? 1 : 0;
-        xf.xf_id = reader.U32(record, "xfId", 0U);
-        bool has_horizontal_align_present = false;
-        bool has_vertical_align_present = false;
-        bool has_wrap_text_present = false;
-        bool has_justify_last_line_present = false;
-        const bool has_horizontal_align_value =
-            reader.Bool(record, "hasHorizontalAlign", false, &has_horizontal_align_present);
-        const bool has_vertical_align_value =
-            reader.Bool(record, "hasVerticalAlign", false, &has_vertical_align_present);
-        const bool has_wrap_text_value = reader.Bool(record, "hasWrapText", false, &has_wrap_text_present);
-        const bool has_justify_last_line_value =
-            reader.Bool(record, "hasJustifyLastLine", false, &has_justify_last_line_present);
-        xf.has_horizontal_align =
-            has_horizontal_align_present ? (has_horizontal_align_value ? 1 : 0) : (horizontal_align_present ? 1 : 0);
-        xf.has_vertical_align =
-            has_vertical_align_present ? (has_vertical_align_value ? 1 : 0) : (vertical_align_present ? 1 : 0);
-        xf.has_wrap_text = has_wrap_text_present ? (has_wrap_text_value ? 1 : 0) : (wrap_text_present ? 1 : 0);
-        xf.has_justify_last_line =
-            has_justify_last_line_present ? (has_justify_last_line_value ? 1 : 0) : (justify_last_line_present ? 1 : 0);
-        bool has_alignment_present = false;
-        const bool has_alignment_value = reader.Bool(record, "hasAlignment", false, &has_alignment_present);
-        bool text_rotation_present = false;
-        bool indent_present = false;
-        bool relative_indent_present = false;
-        bool shrink_to_fit_present = false;
-        bool reading_order_present = false;
-        xf.text_rotation = reader.U32(record, "textRotation", 0U, &text_rotation_present);
-        xf.indent = reader.U32(record, "indent", 0U, &indent_present);
-        xf.relative_indent = reader.I32(record, "relativeIndent", 0, &relative_indent_present);
-        xf.shrink_to_fit = reader.Bool(record, "shrinkToFit", false, &shrink_to_fit_present) ? 1 : 0;
-        xf.reading_order = reader.U32(record, "readingOrder", 0U, &reading_order_present);
-        xf.has_text_rotation = text_rotation_present ? 1 : 0;
-        xf.has_indent = indent_present ? 1 : 0;
-        xf.has_relative_indent = relative_indent_present ? 1 : 0;
-        xf.has_shrink_to_fit = shrink_to_fit_present ? 1 : 0;
-        xf.has_reading_order = reading_order_present ? 1 : 0;
-        const bool has_supplied_alignment = horizontal_align_present || vertical_align_present || wrap_text_present ||
-                                            justify_last_line_present || text_rotation_present || indent_present ||
-                                            relative_indent_present || shrink_to_fit_present || reading_order_present ||
-                                            has_horizontal_align_present || has_vertical_align_present ||
-                                            has_wrap_text_present || has_justify_last_line_present;
-        xf.has_alignment = has_alignment_present ? (has_alignment_value ? 1 : 0) : (has_supplied_alignment ? 1 : 0);
-        xf.apply_number_format = reader.Bool(record, "applyNumberFormat", false) ? 1 : 0;
-        xf.apply_font = reader.Bool(record, "applyFont", false) ? 1 : 0;
-        xf.apply_fill = reader.Bool(record, "applyFill", false) ? 1 : 0;
-        xf.apply_border = reader.Bool(record, "applyBorder", false) ? 1 : 0;
-        xf.apply_alignment = reader.Bool(record, "applyAlignment", false) ? 1 : 0;
-        xf.apply_protection = reader.Bool(record, "applyProtection", false) ? 1 : 0;
-        xf.quote_prefix = reader.Bool(record, "quotePrefix", false) ? 1 : 0;
-        bool has_protection_present = false;
-        bool locked_present = false;
-        bool hidden_present = false;
-        const bool has_protection_value = reader.Bool(record, "hasProtection", false, &has_protection_present);
-        const bool locked_value = reader.Bool(record, "locked", true, &locked_present);
-        const bool hidden_value = reader.Bool(record, "hidden", false, &hidden_present);
-        xf.has_protection =
-            has_protection_present ? (has_protection_value ? 1 : 0) : ((locked_present || hidden_present) ? 1 : 0);
-        xf.locked = locked_value ? 1 : 0;
-        xf.hidden = hidden_value ? 1 : 0;
-      },
+      info, [&](CheckedSpecReader& reader, const Napi::Object& record) { PullCellXf(reader, record, &xf); },
       [&](fm_workbook_t* handle, uint32_t* idx) { return fm_styles_add_cell_xf(handle, xf, idx); });
 }
 
