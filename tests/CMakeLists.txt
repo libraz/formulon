@@ -628,6 +628,18 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   # `int32_t`, so a binding author comparing against a stale number never
   # matches, and mis-classifies whatever code holds that value instead.
   formulon_add_binding_drift_test(binding_drift_header_error_codes header-error-codes)
+  # Public API naming and shape conventions against the per-surface baseline
+  # in tools/dev/api_convention_baseline/: a new violation fails, and so does
+  # a baseline line that no longer matches one, so the baseline only shrinks.
+  formulon_add_binding_drift_test(binding_drift_api_conventions api-conventions)
+  # The status-code tables generated from src/utils/error.h are current:
+  # formulon_status.h, binding_status.h, the JS table and declarations, and
+  # the Python StatusCode module.
+  add_test(
+    NAME BindingStatusCodegenDrift
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/codegen/gen_status_codes.py --check
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
   # Unit tests of the drift checks themselves, so a check that stops
   # detecting anything fails here instead of reporting "no drift".
   add_test(

@@ -120,6 +120,15 @@ Checks:
                   `fm_status_t` is a bare `int32_t`, so those numbers are
                   the whole contract a binding author reading only the
                   header can compare against.
+  api-conventions The public API naming and shape conventions (rule-ids
+                  listed by `--list-rules`), against the per-surface
+                  baseline in tools/dev/api_convention_baseline/. A
+                  violation missing from the baseline fails, and so does a
+                  baseline line that is no longer violated. `--counts`
+                  prints per-rule tallies, `--write-baseline` rewrites the
+                  baseline from the current violations, `--baseline-dir`
+                  points at another baseline directory. Reading the name
+                  ledger tools/api/names.yaml, when present, needs PyYAML.
   all             Run every check above (default).
 
 Stdlib only; no build artifacts or network access required.
@@ -129,8 +138,10 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 from typing import List
 
+from binding_drift import api_conventions
 from binding_drift.abi_checks import check_abi_baseline, check_header_error_codes
 from binding_drift.c_header import c_abi_declarations  # noqa: F401  (re-exported for gen_c_abi_baseline.py)
 from binding_drift.declaration_checks import (
@@ -169,6 +180,7 @@ CHECKS = {
     "staged-dist": check_staged_dist,
     "abi-baseline": check_abi_baseline,
     "header-error-codes": check_header_error_codes,
+    "api-conventions": api_conventions.check_api_conventions,
 }
 
 
@@ -181,13 +193,27 @@ def main(argv: List[str]) -> int:
         choices=[*CHECKS.keys(), "all"],
         help="which drift check to run (default: all)",
     )
+    parser.add_argument("--baseline-dir", type=Path, help="api-conventions: baseline directory to compare against")
+    actions = parser.add_mutually_exclusive_group()
+    actions.add_argument("--write-baseline", action="store_true", help="api-conventions: rewrite the baseline")
+    actions.add_argument("--counts", action="store_true", help="api-conventions: print per-rule tallies")
+    actions.add_argument("--list-rules", action="store_true", help="api-conventions: print the rule-ids")
     args = parser.parse_args(argv)
+
+    action = next((a for a in ("write_baseline", "counts", "list_rules") if getattr(args, a)), None)
+    if (action or args.baseline_dir) and args.check != "api-conventions":
+        parser.error("--baseline-dir, --write-baseline, --counts and --list-rules apply to api-conventions only")
+    if action:
+        return api_conventions.run_action(action.replace("_", "-"), args.baseline_dir)
 
     names = list(CHECKS.keys()) if args.check == "all" else [args.check]
     _SKIPPED.clear()
     problems: List[str] = []
     for name in names:
-        problems.extend(CHECKS[name]())
+        if name == "api-conventions":
+            problems.extend(api_conventions.check_api_conventions(args.baseline_dir))
+        else:
+            problems.extend(CHECKS[name]())
 
     # Printed either way: a skip is not a pass, and the reader has to be able
     # to tell which parts of the run actually looked at anything.

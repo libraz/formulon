@@ -107,20 +107,28 @@ def check_abi_baseline() -> List[str]:
     return problems
 
 
-# A doc comment quotes a status code as `` `kName` (N) ``, and the number may
-# wrap onto the next comment line, so the separator spans a `*` continuation
-# marker as well as plain spaces.
-_HEADER_ERROR_CODE_RE = re.compile(r"`?(k[A-Z][A-Za-z0-9_]*)`?(?:[ \t]|\n[ \t]*\*)*\((\d+)\)")
+# A doc comment quotes a status code as `` `FM_STATUS_NAME` (N) `` (or the
+# enumerator form `` `kName` (N) ``), and the number may wrap onto the next
+# comment line, so the separator spans a `*` continuation marker as well as
+# plain spaces.
+_CODE_QUOTE_SEPARATOR = r"`?(?:[ \t]|\n[ \t]*\*)*\((\d+)\)"
+_HEADER_ERROR_CODE_RE = re.compile(r"`?(k[A-Z][A-Za-z0-9_]*)" + _CODE_QUOTE_SEPARATOR)
+_HEADER_STATUS_MACRO_RE = re.compile(r"`?(FM_STATUS_[A-Z0-9_]+)" + _CODE_QUOTE_SEPARATOR)
+_STATUS_DEFINE_RE = re.compile(r"^#define\s+(FM_STATUS_[A-Z0-9_]+)\s+\(?\s*(-?\d+)\s*\)?\s*$", re.M)
+
+CAPI_STATUS_HEADER = CAPI_HEADER.parent / "formulon_status.h"
 
 
 def check_header_error_codes() -> List[str]:
-    """Every numeric status code quoted in the C header matches its enumerator.
+    """Every numeric status code quoted in the C header matches its definition.
 
     `fm_status_t` is a bare `int32_t`, so the numbers the header's doc
-    comments print next to an enumerator name are the whole contract a
-    binding author reading only the header can act on. A comparison written
-    against a stale number never matches, and mis-classifies whatever code
-    actually holds that value.
+    comments print next to a status name are the whole contract a binding
+    author reading only the header can act on. A comparison written against
+    a stale number never matches, and mis-classifies whatever code actually
+    holds that value. `FM_STATUS_*` quotes are checked against the
+    `#define`s in formulon_status.h, `kName` quotes against
+    `FormulonErrorCode`; a header quoting neither has nothing checked and fails.
     """
     problems: List[str] = []
 
@@ -132,20 +140,39 @@ def check_header_error_codes() -> List[str]:
         ]
 
     header = _read(CAPI_HEADER)
-    for match in _HEADER_ERROR_CODE_RE.finditer(header):
-        name, quoted = match.group(1), match.group(2)
-        line_number = header.count("\n", 0, match.start()) + 1
-        site = f"{CAPI_HEADER.name}:{line_number}"
-        if name not in codes:
-            problems.append(
-                f"header-error-codes: {site} documents `{name}` ({quoted}), which names no enumerator of "
-                f"`FormulonErrorCode` in {ERROR_H.relative_to(REPO_ROOT)}"
-            )
-            continue
-        if int(quoted) != codes[name]:
-            problems.append(
-                f"header-error-codes: {site} documents `{name}` as ({quoted}), but "
-                f"{ERROR_H.relative_to(REPO_ROOT)} defines it as {codes[name]}"
-            )
+    macro_quotes = list(_HEADER_STATUS_MACRO_RE.finditer(header))
+    macros: dict[str, int] = {}
+    if macro_quotes:
+        if not CAPI_STATUS_HEADER.is_file():
+            return [
+                f"header-error-codes: {CAPI_HEADER.name} quotes `FM_STATUS_*` codes but "
+                f"{CAPI_STATUS_HEADER.relative_to(REPO_ROOT)} does not exist"
+            ]
+        macros = {name: int(value) for name, value in _STATUS_DEFINE_RE.findall(_read(CAPI_STATUS_HEADER))}
 
+    checked = 0
+    for regex, table, source in (
+        (_HEADER_ERROR_CODE_RE, codes, f"`FormulonErrorCode` in {ERROR_H.relative_to(REPO_ROOT)}"),
+        (_HEADER_STATUS_MACRO_RE, macros, f"{CAPI_STATUS_HEADER.relative_to(REPO_ROOT)}"),
+    ):
+        for match in regex.finditer(header):
+            checked += 1
+            name, quoted = match.group(1), match.group(2)
+            line_number = header.count("\n", 0, match.start()) + 1
+            site = f"{CAPI_HEADER.name}:{line_number}"
+            if name not in table:
+                problems.append(
+                    f"header-error-codes: {site} documents `{name}` ({quoted}), which {source} does not define"
+                )
+                continue
+            if int(quoted) != table[name]:
+                problems.append(
+                    f"header-error-codes: {site} documents `{name}` as ({quoted}), but {source} defines it as {table[name]}"
+                )
+
+    if checked == 0:
+        problems.append(
+            f"header-error-codes: {CAPI_HEADER.name} quotes no status code beside its number; "
+            "the quoting form changed and nothing was checked"
+        )
     return problems
