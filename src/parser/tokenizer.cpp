@@ -220,7 +220,7 @@ bool Tokenizer::looks_like_cellref(std::string_view run, bool* letters_only) noe
     ++i;
   }
   const std::size_t letters_len = i - letters_begin;
-  if (letters_len == 0 || letters_len > 3) {
+  if (letters_len == 0 || letters_len > detail::kMaxColumnLetters) {
     return false;
   }
   if (i < run.size() && run[i] == '$') {
@@ -248,7 +248,7 @@ bool Tokenizer::looks_like_cellref(std::string_view run, bool* letters_only) noe
     *letters_only = true;
     return false;
   }
-  if (digits_len > 7) {
+  if (digits_len > detail::kMaxRowDigits) {
     return false;
   }
   const std::uint64_t row = detail::DecodeDigitRunClamped(run.substr(digits_begin, digits_len), detail::kMaxRow);

@@ -63,7 +63,7 @@ inline constexpr std::uint32_t kMaxRow = a1::kMaxRows;
 
 // Longest column-letter run (`XFD`), longest row digit run (`1048576`) and the
 // byte cap on a defined or LET binding name.
-inline constexpr std::size_t kMaxColumnLetters = 3;
+inline constexpr std::size_t kMaxColumnLetters = a1::kMaxColumnLetters;
 inline constexpr std::size_t kMaxRowDigits = 7;
 inline constexpr std::size_t kMaxDefinedNameBytes = 255;
 
