@@ -5,7 +5,7 @@
 #include <string>
 #include <string_view>
 
-#include "eval/structured_ref.h"
+#include "parser/structured_ref_payload.h"
 #include "utils/strings.h"
 
 namespace formulon {
@@ -19,17 +19,15 @@ std::optional<parser::StructuredRefTarget> TableLossTransform::apply_structured_
     if (loss.whole) {
       return std::nullopt;
     }
-    const auto selector = eval::parse_structured_ref_payload(column);
-    if (!selector) {
+    const auto payload = parser::parse_structured_ref_payload_text(column);
+    if (!payload) {
       break;
     }
-    const auto deleted = [&loss](std::string_view written) {
-      const std::string name = eval::unescape_structured_ref_name(written);
+    const auto deleted = [&loss](const std::string& name) {
       return std::any_of(loss.columns.begin(), loss.columns.end(),
                          [&name](const std::string& gone) { return strings::case_insensitive_eq(gone, name); });
     };
-    if ((selector.value().column_first_set && deleted(selector.value().column_first)) ||
-        (selector.value().column_last_set && deleted(selector.value().column_last))) {
+    if (std::any_of(payload->columns.begin(), payload->columns.end(), deleted)) {
       return std::nullopt;
     }
     break;

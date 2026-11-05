@@ -7,6 +7,7 @@
 
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
+#include "parser/structured_ref_payload.h"
 #include "utils/status_macros.h"
 
 namespace formulon {
@@ -25,13 +26,6 @@ constexpr std::uint8_t kRowsDataHeaders = 0x06;
 constexpr std::uint8_t kRowsTotals = 0x08;
 constexpr std::uint8_t kRowsDataTotals = 0x0C;
 constexpr std::uint8_t kRowsCurrent = 0x10;
-
-// Selector bits of a parsed bracket payload.
-constexpr std::uint8_t kSelAll = 0x01;
-constexpr std::uint8_t kSelData = 0x02;
-constexpr std::uint8_t kSelHeaders = 0x04;
-constexpr std::uint8_t kSelTotals = 0x08;
-constexpr std::uint8_t kSelThisRow = 0x10;
 
 // PtgList flag fields.
 constexpr std::uint16_t kColumnsMask = 0x0003U;
@@ -106,162 +100,23 @@ const XlsbRetainedTable* FindRetainedTable(const SheetRangeTable& ranges, std::s
   return nullptr;
 }
 
-/// The parsed bracket payload: selector bits and the column slice.
-struct Payload {
-  std::uint8_t selectors = 0;
-  std::vector<std::string> columns;  // unescaped; one, or two for a range
-};
-
-/// Reads one `[...]` item starting at `text[*pos] == '['`; unescapes `'`.
-/// `selector` is set when the item opens with an unescaped `#`.
-bool ReadBracket(std::string_view text, std::size_t* pos, std::string* out, bool* selector) {
-  std::size_t i = *pos + 1U;
-  out->clear();
-  *selector = i < text.size() && text[i] == '#';
-  while (i < text.size()) {
-    const char c = text[i];
-    if (c == '\'' && i + 1U < text.size()) {
-      out->push_back(text[i + 1U]);
-      i += 2U;
-      continue;
-    }
-    if (c == ']') {
-      *pos = i + 1U;
-      return true;
-    }
-    if (c == '[') {
-      return false;
-    }
-    out->push_back(c);
-    ++i;
-  }
-  return false;
-}
-
-std::string Unescape(std::string_view text) {
-  std::string out;
-  for (std::size_t i = 0; i < text.size(); ++i) {
-    if (text[i] == '\'' && i + 1U < text.size()) {
-      ++i;
-    }
-    out.push_back(text[i]);
-  }
-  return out;
-}
-
-bool AddSelector(std::string_view item, std::uint8_t* selectors) {
-  struct Name {
-    std::string_view text;
-    std::uint8_t bit;
-  };
-  constexpr Name kNames[] = {{"#All", kSelAll},
-                             {"#Data", kSelData},
-                             {"#Headers", kSelHeaders},
-                             {"#Totals", kSelTotals},
-                             {"#This Row", kSelThisRow}};
-  for (const Name& name : kNames) {
-    if (EqualsIgnoreCase(item, name.text)) {
-      *selectors |= name.bit;
-      return true;
-    }
-  }
-  return false;
-}
-
-std::string_view Trim(std::string_view s) {
-  while (!s.empty() && s.front() == ' ') {
-    s.remove_prefix(1);
-  }
-  while (!s.empty() && s.back() == ' ') {
-    s.remove_suffix(1);
-  }
-  return s;
-}
-
-/// Parses `[...]` items: selectors separated by `,`, then at most one column
-/// or `[A]:[B]` range.
-bool ParseBracketList(std::string_view text, Payload* out) {
-  std::size_t pos = 0;
-  bool range_pending = false;
-  while (pos < text.size()) {
-    if (text[pos] == ' ' || text[pos] == ',') {
-      ++pos;
-      continue;
-    }
-    if (text[pos] == ':') {
-      if (out->columns.size() != 1U || range_pending) {
-        return false;
-      }
-      range_pending = true;
-      ++pos;
-      continue;
-    }
-    if (text[pos] != '[') {
-      return false;
-    }
-    std::string item;
-    bool selector = false;
-    if (!ReadBracket(text, &pos, &item, &selector)) {
-      return false;
-    }
-    if (selector) {
-      if (!out->columns.empty() || !AddSelector(Trim(item), &out->selectors)) {
-        return false;
-      }
-      continue;
-    }
-    if (!out->columns.empty() && !range_pending) {
-      return false;
-    }
-    out->columns.push_back(item);
-    range_pending = false;
-  }
-  return !range_pending;
-}
-
-bool ParsePayload(std::string_view text, Payload* out) {
-  text = Trim(text);
-  if (text.empty()) {
-    return true;
-  }
-  if (text.front() == '@') {
-    out->selectors |= kSelThisRow;
-    text = Trim(text.substr(1));
-    if (text.empty()) {
-      return true;
-    }
-    if (text.front() != '[') {
-      out->columns.push_back(Unescape(text));
-      return true;
-    }
-    return ParseBracketList(text, out) && (out->selectors & ~kSelThisRow) == 0U;
-  }
-  if (text.front() == '[') {
-    return ParseBracketList(text, out);
-  }
-  if (text.front() == '#') {
-    return AddSelector(text, &out->selectors);
-  }
-  out->columns.push_back(Unescape(text));
-  return true;
-}
-
 std::optional<std::uint8_t> RowTypeFor(std::uint8_t selectors) {
+  using Spec = parser::StructuredRefSpecifiers;
   switch (selectors) {
     case 0:
-    case kSelData:
+    case Spec::kData:
       return kRowsData;
-    case kSelAll:
+    case Spec::kAll:
       return kRowsAll;
-    case kSelHeaders:
+    case Spec::kHeaders:
       return kRowsHeaders;
-    case kSelHeaders | kSelData:
+    case Spec::kHeaders | Spec::kData:
       return kRowsDataHeaders;
-    case kSelTotals:
+    case Spec::kTotals:
       return kRowsTotals;
-    case kSelData | kSelTotals:
+    case Spec::kData | Spec::kTotals:
       return kRowsDataTotals;
-    case kSelThisRow:
+    case Spec::kThisRow:
       return kRowsCurrent;
     default:
       return std::nullopt;
@@ -283,12 +138,16 @@ bool structured_ref_is_single_cell(const parser::AstNode& node) {
   if (node.as_structured_ref_modifier() == parser::StructuredRefModifier::At) {
     return true;
   }
-  Payload payload;
-  if (node.as_structured_ref_modifier() != parser::StructuredRefModifier::None ||
-      !ParsePayload(node.as_structured_ref_column(), &payload) || payload.columns.size() != 1U) {
+  using Spec = parser::StructuredRefSpecifiers;
+  if (node.as_structured_ref_modifier() != parser::StructuredRefModifier::None) {
     return false;
   }
-  return payload.selectors == kSelThisRow || payload.selectors == kSelHeaders || payload.selectors == kSelTotals;
+  const auto payload = parser::parse_structured_ref_payload_text(node.as_structured_ref_column());
+  if (!payload || payload->columns.size() != 1U) {
+    return false;
+  }
+  return payload->specifiers == Spec::kThisRow || payload->specifiers == Spec::kHeaders ||
+         payload->specifiers == Spec::kTotals;
 }
 
 Expected<parser::AstNode*, Error> decode_ptg_list(ByteSpan& cursor, Arena& arena,
@@ -437,12 +296,15 @@ Expected<void, Error> encode_ptg_list(std::vector<std::uint8_t>& out, const pars
   if (table == nullptr) {
     return Unsupported("structured reference names no table of this workbook");
   }
-  Payload payload;
-  if (node.as_structured_ref_modifier() != parser::StructuredRefModifier::None ||
-      !ParsePayload(node.as_structured_ref_column(), &payload)) {
+  std::optional<parser::StructuredRefPayload> parsed;
+  if (node.as_structured_ref_modifier() == parser::StructuredRefModifier::None) {
+    parsed = parser::parse_structured_ref_payload_text(node.as_structured_ref_column());
+  }
+  if (!parsed) {
     return Unsupported("structured reference payload has no PtgList form");
   }
-  const std::optional<std::uint8_t> row_type = RowTypeFor(payload.selectors);
+  const parser::StructuredRefPayload& payload = *parsed;
+  const std::optional<std::uint8_t> row_type = RowTypeFor(payload.specifiers);
   if (!row_type) {
     return Unsupported("structured reference selectors have no PtgRowType");
   }

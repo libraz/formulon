@@ -45,30 +45,14 @@ namespace eval {
 /// `kData`.
 using parser::StructuredRefSpecifiers;
 
-/// Parsed shape of a structured reference's bracket payload.
-///
-/// `table_name` is the table identifier preceding the brackets (or empty
-/// when this selector represents the table-name slot of a cross-table range
-/// like `Table[ColA]:Table[ColB]`). The view borrows from caller-owned
-/// storage and must outlive the resolver call.
-///
-/// `column_first` and `column_last` capture the column slice. Both empty
-/// (`column_first.empty()` is true) means "every column"; only
-/// `column_first` set means a single-column slice; both set means the
-/// inclusive `[first..last]` slice. Like `table_name`, both views borrow
-/// from caller-owned storage. `column_last_set` distinguishes the
-/// "no last column" case from the (rare but legal) empty-string column
-/// name slot.
-///
-/// `specifiers` is the bitwise OR of the `StructuredRefSpecifiers::k*`
-/// constants. The default (no `#` selector, no `@`) is `kData`.
+/// A structured reference to resolve: the table identifier preceding the
+/// brackets and the parsed bracket payload. `table_name` borrows from
+/// caller-owned storage and must outlive the resolver call. Empty
+/// `payload.specifiers` means data rows; empty `payload.columns` means every
+/// column; two columns are the ends of an inclusive range.
 struct StructuredRefSelector {
   std::string_view table_name;
-  std::string_view column_first;
-  std::string_view column_last;
-  bool column_first_set = false;
-  bool column_last_set = false;
-  std::uint8_t specifiers = StructuredRefSpecifiers::kData;
+  parser::StructuredRefPayload payload;
 };
 
 /// Resolved rectangle on the table's home sheet. Coordinates are 0-based
@@ -83,41 +67,15 @@ struct StructuredRefRange {
   std::uint32_t col_last = 0;
 };
 
-/// Parses the bracket payload of a structured reference (the text between
-/// the outermost `[` and `]`, exclusive). The payload is allowed to be
-/// empty — that is the whole-table form `Table[]` which Excel accepts and
-/// treats as `Table[#Data]`.
-///
-/// Recognised shapes:
-///   * Empty                                     -> default (`kData`)
-///   * `ColumnName`                              -> single column, default
-///   * `@`                                       -> `kThisRow`, no column
-///   * `@ColumnName`                             -> `kThisRow` + column
-///   * `#All` / `#Data` / `#Headers` / `#Totals` -> selector only
-///   * `#This Row`                               -> `kThisRow`
-///   * `[#Headers],[Col]`                        -> selector + column
-///   * `[#Headers],[ColA]:[ColB]`                -> selector + range
-///   * `@[Col]` / `@[ColA]:[ColB]`               -> row-implicit range
-///   * `[Col]` / `[ColA]:[ColB]`                 -> bracketed column form
-///
-/// On unknown specifier names, mismatched brackets, or any malformed
-/// payload, returns `ErrorCode::Name` (Excel surfaces `#NAME?` for
-/// unparseable structured references).
+/// Parses the text between a structured reference's outer brackets into a
+/// selector (`table_name` left empty); see
+/// `parser::parse_structured_ref_payload_text` for the accepted grammar. A
+/// malformed payload returns `ErrorCode::Name` (Excel surfaces `#NAME?`).
 Expected<StructuredRefSelector, ErrorCode> parse_structured_ref_payload(std::string_view payload);
 
-/// Unescapes ECMA-376 §18.5.1.10's structured-reference escape grammar: an
-/// apostrophe immediately before one of `# ' [ ]` makes that one character
-/// literal (`Bob''s` -> `Bob's`, `'#Items` -> `#Items`); every other byte,
-/// including an apostrophe not followed by one of those four, passes
-/// through unchanged. A table column name is never stored pre-escaped
-/// (`TableMetadata::columns[i].name` is the literal name), so a
-/// bracket payload read verbatim from formula text must be unescaped
-/// before comparison.
-std::string unescape_structured_ref_name(std::string_view raw);
-
 /// Looks up `selector.table_name` in `wb.tables()` (case-insensitive),
-/// computes the row span from `selector.specifiers`, computes the column
-/// span from `selector.column_first/column_last`, and returns the resolved
+/// computes the row span from `selector.payload.specifiers`, computes the column
+/// span from `selector.payload.columns`, and returns the resolved
 /// rectangle.
 ///
 /// `current_sheet_index` is the 0-based workbook sheet index of the cell

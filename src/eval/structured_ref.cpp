@@ -26,144 +26,11 @@ namespace eval {
 
 namespace {
 
-/// Maps a `#`-prefixed specifier name (case-insensitive, ASCII-fold) to
-/// its bitmask. Unknown specifiers return 0 so the caller can flag them as
-/// `#NAME?`. `#This Row` is accepted with one space between `This` and
-/// `Row`; arbitrary whitespace inside the specifier name would imply a
-/// bracket payload not produced by Excel and is rejected.
-std::uint8_t classify_hash_specifier(std::string_view name) noexcept {
-  if (strings::case_insensitive_eq(name, "#All")) {
-    return StructuredRefSpecifiers::kAll;
-  }
-  if (strings::case_insensitive_eq(name, "#Data")) {
-    return StructuredRefSpecifiers::kData;
-  }
-  if (strings::case_insensitive_eq(name, "#Headers")) {
-    return StructuredRefSpecifiers::kHeaders;
-  }
-  if (strings::case_insensitive_eq(name, "#Totals")) {
-    return StructuredRefSpecifiers::kTotals;
-  }
-  if (strings::case_insensitive_eq(name, "#This Row")) {
-    return StructuredRefSpecifiers::kThisRow;
-  }
-  return 0u;
-}
-
-/// Splits a bracket payload at top-level commas. Bracketed sub-fragments
-/// (`[#Headers]`, `[Col Name]`) are recognised so commas inside them stay
-/// attached to their parent fragment. Returns `false` on unmatched bracket.
-bool split_top_level_commas(std::string_view payload, std::vector<std::string_view>* out) {
-  out->clear();
-  std::size_t depth = 0;
-  std::size_t start = 0;
-  for (std::size_t i = 0; i < payload.size(); ++i) {
-    const char c = payload[i];
-    if (c == '\'') {
-      ++i;  // an escaped character is never bracket or comma punctuation.
-    } else if (c == '[') {
-      ++depth;
-    } else if (c == ']') {
-      if (depth == 0) {
-        return false;
-      }
-      --depth;
-    } else if (c == ',' && depth == 0) {
-      out->push_back(payload.substr(start, i - start));
-      start = i + 1;
-    }
-  }
-  if (depth != 0) {
-    return false;
-  }
-  out->push_back(payload.substr(start));
-  return true;
-}
-
-/// Strips a single leading `[` and trailing `]` from `s`. A non-bracketed
-/// input is returned unchanged. Single-sided brackets are malformed.
-bool strip_outer_brackets(std::string_view s, std::string_view* out) {
-  s = strings::trim_blanks(s);
-  // A trailing `]` is punctuation only when the escape grammar does not
-  // consume it as the literal half of `']` (`Col'[x']` is unbracketed).
-  bool closes = false;
-  for (std::size_t i = 0; i < s.size(); ++i) {
-    if (s[i] == '\'') {
-      ++i;
-    } else if (i + 1 == s.size()) {
-      closes = s[i] == ']';
-    }
-  }
-  if (s.size() >= 2 && s.front() == '[' && closes) {
-    *out = s.substr(1, s.size() - 2);
-    return true;
-  }
-  if (!s.empty() && (s.front() == '[' || closes)) {
-    return false;
-  }
-  *out = s;
-  return true;
-}
-
-/// Splits a column-list fragment (already de-bracketed of any outer `[ ]`)
-/// at the top-level `:` if present. Bracketed inner names are skipped so a
-/// `[Col:Name]` quirk is not split by the operator. Writes the first (and
-/// last, when present) column-name view into the selector slots; returns
-/// `false` on malformed bracketing.
-bool split_column_range(std::string_view text, StructuredRefSelector* sel) {
-  text = strings::trim_blanks(text);
-  if (text.empty()) {
-    return true;
-  }
-  std::size_t depth = 0;
-  std::size_t colon_at = std::string_view::npos;
-  for (std::size_t i = 0; i < text.size(); ++i) {
-    const char c = text[i];
-    if (c == '\'') {
-      ++i;
-    } else if (c == '[') {
-      ++depth;
-    } else if (c == ']') {
-      if (depth == 0) {
-        return false;
-      }
-      --depth;
-    } else if (c == ':' && depth == 0) {
-      colon_at = i;
-      break;
-    }
-  }
-  std::string_view first;
-  std::string_view last;
-  if (colon_at == std::string_view::npos) {
-    first = text;
-  } else {
-    first = strings::trim_blanks(text.substr(0, colon_at));
-    last = strings::trim_blanks(text.substr(colon_at + 1));
-  }
-  std::string_view first_inner;
-  if (!strip_outer_brackets(first, &first_inner)) {
-    return false;
-  }
-  sel->column_first = first_inner;
-  sel->column_first_set = true;
-  if (colon_at != std::string_view::npos) {
-    std::string_view last_inner;
-    if (!strip_outer_brackets(last, &last_inner)) {
-      return false;
-    }
-    sel->column_last = last_inner;
-    sel->column_last_set = true;
-  }
-  return true;
-}
-
 /// Looks up a column by case-insensitive name. Returns a 0-based index into
 /// `t.columns` on success, `-1u` on failure.
 std::uint32_t find_column_index(const TableMetadata& t, std::string_view name) noexcept {
-  const std::string unescaped = unescape_structured_ref_name(name);
   for (std::size_t i = 0; i < t.columns.size(); ++i) {
-    if (strings::case_insensitive_eq(t.columns[i].name, unescaped)) {
+    if (strings::case_insensitive_eq(t.columns[i].name, name)) {
       return static_cast<std::uint32_t>(i);
     }
   }
@@ -197,84 +64,13 @@ bool parse_table_ref(std::string_view ref, std::uint32_t* row_top, std::uint32_t
 
 }  // namespace
 
-std::string unescape_structured_ref_name(std::string_view raw) {
-  std::string out;
-  out.reserve(raw.size());
-  for (std::size_t i = 0; i < raw.size();) {
-    if (raw[i] == '\'' && i + 1 < raw.size()) {
-      const char next = raw[i + 1];
-      if (next == '#' || next == '\'' || next == '[' || next == ']') {
-        out.push_back(next);
-        i += 2;
-        continue;
-      }
-    }
-    out.push_back(raw[i]);
-    ++i;
-  }
-  return out;
-}
-
 Expected<StructuredRefSelector, ErrorCode> parse_structured_ref_payload(std::string_view payload) {
-  payload = strings::trim_blanks(payload);
-  StructuredRefSelector sel;
-  sel.specifiers = 0u;
-
-  if (payload.empty()) {
-    sel.specifiers = StructuredRefSpecifiers::kData;
-    return sel;
-  }
-
-  // Detect the row-implicit shorthand (`@...`). Excel emits `@` only as the
-  // first character of the bracket payload; whitespace between `@` and the
-  // column name is allowed.
-  if (payload.front() == '@') {
-    sel.specifiers |= StructuredRefSpecifiers::kThisRow;
-    payload = strings::trim_blanks(payload.substr(1));
-    if (payload.empty()) {
-      // Bare `Table[@]` is not a useful Excel construct; surface #NAME?.
-      return ErrorCode::Name;
-    }
-  }
-
-  std::vector<std::string_view> fragments;
-  if (!split_top_level_commas(payload, &fragments)) {
+  auto parsed = parser::parse_structured_ref_payload_text(payload);
+  if (!parsed) {
     return ErrorCode::Name;
   }
-
-  bool column_seen = false;
-  for (std::string_view frag_raw : fragments) {
-    std::string_view frag = strings::trim_blanks(frag_raw);
-    if (frag.empty()) {
-      return ErrorCode::Name;
-    }
-    std::string_view inner;
-    if (!strip_outer_brackets(frag, &inner)) {
-      return ErrorCode::Name;
-    }
-    inner = strings::trim_blanks(inner);
-    if (!inner.empty() && inner.front() == '#') {
-      const std::uint8_t bit = classify_hash_specifier(inner);
-      if (bit == 0u) {
-        return ErrorCode::Name;
-      }
-      sel.specifiers |= bit;
-      continue;
-    }
-    if (column_seen) {
-      return ErrorCode::Name;
-    }
-    column_seen = true;
-    if (!split_column_range(frag, &sel)) {
-      return ErrorCode::Name;
-    }
-  }
-
-  // Default the area selector to `kData` when only a column was given.
-  if ((sel.specifiers & ~StructuredRefSpecifiers::kThisRow) == 0u) {
-    sel.specifiers |= StructuredRefSpecifiers::kData;
-  }
-
+  StructuredRefSelector sel;
+  sel.payload = std::move(*parsed);
   return sel;
 }
 
@@ -315,7 +111,7 @@ Expected<StructuredRefRange, ErrorCode> resolve_structured_ref(const StructuredR
     return ErrorCode::Ref;
   }
 
-  std::uint8_t spec = selector.specifiers;
+  std::uint8_t spec = selector.payload.specifiers;
   if (spec == 0u) {
     spec = StructuredRefSpecifiers::kData;
   }
@@ -345,10 +141,8 @@ Expected<StructuredRefRange, ErrorCode> resolve_structured_ref(const StructuredR
     }
   };
 
-  // `kThisRow` (the `@` shorthand) is mutually exclusive with the area
-  // selectors at the row layer: when it is set the resolved row is the
-  // single formula-cell row, regardless of any `kData` default the parser
-  // added to record "no explicit area was specified".
+  // `kThisRow` (the `@` shorthand) wins over the area selectors: the
+  // resolved row is the single formula-cell row.
   if ((spec & StructuredRefSpecifiers::kThisRow) != 0u) {
     if (!has_data || current_row < data_top || current_row > data_bot) {
       return ErrorCode::Value;
@@ -384,14 +178,15 @@ Expected<StructuredRefRange, ErrorCode> resolve_structured_ref(const StructuredR
   // Compute the column span.
   std::uint32_t out_col_left = c_left;
   std::uint32_t out_col_right = c_right;
-  if (selector.column_first_set) {
-    const std::uint32_t idx_first = find_column_index(*table, selector.column_first);
+  const std::vector<std::string>& names = selector.payload.columns;
+  if (!names.empty()) {
+    const std::uint32_t idx_first = find_column_index(*table, names.front());
     if (idx_first == static_cast<std::uint32_t>(-1)) {
       return ErrorCode::Ref;
     }
     std::uint32_t idx_last = idx_first;
-    if (selector.column_last_set) {
-      const std::uint32_t i = find_column_index(*table, selector.column_last);
+    if (names.size() > 1U) {
+      const std::uint32_t i = find_column_index(*table, names.back());
       if (i == static_cast<std::uint32_t>(-1)) {
         return ErrorCode::Ref;
       }

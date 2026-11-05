@@ -103,48 +103,64 @@ Value EvalAt(const Workbook& wb, std::string_view formula, std::uint32_t formula
 TEST(StructuredRefResolver, ParsePayloadEmptyIsData) {
   auto sel = parse_structured_ref_payload("");
   ASSERT_TRUE(sel);
-  EXPECT_EQ(sel.value().specifiers, StructuredRefSpecifiers::kData);
-  EXPECT_FALSE(sel.value().column_first_set);
+  EXPECT_EQ(sel.value().payload.specifiers, 0U);
+  EXPECT_TRUE(sel.value().payload.columns.empty());
 }
 
 TEST(StructuredRefResolver, ParsePayloadSingleColumn) {
   auto sel = parse_structured_ref_payload("Region");
   ASSERT_TRUE(sel);
-  EXPECT_EQ(sel.value().specifiers, StructuredRefSpecifiers::kData);
-  ASSERT_TRUE(sel.value().column_first_set);
-  EXPECT_EQ(sel.value().column_first, "Region");
-  EXPECT_FALSE(sel.value().column_last_set);
+  EXPECT_EQ(sel.value().payload.specifiers, 0U);
+  ASSERT_EQ(sel.value().payload.columns.size(), 1U);
+  EXPECT_EQ(sel.value().payload.columns[0], "Region");
 }
 
 TEST(StructuredRefResolver, ParsePayloadAtColumn) {
   auto sel = parse_structured_ref_payload("@Amount");
   ASSERT_TRUE(sel);
-  EXPECT_EQ(sel.value().specifiers, StructuredRefSpecifiers::kThisRow | StructuredRefSpecifiers::kData);
-  ASSERT_TRUE(sel.value().column_first_set);
-  EXPECT_EQ(sel.value().column_first, "Amount");
+  EXPECT_EQ(sel.value().payload.specifiers, StructuredRefSpecifiers::kThisRow);
+  ASSERT_EQ(sel.value().payload.columns.size(), 1U);
+  EXPECT_EQ(sel.value().payload.columns[0], "Amount");
+}
+
+TEST(StructuredRefResolver, ParsePayloadBareAtIsThisRow) {
+  auto sel = parse_structured_ref_payload("@");
+  ASSERT_TRUE(sel);
+  EXPECT_EQ(sel.value().payload.specifiers, StructuredRefSpecifiers::kThisRow);
+  EXPECT_TRUE(sel.value().payload.columns.empty());
 }
 
 TEST(StructuredRefResolver, ParsePayloadAllSpecifier) {
   auto sel = parse_structured_ref_payload("#All");
   ASSERT_TRUE(sel);
-  EXPECT_EQ(sel.value().specifiers, StructuredRefSpecifiers::kAll);
+  EXPECT_EQ(sel.value().payload.specifiers, StructuredRefSpecifiers::kAll);
 }
 
 TEST(StructuredRefResolver, ParsePayloadHeadersAndColumn) {
   auto sel = parse_structured_ref_payload("[#Headers],[Region]");
   ASSERT_TRUE(sel);
-  EXPECT_EQ(sel.value().specifiers, StructuredRefSpecifiers::kHeaders);
-  ASSERT_TRUE(sel.value().column_first_set);
-  EXPECT_EQ(sel.value().column_first, "Region");
+  EXPECT_EQ(sel.value().payload.specifiers, StructuredRefSpecifiers::kHeaders);
+  ASSERT_EQ(sel.value().payload.columns.size(), 1U);
+  EXPECT_EQ(sel.value().payload.columns[0], "Region");
 }
 
 TEST(StructuredRefResolver, ParsePayloadColumnRange) {
   auto sel = parse_structured_ref_payload("[Region]:[Amount]");
   ASSERT_TRUE(sel);
-  ASSERT_TRUE(sel.value().column_first_set);
-  ASSERT_TRUE(sel.value().column_last_set);
-  EXPECT_EQ(sel.value().column_first, "Region");
-  EXPECT_EQ(sel.value().column_last, "Amount");
+  ASSERT_EQ(sel.value().payload.columns.size(), 2U);
+  EXPECT_EQ(sel.value().payload.columns[0], "Region");
+  EXPECT_EQ(sel.value().payload.columns[1], "Amount");
+}
+
+TEST(StructuredRefResolver, ParsePayloadUnbracketedCommaAndColonAreOneName) {
+  auto comma = parse_structured_ref_payload("a,b");
+  ASSERT_TRUE(comma);
+  ASSERT_EQ(comma.value().payload.columns.size(), 1U);
+  EXPECT_EQ(comma.value().payload.columns[0], "a,b");
+  auto colon = parse_structured_ref_payload("a:b");
+  ASSERT_TRUE(colon);
+  ASSERT_EQ(colon.value().payload.columns.size(), 1U);
+  EXPECT_EQ(colon.value().payload.columns[0], "a:b");
 }
 
 TEST(StructuredRefResolver, ParsePayloadUnknownSpecifierIsName) {
@@ -382,6 +398,77 @@ TEST(StructuredRefEval, EscapedSpecialCharacterColumnNamesResolve) {
     ASSERT_TRUE(v.is_number());
     EXPECT_DOUBLE_EQ(v.as_number(), c.want);
   }
+}
+
+TEST(StructuredRefEval, UnbracketedCommaAndColonNamesAreOneColumn) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  const char* names[] = {"a,b", "a:b", "plain"};
+  TableMetadata table;
+  table.id = 1;
+  table.name = "t";
+  table.display_name = "t";
+  table.ref = "A1:C2";
+  table.sheet_index = 0;
+  table.header_row = true;
+  for (std::uint32_t c = 0; c < 3; ++c) {
+    s.set_cell_value(0, c, Value::text(names[c]));
+    s.set_cell_value(1, c, Value::number(10.0 * (c + 1)));
+    TableColumn col;
+    col.id = c + 1;
+    col.name = names[c];
+    table.columns.push_back(col);
+  }
+  wb.set_tables({table});
+
+  struct Case {
+    const char* src;
+    double want;
+  };
+  const Case cases[] = {
+      {"=SUM(t[a,b])", 10.0},
+      {"=SUM(t[a:b])", 20.0},
+      {"=t[[#This Row],[a:b]]", 20.0},
+  };
+  for (const Case& c : cases) {
+    SCOPED_TRACE(c.src);
+    Arena arena;
+    const Value v = EvalAt(wb, c.src, /*formula_row=*/1, arena);
+    ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+    EXPECT_DOUBLE_EQ(v.as_number(), c.want);
+  }
+}
+
+TEST(StructuredRefEval, BareAtResolvesToThisRow) {
+  Workbook wb = MakeWorkbookWithSalesTable(/*with_totals_row=*/false);
+  Arena arena;
+  const Value v = EvalAt(wb, "=SUM(Sales[@])", /*formula_row=*/2, arena);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 20.0);
+}
+
+TEST(StructuredRefEval, StoredDoubledApostropheColumnResolves) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0, 0, Value::text("a'b"));
+  s.set_cell_value(1, 0, Value::number(7.0));
+  TableMetadata table;
+  table.id = 1;
+  table.name = "t";
+  table.display_name = "t";
+  table.ref = "A1:A2";
+  table.sheet_index = 0;
+  table.header_row = true;
+  TableColumn col;
+  col.id = 1;
+  col.name = "a'b";
+  table.columns = {col};
+  wb.set_tables({table});
+
+  Arena arena;
+  const Value v = EvalAt(wb, "=t[a''b]", /*formula_row=*/1, arena);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 7.0);
 }
 
 TEST(StructuredRefEval, HeadersOnTableWithoutHeadersIsRef) {
