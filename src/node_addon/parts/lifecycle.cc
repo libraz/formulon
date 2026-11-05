@@ -277,16 +277,10 @@ Napi::Value Workbook::PartialRecalc(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeNumberFieldResult(env, NullHandleError(env), "recomputed", 0);
   }
-  // Embind takes the viewport as a JS object; we mirror that shape.
-  const Napi::Object vpobj = ArgObject(info, 0);
-  fm_viewport vp{};
+  const std::size_t sheet = ArgU32(info, 0);
+  fm_cell_rect_t vp{};
   CheckedSpecReader reader(env);
-  const std::size_t sheet = reader.U32(vpobj, "sheet", 0U);
-  vp.first_row = reader.U32(vpobj, "firstRow", 0U);
-  vp.last_row = reader.U32(vpobj, "lastRow", 0U);
-  vp.first_col = reader.U32(vpobj, "firstCol", 0U);
-  vp.last_col = reader.U32(vpobj, "lastCol", 0U);
-  if (!reader.ok()) {
+  if (!ReadCellRect(reader, ArgObject(info, 1), &vp)) {
     return env.Undefined();
   }
   uint32_t recomputed = 0;

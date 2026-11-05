@@ -460,7 +460,7 @@ test('setRangeXfIndex applies one xf across a rectangle', async () => {
   const xf = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: border.index, numFmtId: 0 });
   assert.ok(xf.status.ok);
 
-  assert.ok(wb.setRangeXfIndex(0, 0, 0, 2, 2, xf.index).ok);
+  assert.ok(wb.setRangeXfIndex(0, { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 2 }, xf.index).ok);
   // Every cell in the rectangle is materialised, including ones that held
   // no value, so the box renders.
   for (const [row, col] of [
@@ -481,9 +481,6 @@ test('pivotCount + pivotLayout expose PivotTable projection status', async () =>
   const missing = wb.getPivotLayout(0, 0);
   assert.equal(missing.status.ok, false);
   assert.notEqual(missing.status.status, 0);
-  assert.equal(missing.top, 0);
-  assert.equal(missing.left, 0);
-  assert.equal(missing.rows, 0);
-  assert.equal(missing.cols, 0);
+  assert.equal(missing.rect, null);
   assert.deepEqual(missing.cells, []);
 });

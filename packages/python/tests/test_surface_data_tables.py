@@ -8,6 +8,7 @@ import zipfile
 
 from formulon import (
     CalcMode,
+    CellRect,
     DataTable,
     DataTableInput,
     FormulonError,
@@ -39,7 +40,7 @@ def _number(wb: Workbook, row: int, col: int) -> float:
 class DataTableTests(unittest.TestCase):
     def test_one_variable_table_computes_reads_back_and_refuses_writes(self) -> None:
         with _squares() as wb:
-            wb.add_data_table(0, 2, 1, 4, 1, col_input=(0, 1))
+            wb.add_data_table(0, CellRect(2, 1, 4, 1), col_input=(0, 1))
             wb.recalc()
             self.assertEqual([_number(wb, r, 1) for r in (2, 3, 4)], [1.0, 4.0, 9.0])
             self.assertEqual(_number(wb, 0, 1), 3.0)
@@ -49,10 +50,7 @@ class DataTableTests(unittest.TestCase):
             self.assertEqual(
                 table,
                 DataTable(
-                    first_row=2,
-                    first_col=1,
-                    last_row=4,
-                    last_col=1,
+                    rect=CellRect(2, 1, 4, 1),
                     two_dimensional=False,
                     row_oriented=False,
                     row_input=None,
@@ -80,7 +78,7 @@ class DataTableTests(unittest.TestCase):
             for k in range(3):
                 wb.set_number(0, 2, 3 + k, float(k + 1))
                 wb.set_number(0, 3 + k, 2, float(10 * (k + 1)))
-            wb.add_data_table(0, 3, 3, 5, 5, row_input=(0, 5), col_input=(1, 5))
+            wb.add_data_table(0, CellRect(3, 3, 5, 5), row_input=(0, 5), col_input=(1, 5))
             wb.recalc()
             self.assertEqual([_number(wb, 3 + k, 3 + k) for k in range(3)], [10.0, 40.0, 90.0])
             table = wb.get_data_table(0, 4, 4)
@@ -92,13 +90,13 @@ class DataTableTests(unittest.TestCase):
             table = wb.get_data_table(0, 4, 3)
             self.assertTrue(table.row_input.deleted)
             self.assertFalse(table.col_input.deleted)
-            self.assertEqual(table.first_row, 2)
+            self.assertEqual(table.rect.first_row, 2)
             wb.recalc()
             self.assertIs(wb.get_value(0, 2, 3).kind, ValueKind.ERROR)
 
     def test_save_load_remove_and_auto_no_table(self) -> None:
         with _squares() as wb:
-            wb.add_data_table(0, 2, 1, 4, 1, col_input=(0, 1))
+            wb.add_data_table(0, CellRect(2, 1, 4, 1), col_input=(0, 1))
             wb.recalc()
             data = wb.save()
             self.assertIn('t="dataTable" ref="B3:B5"', _sheet_xml(data))
@@ -125,22 +123,22 @@ class DataTableTests(unittest.TestCase):
     def test_arguments_are_validated(self) -> None:
         with _squares() as wb:
             with self.assertRaises(FormulonError):
-                wb.add_data_table(0, 2, 1, 4, 1)
+                wb.add_data_table(0, CellRect(2, 1, 4, 1))
             with self.assertRaises(FormulonError):
-                wb.add_data_table(0, 0, 1, 4, 1, col_input=(0, 1))
+                wb.add_data_table(0, CellRect(0, 1, 4, 1), col_input=(0, 1))
             with self.assertRaises(FormulonError):
-                wb.add_data_table(0, 2, 1, 4, 1, col_input=(3, 1))
+                wb.add_data_table(0, CellRect(2, 1, 4, 1), col_input=(3, 1))
             with self.assertRaises(FormulonError):
-                wb.add_data_table(5, 2, 1, 4, 1, col_input=(0, 1))
+                wb.add_data_table(5, CellRect(2, 1, 4, 1), col_input=(0, 1))
             with self.assertRaises(FormulonError):
                 wb.get_data_table(5, 0, 0)
             with self.assertRaises(FormulonError):
                 wb.remove_data_table(5, 0, 0)
             with self.assertRaises((TypeError, ValueError, OverflowError)):
-                wb.add_data_table(0, -1, 1, 4, 1, col_input=(0, 1))
-            wb.add_data_table(0, 2, 1, 4, 1, col_input=(0, 1))
+                wb.add_data_table(0, CellRect(-1, 1, 4, 1), col_input=(0, 1))
+            wb.add_data_table(0, CellRect(2, 1, 4, 1), col_input=(0, 1))
             with self.assertRaises(FormulonError):
-                wb.add_data_table(0, 2, 1, 4, 1, col_input=(0, 1))
+                wb.add_data_table(0, CellRect(2, 1, 4, 1), col_input=(0, 1))
 
 
 if __name__ == "__main__":

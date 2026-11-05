@@ -474,13 +474,12 @@ Napi::Value Workbook::GetCellsInRange(const Napi::CallbackInfo& info) {
   const uint64_t cursor = static_cast<uint64_t>(NumberArg(info, 2, 0.0));
   const uint32_t limit = ArgU32(info, 3);
   CheckedSpecReader reader(env);
-  fm_merge_range range{};
-  if (!MergeRangeArg(reader, info, 1, &range)) {
+  fm_cell_rect_t range{};
+  if (!CellRectArg(reader, info, 1, &range)) {
     return env.Undefined();
   }
   fm_cell_range_t* page = nullptr;
-  fm_status_t rc = fm_sheet_get_cells_in_range(handle_, ArgU32(info, 0), range.first_row, range.first_col, range.last_row,
-                                           range.last_col, cursor, limit, &page);
+  fm_status_t rc = fm_sheet_get_cells_in_range(handle_, ArgU32(info, 0), &range, cursor, limit, &page);
   if (rc != 0) {
     out.Set("status", MakeErrorStatus(env, rc));
     return out;

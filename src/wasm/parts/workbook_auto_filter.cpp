@@ -107,7 +107,7 @@ emscripten::val filter_column_to_val(const fm_filter_column_t& c) {
 
 emscripten::val sort_condition_to_val(const fm_sort_condition_t& c) {
   emscripten::val o = emscripten::val::object();
-  o.set("ref", merge_range_to_val(c.ref));
+  o.set("ref", cell_rect_to_val(c.ref));
   o.set("descending", c.descending != 0);
   o.set("sortBy", c.sort_by);
   o.set("dxfId", c.dxf_id);
@@ -121,7 +121,7 @@ emscripten::val sort_condition_to_val(const fm_sort_condition_t& c) {
 
 emscripten::val auto_filter_to_val(const fm_auto_filter_t& f) {
   emscripten::val o = emscripten::val::object();
-  o.set("range", merge_range_to_val(f.range));
+  o.set("range", cell_rect_to_val(f.range));
   emscripten::val columns = emscripten::val::array();
   for (uint32_t i = 0; i < f.column_count; ++i) {
     columns.set(i, filter_column_to_val(f.columns[i]));
@@ -132,7 +132,7 @@ emscripten::val auto_filter_to_val(const fm_auto_filter_t& f) {
     return o;
   }
   emscripten::val sort = emscripten::val::object();
-  sort.set("ref", merge_range_to_val(f.sort_ref));
+  sort.set("ref", cell_rect_to_val(f.sort_ref));
   sort.set("columnSort", f.column_sort != 0);
   sort.set("caseSensitive", f.case_sensitive != 0);
   sort.set("sortMethod", f.sort_method);

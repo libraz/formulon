@@ -10,6 +10,7 @@
 #include <string>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_record_arg.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 
@@ -122,7 +123,7 @@ TEST(FormulonCApiExternalLinks, SetFormulaBindsANewBookOnce) {
 TEST(FormulonCApiExternalLinks, CfRuleNamingANewBookBindsIt) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  const fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  const fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule{};
   rule.type = 0;  // Expression
   rule.formula1 = "[Book.xlsx]Sheet1!$A$1>0";
@@ -143,7 +144,7 @@ TEST(FormulonCApiExternalLinks, CfRuleNamingANewBookBindsIt) {
 TEST(FormulonCApiExternalLinks, ValidationNamingANewBookBindsIt) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  const fm_merge_range range{0, 0, 9, 0};
+  const fm_cell_rect_t range{0, 0, 9, 0};
   fm_data_validation_t v{};
   v.ranges = &range;
   v.range_count = 1;
@@ -287,7 +288,8 @@ TEST(FormulonCApiExternalLinks, FileNameCellGettersSpellTheName) {
   CreateWithName(&wb);
   ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=M5.xlsx!LN+1"), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_set_array_formula(wb.handle, 0, 2, 0, 1, 1, "=M5.xlsx!LN*2"), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_array_formula(wb.handle, 0, record_arg(fm_cell_rect_t{2, 0, 2U, 0U}), "=M5.xlsx!LN*2"), 0)
+      << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 0U);
 
   for (const bool named : {true, false}) {
@@ -308,7 +310,8 @@ TEST(FormulonCApiExternalLinks, FileNameCellGettersSpellTheName) {
     EXPECT_EQ(Str(formula), "=" + book + "LN+1");
 
     fm_cell_range_t* range = nullptr;
-    ASSERT_EQ(fm_sheet_get_cells_in_range(wb.handle, 0, 0, 0, 9, 0, 0, 0, &range), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_sheet_get_cells_in_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 9, 0}), 0, 0, &range), 0)
+        << fm_get_last_error_message();
     ASSERT_EQ(fm_cell_range_get_cell_at(range, 0, &row, &col, &formula, &v), 0);
     EXPECT_EQ(Str(formula), "=" + book + "LN+1");
     fm_cell_range_destroy(range);
@@ -347,7 +350,7 @@ TEST(FormulonCApiExternalLinks, FileNameValidationsStoreAndSpellTheName) {
   WorkbookGuard wb;
   CreateWithName(&wb);
   ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
-  const fm_merge_range range{0, 0, 9, 0};
+  const fm_cell_rect_t range{0, 0, 9, 0};
   fm_data_validation_t v{};
   v.ranges = &range;
   v.range_count = 1;
@@ -370,7 +373,7 @@ TEST(FormulonCApiExternalLinks, FileNameConditionalFormatsStoreAndSpellTheName) 
   WorkbookGuard wb;
   CreateWithName(&wb);
   ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
-  const fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  const fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule{};
   rule.type = 0;  // Expression
   rule.formula1 = "M5.xlsx!LN>0";

@@ -25,7 +25,7 @@ class FormulonCApiSheetFeatures : public ::testing::Test {
 };
 
 TEST_F(FormulonCApiSheetFeatures, MergeAddAndIterate) {
-  fm_merge_range m;
+  fm_cell_rect_t m;
   m.first_row = 0;
   m.first_col = 0;
   m.last_row = 1;
@@ -34,7 +34,7 @@ TEST_F(FormulonCApiSheetFeatures, MergeAddAndIterate) {
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
-  fm_merge_range got{};
+  fm_cell_rect_t got{};
   ASSERT_EQ(fm_sheet_get_merge_at(wb_, 0, 0, &got), 0);
   EXPECT_EQ(got.first_row, 0U);
   EXPECT_EQ(got.last_row, 1U);
@@ -42,16 +42,16 @@ TEST_F(FormulonCApiSheetFeatures, MergeAddAndIterate) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, MergeOutOfRangeIndex) {
-  fm_merge_range got{};
+  fm_cell_rect_t got{};
   EXPECT_NE(fm_sheet_get_merge_at(wb_, 0, 999, &got), 0);
 }
 
 TEST_F(FormulonCApiSheetFeatures, HyperlinkAddAndIterate) {
   fm_hyperlink_t hl{};
-  hl.row = 1;
-  hl.col = 2;
-  hl.last_row = 1;
-  hl.last_col = 2;
+  hl.rect.first_row = 1;
+  hl.rect.first_col = 2;
+  hl.rect.last_row = 1;
+  hl.rect.last_col = 2;
   hl.target = "https://example.com";
   hl.display = "Click";
   hl.tooltip = "Open site";
@@ -61,10 +61,10 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkAddAndIterate) {
   ASSERT_EQ(count, 1U);
   fm_hyperlink_t out{};
   ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0, 0, &out), 0);
-  EXPECT_EQ(out.row, 1U);
-  EXPECT_EQ(out.col, 2U);
-  EXPECT_EQ(out.last_row, 1U);
-  EXPECT_EQ(out.last_col, 2U);
+  EXPECT_EQ(out.rect.first_row, 1U);
+  EXPECT_EQ(out.rect.first_col, 2U);
+  EXPECT_EQ(out.rect.last_row, 1U);
+  EXPECT_EQ(out.rect.last_col, 2U);
   ASSERT_NE(out.target, nullptr);
   EXPECT_STREQ(out.target, "https://example.com");
   EXPECT_STREQ(out.display, "Click");
@@ -73,29 +73,29 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkAddAndIterate) {
 
 TEST_F(FormulonCApiSheetFeatures, HyperlinkRangeAddAndIterate) {
   fm_hyperlink_t hl{};
-  hl.row = 7U;
-  hl.col = 8U;
-  hl.last_row = 9U;
-  hl.last_col = 10U;
+  hl.rect.first_row = 7U;
+  hl.rect.first_col = 8U;
+  hl.rect.last_row = 9U;
+  hl.rect.last_col = 10U;
   hl.target = "https://range.example";
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0U, &hl), 0);
 
   fm_hyperlink_t out{};
   ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0U, 0U, &out), 0);
-  EXPECT_EQ(out.row, 7U);
-  EXPECT_EQ(out.col, 8U);
-  EXPECT_EQ(out.last_row, 9U);
-  EXPECT_EQ(out.last_col, 10U);
+  EXPECT_EQ(out.rect.first_row, 7U);
+  EXPECT_EQ(out.rect.first_col, 8U);
+  EXPECT_EQ(out.rect.last_row, 9U);
+  EXPECT_EQ(out.rect.last_col, 10U);
   EXPECT_STREQ(out.target, "https://range.example");
 }
 
 TEST_F(FormulonCApiSheetFeatures, HyperlinkRejectsInvertedRectangleAtomically) {
   const fm_status_t invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   fm_hyperlink_t hl{};
-  hl.row = 9U;
-  hl.col = 8U;
-  hl.last_row = 7U;
-  hl.last_col = 10U;
+  hl.rect.first_row = 9U;
+  hl.rect.first_col = 8U;
+  hl.rect.last_row = 7U;
+  hl.rect.last_col = 10U;
   hl.target = "https://invalid.example";
   EXPECT_EQ(fm_sheet_add_hyperlink(wb_, 0U, &hl), invalid);
 
@@ -106,10 +106,10 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkRejectsInvertedRectangleAtomically) {
 
 TEST_F(FormulonCApiSheetFeatures, HyperlinkAcceptsNullStringFields) {
   fm_hyperlink_t hl{};
-  hl.row = 0;
-  hl.col = 0;
-  hl.last_row = 0;
-  hl.last_col = 0;
+  hl.rect.first_row = 0;
+  hl.rect.first_col = 0;
+  hl.rect.last_row = 0;
+  hl.rect.last_col = 0;
   // All string pointers null => empty target/display/etc.
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, &hl), 0);
   fm_hyperlink_t got{};
@@ -218,25 +218,25 @@ TEST_F(FormulonCApiSheetFeatures, CommentEnumerateOutOfRangeIndex) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, SheetIndexOutOfRange) {
-  fm_merge_range m{};
+  fm_cell_rect_t m{};
   EXPECT_NE(fm_sheet_add_merge(wb_, 999, &m), 0);
   std::size_t count = 0;
   EXPECT_NE(fm_sheet_get_merge_count(wb_, 999, &count), 0);
 }
 
 TEST_F(FormulonCApiSheetFeatures, RemoveMergeByRangeOverlap) {
-  fm_merge_range a{0, 0, 1, 1};
-  fm_merge_range b{0, 3, 1, 4};
-  fm_merge_range c{4, 0, 5, 1};
+  fm_cell_rect_t a{0, 0, 1, 1};
+  fm_cell_rect_t b{0, 3, 1, 4};
+  fm_cell_rect_t c{4, 0, 5, 1};
   ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &a), 0);
   ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &b), 0);
   ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &c), 0);
-  fm_merge_range q{0, 0, 1, 4};
+  fm_cell_rect_t q{0, 0, 1, 4};
   ASSERT_EQ(fm_sheet_remove_merge(wb_, 0, &q), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
-  fm_merge_range got{};
+  fm_cell_rect_t got{};
   ASSERT_EQ(fm_sheet_get_merge_at(wb_, 0, 0, &got), 0);
   EXPECT_EQ(got.first_row, 4U);
   EXPECT_EQ(got.first_col, 0U);
@@ -245,9 +245,9 @@ TEST_F(FormulonCApiSheetFeatures, RemoveMergeByRangeOverlap) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, RemoveMergeByRangeNoOverlap) {
-  fm_merge_range a{0, 0, 1, 1};
+  fm_cell_rect_t a{0, 0, 1, 1};
   ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &a), 0);
-  fm_merge_range q{4, 2, 5, 3};
+  fm_cell_rect_t q{4, 2, 5, 3};
   ASSERT_EQ(fm_sheet_remove_merge(wb_, 0, &q), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
@@ -255,15 +255,15 @@ TEST_F(FormulonCApiSheetFeatures, RemoveMergeByRangeNoOverlap) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, RemoveMergeAtValid) {
-  fm_merge_range a{0, 0, 1, 1};
-  fm_merge_range b{4, 4, 5, 5};
+  fm_cell_rect_t a{0, 0, 1, 1};
+  fm_cell_rect_t b{4, 4, 5, 5};
   ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &a), 0);
   ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &b), 0);
   ASSERT_EQ(fm_sheet_remove_merge_at(wb_, 0, 0), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
-  fm_merge_range got{};
+  fm_cell_rect_t got{};
   ASSERT_EQ(fm_sheet_get_merge_at(wb_, 0, 0, &got), 0);
   EXPECT_EQ(got.first_row, 4U);
   EXPECT_EQ(got.first_col, 4U);
@@ -272,7 +272,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveMergeAtValid) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, RemoveMergeAtOutOfRange) {
-  fm_merge_range a{0, 0, 1, 1};
+  fm_cell_rect_t a{0, 0, 1, 1};
   ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &a), 0);
   EXPECT_NE(fm_sheet_remove_merge_at(wb_, 0, 99), 0);
   std::size_t count = 0;
@@ -281,9 +281,9 @@ TEST_F(FormulonCApiSheetFeatures, RemoveMergeAtOutOfRange) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, ClearMerges) {
-  fm_merge_range a{0, 0, 1, 1};
-  fm_merge_range b{2, 2, 3, 3};
-  fm_merge_range c{4, 4, 5, 5};
+  fm_cell_rect_t a{0, 0, 1, 1};
+  fm_cell_rect_t b{2, 2, 3, 3};
+  fm_cell_rect_t c{4, 4, 5, 5};
   ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &a), 0);
   ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &b), 0);
   ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &c), 0);
@@ -296,7 +296,7 @@ TEST_F(FormulonCApiSheetFeatures, ClearMerges) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, MergeRemovalSheetIndexOutOfRange) {
-  fm_merge_range q{};
+  fm_cell_rect_t q{};
   EXPECT_NE(fm_sheet_remove_merge(wb_, 999, &q), 0);
   EXPECT_NE(fm_sheet_remove_merge_at(wb_, 999, 0), 0);
   EXPECT_NE(fm_sheet_clear_merges(wb_, 999), 0);
@@ -304,22 +304,22 @@ TEST_F(FormulonCApiSheetFeatures, MergeRemovalSheetIndexOutOfRange) {
 
 TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowCol) {
   fm_hyperlink_t a{};
-  a.row = 1;
-  a.col = 2;
-  a.last_row = 1;
-  a.last_col = 2;
+  a.rect.first_row = 1;
+  a.rect.first_col = 2;
+  a.rect.last_row = 1;
+  a.rect.last_col = 2;
   a.target = "https://a.example";
   fm_hyperlink_t b{};
-  b.row = 3;
-  b.col = 4;
-  b.last_row = 3;
-  b.last_col = 4;
+  b.rect.first_row = 3;
+  b.rect.first_col = 4;
+  b.rect.last_row = 3;
+  b.rect.last_col = 4;
   b.target = "https://b.example";
   fm_hyperlink_t c{};
-  c.row = 1;
-  c.col = 2;
-  c.last_row = 1;
-  c.last_col = 2;
+  c.rect.first_row = 1;
+  c.rect.first_col = 2;
+  c.rect.last_row = 1;
+  c.rect.last_col = 2;
   c.target = "https://dup.example";
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, &a), 0);
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, &b), 0);
@@ -331,17 +331,17 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowCol) {
   ASSERT_EQ(count, 1U);
   fm_hyperlink_t got{};
   ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0, 0, &got), 0);
-  EXPECT_EQ(got.row, 3U);
-  EXPECT_EQ(got.col, 4U);
+  EXPECT_EQ(got.rect.first_row, 3U);
+  EXPECT_EQ(got.rect.first_col, 4U);
   EXPECT_STREQ(got.target, "https://b.example");
 }
 
 TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowColNoMatch) {
   fm_hyperlink_t a{};
-  a.row = 1;
-  a.col = 2;
-  a.last_row = 1;
-  a.last_col = 2;
+  a.rect.first_row = 1;
+  a.rect.first_col = 2;
+  a.rect.last_row = 1;
+  a.rect.last_col = 2;
   a.target = "https://a.example";
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, &a), 0);
   // No hyperlink anchored at (5, 5); call is still kOk.
@@ -353,16 +353,16 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowColNoMatch) {
 
 TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkAtValid) {
   fm_hyperlink_t a{};
-  a.row = 1;
-  a.col = 1;
-  a.last_row = 1;
-  a.last_col = 1;
+  a.rect.first_row = 1;
+  a.rect.first_col = 1;
+  a.rect.last_row = 1;
+  a.rect.last_col = 1;
   a.target = "https://a.example";
   fm_hyperlink_t b{};
-  b.row = 2;
-  b.col = 2;
-  b.last_row = 2;
-  b.last_col = 2;
+  b.rect.first_row = 2;
+  b.rect.first_col = 2;
+  b.rect.last_row = 2;
+  b.rect.last_col = 2;
   b.target = "https://b.example";
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, &a), 0);
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, &b), 0);
@@ -372,17 +372,17 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkAtValid) {
   ASSERT_EQ(count, 1U);
   fm_hyperlink_t got{};
   ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0, 0, &got), 0);
-  EXPECT_EQ(got.row, 2U);
-  EXPECT_EQ(got.col, 2U);
+  EXPECT_EQ(got.rect.first_row, 2U);
+  EXPECT_EQ(got.rect.first_col, 2U);
   EXPECT_STREQ(got.target, "https://b.example");
 }
 
 TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkAtOutOfRange) {
   fm_hyperlink_t a{};
-  a.row = 0;
-  a.col = 0;
-  a.last_row = 0;
-  a.last_col = 0;
+  a.rect.first_row = 0;
+  a.rect.first_col = 0;
+  a.rect.last_row = 0;
+  a.rect.last_col = 0;
   a.target = "https://a.example";
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, &a), 0);
   EXPECT_NE(fm_sheet_remove_hyperlink_at(wb_, 0, 99), 0);
@@ -393,22 +393,22 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkAtOutOfRange) {
 
 TEST_F(FormulonCApiSheetFeatures, ClearHyperlinks) {
   fm_hyperlink_t a{};
-  a.row = 0;
-  a.col = 0;
-  a.last_row = 0;
-  a.last_col = 0;
+  a.rect.first_row = 0;
+  a.rect.first_col = 0;
+  a.rect.last_row = 0;
+  a.rect.last_col = 0;
   a.target = "https://a.example";
   fm_hyperlink_t b{};
-  b.row = 1;
-  b.col = 1;
-  b.last_row = 1;
-  b.last_col = 1;
+  b.rect.first_row = 1;
+  b.rect.first_col = 1;
+  b.rect.last_row = 1;
+  b.rect.last_col = 1;
   b.target = "https://b.example";
   fm_hyperlink_t c{};
-  c.row = 2;
-  c.col = 2;
-  c.last_row = 2;
-  c.last_col = 2;
+  c.rect.first_row = 2;
+  c.rect.first_col = 2;
+  c.rect.last_row = 2;
+  c.rect.last_col = 2;
   c.target = "https://c.example";
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, &a), 0);
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, &b), 0);
@@ -436,7 +436,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationCountEmpty) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, ValidationAddSingleRangeAndIterate) {
-  fm_merge_range r{1, 2, 3, 4};
+  fm_cell_rect_t r{1, 2, 3, 4};
   fm_data_validation_t v{};
   v.ranges = &r;
   v.range_count = 1;
@@ -483,7 +483,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationAddSingleRangeAndIterate) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, ValidationAddMultiRangeRoundTrip) {
-  fm_merge_range ranges[3] = {{0, 0, 1, 1}, {3, 3, 4, 4}, {7, 7, 9, 9}};
+  fm_cell_rect_t ranges[3] = {{0, 0, 1, 1}, {3, 3, 4, 4}, {7, 7, 9, 9}};
   fm_data_validation_t v{};
   v.ranges = ranges;
   v.range_count = 3;
@@ -616,7 +616,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationSheetIndexOutOfRange) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, ValidationBorrowedPointersStableAcrossReads) {
-  fm_merge_range r{0, 0, 5, 5};
+  fm_cell_rect_t r{0, 0, 5, 5};
   fm_data_validation_t v{};
   v.ranges = &r;
   v.range_count = 1;
@@ -663,16 +663,16 @@ TEST_F(FormulonCApiSheetFeatures, MutatorsRejectOutOfGridCoordinatesBeforeMutati
   const fm_status_t invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 
   fm_hyperlink_t hyperlink{};
-  hyperlink.row = 0U;
-  hyperlink.col = formulon::Sheet::kMaxCols;
-  hyperlink.last_row = 0U;
-  hyperlink.last_col = formulon::Sheet::kMaxCols;
+  hyperlink.rect.first_row = 0U;
+  hyperlink.rect.first_col = formulon::Sheet::kMaxCols;
+  hyperlink.rect.last_row = 0U;
+  hyperlink.rect.last_col = formulon::Sheet::kMaxCols;
   EXPECT_EQ(fm_sheet_add_hyperlink(wb_, 0U, &hyperlink), invalid);
   std::size_t count = 99U;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0U, &count), 0);
   EXPECT_EQ(count, 0U);
 
-  fm_merge_range merge{0U, 0U, 0U, formulon::Sheet::kMaxCols};
+  fm_cell_rect_t merge{0U, 0U, 0U, formulon::Sheet::kMaxCols};
   EXPECT_EQ(fm_sheet_add_merge(wb_, 0U, &merge), invalid);
   ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0U, &count), 0);
   EXPECT_EQ(count, 0U);
@@ -681,7 +681,7 @@ TEST_F(FormulonCApiSheetFeatures, MutatorsRejectOutOfGridCoordinatesBeforeMutati
   ASSERT_EQ(fm_sheet_get_comment_count(wb_, 0U, &count), 0);
   EXPECT_EQ(count, 0U);
 
-  const fm_merge_range validation_ranges[2] = {
+  const fm_cell_rect_t validation_ranges[2] = {
       {0U, 0U, 0U, 0U},
       {0U, 0U, 0U, formulon::Sheet::kMaxCols},
   };
@@ -705,7 +705,7 @@ TEST_F(FormulonCApiSheetFeatures, MutatorsRejectOutOfGridCoordinatesBeforeMutati
 // DV formulas are stored as files carry them: one leading '=' is dropped, so
 // a save / load cycle returns the text the setter stored.
 TEST_F(FormulonCApiSheetFeatures, ValidationStoresFormulasWithoutTheLeadingEquals) {
-  fm_merge_range r{0, 0, 5, 0};
+  fm_cell_rect_t r{0, 0, 5, 0};
   fm_data_validation_t v{};
   v.ranges = &r;
   v.range_count = 1;

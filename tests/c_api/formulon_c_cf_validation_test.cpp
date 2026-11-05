@@ -16,20 +16,19 @@ TEST(FormulonCApiCfMutate, OutOfGridSqrefRejectedAndLeavesTheModelUnchanged) {
   std::size_t rule_index = 0;
 
   // One past the last column, on a whole-column range.
-  fm_cf_cell_range_t past_last_col{0, formulon::Sheet::kMaxCols, formulon::Sheet::kMaxRows - 1U,
-                                   formulon::Sheet::kMaxCols};
+  fm_cell_rect_t past_last_col{0, formulon::Sheet::kMaxCols, formulon::Sheet::kMaxRows - 1U, formulon::Sheet::kMaxCols};
   rule.sqref = &past_last_col;
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 
   // One past the last row.
-  fm_cf_cell_range_t past_last_row{0, 0, formulon::Sheet::kMaxRows, 0};
+  fm_cell_rect_t past_last_row{0, 0, formulon::Sheet::kMaxRows, 0};
   rule.sqref = &past_last_row;
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 
   // Inverted rectangle.
-  fm_cf_cell_range_t inverted{5, 0, 1, 0};
+  fm_cell_rect_t inverted{5, 0, 1, 0};
   rule.sqref = &inverted;
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
@@ -41,7 +40,7 @@ TEST(FormulonCApiCfMutate, OutOfGridSqrefRejectedAndLeavesTheModelUnchanged) {
   ASSERT_EQ(fm_workbook_save(wb.handle, &rejected_save.data, &rejected_save.len), 0);
 
   // The widest legal whole-column range still round-trips.
-  fm_cf_cell_range_t whole_col{0, 0, formulon::Sheet::kMaxRows - 1U, 0};
+  fm_cell_rect_t whole_col{0, 0, formulon::Sheet::kMaxRows - 1U, 0};
   rule.sqref = &whole_col;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
 
@@ -79,7 +78,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsExcessiveSqrefCount) {
   std::size_t before = 0;
   ASSERT_EQ(fm_sheet_get_cf_rule_count(wb.handle, 0, &before), 0);
 
-  fm_cf_cell_range_t sqref{0, 0, 0, 0};
+  fm_cell_rect_t sqref{0, 0, 0, 0};
   fm_cf_rule_t rule{};
   rule.type = 0;  // Expression
   std::string f = "TRUE";
@@ -104,7 +103,7 @@ TEST(FormulonCApiCfMutate, GetAtDisengagesADxfIdTheStylesTableCannotResolve) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   SeedDxfs(wb.handle, 2);
 
-  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule{};
   rule.type = 1;  // CellIs
   rule.op_engaged = 1;
@@ -144,7 +143,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsNonGuidId) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule{};
   rule.type = 0;  // Expression
   rule.formula1 = "TRUE";
@@ -191,7 +190,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsEnumOrdinalsPastTheirDomain) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t base{};
   base.formula1 = "TRUE";
   base.sqref = &sqref;
@@ -317,7 +316,7 @@ TEST(FormulonCApiCfMutate, DuplicatePredicateRulesGetDistinctStableIndices) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   SeedDxfs(wb.handle, 1);
 
-  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule{};
   rule.type = 1;  // CellIs
   rule.op_engaged = 1;

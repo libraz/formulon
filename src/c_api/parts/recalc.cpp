@@ -17,6 +17,7 @@
 using formulon::c_api::parts::check_finite_non_negative;
 using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
@@ -379,7 +380,7 @@ extern "C" fm_status_t fm_workbook_set_file_name(fm_workbook_t* wb, const char* 
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_recalc_viewport(fm_workbook_t* wb, size_t sheet_index, const fm_viewport* viewport,
+extern "C" fm_status_t fm_sheet_recalc_viewport(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* viewport,
                                                 uint32_t* out_recomputed_count) {
   clear_last_error();
   if (wb == nullptr || viewport == nullptr) {
@@ -390,6 +391,9 @@ extern "C" fm_status_t fm_sheet_recalc_viewport(fm_workbook_t* wb, size_t sheet_
   // and the caller would keep rendering stale values. Every other entry
   // point that takes a sheet rejects the same input.
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_recalc_viewport"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_rect(*viewport, "fm_sheet_recalc_viewport"); rc != 0) {
     return rc;
   }
   // `SheetCellRange::sheet_id` is 16-bit; refuse an index it cannot hold

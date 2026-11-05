@@ -8,6 +8,7 @@
 
 #include "c_api/formulon_c.h"
 #include "formulon_c_pivot_test_helpers.h"
+#include "formulon_c_record_arg.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 
@@ -37,10 +38,10 @@ void BuildSquares(WorkbookGuard& wb) {
 
 fm_data_table_t SquaresSpec() {
   fm_data_table_t spec{};
-  spec.first_row = 2;
-  spec.first_col = 1;
-  spec.last_row = 4;
-  spec.last_col = 1;
+  spec.rect.first_row = 2;
+  spec.rect.first_col = 1;
+  spec.rect.last_row = 4;
+  spec.rect.last_col = 1;
   spec.has_col_input = 1;
   spec.col_input_row = 0;
   spec.col_input_col = 1;
@@ -63,10 +64,10 @@ TEST(FormulonCApiDataTable, AddComputesReadsAndRefusesWrites) {
   fm_data_table_t info{};
   ASSERT_EQ(fm_sheet_get_data_table(wb.handle, 0, 3, 1, &present, &info), 0);
   EXPECT_EQ(present, 1);
-  EXPECT_EQ(info.first_row, 2U);
-  EXPECT_EQ(info.last_row, 4U);
-  EXPECT_EQ(info.first_col, 1U);
-  EXPECT_EQ(info.last_col, 1U);
+  EXPECT_EQ(info.rect.first_row, 2U);
+  EXPECT_EQ(info.rect.last_row, 4U);
+  EXPECT_EQ(info.rect.first_col, 1U);
+  EXPECT_EQ(info.rect.last_col, 1U);
   EXPECT_EQ(info.has_col_input, 1);
   EXPECT_EQ(info.has_row_input, 0);
   EXPECT_EQ(info.col_input_row, 0U);
@@ -78,7 +79,7 @@ TEST(FormulonCApiDataTable, AddComputesReadsAndRefusesWrites) {
   // A cell outside the range reports no table and a zeroed record.
   ASSERT_EQ(fm_sheet_get_data_table(wb.handle, 0, 1, 1, &present, &info), 0);
   EXPECT_EQ(present, 0);
-  EXPECT_EQ(info.last_row, 0U);
+  EXPECT_EQ(info.rect.last_row, 0U);
 
   EXPECT_EQ(fm_sheet_set_number(wb.handle, 0, 3, 1, 7.0), kPreconditionFailed);
   EXPECT_EQ(fm_sheet_set_text(wb.handle, 0, 2, 1, "x"), kPreconditionFailed);
@@ -101,10 +102,10 @@ TEST(FormulonCApiDataTable, TwoVariableTableReadsBothInputs) {
     ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 3 + j, 2, static_cast<double>(10 * (j + 1))), 0);
   }
   fm_data_table_t spec{};
-  spec.first_row = 3;
-  spec.first_col = 3;
-  spec.last_row = 5;
-  spec.last_col = 5;
+  spec.rect.first_row = 3;
+  spec.rect.first_col = 3;
+  spec.rect.last_row = 5;
+  spec.rect.last_col = 5;
   spec.has_row_input = 1;
   spec.row_input_row = 0;
   spec.row_input_col = 5;
@@ -133,7 +134,7 @@ TEST(FormulonCApiDataTable, TwoVariableTableReadsBothInputs) {
   ASSERT_EQ(present, 1);
   EXPECT_EQ(info.row_input_deleted, 1);
   EXPECT_EQ(info.col_input_deleted, 0);
-  EXPECT_EQ(info.first_row, 2U);
+  EXPECT_EQ(info.rect.first_row, 2U);
   EXPECT_EQ(info.col_input_row, 0U);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   fm_value_t v{};
@@ -209,7 +210,7 @@ TEST(FormulonCApiDataTable, ResultCellsReportTheTableFormula) {
   EXPECT_STREQ(formula, "");  // A header value.
 
   fm_cell_range_t* range = nullptr;
-  ASSERT_EQ(fm_sheet_get_cells_in_range(wb.handle, 0, 2, 1, 4, 1, 0, 0, &range), 0);
+  ASSERT_EQ(fm_sheet_get_cells_in_range(wb.handle, 0, record_arg(fm_cell_rect_t{2, 1, 4, 1}), 0, 0, &range), 0);
   size_t count = 0;
   ASSERT_EQ(fm_cell_range_get_cell_count(range, &count), 0);
   EXPECT_EQ(count, 3U);
@@ -249,12 +250,12 @@ TEST(FormulonCApiDataTable, StructuralEditsMoveOrRemoveTheTableWhole) {
   fm_data_table_t info{};
   ASSERT_EQ(fm_sheet_get_data_table(wb.handle, 0, 2, 1, &present, &info), 0);
   EXPECT_EQ(present, 1);
-  EXPECT_EQ(info.last_row, 4U);
+  EXPECT_EQ(info.rect.last_row, 4U);
   // Rows inserted above the block move it; deleting the whole block removes it.
   ASSERT_EQ(fm_sheet_insert_rows(wb.handle, 0, 1, 1), 0);
   ASSERT_EQ(fm_sheet_get_data_table(wb.handle, 0, 5, 1, &present, &info), 0);
   EXPECT_EQ(present, 1);
-  EXPECT_EQ(info.first_row, 3U);
+  EXPECT_EQ(info.rect.first_row, 3U);
   ASSERT_EQ(fm_sheet_delete_rows(wb.handle, 0, 2, 4), 0);
   ASSERT_EQ(fm_sheet_get_data_table(wb.handle, 0, 3, 1, &present, &info), 0);
   EXPECT_EQ(present, 0);
@@ -278,14 +279,14 @@ TEST(FormulonCApiDataTable, RejectsBadArguments) {
   none.has_col_input = 0;
   EXPECT_EQ(fm_sheet_add_data_table(wb.handle, 0, &none), kDataTableInvalid);
   fm_data_table_t no_header = spec;
-  no_header.first_row = 0;
+  no_header.rect.first_row = 0;
   EXPECT_EQ(fm_sheet_add_data_table(wb.handle, 0, &no_header), kDataTableInvalid);
   fm_data_table_t input_inside = spec;
   input_inside.col_input_row = 3;
   input_inside.col_input_col = 1;
   EXPECT_EQ(fm_sheet_add_data_table(wb.handle, 0, &input_inside), kDataTableInvalid);
   fm_data_table_t off_grid = spec;
-  off_grid.last_row = 0xFFFFFFFFU;
+  off_grid.rect.last_row = 0xFFFFFFFFU;
   EXPECT_EQ(fm_sheet_add_data_table(wb.handle, 0, &off_grid), kInvalidArgument);
   ASSERT_EQ(fm_sheet_add_data_table(wb.handle, 0, &spec), 0);
   EXPECT_EQ(fm_sheet_add_data_table(wb.handle, 0, &spec), kDataTableInvalid);

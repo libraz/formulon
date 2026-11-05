@@ -130,7 +130,7 @@ TEST(FormulonCApiPivot, SavedPivotLocationRefCoversTheProjectedGrid) {
   std::uint32_t left = 0;
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
-  ASSERT_EQ(fm_pivot_cells_get_bounds(projected.handle, &top, &left, &rows, &cols), 0);
+  ASSERT_EQ(PivotLayoutExtent(projected.handle, &top, &left, &rows, &cols), 0);
   ASSERT_GT(rows, 1U) << "projection must be larger than the placeholder for this test to mean anything";
   ASSERT_GT(cols, 1U);
 
@@ -270,7 +270,7 @@ TEST(FormulonCApiPivot, LoadedPivotCacheMutationReprojectsAuthoredLocation) {
   std::uint32_t left = 0;
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
-  ASSERT_EQ(fm_pivot_cells_get_bounds(projected.handle, &top, &left, &rows, &cols), 0);
+  ASSERT_EQ(PivotLayoutExtent(projected.handle, &top, &left, &rows, &cols), 0);
   EXPECT_EQ(top, 0U);
   EXPECT_EQ(left, 3U);
   EXPECT_EQ(rows, 5U);
@@ -825,7 +825,7 @@ TEST(FormulonCApiPivot, PivotProjectionUsesWorkbookLocaleAndReportLayout) {
   std::uint32_t left = 0;
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
-  ASSERT_EQ(fm_pivot_cells_get_bounds(projected.handle, &top, &left, &rows, &cols), 0);
+  ASSERT_EQ(PivotLayoutExtent(projected.handle, &top, &left, &rows, &cols), 0);
   EXPECT_EQ(cols, 2U);  // Tabular exposes its two row-field columns.
 
   bool saw_japanese_total = false;

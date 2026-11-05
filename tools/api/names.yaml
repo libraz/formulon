@@ -1645,8 +1645,9 @@ entries:
     was: { js: ConditionalFormatInput, py: ConditionalFormatInput }
   record.conditional_format_range:
     kind: record
-    js: ConditionalFormatRange
     surfaces: [wasm, native]
+    replaced_by: record.cell_rect
+    closes: R11.rect
     was: { js: ConditionalFormatRange }
   record.data_table_input:
     kind: record
@@ -1673,8 +1674,9 @@ entries:
     was: { js: DataValidationInput, py: DataValidationInput }
   record.data_validation_range:
     kind: record
-    js: DataValidationRange
     surfaces: [wasm, native]
+    replaced_by: record.cell_rect
+    closes: R11.rect
     was: { js: DataValidationRange }
   record.defined_name_entry:
     kind: record

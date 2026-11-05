@@ -2,10 +2,12 @@
 // through the generated table in `sheet_index_calls.inc`, checks its arguments
 // in one order -- handle, NULL pointers, sheet index, everything else -- and
 // reports an out-of-range sheet as FM_STATUS_SHEET_INDEX_OUT_OF_RANGE. A
-// successful call leaves the last-error state empty.
+// successful call leaves the last-error state empty. Every `fm_cell_rect_t`
+// argument rejects an inverted or off-grid rectangle as invalid.
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <vector>
 
@@ -40,6 +42,7 @@ struct SheetIndexCall {
   const char* name;
   std::size_t pointer_count;
   std::uint32_t text_mask;  // pointer slots that are `const char*` arguments
+  std::uint32_t rect_mask;  // pointer slots that are single `const fm_cell_rect_t*` arguments
   fm_status_t (*call)(fm_workbook_t* wb, std::size_t sheet_index, ZeroSlots& slots);
   void (*release)(ZeroSlots& slots);
 };
@@ -187,4 +190,52 @@ TEST(FormulonCApiSheetIndexStatus, SheetCollectionIndexIsSheetIndexOutOfRange) {
   EXPECT_EQ(fm_workbook_add_table(wb.handle, kBad, "A1:A2", "T", "T", columns, 1U, nullptr, 1, 0, &index),
             FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 1U);
+}
+
+// Rectangles every `fm_cell_rect_t` argument refuses: corners in reverse order
+// on either axis, and a corner one past the last row or column.
+const fm_cell_rect_t kBadRects[] = {
+    {2U, 0U, 1U, 0U},
+    {0U, 2U, 0U, 1U},
+    {0U, 0U, 1048576U, 0U},
+    {0U, 0U, 0U, 16384U},
+};
+
+TEST(FormulonCApiCellRect, EveryRectArgumentRejectsAnInvertedOrOffGridRect) {
+  std::size_t rect_calls = 0;
+  for (const SheetIndexCall& entry : kSheetIndexCalls) {
+    if (entry.rect_mask == 0U) {
+      continue;
+    }
+    ++rect_calls;
+    for (const fm_cell_rect_t& bad : kBadRects) {
+      WorkbookGuard wb;
+      ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+      ZeroSlots slots;
+      for (std::size_t slot = 0; slot < ZeroSlots::kCount; ++slot) {
+        if ((entry.rect_mask & (1U << slot)) != 0U) {
+          std::memcpy(slots.storage[slot], &bad, sizeof(bad));
+        }
+      }
+      const fm_status_t rc = entry.call(wb.handle, 0U, slots);
+      if (entry.release != nullptr) {
+        entry.release(slots);
+      }
+      EXPECT_EQ(rc, FM_STATUS_INVALID_ARGUMENT) << entry.name << " {" << bad.first_row << "," << bad.first_col << ","
+                                                << bad.last_row << "," << bad.last_col << "}";
+    }
+  }
+  EXPECT_GE(rect_calls, 13U);
+}
+
+// The rectangle arguments outside the sheet-scoped table: a selection range and
+// the workbook-scope reference formatter.
+TEST(FormulonCApiCellRect, SelectionAndReferenceRejectAnInvertedOrOffGridRect) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  for (const fm_cell_rect_t& bad : kBadRects) {
+    EXPECT_EQ(fm_sheet_set_selection(wb.handle, 0U, 0U, 0U, &bad, 1U), FM_STATUS_INVALID_ARGUMENT);
+    const char* text = nullptr;
+    EXPECT_EQ(fm_workbook_format_reference(wb.handle, nullptr, &bad, 0, &text), FM_STATUS_INVALID_ARGUMENT);
+  }
 }

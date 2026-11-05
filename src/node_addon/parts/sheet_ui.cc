@@ -45,7 +45,7 @@ Napi::Value SheetListResult(const Napi::CallbackInfo& info, const fm_workbook_t*
 }
 
 // Shared body of the per-sheet merge add / remove entries taking `(sheet, range)`.
-using MergeEditFn = fm_status_t (*)(fm_workbook_t*, std::size_t, const fm_merge_range*);
+using MergeEditFn = fm_status_t (*)(fm_workbook_t*, std::size_t, const fm_cell_rect_t*);
 
 // `handle` aliases the wrapper's member, so the C call sees the handle as it
 // is after the range getters ran, not a copy taken before them.
@@ -55,8 +55,8 @@ Napi::Value InvokeMergeEdit(const Napi::CallbackInfo& info, fm_workbook_t* const
     return NullHandleError(env);
   }
   CheckedSpecReader reader(env);
-  fm_merge_range range{};
-  if (!MergeRangeArg(reader, info, 1, &range)) {
+  fm_cell_rect_t range{};
+  if (!CellRectArg(reader, info, 1, &range)) {
     return env.Undefined();
   }
   const uint32_t sheet = Workbook::ArgU32(info, 0);
@@ -93,8 +93,8 @@ Napi::Value Workbook::GetMergesInRange(const Napi::CallbackInfo& info) {
     return FinishListResult(env, arr, kBindingInvalidHandle);
   }
   CheckedSpecReader reader(env);
-  fm_merge_range range{};
-  if (!MergeRangeArg(reader, info, 1, &range)) {
+  fm_cell_rect_t range{};
+  if (!CellRectArg(reader, info, 1, &range)) {
     return env.Undefined();
   }
   const uint32_t sheet = ArgU32(info, 0);
@@ -103,7 +103,7 @@ Napi::Value Workbook::GetMergesInRange(const Napi::CallbackInfo& info) {
   if (rc != 0) {
     return FinishListResult(env, arr, rc);
   }
-  std::vector<fm_merge_range> merges(total);
+  std::vector<fm_cell_rect_t> merges(total);
   uint32_t again = 0;
   rc = fm_sheet_get_merges_in_range(handle_, sheet, &range, merges.data(), total, &again);
   if (rc != 0) {
@@ -346,16 +346,12 @@ Napi::Value Workbook::RemoveProtectedRange(const Napi::CallbackInfo& info) {
 
 namespace {
 
-// Adds the hyperlink described by the already type-checked arguments
-// `(sheet, row, col[, lastRow, lastCol], target, display, tooltip, location)`.
+// Adds a hyperlink over `rect` whose texts are the already type-checked
+// arguments `(target, display, tooltip, location)` from `text_idx` on.
 // Empty strings are forwarded as NULL.
-fm_status_t AddHyperlinkFromArgs(fm_workbook_t* wb, const Napi::CallbackInfo& info, bool ranged) {
+fm_status_t AddHyperlinkFromArgs(fm_workbook_t* wb, const Napi::CallbackInfo& info, const fm_cell_rect_t& rect,
+                                 std::size_t text_idx) {
   const uint32_t sheet = Workbook::ArgU32(info, 0);
-  const uint32_t row = Workbook::ArgU32(info, 1);
-  const uint32_t col = Workbook::ArgU32(info, 2);
-  const uint32_t last_row = ranged ? Workbook::ArgU32(info, 3) : row;
-  const uint32_t last_col = ranged ? Workbook::ArgU32(info, 4) : col;
-  const std::size_t text_idx = ranged ? 5 : 3;
   // Keep the std::string buffers alive until after the C ABI call so the
   // borrowed `const char*` pointers in `fm_hyperlink_t` stay valid.
   const std::string target = Workbook::ArgString(info, text_idx);
@@ -363,10 +359,7 @@ fm_status_t AddHyperlinkFromArgs(fm_workbook_t* wb, const Napi::CallbackInfo& in
   const std::string tooltip = Workbook::ArgString(info, text_idx + 2);
   const std::string location = Workbook::ArgString(info, text_idx + 3);
   fm_hyperlink_t hl{};
-  hl.row = row;
-  hl.col = col;
-  hl.last_row = last_row;
-  hl.last_col = last_col;
+  hl.rect = rect;
   hl.target = target.empty() ? nullptr : target.c_str();
   hl.location = location.empty() ? nullptr : location.c_str();
   hl.display = display.empty() ? nullptr : display.c_str();
@@ -389,7 +382,9 @@ Napi::Value Workbook::AddHyperlink(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  return MakeStatus(env, AddHyperlinkFromArgs(handle_, info, /*ranged=*/false));
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  return MakeStatus(env, AddHyperlinkFromArgs(handle_, info, fm_cell_rect_t{row, col, row, col}, 3));
 }
 
 Napi::Value Workbook::AddHyperlinkRange(const Napi::CallbackInfo& info) {
@@ -397,26 +392,27 @@ Napi::Value Workbook::AddHyperlinkRange(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  if (info.Length() < 9 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber() || !info[3].IsNumber() ||
-      !info[4].IsNumber() || !info[5].IsString() || !info[6].IsString() || !info[7].IsString() || !info[8].IsString()) {
+  if (info.Length() < 6 || !info[0].IsNumber() || !info[1].IsObject() || !info[2].IsString() || !info[3].IsString() ||
+      !info[4].IsString() || !info[5].IsString()) {
     Napi::TypeError::New(env,
-                         "addHyperlinkRange expects (sheet:number, row:number, col:number, "
-                         "lastRow:number, lastCol:number, target:string, display:string, "
-                         "tooltip:string, location:string)")
+                         "addHyperlinkRange expects (sheet:number, range:CellRect, target:string, "
+                         "display:string, tooltip:string, location:string)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  return MakeStatus(env, AddHyperlinkFromArgs(handle_, info, /*ranged=*/true));
+  CheckedSpecReader reader(env);
+  fm_cell_rect_t rect{};
+  if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
+    return env.Undefined();
+  }
+  return MakeStatus(env, AddHyperlinkFromArgs(handle_, info, rect, 2));
 }
 
 namespace {
 
 Napi::Object HyperlinkToJs(Napi::Env env, const fm_hyperlink_t& h) {
   Napi::Object item = Napi::Object::New(env);
-  item.Set("row", Napi::Number::New(env, h.row));
-  item.Set("col", Napi::Number::New(env, h.col));
-  item.Set("lastRow", Napi::Number::New(env, h.last_row));
-  item.Set("lastCol", Napi::Number::New(env, h.last_col));
+  item.Set("rect", RangeToJs(env, h.rect));
   item.Set("target", JsString(env, h.target));
   item.Set("location", JsString(env, h.location));
   item.Set("display", JsString(env, h.display));
@@ -487,7 +483,7 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
   // Pull every JS field into local storage first; the C ABI receives
   // borrowed `const char*` views that must stay valid until
   // `fm_sheet_add_validation` returns.
-  std::vector<fm_merge_range> ranges_buf;
+  std::vector<fm_cell_rect_t> ranges_buf;
   Napi::Array ranges_arr;
   if (reader.Array(v, "ranges", &ranges_arr)) {
     const uint32_t n = ranges_arr.Length();
@@ -501,8 +497,8 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
       if (!reader.Object(range_value, "ranges[]", &range)) {
         break;
       }
-      fm_merge_range parsed{};
-      if (!ReadMergeRange(reader, range, &parsed)) {
+      fm_cell_rect_t parsed{};
+      if (!ReadCellRect(reader, range, &parsed)) {
         break;
       }
       ranges_buf.push_back(parsed);

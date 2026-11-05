@@ -8,9 +8,9 @@ from unittest import mock
 
 import formulon
 from formulon import (
+    CellRect,
     ConditionalFormatInput,
     DataValidationInput,
-    MergeRange,
     ReadDiagnostics,
     SaveDiagnostics,
     Workbook,
@@ -77,14 +77,14 @@ class PackageDiagnosticsTests(unittest.TestCase):
                 0,
                 DataValidationInput(
                     type=3,
-                    ranges=[MergeRange(0, 0, 0, 0)],
+                    ranges=[CellRect(0, 0, 0, 0)],
                     formula1='"Yes,No"',
                 ),
             )
             wb.add_cf_rule(
                 0,
                 ConditionalFormatInput(
-                    sqref=[MergeRange(0, 0, 0, 0)],
+                    sqref=[CellRect(0, 0, 0, 0)],
                     type=1,
                     op=5,
                     formula1="10",

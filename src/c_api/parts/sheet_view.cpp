@@ -199,7 +199,7 @@ extern "C" fm_status_t fm_sheet_set_split(fm_workbook_t* wb, size_t sheet_index,
 }
 
 extern "C" fm_status_t fm_sheet_get_selection(const fm_workbook_t* wb, size_t sheet_index, uint32_t* out_active_row,
-                                              uint32_t* out_active_col, fm_merge_range* out_ranges, size_t capacity,
+                                              uint32_t* out_active_col, fm_cell_rect_t* out_ranges, size_t capacity,
                                               size_t* out_total) {
   clear_last_error();
   if (out_active_row == nullptr || out_active_col == nullptr || out_total == nullptr ||
@@ -230,7 +230,7 @@ extern "C" fm_status_t fm_sheet_get_selection(const fm_workbook_t* wb, size_t sh
 }
 
 extern "C" fm_status_t fm_sheet_set_selection(fm_workbook_t* wb, size_t sheet_index, uint32_t active_row,
-                                              uint32_t active_col, const fm_merge_range* ranges, size_t count) {
+                                              uint32_t active_col, const fm_cell_rect_t* ranges, size_t count) {
   clear_last_error();
   if (count != 0U && ranges == nullptr) {
     return null_argument("fm_sheet_set_selection", "ranges");
@@ -244,7 +244,7 @@ extern "C" fm_status_t fm_sheet_set_selection(fm_workbook_t* wb, size_t sheet_in
   }
   std::vector<formulon::MergeRange> selected;
   for (std::size_t i = 0; i < count; ++i) {
-    const fm_merge_range& r = ranges[i];
+    const fm_cell_rect_t& r = ranges[i];
     if (!formulon::Sheet::coord_in_grid(r.first_row, r.first_col) ||
         !formulon::Sheet::coord_in_grid(r.last_row, r.last_col) || r.first_row > r.last_row ||
         r.first_col > r.last_col) {

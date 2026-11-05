@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "formulon_c_pivot_test_helpers.h"
+#include "formulon_c_record_arg.h"
 #include "sheet.h"
 #include "workbook.h"
 
@@ -107,11 +108,13 @@ TEST(FormulonCApiArgumentRange, CellXfIndexPastTheTableIsRejectedBeforeAnyWrite)
   ASSERT_EQ(count, 3U);
 
   EXPECT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1U, 1U, count), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_range_xf_index(wb.handle, 0, 0U, 0U, 2U, 2U, count), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_range_xf_index(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 2U, 2U}), count),
+            kInvalidArgument);
   EXPECT_EQ(CellCount(wb), 0U);
 
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1U, 1U, count - 1U), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_set_range_xf_index(wb.handle, 0, 3U, 0U, 4U, 0U, count - 1U), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_range_xf_index(wb.handle, 0, record_arg(fm_cell_rect_t{3U, 0U, 4U, 0U}), count - 1U), 0)
+      << fm_get_last_error_message();
   WorkbookGuard reloaded;
   SaveAndReload(wb, FM_WORKBOOK_FORMAT_XLSX, &reloaded);
   const std::pair<std::uint32_t, std::uint32_t> kStyled[] = {{1U, 1U}, {3U, 0U}, {4U, 0U}};

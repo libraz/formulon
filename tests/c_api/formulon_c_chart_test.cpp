@@ -14,6 +14,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "drawing/drawing_xml.h"
+#include "formulon_c_record_arg.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
 #include "io/ooxml/part_dom.h"
@@ -403,7 +404,7 @@ TEST(FormulonCApiChart, ScatterDataCarriesX) {
   x_xf.num_fmt_id = 2;  // built-in 0.00, on the x column only
   std::size_t x_xf_index = 0;
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &x_xf, &x_xf_index), 0);
-  ASSERT_EQ(fm_sheet_set_range_xf_index(wb.handle, 0, 1, 5, 4, 5, x_xf_index), 0);
+  ASSERT_EQ(fm_sheet_set_range_xf_index(wb.handle, 0, record_arg(fm_cell_rect_t{1, 5, 4, 5}), x_xf_index), 0);
   const uint32_t id = Insert(wb.handle, FM_CHART_INSERT_SCATTER, "Sheet1!$F$1:$G$5");
   DataGuard data;
   OpenData(wb.handle, id, &data);

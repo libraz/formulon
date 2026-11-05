@@ -127,7 +127,7 @@ export function registerCellGeometryDisplay(Module, test) {
                 lastCol: 4,
                 [key]: value,
               }),
-            typeof value === 'symbol' ? TypeError : RangeError,
+            value === 2 ** 32 ? RangeError : TypeError,
             `getCellsInRange ${key}=${String(value)} accepted`,
           );
         }
@@ -368,7 +368,7 @@ export function registerCellGeometryDisplay(Module, test) {
       assert.equal(r.printTitles.hasCols, false);
       assert.equal(r.pages.length, r.pageCount);
       assert.ok(r.pages.length >= 2);
-      assert.equal(r.pages[0].firstRow, 0);
+      assert.equal(r.pages[0].rect.firstRow, 0);
       assert.ok(r.pages[0].widthPt > 0);
       assert.equal(r.horizontalBreakManual.length, r.horizontalBreaks.length);
       assert.equal(r.verticalBreakManual.length, r.verticalBreaks.length);

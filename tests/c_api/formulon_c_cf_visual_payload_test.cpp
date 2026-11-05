@@ -22,7 +22,7 @@ TEST(FormulonCApiCfMutate, ZeroInitializedDataBarExtensionKeepsTheModelDefaults)
   // exactly the spec the ABI produced before those fields existed.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cell_rect_t sqref{0, 0, 9, 0};
   const fm_cf_rule_t rule = MakeDataBarRule(&sqref);
   std::size_t rule_index = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
@@ -46,7 +46,7 @@ TEST(FormulonCApiCfMutate, ZeroInitializedDataBarExtensionKeepsTheModelDefaults)
 TEST(FormulonCApiCfMutate, DataBarExtensionFieldsReachTheModelWhenEngaged) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule = MakeDataBarRule(&sqref);
   rule.data_bar_gradient_engaged = 1;
   rule.data_bar_gradient = 0;  // solid, not gradient
@@ -88,7 +88,7 @@ TEST(FormulonCApiCfMutate, DataBarRuleSurvivesGetAtFedBackIntoAddRule) {
   // their defaults.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t seed = MakeDataBarRule(&sqref);
   seed.data_bar_gradient_engaged = 1;
   seed.data_bar_gradient = 0;
@@ -145,7 +145,7 @@ TEST(FormulonCApiCfMutate, GetAtRecordStaysReadableUntilTheNextGet) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 5, 5, "unrelated"), 0);
 
-  fm_cf_cell_range_t sqref[2]{{0, 0, 9, 0}, {4, 3, 14, 3}};
+  fm_cell_rect_t sqref[2]{{0, 0, 9, 0}, {4, 3, 14, 3}};
   fm_cf_rule_t seed{};
   seed.id = "{AB000000-0000-0000-0000-000000000001}";
   seed.type = 2;  // ColorScale
@@ -203,7 +203,7 @@ TEST(FormulonCApiCfMutate, GetAtRecordStaysReadableUntilTheNextGet) {
 TEST(FormulonCApiCfMutate, DataBarRejectsInvertedLengthsAndUnknownAxisPosition) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cell_rect_t sqref{0, 0, 9, 0};
 
   fm_cf_rule_t inverted = MakeDataBarRule(&sqref);
   inverted.data_bar_min_length_pct = 90;
@@ -237,7 +237,7 @@ TEST(FormulonCApiCfMutate, ThresholdStringsStayLiveWhileLaterPayloadsArePulled) 
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   formulon::c_api::BorrowedStringArena strings;
 
-  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule{};
   rule.type = 2;  // ColorScale
   rule.sqref = &sqref;

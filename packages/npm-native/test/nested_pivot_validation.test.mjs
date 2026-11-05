@@ -56,8 +56,8 @@ function pivotGrid(wb, pivot) {
   for (const cell of layout.cells) {
     const value = cell.value;
     const text = value.kind === 1 ? String(value.number) : value.kind === 3 ? value.text : '';
-    if (!rows.has(cell.row)) rows.set(cell.row, new Array(layout.cols).fill(''));
-    rows.get(cell.row)[cell.col - layout.left] = text;
+    if (!rows.has(cell.row)) rows.set(cell.row, new Array(layout.rect.lastCol - layout.rect.firstCol + 1).fill(''));
+    rows.get(cell.row)[cell.col - layout.rect.firstCol] = text;
   }
   return [...rows.keys()].sort((a, b) => a - b).map((row) => rows.get(row).join('|'));
 }

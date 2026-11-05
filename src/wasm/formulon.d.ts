@@ -649,14 +649,8 @@ export interface PivotCell {
 /** Return type of `Workbook.getPivotLayout(sheet, pivotIndex)`. */
 export interface PivotLayoutResult {
   status: Status;
-  /** Absolute 0-based top row of the rectangular pivot layout. */
-  top: number;
-  /** Absolute 0-based left column of the rectangular pivot layout. */
-  left: number;
-  /** Rectangular layout row span. */
-  rows: number;
-  /** Rectangular layout column span. */
-  cols: number;
+  /** The rectangle the layout covers in absolute sheet coordinates; `null` when it spans no cell. */
+  rect: CellRect | null;
   /** Sparse projected cells in row-major order. */
   cells: ReadonlyArray<PivotCell>;
 }
@@ -1319,7 +1313,7 @@ export interface PaginationResult {
    *  none -- it is not backfilled with the used range. Pagination itself
    *  still falls back to the used range in that case, so `pageCount` can be
    *  non-zero while this is empty. */
-  printArea: Array<{ firstRow: number; firstCol: number; lastRow: number; lastCol: number }>;
+  printArea: CellRect[];
   horizontalBreaks: number[];
   verticalBreaks: number[];
   pageCount: number;
@@ -1388,10 +1382,8 @@ export interface RectPt {
 export interface PaginationPage {
   /** Index into `PaginationResult.printArea` (0 for the used-range fallback). */
   areaIndex: number;
-  firstRow: number;
-  lastRow: number;
-  firstCol: number;
-  lastCol: number;
+  /** The page's cell block. */
+  rect: CellRect;
   originXPt: number;
   originYPt: number;
   widthPt: number;
@@ -1558,7 +1550,7 @@ export interface SheetView {
 export interface SheetSelection {
   activeRow: number;
   activeCol: number;
-  ranges?: ReadonlyArray<MergeRange>;
+  ranges?: ReadonlyArray<CellRect>;
 }
 
 /** Return type of `Workbook.getSelection(sheet)`, read as it is saved:
@@ -1569,7 +1561,7 @@ export interface SheetSelectionResult {
   status: Status;
   activeRow: number;
   activeCol: number;
-  ranges: MergeRange[];
+  ranges: CellRect[];
 }
 
 /** Return type of `Workbook.getView(sheet)`. */
@@ -1669,21 +1661,19 @@ export interface RowsResult {
   rows: ReadonlyArray<RowLayout>;
 }
 
-/** Inclusive cell rectangle used by `addMerge` / `getMerges`. */
-export interface MergeRange {
-  firstRow: number;
-  lastRow: number;
-  firstCol: number;
-  lastCol: number;
+/** Cell rectangle: 0-based, inclusive corners `(firstRow, firstCol)` through `(lastRow, lastCol)`.
+ *  Every rectangle the API takes or returns uses this type. */
+export interface CellRect {
+  readonly firstRow: number;
+  readonly firstCol: number;
+  readonly lastRow: number;
+  readonly lastCol: number;
 }
 
 /** Sheet hyperlink entry as returned by `listHyperlinks(sheet)`. */
 export interface Hyperlink {
-  row: number;
-  col: number;
-  /** Inclusive bottom-right endpoint of the hyperlink rectangle. */
-  lastRow: number;
-  lastCol: number;
+  /** The cells the hyperlink covers. */
+  rect: CellRect;
   /** Absolute or relative target (URL, email, internal ref, …). */
   target: string;
   /** In-workbook destination (empty for an external target). */
@@ -1753,16 +1743,6 @@ export interface SheetCommentEntry extends Comment {
   col: number;
 }
 
-/** One cell-range entry inside a `DataValidation.ranges`. Identical
- *  shape to `MergeRange`; declared separately so the data-validation
- *  surface can evolve independently of the merge surface. */
-export interface DataValidationRange {
-  readonly firstRow: number;
-  readonly firstCol: number;
-  readonly lastRow: number;
-  readonly lastCol: number;
-}
-
 /** One sheet `<dataValidation>` block as returned by
  *  `getValidations(sheet)`.
  *
@@ -1775,7 +1755,7 @@ export interface DataValidationRange {
  *    * `errorStyle`  — a `ValidationErrorStyle`.
  */
 export interface DataValidation {
-  readonly ranges: ReadonlyArray<DataValidationRange>;
+  readonly ranges: ReadonlyArray<CellRect>;
   readonly type: number;
   readonly op: number;
   readonly errorStyle: ValidationErrorStyle;
@@ -1799,7 +1779,7 @@ export interface DataValidation {
  *  strings. `ranges` is required by the model but accepted as missing
  *  to allow zero-range rules. */
 export interface DataValidationInput {
-  ranges?: ReadonlyArray<DataValidationRange>;
+  ranges?: ReadonlyArray<CellRect>;
   type: number;
   op?: number;
   errorStyle?: ValidationErrorStyle;
@@ -1972,10 +1952,10 @@ export function mergeFunctionMetadata(
 /** Signature of {@link mergeFunctionMetadata}. */
 export type MergeFunctionMetadata = typeof mergeFunctionMetadata;
 
-/** A legacy array (CSE) formula: the block it fills and its stored text. `ref` is the block's rectangle,
- *  its top-left cell `(row, col)` holding the formula; every cell of the block reports the same value. */
+/** A legacy array (CSE) formula: the block it fills and its stored text. The top-left cell of `rect`
+ *  holds the formula; every cell of the block reports the same value. */
 export interface ArrayFormula {
-  readonly ref: { readonly row: number; readonly col: number; readonly rows: number; readonly cols: number };
+  readonly rect: CellRect;
   readonly formula: string;
 }
 
@@ -1987,17 +1967,16 @@ export interface ArrayFormulaResult {
 }
 
 /** Spill region info returned by `getSpillInfo(sheet, row, col)`. On failure
- *  `engaged` is `false` and the other fields are zero. */
+ *  `engaged` and `blocked` are `false` and `rect` is `null`. */
 export interface SpillInfo {
   readonly status: Status;
   readonly engaged: boolean;
-  readonly anchorRow: number;
-  readonly anchorCol: number;
-  readonly rows: number;
-  readonly cols: number;
-  /** `true` when the cell is the anchor of a spill that failed with `#SPILL!`; then `(anchorRow, anchorCol)`
-   *  + `(rows, cols)` describe the rectangle it attempted. `engaged` is `false` then. */
+  /** `true` when the cell is the anchor of a spill that failed with `#SPILL!`; then `rect` is the rectangle
+   *  it attempted. `engaged` is `false` then. */
   readonly blocked: boolean;
+  /** The region including its anchor, whose top-left cell holds the formula; `null` when the cell is
+   *  neither part of a spill nor a blocked anchor. */
+  readonly rect: CellRect | null;
 }
 
 /** A parsed reference: a 0-based, inclusive rectangle. A whole column or row is expanded to the grid
@@ -2031,14 +2010,6 @@ export interface FormatReferenceOptions {
   absolute?: boolean;
 }
 
-/** One inclusive cell-range entry inside a CF rule's `sqref` union. */
-export interface ConditionalFormatRange {
-  readonly firstRow: number;
-  readonly firstCol: number;
-  readonly lastRow: number;
-  readonly lastCol: number;
-}
-
 /** One CF rule as returned by `getConditionalFormats(sheet)`.
  *
  *  `type` ordinal mirrors `formulon::cf::RuleType`:
@@ -2059,7 +2030,7 @@ export interface ConditionalFormatEntry {
   readonly type: number;
   readonly priority: number;
   readonly stopIfTrue: boolean;
-  readonly sqref: ReadonlyArray<ConditionalFormatRange>;
+  readonly sqref: ReadonlyArray<CellRect>;
   readonly dxfId?: number;
   readonly formula1?: string;
   readonly formula2?: string;
@@ -2144,7 +2115,7 @@ export interface CfIconInput {
  *  `existing_max + 1`. When `id` is missing or empty, the engine
  *  synthesises one. */
 export interface ConditionalFormatInput {
-  sqref: ReadonlyArray<ConditionalFormatRange>;
+  sqref: ReadonlyArray<CellRect>;
   type: number;
   priority?: number;
   stopIfTrue?: boolean;
@@ -3055,16 +3026,7 @@ export interface AddNumFmtResult {
   numFmtId: number;
 }
 
-/** Range used by `partialRecalc`. */
-export interface RecalcViewport {
-  sheet: number;
-  firstRow: number;
-  lastRow: number;
-  firstCol: number;
-  lastCol: number;
-}
-
-/** Return type of `Workbook.recalcViewport(viewport)`. */
+/** Return type of `Workbook.recalcViewport(sheet, viewport)`. */
 export interface PartialRecalcResult {
   status: Status;
   /** Number of cells the engine actually evaluated. */
@@ -3145,7 +3107,7 @@ export interface AutoFilterColumn {
 /** One `<sortCondition>`. `sortBy` is a `SortBy`. `dxfId` is read only when `hasDxfId`, `iconId` only when
  *  `hasIconId`. */
 export interface AutoFilterSortCondition {
-  ref: MergeRange;
+  ref: CellRect;
   descending: boolean;
   sortBy: SortBy;
   customList: string;
@@ -3159,7 +3121,7 @@ export interface AutoFilterSortCondition {
 /** The `<sortState>` of an AutoFilter. `sortMethod` is a
  *  `SortMethod`. */
 export interface AutoFilterSortState {
-  ref: MergeRange;
+  ref: CellRect;
   columnSort: boolean;
   caseSensitive: boolean;
   sortMethod: SortMethod;
@@ -3169,7 +3131,7 @@ export interface AutoFilterSortState {
 /** A sheet or table AutoFilter. `range` includes the header row; `columns`
  *  must be in strictly ascending `colId` order inside it. */
 export interface AutoFilter {
-  range: MergeRange;
+  range: CellRect;
   columns: AutoFilterColumn[];
   sort: AutoFilterSortState | null;
 }
@@ -3454,10 +3416,7 @@ export interface DataTableInput {
  *  of it. A one-variable table has one input (`rowOriented` says which) and the other is `null`; a
  *  two-variable table has both. A deleted input makes the table evaluate to `#REF!`. */
 export interface DataTable {
-  firstRow: number;
-  lastRow: number;
-  firstCol: number;
-  lastCol: number;
+  rect: CellRect;
   twoDimensional: boolean;
   rowOriented: boolean;
   rowInput: DataTableInput | null;
@@ -3467,10 +3426,7 @@ export interface DataTable {
 /** Argument of `addDataTable`: the result range plus the input cells (`{ row, col }`). Give `rowInput`
  *  or `colInput` for a one-variable table, both for a two-variable one. */
 export interface DataTableSpec {
-  firstRow: number;
-  lastRow: number;
-  firstCol: number;
-  lastCol: number;
+  rect: CellRect;
   rowInput?: { row: number; col: number } | null;
   colInput?: { row: number; col: number } | null;
 }
@@ -4147,7 +4103,7 @@ export interface Workbook {
   /** One page of the populated cells (formula or non-blank value, spill phantoms included) inside
    *  `range`, row-major. `cursor` is the `nextCursor` of the previous page (omit for the first);
    *  `limit` caps the page (omit or 0 for the maximum, 65536). */
-  getCellsInRange(sheet: number, range: MergeRange, cursor?: number | null, limit?: number | null): CellsInRangeResult;
+  getCellsInRange(sheet: number, range: CellRect, cursor?: number | null, limit?: number | null): CellsInRangeResult;
   /** The text Excel displays for the cell, from its value and number format under the workbook's date system. */
   getDisplayText(sheet: number, row: number, col: number): DisplayTextResult;
   /** Renders `value` (blank, number, boolean, text or error) under the stored-form number format `formatCode`; empty means General. */
@@ -4231,7 +4187,7 @@ export interface Workbook {
   /** Recalculates only cells touched by the supplied viewport. Reports
    *  status 7003 with `recomputed` at zero when a throwing
    *  `IterativeProgressCallback` cut the pass short. */
-  recalcViewport(viewport: RecalcViewport): PartialRecalcResult;
+  recalcViewport(sheet: number, viewport: CellRect): PartialRecalcResult;
 
   /** Sets iterative calculation. When disabled (the default) cyclic references surface `#REF!`.
    *  `maxIterations` is clamped to `[1, 32767]` (Excel's own limit) and `getIterative` reports the
@@ -4921,19 +4877,11 @@ export interface Workbook {
   /** Removes the filter at `filterIdx`. */
   removePivotFilter(sheet: number, pivotIdx: number, filterIdx: number): Status;
 
-  /** Evaluates every CF block on `sheet` against the inclusive range
-   *  `[(firstRow, firstCol), (lastRow, lastCol)]`. `todaySerial` pins the
+  /** Evaluates every CF block on `sheet` against the cells of `range`. `todaySerial` pins the
    *  date basis for `TimePeriod` rules; pass `NaN` to disable them (no
    *  `TimePeriod` rule then matches). `0` does *not* disable them -- it is
    *  the valid serial for 1899-12-30. */
-  evaluateCfRange(
-    sheet: number,
-    firstRow: number,
-    firstCol: number,
-    lastRow: number,
-    lastCol: number,
-    todaySerial: number,
-  ): CfRangeResult;
+  evaluateCfRange(sheet: number, range: CellRect, todaySerial: number): CfRangeResult;
 
   /** Computes print-area page breaks and physical page count for `sheet`. */
   getPagination(sheet: number): PaginationResult;
@@ -5110,8 +5058,8 @@ export interface Workbook {
   clearRowStyle(sheet: number, first: number, last: number): Status;
   /**
    * Lists, ascending, every cell-XF index some cell of the selection resolves to: the XFs of
-   * cells that carry their own, then the row, column or default (0) style of the rest. The rect
-   * `(firstRow, firstCol)..(lastRow, lastCol)` is a selection: all rows make it a column
+   * cells that carry their own, then the row, column or default (0) style of the rest. `range`
+   * is a selection: all rows make it a column
    * selection, all columns a row selection, both the whole sheet.
    *
    * First step of an attribute-only change (say the font size) over a selection, the way
@@ -5119,13 +5067,7 @@ export interface Workbook {
    * each one's patched XF with `addFont` / `addCellXf`, then apply the pairs with
    * `remapRangeStyle`.
    */
-  getRangeStyleBases(
-    sheet: number,
-    firstRow: number,
-    firstCol: number,
-    lastRow: number,
-    lastCol: number,
-  ): RangeStyleBasesResult;
+  getRangeStyleBases(sheet: number, range: CellRect): RangeStyleBasesResult;
   /**
    * `rangeStyleBases` over the selection less the cells `(excludedRows[i], excludedCols[i])`:
    * an excluded cell contributes no XF, neither its own nor the row, column or default style
@@ -5135,10 +5077,7 @@ export interface Workbook {
    */
   getRangeStyleBasesExcluding(
     sheet: number,
-    firstRow: number,
-    firstCol: number,
-    lastRow: number,
-    lastCol: number,
+    range: CellRect,
     excludedRows: number[],
     excludedCols: number[],
   ): RangeStyleBasesResult;
@@ -5151,23 +5090,9 @@ export interface Workbook {
    * in length, a `fromXfs` entry repeats, a `toXfs` entry is past the cell-XF table, or more
    * than 1,048,576 cells would be written.
    */
-  remapRangeStyle(
-    sheet: number,
-    firstRow: number,
-    firstCol: number,
-    lastRow: number,
-    lastCol: number,
-    fromXfs: number[],
-    toXfs: number[],
-  ): Status;
+  remapRangeStyle(sheet: number, range: CellRect, fromXfs: number[], toXfs: number[]): Status;
   /** Captures the style state of a selection (covered column or row styles and every stored cell's XF) as opaque, versioned bytes for `restoreRangeStyle`; use it to undo a `remapRangeStyle`. */
-  snapshotRangeStyle(
-    sheet: number,
-    firstRow: number,
-    firstCol: number,
-    lastRow: number,
-    lastCol: number,
-  ): RangeStyleSnapshotResult;
+  snapshotRangeStyle(sheet: number, range: CellRect): RangeStyleSnapshotResult;
   /** Puts a `snapshotRangeStyle` capture back exactly. Values, formulas, phonetic runs and comments are not touched; nothing changes on failure. */
   restoreRangeStyle(sheet: number, bytes: Uint8Array): Status;
   /** Removes the height override on rows `first..last`, returning them to the sheet default height. */
@@ -5182,7 +5107,7 @@ export interface Workbook {
 
   /** Rectangle covering the inclusive cell range, in points from the top-left of A1.
    *  Hidden rows and columns contribute zero extent. */
-  getCellRectPt(sheet: number, range: MergeRange, mode: GeometryMode): CellRectResult;
+  getCellRectPt(sheet: number, range: CellRect, mode: GeometryMode): CellRectResult;
   /** Effective column width in points; zero when hidden. */
   getColumnWidthPt(sheet: number, col: number, mode: GeometryMode): NumberResult;
   /** Effective row height in points; zero when hidden. */
@@ -5208,17 +5133,10 @@ export interface Workbook {
    * (`Cell`).
    */
   clearCellXfIndex(sheet: number, row: number, col: number): Status;
-  /** Applies `xfIndex` across an inclusive rectangle, materialising blank
+  /** Applies `xfIndex` across the cells of `range`, materialising blank
    *  cells so an empty ruled box renders. Saves one call per cell. An
    *  index not below `getCellXfCount()` fails with `kInvalidArgument`. */
-  setRangeXfIndex(
-    sheet: number,
-    firstRow: number,
-    firstCol: number,
-    lastRow: number,
-    lastCol: number,
-    xfIndex: number,
-  ): Status;
+  setRangeXfIndex(sheet: number, range: CellRect, xfIndex: number): Status;
   /** Returns the resolved XF record at `xfIndex`. A failed read reports
    *  the all-default record (`locked` true, every other flag false). */
   getCellXf(xfIndex: number): CellXfResult;
@@ -5356,17 +5274,17 @@ export interface Workbook {
   getExternalLinks(): ListResult<ExternalLinkRecord>;
 
   /** Adds a merge range to `sheet`. */
-  addMerge(sheet: number, range: MergeRange): Status;
+  addMerge(sheet: number, range: CellRect): Status;
   /** Removes every merge that overlaps `range` (inclusive). No-op when nothing overlaps. */
-  removeMerge(sheet: number, range: MergeRange): Status;
+  removeMerge(sheet: number, range: CellRect): Status;
   /** Removes the merge at `index`. Returns kInvalidArgument if `index` is out of range. */
   removeMergeAt(sheet: number, index: number): Status;
   /** Drops every merge on `sheet`. */
   clearMerges(sheet: number): Status;
   /** Returns every merge range on `sheet` as a JS array. */
-  listMerges(sheet: number): ListResult<MergeRange>;
+  listMerges(sheet: number): ListResult<CellRect>;
   /** Returns the merge ranges on `sheet` that intersect `range`, in storage order. */
-  getMergesInRange(sheet: number, range: MergeRange): ListResult<MergeRange>;
+  getMergesInRange(sheet: number, range: CellRect): ListResult<CellRect>;
 
   /** Returns the cell comment at `(sheet, row, col)`, or `null` when absent. */
   getComment(sheet: number, row: number, col: number): Comment | null;
@@ -5406,14 +5324,10 @@ export interface Workbook {
     tooltip: string,
     location: string,
   ): Status;
-  /** Appends a hyperlink covering the inclusive rectangle from `(row, col)`
-   *  through `(lastRow, lastCol)`. */
+  /** Appends a hyperlink covering the cells of `range`. */
   addHyperlinkRange(
     sheet: number,
-    row: number,
-    col: number,
-    lastRow: number,
-    lastCol: number,
+    range: CellRect,
     target: string,
     display: string,
     tooltip: string,
@@ -5538,10 +5452,10 @@ export interface Workbook {
 
   /** Returns dynamic-array spill info for `(sheet, row, col)`.
    *  When the cell is part of a spill region (anchor or phantom),
-   *  `engaged` is `true` and `(anchorRow, anchorCol)` + `(rows, cols)`
-   *  describe the region; the per-cell values are read via `getValue`,
-   *  which is already spill-aware. When the cell is not part of any
-   *  region, `engaged` is `false` and the other fields are zero. */
+   *  `engaged` is `true` and `rect` is the region; the per-cell values
+   *  are read via `getValue`, which is already spill-aware. When the cell
+   *  is not part of any region, `engaged` is `false` and `rect` is `null`
+   *  unless the cell is a blocked anchor. */
   getSpillInfo(sheet: number, row: number, col: number): SpillInfo;
 
   /** Parses `text` as `INDIRECT` reads a reference under the workbook's profile: A1, or R1C1 with the
@@ -5561,15 +5475,15 @@ export interface Workbook {
    *  spill is not a legacy array formula; read that through `spillInfo`. */
   getArrayFormula(sheet: number, row: number, col: number): ArrayFormulaResult;
 
-  /** Enters `formula` as one legacy array formula over `rows` x `cols` cells whose top-left cell is
-   *  `(row, col)`; a 1 x 1 block is allowed. Every cell of the rectangle loses its value and formula
+  /** Enters `formula` as one legacy array formula over `range`, whose top-left cell anchors it; a
+   *  1 x 1 block is allowed. Every cell of the rectangle loses its value and formula
    *  (styles are kept) and the next recalc distributes the result, filling `#N/A` where a smaller
    *  result cannot reach. Refused, changing nothing, when the rectangle partially overlaps another
    *  array (one wholly inside is replaced), intersects a merged area, a data table or a PivotTable,
    *  or, for more than one cell, a table. Writing a value, blank or formula to a block's top-left
    *  cell replaces the whole block, which is how a block is cleared; a write to any other cell of
    *  a block is refused. */
-  setArrayFormula(sheet: number, row: number, col: number, rows: number, cols: number, formula: string): Status;
+  setArrayFormula(sheet: number, range: CellRect, formula: string): Status;
 }
 
 /** Static factories on the Workbook class. */

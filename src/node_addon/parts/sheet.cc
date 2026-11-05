@@ -446,11 +446,9 @@ Napi::Value Workbook::PivotLayout(const Napi::CallbackInfo& info) {
     return EmptyPivotLayoutResult(env, MakeErrorStatus(env, rc));
   }
 
-  uint32_t top = 0;
-  uint32_t left = 0;
-  uint32_t rows = 0;
-  uint32_t cols = 0;
-  rc = fm_pivot_cells_get_bounds(cells, &top, &left, &rows, &cols);
+  int32_t present = 0;
+  fm_cell_rect_t bounds{};
+  rc = fm_pivot_cells_get_bounds(cells, &present, &bounds);
   if (rc != 0) {
     fm_pivot_cells_destroy(cells);
     return EmptyPivotLayoutResult(env, MakeErrorStatus(env, rc));
@@ -480,10 +478,7 @@ Napi::Value Workbook::PivotLayout(const Napi::CallbackInfo& info) {
 
   Napi::Object out = Napi::Object::New(env);
   out.Set("status", MakeOkStatus(env));
-  out.Set("top", Napi::Number::New(env, top));
-  out.Set("left", Napi::Number::New(env, left));
-  out.Set("rows", Napi::Number::New(env, rows));
-  out.Set("cols", Napi::Number::New(env, cols));
+  out.Set("rect", present != 0 ? Napi::Value(RangeToJs(env, bounds)) : env.Null());
   out.Set("cells", arr);
   return out;
 }

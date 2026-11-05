@@ -284,22 +284,22 @@ removed fm_workbook_table_remove :: renamed to fm_workbook_remove_table
 removed fm_workbook_table_update :: renamed to fm_workbook_update_table
 removed fm_workbook_theme_script_font_at :: renamed to fm_workbook_get_theme_script_font_at
 removed fm_workbook_theme_script_font_count :: renamed to fm_workbook_get_theme_script_font_count
-signature fm_sheet_add_merge :: sheet index widened to size_t sheet_index; range passed as const pointer
+signature fm_sheet_add_merge :: sheet index widened to size_t sheet_index; range passed as const pointer; parameter type renamed (fm_merge_range -> fm_cell_rect_t)
 signature fm_sheet_clear_hyperlinks :: sheet index widened to size_t sheet_index
 signature fm_sheet_clear_merges :: sheet index widened to size_t sheet_index
 signature fm_sheet_clear_validations :: sheet index widened to size_t sheet_index
 signature fm_sheet_get_comment_count :: sheet index widened to size_t sheet_index, count written through size_t* out_count, handle is const
 signature fm_sheet_get_hyperlink_count :: sheet index widened to size_t sheet_index, count written through size_t* out_count, handle is const
-signature fm_sheet_get_merge_at :: sheet index widened to size_t sheet_index, index widened to size_t, handle is const
+signature fm_sheet_get_merge_at :: sheet index widened to size_t sheet_index, index widened to size_t, handle is const; parameter type renamed (fm_merge_range -> fm_cell_rect_t)
 signature fm_sheet_get_merge_count :: sheet index widened to size_t sheet_index, count written through size_t* out_count, handle is const
 signature fm_sheet_get_validation_count :: sheet index widened to size_t sheet_index, count written through size_t* out_count, handle is const
 signature fm_sheet_remove_hyperlink :: sheet index widened to size_t sheet_index
 signature fm_sheet_remove_hyperlink_at :: sheet index widened to size_t sheet_index, index widened to size_t
-signature fm_sheet_remove_merge :: sheet index widened to size_t sheet_index; range passed as const pointer
+signature fm_sheet_remove_merge :: sheet index widened to size_t sheet_index; range passed as const pointer; parameter type renamed (fm_merge_range -> fm_cell_rect_t)
 signature fm_sheet_remove_merge_at :: sheet index widened to size_t sheet_index, index widened to size_t
 signature fm_sheet_set_column_style :: xf_index widened to size_t
 signature fm_sheet_set_comment :: sheet index widened to size_t sheet_index
-signature fm_sheet_set_range_xf_index :: sheet index widened to size_t sheet_index, xf_index widened to size_t
+signature fm_sheet_set_range_xf_index :: sheet index widened to size_t sheet_index, xf_index widened to size_t; rectangle passed as const fm_cell_rect_t*
 signature fm_sheet_set_row_style :: xf_index widened to size_t
 signature fm_workbook_move_sheet :: from_index / to_index widened to size_t
 signature fm_workbook_remove_sheet :: index widened to size_t
@@ -308,3 +308,5 @@ signature fm_sheet_set_row_height :: takes the inclusive row span (first, last) 
 signature fm_sheet_set_row_hidden :: takes the inclusive row span (first, last) like fm_sheet_set_column_hidden
 signature fm_sheet_set_row_outline :: takes the inclusive row span (first, last) like fm_sheet_set_column_outline
 signature fm_sheet_clear_row_height :: takes the inclusive row span (first, last) like fm_sheet_clear_column_width
+signature fm_sheet_remap_range_style :: rectangle passed as const fm_cell_rect_t* instead of four coordinates
+signature fm_sheet_snapshot_range_style :: rectangle passed as const fm_cell_rect_t* instead of four coordinates

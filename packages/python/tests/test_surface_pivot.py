@@ -172,7 +172,10 @@ def _grid(wb: Workbook, pivot: int = 0) -> List[str]:
             text = f"#{v.error_code}"
         else:
             text = ""
-        rows.setdefault(cell.row, [""] * layout.cols)[cell.col - layout.left] = text
+        assert layout.rect is not None
+        rows.setdefault(cell.row, [""] * (layout.rect.last_col - layout.rect.first_col + 1))[
+            cell.col - layout.rect.first_col
+        ] = text
     return ["|".join(rows[r]) for r in sorted(rows)]
 
 
@@ -322,7 +325,7 @@ class PivotMutatorTableTests(unittest.TestCase):
         def pivot_create(t: Any, f: _PivotFixture, r: int) -> None:
             eq(r, 1)
             layout = f.wb.get_pivot_layout(0, 1)
-            eq((layout.top, layout.left), (20, 1))
+            eq((layout.rect.first_row, layout.rect.first_col), (20, 1))
             eq(f.grid(0), _BASE_GRID)
 
         def pivot_remove(t: Any, f: _PivotFixture, r: None) -> None:
@@ -347,7 +350,7 @@ class PivotMutatorTableTests(unittest.TestCase):
 
         def set_anchor(t: Any, f: _PivotFixture, r: None) -> None:
             layout = f.wb.get_pivot_layout(0, f.pivot)
-            eq((layout.top, layout.left), (10, 2))
+            eq((layout.rect.first_row, layout.rect.first_col), (10, 2))
             eq(f.grid(), _BASE_GRID)
 
         def set_layout(t: Any, f: _PivotFixture, r: None) -> None:

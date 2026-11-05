@@ -37,7 +37,7 @@ extern "C" fm_status_t fm_sheet_add_data_table(fm_workbook_t* wb, size_t sheet_i
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_data_table"); rc != 0) {
     return rc;
   }
-  const formulon::MergeRange ref{spec->first_row, spec->first_col, spec->last_row, spec->last_col};
+  const formulon::MergeRange ref{spec->rect.first_row, spec->rect.first_col, spec->rect.last_row, spec->rect.last_col};
   auto added = wb->workbook().add_data_table(sheet_index, ref,
                                              input_of(spec->has_row_input, spec->row_input_row, spec->row_input_col),
                                              input_of(spec->has_col_input, spec->col_input_row, spec->col_input_col));
@@ -66,10 +66,7 @@ extern "C" fm_status_t fm_sheet_get_data_table(const fm_workbook_t* wb, size_t s
   const formulon::DataTableInput row_in = table->row_input();
   const formulon::DataTableInput col_in = table->col_input();
   *out_present = 1;
-  out->first_row = table->ref.first_row;
-  out->first_col = table->ref.first_col;
-  out->last_row = table->ref.last_row;
-  out->last_col = table->ref.last_col;
+  out->rect = fm_cell_rect_t{table->ref.first_row, table->ref.first_col, table->ref.last_row, table->ref.last_col};
   out->has_row_input = row_in.present ? 1 : 0;
   out->has_col_input = col_in.present ? 1 : 0;
   out->row_input_row = row_in.row;

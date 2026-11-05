@@ -359,6 +359,31 @@ uint32_t JsNarrowNumericReader::u32_value(const emscripten::val& value, uint32_t
   return static_cast<uint32_t>(integer_value(value, dflt, field, 0.0, kMaxU32, "[0, 4294967295]"));
 }
 
+uint32_t JsNarrowNumericReader::required_u32(const emscripten::val& owner, const char* key, const char* field) {
+  bool fetched = false;
+  const emscripten::val value = fetch(owner, key, field, &fetched);
+  if (!fetched) {
+    return 0U;
+  }
+  if (!js_value_present(value)) {
+    reject_type(field, "a whole Number");
+    return 0U;
+  }
+  if (!present_number(value, key, field)) {
+    return 0U;
+  }
+  const double number = value.as<double>();
+  if (!std::isfinite(number) || std::floor(number) != number) {
+    reject_type(field, "a whole Number");
+    return 0U;
+  }
+  if (number < 0.0 || number > kMaxU32) {
+    reject(key, field, "[0, 4294967295]");
+    return 0U;
+  }
+  return static_cast<uint32_t>(number);
+}
+
 int32_t JsNarrowNumericReader::i32_value(const emscripten::val& value, int32_t dflt, const char* field) {
   return static_cast<int32_t>(
       integer_value(value, dflt, field, -2147483648.0, 2147483647.0, "[-2147483648, 2147483647]"));
@@ -671,11 +696,11 @@ JsCfMatch translate_cf_match(const fm_cf_match_t& m) {
   return out;
 }
 
-emscripten::val merge_range_to_val(const fm_merge_range& m) {
+emscripten::val cell_rect_to_val(const fm_cell_rect_t& m) {
   emscripten::val item = emscripten::val::object();
   item.set("firstRow", m.first_row);
-  item.set("lastRow", m.last_row);
   item.set("firstCol", m.first_col);
+  item.set("lastRow", m.last_row);
   item.set("lastCol", m.last_col);
   return item;
 }
@@ -683,10 +708,7 @@ emscripten::val merge_range_to_val(const fm_merge_range& m) {
 emscripten::val empty_pivot_layout_result(JsStatus status) {
   emscripten::val o = emscripten::val::object();
   o.set("status", status);
-  o.set("top", static_cast<uint32_t>(0));
-  o.set("left", static_cast<uint32_t>(0));
-  o.set("rows", static_cast<uint32_t>(0));
-  o.set("cols", static_cast<uint32_t>(0));
+  o.set("rect", emscripten::val::null());
   o.set("cells", emscripten::val::array());
   return o;
 }
@@ -759,26 +781,26 @@ emscripten::val snapshot_bytes_result(fm_status_t rc, uint8_t* data, std::size_t
   return o;
 }
 
-fm_merge_range js_pull_range(const emscripten::val& v, JsNarrowNumericReader* reader) {
+fm_cell_rect_t js_pull_range(const emscripten::val& v, JsNarrowNumericReader* reader) {
   if (reader == nullptr) {
-    return fm_merge_range{};
+    return fm_cell_rect_t{};
   }
-  fm_merge_range m{};
+  fm_cell_rect_t m{};
   if (!js_value_present(v)) {
     return m;
   }
-  m.first_row = reader->u32_value(reader->value(v, "firstRow", "range.firstRow"), 0U, "range.firstRow");
-  m.last_row = reader->u32_value(reader->value(v, "lastRow", "range.lastRow"), 0U, "range.lastRow");
-  m.first_col = reader->u32_value(reader->value(v, "firstCol", "range.firstCol"), 0U, "range.firstCol");
-  m.last_col = reader->u32_value(reader->value(v, "lastCol", "range.lastCol"), 0U, "range.lastCol");
+  m.first_row = reader->required_u32(v, "firstRow", "range.firstRow");
+  m.first_col = reader->required_u32(v, "firstCol", "range.firstCol");
+  m.last_row = reader->required_u32(v, "lastRow", "range.lastRow");
+  m.last_col = reader->required_u32(v, "lastCol", "range.lastCol");
   return m;
 }
 
-std::vector<fm_merge_range> js_pull_ranges(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader) {
+std::vector<fm_cell_rect_t> js_pull_ranges(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader) {
   if (reader == nullptr) {
     return {};
   }
-  std::vector<fm_merge_range> out;
+  std::vector<fm_cell_rect_t> out;
   const emscripten::val array = reader->value(v, key, key);
   if (!reader->ok() || !js_value_present(array)) {
     return out;

@@ -7,8 +7,9 @@ passes the workbook handle, a caller-chosen ``sheet_index`` and a value for
 every other parameter. Scalars and by-value records are value-initialised;
 each pointer parameter gets its own zeroed slot, so a ``const char*`` reads
 ``""`` and an input record is all zeroes. The test may replace any pointer
-argument with ``NULL``, and each ``const char*`` slot is flagged so the test
-can fill it with other text. An owned out-handle (``fm_X_t**`` or ``uint8_t**``)
+argument with ``NULL``; each ``const char*`` slot is flagged so the test can
+fill it with other text, and each single ``const fm_cell_rect_t*`` slot so it
+can pass another rectangle. An owned out-handle (``fm_X_t**`` or ``uint8_t**``)
 gets a release step through the ``*_destroy`` function taking its pointee.
 
 The table is a build artifact consumed by
@@ -32,7 +33,7 @@ from typing import Dict, List, Tuple
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-from tools.dev.binding_drift.api_conventions import CFunction, load_ledger, parse_header  # noqa: E402
+from tools.dev.binding_drift.api_conventions import CELL_RECT, CFunction, load_ledger, parse_header  # noqa: E402
 from tools.dev.binding_drift.surface_files import CAPI_HEADER  # noqa: E402
 
 WORKBOOK_TYPES = ("fm_workbook_t*", "const fm_workbook_t*")
@@ -80,7 +81,9 @@ def render(functions: List[CFunction], destroyers: Dict[str, str], problems: Lis
         releases = []
         slot = 0
         text_mask = 0
-        for param in fn.params[2:]:
+        rect_mask = 0
+        params = fn.params[2:]
+        for i, param in enumerate(params):
             if "*" not in param.ctype:
                 args.append("{}")
                 continue
@@ -88,6 +91,11 @@ def render(functions: List[CFunction], destroyers: Dict[str, str], problems: Lis
             args.append(f"slots.arg<{pointee}, {slot}>()")
             if param.ctype == "const char*":
                 text_mask |= 1 << slot
+            follower = params[i + 1] if i + 1 < len(params) else None
+            if param.ctype == f"const {CELL_RECT}*" and not (
+                follower and "*" not in follower.ctype and follower.name.endswith("count")
+            ):
+                rect_mask |= 1 << slot
             if pointee.endswith("*") and not pointee.startswith("const "):
                 destroy = destroyers.get(pointee)
                 if destroy is None:
@@ -103,7 +111,7 @@ def render(functions: List[CFunction], destroyers: Dict[str, str], problems: Lis
             f"{{ return {fn.name}({', '.join(args)}); }}"
         )
         release = f"[](ZeroSlots& slots) {{ {' '.join(releases)} }}" if releases else "nullptr"
-        lines.append(f'    {{"{fn.name}", {slot}, {text_mask}U, {call}, {release}}},')
+        lines.append(f'    {{"{fn.name}", {slot}, {text_mask}U, {rect_mask}U, {call}, {release}}},')
     lines.append("};")
     return "\n".join(lines) + "\n"
 

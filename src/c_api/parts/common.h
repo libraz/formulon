@@ -219,6 +219,14 @@ fm_status_t check_profile_id(const char* profile_id, const char* api, formulon::
 // entry points apply.
 fm_status_t check_sheet_rect(std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
                              std::uint32_t last_col, const char* api);
+fm_status_t check_sheet_rect(const fm_cell_rect_t& rect, const char* api);
+
+// The rectangle `rows` x `cols` cells whose top-left cell is `(row, col)`;
+// both extents are at least 1.
+inline fm_cell_rect_t cell_rect_from_extent(std::uint32_t row, std::uint32_t col, std::uint32_t rows,
+                                            std::uint32_t cols) {
+  return fm_cell_rect_t{row, col, row + rows - 1U, col + cols - 1U};
+}
 
 // Rejects a column span that is inverted or reaches past Excel's last
 // column. Such a span reaches the worksheet part as a `<col min="..."
@@ -456,7 +464,7 @@ struct fm_workbook {
   // several visual payloads cannot invalidate the pointers already written
   // for the earlier ones.
   formulon::c_api::BorrowedStringArena cf_text_scratch;
-  formulon::c_api::BorrowedArrayArena<fm_cf_cell_range_t> cf_range_scratch;
+  formulon::c_api::BorrowedArrayArena<fm_cell_rect_t> cf_range_scratch;
   formulon::c_api::BorrowedArrayArena<fm_cfvo_t> cfvo_scratch;
   formulon::c_api::BorrowedArrayArena<fm_cf_color_t> cf_color_scratch;
   formulon::c_api::BorrowedArrayArena<fm_cf_icon_t> cf_icon_scratch;

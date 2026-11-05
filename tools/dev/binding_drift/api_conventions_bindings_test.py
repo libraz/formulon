@@ -837,7 +837,9 @@ class RangeTest(BindingRuleTestBase):
             + parse
             + "typedef struct {\n  const fm_cell_rect_t* ranges;\n  size_t range_count;\n} fm_protected_range_t;\n"
             "FM_API fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_index,"
-            " const fm_cell_rect_t* ranges, size_t range_count);\n",
+            " const fm_cell_rect_t* ranges, size_t range_count);\n"
+            "FM_API fm_status_t fm_sheet_recalc_viewport(fm_workbook_t* wb, size_t sheet_index,"
+            " const fm_cell_rect_t* viewport, uint32_t* out_recomputed_count);\n",
             wasm="export interface ProtectedRange { readonly ranges: CellRect[] }\n"
             + _wb("  setPrintArea(sheet: number, ranges: CellRect[]): Status;\n"),
             py_workbook="class ProtectedRange:\n    ranges: List[CellRect]\n\n"

@@ -7,10 +7,10 @@ from dataclasses import replace
 
 from formulon import CellXf, FormulonError, Value, ValueKind, Workbook
 from formulon.workbook import (
+    CellRect,
     DisplayStatus,
     EffectiveStyleSource,
     GeometryMode,
-    MergeRange,
     SheetFormatDefaults,
 )
 
@@ -104,12 +104,14 @@ class GeometryTests(unittest.TestCase):
             a = wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=2))
             b = wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=3))
             wb.set_row_style(0, 2, 2, r)
-            self.assertEqual(wb.get_range_style_bases(0, 0, 1, last_row, 1), [0, r])
+            self.assertEqual(wb.get_range_style_bases(0, CellRect(0, 1, last_row, 1)), [0, r])
             # Row 2 of a one-column selection is a single cell; excluding it hides the row style.
-            self.assertEqual(wb.get_range_style_bases_excluding(0, 0, 1, last_row, 1, [(2, 1), (2, 1), (9, 9)]), [0])
+            self.assertEqual(
+                wb.get_range_style_bases_excluding(0, CellRect(0, 1, last_row, 1), [(2, 1), (2, 1), (9, 9)]), [0]
+            )
 
-            snap = wb.snapshot_range_style(0, 0, 1, last_row, 1)
-            wb.remap_range_style(0, 0, 1, last_row, 1, {0: a, r: b})
+            snap = wb.snapshot_range_style(0, CellRect(0, 1, last_row, 1))
+            wb.remap_range_style(0, CellRect(0, 1, last_row, 1), {0: a, r: b})
             e = wb.get_effective_style(0, 2, 1)
             self.assertEqual((e.source, e.xf_index), (EffectiveStyleSource.CELL, b))
             e = wb.get_effective_style(0, 2, 2)
@@ -122,7 +124,7 @@ class GeometryTests(unittest.TestCase):
             self.assertEqual((e.source, e.xf_index), (EffectiveStyleSource.ROW, r))
 
             with self.assertRaises(FormulonError):
-                wb.remap_range_style(0, 0, 1, last_row, 1, {0: 100000})
+                wb.remap_range_style(0, CellRect(0, 1, last_row, 1), {0: 100000})
 
     def test_effective_format_defaults(self) -> None:
         with Workbook.create_default() as wb:
@@ -177,15 +179,15 @@ class GeometryTests(unittest.TestCase):
             col0_print = wb.get_column_width_pt(0, 0, GeometryMode.PRINT)
             self.assertGreater(col0, 0.0)
             self.assertGreater(col0_print, 0.0)
-            rect = wb.get_cell_rect_pt(0, MergeRange(0, 0, 1, 0))
+            rect = wb.get_cell_rect_pt(0, CellRect(0, 0, 1, 0))
             self.assertEqual(rect.x, 0.0)
             self.assertEqual(rect.y, 0.0)
             self.assertEqual(rect.width, col0)
             self.assertEqual(rect.height, 50.0)
-            below = wb.get_cell_rect_pt(0, MergeRange(2, 0, 2, 0), GeometryMode.PRINT)
+            below = wb.get_cell_rect_pt(0, CellRect(2, 0, 2, 0), GeometryMode.PRINT)
             self.assertEqual(below.y, 50.0)
             with self.assertRaises(FormulonError):
-                wb.get_cell_rect_pt(0, MergeRange(3, 0, 1, 0))
+                wb.get_cell_rect_pt(0, CellRect(3, 0, 1, 0))
             with self.assertRaises(FormulonError):
                 wb.get_column_width_pt(0, 0, 9)
 
@@ -223,7 +225,7 @@ class FormulaAndRangeTests(unittest.TestCase):
                 wb.set_number(0, r, 0, float(r))
             wb.set_formula(0, 2, 1, "=A3*2")
             wb.recalc()
-            full = MergeRange(0, 0, 9, 3)
+            full = CellRect(0, 0, 9, 3)
             cells, nxt = wb.get_cells_in_range(0, full)
             self.assertIsNone(nxt)
             self.assertEqual([(c.row, c.col) for c in cells], [(0, 0), (1, 0), (2, 0), (2, 1), (3, 0), (4, 0)])
@@ -241,20 +243,20 @@ class FormulaAndRangeTests(unittest.TestCase):
                     break
             self.assertEqual(seen, [(c.row, c.col) for c in cells])
 
-            sub, _ = wb.get_cells_in_range(0, MergeRange(3, 0, 4, 0))
+            sub, _ = wb.get_cells_in_range(0, CellRect(3, 0, 4, 0))
             self.assertEqual([(c.row, c.col) for c in sub], [(3, 0), (4, 0)])
             with self.assertRaises(FormulonError):
-                wb.get_cells_in_range(0, MergeRange(4, 0, 1, 0))
+                wb.get_cells_in_range(0, CellRect(4, 0, 1, 0))
 
     def test_merges_in_range(self) -> None:
         with Workbook.create_default() as wb:
-            a = MergeRange(0, 0, 1, 1)
-            b = MergeRange(5, 5, 6, 6)
+            a = CellRect(0, 0, 1, 1)
+            b = CellRect(5, 5, 6, 6)
             wb.add_merge(0, a)
             wb.add_merge(0, b)
-            self.assertEqual(wb.get_merges_in_range(0, MergeRange(1, 1, 3, 3)), [a])
-            self.assertEqual(wb.get_merges_in_range(0, MergeRange(0, 0, 10, 10)), [a, b])
-            self.assertEqual(wb.get_merges_in_range(0, MergeRange(8, 8, 9, 9)), [])
+            self.assertEqual(wb.get_merges_in_range(0, CellRect(1, 1, 3, 3)), [a])
+            self.assertEqual(wb.get_merges_in_range(0, CellRect(0, 0, 10, 10)), [a, b])
+            self.assertEqual(wb.get_merges_in_range(0, CellRect(8, 8, 9, 9)), [])
             with self.assertRaises(FormulonError):
                 wb.get_merges_in_range(7, a)
 
@@ -353,7 +355,7 @@ class PaginationDetailTests(unittest.TestCase):
             self.assertIn(10, p.horizontal_breaks)
             self.assertTrue(p.horizontal_break_manual[p.horizontal_breaks.index(10)])
             first = p.pages[0]
-            self.assertEqual(first.first_row, 0)
+            self.assertEqual(first.rect.first_row, 0)
             self.assertGreater(first.width_pt, 0.0)
             self.assertGreater(first.height_pt, 0.0)
 

@@ -160,7 +160,7 @@ Napi::Object MakeIndexResult(Napi::Env env, Napi::Object status, uint32_t index)
 /// success and reads 0 otherwise.
 Napi::Object MakeIndexResult(Napi::Env env, fm_status_t code, uint32_t index);
 
-/// Builds `{ status, top, left, rows, cols, cells: [] }` placeholder for
+/// Builds the `{ status, rect: null, cells: [] }` placeholder for
 /// failure paths in `PivotLayout`.
 Napi::Object EmptyPivotLayoutResult(Napi::Env env, Napi::Object status);
 
@@ -173,8 +173,8 @@ Napi::Object TranslateCfColor(Napi::Env env, const fm_cf_color_t& c);
 /// Translates an `fm_cf_match_t` into the JS shape used by embind.
 Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m);
 
-/// Builds `{ firstRow, lastRow, firstCol, lastCol }` from a cell range.
-Napi::Object RangeToJs(Napi::Env env, const fm_merge_range& r);
+/// Builds a `CellRect` `{ firstRow, firstCol, lastRow, lastCol }`.
+Napi::Object RangeToJs(Napi::Env env, const fm_cell_rect_t& r);
 
 /// JS string from a C string; NULL becomes "".
 Napi::Value JsString(Napi::Env env, const char* s);
@@ -223,6 +223,9 @@ class CheckedSpecReader final {
   /// a wider unsigned intermediate. The valid interval is [-2^63, 2^63).
   int64_t I64(const Napi::Object& owner, const char* key, int64_t dflt, bool* present = nullptr);
   int64_t I64(const Napi::Value& value, const char* key, int64_t dflt);
+  /// Reads a required uint32 field: absent, non-number or non-integer is a
+  /// TypeError, a negative or too-large integer a RangeError.
+  uint32_t RequiredU32(const Napi::Object& owner, const char* key);
 
  private:
   bool ReadOptional(const Napi::Object& owner, const char* key, Napi::Value* out, bool* present = nullptr);
@@ -247,12 +250,13 @@ class CheckedSpecReader final {
   bool failed_ = false;
 };
 
-/// Reads a `{ firstRow, lastRow, firstCol, lastCol }` range object.
-bool ReadMergeRange(CheckedSpecReader& reader, const Napi::Object& range, fm_merge_range* out);
+/// Reads a `CellRect` `{ firstRow, firstCol, lastRow, lastCol }` object; every
+/// field is required.
+bool ReadCellRect(CheckedSpecReader& reader, const Napi::Object& range, fm_cell_rect_t* out);
 
 /// Reads the range at `info[idx]`; a missing/nullish argument reads as all
 /// zeros, while a supplied non-object is rejected by the reader.
-bool MergeRangeArg(CheckedSpecReader& reader, const Napi::CallbackInfo& info, size_t idx, fm_merge_range* out);
+bool CellRectArg(CheckedSpecReader& reader, const Napi::CallbackInfo& info, size_t idx, fm_cell_rect_t* out);
 
 // ---------------------------------------------------------------------
 // Positional arguments. The registration guard in `workbook_class.cc`

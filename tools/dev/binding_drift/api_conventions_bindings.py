@@ -1275,6 +1275,7 @@ def _multi_problems(members: Sequence[CParam], owner: str) -> Iterator[Tuple[str
         if (
             member.pointer_depth == 1
             and follower is not None
+            and follower.pointer_depth == 0
             and follower.role_name.endswith("count")
             and (role in _A1_MULTI_NAMES or member.base_type == CELL_RECT)
         ):

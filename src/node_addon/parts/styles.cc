@@ -430,7 +430,15 @@ Napi::Value Workbook::ClearCellXfIndex(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetRangeXfIndex(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_set_range_xf_index);
+  Napi::Env env = info.Env();
+  CheckedSpecReader reader(env);
+  fm_cell_rect_t rect{};
+  if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
+    return env.Undefined();
+  }
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    return fm_sheet_set_range_xf_index(handle, ArgU32(info, 0), &rect, ArgU32(info, 2));
+  });
 }
 
 // ---- Style getters --------------------------------------------------

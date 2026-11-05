@@ -197,20 +197,20 @@ class EveryKind {
     columns_[5].icon_id = 2;
     columns_[5].has_icon_id = 1;
 
-    conditions_[0].ref = fm_merge_range{1, 0, 19, 0};
+    conditions_[0].ref = fm_cell_rect_t{1, 0, 19, 0};
     conditions_[0].descending = 1;
-    conditions_[1].ref = fm_merge_range{1, 1, 19, 1};
+    conditions_[1].ref = fm_cell_rect_t{1, 1, 19, 1};
     conditions_[1].sort_by = 3;
     conditions_[1].icon_set = 4;
     conditions_[1].icon_id = 1;
     conditions_[1].has_icon_id = 1;
     conditions_[1].custom_list = "";
 
-    filter_.range = fm_merge_range{0, 0, 19, 6};
+    filter_.range = fm_cell_rect_t{0, 0, 19, 6};
     filter_.columns = columns_;
     filter_.column_count = 6;
     filter_.has_sort = 1;
-    filter_.sort_ref = fm_merge_range{1, 0, 19, 6};
+    filter_.sort_ref = fm_cell_rect_t{1, 0, 19, 6};
     filter_.case_sensitive = 1;
     filter_.conditions = conditions_;
     filter_.condition_count = 2;
@@ -338,7 +338,7 @@ TEST(FormulonCApiAutoFilter, ApplyHidesRowsAndClearShowsThem) {
   const char* values[] = {"2", "4"};
   const fm_filter_column_t column = ValuesColumn(0, values, 2);
   fm_auto_filter_t filter{};
-  filter.range = fm_merge_range{0, 0, 5, 0};
+  filter.range = fm_cell_rect_t{0, 0, 5, 0};
   filter.columns = &column;
   filter.column_count = 1;
   ASSERT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), 0) << fm_get_last_error_message();
@@ -379,7 +379,7 @@ TEST(FormulonCApiAutoFilter, ClearKeepsColumnsThatHideTheirButton) {
   fm_filter_column_t column = ValuesColumn(0, values, 1);
   column.hidden_button = 1;
   fm_auto_filter_t filter{};
-  filter.range = fm_merge_range{0, 0, 5, 0};
+  filter.range = fm_cell_rect_t{0, 0, 5, 0};
   filter.columns = &column;
   filter.column_count = 1;
   ASSERT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), 0);
@@ -399,7 +399,7 @@ TEST(FormulonCApiAutoFilter, RejectsMalformedRecords) {
   const char* values[] = {"1"};
   fm_filter_column_t column = ValuesColumn(3, values, 1);
   fm_auto_filter_t filter{};
-  filter.range = fm_merge_range{0, 0, 5, 1};
+  filter.range = fm_cell_rect_t{0, 0, 5, 1};
   filter.columns = &column;
   filter.column_count = 1;
   EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &filter), kAutoFilterInvalid);
@@ -470,7 +470,7 @@ TEST(FormulonCApiAutoFilter, TableFilterAppliesAndRoundTrips) {
   column.op1 = 5;
   column.val1 = "3";
   fm_auto_filter_t filter{};
-  filter.range = fm_merge_range{0, 0, 5, 0};
+  filter.range = fm_cell_rect_t{0, 0, 5, 0};
   filter.columns = &column;
   filter.column_count = 1;
   ASSERT_EQ(fm_workbook_set_table_auto_filter(wb.handle, table, &filter), 0) << fm_get_last_error_message();

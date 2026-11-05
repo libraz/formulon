@@ -174,7 +174,7 @@ Shown ReportAt(fm_workbook_t* wb, const std::string& row_label, const std::strin
   std::uint32_t left = 0;
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
-  EXPECT_EQ(fm_pivot_cells_get_bounds(projected.handle, &top, &left, &rows, &cols), 0);
+  EXPECT_EQ(PivotLayoutExtent(projected.handle, &top, &left, &rows, &cols), 0);
   const std::vector<fm_pivot_cell_t> cells = CollectCells(projected.handle);
   const auto is_text = [](const fm_pivot_cell_t& cell, const std::string& text) {
     return cell.value.kind == FM_VAL_TEXT && cell.value.u.text != nullptr && text == cell.value.u.text;

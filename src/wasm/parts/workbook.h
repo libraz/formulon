@@ -195,7 +195,7 @@ class JsWorkbook {
   JsStatus setExcelProfileId(const std::string& profile_id);
   JsStringResult fileName() const;
   JsStatus setFileName(const std::string& name);
-  emscripten::val partialRecalc(emscripten::val viewport);
+  emscripten::val partialRecalc(uint32_t sheet, emscripten::val viewport);
   /// Installs the JS callback the iterative solver invokes after each
   /// sweep, or clears it when `cb` is null / undefined. A callback that
   /// throws aborts the solve, and the recalc that ran it reports
@@ -227,8 +227,7 @@ class JsWorkbook {
   JsNumberResult pivotCount(uint32_t sheet) const;
   emscripten::val pivotLayout(uint32_t sheet, uint32_t pivotIndex) const;
 
-  emscripten::val evaluateCfRange(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
-                                  uint32_t lastCol, double todaySerial) const;
+  emscripten::val evaluateCfRange(uint32_t sheet, emscripten::val range, double todaySerial) const;
 
   /// Computes the printable page grid for one sheet. Returns
   /// `{ status, printArea, horizontalBreaks, verticalBreaks, pageCount }`.
@@ -332,15 +331,11 @@ class JsWorkbook {
   JsStatus setRowCollapsed(uint32_t sheet, uint32_t first, uint32_t last, bool collapsed);
   JsStatus setRowStyle(uint32_t sheet, uint32_t first, uint32_t last, uint32_t xfIndex);
   JsStatus clearRowStyle(uint32_t sheet, uint32_t first, uint32_t last);
-  emscripten::val rangeStyleBases(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
-                                  uint32_t lastCol) const;
-  emscripten::val rangeStyleBasesExcluding(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
-                                           uint32_t lastCol, emscripten::val excludedRows,
+  emscripten::val rangeStyleBases(uint32_t sheet, emscripten::val range) const;
+  emscripten::val rangeStyleBasesExcluding(uint32_t sheet, emscripten::val range, emscripten::val excludedRows,
                                            emscripten::val excludedCols) const;
-  JsStatus remapRangeStyle(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow, uint32_t lastCol,
-                           emscripten::val fromXfs, emscripten::val toXfs);
-  emscripten::val snapshotRangeStyle(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
-                                     uint32_t lastCol) const;
+  JsStatus remapRangeStyle(uint32_t sheet, emscripten::val range, emscripten::val fromXfs, emscripten::val toXfs);
+  emscripten::val snapshotRangeStyle(uint32_t sheet, emscripten::val range) const;
   JsStatus restoreRangeStyle(uint32_t sheet, emscripten::val bytes);
   /// Drops the height override at `row`, returning it to the sheet default.
   JsStatus clearRowHeight(uint32_t sheet, uint32_t first, uint32_t last);
@@ -373,8 +368,7 @@ class JsWorkbook {
   JsStatus clearCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col);
   /// Applies one xf across an inclusive rectangle, materialising blank
   /// cells so an empty ruled box renders. Saves one ABI crossing per cell.
-  JsStatus setRangeXfIndex(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow, uint32_t lastCol,
-                           uint32_t xf_index);
+  JsStatus setRangeXfIndex(uint32_t sheet, emscripten::val range, uint32_t xf_index);
   emscripten::val getCellXf(uint32_t xf_index) const;
   emscripten::val getFont(uint32_t font_index) const;
   emscripten::val getFill(uint32_t fill_index) const;
@@ -459,9 +453,8 @@ class JsWorkbook {
 
   JsStatus addHyperlink(uint32_t sheet, uint32_t row, uint32_t col, const std::string& target,
                         const std::string& display, const std::string& tooltip, const std::string& location);
-  JsStatus addHyperlinkRange(uint32_t sheet, uint32_t row, uint32_t col, uint32_t lastRow, uint32_t lastCol,
-                             const std::string& target, const std::string& display, const std::string& tooltip,
-                             const std::string& location);
+  JsStatus addHyperlinkRange(uint32_t sheet, emscripten::val range, const std::string& target,
+                             const std::string& display, const std::string& tooltip, const std::string& location);
   JsStatus removeHyperlink(uint32_t sheet, uint32_t row, uint32_t col);
   JsStatus removeHyperlinkAt(uint32_t sheet, uint32_t index);
   JsStatus clearHyperlinks(uint32_t sheet);
@@ -579,8 +572,7 @@ class JsWorkbook {
   emscripten::val parseReference(const std::string& text, emscripten::val options) const;
   emscripten::val formatReference(emscripten::val range, emscripten::val options) const;
   emscripten::val getArrayFormula(uint32_t sheet, uint32_t row, uint32_t col) const;
-  JsStatus setArrayFormula(uint32_t sheet, uint32_t row, uint32_t col, uint32_t rows, uint32_t cols,
-                           const std::string& formula);
+  JsStatus setArrayFormula(uint32_t sheet, emscripten::val range, const std::string& formula);
 
   // ---- PivotCache mutation -----------------------------------------------
 

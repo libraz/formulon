@@ -52,16 +52,16 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
     return MakeFieldResult(env, NullHandleError(env), "cells", Napi::Array::New(env));
   }
   const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t first_row = ArgU32(info, 1);
-  const uint32_t first_col = ArgU32(info, 2);
-  const uint32_t last_row = ArgU32(info, 3);
-  const uint32_t last_col = ArgU32(info, 4);
+  CheckedSpecReader reader(env);
+  fm_cell_rect_t rect{};
+  if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
+    return env.Undefined();
+  }
   // The registration guard requires `todaySerial`; NaN disables
   // `timePeriod` rules, as the C ABI documents.
-  const double today_serial = ArgDouble(info, 5);
+  const double today_serial = ArgDouble(info, 2);
   fm_cf_results_t* results = nullptr;
-  fm_status_t rc =
-      fm_sheet_evaluate_cf_range(handle_, sheet, first_row, first_col, last_row, last_col, today_serial, &results);
+  fm_status_t rc = fm_sheet_evaluate_cf_range(handle_, sheet, &rect, today_serial, &results);
   if (rc != 0) {
     return MakeFieldResult(env, MakeErrorStatus(env, rc), "cells", Napi::Array::New(env));
   }
@@ -262,7 +262,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   // arena rather than a vector: the colorScale, dataBar and iconSet
   // branches below all feed the same store, and a vector would relocate
   // the earlier strings as the later branches add theirs.
-  std::vector<fm_cf_cell_range_t> ranges_buf;
+  std::vector<fm_cell_rect_t> ranges_buf;
   std::vector<fm_cfvo_t> color_scale_thresholds;
   std::vector<fm_cf_color_t> color_scale_colors;
   std::vector<fm_cfvo_t> icon_set_thresholds;
@@ -291,11 +291,10 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
         continue;
       }
       Napi::Object rng = rng_v.As<Napi::Object>();
-      fm_cf_cell_range_t r{};
-      r.first_row = reader.U32(rng, "firstRow", 0U);
-      r.first_col = reader.U32(rng, "firstCol", 0U);
-      r.last_row = reader.U32(rng, "lastRow", 0U);
-      r.last_col = reader.U32(rng, "lastCol", 0U);
+      fm_cell_rect_t r{};
+      if (!ReadCellRect(reader, rng, &r)) {
+        break;
+      }
       ranges_buf.push_back(r);
     }
   }

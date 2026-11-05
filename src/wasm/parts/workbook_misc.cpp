@@ -197,11 +197,8 @@ emscripten::val JsWorkbook::localeFacts(const std::string& profile_id) const {
 emscripten::val JsWorkbook::spillInfo(uint32_t sheet, uint32_t row, uint32_t col) const {
   emscripten::val item = emscripten::val::object();
   item.set("engaged", false);
-  item.set("anchorRow", 0U);
-  item.set("anchorCol", 0U);
-  item.set("rows", 0U);
-  item.set("cols", 0U);
   item.set("blocked", false);
+  item.set("rect", emscripten::val::null());
   if (handle_ == nullptr) {
     item.set("status", invalid_handle_status());
     return item;
@@ -213,11 +210,10 @@ emscripten::val JsWorkbook::spillInfo(uint32_t sheet, uint32_t row, uint32_t col
     return item;
   }
   item.set("engaged", info.engaged != 0);
-  item.set("anchorRow", info.anchor_row);
-  item.set("anchorCol", info.anchor_col);
-  item.set("rows", info.rows);
-  item.set("cols", info.cols);
   item.set("blocked", info.blocked != 0);
+  if (info.engaged != 0 || info.blocked != 0) {
+    item.set("rect", cell_rect_to_val(info.rect));
+  }
   return item;
 }
 
@@ -234,24 +230,24 @@ emscripten::val JsWorkbook::getArrayFormula(uint32_t sheet, uint32_t row, uint32
   const fm_status_t rc = fm_sheet_get_array_formula(handle_, sheet, row, col, &info);
   o.set("status", status_from_rc(rc));
   if (rc == 0 && info.engaged != 0) {
-    emscripten::val ref = emscripten::val::object();
-    ref.set("row", info.anchor_row);
-    ref.set("col", info.anchor_col);
-    ref.set("rows", info.rows);
-    ref.set("cols", info.cols);
     emscripten::val array = emscripten::val::object();
-    array.set("ref", ref);
+    array.set("rect", cell_rect_to_val(info.rect));
     array.set("formula", std::string(info.formula));
     o.set("arrayFormula", array);
   }
   return o;
 }
 
-JsStatus JsWorkbook::setArrayFormula(uint32_t sheet, uint32_t row, uint32_t col, uint32_t rows, uint32_t cols,
-                                     const std::string& formula) {
-  return status_from_rc(handle_ != nullptr
-                            ? fm_sheet_set_array_formula(handle_, sheet, row, col, rows, cols, formula.c_str())
-                            : kBindingInvalidHandle);
+JsStatus JsWorkbook::setArrayFormula(uint32_t sheet, emscripten::val range, const std::string& formula) {
+  if (handle_ == nullptr) {
+    return status_from_rc(kBindingInvalidHandle);
+  }
+  JsNarrowNumericReader reader("setArrayFormula");
+  const fm_cell_rect_t rect = js_pull_range(range, &reader);
+  if (!reader.ok()) {
+    return reader.failure();
+  }
+  return status_from_rc(fm_sheet_set_array_formula(handle_, sheet, &rect, formula.c_str()));
 }
 
 emscripten::val JsWorkbook::compareText(const std::string& a, const std::string& b, int32_t strength,

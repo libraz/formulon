@@ -29,7 +29,7 @@ Checks:
   python-inline-structs
                   The C structs the Python binding decodes with a bare
                   `struct.unpack` instead of a `_structs.Struct` entry --
-                  `fm_value_t`, `fm_print_range_t` -- have their size
+                  `fm_value_t`, `fm_cell_rect_t` -- have their size
                   literals and their decoders' offsets and field widths
                   measured against the header.
   python-stub-methods

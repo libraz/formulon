@@ -8,6 +8,7 @@ from dataclasses import replace
 from formulon import (
     AnchorEditAs,
     AnchorKind,
+    CellRect,
     ChartAxisCrosses,
     ChartAxisKind,
     ChartBlanksAs,
@@ -165,7 +166,7 @@ class ChartReadTests(unittest.TestCase):
     def test_scatter_is_the_xy_domain(self) -> None:
         wb, oid = _chart(ChartInsertKind.SCATTER, "Sheet1!$F$1:$G$5")
         with wb:
-            wb.set_range_xf_index(0, 1, 5, 4, 5, wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=2)))
+            wb.set_range_xf_index(0, CellRect(1, 5, 4, 5), wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=2)))
             info = wb.get_chart(0, oid)
             self.assertEqual(info.plots[0].type, ChartPlotType.SCATTER)
             data = wb.get_chart_data(0, oid)

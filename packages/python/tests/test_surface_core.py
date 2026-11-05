@@ -9,6 +9,7 @@ from pathlib import Path
 
 from formulon import (
     CalcMode,
+    CellRect,
     CivilTime,
     FormulonError,
     ValueKind,
@@ -28,18 +29,16 @@ class StructLayoutTests(unittest.TestCase):
     # *size* change loud, and `test_every_struct_has_a_pinned_size` is what
     # stops a new struct from opting out by simply not being listed.
     EXPECTED_SIZES = {
-        "MERGE_RANGE": 16,
+        "CELL_RECT": 16,
         "HYPERLINK": 32,
         "COMMENT": 16,
         "DATA_VALIDATION": 52,
         "SHEET_PROTECTION": 88,
         "WORKBOOK_PROTECTION": 52,
         "PROTECTED_RANGE": 32,
-        "VIEWPORT": 16,
         "CELL_NODE": 12,
         "PHONETIC_RUN": 12,
         "CFVO": 12,
-        "CF_CELL_RANGE": 16,
         "CF_COLOR": 4,
         "CF_MATCH": 72,
         "CF_RULE": 248,
@@ -95,14 +94,14 @@ class StructLayoutTests(unittest.TestCase):
         "PAPER_INFO": 24,
         "MARGINS_PT": 48,
         "PRINT_TITLES": 24,
-        # Five `uint32`s, then four tail-aligned `double`s.
+        # A `uint32` and an inline `fm_cell_rect_t`, then four tail-aligned `double`s.
         "PAGE_LAYOUT": 56,
         "THEME_COLORS": 48,
         "THEME_FONTS": 16,
         "EFFECTIVE_STYLE": 96,
         "DATE_GROUP_ITEM": 8,
         "FILTER_COLUMN": 152,
-        # An inline `fm_merge_range` (16 bytes) leads the record.
+        # An inline `fm_cell_rect_t` (16 bytes) leads the record.
         "SORT_CONDITION": 48,
         "AUTO_FILTER": 64,
         "VALIDATION_OUTCOME": 16,
@@ -178,7 +177,7 @@ class StructLayoutTests(unittest.TestCase):
     # Records the wrapper marshals without a `Struct` entry, so they are
     # invisible to `EXPECTED_SIZES` above. `fm_value_t` is passed around as
     # the bare `fm_value_t_size` and as `VALUE_BLOB` when it sits inline in a
-    # larger record; `fm_print_range_t` is the literal 16 in
+    # larger record; `fm_cell_rect_t` is the literal 16 in
     # `Workbook.paginate`. `python-inline-structs` binds these to the C
     # header; pinning them here makes a size change loud on its own.
     def test_hand_marshalled_record_sizes(self) -> None:
@@ -352,9 +351,11 @@ class PartialRecalcTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.set_number(0, 0, 0, 10.0)  # A1
             wb.set_formula(0, 0, 1, "=A1*2")  # B1
-            recomputed = wb.recalc_viewport(0, 0, 0, 1, 1)
+            recomputed = wb.recalc_viewport(0, CellRect(0, 1, 0, 1))
             self.assertGreater(recomputed, 0)
             self.assertEqual(wb.get_value(0, 0, 1).to_python(), 20.0)
+            with self.assertRaises(TypeError):
+                wb.recalc_viewport(0, (0, 1, 0, 1))  # type: ignore[arg-type]
 
 
 class TraceTests(unittest.TestCase):
@@ -376,8 +377,7 @@ class SpillTests(unittest.TestCase):
             wb.recalc()
             info = wb.get_spill_info(0, 0, 0)
             self.assertTrue(info.engaged)
-            self.assertEqual(info.rows, 3)
-            self.assertEqual((info.anchor_row, info.anchor_col), (0, 0))
+            self.assertEqual(info.rect, CellRect(0, 0, 2, 0))
             self.assertFalse(info.blocked)
 
     def test_blocked_spill_reports_the_attempted_footprint(self) -> None:
@@ -388,8 +388,9 @@ class SpillTests(unittest.TestCase):
             info = wb.get_spill_info(0, 0, 0)
             self.assertTrue(info.blocked)
             self.assertFalse(info.engaged)
-            self.assertEqual((info.anchor_row, info.anchor_col, info.rows, info.cols), (0, 0, 5, 1))
+            self.assertEqual(info.rect, CellRect(0, 0, 4, 0))
             self.assertFalse(wb.get_spill_info(0, 1, 0).blocked)
+            self.assertIsNone(wb.get_spill_info(0, 9, 9).rect)
 
 
 class ArrayFormulaTests(unittest.TestCase):
@@ -398,20 +399,17 @@ class ArrayFormulaTests(unittest.TestCase):
             for r in range(3):
                 wb.set_number(0, r, 0, float(r + 1))
             self.assertIsNone(wb.get_array_formula(0, 0, 2))
-            wb.set_array_formula(0, 0, 2, 3, 1, "=A1:A3*2")
+            wb.set_array_formula(0, CellRect(0, 2, 2, 2), "=A1:A3*2")
             wb.recalc()
             for r in range(3):
                 found = wb.get_array_formula(0, r, 2)
                 self.assertIsNotNone(found)
                 assert found is not None
-                self.assertEqual(
-                    (found.ref.first_row, found.ref.first_col, found.ref.last_row, found.ref.last_col),
-                    (0, 2, 2, 2),
-                )
+                self.assertEqual(found.rect, CellRect(0, 2, 2, 2))
                 self.assertIn("A1:A3", found.formula)
             self.assertEqual(wb.get_value(0, 2, 2).to_python(), 6.0)
             with self.assertRaises(FormulonError):
-                wb.set_array_formula(0, 1, 2, 2, 1, "=1")
+                wb.set_array_formula(0, CellRect(1, 2, 2, 2), "=1")
             with self.assertRaises(FormulonError):
                 wb.set_number(0, 1, 2, 1.0)
             wb.set_blank(0, 0, 2)

@@ -634,7 +634,7 @@ def check_python_call_signatures() -> List[str]:
 #
 # `python-struct-layouts` only sees structs that have a `_structs.Struct`
 # entry. A struct small enough to decode with a bare `struct.unpack` -- an
-# `fm_value_t`, an `fm_print_range_t` -- has no such entry, so its field
+# `fm_value_t`, an `fm_cell_rect_t` -- has no such entry, so its field
 # offsets and widths live as literals in the decoding function and nothing
 # compares them to the header.
 # ---------------------------------------------------------------------------
@@ -644,7 +644,7 @@ def check_python_call_signatures() -> List[str]:
 # of the C layout and compared field for field.
 _PYTHON_INLINE_DECODERS = (
     ("Value._from_wasm", "fm_value_t"),
-    ("Workbook.get_pagination", "fm_print_range_t"),
+    ("Workbook.get_pagination", "fm_cell_rect_t"),
 )
 
 # Python-side size literals for a struct with no `_structs.Struct` entry, as

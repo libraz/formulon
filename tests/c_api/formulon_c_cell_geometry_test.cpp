@@ -79,7 +79,8 @@ struct SeenCell {
 std::uint64_t FetchPage(fm_workbook_t* wb, std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
                         std::uint32_t last_col, std::uint64_t cursor, std::uint32_t limit, std::vector<SeenCell>* out) {
   RangeGuard page;
-  EXPECT_EQ(fm_sheet_get_cells_in_range(wb, 0, first_row, first_col, last_row, last_col, cursor, limit, &page.handle),
+  EXPECT_EQ(fm_sheet_get_cells_in_range(wb, 0, record_arg(fm_cell_rect_t{first_row, first_col, last_row, last_col}),
+                                        cursor, limit, &page.handle),
             0);
   if (page.handle == nullptr) {
     return kCursorEnd;
@@ -205,22 +206,30 @@ TEST(FormulonCApiCellGeometry, CellRectSpansRangeAndSkipsHiddenTracks) {
 
   // B2:C3 -- column C is hidden and contributes nothing.
   fm_rect_pt_t rect{};
-  ASSERT_EQ(fm_sheet_get_cell_rect_pt(wb.handle, 0, 1U, 1U, 2U, 2U, FM_GEOMETRY_DISPLAY, &rect), 0);
+  ASSERT_EQ(
+      fm_sheet_get_cell_rect_pt(wb.handle, 0, record_arg(fm_cell_rect_t{1U, 1U, 2U, 2U}), FM_GEOMETRY_DISPLAY, &rect),
+      0);
   EXPECT_DOUBLE_EQ(rect.x, col_a);
   EXPECT_DOUBLE_EQ(rect.y, row_1);
   EXPECT_DOUBLE_EQ(rect.width, col_b);
   EXPECT_DOUBLE_EQ(rect.height, 30.0 + row_3);
 
   // A single cell agrees with the per-track getters exactly.
-  ASSERT_EQ(fm_sheet_get_cell_rect_pt(wb.handle, 0, 1U, 1U, 1U, 1U, FM_GEOMETRY_PRINT, &rect), 0);
+  ASSERT_EQ(
+      fm_sheet_get_cell_rect_pt(wb.handle, 0, record_arg(fm_cell_rect_t{1U, 1U, 1U, 1U}), FM_GEOMETRY_PRINT, &rect), 0);
   double col_b_print = 0.0;
   ASSERT_EQ(fm_sheet_get_column_width_pt(wb.handle, 0, 1U, FM_GEOMETRY_PRINT, &col_b_print), 0);
   EXPECT_EQ(rect.width, col_b_print);
   EXPECT_EQ(rect.height, 30.0);
 
-  EXPECT_EQ(fm_sheet_get_cell_rect_pt(wb.handle, 0, 2U, 0U, 1U, 0U, FM_GEOMETRY_DISPLAY, &rect), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_get_cell_rect_pt(wb.handle, 0, 0U, 0U, 0U, 0U, 7, &rect), kInvalidArgument);
-  EXPECT_NE(fm_sheet_get_cell_rect_pt(wb.handle, 0, 0U, 0U, 0U, 0U, FM_GEOMETRY_DISPLAY, nullptr), 0);
+  EXPECT_EQ(
+      fm_sheet_get_cell_rect_pt(wb.handle, 0, record_arg(fm_cell_rect_t{2U, 0U, 1U, 0U}), FM_GEOMETRY_DISPLAY, &rect),
+      kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_cell_rect_pt(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 0U, 0U}), 7, &rect),
+            kInvalidArgument);
+  EXPECT_NE(
+      fm_sheet_get_cell_rect_pt(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 0U, 0U}), FM_GEOMETRY_DISPLAY, nullptr),
+      0);
 }
 
 TEST(FormulonCApiCellGeometry, DefaultsDriveUnoverriddenTracks) {
@@ -331,16 +340,21 @@ TEST(FormulonCApiCellRange, RejectsBadArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   RangeGuard page;
-  EXPECT_EQ(fm_sheet_get_cells_in_range(wb.handle, 0, 5U, 0U, 1U, 0U, 0U, 0U, &page.handle), kInvalidArgument);
-  EXPECT_EQ(page.handle, nullptr);
-  EXPECT_EQ(fm_sheet_get_cells_in_range(wb.handle, 0, 0U, 0U, 1U, 1U, 1048576U * kCursorStride, 0U, &page.handle),
+  EXPECT_EQ(fm_sheet_get_cells_in_range(wb.handle, 0, record_arg(fm_cell_rect_t{5U, 0U, 1U, 0U}), 0U, 0U, &page.handle),
             kInvalidArgument);
-  EXPECT_EQ(fm_sheet_get_cells_in_range(wb.handle, 0, 0U, 0U, 1U, 1U, kCursorEnd, 0U, &page.handle), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_get_cells_in_range(wb.handle, 3, 0U, 0U, 1U, 1U, 0U, 0U, &page.handle),
+  EXPECT_EQ(page.handle, nullptr);
+  EXPECT_EQ(fm_sheet_get_cells_in_range(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 1U, 1U}),
+                                        1048576U * kCursorStride, 0U, &page.handle),
+            kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_cells_in_range(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 1U, 1U}), kCursorEnd, 0U,
+                                        &page.handle),
+            kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_cells_in_range(wb.handle, 3, record_arg(fm_cell_rect_t{0U, 0U, 1U, 1U}), 0U, 0U, &page.handle),
             FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_NE(fm_sheet_get_cells_in_range(wb.handle, 0, 0U, 0U, 1U, 1U, 0U, 0U, nullptr), 0);
+  EXPECT_NE(fm_sheet_get_cells_in_range(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 1U, 1U}), 0U, 0U, nullptr), 0);
 
-  ASSERT_EQ(fm_sheet_get_cells_in_range(wb.handle, 0, 0U, 0U, 1U, 1U, 0U, 0U, &page.handle), 0);
+  ASSERT_EQ(fm_sheet_get_cells_in_range(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 1U, 1U}), 0U, 0U, &page.handle),
+            0);
   size_t count = 99;
   ASSERT_EQ(fm_cell_range_get_cell_count(page.handle, &count), 0);
   EXPECT_EQ(count, 0U);
@@ -379,24 +393,26 @@ TEST(FormulonCApiCellRange, FormulaGettersReadA1AndR1C1) {
 TEST(FormulonCApiCellRange, MergesInRangeReportsIntersectingMerges) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_merge_range{0U, 0U, 1U, 1U})), 0);
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_merge_range{5U, 5U, 6U, 8U})), 0);
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_merge_range{20U, 0U, 20U, 3U})), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 1U, 1U})), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_cell_rect_t{5U, 5U, 6U, 8U})), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_cell_rect_t{20U, 0U, 20U, 3U})), 0);
 
   std::uint32_t total = 0;
-  // Corners given transposed: rows 1..6, columns 1..6.
-  ASSERT_EQ(fm_sheet_get_merges_in_range(wb.handle, 0, record_arg(fm_merge_range{6U, 6U, 1U, 1U}), nullptr, 0U, &total),
+  ASSERT_EQ(fm_sheet_get_merges_in_range(wb.handle, 0, record_arg(fm_cell_rect_t{1U, 1U, 6U, 6U}), nullptr, 0U, &total),
             0);
   EXPECT_EQ(total, 2U);
-  fm_merge_range out[1] = {};
-  ASSERT_EQ(fm_sheet_get_merges_in_range(wb.handle, 0, record_arg(fm_merge_range{1U, 1U, 6U, 6U}), out, 1U, &total), 0);
+  // Transposed corners are an inverted rectangle, not another spelling of it.
+  EXPECT_EQ(fm_sheet_get_merges_in_range(wb.handle, 0, record_arg(fm_cell_rect_t{6U, 6U, 1U, 1U}), nullptr, 0U, &total),
+            FM_STATUS_INVALID_ARGUMENT);
+  fm_cell_rect_t out[1] = {};
+  ASSERT_EQ(fm_sheet_get_merges_in_range(wb.handle, 0, record_arg(fm_cell_rect_t{1U, 1U, 6U, 6U}), out, 1U, &total), 0);
   EXPECT_EQ(total, 2U);
   EXPECT_EQ(out[0].first_row, 0U);
   EXPECT_EQ(out[0].last_col, 1U);
 
-  EXPECT_NE(fm_sheet_get_merges_in_range(wb.handle, 0, record_arg(fm_merge_range{0U, 0U, 1U, 1U}), nullptr, 1U, &total),
+  EXPECT_NE(fm_sheet_get_merges_in_range(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 1U, 1U}), nullptr, 1U, &total),
             0);
-  EXPECT_EQ(fm_sheet_get_merges_in_range(wb.handle, 9, record_arg(fm_merge_range{0U, 0U, 1U, 1U}), nullptr, 0U, &total),
+  EXPECT_EQ(fm_sheet_get_merges_in_range(wb.handle, 9, record_arg(fm_cell_rect_t{0U, 0U, 1U, 1U}), nullptr, 0U, &total),
             FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
@@ -494,8 +510,8 @@ TEST(FormulonCApiPaginationDetail, PagesFollowPageOrderAndCoverEveryPage) {
     EXPECT_GT(pages[i].height_pt, 0.0);
   }
   // Over then down: the second page sits right of the first, same row band.
-  EXPECT_EQ(pages[1].first_row, pages[0].first_row);
-  EXPECT_GT(pages[1].first_col, pages[0].last_col);
+  EXPECT_EQ(pages[1].rect.first_row, pages[0].rect.first_row);
+  EXPECT_GT(pages[1].rect.first_col, pages[0].rect.last_col);
   fm_page_layout_t extra{};
   EXPECT_EQ(fm_pagination_get_page_at(p.handle, page_count, &extra), kInvalidArgument);
   EXPECT_NE(fm_pagination_get_page_order(nullptr, &order), 0);

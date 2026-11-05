@@ -67,7 +67,7 @@ test('evaluateCfRange returns ok envelope with empty cells for a CF-less workboo
   const wb = mod.Workbook.createDefault();
   // The default workbook has no CF rules, so the call should succeed
   // and return an empty cell list. NaN disables `TimePeriod` rules.
-  const r = wb.evaluateCfRange(0, 0, 0, 4, 4, Number.NaN);
+  const r = wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 4 }, Number.NaN);
   assert.ok(r.status.ok, `evaluateCfRange: ${JSON.stringify(r.status)}`);
   assert.ok(Array.isArray(r.cells));
   assert.equal(r.cells.length, 0);
@@ -93,14 +93,14 @@ test('evaluateCfRange requires todaySerial; NaN disables timePeriod rules', asyn
   // todaySerial is required: an omitted one is rejected rather than read as
   // 0, the valid serial for 1899-12-30 that would make the rule match. NaN
   // is the documented disabling value.
-  assert.throws(() => wb.evaluateCfRange(0, 0, 0, 0, 0), TypeError);
-  const explicitNaN = wb.evaluateCfRange(0, 0, 0, 0, 0, Number.NaN);
+  assert.throws(() => wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }), TypeError);
+  const explicitNaN = wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, Number.NaN);
   assert.ok(explicitNaN.status.ok, `evaluateCfRange: ${JSON.stringify(explicitNaN.status)}`);
   assert.equal(explicitNaN.cells.length, 0);
 
   // A concrete basis of 0 does engage the rule, proving the default is
   // not merely a no-op for this workbook.
-  const zeroBasis = wb.evaluateCfRange(0, 0, 0, 0, 0, 0);
+  const zeroBasis = wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, 0);
   assert.ok(zeroBasis.status.ok, `evaluateCfRange: ${JSON.stringify(zeroBasis.status)}`);
   assert.equal(zeroBasis.cells.length, 1);
 });

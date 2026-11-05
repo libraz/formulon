@@ -68,7 +68,7 @@ extern "C" fm_status_t fm_pagination_get_print_area_count(const fm_pagination_t*
 }
 
 extern "C" fm_status_t fm_pagination_get_print_area_at(const fm_pagination_t* pagination, size_t index,
-                                                       fm_print_range_t* out) {
+                                                       fm_cell_rect_t* out) {
   clear_last_error();
   if (pagination == nullptr || out == nullptr) {
     return null_argument("fm_pagination_get_print_area_at");
@@ -78,7 +78,7 @@ extern "C" fm_status_t fm_pagination_get_print_area_at(const fm_pagination_t* pa
     return rc;
   }
   const formulon::print::CellRange& range = pagination->result.print_area[index];
-  *out = fm_print_range_t{range.first_row, range.first_col, range.last_row, range.last_col};
+  *out = fm_cell_rect_t{range.first_row, range.first_col, range.last_row, range.last_col};
   return 0;
 }
 
@@ -225,10 +225,7 @@ extern "C" fm_status_t fm_pagination_get_page_at(const fm_pagination_t* paginati
   const formulon::print::PageLayout& page = pagination->result.pages[index];
   *out = fm_page_layout_t{};
   out->area_index = page.area_index;
-  out->first_row = page.first_row;
-  out->last_row = page.last_row;
-  out->first_col = page.first_col;
-  out->last_col = page.last_col;
+  out->rect = fm_cell_rect_t{page.first_row, page.first_col, page.last_row, page.last_col};
   out->origin_x_pt = page.origin_x_pt;
   out->origin_y_pt = page.origin_y_pt;
   out->width_pt = page.width_pt;

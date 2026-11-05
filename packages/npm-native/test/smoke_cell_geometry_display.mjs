@@ -303,8 +303,8 @@ test('paginate reports paper, margins, printable area, pages and break provenanc
   assert.equal(p.printTitles.hasCols, false);
   assert.equal(p.pages.length, p.pageCount);
   assert.ok(p.pages.length >= 1);
-  assert.equal(p.pages[0].firstRow, 0);
-  assert.equal(p.pages[0].firstCol, 0);
+  assert.equal(p.pages[0].rect.firstRow, 0);
+  assert.equal(p.pages[0].rect.firstCol, 0);
   assert.ok(p.pages[0].widthPt > 0 && p.pages[0].heightPt > 0);
   assert.equal(p.horizontalBreakManual.length, p.horizontalBreaks.length);
   assert.equal(p.verticalBreakManual.length, p.verticalBreaks.length);

@@ -13,10 +13,7 @@ test('spillInfo reports a spill blocked by a value', async () => {
     const blocked = wb.getSpillInfo(0, 1, 3);
     assert.equal(blocked.engaged, false);
     assert.equal(blocked.blocked, true);
-    assert.equal(blocked.anchorRow, 1);
-    assert.equal(blocked.anchorCol, 3);
-    assert.equal(blocked.rows, 5);
-    assert.equal(blocked.cols, 1);
+    assert.deepEqual(blocked.rect, { firstRow: 1, firstCol: 3, lastRow: 5, lastCol: 3 });
     // Only the anchor reports the attempt.
     assert.equal(wb.getSpillInfo(0, 2, 3).blocked, false);
     assert.ok(wb.setBlank(0, 3, 3).ok);

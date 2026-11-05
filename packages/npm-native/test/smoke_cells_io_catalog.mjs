@@ -788,10 +788,7 @@ test('spillInfo reports a dynamic-array region', async () => {
   assert.ok(wb.recalc().ok);
   const info = wb.getSpillInfo(0, 0, 0);
   assert.equal(info.engaged, true);
-  assert.equal(info.anchorRow, 0);
-  assert.equal(info.anchorCol, 0);
-  assert.equal(info.rows, 3);
-  assert.equal(info.cols, 1);
+  assert.deepEqual(info.rect, { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 });
 });
 
 test('array formulas can be authored, read from every cell and cleared', async () => {
@@ -801,17 +798,17 @@ test('array formulas can be authored, read from every cell and cleared', async (
   const none = wb.getArrayFormula(0, 0, 2);
   assert.ok(none.status.ok);
   assert.equal(none.arrayFormula, null);
-  assert.ok(wb.setArrayFormula(0, 0, 2, 3, 1, '=A1:A3*2').ok);
+  assert.ok(wb.setArrayFormula(0, { firstRow: 0, firstCol: 2, lastRow: 2, lastCol: 2 }, '=A1:A3*2').ok);
   assert.ok(wb.recalc().ok);
   for (let r = 0; r < 3; r += 1) {
     const found = wb.getArrayFormula(0, r, 2);
     assert.ok(found.status.ok);
-    assert.deepEqual(found.arrayFormula.ref, { row: 0, col: 2, rows: 3, cols: 1 });
+    assert.deepEqual(found.arrayFormula.rect, { firstRow: 0, firstCol: 2, lastRow: 2, lastCol: 2 });
     assert.ok(found.arrayFormula.formula.includes('A1:A3'));
   }
   assert.equal(wb.getValue(0, 2, 2).value.number, 6);
   // A partial overlap and a write into a non-anchor cell are refused.
-  assert.equal(wb.setArrayFormula(0, 1, 2, 2, 1, '=1').ok, false);
+  assert.equal(wb.setArrayFormula(0, { firstRow: 1, firstCol: 2, lastRow: 2, lastCol: 2 }, '=1').ok, false);
   assert.equal(wb.setNumber(0, 1, 2, 1).ok, false);
   assert.ok(wb.setBlank(0, 0, 2).ok);
   assert.ok(wb.recalc().ok);

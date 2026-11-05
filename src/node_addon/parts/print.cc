@@ -391,10 +391,7 @@ void SetPaginationDetail(Napi::Env env, Napi::Object result, const fm_pagination
       }
       Napi::Object item = Napi::Object::New(env);
       item.Set("areaIndex", Napi::Number::New(env, page.area_index));
-      item.Set("firstRow", Napi::Number::New(env, page.first_row));
-      item.Set("lastRow", Napi::Number::New(env, page.last_row));
-      item.Set("firstCol", Napi::Number::New(env, page.first_col));
-      item.Set("lastCol", Napi::Number::New(env, page.last_col));
+      item.Set("rect", RangeToJs(env, page.rect));
       item.Set("originXPt", Napi::Number::New(env, page.origin_x_pt));
       item.Set("originYPt", Napi::Number::New(env, page.origin_y_pt));
       item.Set("widthPt", Napi::Number::New(env, page.width_pt));
@@ -477,16 +474,11 @@ Napi::Value Workbook::Paginate(const Napi::CallbackInfo& info) {
     return result;
   }
   for (std::size_t i = 0; i < PaginationCount(pagination, &fm_pagination_get_print_area_count); ++i) {
-    fm_print_range_t range{};
+    fm_cell_rect_t range{};
     if (fm_pagination_get_print_area_at(pagination, i, &range) != 0) {
       continue;
     }
-    Napi::Object item = Napi::Object::New(env);
-    item.Set("firstRow", Napi::Number::New(env, range.first_row));
-    item.Set("firstCol", Napi::Number::New(env, range.first_col));
-    item.Set("lastRow", Napi::Number::New(env, range.last_row));
-    item.Set("lastCol", Napi::Number::New(env, range.last_col));
-    print_area.Set(i, item);
+    print_area.Set(i, RangeToJs(env, range));
   }
   for (std::size_t i = 0; i < PaginationCount(pagination, &fm_pagination_get_row_break_count); ++i) {
     uint32_t row = 0;

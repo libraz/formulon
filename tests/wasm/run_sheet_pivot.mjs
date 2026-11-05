@@ -159,10 +159,7 @@ export function registerSheetPivot(Module, test) {
       const missing = wb.getPivotLayout(0, 0);
       assert.equal(missing.status.ok, false);
       assert.notEqual(missing.status.status, 0);
-      assert.equal(missing.top, 0);
-      assert.equal(missing.left, 0);
-      assert.equal(missing.rows, 0);
-      assert.equal(missing.cols, 0);
+      assert.equal(missing.rect, null);
       assert.deepEqual(missing.cells, []);
     } finally {
       wb.delete();
@@ -178,10 +175,7 @@ export function registerSheetPivot(Module, test) {
 
       const layout = wb.getPivotLayout(1, 0);
       assert.ok(layout.status.ok, `status=${JSON.stringify(layout.status)}`);
-      assert.equal(layout.top, 0);
-      assert.equal(layout.left, 3);
-      assert.equal(layout.rows, 4);
-      assert.equal(layout.cols, 2);
+      assert.deepEqual(layout.rect, { firstRow: 0, firstCol: 3, lastRow: 3, lastCol: 4 });
       assert.ok(layout.cells.length > 0);
 
       const rowLabels = findPivotCell(layout, 0, 3);

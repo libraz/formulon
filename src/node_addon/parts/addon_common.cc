@@ -335,6 +335,26 @@ int32_t CheckedSpecReader::I32(const Napi::Value& value, const char* key, int32_
   return ReadIntegral<int32_t>(value, key, dflt, "int32");
 }
 
+uint32_t CheckedSpecReader::RequiredU32(const Napi::Object& owner, const char* key) {
+  Napi::Value value;
+  if (!ReadOptional(owner, key, &value)) {
+    if (ok()) {
+      ReportType(key, "whole number");
+    }
+    return 0U;
+  }
+  const double number = value.IsNumber() ? value.As<Napi::Number>().DoubleValue() : 0.5;
+  if (!std::isfinite(number) || std::trunc(number) != number) {
+    ReportType(key, "whole number");
+    return 0U;
+  }
+  if (number < 0.0 || number > static_cast<double>(std::numeric_limits<uint32_t>::max())) {
+    ReportRange(key, "uint32");
+    return 0U;
+  }
+  return static_cast<uint32_t>(number);
+}
+
 int64_t CheckedSpecReader::NarrowI64(double number, const char* key, int64_t dflt) {
   if (!std::isfinite(number) || std::trunc(number) != number || number < -0x1p63 || number >= 0x1p63) {
     ReportRange(key, "int64");
@@ -548,10 +568,7 @@ Napi::Object MakeIndexResult(Napi::Env env, fm_status_t code, uint32_t index) {
 Napi::Object EmptyPivotLayoutResult(Napi::Env env, Napi::Object status) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("status", status);
-  out.Set("top", Napi::Number::New(env, 0));
-  out.Set("left", Napi::Number::New(env, 0));
-  out.Set("rows", Napi::Number::New(env, 0));
-  out.Set("cols", Napi::Number::New(env, 0));
+  out.Set("rect", env.Null());
   out.Set("cells", Napi::Array::New(env));
   return out;
 }
@@ -597,11 +614,11 @@ Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m) {
   return o;
 }
 
-Napi::Object RangeToJs(Napi::Env env, const fm_merge_range& r) {
+Napi::Object RangeToJs(Napi::Env env, const fm_cell_rect_t& r) {
   Napi::Object item = Napi::Object::New(env);
   item.Set("firstRow", Napi::Number::New(env, r.first_row));
-  item.Set("lastRow", Napi::Number::New(env, r.last_row));
   item.Set("firstCol", Napi::Number::New(env, r.first_col));
+  item.Set("lastRow", Napi::Number::New(env, r.last_row));
   item.Set("lastCol", Napi::Number::New(env, r.last_col));
   return item;
 }
@@ -635,18 +652,18 @@ void BuildDataFieldSpec(CheckedSpecReader& reader, const Napi::Object& spec, fm_
 }
 
 // Reads a `{ firstRow, lastRow, firstCol, lastCol }` range object.
-bool ReadMergeRange(CheckedSpecReader& reader, const Napi::Object& range, fm_merge_range* out) {
-  out->first_row = reader.U32(range, "firstRow", 0U);
-  out->last_row = reader.U32(range, "lastRow", 0U);
-  out->first_col = reader.U32(range, "firstCol", 0U);
-  out->last_col = reader.U32(range, "lastCol", 0U);
+bool ReadCellRect(CheckedSpecReader& reader, const Napi::Object& range, fm_cell_rect_t* out) {
+  out->first_row = reader.RequiredU32(range, "firstRow");
+  out->first_col = reader.RequiredU32(range, "firstCol");
+  out->last_row = reader.RequiredU32(range, "lastRow");
+  out->last_col = reader.RequiredU32(range, "lastCol");
   return reader.ok();
 }
 
 // Reads the range at `info[idx]`; a missing/nullish argument reads as all
 // zeros, while a supplied non-object is rejected by the reader.
-bool MergeRangeArg(CheckedSpecReader& reader, const Napi::CallbackInfo& info, size_t idx, fm_merge_range* out) {
-  *out = fm_merge_range{};
+bool CellRectArg(CheckedSpecReader& reader, const Napi::CallbackInfo& info, size_t idx, fm_cell_rect_t* out) {
+  *out = fm_cell_rect_t{};
   if (info.Length() <= idx) {
     return true;
   }
@@ -659,7 +676,7 @@ bool MergeRangeArg(CheckedSpecReader& reader, const Napi::CallbackInfo& info, si
   if (!reader.Object(present, "range", &object)) {
     return false;
   }
-  return ReadMergeRange(reader, object, out);
+  return ReadCellRect(reader, object, out);
 }
 
 }  // namespace formulon_node

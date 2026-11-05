@@ -10,7 +10,7 @@
 //   * Value-object structs (`JsStatus`, `JsValue`, `JsCellResult`, ...)
 //     that the JS-facing API surface returns.
 //   * Translation helpers (`translate_value`, `translate_cf_*`,
-//     `merge_range_to_val`, `bytes_to_val`, `val_to_bytes_checked`).
+//     `cell_rect_to_val`, `bytes_to_val`, `val_to_bytes_checked`).
 //   * Status builders (`ok_status`, `error_status`, `status_from_rc`).
 //   * checked nested-field readers and `js_set_*` record builders.
 //
@@ -314,6 +314,9 @@ class JsNarrowNumericReader {
   uint16_t u16_value(const emscripten::val& value, uint16_t dflt, const char* field);
   uint32_t u32_value(const emscripten::val& value, uint32_t dflt, const char* field);
   int32_t i32_value(const emscripten::val& value, int32_t dflt, const char* field);
+  /// Reads a required uint32 field: absent, non-Number or non-integer is a
+  /// type error, a negative or too-large integer a range error.
+  uint32_t required_u32(const emscripten::val& owner, const char* key, const char* field);
   int64_t i64(const emscripten::val& owner, const char* key, int64_t dflt, const char* field = nullptr);
   double number(const emscripten::val& owner, const char* key, double dflt, const char* field = nullptr);
   double number_value(const emscripten::val& value, double dflt, const char* field);
@@ -434,12 +437,11 @@ JsCfColor translate_cf_color(const fm_cf_color_t& c);
 /// mirror.
 JsCfMatch translate_cf_match(const fm_cf_match_t& m);
 
-/// Builds a `{firstRow, lastRow, firstCol, lastCol}` JS object from a
-/// merge / validation range record.
-emscripten::val merge_range_to_val(const fm_merge_range& m);
+/// Builds a `CellRect` `{firstRow, firstCol, lastRow, lastCol}` JS object.
+emscripten::val cell_rect_to_val(const fm_cell_rect_t& m);
 
-/// Builds the empty `{status, top:0, left:0, rows:0, cols:0, cells:[]}`
-/// envelope shape used by `getPivotLayout()` on failure paths.
+/// Builds the empty `{status, rect: null, cells: []}` envelope shape used by
+/// `getPivotLayout()` on failure paths.
 emscripten::val empty_pivot_layout_result(JsStatus status);
 
 /// Translates one `fm_pivot_cell_t` into a JS object suitable for
@@ -480,9 +482,9 @@ emscripten::val snapshot_bytes_result(fm_status_t rc, uint8_t* data, std::size_t
 // reading through `val::as<T>` directly so a missing one converts exactly
 // as before.
 
-/// Reads a range record with the explicit numeric reader. Missing / nullish
-/// fields retain the all-zero defaults.
-fm_merge_range js_pull_range(const emscripten::val& v, JsNarrowNumericReader* reader);
+/// Reads a `CellRect` record with the explicit numeric reader; every field is
+/// required. A missing / nullish record reads as all zeros.
+fm_cell_rect_t js_pull_range(const emscripten::val& v, JsNarrowNumericReader* reader);
 
 /// Reads a `{kind, number, boolean, text, errorCode}` value record into
 /// `out`; `text` owns the storage a `FM_VAL_TEXT` payload points at. Returns
@@ -491,7 +493,7 @@ bool pull_value(JsNarrowNumericReader& reader, const emscripten::val& value, std
 
 /// Reads a range list with the explicit numeric reader. Other WASM families
 /// must use the same per-call reader before invoking a C mutator.
-std::vector<fm_merge_range> js_pull_ranges(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader);
+std::vector<fm_cell_rect_t> js_pull_ranges(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader);
 
 /// Pulls the `{kind, rgb, theme, tint, indexed}` colour specification out
 /// of `v[key]`. An absent object leaves `kind` at `kFmColorNone`, which

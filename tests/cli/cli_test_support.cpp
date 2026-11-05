@@ -331,7 +331,7 @@ bool write_lossy_xlsx_fixture(const std::string& path) {
     fm_workbook_destroy(wb);
     return false;
   }
-  fm_merge_range range{0, 0, 0, 0};
+  fm_cell_rect_t range{0, 0, 0, 0};
   fm_data_validation_t validation{};
   validation.ranges = &range;
   validation.range_count = 1;

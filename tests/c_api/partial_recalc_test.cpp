@@ -62,7 +62,7 @@ TEST(FormulonCApiPartialRecalc, RecomputesOnlyClosure) {
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 2, "=A1*3"), 0);
 
   // Viewport: B1 only (sheet 0, row 0, col 1).
-  fm_viewport vp{};
+  fm_cell_rect_t vp{};
   vp.first_row = 0;
   vp.last_row = 0;
   vp.first_col = 1;
@@ -84,7 +84,7 @@ TEST(FormulonCApiPartialRecalc, RecomputesOnlyClosure) {
 TEST(FormulonCApiPartialRecalc, NullArgumentsRejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_viewport vp{};
+  fm_cell_rect_t vp{};
   EXPECT_EQ(fm_sheet_recalc_viewport(nullptr, 0, &vp, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   EXPECT_EQ(fm_sheet_recalc_viewport(wb.handle, 0, nullptr, nullptr),
@@ -103,7 +103,7 @@ TEST(FormulonCApiPartialRecalc, SheetIndexPastTheLastSheetRejected) {
   const size_t sheet_count = count_of(fm_workbook_get_sheet_count, wb.handle);
   ASSERT_GT(sheet_count, 0U);
 
-  fm_viewport vp{};
+  fm_cell_rect_t vp{};
   vp.first_col = 1;
   vp.last_col = 1;
   for (const size_t sheet : {sheet_count, size_t{0x10000U}, size_t{0xFFFFFFFFU}}) {
@@ -127,7 +127,7 @@ TEST(FormulonCApiPartialRecalc, OutCountOptional) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=42"), 0);
-  fm_viewport vp{};
+  fm_cell_rect_t vp{};
   vp.first_row = 0;
   vp.last_row = 0;
   vp.first_col = 0;

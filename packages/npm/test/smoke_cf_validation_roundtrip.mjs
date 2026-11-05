@@ -211,7 +211,7 @@ test('merges, comments and hyperlinks round-trip through save and load', async (
     const links = reloaded.listHyperlinks(0);
     assert.ok(links.status.ok, JSON.stringify(links.status));
     assert.equal(links.length, 1);
-    assert.equal(links[0].row, 3);
+    assert.equal(links[0].rect.firstRow, 3);
     assert.equal(links[0].target, 'https://example.com/');
     assert.equal(links[0].tooltip, 'ツールチップ');
   } finally {

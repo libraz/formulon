@@ -43,9 +43,9 @@ VALUE_BLOB = ("blob16", 16, 8)
 # :meth:`Struct.unpack`; callers who need the sub-fields read them at
 # ``ptr + offset`` with their own struct.unpack_from calls.
 CFVO_BLOB = ("blob_cfvo", 12, 4)
-# Opaque 16-byte, 4-aligned blob: an inline ``fm_merge_range``. Pack and
-# unpack it with :data:`MERGE_RANGE` against ``ptr + offset``.
-MERGE_RANGE_BLOB = ("blob_merge_range", 16, 4)
+# Opaque 16-byte, 4-aligned blob: an inline ``fm_cell_rect_t``. Pack and
+# unpack it with :data:`CELL_RECT` against ``ptr + offset``.
+CELL_RECT_BLOB = ("blob_cell_rect", 16, 4)
 # Opaque 4-byte, 1-aligned blob: an inline ``fm_cf_color_t`` (four
 # ``uint8_t`` channels). Not decoded by :meth:`Struct.unpack`.
 CF_COLOR_BLOB = ("blob_cf_color", 4, 1)
@@ -147,24 +147,15 @@ def zero_struct(lib, layout: Struct, ptr: int) -> None:
 # Struct layouts (mirror src/c_api/formulon_c.h field-for-field)
 # ---------------------------------------------------------------------------
 
-MERGE_RANGE = Struct(
-    "fm_merge_range",
-    [("first_row", U32), ("first_col", U32), ("last_row", U32), ("last_col", U32)],
-)
-
-# fm_cf_cell_range_t shares fm_merge_range's shape.
-CF_CELL_RANGE = Struct(
-    "fm_cf_cell_range_t",
+CELL_RECT = Struct(
+    "fm_cell_rect_t",
     [("first_row", U32), ("first_col", U32), ("last_row", U32), ("last_col", U32)],
 )
 
 HYPERLINK = Struct(
     "fm_hyperlink_t",
     [
-        ("row", U32),
-        ("col", U32),
-        ("last_row", U32),
-        ("last_col", U32),
+        ("rect", nested(CELL_RECT)),
         ("target", PTR),
         ("location", PTR),
         ("display", PTR),
@@ -256,16 +247,6 @@ SHEET_PROTECTION = Struct(
         ("sort", I32),
         ("auto_filter", I32),
         ("pivot_tables", I32),
-    ],
-)
-
-VIEWPORT = Struct(
-    "fm_viewport",
-    [
-        ("first_row", U32),
-        ("last_row", U32),
-        ("first_col", U32),
-        ("last_col", U32),
     ],
 )
 
@@ -591,10 +572,7 @@ SAVE_DIAGNOSTICS = Struct(
 SPILL_INFO = Struct(
     "fm_spill_info_t",
     [
-        ("anchor_row", U32),
-        ("anchor_col", U32),
-        ("rows", U32),
-        ("cols", U32),
+        ("rect", nested(CELL_RECT)),
         ("engaged", I32),
         ("blocked", I32),
     ],
@@ -606,20 +584,14 @@ REFERENCE = Struct(
         ("valid", I32),
         ("has_sheet", I32),
         ("sheet_name", PTR),
-        ("row0", U32),
-        ("col0", U32),
-        ("row1", U32),
-        ("col1", U32),
+        ("rect", nested(CELL_RECT)),
     ],
 )
 
 ARRAY_FORMULA = Struct(
     "fm_array_formula_t",
     [
-        ("anchor_row", U32),
-        ("anchor_col", U32),
-        ("rows", U32),
-        ("cols", U32),
+        ("rect", nested(CELL_RECT)),
         ("formula", PTR),
         ("engaged", I32),
     ],
@@ -790,10 +762,7 @@ PAGE_LAYOUT = Struct(
     "fm_page_layout_t",
     [
         ("area_index", U32),
-        ("first_row", U32),
-        ("last_row", U32),
-        ("first_col", U32),
-        ("last_col", U32),
+        ("rect", nested(CELL_RECT)),
         ("origin_x_pt", F64),
         ("origin_y_pt", F64),
         ("width_pt", F64),
@@ -1212,7 +1181,7 @@ FILTER_COLUMN = Struct(
 SORT_CONDITION = Struct(
     "fm_sort_condition_t",
     [
-        ("ref", MERGE_RANGE_BLOB),
+        ("ref", CELL_RECT_BLOB),
         ("descending", I32),
         ("sort_by", I32),
         ("custom_list", PTR),
@@ -1227,11 +1196,11 @@ SORT_CONDITION = Struct(
 AUTO_FILTER = Struct(
     "fm_auto_filter_t",
     [
-        ("range", MERGE_RANGE_BLOB),
+        ("range", CELL_RECT_BLOB),
         ("columns", PTR),
         ("column_count", U32),
         ("has_sort", I32),
-        ("sort_ref", MERGE_RANGE_BLOB),
+        ("sort_ref", CELL_RECT_BLOB),
         ("column_sort", I32),
         ("case_sensitive", I32),
         ("sort_method", I32),
@@ -1377,10 +1346,7 @@ SHAPE = Struct(
 DATA_TABLE = Struct(
     "fm_data_table_t",
     [
-        ("first_row", U32),
-        ("first_col", U32),
-        ("last_row", U32),
-        ("last_col", U32),
+        ("rect", nested(CELL_RECT)),
         ("row_input_row", U32),
         ("row_input_col", U32),
         ("col_input_row", U32),

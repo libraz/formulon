@@ -11,6 +11,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "formulon_c_record_arg.h"
 #include "gtest/gtest.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
@@ -436,7 +437,7 @@ TEST(FormulonCApiDisplayText, ExplicitDefaultRangeXfOverridesInheritedColumnForm
   WorkbookGuard loaded;
   LoadPackage(PackageWithColumnPercentSpill(wb.handle, static_cast<uint32_t>(column_xf)), &loaded);
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
-  ASSERT_EQ(fm_sheet_set_range_xf_index(loaded.handle, 0, 0, 1, 0, 1, 0), 0);
+  ASSERT_EQ(fm_sheet_set_range_xf_index(loaded.handle, 0, record_arg(fm_cell_rect_t{0, 1, 0, 1}), 0), 0);
 
   const char* text = nullptr;
   int32_t status = -1;

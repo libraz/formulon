@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 
 from formulon import (
+    CellRect,
     CellXf,
     FormulonError,
     Workbook,
@@ -200,7 +201,7 @@ class PrintSettingsTests(unittest.TestCase):
                     has_wrap_text=True,
                 )
             )
-            wb.set_range_xf_index(0, 0, 0, 2, 2, xf)
+            wb.set_range_xf_index(0, CellRect(0, 0, 2, 2), xf)
             for row, col in ((0, 0), (1, 1), (2, 2)):
                 self.assertEqual(wb.get_cell_xf_index(0, row, col), xf)
             self.assertEqual(wb.get_cell_xf_index(0, 3, 3), 0)

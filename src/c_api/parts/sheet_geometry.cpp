@@ -40,19 +40,22 @@ formulon::ColumnWidthModel width_model_for(const fm_workbook_t* wb, int32_t mode
 
 }  // namespace
 
-extern "C" fm_status_t fm_sheet_get_cell_rect_pt(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
-                                                 uint32_t first_col, uint32_t last_row, uint32_t last_col, int32_t mode,
-                                                 fm_rect_pt_t* out) {
+extern "C" fm_status_t fm_sheet_get_cell_rect_pt(const fm_workbook_t* wb, size_t sheet_index,
+                                                 const fm_cell_rect_t* range, int32_t mode, fm_rect_pt_t* out) {
   clear_last_error();
-  if (out == nullptr) {
+  if (range == nullptr || out == nullptr) {
     return null_argument("fm_sheet_get_cell_rect_pt");
   }
   if (auto rc = check_geometry_args(wb, sheet_index, mode, "fm_sheet_get_cell_rect_pt"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_rect(first_row, first_col, last_row, last_col, "fm_sheet_get_cell_rect_pt"); rc != 0) {
+  if (auto rc = check_sheet_rect(*range, "fm_sheet_get_cell_rect_pt"); rc != 0) {
     return rc;
   }
+  const std::uint32_t first_row = range->first_row;
+  const std::uint32_t first_col = range->first_col;
+  const std::uint32_t last_row = range->last_row;
+  const std::uint32_t last_col = range->last_col;
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   const formulon::ColumnWidthModel model = width_model_for(wb, mode);
   double width = 0.0;

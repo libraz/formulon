@@ -197,7 +197,7 @@ inline constexpr std::uint32_t kCfMaxCols = a1::kMaxCols;
 /// treats `A:A` and `A1:A1048576` as identical); range-aware evaluation
 /// clamps the unbounded axis to the sheet's used range, and the writer
 /// re-emits the compact `A:A` / `1:1` form. This keeps the struct layout
-/// (and its C-ABI mirror `fm_cf_cell_range_t`) unchanged.
+/// (and its C-ABI mirror `fm_cell_rect_t`) unchanged.
 struct CFCellRange {
   CellAddress first{};
   CellAddress last{};

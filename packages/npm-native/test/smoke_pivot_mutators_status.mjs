@@ -60,8 +60,8 @@ function pivotGrid(wb, pivot = 0) {
   for (const cell of layout.cells) {
     const v = cell.value;
     const text = v.kind === 1 ? String(v.number) : v.kind === 3 ? v.text : v.kind === 4 ? `#${v.errorCode}` : '';
-    if (!rows.has(cell.row)) rows.set(cell.row, new Array(layout.cols).fill(''));
-    rows.get(cell.row)[cell.col - layout.left] = text;
+    if (!rows.has(cell.row)) rows.set(cell.row, new Array(layout.rect.lastCol - layout.rect.firstCol + 1).fill(''));
+    rows.get(cell.row)[cell.col - layout.rect.firstCol] = text;
   }
   return [...rows.keys()].sort((a, b) => a - b).map((row) => rows.get(row).join('|'));
 }
@@ -308,8 +308,8 @@ const PIVOT_MUTATORS = [
       expect: (b, r) => {
         assert.equal(r.index, 1);
         const layout = b.wb.getPivotLayout(0, 1);
-        assert.equal(layout.top, 20);
-        assert.equal(layout.left, 1);
+        assert.equal(layout.rect.firstRow, 20);
+        assert.equal(layout.rect.firstCol, 1);
         assert.deepEqual(pivotGrid(b.wb, 0), BASE_GRID);
       },
     },
@@ -345,8 +345,8 @@ const PIVOT_MUTATORS = [
       act: (b) => b.wb.setPivotAnchor(0, b.pivot, 10, 2, 4, 2),
       expect: (b) => {
         const layout = b.wb.getPivotLayout(0, b.pivot);
-        assert.equal(layout.top, 10);
-        assert.equal(layout.left, 2);
+        assert.equal(layout.rect.firstRow, 10);
+        assert.equal(layout.rect.firstCol, 2);
         assert.deepEqual(pivotGrid(b.wb), BASE_GRID);
       },
     },

@@ -111,7 +111,7 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
   out << "pages=" << page_count << '\n';
   out << "print_area=";
   for (std::size_t i = 0; i < print_area_count; ++i) {
-    fm_print_range_t range{};
+    fm_cell_rect_t range{};
     if (const auto status = fm_pagination_get_print_area_at(pagination.handle, i, &range); status != 0) {
       emit_last_error(err, "paginate");
       return status;

@@ -7,27 +7,6 @@ R11.multi	selection.set	ranges	fm_sheet_set_selection: `const fm_merge_range* ra
 R11.multi	table.create	ref	fm_workbook_table_create: `const char* ref` is A1 text; take `const fm_cell_rect_t* ranges, size_t range_count`
 R11.multi	table.get	out_ref	fm_workbook_table_at: `const char** out_ref` is A1 text; take `const fm_cell_rect_t* ranges, size_t range_count`
 R11.multi	table.update	ref	fm_workbook_table_update: `const char* ref` is A1 text; take `const fm_cell_rect_t* ranges, size_t range_count`
-R11.rect	array_formula.set	row	fm_workbook_set_array_formula takes a rectangle as four coordinates from `row`; take `const fm_cell_rect_t*`
-R11.rect	cell_rect_pt.get	first_row	fm_sheet_cell_rect_pt takes a rectangle as four coordinates from `first_row`; take `const fm_cell_rect_t*`
-R11.rect	cells_in_range.get	first_row	fm_sheet_cells_in_range takes a rectangle as four coordinates from `first_row`; take `const fm_cell_rect_t*`
-R11.rect	cf_range.evaluate	first_row	fm_workbook_cf_evaluate_range takes a rectangle as four coordinates from `first_row`; take `const fm_cell_rect_t*`
-R11.rect	pivot_cells.get_bounds	out_top	fm_pivot_cells_bounds takes a rectangle as four coordinates from `out_top`; take `const fm_cell_rect_t*`
-R11.rect	range_style.remap	first_row	fm_sheet_remap_range_style takes a rectangle as four coordinates from `first_row`; take `const fm_cell_rect_t*`
-R11.rect	range_style.snapshot	first_row	fm_sheet_snapshot_range_style takes a rectangle as four coordinates from `first_row`; take `const fm_cell_rect_t*`
-R11.rect	range_style_bases.get	first_row	fm_sheet_range_style_bases takes a rectangle as four coordinates from `first_row`; take `const fm_cell_rect_t*`
-R11.rect	range_style_bases_excluding.get	first_row	fm_sheet_range_style_bases_excluding takes a rectangle as four coordinates from `first_row`; take `const fm_cell_rect_t*`
-R11.rect	range_xf_index.set	first_row	fm_sheet_set_range_xf_index takes a rectangle as four coordinates from `first_row`; take `const fm_cell_rect_t*`
-R11.rect	record.array_formula	anchor_row	fm_array_formula_t spells a rectangle from `anchor_row`; use `fm_cell_rect_t`
-R11.rect	record.cf_cell_range	first_row	fm_cf_cell_range_t spells a rectangle from `first_row`; use `fm_cell_rect_t`
-R11.rect	record.data_table	first_row	fm_data_table spells a rectangle from `first_row`; use `fm_cell_rect_t`
-R11.rect	record.hyperlink	row	fm_hyperlink spells a rectangle from `row`; use `fm_cell_rect_t`
-R11.rect	record.merge_range	first_row	fm_merge_range spells a rectangle from `first_row`; use `fm_cell_rect_t`
-R11.rect	record.page_layout	first_row	fm_page_layout spells a rectangle from `first_row`; use `fm_cell_rect_t`
-R11.rect	record.print_range	first_row	fm_print_range_t spells a rectangle from `first_row`; use `fm_cell_rect_t`
-R11.rect	record.reference	row0	fm_reference_t spells a rectangle from `row0`; use `fm_cell_rect_t`
-R11.rect	record.spill_info	anchor_row	fm_spill_info_t spells a rectangle from `anchor_row`; use `fm_cell_rect_t`
-R11.rect	record.viewport	first_row	fm_viewport spells a rectangle from `first_row`; use `fm_cell_rect_t`
-R11.rect	reference.format	row0	fm_workbook_format_reference takes a rectangle as four coordinates from `row0`; take `const fm_cell_rect_t*`
 R11.sheet	record.chart_sheet_range	-	fm_chart_sheet_range_t pairs a sheet with a rectangle; use `fm_sheet_rect_t`
 R3.keys	cell_style	getter	natural-key collection `cell_style` has no getter by key
 R3.keys	cell_style_xf.add	out-key	fm_styles_add_cell_style_xf: returns the allocated index through `out_index`

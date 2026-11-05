@@ -182,7 +182,7 @@ TEST(FormulonCApiReadScratch, AllScratchProducersStayBoundedWhenAlternated) {
   lambda->captured_env = nullptr;
   wb.handle->workbook().sheet(0).set_cell_cached_value(0, 1, formulon::Value::lambda(lambda));
 
-  fm_cf_cell_range_t cf_range{0, 0, 0, 0};
+  fm_cell_rect_t cf_range{0, 0, 0, 0};
   fm_cfvo_t thresholds[3]{};
   thresholds[0].type = 3;  // Min.
   thresholds[1].type = 1;  // Percent.

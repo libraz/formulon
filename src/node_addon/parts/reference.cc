@@ -80,10 +80,10 @@ Napi::Value Workbook::ParseReference(const Napi::CallbackInfo& info) {
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("sheetName", ref.has_sheet != 0 ? JsString(env, ref.sheet_name) : env.Null());
-  out.Set("row0", Napi::Number::New(env, ref.row0));
-  out.Set("col0", Napi::Number::New(env, ref.col0));
-  out.Set("row1", Napi::Number::New(env, ref.row1));
-  out.Set("col1", Napi::Number::New(env, ref.col1));
+  out.Set("row0", Napi::Number::New(env, ref.rect.first_row));
+  out.Set("col0", Napi::Number::New(env, ref.rect.first_col));
+  out.Set("row1", Napi::Number::New(env, ref.rect.last_row));
+  out.Set("col1", Napi::Number::New(env, ref.rect.last_col));
   return out;
 }
 
@@ -101,17 +101,18 @@ Napi::Value Workbook::FormatReference(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   std::string sheet_name;
   const bool has_sheet = reader.String(range, "sheetName", &sheet_name);
-  const uint32_t row0 = RequiredU32(reader, range, "row0", "formatReference");
-  const uint32_t col0 = reader.ok() ? RequiredU32(reader, range, "col0", "formatReference") : 0U;
-  const uint32_t row1 = reader.ok() ? RequiredU32(reader, range, "row1", "formatReference") : 0U;
-  const uint32_t col1 = reader.ok() ? RequiredU32(reader, range, "col1", "formatReference") : 0U;
+  fm_cell_rect_t rect{};
+  rect.first_row = RequiredU32(reader, range, "row0", "formatReference");
+  rect.first_col = reader.ok() ? RequiredU32(reader, range, "col0", "formatReference") : 0U;
+  rect.last_row = reader.ok() ? RequiredU32(reader, range, "row1", "formatReference") : 0U;
+  rect.last_col = reader.ok() ? RequiredU32(reader, range, "col1", "formatReference") : 0U;
   const bool absolute = reader.ok() && reader.Bool(options, "absolute", false);
   if (!reader.ok()) {
     return env.Undefined();
   }
   const char* text = nullptr;
-  const fm_status_t rc = fm_workbook_format_reference(handle_, has_sheet ? sheet_name.c_str() : nullptr, row0, col0,
-                                                      row1, col1, absolute ? 1 : 0, &text);
+  const fm_status_t rc =
+      fm_workbook_format_reference(handle_, has_sheet ? sheet_name.c_str() : nullptr, &rect, absolute ? 1 : 0, &text);
   if (rc != 0) {
     return ThrowLastError(env);
   }

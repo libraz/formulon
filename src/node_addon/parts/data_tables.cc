@@ -39,12 +39,10 @@ Napi::Value Workbook::AddDataTable(const Napi::CallbackInfo& info) {
   return InvokeSheetSpec(
       info, "addDataTable expects (sheet:number, spec:object)",
       [&](CheckedSpecReader& reader, const Napi::Object& spec) {
-        fm_merge_range range{};
-        ReadMergeRange(reader, spec, &range);
-        table.first_row = range.first_row;
-        table.first_col = range.first_col;
-        table.last_row = range.last_row;
-        table.last_col = range.last_col;
+        Napi::Object rect;
+        if (reader.Object(spec, "rect", &rect)) {
+          ReadCellRect(reader, rect, &table.rect);
+        }
         PullInput(reader, spec, "rowInput", &table.has_row_input, &table.row_input_row, &table.row_input_col);
         PullInput(reader, spec, "colInput", &table.has_col_input, &table.col_input_row, &table.col_input_col);
       },
@@ -68,10 +66,7 @@ Napi::Value Workbook::GetDataTable(const Napi::CallbackInfo& info) {
     return out;
   }
   Napi::Object table = Napi::Object::New(env);
-  table.Set("firstRow", JsNumber(env, t.first_row));
-  table.Set("lastRow", JsNumber(env, t.last_row));
-  table.Set("firstCol", JsNumber(env, t.first_col));
-  table.Set("lastCol", JsNumber(env, t.last_col));
+  table.Set("rect", RangeToJs(env, t.rect));
   table.Set("twoDimensional", JsBool(env, t.two_dimensional));
   table.Set("rowOriented", JsBool(env, t.row_oriented));
   table.Set("rowInput", InputToJs(env, t.has_row_input, t.row_input_row, t.row_input_col, t.row_input_deleted));

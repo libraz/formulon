@@ -54,16 +54,16 @@ static_assert(offsetof(fm_value_t, kind) == 0U, "fm_value_t.kind offset changed"
 static_assert(offsetof(fm_value_t, u) == 8U, "fm_value_t.u offset changed");
 static_assert(sizeof(decltype(fm_value_t::u)) == 8U, "fm_value_t.u payload width changed");
 
-// `fm_print_range_t` is written through a caller-supplied block by
+// `fm_cell_rect_t` is written through a caller-supplied block by
 // `fm_pagination_get_print_area_at`. Four `uint32_t` with no padding, so it is
 // identical on native and wasm32 and a binding may decode it as four
 // little-endian words.
-static_assert(sizeof(fm_print_range_t) == 16U, "fm_print_range_t ABI layout changed");
-static_assert(alignof(fm_print_range_t) == 4U, "fm_print_range_t ABI alignment changed");
-static_assert(offsetof(fm_print_range_t, first_row) == 0U, "fm_print_range_t.first_row offset changed");
-static_assert(offsetof(fm_print_range_t, first_col) == 4U, "fm_print_range_t.first_col offset changed");
-static_assert(offsetof(fm_print_range_t, last_row) == 8U, "fm_print_range_t.last_row offset changed");
-static_assert(offsetof(fm_print_range_t, last_col) == 12U, "fm_print_range_t.last_col offset changed");
+static_assert(sizeof(fm_cell_rect_t) == 16U, "fm_cell_rect_t ABI layout changed");
+static_assert(alignof(fm_cell_rect_t) == 4U, "fm_cell_rect_t ABI alignment changed");
+static_assert(offsetof(fm_cell_rect_t, first_row) == 0U, "fm_cell_rect_t.first_row offset changed");
+static_assert(offsetof(fm_cell_rect_t, first_col) == 4U, "fm_cell_rect_t.first_col offset changed");
+static_assert(offsetof(fm_cell_rect_t, last_row) == 8U, "fm_cell_rect_t.last_row offset changed");
+static_assert(offsetof(fm_cell_rect_t, last_col) == 12U, "fm_cell_rect_t.last_col offset changed");
 
 void ExpectOpaqueAutoFilterRefUpdate(std::string raw_xml, std::string expected_xml) {
   WorkbookGuard wb;

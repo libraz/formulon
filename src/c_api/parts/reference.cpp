@@ -86,10 +86,8 @@ extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, cons
   const std::uint32_t row2 = parsed.is_range ? parsed.row2 : parsed.row;
   const std::uint32_t col2 = parsed.is_range ? parsed.col2 : parsed.col;
   out->valid = 1;
-  out->row0 = std::min(parsed.row, row2);
-  out->row1 = std::max(parsed.row, row2);
-  out->col0 = std::min(parsed.col, col2);
-  out->col1 = std::max(parsed.col, col2);
+  out->rect = fm_cell_rect_t{std::min(parsed.row, row2), std::min(parsed.col, col2), std::max(parsed.row, row2),
+                             std::max(parsed.col, col2)};
   if (!parsed.sheet.empty()) {
     // The parser's view points at thread-local scratch the next parse reuses.
     out->has_sheet = 1;
@@ -98,14 +96,18 @@ extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, cons
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_format_reference(const fm_workbook_t* wb, const char* sheet_name, uint32_t row0,
-                                                    uint32_t col0, uint32_t row1, uint32_t col1, int32_t absolute,
+extern "C" fm_status_t fm_workbook_format_reference(const fm_workbook_t* wb, const char* sheet_name,
+                                                    const fm_cell_rect_t* range, int32_t absolute,
                                                     const char** out_text) {
   static constexpr const char* kApi = "fm_workbook_format_reference";
   clear_last_error();
-  if (wb == nullptr || out_text == nullptr) {
+  if (wb == nullptr || range == nullptr || out_text == nullptr) {
     return null_argument(kApi);
   }
+  const std::uint32_t row0 = range->first_row;
+  const std::uint32_t col0 = range->first_col;
+  const std::uint32_t row1 = range->last_row;
+  const std::uint32_t col1 = range->last_col;
   if (auto rc = check_utf8(kApi, {sheet_name}); rc != 0) {
     return rc;
   }
@@ -117,7 +119,7 @@ extern "C" fm_status_t fm_workbook_format_reference(const fm_workbook_t* wb, con
   }
   if (row0 > row1 || col0 > col1) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             (std::string(kApi) + ": row0 > row1 or col0 > col1").c_str());
+                             (std::string(kApi) + ": inverted rectangle").c_str());
   }
   if (auto rc = check_enum_domain(absolute, 1, kApi, "absolute"); rc != 0) {
     return rc;

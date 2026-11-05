@@ -170,7 +170,7 @@ test('a primitive or null where an object is declared throws TypeError and chang
     assert.throws(() => wb.setDefaultFont(null), TypeError);
     assert.equal(wb.getFontCount().value, fonts);
 
-    assert.throws(() => wb.recalcViewport('x'), TypeError);
+    assert.throws(() => wb.recalcViewport(0, 'x'), TypeError);
     assert.throws(() => wb.getCellRectPt(0, null, 0), TypeError);
     assert.throws(() => wb.setCellPhoneticProperties(0, 0, 0, 'x'), TypeError);
     assert.throws(() => wb.restoreRangeStyle(0, null), TypeError);
@@ -186,7 +186,10 @@ test('an argument a method rejects with a status reports kInvalidArgument', asyn
     for (const [label, result] of [
       ['setThemeColors([])', wb.setThemeColors([])],
       ['restoreRangeStyle(0, {})', wb.restoreRangeStyle(0, {})],
-      ['remapRangeStyle mismatched lengths', wb.remapRangeStyle(0, 0, 0, 0, 0, [1], [])],
+      [
+        'remapRangeStyle mismatched lengths',
+        wb.remapRangeStyle(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, [1], []),
+      ],
       ['probeImage({})', wb.getImageInfo({})],
     ]) {
       const status = typeof result.ok === 'boolean' ? result : result.status;
@@ -272,6 +275,34 @@ test('every method called from the iterative progress callback throws and change
     assert.equal(wb.getValue(1, 0, 0).value.kind, 0, 'the refused setFormula wrote nothing');
   } finally {
     wb.setIterativeProgress(null);
+    wb.dispose();
+  }
+});
+
+test('a CellRect argument requires four integer fields', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    const rect = { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 };
+    const malformed = [
+      { firstRow: 0, firstCol: 0, lastRow: 1 },
+      { ...rect, firstRow: '0' },
+      { ...rect, lastCol: 1.5 },
+      { ...rect, firstCol: Number.NaN },
+      { ...rect, lastRow: null },
+    ];
+    for (const bad of malformed) {
+      assert.throws(() => wb.addMerge(0, bad), TypeError, JSON.stringify(bad));
+      assert.throws(() => wb.setRangeXfIndex(0, bad, 0), TypeError, JSON.stringify(bad));
+      assert.throws(() => wb.getCellRectPt(0, bad, 0), TypeError, JSON.stringify(bad));
+    }
+    assert.throws(() => wb.addMerge(0, { ...rect, firstRow: -1 }), RangeError);
+    assert.equal(wb.listMerges(0).length, 0);
+    // A well-typed rectangle the engine refuses is a status, not a throw.
+    assert.equal(wb.addMerge(0, { firstRow: 1, firstCol: 0, lastRow: 0, lastCol: 0 }).ok, false);
+    assert.equal(wb.setRangeXfIndex(0, { firstRow: 0, firstCol: 0, lastRow: 1048576, lastCol: 0 }, 0).ok, false);
+    assert.ok(wb.addMerge(0, rect).ok);
+  } finally {
     wb.dispose();
   }
 });

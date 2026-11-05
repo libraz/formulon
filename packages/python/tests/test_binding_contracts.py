@@ -24,6 +24,7 @@ import formulon
 from formulon import (
     AnchorKind,
     CalcMode,
+    CellRect,
     CellStyleRecord,
     CellXf,
     CfColor,
@@ -37,7 +38,6 @@ from formulon import (
     FontRecord,
     FormulonError,
     LogLevel,
-    MergeRange,
     PhoneticProperties,
     PhoneticRun,
     PivotAggregation,
@@ -965,10 +965,10 @@ class SheetViewOriginAndSelectionTests(unittest.TestCase):
             wb.set_pane_top_left(0, 40, 6)
             with self.assertRaises(FormulonError):
                 wb.set_pane_top_left(0, 1, 6)
-            ranges = [MergeRange(41, 7, 43, 8), MergeRange(50, 9, 50, 9)]
+            ranges = [CellRect(41, 7, 43, 8), CellRect(50, 9, 50, 9)]
             wb.set_selection(0, 41, 7, ranges)
             with self.assertRaises(FormulonError):
-                wb.set_selection(0, 0, 0, [MergeRange(3, 0, 1, 0)])
+                wb.set_selection(0, 0, 0, [CellRect(3, 0, 1, 0)])
             data = wb.save()
         with Workbook.load(data) as reloaded:
             view = reloaded.get_view(0)
@@ -1004,17 +1004,17 @@ class SheetViewOriginAndSelectionTests(unittest.TestCase):
 
     def test_unset_selection_reads_as_a1(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertEqual(wb.get_selection(0), ((0, 0), [MergeRange(0, 0, 0, 0)]))
+            self.assertEqual(wb.get_selection(0), ((0, 0), [CellRect(0, 0, 0, 0)]))
             with self.assertRaises(FormulonError):
                 wb.get_selection(9)
 
     def test_selection_without_ranges_is_the_active_cell(self) -> None:
         with Workbook.create_default() as wb:
             wb.set_selection(0, 4, 2)
-            self.assertEqual(wb.get_selection(0), ((4, 2), [MergeRange(4, 2, 4, 2)]))
+            self.assertEqual(wb.get_selection(0), ((4, 2), [CellRect(4, 2, 4, 2)]))
             data = wb.save()
         with Workbook.load(data) as reloaded:
-            self.assertEqual(reloaded.get_selection(0), ((4, 2), [MergeRange(4, 2, 4, 2)]))
+            self.assertEqual(reloaded.get_selection(0), ((4, 2), [CellRect(4, 2, 4, 2)]))
 
 
 class CollectionReaderAllocationTests(unittest.TestCase):
@@ -1056,7 +1056,7 @@ class CollectionReaderAllocationTests(unittest.TestCase):
 
     def test_get_merges_allocation_count_is_flat(self) -> None:
         self._assert_flat_in_item_count(
-            lambda wb, n: [wb.add_merge(0, MergeRange(r, 4, r, 6)) for r in range(n)],
+            lambda wb, n: [wb.add_merge(0, CellRect(r, 4, r, 6)) for r in range(n)],
             lambda wb: wb.list_merges(0),
         )
 
@@ -1101,7 +1101,7 @@ class CollectionReaderAllocationTests(unittest.TestCase):
             wb.add_cf_rule(
                 0,
                 ConditionalFormatInput(
-                    sqref=[MergeRange(0, 0, n - 1, 0)],
+                    sqref=[CellRect(0, 0, n - 1, 0)],
                     type=1,
                     op=4,
                     formula1="10",
@@ -1110,13 +1110,13 @@ class CollectionReaderAllocationTests(unittest.TestCase):
             )
             wb.recalc()
 
-        self._assert_flat_in_item_count(populate, lambda wb: wb.evaluate_cf_range(0, 0, 0, 39, 0))
+        self._assert_flat_in_item_count(populate, lambda wb: wb.evaluate_cf_range(0, CellRect(0, 0, 39, 0)))
 
 
 class AbiScratchBlockTests(unittest.TestCase):
     """The records the wrapper sizes by hand, measured against the real module.
 
-    ``fm_value_t`` and ``fm_print_range_t`` have no ``_structs.Struct``
+    ``fm_value_t`` and ``fm_cell_rect_t`` have no ``_structs.Struct``
     layout: the wrapper carries their sizes as the literals
     ``_c.fm_value_t_size`` and the 16 in ``Workbook.paginate``. The static
     drift check compares those literals to the C header in the working tree,
@@ -1163,7 +1163,7 @@ class AbiScratchBlockTests(unittest.TestCase):
                 _c.LIB.free(ptr)
 
     def test_print_range_out_param_stays_within_the_wrappers_block(self) -> None:
-        size = 16  # fm_print_range_t: four uint32_t, as Workbook.paginate reads it
+        size = 16  # fm_cell_rect_t: four uint32_t, as Workbook.paginate reads it
         with Workbook.create_default() as wb:
             wb.set_defined_name_scoped("_xlnm.Print_Area", "Sheet1!$A$1:$C$5", 0)
             out = _c.LIB.alloc(4)
@@ -1181,7 +1181,7 @@ class AbiScratchBlockTests(unittest.TestCase):
                     ptr = self._guarded_block(size)
                     try:
                         self.assertEqual(_c.LIB.fm_pagination_get_print_area_at(pagination, 0, ptr), 0)
-                        self._assert_sentinel_intact(ptr, size, "fm_print_range_t")
+                        self._assert_sentinel_intact(ptr, size, "fm_cell_rect_t")
                         self.assertEqual(struct.unpack("<IIII", _c.LIB.read_bytes(ptr, size)), (0, 0, 4, 2))
                     finally:
                         _c.LIB.free(ptr)
@@ -1222,16 +1222,16 @@ class EvaluateCfRangeDefaultTests(unittest.TestCase):
             wb.add_cf_rule(
                 0,
                 ConditionalFormatInput(
-                    sqref=[MergeRange(0, 0, 0, 0)],
+                    sqref=[CellRect(0, 0, 0, 0)],
                     type=15,
                     time_period=0,
                     dxf_id=dxf_index,
                 ),
             )
             wb.recalc()
-            omitted = wb.evaluate_cf_range(0, 0, 0, 0, 0)
-            explicit_nan = wb.evaluate_cf_range(0, 0, 0, 0, 0, float("nan"))
-            zero_basis = wb.evaluate_cf_range(0, 0, 0, 0, 0, 0.0)
+            omitted = wb.evaluate_cf_range(0, CellRect(0, 0, 0, 0))
+            explicit_nan = wb.evaluate_cf_range(0, CellRect(0, 0, 0, 0), float("nan"))
+            zero_basis = wb.evaluate_cf_range(0, CellRect(0, 0, 0, 0), 0.0)
         self.assertEqual([c for c in omitted if c.matches], [])
         self.assertEqual(len(omitted), len(explicit_nan))
         self.assertEqual(len([c for c in zero_basis if c.matches]), 1)
@@ -1294,7 +1294,7 @@ class ArgumentScopeTests(unittest.TestCase):
 
     def test_a_packer_that_raises_after_allocating_frees_everything(self) -> None:
         runs = [PhoneticRun(i, i + 1, "\u30a2") for i in range(200)] + [PhoneticRun(-1, 1, "\u30a4")]
-        ranges = [MergeRange(0, 0, 0, 0)] * 200 + [MergeRange(-1, 0, 0, 0)]
+        ranges = [CellRect(0, 0, 0, 0)] * 200 + [CellRect(-1, 0, 0, 0)]
         bad_spec = PivotDataFieldSpec(name="Sum", field_index=-1)
         with Workbook.create_default() as wb:
             for name, call in (
@@ -1307,7 +1307,7 @@ class ArgumentScopeTests(unittest.TestCase):
                     self.assertGreater(self._assert_rejected_without_leak(call), 0)
 
     def test_repeated_rejected_calls_do_not_grow_linear_memory(self) -> None:
-        ranges = [MergeRange(0, 0, 0, 0)] * 20000 + [MergeRange(-1, 0, 0, 0)]
+        ranges = [CellRect(0, 0, 0, 0)] * 20000 + [CellRect(-1, 0, 0, 0)]
         with Workbook.create_default() as wb:
             with self.assertRaises(ValueError):
                 wb.set_selection(0, 0, 0, ranges)
@@ -1406,7 +1406,7 @@ class PackedIntegerGuardTests(unittest.TestCase):
             for bad in (1.5, 256, -1):
                 with self.subTest(min_length_pct=bad):
                     rule = ConditionalFormatInput(
-                        sqref=[MergeRange(0, 0, 2, 0)],
+                        sqref=[CellRect(0, 0, 2, 0)],
                         type=3,
                         data_bar=DataBar(Cfvo(3), Cfvo(4), CfColor(0, 0, 255), min_length_pct=bad),
                     )

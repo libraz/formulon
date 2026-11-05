@@ -226,19 +226,39 @@ export function registerThemeStyles(Module, test) {
       assert.equal(wb.getEffectiveStyle(0, 2, 1).source, 1);
       assert.equal(wb.setRowStyle(0, 5, 4, rowXf.index).ok, false);
 
-      const bases = wb.getRangeStyleBases(0, 0, 1, 1048575, 1);
+      const bases = wb.getRangeStyleBases(0, { firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 });
       assert.ok(bases.status.ok, JSON.stringify(bases.status));
       assert.ok(bases.xfIndices.includes(0) && bases.xfIndices.includes(rowXf.index));
       // Row 2 of a one-column selection is a single cell; excluding it hides the row style.
-      const excluded = wb.getRangeStyleBasesExcluding(0, 0, 1, 1048575, 1, [2, 2, 9], [1, 1, 9]);
+      const excluded = wb.getRangeStyleBasesExcluding(
+        0,
+        { firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 },
+        [2, 2, 9],
+        [1, 1, 9],
+      );
       assert.ok(excluded.status.ok, JSON.stringify(excluded.status));
       assert.deepEqual(excluded.xfIndices, [0]);
-      assert.equal(wb.getRangeStyleBasesExcluding(0, 0, 1, 1048575, 1, [2], []).status.ok, false);
+      assert.equal(
+        wb.getRangeStyleBasesExcluding(0, { firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 }, [2], []).status
+          .ok,
+        false,
+      );
 
-      const snap = wb.snapshotRangeStyle(0, 0, 1, 1048575, 1);
+      const snap = wb.snapshotRangeStyle(0, { firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 });
       assert.ok(snap.status.ok && snap.bytes.length > 0);
-      assert.equal(wb.remapRangeStyle(0, 0, 1, 1048575, 1, [0, rowXf.index], [xfA.index]).ok, false);
-      assert.ok(wb.remapRangeStyle(0, 0, 1, 1048575, 1, [0, rowXf.index], [xfA.index, xfB.index]).ok);
+      assert.equal(
+        wb.remapRangeStyle(0, { firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 }, [0, rowXf.index], [xfA.index])
+          .ok,
+        false,
+      );
+      assert.ok(
+        wb.remapRangeStyle(
+          0,
+          { firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 },
+          [0, rowXf.index],
+          [xfA.index, xfB.index],
+        ).ok,
+      );
 
       let e = wb.getEffectiveStyle(0, 2, 1);
       assert.equal(e.source, 0);

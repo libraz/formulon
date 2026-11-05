@@ -377,11 +377,16 @@ JsStatus JsWorkbook::clearCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col
                                            : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::setRangeXfIndex(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
-                                     uint32_t lastCol, uint32_t xf_index) {
-  return status_from_rc(
-      handle_ != nullptr ? fm_sheet_set_range_xf_index(handle_, sheet, firstRow, firstCol, lastRow, lastCol, xf_index)
-                         : kBindingInvalidHandle);
+JsStatus JsWorkbook::setRangeXfIndex(uint32_t sheet, emscripten::val range, uint32_t xf_index) {
+  if (handle_ == nullptr) {
+    return status_from_rc(kBindingInvalidHandle);
+  }
+  JsNarrowNumericReader reader("setRangeXfIndex");
+  const fm_cell_rect_t rect = js_pull_range(range, &reader);
+  if (!reader.ok()) {
+    return reader.failure();
+  }
+  return status_from_rc(fm_sheet_set_range_xf_index(handle_, sheet, &rect, xf_index));
 }
 
 // ---- Style record getters ----------------------------------------------

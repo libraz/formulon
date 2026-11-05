@@ -34,6 +34,7 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::cell_range_page_size;
+using formulon::c_api::parts::cell_rect_from_extent;
 using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_cell_cursor;
 using formulon::c_api::parts::check_entered_cell_formula;
@@ -685,18 +686,12 @@ extern "C" fm_status_t fm_sheet_get_spill_info(const fm_workbook_t* wb, std::siz
     const auto blocked = s.blocked_spill_footprint_at(row, col);
     if (blocked && static_cast<std::uint64_t>(blocked->anchor_row) + blocked->rows <= formulon::Sheet::kMaxRows &&
         static_cast<std::uint64_t>(blocked->anchor_col) + blocked->cols <= formulon::Sheet::kMaxCols) {
-      out->anchor_row = blocked->anchor_row;
-      out->anchor_col = blocked->anchor_col;
-      out->rows = blocked->rows;
-      out->cols = blocked->cols;
+      out->rect = cell_rect_from_extent(blocked->anchor_row, blocked->anchor_col, blocked->rows, blocked->cols);
       out->blocked = 1;
     }
     return 0;
   }
-  out->anchor_row = region->anchor_row;
-  out->anchor_col = region->anchor_col;
-  out->rows = region->rows;
-  out->cols = region->cols;
+  out->rect = cell_rect_from_extent(region->anchor_row, region->anchor_col, region->rows, region->cols);
   out->engaged = 1;
   return 0;
 }
@@ -723,10 +718,7 @@ extern "C" fm_status_t fm_sheet_get_array_formula(const fm_workbook_t* wb, std::
   if (!info.has_value()) {
     return 0;
   }
-  out->anchor_row = info->anchor_row;
-  out->anchor_col = info->anchor_col;
-  out->rows = info->rows;
-  out->cols = info->cols;
+  out->rect = cell_rect_from_extent(info->anchor_row, info->anchor_col, info->rows, info->cols);
   out->formula = publish_scratch(
       wb, display_formula_text(wb->workbook(), info->formula,
                                table_display_name_at(wb->workbook(), sheet_index, info->anchor_row, info->anchor_col)));
@@ -734,12 +726,14 @@ extern "C" fm_status_t fm_sheet_get_array_formula(const fm_workbook_t* wb, std::
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_set_array_formula(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
-                                                  std::uint32_t col, std::uint32_t rows, std::uint32_t cols,
-                                                  const char* formula) {
+extern "C" fm_status_t fm_sheet_set_array_formula(fm_workbook_t* wb, std::size_t sheet_index,
+                                                  const fm_cell_rect_t* range, const char* formula) {
   clear_last_error();
   if (wb == nullptr) {
     return null_argument("fm_sheet_set_array_formula", "wb");
+  }
+  if (range == nullptr) {
+    return null_argument("fm_sheet_set_array_formula", "range");
   }
   if (formula == nullptr) {
     return null_argument("fm_sheet_set_array_formula", "formula");
@@ -747,9 +741,13 @@ extern "C" fm_status_t fm_sheet_set_array_formula(fm_workbook_t* wb, std::size_t
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_array_formula"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_cell_coord(row, col, "fm_sheet_set_array_formula"); rc != 0) {
+  if (auto rc = check_sheet_rect(*range, "fm_sheet_set_array_formula"); rc != 0) {
     return rc;
   }
+  const std::uint32_t row = range->first_row;
+  const std::uint32_t col = range->first_col;
+  const std::uint32_t rows = range->last_row - row + 1U;
+  const std::uint32_t cols = range->last_col - col + 1U;
   std::string bound;
   if (auto rc = check_entered_cell_formula("fm_sheet_set_array_formula", wb, sheet_index, row, col, formula,
                                            "row=" + std::to_string(row) + " col=" + std::to_string(col), &bound);
@@ -829,32 +827,36 @@ extern "C" fm_status_t fm_sheet_get_formula_r1c1(const fm_workbook_t* wb, size_t
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_get_cells_in_range(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
-                                                   uint32_t first_col, uint32_t last_row, uint32_t last_col,
-                                                   uint64_t cursor, uint32_t limit, fm_cell_range_t** out) {
+extern "C" fm_status_t fm_sheet_get_cells_in_range(const fm_workbook_t* wb, size_t sheet_index,
+                                                   const fm_cell_rect_t* range, uint64_t cursor, uint32_t limit,
+                                                   fm_cell_range_t** out) {
   clear_last_error();
   if (out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_cells_in_range: NULL out");
   }
   *out = nullptr;
+  if (range == nullptr) {
+    return null_argument("fm_sheet_get_cells_in_range", "range");
+  }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_cells_in_range"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_rect(first_row, first_col, last_row, last_col, "fm_sheet_get_cells_in_range"); rc != 0) {
+  if (auto rc = check_sheet_rect(*range, "fm_sheet_get_cells_in_range"); rc != 0) {
     return rc;
   }
   if (auto rc = check_cell_cursor(cursor, "fm_sheet_get_cells_in_range"); rc != 0) {
     return rc;
   }
   auto handle = std::unique_ptr<fm_cell_range_t>(new fm_cell_range_t{});
-  handle->next_cursor = wb->workbook()
-                            .sheet(sheet_index)
-                            .cells_in_range(
-                                first_row, first_col, last_row, last_col, cursor, cell_range_page_size(limit),
-                                [](const formulon::Sheet::RangeCell& cell, void* ctx) {
-                                  static_cast<fm_cell_range_t*>(ctx)->append(cell);
-                                },
-                                handle.get());
+  handle->next_cursor =
+      wb->workbook()
+          .sheet(sheet_index)
+          .cells_in_range(
+              range->first_row, range->first_col, range->last_row, range->last_col, cursor, cell_range_page_size(limit),
+              [](const formulon::Sheet::RangeCell& cell, void* ctx) {
+                static_cast<fm_cell_range_t*>(ctx)->append(cell);
+              },
+              handle.get());
   // A data table's result cells show its `TABLE()` formula, as `fm_sheet_get_formula` does.
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   for (fm_cell_range_t::Entry& entry : handle->entries) {

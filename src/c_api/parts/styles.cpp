@@ -4,7 +4,6 @@
 
 #include "styles.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -87,21 +86,23 @@ extern "C" fm_status_t fm_sheet_clear_cell_xf_index(fm_workbook_t* wb, size_t sh
   return finish_status(wb->workbook().clear_cell_xf_index(sheet_index, row, col));
 }
 
-extern "C" fm_status_t fm_sheet_set_range_xf_index(fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
-                                                   uint32_t first_col, uint32_t last_row, uint32_t last_col,
+extern "C" fm_status_t fm_sheet_set_range_xf_index(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* range,
                                                    size_t xf_index) {
   static constexpr const char* kFn = "fm_sheet_set_range_xf_index";
   clear_last_error();
+  if (range == nullptr) {
+    return null_argument(kFn, "range");
+  }
   if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
     return rc;
   }
-  const std::uint32_t row_lo = std::min(first_row, last_row);
-  const std::uint32_t row_hi = std::max(first_row, last_row);
-  const std::uint32_t col_lo = std::min(first_col, last_col);
-  const std::uint32_t col_hi = std::max(first_col, last_col);
-  if (auto rc = check_sheet_rect(row_lo, col_lo, row_hi, col_hi, kFn); rc != 0) {
+  if (auto rc = check_sheet_rect(*range, kFn); rc != 0) {
     return rc;
   }
+  const std::uint32_t row_lo = range->first_row;
+  const std::uint32_t row_hi = range->last_row;
+  const std::uint32_t col_lo = range->first_col;
+  const std::uint32_t col_hi = range->last_col;
   if (auto rc = check_cell_xf_index(wb, xf_index, kFn); rc != 0) {
     return rc;
   }

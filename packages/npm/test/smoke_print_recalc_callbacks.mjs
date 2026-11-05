@@ -156,7 +156,7 @@ test('setRangeXfIndex applies one xf across a rectangle', async () => {
       hasWrapText: true,
     });
     assert.ok(xf.status.ok, JSON.stringify(xf.status));
-    assert.ok(wb.setRangeXfIndex(0, 0, 0, 2, 2, xf.index).ok);
+    assert.ok(wb.setRangeXfIndex(0, { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 2 }, xf.index).ok);
     // Cells that held nothing are materialised so the ruled box renders.
     for (const [row, col] of [
       [0, 0],

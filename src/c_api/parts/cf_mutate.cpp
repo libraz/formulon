@@ -47,17 +47,17 @@ using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::validate;
 
-// `fm_cf_cell_range_t` mirrors `cf::CFCellRange`, so the model's range
+// `fm_cell_rect_t` mirrors `cf::CFCellRange`, so the model's range
 // vector copies into the getter's arena as one memcpy and the wire type
 // needs no per-field repacking.
-static_assert(sizeof(fm_cf_cell_range_t) == sizeof(formulon::cf::CFCellRange),
-              "fm_cf_cell_range_t / cf::CFCellRange size mismatch");
-static_assert(alignof(fm_cf_cell_range_t) == alignof(formulon::cf::CFCellRange),
-              "fm_cf_cell_range_t / cf::CFCellRange align mismatch");
-static_assert(offsetof(fm_cf_cell_range_t, first_row) == offsetof(formulon::cf::CFCellRange, first),
-              "fm_cf_cell_range_t::first_row layout mismatch");
-static_assert(offsetof(fm_cf_cell_range_t, last_row) == offsetof(formulon::cf::CFCellRange, last),
-              "fm_cf_cell_range_t::last_row layout mismatch");
+static_assert(sizeof(fm_cell_rect_t) == sizeof(formulon::cf::CFCellRange),
+              "fm_cell_rect_t / cf::CFCellRange size mismatch");
+static_assert(alignof(fm_cell_rect_t) == alignof(formulon::cf::CFCellRange),
+              "fm_cell_rect_t / cf::CFCellRange align mismatch");
+static_assert(offsetof(fm_cell_rect_t, first_row) == offsetof(formulon::cf::CFCellRange, first),
+              "fm_cell_rect_t::first_row layout mismatch");
+static_assert(offsetof(fm_cell_rect_t, last_row) == offsetof(formulon::cf::CFCellRange, last),
+              "fm_cell_rect_t::last_row layout mismatch");
 
 namespace {
 
@@ -118,7 +118,7 @@ fm_cfvo_t from_cfvo(const formulon::Workbook& wb, const formulon::cf::CfValueObj
 
 void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalFormat& block,
                const formulon::cf::CFRule& rule, std::size_t dxf_count, BorrowedStringArena& text_arena,
-               BorrowedArrayArena<fm_cf_cell_range_t>& range_arena, BorrowedArrayArena<fm_cfvo_t>& cfvo_arena,
+               BorrowedArrayArena<fm_cell_rect_t>& range_arena, BorrowedArrayArena<fm_cfvo_t>& cfvo_arena,
                BorrowedArrayArena<fm_cf_color_t>& color_arena, BorrowedArrayArena<fm_cf_icon_t>& icon_arena,
                fm_cf_rule_t* out) {
   *out = fm_cf_rule_t{};
@@ -136,11 +136,11 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
     out->dxf_id_engaged = 1;
     out->dxf_id = *rule.dxf_id;
   }
-  // `cf::CFCellRange` and `fm_cf_cell_range_t` are layout-identical (see the
+  // `cf::CFCellRange` and `fm_cell_rect_t` are layout-identical (see the
   // static_asserts above), so the block's ranges copy across as one memcpy.
   if (!block.sqref.empty()) {
-    const auto* first = reinterpret_cast<const fm_cf_cell_range_t*>(block.sqref.data());
-    out->sqref = range_arena.adopt(std::vector<fm_cf_cell_range_t>(first, first + block.sqref.size()));
+    const auto* first = reinterpret_cast<const fm_cell_rect_t*>(block.sqref.data());
+    out->sqref = range_arena.adopt(std::vector<fm_cell_rect_t>(first, first + block.sqref.size()));
   }
   out->sqref_count = static_cast<std::uint32_t>(block.sqref.size());
   out->formula1 = rule.formula1.has_value() ? text_arena.emplace(wb.spell_self_book_names(*rule.formula1)) : nullptr;

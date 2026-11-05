@@ -52,7 +52,7 @@ const squaresWorkbook = (mod) => {
   return wb;
 };
 
-const squares = { firstRow: 2, lastRow: 4, firstCol: 1, lastCol: 1, colInput: { row: 0, col: 1 } };
+const squares = { rect: { firstRow: 2, firstCol: 1, lastRow: 4, lastCol: 1 }, colInput: { row: 0, col: 1 } };
 
 test('a one-variable data table computes, reads back and refuses writes', async () => {
   const mod = await load();
@@ -66,10 +66,7 @@ test('a one-variable data table computes, reads back and refuses writes', async 
   const found = wb.getDataTable(0, 3, 1);
   assert.ok(found.status.ok);
   assert.deepEqual(found.dataTable, {
-    firstRow: 2,
-    lastRow: 4,
-    firstCol: 1,
-    lastCol: 1,
+    rect: { firstRow: 2, firstCol: 1, lastRow: 4, lastCol: 1 },
     twoDimensional: false,
     rowOriented: false,
     rowInput: null,
@@ -100,10 +97,7 @@ test('a two-variable data table fills a multiplication table', async () => {
   }
   assert.ok(
     wb.addDataTable(0, {
-      firstRow: 3,
-      lastRow: 5,
-      firstCol: 3,
-      lastCol: 5,
+      rect: { firstRow: 3, firstCol: 3, lastRow: 5, lastCol: 5 },
       rowInput: { row: 0, col: 5 },
       colInput: { row: 1, col: 5 },
     }).ok,
@@ -136,7 +130,7 @@ test('a data table survives save and load as a dataTable formula and follows row
   assert.equal(loaded.setNumber(0, 4, 1, 1).ok, false);
   assert.ok(loaded.insertRows(0, 0, 2).ok);
   const moved = loaded.getDataTable(0, 6, 1).dataTable;
-  assert.deepEqual([moved.firstRow, moved.lastRow], [4, 6]);
+  assert.deepEqual([moved.rect.firstRow, moved.rect.lastRow], [4, 6]);
   assert.deepEqual(moved.colInput, { row: 2, col: 1, deleted: false });
   // Deleting the input's row marks it deleted and the table turns into errors.
   assert.ok(loaded.deleteRows(0, 2, 1).ok);
@@ -169,8 +163,8 @@ test('autoNoTable leaves tables to recalcDataTables and removal blanks them', as
 test('data table arguments are validated', async () => {
   const mod = await load();
   const wb = squaresWorkbook(mod);
-  assert.equal(wb.addDataTable(0, { firstRow: 2, lastRow: 4, firstCol: 1, lastCol: 1 }).ok, false);
-  assert.equal(wb.addDataTable(0, { ...squares, firstRow: 0 }).ok, false);
+  assert.equal(wb.addDataTable(0, { rect: squares.rect }).ok, false);
+  assert.equal(wb.addDataTable(0, { ...squares, rect: { ...squares.rect, firstRow: 0 } }).ok, false);
   assert.equal(wb.addDataTable(0, { ...squares, colInput: { row: 3, col: 1 } }).ok, false);
   assert.equal(wb.addDataTable(5, squares).ok, false);
   assert.equal(wb.getDataTable(5, 0, 0).status.ok, false);

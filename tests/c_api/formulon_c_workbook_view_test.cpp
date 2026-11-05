@@ -388,7 +388,7 @@ TEST(FormulonCApiWorkbookView, SheetViewScrollAndSelectionRoundTripFromAPackage)
   EXPECT_EQ(row, 21U);
   EXPECT_EQ(col, 2U);
   ASSERT_EQ(total, 3U);
-  fm_merge_range ranges[3]{};
+  fm_cell_rect_t ranges[3]{};
   size_t again = 0;
   ASSERT_EQ(fm_sheet_get_selection(wb.handle, 0, &row, &col, ranges, 3, &again), 0);
   EXPECT_EQ(again, 3U);
@@ -400,7 +400,7 @@ TEST(FormulonCApiWorkbookView, SheetViewScrollAndSelectionRoundTripFromAPackage)
   EXPECT_EQ(ranges[2].first_col, 0U);
   EXPECT_EQ(ranges[2].last_col, formulon::Sheet::kMaxCols - 1U);
   // A short buffer is filled as far as it goes and the total still reports every range.
-  fm_merge_range one[1]{};
+  fm_cell_rect_t one[1]{};
   ASSERT_EQ(fm_sheet_get_selection(wb.handle, 0, &row, &col, one, 1, &again), 0);
   EXPECT_EQ(again, 3U);
   EXPECT_EQ(fm_sheet_get_selection(wb.handle, 0, &row, &col, nullptr, 1, &again),
@@ -428,7 +428,7 @@ TEST(FormulonCApiWorkbookView, SelectionReadSkipsInvertedAndOffGridWholeRowsAndC
   uint32_t row = 99;
   uint32_t col = 99;
   size_t total = 0;
-  fm_merge_range ranges[5]{};
+  fm_cell_rect_t ranges[5]{};
   ASSERT_EQ(fm_sheet_get_selection(wb.handle, 0, &row, &col, ranges, 5, &total), 0);
   ASSERT_EQ(total, 1U);
   EXPECT_EQ(ranges[0].first_row, 1U);
@@ -497,7 +497,7 @@ TEST(FormulonCApiWorkbookView, FreezeWithoutASelectionSelectsThePaneOrigin) {
 TEST(FormulonCApiWorkbookView, ActiveCellOutsideTheRangesReadsAndSavesAsTheFirstRangesCorner) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  const fm_merge_range ranges[] = {{2, 2, 3, 3}, {9, 0, 9, 0}};
+  const fm_cell_rect_t ranges[] = {{2, 2, 3, 3}, {9, 0, 9, 0}};
   ASSERT_EQ(fm_sheet_set_selection(wb.handle, 0, 0, 7, ranges, 2), 0);
   uint32_t row = 99;
   uint32_t col = 99;
@@ -563,11 +563,11 @@ TEST(FormulonCApiWorkbookView, SettersWriteTheFrozenPaneTheDesktopWayAndRoundTri
   ASSERT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 40, 6), 0);
   EXPECT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 1, 6), kInvalidArgument);  // inside the frozen rows
   EXPECT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 4, 0), kInvalidArgument);  // inside the frozen columns
-  const fm_merge_range ranges[] = {{41, 7, 43, 8}, {50, 9, 50, 9}};
+  const fm_cell_rect_t ranges[] = {{41, 7, 43, 8}, {50, 9, 50, 9}};
   ASSERT_EQ(fm_sheet_set_selection(wb.handle, 0, 41, 7, ranges, 2), 0) << fm_get_last_error_message();
   EXPECT_EQ(fm_sheet_set_selection(wb.handle, 0, 0, 0, ranges, 0), 0);  // replaces: active cell alone
   ASSERT_EQ(fm_sheet_set_selection(wb.handle, 0, 41, 7, ranges, 2), 0);
-  const fm_merge_range inverted{3, 3, 1, 1};
+  const fm_cell_rect_t inverted{3, 3, 1, 1};
   EXPECT_EQ(fm_sheet_set_selection(wb.handle, 0, 0, 0, &inverted, 1), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_selection(wb.handle, 0, formulon::Sheet::kMaxRows, 0, nullptr, 0), kInvalidArgument);
 
@@ -675,7 +675,7 @@ TEST(FormulonCApiWorkbookView, SetSplitRehomesTheActiveSelectionAndKeepsTheViewO
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 2, 1), 0);
   ASSERT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 40, 6), 0);
-  const fm_merge_range ranges[] = {{41, 7, 43, 8}};
+  const fm_cell_rect_t ranges[] = {{41, 7, 43, 8}};
   ASSERT_EQ(fm_sheet_set_selection(wb.handle, 0, 41, 7, ranges, 1), 0);
 
   ASSERT_EQ(fm_sheet_set_split(wb.handle, 0, 1800.0, 1200.0), 0);

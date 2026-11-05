@@ -121,13 +121,12 @@ TEST_P(PivotValuesAxisFixture, SaveKeepsTheValuesFieldOnTheRows) {
 }
 
 TEST_P(PivotValuesAxisFixture, MovingTheValuesFieldToTheColumnsGivesTheDefaultLayout) {
-  uint32_t top = 0;
-  uint32_t left = 0;
-  uint32_t rows_before = 0;
-  uint32_t cols_before = 0;
+  int32_t present = 0;
+  fm_cell_rect_t before{};
   fm_pivot_cells_t* layout = nullptr;
   ASSERT_EQ(fm_sheet_get_pivot_layout(wb_.handle, 0U, 0U, &layout), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_pivot_cells_get_bounds(layout, &top, &left, &rows_before, &cols_before), 0);
+  ASSERT_EQ(fm_pivot_cells_get_bounds(layout, &present, &before), 0);
+  ASSERT_EQ(present, 1);
   fm_pivot_cells_destroy(layout);
 
   std::vector<std::uint32_t> columns = {FM_PIVOT_VALUES_FIELD};
@@ -141,13 +140,13 @@ TEST_P(PivotValuesAxisFixture, MovingTheValuesFieldToTheColumnsGivesTheDefaultLa
   EXPECT_EQ(ReadOrder(wb_.handle, false), columns);
 
   // One row per label instead of one per label and data field, one column per data field.
-  uint32_t rows_after = 0;
-  uint32_t cols_after = 0;
+  fm_cell_rect_t after{};
   ASSERT_EQ(fm_sheet_get_pivot_layout(wb_.handle, 0U, 0U, &layout), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_pivot_cells_get_bounds(layout, &top, &left, &rows_after, &cols_after), 0);
+  ASSERT_EQ(fm_pivot_cells_get_bounds(layout, &present, &after), 0);
   fm_pivot_cells_destroy(layout);
-  EXPECT_LT(rows_after, rows_before);
-  EXPECT_GT(cols_after, cols_before);
+  ASSERT_EQ(present, 1);
+  EXPECT_LT(after.last_row - after.first_row, before.last_row - before.first_row);
+  EXPECT_GT(after.last_col - after.first_col, before.last_col - before.first_col);
 
   const std::string xml = SavedPivotXml(wb_.handle);
   EXPECT_EQ(xml.find("dataOnRows=\"1\""), std::string::npos);

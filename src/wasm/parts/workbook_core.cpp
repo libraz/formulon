@@ -636,7 +636,7 @@ JsStatus JsWorkbook::setFileName(const std::string& name) {
   return status_from_rc(handle_ != nullptr ? fm_workbook_set_file_name(handle_, name.c_str()) : kBindingInvalidHandle);
 }
 
-emscripten::val JsWorkbook::partialRecalc(emscripten::val viewport) {
+emscripten::val JsWorkbook::partialRecalc(uint32_t sheet, emscripten::val viewport) {
   emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {
     o.set("status", invalid_handle_status());
@@ -644,17 +644,15 @@ emscripten::val JsWorkbook::partialRecalc(emscripten::val viewport) {
     return o;
   }
   JsNarrowNumericReader reader("recalcViewport");
-  const uint32_t vp_sheet = reader.u32(viewport, "sheet", 0U, "viewport.sheet");
-  const fm_merge_range bounds = js_pull_range(viewport, &reader);
+  const fm_cell_rect_t vp = js_pull_range(viewport, &reader);
   if (!reader.ok()) {
     o.set("status", reader.failure());
     o.set("recomputed", static_cast<uint32_t>(0));
     return o;
   }
-  fm_viewport vp{bounds.first_row, bounds.last_row, bounds.first_col, bounds.last_col};
   uint32_t recomputed = 0;
   progress_callback_threw_ = false;
-  fm_status_t rc = fm_sheet_recalc_viewport(handle_, vp_sheet, &vp, &recomputed);
+  fm_status_t rc = fm_sheet_recalc_viewport(handle_, sheet, &vp, &recomputed);
   const bool callback_threw = progress_callback_threw_;
   progress_callback_threw_ = false;
   if (rc != 0) {

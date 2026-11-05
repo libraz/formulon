@@ -61,7 +61,7 @@ fm_value_t Text(const char* text) {
 }
 
 /// Adds a whole-number rule over `range` (between `low` and `high`).
-void AddWholeBetween(fm_workbook_t* wb, fm_merge_range range, const char* low, const char* high,
+void AddWholeBetween(fm_workbook_t* wb, fm_cell_rect_t range, const char* low, const char* high,
                      std::uint8_t error_style) {
   fm_data_validation_t v{};
   v.ranges = &range;
@@ -111,8 +111,8 @@ std::vector<std::pair<std::uint32_t, std::uint32_t>> ListInvalid(const fm_workbo
 
 /// A2:A10 whole 1..10 (warning) over B2:B10 whole 5..6 (stop); A1 is free.
 void BuildRules(fm_workbook_t* wb) {
-  AddWholeBetween(wb, fm_merge_range{1, 0, 9, 0}, "1", "10", 1);
-  AddWholeBetween(wb, fm_merge_range{1, 1, 9, 1}, "5", "6", 0);
+  AddWholeBetween(wb, fm_cell_rect_t{1, 0, 9, 0}, "1", "10", 1);
+  AddWholeBetween(wb, fm_cell_rect_t{1, 1, 9, 1}, "5", "6", 0);
 }
 
 void ExpectVerdicts(const fm_workbook_t* wb) {
@@ -151,8 +151,8 @@ TEST(FormulonCApiValidation, ValidateValueUsesTheCoveringRule) {
 TEST(FormulonCApiValidation, OverlappingRulesApplyTheFirst) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  AddWholeBetween(wb.handle, fm_merge_range{0, 0, 4, 0}, "1", "3", 0);
-  AddWholeBetween(wb.handle, fm_merge_range{0, 0, 9, 0}, "1", "100", 2);
+  AddWholeBetween(wb.handle, fm_cell_rect_t{0, 0, 4, 0}, "1", "3", 0);
+  AddWholeBetween(wb.handle, fm_cell_rect_t{0, 0, 9, 0}, "1", "100", 2);
   const fm_validation_outcome_t overlap = Validate(wb.handle, 2, 0, Number(50));
   EXPECT_EQ(overlap.rule_index, 0U);
   EXPECT_EQ(overlap.valid, 0);

@@ -202,7 +202,7 @@ TEST(FormulonCApiFormulaEntry, DefinedNameAcceptsParseableAndEmptyText) {
   EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 2U);
 }
 
-fm_cf_rule_t MakeCfRule(const fm_cf_cell_range_t* sqref, const char* formula1, const char* formula2) {
+fm_cf_rule_t MakeCfRule(const fm_cell_rect_t* sqref, const char* formula1, const char* formula2) {
   fm_cf_rule_t rule{};
   rule.type = 0;  // Expression
   rule.formula1 = formula1;
@@ -215,7 +215,7 @@ fm_cf_rule_t MakeCfRule(const fm_cf_cell_range_t* sqref, const char* formula1, c
 TEST(FormulonCApiFormulaEntry, CfAddRuleRejectsUnparseableFormulasAndKeepsState) {
   WorkbookGuard wb;
   MakeWorkbook(&wb);
-  const fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  const fm_cell_rect_t sqref{0, 0, 9, 0};
   std::size_t index = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "A1>0", nullptr)), &index), 0);
   for (const std::string& formula : RejectedFormulas()) {
@@ -237,7 +237,7 @@ TEST(FormulonCApiFormulaEntry, CfAddRuleRejectsUnparseableFormulasAndKeepsState)
 TEST(FormulonCApiFormulaEntry, CfAddRuleAcceptsParseableAndEmptyFormulas) {
   WorkbookGuard wb;
   MakeWorkbook(&wb);
-  const fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  const fm_cell_rect_t sqref{0, 0, 9, 0};
   std::size_t index = 0;
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "'S2'!$A$1>0", "")), &index), 0);
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "Gone!$A$1>0", nullptr)), &index), 0);
@@ -247,7 +247,7 @@ TEST(FormulonCApiFormulaEntry, CfAddRuleAcceptsParseableAndEmptyFormulas) {
   EXPECT_EQ(count, 3U);
 }
 
-fm_data_validation_t MakeValidation(const fm_merge_range* range, std::uint8_t type, const char* formula1,
+fm_data_validation_t MakeValidation(const fm_cell_rect_t* range, std::uint8_t type, const char* formula1,
                                     const char* formula2) {
   fm_data_validation_t v{};
   v.ranges = range;
@@ -261,7 +261,7 @@ fm_data_validation_t MakeValidation(const fm_merge_range* range, std::uint8_t ty
 TEST(FormulonCApiFormulaEntry, AddValidationRejectsUnparseableFormulasAndKeepsState) {
   WorkbookGuard wb;
   MakeWorkbook(&wb);
-  const fm_merge_range range{0, 0, 9, 0};
+  const fm_cell_rect_t range{0, 0, 9, 0};
   ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 1, "0", "10"))), 0);
   for (const std::string& formula : RejectedFormulas()) {
     SCOPED_TRACE(formula);
@@ -282,7 +282,7 @@ TEST(FormulonCApiFormulaEntry, AddValidationRejectsUnparseableFormulasAndKeepsSt
 TEST(FormulonCApiFormulaEntry, AddValidationAcceptsEveryListAndScalarShape) {
   WorkbookGuard wb;
   MakeWorkbook(&wb);
-  const fm_merge_range range{0, 0, 9, 0};
+  const fm_cell_rect_t range{0, 0, 9, 0};
   constexpr std::uint8_t kList = 3;
   EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "\"a,b,c\"", nullptr))), 0);
   EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "'S2'!$A$1:$A$5", nullptr))),
@@ -315,7 +315,7 @@ TEST(FormulonCApiFormulaEntry, EveryFormulaSetterStoresTheEnteredSpelling) {
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 1, &name, &formula, &scope), 0);
   EXPECT_STREQ(formula, " 1+ 5");
 
-  const fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  const fm_cell_rect_t sqref{0, 0, 9, 0};
   std::size_t index = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "=$A$1>+1.50", "{1, 2}")), &index), 0);
   fm_cf_rule_t rule{};
@@ -323,7 +323,7 @@ TEST(FormulonCApiFormulaEntry, EveryFormulaSetterStoresTheEnteredSpelling) {
   EXPECT_STREQ(rule.formula1, "$A$1>1.5");
   EXPECT_STREQ(rule.formula2, "{1,2}");
 
-  const fm_merge_range range{0, 0, 9, 0};
+  const fm_cell_rect_t range{0, 0, 9, 0};
   constexpr std::uint8_t kList = 3;
   constexpr std::uint8_t kCustom = 7;
   ASSERT_EQ(

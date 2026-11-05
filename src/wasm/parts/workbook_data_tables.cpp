@@ -47,12 +47,8 @@ JsStatus JsWorkbook::addDataTable(uint32_t sheet, emscripten::val spec) {
   }
   JsNarrowNumericReader reader("addDataTable");
   fm_data_table_t table{};
-  const fm_merge_range range = js_pull_range(spec, &reader);
-  table.first_row = range.first_row;
-  table.first_col = range.first_col;
-  table.last_row = range.last_row;
-  table.last_col = range.last_col;
   if (js_value_present(spec)) {
+    table.rect = js_pull_range(reader.value(spec, "rect", "rect"), &reader);
     pull_input(reader, spec, "rowInput", &table.has_row_input, &table.row_input_row, &table.row_input_col);
     pull_input(reader, spec, "colInput", &table.has_col_input, &table.col_input_row, &table.col_input_col);
   }
@@ -75,10 +71,7 @@ emscripten::val JsWorkbook::getDataTable(uint32_t sheet, uint32_t row, uint32_t 
   o.set("status", status_from_rc(rc));
   if (rc == 0 && present != 0) {
     emscripten::val table = emscripten::val::object();
-    table.set("firstRow", t.first_row);
-    table.set("lastRow", t.last_row);
-    table.set("firstCol", t.first_col);
-    table.set("lastCol", t.last_col);
+    table.set("rect", cell_rect_to_val(t.rect));
     table.set("twoDimensional", t.two_dimensional != 0);
     table.set("rowOriented", t.row_oriented != 0);
     table.set("rowInput", input_to_val(t.has_row_input, t.row_input_row, t.row_input_col, t.row_input_deleted));

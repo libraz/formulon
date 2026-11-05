@@ -91,7 +91,11 @@ function envelopeProbes(wb) {
     ['PivotFieldResult', true, () => wb.getPivotField(99, 0, 0)],
     ['PivotItemResult', true, () => wb.getPivotFieldItem(99, 0, 0, 0)],
     ['PivotDataFieldResult', true, () => wb.getPivotDataField(99, 0, 0)],
-    ['CfRangeResult', true, () => wb.evaluateCfRange(99, 0, 0, 1, 1, Number.NaN)],
+    [
+      'CfRangeResult',
+      true,
+      () => wb.evaluateCfRange(99, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 }, Number.NaN),
+    ],
     ['PaginationResult', true, () => wb.getPagination(99)],
     ['SheetViewResult', true, () => wb.getView(99)],
     ['SheetProtectionResult', true, () => wb.getSheetProtection(99)],
@@ -118,11 +122,7 @@ function envelopeProbes(wb) {
     ['AddStyleResult', true, () => wb.addCellXf({ fontIndex: 9999 })],
     ['AddNumFmtResult', false, () => wb.addNumFmt('0.00')],
     ['IterativeSettingsResult', false, () => wb.getIterative()],
-    [
-      'PartialRecalcResult',
-      true,
-      () => wb.recalcViewport({ sheet: 99, firstRow: 0, lastRow: 1, firstCol: 0, lastCol: 1 }),
-    ],
+    ['PartialRecalcResult', true, () => wb.recalcViewport(99, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 })],
     ['SheetPrintXmlResult', true, () => wb.getPageSetupXml(99)],
     ['SheetPrintAreaResult', true, () => wb.getPrintArea(99)],
     ['SheetPrintTitlesResult', true, () => wb.getPrintTitles(99)],
@@ -163,9 +163,21 @@ function envelopeProbes(wb) {
     ['ChartDataResult', true, () => wb.getChartData(99, 1)],
     ['InsertChartResult', true, () => wb.addChart(99, { kind: 0, source: 'A1:B2' })],
     ['AddChartSeriesResult', true, () => wb.addChartSeries(99, 1, 0, { values: 'A1:A2' })],
-    ['RangeStyleBasesResult', true, () => wb.getRangeStyleBases(99, 0, 0, 0, 0)],
-    ['RangeStyleBasesResult', true, () => wb.getRangeStyleBasesExcluding(99, 0, 0, 0, 0, [], [])],
-    ['RangeStyleSnapshotResult', true, () => wb.snapshotRangeStyle(99, 0, 0, 0, 0)],
+    [
+      'RangeStyleBasesResult',
+      true,
+      () => wb.getRangeStyleBases(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }),
+    ],
+    [
+      'RangeStyleBasesResult',
+      true,
+      () => wb.getRangeStyleBasesExcluding(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, [], []),
+    ],
+    [
+      'RangeStyleSnapshotResult',
+      true,
+      () => wb.snapshotRangeStyle(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }),
+    ],
     ['ValidationOutcomeResult', true, () => wb.validateValue(99, 0, 0, { kind: 1, number: 1 })],
   ];
 }

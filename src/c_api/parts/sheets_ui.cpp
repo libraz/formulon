@@ -41,10 +41,9 @@ fm_status_t check_sheet_coord(std::uint32_t row, std::uint32_t col, const char* 
                            "row=" + std::to_string(row) + " col=" + std::to_string(col));
 }
 
-// Orders the corners so first <= last componentwise; mirrors the reader's
-// behaviour and keeps downstream consumers simple.
-formulon::MergeRange normalized_merge(const fm_merge_range& r) {
-  return formulon::normalized(formulon::MergeRange{r.first_row, r.first_col, r.last_row, r.last_col});
+// The engine range of a rectangle `check_sheet_rect` has accepted.
+formulon::MergeRange merge_range_of(const fm_cell_rect_t& r) {
+  return formulon::MergeRange{r.first_row, r.first_col, r.last_row, r.last_col};
 }
 
 using SheetItemSize = std::size_t (*)(const formulon::Sheet& sheet);
@@ -97,17 +96,17 @@ extern "C" fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, std::size_t she
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_hyperlink"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_rect(hl->row, hl->col, hl->last_row, hl->last_col, "fm_sheet_add_hyperlink"); rc != 0) {
+  if (auto rc = check_sheet_rect(hl->rect, "fm_sheet_add_hyperlink"); rc != 0) {
     return rc;
   }
   if (auto rc = check_utf8("fm_sheet_add_hyperlink", {hl->target, hl->location, hl->display, hl->tooltip}); rc != 0) {
     return rc;
   }
   formulon::Hyperlink out;
-  out.row = hl->row;
-  out.col = hl->col;
-  out.last_row = hl->last_row;
-  out.last_col = hl->last_col;
+  out.row = hl->rect.first_row;
+  out.col = hl->rect.first_col;
+  out.last_row = hl->rect.last_row;
+  out.last_col = hl->rect.last_col;
   out.target = text_or_empty(hl->target);
   out.location = text_or_empty(hl->location);
   out.display = text_or_empty(hl->display);
@@ -159,10 +158,7 @@ extern "C" fm_status_t fm_sheet_get_hyperlink_at(const fm_workbook_t* wb, std::s
     return rc;
   }
   const formulon::Hyperlink& h = hls[index];
-  out->row = h.row;
-  out->col = h.col;
-  out->last_row = h.last_row;
-  out->last_col = h.last_col;
+  out->rect = fm_cell_rect_t{h.row, h.col, h.last_row, h.last_col};
   out->target = h.target.c_str();
   out->location = h.location.c_str();
   out->display = h.display.c_str();
@@ -181,7 +177,7 @@ extern "C" fm_status_t fm_sheet_get_hyperlink_count(const fm_workbook_t* wb, std
 // Merges
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, std::size_t sheet_index, const fm_merge_range* merge) {
+extern "C" fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, std::size_t sheet_index, const fm_cell_rect_t* merge) {
   clear_last_error();
   if (merge == nullptr) {
     return null_argument("fm_sheet_add_merge", "merge");
@@ -189,14 +185,13 @@ extern "C" fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, std::size_t sheet_i
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_merge"); rc != 0) {
     return rc;
   }
-  const formulon::MergeRange m = normalized_merge(*merge);
-  if (auto rc = check_sheet_rect(m.first_row, m.first_col, m.last_row, m.last_col, "fm_sheet_add_merge"); rc != 0) {
+  if (auto rc = check_sheet_rect(*merge, "fm_sheet_add_merge"); rc != 0) {
     return rc;
   }
-  return finish_status(wb->workbook().add_merge(sheet_index, m));
+  return finish_status(wb->workbook().add_merge(sheet_index, merge_range_of(*merge)));
 }
 
-extern "C" fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, std::size_t sheet_index, const fm_merge_range* range) {
+extern "C" fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, std::size_t sheet_index, const fm_cell_rect_t* range) {
   clear_last_error();
   if (range == nullptr) {
     return null_argument("fm_sheet_remove_merge", "range");
@@ -204,8 +199,10 @@ extern "C" fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, std::size_t shee
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_remove_merge"); rc != 0) {
     return rc;
   }
-  const formulon::MergeRange q = normalized_merge(*range);
-  return finish_status(wb->workbook().remove_merges_intersecting(sheet_index, q));
+  if (auto rc = check_sheet_rect(*range, "fm_sheet_remove_merge"); rc != 0) {
+    return rc;
+  }
+  return finish_status(wb->workbook().remove_merges_intersecting(sheet_index, merge_range_of(*range)));
 }
 
 extern "C" fm_status_t fm_sheet_remove_merge_at(fm_workbook_t* wb, std::size_t sheet_index, std::size_t index) {
@@ -225,7 +222,7 @@ extern "C" fm_status_t fm_sheet_clear_merges(fm_workbook_t* wb, std::size_t shee
 }
 
 extern "C" fm_status_t fm_sheet_get_merge_at(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t index,
-                                             fm_merge_range* out) {
+                                             fm_cell_rect_t* out) {
   clear_last_error();
   if (out == nullptr) {
     return null_argument("fm_sheet_get_merge_at", "out");
@@ -253,7 +250,7 @@ extern "C" fm_status_t fm_sheet_get_merge_count(const fm_workbook_t* wb, std::si
 }
 
 extern "C" fm_status_t fm_sheet_get_merges_in_range(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                    const fm_merge_range* range, fm_merge_range* out,
+                                                    const fm_cell_rect_t* range, fm_cell_rect_t* out,
                                                     std::uint32_t capacity, std::uint32_t* out_count) {
   clear_last_error();
   if (range == nullptr || out_count == nullptr || (out == nullptr && capacity > 0U)) {
@@ -262,7 +259,10 @@ extern "C" fm_status_t fm_sheet_get_merges_in_range(const fm_workbook_t* wb, std
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_merges_in_range"); rc != 0) {
     return rc;
   }
-  const formulon::MergeRange query = normalized_merge(*range);
+  if (auto rc = check_sheet_rect(*range, "fm_sheet_get_merges_in_range"); rc != 0) {
+    return rc;
+  }
+  const formulon::MergeRange query = merge_range_of(*range);
   std::uint32_t count = 0;
   for (const formulon::MergeRange& m : wb->workbook().sheet(sheet_index).merges()) {
     if (m.last_row < query.first_row || m.first_row > query.last_row || m.last_col < query.first_col ||
@@ -270,7 +270,7 @@ extern "C" fm_status_t fm_sheet_get_merges_in_range(const fm_workbook_t* wb, std
       continue;
     }
     if (count < capacity) {
-      out[count] = fm_merge_range{m.first_row, m.first_col, m.last_row, m.last_col};
+      out[count] = fm_cell_rect_t{m.first_row, m.first_col, m.last_row, m.last_col};
     }
     ++count;
   }
@@ -428,24 +428,24 @@ extern "C" fm_status_t fm_sheet_set_comment_visible(fm_workbook_t* wb, std::size
 // Validations
 // ---------------------------------------------------------------------------
 
-// `fm_merge_range` and `formulon::MergeRange` must remain layout-compatible
+// `fm_cell_rect_t` and `formulon::MergeRange` must remain layout-compatible
 // so `fm_sheet_get_validation` can hand out the engine-side
 // `std::vector<MergeRange>::data()` directly via `reinterpret_cast`. Both
 // types are POD with four `uint32_t` fields in identical order; the static
 // asserts below pin that contract so any future change to either struct
 // trips a compile-time error.
-static_assert(sizeof(fm_merge_range) == sizeof(formulon::MergeRange),
-              "fm_merge_range / MergeRange size mismatch breaks validation getter");
-static_assert(alignof(fm_merge_range) == alignof(formulon::MergeRange),
-              "fm_merge_range / MergeRange alignment mismatch breaks validation getter");
-static_assert(offsetof(fm_merge_range, first_row) == offsetof(formulon::MergeRange, first_row),
-              "fm_merge_range::first_row layout mismatch");
-static_assert(offsetof(fm_merge_range, first_col) == offsetof(formulon::MergeRange, first_col),
-              "fm_merge_range::first_col layout mismatch");
-static_assert(offsetof(fm_merge_range, last_row) == offsetof(formulon::MergeRange, last_row),
-              "fm_merge_range::last_row layout mismatch");
-static_assert(offsetof(fm_merge_range, last_col) == offsetof(formulon::MergeRange, last_col),
-              "fm_merge_range::last_col layout mismatch");
+static_assert(sizeof(fm_cell_rect_t) == sizeof(formulon::MergeRange),
+              "fm_cell_rect_t / MergeRange size mismatch breaks validation getter");
+static_assert(alignof(fm_cell_rect_t) == alignof(formulon::MergeRange),
+              "fm_cell_rect_t / MergeRange alignment mismatch breaks validation getter");
+static_assert(offsetof(fm_cell_rect_t, first_row) == offsetof(formulon::MergeRange, first_row),
+              "fm_cell_rect_t::first_row layout mismatch");
+static_assert(offsetof(fm_cell_rect_t, first_col) == offsetof(formulon::MergeRange, first_col),
+              "fm_cell_rect_t::first_col layout mismatch");
+static_assert(offsetof(fm_cell_rect_t, last_row) == offsetof(formulon::MergeRange, last_row),
+              "fm_cell_rect_t::last_row layout mismatch");
+static_assert(offsetof(fm_cell_rect_t, last_col) == offsetof(formulon::MergeRange, last_col),
+              "fm_cell_rect_t::last_col layout mismatch");
 
 extern "C" fm_status_t fm_sheet_get_validation_count(const fm_workbook_t* wb, std::size_t sheet_index,
                                                      std::size_t* out_count) {
@@ -473,7 +473,7 @@ extern "C" fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, std::siz
   // documented in the header (valid until the next mutation that
   // touches the validation list) follows naturally from
   // `std::vector::data()` invalidation rules.
-  out->ranges = v.ranges.empty() ? nullptr : reinterpret_cast<const fm_merge_range*>(v.ranges.data());
+  out->ranges = v.ranges.empty() ? nullptr : reinterpret_cast<const fm_cell_rect_t*>(v.ranges.data());
   out->range_count = static_cast<std::uint32_t>(v.ranges.size());
   out->type = v.type;
   out->op = v.op;

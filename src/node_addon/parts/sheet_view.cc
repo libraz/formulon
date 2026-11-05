@@ -316,7 +316,7 @@ Napi::Value Workbook::GetSheetSelection(const Napi::CallbackInfo& info) {
   std::size_t total = 0;
   fm_status_t rc = handle_ != nullptr ? fm_sheet_get_selection(handle_, sheet, &row, &col, nullptr, 0, &total)
                                       : kBindingInvalidHandle;
-  std::vector<fm_merge_range> found(total);
+  std::vector<fm_cell_rect_t> found(total);
   if (rc == 0) {
     rc = fm_sheet_get_selection(handle_, sheet, &row, &col, found.data(), found.size(), &total);
   }
@@ -342,16 +342,16 @@ Napi::Value Workbook::SetSheetSelection(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   const uint32_t row = reader.U32(selection, "activeRow", 0U);
   const uint32_t col = reader.U32(selection, "activeCol", 0U);
-  std::vector<fm_merge_range> ranges;
+  std::vector<fm_cell_rect_t> ranges;
   Napi::Array array;
   if (reader.Array(selection, "ranges", &array)) {
     const uint32_t n = array.Length();
     for (uint32_t i = 0; i < n && reader.ok(); ++i) {
       Napi::Value value;
       Napi::Object object;
-      fm_merge_range range{};
+      fm_cell_rect_t range{};
       if (reader.ArrayElement(array, i, &value) && reader.Object(value, "ranges[]", &object) &&
-          ReadMergeRange(reader, object, &range)) {
+          ReadCellRect(reader, object, &range)) {
         ranges.push_back(range);
       }
     }
@@ -494,15 +494,11 @@ Napi::Value Workbook::GetCellRectPt(const Napi::CallbackInfo& info) {
   } else {
     const Napi::Object range = ArgObject(info, 1);
     CheckedSpecReader reader(env);
-    const uint32_t first_row = reader.U32(range, "firstRow", 0U);
-    const uint32_t first_col = reader.U32(range, "firstCol", 0U);
-    const uint32_t last_row = reader.U32(range, "lastRow", 0U);
-    const uint32_t last_col = reader.U32(range, "lastCol", 0U);
-    if (!reader.ok()) {
+    fm_cell_rect_t cells{};
+    if (!ReadCellRect(reader, range, &cells)) {
       return env.Undefined();
     }
-    const fm_status_t rc = fm_sheet_get_cell_rect_pt(handle_, ArgU32(info, 0), first_row, first_col, last_row, last_col,
-                                                     ArgMode(info, 2), &rect);
+    const fm_status_t rc = fm_sheet_get_cell_rect_pt(handle_, ArgU32(info, 0), &cells, ArgMode(info, 2), &rect);
     if (rc != 0) {
       rect = fm_rect_pt_t{};
     }
@@ -597,18 +593,17 @@ Napi::Value Workbook::ClearRowStyle(const Napi::CallbackInfo& info) {
 
 namespace {
 
-// `rect` is (sheet, firstRow, firstCol, lastRow, lastCol).
-Napi::Object RangeStyleBasesResult(Napi::Env env, fm_workbook_t* handle, const uint32_t (&rect)[5],
+Napi::Object RangeStyleBasesResult(Napi::Env env, fm_workbook_t* handle, uint32_t sheet, const fm_cell_rect_t& rect,
                                    const std::vector<uint32_t>& rows, const std::vector<uint32_t>& cols) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("xfIndices", Napi::Array::New(env));
   size_t len = 0;
-  fm_status_t rc = fm_sheet_get_range_style_bases_excluding(handle, rect[0], rect[1], rect[2], rect[3], rect[4],
-                                                            rows.data(), cols.data(), rows.size(), nullptr, 0, &len);
+  fm_status_t rc = fm_sheet_get_range_style_bases_excluding(handle, sheet, &rect, rows.data(), cols.data(), rows.size(),
+                                                            nullptr, 0, &len);
   std::vector<uint32_t> xfs(len);
   if (rc == 0 && len > 0) {
-    rc = fm_sheet_get_range_style_bases_excluding(handle, rect[0], rect[1], rect[2], rect[3], rect[4], rows.data(),
-                                                  cols.data(), rows.size(), xfs.data(), xfs.size(), &len);
+    rc = fm_sheet_get_range_style_bases_excluding(handle, sheet, &rect, rows.data(), cols.data(), rows.size(),
+                                                  xfs.data(), xfs.size(), &len);
   }
   if (rc != 0) {
     out.Set("status", MakeStatus(env, rc));
@@ -650,8 +645,12 @@ Napi::Value Workbook::RangeStyleBases(const Napi::CallbackInfo& info) {
     out.Set("status", NullHandleError(env));
     return out;
   }
-  const uint32_t rect[5] = {ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), ArgU32(info, 3), ArgU32(info, 4)};
-  return RangeStyleBasesResult(env, handle_, rect, {}, {});
+  CheckedSpecReader reader(env);
+  fm_cell_rect_t rect{};
+  if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
+    return env.Undefined();
+  }
+  return RangeStyleBasesResult(env, handle_, ArgU32(info, 0), rect, {}, {});
 }
 
 Napi::Value Workbook::RangeStyleBasesExcluding(const Napi::CallbackInfo& info) {
@@ -670,23 +669,25 @@ Napi::Value Workbook::RangeStyleBasesExcluding(const Napi::CallbackInfo& info) {
   };
   Napi::Array rows_arr;
   Napi::Array cols_arr;
-  if (!ArrayArg(info, 5, &rows_arr) || !ArrayArg(info, 6, &cols_arr)) {
+  if (!ArrayArg(info, 2, &rows_arr) || !ArrayArg(info, 3, &cols_arr)) {
     return refused(
-        "getRangeStyleBasesExcluding expects (sheet, firstRow, firstCol, lastRow, lastCol, excludedRows:number[], "
-        "excludedCols:number[])");
+        "getRangeStyleBasesExcluding expects (sheet, range:CellRect, excludedRows:number[], excludedCols:number[])");
   }
   if (rows_arr.Length() != cols_arr.Length()) {
     return refused("getRangeStyleBasesExcluding: excludedRows and excludedCols must have the same length");
   }
   CheckedSpecReader reader(env);
+  fm_cell_rect_t rect{};
+  if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
+    return env.Undefined();
+  }
   std::vector<uint32_t> rows;
   std::vector<uint32_t> cols;
   PullParallelU32(reader, rows_arr, cols_arr, "excludedRows/excludedCols", &rows, &cols);
   if (!reader.ok()) {
     return env.Undefined();
   }
-  const uint32_t rect[5] = {ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), ArgU32(info, 3), ArgU32(info, 4)};
-  return RangeStyleBasesResult(env, handle_, rect, rows, cols);
+  return RangeStyleBasesResult(env, handle_, ArgU32(info, 0), rect, rows, cols);
 }
 
 Napi::Value Workbook::RemapRangeStyle(const Napi::CallbackInfo& info) {
@@ -696,23 +697,26 @@ Napi::Value Workbook::RemapRangeStyle(const Napi::CallbackInfo& info) {
   }
   Napi::Array from_arr;
   Napi::Array to_arr;
-  if (!ArrayArg(info, 5, &from_arr) || !ArrayArg(info, 6, &to_arr)) {
+  if (!ArrayArg(info, 2, &from_arr) || !ArrayArg(info, 3, &to_arr)) {
     return MakeBindingArgumentError(
-        env, "remapRangeStyle expects (sheet, firstRow, firstCol, lastRow, lastCol, fromXfs:number[], toXfs:number[])");
+        env, "remapRangeStyle expects (sheet, range:CellRect, fromXfs:number[], toXfs:number[])");
   }
   if (from_arr.Length() != to_arr.Length()) {
     return MakeBindingArgumentError(env, "remapRangeStyle: fromXfs and toXfs must have the same length");
   }
   CheckedSpecReader reader(env);
+  fm_cell_rect_t rect{};
+  if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
+    return env.Undefined();
+  }
   std::vector<uint32_t> from;
   std::vector<uint32_t> to;
   PullParallelU32(reader, from_arr, to_arr, "fromXfs/toXfs", &from, &to);
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_sheet_remap_range_style(handle_, static_cast<std::size_t>(ArgU32(info, 0)), ArgU32(info, 1),
-                                                    ArgU32(info, 2), ArgU32(info, 3), ArgU32(info, 4), from.data(),
-                                                    to.data(), from.size()));
+  return MakeStatus(env, fm_sheet_remap_range_style(handle_, static_cast<std::size_t>(ArgU32(info, 0)), &rect,
+                                                    from.data(), to.data(), from.size()));
 }
 
 Napi::Value Workbook::SnapshotRangeStyle(const Napi::CallbackInfo& info) {
@@ -720,11 +724,15 @@ Napi::Value Workbook::SnapshotRangeStyle(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return SnapshotBytesResult(env, kBindingInvalidHandle, nullptr, 0);
   }
+  CheckedSpecReader reader(env);
+  fm_cell_rect_t rect{};
+  if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
+    return env.Undefined();
+  }
   uint8_t* bytes = nullptr;
   size_t len = 0;
   const fm_status_t rc =
-      fm_sheet_snapshot_range_style(handle_, static_cast<std::size_t>(ArgU32(info, 0)), ArgU32(info, 1),
-                                    ArgU32(info, 2), ArgU32(info, 3), ArgU32(info, 4), &bytes, &len);
+      fm_sheet_snapshot_range_style(handle_, static_cast<std::size_t>(ArgU32(info, 0)), &rect, &bytes, &len);
   return SnapshotBytesResult(env, rc, bytes, len);
 }
 

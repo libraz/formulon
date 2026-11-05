@@ -190,10 +190,7 @@ class PrintTitles:
 @dataclass(frozen=True)
 class PageLayout:
     area_index: int
-    first_row: int
-    last_row: int
-    first_col: int
-    last_col: int
+    rect: CellRect
     origin_x_pt: float
     origin_y_pt: float
     width_pt: float
@@ -685,7 +682,7 @@ class PivotCellKind(IntEnum):
 # Structured value / input dataclasses
 # ---------------------------------------------------------------------------
 
-class MergeRange:
+class CellRect:
     first_row: int
     first_col: int
     last_row: int
@@ -694,10 +691,7 @@ class MergeRange:
 
 @dataclass(frozen=True)
 class Hyperlink:
-    row: int
-    col: int
-    last_row: int
-    last_col: int
+    rect: CellRect
     target: str
     location: str
     display: str
@@ -710,7 +704,7 @@ class Comment:
 
 @dataclass(frozen=True)
 class DataValidation:
-    ranges: List[MergeRange]
+    ranges: List[CellRect]
     type: int
     op: int
     error_style: Union[ValidationErrorStyle, int]
@@ -810,7 +804,7 @@ class AutoFilterColumn:
     ) -> None: ...
 
 class AutoFilterSortCondition:
-    ref: MergeRange
+    ref: CellRect
     descending: bool
     sort_by: Union[SortBy, int]
     custom_list: str
@@ -821,7 +815,7 @@ class AutoFilterSortCondition:
     has_icon_id: bool
     def __init__(
         self,
-        ref: MergeRange,
+        ref: CellRect,
         descending: bool = ...,
         sort_by: Union[SortBy, int] = ...,
         custom_list: str = ...,
@@ -833,14 +827,14 @@ class AutoFilterSortCondition:
     ) -> None: ...
 
 class AutoFilterSortState:
-    ref: MergeRange
+    ref: CellRect
     column_sort: bool
     case_sensitive: bool
     sort_method: Union[SortMethod, int]
     conditions: List[AutoFilterSortCondition]
     def __init__(
         self,
-        ref: MergeRange,
+        ref: CellRect,
         column_sort: bool = ...,
         case_sensitive: bool = ...,
         sort_method: Union[SortMethod, int] = ...,
@@ -848,12 +842,12 @@ class AutoFilterSortState:
     ) -> None: ...
 
 class AutoFilter:
-    range: MergeRange
+    range: CellRect
     columns: List[AutoFilterColumn]
     sort: Optional[AutoFilterSortState]
     def __init__(
         self,
-        range: MergeRange,
+        range: CellRect,
         columns: List[AutoFilterColumn] = ...,
         sort: Optional[AutoFilterSortState] = ...,
     ) -> None: ...
@@ -1061,20 +1055,14 @@ class DataTableInput:
     def __init__(self, row: int, col: int, deleted: bool) -> None: ...
 
 class DataTable:
-    first_row: int
-    first_col: int
-    last_row: int
-    last_col: int
+    rect: CellRect
     two_dimensional: bool
     row_oriented: bool
     row_input: Optional[DataTableInput]
     col_input: Optional[DataTableInput]
     def __init__(
         self,
-        first_row: int,
-        first_col: int,
-        last_row: int,
-        last_col: int,
+        rect: CellRect,
         two_dimensional: bool,
         row_oriented: bool,
         row_input: Optional[DataTableInput],
@@ -1551,7 +1539,7 @@ class Person:
 
 class DataValidationInput:
     type: int
-    ranges: List[MergeRange]
+    ranges: List[CellRect]
     op: int
     error_style: Union[ValidationErrorStyle, int]
     allow_blank: bool
@@ -1567,7 +1555,7 @@ class DataValidationInput:
     def __init__(
         self,
         type: int,
-        ranges: List[MergeRange] = ...,
+        ranges: List[CellRect] = ...,
         op: int = ...,
         error_style: Union[ValidationErrorStyle, int] = ...,
         allow_blank: bool = ...,
@@ -1854,7 +1842,7 @@ class ConditionalFormat:
     type: int
     priority: int
     stop_if_true: bool
-    sqref: List[MergeRange]
+    sqref: List[CellRect]
     dxf_id: Optional[int]
     formula1: str
     formula2: str
@@ -1872,7 +1860,7 @@ class ConditionalFormat:
     icon_set: Optional[IconSet]
 
 class ConditionalFormatInput:
-    sqref: List[MergeRange]
+    sqref: List[CellRect]
     type: int
     priority: int
     stop_if_true: bool
@@ -1894,7 +1882,7 @@ class ConditionalFormatInput:
     icon_set: Optional[IconSet]
     def __init__(
         self,
-        sqref: List[MergeRange],
+        sqref: List[CellRect],
         type: int,
         priority: int = ...,
         stop_if_true: bool = ...,
@@ -1925,11 +1913,8 @@ class CellNode:
 @dataclass(frozen=True)
 class SpillInfo:
     engaged: bool
-    anchor_row: int
-    anchor_col: int
-    rows: int
-    cols: int
     blocked: bool
+    rect: Optional[CellRect]
 
 @dataclass(frozen=True)
 class ParsedReference:
@@ -1941,7 +1926,7 @@ class ParsedReference:
 
 @dataclass(frozen=True)
 class ArrayFormula:
-    ref: MergeRange
+    rect: CellRect
     formula: str
 
 @dataclass(frozen=True)
@@ -2325,10 +2310,7 @@ class PivotCell:
 
 @dataclass(frozen=True)
 class PivotLayout:
-    top: int
-    left: int
-    rows: int
-    cols: int
+    rect: Optional[CellRect]
     cells: List[PivotCell]
 
 class PivotReportLayout(IntEnum):
@@ -2564,14 +2546,7 @@ class Workbook:
     def set_iterative(self, enabled: bool, max_iterations: int, max_change: float) -> None: ...
     def set_iterative_enabled(self, enabled: bool) -> None: ...
     def get_iterative(self) -> IterativeSettings: ...
-    def recalc_viewport(
-        self,
-        sheet: int,
-        first_row: int,
-        last_row: int,
-        first_col: int,
-        last_col: int,
-    ) -> int: ...
+    def recalc_viewport(self, sheet: int, rect: CellRect) -> int: ...
     def get_calc_mode(self) -> CalcMode: ...
     def get_full_precision(self) -> bool: ...
     def set_full_precision(self, full_precision: bool) -> None: ...
@@ -2668,12 +2643,12 @@ class Workbook:
     def remove_table(self, index: int) -> None: ...
 
     # Merges.
-    def add_merge(self, sheet: int, merge: MergeRange) -> None: ...
-    def remove_merge(self, sheet: int, merge: MergeRange) -> None: ...
+    def add_merge(self, sheet: int, merge: CellRect) -> None: ...
+    def remove_merge(self, sheet: int, merge: CellRect) -> None: ...
     def remove_merge_at(self, sheet: int, index: int) -> None: ...
     def clear_merges(self, sheet: int) -> None: ...
     def merge_count(self, sheet: int) -> int: ...
-    def list_merges(self, sheet: int) -> List[MergeRange]: ...
+    def list_merges(self, sheet: int) -> List[CellRect]: ...
 
     # Hyperlinks.
     def add_hyperlink(
@@ -2689,10 +2664,7 @@ class Workbook:
     def add_hyperlink_range(
         self,
         sheet: int,
-        row: int,
-        col: int,
-        last_row: int,
-        last_col: int,
+        rect: CellRect,
         target: str,
         display: str = ...,
         tooltip: str = ...,
@@ -2753,10 +2725,8 @@ class Workbook:
     def set_top_left(self, sheet: int, row: int, col: int) -> None: ...
     def set_pane_top_left(self, sheet: int, row: int, col: int) -> None: ...
     def set_split(self, sheet: int, x_twips: float, y_twips: float) -> None: ...
-    def get_selection(self, sheet: int) -> Tuple[Tuple[int, int], List[MergeRange]]: ...
-    def set_selection(
-        self, sheet: int, active_row: int, active_col: int, ranges: Sequence[MergeRange] = ...
-    ) -> None: ...
+    def get_selection(self, sheet: int) -> Tuple[Tuple[int, int], List[CellRect]]: ...
+    def set_selection(self, sheet: int, active_row: int, active_col: int, ranges: Sequence[CellRect] = ...) -> None: ...
     def set_view_mode(self, sheet: int, mode: str) -> None: ...
     def get_auto_filter_xml(self, sheet: int) -> str: ...
     def set_auto_filter_xml(self, sheet: int, xml: str) -> None: ...
@@ -2845,29 +2815,20 @@ class Workbook:
     def clear_column_style(self, sheet: int, first: int, last: int) -> None: ...
     def set_row_style(self, sheet: int, first: int, last: int, xf_index: int) -> None: ...
     def clear_row_style(self, sheet: int, first: int, last: int) -> None: ...
-    def get_range_style_bases(
-        self, sheet: int, first_row: int, first_col: int, last_row: int, last_col: int
-    ) -> List[int]: ...
+    def get_range_style_bases(self, sheet: int, rect: CellRect) -> List[int]: ...
     def get_range_style_bases_excluding(
         self,
         sheet: int,
-        first_row: int,
-        first_col: int,
-        last_row: int,
-        last_col: int,
+        rect: CellRect,
         excluded: Sequence[Tuple[int, int]],
     ) -> List[int]: ...
-    def remap_range_style(
-        self, sheet: int, first_row: int, first_col: int, last_row: int, last_col: int, mapping: Dict[int, int]
-    ) -> None: ...
-    def snapshot_range_style(
-        self, sheet: int, first_row: int, first_col: int, last_row: int, last_col: int
-    ) -> bytes: ...
+    def remap_range_style(self, sheet: int, rect: CellRect, mapping: Dict[int, int]) -> None: ...
+    def snapshot_range_style(self, sheet: int, rect: CellRect) -> bytes: ...
     def restore_range_style(self, sheet: int, data: Union[bytes, bytearray, memoryview]) -> None: ...
     def clear_column_width(self, sheet: int, first: int, last: int) -> None: ...
     def get_format_defaults(self, sheet: int) -> SheetFormatDefaults: ...
     def set_format_defaults(self, sheet: int, defaults: SheetFormatDefaults) -> None: ...
-    def get_cell_rect_pt(self, sheet: int, cell_range: MergeRange, mode: Union[GeometryMode, int] = ...) -> RectPt: ...
+    def get_cell_rect_pt(self, sheet: int, cell_range: CellRect, mode: Union[GeometryMode, int] = ...) -> RectPt: ...
     def get_column_width_pt(self, sheet: int, col: int, mode: Union[GeometryMode, int] = ...) -> float: ...
     def get_row_height_pt(self, sheet: int, row: int) -> float: ...
     def get_width_model(self, sheet: int, mode: Union[GeometryMode, int] = ...) -> WidthModel: ...
@@ -2878,7 +2839,7 @@ class Workbook:
     def get_cells_in_range(
         self,
         sheet: int,
-        cell_range: MergeRange,
+        cell_range: CellRect,
         cursor: Optional[int] = ...,
         limit: Optional[int] = ...,
     ) -> Tuple[List[Cell], Optional[int]]: ...
@@ -3038,10 +2999,7 @@ class Workbook:
     def add_data_table(
         self,
         sheet: int,
-        first_row: int,
-        first_col: int,
-        last_row: int,
-        last_col: int,
+        rect: CellRect,
         *,
         row_input: Optional[Tuple[int, int]] = ...,
         col_input: Optional[Tuple[int, int]] = ...,
@@ -3126,7 +3084,7 @@ class Workbook:
     def list_people(self) -> List[Person]: ...
     def add_person(self, person: Person) -> None: ...
     def remove_person(self, person_id: str) -> None: ...
-    def get_merges_in_range(self, sheet: int, cell_range: MergeRange) -> List[MergeRange]: ...
+    def get_merges_in_range(self, sheet: int, cell_range: CellRect) -> List[CellRect]: ...
     def get_display_text(self, sheet: int, row: int, col: int) -> Tuple[str, DisplayStatus]: ...
     def format_value(self, value: Value, format_code: str = ...) -> Tuple[str, DisplayStatus]: ...
     def set_row_hidden(self, sheet: int, first: int, last: int, hidden: bool) -> None: ...
@@ -3137,10 +3095,7 @@ class Workbook:
     def evaluate_cf_range(
         self,
         sheet: int,
-        first_row: int,
-        first_col: int,
-        last_row: int,
-        last_col: int,
+        rect: CellRect,
         today_serial: float = ...,
     ) -> List[CfCellResult]: ...
     def get_cf_rule_count(self, sheet: int) -> int: ...
@@ -3154,9 +3109,7 @@ class Workbook:
     def get_cell_xf_index(self, sheet: int, row: int, col: int) -> int: ...
     def set_cell_xf_index(self, sheet: int, row: int, col: int, xf_index: int) -> None: ...
     def clear_cell_xf_index(self, sheet: int, row: int, col: int) -> None: ...
-    def set_range_xf_index(
-        self, sheet: int, first_row: int, first_col: int, last_row: int, last_col: int, xf_index: int
-    ) -> None: ...
+    def set_range_xf_index(self, sheet: int, rect: CellRect, xf_index: int) -> None: ...
     def get_cell_xf(self, xf_index: int) -> CellXf: ...
     def get_font(self, font_index: int) -> FontRecord: ...
     def get_fill(self, fill_index: int) -> FillRecord: ...
@@ -3416,7 +3369,7 @@ class Workbook:
         absolute: bool = ...,
     ) -> str: ...
     def get_array_formula(self, sheet: int, row: int, col: int) -> Optional[ArrayFormula]: ...
-    def set_array_formula(self, sheet: int, row: int, col: int, rows: int, cols: int, formula: str) -> None: ...
+    def set_array_formula(self, sheet: int, rect: CellRect, formula: str) -> None: ...
 
     # Function catalog (workbook-independent).
     @staticmethod

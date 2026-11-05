@@ -56,8 +56,7 @@ emscripten::val cfvo_to_js(const fm_cfvo_t& cfvo) {
 
 }  // namespace
 
-emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
-                                            uint32_t lastCol, double todaySerial) const {
+emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, emscripten::val range, double todaySerial) const {
   emscripten::val r = emscripten::val::object();
   emscripten::val cells = emscripten::val::array();
   if (handle_ == nullptr) {
@@ -65,9 +64,15 @@ emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, uint32_t firstRow, u
     r.set("cells", cells);
     return r;
   }
+  JsNarrowNumericReader reader("evaluateCfRange");
+  const fm_cell_rect_t rect = js_pull_range(range, &reader);
+  if (!reader.ok()) {
+    r.set("status", reader.failure());
+    r.set("cells", cells);
+    return r;
+  }
   fm_cf_results_t* results = nullptr;
-  fm_status_t rc =
-      fm_sheet_evaluate_cf_range(handle_, sheet, firstRow, firstCol, lastRow, lastCol, todaySerial, &results);
+  fm_status_t rc = fm_sheet_evaluate_cf_range(handle_, sheet, &rect, todaySerial, &results);
   if (rc != 0) {
     r.set("status", error_status(rc));
     r.set("cells", cells);
@@ -278,11 +283,11 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
   std::vector<fm_cf_icon_t> icon_set_icons;
   formulon::c_api::BorrowedStringArena cfvo_strings;
   JsNarrowNumericReader reader("addCfRule");
-  const std::vector<fm_merge_range> merge_ranges = js_pull_ranges(v, "sqref", &reader);
-  std::vector<fm_cf_cell_range_t> ranges_buf;
+  const std::vector<fm_cell_rect_t> merge_ranges = js_pull_ranges(v, "sqref", &reader);
+  std::vector<fm_cell_rect_t> ranges_buf;
   ranges_buf.reserve(merge_ranges.size());
-  for (const fm_merge_range& m : merge_ranges) {
-    ranges_buf.push_back(fm_cf_cell_range_t{m.first_row, m.first_col, m.last_row, m.last_col});
+  for (const fm_cell_rect_t& m : merge_ranges) {
+    ranges_buf.push_back(fm_cell_rect_t{m.first_row, m.first_col, m.last_row, m.last_col});
   }
   const std::string id = reader.string(v, "id", "rule.id");
   const std::string formula1 = reader.string(v, "formula1", "rule.formula1");

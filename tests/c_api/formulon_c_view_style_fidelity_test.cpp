@@ -348,7 +348,7 @@ TEST(FormulonCApiGradientFill, SurvivesSaveLoadOnCellsAndDxfs) {
 
 namespace {
 
-fm_cf_rule_t IconRule(const fm_cf_cell_range_t* sqref, fm_cfvo_t* thresholds, const fm_cf_icon_t* icons,
+fm_cf_rule_t IconRule(const fm_cell_rect_t* sqref, fm_cfvo_t* thresholds, const fm_cf_icon_t* icons,
                       uint32_t icon_count) {
   fm_cf_rule_t rule{};
   rule.type = 4;  // IconSet
@@ -376,7 +376,7 @@ fm_cf_rule_t IconRule(const fm_cf_cell_range_t* sqref, fm_cfvo_t* thresholds, co
 TEST(FormulonCApiCustomIcons, RoundTripThroughSaveAndLoad) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cfvo_t thresholds[2]{};
   const fm_cf_icon_t icons[3] = {{"3Triangles", 0}, {"NoIcons", 0}, {"5Boxes", 4}};
   size_t rule_index = 0;
@@ -403,7 +403,7 @@ TEST(FormulonCApiCustomIcons, RoundTripThroughSaveAndLoad) {
 TEST(FormulonCApiCustomIcons, RulesWithoutIconsReportNone) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cfvo_t thresholds[2]{};
   size_t rule_index = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(IconRule(&sqref, thresholds, nullptr, 0)), &rule_index), 0);
@@ -416,7 +416,7 @@ TEST(FormulonCApiCustomIcons, RulesWithoutIconsReportNone) {
 TEST(FormulonCApiCustomIcons, MalformedIconListsAreRejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cfvo_t thresholds[2]{};
   size_t rule_index = 0;
   const fm_cf_icon_t too_few[2] = {{"3Arrows", 0}, {"3Arrows", 1}};

@@ -21,8 +21,11 @@ export function registerSparseRows(Module, test) {
         wrapText: true,
       });
       assert.ok(added.status.ok);
-      assert.ok(wb.setRangeXfIndex(0, 0, 0, ROWS - 1, 0, added.index).ok);
-      assert.ok(wb.setRangeXfIndex(0, 0, LAST_COL, ROWS - 1, LAST_COL, added.index).ok);
+      assert.ok(wb.setRangeXfIndex(0, { firstRow: 0, firstCol: 0, lastRow: ROWS - 1, lastCol: 0 }, added.index).ok);
+      assert.ok(
+        wb.setRangeXfIndex(0, { firstRow: 0, firstCol: LAST_COL, lastRow: ROWS - 1, lastCol: LAST_COL }, added.index)
+          .ok,
+      );
 
       // Gap columns are not stored, so the count is exactly the written cells.
       const count = wb.getCellCount(0);

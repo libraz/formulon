@@ -27,6 +27,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::cell_rect_from_extent;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
@@ -170,17 +171,19 @@ extern "C" fm_status_t fm_pivot_cells_get_cell_count(const fm_pivot_cells_t* cel
   return 0;
 }
 
-extern "C" fm_status_t fm_pivot_cells_get_bounds(const fm_pivot_cells_t* cells, std::uint32_t* out_top,
-                                                 std::uint32_t* out_left, std::uint32_t* out_rows,
-                                                 std::uint32_t* out_cols) {
+extern "C" fm_status_t fm_pivot_cells_get_bounds(const fm_pivot_cells_t* cells, std::int32_t* out_present,
+                                                 fm_cell_rect_t* out_rect) {
   clear_last_error();
-  if (cells == nullptr || out_top == nullptr || out_left == nullptr || out_rows == nullptr || out_cols == nullptr) {
+  if (cells == nullptr || out_present == nullptr || out_rect == nullptr) {
     return null_argument("fm_pivot_cells_get_bounds");
   }
-  *out_top = cells->top;
-  *out_left = cells->left;
-  *out_rows = cells->rows;
-  *out_cols = cells->cols;
+  *out_rect = fm_cell_rect_t{};
+  *out_present = 0;
+  if (cells->rows == 0U || cells->cols == 0U) {
+    return 0;
+  }
+  *out_rect = cell_rect_from_extent(cells->top, cells->left, cells->rows, cells->cols);
+  *out_present = 1;
   return 0;
 }
 

@@ -25,12 +25,12 @@ namespace {
 
 // Reads `range` and hands it to `edit`, the add or remove half of the merge API.
 JsStatus edit_merge(fm_workbook_t* wb, uint32_t sheet, const emscripten::val& range, const char* operation,
-                    fm_status_t (*edit)(fm_workbook_t*, std::size_t, const fm_merge_range*)) {
+                    fm_status_t (*edit)(fm_workbook_t*, std::size_t, const fm_cell_rect_t*)) {
   if (wb == nullptr) {
     return invalid_handle_status();
   }
   JsNarrowNumericReader reader(operation);
-  const fm_merge_range m = js_pull_range(range, &reader);
+  const fm_cell_rect_t m = js_pull_range(range, &reader);
   if (!reader.ok()) {
     return reader.failure();
   }
@@ -91,12 +91,12 @@ emscripten::val sheet_list(const fm_workbook_t* wb, uint32_t sheet,
 }
 
 fm_status_t merge_item(const fm_workbook_t* wb, uint32_t sheet, std::size_t index, emscripten::val* out) {
-  fm_merge_range m{};
+  fm_cell_rect_t m{};
   const fm_status_t rc = fm_sheet_get_merge_at(wb, sheet, index, &m);
   if (rc != 0) {
     return rc;
   }
-  *out = merge_range_to_val(m);
+  *out = cell_rect_to_val(m);
   return 0;
 }
 
@@ -113,14 +113,14 @@ emscripten::val JsWorkbook::getMergesInRange(uint32_t sheet, emscripten::val ran
     return arr;
   }
   JsNarrowNumericReader reader("getMergesInRange");
-  const fm_merge_range query = js_pull_range(range, &reader);
+  const fm_cell_rect_t query = js_pull_range(range, &reader);
   if (!reader.ok()) {
     arr.set("status", reader.failure());
     return arr;
   }
   uint32_t total = 0;
   fm_status_t rc = fm_sheet_get_merges_in_range(handle_, sheet, &query, nullptr, 0, &total);
-  std::vector<fm_merge_range> found(rc == 0 ? total : 0);
+  std::vector<fm_cell_rect_t> found(rc == 0 ? total : 0);
   if (rc == 0 && total > 0) {
     uint32_t written = 0;
     rc = fm_sheet_get_merges_in_range(handle_, sheet, &query, found.data(), total, &written);
@@ -131,7 +131,7 @@ emscripten::val JsWorkbook::getMergesInRange(uint32_t sheet, emscripten::val ran
     return arr;
   }
   for (uint32_t i = 0; i < found.size(); ++i) {
-    arr.set(i, merge_range_to_val(found[i]));
+    arr.set(i, cell_rect_to_val(found[i]));
   }
   arr.set("status", ok_status());
   return arr;
@@ -363,28 +363,42 @@ JsStatus JsWorkbook::removeProtectedRange(uint32_t sheet, uint32_t index) {
 
 // ---- Hyperlinks --------------------------------------------------------
 
-JsStatus JsWorkbook::addHyperlink(uint32_t sheet, uint32_t row, uint32_t col, const std::string& target,
-                                  const std::string& display, const std::string& tooltip, const std::string& location) {
-  return addHyperlinkRange(sheet, row, col, row, col, target, display, tooltip, location);
-}
+namespace {
 
-JsStatus JsWorkbook::addHyperlinkRange(uint32_t sheet, uint32_t row, uint32_t col, uint32_t lastRow, uint32_t lastCol,
-                                       const std::string& target, const std::string& display,
-                                       const std::string& tooltip, const std::string& location) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
+fm_status_t add_hyperlink_rect(fm_workbook_t* wb, uint32_t sheet, const fm_cell_rect_t& rect, const std::string& target,
+                               const std::string& display, const std::string& tooltip, const std::string& location) {
   fm_hyperlink_t hl{};
-  hl.row = row;
-  hl.col = col;
-  hl.last_row = lastRow;
-  hl.last_col = lastCol;
+  hl.rect = rect;
   hl.target = target.empty() ? nullptr : target.c_str();
   hl.location = location.empty() ? nullptr : location.c_str();
   hl.display = display.empty() ? nullptr : display.c_str();
   hl.tooltip = tooltip.empty() ? nullptr : tooltip.c_str();
-  fm_status_t rc = fm_sheet_add_hyperlink(handle_, sheet, &hl);
-  return status_from_rc(rc);
+  return fm_sheet_add_hyperlink(wb, sheet, &hl);
+}
+
+}  // namespace
+
+JsStatus JsWorkbook::addHyperlink(uint32_t sheet, uint32_t row, uint32_t col, const std::string& target,
+                                  const std::string& display, const std::string& tooltip, const std::string& location) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  return status_from_rc(
+      add_hyperlink_rect(handle_, sheet, fm_cell_rect_t{row, col, row, col}, target, display, tooltip, location));
+}
+
+JsStatus JsWorkbook::addHyperlinkRange(uint32_t sheet, emscripten::val range, const std::string& target,
+                                       const std::string& display, const std::string& tooltip,
+                                       const std::string& location) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  JsNarrowNumericReader reader("addHyperlinkRange");
+  const fm_cell_rect_t rect = js_pull_range(range, &reader);
+  if (!reader.ok()) {
+    return reader.failure();
+  }
+  return status_from_rc(add_hyperlink_rect(handle_, sheet, rect, target, display, tooltip, location));
 }
 
 JsStatus JsWorkbook::removeHyperlink(uint32_t sheet, uint32_t row, uint32_t col) {
@@ -410,10 +424,7 @@ fm_status_t hyperlink_item(const fm_workbook_t* wb, uint32_t sheet, std::size_t 
     return rc;
   }
   emscripten::val item = emscripten::val::object();
-  item.set("row", h.row);
-  item.set("col", h.col);
-  item.set("lastRow", h.last_row);
-  item.set("lastCol", h.last_col);
+  item.set("rect", cell_rect_to_val(h.rect));
   js_set_cstr_fields(item,
                      {{"target", h.target}, {"location", h.location}, {"display", h.display}, {"tooltip", h.tooltip}});
   *out = item;
@@ -439,7 +450,7 @@ fm_status_t validation_item(const fm_workbook_t* wb, uint32_t sheet, std::size_t
   emscripten::val item = emscripten::val::object();
   emscripten::val ranges = emscripten::val::array();
   for (uint32_t r = 0; r < v.range_count; ++r) {
-    ranges.set(r, merge_range_to_val(v.ranges[r]));
+    ranges.set(r, cell_rect_to_val(v.ranges[r]));
   }
   item.set("ranges", ranges);
   item.set("type", v.type);
@@ -473,7 +484,7 @@ JsStatus JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
   // borrowed `const char*` views that must stay valid until
   // `fm_sheet_add_validation` returns.
   JsNarrowNumericReader reader("addValidation");
-  const std::vector<fm_merge_range> ranges_buf = js_pull_ranges(v, "ranges", &reader);
+  const std::vector<fm_cell_rect_t> ranges_buf = js_pull_ranges(v, "ranges", &reader);
   if (!reader.ok()) {
     return reader.failure();
   }

@@ -408,7 +408,7 @@ class ArgumentSweepTests(unittest.TestCase):
         self.assertIn("sheet_index <- int(sheet)", findings[0])
 
     def test_sweep_catches_a_packed_struct_field(self) -> None:
-        findings = _sweep_source('S.HYPERLINK.pack(LIB, ptr, {"row": int(row)})', _parse_header(_HEADER))
+        findings = _sweep_source('S.COMMENT.pack(LIB, ptr, {"row": int(row)})', _parse_header(_HEADER))
         self.assertEqual(len(findings), 1, findings)
         self.assertIn("u32 row <- int(row)", findings[0])
 
@@ -429,7 +429,7 @@ class ArgumentSweepTests(unittest.TestCase):
         self.assertIn("i64 cx <- int(cx)", findings[0])
 
     def test_sweep_catches_int_inside_a_guard(self) -> None:
-        findings = _sweep_source('S.HYPERLINK.pack(LIB, ptr, {"row": _uint(int(row), "row")})', _parse_header(_HEADER))
+        findings = _sweep_source('S.COMMENT.pack(LIB, ptr, {"row": _uint(int(row), "row")})', _parse_header(_HEADER))
         self.assertEqual(len(findings), 1, findings)
 
     def test_sweep_catches_a_raw_struct_pack_of_a_caller_value(self) -> None:
@@ -452,7 +452,7 @@ class ArgumentSweepTests(unittest.TestCase):
     def test_sweep_reports_a_payload_it_cannot_read(self) -> None:
         # An unreadable payload is a hole in the sweep, not evidence that
         # the site is safe, so it has to surface rather than be skipped.
-        findings = _sweep_source("S.HYPERLINK.pack(LIB, ptr, build_it())", _parse_header(_HEADER))
+        findings = _sweep_source("S.COMMENT.pack(LIB, ptr, build_it())", _parse_header(_HEADER))
         self.assertEqual(len(findings), 1, findings)
         self.assertIn("cannot inspect", findings[0])
 
@@ -461,7 +461,7 @@ class ArgumentSweepTests(unittest.TestCase):
         for source in (
             'LIB.fm_sheet_set_number(h, _uint(sheet, "sheet_index"), 0, 0, 1.0)',
             '_read_count(LIB.fm_sheet_get_merge_count, h, _uint(sheet, "sheet"))',
-            'S.HYPERLINK.pack(LIB, ptr, {"row": _uint(row, "row")})',
+            'S.COMMENT.pack(LIB, ptr, {"row": _uint(row, "row")})',
         ):
             with self.subTest(source=source):
                 self.assertEqual(_sweep_source(source, functions), [])
@@ -558,7 +558,7 @@ class IndexRangeTests(unittest.TestCase):
             self.assertIn("row", str(ctx.exception))
 
             with self.assertRaises(ValueError) as ctx:
-                wb.add_merge(0, formulon.MergeRange(first_row=-1, first_col=0, last_row=1, last_col=1))
+                wb.add_merge(0, formulon.CellRect(first_row=-1, first_col=0, last_row=1, last_col=1))
             self.assertIn("first_row", str(ctx.exception))
 
     def test_narrow_struct_fields_are_checked_at_their_own_width(self) -> None:

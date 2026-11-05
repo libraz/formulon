@@ -8,6 +8,7 @@
 
 #include "c_api/formulon_c.h"
 #include "eval/a1_parse.h"
+#include "formulon_c_record_arg.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
@@ -45,7 +46,7 @@ Parsed Parse(fm_workbook_t* wb, const char* text, int32_t r1c1 = 0, int32_t has_
   if (out.valid == 0) {
     EXPECT_EQ(out.has_sheet, 0) << text;
     EXPECT_EQ(out.sheet_name, nullptr) << text;
-    EXPECT_EQ(out.row0 | out.col0 | out.row1 | out.col1, 0U) << text;
+    EXPECT_EQ(out.rect.first_row | out.rect.first_col | out.rect.last_row | out.rect.last_col, 0U) << text;
   }
   if (out.has_sheet == 1) {
     EXPECT_NE(out.sheet_name, nullptr) << text;
@@ -55,10 +56,10 @@ Parsed Parse(fm_workbook_t* wb, const char* text, int32_t r1c1 = 0, int32_t has_
   } else {
     EXPECT_EQ(out.sheet_name, nullptr) << text;
   }
-  p.row0 = out.row0;
-  p.col0 = out.col0;
-  p.row1 = out.row1;
-  p.col1 = out.col1;
+  p.row0 = out.rect.first_row;
+  p.col0 = out.rect.first_col;
+  p.row1 = out.rect.last_row;
+  p.col1 = out.rect.last_col;
   return p;
 }
 
@@ -73,7 +74,8 @@ void ExpectRange(const Parsed& p, uint32_t row0, uint32_t col0, uint32_t row1, u
 std::string Format(fm_workbook_t* wb, const char* sheet, uint32_t row0, uint32_t col0, uint32_t row1, uint32_t col1,
                    int32_t absolute = 0) {
   const char* text = nullptr;
-  EXPECT_EQ(fm_workbook_format_reference(wb, sheet, row0, col0, row1, col1, absolute, &text), 0)
+  EXPECT_EQ(
+      fm_workbook_format_reference(wb, sheet, record_arg(fm_cell_rect_t{row0, col0, row1, col1}), absolute, &text), 0)
       << fm_get_last_error_message();
   return text != nullptr ? std::string(text) : std::string("<null>");
 }
@@ -210,14 +212,24 @@ TEST(FormulonCApiReference, FormatRejectsBadArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* text = nullptr;
-  EXPECT_EQ(fm_workbook_format_reference(nullptr, nullptr, 0, 0, 0, 0, 0, &text), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_format_reference(wb.handle, nullptr, 0, 0, 0, 0, 0, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_format_reference(wb.handle, "S\xff", 0, 0, 0, 0, 0, &text), kBindingUtf8);
-  EXPECT_EQ(fm_workbook_format_reference(wb.handle, nullptr, 0, 0, kLastRow + 1U, 0, 0, &text), kInvalidArgument);
-  EXPECT_EQ(fm_workbook_format_reference(wb.handle, nullptr, 0, 0, 0, kLastCol + 1U, 0, &text), kInvalidArgument);
-  EXPECT_EQ(fm_workbook_format_reference(wb.handle, nullptr, 2, 0, 1, 0, 0, &text), kInvalidArgument);
-  EXPECT_EQ(fm_workbook_format_reference(wb.handle, nullptr, 0, 2, 0, 1, 0, &text), kInvalidArgument);
-  EXPECT_EQ(fm_workbook_format_reference(wb.handle, nullptr, 0, 0, 0, 0, 2, &text), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_format_reference(nullptr, nullptr, record_arg(fm_cell_rect_t{0, 0, 0, 0}), 0, &text),
+            kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_format_reference(wb.handle, nullptr, record_arg(fm_cell_rect_t{0, 0, 0, 0}), 0, nullptr),
+            kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_format_reference(wb.handle, "S\xff", record_arg(fm_cell_rect_t{0, 0, 0, 0}), 0, &text),
+            kBindingUtf8);
+  EXPECT_EQ(
+      fm_workbook_format_reference(wb.handle, nullptr, record_arg(fm_cell_rect_t{0, 0, kLastRow + 1U, 0}), 0, &text),
+      kInvalidArgument);
+  EXPECT_EQ(
+      fm_workbook_format_reference(wb.handle, nullptr, record_arg(fm_cell_rect_t{0, 0, 0, kLastCol + 1U}), 0, &text),
+      kInvalidArgument);
+  EXPECT_EQ(fm_workbook_format_reference(wb.handle, nullptr, record_arg(fm_cell_rect_t{2, 0, 1, 0}), 0, &text),
+            kInvalidArgument);
+  EXPECT_EQ(fm_workbook_format_reference(wb.handle, nullptr, record_arg(fm_cell_rect_t{0, 2, 0, 1}), 0, &text),
+            kInvalidArgument);
+  EXPECT_EQ(fm_workbook_format_reference(wb.handle, nullptr, record_arg(fm_cell_rect_t{0, 0, 0, 0}), 2, &text),
+            kInvalidArgument);
 }
 
 TEST(FormulonCApiReference, FormatThenParseRoundTrips) {

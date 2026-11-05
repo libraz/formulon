@@ -86,11 +86,8 @@ Napi::Value Workbook::SpillInfo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
   out.Set("engaged", Napi::Boolean::New(env, false));
-  out.Set("anchorRow", Napi::Number::New(env, 0));
-  out.Set("anchorCol", Napi::Number::New(env, 0));
-  out.Set("rows", Napi::Number::New(env, 0));
-  out.Set("cols", Napi::Number::New(env, 0));
   out.Set("blocked", Napi::Boolean::New(env, false));
+  out.Set("rect", env.Null());
   if (handle_ == nullptr) {
     out.Set("status", NullHandleError(env));
     return out;
@@ -105,11 +102,10 @@ Napi::Value Workbook::SpillInfo(const Napi::CallbackInfo& info) {
     return out;
   }
   out.Set("engaged", Napi::Boolean::New(env, spill.engaged != 0));
-  out.Set("anchorRow", Napi::Number::New(env, spill.anchor_row));
-  out.Set("anchorCol", Napi::Number::New(env, spill.anchor_col));
-  out.Set("rows", Napi::Number::New(env, spill.rows));
-  out.Set("cols", Napi::Number::New(env, spill.cols));
   out.Set("blocked", Napi::Boolean::New(env, spill.blocked != 0));
+  if (spill.engaged != 0 || spill.blocked != 0) {
+    out.Set("rect", RangeToJs(env, spill.rect));
+  }
   return out;
 }
 
@@ -130,23 +126,23 @@ Napi::Value Workbook::GetArrayFormula(const Napi::CallbackInfo& info) {
   if (rc != 0 || array.engaged == 0) {
     return out;
   }
-  Napi::Object ref = Napi::Object::New(env);
-  ref.Set("row", Napi::Number::New(env, array.anchor_row));
-  ref.Set("col", Napi::Number::New(env, array.anchor_col));
-  ref.Set("rows", Napi::Number::New(env, array.rows));
-  ref.Set("cols", Napi::Number::New(env, array.cols));
   Napi::Object value = Napi::Object::New(env);
-  value.Set("ref", ref);
+  value.Set("rect", RangeToJs(env, array.rect));
   value.Set("formula", Napi::String::New(env, array.formula));
   out.Set("arrayFormula", value);
   return out;
 }
 
 Napi::Value Workbook::SetArrayFormula(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  CheckedSpecReader reader(env);
+  fm_cell_rect_t rect{};
+  if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
+    return env.Undefined();
+  }
   return StatusCall(info, [&](fm_workbook_t* handle) {
-    const std::string formula = ArgString(info, 5);
-    return fm_sheet_set_array_formula(handle, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), ArgU32(info, 3),
-                                         ArgU32(info, 4), formula.c_str());
+    const std::string formula = ArgString(info, 2);
+    return fm_sheet_set_array_formula(handle, ArgU32(info, 0), &rect, formula.c_str());
   });
 }
 

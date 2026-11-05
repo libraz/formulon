@@ -113,6 +113,20 @@ template <typename Enum>
   return out;
 }
 
+/// The layout's `(top, left, rows, cols)` extent read through `fm_pivot_cells_get_bounds`; an empty
+/// layout reads as all zeros.
+[[maybe_unused]] inline fm_status_t PivotLayoutExtent(const fm_pivot_cells_t* cells, std::uint32_t* top,
+                                                      std::uint32_t* left, std::uint32_t* rows, std::uint32_t* cols) {
+  std::int32_t present = 0;
+  fm_cell_rect_t rect{};
+  const fm_status_t rc = fm_pivot_cells_get_bounds(cells, &present, &rect);
+  *top = rect.first_row;
+  *left = rect.first_col;
+  *rows = present != 0 ? rect.last_row - rect.first_row + 1U : 0U;
+  *cols = present != 0 ? rect.last_col - rect.first_col + 1U : 0U;
+  return rc;
+}
+
 [[maybe_unused]] inline std::size_t CountOccurrences(const std::string& haystack, std::string_view needle) {
   std::size_t count = 0;
   for (std::size_t at = haystack.find(needle); at != std::string::npos; at = haystack.find(needle, at + 1U)) {

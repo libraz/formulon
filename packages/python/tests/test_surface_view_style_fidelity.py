@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 
 from formulon import (
+    CellRect,
     CfIcon,
     Cfvo,
     ConditionalFormatInput,
@@ -15,7 +16,6 @@ from formulon import (
     GradientFill,
     GradientStop,
     IconSet,
-    MergeRange,
     RefMode,
     SheetFormatDefaults,
     Workbook,
@@ -142,7 +142,7 @@ class CustomIconTests(unittest.TestCase):
     @staticmethod
     def _rule(icons: list[CfIcon]) -> ConditionalFormatInput:
         return ConditionalFormatInput(
-            sqref=[MergeRange(0, 0, 9, 0)],
+            sqref=[CellRect(0, 0, 9, 0)],
             type=4,
             icon_set=IconSet(
                 name=0,

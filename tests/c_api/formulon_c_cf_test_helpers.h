@@ -94,7 +94,7 @@ template <typename MutateFn>
 
 // Minimal valid DataBar rule. Extension fields stay zero-initialized so
 // each test below engages only what it is about to assert.
-[[maybe_unused]] inline fm_cf_rule_t MakeDataBarRule(const fm_cf_cell_range_t* sqref) {
+[[maybe_unused]] inline fm_cf_rule_t MakeDataBarRule(const fm_cell_rect_t* sqref) {
   fm_cf_rule_t rule{};
   rule.type = 3;  // DataBar
   rule.sqref = sqref;

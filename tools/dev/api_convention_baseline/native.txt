@@ -7,7 +7,6 @@ R11.multi	record.table_entry	ref	`TableEntry.ref: string` should be `ranges: Cel
 R11.multi	record.table_input	ref	`TableInput.ref: string` should be `ranges: CellRect[]`
 R11.multi	record.table_update_input	ref	`TableUpdateInput.ref: string` should be `ranges: CellRect[]`
 R11.sheet	record.chart_sheet_range	-	`ChartSheetRange` pairs a sheet with a rectangle; use `SheetRect`
-R11.sheet	record.viewport	-	`RecalcViewport` pairs a sheet with a rectangle; use `SheetRect`
 R12	auto_filter_xml.get	method	`getSheetAutoFilterXml` is on wasm but not on native
 R12	auto_filter_xml.set	method	`setSheetAutoFilterXml` is on wasm but not on native
 R12	cell_style_xf.add	method	`addCellStyleXf` is on wasm but not on native

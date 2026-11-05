@@ -147,7 +147,7 @@ __all__ = [
     "LogLevel",
     "IconSet",
     "MarginsPt",
-    "MergeRange",
+    "CellRect",
     "PageLayout",
     "PaperInfo",
     "PassthroughPart",
@@ -1105,8 +1105,8 @@ CELL_STYLE_BUILTIN_ID_NONE = S.CELL_STYLE_BUILTIN_ID_NONE
 
 
 @dataclass(frozen=True)
-class MergeRange:
-    """Inclusive cell rectangle (0-based corners)."""
+class CellRect:
+    """Cell rectangle: 0-based, inclusive corners ``(first_row, first_col)`` through ``(last_row, last_col)``."""
 
     first_row: int
     first_col: int
@@ -1116,12 +1116,9 @@ class MergeRange:
 
 @dataclass(frozen=True)
 class Hyperlink:
-    """A sheet hyperlink covering an inclusive cell rectangle."""
+    """A sheet hyperlink covering the cells of ``rect``."""
 
-    row: int
-    col: int
-    last_row: int
-    last_col: int
+    rect: CellRect
     target: str
     location: str
     display: str
@@ -1149,7 +1146,7 @@ class CommentEntry(NamedTuple):
 class DataValidation:
     """A sheet ``<dataValidation>`` rule (getter result)."""
 
-    ranges: List[MergeRange]
+    ranges: List[CellRect]
     type: int
     op: int
     error_style: Union[ValidationErrorStyle, int]
@@ -1176,7 +1173,7 @@ class DataValidationInput:
     """
 
     type: int
-    ranges: List[MergeRange] = field(default_factory=list)
+    ranges: List[CellRect] = field(default_factory=list)
     op: int = 0
     error_style: Union[ValidationErrorStyle, int] = ValidationErrorStyle.STOP
     allow_blank: bool = False
@@ -1248,7 +1245,7 @@ class AutoFilterColumn:
 class AutoFilterSortCondition:
     """One ``<sortCondition>`` of an AutoFilter sort state."""
 
-    ref: MergeRange
+    ref: CellRect
     descending: bool = False
     sort_by: Union[SortBy, int] = SortBy.VALUE
     custom_list: str = ""
@@ -1263,7 +1260,7 @@ class AutoFilterSortCondition:
 class AutoFilterSortState:
     """The ``<sortState>`` of an AutoFilter; ``sort_method`` is a :class:`SortMethod`."""
 
-    ref: MergeRange
+    ref: CellRect
     column_sort: bool = False
     case_sensitive: bool = False
     sort_method: Union[SortMethod, int] = SortMethod.NONE
@@ -1274,7 +1271,7 @@ class AutoFilterSortState:
 class AutoFilter:
     """A sheet or table AutoFilter; ``range`` includes the header row, ``sort`` may be ``None``."""
 
-    range: MergeRange
+    range: CellRect
     columns: List[AutoFilterColumn] = field(default_factory=list)
     sort: Optional[AutoFilterSortState] = None
 
@@ -1451,10 +1448,8 @@ class DataTable:
     two-variable table both. A deleted input makes the table evaluate to ``#REF!``.
     """
 
-    first_row: int
-    first_col: int
-    last_row: int
-    last_col: int
+    #: The result range.
+    rect: CellRect
     two_dimensional: bool
     row_oriented: bool
     row_input: Optional[DataTableInput]
@@ -2289,10 +2284,8 @@ class PageLayout:
     """One physical page: the cell block it carries and where it sits."""
 
     area_index: int
-    first_row: int
-    last_row: int
-    first_col: int
-    last_col: int
+    #: The page's cell block.
+    rect: CellRect
     origin_x_pt: float
     origin_y_pt: float
     width_pt: float
@@ -2539,7 +2532,7 @@ class ConditionalFormat:
     type: int
     priority: int
     stop_if_true: bool
-    sqref: List[MergeRange]
+    sqref: List[CellRect]
     dxf_id: Optional[int]
     formula1: str
     formula2: str
@@ -2565,7 +2558,7 @@ class ConditionalFormatInput:
     icon-set rules. The C ABI validates each payload's cardinality.
     """
 
-    sqref: List[MergeRange]
+    sqref: List[CellRect]
     type: int
     priority: int = 0
     stop_if_true: bool = False
@@ -2601,12 +2594,11 @@ class SpillInfo:
     """Dynamic-array spill region info for a cell."""
 
     engaged: bool
-    anchor_row: int
-    anchor_col: int
-    rows: int
-    cols: int
     #: ``True`` when the cell anchors a spill that could not fill its footprint.
     blocked: bool
+    #: The region including its anchor (for a blocked anchor, the footprint it attempted); ``None`` when the
+    #: cell is neither part of a spill nor a blocked anchor.
+    rect: Optional[CellRect]
 
 
 @dataclass(frozen=True)
@@ -2624,8 +2616,8 @@ class ParsedReference:
 class ArrayFormula:
     """A legacy array (CSE) formula: the block it fills and its stored text."""
 
-    #: The block's inclusive rectangle; its top-left cell holds the formula.
-    ref: MergeRange
+    #: The block; its top-left cell holds the formula.
+    rect: CellRect
     formula: str
 
 
@@ -3228,10 +3220,8 @@ class PivotCell:
 class PivotLayout:
     """The projected rectangular layout of a PivotTable."""
 
-    top: int
-    left: int
-    rows: int
-    cols: int
+    #: The rectangle the layout covers in absolute sheet coordinates; ``None`` when it spans no cell.
+    rect: Optional[CellRect]
     cells: List[PivotCell]
 
 
@@ -4363,17 +4353,17 @@ def _read_owned_buffer(fn, *args, default_op: str = "save") -> bytes:
                 LIB.fm_buffer_destroy(data_ptr)
 
 
-def _pack_merge_array(ranges: Sequence[MergeRange], scope: _ArgScope) -> int:
-    """Pack a list of ``MergeRange`` into a contiguous WASM array.
+def _pack_cell_rect_array(ranges: Sequence[CellRect], scope: _ArgScope) -> int:
+    """Pack a list of ``CellRect`` into a contiguous WASM array.
 
     Returns the array pointer (0 when empty), allocated through ``scope``.
     """
     if not ranges:
         return 0
-    size = S.MERGE_RANGE.size
+    size = S.CELL_RECT.size
     ptr = scope.alloc(size * len(ranges))
     for i, r in enumerate(ranges):
-        _pack_merge_at(ptr + i * size, r)
+        _pack_cell_rect_at(ptr + i * size, r)
     return ptr
 
 
@@ -4436,8 +4426,30 @@ def _decode_mentions(base: int, count: int) -> List[Mention]:
     return out
 
 
-def _pack_merge_at(ptr: int, r: MergeRange) -> None:
-    S.MERGE_RANGE.pack(
+def _require_cell_rect(r: object) -> CellRect:
+    if not isinstance(r, CellRect):
+        raise TypeError(f"formulon: expected a CellRect, got {type(r).__name__}")
+    return r
+
+
+def _cell_rect_fields(r: CellRect) -> Dict[str, int]:
+    """The ``fm_cell_rect_t`` field values of ``r``; anything but a :class:`CellRect` is a ``TypeError``."""
+    r = _require_cell_rect(r)
+    return {
+        "first_row": _uint(r.first_row, "first_row"),
+        "first_col": _uint(r.first_col, "first_col"),
+        "last_row": _uint(r.last_row, "last_row"),
+        "last_col": _uint(r.last_col, "last_col"),
+    }
+
+
+def _cell_rect_from(d: Dict[str, int]) -> CellRect:
+    return CellRect(d["first_row"], d["first_col"], d["last_row"], d["last_col"])
+
+
+def _pack_cell_rect_at(ptr: int, r: CellRect) -> None:
+    r = _require_cell_rect(r)
+    S.CELL_RECT.pack(
         LIB,
         ptr,
         {
@@ -4449,9 +4461,8 @@ def _pack_merge_at(ptr: int, r: MergeRange) -> None:
     )
 
 
-def _decode_merge_at(ptr: int) -> MergeRange:
-    d = S.MERGE_RANGE.unpack(LIB, ptr)
-    return MergeRange(d["first_row"], d["first_col"], d["last_row"], d["last_col"])
+def _decode_cell_rect_at(ptr: int) -> CellRect:
+    return _cell_rect_from(S.CELL_RECT.unpack(LIB, ptr))
 
 
 _FILTER_COLUMN_BOOLS = (
@@ -4527,7 +4538,7 @@ def _pack_sort_condition(ptr: int, cond: AutoFilterSortCondition, scope: _ArgSco
             "has_icon_id": 1 if cond.has_icon_id else 0,
         },
     )
-    _pack_merge_at(ptr + S.SORT_CONDITION.offsets["ref"][1], cond.ref)
+    _pack_cell_rect_at(ptr + S.SORT_CONDITION.offsets["ref"][1], cond.ref)
     S.write_str_field(LIB, ptr, S.SORT_CONDITION, "custom_list", cond.custom_list, scope)
 
 
@@ -4541,7 +4552,7 @@ def _pack_auto_filter(ptr: int, af: AutoFilter, scope: _ArgScope) -> None:
         },
     )
     off = S.AUTO_FILTER.offsets
-    _pack_merge_at(ptr + off["range"][1], af.range)
+    _pack_cell_rect_at(ptr + off["range"][1], af.range)
     if af.columns:
         base = scope.struct_array(S.FILTER_COLUMN, len(af.columns))
         for i, col in enumerate(af.columns):
@@ -4559,7 +4570,7 @@ def _pack_auto_filter(ptr: int, af: AutoFilter, scope: _ArgScope) -> None:
     }
     for name, value in fields.items():
         LIB.write_bytes(ptr + off[name][1], struct.pack("<i" if name != "condition_count" else "<I", value))
-    _pack_merge_at(ptr + off["sort_ref"][1], sort.ref)
+    _pack_cell_rect_at(ptr + off["sort_ref"][1], sort.ref)
     if sort.conditions:
         base = scope.struct_array(S.SORT_CONDITION, len(sort.conditions))
         for i, cond in enumerate(sort.conditions):
@@ -4586,7 +4597,7 @@ def _decode_filter_column(ptr: int) -> AutoFilterColumn:
 def _decode_sort_condition(ptr: int) -> AutoFilterSortCondition:
     d = S.SORT_CONDITION.unpack(LIB, ptr)
     return AutoFilterSortCondition(
-        ref=_decode_merge_at(ptr + S.SORT_CONDITION.offsets["ref"][1]),
+        ref=_decode_cell_rect_at(ptr + S.SORT_CONDITION.offsets["ref"][1]),
         descending=bool(d["descending"]),
         sort_by=d["sort_by"],
         custom_list=LIB.read_cstr(d["custom_list"]),
@@ -4604,7 +4615,7 @@ def _decode_auto_filter(ptr: int) -> AutoFilter:
     sort = None
     if d["has_sort"]:
         sort = AutoFilterSortState(
-            ref=_decode_merge_at(ptr + off["sort_ref"][1]),
+            ref=_decode_cell_rect_at(ptr + off["sort_ref"][1]),
             column_sort=bool(d["column_sort"]),
             case_sensitive=bool(d["case_sensitive"]),
             sort_method=d["sort_method"],
@@ -4613,7 +4624,7 @@ def _decode_auto_filter(ptr: int) -> AutoFilter:
             ],
         )
     return AutoFilter(
-        range=_decode_merge_at(ptr + off["range"][1]),
+        range=_decode_cell_rect_at(ptr + off["range"][1]),
         columns=[_decode_filter_column(d["columns"] + i * S.FILTER_COLUMN.size) for i in range(d["column_count"])],
         sort=sort,
     )
@@ -6175,29 +6186,13 @@ class Workbook:
     # Note: ``fm_workbook_set_iterative_progress`` (the per-sweep callback)
     # is intentionally NOT bound -- it takes a C function pointer that the
     # wasmtime-py host cannot synthesise into the module's function table.
-    def recalc_viewport(
-        self,
-        sheet: int,
-        first_row: int,
-        last_row: int,
-        first_col: int,
-        last_col: int,
-    ) -> int:
-        """Recalc the dependency closure for a viewport; return cell count."""
+    def recalc_viewport(self, sheet: int, rect: CellRect) -> int:
+        """Recalc the dependency closure for the viewport ``rect``; return cell count."""
         h = self._require()
         with _ArgScope() as scope:
-            vp = scope.struct(S.VIEWPORT)
+            vp = scope.struct(S.CELL_RECT)
             out = scope.out_ptr()
-            S.VIEWPORT.pack(
-                LIB,
-                vp,
-                {
-                    "first_row": _uint(first_row, "first_row"),
-                    "last_row": _uint(last_row, "last_row"),
-                    "first_col": _uint(first_col, "first_col"),
-                    "last_col": _uint(last_col, "last_col"),
-                },
-            )
+            _pack_cell_rect_at(vp, rect)
             _check(
                 LIB.fm_sheet_recalc_viewport(h, _uint(sheet, "sheet"), vp, out),
                 "fm_sheet_recalc_viewport",
@@ -6218,18 +6213,18 @@ class Workbook:
         )
 
     # -- Merges ------------------------------------------------------------
-    def add_merge(self, sheet: int, merge: MergeRange) -> None:
+    def add_merge(self, sheet: int, merge: CellRect) -> None:
         """Append a merge range to ``sheet``."""
         h = self._require()
         with _ArgScope() as scope:
-            ptr = _pack_merge_array([merge], scope)
+            ptr = _pack_cell_rect_array([merge], scope)
             _check(LIB.fm_sheet_add_merge(h, _uint(sheet, "sheet"), ptr), "fm_sheet_add_merge")
 
-    def remove_merge(self, sheet: int, merge: MergeRange) -> None:
+    def remove_merge(self, sheet: int, merge: CellRect) -> None:
         """Remove every merge on ``sheet`` overlapping ``merge``."""
         h = self._require()
         with _ArgScope() as scope:
-            ptr = _pack_merge_array([merge], scope)
+            ptr = _pack_cell_rect_array([merge], scope)
             _check(
                 LIB.fm_sheet_remove_merge(h, _uint(sheet, "sheet"), ptr),
                 "fm_sheet_remove_merge",
@@ -6253,21 +6248,21 @@ class Workbook:
         h = self._require()
         return _read_count(LIB.fm_sheet_get_merge_count, h, _uint(sheet, "sheet"))
 
-    def list_merges(self, sheet: int) -> List[MergeRange]:
+    def list_merges(self, sheet: int) -> List[CellRect]:
         """Return every merge range on ``sheet``."""
         h = self._require()
         n = self.merge_count(sheet)
-        out: List[MergeRange] = []
+        out: List[CellRect] = []
         # One scratch block for the whole walk; see iter_defined_names.
         with _ArgScope() as scope:
-            ptr = scope.struct(S.MERGE_RANGE)
+            ptr = scope.struct(S.CELL_RECT)
             for i in range(n):
-                S.zero_struct(LIB, S.MERGE_RANGE, ptr)
+                S.zero_struct(LIB, S.CELL_RECT, ptr)
                 _check(
                     LIB.fm_sheet_get_merge_at(h, _uint(sheet, "sheet"), _uint(i, "index"), ptr),
                     "fm_sheet_get_merge_at",
                 )
-                out.append(_decode_merge_at(ptr))
+                out.append(_decode_cell_rect_at(ptr))
         return out
 
     # -- Hyperlinks --------------------------------------------------------
@@ -6288,12 +6283,7 @@ class Workbook:
             S.HYPERLINK.pack(
                 LIB,
                 ptr,
-                {
-                    "row": _uint(row, "row"),
-                    "col": _uint(col, "col"),
-                    "last_row": _uint(row, "row"),
-                    "last_col": _uint(col, "col"),
-                },
+                {"rect": _cell_rect_fields(CellRect(row, col, row, col))},
             )
             S.write_str_field(LIB, ptr, S.HYPERLINK, "target", target, scope)
             S.write_str_field(LIB, ptr, S.HYPERLINK, "location", location, scope)
@@ -6304,29 +6294,17 @@ class Workbook:
     def add_hyperlink_range(
         self,
         sheet: int,
-        row: int,
-        col: int,
-        last_row: int,
-        last_col: int,
+        rect: CellRect,
         target: str,
         display: str = "",
         tooltip: str = "",
         location: str = "",
     ) -> None:
-        """Append a hyperlink covering the inclusive cell rectangle."""
+        """Append a hyperlink covering the cells of ``rect``."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.HYPERLINK)
-            S.HYPERLINK.pack(
-                LIB,
-                ptr,
-                {
-                    "row": _uint(row, "row"),
-                    "col": _uint(col, "col"),
-                    "last_row": _uint(last_row, "last_row"),
-                    "last_col": _uint(last_col, "last_col"),
-                },
-            )
+            S.HYPERLINK.pack(LIB, ptr, {"rect": _cell_rect_fields(rect)})
             S.write_str_field(LIB, ptr, S.HYPERLINK, "target", target, scope)
             S.write_str_field(LIB, ptr, S.HYPERLINK, "location", location, scope)
             S.write_str_field(LIB, ptr, S.HYPERLINK, "display", display, scope)
@@ -6376,10 +6354,7 @@ class Workbook:
                 d = S.HYPERLINK.unpack(LIB, ptr)
                 out.append(
                     Hyperlink(
-                        row=d["row"],
-                        col=d["col"],
-                        last_row=d["last_row"],
-                        last_col=d["last_col"],
+                        rect=_cell_rect_from(d["rect"]),
                         target=LIB.read_cstr(d["target"]),
                         location=LIB.read_cstr(d["location"]),
                         display=LIB.read_cstr(d["display"]),
@@ -6608,11 +6583,11 @@ class Workbook:
     @staticmethod
     def _decode_validation(ptr: int) -> DataValidation:
         d = S.DATA_VALIDATION.unpack(LIB, ptr)
-        ranges: List[MergeRange] = []
+        ranges: List[CellRect] = []
         base = d["ranges"]
-        rsize = S.MERGE_RANGE.size
+        rsize = S.CELL_RECT.size
         for i in range(d["range_count"]):
-            ranges.append(_decode_merge_at(base + i * rsize))
+            ranges.append(_decode_cell_rect_at(base + i * rsize))
         return DataValidation(
             ranges=ranges,
             type=d["type"],
@@ -6648,7 +6623,7 @@ class Workbook:
                     "show_dropdown": 1 if validation.show_dropdown else 0,
                 },
             )
-            ranges_ptr = _pack_merge_array(validation.ranges, scope)
+            ranges_ptr = _pack_cell_rect_array(validation.ranges, scope)
             ro = S.DATA_VALIDATION.offsets
             LIB.write_bytes(ptr + ro["ranges"][1], struct.pack("<I", ranges_ptr))
             LIB.write_bytes(
@@ -6822,23 +6797,16 @@ class Workbook:
             return LIB.read_f64(out)
 
     def get_cell_rect_pt(
-        self, sheet: int, cell_range: MergeRange, mode: Union[GeometryMode, int] = GeometryMode.DISPLAY
+        self, sheet: int, cell_range: CellRect, mode: Union[GeometryMode, int] = GeometryMode.DISPLAY
     ) -> RectPt:
         """Return the rectangle covering ``cell_range`` in points from the top-left of A1."""
         h = self._require()
         with _ArgScope() as scope:
+            rp = scope.struct(S.CELL_RECT)
+            _pack_cell_rect_at(rp, cell_range)
             ptr = scope.struct(S.RECT_PT)
             _check(
-                LIB.fm_sheet_get_cell_rect_pt(
-                    h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(cell_range.first_row, "first_row"),
-                    _uint(cell_range.first_col, "first_col"),
-                    _uint(cell_range.last_row, "last_row"),
-                    _uint(cell_range.last_col, "last_col"),
-                    _sint(mode, "mode"),
-                    ptr,
-                ),
+                LIB.fm_sheet_get_cell_rect_pt(h, _uint(sheet, "sheet_index"), rp, _sint(mode, "mode"), ptr),
                 "fm_sheet_get_cell_rect_pt",
             )
             return RectPt(**S.RECT_PT.unpack(LIB, ptr))
@@ -6915,7 +6883,7 @@ class Workbook:
     def get_cells_in_range(
         self,
         sheet: int,
-        cell_range: MergeRange,
+        cell_range: CellRect,
         cursor: Optional[int] = None,
         limit: Optional[int] = None,
     ) -> "tuple[List[Cell], Optional[int]]":
@@ -6926,18 +6894,18 @@ class Workbook:
         ``None`` or ``0`` means the engine maximum.
         """
         h = self._require()
-        return self._read_cell_range_page(
-            "fm_sheet_get_cells_in_range",
-            LIB.fm_sheet_get_cells_in_range,
-            h,
-            _uint(sheet, "sheet_index"),
-            _uint(cell_range.first_row, "first_row"),
-            _uint(cell_range.first_col, "first_col"),
-            _uint(cell_range.last_row, "last_row"),
-            _uint(cell_range.last_col, "last_col"),
-            _uint(cursor or 0, "cursor", 64),
-            _uint(limit or 0, "limit"),
-        )
+        with _ArgScope() as scope:
+            rp = scope.struct(S.CELL_RECT)
+            _pack_cell_rect_at(rp, cell_range)
+            return self._read_cell_range_page(
+                "fm_sheet_get_cells_in_range",
+                LIB.fm_sheet_get_cells_in_range,
+                h,
+                _uint(sheet, "sheet_index"),
+                rp,
+                _uint(cursor or 0, "cursor", 64),
+                _uint(limit or 0, "limit"),
+            )
 
     @staticmethod
     def _read_cell_range_page(op: str, fn, *args) -> "tuple[List[Cell], Optional[int]]":
@@ -7718,15 +7686,12 @@ class Workbook:
     def add_data_table(
         self,
         sheet: int,
-        first_row: int,
-        first_col: int,
-        last_row: int,
-        last_col: int,
+        rect: CellRect,
         *,
         row_input: Optional[Tuple[int, int]] = None,
         col_input: Optional[Tuple[int, int]] = None,
     ) -> None:
-        """Create a data table whose result range is ``first_row``..``last_col`` (0-based, inclusive).
+        """Create a data table whose result range is ``rect``.
 
         The formulas sit in the row above the range and the substitution values in the column left of it (a
         one-variable table), or the other way round; ``row_input`` / ``col_input`` are the ``(row, col)`` input
@@ -7737,12 +7702,7 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct_array(S.DATA_TABLE, 1)
-            values: Dict[str, int] = {
-                "first_row": _uint(first_row, "first_row"),
-                "first_col": _uint(first_col, "first_col"),
-                "last_row": _uint(last_row, "last_row"),
-                "last_col": _uint(last_col, "last_col"),
-            }
+            values: Dict[str, object] = {"rect": _cell_rect_fields(rect)}
             for prefix, cell in (("row_input", row_input), ("col_input", col_input)):
                 if cell is not None:
                     values["has_" + prefix] = 1
@@ -7773,10 +7733,7 @@ class Workbook:
             return DataTableInput(d[prefix + "_row"], d[prefix + "_col"], bool(d[prefix + "_deleted"]))
 
         return DataTable(
-            first_row=d["first_row"],
-            first_col=d["first_col"],
-            last_row=d["last_row"],
-            last_col=d["last_col"],
+            rect=_cell_rect_from(d["rect"]),
             two_dimensional=bool(d["two_dimensional"]),
             row_oriented=bool(d["row_oriented"]),
             row_input=_input("row_input"),
@@ -8295,11 +8252,11 @@ class Workbook:
             id_ptr = scope.cstr(person_id)
             _check(LIB.fm_workbook_remove_person(h, id_ptr), "fm_workbook_remove_person")
 
-    def get_merges_in_range(self, sheet: int, cell_range: MergeRange) -> List[MergeRange]:
+    def get_merges_in_range(self, sheet: int, cell_range: CellRect) -> List[CellRect]:
         """Return every merge range on ``sheet`` that intersects ``cell_range``."""
         h = self._require()
         with _ArgScope() as scope:
-            range_ptr = _pack_merge_array([cell_range], scope)
+            range_ptr = _pack_cell_rect_array([cell_range], scope)
             count_ptr = scope.out_ptr()
             # Size the buffer first, then fetch.
             _check(
@@ -8309,17 +8266,17 @@ class Workbook:
             total = LIB.read_u32(count_ptr)
             if total == 0:
                 return []
-            size = S.MERGE_RANGE.size
-            buf = scope.struct_array(S.MERGE_RANGE, total)
+            size = S.CELL_RECT.size
+            buf = scope.struct_array(S.CELL_RECT, total)
             _check(
                 LIB.fm_sheet_get_merges_in_range(
                     h, _uint(sheet, "sheet_index"), range_ptr, buf, _uint(total, "capacity"), count_ptr
                 ),
                 "fm_sheet_get_merges_in_range",
             )
-            out: List[MergeRange] = []
+            out: List[CellRect] = []
             for i in range(min(total, LIB.read_u32(count_ptr))):
-                out.append(_decode_merge_at(buf + i * size))
+                out.append(_decode_cell_rect_at(buf + i * size))
             return out
 
     def get_display_text(self, sheet: int, row: int, col: int) -> "tuple[str, DisplayStatus]":
@@ -8449,7 +8406,9 @@ class Workbook:
                         LIB.fm_pagination_get_page_at(pagination, _uint(i, "index"), struct_ptr),
                         "fm_pagination_get_page_at",
                     )
-                    pages.append(PageLayout(**S.PAGE_LAYOUT.unpack(LIB, struct_ptr)))
+                    page = S.PAGE_LAYOUT.unpack(LIB, struct_ptr)
+                    page["rect"] = _cell_rect_from(page["rect"])
+                    pages.append(PageLayout(**page))
                 return PaginationResult(
                     page_count,
                     print_area,
@@ -8632,7 +8591,7 @@ class Workbook:
             "fm_sheet_set_split",
         )
 
-    def get_selection(self, sheet: int) -> Tuple[Tuple[int, int], List[MergeRange]]:
+    def get_selection(self, sheet: int) -> Tuple[Tuple[int, int], List[CellRect]]:
         """Return ``((active_row, active_col), ranges)`` of the active pane's selection.
 
         The selection reads as it is saved: a pane that stores none reports A1
@@ -8652,22 +8611,22 @@ class Workbook:
                 "fm_sheet_get_selection",
             )
             total = LIB.read_u32(total_ptr)
-            array_ptr = scope.struct_array(S.MERGE_RANGE, total)
+            array_ptr = scope.struct_array(S.CELL_RECT, total)
             _check(
                 LIB.fm_sheet_get_selection(
                     h, _uint(sheet, "sheet_index"), row_ptr, col_ptr, array_ptr, _uint(total, "capacity"), total_ptr
                 ),
                 "fm_sheet_get_selection",
             )
-            size = S.MERGE_RANGE.size
-            ranges = [_decode_merge_at(array_ptr + i * size) for i in range(total)]
+            size = S.CELL_RECT.size
+            ranges = [_decode_cell_rect_at(array_ptr + i * size) for i in range(total)]
             return (LIB.read_u32(row_ptr), LIB.read_u32(col_ptr)), ranges
 
-    def set_selection(self, sheet: int, active_row: int, active_col: int, ranges: Sequence[MergeRange] = ()) -> None:
+    def set_selection(self, sheet: int, active_row: int, active_col: int, ranges: Sequence[CellRect] = ()) -> None:
         """Replace the active pane's selection; no ``ranges`` selects the active cell alone."""
         h = self._require()
         with _ArgScope() as scope:
-            ptr = _pack_merge_array(list(ranges), scope)
+            ptr = _pack_cell_rect_array(list(ranges), scope)
             _check(
                 LIB.fm_sheet_set_selection(
                     h,
@@ -9363,26 +9322,21 @@ class Workbook:
             "fm_sheet_clear_row_style",
         )
 
-    def get_range_style_bases(
-        self, sheet: int, first_row: int, first_col: int, last_row: int, last_col: int
-    ) -> List[int]:
+    def get_range_style_bases(self, sheet: int, rect: CellRect) -> List[int]:
         """List, ascending, every cell XF some cell of the selection resolves to.
 
-        The rectangle is a selection: full height is a column selection, full
+        ``rect`` is a selection: full height is a column selection, full
         width a row selection, both the whole sheet, neither a cell range. It
         is the first step of an attribute patch (for example a font size over a selection): read the
         bases, build a patched XF for each with :meth:`add_font` /
         :meth:`add_cell_xf`, then apply them with :meth:`remap_range_style`.
         """
-        return self.get_range_style_bases_excluding(sheet, first_row, first_col, last_row, last_col, ())
+        return self.get_range_style_bases_excluding(sheet, rect, ())
 
     def get_range_style_bases_excluding(
         self,
         sheet: int,
-        first_row: int,
-        first_col: int,
-        last_row: int,
-        last_col: int,
+        rect: CellRect,
         excluded: Sequence[Tuple[int, int]],
     ) -> List[int]:
         """:meth:`get_range_style_bases` over the selection less the ``(row, col)`` cells in ``excluded``.
@@ -9395,6 +9349,8 @@ class Workbook:
         cells = list(excluded)
         count = len(cells)
         with _ArgScope() as scope:
+            rp = scope.struct(S.CELL_RECT)
+            _pack_cell_rect_at(rp, rect)
             rows_buf = cols_buf = 0
             if count:
                 rows_buf = scope.buffer(b"".join(struct.pack("<I", _uint(r, "excluded_row")) for r, _ in cells))
@@ -9405,10 +9361,7 @@ class Workbook:
                 LIB.fm_sheet_get_range_style_bases_excluding(
                     h,
                     _uint(sheet, "sheet_index"),
-                    _uint(first_row, "first_row"),
-                    _uint(first_col, "first_col"),
-                    _uint(last_row, "last_row"),
-                    _uint(last_col, "last_col"),
+                    rp,
                     rows_buf,
                     cols_buf,
                     _uint(count, "excluded_count"),
@@ -9426,10 +9379,7 @@ class Workbook:
                 LIB.fm_sheet_get_range_style_bases_excluding(
                     h,
                     _uint(sheet, "sheet_index"),
-                    _uint(first_row, "first_row"),
-                    _uint(first_col, "first_col"),
-                    _uint(last_row, "last_row"),
-                    _uint(last_col, "last_col"),
+                    rp,
                     rows_buf,
                     cols_buf,
                     _uint(count, "excluded_count"),
@@ -9442,9 +9392,7 @@ class Workbook:
             n = min(total, LIB.read_u32(len_ptr))
             return list(struct.unpack("<%dI" % n, LIB.read_bytes(buf, 4 * n)))
 
-    def remap_range_style(
-        self, sheet: int, first_row: int, first_col: int, last_row: int, last_col: int, mapping: Dict[int, int]
-    ) -> None:
+    def remap_range_style(self, sheet: int, rect: CellRect, mapping: Dict[int, int]) -> None:
         """Remap the XFs of a selection: a cell resolving to key ``k`` ends at ``mapping[k]``.
 
         An XF absent from ``mapping`` is kept. Each target must be a valid cell
@@ -9458,6 +9406,8 @@ class Workbook:
         count = len(pairs)
         from_buf = to_buf = 0
         with _ArgScope() as scope:
+            rp = scope.struct(S.CELL_RECT)
+            _pack_cell_rect_at(rp, rect)
             if count:
                 from_buf = scope.buffer(b"".join(struct.pack("<I", _uint(k, "from_xf")) for k, _ in pairs))
                 to_buf = scope.buffer(b"".join(struct.pack("<I", _uint(v, "to_xf")) for _, v in pairs))
@@ -9465,10 +9415,7 @@ class Workbook:
                 LIB.fm_sheet_remap_range_style(
                     h,
                     _uint(sheet, "sheet_index"),
-                    _uint(first_row, "first_row"),
-                    _uint(first_col, "first_col"),
-                    _uint(last_row, "last_row"),
-                    _uint(last_col, "last_col"),
+                    rp,
                     from_buf,
                     to_buf,
                     _uint(count, "count"),
@@ -9476,7 +9423,7 @@ class Workbook:
                 "fm_sheet_remap_range_style",
             )
 
-    def snapshot_range_style(self, sheet: int, first_row: int, first_col: int, last_row: int, last_col: int) -> bytes:
+    def snapshot_range_style(self, sheet: int, rect: CellRect) -> bytes:
         """Capture the style state of a selection as opaque bytes for :meth:`restore_range_style`.
 
         The capture holds the covered column styles (column selection), row
@@ -9485,6 +9432,8 @@ class Workbook:
         """
         h = self._require()
         with _ArgScope() as scope:
+            rp = scope.struct(S.CELL_RECT)
+            _pack_cell_rect_at(rp, rect)
             bytes_ptr = scope.out_ptr()
             len_ptr = scope.out_ptr()
             data_ptr = 0
@@ -9493,10 +9442,7 @@ class Workbook:
                     LIB.fm_sheet_snapshot_range_style(
                         h,
                         _uint(sheet, "sheet_index"),
-                        _uint(first_row, "first_row"),
-                        _uint(first_col, "first_col"),
-                        _uint(last_row, "last_row"),
-                        _uint(last_col, "last_col"),
+                        rp,
                         bytes_ptr,
                         len_ptr,
                     ),
@@ -9538,20 +9484,14 @@ class Workbook:
     def evaluate_cf_range(
         self,
         sheet: int,
-        first_row: int,
-        first_col: int,
-        last_row: int,
-        last_col: int,
+        rect: CellRect,
         today_serial: float = float("nan"),
     ) -> List[CfCellResult]:
-        """Evaluate every CF block on ``sheet`` against an inclusive range.
+        """Evaluate every CF block on ``sheet`` against the cells of ``rect``.
 
         Args:
           sheet: 0-based sheet index.
-          first_row: 0-based inclusive first row.
-          first_col: 0-based inclusive first column.
-          last_row: 0-based inclusive last row.
-          last_col: 0-based inclusive last column.
+          rect: the cells to evaluate.
           today_serial: date basis pinned for ``timePeriod`` rules, as an
             Excel serial date. The default ``float("nan")`` disables them:
             no ``timePeriod`` rule can match, so pass a serial date to use
@@ -9561,6 +9501,8 @@ class Workbook:
         """
         h = self._require()
         with _ArgScope() as scope:
+            rect_ptr = scope.struct(S.CELL_RECT)
+            _pack_cell_rect_at(rect_ptr, rect)
             out = scope.out_ptr()
             results = 0
             try:
@@ -9568,10 +9510,7 @@ class Workbook:
                     LIB.fm_sheet_evaluate_cf_range(
                         h,
                         _uint(sheet, "sheet_index"),
-                        _uint(first_row, "first_row"),
-                        _uint(first_col, "first_col"),
-                        _uint(last_row, "last_row"),
-                        _uint(last_col, "last_col"),
+                        rect_ptr,
                         float(today_serial),
                         out,
                     ),
@@ -9679,13 +9618,13 @@ class Workbook:
                 "fm_sheet_get_cf_rule",
             )
             d = S.CF_RULE.unpack(LIB, ptr)
-            sqref: List[MergeRange] = []
+            sqref: List[CellRect] = []
             base = d["sqref"]
-            rsize = S.CF_CELL_RANGE.size
+            rsize = S.CELL_RECT.size
             for i in range(d["sqref_count"]):
-                rd = S.CF_CELL_RANGE.unpack(LIB, base + i * rsize)
+                rd = S.CELL_RECT.unpack(LIB, base + i * rsize)
                 sqref.append(
-                    MergeRange(
+                    CellRect(
                         first_row=rd["first_row"],
                         first_col=rd["first_col"],
                         last_row=rd["last_row"],
@@ -9816,10 +9755,10 @@ class Workbook:
             )
             sqref_ptr = 0
             if rule.sqref:
-                rsize = S.CF_CELL_RANGE.size
+                rsize = S.CELL_RECT.size
                 sqref_ptr = scope.alloc(rsize * len(rule.sqref))
                 for i, r in enumerate(rule.sqref):
-                    S.CF_CELL_RANGE.pack(
+                    S.CELL_RECT.pack(
                         LIB,
                         sqref_ptr + i * rsize,
                         {
@@ -9974,28 +9913,21 @@ class Workbook:
             "fm_sheet_clear_cell_xf_index",
         )
 
-    def set_range_xf_index(
-        self, sheet: int, first_row: int, first_col: int, last_row: int, last_col: int, xf_index: int
-    ) -> None:
-        """Store ``xf_index`` on every cell in the inclusive rectangle.
+    def set_range_xf_index(self, sheet: int, rect: CellRect, xf_index: int) -> None:
+        """Store ``xf_index`` on every cell of ``rect``.
 
         Cells that do not exist yet are materialised as blanks carrying only
         the style, so an empty ruled box renders. Ruling a report this way
         costs one call instead of one per cell.
         """
         h = self._require()
-        _check(
-            LIB.fm_sheet_set_range_xf_index(
-                h,
-                _uint(sheet, "sheet"),
-                _uint(first_row, "first_row"),
-                _uint(first_col, "first_col"),
-                _uint(last_row, "last_row"),
-                _uint(last_col, "last_col"),
-                _uint(xf_index, "xf_index"),
-            ),
-            "fm_sheet_set_range_xf_index",
-        )
+        with _ArgScope() as scope:
+            rp = scope.struct(S.CELL_RECT)
+            _pack_cell_rect_at(rp, rect)
+            _check(
+                LIB.fm_sheet_set_range_xf_index(h, _uint(sheet, "sheet"), rp, _uint(xf_index, "xf_index")),
+                "fm_sheet_set_range_xf_index",
+            )
 
     @staticmethod
     def _decode_cell_xf(ptr: int) -> CellXf:
@@ -10710,18 +10642,13 @@ class Workbook:
                     "fm_sheet_get_pivot_layout",
                 )
                 handle = LIB.read_u32(out)
-                top_p = scope.out_ptr()
-                left_p = scope.out_ptr()
-                rows_p = scope.out_ptr()
-                cols_p = scope.out_ptr()
+                present_p = scope.out_ptr()
+                rect_p = scope.struct(S.CELL_RECT)
                 _check(
-                    LIB.fm_pivot_cells_get_bounds(handle, top_p, left_p, rows_p, cols_p),
+                    LIB.fm_pivot_cells_get_bounds(handle, present_p, rect_p),
                     "fm_pivot_cells_get_bounds",
                 )
-                top = LIB.read_u32(top_p)
-                left = LIB.read_u32(left_p)
-                rows = LIB.read_u32(rows_p)
-                cols = LIB.read_u32(cols_p)
+                rect = _decode_cell_rect_at(rect_p) if LIB.read_u32(present_p) else None
                 cells: List[PivotCell] = []
                 n = _read_count(LIB.fm_pivot_cells_get_cell_count, handle)
                 # One scratch block for the whole walk; see iter_defined_names.
@@ -10745,7 +10672,7 @@ class Workbook:
                             number_format=LIB.read_cstr(d["number_format"]),
                         )
                     )
-                return PivotLayout(top=top, left=left, rows=rows, cols=cols, cells=cells)
+                return PivotLayout(rect=rect, cells=cells)
             finally:
                 if handle:
                     LIB.fm_pivot_cells_destroy(handle)
@@ -12368,13 +12295,12 @@ class Workbook:
                 "fm_sheet_get_spill_info",
             )
             d = S.SPILL_INFO.unpack(LIB, ptr)
+            engaged = bool(d["engaged"])
+            blocked = bool(d["blocked"])
             return SpillInfo(
-                engaged=bool(d["engaged"]),
-                anchor_row=d["anchor_row"],
-                anchor_col=d["anchor_col"],
-                rows=d["rows"],
-                cols=d["cols"],
-                blocked=bool(d["blocked"]),
+                engaged=engaged,
+                blocked=blocked,
+                rect=_cell_rect_from(d["rect"]) if engaged or blocked else None,
             )
 
     # -- Reference text ----------------------------------------------------
@@ -12412,10 +12338,10 @@ class Workbook:
                 return None
             return ParsedReference(
                 sheet_name=LIB.read_cstr(d["sheet_name"]) if d["has_sheet"] else None,
-                row0=d["row0"],
-                col0=d["col0"],
-                row1=d["row1"],
-                col1=d["col1"],
+                row0=d["rect"]["first_row"],
+                col0=d["rect"]["first_col"],
+                row1=d["rect"]["last_row"],
+                col1=d["rect"]["last_col"],
             )
 
     def format_reference(
@@ -12436,14 +12362,13 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
+            rp = scope.struct(S.CELL_RECT)
+            _pack_cell_rect_at(rp, CellRect(row0, col0, row1, col1))
             _check(
                 LIB.fm_workbook_format_reference(
                     h,
                     scope.cstr(sheet_name) if sheet_name else 0,
-                    _uint(row0, "row0"),
-                    _uint(col0, "col0"),
-                    _uint(row1, "row1"),
-                    _uint(col1, "col1"),
+                    rp,
                     _sint(1 if absolute else 0, "absolute"),
                     out,
                 ),
@@ -12468,20 +12393,14 @@ class Workbook:
             if not d["engaged"]:
                 return None
             return ArrayFormula(
-                ref=MergeRange(
-                    first_row=d["anchor_row"],
-                    first_col=d["anchor_col"],
-                    last_row=d["anchor_row"] + d["rows"] - 1,
-                    last_col=d["anchor_col"] + d["cols"] - 1,
-                ),
+                rect=_cell_rect_from(d["rect"]),
                 formula=LIB.read_cstr(d["formula"]),
             )
 
-    def set_array_formula(self, sheet: int, row: int, col: int, rows: int, cols: int, formula: str) -> None:
-        """Enter ``formula`` as one legacy array formula over ``rows`` x ``cols`` cells.
+    def set_array_formula(self, sheet: int, rect: CellRect, formula: str) -> None:
+        """Enter ``formula`` as one legacy array formula over ``rect``.
 
-        ``(row, col)`` is the block's top-left cell; all coordinates are
-        0-based. Every cell of the rectangle loses its value and formula, and
+        The top-left cell of ``rect`` anchors the block. Every cell of the rectangle loses its value and formula, and
         the next :meth:`recalc` distributes the result. Refused when the
         rectangle partially overlaps another array, or intersects a merged
         area, a data table, a PivotTable or (for more than one cell) a table.
@@ -12489,16 +12408,10 @@ class Workbook:
         """
         h = self._require()
         with _ArgScope() as scope:
+            rp = scope.struct(S.CELL_RECT)
+            _pack_cell_rect_at(rp, rect)
             formula_ptr = scope.cstr(formula)
-            status = LIB.fm_sheet_set_array_formula(
-                h,
-                _uint(sheet, "sheet"),
-                _uint(row, "row"),
-                _uint(col, "col"),
-                _uint(rows, "rows"),
-                _uint(cols, "cols"),
-                formula_ptr,
-            )
+            status = LIB.fm_sheet_set_array_formula(h, _uint(sheet, "sheet"), rp, formula_ptr)
             _check(status, "fm_sheet_set_array_formula")
 
     # -- Function catalog (workbook-independent) ---------------------------

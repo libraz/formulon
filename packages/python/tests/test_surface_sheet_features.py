@@ -6,9 +6,10 @@ import unittest
 
 import formulon
 from formulon import (
+    CellRect,
     DataValidationInput,
     FormulonError,
-    MergeRange,
+    InvalidArgumentError,
     SheetProtection,
     SheetVisibility,
     ValueKind,
@@ -74,7 +75,7 @@ class MatrixEditTests(unittest.TestCase):
 class MergeCommentHyperlinkTests(unittest.TestCase):
     def test_merge_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
-            wb.add_merge(0, MergeRange(0, 0, 1, 1))
+            wb.add_merge(0, CellRect(0, 0, 1, 1))
             merges = wb.list_merges(0)
             self.assertEqual(len(merges), 1)
             self.assertEqual((merges[0].first_row, merges[0].last_col), (0, 1))
@@ -101,18 +102,27 @@ class MergeCommentHyperlinkTests(unittest.TestCase):
             wb.add_hyperlink(0, 2, 3, "https://example.com", "Example", "tip")
             links = wb.list_hyperlinks(0)
             self.assertEqual(len(links), 1)
-            self.assertEqual((links[0].row, links[0].col), (2, 3))
-            self.assertEqual((links[0].last_row, links[0].last_col), (2, 3))
+            self.assertEqual(links[0].rect, CellRect(2, 3, 2, 3))
             self.assertEqual(links[0].target, "https://example.com")
             self.assertEqual(links[0].display, "Example")
 
+    def test_inverted_or_off_grid_rect_is_invalid_argument(self) -> None:
+        with Workbook.create_default() as wb:
+            for bad in (CellRect(1, 0, 0, 0), CellRect(0, 1, 0, 0), CellRect(0, 0, 1048576, 0)):
+                with self.assertRaises(InvalidArgumentError):
+                    wb.add_merge(0, bad)
+                with self.assertRaises(InvalidArgumentError):
+                    wb.set_range_xf_index(0, bad, 0)
+                with self.assertRaises(InvalidArgumentError):
+                    wb.get_range_style_bases(0, bad)
+            self.assertEqual(wb.list_merges(0), [])
+
     def test_hyperlink_range_roundtrip_at_nonzero_coordinate(self) -> None:
         with Workbook.create_default() as wb:
-            wb.add_hyperlink_range(0, 4, 6, 7, 9, "https://example.com", "Range", "tip")
+            wb.add_hyperlink_range(0, CellRect(4, 6, 7, 9), "https://example.com", "Range", "tip")
             links = wb.list_hyperlinks(0)
             self.assertEqual(len(links), 1)
-            self.assertEqual((links[0].row, links[0].col), (4, 6))
-            self.assertEqual((links[0].last_row, links[0].last_col), (7, 9))
+            self.assertEqual(links[0].rect, CellRect(4, 6, 7, 9))
 
 
 class ValidationTests(unittest.TestCase):
@@ -122,7 +132,7 @@ class ValidationTests(unittest.TestCase):
                 0,
                 DataValidationInput(
                     type=3,  # list
-                    ranges=[MergeRange(0, 0, 4, 0)],
+                    ranges=[CellRect(0, 0, 4, 0)],
                     allow_blank=True,
                     formula1='"a,b,c"',
                 ),

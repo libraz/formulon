@@ -173,7 +173,7 @@ test('insertChart covers the creation kinds and omitted options', async () => {
 
     const xXf = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 2 });
     assert.ok(xXf.status.ok, JSON.stringify(xXf.status));
-    assert.ok(wb.setRangeXfIndex(0, 1, 5, 4, 5, xXf.index).ok);
+    assert.ok(wb.setRangeXfIndex(0, { firstRow: 1, firstCol: 5, lastRow: 4, lastCol: 5 }, xXf.index).ok);
     const scatter = insert(wb, mod, { kind: mod.ChartInsertKind.Scatter, source: 'Sheet1!$F$1:$G$5' });
     const sdata = dataOf(wb, scatter);
     assert.equal(sdata.domain, 'xy');

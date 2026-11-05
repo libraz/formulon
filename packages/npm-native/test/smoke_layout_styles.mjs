@@ -29,13 +29,19 @@ test('addHyperlink + getHyperlinks round-trip', async () => {
   assert.ok(wb.addHyperlink(0, 1, 2, 'https://example.com/', '', '', '').ok);
   assert.ok(wb.addHyperlink(0, 3, 4, 'mailto:hello@example.com', 'Hello', '', '').ok);
   assert.ok(wb.addHyperlink(0, 5, 6, '', 'See X', 'Internal link', 'Sheet1!A1').ok);
-  assert.ok(wb.addHyperlinkRange(0, 7, 8, 9, 10, 'https://example.com/range', 'Range', 'Range tip', '').ok);
+  assert.ok(
+    wb.addHyperlinkRange(
+      0,
+      { firstRow: 7, firstCol: 8, lastRow: 9, lastCol: 10 },
+      'https://example.com/range',
+      'Range',
+      'Range tip',
+      '',
+    ).ok,
+  );
   const list = wb.listHyperlinks(0);
   assert.equal(list.length, 4);
-  assert.equal(list[0].row, 1);
-  assert.equal(list[0].col, 2);
-  assert.equal(list[0].lastRow, 1);
-  assert.equal(list[0].lastCol, 2);
+  assert.deepEqual(list[0].rect, { firstRow: 1, firstCol: 2, lastRow: 1, lastCol: 2 });
   assert.equal(list[0].target, 'https://example.com/');
   assert.equal(list[0].display, '');
   assert.equal(list[0].tooltip, '');
@@ -46,19 +52,13 @@ test('addHyperlink + getHyperlinks round-trip', async () => {
   assert.equal(list[2].location, 'Sheet1!A1');
   assert.deepEqual(
     {
-      row: list[3].row,
-      col: list[3].col,
-      lastRow: list[3].lastRow,
-      lastCol: list[3].lastCol,
+      rect: list[3].rect,
       target: list[3].target,
       display: list[3].display,
       tooltip: list[3].tooltip,
     },
     {
-      row: 7,
-      col: 8,
-      lastRow: 9,
-      lastCol: 10,
+      rect: { firstRow: 7, firstCol: 8, lastRow: 9, lastCol: 10 },
       target: 'https://example.com/range',
       display: 'Range',
       tooltip: 'Range tip',

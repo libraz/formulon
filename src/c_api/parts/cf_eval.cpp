@@ -110,17 +110,21 @@ void fill_match(const formulon::cf::CFMatch& match, fm_cf_match_t* out) {
 
 }  // namespace
 
-extern "C" fm_status_t fm_sheet_evaluate_cf_range(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
-                                                  uint32_t first_col, uint32_t last_row, uint32_t last_col,
-                                                  double today_serial, fm_cf_results_t** out) {
+extern "C" fm_status_t fm_sheet_evaluate_cf_range(const fm_workbook_t* wb, size_t sheet_index,
+                                                  const fm_cell_rect_t* range, double today_serial,
+                                                  fm_cf_results_t** out) {
   clear_last_error();
-  if (out == nullptr) {
+  if (range == nullptr || out == nullptr) {
     return null_argument("fm_sheet_evaluate_cf_range");
   }
   *out = nullptr;
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_evaluate_cf_range"); rc != 0) {
     return rc;
   }
+  const std::uint32_t first_row = range->first_row;
+  const std::uint32_t first_col = range->first_col;
+  const std::uint32_t last_row = range->last_row;
+  const std::uint32_t last_col = range->last_col;
   if (!formulon::Sheet::rect_in_grid(first_row, first_col, last_row, last_col)) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_sheet_evaluate_cf_range: rect out of grid",
@@ -142,11 +146,11 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_range(const fm_workbook_t* wb, size_
   host.eval_ctx = &eval_ctx;
   host.today_serial = std::isnan(today_serial) ? std::optional<double>{} : std::optional<double>{today_serial};
 
-  formulon::cf::CFCellRange range{};
-  range.first = formulon::CellAddress{first_row, first_col};
-  range.last = formulon::CellAddress{last_row, last_col};
+  formulon::cf::CFCellRange cf_range{};
+  cf_range.first = formulon::CellAddress{first_row, first_col};
+  cf_range.last = formulon::CellAddress{last_row, last_col};
 
-  auto matches = formulon::cf::evaluate_cf_for_range(wb->workbook().sheet(sheet_index), range, host);
+  auto matches = formulon::cf::evaluate_cf_for_range(wb->workbook().sheet(sheet_index), cf_range, host);
   if (!matches) {
     return set_last_error(matches.error());
   }

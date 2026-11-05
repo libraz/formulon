@@ -38,7 +38,7 @@ using formulon::c_api::parts::validate_single_element_fragment;
 
 namespace {
 
-static_assert(sizeof(fm_merge_range) == sizeof(formulon::MergeRange), "fm_merge_range / MergeRange size mismatch");
+static_assert(sizeof(fm_cell_rect_t) == sizeof(formulon::MergeRange), "fm_cell_rect_t / MergeRange size mismatch");
 
 // `fm_filter_column_t::dxf_id` of a colour filter that names no dxf.
 constexpr std::uint32_t kAbsentDxfId = std::numeric_limits<std::uint32_t>::max();
@@ -88,11 +88,11 @@ fm_status_t require_typed(const Target& target, const char* api) {
   return 0;
 }
 
-fm_merge_range to_fm(const formulon::MergeRange& r) {
-  return fm_merge_range{r.first_row, r.first_col, r.last_row, r.last_col};
+fm_cell_rect_t to_fm(const formulon::MergeRange& r) {
+  return fm_cell_rect_t{r.first_row, r.first_col, r.last_row, r.last_col};
 }
 
-formulon::MergeRange from_fm(const fm_merge_range& r) {
+formulon::MergeRange from_fm(const fm_cell_rect_t& r) {
   formulon::MergeRange out;
   out.first_row = r.first_row;
   out.first_col = r.first_col;

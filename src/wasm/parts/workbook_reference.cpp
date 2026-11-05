@@ -109,10 +109,10 @@ emscripten::val JsWorkbook::parseReference(const std::string& text, emscripten::
   }
   val out = val::object();
   out.set("sheetName", ref.has_sheet != 0 ? val(std::string(ref.sheet_name)) : val::null());
-  out.set("row0", ref.row0);
-  out.set("col0", ref.col0);
-  out.set("row1", ref.row1);
-  out.set("col1", ref.col1);
+  out.set("row0", ref.rect.first_row);
+  out.set("col0", ref.rect.first_col);
+  out.set("row1", ref.rect.last_row);
+  out.set("col1", ref.rect.last_col);
   return out;
 }
 
@@ -128,17 +128,17 @@ emscripten::val JsWorkbook::formatReference(emscripten::val range, emscripten::v
   JsNarrowNumericReader reader("formatReference");
   std::string sheet_store;
   const char* sheet_name = reader.optional_string(range, "sheetName", sheet_store, "sheetName");
-  const uint32_t row0 = required_u32(reader, range, "row0");
-  const uint32_t col0 = required_u32(reader, range, "col0");
-  const uint32_t row1 = required_u32(reader, range, "row1");
-  const uint32_t col1 = required_u32(reader, range, "col1");
+  fm_cell_rect_t rect{};
+  rect.first_row = required_u32(reader, range, "row0");
+  rect.first_col = required_u32(reader, range, "col0");
+  rect.last_row = required_u32(reader, range, "row1");
+  rect.last_col = required_u32(reader, range, "col1");
   const bool absolute = reader.boolean(opts, "absolute", false, "absolute");
   if (!reader.ok()) {
     return val::undefined();
   }
   const char* text = nullptr;
-  const fm_status_t rc =
-      fm_workbook_format_reference(handle_, sheet_name, row0, col0, row1, col1, absolute ? 1 : 0, &text);
+  const fm_status_t rc = fm_workbook_format_reference(handle_, sheet_name, &rect, absolute ? 1 : 0, &text);
   if (rc != 0) {
     return reject_last_error();
   }

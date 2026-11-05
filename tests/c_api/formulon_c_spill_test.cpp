@@ -27,8 +27,8 @@ TEST(FormulonCApiSpill, NotSpilledLiteralReturnsNotEngaged) {
   fm_spill_info_t info{};
   ASSERT_EQ(fm_sheet_get_spill_info(wb.handle, 0, 0, 0, &info), 0);
   EXPECT_EQ(info.engaged, 0);
-  EXPECT_EQ(info.rows, 0U);
-  EXPECT_EQ(info.cols, 0U);
+  EXPECT_EQ(info.rect.last_row, 0U);
+  EXPECT_EQ(info.rect.last_col, 0U);
 }
 
 TEST(FormulonCApiSpill, SequenceSpillReportsAnchorAndShape) {
@@ -43,19 +43,19 @@ TEST(FormulonCApiSpill, SequenceSpillReportsAnchorAndShape) {
   fm_spill_info_t at_anchor{};
   ASSERT_EQ(fm_sheet_get_spill_info(wb.handle, 0, 0, 0, &at_anchor), 0);
   EXPECT_EQ(at_anchor.engaged, 1);
-  EXPECT_EQ(at_anchor.anchor_row, 0U);
-  EXPECT_EQ(at_anchor.anchor_col, 0U);
-  EXPECT_EQ(at_anchor.rows, 2U);
-  EXPECT_EQ(at_anchor.cols, 3U);
+  EXPECT_EQ(at_anchor.rect.first_row, 0U);
+  EXPECT_EQ(at_anchor.rect.first_col, 0U);
+  EXPECT_EQ(at_anchor.rect.last_row - at_anchor.rect.first_row + 1U, 2U);
+  EXPECT_EQ(at_anchor.rect.last_col - at_anchor.rect.first_col + 1U, 3U);
 
   // Phantom lookup (any cell within the region, e.g. B2 = row=1, col=1)
   fm_spill_info_t at_phantom{};
   ASSERT_EQ(fm_sheet_get_spill_info(wb.handle, 0, 1, 1, &at_phantom), 0);
   EXPECT_EQ(at_phantom.engaged, 1);
-  EXPECT_EQ(at_phantom.anchor_row, 0U);
-  EXPECT_EQ(at_phantom.anchor_col, 0U);
-  EXPECT_EQ(at_phantom.rows, 2U);
-  EXPECT_EQ(at_phantom.cols, 3U);
+  EXPECT_EQ(at_phantom.rect.first_row, 0U);
+  EXPECT_EQ(at_phantom.rect.first_col, 0U);
+  EXPECT_EQ(at_phantom.rect.last_row - at_phantom.rect.first_row + 1U, 2U);
+  EXPECT_EQ(at_phantom.rect.last_col - at_phantom.rect.first_col + 1U, 3U);
 
   // Outside region (D1, beyond cols=3 from anchor col=0 → col=3 is just past)
   fm_spill_info_t outside{};
@@ -73,8 +73,8 @@ TEST(FormulonCApiSpill, ExpandBlankPadSpillsZerosAndCountReadsTwelve) {
   fm_spill_info_t info{};
   ASSERT_EQ(fm_sheet_get_spill_info(wb.handle, 0, 0, 0, &info), 0);
   ASSERT_EQ(info.engaged, 1);
-  EXPECT_EQ(info.rows, 3U);
-  EXPECT_EQ(info.cols, 4U);
+  EXPECT_EQ(info.rect.last_row - info.rect.first_row + 1U, 3U);
+  EXPECT_EQ(info.rect.last_col - info.rect.first_col + 1U, 4U);
 
   // C1 and D3 are generated pad cells, and the committed spill stores their
   // projected numeric-zero values for later grid reads.
@@ -402,19 +402,19 @@ fm_spill_info_t SpillAt(fm_workbook_t* wb, uint32_t row, uint32_t col) {
 void ExpectBlocked(const fm_spill_info_t& info, uint32_t row, uint32_t col, uint32_t rows, uint32_t cols) {
   EXPECT_EQ(info.engaged, 0);
   EXPECT_EQ(info.blocked, 1);
-  EXPECT_EQ(info.anchor_row, row);
-  EXPECT_EQ(info.anchor_col, col);
-  EXPECT_EQ(info.rows, rows);
-  EXPECT_EQ(info.cols, cols);
+  EXPECT_EQ(info.rect.first_row, row);
+  EXPECT_EQ(info.rect.first_col, col);
+  EXPECT_EQ(info.rect.last_row - info.rect.first_row + 1U, rows);
+  EXPECT_EQ(info.rect.last_col - info.rect.first_col + 1U, cols);
 }
 
 void ExpectNothing(const fm_spill_info_t& info) {
   EXPECT_EQ(info.engaged, 0);
   EXPECT_EQ(info.blocked, 0);
-  EXPECT_EQ(info.anchor_row, 0U);
-  EXPECT_EQ(info.anchor_col, 0U);
-  EXPECT_EQ(info.rows, 0U);
-  EXPECT_EQ(info.cols, 0U);
+  EXPECT_EQ(info.rect.first_row, 0U);
+  EXPECT_EQ(info.rect.first_col, 0U);
+  EXPECT_EQ(info.rect.last_row, 0U);
+  EXPECT_EQ(info.rect.last_col, 0U);
 }
 
 }  // namespace
@@ -438,16 +438,16 @@ TEST(FormulonCApiSpill, OccupiedCellBlocksAnchorUntilCleared) {
   const fm_spill_info_t info = SpillAt(wb.handle, 1, 3);
   EXPECT_EQ(info.engaged, 1);
   EXPECT_EQ(info.blocked, 0);
-  EXPECT_EQ(info.anchor_row, 1U);
-  EXPECT_EQ(info.anchor_col, 3U);
-  EXPECT_EQ(info.rows, 5U);
-  EXPECT_EQ(info.cols, 1U);
+  EXPECT_EQ(info.rect.first_row, 1U);
+  EXPECT_EQ(info.rect.first_col, 3U);
+  EXPECT_EQ(info.rect.last_row - info.rect.first_row + 1U, 5U);
+  EXPECT_EQ(info.rect.last_col - info.rect.first_col + 1U, 1U);
 }
 
 TEST(FormulonCApiSpill, MergedCellBlocksAnchor) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_merge_range{3, 3, 3, 4})), 0);  // D4:E4
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, record_arg(fm_cell_rect_t{3, 3, 3, 4})), 0);  // D4:E4
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1, 3, "=SEQUENCE(5)"), 0);                  // D2
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
@@ -468,7 +468,7 @@ TEST(FormulonCApiSpill, OtherSpillBlocksAnchor) {
   const fm_spill_info_t d4 = SpillAt(wb.handle, 3, 3);
   EXPECT_EQ(d4.engaged, 1);
   EXPECT_EQ(d4.blocked, 0);
-  EXPECT_EQ(d4.anchor_row, 3U);
-  EXPECT_EQ(d4.anchor_col, 1U);
+  EXPECT_EQ(d4.rect.first_row, 3U);
+  EXPECT_EQ(d4.rect.first_col, 1U);
   ExpectNothing(SpillAt(wb.handle, 2, 3));
 }

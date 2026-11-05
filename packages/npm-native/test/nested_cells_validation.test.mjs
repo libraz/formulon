@@ -137,7 +137,7 @@ test('cell range integers reject narrowing before getCellsInRange touches the wo
       for (const key of ['firstRow', 'firstCol', 'lastRow', 'lastCol']) {
         assert.throws(
           () => wb.getCellsInRange(0, { ...validRange(), [key]: value }),
-          RangeError,
+          value === 2 ** 32 ? RangeError : TypeError,
           `getCellsInRange ${key}=${String(value)}`,
         );
       }

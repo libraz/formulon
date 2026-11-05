@@ -159,6 +159,10 @@ fm_status_t check_sheet_rect(std::uint32_t first_row, std::uint32_t first_col, s
                                " last_col=" + std::to_string(last_col));
 }
 
+fm_status_t check_sheet_rect(const fm_cell_rect_t& rect, const char* api) {
+  return check_sheet_rect(rect.first_row, rect.first_col, rect.last_row, rect.last_col, api);
+}
+
 fm_status_t check_column_span(std::uint32_t first, std::uint32_t last, const char* api) {
   if (first <= last && last < formulon::Sheet::kMaxCols) {
     return 0;

@@ -18,13 +18,13 @@ namespace {
 
 constexpr uint32_t kAbsentDxfId = UINT32_MAX;
 
-bool PullRange(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, fm_merge_range* out) {
-  *out = fm_merge_range{};
+bool PullRange(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, fm_cell_rect_t* out) {
+  *out = fm_cell_rect_t{};
   Napi::Object object;
   if (!reader.Object(spec, key, &object)) {
     return reader.ok();
   }
-  return ReadMergeRange(reader, object, out);
+  return ReadCellRect(reader, object, out);
 }
 
 Napi::Object FilterColumnToJs(Napi::Env env, const fm_filter_column_t& c) {

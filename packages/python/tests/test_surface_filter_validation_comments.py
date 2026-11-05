@@ -10,6 +10,7 @@ from formulon import (
     AutoFilterDateGroup,
     AutoFilterSortCondition,
     AutoFilterSortState,
+    CellRect,
     DataValidationInput,
     DateTimeGrouping,
     DynamicFilterType,
@@ -17,7 +18,6 @@ from formulon import (
     FilterOperator,
     FormulonError,
     Mention,
-    MergeRange,
     Person,
     SortBy,
     SortMethod,
@@ -67,16 +67,16 @@ class AutoFilterTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             _seed_numbers(wb)
             sort = AutoFilterSortState(
-                ref=MergeRange(1, 0, 5, 1),
+                ref=CellRect(1, 0, 5, 1),
                 column_sort=False,
                 case_sensitive=True,
                 sort_method=SortMethod.PIN_YIN,
                 conditions=[
-                    AutoFilterSortCondition(ref=MergeRange(1, 0, 5, 0), descending=True, custom_list="a,b"),
+                    AutoFilterSortCondition(ref=CellRect(1, 0, 5, 0), descending=True, custom_list="a,b"),
                 ],
             )
             af = AutoFilter(
-                range=MergeRange(0, 0, 5, 1),
+                range=CellRect(0, 0, 5, 1),
                 columns=[
                     AutoFilterColumn(
                         col_id=0,
@@ -145,7 +145,7 @@ class AutoFilterTests(unittest.TestCase):
                 dyn_val=3.5,
                 val_iso="x",
             )
-            wb.set_auto_filter(0, AutoFilter(range=MergeRange(0, 0, 5, 1), columns=[col, dyn]))
+            wb.set_auto_filter(0, AutoFilter(range=CellRect(0, 0, 5, 1), columns=[col, dyn]))
             got = wb.get_auto_filter(0)
             assert got is not None
             self.assertFalse(got.columns[0].top)
@@ -160,7 +160,7 @@ class AutoFilterTests(unittest.TestCase):
             wb.set_auto_filter(
                 0,
                 AutoFilter(
-                    range=MergeRange(0, 0, 5, 0),
+                    range=CellRect(0, 0, 5, 0),
                     columns=[
                         AutoFilterColumn(
                             col_id=0, kind=FilterKind.CUSTOM, custom_count=1, op1=FilterOperator.GREATER_THAN, val1="2"
@@ -192,7 +192,7 @@ class AutoFilterTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.set_auto_filter(
                     0,
-                    AutoFilter(range=MergeRange(0, 0, 3, 0), columns=[AutoFilterColumn(col_id=5)]),
+                    AutoFilter(range=CellRect(0, 0, 3, 0), columns=[AutoFilterColumn(col_id=5)]),
                 )
             with self.assertRaises(FormulonError):
                 wb.get_auto_filter(99)
@@ -210,7 +210,7 @@ class AutoFilterTests(unittest.TestCase):
             wb.set_table_auto_filter(
                 idx,
                 AutoFilter(
-                    range=MergeRange(0, 0, 3, 1),
+                    range=CellRect(0, 0, 3, 1),
                     columns=[
                         AutoFilterColumn(
                             col_id=0,
@@ -241,7 +241,7 @@ class ValidationCheckTests(unittest.TestCase):
         wb.add_validation(
             0,
             DataValidationInput(
-                type=3, ranges=[MergeRange(0, 3, 9, 3)], formula1='"Yes,No"', error_style=ValidationErrorStyle.WARNING
+                type=3, ranges=[CellRect(0, 3, 9, 3)], formula1='"Yes,No"', error_style=ValidationErrorStyle.WARNING
             ),
         )
         return wb

@@ -12,6 +12,7 @@
 #include "c_api/parts/common.h"
 #include "cell.h"
 #include "formulon_c_pivot_test_helpers.h"
+#include "formulon_c_record_arg.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
@@ -91,7 +92,8 @@ std::string CellAtFormula(const WorkbookGuard& wb, std::size_t sheet, std::uint3
 
 std::string RangeFormula(const WorkbookGuard& wb, std::size_t sheet, std::uint32_t row, std::uint32_t col) {
   fm_cell_range_t* range = nullptr;
-  EXPECT_EQ(fm_sheet_get_cells_in_range(wb.handle, sheet, row, col, row, col, 0, 0, &range), 0);
+  EXPECT_EQ(fm_sheet_get_cells_in_range(wb.handle, sheet, record_arg(fm_cell_rect_t{row, col, row, col}), 0, 0, &range),
+            0);
   std::string out;
   std::size_t count = 0;
   EXPECT_EQ(fm_cell_range_get_cell_count(range, &count), 0);
@@ -197,9 +199,17 @@ TEST(FormulonCApiStructuredRef, GettersReturnTheDisplayFormForTheCell) {
 TEST(FormulonCApiStructuredRef, ArrayFormulaReadsAtItsAnchor) {
   WorkbookGuard wb;
   BuildSales(wb);
-  ASSERT_EQ(fm_sheet_set_array_formula(wb.handle, 0, kInsideRow, kInsideCol, 1, 1, "=SUM(tblSales[Qty])"), 0)
+  ASSERT_EQ(
+      fm_sheet_set_array_formula(
+          wb.handle, 0, record_arg(fm_cell_rect_t{kInsideRow, kInsideCol, kInsideRow + 1 - 1U, kInsideCol + 1 - 1U}),
+          "=SUM(tblSales[Qty])"),
+      0)
       << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_set_array_formula(wb.handle, 0, kOutsideRow, kOutsideCol, 1, 1, "=SUM(tblSales[Qty])"), 0);
+  ASSERT_EQ(fm_sheet_set_array_formula(
+                wb.handle, 0,
+                record_arg(fm_cell_rect_t{kOutsideRow, kOutsideCol, kOutsideRow + 1 - 1U, kOutsideCol + 1 - 1U}),
+                "=SUM(tblSales[Qty])"),
+            0);
   fm_array_formula_t info{};
   ASSERT_EQ(fm_sheet_get_array_formula(wb.handle, 0, kInsideRow, kInsideCol, &info), 0);
   ASSERT_EQ(info.engaged, 1);
@@ -262,8 +272,11 @@ TEST(FormulonCApiStructuredRef, UnqualifiedReferenceOutsideEveryTableIsRefused) 
   BuildSales(wb);
   EXPECT_EQ(fm_sheet_set_formula(wb.handle, 0, kOutsideRow, kOutsideCol, "=[Qty]"), kParserUnexpectedToken);
   EXPECT_EQ(Stored(wb, 0, kOutsideRow, kOutsideCol), "");
-  EXPECT_EQ(fm_sheet_set_array_formula(wb.handle, 0, kOutsideRow, kOutsideCol, 1, 1, "=[@Qty]"),
-            kParserUnexpectedToken);
+  EXPECT_EQ(
+      fm_sheet_set_array_formula(
+          wb.handle, 0,
+          record_arg(fm_cell_rect_t{kOutsideRow, kOutsideCol, kOutsideRow + 1 - 1U, kOutsideCol + 1 - 1U}), "=[@Qty]"),
+      kParserUnexpectedToken);
 }
 
 TEST(FormulonCApiStructuredRef, EvaluateFormulaBindsAtItsCell) {

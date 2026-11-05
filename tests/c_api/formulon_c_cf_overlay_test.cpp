@@ -124,7 +124,7 @@ TEST(FormulonCApiCfMutate, DataBarExtensionFieldsSurviveSaveAndLoad) {
   // ABI boundary in both directions.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule = MakeDataBarRule(&sqref);
   rule.data_bar_gradient_engaged = 1;
   rule.data_bar_gradient = 0;
@@ -165,7 +165,7 @@ TEST(FormulonCApiCfMutate, DataBarExtensionFieldsSurviveSaveAndLoad) {
 TEST(FormulonCApiCfMutate, IconSetFloorSurvivesSaveAndLoad) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule{};
   rule.type = 4;  // IconSet
   rule.sqref = &sqref;
@@ -205,7 +205,7 @@ TEST(FormulonCApiCfMutate, IconSetFloorSurvivesSaveAndLoad) {
 TEST(FormulonCApiCfMutate, UnengagedIconSetFloorIsExcelsDefault) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule{};
   rule.type = 4;  // IconSet
   rule.sqref = &sqref;

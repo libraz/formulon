@@ -633,11 +633,9 @@ emscripten::val JsWorkbook::pivotLayout(uint32_t sheet, uint32_t pivotIndex) con
     return empty_pivot_layout_result(error_status(rc));
   }
 
-  uint32_t top = 0;
-  uint32_t left = 0;
-  uint32_t rows = 0;
-  uint32_t cols = 0;
-  rc = fm_pivot_cells_get_bounds(cells, &top, &left, &rows, &cols);
+  int32_t present = 0;
+  fm_cell_rect_t bounds{};
+  rc = fm_pivot_cells_get_bounds(cells, &present, &bounds);
   if (rc != 0) {
     fm_pivot_cells_destroy(cells);
     return empty_pivot_layout_result(error_status(rc));
@@ -663,10 +661,7 @@ emscripten::val JsWorkbook::pivotLayout(uint32_t sheet, uint32_t pivotIndex) con
   fm_pivot_cells_destroy(cells);
   emscripten::val o = emscripten::val::object();
   o.set("status", ok_status());
-  o.set("top", top);
-  o.set("left", left);
-  o.set("rows", rows);
-  o.set("cols", cols);
+  o.set("rect", present != 0 ? cell_rect_to_val(bounds) : emscripten::val::null());
   o.set("cells", arr);
   return o;
 }
@@ -805,15 +800,14 @@ emscripten::val JsWorkbook::getCellsInRange(uint32_t sheet, emscripten::val rang
     return o;
   }
   JsNarrowNumericReader reader("getCellsInRange");
-  const fm_merge_range bounds = js_pull_range(range, &reader);
+  const fm_cell_rect_t bounds = js_pull_range(range, &reader);
   if (!reader.ok()) {
     o.set("status", reader.failure());
     return o;
   }
   fm_cell_range_t* page = nullptr;
-  const fm_status_t rc =
-      fm_sheet_get_cells_in_range(handle_, sheet, bounds.first_row, bounds.first_col, bounds.last_row, bounds.last_col,
-                                  static_cast<uint64_t>(cursor_value), static_cast<uint32_t>(limit_value), &page);
+  const fm_status_t rc = fm_sheet_get_cells_in_range(handle_, sheet, &bounds, static_cast<uint64_t>(cursor_value),
+                                                     static_cast<uint32_t>(limit_value), &page);
   if (rc != 0) {
     o.set("status", error_status(rc));
     return o;

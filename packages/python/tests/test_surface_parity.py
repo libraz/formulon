@@ -174,7 +174,7 @@ class SurfaceParityTests(unittest.TestCase):
 
     def test_public_types_exported(self) -> None:
         for name in (
-            "MergeRange",
+            "CellRect",
             "Comment",
             "Hyperlink",
             "DataValidation",
