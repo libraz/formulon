@@ -15,6 +15,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -64,6 +65,31 @@ void parse_format(std::string_view format, FormatDialect dialect, ParsedFormat& 
     number_format_detail::classify(s, raw);
     parsed.sections.push_back(std::move(s));
   }
+}
+
+// The parse of the last format this thread asked for, keyed on everything `parse_format` reads: the text, the dialect
+// and the evaluation profile. A TEXT() over a range repeats one format per cell. The handle keeps a parse alive
+// across a nested call that replaces the entry.
+std::shared_ptr<const ParsedFormat> parse_format_cached(std::string_view format, FormatDialect dialect) {
+  struct Entry {
+    std::string format;
+    FormatDialect dialect = FormatDialect::kLocalized;
+    ExcelProfile profile;
+    std::shared_ptr<const ParsedFormat> parsed;
+  };
+  thread_local Entry entry;
+  const ExcelProfile profile = eval::current_eval_profile();
+  if (entry.parsed != nullptr && entry.dialect == dialect && entry.profile.host == profile.host &&
+      entry.profile.locale == profile.locale && entry.format == format) {
+    return entry.parsed;
+  }
+  auto parsed = std::make_shared<ParsedFormat>();
+  parse_format(format, dialect, *parsed);
+  entry.format.assign(format);
+  entry.dialect = dialect;
+  entry.profile = profile;
+  entry.parsed = std::move(parsed);
+  return entry.parsed;
 }
 
 // A number format asks for at most this many decimal places in a TEXT() argument.
@@ -296,8 +322,8 @@ FormatStatus apply_format(double value, std::string_view format, std::string& ou
   if (tests_as_zero(value)) {
     value = 0.0;
   }
-  ParsedFormat parsed;
-  parse_format(format, dialect, parsed);
+  const std::shared_ptr<const ParsedFormat> held = parse_format_cached(format, dialect);
+  const ParsedFormat& parsed = *held;
   if (!valid_format(parsed) || (cap_decimals && format_decimal_places(parsed.normalized) > kMaxFormatDecimalPlaces)) {
     return FormatStatus::kValueError;
   }
@@ -365,8 +391,8 @@ FormatStatus apply_format(double value, std::string_view format, std::string& ou
 
 FormatStatus apply_text_format(std::string_view text, std::string_view format, std::string& out,
                                FormatDialect dialect) {
-  ParsedFormat parsed;
-  parse_format(format, dialect, parsed);
+  const std::shared_ptr<const ParsedFormat> held = parse_format_cached(format, dialect);
+  const ParsedFormat& parsed = *held;
   // Even when the format has no text section and would otherwise pass the
   // original bytes through unchanged, Excel validates every section first.
   // This matters for text/bool TEXT values with a malformed numeric sibling
@@ -387,8 +413,8 @@ FormatStatus apply_text_format(std::string_view text, std::string_view format, s
 }
 
 bool negative_section_has_color(std::string_view format, FormatDialect dialect) {
-  ParsedFormat parsed;
-  parse_format(format, dialect, parsed);
+  const std::shared_ptr<const ParsedFormat> held = parse_format_cached(format, dialect);
+  const ParsedFormat& parsed = *held;
   if (!parsed.spelling_valid || parsed.sections.empty()) {
     return false;
   }

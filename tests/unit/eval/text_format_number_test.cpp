@@ -1338,6 +1338,27 @@ TEST(TextFormatGeneralRules, MatchesExcelValues) {
   }
 }
 
+// The parse of the previous format is reused only for the same text, dialect and profile.
+TEST(NumberFormatParseReuse, KeyedOnTextDialectAndProfile) {
+  const ExcelProfile de{ExcelHost::kMac365, ExcelLocale::kDeDE};
+  const auto render = [](ExcelProfile profile, FormatDialect dialect, std::string_view format) {
+    const eval::ScopedEvalProfile scope(profile);
+    std::string out;
+    EXPECT_EQ(apply_format(1234.5, format, out, false, dialect), FormatStatus::kOk);
+    return out;
+  };
+  for (int round = 0; round < 3; ++round) {
+    EXPECT_EQ(render(de, FormatDialect::kLocalized, "#.##0,00"), "1.234,50");
+    EXPECT_EQ(render(de, FormatDialect::kLocalized, "#.##0,00"), "1.234,50");
+    EXPECT_EQ(render(mac_365_en_us_profile(), FormatDialect::kLocalized, "#,##0.00"), "1,234.50");
+    EXPECT_EQ(render(de, FormatDialect::kStored, "#,##0.00"), "1.234,50");
+    EXPECT_EQ(render(mac_365_en_us_profile(), FormatDialect::kStored, "#,##0.00"), "1,234.50");
+    EXPECT_EQ(render(mac_365_en_us_profile(), FormatDialect::kLocalized, "0.0"), "1234.5");
+    EXPECT_EQ(render(mac_365_en_us_profile(), FormatDialect::kLocalized, "0.00"), "1234.50");
+    EXPECT_EQ(render(mac_365_en_us_profile(), FormatDialect::kLocalized, "0.0"), "1234.5");
+  }
+}
+
 }  // namespace
 }  // namespace text_format
 }  // namespace formulon
