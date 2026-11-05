@@ -19,6 +19,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_sheet_index;
@@ -242,10 +243,8 @@ extern "C" fm_status_t fm_sheet_get_effective_style(const fm_workbook_t* wb, siz
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_effective_style"); rc != 0) {
     return rc;
   }
-  if (!formulon::Sheet::coord_in_grid(row, col)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_get_effective_style: cell coordinate out of range",
-                             "row=" + std::to_string(row) + " col=" + std::to_string(col));
+  if (auto rc = check_cell_coord(row, col, "fm_sheet_get_effective_style"); rc != 0) {
+    return rc;
   }
   const formulon::Workbook& workbook = wb->workbook();
   formulon::EffectiveStyle style = formulon::effective_style(workbook, workbook.sheet(sheet_index), row, col);

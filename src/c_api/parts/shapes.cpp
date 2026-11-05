@@ -77,8 +77,7 @@ fm_status_t to_spec(const fm_shape_t& shape, const char* api, formulon::ShapeSpe
 extern "C" fm_status_t fm_sheet_get_shape_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_shape_count: NULL out_count");
+    return null_argument("fm_sheet_get_shape_count", "out_count");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_shape_count"); rc != 0) {
     return rc;
@@ -94,7 +93,7 @@ extern "C" fm_status_t fm_sheet_get_shape_count(const fm_workbook_t* wb, size_t 
 extern "C" fm_status_t fm_sheet_get_shape_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx, fm_shape_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_shape_at: NULL out");
+    return null_argument("fm_sheet_get_shape_at", "out");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_shape_at"); rc != 0) {
     return rc;
@@ -135,7 +134,7 @@ extern "C" fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_
                                           int32_t* out_present, fm_shape_t* out) {
   clear_last_error();
   if (out_present == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_shape: NULL out");
+    return null_argument("fm_sheet_get_shape", "out");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_shape"); rc != 0) {
     return rc;
@@ -183,7 +182,7 @@ extern "C" fm_status_t fm_sheet_update_shape(fm_workbook_t* wb, size_t sheet_ind
   clear_last_error();
   constexpr const char* kApi = "fm_sheet_update_shape";
   if (spec == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_update_shape: NULL spec");
+    return null_argument("fm_sheet_update_shape", "spec");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
     return rc;

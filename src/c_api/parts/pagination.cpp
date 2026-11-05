@@ -19,7 +19,6 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 
 struct fm_pagination {
@@ -29,7 +28,7 @@ struct fm_pagination {
 extern "C" fm_status_t fm_sheet_get_pagination(const fm_workbook_t* wb, size_t sheet_index, fm_pagination_t** out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_pagination: NULL out");
+    return null_argument("fm_sheet_get_pagination", "out");
   }
   *out = nullptr;
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_pagination"); rc != 0) {

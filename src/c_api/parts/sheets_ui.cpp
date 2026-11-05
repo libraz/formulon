@@ -15,6 +15,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
@@ -29,22 +30,11 @@ using formulon::c_api::parts::may_respell_formula;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::text_or_empty;
+using formulon::c_api::parts::to_cell_rect;
+using formulon::c_api::parts::to_merge_range;
 using formulon::c_api::parts::validate;
 
 namespace {
-
-fm_status_t check_sheet_coord(std::uint32_t row, std::uint32_t col, const char* fn) {
-  if (formulon::Sheet::coord_in_grid(row, col)) {
-    return 0;
-  }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, fn,
-                           "row=" + std::to_string(row) + " col=" + std::to_string(col));
-}
-
-// The engine range of a rectangle `check_sheet_rect` has accepted.
-formulon::MergeRange merge_range_of(const fm_cell_rect_t& r) {
-  return formulon::MergeRange{r.first_row, r.first_col, r.last_row, r.last_col};
-}
 
 using SheetItemSize = std::size_t (*)(const formulon::Sheet& sheet);
 
@@ -209,7 +199,7 @@ extern "C" fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, std::size_t sheet_i
   if (auto rc = check_sheet_rect(*merge, "fm_sheet_add_merge"); rc != 0) {
     return rc;
   }
-  return finish_status(wb->workbook().add_merge(sheet_index, merge_range_of(*merge)));
+  return finish_status(wb->workbook().add_merge(sheet_index, to_merge_range(*merge)));
 }
 
 extern "C" fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, std::size_t sheet_index, const fm_cell_rect_t* range) {
@@ -223,7 +213,7 @@ extern "C" fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, std::size_t shee
   if (auto rc = check_sheet_rect(*range, "fm_sheet_remove_merge"); rc != 0) {
     return rc;
   }
-  return finish_status(wb->workbook().remove_merges_intersecting(sheet_index, merge_range_of(*range)));
+  return finish_status(wb->workbook().remove_merges_intersecting(sheet_index, to_merge_range(*range)));
 }
 
 extern "C" fm_status_t fm_sheet_remove_merge_at(fm_workbook_t* wb, std::size_t sheet_index, std::size_t index) {
@@ -256,10 +246,7 @@ extern "C" fm_status_t fm_sheet_get_merge_at(const fm_workbook_t* wb, std::size_
     return rc;
   }
   const formulon::MergeRange& m = merges[index];
-  out->first_row = m.first_row;
-  out->first_col = m.first_col;
-  out->last_row = m.last_row;
-  out->last_col = m.last_col;
+  *out = to_cell_rect(m);
   return 0;
 }
 
@@ -283,7 +270,7 @@ extern "C" fm_status_t fm_sheet_get_merges_in_range(const fm_workbook_t* wb, std
   if (auto rc = check_sheet_rect(*range, "fm_sheet_get_merges_in_range"); rc != 0) {
     return rc;
   }
-  const formulon::MergeRange query = merge_range_of(*range);
+  const formulon::MergeRange query = to_merge_range(*range);
   std::uint32_t count = 0;
   for (const formulon::MergeRange& m : wb->workbook().sheet(sheet_index).merges()) {
     if (m.last_row < query.first_row || m.first_row > query.last_row || m.last_col < query.first_col ||
@@ -291,7 +278,7 @@ extern "C" fm_status_t fm_sheet_get_merges_in_range(const fm_workbook_t* wb, std
       continue;
     }
     if (count < capacity) {
-      out[count] = fm_cell_rect_t{m.first_row, m.first_col, m.last_row, m.last_col};
+      out[count] = to_cell_rect(m);
     }
     ++count;
   }
@@ -376,7 +363,7 @@ extern "C" fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, std::size_t sheet
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_comment"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_coord(row, col, "fm_sheet_set_comment: coordinate out of grid"); rc != 0) {
+  if (auto rc = check_cell_coord(row, col, "fm_sheet_set_comment"); rc != 0) {
     return rc;
   }
   if (auto rc = check_utf8("fm_sheet_set_comment", {author, text}); rc != 0) {
@@ -550,12 +537,7 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::size_t sh
   }
   out.ranges.reserve(v->range_count);
   for (std::size_t i = 0; i < v->range_count; ++i) {
-    formulon::MergeRange r;
-    r.first_row = v->ranges[i].first_row;
-    r.first_col = v->ranges[i].first_col;
-    r.last_row = v->ranges[i].last_row;
-    r.last_col = v->ranges[i].last_col;
-    out.ranges.push_back(r);
+    out.ranges.push_back(to_merge_range(v->ranges[i]));
   }
   out.type = v->type;
   out.op = v->op;

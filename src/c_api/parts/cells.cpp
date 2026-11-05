@@ -833,7 +833,7 @@ extern "C" fm_status_t fm_sheet_get_cells_in_range(const fm_workbook_t* wb, size
                                                    fm_cell_range_t** out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_cells_in_range: NULL out");
+    return null_argument("fm_sheet_get_cells_in_range", "out");
   }
   *out = nullptr;
   if (range == nullptr) {

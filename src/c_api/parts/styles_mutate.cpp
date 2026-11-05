@@ -494,8 +494,7 @@ namespace {
 
 fm_status_t add_cell_xf_impl(fm_workbook_t* wb, const fm_cell_xf_t* record, size_t* out_xf_index, const char* api) {
   if (wb == nullptr || record == nullptr || out_xf_index == nullptr) {
-    const std::string message = std::string(api) + ": NULL argument";
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, message.c_str());
+    return null_argument(api);
   }
   if (fm_status_t rc = validate_xf_alignment(*record, api); rc != 0) {
     return rc;

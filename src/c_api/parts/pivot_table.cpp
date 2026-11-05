@@ -26,6 +26,7 @@
 #include "utils/utf8_length.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_num_fmt_id_text;
@@ -109,9 +110,8 @@ extern "C" fm_status_t fm_sheet_add_pivot(fm_workbook_t* wb, std::size_t sheet_i
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_add_pivot: cache_id not found",
                              "cache_id=" + std::to_string(cache_id));
   }
-  if (!formulon::Sheet::coord_in_grid(anchor_row, anchor_col)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_add_pivot: anchor out of grid",
-                             "row=" + std::to_string(anchor_row) + " col=" + std::to_string(anchor_col));
+  if (auto rc = check_cell_coord(anchor_row, anchor_col, "fm_sheet_add_pivot"); rc != 0) {
+    return rc;
   }
   auto table = std::make_unique<formulon::pivot::PivotTable>();
   table->set_name(utf8_name);

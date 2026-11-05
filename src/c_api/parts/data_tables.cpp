@@ -14,8 +14,8 @@
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::to_cell_rect;
 
 namespace {
 
@@ -32,7 +32,7 @@ formulon::DataTableInput input_of(int32_t has, uint32_t row, uint32_t col) {
 extern "C" fm_status_t fm_sheet_add_data_table(fm_workbook_t* wb, size_t sheet_index, const fm_data_table_t* spec) {
   clear_last_error();
   if (spec == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_add_data_table: NULL spec");
+    return null_argument("fm_sheet_add_data_table", "spec");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_data_table"); rc != 0) {
     return rc;
@@ -51,8 +51,7 @@ extern "C" fm_status_t fm_sheet_get_data_table(const fm_workbook_t* wb, size_t s
                                                int32_t* out_present, fm_data_table_t* out) {
   clear_last_error();
   if (out_present == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_data_table: NULL out argument");
+    return null_argument("fm_sheet_get_data_table");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_data_table"); rc != 0) {
     return rc;
@@ -66,7 +65,7 @@ extern "C" fm_status_t fm_sheet_get_data_table(const fm_workbook_t* wb, size_t s
   const formulon::DataTableInput row_in = table->row_input();
   const formulon::DataTableInput col_in = table->col_input();
   *out_present = 1;
-  out->rect = fm_cell_rect_t{table->ref.first_row, table->ref.first_col, table->ref.last_row, table->ref.last_col};
+  out->rect = to_cell_rect(table->ref);
   out->has_row_input = row_in.present ? 1 : 0;
   out->has_col_input = col_in.present ? 1 : 0;
   out->row_input_row = row_in.row;

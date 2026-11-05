@@ -43,7 +43,7 @@ namespace {
 fm_status_t resolve_xf(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                        std::size_t* out_xf_index, const char* fn) {
   if (out_xf_index == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, fn);
+    return null_argument(fn);
   }
   if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
     return rc;

@@ -15,12 +15,12 @@
 #include "value.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::value_from_fm;
 
@@ -53,10 +53,8 @@ extern "C" fm_status_t fm_sheet_get_display_text(const fm_workbook_t* wb, size_t
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_display_text"); rc != 0) {
     return rc;
   }
-  if (!formulon::Sheet::coord_in_grid(row, col)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_get_display_text: cell coordinate out of range",
-                             "row=" + std::to_string(row) + " col=" + std::to_string(col));
+  if (auto rc = check_cell_coord(row, col, "fm_sheet_get_display_text"); rc != 0) {
+    return rc;
   }
   const formulon::Workbook& workbook = wb->workbook();
   publish(wb, formulon::text_format::format_cell_for_display(workbook, workbook.sheet(sheet_index), row, col), out_text,
