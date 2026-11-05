@@ -4,7 +4,9 @@
 #include <string>
 #include <utility>
 
+#include "io/xlsb/dxf_props.h"
 #include "io/xlsb/frt_records.h"
+#include "io/xlsb/record_ids.h"
 #include "io/xlsb/record_writer.h"
 #include "sheet.h"
 #include "utils/double_format.h"
@@ -16,32 +18,10 @@ namespace io {
 namespace xlsb {
 namespace {
 
-enum : std::uint16_t {
-  kBrtEndAFilter = 162,
-  kBrtBeginFilterColumn = 163,
-  kBrtEndFilterColumn = 164,
-  kBrtBeginFilters = 165,
-  kBrtEndFilters = 166,
-  kBrtFilter = 167,
-  kBrtColorFilter = 168,
-  kBrtIconFilter = 169,
-  kBrtTop10Filter = 170,
-  kBrtDynamicFilter = 171,
-  kBrtBeginCustomFilters = 172,
-  kBrtEndCustomFilters = 173,
-  kBrtCustomFilter = 174,
-  kBrtAFilterDateGroupItem = 175,
-  kBrtBeginSortState = 530,
-  kBrtEndSortState = 531,
-  kBrtBeginSortCond = 532,
-  kBrtEndSortCond = 533,
-};
-
 // BrtCustomFilter vts values.
 constexpr std::uint8_t kVtsNumber = 0x04;
 constexpr std::uint8_t kVtsString = 0x06;
 
-constexpr std::uint32_t kNoDxf = 0xFFFFFFFFU;
 constexpr std::uint32_t kKpiNil = 0xFFFFFFFFU;
 // BrtDynamicFilter cft: CFTNIL..CFTBELOWAVERAGE are 0..2, CFTTOMORROW.. start at 8.
 constexpr std::uint32_t kCftDateBase = 8U;

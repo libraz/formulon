@@ -1,6 +1,7 @@
 #include "io/xlsb/table_records.h"
 
 #include <algorithm>
+#include <array>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -11,7 +12,9 @@
 #include "io/ooxml_defs.h"
 #include "io/xlsb/auto_filter_records.h"
 #include "io/xlsb/cf_x14_link.h"
+#include "io/xlsb/dxf_props.h"
 #include "io/xlsb/frt_records.h"
+#include "io/xlsb/guid_text.h"
 #include "io/xlsb/ptg_list.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
@@ -52,8 +55,6 @@ enum : std::uint16_t {
 // spells `xr:uid` / `xr3:uid`. The BrtACBegin payload is the one Excel writes.
 constexpr std::uint8_t kAcBeginPayload[] = {0x01, 0x00, 0x00, 0x10, 0x00, 0x80};
 constexpr std::string_view kXr3Namespace = "http://schemas.microsoft.com/office/spreadsheetml/2016/revision3";
-
-constexpr std::uint32_t kNoDxf = 0xFFFFFFFFU;
 
 // BrtBeginList flag bits ([MS-XLSB] 2.4.100).
 constexpr std::uint32_t kShownTotalRow = 0x01U;
@@ -227,48 +228,6 @@ std::optional<std::pair<std::string, std::string>> AltTextFromExtLst(const std::
                         std::string(table.attribute("altTextSummary").value()));
 }
 
-/// `{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}` of a [MS-DTYP] GUID.
-std::string GuidText(const std::uint8_t* b) {
-  // Data1, Data2 and Data3 are little-endian; Data4 is a byte array.
-  constexpr int kOrder[] = {3, 2, 1, 0, -1, 5, 4, -1, 7, 6, -1, 8, 9, -1, 10, 11, 12, 13, 14, 15};
-  std::string out("{");
-  for (const int i : kOrder) {
-    if (i < 0) {
-      out.push_back('-');
-      continue;
-    }
-    out.push_back(strings::hex_digit_upper(b[i] >> 4U));
-    out.push_back(strings::hex_digit_upper(b[i]));
-  }
-  out.push_back('}');
-  return out;
-}
-
-std::optional<std::vector<std::uint8_t>> ParseGuid(std::string_view text) {
-  constexpr int kOrder[] = {3, 2, 1, 0, -1, 5, 4, -1, 7, 6, -1, 8, 9, -1, 10, 11, 12, 13, 14, 15};
-  if (text.size() != 38U || text.front() != '{' || text.back() != '}') {
-    return std::nullopt;
-  }
-  std::vector<std::uint8_t> out(16U, 0U);
-  std::size_t pos = 1;
-  for (const int i : kOrder) {
-    if (i < 0) {
-      if (text[pos++] != '-') {
-        return std::nullopt;
-      }
-      continue;
-    }
-    const int hi = strings::hex_digit_value(text[pos]);
-    const int lo = strings::hex_digit_value(text[pos + 1U]);
-    if (hi < 0 || lo < 0) {
-      return std::nullopt;
-    }
-    out[static_cast<std::size_t>(i)] = static_cast<std::uint8_t>((hi << 4) | lo);
-    pos += 2U;
-  }
-  return out;
-}
-
 /// Reads the rest of an ACUID block after its BrtACBegin: one BrtUid, then
 /// BrtACEnd.
 Expected<std::string, Error> ReadAcuid(ByteSpan& cursor) {
@@ -277,7 +236,7 @@ Expected<std::string, Error> ReadAcuid(ByteSpan& cursor) {
   if (uid.type != kUid || uid.payload.size != 16U || end.type != kAcEnd) {
     return Unsupported(uid.type);
   }
-  return GuidText(uid.payload.data);
+  return FormatGuid(uid.payload.data);
 }
 
 /// Emits an ACUID block for `guid`; nothing when it is not a GUID.
@@ -285,12 +244,12 @@ void EmitAcuid(std::vector<std::uint8_t>& out, const std::string* guid) {
   if (guid == nullptr) {
     return;
   }
-  const std::optional<std::vector<std::uint8_t>> bytes = ParseGuid(*guid);
-  if (!bytes) {
+  std::array<std::uint8_t, kGuidBytes> bytes{};
+  if (!ParseGuid(*guid, bytes)) {
     return;
   }
   emit_record(out, kAcBegin, ByteSpan{kAcBeginPayload, sizeof(kAcBeginPayload)});
-  emit_record(out, kUid, *bytes);
+  emit_record(out, kUid, ByteSpan{bytes.data(), bytes.size()});
   emit_record(out, kAcEnd, ByteSpan{});
 }
 

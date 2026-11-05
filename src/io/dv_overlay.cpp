@@ -27,8 +27,6 @@
 namespace formulon::io {
 namespace {
 
-constexpr const char* kX14DvExtUri = "{CCE6A557-97BC-4b89-ADB6-D9C93CAAB3DF}";
-
 bool FormulaReferencesOtherSheet(std::string_view formula, std::string_view own_sheet) {
   if (formula.empty()) {
     return false;
@@ -169,7 +167,7 @@ std::string merge_x14_dv_entries(const std::string& ext_lst_xml, const std::vect
     set_attr(existing, "count", static_cast<std::int64_t>(total));
   } else {
     pugi::xml_node ext = ext_lst.append_child("ext");
-    ext.append_attribute("uri") = kX14DvExtUri;
+    ext.append_attribute("uri") = kX14DataValidationsExtUri;
     ext.append_attribute("xmlns:x14") = kNsX14.data();
     ext.append_copy(fresh);
   }

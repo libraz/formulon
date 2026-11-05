@@ -30,6 +30,7 @@
 #include <string>
 #include <vector>
 
+#include "io/xlsb/record_ids.h"
 #include "io/zip_reader.h"
 #include "protection.h"
 #include "sheet.h"
@@ -91,8 +92,6 @@ bool base64_decode(const std::string& text, std::vector<std::uint8_t>& out);
 //     ranges and title): dwSpinCount u32, UncheckedSqRfX,
 //     RangeProtectionTitleSDRel, then IsoPasswordData (hash and salt as
 //     u32-length blobs, algorithm as an XLNullableWideString).
-inline constexpr std::uint16_t kBrtRangeProtection = 536;
-inline constexpr std::uint16_t kBrtRangeProtectionIso = 680;
 
 /// Decodes a BrtRangeProtection `payload` and the BrtRangeProtectionIso `iso`
 /// before it (empty when none). False for a malformed record, a mismatched

@@ -15,6 +15,7 @@
 #include "io/cf_writer.h"
 #include "io/xlsb/brt_color.h"
 #include "io/xlsb/cf_x14_link.h"
+#include "io/xlsb/dxf_props.h"
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
@@ -426,7 +427,7 @@ std::optional<cf::CFRule> DecodeRuleHeader(ByteSpan p, const MergeRange& base, c
     return std::nullopt;
   }
   rule.priority = static_cast<std::int32_t>(pri.value());
-  if (dxf.value() != 0xFFFFFFFFU) {
+  if (dxf.value() != kNoDxf) {
     rule.dxf_id = dxf.value();
   }
   if (!cf_rule_has_formulas(rule.type) && (cb1.value() != 0U || cb2.value() != 0U)) {
@@ -549,7 +550,7 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
   std::vector<std::uint8_t> p;
   emit_u32(p, fields.value().itype);
   emit_u32(p, fields.value().tmpl);
-  emit_u32(p, rule.dxf_id.value_or(0xFFFFFFFFU));
+  emit_u32(p, rule.dxf_id.value_or(kNoDxf));
   emit_u32(p, static_cast<std::uint32_t>(rule.priority));
   emit_u32(p, fields.value().param);
   emit_u32(p, 0U);

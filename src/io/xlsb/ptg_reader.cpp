@@ -1299,7 +1299,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         // TEXTJOIN, CONCAT, IFS, SEQUENCE, ...). Its name was pushed as
         // the FIRST operand via a preceding `PtgName`, so `cparams`
         // counts that name-ref plus the real arguments.
-        if (id == 255) {
+        if (id == kFutureFunctionId) {
           ASSIGN_OR_RETURN(auto call, decode_future_function(cparams));
           stack.push_back(call);
           break;

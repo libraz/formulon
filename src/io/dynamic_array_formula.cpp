@@ -26,10 +26,7 @@ xlsb::NameShape NameFormulaShape(std::string_view formula) {
     return shape;
   }
   if (body->kind() == parser::NodeKind::Literal && body->as_literal().is_number()) {
-    const double d = body->as_literal().as_number();
-    if (d >= 1.0 && d <= 65535.0 && d == static_cast<double>(static_cast<std::uint32_t>(d))) {
-      shape.positive_int = static_cast<std::uint32_t>(d);
-    }
+    shape.positive_int = xlsb::positive_ptg_int(body->as_literal().as_number());
   }
   if (body->kind() == parser::NodeKind::UnaryOp) {
     body = &body->as_unary_operand();
@@ -145,7 +142,7 @@ std::uint32_t xldapr_cell_metadata_index(const std::vector<std::uint8_t>& metada
 }
 
 void apply_loaded_dynamic_array_marks(Sheet& sheet, const std::unordered_set<std::uint64_t>& marked) {
-  for (const CellAddress address : sheet.formula_cells_in(0U, 0U, Sheet::kMaxRows - 1U, Sheet::kMaxCols - 1U)) {
+  for (const CellAddress address : sheet.all_formula_cells()) {
     const bool dynamic = marked.count(dynamic_array_cell_key(address.row, address.col)) != 0U;
     sheet.set_cell_dynamic_array(address.row, address.col, dynamic);
     const SpillRegion* block = dynamic ? nullptr : sheet.spill_region_at_anchor(address.row, address.col);
@@ -208,22 +205,41 @@ xlsb::NameShapes name_shapes(const Workbook& wb, std::size_t sheet_index) {
   };
 }
 
+namespace {
+
+// A dynamic-array anchor whose spill is blocked always recalculates.
+bool is_blocked_spill_anchor(const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell) {
+  if (!is_dynamic_array_formula(cell)) {
+    return false;
+  }
+  const std::vector<CellAddress> blocked = sheet.blocked_spill_anchors_intersecting(row, col, 1U, 1U);
+  return std::any_of(blocked.begin(), blocked.end(),
+                     [&](const CellAddress& a) { return a.row == row && a.col == col; });
+}
+
+}  // namespace
+
+bool formula_cell_always_calculates(const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell,
+                                    const parser::AstNode* root, const xlsb::NameShapes& names) {
+  if (cell.formula_text.empty()) {
+    return false;
+  }
+  if (is_blocked_spill_anchor(sheet, row, col, cell)) {
+    return true;
+  }
+  return root != nullptr && xlsb::formula_always_calculates(*root, names);
+}
+
 bool formula_cell_always_calculates(const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell,
                                     const xlsb::NameShapes& names) {
   if (cell.formula_text.empty()) {
     return false;
   }
-  if (is_dynamic_array_formula(cell)) {
-    const std::vector<CellAddress> blocked = sheet.blocked_spill_anchors_intersecting(row, col, 1U, 1U);
-    if (std::any_of(blocked.begin(), blocked.end(),
-                    [&](const CellAddress& a) { return a.row == row && a.col == col; })) {
-      return true;
-    }
+  if (is_blocked_spill_anchor(sheet, row, col, cell)) {
+    return true;
   }
-  std::string_view formula = cell.formula_text;
-  formula = strip_formula_prefix(formula);
   Arena arena;
-  parser::Parser parser(formula, arena);
+  parser::Parser parser(strip_formula_prefix(cell.formula_text), arena);
   const parser::AstNode* root = parser.parse();
   return root != nullptr && parser.errors().empty() && xlsb::formula_always_calculates(*root, names);
 }

@@ -173,8 +173,6 @@ void apply_hyperlink_rels(std::vector<Hyperlink>& hyperlinks,
 
 namespace {
 
-constexpr const char* kX14DataValidationsExtUri = "{CCE6A557-97BC-4b89-ADB6-D9C93CAAB3DF}";
-
 /// Calls `fn(container)` for every `<x14:dataValidations>` under the
 /// worksheet `<extLst>`.
 template <typename Fn>

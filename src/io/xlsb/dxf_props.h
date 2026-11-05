@@ -19,6 +19,9 @@ inline constexpr std::uint16_t kBrtBeginDxfs = 505;
 inline constexpr std::uint16_t kBrtEndDxfs = 506;
 inline constexpr std::uint16_t kBrtDxf = 507;
 
+/// "No dxf" sentinel stored in a dxf-index field.
+inline constexpr std::uint32_t kNoDxf = 0xFFFFFFFFU;
+
 /// BrtDXF property types as Excel saves them (each matches the
 /// <dxf> Excel wrote for the same book).
 inline constexpr std::uint16_t kDxfPropFillPattern = 0;

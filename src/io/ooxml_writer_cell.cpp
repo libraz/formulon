@@ -345,7 +345,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     // Excel stores `ca="1"` on a formula it recalculates every time, and on a
     // dynamic-array formula whose spill is blocked; the array form adds
     // `aca="1"`.
-    const bool always_calculates = formula_cell_always_calculates(sheet, row, col, cell, name_shapes);
+    const bool always_calculates = formula_cell_always_calculates(sheet, row, col, cell, formula_root, name_shapes);
     if (anchored != nullptr || dynamic || cse) {
       out.append(always_calculates ? "<f t=\"array\" aca=\"1\" ref=\"" : "<f t=\"array\" ref=\"");
       out.append(a1::encode_a1(row, col));

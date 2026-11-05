@@ -15,6 +15,7 @@
 #include "cf/cf_types.h"
 #include "io/xlsb/brt_color.h"
 #include "io/xlsb/frt_records.h"
+#include "io/xlsb/guid_text.h"
 #include "io/xlsb/record.h"
 #include "utils/number_text.h"
 
@@ -25,7 +26,6 @@ namespace xlsb {
 // BrtFRTBegin payload Excel writes around the x14 link, and the
 // BrtCFRuleExt layout: a zero u32, then the GUID in Windows byte order.
 inline constexpr std::array<std::uint8_t, 4> kFrtVersion = {0x02, 0x0E, 0x00, 0x00};
-inline constexpr std::size_t kGuidBytes = 16;
 
 /// A future-record container `open` .. `close` around `body`, wrapped in
 /// BrtFRTBegin / BrtFRTEnd. Excel refuses an x14 container that directly
@@ -76,58 +76,6 @@ inline std::array<std::uint8_t, 8> EncodeColor(const cf::Color& c) {
   const std::uint32_t argb = (static_cast<std::uint32_t>(c.a) << 24U) | (static_cast<std::uint32_t>(c.r) << 16U) |
                              (static_cast<std::uint32_t>(c.g) << 8U) | static_cast<std::uint32_t>(c.b);
   return encode_brt_color(argb, c.spec);
-}
-
-inline std::string FormatGuid(const std::uint8_t* g) {
-  // Bytes in GUID text order: the first three groups are stored little-endian.
-  static constexpr int kTextOrder[16] = {3, 2, 1, 0, 5, 4, 7, 6, 8, 9, 10, 11, 12, 13, 14, 15};
-  std::string out = "{";
-  for (int i = 0; i < 16; ++i) {
-    if (i == 4 || i == 6 || i == 8 || i == 10) {
-      out.push_back('-');
-    }
-    char hex[4];
-    format_hex(hex, sizeof(hex), g[kTextOrder[i]], 2, true);
-    out.append(hex);
-  }
-  out.push_back('}');
-  return out;
-}
-
-inline bool ParseGuid(const std::string& id, std::array<std::uint8_t, kGuidBytes>& out) {
-  // {XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}
-  if (id.size() != 38U || id.front() != '{' || id.back() != '}') {
-    return false;
-  }
-  std::array<std::uint8_t, kGuidBytes> be{};
-  std::size_t n = 0;
-  for (std::size_t i = 1; i + 1U < id.size(); ++i) {
-    const char c = id[i];
-    if (c == '-') {
-      if (i != 9U && i != 14U && i != 19U && i != 24U) {
-        return false;
-      }
-      continue;
-    }
-    const int d = (c >= '0' && c <= '9')   ? c - '0'
-                  : (c >= 'A' && c <= 'F') ? c - 'A' + 10
-                  : (c >= 'a' && c <= 'f') ? c - 'a' + 10
-                                           : -1;
-    if (d < 0 || n >= 2U * kGuidBytes) {
-      return false;
-    }
-    be[n / 2U] = static_cast<std::uint8_t>((be[n / 2U] << 4U) | static_cast<std::uint8_t>(d));
-    ++n;
-  }
-  if (n != 2U * kGuidBytes) {
-    return false;
-  }
-  // Data1..Data3 are little-endian on the wire; Data4 is a byte string.
-  constexpr std::array<std::uint8_t, kGuidBytes> kOrder = {3, 2, 1, 0, 5, 4, 7, 6, 8, 9, 10, 11, 12, 13, 14, 15};
-  for (std::size_t i = 0; i < kGuidBytes; ++i) {
-    out[i] = be[kOrder[i]];
-  }
-  return true;
 }
 
 }  // namespace xlsb

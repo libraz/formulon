@@ -2,10 +2,9 @@
 // `<c>` element parser. See cell_parser.h for the public contract.
 //
 // Implementation notes:
-//   * We do NOT use `strtod` directly here — instead we hand off to the
-//     shared `parse_a1`-free `std::strtod` path used elsewhere; the OOXML
-//     `<v>` payload is always C-locale ASCII (Excel emits `%.17g`-style
-//     printouts, never localised), so a plain `std::strtod` is sufficient.
+//   * The OOXML `<v>` payload of a numeric cell is C-locale ASCII (Excel
+//     emits `%.17g`-style printouts, never localised) and is read with the
+//     shared `parse_xsd_double`.
 //   * Inline-string handling walks the `<is>` element's text nodes in
 //     document order, concatenating `<t>` children. Rich-text shape (a
 //     sequence of `<r><t>...</t></r>`) is preserved as plain text since
@@ -76,6 +75,18 @@ void ConcatInlineStringText(const pugi::xml_node& is_node, std::string& out) {
   (void)append_rich_text(is_node, out);
 }
 
+Error CellRefError(const char* message, std::string_view ref) {
+  std::string ctx("context=cell_parser parse_a1=");
+  ctx.append(ref);
+  return make_error(FormulonErrorCode::kIoSheetCorrupt, message, std::move(ctx));
+}
+
+Error CellValueError(const char* message, std::string_view v_text) {
+  std::string ctx("context=cell_parser v=");
+  ctx.append(v_text);
+  return make_error(FormulonErrorCode::kIoSheetCorrupt, message, std::move(ctx));
+}
+
 }  // namespace
 
 Expected<std::pair<std::uint32_t, std::uint32_t>, Error> parse_a1(std::string_view ref) {
@@ -84,41 +95,28 @@ Expected<std::pair<std::uint32_t, std::uint32_t>, Error> parse_a1(std::string_vi
   }
   // Reject sheet-qualified or range shapes.
   if (ref.find('!') != std::string_view::npos || ref.find(':') != std::string_view::npos) {
-    std::string ctx("context=cell_parser parse_a1=");
-    ctx.append(ref);
-    return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell ref: must not be qualified or a range", std::move(ctx));
+    return CellRefError("cell ref: must not be qualified or a range", ref);
   }
   // Reject `$` markers: OOXML cell refs in `<c r=...>` are always plain.
   if (ref.find('$') != std::string_view::npos) {
-    std::string ctx("context=cell_parser parse_a1=");
-    ctx.append(ref);
-    return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell ref: must not contain '$'", std::move(ctx));
+    return CellRefError("cell ref: must not contain '$'", ref);
   }
 
   std::size_t i = 0;
   const std::uint32_t col_1based = ParseColumnLetters(ref, &i);
   if (col_1based == 0U) {
-    std::string ctx("context=cell_parser parse_a1=");
-    ctx.append(ref);
-    return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell ref: missing or oversized column letters",
-                      std::move(ctx));
+    return CellRefError("cell ref: missing or oversized column letters", ref);
   }
   const std::uint32_t row_1based = ParseUintAdvance(ref, &i);
   if (row_1based == 0U) {
-    std::string ctx("context=cell_parser parse_a1=");
-    ctx.append(ref);
-    return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell ref: missing or invalid row number", std::move(ctx));
+    return CellRefError("cell ref: missing or invalid row number", ref);
   }
   if (i != ref.size()) {
-    std::string ctx("context=cell_parser parse_a1=");
-    ctx.append(ref);
-    return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell ref: trailing characters", std::move(ctx));
+    return CellRefError("cell ref: trailing characters", ref);
   }
   // Bounds check: Excel 365 limits.
   if (col_1based > Sheet::kMaxCols || row_1based > Sheet::kMaxRows) {
-    std::string ctx("context=cell_parser parse_a1=");
-    ctx.append(ref);
-    return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell ref: out of Excel range", std::move(ctx));
+    return CellRefError("cell ref: out of Excel range", ref);
   }
   return std::pair<std::uint32_t, std::uint32_t>{row_1based - 1U, col_1based - 1U};
 }
@@ -211,9 +209,7 @@ Expected<ParsedCell, Error> decode_cell_payload(std::string_view t, std::string_
     // overflow past 2^32-1. Distinguish: empty / non-digit / overflow
     // leaves `i == 0` or `i < v_text.size()`.
     if (i == 0U || i != v_text.size()) {
-      std::string ctx("context=cell_parser v=");
-      ctx.append(v_text);
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: t='s' has unparseable index", std::move(ctx));
+      return CellValueError("cell parser: t='s' has unparseable index", v_text);
     }
     out.is_sst_index = true;
     out.sst_index = parsed_idx;
@@ -230,9 +226,7 @@ Expected<ParsedCell, Error> decode_cell_payload(std::string_view t, std::string_
     } else if (v_text == "0") {
       out.value = Value::boolean(false);
     } else {
-      std::string ctx("context=cell_parser v=");
-      ctx.append(v_text);
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: t='b' must be 0 or 1", std::move(ctx));
+      return CellValueError("cell parser: t='b' must be 0 or 1", v_text);
     }
     return out;
   }
@@ -243,9 +237,7 @@ Expected<ParsedCell, Error> decode_cell_payload(std::string_view t, std::string_
     }
     const auto code = error_from_display_name(v_text);
     if (!code.has_value()) {
-      std::string ctx("context=cell_parser v=");
-      ctx.append(v_text);
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: unrecognised error display", std::move(ctx));
+      return CellValueError("cell parser: unrecognised error display", v_text);
     }
     out.value = Value::error(*code);
     return out;
@@ -277,9 +269,7 @@ Expected<ParsedCell, Error> decode_cell_payload(std::string_view t, std::string_
   }
   double num = 0.0;
   if (!parse_xsd_double(v_text, &num)) {
-    std::string ctx("context=cell_parser v=");
-    ctx.append(v_text);
-    return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: t='n' has unparseable <v>", std::move(ctx));
+    return CellValueError("cell parser: t='n' has unparseable <v>", v_text);
   }
   out.value = Value::number(num);
   return out;

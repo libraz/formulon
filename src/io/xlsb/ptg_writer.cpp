@@ -969,7 +969,7 @@ class Encoder {
     }
     emit_u8(out_, ClassedPtg(kPtgFuncVar, cls));  // PtgFuncVar result
     emit_u8(out_, static_cast<std::uint8_t>(cparams));
-    emit_u16(out_, 255);
+    emit_u16(out_, kFutureFunctionId);
     return Expected<void, Error>::Ok();
   }
 
@@ -1722,7 +1722,7 @@ class Encoder {
     }
     emit_u8(out_, ClassedPtg(kPtgFuncVar, cls));  // PtgFuncVar result
     emit_u8(out_, 2);                             // cparams: name-ref + one anchor operand
-    emit_u16(out_, 255);
+    emit_u16(out_, kFutureFunctionId);
     return Expected<void, Error>::Ok();
   }
 
@@ -1737,7 +1737,7 @@ class Encoder {
     RETURN_IF_ERROR(emit(node.as_implicit_intersection_operand()));
     emit_u8(out_, reference_result ? kPtgFuncVar : ValueClassPtg(kPtgFuncVar));  // PtgFuncVar result
     emit_u8(out_, 2);                                                            // cparams: name-ref + the operand
-    emit_u16(out_, 255);
+    emit_u16(out_, kFutureFunctionId);
     return Expected<void, Error>::Ok();
   }
 

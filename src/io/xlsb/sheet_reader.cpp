@@ -21,6 +21,7 @@
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/record_ids.h"
 #include "io/xlsb/sheet_properties_records.h"
 #include "io/xlsb/sheet_record_flags.h"
 #include "io/xlsb/sparkline_records.h"
@@ -998,49 +999,6 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
 /// block.  This explicit grammar classification is needed when the source
 /// has no BrtHLink at all but the in-memory caller adds one before writing.
 bool is_after_hyperlinks(std::uint16_t type) {
-  enum : std::uint16_t {
-    kBrtPrintOptions = 477,
-    kBrtMargins = 476,
-    kBrtBeginHeaderFooter = 479,
-    kBrtEndHeaderFooter = 480,
-    kBrtPageSetup = 478,
-    kBrtBeginRwBrk = 392,
-    kBrtBrk = 396,
-    kBrtEndRwBrk = 393,
-    kBrtBeginColBrk = 394,
-    kBrtEndColBrk = 395,
-    kBrtBigName = 625,
-    kBrtBeginCellWatches = 605,
-    kBrtCellWatch = 607,
-    kBrtEndCellWatches = 606,
-    kBrtBeginCellIgnoreECs = 648,
-    kBrtCellIgnoreEC = 649,
-    kBrtEndCellIgnoreECs = 650,
-    kBrtBeginSmartTags = 594,
-    kBrtBeginCellSmartTags = 592,
-    kBrtBeginCellSmartTag = 590,
-    kBrtCellSmartTagProperty = 589,
-    kBrtEndCellSmartTag = 591,
-    kBrtEndCellSmartTags = 593,
-    kBrtEndSmartTags = 595,
-    kBrtDrawing = 550,
-    kBrtLegacyDrawing = 551,
-    kBrtLegacyDrawingHF = 552,
-    kBrtBkhim = 562,
-    kBrtBeginOleObjects = 638,
-    kBrtOleObject = 639,
-    kBrtEndOleObjects = 640,
-    kBrtBeginActiveXControls = 643,
-    kBrtActiveX = 644,
-    kBrtEndActiveXControls = 645,
-    kBrtBeginWebPubItems = 554,
-    kBrtBeginWebPubItem = 556,
-    kBrtEndWebPubItem = 557,
-    kBrtEndWebPubItems = 555,
-    kBrtBeginTableParts = 660,
-    kBrtTablePart = 661,
-    kBrtEndTableParts = 662,
-  };
   switch (type) {
     case kBrtPrintOptions:
     case kBrtMargins:

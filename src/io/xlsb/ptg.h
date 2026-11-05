@@ -194,6 +194,9 @@ inline constexpr std::uint8_t kPtgNum = 0x1F;
 inline constexpr std::uint8_t kPtgArray = 0x20;
 inline constexpr std::uint8_t kPtgFunc = 0x21;
 inline constexpr std::uint8_t kPtgFuncVar = 0x22;
+/// `PtgFuncVar` function id marking a future function: the callee is the
+/// name operand pushed first, not a classic table entry.
+inline constexpr std::uint16_t kFutureFunctionId = 255;
 inline constexpr std::uint8_t kPtgName = 0x23;
 inline constexpr std::uint8_t kPtgRef = 0x24;
 inline constexpr std::uint8_t kPtgArea = 0x25;

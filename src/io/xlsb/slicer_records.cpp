@@ -9,6 +9,7 @@
 
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/record_ids.h"
 #include "io/xlsb/record_writer.h"
 
 namespace formulon {
@@ -16,7 +17,6 @@ namespace io {
 namespace xlsb {
 namespace {
 
-constexpr std::uint16_t kEndBook = 132;
 constexpr std::uint16_t kBeginSlicerCacheIds = 1070;
 constexpr std::uint16_t kBeginSlicerCacheId = 1072;
 constexpr std::uint16_t kEndSlicerCacheId = 1073;
@@ -138,7 +138,7 @@ void splice_book_slicer_cache_ids(std::vector<std::uint8_t>& workbook_bin, const
       continue;
     }
     const std::vector<FramedRecord> dst = split_records(workbook_bin);
-    std::size_t at = dst.empty() || dst.back().type != kEndBook ? workbook_bin.size() : dst.back().begin;
+    std::size_t at = dst.empty() || dst.back().type != kBrtEndBook ? workbook_bin.size() : dst.back().begin;
     for (std::size_t k = 0; k + 1U < dst.size(); ++k) {
       const std::size_t rank = Rank(dst[k + 1U].type);
       if (dst[k].type == kFrtBegin && rank < kBookFrtOrder.size() && rank > Rank(first)) {

@@ -13,12 +13,16 @@
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/ptg.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/record_ids.h"
 #include "io/xlsb/record_writer.h"
 #include "parser/reference.h"
 #include "sheet.h"
 
 namespace formulon::io::xlsb {
 namespace {
+
+// BrtBeginWebPubItem source type of a range item.
+constexpr std::uint32_t kWebSourceRange = 4U;
 
 // Future-record header flags: a range list, plus a formula list.
 constexpr std::uint32_t kFrtRanges = 0x02U;
@@ -507,36 +511,6 @@ void CloneSlotSparklines(std::vector<std::uint8_t>& buf, const std::vector<XlsbE
   }
 }
 
-// Worksheet-children records (field
-// offsets in bytes).
-constexpr std::uint16_t kBeginScenMan = 500;  // u16 current, u16 show
-constexpr std::uint16_t kEndScenMan = 501;
-constexpr std::uint16_t kBeginSct = 502;  // u16 input-cell count
-constexpr std::uint16_t kEndSct = 503;
-constexpr std::uint16_t kSlc = 504;             // u32 row, u32 col
-constexpr std::uint16_t kBeginSortState = 530;  // RfX at 2
-constexpr std::uint16_t kEndSortState = 531;
-constexpr std::uint16_t kBeginSortCond = 532;  // RfX at 2
-constexpr std::uint16_t kEndSortCond = 533;
-constexpr std::uint16_t kRangeProtection = 536;   // Sqrfx at 2
-constexpr std::uint16_t kBeginWebPubItems = 554;  // u32 item count
-constexpr std::uint16_t kEndWebPubItems = 555;
-constexpr std::uint16_t kBeginWebPubItem = 556;  // u32 source type, RfX at 9
-constexpr std::uint16_t kEndWebPubItem = 557;
-constexpr std::uint16_t kCellWatch = 607;  // u32 row, u32 col
-constexpr std::uint16_t kBeginCellIgnoreEcs = 648;
-constexpr std::uint16_t kCellIgnoreEc = 649;  // u32 flags, Sqrfx at 4
-constexpr std::uint16_t kEndCellIgnoreEcs = 650;
-constexpr std::uint32_t kWebSourceRange = 4U;
-constexpr std::uint16_t kEndAFilter = 162;
-constexpr std::uint16_t kBeginFilterColumn = 163;  // u32 column id
-constexpr std::uint16_t kEndFilterColumn = 164;
-constexpr std::uint16_t kBeginRwBrk = 392;  // u32 count, u32 manual count
-constexpr std::uint16_t kEndRwBrk = 393;
-constexpr std::uint16_t kBeginColBrk = 394;
-constexpr std::uint16_t kEndColBrk = 395;
-constexpr std::uint16_t kBrk = 396;  // u32 id, min, max, u32 manual
-
 enum class Outcome { kUnchanged, kChanged, kEmptied };
 
 std::vector<std::uint8_t> CurrentPayload(const Edit& edit, std::size_t i) {
@@ -630,24 +604,24 @@ std::size_t CountAll(const Edit& edit, std::size_t from, std::size_t until, std:
 /// others' counts follow, and the manager's current / shown indexes clamp to
 /// the last scenario left.
 void SettleScenarios(Edit& edit) {
-  for (std::size_t man = edit.Find(0, kBeginScenMan); man < edit.recs.size();
-       man = edit.Find(man + 1U, kBeginScenMan)) {
-    const std::size_t man_end = edit.Find(man, kEndScenMan);
+  for (std::size_t man = edit.Find(0, kBrtBeginScenMan); man < edit.recs.size();
+       man = edit.Find(man + 1U, kBrtBeginScenMan)) {
+    const std::size_t man_end = edit.Find(man, kBrtEndScenMan);
     if (man_end == edit.recs.size()) {
       return;
     }
     std::uint16_t remaining = 0;
     bool removed = false;
-    for (std::size_t sct = edit.Find(man, kBeginSct); sct < man_end; sct = edit.Find(sct + 1U, kBeginSct)) {
-      const std::size_t sct_end = edit.Find(sct, kEndSct);
-      const std::size_t kept = CountKept(edit, sct, sct_end, kSlc);
+    for (std::size_t sct = edit.Find(man, kBrtBeginSct); sct < man_end; sct = edit.Find(sct + 1U, kBrtBeginSct)) {
+      const std::size_t sct_end = edit.Find(sct, kBrtEndSct);
+      const std::size_t kept = CountKept(edit, sct, sct_end, kBrtSlc);
       if (sct_end < man_end && kept == 0U) {
         edit.Drop(sct, sct_end);
         removed = true;
         continue;
       }
       ++remaining;
-      if (sct_end < man_end && kept != CountAll(edit, sct, sct_end, kSlc) && edit.recs[sct].payload.size >= 2U) {
+      if (sct_end < man_end && kept != CountAll(edit, sct, sct_end, kBrtSlc) && edit.recs[sct].payload.size >= 2U) {
         std::vector<std::uint8_t> out = CurrentPayload(edit, sct);
         store_u16(out.data(), static_cast<std::uint16_t>(kept));
         edit.payload[sct] = std::move(out);
@@ -678,7 +652,7 @@ void SettleScenarios(Edit& edit) {
 /// `shift_auto_filter` runs once per piece on a filter holding only that
 /// piece. Returns true when the block changed.
 bool RemapAutoFilter(Edit& edit, std::size_t begin, const StructuralEdit& e) {
-  const std::size_t end = edit.Find(begin, kEndAFilter);
+  const std::size_t end = edit.Find(begin, kBrtEndAFilter);
   if (end == edit.recs.size() || edit.recs[begin].payload.size < 16U) {
     return false;
   }
@@ -714,12 +688,12 @@ bool RemapAutoFilter(Edit& edit, std::size_t begin, const StructuralEdit& e) {
   bool condition_dropped = false;
   for (std::size_t i = begin + 1U; i < end; ++i) {
     const FramedRecord& rec = edit.recs[i];
-    if (rec.type == kBeginFilterColumn && rec.payload.size >= 4U) {
+    if (rec.type == kBrtBeginFilterColumn && rec.payload.size >= 4U) {
       AutoFilter one = whole;
       one.columns.emplace_back().col_id = load_u32(rec.payload.data);
       const std::optional<AutoFilter> after = moved(one);
       if (after->columns.empty()) {
-        edit.Drop(i, edit.Find(i, kEndFilterColumn));
+        edit.Drop(i, edit.Find(i, kBrtEndFilterColumn));
         changed = true;
       } else if (after->columns.front().col_id != one.columns.front().col_id) {
         std::vector<std::uint8_t> out = CurrentPayload(edit, i);
@@ -727,7 +701,7 @@ bool RemapAutoFilter(Edit& edit, std::size_t begin, const StructuralEdit& e) {
         edit.payload[i] = std::move(out);
         changed = true;
       }
-    } else if (rec.type == kBeginSortState && rec.payload.size >= 18U) {
+    } else if (rec.type == kBrtBeginSortState && rec.payload.size >= 18U) {
       ByteSpan at{rec.payload.data + 2, 16U};
       sort.emplace().ref = read_rfx(at).value();
       sort_begin = i;
@@ -737,14 +711,14 @@ bool RemapAutoFilter(Edit& edit, std::size_t begin, const StructuralEdit& e) {
       if (after->sort && !(after->sort->ref == sort->ref)) {
         store_rfx(i, 2U, after->sort->ref);
       }
-    } else if (rec.type == kBeginSortCond && sort && rec.payload.size >= 18U) {
+    } else if (rec.type == kBrtBeginSortCond && sort && rec.payload.size >= 18U) {
       ByteSpan at{rec.payload.data + 2, 16U};
       AutoFilter with_cond = whole;
       with_cond.sort = sort;
       with_cond.sort->conditions.emplace_back().ref = read_rfx(at).value();
       const std::optional<AutoFilter> after = moved(with_cond);
       if (!after->sort || after->sort->conditions.empty()) {
-        edit.Drop(i, edit.Find(i, kEndSortCond));
+        edit.Drop(i, edit.Find(i, kBrtEndSortCond));
         condition_dropped = changed = true;
       } else {
         ++conditions_left;
@@ -755,7 +729,7 @@ bool RemapAutoFilter(Edit& edit, std::size_t begin, const StructuralEdit& e) {
     }
   }
   if (condition_dropped && conditions_left == 0U && sort_begin < end) {
-    edit.Drop(sort_begin, edit.Find(sort_begin, kEndSortState));
+    edit.Drop(sort_begin, edit.Find(sort_begin, kBrtEndSortState));
   }
   return changed;
 }
@@ -773,7 +747,7 @@ bool RemapBreaks(Edit& edit, std::size_t begin, std::uint16_t end_type, const St
   std::uint32_t manual = 0;
   for (std::size_t i = begin + 1U; i < end; ++i) {
     const FramedRecord& rec = edit.recs[i];
-    if (rec.type != kBrk || rec.payload.size < 16U) {
+    if (rec.type != kBrtBrk || rec.payload.size < 16U) {
       continue;
     }
     const std::uint32_t id = load_u32(rec.payload.data);
@@ -829,54 +803,55 @@ void RemapSlotChildRefs(std::vector<std::uint8_t>& buf, const StructuralEdit& e)
     switch (edit.recs[i].type) {
       case kBeginAFilter: {
         changed = RemapAutoFilter(edit, i, e) || changed;
-        i = std::min(edit.Find(i, kEndAFilter), edit.recs.size() - 1U);
+        i = std::min(edit.Find(i, kBrtEndAFilter), edit.recs.size() - 1U);
         break;
       }
-      case kBeginRwBrk:
-      case kBeginColBrk:
-        if ((edit.recs[i].type == kBeginRwBrk) == e.row_axis) {
-          changed = RemapBreaks(edit, i, edit.recs[i].type == kBeginRwBrk ? kEndRwBrk : kEndColBrk, e) || changed;
+      case kBrtBeginRwBrk:
+      case kBrtBeginColBrk:
+        if ((edit.recs[i].type == kBrtBeginRwBrk) == e.row_axis) {
+          changed =
+              RemapBreaks(edit, i, edit.recs[i].type == kBrtBeginRwBrk ? kBrtEndRwBrk : kBrtEndColBrk, e) || changed;
         }
         break;
-      case kRangeProtection:
+      case kBrtRangeProtection:
         if (note(RemapSqrfxAt(edit, i, 2U, move))) {
           edit.Drop(i, i);
         }
         break;
-      case kSlc:
+      case kBrtSlc:
         if (note(RemapRectAt(edit, i, 0U, true, move))) {
           edit.Drop(i, i);
           cells_dropped = true;
         }
         break;
-      case kBeginSortState:
+      case kBrtBeginSortState:
         if (note(RemapRectAt(edit, i, 2U, false, move))) {
-          edit.Drop(i, edit.Find(i, kEndSortState));
+          edit.Drop(i, edit.Find(i, kBrtEndSortState));
         }
         break;
-      case kBeginSortCond:
+      case kBrtBeginSortCond:
         if (note(RemapRectAt(edit, i, 2U, false, move))) {
-          edit.Drop(i, edit.Find(i, kEndSortCond));
+          edit.Drop(i, edit.Find(i, kBrtEndSortCond));
         }
         break;
-      case kCellWatch: {
+      case kBrtCellWatch: {
         // A watch on a deleted cell keeps its address.
         const Outcome outcome = RemapRectAt(edit, i, 0U, true, move);
         changed = changed || outcome == Outcome::kChanged;
         break;
       }
-      case kCellIgnoreEc:
+      case kBrtCellIgnoreEC:
         // The first entry an edit empties takes every later entry with it.
         if (note(RemapSqrfxAt(edit, i, 4U, cut))) {
-          for (std::size_t j = i; j < edit.recs.size() && edit.recs[j].type == kCellIgnoreEc; ++j) {
+          for (std::size_t j = i; j < edit.recs.size() && edit.recs[j].type == kBrtCellIgnoreEC; ++j) {
             edit.Drop(j, j);
           }
         }
         break;
-      case kBeginWebPubItem:
+      case kBrtBeginWebPubItem:
         if (edit.recs[i].payload.size >= 4U && load_u32(edit.recs[i].payload.data) == kWebSourceRange &&
             note(RemapRectAt(edit, i, 9U, false, move))) {
-          edit.Drop(i, edit.Find(i, kEndWebPubItem));
+          edit.Drop(i, edit.Find(i, kBrtEndWebPubItem));
         }
         break;
       default:
@@ -889,13 +864,13 @@ void RemapSlotChildRefs(std::vector<std::uint8_t>& buf, const StructuralEdit& e)
   if (cells_dropped) {
     SettleScenarios(edit);
   }
-  edit.DropEmpty(kBeginSortState, kEndSortState, kBeginSortCond);
-  edit.DropEmpty(kBeginCellIgnoreEcs, kEndCellIgnoreEcs, kCellIgnoreEc);
-  edit.DropEmpty(kBeginWebPubItems, kEndWebPubItems, kBeginWebPubItem);
-  for (std::size_t i = edit.Find(0, kBeginWebPubItems); i < edit.recs.size();
-       i = edit.Find(i + 1U, kBeginWebPubItems)) {
-    const std::size_t close = edit.Find(i, kEndWebPubItems);
-    const auto kept = static_cast<std::uint32_t>(CountKept(edit, i, close, kBeginWebPubItem));
+  edit.DropEmpty(kBrtBeginSortState, kBrtEndSortState, kBrtBeginSortCond);
+  edit.DropEmpty(kBrtBeginCellIgnoreECs, kBrtEndCellIgnoreECs, kBrtCellIgnoreEC);
+  edit.DropEmpty(kBrtBeginWebPubItems, kBrtEndWebPubItems, kBrtBeginWebPubItem);
+  for (std::size_t i = edit.Find(0, kBrtBeginWebPubItems); i < edit.recs.size();
+       i = edit.Find(i + 1U, kBrtBeginWebPubItems)) {
+    const std::size_t close = edit.Find(i, kBrtEndWebPubItems);
+    const auto kept = static_cast<std::uint32_t>(CountKept(edit, i, close, kBrtBeginWebPubItem));
     if (edit.keep[i] && edit.recs[i].payload.size >= 4U && load_u32(edit.recs[i].payload.data) != kept) {
       std::vector<std::uint8_t> out = CurrentPayload(edit, i);
       store_u32(out.data(), kept);

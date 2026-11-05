@@ -13,6 +13,9 @@
 
 namespace formulon::io {
 
+/// `<ext uri>` of the x14 `<dataValidations>` container.
+inline constexpr const char* kX14DataValidationsExtUri = "{CCE6A557-97BC-4b89-ADB6-D9C93CAAB3DF}";
+
 inline constexpr std::array<EnumName, 7> kDataValidationTypeNames = {{
     {1, "whole"},
     {2, "decimal"},

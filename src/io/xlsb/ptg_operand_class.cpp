@@ -166,10 +166,7 @@ Shape Shapes::name_shape(const parser::AstNode& node) const {
 bool Shapes::positive_int(const parser::AstNode& node, std::uint32_t want) const {
   std::uint32_t n = 0;
   if (node.kind() == parser::NodeKind::Literal && node.as_literal().is_number()) {
-    const double d = node.as_literal().as_number();
-    n = d >= 1.0 && d <= 65535.0 && d == static_cast<double>(static_cast<std::uint32_t>(d))
-            ? static_cast<std::uint32_t>(d)
-            : 0U;
+    n = positive_ptg_int(node.as_literal().as_number());
   } else if (node.kind() == parser::NodeKind::NameRef && binding(node) == nullptr) {
     n = defined(node).positive_int;
   }

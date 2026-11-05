@@ -42,6 +42,7 @@
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/retained_part_fingerprint.h"
+#include "io/xlsb/sheet_properties_records.h"
 #include "io/xlsb/sheet_writer.h"
 #include "io/xlsb/slicer_records.h"
 #include "io/xlsb/sst_writer.h"
@@ -131,23 +132,6 @@ void ReportDeferred(std::uint32_t* count, std::string_view kind, std::size_t ite
       .field("count", static_cast<std::int64_t>(items))
       .field("sheet_index", static_cast<std::int64_t>(sheet_index))
       .warn();
-}
-
-bool IsRepresentableBaseColumnWidth(double value) {
-  return std::isfinite(value) && value >= 0.0 && value <= 255.0 && std::floor(value) == value;
-}
-
-bool IsRepresentableDefaultColumnWidth(double value) {
-  constexpr double kMaxDefaultColumnWidth = 65535.0 / 256.0;
-  return std::isfinite(value) && value >= 0.0 && value <= kMaxDefaultColumnWidth;
-}
-
-bool IsRepresentableDefaultRowHeight(double value) {
-  constexpr double kMaxDefaultRowHeight = 65535.0 / 20.0;
-  if (!std::isfinite(value) || value < 0.0 || value > kMaxDefaultRowHeight) {
-    return false;
-  }
-  return std::isfinite(std::round(value * 20.0));
 }
 
 /// Fails a retained part (pivot table, pivot cache, styles) whose model

@@ -62,6 +62,11 @@ xlsb::NameShapes name_shapes(const Workbook& wb, std::size_t sheet_index);
 bool formula_cell_always_calculates(const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell,
                                     const xlsb::NameShapes& names);
 
+/// As above for a caller that already parsed the cell's formula (body after
+/// the `=`); `root` is null when that parse failed.
+bool formula_cell_always_calculates(const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell,
+                                    const parser::AstNode* root, const xlsb::NameShapes& names);
+
 /// True when Excel 365 marks `root`, a formula typed into sheet
 /// `sheet_index` of `wb`, as a dynamic-array formula
 /// (`xlsb::formula_is_dynamic_array` over `wb`'s defined names).

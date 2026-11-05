@@ -82,7 +82,6 @@ constexpr std::uint16_t kIconReverse = 0x04;
 // be preceded by a copy of that dxf: BrtBeginDXFs (FRTBlank, count 1), one
 // BrtDXF prefixed by an FRTBlank, BrtEndDXFs.
 constexpr std::size_t kRule14TailBytes = kGuidBytes + 4U;
-constexpr std::uint32_t kNoDxf = 0xFFFFFFFFU;
 
 Error Refuse(const std::string& what) {
   return make_error(FormulonErrorCode::kInvalidArgument, what, "context=write_xlsb");
@@ -717,7 +716,7 @@ Expected<void, Error> EmitIconRule14(std::vector<std::uint8_t>& dst, const cf::C
   const auto put = [&head](std::size_t at, std::uint32_t v) { store_u32(head.data() + at, v); };
   put(4, kTypeMultistate);
   put(8, kTemplateMultistate);
-  put(12, 0xFFFFFFFFU);
+  put(12, kNoDxf);
   put(kRule14PriorityOffset, static_cast<std::uint32_t>(rule.priority));
   if (!rule.id.empty()) {
     std::array<std::uint8_t, kGuidBytes> guid{};

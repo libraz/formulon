@@ -338,21 +338,12 @@ void emit_ws_fmt_info(std::vector<std::uint8_t>& dst, const SheetFormatDefaults&
   // while the OOXML model stores it in character units. The sentinel is the
   // only absent marker; zero is a valid explicit width.
   constexpr std::uint16_t kCanonicalDefaultColumnWidth = 8U;
-  constexpr double kMaxDefaultColumnWidth = 65535.0 / 256.0;
-  constexpr double kMaxDefaultRowHeight = 65535.0 / 20.0;
 
-  const bool valid_base_col_width = std::isfinite(defaults.base_col_width) && defaults.base_col_width >= 0.0 &&
-                                    defaults.base_col_width <= 255.0 &&
-                                    std::floor(defaults.base_col_width) == defaults.base_col_width;
+  const bool valid_base_col_width = IsRepresentableBaseColumnWidth(defaults.base_col_width);
   const bool valid_default_col_width =
-      !defaults.has_default_col_width ||
-      (std::isfinite(defaults.default_col_width) && defaults.default_col_width >= 0.0 &&
-       defaults.default_col_width <= kMaxDefaultColumnWidth);
+      !defaults.has_default_col_width || IsRepresentableDefaultColumnWidth(defaults.default_col_width);
   const bool valid_default_row_height =
-      !defaults.has_default_row_height ||
-      (std::isfinite(defaults.default_row_height) && defaults.default_row_height >= 0.0 &&
-       defaults.default_row_height <= kMaxDefaultRowHeight &&
-       std::isfinite(std::round(defaults.default_row_height * 20.0)));
+      !defaults.has_default_row_height || IsRepresentableDefaultRowHeight(defaults.default_row_height);
 
   const std::uint16_t base_col_width =
       valid_base_col_width ? static_cast<std::uint16_t>(defaults.base_col_width) : kCanonicalDefaultColumnWidth;

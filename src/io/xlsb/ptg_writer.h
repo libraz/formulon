@@ -242,6 +242,14 @@ void collect_sheet_qualified_names(const parser::AstNode& node,
 void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
                               SheetRangeTable& ranges, std::unordered_set<std::uint64_t>& seen);
 
+/// `d` as the integer `PtgInt` stores for a literal (1..65535); 0 for any
+/// other number.
+inline std::uint32_t positive_ptg_int(double d) {
+  return d >= 1.0 && d <= 65535.0 && d == static_cast<double>(static_cast<std::uint32_t>(d))
+             ? static_cast<std::uint32_t>(d)
+             : 0U;
+}
+
 /// What a formula can know of a defined name from the name's own formula,
 /// without evaluating it.
 struct NameShape {
