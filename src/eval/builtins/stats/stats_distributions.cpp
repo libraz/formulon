@@ -75,7 +75,7 @@ Value NormSDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!z) {
     return Value::error(z.error());
   }
-  auto cum = read_bool_arg(args, 1);
+  auto cum = coerce_to_bool(args[1]);
   if (!cum) {
     return Value::error(cum.error());
   }

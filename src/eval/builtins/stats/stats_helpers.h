@@ -68,14 +68,6 @@ using builtins_detail::to_finite_value;
 using builtins_detail::read_number_pair;
 using builtins_detail::read_number_triple;
 
-inline Expected<bool, ErrorCode> read_bool_arg(const Value* args, std::uint32_t index) {
-  auto value = coerce_to_bool(args[index]);
-  if (!value) {
-    return std::move(value.error());
-  }
-  return value.value();
-}
-
 // Leading numeric arguments followed by a trailing `cumulative` flag, as the
 // `*.DIST` family takes them. Numbers are read before the flag so the
 // left-most error wins.
@@ -96,7 +88,7 @@ inline Expected<PairCumulative, ErrorCode> read_pair_cumulative(const Value* arg
   if (!input) {
     return std::move(input.error());
   }
-  auto cum = read_bool_arg(args, 2);
+  auto cum = coerce_to_bool(args[2]);
   if (!cum) {
     return std::move(cum.error());
   }
@@ -108,7 +100,7 @@ inline Expected<TripleCumulative, ErrorCode> read_triple_cumulative(const Value*
   if (!input) {
     return std::move(input.error());
   }
-  auto cum = read_bool_arg(args, 3);
+  auto cum = coerce_to_bool(args[3]);
   if (!cum) {
     return std::move(cum.error());
   }
