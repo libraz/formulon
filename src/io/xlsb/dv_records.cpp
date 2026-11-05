@@ -174,7 +174,6 @@ std::optional<DataValidation> DecodeDVal14(ByteSpan p, const FeatureFormulaReadC
   if (((flags.value() & kStrLookup) != 0U) != IsInlineList(dv)) {
     return std::nullopt;
   }
-  dv.x14_placement = true;
   return dv;
 }
 

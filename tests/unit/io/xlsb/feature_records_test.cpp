@@ -953,10 +953,6 @@ TEST(XlsbDv14, LoadsToTheModelOfExcelsXlsx) {
 
   const std::vector<DataValidation>& dvs = from_xlsb.sheet(1).validations();
   ASSERT_EQ(dvs.size(), 5U);
-  for (std::size_t i = 0; i < 3U; ++i) {
-    EXPECT_FALSE(dvs[i].x14_placement) << i;
-  }
-  EXPECT_TRUE(dvs[3].x14_placement);
   EXPECT_EQ(dvs[3].type, 3U);
   EXPECT_EQ(Canonical(dvs[3].formula1), Canonical(std::string("Sheet1!$A$1:$A$3")));
   ASSERT_EQ(dvs[3].ranges.size(), 1U);
@@ -964,7 +960,6 @@ TEST(XlsbDv14, LoadsToTheModelOfExcelsXlsx) {
   EXPECT_EQ(dvs[3].ranges[0].first_col, 6U);
   EXPECT_FALSE(dvs[3].allow_blank);
   EXPECT_TRUE(dvs[3].show_dropdown);
-  EXPECT_TRUE(dvs[4].x14_placement);
   EXPECT_EQ(dvs[4].type, 7U);
   EXPECT_EQ(Canonical(dvs[4].formula1), Canonical(std::string("Sheet1!$A$1>0")));
   EXPECT_TRUE(dvs[4].formula2.empty());

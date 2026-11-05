@@ -906,20 +906,12 @@ TEST(CFWriter, X14RuleKeepsItsOwnSheetReferencesBare) {
   EXPECT_NE(entries.find("<xm:f>Sheet1!$A$1&gt;SUM($B$1:$B$3)+C1</xm:f>"), std::string::npos) << entries;
 }
 
-TEST(CFWriter, X14PlacementKeepsARuleInTheExtension) {
-  // A rule read from the extension stays there after its target sheet is
-  // deleted, though `#REF!>0` names no sheet.
+TEST(CFWriter, BareRefErrorRuleIsWrittenToTheBaseElement) {
   cf::ConditionalFormat cf = MixedBlock();
   cf.rules[0].formula1 = "#REF!>0";
   cf.rules[0].id = "{00000000-000E-0000-0100-000001000000}";
-  cf.rules[0].x14_placement = true;
-  EXPECT_EQ(write_conditional_formattings({cf}, kDxfCount, nullptr, kSheet2).find("#REF!"), std::string::npos);
-  EXPECT_NE(build_x14_cf_overlay_entries({cf}, nullptr, kSheet2)
-                .find("id=\"{00000000-000E-0000-0100-000001000000}\"><xm:f>#REF!&gt;0</xm:f>"),
-            std::string::npos);
-  // The same text without the mark is a local rule.
-  cf.rules[0].x14_placement = false;
   EXPECT_NE(write_conditional_formattings({cf}, kDxfCount, nullptr, kSheet2).find("#REF!"), std::string::npos);
+  EXPECT_EQ(build_x14_cf_overlay_entries({cf}, nullptr, kSheet2).find("#REF!"), std::string::npos);
 }
 
 TEST(CFWriter, MintedIdAvoidsIdsInUse) {
@@ -957,14 +949,12 @@ TEST(CFWriter, X14OnlyRulesReadBackIntoTheModel) {
   ASSERT_EQ(out.size(), 2u);
   ASSERT_EQ(out[1].rules.size(), 1u);
   const cf::CFRule& adopted = out[1].rules[0];
-  EXPECT_TRUE(adopted.x14_placement);
   EXPECT_EQ(adopted.priority, 1);
   EXPECT_EQ(adopted.id, "{00000000-000E-0000-0100-000001000000}");
   EXPECT_EQ(adopted.formula1.value_or(""), "Sheet1!$A$1>0");
   EXPECT_EQ(adopted.dxf_id, std::optional<std::uint32_t>(0U));
   EXPECT_EQ(dxfs.size(), 1u);
   EXPECT_EQ(out[1].sqref, cf.sqref);
-  EXPECT_FALSE(out[0].rules[0].x14_placement);
 }
 
 }  // namespace

@@ -75,8 +75,7 @@ pugi::xml_node FindContainer(const pugi::xml_node& ext_lst) {
 }  // namespace
 
 bool data_validation_in_x14(const DataValidation& v, std::string_view own_sheet) {
-  return v.x14_placement || FormulaReferencesOtherSheet(v.formula1, own_sheet) ||
-         FormulaReferencesOtherSheet(v.formula2, own_sheet);
+  return FormulaReferencesOtherSheet(v.formula1, own_sheet) || FormulaReferencesOtherSheet(v.formula2, own_sheet);
 }
 
 void append_data_validation_attrs(std::string& out, const DataValidation& v) {

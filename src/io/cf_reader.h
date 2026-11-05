@@ -70,7 +70,7 @@ namespace formulon::io {
 /// An `<x14:cfRule>` Excel stores in the extension alone -- it carries a
 /// `priority` and no legacy `<cfRule>` links to it, as for a rule naming
 /// another sheet or a custom icon set -- is read into a block of its own
-/// with `CFRule::x14_placement` set, when the model can hold its type. Its
+/// when the model can hold its type. Its
 /// inline `<x14:dxf>` is matched against `dxfs` (the package's `<dxfs>`
 /// table) and appended when no equal entry exists; a NULL `dxfs` drops the
 /// formatting. The caller removes these rules from the captured extension

@@ -915,7 +915,6 @@ std::optional<cf::CFRule> DecodeFormulaRule14(const std::vector<FramedRecord>& r
     rule.dxf_id = head->dxf;
   }
   rule.id = std::move(head->id);
-  rule.x14_placement = true;
   return rule;
 }
 
@@ -996,9 +995,6 @@ bool is_x14_only_rule(const cf::CFRule& rule, std::string_view own_sheet) {
   }
   if (IsVisualRule(rule.type)) {
     return false;
-  }
-  if (rule.x14_placement) {
-    return true;
   }
   return !own_sheet.empty() &&
          (FormulaNamesOtherSheet(rule.formula1, own_sheet) || FormulaNamesOtherSheet(rule.formula2, own_sheet));
@@ -1101,10 +1097,8 @@ Expected<void, Error> reconcile_x14_rules(std::vector<std::uint8_t>& records,
                                           const std::vector<XlsbExternSheetEntry>& extern_sheets,
                                           std::unordered_set<std::string>& linked) {
   std::unordered_map<std::string, std::pair<const cf::ConditionalFormat*, const cf::CFRule*>> model;
-  std::unordered_set<std::string> model_ids;
   for (const cf::ConditionalFormat& format : formats) {
     for (const cf::CFRule& rule : format.rules) {
-      model_ids.insert(rule.id);
       if (!rule.id.empty() && !is_x14_icon_set_rule(rule) && is_x14_only_rule(rule, own_sheet)) {
         model.emplace(rule.id, std::make_pair(&format, &rule));
       }
@@ -1151,10 +1145,10 @@ Expected<void, Error> reconcile_x14_rules(std::vector<std::uint8_t>& records,
     }
     const auto it = model.find(head->id);
     if (it == model.end()) {
-      // Only a rule the reader adopted, since removed from the model,
-      // leaves; one it could not adopt stays verbatim.
-      if (model_ids.count(head->id) == 0U &&
-          DecodeFormulaRule14(recs, first, last, sqref_base(ranges), read_ctx).has_value()) {
+      // Only a rule the reader adopted, since removed from the model or no
+      // longer x14-only (the base records carry it), leaves; one it could not
+      // adopt stays verbatim.
+      if (DecodeFormulaRule14(recs, first, last, sqref_base(ranges), read_ctx).has_value()) {
         outcome.kind = RuleOutcome::Kind::kDrop;
       }
       return outcome;

@@ -161,7 +161,6 @@ TEST(OoxmlX14CrossSheet, CfExcelRulesLoadIntoTheModel) {
   EXPECT_EQ(p1->type, cf::RuleType::Expression);
   EXPECT_EQ(p1->formula1.value_or(""), "Sheet1!$A$1>0");
   EXPECT_EQ(p1->id, kM6Id1);
-  EXPECT_TRUE(p1->x14_placement);
   EXPECT_FALSE(p1->dxf_id.has_value());
   EXPECT_EQ(p4->type, cf::RuleType::CellIs);
   ASSERT_TRUE(p4->op.has_value());
@@ -296,6 +295,27 @@ TEST(OoxmlX14CrossSheet, CfRuleWhoseTargetSheetIsDeletedStaysInX14) {
   EXPECT_EQ(MainBlocks(xml).find("#REF!"), std::string::npos) << xml;
 }
 
+// Excel moves a bare `#REF!` rule it read from the extension to the main element.
+TEST(OoxmlX14CrossSheet, CfBareRefErrorFromX14MovesToBaseElement) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  wb.sheet(1).set_ext_lst_xml(
+      "<extLst><ext uri=\"{78C0D931-6437-407d-A8EE-F0AAD7539E65}\" "
+      "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\">"
+      "<x14:conditionalFormattings><x14:conditionalFormatting "
+      "xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\">"
+      "<x14:cfRule type=\"expression\" priority=\"1\" id=\"{00000000-000E-0000-0100-000001000000}\">"
+      "<xm:f>#REF!&gt;0</xm:f><x14:dxf/></x14:cfRule><xm:sqref>C1:C3</xm:sqref>"
+      "</x14:conditionalFormatting></x14:conditionalFormattings></ext></extLst>");
+  const Workbook loaded = Load(Save(wb));
+  const cf::CFRule* rule = RuleWithPriority(loaded.sheet(1), 1);
+  ASSERT_NE(rule, nullptr);
+  EXPECT_EQ(rule->formula1.value_or(""), "#REF!>0");
+  const std::string xml = ReadPart(Save(loaded), "xl/worksheets/sheet2.xml");
+  EXPECT_NE(MainBlocks(xml).find("#REF!"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("<x14:conditionalFormatting"), std::string::npos) << xml;
+}
+
 /// Every `<x14:dataValidation>` of the worksheet part `xml`, keyed by sqref,
 /// without its `xr:uid` (the only attribute a save leaves out).
 std::map<std::string, std::string> X14Dvs(const std::string& xml) {
@@ -335,11 +355,8 @@ TEST(OoxmlX14CrossSheet, DvExcelValidationsLoadIntoTheModel) {
   ASSERT_NE(own, nullptr);
   ASSERT_NE(list, nullptr);
   ASSERT_NE(custom, nullptr);
-  EXPECT_FALSE(own->x14_placement);
   EXPECT_EQ(own->formula1, "$A$1:$A$3");
-  EXPECT_TRUE(list->x14_placement);
   EXPECT_EQ(list->formula1, "Sheet1!$A$1:$A$3");
-  EXPECT_TRUE(custom->x14_placement);
   EXPECT_EQ(custom->formula1, "Sheet1!$A$1>0");
   EXPECT_TRUE(list->extra_attrs.empty()) << list->extra_attrs;
   EXPECT_EQ(sheet.ext_lst_xml().find("x14:dataValidations"), std::string::npos) << sheet.ext_lst_xml();
@@ -401,6 +418,23 @@ TEST(OoxmlX14CrossSheet, DvValidationWhoseTargetSheetIsDeletedStaysInX14) {
   ASSERT_EQ(dvs.count("G1"), 1U) << xml;
   EXPECT_NE(dvs.at("G1").find("<xm:f>#REF!</xm:f>"), std::string::npos) << dvs.at("G1");
   EXPECT_EQ(xml.find("<dataValidations"), std::string::npos) << xml;
+}
+
+TEST(OoxmlX14CrossSheet, DvBareRefErrorFromX14MovesToBaseElement) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  wb.sheet(1).set_ext_lst_xml(
+      "<extLst><ext uri=\"{CCE6A557-97BC-4b89-ADB6-D9C93CAAB3DF}\" "
+      "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\">"
+      "<x14:dataValidations count=\"1\" xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\">"
+      "<x14:dataValidation type=\"list\"><x14:formula1><xm:f>#REF!</xm:f></x14:formula1>"
+      "<xm:sqref>G1</xm:sqref></x14:dataValidation>"
+      "</x14:dataValidations></ext></extLst>");
+  const Workbook loaded = Load(Save(wb));
+  ASSERT_EQ(loaded.sheet(1).validations().size(), 1U);
+  const std::string xml = ReadPart(Save(loaded), "xl/worksheets/sheet2.xml");
+  EXPECT_NE(xml.find("<dataValidations"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("<x14:dataValidation"), std::string::npos) << xml;
 }
 
 TEST(OoxmlX14CrossSheet, DvUnreadableEntrySurvivesAndAdoptedOnesAreNotDuplicated) {

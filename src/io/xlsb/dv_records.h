@@ -60,7 +60,7 @@ Expected<void, Error> emit_dv_block(std::vector<std::uint8_t>& dst, const std::v
                                     const FeatureFormulaWriteContext& ctx, std::string_view own_sheet);
 
 /// Appends every BrtDVal14 of the retained tail `records` to `validations`,
-/// marked `x14_placement`. The records stay in the tail as the slots
+/// The records stay in the tail as the slots
 /// `place_x14_validations` rewrites: a retained future record is what keeps
 /// the source BrtExternSheet table seeding the written one, which the 3-D
 /// references of a record it cannot adopt index.

@@ -50,13 +50,12 @@ namespace formulon::io {
 
 /// The sheet a list of conditional formats belongs to.
 ///
-/// A rule naming another sheet in a formula or a `cfvo` (or carrying
-/// `CFRule::x14_placement`) is written only in the x14 extension, as Excel
+/// A rule naming another sheet in a formula or a `cfvo` is written only in the x14 extension, as Excel
 /// does: `<x14:cfRule>` with an inline `<x14:dxf>` and `<xm:f>` formulas,
 /// whose references to `sheet_name` itself stay unqualified as Excel writes
 /// them. A rule without an id gets
 /// `cf::x14_rule_id(sheet_index, priority, ...)` for the write only. An empty
-/// `sheet_name` places rules by `x14_placement` alone. `dxfs` is the package's
+/// `sheet_name` places no rule in x14. `dxfs` is the package's
 /// `<dxfs>` table; null writes every `<x14:dxf>` empty.
 struct CfSheetContext {
   std::string_view sheet_name;

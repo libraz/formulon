@@ -98,7 +98,7 @@ bool is_x14_icon_set_rule(const cf::CFRule& rule);
 
 /// True for a rule written only as a standalone x14 rule: a custom icon set,
 /// or a rule with formula slots (or none, as top10 / aboveAverage /
-/// uniqueness) that carries `x14_placement` or whose formulas name a sheet
+/// uniqueness) whose formulas name a sheet
 /// other than `own_sheet`. Colour scales, data bars and plain icon sets stay
 /// legacy records.
 bool is_x14_only_rule(const cf::CFRule& rule, std::string_view own_sheet);
@@ -106,8 +106,8 @@ bool is_x14_only_rule(const cf::CFRule& rule, std::string_view own_sheet);
 /// Moves every standalone x14 rule (iPri > 0) of the retained tail `records`
 /// the model can hold into `formats`. A custom icon set joins a block with
 /// the same ranges (or its legacy shadow) and its records are dropped, along
-/// with a block or container left empty. Any other rule comes in with
-/// `x14_placement`, one new block per x14 block, as the .xlsx reader adds
+/// with a block or container left empty. Any other rule comes in as
+/// one new block per x14 block, as the .xlsx reader adds
 /// them; its records stay retained, so the sheet references of the tail keep
 /// their table, and `reconcile_x14_rules` rewrites them from the model. A
 /// rule holding anything outside the supported shape stays retained.

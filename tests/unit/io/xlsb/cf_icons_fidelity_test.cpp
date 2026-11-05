@@ -347,8 +347,8 @@ std::string DescribeSheetCf(const Workbook& wb, std::size_t sheet) {
     os << "pivot=" << f.pivot_scope << "\n";
     for (const cf::CFRule& r : f.rules) {
       os << "  type=" << static_cast<int>(r.type) << " pri=" << r.priority << " stop=" << r.stop_if_true
-         << " id=" << r.id << " x14=" << r.x14_placement << " f1=" << Canonical(r.formula1)
-         << " f2=" << Canonical(r.formula2) << " op=" << (r.op ? static_cast<int>(*r.op) : -1) << " dxf=";
+         << " id=" << r.id << " f1=" << Canonical(r.formula1) << " f2=" << Canonical(r.formula2)
+         << " op=" << (r.op ? static_cast<int>(*r.op) : -1) << " dxf=";
       if (r.dxf_id && *r.dxf_id < wb.styles().dxfs.size()) {
         os << dxf_body_fragment(wb.styles().dxfs[*r.dxf_id]);
       } else {
@@ -366,13 +366,12 @@ TEST(XlsbCrossSheetCf, ExcelXlsbLoadsAsItsXlsxTwin) {
   const Workbook xlsx = LoadXlsx(ReadFixture("structural_ref_m6.xlsx"));
   const std::string described = DescribeSheetCf(xlsb, 1);
   EXPECT_EQ(described, DescribeSheetCf(xlsx, 1));
-  EXPECT_NE(described.find("pri=6 stop=0 id={00000000-000E-0000-0100-000006000000} x14=1 f1=SUM(Sheet1!A:A)>0"),
+  EXPECT_NE(described.find("pri=6 stop=0 id={00000000-000E-0000-0100-000006000000} f1=SUM(Sheet1!A:A)>0"),
             std::string::npos)
       << described;
-  EXPECT_NE(described.find("pri=4 stop=0 id={00000000-000E-0000-0100-000004000000} x14=1 f1=Sheet1!$A$1"),
-            std::string::npos)
+  EXPECT_NE(described.find("pri=4 stop=0 id={00000000-000E-0000-0100-000004000000} f1=Sheet1!$A$1"), std::string::npos)
       << described;
-  EXPECT_NE(described.find("pri=1 stop=0 id={00000000-000E-0000-0100-000001000000} x14=1 f1=Sheet1!$A$1>0"),
+  EXPECT_NE(described.find("pri=1 stop=0 id={00000000-000E-0000-0100-000001000000} f1=Sheet1!$A$1>0"),
             std::string::npos)
       << described;
 }
@@ -392,7 +391,6 @@ TEST(XlsbCrossSheetCf, ExcelXlsbRuleKeepsStopIfTrueAndDxf) {
   }
   ASSERT_NE(cross, nullptr) << described;
   EXPECT_TRUE(cross->stop_if_true);
-  EXPECT_TRUE(cross->x14_placement);
   ASSERT_TRUE(cross->dxf_id.has_value());
   EXPECT_EQ(*cross->dxf_id, 1U);
 }
@@ -428,10 +426,10 @@ TEST(XlsbCrossSheetCf, SaveRoutesCrossSheetRulesToX14Records) {
 
   const Workbook back = LoadXlsb(first);
   const std::string described = DescribeSheetCf(back, 1);
-  EXPECT_NE(described.find("pri=1 stop=1 id={00000000-000E-0000-0100-000001000000} x14=1 f1=Sheet1!$A$1>0"),
+  EXPECT_NE(described.find("pri=1 stop=1 id={00000000-000E-0000-0100-000001000000} f1=Sheet1!$A$1>0"),
             std::string::npos)
       << described;
-  EXPECT_NE(described.find("pri=2 stop=0 id= x14=0 f1=$A$1>0"), std::string::npos) << described;
+  EXPECT_NE(described.find("pri=2 stop=0 id= f1=$A$1>0"), std::string::npos) << described;
 
   const std::vector<std::uint8_t> second = SaveXlsb(back);
   EXPECT_EQ(SheetPart(second, "xl/worksheets/sheet2.bin"), SheetPart(first, "xl/worksheets/sheet2.bin"));

@@ -205,9 +205,6 @@ struct DataValidation {
   /// Attributes not represented by the model (`imeMode`, ...) retained as
   /// escaped ` name="value"` pairs.
   std::string extra_attrs;
-  /// Set when the validation was read from the x14 extension; it is written
-  /// there again even if its formulas no longer name another sheet.
-  bool x14_placement = false;
 };
 
 /// A registered spill region produced by a dynamic-array formula.

@@ -209,11 +209,23 @@ Expected<void, Error> apply_worksheet_metadata(const pugi::xml_document& doc, st
   // the SAX path recovers it too, via the metadata shell.
   if (pugi::xml_node ext_lst = worksheet.child("extLst")) {
     // Rules read into the model leave the capture; the writer rebuilds them.
-    std::unordered_set<std::string> adopted;
+    std::unordered_set<std::string> model_ids;
     for (const cf::ConditionalFormat& format : wb.sheet(i).conditional_formats()) {
       for (const cf::CFRule& rule : format.rules) {
-        if (rule.x14_placement && !rule.id.empty()) {
-          adopted.insert(rule.id);
+        if (!rule.id.empty()) {
+          model_ids.insert(rule.id);
+        }
+      }
+    }
+    // A standalone x14 rule (it carries a priority) whose id the model holds was adopted.
+    std::unordered_set<std::string> adopted;
+    for (pugi::xml_node ext : ext_lst.children("ext")) {
+      for (pugi::xml_node block : ext.child("x14:conditionalFormattings").children("x14:conditionalFormatting")) {
+        for (pugi::xml_node rule : block.children("x14:cfRule")) {
+          const std::string id = rule.attribute("id").value();
+          if (rule.attribute("priority") && model_ids.count(id) != 0U) {
+            adopted.insert(id);
+          }
         }
       }
     }

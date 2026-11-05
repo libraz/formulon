@@ -205,7 +205,6 @@ void ReadDataValidationEntry(const pugi::xml_node& dv, bool x14, std::vector<Dat
     return;
   }
   v.ranges = std::move(ranges_or.value());
-  v.x14_placement = x14;
 
   // type
   v.type = enum_from_name(kDataValidationTypeNames, attr_str(dv, "type"), std::uint8_t{0});

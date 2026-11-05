@@ -224,7 +224,6 @@ TEST(CfOverlay, CrossSheetRuleJoinsTheOverlayAheadOfOtherExtensions) {
   rule.priority = 1;
   rule.formula1 = "Sheet1!$A$1>0";
   rule.id = kExcelId1;
-  rule.x14_placement = true;
   block.rules.push_back(rule);
   const std::string merged = merge_x14_cf_entries(captured, {block}, nullptr, CfSheetContext{"Sheet2", 1, nullptr});
   const std::size_t cf_ext = merged.find("{78C0D931-6437-407d-A8EE-F0AAD7539E65}");

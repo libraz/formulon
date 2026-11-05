@@ -607,7 +607,6 @@ std::optional<cf::CFRule> ReadX14OnlyRule(const pugi::xml_node& rule, std::vecto
   cf::CFRule out;
   ReadCfRuleAttributes(rule, &out);
   out.id = std::string(attr_str(rule, "id"));
-  out.x14_placement = true;
   if (out.type == cf::RuleType::ColorScale) {
     const pugi::xml_node scale = rule.child("x14:colorScale");
     if (!scale) {

@@ -203,12 +203,9 @@ bool CfvoReferencesOtherSheet(const cf::CfValueObject& v, std::string_view own_s
   return v.type == cf::CfvoType::Formula && FormulaReferencesOtherSheet(v.value, own_sheet);
 }
 
-/// True when `r` is written only in the x14 extension: it was read from
-/// there, or a formula or `cfvo` of it names a sheet other than `own_sheet`.
+/// True when `r` is written only in the x14 extension: a formula or `cfvo`
+/// of it names a sheet other than `own_sheet`.
 bool RuleIsX14Only(const cf::CFRule& r, std::string_view own_sheet) {
-  if (r.x14_placement) {
-    return true;
-  }
   if (own_sheet.empty()) {
     return false;
   }
