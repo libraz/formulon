@@ -455,7 +455,12 @@ def rewrite(text: str, rel: str, f: Forms, r: Renames, counts: Counts) -> str:
     """The rewritten text of the file at `rel`."""
     if rel == CHANGELOG:
         head, sep, tail = _split_changelog(text)
-        return _markdown(_run(f.c, head, counts, "c"), rel, f, counts) + sep + tail
+        before, table, after = _split_migration_table(head)
+
+        def rewrite_prose(part: str) -> str:
+            return _markdown(_run(f.c, part, counts, "c"), rel, f, counts)
+
+        return rewrite_prose(before) + table + rewrite_prose(after) + sep + tail
     text = _run(f.c, text, counts, "c")
     ext = os.path.splitext(rel)[1]
     is_dts = rel.endswith(".d.ts")
@@ -502,6 +507,22 @@ def _py_imports(text: str, table: Dict[str, str], counts: Counts) -> str:
     return _PY_IMPORT_RE.sub(repl, text)
 
 
+def _split_migration_table(text: str) -> Tuple[str, str, str]:
+    """(text before, generated migration table, text after); the table spells former names on purpose."""
+    start = text.find("<!-- migration-table:begin")
+    end = text.find("<!-- migration-table:end -->", start) if start >= 0 else -1
+    if end < 0:
+        return text, "", ""
+    end += len("<!-- migration-table:end -->")
+    return text[:start], text[start:end], text[end:]
+
+
+def _changelog_prose(text: str) -> str:
+    """The Unreleased section without the generated migration table."""
+    before, _table, after = _split_migration_table(_split_changelog(text)[0])
+    return before + after
+
+
 def _split_changelog(text: str) -> Tuple[str, str, str]:
     """(Unreleased section, "", released sections); everything after Unreleased is history."""
     start = text.find(UNRELEASED)
@@ -523,7 +544,7 @@ def _split_changelog(text: str) -> Tuple[str, str, str]:
 def _hand_over_table(r: Renames, contents: Dict[str, str]) -> Dict[str, str]:
     """The C table, minus hand-over names the tree has already rewritten."""
     table = dict(r.c)
-    texts = [_split_changelog(t)[0] if rel == CHANGELOG else t for rel, t in contents.items()]
+    texts = [_changelog_prose(t) if rel == CHANGELOG else t for rel, t in contents.items()]
     for name, (giver_new, taker_old) in r.handed_over.items():
         taker_seen = any(re.search(rf"\b{re.escape(taker_old)}\b", t) for t in texts)
         giver_seen = any(re.search(rf"\b{re.escape(giver_new)}\b", t) for t in texts)

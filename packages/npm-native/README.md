@@ -113,11 +113,15 @@ console.log(evalFormula('=SUM(1,2,3)'));
 // { status: { ok: true, ... }, value: { kind: 1, number: 6, ... } }
 
 const wb = Workbook.createDefault().value;
-wb.setFormula(0, 0, 0, '=1+2');
-wb.recalc();
-const r = wb.getValue(0, 0, 0);
-if (r.status.ok && r.value.kind === ValueKind.Number) {
-  console.log(r.value.number);  // 3
+try {
+  wb.setFormula(0, 0, 0, '=1+2');
+  wb.recalc();
+  const r = wb.getValue(0, 0, 0);
+  if (r.status.ok && r.value.kind === ValueKind.Number) {
+    console.log(r.value.number);  // 3
+  }
+} finally {
+  wb.dispose();
 }
 ```
 
@@ -133,8 +137,8 @@ through `Number.MAX_SAFE_INTEGER`.
 
 The `{ status, value }` envelope mirrors the WASM package's contract for
 engine operations. Module loading can throw when the native prebuild is not
-available; after the module loads, fallible engine operations return
-`{ ok: false, code, message, context }`.
+available; after the module loads, fallible engine operations report failure through
+`status`: `{ ok: false, code, message, context }`.
 
 ## Memory accounting
 

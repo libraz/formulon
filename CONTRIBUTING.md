@@ -294,10 +294,13 @@ You can then re-run `make oracle-contribute` to actually generate.
 For bug fixes, new functions, parser improvements, etc.:
 
 1. Fork, branch off `main`.
-2. Read [CLAUDE.md](CLAUDE.md) for the development standards
-   (`Expected<T, Error>`, no exceptions, RAII, oracle-driven function
-   work).
+2. Follow the development standards: `Expected<T, Error>` for errors, no
+   exceptions or RTTI, RAII, and oracle-driven function work.
 3. Run `make build && make test` (fast suite, ~30s) before pushing.
+   A change to `src/c_api/formulon_c.h` or to a binding also needs
+   `make node-test`, `make python-test` and
+   `python3 tools/dev/check_binding_drift.py all`; every public name
+   is recorded in `tools/api/names.yaml`.
 4. For functions, add cases to `tests/oracle/cases/<category>.yaml` and
    regenerate the primary golden on a Mac (`make oracle-gen
    SUITE=<category>`). Reviewers will not merge an unimplemented

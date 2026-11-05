@@ -9,8 +9,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### BREAKING
 
-- **C ABI:** `fm_sheet_set_pivot_field_date_group` (`pivotFieldSetDateGroup`,
-  `pivot_field_set_date_group`) takes a mask of `FM_PIVOT_PERIOD_*` bits, a
+- **Names:** one naming convention covers every public function, type and
+  field in C, JavaScript and Python, and the former names are removed with no
+  aliases. The table under [Name migration](#name-migration) lists each former
+  name and what replaces it. Python static methods are module-level functions,
+  and the `version` / `version_string` aliases are gone.
+- **C ABI:** a function that acts on a sheet takes `size_t sheet_index`
+  explicitly. Count getters return `fm_status_t` and write the count through
+  `size_t* out_count`; a NULL handle reports
+  `FM_STATUS_BINDING_NULL_POINTER`. Getters take `const` handles, enum
+  parameters and fields cross the ABI as `int32_t`, and
+  `fm_workbook_get_pagination` is `fm_sheet_get_pagination`.
+- **C ABI:** an out-of-range sheet index returns
+  `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) instead of
+  `FM_STATUS_INVALID_ARGUMENT`. Every sheet-taking function checks the handle,
+  then NULL pointers, then the sheet index, then the remaining arguments. A
+  successful call leaves `fm_get_last_error_message` empty.
+- **C ABI:** fifteen functions take their input record as `const T*` instead of
+  by value (`fm_sheet_add_hyperlink`, `fm_sheet_add_merge`,
+  `fm_sheet_add_validation`, `fm_sheet_add_cf_rule`, `fm_workbook_add_font`,
+  `fm_workbook_add_cell_xf` and the other record-taking add and set
+  functions); a NULL record returns `FM_STATUS_BINDING_NULL_POINTER`. The row
+  setters (`fm_sheet_set_row_height`, `_set_row_auto_height`, `_set_row_hidden`,
+  `_set_row_outline`, `_set_row_collapsed`, `fm_sheet_clear_row_height`) take an
+  inclusive `(sheet_index, first, last, ...)` span like the column functions;
+  `last < first` returns `FM_STATUS_INVALID_ARGUMENT`.
+- **C ABI, JavaScript, Python:** one cell rectangle record, `fm_cell_rect_t`
+  (`CellRect`), with inclusive 0-based corners, replaces `fm_merge_range`,
+  `fm_print_range_t`, `fm_cf_cell_range_t`, `fm_viewport`, `MergeRange`,
+  `DataValidationRange` and `ConditionalFormatRange`. Inverted or out-of-grid
+  corners are rejected instead of normalised. Conditional-format and
+  validation ranges, protected ranges and print areas take `CellRect` arrays
+  instead of A1 text; table, chart and reference records carry `rect` or a
+  `SheetRect`.
+- **C ABI, JavaScript, Python:** records that live under a name are looked up
+  by that name (defined name, table style, cell style, hyperlink, person,
+  threaded comment, shape, slicer, drawing object, passthrough part, theme
+  script font). A missing key is reported as `out_present = 0` in C, as
+  `OptionalResult` in JavaScript and as `None` in Python. Adds that allocate an
+  index (`fm_workbook_add_sheet`, `fm_sheet_add_validation`,
+  `fm_workbook_add_cell_style_xf` and the others) take a trailing
+  `size_t* out_index`. `fm_workbook_evaluate_formula_array_cell` is replaced by
+  an owned `fm_value_array_t`, and slicers are addressed by the object id
+  `fm_sheet_add_slicer` returned.
+- **JavaScript, Python:** collections keyed by name are listed with `list*`
+  methods. The whole-collection walkers for index-keyed collections
+  (`getConditionalFormats`, `getValidations`, `getProtectedRanges`,
+  `listSparklineGroups`, `getExternalLinks`, `getCellPhoneticRuns`, Python
+  `iter_tables` and `iter_cells`) and Python's per-collection count helpers
+  are removed; use the count method with the index getter.
+- **JavaScript:** `Status.status` is `Status.code`. The workbook factories
+  return `OptionalResult<Workbook>`, drawing adds return `ObjectIdResult`, and
+  `FormulaResult`, `CommentResult`, `CompareTextResult`, `CellXfIndexResult`
+  and `FunctionMetadataResult` are replaced by `NumberResult`, `StringResult`
+  or `OptionalResult<T>`. Boolean getters return `BoolResult`; a missing image,
+  chart, comment, lambda text, number format or function metadata key is no
+  longer `INVALID_ARGUMENT`. Result records are `readonly`, enums are const
+  objects with matching union types, and update inputs take `Patch<T>`.
+  `Workbook` has `dispose()` and `[Symbol.dispose]()`, which release the handle
+  in both packages; `delete()` is no longer declared.
+- **Python:** tuple results are frozen dataclasses (`PivotGrandTotals`,
+  `SheetPrintTitles`, `SheetSelection`, `TableStyleDefaults`,
+  `IterativeSettings`, `StyleBatchIndices`), as are `Cell` and `Table`.
+  `get_display_text` and `format_value` return a `DisplayText`,
+  `evaluate_auto_filter` and `evaluate_table_auto_filter` an `AutoFilterEval`,
+  and `get_cells_in_range` and `get_invalid_cells` a `CellsInRange`, where they
+  returned tuples. `DefinedName` is a frozen dataclass. `get_comment_visible` returns
+  `Optional[bool]`, and an optional keyword argument defaults to `None`, which
+  leaves the field unchanged. `formulon/__init__.pyi` is removed; the package
+  carries inline annotations and `py.typed`.
+- **Command line:** plain output escapes only newline, carriage return, tab and
+  backslash, so a value pastes back as written; `--json` output is unchanged.
+  `paginate` prints print-area ranges in A1 notation. `eval` with no formula
+  exits with status 64.
+- **C ABI:** `fm_sheet_set_pivot_field_date_group` (`setPivotFieldDateGroup`,
+  `set_pivot_field_date_group`) takes a mask of `FM_PIVOT_PERIOD_*` bits, a
   calendar, an interval in days and start and end serials (NaN for automatic)
   in place of a granularity and year arguments. `fm_pivot_date_grouping_t` and
   the `date_*` members of `fm_pivot_field_info_t` are gone; the struct now
@@ -40,10 +113,956 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `naAsBlank` (`blanks_as`, `plot_visible_only`, `na_as_blank`). An omitted
   key keeps the element, `null` / `None` removes it, a value sets it.
 
+### Name migration
+
+<!-- migration-table:begin generated by tools/api/gen_migration_table.py; do not edit -->
+#### C ABI
+
+| Before | After |
+|---|---|
+| `fm_auto_filter` | `fm_auto_filter_t` |
+| `fm_border_record` | `fm_border_record_t` |
+| `fm_border_side` | `fm_border_side_t` |
+| `fm_buffer_free` | `fm_buffer_destroy` |
+| `fm_cell_clear_xf_index` | `fm_sheet_clear_cell_xf_index` |
+| `fm_cell_get_xf_index` | `fm_sheet_get_cell_xf_index` |
+| `fm_cell_nodes_at` | `fm_cell_nodes_get_node_at` |
+| `fm_cell_nodes_count` | `fm_cell_nodes_get_node_count` |
+| `fm_cell_range_at` | `fm_cell_range_get_cell_at` |
+| `fm_cell_range_count` | `fm_cell_range_get_cell_count` |
+| `fm_cell_set_xf_index` | `fm_sheet_set_cell_xf_index` |
+| `fm_cell_xf` | `fm_cell_xf_t` |
+| `fm_cf_cell_range_t` | folded into `fm_cell_rect_t` |
+| `fm_cf_results_cell_at` | `fm_cf_results_get_cell_at` |
+| `fm_cf_results_cell_count` | `fm_cf_results_get_cell_count` |
+| `fm_cf_results_match_at` | `fm_cf_results_get_match_at` |
+| `fm_chart_axis_at` | `fm_chart_get_axis_at` |
+| `fm_chart_axis_patch` | `fm_chart_axis_patch_t` |
+| `fm_chart_data_axis_title_at` | `fm_chart_data_get_axis_title_at` |
+| `fm_chart_data_category_at` | `fm_chart_data_get_category_at` |
+| `fm_chart_data_category_level_at` | `fm_chart_data_get_category_level_at` |
+| `fm_chart_data_category_level_size` | `fm_chart_data_get_category_level_size` |
+| `fm_chart_data_info` | `fm_chart_data_get_info` |
+| `fm_chart_data_range_at` | `fm_chart_data_get_range_at` |
+| `fm_chart_data_series_at` | `fm_chart_data_get_series_at` |
+| `fm_chart_data_series_points` | `fm_chart_data_get_series_points` |
+| `fm_chart_data_unresolved_at` | `fm_chart_data_get_unresolved_at` |
+| `fm_chart_display_patch` | `fm_chart_display_patch_t` |
+| `fm_chart_fill_patch` | `fm_chart_fill_patch_t` |
+| `fm_chart_hidden_category_at` | `fm_chart_get_hidden_category_at` |
+| `fm_chart_info` | `fm_chart_get_info` |
+| `fm_chart_insert` | `fm_chart_insert_t` |
+| `fm_chart_labels_patch` | `fm_chart_labels_patch_t` |
+| `fm_chart_legend_hidden_at` | `fm_chart_get_legend_hidden_at` |
+| `fm_chart_legend_patch` | `fm_chart_legend_patch_t` |
+| `fm_chart_line_patch` | `fm_chart_line_patch_t` |
+| `fm_chart_marker_patch` | `fm_chart_marker_patch_t` |
+| `fm_chart_plot_at` | `fm_chart_get_plot_at` |
+| `fm_chart_plot_axis_id_at` | `fm_chart_get_plot_axis_id_at` |
+| `fm_chart_plot_patch` | `fm_chart_plot_patch_t` |
+| `fm_chart_point_patch` | `fm_chart_point_patch_t` |
+| `fm_chart_preview_overrides` | `fm_chart_preview_overrides_t` |
+| `fm_chart_series_at` | `fm_chart_get_series_at` |
+| `fm_chart_series_literal_at` | `fm_chart_get_series_literal_at` |
+| `fm_chart_series_patch` | `fm_chart_series_patch_t` |
+| `fm_chart_series_point_at` | `fm_chart_get_series_point_at` |
+| `fm_chart_sheet_range_t` | folded into `fm_sheet_rect_t` |
+| `fm_collation_classes` | `fm_get_collation_classes` |
+| `fm_color_spec` | `fm_color_spec_t` |
+| `fm_comment` | `fm_comment_t` |
+| `fm_data_table` | `fm_data_table_t` |
+| `fm_data_validation` | `fm_data_validation_t` |
+| `fm_date_group_item` | `fm_date_group_item_t` |
+| `fm_drawing_anchor` | `fm_drawing_anchor_t` |
+| `fm_drawing_object` | `fm_drawing_object_t` |
+| `fm_dxf_record` | `fm_dxf_record_t` |
+| `fm_effective_style` | `fm_effective_style_t` |
+| `fm_error_display_name` | `fm_get_error_display_name` |
+| `fm_fill_record` | `fm_fill_record_t` |
+| `fm_filter_column` | `fm_filter_column_t` |
+| `fm_font_record` | `fm_font_record_t` |
+| `fm_formula_canonicalize` | `fm_canonicalize_formula` |
+| `fm_formula_localize` | `fm_localize_formula` |
+| `fm_function_canonicalize` | `fm_canonicalize_function_name` |
+| `fm_function_count` | `fm_get_function_count` |
+| `fm_function_localize` | `fm_localize_function_name` |
+| `fm_function_metadata` | `fm_get_function_metadata` |
+| `fm_function_name_at` | `fm_get_function_name_at` |
+| `fm_gradient_stop` | `fm_gradient_stop_t` |
+| `fm_hyperlink` | `fm_hyperlink_t` |
+| `fm_image_info` | `fm_image_info_t` |
+| `fm_image_insert` | `fm_image_insert_t` |
+| `fm_last_error_context` | `fm_get_last_error_context` |
+| `fm_last_error_message` | `fm_get_last_error_message` |
+| `fm_locale_error_name_count` | `fm_get_locale_error_name_count` |
+| `fm_locale_error_name` | `fm_get_locale_error_name_at` |
+| `fm_locale_facts` | `fm_get_locale_facts` |
+| `fm_margins_pt` | `fm_margins_pt_t` |
+| `fm_mention` | `fm_mention_t` |
+| `fm_merge_range` | folded into `fm_cell_rect_t` |
+| `fm_page_layout` | `fm_page_layout_t` |
+| `fm_pagination_horizontal_break_at` | `fm_pagination_get_row_break_at` |
+| `fm_pagination_horizontal_break_count` | `fm_pagination_get_row_break_count` |
+| `fm_pagination_horizontal_break_is_manual` | `fm_pagination_is_row_break_manual` |
+| `fm_pagination_margins` | `fm_pagination_get_margins` |
+| `fm_pagination_page_at` | `fm_pagination_get_page_at` |
+| `fm_pagination_page_count` | `fm_pagination_get_page_count` |
+| `fm_pagination_page_order` | `fm_pagination_get_page_order` |
+| `fm_pagination_paper` | `fm_pagination_get_paper` |
+| `fm_pagination_print_area_at` | `fm_pagination_get_print_area_at` |
+| `fm_pagination_print_area_count` | `fm_pagination_get_print_area_count` |
+| `fm_pagination_print_titles` | `fm_pagination_get_print_titles` |
+| `fm_pagination_printable` | `fm_pagination_get_printable` |
+| `fm_pagination_scale` | `fm_pagination_get_scale` |
+| `fm_pagination_vertical_break_at` | `fm_pagination_get_col_break_at` |
+| `fm_pagination_vertical_break_count` | `fm_pagination_get_col_break_count` |
+| `fm_pagination_vertical_break_is_manual` | `fm_pagination_is_col_break_manual` |
+| `fm_paper_info` | `fm_paper_info_t` |
+| `fm_parallel_recalc_stats` | `fm_parallel_recalc_stats_t` |
+| `fm_person` | `fm_person_t` |
+| `fm_pivot_cells_at` | `fm_pivot_cells_get_cell_at` |
+| `fm_pivot_cells_bounds` | `fm_pivot_cells_get_bounds` |
+| `fm_pivot_cells_count` | `fm_pivot_cells_get_cell_count` |
+| `FM_PIVOT_LAYOUT_COMPACT` | `FM_PIVOT_REPORT_LAYOUT_COMPACT` |
+| `FM_PIVOT_LAYOUT_OUTLINE` | `FM_PIVOT_REPORT_LAYOUT_OUTLINE` |
+| `fm_pivot_layout_t` | `fm_pivot_report_layout_t` |
+| `FM_PIVOT_LAYOUT_TABULAR` | `FM_PIVOT_REPORT_LAYOUT_TABULAR` |
+| `FM_PIVOT_SHOW_AS_DIFFERENCE_FROM` | `FM_PIVOT_SHOW_VALUES_AS_DIFFERENCE_FROM` |
+| `FM_PIVOT_SHOW_AS_INDEX` | `FM_PIVOT_SHOW_VALUES_AS_INDEX` |
+| `FM_PIVOT_SHOW_AS_NORMAL` | `FM_PIVOT_SHOW_VALUES_AS_NORMAL` |
+| `FM_PIVOT_SHOW_AS_PERCENT_DIFFERENCE_FROM` | `FM_PIVOT_SHOW_VALUES_AS_PERCENT_DIFFERENCE_FROM` |
+| `FM_PIVOT_SHOW_AS_PERCENT_OF_COL` | `FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_COL` |
+| `FM_PIVOT_SHOW_AS_PERCENT_OF_PARENT_COL` | `FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_PARENT_COL` |
+| `FM_PIVOT_SHOW_AS_PERCENT_OF_PARENT_ROW` | `FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_PARENT_ROW` |
+| `FM_PIVOT_SHOW_AS_PERCENT_OF_PARENT` | `FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_PARENT` |
+| `FM_PIVOT_SHOW_AS_PERCENT_OF_ROW` | `FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_ROW` |
+| `FM_PIVOT_SHOW_AS_PERCENT_OF_RUNNING_TOTAL` | `FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_RUNNING_TOTAL` |
+| `FM_PIVOT_SHOW_AS_PERCENT_OF_TOTAL` | `FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_TOTAL` |
+| `FM_PIVOT_SHOW_AS_PERCENT_OF` | `FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF` |
+| `FM_PIVOT_SHOW_AS_RANK_ASCENDING` | `FM_PIVOT_SHOW_VALUES_AS_RANK_ASCENDING` |
+| `FM_PIVOT_SHOW_AS_RANK_DESCENDING` | `FM_PIVOT_SHOW_VALUES_AS_RANK_DESCENDING` |
+| `FM_PIVOT_SHOW_AS_RUNNING_TOTAL_IN_COL` | `FM_PIVOT_SHOW_VALUES_AS_RUNNING_TOTAL_IN_COL` |
+| `FM_PIVOT_SHOW_AS_RUNNING_TOTAL_IN_ROW` | `FM_PIVOT_SHOW_VALUES_AS_RUNNING_TOTAL_IN_ROW` |
+| `fm_pivot_show_as_t` | `fm_pivot_show_values_as_t` |
+| `fm_print_range_t` | folded into `fm_cell_rect_t` |
+| `fm_print_titles` | `fm_print_titles_t` |
+| `fm_rect_pt` | `fm_rect_pt_t` |
+| `fm_reference_t` | `fm_parsed_reference_t` |
+| `fm_shape` | `fm_shape_t` |
+| `fm_sheet_cell_rect_pt` | `fm_sheet_get_cell_rect_pt` |
+| `fm_sheet_cells_in_range` | `fm_sheet_get_cells_in_range` |
+| `fm_sheet_cf_add_rule` | `fm_sheet_add_cf_rule` |
+| `fm_sheet_cf_clear` | `fm_sheet_clear_cf_rules` |
+| `fm_sheet_cf_count` | `fm_sheet_get_cf_rule_count` |
+| `fm_sheet_cf_get_at` | `fm_sheet_get_cf_rule` |
+| `fm_sheet_cf_remove_at` | `fm_sheet_remove_cf_rule` |
+| `fm_sheet_chart_data_open` | `fm_sheet_get_chart_data` |
+| `fm_sheet_chart_open` | `fm_sheet_get_chart` |
+| `fm_sheet_chart_preview_open` | `fm_sheet_get_chart_preview` |
+| `fm_sheet_col_break_at` | `fm_sheet_get_col_break_at` |
+| `fm_sheet_col_break_count` | `fm_sheet_get_col_break_count` |
+| `fm_sheet_column_chars_to_pt` | `fm_sheet_convert_column_chars_to_pt` |
+| `fm_sheet_column_pt_to_chars` | `fm_sheet_convert_column_pt_to_chars` |
+| `fm_sheet_column_width_pt` | `fm_sheet_get_column_width_pt` |
+| `fm_sheet_data_table_at` | `fm_sheet_get_data_table` |
+| `fm_sheet_drawing_object_at` | `fm_sheet_get_drawing_object_at` |
+| `fm_sheet_drawing_object_count` | `fm_sheet_get_drawing_object_count` |
+| `fm_sheet_edit_threaded_comment` | `fm_sheet_update_threaded_comment` |
+| `fm_sheet_format_defaults` | `fm_sheet_format_defaults_t` |
+| `fm_sheet_get_column_count` | `fm_sheet_get_col_override_count` |
+| `fm_sheet_get_column` | `fm_sheet_get_col_override_at` |
+| `fm_sheet_get_comment_at_index` | `fm_sheet_get_comment_at` |
+| `fm_sheet_get_comment_at` | `fm_sheet_get_comment` |
+| `fm_sheet_get_protection` | `fm_sheet_get_sheet_protection` |
+| `fm_sheet_get_row_override` | `fm_sheet_get_row_override_at` |
+| `fm_sheet_get_validation_at` | `fm_sheet_get_validation` |
+| `fm_sheet_insert_chart` | `fm_sheet_add_chart` |
+| `fm_sheet_insert_image` | `fm_sheet_add_image` |
+| `fm_sheet_insert_shape` | `fm_sheet_add_shape` |
+| `fm_sheet_list_invalid_cells` | `fm_sheet_get_invalid_cells` |
+| `fm_sheet_merges_in_range` | `fm_sheet_get_merges_in_range` |
+| `fm_sheet_protected_range_count` | `fm_sheet_get_protected_range_count` |
+| `fm_sheet_range_style_bases_excluding` | `fm_sheet_get_range_style_bases_excluding` |
+| `fm_sheet_range_style_bases` | `fm_sheet_get_range_style_bases` |
+| `fm_sheet_remove_validation_at` | `fm_sheet_remove_validation` |
+| `fm_sheet_row_break_at` | `fm_sheet_get_row_break_at` |
+| `fm_sheet_row_break_count` | `fm_sheet_get_row_break_count` |
+| `fm_sheet_row_height_pt` | `fm_sheet_get_row_height_pt` |
+| `fm_sheet_set_protection` | `fm_sheet_set_sheet_protection` |
+| `fm_sheet_shape_at` | `fm_sheet_get_shape_at` |
+| `fm_sheet_shape_count` | `fm_sheet_get_shape_count` |
+| `fm_sheet_slicer_at` | `fm_sheet_get_slicer_at` |
+| `fm_sheet_slicer_count` | `fm_sheet_get_slicer_count` |
+| `fm_sheet_sparkline_at` | `fm_sheet_get_sparkline` |
+| `fm_sheet_sparkline_group_at` | `fm_sheet_get_sparkline_group` |
+| `fm_sheet_sparkline_group_count` | `fm_sheet_get_sparkline_group_count` |
+| `fm_sheet_threaded_comment_at` | `fm_sheet_get_threaded_comment_at` |
+| `fm_sheet_threaded_comment_count` | `fm_sheet_get_threaded_comment_count` |
+| `fm_sheet_width_model` | `fm_sheet_get_width_model` |
+| `FM_SLICER_SORT_ASCENDING` | `FM_SLICER_SORT_ORDER_ASCENDING` |
+| `FM_SLICER_SORT_DESCENDING` | `FM_SLICER_SORT_ORDER_DESCENDING` |
+| `fm_slicer_sort_t` | `fm_slicer_sort_order_t` |
+| `fm_slicer` | `fm_slicer_t` |
+| `fm_sort_condition` | `fm_sort_condition_t` |
+| `fm_sparkline_group` | `fm_sparkline_group_t` |
+| `fm_sparkline` | `fm_sparkline_t` |
+| `fm_status_string` | `fm_get_status_name` |
+| `fm_styles_add_batch` | `fm_workbook_add_batch` |
+| `fm_styles_add_border` | `fm_workbook_add_border` |
+| `fm_styles_add_cell_style_xf` | `fm_workbook_add_cell_style_xf` |
+| `fm_styles_add_cell_xf` | `fm_workbook_add_cell_xf` |
+| `fm_styles_add_dxf` | `fm_workbook_add_dxf` |
+| `fm_styles_add_fill` | `fm_workbook_add_fill` |
+| `fm_styles_add_font` | `fm_workbook_add_font` |
+| `fm_styles_add_num_fmt` | `fm_workbook_add_num_fmt` |
+| `fm_styles_batch` | `fm_styles_batch_t` |
+| `fm_styles_get_border_count` | `fm_workbook_get_border_count` |
+| `fm_styles_get_border` | `fm_workbook_get_border` |
+| `fm_styles_get_cell_style_count` | `fm_workbook_get_cell_style_count` |
+| `fm_styles_get_cell_style_xf_count` | `fm_workbook_get_cell_style_xf_count` |
+| `fm_styles_get_cell_style_xf` | `fm_workbook_get_cell_style_xf` |
+| `fm_styles_get_cell_style` | `fm_workbook_get_cell_style_at` |
+| `fm_styles_get_cell_xf_count` | `fm_workbook_get_cell_xf_count` |
+| `fm_styles_get_cell_xf` | `fm_workbook_get_cell_xf` |
+| `fm_styles_get_dxf_count` | `fm_workbook_get_dxf_count` |
+| `fm_styles_get_dxf` | `fm_workbook_get_dxf` |
+| `fm_styles_get_fill_count` | `fm_workbook_get_fill_count` |
+| `fm_styles_get_fill` | `fm_workbook_get_fill` |
+| `fm_styles_get_font_count` | `fm_workbook_get_font_count` |
+| `fm_styles_get_font` | `fm_workbook_get_font` |
+| `fm_styles_get_num_fmt_string` | `fm_workbook_get_num_fmt_string` |
+| `fm_styles_get_table_style_count` | `fm_workbook_get_table_style_count` |
+| `fm_styles_get_table_style_defaults` | `fm_workbook_get_table_style_defaults` |
+| `fm_styles_get_table_style` | `fm_workbook_get_table_style_at` |
+| `fm_styles_remove_cell_style` | `fm_workbook_remove_cell_style` |
+| `fm_styles_remove_table_style` | `fm_workbook_remove_table_style` |
+| `fm_styles_set_cell_style` | `fm_workbook_set_cell_style` |
+| `fm_styles_set_font` | `fm_workbook_set_font` |
+| `fm_styles_set_table_style_defaults` | `fm_workbook_set_table_style_defaults` |
+| `fm_styles_set_table_style` | `fm_workbook_set_table_style` |
+| `fm_table_apply_auto_filter` | `fm_workbook_apply_table_auto_filter` |
+| `fm_table_clear_auto_filter` | `fm_workbook_clear_table_auto_filter` |
+| `fm_table_evaluate_auto_filter` | `fm_workbook_evaluate_table_auto_filter` |
+| `fm_table_get_auto_filter` | `fm_workbook_get_table_auto_filter` |
+| `fm_table_remove_auto_filter` | `fm_workbook_remove_table_auto_filter` |
+| `fm_table_set_auto_filter` | `fm_workbook_set_table_auto_filter` |
+| `fm_text_compare` | `fm_compare_text` |
+| `fm_theme_colors` | `fm_theme_colors_t` |
+| `fm_theme_fonts` | `fm_theme_fonts_t` |
+| `fm_threaded_comment` | `fm_threaded_comment_t` |
+| `fm_validation_outcome` | `fm_validation_outcome_t` |
+| `fm_version_string` | `fm_get_version` |
+| `fm_viewport` | folded into `fm_cell_rect_t` |
+| `fm_width_model` | `fm_width_model_t` |
+| `fm_workbook_calc_mode` | `fm_workbook_get_calc_mode` |
+| `fm_workbook_calc_on_save` | `fm_workbook_get_calc_on_save` |
+| `fm_workbook_cell_at` | `fm_sheet_get_cell_at` |
+| `fm_workbook_cell_count` | `fm_sheet_get_cell_count` |
+| `fm_workbook_cf_evaluate_range` | `fm_sheet_evaluate_cf_range` |
+| `fm_workbook_create` | `fm_workbook_create_default` |
+| `fm_workbook_date1904` | `fm_workbook_get_date1904` |
+| `fm_workbook_defined_name_at` | `fm_workbook_get_defined_name_at` |
+| `fm_workbook_defined_name_attrs_at` | `fm_workbook_get_defined_name_attrs_at` |
+| `fm_workbook_defined_name_count` | `fm_workbook_get_defined_name_count` |
+| `fm_workbook_delete_cols` | `fm_sheet_delete_cols` |
+| `fm_workbook_delete_rows` | `fm_sheet_delete_rows` |
+| `fm_workbook_dependents` | `fm_sheet_get_dependents` |
+| `fm_workbook_evaluate_cf_formula` | `fm_sheet_evaluate_cf_formula` |
+| `fm_workbook_evaluate_formula_array` | `fm_sheet_evaluate_formula_array` |
+| `fm_workbook_evaluate_formula` | `fm_sheet_evaluate_formula` |
+| `fm_workbook_excel_profile_id` | `fm_workbook_get_excel_profile_id` |
+| `fm_workbook_external_link_at` | `fm_workbook_get_external_link` |
+| `fm_workbook_external_link_count` | `fm_workbook_get_external_link_count` |
+| `fm_workbook_file_name` | `fm_workbook_get_file_name` |
+| `fm_workbook_full_precision` | `fm_workbook_get_full_precision` |
+| `fm_workbook_get_array_formula` | `fm_sheet_get_array_formula` |
+| `fm_workbook_get_cell_phonetic_properties` | `fm_sheet_get_cell_phonetic_properties` |
+| `fm_workbook_get_cell_phonetic_run_count` | `fm_sheet_get_cell_phonetic_run_count` |
+| `fm_workbook_get_cell_phonetic_run` | `fm_sheet_get_cell_phonetic_run` |
+| `fm_workbook_get_cell_phonetic` | `fm_sheet_get_cell_phonetic` |
+| `fm_workbook_get_cell_show_phonetic` | `fm_sheet_get_cell_show_phonetic` |
+| `fm_workbook_get_display_text` | `fm_sheet_get_display_text` |
+| `fm_workbook_get_formula_r1c1` | `fm_sheet_get_formula_r1c1` |
+| `fm_workbook_get_formula` | `fm_sheet_get_formula` |
+| `fm_workbook_get_protection` | `fm_workbook_get_workbook_protection` |
+| `fm_workbook_get_value` | `fm_sheet_get_value` |
+| `fm_workbook_has_cell_phonetic_properties` | `fm_sheet_has_cell_phonetic_properties` |
+| `fm_workbook_insert_cols` | `fm_sheet_insert_cols` |
+| `fm_workbook_insert_rows` | `fm_sheet_insert_rows` |
+| `fm_workbook_lambda_text_at` | `fm_sheet_get_lambda_text` |
+| `fm_workbook_memory_usage` | `fm_workbook_get_memory_usage` |
+| `fm_workbook_paginate` | `fm_sheet_get_pagination` |
+| `fm_workbook_partial_recalc` | `fm_sheet_recalc_viewport` |
+| `fm_workbook_passthrough_at` | `fm_workbook_get_passthrough_at` |
+| `fm_workbook_passthrough_count` | `fm_workbook_get_passthrough_count` |
+| `fm_workbook_person_at` | `fm_workbook_get_person_at` |
+| `fm_workbook_person_count` | `fm_workbook_get_person_count` |
+| `fm_workbook_pinned_now` | `fm_workbook_get_pinned_now` |
+| `fm_workbook_pivot_cache_calculated_field_add` | `fm_workbook_add_pivot_cache_calculated_field` |
+| `fm_workbook_pivot_cache_calculated_field_remove` | `fm_workbook_remove_pivot_cache_calculated_field` |
+| `fm_workbook_pivot_cache_calculated_field_set_formula` | `fm_workbook_set_pivot_cache_calculated_field_formula` |
+| `fm_workbook_pivot_cache_calculated_item_add` | `fm_workbook_add_pivot_cache_calculated_item` |
+| `fm_workbook_pivot_cache_calculated_item_at` | `fm_workbook_get_pivot_cache_calculated_item` |
+| `fm_workbook_pivot_cache_calculated_item_count` | `fm_workbook_get_pivot_cache_calculated_item_count` |
+| `fm_workbook_pivot_cache_calculated_item_move` | `fm_workbook_move_pivot_cache_calculated_item` |
+| `fm_workbook_pivot_cache_calculated_item_remove` | `fm_workbook_remove_pivot_cache_calculated_item` |
+| `fm_workbook_pivot_cache_calculated_item_set_formula` | `fm_workbook_set_pivot_cache_calculated_item_formula` |
+| `fm_workbook_pivot_cache_count` | `fm_workbook_get_pivot_cache_count` |
+| `fm_workbook_pivot_cache_create` | `fm_workbook_add_pivot_cache` |
+| `fm_workbook_pivot_cache_field_add_shared_item_blank` | `fm_workbook_add_pivot_cache_field_shared_item_blank` |
+| `fm_workbook_pivot_cache_field_add_shared_item_bool` | `fm_workbook_add_pivot_cache_field_shared_item_bool` |
+| `fm_workbook_pivot_cache_field_add_shared_item_date` | `fm_workbook_add_pivot_cache_field_shared_item_date` |
+| `fm_workbook_pivot_cache_field_add_shared_item_error` | `fm_workbook_add_pivot_cache_field_shared_item_error` |
+| `fm_workbook_pivot_cache_field_add_shared_item_number` | `fm_workbook_add_pivot_cache_field_shared_item_number` |
+| `fm_workbook_pivot_cache_field_add_shared_item_text` | `fm_workbook_add_pivot_cache_field_shared_item_text` |
+| `fm_workbook_pivot_cache_field_add` | `fm_workbook_add_pivot_cache_field` |
+| `fm_workbook_pivot_cache_field_clear_shared_items` | `fm_workbook_clear_pivot_cache_field_shared_items` |
+| `fm_workbook_pivot_cache_field_clear` | `fm_workbook_clear_pivot_cache_fields` |
+| `fm_workbook_pivot_cache_field_count` | `fm_workbook_get_pivot_cache_field_count` |
+| `fm_workbook_pivot_cache_field_formula` | `fm_workbook_get_pivot_cache_field_formula` |
+| `fm_workbook_pivot_cache_field_name` | `fm_workbook_get_pivot_cache_field_name` |
+| `fm_workbook_pivot_cache_field_shared_item_count` | `fm_workbook_get_pivot_cache_field_shared_item_count` |
+| `fm_workbook_pivot_cache_field_shared_item_is_date` | `fm_workbook_is_pivot_cache_field_shared_item_date` |
+| `fm_workbook_pivot_cache_field_shared_item_value` | `fm_workbook_get_pivot_cache_field_shared_item_value` |
+| `fm_workbook_pivot_cache_get_options` | `fm_workbook_get_pivot_cache_options` |
+| `fm_workbook_pivot_cache_get_worksheet_source` | `fm_workbook_get_pivot_cache_worksheet_source` |
+| `fm_workbook_pivot_cache_id_at` | `fm_workbook_get_pivot_cache_id_at` |
+| `fm_workbook_pivot_cache_record_add` | `fm_workbook_add_pivot_cache_record` |
+| `fm_workbook_pivot_cache_record_clear` | `fm_workbook_clear_pivot_cache_records` |
+| `fm_workbook_pivot_cache_record_count` | `fm_workbook_get_pivot_cache_record_count` |
+| `fm_workbook_pivot_cache_record_set_blank` | `fm_workbook_set_pivot_cache_record_blank` |
+| `fm_workbook_pivot_cache_record_set_bool` | `fm_workbook_set_pivot_cache_record_bool` |
+| `fm_workbook_pivot_cache_record_set_date` | `fm_workbook_set_pivot_cache_record_date` |
+| `fm_workbook_pivot_cache_record_set_error` | `fm_workbook_set_pivot_cache_record_error` |
+| `fm_workbook_pivot_cache_record_set_number` | `fm_workbook_set_pivot_cache_record_number` |
+| `fm_workbook_pivot_cache_record_set_text` | `fm_workbook_set_pivot_cache_record_text` |
+| `fm_workbook_pivot_cache_remove` | `fm_workbook_remove_pivot_cache` |
+| `fm_workbook_pivot_cache_set_options` | `fm_workbook_set_pivot_cache_options` |
+| `fm_workbook_pivot_cache_set_worksheet_source` | `fm_workbook_set_pivot_cache_worksheet_source` |
+| `fm_workbook_pivot_count` | `fm_sheet_get_pivot_count` |
+| `fm_workbook_pivot_create` | `fm_sheet_add_pivot` |
+| `fm_workbook_pivot_data_field_add` | `fm_sheet_add_pivot_data_field` |
+| `fm_workbook_pivot_data_field_at` | `fm_sheet_get_pivot_data_field` |
+| `fm_workbook_pivot_data_field_clear` | `fm_sheet_clear_pivot_data_fields` |
+| `fm_workbook_pivot_data_field_count` | `fm_sheet_get_pivot_data_field_count` |
+| `fm_workbook_pivot_data_field_default_name` | `fm_sheet_get_pivot_data_field_default_name` |
+| `fm_workbook_pivot_data_field_set` | `fm_sheet_set_pivot_data_field` |
+| `fm_workbook_pivot_field_add_item_at` | `fm_sheet_add_pivot_field_shared_item` |
+| `fm_workbook_pivot_field_add_item` | `fm_sheet_add_pivot_field_item` |
+| `fm_workbook_pivot_field_add_subtotal_fn` | `fm_sheet_add_pivot_field_subtotal_fn` |
+| `fm_workbook_pivot_field_add` | `fm_sheet_add_pivot_field` |
+| `fm_workbook_pivot_field_at` | `fm_sheet_get_pivot_field` |
+| `fm_workbook_pivot_field_clear_date_group` | `fm_sheet_clear_pivot_field_date_group` |
+| `fm_workbook_pivot_field_clear_items` | `fm_sheet_clear_pivot_field_items` |
+| `fm_workbook_pivot_field_clear_subtotal_fns` | `fm_sheet_clear_pivot_field_subtotal_fns` |
+| `fm_workbook_pivot_field_clear` | `fm_sheet_clear_pivot_fields` |
+| `fm_workbook_pivot_field_count` | `fm_sheet_get_pivot_field_count` |
+| `fm_workbook_pivot_field_item_at` | `fm_sheet_get_pivot_field_item` |
+| `fm_workbook_pivot_field_item_count` | `fm_sheet_get_pivot_field_item_count` |
+| `fm_workbook_pivot_field_set_axis` | `fm_sheet_set_pivot_field_axis` |
+| `fm_workbook_pivot_field_set_custom_name` | `fm_sheet_set_pivot_field_custom_name` |
+| `fm_workbook_pivot_field_set_date_group` | `fm_sheet_set_pivot_field_date_group` |
+| `fm_workbook_pivot_field_set_default_subtotal` | `fm_sheet_set_pivot_field_default_subtotal` |
+| `fm_workbook_pivot_field_set_fill_down_labels` | `fm_sheet_set_pivot_field_fill_down_labels` |
+| `fm_workbook_pivot_field_set_insert_blank_row` | `fm_sheet_set_pivot_field_insert_blank_row` |
+| `fm_workbook_pivot_field_set_item_caption` | `fm_sheet_set_pivot_field_item_caption` |
+| `fm_workbook_pivot_field_set_item_show_detail` | `fm_sheet_set_pivot_field_item_show_detail` |
+| `fm_workbook_pivot_field_set_item_visible` | `fm_sheet_set_pivot_field_item_visible` |
+| `fm_workbook_pivot_field_set_number_format` | `fm_sheet_set_pivot_field_number_format` |
+| `fm_workbook_pivot_field_set_show_all` | `fm_sheet_set_pivot_field_show_all` |
+| `fm_workbook_pivot_field_set_show_detail` | `fm_sheet_set_pivot_field_show_detail` |
+| `fm_workbook_pivot_field_set_sort` | `fm_sheet_set_pivot_field_sort` |
+| `fm_workbook_pivot_field_set_subtotal_top` | `fm_sheet_set_pivot_field_subtotal_top` |
+| `fm_workbook_pivot_filter_add` | `fm_sheet_add_pivot_filter` |
+| `fm_workbook_pivot_filter_at` | `fm_sheet_get_pivot_filter` |
+| `fm_workbook_pivot_filter_clear` | `fm_sheet_clear_pivot_filters` |
+| `fm_workbook_pivot_filter_count` | `fm_sheet_get_pivot_filter_count` |
+| `fm_workbook_pivot_filter_remove_at` | `fm_sheet_remove_pivot_filter` |
+| `fm_workbook_pivot_get_cache_id` | `fm_sheet_get_pivot_cache_id` |
+| `fm_workbook_pivot_get_col_field_order` | `fm_sheet_get_pivot_col_field_order` |
+| `fm_workbook_pivot_get_grand_totals` | `fm_sheet_get_pivot_grand_totals` |
+| `fm_workbook_pivot_get_layout` | `fm_sheet_get_pivot_report_layout` |
+| `fm_workbook_pivot_get_name` | `fm_sheet_get_pivot_name` |
+| `fm_workbook_pivot_get_options` | `fm_sheet_get_pivot_options` |
+| `fm_workbook_pivot_get_row_field_order` | `fm_sheet_get_pivot_row_field_order` |
+| `fm_workbook_pivot_get_style_info` | `fm_sheet_get_pivot_style_info` |
+| `fm_workbook_pivot_layout` | `fm_sheet_get_pivot_layout` |
+| `fm_workbook_pivot_project` | `fm_sheet_project_pivot` |
+| `fm_workbook_pivot_projection_pending` | `fm_sheet_is_pivot_projection_pending` |
+| `fm_workbook_pivot_remove` | `fm_sheet_remove_pivot` |
+| `fm_workbook_pivot_set_anchor` | `fm_sheet_set_pivot_anchor` |
+| `fm_workbook_pivot_set_col_field_order` | `fm_sheet_set_pivot_col_field_order` |
+| `fm_workbook_pivot_set_grand_totals` | `fm_sheet_set_pivot_grand_totals` |
+| `fm_workbook_pivot_set_layout` | `fm_sheet_set_pivot_report_layout` |
+| `fm_workbook_pivot_set_name` | `fm_sheet_set_pivot_name` |
+| `fm_workbook_pivot_set_options` | `fm_sheet_set_pivot_options` |
+| `fm_workbook_pivot_set_row_field_order` | `fm_sheet_set_pivot_row_field_order` |
+| `fm_workbook_pivot_set_style_info` | `fm_sheet_set_pivot_style_info` |
+| `fm_workbook_pivot_show_details` | `fm_sheet_show_pivot_details` |
+| `fm_workbook_precedents` | `fm_sheet_get_precedents` |
+| `fm_workbook_probe_image` | `fm_workbook_get_image_info` |
+| `fm_workbook_read_diagnostics` | `fm_workbook_get_diagnostics` |
+| `fm_workbook_ref_mode` | `fm_workbook_get_ref_mode` |
+| `fm_workbook_reset_theme` | `fm_workbook_clear_theme` |
+| `fm_workbook_set_array_formula` | `fm_sheet_set_array_formula` |
+| `fm_workbook_set_blank` | `fm_sheet_set_blank` |
+| `fm_workbook_set_bool` | `fm_sheet_set_bool` |
+| `fm_workbook_set_cell_phonetic_properties` | `fm_sheet_set_cell_phonetic_properties` |
+| `fm_workbook_set_cell_phonetic_runs` | `fm_sheet_set_cell_phonetic_runs` |
+| `fm_workbook_set_cell_phonetic` | `fm_sheet_set_cell_phonetic` |
+| `fm_workbook_set_cell_show_phonetic` | `fm_sheet_set_cell_show_phonetic` |
+| `fm_workbook_set_error` | `fm_sheet_set_error` |
+| `fm_workbook_set_formula` | `fm_sheet_set_formula` |
+| `fm_workbook_set_number` | `fm_sheet_set_number` |
+| `fm_workbook_set_protection` | `fm_workbook_set_workbook_protection` |
+| `fm_workbook_set_text` | `fm_sheet_set_text` |
+| `fm_workbook_sheet_count` | `fm_workbook_get_sheet_count` |
+| `fm_workbook_sheet_name` | `fm_workbook_get_sheet_name` |
+| `fm_workbook_spill_info` | `fm_sheet_get_spill_info` |
+| `fm_workbook_table_at` | `fm_workbook_get_table` |
+| `fm_workbook_table_count` | `fm_workbook_get_table_count` |
+| `fm_workbook_table_create` | `fm_workbook_add_table` |
+| `fm_workbook_table_get_column` | `fm_workbook_get_table_column` |
+| `fm_workbook_table_get_info` | `fm_workbook_get_table_info` |
+| `fm_workbook_table_remove` | `fm_workbook_remove_table` |
+| `fm_workbook_table_rename_column` | `fm_workbook_rename_table_column` |
+| `fm_workbook_table_rename` | `fm_workbook_rename_table` |
+| `fm_workbook_table_set_column_totals` | `fm_workbook_set_table_column_totals` |
+| `fm_workbook_table_set_style_info` | `fm_workbook_set_table_style_info` |
+| `fm_workbook_table_update` | `fm_workbook_update_table` |
+| `fm_workbook_theme_script_font_at` | `fm_workbook_get_theme_script_font_at` |
+| `fm_workbook_theme_script_font_count` | `fm_workbook_get_theme_script_font_count` |
+
+#### JavaScript (`@libraz/formulon`, `@libraz/formulon-native`)
+
+| Before | After |
+|---|---|
+| `activeSheet()` | `getActiveSheet()` |
+| `addConditionalFormat()` | `addCfRule()` |
+| `addSheetColBreak()` | `addColBreak()` |
+| `addSheetRowBreak()` | `addRowBreak()` |
+| `AddStyleResult` | `IndexResult` |
+| `addXf()` | `addCellXf()` |
+| `borderCount()` | `getBorderCount()` |
+| `calcMode()` | `getCalcMode()` |
+| `calcOnSave()` | `getCalcOnSave()` |
+| `cellAt()` | `getCellAt()` |
+| `cellCount()` | `getCellCount()` |
+| `CellShowPhoneticResult` | folded into `BoolResult` |
+| `cellStyleCount()` | removed; use `listCellStyles()` |
+| `cellStyleXfCount()` | `getCellStyleXfCount()` |
+| `CellXfIndexResult` | folded into `NumberResult` |
+| `chart` | `value` |
+| `ChartInsertOptions` | `ChartInsertInput` |
+| `ChartPreviewOverrides` | `ChartPreviewOverridesInput` |
+| `ChartResult` | folded into `OptionalResult` |
+| `ChartSheetRange` | folded into `SheetRect` |
+| `clearConditionalFormats()` | `clearCfRules()` |
+| `clearSheetBreaks()` | `clearBreaks()` |
+| `collationClasses()` | `getCollationClasses()` |
+| `columnCharsToPt()` | `convertColumnCharsToPt()` |
+| `columnPtToChars()` | `convertColumnPtToChars()` |
+| `comment` | `value` |
+| `CommentEntry` | `Comment` |
+| `CommentResult` | folded into `OptionalResult` |
+| `CompareTextResult` | folded into `NumberResult` |
+| `ConditionalFormatRange` | folded into `CellRect` |
+| `createTable()` | `addTable()` |
+| `dataTable` | `value` |
+| `DataTableResult` | folded into `OptionalResult` |
+| `DataValidationEntry` | `DataValidation` |
+| `DataValidationRange` | folded into `CellRect` |
+| `date1904()` | `getDate1904()` |
+| `definedNameAt()` | removed; use `listDefinedNames()` |
+| `definedNameCount()` | removed; use `listDefinedNames()` |
+| `delete()` | removed |
+| `dependents()` | `getDependents()` |
+| `dxfCount()` | `getDxfCount()` |
+| `editThreadedComment()` | `updateThreadedComment()` |
+| `errorDisplayName()` | `getErrorDisplayName()` |
+| `evaluateConditionalFormula()` | `evaluateCfFormula()` |
+| `evaluateFormulaText()` | `evaluateFormula()` |
+| `excelProfileId()` | `getExcelProfileId()` |
+| `fileName()` | `getFileName()` |
+| `fillCount()` | `getFillCount()` |
+| `fontCount()` | `getFontCount()` |
+| `formula` | `value` |
+| `FormulaResult` | folded into `OptionalResult` |
+| `fullPrecision()` | `getFullPrecision()` |
+| `functionMetadata()` | `getFunctionMetadata()` |
+| `FunctionMetadataResult` | removed |
+| `functionNames()` | `listFunctionNames()` |
+| `getCellPhoneticRuns()` | removed |
+| `getCommentResult()` | removed; use `getComment()` |
+| `getComments()` | `listComments()` |
+| `getConditionalFormats()` | removed |
+| `getExternalLinks()` | removed |
+| `getHyperlinks()` | `listHyperlinks()` |
+| `getMerges()` | `listMerges()` |
+| `getNumFmt()` | `getNumFmtString()` |
+| `getPersons()` | `listPeople()` |
+| `getProtectedRanges()` | removed |
+| `getSheetAutoFilterXml()` | `getAutoFilterXml()` |
+| `getSheetColBreaks()` | `listColBreaks()` |
+| `getSheetColumns()` | `listColOverrides()` |
+| `getSheetFormatDefaults()` | `getFormatDefaults()` |
+| `getSheetHeaderFooterXml()` | `getHeaderFooterXml()` |
+| `getSheetPageMargins()` | `getPageMargins()` |
+| `getSheetPageMarginsXml()` | `getPageMarginsXml()` |
+| `getSheetPageSetup()` | `getPageSetup()` |
+| `getSheetPageSetupXml()` | `getPageSetupXml()` |
+| `getSheetPrintArea()` | `getPrintArea()` |
+| `getSheetPrintOptionsXml()` | `getPrintOptionsXml()` |
+| `getSheetPrintTitles()` | `getPrintTitles()` |
+| `getSheetRowBreaks()` | `listRowBreaks()` |
+| `getSheetRowOverrides()` | `listRowOverrides()` |
+| `getSheetSelection()` | `getSelection()` |
+| `getSheetSheetPrXml()` | `getSheetPrXml()` |
+| `getSheetView()` | `getView()` |
+| `getTheme()` | `getThemeFonts()` |
+| `getThreadedComments()` | `listThreadedComments()` |
+| `getValidations()` | removed |
+| `HyperlinkEntry` | `Hyperlink` |
+| `ImageInsertOptions` | `ImageInsertInput` |
+| `ImageResult` | removed |
+| `insertChart()` | `addChart()` |
+| `InsertChartResult` | folded into `ObjectIdResult` |
+| `insertImage()` | `addImage()` |
+| `InsertImageResult` | `ObjectIdResult` |
+| `insertShape()` | `addShape()` |
+| `LambdaTextResult` | folded into `OptionalResult` |
+| `lastErrorContext()` | `getLastErrorContext()` |
+| `lastErrorMessage()` | `getLastErrorMessage()` |
+| `layout` | `value` |
+| `listInvalidCells()` | `getInvalidCells()` |
+| `listSparklineGroups()` | removed |
+| `localeFacts()` | `getLocaleFacts()` |
+| `memoryUsage()` | `getMemoryUsage()` |
+| `MergedFunctionMetadataResult` | removed |
+| `MergeRange` | folded into `CellRect` |
+| `NumFmtResult` | removed |
+| `order` | `value` |
+| `PageMarginsInput` | `PageMargins` |
+| `PageSetupInput` | `PageSetup` |
+| `paginate()` | `getPagination()` |
+| `partialRecalc()` | `recalcViewport()` |
+| `PartialRecalcResult` | folded into `NumberResult` |
+| `passthroughAt()` | removed; use `listPassthroughs()` |
+| `passthroughCount()` | removed; use `listPassthroughs()` |
+| `pinnedNow()` | `getPinnedNow()` |
+| `pivotCacheCalculatedFieldAdd()` | `addPivotCacheCalculatedField()` |
+| `pivotCacheCalculatedFieldRemove()` | `removePivotCacheCalculatedField()` |
+| `pivotCacheCalculatedFieldSetFormula()` | `setPivotCacheCalculatedFieldFormula()` |
+| `pivotCacheCalculatedItemAdd()` | `addPivotCacheCalculatedItem()` |
+| `pivotCacheCalculatedItemAt()` | `getPivotCacheCalculatedItem()` |
+| `pivotCacheCalculatedItemCount()` | `getPivotCacheCalculatedItemCount()` |
+| `pivotCacheCalculatedItemMove()` | `movePivotCacheCalculatedItem()` |
+| `pivotCacheCalculatedItemRemove()` | `removePivotCacheCalculatedItem()` |
+| `pivotCacheCalculatedItemSetFormula()` | `setPivotCacheCalculatedItemFormula()` |
+| `pivotCacheCount()` | removed; use `listPivotCaches()` |
+| `pivotCacheCreate()` | `addPivotCache()` |
+| `pivotCacheFieldAdd()` | `addPivotCacheField()` |
+| `pivotCacheFieldAddSharedItemBlank()` | `addPivotCacheFieldSharedItemBlank()` |
+| `pivotCacheFieldAddSharedItemBool()` | `addPivotCacheFieldSharedItemBool()` |
+| `pivotCacheFieldAddSharedItemDate()` | `addPivotCacheFieldSharedItemDate()` |
+| `pivotCacheFieldAddSharedItemError()` | `addPivotCacheFieldSharedItemError()` |
+| `pivotCacheFieldAddSharedItemNumber()` | `addPivotCacheFieldSharedItemNumber()` |
+| `pivotCacheFieldAddSharedItemText()` | `addPivotCacheFieldSharedItemText()` |
+| `pivotCacheFieldClear()` | `clearPivotCacheFields()` |
+| `pivotCacheFieldClearSharedItems()` | `clearPivotCacheFieldSharedItems()` |
+| `pivotCacheFieldCount()` | `getPivotCacheFieldCount()` |
+| `pivotCacheFieldFormula()` | `getPivotCacheFieldFormula()` |
+| `pivotCacheFieldName()` | `getPivotCacheFieldName()` |
+| `pivotCacheFieldSharedItemCount()` | `getPivotCacheFieldSharedItemCount()` |
+| `pivotCacheFieldSharedItemIsDate()` | `isPivotCacheFieldSharedItemDate()` |
+| `pivotCacheFieldSharedItemValue()` | `getPivotCacheFieldSharedItemValue()` |
+| `pivotCacheGetOptions()` | `getPivotCacheOptions()` |
+| `pivotCacheGetWorksheetSource()` | `getPivotCacheWorksheetSource()` |
+| `pivotCacheId()` | `getPivotCacheId()` |
+| `pivotCacheIdAt()` | removed; use `listPivotCaches()` |
+| `pivotCacheRecordAdd()` | `addPivotCacheRecord()` |
+| `pivotCacheRecordClear()` | `clearPivotCacheRecords()` |
+| `pivotCacheRecordCount()` | `getPivotCacheRecordCount()` |
+| `pivotCacheRecordSetBlank()` | `setPivotCacheRecordBlank()` |
+| `pivotCacheRecordSetBool()` | `setPivotCacheRecordBool()` |
+| `pivotCacheRecordSetDate()` | `setPivotCacheRecordDate()` |
+| `pivotCacheRecordSetError()` | `setPivotCacheRecordError()` |
+| `pivotCacheRecordSetNumber()` | `setPivotCacheRecordNumber()` |
+| `pivotCacheRecordSetText()` | `setPivotCacheRecordText()` |
+| `pivotCacheRemove()` | `removePivotCache()` |
+| `pivotCacheSetOptions()` | `setPivotCacheOptions()` |
+| `pivotCacheSetWorksheetSource()` | `setPivotCacheWorksheetSource()` |
+| `PivotCacheSharedItemIsDateResult` | folded into `BoolResult` |
+| `pivotColFieldOrder()` | `getPivotColFieldOrder()` |
+| `pivotCount()` | `getPivotCount()` |
+| `pivotCreate()` | `addPivot()` |
+| `pivotDataFieldAdd()` | `addPivotDataField()` |
+| `pivotDataFieldAt()` | `getPivotDataField()` |
+| `pivotDataFieldClear()` | `clearPivotDataFields()` |
+| `pivotDataFieldCount()` | `getPivotDataFieldCount()` |
+| `pivotDataFieldDefaultName()` | `getPivotDataFieldDefaultName()` |
+| `pivotDataFieldSet()` | `setPivotDataField()` |
+| `pivotFieldAdd()` | `addPivotField()` |
+| `pivotFieldAddItem()` | `addPivotFieldItem()` |
+| `pivotFieldAddItemAt()` | `addPivotFieldSharedItem()` |
+| `pivotFieldAddSubtotalFn()` | `addPivotFieldSubtotalFn()` |
+| `pivotFieldAt()` | `getPivotField()` |
+| `pivotFieldClear()` | `clearPivotFields()` |
+| `pivotFieldClearDateGroup()` | `clearPivotFieldDateGroup()` |
+| `pivotFieldClearItems()` | `clearPivotFieldItems()` |
+| `pivotFieldClearSubtotalFns()` | `clearPivotFieldSubtotalFns()` |
+| `pivotFieldCount()` | `getPivotFieldCount()` |
+| `pivotFieldItemAt()` | `getPivotFieldItem()` |
+| `pivotFieldItemCount()` | `getPivotFieldItemCount()` |
+| `pivotFieldSetAxis()` | `setPivotFieldAxis()` |
+| `pivotFieldSetCustomName()` | `setPivotFieldCustomName()` |
+| `pivotFieldSetDateGroup()` | `setPivotFieldDateGroup()` |
+| `pivotFieldSetDefaultSubtotal()` | `setPivotFieldDefaultSubtotal()` |
+| `pivotFieldSetFillDownLabels()` | `setPivotFieldFillDownLabels()` |
+| `pivotFieldSetInsertBlankRow()` | `setPivotFieldInsertBlankRow()` |
+| `pivotFieldSetItemCaption()` | `setPivotFieldItemCaption()` |
+| `pivotFieldSetItemShowDetail()` | `setPivotFieldItemShowDetail()` |
+| `pivotFieldSetItemVisible()` | `setPivotFieldItemVisible()` |
+| `pivotFieldSetNumberFormat()` | `setPivotFieldNumberFormat()` |
+| `pivotFieldSetShowAll()` | `setPivotFieldShowAll()` |
+| `pivotFieldSetShowDetail()` | `setPivotFieldShowDetail()` |
+| `pivotFieldSetSort()` | `setPivotFieldSort()` |
+| `pivotFieldSetSubtotalTop()` | `setPivotFieldSubtotalTop()` |
+| `PivotFieldSpec` | `PivotFieldSpecInput` |
+| `pivotFilterAdd()` | `addPivotFilter()` |
+| `pivotFilterAt()` | `getPivotFilter()` |
+| `pivotFilterClear()` | `clearPivotFilters()` |
+| `pivotFilterCount()` | `getPivotFilterCount()` |
+| `pivotFilterRemoveAt()` | `removePivotFilter()` |
+| `pivotGetGrandTotals()` | `getPivotGrandTotals()` |
+| `pivotGetLayout()` | `getPivotReportLayout()` |
+| `pivotGetOptions()` | `getPivotOptions()` |
+| `pivotGetStyleInfo()` | `getPivotStyleInfo()` |
+| `pivotLayout()` | `getPivotLayout()` |
+| `pivotName()` | `getPivotName()` |
+| `pivotProject()` | `projectPivot()` |
+| `pivotProjectionPending()` | `isPivotProjectionPending()` |
+| `PivotProjectionPendingResult` | folded into `BoolResult` |
+| `pivotRemove()` | `removePivot()` |
+| `PivotReportLayoutResult` | folded into `NumberResult` |
+| `pivotRowFieldOrder()` | `getPivotRowFieldOrder()` |
+| `pivotSetAnchor()` | `setPivotAnchor()` |
+| `pivotSetColFieldOrder()` | `setPivotColFieldOrder()` |
+| `pivotSetGrandTotals()` | `setPivotGrandTotals()` |
+| `pivotSetLayout()` | `setPivotReportLayout()` |
+| `pivotSetName()` | `setPivotName()` |
+| `pivotSetOptions()` | `setPivotOptions()` |
+| `pivotSetRowFieldOrder()` | `setPivotRowFieldOrder()` |
+| `pivotSetStyleInfo()` | `setPivotStyleInfo()` |
+| `pivotShowDetails()` | `showPivotDetails()` |
+| `precedents()` | `getPrecedents()` |
+| `previewChartData()` | `getChartPreview()` |
+| `probeImage()` | `getImageInfo()` |
+| `rangeStyleBases()` | `getRangeStyleBases()` |
+| `rangeStyleBasesExcluding()` | `getRangeStyleBasesExcluding()` |
+| `readDiagnostics()` | `getDiagnostics()` |
+| `RecalcViewport` | folded into `CellRect` |
+| `recomputed` | `value` |
+| `refMode()` | `getRefMode()` |
+| `removeConditionalFormatAt()` | `removeCfRule()` |
+| `removeSheetColBreak()` | `removeColBreak()` |
+| `removeSheetRowBreak()` | `removeRowBreak()` |
+| `removeValidationAt()` | `removeValidation()` |
+| `resetTheme()` | `clearTheme()` |
+| `setSheetAutoFilterXml()` | `setAutoFilterXml()` |
+| `setSheetFitToPage()` | `setFitToPage()` |
+| `setSheetFormatDefaults()` | `setFormatDefaults()` |
+| `setSheetFreeze()` | `setFreeze()` |
+| `setSheetHeaderFooter()` | `setHeaderFooter()` |
+| `setSheetHeaderFooterXml()` | `setHeaderFooterXml()` |
+| `setSheetPageMargins()` | `setPageMargins()` |
+| `setSheetPageMarginsXml()` | `setPageMarginsXml()` |
+| `setSheetPageSetup()` | `setPageSetup()` |
+| `setSheetPageSetupXml()` | `setPageSetupXml()` |
+| `setSheetPaneTopLeft()` | `setPaneTopLeft()` |
+| `setSheetPrintArea()` | `setPrintArea()` |
+| `setSheetPrintOptions()` | `setPrintOptions()` |
+| `setSheetPrintOptionsXml()` | `setPrintOptionsXml()` |
+| `setSheetPrintTitles()` | `setPrintTitles()` |
+| `setSheetRightToLeft()` | `setRightToLeft()` |
+| `setSheetSelection()` | `setSelection()` |
+| `setSheetSheetPrXml()` | `setSheetPrXml()` |
+| `setSheetShowFormulas()` | `setShowFormulas()` |
+| `setSheetShowGridLines()` | `setShowGridLines()` |
+| `setSheetShowOutlineSymbols()` | `setShowOutlineSymbols()` |
+| `setSheetShowRowColHeaders()` | `setShowRowColHeaders()` |
+| `setSheetShowZeros()` | `setShowZeros()` |
+| `setSheetSplit()` | `setSplit()` |
+| `setSheetTabHidden()` | `setTabHidden()` |
+| `setSheetTabSelected()` | `setTabSelected()` |
+| `setSheetTopLeft()` | `setTopLeft()` |
+| `setSheetViewMode()` | `setViewMode()` |
+| `setSheetVisibility()` | `setVisibility()` |
+| `setSheetZoom()` | `setZoom()` |
+| `SheetAutoFilterXmlResult` | folded into `StringResult` |
+| `sheetCount()` | `getSheetCount()` |
+| `sheetName()` | `getSheetName()` |
+| `SheetPrintXmlResult` | folded into `StringResult` |
+| `show` | `value` |
+| `spillInfo()` | `getSpillInfo()` |
+| `Status.status` | `Status.code` |
+| `statusString()` | `getStatusName()` |
+| `tableAt()` | `getTable()` |
+| `tableCount()` | `getTableCount()` |
+| `tableStyleCount()` | removed; use `listTableStyles()` |
+| `text` | `value` |
+| `version()` | removed; use `getVersion()` |
+| `versionString()` | `getVersion()` |
+| `Workbook.loadBytes()` | `Workbook.load()` |
+| `xfCount()` | `getCellXfCount()` |
+| `xfIndex` | `value` |
+| `xml` | `value` |
+
+#### Python (`formulon`)
+
+| Before | After |
+|---|---|
+| `active_sheet()` | `get_active_sheet()` |
+| `add_conditional_format()` | `add_cf_rule()` |
+| `border_count()` | `get_border_count()` |
+| `calc_mode()` | `get_calc_mode()` |
+| `calc_on_save()` | `get_calc_on_save()` |
+| `cell_style_count()` | removed; use `list_cell_styles()` |
+| `cell_style_xf_count()` | `get_cell_style_xf_count()` |
+| `cell_xf_count()` | `get_cell_xf_count()` |
+| `CellStyle` | `CellStyleRecord` |
+| `cf_count()` | `get_cf_rule_count()` |
+| `CfValueObject` | `Cfvo` |
+| `ChartPreviewOverrides` | `ChartPreviewOverridesInput` |
+| `ChartSheetRange` | folded into `SheetRect` |
+| `ChartTitleInfo` | `ChartTitle` |
+| `clear_conditional_formats()` | `clear_cf_rules()` |
+| `column_chars_to_pt()` | `convert_column_chars_to_pt()` |
+| `column_pt_to_chars()` | `convert_column_pt_to_chars()` |
+| `comment_count()` | removed; use `list_comments()` |
+| `date1904()` | `get_date1904()` |
+| `dependents()` | `get_dependents()` |
+| `dxf_count()` | `get_dxf_count()` |
+| `edit_threaded_comment()` | `update_threaded_comment()` |
+| `error_display_name()` | `get_error_display_name()` |
+| `excel_profile_id()` | `get_excel_profile_id()` |
+| `external_link_count()` | `get_external_link_count()` |
+| `ExternalLink` | `ExternalLinkRecord` |
+| `file_name()` | `get_file_name()` |
+| `fill_count()` | `get_fill_count()` |
+| `font_count()` | `get_font_count()` |
+| `full_precision()` | `get_full_precision()` |
+| `get_col_breaks()` | `list_col_breaks()` |
+| `get_comments()` | `list_comments()` |
+| `get_conditional_format_at()` | `get_cf_rule()` |
+| `get_conditional_formats()` | removed |
+| `get_external_link_at()` | `get_external_link()` |
+| `get_external_links()` | removed |
+| `get_hyperlinks()` | `list_hyperlinks()` |
+| `get_merges()` | `list_merges()` |
+| `get_num_fmt()` | `get_num_fmt_string()` |
+| `get_persons()` | `list_people()` |
+| `get_phonetic()` | `get_cell_phonetic()` |
+| `get_phonetic_properties()` | `get_cell_phonetic_properties()` |
+| `get_phonetic_runs()` | removed |
+| `get_protected_ranges()` | removed |
+| `get_row_breaks()` | `list_row_breaks()` |
+| `get_sheet_columns()` | `list_col_overrides()` |
+| `get_sheet_format_defaults()` | `get_format_defaults()` |
+| `get_sheet_row_overrides()` | `list_row_overrides()` |
+| `get_sheet_selection()` | `get_selection()` |
+| `get_sheet_view()` | `get_view()` |
+| `get_show_phonetic()` | `get_cell_show_phonetic()` |
+| `get_theme()` | `get_theme_fonts()` |
+| `get_threaded_comments()` | `list_threaded_comments()` |
+| `get_validation_at()` | `get_validation()` |
+| `get_validations()` | removed |
+| `has_phonetic_properties()` | `has_cell_phonetic_properties()` |
+| `hyperlink_count()` | removed; use `list_hyperlinks()` |
+| `insert_chart()` | `add_chart()` |
+| `insert_image()` | `add_image()` |
+| `insert_shape()` | `add_shape()` |
+| `iter_cells()` | removed |
+| `iter_defined_names()` | `list_defined_names()` |
+| `iter_passthrough()` | `list_passthroughs()` |
+| `iter_tables()` | removed |
+| `lambda_text_at()` | `get_lambda_text()` |
+| `library_version()` | `get_version()` |
+| `list_invalid_cells()` | `get_invalid_cells()` |
+| `list_sparkline_groups()` | removed |
+| `memory_usage()` | `get_memory_usage()` |
+| `merge_count()` | removed; use `list_merges()` |
+| `MergeRange` | folded into `CellRect` |
+| `paginate()` | `get_pagination()` |
+| `partial_recalc()` | `recalc_viewport()` |
+| `pinned_now()` | `get_pinned_now()` |
+| `pivot_cache_calculated_field_add()` | `add_pivot_cache_calculated_field()` |
+| `pivot_cache_calculated_field_remove()` | `remove_pivot_cache_calculated_field()` |
+| `pivot_cache_calculated_field_set_formula()` | `set_pivot_cache_calculated_field_formula()` |
+| `pivot_cache_calculated_item_add()` | `add_pivot_cache_calculated_item()` |
+| `pivot_cache_calculated_item_at()` | `get_pivot_cache_calculated_item()` |
+| `pivot_cache_calculated_item_count()` | `get_pivot_cache_calculated_item_count()` |
+| `pivot_cache_calculated_item_move()` | `move_pivot_cache_calculated_item()` |
+| `pivot_cache_calculated_item_remove()` | `remove_pivot_cache_calculated_item()` |
+| `pivot_cache_calculated_item_set_formula()` | `set_pivot_cache_calculated_item_formula()` |
+| `pivot_cache_count()` | removed; use `list_pivot_caches()` |
+| `pivot_cache_create()` | `add_pivot_cache()` |
+| `pivot_cache_field_add()` | `add_pivot_cache_field()` |
+| `pivot_cache_field_add_shared_item_blank()` | `add_pivot_cache_field_shared_item_blank()` |
+| `pivot_cache_field_add_shared_item_bool()` | `add_pivot_cache_field_shared_item_bool()` |
+| `pivot_cache_field_add_shared_item_date()` | `add_pivot_cache_field_shared_item_date()` |
+| `pivot_cache_field_add_shared_item_error()` | `add_pivot_cache_field_shared_item_error()` |
+| `pivot_cache_field_add_shared_item_number()` | `add_pivot_cache_field_shared_item_number()` |
+| `pivot_cache_field_add_shared_item_text()` | `add_pivot_cache_field_shared_item_text()` |
+| `pivot_cache_field_clear()` | `clear_pivot_cache_fields()` |
+| `pivot_cache_field_clear_shared_items()` | `clear_pivot_cache_field_shared_items()` |
+| `pivot_cache_field_count()` | `get_pivot_cache_field_count()` |
+| `pivot_cache_field_formula()` | `get_pivot_cache_field_formula()` |
+| `pivot_cache_field_name()` | `get_pivot_cache_field_name()` |
+| `pivot_cache_field_shared_item_count()` | `get_pivot_cache_field_shared_item_count()` |
+| `pivot_cache_field_shared_item_is_date()` | `is_pivot_cache_field_shared_item_date()` |
+| `pivot_cache_field_shared_item_value()` | `get_pivot_cache_field_shared_item_value()` |
+| `pivot_cache_get_options()` | `get_pivot_cache_options()` |
+| `pivot_cache_id()` | `get_pivot_cache_id()` |
+| `pivot_cache_id_at()` | removed; use `list_pivot_caches()` |
+| `pivot_cache_record_add()` | `add_pivot_cache_record()` |
+| `pivot_cache_record_clear()` | `clear_pivot_cache_records()` |
+| `pivot_cache_record_count()` | `get_pivot_cache_record_count()` |
+| `pivot_cache_record_set_blank()` | `set_pivot_cache_record_blank()` |
+| `pivot_cache_record_set_bool()` | `set_pivot_cache_record_bool()` |
+| `pivot_cache_record_set_date()` | `set_pivot_cache_record_date()` |
+| `pivot_cache_record_set_error()` | `set_pivot_cache_record_error()` |
+| `pivot_cache_record_set_number()` | `set_pivot_cache_record_number()` |
+| `pivot_cache_record_set_text()` | `set_pivot_cache_record_text()` |
+| `pivot_cache_remove()` | `remove_pivot_cache()` |
+| `pivot_cache_set_options()` | `set_pivot_cache_options()` |
+| `pivot_col_field_order()` | `get_pivot_col_field_order()` |
+| `pivot_count()` | `get_pivot_count()` |
+| `pivot_create()` | `add_pivot()` |
+| `pivot_data_field_add()` | `add_pivot_data_field()` |
+| `pivot_data_field_at()` | `get_pivot_data_field()` |
+| `pivot_data_field_clear()` | `clear_pivot_data_fields()` |
+| `pivot_data_field_count()` | `get_pivot_data_field_count()` |
+| `pivot_data_field_default_name()` | `get_pivot_data_field_default_name()` |
+| `pivot_data_field_set()` | `set_pivot_data_field()` |
+| `pivot_field_add()` | `add_pivot_field()` |
+| `pivot_field_add_item()` | `add_pivot_field_item()` |
+| `pivot_field_add_item_at()` | `add_pivot_field_shared_item()` |
+| `pivot_field_add_subtotal_fn()` | `add_pivot_field_subtotal_fn()` |
+| `pivot_field_at()` | `get_pivot_field()` |
+| `pivot_field_clear()` | `clear_pivot_fields()` |
+| `pivot_field_clear_date_group()` | `clear_pivot_field_date_group()` |
+| `pivot_field_clear_items()` | `clear_pivot_field_items()` |
+| `pivot_field_clear_subtotal_fns()` | `clear_pivot_field_subtotal_fns()` |
+| `pivot_field_count()` | `get_pivot_field_count()` |
+| `pivot_field_item_at()` | `get_pivot_field_item()` |
+| `pivot_field_item_count()` | `get_pivot_field_item_count()` |
+| `pivot_field_set_axis()` | `set_pivot_field_axis()` |
+| `pivot_field_set_custom_name()` | `set_pivot_field_custom_name()` |
+| `pivot_field_set_date_group()` | `set_pivot_field_date_group()` |
+| `pivot_field_set_default_subtotal()` | `set_pivot_field_default_subtotal()` |
+| `pivot_field_set_fill_down_labels()` | `set_pivot_field_fill_down_labels()` |
+| `pivot_field_set_insert_blank_row()` | `set_pivot_field_insert_blank_row()` |
+| `pivot_field_set_item_caption()` | `set_pivot_field_item_caption()` |
+| `pivot_field_set_item_show_detail()` | `set_pivot_field_item_show_detail()` |
+| `pivot_field_set_item_visible()` | `set_pivot_field_item_visible()` |
+| `pivot_field_set_number_format()` | `set_pivot_field_number_format()` |
+| `pivot_field_set_show_all()` | `set_pivot_field_show_all()` |
+| `pivot_field_set_show_detail()` | `set_pivot_field_show_detail()` |
+| `pivot_field_set_sort()` | `set_pivot_field_sort()` |
+| `pivot_field_set_subtotal_top()` | `set_pivot_field_subtotal_top()` |
+| `pivot_filter_add()` | `add_pivot_filter()` |
+| `pivot_filter_at()` | `get_pivot_filter()` |
+| `pivot_filter_clear()` | `clear_pivot_filters()` |
+| `pivot_filter_count()` | `get_pivot_filter_count()` |
+| `pivot_filter_remove_at()` | `remove_pivot_filter()` |
+| `pivot_get_options()` | `get_pivot_options()` |
+| `pivot_grand_totals()` | `get_pivot_grand_totals()` |
+| `pivot_layout()` | `get_pivot_layout()` |
+| `pivot_name()` | `get_pivot_name()` |
+| `pivot_project()` | `project_pivot()` |
+| `pivot_projection_pending()` | `is_pivot_projection_pending()` |
+| `pivot_remove()` | `remove_pivot()` |
+| `pivot_row_field_order()` | `get_pivot_row_field_order()` |
+| `pivot_set_anchor()` | `set_pivot_anchor()` |
+| `pivot_set_col_field_order()` | `set_pivot_col_field_order()` |
+| `pivot_set_grand_totals()` | `set_pivot_grand_totals()` |
+| `pivot_set_name()` | `set_pivot_name()` |
+| `pivot_set_options()` | `set_pivot_options()` |
+| `pivot_set_row_field_order()` | `set_pivot_row_field_order()` |
+| `pivot_set_style_info()` | `set_pivot_style_info()` |
+| `pivot_show_details()` | `show_pivot_details()` |
+| `pivot_style_info()` | `get_pivot_style_info()` |
+| `PivotFieldSpec` | `PivotFieldSpecInput` |
+| `precedents()` | `get_precedents()` |
+| `preview_chart_data()` | `get_chart_preview()` |
+| `probe_image()` | `get_image_info()` |
+| `protected_range_count()` | `get_protected_range_count()` |
+| `range_style_bases()` | `get_range_style_bases()` |
+| `range_style_bases_excluding()` | `get_range_style_bases_excluding()` |
+| `read_diagnostics()` | `get_diagnostics()` |
+| `ref_mode()` | `get_ref_mode()` |
+| `remove_conditional_format_at()` | `remove_cf_rule()` |
+| `remove_validation_at()` | `remove_validation()` |
+| `reset_theme()` | `clear_theme()` |
+| `set_phonetic()` | `set_cell_phonetic()` |
+| `set_phonetic_properties()` | `set_cell_phonetic_properties()` |
+| `set_phonetic_runs()` | `set_cell_phonetic_runs()` |
+| `set_sheet_format_defaults()` | `set_format_defaults()` |
+| `set_sheet_freeze()` | `set_freeze()` |
+| `set_sheet_pane_top_left()` | `set_pane_top_left()` |
+| `set_sheet_right_to_left()` | `set_right_to_left()` |
+| `set_sheet_selection()` | `set_selection()` |
+| `set_sheet_show_formulas()` | `set_show_formulas()` |
+| `set_sheet_show_grid_lines()` | `set_show_grid_lines()` |
+| `set_sheet_show_outline_symbols()` | `set_show_outline_symbols()` |
+| `set_sheet_show_row_col_headers()` | `set_show_row_col_headers()` |
+| `set_sheet_show_zeros()` | `set_show_zeros()` |
+| `set_sheet_split()` | `set_split()` |
+| `set_sheet_tab_hidden()` | `set_tab_hidden()` |
+| `set_sheet_tab_selected()` | `set_tab_selected()` |
+| `set_sheet_top_left()` | `set_top_left()` |
+| `set_sheet_view_mode()` | `set_view_mode()` |
+| `set_sheet_visibility()` | `set_visibility()` |
+| `set_sheet_zoom()` | `set_zoom()` |
+| `set_show_phonetic()` | `set_cell_show_phonetic()` |
+| `sheet_count()` | `get_sheet_count()` |
+| `sheet_name()` | `get_sheet_name()` |
+| `spill_info()` | `get_spill_info()` |
+| `table_create()` | `add_table()` |
+| `table_remove()` | `remove_table()` |
+| `table_rename()` | `rename_table()` |
+| `table_rename_column()` | `rename_table_column()` |
+| `table_set_column_totals()` | `set_table_column_totals()` |
+| `table_set_style_info()` | `set_table_style_info()` |
+| `table_style_count()` | removed; use `list_table_styles()` |
+| `table_style_defaults()` | `get_table_style_defaults()` |
+| `table_update()` | `update_table()` |
+| `validation_count()` | `get_validation_count()` |
+| `version_string()` | removed; use `get_version()` |
+| `Workbook.canonicalize_formula()` | `canonicalize_formula()` |
+| `Workbook.canonicalize_function_name()` | `canonicalize_function_name()` |
+| `Workbook.collation_classes()` | `get_collation_classes()` |
+| `Workbook.compare_text()` | `compare_text()` |
+| `Workbook.function_count()` | removed; use `list_function_names()` |
+| `Workbook.function_metadata()` | `get_function_metadata()` |
+| `Workbook.function_name_at()` | removed; use `list_function_names()` |
+| `Workbook.locale_facts()` | `get_locale_facts()` |
+| `Workbook.localize_formula()` | `localize_formula()` |
+| `Workbook.localize_function_name()` | `localize_function_name()` |
+<!-- migration-table:end -->
+
 ### Added
 
+- `FM_VERSION_MAJOR`, `FM_VERSION_MINOR` and `FM_VERSION_PATCH` in
+  `formulon_c.h` give the library version at compile time. The header opens
+  with a quick start, the five pointer lifetime classes, the last-error
+  contract and the rule that public structs gain no fields from 1.0 on.
+- `fm_workbook_get_defined_name` and `fm_workbook_remove_defined_name` look up
+  and remove a defined name by name and scope.
+
 - A workbook file name: `fm_workbook_set_file_name` / `fm_workbook_get_file_name`
-  (`setFileName` / `fileName`, `set_file_name` / `file_name`). When it is
+  (`setFileName` / `getFileName`, `set_file_name` / `get_file_name`). When it is
   set, every function that returns formula text, and `FORMULATEXT`, shows a
   reference to this workbook's own names as the formula bar does
   (`=Book.xlsx!Rate`, `='My Book.xlsx'!Rate`) instead of the stored
@@ -62,7 +1081,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   field's number format.
 - Pivot report options: per field `fm_sheet_set_pivot_field_default_subtotal`,
   `_set_insert_blank_row`, `_set_fill_down_labels` and `_set_show_detail`
-  (`pivotFieldSetShowDetail`, `pivot_field_set_show_detail`, and so on), and
+  (`setPivotFieldShowDetail`, `set_pivot_field_show_detail`, and so on), and
   the grand total caption and autofit flag in `fm_pivot_options_t`. The layout
   draws the grand total caption, blank rows, repeated labels and collapsed
   items as Excel does, and loaded files keep them.
@@ -76,7 +1095,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   among the fields. Listing it in `fm_sheet_set_pivot_row_field_order` or
   `_set_col_field_order` moves it to that axis. It needs two or more data
   fields, and the axis that holds it must keep listing it.
-- `fm_sheet_show_pivot_details` (`pivotShowDetails`, `pivot_show_details`)
+- `fm_sheet_show_pivot_details` (`showPivotDetails`, `show_pivot_details`)
   runs Show Details on a data, subtotal or grand total cell: it adds a sheet
   with the matching source rows in a table, before the pivot's sheet, and
   makes it the active sheet. Sheets from the pivot's sheet onward move up by
@@ -87,24 +1106,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and table names use the workbook locale's word.
 
 - `fm_workbook_get_pivot_cache_field_shared_item_value`
-  (`pivotCacheFieldSharedItemValue`, `pivot_cache_field_shared_item_value`)
+  (`getPivotCacheFieldSharedItemValue`, `get_pivot_cache_field_shared_item_value`)
   reads one shared item of a pivot cache field, so a refresh can keep the
   existing item order.
 - Pivot cache dates: `fm_workbook_add_pivot_cache_field_shared_item_date`
   and `fm_workbook_set_pivot_cache_record_date` store a serial as a date
   (`<d>`) rather than a number, and
   `fm_workbook_is_pivot_cache_field_shared_item_date` reads the mark back
-  (`pivotCacheFieldAddSharedItemDate`, `pivotCacheRecordSetDate`,
-  `pivotCacheFieldSharedItemIsDate`; `pivot_cache_field_add_shared_item_date`,
+  (`addPivotCacheFieldSharedItemDate`, `setPivotCacheRecordDate`,
+  `isPivotCacheFieldSharedItemDate`; `add_pivot_cache_field_shared_item_date`,
   and so on). A serial outside the workbook's date system is refused. Date
   filters, date grouping and the saved field hints treat these values as
   they treat dates loaded from a file.
 - `fm_sheet_set_row_auto_height` (`setRowAutoHeight`, `set_row_auto_height`)
-  stores a row's automatic height without marking it custom, so a refreshed
-  height is saved as `ht` alone and the row keeps following its content and
-  font.
-- `fm_sheet_get_range_style_bases_excluding` (`rangeStyleBasesExcluding`,
-  `range_style_bases_excluding`) lists the XFs a selection resolves to while
+  stores the automatic height of the rows `first` to `last` of a sheet
+  without marking them custom, so a refreshed height is saved as `ht` alone
+  and the rows keep following their content and font.
+- `fm_sheet_get_range_style_bases_excluding` (`getRangeStyleBasesExcluding`,
+  `get_range_style_bases_excluding`) lists the XFs a selection resolves to while
   leaving out given cells, for hosts that resolve those cells' style
   themselves.
 - `fm_sheet_get_array_formula` / `fm_sheet_set_array_formula`
@@ -116,44 +1135,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Calculated fields: `fm_workbook_add_pivot_cache_calculated_field`,
   `_calculated_field_set_formula`, `_calculated_field_remove` and
-  `fm_workbook_get_pivot_cache_field_formula` (`pivotCacheCalculatedFieldAdd`,
-  `pivot_cache_calculated_field_add`, and so on). A calculated field shows its
+  `fm_workbook_get_pivot_cache_field_formula` (`addPivotCacheCalculatedField`,
+  `add_pivot_cache_calculated_field`, and so on). A calculated field shows its
   formula over the Sums of the fields it names, totals included, and is saved
   in Excel's form.
 - Calculated items: `fm_workbook_add_pivot_cache_calculated_item`, `_count`,
   `_at` (`fm_pivot_calculated_item_t`), `_set_formula`, `_move` and `_remove`
-  (`pivotCacheCalculatedItemAdd`, `pivot_cache_calculated_item_add`, and so
+  (`addPivotCacheCalculatedItem`, `add_pivot_cache_calculated_item`, and so
   on). Items are evaluated in the context of each cell, the field's totals
   include them, and where items meet the one later in solve order wins. A data
   field cannot use Average, StdDev, StdDevP, Var or VarP beside them.
 - PivotTable options in one struct: `fm_sheet_get_pivot_options` /
   `fm_sheet_set_pivot_options` with `fm_pivot_options_t`
-  (`pivotGetOptions` / `pivotSetOptions`, `pivot_get_options` /
-  `pivot_set_options`): error and empty-cell captions, field headers, classic
+  (`getPivotOptions` / `setPivotOptions`, `get_pivot_options` /
+  `set_pivot_options`): error and empty-cell captions, field headers, classic
   grid layout, empty rows and columns, report filter wrapping, merged labels,
   compact indent, print titles, alternative text and the rest of the options
   dialog. The layout draws those that change the report.
 - Pivot cache options: `fm_workbook_get_pivot_cache_options` /
-  `_set_options` with `fm_pivot_cache_options_t` (`pivotCacheGetOptions`,
-  `pivot_cache_get_options`): saving the source records, the missing-items
+  `_set_options` with `fm_pivot_cache_options_t` (`getPivotCacheOptions`,
+  `get_pivot_cache_options`): saving the source records, the missing-items
   limit and refresh on open. A cache saved without records writes no records
   part.
-- `fm_sheet_set_pivot_field_custom_name` (`pivotFieldSetCustomName`,
-  `pivot_field_set_custom_name`) renames a pivot field in the report, and
-  `fm_sheet_set_pivot_field_show_all` (`pivotFieldSetShowAll`,
-  `pivot_field_set_show_all`) lists its items without data.
-- `fm_sheet_get_pivot_data_field_default_name` (`pivotDataFieldDefaultName`,
-  `pivot_data_field_default_name`) reads the name a new data field would get,
+- `fm_sheet_set_pivot_field_custom_name` (`setPivotFieldCustomName`,
+  `set_pivot_field_custom_name`) renames a pivot field in the report, and
+  `fm_sheet_set_pivot_field_show_all` (`setPivotFieldShowAll`,
+  `set_pivot_field_show_all`) lists its items without data.
+- `fm_sheet_get_pivot_data_field_default_name` (`getPivotDataFieldDefaultName`,
+  `get_pivot_data_field_default_name`) reads the name a new data field would get,
   without adding one.
-- `fm_sheet_project_pivot` (`pivotProject`, `pivot_project`) writes a
+- `fm_sheet_project_pivot` (`projectPivot`, `project_pivot`) writes a
   pivot's report into its cells now, and `fm_sheet_is_pivot_projection_pending`
-  (`pivotProjectionPending`, `pivot_projection_pending`) tells whether a cache
+  (`isPivotProjectionPending`, `is_pivot_projection_pending`) tells whether a cache
   change left them stale.
 - Charts read and write "Show #N/A as an empty cell" (`c16r3:dispNaAsBlank`):
   `na_as_blank` in `fm_chart_info_t` (`naAsBlank`, `na_as_blank`), the
   `na_as_blank` field of the display patch, and a preview override. Turning it
   off removes the extension, as Excel writes it.
-- `fm_sheet_get_spill_info` (`spillInfo`, `spill_info`) reports a spill that is
+- `fm_sheet_get_spill_info` (`getSpillInfo`, `get_spill_info`) reports a spill that is
   blocked with `#SPILL!`: at the anchor, `blocked` is 1 and the anchor, rows
   and columns give the range the spill tried to fill, so a host can outline
   it as Excel does.
@@ -165,7 +1184,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   does.
 
 - `fm_workbook_rename_table_column` (`renameTableColumn`,
-  `table_rename_column`) renames a table column as typing over its header
+  `rename_table_column`) renames a table column as typing over its header
   does, and returns the final name. An empty name takes the locale's word
   with the lowest unused number (`Column1`, `列1`, `Spalte1`), and a name
   another column already has gets the lowest unused number from 2 appended
@@ -176,7 +1195,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `fm_get_function_metadata` (`functionMetadata`, `function_metadata`) reports the
+- `fm_get_function_metadata` (`getFunctionMetadata`, `function_metadata`) reports the
   argument counts formula entry accepts for every built-in, including the
   functions it used to report as `0` with no upper bound (`IF` 2 to 3,
   `XLOOKUP` 3 to 6, `SUMIFS` 3 or more, `LET` 3 to 253, `LAMBDA` 1 to 254).

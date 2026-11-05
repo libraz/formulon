@@ -1453,7 +1453,8 @@ entries:
     kind: record
     role: result
     js: AutoFilterEvalResult
-    surfaces: [wasm, native]
+    py: AutoFilterEval
+    surfaces: [wasm, native, py]
     was: { js: AutoFilterEvalResult }
   record.auto_filter_result:
     kind: record
@@ -1520,7 +1521,8 @@ entries:
     kind: record
     role: result
     js: CellsInRangeResult
-    surfaces: [wasm, native]
+    py: CellsInRange
+    surfaces: [wasm, native, py]
     was: { js: CellsInRangeResult }
   record.cf_cell_result:
     kind: record
@@ -1688,7 +1690,8 @@ entries:
     kind: record
     role: result
     js: DisplayTextResult
-    surfaces: [wasm, native]
+    py: DisplayText
+    surfaces: [wasm, native, py]
     was: { js: DisplayTextResult }
   record.dxf_result:
     kind: record
@@ -10663,6 +10666,18 @@ entries:
     surfaces: [wasm]
     exception: "WASM module entry point (default export); the native package has none"
     was: { js: createFormulon }
+  constant.fm_version_major:
+    kind: constant
+    c: FM_VERSION_MAJOR
+    surfaces: [c]
+  constant.fm_version_minor:
+    kind: constant
+    c: FM_VERSION_MINOR
+    surfaces: [c]
+  constant.fm_version_patch:
+    kind: constant
+    c: FM_VERSION_PATCH
+    surfaces: [c]
   constant.functionmetadataprovider:
     kind: constant
     py: FunctionMetadataProvider

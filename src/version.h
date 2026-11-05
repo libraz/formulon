@@ -2,7 +2,8 @@
 #define FORMULON_VERSION_H_
 
 // Single source of truth for the Formulon version. Keep in lockstep with
-// `CMakeLists.txt` (`project(formulon VERSION ...)`),
+// `CMakeLists.txt` (`project(formulon VERSION ...)`), the `FM_VERSION_*` macros in
+// `src/c_api/formulon_c.h` (checked at compile time in `c_api/parts/version.cpp`),
 // `packages/npm/package.json`, `packages/npm-native/package.json`, and
 // `packages/python/pyproject.toml`. The release skill bumps all of them
 // together.

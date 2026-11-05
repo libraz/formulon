@@ -16,6 +16,7 @@ from tools.dev.binding_drift import (
     declaration_checks,
     enum_decl,
     readme_checks,
+    readme_identifiers,
     shape_checks,
     ts_decl,
 )
@@ -240,6 +241,48 @@ class ReadmeFactsTest(unittest.TestCase):
     def test_a_reworded_sentence_fails_instead_of_passing_silently(self) -> None:
         problems = self._problems_after("Excel behavior profiles across", "profiles over")
         self.assertTrue(any("profile-count sentence not found" in p for p in problems), problems)
+
+
+class ReadmeIdentifiersTest(unittest.TestCase):
+    def _problems_after(self, readme: str, old: str, new: str) -> list[str]:
+        original = readme_identifiers._read
+        target = readme_identifiers.REPO_ROOT / readme
+
+        def read(path: Path) -> str:
+            text = original(path)
+            return text.replace(old, new) if path == target else text
+
+        with patch.object(readme_identifiers, "_read", read):
+            return readme_identifiers.check_readme_identifiers()
+
+    def test_current_documents_resolve(self) -> None:
+        self.assertEqual(readme_identifiers.check_readme_identifiers(), [])
+
+    def test_unknown_c_name_is_reported(self) -> None:
+        problems = self._problems_after("README.md", "formulon eval '=SUM(1,2,3)'", "fm_no_such_function(wb);")
+        self.assertTrue(any("`fm_no_such_function`" in p for p in problems), problems)
+
+    def test_unknown_js_import_is_reported(self) -> None:
+        problems = self._problems_after(
+            "packages/npm-native/README.md", "{ Workbook, evalFormula, ValueKind }", "{ Workbook, NoSuchExport }"
+        )
+        self.assertTrue(any("`NoSuchExport`" in p for p in problems), problems)
+
+    def test_stale_workbook_method_is_reported(self) -> None:
+        problems = self._problems_after("packages/npm/README.md", "wb.dispose();", "wb.delete();")
+        self.assertTrue(any("`wb.delete`" in p for p in problems), problems)
+
+    def test_unknown_factory_is_reported(self) -> None:
+        problems = self._problems_after("packages/npm/README.md", "Workbook.load(", "Workbook.open(")
+        self.assertTrue(any("Workbook.open" in p for p in problems), problems)
+
+    def test_stale_python_method_is_reported(self) -> None:
+        problems = self._problems_after("packages/python/README.md", "wb.recalc()", "wb.recalculate()")
+        self.assertTrue(any("`wb.recalculate`" in p for p in problems), problems)
+
+    def test_link_to_ignored_path_is_reported(self) -> None:
+        problems = self._problems_after("CONTRIBUTING.md", "[Apache 2.0 license](LICENSE)", "[rules](CLAUDE.md)")
+        self.assertTrue(any("git-ignored path `CLAUDE.md`" in p for p in problems), problems)
 
 
 def _conventions(header: str, ledger: dict | None = None) -> api_conventions.Context:

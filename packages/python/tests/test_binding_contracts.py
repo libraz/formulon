@@ -1432,7 +1432,7 @@ class ValueValidationTests(unittest.TestCase):
         value = Value(kind=1, number=5.5)
         self.assertIs(value.kind, ValueKind.NUMBER)
         with Workbook.create_default() as wb:
-            self.assertEqual(wb.format_value(value)[0], "5.5")
+            self.assertEqual(wb.format_value(value).text, "5.5")
 
     def test_a_missing_or_extra_payload_is_a_value_error(self) -> None:
         for kwargs in (

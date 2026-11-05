@@ -73,7 +73,7 @@ with formulon.Workbook.create_default() as wb:
     for profile in ("mac-365-en_US", "mac-365-ja_JP", "mac-365-de_DE"):
         wb.set_excel_profile_id(profile)
         wb.recalc()
-        print(profile, [wb.get_display_text(0, row, 0)[0] for row in range(3)])
+        print(profile, [wb.get_display_text(0, row, 0).text for row in range(3)])
 # mac-365-en_US ['2', '#VALUE!', 'TRUE']
 # mac-365-ja_JP ['4', '#VALUE!', 'TRUE']
 # mac-365-de_DE ['2', '1,5', 'WAHR']

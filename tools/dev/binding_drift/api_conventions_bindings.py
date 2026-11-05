@@ -1265,6 +1265,7 @@ def _rule_js_results(ctx: Context) -> Iterable[Violation]:
 
 
 def _is_tuple(annotation: str, classes: Dict[str, PyClass]) -> bool:
+    annotation = annotation.replace("'", "").replace('"', "")
     if re.match(r"(?:typing\.)?(?:Tuple|tuple)\b", annotation):
         return True
     base = re.sub(r"^(?:typing\.)?Optional\[(.*)\]$", r"\1", annotation)
@@ -1285,7 +1286,7 @@ def _rule_py_results(ctx: Context) -> Iterable[Violation]:
     pool = _callables(ctx, "py")
     lookups = _optional_lookups(ctx)
     for name, fn in sorted(pool.items()):
-        if fn.returns and _is_tuple(fn.returns, py.classes):
+        if not name.rpartition(".")[2].startswith("_") and fn.returns and _is_tuple(fn.returns, py.classes):
             yield _violation(ctx, "R8.py", "py", _key(ctx, "py", name), "tuple", f"`{name}` returns `{fn.returns}`")
     for key, entry in sorted(ctx.ledger.entries.items()):
         if not isinstance(entry, dict):

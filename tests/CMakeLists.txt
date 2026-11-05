@@ -596,7 +596,6 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   # declares. Everything else here compares two hand-maintained descriptions.
   formulon_add_binding_drift_test(binding_drift_python_call_signatures python-call-signatures)
   formulon_add_binding_drift_test(binding_drift_python_inline_structs python-inline-structs)
-  formulon_add_binding_drift_test(binding_drift_python_stub_methods python-stub-methods)
   formulon_add_binding_drift_test(binding_drift_dts_wasm dts-wasm)
   formulon_add_binding_drift_test(binding_drift_dts_node dts-node)
   # The two `dts-*` checks above compare method names only. These compare
@@ -608,6 +607,7 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   formulon_add_binding_drift_test(binding_drift_pure_js_helpers pure-js-helpers)
   formulon_add_binding_drift_test(binding_drift_readme_counts readme-counts)
   formulon_add_binding_drift_test(binding_drift_readme_facts readme-facts)
+  formulon_add_binding_drift_test(binding_drift_readme_identifiers readme-identifiers)
   formulon_add_binding_drift_test(binding_drift_dts_enums dts-enums)
   formulon_add_binding_drift_test(binding_drift_style_record_fields style-record-fields)
   # Byte-compares the files `stage.mjs` copies verbatim into the native

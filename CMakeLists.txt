@@ -557,6 +557,12 @@ formulon_apply_common_deps(formulon_core)
 
 formulon_apply_warnings(formulon_core)
 
+# `FM_API` resolves to dllexport while the core objects are compiled, so the
+# shared library built from them exports the C ABI on Windows.
+if(WIN32)
+  target_compile_definitions(formulon_core PRIVATE FORMULON_BUILDING_DLL)
+endif()
+
 # ---------------------------------------------------------------------------
 # Static library aggregating the core objects
 # ---------------------------------------------------------------------------

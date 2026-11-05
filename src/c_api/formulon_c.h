@@ -15,14 +15,33 @@
  *   * the Python wheel (`formulon` on PyPI, via Wasmtime/WASM),
  *   * any third-party language binding.
  *
+ * Quick start:
+ *
+ *     fm_workbook_t* wb = NULL;
+ *     if (fm_workbook_create_default(&wb) != FM_STATUS_OK) { ... }
+ *     fm_sheet_set_number(wb, 0, 0, 0, 42.0);                 // Sheet1!A1
+ *     fm_sheet_set_formula(wb, 0, 1, 0, "=A1*2");             // Sheet1!A2
+ *     fm_workbook_recalc(wb);
+ *     fm_value_t v;
+ *     fm_sheet_get_value(wb, 0, 1, 0, &v);                    // v.number == 84
+ *     fm_workbook_destroy(wb);
+ *
+ * Every fallible function returns an `fm_status_t`; results come back through
+ * `out` parameters. Sheets are addressed by 0-based index, cells by 0-based
+ * `(row, col)`.
+ *
  * Status codes mirror `formulon::FormulonErrorCode` (see
- * `src/utils/error.h`); a return value of `0` (`FM_STATUS_OK` (0)) always denotes
- * success. Error strings and contexts associated with the most recent
- * call are exposed via `fm_get_last_error_message()` /
- * `fm_get_last_error_context()`. Both buffers are thread-local and are
- * overwritten on every API call on the same thread; copy them out
- * before invoking another API entry point if the caller wants to keep
- * the diagnostic.
+ * `src/utils/error.h`) and are named `FM_STATUS_*` in `formulon_status.h`; a
+ * return value of `0` (`FM_STATUS_OK`) always denotes success.
+ *
+ * Last error: `fm_get_last_error_message()` and `fm_get_last_error_context()`
+ * describe the most recent failing call on the calling thread. Both are
+ * thread-local views, valid until the next API call on that thread; copy them
+ * out to keep the diagnostic. A call that succeeds resets the message to the
+ * empty string. The functions that read or release error state leave it
+ * untouched: `fm_get_last_error_message`, `fm_get_last_error_context`,
+ * `fm_get_status_name`, `fm_get_version`, `fm_get_error_display_name` and
+ * every `*_destroy`.
  *
  * Text input: every caller-supplied string (argument or struct field) must be
  * well-formed UTF-8. A lone surrogate, overlong form or truncated sequence
@@ -38,13 +57,16 @@
  *     one call. Those implementation threads do not make cross-call handle
  *     access safe, and the same-handle external-concurrency restriction
  *     remains in force.
- *   * `fm_last_error_*` storage is thread-local, so two threads driving
+ *   * The last-error storage is thread-local, so two threads driving
  *     two distinct workbooks can read their own diagnostics
  *     independently.
  *   * `fm_get_status_name()` and `fm_get_version()` are pure functions
  *     and are safe to call concurrently.
  *
- * Pointer-view vocabulary:
+ * Pointer lifetimes: every pointer a function hands back belongs to one of
+ * five classes, and each API names its class. They are the model-backed view,
+ * the read-scratch-backed view, the owned snapshot, the static view and the
+ * thread-local view:
  *   * A **model-backed view** points into workbook-owned model storage. Its
  *     lifetime ends at the invalidating mutation named by that API, or when
  *     `fm_workbook_destroy` releases the handle. A read on the same handle
@@ -56,9 +78,11 @@
  *     must copy strings or arrays before making another call when they need
  *     to retain the value.
  *   * An **owned snapshot** is returned through a separately owned opaque
- *     result handle and stays valid until that result is destroyed. A
- *     **static view** points at process-static storage and has program
- *     lifetime. Each individual API below names which view it returns.
+ *     result handle and stays valid until that result is destroyed.
+ *   * A **static view** points at process-static storage and has program
+ *     lifetime.
+ *   * A **thread-local view** points into storage owned by the calling
+ *     thread and stays valid until the next API call on that thread.
  *
  * Memory model:
  *   * Workbook-backed views are never allocated for the caller and must not
@@ -68,12 +92,18 @@
  *     `fm_workbook_save_with_diagnostics`, `fm_sheet_snapshot_drawing` and
  *     `fm_sheet_snapshot_range_style` are heap-allocated by the library with
  *     `new[]` and must be released by passing the same pointer to
- *     `fm_buffer_destroy`. Mixing `malloc`/`free` and
+ *     `fm_buffer_destroy` (a NULL pointer is a no-op). Mixing `malloc`/`free` and
  *     `new[]`/`delete[]` across the boundary is undefined.
  *   * Every API that returns an owned opaque handle through an `out`
  *     parameter (including workbook, conditional-format-result, and
  *     cell-node handles) initializes `*out` to `NULL` before validation and
  *     leaves it `NULL` on every failure path.
+ *
+ * Versioning and stability: `FM_VERSION_MAJOR`, `FM_VERSION_MINOR` and
+ * `FM_VERSION_PATCH` give the library version at compile time;
+ * `fm_get_version()` returns it at run time. From 1.0 on, no function is
+ * removed or changed in meaning, and no public struct gains, loses or
+ * reorders a field. New data arrives through new functions.
  */
 
 #ifndef FORMULON_C_API_H
@@ -84,6 +114,11 @@
 
 #include "c_api/formulon_status.h"
 
+/** @brief Library version at compile time; equals `fm_get_version()`. */
+#define FM_VERSION_MAJOR 0
+#define FM_VERSION_MINOR 18
+#define FM_VERSION_PATCH 0
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -93,13 +128,19 @@ extern "C" {
  *
  * The core library is built with `-fvisibility=hidden`, so every
  * exported entry point must opt back in via `__attribute__((visibility
- * ("default")))` (or `__declspec(dllexport)` on Windows). Consumers
- * that link against a static `formulon_static` archive can ignore the
- * macro; consumers that link against a shared library rely on it for
- * symbol export filtering.
+ * ("default")))`. On Windows the macro is `__declspec(dllexport)` while the
+ * library itself is compiled (`FORMULON_BUILDING_DLL`), `__declspec(dllimport)`
+ * in a consumer of the shared library (`FORMULON_SHARED`) and empty otherwise.
+ * Consumers that link the static `formulon_static` archive define neither.
  */
 #if defined(_WIN32)
+#if defined(FORMULON_BUILDING_DLL)
 #define FM_API __declspec(dllexport)
+#elif defined(FORMULON_SHARED)
+#define FM_API __declspec(dllimport)
+#else
+#define FM_API
+#endif
 #else
 #define FM_API __attribute__((visibility("default")))
 #endif

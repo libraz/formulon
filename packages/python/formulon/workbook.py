@@ -51,6 +51,7 @@ from ._status import StatusCode
 __all__ = [
     "CalcMode",
     "Cell",
+    "CellsInRange",
     "CellNode",
     "CellStyleRecord",
     "CellXf",
@@ -131,6 +132,7 @@ __all__ = [
     "DefinedName",
     "DifferentialFormat",
     "DisplayStatus",
+    "DisplayText",
     "EffectiveStyle",
     "ErrorCode",
     "ExternalLinkRecord",
@@ -215,6 +217,7 @@ __all__ = [
     "Workbook",
     "WorkbookProtection",
     "AutoFilter",
+    "AutoFilterEval",
     "AutoFilterSortState",
     "AutoFilterDateGroup",
     "AutoFilterColumn",
@@ -1289,6 +1292,30 @@ class AutoFilter:
     range: CellRect
     columns: List[AutoFilterColumn] = field(default_factory=list)
     sort: Optional[AutoFilterSortState] = None
+
+
+@dataclass(frozen=True)
+class DisplayText:
+    """The text Excel displays for a value and the rendering outcome (``display_status``)."""
+
+    text: str
+    display_status: DisplayStatus
+
+
+@dataclass(frozen=True)
+class AutoFilterEval:
+    """Rows an AutoFilter shows: body row ``first_row + i`` matches when ``match[i]`` is true."""
+
+    first_row: int
+    match: List[bool]
+
+
+@dataclass(frozen=True)
+class CellsInRange:
+    """One page of populated cells; ``next_cursor`` is ``None`` once no further cell exists."""
+
+    cells: List[Cell]
+    next_cursor: Optional[int]
 
 
 @dataclass(frozen=True)
@@ -7141,10 +7168,10 @@ class Workbook:
         cell_range: CellRect,
         cursor: Optional[int] = None,
         limit: Optional[int] = None,
-    ) -> "tuple[List[Cell], Optional[int]]":
+    ) -> CellsInRange:
         """Return one page of the populated cells in ``cell_range`` (row-major).
 
-        Pass the returned cursor back to fetch the next page; it is ``None``
+        Pass ``next_cursor`` back to fetch the next page; it is ``None``
         when the rectangle holds no further populated cell. ``limit`` of
         ``None`` or ``0`` means the engine maximum.
         """
@@ -7152,14 +7179,16 @@ class Workbook:
         with _ArgScope() as scope:
             rp = scope.struct(S.CELL_RECT)
             _pack_cell_rect_at(rp, cell_range)
-            return self._read_cell_range_page(
-                "fm_sheet_get_cells_in_range",
-                LIB.fm_sheet_get_cells_in_range,
-                h,
-                _uint(sheet, "sheet_index"),
-                rp,
-                _uint(cursor or 0, "cursor", 64),
-                _uint(limit or 0, "limit"),
+            return CellsInRange(
+                *self._read_cell_range_page(
+                    "fm_sheet_get_cells_in_range",
+                    LIB.fm_sheet_get_cells_in_range,
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    rp,
+                    _uint(cursor or 0, "cursor", 64),
+                    _uint(limit or 0, "limit"),
+                )
             )
 
     @staticmethod
@@ -7266,14 +7295,15 @@ class Workbook:
         h = self._require()
         _check(LIB.fm_sheet_clear_auto_filter(h, _uint(sheet, "sheet_index")), "fm_sheet_clear_auto_filter")
 
-    def evaluate_auto_filter(self, sheet: int) -> "tuple[int, List[bool]]":
+    def evaluate_auto_filter(self, sheet: int) -> AutoFilterEval:
         """Evaluate the sheet AutoFilter without changing the sheet.
 
-        Returns ``(first_row, match)``: body row ``first_row + i`` matches when
-        ``match[i]`` is true.
+        Body row ``first_row + i`` matches when ``match[i]`` is true.
         """
-        return self._evaluate_auto_filter(
-            LIB.fm_sheet_evaluate_auto_filter, sheet, "fm_sheet_evaluate_auto_filter", "sheet_index"
+        return AutoFilterEval(
+            *self._evaluate_auto_filter(
+                LIB.fm_sheet_evaluate_auto_filter, sheet, "fm_sheet_evaluate_auto_filter", "sheet_index"
+            )
         )
 
     def get_table_auto_filter(self, table_index: int) -> Optional[AutoFilter]:
@@ -7316,13 +7346,15 @@ class Workbook:
             "fm_workbook_clear_table_auto_filter",
         )
 
-    def evaluate_table_auto_filter(self, table_index: int) -> "tuple[int, List[bool]]":
-        """Evaluate the table AutoFilter; returns ``(first_row, match)`` as :meth:`evaluate_auto_filter`."""
-        return self._evaluate_auto_filter(
-            LIB.fm_workbook_evaluate_table_auto_filter,
-            table_index,
-            "fm_workbook_evaluate_table_auto_filter",
-            "table_index",
+    def evaluate_table_auto_filter(self, table_index: int) -> AutoFilterEval:
+        """Evaluate the table AutoFilter as :meth:`evaluate_auto_filter`."""
+        return AutoFilterEval(
+            *self._evaluate_auto_filter(
+                LIB.fm_workbook_evaluate_table_auto_filter,
+                table_index,
+                "fm_workbook_evaluate_table_auto_filter",
+                "table_index",
+            )
         )
 
     # -- Validation checks -----------------------------------------------------
@@ -7348,22 +7380,22 @@ class Workbook:
             error_style=d["error_style"],
         )
 
-    def get_invalid_cells(
-        self, sheet: int, cursor: Optional[int] = None, limit: Optional[int] = None
-    ) -> "tuple[List[Cell], Optional[int]]":
+    def get_invalid_cells(self, sheet: int, cursor: Optional[int] = None, limit: Optional[int] = None) -> CellsInRange:
         """Return one page of the populated cells failing their data-validation rule (row-major).
 
-        Paging follows :meth:`get_cells_in_range`: pass the returned cursor back
+        Paging follows :meth:`get_cells_in_range`: pass ``next_cursor`` back
         for the next page; it is ``None`` once no further invalid cell exists.
         """
         h = self._require()
-        return self._read_cell_range_page(
-            "fm_sheet_get_invalid_cells",
-            LIB.fm_sheet_get_invalid_cells,
-            h,
-            _uint(sheet, "sheet_index"),
-            _uint(cursor or 0, "cursor", 64),
-            _uint(limit or 0, "limit"),
+        return CellsInRange(
+            *self._read_cell_range_page(
+                "fm_sheet_get_invalid_cells",
+                LIB.fm_sheet_get_invalid_cells,
+                h,
+                _uint(sheet, "sheet_index"),
+                _uint(cursor or 0, "cursor", 64),
+                _uint(limit or 0, "limit"),
+            )
         )
 
     # -- Threaded comments and persons -------------------------------------------
@@ -8525,7 +8557,7 @@ class Workbook:
                 out.append(_decode_cell_rect_at(buf + i * size))
             return out
 
-    def get_display_text(self, sheet: int, row: int, col: int) -> "tuple[str, DisplayStatus]":
+    def get_display_text(self, sheet: int, row: int, col: int) -> DisplayText:
         """Return the text Excel displays for the cell and the rendering outcome."""
         h = self._require()
         with _ArgScope() as scope:
@@ -8537,9 +8569,9 @@ class Workbook:
                 ),
                 "fm_sheet_get_display_text",
             )
-            return LIB.read_cstr(LIB.read_u32(text_ptr)), DisplayStatus(LIB.read_i32(status_ptr))
+            return DisplayText(LIB.read_cstr(LIB.read_u32(text_ptr)), DisplayStatus(LIB.read_i32(status_ptr)))
 
-    def format_value(self, value: Value, format_code: str = "") -> "tuple[str, DisplayStatus]":
+    def format_value(self, value: Value, format_code: str = "") -> DisplayText:
         """Render ``value`` under the number format ``format_code`` (empty means General)."""
         h = self._require()
         _check_value(value)
@@ -8553,7 +8585,7 @@ class Workbook:
                 LIB.fm_workbook_format_value(h, value_ptr, fmt_ptr, text_ptr, status_ptr),
                 "fm_workbook_format_value",
             )
-            return LIB.read_cstr(LIB.read_u32(text_ptr)), DisplayStatus(LIB.read_i32(status_ptr))
+            return DisplayText(LIB.read_cstr(LIB.read_u32(text_ptr)), DisplayStatus(LIB.read_i32(status_ptr)))
 
     # -- Sheet view / layout -----------------------------------------------
     def get_pagination(self, sheet: int) -> PaginationResult:

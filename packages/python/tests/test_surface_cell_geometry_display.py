@@ -9,6 +9,7 @@ from formulon import CellXf, FormulonError, Value, ValueKind, Workbook
 from formulon.workbook import (
     CellRect,
     DisplayStatus,
+    DisplayText,
     EffectiveStyleSource,
     GeometryMode,
     SheetFormatDefaults,
@@ -226,7 +227,8 @@ class FormulaAndRangeTests(unittest.TestCase):
             wb.set_formula(0, 2, 1, "=A3*2")
             wb.recalc()
             full = CellRect(0, 0, 9, 3)
-            cells, nxt = wb.get_cells_in_range(0, full)
+            page_all = wb.get_cells_in_range(0, full)
+            cells, nxt = page_all.cells, page_all.next_cursor
             self.assertIsNone(nxt)
             self.assertEqual([(c.row, c.col) for c in cells], [(0, 0), (1, 0), (2, 0), (2, 1), (3, 0), (4, 0)])
             self.assertEqual(cells[3].formula, "=A3*2")
@@ -236,14 +238,15 @@ class FormulaAndRangeTests(unittest.TestCase):
             seen = []
             cursor = None
             while True:
-                page, cursor = wb.get_cells_in_range(0, full, cursor, 2)
+                got = wb.get_cells_in_range(0, full, cursor, 2)
+                page, cursor = got.cells, got.next_cursor
                 self.assertLessEqual(len(page), 2)
                 seen.extend((c.row, c.col) for c in page)
                 if cursor is None:
                     break
             self.assertEqual(seen, [(c.row, c.col) for c in cells])
 
-            sub, _ = wb.get_cells_in_range(0, CellRect(3, 0, 4, 0))
+            sub = wb.get_cells_in_range(0, CellRect(3, 0, 4, 0)).cells
             self.assertEqual([(c.row, c.col) for c in sub], [(3, 0), (4, 0)])
             with self.assertRaises(FormulonError):
                 wb.get_cells_in_range(0, CellRect(4, 0, 1, 0))
@@ -278,21 +281,21 @@ class DisplayTextTests(unittest.TestCase):
             )
             wb.set_number(0, 0, 0, 3.14159)
             wb.set_cell_xf_index(0, 0, 0, xf)
-            self.assertEqual(wb.get_display_text(0, 0, 0), ("3.14", DisplayStatus.OK))
-            self.assertEqual(wb.get_display_text(0, 9, 9), ("", DisplayStatus.OK))
+            self.assertEqual(wb.get_display_text(0, 0, 0), DisplayText("3.14", DisplayStatus.OK))
+            self.assertEqual(wb.get_display_text(0, 9, 9), DisplayText("", DisplayStatus.OK))
             with self.assertRaises(FormulonError):
                 wb.get_display_text(3, 0, 0)
 
     def test_format_value(self) -> None:
         with Workbook.create_default() as wb:
             num = Value(kind=ValueKind.NUMBER, number=1234.5)
-            self.assertEqual(wb.format_value(num, "#,##0.00"), ("1,234.50", DisplayStatus.OK))
-            self.assertEqual(wb.format_value(num), ("1234.5", DisplayStatus.OK))
+            self.assertEqual(wb.format_value(num, "#,##0.00"), DisplayText("1,234.50", DisplayStatus.OK))
+            self.assertEqual(wb.format_value(num), DisplayText("1234.5", DisplayStatus.OK))
             text = Value(kind=ValueKind.TEXT, text="abc")
-            self.assertEqual(wb.format_value(text, "General"), ("abc", DisplayStatus.OK))
+            self.assertEqual(wb.format_value(text, "General"), DisplayText("abc", DisplayStatus.OK))
             boolean = Value(kind=ValueKind.BOOL, boolean=True)
-            self.assertEqual(wb.format_value(boolean)[0], "TRUE")
-            text_out, status = wb.format_value(num, "0.00[")
+            self.assertEqual(wb.format_value(boolean).text, "TRUE")
+            text_out, status = (lambda r: (r.text, r.display_status))(wb.format_value(num, "0.00["))
             self.assertEqual(status, DisplayStatus.INVALID_FORMAT)
             self.assertTrue(text_out)
             with self.assertRaises(FormulonError):

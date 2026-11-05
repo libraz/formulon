@@ -70,6 +70,8 @@ parsed or evaluated.
 - Keys inside `aliases` and `localized` are BCP-47 locale tags
   (`fr-FR`, `de-DE`, ...). They are the **display locale** the host chose,
   independent of the profile id passed to the engine's locale calls.
+  Metadata locale keys are hyphenated (`fr-FR`); the locale part of a profile
+  id is underscored (`fr_FR`), and the two are unrelated identifiers.
 
 ## Merge semantics
 

@@ -58,7 +58,7 @@ try {
   const saved = wb.save();
   if (saved.status.ok) await writeFile('output.xlsx', saved.bytes);
 } finally {
-  wb.delete(); // workbooks wrap a native handle
+  wb.dispose(); // workbooks wrap a native handle
 }
 ```
 
@@ -79,7 +79,7 @@ try {
     console.log(id, [0, 1, 2].map((row) => wb.getDisplayText(0, row, 0).text));
   }
 } finally {
-  wb.delete();
+  wb.dispose();
 }
 // mac-365-en_US [ '2', '#VALUE!', 'TRUE' ]
 // mac-365-ja_JP [ '4', '#VALUE!', 'TRUE' ]

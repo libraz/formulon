@@ -955,6 +955,20 @@ class ResultShapeTest(BindingRuleTestBase):
             ],
         )
 
+    def test_r8_flags_quoted_and_unledgered_tuple_returns(self) -> None:
+        def ctx(body: str) -> api_conventions.Context:
+            return self.fixture.context(self.HEADER, {"entries": {}}, py_workbook=_py_wb(body))
+
+        bad = ctx(
+            '    def get_display_text(self, sheet: int) -> "tuple[str, int]": ...\n'
+            "    def format_value(self, value: int) -> Tuple[str, int]: ...\n"
+            "    def _helper(self) -> tuple[int, int]: ...\n"
+        )
+        found = [h for h in hits(bad, "R8.py") if h[2] == "tuple"]
+        self.assertEqual([h[1] for h in found], ["format_value", "get_display_text"])
+        good = ctx("    def get_display_text(self, sheet: int) -> DisplayText: ...\n")
+        self.assertEqual([h for h in hits(good, "R8.py") if h[2] == "tuple"], [])
+
     def test_r8_total_lookup_is_not_optional(self) -> None:
         ledger = copy.deepcopy(self.LEDGER)
 

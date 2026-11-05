@@ -8,6 +8,7 @@ from formulon import (
     AutoFilter,
     AutoFilterColumn,
     AutoFilterDateGroup,
+    AutoFilterEval,
     AutoFilterSortCondition,
     AutoFilterSortState,
     CellRect,
@@ -168,7 +169,8 @@ class AutoFilterTests(unittest.TestCase):
                     ],
                 ),
             )
-            first_row, match = wb.evaluate_auto_filter(0)
+            evaluated = wb.evaluate_auto_filter(0)
+            first_row, match = evaluated.first_row, evaluated.match
             self.assertEqual(first_row, 1)
             self.assertEqual(match, [False, False, True, True, True])
             wb.apply_auto_filter(0)
@@ -178,7 +180,7 @@ class AutoFilterTests(unittest.TestCase):
             got = wb.get_auto_filter(0)
             assert got is not None
             self.assertEqual(got.columns, [])
-            self.assertEqual(wb.evaluate_auto_filter(0), (1, [True] * 5))
+            self.assertEqual(wb.evaluate_auto_filter(0), AutoFilterEval(1, [True] * 5))
             wb.remove_auto_filter(0)
             self.assertIsNone(wb.get_auto_filter(0))
             wb.remove_auto_filter(0)
@@ -225,10 +227,10 @@ class AutoFilterTests(unittest.TestCase):
             got = wb.get_table_auto_filter(idx)
             assert got is not None
             self.assertEqual(got.columns[0].val1, "2")
-            self.assertEqual(wb.evaluate_table_auto_filter(idx), (1, [False, True, True]))
+            self.assertEqual(wb.evaluate_table_auto_filter(idx), AutoFilterEval(1, [False, True, True]))
             wb.apply_table_auto_filter(idx)
             wb.clear_table_auto_filter(idx)
-            self.assertEqual(wb.evaluate_table_auto_filter(idx), (1, [True, True, True]))
+            self.assertEqual(wb.evaluate_table_auto_filter(idx), AutoFilterEval(1, [True, True, True]))
             wb.remove_table_auto_filter(idx)
             self.assertIsNone(wb.get_table_auto_filter(idx))
             with self.assertRaises(FormulonError):
@@ -267,14 +269,16 @@ class ValidationCheckTests(unittest.TestCase):
         with self._wb_with_list_rule() as wb:
             for r, v in enumerate(["Yes", "bad1", "No", "bad2", "bad3"]):
                 wb.set_text(0, r, 3, v)
-            cells, cursor = wb.get_invalid_cells(0)
+            first_page = wb.get_invalid_cells(0)
+            cells, cursor = first_page.cells, first_page.next_cursor
             self.assertEqual([c.row for c in cells], [1, 3, 4])
             self.assertIsNone(cursor)
             seen = []
             cursor = None
             pages = 0
             while True:
-                page, cursor = wb.get_invalid_cells(0, cursor, 2)
+                got = wb.get_invalid_cells(0, cursor, 2)
+                page, cursor = got.cells, got.next_cursor
                 pages += 1
                 seen += [(c.row, c.value.text) for c in page]
                 if cursor is None:
