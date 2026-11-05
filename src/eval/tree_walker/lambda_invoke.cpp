@@ -223,6 +223,22 @@ const parser::AstNode* array_literal_ast(const ArrayValue* arr, Arena& arena) {
 
 namespace {
 
+// Evaluates the call-site arguments in the caller's scope and binds them to
+// `lv`'s parameters in `*env`; the error the call surfaces instead when the
+// arity does not fit (checked before any argument runs) or binding fails.
+std::optional<ErrorCode> bind_call_site(const LambdaValue* lv, std::uint32_t arity,
+                                        const parser::AstNode* const* call_args, Arena& arena,
+                                        const FunctionRegistry& registry, const EvalContext& ctx, NameEnv* env) {
+  if (!lambda_accepts_arity(lv, arity)) {
+    return ErrorCode::Value;
+  }
+  std::vector<Value> args;
+  std::vector<const parser::AstNode*> bound_asts;
+  evaluate_call_args(call_args, arity, arena, registry, ctx, &args, &bound_asts);
+  return bind_lambda_params(lv, arity, args.empty() ? nullptr : args.data(),
+                            bound_asts.empty() ? nullptr : bound_asts.data(), call_args, arena, env);
+}
+
 // A lambda is callable by a helper when it accepts `call_arity` arguments
 // (trailing `[optional]` params may stay unbound) and carries a body. A
 // function value is callable at any arity; the built-in judges it when run.
@@ -268,14 +284,12 @@ Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::As
   if (call.error()) {
     return Value::error(*call.error());
   }
-  if (!lambda_accepts_arity(call.lambda(), arity)) {
-    return Value::error(ErrorCode::Value);
+  NameEnv env;
+  if (const std::optional<ErrorCode> err =
+          bind_call_site(call.lambda(), arity, call_args, arena, registry, ctx, &env)) {
+    return Value::error(*err);
   }
-  std::vector<Value> args;
-  std::vector<const parser::AstNode*> bound_asts;
-  evaluate_call_args(call_args, arity, arena, registry, ctx, &args, &bound_asts);
-  return invoke_lambda_values_impl(call.lambda(), arity, args.empty() ? nullptr : args.data(),
-                                   bound_asts.empty() ? nullptr : bound_asts.data(), call_args, arena, registry, ctx);
+  return eval_node(*call.lambda()->body, arena, registry, lambda_body_context(call.lambda(), env, ctx));
 }
 
 bool resolve_lambda_reference(const LambdaValue* lv, std::uint32_t arity, const parser::AstNode* const* call_args,
@@ -288,17 +302,8 @@ bool resolve_lambda_reference(const LambdaValue* lv, std::uint32_t arity, const 
     return false;
   }
   lv = call.lambda();
-  if (!lambda_accepts_arity(lv, arity)) {
-    *out_err = ErrorCode::Value;
-    return false;
-  }
-  std::vector<Value> args;
-  std::vector<const parser::AstNode*> bound_asts;
-  evaluate_call_args(call_args, arity, arena, registry, ctx, &args, &bound_asts);
   NameEnv env;
-  if (const std::optional<ErrorCode> err =
-          bind_lambda_params(lv, arity, args.empty() ? nullptr : args.data(),
-                             bound_asts.empty() ? nullptr : bound_asts.data(), call_args, arena, &env)) {
+  if (const std::optional<ErrorCode> err = bind_call_site(lv, arity, call_args, arena, registry, ctx, &env)) {
     *out_err = *err;
     return false;
   }
