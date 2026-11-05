@@ -230,29 +230,16 @@ std::optional<std::uint32_t> RowColShiftTransform::shift_axis(std::uint32_t coor
 
 std::optional<std::pair<std::uint32_t, std::uint32_t>> RowColShiftTransform::shift_interval(
     std::uint32_t first, std::uint32_t last) const noexcept {
-  if (edit_ == RowColEdit::kInsert || count_ == 0) {
-    const std::optional<std::uint32_t> shifted_first =
-        shift_axis(first, axis_ == RowColAxis::kRow ? a1::kMaxRows : a1::kMaxCols);
-    if (!shifted_first.has_value()) {
-      return std::nullopt;
-    }
-    const std::optional<std::uint32_t> shifted_last =
-        shift_axis(last, axis_ == RowColAxis::kRow ? a1::kMaxRows : a1::kMaxCols);
-    if (!shifted_last.has_value()) {
-      return std::nullopt;
-    }
-    return std::make_pair(*shifted_first, *shifted_last);
-  }
-
   const std::uint32_t bound = axis_ == RowColAxis::kRow ? a1::kMaxRows : a1::kMaxCols;
   const std::uint32_t low = std::min(first, last);
   const std::uint32_t high = std::max(first, last);
   const std::uint64_t delete_begin = index_;
   const std::uint64_t delete_end = delete_begin + count_;
 
-  // An interval wholly before or wholly after the deletion has no surviving
-  // gap to clamp; endpoint mapping gives the ordinary structural shift.
-  if (static_cast<std::uint64_t>(high) < delete_begin || static_cast<std::uint64_t>(low) >= delete_end) {
+  // An insert, or an interval wholly before or wholly after a deletion, has no
+  // surviving gap to clamp; endpoint mapping gives the ordinary structural shift.
+  if (edit_ == RowColEdit::kInsert || count_ == 0 || static_cast<std::uint64_t>(high) < delete_begin ||
+      static_cast<std::uint64_t>(low) >= delete_end) {
     const std::optional<std::uint32_t> shifted_first = shift_axis(first, bound);
     if (!shifted_first.has_value()) {
       return std::nullopt;

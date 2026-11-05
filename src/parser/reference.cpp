@@ -49,7 +49,7 @@ std::size_t SkipDigits(std::string_view name, std::size_t* i) noexcept {
 // (`A01` is row 1); `XFE1` and `A0` lie off the grid and are ordinary names.
 bool IsA1CellShaped(std::string_view name) noexcept {
   std::size_t i = 0;
-  while (i < name.size() && detail::IsAsciiLetter(name[i]) && i < 3) {
+  while (i < name.size() && detail::IsAsciiLetter(name[i]) && i < detail::kMaxColumnLetters) {
     ++i;
   }
   if (i == 0 || detail::DecodeColumnLetters(name.substr(0, i)) == 0) {

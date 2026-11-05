@@ -17,8 +17,19 @@ using detail::DecodeDigitRunClamped;
 using detail::HasWorkbookExtension;
 using detail::IsAsciiDigit;
 using detail::IsAsciiLetter;
+using detail::kMaxColumnLetters;
 using detail::kMaxRow;
+using detail::kMaxRowDigits;
 using detail::SpanRange;
+
+namespace {
+
+// The sheet name a token carries: escape-resolved for a quoted name.
+std::string_view SheetTokenText(const Token& tok) noexcept {
+  return tok.kind == TokenKind::SheetName ? tok.text : tok.lexeme;
+}
+
+}  // namespace
 
 // ---------------------------------------------------------------------------
 // Cell-ref decoding
@@ -38,7 +49,7 @@ bool Parser::decode_cellref_lexeme(std::string_view lex, Reference* out) noexcep
     ++i;
   }
   const std::size_t letters_len = i - letters_begin;
-  if (letters_len == 0 || letters_len > 3) {
+  if (letters_len == 0 || letters_len > kMaxColumnLetters) {
     return false;
   }
   if (i < lex.size() && lex[i] == '$') {
@@ -50,7 +61,7 @@ bool Parser::decode_cellref_lexeme(std::string_view lex, Reference* out) noexcep
     ++i;
   }
   const std::size_t digits_len = i - digits_begin;
-  if (digits_len == 0 || digits_len > 7 || i != lex.size()) {
+  if (digits_len == 0 || digits_len > kMaxRowDigits || i != lex.size()) {
     return false;
   }
   // Decode column letters.
@@ -83,7 +94,7 @@ std::uint32_t Parser::decode_column_letters(std::string_view lex, bool* col_abs)
   while (i < lex.size() && IsAsciiLetter(lex[i])) {
     ++i;
   }
-  if (i != lex.size() || (i - letters_begin) == 0 || (i - letters_begin) > 3) {
+  if (i != lex.size() || (i - letters_begin) == 0 || (i - letters_begin) > kMaxColumnLetters) {
     return 0;
   }
   return DecodeColumnLetters(lex.substr(letters_begin, i - letters_begin));
@@ -176,7 +187,7 @@ bool Parser::sheet_span_end_at(std::size_t offset) const noexcept {
   if (tok.kind != TokenKind::Ident && tok.kind != TokenKind::SheetName && tok.kind != TokenKind::Bool) {
     return false;
   }
-  const std::string_view name = tok.kind == TokenKind::SheetName ? tok.text : tok.lexeme;
+  const std::string_view name = SheetTokenText(tok);
   return !name.empty() && !IsAsciiDigit(name.front());
 }
 
@@ -478,12 +489,7 @@ AstNode* Parser::parse_3d_ref(std::string_view sheet1, TextRange sheet1_range) {
   // `Ident` / `SheetName`, and the one after that is `Bang`.
   advance();  // Colon
   const Token& sheet2_tok = peek();
-  std::string_view sheet2;
-  if (sheet2_tok.kind == TokenKind::SheetName) {
-    sheet2 = sheet2_tok.text;  // escape-resolved
-  } else {
-    sheet2 = sheet2_tok.lexeme;
-  }
+  const std::string_view sheet2 = SheetTokenText(sheet2_tok);
   advance();  // second sheet name
   advance();  // Bang
 
@@ -504,12 +510,8 @@ AstNode* Parser::parse_3d_ref(std::string_view sheet1, TextRange sheet1_range) {
       record_error_with_token(ParseErrorCode::InvalidReference, tail.range, tail.lexeme);
       return nullptr;
     }
-    AstNode* range_node = make_ref3d_range(arena_, sheet1, sheet2, r, r2);
-    if (range_node == nullptr) {
-      return nullptr;
-    }
-    range_node->set_range(SpanRange(sheet1_range, tail.range));
-    return range_node;
+    tail_range = tail.range;
+    has_range_tail = true;
   }
   if (has_range_tail) {
     AstNode* range_node = make_ref3d_range(arena_, sheet1, sheet2, r, r2);

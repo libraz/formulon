@@ -90,6 +90,9 @@ void append_sheet_name(std::string_view sheet, bool force_quote, std::string& ou
 /// decide quoting by a rule other than the stored-formula one. No trailing `!`.
 void append_sheet_name_quoted_if(std::string_view sheet, bool quote, std::string& out);
 
+/// Appends `s`, doubling every embedded single quote.
+void append_quote_escaped(std::string_view s, std::string& out);
+
 /// Appends the qualifier of the cross-workbook reference `node`, through
 /// its `!`, as the formula bar spells it: `[Book.xlsx]Sheet!`, or one quoted
 /// unit around directory, book and sheets (`'/dir/[Book.xlsx]Sheet'!`) when

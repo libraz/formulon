@@ -2,7 +2,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
+#include "parser/ast_format.h"
 #include "parser/parser_detail.h"
 #include "parser/reference.h"
 #include "utils/strings.h"
@@ -53,24 +55,6 @@ std::string WithBackslashes(std::string_view s) {
   return out;
 }
 
-std::string DecimalText(std::uint32_t n) {
-  std::string out;
-  do {
-    out.insert(out.begin(), static_cast<char>('0' + n % 10));
-    n /= 10;
-  } while (n != 0);
-  return out;
-}
-
-void AppendQuoted(std::string* out, std::string_view s) {
-  for (char c : s) {
-    if (c == '\'') {
-      out->push_back('\'');
-    }
-    out->push_back(c);
-  }
-}
-
 struct Qualifier {
   std::uint32_t index = 0;
   std::string_view sheet;      // empty for a book-scope name
@@ -82,7 +66,7 @@ void AppendSpelled(std::string* out, const Qualifier& q, const ExternalBookResol
   ExternalBookDisplay link;
   if (!resolver.resolve(resolver.ctx, q.index, &link)) {
     link.path.clear();
-    link.book = DecimalText(q.index);
+    link.book = std::to_string(q.index);
   }
   const bool book_scope = q.sheet.empty();
   bool quote = !link.path.empty() || external_book_needs_quoting(link.book) ||
@@ -93,26 +77,26 @@ void AppendSpelled(std::string* out, const Qualifier& q, const ExternalBookResol
   }
   if (quote) {
     out->push_back('\'');
-    AppendQuoted(out, link.path);
+    append_quote_escaped(link.path, *out);
   }
   if (book_scope) {
-    AppendQuoted(out, link.book);
+    append_quote_escaped(link.book, *out);
   } else {
     out->push_back('[');
     if (quote) {
-      AppendQuoted(out, link.book);
+      append_quote_escaped(link.book, *out);
     } else {
       out->append(link.book);
     }
     out->push_back(']');
     if (quote) {
-      AppendQuoted(out, q.sheet);
+      append_quote_escaped(q.sheet, *out);
     } else {
       out->append(q.sheet);
     }
     if (!q.sheet_end.empty()) {
       out->push_back(':');
-      AppendQuoted(out, q.sheet_end);
+      append_quote_escaped(q.sheet_end, *out);
     }
   }
   if (quote) {
@@ -267,13 +251,7 @@ void AppendLocalQualifier(std::string* out, std::string_view sheets) {
     quote = quote || local_sheet_needs_quoting_a1(sheets.substr(begin, colon - begin));
     begin = colon + 1;
   }
-  if (quote) {
-    out->push_back('\'');
-    AppendQuoted(out, sheets);
-    out->push_back('\'');
-  } else {
-    out->append(sheets);
-  }
+  append_sheet_name_quoted_if(sheets, quote, *out);
   out->push_back('!');
 }
 
@@ -339,8 +317,7 @@ std::string spell_external_books(std::string_view stored, const ExternalBookReso
       continue;
     }
     if (c == '[') {
-      const bool operand_position = depth == 0 && (i == 0 || !(IsRunByte(stored[i - 1]) || stored[i - 1] == ']' ||
-                                                               stored[i - 1] == ')' || stored[i - 1] == '\''));
+      const bool operand_position = depth == 0 && (i == 0 || !ContinuesOperand(stored[i - 1]));
       if (operand_position) {
         Qualifier q;
         const std::size_t next = ParseBareQualifier(stored, i, &q);
@@ -369,7 +346,7 @@ std::string spell_self_book_names(std::string_view text, std::string_view file_n
   if (quote) {
     book.push_back('\'');
   }
-  AppendQuoted(&book, file_name);
+  append_quote_escaped(file_name, book);
   if (quote) {
     book.push_back('\'');
   }

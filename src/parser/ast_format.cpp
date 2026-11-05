@@ -134,17 +134,6 @@ void FormatRef(const Reference& r, std::string& out) {
   out.append(format_a1(r));
 }
 
-// Appends `s`, doubling any embedded single quotes per Excel's escaping
-// convention.
-void AppendQuoteEscaped(std::string_view s, std::string& out) {
-  for (char c : s) {
-    if (c == '\'') {
-      out.push_back('\'');
-    }
-    out.push_back(c);
-  }
-}
-
 // Appends the `Sheet1!` / `'My Sheet'!` qualifier of a sheet-scoped NameRef;
 // nothing for an unqualified one.
 void AppendNameSheetQualifier(const AstNode& node, std::string& out) {
@@ -248,8 +237,8 @@ void AppendExternalQualifier(const AstNode& node, bool r1c1, const ExternalBookI
       out.append(book);
     } else {
       out.push_back('\'');
-      AppendQuoteEscaped(path, out);
-      AppendQuoteEscaped(book, out);
+      append_quote_escaped(path, out);
+      append_quote_escaped(book, out);
       out.push_back('\'');
     }
     out.push_back('!');
@@ -261,14 +250,14 @@ void AppendExternalQualifier(const AstNode& node, bool r1c1, const ExternalBookI
   if (quoted) {
     out.push_back('\'');
   }
-  AppendQuoteEscaped(path, out);
+  append_quote_escaped(path, out);
   out.push_back('[');
-  AppendQuoteEscaped(book, out);
+  append_quote_escaped(book, out);
   out.push_back(']');
-  AppendQuoteEscaped(sheet, out);
+  append_quote_escaped(sheet, out);
   if (spans_sheets) {
     out.push_back(':');
-    AppendQuoteEscaped(sheet_end, out);
+    append_quote_escaped(sheet_end, out);
   }
   if (quoted) {
     out.push_back('\'');
@@ -297,9 +286,9 @@ void FormatRef3D(const AstNode& node, std::string& out) {
   const std::string_view end = node.as_ref3d_sheet_end();
   if (local_sheet_needs_quoting_a1(begin) || local_sheet_needs_quoting_a1(end)) {
     out.push_back('\'');
-    AppendQuoteEscaped(begin, out);
+    append_quote_escaped(begin, out);
     out.push_back(':');
-    AppendQuoteEscaped(end, out);
+    append_quote_escaped(end, out);
     out.push_back('\'');
   } else {
     out.append(begin);
@@ -397,7 +386,7 @@ void FormatBinary(const AstNode& node, std::string& out, const Layout& layout) {
 // True when `name` on its own is a bare column token -- one to three ASCII
 // letters naming a column inside Excel's grid.
 bool IsBareColumnToken(std::string_view name) noexcept {
-  if (name.empty() || name.size() > 3) {
+  if (name.empty() || name.size() > detail::kMaxColumnLetters) {
     return false;
   }
   return detail::DecodeColumnLetters(name) != 0;
@@ -1154,10 +1143,19 @@ void append_sheet_name(std::string_view sheet, bool force_quote, std::string& ou
   append_sheet_name_quoted_if(sheet, force_quote || local_sheet_needs_quoting_a1(sheet), out);
 }
 
+void append_quote_escaped(std::string_view s, std::string& out) {
+  for (char c : s) {
+    if (c == '\'') {
+      out.push_back('\'');
+    }
+    out.push_back(c);
+  }
+}
+
 void append_sheet_name_quoted_if(std::string_view sheet, bool quote, std::string& out) {
   if (quote) {
     out.push_back('\'');
-    AppendQuoteEscaped(sheet, out);
+    append_quote_escaped(sheet, out);
     out.push_back('\'');
   } else {
     out.append(sheet);

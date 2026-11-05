@@ -25,14 +25,14 @@ namespace {
 
 // Returns true iff `name` starts with `[A-Za-z_\]` or any non-ASCII (UTF-8
 // continuation) byte, and continues with `[A-Za-z0-9_.?]` plus non-ASCII
-// bytes. Length must be non-zero and <= 255 bytes. This mirrors the
+// bytes. Length must be non-zero and within kMaxDefinedNameBytes. This mirrors the
 // tokenizer's identifier rule (`Tokenizer::is_ident_start_byte` /
 // `is_ident_cont_byte`) and matches the identifier shape Excel accepts for
 // LET bindings and defined names, including hiragana / katakana / kanji and
 // other locale-specific scripts. The shape is still stricter than the
 // tokenizer's Ident rule because it forbids a leading ASCII digit.
 bool IsLetNameShape(std::string_view name) noexcept {
-  if (name.empty() || name.size() > 255) {
+  if (name.empty() || name.size() > detail::kMaxDefinedNameBytes) {
     return false;
   }
   const auto first = static_cast<unsigned char>(name[0]);
@@ -60,7 +60,7 @@ bool LooksLikeCellRef(std::string_view name) noexcept {
     ++i;
   }
   const std::size_t letters = i;
-  if (letters == 0 || letters > 3) {
+  if (letters == 0 || letters > detail::kMaxColumnLetters) {
     return false;
   }
   // First digit must not be zero so names like `A0` (not a valid ref) still
@@ -73,6 +73,11 @@ bool LooksLikeCellRef(std::string_view name) noexcept {
     ++i;
   }
   return i == name.size();
+}
+
+// A valid LET / LAMBDA binding name: identifier-shaped and not a cell reference.
+bool IsBindingName(std::string_view name) noexcept {
+  return IsLetNameShape(name) && !LooksLikeCellRef(name);
 }
 
 }  // namespace
@@ -96,7 +101,7 @@ bool Parser::parse_let_binding_name(std::string_view* out_name, TextRange* out_r
     record_error_with_token(ParseErrorCode::LetInvalidName, tok.range, tok.lexeme);
     return false;
   }
-  if (!IsLetNameShape(tok.lexeme) || LooksLikeCellRef(tok.lexeme)) {
+  if (!IsBindingName(tok.lexeme)) {
     record_error_with_token(ParseErrorCode::LetInvalidName, tok.range, tok.lexeme);
     advance();
     return false;
@@ -166,8 +171,8 @@ AstNode* Parser::parse_let_call(const Token& name_tok) {
       }
       break;
     }
-    const bool is_name_slot = (peek_kind() == TokenKind::Ident) && IsLetNameShape(peek().lexeme) &&
-                              !LooksLikeCellRef(peek().lexeme) && peek_kind_at(1) == TokenKind::Comma;
+    const bool is_name_slot =
+        (peek_kind() == TokenKind::Ident) && IsBindingName(peek().lexeme) && peek_kind_at(1) == TokenKind::Comma;
     if (is_name_slot) {
       std::string_view name;
       // The name's source span is written via parse_let_binding_name; we do
@@ -221,19 +226,13 @@ AstNode* Parser::parse_let_call(const Token& name_tok) {
   if (peek_kind() == TokenKind::RParen) {
     const Token& rparen = advance();
     end_range = rparen.range;
-  } else if (peek_kind() != TokenKind::Eof) {
-    record_error_with_token(ParseErrorCode::ExpectedCloseParen, call_start, name_tok.lexeme);
   } else {
     record_error_with_token(ParseErrorCode::ExpectedCloseParen, call_start, name_tok.lexeme);
   }
 
   // Validate arity: need >= 1 binding and a body.
   if (names.empty() || body == nullptr) {
-    if (body == nullptr) {
-      record_error_with_token(ParseErrorCode::LetWrongArity, call_start, name_tok.lexeme);
-    } else if (names.empty()) {
-      record_error_with_token(ParseErrorCode::LetWrongArity, call_start, name_tok.lexeme);
-    }
+    record_error_with_token(ParseErrorCode::LetWrongArity, call_start, name_tok.lexeme);
     return make_recovery_placeholder(SpanRange(call_start, end_range));
   }
 
@@ -302,11 +301,10 @@ AstNode* Parser::parse_lambda_call(const Token& name_tok) {
     // only treat it as a param when the closing bracket is followed by a
     // comma; otherwise let the body branch handle it.
     const bool is_optional_param_slot = (peek_kind() == TokenKind::LBracket) && (peek_kind_at(1) == TokenKind::Ident) &&
-                                        IsLetNameShape(peek_at(1).lexeme) && !LooksLikeCellRef(peek_at(1).lexeme) &&
-                                        (peek_kind_at(2) == TokenKind::RBracket) &&
+                                        IsBindingName(peek_at(1).lexeme) && (peek_kind_at(2) == TokenKind::RBracket) &&
                                         (peek_kind_at(3) == TokenKind::Comma);
-    const bool is_param_slot = (peek_kind() == TokenKind::Ident) && IsLetNameShape(peek().lexeme) &&
-                               !LooksLikeCellRef(peek().lexeme) && peek_kind_at(1) == TokenKind::Comma;
+    const bool is_param_slot =
+        (peek_kind() == TokenKind::Ident) && IsBindingName(peek().lexeme) && peek_kind_at(1) == TokenKind::Comma;
     if (is_optional_param_slot || is_param_slot) {
       const bool optional = is_optional_param_slot;
       const Token& tok = optional ? peek_at(1) : peek();

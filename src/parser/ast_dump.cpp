@@ -9,6 +9,7 @@
 #include <string_view>
 
 #include "parser/ast.h"
+#include "parser/ast_format.h"
 #include "parser/reference.h"
 #include "utils/double_format.h"
 #include "utils/expected.h"  // FM_CHECK
@@ -65,36 +66,6 @@ void AppendValueLiteral(std::string& out, const Value& v) {
       return;
   }
   out.append("(value ?)");
-}
-
-const char* BinOpToken(BinOp op) {
-  switch (op) {
-    case BinOp::Add:
-      return "+";
-    case BinOp::Sub:
-      return "-";
-    case BinOp::Mul:
-      return "*";
-    case BinOp::Div:
-      return "/";
-    case BinOp::Pow:
-      return "^";
-    case BinOp::Concat:
-      return "&";
-    case BinOp::Eq:
-      return "=";
-    case BinOp::NotEq:
-      return "<>";
-    case BinOp::Lt:
-      return "<";
-    case BinOp::LtEq:
-      return "<=";
-    case BinOp::Gt:
-      return ">";
-    case BinOp::GtEq:
-      return ">=";
-  }
-  return "?";
 }
 
 const char* UnaryOpToken(UnaryOp op) {
@@ -253,13 +224,13 @@ void DumpInto(const AstNode& node, std::string& out) {
     case NodeKind::BinaryOp:
       // `(binary + a b)`; each further chain operand follows its operator.
       out.append("(binary ");
-      out.append(BinOpToken(node.as_binary_op(0)));
+      out.append(binop_token(node.as_binary_op(0)));
       out.push_back(' ');
       DumpInto(node.as_binary_operand(0), out);
       for (std::uint32_t i = 1; i < node.as_binary_arity(); ++i) {
         if (i >= 2U) {
           out.push_back(' ');
-          out.append(BinOpToken(node.as_binary_op(i - 1U)));
+          out.append(binop_token(node.as_binary_op(i - 1U)));
         }
         out.push_back(' ');
         DumpInto(node.as_binary_operand(i), out);

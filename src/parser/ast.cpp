@@ -162,42 +162,30 @@ const AstNode& ChildAt(const AstNode& node, std::uint64_t index) {
   return node;
 }
 
-}  // namespace
+struct DepthFrame {
+  const AstNode* node;
+  std::uint64_t next_child;
+  std::uint64_t child_count;
+};
 
-bool ast_depth_within_limit(const AstNode& root, std::uint32_t max_depth) {
-  if (max_depth == 0) {
-    return false;
-  }
-  struct Frame {
-    const AstNode* node;
-    std::uint64_t next_child;
-    std::uint64_t child_count;
-  };
+// Fixed-capacity stack with the vector subset DepthWithinLimit uses; the caller
+// never pushes past kMaxFormulaAstDepth frames.
+struct FixedFrameStack {
+  std::array<DepthFrame, kMaxFormulaAstDepth> frames;
+  std::size_t count = 0;
 
-  // The formula-depth limit walks a fixed stack array; a larger requested limit uses the vector below.
-  if (max_depth <= kMaxFormulaAstDepth) {
-    std::array<Frame, kMaxFormulaAstDepth> stack;
-    std::size_t stack_size = 1;
-    stack[0] = Frame{&root, 0, ChildCount(root)};
-    while (stack_size != 0) {
-      Frame& frame = stack[stack_size - 1];
-      if (frame.next_child == frame.child_count) {
-        --stack_size;
-        continue;
-      }
-      const AstNode& child = ChildAt(*frame.node, frame.next_child++);
-      if (stack_size >= max_depth) {
-        return false;
-      }
-      stack[stack_size++] = Frame{&child, 0, ChildCount(child)};
-    }
-    return true;
-  }
+  bool empty() const noexcept { return count == 0; }
+  std::size_t size() const noexcept { return count; }
+  DepthFrame& back() noexcept { return frames[count - 1]; }
+  void push_back(const DepthFrame& frame) noexcept { frames[count++] = frame; }
+  void pop_back() noexcept { --count; }
+};
 
-  std::vector<Frame> stack;
-  stack.push_back(Frame{&root, 0, ChildCount(root)});
+template <typename Stack>
+bool DepthWithinLimit(Stack& stack, const AstNode& root, std::uint32_t max_depth) {
+  stack.push_back(DepthFrame{&root, 0, ChildCount(root)});
   while (!stack.empty()) {
-    Frame& frame = stack.back();
+    DepthFrame& frame = stack.back();
     if (frame.next_child == frame.child_count) {
       stack.pop_back();
       continue;
@@ -206,9 +194,24 @@ bool ast_depth_within_limit(const AstNode& root, std::uint32_t max_depth) {
     if (stack.size() >= max_depth) {
       return false;
     }
-    stack.push_back(Frame{&child, 0, ChildCount(child)});
+    stack.push_back(DepthFrame{&child, 0, ChildCount(child)});
   }
   return true;
+}
+
+}  // namespace
+
+bool ast_depth_within_limit(const AstNode& root, std::uint32_t max_depth) {
+  if (max_depth == 0) {
+    return false;
+  }
+  // The formula-depth limit walks a fixed stack array; a larger requested limit uses a vector.
+  if (max_depth <= kMaxFormulaAstDepth) {
+    FixedFrameStack stack;
+    return DepthWithinLimit(stack, root, max_depth);
+  }
+  std::vector<DepthFrame> stack;
+  return DepthWithinLimit(stack, root, max_depth);
 }
 
 const AstNode* first_node_past_excel_nesting(const AstNode& root) {
@@ -907,6 +910,11 @@ std::string_view trim_ref_function_name(TrimRefMode mode) noexcept {
 
 TrimRefMode trim_ref_call_mode(const AstNode& node) noexcept {
   if (node.kind() != NodeKind::Call || node.as_call_arity() != 1U) {
+    return TrimRefMode::None;
+  }
+  // The candidates run from `_TRO_ALL` (8 bytes) to `_TRO_TRAILING` (13 bytes).
+  const std::size_t name_size = node.as_call_name().size();
+  if (name_size < 8U || name_size > 13U) {
     return TrimRefMode::None;
   }
   for (const TrimRefMode mode : {TrimRefMode::Leading, TrimRefMode::Trailing, TrimRefMode::Both}) {
