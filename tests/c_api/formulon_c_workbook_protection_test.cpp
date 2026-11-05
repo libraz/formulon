@@ -204,7 +204,7 @@ TEST(FormulonCApiProtectedRanges, ArgumentsAreValidated) {
   EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &unnamed), kInvalidArgument);
   EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &bad_sqref), kInvalidArgument);
   EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &no_sqref), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 9, &good), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 9, &good), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_NE(fm_sheet_add_protected_range(wb.handle, 0, nullptr), 0);
   // Updating an entry to its own name is not a duplicate.
   EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 0, &good), 0);
@@ -213,7 +213,7 @@ TEST(FormulonCApiProtectedRanges, ArgumentsAreValidated) {
   fm_protected_range_t out{};
   EXPECT_EQ(fm_sheet_get_protected_range(wb.handle, 0, 5, &out), kInvalidArgument);
   std::size_t count = 0;
-  EXPECT_EQ(fm_sheet_get_protected_range_count(wb.handle, 9, &count), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_protected_range_count(wb.handle, 9, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(RangeCount(wb), 1U);
 }
 
@@ -251,8 +251,8 @@ TEST(FormulonCApiNoteVisibility, ArgumentsAreValidated) {
   int32_t visible = 0;
   EXPECT_EQ(fm_sheet_get_comment_visible(wb.handle, 0, 1, 1, &visible), kNotFound);
   EXPECT_EQ(fm_sheet_set_comment_visible(wb.handle, 0, 1, 1, 1), kNotFound);
-  EXPECT_EQ(fm_sheet_get_comment_visible(wb.handle, 9, 1, 1, &visible), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_comment_visible(wb.handle, 9, 1, 1, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_comment_visible(wb.handle, 9, 1, 1, &visible), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_comment_visible(wb.handle, 9, 1, 1, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_NE(fm_sheet_get_comment_visible(wb.handle, 0, 1, 1, nullptr), 0);
   EXPECT_NE(fm_sheet_get_comment_visible(nullptr, 0, 1, 1, &visible), 0);
 }

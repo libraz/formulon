@@ -318,7 +318,7 @@ TEST(FormulonCApiRangeStyle, ExcludingRejectsNullArraysAndBadRects) {
       static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   const std::uint32_t one = 0U;
   EXPECT_EQ(fm_sheet_get_range_style_bases_excluding(wb.handle, 9, 0U, 0U, 1U, 1U, &one, &one, 1U, nullptr, 0U, &len),
-            kInvalidArgument);
+            FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiRangeStyle, SnapshotRestoresPriorInheritance) {

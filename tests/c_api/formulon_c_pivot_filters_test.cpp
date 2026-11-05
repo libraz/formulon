@@ -293,7 +293,8 @@ TEST(FormulonCApiPivot, InspectPivotFiltersByIndex) {
   expect_error_preserves_output(
       [&](fm_pivot_filter_spec_t* out) { return fm_sheet_get_pivot_filter(wb.handle, 0, pivot_idx, 6, out); }, invalid);
   expect_error_preserves_output(
-      [&](fm_pivot_filter_spec_t* out) { return fm_sheet_get_pivot_filter(wb.handle, 1, pivot_idx, 0, out); }, invalid);
+      [&](fm_pivot_filter_spec_t* out) { return fm_sheet_get_pivot_filter(wb.handle, 1, pivot_idx, 0, out); },
+      FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   expect_error_preserves_output(
       [&](fm_pivot_filter_spec_t* out) { return fm_sheet_get_pivot_filter(wb.handle, 0, pivot_idx + 1, 0, out); },
       invalid);

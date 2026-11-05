@@ -477,11 +477,12 @@ fm_status_t store(fm_workbook_t* wb, const Target& target, formulon::AutoFilter 
   return finish_status(result);
 }
 
+fm_status_t null_filter(const char* api) {
+  return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                           (std::string(api) + ": NULL filter").c_str());
+}
+
 fm_status_t set_body(fm_workbook_t* wb, const Target& target, const fm_auto_filter_t* filter, const char* api) {
-  if (filter == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             (std::string(api) + ": NULL filter").c_str());
-  }
   formulon::AutoFilter model;
   if (auto rc = filter_from_fm(*filter, api, &model); rc != 0) {
     return rc;
@@ -567,6 +568,9 @@ extern "C" fm_status_t fm_sheet_get_auto_filter(const fm_workbook_t* wb, size_t 
 extern "C" fm_status_t fm_sheet_set_auto_filter(fm_workbook_t* wb, size_t sheet_index, const fm_auto_filter_t* filter) {
   clear_last_error();
   constexpr const char* kApi = "fm_sheet_set_auto_filter";
+  if (filter == nullptr) {
+    return null_filter(kApi);
+  }
   Target target;
   if (auto rc = resolve_sheet(wb, sheet_index, kApi, &target); rc != 0) {
     return rc;
@@ -638,6 +642,9 @@ extern "C" fm_status_t fm_workbook_set_table_auto_filter(fm_workbook_t* wb, size
                                                          const fm_auto_filter_t* filter) {
   clear_last_error();
   constexpr const char* kApi = "fm_workbook_set_table_auto_filter";
+  if (filter == nullptr) {
+    return null_filter(kApi);
+  }
   Target target;
   if (auto rc = resolve_table(wb, table_index, kApi, &target); rc != 0) {
     return rc;

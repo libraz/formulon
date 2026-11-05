@@ -67,6 +67,9 @@ extern "C" fm_status_t fm_sheet_set_cell_xf_index(fm_workbook_t* wb, size_t shee
   if (wb == nullptr) {
     return null_argument("fm_sheet_set_cell_xf_index", "wb");
   }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_cell_xf_index"); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_cell_xf_index(wb, xf_index, "fm_sheet_set_cell_xf_index"); rc != 0) {
     return rc;
   }
@@ -77,6 +80,9 @@ extern "C" fm_status_t fm_sheet_clear_cell_xf_index(fm_workbook_t* wb, size_t sh
   clear_last_error();
   if (wb == nullptr) {
     return null_argument("fm_sheet_clear_cell_xf_index", "wb");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_clear_cell_xf_index"); rc != 0) {
+    return rc;
   }
   return finish_status(wb->workbook().clear_cell_xf_index(sheet_index, row, col));
 }

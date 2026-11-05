@@ -321,7 +321,7 @@ TEST(FormulonCApiDrawing, InsertRejectsBadArguments) {
   EXPECT_EQ(fm_sheet_add_image(wb.handle, 0, nullptr, 0, &opts, &id), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_add_image(wb.handle, 0, png.data(), png.size(), nullptr, &id), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_add_image(wb.handle, 0, png.data(), png.size(), &opts, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_add_image(wb.handle, 7, png.data(), png.size(), &opts, &id), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_image(wb.handle, 7, png.data(), png.size(), &opts, &id), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   opts.anchor_kind = FM_ANCHOR_KIND_ABSOLUTE;
   EXPECT_EQ(fm_sheet_add_image(wb.handle, 0, png.data(), png.size(), &opts, &id), kInvalidArgument);
   opts.anchor_kind = 3;
@@ -461,7 +461,7 @@ TEST(FormulonCApiDrawing, SetImageAnchorRejectsBadArguments) {
   anchor.anchor_kind = FM_ANCHOR_KIND_ONE_CELL;
   anchor.edit_as = FM_ANCHOR_EDIT_AS_TWO_CELL;
   EXPECT_EQ(fm_sheet_set_drawing_anchor(wb.handle, 0, id, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_set_drawing_anchor(wb.handle, 7, id, &anchor), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_drawing_anchor(wb.handle, 7, id, &anchor), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_drawing_anchor(wb.handle, 0, 99, &anchor), kInvalidArgument);
   anchor.anchor_kind = FM_ANCHOR_KIND_ABSOLUTE;
   EXPECT_EQ(fm_sheet_set_drawing_anchor(wb.handle, 0, id, &anchor), kInvalidArgument);
@@ -497,7 +497,7 @@ TEST(FormulonCApiDrawing, ZOrderMovesPictureInListOrder) {
 
   EXPECT_EQ(fm_sheet_set_drawing_z_order(wb.handle, 0, second, 3), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_drawing_z_order(wb.handle, 0, 99, 0), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_drawing_z_order(wb.handle, 9, second, 0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_drawing_z_order(wb.handle, 9, second, 0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(ObjectIds(wb.handle), (std::vector<std::uint32_t>{2U, first, second}));
 
   // The chart reorders like a picture.
@@ -541,7 +541,7 @@ TEST(FormulonCApiDrawing, SetNameRejectsBadArguments) {
   EXPECT_EQ(fm_sheet_set_drawing_name(wb.handle, 0, id, ""), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_drawing_name(wb.handle, 0, id, "\xC3"), kBindingUtf8EncodingError);
   EXPECT_EQ(fm_sheet_set_drawing_name(wb.handle, 0, 99, "x"), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_drawing_name(wb.handle, 9, id, "x"), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_drawing_name(wb.handle, 9, id, "x"), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_drawing_name(wb.handle, 0, 0xFFFFFFFFU, "x"), kInvalidArgument);
   EXPECT_EQ(DrawingBytes(wb.handle), before);
 }
@@ -639,7 +639,7 @@ TEST(FormulonCApiDrawing, SnapshotAndRestoreRejectBadArguments) {
   EXPECT_EQ(fm_sheet_snapshot_drawing(wb.handle, 0, 99, &none.data, &none.len), kInvalidArgument);
   EXPECT_EQ(none.data, nullptr);
   EXPECT_EQ(none.len, 0U);
-  EXPECT_EQ(fm_sheet_snapshot_drawing(wb.handle, 4, id, &none.data, &none.len), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_snapshot_drawing(wb.handle, 4, id, &none.data, &none.len), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_snapshot_drawing(wb.handle, 0, id, nullptr, &none.len), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_snapshot_drawing(wb.handle, 0, id, &none.data, nullptr), kBindingNullPointer);
 
@@ -648,7 +648,7 @@ TEST(FormulonCApiDrawing, SnapshotAndRestoreRejectBadArguments) {
   EXPECT_EQ(fm_sheet_restore_drawing(wb.handle, 0, junk.data(), junk.size(), 0, &out), kInvalidArgument);
   EXPECT_EQ(fm_sheet_restore_drawing(wb.handle, 0, snap.data, snap.len / 2, 0, &out), kInvalidArgument);
   EXPECT_EQ(fm_sheet_restore_drawing(wb.handle, 0, snap.data, snap.len, 2, &out), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_restore_drawing(wb.handle, 9, snap.data, snap.len, 0, &out), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_restore_drawing(wb.handle, 9, snap.data, snap.len, 0, &out), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_restore_drawing(wb.handle, 0, nullptr, 0, 0, &out), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_restore_drawing(wb.handle, 0, snap.data, snap.len, 0, nullptr), kBindingNullPointer);
   EXPECT_EQ(ObjectIds(wb.handle), (std::vector<std::uint32_t>{2U, id}));

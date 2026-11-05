@@ -127,7 +127,7 @@ TEST(FormulonCApiOutline, ClearingCollapsedRemovesAnOtherwiseEmptyOverride) {
 TEST(FormulonCApiOutline, CollapsedSettersRejectBadArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  EXPECT_EQ(fm_sheet_set_row_collapsed(wb.handle, 9, 0, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_collapsed(wb.handle, 9, 0, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 1048576U, 1), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_column_collapsed(wb.handle, 0, 3, 2, 1), kInvalidArgument);
 }
@@ -146,7 +146,7 @@ TEST(FormulonCApiSheetViewFlags, ShowFormulasAndOutlineSymbolsRoundTrip) {
 
   ASSERT_EQ(fm_sheet_set_show_formulas(wb.handle, 0, 1), 0);
   ASSERT_EQ(fm_sheet_set_show_outline_symbols(wb.handle, 0, 0), 0);
-  EXPECT_EQ(fm_sheet_set_show_formulas(wb.handle, 7, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_show_formulas(wb.handle, 7, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 
   WorkbookGuard reloaded;
   std::string xml;

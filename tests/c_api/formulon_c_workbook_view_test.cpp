@@ -118,7 +118,7 @@ TEST(FormulonCApiWorkbookView, SetActiveSheetKeepsOtherAttributesAndClampsFirstS
 TEST(FormulonCApiWorkbookView, ActiveSheetRejectsBadArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  EXPECT_EQ(fm_workbook_set_active_sheet(wb.handle, 1), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_set_active_sheet(wb.handle, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(ActiveSheet(wb.handle), 0U);
   std::size_t index = 7;
   EXPECT_NE(fm_workbook_get_active_sheet(nullptr, &index), 0);
@@ -281,7 +281,7 @@ TEST(FormulonCApiWorkbookView, ShowPhoneticSurvivesValueWritesAndRoundTrips) {
   ASSERT_EQ(fm_sheet_set_cell_show_phonetic(wb.handle, 0, 0, 0, 0), 0);
   ASSERT_EQ(fm_sheet_get_cell_show_phonetic(wb.handle, 0, 0, 0, &show), 0);
   EXPECT_EQ(show, 0);
-  EXPECT_EQ(fm_sheet_set_cell_show_phonetic(wb.handle, 9, 0, 0, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_cell_show_phonetic(wb.handle, 9, 0, 0, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_cell_show_phonetic(wb.handle, 0, 0, 0, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
@@ -358,7 +358,7 @@ TEST(FormulonCApiWorkbookView, PhoneticPropertiesPresenceTracksExplicitTriples) 
 
   EXPECT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, 0, 0, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 5, 0, 0, &present), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 5, 0, 0, &present), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiWorkbookView, SheetViewScrollAndSelectionRoundTripFromAPackage) {
@@ -614,7 +614,7 @@ TEST(FormulonCApiWorkbookView, SettersWriteTheFrozenPaneTheDesktopWayAndRoundTri
   EXPECT_EQ(count, 2U);
   ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 0, 0), 0);
   EXPECT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 0, 0), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_top_left(wb.handle, 9, 0, 0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_top_left(wb.handle, 9, 0, 0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiWorkbookView, SetSplitReadsBackRoundTripsAndExchangesWithFreeze) {
@@ -696,7 +696,7 @@ TEST(FormulonCApiWorkbookView, SetSplitRehomesTheActiveSelectionAndKeepsTheViewO
   EXPECT_EQ(fm_sheet_set_split(wb.handle, 0, -1.0, 0.0), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_split(wb.handle, 0, 0.0, nan), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_split(wb.handle, 0, inf, 0.0), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_split(wb.handle, 9, 1.0, 1.0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_split(wb.handle, 9, 1.0, 1.0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.split_x, 1800.0);
   EXPECT_EQ(view.split_y, 1200.0);

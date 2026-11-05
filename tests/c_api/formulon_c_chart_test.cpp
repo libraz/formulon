@@ -951,7 +951,7 @@ TEST(FormulonCApiChart, OpenAndAccessorsRejectBadArguments) {
   fm_chart_t* chart = reinterpret_cast<fm_chart_t*>(&wb);
   EXPECT_EQ(fm_sheet_get_chart(wb.handle, 0, 99, &chart), kInvalidArgument);
   EXPECT_EQ(chart, nullptr);
-  EXPECT_EQ(fm_sheet_get_chart(wb.handle, 4, id, &chart), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_chart(wb.handle, 4, id, &chart), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_chart(wb.handle, 0, id, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_get_chart(nullptr, 0, id, &chart), kBindingNullPointer);
   fm_chart_data_t* data = nullptr;
@@ -1022,7 +1022,7 @@ TEST(FormulonCApiChart, InsertRejectsBadOptions) {
   o = Options(FM_CHART_INSERT_COLUMN, "Sheet1!$A$1:$D$5");
   EXPECT_EQ(fm_sheet_add_chart(wb.handle, 0, &o, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_add_chart(wb.handle, 0, nullptr, &id), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_add_chart(wb.handle, 3, &o, &id), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_chart(wb.handle, 3, &o, &id), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   size_t count = 9;
   ASSERT_EQ(fm_sheet_get_drawing_object_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 0U);

@@ -212,12 +212,12 @@ TEST(FormulonCApiSlicers, RejectsBadArguments) {
   size_t count = 0;
   fm_slicer_t out{};
   EXPECT_EQ(fm_sheet_get_slicer_count(wb.handle, 0, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_get_slicer_count(wb.handle, 7, &count), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_slicer_count(wb.handle, 7, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_slicer_at(wb.handle, 0, 0, &out), kInvalidArgument);
   EXPECT_EQ(fm_sheet_get_slicer_at(wb.handle, 0, 0, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, nullptr, &id), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, &spec, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 7, 0, 0, &spec, &id), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 7, 0, 0, &spec, &id), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 1, 0, &spec, &id), kInvalidArgument);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 2, &spec, &id), kInvalidArgument);
   fm_slicer_t no_anchor{};
@@ -245,7 +245,7 @@ TEST(FormulonCApiSlicers, RejectsBadArguments) {
   rename.name = "Other";
   EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, 0, &rename), kInvalidArgument);
   EXPECT_EQ(fm_sheet_remove_slicer(wb.handle, 0, 1), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_remove_slicer(wb.handle, 7, 0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_remove_slicer(wb.handle, 7, 0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
 }  // namespace

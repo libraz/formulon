@@ -442,9 +442,10 @@ TEST(FormulonCApiPivotSaveShape, ProjectionEntryPointsRejectBadArguments) {
   EXPECT_EQ(fm_sheet_is_pivot_projection_pending(nullptr, 0U, 0U, &pending), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_is_pivot_projection_pending(wb.handle, 0U, 0U, nullptr), kBindingNullPointer);
   for (const std::size_t index : {std::size_t{1}, std::size_t{0x80000000U}, static_cast<std::size_t>(0x100000000ULL)}) {
-    EXPECT_EQ(fm_sheet_project_pivot(wb.handle, index, 0U), kInvalidArgument) << index;
+    EXPECT_EQ(fm_sheet_project_pivot(wb.handle, index, 0U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE) << index;
     EXPECT_EQ(fm_sheet_project_pivot(wb.handle, 0U, index), kInvalidArgument) << index;
-    EXPECT_EQ(fm_sheet_is_pivot_projection_pending(wb.handle, index, 0U, &pending), kInvalidArgument) << index;
+    EXPECT_EQ(fm_sheet_is_pivot_projection_pending(wb.handle, index, 0U, &pending), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE)
+        << index;
     EXPECT_EQ(fm_sheet_is_pivot_projection_pending(wb.handle, 0U, index, &pending), kInvalidArgument) << index;
   }
 }

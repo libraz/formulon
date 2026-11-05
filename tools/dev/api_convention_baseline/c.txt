@@ -1,19 +1,3 @@
-R10.c.doc	cell_range.get_cell_at	-	fm_cell_range_at returns a `const char**` view whose doc names none of: model-backed, read-scratch-backed, owned snapshot, static, thread-local view
-R10.c.doc	chart_data.get_category_at	-	fm_chart_data_category_at returns a `const char**` view whose doc names none of: model-backed, read-scratch-backed, owned snapshot, static, thread-local view
-R10.c.doc	chart_data.get_category_level_at	-	fm_chart_data_category_level_at returns a `const char**` view whose doc names none of: model-backed, read-scratch-backed, owned snapshot, static, thread-local view
-R10.c.doc	formula.canonicalize	-	fm_formula_canonicalize returns a `const char**` view whose doc names none of: model-backed, read-scratch-backed, owned snapshot, static, thread-local view
-R10.c.doc	formula.localize	-	fm_formula_localize returns a `const char**` view whose doc names none of: model-backed, read-scratch-backed, owned snapshot, static, thread-local view
-R10.c.doc	formula_r1c1.get	-	fm_workbook_get_formula_r1c1 returns a `const char**` view whose doc names none of: model-backed, read-scratch-backed, owned snapshot, static, thread-local view
-R10.c.doc	function.canonicalize_name	-	fm_function_canonicalize returns a `const char**` view whose doc names none of: model-backed, read-scratch-backed, owned snapshot, static, thread-local view
-R10.c.doc	header_footer_xml.get	-	fm_sheet_get_header_footer_xml returns a `const char**` view whose doc names none of: model-backed, read-scratch-backed, owned snapshot, static, thread-local view
-R10.c.doc	locale_error_name.get_at	-	fm_locale_error_name returns a `const char**` view whose doc names none of: model-backed, read-scratch-backed, owned snapshot, static, thread-local view
-R10.c.doc	page_margins_xml.get	-	fm_sheet_get_page_margins_xml returns a `const char**` view whose doc names none of: model-backed, read-scratch-backed, owned snapshot, static, thread-local view
-R10.c.doc	page_setup_xml.get	-	fm_sheet_get_page_setup_xml returns a `const char**` view whose doc names none of: model-backed, read-scratch-backed, owned snapshot, static, thread-local view
-R10.c.doc	pivot_name.get	-	fm_workbook_pivot_get_name returns a `const char**` view whose doc names none of: model-backed, read-scratch-backed, owned snapshot, static, thread-local view
-R10.c.doc	print_area.get	-	fm_sheet_get_print_area returns a `const char**` view whose doc names none of: model-backed, read-scratch-backed, owned snapshot, static, thread-local view
-R10.c.doc	print_options_xml.get	-	fm_sheet_get_print_options_xml returns a `const char**` view whose doc names none of: model-backed, read-scratch-backed, owned snapshot, static, thread-local view
-R10.c.doc	print_titles.get	-	fm_sheet_get_print_titles returns a `const char**` view whose doc names none of: model-backed, read-scratch-backed, owned snapshot, static, thread-local view
-R10.c.doc	sheet_pr_xml.get	-	fm_sheet_get_sheet_pr_xml returns a `const char**` view whose doc names none of: model-backed, read-scratch-backed, owned snapshot, static, thread-local view
 R11.axis	row_collapsed.set	-	fm_sheet_set_row_collapsed takes a single row while fm_sheet_set_column_collapsed takes a `(first, last)` span
 R11.axis	row_height.set	-	fm_sheet_set_row_height takes a single row while fm_sheet_set_column_width takes a `(first, last)` span
 R11.axis	row_hidden.set	-	fm_sheet_set_row_hidden takes a single row while fm_sheet_set_column_hidden takes a `(first, last)` span

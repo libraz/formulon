@@ -257,7 +257,7 @@ TEST(FormulonCApiThreadedComments, RejectsMalformedInput) {
   EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c), kThreadedCommentInvalid);
   c.mentions = nullptr;
   c.mention_count = 0;
-  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 3, &c), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 3, &c), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   ASSERT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c), 0) << fm_get_last_error_message();
   EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, &c), kThreadedCommentInvalid);
 
@@ -268,7 +268,7 @@ TEST(FormulonCApiThreadedComments, RejectsMalformedInput) {
   EXPECT_EQ(fm_sheet_remove_threaded_comment(wb.handle, 0, nullptr), kBindingNullPointer);
 
   std::size_t count = 0;
-  EXPECT_EQ(fm_sheet_get_threaded_comment_count(wb.handle, 5, &count), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_threaded_comment_count(wb.handle, 5, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   fm_threaded_comment_t out{};
   EXPECT_EQ(fm_sheet_get_threaded_comment_at(wb.handle, 0, 1, &out), kInvalidArgument);
 }

@@ -947,10 +947,13 @@ extern "C" fm_status_t fm_chart_data_get_unresolved_at(const fm_chart_data_t* da
 extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index, const fm_chart_insert_t* opts,
                                           uint32_t* out_object_id) {
   constexpr const char* kApi = "fm_sheet_add_chart";
+  if (out_object_id == nullptr) {
+    return null_argument(kApi);
+  }
   if (auto rc = edit_entry(wb, sheet_index, opts, kApi); rc != 0) {
     return rc;
   }
-  if (opts->source == nullptr || out_object_id == nullptr) {
+  if (opts->source == nullptr) {
     return null_argument(kApi);
   }
   if (auto rc = check_utf8(kApi, {opts->source, opts->title, opts->placement.name, opts->placement.descr}); rc != 0) {
@@ -1192,11 +1195,11 @@ extern "C" fm_status_t fm_sheet_set_chart_filter(fm_workbook_t* wb, size_t sheet
 extern "C" fm_status_t fm_sheet_add_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
                                                  const fm_chart_series_patch_t* patch, size_t* out_series_idx) {
   constexpr const char* kApi = "fm_sheet_add_chart_series";
-  if (auto rc = edit_entry(wb, sheet_index, patch, kApi); rc != 0) {
-    return rc;
-  }
   if (out_series_idx == nullptr) {
     return null_argument(kApi);
+  }
+  if (auto rc = edit_entry(wb, sheet_index, patch, kApi); rc != 0) {
+    return rc;
   }
   PatchReader r(kApi);
   formulon::ChartSeriesPatch model = read_series(r, *patch);

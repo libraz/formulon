@@ -28,7 +28,7 @@ extern "C" fm_status_t fm_sheet_get_cell_count(const fm_workbook_t* wb, size_t s
   }
   if (sheet_index >= wb->workbook().sheet_count()) {
     return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_get_cell_count: sheet_index out of range",
+        formulon::FormulonErrorCode::kSheetIndexOutOfRange, "fm_sheet_get_cell_count: sheet_index out of range",
         "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
   }
   *out_count = wb->workbook().sheet(sheet_index).cell_count();
@@ -43,7 +43,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_count(const fm_workbook_t* wb, size_t 
   }
   if (sheet_index >= wb->workbook().sheet_count()) {
     return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_get_pivot_count: sheet_index out of range",
+        formulon::FormulonErrorCode::kSheetIndexOutOfRange, "fm_sheet_get_pivot_count: sheet_index out of range",
         "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
   }
   *out_count = wb->workbook().sheet(sheet_index).pivot_tables().size();

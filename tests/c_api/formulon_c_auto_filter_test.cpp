@@ -307,7 +307,7 @@ TEST(FormulonCApiAutoFilter, AbsentFilterReadsAsNotPresent) {
   EXPECT_EQ(fm_sheet_clear_auto_filter(wb.handle, 0), kNotFound);
   EXPECT_EQ(fm_sheet_evaluate_auto_filter(wb.handle, 0, nullptr, 0, &len, &first_row), kNotFound);
   EXPECT_EQ(fm_sheet_remove_auto_filter(wb.handle, 0), 0);
-  EXPECT_EQ(fm_sheet_get_auto_filter(wb.handle, 5, &out, &present), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_auto_filter(wb.handle, 5, &out, &present), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_auto_filter(wb.handle, 0, nullptr, &present), kBindingNullPointer);
 }
 

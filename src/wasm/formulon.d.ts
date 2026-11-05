@@ -4087,7 +4087,7 @@ export interface Workbook {
   copySheet(sourceIndex: number, insertBefore: number, newName?: string): AddStyleResult;
   /** Number of sheets. */
   getSheetCount(): NumberResult;
-  /** Display name of the sheet at `idx`; `kInvalidArgument` when `idx` is out of range. */
+  /** Display name of the sheet at `idx`; `kSheetIndexOutOfRange` when `idx` is out of range. */
   getSheetName(idx: number): StringResult;
   /** Returns `{ status, index }`: the sheet the first `<workbookView>` marks
    *  active (`activeTab`); without workbook views (an XLSB load) the first
@@ -4101,7 +4101,8 @@ export interface Workbook {
    *  hidden sheet is rejected. */
   setActiveSheet(sheet: number): Status;
 
-  /** Stores a numeric literal. NaN and infinity are rejected with `kInvalidArgument`; so is an out-of-range `sheet`. */
+  /** Stores a numeric literal. NaN and infinity are rejected with `kInvalidArgument`, an out-of-range `sheet` with
+   *  `kSheetIndexOutOfRange`. */
   setNumber(sheet: number, row: number, col: number, value: number): Status;
   /** Stores a boolean literal. */
   setBool(sheet: number, row: number, col: number, value: boolean): Status;
@@ -4132,7 +4133,7 @@ export interface Workbook {
   setFormula(sheet: number, row: number, col: number, formula: string): Status;
 
   /** Reads the cell's cached value, as of the most recent recalc; call `recalc` first after mutating cells.
-   *  Fails with `kInvalidArgument` when `sheet`, `row` or `col` is out of range. */
+   *  Fails with `kSheetIndexOutOfRange` when `sheet` is out of range and `kInvalidArgument` when `row` or `col` is. */
   getValue(sheet: number, row: number, col: number): CellResult;
 
   /** The stored A1 formula (leading `=` included), or `formula: null` for a cell that holds none.

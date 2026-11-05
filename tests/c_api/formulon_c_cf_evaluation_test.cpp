@@ -214,12 +214,12 @@ TEST(FormulonCApiCf, NullWorkbookSetsBindingError) {
   fm_cf_results_destroy(out);
 }
 
-TEST(FormulonCApiCf, OutOfRangeSheetIndexReturnsInvalidArgument) {
+TEST(FormulonCApiCf, OutOfRangeSheetIndexReturnsSheetIndexOutOfRange) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cf_results_t* out = reinterpret_cast<fm_cf_results_t*>(static_cast<std::uintptr_t>(1));
   fm_status_t rc = fm_sheet_evaluate_cf_range(wb.handle, 99, 0, 0, 0, 0, std::nan(""), &out);
-  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
   EXPECT_EQ(out, nullptr);
   fm_cf_results_destroy(out);
 }

@@ -105,14 +105,14 @@ TEST(FormulonCApiProtection, NullStringsTreatedAsEmpty) {
   EXPECT_STREQ(out.hash_value, "");
 }
 
-TEST(FormulonCApiProtection, OutOfRangeSheetReturnsInvalidArgument) {
+TEST(FormulonCApiProtection, OutOfRangeSheetReturnsSheetIndexOutOfRange) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_sheet_protection_t p{};
   EXPECT_EQ(fm_sheet_get_sheet_protection(wb.handle, 99, &p),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
   EXPECT_EQ(fm_sheet_set_sheet_protection(wb.handle, 99, &p),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
 }
 
 TEST(FormulonCApiProtection, NullArgsReturnBindingNullPointer) {

@@ -138,7 +138,7 @@ TEST(FormulonCApiShapes, Validation) {
   fm_shape_t spec = Callout();
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, nullptr, &id), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_add_shape(wb.handle, 7, &spec, &id), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_shape(wb.handle, 7, &spec, &id), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   spec.anchor_kind = 9;
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), kInvalidArgument);
   spec = Callout();
@@ -271,7 +271,7 @@ TEST(FormulonCApiSparklines, Validation) {
   EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, nullptr, good, 1), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, nullptr, 1), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, good, 0), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 3, &g, good, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 3, &g, good, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   const fm_sparkline_t range_location[] = {{"Sheet1!A1:D1", "F1:F2"}};
   EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, range_location, 1), kInvalidArgument);
   const fm_sparkline_t no_formula[] = {{"", "F1"}};

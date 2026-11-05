@@ -44,6 +44,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_read_scratch_test.cpp
   formulon_c_reference_test.cpp
   formulon_c_sheet_features_test.cpp
+  formulon_c_sheet_index_status_test.cpp
   formulon_c_sheet_layout_test.cpp
   formulon_c_spill_test.cpp
   formulon_c_status_test.cpp
@@ -79,7 +80,31 @@ set(FORMULON_C_API_TEST_SOURCES
   workbook_sheet_ops_test.cpp
 )
 
-add_executable(formulon_c_api_tests ${FORMULON_C_API_TEST_SOURCES})
+# The sheet-index status test calls every sheet-scoped function through a
+# table generated from the header and the name ledger (PyYAML required).
+if(NOT DEFINED _FORMULON_BEHAVIOR_PY)
+  find_package(Python3 COMPONENTS Interpreter REQUIRED)
+  set(_FORMULON_BEHAVIOR_PY "${Python3_EXECUTABLE}")
+endif()
+set(_FM_SHEET_INDEX_CALLS_SCRIPT "${CMAKE_SOURCE_DIR}/tools/codegen/gen_sheet_index_calls.py")
+set(_FM_SHEET_INDEX_CALLS_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+set(_FM_SHEET_INDEX_CALLS_INC "${_FM_SHEET_INDEX_CALLS_DIR}/sheet_index_calls.inc")
+add_custom_command(
+  OUTPUT "${_FM_SHEET_INDEX_CALLS_INC}"
+  COMMAND ${_FORMULON_BEHAVIOR_PY} "${_FM_SHEET_INDEX_CALLS_SCRIPT}" --output "${_FM_SHEET_INDEX_CALLS_INC}"
+  DEPENDS
+    "${_FM_SHEET_INDEX_CALLS_SCRIPT}"
+    "${CMAKE_SOURCE_DIR}/src/c_api/formulon_c.h"
+    "${CMAKE_SOURCE_DIR}/tools/api/names.yaml"
+    "${CMAKE_SOURCE_DIR}/tools/dev/binding_drift/api_conventions.py"
+    "${CMAKE_SOURCE_DIR}/tools/dev/binding_drift/c_header.py"
+  COMMENT "Generating the sheet-scoped C ABI call table"
+  VERBATIM
+)
+set_source_files_properties(formulon_c_sheet_index_status_test.cpp
+  PROPERTIES OBJECT_DEPENDS "${_FM_SHEET_INDEX_CALLS_INC}")
+
+add_executable(formulon_c_api_tests ${FORMULON_C_API_TEST_SOURCES} "${_FM_SHEET_INDEX_CALLS_INC}")
 
 target_link_libraries(formulon_c_api_tests
   PRIVATE
@@ -90,6 +115,7 @@ target_link_libraries(formulon_c_api_tests
 target_include_directories(formulon_c_api_tests
   PRIVATE
     ${CMAKE_SOURCE_DIR}/src
+    ${_FM_SHEET_INDEX_CALLS_DIR}
 )
 
 formulon_apply_warnings(formulon_c_api_tests)

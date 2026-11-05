@@ -758,7 +758,7 @@ TEST(FormulonCApiDisplayText, RejectsBadArguments) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* text = nullptr;
   int32_t status = 0;
-  EXPECT_EQ(fm_sheet_get_display_text(wb.handle, 3, 0, 0, &text, &status), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_display_text(wb.handle, 3, 0, 0, &text, &status), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_display_text(wb.handle, 0, 0, 16384U, &text, &status), kInvalidArgument);
   EXPECT_NE(fm_sheet_get_display_text(wb.handle, 0, 0, 0, nullptr, &status), 0);
 

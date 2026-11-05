@@ -31,6 +31,7 @@
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_keeps_visible_sheet;
 using formulon::c_api::parts::check_profile_id;
+using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
@@ -280,8 +281,7 @@ extern "C" fm_status_t fm_workbook_get_sheet_name(const fm_workbook_t* wb, size_
   if (wb == nullptr || out_utf8 == nullptr) {
     return null_argument("fm_workbook_get_sheet_name");
   }
-  if (auto rc = check_index(index, wb->workbook().sheet_count(), "fm_workbook_get_sheet_name", "sheet_index");
-      rc != 0) {
+  if (auto rc = check_sheet_index(wb, index, "fm_workbook_get_sheet_name"); rc != 0) {
     return rc;
   }
   // `Sheet::name()` returns `const std::string&`, so `c_str()` is
@@ -358,9 +358,8 @@ extern "C" fm_status_t fm_workbook_set_active_sheet(fm_workbook_t* wb, size_t in
   if (wb == nullptr) {
     return null_argument("fm_workbook_set_active_sheet", "wb");
   }
-  if (index >= wb->workbook().sheet_count()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_set_active_sheet: index out of range", "index=" + std::to_string(index));
+  if (auto rc = check_sheet_index(wb, index, "fm_workbook_set_active_sheet"); rc != 0) {
+    return rc;
   }
   if (wb->workbook().sheet(index).view().visibility() != formulon::SheetVisibility::kVisible) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
@@ -471,6 +470,9 @@ extern "C" fm_status_t fm_sheet_insert_rows(fm_workbook_t* wb, size_t sheet_inde
   if (wb == nullptr) {
     return null_argument("fm_sheet_insert_rows");
   }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_insert_rows"); rc != 0) {
+    return rc;
+  }
   return finish_status(wb->workbook().insert_rows(sheet_index, row, count));
 }
 
@@ -478,6 +480,9 @@ extern "C" fm_status_t fm_sheet_delete_rows(fm_workbook_t* wb, size_t sheet_inde
   clear_last_error();
   if (wb == nullptr) {
     return null_argument("fm_sheet_delete_rows");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_delete_rows"); rc != 0) {
+    return rc;
   }
   return finish_status(wb->workbook().delete_rows(sheet_index, row, count));
 }
@@ -487,6 +492,9 @@ extern "C" fm_status_t fm_sheet_insert_cols(fm_workbook_t* wb, size_t sheet_inde
   if (wb == nullptr) {
     return null_argument("fm_sheet_insert_cols");
   }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_insert_cols"); rc != 0) {
+    return rc;
+  }
   return finish_status(wb->workbook().insert_cols(sheet_index, col, count));
 }
 
@@ -494,6 +502,9 @@ extern "C" fm_status_t fm_sheet_delete_cols(fm_workbook_t* wb, size_t sheet_inde
   clear_last_error();
   if (wb == nullptr) {
     return null_argument("fm_sheet_delete_cols");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_delete_cols"); rc != 0) {
+    return rc;
   }
   return finish_status(wb->workbook().delete_cols(sheet_index, col, count));
 }

@@ -24,6 +24,7 @@ from formulon import (
     PivotReportLayout,
     PivotSortOrder,
     PivotWorksheetSource,
+    StatusCode,
     ValueKind,
     Workbook,
 )
@@ -1184,20 +1185,21 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
     def test_out_of_range_indices_raise(self) -> None:
         with Workbook.create_default() as wb:
             f = _PivotFixture(wb)
-            for call in (
-                lambda: wb.get_pivot_cache_id(0, 9),
-                lambda: wb.get_pivot_name(0, 9),
-                lambda: wb.get_pivot_grand_totals(9, f.pivot),
-                lambda: wb.get_pivot_row_field_order(0, 9),
-                lambda: wb.get_pivot_col_field_order(0, 9),
-                lambda: wb.get_pivot_field(0, f.pivot, 99),
-                lambda: wb.get_pivot_field_item_count(0, f.pivot, 99),
-                lambda: wb.get_pivot_field_item(0, f.pivot, f.region, 99),
-                lambda: wb.get_pivot_data_field(0, f.pivot, 99),
+            invalid, bad_sheet = StatusCode.INVALID_ARGUMENT, StatusCode.SHEET_INDEX_OUT_OF_RANGE
+            for call, code in (
+                (lambda: wb.get_pivot_cache_id(0, 9), invalid),
+                (lambda: wb.get_pivot_name(0, 9), invalid),
+                (lambda: wb.get_pivot_grand_totals(9, f.pivot), bad_sheet),
+                (lambda: wb.get_pivot_row_field_order(0, 9), invalid),
+                (lambda: wb.get_pivot_col_field_order(0, 9), invalid),
+                (lambda: wb.get_pivot_field(0, f.pivot, 99), invalid),
+                (lambda: wb.get_pivot_field_item_count(0, f.pivot, 99), invalid),
+                (lambda: wb.get_pivot_field_item(0, f.pivot, f.region, 99), invalid),
+                (lambda: wb.get_pivot_data_field(0, f.pivot, 99), invalid),
             ):
                 with self.assertRaises(FormulonError) as caught:
                     call()
-                self.assertEqual(caught.exception.code, 2)
+                self.assertEqual(caught.exception.code, code)
 
     def test_empty_data_field_name_is_derived_from_the_profile(self) -> None:
         for profile, expected in (("win-365-ja_JP", "合計 / Amount"), ("win-365-en_US", "Sum of Amount")):

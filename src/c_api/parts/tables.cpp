@@ -26,6 +26,7 @@
 
 using formulon::c_api::parts::check_entered_cell_formula;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::display_formula;
@@ -292,6 +293,9 @@ extern "C" fm_status_t fm_workbook_add_table(fm_workbook_t* wb, size_t sheet_ind
   if (wb == nullptr || ref == nullptr || name == nullptr || display_name == nullptr || column_names == nullptr ||
       out_index == nullptr) {
     return null_argument("fm_workbook_add_table");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_add_table"); rc != 0) {
+    return rc;
   }
   if (auto rc = check_utf8("fm_workbook_add_table", {ref, name, display_name, style_name}); rc != 0) {
     return rc;

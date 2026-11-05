@@ -371,12 +371,12 @@ TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesBothSlotsAfterSheetMove) 
   EXPECT_EQ(col, 1U);
 }
 
-TEST(FormulonCApiSpill, OutOfRangeSheetReturnsInvalidArgument) {
+TEST(FormulonCApiSpill, OutOfRangeSheetReturnsSheetIndexOutOfRange) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_spill_info_t info{};
   fm_status_t rc = fm_sheet_get_spill_info(wb.handle, 99, 0, 0, &info);
-  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
 }
 
 TEST(FormulonCApiSpill, NullArgsReturnBindingNullPointer) {

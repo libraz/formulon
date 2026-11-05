@@ -62,12 +62,12 @@ TEST(FormulonCApiLambdaText, BareLambdaProjectsToCalcError) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 
-TEST(FormulonCApiLambdaText, OutOfRangeSheetReturnsInvalidArgument) {
+TEST(FormulonCApiLambdaText, OutOfRangeSheetReturnsSheetIndexOutOfRange) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* text = nullptr;
   EXPECT_EQ(fm_sheet_get_lambda_text(wb.handle, 99, 0, 0, &text),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
 }
 
 TEST(FormulonCApiLambdaText, NullArgsReturnBindingNullPointer) {

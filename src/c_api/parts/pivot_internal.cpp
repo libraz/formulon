@@ -60,38 +60,42 @@ const formulon::pivot::PivotCache* find_cache(const formulon::Workbook& wb, std:
   return wb.find_pivot_cache(cache_id);
 }
 
-const formulon::pivot::PivotTable* resolve_pivot(const formulon::Workbook& wb, std::size_t sheet_index,
-                                                 std::size_t pivot_index, const char* fn) {
-  if (check_index(sheet_index, wb.sheet_count(), fn, "sheet_index") != 0) {
-    return nullptr;
+fm_status_t resolve_pivot(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index, const char* fn,
+                          const formulon::pivot::PivotTable** out) {
+  *out = nullptr;
+  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+    return rc;
   }
-  const formulon::Sheet& sheet = wb.sheet(sheet_index);
-  if (check_index(pivot_index, sheet.pivot_tables().size(), fn, "pivot_index") != 0) {
-    return nullptr;
+  const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  if (auto rc = check_index(pivot_index, sheet.pivot_tables().size(), fn, "pivot_index"); rc != 0) {
+    return rc;
   }
   const formulon::pivot::PivotTable* table = sheet.pivot_tables()[pivot_index].get();
   if (table == nullptr) {
-    set_binding_error(formulon::FormulonErrorCode::kEvalPivotInvalid, "pivot table entry is NULL",
-                      std::string(fn) + ": sheet_index=" + std::to_string(sheet_index) +
-                          " pivot_index=" + std::to_string(pivot_index));
-    return nullptr;
+    return set_binding_error(formulon::FormulonErrorCode::kEvalPivotInvalid, "pivot table entry is NULL",
+                             std::string(fn) + ": sheet_index=" + std::to_string(sheet_index) +
+                                 " pivot_index=" + std::to_string(pivot_index));
   }
-  return table;
+  *out = table;
+  return 0;
 }
 
-formulon::pivot::PivotTable* resolve_pivot_mut(formulon::Workbook& wb, std::size_t sheet_index, std::size_t pivot_index,
-                                               const char* fn) {
+fm_status_t resolve_pivot_mut(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index, const char* fn,
+                              formulon::pivot::PivotTable** out) {
   // The pivot tables are owned non-const objects; only the lookup path is shared.
-  return const_cast<formulon::pivot::PivotTable*>(resolve_pivot(wb, sheet_index, pivot_index, fn));
+  const formulon::pivot::PivotTable* table = nullptr;
+  const fm_status_t rc = resolve_pivot(wb, sheet_index, pivot_index, fn, &table);
+  *out = const_cast<formulon::pivot::PivotTable*>(table);
+  return rc;
 }
 
 fm_status_t resolve_pivot_checked(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index, const char* fn,
                                   formulon::pivot::PivotTable** out) {
   if (wb == nullptr) {
+    *out = nullptr;
     return null_argument(fn, "wb");
   }
-  *out = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, fn);
-  return *out != nullptr ? 0 : static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  return resolve_pivot_mut(wb, sheet_index, pivot_index, fn, out);
 }
 
 fm_status_t resolve_pivot_checked(const fm_workbook_t* wb, std::initializer_list<const void*> out_args,
@@ -104,8 +108,7 @@ fm_status_t resolve_pivot_checked(const fm_workbook_t* wb, std::initializer_list
   if (null_arg) {
     return null_argument(fn);
   }
-  *out = resolve_pivot(wb->workbook(), sheet_index, pivot_index, fn);
-  return *out != nullptr ? 0 : static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  return resolve_pivot(wb, sheet_index, pivot_index, fn, out);
 }
 
 void invalidate_pivot_result(formulon::Workbook& wb, formulon::pivot::PivotTable& table) {

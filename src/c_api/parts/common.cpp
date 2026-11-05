@@ -572,7 +572,7 @@ fm_status_t check_sheet(const fm_workbook_t* wb, std::size_t sheet, const char* 
   const std::size_t count = wb->workbook().sheet_count();
   if (sheet >= count) {
     return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, fn,
+        formulon::FormulonErrorCode::kSheetIndexOutOfRange, fn,
         std::string(field) + "=" + std::to_string(sheet) + " sheet_count=" + std::to_string(count));
   }
   return 0;

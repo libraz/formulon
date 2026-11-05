@@ -164,7 +164,7 @@ TEST_F(FormulonCApiSheetFeatures, CommentLookupDistinguishesAbsenceFromInvalidSh
   fm_comment_t got{};
   EXPECT_EQ(fm_sheet_get_comment(wb_, 0, 0, 0, &got), static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
   EXPECT_EQ(fm_sheet_get_comment(wb_, 99, 0, 0, &got),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentRemoveViaNullText) {

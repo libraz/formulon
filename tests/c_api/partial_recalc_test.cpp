@@ -106,10 +106,10 @@ TEST(FormulonCApiPartialRecalc, SheetIndexPastTheLastSheetRejected) {
   fm_viewport vp{};
   vp.first_col = 1;
   vp.last_col = 1;
-  const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   for (const size_t sheet : {sheet_count, size_t{0x10000U}, size_t{0xFFFFFFFFU}}) {
     uint32_t recomputed = 99U;
-    EXPECT_EQ(fm_sheet_recalc_viewport(wb.handle, sheet, &vp, &recomputed), invalid) << sheet;
+    EXPECT_EQ(fm_sheet_recalc_viewport(wb.handle, sheet, &vp, &recomputed), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE)
+        << sheet;
   }
 
   // B1 stayed dirty rather than being reported as recomputed.

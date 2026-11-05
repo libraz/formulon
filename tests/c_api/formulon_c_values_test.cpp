@@ -285,7 +285,7 @@ TEST(FormulonCApi, OutOfRangeSheetIndex) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_status_t rc = fm_sheet_set_number(wb.handle, 99, 0, 0, 1.0);
   EXPECT_NE(rc, 0);
-  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
   // Context should reference the offending sheet index.
   std::string ctx = fm_get_last_error_context();
   EXPECT_NE(ctx.find("sheet_index"), std::string::npos) << "context=" << ctx;

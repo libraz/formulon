@@ -107,9 +107,9 @@ TEST(FormulonCApiArrayFormula, ArgumentChecks) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_array_formula_t info{};
   EXPECT_EQ(fm_sheet_get_array_formula(wb.handle, 0, 0, 0, nullptr), kNullPointer);
-  EXPECT_EQ(fm_sheet_get_array_formula(wb.handle, 9, 0, 0, &info), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_array_formula(wb.handle, 9, 0, 0, &info), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_array_formula(wb.handle, 0, 0, 0, 1, 1, nullptr), kNullPointer);
-  EXPECT_EQ(fm_sheet_set_array_formula(wb.handle, 9, 0, 0, 1, 1, "=1"), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_array_formula(wb.handle, 9, 0, 0, 1, 1, "=1"), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_array_formula(wb.handle, 0, 0, 0, 0, 1, "=1"), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_array_formula(wb.handle, 0, 0, 0, 1, 0, "=1"), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_array_formula(wb.handle, 0, 4294967295U, 0, 1, 1, "=1"), kInvalidArgument);

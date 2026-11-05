@@ -181,7 +181,7 @@ def _select_body_template(body: str, templates: Dict[str, str]) -> str:
 #           return set_binding_error(...kBindingNullPointer, "NAME: NULL argument");
 #         }
 #         if (sheet_index >= wb->workbook().sheet_count()) {
-#           return set_binding_error(...kInvalidArgument,
+#           return set_binding_error(...kSheetIndexOutOfRange,
 #               "NAME: sheet_index out of range",
 #               "sheet_index=" + std::to_string(sheet_index) + ...);
 #         }
@@ -211,7 +211,7 @@ extern "C" fm_status_t {name}(const fm_workbook_t* wb, size_t sheet_index, size_
   }}
   if (sheet_index >= wb->workbook().sheet_count()) {{
     return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "{name}: sheet_index out of range",
+        formulon::FormulonErrorCode::kSheetIndexOutOfRange, "{name}: sheet_index out of range",
         "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
   }}
   *out_count = {accessor};

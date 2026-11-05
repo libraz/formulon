@@ -335,7 +335,8 @@ TEST(FormulonCApiCellRange, RejectsBadArguments) {
   EXPECT_EQ(fm_sheet_get_cells_in_range(wb.handle, 0, 0U, 0U, 1U, 1U, 1048576U * kCursorStride, 0U, &page.handle),
             kInvalidArgument);
   EXPECT_EQ(fm_sheet_get_cells_in_range(wb.handle, 0, 0U, 0U, 1U, 1U, kCursorEnd, 0U, &page.handle), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_get_cells_in_range(wb.handle, 3, 0U, 0U, 1U, 1U, 0U, 0U, &page.handle), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_cells_in_range(wb.handle, 3, 0U, 0U, 1U, 1U, 0U, 0U, &page.handle),
+            FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_NE(fm_sheet_get_cells_in_range(wb.handle, 0, 0U, 0U, 1U, 1U, 0U, 0U, nullptr), 0);
 
   ASSERT_EQ(fm_sheet_get_cells_in_range(wb.handle, 0, 0U, 0U, 1U, 1U, 0U, 0U, &page.handle), 0);
@@ -370,7 +371,7 @@ TEST(FormulonCApiCellRange, FormulaGettersReadA1AndR1C1) {
   EXPECT_STREQ(text, "");
 
   EXPECT_EQ(fm_sheet_get_formula(wb.handle, 0, 1048576U, 0, &text), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_get_formula_r1c1(wb.handle, 4, 0, 0, &text), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_formula_r1c1(wb.handle, 4, 0, 0, &text), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_NE(fm_sheet_get_formula(wb.handle, 0, 0, 0, nullptr), 0);
 }
 
@@ -393,7 +394,7 @@ TEST(FormulonCApiCellRange, MergesInRangeReportsIntersectingMerges) {
 
   EXPECT_NE(fm_sheet_get_merges_in_range(wb.handle, 0, fm_merge_range{0U, 0U, 1U, 1U}, nullptr, 1U, &total), 0);
   EXPECT_EQ(fm_sheet_get_merges_in_range(wb.handle, 9, fm_merge_range{0U, 0U, 1U, 1U}, nullptr, 0U, &total),
-            kInvalidArgument);
+            FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
 /* -------------------------------------------------------------------------- */

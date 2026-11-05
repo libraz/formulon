@@ -217,7 +217,7 @@ TEST(FormulonCApiPivot, InvalidPivotArgsReturnErrors) {
   EXPECT_EQ(fm_sheet_get_pivot_count(nullptr, 0, &count),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   EXPECT_EQ(fm_sheet_get_pivot_count(wb.handle, 99, &count),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
 
   fm_pivot_cells_t* cells = nullptr;
   EXPECT_EQ(fm_sheet_get_pivot_layout(wb.handle, 0, 0, &cells),

@@ -178,7 +178,7 @@ TEST(EvaluateFormula, SheetIndexOutOfRange) {
 
   fm_value_t v{};
   EXPECT_EQ(fm_sheet_evaluate_formula(wb.handle, 99, 0, 0, "=1", &v),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
 }
 
 TEST(EvaluateFormula, TargetOutsideSheetIsRejected) {
@@ -407,7 +407,7 @@ TEST(EvaluateFormulaArray, SheetIndexOutOfRange) {
   uint32_t rows = 0;
   uint32_t cols = 0;
   EXPECT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 99, 0, 0, "=1", &rows, &cols),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
 }
 
 TEST(EvaluateFormulaArray, TargetOutsideSheetIsRejected) {

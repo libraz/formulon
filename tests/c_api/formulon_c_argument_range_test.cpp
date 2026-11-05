@@ -200,7 +200,7 @@ TEST(FormulonCApiArgumentRange, TheOnlyVisibleSheetCannotBeRemoved) {
 TEST(FormulonCApiArgumentRange, CountHelpersClearThePreviousError) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 99U, 1U, 1U), kInvalidArgument);
+  ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 99U, 1U, 1U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   ASSERT_STRNE(fm_get_last_error_message(), "");
 
   EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 1U);
@@ -209,8 +209,18 @@ TEST(FormulonCApiArgumentRange, CountHelpersClearThePreviousError) {
 
   fm_pagination_t* pagination = nullptr;
   ASSERT_EQ(fm_sheet_get_pagination(wb.handle, 0, &pagination), 0);
-  ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 99U, 1U, 1U), kInvalidArgument);
+  ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 99U, 1U, 1U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(count_of(fm_pagination_get_page_count, pagination), 0U);
   EXPECT_STREQ(fm_get_last_error_message(), "");
   fm_pagination_destroy(pagination);
+}
+
+TEST(FormulonCApiArgumentRange, CountHelpersRejectANullHandle) {
+  constexpr fm_status_t kNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
+  std::size_t count = 99U;
+  EXPECT_EQ(fm_workbook_get_sheet_count(nullptr, &count), kNullPointer);
+  EXPECT_STRNE(fm_get_last_error_message(), "");
+  EXPECT_EQ(fm_pagination_get_page_count(nullptr, &count), kNullPointer);
+  EXPECT_STRNE(fm_get_last_error_message(), "");
+  EXPECT_EQ(count, 99U);
 }

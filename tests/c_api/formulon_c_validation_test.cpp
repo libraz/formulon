@@ -219,7 +219,7 @@ TEST(FormulonCApiValidation, RejectsBadArguments) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_validation_outcome_t out{};
   fm_value_t value = Number(1);
-  EXPECT_EQ(fm_sheet_validate_value(wb.handle, 3, 0, 0, &value, &out), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_validate_value(wb.handle, 3, 0, 0, &value, &out), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, 0, 0, nullptr, &out), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, 0, 0, &value, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_validate_value(wb.handle, 0, 2000000, 0, &value, &out), kInvalidArgument);
@@ -234,7 +234,7 @@ TEST(FormulonCApiValidation, RejectsBadArguments) {
   EXPECT_EQ(fm_sheet_get_invalid_cells(wb.handle, 0, 0, 0, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_get_invalid_cells(wb.handle, 0, 1048576ULL * kCursorStride, 0, &page.handle), kInvalidArgument);
   EXPECT_EQ(page.handle, nullptr);
-  EXPECT_EQ(fm_sheet_get_invalid_cells(wb.handle, 2, 0, 0, &page.handle), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_invalid_cells(wb.handle, 2, 0, 0, &page.handle), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
 }  // namespace

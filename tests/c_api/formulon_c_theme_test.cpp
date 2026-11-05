@@ -573,7 +573,7 @@ TEST(FormulonCApiEffectiveStyle, RejectsInvalidArguments) {
   fm_effective_style_t style{};
   EXPECT_EQ(fm_sheet_get_effective_style(nullptr, 0, 0, 0, &style), kNullPointer);
   EXPECT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 0, 0, nullptr), kNullPointer);
-  EXPECT_EQ(fm_sheet_get_effective_style(wb.handle, 9, 0, 0, &style), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_effective_style(wb.handle, 9, 0, 0, &style), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 1048576U, 0, &style), kInvalidArgument);
   EXPECT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 0, 16384U, &style), kInvalidArgument);
 }

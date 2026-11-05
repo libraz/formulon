@@ -183,7 +183,7 @@ TEST(FormulonCApiSheetLayout, SetVisibilityRejectsUnknownStateAndLeavesTheSheet)
 
   EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 0, 3), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 0, -1), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 99U, FM_SHEET_HIDDEN), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 99U, FM_SHEET_HIDDEN), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 
   fm_sheet_view_t v{};
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
@@ -609,11 +609,11 @@ TEST(FormulonCApiSheetLayout, InvalidSheetIndexRejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_sheet_view_t v{};
-  EXPECT_EQ(fm_sheet_get_view(wb.handle, 99U, &v), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_zoom(wb.handle, 99U, 100U), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_freeze(wb.handle, 99U, 1U, 1U), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_tab_hidden(wb.handle, 99U, 1), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_column_width(wb.handle, 99U, 0U, 1U, 10.0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_view(wb.handle, 99U, &v), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_zoom(wb.handle, 99U, 100U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_freeze(wb.handle, 99U, 1U, 1U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_tab_hidden(wb.handle, 99U, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_column_width(wb.handle, 99U, 0U, 1U, 10.0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
 // The row setters take a bare row index rather than a span, so they reach
@@ -623,9 +623,9 @@ TEST(FormulonCApiSheetLayout, InvalidSheetIndexRejected) {
 TEST(FormulonCApiSheetLayout, RowSettersRejectInvalidSheetIndex) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 99U, 0U, 20.0), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_row_hidden(wb.handle, 99U, 0U, 1), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_row_outline(wb.handle, 99U, 0U, 2U), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_height(wb.handle, 99U, 0U, 20.0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_row_hidden(wb.handle, 99U, 0U, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_row_outline(wb.handle, 99U, 0U, 2U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 
   // Sheet 0 exists and must not have absorbed any of the three.
   size_t count = 1U;
@@ -877,7 +877,7 @@ TEST(FormulonCApiSheetLayout, AutoRowHeightRefreshesTheCacheAndStaysAutomatic) {
   EXPECT_EQ(cleared.hidden, 1);
 
   EXPECT_EQ(fm_sheet_set_row_auto_height(wb.handle, 0, kLastRow + 1U, 10.0), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_row_auto_height(wb.handle, 7, 0U, 10.0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_auto_height(wb.handle, 7, 0U, 10.0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_row_auto_height(wb.handle, 0, 0U, -1.0), kInvalidArgument);
 }
 
@@ -904,7 +904,7 @@ TEST(FormulonCApiSheetLayout, ClearRowHeightDropsBareOverride) {
   EXPECT_EQ(r.custom_height, 0);
 
   EXPECT_EQ(fm_sheet_clear_row_height(wb.handle, 0, kLastRow + 1U), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_clear_row_height(wb.handle, 7, 0U), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_clear_row_height(wb.handle, 7, 0U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
 namespace {
@@ -1163,7 +1163,7 @@ TEST(FormulonCApiSheetLayout, ClearColumnWidthRejectsBadArgumentsAndLeavesTheLay
 
   EXPECT_EQ(fm_sheet_clear_column_width(wb.handle, 0, 5U, 3U), kInvalidArgument);
   EXPECT_EQ(fm_sheet_clear_column_width(wb.handle, 0, 0U, kLastColumn + 1U), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_clear_column_width(wb.handle, 7, 0U, 0U), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_clear_column_width(wb.handle, 7, 0U, 0U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_NE(fm_sheet_clear_column_width(nullptr, 0, 0U, 0U), 0);
 
   const auto columns = ReadColumns(wb.handle);

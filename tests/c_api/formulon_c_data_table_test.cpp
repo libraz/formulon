@@ -267,11 +267,11 @@ TEST(FormulonCApiDataTable, RejectsBadArguments) {
   int32_t present = 0;
   fm_data_table_t info{};
   EXPECT_EQ(fm_sheet_add_data_table(wb.handle, 0, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_add_data_table(wb.handle, 9, &spec), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_data_table(wb.handle, 9, &spec), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_data_table(wb.handle, 0, 0, 0, nullptr, &info), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_get_data_table(wb.handle, 0, 0, 0, &present, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_get_data_table(wb.handle, 9, 0, 0, &present, &info), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_remove_data_table(wb.handle, 9, 0, 0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_data_table(wb.handle, 9, 0, 0, &present, &info), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_remove_data_table(wb.handle, 9, 0, 0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_workbook_recalc_data_tables(nullptr), kBindingNullPointer);
 
   fm_data_table_t none = spec;

@@ -20,6 +20,7 @@
 #include "utils/error.h"
 
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
@@ -61,15 +62,18 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
   if (wb == nullptr || spec == nullptr) {
     return null_argument(api);
   }
+  if (auto rc = check_sheet_index(wb, sheet_index, api); rc != 0) {
+    return rc;
+  }
   if (spec->field_name == nullptr) {
     return null_argument(api, "spec->field_name");
   }
   if (auto rc = validate(*spec, api); rc != 0) {
     return rc;
   }
-  auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, api);
-  if (table == nullptr) {
-    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  formulon::pivot::PivotTable* table = nullptr;
+  if (auto rc = resolve_pivot_mut(wb, sheet_index, pivot_index, api, &table); rc != 0) {
+    return rc;
   }
   const formulon::pivot::FilterType type = pivot_filter_type_from_fm(static_cast<fm_pivot_filter_type_t>(spec->type));
   const bool caption = formulon::pivot::is_caption_filter_type(type);
@@ -259,9 +263,9 @@ extern "C" fm_status_t fm_sheet_remove_pivot_filter(fm_workbook_t* wb, std::size
   if (wb == nullptr) {
     return null_argument("fm_sheet_remove_pivot_filter", "wb");
   }
-  auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, "fm_sheet_remove_pivot_filter");
-  if (table == nullptr) {
-    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  formulon::pivot::PivotTable* table = nullptr;
+  if (auto rc = resolve_pivot_mut(wb, sheet_index, pivot_index, "fm_sheet_remove_pivot_filter", &table); rc != 0) {
+    return rc;
   }
   if (auto rc = check_index(filter_idx, table->active_filters().size(), "fm_sheet_remove_pivot_filter", "filter_idx");
       rc != 0) {

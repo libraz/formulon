@@ -478,7 +478,7 @@ TEST(FormulonCApiStyles, ClearXfIndexRejectsBadArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-  EXPECT_EQ(fm_sheet_clear_cell_xf_index(wb.handle, 99, 0, 0), invalid);
+  EXPECT_EQ(fm_sheet_clear_cell_xf_index(wb.handle, 99, 0, 0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_clear_cell_xf_index(wb.handle, 0, formulon::Sheet::kMaxRows, 0), invalid);
 }
 

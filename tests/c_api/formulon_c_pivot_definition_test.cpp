@@ -229,7 +229,7 @@ TEST(FormulonCApiPivot, ReadBackRejectsBadArguments) {
   EXPECT_EQ(fm_sheet_get_pivot_row_field_order(wb.handle, 0, pivot_idx, nullptr, &count),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   EXPECT_EQ(fm_sheet_get_pivot_col_field_order(wb.handle, 9, pivot_idx, &order, &count),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
 }
 
 TEST(FormulonCApiPivot, EmptyDataFieldNameIsDerivedFromTheProfile) {

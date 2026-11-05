@@ -484,9 +484,9 @@ TEST(FormulonCApiPrintSettings, BreakCountReportsARejectedSheetThroughItsStatus)
   EXPECT_STREQ(fm_get_last_error_message(), "");
 
   // Sheet past the end: a rejection, and a diagnostic naming the entry point.
-  EXPECT_EQ(fm_sheet_get_row_break_count(wb.handle, sheet_count, &count), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_row_break_count(wb.handle, sheet_count, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_STRNE(fm_get_last_error_message(), "");
-  EXPECT_EQ(fm_sheet_get_col_break_count(wb.handle, sheet_count, &count), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_col_break_count(wb.handle, sheet_count, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_STRNE(fm_get_last_error_message(), "");
 
   // NULL handle and NULL out-param.
@@ -503,8 +503,8 @@ TEST(FormulonCApiPrintSettings, BreakCountReportsARejectedSheetThroughItsStatus)
 
   // The indexed reader rejects the same sheet outright.
   fm_page_break_t brk{};
-  EXPECT_EQ(fm_sheet_get_row_break_at(wb.handle, sheet_count, 0, &brk), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_get_col_break_at(wb.handle, sheet_count, 0, &brk), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_row_break_at(wb.handle, sheet_count, 0, &brk), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_get_col_break_at(wb.handle, sheet_count, 0, &brk), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiPrintSettings, ColumnBreaksSpanEveryRow) {
@@ -824,11 +824,11 @@ TEST(FormulonCApiPrintSettings, OutOfRangeSheetIndexIsRejectedEverywhere) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* xml = nullptr;
-  EXPECT_EQ(fm_sheet_get_page_setup_xml(wb.handle, 9, &xml), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_page_setup_xml(wb.handle, 9, "<pageSetup/>"), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_fit_to_page(wb.handle, 9, 1), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_print_area(wb.handle, 9, "A1:B2"), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_add_row_break(wb.handle, 9, 1, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_page_setup_xml(wb.handle, 9, &xml), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_page_setup_xml(wb.handle, 9, "<pageSetup/>"), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_fit_to_page(wb.handle, 9, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_print_area(wb.handle, 9, "A1:B2"), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_add_row_break(wb.handle, 9, 1, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   std::size_t count = 0;
-  EXPECT_EQ(fm_sheet_get_row_break_count(wb.handle, 9, &count), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_row_break_count(wb.handle, 9, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }

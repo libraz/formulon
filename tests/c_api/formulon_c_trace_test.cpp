@@ -169,18 +169,18 @@ TEST(FormulonCApiTrace, DepthCapPreventsRunaway) {
   EXPECT_EQ(count_of(fm_cell_nodes_get_node_count, n.handle), 0U);
 }
 
-TEST(FormulonCApiTrace, OutOfRangeSheetReturnsInvalidArgument) {
+TEST(FormulonCApiTrace, OutOfRangeSheetReturnsSheetIndexOutOfRange) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cell_nodes_t* out = reinterpret_cast<fm_cell_nodes_t*>(static_cast<std::uintptr_t>(1));
   fm_status_t rc = fm_sheet_get_precedents(wb.handle, 99, 0, 0, 1, &out);
-  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
   EXPECT_EQ(out, nullptr);
   fm_cell_nodes_destroy(out);
 
   out = reinterpret_cast<fm_cell_nodes_t*>(static_cast<std::uintptr_t>(1));
   rc = fm_sheet_get_dependents(wb.handle, 99, 0, 0, 1, &out);
-  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
   EXPECT_EQ(out, nullptr);
   fm_cell_nodes_destroy(out);
 }

@@ -40,12 +40,13 @@ std::vector<std::unique_ptr<formulon::pivot::PivotCache>>& mutable_pivot_caches(
 formulon::pivot::PivotCache* find_cache_mut(formulon::Workbook& wb, std::uint32_t cache_id);
 const formulon::pivot::PivotCache* find_cache(const formulon::Workbook& wb, std::uint32_t cache_id);
 
-// Sheet+pivot resolution. On miss the binding error is populated and
-// `nullptr` is returned; callers should propagate as `kInvalidArgument`.
-formulon::pivot::PivotTable* resolve_pivot_mut(formulon::Workbook& wb, std::size_t sheet_index, std::size_t pivot_index,
-                                               const char* fn);
-const formulon::pivot::PivotTable* resolve_pivot(const formulon::Workbook& wb, std::size_t sheet_index,
-                                                 std::size_t pivot_index, const char* fn);
+// Sheet+pivot resolution. Returns 0 with `*out` set, or the error status with
+// the binding error populated (a bad sheet is kSheetIndexOutOfRange, a bad
+// pivot kInvalidArgument).
+fm_status_t resolve_pivot_mut(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index, const char* fn,
+                              formulon::pivot::PivotTable** out);
+fm_status_t resolve_pivot(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index, const char* fn,
+                          const formulon::pivot::PivotTable** out);
 
 // Mutable-handle variant for the table-level setters: rejects a NULL `wb`,
 // then resolves like `resolve_pivot_mut`. Returns 0 with `*out` set, or the

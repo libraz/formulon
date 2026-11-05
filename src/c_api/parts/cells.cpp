@@ -163,11 +163,14 @@ extern "C" fm_status_t fm_sheet_set_error(fm_workbook_t* wb, size_t sheet_index,
 extern "C" fm_status_t fm_sheet_set_text(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                          const char* utf8) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_text"); rc != 0) {
-    return rc;
+  if (wb == nullptr) {
+    return null_argument("fm_sheet_set_text", "wb");
   }
   if (utf8 == nullptr) {
     return null_argument("fm_sheet_set_text", "utf8");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_text"); rc != 0) {
+    return rc;
   }
   if (auto rc = check_utf8("fm_sheet_set_text", {utf8}); rc != 0) {
     return rc;
@@ -184,11 +187,14 @@ extern "C" fm_status_t fm_sheet_set_text(fm_workbook_t* wb, size_t sheet_index, 
 extern "C" fm_status_t fm_sheet_set_cell_phonetic(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                                   const char* utf8) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_cell_phonetic"); rc != 0) {
-    return rc;
+  if (wb == nullptr) {
+    return null_argument("fm_sheet_set_cell_phonetic", "wb");
   }
   if (utf8 == nullptr) {
     return null_argument("fm_sheet_set_cell_phonetic", "utf8");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_cell_phonetic"); rc != 0) {
+    return rc;
   }
   if (auto rc = check_utf8("fm_sheet_set_cell_phonetic", {utf8}); rc != 0) {
     return rc;
@@ -369,11 +375,14 @@ extern "C" fm_status_t fm_sheet_set_blank(fm_workbook_t* wb, size_t sheet_index,
 extern "C" fm_status_t fm_sheet_set_formula(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                             const char* formula) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_formula"); rc != 0) {
-    return rc;
+  if (wb == nullptr) {
+    return null_argument("fm_sheet_set_formula", "wb");
   }
   if (formula == nullptr) {
     return null_argument("fm_sheet_set_formula", "formula");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_formula"); rc != 0) {
+    return rc;
   }
   std::string bound;
   if (auto rc = check_entered_cell_formula("fm_sheet_set_formula", wb, sheet_index, row, col, formula,
@@ -729,11 +738,14 @@ extern "C" fm_status_t fm_sheet_set_array_formula(fm_workbook_t* wb, std::size_t
                                                   std::uint32_t col, std::uint32_t rows, std::uint32_t cols,
                                                   const char* formula) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_array_formula"); rc != 0) {
-    return rc;
+  if (wb == nullptr) {
+    return null_argument("fm_sheet_set_array_formula", "wb");
   }
   if (formula == nullptr) {
     return null_argument("fm_sheet_set_array_formula", "formula");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_array_formula"); rc != 0) {
+    return rc;
   }
   if (auto rc = check_cell_coord(row, col, "fm_sheet_set_array_formula"); rc != 0) {
     return rc;
