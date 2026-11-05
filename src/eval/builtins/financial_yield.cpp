@@ -63,12 +63,7 @@ double years_to_maturity(double settlement, double maturity, int basis, bool dat
   const double anniversary =
       date_time::serial_from_ymd(anniversary_year, sd.m, 1u, date1904) + static_cast<double>(sd.d) - 1.0;
   const double days = date_time::basis_days_between(anniversary, m, basis, date1904);
-  double year = 360.0;
-  if (basis == 3) {
-    year = 365.0;
-  } else if (basis == 1) {
-    year = date_time::days_in_month(md.y, 2u) == 29u ? 366.0 : 365.0;
-  }
+  const double year = year_length_for_basis(basis, md.y);
   return days / year + whole;
 }
 

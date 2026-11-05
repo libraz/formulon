@@ -535,12 +535,7 @@ Value Amorlinc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
   } else {
     days = clipped(first_period) - clipped(purchased);
   }
-  double year = 360.0;
-  if (basis == 3) {
-    year = 365.0;
-  } else if (basis == 1) {
-    year = date_time::days_in_month(dp.y, 2u) == 29u ? 366.0 : 365.0;
-  }
+  const double year = year_length_for_basis(basis, dp.y);
   double first = ((days / year) * rate) * cost;
   if (first == 0.0) {
     first = cost * rate;

@@ -280,6 +280,18 @@ inline Expected<DayCountSpan, ErrorCode> day_count_span(double start, double end
   }
 }
 
+// Year length for a basis: 360, 365 for basis 3, and 366 or 365 for basis 1
+// by whether `leap_year` is a leap year.
+inline double year_length_for_basis(int basis, int leap_year) {
+  if (basis == 3) {
+    return 365.0;
+  }
+  if (basis == 1) {
+    return date_time::days_in_month(leap_year, 2u) == 29u ? 366.0 : 365.0;
+  }
+  return 360.0;
+}
+
 // The two amounts of `SecurityRateArgs` with the day-count span of its dates.
 struct SecurityRateSpan {
   double amount1;
