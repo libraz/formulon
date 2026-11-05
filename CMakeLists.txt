@@ -136,6 +136,7 @@ set(FORMULON_CORE_SOURCES
   src/color_resolve.cpp
   src/value.cpp
   src/sheet.cpp
+  src/row_cells.cpp
   src/sheet_copy_names.cpp
   src/sheet_name.cpp
   src/sheet_row_col_edit.cpp
