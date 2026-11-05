@@ -164,6 +164,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   writes a rectangle back as A1 text, quoting the sheet name as a formula
   does.
 
+- `fm_workbook_table_rename_column` (`renameTableColumn`,
+  `table_rename_column`) renames a table column as typing over its header
+  does, and returns the final name. An empty name takes the locale's word
+  with the lowest unused number (`Column1`, `列1`, `Spalte1`), and a name
+  another column already has gets the lowest unused number from 2 appended
+  (`Amount2` becomes `Amount22`). Structured references to the column follow
+  in cell formulas on every sheet, totals-row formulas, defined names and
+  chart series. A column added inside a table is named with the same locale
+  word.
+
 ### Changed
 
 - A conditional formatting rule added without an id gets one in the form
@@ -192,6 +202,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and removed by `fm_workbook_pivot_filter_clear`.
 - The WASM size report's Brotli ceilings moved to 1280 KiB soft / 1344 KiB
   hard, to take in the pivot layout, date grouping and drawing-name API.
+
+- Functions that return formula text spell structured references as the
+  formula bar does: `[#This Row]` is written `@`, a reference from inside the
+  table to one of its own columns drops the table name (`=[@Qty]`,
+  `=SUM([Qty])`; `=tblSales[@Qty]` from outside), and `tblSales[]` reads
+  `tblSales`. `FORMULATEXT` shows the same form at the target cell, with
+  `#All`, `#Data`, `#Headers` and `#Totals` and the item separator inside the
+  brackets in the workbook's locale (`[[#Kopfzeilen];[Qty]]`). Formula
+  setters accept this form and store Excel's long form; a bare table name is
+  stored as `tblSales[]`.
+- Writing a value into a table's header cell (`fm_workbook_set_text`,
+  `_set_number`, `_set_bool`, `_set_error`, `_set_blank`) renames the column
+  as `fm_workbook_table_rename_column` does. Clearing it gives the default
+  name instead of an empty header.
 
 ### Fixed
 
@@ -283,6 +307,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   automatic axis, the default for one added through the API, now writes its
   x14 extension, so Excel keeps the axis after a save instead of showing the
   2007 form.
+- A structured reference to one cell (`[@Qty]`, or `[#Headers]` or
+  `[#Totals]` with one column) in a legacy formula loaded without a
+  dynamic-array mark no longer gains an implicit-intersection `@`.
+- Formulas with structured references in a loaded workbook recalculate when
+  the table changes; totals, `SUBTOTAL`, `[#Totals]` and `[#Headers]` results
+  kept their loaded values before. A `[#This Row]` reference now depends on
+  its own row.
+- A column name containing `,` or `:` is read as one name in a structured
+  reference (`t[a,b]`, `t[a:b]`), as Excel stores it, and `'` escapes are
+  read the same way in formulas, files and table edits.
 
 ## [0.18.0] - 2026-10-26
 
