@@ -36,15 +36,33 @@
 #include <cstddef>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
 #include "cf/cf_types.h"
+#include "styles.h"
 
 namespace formulon::parser {
 struct ExternalBookIndexer;
 }  // namespace formulon::parser
 
 namespace formulon::io {
+
+/// The sheet a list of conditional formats belongs to.
+///
+/// A rule naming another sheet in a formula or a `cfvo` (or carrying
+/// `CFRule::x14_placement`) is written only in the x14 extension, as Excel
+/// does: `<x14:cfRule>` with an inline `<x14:dxf>` and `<xm:f>` formulas,
+/// whose references to `sheet_name` itself stay unqualified as Excel writes
+/// them. A rule without an id gets
+/// `cf::x14_rule_id(sheet_index, priority, ...)` for the write only. An empty
+/// `sheet_name` places rules by `x14_placement` alone. `dxfs` is the package's
+/// `<dxfs>` table; null writes every `<x14:dxf>` empty.
+struct CfSheetContext {
+  std::string_view sheet_name;
+  std::size_t sheet_index = 0;
+  const std::vector<DifferentialFormat>* dxfs = nullptr;
+};
 
 /// The inverse of `canonical_feature_formula` (cf_reader.h), for writing a
 /// CF / DV formula into .xlsx: storage prefixes
@@ -72,8 +90,12 @@ std::string storage_feature_formula(std::string_view formula, const parser::Exte
 /// its conditional formatting, which costs far more than the one rule's
 /// formatting. The rule itself is still emitted. `indexer` numbers the
 /// external books the rule formulas name (see `storage_feature_formula`).
+///
+/// A rule `sheet` places in the extension is left out; a block all of whose
+/// rules it places there is left out entirely.
 std::string write_conditional_formattings(const std::vector<cf::ConditionalFormat>& formats, std::size_t dxf_count,
-                                          const parser::ExternalBookIndexer* indexer = nullptr);
+                                          const parser::ExternalBookIndexer* indexer = nullptr,
+                                          const CfSheetContext& sheet = {});
 
 /// Builds the `<x14:conditionalFormatting>` entries that carry the
 /// data-bar settings the legacy `<dataBar>` element cannot express, for
@@ -92,8 +114,14 @@ std::string write_conditional_formattings(const std::vector<cf::ConditionalForma
 /// `merge_x14_cf_entries` reconciles it with the captured original, which
 /// this writer does not see. `indexer` numbers external books as in
 /// `storage_feature_formula`.
+///
+/// A rule `sheet` places in the extension is written whole here, one
+/// `<x14:conditionalFormatting>` per rule; an id minted for it avoids every
+/// model id and `reserved_ids`.
 std::string build_x14_cf_overlay_entries(const std::vector<cf::ConditionalFormat>& formats,
-                                         const parser::ExternalBookIndexer* indexer = nullptr);
+                                         const parser::ExternalBookIndexer* indexer = nullptr,
+                                         const CfSheetContext& sheet = {},
+                                         const std::unordered_set<std::string>& reserved_ids = {});
 
 /// True when `bar` carries a setting the legacy data-bar record has no
 /// field for, so the rule needs an x14 counterpart to survive a save.

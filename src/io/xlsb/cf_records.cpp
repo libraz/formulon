@@ -179,23 +179,6 @@ constexpr std::array<std::uint32_t, 8> kCellIsParam = {6, 8, 3, 4, 7, 5, 1, 2};
 /// BrtCFVO iType, indexed by `cf::CfvoType`; 0 marks the x14-only kinds.
 constexpr std::array<std::uint32_t, 8> kCfvoTypes = {1, 4, 5, 2, 3, 7, 0, 0};
 
-/// Whether Excel stores formula slots for the rule type (the rank / average
-/// / uniqueness and visual rules carry none).
-bool HasFormulas(cf::RuleType t) {
-  switch (t) {
-    case cf::RuleType::ColorScale:
-    case cf::RuleType::DataBar:
-    case cf::RuleType::IconSet:
-    case cf::RuleType::Top10:
-    case cf::RuleType::AboveAverage:
-    case cf::RuleType::DuplicateValues:
-    case cf::RuleType::UniqueValues:
-      return false;
-    default:
-      return true;
-  }
-}
-
 bool Consumed(const ByteSpan& p) {
   return p.size == 0U;
 }
@@ -438,83 +421,15 @@ std::optional<cf::CFRule> DecodeRuleHeader(ByteSpan p, const MergeRange& base, c
     return std::nullopt;
   }
   cf::CFRule rule;
-  bool matched = false;
-  const std::uint32_t t = tmpl.value();
-  const std::uint32_t v = param.value();
-  const bool above_template = t == kTmplAbove || t == kTmplBelow || t == kTmplAboveEqual || t == kTmplBelowEqual;
-  for (const RuleShape& s : kShapes) {
-    const bool tmpl_ok = s.type == cf::RuleType::AboveAverage ? above_template : s.tmpl == t;
-    if (s.itype == itype.value() && tmpl_ok && (s.param_is_value || s.param == v)) {
-      rule.type = s.type;
-      matched = true;
-      break;
-    }
-  }
-  if (!matched && itype.value() == kTypeExpression) {
-    for (std::size_t i = 0; i < kTimePeriods.size(); ++i) {
-      if (kTimePeriods[i].first == t && kTimePeriods[i].second == v) {
-        rule.type = cf::RuleType::TimePeriod;
-        rule.time_period = static_cast<cf::TimePeriod>(i);
-        matched = true;
-      }
-    }
-  }
-  if (!matched) {
+  if (!decode_cf_rule_fields(CfRuleFields{itype.value(), tmpl.value(), param.value(), flags.value()},
+                             std::move(text).value(), rule)) {
     return std::nullopt;
-  }
-  const bool above = (flags.value() & kFlagAbove) != 0U;
-  const bool rank_flags = (flags.value() & (kFlagBottom | kFlagPercent)) != 0U;
-  if ((above && rule.type != cf::RuleType::AboveAverage) || (rank_flags && rule.type != cf::RuleType::Top10)) {
-    return std::nullopt;
-  }
-  switch (rule.type) {
-    case cf::RuleType::CellIs: {
-      std::size_t op = 0;
-      while (op < kCellIsParam.size() && kCellIsParam[op] != v) {
-        ++op;
-      }
-      if (op == kCellIsParam.size()) {
-        return std::nullopt;
-      }
-      rule.op = static_cast<cf::CellIsOperator>(op);
-      break;
-    }
-    case cf::RuleType::Top10:
-      if (v > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max())) {
-        return std::nullopt;
-      }
-      rule.rank = static_cast<std::int32_t>(v);
-      rule.percent = (flags.value() & kFlagPercent) != 0U;
-      rule.bottom = (flags.value() & kFlagBottom) != 0U;
-      break;
-    case cf::RuleType::AboveAverage:
-      rule.above_average = t == kTmplAbove || t == kTmplAboveEqual;
-      rule.equal_average = t == kTmplAboveEqual || t == kTmplBelowEqual;
-      if (above != rule.above_average || (rule.equal_average && v != 0U)) {
-        return std::nullopt;
-      }
-      if (v != 0U) {
-        rule.std_dev = static_cast<double>(v);
-      }
-      break;
-    case cf::RuleType::ContainsText:
-    case cf::RuleType::NotContainsText:
-    case cf::RuleType::BeginsWith:
-    case cf::RuleType::EndsWith:
-      rule.text = std::move(text).value();
-      break;
-    default:
-      if (!text.value().empty()) {
-        return std::nullopt;
-      }
-      break;
   }
   rule.priority = static_cast<std::int32_t>(pri.value());
-  rule.stop_if_true = (flags.value() & kFlagStopIfTrue) != 0U;
   if (dxf.value() != 0xFFFFFFFFU) {
     rule.dxf_id = dxf.value();
   }
-  if (!HasFormulas(rule.type) && (cb1.value() != 0U || cb2.value() != 0U)) {
+  if (!cf_rule_has_formulas(rule.type) && (cb1.value() != 0U || cb2.value() != 0U)) {
     return std::nullopt;
   }
   for (std::uint32_t cb : {cb1.value(), cb2.value()}) {
@@ -576,37 +491,6 @@ Expected<void, Error> EmitCfvo(std::vector<std::uint8_t>& dst, const cf::CfValue
   return Expected<void, Error>::Ok();
 }
 
-/// iType, template and iParam for `rule`.
-Expected<std::array<std::uint32_t, 3>, Error> RuleCodes(const cf::CFRule& rule) {
-  if (rule.type == cf::RuleType::TimePeriod) {
-    const auto& tp = kTimePeriods[static_cast<std::size_t>(rule.time_period.value_or(cf::TimePeriod::Today))];
-    return std::array<std::uint32_t, 3>{kTypeExpression, tp.first, tp.second};
-  }
-  for (const RuleShape& s : kShapes) {
-    if (s.type != rule.type) {
-      continue;
-    }
-    std::array<std::uint32_t, 3> codes{s.itype, s.tmpl, s.param};
-    if (rule.type == cf::RuleType::CellIs) {
-      codes[2] = kCellIsParam[static_cast<std::size_t>(rule.op.value_or(cf::CellIsOperator::Equal))];
-    } else if (rule.type == cf::RuleType::Top10) {
-      codes[2] = static_cast<std::uint32_t>(rule.rank.value_or(10));
-    } else if (rule.type == cf::RuleType::AboveAverage) {
-      codes[1] = rule.above_average ? (rule.equal_average ? kTmplAboveEqual : kTmplAbove)
-                                    : (rule.equal_average ? kTmplBelowEqual : kTmplBelow);
-      if (rule.std_dev.has_value()) {
-        const double sd = *rule.std_dev;
-        if (rule.equal_average || !(sd >= 1.0 && sd <= 3.0) || sd != std::floor(sd)) {
-          return Refuse("xlsb aboveAverage standard deviation is not representable");
-        }
-        codes[2] = static_cast<std::uint32_t>(sd);
-      }
-    }
-    return codes;
-  }
-  return Refuse("xlsb conditional format rule type has no record form");
-}
-
 /// Excel's stored form of a timePeriod rule's formula, when the rule carries
 /// the one Excel generates for its period at `base`.
 std::optional<EncodedFeatureFormula> TimePeriodFormula(const cf::CFRule& rule, const MergeRange& base) {
@@ -633,23 +517,16 @@ std::optional<EncodedFeatureFormula> TimePeriodFormula(const cf::CFRule& rule, c
 
 Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule& rule, const MergeRange& base,
                                const FeatureFormulaWriteContext& ctx, bool linked) {
-  auto codes = RuleCodes(rule);
-  if (!codes) {
-    return std::move(codes.error());
+  auto fields = encode_cf_rule_fields(rule);
+  if (!fields) {
+    return std::move(fields.error());
   }
   std::array<std::uint8_t, kGuidBytes> guid{};
   if (!rule.id.empty() && !ParseGuid(rule.id, guid)) {
     return Refuse("xlsb conditional format x14 link id is not a GUID: " + rule.id);
   }
-  std::uint16_t flags = rule.stop_if_true ? kFlagStopIfTrue : 0U;
-  if (rule.type == cf::RuleType::AboveAverage && rule.above_average) {
-    flags |= kFlagAbove;
-  }
-  if (rule.type == cf::RuleType::Top10) {
-    flags |= (rule.bottom ? kFlagBottom : 0U) | (rule.percent ? kFlagPercent : 0U);
-  }
   std::array<EncodedFeatureFormula, 2> formulas;
-  if (HasFormulas(rule.type)) {
+  if (cf_rule_has_formulas(rule.type)) {
     const std::optional<std::string>* sources[2] = {&rule.formula1, &rule.formula2};
     for (std::size_t i = 0; i < 2U; ++i) {
       if (!sources[i]->has_value() || (*sources[i])->empty()) {
@@ -670,14 +547,14 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
     }
   }
   std::vector<std::uint8_t> p;
-  emit_u32(p, codes.value()[0]);
-  emit_u32(p, codes.value()[1]);
+  emit_u32(p, fields.value().itype);
+  emit_u32(p, fields.value().tmpl);
   emit_u32(p, rule.dxf_id.value_or(0xFFFFFFFFU));
   emit_u32(p, static_cast<std::uint32_t>(rule.priority));
-  emit_u32(p, codes.value()[2]);
+  emit_u32(p, fields.value().param);
   emit_u32(p, 0U);
   emit_u32(p, 0U);
-  emit_u16(p, flags);
+  emit_u16(p, fields.value().flags);
   emit_u32(p, formulas[0].cb_fmla);
   emit_u32(p, formulas[1].cb_fmla);
   emit_u32(p, 0U);
@@ -770,6 +647,141 @@ Expected<double, Error> parse_threshold_number(const std::string& text) {
   return num;
 }
 
+bool cf_rule_has_formulas(cf::RuleType type) {
+  switch (type) {
+    case cf::RuleType::ColorScale:
+    case cf::RuleType::DataBar:
+    case cf::RuleType::IconSet:
+    case cf::RuleType::Top10:
+    case cf::RuleType::AboveAverage:
+    case cf::RuleType::DuplicateValues:
+    case cf::RuleType::UniqueValues:
+      return false;
+    default:
+      return true;
+  }
+}
+
+bool decode_cf_rule_fields(const CfRuleFields& fields, std::string text, cf::CFRule& rule) {
+  if ((fields.flags & ~kKnownFlags) != 0U) {
+    return false;
+  }
+  bool matched = false;
+  const std::uint32_t t = fields.tmpl;
+  const std::uint32_t v = fields.param;
+  const bool above_template = t == kTmplAbove || t == kTmplBelow || t == kTmplAboveEqual || t == kTmplBelowEqual;
+  for (const RuleShape& s : kShapes) {
+    const bool tmpl_ok = s.type == cf::RuleType::AboveAverage ? above_template : s.tmpl == t;
+    if (s.itype == fields.itype && tmpl_ok && (s.param_is_value || s.param == v)) {
+      rule.type = s.type;
+      matched = true;
+      break;
+    }
+  }
+  if (!matched && fields.itype == kTypeExpression) {
+    for (std::size_t i = 0; i < kTimePeriods.size(); ++i) {
+      if (kTimePeriods[i].first == t && kTimePeriods[i].second == v) {
+        rule.type = cf::RuleType::TimePeriod;
+        rule.time_period = static_cast<cf::TimePeriod>(i);
+        matched = true;
+      }
+    }
+  }
+  if (!matched) {
+    return false;
+  }
+  const bool above = (fields.flags & kFlagAbove) != 0U;
+  const bool rank_flags = (fields.flags & (kFlagBottom | kFlagPercent)) != 0U;
+  if ((above && rule.type != cf::RuleType::AboveAverage) || (rank_flags && rule.type != cf::RuleType::Top10)) {
+    return false;
+  }
+  switch (rule.type) {
+    case cf::RuleType::CellIs: {
+      std::size_t op = 0;
+      while (op < kCellIsParam.size() && kCellIsParam[op] != v) {
+        ++op;
+      }
+      if (op == kCellIsParam.size()) {
+        return false;
+      }
+      rule.op = static_cast<cf::CellIsOperator>(op);
+      break;
+    }
+    case cf::RuleType::Top10:
+      if (v > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max())) {
+        return false;
+      }
+      rule.rank = static_cast<std::int32_t>(v);
+      rule.percent = (fields.flags & kFlagPercent) != 0U;
+      rule.bottom = (fields.flags & kFlagBottom) != 0U;
+      break;
+    case cf::RuleType::AboveAverage:
+      rule.above_average = t == kTmplAbove || t == kTmplAboveEqual;
+      rule.equal_average = t == kTmplAboveEqual || t == kTmplBelowEqual;
+      if (above != rule.above_average || (rule.equal_average && v != 0U)) {
+        return false;
+      }
+      if (v != 0U) {
+        rule.std_dev = static_cast<double>(v);
+      }
+      break;
+    case cf::RuleType::ContainsText:
+    case cf::RuleType::NotContainsText:
+    case cf::RuleType::BeginsWith:
+    case cf::RuleType::EndsWith:
+      rule.text = std::move(text);
+      break;
+    default:
+      if (!text.empty()) {
+        return false;
+      }
+      break;
+  }
+  rule.stop_if_true = (fields.flags & kFlagStopIfTrue) != 0U;
+  return true;
+}
+
+Expected<CfRuleFields, Error> encode_cf_rule_fields(const cf::CFRule& rule) {
+  CfRuleFields out;
+  out.flags = rule.stop_if_true ? kFlagStopIfTrue : 0U;
+  if (rule.type == cf::RuleType::TimePeriod) {
+    const auto& tp = kTimePeriods[static_cast<std::size_t>(rule.time_period.value_or(cf::TimePeriod::Today))];
+    out.itype = kTypeExpression;
+    out.tmpl = tp.first;
+    out.param = tp.second;
+    return out;
+  }
+  for (const RuleShape& s : kShapes) {
+    if (s.type != rule.type) {
+      continue;
+    }
+    out.itype = s.itype;
+    out.tmpl = s.tmpl;
+    out.param = s.param;
+    if (rule.type == cf::RuleType::CellIs) {
+      out.param = kCellIsParam[static_cast<std::size_t>(rule.op.value_or(cf::CellIsOperator::Equal))];
+    } else if (rule.type == cf::RuleType::Top10) {
+      out.param = static_cast<std::uint32_t>(rule.rank.value_or(10));
+      out.flags |= (rule.bottom ? kFlagBottom : 0U) | (rule.percent ? kFlagPercent : 0U);
+    } else if (rule.type == cf::RuleType::AboveAverage) {
+      out.tmpl = rule.above_average ? (rule.equal_average ? kTmplAboveEqual : kTmplAbove)
+                                    : (rule.equal_average ? kTmplBelowEqual : kTmplBelow);
+      if (rule.above_average) {
+        out.flags |= kFlagAbove;
+      }
+      if (rule.std_dev.has_value()) {
+        const double sd = *rule.std_dev;
+        if (rule.equal_average || !(sd >= 1.0 && sd <= 3.0) || sd != std::floor(sd)) {
+          return Refuse("xlsb aboveAverage standard deviation is not representable");
+        }
+        out.param = static_cast<std::uint32_t>(sd);
+      }
+    }
+    return out;
+  }
+  return Refuse("xlsb conditional format rule type has no record form");
+}
+
 std::optional<cf::ConditionalFormat> decode_cf_block(ByteSpan block, const FeatureFormulaReadContext& ctx) {
   BlockCursor blocks(block);
   XlsbRecord rec{};
@@ -809,7 +821,7 @@ std::optional<cf::ConditionalFormat> decode_cf_block(ByteSpan block, const Featu
 
 Expected<void, Error> emit_cf_block(std::vector<std::uint8_t>& dst, const cf::ConditionalFormat& format,
                                     const FeatureFormulaWriteContext& ctx,
-                                    const std::unordered_set<std::string>& linked) {
+                                    const std::unordered_set<std::string>& linked, std::string_view own_sheet) {
   if (format.sqref.empty() || format.rules.empty()) {
     return Expected<void, Error>::Ok();
   }
@@ -818,8 +830,9 @@ Expected<void, Error> emit_cf_block(std::vector<std::uint8_t>& dst, const cf::Co
     ranges.push_back(MergeRange{r.first.row, r.first.col, r.last.row, r.last.col});
   }
   const MergeRange base = sqref_base(ranges);
-  const auto legacy = static_cast<std::size_t>(std::count_if(
-      format.rules.begin(), format.rules.end(), [](const cf::CFRule& r) { return !is_x14_icon_set_rule(r); }));
+  const auto legacy = static_cast<std::size_t>(
+      std::count_if(format.rules.begin(), format.rules.end(),
+                    [own_sheet](const cf::CFRule& r) { return !is_x14_only_rule(r, own_sheet); }));
   if (legacy == 0U) {
     return Expected<void, Error>::Ok();
   }
@@ -830,7 +843,7 @@ Expected<void, Error> emit_cf_block(std::vector<std::uint8_t>& dst, const cf::Co
   std::vector<std::uint8_t> body;
   emit_record(body, kBrtBeginConditionalFormatting, head);
   for (const cf::CFRule& rule : format.rules) {
-    if (is_x14_icon_set_rule(rule)) {
+    if (is_x14_only_rule(rule, own_sheet)) {
       continue;
     }
     if (auto s = EmitRule(body, rule, base, ctx, !rule.id.empty() && linked.count(rule.id) != 0U); !s) {

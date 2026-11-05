@@ -14,6 +14,7 @@
 #ifndef FORMULON_IO_OOXML_SHEET_XML_BUILDER_H_
 #define FORMULON_IO_OOXML_SHEET_XML_BUILDER_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -21,6 +22,7 @@
 
 #include "io/ooxml/emission_plan.h"
 #include "io/xlsb/ptg_writer.h"
+#include "styles.h"
 
 namespace formulon {
 class Sheet;
@@ -38,9 +40,10 @@ class SharedStrings;
 /// file actually declared; `hyperlink_rids` carries the per-hyperlink
 /// rId strings the same way; `printer_settings_rid` is the rId of the
 /// printer-settings rel (empty when the sheet has no printer settings).
-/// `dxf_count` is the `<dxf>` record count of the package's styles part,
-/// which bounds the `dxfId` values the conditional-format block may name
-/// (see `write_conditional_formattings`). `dynamic_array_cm_index` is the
+/// `dxfs` is the package's `<dxfs>` table, which bounds the `dxfId` values
+/// the conditional-format block may name and supplies the inline formatting
+/// of rules written to the x14 extension; `sheet_index` is the sheet's
+/// zero-based position (see `write_conditional_formattings`). `dynamic_array_cm_index` is the
 /// 1-based `<cellMetadata>/<bk>` index a spill anchor's `<c cm="N">`
 /// names (0 when no retained `xl/metadata.xml` part carries an XLDAPR
 /// entry, in which case no anchor emits `cm=` at all); see
@@ -49,9 +52,9 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               const std::vector<std::string>& table_rids,
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
                               std::string_view drawing_rid, std::string_view legacy_drawing_rid,
-                              const SharedStrings* shared_strings, std::size_t dxf_count,
-                              std::uint32_t dynamic_array_cm_index, const xlsb::NameShapes& name_shapes,
-                              const parser::ExternalBookIndexer* indexer);
+                              const SharedStrings* shared_strings, const std::vector<DifferentialFormat>& dxfs,
+                              std::size_t sheet_index, std::uint32_t dynamic_array_cm_index,
+                              const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer);
 
 /// Builds the `_rels` document for a single sheet, covering tables,
 /// pivot tables, hyperlinks, printer settings, comments / VML, and

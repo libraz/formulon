@@ -1,10 +1,14 @@
-// Custom icon sets in XLSB: a rule with per-level icons is a standalone x14
-// rule (BrtBeginCFRule14 / BrtBeginIconSet14 / BrtCFVO14 / BrtCFIcon), read
-// back into the same model the .xlsx reader fills.
+// Standalone x14 rules in XLSB: a custom icon set (BrtBeginCFRule14 /
+// BrtBeginIconSet14 / BrtCFVO14 / BrtCFIcon) and a rule naming another sheet
+// (BrtBeginCFRule14 with its formulas), read back into the same model the
+// .xlsx reader fills.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <optional>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -12,13 +16,18 @@
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
+#include "io/styles_writer.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
+#include "parser/ast_format.h"
+#include "parser/parser.h"
+#include "utils/arena.h"
 #include "value.h"
 #include "workbook.h"
 #include "writer_test_helpers.h"
+#include "zip_repack_helpers.h"
 
 #ifndef FORMULON_FIXTURES_DIR
 #error "FORMULON_FIXTURES_DIR must be defined by the build"
@@ -76,10 +85,19 @@ Workbook LoadXlsb(const std::vector<std::uint8_t>& bytes) {
   return r ? std::move(r.value().workbook) : Workbook::create_empty();
 }
 
-std::vector<std::uint16_t> SheetRecordTypes(const std::vector<std::uint8_t>& package) {
+std::vector<std::uint8_t> SheetPart(const std::vector<std::uint8_t>& package, const char* part) {
   ZipReader zip;
   EXPECT_TRUE(static_cast<bool>(zip.open(SpanOf(package))));
-  auto entry = zip.read_entry("xl/worksheets/sheet1.bin");
+  auto entry = zip.read_entry(part);
+  EXPECT_TRUE(static_cast<bool>(entry)) << part;
+  return entry ? std::move(entry.value()) : std::vector<std::uint8_t>{};
+}
+
+std::vector<std::uint16_t> SheetRecordTypes(const std::vector<std::uint8_t>& package,
+                                            const char* part = "xl/worksheets/sheet1.bin") {
+  ZipReader zip;
+  EXPECT_TRUE(static_cast<bool>(zip.open(SpanOf(package))));
+  auto entry = zip.read_entry(part);
   EXPECT_TRUE(static_cast<bool>(entry));
   std::vector<std::uint16_t> out;
   if (entry) {
@@ -303,6 +321,185 @@ TEST(ExcelCustomIconSet, XlsbResaveKeepsOneRule) {
   auto saved = write_ooxml(loaded);
   ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
   ExpectExcelCustomIconSet(LoadXlsx(saved.value()));
+}
+
+// Rules naming another sheet: Excel stores them as standalone x14 rules
+// (BrtBeginCFRule14, record 1048) in .xlsb and as <x14:cfRule> in .xlsx.
+
+std::string Canonical(const std::optional<std::string>& text) {
+  if (!text) {
+    return "-";
+  }
+  Arena arena;
+  parser::Parser parser(*text, arena);
+  const parser::AstNode* root = parser.parse();
+  return root != nullptr && parser.errors().empty() ? parser::format_formula(*root) : "unparsed:" + *text;
+}
+
+/// Every CF field the cross-sheet rules carry, the dxf by content.
+std::string DescribeSheetCf(const Workbook& wb, std::size_t sheet) {
+  std::ostringstream os;
+  for (const cf::ConditionalFormat& f : wb.sheet(sheet).conditional_formats()) {
+    os << "[";
+    for (const cf::CFCellRange& r : f.sqref) {
+      os << r.first.row << "," << r.first.col << ":" << r.last.row << "," << r.last.col << " ";
+    }
+    os << "pivot=" << f.pivot_scope << "\n";
+    for (const cf::CFRule& r : f.rules) {
+      os << "  type=" << static_cast<int>(r.type) << " pri=" << r.priority << " stop=" << r.stop_if_true
+         << " id=" << r.id << " x14=" << r.x14_placement << " f1=" << Canonical(r.formula1)
+         << " f2=" << Canonical(r.formula2) << " op=" << (r.op ? static_cast<int>(*r.op) : -1) << " dxf=";
+      if (r.dxf_id && *r.dxf_id < wb.styles().dxfs.size()) {
+        os << dxf_body_fragment(wb.styles().dxfs[*r.dxf_id]);
+      } else {
+        os << (r.dxf_id ? "dangling" : "none");
+      }
+      os << "\n";
+    }
+    os << "]\n";
+  }
+  return os.str();
+}
+
+TEST(XlsbCrossSheetCf, ExcelXlsbLoadsAsItsXlsxTwin) {
+  const Workbook xlsb = LoadXlsb(ReadFixture("structural_ref_m6.xlsb"));
+  const Workbook xlsx = LoadXlsx(ReadFixture("structural_ref_m6.xlsx"));
+  const std::string described = DescribeSheetCf(xlsb, 1);
+  EXPECT_EQ(described, DescribeSheetCf(xlsx, 1));
+  EXPECT_NE(described.find("pri=6 stop=0 id={00000000-000E-0000-0100-000006000000} x14=1 f1=SUM(Sheet1!A:A)>0"),
+            std::string::npos)
+      << described;
+  EXPECT_NE(described.find("pri=4 stop=0 id={00000000-000E-0000-0100-000004000000} x14=1 f1=Sheet1!$A$1"),
+            std::string::npos)
+      << described;
+  EXPECT_NE(described.find("pri=1 stop=0 id={00000000-000E-0000-0100-000001000000} x14=1 f1=Sheet1!$A$1>0"),
+            std::string::npos)
+      << described;
+}
+
+TEST(XlsbCrossSheetCf, ExcelXlsbRuleKeepsStopIfTrueAndDxf) {
+  const Workbook xlsb = LoadXlsb(ReadFixture("structural_ref_m6b.xlsb"));
+  const Workbook xlsx = LoadXlsx(ReadFixture("structural_ref_m6b.xlsx"));
+  const std::string described = DescribeSheetCf(xlsb, 1);
+  EXPECT_EQ(described, DescribeSheetCf(xlsx, 1));
+  const cf::CFRule* cross = nullptr;
+  for (const cf::ConditionalFormat& f : xlsb.sheet(1).conditional_formats()) {
+    for (const cf::CFRule& r : f.rules) {
+      if (r.priority == 1) {
+        cross = &r;
+      }
+    }
+  }
+  ASSERT_NE(cross, nullptr) << described;
+  EXPECT_TRUE(cross->stop_if_true);
+  EXPECT_TRUE(cross->x14_placement);
+  ASSERT_TRUE(cross->dxf_id.has_value());
+  EXPECT_EQ(*cross->dxf_id, 1U);
+}
+
+Workbook BookWithCrossSheetRule() {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  cf::ConditionalFormat block;
+  block.sqref = {cf::CFCellRange{{0, 2}, {2, 2}}};
+  cf::CFRule cross;
+  cross.type = cf::RuleType::Expression;
+  cross.priority = 1;
+  cross.stop_if_true = true;
+  cross.formula1 = "Sheet1!$A$1>0";
+  block.rules.push_back(cross);
+  cf::CFRule own;
+  own.type = cf::RuleType::Expression;
+  own.priority = 2;
+  own.formula1 = "$A$1>0";
+  block.rules.push_back(own);
+  wb.sheet(1).mutable_conditional_formats().push_back(block);
+  return wb;
+}
+
+TEST(XlsbCrossSheetCf, SaveRoutesCrossSheetRulesToX14Records) {
+  const std::vector<std::uint8_t> first = SaveXlsb(BookWithCrossSheetRule());
+  const std::vector<std::uint16_t> types = SheetRecordTypes(first, "xl/worksheets/sheet2.bin");
+  EXPECT_EQ(Count(types, 1048U), 1U);
+  EXPECT_EQ(Count(types, 463U), 1U);
+  EXPECT_EQ(Count(types, 1046U), 1U);
+  EXPECT_EQ(Count(types, 35U), Count(types, 36U));
+
+  const Workbook back = LoadXlsb(first);
+  const std::string described = DescribeSheetCf(back, 1);
+  EXPECT_NE(described.find("pri=1 stop=1 id={00000000-000E-0000-0100-000001000000} x14=1 f1=Sheet1!$A$1>0"),
+            std::string::npos)
+      << described;
+  EXPECT_NE(described.find("pri=2 stop=0 id= x14=0 f1=$A$1>0"), std::string::npos) << described;
+
+  const std::vector<std::uint8_t> second = SaveXlsb(back);
+  EXPECT_EQ(SheetPart(second, "xl/worksheets/sheet2.bin"), SheetPart(first, "xl/worksheets/sheet2.bin"));
+  EXPECT_EQ(DescribeSheetCf(LoadXlsb(second), 1), described);
+}
+
+/// Payload of every BrtBeginCFRule14 in `part` of `package`.
+std::vector<std::vector<std::uint8_t>> Rule14Payloads(const std::vector<std::uint8_t>& package, const char* part) {
+  std::vector<std::vector<std::uint8_t>> out;
+  const std::vector<std::uint8_t> sheet = SheetPart(package, part);
+  for (const FramedRecord& rec : split_records(sheet)) {
+    if (rec.type == 1048U) {
+      out.emplace_back(rec.payload.data, rec.payload.data + rec.payload.size);
+    }
+  }
+  return out;
+}
+
+TEST(XlsbCrossSheetCf, UnadoptedRuleSurvivesAndDeletedRuleLeaves) {
+  constexpr const char* kSheet = "xl/worksheets/sheet2.bin";
+  const std::vector<std::uint8_t> source = ReadFixture("structural_ref_m6.xlsb");
+  // The priority-4 rule's formula starts with an invalid Ptg, so it cannot
+  // be adopted and stays a retained record.
+  std::vector<std::uint8_t> sheet = SheetPart(source, kSheet);
+  std::size_t rules14 = 0;
+  for (const FramedRecord& rec : split_records(sheet)) {
+    if (rec.type == 1048U && ++rules14 == 2U) {
+      sheet[static_cast<std::size_t>(rec.payload.data - sheet.data()) + 20U] = 0x00;
+    }
+  }
+  ASSERT_EQ(rules14, 3U);
+  const std::vector<std::uint8_t> patched = RepackWithEntries(source, {{kSheet, sheet}});
+  const std::vector<std::vector<std::uint8_t>> before = Rule14Payloads(patched, kSheet);
+  ASSERT_EQ(before.size(), 3U);
+
+  Workbook wb = LoadXlsb(patched);
+  const std::string described = DescribeSheetCf(wb, 1);
+  EXPECT_EQ(described.find("pri=4 "), std::string::npos) << described;
+  ASSERT_NE(described.find("pri=1 "), std::string::npos) << described;
+  const std::vector<std::vector<std::uint8_t>> resaved = Rule14Payloads(SaveXlsb(wb), kSheet);
+  ASSERT_EQ(resaved.size(), 3U);
+  EXPECT_EQ(resaved[1], before[1]);
+
+  // An adopted rule removed from the model leaves the records; the
+  // unadopted one is still written verbatim.
+  auto& formats = wb.sheet(1).mutable_conditional_formats();
+  formats.erase(
+      std::remove_if(formats.begin(), formats.end(),
+                     [](const cf::ConditionalFormat& f) { return f.rules.size() == 1U && f.rules[0].priority == 1; }),
+      formats.end());
+  const std::vector<std::uint8_t> trimmed = SaveXlsb(wb);
+  const std::vector<std::vector<std::uint8_t>> left = Rule14Payloads(trimmed, kSheet);
+  ASSERT_EQ(left.size(), 2U);
+  EXPECT_EQ(left[0], before[1]);
+  EXPECT_EQ(DescribeSheetCf(LoadXlsb(trimmed), 1).find("pri=1 "), std::string::npos);
+}
+
+TEST(XlsbCrossSheetCf, ExcelXlsbResavesStably) {
+  for (const char* name : {"structural_ref_m6.xlsb", "structural_ref_m6b.xlsb"}) {
+    const Workbook loaded = LoadXlsb(ReadFixture(name));
+    const std::vector<std::uint8_t> first = SaveXlsb(loaded);
+    const std::vector<std::uint16_t> types = SheetRecordTypes(first, "xl/worksheets/sheet2.bin");
+    EXPECT_EQ(Count(types, 1048U), name == std::string("structural_ref_m6.xlsb") ? 3U : 1U) << name;
+    const Workbook back = LoadXlsb(first);
+    EXPECT_EQ(DescribeSheetCf(back, 1), DescribeSheetCf(loaded, 1)) << name;
+    EXPECT_EQ(SheetPart(SaveXlsb(back), "xl/worksheets/sheet2.bin"), SheetPart(first, "xl/worksheets/sheet2.bin"))
+        << name;
+  }
 }
 
 }  // namespace

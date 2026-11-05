@@ -185,11 +185,46 @@ bool PatchX14IconSet(pugi::xml_node x14_rule, const cf::IconSetSpec& spec, const
   return true;
 }
 
+/// Drops the containers a rule removal hollowed out, innermost first:
+/// `<x14:conditionalFormatting>` with no `<x14:cfRule>` left, then
+/// `<x14:conditionalFormattings>` with no block left, then `<ext>` elements
+/// with no element payload at all.
+void PruneHollowCfContainers(const pugi::xml_node& ext_lst) {
+  ForEachX14Formattings(ext_lst, [](const pugi::xml_node& formattings) {
+    RemoveMatchingChildren(formattings, "x14:conditionalFormatting",
+                           [](const pugi::xml_node& block) { return !block.child("x14:cfRule"); });
+  });
+  for (pugi::xml_node ext = ext_lst.child("ext"); ext; ext = ext.next_sibling("ext")) {
+    RemoveMatchingChildren(ext, "x14:conditionalFormattings",
+                           [](const pugi::xml_node& formattings) { return !has_element_child(formattings); });
+  }
+  RemoveMatchingChildren(ext_lst, "ext", [](const pugi::xml_node& ext) { return !has_element_child(ext); });
+}
+
 }  // namespace
 
 std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vector<cf::ConditionalFormat>& formats,
-                                 const parser::ExternalBookIndexer* indexer) {
-  const std::string entries = build_x14_cf_overlay_entries(formats, indexer);
+                                 const parser::ExternalBookIndexer* indexer, const CfSheetContext& sheet) {
+  if (formats.empty()) {
+    return ext_lst_xml;
+  }
+  pugi::xml_document doc;
+  pugi::xml_node ext_lst;
+  if (ext_lst_xml.empty()) {
+    ext_lst = doc.append_child("extLst");
+  } else {
+    if (!doc.load_string(ext_lst_xml.c_str())) {
+      return ext_lst_xml;
+    }
+    ext_lst = doc.child("extLst");
+    if (!ext_lst) {
+      return ext_lst_xml;
+    }
+  }
+  std::unordered_set<std::string> claimed;
+  CollectClaimedRuleIds(ext_lst, &claimed);
+
+  const std::string entries = build_x14_cf_overlay_entries(formats, indexer, sheet, claimed);
   std::unordered_map<std::string, const cf::DataBarSpec*> model_bars;
   std::unordered_map<std::string, const cf::IconSetSpec*> model_icon_sets;
   for (const cf::ConditionalFormat& format : formats) {
@@ -212,20 +247,6 @@ std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vect
   const std::string wrapped = "<entries>" + entries + "</entries>";
   if (!entries_doc.load_string(wrapped.c_str())) {
     return ext_lst_xml;
-  }
-
-  pugi::xml_document doc;
-  pugi::xml_node ext_lst;
-  if (ext_lst_xml.empty()) {
-    ext_lst = doc.append_child("extLst");
-  } else {
-    if (!doc.load_string(ext_lst_xml.c_str())) {
-      return ext_lst_xml;
-    }
-    ext_lst = doc.child("extLst");
-    if (!ext_lst) {
-      return ext_lst_xml;
-    }
   }
 
   // A captured data bar whose settings no longer decode to the model's is
@@ -251,10 +272,10 @@ std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vect
     }
   });
 
-  std::unordered_set<std::string> claimed;
-  CollectClaimedRuleIds(ext_lst, &claimed);
-
   pugi::xml_node formattings;
+  // Rebuilt entries go ahead of the captured ones, as Excel orders a rule
+  // stored in the extension alone before the data-bar payloads.
+  pugi::xml_node last_inserted;
   for (pugi::xml_node entry = entries_doc.child("entries").first_child(); entry; entry = entry.next_sibling()) {
     const char* id = entry.child("x14:cfRule").attribute("id").value();
     if (id[0] == '\0' || claimed.count(id) != 0U) {
@@ -266,12 +287,14 @@ std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vect
       }
     }
     if (!formattings) {
-      pugi::xml_node ext = ext_lst.append_child("ext");
+      // Excel writes the conditional-formatting extension first.
+      pugi::xml_node ext = ext_lst.prepend_child("ext");
       ext.append_attribute("uri") = kWorksheetCfExtUri;
       ext.append_attribute("xmlns:x14") = kNsX14.data();
       formattings = ext.append_child("x14:conditionalFormattings");
     }
-    formattings.append_copy(entry);
+    last_inserted =
+        last_inserted ? formattings.insert_copy_after(entry, last_inserted) : formattings.prepend_copy(entry);
     claimed.insert(id);
     changed = true;
   }
@@ -280,6 +303,32 @@ std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vect
     // Nothing new: hand the original bytes back untouched rather than
     // re-serialising a document that only round-tripped through pugixml.
     return ext_lst_xml;
+  }
+  return raw_xml(ext_lst);
+}
+
+std::string strip_x14_cf_rules(const std::string& ext_lst_xml, const std::unordered_set<std::string>& ids) {
+  if (ext_lst_xml.empty() || ids.empty()) {
+    return ext_lst_xml;
+  }
+  pugi::xml_document doc;
+  const pugi::xml_parse_result rc = doc.load_string(ext_lst_xml.c_str());
+  const pugi::xml_node ext_lst = doc.child("extLst");
+  if (!rc || !ext_lst) {
+    return ext_lst_xml;
+  }
+  bool changed = false;
+  ForEachX14Block(ext_lst, [&](const pugi::xml_node& block) {
+    changed |= RemoveMatchingChildren(block, "x14:cfRule", [&ids](const pugi::xml_node& rule) {
+      return ids.count(rule.attribute("id").value()) != 0U;
+    });
+  });
+  if (!changed) {
+    return ext_lst_xml;
+  }
+  PruneHollowCfContainers(ext_lst);
+  if (!has_element_child(ext_lst)) {
+    return std::string();
   }
   return raw_xml(ext_lst);
 }
@@ -327,19 +376,8 @@ std::string reconcile_x14_cf_overlay(const std::string& ext_lst_xml,
     return ext_lst_xml;
   }
 
-  // Pass 2: prune containers hollowed out by the rule removal, innermost
-  // first: <x14:conditionalFormatting> with no <x14:cfRule> left, then
-  // <x14:conditionalFormattings> with no block left, then <ext> elements
-  // with no element payload at all.
-  ForEachX14Formattings(ext_lst, [](const pugi::xml_node& formattings) {
-    RemoveMatchingChildren(formattings, "x14:conditionalFormatting",
-                           [](const pugi::xml_node& block) { return !block.child("x14:cfRule"); });
-  });
-  for (pugi::xml_node ext = ext_lst.child("ext"); ext; ext = ext.next_sibling("ext")) {
-    RemoveMatchingChildren(ext, "x14:conditionalFormattings",
-                           [](const pugi::xml_node& formattings) { return !has_element_child(formattings); });
-  }
-  RemoveMatchingChildren(ext_lst, "ext", [](const pugi::xml_node& ext) { return !has_element_child(ext); });
+  // Pass 2: prune containers hollowed out by the rule removal.
+  PruneHollowCfContainers(ext_lst);
 
   if (!has_element_child(ext_lst)) {
     return std::string();

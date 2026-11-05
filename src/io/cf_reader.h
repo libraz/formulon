@@ -7,9 +7,10 @@
 // border / axis colour+position / gradient-vs-solid have no
 // representation in the legacy `<dataBar>` schema and are only ever
 // expressed there, cross-referenced to the legacy `<cfRule id="...">`
-// GUID. Other x14 rule types and settings (data-bar exponential scaling
-// beyond what's modelled here) are not consulted. The x14 `iconSet` of a
-// linked icon-set rule supplies its custom icons.
+// GUID. Other x14 settings (data-bar exponential scaling beyond what's
+// modelled here) are not consulted. The x14 `iconSet` of a linked icon-set
+// rule supplies its custom icons. A rule stored in the extension alone is
+// read whole (see `read_conditional_formats`).
 //
 // Design references:
 //   * src/io/pivot_table_reader.h (sister reader, similar style)
@@ -25,6 +26,7 @@
 #include "cf/cf_types.h"
 #include "io/package_diagnostics.h"
 #include "pugixml.hpp"
+#include "styles.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "workbook.h"
@@ -64,8 +66,18 @@ namespace formulon::io {
 /// Each skipped block bumps `diagnostics->skipped_feature_count` when
 /// `diagnostics` is non-NULL, so a caller that never reads the structured
 /// log still learns the load was lossy. Passing NULL discards the count.
-Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(const pugi::xml_node& worksheet,
-                                                                             ReadDiagnostics* diagnostics = nullptr);
+///
+/// An `<x14:cfRule>` Excel stores in the extension alone -- it carries a
+/// `priority` and no legacy `<cfRule>` links to it, as for a rule naming
+/// another sheet or a custom icon set -- is read into a block of its own
+/// with `CFRule::x14_placement` set, when the model can hold its type. Its
+/// inline `<x14:dxf>` is matched against `dxfs` (the package's `<dxfs>`
+/// table) and appended when no equal entry exists; a NULL `dxfs` drops the
+/// formatting. The caller removes these rules from the captured extension
+/// (`strip_x14_cf_rules`).
+Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(
+    const pugi::xml_node& worksheet, ReadDiagnostics* diagnostics = nullptr,
+    std::vector<DifferentialFormat>* dxfs = nullptr);
 
 /// Disengages every `CFRule::dxf_id` in `formats` that does not address an
 /// entry of a `dxf_count`-sized `<dxfs>` table.
@@ -112,10 +124,11 @@ void apply_x14_data_bar_overlay(const pugi::xml_node& x14_bar, cf::DataBarSpec* 
 /// document order; empty for a null node or one without them.
 std::vector<cf::CfIcon> read_x14_icon_set_icons(const pugi::xml_node& x14_icon_set);
 
-/// True when the model can hold the `<x14:cfRule>` `rule`: a data bar, or an
-/// icon set over one of the modelled base sets. Any other extension rule (a
-/// 3Stars / 3Triangles / 5Boxes icon set, a formula rule Excel writes only in
-/// the extension) never enters the model and stays in the extension as read.
+/// True when the model can hold the `<x14:cfRule>` `rule` as a payload the
+/// overlay reconciliation tracks: a data bar, or an icon set over one of the
+/// modelled base sets. A 3Stars / 3Triangles / 5Boxes icon set never enters
+/// the model and stays in the extension as read; a formula rule stored there
+/// alone enters it and leaves the extension on load.
 bool x14_cf_rule_model_can_hold(const pugi::xml_node& rule);
 
 }  // namespace formulon::io

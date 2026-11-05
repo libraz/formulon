@@ -2,11 +2,15 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
+#include "cf/cf_types.h"
 #include "io/auto_filter_xml.h"
+#include "io/cf_overlay.h"
 #include "io/cf_reader.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/print_settings_parse.h"
@@ -145,7 +149,9 @@ std::vector<std::uint8_t> build_worksheet_shell_bytes(const std::vector<std::uin
 Expected<void, Error> apply_worksheet_metadata(const pugi::xml_document& doc, std::size_t i, Workbook& wb,
                                                ReadDiagnostics* diagnostics) {
   const pugi::xml_node worksheet = doc.child("worksheet");
-  ASSIGN_OR_RETURN(auto cfs, read_conditional_formats(worksheet, diagnostics));
+  // Rules stored in the x14 extension alone bring their formatting inline;
+  // it joins the `<dxfs>` table here, before the indices are checked.
+  ASSIGN_OR_RETURN(auto cfs, read_conditional_formats(worksheet, diagnostics, &wb.mutable_styles().dxfs));
   // The `<dxfs>` table is loaded before any sheet, so this is the first
   // point where a rule's `dxfId` can be checked against it. Both the DOM
   // and the SAX path reach the model through here, which is what makes
@@ -201,7 +207,16 @@ Expected<void, Error> apply_worksheet_metadata(const pugi::xml_document& doc, st
   // survives a save cycle unchanged. Living in this shared helper means
   // the SAX path recovers it too, via the metadata shell.
   if (pugi::xml_node ext_lst = worksheet.child("extLst")) {
-    wb.sheet(i).set_ext_lst_xml(raw_xml(ext_lst));
+    // Rules read into the model leave the capture; the writer rebuilds them.
+    std::unordered_set<std::string> adopted;
+    for (const cf::ConditionalFormat& format : wb.sheet(i).conditional_formats()) {
+      for (const cf::CFRule& rule : format.rules) {
+        if (rule.x14_placement && !rule.id.empty()) {
+          adopted.insert(rule.id);
+        }
+      }
+    }
+    wb.sheet(i).set_ext_lst_xml(strip_x14_cf_rules(raw_xml(ext_lst), adopted));
   }
   // Capture the worksheet root's extra namespace declarations so any
   // prefixed attribute carried inside a raw capture above resolves when

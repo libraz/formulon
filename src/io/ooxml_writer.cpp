@@ -404,7 +404,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
         AddPart(writer.get(), SheetPartPath(i),
                 BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.table_rids, rels_result.hyperlink_rids,
                                   rels_result.printer_settings_rid, rels_result.drawing_rid,
-                                  rels_result.legacy_drawing_rid, &shared_strings, wb.styles().dxfs.size(),
+                                  rels_result.legacy_drawing_rid, &shared_strings, wb.styles().dxfs, i,
                                   dynamic_array_cm_index, name_shapes(wb, i), &external_book_indexer),
                 &written_paths));
     // An empty rels file is invalid OOXML; Excel repairs the package and

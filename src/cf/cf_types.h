@@ -368,6 +368,11 @@ struct CFRule {
   /// `timePeriod` bucket.
   std::optional<TimePeriod> time_period;
 
+  /// The rule was read from the x14 extension alone, so the writer keeps it
+  /// there even when its formulas no longer name another sheet (a target
+  /// sheet deleted since load leaves `#REF!`).
+  bool x14_placement = false;
+
   /// Verbatim, unparsed `<extLst>...</extLst>` XML captured from this
   /// rule's own `<cfRule>` element (`CT_CfRule`'s schema-trailing
   /// `extLst?`). Typically carries a 2010+ `<x14:id>` cross-reference to

@@ -6,16 +6,21 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
 #include "cf/cf_types.h"
+#include "cf/cf_x14_id.h"
 #include "io/cf_attr_names.h"
 #include "io/color_spec_xml.h"
 #include "io/future_functions.h"
 #include "io/ooxml/external_link_writer.h"
 #include "io/ooxml_defs.h"
+#include "io/styles_writer.h"
 #include "io/xlsb/ptg_writer.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
@@ -186,6 +191,73 @@ void AppendIconSet(std::string& out, const cf::IconSetSpec& i, const parser::Ext
   out.append("</iconSet>");
 }
 
+/// True when `formula` parses and names a sheet other than `own_sheet`.
+bool FormulaReferencesOtherSheet(std::string_view formula, std::string_view own_sheet) {
+  Arena arena;
+  parser::Parser parser(formula, arena);
+  const parser::AstNode* root = parser.parse();
+  return root != nullptr && parser.errors().empty() && parser::references_other_sheet(*root, own_sheet);
+}
+
+bool CfvoReferencesOtherSheet(const cf::CfValueObject& v, std::string_view own_sheet) {
+  return v.type == cf::CfvoType::Formula && FormulaReferencesOtherSheet(v.value, own_sheet);
+}
+
+/// True when `r` is written only in the x14 extension: it was read from
+/// there, or a formula or `cfvo` of it names a sheet other than `own_sheet`.
+bool RuleIsX14Only(const cf::CFRule& r, std::string_view own_sheet) {
+  if (r.x14_placement) {
+    return true;
+  }
+  if (own_sheet.empty()) {
+    return false;
+  }
+  for (const std::optional<std::string>* formula : {&r.formula1, &r.formula2}) {
+    if (formula->has_value() && FormulaReferencesOtherSheet(**formula, own_sheet)) {
+      return true;
+    }
+  }
+  if (r.color_scale.has_value()) {
+    for (const cf::CfValueObject& v : r.color_scale->thresholds) {
+      if (CfvoReferencesOtherSheet(v, own_sheet)) {
+        return true;
+      }
+    }
+  }
+  if (r.data_bar.has_value() &&
+      (CfvoReferencesOtherSheet(r.data_bar->min, own_sheet) || CfvoReferencesOtherSheet(r.data_bar->max, own_sheet))) {
+    return true;
+  }
+  if (r.icon_set.has_value()) {
+    if (CfvoReferencesOtherSheet(r.icon_set->floor, own_sheet)) {
+      return true;
+    }
+    for (const cf::CfValueObject& v : r.icon_set->thresholds) {
+      if (CfvoReferencesOtherSheet(v, own_sheet)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/// The legacy `operator` hint Excel writes on the text rule types, or null
+/// for any other type.
+const char* TextRuleOperator(cf::RuleType type) {
+  switch (type) {
+    case cf::RuleType::ContainsText:
+      return "containsText";
+    case cf::RuleType::NotContainsText:
+      return "notContains";
+    case cf::RuleType::BeginsWith:
+      return "beginsWith";
+    case cf::RuleType::EndsWith:
+      return "endsWith";
+    default:
+      return nullptr;
+  }
+}
+
 /// URI of the `<ext>` that links a legacy `<cfRule>` to its x14
 /// counterpart, and the two namespaces the extension content lives in.
 /// All three are fixed constants Excel matches literally.
@@ -294,13 +366,18 @@ void AppendX14Cfvo(std::string& out, const cf::CfValueObject& v, const parser::E
 
 /// Emits `d`'s `<x14:dataBar>` element. The bar lengths are always
 /// stated here: the legacy element of a linked bar leaves them at the
-/// pre-2010 defaults, as Excel does.
-void AppendX14DataBar(std::string& out, const cf::DataBarSpec& d, const parser::ExternalBookIndexer* indexer) {
+/// pre-2010 defaults, as Excel does. A `standalone` bar has no legacy
+/// element, so its `showValue` and fill colour are stated here too.
+void AppendX14DataBar(std::string& out, const cf::DataBarSpec& d, const parser::ExternalBookIndexer* indexer,
+                      bool standalone) {
   out.append("<x14:dataBar minLength=\"");
   out.append(std::to_string(static_cast<unsigned>(d.min_length_pct)));
   out.append("\" maxLength=\"");
   out.append(std::to_string(static_cast<unsigned>(d.max_length_pct)));
   out.push_back('"');
+  if (standalone && !d.show_value) {
+    out.append(" showValue=\"0\"");
+  }
   if (!d.gradient) {
     out.append(" gradient=\"0\"");
   }
@@ -325,9 +402,12 @@ void AppendX14DataBar(std::string& out, const cf::DataBarSpec& d, const parser::
   }
   out.push_back('>');
   // Schema order inside `<x14:dataBar>`: two cfvo, then the colour slots
-  // border / negativeFill / negativeBorder / axis.
+  // fill / border / negativeFill / negativeBorder / axis.
   AppendX14Cfvo(out, d.min, indexer);
   AppendX14Cfvo(out, d.max, indexer);
+  if (standalone) {
+    AppendX14Color(out, "x14:fillColor", d.fill);
+  }
   if (d.border.has_value()) {
     AppendX14Color(out, "x14:borderColor", d.border.value());
   }
@@ -348,7 +428,9 @@ void AppendX14DataBar(std::string& out, const cf::DataBarSpec& d, const parser::
 void AppendX14IconSet(std::string& out, const cf::IconSetSpec& i, const parser::ExternalBookIndexer* indexer) {
   out.append("<x14:iconSet");
   append_xml_attr(out, "iconSet", IconSetNameToString(i.name));
-  out.append(" custom=\"1\"");
+  if (!i.custom_icons.empty()) {
+    out.append(" custom=\"1\"");
+  }
   if (!i.show_value) {
     out.append(" showValue=\"0\"");
   }
@@ -391,10 +473,112 @@ void AppendX14CfRuleEntry(std::string& out, const cf::CFRule& r, const std::vect
   if (icon_set) {
     AppendX14IconSet(out, *r.icon_set, indexer);
   } else {
-    AppendX14DataBar(out, r.data_bar.value(), indexer);
+    AppendX14DataBar(out, r.data_bar.value(), indexer, /*standalone=*/false);
   }
   out.append("</x14:cfRule><xm:sqref>");
   AppendXmlEscaped(out, EncodeSqref(sqref));
+  out.append("</xm:sqref></x14:conditionalFormatting>");
+}
+
+/// Emits `<x14:dxf>` holding the body of the `<dxf>` `r.dxf_id` names, or an
+/// empty `<x14:dxf/>` when the rule sets no formatting.
+void AppendX14Dxf(std::string& out, const cf::CFRule& r, const std::vector<DifferentialFormat>* dxfs) {
+  if (dxfs != nullptr && r.dxf_id.has_value() && *r.dxf_id < dxfs->size()) {
+    const std::string body = dxf_body_fragment((*dxfs)[*r.dxf_id]);
+    if (!body.empty()) {
+      out.append("<x14:dxf>");
+      out.append(body);
+      out.append("</x14:dxf>");
+      return;
+    }
+  }
+  out.append("<x14:dxf/>");
+}
+
+/// Emits `r` whole as an `<x14:conditionalFormatting>` entry under `id`, in
+/// the shape Excel stores a rule that names another sheet: the attributes in
+/// Excel's order, `<xm:f>` formulas and an inline `<x14:dxf>`, or the x14 form
+/// of a colour scale, data bar or icon set.
+void AppendX14OnlyRuleEntry(std::string& out, const cf::CFRule& r, std::string_view id,
+                            const cf::ConditionalFormat& block, const CfSheetContext& sheet,
+                            const parser::ExternalBookIndexer* indexer) {
+  out.append("<x14:conditionalFormatting xmlns:xm=\"");
+  out.append(kNsExcelMain);
+  out.push_back('"');
+  if (block.pivot_scope) {
+    out.append(" pivot=\"1\"");
+  }
+  out.append("><x14:cfRule type=\"");
+  out.append(enum_name(kCfRuleTypeNames, r.type, "expression"));
+  out.append("\" priority=\"");
+  out.append(std::to_string(r.priority));
+  out.push_back('"');
+  if (r.stop_if_true) {
+    out.append(" stopIfTrue=\"1\"");
+  }
+  if (r.type == cf::RuleType::AboveAverage && !r.above_average) {
+    out.append(" aboveAverage=\"0\"");
+  }
+  if (r.type == cf::RuleType::Top10) {
+    if (r.percent) {
+      out.append(" percent=\"1\"");
+    }
+    if (r.bottom) {
+      out.append(" bottom=\"1\"");
+    }
+  }
+  const char* text_operator = TextRuleOperator(r.type);
+  if (r.type == cf::RuleType::CellIs && r.op.has_value()) {
+    append_xml_attr(out, "operator", enum_name(kCfCellIsOperatorNames, r.op.value(), "equal"));
+  } else if (text_operator != nullptr && r.text.has_value()) {
+    append_xml_attr(out, "operator", text_operator);
+  }
+  if (text_operator != nullptr && r.text.has_value()) {
+    append_xml_attr(out, "text", r.text.value());
+  }
+  if (r.type == cf::RuleType::TimePeriod && r.time_period.has_value()) {
+    append_xml_attr(out, "timePeriod", enum_name(kCfTimePeriodNames, r.time_period.value(), "today"));
+  }
+  if (r.type == cf::RuleType::Top10 && r.rank.has_value()) {
+    append_xml_attr_int(out, "rank", r.rank.value());
+  }
+  if (r.type == cf::RuleType::AboveAverage) {
+    if (r.std_dev.has_value()) {
+      char buf[32];
+      format_general(buf, sizeof(buf), r.std_dev.value(), 6);
+      append_xml_attr(out, "stdDev", buf);
+    }
+    if (r.equal_average) {
+      out.append(" equalAverage=\"1\"");
+    }
+  }
+  append_xml_attr(out, "id", id);
+  out.push_back('>');
+  if (r.color_scale.has_value()) {
+    out.append("<x14:colorScale>");
+    for (const cf::CfValueObject& th : r.color_scale->thresholds) {
+      AppendX14Cfvo(out, th, indexer);
+    }
+    for (const cf::Color& c : r.color_scale->colors) {
+      AppendX14Color(out, "x14:color", c);
+    }
+    out.append("</x14:colorScale>");
+  } else if (r.data_bar.has_value()) {
+    AppendX14DataBar(out, *r.data_bar, indexer, /*standalone=*/true);
+  } else if (r.icon_set.has_value()) {
+    AppendX14IconSet(out, *r.icon_set, indexer);
+  } else {
+    for (const std::optional<std::string>* formula : {&r.formula1, &r.formula2}) {
+      if (formula->has_value()) {
+        out.append("<xm:f>");
+        AppendXmlEscaped(out, storage_feature_formula(**formula, indexer));
+        out.append("</xm:f>");
+      }
+    }
+    AppendX14Dxf(out, r, sheet.dxfs);
+  }
+  out.append("</x14:cfRule><xm:sqref>");
+  AppendXmlEscaped(out, EncodeSqref(block.sqref));
   out.append("</xm:sqref></x14:conditionalFormatting>");
 }
 
@@ -424,24 +608,7 @@ void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count,
     // legacy reader (e.g. `operator="containsText"`); the modern
     // reader keys solely off `type`. Emit it for parity with Excel-
     // saved files.
-    const char* op_attr = nullptr;
-    switch (r.type) {
-      case cf::RuleType::ContainsText:
-        op_attr = "containsText";
-        break;
-      case cf::RuleType::NotContainsText:
-        op_attr = "notContains";
-        break;
-      case cf::RuleType::BeginsWith:
-        op_attr = "beginsWith";
-        break;
-      case cf::RuleType::EndsWith:
-        op_attr = "endsWith";
-        break;
-      default:
-        break;
-    }
-    if (op_attr != nullptr) {
+    if (const char* op_attr = TextRuleOperator(r.type); op_attr != nullptr) {
       append_xml_attr(out, "operator", op_attr);
     }
     append_xml_attr(out, "text", r.text.value());
@@ -504,13 +671,23 @@ void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count,
 }  // namespace
 
 std::string write_conditional_formattings(const std::vector<cf::ConditionalFormat>& formats, std::size_t dxf_count,
-                                          const parser::ExternalBookIndexer* indexer) {
+                                          const parser::ExternalBookIndexer* indexer, const CfSheetContext& sheet) {
   if (formats.empty()) {
     return std::string{};
   }
   std::string out;
   out.reserve(formats.size() * 128);
+  std::string rules;
   for (const auto& cf : formats) {
+    rules.clear();
+    for (const auto& rule : cf.rules) {
+      if (!RuleIsX14Only(rule, sheet.sheet_name)) {
+        AppendCfRule(rules, rule, dxf_count, indexer);
+      }
+    }
+    if (rules.empty() && !cf.rules.empty()) {
+      continue;
+    }
     out.append("<conditionalFormatting sqref=\"");
     AppendXmlAttrEscaped(out, EncodeSqref(cf.sqref));
     out.push_back('"');
@@ -518,9 +695,7 @@ std::string write_conditional_formattings(const std::vector<cf::ConditionalForma
       out.append(" pivot=\"1\"");
     }
     out.push_back('>');
-    for (const auto& rule : cf.rules) {
-      AppendCfRule(out, rule, dxf_count, indexer);
-    }
+    out.append(rules);
     // `CT_ConditionalFormatting`'s schema-trailing `extLst?`, round-tripped
     // byte-for-byte (see `ConditionalFormat::ext_lst_raw`).
     if (cf.ext_lst_raw.has_value()) {
@@ -551,7 +726,7 @@ bool data_bar_needs_x14(const cf::DataBarSpec& bar) {
 
 std::string build_x14_data_bar_element(const cf::DataBarSpec& bar) {
   std::string out;
-  AppendX14DataBar(out, bar, /*indexer=*/nullptr);
+  AppendX14DataBar(out, bar, /*indexer=*/nullptr, /*standalone=*/false);
   return out;
 }
 
@@ -562,12 +737,29 @@ std::string build_x14_icon_set_element(const cf::IconSetSpec& icon_set, const pa
 }
 
 std::string build_x14_cf_overlay_entries(const std::vector<cf::ConditionalFormat>& formats,
-                                         const parser::ExternalBookIndexer* indexer) {
+                                         const parser::ExternalBookIndexer* indexer, const CfSheetContext& sheet,
+                                         const std::unordered_set<std::string>& reserved_ids) {
+  std::unordered_set<std::string> used_ids = reserved_ids;
+  for (const auto& block : formats) {
+    for (const auto& rule : block.rules) {
+      if (!rule.id.empty()) {
+        used_ids.insert(rule.id);
+      }
+    }
+  }
   std::string out;
-  for (const auto& cf : formats) {
-    for (const auto& rule : cf.rules) {
-      if (RuleNeedsX14Payload(rule)) {
-        AppendX14CfRuleEntry(out, rule, cf.sqref, indexer);
+  for (const auto& block : formats) {
+    for (const auto& rule : block.rules) {
+      if (RuleIsX14Only(rule, sheet.sheet_name)) {
+        std::string id = rule.id;
+        if (id.empty()) {
+          const std::uint32_t ordinal = rule.priority > 0 ? static_cast<std::uint32_t>(rule.priority) : 0U;
+          id = cf::x14_rule_id(sheet.sheet_index, ordinal, used_ids);
+          used_ids.insert(id);
+        }
+        AppendX14OnlyRuleEntry(out, rule, id, block, sheet, indexer);
+      } else if (RuleNeedsX14Payload(rule)) {
+        AppendX14CfRuleEntry(out, rule, block.sqref, indexer);
       }
     }
   }

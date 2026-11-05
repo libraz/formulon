@@ -26,9 +26,11 @@
 #define FORMULON_IO_CF_OVERLAY_H_
 
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "cf/cf_types.h"
+#include "io/cf_writer.h"
 
 namespace formulon::parser {
 struct ExternalBookIndexer;
@@ -65,9 +67,11 @@ std::string reconcile_x14_cf_overlay(const std::string& ext_lst_xml, const std::
 /// model-owned attributes and colours are rewritten from the model, and
 /// the thresholds and any unmodelled child are kept. A rule
 /// that needs a payload and has none gets one built by
-/// `build_x14_cf_overlay_entries`, placed in the first
+/// `build_x14_cf_overlay_entries`, placed at the front of the first
 /// `<x14:conditionalFormattings>` the overlay already has (or a new
-/// `<ext>` / `<extLst>` around it).
+/// `<ext>`, ahead of the other extensions, or `<extLst>` around it). So does
+/// every rule `sheet` places in the extension alone; an id minted for one
+/// avoids the ids the overlay already holds.
 ///
 /// Returns `ext_lst_xml` byte-for-byte when nothing changes, so a save
 /// that needs no new extension content cannot perturb the captured
@@ -75,7 +79,15 @@ std::string reconcile_x14_cf_overlay(const std::string& ext_lst_xml, const std::
 /// returned unchanged. `indexer` numbers the external books a built entry's
 /// formulas name (see `storage_feature_formula`).
 std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vector<cf::ConditionalFormat>& formats,
-                                 const parser::ExternalBookIndexer* indexer = nullptr);
+                                 const parser::ExternalBookIndexer* indexer = nullptr,
+                                 const CfSheetContext& sheet = {});
+
+/// Removes from `ext_lst_xml` every `<x14:cfRule>` whose id is in `ids` -- the
+/// rules the reader moved into the model, which the writer rebuilds from it
+/// -- and the containers that leaves empty. Returns the input unchanged when
+/// nothing matches or it does not parse, and an empty string when nothing
+/// survives.
+std::string strip_x14_cf_rules(const std::string& ext_lst_xml, const std::unordered_set<std::string>& ids);
 
 }  // namespace formulon::io
 

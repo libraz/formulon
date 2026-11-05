@@ -1156,7 +1156,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     std::vector<cf::ConditionalFormat>& formats = wb.sheet(sheet_index).mutable_conditional_formats();
     for (std::vector<std::uint8_t>* slot :
          {&state.tail.before_merges, &state.tail.after_merges_before_hyperlinks, &state.tail.after_hyperlinks}) {
-      take_x14_icon_sets(*slot, feature_ctx, formats);
+      take_x14_rules(*slot, feature_ctx, formats);
       apply_x14_data_bar_overlays(ByteSpan{slot->data(), slot->size()}, formats);
     }
     // Sparkline groups the records describe move into the sheet's extension XML.

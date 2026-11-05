@@ -16,12 +16,21 @@
 #ifndef FORMULON_IO_XLSB_TAIL_REFS_H_
 #define FORMULON_IO_XLSB_TAIL_REFS_H_
 
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+
 #include "io/ext_lst_refs.h"
 #include "io/worksheet_child_refs.h"
 #include "parser/ast_shift.h"
 #include "sheet_passthrough.h"
 
 namespace formulon::io::xlsb {
+
+/// The cbFmla Excel stores beside a BrtBeginCFRule14 formula: `cce` plus 2
+/// per PtgRefN / PtgAreaN (3-D and absolute tokens add nothing). Nothing
+/// when `rgce` holds a token this walk cannot step over.
+std::optional<std::uint32_t> frt_formula_size_field(const std::uint8_t* rgce, std::size_t cce);
 
 /// Maps the range of every retained x14 CF block and sparkline through
 /// `remap`. An emptied range drops the block or sparkline, then a

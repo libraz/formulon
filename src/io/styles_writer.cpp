@@ -622,6 +622,29 @@ void AppendBorderFragment(std::string& out, const BorderRecord& b) {
   out.append("</border>");
 }
 
+void AppendDxfBody(std::string& out, const DifferentialFormat& dxf) {
+  if (dxf.has_font) {
+    AppendFontFragment(out, dxf.font);
+  }
+  if (dxf.has_num_fmt) {
+    out.append("<numFmt");
+    append_xml_attr_uint(out, "numFmtId", dxf.num_fmt_id);
+    append_xml_attr(out, "formatCode", dxf.num_fmt_code);
+    out.append("/>");
+  }
+  if (dxf.has_fill) {
+    AppendFillFragment(out, dxf.fill);
+  }
+  // CT_Dxf child order: font, numFmt, fill, alignment, border, protection.
+  // The captured `<alignment>` / `<protection>` are re-emitted verbatim
+  // at their schema positions.
+  out.append(dxf.alignment_xml);
+  if (dxf.has_border) {
+    AppendBorderFragment(out, dxf.border);
+  }
+  out.append(dxf.protection_xml);
+}
+
 void AppendDxfs(std::string& out, const StylesTable& table) {
   if (table.dxfs.empty()) {
     return;
@@ -631,32 +654,19 @@ void AppendDxfs(std::string& out, const StylesTable& table) {
   out.append(">\n");
   for (const DifferentialFormat& dxf : table.dxfs) {
     out.append("    <dxf>");
-    if (dxf.has_font) {
-      AppendFontFragment(out, dxf.font);
-    }
-    if (dxf.has_num_fmt) {
-      out.append("<numFmt");
-      append_xml_attr_uint(out, "numFmtId", dxf.num_fmt_id);
-      append_xml_attr(out, "formatCode", dxf.num_fmt_code);
-      out.append("/>");
-    }
-    if (dxf.has_fill) {
-      AppendFillFragment(out, dxf.fill);
-    }
-    // CT_Dxf child order: font, numFmt, fill, alignment, border, protection.
-    // The captured `<alignment>` / `<protection>` are re-emitted verbatim
-    // at their schema positions.
-    out.append(dxf.alignment_xml);
-    if (dxf.has_border) {
-      AppendBorderFragment(out, dxf.border);
-    }
-    out.append(dxf.protection_xml);
+    AppendDxfBody(out, dxf);
     out.append("</dxf>\n");
   }
   out.append("  </dxfs>\n");
 }
 
 }  // namespace
+
+std::string dxf_body_fragment(const DifferentialFormat& dxf) {
+  std::string out;
+  AppendDxfBody(out, dxf);
+  return out;
+}
 
 std::string font_fragment(const FontRecord& font) {
   std::string out;

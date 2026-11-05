@@ -31,6 +31,7 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   ooxml_view_style_fidelity_test.cpp
   ooxml_workbook_pr_roundtrip_test.cpp
   ooxml_writer_pivot_test.cpp
+  ooxml_x14_cross_sheet_test.cpp
   pivot_aggregation_fixture_test.cpp
   pivot_blank_item_fixture_test.cpp
   pivot_calc_fixture_test.cpp

@@ -250,7 +250,7 @@ Expected<void, Error> EmitFormattingAndValidation(std::vector<std::uint8_t>& bod
   const auto raw_dvals = static_cast<std::ptrdiff_t>(find_record_offset(retained, kBrtBeginDVals));
   body.insert(body.end(), retained.begin(), retained.begin() + raw_dvals);
   for (const cf::ConditionalFormat& format : sheet.conditional_formats()) {
-    if (auto s = emit_cf_block(body, format, ctx, x14_linked); !s) {
+    if (auto s = emit_cf_block(body, format, ctx, x14_linked, sheet.name()); !s) {
       return s;
     }
   }
@@ -556,10 +556,25 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   if (auto added = add_x14_data_bars(tail.after_hyperlinks, sheet.conditional_formats(), x14_linked); !added) {
     return std::move(added.error());
   }
-  // Custom icon sets and sparkline groups are model-owned future records.
+  // Standalone x14 CF rules (custom icon sets, rules naming another sheet)
+  // and sparkline groups are model-owned future records; retained rules are
+  // rewritten in place, missing ones are added.
   const FeatureFormulaWriteContext frt_ctx{sheet_names, sheet_ranges, name_table};
-  if (auto icons = add_x14_icon_sets(tail.after_hyperlinks, sheet.conditional_formats(), frt_ctx); !icons) {
-    return std::move(icons.error());
+  std::unordered_set<std::string> rules14_linked;
+  for (std::vector<std::uint8_t>* slot :
+       {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
+    if (auto s = reconcile_x14_rules(*slot, sheet.conditional_formats(), frt_ctx, sheet.name(), tail.extern_sheets,
+                                     rules14_linked);
+        !s) {
+      return std::move(s.error());
+    }
+  }
+  const auto own_index =
+      static_cast<std::size_t>(std::find(sheet_names.begin(), sheet_names.end(), sheet.name()) - sheet_names.begin());
+  if (auto rules14 = add_x14_rules(tail.after_hyperlinks, sheet.conditional_formats(), frt_ctx, sheet.name(), own_index,
+                                   rules14_linked);
+      !rules14) {
+    return std::move(rules14.error());
   }
   if (auto sparklines = add_sparkline_groups(tail.after_hyperlinks, sheet.ext_lst_xml(), frt_ctx, sheet.name(),
                                              deferred_sparkline_groups);

@@ -612,38 +612,42 @@ void ReadDxfs(const pugi::xml_node& root, StylesTable& table) {
     return;
   }
   for (pugi::xml_node dxf = dxfs.child("dxf"); dxf; dxf = dxf.next_sibling("dxf")) {
-    DifferentialFormat rec;
-    if (pugi::xml_node font = dxf.child("font")) {
-      rec.has_font = true;
-      rec.font = ParseFontNode(font);
-    }
-    if (pugi::xml_node fill = dxf.child("fill")) {
-      rec.has_fill = true;
-      rec.fill = ParseFillNode(fill);
-    }
-    if (pugi::xml_node border = dxf.child("border")) {
-      rec.has_border = true;
-      rec.border = ParseBorderNode(border);
-    }
-    if (pugi::xml_node num_fmt = dxf.child("numFmt")) {
-      rec.has_num_fmt = true;
-      rec.num_fmt_id = static_cast<std::uint16_t>(num_fmt.attribute("numFmtId").as_uint(0U));
-      rec.num_fmt_code = num_fmt.attribute("formatCode").value();
-    }
-    // `<alignment>` / `<protection>` are not modelled structurally on a dxf;
-    // retain their serialized XML so they round-trip semantically. Parsing
-    // may normalize lexical formatting.
-    if (pugi::xml_node alignment = dxf.child("alignment")) {
-      rec.alignment_xml = raw_xml(alignment);
-    }
-    if (pugi::xml_node protection = dxf.child("protection")) {
-      rec.protection_xml = raw_xml(protection);
-    }
-    table.dxfs.push_back(std::move(rec));
+    table.dxfs.push_back(read_dxf(dxf));
   }
 }
 
 }  // namespace
+
+DifferentialFormat read_dxf(const pugi::xml_node& dxf) {
+  DifferentialFormat rec;
+  if (pugi::xml_node font = dxf.child("font")) {
+    rec.has_font = true;
+    rec.font = ParseFontNode(font);
+  }
+  if (pugi::xml_node fill = dxf.child("fill")) {
+    rec.has_fill = true;
+    rec.fill = ParseFillNode(fill);
+  }
+  if (pugi::xml_node border = dxf.child("border")) {
+    rec.has_border = true;
+    rec.border = ParseBorderNode(border);
+  }
+  if (pugi::xml_node num_fmt = dxf.child("numFmt")) {
+    rec.has_num_fmt = true;
+    rec.num_fmt_id = static_cast<std::uint16_t>(num_fmt.attribute("numFmtId").as_uint(0U));
+    rec.num_fmt_code = num_fmt.attribute("formatCode").value();
+  }
+  // `<alignment>` / `<protection>` are not modelled structurally on a dxf;
+  // retain their serialized XML so they round-trip semantically. Parsing
+  // may normalize lexical formatting.
+  if (pugi::xml_node alignment = dxf.child("alignment")) {
+    rec.alignment_xml = raw_xml(alignment);
+  }
+  if (pugi::xml_node protection = dxf.child("protection")) {
+    rec.protection_xml = raw_xml(protection);
+  }
+  return rec;
+}
 
 /// Rewrites every out-of-range index in `table` to the default record 0.
 ///

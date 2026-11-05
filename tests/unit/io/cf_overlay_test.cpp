@@ -17,6 +17,7 @@
 #include "../small_stack.h"
 #include "cf/cf_types.h"
 #include "gtest/gtest.h"
+#include "io/cf_writer.h"
 
 namespace formulon::io {
 namespace {
@@ -173,6 +174,83 @@ TEST(CfOverlay, RuleWithoutIdIsKept) {
   const std::string out = reconcile_x14_cf_overlay(overlay, {});
   EXPECT_FALSE(Contains(out, kIdA));
   EXPECT_TRUE(Contains(out, "<x14:cfRule type=\"iconSet\"/>"));
+}
+
+constexpr const char* kExcelId1 = "{00000000-000E-0000-0100-000001000000}";
+
+/// Excel's Sheet2 extension from structural_ref_m10b: one cross-sheet
+/// formula rule and a data-validation extension after it.
+std::string ExcelCrossSheetOverlay() {
+  return std::string(
+             "<extLst><ext uri=\"{78C0D931-6437-407d-A8EE-F0AAD7539E65}\" "
+             "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\"><x14:conditionalFormattings>"
+             "<x14:conditionalFormatting xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\">"
+             "<x14:cfRule type=\"expression\" priority=\"1\" id=\"") +
+         kExcelId1 +
+         "\"><xm:f>Sheet1!$A$1&gt;0</xm:f><x14:dxf/></x14:cfRule><xm:sqref>C1:C3</xm:sqref>"
+         "</x14:conditionalFormatting></x14:conditionalFormattings></ext>"
+         "<ext uri=\"{CCE6A557-97BC-4b89-ADB6-D9C93CAAB3DF}\" "
+         "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\">"
+         "<x14:dataValidations count=\"1\" xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\"/>"
+         "</ext></extLst>";
+}
+
+TEST(CfOverlay, StripRemovesAdoptedRulesAndTheirEmptyContainers) {
+  const std::string out = strip_x14_cf_rules(ExcelCrossSheetOverlay(), {kExcelId1});
+  EXPECT_FALSE(Contains(out, kExcelId1)) << out;
+  EXPECT_FALSE(Contains(out, "x14:conditionalFormattings")) << out;
+  EXPECT_FALSE(Contains(out, "{78C0D931-6437-407d-A8EE-F0AAD7539E65}")) << out;
+  EXPECT_TRUE(Contains(out, "x14:dataValidations")) << out;
+}
+
+TEST(CfOverlay, StripLeavesAnOverlayWithoutTheIdsByteIdentical) {
+  const std::string overlay = ExcelCrossSheetOverlay();
+  EXPECT_EQ(strip_x14_cf_rules(overlay, {kIdA}), overlay);
+  EXPECT_EQ(strip_x14_cf_rules(overlay, {}), overlay);
+}
+
+TEST(CfOverlay, StripOfEveryRuleEmptiesACfOnlyOverlay) {
+  EXPECT_TRUE(strip_x14_cf_rules(OverlayWithRules({kIdA, kIdB}), {kIdA, kIdB}).empty());
+}
+
+TEST(CfOverlay, CrossSheetRuleJoinsTheOverlayAheadOfOtherExtensions) {
+  // The captured CF extension was stripped on load; the rebuilt one goes
+  // first, where Excel writes it.
+  const std::string captured = strip_x14_cf_rules(ExcelCrossSheetOverlay(), {kExcelId1});
+  cf::ConditionalFormat block{};
+  block.sqref.push_back({{0, 2}, {2, 2}});
+  cf::CFRule rule;
+  rule.type = cf::RuleType::Expression;
+  rule.priority = 1;
+  rule.formula1 = "Sheet1!$A$1>0";
+  rule.id = kExcelId1;
+  rule.x14_placement = true;
+  block.rules.push_back(rule);
+  const std::string merged = merge_x14_cf_entries(captured, {block}, nullptr, CfSheetContext{"Sheet2", 1, nullptr});
+  const std::size_t cf_ext = merged.find("{78C0D931-6437-407d-A8EE-F0AAD7539E65}");
+  const std::size_t dv_ext = merged.find("{CCE6A557-97BC-4b89-ADB6-D9C93CAAB3DF}");
+  ASSERT_NE(cf_ext, std::string::npos) << merged;
+  ASSERT_NE(dv_ext, std::string::npos) << merged;
+  EXPECT_LT(cf_ext, dv_ext) << merged;
+  EXPECT_TRUE(Contains(merged, "<x14:cfRule type=\"expression\" priority=\"1\" id=\"" + std::string(kExcelId1) +
+                                   "\"><xm:f>Sheet1!$A$1&gt;0</xm:f><x14:dxf/></x14:cfRule>"))
+      << merged;
+}
+
+TEST(CfOverlay, MintedIdAvoidsAnIdTheOverlayAlreadyHolds) {
+  // A rule left in the extension holds Excel's id for priority 1; a new
+  // cross-sheet rule at priority 1 must not take it.
+  const std::string captured = ExcelCrossSheetOverlay();
+  cf::ConditionalFormat block{};
+  block.sqref.push_back({{0, 3}, {2, 3}});
+  cf::CFRule rule;
+  rule.type = cf::RuleType::Expression;
+  rule.priority = 1;
+  rule.formula1 = "Sheet3!$A$1>0";
+  block.rules.push_back(rule);
+  const std::string merged = merge_x14_cf_entries(captured, {block}, nullptr, CfSheetContext{"Sheet2", 1, nullptr});
+  EXPECT_TRUE(Contains(merged, "id=\"{00000000-000E-0000-0100-000002000000}\"><xm:f>Sheet3!$A$1&gt;0</xm:f>"))
+      << merged;
 }
 
 }  // namespace

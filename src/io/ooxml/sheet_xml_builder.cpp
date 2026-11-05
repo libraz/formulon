@@ -592,9 +592,9 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               const std::vector<std::string>& table_rids,
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
                               std::string_view drawing_rid, std::string_view legacy_drawing_rid,
-                              const SharedStrings* shared_strings, std::size_t dxf_count,
-                              std::uint32_t dynamic_array_cm_index, const xlsb::NameShapes& name_shapes,
-                              const parser::ExternalBookIndexer* indexer) {
+                              const SharedStrings* shared_strings, const std::vector<DifferentialFormat>& dxfs,
+                              std::size_t sheet_index, std::uint32_t dynamic_array_cm_index,
+                              const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer) {
   const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
   const std::string sheet_format_xml =
       BuildSheetFormatPrXml(WithDerivedOutlineLevels(sheet.format_defaults(), sheet.layout()));
@@ -658,11 +658,14 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // Conditional-format blocks live between <sheetData> and <tableParts>
   // in ECMA-376 document order. Empty list => empty string, no
   // wrapper.
-  const std::string cf_xml = write_conditional_formattings(sheet.conditional_formats(), dxf_count, indexer);
+  // Rules naming another sheet go to the x14 extension instead.
+  const CfSheetContext cf_sheet{sheet.name(), sheet_index, &dxfs};
+  const std::string cf_xml = write_conditional_formattings(sheet.conditional_formats(), dxfs.size(), indexer, cf_sheet);
   // Data-bar settings with no legacy attribute live in the worksheet
   // `<extLst>`, which is emitted much further down; build them here so
   // the CF model is read once.
-  const std::string ext_lst_xml = merge_x14_cf_entries(sheet.ext_lst_xml(), sheet.conditional_formats(), indexer);
+  const std::string ext_lst_xml =
+      merge_x14_cf_entries(sheet.ext_lst_xml(), sheet.conditional_formats(), indexer, cf_sheet);
   const std::string merges_xml = BuildMergeCellsBlock(sheet);
   const std::string dv_xml = BuildDataValidationsBlock(sheet, indexer);
   const std::string hl_xml = BuildHyperlinksBlock(sheet, hyperlink_rids);

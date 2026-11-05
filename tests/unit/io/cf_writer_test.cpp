@@ -8,14 +8,19 @@
 #include "io/cf_writer.h"
 
 #include <cstddef>
+#include <cstdint>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "cf/cf_types.h"
 #include "gtest/gtest.h"
 #include "io/cf_overlay.h"
 #include "io/cf_reader.h"
+#include "io/styles_writer.h"
 #include "pugixml.hpp"
+#include "styles.h"
 
 namespace formulon::io {
 namespace {
@@ -791,6 +796,175 @@ TEST(CFWriter, RangeWithNoA1SpellingIsDroppedFromTheSqref) {
   ASSERT_EQ(out.size(), 1u);
   ASSERT_EQ(out[0].sqref.size(), 1u);
   EXPECT_EQ(out[0].sqref[0], cf::CFCellRange({{0, 0}, {9, 0}}));
+}
+
+// ---------------------------------------------------------------------------
+// Rules naming another sheet live in the x14 extension alone. Expected XML is
+// what Excel wrote for the same rules (structural_ref_m6 / m6b / m10b).
+// ---------------------------------------------------------------------------
+
+constexpr const char* kXmNs = "http://schemas.microsoft.com/office/excel/2006/main";
+
+cf::CFRule ExpressionRule(std::int32_t priority, std::string formula) {
+  cf::CFRule r;
+  r.type = cf::RuleType::Expression;
+  r.priority = priority;
+  r.formula1 = std::move(formula);
+  return r;
+}
+
+/// M6's C1:C3 block on Sheet2: one rule naming Sheet1, one local rule.
+cf::ConditionalFormat MixedBlock() {
+  cf::ConditionalFormat cf{};
+  cf.sqref.push_back({{0, 2}, {2, 2}});
+  cf.rules.push_back(ExpressionRule(1, "Sheet1!$A$1>0"));
+  cf.rules.push_back(ExpressionRule(2, "$A$1>0"));
+  return cf;
+}
+
+const CfSheetContext kSheet2{"Sheet2", 1, nullptr};
+
+TEST(CFWriter, CrossSheetRuleLeavesTheMainElement) {
+  const std::string legacy = write_conditional_formattings({MixedBlock()}, kDxfCount, nullptr, kSheet2);
+  EXPECT_NE(legacy.find("<conditionalFormatting sqref=\"C1:C3\"><cfRule type=\"expression\" priority=\"2\">"
+                        "<formula>$A$1&gt;0</formula></cfRule></conditionalFormatting>"),
+            std::string::npos)
+      << legacy;
+  EXPECT_EQ(legacy.find("Sheet1!"), std::string::npos) << legacy;
+  // Without a sheet name nothing is placed by reference.
+  EXPECT_NE(write_conditional_formattings({MixedBlock()}, kDxfCount).find("Sheet1!"), std::string::npos);
+}
+
+TEST(CFWriter, CrossSheetRuleIsWrittenInExcelsX14Shape) {
+  const std::string entries = build_x14_cf_overlay_entries({MixedBlock()}, nullptr, kSheet2);
+  EXPECT_EQ(entries, std::string("<x14:conditionalFormatting xmlns:xm=\"") + kXmNs +
+                         "\"><x14:cfRule type=\"expression\" priority=\"1\" "
+                         "id=\"{00000000-000E-0000-0100-000001000000}\"><xm:f>Sheet1!$A$1&gt;0</xm:f><x14:dxf/>"
+                         "</x14:cfRule><xm:sqref>C1:C3</xm:sqref></x14:conditionalFormatting>");
+}
+
+TEST(CFWriter, CrossSheetCellIsRuleKeepsExcelsAttributeOrder) {
+  cf::ConditionalFormat cf{};
+  cf.sqref.push_back({{0, 4}, {2, 4}});
+  cf::CFRule r = ExpressionRule(4, "Sheet1!$A$1");
+  r.type = cf::RuleType::CellIs;
+  r.op = cf::CellIsOperator::GreaterThan;
+  cf.rules.push_back(r);
+  const std::string entries = build_x14_cf_overlay_entries({cf}, nullptr, kSheet2);
+  EXPECT_NE(entries.find("<x14:cfRule type=\"cellIs\" priority=\"4\" operator=\"greaterThan\" "
+                         "id=\"{00000000-000E-0000-0100-000004000000}\"><xm:f>Sheet1!$A$1</xm:f><x14:dxf/>"
+                         "</x14:cfRule><xm:sqref>E1:E3</xm:sqref>"),
+            std::string::npos)
+      << entries;
+}
+
+TEST(CFWriter, CrossSheetRuleInlinesItsDxf) {
+  DifferentialFormat dxf;
+  dxf.has_font = true;
+  dxf.font.has_bold = true;
+  dxf.font.bold = true;
+  const std::vector<DifferentialFormat> dxfs = {DifferentialFormat{}, dxf};
+  cf::ConditionalFormat cf = MixedBlock();
+  cf.rules[0].stop_if_true = true;
+  cf.rules[0].dxf_id = 1U;
+  const std::string entries = build_x14_cf_overlay_entries({cf}, nullptr, CfSheetContext{"Sheet2", 1, &dxfs});
+  EXPECT_NE(entries.find("<x14:cfRule type=\"expression\" priority=\"1\" stopIfTrue=\"1\" "
+                         "id=\"{00000000-000E-0000-0100-000001000000}\"><xm:f>Sheet1!$A$1&gt;0</xm:f><x14:dxf>" +
+                         dxf_body_fragment(dxf) + "</x14:dxf></x14:cfRule>"),
+            std::string::npos)
+      << entries;
+  EXPECT_NE(entries.find("<x14:dxf><font><b/>"), std::string::npos) << entries;
+}
+
+TEST(CFWriter, CrossSheetCfvoPutsAColourScaleInX14) {
+  cf::ConditionalFormat cf{};
+  cf.sqref.push_back({{0, 4}, {9, 4}});
+  cf::CFRule r;
+  r.type = cf::RuleType::ColorScale;
+  r.priority = 3;
+  cf::ColorScaleSpec scale;
+  scale.thresholds = {{cf::CfvoType::Formula, "Sheet3!$A$1", true}, {cf::CfvoType::Max, "", true}};
+  scale.colors = {cf::Color{0xFF, 0x00, 0x00, 0xFF}, cf::Color{0x00, 0xFF, 0x00, 0xFF}};
+  r.color_scale = scale;
+  cf.rules.push_back(r);
+  EXPECT_TRUE(write_conditional_formattings({cf}, kDxfCount, nullptr, kSheet2).empty());
+  const std::string entries = build_x14_cf_overlay_entries({cf}, nullptr, kSheet2);
+  EXPECT_EQ(entries, std::string("<x14:conditionalFormatting xmlns:xm=\"") + kXmNs +
+                         "\"><x14:cfRule type=\"colorScale\" priority=\"3\" "
+                         "id=\"{00000000-000E-0000-0100-000003000000}\"><x14:colorScale><x14:cfvo type=\"formula\">"
+                         "<xm:f>Sheet3!$A$1</xm:f></x14:cfvo><x14:cfvo type=\"max\"/><x14:color rgb=\"FFFF0000\"/>"
+                         "<x14:color rgb=\"FF00FF00\"/></x14:colorScale></x14:cfRule><xm:sqref>E1:E10</xm:sqref>"
+                         "</x14:conditionalFormatting>");
+}
+
+TEST(CFWriter, X14RuleKeepsItsOwnSheetReferencesBare) {
+  // As Excel writes them (x14_formula_edit_0_base.xlsx: `Sheet2!$A$1&lt;A1`).
+  cf::ConditionalFormat cf{};
+  cf.sqref.push_back({{0, 0}, {0, 0}});
+  cf.rules.push_back(ExpressionRule(1, "Sheet1!$A$1>SUM($B$1:$B$3)+C1"));
+  const std::string entries = build_x14_cf_overlay_entries({cf}, nullptr, CfSheetContext{"My Sheet", 0, nullptr});
+  EXPECT_NE(entries.find("<xm:f>Sheet1!$A$1&gt;SUM($B$1:$B$3)+C1</xm:f>"), std::string::npos) << entries;
+}
+
+TEST(CFWriter, X14PlacementKeepsARuleInTheExtension) {
+  // A rule read from the extension stays there after its target sheet is
+  // deleted, though `#REF!>0` names no sheet.
+  cf::ConditionalFormat cf = MixedBlock();
+  cf.rules[0].formula1 = "#REF!>0";
+  cf.rules[0].id = "{00000000-000E-0000-0100-000001000000}";
+  cf.rules[0].x14_placement = true;
+  EXPECT_EQ(write_conditional_formattings({cf}, kDxfCount, nullptr, kSheet2).find("#REF!"), std::string::npos);
+  EXPECT_NE(build_x14_cf_overlay_entries({cf}, nullptr, kSheet2)
+                .find("id=\"{00000000-000E-0000-0100-000001000000}\"><xm:f>#REF!&gt;0</xm:f>"),
+            std::string::npos);
+  // The same text without the mark is a local rule.
+  cf.rules[0].x14_placement = false;
+  EXPECT_NE(write_conditional_formattings({cf}, kDxfCount, nullptr, kSheet2).find("#REF!"), std::string::npos);
+}
+
+TEST(CFWriter, MintedIdAvoidsIdsInUse) {
+  const std::string entries =
+      build_x14_cf_overlay_entries({MixedBlock()}, nullptr, kSheet2, {"{00000000-000E-0000-0100-000001000000}"});
+  EXPECT_NE(entries.find("id=\"{00000000-000E-0000-0100-000002000000}\""), std::string::npos) << entries;
+}
+
+TEST(CFWriter, PivotScopedCrossSheetRuleCarriesPivot) {
+  cf::ConditionalFormat cf = MixedBlock();
+  cf.pivot_scope = true;
+  EXPECT_NE(build_x14_cf_overlay_entries({cf}, nullptr, kSheet2)
+                .find(std::string("<x14:conditionalFormatting xmlns:xm=\"") + kXmNs + "\" pivot=\"1\">"),
+            std::string::npos);
+}
+
+TEST(CFWriter, X14OnlyRulesReadBackIntoTheModel) {
+  DifferentialFormat dxf;
+  dxf.has_font = true;
+  dxf.font.has_bold = true;
+  dxf.font.bold = true;
+  std::vector<DifferentialFormat> dxfs = {dxf};
+  cf::ConditionalFormat cf = MixedBlock();
+  cf.rules[0].dxf_id = 0U;
+  const CfSheetContext sheet{"Sheet2", 1, &dxfs};
+  std::string xml = "<worksheet>";
+  xml.append(write_conditional_formattings({cf}, dxfs.size(), nullptr, sheet));
+  xml.append(merge_x14_cf_entries(std::string(), {cf}, nullptr, sheet));
+  xml.append("</worksheet>");
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string(xml.c_str())) << xml;
+  auto out_or = read_conditional_formats(doc.child("worksheet"), nullptr, &dxfs);
+  ASSERT_TRUE(static_cast<bool>(out_or));
+  const auto& out = out_or.value();
+  ASSERT_EQ(out.size(), 2u);
+  ASSERT_EQ(out[1].rules.size(), 1u);
+  const cf::CFRule& adopted = out[1].rules[0];
+  EXPECT_TRUE(adopted.x14_placement);
+  EXPECT_EQ(adopted.priority, 1);
+  EXPECT_EQ(adopted.id, "{00000000-000E-0000-0100-000001000000}");
+  EXPECT_EQ(adopted.formula1.value_or(""), "Sheet1!$A$1>0");
+  EXPECT_EQ(adopted.dxf_id, std::optional<std::uint32_t>(0U));
+  EXPECT_EQ(dxfs.size(), 1u);
+  EXPECT_EQ(out[1].sqref, cf.sqref);
+  EXPECT_FALSE(out[0].rules[0].x14_placement);
 }
 
 }  // namespace

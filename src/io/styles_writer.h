@@ -68,6 +68,10 @@ std::string font_fragment(const FontRecord& font);
 std::string fill_fragment(const FillRecord& fill);
 std::string border_fragment(const BorderRecord& border);
 
+/// The children `write_styles` emits inside `dxf`'s `<dxf>` element, without
+/// the element itself; empty for a record that sets nothing.
+std::string dxf_body_fragment(const DifferentialFormat& dxf);
+
 }  // namespace io
 }  // namespace formulon
 

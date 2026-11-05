@@ -5,21 +5,30 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
+#include "cf/cf_x14_id.h"
 #include "io/cf_writer.h"
 #include "io/xlsb/cf_records.h"
 #include "io/xlsb/cf_x14_link.h"
+#include "io/xlsb/dxf_props.h"
 #include "io/xlsb/feature_formula.h"
 #include "io/xlsb/frt_formula.h"
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
+#include "io/xlsb/tail_refs.h"
 #include "io/xml_utils.h"
+#include "parser/ast.h"
+#include "parser/parser.h"
+#include "utils/arena.h"
 #include "utils/status_macros.h"
 
 namespace formulon {
@@ -64,6 +73,16 @@ constexpr std::size_t kRule14FGuidOffset = 66;
 constexpr std::uint16_t kIconCustom = 0x01;
 constexpr std::uint16_t kIconOnly = 0x02;
 constexpr std::uint16_t kIconReverse = 0x04;
+// A standalone formula rule (one naming another sheet): BrtBeginCFRule14 is
+// an FRTHeader (0, or 0x04 with a formula list: u32 count, one FRTFormula
+// per non-zero cbFmla), then iType, iTemplate, dxfId, iPri, iParam, two
+// zero u32, the BrtBeginCFRule flag word, cbFmla1..3 (cce), strParam (an
+// empty string unless a text rule), the rule GUID and fGuid = 1. dxfId
+// indexes the styles part's BrtDXF list (-1 for none); BrtEndCFRule14 may
+// be preceded by a copy of that dxf: BrtBeginDXFs (FRTBlank, count 1), one
+// BrtDXF prefixed by an FRTBlank, BrtEndDXFs.
+constexpr std::size_t kRule14TailBytes = kGuidBytes + 4U;
+constexpr std::uint32_t kNoDxf = 0xFFFFFFFFU;
 
 Error Refuse(const std::string& what) {
   return make_error(FormulonErrorCode::kInvalidArgument, what, "context=write_xlsb");
@@ -256,8 +275,9 @@ struct RuleOutcome {
 };
 
 /// Rebuilds the x14 CF containers of `records`, passing every rule
-/// (`recs[first..last]`, BrtBeginCFRule14 to BrtEndCFRule14) and its block's
-/// ranges (empty when its head is not the supported shape) to `visit`. A
+/// (`recs[first..last]`, BrtBeginCFRule14 to BrtEndCFRule14), its block's
+/// ranges (empty when its head is not the supported shape) and the index of
+/// its block's head record to `visit`. A
 /// block's ccf follows the rules it keeps; a block or
 /// container left empty goes. Records outside a container pass through.
 template <typename Visit>
@@ -295,7 +315,7 @@ void RewriteX14Rules(std::vector<std::uint8_t>& records, Visit&& visit) {
           continue;
         }
         ++rules;
-        RuleOutcome outcome = visit(recs, l, rule_end, head_ok ? ranges : std::vector<MergeRange>{});
+        RuleOutcome outcome = visit(recs, l, rule_end, head_ok ? ranges : std::vector<MergeRange>{}, k);
         if (outcome.kind == RuleOutcome::Kind::kKeep) {
           for (std::size_t m = l; m <= rule_end; ++m) {
             append_record(block, records, recs[m]);
@@ -335,14 +355,16 @@ void RewriteX14Rules(std::vector<std::uint8_t>& records, Visit&& visit) {
 }
 
 /// Splices `groups` (whole BrtBeginConditionalFormatting14 blocks) into the
-/// retained x14 container of `records`, or appends a new container.
-void InsertX14Blocks(std::vector<std::uint8_t>& records, const std::vector<std::uint8_t>& groups) {
+/// retained x14 container of `records`, at its start when `front`, else at
+/// its end, or appends a new container.
+void InsertX14Blocks(std::vector<std::uint8_t>& records, const std::vector<std::uint8_t>& groups, bool front = false) {
   const std::vector<FramedRecord> recs = split_records(records);
   for (std::size_t i = 0; i + 1U < recs.size(); ++i) {
     if (recs[i].type == kFrtBegin && recs[i + 1U].type == kBeginCfs14) {
       const std::size_t close = FindType(recs, i, recs.size(), kEndCfs14);
       if (close != recs.size()) {
-        records.insert(records.begin() + static_cast<std::ptrdiff_t>(recs[close].begin), groups.begin(), groups.end());
+        const std::size_t at = front ? recs[i + 2U].begin : recs[close].begin;
+        records.insert(records.begin() + static_cast<std::ptrdiff_t>(at), groups.begin(), groups.end());
         return;
       }
     }
@@ -407,7 +429,7 @@ void reconcile_x14_data_bars(std::vector<std::uint8_t>& records, const std::vect
     }
   }
   RewriteX14Rules(records, [&](const std::vector<FramedRecord>& recs, std::size_t first, std::size_t last,
-                               const std::vector<MergeRange>&) {
+                               const std::vector<MergeRange>&, std::size_t) {
     RuleOutcome outcome;
     if (!IsMeasuredDataBarRule14(recs[first])) {
       return outcome;
@@ -754,20 +776,273 @@ bool SameSqref(const std::vector<cf::CFCellRange>& a, const std::vector<MergeRan
   return true;
 }
 
+bool IsVisualRule(cf::RuleType type) {
+  return type == cf::RuleType::ColorScale || type == cf::RuleType::DataBar || type == cf::RuleType::IconSet;
+}
+
+/// True when `formula` parses and names a sheet other than `own_sheet`.
+bool FormulaNamesOtherSheet(const std::optional<std::string>& formula, std::string_view own_sheet) {
+  if (!formula.has_value() || formula->empty()) {
+    return false;
+  }
+  Arena arena;
+  parser::Parser parser(*formula, arena);
+  const parser::AstNode* root = parser.parse();
+  return root != nullptr && parser.errors().empty() && parser::references_other_sheet(*root, own_sheet);
+}
+
+/// The dxf copy between the rule head and BrtEndCFRule14
+/// (`recs[from..until)`): nothing, or BrtBeginDXFs, one BrtDXF, BrtEndDXFs.
+/// False for any other run, or for a copy that states formatting the
+/// rule's dxfId does not name.
+bool IsDxfCopy(const std::vector<FramedRecord>& recs, std::size_t from, std::size_t until, bool has_dxf) {
+  if (from == until) {
+    return true;
+  }
+  if (until - from != 3U) {
+    return false;
+  }
+  const ByteSpan begin = recs[from].payload;
+  const ByteSpan dxf = recs[from + 1U].payload;
+  // BrtDXF after its FRTBlank: u16 flags, u16 reserved, u16 property count.
+  return recs[from].type == kBrtBeginDxfs && begin.size == 8U && load_u32(begin.data) == 0U &&
+         load_u32(begin.data + 4) == 1U && recs[from + 1U].type == kBrtDxf && dxf.size >= 10U &&
+         load_u32(dxf.data) == 0U && (has_dxf || (dxf.data[8] == 0U && dxf.data[9] == 0U)) &&
+         recs[from + 2U].type == kBrtEndDxfs && recs[from + 2U].payload.size == 0U;
+}
+
+/// The fields of a standalone formula rule's BrtBeginCFRule14, its
+/// FRTFormulas left encoded.
+struct Rule14Head {
+  std::vector<ByteSpan> formulas;
+  std::uint32_t dxf = kNoDxf;
+  std::int32_t priority = 0;
+  bool slot1 = false;
+  bool slot2 = false;
+  std::string id;
+};
+
+/// `p` read as a standalone non-visual rule with iPri > 0 and a GUID, or
+/// nothing for any other shape. `rule` receives its kind fields.
+std::optional<Rule14Head> ParseRule14Head(ByteSpan p, cf::CFRule& rule) {
+  Rule14Head head;
+  auto header = read_u32(p);
+  if (!header || (header.value() != 0U && header.value() != kFrtHeaderFormulas)) {
+    return std::nullopt;
+  }
+  if (header.value() == kFrtHeaderFormulas) {
+    auto count = read_u32(p);
+    if (!count || count.value() == 0U || count.value() > 2U) {
+      return std::nullopt;
+    }
+    for (std::uint32_t i = 0; i < count.value(); ++i) {
+      if (p.size < 12U) {
+        return std::nullopt;
+      }
+      const std::size_t size = 12U + std::size_t{load_u32(p.data + 4)} + std::size_t{load_u32(p.data + 8)};
+      if (size > p.size) {
+        return std::nullopt;
+      }
+      head.formulas.push_back(ByteSpan{p.data, size});
+      p.data += size;
+      p.size -= size;
+    }
+  }
+  auto itype = read_u32(p);
+  auto tmpl = read_u32(p);
+  auto dxf = read_u32(p);
+  auto pri = read_u32(p);
+  auto param = read_u32(p);
+  auto reserved1 = read_u32(p);
+  auto reserved2 = read_u32(p);
+  auto flags = read_u16(p);
+  auto cb1 = read_u32(p);
+  auto cb2 = read_u32(p);
+  auto cb3 = read_u32(p);
+  if (!itype || !tmpl || !dxf || !pri || !param || !reserved1 || !reserved2 || !flags || !cb1 || !cb2 || !cb3 ||
+      reserved1.value() != 0U || reserved2.value() != 0U || cb3.value() != 0U ||
+      static_cast<std::int32_t>(pri.value()) <= 0) {
+    return std::nullopt;
+  }
+  auto text = read_xlnullablewidestring(p);
+  if (!text || p.size != kRule14TailBytes || load_u32(p.data + kGuidBytes) != 1U) {
+    return std::nullopt;
+  }
+  if (!decode_cf_rule_fields(CfRuleFields{itype.value(), tmpl.value(), param.value(), flags.value()},
+                             std::move(text).value(), rule) ||
+      IsVisualRule(rule.type)) {
+    return std::nullopt;
+  }
+  head.slot1 = cb1.value() != 0U;
+  head.slot2 = cb2.value() != 0U;
+  const std::size_t slots = static_cast<std::size_t>(head.slot1) + static_cast<std::size_t>(head.slot2);
+  if (slots != head.formulas.size() || (slots != 0U && !cf_rule_has_formulas(rule.type))) {
+    return std::nullopt;
+  }
+  head.dxf = dxf.value();
+  head.priority = static_cast<std::int32_t>(pri.value());
+  head.id = FormatGuid(p.data);
+  return head;
+}
+
+/// The standalone formula rule `recs[first..last]`, or nothing when any
+/// record is outside the shape above or the rule is a visual one.
+std::optional<cf::CFRule> DecodeFormulaRule14(const std::vector<FramedRecord>& recs, std::size_t first,
+                                              std::size_t last, const MergeRange& base,
+                                              const FeatureFormulaReadContext& ctx) {
+  cf::CFRule rule;
+  std::optional<Rule14Head> head = ParseRule14Head(recs[first].payload, rule);
+  if (!head || !IsDxfCopy(recs, first + 1U, last, head->dxf != kNoDxf) || recs[last].payload.size != 0U) {
+    return std::nullopt;
+  }
+  std::vector<std::string> formulas;
+  for (ByteSpan span : head->formulas) {
+    auto f = read_frt_formula(span, base.first_row, base.first_col, ctx);
+    if (!f || f.value().empty()) {
+      return std::nullopt;
+    }
+    formulas.push_back(std::move(f).value());
+  }
+  std::size_t next = 0;
+  if (head->slot1) {
+    rule.formula1 = std::move(formulas[next++]);
+  }
+  if (head->slot2) {
+    rule.formula2 = std::move(formulas[next++]);
+  }
+  rule.priority = head->priority;
+  if (head->dxf != kNoDxf) {
+    rule.dxf_id = head->dxf;
+  }
+  rule.id = std::move(head->id);
+  rule.x14_placement = true;
+  return rule;
+}
+
+/// `rule` as a standalone BrtBeginCFRule14 .. BrtEndCFRule14 under `id`.
+/// `dxf_copy` (framed records, possibly none) goes before BrtEndCFRule14;
+/// dxfId alone names the formatting.
+Expected<void, Error> EmitFormulaRule14(std::vector<std::uint8_t>& dst, const cf::CFRule& rule, const std::string& id,
+                                        const MergeRange& base, const FeatureFormulaWriteContext& ctx,
+                                        const std::vector<std::uint8_t>& dxf_copy = {}) {
+  ASSIGN_OR_RETURN(CfRuleFields fields, encode_cf_rule_fields(rule));
+  std::array<std::uint8_t, kGuidBytes> guid{};
+  if (!ParseGuid(id, guid)) {
+    return Refuse("xlsb conditional format x14 rule id is not a GUID: " + id);
+  }
+  if (rule.priority <= 0) {
+    return Refuse("xlsb conditional format x14 rule needs a positive priority");
+  }
+  std::array<std::uint32_t, 2> cb{};
+  std::vector<std::uint8_t> list;
+  std::uint32_t count = 0;
+  if (cf_rule_has_formulas(rule.type)) {
+    const std::optional<std::string>* sources[2] = {&rule.formula1, &rule.formula2};
+    for (std::size_t i = 0; i < 2U; ++i) {
+      if (!sources[i]->has_value() || (*sources[i])->empty()) {
+        continue;
+      }
+      auto f = encode_feature_formula(**sources[i], base.first_row, base.first_col, PtgRootClass::kValue, ctx,
+                                      PtgEvaluation::kConditionalFormat);
+      if (!f) {
+        return std::move(f.error());
+      }
+      emit_frt_formula(list, f.value());
+      const std::vector<std::uint8_t>& bytes = f.value().bytes;
+      const std::optional<std::uint32_t> size =
+          bytes.size() >= 4U ? frt_formula_size_field(bytes.data() + 4, load_u32(bytes.data())) : std::nullopt;
+      cb[i] = size.value_or(f.value().cb_fmla);
+      ++count;
+    }
+  }
+  std::vector<std::uint8_t> p;
+  emit_u32(p, count != 0U ? kFrtHeaderFormulas : 0U);
+  if (count != 0U) {
+    emit_u32(p, count);
+    p.insert(p.end(), list.begin(), list.end());
+  }
+  emit_u32(p, fields.itype);
+  emit_u32(p, fields.tmpl);
+  emit_u32(p, rule.dxf_id.value_or(kNoDxf));
+  emit_u32(p, static_cast<std::uint32_t>(rule.priority));
+  emit_u32(p, fields.param);
+  emit_u32(p, 0U);
+  emit_u32(p, 0U);
+  emit_u16(p, fields.flags);
+  emit_u32(p, cb[0]);
+  emit_u32(p, cb[1]);
+  emit_u32(p, 0U);
+  const bool has_text =
+      rule.text.has_value() && (rule.type == cf::RuleType::ContainsText || rule.type == cf::RuleType::NotContainsText ||
+                                rule.type == cf::RuleType::BeginsWith || rule.type == cf::RuleType::EndsWith);
+  emit_xlnullablewidestring(p, has_text ? std::string_view(*rule.text) : std::string_view());
+  p.insert(p.end(), guid.begin(), guid.end());
+  emit_u32(p, 1U);
+  emit_record(dst, kBeginCfRule14, p);
+  dst.insert(dst.end(), dxf_copy.begin(), dxf_copy.end());
+  emit_record(dst, kEndCfRule14, ByteSpan{});
+  return Expected<void, Error>::Ok();
+}
+
 }  // namespace
 
 bool is_x14_icon_set_rule(const cf::CFRule& rule) {
   return rule.type == cf::RuleType::IconSet && rule.icon_set.has_value() && !rule.icon_set->custom_icons.empty();
 }
 
-void take_x14_icon_sets(std::vector<std::uint8_t>& records, const FeatureFormulaReadContext& ctx,
-                        std::vector<cf::ConditionalFormat>& formats) {
+bool is_x14_only_rule(const cf::CFRule& rule, std::string_view own_sheet) {
+  if (is_x14_icon_set_rule(rule)) {
+    return true;
+  }
+  if (IsVisualRule(rule.type)) {
+    return false;
+  }
+  if (rule.x14_placement) {
+    return true;
+  }
+  return !own_sheet.empty() &&
+         (FormulaNamesOtherSheet(rule.formula1, own_sheet) || FormulaNamesOtherSheet(rule.formula2, own_sheet));
+}
+
+void take_x14_rules(std::vector<std::uint8_t>& records, const FeatureFormulaReadContext& ctx,
+                    std::vector<cf::ConditionalFormat>& formats) {
+  std::unordered_set<std::string> model_ids;
+  for (const cf::ConditionalFormat& format : formats) {
+    for (const cf::CFRule& rule : format.rules) {
+      if (!rule.id.empty()) {
+        model_ids.insert(rule.id);
+      }
+    }
+  }
+  // The model block the current x14 block's formula rules join.
+  std::size_t open_block = std::numeric_limits<std::size_t>::max();
+  std::size_t open_format = 0;
   RewriteX14Rules(records, [&](const std::vector<FramedRecord>& recs, std::size_t first, std::size_t last,
-                               const std::vector<MergeRange>& ranges) {
+                               const std::vector<MergeRange>& ranges, std::size_t block) {
     RuleOutcome outcome;
-    std::optional<cf::CFRule> rule =
-        ranges.empty() ? std::nullopt : DecodeIconRule14(recs, first, last, sqref_base(ranges), ctx);
+    if (ranges.empty()) {
+      return outcome;
+    }
+    const MergeRange base = sqref_base(ranges);
+    std::optional<cf::CFRule> rule = DecodeIconRule14(recs, first, last, base, ctx);
     if (!rule) {
+      std::optional<cf::CFRule> formula_rule = DecodeFormulaRule14(recs, first, last, base, ctx);
+      if (!formula_rule || model_ids.count(formula_rule->id) != 0U) {
+        return outcome;
+      }
+      model_ids.insert(formula_rule->id);
+      if (block != open_block) {
+        cf::ConditionalFormat format;
+        for (const MergeRange& r : ranges) {
+          format.sqref.push_back(cf::CFCellRange{{r.first_row, r.first_col}, {r.last_row, r.last_col}});
+        }
+        formats.push_back(std::move(format));
+        open_block = block;
+        open_format = formats.size() - 1U;
+      }
+      formats[open_format].rules.push_back(std::move(*formula_rule));
+      // The records stay as the placeholder `reconcile_x14_rules` rewrites,
+      // so the sheet references they index keep their table.
       return outcome;
     }
     // Excel also writes the rule as a legacy icon set without the custom
@@ -820,33 +1095,152 @@ void take_x14_icon_sets(std::vector<std::uint8_t>& records, const FeatureFormula
   });
 }
 
-Expected<void, Error> add_x14_icon_sets(std::vector<std::uint8_t>& records,
-                                        const std::vector<cf::ConditionalFormat>& formats,
-                                        const FeatureFormulaWriteContext& ctx) {
+Expected<void, Error> reconcile_x14_rules(std::vector<std::uint8_t>& records,
+                                          const std::vector<cf::ConditionalFormat>& formats,
+                                          const FeatureFormulaWriteContext& ctx, std::string_view own_sheet,
+                                          const std::vector<XlsbExternSheetEntry>& extern_sheets,
+                                          std::unordered_set<std::string>& linked) {
+  std::unordered_map<std::string, std::pair<const cf::ConditionalFormat*, const cf::CFRule*>> model;
+  std::unordered_set<std::string> model_ids;
+  for (const cf::ConditionalFormat& format : formats) {
+    for (const cf::CFRule& rule : format.rules) {
+      model_ids.insert(rule.id);
+      if (!rule.id.empty() && !is_x14_icon_set_rule(rule) && is_x14_only_rule(rule, own_sheet)) {
+        model.emplace(rule.id, std::make_pair(&format, &rule));
+      }
+    }
+  }
+  // The load-time view of the records: `ixti` indexes the source table, so a
+  // rule the reader could adopt decodes here too.
+  std::vector<XlsbSheetRange> source_ranges;
+  for (const XlsbExternSheetEntry& entry : extern_sheets) {
+    const auto itab = [&ctx](const std::string& name) {
+      const auto at = std::find(ctx.sheet_names.begin(), ctx.sheet_names.end(), name);
+      return at == ctx.sheet_names.end() ? -1 : static_cast<std::int32_t>(at - ctx.sheet_names.begin());
+    };
+    XlsbSheetRange range;
+    if (entry.external_book != 0U || entry.unresolved) {
+      range.external_book = entry.external_book != 0U ? entry.external_book : 1U;
+    } else if (entry.first.empty() && entry.last.empty()) {
+      range.itab_first = range.itab_last = -2;
+    } else {
+      range.itab_first = itab(entry.first);
+      range.itab_last = itab(entry.last);
+    }
+    source_ranges.push_back(range);
+  }
+  std::vector<XlsbName> source_names;
+  for (const auto& [key, ilbl] : ctx.name_table) {
+    if (ilbl != 0U) {
+      source_names.resize(std::max<std::size_t>(source_names.size(), ilbl));
+      source_names[ilbl - 1U].name = key;
+    }
+  }
+  const XlsbExternalBooks no_books;
+  const auto own = std::find(ctx.sheet_names.begin(), ctx.sheet_names.end(), own_sheet);
+  const FeatureFormulaReadContext read_ctx{ctx.sheet_names, source_names, source_ranges, no_books,
+                                           static_cast<std::size_t>(own - ctx.sheet_names.begin())};
+  Expected<void, Error> status = Expected<void, Error>::Ok();
+  RewriteX14Rules(records, [&](const std::vector<FramedRecord>& recs, std::size_t first, std::size_t last,
+                               const std::vector<MergeRange>& ranges, std::size_t) {
+    RuleOutcome outcome;
+    cf::CFRule kind;
+    const std::optional<Rule14Head> head = ParseRule14Head(recs[first].payload, kind);
+    if (!status || ranges.empty() || !head || !IsDxfCopy(recs, first + 1U, last, head->dxf != kNoDxf)) {
+      return outcome;
+    }
+    const auto it = model.find(head->id);
+    if (it == model.end()) {
+      // Only a rule the reader adopted, since removed from the model,
+      // leaves; one it could not adopt stays verbatim.
+      if (model_ids.count(head->id) == 0U &&
+          DecodeFormulaRule14(recs, first, last, sqref_base(ranges), read_ctx).has_value()) {
+        outcome.kind = RuleOutcome::Kind::kDrop;
+      }
+      return outcome;
+    }
+    // Ranges moved apart from this block's: `add_x14_rules` writes it afresh.
+    outcome.kind = RuleOutcome::Kind::kDrop;
+    if (!SameSqref(it->second.first->sqref, ranges)) {
+      return outcome;
+    }
+    const cf::CFRule& rule = *it->second.second;
+    std::vector<std::uint8_t> dxf_copy;
+    if (rule.dxf_id.value_or(kNoDxf) == head->dxf) {
+      for (std::size_t i = first + 1U; i < last; ++i) {
+        append_record(dxf_copy, records, recs[i]);
+      }
+    }
+    std::vector<std::uint8_t> bytes;
+    if (auto s = EmitFormulaRule14(bytes, rule, head->id, sqref_base(ranges), ctx, dxf_copy); !s) {
+      status = std::move(s);
+      outcome.kind = RuleOutcome::Kind::kKeep;
+      return outcome;
+    }
+    outcome.kind = RuleOutcome::Kind::kReplace;
+    outcome.bytes = std::move(bytes);
+    linked.insert(head->id);
+    return outcome;
+  });
+  return status;
+}
+
+Expected<void, Error> add_x14_rules(std::vector<std::uint8_t>& records,
+                                    const std::vector<cf::ConditionalFormat>& formats,
+                                    const FeatureFormulaWriteContext& ctx, std::string_view own_sheet,
+                                    std::size_t sheet_index, const std::unordered_set<std::string>& linked) {
+  std::unordered_set<std::string> used_ids;
+  for (const cf::ConditionalFormat& format : formats) {
+    for (const cf::CFRule& rule : format.rules) {
+      if (!rule.id.empty()) {
+        used_ids.insert(rule.id);
+      }
+    }
+  }
   std::vector<std::uint8_t> groups;
   for (const cf::ConditionalFormat& format : formats) {
-    const auto rules =
-        static_cast<std::uint32_t>(std::count_if(format.rules.begin(), format.rules.end(), is_x14_icon_set_rule));
-    if (rules == 0U || format.sqref.empty()) {
+    if (format.sqref.empty()) {
       continue;
     }
     std::vector<MergeRange> ranges;
     for (const cf::CFCellRange& r : format.sqref) {
       ranges.push_back(MergeRange{r.first.row, r.first.col, r.last.row, r.last.col});
     }
-    EmitBlockHead(groups, format, rules);
+    const MergeRange base = sqref_base(ranges);
+    const auto icon_rules =
+        static_cast<std::uint32_t>(std::count_if(format.rules.begin(), format.rules.end(), is_x14_icon_set_rule));
+    if (icon_rules != 0U) {
+      EmitBlockHead(groups, format, icon_rules);
+      for (const cf::CFRule& rule : format.rules) {
+        if (!is_x14_icon_set_rule(rule)) {
+          continue;
+        }
+        if (auto s = EmitIconRule14(groups, rule, base, ctx); !s) {
+          return s;
+        }
+      }
+      emit_record(groups, kEndCondFmt14, ByteSpan{});
+    }
     for (const cf::CFRule& rule : format.rules) {
-      if (!is_x14_icon_set_rule(rule)) {
+      if (is_x14_icon_set_rule(rule) || !is_x14_only_rule(rule, own_sheet) ||
+          (!rule.id.empty() && linked.count(rule.id) != 0U)) {
         continue;
       }
-      if (auto s = EmitIconRule14(groups, rule, sqref_base(ranges), ctx); !s) {
+      std::string id = rule.id;
+      if (id.empty()) {
+        id = cf::x14_rule_id(sheet_index, rule.priority > 0 ? static_cast<std::uint32_t>(rule.priority) : 0U, used_ids);
+        used_ids.insert(id);
+      }
+      EmitBlockHead(groups, format, 1U);
+      if (auto s = EmitFormulaRule14(groups, rule, id, base, ctx); !s) {
         return s;
       }
+      emit_record(groups, kEndCondFmt14, ByteSpan{});
     }
-    emit_record(groups, kEndCondFmt14, ByteSpan{});
   }
+  // Excel orders rules stored in the extension alone before data-bar payloads.
   if (!groups.empty()) {
-    InsertX14Blocks(records, groups);
+    InsertX14Blocks(records, groups, /*front=*/true);
   }
   return Expected<void, Error>::Ok();
 }

@@ -367,6 +367,24 @@ bool RemapRefToken(std::uint8_t* tag, const RefContext& ctx) {
   return true;
 }
 
+}  // namespace
+
+std::optional<std::uint32_t> frt_formula_size_field(const std::uint8_t* rgce, std::size_t cce) {
+  std::size_t relative = 0;
+  for (std::size_t i = 0; i < cce;) {
+    const std::optional<std::size_t> size = TokenSize(rgce + i, cce - i);
+    if (!size || *size > cce - i - 1U) {
+      return std::nullopt;
+    }
+    const std::uint8_t kind = rgce[i] & 0x1FU;
+    relative += rgce[i] >= 0x20U && (kind == 0x0CU || kind == 0x0DU) ? 1U : 0U;
+    i += 1U + *size;
+  }
+  return static_cast<std::uint32_t>(cce + 2U * relative);
+}
+
+namespace {
+
 /// Rewrites every reference in `rgce[0, cce)` in place. False when a token
 /// cannot be stepped over or resolved; the caller then keeps the record.
 bool RemapRgce(std::uint8_t* rgce, std::size_t cce, const RefContext& ctx) {
