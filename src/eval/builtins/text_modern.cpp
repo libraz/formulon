@@ -56,6 +56,18 @@ struct TextMatchResult {
   std::size_t match_end_byte = 0;  // one past the last byte of the match
 };
 
+// Next hit of `needle` at or after `scan`, or npos; advances `scan` past it so hits never overlap.
+std::size_t next_hit(std::string_view hay, std::string_view needle, std::size_t& scan) {
+  if (scan > hay.size()) {
+    return std::string_view::npos;
+  }
+  const std::size_t pos = hay.find(needle, scan);
+  if (pos != std::string_view::npos) {
+    scan = pos + needle.size();
+  }
+  return pos;
+}
+
 // Searches `text` for the Nth occurrence of `delimiter`, honouring
 // `match_mode` and `match_end`. Sets `out_err` if the arguments are
 // malformed. Returns `{found=false}` when the instance does not exist.
@@ -94,18 +106,13 @@ TextMatchResult find_text_instance(std::string_view text, std::string_view delim
     const std::size_t wanted = static_cast<std::size_t>(instance_num);
     std::size_t ordinal = 0;
     std::size_t scan = 0;
-    while (scan <= hay.size()) {
-      const std::size_t pos = hay.find(needle, scan);
-      if (pos == std::string_view::npos) {
-        break;
-      }
+    // Hits advance past the match: greedy non-overlap, so "aa" in "aaaa" hits at 0 and 2.
+    for (std::size_t pos = next_hit(hay, needle, scan); pos != std::string_view::npos;
+         pos = next_hit(hay, needle, scan)) {
       ++ordinal;
       if (ordinal == wanted) {
         return hit_at(pos);
       }
-      // Advance past the match to preserve the existing greedy non-overlap
-      // rule (for example, "aa" in "aaaa" has hits at 0 and 2).
-      scan = pos + needle.size();
     }
     if (use_virtual_end && ordinal + 1u == wanted) {
       return TextMatchResult{true, text.size(), text.size()};
@@ -119,13 +126,9 @@ TextMatchResult find_text_instance(std::string_view text, std::string_view delim
   if (wanted_from_end == 1u) {
     TextMatchResult last;
     std::size_t scan = 0;
-    while (scan <= hay.size()) {
-      const std::size_t pos = hay.find(needle, scan);
-      if (pos == std::string_view::npos) {
-        break;
-      }
+    for (std::size_t pos = next_hit(hay, needle, scan); pos != std::string_view::npos;
+         pos = next_hit(hay, needle, scan)) {
       last = hit_at(pos);
-      scan = last.match_end_byte;
     }
     return last.found ? last : (use_virtual_start ? TextMatchResult{true, 0u, 0u} : TextMatchResult{});
   }
@@ -135,13 +138,9 @@ TextMatchResult find_text_instance(std::string_view text, std::string_view delim
   // forward non-overlapping sequence without copying a second hit array.
   std::vector<std::size_t> starts;
   std::size_t scan = 0;
-  while (scan <= hay.size()) {
-    const std::size_t pos = hay.find(needle, scan);
-    if (pos == std::string_view::npos) {
-      break;
-    }
+  for (std::size_t pos = next_hit(hay, needle, scan); pos != std::string_view::npos;
+       pos = next_hit(hay, needle, scan)) {
     starts.push_back(pos);
-    scan = pos + needle.size();
   }
   if (wanted_from_end <= starts.size()) {
     return hit_at(starts[starts.size() - wanted_from_end]);
@@ -175,9 +174,6 @@ Expected<TextBeforeAfterOpts, ErrorCode> read_tba_opts(const Value* args, std::u
       return std::move(coerced.error());
     }
     const double d = coerced.value();
-    if (std::isnan(d) || std::isinf(d)) {
-      return ErrorCode::Num;
-    }
     // Saturated: find_text_instance treats an out-of-range instance as not found.
     opts.instance_num = truncate_saturated_int(std::floor(snap_near_integer(d)));
   }
