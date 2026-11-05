@@ -11,6 +11,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 #include "utils/utf8_length.h"
 #include "workbook.h"
 
@@ -22,12 +23,8 @@ constexpr std::string_view kStubPreamble =
     "will get removed if the file is opened in a newer version of Excel. Learn more: "
     "https://go.microsoft.com/fwlink/?linkid=870924\n\nComment:\n    ";
 
-bool IsDigit(char c) noexcept {
-  return c >= '0' && c <= '9';
-}
-
 bool IsUpperHex(char c) noexcept {
-  return IsDigit(c) || (c >= 'A' && c <= 'F');
+  return strings::is_ascii_digit(c) || (c >= 'A' && c <= 'F');
 }
 
 // Out of line so the string building is emitted once rather than at every validation site.
@@ -103,7 +100,7 @@ bool is_threaded_comment_timestamp(std::string_view s) noexcept {
     return false;
   }
   for (std::size_t i = 0; i < s.size(); ++i) {
-    if (kShape[i] == 'd' ? !IsDigit(s[i]) : s[i] != kShape[i]) {
+    if (kShape[i] == 'd' ? !strings::is_ascii_digit(s[i]) : s[i] != kShape[i]) {
       return false;
     }
   }
@@ -206,7 +203,7 @@ Expected<void, Error> Workbook::add_threaded_comment(std::size_t sheet_index, Th
 
   std::size_t insert_at = list.size();
   if (comment.parent_id.empty()) {
-    if (comment.row >= Sheet::kMaxRows || comment.col >= Sheet::kMaxCols) {
+    if (!Sheet::coord_in_grid(comment.row, comment.col)) {
       return make_error(FormulonErrorCode::kInvalidArgument, "add_threaded_comment: coordinate out of grid",
                         "row=" + std::to_string(comment.row) + " col=" + std::to_string(comment.col));
     }

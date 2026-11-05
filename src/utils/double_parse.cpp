@@ -18,6 +18,7 @@
 #include <string>
 
 #include "double-conversion/strtod.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace {
@@ -29,10 +30,6 @@ constexpr int kExponentCap = 100000;
 
 bool is_c_space(char c) noexcept {
   return c == ' ' || (c >= '\t' && c <= '\r');
-}
-
-bool is_digit(char c) noexcept {
-  return c >= '0' && c <= '9';
 }
 
 // The sign, the leading significant digits (at most `max_digits`, leading zeros
@@ -59,7 +56,7 @@ ScannedDecimal scan_decimal(std::string_view text, int max_digits) noexcept {
     ++i;
   }
   bool mantissa_digit = false;
-  for (; i < n && is_digit(text[i]); ++i) {
+  for (; i < n && strings::is_ascii_digit(text[i]); ++i) {
     mantissa_digit = true;
     if (out.count == 0 && text[i] == '0') {
       continue;
@@ -71,8 +68,8 @@ ScannedDecimal scan_decimal(std::string_view text, int max_digits) noexcept {
       out.dropped_nonzero = out.dropped_nonzero || text[i] != '0';
     }
   }
-  if (i < n && text[i] == '.' && (mantissa_digit || (i + 1 < n && is_digit(text[i + 1])))) {
-    for (++i; i < n && is_digit(text[i]); ++i) {
+  if (i < n && text[i] == '.' && (mantissa_digit || (i + 1 < n && strings::is_ascii_digit(text[i + 1])))) {
+    for (++i; i < n && strings::is_ascii_digit(text[i]); ++i) {
       mantissa_digit = true;
       if (out.count == 0 && text[i] == '0') {
         --out.exponent;
@@ -94,9 +91,9 @@ ScannedDecimal scan_decimal(std::string_view text, int max_digits) noexcept {
       exponent_negative = text[j] == '-';
       ++j;
     }
-    if (j < n && is_digit(text[j])) {
+    if (j < n && strings::is_ascii_digit(text[j])) {
       int e = 0;
-      for (; j < n && is_digit(text[j]); ++j) {
+      for (; j < n && strings::is_ascii_digit(text[j]); ++j) {
         if (e < kExponentCap) {
           e = e * 10 + (text[j] - '0');
         }

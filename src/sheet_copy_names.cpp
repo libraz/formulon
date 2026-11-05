@@ -8,14 +8,6 @@
 namespace formulon {
 namespace {
 
-bool is_ascii_digit(char c) {
-  return c >= '0' && c <= '9';
-}
-
-bool is_ascii_alpha(char c) {
-  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
-}
-
 /// Strips a trailing " (<digits>)" and returns the base, or the whole name
 /// when nothing would remain or the suffix is absent.
 std::string_view strip_copy_suffix(std::string_view name) {
@@ -24,7 +16,7 @@ std::string_view strip_copy_suffix(std::string_view name) {
   }
   std::size_t pos = name.size() - 1;
   std::size_t digits_end = pos;
-  while (pos > 0 && is_ascii_digit(name[pos - 1])) {
+  while (pos > 0 && strings::is_ascii_digit(name[pos - 1])) {
     --pos;
   }
   if (pos == digits_end || pos < 2 || name[pos - 1] != '(' || name[pos - 2] != ' ') {
@@ -66,10 +58,10 @@ std::string_view truncate_units(std::string_view s, std::uint32_t max_units) {
 bool is_a1_ref(std::string_view s) {
   std::size_t i = 0;
   std::uint32_t col = 0;
-  while (i < s.size() && is_ascii_alpha(s[i])) {
+  while (i < s.size() && strings::is_ascii_alpha(s[i])) {
     col = col * 26 + static_cast<std::uint32_t>(strings::ascii_to_upper(s[i]) - 'A' + 1);
     ++i;
-    if (i > 3) {
+    if (i > a1::kMaxColumnLetters) {
       return false;
     }
   }
@@ -82,7 +74,7 @@ bool is_a1_ref(std::string_view s) {
   }
   std::uint32_t row = 0;
   for (; i < s.size(); ++i) {
-    if (!is_ascii_digit(s[i])) {
+    if (!strings::is_ascii_digit(s[i])) {
       return false;
     }
     row = row * 10 + static_cast<std::uint32_t>(s[i] - '0');
@@ -101,7 +93,7 @@ bool is_r1c1_ref(std::string_view s) {
     return false;
   }
   std::size_t d1 = i;
-  while (i < s.size() && is_ascii_digit(s[i])) {
+  while (i < s.size() && strings::is_ascii_digit(s[i])) {
     ++i;
   }
   if (i == s.size()) {
@@ -111,7 +103,7 @@ bool is_r1c1_ref(std::string_view s) {
     return false;
   }
   ++i;
-  while (i < s.size() && is_ascii_digit(s[i])) {
+  while (i < s.size() && strings::is_ascii_digit(s[i])) {
     ++i;
   }
   return i == s.size();
