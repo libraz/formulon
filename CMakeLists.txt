@@ -323,6 +323,8 @@ set(FORMULON_CORE_SOURCES
   src/eval/iterative_solver.cpp
   src/eval/recalc_dynamic_reads.cpp
   src/eval/recalc_engine.cpp
+  src/eval/recalc_engine_partial.cpp
+  src/eval/recalc_engine_spill.cpp
   src/eval/cell_evaluator.cpp
   src/eval/adhoc_eval.cpp
   src/eval/scheduler.cpp
