@@ -22,30 +22,6 @@ fm_color_spec_t* GroupColor(fm_sparkline_group_t& g, size_t i) {
   return colors[i];
 }
 
-Napi::Object ColorToJs(Napi::Env env, const fm_color_spec_t& spec) {
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("kind", JsNumber(env, spec.kind));
-  out.Set("rgb", JsNumber(env, spec.rgb));
-  out.Set("theme", JsNumber(env, spec.theme));
-  out.Set("tint", JsNumber(env, spec.tint));
-  out.Set("indexed", JsNumber(env, spec.indexed));
-  return out;
-}
-
-fm_color_spec_t PullColor(CheckedSpecReader& reader, const Napi::Object& owner, const char* key) {
-  fm_color_spec_t spec{};
-  Napi::Object v;
-  if (!reader.Object(owner, key, &v)) {
-    return spec;
-  }
-  spec.kind = reader.U8(v, "kind", 0U);
-  spec.rgb = reader.U32(v, "rgb", 0U);
-  spec.theme = reader.U32(v, "theme", 0U);
-  spec.tint = reader.Double(v, "tint", 0.0);
-  spec.indexed = reader.U32(v, "indexed", 0U);
-  return spec;
-}
-
 struct ShapeText {
   std::string name;
   std::string prst;
@@ -114,7 +90,7 @@ fm_shape_t PullShape(CheckedSpecReader& reader, const Napi::Object& spec, ShapeT
 fm_sparkline_group_t PullGroup(CheckedSpecReader& reader, const Napi::Object& spec, std::string& ref_store) {
   fm_sparkline_group_t g{};
   for (size_t i = 0; i < 8U; ++i) {
-    *GroupColor(g, i) = PullColor(reader, spec, kSparklineColorKeys[i]);
+    *GroupColor(g, i) = PullColorSpec(reader, spec, kSparklineColorKeys[i]);
   }
   g.type = reader.I32(spec, "type", FM_SPARKLINE_LINE);
   g.markers = reader.Bool(spec, "markers", false) ? 1 : 0;
@@ -288,7 +264,7 @@ Napi::Value Workbook::GetSparklineGroup(const Napi::CallbackInfo& info) {
   }
   Napi::Object item = Napi::Object::New(env);
   for (size_t c = 0; c < 8U; ++c) {
-    item.Set(kSparklineColorKeys[c], ColorToJs(env, *GroupColor(g, c)));
+    item.Set(kSparklineColorKeys[c], ColorSpecToJs(env, *GroupColor(g, c)));
   }
   item.Set("type", JsNumber(env, g.type));
   item.Set("markers", Napi::Boolean::New(env, g.markers != 0));

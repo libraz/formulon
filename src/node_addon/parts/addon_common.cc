@@ -654,6 +654,16 @@ Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m) {
   return o;
 }
 
+Napi::Object ColorSpecToJs(Napi::Env env, const fm_color_spec_t& spec) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("kind", Napi::Number::New(env, static_cast<uint32_t>(spec.kind)));
+  out.Set("rgb", Napi::Number::New(env, spec.rgb));
+  out.Set("theme", Napi::Number::New(env, spec.theme));
+  out.Set("tint", Napi::Number::New(env, spec.tint));
+  out.Set("indexed", Napi::Number::New(env, spec.indexed));
+  return out;
+}
+
 Napi::Object RangeToJs(Napi::Env env, const fm_cell_rect_t& r) {
   Napi::Object item = Napi::Object::New(env);
   item.Set("firstRow", Napi::Number::New(env, r.first_row));
@@ -719,6 +729,20 @@ bool ReadCellRects(CheckedSpecReader& reader, const Napi::Value& value, const ch
     }
   }
   return reader.ok();
+}
+
+fm_color_spec_t PullColorSpec(CheckedSpecReader& reader, const Napi::Object& owner, const char* key) {
+  fm_color_spec_t spec{};
+  Napi::Object v;
+  if (!reader.Object(owner, key, &v)) {
+    return spec;
+  }
+  spec.kind = reader.U8(v, "kind", 0U);
+  spec.rgb = reader.U32(v, "rgb", 0U);
+  spec.theme = reader.U32(v, "theme", 0U);
+  spec.tint = reader.Double(v, "tint", 0.0);
+  spec.indexed = reader.U32(v, "indexed", 0U);
+  return spec;
 }
 
 // Reads the range at `info[idx]`; a missing/nullish argument reads as all

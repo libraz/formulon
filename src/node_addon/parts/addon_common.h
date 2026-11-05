@@ -190,6 +190,9 @@ Napi::Object TranslateCfColor(Napi::Env env, const fm_cf_color_t& c);
 /// Translates an `fm_cf_match_t` into the JS shape used by embind.
 Napi::Object TranslateCfMatch(Napi::Env env, const fm_cf_match_t& m);
 
+/// Translates an `fm_color_spec_t` into `{ kind, rgb, theme, tint, indexed }`.
+Napi::Object ColorSpecToJs(Napi::Env env, const fm_color_spec_t& spec);
+
 /// Builds a `CellRect` `{ firstRow, firstCol, lastRow, lastCol }`.
 Napi::Object RangeToJs(Napi::Env env, const fm_cell_rect_t& r);
 
@@ -273,6 +276,13 @@ class CheckedSpecReader final {
 /// Reads a `CellRect` `{ firstRow, firstCol, lastRow, lastCol }` object; every
 /// field is required.
 bool ReadCellRect(CheckedSpecReader& reader, const Napi::Object& range, fm_cell_rect_t* out);
+
+/// Reads the `{ kind, rgb, theme, tint, indexed }` colour specification out
+/// of `owner[key]`. An absent object leaves `kind` at `kFmColorNone`, so
+/// the writer emits the sibling `*Argb` as literal `rgb`. A supplied
+/// selector is authoritative; this binding does not resolve theme/indexed /
+/// auto colours.
+fm_color_spec_t PullColorSpec(CheckedSpecReader& reader, const Napi::Object& owner, const char* key);
 
 /// Reads the `CellRect` array `value`; `key` names it in a rejection. A
 /// missing array, or a missing element, reads as nothing.

@@ -13,35 +13,6 @@
 namespace formulon_node {
 namespace {
 
-/// Reads the `{kind, rgb, theme, tint, indexed}` colour specification out
-/// of `owner[key]`. An absent object leaves `kind` at `kFmColorNone`, so
-/// the writer emits the sibling `*Argb` as literal `rgb`. A supplied
-/// selector is authoritative; this binding does not resolve theme/indexed /
-/// auto colours.
-fm_color_spec_t PullColorSpec(CheckedSpecReader& reader, const Napi::Object& owner, const char* key) {
-  fm_color_spec_t spec{};
-  Napi::Object v;
-  if (!reader.Object(owner, key, &v)) {
-    return spec;
-  }
-  spec.kind = reader.U8(v, "kind", 0U);
-  spec.rgb = reader.U32(v, "rgb", 0U);
-  spec.theme = reader.U32(v, "theme", 0U);
-  spec.tint = reader.Double(v, "tint", 0.0);
-  spec.indexed = reader.U32(v, "indexed", 0U);
-  return spec;
-}
-
-Napi::Object ColorSpecToJs(Napi::Env env, const fm_color_spec_t& spec) {
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("kind", Napi::Number::New(env, static_cast<uint32_t>(spec.kind)));
-  out.Set("rgb", Napi::Number::New(env, spec.rgb));
-  out.Set("theme", Napi::Number::New(env, spec.theme));
-  out.Set("tint", Napi::Number::New(env, spec.tint));
-  out.Set("indexed", Napi::Number::New(env, spec.indexed));
-  return out;
-}
-
 /// Builds the JS mirror of a font record. Shared by `getFont` and the
 /// `<dxf>` font projection so both surface the same field set.
 Napi::Object FontRecordToJs(Napi::Env env, const fm_font_record_t& f) {
