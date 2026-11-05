@@ -443,30 +443,30 @@ TEST(FormulonCApi, ReservedStatusCodesKeepTheirSlotsAndSpelling) {
   // The header promises numeric identity with `formulon::FormulonErrorCode`,
   // so those slots must not be reused or renumbered, and `fm_status_string`
   // must keep naming them exactly: only a value outside the enum may fall
-  // back to `"kUnknownError"`.
+  // back to `"UNRECOGNIZED_STATUS"`.
   struct Reserved {
     fm_status_t code;
     const char* name;
   };
   const Reserved reserved[] = {
-      {5008, "kIoXmlDoctype"},
-      {5009, "kIoXmlEntityExplosion"},
-      {5015, "kIoCsvEncodingDetect"},
-      {6000, "kCryptoAgileNotSupported"},
-      {6001, "kCryptoStandardNotSupported"},
-      {6002, "kCryptoBadPassword"},
-      {6003, "kCryptoHashMismatch"},
-      {6004, "kCryptoKeyDerivationFailed"},
+      {5008, "IO_XML_DOCTYPE"},
+      {5009, "IO_XML_ENTITY_EXPLOSION"},
+      {5015, "IO_CSV_ENCODING_DETECT"},
+      {6000, "CRYPTO_AGILE_NOT_SUPPORTED"},
+      {6001, "CRYPTO_STANDARD_NOT_SUPPORTED"},
+      {6002, "CRYPTO_BAD_PASSWORD"},
+      {6003, "CRYPTO_HASH_MISMATCH"},
+      {6004, "CRYPTO_KEY_DERIVATION_FAILED"},
   };
   for (const Reserved& entry : reserved) {
     EXPECT_STREQ(fm_status_string(entry.code), entry.name) << "code=" << entry.code;
   }
 
   // The reserved crypto band is not what an encrypted package reports; a
-  // binding offering a password prompt must branch on `kIoZipEncrypted`.
+  // binding offering a password prompt must branch on `IO_ZIP_ENCRYPTED`.
   EXPECT_STREQ(fm_status_string(static_cast<fm_status_t>(formulon::FormulonErrorCode::kIoZipEncrypted)),
-               "kIoZipEncrypted");
-  EXPECT_STREQ(fm_status_string(123456), "kUnknownError");
+               "IO_ZIP_ENCRYPTED");
+  EXPECT_STREQ(fm_status_string(123456), "UNRECOGNIZED_STATUS");
 }
 TEST(FormulonCApi, MemoryUsageTracksTheWorkbookAndRejectsNulls) {
   WorkbookGuard wb;
@@ -622,12 +622,11 @@ TEST(FormulonCApi, ThreadLocalLastErrorIsolation) {
   EXPECT_EQ(std::string(fm_last_error_message()), main_msg);
 }
 TEST(FormulonCApi, StatusStringCoversKnownCodes) {
-  // Spot-check a handful of band-spanning codes; the source-of-truth is
-  // `formulon::to_cstring`, which the C API forwards to.
-  EXPECT_STREQ(fm_status_string(0), "kOk");
-  EXPECT_STREQ(fm_status_string(2), "kInvalidArgument");
-  EXPECT_STREQ(fm_status_string(7000), "kBindingInvalidHandle");
-  EXPECT_STREQ(fm_status_string(7001), "kBindingNullPointer");
+  // Spot-check a handful of band-spanning codes.
+  EXPECT_STREQ(fm_status_string(0), "OK");
+  EXPECT_STREQ(fm_status_string(2), "INVALID_ARGUMENT");
+  EXPECT_STREQ(fm_status_string(7000), "BINDING_INVALID_HANDLE");
+  EXPECT_STREQ(fm_status_string(7001), "BINDING_NULL_POINTER");
   // Unknown numeric values must still return a non-NULL fallback.
   const char* unknown = fm_status_string(123456);
   ASSERT_NE(unknown, nullptr);

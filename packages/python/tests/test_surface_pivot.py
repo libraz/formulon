@@ -99,7 +99,7 @@ class PivotTests(unittest.TestCase):
             for bad in (-1.0, float("nan")):
                 with self.assertRaises(FormulonError) as caught:
                     wb.pivot_cache_field_add_shared_item_date(cache_id, 0, bad)
-                self.assertEqual(caught.exception.status, 2)
+                self.assertEqual(caught.exception.code, 2)
             wb.pivot_cache_record_add(cache_id)
             wb.pivot_cache_record_set_date(cache_id, 0, 0, 45292.0)
             with self.assertRaises(FormulonError):
@@ -284,7 +284,7 @@ class PivotMutatorTableTests(unittest.TestCase):
         def rejects(call: Any) -> None:
             with self.assertRaises(FormulonError) as caught:
                 call()
-            eq(caught.exception.status, 2)
+            eq(caught.exception.code, 2)
 
         def cache_create(t: Any, f: _PivotFixture, r: int) -> None:
             eq(r, 77)
@@ -1186,7 +1186,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             ):
                 with self.assertRaises(FormulonError) as caught:
                     call()
-                self.assertEqual(caught.exception.status, 2)
+                self.assertEqual(caught.exception.code, 2)
 
     def test_empty_data_field_name_is_derived_from_the_profile(self) -> None:
         for profile, expected in (("win-365-ja_JP", "合計 / Amount"), ("win-365-en_US", "Sum of Amount")):
@@ -1229,7 +1229,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             ):
                 with self.assertRaises(FormulonError) as caught:
                     wb.pivot_data_field_default_name(*args)
-                self.assertEqual(caught.exception.status, 2)
+                self.assertEqual(caught.exception.code, 2)
             with self.assertRaises(TypeError):
                 wb.pivot_data_field_default_name(0, f.pivot, "0", 0)
 

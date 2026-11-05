@@ -73,7 +73,7 @@ class FormulonErrorStatusTests(unittest.TestCase):
             with mock.patch.object(_c.LIB, "fm_workbook_paginate", fake_paginate, create=True):
                 with self.assertRaises(FormulonError) as caught:
                     wb.paginate(0)
-        self.assertEqual(caught.exception.status, 7001)
+        self.assertEqual(caught.exception.code, 7001)
         self.assertIn("fm_workbook_paginate", str(caught.exception))
 
 
@@ -397,7 +397,7 @@ class MemoryUsageTests(unittest.TestCase):
         wb.close()
         with self.assertRaises(FormulonError) as caught:
             wb.memory_usage()
-        self.assertEqual(caught.exception.status, 7000)
+        self.assertEqual(caught.exception.code, 7000)
 
 
 class StructuredLogTests(unittest.TestCase):
@@ -454,7 +454,7 @@ class StructuredLogTests(unittest.TestCase):
             with self.subTest(level=level):
                 with self.assertRaises(FormulonError) as caught:
                     formulon.set_log_min_level(level)
-                self.assertEqual(caught.exception.status, 2)
+                self.assertEqual(caught.exception.code, 2)
 
     def test_every_level_ordinal_is_accepted(self) -> None:
         for level in LogLevel:

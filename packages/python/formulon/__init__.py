@@ -19,7 +19,8 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _dist_version
 from pathlib import Path
 
-from ._c import LIB, ValueKind, decode_cstr
+from ._c import LIB, InvalidArgumentError, NotFoundError, ValueKind, decode_cstr
+from ._status import StatusCode
 from .metadata import (
     FunctionMetadataEntry,
     FunctionMetadataLocalized,
@@ -313,6 +314,9 @@ __all__ = [
     "GradientFill",
     "GradientStop",
     "FormulonError",
+    "InvalidArgumentError",
+    "NotFoundError",
+    "StatusCode",
     "FunctionMetadata",
     "FunctionMetadataEntry",
     "FunctionMetadataLocalized",

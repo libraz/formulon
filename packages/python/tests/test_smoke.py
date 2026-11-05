@@ -133,7 +133,7 @@ class WorkbookLifecycleTests(unittest.TestCase):
         with self.assertRaises(FormulonError) as ctx:
             wb.sheet_count()
         error = ctx.exception
-        self.assertEqual(error.status, 7000)
+        self.assertEqual(error.code, 7000)
         self.assertEqual(error.message, "handle is NULL or already closed")
         self.assertEqual(error.context, "")
         self.assertNotIn("index=99", str(error))
@@ -348,15 +348,15 @@ class WorkbookSaveLoadTests(unittest.TestCase):
             self.assertEqual(v1.to_python(), "world")
 
     def test_load_rejects_garbage(self) -> None:
-        # Empty buffer triggers kBindingNullPointer (ABI contract: len == 0
-        # rejects). Non-empty garbage triggers a kIo* parse failure. Both
+        # Empty buffer triggers BINDING_NULL_POINTER (ABI contract: len == 0
+        # rejects). Non-empty garbage triggers an IO_* parse failure. Both
         # paths must raise FormulonError with non-empty diagnostics.
         with self.assertRaises(FormulonError) as ctx:
             Workbook.load(b"not a real xlsx archive")
         err = ctx.exception
-        self.assertIsInstance(err.status, int)
-        self.assertNotEqual(err.status, 0)
-        self.assertGreater(len(err.status_name), 0, "fm_status_string returned empty")
+        self.assertIsInstance(err.code, int)
+        self.assertNotEqual(err.code, 0)
+        self.assertGreater(len(err.code.name), 0)
 
     def test_value_dataclass_is_frozen(self) -> None:
         v = Value(kind=ValueKind.NUMBER, number=1.0)

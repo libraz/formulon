@@ -53,9 +53,13 @@ from typing import Optional, Tuple, Union
 
 import wasmtime
 
+from ._status import NOT_FOUND_CODES, StatusCode
+
 __all__ = [
     "LIB",
     "FormulonError",
+    "InvalidArgumentError",
+    "NotFoundError",
     "ValueKind",
     "decode_cstr",
     "fm_value_t_size",
@@ -63,12 +67,6 @@ __all__ = [
 
 # fm_value_t layout: int32 kind + 4 pad + 8 union = 16 bytes.
 fm_value_t_size = 16
-
-# `formulon::FormulonErrorCode::kInternalError` (src/utils/error.h, the
-# "General" 0-999 band). Used only for a host-side failure the WASM trampoline
-# below observes but the C ABI itself never reported a status for -- a
-# wasmtime Trap, which aborts the call before any `fm_status_t` is returned.
-_STATUS_INTERNAL_ERROR = 8
 
 
 def _coerce_integral(value: int, name: str) -> int:
@@ -151,11 +149,15 @@ def _sint(value: int, name: str, bits: int = 32) -> int:
 class FormulonError(Exception):
     """Raised for host-side failures of the Formulon C ABI.
 
+    Constructing ``FormulonError`` with a status that has a dedicated
+    subclass yields that subclass (:class:`InvalidArgumentError`,
+    :class:`NotFoundError`), so ``except ValueError`` / ``except
+    LookupError`` also catch the matching failures.
+
     Attributes:
-      status: numeric ``fm_status_t`` (matches
-        ``formulon::FormulonErrorCode`` ordinals).
-      status_name: symbolic name (e.g. ``"kInvalidArgument"``) returned
-        by ``fm_status_string``.
+      code: the :class:`~formulon._status.StatusCode` member of the
+        ``fm_status_t`` (a plain ``int`` for a value the enum does not
+        list).
       message: thread-local diagnostic message captured from
         ``fm_last_error_message`` at the time the failure was detected.
       context: optional context string captured from
@@ -171,40 +173,59 @@ class FormulonError(Exception):
     imports ``LIB`` from here.
     """
 
+    code: Union[StatusCode, int]
+    message: str
+    context: str
+
+    def __new__(cls, status: int, *args, **kwargs):
+        if cls is FormulonError:
+            if status == StatusCode.INVALID_ARGUMENT:
+                cls = InvalidArgumentError
+            elif status in NOT_FOUND_CODES:
+                cls = NotFoundError
+        return super().__new__(cls)
+
     def __init__(
         self,
         status: int,
         *,
         op: str = "",
         _diagnostic_override: Optional[Tuple[str, str]] = None,
-        _status_name_override: Optional[str] = None,
+        _host_only: bool = False,
     ) -> None:
-        self.status = int(status)
-        if _status_name_override is not None:
+        try:
+            self.code = StatusCode(int(status))
+            name = self.code.name
+        except ValueError:
+            self.code = int(status)
+            name = "UNRECOGNIZED_STATUS"
+        if _host_only:
             # A trap leaves the module instance poisoned (see `_wrapped`
-            # below); calling back into it for `fm_status_string` would
-            # retry the very call that just failed, so this path never
-            # touches WASM memory.
-            self.status_name = _status_name_override
+            # below); reading the diagnostic buffers would call back into
+            # it, so this path never touches WASM memory.
             self.message, self.context = _diagnostic_override or ("", "")
         else:
-            # Take the Python-side snapshot before calling fm_status_string.
-            # The latter is a non-status pointer-returning export and must
-            # not become a diagnostic read or overwrite the pending
-            # snapshot. An override still drains a pending C diagnostic so
-            # it cannot leak into a later exception on this Python thread.
-            message, context = LIB.last_diagnostic(self.status)
+            # An override still drains a pending C diagnostic so it cannot
+            # leak into a later exception on this Python thread.
+            message, context = LIB.last_diagnostic(int(status))
             if _diagnostic_override is not None:
                 message, context = _diagnostic_override
-            self.status_name = LIB.read_cstr(LIB.fm_status_string(_sint(self.status, "status")))
             self.message, self.context = message, context
         prefix = f"{op}: " if op else ""
-        text = f"{prefix}{self.status_name} ({self.status})"
+        text = f"{prefix}{name} ({int(status)})"
         if self.message:
             text += f": {self.message}"
         if self.context:
             text += f" [{self.context}]"
         super().__init__(text)
+
+
+class InvalidArgumentError(FormulonError, ValueError):
+    """The engine refused an argument (``StatusCode.INVALID_ARGUMENT``)."""
+
+
+class NotFoundError(FormulonError, LookupError):
+    """A named or indexed item does not exist (``NOT_FOUND`` and its variants)."""
 
 
 # Generated from the current working-tree C header and WASM export manifest:
@@ -866,10 +887,10 @@ class _WasmInstance:
         """
         if self._poison_message is not None:
             raise FormulonError(
-                _STATUS_INTERNAL_ERROR,
+                StatusCode.INTERNAL_ERROR,
                 op=name,
                 _diagnostic_override=(self._poison_message, ""),
-                _status_name_override="kInternalError",
+                _host_only=True,
             )
         try:
             return fn(self._store, *args)
@@ -881,10 +902,10 @@ class _WasmInstance:
             # against it.
             self._poison_message = str(trap)
             raise FormulonError(
-                _STATUS_INTERNAL_ERROR,
+                StatusCode.INTERNAL_ERROR,
                 op=name,
                 _diagnostic_override=(self._poison_message, ""),
-                _status_name_override="kInternalError",
+                _host_only=True,
             ) from trap
 
     def __getattr__(self, name: str):

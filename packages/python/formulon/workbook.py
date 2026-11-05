@@ -47,6 +47,7 @@ from typing import (
 
 from . import _structs as S
 from ._c import LIB, FormulonError, ValueKind, _sint, _uint, fm_value_t_size
+from ._status import StatusCode
 
 __all__ = [
     "CalcMode",
@@ -229,9 +230,6 @@ __all__ = [
 # `formulon::FormulonErrorCode` ordinals. The C ABI intentionally exposes
 # status codes as integers, so bindings retain these matching stable values.
 _STATUS_NOT_FOUND = 6
-# 7000-band: bindings / C API (src/utils/error.h).
-_STATUS_BINDING_INVALID_HANDLE = 7000
-_STATUS_BINDING_NULL_POINTER = 7001
 
 # `fm_cell_range_next_cursor` reports UINT64_MAX when no further cell exists.
 _CELL_RANGE_NO_CURSOR = (1 << 64) - 1
@@ -4802,7 +4800,7 @@ class Workbook:
     def _require(self) -> int:
         if not self.is_valid:
             raise FormulonError(
-                _STATUS_BINDING_INVALID_HANDLE,
+                StatusCode.BINDING_INVALID_HANDLE,
                 op="Workbook",
                 _diagnostic_override=("handle is NULL or already closed", ""),
             )
@@ -4821,7 +4819,7 @@ class Workbook:
         with LIB.call_lock:
             if not self._handle:
                 raise FormulonError(
-                    _STATUS_BINDING_INVALID_HANDLE,
+                    StatusCode.BINDING_INVALID_HANDLE,
                     op="Workbook",
                     _diagnostic_override=("handle is NULL or already closed", ""),
                 )
@@ -6950,9 +6948,9 @@ class Workbook:
             handle = LIB.read_u32(out)
         if handle == 0:
             raise FormulonError(
-                _STATUS_BINDING_NULL_POINTER,
+                StatusCode.BINDING_NULL_POINTER,
                 op=op,
-                _diagnostic_override=("returned kOk with a null cell-range handle", ""),
+                _diagnostic_override=("returned OK with a null cell-range handle", ""),
             )
         try:
             count = _read_count(LIB.fm_cell_range_count, handle)
@@ -8346,9 +8344,9 @@ class Workbook:
             pagination = LIB.read_u32(out)
             if pagination == 0:
                 raise FormulonError(
-                    _STATUS_BINDING_NULL_POINTER,
+                    StatusCode.BINDING_NULL_POINTER,
                     op="fm_workbook_paginate",
-                    _diagnostic_override=("returned kOk with a null pagination handle", ""),
+                    _diagnostic_override=("returned OK with a null pagination handle", ""),
                 )
             try:
                 page_count = int(LIB.fm_pagination_page_count(pagination))

@@ -16,7 +16,7 @@
  *   * any third-party language binding.
  *
  * Status codes mirror `formulon::FormulonErrorCode` (see
- * `src/utils/error.h`); a return value of `0` (`kOk`) always denotes
+ * `src/utils/error.h`); a return value of `0` (`FM_STATUS_OK` (0)) always denotes
  * success. Error strings and contexts associated with the most recent
  * call are exposed via `fm_last_error_message()` /
  * `fm_last_error_context()`. Both buffers are thread-local and are
@@ -26,7 +26,7 @@
  *
  * Text input: every caller-supplied string (argument or struct field) must be
  * well-formed UTF-8. A lone surrogate, overlong form or truncated sequence
- * returns `kBindingUtf8EncodingError` with the workbook unchanged; bindings
+ * returns `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) with the workbook unchanged; bindings
  * holding UTF-16 replace lone surrogates with U+FFFD before the call.
  *
  * Threading model:
@@ -82,6 +82,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "c_api/formulon_status.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -106,7 +108,7 @@ extern "C" {
  * @brief Status / error code returned by every fallible C API entry.
  *
  * Numerically identical to `formulon::FormulonErrorCode`. `0` is
- * `kOk` (success); every other value identifies a module band as
+ * `FM_STATUS_OK` (0) (success); every other value identifies a module band as
  * documented in `src/utils/error.h`.
  */
 typedef int32_t fm_status_t;
@@ -192,7 +194,7 @@ typedef struct {
  * @param out  On success receives a freshly allocated handle. The
  *             caller owns the handle and must release it with
  *             `fm_workbook_destroy`.
- * @return `kOk` on success; `kBindingNullPointer` if `out == NULL`.
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out == NULL`.
  *
  * @thread-safety Not thread-safe with respect to its own `out`
  *                pointer. Two threads must not race to populate the
@@ -223,9 +225,9 @@ FM_API fm_status_t fm_workbook_create(fm_workbook_t** out);
  *                    e.g. `"mac-365-ja_JP"`.
  * @param out         On success receives a freshly allocated handle owned by
  *                    the caller (release with `fm_workbook_destroy`).
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `profile_id` or `out` is `NULL`;
- *         `kInvalidArgument` for an unknown profile id.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `profile_id` or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for an unknown profile id.
  */
 FM_API fm_status_t fm_workbook_create_for_profile(const char* profile_id, fm_workbook_t** out);
 
@@ -246,7 +248,7 @@ FM_API fm_status_t fm_workbook_create_for_profile(const char* profile_id, fm_wor
  * rule.
  *
  * @param out  On success receives a freshly allocated handle.
- * @return `kOk` on success; `kBindingNullPointer` if `out == NULL`.
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out == NULL`.
  */
 FM_API fm_status_t fm_workbook_create_empty(fm_workbook_t** out);
 
@@ -263,8 +265,8 @@ FM_API fm_status_t fm_workbook_create_empty(fm_workbook_t** out);
  * @param bytes  Pointer to the first byte of the OOXML or MS-XLSB archive.
  * @param len    Length of the buffer in bytes.
  * @param out    On success receives the freshly allocated handle.
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL` or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL` or
  *         `len == 0`;
  *         a `kIo*` / `kCrypto*` code from
  *         `formulon::FormulonErrorCode` on parse / archive failure.
@@ -332,13 +334,13 @@ typedef struct {
  * @brief Returns the load diagnostics captured when `wb` was created.
  *
  * `*out_diagnostics` is written to its all-zero state before argument
- * validation and stays all-zero on every non-`kOk` return, so a caller
+ * validation and stays all-zero on every non-`FM_STATUS_OK` (0) return, so a caller
  * may reuse one struct across calls without observing a previous call's
  * numbers. A workbook built in memory rather than loaded reports every
  * counter as zero.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if either pointer argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if either pointer argument is `NULL`.
  */
 FM_API fm_status_t fm_workbook_read_diagnostics(const fm_workbook_t* wb, fm_read_diagnostics_t* out_diagnostics);
 
@@ -359,7 +361,7 @@ FM_API fm_status_t fm_workbook_read_diagnostics(const fm_workbook_t* wb, fm_read
  *
  * @param wb         Workbook to measure.
  * @param out_bytes  On success receives the estimate.
- * @return `kOk` on success; `kBindingNullPointer` if either pointer is
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if either pointer is
  *         `NULL`.
  */
 FM_API fm_status_t fm_workbook_memory_usage(const fm_workbook_t* wb, size_t* out_bytes);
@@ -385,13 +387,13 @@ FM_API void fm_workbook_destroy(fm_workbook_t* wb);
  *   * Every non-NULL out-parameter is written to its zero state
  *     (`*out_bytes = NULL`, `*out_len = 0`, every counter `0`) *before*
  *     argument and model validation, and that zero state survives every
- *     non-`kOk` return. A caller may therefore reuse the same out variables
+ *     non-`FM_STATUS_OK` (0) return. A caller may therefore reuse the same out variables
  *     across calls without observing a previous call's pointer, and the
  *     "initialise to NULL, call, free unconditionally" idiom stays safe
  *     because `fm_buffer_free(NULL)` is a no-op.
- *   * A NULL out-parameter is rejected with `kBindingNullPointer` and never
+ *   * A NULL out-parameter is rejected with `FM_STATUS_BINDING_NULL_POINTER` (7001) and never
  *     dereferenced.
- *   * On `kOk`, `*out_bytes` owns exactly `*out_len` bytes allocated with
+ *   * On `FM_STATUS_OK` (0), `*out_bytes` owns exactly `*out_len` bytes allocated with
  *     `new uint8_t[]` and must be released with `fm_buffer_free`.
  */
 
@@ -407,8 +409,8 @@ FM_API void fm_workbook_destroy(fm_workbook_t* wb);
  * @param wb         Workbook handle. Must be non-NULL.
  * @param out_bytes  Receives a pointer to the freshly allocated buffer.
  * @param out_len    Receives the buffer length in bytes.
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         a `kIo*` code on archive / writer failure.
  */
 FM_API fm_status_t fm_workbook_save(const fm_workbook_t* wb, uint8_t** out_bytes, size_t* out_len);
@@ -418,7 +420,7 @@ FM_API fm_status_t fm_workbook_save(const fm_workbook_t* wb, uint8_t** out_bytes
  *
  * Mirrors `formulon::WorkbookFormat`. `FM_WORKBOOK_FORMAT_UNKNOWN`
  * is not a valid save target; passing it to `fm_workbook_save_as`
- * returns `kInvalidArgument`.
+ * returns `FM_STATUS_INVALID_ARGUMENT` (2).
  */
 typedef enum {
   FM_WORKBOOK_FORMAT_UNKNOWN = 0,
@@ -435,7 +437,7 @@ typedef enum {
  * package via the `.xlsb` writer.
  * `format` is a raw signed 32-bit ordinal so FFI callers can probe unknown
  * values without constructing an out-of-domain C enum; unknown values return
- * `kInvalidArgument`.
+ * `FM_STATUS_INVALID_ARGUMENT` (2).
  *
  * On success the caller receives a heap-allocated buffer that MUST be
  * released with `fm_buffer_free` (NOT `free`). This applies to every save
@@ -447,9 +449,9 @@ typedef enum {
  * @param format     Target container format.
  * @param out_bytes  Receives a pointer to the freshly allocated buffer.
  * @param out_len    Receives the buffer length in bytes.
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` if `format` is `FM_WORKBOOK_FORMAT_UNKNOWN`
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `format` is `FM_WORKBOOK_FORMAT_UNKNOWN`
  *         or otherwise undocumented;
  *         a `kIo*` code on archive / writer failure.
  */
@@ -475,7 +477,7 @@ typedef struct {
   /** Modelled sheet features the writer could not lower to records at
    *  all. XLSB only: the OOXML writer represents every modelled feature,
    *  and rejects the one case it cannot (a table whose metadata names a
-   *  removed sheet) with `kIoWriteFailed` before building any part, so
+   *  removed sheet) with `FM_STATUS_IO_WRITE_FAILED` (5016) before building any part, so
    *  the caller loses the save rather than the table.
    *  Fed by: `xlsb.writer.deferred`. */
   uint32_t deferred_feature_count;
@@ -517,7 +519,7 @@ typedef struct {
  * `format` uses the same raw signed 32-bit ordinal contract as
  * `fm_workbook_save_as`. Every output parameter — including every
  * `*out_diagnostics` field — is written to its zero / `NULL` state before
- * argument and model validation, and stays there on every non-`kOk`
+ * argument and model validation, and stays there on every non-`FM_STATUS_OK` (0)
  * return. `*out_diagnostics` is therefore always written, success or
  * failure; on failure it reads all-zero.
  *
@@ -563,9 +565,9 @@ FM_API size_t fm_workbook_sheet_count(const fm_workbook_t* wb);
  * @param wb         Workbook handle. Must be non-NULL.
  * @param index      0-based sheet index. Must be `< sheet_count`.
  * @param out_utf8   Receives a NUL-terminated UTF-8 pointer.
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index` is out of range.
  */
 FM_API fm_status_t fm_workbook_sheet_name(const fm_workbook_t* wb, size_t index, const char** out_utf8);
 
@@ -576,16 +578,16 @@ FM_API fm_status_t fm_workbook_sheet_name(const fm_workbook_t* wb, size_t index,
  * @param utf8_name  Strict UTF-8 display name; must be non-NULL. Worksheet
  *                   identity uses locale-independent Unicode simple case
  *                   folding (C/S mappings only, without normalization).
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kBindingUtf8EncodingError` when `utf8_name` is malformed UTF-8;
- *         `kInvalidSheetName` when `utf8_name` is empty,
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `utf8_name` is malformed UTF-8;
+ *         `FM_STATUS_INVALID_SHEET_NAME` (5051) when `utf8_name` is empty,
  *         exceeds 31 UTF-16 units, contains a forbidden character
  *         (`: \ / ? * [ ]`), begins or ends with an apostrophe, is
  *         `History` in any case, or collides under locale-independent
  *         Unicode simple case folding with an existing sheet -- the rules
  *         `fm_workbook_rename_sheet` applies;
- *         `kSheetCountLimitExceeded` when the workbook already contains
+ *         `FM_STATUS_SHEET_COUNT_LIMIT_EXCEEDED` (5053) when the workbook already contains
  *         the maximum supported sheet count.
  */
 FM_API fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* utf8_name);
@@ -598,9 +600,9 @@ FM_API fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* utf8_nam
  * `to_index == 2`, not `3`. A move to the same position is a successful
  * no-op.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kSheetIndexOutOfRange` when either index is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when either index is out of range.
  */
 FM_API fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, uint32_t from_index, uint32_t to_index);
 
@@ -624,16 +626,16 @@ FM_API fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, uint32_t from_index
  *                      `fm_workbook_add_sheet`, or `NULL` to name the copy as
  *                      Excel does (`Src (2)`).
  * @param out_index     Receives the copy's index. Must be non-NULL.
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_index` is `NULL`;
- *         `kBindingUtf8EncodingError` when `new_name` is malformed UTF-8;
- *         `kSheetIndexOutOfRange` when `source_index >= sheet_count` or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_index` is `NULL`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `new_name` is malformed UTF-8;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `source_index >= sheet_count` or
  *         `insert_before > sheet_count`;
- *         `kInvalidSheetName` when `new_name` is empty, too long, contains a
+ *         `FM_STATUS_INVALID_SHEET_NAME` (5051) when `new_name` is empty, too long, contains a
  *         forbidden character or collides with an existing sheet;
- *         `kSheetCountLimitExceeded` when the workbook is full;
- *         `kPreconditionFailed` when the source is very hidden;
- *         `kNotImplemented` when the source is not a worksheet or carries
+ *         `FM_STATUS_SHEET_COUNT_LIMIT_EXCEEDED` (5053) when the workbook is full;
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when the source is very hidden;
+ *         `FM_STATUS_NOT_IMPLEMENTED` (3) when the source is not a worksheet or carries
  *         content the copy cannot model (unrecognised relationships, slicers,
  *         shapes, pivot charts, or a drawing retained from an `.xlsb`).
  */
@@ -650,8 +652,8 @@ FM_API fm_status_t fm_workbook_copy_sheet(fm_workbook_t* wb, uint32_t source_ind
  * first visible sheet after it, else the nearest visible one before it, as
  * Excel does.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_index` is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_index` is `NULL`.
  */
 FM_API fm_status_t fm_workbook_get_active_sheet(const fm_workbook_t* wb, uint32_t* out_index);
 
@@ -664,9 +666,9 @@ FM_API fm_status_t fm_workbook_get_active_sheet(const fm_workbook_t* wb, uint32_
  * `<bookViews><workbookView activeTab="N"/></bookViews>`. Sheet `index`
  * becomes the only `tabSelected` sheet, as clicking its tab does in Excel.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`;
- *         `kInvalidArgument` when `index` is not a sheet of the workbook or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index` is not a sheet of the workbook or
  *         the sheet is hidden or very hidden.
  */
 FM_API fm_status_t fm_workbook_set_active_sheet(fm_workbook_t* wb, uint32_t index);
@@ -690,12 +692,12 @@ FM_API fm_status_t fm_workbook_set_active_sheet(fm_workbook_t* wb, uint32_t inde
  * sheet, so the only visible sheet cannot be removed while hidden ones
  * remain.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kSheetIndexOutOfRange` when `index` is out of range;
- *         `kCannotRemoveLastSheet` when the workbook has only one
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `index` is out of range;
+ *         `FM_STATUS_CANNOT_REMOVE_LAST_SHEET` (5052) when the workbook has only one
  *         sheet remaining;
- *         `kInvalidArgument` when `index` is the only visible sheet
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index` is the only visible sheet
  *         (the workbook is left unchanged).
  */
 FM_API fm_status_t fm_workbook_remove_sheet(fm_workbook_t* wb, uint32_t index);
@@ -711,11 +713,11 @@ FM_API fm_status_t fm_workbook_remove_sheet(fm_workbook_t* wb, uint32_t index);
  * Unicode simple case folding, so a casing-only rename updates references
  * to the same sheet.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kSheetIndexOutOfRange` when `index` is out of range;
- *         `kBindingUtf8EncodingError` when `new_name` is malformed UTF-8;
- *         `kInvalidSheetName` when `new_name` is empty,
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `index` is out of range;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `new_name` is malformed UTF-8;
+ *         `FM_STATUS_INVALID_SHEET_NAME` (5051) when `new_name` is empty,
  *         exceeds 31 UTF-16 units, contains a forbidden character
  *         (`: \ / ? * [ ]`), begins or ends with an apostrophe, is
  *         `History` in any case, or collides under locale-independent
@@ -738,10 +740,10 @@ FM_API fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, uint32_t index, c
  * accepted and dropped: the name stores the formula as files carry it,
  * spelled as `fm_workbook_set_formula` stores a cell formula.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `name` is empty;
- *         `kParserUnexpectedToken` (1000) when a non-empty `formula` does
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` is empty;
+ *         `FM_STATUS_PARSER_UNEXPECTED_TOKEN` (1000) when a non-empty `formula` does
  *         not parse.
  */
 FM_API fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const char* name, const char* formula);
@@ -755,11 +757,11 @@ FM_API fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const char* n
  * does not parse is rejected and leaves the name list unchanged. One
  * leading `=` is accepted and dropped, as for `fm_workbook_set_defined_name`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `name` is empty or `local_sheet_id`
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` is empty or `local_sheet_id`
  *         is outside `[-1, sheet_count)`;
- *         `kParserUnexpectedToken` (1000) when a non-empty `formula` does
+ *         `FM_STATUS_PARSER_UNEXPECTED_TOKEN` (1000) when a non-empty `formula` does
  *         not parse.
  */
 FM_API fm_status_t fm_workbook_set_defined_name_scoped(fm_workbook_t* wb, const char* name, const char* formula,
@@ -775,9 +777,9 @@ FM_API fm_status_t fm_workbook_set_defined_name_scoped(fm_workbook_t* wb, const 
  * unchanged, otherwise non-zero hides the name from the Name Manager.
  * Replacing a name's formula keeps both attributes.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `name` is `NULL`;
- *         `kInvalidArgument` when no such name exists in that scope.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `name` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when no such name exists in that scope.
  */
 FM_API fm_status_t fm_workbook_set_defined_name_attrs(fm_workbook_t* wb, const char* name, int32_t local_sheet_id,
                                                       const char* comment, int32_t hidden);
@@ -811,12 +813,12 @@ FM_API fm_status_t fm_workbook_set_defined_name_attrs(fm_workbook_t* wb, const c
  *        track the new positions; references that would land past the
  *        sheet bound collapse to `#REF!`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet` is out of range, `row` is
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range, `row` is
  *         past the sheet bound, or `count == 0`. Delete operations also
  *         reject a `count` that extends past the sheet bound;
- *         `kPreconditionFailed` when the edit cuts into a data table,
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when the edit cuts into a data table,
  *         legacy array block or PivotTable, or would push one of them or a
  *         table past the sheet bound; the workbook is unchanged.
  */
@@ -856,7 +858,7 @@ FM_API fm_status_t fm_workbook_delete_cols(fm_workbook_t* wb, uint32_t sheet, ui
  *
  * Every setter here, `fm_workbook_set_blank` included, refuses a non-anchor
  * cell of a legacy array formula (CSE) block: it returns
- * `kPreconditionFailed` and leaves the block unchanged. A write to the
+ * `FM_STATUS_PRECONDITION_FAILED` (9) and leaves the block unchanged. A write to the
  * block's anchor replaces the whole block.
  */
 
@@ -879,9 +881,9 @@ FM_API fm_status_t fm_workbook_delete_cols(fm_workbook_t* wb, uint32_t sheet, ui
  * to it (`fm_workbook_table_rename_column`), and the cell holds the final
  * name.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range, or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, or
  *         `value` is NaN or infinite.
  */
 FM_API fm_status_t fm_workbook_set_number(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -895,9 +897,9 @@ FM_API fm_status_t fm_workbook_set_number(fm_workbook_t* wb, size_t sheet_index,
  * to it (`fm_workbook_table_rename_column`), and the cell holds the final
  * name.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_workbook_set_bool(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                         int32_t value);
@@ -912,9 +914,9 @@ FM_API fm_status_t fm_workbook_set_bool(fm_workbook_t* wb, size_t sheet_index, u
  * to it (`fm_workbook_table_rename_column`), and the cell holds the final
  * name.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` or `error` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `error` is out of range.
  */
 FM_API fm_status_t fm_workbook_set_error(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                          fm_error_code_t error);
@@ -927,9 +929,9 @@ FM_API fm_status_t fm_workbook_set_error(fm_workbook_t* wb, size_t sheet_index, 
  * to it (`fm_workbook_table_rename_column`), and the cell holds the final
  * name.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_workbook_set_text(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                         const char* utf8);
@@ -966,9 +968,9 @@ typedef struct {
  * flattens a partially annotated cell into a single whole-cell annotation.
  * Use `fm_workbook_set_cell_phonetic_runs` to preserve the spans.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_workbook_set_cell_phonetic(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                                  const char* utf8);
@@ -994,10 +996,10 @@ FM_API fm_status_t fm_workbook_set_cell_phonetic(fm_workbook_t* wb, size_t sheet
  * overshoots is treated as covering the remainder of the text rather than
  * as an error.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`, if `runs` is `NULL` with
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`, if `runs` is `NULL` with
  *         a non-zero `count`, or if any run's `text` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` or the cell coordinate is
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or the cell coordinate is
  *         out of range, or when the runs are not an ordered partition.
  */
 FM_API fm_status_t fm_workbook_set_cell_phonetic_runs(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -1028,9 +1030,9 @@ FM_API fm_status_t fm_workbook_set_cell_phonetic_runs(fm_workbook_t* wb, size_t 
  * (`phonetic`) flags read from OOXML are preserved on save but have no setter
  * here.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` or the cell coordinate is
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or the cell coordinate is
  *         out of range.
  */
 FM_API fm_status_t fm_workbook_set_cell_show_phonetic(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -1057,9 +1059,9 @@ FM_API fm_status_t fm_workbook_set_cell_show_phonetic(fm_workbook_t* wb, size_t 
  * The all-zero triple is what Excel infers for a guide that arrived with no
  * `<phoneticPr>` at all, so a host that does not care can leave it alone.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` or the cell coordinate is
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or the cell coordinate is
  *         out of range, when `font_id` exceeds 65535, or when `type` or
  *         `alignment` is not one of the four values above.
  */
@@ -1075,9 +1077,9 @@ FM_API fm_status_t fm_workbook_set_cell_phonetic_properties(fm_workbook_t* wb, s
  * default name (`Column1`, `列1`; `fm_workbook_table_rename_column` with an
  * empty name), and the cell holds that name.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_workbook_set_blank(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col);
 
@@ -1103,10 +1105,10 @@ FM_API fm_status_t fm_workbook_set_blank(fm_workbook_t* wb, size_t sheet_index, 
  * hidden by a defined name as `T[]`. An unqualified `[Qty]` outside every
  * table does not parse.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range;
- *         `kParserUnexpectedToken` (1000) when `formula` does not parse.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range;
+ *         `FM_STATUS_PARSER_UNEXPECTED_TOKEN` (1000) when `formula` does not parse.
  */
 FM_API fm_status_t fm_workbook_set_formula(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                            const char* formula);
@@ -1129,9 +1131,9 @@ FM_API fm_status_t fm_workbook_set_formula(fm_workbook_t* wb, size_t sheet_index
  * long-lived read loop does not accumulate memory. Callers that need to
  * retain the string must copy it before another call.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index`, `row` or `col` is out of
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index`, `row` or `col` is out of
  *         range.
  */
 FM_API fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -1153,9 +1155,9 @@ FM_API fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t sheet_i
  * It is also invalid after a mutation or handle destruction. Copy it before
  * another call when it must outlive that window.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_text` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_text` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_workbook_get_cell_phonetic(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                  uint32_t col, const char** out_text);
@@ -1166,9 +1168,9 @@ FM_API fm_status_t fm_workbook_get_cell_phonetic(const fm_workbook_t* wb, size_t
  * Zero for a cell with no annotation, including one that does not exist.
  * Pair with `fm_workbook_get_cell_phonetic_run` to walk the spans.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_count` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_count` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_workbook_get_cell_phonetic_run_count(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                            uint32_t col, uint32_t* out_count);
@@ -1181,9 +1183,9 @@ FM_API fm_status_t fm_workbook_get_cell_phonetic_run_count(const fm_workbook_t* 
  * on this handle may invalidate it, so a caller collecting every run must
  * copy each one before asking for the next.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or
  *         `run_index` is past the cell's run count.
  */
 FM_API fm_status_t fm_workbook_get_cell_phonetic_run(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
@@ -1198,9 +1200,9 @@ FM_API fm_status_t fm_workbook_get_cell_phonetic_run(const fm_workbook_t* wb, si
  *
  * Any out-parameter may be `NULL` to skip that field.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_workbook_get_cell_phonetic_properties(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                             uint32_t col, uint32_t* out_font_id, uint32_t* out_type,
@@ -1217,9 +1219,9 @@ FM_API fm_status_t fm_workbook_get_cell_phonetic_properties(const fm_workbook_t*
  * and XLSB always stores the triple, so a reloaded or XLSB-loaded cell with
  * runs reports `1`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_present` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_present` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_workbook_has_cell_phonetic_properties(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                             uint32_t col, int32_t* out_present);
@@ -1228,9 +1230,9 @@ FM_API fm_status_t fm_workbook_has_cell_phonetic_properties(const fm_workbook_t*
  * @brief Reads the cell's "Show Phonetic" flag into `*out_show` (`0` or `1`).
  *        An absent cell reports `0`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_show` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_show` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_workbook_get_cell_show_phonetic(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                       uint32_t col, int32_t* out_show);
@@ -1254,9 +1256,9 @@ FM_API fm_status_t fm_workbook_get_cell_show_phonetic(const fm_workbook_t* wb, s
  * long-lived handle does not accumulate memory. Callers that need to retain
  * the string must copy it before another call.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range, the
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, the
  *         cell is absent, or the cached value is not a lambda.
  */
 FM_API fm_status_t fm_workbook_lambda_text_at(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -1300,10 +1302,10 @@ FM_API fm_status_t fm_workbook_lambda_text_at(fm_workbook_t* wb, size_t sheet_in
  *       iterative calc. This diverges from true in-cell F9 entry;
  *       self-reference detection is out of scope for this API.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `wb`, `formula`, or `out` is `NULL`;
- *         `kInvalidArgument` when `sheet_index`, `row`, or `col` is out of range;
- *         `kOutOfMemory` when the evaluation arena is exhausted.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `formula`, or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index`, `row`, or `col` is out of range;
+ *         `FM_STATUS_OUT_OF_MEMORY` (4) when the evaluation arena is exhausted.
  */
 FM_API fm_status_t fm_workbook_evaluate_formula(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                                 const char* formula, fm_value_t* out);
@@ -1326,10 +1328,10 @@ FM_API fm_status_t fm_workbook_evaluate_formula(const fm_workbook_t* wb, size_t 
  *       applies: a rule that reads its own anchored cell sees the cached
  *       value rather than raising `#REF!`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `wb`, `formula`, or `out` is `NULL`;
- *         `kInvalidArgument` when the sheet, target cell, or anchor cell is out of range;
- *         `kOutOfMemory` when the evaluation arena is exhausted.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `formula`, or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the sheet, target cell, or anchor cell is out of range;
+ *         `FM_STATUS_OUT_OF_MEMORY` (4) when the evaluation arena is exhausted.
  */
 FM_API fm_status_t fm_workbook_evaluate_cf_formula(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                    uint32_t col, uint32_t anchor_row, uint32_t anchor_col,
@@ -1369,11 +1371,11 @@ FM_API fm_status_t fm_workbook_evaluate_cf_formula(const fm_workbook_t* wb, size
  * @note The same self-reference caveat as `fm_workbook_evaluate_formula`
  *       applies: a self-reference reads the target cell's cached value.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `wb`, `formula`, `out_rows`, or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `formula`, `out_rows`, or
  *         `out_cols` is `NULL`;
- *         `kInvalidArgument` when `sheet_index`, `row`, or `col` is out of range;
- *         `kOutOfMemory` when the evaluation arena is exhausted (the
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index`, `row`, or `col` is out of range;
+ *         `FM_STATUS_OUT_OF_MEMORY` (4) when the evaluation arena is exhausted (the
  *         handle's array stash is left untouched, per the "a rejected call
  *         does not refresh storage" rule above).
  */
@@ -1396,9 +1398,9 @@ FM_API fm_status_t fm_workbook_evaluate_formula_array(const fm_workbook_t* wb, s
  * refresh the storage; mutation and handle destruction also invalidate it.
  * Copy it before another call if you need to retain it.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `wb` or `out` is `NULL`;
- *         `kInvalidArgument` when `index` is past the stashed result (or no
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index` is past the stashed result (or no
  *         array evaluation has run on this handle yet).
  */
 FM_API fm_status_t fm_workbook_evaluate_formula_array_cell(const fm_workbook_t* wb, size_t index, fm_value_t* out);
@@ -1439,10 +1441,10 @@ typedef struct {
  * are measured from `(base_row, base_col)` and wrap at the grid edge; with
  * `has_base` 0 a relative axis reads as `valid = 0`.
  *
- * @return `kOk` on success, including text that is not a reference;
- *         `kBindingNullPointer` when `wb`, `text` or `out` is `NULL`;
- *         `kBindingUtf8EncodingError` when `text` is malformed UTF-8;
- *         `kInvalidArgument` when `r1c1` or `has_base` is not 0/1, or
+ * @return `FM_STATUS_OK` (0) on success, including text that is not a reference;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `text` or `out` is `NULL`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `text` is malformed UTF-8;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `r1c1` or `has_base` is not 0/1, or
  *         `has_base` is 1 with the base outside the grid.
  */
 FM_API fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, const char* text, int32_t r1c1,
@@ -1460,10 +1462,10 @@ FM_API fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, const ch
  * (`2:11`). `absolute` 1 prefixes each component with `$`. `*out_text` is
  * a read-scratch-backed view.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `wb` or `out_text` is `NULL`;
- *         `kBindingUtf8EncodingError` when `sheet_name` is malformed UTF-8;
- *         `kInvalidArgument` when a coordinate is outside the grid,
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `out_text` is `NULL`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `sheet_name` is malformed UTF-8;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when a coordinate is outside the grid,
  *         `row0 > row1` or `col0 > col1`, or `absolute` is not 0/1.
  */
 FM_API fm_status_t fm_workbook_format_reference(const fm_workbook_t* wb, const char* sheet_name, uint32_t row0,
@@ -1490,9 +1492,9 @@ FM_API fm_status_t fm_workbook_format_reference(const fm_workbook_t* wb, const c
  * `(row, col)` ascending order. The enumeration is stable for a given
  * workbook state (no cell mutation has occurred between calls).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL` or `out_count == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL` or `out_count == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_workbook_cell_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
 
@@ -1517,10 +1519,10 @@ FM_API fm_status_t fm_workbook_cell_count(const fm_workbook_t* wb, size_t sheet_
  * The scratch is refreshed by each successful producer so iterating
  * `cell_at` does not accumulate memory.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb`, `out_row`, `out_col`, or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `out_row`, `out_col`, or
  *         `out_value` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or
  *         `idx >= cell_count`.
  */
 FM_API fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx, uint32_t* out_row,
@@ -1547,9 +1549,9 @@ FM_API fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet_ind
  * `*out_formula` is a read-scratch-backed view: valid until the next
  * successful scratch-backed read, any mutation, or handle destruction.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or the
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or the
  *         coordinate is outside the grid.
  */
 FM_API fm_status_t fm_workbook_get_formula(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -1567,14 +1569,14 @@ FM_API fm_status_t fm_workbook_get_formula(const fm_workbook_t* wb, size_t sheet
  * `fm_workbook_get_formula`.
  *
  * A formula loaded from a file that does not parse is kept verbatim: it
- * evaluates to `#NAME?` and fails here with `kParserUnexpectedToken`.
+ * evaluates to `#NAME?` and fails here with `FM_STATUS_PARSER_UNEXPECTED_TOKEN` (1000).
  * `fm_workbook_set_formula` never produces that state.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or the
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or the
  *         coordinate is outside the grid;
- *         `kParserUnexpectedToken` (1000) when the stored formula does not
+ *         `FM_STATUS_PARSER_UNEXPECTED_TOKEN` (1000) when the stored formula does not
  *         parse.
  */
 FM_API fm_status_t fm_workbook_get_formula_r1c1(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -1599,9 +1601,9 @@ typedef struct fm_cell_range fm_cell_range_t;
  * `fm_cell_range_destroy`; it is a snapshot, so later mutations do not
  * change it.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `out == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range, the
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, the
  *         rectangle is inverted or outside the grid, or `cursor` is past
  *         the last cell of the grid.
  */
@@ -1612,7 +1614,7 @@ FM_API fm_status_t fm_sheet_cells_in_range(const fm_workbook_t* wb, size_t sheet
 /**
  * @brief Number of cells in the page.
  *
- * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`.
  */
 FM_API fm_status_t fm_cell_range_count(const fm_cell_range_t* range, size_t* out_count);
 
@@ -1624,10 +1626,10 @@ FM_API fm_status_t fm_cell_range_count(const fm_cell_range_t* range, size_t* out
  * be `NULL` to skip it. Both the formula and a `FM_VAL_TEXT` payload are
  * owned by the handle and stay valid until `fm_cell_range_destroy`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `range`, `out_row`, `out_col`, or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `range`, `out_row`, `out_col`, or
  *         `out_value` is `NULL`;
- *         `kInvalidArgument` when `idx` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range.
  */
 FM_API fm_status_t fm_cell_range_at(const fm_cell_range_t* range, size_t idx, uint32_t* out_row, uint32_t* out_col,
                                     const char** out_formula, fm_value_t* out_value);
@@ -1636,7 +1638,7 @@ FM_API fm_status_t fm_cell_range_at(const fm_cell_range_t* range, size_t idx, ui
  * @brief Reads the cursor that resumes after this page, or `UINT64_MAX` when
  *        the rectangle holds no further populated cell.
  *
- * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`.
  */
 FM_API fm_status_t fm_cell_range_next_cursor(const fm_cell_range_t* range, uint64_t* out_cursor);
 
@@ -1671,9 +1673,9 @@ typedef enum {
  * A coordinate with no value or spill result is `""`. `*out_text` is a
  * read-scratch-backed view.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or the
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or the
  *         coordinate is outside the grid.
  */
 FM_API fm_status_t fm_workbook_get_display_text(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -1686,10 +1688,10 @@ FM_API fm_status_t fm_workbook_get_display_text(const fm_workbook_t* wb, size_t 
  * An empty `format_code` means General. `value` must be blank, a number,
  * a boolean, text, or an error. `*out_text` is a read-scratch-backed view.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`, or a
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`, or a
  *         `FM_VAL_TEXT` value carries a `NULL` text;
- *         `kInvalidArgument` when the value kind is not one of the above,
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the value kind is not one of the above,
  *         a number is NaN or infinite, or an error code is out of range.
  */
 FM_API fm_status_t fm_workbook_format_value(const fm_workbook_t* wb, const fm_value_t* value, const char* format_code,
@@ -1721,10 +1723,10 @@ FM_API size_t fm_workbook_defined_name_count(const fm_workbook_t* wb);
  * `out_local_sheet_id` is optional: when non-NULL it receives `-1` for
  * workbook scope, or a 0-based sheet index for sheet-local scope.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb`, `out_name`, or `out_formula` is
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `out_name`, or `out_formula` is
  *         `NULL`;
- *         `kInvalidArgument` when `idx` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range.
  */
 FM_API fm_status_t fm_workbook_defined_name_at(const fm_workbook_t* wb, size_t idx, const char** out_name,
                                                const char** out_formula, int32_t* out_local_sheet_id);
@@ -1737,9 +1739,9 @@ FM_API fm_status_t fm_workbook_defined_name_at(const fm_workbook_t* wb, size_t i
  * `fm_workbook_defined_name_at`'s strings, `""` when the name has no comment.
  * `*out_hidden` is 0/1.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range.
  */
 FM_API fm_status_t fm_workbook_defined_name_attrs_at(const fm_workbook_t* wb, size_t idx, const char** out_comment,
                                                      int32_t* out_hidden);
@@ -1762,9 +1764,9 @@ FM_API size_t fm_workbook_table_count(const fm_workbook_t* wb);
  * effect (a structural row/column insert/delete, or a sheet rename/removal)
  * -- or until the handle is destroyed. Reads do not invalidate them.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range.
  */
 FM_API fm_status_t fm_workbook_table_at(const fm_workbook_t* wb, size_t idx, const char** out_name,
                                         const char** out_display_name, const char** out_ref, size_t* out_sheet_index);
@@ -1850,16 +1852,16 @@ typedef struct {
 /**
  * @brief Reads the style, row counts and column count of table `index`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
- *         `kInvalidArgument` when `index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index` is out of range.
  */
 FM_API fm_status_t fm_workbook_table_get_info(const fm_workbook_t* wb, size_t index, fm_table_info_t* out);
 
 /**
  * @brief Reads column `column` (0-based, left to right) of table `index`.
  *
- * @return As `fm_workbook_table_get_info`, with `kInvalidArgument` also for an
+ * @return As `fm_workbook_table_get_info`, with `FM_STATUS_INVALID_ARGUMENT` (2) also for an
  *         out-of-range `column`.
  */
 FM_API fm_status_t fm_workbook_table_get_column(const fm_workbook_t* wb, size_t index, size_t column,
@@ -1872,9 +1874,9 @@ FM_API fm_status_t fm_workbook_table_get_column(const fm_workbook_t* wb, size_t 
  *        `fm_workbook_table_create` starts a styled table with row stripes on
  *        and the other three off.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`;
- *         `kInvalidArgument` when `index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index` is out of range.
  */
 FM_API fm_status_t fm_workbook_table_set_style_info(fm_workbook_t* wb, size_t index, const char* style_name,
                                                     int32_t show_first_column, int32_t show_last_column,
@@ -1890,9 +1892,9 @@ FM_API fm_status_t fm_workbook_table_set_style_info(fm_workbook_t* wb, size_t in
  * conditional formats, data validations, calculated-column and totals-row
  * formulas, and chart series. A pivot cache sourced from the table follows.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `name` is `NULL`;
- *         `kInvalidArgument` when `index` is out of range or a name is empty
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `name` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index` is out of range or a name is empty
  *         or taken.
  */
 FM_API fm_status_t fm_workbook_table_rename(fm_workbook_t* wb, size_t index, const char* name,
@@ -1917,10 +1919,10 @@ FM_API fm_status_t fm_workbook_table_rename(fm_workbook_t* wb, size_t index, con
  * `*out_name` receives the final name, read-scratch-backed: valid until the
  * next successful scratch-backed read, any mutation, or handle destruction.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb`, `name` or `out_name` is `NULL`;
- *         `kInvalidArgument` when `index` or `column` is out of range;
- *         `kBindingUtf8EncodingError` when `name` is not valid UTF-8.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `name` or `out_name` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index` or `column` is out of range;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `name` is not valid UTF-8.
  */
 FM_API fm_status_t fm_workbook_table_rename_column(fm_workbook_t* wb, size_t index, size_t column, const char* name,
                                                    const char** out_name);
@@ -1940,11 +1942,11 @@ FM_API fm_status_t fm_workbook_table_rename_column(fm_workbook_t* wb, size_t ind
  * becomes `SUBTOTAL(<101..110>,Table[Column])`, `custom` becomes `formula`,
  * otherwise the label is written as text, or the cell is cleared.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`;
- *         `kInvalidArgument` when `index` or `column` is out of range, the
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index` or `column` is out of range, the
  *         token is unknown, or `custom` has no formula;
- *         `kParserUnexpectedToken` when `formula` does not parse.
+ *         `FM_STATUS_PARSER_UNEXPECTED_TOKEN` (1000) when `formula` does not parse.
  */
 FM_API fm_status_t fm_workbook_table_set_column_totals(fm_workbook_t* wb, size_t index, size_t column,
                                                        const char* function, const char* label, const char* formula);
@@ -1966,9 +1968,9 @@ FM_API size_t fm_workbook_passthrough_count(const fm_workbook_t* wb);
  * replaced by a reader/writer round-trip, another invalidating workbook
  * mutation, or handle destruction. Reads do not invalidate it.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range.
  */
 FM_API fm_status_t fm_workbook_passthrough_at(const fm_workbook_t* wb, size_t idx, const char** out_path);
 
@@ -2021,9 +2023,9 @@ typedef struct {
  * @brief Appends a hyperlink covering the inclusive rectangle
  *        `(hl.row, hl.col)..(hl.last_row, hl.last_col)` to `sheet`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet` is out of range or the hyperlink
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range or the hyperlink
  *         rectangle is inverted or outside the Excel grid.
  */
 FM_API fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, uint32_t sheet, fm_hyperlink hl);
@@ -2032,9 +2034,9 @@ FM_API fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, uint32_t sheet, fm_
  * @brief Removes every hyperlink anchored at the exact `(row, col)`
  *        cell on `sheet`. No-op when nothing matches.
  *
- * @return `kOk` on success (including the no-match case);
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet` is out of range.
+ * @return `FM_STATUS_OK` (0) on success (including the no-match case);
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
  */
 FM_API fm_status_t fm_sheet_remove_hyperlink(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col);
 
@@ -2042,9 +2044,9 @@ FM_API fm_status_t fm_sheet_remove_hyperlink(fm_workbook_t* wb, uint32_t sheet, 
  * @brief Removes the hyperlink at `index` on `sheet`. Mirrors the
  *        index domain of fm_sheet_get_hyperlink_at.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet` or `index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` or `index` is out of range.
  */
 FM_API fm_status_t fm_sheet_remove_hyperlink_at(fm_workbook_t* wb, uint32_t sheet, uint32_t index);
 
@@ -2052,9 +2054,9 @@ FM_API fm_status_t fm_sheet_remove_hyperlink_at(fm_workbook_t* wb, uint32_t shee
  * @brief Drops every hyperlink on `sheet`. No-op when the sheet
  *        already has no hyperlinks.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
  */
 FM_API fm_status_t fm_sheet_clear_hyperlinks(fm_workbook_t* wb, uint32_t sheet);
 
@@ -2063,9 +2065,9 @@ FM_API fm_status_t fm_sheet_clear_hyperlinks(fm_workbook_t* wb, uint32_t sheet);
  *        Corners are normalised internally. The resulting inclusive
  *        rectangle must lie within the Excel grid.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet` is out of range or the merge
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range or the merge
  *         rectangle is outside the Excel grid.
  */
 FM_API fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, uint32_t sheet, fm_merge_range merge);
@@ -2077,9 +2079,9 @@ FM_API fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, uint32_t sheet, fm_merg
  *        caller may pass either (first <= last) or transposed corners,
  *        mirroring fm_sheet_add_merge.
  *
- * @return `kOk` on success (including the no-overlap case);
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet` is out of range.
+ * @return `FM_STATUS_OK` (0) on success (including the no-overlap case);
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
  */
 FM_API fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, uint32_t sheet, fm_merge_range range);
 
@@ -2087,9 +2089,9 @@ FM_API fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, uint32_t sheet, fm_m
  * @brief Removes the merge at `index` on `sheet`. Mirrors the
  *        index domain of fm_sheet_get_merge_at.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet` or `index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` or `index` is out of range.
  */
 FM_API fm_status_t fm_sheet_remove_merge_at(fm_workbook_t* wb, uint32_t sheet, uint32_t index);
 
@@ -2097,16 +2099,16 @@ FM_API fm_status_t fm_sheet_remove_merge_at(fm_workbook_t* wb, uint32_t sheet, u
  * @brief Drops every merge range on `sheet`. No-op when the sheet
  *        already has no merges.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
  */
 FM_API fm_status_t fm_sheet_clear_merges(fm_workbook_t* wb, uint32_t sheet);
 
 /**
  * @brief Reads `(out_row, out_col, out_author, out_text)` for the
- *        comment at `(row, col)` on `sheet`. Returns `kNotFound` when no
- *        comment is anchored there, and `kInvalidArgument` when `sheet` is
+ *        comment at `(row, col)` on `sheet`. Returns `FM_STATUS_NOT_FOUND` (6) when no
+ *        comment is anchored there, and `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is
  *        out of range.
  *
  * `out->author` and `out->text` are model-backed views into the workbook
@@ -2121,9 +2123,9 @@ FM_API fm_status_t fm_sheet_get_comment_at(fm_workbook_t* wb, uint32_t sheet, ui
  * @brief Returns the number of comments attached to `sheet`, including
  *        comments anchored on cells that carry no value.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_comment_count(fm_workbook_t* wb, uint32_t sheet, uint32_t* out_count);
 
@@ -2137,9 +2139,9 @@ FM_API fm_status_t fm_sheet_get_comment_count(fm_workbook_t* wb, uint32_t sheet,
  * `out->author` and `out->text` are model-backed views into the workbook
  * handle, with the same lifetime contract as `fm_sheet_get_comment_at`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet` or `index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` or `index` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_comment_at_index(fm_workbook_t* wb, uint32_t sheet, uint32_t index, fm_comment* out);
 
@@ -2148,9 +2150,9 @@ FM_API fm_status_t fm_sheet_get_comment_at_index(fm_workbook_t* wb, uint32_t she
  *
  * String fields in `out` are model-backed views (see `fm_hyperlink`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet` or `index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` or `index` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_hyperlink_at(fm_workbook_t* wb, uint32_t sheet, uint32_t index, fm_hyperlink* out);
 
@@ -2178,10 +2180,10 @@ FM_API fm_status_t fm_sheet_get_merge_count(fm_workbook_t* wb, uint32_t sheet, u
  * (and `out` may then be `NULL`) to size the buffer first. `range` corners
  * are normalised, mirroring `fm_sheet_remove_merge`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_count` is `NULL`, or `out`
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_count` is `NULL`, or `out`
  *         is `NULL` while `capacity > 0`;
- *         `kInvalidArgument` when `sheet` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
  */
 FM_API fm_status_t fm_sheet_merges_in_range(fm_workbook_t* wb, uint32_t sheet, fm_merge_range range,
                                             fm_merge_range* out, uint32_t capacity, uint32_t* out_count);
@@ -2192,11 +2194,11 @@ FM_API fm_status_t fm_sheet_merges_in_range(fm_workbook_t* wb, uint32_t sheet, f
  *        comment. The strings are copied into the workbook handle's text
  *        storage. The coordinate must lie within the Excel grid.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet` is out of range or the coordinate
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range or the coordinate
  *         is outside the Excel grid;
- *         `kThreadedCommentInvalid` when the cell already holds a threaded
+ *         `FM_STATUS_THREADED_COMMENT_INVALID` (9006) when the cell already holds a threaded
  *         comment (a cell carries a note or a thread, never both).
  *         Replacing a note keeps its `xr:uid`.
  */
@@ -2207,10 +2209,10 @@ FM_API fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, uint32_t sheet, uint3
  * @brief Reads whether the note at `(row, col)` is shown without hovering
  *        (`visibility:visible` in the note's VML shape).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_visible` is `NULL`;
- *         `kInvalidArgument` when `sheet` is out of range;
- *         `kNotFound` when no note is anchored at the cell.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_visible` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range;
+ *         `FM_STATUS_NOT_FOUND` (6) when no note is anchored at the cell.
  */
 FM_API fm_status_t fm_sheet_get_comment_visible(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
                                                 int32_t* out_visible);
@@ -2219,10 +2221,10 @@ FM_API fm_status_t fm_sheet_get_comment_visible(fm_workbook_t* wb, uint32_t shee
  * @brief Shows (`visible != 0`) or hides the note at `(row, col)`. The note's
  *        box geometry is kept.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet` is out of range;
- *         `kNotFound` when no note is anchored at the cell.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range;
+ *         `FM_STATUS_NOT_FOUND` (6) when no note is anchored at the cell.
  */
 FM_API fm_status_t fm_sheet_set_comment_visible(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
                                                 int32_t visible);
@@ -2259,8 +2261,8 @@ typedef struct {
  * @brief Reads the workbook's `<workbookProtection>`; every field is zero or
  *        empty when the workbook has none.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out` is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`.
  */
 FM_API fm_status_t fm_workbook_get_protection(fm_workbook_t* wb, fm_workbook_protection_t* out);
 
@@ -2269,8 +2271,8 @@ FM_API fm_status_t fm_workbook_get_protection(fm_workbook_t* wb, fm_workbook_pro
  *        with every field zero or empty removes the element. Attributes the
  *        record does not model (the password character sets) are kept.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `protection` is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `protection` is `NULL`.
  */
 FM_API fm_status_t fm_workbook_set_protection(fm_workbook_t* wb, const fm_workbook_protection_t* protection);
 
@@ -2293,18 +2295,18 @@ typedef struct {
 /**
  * @brief Number of protected ranges on `sheet`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_count` is `NULL`;
- *         `kInvalidArgument` when `sheet` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_count` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
  */
 FM_API fm_status_t fm_sheet_protected_range_count(fm_workbook_t* wb, uint32_t sheet, uint32_t* out_count);
 
 /**
  * @brief Reads protected range `index` in file order.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
- *         `kInvalidArgument` when `sheet` or `index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` or `index` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_protected_range(fm_workbook_t* wb, uint32_t sheet, uint32_t index,
                                                 fm_protected_range_t* out);
@@ -2314,9 +2316,9 @@ FM_API fm_status_t fm_sheet_get_protected_range(fm_workbook_t* wb, uint32_t shee
  *        like any other sheet range and disappears when an edit deletes all
  *        of it.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `range` is `NULL`;
- *         `kInvalidArgument` when `sheet` is out of range, `name` is empty or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `range` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range, `name` is empty or
  *         already names another range of the sheet, or `sqref` does not parse
  *         as an A1 range list.
  */
@@ -2332,9 +2334,9 @@ FM_API fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, uint32_t s
 /**
  * @brief Removes protected range `index`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet` or `index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` or `index` is out of range.
  */
 FM_API fm_status_t fm_sheet_remove_protected_range(fm_workbook_t* wb, uint32_t sheet, uint32_t index);
 
@@ -2395,9 +2397,9 @@ typedef struct {
 /**
  * @brief Returns the number of data-validation rules attached to `sheet`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_validation_count(fm_workbook_t* wb, uint32_t sheet, uint32_t* out_count);
 
@@ -2415,9 +2417,9 @@ FM_API fm_status_t fm_sheet_get_validation_count(fm_workbook_t* wb, uint32_t she
  * differs from the model's (see `fm_workbook_file_name`), both are
  * read-scratch-backed instead, valid until the next scratch-backed read.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet` or `index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` or `index` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_validation_at(fm_workbook_t* wb, uint32_t sheet, uint32_t index,
                                               fm_data_validation* out);
@@ -2437,14 +2439,14 @@ FM_API fm_status_t fm_sheet_get_validation_at(fm_workbook_t* wb, uint32_t sheet,
  * the rule stores them as files carry them, spelled as
  * `fm_workbook_set_formula` stores a cell formula.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet` is out of range, when
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range, when
  *         `v.range_count > 0 && v.ranges == NULL` or `v.range_count`
  *         exceeds the per-call range cap, when any supplied range is
  *         outside the Excel grid, or when `v.type`, `v.op` or
  *         `v.error_style` is outside the domain listed above;
- *         `kParserUnexpectedToken` (1000) when a non-empty `v.formula1` or
+ *         `FM_STATUS_PARSER_UNEXPECTED_TOKEN` (1000) when a non-empty `v.formula1` or
  *         `v.formula2` does not parse (the rule is not stored).
  */
 FM_API fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, uint32_t sheet, fm_data_validation v);
@@ -2452,9 +2454,9 @@ FM_API fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, uint32_t sheet, fm
 /**
  * @brief Removes the validation rule at `index` on `sheet`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet` or `index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` or `index` is out of range.
  */
 FM_API fm_status_t fm_sheet_remove_validation_at(fm_workbook_t* wb, uint32_t sheet, uint32_t index);
 
@@ -2462,9 +2464,9 @@ FM_API fm_status_t fm_sheet_remove_validation_at(fm_workbook_t* wb, uint32_t she
  * @brief Drops every validation rule on `sheet`. No-op when the sheet
  *        already has no rules.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
  */
 FM_API fm_status_t fm_sheet_clear_validations(fm_workbook_t* wb, uint32_t sheet);
 
@@ -2495,10 +2497,10 @@ typedef struct {
  * formulas, including a `custom` formula that refers to the cell itself,
  * read the workbook as stored.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`, or a
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`, or a
  *         `FM_VAL_TEXT` value carries a `NULL` text;
- *         `kInvalidArgument` when `sheet_index` is out of range, the cell is
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, the cell is
  *         outside the grid, the number is not finite, the error code is out
  *         of range, or the value kind is an array, reference or lambda.
  */
@@ -2515,9 +2517,9 @@ FM_API fm_status_t fm_sheet_validate_value(const fm_workbook_t* wb, size_t sheet
  * for the first page and `fm_cell_range_next_cursor`'s value for each
  * following one, which is `UINT64_MAX` once no further invalid cell exists.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `out == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or `cursor`
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or `cursor`
  *         is past the last cell of the grid.
  */
 FM_API fm_status_t fm_sheet_list_invalid_cells(const fm_workbook_t* wb, size_t sheet_index, uint64_t cursor,
@@ -2573,9 +2575,9 @@ typedef struct {
 /**
  * @brief Number of threaded comments on the sheet, replies included.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `out_count == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out_count == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_threaded_comment_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
 
@@ -2586,9 +2588,9 @@ FM_API fm_status_t fm_sheet_threaded_comment_count(const fm_workbook_t* wb, size
  * Every string and the `mentions` array are read-scratch-backed views, with
  * the lifetime `fm_sheet_get_auto_filter` describes.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `out == NULL`;
- *         `kInvalidArgument` when `sheet_index` or `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `idx` is out of range.
  */
 FM_API fm_status_t fm_sheet_threaded_comment_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
                                                 fm_threaded_comment* out);
@@ -2599,12 +2601,12 @@ FM_API fm_status_t fm_sheet_threaded_comment_at(const fm_workbook_t* wb, size_t 
  *        non-empty one appends a reply to that thread, taking its anchor and
  *        ignoring `row`, `col` and `done`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `comment` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range, a new
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `comment` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, a new
  *         thread's cell is outside the grid, or `mentions` is `NULL` with a
  *         non-zero count;
- *         `kThreadedCommentInvalid` (9006) for a malformed id or timestamp,
+ *         `FM_STATUS_THREADED_COMMENT_INVALID` (9006) for a malformed id or timestamp,
  *         a duplicate id, an unknown person or parent, a cell already
  *         carrying a note or thread, or a mention outside the text. The
  *         sheet is then unchanged.
@@ -2615,11 +2617,11 @@ FM_API fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t sheet
 /**
  * @brief Replaces the text and mentions of the comment with `id`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `id` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `id` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or
  *         `mentions` is `NULL` with a non-zero count;
- *         `kThreadedCommentInvalid` (9006) when no comment has `id` or a
+ *         `FM_STATUS_THREADED_COMMENT_INVALID` (9006) when no comment has `id` or a
  *         mention is invalid.
  */
 FM_API fm_status_t fm_sheet_edit_threaded_comment(fm_workbook_t* wb, size_t sheet_index, const char* id,
@@ -2628,10 +2630,10 @@ FM_API fm_status_t fm_sheet_edit_threaded_comment(fm_workbook_t* wb, size_t shee
 /**
  * @brief Sets the resolved state of the thread opened by `thread_id`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `thread_id` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range;
- *         `kThreadedCommentInvalid` (9006) when `thread_id` names no opening
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `thread_id` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range;
+ *         `FM_STATUS_THREADED_COMMENT_INVALID` (9006) when `thread_id` names no opening
  *         comment.
  */
 FM_API fm_status_t fm_sheet_set_thread_resolved(fm_workbook_t* wb, size_t sheet_index, const char* thread_id,
@@ -2641,17 +2643,17 @@ FM_API fm_status_t fm_sheet_set_thread_resolved(fm_workbook_t* wb, size_t sheet_
  * @brief Removes the comment with `id`; removing an opening comment removes
  *        its whole thread.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `id` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range;
- *         `kThreadedCommentInvalid` (9006) when no comment has `id`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `id` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range;
+ *         `FM_STATUS_THREADED_COMMENT_INVALID` (9006) when no comment has `id`.
  */
 FM_API fm_status_t fm_sheet_remove_threaded_comment(fm_workbook_t* wb, size_t sheet_index, const char* id);
 
 /**
  * @brief Number of entries in the workbook's person list.
  *
- * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`.
  */
 FM_API fm_status_t fm_workbook_person_count(const fm_workbook_t* wb, size_t* out_count);
 
@@ -2659,18 +2661,18 @@ FM_API fm_status_t fm_workbook_person_count(const fm_workbook_t* wb, size_t* out
  * @brief Reads person `idx`, in file order. The strings are
  *        read-scratch-backed views.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any argument is `NULL`;
- *         `kInvalidArgument` when `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range.
  */
 FM_API fm_status_t fm_workbook_person_at(const fm_workbook_t* wb, size_t idx, fm_person* out);
 
 /**
  * @brief Appends a person to the workbook's person list.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any argument is `NULL`;
- *         `kThreadedCommentInvalid` (9006) when the id is malformed or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`;
+ *         `FM_STATUS_THREADED_COMMENT_INVALID` (9006) when the id is malformed or
  *         already listed, or the display name is empty.
  */
 FM_API fm_status_t fm_workbook_add_person(fm_workbook_t* wb, const fm_person* person);
@@ -2678,9 +2680,9 @@ FM_API fm_status_t fm_workbook_add_person(fm_workbook_t* wb, const fm_person* pe
 /**
  * @brief Removes the person with `id`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any argument is `NULL`;
- *         `kThreadedCommentInvalid` (9006) when no person has `id`, or a
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`;
+ *         `FM_STATUS_THREADED_COMMENT_INVALID` (9006) when no person has `id`, or a
  *         threaded comment or mention still names them.
  */
 FM_API fm_status_t fm_workbook_remove_person(fm_workbook_t* wb, const char* id);
@@ -2693,8 +2695,8 @@ FM_API fm_status_t fm_workbook_remove_person(fm_workbook_t* wb, const char* id);
  * @brief Drives a full incremental recalc using the default function
  *        registry (`eval::default_registry()`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
  *         a `kEval*` / `kGraph*` code on engine failure.
  */
 FM_API fm_status_t fm_workbook_recalc(fm_workbook_t* wb);
@@ -2728,10 +2730,10 @@ typedef struct {
  * claimed at least one SCC task. A configured iterative-progress callback
  * is always invoked on the caller thread for cyclic layers.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `thread_count > 8`;
- *         `kGraphRecalcReentrant` when called recursively from a recalc
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `thread_count > 8`;
+ *         `FM_STATUS_GRAPH_RECALC_REENTRANT` (4005) when called recursively from a recalc
  *         callback (including a scheduler worker);
  *         a `kEval*` / `kGraph*` code on engine failure.
  */
@@ -2753,8 +2755,8 @@ FM_API fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t threa
  *                        value, not the requested one.
  * @param max_change      Absolute convergence threshold.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`.
  */
 FM_API fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enabled, int32_t max_iterations,
                                              double max_change);
@@ -2766,16 +2768,16 @@ FM_API fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enabled,
  * This is useful for hosts that expose Excel's enable checkbox separately
  * from its advanced iterative-calculation settings.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`.
  */
 FM_API fm_status_t fm_workbook_set_iterative_enabled(fm_workbook_t* wb, int32_t enabled);
 
 /**
  * @brief Reads the iterative-calculation settings currently stored on a workbook.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`.
  */
 FM_API fm_status_t fm_workbook_get_iterative(const fm_workbook_t* wb, int32_t* out_enabled,
                                              uint32_t* out_max_iterations, double* out_max_change);
@@ -2809,8 +2811,8 @@ typedef enum {
  * @param wb       Workbook handle. Must not be NULL.
  * @param out_mode Populated on success.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_mode` is NULL.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_mode` is NULL.
  */
 FM_API fm_status_t fm_workbook_calc_mode(const fm_workbook_t* wb, fm_calc_mode_t* out_mode);
 
@@ -2820,11 +2822,11 @@ FM_API fm_status_t fm_workbook_calc_mode(const fm_workbook_t* wb, fm_calc_mode_t
  * Plain metadata — does not affect evaluation. The value is a raw signed
  * 32-bit enum ordinal so FFI callers can pass an arbitrary value without
  * first constructing an out-of-domain C enum. Unknown values (outside the
- * documented range) return `kInvalidArgument`.
+ * documented range) return `FM_STATUS_INVALID_ARGUMENT` (2).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` if `mode` is not a documented value.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `mode` is not a documented value.
  */
 FM_API fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, int32_t mode);
 
@@ -2841,37 +2843,38 @@ typedef enum {
  * Plain metadata like the calc mode: the engine evaluates at full precision
  * whatever this holds.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out` is NULL.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is NULL.
  */
 FM_API fm_status_t fm_workbook_full_precision(const fm_workbook_t* wb, int32_t* out);
 
-/** @brief Sets `<calcPr fullPrecision>` (non-zero = full precision). @return `kOk`, or `kBindingNullPointer` if `wb` is
- * NULL. */
+/** @brief Sets `<calcPr fullPrecision>` (non-zero = full precision). @return `FM_STATUS_OK` (0), or
+ * `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is NULL. */
 FM_API fm_status_t fm_workbook_set_full_precision(fm_workbook_t* wb, int32_t full_precision);
 
-/** @brief Reads `<calcPr calcOnSave>` (default 1). @return `kOk`, or `kBindingNullPointer` if `wb` or `out` is NULL. */
+/** @brief Reads `<calcPr calcOnSave>` (default 1). @return `FM_STATUS_OK` (0), or `FM_STATUS_BINDING_NULL_POINTER`
+ * (7001) if `wb` or `out` is NULL. */
 FM_API fm_status_t fm_workbook_calc_on_save(const fm_workbook_t* wb, int32_t* out);
 
-/** @brief Sets `<calcPr calcOnSave>` (non-zero = recalculate before saving). @return `kOk`, or `kBindingNullPointer` if
- * `wb` is NULL. */
+/** @brief Sets `<calcPr calcOnSave>` (non-zero = recalculate before saving). @return `FM_STATUS_OK` (0), or
+ * `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is NULL. */
 FM_API fm_status_t fm_workbook_set_calc_on_save(fm_workbook_t* wb, int32_t calc_on_save);
 
-/** @brief Reads `<calcPr refMode>` as an `fm_ref_mode_t`. @return `kOk`, or `kBindingNullPointer` if `wb` or `out` is
- * NULL. */
+/** @brief Reads `<calcPr refMode>` as an `fm_ref_mode_t`. @return `FM_STATUS_OK` (0), or
+ * `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is NULL. */
 FM_API fm_status_t fm_workbook_ref_mode(const fm_workbook_t* wb, fm_ref_mode_t* out);
 
 /**
  * @brief Sets `<calcPr refMode>` from a raw `fm_ref_mode_t` ordinal.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` if `mode` is not a documented value.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `mode` is not a documented value.
  */
 FM_API fm_status_t fm_workbook_set_ref_mode(fm_workbook_t* wb, int32_t mode);
 
-/** @brief Reads the workbook's 1904 date system flag (`<workbookPr date1904>`). @return `kOk`, or `kBindingNullPointer`
- * if `wb` or `out` is NULL. */
+/** @brief Reads the workbook's 1904 date system flag (`<workbookPr date1904>`). @return `FM_STATUS_OK` (0), or
+ * `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is NULL. */
 FM_API fm_status_t fm_workbook_date1904(const fm_workbook_t* wb, int32_t* out);
 
 /**
@@ -2880,7 +2883,7 @@ FM_API fm_status_t fm_workbook_date1904(const fm_workbook_t* wb, int32_t* out);
  * Existing date serials keep their numbers, so every date shifts by 1462
  * days; cached results depending on the date system are invalidated.
  *
- * @return `kOk`, or `kBindingNullPointer` if `wb` is NULL.
+ * @return `FM_STATUS_OK` (0), or `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is NULL.
  */
 FM_API fm_status_t fm_workbook_set_date1904(fm_workbook_t* wb, int32_t date1904);
 
@@ -2926,8 +2929,8 @@ typedef struct {
  *                   from a pin, since no civil field combination is
  *                   reserved as a sentinel.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any argument is NULL.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is NULL.
  */
 FM_API fm_status_t fm_workbook_pinned_now(const fm_workbook_t* wb, fm_civil_time_t* out_now, int32_t* out_pinned);
 
@@ -2949,9 +2952,9 @@ FM_API fm_status_t fm_workbook_pinned_now(const fm_workbook_t* wb, fm_civil_time
  * @param now The reading to pin. Must not be NULL, and every field must be
  *            in the range documented on `fm_civil_time_t`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `now` is NULL;
- *         `kInvalidArgument` if any field is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `now` is NULL;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if any field is out of range.
  */
 FM_API fm_status_t fm_workbook_set_pinned_now(fm_workbook_t* wb, const fm_civil_time_t* now);
 
@@ -2959,8 +2962,8 @@ FM_API fm_status_t fm_workbook_set_pinned_now(fm_workbook_t* wb, const fm_civil_
  * @brief Releases the pin so clock-dependent results follow the host clock
  *        again. Clearing an unpinned workbook succeeds and does nothing.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`.
  */
 FM_API fm_status_t fm_workbook_clear_pinned_now(fm_workbook_t* wb);
 
@@ -2978,8 +2981,8 @@ FM_API fm_status_t fm_workbook_clear_pinned_now(fm_workbook_t* wb);
  * `es_ES`, `es_MX`, `pt_BR`, `ru_RU`, `zh_TW`, `it_IT` or `nl_NL` (28 ids); the corresponding setter accepts exactly
  * that set.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_profile_id` is NULL.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_profile_id` is NULL.
  */
 FM_API fm_status_t fm_workbook_excel_profile_id(const fm_workbook_t* wb, const char** out_profile_id);
 
@@ -2995,9 +2998,9 @@ FM_API fm_status_t fm_workbook_excel_profile_id(const fm_workbook_t* wb, const c
  * Existing cached formula values are not recomputed until the caller drives
  * `fm_workbook_recalc` or an equivalent partial recalc.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `profile_id` is NULL`;
- *         `kInvalidArgument` if `profile_id` is not a documented profile.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `profile_id` is NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `profile_id` is not a documented profile.
  */
 FM_API fm_status_t fm_workbook_set_excel_profile_id(fm_workbook_t* wb, const char* profile_id);
 
@@ -3011,8 +3014,8 @@ FM_API fm_status_t fm_workbook_set_excel_profile_id(fm_workbook_t* wb, const cha
  * (`'M5 b-1.xlsx'!Name`). Unset, they return `[0]!Name`. Loading from bytes
  * leaves the name unset. `*out_name` is read-scratch-backed.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_name` is NULL.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_name` is NULL.
  */
 FM_API fm_status_t fm_workbook_file_name(const fm_workbook_t* wb, const char** out_name);
 
@@ -3025,9 +3028,9 @@ FM_API fm_status_t fm_workbook_file_name(const fm_workbook_t* wb, const char** o
  * `Sheet1!A1`. The book is matched under ASCII case folding. The stored form
  * and the saved files do not depend on the name.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `name` is NULL;
- *         `kInvalidArgument`, changing nothing, when `name` does not end in a
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `name` is NULL;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2), changing nothing, when `name` does not end in a
  *           workbook extension (`.xlsx`, `.xlsm`, `.xlsb`, `.xls`, `.xltx`,
  *           `.xltm`, `.xlt`, `.xlam`, `.xla`), holds one of `[ ] : / \ ? *`,
  *           is not valid UTF-8, is longer than 218 bytes, or equals the book
@@ -3096,9 +3099,9 @@ typedef struct {
  *                     remain valid until the next protection mutation on
  *                     this sheet or handle destruction.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out` is NULL;
- *         `kInvalidArgument` if `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is NULL;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_protection(const fm_workbook_t* wb, uint32_t sheet_index, fm_sheet_protection_t* out);
 
@@ -3109,9 +3112,9 @@ FM_API fm_status_t fm_sheet_get_protection(const fm_workbook_t* wb, uint32_t she
  * are deep-copied into the workbook; NULL strings are stored as
  * empty.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `in` is NULL;
- *         `kInvalidArgument` if `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `in` is NULL;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_set_protection(fm_workbook_t* wb, uint32_t sheet_index, const fm_sheet_protection_t* in);
 
@@ -3163,9 +3166,9 @@ typedef int32_t (*fm_iterative_progress_cb)(uint32_t iteration, double max_resid
  *                               May be NULL if the caller does not
  *                               care.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `viewport` is NULL;
- *         `kInvalidArgument` when `viewport->sheet` is past the last
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `viewport` is NULL;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `viewport->sheet` is past the last
  *           sheet, or exceeds the 16-bit range a sheet id is stored in;
  *         a `kEval*` / `kGraph*` code on engine failure.
  */
@@ -3182,11 +3185,11 @@ FM_API fm_status_t fm_workbook_partial_recalc(fm_workbook_t* wb, const fm_viewpo
  *
  * The callback runs inside the recalc and must not call any `fm_*`
  * function on the same workbook: a nested recalc returns
- * `kGraphRecalcReentrant`, and any other call may block or observe a
+ * `FM_STATUS_GRAPH_RECALC_REENTRANT` (4005), and any other call may block or observe a
  * half-computed sweep.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`.
  */
 FM_API fm_status_t fm_workbook_set_iterative_progress(fm_workbook_t* wb, fm_iterative_progress_cb cb, void* user_data);
 
@@ -3289,7 +3292,7 @@ typedef struct {
  * `sheet_index` is 0-based. Release a successful result with
  * `fm_pagination_destroy`.
  *
- * Fails with `kPrintPageCountOverflow` (9005) when the page grid the sheet
+ * Fails with `FM_STATUS_PRINT_PAGE_COUNT_OVERFLOW` (9005) when the page grid the sheet
  * declares exceeds the supported page count, which a file listing a manual
  * break before nearly every row and column can reach. On success the count
  * `fm_pagination_page_count` reports is the true total; it is never a
@@ -3390,14 +3393,14 @@ typedef struct {
 /**
  * @brief Reads the paper size and orientation pagination laid out on.
  *
- * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`.
  */
 FM_API fm_status_t fm_pagination_paper(const fm_pagination_t* pagination, fm_paper_info* out);
 
 /**
  * @brief Reads the page margins in points.
  *
- * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`.
  */
 FM_API fm_status_t fm_pagination_margins(const fm_pagination_t* pagination, fm_margins_pt* out);
 
@@ -3405,7 +3408,7 @@ FM_API fm_status_t fm_pagination_margins(const fm_pagination_t* pagination, fm_m
  * @brief Reads the cell-body rectangle before print-title reservation, in
  *        points from the page's top-left corner.
  *
- * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`.
  */
 FM_API fm_status_t fm_pagination_printable(const fm_pagination_t* pagination, fm_rect_pt* out);
 
@@ -3413,7 +3416,7 @@ FM_API fm_status_t fm_pagination_printable(const fm_pagination_t* pagination, fm
  * @brief Reads the effective scale as a factor (1.0 is 100%): the `scale`
  *        percentage, or the fit-to-page factor.
  *
- * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`.
  */
 FM_API fm_status_t fm_pagination_scale(const fm_pagination_t* pagination, double* out_scale);
 
@@ -3421,14 +3424,14 @@ FM_API fm_status_t fm_pagination_scale(const fm_pagination_t* pagination, double
  * @brief Reads the page order: `0` down-then-over (the OOXML default), `1`
  *        over-then-down.
  *
- * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`.
  */
 FM_API fm_status_t fm_pagination_page_order(const fm_pagination_t* pagination, int32_t* out_order);
 
 /**
  * @brief Reads the print-title rows / columns repeated on every page.
  *
- * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`.
  */
 FM_API fm_status_t fm_pagination_print_titles(const fm_pagination_t* pagination, fm_print_titles* out);
 
@@ -3439,8 +3442,8 @@ FM_API fm_status_t fm_pagination_print_titles(const fm_pagination_t* pagination,
  * physical page, ordered by the page order and, across several print
  * areas, by declaration order.
  *
- * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`;
- *         `kInvalidArgument` when `index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index` is out of range.
  */
 FM_API fm_status_t fm_pagination_page_at(const fm_pagination_t* pagination, size_t index, fm_page_layout* out);
 
@@ -3449,8 +3452,8 @@ FM_API fm_status_t fm_pagination_page_at(const fm_pagination_t* pagination, size
  *        `fm_pagination_horizontal_break_at`) is a manual break (`1`) rather
  *        than one the page walk computed (`0`).
  *
- * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`;
- *         `kInvalidArgument` when `index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index` is out of range.
  */
 FM_API fm_status_t fm_pagination_horizontal_break_is_manual(const fm_pagination_t* pagination, size_t index,
                                                             int32_t* out_manual);
@@ -3459,8 +3462,8 @@ FM_API fm_status_t fm_pagination_horizontal_break_is_manual(const fm_pagination_
  * @brief Vertical-break counterpart of
  *        `fm_pagination_horizontal_break_is_manual`.
  *
- * @return `kOk` on success; `kBindingNullPointer` if any argument is `NULL`;
- *         `kInvalidArgument` when `index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index` is out of range.
  */
 FM_API fm_status_t fm_pagination_vertical_break_is_manual(const fm_pagination_t* pagination, size_t index,
                                                           int32_t* out_manual);
@@ -3501,11 +3504,11 @@ FM_API fm_status_t fm_sheet_get_page_setup_xml(const fm_workbook_t* wb, size_t s
  * `fitToPage` is NOT part of `<pageSetup>` - it lives in
  * `<sheetPr><pageSetUpPr>`; use `fm_sheet_set_fit_to_page`.
  *
- * Returns `kInvalidArgument` (2) when the fragment is malformed, carries
+ * Returns `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is malformed, carries
  * more than one top-level element, or names the wrong root; and when it
  * declares an `r:id` on a sheet that has no printer-settings part, which
  * would leave a dangling relationship that makes Excel repair the file.
- * Returns `kPreconditionFailed` (9) when the fragment exceeds 4 KiB.
+ * Returns `FM_STATUS_PRECONDITION_FAILED` (9) when the fragment exceeds 4 KiB.
  */
 FM_API fm_status_t fm_sheet_set_page_setup_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
 
@@ -3581,8 +3584,8 @@ FM_API fm_status_t fm_sheet_set_fit_to_page(fm_workbook_t* wb, size_t sheet_inde
  * Excel writes. Area order is preserved - Excel prints them in the stated
  * order.
  *
- * An empty string removes the defined name. Returns `kPrintInvalidArea`
- * (9002) when any area fails to parse, and `kInvalidArgument` (2) when
+ * An empty string removes the defined name. Returns `FM_STATUS_PRINT_INVALID_AREA` (9002)
+ * (9002) when any area fails to parse, and `FM_STATUS_INVALID_ARGUMENT` (2) when
  * the list holds more areas than the per-call cap every range-taking
  * entry point shares.
  */
@@ -3597,7 +3600,7 @@ FM_API fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_index
  * the paginator, and this getter reports the resolved form rather than
  * re-deriving the authored shape.
  *
- * Returns `kPrintInvalidArea` (9002) when the defined name exists but does
+ * Returns `FM_STATUS_PRINT_INVALID_AREA` (9002) when the defined name exists but does
  * not parse, so a malformed one is never mistaken for "no print area".
  */
 FM_API fm_status_t fm_sheet_get_print_area(const fm_workbook_t* wb, size_t sheet_index, const char** out_ranges_a1);
@@ -3609,7 +3612,7 @@ FM_API fm_status_t fm_sheet_get_print_area(const fm_workbook_t* wb, size_t sheet
  * (`"A:A"`); either may be empty or NULL. Both empty removes the defined
  * name. The stored formula lists rows before columns, matching Excel.
  *
- * Returns `kPrintInvalidArea` (9002) when either span is present but not a
+ * Returns `FM_STATUS_PRINT_INVALID_AREA` (9002) when either span is present but not a
  * whole-row / whole-column span of the right shape.
  */
 FM_API fm_status_t fm_sheet_set_print_titles(fm_workbook_t* wb, size_t sheet_index, const char* repeat_rows,
@@ -3646,8 +3649,8 @@ typedef struct {
  * `manual` flag rather than duplicating it; the vector stays sorted
  * ascending by index.
  *
- * Returns `kInvalidArgument` (2) for a row past the grid, and
- * `kPreconditionFailed` (9) once the axis holds 1026 breaks. A row break
+ * Returns `FM_STATUS_INVALID_ARGUMENT` (2) for a row past the grid, and
+ * `FM_STATUS_PRECONDITION_FAILED` (9) once the axis holds 1026 breaks. A row break
  * divides the page horizontally, and 1026 is the limit Excel publishes
  * for horizontal page breaks.
  */
@@ -3660,8 +3663,8 @@ FM_API fm_status_t fm_sheet_add_row_break(fm_workbook_t* wb, size_t sheet_index,
  * Upsert-replaces-in-place and the ascending-order guarantee match
  * `fm_sheet_add_row_break`.
  *
- * Returns `kInvalidArgument` (2) for a column past the grid, and
- * `kPreconditionFailed` (9) once the axis holds 1026 breaks. A column
+ * Returns `FM_STATUS_INVALID_ARGUMENT` (2) for a column past the grid, and
+ * `FM_STATUS_PRECONDITION_FAILED` (9) once the axis holds 1026 breaks. A column
  * break divides the page vertically, and Excel publishes no separate
  * figure for vertical page breaks; the horizontal limit is applied here
  * as a conservative bound rather than leaving the axis unbounded, so
@@ -3691,7 +3694,7 @@ FM_API fm_status_t fm_sheet_clear_breaks(fm_workbook_t* wb, size_t sheet_index);
  *
  * A caller enumerating breaks as count-then-`fm_sheet_row_break_at` must
  * check that message after the count. The `_at` loop is what would
- * otherwise surface `kInvalidArgument`, and on a zero count it never
+ * otherwise surface `FM_STATUS_INVALID_ARGUMENT` (2), and on a zero count it never
  * runs, so a bad sheet index reads back as an empty break list.
  */
 FM_API size_t fm_sheet_row_break_count(const fm_workbook_t* wb, size_t sheet_index);
@@ -3699,9 +3702,9 @@ FM_API size_t fm_sheet_row_break_count(const fm_workbook_t* wb, size_t sheet_ind
 /**
  * @brief Copies the row break at `index` (ascending by row).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `out` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` or `index` is out of
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `index` is out of
  *           range.
  */
 FM_API fm_status_t fm_sheet_row_break_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
@@ -3717,9 +3720,9 @@ FM_API size_t fm_sheet_col_break_count(const fm_workbook_t* wb, size_t sheet_ind
 /**
  * @brief Copies the column break at `index` (ascending by column).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `out` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` or `index` is out of
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `index` is out of
  *           range.
  */
 FM_API fm_status_t fm_sheet_col_break_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
@@ -3820,7 +3823,7 @@ typedef struct {
 /**
  * @brief Applies a partial `<pageSetup>` update.
  *
- * `scale` outside [10, 400] is rejected with `kInvalidArgument` (2) rather
+ * `scale` outside [10, 400] is rejected with `FM_STATUS_INVALID_ARGUMENT` (2) rather
  * than clamped. `fm_sheet_set_zoom` clamps its own input because an
  * out-of-range screen zoom is harmless, but a mis-stated print scale lands
  * on paper, so silently rounding it would hide the mistake.
@@ -3828,7 +3831,7 @@ typedef struct {
 FM_API fm_status_t fm_sheet_set_page_setup(fm_workbook_t* wb, size_t sheet_index, const fm_page_setup_t* setup);
 
 /** @brief Applies a partial `<pageMargins>` update. A negative, infinite or
- *         NaN margin is rejected with `kInvalidArgument` (2). */
+ *         NaN margin is rejected with `FM_STATUS_INVALID_ARGUMENT` (2). */
 FM_API fm_status_t fm_sheet_set_page_margins(fm_workbook_t* wb, size_t sheet_index, const fm_page_margins_t* margins);
 
 /** @brief Applies a partial `<printOptions>` update. */
@@ -3866,9 +3869,9 @@ typedef struct fm_cf_results fm_cf_results_t;
  * `today_serial` pins the date reference for `TimePeriod` rules. Pass
  * `NaN` to disable (in which case `TimePeriod` rules will not match).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `wb` or `out` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  *
  * On success the caller owns `*out` and must free it with
  * `fm_cf_results_destroy`.
@@ -3891,9 +3894,9 @@ FM_API size_t fm_cf_results_cell_count(const fm_cf_results_t* results);
 /**
  * @brief Reads cell `cell_idx`'s coordinates and match count.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `cell_idx >= cell_count`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `cell_idx >= cell_count`.
  */
 FM_API fm_status_t fm_cf_results_cell_at(const fm_cf_results_t* results, size_t cell_idx, uint32_t* out_row,
                                          uint32_t* out_col, size_t* out_match_count);
@@ -3901,9 +3904,9 @@ FM_API fm_status_t fm_cf_results_cell_at(const fm_cf_results_t* results, size_t 
 /**
  * @brief Reads match `match_idx` for cell `cell_idx`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when either index is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when either index is out of range.
  */
 FM_API fm_status_t fm_cf_results_match_at(const fm_cf_results_t* results, size_t cell_idx, size_t match_idx,
                                           fm_cf_match_t* out);
@@ -4127,9 +4130,9 @@ typedef struct {
  * sheet with two blocks of two rules each reports `4`. Indexing into
  * the flattened sequence is stable until the next mutation.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_cf_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
 
@@ -4157,9 +4160,9 @@ FM_API fm_status_t fm_sheet_cf_count(const fm_workbook_t* wb, size_t sheet_index
  * refuse. The record therefore always feeds straight back into
  * `fm_sheet_cf_add_rule`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` or `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `idx` is out of range.
  */
 FM_API fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx, fm_cf_rule_t* out);
 
@@ -4202,10 +4205,10 @@ FM_API fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, size_t sheet_inde
  * with the formula Excel stores for the rule, relative to the top-left
  * corner of the bounding box of `rule.sqref` (e.g. `NOT(ISERROR(SEARCH("ab",B1)))`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `wb` or `out_index` is `NULL`, or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `out_index` is `NULL`, or
  *           `rule.sqref` is `NULL` while `rule.sqref_count > 0`;
- *         `kInvalidArgument` when `sheet_index` is out of range, when
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, when
  *           `rule.sqref_count == 0` or exceeds the per-call range cap,
  *           when any `rule.sqref` entry is inverted (`first` past
  *           `last`) or reaches outside the grid (`row >= 1048576`,
@@ -4218,7 +4221,7 @@ FM_API fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, size_t sheet_inde
  *           when a visual payload is missing / malformed, or when
  *           `rule.priority <= 0` and an existing rule already holds
  *           `INT32_MAX`, so the auto-assigned priority would overflow;
- *         `kParserUnexpectedToken` (1000) when a non-empty `rule.formula1`,
+ *         `FM_STATUS_PARSER_UNEXPECTED_TOKEN` (1000) when a non-empty `rule.formula1`,
  *           `rule.formula2` or formula-typed `fm_cfvo_t` value does not
  *           parse (the rule is not stored).
  */
@@ -4228,18 +4231,18 @@ FM_API fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, size_t sheet_index, f
  * @brief Removes the `idx`-th CF rule (flattened order). When the
  *        containing block becomes empty it is removed too.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `wb` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` or `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `idx` is out of range.
  */
 FM_API fm_status_t fm_sheet_cf_remove_at(fm_workbook_t* wb, size_t sheet_index, size_t idx);
 
 /**
  * @brief Removes every CF block on `sheet_index`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `wb` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_cf_clear(fm_workbook_t* wb, size_t sheet_index);
 
@@ -4277,9 +4280,9 @@ typedef struct fm_cell_nodes fm_cell_nodes_t;
  * The set excludes the seed cell itself. Order is unspecified but
  * stable for a given graph state.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `wb` or `out` is `NULL`;
- *         `kInvalidArgument` when `sheet` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
  *
  * On success the caller owns `*out` and must free it with
  * `fm_cell_nodes_destroy`.
@@ -4313,9 +4316,9 @@ FM_API size_t fm_cell_nodes_count(const fm_cell_nodes_t* nodes);
 /**
  * @brief Reads cell `idx` from the result.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range.
  */
 FM_API fm_status_t fm_cell_nodes_at(const fm_cell_nodes_t* nodes, size_t idx, fm_cell_node_t* out);
 
@@ -4368,9 +4371,9 @@ typedef struct fm_pivot_cells fm_pivot_cells_t;
 /**
  * @brief Returns the number of pivot tables anchored on `sheet_index`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `wb` or `out_count` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `out_count` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_workbook_pivot_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
 
@@ -4380,9 +4383,9 @@ FM_API fm_status_t fm_workbook_pivot_count(const fm_workbook_t* wb, size_t sheet
  * On success the caller owns `*out` and must free it with
  * `fm_pivot_cells_destroy`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `wb` or `out` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` or `pivot_index` is out of range;
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `pivot_index` is out of range;
  *         a pivot evaluation/layout error when the table references a missing
  *         or invalid cache.
  */
@@ -4406,8 +4409,8 @@ FM_API size_t fm_pivot_cells_count(const fm_pivot_cells_t* cells);
  * `top` / `left` are absolute 0-based sheet coordinates; `rows` / `cols`
  * are the rectangular layout span.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`.
  */
 FM_API fm_status_t fm_pivot_cells_bounds(const fm_pivot_cells_t* cells, uint32_t* out_top, uint32_t* out_left,
                                          uint32_t* out_rows, uint32_t* out_cols);
@@ -4415,9 +4418,9 @@ FM_API fm_status_t fm_pivot_cells_bounds(const fm_pivot_cells_t* cells, uint32_t
 /**
  * @brief Reads projected cell `idx`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range.
  */
 FM_API fm_status_t fm_pivot_cells_at(const fm_pivot_cells_t* cells, size_t idx, fm_pivot_cell_t* out);
 
@@ -4642,7 +4645,7 @@ typedef enum {
  *                       e.g. an id returned by `fm_styles_add_num_fmt` or a
  *                       built-in id. `NULL` or `""` means none; any other
  *                       string that is not a built-in or registered id is
- *                       `kInvalidArgument`.
+ *                       `FM_STATUS_INVALID_ARGUMENT` (2).
  */
 typedef struct {
   const char* source_name;
@@ -4956,17 +4959,17 @@ typedef struct {
 /**
  * @brief Returns the number of pivot caches owned by the workbook.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_count(const fm_workbook_t* wb, size_t* out_count);
 
 /**
  * @brief Returns the `cache_id` of the pivot cache at flat index `idx`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_id_at(const fm_workbook_t* wb, size_t idx, uint32_t* out_cache_id);
 
@@ -4985,9 +4988,9 @@ FM_API fm_status_t fm_workbook_pivot_cache_id_at(const fm_workbook_t* wb, size_t
  * only has to name where the records came from; it need not hold data,
  * because the records carry the values themselves.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `requested_id` collides with an
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `requested_id` collides with an
  *         existing cache or auto-assignment would overflow.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_create(fm_workbook_t* wb, uint32_t requested_id, uint32_t* out_cache_id);
@@ -4995,9 +4998,9 @@ FM_API fm_status_t fm_workbook_pivot_cache_create(fm_workbook_t* wb, uint32_t re
 /**
  * @brief Removes the pivot cache with id `cache_id`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when no cache matches `cache_id` or when
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when no cache matches `cache_id` or when
  *         the cache is still referenced by at least one pivot table.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_remove(fm_workbook_t* wb, uint32_t cache_id);
@@ -5059,7 +5062,7 @@ FM_API fm_status_t fm_workbook_pivot_cache_field_shared_item_count(const fm_work
  *        `FM_VAL_NUMBER`; query `fm_workbook_pivot_cache_field_shared_item_is_date`
  *        to tell them from plain numbers. Text is read-scratch backed: the pointer remains
  *        valid until the next scratch-backed read, any mutation, or handle
- *        destruction. `item_idx >= count` is `kInvalidArgument`.
+ *        destruction. `item_idx >= count` is `FM_STATUS_INVALID_ARGUMENT` (2).
  */
 FM_API fm_status_t fm_workbook_pivot_cache_field_shared_item_value(const fm_workbook_t* wb, uint32_t cache_id,
                                                                    size_t field_idx, size_t item_idx, fm_value_t* out);
@@ -5072,7 +5075,7 @@ FM_API fm_status_t fm_workbook_pivot_cache_field_add_shared_item_number(fm_workb
  * @brief Appends a date shared item to cache field `field_idx`. `serial` is a
  *        date serial in the workbook's date system, as a cell holds it; it must
  *        be finite, non-negative and not past 9999-12-31, else
- *        `kInvalidArgument`. Saved with seconds precision.
+ *        `FM_STATUS_INVALID_ARGUMENT` (2). Saved with seconds precision.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_field_add_shared_item_date(fm_workbook_t* wb, uint32_t cache_id,
                                                                       size_t field_idx, double serial);
@@ -5080,7 +5083,7 @@ FM_API fm_status_t fm_workbook_pivot_cache_field_add_shared_item_date(fm_workboo
 /**
  * @brief Reports whether shared item `item_idx` of cache field `field_idx` is
  *        a date (`*out_is_date` is 1) or not (0). `item_idx >= count` is
- *        `kInvalidArgument`.
+ *        `FM_STATUS_INVALID_ARGUMENT` (2).
  */
 FM_API fm_status_t fm_workbook_pivot_cache_field_shared_item_is_date(const fm_workbook_t* wb, uint32_t cache_id,
                                                                      size_t field_idx, size_t item_idx,
@@ -5164,9 +5167,9 @@ FM_API fm_status_t fm_workbook_pivot_cache_record_set_error(fm_workbook_t* wb, u
 /**
  * @brief Reads the cache's options into `out`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
- *         `kInvalidArgument` when `cache_id` does not match any cache.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `cache_id` does not match any cache.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_get_options(const fm_workbook_t* wb, uint32_t cache_id,
                                                        fm_pivot_cache_options_t* out);
@@ -5176,9 +5179,9 @@ FM_API fm_status_t fm_workbook_pivot_cache_get_options(const fm_workbook_t* wb, 
  *        `missing_items_limit` equal to the value read from the file is kept
  *        even when outside the settable range.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `options` is `NULL`;
- *         `kInvalidArgument` when `cache_id` does not match any cache or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `options` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `cache_id` does not match any cache or
  *         `missing_items_limit` is outside `-1` to `1048576`.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_set_options(fm_workbook_t* wb, uint32_t cache_id,
@@ -5196,11 +5199,11 @@ FM_API fm_status_t fm_workbook_pivot_cache_set_options(fm_workbook_t* wb, uint32
  * stored. A cell shows the formula applied to the Sums of the named fields,
  * whatever the data field's function.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb`, `name`, `formula` or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `name`, `formula` or
  *         `out_field_index` is `NULL`;
- *         `kBindingUtf8EncodingError` for malformed UTF-8;
- *         `kInvalidArgument` when `cache_id` does not match any cache, the
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) for malformed UTF-8;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `cache_id` does not match any cache, the
  *         name is empty, longer than 255 UTF-16 code units, `All` or `Blank`,
  *         contains `[` or `]`, or equals an existing field name under the
  *         profile's collation, or the formula is empty, longer than 8192
@@ -5216,7 +5219,7 @@ FM_API fm_status_t fm_workbook_pivot_cache_calculated_field_add(fm_workbook_t* w
  * @brief Replaces the formula of calculated field `field_index`.
  *
  * @return As `fm_workbook_pivot_cache_calculated_field_add` for the formula;
- *         `kInvalidArgument` when `field_index` is not a calculated field.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `field_index` is not a calculated field.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_calculated_field_set_formula(fm_workbook_t* wb, uint32_t cache_id,
                                                                         size_t field_index, const char* formula);
@@ -5225,11 +5228,11 @@ FM_API fm_status_t fm_workbook_pivot_cache_calculated_field_set_formula(fm_workb
  * @brief Removes calculated field `field_index` and its data fields in every
  *        pivot table; the fields after it move down by one.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`;
- *         `kInvalidArgument` when `cache_id` does not match any cache or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `cache_id` does not match any cache or
  *         `field_index` is not a calculated field;
- *         `kPreconditionFailed` while another calculated field's formula
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) while another calculated field's formula
  *         names it.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_calculated_field_remove(fm_workbook_t* wb, uint32_t cache_id,
@@ -5256,14 +5259,14 @@ FM_API fm_status_t fm_workbook_pivot_cache_field_formula(const fm_workbook_t* wb
  * shows the formula applied to the named items' values in the same context,
  * and the field's totals include the item.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb`, `name` or `formula` is `NULL`;
- *         `kBindingUtf8EncodingError` for malformed UTF-8;
- *         `kInvalidArgument` when `cache_id` or `field_index` is out of
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `name` or `formula` is `NULL`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) for malformed UTF-8;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `cache_id` or `field_index` is out of
  *         range, for a name as `fm_workbook_pivot_cache_calculated_field_add`
  *         refuses it or equal to an item of the field, or for a formula it
  *         refuses or that names another field;
- *         `kPreconditionFailed` when the field is grouped, calculated or on
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when the field is grouped, calculated or on
  *         no pivot table's axis, or a data field drawing from the cache uses
  *         Average, StdDev, StdDevP, Var or VarP.
  */
@@ -5277,9 +5280,9 @@ FM_API fm_status_t fm_workbook_pivot_cache_calculated_item_count(const fm_workbo
 /**
  * @brief Reads calculated item `idx` (in solve order) into `out`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
- *         `kInvalidArgument` when `cache_id` or `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `cache_id` or `idx` is out of range.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_calculated_item_at(const fm_workbook_t* wb, uint32_t cache_id, size_t idx,
                                                               fm_pivot_calculated_item_t* out);
@@ -5288,7 +5291,7 @@ FM_API fm_status_t fm_workbook_pivot_cache_calculated_item_at(const fm_workbook_
  * @brief Replaces the formula of calculated item `idx`.
  *
  * @return As `fm_workbook_pivot_cache_calculated_item_add` for the formula;
- *         `kInvalidArgument` when `idx` is out of range or the formula refers
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range or the formula refers
  *         back to the item.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_calculated_item_set_formula(fm_workbook_t* wb, uint32_t cache_id, size_t idx,
@@ -5297,9 +5300,9 @@ FM_API fm_status_t fm_workbook_pivot_cache_calculated_item_set_formula(fm_workbo
 /**
  * @brief Moves calculated item `idx` to position `new_idx` in solve order.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`;
- *         `kInvalidArgument` when `cache_id`, `idx` or `new_idx` is out of
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `cache_id`, `idx` or `new_idx` is out of
  *         range.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_calculated_item_move(fm_workbook_t* wb, uint32_t cache_id, size_t idx,
@@ -5309,10 +5312,10 @@ FM_API fm_status_t fm_workbook_pivot_cache_calculated_item_move(fm_workbook_t* w
  * @brief Removes calculated item `idx`, its item in the cache field and in
  *        every pivot table.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`;
- *         `kInvalidArgument` when `cache_id` or `idx` is out of range;
- *         `kPreconditionFailed` while another calculated item names it.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `cache_id` or `idx` is out of range;
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) while another calculated item names it.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_calculated_item_remove(fm_workbook_t* wb, uint32_t cache_id, size_t idx);
 
@@ -5325,7 +5328,7 @@ FM_API fm_status_t fm_workbook_pivot_cache_calculated_item_remove(fm_workbook_t*
  * then each report cell is written as a value with Excel's format for its
  * role, and formulas reading the range recalculate. A mutation whose report
  * would overlap another pivot table, a table, a data table, an array formula
- * or a merge it does not own returns `kPreconditionFailed` and leaves the
+ * or a merge it does not own returns `FM_STATUS_PRECONDITION_FAILED` (9) and leaves the
  * pivot table and the sheet unchanged. A pivot table read from a file keeps
  * the cells read with it until it is edited.
  */
@@ -5335,12 +5338,12 @@ FM_API fm_status_t fm_workbook_pivot_cache_calculated_item_remove(fm_workbook_t*
  *        Excel gives a new pivot. `cache_id` must reference an existing
  *        cache. The new table's flat index is written to `*out_pivot_index`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb`, `utf8_name`, or `out_pivot_index`
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `utf8_name`, or `out_pivot_index`
  *         is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or
  *         `cache_id` does not match any existing cache;
- *         `kPreconditionFailed`, creating nothing, when the report range
+ *         `FM_STATUS_PRECONDITION_FAILED` (9), creating nothing, when the report range
  *         would overlap another structure.
  */
 FM_API fm_status_t fm_workbook_pivot_create(fm_workbook_t* wb, size_t sheet_index, const char* utf8_name,
@@ -5387,7 +5390,7 @@ FM_API fm_status_t fm_workbook_pivot_get_layout(const fm_workbook_t* wb, size_t 
  * @brief Sets the pivot's compact / tabular / outline report layout.
  *
  * `layout` is a raw signed 32-bit ordinal. Unknown values return
- * `kInvalidArgument`; callers do not need to construct an out-of-domain
+ * `FM_STATUS_INVALID_ARGUMENT` (2); callers do not need to construct an out-of-domain
  * `fm_pivot_layout_t` value.
  */
 FM_API fm_status_t fm_workbook_pivot_set_layout(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -5411,10 +5414,10 @@ FM_API fm_status_t fm_workbook_pivot_field_count(const fm_workbook_t* wb, size_t
  * A field placed on the row or column axis is appended to that axis's field
  * order.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb`, `spec`, `out_field_idx` or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `spec`, `out_field_idx` or
  *           `spec->source_name` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` or `pivot_index` is out
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `pivot_index` is out
  *           of range, or `spec->axis` names no declared enumerator.
  */
 FM_API fm_status_t fm_workbook_pivot_field_add(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -5427,7 +5430,7 @@ FM_API fm_status_t fm_workbook_pivot_field_clear(fm_workbook_t* wb, size_t sheet
  * @brief Sets the axis of pivot field `field_idx`.
  *
  * `axis` is a raw signed 32-bit ordinal; unknown values return
- * `kInvalidArgument`. Moving a field onto the row or column axis appends it
+ * `FM_STATUS_INVALID_ARGUMENT` (2). Moving a field onto the row or column axis appends it
  * to that axis's field order (a field already there keeps its place);
  * moving it off removes it from the order it was in.
  *
@@ -5444,10 +5447,10 @@ FM_API fm_status_t fm_workbook_pivot_field_set_axis(fm_workbook_t* wb, size_t sh
  * @brief Sets the sort directive on pivot field `field_idx`.
  *
  * `order` is a raw signed 32-bit `fm_pivot_sort_order_t` ordinal; unknown
- * values return `kInvalidArgument`. `FM_PIVOT_SORT_MANUAL` keeps sibling
+ * values return `FM_STATUS_INVALID_ARGUMENT` (2). `FM_PIVOT_SORT_MANUAL` keeps sibling
  * items in the field's item document order (`fm_workbook_pivot_field_add_item`
  * order) and takes no `by_field` key: a non-NULL, non-empty `by_field` with it
- * returns `kInvalidArgument`. For the other orders, `by_field == NULL` (or
+ * returns `FM_STATUS_INVALID_ARGUMENT` (2). For the other orders, `by_field == NULL` (or
  * empty) sorts by label and clears the by-field key.
  */
 FM_API fm_status_t fm_workbook_pivot_field_set_sort(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -5483,14 +5486,14 @@ FM_API fm_status_t fm_workbook_pivot_field_set_fill_down_labels(fm_workbook_t* w
  * @brief Renames pivot field `field_idx` in the report; `NULL` or an empty
  *        `name` restores its source name. Data field names are not changed.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`;
- *         `kBindingUtf8EncodingError` for malformed UTF-8;
- *         `kInvalidArgument` if an index is out of range, `name` is longer
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) for malformed UTF-8;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if an index is out of range, `name` is longer
  *           than 255 UTF-16 code units, or it equals under the profile's
  *           collation another field's source or custom name or a data
  *           field's name (the field's own source name is allowed);
- *         `kPreconditionFailed` when the report would overlap another
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when the report would overlap another
  *           structure.
  */
 FM_API fm_status_t fm_workbook_pivot_field_set_custom_name(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -5514,7 +5517,7 @@ FM_API fm_status_t fm_workbook_pivot_field_set_show_detail(fm_workbook_t* wb, si
  * @brief Expands (non-zero) or collapses (`0`) item `item_idx` of pivot field
  *        `field_idx`.
  *
- * @return `kInvalidArgument` when an index is out of range, otherwise as
+ * @return `FM_STATUS_INVALID_ARGUMENT` (2) when an index is out of range, otherwise as
  *         `fm_workbook_pivot_field_set_show_detail`.
  */
 FM_API fm_status_t fm_workbook_pivot_field_set_item_show_detail(fm_workbook_t* wb, size_t sheet_index,
@@ -5529,9 +5532,9 @@ FM_API fm_status_t fm_workbook_pivot_field_set_item_show_detail(fm_workbook_t* w
  * the item's own value. The item's value, not the caption, still decides
  * hidden-item matching and ordering.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`;
- *         `kInvalidArgument` when an index is out of range, `caption` is not
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when an index is out of range, `caption` is not
  *         valid UTF-8 or is longer than 255 UTF-16 code units, or it matches,
  *         under the workbook profile's text collation, the label another item
  *         of the field shows.
@@ -5588,7 +5591,7 @@ FM_API fm_status_t fm_workbook_pivot_field_set_item_visible(fm_workbook_t* wb, s
  * @brief Appends a subtotal-fn entry to pivot field `field_idx`.
  *
  * `agg` is a raw signed 32-bit ordinal; unknown values return
- * `kInvalidArgument`. The selection reads back through
+ * `FM_STATUS_INVALID_ARGUMENT` (2). The selection reads back through
  * `fm_pivot_field_info_t::subtotal_fns`.
  */
 FM_API fm_status_t fm_workbook_pivot_field_add_subtotal_fn(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -5613,12 +5616,12 @@ FM_API fm_status_t fm_workbook_pivot_field_clear_subtotal_fns(fm_workbook_t* wb,
  * `start_or_nan` / `end_or_nan` are date serials; NaN takes the field's
  * first value and its last (the midnight after it for a date without a time).
  *
- * @return `kInvalidArgument` for an index out of range, a `periods_mask` of 0
+ * @return `FM_STATUS_INVALID_ARGUMENT` (2) for an index out of range, a `periods_mask` of 0
  *         or with an unknown bit, an unknown `calendar`, `interval_days == 0`,
  *         `interval_days > 1` with any period but days, an infinite or
  *         otherwise invalid date bound, a start after the end, or a field
  *         holding a blank, a value that is not a date, or no value;
- *         `kPreconditionFailed` when the field is grouped and its group fields
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when the field is grouped and its group fields
  *         are not the last fields of the cache.
  */
 FM_API fm_status_t fm_workbook_pivot_field_set_date_group(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -5632,7 +5635,7 @@ FM_API fm_status_t fm_workbook_pivot_field_set_date_group(fm_workbook_t* wb, siz
  *        returns to the axis position its group fields held. A field that is
  *        not grouped is left as it is.
  *
- * @return `kInvalidArgument` for an index out of range; `kPreconditionFailed`
+ * @return `FM_STATUS_INVALID_ARGUMENT` (2) for an index out of range; `FM_STATUS_PRECONDITION_FAILED` (9)
  *         when the group fields are not the last fields of the cache.
  */
 FM_API fm_status_t fm_workbook_pivot_field_clear_date_group(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -5642,7 +5645,7 @@ FM_API fm_status_t fm_workbook_pivot_field_clear_date_group(fm_workbook_t* wb, s
  * @brief Sets the `numFmtId` of pivot field `field_idx`, as a decimal string
  *        naming a built-in id or one returned by `fm_styles_add_num_fmt`.
  *        `utf8` must be non-NULL (use the empty string to clear); any other
- *        string that is not a known id returns `kInvalidArgument`.
+ *        string that is not a known id returns `FM_STATUS_INVALID_ARGUMENT` (2).
  */
 FM_API fm_status_t fm_workbook_pivot_field_set_number_format(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                              size_t field_idx, const char* utf8);
@@ -5650,7 +5653,7 @@ FM_API fm_status_t fm_workbook_pivot_field_set_number_format(fm_workbook_t* wb, 
 /**
  * @brief Replaces the row-axis field order with `indices[0..count)`.
  *        Each entry must be `< field_count` or `FM_PIVOT_VALUES_FIELD`, and
- *        appear once, else `kInvalidArgument`. The list is the axis's whole
+ *        appear once, else `FM_STATUS_INVALID_ARGUMENT` (2). The list is the axis's whole
  *        membership: listed fields move onto the row axis (leaving the column
  *        order), and fields previously on it but not listed come off every
  *        axis. Pass `count == 0` to clear. Adding or moving a field already
@@ -5658,9 +5661,9 @@ FM_API fm_status_t fm_workbook_pivot_field_set_number_format(fm_workbook_t* wb, 
  *
  * `FM_PIVOT_VALUES_FIELD` places the Values level at that position and takes
  * it off the other axis. It needs at least two data fields
- * (`kInvalidArgument` otherwise). With two or more data fields the Values
+ * (`FM_STATUS_INVALID_ARGUMENT` (2) otherwise). With two or more data fields the Values
  * level is always on one axis, so a list for the axis that holds it must
- * include it (`kInvalidArgument` otherwise); the column axis holds it, at the
+ * include it (`FM_STATUS_INVALID_ARGUMENT` (2) otherwise); the column axis holds it, at the
  * end, until it is moved.
  */
 FM_API fm_status_t fm_workbook_pivot_set_row_field_order(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -5679,14 +5682,14 @@ FM_API fm_status_t fm_workbook_pivot_data_field_count(const fm_workbook_t* wb, s
  *        replaced by the engine-derived name described on
  *        `fm_pivot_data_field_spec_t`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb`, `spec` or `out_idx` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` or `pivot_index` is out
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `spec` or `out_idx` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `pivot_index` is out
  *           of range, `spec->aggregation` / `spec->show_as` names no
  *           declared enumerator, or `spec->field_index` or a set
  *           `spec->show_as_base_field` is not an index into the pivot's
  *           fields (the pivot is left unchanged);
- *         `kPreconditionFailed` when the cache has calculated items and
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when the cache has calculated items and
  *           `spec->aggregation` is Average, StdDev, StdDevP, Var or VarP.
  */
 FM_API fm_status_t fm_workbook_pivot_data_field_add(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -5700,14 +5703,14 @@ FM_API fm_status_t fm_workbook_pivot_data_field_clear(fm_workbook_t* wb, size_t 
  *        `NULL` or empty `spec->name` is derived as in
  *        `fm_workbook_pivot_data_field_add`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `spec` is `NULL`;
- *         `kInvalidArgument` when `sheet_index`, `pivot_index` or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `spec` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index`, `pivot_index` or
  *           `data_field_idx` is out of range, `spec->aggregation` /
  *           `spec->show_as` names no declared enumerator, or
  *           `spec->field_index` or a set `spec->show_as_base_field` is not
  *           an index into the pivot's fields (the pivot is left unchanged);
- *         `kPreconditionFailed` as for `fm_workbook_pivot_data_field_add`.
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) as for `fm_workbook_pivot_data_field_add`.
  */
 FM_API fm_status_t fm_workbook_pivot_data_field_set(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                     size_t data_field_idx, const fm_pivot_data_field_spec_t* spec);
@@ -5720,9 +5723,9 @@ FM_API fm_status_t fm_workbook_pivot_data_field_set(fm_workbook_t* wb, size_t sh
  *        not counted as taken; `SIZE_MAX` for none (the add case). The string
  *        is a read-scratch-backed view.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
- *         `kInvalidArgument` when `sheet_index`, `pivot_index`,
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index`, `pivot_index`,
  *           `field_index` or a `exclude_data_field` other than `SIZE_MAX`
  *           is out of range, or `aggregation` names no
  *           `fm_pivot_aggregation_t`.
@@ -5745,9 +5748,9 @@ FM_API fm_status_t fm_workbook_pivot_data_field_default_name(const fm_workbook_t
 /**
  * @brief Reads the `cache_id` of the pivot cache the pivot draws from.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_cache_id` is `NULL`;
- *         `kInvalidArgument` if `sheet_index` or `pivot_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_cache_id` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `sheet_index` or `pivot_index` is out of range.
  */
 FM_API fm_status_t fm_workbook_pivot_get_cache_id(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                   uint32_t* out_cache_id);
@@ -5764,9 +5767,9 @@ FM_API fm_status_t fm_workbook_pivot_get_name(const fm_workbook_t* wb, size_t sh
 /**
  * @brief Reads the pivot's options into `out`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
- *         `kInvalidArgument` if `sheet_index` or `pivot_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `sheet_index` or `pivot_index` is out of range.
  */
 FM_API fm_status_t fm_workbook_pivot_get_options(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                  fm_pivot_options_t* out);
@@ -5777,14 +5780,14 @@ FM_API fm_status_t fm_workbook_pivot_get_options(const fm_workbook_t* wb, size_t
  *        outside the settable range, so a definition read from a file
  *        survives a get / set round trip.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `options` is `NULL`;
- *         `kBindingUtf8EncodingError` for a malformed string;
- *         `kInvalidArgument` if an index is out of range, `error_caption`,
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `options` is `NULL`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) for a malformed string;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if an index is out of range, `error_caption`,
  *           `missing_caption`, `alt_text` or `grand_total_caption` is longer
  *           than 255 UTF-16 code units, `indent` exceeds 126 or `page_wrap`
  *           exceeds 255;
- *         `kPreconditionFailed` when the report would overlap another
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when the report would overlap another
  *           structure (the pivot is left unchanged).
  */
 FM_API fm_status_t fm_workbook_pivot_set_options(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -5795,10 +5798,10 @@ FM_API fm_status_t fm_workbook_pivot_set_options(fm_workbook_t* wb, size_t sheet
  *        mutation does, and clears its pending flag. A pivot over a cache
  *        loaded without its records writes nothing.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`;
- *         `kInvalidArgument` if `sheet_index` or `pivot_index` is out of range;
- *         `kPreconditionFailed` when the report would overlap another
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `sheet_index` or `pivot_index` is out of range;
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when the report would overlap another
  *           structure; the pivot stays pending.
  */
 FM_API fm_status_t fm_workbook_pivot_project(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index);
@@ -5807,9 +5810,9 @@ FM_API fm_status_t fm_workbook_pivot_project(fm_workbook_t* wb, size_t sheet_ind
  * @brief Reads into `*out` whether the pivot's sheet cells are stale after a
  *        change to its cache (`1`) or current (`0`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
- *         `kInvalidArgument` if `sheet_index` or `pivot_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `sheet_index` or `pivot_index` is out of range.
  */
 FM_API fm_status_t fm_workbook_pivot_projection_pending(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                         int32_t* out);
@@ -5824,11 +5827,11 @@ FM_API fm_status_t fm_workbook_pivot_projection_pending(const fm_workbook_t* wb,
  * stored in `*out_sheet_index`. Sheets at and after the pivot's sheet index
  * shift by one, so indices held for them must be refreshed.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_sheet_index` is `NULL`;
- *         `kInvalidArgument` if an index is out of range or the cell is not
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_sheet_index` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if an index is out of range or the cell is not
  *         a data, subtotal or grand total cell of the pivot;
- *         `kPreconditionFailed` when the pivot disables drill-down.
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when the pivot disables drill-down.
  */
 FM_API fm_status_t fm_workbook_pivot_show_details(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                   uint32_t row, uint32_t col, size_t* out_sheet_index);
@@ -5837,9 +5840,9 @@ FM_API fm_status_t fm_workbook_pivot_show_details(fm_workbook_t* wb, size_t shee
  * @brief Reads the row / column grand total flags (`0` or `1`), the values
  *        `fm_workbook_pivot_set_grand_totals` writes.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb`, `out_rows` or `out_cols` is `NULL`;
- *         `kInvalidArgument` if `sheet_index` or `pivot_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `out_rows` or `out_cols` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `sheet_index` or `pivot_index` is out of range.
  */
 FM_API fm_status_t fm_workbook_pivot_get_grand_totals(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                       int32_t* out_rows, int32_t* out_cols);
@@ -5857,9 +5860,9 @@ FM_API fm_status_t fm_workbook_pivot_get_style_info(const fm_workbook_t* wb, siz
 /**
  * @brief Reads the definition of pivot field `field_idx` into `out`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
- *         `kInvalidArgument` if `sheet_index`, `pivot_index` or `field_idx`
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `sheet_index`, `pivot_index` or `field_idx`
  *         is out of range.
  */
 FM_API fm_status_t fm_workbook_pivot_field_at(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -5878,7 +5881,7 @@ FM_API fm_status_t fm_workbook_pivot_field_item_count(const fm_workbook_t* wb, s
  * @brief Reads item `item_idx` of pivot field `field_idx` into `out`. The
  *        index is the one `fm_workbook_pivot_field_set_item_visible` takes.
  *
- * @return As `fm_workbook_pivot_field_at`, plus `kInvalidArgument` when
+ * @return As `fm_workbook_pivot_field_at`, plus `FM_STATUS_INVALID_ARGUMENT` (2) when
  *         `item_idx` is out of range.
  */
 FM_API fm_status_t fm_workbook_pivot_field_item_at(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -5890,9 +5893,9 @@ FM_API fm_status_t fm_workbook_pivot_field_item_at(const fm_workbook_t* wb, size
  *        `number_format` are views and never `NULL` (`number_format` is `""`
  *        for none); an unset `show_as_base_field` / `show_as_base_item` is `-1`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
- *         `kInvalidArgument` if `sheet_index`, `pivot_index` or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `sheet_index`, `pivot_index` or
  *         `data_field_idx` is out of range.
  */
 FM_API fm_status_t fm_workbook_pivot_data_field_at(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -5906,9 +5909,9 @@ FM_API fm_status_t fm_workbook_pivot_data_field_at(const fm_workbook_t* wb, size
  *        axis holding the Values level lists `FM_PIVOT_VALUES_FIELD` at its
  *        position; when it is listed the view is read-scratch-backed.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb`, `out_indices` or `out_count` is `NULL`;
- *         `kInvalidArgument` if `sheet_index` or `pivot_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `out_indices` or `out_count` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `sheet_index` or `pivot_index` is out of range.
  */
 FM_API fm_status_t fm_workbook_pivot_get_row_field_order(const fm_workbook_t* wb, size_t sheet_index,
                                                          size_t pivot_index, const uint32_t** out_indices,
@@ -5955,9 +5958,9 @@ FM_API fm_status_t fm_workbook_pivot_filter_count(const fm_workbook_t* wb, size_
  * `value_text` is `NULL`; an unset upper bound has kind
  * `FM_PIVOT_FILTER_VALUE_NONE` and zero numeric payloads.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
- *         `kInvalidArgument` if `sheet_index`, `pivot_index`, or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `sheet_index`, `pivot_index`, or
  *         `filter_idx` is out of range, or the model contains an axis or
  *         filter type that is not representable by this C ABI. On any error,
  *         `*out` is left unchanged.
@@ -5974,10 +5977,10 @@ FM_API fm_status_t fm_workbook_pivot_filter_at(const fm_workbook_t* wb, size_t s
  *
  * The entry is saved with the pivot; see the persistence contract above.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb`, `spec`, `spec->field_name` or a
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `spec`, `spec->field_name` or a
  *         required `spec->value_text` is `NULL`;
- *         `kInvalidArgument` if `axis` or `type` is outside the C ABI enum
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `axis` or `type` is outside the C ABI enum
  *         ranges, the sheet/pivot indices do not resolve, the value payload
  *         discriminators are unusable, `data_field_index` is out of range
  *         for a value filter, or a label/date filter's `field_name` names no
@@ -6037,9 +6040,9 @@ typedef struct {
  * blocked anchor (see `blocked`), returns the attempted rectangle with
  * `out->blocked = 1`. Otherwise every field is zero.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
  */
 FM_API fm_status_t fm_workbook_spill_info(const fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
                                           fm_spill_info_t* out);
@@ -6079,9 +6082,9 @@ typedef struct {
  * `fm_workbook_spill_info` for that. When the cell is outside any block,
  * sets `out->engaged = 0` and leaves the remaining fields zero / `NULL`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet` is out of range or the coordinate
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range or the coordinate
  *         is outside the grid.
  */
 FM_API fm_status_t fm_workbook_get_array_formula(const fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
@@ -6099,13 +6102,13 @@ FM_API fm_status_t fm_workbook_get_array_formula(const fm_workbook_t* wb, uint32
  * of a block is refused. Structured references are bound at `(row, col)`
  * as `fm_workbook_set_formula` binds them.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `wb` or `formula` is `NULL`;
- *         `kInvalidArgument` when `sheet` is out of range, `rows` or `cols`
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `formula` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range, `rows` or `cols`
  *         is zero, or the rectangle leaves the grid or exceeds the
  *         dynamic-array cell ceiling;
  *         a parser code when `formula` does not parse;
- *         `kPreconditionFailed`, changing nothing, when the rectangle
+ *         `FM_STATUS_PRECONDITION_FAILED` (9), changing nothing, when the rectangle
  *         partially overlaps another array block, intersects a merged
  *         area, a data table or a PivotTable, or (for more than one cell) a
  *         table.
@@ -6186,9 +6189,9 @@ typedef struct {
  * the views are valid for the lifetime of the process. The metadata is
  * locale-invariant.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `name` or `out` is `NULL`;
- *         `kInvalidArgument` when no function matches `name`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `name` or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when no function matches `name`.
  */
 FM_API fm_status_t fm_function_metadata(const char* name, fm_function_metadata_t* out);
 
@@ -6206,9 +6209,9 @@ FM_API size_t fm_function_count(void);
  * lists. `*out_name` is a static view into the catalog's process-static
  * storage.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `out_name` is `NULL`;
- *         `kInvalidArgument` when `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `out_name` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range.
  */
 FM_API fm_status_t fm_function_name_at(size_t idx, const char** out_name);
 
@@ -6226,9 +6229,9 @@ FM_API fm_status_t fm_function_name_at(size_t idx, const char** out_name);
  * `ja-JP` renames only `DOLLAR` (`YEN`), `USDOLLAR` (`DOLLAR`) and `DBCS`
  * (`JIS`); `zh-TW` renames only `DBCS` (`BIG5`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `profile_id` is not a documented profile
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `profile_id` is not a documented profile
  *           (context `profile_id=<id>`) or `canonical_name` does not match
  *           a registered function.
  */
@@ -6243,9 +6246,9 @@ FM_API fm_status_t fm_function_localize(const char* canonical_name, const char* 
  * (ASCII case-insensitive), accepting the canonical spelling as a fallback; a
  * locale without renames reduces to that canonical match.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `profile_id` is not a documented profile
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `profile_id` is not a documented profile
  *           (context `profile_id=<id>`) or no function matches.
  */
 FM_API fm_status_t fm_function_canonicalize(const char* localized_name, const char* profile_id,
@@ -6266,9 +6269,9 @@ FM_API fm_status_t fm_function_canonicalize(const char* localized_name, const ch
  * next `fm_formula_localize` / `fm_formula_canonicalize` call on the same
  * thread. Copy it before making another call when it must be retained.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `profile_id` is not a documented profile
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `profile_id` is not a documented profile
  *           (context `profile_id=<id>`).
  */
 FM_API fm_status_t fm_formula_localize(const char* formula, const char* profile_id, const char** out_formula);
@@ -6315,9 +6318,9 @@ typedef struct {
 /**
  * @brief Fills `*out` with the locale facts of `profile_id`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `profile_id` or `out` is `NULL`;
- *         `kInvalidArgument` when `profile_id` is not a documented profile
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `profile_id` or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `profile_id` is not a documented profile
  *           (context `profile_id=<id>`).
  */
 FM_API fm_status_t fm_locale_facts(const char* profile_id, fm_locale_facts_t* out);
@@ -6340,9 +6343,9 @@ typedef enum {
  * `*out_order` is the sign (-1, 0, 1) of comparing `a` with `b`; it is a text
  * order, not `=` on two cells. Both strings are NUL-terminated UTF-8.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `profile_id` is not a documented profile
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `profile_id` is not a documented profile
  *           (context `profile_id=<id>`) or `strength` is out of range.
  */
 FM_API fm_status_t fm_text_compare(const char* a, const char* b, const char* profile_id,
@@ -6366,10 +6369,10 @@ FM_API fm_status_t fm_text_compare(const char* a, const char* b, const char* pro
  *
  * When `count` is `0`, `values` and `out_class_ids` may be `NULL`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `profile_id` or `out_class_count` is
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `profile_id` or `out_class_count` is
  *           `NULL`, or `values` / `out_class_ids` is `NULL` with `count > 0`;
- *         `kInvalidArgument` when `profile_id` is not a documented profile,
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `profile_id` is not a documented profile,
  *           `strength` is out of range, `count` exceeds `UINT32_MAX`, or a
  *           value is a non-finite number, text with a `NULL` pointer, an
  *           out-of-range error code, or an array / reference / lambda kind.
@@ -6394,9 +6397,9 @@ FM_API size_t fm_locale_error_name_count(void);
  * localized spelling comes from Excel under an Excel-backed profile and
  * `0` when it is assumed.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `profile_id` is not a documented profile
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `profile_id` is not a documented profile
  *           or `error_index` is out of range.
  */
 FM_API fm_status_t fm_locale_error_name(const char* profile_id, size_t error_index, const char** out_canonical,
@@ -6529,18 +6532,18 @@ typedef struct {
 /**
  * @brief Returns the column-layout-override count for `sheet_index`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_column_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
 
 /**
  * @brief Reads the `idx`-th column-layout override.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` or `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `idx` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_column(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
                                        fm_column_layout_t* out);
@@ -6548,18 +6551,18 @@ FM_API fm_status_t fm_sheet_get_column(const fm_workbook_t* wb, size_t sheet_ind
 /**
  * @brief Returns the row-layout-override count for `sheet_index`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_row_override_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
 
 /**
  * @brief Reads the `idx`-th row-layout override.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` or `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `idx` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_row_override(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
                                              fm_row_layout_t* out);
@@ -6568,18 +6571,18 @@ FM_API fm_status_t fm_sheet_get_row_override(const fm_workbook_t* wb, size_t she
  * @brief Reads the sheet-view state (zoom, frozen panes, tab hidden, and
  *        the display / orientation flags).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_index, fm_sheet_view_t* out);
 
 /**
  * @brief Sets the sheet view's scroll origin (`<sheetView topLeftCell>`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` or the cell is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or the cell is out of range.
  */
 FM_API fm_status_t fm_sheet_set_top_left(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col);
 
@@ -6591,9 +6594,9 @@ FM_API fm_status_t fm_sheet_set_top_left(fm_workbook_t* wb, size_t sheet_index, 
  * freeze_rows` and `col >= freeze_cols`. Changing the freeze with `fm_sheet_set_freeze`
  * resets this to the first unfrozen cell.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range, the sheet
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, the sheet
  *         has neither frozen nor split panes, or the cell is not in the
  *         unfrozen area.
  */
@@ -6608,9 +6611,9 @@ FM_API fm_status_t fm_sheet_set_pane_top_left(fm_workbook_t* wb, size_t sheet_in
  * keeps only the active selection, re-homed to the new active pane. Setting
  * the current split is a no-op.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or a value is
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or a value is
  *         negative or not finite (the view is left unchanged).
  */
 FM_API fm_status_t fm_sheet_set_split(fm_workbook_t* wb, size_t sheet_index, double x_twips, double y_twips);
@@ -6627,11 +6630,11 @@ FM_API fm_status_t fm_sheet_set_split(fm_workbook_t* wb, size_t sheet_index, dou
  * range moves to the first range's top-left. Whole-row and whole-column
  * references read as full-width / full-height ranges.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb`, `out_active_row`, `out_active_col`
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `out_active_row`, `out_active_col`
  *         or `out_total` is `NULL`, or `out_ranges` is `NULL` while
  *         `capacity > 0`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_selection(const fm_workbook_t* wb, size_t sheet_index, uint32_t* out_active_row,
                                           uint32_t* out_active_col, fm_merge_range* out_ranges, size_t capacity,
@@ -6647,10 +6650,10 @@ FM_API fm_status_t fm_sheet_get_selection(const fm_workbook_t* wb, size_t sheet_
  * other panes' selections are kept. An active cell outside every range is
  * saved as the first range's top-left, as Excel does.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`, or `ranges` is `NULL` with
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`, or `ranges` is `NULL` with
  *           a non-zero `count`;
- *         `kInvalidArgument` when `sheet_index`, the active cell or a range
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index`, the active cell or a range
  *         is out of range, or a range has `first > last`.
  */
 FM_API fm_status_t fm_sheet_set_selection(fm_workbook_t* wb, size_t sheet_index, uint32_t active_row,
@@ -6668,8 +6671,8 @@ FM_API fm_status_t fm_sheet_set_selection(fm_workbook_t* wb, size_t sheet_index,
  * payload carried by the OOXML reader so callers can preserve definitions
  * they do not otherwise interpret.
  *
- * @return `kOk` on success; `kBindingNullPointer` if `out_xml` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out_xml` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_auto_filter_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml);
 
@@ -6681,8 +6684,8 @@ FM_API fm_status_t fm_sheet_get_auto_filter_xml(const fm_workbook_t* wb, size_t 
  * with Excel/OOXML consumers because filter extensions are intentionally
  * preserved verbatim by the engine.
  *
- * @return `kOk` on success; `kBindingNullPointer` if `xml` is `NULL`;
- *         `kInvalidArgument` for a bad sheet index or malformed fragment.
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if `xml` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for a bad sheet index or malformed fragment.
  */
 FM_API fm_status_t fm_sheet_set_auto_filter_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
 
@@ -6904,10 +6907,10 @@ typedef struct {
  * and may be invalidated by the next successful scratch-backed read on the
  * same handle, by a mutation, or by handle destruction.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range;
- *         `kAutoFilterInvalid` (8006) when the AutoFilter did not parse into
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range;
+ *         `FM_STATUS_AUTO_FILTER_INVALID` (8006) when the AutoFilter did not parse into
  *         the typed model (only `fm_sheet_get_auto_filter_xml` reads it).
  */
 FM_API fm_status_t fm_sheet_get_auto_filter(const fm_workbook_t* wb, size_t sheet_index, fm_auto_filter* out,
@@ -6920,12 +6923,12 @@ FM_API fm_status_t fm_sheet_get_auto_filter(const fm_workbook_t* wb, size_t shee
  * Row visibility is not changed; call `fm_sheet_apply_auto_filter` to hide
  * the rows the criteria exclude.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `filter` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range, an
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `filter` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, an
  *         enumeration field is outside the domain listed on the record, or an
  *         array pointer is `NULL` with a non-zero count;
- *         `kAutoFilterInvalid` (8006) when the range is outside the grid,
+ *         `FM_STATUS_AUTO_FILTER_INVALID` (8006) when the range is outside the grid,
  *         column ids are outside the range or not ascending, a custom filter
  *         has other than one or two conditions, or a date group item does
  *         not fit its grouping.
@@ -6936,9 +6939,9 @@ FM_API fm_status_t fm_sheet_set_auto_filter(fm_workbook_t* wb, size_t sheet_inde
  * @brief Removes the sheet AutoFilter and its `_xlnm._FilterDatabase` name.
  *        Row visibility is not changed. No-op when the sheet has none.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_remove_auto_filter(fm_workbook_t* wb, size_t sheet_index);
 
@@ -6948,11 +6951,11 @@ FM_API fm_status_t fm_sheet_remove_auto_filter(fm_workbook_t* wb, size_t sheet_i
  *        row hidden by hand is shown again, and rows outside the body are
  *        untouched.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range;
- *         `kNotFound` when the sheet has no AutoFilter;
- *         `kAutoFilterInvalid` (8006) when it did not parse into the model.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range;
+ *         `FM_STATUS_NOT_FOUND` (6) when the sheet has no AutoFilter;
+ *         `FM_STATUS_AUTO_FILTER_INVALID` (8006) when it did not parse into the model.
  */
 FM_API fm_status_t fm_sheet_apply_auto_filter(fm_workbook_t* wb, size_t sheet_index);
 
@@ -6973,12 +6976,12 @@ FM_API fm_status_t fm_sheet_clear_auto_filter(fm_workbook_t* wb, size_t sheet_in
  * flags are written. Call with `cap == 0` (`out_match` may then be `NULL`)
  * to size the buffer first.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb`, `out_len` or `out_first_row` is
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `out_len` or `out_first_row` is
  *         `NULL`, or `out_match` is `NULL` while `cap > 0`;
- *         `kInvalidArgument` when `sheet_index` is out of range;
- *         `kNotFound` when the sheet has no AutoFilter;
- *         `kAutoFilterInvalid` (8006) when it did not parse into the model.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range;
+ *         `FM_STATUS_NOT_FOUND` (6) when the sheet has no AutoFilter;
+ *         `FM_STATUS_AUTO_FILTER_INVALID` (8006) when it did not parse into the model.
  */
 FM_API fm_status_t fm_sheet_evaluate_auto_filter(const fm_workbook_t* wb, size_t sheet_index, uint8_t* out_match,
                                                  size_t cap, size_t* out_len, uint32_t* out_first_row);
@@ -6989,7 +6992,7 @@ FM_API fm_status_t fm_sheet_evaluate_auto_filter(const fm_workbook_t* wb, size_t
  * `table_index` addresses the workbook table list as `fm_workbook_table_at`
  * does, and the table's sheet is the one whose rows are evaluated and
  * hidden. Tables carry no `_FilterDatabase` name. The contracts are those
- * of the sheet functions, with `kInvalidArgument` for an out-of-range
+ * of the sheet functions, with `FM_STATUS_INVALID_ARGUMENT` (2) for an out-of-range
  * `table_index`.
  */
 FM_API fm_status_t fm_table_get_auto_filter(const fm_workbook_t* wb, size_t table_index, fm_auto_filter* out,
@@ -7013,9 +7016,9 @@ FM_API fm_status_t fm_table_evaluate_auto_filter(const fm_workbook_t* wb, size_t
  * 8.43-character column as 9.140625). A rejected call leaves the layout
  * exactly as it was.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range,
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range,
  *         `last < first`, `last` is past the last column (16383), or
  *         `width` is negative, NaN, or infinite.
  */
@@ -7033,9 +7036,9 @@ FM_API fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet_ind
  * dropped. Columns with no width override are unaffected. A rejected call
  * leaves the layout exactly as it was.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range,
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range,
  *         `last < first`, or `last` is past the last column (16383).
  */
 FM_API fm_status_t fm_sheet_clear_column_width(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last);
@@ -7045,9 +7048,9 @@ FM_API fm_status_t fm_sheet_clear_column_width(fm_workbook_t* wb, size_t sheet_i
  *        column span `[first, last]`. See `fm_sheet_set_column_width`
  *        for the merge semantics.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range,
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range,
  *         `last < first`, or `last` is past the last column (16383).
  */
 FM_API fm_status_t fm_sheet_set_column_hidden(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
@@ -7058,9 +7061,9 @@ FM_API fm_status_t fm_sheet_set_column_hidden(fm_workbook_t* wb, size_t sheet_in
  *        column span `[first, last]`. See `fm_sheet_set_column_width`
  *        for the merge semantics.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range,
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range,
  *         `last < first`, `last` is past the last column (16383), or
  *         `level` is above 7, the deepest outline level Excel stores.
  */
@@ -7072,9 +7075,9 @@ FM_API fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t sheet_i
  *        the span is collapsed) for the inclusive column span `[first, last]`.
  *        See `fm_sheet_set_column_width` for the merge semantics.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range,
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range,
  *         `last < first`, or `last` is past the last column (16383).
  */
 FM_API fm_status_t fm_sheet_set_column_collapsed(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
@@ -7089,9 +7092,9 @@ FM_API fm_status_t fm_sheet_set_column_collapsed(fm_workbook_t* wb, size_t sheet
  * column spans are split at the requested boundaries. `xf_index` addresses
  * the workbook's cell-XF table; index 0 is the default cell style.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index`, the span, or `xf_index` is
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index`, the span, or `xf_index` is
  *         out of range.
  */
 FM_API fm_status_t fm_sheet_set_column_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
@@ -7113,9 +7116,9 @@ FM_API fm_status_t fm_sheet_clear_column_style(fm_workbook_t* wb, size_t sheet_i
  * (`customHeight="1"`), which Excel keeps when the row's content or font
  * changes. A rejected call leaves the layout exactly as it was.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range, `row`
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, `row`
  *         is past the last row (1048575), or `height` is negative, NaN,
  *         or infinite.
  */
@@ -7137,9 +7140,9 @@ FM_API fm_status_t fm_sheet_set_row_auto_height(fm_workbook_t* wb, size_t sheet_
 /**
  * @brief Sets or replaces the row hidden flag for `row`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or `row`
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or `row`
  *         is past the last row (1048575).
  */
 FM_API fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_index, uint32_t row, int32_t hidden);
@@ -7147,9 +7150,9 @@ FM_API fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_index
 /**
  * @brief Sets or replaces the row outline level for `row`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range, `row`
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, `row`
  *         is past the last row (1048575), or `level` is above 7, the
  *         deepest outline level Excel stores.
  */
@@ -7159,9 +7162,9 @@ FM_API fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_inde
  * @brief Sets or clears the `collapsed` flag (the outline group summarised by
  *        the row is collapsed) for `row`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or `row`
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or `row`
  *         is past the last row (1048575).
  */
 FM_API fm_status_t fm_sheet_set_row_collapsed(fm_workbook_t* wb, size_t sheet_index, uint32_t row, int32_t collapsed);
@@ -7175,9 +7178,9 @@ FM_API fm_status_t fm_sheet_set_row_collapsed(fm_workbook_t* wb, size_t sheet_in
  * attributes are retained. `xf_index` addresses the workbook's cell-XF table;
  * index 0 is the default cell style. Nothing changes on failure.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index`, the span, or `xf_index` is
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index`, the span, or `xf_index` is
  *         out of range.
  */
 FM_API fm_status_t fm_sheet_set_row_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
@@ -7219,10 +7222,10 @@ FM_API fm_status_t fm_sheet_clear_row_style(fm_workbook_t* wb, size_t sheet_inde
  * written. Call with `cap == 0` (`out_xfs` may then be `NULL`) to size the
  * buffer first.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_len` is `NULL`, or `out_xfs`
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_len` is `NULL`, or `out_xfs`
  *         is `NULL` while `cap > 0`;
- *         `kInvalidArgument` when `sheet_index` or the rect is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or the rect is out of range.
  */
 FM_API fm_status_t fm_sheet_range_style_bases(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
                                               uint32_t first_col, uint32_t last_row, uint32_t last_col,
@@ -7238,7 +7241,7 @@ FM_API fm_status_t fm_sheet_range_style_bases(const fm_workbook_t* wb, size_t sh
  * selection and repeats are ignored; excluding every cell yields no indices.
  * Values, styles and history are not touched.
  *
- * @return As `fm_sheet_range_style_bases`; also `kBindingNullPointer` when
+ * @return As `fm_sheet_range_style_bases`; also `FM_STATUS_BINDING_NULL_POINTER` (7001) when
  *         either excluded array is `NULL` while `excluded_count > 0`.
  */
 FM_API fm_status_t fm_sheet_range_style_bases_excluding(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
@@ -7251,13 +7254,13 @@ FM_API fm_status_t fm_sheet_range_style_bases_excluding(const fm_workbook_t* wb,
  * @brief Remaps the XFs of a selection: each cell ends at `to_xfs[i]` where
  *        it resolved to `from_xfs[i]` before; an unlisted XF is kept.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`, or either array is `NULL`
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`, or either array is `NULL`
  *         while `count > 0`;
- *         `kInvalidArgument` when `sheet_index` or the rect is out of range,
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or the rect is out of range,
  *         a `from_xfs` entry repeats, or a `to_xfs` entry is past the
  *         cell-XF table;
- *         `kPreconditionFailed` when more than 1,048,576 cells would be
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when more than 1,048,576 cells would be
  *         written. Nothing changes on failure.
  */
 FM_API fm_status_t fm_sheet_remap_range_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
@@ -7274,9 +7277,9 @@ FM_API fm_status_t fm_sheet_remap_range_style(fm_workbook_t* wb, size_t sheet_in
  * that MUST be released with `fm_buffer_free`. Both are zeroed before
  * validation and stay zero on failure.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` or the rect is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or the rect is out of range.
  */
 FM_API fm_status_t fm_sheet_snapshot_range_style(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
                                                  uint32_t first_col, uint32_t last_row, uint32_t last_col,
@@ -7290,10 +7293,10 @@ FM_API fm_status_t fm_sheet_snapshot_range_style(const fm_workbook_t* wb, size_t
  * the captured rect that was not captured loses its style. Values, formulas,
  * phonetic runs and comments are not touched.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`, or `bytes` is `NULL`
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`, or `bytes` is `NULL`
  *         while `len > 0`;
- *         `kInvalidArgument` when `sheet_index` is out of range, the bytes
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, the bytes
  *         are not a valid capture, or an XF is past the cell-XF table.
  *         Nothing changes on failure.
  */
@@ -7310,9 +7313,9 @@ FM_API fm_status_t fm_sheet_restore_range_style(fm_workbook_t* wb, size_t sheet_
  * exception to the hidden default and is kept. A row with no height
  * override is a no-op.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or `row`
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or `row`
  *         is past the last row (1048575).
  */
 FM_API fm_status_t fm_sheet_clear_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t row);
@@ -7355,9 +7358,9 @@ typedef struct {
 /**
  * @brief Reads the sheet's default column / row metrics.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_format_defaults(const fm_workbook_t* wb, size_t sheet_index,
                                                 fm_sheet_format_defaults* out);
@@ -7370,9 +7373,9 @@ FM_API fm_status_t fm_sheet_get_format_defaults(const fm_workbook_t* wb, size_t 
  * `zero_height` replace the stored flags, so read the current record first to
  * keep them. A rejected call leaves the sheet unchanged.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or a
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or a
  *         stated value is negative, NaN, or infinite.
  */
 FM_API fm_status_t fm_sheet_set_format_defaults(fm_workbook_t* wb, size_t sheet_index,
@@ -7420,9 +7423,9 @@ typedef struct {
  * Hidden rows and columns contribute zero extent. `mode` is an
  * `fm_geometry_mode_t` ordinal.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range, the range
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, the range
  *         is inverted or outside the grid, or `mode` is unknown.
  */
 FM_API fm_status_t fm_sheet_cell_rect_pt(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
@@ -7433,9 +7436,9 @@ FM_API fm_status_t fm_sheet_cell_rect_pt(const fm_workbook_t* wb, size_t sheet_i
  * @brief Reads the effective width of column `col` in points; zero when the
  *        column is hidden.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` or `col` is out of range or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `col` is out of range or
  *         `mode` is unknown.
  */
 FM_API fm_status_t fm_sheet_column_width_pt(const fm_workbook_t* wb, size_t sheet_index, uint32_t col, int32_t mode,
@@ -7445,18 +7448,18 @@ FM_API fm_status_t fm_sheet_column_width_pt(const fm_workbook_t* wb, size_t shee
  * @brief Reads the effective height of row `row` in points; zero when the
  *        row is hidden.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` or `row` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `row` is out of range.
  */
 FM_API fm_status_t fm_sheet_row_height_pt(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, double* out_pt);
 
 /**
  * @brief Reads the column-width conversion model in `mode`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or `mode`
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or `mode`
  *         is unknown.
  */
 FM_API fm_status_t fm_sheet_width_model(const fm_workbook_t* wb, size_t sheet_index, int32_t mode, fm_width_model* out);
@@ -7467,9 +7470,9 @@ FM_API fm_status_t fm_sheet_width_model(const fm_workbook_t* wb, size_t sheet_in
  *        the width snaps to whole pixels of the Normal font's maximum digit
  *        width (ECMA-376 §18.3.1.13). Zero is exactly zero points.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range, `mode` is
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, `mode` is
  *         unknown, or `chars` is negative, NaN, or infinite.
  */
 FM_API fm_status_t fm_sheet_column_chars_to_pt(const fm_workbook_t* wb, size_t sheet_index, int32_t mode, double chars,
@@ -7480,9 +7483,9 @@ FM_API fm_status_t fm_sheet_column_chars_to_pt(const fm_workbook_t* wb, size_t s
  *        writes for a column of `pt`, rounded to whole screen pixels; zero
  *        points maps to zero.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range, `mode` is
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, `mode` is
  *         unknown, or `pt` is negative, NaN, or infinite.
  */
 FM_API fm_status_t fm_sheet_column_pt_to_chars(const fm_workbook_t* wb, size_t sheet_index, int32_t mode, double pt,
@@ -7492,9 +7495,9 @@ FM_API fm_status_t fm_sheet_column_pt_to_chars(const fm_workbook_t* wb, size_t s
  * @brief Sets the sheet's zoom percentage. Values outside `[10, 400]`
  *        are clamped to the nearest endpoint.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_set_zoom(fm_workbook_t* wb, size_t sheet_index, uint32_t zoom_scale);
 
@@ -7505,9 +7508,9 @@ FM_API fm_status_t fm_sheet_set_zoom(fm_workbook_t* wb, size_t sheet_index, uint
  * The first unfrozen cell `(freeze_rows, freeze_cols)` must lie inside the
  * grid, so `freeze_rows` is at most 1048575 and `freeze_cols` at most 16383.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or
  *           `freeze_rows` / `freeze_cols` reaches past the grid (the view
  *           is left unchanged).
  */
@@ -7531,9 +7534,9 @@ FM_API fm_status_t fm_sheet_set_freeze(fm_workbook_t* wb, size_t sheet_index, ui
  * successor (`fm_workbook_get_active_sheet`). A workbook keeps at least one
  * visible sheet, so the only visible sheet cannot be hidden.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range, or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, or
  *           `hidden` is non-zero and the sheet is the only visible one
  *           (the workbook is left unchanged).
  */
@@ -7549,14 +7552,14 @@ FM_API fm_status_t fm_sheet_set_tab_hidden(fm_workbook_t* wb, size_t sheet_index
  * with `visibility`.
  *
  * `visibility` is a raw signed 32-bit ordinal, not a validated enum type:
- * a value outside `fm_sheet_visibility_t` returns `kInvalidArgument` and
+ * a value outside `fm_sheet_visibility_t` returns `FM_STATUS_INVALID_ARGUMENT` (2) and
  * leaves the sheet unchanged. Hiding the active sheet activates its visible
  * successor (`fm_workbook_get_active_sheet`). A workbook keeps at least one
  * visible sheet, so the only visible sheet cannot be hidden.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range,
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range,
  *           `visibility` is not an `fm_sheet_visibility_t` value, or it
  *           hides the only visible sheet (the workbook is left unchanged).
  */
@@ -7565,9 +7568,9 @@ FM_API fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_index
 /**
  * @brief Sets the sheet's gridline-visibility flag (`showGridLines`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_set_show_grid_lines(fm_workbook_t* wb, size_t sheet_index, int32_t show);
 
@@ -7575,45 +7578,45 @@ FM_API fm_status_t fm_sheet_set_show_grid_lines(fm_workbook_t* wb, size_t sheet_
  * @brief Sets the sheet's row/column header-visibility flag
  *        (`showRowColHeaders`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_set_show_row_col_headers(fm_workbook_t* wb, size_t sheet_index, int32_t show);
 
 /**
  * @brief Sets the sheet's zero-value display flag (`showZeros`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_set_show_zeros(fm_workbook_t* wb, size_t sheet_index, int32_t show);
 
 /**
  * @brief Sets the sheet's formula-text display flag (`showFormulas`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_set_show_formulas(fm_workbook_t* wb, size_t sheet_index, int32_t show);
 
 /**
  * @brief Sets the sheet's outline-symbol display flag (`showOutlineSymbols`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_set_show_outline_symbols(fm_workbook_t* wb, size_t sheet_index, int32_t show);
 
 /**
  * @brief Sets the sheet's right-to-left display flag (`rightToLeft`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_set_right_to_left(fm_workbook_t* wb, size_t sheet_index, int32_t right_to_left);
 
@@ -7623,9 +7626,9 @@ FM_API fm_status_t fm_sheet_set_right_to_left(fm_workbook_t* wb, size_t sheet_in
  *        than one sheet does not affect evaluation, only what a host
  *        UI reproduces as the active tab.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_set_tab_selected(fm_workbook_t* wb, size_t sheet_index, int32_t selected);
 
@@ -7637,9 +7640,9 @@ FM_API fm_status_t fm_sheet_set_tab_selected(fm_workbook_t* wb, size_t sheet_ind
  * other value round-trips unchanged, matching the engine's tolerance
  * for future OOXML view-mode values.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL` or `mode == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL` or `mode == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_set_view_mode(fm_workbook_t* wb, size_t sheet_index, const char* mode);
 
@@ -7670,8 +7673,9 @@ FM_API const char* fm_last_error_context(void);
 /**
  * @brief Returns a static C string describing `status`.
  *
- * For known codes the result matches `formulon::to_cstring` (e.g.
- * `"kInvalidArgument"`); unknown codes yield `"kUnknownError"`.
+ * For known codes the result is the status name without the `FM_STATUS_`
+ * prefix (e.g. `"INVALID_ARGUMENT"` for `FM_STATUS_INVALID_ARGUMENT`);
+ * unknown codes yield `"UNRECOGNIZED_STATUS"`.
  * Always non-NULL with program lifetime.
  */
 FM_API const char* fm_status_string(fm_status_t status);
@@ -7722,8 +7726,8 @@ typedef void (*fm_log_sink_cb)(const char* record, size_t len, void* user_data);
  *
  * This setting is process-wide, not per workbook handle.
  *
- * @return `kOk` on success;
- *         `kInvalidArgument` when `level` is outside `fm_log_level_t`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `level` is outside `fm_log_level_t`.
  */
 FM_API fm_status_t fm_set_log_min_level(int32_t level);
 
@@ -7738,7 +7742,7 @@ FM_API fm_status_t fm_set_log_min_level(int32_t level);
  *
  * This setting is process-wide, not per workbook handle.
  *
- * @return `kOk` always.
+ * @return `FM_STATUS_OK` (0) always.
  */
 FM_API fm_status_t fm_set_log_sink(fm_log_sink_cb sink, void* user_data);
 
@@ -8077,9 +8081,9 @@ typedef struct {
  * need to distinguish "no cell" from "default-formatted cell" should
  * combine this with `fm_workbook_cell_at` iteration.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_cell_get_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
                                         uint32_t* out_xf_index);
@@ -8093,9 +8097,9 @@ FM_API fm_status_t fm_cell_get_xf_index(fm_workbook_t* wb, uint32_t sheet, uint3
  * those calls leave `xf_index` untouched, so the caller can layer a
  * style update on top of either order of operations.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or
  *           `xf_index` is not below `fm_styles_get_cell_xf_count` (no cell
  *           is materialised).
  */
@@ -8114,9 +8118,9 @@ FM_API fm_status_t fm_cell_set_xf_index(fm_workbook_t* wb, uint32_t sheet, uint3
  * cell from one assigned the default xf through the `source` of
  * `fm_sheet_get_effective_style`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` or the address is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or the address is out of range.
  */
 FM_API fm_status_t fm_cell_clear_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col);
 
@@ -8132,12 +8136,12 @@ FM_API fm_status_t fm_cell_clear_xf_index(fm_workbook_t* wb, uint32_t sheet, uin
  * cell at a time costs one ABI crossing per cell, which dominates the work
  * on any binding that marshals arguments.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet` or a corner is out of range, or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` or a corner is out of range, or
  *           `xf_index` is not below `fm_styles_get_cell_xf_count` (checked
  *           before any cell is written);
- *         `kPreconditionFailed` when the rectangle exceeds the per-call
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when the rectangle exceeds the per-call
  *         cell ceiling.
  */
 FM_API fm_status_t fm_sheet_set_range_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t first_row,
@@ -8152,9 +8156,9 @@ FM_API fm_status_t fm_sheet_set_range_xf_index(fm_workbook_t* wb, uint32_t sheet
  * `has_alignment` reports whether the `<alignment>` child existed;
  * explicit zero / false attributes remain present in their value fields.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `xf_index >= cell_xfs.size()`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `xf_index >= cell_xfs.size()`.
  */
 FM_API fm_status_t fm_styles_get_cell_xf(fm_workbook_t* wb, uint32_t xf_index, fm_cell_xf* out);
 
@@ -8162,9 +8166,9 @@ FM_API fm_status_t fm_styles_get_cell_xf(fm_workbook_t* wb, uint32_t xf_index, f
  * @brief Reads the `font_index`-th font record from the workbook's
  *        styles table.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `font_index >= fonts.size()`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `font_index >= fonts.size()`.
  */
 FM_API fm_status_t fm_styles_get_font(fm_workbook_t* wb, uint32_t font_index, fm_font_record* out);
 
@@ -8183,12 +8187,12 @@ FM_API fm_status_t fm_styles_get_font(fm_workbook_t* wb, uint32_t font_index, fm
  * handle destruction), or a static built-in view with program lifetime.
  * The styles writer intentionally emits
  * only custom records with ids >= 164, so a below-164 override is not
- * promised to survive save/load. Returns `kInvalidArgument` when no effective
+ * promised to survive save/load. Returns `FM_STATUS_INVALID_ARGUMENT` (2) when no effective
  * mapping exists for `num_fmt_id`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when the id is unknown.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the id is unknown.
  */
 FM_API fm_status_t fm_styles_get_num_fmt_string(fm_workbook_t* wb, uint16_t num_fmt_id, const char** out);
 
@@ -8196,9 +8200,9 @@ FM_API fm_status_t fm_styles_get_num_fmt_string(fm_workbook_t* wb, uint16_t num_
  * @brief Reads the `fill_index`-th fill record from the workbook's
  *        styles table.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `fill_index >= fills.size()`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `fill_index >= fills.size()`.
  */
 FM_API fm_status_t fm_styles_get_fill(fm_workbook_t* wb, uint32_t fill_index, fm_fill_record* out);
 
@@ -8206,9 +8210,9 @@ FM_API fm_status_t fm_styles_get_fill(fm_workbook_t* wb, uint32_t fill_index, fm
  * @brief Reads the `border_index`-th border record from the workbook's
  *        styles table.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `border_index >= borders.size()`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `border_index >= borders.size()`.
  */
 FM_API fm_status_t fm_styles_get_border(fm_workbook_t* wb, uint32_t border_index, fm_border_record* out);
 
@@ -8216,17 +8220,17 @@ FM_API fm_status_t fm_styles_get_border(fm_workbook_t* wb, uint32_t border_index
  * @brief Returns the number of `<dxf>` differential-format records
  *        available for conditional-format `dxfId` resolution.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
 FM_API fm_status_t fm_styles_get_dxf_count(fm_workbook_t* wb, uint32_t* out_count);
 
 /**
  * @brief Reads the `dxf_index`-th differential-format record.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `dxf_index >= dxfs.size()`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `dxf_index >= dxfs.size()`.
  */
 FM_API fm_status_t fm_styles_get_dxf(fm_workbook_t* wb, uint32_t dxf_index, fm_dxf_record* out);
 
@@ -8240,8 +8244,8 @@ FM_API fm_status_t fm_styles_get_dxf(fm_workbook_t* wb, uint32_t dxf_index, fm_d
  * string. `alignment_xml` and `protection_xml` are always deep-copied when
  * non-`NULL`; passing `NULL` stores an empty fragment.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_dxf_index` is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_dxf_index` is `NULL`.
  */
 FM_API fm_status_t fm_styles_add_dxf(fm_workbook_t* wb, fm_dxf_record record, uint32_t* out_dxf_index);
 
@@ -8288,17 +8292,17 @@ typedef struct {
 /**
  * @brief Returns the number of custom table / PivotTable styles.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
 FM_API fm_status_t fm_styles_get_table_style_count(fm_workbook_t* wb, uint32_t* out_count);
 
 /**
  * @brief Reads the `index`-th custom table style.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index` is out of range.
  */
 FM_API fm_status_t fm_styles_get_table_style(fm_workbook_t* wb, uint32_t index, fm_table_style_t* out);
 
@@ -8313,10 +8317,10 @@ FM_API fm_status_t fm_styles_get_table_style(fm_workbook_t* wb, uint32_t index, 
  * defaults to `TableStyleMedium2` / `PivotStyleLight16`, as the desktop
  * application writes them.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb`, `style` or `style->name` is `NULL`,
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `style` or `style->name` is `NULL`,
  *         or `elements` is `NULL` with a non-zero count;
- *         `kInvalidArgument` for an invalid name, an unknown or repeated
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for an invalid name, an unknown or repeated
  *         element type, a zero `size`, or a `dxf_id` past `<dxfs>`.
  */
 FM_API fm_status_t fm_styles_set_table_style(fm_workbook_t* wb, const fm_table_style_t* style);
@@ -8328,9 +8332,9 @@ FM_API fm_status_t fm_styles_set_table_style(fm_workbook_t* wb, const fm_table_s
  * naming it keep the name, which the desktop application then renders
  * unstyled.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any argument is `NULL`;
- *         `kInvalidArgument` when no custom style has that name.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when no custom style has that name.
  */
 FM_API fm_status_t fm_styles_remove_table_style(fm_workbook_t* wb, const char* name);
 
@@ -8338,8 +8342,8 @@ FM_API fm_status_t fm_styles_remove_table_style(fm_workbook_t* wb, const char* n
  * @brief Reads the default table and PivotTable style names (model-backed
  *        views, empty when unset).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
 FM_API fm_status_t fm_styles_get_table_style_defaults(fm_workbook_t* wb, const char** out_table_style,
                                                       const char** out_pivot_style);
@@ -8348,8 +8352,8 @@ FM_API fm_status_t fm_styles_get_table_style_defaults(fm_workbook_t* wb, const c
  * @brief Sets the default table and PivotTable style names. `NULL` keeps a
  *        default, an empty string removes it.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`.
  */
 FM_API fm_status_t fm_styles_set_table_style_defaults(fm_workbook_t* wb, const char* table_style,
                                                       const char* pivot_style);
@@ -8358,8 +8362,8 @@ FM_API fm_status_t fm_styles_set_table_style_defaults(fm_workbook_t* wb, const c
  * @brief Returns the number of font records currently registered in the
  *        workbook's styles table.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
 FM_API fm_status_t fm_styles_get_font_count(fm_workbook_t* wb, uint32_t* out_count);
 
@@ -8367,8 +8371,8 @@ FM_API fm_status_t fm_styles_get_font_count(fm_workbook_t* wb, uint32_t* out_cou
  * @brief Returns the number of fill records currently registered in the
  *        workbook's styles table.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
 FM_API fm_status_t fm_styles_get_fill_count(fm_workbook_t* wb, uint32_t* out_count);
 
@@ -8376,8 +8380,8 @@ FM_API fm_status_t fm_styles_get_fill_count(fm_workbook_t* wb, uint32_t* out_cou
  * @brief Returns the number of border records currently registered in
  *        the workbook's styles table.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
 FM_API fm_status_t fm_styles_get_border_count(fm_workbook_t* wb, uint32_t* out_count);
 
@@ -8386,8 +8390,8 @@ FM_API fm_status_t fm_styles_get_border_count(fm_workbook_t* wb, uint32_t* out_c
  *        the workbook's styles table (i.e. the size of the `cellXfs`
  *        vector).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
 FM_API fm_status_t fm_styles_get_cell_xf_count(fm_workbook_t* wb, uint32_t* out_count);
 
@@ -8396,8 +8400,8 @@ FM_API fm_status_t fm_styles_get_cell_xf_count(fm_workbook_t* wb, uint32_t* out_
  *        registered in the workbook. Zero for workbooks that do not
  *        declare any named styles.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
 FM_API fm_status_t fm_styles_get_cell_style_count(fm_workbook_t* wb, uint32_t* out_count);
 
@@ -8406,9 +8410,9 @@ FM_API fm_status_t fm_styles_get_cell_style_count(fm_workbook_t* wb, uint32_t* o
  *        model-backed view into storage owned by the workbook; see
  *        `fm_cell_style_record_t` for lifetime rules.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `index >= cell_styles.size()`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index >= cell_styles.size()`.
  */
 FM_API fm_status_t fm_styles_get_cell_style(fm_workbook_t* wb, uint32_t index, fm_cell_style_record_t* out);
 
@@ -8417,8 +8421,8 @@ FM_API fm_status_t fm_styles_get_cell_style(fm_workbook_t* wb, uint32_t index, f
  *        style xf table. This table is independent of `cellXfs` and
  *        is referenced by `fm_cell_style_record_t::xf_id`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
 FM_API fm_status_t fm_styles_get_cell_style_xf_count(fm_workbook_t* wb, uint32_t* out_count);
 
@@ -8427,9 +8431,9 @@ FM_API fm_status_t fm_styles_get_cell_style_xf_count(fm_workbook_t* wb, uint32_t
  *        table). Output shape mirrors `fm_styles_get_cell_xf`, including
  *        the optional alignment attributes and their presence flags.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `index >= cell_style_xfs.size()`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index >= cell_style_xfs.size()`.
  */
 FM_API fm_status_t fm_styles_get_cell_style_xf(fm_workbook_t* wb, uint32_t index, fm_cell_xf* out);
 
@@ -8452,8 +8456,8 @@ FM_API fm_status_t fm_styles_get_cell_style_xf(fm_workbook_t* wb, uint32_t index
  * into the styles table and may be freed by the caller after the call
  * returns.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_index` is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_index` is `NULL`.
  */
 FM_API fm_status_t fm_styles_add_font(fm_workbook_t* wb, fm_font_record record, uint32_t* out_index);
 
@@ -8474,9 +8478,9 @@ FM_API fm_status_t fm_styles_add_font(fm_workbook_t* wb, fm_font_record record, 
  * `record.name` follows `fm_styles_add_font`: NUL-terminated UTF-8, copied
  * into the styles table, `NULL` treated as the empty string.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`;
- *         `kInvalidArgument` when `font_index >= fonts.size()`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `font_index >= fonts.size()`.
  */
 FM_API fm_status_t fm_styles_set_font(fm_workbook_t* wb, uint32_t font_index, fm_font_record record);
 
@@ -8506,8 +8510,8 @@ FM_API fm_status_t fm_styles_set_font(fm_workbook_t* wb, uint32_t font_index, fm
  * it back with `scheme` preserved keeps Excel showing the font as the
  * theme's body font.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`.
  */
 FM_API fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, fm_font_record record);
 
@@ -8522,8 +8526,8 @@ FM_API fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, fm_font_recor
  * dedup is `O(N)` per call; callers that bulk-build a workbook should
  * batch when possible.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_index` is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_index` is `NULL`.
  */
 FM_API fm_status_t fm_styles_add_fill(fm_workbook_t* wb, fm_fill_record record, uint32_t* out_index);
 
@@ -8538,8 +8542,8 @@ FM_API fm_status_t fm_styles_add_fill(fm_workbook_t* wb, fm_fill_record record, 
  * `O(N)` per call; callers that bulk-build a workbook should batch when
  * possible.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_index` is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_index` is `NULL`.
  */
 FM_API fm_status_t fm_styles_add_border(fm_workbook_t* wb, fm_border_record record, uint32_t* out_index);
 
@@ -8561,15 +8565,15 @@ FM_API fm_status_t fm_styles_add_border(fm_workbook_t* wb, fm_border_record reco
  *   3. Otherwise a new custom entry is appended with id
  *      `max(existing_custom_id, 163) + 1`, and the new id is returned.
  *      When the 16-bit OOXML id space is exhausted, the function returns
- *      `kPreconditionFailed` and leaves both the table and `*out_num_fmt_id`
+ *      `FM_STATUS_PRECONDITION_FAILED` (9) and leaves both the table and `*out_num_fmt_id`
  *      unchanged.
  *
  * `format_code` must be a NUL-terminated UTF-8 pointer; passing `NULL`
  * is treated as the empty string.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_num_fmt_id` is `NULL`;
- *         `kPreconditionFailed` when no custom OOXML id remains.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_num_fmt_id` is `NULL`;
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when no custom OOXML id remains.
  */
 FM_API fm_status_t fm_styles_add_num_fmt(fm_workbook_t* wb, const char* format_code, uint16_t* out_num_fmt_id);
 
@@ -8593,19 +8597,19 @@ FM_API fm_status_t fm_styles_add_num_fmt(fm_workbook_t* wb, const char* format_c
  *   * `record.num_fmt_id` must either be a built-in id with a format
  *     code in at least one locale (`5`-`8`, `41`-`44` included) or already
  *     registered as a custom entry. Unknown ids surface
- *     `kInvalidArgument`.
+ *     `FM_STATUS_INVALID_ARGUMENT` (2).
  *   * Alignment values outside their Excel ranges are rejected when the
  *     matching presence flag is set.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_xf_index` is `NULL`;
- *         `kInvalidArgument` for any out-of-range / unregistered field.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_xf_index` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for any out-of-range / unregistered field.
  */
 FM_API fm_status_t fm_styles_add_cell_xf(fm_workbook_t* wb, fm_cell_xf record, uint32_t* out_xf_index);
 
 /** Adds and deduplicates a named-style xf including optional alignment
  * attributes. `has_alignment` preserves an explicit empty child. Invalid
- * Excel ranges return `kInvalidArgument`. */
+ * Excel ranges return `FM_STATUS_INVALID_ARGUMENT` (2). */
 FM_API fm_status_t fm_styles_add_cell_style_xf(fm_workbook_t* wb, fm_cell_xf record, uint32_t* out_xf_id);
 
 /**
@@ -8617,9 +8621,9 @@ FM_API fm_status_t fm_styles_add_cell_style_xf(fm_workbook_t* wb, fm_cell_xf rec
  * `FM_CELL_STYLE_BUILTIN_ID_NONE` for a custom style; `i_level` is `0..6`
  * for `builtin_id` 1 / 2 and must be `0` otherwise.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb`, `record` or `record->name` is `NULL`;
- *         `kInvalidArgument` for an empty name or an out-of-range field.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `record` or `record->name` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for an empty name or an out-of-range field.
  */
 FM_API fm_status_t fm_styles_set_cell_style(fm_workbook_t* wb, const fm_cell_style_record_t* record);
 
@@ -8632,9 +8636,9 @@ FM_API fm_status_t fm_styles_set_cell_style(fm_workbook_t* wb, const fm_cell_sty
  * whose flag is set keep their own. Neither `<cellXfs>` nor
  * `<cellStyleXfs>` is compacted, so every xf index stays valid.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `name` is `NULL`;
- *         `kInvalidArgument` when no style has that name or it is the
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `name` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when no style has that name or it is the
  *         Normal style (`builtin_id` 0).
  */
 FM_API fm_status_t fm_styles_remove_cell_style(fm_workbook_t* wb, const char* name);
@@ -8643,9 +8647,9 @@ FM_API fm_status_t fm_styles_remove_cell_style(fm_workbook_t* wb, const char* na
  * @brief Adds and deduplicates a batch of fonts, fills, borders, and cell xfs.
  *
  * Empty arrays may be `NULL`. A non-empty input or output array that is NULL
- * returns `kBindingNullPointer`; invalid xfs return `kInvalidArgument`.
+ * returns `FM_STATUS_BINDING_NULL_POINTER` (7001); invalid xfs return `FM_STATUS_INVALID_ARGUMENT` (2).
  * The operation is staged and committed as one transaction: any returned
- * error, including `kPreconditionFailed` when custom number-format ids are
+ * error, including `FM_STATUS_PRECONDITION_FAILED` (9) when custom number-format ids are
  * exhausted, leaves the workbook and every caller-provided output array
  * unchanged. Allocation failures are not converted into a fabricated
  * success or recovery path; callers observe only the documented status
@@ -8750,8 +8754,8 @@ typedef struct {
  * parsed; in both latter cases the default theme's colours are reported.
  * The theme is parsed on every call.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
 FM_API fm_status_t fm_workbook_get_theme_colors(const fm_workbook_t* wb, fm_theme_colors* out, int32_t* out_source);
 
@@ -8762,9 +8766,9 @@ FM_API fm_status_t fm_workbook_get_theme_colors(const fm_workbook_t* wb, fm_them
  * without a theme part first gets a minimal valid one carrying the default
  * theme, registered with its content type and workbook relationship.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kIoXmlParse` when the existing theme part cannot be parsed (the
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_IO_XML_PARSE` (5007) when the existing theme part cannot be parsed (the
  *         part is left untouched).
  */
 FM_API fm_status_t fm_workbook_set_theme_colors(fm_workbook_t* wb, const fm_theme_colors* colors);
@@ -8774,8 +8778,8 @@ FM_API fm_status_t fm_workbook_set_theme_colors(fm_workbook_t* wb, const fm_them
  *        faces are reported when the theme part is absent or unparseable
  *        (see `fm_workbook_get_theme_colors` for telling the cases apart).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
 FM_API fm_status_t fm_workbook_get_theme_fonts(const fm_workbook_t* wb, fm_theme_fonts* out);
 
@@ -8784,9 +8788,9 @@ FM_API fm_status_t fm_workbook_get_theme_fonts(const fm_workbook_t* wb, fm_theme
  *        copied. Part generation and failure rules match
  *        `fm_workbook_set_theme_colors`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument or any face is `NULL`;
- *         `kIoXmlParse` when the existing theme part cannot be parsed.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument or any face is `NULL`;
+ *         `FM_STATUS_IO_XML_PARSE` (5007) when the existing theme part cannot be parsed.
  */
 FM_API fm_status_t fm_workbook_set_theme_fonts(fm_workbook_t* wb, const fm_theme_fonts* fonts);
 
@@ -8798,8 +8802,8 @@ FM_API fm_status_t fm_workbook_set_theme_fonts(fm_workbook_t* wb, const fm_theme
  * absent or unparseable (the same rule as `fm_workbook_get_theme_fonts`).
  * The theme is parsed on every call.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out_count` is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_count` is `NULL`.
  */
 FM_API fm_status_t fm_workbook_theme_script_font_count(const fm_workbook_t* wb, int32_t major, size_t* out_count);
 
@@ -8818,9 +8822,9 @@ FM_API fm_status_t fm_workbook_theme_script_font_count(const fm_workbook_t* wb, 
  * entry). Use the same table when choosing by the script of the characters
  * in the text.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `idx` is not below the count.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is not below the count.
  */
 FM_API fm_status_t fm_workbook_theme_script_font_at(const fm_workbook_t* wb, int32_t major, size_t idx,
                                                     const char** out_script, const char** out_typeface);
@@ -8836,11 +8840,11 @@ FM_API fm_status_t fm_workbook_theme_script_font_at(const fm_workbook_t* wb, int
  * default values. Part generation and failure rules match
  * `fm_workbook_set_theme_colors`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `script` is not exactly four ASCII letters
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `script` is not exactly four ASCII letters
  *         or `typeface` is empty;
- *         `kIoXmlParse` when the existing theme part cannot be parsed.
+ *         `FM_STATUS_IO_XML_PARSE` (5007) when the existing theme part cannot be parsed.
  */
 FM_API fm_status_t fm_workbook_set_theme_script_font(fm_workbook_t* wb, int32_t major, const char* script,
                                                      const char* typeface);
@@ -8857,8 +8861,8 @@ FM_API fm_status_t fm_workbook_set_theme_script_font(fm_workbook_t* wb, int32_t 
  * current default look, and Excel adds a theme part again when it saves the
  * file.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`.
  */
 FM_API fm_status_t fm_workbook_reset_theme(fm_workbook_t* wb);
 
@@ -8871,9 +8875,9 @@ FM_API fm_status_t fm_workbook_reset_theme(fm_workbook_t* wb);
  * (an `fm_color_context_t`). `*out_resolution` is an
  * `fm_color_resolution_t`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` for an unknown `context` or `spec.kind`, or a
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for an unknown `context` or `spec.kind`, or a
  *         non-finite theme tint.
  */
 FM_API fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, fm_color_spec spec, int32_t context,
@@ -8883,9 +8887,9 @@ FM_API fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, fm_color_s
  * @brief Reads the effective style of the cell at `(row, col)`; see
  *        `fm_effective_style`. The cell need not exist.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or the
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or the
  *         coordinate is outside the grid.
  */
 FM_API fm_status_t fm_sheet_get_effective_style(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
@@ -8941,8 +8945,8 @@ typedef struct {
  * adds a record at the end without renumbering the others; a book already
  * present, in any letter case, adds none.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
 FM_API fm_status_t fm_workbook_external_link_count(fm_workbook_t* wb, uint32_t* out_count);
 
@@ -8953,9 +8957,9 @@ FM_API fm_status_t fm_workbook_external_link_count(fm_workbook_t* wb, uint32_t* 
  * The returned string pointers are model-backed views into workbook-owned
  * storage; see `fm_external_link_record_t` for lifetime rules.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `index >= external_link_count`.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index >= external_link_count`.
  */
 FM_API fm_status_t fm_workbook_external_link_at(fm_workbook_t* wb, uint32_t index, fm_external_link_record_t* out);
 
@@ -9092,9 +9096,9 @@ typedef struct {
  * @brief Sniffs the format and pixel size of PNG, JPEG, GIF or BMP bytes
  *        from the header alone, without touching the workbook.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kIoImageUnsupported` (5023) when the bytes are not a recognised
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_IO_IMAGE_UNSUPPORTED` (5023) when the bytes are not a recognised
  *         image, the header is truncated, or a dimension is zero.
  */
 FM_API fm_status_t fm_workbook_probe_image(const fm_workbook_t* wb, const uint8_t* bytes, size_t len,
@@ -9104,10 +9108,10 @@ FM_API fm_status_t fm_workbook_probe_image(const fm_workbook_t* wb, const uint8_
  * @brief Number of anchored objects in the sheet's drawing; `0` for a sheet
  *        without a drawing.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `out_count == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range;
- *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out_count == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range;
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse.
  */
 FM_API fm_status_t fm_sheet_drawing_object_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
 
@@ -9119,10 +9123,10 @@ FM_API fm_status_t fm_sheet_drawing_object_count(const fm_workbook_t* wb, size_t
  *
  * The three strings are read-scratch-backed views.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `out == NULL`;
- *         `kInvalidArgument` when `sheet_index` or `idx` is out of range;
- *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `idx` is out of range;
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse.
  */
 FM_API fm_status_t fm_sheet_drawing_object_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
                                               fm_drawing_object* out);
@@ -9135,13 +9139,13 @@ FM_API fm_status_t fm_sheet_drawing_object_at(const fm_workbook_t* wb, size_t sh
  * workbook (insert, remove, any edit) or the handle is destroyed; unrelated
  * reads do not invalidate it. Copy it to keep it longer.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or the sheet
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or the sheet
  *         has no picture `object_id` with a present media part;
- *         `kIoImageUnsupported` (5023) when the media bytes are not a
+ *         `FM_STATUS_IO_IMAGE_UNSUPPORTED` (5023) when the media bytes are not a
  *         recognised image;
- *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse.
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse.
  */
 FM_API fm_status_t fm_sheet_get_image(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                       const uint8_t** out_bytes, size_t* out_len, fm_image_info* out_info);
@@ -9153,15 +9157,15 @@ FM_API fm_status_t fm_sheet_get_image(const fm_workbook_t* wb, size_t sheet_inde
  * Existing charts, shapes and every other drawing content are kept. A sheet
  * without a drawing gets a new one.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range, an enum
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, an enum
  *         field is outside its domain, the anchor kind is absolute, an
  *         offset or size is negative or 2^31 EMU or more, the anchor lies
  *         outside the sheet, the image exceeds 32 MiB, or the package would
  *         exceed the reader's limits;
- *         `kIoImageUnsupported` (5023) when `bytes` is not a recognised image;
- *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         `FM_STATUS_IO_IMAGE_UNSUPPORTED` (5023) when `bytes` is not a recognised image;
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or was retained from an `.xlsb` package. The workbook is then
  *         unchanged.
  */
@@ -9173,11 +9177,11 @@ FM_API fm_status_t fm_sheet_insert_image(fm_workbook_t* wb, size_t sheet_index, 
  *        names, and the parts it reaches (media, or a chart part and its
  *        style, colors and embeddings) once nothing else references them.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or the sheet
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or the sheet
  *         has no picture or chart with that id;
- *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or was retained from an `.xlsb` package.
  */
 FM_API fm_status_t fm_sheet_remove_drawing(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id);
@@ -9194,14 +9198,14 @@ FM_API fm_status_t fm_sheet_remove_drawing(fm_workbook_t* wb, size_t sheet_index
  * current one writes nothing. An absolute object can be converted by naming
  * a one-cell or two-cell kind.
  *
- * @return `kOk` on success;
- *         `kInvalidArgument` when `sheet_index` is out of range, an enum
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, an enum
  *         field is outside its domain, the anchor kind is absolute, an
  *         offset or size is negative or 2^31 EMU or more, the anchor lies
  *         outside the sheet, or the sheet has no picture or chart with that
  *         id;
- *         `kBindingNullPointer` if `anchor == NULL`;
- *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `anchor == NULL`;
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or was retained from an `.xlsb` package.
  */
 FM_API fm_status_t fm_sheet_set_drawing_anchor(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
@@ -9211,12 +9215,12 @@ FM_API fm_status_t fm_sheet_set_drawing_anchor(fm_workbook_t* wb, size_t sheet_i
  * @brief Renames the picture or chart `object_id` (the first one when ids
  *        repeat). Duplicate names are allowed.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `name` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range, `name` is
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `name` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, `name` is
  *         empty or not valid UTF-8, or the sheet has no picture or chart with
  *         that id;
- *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or was retained from an `.xlsb` package.
  */
 FM_API fm_status_t fm_sheet_set_drawing_name(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
@@ -9230,12 +9234,12 @@ FM_API fm_status_t fm_sheet_set_drawing_name(fm_workbook_t* wb, size_t sheet_ind
  * `mc:AlternateContent` included; other objects keep their relative order
  * and ids. An unchanged order writes nothing.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range, the sheet
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, the sheet
  *         has no picture or chart with that id, or `index` is not less than
  *         the object count;
- *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or was retained from an `.xlsb` package.
  */
 FM_API fm_status_t fm_sheet_set_drawing_z_order(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
@@ -9252,11 +9256,11 @@ FM_API fm_status_t fm_sheet_set_drawing_z_order(fm_workbook_t* wb, size_t sheet_
  * validation and stay zero on failure. Hand the bytes to
  * `fm_sheet_restore_drawing` to put the object back.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or the sheet
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or the sheet
  *         has no picture or chart with that id;
- *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or was retained from an `.xlsb` package.
  */
 FM_API fm_status_t fm_sheet_snapshot_drawing(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
@@ -9276,13 +9280,13 @@ FM_API fm_status_t fm_sheet_snapshot_drawing(const fm_workbook_t* wb, size_t she
  * one with the relationships naming it re-pointed. A sheet without a
  * drawing gets a new one.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range, the bytes
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, the bytes
  *         are not a valid capture, `flags` has an unknown bit, the id is
  *         held by another kind of object, or the package would exceed the
  *         reader's limits;
- *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or was retained from an `.xlsb` package. The workbook is then
  *         unchanged.
  */
@@ -9368,10 +9372,10 @@ typedef struct {
  *        for a sheet without a drawing. Pictures, charts and other frames are
  *        not counted; children of a group are not listed.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `out_count == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range;
- *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out_count == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range;
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse.
  */
 FM_API fm_status_t fm_sheet_shape_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
 
@@ -9382,10 +9386,10 @@ FM_API fm_status_t fm_sheet_shape_count(const fm_workbook_t* wb, size_t sheet_in
  * and pass through a save untouched. The three strings are read-scratch-backed
  * views.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `out == NULL`;
- *         `kInvalidArgument` when `sheet_index` or `idx` is out of range;
- *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `idx` is out of range;
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse.
  */
 FM_API fm_status_t fm_sheet_shape_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx, fm_shape* out);
 
@@ -9397,14 +9401,14 @@ FM_API fm_status_t fm_sheet_shape_at(const fm_workbook_t* wb, size_t sheet_index
  * `curvedConnector*`) inserts a connector, which holds no text. A sheet
  * without a drawing gets one; existing drawing content is kept.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `spec` or `out_object_id` is `NULL`;
- *         `kInvalidArgument` for a bad sheet or enumeration, a missing anchor,
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `spec` or `out_object_id` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for a bad sheet or enumeration, a missing anchor,
  *         a `prst` that is not an alphanumeric token, an offset or size
  *         outside [0, 2^31) EMU, a cell outside the sheet, a two-cell `to`
  *         before `from`, a fill or outline that is neither solid nor none,
  *         or text with control characters;
- *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or was retained from an `.xlsb` package.
  */
 FM_API fm_status_t fm_sheet_insert_shape(fm_workbook_t* wb, size_t sheet_index, const fm_shape* spec,
@@ -9416,7 +9420,7 @@ FM_API fm_status_t fm_sheet_insert_shape(fm_workbook_t* wb, size_t sheet_index, 
  *
  * Text applies to a shape only and keeps the first paragraph's properties and
  * first run's formatting. Fails like `fm_sheet_insert_shape`, and with
- * `kInvalidArgument` for an unknown id or a changed anchor kind.
+ * `FM_STATUS_INVALID_ARGUMENT` (2) for an unknown id or a changed anchor kind.
  */
 FM_API fm_status_t fm_sheet_update_shape(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                          const fm_shape* spec);
@@ -9424,9 +9428,9 @@ FM_API fm_status_t fm_sheet_update_shape(fm_workbook_t* wb, size_t sheet_index, 
 /**
  * @brief Removes the shape, connector or group `object_id` with its children.
  *
- * @return `kOk` on success;
- *         `kInvalidArgument` when the sheet has no such shape;
- *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the sheet has no such shape;
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse.
  */
 FM_API fm_status_t fm_sheet_remove_shape(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id);
 
@@ -9507,10 +9511,10 @@ typedef struct {
  * @brief Number of table slicers hosted by the sheet; `0` for a sheet without
  *        any. Slicers over a pivot cache are not counted.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `out_count == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range;
- *         `kIoDrawingUnparseable` (5024) when the sheet's drawing does not parse.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out_count == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range;
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the sheet's drawing does not parse.
  */
 FM_API fm_status_t fm_sheet_slicer_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
 
@@ -9518,7 +9522,7 @@ FM_API fm_status_t fm_sheet_slicer_count(const fm_workbook_t* wb, size_t sheet_i
  * @brief Reads slicer `idx` of the sheet. The strings are read-scratch-backed
  *        views.
  *
- * @return As `fm_sheet_slicer_count`, with `kInvalidArgument` also for an
+ * @return As `fm_sheet_slicer_count`, with `FM_STATUS_INVALID_ARGUMENT` (2) also for an
  *         out-of-range `idx`.
  */
 FM_API fm_status_t fm_sheet_slicer_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx, fm_slicer* out);
@@ -9532,11 +9536,11 @@ FM_API fm_status_t fm_sheet_slicer_at(const fm_workbook_t* wb, size_t sheet_inde
  * or extends the sheet's existing slicer part. `FM_SLICER_FIELD_ANCHOR` is
  * required. The table may live on another sheet.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `spec` or `out_object_id` is `NULL`;
- *         `kInvalidArgument` for a bad sheet, table, column, field bit,
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `spec` or `out_object_id` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for a bad sheet, table, column, field bit,
  *         anchor, column count, row height or text with control characters;
- *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or was retained from an `.xlsb` package.
  */
 FM_API fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index, size_t table_index, size_t column_index,
@@ -9546,7 +9550,7 @@ FM_API fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index, si
  * @brief Applies the fields `spec->fields` names (all but the name) to slicer
  *        `idx`, keeping the rest of its XML.
  *
- * @return As `fm_sheet_add_slicer`, with `kInvalidArgument` also for an
+ * @return As `fm_sheet_add_slicer`, with `FM_STATUS_INVALID_ARGUMENT` (2) also for an
  *         out-of-range `idx`, a name field, or an anchor update of a slicer
  *         whose frame is missing or not two-cell.
  */
@@ -9558,9 +9562,9 @@ FM_API fm_status_t fm_sheet_update_slicer(fm_workbook_t* wb, size_t sheet_index,
  *        else. Removing a table or a sheet, or deleting the rows or columns
  *        under a slicer's frame, removes the slicers bound to it the same way.
  *
- * @return `kOk` on success;
- *         `kInvalidArgument` when `sheet_index` or `idx` is out of range;
- *         `kIoDrawingUnparseable` (5024) when the sheet's drawing does not parse.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `idx` is out of range;
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the sheet's drawing does not parse.
  */
 FM_API fm_status_t fm_sheet_remove_slicer(fm_workbook_t* wb, size_t sheet_index, size_t idx);
 
@@ -9649,18 +9653,18 @@ typedef struct {
  * `.xlsb` are listed and editable the same way; a group the reader cannot
  * decode stays a binary record and is not listed.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `out_count == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out_count == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_sparkline_group_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
 
 /**
  * @brief Reads sparkline group `idx`; `date_axis_ref` is a read-scratch-backed view.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `out == NULL`;
- *         `kInvalidArgument` when `sheet_index` or `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `idx` is out of range.
  */
 FM_API fm_status_t fm_sheet_sparkline_group_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
                                                fm_sparkline_group* out);
@@ -9669,9 +9673,9 @@ FM_API fm_status_t fm_sheet_sparkline_group_at(const fm_workbook_t* wb, size_t s
  * @brief Reads sparkline `idx` of group `group_idx`; both strings are
  *        read-scratch-backed views.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `out == NULL`;
- *         `kInvalidArgument` when `sheet_index`, `group_idx` or `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index`, `group_idx` or `idx` is out of range.
  */
 FM_API fm_status_t fm_sheet_sparkline_at(const fm_workbook_t* wb, size_t sheet_index, size_t group_idx, size_t idx,
                                          fm_sparkline* out);
@@ -9682,9 +9686,9 @@ FM_API fm_status_t fm_sheet_sparkline_at(const fm_workbook_t* wb, size_t sheet_i
  * Attributes and children outside the model are not written. A sheet without
  * a worksheet extension list gets one; other extensions are kept.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `group` or `items` is `NULL`;
- *         `kInvalidArgument` for a bad sheet, `count == 0`, a sparkline whose
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `group` or `items` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for a bad sheet, `count == 0`, a sparkline whose
  *         location is not one A1 cell or whose formula is empty, a
  *         non-finite number, a negative line weight, or an enumeration out of
  *         range.
@@ -9697,8 +9701,8 @@ FM_API fm_status_t fm_sheet_add_sparkline_group(fm_workbook_t* wb, size_t sheet_
  *        group `idx` from `group`; its sparklines and every attribute or
  *        child outside the model are kept.
  *
- * @return `kOk` on success; failures as `fm_sheet_add_sparkline_group`, and
- *         `kInvalidArgument` when `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success; failures as `fm_sheet_add_sparkline_group`, and
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range.
  */
 FM_API fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t sheet_index, size_t idx,
                                                    const fm_sparkline_group* group);
@@ -9706,7 +9710,7 @@ FM_API fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t she
 /**
  * @brief Replaces the sparklines of group `idx` with `count` new ones.
  *
- * @return `kOk` on success; failures as `fm_sheet_update_sparkline_group`.
+ * @return `FM_STATUS_OK` (0) on success; failures as `fm_sheet_update_sparkline_group`.
  */
 FM_API fm_status_t fm_sheet_set_sparkline_group_sparklines(fm_workbook_t* wb, size_t sheet_index, size_t idx,
                                                            const fm_sparkline* items, size_t count);
@@ -9714,8 +9718,8 @@ FM_API fm_status_t fm_sheet_set_sparkline_group_sparklines(fm_workbook_t* wb, si
 /**
  * @brief Removes sparkline group `idx`.
  *
- * @return `kOk` on success;
- *         `kInvalidArgument` when `sheet_index` or `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `idx` is out of range.
  */
 FM_API fm_status_t fm_sheet_remove_sparkline_group(fm_workbook_t* wb, size_t sheet_index, size_t idx);
 
@@ -9737,15 +9741,15 @@ FM_API fm_status_t fm_sheet_remove_sparkline_group(fm_workbook_t* wb, size_t she
  * Patch structs carry one `fm_chart_patch_op_t` per field: a zeroed struct
  * changes nothing, `FM_CHART_PATCH_CLEAR` removes the element, and
  * `FM_CHART_PATCH_SET` writes the value beside it. A field that cannot be
- * removed rejects `CLEAR` with `kInvalidArgument`. Colors are ARGB
+ * removed rejects `CLEAR` with `FM_STATUS_INVALID_ARGUMENT` (2). Colors are ARGB
  * (`0xAARRGGBB`); transparency is a percentage (0..100).
  *
  * Edits patch the chart part and write nothing when the result is
  * unchanged. Common failures, besides those each entry lists:
- * `kInvalidArgument` for an out-of-range sheet, unknown id, plot, series or
- * axis, or an enum value outside its domain; `kIoChartUnparseable` (5025)
- * when the chart part does not parse; `kIoChartUnsupportedKind` (5027) for
- * an edit to a chartex chart; `kIoDrawingUnparseable` (5024) for an edit to
+ * `FM_STATUS_INVALID_ARGUMENT` (2) for an out-of-range sheet, unknown id, plot, series or
+ * axis, or an enum value outside its domain; `FM_STATUS_IO_CHART_UNPARSEABLE` (5025)
+ * when the chart part does not parse; `FM_STATUS_IO_CHART_UNSUPPORTED_KIND` (5027) for
+ * an edit to a chartex chart; `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) for an edit to
  * a chart on a drawing retained from an `.xlsb` package. A failed edit
  * leaves the workbook unchanged.
  */
@@ -10165,12 +10169,12 @@ typedef struct {
  * and releases it with `fm_chart_destroy`. Later workbook edits do not
  * change it.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `out` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or the sheet
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or the sheet
  *         has no chart with that id;
- *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse;
- *         `kIoChartUnparseable` (5025) when the chart part does not parse.
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse;
+ *         `FM_STATUS_IO_CHART_UNPARSEABLE` (5025) when the chart part does not parse.
  */
 FM_API fm_status_t fm_sheet_chart_open(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                        fm_chart_t** out);
@@ -10181,7 +10185,7 @@ FM_API void fm_chart_destroy(fm_chart_t* chart);
 /**
  * @brief Reads the chart's top-level fields.
  *
- * @return `kOk` on success; `kBindingNullPointer` when any pointer argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`.
  */
 FM_API fm_status_t fm_chart_info(const fm_chart_t* chart, fm_chart_info_t* out);
 
@@ -10189,9 +10193,9 @@ FM_API fm_status_t fm_chart_info(const fm_chart_t* chart, fm_chart_info_t* out);
  * @brief Reads the `c:idx` of legend entry `idx` hidden from the legend
  *        (`idx < legend_hidden_count`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range.
  */
 FM_API fm_status_t fm_chart_legend_hidden_at(const fm_chart_t* chart, size_t idx, uint32_t* out);
 
@@ -10199,27 +10203,27 @@ FM_API fm_status_t fm_chart_legend_hidden_at(const fm_chart_t* chart, size_t idx
  * @brief Reads the position of hidden category `idx`
  *        (`idx < hidden_category_count`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range.
  */
 FM_API fm_status_t fm_chart_hidden_category_at(const fm_chart_t* chart, size_t idx, uint32_t* out);
 
 /**
  * @brief Reads plot group `plot` (`plot < plot_count`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `plot` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `plot` is out of range.
  */
 FM_API fm_status_t fm_chart_plot_at(const fm_chart_t* chart, size_t plot, fm_chart_plot_t* out);
 
 /**
  * @brief Reads axis id `idx` of plot group `plot` (`idx < axis_id_count`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `plot` or `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `plot` or `idx` is out of range.
  */
 FM_API fm_status_t fm_chart_plot_axis_id_at(const fm_chart_t* chart, size_t plot, size_t idx, uint32_t* out);
 
@@ -10227,9 +10231,9 @@ FM_API fm_status_t fm_chart_plot_axis_id_at(const fm_chart_t* chart, size_t plot
  * @brief Reads series `series` of plot group `plot`, in document order
  *        (`series < series_count`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `plot` or `series` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `plot` or `series` is out of range.
  */
 FM_API fm_status_t fm_chart_series_at(const fm_chart_t* chart, size_t plot, size_t series, fm_chart_series_t* out);
 
@@ -10237,9 +10241,9 @@ FM_API fm_status_t fm_chart_series_at(const fm_chart_t* chart, size_t plot, size
  * @brief Reads literal point `idx` of input `role` (an `fm_chart_role_t`)
  *        of a series (`idx < literal_count`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `plot`, `series`, `role` or `idx` is out
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `plot`, `series`, `role` or `idx` is out
  *         of range.
  */
 FM_API fm_status_t fm_chart_series_literal_at(const fm_chart_t* chart, size_t plot, size_t series, int32_t role,
@@ -10248,9 +10252,9 @@ FM_API fm_status_t fm_chart_series_literal_at(const fm_chart_t* chart, size_t pl
 /**
  * @brief Reads formatted point `idx` of a series (`idx < point_count`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `plot`, `series` or `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `plot`, `series` or `idx` is out of range.
  */
 FM_API fm_status_t fm_chart_series_point_at(const fm_chart_t* chart, size_t plot, size_t series, size_t idx,
                                             fm_chart_point_t* out);
@@ -10258,9 +10262,9 @@ FM_API fm_status_t fm_chart_series_point_at(const fm_chart_t* chart, size_t plot
 /**
  * @brief Reads axis `idx` (`idx < axis_count`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range.
  */
 FM_API fm_status_t fm_chart_axis_at(const fm_chart_t* chart, size_t idx, fm_chart_axis_t* out);
 
@@ -10387,12 +10391,12 @@ typedef struct {
  * `*out` is set to `NULL` before validation; on success the caller owns it
  * and releases it with `fm_chart_data_destroy`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `out` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or the sheet
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or the sheet
  *         has no chart with that id;
- *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse;
- *         `kIoChartUnparseable` (5025) when the chart part does not parse.
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse;
+ *         `FM_STATUS_IO_CHART_UNPARSEABLE` (5025) when the chart part does not parse.
  */
 FM_API fm_status_t fm_sheet_chart_data_open(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                             fm_chart_data_t** out);
@@ -10407,10 +10411,10 @@ FM_API fm_status_t fm_sheet_chart_data_open(const fm_workbook_t* wb, size_t shee
  * ones as derived).
  *
  * @return as `fm_sheet_chart_data_open`, and
- *         `kBindingNullPointer` when `overrides` is `NULL`;
- *         `kInvalidArgument` for a `CLEAR` op or an out-of-domain value;
- *         `kIoChartInvalidReference` (5026) when `source` does not resolve;
- *         `kIoChartUnsupportedKind` (5027) for a chartex chart.
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `overrides` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for a `CLEAR` op or an out-of-domain value;
+ *         `FM_STATUS_IO_CHART_INVALID_REFERENCE` (5026) when `source` does not resolve;
+ *         `FM_STATUS_IO_CHART_UNSUPPORTED_KIND` (5027) for a chartex chart.
  */
 FM_API fm_status_t fm_sheet_chart_preview_open(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                const fm_chart_preview_overrides* overrides, fm_chart_data_t** out);
@@ -10421,7 +10425,7 @@ FM_API void fm_chart_data_destroy(fm_chart_data_t* data);
 /**
  * @brief Reads the data summary.
  *
- * @return `kOk` on success; `kBindingNullPointer` when any pointer argument is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`.
  */
 FM_API fm_status_t fm_chart_data_info(const fm_chart_data_t* data, fm_chart_data_info_t* out);
 
@@ -10429,9 +10433,9 @@ FM_API fm_status_t fm_chart_data_info(const fm_chart_data_t* data, fm_chart_data
  * @brief Reads category label `idx` (`idx < category_label_count`) and, for
  *        numeric categories, its value (NaN otherwise).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range.
  */
 FM_API fm_status_t fm_chart_data_category_at(const fm_chart_data_t* data, size_t idx, const char** out_label,
                                              double* out_value);
@@ -10440,18 +10444,18 @@ FM_API fm_status_t fm_chart_data_category_at(const fm_chart_data_t* data, size_t
  * @brief Reads the label count of upper category level `level`
  *        (`level < category_level_count`, outermost first).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `level` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `level` is out of range.
  */
 FM_API fm_status_t fm_chart_data_category_level_size(const fm_chart_data_t* data, size_t level, size_t* out_count);
 
 /**
  * @brief Reads label `idx` of upper category level `level`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `level` or `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `level` or `idx` is out of range.
  */
 FM_API fm_status_t fm_chart_data_category_level_at(const fm_chart_data_t* data, size_t level, size_t idx,
                                                    const char** out_label);
@@ -10459,18 +10463,18 @@ FM_API fm_status_t fm_chart_data_category_level_at(const fm_chart_data_t* data, 
 /**
  * @brief Reads resolved series `series` (`series < series_count`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `series` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `series` is out of range.
  */
 FM_API fm_status_t fm_chart_data_series_at(const fm_chart_data_t* data, size_t series, fm_chart_data_series_t* out);
 
 /**
  * @brief Returns the point arrays of series `series`.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `series` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `series` is out of range.
  */
 FM_API fm_status_t fm_chart_data_series_points(const fm_chart_data_t* data, size_t series, fm_chart_data_points_t* out);
 
@@ -10478,9 +10482,9 @@ FM_API fm_status_t fm_chart_data_series_points(const fm_chart_data_t* data, size
  * @brief Reads resolved rectangle `idx` of input `role` (an
  *        `fm_chart_role_t`) of series `series` (`idx < range_count[role]`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `series`, `role` or `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `series`, `role` or `idx` is out of range.
  */
 FM_API fm_status_t fm_chart_data_range_at(const fm_chart_data_t* data, size_t series, int32_t role, size_t idx,
                                           fm_chart_sheet_range_t* out);
@@ -10488,9 +10492,9 @@ FM_API fm_status_t fm_chart_data_range_at(const fm_chart_data_t* data, size_t se
 /**
  * @brief Reads axis title `idx` (`idx < axis_title_count`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range.
  */
 FM_API fm_status_t fm_chart_data_axis_title_at(const fm_chart_data_t* data, size_t idx,
                                                fm_chart_axis_title_text_t* out);
@@ -10498,9 +10502,9 @@ FM_API fm_status_t fm_chart_data_axis_title_at(const fm_chart_data_t* data, size
 /**
  * @brief Reads unresolved input `idx` (`idx < unresolved_count`).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when any pointer argument is `NULL`;
- *         `kInvalidArgument` when `idx` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range.
  */
 FM_API fm_status_t fm_chart_data_unresolved_at(const fm_chart_data_t* data, size_t idx, fm_chart_unresolved_t* out);
 
@@ -10598,7 +10602,7 @@ typedef struct {
  *
  * Each reference is `NULL` to keep it; otherwise the new reference text, an
  * empty string removing `name`, `categories` or `x`. An empty `values`, `y`
- * or `size` is `kInvalidArgument`. `marker_op`/`labels_op` `CLEAR` removes
+ * or `size` is `FM_STATUS_INVALID_ARGUMENT` (2). `marker_op`/`labels_op` `CLEAR` removes
  * the marker or the data labels; `smooth` is 0/1 (`CLEAR` rejected).
  */
 typedef struct {
@@ -10628,7 +10632,7 @@ typedef struct {
 
 /**
  * @brief Plot-group patch (`CLEAR` rejected on every field). A field the
- *        plot type does not have is `kInvalidArgument`; `hole_size` is
+ *        plot type does not have is `FM_STATUS_INVALID_ARGUMENT` (2); `hole_size` is
  *        10..90 and doughnut only.
  */
 typedef struct {
@@ -10716,14 +10720,14 @@ typedef struct {
  * @brief Creates a chart from `opts` with filled caches and returns its
  *        object id.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` when `opts`, `opts->source` or
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `opts`, `opts->source` or
  *         `out_object_id` is `NULL`;
- *         `kInvalidArgument` for a bad sheet, enum value or placement (as
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for a bad sheet, enum value or placement (as
  *         `fm_sheet_insert_image`), or a source that does not yield a series;
- *         `kIoChartInvalidReference` (5026) when `source` does not resolve to
+ *         `FM_STATUS_IO_CHART_INVALID_REFERENCE` (5026) when `source` does not resolve to
  *         one rectangle;
- *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or was retained from an `.xlsb` package. The workbook is then
  *         unchanged.
  */
@@ -10735,8 +10739,8 @@ FM_API fm_status_t fm_sheet_insert_chart(fm_workbook_t* wb, size_t sheet_index, 
  *        `fm_chart_insert_kind_t`) and `grouping` (an `fm_chart_grouping_t`),
  *        keeping each series' references, idx, order and explicit colors.
  *
- * @return `kOk` on success, or a common chart failure;
- *         `kIoChartUnsupportedKind` (5027) for a pivot chart, or a plot that
+ * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
+ *         `FM_STATUS_IO_CHART_UNSUPPORTED_KIND` (5027) for a pivot chart, or a plot that
  *         shares its axes with another plot group.
  */
 FM_API fm_status_t fm_sheet_set_chart_type(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
@@ -10747,9 +10751,9 @@ FM_API fm_status_t fm_sheet_set_chart_type(fm_workbook_t* wb, size_t sheet_index
  *        `REF` writes the reference `formula`, `AUTO` leaves the text to
  *        the viewer.
  *
- * @return `kOk` on success, or a common chart failure;
- *         `kBindingNullPointer` when `title` is `NULL`;
- *         `kIoChartInvalidReference` (5026) when `formula` does not resolve.
+ * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `title` is `NULL`;
+ *         `FM_STATUS_IO_CHART_INVALID_REFERENCE` (5026) when `formula` does not resolve.
  */
 FM_API fm_status_t fm_sheet_set_chart_title(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                             const fm_chart_title_t* title);
@@ -10757,8 +10761,8 @@ FM_API fm_status_t fm_sheet_set_chart_title(fm_workbook_t* wb, size_t sheet_inde
 /**
  * @brief Sets the legend position, overlay and hidden entries.
  *
- * @return `kOk` on success, or a common chart failure;
- *         `kBindingNullPointer` when `legend` is `NULL`, or
+ * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `legend` is `NULL`, or
  *         `hidden_series` is `NULL` with a non-zero count.
  */
 FM_API fm_status_t fm_sheet_set_chart_legend(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
@@ -10767,8 +10771,8 @@ FM_API fm_status_t fm_sheet_set_chart_legend(fm_workbook_t* wb, size_t sheet_ind
 /**
  * @brief Patches axis `axis_id`.
  *
- * @return `kOk` on success, or a common chart failure;
- *         `kBindingNullPointer` when `patch` is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `patch` is `NULL`.
  */
 FM_API fm_status_t fm_sheet_set_chart_axis(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, uint32_t axis_id,
                                            const fm_chart_axis_patch* patch);
@@ -10776,9 +10780,9 @@ FM_API fm_status_t fm_sheet_set_chart_axis(fm_workbook_t* wb, size_t sheet_index
 /**
  * @brief Patches the chart's display options.
  *
- * @return `kOk` on success, or a common chart failure;
- *         `kBindingNullPointer` when `patch` is `NULL`;
- *         `kInvalidArgument` when a `SET` value is outside its domain
+ * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `patch` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when a `SET` value is outside its domain
  *         (`blanks_as` `ABSENT` included; `CLEAR` removes the element).
  */
 FM_API fm_status_t fm_sheet_set_chart_display(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
@@ -10788,11 +10792,11 @@ FM_API fm_status_t fm_sheet_set_chart_display(fm_workbook_t* wb, size_t sheet_in
  * @brief Patches the series with `c:idx` `series_idx` of plot group `plot`.
  *        A changed reference refreshes its cache.
  *
- * @return `kOk` on success, or a common chart failure;
- *         `kBindingNullPointer` when `patch` is `NULL`;
- *         `kIoChartInvalidReference` (5026) when a reference does not
+ * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `patch` is `NULL`;
+ *         `FM_STATUS_IO_CHART_INVALID_REFERENCE` (5026) when a reference does not
  *         resolve;
- *         `kIoChartUnsupportedKind` (5027) for a reference edit on a pivot
+ *         `FM_STATUS_IO_CHART_UNSUPPORTED_KIND` (5027) for a reference edit on a pivot
  *         chart.
  */
 FM_API fm_status_t fm_sheet_set_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
@@ -10802,8 +10806,8 @@ FM_API fm_status_t fm_sheet_set_chart_series(fm_workbook_t* wb, size_t sheet_ind
  * @brief Patches point `point_idx` of series `series_idx`; a patch that
  *        changes nothing removes the point's formatting.
  *
- * @return `kOk` on success, or a common chart failure;
- *         `kBindingNullPointer` when `patch` is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `patch` is `NULL`.
  */
 FM_API fm_status_t fm_sheet_set_chart_point(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
                                             uint32_t series_idx, uint32_t point_idx, const fm_chart_point_patch* patch);
@@ -10811,8 +10815,8 @@ FM_API fm_status_t fm_sheet_set_chart_point(fm_workbook_t* wb, size_t sheet_inde
 /**
  * @brief Patches plot group `plot`.
  *
- * @return `kOk` on success, or a common chart failure;
- *         `kBindingNullPointer` when `patch` is `NULL`.
+ * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `patch` is `NULL`.
  */
 FM_API fm_status_t fm_sheet_set_chart_plot(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
                                            const fm_chart_plot_patch* patch);
@@ -10822,9 +10826,9 @@ FM_API fm_status_t fm_sheet_set_chart_plot(fm_workbook_t* wb, size_t sheet_index
  *        categories (positions in the full category range) are hidden.
  *        Either array may be `NULL` when its count is 0.
  *
- * @return `kOk` on success, or a common chart failure;
- *         `kBindingNullPointer` when an array is `NULL` with a non-zero count;
- *         `kIoChartUnsupportedKind` (5027) for a pivot chart.
+ * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when an array is `NULL` with a non-zero count;
+ *         `FM_STATUS_IO_CHART_UNSUPPORTED_KIND` (5027) for a pivot chart.
  */
 FM_API fm_status_t fm_sheet_set_chart_filter(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                              const uint32_t* hidden_series, size_t hidden_series_count,
@@ -10834,11 +10838,11 @@ FM_API fm_status_t fm_sheet_set_chart_filter(fm_workbook_t* wb, size_t sheet_ind
  * @brief Appends a series to plot group `plot` from `patch` (which must set
  *        `values`, or `y` for a scatter plot) and returns its `c:idx`.
  *
- * @return `kOk` on success, or a common chart failure;
- *         `kBindingNullPointer` when `patch` or `out_series_idx` is `NULL`;
- *         `kIoChartInvalidReference` (5026) when a reference does not
+ * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `patch` or `out_series_idx` is `NULL`;
+ *         `FM_STATUS_IO_CHART_INVALID_REFERENCE` (5026) when a reference does not
  *         resolve;
- *         `kIoChartUnsupportedKind` (5027) for a pivot chart.
+ *         `FM_STATUS_IO_CHART_UNSUPPORTED_KIND` (5027) for a pivot chart.
  */
 FM_API fm_status_t fm_sheet_add_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
                                              const fm_chart_series_patch* patch, uint32_t* out_series_idx);
@@ -10846,8 +10850,8 @@ FM_API fm_status_t fm_sheet_add_chart_series(fm_workbook_t* wb, size_t sheet_ind
 /**
  * @brief Removes the series with `c:idx` `series_idx` from plot group `plot`.
  *
- * @return `kOk` on success, or a common chart failure;
- *         `kIoChartUnsupportedKind` (5027) for a pivot chart.
+ * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
+ *         `FM_STATUS_IO_CHART_UNSUPPORTED_KIND` (5027) for a pivot chart.
  */
 FM_API fm_status_t fm_sheet_remove_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
                                                 uint32_t series_idx);
@@ -10858,11 +10862,11 @@ FM_API fm_status_t fm_sheet_remove_chart_series(fm_workbook_t* wb, size_t sheet_
  *        clears the filter. `direction` is an `fm_chart_series_direction_t`,
  *        the header modes `fm_chart_header_mode_t`s.
  *
- * @return `kOk` on success, or a common chart failure;
- *         `kBindingNullPointer` when `source` is `NULL`;
- *         `kIoChartInvalidReference` (5026) when `source` does not resolve to
+ * @return `FM_STATUS_OK` (0) on success, or a common chart failure;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `source` is `NULL`;
+ *         `FM_STATUS_IO_CHART_INVALID_REFERENCE` (5026) when `source` does not resolve to
  *         one rectangle;
- *         `kIoChartUnsupportedKind` (5027) for a pivot chart.
+ *         `FM_STATUS_IO_CHART_UNSUPPORTED_KIND` (5027) for a pivot chart.
  */
 FM_API fm_status_t fm_sheet_set_chart_source(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                              const char* source, int32_t direction, int32_t header_row,
@@ -10910,11 +10914,11 @@ typedef struct {
  * @brief Creates a data table over the result range of `spec`. Cells in the
  *        range may no longer be written, except by removing the table.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `spec == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or a
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `spec == NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or a
  *         coordinate is outside the grid;
- *         `kDataTableInvalid` (8005) when neither input is given, the range
+ *         `FM_STATUS_DATA_TABLE_INVALID` (8005) when neither input is given, the range
  *         has no row above or column left of it, an input lies inside the
  *         range, or the range overlaps another data table.
  */
@@ -10923,11 +10927,11 @@ FM_API fm_status_t fm_sheet_add_data_table(fm_workbook_t* wb, size_t sheet_index
 /**
  * @brief Reads the data table whose result range contains `(row, col)`.
  *        `*out_present` is `1` and `*out` filled when there is one, else `0`
- *        and `*out` zeroed (still `kOk`).
+ *        and `*out` zeroed (still `FM_STATUS_OK` (0)).
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `out_present` or `out` is `NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `out_present` or `out` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_data_table_at(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                           int32_t* out_present, fm_data_table* out);
@@ -10936,9 +10940,9 @@ FM_API fm_status_t fm_sheet_data_table_at(const fm_workbook_t* wb, size_t sheet_
  * @brief Removes the data table whose result range contains `(row, col)` and
  *        blanks its result cells.
  *
- * @return `kOk` on success;
- *         `kInvalidArgument` when `sheet_index` is out of range;
- *         `kDataTableInvalid` (8005) when no data table covers the cell.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range;
+ *         `FM_STATUS_DATA_TABLE_INVALID` (8005) when no data table covers the cell.
  */
 FM_API fm_status_t fm_sheet_remove_data_table(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col);
 
@@ -10948,8 +10952,8 @@ FM_API fm_status_t fm_sheet_remove_data_table(fm_workbook_t* wb, size_t sheet_in
  *        formula, except under
  *        `FM_CALC_MODE_AUTO_NO_TABLE`, which leaves it to this call.
  *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb == NULL`;
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
  *         a `kEval*` / `kGraph*` code on engine failure.
  */
 FM_API fm_status_t fm_workbook_recalc_data_tables(fm_workbook_t* wb);

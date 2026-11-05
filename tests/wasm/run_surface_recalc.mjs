@@ -9,7 +9,7 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
   });
 
   test('statusString covers known codes', () => {
-    assert.equal(Module.statusString(0), 'kOk');
+    assert.equal(Module.statusString(0), 'OK');
     // Unknown / out-of-band codes still return a non-null string.
     const unknown = Module.statusString(123456);
     assert.equal(typeof unknown, 'string');

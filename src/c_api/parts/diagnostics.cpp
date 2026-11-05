@@ -3,14 +3,15 @@
 // display names) and the process-wide structured-log configuration.
 //
 // Thin pass-through to the thread-local diagnostic buffers populated by
-// `parts/common.cpp`. The error-code-to-text mapping leverages the
-// existing `formulon::to_cstring(FormulonErrorCode)` helper.
+// `parts/common.cpp`. Status names come from the generated
+// `c_api::status_name` table.
 
 #include <cstddef>
 #include <mutex>
 #include <string>
 #include <string_view>
 
+#include "c_api/binding_status.h"
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "utils/error.h"
@@ -26,7 +27,8 @@ extern "C" const char* fm_last_error_context(void) {
 }
 
 extern "C" const char* fm_status_string(fm_status_t status) {
-  return formulon::to_cstring(static_cast<formulon::FormulonErrorCode>(status));
+  const char* name = formulon::c_api::status_name(status);
+  return name != nullptr ? name : "UNRECOGNIZED_STATUS";
 }
 
 extern "C" const char* fm_error_display_name(fm_error_code_t error) {

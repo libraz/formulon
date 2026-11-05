@@ -127,7 +127,7 @@ class WasmTrapPoisoningTests(unittest.TestCase):
 
         with self.assertRaises(_c.FormulonError) as caught:
             instance.fm_workbook_recalc(0)
-        self.assertEqual(caught.exception.status_name, "kInternalError")
+        self.assertEqual(caught.exception.code.name, "INTERNAL_ERROR")
         self.assertIn("out of memory", caught.exception.message)
         self.assertIn("fm_workbook_recalc", str(caught.exception))
 
@@ -147,7 +147,7 @@ class WasmTrapPoisoningTests(unittest.TestCase):
         with self.assertRaises(_c.FormulonError) as caught:
             instance.fm_workbook_sheet_count(0)
         self.assertEqual(other_calls, {"other": 0})
-        self.assertEqual(caught.exception.status_name, "kInternalError")
+        self.assertEqual(caught.exception.code.name, "INTERNAL_ERROR")
 
     def test_trap_from_malloc_raises_formulon_error_not_memory_error(self) -> None:
         instance, _calls = _fake_instance("fm_workbook_recalc", 0)
@@ -155,7 +155,7 @@ class WasmTrapPoisoningTests(unittest.TestCase):
 
         with self.assertRaises(_c.FormulonError) as caught:
             instance.alloc(64)
-        self.assertEqual(caught.exception.status_name, "kInternalError")
+        self.assertEqual(caught.exception.code.name, "INTERNAL_ERROR")
 
         # The instance is poisoned: `free` also fails closed rather than
         # calling into the module again.

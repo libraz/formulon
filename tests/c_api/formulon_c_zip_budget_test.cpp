@@ -138,7 +138,7 @@ TEST(FormulonCApiZipBudget, XlsbLoadReturnsStableFileTooLarge) {
   EXPECT_EQ(status, static_cast<fm_status_t>(5002));
   EXPECT_EQ(status, static_cast<fm_status_t>(formulon::FormulonErrorCode::kIoFileTooLarge));
   EXPECT_EQ(workbook, nullptr);
-  EXPECT_EQ(std::string_view(fm_status_string(status)), "kIoFileTooLarge");
+  EXPECT_EQ(std::string_view(fm_status_string(status)), "IO_FILE_TOO_LARGE");
   EXPECT_NE(context.find("limit=total"), std::string::npos);
   EXPECT_NE(context.find("entry=xl/formulon-budget-"), std::string::npos);
   EXPECT_NE(message.find("cumulative"), std::string::npos);

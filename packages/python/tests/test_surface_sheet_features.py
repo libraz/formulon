@@ -94,7 +94,7 @@ class MergeCommentHyperlinkTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             with self.assertRaises(formulon.FormulonError) as ctx:
                 wb.get_comment(99, 0, 0)
-            self.assertEqual(ctx.exception.status, 2)  # kInvalidArgument
+            self.assertEqual(ctx.exception.code, 2)  # INVALID_ARGUMENT
 
     def test_hyperlink_roundtrip(self) -> None:
         with Workbook.create_default() as wb:

@@ -46,6 +46,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_sheet_features_test.cpp
   formulon_c_sheet_layout_test.cpp
   formulon_c_spill_test.cpp
+  formulon_c_status_test.cpp
   formulon_c_structured_ref_test.cpp
   formulon_c_array_formula_test.cpp
   formulon_c_styles_alignment_test.cpp

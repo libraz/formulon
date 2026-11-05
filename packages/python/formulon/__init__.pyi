@@ -18,7 +18,10 @@ from typing import (
     Union,
 )
 
+from ._c import InvalidArgumentError as InvalidArgumentError
+from ._c import NotFoundError as NotFoundError
 from ._c import ValueKind as ValueKind
+from ._status import StatusCode as StatusCode
 
 ExcelProfileId = Literal[
     "mac-365-ja_JP",
@@ -268,11 +271,13 @@ class PageMargins:
     footer_stated: bool
 
 class FormulonError(Exception):
-    status: int
-    status_name: str
+    code: Union[StatusCode, int]
     message: str
     context: str
     def __init__(self, status: int, *, op: str = ...) -> None: ...
+
+class InvalidArgumentError(FormulonError, ValueError): ...
+class NotFoundError(FormulonError, LookupError): ...
 
 class SaveDiagnostics:
     bytes: builtins.bytes
