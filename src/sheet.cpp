@@ -125,6 +125,11 @@ void strip_code_name(std::string& sheet_pr_xml) {
   }
 }
 
+/// A stored cell is content when it has a formula or a non-blank value.
+bool has_cell_content(const Cell& cell) noexcept {
+  return !cell.formula_text.empty() || !cell.cached_value.is_blank();
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -277,7 +282,7 @@ std::vector<CommentShape> Sheet::comment_shapes() const {
       shape.box = c.box;
       shape.xml = c.vml_shape;
     }
-    shapes.push_back(shape);
+    shapes.push_back(std::move(shape));
   }
   return shapes;
 }
@@ -646,7 +651,7 @@ std::optional<Sheet::PopulatedExtent> Sheet::populated_extent(std::uint32_t firs
   // formula and a blank value is not content.
   const auto scan_row = [&](std::uint32_t row, const RowCells& cells) {
     for (const auto& [col, cell] : cells.entries_in(first_col, static_cast<std::uint64_t>(last_col) + 1U)) {
-      if (!cell.formula_text.empty() || !cell.cached_value.is_blank()) {
+      if (has_cell_content(cell)) {
         include(row, col);
       }
     }
@@ -792,7 +797,7 @@ std::uint64_t Sheet::cells_in_range(std::uint32_t first_row, std::uint32_t first
     const RowCells* cells = row_it == rows_.end() ? nullptr : &row_it->second;
     if (cells != nullptr) {
       for (const auto& [col, cell] : cells->entries_in(col_begin, static_cast<std::uint64_t>(last_col) + 1U)) {
-        if (!cell.formula_text.empty() || !cell.cached_value.is_blank()) {
+        if (has_cell_content(cell)) {
           cols.push_back(col);
         }
       }
