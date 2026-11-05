@@ -34,6 +34,19 @@ const char* resolve_builtin_function_name(std::string_view name);
 /// offending callee.
 const parser::AstNode* find_qualified_builtin_call(const parser::AstNode& root);
 
+/// Returns the first argument in `root` that Excel refuses at entry because
+/// the built-in's parameter takes only a reference (`SUMIF`'s range,
+/// `SUBTOTAL`'s refs, `OFFSET`'s base, ...) and the argument is not a
+/// reference expression: it is empty, a constant, an operator, or a call of a
+/// built-in that never returns a reference. Reference expressions are cell,
+/// range, 3-D, external and structured references, names, `#REF!`, spill
+/// references, the range operators over references, `@` over one, lambda
+/// calls, unknown functions, and calls of the built-ins that may return a
+/// reference (`INDEX`, `INDIRECT`, `OFFSET`, `IF`, `CHOOSE`, `XLOOKUP`, `IFS`,
+/// `SWITCH`, `LET`, `TRIMRANGE`, `SINGLE`, `TAKE`, `DROP`) whatever their
+/// arguments. nullptr when there is none.
+const parser::AstNode* find_non_reference_argument(const parser::AstNode& root);
+
 /// Parses a formula body at a public formula-entry boundary. The parser
 /// accepts qualified names syntactically because they may denote defined
 /// names; a qualified built-in is nevertheless invalid formula entry and is

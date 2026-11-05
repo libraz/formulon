@@ -732,9 +732,12 @@ fm_status_t check_entered_formula_parses(const char* api, std::string_view formu
   std::string_view body = *stored;
   body = strip_formula_prefix(body);
   formulon::Arena arena;
-  if (!formulon::parser::has_refused_whitespace(formula, &is_builtin_function_name) &&
-      formulon::eval::parse_formula_entry(body, arena) != nullptr) {
-    return 0;
+  if (!formulon::parser::has_refused_whitespace(formula, &is_builtin_function_name)) {
+    const formulon::parser::AstNode* root = formulon::eval::parse_formula_entry(body, arena);
+    // Excel also refuses a non-reference argument to a reference-only parameter (`SUBTOTAL(9,)`).
+    if (root != nullptr && formulon::eval::find_non_reference_argument(*root) == nullptr) {
+      return 0;
+    }
   }
   return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken,
                            (std::string(api) + ": formula does not parse").c_str(), std::string(context));

@@ -1,8 +1,12 @@
 #include "eval/builtin_names.h"
 
+#include <cstdint>
+#include <string>
+
 #include "eval/function_registry.h"
 #include "eval/special_forms_catalog.h"
 #include "eval/tree_walker.h"
+#include "parser/formula_prefix.h"
 #include "parser/parser.h"
 #include "utils/arena.h"
 #include "utils/strings.h"
@@ -34,6 +38,130 @@ bool is_qualified_builtin_callee(const AstNode& callee) {
     return false;
   }
   return resolve_builtin_function_name(name) != nullptr;
+}
+
+// Which parameters of a built-in take only a reference.
+enum class ReferenceParams : std::uint8_t {
+  kFirst,          // 0
+  kFirstAndThird,  // 0 and 2
+  kSecond,         // 1
+  kAllButFirst,    // 1, 2, ...
+  kEven,           // 0, 2, 4, ...
+  kFirstAndOdd,    // 0, 1, 3, 5, ...
+};
+
+struct ReferenceParamEntry {
+  const char* name;
+  ReferenceParams params;
+};
+
+// Measured in Excel 365 by entering each built-in with an empty and a
+// constant argument in every position.
+constexpr ReferenceParamEntry kReferenceParams[] = {
+    {"AREAS", ReferenceParams::kFirst},
+    {"AVERAGEIF", ReferenceParams::kFirstAndThird},
+    {"AVERAGEIFS", ReferenceParams::kFirstAndOdd},
+    {"CELL", ReferenceParams::kSecond},
+    {"COLUMN", ReferenceParams::kFirst},
+    {"COUNTBLANK", ReferenceParams::kFirst},
+    {"COUNTIF", ReferenceParams::kFirst},
+    {"COUNTIFS", ReferenceParams::kEven},
+    {"DAVERAGE", ReferenceParams::kFirst},
+    {"DCOUNT", ReferenceParams::kFirst},
+    {"DCOUNTA", ReferenceParams::kFirst},
+    {"DGET", ReferenceParams::kFirst},
+    {"DMAX", ReferenceParams::kFirst},
+    {"DMIN", ReferenceParams::kFirst},
+    {"DPRODUCT", ReferenceParams::kFirst},
+    {"DSTDEV", ReferenceParams::kFirst},
+    {"DSTDEVP", ReferenceParams::kFirst},
+    {"DSUM", ReferenceParams::kFirst},
+    {"DVAR", ReferenceParams::kFirst},
+    {"DVARP", ReferenceParams::kFirst},
+    {"FORMULATEXT", ReferenceParams::kFirst},
+    {"ISFORMULA", ReferenceParams::kFirst},
+    {"MAXIFS", ReferenceParams::kFirstAndOdd},
+    {"MINIFS", ReferenceParams::kFirstAndOdd},
+    {"OFFSET", ReferenceParams::kFirst},
+    {"PHONETIC", ReferenceParams::kFirst},
+    {"RANK", ReferenceParams::kSecond},
+    {"RANK.AVG", ReferenceParams::kSecond},
+    {"RANK.EQ", ReferenceParams::kSecond},
+    {"ROW", ReferenceParams::kFirst},
+    {"SUBTOTAL", ReferenceParams::kAllButFirst},
+    {"SUMIF", ReferenceParams::kFirstAndThird},
+    {"SUMIFS", ReferenceParams::kFirstAndOdd},
+};
+
+// Built-ins whose call Excel takes as a reference whatever its arguments
+// (LET parses to its own node); the `_TRO_*` forms are the trim-range
+// operators `.:`, `:.` and `.:.`.
+constexpr const char* kReferenceReturning[] = {
+    "INDEX",     "INDIRECT", "OFFSET", "IF",   "CHOOSE",       "XLOOKUP",       "IFS",      "SWITCH",
+    "TRIMRANGE", "SINGLE",   "TAKE",   "DROP", "_TRO_LEADING", "_TRO_TRAILING", "_TRO_ALL", nullptr,
+};
+
+bool takes_only_reference(std::string_view name, std::uint32_t index) {
+  for (const ReferenceParamEntry& entry : kReferenceParams) {
+    if (!strings::case_insensitive_eq(name, entry.name)) {
+      continue;
+    }
+    switch (entry.params) {
+      case ReferenceParams::kFirst:
+        return index == 0U;
+      case ReferenceParams::kFirstAndThird:
+        return index == 0U || index == 2U;
+      case ReferenceParams::kSecond:
+        return index == 1U;
+      case ReferenceParams::kAllButFirst:
+        return index >= 1U;
+      case ReferenceParams::kEven:
+        return index % 2U == 0U;
+      case ReferenceParams::kFirstAndOdd:
+        return index == 0U || index % 2U == 1U;
+    }
+  }
+  return false;
+}
+
+bool is_reference_expression(const AstNode& node) {
+  switch (node.kind()) {
+    case NodeKind::Ref:
+    case NodeKind::Ref3D:
+    case NodeKind::ExternalRef:
+    case NodeKind::StructuredRef:
+    case NodeKind::NameRef:
+    case NodeKind::SpillRef:
+    case NodeKind::LambdaCall:
+    case NodeKind::LetBinding:
+      return true;
+    case NodeKind::ErrorLiteral:
+      return node.as_error_literal() == ErrorCode::Ref;
+    case NodeKind::ImplicitIntersection:
+      return is_reference_expression(node.as_implicit_intersection_operand());
+    case NodeKind::RangeOp:
+      for (std::uint32_t i = 0; i < node.as_range_arity(); ++i) {
+        if (!is_reference_expression(node.as_range_operand(i))) {
+          return false;
+        }
+      }
+      return true;
+    case NodeKind::UnionOp:
+      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
+        if (!is_reference_expression(node.as_union_child(i))) {
+          return false;
+        }
+      }
+      return true;
+    case NodeKind::IntersectOp:
+      return is_reference_expression(node.as_intersect_lhs()) && is_reference_expression(node.as_intersect_rhs());
+    case NodeKind::Call: {
+      const std::string name = parser::strip_storage_prefixes(node.as_call_name());
+      return resolve_builtin_function_name(name) == nullptr || find_in(kReferenceReturning, name) != nullptr;
+    }
+    default:
+      return false;
+  }
 }
 
 }  // namespace
@@ -73,6 +201,24 @@ const AstNode* find_qualified_builtin_call(const AstNode& root) {
   const AstNode* hit = nullptr;
   parser::any_child_node(root, [&](const AstNode& child) {
     hit = find_qualified_builtin_call(child);
+    return hit != nullptr;
+  });
+  return hit;
+}
+
+const AstNode* find_non_reference_argument(const AstNode& root) {
+  if (root.kind() == NodeKind::Call) {
+    const std::string name = parser::strip_storage_prefixes(root.as_call_name());
+    for (std::uint32_t i = 0; i < root.as_call_arity(); ++i) {
+      const AstNode& arg = root.as_call_arg(i);
+      if (takes_only_reference(name, i) && !is_reference_expression(arg)) {
+        return &arg;
+      }
+    }
+  }
+  const AstNode* hit = nullptr;
+  parser::any_child_node(root, [&](const AstNode& child) {
+    hit = find_non_reference_argument(child);
     return hit != nullptr;
   });
   return hit;

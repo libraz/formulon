@@ -37,8 +37,9 @@ void MakeWorkbook(WorkbookGuard* wb) {
 
 const std::vector<std::string>& RejectedFormulas() {
   static const std::vector<std::string> formulas = {
-      "=TRUE!A1", "=SUM(", "=1+",    "=Data!SUM(A1:A2)", "=SUM(Data:Sheet1!A1",
-      "=(1+2",    "SUM(",  "=1\t+2", "=SUM(1,\r\n2)",    "=SUM (1)",
+      "=TRUE!A1",      "=SUM(",      "=1+",           "=Data!SUM(A1:A2)",  "=SUM(Data:Sheet1!A1",
+      "=(1+2",         "SUM(",       "=1\t+2",        "=SUM(1,\r\n2)",     "=SUM (1)",
+      "=SUBTOTAL(9,)", "=SUMIF(,1)", "=COUNTIF(1,1)", "=OFFSET(A1+0,0,0)",
   };
   return formulas;
 }
@@ -76,6 +77,11 @@ const std::vector<std::string>& AcceptedFormulas() {
       "='/p/[Book.xlsx]S1:S2'!A1",
       "=Book.xlsx!Name",
       "='/p/Book.xlsx'!Name",
+      "=SUM(,)",
+      "=IF(A1,,1)",
+      "=AGGREGATE(9,4,)",
+      "=SUBTOTAL(9,INDIRECT(\"A1\"))",
+      "=SUMIF(Nope,1)",
   };
   return formulas;
 }
