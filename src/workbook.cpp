@@ -138,6 +138,14 @@ Expected<void, Error> check_not_part_of_data_table(const char* op, const Sheet& 
   }
   return Expected<void, Error>::Ok();
 }
+
+// Target and block checks shared by the cell value, text and formula setters.
+Expected<void, Error> check_cell_writable(const char* op, const std::vector<Sheet>& sheets, std::size_t sheet_index,
+                                          std::uint32_t row, std::uint32_t col) {
+  RETURN_IF_ERROR(check_cell_target(op, sheet_index, sheets.size(), row, col));
+  RETURN_IF_ERROR(check_not_part_of_array(op, sheets[sheet_index], row, col));
+  return check_not_part_of_data_table(op, sheets[sheet_index], row, col);
+}
 }  // namespace
 
 Workbook::Workbook() : engine_(std::make_unique<eval::RecalcEngine>()), kind_(WorkbookKind::kXlsx) {}
@@ -678,9 +686,7 @@ Expected<void, Error> Workbook::remove_sheet_locked(std::uint32_t index) {
   std::vector<std::string> rebound_names =
       referenced_local_names_of_removed_sheet(sheets_, defined_names_, tables_, index, chart_formulas.value());
   const auto has_book_namesake = [this](std::string_view name) {
-    return std::any_of(defined_names_.begin(), defined_names_.end(), [name](const DefinedName& entry) {
-      return entry.local_sheet_id < 0 && strings::case_insensitive_eq(entry.name, name);
-    });
+    return detail::has_book_namesake(defined_names_, name);
   };
   std::vector<bool> promotes(defined_names_.size(), false);
   for (std::size_t i = 0; i < defined_names_.size(); ++i) {
@@ -1273,9 +1279,7 @@ void prepare_cell_overwrite(const eval::RecalcEngine::LockedMutator& mutator, st
 
 Expected<void, Error> Workbook::set_cell_value(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                                Value value) {
-  RETURN_IF_ERROR(check_cell_target("set_cell_value", sheet_index, sheets_.size(), row, col));
-  RETURN_IF_ERROR(check_not_part_of_array("set_cell_value", sheets_[sheet_index], row, col));
-  RETURN_IF_ERROR(check_not_part_of_data_table("set_cell_value", sheets_[sheet_index], row, col));
+  RETURN_IF_ERROR(check_cell_writable("set_cell_value", sheets_, sheet_index, row, col));
   put_cell_value(sheet_index, row, col, value);
   return Expected<void, Error>::Ok();
 }
@@ -1309,9 +1313,7 @@ void Workbook::put_cell_value(std::size_t sheet_index, std::uint32_t row, std::u
 
 Expected<void, Error> Workbook::set_cell_text(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                               std::string_view text) {
-  RETURN_IF_ERROR(check_cell_target("set_cell_text", sheet_index, sheets_.size(), row, col));
-  RETURN_IF_ERROR(check_not_part_of_array("set_cell_text", sheets_[sheet_index], row, col));
-  RETURN_IF_ERROR(check_not_part_of_data_table("set_cell_text", sheets_[sheet_index], row, col));
+  RETURN_IF_ERROR(check_cell_writable("set_cell_text", sheets_, sheet_index, row, col));
   put_cell_text(sheet_index, row, col, text);
   return Expected<void, Error>::Ok();
 }
@@ -1402,9 +1404,7 @@ std::string Workbook::normalize_formula_text(std::string formula, FormulaSource 
 
 Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                                  std::string formula, FormulaSource source) {
-  RETURN_IF_ERROR(check_cell_target("set_cell_formula", sheet_index, sheets_.size(), row, col));
-  RETURN_IF_ERROR(check_not_part_of_array("set_cell_formula", sheets_[sheet_index], row, col));
-  RETURN_IF_ERROR(check_not_part_of_data_table("set_cell_formula", sheets_[sheet_index], row, col));
+  RETURN_IF_ERROR(check_cell_writable("set_cell_formula", sheets_, sheet_index, row, col));
   put_cell_formula(sheet_index, row, col, std::move(formula), source, 0U, 0U);
   return Expected<void, Error>::Ok();
 }

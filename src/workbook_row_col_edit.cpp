@@ -42,6 +42,7 @@
 #include "utils/strings.h"
 #include "workbook.h"
 #include "workbook_formula_index.h"
+#include "workbook_internal.h"
 #include "workbook_ref_rewrite.h"
 #include "workbook_sheet_mutation.h"
 #include "workbook_table_loss.h"
@@ -98,8 +99,7 @@ std::vector<TableLoss> table_losses(const std::vector<TableMetadata>& tables, st
   }
   const std::uint64_t end = static_cast<std::uint64_t>(edit.index) + edit.count;  // exclusive
   for (const TableMetadata& table : tables) {
-    const std::optional<MergeRange> ref =
-        table.sheet_index == sheet_index ? parse_a1_rectangle(table.ref) : std::nullopt;
+    const std::optional<MergeRange> ref = detail::table_rect_on_sheet(table, sheet_index);
     if (!ref.has_value()) {
       continue;
     }
@@ -203,12 +203,8 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
         }
         const bool cell_moves = (new_row != row) || (new_col != static_cast<std::uint32_t>(col));
 
-        std::string_view body = cell.formula_text;
-        bool had_equals = false;
-        if (!body.empty() && body.front() == '=') {
-          body = body.substr(1);
-          had_equals = true;
-        }
+        const std::string_view body = strip_formula_prefix(cell.formula_text);
+        const bool had_equals = body.size() != cell.formula_text.size();
 
         bool ast_changed = false;
         std::string rewritten;
@@ -236,8 +232,8 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
         // unregistered. Parse failures and an empty body remain opaque and
         // therefore retain their original text exactly.
 
-        const eval::CellNodeId old_node{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)};
-        const eval::CellNodeId new_node{static_cast<std::uint16_t>(sheet_idx), new_row, new_col};
+        const eval::CellNodeId old_node = make_node(sheet_idx, row, static_cast<std::uint32_t>(col));
+        const eval::CellNodeId new_node = make_node(sheet_idx, new_row, new_col);
         if (!ast_changed) {
           rewritten = cell.formula_text;
         }
@@ -268,8 +264,7 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
     if (formula_cell == nullptr || formula_cell->formula_text.empty()) {
       continue;
     }
-    std::string_view body = formula_cell->formula_text;
-    body = strip_formula_prefix(body);
+    const std::string_view body = strip_formula_prefix(formula_cell->formula_text);
     parser_arena.reset();
     parser::AstNode* root = parse_indexable_formula(body, parser_arena);
     if (root == nullptr) {
@@ -487,8 +482,7 @@ Expected<void, Error> check_structure_edit(const Workbook& wb, std::size_t sheet
     }
   }
   for (const TableMetadata& table : wb.tables()) {
-    const std::optional<MergeRange> ref =
-        table.sheet_index == sheet_index ? parse_a1_rectangle(table.ref) : std::nullopt;
+    const std::optional<MergeRange> ref = detail::table_rect_on_sheet(table, sheet_index);
     if (!ref.has_value()) {
       continue;
     }

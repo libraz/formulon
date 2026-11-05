@@ -41,6 +41,7 @@
 #include "utils/status_macros.h"
 #include "value.h"
 #include "workbook.h"
+#include "workbook_internal.h"
 
 namespace formulon {
 namespace {
@@ -278,8 +279,7 @@ Expected<void, Error> check_projection_target(const Workbook& wb, std::size_t sh
     }
   }
   for (const TableMetadata& table : wb.tables()) {
-    const std::optional<MergeRange> ref =
-        table.sheet_index == sheet_index ? parse_a1_rectangle(table.ref) : std::nullopt;
+    const std::optional<MergeRange> ref = detail::table_rect_on_sheet(table, sheet_index);
     if (ref.has_value() && intersects(normalized(*ref), target)) {
       return refuse("the report would overlap a table");
     }

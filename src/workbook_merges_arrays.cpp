@@ -75,8 +75,7 @@ Expected<void, Error> check_array_target_free(const char* op, const Workbook& wb
   }
   if (target.first_row != target.last_row || target.first_col != target.last_col) {
     for (const TableMetadata& table : wb.tables()) {
-      const std::optional<MergeRange> ref =
-          table.sheet_index == sheet_index ? parse_a1_rectangle(table.ref) : std::nullopt;
+      const std::optional<MergeRange> ref = detail::table_rect_on_sheet(table, sheet_index);
       if (ref.has_value() && intersects(*ref, target)) {
         return refuse("multi-cell array formulas are not valid in a table");
       }

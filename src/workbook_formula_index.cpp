@@ -26,6 +26,7 @@
 #include "utils/formula_text.h"
 #include "utils/strings.h"
 #include "workbook.h"
+#include "workbook_internal.h"
 
 namespace formulon {
 
@@ -79,7 +80,7 @@ void reindex_all_formulas(std::vector<Sheet>& sheets, const eval::RecalcEngine::
         if (cell.formula_text.empty()) {
           continue;
         }
-        const eval::CellNodeId node{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)};
+        const eval::CellNodeId node = make_node(sheet_idx, row, static_cast<std::uint32_t>(col));
         if (parser::AstNode* root = parse_stored_formula(cell.formula_text, parser_arena); root != nullptr) {
           mutator.register_formula(node, *root, workbook);
         }
@@ -288,11 +289,7 @@ std::vector<std::string> referenced_local_names_of_removed_sheet(const std::vect
   }
 
   // A promoted name keeps its body, so the locals that body reaches survive too.
-  const auto has_book_namesake = [&](std::string_view name) {
-    return std::any_of(defined_names.begin(), defined_names.end(), [&](const DefinedName& entry) {
-      return entry.local_sheet_id < 0 && strings::case_insensitive_eq(entry.name, name);
-    });
-  };
+  const auto has_book_namesake = [&](std::string_view name) { return detail::has_book_namesake(defined_names, name); };
   for (std::size_t i = 0; i < referenced.size(); ++i) {
     const std::string name = referenced[i];
     if (has_book_namesake(name)) {
@@ -395,8 +392,7 @@ void mark_row_visibility_dependents_dirty_locked(const std::vector<Sheet>& sheet
           affected = root != nullptr && references_any_name(*root, affected_names);
         }
         if (affected) {
-          mutator.mark_dirty(
-              eval::CellNodeId{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)});
+          mutator.mark_dirty(make_node(sheet_idx, row, static_cast<std::uint32_t>(col)));
         }
       }
     }

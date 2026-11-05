@@ -25,8 +25,15 @@
 #include "sheet.h"
 #include "sheet_name.h"
 #include "table.h"
+#include "workbook_formula_index.h"
 
 namespace formulon {
+
+namespace {
+// Parses the book-views fragment losslessly: comments, PIs and whitespace text kept.
+constexpr unsigned int kBookViewsParseFlags =
+    pugi::parse_default | pugi::parse_comments | pugi::parse_pi | pugi::parse_ws_pcdata;
+}  // namespace
 
 bool remap_book_views_xml(std::string& book_views_xml, const std::vector<std::uint32_t>& old_to_new) {
   if (book_views_xml.empty() || old_to_new.empty()) {
@@ -34,9 +41,8 @@ bool remap_book_views_xml(std::string& book_views_xml, const std::vector<std::ui
   }
 
   pugi::xml_document document;
-  const pugi::xml_parse_result parsed = document.load_buffer(
-      book_views_xml.data(), book_views_xml.size(),
-      pugi::parse_default | pugi::parse_comments | pugi::parse_pi | pugi::parse_ws_pcdata, pugi::encoding_utf8);
+  const pugi::xml_parse_result parsed =
+      document.load_buffer(book_views_xml.data(), book_views_xml.size(), kBookViewsParseFlags, pugi::encoding_utf8);
   if (!parsed) {
     return false;
   }
@@ -120,9 +126,7 @@ void set_book_views_active_tab(std::string& book_views_xml, std::uint32_t index)
   pugi::xml_document document;
   pugi::xml_node view;
   if (!book_views_xml.empty() &&
-      document.load_buffer(book_views_xml.data(), book_views_xml.size(),
-                           pugi::parse_default | pugi::parse_comments | pugi::parse_pi | pugi::parse_ws_pcdata,
-                           pugi::encoding_utf8)
+      document.load_buffer(book_views_xml.data(), book_views_xml.size(), kBookViewsParseFlags, pugi::encoding_utf8)
               .status == kNoParseError) {
     view = first_workbook_view(document);
   }
@@ -298,20 +302,13 @@ void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<Defined
     // existing dependency edges valid. Dirtying the changed owner is enough
     // to propagate through those edges; removal performs one final full
     // reindex after the sheet vector and metadata reach their final shape.
-    mutator.mark_dirty(eval::CellNodeId{static_cast<std::uint16_t>(update.sheet_index), update.row, update.col});
-  }
-
-  for (DefinedName& entry : defined_names) {
-    const FormulaRewriteResult result = rewrite_formula(entry.formula, transform);
-    if (result.changed) {
-      entry.formula = result.text;
-      defined_names_changed = true;
-    }
+    mutator.mark_dirty(make_node(update.sheet_index, update.row, update.col));
   }
 
   // A sheet mutation applies the same policy everywhere, so every slot of the
   // per-sheet table points at the single transform the caller supplied.
   const std::vector<const parser::RefTransform*> uniform(sheets.size(), &transform);
+  defined_names_changed = rewrite_defined_names(defined_names, uniform, transform);
   rewrite_sheet_metadata_formulas(sheets, uniform, tables, pivot_caches, direct_sheet_old, direct_sheet_new,
                                   removed_sheet_name, dropped_cache_ids, transform);
 }

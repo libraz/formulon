@@ -9,12 +9,15 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "auto_filter.h"
 #include "defined_name.h"
 #include "sheet.h"
+#include "table.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/strings.h"
@@ -59,6 +62,18 @@ inline std::vector<DefinedName>::iterator find_defined_name(std::vector<DefinedN
   return std::find_if(names.begin(), names.end(), [name, local_sheet_id](const DefinedName& entry) {
     return entry.local_sheet_id == local_sheet_id && strings::case_insensitive_eq(entry.name, name);
   });
+}
+
+/// Whether a workbook-scope name spelled `name` (ASCII case-insensitive) exists.
+inline bool has_book_namesake(const std::vector<DefinedName>& names, std::string_view name) {
+  return std::any_of(names.begin(), names.end(), [name](const DefinedName& entry) {
+    return entry.local_sheet_id < 0 && strings::case_insensitive_eq(entry.name, name);
+  });
+}
+
+/// The table's A1 rectangle when it lives on `sheet_index`, else nullopt.
+inline std::optional<MergeRange> table_rect_on_sheet(const TableMetadata& table, std::size_t sheet_index) {
+  return table.sheet_index == sheet_index ? parse_a1_rectangle(table.ref) : std::nullopt;
 }
 
 }  // namespace detail
