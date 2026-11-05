@@ -11,6 +11,7 @@
 
 #include "io/future_functions.h"
 #include "io/xlsb/func_id_table.h"
+#include "io/xlsb/ptg_list.h"
 #include "io/xlsb/ptg_targets.h"
 #include "parser/ast.h"
 #include "utils/a1_ref.h"
@@ -101,8 +102,7 @@ Shape Shapes::of(const parser::AstNode& node) {
                  ? Shape::kReference
                  : Shape::kScalar;
     case NodeKind::StructuredRef:
-      return node.as_structured_ref_modifier() == parser::StructuredRefModifier::At ? Shape::kScalar
-                                                                                    : Shape::kReference;
+      return structured_ref_is_single_cell(node) ? Shape::kScalar : Shape::kReference;
     case NodeKind::UnaryOp:
       return !lifting_ || of(node.as_unary_operand()) == Shape::kScalar ? Shape::kScalar : Shape::kArray;
     case NodeKind::BinaryOp:

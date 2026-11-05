@@ -48,6 +48,11 @@ Expected<parser::AstNode*, Error> decode_ptg_list(ByteSpan& cursor, Arena& arena
 std::uint32_t xlsb_table_id(const std::vector<TableMetadata>& tables, std::size_t index,
                             const std::unordered_set<std::uint32_t>& reserved);
 
+/// True when a StructuredRef names one column in one row band: `[@Col]`,
+/// `[[#This Row],[Col]]`, `[[#Headers],[Col]]` or `[[#Totals],[Col]]`.
+/// Excel gives such a reference no implicit intersection.
+bool structured_ref_is_single_cell(const parser::AstNode& node);
+
 /// The 0-based sheet of the model or verbatim table a StructuredRef names, or nullopt.
 std::optional<std::int32_t> structured_ref_sheet(const parser::AstNode& node, const SheetRangeTable& ranges);
 

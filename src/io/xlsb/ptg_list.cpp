@@ -279,6 +279,18 @@ std::optional<std::uint16_t> ColumnIndex(const TableMetadata& table, const std::
 
 }  // namespace
 
+bool structured_ref_is_single_cell(const parser::AstNode& node) {
+  if (node.as_structured_ref_modifier() == parser::StructuredRefModifier::At) {
+    return true;
+  }
+  Payload payload;
+  if (node.as_structured_ref_modifier() != parser::StructuredRefModifier::None ||
+      !ParsePayload(node.as_structured_ref_column(), &payload) || payload.columns.size() != 1U) {
+    return false;
+  }
+  return payload.selectors == kSelThisRow || payload.selectors == kSelHeaders || payload.selectors == kSelTotals;
+}
+
 Expected<parser::AstNode*, Error> decode_ptg_list(ByteSpan& cursor, Arena& arena,
                                                   const std::vector<TableMetadata>* tables) {
   if (cursor.size < kPtgListSize) {

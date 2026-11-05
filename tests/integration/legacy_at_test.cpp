@@ -45,6 +45,7 @@
 #include "io/zip_reader.h"
 #include "sheet.h"
 #include "support/ooxml_package_fixture.h"
+#include "table.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -948,6 +949,46 @@ TEST(LegacyAt, LegacyArrayFormulaBlockIsChangedOnlyAsAWhole) {
   ASSERT_NE(replaced, nullptr);
   EXPECT_TRUE(replaced->formula_text.empty());
   EXPECT_EQ(replaced->array_block_rows, 0U);
+}
+
+// A structured reference to one column of one row band is a single cell, and
+// Excel shows no '@' on it even in a formula without a dynamic-array mark.
+TEST(LegacyAt, SingleCellStructuredReferencesTakeNoAt) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0U, 0U, Value::text("Qty"));
+  s.set_cell_value(0U, 1U, Value::text("Price"));
+  for (std::uint32_t r = 1; r <= 3U; ++r) {
+    s.set_cell_value(r, 0U, Value::number(r));
+    s.set_cell_value(r, 1U, Value::number(10.0 * r));
+  }
+  TableMetadata table;
+  table.id = 1U;
+  table.name = "tblSales";
+  table.display_name = "tblSales";
+  table.ref = "A1:B5";
+  table.header_row = true;
+  table.totals_row = true;
+  table.columns = {TableColumn{1U, "Qty", "", "", ""}, TableColumn{2U, "Price", "", "", ""}};
+  std::vector<TableMetadata> tables = {std::move(table)};
+  wb.set_tables(std::move(tables));
+  constexpr std::array<const char*, 5> kStored = {
+      "=tblSales[[#This Row],[Qty]]*tblSales[[#This Row],[Price]]",
+      "=tblSales[@Qty]*2",
+      "=tblSales[[#Headers],[Qty]]",
+      "=tblSales[[#Totals],[Qty]]",
+      "=SUBTOTAL(109,tblSales[Qty])",
+  };
+  for (std::uint32_t i = 0; i < kStored.size(); ++i) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U + i, 3U, kStored[i])));
+    s.set_cell_dynamic_array(1U + i, 3U, false);
+  }
+  wb.apply_legacy_implicit_intersections();
+  for (std::uint32_t i = 0; i < kStored.size(); ++i) {
+    const Cell* cell = s.cell_at(1U + i, 3U);
+    ASSERT_NE(cell, nullptr) << kStored[i];
+    EXPECT_EQ(cell->formula_text, kStored[i]);
+  }
 }
 
 }  // namespace
