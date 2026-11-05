@@ -105,14 +105,11 @@ std::optional<LiteralOperand> parse_literal(const std::string& source) {
     return operand;
   }
 
-  // Numeric literal — consumed in full or rejected. Route through the
-  // shared decimal parser (`utils/double_parse.h`) so the cellIs literal parser
-  // and the engine's text-to-number coercion accept exactly the same syntax.
-  double parsed = 0.0;
-  if (parse_double_exact(source, &parsed)) {
+  // Numeric literal, consumed in full or rejected.
+  if (const std::optional<double> parsed = parse_double(source)) {
     LiteralOperand operand;
     operand.kind = LiteralOperand::Kind::Number;
-    operand.number_value = parsed;
+    operand.number_value = *parsed;
     return operand;
   }
   return std::nullopt;
