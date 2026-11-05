@@ -506,6 +506,7 @@ src/eval/aggregate_lazy.cpp
   src/c_api/parts/eval_adhoc.cpp
   src/c_api/parts/cf_mutate.cpp
   src/c_api/parts/chart.cpp
+  src/c_api/parts/chart_mutate.cpp
   src/c_api/parts/common.cpp
   src/c_api/parts/diagnostics.cpp
   src/c_api/parts/drawing.cpp
