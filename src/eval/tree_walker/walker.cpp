@@ -380,8 +380,8 @@ Value eval_intersect_op(const parser::AstNode& node, Arena& arena, const Functio
   top_left.sheet = sheet;
   top_left.row = r1;
   top_left.col = c1;
-  const bool full_height = r1 == 0U && r2 == Sheet::kMaxRows - 1U;
-  const bool full_width = c1 == 0U && c2 == Sheet::kMaxCols - 1U;
+  const bool full_height = spans_all_rows(r1, r2);
+  const bool full_width = spans_all_cols(c1, c2);
   if ((r1 == r2 && c1 == c2) || (!spill_position && (full_height || full_width))) {
     return ctx.resolve_ref(top_left, arena, registry);
   }
@@ -736,8 +736,7 @@ Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const Functio
       }
       const auto& lhs_ref = lhs.as_ref();
       const auto& rhs_ref = rhs.as_ref();
-      const bool whole = lhs_ref.is_full_col || lhs_ref.is_full_row || rhs_ref.is_full_col || rhs_ref.is_full_row;
-      if (whole || is_full_axis_range(lhs_ref, rhs_ref)) {
+      if (has_whole_axis_endpoint(lhs_ref, rhs_ref) || is_full_axis_range(lhs_ref, rhs_ref)) {
         return read_whole_axis(lhs_ref, rhs_ref, arena, registry, ctx);
       }
       const std::uint32_t r1 = std::min(lhs_ref.row, rhs_ref.row);
@@ -1018,8 +1017,8 @@ Value evaluate_top_body(const parser::AstNode& node, Arena& arena, const Functio
     // Excel rewrites a bounded range spanning a full grid axis into the
     // whole-axis spelling on entry, so exactly this set has a twin above
     // whose answer it must match. Anything narrower has no twin.
-    const bool full_height = bare_range_top.row == 0U && bare_range_bottom.row == Sheet::kMaxRows - 1U;
-    const bool full_width = bare_range_top.col == 0U && bare_range_bottom.col == Sheet::kMaxCols - 1U;
+    const bool full_height = spans_all_rows(bare_range_top.row, bare_range_bottom.row);
+    const bool full_width = spans_all_cols(bare_range_top.col, bare_range_bottom.col);
     sv = evaluate_bare_range_spill(bare_range_top, bare_range_bottom, arena, registry, ctx_with_counters,
                                    /*settle_circularity=*/full_height || full_width, /*allow_tail=*/true,
                                    &footprint_probed);

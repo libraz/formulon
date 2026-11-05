@@ -33,6 +33,7 @@
 
 #include "eval/tail_array.h"
 #include "parser/reference.h"
+#include "sheet.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -73,6 +74,19 @@ Shaped dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionRe
 /// with whole-column / whole-row endpoints (`A:C`, `1:3`) or with bounded ones
 /// (`A1:A1048576`) that Excel rewrites into that form. Both axes whole is true.
 bool is_full_axis_range(const parser::Reference& lhs, const parser::Reference& rhs);
+
+/// True when either endpoint of a `:` pair is a whole-column or whole-row reference.
+inline bool has_whole_axis_endpoint(const parser::Reference& lhs, const parser::Reference& rhs) noexcept {
+  return lhs.is_full_col || lhs.is_full_row || rhs.is_full_col || rhs.is_full_row;
+}
+
+/// True when the inclusive row / column span covers the whole grid height / width.
+inline bool spans_all_rows(std::uint32_t row_first, std::uint32_t row_last) noexcept {
+  return row_first == 0U && row_last == Sheet::kMaxRows - 1U;
+}
+inline bool spans_all_cols(std::uint32_t col_first, std::uint32_t col_last) noexcept {
+  return col_first == 0U && col_last == Sheet::kMaxCols - 1U;
+}
 
 /// True for an AST written as a reference -- a cell, a `:` range, a union, an
 /// intersection, a 3-D or spill reference -- which Excel refuses to call

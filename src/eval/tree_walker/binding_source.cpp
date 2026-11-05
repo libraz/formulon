@@ -38,8 +38,6 @@ bool is_scope_free(const parser::AstNode& node, const NameEnv* env) {
     case parser::NodeKind::UnaryOp:
       return is_scope_free(node.as_unary_operand(), env);
     case parser::NodeKind::BinaryOp:
-      return !parser::any_child_node(node,
-                                     [&](const parser::AstNode& operand) { return !is_scope_free(operand, env); });
     case parser::NodeKind::RangeOp:
       return !parser::any_child_node(node,
                                      [&](const parser::AstNode& operand) { return !is_scope_free(operand, env); });
@@ -101,12 +99,12 @@ const parser::AstNode* resolve_computed_reference(const parser::AstNode& expr, A
   parser::Reference last{};
   first.sheet = sheet;
   last.sheet = sheet;
-  if (top == 0U && bottom == Sheet::kMaxRows - 1U) {
+  if (spans_all_rows(top, bottom)) {
     first.is_full_col = true;
     last.is_full_col = true;
     first.col = left;
     last.col = right;
-  } else if (left == 0U && right == Sheet::kMaxCols - 1U) {
+  } else if (spans_all_cols(left, right)) {
     first.is_full_row = true;
     last.is_full_row = true;
     first.row = top;

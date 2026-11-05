@@ -671,8 +671,7 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
     parser::Reference chain_rhs{};
     const bool is_bare_pair = arg_node.as_range_arity() == 2U && lhs_ast.kind() == parser::NodeKind::Ref &&
                               rhs_ast.kind() == parser::NodeKind::Ref;
-    const bool whole_axis_pair = is_bare_pair && (lhs_ast.as_ref().is_full_col || lhs_ast.as_ref().is_full_row ||
-                                                  rhs_ast.as_ref().is_full_col || rhs_ast.as_ref().is_full_row);
+    const bool whole_axis_pair = is_bare_pair && has_whole_axis_endpoint(lhs_ast.as_ref(), rhs_ast.as_ref());
     if (whole_axis_pair) {
       chain_lhs = lhs_ast.as_ref();
       chain_rhs = rhs_ast.as_ref();
@@ -712,7 +711,7 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
         parser::any_child_node(arg_node,
                                [](const parser::AstNode& operand) {
                                  return operand.kind() == parser::NodeKind::Ref &&
-                                        (operand.as_ref().is_full_col || operand.as_ref().is_full_row);
+                                        has_whole_axis_endpoint(operand.as_ref(), operand.as_ref());
                                }) ||
         (arg_node.as_range_arity() == 2U && lhs_ast.kind() == parser::NodeKind::Ref &&
          rhs_ast.kind() == parser::NodeKind::Ref && is_full_axis_range(lhs_ast.as_ref(), rhs_ast.as_ref()));
@@ -1008,13 +1007,6 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
                                             : arity;
   for (std::uint32_t i = 0; i < evaluated_arity; ++i) {
     const parser::AstNode& raw_arg = node.as_call_arg(i);
-    // LET-binding passthrough: when the caller wrote `SUM(r)` where `r` is
-    // bound to a RangeOp / ArrayLiteral / OFFSET / CHOOSE / INDIRECT, the
-    // dispatcher must see the underlying range AST or it would fall back
-    // to the scalar path and collapse the binding to its spill anchor.
-    // Substitute only when the resolved AST is genuinely range-shaped so
-    // that a NameRef bound to a scalar (or a single-cell Ref) continues to
-    // flow through the existing scalar branch with its original provenance.
     if (def->last_arg_scalar && i > 0U && i + 1U == evaluated_arity) {
       const Value v = densify(eval_node_shaped(raw_arg, arena, registry, ctx), arena);
       if (def->propagate_errors && v.is_error()) {
@@ -1026,6 +1018,13 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       values.push_back(v);
       continue;
     }
+    // LET-binding passthrough: when the caller wrote `SUM(r)` where `r` is
+    // bound to a RangeOp / ArrayLiteral / OFFSET / CHOOSE / INDIRECT, the
+    // dispatcher must see the underlying range AST or it would fall back
+    // to the scalar path and collapse the binding to its spill anchor.
+    // Substitute only when the resolved AST is genuinely range-shaped so
+    // that a NameRef bound to a scalar (or a single-cell Ref) continues to
+    // flow through the existing scalar branch with its original provenance.
     const parser::AstNode& arg_node = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/false);
     Value range_arg_result = Value::blank();
     switch (collect_range_arg(*def, arg_node, arena, registry, ctx, values, had_range_shaped_arg, range_arg_result)) {
