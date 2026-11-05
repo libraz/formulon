@@ -205,7 +205,7 @@ else()
   string(CONCAT _FM_WASM_COLD_SOURCE_REGEX
     "^src/(io|c_api|chart|drawing|pivot)/|"
     "^src/eval/(stats/|builtins/(financial|engineering|complex_num|distributions|cube|web)|builtins/stats/stats_distributions|builtins/(math_combinatorics|text_dbcs|text_width)|text_format/|groupby_pivotby/)|"
-    "^src/eval/(ets_series|ets_detect|ets_calendar|ets_grid|date_text_parse|regex_lazy|locale_function_names|holt_winters|forecast_ets_lazy|financial_lazy|coupon_schedule|database_lazy|getpivotdata_lazy|hypothesis_lazy|linest_lazy|regression_lazy)\\.cpp$")
+    "^src/eval/(ets_series|ets_detect|ets_calendar|ets_grid|date_text_parse|regex_lazy|regex_replacement|locale_function_names|holt_winters|forecast_ets_lazy|financial_lazy|coupon_schedule|database_lazy|getpivotdata_lazy|hypothesis_lazy|linest_lazy|regression_lazy)\\.cpp$")
   set(_FM_WASM_HOT_LOAD_REGEX
     "^src/io/(cell_parser|sheet_reader|sst_reader|styles_reader|sax_xml_reader|xml_utils|xsd_double)\\.cpp$")
   set(_FM_WASM_LINK_OPT_FLAGS "-O3;-sASSERTIONS=0")

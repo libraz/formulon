@@ -478,6 +478,7 @@ src/eval/aggregate_lazy.cpp
   src/eval/series_sum_lazy.cpp
   src/eval/rank_lazy.cpp
   src/eval/regex_lazy.cpp
+  src/eval/regex_replacement.cpp
   src/eval/hypothesis_lazy.cpp
   src/eval/info_lazy.cpp
   src/eval/phonetic_lazy.cpp
