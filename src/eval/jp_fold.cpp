@@ -67,6 +67,27 @@ bool is_voicing_base(std::uint32_t full_cp) {
   return voiced_full_from_base(full_cp) != 0u || semi_voiced_full_from_base(full_cp) != 0u;
 }
 
+// Appends the composed voiced / semi-voiced form of `base` when the code point
+// at `pos` is ﾞ / ﾟ; `*consumed` is the byte length of that mark.
+bool append_composed_voicing(std::string_view input, std::size_t pos, std::uint32_t base, std::string* out,
+                             std::size_t* consumed) {
+  if (!is_voicing_base(base) || pos >= input.size()) {
+    return false;
+  }
+  const std::uint32_t next = decode_utf8_step(input, pos, consumed);
+  std::uint32_t composed = 0u;
+  if (next == 0xFF9Eu) {
+    composed = voiced_full_from_base(base);
+  } else if (next == 0xFF9Fu) {
+    composed = semi_voiced_full_from_base(base);
+  }
+  if (composed == 0u) {
+    return false;
+  }
+  encode_utf8(composed, out);
+  return true;
+}
+
 std::string fold_jp_text_impl(std::string_view input, bool fold_fullwidth_digits, bool fold_halfwidth_kana,
                               bool compose_voicing) {
   std::string out;
@@ -110,22 +131,10 @@ std::string fold_jp_text_impl(std::string_view input, bool fold_fullwidth_digits
     // stays FF76 FF9E (see the header for the caller that needs it).
     if (fold_halfwidth_kana && cp >= 0xFF61u && cp <= 0xFF9Du) {
       std::uint32_t base = half_to_full_kana_or_punct(cp);
-      if (compose_voicing && is_voicing_base(base) && i + n < input.size()) {
-        std::size_t n2 = 0;
-        const std::uint32_t next = decode_utf8_step(input, i + n, &n2);
-        if (next == 0xFF9Eu) {
-          if (const std::uint32_t v = voiced_full_from_base(base); v != 0u) {
-            encode_utf8(v, &out);
-            i += n + n2;
-            continue;
-          }
-        } else if (next == 0xFF9Fu) {
-          if (const std::uint32_t s = semi_voiced_full_from_base(base); s != 0u) {
-            encode_utf8(s, &out);
-            i += n + n2;
-            continue;
-          }
-        }
+      std::size_t consumed = 0;
+      if (compose_voicing && append_composed_voicing(input, i + n, base, &out, &consumed)) {
+        i += n + consumed;
+        continue;
       }
       encode_utf8(base, &out);
       i += n;
@@ -173,22 +182,10 @@ std::string compose_jp_halfwidth_voicing(std::string_view input) {
     // Only a half-width katakana base can absorb a following ﾞ / ﾟ.
     if (cp >= 0xFF66u && cp <= 0xFF9Du && i + n < input.size()) {
       const std::uint32_t base = half_to_full_kana_or_punct(cp);
-      if (is_voicing_base(base)) {
-        std::size_t n2 = 0;
-        const std::uint32_t next = decode_utf8_step(input, i + n, &n2);
-        if (next == 0xFF9Eu) {
-          if (const std::uint32_t v = voiced_full_from_base(base); v != 0u) {
-            encode_utf8(v, &out);
-            i += n + n2;
-            continue;
-          }
-        } else if (next == 0xFF9Fu) {
-          if (const std::uint32_t s = semi_voiced_full_from_base(base); s != 0u) {
-            encode_utf8(s, &out);
-            i += n + n2;
-            continue;
-          }
-        }
+      std::size_t consumed = 0;
+      if (append_composed_voicing(input, i + n, base, &out, &consumed)) {
+        i += n + consumed;
+        continue;
       }
     }
 
