@@ -6,6 +6,10 @@
 
 #include "cf/cf_types.h"
 
+#include <string>
+#include <unordered_set>
+
+#include "cf/cf_x14_id.h"
 #include "gtest/gtest.h"
 
 namespace formulon::cf {
@@ -198,6 +202,19 @@ TEST(ConditionalFormat, AccumulateRulesAndRanges) {
   EXPECT_EQ(cf.rules[0].type, RuleType::CellIs);
   ASSERT_TRUE(cf.rules[0].op.has_value());
   EXPECT_EQ(cf.rules[0].op.value(), CellIsOperator::GreaterThan);
+}
+
+TEST(X14RuleId, ExcelShapeFromSheetIndexAndOrdinal) {
+  const std::unordered_set<std::string> none;
+  EXPECT_EQ(x14_rule_id(1, 1, none), "{00000000-000E-0000-0100-000001000000}");
+  EXPECT_EQ(x14_rule_id(1, 4, none), "{00000000-000E-0000-0100-000004000000}");
+  EXPECT_EQ(x14_rule_id(0, 0x1234, none), "{00000000-000E-0000-0000-000034120000}");
+}
+
+TEST(X14RuleId, CollisionSkipsToNextOrdinal) {
+  const std::unordered_set<std::string> used = {"{00000000-000E-0000-0100-000001000000}",
+                                                "{00000000-000E-0000-0100-000002000000}"};
+  EXPECT_EQ(x14_rule_id(1, 1, used), "{00000000-000E-0000-0100-000003000000}");
 }
 
 }  // namespace

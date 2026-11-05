@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -28,10 +29,10 @@
 #include "c_api/parts/common.h"
 #include "cf/cf_authoring.h"
 #include "cf/cf_types.h"
+#include "cf/cf_x14_id.h"
 #include "color_resolve.h"
 #include "io/cf_overlay.h"
 #include "utils/error.h"
-#include "utils/number_text.h"
 #include "workbook.h"
 
 using formulon::c_api::BorrowedArrayArena;
@@ -478,17 +479,15 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
     // Already checked against the `ST_Guid` shape by `validate` above.
     out_rule.id = rule.id;
   } else {
-    // The id reaches the file as `<x14:cfRule id="...">`, whose schema
-    // type is a GUID, so a synthesized one has to be GUID-shaped or
-    // Excel rejects the extension block. It is derived from the priority
-    // rather than drawn at random so add-then-list is deterministic and
-    // two saves of the same model produce the same bytes. The version
-    // nibble is `0`, which no random (version 4) GUID Excel generates
-    // can carry, so a synthesized id can never collide with a loaded
-    // one.
-    char buf[16];
-    formulon::format_hex(buf, sizeof(buf), static_cast<unsigned>(out_rule.priority), 12, true);
-    out_rule.id = std::string("{FC000000-0000-0000-0000-") + buf + "}";
+    // Derived from the priority so add-then-list is deterministic; skips ids
+    // already on the sheet's rules.
+    std::unordered_set<std::string> used_ids;
+    for (const auto& block : wb->workbook().sheet(sheet_index).conditional_formats()) {
+      for (const auto& existing : block.rules) {
+        used_ids.insert(existing.id);
+      }
+    }
+    out_rule.id = formulon::cf::x14_rule_id(sheet_index, static_cast<std::uint32_t>(out_rule.priority), used_ids);
   }
   if (rule.formula1 != nullptr) {
     if (auto rc =
