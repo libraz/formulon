@@ -12,6 +12,7 @@
 //   * Exponentials (4): IMEXP, IMLN, IMLOG10, IMLOG2, IMSQRT.
 //   * Trigonometric (7): IMSIN, IMCOS, IMTAN, IMSEC, IMCSC, IMCOT.
 //   * Hyperbolic (4): IMSINH, IMCOSH, IMSECH, IMCSCH.
+//     (The trigonometric and hyperbolic rows register from complex_num_trig.h.)
 //
 // All entries are eager scalar (dispatched via the default `FunctionDef`
 // path); no tree-walker changes are needed.

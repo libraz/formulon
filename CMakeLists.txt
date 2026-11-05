@@ -356,6 +356,8 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins.cpp
   src/eval/builtins/aggregate.cpp
   src/eval/builtins/complex_num.cpp
+  src/eval/builtins/complex_num_text.cpp
+  src/eval/builtins/complex_num_trig.cpp
   src/eval/builtins/cube.cpp
   src/eval/builtins/datetime.cpp
   src/eval/builtins/distributions.cpp

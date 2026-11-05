@@ -19,6 +19,7 @@
 
 #include "eval/builtins/aggregate.h"
 #include "eval/builtins/complex_num.h"
+#include "eval/builtins/complex_num_trig.h"
 #include "eval/builtins/cube.h"
 #include "eval/builtins/datetime.h"
 #include "eval/builtins/distributions.h"
@@ -69,6 +70,7 @@ void register_builtins(FunctionRegistry& registry) {
   register_engineering_convert_builtins(registry);
   register_engineering_special_builtins(registry);
   register_complex_num_builtins(registry);
+  register_complex_num_trig_builtins(registry);
   register_reference_builtins(registry);
   register_web_builtins(registry);
   register_service_stub_builtins(registry);

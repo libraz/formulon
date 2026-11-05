@@ -4793,7 +4793,7 @@ groups:
   # =========================================================================
   # Complex-number engineering family. Cases live in
   # tests/oracle/cases/complex.yaml; backing impls under
-  # src/eval/builtins/complex_num.cpp. Probes are substrings of the case
+  # src/eval/builtins/complex_num*.cpp. Probes are substrings of the case
   # formula and must remain in sync with that file.
   # =========================================================================
 
