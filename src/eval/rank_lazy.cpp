@@ -73,6 +73,36 @@ std::variant<Value, std::vector<double>> collect_rank_array(const parser::AstNod
   return nums;
 }
 
+// PERCENTRANK's array argument. A rectangle skips its non-Numbers like
+// `collect_rank_array`; a directly supplied scalar coerces as LARGE's does
+// (Bool and numeric text convert, other text is `#VALUE!`).
+std::variant<Value, std::vector<double>> collect_percentrank_array(const parser::AstNode& arg_node, Arena& arena,
+                                                                   const FunctionRegistry& registry,
+                                                                   const EvalContext& ctx) {
+  auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
+  if (!resolved) {
+    return Value::error(resolved.error());
+  }
+  const RangeResult& range = resolved.value();
+  if (const Value* error_cell = first_error(range.cells)) {
+    return *error_cell;
+  }
+  std::vector<double> nums;
+  nums.reserve(range.cells.size());
+  for (const Value& v : range.cells) {
+    if (range.from_scalar) {
+      const auto n = coerce_to_number(v);
+      if (!n) {
+        return Value::error(n.error());
+      }
+      nums.push_back(n.value());
+    } else if (v.is_number()) {
+      nums.push_back(v.as_number());
+    }
+  }
+  return nums;
+}
+
 /// Evaluates one AST arg as a scalar number using Excel's lenient
 /// coercion rules: Number passes through; Bool -> 1.0 / 0.0; Blank ->
 /// 0.0; text-numeric is parsed; non-numeric text yields `#VALUE!`;
@@ -268,9 +298,15 @@ Value percentrank_cell(const std::vector<double>& sorted, const Value& x_v, cons
   const auto significance = static_cast<std::int64_t>(sig_d);
   const double x = x_or.value();
   const std::size_t n = sorted.size();
-  // Excel returns #N/A for an empty array, and for the inclusive form also
-  // for a single numeric cell (the `(N - 1)` divisor collapses).
-  if (n < (exclusive ? 1U : 2U)) {
+  // Excel returns #N/A for an empty array.
+  if (n == 0U) {
+    return Value::error(ErrorCode::NA);
+  }
+  // A single value equal to x ranks at 1 in every form.
+  if (n == 1U && x == sorted.front()) {
+    return Value::number(1.0);
+  }
+  if (n == 1U) {
     return Value::error(ErrorCode::NA);
   }
   if (x < sorted.front() || x > sorted.back()) {
@@ -313,7 +349,7 @@ Value percentrank_impl(const parser::AstNode& call, Arena& arena, const Function
   if (arity < 2U || arity > 3U) {
     return Value::error(ErrorCode::Value);
   }
-  auto arr = collect_rank_array(call.as_call_arg(0), arena, registry, ctx);
+  auto arr = collect_percentrank_array(call.as_call_arg(0), arena, registry, ctx);
   if (std::holds_alternative<Value>(arr)) {
     return std::get<Value>(arr);
   }

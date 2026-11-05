@@ -3,11 +3,11 @@
 // MEDIAN, MODE / MODE.SNGL / MODE.MULT, LARGE / SMALL, PERCENTILE[.INC] /
 // PERCENTILE.EXC, QUARTILE[.INC] / QUARTILE.EXC, TRIMMEAN.
 //
-// All entries share the skip-non-numeric rule: only `Number` kinds
-// participate (the dispatcher already short-circuits error arguments via
-// `propagate_errors = true`). LARGE / SMALL go through `collect_direct_scalar_coerced`
-// which coerces direct scalar Bool / Text to numeric and lets the
-// dispatcher's `range_filter_numeric_only` filter the range-sourced cells.
+// Range-sourced non-Numbers are skipped (the dispatcher's
+// `range_filter_numeric_only` filter; error arguments short-circuit via
+// `propagate_errors = true`). LARGE / SMALL / PERCENTILE / QUARTILE go
+// through `collect_direct_scalar_coerced`, which coerces direct scalar
+// Bool / Text to numeric.
 //
 // Registration lives in the sibling `stats.cpp` translation unit; the
 // shared helpers (`collect_numerics`, `collect_direct_scalar_coerced`,
@@ -153,14 +153,23 @@ Value Small(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return large_small(args, arity, false);
 }
 
-// Sorts the numeric data arguments and interpolates percentile `k`; an
-// empty numeric slice is `#NUM!`.
-static Value percentile_of_data(const Value* args, std::uint32_t data_count, double k, bool exclusive) {
-  std::vector<double> xs = collect_numerics(args, data_count);
+// Sorted numeric data arguments, coerced like LARGE / MEDIAN: a direct Bool or
+// numeric Text converts and other direct Text is `#VALUE!`, while the
+// dispatcher has already dropped range-sourced non-Numbers. The data is read
+// before the trailing argument, so its error wins.
+static Expected<std::vector<double>, ErrorCode> sorted_data(const Value* args, std::uint32_t data_count) {
+  auto xs = collect_direct_scalar_coerced(args, data_count);
+  if (xs) {
+    std::sort(xs.value().begin(), xs.value().end());
+  }
+  return xs;
+}
+
+// Interpolates percentile `k` of sorted data; an empty slice is `#NUM!`.
+static Value percentile_of_sorted(const std::vector<double>& xs, double k, bool exclusive) {
   if (xs.empty()) {
     return Value::error(ErrorCode::Num);
   }
-  std::sort(xs.begin(), xs.end());
   return exclusive ? percentile_exc_sorted(xs, k) : percentile_inc_sorted(xs, k);
 }
 
@@ -168,6 +177,10 @@ static Value percentile_of_data(const Value* args, std::uint32_t data_count, dou
 // the inclusive form requires it in [0, 1], the exclusive form leaves the
 // range check to the interpolation.
 static Value percentile_by_trailing_k(const Value* args, std::uint32_t arity, bool exclusive) {
+  auto xs = sorted_data(args, arity - 1u);
+  if (!xs) {
+    return Value::error(xs.error());
+  }
   auto k_raw = coerce_to_number(args[arity - 1u]);
   if (!k_raw) {
     return Value::error(k_raw.error());
@@ -176,7 +189,7 @@ static Value percentile_by_trailing_k(const Value* args, std::uint32_t arity, bo
   if (!exclusive && (k < 0.0 || k > 1.0)) {
     return Value::error(ErrorCode::Num);
   }
-  return percentile_of_data(args, arity - 1u, k, exclusive);
+  return percentile_of_sorted(xs.value(), k, exclusive);
 }
 
 // PERCENTILE.INC(array, k) / PERCENTILE(array, k) - linear-interpolation
@@ -201,7 +214,10 @@ Value PercentileExc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // Shared body of QUARTILE.INC / QUARTILE.EXC: `quart` must lie in [lo, hi)
 // and is truncated toward zero before becoming the rank `quart / 4`.
 static Value quartile_of_data(const Value* args, std::uint32_t arity, double lo, double hi, bool exclusive) {
-  const std::uint32_t data_count = arity - 1u;
+  auto xs = sorted_data(args, arity - 1u);
+  if (!xs) {
+    return Value::error(xs.error());
+  }
   auto q_raw = coerce_to_number(args[arity - 1u]);
   if (!q_raw) {
     return Value::error(q_raw.error());
@@ -211,7 +227,7 @@ static Value quartile_of_data(const Value* args, std::uint32_t arity, double lo,
     return Value::error(ErrorCode::Num);
   }
   const double q = std::trunc(q_in);
-  return percentile_of_data(args, data_count, q / 4.0, exclusive);
+  return percentile_of_sorted(xs.value(), q / 4.0, exclusive);
 }
 
 // QUARTILE.INC(array, quart) / QUARTILE(array, quart) - quartile by

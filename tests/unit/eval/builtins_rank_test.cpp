@@ -204,10 +204,30 @@ TEST(BuiltinsPercentRank, LegacyMatchesInc) {
   EXPECT_DOUBLE_EQ(v.as_number(), 0.5);
 }
 
-TEST(BuiltinsPercentRankInc, SingleElementIsNA) {
-  const Value v = EvalSource("=PERCENTRANK.INC({5}, 5)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+TEST(BuiltinsPercentRank, SingleElementEqualToXIsOne) {
+  for (const char* formula :
+       {"=PERCENTRANK.INC({5}, 5)", "=PERCENTRANK.INC(5, 5)", "=PERCENTRANK.INC(TRUE, 1)", "=PERCENTRANK.INC(\"5\", 5)",
+        "=PERCENTRANK.EXC({5}, 5)", "=PERCENTRANK.EXC(\"5\", 5)", "=PERCENTRANK({5}, 5)", "=PERCENTRANK(\"5\", 5)"}) {
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_number()) << formula;
+    EXPECT_DOUBLE_EQ(v.as_number(), 1.0) << formula;
+  }
+}
+
+TEST(BuiltinsPercentRank, SingleCellEqualToXIsOne) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(3.0));
+  const Value v = EvalSourceIn("=PERCENTRANK.INC(A1, 3)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+}
+
+TEST(BuiltinsPercentRank, SingleElementOutsideXIsNA) {
+  for (const char* formula : {"=PERCENTRANK.INC({5}, 4)", "=PERCENTRANK.EXC({5}, 6)"}) {
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::NA) << formula;
+  }
 }
 
 TEST(BuiltinsPercentRankInc, SignificanceZeroIsNum) {

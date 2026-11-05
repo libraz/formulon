@@ -1055,6 +1055,71 @@ TEST(BuiltinsAFamilyArrays, ReferencesKeepCoercingNextToAnArray) {
   EXPECT_DOUBLE_EQ(v.as_number(), 2.25);
 }
 
+// ---------------------------------------------------------------------------
+// Direct-argument coercion of the quantile family (same rule as MEDIAN / LARGE)
+// ---------------------------------------------------------------------------
+
+void ExpectNumber(const Value& v, double expected) {
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), expected);
+}
+
+void ExpectError(const Value& v, ErrorCode code) {
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), code);
+}
+
+TEST(BuiltinsQuantileDirectArgs, DataErrorPrecedesTrailingArgument) {
+  for (const char* f : {"PERCENTILE.INC", "PERCENTILE.EXC", "QUARTILE.INC", "QUARTILE.EXC"}) {
+    ExpectError(EvalSource(std::string("=") + f + "(\"a\",#N/A)"), ErrorCode::Value);
+  }
+  ExpectError(EvalSource("=PERCENTILE(\"a\",NA())"), ErrorCode::Value);
+  ExpectError(EvalSource("=QUARTILE(\"a\",NA())"), ErrorCode::Value);
+  ExpectError(EvalSource("=MEDIAN(\"a\",#N/A)"), ErrorCode::Value);
+  ExpectError(EvalSource("=PERCENTILE.INC({1,2,3},#N/A)"), ErrorCode::NA);
+  ExpectError(EvalSource("=PERCENTILE.EXC({1,2,3},#N/A)"), ErrorCode::NA);
+}
+
+TEST(BuiltinsQuantileDirectArgs, NonNumericTextIsValueError) {
+  ExpectError(EvalSource("=PERCENTILE.INC(\"a\",0.5)"), ErrorCode::Value);
+  ExpectError(EvalSource("=PERCENTILE.EXC(\"a\",0.5)"), ErrorCode::Value);
+}
+
+TEST(BuiltinsQuantileDirectArgs, DirectBoolAndNumericTextCoerce) {
+  ExpectNumber(EvalSource("=PERCENTILE.INC(TRUE,0.5)"), 1.0);
+  ExpectNumber(EvalSource("=PERCENTILE.EXC(TRUE,0.5)"), 1.0);
+  ExpectNumber(EvalSource("=PERCENTILE.INC(\"5\",0.5)"), 5.0);
+  ExpectNumber(EvalSource("=PERCENTILE.EXC(\"5\",0.5)"), 5.0);
+  ExpectNumber(EvalSource("=QUARTILE.INC(\"5\",1)"), 5.0);
+  ExpectError(EvalSource("=QUARTILE.EXC(\"5\",1)"), ErrorCode::Num);
+  ExpectNumber(EvalSource("=PERCENTILE.INC((\"5\"),0.5)"), 5.0);
+  ExpectNumber(EvalSource("=PERCENTILE.INC(-\"5\",0.5)"), -5.0);
+  ExpectNumber(EvalSource("=PERCENTRANK.INC(\"5\",5)"), 1.0);
+}
+
+TEST(BuiltinsQuantileDirectArgs, TrailingArgumentCoerces) {
+  ExpectNumber(EvalSource("=PERCENTILE.EXC({1,2,3},\"0.5\")"), 2.0);
+  ExpectNumber(EvalSource("=PERCENTILE.INC(1,\"0.5\")"), 1.0);
+  ExpectNumber(EvalSource("=PERCENTILE.INC(1,TRUE)"), 1.0);
+}
+
+TEST(BuiltinsQuantileDirectArgs, ReferencesSkipTextAndBool) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(11, 5, Value::text("5"));
+  sheet.set_cell_value(12, 5, Value::boolean(true));
+  sheet.set_cell_value(13, 5, Value::number(3.0));
+  ExpectError(EvalSourceIn("=PERCENTILE.INC(F12,0.5)", wb, wb.sheet(0)), ErrorCode::Num);
+  ExpectError(EvalSourceIn("=PERCENTILE.INC(F13,0.5)", wb, wb.sheet(0)), ErrorCode::Num);
+  ExpectNumber(EvalSourceIn("=PERCENTILE.INC(F12:F14,0.5)", wb, wb.sheet(0)), 3.0);
+}
+
+TEST(BuiltinsQuantileDirectArgs, ControlsStayPut) {
+  ExpectNumber(EvalSource("=MEDIAN(\"5\")"), 5.0);
+  ExpectNumber(EvalSource("=MEDIAN(TRUE)"), 1.0);
+  ExpectNumber(EvalSource("=LARGE(\"5\",1)"), 5.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

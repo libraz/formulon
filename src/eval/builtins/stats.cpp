@@ -14,14 +14,13 @@
 // in `stats/stats_distributions.cpp` and `stats/stats_distributions_misc.cpp`.
 // All four TUs share `stats/stats_helpers.h` and register here.
 //
-// Argument-type rule: PERCENTILE / QUARTILE / TRIMMEAN / MODE
-// (`stats/stats_order.cpp`) silently SKIP text, boolean, and blank direct
-// inputs -- only values whose kind is `Number` participate. VAR / STDEV /
-// MEDIAN and the higher-moment family (`collect_direct_stats`) follow the
+// Argument-type rule: TRIMMEAN / MODE (`stats/stats_order.cpp`) silently
+// SKIP text, boolean, and blank direct inputs -- only values whose kind is
+// `Number` participate. VAR / STDEV / MEDIAN and the higher-moment family (`collect_direct_stats`) follow the
 // AVERAGE-family rule: a range/array-sourced non-Number cell is dropped (via
 // the dispatcher's `range_filter_numeric_only` filter), but a DIRECT Bool,
 // numeric-Text or omitted argument counts (TRUE = 1, omitted = 0) and other
-// direct Text is #VALUE!. SMALL / LARGE use `collect_direct_scalar_coerced`,
+// direct Text is #VALUE!. SMALL / LARGE / PERCENTILE / QUARTILE use `collect_direct_scalar_coerced`,
 // the same rule without the omitted-slot term. The dispatcher runs with
 // `propagate_errors = true` so error-typed arguments always short-circuit
 // before the impl executes.
@@ -306,11 +305,11 @@ void register_stats_builtins(FunctionRegistry& registry) {
       builtins_detail::array_result({"MODE.MULT", 1u, kVariadic, &stats_detail::ModeMult, true, true, true}),
       builtins_detail::scalar_last_arg({"LARGE", 2u, 2u, &stats_detail::Large, true, true, true}),
       builtins_detail::scalar_last_arg({"SMALL", 2u, 2u, &stats_detail::Small, true, true, true}),
-      builtins_detail::scalar_last_arg({"PERCENTILE.INC", 2u, 2u, &stats_detail::PercentileInc, true, true}),
-      builtins_detail::scalar_last_arg({"PERCENTILE", 2u, 2u, &stats_detail::PercentileInc, true, true}),
+      builtins_detail::scalar_last_arg({"PERCENTILE.INC", 2u, 2u, &stats_detail::PercentileInc, true, true, true}),
+      builtins_detail::scalar_last_arg({"PERCENTILE", 2u, 2u, &stats_detail::PercentileInc, true, true, true}),
       builtins_detail::scalar_last_arg({"PERCENTILE.EXC", 2u, 2u, &stats_detail::PercentileExc, true, true, true}),
-      builtins_detail::scalar_last_arg({"QUARTILE.INC", 2u, 2u, &stats_detail::QuartileInc, true, true}),
-      builtins_detail::scalar_last_arg({"QUARTILE", 2u, 2u, &stats_detail::QuartileInc, true, true}),
+      builtins_detail::scalar_last_arg({"QUARTILE.INC", 2u, 2u, &stats_detail::QuartileInc, true, true, true}),
+      builtins_detail::scalar_last_arg({"QUARTILE", 2u, 2u, &stats_detail::QuartileInc, true, true, true}),
       builtins_detail::scalar_last_arg({"QUARTILE.EXC", 2u, 2u, &stats_detail::QuartileExc, true, true, true}),
       // range_filter_numeric_only = true: a range/array-sourced Bool or
       // Text cell is dropped, but a direct Bool/numeric-Text argument
