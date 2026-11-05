@@ -34,6 +34,18 @@ inline constexpr MergeRange normalized(MergeRange range) noexcept {
                     std::max(range.first_row, range.last_row), std::max(range.first_col, range.last_col)};
 }
 
+/// True when the two rectangles share at least one cell.
+inline constexpr bool intersects(const MergeRange& a, const MergeRange& b) noexcept {
+  return a.first_row <= b.last_row && b.first_row <= a.last_row && a.first_col <= b.last_col &&
+         b.first_col <= a.last_col;
+}
+
+/// True when `inner` lies wholly inside `outer`.
+inline constexpr bool contains(const MergeRange& outer, const MergeRange& inner) noexcept {
+  return outer.first_row <= inner.first_row && inner.last_row <= outer.last_row && outer.first_col <= inner.first_col &&
+         inner.last_col <= outer.last_col;
+}
+
 }  // namespace formulon
 
 #endif  // FORMULON_MERGE_RANGE_H_

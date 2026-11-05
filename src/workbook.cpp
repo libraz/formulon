@@ -63,6 +63,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/formula_text.h"
 #include "utils/index_sort.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
@@ -391,11 +392,9 @@ std::size_t Workbook::add_sheet(std::string name) {
 Expected<Sheet*, Error> Workbook::add_sheet_validated(std::string name) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   RETURN_IF_ERROR(validate_sheet_name(name));
-  for (const Sheet& existing : sheets_) {
-    if (sheet_names::equal(existing.name(), name)) {
-      return make_error(FormulonErrorCode::kInvalidSheetName, "add_sheet: name collides with an existing sheet",
-                        "name=\"" + name + "\"");
-    }
+  if (sheet_by_name(name) != nullptr) {
+    return make_error(FormulonErrorCode::kInvalidSheetName, "add_sheet: name collides with an existing sheet",
+                      "name=\"" + name + "\"");
   }
   RETURN_IF_ERROR(check_sheet_headroom(sheets_.size()));
   append_sheet(sheets_, engine_->locked_mutator(), *this, std::move(name), new_sheet_profile());
@@ -405,11 +404,9 @@ Expected<Sheet*, Error> Workbook::add_sheet_validated(std::string name) {
 Expected<void, Error> Workbook::check_entered_new_sheet_name(std::string_view name) const {
   RETURN_IF_ERROR(validate_sheet_name(name));
   RETURN_IF_ERROR(validate_entered_sheet_name(name, excel_profile_.host));
-  for (const Sheet& existing : sheets_) {
-    if (sheet_names::equal(existing.name(), name)) {
-      return make_error(FormulonErrorCode::kInvalidSheetName, "copy_sheet: name collides with an existing sheet",
-                        "name=\"" + std::string(name) + "\"");
-    }
+  if (sheet_by_name(name) != nullptr) {
+    return make_error(FormulonErrorCode::kInvalidSheetName, "copy_sheet: name collides with an existing sheet",
+                      "name=\"" + std::string(name) + "\"");
   }
   return Expected<void, Error>::Ok();
 }
@@ -506,13 +503,6 @@ bool is_valid_sheet_name_chars(std::string_view name) noexcept {
   return true;
 }
 
-// Excel measures the 31-"character" sheet-name limit in UTF-16 code units
-// (its internal string representation), not UTF-8 bytes. Counting bytes
-// wrongly rejects a 31-character Japanese name (up to 93 bytes) far short
-// of the real limit; counting code units matches Excel and treats a
-// supplementary-plane emoji as the two units Excel charges for it.
-constexpr std::uint32_t kMaxSheetNameUnits = 31U;
-
 // Shared structural validator for a sheet name across every mutation
 // surface (add / rename / any future import-side check). Verifies strict
 // UTF-8, a non-empty name within the code-unit length limit, no forbidden
@@ -525,7 +515,7 @@ Expected<void, Error> validate_sheet_name(std::string_view name) {
   if (!sheet_names::valid_utf8(name)) {
     return make_error(FormulonErrorCode::kInvalidSheetName, "sheet name is not valid UTF-8", "name=invalid-utf8");
   }
-  if (utf16_units_in(name) > kMaxSheetNameUnits) {
+  if (utf16_units_in(name) > sheet_names::kMaxNameUnits) {
     return make_error(FormulonErrorCode::kInvalidSheetName, "sheet name exceeds 31 characters",
                       "name=\"" + std::string(name) + "\"");
   }
@@ -609,14 +599,12 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
   // Collision check (Unicode simple-fold). A no-op rename — same case-fold
   // as the current name — bypasses the collision check so callers can
   // change only the casing.
-  for (std::size_t idx = 0; idx < sheets_.size(); ++idx) {
-    if (idx == static_cast<std::size_t>(index)) {
-      continue;
-    }
-    if (sheet_names::equal(sheets_[idx].name(), new_name)) {
-      return make_error(FormulonErrorCode::kInvalidSheetName, "rename_sheet: name collides with another sheet",
-                        "name=\"" + new_name + "\" colliding_index=" + std::to_string(idx));
-    }
+  // Sheet names are unique under folding, so the one match is either the
+  // sheet being renamed or a genuine collision.
+  const std::size_t idx = sheet_index_by_name(new_name);
+  if (idx != static_cast<std::size_t>(-1) && idx != static_cast<std::size_t>(index)) {
+    return make_error(FormulonErrorCode::kInvalidSheetName, "rename_sheet: name collides with another sheet",
+                      "name=\"" + new_name + "\" colliding_index=" + std::to_string(idx));
   }
 
   const std::string old_name = sheets_[index].name();
@@ -1276,12 +1264,8 @@ Expected<std::string, Error> Workbook::rename_table_column(std::size_t table, st
 }
 
 const Sheet* Workbook::sheet_by_name(std::string_view name) const noexcept {
-  for (const Sheet& s : sheets_) {
-    if (sheet_names::equal(s.name(), name)) {
-      return &s;
-    }
-  }
-  return nullptr;
+  const std::size_t index = sheet_index_by_name(name);
+  return index == static_cast<std::size_t>(-1) ? nullptr : &sheets_[index];
 }
 
 std::size_t Workbook::sheet_index_by_name(std::string_view name) const noexcept {
@@ -1447,6 +1431,19 @@ void mark_blocked_spill_anchors_released_by_cell(const eval::RecalcEngine::Locke
   mark_blocked_spill_anchors_intersecting(mutator, sheet_index, sheets, row, col);
 }
 
+// Dirties the cell, its dependents and every spill anchor the write wakes,
+// and drops the cell's outgoing edges. Precondition: caller holds the engine
+// mutex; call before the sheet write.
+void prepare_cell_overwrite(const eval::RecalcEngine::LockedMutator& mutator, std::size_t sheet_index,
+                            const std::vector<Sheet>& sheets, std::uint32_t row, std::uint32_t col) {
+  const eval::CellNodeId node = make_node(sheet_index, row, col);
+  mutator.mark_dirty(node);
+  mark_dependents_dirty(mutator, node);
+  mark_blocked_spill_anchors_released_by_cell(mutator, sheet_index, sheets, row, col);
+  mutator.clear_cell_dependencies(node);
+  mark_spill_anchor_dirty_if_covered(mutator, sheet_index, sheets, row, col);
+}
+
 /// `Sheet::blocked_spill_anchors_intersecting` or
 /// `Sheet::committed_spill_anchors_intersecting`.
 using SpillAnchorQuery = std::vector<CellAddress> (Sheet::*)(std::uint32_t, std::uint32_t, std::uint32_t,
@@ -1479,8 +1476,6 @@ Expected<void, Error> Workbook::set_cell_value(std::size_t sheet_index, std::uin
 }
 
 void Workbook::put_cell_value(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, Value value) {
-  const eval::CellNodeId node = make_node(sheet_index, row, col);
-
   // The cell is becoming a literal: drop outgoing edges (the old formula's
   // reads), but preserve incoming edges so other formulas that *read* this
   // cell continue to re-evaluate when the literal changes.
@@ -1502,11 +1497,7 @@ void Workbook::put_cell_value(std::size_t sheet_index, std::uint32_t row, std::u
   {
     std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
     const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-    mutator.mark_dirty(node);
-    mark_dependents_dirty(mutator, node);
-    mark_blocked_spill_anchors_released_by_cell(mutator, sheet_index, sheets_, row, col);
-    mutator.clear_cell_dependencies(node);
-    mark_spill_anchor_dirty_if_covered(mutator, sheet_index, sheets_, row, col);
+    prepare_cell_overwrite(mutator, sheet_index, sheets_, row, col);
     sheets_[sheet_index].set_cell_value(row, col, value);
   }
 }
@@ -1521,14 +1512,9 @@ Expected<void, Error> Workbook::set_cell_text(std::size_t sheet_index, std::uint
 }
 
 void Workbook::put_cell_text(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, std::string_view text) {
-  const eval::CellNodeId node = make_node(sheet_index, row, col);
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-  mutator.mark_dirty(node);
-  mark_dependents_dirty(mutator, node);
-  mark_blocked_spill_anchors_released_by_cell(mutator, sheet_index, sheets_, row, col);
-  mutator.clear_cell_dependencies(node);
-  mark_spill_anchor_dirty_if_covered(mutator, sheet_index, sheets_, row, col);
+  prepare_cell_overwrite(mutator, sheet_index, sheets_, row, col);
   sheets_[sheet_index].set_cell_text(row, col, text);
 }
 
@@ -1549,12 +1535,7 @@ void Workbook::erase_cells_in(std::size_t sheet_index, const MergeRange& rect) {
   }
   // Like a literal write, the erase re-evaluates whatever read the cell.
   for (const CellAddress address : stored) {
-    const eval::CellNodeId node = make_node(sheet_index, address.row, address.col);
-    mutator.mark_dirty(node);
-    mark_dependents_dirty(mutator, node);
-    mark_blocked_spill_anchors_released_by_cell(mutator, sheet_index, sheets_, address.row, address.col);
-    mutator.clear_cell_dependencies(node);
-    mark_spill_anchor_dirty_if_covered(mutator, sheet_index, sheets_, address.row, address.col);
+    prepare_cell_overwrite(mutator, sheet_index, sheets_, address.row, address.col);
     sheet.erase_cell(address.row, address.col);
   }
 }
@@ -1564,7 +1545,7 @@ void Workbook::apply_legacy_implicit_intersections() {
   for (std::size_t sheet_index = 0; sheet_index < sheets_.size(); ++sheet_index) {
     const io::xlsb::NameShapes name_shapes = io::name_shapes(*this, sheet_index);
     Sheet& sheet = sheets_[sheet_index];
-    for (const CellAddress address : sheet.formula_cells_in(0U, 0U, Sheet::kMaxRows - 1U, Sheet::kMaxCols - 1U)) {
+    for (const CellAddress address : sheet.all_formula_cells()) {
       const Cell* cell = sheet.cell_at(address.row, address.col);
       // A dynamic-array formula already says where it intersects, and a CSE
       // block evaluates as an array.
@@ -1814,9 +1795,7 @@ void Workbook::bind_external_books_unlocked(std::string_view formula) {
   if (!MayNameExternalBook(formula)) {
     return;
   }
-  if (!formula.empty() && formula.front() == '=') {
-    formula.remove_prefix(1);
-  }
+  formula = strip_formula_prefix(formula);
   Arena arena;
   if (const parser::AstNode* root = parse_indexable_formula(formula, arena); root != nullptr) {
     bind_external_books_unlocked(*root);
@@ -2008,10 +1987,7 @@ void Workbook::put_cell_formula(std::size_t sheet_index, std::uint32_t row, std:
   // Parse the formula in a throwaway arena to extract its dependency list.
   // Strip a leading '=' so the parser sees a bare expression (the tokenizer
   // accepts both shapes, but the dep extractor walks the AST regardless).
-  std::string_view src = formula;
-  if (!src.empty() && src.front() == '=') {
-    src.remove_prefix(1);
-  }
+  const std::string_view src = strip_formula_prefix(formula);
 
   Arena tmp_arena;
   parser::AstNode* root = parse_indexable_formula(src, tmp_arena);
@@ -2058,16 +2034,6 @@ void Workbook::put_cell_formula(std::size_t sheet_index, std::uint32_t row, std:
 
 namespace {
 
-bool rects_intersect(const MergeRange& a, const MergeRange& b) noexcept {
-  return a.first_row <= b.last_row && b.first_row <= a.last_row && a.first_col <= b.last_col &&
-         b.first_col <= a.last_col;
-}
-
-bool rect_contains(const MergeRange& outer, const MergeRange& inner) noexcept {
-  return outer.first_row <= inner.first_row && inner.last_row <= outer.last_row && outer.first_col <= inner.first_col &&
-         inner.last_col <= outer.last_col;
-}
-
 // Refusal of `target` as the extent of a new legacy array formula, on the
 // first structure it collides with. A legacy array block wholly inside
 // `target` is replaced, so only one it partially overlaps counts.
@@ -2078,24 +2044,24 @@ Expected<void, Error> check_array_target_free(const char* op, const Workbook& wb
     return make_error(FormulonErrorCode::kPreconditionFailed, std::string(op) + ": " + what,
                       "row=" + std::to_string(target.first_row) + " col=" + std::to_string(target.first_col));
   };
-  for (const CellAddress address : sheet.formula_cells_in(0U, 0U, Sheet::kMaxRows - 1U, Sheet::kMaxCols - 1U)) {
+  for (const CellAddress address : sheet.all_formula_cells()) {
     const Cell* cell = sheet.cell_at(address.row, address.col);
     if (cell == nullptr || cell->array_block_rows == 0U) {
       continue;
     }
     const MergeRange block{address.row, address.col, address.row + cell->array_block_rows - 1U,
                            address.col + cell->array_block_cols - 1U};
-    if (rects_intersect(block, target) && !rect_contains(target, block)) {
+    if (intersects(block, target) && !contains(target, block)) {
       return refuse("cannot change part of an array");
     }
   }
   for (const MergeRange& merge : sheet.merges()) {
-    if (rects_intersect(normalized(merge), target)) {
+    if (intersects(normalized(merge), target)) {
       return refuse("array formulas are not valid in merged cells");
     }
   }
   for (const DataTable& table : sheet.data_tables()) {
-    if (rects_intersect(normalized(table.ref), target)) {
+    if (intersects(normalized(table.ref), target)) {
       return refuse("cannot change part of a data table");
     }
   }
@@ -2105,7 +2071,7 @@ Expected<void, Error> check_array_target_free(const char* op, const Workbook& wb
     }
     const MergeRange area{pivot->anchor_row(), pivot->anchor_col(), pivot->anchor_row() + pivot->span_rows() - 1U,
                           pivot->anchor_col() + pivot->span_cols() - 1U};
-    if (rects_intersect(area, target)) {
+    if (intersects(area, target)) {
       return refuse("cannot change part of a PivotTable");
     }
   }
@@ -2113,7 +2079,7 @@ Expected<void, Error> check_array_target_free(const char* op, const Workbook& wb
     for (const TableMetadata& table : wb.tables()) {
       const std::optional<MergeRange> ref =
           table.sheet_index == sheet_index ? parse_a1_rectangle(table.ref) : std::nullopt;
-      if (ref.has_value() && rects_intersect(*ref, target)) {
+      if (ref.has_value() && intersects(*ref, target)) {
         return refuse("multi-cell array formulas are not valid in a table");
       }
     }

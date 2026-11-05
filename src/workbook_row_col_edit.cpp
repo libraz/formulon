@@ -179,17 +179,7 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
     const parser::RowColShiftTransform shift(target_sheet, axis, edit, index, count, local_means_target);
     const TableLossTransform transform(shift, table_losses);
 
-    std::vector<std::uint32_t> row_keys;
-    row_keys.reserve(sheet.rows().size());
-    for (const auto& kv : sheet.rows()) {
-      row_keys.push_back(kv.first);
-    }
-    for (std::uint32_t row : row_keys) {
-      const auto it = sheet.rows().find(row);
-      if (it == sheet.rows().end()) {
-        continue;
-      }
-      const RowCells& cells = it->second;
+    for (const auto& [row, cells] : sheet.rows()) {
       for (const auto& [col, cell] : cells) {
         if (cell.formula_text.empty()) {
           continue;
@@ -221,7 +211,7 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
         }
 
         bool ast_changed = false;
-        std::string effective_formula = cell.formula_text;
+        std::string rewritten;
         parser_arena.reset();
         if (!body.empty()) {
           parser::AstNode* root = parse_indexable_formula(body, parser_arena);
@@ -229,11 +219,10 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
             const parser::AstNode* shifted = parser::shift_refs(*root, parser_arena, transform);
             ast_changed = (shifted != nullptr && shifted != root);
             if (ast_changed) {
-              effective_formula.clear();
               if (had_equals) {
-                effective_formula.push_back('=');
+                rewritten.push_back('=');
               }
-              effective_formula.append(parser::format_formula(*shifted));
+              rewritten.append(parser::format_formula(*shifted));
             }
           }
         }
@@ -249,7 +238,10 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
 
         const eval::CellNodeId old_node{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)};
         const eval::CellNodeId new_node{static_cast<std::uint16_t>(sheet_idx), new_row, new_col};
-        updates.push_back(FormulaUpdate{&sheet, old_node, new_node, dropped, std::move(effective_formula)});
+        if (!ast_changed) {
+          rewritten = cell.formula_text;
+        }
+        updates.push_back(FormulaUpdate{&sheet, old_node, new_node, dropped, std::move(rewritten)});
       }
     }
   }
@@ -475,7 +467,7 @@ Expected<void, Error> check_structure_edit(const Workbook& wb, std::size_t sheet
       return refuse(cut, "a data table");
     }
   }
-  for (const CellAddress address : sheet.formula_cells_in(0U, 0U, Sheet::kMaxRows - 1U, Sheet::kMaxCols - 1U)) {
+  for (const CellAddress address : sheet.all_formula_cells()) {
     const Cell* cell = sheet.cell_at(address.row, address.col);
     if (cell == nullptr || cell->array_block_rows == 0U) {
       continue;

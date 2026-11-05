@@ -217,11 +217,7 @@ Expected<std::size_t, Error> Workbook::show_pivot_details(std::size_t sheet, std
   std::string name;
   for (std::size_t n = 1;; ++n) {
     name = std::string(word) + std::to_string(n);
-    bool taken = false;
-    for (const Sheet& existing : sheets_) {
-      taken = taken || sheet_names::equal(existing.name(), name);
-    }
-    if (!taken) {
+    if (sheet_by_name(name) == nullptr) {
       break;
     }
   }

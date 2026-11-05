@@ -34,12 +34,6 @@ std::uint32_t utf16_units_in(std::string_view s) noexcept;
 /// `tests/divergence.yaml`.
 int byte_count_jajp(std::uint32_t codepoint) noexcept;
 
-/// Returns the Excel DBCS byte count of `s` interpreted as UTF-8 under the
-/// ja-JP rule above. Sum of `byte_count_jajp(cp)` for every decoded codepoint.
-/// Malformed leading bytes contribute 1 byte each (mirroring
-/// `utf16_units_in`).
-std::uint64_t bytes_in_jajp(std::string_view s) noexcept;
-
 }  // namespace formulon
 
 #endif  // FORMULON_UTILS_UTF8_LENGTH_H_

@@ -24,27 +24,6 @@ int byte_count_jajp(std::uint32_t codepoint) noexcept {
   return 2;
 }
 
-std::uint64_t bytes_in_jajp(std::string_view s) noexcept {
-  std::uint64_t bytes = 0;
-  std::size_t i = 0;
-  while (i < s.size()) {
-    std::size_t step = 0;
-    const std::uint32_t cp = decode_utf8_step(s, i, &step);
-    // Lenient decoder reports U+FFFD with a 1-byte advance on malformed
-    // input. Both ASCII and replacement-codepoint paths cost 1 DBCS byte
-    // (`byte_count_jajp(0xFFFD) == 2` would mis-count broken input as
-    // 2 bytes; the prior implementation explicitly counted these as 1).
-    if (step == 1 && cp == 0xFFFDu) {
-      bytes += 1;
-      i += 1;
-      continue;
-    }
-    bytes += static_cast<std::uint64_t>(byte_count_jajp(cp));
-    i += step;
-  }
-  return bytes;
-}
-
 std::uint32_t utf16_units_in(std::string_view s) noexcept {
   std::uint32_t units = 0;
   std::size_t i = 0;

@@ -210,22 +210,36 @@ void Sheet::add_pivot_table(std::unique_ptr<pivot::PivotTable> table) {
   pivot_tables_.push_back(std::move(table));
 }
 
-std::vector<std::pair<std::uint32_t, std::uint32_t>> Sheet::comment_anchor_set() const {
-  // Packed (row << 32 | col) keys sort in the same order as the pairs.
-  std::vector<std::uint64_t> keys;
-  keys.reserve(comments_.size() + threaded_comments_.size());
-  for (const CellComment& c : comments_) {
-    keys.push_back((static_cast<std::uint64_t>(c.row) << 32U) | c.col);
-  }
-  for (const ThreadedComment& c : threaded_comments_) {
-    keys.push_back((static_cast<std::uint64_t>(c.row) << 32U) | c.col);
-  }
+namespace {
+
+// (row << 32 | col): packed keys sort in the same order as the pairs.
+std::uint64_t packed_cell_key(std::uint32_t row, std::uint32_t col) noexcept {
+  return (static_cast<std::uint64_t>(row) << 32U) | col;
+}
+
+// Indices of `keys` in ascending key order.
+std::vector<std::uint32_t> sorted_key_order(const std::vector<std::uint64_t>& keys) {
   std::vector<std::uint32_t> order;
   sorted_index_order(order, static_cast<std::uint32_t>(keys.size()),
                      IndexLess{&keys, [](const void* context, std::uint32_t lhs, std::uint32_t rhs) {
                                  const auto& packed = *static_cast<const std::vector<std::uint64_t>*>(context);
                                  return packed[lhs] < packed[rhs];
                                }});
+  return order;
+}
+
+}  // namespace
+
+std::vector<std::pair<std::uint32_t, std::uint32_t>> Sheet::comment_anchor_set() const {
+  std::vector<std::uint64_t> keys;
+  keys.reserve(comments_.size() + threaded_comments_.size());
+  for (const CellComment& c : comments_) {
+    keys.push_back(packed_cell_key(c.row, c.col));
+  }
+  for (const ThreadedComment& c : threaded_comments_) {
+    keys.push_back(packed_cell_key(c.row, c.col));
+  }
+  const std::vector<std::uint32_t> order = sorted_key_order(keys);
   std::vector<std::pair<std::uint32_t, std::uint32_t>> anchors;
   anchors.reserve(order.size());
   for (std::size_t i = 0; i < order.size(); ++i) {
@@ -246,19 +260,14 @@ std::vector<CommentShape> Sheet::comment_shapes() const {
   std::vector<std::uint64_t> keys;
   keys.reserve(comments_.size());
   for (const CellComment& c : comments_) {
-    keys.push_back((static_cast<std::uint64_t>(c.row) << 32U) | c.col);
+    keys.push_back(packed_cell_key(c.row, c.col));
   }
-  std::vector<std::uint32_t> order;
-  sorted_index_order(order, static_cast<std::uint32_t>(keys.size()),
-                     IndexLess{&keys, [](const void* context, std::uint32_t lhs, std::uint32_t rhs) {
-                                 const auto& packed = *static_cast<const std::vector<std::uint64_t>*>(context);
-                                 return packed[lhs] < packed[rhs];
-                               }});
+  const std::vector<std::uint32_t> order = sorted_key_order(keys);
   for (const auto& [row, col] : anchors) {
     CommentShape shape;
     shape.row = row;
     shape.col = col;
-    const std::uint64_t key = (static_cast<std::uint64_t>(row) << 32U) | col;
+    const std::uint64_t key = packed_cell_key(row, col);
     const auto at = std::lower_bound(order.begin(), order.end(), key,
                                      [&keys](std::uint32_t index, std::uint64_t k) { return keys[index] < k; });
     if (at != order.end() && keys[*at] == key) {
@@ -927,8 +936,7 @@ std::vector<MergeRange> Sheet::remove_merges_intersecting(MergeRange range) {
   std::vector<MergeRange> removed;
   auto write = merges_.begin();
   for (auto read = merges_.begin(); read != merges_.end(); ++read) {
-    if (read->last_row < range.first_row || range.last_row < read->first_row || read->last_col < range.first_col ||
-        range.last_col < read->first_col) {
+    if (!intersects(*read, range)) {
       if (write != read) {
         *write = std::move(*read);
       }

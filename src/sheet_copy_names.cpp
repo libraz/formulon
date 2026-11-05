@@ -1,13 +1,12 @@
 #include "sheet_copy_names.h"
 
 #include "sheet_name.h"
+#include "utils/a1_ref.h"
 #include "utils/strings.h"
 #include "utils/utf8_length.h"
 
 namespace formulon {
 namespace {
-
-constexpr std::uint32_t kMaxSheetNameUnits = 31;
 
 bool is_ascii_digit(char c) {
   return c >= '0' && c <= '9';
@@ -88,9 +87,7 @@ bool is_a1_ref(std::string_view s) {
     }
     row = row * 10 + static_cast<std::uint32_t>(s[i] - '0');
   }
-  constexpr std::uint32_t kMaxCol = 16384;  // XFD
-  constexpr std::uint32_t kMaxRow = 1048576;
-  return col <= kMaxCol && row >= 1 && row <= kMaxRow;
+  return col <= a1::kMaxCols && row >= 1 && row <= a1::kMaxRows;
 }
 
 /// Whole-string R1C1 reference: R\d*C\d*, R\d+ or C\d+ (case-insensitive).
@@ -128,8 +125,8 @@ std::string copy_sheet_default_name(std::string_view source_name, const std::vec
     const std::string suffix = " (" + std::to_string(n) + ")";
     std::string candidate(base);
     candidate += suffix;
-    if (utf16_units_in(candidate) > kMaxSheetNameUnits) {
-      const std::uint32_t room = kMaxSheetNameUnits - utf16_units_in(suffix);
+    if (utf16_units_in(candidate) > sheet_names::kMaxNameUnits) {
+      const std::uint32_t room = sheet_names::kMaxNameUnits - utf16_units_in(suffix);
       std::string_view cut = truncate_units(base, room);
       std::string_view trimmed = cut;
       while (!trimmed.empty() && (trimmed.back() == ' ' || trimmed.back() == '\'')) {

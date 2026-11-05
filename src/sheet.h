@@ -500,6 +500,9 @@ class Sheet {
   std::vector<CellAddress> formula_cells_in(std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
                                             std::uint32_t last_col) const;
 
+  /// Every formula cell of the sheet, in the order `formula_cells_in` returns.
+  std::vector<CellAddress> all_formula_cells() const { return formula_cells_in(0U, 0U, kMaxRows - 1U, kMaxCols - 1U); }
+
   /// One populated coordinate handed to a `cells_in_range` visitor.
   struct RangeCell {
     std::uint32_t row = 0;

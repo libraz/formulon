@@ -8,10 +8,16 @@
 #ifndef FORMULON_SHEET_NAME_H_
 #define FORMULON_SHEET_NAME_H_
 
+#include <cstdint>
 #include <string_view>
 
 namespace formulon {
 namespace sheet_names {
+
+/// Excel measures the sheet-name limit in UTF-16 code units (its internal
+/// string representation), not UTF-8 bytes; a supplementary-plane character
+/// counts as two units.
+inline constexpr std::uint32_t kMaxNameUnits = 31U;
 
 /// Returns true when `lhs` and `rhs` have the same worksheet identity under
 /// Unicode simple case folding (Unicode CaseFolding C/S mappings, no

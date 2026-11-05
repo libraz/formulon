@@ -2,6 +2,7 @@
 #include "print/pagination.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <string>
@@ -312,17 +313,14 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   const std::vector<double> row_heights = row_heights_pt(sheet, union_box.first_row, union_box.last_row);
   const std::vector<double> col_widths =
       column_widths_chars(sheet, union_box.first_col, union_box.last_col, column_geometry);
+  // Every queried track lies inside an effective area, hence inside `union_box`.
   const auto row_height = [&](std::uint32_t row) {
-    if (row >= union_box.first_row && row <= union_box.last_row) {
-      return row_heights[static_cast<std::size_t>(row - union_box.first_row)];
-    }
-    return effective_row_height_pt(sheet, row);
+    assert(row >= union_box.first_row && row <= union_box.last_row);
+    return row_heights[static_cast<std::size_t>(row - union_box.first_row)];
   };
   const auto col_width = [&](std::uint32_t col) {
-    if (col >= union_box.first_col && col <= union_box.last_col) {
-      return col_widths[static_cast<std::size_t>(col - union_box.first_col)];
-    }
-    return effective_column_width_chars(sheet, col, column_geometry);
+    assert(col >= union_box.first_col && col <= union_box.last_col);
+    return col_widths[static_cast<std::size_t>(col - union_box.first_col)];
   };
 
   // 2. Printable body area is determined once from the page setup.

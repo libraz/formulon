@@ -16,6 +16,7 @@
 #include "eval/a1_parse.h"
 #include "eval/eval_profile_scope.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "utils/error.h"
 #include "utils/utf8_length.h"
 #include "workbook.h"
@@ -31,9 +32,6 @@ using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::store_cstr;
 
 namespace {
-
-// Excel's sheet-name limit; a longer qualifier names no sheet.
-constexpr std::uint32_t kMaxSheetNameUnits = 31U;
 
 // One endpoint of a whole-column / whole-row pair: the text before the `:`
 // `format_a1` writes between the two copies of the axis.
@@ -82,7 +80,7 @@ extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, cons
       parsed = refs::parse_a1_ref(text);
     }
   }
-  if (!parsed.valid || formulon::utf16_units_in(parsed.sheet) > kMaxSheetNameUnits) {
+  if (!parsed.valid || formulon::utf16_units_in(parsed.sheet) > formulon::sheet_names::kMaxNameUnits) {
     return 0;
   }
   const std::uint32_t row2 = parsed.is_range ? parsed.row2 : parsed.row;

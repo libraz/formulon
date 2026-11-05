@@ -59,16 +59,6 @@ PivotRect to_rect(const MergeRange& m) {
   return PivotRect{m.first_row, m.first_col, m.last_row, m.last_col};
 }
 
-bool intersects(const MergeRange& a, const MergeRange& b) {
-  return a.first_row <= b.last_row && b.first_row <= a.last_row && a.first_col <= b.last_col &&
-         b.first_col <= a.last_col;
-}
-
-bool contains(const MergeRange& outer, const MergeRange& inner) {
-  return outer.first_row <= inner.first_row && inner.last_row <= outer.last_row && outer.first_col <= inner.first_col &&
-         inner.last_col <= outer.last_col;
-}
-
 // The range a pivot holds before its first projection: its location, and the
 // page fields plus their gap row above it.
 MergeRange location_extent(const pivot::PivotTable& table) {
