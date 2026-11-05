@@ -47,6 +47,11 @@ if(NOT TARGET formulon::miniz)
   add_library(formulon::miniz ALIAS ${_FORMULON_MINIZ_TARGET})
 endif()
 
+# Formulon only reads and writes archives in memory. Without this, miniz's
+# FILE*-based entry points keep libc stdio (fflush/fclose and the stdio write
+# path) linked into the WASM module.
+target_compile_definitions(${_FORMULON_MINIZ_TARGET} PRIVATE MINIZ_NO_STDIO)
+
 # miniz's public headers contain optional static zlib-compatibility wrappers.
 # They remain available to callers (the smoke tests use them), but Clang's
 # -Wunused-function reports the unused wrappers when a strict consumer merely
