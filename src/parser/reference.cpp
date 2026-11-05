@@ -134,6 +134,13 @@ bool is_a1_cell_shaped(std::string_view name) noexcept {
   return row >= 1U && row <= detail::kMaxRow;
 }
 
+bool is_a1_column_shaped(std::string_view name) noexcept {
+  if (name.empty() || name.size() > detail::kMaxColumnLetters) {
+    return false;
+  }
+  return detail::DecodeColumnLetters(name) != 0;
+}
+
 bool local_sheet_needs_quoting_a1(std::string_view name) noexcept {
   return LocalSheetNeedsQuotingInEitherNotation(name) || is_a1_cell_shaped(name);
 }

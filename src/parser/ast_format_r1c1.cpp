@@ -1,8 +1,8 @@
 //
-// R1C1 formatter. Reference-bearing nodes and the operators around them are
-// rendered here; leaves that carry no cell reference (literals, names,
+// R1C1 formatter. Reference-bearing nodes, names and the operators around
+// them are rendered here; leaves that carry no cell reference (literals,
 // stored-form structured references, array constants) are delegated to
-// `format_formula`.
+// `format_formula`. A cell-shaped name prints bare: in R1C1 it is no cell.
 // Parenthesis counts come from `collect_parenthesized_nodes`, so grouping
 // matches the A1 formatter exactly.
 
@@ -16,6 +16,7 @@
 
 #include "parser/ast.h"
 #include "parser/ast_format.h"
+#include "parser/formula_prefix.h"
 #include "parser/reference.h"
 #include "parser/structured_ref_payload.h"
 #include "utils/strings.h"
@@ -121,12 +122,6 @@ struct Emitter {
 
   void emit(const AstNode& node, std::string& out) const {
     switch (node.kind()) {
-      case NodeKind::NameRef:
-        if (!node.as_name_sheet().empty()) {
-          break;
-        }
-        out.append(format_formula(node));
-        return;
       case NodeKind::StructuredRef:
         if (display != nullptr) {
           break;
@@ -268,7 +263,7 @@ struct Emitter {
           }
           return;
         }
-        out.append(node.as_call_name());
+        out.append(cell_shaped_name_bare(node.as_call_name()));
         out.push_back('(');
         emit_args(node.as_call_arity(), &AstNode::as_call_arg, node, out);
         out.push_back(')');
@@ -285,7 +280,7 @@ struct Emitter {
           if (optional) {
             out.push_back('[');
           }
-          out.append(node.as_lambda_param(i));
+          out.append(cell_shaped_name_bare(node.as_lambda_param(i)));
           if (optional) {
             out.push_back(']');
           }
@@ -300,7 +295,7 @@ struct Emitter {
       case NodeKind::LetBinding:
         out.append("LET(");
         for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
-          out.append(node.as_let_binding_name(i));
+          out.append(cell_shaped_name_bare(node.as_let_binding_name(i)));
           out.push_back(',');
           emit(node.as_let_binding_expr(i), out);
           out.push_back(',');
@@ -315,10 +310,9 @@ struct Emitter {
         out.push_back(')');
         return;
       case NodeKind::NameRef:
-        // Only a sheet-qualified name reaches here; its qualifier follows
-        // the R1C1 quoting rule.
+        // A qualifier follows the R1C1 quoting rule.
         AppendSheetQualifier(node.as_name_sheet(), out);
-        out.append(node.as_name());
+        out.append(cell_shaped_name_bare(node.as_name()));
         return;
       case NodeKind::ErrorLiteral:
         emit_error_literal(node, out);

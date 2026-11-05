@@ -77,6 +77,10 @@ bool whole_axis_pair_is_single(const Reference& lhs, const Reference& rhs) noexc
 /// Zero padding counts (`A01` is row 1); `XFE1` and `A0` are ordinary names.
 bool is_a1_cell_shaped(std::string_view name) noexcept;
 
+/// True iff `name` on its own is a bare column token: one to three ASCII
+/// letters naming a column inside the grid (`A`..`XFD`, any letter case).
+bool is_a1_column_shaped(std::string_view name) noexcept;
+
 /// Returns true iff the local sheet `name` must be wrapped in single quotes
 /// when written into an A1 reference: names leaving the bare qualifier run
 /// (ASCII letters, digits, `.`, `_` and non-ASCII characters other than

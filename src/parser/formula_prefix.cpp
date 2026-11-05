@@ -1,9 +1,11 @@
 //
 // Respelling of the `SINGLE` / `ANCHORARRAY` storage calls as the `@x` / `x#`
-// operators; the contract is declared in `parser/formula_prefix.h`.
+// operators, and the cell-shaped name prefixes; the contracts are declared in
+// `parser/formula_prefix.h`.
 
 #include "parser/formula_prefix.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -12,6 +14,7 @@
 
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "parser/reference.h"
 #include "utils/arena.h"
 #include "utils/index_sort.h"
 #include "utils/strings.h"
@@ -21,6 +24,9 @@ namespace formulon {
 namespace parser {
 
 namespace {
+
+constexpr std::string_view kParamPrefix = "_xlpm.";
+constexpr std::string_view kNamePrefix = "_xlnm.";
 
 bool IsOperatorCall(const AstNode& node, std::string_view name) {
   return node.kind() == NodeKind::Call && node.as_call_arity() == 1U &&
@@ -159,6 +165,81 @@ std::string spell_storage_operators(std::string_view formula) {
   const std::string_view lead = respeller.slice(0, r.start);
   return std::string(formula.substr(0, body_at + lead.size())) + respeller.text(*root, false) +
          std::string(body.substr(whole.size()));
+}
+
+std::string_view cell_shaped_name_prefix(std::string_view name) noexcept {
+  static constexpr std::array<std::string_view, 2> kPrefixes = {kParamPrefix, kNamePrefix};
+  for (const std::string_view prefix : kPrefixes) {
+    if (name.size() > prefix.size() && formula_prefix_ci_eq(name.substr(0, prefix.size()), prefix) &&
+        is_a1_cell_shaped(name.substr(prefix.size()))) {
+      return prefix;
+    }
+  }
+  return {};
+}
+
+std::string_view cell_shaped_name_bare(std::string_view name) noexcept {
+  return name.substr(cell_shaped_name_prefix(name).size());
+}
+
+std::string display_cell_shaped_names(std::string_view formula) {
+  std::string out;
+  out.reserve(formula.size());
+  std::size_t bracket_depth = 0;
+  for (std::size_t i = 0; i < formula.size();) {
+    const char c = formula[i];
+    if (c == '\'' && bracket_depth > 0U) {
+      // Inside a structured reference `'` escapes the next character.
+      out.append(formula.substr(i, 2));
+      i += 2;
+      continue;
+    }
+    if (c == '"' || c == '\'') {
+      // A string literal or a quoted sheet name; a doubled quote escapes one.
+      std::size_t end = i + 1;
+      while (end < formula.size()) {
+        if (formula[end] == c) {
+          if (end + 1 < formula.size() && formula[end + 1] == c) {
+            end += 2;
+            continue;
+          }
+          ++end;
+          break;
+        }
+        ++end;
+      }
+      out.append(formula.substr(i, end - i));
+      i = end;
+      continue;
+    }
+    if (c == '[') {
+      ++bracket_depth;
+    } else if (c == ']' && bracket_depth > 0U) {
+      --bracket_depth;
+    } else if (c == '_' && (out.empty() || !formula_prefix_is_ident_byte(out.back()))) {
+      std::size_t end = i;
+      while (end < formula.size() && formula_prefix_is_ident_byte(formula[end])) {
+        ++end;
+      }
+      const std::string_view run = formula.substr(i, end - i);
+      const std::string_view prefix = cell_shaped_name_prefix(run);
+      if (!prefix.empty()) {
+        const std::string_view bare = run.substr(prefix.size());
+        if (prefix == kNamePrefix) {
+          out.push_back('\'');
+          out.append(bare);
+          out.push_back('\'');
+        } else {
+          out.append(bare);
+        }
+        i = end;
+        continue;
+      }
+    }
+    out.push_back(c);
+    ++i;
+  }
+  return out;
 }
 
 }  // namespace parser

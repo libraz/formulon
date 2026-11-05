@@ -77,7 +77,18 @@ const WhitespaceRun* find_whitespace(const FormulaWhitespace& whitespace, const 
 /// redundant parentheses to preserve operator precedence; round-trip
 /// equivalence (parse → format → parse → equal AST) is the contract, not
 /// byte-exact stability. `whitespace`, when given, is printed at its slots.
+///
+/// A name whose rest is A1 cell-shaped carries a prefix so it cannot read
+/// back as a cell: a LET binding / LAMBDA parameter, and an unqualified name
+/// or call name matching one in scope, as `_xlpm.B1`; every other such name
+/// as `_xlnm.B2` (`Sheet1!_xlnm.B1`). A column-shaped name right of a `:`
+/// whose left operand is a name prints parenthesised (`A:(B)`).
 std::string format_formula(const AstNode& node, const FormulaWhitespace* whitespace = nullptr);
+
+/// `format_formula` for a subtree whose enclosing LET / LAMBDA binds
+/// `scope_names` (spelled bare or with `_xlpm.`).
+std::string format_formula_in_scope(const AstNode& node, const std::vector<std::string_view>& scope_names,
+                                    const FormulaWhitespace* whitespace = nullptr);
 
 /// Excel's spelling of a binary operator (`+`, `<>`, `&`, ...).
 const char* binop_token(BinOp op) noexcept;
@@ -149,7 +160,8 @@ using StorageFunctionNameSpeller = std::string (*)(std::string_view name);
 ///     accepts but does not store;
 ///   * LET / LAMBDA are themselves future functions (spelled the same
 ///     way), and every LET binding name / LAMBDA parameter name — plus each
-///     in-scope reference to one — is emitted with the `_xlpm.` prefix.
+///     in-scope reference to one — is emitted with the `_xlpm.` prefix, once;
+///     cell-shaped names follow `format_formula`'s rule.
 ///
 /// This is the inverse of `parser::strip_storage_prefixes` for the shapes the
 /// writer produces, so a save → load cycle round-trips the canonical text.

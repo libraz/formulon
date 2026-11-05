@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "parser/ast.h"
+#include "parser/formula_prefix.h"
 #include "parser/parser_detail.h"
 #include "parser/reference.h"
 #include "utils/arena.h"
@@ -42,10 +43,15 @@ std::uint16_t ParenCount(const ParenCounts& parens, const AstNode& node) {
   return it == parens.end() ? 0U : it->second;
 }
 
+// The LET binding / LAMBDA parameter names in scope, each as its
+// `cell_shaped_name_bare`.
+using NameScope = std::vector<std::string_view>;
+
 // What the canonical formatter prints around each node besides its text.
 struct Layout {
   ParenCounts parens;
   const FormulaWhitespace* whitespace = nullptr;
+  NameScope* scope = nullptr;
 };
 
 // Appends the whitespace runs kept at `slot` / `index` of `node`, if any.
@@ -143,6 +149,74 @@ void AppendNameSheetQualifier(const AstNode& node, std::string& out) {
   }
   append_sheet_name(sheet, node.as_name_sheet_quoted(), out);
   out.push_back('!');
+}
+
+// Case-insensitive: Excel folds ASCII case on name resolution.
+bool InScope(const NameScope& scope, std::string_view bare) {
+  for (const std::string_view s : scope) {
+    if (strings::case_insensitive_eq(s, bare)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool HasParamPrefix(std::string_view name) noexcept {
+  return name.size() >= 6U && formula_prefix_ci_eq(name.substr(0, 6U), "_xlpm.");
+}
+
+// A cell-shaped binding name keeps `_xlpm.` so it cannot read back as a cell;
+// `storage` gives every other one the prefix too, once.
+void AppendBindingName(std::string_view raw, bool storage, std::string& out) {
+  const std::string_view bare = cell_shaped_name_bare(raw);
+  if (is_a1_cell_shaped(bare)) {
+    out.append("_xlpm.");
+    out.append(bare);
+    return;
+  }
+  if (storage && !HasParamPrefix(raw)) {
+    out.append("_xlpm.");
+  }
+  out.append(raw);
+}
+
+// Appends the unqualified name `raw` when it is cell-shaped: `_xlpm.` for a
+// binding in scope unless it is spelled `_xlnm.`, `_xlnm.` otherwise. False,
+// appending nothing, for any other name.
+bool AppendCellShapedName(std::string_view raw, const NameScope& scope, std::string& out) {
+  const std::string_view bare = cell_shaped_name_bare(raw);
+  if (!is_a1_cell_shaped(bare)) {
+    return false;
+  }
+  const bool bound = cell_shaped_name_prefix(raw) != "_xlnm." && InScope(scope, bare);
+  out.append(bound ? "_xlpm." : "_xlnm.");
+  out.append(bare);
+  return true;
+}
+
+// `AppendCellShapedName` for a call name; the built-in `LOG10` is no name.
+bool AppendCellShapedCallName(std::string_view raw, const NameScope& scope, std::string& out) {
+  return !is_cellref_shaped_function_name(raw) && AppendCellShapedName(raw, scope, out);
+}
+
+// A NameRef with its qualifier. A sheet-qualified name is never a binding,
+// so a cell-shaped one is always `Sheet1!_xlnm.B1`.
+void AppendNameRef(const AstNode& node, const NameScope& scope, std::string& out) {
+  const std::string_view name = node.as_name();
+  if (node.as_name_sheet().empty()) {
+    if (!AppendCellShapedName(name, scope, out)) {
+      out.append(name);
+    }
+    return;
+  }
+  AppendNameSheetQualifier(node, out);
+  const std::string_view bare = cell_shaped_name_bare(name);
+  if (is_a1_cell_shaped(bare)) {
+    out.append("_xlnm.");
+    out.append(bare);
+    return;
+  }
+  out.append(name);
 }
 
 // Appends the sheet-less cell part of a reference tail in A1 notation: a
@@ -383,15 +457,6 @@ void FormatBinary(const AstNode& node, std::string& out, const Layout& layout) {
   }
 }
 
-// True when `name` on its own is a bare column token -- one to three ASCII
-// letters naming a column inside Excel's grid.
-bool IsBareColumnToken(std::string_view name) noexcept {
-  if (name.empty() || name.size() > detail::kMaxColumnLetters) {
-    return false;
-  }
-  return detail::DecodeColumnLetters(name) != 0;
-}
-
 // The identifier a `:` endpoint opens with, when the endpoint is written as a
 // bare identifier rather than as a reference. A call contributes its name
 // because the parser sees the name before the argument list.
@@ -419,8 +484,15 @@ std::string_view LeadingIdentifier(const AstNode& node) noexcept {
 // Call NA())` emitted as `LE:NA()` reads back as a range with a stray `()`.
 // Parenthesising the left endpoint keeps the two operands apart.
 bool ColonEndpointsWouldFold(const AstNode& lhs, const AstNode& rhs) noexcept {
-  return lhs.kind() == NodeKind::NameRef && IsBareColumnToken(lhs.as_name()) &&
-         IsBareColumnToken(LeadingIdentifier(rhs));
+  return lhs.kind() == NodeKind::NameRef && is_a1_column_shaped(lhs.as_name()) &&
+         is_a1_column_shaped(LeadingIdentifier(rhs));
+}
+
+// Excel holds a column-shaped name apart from a name on its left by
+// parenthesising the right endpoint instead: `A:(B)`, `_xlnm.A1:(A)`.
+bool RightEndpointTakesParens(const AstNode& lhs, const AstNode& rhs) noexcept {
+  return lhs.kind() == NodeKind::NameRef && rhs.kind() == NodeKind::NameRef && rhs.as_name_sheet().empty() &&
+         is_a1_column_shaped(rhs.as_name());
 }
 
 // True when operands `i` and `i + 1` of `range` print as one whole-axis
@@ -521,7 +593,9 @@ void FormatCall(const AstNode& node, std::string& out, const Layout& layout) {
       mode != TrimRefMode::None && FormatTrimRef(node, mode, out, layout)) {
     return;
   }
-  out.append(node.as_call_name());
+  if (!AppendCellShapedCallName(node.as_call_name(), *layout.scope, out)) {
+    out.append(node.as_call_name());
+  }
   out.push_back('(');
   const std::uint32_t n = node.as_call_arity();
   for (std::uint32_t i = 0; i < n; ++i) {
@@ -568,36 +642,43 @@ void FormatLambda(const AstNode& node, std::string& out, const Layout& layout) {
   const std::uint32_t n = node.as_lambda_param_count();
   const std::uint32_t opt = node.as_lambda_optional_count();
   const std::uint32_t first_optional = n - opt;
+  const std::size_t base = layout.scope->size();
   for (std::uint32_t i = 0; i < n; ++i) {
     if (i > 0) {
       out.push_back(',');
     }
     if (i >= first_optional) {
       out.push_back('[');
-      out.append(node.as_lambda_param(i));
+      AppendBindingName(node.as_lambda_param(i), /*storage=*/false, out);
       out.push_back(']');
     } else {
-      out.append(node.as_lambda_param(i));
+      AppendBindingName(node.as_lambda_param(i), /*storage=*/false, out);
     }
+    layout.scope->push_back(cell_shaped_name_bare(node.as_lambda_param(i)));
   }
   if (n > 0) {
     out.push_back(',');
   }
   FormatNode(node.as_lambda_body(), out, layout);
   out.push_back(')');
+  layout.scope->resize(base);
 }
 
 void FormatLet(const AstNode& node, std::string& out, const Layout& layout) {
   out.append("LET(");
   const std::uint32_t n = node.as_let_binding_count();
+  const std::size_t base = layout.scope->size();
   for (std::uint32_t i = 0; i < n; ++i) {
-    out.append(node.as_let_binding_name(i));
+    AppendBindingName(node.as_let_binding_name(i), /*storage=*/false, out);
     out.push_back(',');
+    // A binding value sees the earlier bindings only.
     FormatNode(node.as_let_binding_expr(i), out, layout);
     out.push_back(',');
+    layout.scope->push_back(cell_shaped_name_bare(node.as_let_binding_name(i)));
   }
   FormatNode(node.as_let_body(), out, layout);
   out.push_back(')');
+  layout.scope->resize(base);
 }
 
 // A callee that re-parses as the same callee without parentheses. An
@@ -659,8 +740,7 @@ void FormatBare(const AstNode& node, std::string& out, const Layout& layout) {
       FormatStructuredRef(node, out);
       return;
     case NodeKind::NameRef:
-      AppendNameSheetQualifier(node, out);
-      out.append(node.as_name());
+      AppendNameRef(node, *layout.scope, out);
       return;
     case NodeKind::UnaryOp:
       FormatUnary(node, out, layout);
@@ -768,8 +848,12 @@ void CollectParens(const AstNode& node, int min_bp, ParenCounts& out) {
       const std::uint32_t n = node.as_range_arity();
       for (std::uint32_t i = 0; i < n; ++i) {
         const AstNode& operand = node.as_range_operand(i);
-        if (i + 1U < n && !PrintsSpliced(node, i)) {
+        if (i + 1U < n && !PrintsSpliced(node, i) &&
+            !RightEndpointTakesParens(operand, node.as_range_operand(i + 1U))) {
           Parenthesize(operand, ColonEndpointsWouldFold(operand, node.as_range_operand(i + 1U)), out);
+        }
+        if (i > 0U && RightEndpointTakesParens(node.as_range_operand(i - 1U), operand)) {
+          Parenthesize(operand, true, out);
         }
         CollectParens(operand, i == 0U ? kBpRange : kBpRange + 1, out);
       }
@@ -920,17 +1004,18 @@ struct StorageEmitter {
         }
         // A sheet-qualified name is a workbook name, never a LET / LAMBDA
         // parameter.
-        if (sheet.empty() && in_scope(name)) {
+        const std::string_view bare = cell_shaped_name_bare(name);
+        const bool param = sheet.empty() && in_scope(bare);
+        if (param && !is_a1_cell_shaped(bare) && !HasParamPrefix(name)) {
           out.append("_xlpm.");
-        } else if (function_values != nullptr &&
+        } else if (!param && function_values != nullptr &&
                    std::find(function_values->begin(), function_values->end(), &node) != function_values->end()) {
           // Excel upper-cases a built-in it stores as a value.
           out.append("_xleta.");
           out.append(strings::to_ascii_upper(name));
           return;
         }
-        AppendNameSheetQualifier(node, out);
-        out.append(name);
+        AppendNameRef(node, scope, out);
         return;
       }
       case NodeKind::UnaryOp:
@@ -1002,11 +1087,16 @@ struct StorageEmitter {
 
   void emit_call(const AstNode& node, std::string& out) {
     // `f(-2)` calls a LET / LAMBDA parameter.
-    if (in_scope(node.as_call_name())) {
-      out.append("_xlpm.");
-      out.append(node.as_call_name());
+    const std::string_view name = node.as_call_name();
+    if (AppendCellShapedCallName(name, scope, out)) {
+      // Spelled with its prefix already.
+    } else if (in_scope(name)) {
+      if (!HasParamPrefix(name)) {
+        out.append("_xlpm.");
+      }
+      out.append(name);
     } else {
-      append_function_name(out, node.as_call_name());
+      append_function_name(out, name);
     }
     out.push_back('(');
     const std::uint32_t n = node.as_call_arity();
@@ -1055,14 +1145,12 @@ struct StorageEmitter {
       const std::string_view param = node.as_lambda_param(i);
       if (i >= first_optional) {
         out.push_back('[');
-        out.append("_xlpm.");
-        out.append(param);
+        AppendBindingName(param, /*storage=*/true, out);
         out.push_back(']');
       } else {
-        out.append("_xlpm.");
-        out.append(param);
+        AppendBindingName(param, /*storage=*/true, out);
       }
-      scope.push_back(param);
+      scope.push_back(cell_shaped_name_bare(param));
     }
     if (n > 0) {
       out.push_back(',');
@@ -1079,14 +1167,13 @@ struct StorageEmitter {
     const std::size_t base = scope.size();
     for (std::uint32_t i = 0; i < n; ++i) {
       const std::string_view name = node.as_let_binding_name(i);
-      out.append("_xlpm.");
-      out.append(name);
+      AppendBindingName(name, /*storage=*/true, out);
       out.push_back(',');
       // A binding value may reference earlier bindings but not itself, so it
       // is emitted with the scope accumulated so far (before pushing `name`).
       emit(node.as_let_binding_expr(i), out);
       out.push_back(',');
-      scope.push_back(name);
+      scope.push_back(cell_shaped_name_bare(name));
     }
     emit(node.as_let_body(), out);
     out.push_back(')');
@@ -1183,11 +1270,22 @@ const WhitespaceRun* find_whitespace(const FormulaWhitespace& whitespace, const 
 }
 
 std::string format_formula(const AstNode& node, const FormulaWhitespace* whitespace) {
+  return format_formula_in_scope(node, {}, whitespace);
+}
+
+std::string format_formula_in_scope(const AstNode& node, const std::vector<std::string_view>& scope_names,
+                                    const FormulaWhitespace* whitespace) {
   if (!ast_depth_within_limit(node, kMaxFormulaAstDepth)) {
     return "#REF!";
   }
+  NameScope scope;
+  scope.reserve(scope_names.size());
+  for (const std::string_view name : scope_names) {
+    scope.push_back(cell_shaped_name_bare(name));
+  }
   Layout layout;
   layout.whitespace = whitespace != nullptr && !whitespace->empty() ? whitespace : nullptr;
+  layout.scope = &scope;
   CollectParens(node, 0, layout.parens);
   std::string out;
   out.reserve(64);

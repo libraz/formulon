@@ -235,7 +235,7 @@ TEST(AstFormat, SheetQualifiedColumnLikeNameInRangeKeepsParens) {
   ASSERT_NE(rhs, nullptr);
   AstNode* range = make_range_op(a, lhs, rhs, /*spliced=*/false);
   ASSERT_NE(range, nullptr);
-  EXPECT_EQ(format_formula(*range), "(Sheet1!AB):CD");
+  EXPECT_EQ(format_formula(*range), "Sheet1!AB:(CD)");
 }
 
 TEST(AstFormat, StorageFormNeverPrefixesSheetQualifiedName) {

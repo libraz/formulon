@@ -28,6 +28,8 @@
 #include <string>
 #include <string_view>
 
+#include "parser/reference.h"
+
 namespace formulon {
 namespace parser {
 
@@ -71,8 +73,9 @@ inline bool formula_prefix_ci_eq(std::string_view s, std::string_view lit) noexc
 /// With `known`, a function prefix (`_xlfn.`, `_xlfn._xlws.`, `_xlws.`) is
 /// removed only before a name `known` accepts: Excel keeps it on a name it
 /// does not recognise (`_xlfn.FOOBAR(1)` stays so in the formula bar and the
-/// file), and the writers re-apply it only to the names they know. `_xlpm.`
-/// and `_xleta.` always go.
+/// file), and the writers re-apply it only to the names they know. `_xleta.`
+/// always goes, and so does `_xlpm.` unless the identifier run after it is
+/// A1 cell-shaped (`_xlpm.B1`), which keeps it so it cannot read as a cell.
 inline std::string strip_storage_prefixes(std::string_view formula, bool (*known)(std::string_view) = nullptr) {
   // Longest first so `_xlfn._xlws.` is consumed as a unit before `_xlfn.`.
   static constexpr std::array<std::string_view, 5> kPrefixes = {"_xlfn._xlws.", "_xlfn.", "_xlws.", "_xlpm.",
@@ -113,6 +116,9 @@ inline std::string strip_storage_prefixes(std::string_view formula, bool (*known
               ++end;
             }
             const std::string_view name = formula.substr(i + prefix.size(), end - i - prefix.size());
+            if (prefix == "_xlpm." && is_a1_cell_shaped(name)) {
+              break;
+            }
             if (prefix != "_xlpm." && prefix != "_xleta." && known != nullptr && !known(name)) {
               break;
             }
@@ -131,6 +137,20 @@ inline std::string strip_storage_prefixes(std::string_view formula, bool (*known
   }
   return out;
 }
+
+/// `name` without its `_xlpm.` / `_xlnm.` prefix (ASCII case-insensitive)
+/// when the rest is A1 cell-shaped (`_xlpm.B1` -> `B1`); `name` otherwise.
+std::string_view cell_shaped_name_bare(std::string_view name) noexcept;
+
+/// The prefix `cell_shaped_name_bare` drops, spelled `_xlpm.` or `_xlnm.`
+/// in lower case; empty when it drops none.
+std::string_view cell_shaped_name_prefix(std::string_view name) noexcept;
+
+/// The formula-bar spelling of the cell-shaped names in stored text: outside
+/// string literals and quoted sheet names, at an identifier boundary,
+/// `_xlpm.X` becomes `X` and `_xlnm.X` becomes `'X'` for a cell-shaped `X`
+/// (`Sheet1!_xlnm.B1` -> `Sheet1!'B1'`). Every other byte is copied.
+std::string display_cell_shaped_names(std::string_view formula);
 
 /// Respells each one-argument call to `SINGLE` / `ANCHORARRAY` / `_TRO_*` in
 /// `formula` (a leading `=` optional) as the `@x` / `x#` / `A1:.A10` operator
