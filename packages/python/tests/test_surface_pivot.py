@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Tuple
 
 from formulon import (
     PIVOT_VALUES_FIELD,
+    CellRect,
     FormulonError,
     PivotAggregation,
     PivotAxis,
@@ -731,7 +732,12 @@ class PivotMutatorTableTests(unittest.TestCase):
             "add_pivot": (None, lambda f: f.wb.add_pivot(0, "Pivot2", f.cache, 20, 1), None, pivot_create),
             "remove_pivot": (None, lambda f: f.wb.remove_pivot(0, f.pivot), None, pivot_remove),
             "set_pivot_name": (None, lambda f: f.wb.set_pivot_name(0, f.pivot, "Renamed"), None, set_name),
-            "set_pivot_anchor": (None, lambda f: f.wb.set_pivot_anchor(0, f.pivot, 10, 2, 4, 2), None, set_anchor),
+            "set_pivot_anchor": (
+                None,
+                lambda f: f.wb.set_pivot_anchor(0, f.pivot, CellRect(10, 2, 13, 3)),
+                None,
+                set_anchor,
+            ),
             "set_pivot_grand_totals": (
                 lambda f: f.wb.set_pivot_col_field_order(0, f.pivot, [f.product]),
                 # Rows off drops the per-row total column; columns on keeps

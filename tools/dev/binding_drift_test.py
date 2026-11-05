@@ -527,6 +527,16 @@ class ApiConventionRuleTest(unittest.TestCase):
             [("fm_merge_range", "first_row"), ("fm_sheet_set_area", "row0")],
         )
 
+    def test_r11_rect_anchor_and_span(self) -> None:
+        self.assert_rule(
+            "R11.rect",
+            "FM_API fm_status_t fm_sheet_set_pivot_anchor(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,"
+            " uint32_t anchor_row, uint32_t anchor_col, uint32_t span_rows, uint32_t span_cols);\n",
+            "FM_API fm_status_t fm_sheet_set_pivot_anchor(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,"
+            " const fm_cell_rect_t* rect);\n",
+            [("fm_sheet_set_pivot_anchor", "anchor_row")],
+        )
+
 
 class ApiConventionBaselineTest(unittest.TestCase):
     HEADER = (

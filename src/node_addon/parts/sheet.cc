@@ -161,7 +161,7 @@ Napi::Value Workbook::DefinedNameAt(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
   const char* name = nullptr;
   const char* display = nullptr;
-  const char* ref = nullptr;
+  fm_cell_rect_t rect{};
   std::size_t sheet_index = 0;
   fm_table_info_t table{};
   std::vector<fm_table_column_info_t> columns;
@@ -171,7 +171,7 @@ Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
       info,
       [&](fm_workbook_t* handle) {
         const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
-        fm_status_t rc = fm_workbook_get_table(handle, idx, &name, &display, &ref, &sheet_index);
+        fm_status_t rc = fm_workbook_get_table(handle, idx, &name, &display, &rect, &sheet_index);
         if (rc == 0) {
           rc = fm_workbook_get_table_info(handle, idx, &table);
         }
@@ -189,8 +189,10 @@ Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
         Napi::Env env = info.Env();
         out.Set("name", JsString(env, name));
         out.Set("displayName", JsString(env, display));
-        out.Set("ref", JsString(env, ref));
-        out.Set("sheetIndex", Napi::Number::New(env, static_cast<double>(sheet_index)));
+        Napi::Object range = Napi::Object::New(env);
+        range.Set("sheet", Napi::Number::New(env, static_cast<double>(sheet_index)));
+        range.Set("rect", RangeToJs(env, rect));
+        out.Set("range", range);
         out.Set("styleName", JsString(env, table.style_name));
         out.Set("hasStyleInfo", JsBool(env, table.style_present));
         out.Set("showFirstColumn", JsBool(env, table.show_first_column));
@@ -266,12 +268,19 @@ Napi::Value Workbook::CreateTable(const Napi::CallbackInfo& info) {
   }
   const Napi::Object spec = ArgObject(info, 0);
   CheckedSpecReader reader(env);
-  const uint32_t sheet = reader.U32(spec, "sheetIndex", 0U);
-  std::string ref;
+  uint32_t sheet = 0U;
+  fm_cell_rect_t rect{};
+  Napi::Object range_object;
+  if (reader.RequiredObject(spec, "range", &range_object)) {
+    sheet = reader.RequiredU32(range_object, "sheet");
+    Napi::Object rect_object;
+    if (reader.RequiredObject(range_object, "rect", &rect_object)) {
+      ReadCellRect(reader, rect_object, &rect);
+    }
+  }
   std::string name;
   std::string display_name;
   std::string style_name;
-  reader.String(spec, "ref", &ref);
   reader.String(spec, "name", &name);
   reader.String(spec, "displayName", &display_name);
   if (display_name.empty()) {
@@ -295,8 +304,8 @@ Napi::Value Workbook::CreateTable(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (!has_columns) {
-    return MakeIndexResult(
-        env, MakeBindingArgumentError(env, "addTable: `columns` must be an array of column names"), 0U);
+    return MakeIndexResult(env, MakeBindingArgumentError(env, "addTable: `columns` must be an array of column names"),
+                           0U);
   }
   // `names` has stopped growing, so its `c_str()` views stay put.
   std::vector<const char*> pointers;
@@ -306,8 +315,8 @@ Napi::Value Workbook::CreateTable(const Napi::CallbackInfo& info) {
   }
   std::size_t index = 0;
   fm_status_t rc =
-      fm_workbook_add_table(handle_, sheet, ref.c_str(), name.c_str(), display_name.c_str(), pointers.data(),
-                               pointers.size(), style_name.c_str(), header_row ? 1 : 0, totals_row ? 1 : 0, &index);
+      fm_workbook_add_table(handle_, sheet, &rect, name.c_str(), display_name.c_str(), pointers.data(), pointers.size(),
+                            style_name.c_str(), header_row ? 1 : 0, totals_row ? 1 : 0, &index);
   if (rc == 0 && toggles.any()) {
     rc = ApplyTableStyleToggles(handle_, index, toggles);
     if (rc != 0) {
@@ -325,11 +334,15 @@ Napi::Value Workbook::UpdateTable(const Napi::CallbackInfo& info) {
   const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
   const Napi::Object spec = ArgObject(info, 1);
   CheckedSpecReader reader(env);
-  std::string ref;
+  fm_cell_rect_t rect{};
+  Napi::Object rect_object;
+  const bool has_rect = reader.Object(spec, "rect", &rect_object);
+  if (has_rect) {
+    ReadCellRect(reader, rect_object, &rect);
+  }
   std::string style_name;
   std::string name;
   std::string display_name;
-  const bool has_ref = reader.String(spec, "ref", &ref);
   const bool has_style = reader.String(spec, "styleName", &style_name);
   const bool has_name = reader.String(spec, "name", &name);
   const bool has_display_name = reader.String(spec, "displayName", &display_name);
@@ -342,17 +355,17 @@ Napi::Value Workbook::UpdateTable(const Napi::CallbackInfo& info) {
 
   const char* current_name = nullptr;
   const char* current_display_name = nullptr;
-  const char* current_ref = nullptr;
+  fm_cell_rect_t current_rect{};
   std::size_t ignored_sheet = 0;
   if (const fm_status_t rc =
-          fm_workbook_get_table(handle_, idx, &current_name, &current_display_name, &current_ref, &ignored_sheet);
+          fm_workbook_get_table(handle_, idx, &current_name, &current_display_name, &current_rect, &ignored_sheet);
       rc != 0) {
     return MakeStatus(env, rc);
   }
   const std::string old_name = current_name != nullptr ? current_name : "";
   const std::string old_display_name = current_display_name != nullptr ? current_display_name : "";
-  if (!has_ref) {
-    ref = current_ref != nullptr ? current_ref : "";
+  if (!has_rect) {
+    rect = current_rect;
   }
 
   // The rename goes first because it is the step a name clash can refuse;
@@ -366,8 +379,8 @@ Napi::Value Workbook::UpdateTable(const Napi::CallbackInfo& info) {
       return MakeStatus(env, rc);
     }
   }
-  fm_status_t rc = fm_workbook_update_table(handle_, idx, ref.c_str(), has_style ? style_name.c_str() : nullptr,
-                                            header_row, totals_row);
+  fm_status_t rc =
+      fm_workbook_update_table(handle_, idx, &rect, has_style ? style_name.c_str() : nullptr, header_row, totals_row);
   if (rc == 0 && toggles.any()) {
     rc = ApplyTableStyleToggles(handle_, idx, toggles);
   }

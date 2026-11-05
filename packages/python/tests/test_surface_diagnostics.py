@@ -84,7 +84,7 @@ class PackageDiagnosticsTests(unittest.TestCase):
             wb.add_cf_rule(
                 0,
                 ConditionalFormatInput(
-                    sqref=[CellRect(0, 0, 0, 0)],
+                    ranges=[CellRect(0, 0, 0, 0)],
                     type=1,
                     op=5,
                     formula1="10",

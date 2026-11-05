@@ -27,6 +27,7 @@
 using formulon::c_api::parts::check_entered_cell_formula;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::display_formula;
@@ -54,6 +55,17 @@ std::string xml_attr_escape(std::string_view value) {
 std::size_t table_ref_column_count(std::string_view ref) {
   const auto rect = formulon::parse_a1_rectangle(ref);
   return rect ? static_cast<std::size_t>(rect->last_col - rect->first_col) + 1U : 0U;
+}
+
+/// The A1 `ref` of a table covering `rect`, which must be ordered and inside the grid.
+fm_status_t table_ref_text(const fm_cell_rect_t& rect, const char* api, std::string* out) {
+  if (auto rc = check_sheet_rect(rect, api); rc != 0) {
+    return rc;
+  }
+  out->clear();
+  formulon::append_a1_rectangle(*out,
+                                formulon::MergeRange{rect.first_row, rect.first_col, rect.last_row, rect.last_col});
+  return 0;
 }
 
 /// Style of a newly styled table: the named style with row stripes on, the
@@ -267,10 +279,10 @@ std::string table_auto_filter_xml(std::string_view raw_xml, std::string_view ref
 }  // namespace
 
 extern "C" fm_status_t fm_workbook_get_table(const fm_workbook_t* wb, size_t idx, const char** out_name,
-                                             const char** out_display_name, const char** out_ref,
+                                             const char** out_display_name, fm_cell_rect_t* out_rect,
                                              size_t* out_sheet_index) {
   clear_last_error();
-  if (wb == nullptr || out_name == nullptr || out_display_name == nullptr || out_ref == nullptr ||
+  if (wb == nullptr || out_name == nullptr || out_display_name == nullptr || out_rect == nullptr ||
       out_sheet_index == nullptr) {
     return null_argument("fm_workbook_get_table");
   }
@@ -278,26 +290,36 @@ extern "C" fm_status_t fm_workbook_get_table(const fm_workbook_t* wb, size_t idx
   if (auto rc = check_index(idx, tables.size(), "fm_workbook_get_table", "idx"); rc != 0) {
     return rc;
   }
+  const std::optional<formulon::MergeRange> rect = formulon::parse_a1_rectangle(tables[idx].ref);
+  if (!rect) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_get_table: table ref is not a range", "ref=" + tables[idx].ref);
+  }
   *out_name = tables[idx].name.c_str();
   *out_display_name = tables[idx].display_name.c_str();
-  *out_ref = tables[idx].ref.c_str();
+  *out_rect = fm_cell_rect_t{rect->first_row, rect->first_col, rect->last_row, rect->last_col};
   *out_sheet_index = tables[idx].sheet_index;
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_add_table(fm_workbook_t* wb, size_t sheet_index, const char* ref, const char* name,
-                                             const char* display_name, const char* const* column_names,
-                                             size_t column_count, const char* style_name, int32_t header_row,
-                                             int32_t totals_row, size_t* out_index) {
+extern "C" fm_status_t fm_workbook_add_table(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* rect,
+                                             const char* name, const char* display_name,
+                                             const char* const* column_names, size_t column_count,
+                                             const char* style_name, int32_t header_row, int32_t totals_row,
+                                             size_t* out_index) {
   clear_last_error();
-  if (wb == nullptr || ref == nullptr || name == nullptr || display_name == nullptr || column_names == nullptr ||
+  if (wb == nullptr || rect == nullptr || name == nullptr || display_name == nullptr || column_names == nullptr ||
       out_index == nullptr) {
     return null_argument("fm_workbook_add_table");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_add_table"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8("fm_workbook_add_table", {ref, name, display_name, style_name}); rc != 0) {
+  std::string ref;
+  if (auto rc = table_ref_text(*rect, "fm_workbook_add_table", &ref); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8("fm_workbook_add_table", {name, display_name, style_name}); rc != 0) {
     return rc;
   }
   for (size_t i = 0; i < column_count; ++i) {
@@ -335,19 +357,23 @@ extern "C" fm_status_t fm_workbook_add_table(fm_workbook_t* wb, size_t sheet_ind
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_update_table(fm_workbook_t* wb, size_t index, const char* ref,
+extern "C" fm_status_t fm_workbook_update_table(fm_workbook_t* wb, size_t index, const fm_cell_rect_t* rect,
                                                 const char* style_name, int32_t header_row, int32_t totals_row) {
   clear_last_error();
-  if (wb == nullptr || ref == nullptr) {
+  if (wb == nullptr || rect == nullptr) {
     return null_argument("fm_workbook_update_table");
   }
-  if (auto rc = check_utf8("fm_workbook_update_table", {ref, style_name}); rc != 0) {
+  std::string ref;
+  if (auto rc = table_ref_text(*rect, "fm_workbook_update_table", &ref); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8("fm_workbook_update_table", {style_name}); rc != 0) {
     return rc;
   }
   auto& tables = wb->workbook().mutable_tables();
-  if (index >= tables.size() || ref[0] == '\0') {
+  if (index >= tables.size()) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_update_table: table index or ref is invalid");
+                             "fm_workbook_update_table: table index is invalid");
   }
   formulon::TableMetadata& table = tables[index];
   if (!table.columns.empty() && table_ref_column_count(ref) != table.columns.size()) {

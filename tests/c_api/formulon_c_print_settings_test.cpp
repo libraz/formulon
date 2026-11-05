@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <initializer_list>
 #include <string>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
@@ -231,7 +232,8 @@ TEST(FormulonCApiPrintSettings, FitToPageCreatesSheetPrWhenAbsent) {
 TEST(FormulonCApiPrintSettings, SetPrintAreaWritesQualifiedAbsoluteDefinedName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, "A1:F8"), 0);
+  const fm_cell_rect_t area{0, 0, 7, 5};
+  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, &area, 1), 0);
 
   const auto& names = wb.handle->workbook().defined_names();
   ASSERT_EQ(names.size(), 1U);
@@ -239,16 +241,22 @@ TEST(FormulonCApiPrintSettings, SetPrintAreaWritesQualifiedAbsoluteDefinedName) 
   EXPECT_EQ(names[0].formula, "Sheet1!$A$1:$F$8");
   EXPECT_EQ(names[0].local_sheet_id, 0);
 
-  const char* ranges = nullptr;
-  ASSERT_EQ(fm_sheet_get_print_area(wb.handle, 0, &ranges), 0);
-  EXPECT_STREQ(ranges, "A1:F8");
+  const fm_cell_rect_t* ranges = nullptr;
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_print_area(wb.handle, 0, &ranges, &count), 0);
+  ASSERT_EQ(count, 1U);
+  EXPECT_EQ(ranges[0].first_row, 0U);
+  EXPECT_EQ(ranges[0].first_col, 0U);
+  EXPECT_EQ(ranges[0].last_row, 7U);
+  EXPECT_EQ(ranges[0].last_col, 5U);
 }
 
 TEST(FormulonCApiPrintSettings, SetPrintAreaQuotesSheetNamesThatNeedIt) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_rename_sheet(wb.handle, 0, "It's 2026"), 0);
-  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, "A1:B2"), 0);
+  const fm_cell_rect_t area{0, 0, 1, 1};
+  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, &area, 1), 0);
   // A space forces quoting and the apostrophe has to be doubled, or Excel
   // reads the formula as ending at the apostrophe.
   EXPECT_EQ(wb.handle->workbook().defined_names()[0].formula, "'It''s 2026'!$A$1:$B$2");
@@ -257,25 +265,38 @@ TEST(FormulonCApiPrintSettings, SetPrintAreaQuotesSheetNamesThatNeedIt) {
 TEST(FormulonCApiPrintSettings, SetPrintAreaKeepsMultiAreaOrderAndWholeAxisShape) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, "D5:E20, A1:B10"), 0);
+  const fm_cell_rect_t two[] = {{4, 3, 19, 4}, {0, 0, 9, 1}};
+  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, two, 2), 0);
   // Excel prints the areas in the stated order, so the engine must not
   // sort them.
   EXPECT_EQ(wb.handle->workbook().defined_names()[0].formula, "Sheet1!$D$5:$E$20,Sheet1!$A$1:$B$10");
 
-  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, "A:D"), 0);
-  // A whole-column area keeps its authored shape in the file; only the
-  // getter reports the resolver's expanded rectangle.
+  const fm_cell_rect_t columns{0, 0, formulon::Sheet::kMaxRows - 1U, 3};
+  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, &columns, 1), 0);
+  // A rectangle spanning every row is stored as whole columns, as Excel
+  // writes it; the getter reports the resolver's expanded rectangle.
   EXPECT_EQ(wb.handle->workbook().defined_names()[0].formula, "Sheet1!$A:$D");
-  const char* ranges = nullptr;
-  ASSERT_EQ(fm_sheet_get_print_area(wb.handle, 0, &ranges), 0);
-  EXPECT_STREQ(ranges, "A1:D1048576");
+  const fm_cell_rect_t* ranges = nullptr;
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_print_area(wb.handle, 0, &ranges, &count), 0);
+  ASSERT_EQ(count, 1U);
+  EXPECT_EQ(ranges[0].last_row, formulon::Sheet::kMaxRows - 1U);
+  EXPECT_EQ(ranges[0].last_col, 3U);
+
+  const fm_cell_rect_t rows{0, 0, 49, formulon::Sheet::kMaxCols - 1U};
+  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, &rows, 1), 0);
+  EXPECT_EQ(wb.handle->workbook().defined_names()[0].formula, "Sheet1!$1:$50");
 }
 
-TEST(FormulonCApiPrintSettings, SetPrintAreaRejectsMalformedAreaAndLeavesNameUnchanged) {
+TEST(FormulonCApiPrintSettings, SetPrintAreaRejectsABadRectangleAndLeavesNameUnchanged) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, "A1:F8"), 0);
-  EXPECT_EQ(fm_sheet_set_print_area(wb.handle, 0, "A1:F8,not-a-range"), kPrintInvalidArea);
+  const fm_cell_rect_t area{0, 0, 7, 5};
+  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, &area, 1), 0);
+  const fm_cell_rect_t inverted[] = {{0, 0, 7, 5}, {5, 0, 4, 0}};
+  EXPECT_EQ(fm_sheet_set_print_area(wb.handle, 0, inverted, 2), kInvalidArgument);
+  const fm_cell_rect_t off_grid{0, 0, formulon::Sheet::kMaxRows, 0};
+  EXPECT_EQ(fm_sheet_set_print_area(wb.handle, 0, &off_grid, 1), kInvalidArgument);
   EXPECT_EQ(wb.handle->workbook().defined_names()[0].formula, "Sheet1!$A$1:$F$8");
 }
 
@@ -285,26 +306,27 @@ TEST(FormulonCApiPrintSettings, SetPrintAreaOverTheRangeCapReportsInvalidArgumen
   // status across all of them.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, "A1:F8"), 0);
+  const fm_cell_rect_t area{0, 0, 7, 5};
+  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, &area, 1), 0);
 
-  std::string areas = "A1:A1";
-  for (std::uint32_t i = 0; i < formulon::c_api::parts::kMaxRangesPerCApiCall; ++i) {
-    areas += ",A1:A1";
-  }
-  EXPECT_EQ(fm_sheet_set_print_area(wb.handle, 0, areas.c_str()), kInvalidArgument);
+  const std::vector<fm_cell_rect_t> areas(formulon::c_api::parts::kMaxRangesPerCApiCall + 1U, fm_cell_rect_t{});
+  EXPECT_EQ(fm_sheet_set_print_area(wb.handle, 0, areas.data(), areas.size()), kInvalidArgument);
   EXPECT_EQ(wb.handle->workbook().defined_names()[0].formula, "Sheet1!$A$1:$F$8");
 }
 
 TEST(FormulonCApiPrintSettings, EmptyPrintAreaRemovesTheDefinedName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, "A1:F8"), 0);
-  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, ""), 0);
+  const fm_cell_rect_t area{0, 0, 7, 5};
+  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, &area, 1), 0);
+  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, nullptr, 0), 0);
   EXPECT_TRUE(wb.handle->workbook().defined_names().empty());
 
-  const char* ranges = nullptr;
-  ASSERT_EQ(fm_sheet_get_print_area(wb.handle, 0, &ranges), 0);
-  EXPECT_STREQ(ranges, "");
+  const fm_cell_rect_t* ranges = &area;
+  std::size_t count = 9;
+  ASSERT_EQ(fm_sheet_get_print_area(wb.handle, 0, &ranges, &count), 0);
+  EXPECT_EQ(count, 0U);
+  EXPECT_EQ(ranges, nullptr);
 }
 
 TEST(FormulonCApiPrintSettings, GetPrintAreaSurfacesAMalformedDefinedName) {
@@ -314,8 +336,9 @@ TEST(FormulonCApiPrintSettings, GetPrintAreaSurfacesAMalformedDefinedName) {
   // it as "no print area" would silently print the whole used range.
   ASSERT_TRUE(
       static_cast<bool>(wb.handle->workbook().set_defined_name_scoped("_xlnm.Print_Area", "Sheet1!$A$1:$$$", 0)));
-  const char* ranges = nullptr;
-  EXPECT_EQ(fm_sheet_get_print_area(wb.handle, 0, &ranges), kPrintInvalidArea);
+  const fm_cell_rect_t* ranges = nullptr;
+  std::size_t count = 0;
+  EXPECT_EQ(fm_sheet_get_print_area(wb.handle, 0, &ranges, &count), kPrintInvalidArea);
 }
 
 TEST(FormulonCApiPrintSettings, PrintTitlesRoundTripRowsBeforeColumns) {
@@ -795,7 +818,8 @@ TEST(FormulonCApiPrintSettings, PrintAreaNarrowsWhatPaginates) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   FillGrid(wb.handle);
   const std::uint32_t full = PageCount(wb.handle);
-  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, "A1:B2"), 0);
+  const fm_cell_rect_t area{0, 0, 1, 1};
+  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, &area, 1), 0);
   EXPECT_LT(PageCount(wb.handle), full);
   EXPECT_EQ(PageCount(wb.handle), 1U);
 }
@@ -810,7 +834,9 @@ TEST(FormulonCApiPrintSettings, NullArgumentsReportBindingNullPointer) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   EXPECT_EQ(fm_sheet_get_page_setup_xml(wb.handle, 0, nullptr), kNullPointer);
   EXPECT_EQ(fm_sheet_set_page_setup_xml(wb.handle, 0, nullptr), kNullPointer);
-  EXPECT_EQ(fm_sheet_set_print_area(wb.handle, 0, nullptr), kNullPointer);
+  EXPECT_EQ(fm_sheet_set_print_area(wb.handle, 0, nullptr, 1), kNullPointer);
+  std::size_t area_count = 0;
+  EXPECT_EQ(fm_sheet_get_print_area(wb.handle, 0, nullptr, &area_count), kNullPointer);
   EXPECT_EQ(fm_sheet_get_page_setup(wb.handle, 0, nullptr), kNullPointer);
   EXPECT_EQ(fm_sheet_set_page_setup(wb.handle, 0, nullptr), kNullPointer);
   EXPECT_EQ(fm_sheet_set_page_margins(wb.handle, 0, nullptr), kNullPointer);
@@ -827,7 +853,8 @@ TEST(FormulonCApiPrintSettings, OutOfRangeSheetIndexIsRejectedEverywhere) {
   EXPECT_EQ(fm_sheet_get_page_setup_xml(wb.handle, 9, &xml), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_page_setup_xml(wb.handle, 9, "<pageSetup/>"), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_fit_to_page(wb.handle, 9, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_set_print_area(wb.handle, 9, "A1:B2"), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  const fm_cell_rect_t area{0, 0, 1, 1};
+  EXPECT_EQ(fm_sheet_set_print_area(wb.handle, 9, &area, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_add_row_break(wb.handle, 9, 1, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   std::size_t count = 0;
   EXPECT_EQ(fm_sheet_get_row_break_count(wb.handle, 9, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);

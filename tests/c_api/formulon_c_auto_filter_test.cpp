@@ -15,6 +15,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "formulon_c_count_of.h"
+#include "formulon_c_record_arg.h"
 #include "gtest/gtest.h"
 #include "io/auto_filter_xml.h"
 #include "utils/error.h"
@@ -453,7 +454,9 @@ TEST(FormulonCApiAutoFilter, TableFilterAppliesAndRoundTrips) {
   FillNumbers(wb.handle);
   const char* names[] = {"N"};
   std::size_t table = 0;
-  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, "A1:A6", "Nums", "Nums", names, 1, nullptr, 1, 0, &table), 0)
+  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 5, 0}), "Nums", "Nums", names, 1,
+                                  nullptr, 1, 0, &table),
+            0)
       << fm_get_last_error_message();
 
   fm_auto_filter_t out{};
@@ -568,7 +571,9 @@ TEST(FormulonCApiAutoFilter, GetThenSetKeepsUnmodelledContent) {
 
   const char* names[] = {"A", "B", "C"};
   std::size_t table = 0;
-  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, "E1:G9", "T", "T", names, 3, nullptr, 1, 0, &table), 0);
+  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 4, 8, 6}), "T", "T", names, 3, nullptr, 1,
+                                  0, &table),
+            0);
   std::string table_xml = kUnmodelledXml;
   table_xml.replace(table_xml.find("A1:C9"), 5, "E1:G9");
   table_xml.replace(table_xml.find("A2:C9"), 5, "E2:G9");

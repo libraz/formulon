@@ -140,9 +140,9 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
   // static_asserts above), so the block's ranges copy across as one memcpy.
   if (!block.sqref.empty()) {
     const auto* first = reinterpret_cast<const fm_cell_rect_t*>(block.sqref.data());
-    out->sqref = range_arena.adopt(std::vector<fm_cell_rect_t>(first, first + block.sqref.size()));
+    out->ranges = range_arena.adopt(std::vector<fm_cell_rect_t>(first, first + block.sqref.size()));
   }
-  out->sqref_count = static_cast<std::uint32_t>(block.sqref.size());
+  out->range_count = block.sqref.size();
   out->formula1 = rule.formula1.has_value() ? text_arena.emplace(wb.spell_self_book_names(*rule.formula1)) : nullptr;
   out->formula2 = rule.formula2.has_value() ? text_arena.emplace(wb.spell_self_book_names(*rule.formula2)) : nullptr;
   if (rule.op.has_value()) {
@@ -442,11 +442,11 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
   }
 
   formulon::cf::ConditionalFormat new_block;
-  new_block.sqref.reserve(rule->sqref_count);
-  for (std::uint32_t i = 0; i < rule->sqref_count; ++i) {
+  new_block.sqref.reserve(rule->range_count);
+  for (std::size_t i = 0; i < rule->range_count; ++i) {
     formulon::cf::CFCellRange r;
-    r.first = formulon::CellAddress{rule->sqref[i].first_row, rule->sqref[i].first_col};
-    r.last = formulon::CellAddress{rule->sqref[i].last_row, rule->sqref[i].last_col};
+    r.first = formulon::CellAddress{rule->ranges[i].first_row, rule->ranges[i].first_col};
+    r.last = formulon::CellAddress{rule->ranges[i].last_row, rule->ranges[i].last_col};
     new_block.sqref.push_back(r);
   }
 

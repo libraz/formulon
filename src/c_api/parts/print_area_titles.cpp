@@ -30,7 +30,6 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
-using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
@@ -101,41 +100,6 @@ std::string absolutise_a1_token(std::string_view token) {
   return out;
 }
 
-/// Splits `text` on commas, trimming ASCII whitespace around each token.
-/// The caller-facing range syntax is unqualified, so no sheet name (and
-/// therefore no quoted comma) can appear.
-std::vector<std::string_view> split_areas(std::string_view text) {
-  std::vector<std::string_view> out;
-  std::size_t start = 0;
-  while (start <= text.size()) {
-    std::size_t comma = text.find(',', start);
-    if (comma == std::string_view::npos) {
-      comma = text.size();
-    }
-    std::string_view token = text.substr(start, comma - start);
-    while (!token.empty() && (token.front() == ' ' || token.front() == '\t')) {
-      token.remove_prefix(1);
-    }
-    while (!token.empty() && (token.back() == ' ' || token.back() == '\t')) {
-      token.remove_suffix(1);
-    }
-    out.push_back(token);
-    start = comma + 1;
-  }
-  return out;
-}
-
-/// Renders a resolved rectangle as an unqualified, anchor-free A1 range.
-std::string format_range(const formulon::print::CellRange& range) {
-  std::string out;
-  formulon::a1::append_column_letters(out, range.first_col);
-  out.append(std::to_string(static_cast<std::uint64_t>(range.first_row) + 1U));
-  out.push_back(':');
-  formulon::a1::append_column_letters(out, range.last_col);
-  out.append(std::to_string(static_cast<std::uint64_t>(range.last_row) + 1U));
-  return out;
-}
-
 /// A span endpoint reader: `formulon::a1::parse_uint` or `parse_column_letters`.
 using SpanEndParser = bool (*)(std::string_view, std::size_t*, std::uint32_t*);
 
@@ -163,39 +127,28 @@ bool is_span(std::string_view token, SpanEndParser parse_end, std::uint32_t max)
 /* Print area and titles                                                      */
 /* -------------------------------------------------------------------------- */
 
-extern "C" fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_index, const char* ranges_a1) {
+extern "C" fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* ranges,
+                                               size_t range_count) {
   static constexpr const char* kFn = "fm_sheet_set_print_area";
   clear_last_error();
-  if (ranges_a1 == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn, "arg=ranges_a1");
+  if (range_count != 0U && ranges == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn, "arg=ranges");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8(kFn, {ranges_a1}); rc != 0) {
-    return rc;
-  }
-  const std::string_view input(ranges_a1);
   std::string formula;
-  if (!input.empty()) {
-    const std::string qualifier = sheet_qualifier(wb->workbook().sheet(sheet_index).name());
-    const std::vector<std::string_view> tokens = split_areas(input);
-    if (!formulon::c_api::parts::check_range_count(static_cast<std::uint32_t>(tokens.size()), kFn)) {
-      return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  if (range_count != 0U) {
+    if (auto rc = formulon::c_api::parts::check_rect_list(ranges, range_count, kFn); rc != 0) {
+      return rc;
     }
-    for (const std::string_view token : tokens) {
-      // Round-trip the token through the resolver's own grammar so a
-      // malformed area is rejected here rather than surfacing later as a
-      // `kPrintInvalidArea` from `resolve_print_area`.
-      formulon::print::CellRange probe;
-      if (token.empty() || !formulon::print::parse_area_token(token, &probe)) {
-        return set_binding_error(formulon::FormulonErrorCode::kPrintInvalidArea, kFn, "token=" + std::string(token));
-      }
+    const std::string qualifier = sheet_qualifier(wb->workbook().sheet(sheet_index).name());
+    for (std::size_t i = 0; i < range_count; ++i) {
       if (!formula.empty()) {
         formula.push_back(',');
       }
       formula.append(qualifier);
-      formula.append(absolutise_a1_token(token));
+      formula.append(formulon::c_api::parts::format_rect_a1({}, ranges[i], /*absolute=*/true));
     }
   }
   auto result = wb->workbook().set_defined_name_scoped(std::string(kPrintAreaName), std::move(formula),
@@ -207,11 +160,11 @@ extern "C" fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_i
 }
 
 extern "C" fm_status_t fm_sheet_get_print_area(const fm_workbook_t* wb, size_t sheet_index,
-                                               const char** out_ranges_a1) {
+                                               const fm_cell_rect_t** out_ranges, size_t* out_range_count) {
   static constexpr const char* kFn = "fm_sheet_get_print_area";
   clear_last_error();
-  if (out_ranges_a1 == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn, "arg=out_ranges_a1");
+  if (out_ranges == nullptr || out_range_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn, "arg=out_ranges");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
     return rc;
@@ -220,14 +173,14 @@ extern "C" fm_status_t fm_sheet_get_print_area(const fm_workbook_t* wb, size_t s
   if (!areas) {
     return set_last_error(areas.error());
   }
-  std::string rendered;
+  std::vector<formulon::MergeRange> rects;
+  rects.reserve(areas.value().size());
   for (const formulon::print::CellRange& range : areas.value()) {
-    if (!rendered.empty()) {
-      rendered.push_back(',');
-    }
-    rendered.append(format_range(range));
+    rects.push_back({range.first_row, range.first_col, range.last_row, range.last_col});
   }
-  *out_ranges_a1 = publish_scratch(wb, std::move(rendered));
+  fresh_read_scratch(wb);
+  *out_ranges = formulon::c_api::parts::publish_rects(wb, rects);
+  *out_range_count = rects.size();
   return 0;
 }
 

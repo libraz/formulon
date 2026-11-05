@@ -521,7 +521,7 @@ export function registerStyles(Module, test) {
       const dxf = wb.addDxf({ font: { name: 'cf-dxf' } });
       assert.ok(dxf.status.ok);
       const base = {
-        sqref: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+        ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
         type: 3,
         priority: 0x100000000,
         dxfId: dxf.index,
@@ -533,13 +533,13 @@ export function registerStyles(Module, test) {
 
       const rangeRule = structuredClone(base);
       rangeRule.priority = 0;
-      rangeRule.sqref[0].firstRow = 0x100000000;
+      rangeRule.ranges[0].firstRow = 0x100000000;
       assert.throws(() => wb.addCfRule(0, rangeRule), RangeError);
       assert.equal(wb.getConditionalFormats(0).length, cfBefore);
 
       const notArray = structuredClone(base);
       notArray.priority = 0;
-      notArray.sqref = 'A1';
+      notArray.ranges = 'A1';
       assert.throws(() => wb.addCfRule(0, notArray), TypeError);
       assert.equal(wb.getConditionalFormats(0).length, cfBefore);
     } finally {
@@ -584,7 +584,7 @@ export function registerStyles(Module, test) {
     const wb = Module.Workbook.createDefault();
     try {
       const base = {
-        sqref: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+        ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
         type: 3,
         dataBar: {
           min: { type: 3 },
@@ -619,7 +619,7 @@ export function registerStyles(Module, test) {
       const wb = Module.Workbook.createDefault();
       try {
         const rule = {
-          sqref: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+          ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
           type: 3,
           dataBar: {
             min: { type: 3 },
@@ -643,7 +643,7 @@ export function registerStyles(Module, test) {
     const wb = Module.Workbook.createDefault();
     try {
       const result = wb.addCfRule(0, {
-        sqref: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+        ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
         type: 3,
         dataBar: {
           min: { type: 3, gte: null },
@@ -695,7 +695,7 @@ export function registerStyles(Module, test) {
       assert.ok(secondDxf.status.ok, JSON.stringify(secondDxf.status));
       let dxfReads = 0;
       const rule = {
-        sqref: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+        ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
         type: 3,
         dataBar: {
           min: { type: 3 },

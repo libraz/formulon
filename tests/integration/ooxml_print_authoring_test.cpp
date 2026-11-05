@@ -146,7 +146,8 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   hf.odd_footer = "&R&P / &N";
   ASSERT_EQ(fm_sheet_set_header_footer(wb.handle, 0, &hf), 0);
 
-  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, "A1:F80"), 0);
+  const fm_cell_rect_t print_area{0, 0, 79, 5};
+  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, &print_area, 1), 0);
   ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, "1:2", ""), 0);
   ASSERT_EQ(fm_sheet_add_row_break(wb.handle, 0, 39, 1), 0);
 
@@ -212,9 +213,12 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   EXPECT_DOUBLE_EQ(read_margins.left, 0.5);
   EXPECT_DOUBLE_EQ(read_margins.top, 0.8);
 
-  const char* ranges = nullptr;
-  ASSERT_EQ(fm_sheet_get_print_area(reloaded.handle, 0, &ranges), 0);
-  EXPECT_STREQ(ranges, "A1:F80");
+  const fm_cell_rect_t* ranges = nullptr;
+  std::size_t range_count = 0;
+  ASSERT_EQ(fm_sheet_get_print_area(reloaded.handle, 0, &ranges, &range_count), 0);
+  ASSERT_EQ(range_count, 1U);
+  EXPECT_EQ(ranges[0].last_row, 79U);
+  EXPECT_EQ(ranges[0].last_col, 5U);
 
   const char* rows = nullptr;
   const char* cols = nullptr;

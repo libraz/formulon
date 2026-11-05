@@ -17,6 +17,9 @@
 
 namespace {
 
+// The one-cell range a validation rule needs.
+const fm_cell_rect_t kA1{0, 0, 0, 0};
+
 class FormulonCApiSheetFeatures : public ::testing::Test {
  protected:
   void SetUp() override { ASSERT_EQ(fm_workbook_create_default(&wb_), 0); }
@@ -512,6 +515,8 @@ TEST_F(FormulonCApiSheetFeatures, ValidationCoversEveryTypeAndOpEnum) {
   for (std::uint8_t type = 0; type <= 7; ++type) {
     for (std::uint8_t op = 0; op <= 7; ++op) {
       fm_data_validation_t v{};
+      v.ranges = &kA1;
+      v.range_count = 1;
       v.type = type;
       v.op = op;
       v.error_style = static_cast<std::uint8_t>(op % 3);
@@ -568,8 +573,12 @@ TEST_F(FormulonCApiSheetFeatures, ValidationGetAtOutOfRange) {
 
 TEST_F(FormulonCApiSheetFeatures, ValidationRemoveAtValid) {
   fm_data_validation_t a{};
+  a.ranges = &kA1;
+  a.range_count = 1;
   a.type = 1;
   fm_data_validation_t b{};
+  b.ranges = &kA1;
+  b.range_count = 1;
   b.type = 2;
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &a), 0);
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &b), 0);
@@ -584,6 +593,8 @@ TEST_F(FormulonCApiSheetFeatures, ValidationRemoveAtValid) {
 
 TEST_F(FormulonCApiSheetFeatures, ValidationRemoveAtOutOfRange) {
   fm_data_validation_t a{};
+  a.ranges = &kA1;
+  a.range_count = 1;
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &a), 0);
   EXPECT_NE(fm_sheet_remove_validation(wb_, 0, 99), 0);
   std::size_t count = 0;
@@ -593,7 +604,11 @@ TEST_F(FormulonCApiSheetFeatures, ValidationRemoveAtOutOfRange) {
 
 TEST_F(FormulonCApiSheetFeatures, ValidationClear) {
   fm_data_validation_t a{};
+  a.ranges = &kA1;
+  a.range_count = 1;
   fm_data_validation_t b{};
+  b.ranges = &kA1;
+  b.range_count = 1;
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &a), 0);
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &b), 0);
   ASSERT_EQ(fm_sheet_clear_validations(wb_, 0), 0);
@@ -636,6 +651,8 @@ TEST_F(FormulonCApiSheetFeatures, ValidationBorrowedPointersStableAcrossReads) {
 
 TEST_F(FormulonCApiSheetFeatures, ValidationAddNullStringFieldsBecomeEmpty) {
   fm_data_validation_t v{};
+  v.ranges = &kA1;
+  v.range_count = 1;
   v.type = 1;
   // Every string left as nullptr; getter must surface "" not nullptr.
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &v), 0);
@@ -647,6 +664,16 @@ TEST_F(FormulonCApiSheetFeatures, ValidationAddNullStringFieldsBecomeEmpty) {
   EXPECT_STREQ(got.formula2, "");
   ASSERT_NE(got.error_title, nullptr);
   EXPECT_STREQ(got.error_title, "");
+}
+
+TEST_F(FormulonCApiSheetFeatures, ValidationAddRejectsAnEmptyRangeList) {
+  // A rule applies to cells, so it needs at least one range, as a CF rule does.
+  fm_data_validation_t v{};
+  v.type = 1;
+  EXPECT_EQ(fm_sheet_add_validation(wb_, 0, &v), FM_STATUS_INVALID_ARGUMENT);
+  std::size_t count = 9;
+  ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
+  EXPECT_EQ(count, 0U);
 }
 
 TEST_F(FormulonCApiSheetFeatures, ValidationAddRejectsNullRangesWithCount) {

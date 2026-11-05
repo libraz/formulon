@@ -157,7 +157,11 @@ export function registerFilterValidationComments(Module, test) {
   test('table AutoFilter methods mirror the sheet ones', () => {
     withWorkbook(Module, (wb) => {
       fillNumbers(wb);
-      const created = wb.addTable({ sheetIndex: 0, ref: 'A1:A6', name: 'Nums', columns: ['N'] });
+      const created = wb.addTable({
+        range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 5, lastCol: 0 } },
+        name: 'Nums',
+        columns: ['N'],
+      });
       assert.ok(created.status.ok, JSON.stringify(created.status));
       const table = created.index;
       const got = wb.getTableAutoFilter(table);

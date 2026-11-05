@@ -335,6 +335,26 @@ int32_t CheckedSpecReader::I32(const Napi::Value& value, const char* key, int32_
   return ReadIntegral<int32_t>(value, key, dflt, "int32");
 }
 
+bool CheckedSpecReader::RequiredObject(const Napi::Object& owner, const char* key, Napi::Object* out) {
+  if (Object(owner, key, out)) {
+    return true;
+  }
+  if (ok()) {
+    ReportType(key, "object");
+  }
+  return false;
+}
+
+bool CheckedSpecReader::RequiredArray(const Napi::Object& owner, const char* key, Napi::Array* out) {
+  if (Array(owner, key, out)) {
+    return true;
+  }
+  if (ok()) {
+    ReportType(key, "array");
+  }
+  return false;
+}
+
 uint32_t CheckedSpecReader::RequiredU32(const Napi::Object& owner, const char* key) {
   Napi::Value value;
   if (!ReadOptional(owner, key, &value)) {
@@ -657,6 +677,27 @@ bool ReadCellRect(CheckedSpecReader& reader, const Napi::Object& range, fm_cell_
   out->first_col = reader.RequiredU32(range, "firstCol");
   out->last_row = reader.RequiredU32(range, "lastRow");
   out->last_col = reader.RequiredU32(range, "lastCol");
+  return reader.ok();
+}
+
+bool ReadCellRects(CheckedSpecReader& reader, const Napi::Value& value, const char* key,
+                   std::vector<fm_cell_rect_t>* out) {
+  out->clear();
+  Napi::Array array;
+  if (!reader.Array(value, key, &array)) {
+    return reader.ok();
+  }
+  const uint32_t n = array.Length();
+  out->reserve(n);
+  for (uint32_t i = 0; i < n && reader.ok(); ++i) {
+    Napi::Value element;
+    Napi::Object object;
+    fm_cell_rect_t range{};
+    if (reader.ArrayElement(array, i, &element) && reader.Object(element, key, &object) &&
+        ReadCellRect(reader, object, &range)) {
+      out->push_back(range);
+    }
+  }
   return reader.ok();
 }
 

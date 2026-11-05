@@ -191,8 +191,8 @@ TEST(FormulonCApiReadScratch, AllScratchProducersStayBoundedWhenAlternated) {
   fm_cf_color_t colors[3]{{255, 0, 0, 255}, {255, 255, 0, 255}, {0, 255, 0, 255}};
   fm_cf_rule_t cf_input{};
   cf_input.type = 2;  // ColorScale.
-  cf_input.sqref = &cf_range;
-  cf_input.sqref_count = 1;
+  cf_input.ranges = &cf_range;
+  cf_input.range_count = 1;
   cf_input.color_scale_thresholds = thresholds;
   cf_input.color_scale_colors = colors;
   cf_input.color_scale_count = 3;

@@ -353,7 +353,7 @@ const PIVOT_MUTATORS = [
   [
     'setPivotAnchor',
     {
-      act: (b) => b.wb.setPivotAnchor(0, b.pivot, 10, 2, 4, 2),
+      act: (b) => b.wb.setPivotAnchor(0, b.pivot, { firstRow: 10, firstCol: 2, lastRow: 13, lastCol: 3 }),
       expect: (b) => {
         const layout = b.wb.getPivotLayout(0, b.pivot);
         assert.equal(layout.rect.firstRow, 10);

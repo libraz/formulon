@@ -15,7 +15,7 @@ import threading
 import unittest
 
 import formulon
-from formulon import LIB, FormulonError, Value, ValueKind, Workbook
+from formulon import LIB, CellRect, FormulonError, Value, ValueKind, Workbook
 
 # Excel error code ordinals, mirrored from src/value.h ``ErrorCode``.
 ERROR_DIV0 = 1
@@ -416,8 +416,8 @@ class IteratorHandleLivenessTests(unittest.TestCase):
         wb.add_sheet("Sheet2")
         wb.set_text(0, 0, 0, "A")
         wb.set_text(1, 0, 0, "A")
-        wb.add_table(0, "A1:A1", "TableOne", "TableOne", ["A"])
-        wb.add_table(1, "A1:A1", "TableTwo", "TableTwo", ["A"])
+        wb.add_table(0, CellRect(0, 0, 0, 0), "TableOne", "TableOne", ["A"])
+        wb.add_table(1, CellRect(0, 0, 0, 0), "TableTwo", "TableTwo", ["A"])
         it = wb.iter_tables()
         next(it)
         wb.close()
@@ -428,7 +428,7 @@ class IteratorHandleLivenessTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.set_text(0, 0, 0, "Qty")
             wb.set_number(0, 1, 0, 2)
-            wb.add_table(0, "A1:A2", "T", "T", ["Qty"])
+            wb.add_table(0, CellRect(0, 0, 1, 0), "T", "T", ["Qty"])
             wb.set_formula(0, 0, 2, "=SUM(T[Qty])")
             self.assertEqual(wb.rename_table_column(0, 0, "Amount"), "Amount")
             self.assertEqual(wb.get_formula(0, 0, 2), "=SUM(T[Amount])")

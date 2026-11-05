@@ -352,9 +352,9 @@ emscripten::val JsWorkbook::tableAt(uint32_t idx) const {
   }
   const char* name = nullptr;
   const char* display = nullptr;
-  const char* ref = nullptr;
+  fm_cell_rect_t rect{};
   std::size_t sheet_index = 0;
-  fm_status_t rc = fm_workbook_get_table(handle_, idx, &name, &display, &ref, &sheet_index);
+  fm_status_t rc = fm_workbook_get_table(handle_, idx, &name, &display, &rect, &sheet_index);
   if (rc != 0) {
     o.set("status", error_status(rc));
     return o;
@@ -381,8 +381,10 @@ emscripten::val JsWorkbook::tableAt(uint32_t idx) const {
   o.set("status", ok_status());
   js_set_cstr(o, "name", name);
   js_set_cstr(o, "displayName", display);
-  js_set_cstr(o, "ref", ref);
-  o.set("sheetIndex", static_cast<uint32_t>(sheet_index));
+  emscripten::val range = emscripten::val::object();
+  range.set("sheet", static_cast<uint32_t>(sheet_index));
+  range.set("rect", cell_rect_to_val(rect));
+  o.set("range", range);
   js_set_cstr(o, "styleName", info.style_name);
   o.set("hasStyleInfo", info.style_present != 0);
   o.set("showFirstColumn", info.show_first_column != 0);
@@ -452,8 +454,16 @@ JsAddStyleResult JsWorkbook::createTable(emscripten::val spec) {
     return out;
   }
   JsNarrowNumericReader reader("addTable");
-  const uint32_t sheet = reader.u32(spec, "sheetIndex", 0U, "addTable.sheetIndex");
-  const std::string ref = reader.string(spec, "ref", "addTable.ref");
+  const emscripten::val range = reader.value(spec, "range", "addTable.range");
+  uint32_t sheet = 0U;
+  fm_cell_rect_t rect{};
+  if (reader.require_object(range, "addTable.range")) {
+    sheet = reader.required_u32(range, "sheet", "addTable.range.sheet");
+    const emscripten::val rect_value = reader.value(range, "rect", "addTable.range.rect");
+    if (reader.require_object(rect_value, "addTable.range.rect")) {
+      rect = js_pull_range(rect_value, &reader);
+    }
+  }
   const std::string name = reader.string(spec, "name", "addTable.name");
   std::string display_name = reader.string(spec, "displayName", "addTable.displayName");
   if (display_name.empty()) {
@@ -496,8 +506,8 @@ JsAddStyleResult JsWorkbook::createTable(emscripten::val spec) {
   }
   size_t index = 0;
   const fm_status_t rc =
-      fm_workbook_add_table(handle_, sheet, ref.c_str(), name.c_str(), display_name.c_str(), pointers.data(),
-                            pointers.size(), style_name.c_str(), header_row ? 1 : 0, totals_row ? 1 : 0, &index);
+      fm_workbook_add_table(handle_, sheet, &rect, name.c_str(), display_name.c_str(), pointers.data(), pointers.size(),
+                            style_name.c_str(), header_row ? 1 : 0, totals_row ? 1 : 0, &index);
   if (rc != 0) {
     out.status = error_status(rc);
     return out;
@@ -520,13 +530,14 @@ JsStatus JsWorkbook::updateTable(uint32_t idx, emscripten::val spec) {
     return invalid_handle_status();
   }
 
-  // The C ABI keeps `ref` non-null, so an omitted ref is resolved to the
-  // current value before forwarding the partial update. Other omitted fields
+  // The C ABI requires the range, so an omitted `rect` is resolved to the
+  // current range before forwarding the partial update. Other omitted fields
   // use the C ABI's preservation sentinels directly.
   JsNarrowNumericReader reader("updateTable");
-  std::string ref;
+  const emscripten::val rect_value = reader.value(spec, "rect", "updateTable.rect");
+  const bool has_rect = js_value_present(rect_value);
+  fm_cell_rect_t rect = js_pull_range(rect_value, &reader);
   std::string style_name;
-  const char* ref_ptr = reader.optional_string(spec, "ref", ref, "updateTable.ref");
   const char* style_name_ptr = reader.optional_string(spec, "styleName", style_name, "updateTable.styleName");
   std::string name;
   std::string display_name;
@@ -541,16 +552,18 @@ JsStatus JsWorkbook::updateTable(uint32_t idx, emscripten::val spec) {
 
   const char* current_name = nullptr;
   const char* current_display_name = nullptr;
-  const char* current_ref = nullptr;
+  fm_cell_rect_t current_rect{};
   std::size_t ignored_sheet = 0;
   if (const fm_status_t lookup_rc =
-          fm_workbook_get_table(handle_, idx, &current_name, &current_display_name, &current_ref, &ignored_sheet);
+          fm_workbook_get_table(handle_, idx, &current_name, &current_display_name, &current_rect, &ignored_sheet);
       lookup_rc != 0) {
     return status_from_rc(lookup_rc);
   }
   const std::string old_name = current_name != nullptr ? current_name : "";
   const std::string old_display_name = current_display_name != nullptr ? current_display_name : "";
-  const std::string effective_ref = ref_ptr != nullptr ? std::string(ref_ptr) : std::string(current_ref);
+  if (!has_rect) {
+    rect = current_rect;
+  }
 
   // The rename goes first because it is the step a name clash can refuse;
   // a later failure renames back so the update stays all-or-nothing.
@@ -564,8 +577,7 @@ JsStatus JsWorkbook::updateTable(uint32_t idx, emscripten::val spec) {
       return status_from_rc(rc);
     }
   }
-  fm_status_t rc =
-      fm_workbook_update_table(handle_, idx, effective_ref.c_str(), style_name_ptr, header_row, totals_row);
+  fm_status_t rc = fm_workbook_update_table(handle_, idx, &rect, style_name_ptr, header_row, totals_row);
   if (rc == 0 && toggles.any()) {
     rc = apply_table_style_toggles(handle_, idx, toggles);
   }

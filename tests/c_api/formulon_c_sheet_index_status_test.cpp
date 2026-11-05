@@ -11,6 +11,7 @@
 #include <limits>
 #include <vector>
 
+#include "formulon_c_record_arg.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
 
@@ -187,7 +188,8 @@ TEST(FormulonCApiSheetIndexStatus, SheetCollectionIndexIsSheetIndexOutOfRange) {
   EXPECT_EQ(fm_workbook_move_sheet(wb.handle, 0U, kBad), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_workbook_copy_sheet(wb.handle, kBad, 0U, nullptr, &index), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_workbook_copy_sheet(wb.handle, 0U, kBad + 1U, nullptr, &index), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_workbook_add_table(wb.handle, kBad, "A1:A2", "T", "T", columns, 1U, nullptr, 1, 0, &index),
+  EXPECT_EQ(fm_workbook_add_table(wb.handle, kBad, record_arg(fm_cell_rect_t{0, 0, 1, 0}), "T", "T", columns, 1U,
+                                  nullptr, 1, 0, &index),
             FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 1U);
 }

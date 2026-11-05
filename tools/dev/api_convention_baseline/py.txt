@@ -1,11 +1,3 @@
-R11.multi	print_area.set	ranges_a1	`set_print_area(ranges_a1: str)` should take `List[CellRect]`
-R11.multi	record.conditional_format	sqref	`ConditionalFormat.sqref: List[MergeRange]` should be `ranges: List[CellRect]`
-R11.multi	record.conditional_format_input	sqref	`ConditionalFormatInput.sqref: List[MergeRange]` should be `ranges: List[CellRect]`
-R11.multi	record.protected_range	sqref	`ProtectedRange.sqref: str` should be `ranges: List[CellRect]`
-R11.multi	record.table	ref	`Table.ref: str` should be `ranges: List[CellRect]`
-R11.multi	table.create	ref	`table_create(ref: str)` should take `List[CellRect]`
-R11.multi	table.update	ref	`table_update(ref: str)` should take `List[CellRect]`
-R11.sheet	record.chart_sheet_range	-	`ChartSheetRange` pairs a sheet with a rectangle; use `SheetRect`
 R5.list	cell.list.iter_cells	iter_cells	`iter_cells` is dropped from the py surface
 R5.list	cell_phonetic_run.list.get_cell_phonetic_runs	get_phonetic_runs	`get_phonetic_runs` is dropped from the py surface
 R5.list	cell_style.get_at	get_cell_style	`get_cell_style` is dropped from the py surface

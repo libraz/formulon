@@ -226,6 +226,9 @@ class CheckedSpecReader final {
   /// Reads a required uint32 field: absent, non-number or non-integer is a
   /// TypeError, a negative or too-large integer a RangeError.
   uint32_t RequiredU32(const Napi::Object& owner, const char* key);
+  /// `Object` / `Array` for a required field: an absent one is a TypeError.
+  bool RequiredObject(const Napi::Object& owner, const char* key, Napi::Object* out);
+  bool RequiredArray(const Napi::Object& owner, const char* key, Napi::Array* out);
 
  private:
   bool ReadOptional(const Napi::Object& owner, const char* key, Napi::Value* out, bool* present = nullptr);
@@ -253,6 +256,11 @@ class CheckedSpecReader final {
 /// Reads a `CellRect` `{ firstRow, firstCol, lastRow, lastCol }` object; every
 /// field is required.
 bool ReadCellRect(CheckedSpecReader& reader, const Napi::Object& range, fm_cell_rect_t* out);
+
+/// Reads the `CellRect` array `value`; `key` names it in a rejection. A
+/// missing array, or a missing element, reads as nothing.
+bool ReadCellRects(CheckedSpecReader& reader, const Napi::Value& value, const char* key,
+                   std::vector<fm_cell_rect_t>* out);
 
 /// Reads the range at `info[idx]`; a missing/nullish argument reads as all
 /// zeros, while a supplied non-object is rejected by the reader.

@@ -143,16 +143,11 @@ emscripten::val JsWorkbook::getConditionalFormats(uint32_t sheet) const {
     item.set("type", static_cast<uint32_t>(rule.type));
     item.set("priority", rule.priority);
     item.set("stopIfTrue", rule.stop_if_true != 0);
-    emscripten::val sqref = emscripten::val::array();
-    for (uint32_t r = 0; r < rule.sqref_count; ++r) {
-      emscripten::val rng = emscripten::val::object();
-      rng.set("firstRow", rule.sqref[r].first_row);
-      rng.set("firstCol", rule.sqref[r].first_col);
-      rng.set("lastRow", rule.sqref[r].last_row);
-      rng.set("lastCol", rule.sqref[r].last_col);
-      sqref.set(r, rng);
+    emscripten::val ranges = emscripten::val::array();
+    for (std::size_t r = 0; r < rule.range_count; ++r) {
+      ranges.set(r, cell_rect_to_val(rule.ranges[r]));
     }
-    item.set("sqref", sqref);
+    item.set("ranges", ranges);
     if (rule.dxf_id_engaged != 0) {
       item.set("dxfId", rule.dxf_id);
     }
@@ -283,7 +278,7 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
   std::vector<fm_cf_icon_t> icon_set_icons;
   formulon::c_api::BorrowedStringArena cfvo_strings;
   JsNarrowNumericReader reader("addCfRule");
-  const std::vector<fm_cell_rect_t> merge_ranges = js_pull_ranges(v, "sqref", &reader);
+  const std::vector<fm_cell_rect_t> merge_ranges = js_pull_ranges(v, "ranges", &reader);
   std::vector<fm_cell_rect_t> ranges_buf;
   ranges_buf.reserve(merge_ranges.size());
   for (const fm_cell_rect_t& m : merge_ranges) {
@@ -304,8 +299,8 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
     rule.dxf_id_engaged = 1;
     rule.dxf_id = reader.u32_value(dxf_id, 0U, "rule.dxfId");
   }
-  rule.sqref = ranges_buf.empty() ? nullptr : ranges_buf.data();
-  rule.sqref_count = static_cast<uint32_t>(ranges_buf.size());
+  rule.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
+  rule.range_count = ranges_buf.size();
   rule.formula1 = formula1.empty() ? nullptr : formula1.c_str();
   rule.formula2 = formula2.empty() ? nullptr : formula2.c_str();
   const emscripten::val op = reader.value(v, "op", "rule.op");

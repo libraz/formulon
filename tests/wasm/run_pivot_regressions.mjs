@@ -261,7 +261,10 @@ export function registerPivotRegressions(Module, test) {
       assert.equal(stale.status.ok, false);
       assert.ok(stale.status.message.length > 0);
 
-      const rejected = wb.addTable({ sheetIndex: 0, ref: 'A1:B2', name: 'T' });
+      const rejected = wb.addTable({
+        range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 } },
+        name: 'T',
+      });
       assert.equal(rejected.status.ok, false);
       assert.notEqual(rejected.status.message, stale.status.message);
       assert.match(rejected.status.message, /columns/);

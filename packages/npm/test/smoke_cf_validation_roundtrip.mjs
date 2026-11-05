@@ -11,7 +11,7 @@ import { assert, getModule } from './smoke_support.mjs';
 // `CfValueObjectInput.type`: 0 num, 1 percent, 2 percentile, 3 min,
 // 4 max, 5 formula, 6 autoMin, 7 autoMax.
 const COLOR_SCALE_RULE = Object.freeze({
-  sqref: [{ firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 0 }],
+  ranges: [{ firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 0 }],
   type: 2,
   colorScale: {
     thresholds: [
@@ -28,7 +28,7 @@ const COLOR_SCALE_RULE = Object.freeze({
 });
 
 const DATA_BAR_RULE = Object.freeze({
-  sqref: [{ firstRow: 0, firstCol: 1, lastRow: 4, lastCol: 1 }],
+  ranges: [{ firstRow: 0, firstCol: 1, lastRow: 4, lastCol: 1 }],
   type: 3,
   dataBar: {
     min: { type: 0, value: '5' },
@@ -38,7 +38,7 @@ const DATA_BAR_RULE = Object.freeze({
 });
 
 const ICON_SET_RULE = Object.freeze({
-  sqref: [{ firstRow: 0, firstCol: 2, lastRow: 4, lastCol: 2 }],
+  ranges: [{ firstRow: 0, firstCol: 2, lastRow: 4, lastCol: 2 }],
   type: 4,
   iconSet: {
     // 4Arrows: a 4-icon set carries three thresholds.
@@ -153,7 +153,14 @@ test('addValidation defaults every omitted boolean to false', async () => {
     assert.equal(rule.ranges[0].lastRow, 2);
 
     // An explicit `true` is not overwritten by the default.
-    assert.ok(wb.addValidation(0, { type: 3, allowBlank: true, formula1: '"A,B"' }).ok);
+    assert.ok(
+      wb.addValidation(0, {
+        ranges: [{ firstRow: 3, firstCol: 0, lastRow: 3, lastCol: 0 }],
+        type: 3,
+        allowBlank: true,
+        formula1: '"A,B"',
+      }).ok,
+    );
     assert.equal(wb.getValidations(0)[1].allowBlank, true);
   } finally {
     wb.delete();

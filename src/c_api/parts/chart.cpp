@@ -889,7 +889,7 @@ extern "C" fm_status_t fm_chart_data_get_series_points(const fm_chart_data_t* da
 }
 
 extern "C" fm_status_t fm_chart_data_get_range_at(const fm_chart_data_t* data, size_t series, int32_t role, size_t idx,
-                                                  fm_chart_sheet_range_t* out) {
+                                                  fm_sheet_rect_t* out) {
   clear_last_error();
   constexpr const char* kApi = "fm_chart_data_get_range_at";
   if (data == nullptr || out == nullptr) {
@@ -906,7 +906,7 @@ extern "C" fm_status_t fm_chart_data_get_range_at(const fm_chart_data_t* data, s
     return rc;
   }
   const formulon::SheetRect& r = ranges[idx];
-  *out = fm_chart_sheet_range_t{r.sheet, r.top, r.left, r.bottom, r.right};
+  *out = fm_sheet_rect_t{r.sheet, fm_cell_rect_t{r.top, r.left, r.bottom, r.right}};
   return 0;
 }
 

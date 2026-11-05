@@ -89,7 +89,7 @@ test('a throwing iterative progress callback aborts the solve and reports a stat
 // 4 max, 5 formula, 6 autoMin, 7 autoMax. Every threshold below states a
 // `value`, which is what puts a borrowed string behind each CFVO.
 const COLOR_SCALE_RULE = Object.freeze({
-  sqref: [{ firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 0 }],
+  ranges: [{ firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 0 }],
   type: 2,
   colorScale: {
     thresholds: [
@@ -106,7 +106,7 @@ const COLOR_SCALE_RULE = Object.freeze({
 });
 
 const DATA_BAR_RULE = Object.freeze({
-  sqref: [{ firstRow: 0, firstCol: 1, lastRow: 4, lastCol: 1 }],
+  ranges: [{ firstRow: 0, firstCol: 1, lastRow: 4, lastCol: 1 }],
   type: 3,
   dataBar: {
     min: { type: 0, value: '5' },
@@ -116,7 +116,7 @@ const DATA_BAR_RULE = Object.freeze({
 });
 
 const ICON_SET_RULE = Object.freeze({
-  sqref: [{ firstRow: 0, firstCol: 2, lastRow: 4, lastCol: 2 }],
+  ranges: [{ firstRow: 0, firstCol: 2, lastRow: 4, lastCol: 2 }],
   type: 4,
   iconSet: {
     // 4Arrows: a 4-icon set carries three thresholds.

@@ -20,6 +20,7 @@
 #include "eval/builtin_names.h"
 #include "num_fmt_locale.h"
 #include "parser/literal_spelling.h"
+#include "parser/reference.h"
 #include "parser/structured_ref_spelling.h"
 #include "sheet.h"
 #include "sheet_name.h"
@@ -126,7 +127,7 @@ const char* last_error_context() {
   return g_last_error_context.c_str();
 }
 
-bool check_range_count(std::uint32_t n, const char* api) {
+bool check_range_count(std::size_t n, const char* api) {
   if (n > kMaxRangesPerCApiCall) {
     set_binding_error(
         formulon::FormulonErrorCode::kInvalidArgument, "range_count exceeds per-call cap",
@@ -161,6 +162,76 @@ fm_status_t check_sheet_rect(std::uint32_t first_row, std::uint32_t first_col, s
 
 fm_status_t check_sheet_rect(const fm_cell_rect_t& rect, const char* api) {
   return check_sheet_rect(rect.first_row, rect.first_col, rect.last_row, rect.last_col, api);
+}
+
+fm_status_t check_rect_list(const fm_cell_rect_t* ranges, std::size_t range_count, const char* api) {
+  if (range_count == 0U) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "range_count must be >= 1",
+                             std::string(api) + ": range_count=0");
+  }
+  if (ranges == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "ranges is NULL while range_count > 0",
+                             std::string(api));
+  }
+  if (!check_range_count(range_count, api)) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  for (std::size_t i = 0; i < range_count; ++i) {
+    if (auto rc = check_sheet_rect(ranges[i], api); rc != 0) {
+      return rc;
+    }
+  }
+  return 0;
+}
+
+const fm_cell_rect_t* publish_rects(const fm_workbook_t* wb, const std::vector<formulon::MergeRange>& ranges) {
+  auto& scratch = const_cast<formulon::c_api::BorrowedArrayArena<fm_cell_rect_t>&>(wb->rect_scratch);
+  scratch.clear();
+  std::vector<fm_cell_rect_t> block;
+  block.reserve(ranges.size());
+  for (const formulon::MergeRange& r : ranges) {
+    block.push_back(fm_cell_rect_t{r.first_row, r.first_col, r.last_row, r.last_col});
+  }
+  return scratch.adopt(std::move(block));
+}
+
+namespace {
+
+// One endpoint of a whole-column / whole-row pair: the text before the `:`
+// `format_a1` writes between the two copies of the axis.
+std::string whole_axis_endpoint(const formulon::parser::Reference& ref) {
+  std::string text = formulon::parser::format_a1(ref);
+  text.resize(text.rfind(':'));
+  return text;
+}
+
+}  // namespace
+
+std::string format_rect_a1(std::string_view sheet_name, const fm_cell_rect_t& rect, bool absolute) {
+  formulon::parser::Reference first;
+  first.sheet = sheet_name;
+  first.row = rect.first_row;
+  first.col = rect.first_col;
+  first.row_abs = absolute;
+  first.col_abs = absolute;
+  formulon::parser::Reference second = first;
+  second.sheet = std::string_view();
+  second.row = rect.last_row;
+  second.col = rect.last_col;
+  if (rect.first_row == 0U && rect.last_row == formulon::Sheet::kMaxRows - 1U) {
+    first.is_full_col = true;
+    second.is_full_col = true;
+    return whole_axis_endpoint(first) + ":" + whole_axis_endpoint(second);
+  }
+  if (rect.first_col == 0U && rect.last_col == formulon::Sheet::kMaxCols - 1U) {
+    first.is_full_row = true;
+    second.is_full_row = true;
+    return whole_axis_endpoint(first) + ":" + whole_axis_endpoint(second);
+  }
+  if (rect.first_row == rect.last_row && rect.first_col == rect.last_col) {
+    return formulon::parser::format_a1(first);
+  }
+  return formulon::parser::format_a1(first) + ":" + formulon::parser::format_a1(second);
 }
 
 fm_status_t check_column_span(std::uint32_t first, std::uint32_t last, const char* api) {
@@ -295,27 +366,12 @@ fm_status_t check_cfvo_types(const fm_cfvo_t* thresholds, std::uint32_t count, c
 }  // namespace
 
 fm_status_t validate(const fm_cf_rule_t& rule, const char* api) {
-  if (rule.sqref_count == 0) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "sqref_count must be >= 1",
-                             std::string(api) + ": sqref_count=0");
-  }
-  if (rule.sqref == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "sqref is NULL while sqref_count > 0",
-                             std::string(api));
-  }
-  if (!check_range_count(rule.sqref_count, api)) {
-    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-  }
-  for (std::uint32_t i = 0; i < rule.sqref_count; ++i) {
-    // A range the A1 encoder cannot spell reaches the writer as an empty
-    // reference, which Excel reads as a broken conditional-formatting
-    // block. Rejecting it here names the offending rectangle at set time
-    // instead of losing the format at save time.
-    if (auto rc = check_sheet_rect(rule.sqref[i].first_row, rule.sqref[i].first_col, rule.sqref[i].last_row,
-                                   rule.sqref[i].last_col, api);
-        rc != 0) {
-      return rc;
-    }
+  // A range the A1 encoder cannot spell reaches the writer as an empty
+  // reference, which Excel reads as a broken conditional-formatting
+  // block. Rejecting it here names the offending rectangle at set time
+  // instead of losing the format at save time.
+  if (auto rc = check_rect_list(rule.ranges, rule.range_count, api); rc != 0) {
+    return rc;
   }
   if (auto rc = check_enum_domain(rule.type, static_cast<std::int64_t>(cf::RuleType::UniqueValues), api, "type");
       rc != 0) {
@@ -414,19 +470,8 @@ fm_status_t validate(const fm_cf_rule_t& rule, const char* api) {
 }
 
 fm_status_t validate(const fm_data_validation_t& v, const char* api) {
-  if (v.range_count > 0 && v.ranges == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "ranges is NULL while range_count > 0",
-                             std::string(api) + ": range_count=" + std::to_string(v.range_count));
-  }
-  if (!check_range_count(v.range_count, api)) {
-    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-  }
-  for (std::uint32_t i = 0; i < v.range_count; ++i) {
-    if (auto rc = check_sheet_rect(v.ranges[i].first_row, v.ranges[i].first_col, v.ranges[i].last_row,
-                                   v.ranges[i].last_col, api);
-        rc != 0) {
-      return rc;
-    }
+  if (auto rc = check_rect_list(v.ranges, v.range_count, api); rc != 0) {
+    return rc;
   }
   // The three domains the writer's attribute tables spell out
   // (`sheet_xml_builder.cpp`): a value past them is emitted as an absent

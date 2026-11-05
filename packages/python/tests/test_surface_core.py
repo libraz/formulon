@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 import subprocess
 import unittest
 from pathlib import Path
@@ -35,7 +34,7 @@ class StructLayoutTests(unittest.TestCase):
         "DATA_VALIDATION": 52,
         "SHEET_PROTECTION": 88,
         "WORKBOOK_PROTECTION": 52,
-        "PROTECTED_RANGE": 32,
+        "PROTECTED_RANGE": 36,
         "CELL_NODE": 12,
         "PHONETIC_RUN": 12,
         "CFVO": 12,
@@ -133,7 +132,7 @@ class StructLayoutTests(unittest.TestCase):
         "CHART_DATA_INFO": 44,
         "CHART_DATA_SERIES": 56,
         "CHART_DATA_POINTS": 20,
-        "CHART_SHEET_RANGE": 20,
+        "SHEET_RECT": 20,
         "CHART_AXIS_TITLE_TEXT": 8,
         "CHART_UNRESOLVED": 12,
         "CHART_INSERT": 88,
@@ -177,14 +176,11 @@ class StructLayoutTests(unittest.TestCase):
     # Records the wrapper marshals without a `Struct` entry, so they are
     # invisible to `EXPECTED_SIZES` above. `fm_value_t` is passed around as
     # the bare `fm_value_t_size` and as `VALUE_BLOB` when it sits inline in a
-    # larger record; `fm_cell_rect_t` is the literal 16 in
-    # `Workbook.paginate`. `python-inline-structs` binds these to the C
-    # header; pinning them here makes a size change loud on its own.
+    # larger record. `python-inline-structs` binds these to the C header;
+    # pinning them here makes a size change loud on its own.
     def test_hand_marshalled_record_sizes(self) -> None:
         self.assertEqual(_c.fm_value_t_size, 16)
         self.assertEqual(S.VALUE_BLOB, ("blob16", 16, 8))
-        source = inspect.getsource(Workbook.get_pagination)
-        self.assertIn('struct.unpack("<IIII", LIB.read_bytes(range_ptr, 16))', source)
 
     def test_layouts_match_c_header(self) -> None:
         """Every binding-drift check that reads the Python package.

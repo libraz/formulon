@@ -48,6 +48,7 @@ from formulon import (
     PivotFilterType,
     PivotFilterValueKind,
     PivotWorksheetSource,
+    SheetRect,
     TableStyle,
     TableStyleElement,
     Value,
@@ -602,19 +603,19 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.set_text(0, 0, 0, "A")
             wb.set_text(0, 0, 1, "B")
-            index = wb.add_table(0, "A1:B3", "Table1", "Table1", ["A", "B"])
-            self.assertEqual([t.ref for t in wb.iter_tables()], ["A1:B3"])
+            index = wb.add_table(0, CellRect(0, 0, 2, 1), "Table1", "Table1", ["A", "B"])
+            self.assertEqual([t.range for t in wb.iter_tables()], [SheetRect(0, CellRect(0, 0, 2, 1))])
             self.assertEqual([t.name for t in wb.iter_tables()], ["Table1"])
 
-            wb.update_table(index, "A1:B5")
-            self.assertEqual([t.ref for t in wb.iter_tables()], ["A1:B5"])
+            wb.update_table(index, CellRect(0, 0, 4, 1))
+            self.assertEqual([t.range for t in wb.iter_tables()], [SheetRect(0, CellRect(0, 0, 4, 1))])
 
             wb.remove_table(index)
             self.assertEqual(list(wb.iter_tables()), [])
 
     def test_table_style_toggles_survive_a_style_name_change(self) -> None:
         with Workbook.create_default() as wb:
-            index = wb.add_table(0, "A1:B3", "Sales", "Sales", ["A", "B"], "TableStyleLight9")
+            index = wb.add_table(0, CellRect(0, 0, 2, 1), "Sales", "Sales", ["A", "B"], "TableStyleLight9")
             table = list(wb.iter_tables())[0]
             self.assertEqual(table.style_name, "TableStyleLight9")
             self.assertTrue(table.has_style_info)
@@ -623,8 +624,8 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             self.assertEqual((table.header_row_count, table.totals_row_count), (1, 0))
             self.assertEqual([c.name for c in table.columns], ["A", "B"])
 
-            wb.update_table(index, "A1:B3", show_first_column=True, show_row_stripes=False)
-            wb.update_table(index, "A1:B3", "TableStyleMedium4")
+            wb.update_table(index, CellRect(0, 0, 2, 1), show_first_column=True, show_row_stripes=False)
+            wb.update_table(index, CellRect(0, 0, 2, 1), "TableStyleMedium4")
             with Workbook.load(wb.save()) as reloaded:
                 table = list(reloaded.iter_tables())[0]
                 self.assertEqual(table.style_name, "TableStyleMedium4")
@@ -637,7 +638,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             wb.set_text(0, 0, 1, "Amount")
             wb.set_number(0, 1, 1, 10.0)
             wb.set_number(0, 2, 1, 20.0)
-            index = wb.add_table(0, "A1:B4", "Sales", "Sales", ["Product", "Amount"], totals_row=True)
+            index = wb.add_table(0, CellRect(0, 0, 3, 1), "Sales", "Sales", ["Product", "Amount"], totals_row=True)
             wb.set_table_column_totals(index, 0, label="Total")
             wb.set_table_column_totals(index, 1, "sum")
             self.assertEqual(wb.get_formula(0, 3, 1), "=SUBTOTAL(109,[Amount])")
@@ -654,12 +655,12 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.set_text(0, 0, 0, "Amount")
             wb.set_number(0, 1, 0, 5.0)
-            index = wb.add_table(0, "A1:A2", "Sales", "Sales", ["Amount"])
+            index = wb.add_table(0, CellRect(0, 0, 1, 0), "Sales", "Sales", ["Amount"])
             wb.set_formula(0, 0, 3, "=SUM(Sales[Amount])")
-            wb.update_table(index, "A1:A2", name="Revenue")
+            wb.update_table(index, CellRect(0, 0, 1, 0), name="Revenue")
             self.assertEqual(wb.get_formula(0, 0, 3), "=SUM(Revenue[Amount])")
             self.assertEqual(list(wb.iter_tables())[0].display_name, "Revenue")
-            other = wb.add_table(0, "C1:C2", "Other", "Other", ["X"])
+            other = wb.add_table(0, CellRect(0, 2, 1, 2), "Other", "Other", ["X"])
             with self.assertRaises(FormulonError):
                 wb.rename_table(other, "revenue")
 
@@ -678,7 +679,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             wb.set_table_style(style)
             self.assertEqual(wb.table_style_count(), 1)
             self.assertEqual(wb.get_table_style_defaults(), ("TableStyleMedium2", "PivotStyleLight16"))
-            index = wb.add_table(0, "A1:A2", "T", "T", ["X"], "Corporate")
+            index = wb.add_table(0, CellRect(0, 0, 1, 0), "T", "T", ["X"], "Corporate")
             with self.assertRaises(FormulonError):
                 wb.set_table_style(TableStyle(name="TableStyleMedium2"))
             with Workbook.load(wb.save()) as reloaded:
@@ -694,11 +695,11 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.set_text(0, 0, 0, "A")
             wb.set_text(0, 0, 1, "B")
-            index = wb.add_table(0, "A1:B3", "Sales", "Sales", ["A", "B"], "TableStyleMedium2")
-            wb.update_table(index, "A1:B3", style_name=None)
+            index = wb.add_table(0, CellRect(0, 0, 2, 1), "Sales", "Sales", ["A", "B"], "TableStyleMedium2")
+            wb.update_table(index, CellRect(0, 0, 2, 1), style_name=None)
             self.assertEqual(list(wb.iter_tables())[0].style_name, "TableStyleMedium2")
 
-            wb.update_table(index, "A1:B3", style_name="")
+            wb.update_table(index, CellRect(0, 0, 2, 1), style_name="")
             table = list(wb.iter_tables())[0]
             self.assertEqual((table.style_name, table.has_style_info), ("", False))
             data = wb.save()
@@ -712,7 +713,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
     def test_table_create_rejects_a_column_count_that_does_not_match_ref(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.add_table(0, "A1:B3", "Table1", "Table1", ["OnlyOne"])
+                wb.add_table(0, CellRect(0, 0, 2, 1), "Table1", "Table1", ["OnlyOne"])
 
     def test_auto_filter_xml_round_trips(self) -> None:
         fragment = '<autoFilter ref="A1:B3"/>'
@@ -1101,7 +1102,7 @@ class CollectionReaderAllocationTests(unittest.TestCase):
             wb.add_cf_rule(
                 0,
                 ConditionalFormatInput(
-                    sqref=[CellRect(0, 0, n - 1, 0)],
+                    ranges=[CellRect(0, 0, n - 1, 0)],
                     type=1,
                     op=4,
                     formula1="10",
@@ -1222,7 +1223,7 @@ class EvaluateCfRangeDefaultTests(unittest.TestCase):
             wb.add_cf_rule(
                 0,
                 ConditionalFormatInput(
-                    sqref=[CellRect(0, 0, 0, 0)],
+                    ranges=[CellRect(0, 0, 0, 0)],
                     type=15,
                     time_period=0,
                     dxf_id=dxf_index,
@@ -1406,7 +1407,7 @@ class PackedIntegerGuardTests(unittest.TestCase):
             for bad in (1.5, 256, -1):
                 with self.subTest(min_length_pct=bad):
                     rule = ConditionalFormatInput(
-                        sqref=[CellRect(0, 0, 2, 0)],
+                        ranges=[CellRect(0, 0, 2, 0)],
                         type=3,
                         data_bar=DataBar(Cfvo(3), Cfvo(4), CfColor(0, 0, 255), min_length_pct=bad),
                     )

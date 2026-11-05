@@ -125,7 +125,7 @@ test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable 
   assert.ok(dxf.status.ok, JSON.stringify(dxf.status));
   assert.ok(
     wb.addCfRule(0, {
-      sqref: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+      ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
       type: 1,
       op: 5,
       formula1: '10',
@@ -274,7 +274,7 @@ test('addConditionalFormat + getConditionalFormats + clearConditionalFormats rou
   assert.ok(dxf.status.ok, JSON.stringify(dxf.status));
   // cellIs rule (type 1) comparing the cell to a literal.
   const add = wb.addCfRule(0, {
-    sqref: [{ firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 0 }],
+    ranges: [{ firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 0 }],
     type: 1,
     op: 5,
     formula1: '10',
@@ -287,8 +287,8 @@ test('addConditionalFormat + getConditionalFormats + clearConditionalFormats rou
   assert.equal(list.length, 1);
   assert.equal(list[0].type, 1);
   assert.equal(typeof list[0].id, 'string');
-  assert.equal(list[0].sqref.length, 1);
-  assert.equal(list[0].sqref[0].lastRow, 4);
+  assert.equal(list[0].ranges.length, 1);
+  assert.equal(list[0].ranges[0].lastRow, 4);
   assert.equal(list[0].formula1, '10');
   // removeConditionalFormatAt drops the only rule.
   assert.ok(wb.removeCfRule(0, 0).ok);
@@ -307,7 +307,7 @@ test('data bar x14 fields survive save and load', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   const add = wb.addCfRule(0, {
-    sqref: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
+    ranges: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
     type: 3,
     dataBar: {
       min: { type: 3 },
@@ -338,7 +338,7 @@ test('data bar x14 fields survive save and load', async () => {
 
   // The decoded bar fed straight back must reproduce the same rule.
   const again = loaded.addCfRule(0, {
-    sqref: [{ firstRow: 4, firstCol: 0, lastRow: 6, lastCol: 0 }],
+    ranges: [{ firstRow: 4, firstCol: 0, lastRow: 6, lastCol: 0 }],
     type: 3,
     dataBar: bar,
   });
@@ -357,7 +357,7 @@ test('icon set floor survives save and load', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   const add = wb.addCfRule(0, {
-    sqref: [{ firstRow: 0, firstCol: 0, lastRow: 9, lastCol: 0 }],
+    ranges: [{ firstRow: 0, firstCol: 0, lastRow: 9, lastCol: 0 }],
     type: 4,
     iconSet: {
       name: 2,
@@ -384,7 +384,7 @@ test('omitted data bar x14 fields keep the model defaults', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   const add = wb.addCfRule(0, {
-    sqref: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
+    ranges: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
     type: 3,
     dataBar: { min: { type: 3 }, max: { type: 4 }, fill: { r: 0, g: 0, b: 255 } },
   });

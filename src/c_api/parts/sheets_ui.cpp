@@ -474,7 +474,7 @@ extern "C" fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, std::siz
   // touches the validation list) follows naturally from
   // `std::vector::data()` invalidation rules.
   out->ranges = v.ranges.empty() ? nullptr : reinterpret_cast<const fm_cell_rect_t*>(v.ranges.data());
-  out->range_count = static_cast<std::uint32_t>(v.ranges.size());
+  out->range_count = v.ranges.size();
   out->type = v.type;
   out->op = v.op;
   out->error_style = v.error_style;
@@ -523,7 +523,7 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::size_t sh
     }
   }
   out.ranges.reserve(v->range_count);
-  for (std::uint32_t i = 0; i < v->range_count; ++i) {
+  for (std::size_t i = 0; i < v->range_count; ++i) {
     formulon::MergeRange r;
     r.first_row = v->ranges[i].first_row;
     r.first_col = v->ranges[i].first_col;

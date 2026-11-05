@@ -68,7 +68,8 @@ TEST(FormulonCli, PaginatePrintAreaUsesA1Notation) {
   fm_workbook_t* wb = nullptr;
   ASSERT_EQ(fm_workbook_create_default(&wb), 0);
   ASSERT_EQ(fm_sheet_set_number(wb, 0, 0, 0, 1.0), 0);
-  ASSERT_EQ(fm_sheet_set_print_area(wb, 0, "B2:D5,F1:G3"), 0);
+  const fm_cell_rect_t areas[] = {{1, 1, 4, 3}, {0, 5, 2, 6}};
+  ASSERT_EQ(fm_sheet_set_print_area(wb, 0, areas, 2), 0);
   std::uint8_t* bytes = nullptr;
   std::size_t len = 0;
   ASSERT_EQ(fm_workbook_save(wb, &bytes, &len), 0);

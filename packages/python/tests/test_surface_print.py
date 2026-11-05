@@ -117,13 +117,16 @@ class PrintSettingsTests(unittest.TestCase):
 
     def test_print_area_and_titles(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_print_area(0, "A1:F8")
-            self.assertEqual(wb.get_print_area(0), "A1:F8")
+            area = [CellRect(0, 0, 7, 5)]
+            wb.set_print_area(0, area)
+            self.assertEqual(wb.get_print_area(0), area)
             with self.assertRaises(FormulonError):
-                wb.set_print_area(0, "not-a-range")
-            self.assertEqual(wb.get_print_area(0), "A1:F8")
-            wb.set_print_area(0, "")
-            self.assertEqual(wb.get_print_area(0), "")
+                wb.set_print_area(0, [CellRect(5, 0, 4, 0)])
+            with self.assertRaises(TypeError):
+                wb.set_print_area(0, "A1:F8")  # type: ignore[arg-type]
+            self.assertEqual(wb.get_print_area(0), area)
+            wb.set_print_area(0, [])
+            self.assertEqual(wb.get_print_area(0), [])
 
             wb.set_print_titles(0, "1:2", "A:A")
             self.assertEqual(wb.get_print_titles(0), ("1:2", "A:A"))
@@ -169,7 +172,7 @@ class PrintSettingsTests(unittest.TestCase):
             wb.set_page_setup(0, paper_size=9, orientation=1, fit_to_page=True, fit_to_width=1, fit_to_height=0)
             wb.set_page_margins(0, left=0.5, right=0.5, top=0.8, bottom=0.8)
             wb.set_header_footer(0, odd_header="&C\u6708\u6b21\u5831\u544a")
-            wb.set_print_area(0, "A1:F80")
+            wb.set_print_area(0, [CellRect(0, 0, 79, 5)])
             wb.set_print_titles(0, "1:2")
             wb.add_row_break(0, 39)
             data = wb.save()
@@ -181,7 +184,7 @@ class PrintSettingsTests(unittest.TestCase):
             self.assertTrue(setup.fit_to_page)
             self.assertEqual(setup.fit_to_height, 0)
             self.assertAlmostEqual(reloaded.get_page_margins(0).left, 0.5)
-            self.assertEqual(reloaded.get_print_area(0), "A1:F80")
+            self.assertEqual(reloaded.get_print_area(0), [CellRect(0, 0, 79, 5)])
             self.assertEqual(reloaded.get_print_titles(0), ("1:2", ""))
             self.assertEqual([b.id for b in reloaded.list_row_breaks(0)], [39])
 

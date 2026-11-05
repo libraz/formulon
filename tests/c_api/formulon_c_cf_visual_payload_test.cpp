@@ -149,8 +149,8 @@ TEST(FormulonCApiCfMutate, GetAtRecordStaysReadableUntilTheNextGet) {
   fm_cf_rule_t seed{};
   seed.id = "{AB000000-0000-0000-0000-000000000001}";
   seed.type = 2;  // ColorScale
-  seed.sqref = sqref;
-  seed.sqref_count = 2;
+  seed.ranges = sqref;
+  seed.range_count = 2;
   seed.formula1 = "SEEDFORMULA";
   fm_cfvo_t thresholds[2]{};
   thresholds[0].type = 0;  // Number
@@ -166,8 +166,8 @@ TEST(FormulonCApiCfMutate, GetAtRecordStaysReadableUntilTheNextGet) {
 
   fm_cf_rule_t held{};
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &held), 0);
-  ASSERT_NE(held.sqref, nullptr);
-  ASSERT_EQ(held.sqref_count, 2U);
+  ASSERT_NE(held.ranges, nullptr);
+  ASSERT_EQ(held.range_count, 2U);
   ASSERT_EQ(held.color_scale_count, 2U);
 
   // A removal frees the block the rule lived in.
@@ -177,8 +177,8 @@ TEST(FormulonCApiCfMutate, GetAtRecordStaysReadableUntilTheNextGet) {
   ASSERT_EQ(remaining, 0U);
   EXPECT_STREQ(held.id, "{AB000000-0000-0000-0000-000000000001}");
   EXPECT_STREQ(held.formula1, "SEEDFORMULA");
-  EXPECT_EQ(held.sqref[1].first_col, 3U);
-  EXPECT_EQ(held.sqref[1].last_row, 14U);
+  EXPECT_EQ(held.ranges[1].first_col, 3U);
+  EXPECT_EQ(held.ranges[1].last_row, 14U);
   EXPECT_STREQ(held.color_scale_thresholds[1].value, "33");
 
   // An unrelated text read recycles `read_scratch`.
@@ -240,8 +240,8 @@ TEST(FormulonCApiCfMutate, ThresholdStringsStayLiveWhileLaterPayloadsArePulled) 
   fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule{};
   rule.type = 2;  // ColorScale
-  rule.sqref = &sqref;
-  rule.sqref_count = 1;
+  rule.ranges = &sqref;
+  rule.range_count = 1;
 
   fm_cfvo_t thresholds[3]{};
   const char* const kThresholdValues[3] = {"11", "22", "33"};

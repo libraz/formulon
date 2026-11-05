@@ -332,6 +332,8 @@ class JsNarrowNumericReader {
   bool is_array(const emscripten::val& value, const char* field = nullptr);
   /// `is_array`, failing the reader with a type error when `value` is not an array.
   bool require_array(const emscripten::val& value, const char* field);
+  /// Fails the reader with a type error unless `value` is a non-null object.
+  bool require_object(const emscripten::val& value, const char* field);
   uint32_t length(const emscripten::val& array, const char* field = nullptr);
   emscripten::val array_element(const emscripten::val& array, uint32_t index, const char* field = nullptr);
 
@@ -494,6 +496,11 @@ bool pull_value(JsNarrowNumericReader& reader, const emscripten::val& value, std
 /// Reads a range list with the explicit numeric reader. Other WASM families
 /// must use the same per-call reader before invoking a C mutator.
 std::vector<fm_cell_rect_t> js_pull_ranges(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader);
+
+/// Reads the `CellRect` array `array` itself (a positional argument); `field`
+/// names it in a rejection. A missing array reads as empty.
+std::vector<fm_cell_rect_t> js_pull_range_array(const emscripten::val& array, const char* field,
+                                                JsNarrowNumericReader* reader);
 
 /// Pulls the `{kind, rgb, theme, tint, indexed}` colour specification out
 /// of `v[key]`. An absent object leaves `kind` at `kFmColorNone`, which

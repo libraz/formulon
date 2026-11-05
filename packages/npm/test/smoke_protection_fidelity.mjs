@@ -48,11 +48,20 @@ test('workbook protection is absent by default and every field round-trips', asy
 test('protected ranges add, list, update, remove and follow row edits', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.ok(wb.addProtectedRange(0, { name: 'Inputs', sqref: 'B2:C3 E5', password: 'CC1A' }).ok);
+  assert.ok(
+    wb.addProtectedRange(0, {
+      name: 'Inputs',
+      ranges: [
+        { firstRow: 1, firstCol: 1, lastRow: 2, lastCol: 2 },
+        { firstRow: 4, firstCol: 4, lastRow: 4, lastCol: 4 },
+      ],
+      password: 'CC1A',
+    }).ok,
+  );
   assert.ok(
     wb.addProtectedRange(0, {
       name: 'Totals',
-      sqref: 'A10:A12',
+      ranges: [{ firstRow: 9, firstCol: 0, lastRow: 11, lastCol: 0 }],
       algorithmName: 'SHA-512',
       hashValue: 'aA==',
       saltValue: 'cw==',
@@ -65,14 +74,25 @@ test('protected ranges add, list, update, remove and follow row edits', async ()
   assert.ok(ranges.status.ok);
   assert.equal(ranges.length, 2);
   assert.equal(ranges[0].name, 'Inputs');
-  assert.equal(ranges[0].sqref, 'B2:C3 E5');
+  assert.deepEqual(ranges[0].ranges, [
+    { firstRow: 1, firstCol: 1, lastRow: 2, lastCol: 2 },
+    { firstRow: 4, firstCol: 4, lastRow: 4, lastCol: 4 },
+  ]);
   assert.equal(ranges[0].password, 'CC1A');
   assert.equal(ranges[1].spinCount, 100000);
   assert.equal(ranges[1].securityDescriptor, 'O:WDG:WD');
 
   assert.ok(loaded.insertRows(0, 0, 2).ok);
-  assert.equal(loaded.getProtectedRanges(0)[0].sqref, 'B4:C5 E7');
-  assert.ok(loaded.updateProtectedRange(0, 0, { name: 'Renamed', sqref: 'D4' }).ok);
+  assert.deepEqual(loaded.getProtectedRanges(0)[0].ranges, [
+    { firstRow: 3, firstCol: 1, lastRow: 4, lastCol: 2 },
+    { firstRow: 6, firstCol: 4, lastRow: 6, lastCol: 4 },
+  ]);
+  assert.ok(
+    loaded.updateProtectedRange(0, 0, {
+      name: 'Renamed',
+      ranges: [{ firstRow: 3, firstCol: 3, lastRow: 3, lastCol: 3 }],
+    }).ok,
+  );
   assert.equal(loaded.getProtectedRanges(0)[0].password, '');
   assert.ok(loaded.removeProtectedRange(0, 0).ok);
   assert.deepEqual(
@@ -86,12 +106,26 @@ test('protected ranges add, list, update, remove and follow row edits', async ()
 test('protected range arguments are validated', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.ok(wb.addProtectedRange(0, { name: 'Inputs', sqref: 'A1' }).ok);
-  assert.equal(wb.addProtectedRange(0, { name: 'Inputs', sqref: 'B1' }).ok, false);
-  assert.equal(wb.addProtectedRange(0, { name: '', sqref: 'B1' }).ok, false);
-  assert.equal(wb.addProtectedRange(0, { name: 'Other', sqref: 'not a range' }).ok, false);
-  assert.equal(wb.addProtectedRange(9, { name: 'Other', sqref: 'B1' }).ok, false);
-  assert.equal(wb.updateProtectedRange(0, 5, { name: 'Other', sqref: 'B1' }).ok, false);
+  assert.ok(
+    wb.addProtectedRange(0, { name: 'Inputs', ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }] }).ok,
+  );
+  assert.equal(
+    wb.addProtectedRange(0, { name: 'Inputs', ranges: [{ firstRow: 0, firstCol: 1, lastRow: 0, lastCol: 1 }] }).ok,
+    false,
+  );
+  assert.equal(
+    wb.addProtectedRange(0, { name: '', ranges: [{ firstRow: 0, firstCol: 1, lastRow: 0, lastCol: 1 }] }).ok,
+    false,
+  );
+  assert.equal(wb.addProtectedRange(0, { name: 'Other', ranges: [] }).ok, false);
+  assert.equal(
+    wb.addProtectedRange(9, { name: 'Other', ranges: [{ firstRow: 0, firstCol: 1, lastRow: 0, lastCol: 1 }] }).ok,
+    false,
+  );
+  assert.equal(
+    wb.updateProtectedRange(0, 5, { name: 'Other', ranges: [{ firstRow: 0, firstCol: 1, lastRow: 0, lastCol: 1 }] }).ok,
+    false,
+  );
   assert.equal(wb.removeProtectedRange(0, 5).ok, false);
   assert.equal(wb.getProtectedRanges(0).length, 1);
   release(wb);
@@ -112,5 +146,15 @@ test('note visibility reads back, persists and rejects a missing note', async ()
   assert.equal(loaded.getCommentVisible(0, 7, 7).status.ok, false);
   assert.equal(loaded.setCommentVisible(0, 7, 7, true).ok, false);
   release(loaded);
+  release(wb);
+});
+
+test('range-list inputs need at least one rectangle', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.throws(() => wb.addProtectedRange(0, { name: 'Inputs' }), TypeError);
+  assert.throws(() => wb.addValidation(0, { type: 3, formula1: '"A,B"' }), TypeError);
+  assert.equal(wb.addValidation(0, { ranges: [], type: 3, formula1: '"A,B"' }).status, 2);
+  assert.equal(wb.getValidations(0).length, 0);
   release(wb);
 });

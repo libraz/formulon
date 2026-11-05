@@ -18,11 +18,13 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_rect_list;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::publish_rects;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::text_or_empty;
@@ -33,7 +35,13 @@ namespace {
 formulon::ProtectedRange ToModel(const fm_protected_range_t& range) {
   formulon::ProtectedRange out;
   out.name = text_or_empty(range.name);
-  out.sqref = text_or_empty(range.sqref);
+  std::vector<formulon::MergeRange> ranges;
+  ranges.reserve(range.range_count);
+  for (std::size_t i = 0; i < range.range_count; ++i) {
+    const fm_cell_rect_t& r = range.ranges[i];
+    ranges.push_back({r.first_row, r.first_col, r.last_row, r.last_col});
+  }
+  out.sqref = formulon::io::format_sqref_text(ranges);
   out.password = text_or_empty(range.password);
   out.algorithm_name = text_or_empty(range.algorithm_name);
   out.hash_value = text_or_empty(range.hash_value);
@@ -46,16 +54,13 @@ formulon::ProtectedRange ToModel(const fm_protected_range_t& range) {
 // Every text is UTF-8 and a name is unique per sheet; `skip` is the entry being replaced.
 fm_status_t CheckRange(const std::vector<formulon::ProtectedRange>& ranges, const formulon::ProtectedRange& range,
                        std::size_t skip, const char* fn) {
-  if (auto rc =
-          check_utf8(fn, {range.name.c_str(), range.sqref.c_str(), range.password.c_str(), range.algorithm_name.c_str(),
-                          range.hash_value.c_str(), range.salt_value.c_str(), range.security_descriptor.c_str()});
+  if (auto rc = check_utf8(fn, {range.name.c_str(), range.password.c_str(), range.algorithm_name.c_str(),
+                                range.hash_value.c_str(), range.salt_value.c_str(), range.security_descriptor.c_str()});
       rc != 0) {
     return rc;
   }
-  std::vector<formulon::MergeRange> parsed;
-  if (range.name.empty() || !formulon::io::parse_sqref_text(range.sqref, parsed)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             (std::string(fn) + ": empty name or unparseable sqref").c_str(), "sqref=" + range.sqref);
+  if (range.name.empty()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, (std::string(fn) + ": empty name").c_str());
   }
   for (std::size_t i = 0; i < ranges.size(); ++i) {
     if (i != skip && ranges[i].name == range.name) {
@@ -157,7 +162,10 @@ extern "C" fm_status_t fm_sheet_get_protected_range(const fm_workbook_t* wb, siz
   TextStore& store = fresh_read_scratch(wb);
   out->spin_count = r.spin_count;
   out->name = store_cstr(store, r.name);
-  out->sqref = store_cstr(store, r.sqref);
+  std::vector<formulon::MergeRange> rects;
+  formulon::io::parse_selection_sqref_text(r.sqref, rects);
+  out->ranges = publish_rects(wb, rects);
+  out->range_count = rects.size();
   out->password = store_cstr(store, r.password);
   out->algorithm_name = store_cstr(store, r.algorithm_name);
   out->hash_value = store_cstr(store, r.hash_value);
@@ -174,6 +182,9 @@ extern "C" fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sh
                              "fm_sheet_add_protected_range: NULL range");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_protected_range"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_rect_list(range->ranges, range->range_count, "fm_sheet_add_protected_range"); rc != 0) {
     return rc;
   }
   formulon::WorksheetRawExtensions& raw = wb->workbook().sheet(sheet_index).mutable_raw_extensions();
@@ -200,6 +211,9 @@ extern "C" fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t
   formulon::WorksheetRawExtensions& raw = wb->workbook().sheet(sheet_index).mutable_raw_extensions();
   auto ranges = formulon::io::read_protected_ranges(raw);
   if (auto rc = check_index(index, ranges.size(), "fm_sheet_update_protected_range", "index"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_rect_list(range->ranges, range->range_count, "fm_sheet_update_protected_range"); rc != 0) {
     return rc;
   }
   formulon::ProtectedRange updated = ToModel(*range);

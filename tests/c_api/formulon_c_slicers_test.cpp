@@ -9,6 +9,7 @@
 
 #include "c_api/formulon_c.h"
 #include "formulon_c_pivot_test_helpers.h"
+#include "formulon_c_record_arg.h"
 #include "gtest/gtest.h"
 #include "miniz.h"
 #include "utils/error.h"
@@ -54,8 +55,9 @@ void CreateSalesTable(WorkbookGuard& wb) {
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 1, 1, 10.0), 0);
   const char* columns[] = {"Product", "Amount"};
   std::size_t index = 99U;
-  ASSERT_EQ(
-      fm_workbook_add_table(wb.handle, 0, "A1:B2", "Sales", "Sales", columns, 2, "TableStyleMedium2", 1, 0, &index), 0);
+  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 1, 1}), "Sales", "Sales", columns, 2,
+                                  "TableStyleMedium2", 1, 0, &index),
+            0);
 }
 
 fm_slicer_t Anchored(std::uint32_t fields) {

@@ -127,8 +127,8 @@ TEST(FormulonCApiExternalLinks, CfRuleNamingANewBookBindsIt) {
   fm_cf_rule_t rule{};
   rule.type = 0;  // Expression
   rule.formula1 = "[Book.xlsx]Sheet1!$A$1>0";
-  rule.sqref = &sqref;
-  rule.sqref_count = 1;
+  rule.ranges = &sqref;
+  rule.range_count = 1;
   std::size_t index = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &index), 0) << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 1U);
@@ -377,8 +377,8 @@ TEST(FormulonCApiExternalLinks, FileNameConditionalFormatsStoreAndSpellTheName) 
   fm_cf_rule_t rule{};
   rule.type = 0;  // Expression
   rule.formula1 = "M5.xlsx!LN>0";
-  rule.sqref = &sqref;
-  rule.sqref_count = 1;
+  rule.ranges = &sqref;
+  rule.range_count = 1;
   std::size_t index = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &index), 0) << fm_get_last_error_message();
   fm_cfvo_t thresholds[2]{};
@@ -390,8 +390,8 @@ TEST(FormulonCApiExternalLinks, FileNameConditionalFormatsStoreAndSpellTheName) 
   fm_cf_color_t colors[2]{{255, 0, 0, 255}, {0, 255, 0, 255}};
   fm_cf_rule_t scale{};
   scale.type = 2;  // ColorScale
-  scale.sqref = &sqref;
-  scale.sqref_count = 1;
+  scale.ranges = &sqref;
+  scale.range_count = 1;
   scale.color_scale_thresholds = thresholds;
   scale.color_scale_colors = colors;
   scale.color_scale_count = 2;
@@ -415,7 +415,9 @@ TEST(FormulonCApiExternalLinks, FileNameTableTotalsStoreAndSpellTheName) {
   ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
   const char* names[] = {"a", "b"};
   std::size_t table = 99;
-  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, "D1:E4", "T1", "T1", names, 2, nullptr, 1, 1, &table), 0)
+  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 3, 3, 4}), "T1", "T1", names, 2, nullptr,
+                                  1, 1, &table),
+            0)
       << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_set_table_column_totals(wb.handle, table, 0, "custom", nullptr, "M5.xlsx!LN+1"), 0)
       << fm_get_last_error_message();

@@ -205,15 +205,20 @@ TEST(FormulonCApiPivot, OutOfGridAnchorRejected) {
   EXPECT_EQ(fm_sheet_add_pivot(wb.handle, 0, "PT", cache_id, 0U, kMaxCols, &pivot_idx),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 
-  // A valid create succeeds, then set_anchor must reject a span whose far
-  // corner leaves the grid (the wrap the audit flagged) and a zero span.
+  // A valid create succeeds, then set_anchor must reject a rectangle whose
+  // far corner leaves the grid, an inverted one and a NULL one.
   ASSERT_EQ(fm_sheet_add_pivot(wb.handle, 0, "PT", cache_id, 0U, 0U, &pivot_idx), 0);
-  EXPECT_EQ(fm_sheet_set_pivot_anchor(wb.handle, 0, pivot_idx, kMaxRows - 1U, 0U, /*span_rows=*/2U, /*span_cols=*/1U),
+  const fm_cell_rect_t past_last_row{kMaxRows - 1U, 0U, kMaxRows, 0U};
+  EXPECT_EQ(fm_sheet_set_pivot_anchor(wb.handle, 0, pivot_idx, &past_last_row),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  EXPECT_EQ(fm_sheet_set_pivot_anchor(wb.handle, 0, pivot_idx, 0U, 0U, /*span_rows=*/0U, /*span_cols=*/1U),
+  const fm_cell_rect_t inverted{1U, 0U, 0U, 0U};
+  EXPECT_EQ(fm_sheet_set_pivot_anchor(wb.handle, 0, pivot_idx, &inverted),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  // An in-grid span still succeeds.
-  EXPECT_EQ(fm_sheet_set_pivot_anchor(wb.handle, 0, pivot_idx, 0U, 0U, /*span_rows=*/3U, /*span_cols=*/2U), 0);
+  EXPECT_EQ(fm_sheet_set_pivot_anchor(wb.handle, 0, pivot_idx, nullptr),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  // An in-grid rectangle still succeeds.
+  const fm_cell_rect_t location{0U, 0U, 2U, 1U};
+  EXPECT_EQ(fm_sheet_set_pivot_anchor(wb.handle, 0, pivot_idx, &location), 0);
 }
 
 TEST(FormulonCApiPivot, MutationAndClearExportsCompleteTheirLifecycles) {

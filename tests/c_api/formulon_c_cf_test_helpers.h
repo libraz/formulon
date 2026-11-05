@@ -97,8 +97,8 @@ template <typename MutateFn>
 [[maybe_unused]] inline fm_cf_rule_t MakeDataBarRule(const fm_cell_rect_t* sqref) {
   fm_cf_rule_t rule{};
   rule.type = 3;  // DataBar
-  rule.sqref = sqref;
-  rule.sqref_count = 1;
+  rule.ranges = sqref;
+  rule.range_count = 1;
   rule.data_bar_engaged = 1;
   rule.data_bar_min.type = 3;  // Min
   rule.data_bar_min.gte = 1;

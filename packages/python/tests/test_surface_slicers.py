@@ -8,6 +8,7 @@ import zipfile
 
 from formulon import (
     AnchorKind,
+    CellRect,
     FormulonError,
     Slicer,
     SlicerCrossFilter,
@@ -28,7 +29,7 @@ def _sales() -> Workbook:
     wb.set_text(0, 0, 0, "Product")
     wb.set_text(0, 0, 1, "Amount")
     wb.set_number(0, 1, 1, 10.0)
-    wb.add_table(0, "A1:B2", "Sales", "Sales", ["Product", "Amount"])
+    wb.add_table(0, CellRect(0, 0, 1, 1), "Sales", "Sales", ["Product", "Amount"])
     return wb
 
 

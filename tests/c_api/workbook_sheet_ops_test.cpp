@@ -343,9 +343,9 @@ TEST(WorkbookSheetOpsCApi, EmptyMetadataListsExposeTheirCAbiContracts) {
 
   const char* name = nullptr;
   const char* display_name = nullptr;
-  const char* ref = nullptr;
+  fm_cell_rect_t rect{};
   std::size_t sheet_index = 99;
-  EXPECT_NE(fm_workbook_get_table(wb.handle, 0, &name, &display_name, &ref, &sheet_index), 0);
+  EXPECT_NE(fm_workbook_get_table(wb.handle, 0, &name, &display_name, &rect, &sheet_index), 0);
 
   const char* path = nullptr;
   EXPECT_NE(fm_workbook_get_passthrough_at(wb.handle, 0, &path), 0);

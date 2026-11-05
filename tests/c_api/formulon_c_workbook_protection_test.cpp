@@ -7,8 +7,12 @@
 #include <string>
 
 #include "c_api/formulon_c.h"
+#include "c_api/parts/common.h"
 #include "gtest/gtest.h"
+#include "io/protection_xml.h"
+#include "sheet.h"
 #include "utils/error.h"
+#include "workbook.h"
 
 namespace {
 
@@ -42,12 +46,30 @@ void RoundTrip(const WorkbookGuard& wb, WorkbookGuard* out) {
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &out->handle), 0) << fm_get_last_error_message();
 }
 
-fm_protected_range_t Range(const char* name, const char* sqref) {
+fm_protected_range_t Range(const char* name, const fm_cell_rect_t* ranges, size_t range_count) {
   fm_protected_range_t r{};
   r.name = name;
-  r.sqref = sqref;
+  r.ranges = ranges;
+  r.range_count = range_count;
   return r;
 }
+
+// The ranges of `r` as space-separated A1 text.
+std::string RangesText(const WorkbookGuard& wb, const fm_protected_range_t& r) {
+  std::string out;
+  for (size_t i = 0; i < r.range_count; ++i) {
+    const char* text = nullptr;
+    EXPECT_EQ(fm_workbook_format_reference(wb.handle, nullptr, &r.ranges[i], 0, &text), 0);
+    if (!out.empty()) {
+      out.push_back(' ');
+    }
+    out += text != nullptr ? text : "";
+  }
+  return out;
+}
+
+// B2:C3 E5
+const fm_cell_rect_t kInputsRanges[] = {{1, 1, 2, 2}, {4, 4, 4, 4}};
 
 uint32_t RangeCount(const WorkbookGuard& wb) {
   std::size_t count = 0;
@@ -134,9 +156,10 @@ TEST(FormulonCApiWorkbookProtection, NullArgumentsAreRejected) {
 TEST(FormulonCApiProtectedRanges, AddListUpdateRemove) {
   WorkbookGuard wb;
   Create(&wb);
-  fm_protected_range_t inputs = Range("Inputs", "B2:C3 E5");
+  fm_protected_range_t inputs = Range("Inputs", kInputsRanges, 2);
   inputs.password = "CC1A";
-  fm_protected_range_t totals = Range("Totals", "A10:A12");
+  const fm_cell_rect_t totals_range{9, 0, 11, 0};
+  fm_protected_range_t totals = Range("Totals", &totals_range, 1);
   totals.algorithm_name = "SHA-512";
   totals.hash_value = "aA==";
   totals.salt_value = "cw==";
@@ -152,7 +175,7 @@ TEST(FormulonCApiProtectedRanges, AddListUpdateRemove) {
   fm_protected_range_t out{};
   ASSERT_EQ(fm_sheet_get_protected_range(loaded.handle, 0, 0, &out), 0);
   EXPECT_STREQ(out.name, "Inputs");
-  EXPECT_STREQ(out.sqref, "B2:C3 E5");
+  EXPECT_EQ(RangesText(loaded, out), "B2:C3 E5");
   EXPECT_STREQ(out.password, "CC1A");
   ASSERT_EQ(fm_sheet_get_protected_range(loaded.handle, 0, 1, &out), 0);
   EXPECT_STREQ(out.algorithm_name, "SHA-512");
@@ -161,11 +184,12 @@ TEST(FormulonCApiProtectedRanges, AddListUpdateRemove) {
   EXPECT_EQ(out.spin_count, 100000U);
   EXPECT_STREQ(out.security_descriptor, "O:WDG:WD");
 
-  fm_protected_range_t renamed = Range("Renamed", "D4");
+  const fm_cell_rect_t d4{3, 3, 3, 3};
+  fm_protected_range_t renamed = Range("Renamed", &d4, 1);
   ASSERT_EQ(fm_sheet_update_protected_range(loaded.handle, 0, 0, &renamed), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_protected_range(loaded.handle, 0, 0, &out), 0);
   EXPECT_STREQ(out.name, "Renamed");
-  EXPECT_STREQ(out.sqref, "D4");
+  EXPECT_EQ(RangesText(loaded, out), "D4");
   EXPECT_STREQ(out.password, "");
 
   ASSERT_EQ(fm_sheet_remove_protected_range(loaded.handle, 0, 0), 0);
@@ -179,31 +203,64 @@ TEST(FormulonCApiProtectedRanges, AddListUpdateRemove) {
 TEST(FormulonCApiProtectedRanges, SqrefFollowsRowAndColumnEdits) {
   WorkbookGuard wb;
   Create(&wb);
-  const fm_protected_range_t r = Range("Inputs", "B2:C3 E5");
+  const fm_protected_range_t r = Range("Inputs", kInputsRanges, 2);
   ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &r), 0);
   ASSERT_EQ(fm_sheet_insert_rows(wb.handle, 0, 0, 2), 0);
   ASSERT_EQ(fm_sheet_insert_cols(wb.handle, 0, 0, 1), 0);
   fm_protected_range_t out{};
   ASSERT_EQ(fm_sheet_get_protected_range(wb.handle, 0, 0, &out), 0);
-  EXPECT_STREQ(out.sqref, "C4:D5 F7");
+  EXPECT_EQ(RangesText(wb, out), "C4:D5 F7");
   // Deleting every row the range covers removes it.
   ASSERT_EQ(fm_sheet_delete_rows(wb.handle, 0, 3, 4), 0);
   EXPECT_EQ(RangeCount(wb), 0U);
 }
 
+TEST(FormulonCApiProtectedRanges, AnUnparsedTokenIsKeptForSave) {
+  // A stored range the getter cannot express as a rectangle is left out of
+  // `ranges`, but the stored text is what the file keeps.
+  WorkbookGuard wb;
+  Create(&wb);
+  formulon::ProtectedRange stored;
+  stored.name = "Odd";
+  stored.sqref = "B2 bogus";
+  formulon::io::write_protected_ranges(wb.handle->workbook().sheet(0).mutable_raw_extensions(), {stored});
+  fm_protected_range_t out{};
+  ASSERT_EQ(fm_sheet_get_protected_range(wb.handle, 0, 0, &out), 0);
+  EXPECT_EQ(RangesText(wb, out), "B2");
+
+  // Adding another range rewrites the list from the stored entries.
+  const fm_cell_rect_t d4{3, 3, 3, 3};
+  const fm_protected_range_t other = Range("Other", &d4, 1);
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &other), 0);
+  WorkbookGuard loaded;
+  RoundTrip(wb, &loaded);
+  const auto ranges = formulon::io::read_protected_ranges(loaded.handle->workbook().sheet(0).raw_extensions());
+  ASSERT_EQ(ranges.size(), 2U);
+  EXPECT_EQ(ranges[0].sqref, "B2 bogus");
+  EXPECT_EQ(ranges[1].sqref, "D4");
+}
+
 TEST(FormulonCApiProtectedRanges, ArgumentsAreValidated) {
   WorkbookGuard wb;
   Create(&wb);
-  const fm_protected_range_t good = Range("Inputs", "A1");
+  const fm_cell_rect_t a1{0, 0, 0, 0};
+  const fm_cell_rect_t b1{0, 1, 0, 1};
+  const fm_cell_rect_t inverted{2, 0, 1, 0};
+  const fm_cell_rect_t off_grid{0, 0, 0, 16384};
+  const fm_protected_range_t good = Range("Inputs", &a1, 1);
   ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &good), 0);
-  const fm_protected_range_t duplicate = Range("Inputs", "B1");
-  const fm_protected_range_t unnamed = Range("", "B1");
-  const fm_protected_range_t bad_sqref = Range("Other", "not a range");
-  const fm_protected_range_t no_sqref = Range("Other", nullptr);
+  const fm_protected_range_t duplicate = Range("Inputs", &b1, 1);
+  const fm_protected_range_t unnamed = Range("", &b1, 1);
+  const fm_protected_range_t inverted_range = Range("Other", &inverted, 1);
+  const fm_protected_range_t off_grid_range = Range("Other", &off_grid, 1);
+  const fm_protected_range_t no_ranges = Range("Other", nullptr, 0);
+  const fm_protected_range_t null_ranges = Range("Other", nullptr, 1);
   EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &duplicate), kInvalidArgument);
   EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &unnamed), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &bad_sqref), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &no_sqref), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &inverted_range), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &off_grid_range), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &no_ranges), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &null_ranges), FM_STATUS_BINDING_NULL_POINTER);
   EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 9, &good), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_NE(fm_sheet_add_protected_range(wb.handle, 0, nullptr), 0);
   // Updating an entry to its own name is not a duplicate.

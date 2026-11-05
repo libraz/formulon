@@ -308,13 +308,10 @@ Napi::Float64Array CopyDoubles(Napi::Env env, const double* src, size_t n) {
   return out;
 }
 
-Napi::Object SheetRangeToJs(Napi::Env env, const fm_chart_sheet_range_t& r) {
+Napi::Object SheetRangeToJs(Napi::Env env, const fm_sheet_rect_t& r) {
   Napi::Object o = Napi::Object::New(env);
-  o.Set("sheet", JsNumber(env, static_cast<double>(r.sheet)));
-  o.Set("top", JsNumber(env, r.top));
-  o.Set("left", JsNumber(env, r.left));
-  o.Set("bottom", JsNumber(env, r.bottom));
-  o.Set("right", JsNumber(env, r.right));
+  o.Set("sheet", JsNumber(env, static_cast<double>(r.sheet_index)));
+  o.Set("rect", RangeToJs(env, r.rect));
   return o;
 }
 
@@ -343,7 +340,7 @@ Napi::Object DataSeriesToJs(Napi::Env env, const fm_chart_data_t* data, size_t i
   for (int32_t role = 0; role < kRoleCount && rc == 0; ++role) {
     Napi::Array list = Napi::Array::New(env);
     for (size_t i = 0; i < s.range_count[role] && rc == 0; ++i) {
-      fm_chart_sheet_range_t r{};
+      fm_sheet_rect_t r{};
       if (Step(rc, fm_chart_data_get_range_at(data, index, role, i, &r))) {
         list.Set(static_cast<uint32_t>(i), SheetRangeToJs(env, r));
       }

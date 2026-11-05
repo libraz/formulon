@@ -106,7 +106,7 @@ test('print settings: an authored report survives save and load', async () => {
     assert.ok(wb.setPageMargins(0, { left: 0.5, right: 0.5, top: 0.8, bottom: 0.8 }).ok);
     assert.ok(wb.setPrintOptions(0, { horizontalCentered: true }).ok);
     assert.ok(wb.setHeaderFooter(0, { oddHeader: '&C月次報告', oddFooter: '&R&P / &N' }).ok);
-    assert.ok(wb.setPrintArea(0, 'A1:F80').ok);
+    assert.ok(wb.setPrintArea(0, [{ firstRow: 0, firstCol: 0, lastRow: 79, lastCol: 5 }]).ok);
     assert.ok(wb.setPrintTitles(0, '1:2', '').ok);
     assert.ok(wb.addRowBreak(0, 39, true).ok);
 
@@ -126,7 +126,7 @@ test('print settings: an authored report survives save and load', async () => {
     assert.equal(setup.fitToPage, true);
     assert.equal(setup.fitToHeight, 0);
     assert.equal(reloaded.getPageMargins(0).left, 0.5);
-    assert.equal(reloaded.getPrintArea(0).ranges, 'A1:F80');
+    assert.deepEqual(reloaded.getPrintArea(0).ranges, [{ firstRow: 0, firstCol: 0, lastRow: 79, lastCol: 5 }]);
     const titles = reloaded.getPrintTitles(0);
     assert.equal(titles.repeatRows, '1:2');
     assert.equal(titles.repeatCols, '');

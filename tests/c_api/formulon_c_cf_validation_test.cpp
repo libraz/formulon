@@ -12,24 +12,24 @@ TEST(FormulonCApiCfMutate, OutOfGridSqrefRejectedAndLeavesTheModelUnchanged) {
   fm_cf_rule_t rule{};
   rule.type = 0;  // Expression
   rule.formula1 = "TRUE";
-  rule.sqref_count = 1;
+  rule.range_count = 1;
   std::size_t rule_index = 0;
 
   // One past the last column, on a whole-column range.
   fm_cell_rect_t past_last_col{0, formulon::Sheet::kMaxCols, formulon::Sheet::kMaxRows - 1U, formulon::Sheet::kMaxCols};
-  rule.sqref = &past_last_col;
+  rule.ranges = &past_last_col;
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 
   // One past the last row.
   fm_cell_rect_t past_last_row{0, 0, formulon::Sheet::kMaxRows, 0};
-  rule.sqref = &past_last_row;
+  rule.ranges = &past_last_row;
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 
   // Inverted rectangle.
   fm_cell_rect_t inverted{5, 0, 1, 0};
-  rule.sqref = &inverted;
+  rule.ranges = &inverted;
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 
@@ -41,7 +41,7 @@ TEST(FormulonCApiCfMutate, OutOfGridSqrefRejectedAndLeavesTheModelUnchanged) {
 
   // The widest legal whole-column range still round-trips.
   fm_cell_rect_t whole_col{0, 0, formulon::Sheet::kMaxRows - 1U, 0};
-  rule.sqref = &whole_col;
+  rule.ranges = &whole_col;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
 
   BufferGuard saved;
@@ -60,8 +60,8 @@ TEST(FormulonCApiCfMutate, EmptySqrefRejected) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cf_rule_t rule{};
   rule.type = 0;
-  rule.sqref = nullptr;
-  rule.sqref_count = 0;
+  rule.ranges = nullptr;
+  rule.range_count = 0;
   std::size_t rule_index = 0;
   fm_status_t rc = fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index);
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
@@ -69,7 +69,7 @@ TEST(FormulonCApiCfMutate, EmptySqrefRejected) {
 
 TEST(FormulonCApiCfMutate, AddRuleRejectsExcessiveSqrefCount) {
   // Hostile caller passes the maximum unsigned 32-bit value as
-  // `sqref_count`. The `sqref` pointer is non-null so the early
+  // `range_count`. The `ranges` pointer is non-null so the early
   // null-check does not short-circuit, but the binding's range-count
   // cap must reject the call before the body attempts a 4 GiB
   // `reserve()`. Sheet state must be unchanged on rejection.
@@ -83,8 +83,8 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsExcessiveSqrefCount) {
   rule.type = 0;  // Expression
   std::string f = "TRUE";
   rule.formula1 = f.c_str();
-  rule.sqref = &sqref;
-  rule.sqref_count = 0xFFFFFFFFu;
+  rule.ranges = &sqref;
+  rule.range_count = 0xFFFFFFFFu;
   std::size_t rule_index = 0;
   fm_status_t rc = fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index);
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
@@ -111,8 +111,8 @@ TEST(FormulonCApiCfMutate, GetAtDisengagesADxfIdTheStylesTableCannotResolve) {
   rule.formula1 = "50";
   rule.dxf_id_engaged = 1;
   rule.dxf_id = 1;
-  rule.sqref = &sqref;
-  rule.sqref_count = 1;
+  rule.ranges = &sqref;
+  rule.range_count = 1;
   std::size_t rule_index = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
 
@@ -147,8 +147,8 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsNonGuidId) {
   fm_cf_rule_t rule{};
   rule.type = 0;  // Expression
   rule.formula1 = "TRUE";
-  rule.sqref = &sqref;
-  rule.sqref_count = 1;
+  rule.ranges = &sqref;
+  rule.range_count = 1;
 
   std::size_t rule_index = 99U;
   for (const char* rejected : {"sales-databar", "{}", "FC000000-0000-0000-0000-000000000001",
@@ -193,8 +193,8 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsEnumOrdinalsPastTheirDomain) {
   fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t base{};
   base.formula1 = "TRUE";
-  base.sqref = &sqref;
-  base.sqref_count = 1;
+  base.ranges = &sqref;
+  base.range_count = 1;
 
   const auto expect_rejected = [&wb](fm_cf_rule_t rule, const char* what) {
     std::size_t rule_index = 99U;
@@ -324,8 +324,8 @@ TEST(FormulonCApiCfMutate, DuplicatePredicateRulesGetDistinctStableIndices) {
   rule.formula1 = "50";
   rule.dxf_id_engaged = 1;
   rule.dxf_id = 0;
-  rule.sqref = &sqref;
-  rule.sqref_count = 1;
+  rule.ranges = &sqref;
+  rule.range_count = 1;
 
   std::size_t first_index = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &first_index), 0) << fm_get_last_error_message();
@@ -340,8 +340,8 @@ TEST(FormulonCApiCfMutate, DuplicatePredicateRulesGetDistinctStableIndices) {
   rule2.formula1 = "50";
   rule2.dxf_id_engaged = 1;
   rule2.dxf_id = 0;
-  rule2.sqref = &sqref;
-  rule2.sqref_count = 1;
+  rule2.ranges = &sqref;
+  rule2.range_count = 1;
 
   std::size_t second_index = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule2, &second_index), 0) << fm_get_last_error_message();

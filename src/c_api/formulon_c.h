@@ -130,6 +130,12 @@ typedef struct {
   uint32_t last_col;
 } fm_cell_rect_t;
 
+/** @brief A cell rectangle on sheet `sheet_index`. */
+typedef struct {
+  size_t sheet_index;
+  fm_cell_rect_t rect;
+} fm_sheet_rect_t;
+
 /** @brief Opaque result of one sheet pagination operation. */
 typedef struct fm_pagination fm_pagination_t;
 
@@ -1766,8 +1772,9 @@ FM_API fm_status_t fm_workbook_get_table_count(const fm_workbook_t* wb, size_t* 
 /**
  * @brief Reads the `idx`-th table's identifying metadata.
  *
- * On success `*out_name`, `*out_display_name`, and `*out_ref` are
- * model-backed views into the workbook handle. They are valid until the
+ * `*out_rect` receives the table's range. On success `*out_name` and
+ * `*out_display_name` are model-backed views into the workbook handle.
+ * They are valid until the
  * next mutation of the table list -- `fm_workbook_add_table`/`_update`/
  * `_remove`, or any workbook edit that rewrites table metadata as a side
  * effect (a structural row/column insert/delete, or a sheet rename/removal)
@@ -1775,35 +1782,39 @@ FM_API fm_status_t fm_workbook_get_table_count(const fm_workbook_t* wb, size_t* 
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `idx` is out of range, or a loaded table's `ref`
+ *           is not an A1 range.
  */
 FM_API fm_status_t fm_workbook_get_table(const fm_workbook_t* wb, size_t idx, const char** out_name,
-                                         const char** out_display_name, const char** out_ref, size_t* out_sheet_index);
+                                         const char** out_display_name, fm_cell_rect_t* out_rect,
+                                         size_t* out_sheet_index);
 
-/** Creates a worksheet table (`xl/tables/tableN.xml`). `column_names` must
- * contain one non-empty header for every column in `ref`; each name must be
- * unique within the table, and `column_count` must equal the width of `ref`.
- * `style_name` may be NULL or empty to omit table styling. The table's filter
- * definition is created automatically. When `header_row` is set, the caller
- * still owns the header cells: Excel expects the first row of `ref` to hold
- * exactly the column names. */
-FM_API fm_status_t fm_workbook_add_table(fm_workbook_t* wb, size_t sheet_index, const char* ref, const char* name,
-                                         const char* display_name, const char* const* column_names, size_t column_count,
-                                         const char* style_name, int32_t header_row, int32_t totals_row,
-                                         size_t* out_index);
+/** Creates a worksheet table (`xl/tables/tableN.xml`) over `rect` (an
+ * inverted or out-of-grid rectangle is `FM_STATUS_INVALID_ARGUMENT`).
+ * `column_names` must contain one non-empty header for every column of the
+ * range; each name must be unique within the table, and `column_count` must
+ * equal the range's width. `style_name` may be NULL or empty to omit table
+ * styling. The table's filter definition is created automatically. When
+ * `header_row` is set, the caller still owns the header cells: Excel expects
+ * the first row of the range to hold exactly the column names. */
+FM_API fm_status_t fm_workbook_add_table(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* rect,
+                                         const char* name, const char* display_name, const char* const* column_names,
+                                         size_t column_count, const char* style_name, int32_t header_row,
+                                         int32_t totals_row, size_t* out_index);
 
-/** Replaces a table's range and optional visual style. `ref` is required;
+/** Replaces a table's range (`rect`, checked as for `fm_workbook_add_table`)
+ * and optional visual style;
  * `style_name == NULL` preserves the existing style, a non-empty name
  * replaces the style name and keeps the four `fm_table_info_t` toggles
  * (a table without `<tableStyleInfo>` gets the creation defaults), and an
  * empty style removes `<tableStyleInfo>`. Negative `header_row` and
  * `totals_row` preserve their existing flags; zero and positive values set
- * them false and true respectively. `ref` must keep the width the table's
- * column list already describes. Turning the totals row on writes each
- * column's totals cell (`fm_workbook_set_table_column_totals`) on the last
- * row of `ref`. */
-FM_API fm_status_t fm_workbook_update_table(fm_workbook_t* wb, size_t index, const char* ref, const char* style_name,
-                                            int32_t header_row, int32_t totals_row);
+ * them false and true respectively. The range must keep the width the
+ * table's column list already describes. Turning the totals row on writes
+ * each column's totals cell (`fm_workbook_set_table_column_totals`) on the
+ * last row of the range. */
+FM_API fm_status_t fm_workbook_update_table(fm_workbook_t* wb, size_t index, const fm_cell_rect_t* rect,
+                                            const char* style_name, int32_t header_row, int32_t totals_row);
 
 /** Removes the table at `index`. */
 FM_API fm_status_t fm_workbook_remove_table(fm_workbook_t* wb, size_t index);
@@ -2282,13 +2293,16 @@ FM_API fm_status_t fm_workbook_set_workbook_protection(fm_workbook_t* wb, const 
 
 /**
  * @brief One `<protectedRange>`: a named range users may edit on a protected
- *        sheet. `sqref` is the A1 range list (`B2:C3 E5`). Input handling and
- *        output lifetime follow `fm_workbook_protection_t`.
+ *        sheet, covering the `range_count` rectangles of `ranges`. Input
+ *        handling and output lifetime follow `fm_workbook_protection_t`; the
+ *        `ranges` of a getter result are read-scratch-backed, and a stored
+ *        range that does not parse is left out of them.
  */
 typedef struct {
   uint32_t spin_count;
   const char* name;
-  const char* sqref;
+  const fm_cell_rect_t* ranges;
+  size_t range_count;
   const char* password;
   const char* algorithm_name;
   const char* hash_value;
@@ -2322,11 +2336,13 @@ FM_API fm_status_t fm_sheet_get_protected_range(const fm_workbook_t* wb, size_t 
  *        of it.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `range` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `range` is `NULL`, or `range.ranges`
+ *           is `NULL` while `range.range_count > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` is empty or
- *         already names another range of the sheet, or `sqref` does not parse
- *         as an A1 range list.
+ *         already names another range of the sheet, or when `range.range_count`
+ *         is 0 or past the per-call range cap, or a rectangle is inverted or
+ *         outside the grid.
  */
 FM_API fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sheet_index,
                                                 const fm_protected_range_t* range);
@@ -2386,7 +2402,7 @@ typedef enum {
  */
 typedef struct {
   const fm_cell_rect_t* ranges;
-  uint32_t range_count;
+  size_t range_count;
   uint8_t type;
   uint8_t op;
   uint8_t error_style;
@@ -2437,10 +2453,9 @@ FM_API fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, size_t sheet
  * @brief Appends a data-validation rule to the sheet's validation list.
  *
  * Every string field accepts `NULL`, which is treated as the empty
- * string. `v.ranges` may be `NULL` only when `v.range_count == 0`
- * (a rule with no anchor ranges); otherwise it must point to
- * `v.range_count` consecutive `fm_cell_rect_t` values that the
- * implementation copies into the rule's owned storage. Range corners
+ * string. `v.ranges` must point to `v.range_count >= 1` consecutive
+ * `fm_cell_rect_t` values that the implementation copies into the
+ * rule's owned storage. Range corners
  * are not normalised — callers should pass already-normalised
  * `(first <= last)` rectangles. Every rectangle must lie within the
  * Excel grid; all ranges are validated before the rule is stored.
@@ -2449,9 +2464,10 @@ FM_API fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, size_t sheet
  * `fm_sheet_set_formula` stores a cell formula.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `v` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `v` is `NULL`, or `v.ranges` is `NULL`
+ *           while `v.range_count > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `v.range_count > 0 && v.ranges == NULL` or `v.range_count`
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `v.range_count` is 0 or
  *         exceeds the per-call range cap, when any supplied range is
  *         outside the Excel grid, or when `v.type`, `v.op` or
  *         `v.error_style` is outside the domain listed above;
@@ -3581,37 +3597,42 @@ FM_API fm_status_t fm_sheet_set_fit_to_page(fm_workbook_t* wb, size_t sheet_inde
 /* -------------------------------------------------------------------------- */
 
 /**
- * @brief Writes the sheet-scoped `_xlnm.Print_Area` defined name.
+ * @brief Writes the sheet-scoped `_xlnm.Print_Area` defined name from the
+ *        `range_count` rectangles of `ranges`.
  *
- * `ranges_a1` accepts one or more comma-separated A1 ranges, with or
- * without `$` anchors: `"A1:F8"`, `"A1:B10,D5:E20"`, `"A:D"`, `"1:50"`.
- * Every corner is absolutised and each area is qualified with the sheet's
- * own name, quoted per Excel's rules, so the stored formula matches what
- * Excel writes. Area order is preserved - Excel prints them in the stated
- * order.
+ * Each area is stored absolute and qualified with the sheet's own name,
+ * quoted per Excel's rules, so the stored formula matches what Excel writes:
+ * a rectangle spanning every row is stored as columns (`$A:$D`), one
+ * spanning every column as rows (`$1:$50`). Area order is preserved - Excel
+ * prints them in the stated order. `range_count` 0 removes the defined name.
  *
- * An empty string removes the defined name. Returns `FM_STATUS_PRINT_INVALID_AREA` (9002)
- * (9002) when any area fails to parse, and `FM_STATUS_INVALID_ARGUMENT` (2) when
- * the list holds more areas than the per-call cap every range-taking
- * entry point shares.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`, or `ranges` is `NULL` with a
+ *           non-zero `range_count`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `range_count` is past the per-call range cap
+ *           every range-taking entry point shares, or a rectangle is inverted or outside the grid.
  */
-FM_API fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_index, const char* ranges_a1);
+FM_API fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* ranges,
+                                           size_t range_count);
 
 /**
- * @brief Reads the print area back as unqualified A1 ranges, or an empty
- *        string when the sheet declares none.
+ * @brief Reads the print area back as rectangles; `*out_range_count` is 0
+ *        when the sheet declares none.
  *
- * Whole-axis areas come back expanded to explicit corners (`"A:D"` reads
- * back as `"A1:D1048576"`): the resolver normalises them to rectangles for
- * the paginator, and this getter reports the resolved form rather than
- * re-deriving the authored shape.
+ * Whole-axis areas come back expanded to the grid edge (`A:D` reads back as
+ * `A1:D1048576`): the resolver normalises them to rectangles for the
+ * paginator, and this getter reports the resolved form. `*out_ranges` is a
+ * read-scratch-backed view, `NULL` when the count is 0.
  *
- * `*out_ranges_a1` is a read-scratch-backed view.
- *
- * Returns `FM_STATUS_PRINT_INVALID_AREA` (9002) when the defined name exists but does
- * not parse, so a malformed one is never mistaken for "no print area".
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `out_ranges` or `out_range_count` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
+ *         `FM_STATUS_PRINT_INVALID_AREA` (9002) when the defined name exists but does not
+ *           parse, so a malformed one is never mistaken for "no print area".
  */
-FM_API fm_status_t fm_sheet_get_print_area(const fm_workbook_t* wb, size_t sheet_index, const char** out_ranges_a1);
+FM_API fm_status_t fm_sheet_get_print_area(const fm_workbook_t* wb, size_t sheet_index,
+                                           const fm_cell_rect_t** out_ranges, size_t* out_range_count);
 
 /**
  * @brief Writes the sheet-scoped `_xlnm.Print_Titles` defined name.
@@ -3935,7 +3956,7 @@ typedef struct {
  * Wide POD covering both differential-format rules and visual rules.
  * `fm_sheet_add_cf_rule` deep-copies every pointer-backed payload into
  * the engine model. `fm_sheet_get_cf_rule` returns every pointer in the
- * selected rule -- id, sqref, formula/text strings, and the visual
+ * selected rule -- id, ranges, formula/text strings, and the visual
  * threshold arrays and their value strings alike -- as a view into
  * handle-owned storage, not the workbook model; see that function's own
  * doc for the full lifetime contract (valid until the next successful
@@ -3994,10 +4015,10 @@ typedef struct {
   uint32_t dxf_id;
 
   /* sqref union — at least one entry. On input, must be non-NULL with
-   * sqref_count >= 1. On output, points to `fm_sheet_get_cf_rule`'s
+   * range_count >= 1. On output, points to `fm_sheet_get_cf_rule`'s
    * handle-owned storage (see that function's doc), not the model. */
-  const fm_cell_rect_t* sqref;
-  uint32_t sqref_count;
+  const fm_cell_rect_t* ranges;
+  size_t range_count;
 
   /* Formula sources (Expression / CellIs / containsText-derived). */
   const char* formula1;
@@ -4123,7 +4144,7 @@ FM_API fm_status_t fm_sheet_get_cf_rule_count(const fm_workbook_t* wb, size_t sh
 /**
  * @brief Reads the `idx`-th CF rule (in flattened order) into `out`.
  *
- * Every pointer in `*out` - `id`, `sqref`, `formula1`, `formula2`, `text`,
+ * Every pointer in `*out` - `id`, `ranges`, `formula1`, `formula2`, `text`,
  * the visual threshold and colour arrays, and the threshold value strings -
  * addresses storage owned by `wb`, not the workbook model. That storage is
  * released only by the next successful `fm_sheet_get_cf_rule` on the same
@@ -4154,7 +4175,7 @@ FM_API fm_status_t fm_sheet_get_cf_rule(const fm_workbook_t* wb, size_t sheet_in
 /**
  * @brief Appends a new single-rule `<conditionalFormatting>` block.
  *
- * The new block carries `rule.sqref` (deep-copied) and a single CF
+ * The new block carries `rule.ranges` (deep-copied) and a single CF
  * rule constructed from the remaining fields. The auto-generated
  * priority (when `rule.priority <= 0`) is `existing_max + 1`. If
  * `rule.id` is `NULL` or empty, a new id is synthesised from the
@@ -4188,14 +4209,14 @@ FM_API fm_status_t fm_sheet_get_cf_rule(const fm_workbook_t* wb, size_t sheet_in
  * formula. For the text (7-10), blanks / errors (11-14) and
  * `TimePeriod` (15) types, a `NULL` or empty `rule.formula1` is filled
  * with the formula Excel stores for the rule, relative to the top-left
- * corner of the bounding box of `rule.sqref` (e.g. `NOT(ISERROR(SEARCH("ab",B1)))`).
+ * corner of the bounding box of `rule.ranges` (e.g. `NOT(ISERROR(SEARCH("ab",B1)))`).
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `rule` or `out_index` is `NULL`, or
- *           `rule.sqref` is `NULL` while `rule.sqref_count > 0`;
+ *           `rule.ranges` is `NULL` while `rule.range_count > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `rule.sqref_count == 0` or exceeds the per-call range cap,
- *           when any `rule.sqref` entry is inverted (`first` past
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `rule.range_count == 0` or exceeds the per-call range cap,
+ *           when any `rule.ranges` entry is inverted (`first` past
  *           `last`) or reaches outside the grid (`row >= 1048576`,
  *           `col >= 16384`) and therefore has no A1 spelling, when
  *           `rule.id` is non-empty but not GUID-shaped, when `rule.type`
@@ -5354,10 +5375,18 @@ FM_API fm_status_t fm_sheet_remove_pivot(fm_workbook_t* wb, size_t sheet_index, 
 FM_API fm_status_t fm_sheet_set_pivot_name(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                            const char* utf8_name);
 
-/** @brief Updates the pivot's anchor cell and span. */
+/**
+ * @brief Sets the rectangle the pivot reserves (`<location ref>`); its
+ *        top-left cell is the anchor.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `rect` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `pivot_index` is out of range, or `rect` is
+ *           inverted or outside the grid.
+ */
 FM_API fm_status_t fm_sheet_set_pivot_anchor(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                             uint32_t anchor_row, uint32_t anchor_col, uint32_t span_rows,
-                                             uint32_t span_cols);
+                                             const fm_cell_rect_t* rect);
 
 /** @brief Toggles the row / column grand total bands on the pivot. */
 FM_API fm_status_t fm_sheet_set_pivot_grand_totals(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -6647,7 +6676,7 @@ FM_API fm_status_t fm_sheet_get_selection(const fm_workbook_t* wb, size_t sheet_
 
 /**
  * @brief Replaces the active pane's selection (`<selection>`): the active
- *        cell and the selected ranges (`sqref`). `count == 0` selects the
+ *        cell and the selected ranges (`sqref`). `range_count == 0` selects the
  *        active cell alone.
  *
  * The selection of a frozen or split view belongs to the pane it is active
@@ -6657,13 +6686,13 @@ FM_API fm_status_t fm_sheet_get_selection(const fm_workbook_t* wb, size_t sheet_
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`, or `ranges` is `NULL` with
- *           a non-zero `count`;
+ *           a non-zero `range_count`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the active cell or a range is out of range, or a
  *         range has `first > last`.
  */
 FM_API fm_status_t fm_sheet_set_selection(fm_workbook_t* wb, size_t sheet_index, uint32_t active_row,
-                                          uint32_t active_col, const fm_cell_rect_t* ranges, size_t count);
+                                          uint32_t active_col, const fm_cell_rect_t* ranges, size_t range_count);
 
 /**
  * @brief Returns the complete worksheet-level `<autoFilter>` XML fragment.
@@ -10404,15 +10433,6 @@ typedef struct {
   const double* sizes;
 } fm_chart_data_points_t;
 
-/** @brief A rectangle of cells on one sheet (0-based, inclusive). */
-typedef struct {
-  size_t sheet;
-  uint32_t top;
-  uint32_t left;
-  uint32_t bottom;
-  uint32_t right;
-} fm_chart_sheet_range_t;
-
 /** @brief Resolved title text of one axis. */
 typedef struct {
   uint32_t axis_id;
@@ -10542,7 +10562,7 @@ FM_API fm_status_t fm_chart_data_get_series_points(const fm_chart_data_t* data, 
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `series`, `role` or `idx` is out of range.
  */
 FM_API fm_status_t fm_chart_data_get_range_at(const fm_chart_data_t* data, size_t series, int32_t role, size_t idx,
-                                              fm_chart_sheet_range_t* out);
+                                              fm_sheet_rect_t* out);
 
 /**
  * @brief Reads axis title `idx` (`idx < axis_title_count`).

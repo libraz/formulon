@@ -60,19 +60,6 @@ bool options_object(const emscripten::val& options, const char* api, emscripten:
   return false;
 }
 
-/// A required uint32 property of `range`; a missing one is a TypeError.
-uint32_t required_u32(JsNarrowNumericReader& reader, const emscripten::val& range, const char* key) {
-  const emscripten::val v = reader.value(range, key, key);
-  if (!reader.ok()) {
-    return 0U;
-  }
-  if (!js_value_present(v)) {
-    reject(kReferenceTypeError, std::string("formatReference: `") + key + "` is required");
-    return 0U;
-  }
-  return reader.u32_value(v, 0U, key);
-}
-
 }  // namespace
 
 emscripten::val JsWorkbook::parseReference(const std::string& text, emscripten::val options) const {
@@ -109,10 +96,7 @@ emscripten::val JsWorkbook::parseReference(const std::string& text, emscripten::
   }
   val out = val::object();
   out.set("sheetName", ref.has_sheet != 0 ? val(std::string(ref.sheet_name)) : val::null());
-  out.set("row0", ref.rect.first_row);
-  out.set("col0", ref.rect.first_col);
-  out.set("row1", ref.rect.last_row);
-  out.set("col1", ref.rect.last_col);
+  out.set("rect", cell_rect_to_val(ref.rect));
   return out;
 }
 
@@ -128,11 +112,11 @@ emscripten::val JsWorkbook::formatReference(emscripten::val range, emscripten::v
   JsNarrowNumericReader reader("formatReference");
   std::string sheet_store;
   const char* sheet_name = reader.optional_string(range, "sheetName", sheet_store, "sheetName");
-  fm_cell_rect_t rect{};
-  rect.first_row = required_u32(reader, range, "row0");
-  rect.first_col = required_u32(reader, range, "col0");
-  rect.last_row = required_u32(reader, range, "row1");
-  rect.last_col = required_u32(reader, range, "col1");
+  const val rect_value = reader.value(range, "rect", "rect");
+  if (reader.ok() && !js_value_present(rect_value)) {
+    return reject(kReferenceTypeError, "formatReference: `rect` is required");
+  }
+  const fm_cell_rect_t rect = js_pull_range(rect_value, &reader);
   const bool absolute = reader.boolean(opts, "absolute", false, "absolute");
   if (!reader.ok()) {
     return val::undefined();

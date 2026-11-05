@@ -72,7 +72,7 @@ void Load(const std::vector<std::uint8_t>& bytes, WorkbookGuard& out) {
 /// Sheet1 with Product/Amount headers, two data rows and table `Sales` over
 /// A1:B3.
 void CreateSalesTable(WorkbookGuard& wb, const char* style = "TableStyleMedium2", int32_t totals = 0,
-                      const char* ref = "A1:B3") {
+                      fm_cell_rect_t ref = {0, 0, 2, 1}) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "Product"), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 1, "Amount"), 0);
@@ -82,7 +82,7 @@ void CreateSalesTable(WorkbookGuard& wb, const char* style = "TableStyleMedium2"
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 2, 1, 20.0), 0);
   const char* columns[] = {"Product", "Amount"};
   std::size_t index = 99U;
-  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, ref, "Sales", "Sales", columns, 2, style, 1, totals, &index), 0);
+  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, &ref, "Sales", "Sales", columns, 2, style, 1, totals, &index), 0);
   ASSERT_EQ(index, 0U);
 }
 
@@ -157,7 +157,8 @@ TEST(FormulonCApiTable, LoadedStyleTogglesSurviveAStyleNameChange) {
   EXPECT_EQ(info.show_row_stripes, 0);
   EXPECT_EQ(info.show_column_stripes, 1);
 
-  ASSERT_EQ(fm_workbook_update_table(wb.handle, 0, "A1:B3", "TableStyleMedium4", -1, -1), 0);
+  ASSERT_EQ(fm_workbook_update_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "TableStyleMedium4", -1, -1),
+            0);
   info = Info(wb.handle);
   EXPECT_STREQ(info.style_name, "TableStyleMedium4");
   EXPECT_EQ(info.show_first_column, 1);
@@ -202,14 +203,14 @@ TEST(FormulonCApiTable, SetStyleInfoWritesTheElementInSchemaPosition) {
   EXPECT_LT(columns_end, style);
 
   // An empty style through update still removes the element.
-  ASSERT_EQ(fm_workbook_update_table(wb.handle, 0, "A1:B3", "", -1, -1), 0);
+  ASSERT_EQ(fm_workbook_update_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "", -1, -1), 0);
   EXPECT_EQ(Info(wb.handle).style_present, 0);
   EXPECT_EQ(fm_workbook_set_table_style_info(wb.handle, 3, "X", 0, 0, 0, 0), kInvalidArgument);
 }
 
 TEST(FormulonCApiTable, ColumnTotalsWriteTheTotalsRowCells) {
   WorkbookGuard wb;
-  CreateSalesTable(wb, "TableStyleMedium2", 1, "A1:B4");
+  CreateSalesTable(wb, "TableStyleMedium2", 1, {0, 0, 3, 1});
   ASSERT_EQ(fm_workbook_set_table_column_totals(wb.handle, 0, 0, nullptr, "Total", nullptr), 0);
   ASSERT_EQ(fm_workbook_set_table_column_totals(wb.handle, 0, 1, "sum", nullptr, nullptr), 0);
   EXPECT_EQ(Formula(wb.handle, 3, 1), "=SUBTOTAL(109,[Amount])");
@@ -259,7 +260,7 @@ TEST(FormulonCApiTable, ColumnTotalsWriteTheTotalsRowCells) {
 
 TEST(FormulonCApiTable, CustomTotalsFormulaRoundTrips) {
   WorkbookGuard wb;
-  CreateSalesTable(wb, "TableStyleMedium2", 1, "A1:B4");
+  CreateSalesTable(wb, "TableStyleMedium2", 1, {0, 0, 3, 1});
   EXPECT_EQ(fm_workbook_set_table_column_totals(wb.handle, 0, 1, "custom", nullptr, nullptr), kInvalidArgument);
   EXPECT_EQ(fm_workbook_set_table_column_totals(wb.handle, 0, 1, "median", nullptr, nullptr), kInvalidArgument);
   EXPECT_NE(fm_workbook_set_table_column_totals(wb.handle, 0, 1, "custom", nullptr, "=SUM(("), 0);
@@ -302,7 +303,7 @@ TEST(FormulonCApiTable, TurningTheTotalsRowOnRestoresItsCells) {
       });
   WorkbookGuard wb;
   Load(patched, wb);
-  ASSERT_EQ(fm_workbook_update_table(wb.handle, 0, "A1:B4", nullptr, -1, 1), 0);
+  ASSERT_EQ(fm_workbook_update_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 3, 1}), nullptr, -1, 1), 0);
   EXPECT_EQ(Formula(wb.handle, 3, 1), "=SUBTOTAL(104,[Amount])");
   const fm_value_t label = Value(wb.handle, 3, 0);
   ASSERT_EQ(label.kind, FM_VAL_TEXT);
@@ -333,7 +334,9 @@ TEST(FormulonCApiTable, TotalsFormulaEscapesSpecialColumnNames) {
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 1, 1, 5.0), 0);
   const char* columns[] = {"Q1 #est", "a,b"};
   std::size_t index = 0;
-  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, "A1:B3", "T", "T", columns, 2, "", 1, 1, &index), 0);
+  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "T", "T", columns, 2, "", 1, 1,
+                                  &index),
+            0);
   ASSERT_EQ(fm_workbook_set_table_column_totals(wb.handle, 0, 0, "sum", nullptr, nullptr), 0);
   ASSERT_EQ(fm_workbook_set_table_column_totals(wb.handle, 0, 1, "sum", nullptr, nullptr), 0);
   EXPECT_EQ(Formula(wb.handle, 2, 0), "=SUBTOTAL(109,[Q1 '#est])");
@@ -352,7 +355,9 @@ TEST(FormulonCApiTable, RenameRewritesStructuredReferences) {
   CreateSalesTable(wb);
   const char* columns[] = {"Key"};
   std::size_t other = 0;
-  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, "F1:F2", "Other", "Other", columns, 1, "", 1, 0, &other), 0);
+  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 5, 1, 5}), "Other", "Other", columns, 1,
+                                  "", 1, 0, &other),
+            0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 3, "=SUM(Sales[Amount])+COUNTA(sales[Product])"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1, 3, "=Sales"), 0);
   ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "Doubled", "=SUM(Sales[Amount])*2"), 0);
@@ -368,9 +373,9 @@ TEST(FormulonCApiTable, RenameRewritesStructuredReferences) {
 
   const char* name = nullptr;
   const char* display = nullptr;
-  const char* ref = nullptr;
+  fm_cell_rect_t rect{};
   std::size_t sheet = 0;
-  ASSERT_EQ(fm_workbook_get_table(wb.handle, 0, &name, &display, &ref, &sheet), 0);
+  ASSERT_EQ(fm_workbook_get_table(wb.handle, 0, &name, &display, &rect, &sheet), 0);
   EXPECT_STREQ(name, "Revenue");
   EXPECT_STREQ(display, "Revenue");
   EXPECT_EQ(Formula(wb.handle, 0, 3), "=SUM(Revenue[Amount])+COUNTA(Revenue[Product])");
@@ -394,7 +399,7 @@ TEST(FormulonCApiTable, RenameRewritesStructuredReferences) {
 
   WorkbookGuard reloaded;
   Load(Save(wb.handle), reloaded);
-  ASSERT_EQ(fm_workbook_get_table(reloaded.handle, 0, &name, &display, &ref, &sheet), 0);
+  ASSERT_EQ(fm_workbook_get_table(reloaded.handle, 0, &name, &display, &rect, &sheet), 0);
   EXPECT_STREQ(name, "RevenueInternal");
   EXPECT_STREQ(display, "RevenueShown");
   ASSERT_EQ(fm_workbook_recalc(reloaded.handle), 0);
@@ -596,12 +601,16 @@ TEST(FormulonCApiTable, CreateRejectsTheNameOfAVerbatimXlsbTable) {
   ASSERT_EQ(count_of(fm_workbook_get_table_count, wb.handle), 0U);
   const char* columns[] = {"A", "B"};
   std::size_t index = 0;
-  EXPECT_EQ(fm_workbook_add_table(wb.handle, 0, "E1:F3", "sales", "sales", columns, 2, nullptr, 1, 0, &index),
+  EXPECT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 4, 2, 5}), "sales", "sales", columns, 2,
+                                  nullptr, 1, 0, &index),
             kInvalidArgument);
-  EXPECT_EQ(fm_workbook_add_table(wb.handle, 0, "E1:F3", "Fresh", "SALES", columns, 2, nullptr, 1, 0, &index),
+  EXPECT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 4, 2, 5}), "Fresh", "SALES", columns, 2,
+                                  nullptr, 1, 0, &index),
             kInvalidArgument);
   EXPECT_EQ(count_of(fm_workbook_get_table_count, wb.handle), 0U);
-  EXPECT_EQ(fm_workbook_add_table(wb.handle, 0, "E1:F3", "Fresh", "Fresh", columns, 2, nullptr, 1, 0, &index), 0);
+  EXPECT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 4, 2, 5}), "Fresh", "Fresh", columns, 2,
+                                  nullptr, 1, 0, &index),
+            0);
 }
 
 TEST(FormulonCApiTable, RenameRejectsTheNameOfAVerbatimXlsbTable) {
@@ -609,7 +618,9 @@ TEST(FormulonCApiTable, RenameRejectsTheNameOfAVerbatimXlsbTable) {
   Load(RetainedSalesPackage(3), wb);
   const char* columns[] = {"A", "B"};
   std::size_t index = 0;
-  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, "E1:F3", "Fresh", "Fresh", columns, 2, nullptr, 1, 0, &index), 0);
+  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 4, 2, 5}), "Fresh", "Fresh", columns, 2,
+                                  nullptr, 1, 0, &index),
+            0);
   EXPECT_EQ(fm_workbook_rename_table(wb.handle, index, "Sales", "Sales"), kInvalidArgument);
   EXPECT_EQ(fm_workbook_rename_table(wb.handle, index, "Fresh2", "sALES"), kInvalidArgument);
   EXPECT_EQ(fm_workbook_rename_table(wb.handle, index, "Fresh2", "Fresh2"), 0);
@@ -620,7 +631,9 @@ TEST(FormulonCApiTable, CreateAvoidsTheIdOfAVerbatimXlsbTable) {
   Load(RetainedSalesPackage(1), wb);
   const char* columns[] = {"A", "B"};
   std::size_t index = 0;
-  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, "E1:F3", "Fresh", "Fresh", columns, 2, nullptr, 1, 0, &index), 0);
+  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 4, 2, 5}), "Fresh", "Fresh", columns, 2,
+                                  nullptr, 1, 0, &index),
+            0);
   // The xlsx part is named after the table id.
   const std::string table_xml = ExtractZipEntry(Save(wb.handle), "xl/tables/table2.xml");
   EXPECT_NE(table_xml.find(" id=\"2\""), std::string::npos) << table_xml;

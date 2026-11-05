@@ -104,6 +104,7 @@ _RECT_QUADS = (
     ("top", "left", "rows", "cols"),
     ("row", "col", "rows", "cols"),
     ("anchor_row", "anchor_col", "rows", "cols"),
+    ("anchor_row", "anchor_col", "span_rows", "span_cols"),
 )
 _INTEGER_TYPES = frozenset({"uint8_t", "uint16_t", "uint32_t", "uint64_t", "int32_t", "int64_t", "size_t"})
 _BARE_C_SCALARS = frozenset({"int", "unsigned", "unsigned int", "long", "short", "bool", "_Bool"})

@@ -307,7 +307,22 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
 
   const JsonValue* area = rt.find("print_area");
   if (area != nullptr && area->is_string() && !area->as_string().empty()) {
-    RETURN_IF_ERROR(checked(fm_sheet_set_print_area(wb, sheet, area->as_string().c_str()), "fm_sheet_set_print_area"));
+    // The case spells the area as comma-separated A1 ranges.
+    std::vector<fm_cell_rect_t> rects;
+    std::string_view text = area->as_string();
+    while (!text.empty()) {
+      const std::size_t comma = std::min(text.find(','), text.size());
+      const std::string token(text.substr(0, comma));
+      fm_parsed_reference_t ref{};
+      RETURN_IF_ERROR(
+          checked(fm_workbook_parse_reference(wb, token.c_str(), 0, 0, 0U, 0U, &ref), "fm_workbook_parse_reference"));
+      if (ref.valid == 0) {
+        return invalid("print_area token is not an A1 range: " + token);
+      }
+      rects.push_back(ref.rect);
+      text.remove_prefix(comma == text.size() ? comma : comma + 1U);
+    }
+    RETURN_IF_ERROR(checked(fm_sheet_set_print_area(wb, sheet, rects.data(), rects.size()), "fm_sheet_set_print_area"));
   }
 
   if (const JsonValue* titles = rt.find("print_titles"); titles != nullptr && titles->is_object()) {

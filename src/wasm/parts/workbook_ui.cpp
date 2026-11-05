@@ -298,8 +298,12 @@ fm_status_t protected_range_item(const fm_workbook_t* wb, uint32_t sheet, std::s
   }
   emscripten::val o = emscripten::val::object();
   o.set("spinCount", r.spin_count);
+  emscripten::val ranges = emscripten::val::array();
+  for (std::size_t i = 0; i < r.range_count; ++i) {
+    ranges.call<void>("push", cell_rect_to_val(r.ranges[i]));
+  }
+  o.set("ranges", ranges);
   js_set_cstr_fields(o, {{"name", r.name},
-                         {"sqref", r.sqref},
                          {"password", r.password},
                          {"algorithmName", r.algorithm_name},
                          {"hashValue", r.hash_value},
@@ -324,16 +328,22 @@ JsStatus edit_protected_range(fm_workbook_t* wb, const emscripten::val& range, c
     return invalid_handle_status();
   }
   JsNarrowNumericReader reader(operation);
-  std::string text[7];
+  std::string text[6];
   fm_protected_range_t r{};
   r.spin_count = reader.u32(range, "spinCount", 0U, "range.spinCount");
   r.name = reader.optional_string(range, "name", text[0], "range.name");
-  r.sqref = reader.optional_string(range, "sqref", text[1], "range.sqref");
-  r.password = reader.optional_string(range, "password", text[2], "range.password");
-  r.algorithm_name = reader.optional_string(range, "algorithmName", text[3], "range.algorithmName");
-  r.hash_value = reader.optional_string(range, "hashValue", text[4], "range.hashValue");
-  r.salt_value = reader.optional_string(range, "saltValue", text[5], "range.saltValue");
-  r.security_descriptor = reader.optional_string(range, "securityDescriptor", text[6], "range.securityDescriptor");
+  const emscripten::val ranges_value = reader.value(range, "ranges", "range.ranges");
+  std::vector<fm_cell_rect_t> ranges;
+  if (reader.require_array(ranges_value, "range.ranges")) {
+    ranges = js_pull_range_array(ranges_value, "range.ranges", &reader);
+  }
+  r.ranges = ranges.data();
+  r.range_count = ranges.size();
+  r.password = reader.optional_string(range, "password", text[1], "range.password");
+  r.algorithm_name = reader.optional_string(range, "algorithmName", text[2], "range.algorithmName");
+  r.hash_value = reader.optional_string(range, "hashValue", text[3], "range.hashValue");
+  r.salt_value = reader.optional_string(range, "saltValue", text[4], "range.saltValue");
+  r.security_descriptor = reader.optional_string(range, "securityDescriptor", text[5], "range.securityDescriptor");
   if (!reader.ok()) {
     return reader.failure();
   }
@@ -449,7 +459,7 @@ fm_status_t validation_item(const fm_workbook_t* wb, uint32_t sheet, std::size_t
   }
   emscripten::val item = emscripten::val::object();
   emscripten::val ranges = emscripten::val::array();
-  for (uint32_t r = 0; r < v.range_count; ++r) {
+  for (std::size_t r = 0; r < v.range_count; ++r) {
     ranges.set(r, cell_rect_to_val(v.ranges[r]));
   }
   item.set("ranges", ranges);
@@ -484,7 +494,11 @@ JsStatus JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
   // borrowed `const char*` views that must stay valid until
   // `fm_sheet_add_validation` returns.
   JsNarrowNumericReader reader("addValidation");
-  const std::vector<fm_cell_rect_t> ranges_buf = js_pull_ranges(v, "ranges", &reader);
+  const emscripten::val ranges_value = reader.value(v, "ranges", "validation.ranges");
+  std::vector<fm_cell_rect_t> ranges_buf;
+  if (reader.require_array(ranges_value, "validation.ranges")) {
+    ranges_buf = js_pull_range_array(ranges_value, "validation.ranges", &reader);
+  }
   if (!reader.ok()) {
     return reader.failure();
   }
@@ -500,7 +514,7 @@ JsStatus JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
 
   fm_data_validation_t dv{};
   dv.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
-  dv.range_count = static_cast<uint32_t>(ranges_buf.size());
+  dv.range_count = ranges_buf.size();
   dv.type = reader.u8(v, "type", 0U, "validation.type");
   dv.op = reader.u8(v, "op", 0U, "validation.op");
   dv.error_style = reader.u8(v, "errorStyle", 0U, "validation.errorStyle");

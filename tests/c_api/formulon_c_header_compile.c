@@ -110,7 +110,7 @@ int main(void) {
   // Protection records, pinned per target.
   _Static_assert(sizeof(fm_workbook_protection_t) == (sizeof(void*) == 4 ? 52 : 88),
                  "fm_workbook_protection_t ABI layout changed");
-  _Static_assert(sizeof(fm_protected_range_t) == (sizeof(void*) == 4 ? 32 : 64),
+  _Static_assert(sizeof(fm_protected_range_t) == (sizeof(void*) == 4 ? 36 : 72),
                  "fm_protected_range_t ABI layout changed");
   fm_status_t (*get_auto_filter)(const fm_workbook_t*, size_t, fm_auto_filter_t*, int32_t*) = fm_sheet_get_auto_filter;
   fm_status_t (*set_table_auto_filter)(fm_workbook_t*, size_t, const fm_auto_filter_t*) =

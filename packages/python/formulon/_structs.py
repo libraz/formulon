@@ -152,6 +152,11 @@ CELL_RECT = Struct(
     [("first_row", U32), ("first_col", U32), ("last_row", U32), ("last_col", U32)],
 )
 
+SHEET_RECT = Struct(
+    "fm_sheet_rect_t",
+    [("sheet_index", U32), ("rect", nested(CELL_RECT))],
+)
+
 HYPERLINK = Struct(
     "fm_hyperlink_t",
     [
@@ -192,7 +197,8 @@ PROTECTED_RANGE = Struct(
     [
         ("spin_count", U32),
         ("name", PTR),
-        ("sqref", PTR),
+        ("ranges", PTR),
+        ("range_count", U32),
         ("password", PTR),
         ("algorithm_name", PTR),
         ("hash_value", PTR),
@@ -302,8 +308,8 @@ CF_RULE = Struct(
         ("stop_if_true", I32),
         ("dxf_id_engaged", I32),
         ("dxf_id", U32),
-        ("sqref", PTR),
-        ("sqref_count", U32),
+        ("ranges", PTR),
+        ("range_count", U32),
         ("formula1", PTR),
         ("formula2", PTR),
         ("op_engaged", I32),
@@ -1666,11 +1672,6 @@ CHART_DATA_SERIES = Struct(
 CHART_DATA_POINTS = Struct(
     "fm_chart_data_points_t",
     [("count", U32), ("values", PTR), ("states", PTR), ("x", PTR), ("sizes", PTR)],
-)
-
-CHART_SHEET_RANGE = Struct(
-    "fm_chart_sheet_range_t",
-    [("sheet", U32), ("top", U32), ("left", U32), ("bottom", U32), ("right", U32)],
 )
 
 CHART_AXIS_TITLE_TEXT = Struct(

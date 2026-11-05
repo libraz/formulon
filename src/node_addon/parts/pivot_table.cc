@@ -121,7 +121,16 @@ Napi::Value Workbook::PivotSetName(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::PivotSetAnchor(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_set_pivot_anchor);
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  CheckedSpecReader reader(env);
+  fm_cell_rect_t rect{};
+  if (!CellRectArg(reader, info, 2, &rect)) {
+    return env.Undefined();
+  }
+  return MakeStatus(env, fm_sheet_set_pivot_anchor(handle_, ArgU32(info, 0), ArgU32(info, 1), &rect));
 }
 
 Napi::Value Workbook::PivotSetGrandTotals(const Napi::CallbackInfo& info) {
@@ -154,8 +163,8 @@ Napi::Value Workbook::PivotSetStyleInfo(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return MakeStatus(env, fm_sheet_set_pivot_style_info(handle_, sheet, pivot_idx, has_name ? name.c_str() : nullptr,
-                                                          row_headers ? 1 : 0, col_headers ? 1 : 0, row_stripes ? 1 : 0,
-                                                          col_stripes ? 1 : 0, last_column ? 1 : 0));
+                                                       row_headers ? 1 : 0, col_headers ? 1 : 0, row_stripes ? 1 : 0,
+                                                       col_stripes ? 1 : 0, last_column ? 1 : 0));
 }
 
 Napi::Value Workbook::PivotGetLayout(const Napi::CallbackInfo& info) {
@@ -204,9 +213,8 @@ Napi::Value Workbook::PivotGetGrandTotals(const Napi::CallbackInfo& info) {
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   int32_t rows = 0;
   int32_t cols = 0;
-  const fm_status_t rc = handle_ != nullptr
-                             ? fm_sheet_get_pivot_grand_totals(handle_, sheet, pivot_idx, &rows, &cols)
-                             : kBindingInvalidHandle;
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_pivot_grand_totals(handle_, sheet, pivot_idx, &rows, &cols)
+                                            : kBindingInvalidHandle;
   Napi::Object out = Napi::Object::New(env);
   out.Set("status", MakeStatus(env, rc));
   out.Set("rows", Napi::Boolean::New(env, rc == 0 && rows != 0));
@@ -330,7 +338,7 @@ Napi::Value Workbook::PivotFieldItemAt(const Napi::CallbackInfo& info) {
   const std::size_t item_idx = static_cast<std::size_t>(ArgU32(info, 3));
   fm_pivot_item_info_t item{};
   const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_pivot_field_item(handle_, args.sheet, args.pivot_idx,
-                                                                              args.field_idx, item_idx, &item)
+                                                                            args.field_idx, item_idx, &item)
                                             : kBindingInvalidHandle;
   if (rc != 0) {
     item = fm_pivot_item_info_t{};
@@ -406,7 +414,7 @@ Napi::Value Workbook::PivotFieldSetSubtotalTop(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const PivotFieldArgs field = ReadPivotField(info);
     return fm_sheet_set_pivot_field_subtotal_top(handle, field.sheet, field.pivot_idx, field.field_idx,
-                                                    ArgFlag(info, 3));
+                                                 ArgFlag(info, 3));
   });
 }
 
@@ -415,8 +423,7 @@ Napi::Value Workbook::PivotFieldAddItem(const Napi::CallbackInfo& info) {
     const PivotFieldArgs field = ReadPivotField(info);
     const std::string name = ArgString(info, 3);
     const int32_t visible = ArgFlag(info, 4);
-    return fm_sheet_add_pivot_field_item(handle, field.sheet, field.pivot_idx, field.field_idx, name.c_str(),
-                                            visible);
+    return fm_sheet_add_pivot_field_item(handle, field.sheet, field.pivot_idx, field.field_idx, name.c_str(), visible);
   });
 }
 
@@ -426,7 +433,7 @@ Napi::Value Workbook::PivotFieldAddItemAt(const Napi::CallbackInfo& info) {
     const uint32_t cache_index = ArgU32(info, 3);
     const int32_t visible = ArgFlag(info, 4);
     return fm_sheet_add_pivot_field_shared_item(handle, field.sheet, field.pivot_idx, field.field_idx, cache_index,
-                                               visible);
+                                                visible);
   });
 }
 
@@ -440,7 +447,7 @@ Napi::Value Workbook::PivotFieldSetItemVisible(const Napi::CallbackInfo& info) {
     const std::size_t item_idx = static_cast<std::size_t>(ArgU32(info, 3));
     const int32_t visible = ArgFlag(info, 4);
     return fm_sheet_set_pivot_field_item_visible(handle, field.sheet, field.pivot_idx, field.field_idx, item_idx,
-                                                    visible);
+                                                 visible);
   });
 }
 
@@ -722,8 +729,7 @@ Napi::Value Workbook::PivotShowDetails(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   std::size_t out = 0;
-  const fm_status_t rc =
-      fm_sheet_show_pivot_details(handle_, sheet, pivot_idx, ArgU32(info, 2), ArgU32(info, 3), &out);
+  const fm_status_t rc = fm_sheet_show_pivot_details(handle_, sheet, pivot_idx, ArgU32(info, 2), ArgU32(info, 3), &out);
   return MakeIndexResult(env, rc, static_cast<uint32_t>(out));
 }
 
@@ -766,7 +772,7 @@ Napi::Value Workbook::PivotFieldSetItemShowDetail(const Napi::CallbackInfo& info
     const PivotFieldArgs field = ReadPivotField(info);
     const std::size_t item_idx = static_cast<std::size_t>(ArgU32(info, 3));
     return fm_sheet_set_pivot_field_item_show_detail(handle, field.sheet, field.pivot_idx, field.field_idx, item_idx,
-                                                        ArgFlag(info, 4));
+                                                     ArgFlag(info, 4));
   });
 }
 
@@ -776,7 +782,7 @@ Napi::Value Workbook::PivotFieldSetItemCaption(const Napi::CallbackInfo& info) {
     const std::size_t item_idx = static_cast<std::size_t>(ArgU32(info, 3));
     const std::string caption = ArgString(info, 4);
     return fm_sheet_set_pivot_field_item_caption(handle, field.sheet, field.pivot_idx, field.field_idx, item_idx,
-                                                    caption.c_str());
+                                                 caption.c_str());
   });
 }
 
@@ -805,8 +811,8 @@ Napi::Value Workbook::PivotFieldSetDateGroup(const Napi::CallbackInfo& info) {
   }
   const PivotFieldArgs field = ReadPivotField(info);
   return MakeStatus(
-      env, fm_sheet_set_pivot_field_date_group(handle_, field.sheet, field.pivot_idx, field.field_idx,
-                                                  ArgU32(info, 3), ArgI32(info, 4), interval_days, start, end));
+      env, fm_sheet_set_pivot_field_date_group(handle_, field.sheet, field.pivot_idx, field.field_idx, ArgU32(info, 3),
+                                               ArgI32(info, 4), interval_days, start, end));
 }
 
 Napi::Value Workbook::PivotFieldClearDateGroup(const Napi::CallbackInfo& info) {
@@ -817,8 +823,7 @@ Napi::Value Workbook::PivotFieldSetNumberFormat(const Napi::CallbackInfo& info) 
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const PivotFieldArgs field = ReadPivotField(info);
     const std::string utf8 = ArgString(info, 3);
-    return fm_sheet_set_pivot_field_number_format(handle, field.sheet, field.pivot_idx, field.field_idx,
-                                                     utf8.c_str());
+    return fm_sheet_set_pivot_field_number_format(handle, field.sheet, field.pivot_idx, field.field_idx, utf8.c_str());
   });
 }
 
@@ -890,9 +895,9 @@ Napi::Value Workbook::PivotDataFieldAt(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const PivotFieldArgs args = ReadPivotField(info);
   fm_pivot_data_field_spec_t spec{};
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_sheet_get_pivot_data_field(handle_, args.sheet, args.pivot_idx, args.field_idx, &spec)
-                         : kBindingInvalidHandle;
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_sheet_get_pivot_data_field(handle_, args.sheet, args.pivot_idx, args.field_idx, &spec)
+                             : kBindingInvalidHandle;
   if (rc != 0) {
     spec = fm_pivot_data_field_spec_t{};
     spec.show_as_base_field = -1;

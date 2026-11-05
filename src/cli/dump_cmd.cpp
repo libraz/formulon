@@ -148,13 +148,18 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
   for (std::size_t i = 0; i < n_tables; ++i) {
     const char* name = nullptr;
     const char* display = nullptr;
-    const char* ref = nullptr;
+    fm_cell_rect_t rect{};
     std::size_t sheet_index = 0;
-    if (auto rc = fm_workbook_get_table(wb, i, &name, &display, &ref, &sheet_index); rc != 0) {
+    if (auto rc = fm_workbook_get_table(wb, i, &name, &display, &rect, &sheet_index); rc != 0) {
       return rc;
     }
+    // The ref as the table part stores it: a single cell is one address.
+    std::string ref = format_a1(rect.first_row, rect.first_col);
+    if (rect.first_row != rect.last_row || rect.first_col != rect.last_col) {
+      ref += ':' + format_a1(rect.last_row, rect.last_col);
+    }
     snapshot << escape_c_string(name) << ' ' << escape_c_string(display) << ' ' << sheet_index << ' '
-             << escape_c_string(ref) << '\n';
+             << escape_c_string(ref.c_str()) << '\n';
   }
   snapshot << "[passthrough_parts]\n";
   std::size_t n_parts = 0;

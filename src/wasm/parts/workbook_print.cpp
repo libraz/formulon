@@ -137,11 +137,32 @@ JsStatus JsWorkbook::setSheetFitToPage(uint32_t sheet, bool enabled) {
 // ---- Print area / titles -----------------------------------------------
 
 emscripten::val JsWorkbook::getSheetPrintArea(uint32_t sheet) const {
-  return xml_result(handle_, sheet, &fm_sheet_get_print_area, "ranges");
+  emscripten::val out = emscripten::val::object();
+  emscripten::val ranges = emscripten::val::array();
+  const fm_cell_rect_t* found = nullptr;
+  size_t count = 0;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_print_area(handle_, sheet, &found, &count) : kBindingInvalidHandle;
+  if (rc == 0) {
+    for (size_t i = 0; i < count; ++i) {
+      ranges.call<void>("push", cell_rect_to_val(found[i]));
+    }
+  }
+  out.set("status", status_from_rc(rc));
+  out.set("ranges", ranges);
+  return out;
 }
 
-JsStatus JsWorkbook::setSheetPrintArea(uint32_t sheet, const std::string& rangesA1) {
-  return xml_set(handle_, sheet, rangesA1, &fm_sheet_set_print_area);
+JsStatus JsWorkbook::setSheetPrintArea(uint32_t sheet, emscripten::val ranges) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  JsNarrowNumericReader reader("setPrintArea");
+  const std::vector<fm_cell_rect_t> rects = js_pull_range_array(ranges, "ranges", &reader);
+  if (!reader.ok()) {
+    return reader.failure();
+  }
+  return status_from_rc(fm_sheet_set_print_area(handle_, sheet, rects.data(), rects.size()));
 }
 
 emscripten::val JsWorkbook::getSheetPrintTitles(uint32_t sheet) const {

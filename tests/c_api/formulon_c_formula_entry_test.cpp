@@ -207,8 +207,8 @@ fm_cf_rule_t MakeCfRule(const fm_cell_rect_t* sqref, const char* formula1, const
   rule.type = 0;  // Expression
   rule.formula1 = formula1;
   rule.formula2 = formula2;
-  rule.sqref = sqref;
-  rule.sqref_count = 1;
+  rule.ranges = sqref;
+  rule.range_count = 1;
   return rule;
 }
 

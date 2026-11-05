@@ -1,13 +1,3 @@
-R11.multi	print_area.get	out_ranges_a1	fm_sheet_get_print_area: `const char** out_ranges_a1` is A1 text; take `const fm_cell_rect_t* ranges, size_t range_count`
-R11.multi	print_area.set	ranges_a1	fm_sheet_set_print_area: `const char* ranges_a1` is A1 text; take `const fm_cell_rect_t* ranges, size_t range_count`
-R11.multi	record.cf_rule	sqref	fm_cf_rule_t: `const fm_cf_cell_range_t* sqref, uint32_t sqref_count` should be `const fm_cell_rect_t* ranges, size_t range_count`
-R11.multi	record.data_validation	ranges	fm_data_validation: `const fm_merge_range* ranges, uint32_t range_count` should be `const fm_cell_rect_t* ranges, size_t range_count`
-R11.multi	record.protected_range	sqref	fm_protected_range_t: `const char* sqref` is A1 text; take `const fm_cell_rect_t* ranges, size_t range_count`
-R11.multi	selection.set	ranges	fm_sheet_set_selection: `const fm_merge_range* ranges, size_t count` should be `const fm_cell_rect_t* ranges, size_t range_count`
-R11.multi	table.create	ref	fm_workbook_table_create: `const char* ref` is A1 text; take `const fm_cell_rect_t* ranges, size_t range_count`
-R11.multi	table.get	out_ref	fm_workbook_table_at: `const char** out_ref` is A1 text; take `const fm_cell_rect_t* ranges, size_t range_count`
-R11.multi	table.update	ref	fm_workbook_table_update: `const char* ref` is A1 text; take `const fm_cell_rect_t* ranges, size_t range_count`
-R11.sheet	record.chart_sheet_range	-	fm_chart_sheet_range_t pairs a sheet with a rectangle; use `fm_sheet_rect_t`
 R3.keys	cell_style	getter	natural-key collection `cell_style` has no getter by key
 R3.keys	cell_style_xf.add	out-key	fm_styles_add_cell_style_xf: returns the allocated index through `out_index`
 R3.keys	defined_name	getter	natural-key collection `defined_name` has no getter by key

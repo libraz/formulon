@@ -471,8 +471,8 @@ export interface TableEntry {
   status: Status;
   name?: string;
   displayName?: string;
-  ref?: string;
-  sheetIndex?: number;
+  /** The table's sheet and range. */
+  range?: SheetRect;
   styleName?: string;
   hasStyleInfo?: boolean;
   showFirstColumn?: boolean;
@@ -484,16 +484,15 @@ export interface TableEntry {
   columns?: TableColumnEntry[];
 }
 
-/** Authoring input for a worksheet table. `columns` must have exactly one
- * name per column in `ref`; `styleName` names a built-in TableStyle or a
- * custom style. A styled table starts with row stripes on and the other
+/** Authoring input for a worksheet table over `range`. `columns` must have
+ * exactly one name per column of the range; `styleName` names a built-in
+ * TableStyle or a custom style. A styled table starts with row stripes on and the other
  * toggles off; a supplied toggle overrides that (and, without `styleName`,
  * writes an unnamed style element). With `headerRow` (the default), the
- * caller still writes the header cells: Excel expects the first row of `ref`
- * to hold the column names. */
+ * caller still writes the header cells: Excel expects the first row of the
+ * range to hold the column names. */
 export interface TableInput {
-  sheetIndex: number;
-  ref: string;
+  range: SheetRect;
   name: string;
   displayName?: string;
   columns: string[];
@@ -508,17 +507,18 @@ export interface TableInput {
 
 /** Partial table metadata update. Omitted fields preserve their existing
  * values; an empty `styleName` explicitly removes the table style, while a
- * new name keeps the four toggles. When omitted, `ref` also preserves the
- * current range. `headerRow` and `totalsRow` update their flags only when
- * supplied; turning `totalsRow` on writes each column's totals cell on the
- * last row of `ref` (see `setTableColumnTotals`). `name` renames the table
+ * new name keeps the four toggles. When omitted, `rect` also preserves the
+ * current range. `headerRow` and
+ * `totalsRow` update their flags only when supplied; turning `totalsRow` on
+ * writes each column's totals cell on the last row of the range (see
+ * `setTableColumnTotals`). `name` renames the table
  * (`displayName` follows it unless supplied), with `createTable`'s
  * uniqueness rule, and rewrites structured references to the old name in
  * cell, defined-name, conditional-format, validation and chart formulas; a
  * bare table name used as a reference is not rewritten. The update is
  * all-or-nothing. */
 export interface TableUpdateInput {
-  ref?: string;
+  rect?: CellRect;
   name?: string;
   displayName?: string;
   styleName?: string;
@@ -1498,12 +1498,11 @@ export interface SheetPrintXmlResult {
   xml: string;
 }
 
-/** Result of `Workbook.getPrintArea`. `ranges` is comma-separated A1
- * (`"A1:F8"`, `"A1:B10,D5:E20"`), empty when no print area is declared. A
- * whole-axis area reads back expanded to explicit corners. */
+/** Result of `Workbook.getPrintArea`. `ranges` is empty when no print
+ * area is declared; a whole-axis area reads back expanded to the grid edge. */
 export interface SheetPrintAreaResult {
   status: Status;
-  ranges: string;
+  ranges: CellRect[];
 }
 
 /** Result of `Workbook.getPrintTitles`. Either span is empty when
@@ -2277,6 +2276,12 @@ export interface CellRect {
   readonly lastCol: number;
 }
 
+/** A cell rectangle on sheet index `sheet`. */
+export interface SheetRect {
+  readonly sheet: number;
+  readonly rect: CellRect;
+}
+
 /** Return type of `Workbook.getFormatDefaults(sheet)`; also the
  *  argument shape of `setSheetFormatDefaults`. `defaultColWidth` is a
  *  stored width (padding included) and `defaultRowHeight` in points, each meaningful only
@@ -2909,15 +2914,6 @@ export interface ChartInfo {
   source: { range: string; direction: ChartSeriesDirection; headerRow: boolean; headerColumn: boolean } | null;
 }
 
-/** A 0-based inclusive cell rectangle on sheet index `sheet`. */
-export interface ChartSheetRange {
-  sheet: number;
-  top: number;
-  left: number;
-  bottom: number;
-  right: number;
-}
-
 /** One resolved series; `values`, `states` (a {@link ChartPointState} each) and the optional `x` / `sizes` have `pointCount` entries. */
 export interface ChartDataSeries {
   plotIndex: number;
@@ -2933,12 +2929,12 @@ export interface ChartDataSeries {
   x: Float64Array | null;
   sizes: Float64Array | null;
   ranges: {
-    name: ChartSheetRange[];
-    categories: ChartSheetRange[];
-    values: ChartSheetRange[];
-    x: ChartSheetRange[];
-    y: ChartSheetRange[];
-    size: ChartSheetRange[];
+    name: SheetRect[];
+    categories: SheetRect[];
+    values: SheetRect[];
+    x: SheetRect[];
+    y: SheetRect[];
+    size: SheetRect[];
   };
 }
 
@@ -3198,11 +3194,11 @@ export interface WorkbookProtectionResult {
   protection: WorkbookProtection | null;
 }
 
-/** One `<protectedRange>`: a named range users may edit on a protected sheet.
- *  `sqref` is the A1 range list (`"B2:C3 E5"`). */
+/** One `<protectedRange>`: a named range users may edit on a protected sheet,
+ *  covering the rectangles of `ranges`. */
 export interface ProtectedRange {
   name: string;
-  sqref: string;
+  ranges: ReadonlyArray<CellRect>;
   password: string;
   algorithmName: string;
   hashValue: string;
@@ -3250,11 +3246,11 @@ export interface DataValidation {
 }
 
 /** Argument shape accepted by `addValidation(sheet, validation)`. Every
- *  field except `type` is optional; missing fields default to `0` for
- *  the small enum-shaped integers, `false` for booleans, and `""` for
- *  strings. */
+ *  field except `ranges` and `type` is optional; missing fields default to
+ *  `0` for the small enum-shaped integers, `false` for booleans, and `""`
+ *  for strings. `ranges` must hold at least one rectangle. */
 export interface DataValidationInput {
-  ranges?: ReadonlyArray<CellRect>;
+  ranges: ReadonlyArray<CellRect>;
   type: number;
   op?: number;
   errorStyle?: ValidationErrorStyle;
@@ -3748,7 +3744,7 @@ export interface ExternalLinkRecord {
  *  1 cellIs, 2 colorScale, 3 dataBar, 4 iconSet, 5 top10,
  *  6 aboveAverage, 7 containsText, ... 17 uniqueValues).
  *
- *  `id`, `type`, `priority`, `stopIfTrue` and `sqref` populate for every
+ *  `id`, `type`, `priority`, `stopIfTrue` and `ranges` populate for every
  *  rule kind; the remaining fields are engaged by the kinds noted on
  *  each. A visual rule (`colorScale` / `dataBar` / `iconSet`) carries its
  *  full sub-spec, so an entry read back here can be handed straight to
@@ -3758,7 +3754,7 @@ export interface ConditionalFormatEntry {
   readonly type: number;
   readonly priority: number;
   readonly stopIfTrue: boolean;
-  readonly sqref: ReadonlyArray<CellRect>;
+  readonly ranges: ReadonlyArray<CellRect>;
   readonly dxfId?: number;
   readonly formula1?: string;
   readonly formula2?: string;
@@ -3842,7 +3838,7 @@ export interface CfIconInput {
  *  `existing_max + 1`. When `id` is missing or empty, the engine
  *  synthesises one. */
 export interface ConditionalFormatInput {
-  sqref: ReadonlyArray<CellRect>;
+  ranges: ReadonlyArray<CellRect>;
   type: number;
   priority?: number;
   stopIfTrue?: boolean;
@@ -4055,14 +4051,11 @@ export interface SpillInfo {
   readonly rect: CellRect | null;
 }
 
-/** A parsed reference: a 0-based, inclusive rectangle. A whole column or row is expanded to the grid
- *  edge, and `row0 <= row1`, `col0 <= col1`. `sheetName` is the unquoted local qualifier, `null` when none. */
+/** A parsed reference: the rectangle `rect`, with a whole column or row expanded to the grid edge.
+ *  `sheetName` is the unquoted local qualifier, `null` when none. */
 export interface ParsedReference {
   sheetName: string | null;
-  row0: number;
-  col0: number;
-  row1: number;
-  col1: number;
+  rect: CellRect;
 }
 
 /** Options for `parseReference`. `baseRow` and `baseCol` anchor R1C1 relative axes and are given together. */
@@ -4075,10 +4068,7 @@ export interface ParseReferenceOptions {
 /** The rectangle `formatReference` writes; `sheetName` `null`, omitted or `""` writes no qualifier. */
 export interface ReferenceRange {
   sheetName?: string | null;
-  row0: number;
-  col0: number;
-  row1: number;
-  col1: number;
+  rect: CellRect;
 }
 
 /** Options for `formatReference`. */
@@ -4614,15 +4604,8 @@ export interface Workbook {
   removePivot(sheet: number, pivotIdx: number): Status;
   /** Renames the pivot table. */
   setPivotName(sheet: number, pivotIdx: number, name: string): Status;
-  /** Updates the pivot's anchor cell and span. */
-  setPivotAnchor(
-    sheet: number,
-    pivotIdx: number,
-    anchorRow: number,
-    anchorCol: number,
-    spanRows: number,
-    spanCols: number,
-  ): Status;
+  /** Sets the rectangle the pivot reserves (`<location ref>`); its top-left cell is the anchor. */
+  setPivotAnchor(sheet: number, pivotIdx: number, rect: CellRect): Status;
   /** Toggles the row / column grand total bands on the pivot. */
   setPivotGrandTotals(sheet: number, pivotIdx: number, rowsEnabled: boolean, colsEnabled: boolean): Status;
   /** Sets the pivot's table style and toggles, making the style element
@@ -4911,11 +4894,12 @@ export interface Workbook {
    *  anything else `<sheetPr>` carries. */
   setFitToPage(sheet: number, enabled: boolean): Status;
 
-  /** Reads `_xlnm.Print_Area` as comma-separated A1 ranges. */
+  /** Reads `_xlnm.Print_Area` as rectangles. */
   getPrintArea(sheet: number): SheetPrintAreaResult;
-  /** Writes `_xlnm.Print_Area` from one or more comma-separated A1 ranges
-   *  (`"A1:F8"`, `"A1:B10,D5:E20"`, `"A:D"`). Empty removes it. */
-  setPrintArea(sheet: number, rangesA1: string): Status;
+  /** Writes `_xlnm.Print_Area` from one or more rectangles, printed in the
+   *  given order; a rectangle spanning every row or column is stored as whole
+   *  columns or rows. An empty array removes it. */
+  setPrintArea(sheet: number, ranges: ReadonlyArray<CellRect>): Status;
   /** Reads `_xlnm.Print_Titles` as a row span and a column span. */
   getPrintTitles(sheet: number): SheetPrintTitlesResult;
   /** Writes `_xlnm.Print_Titles`. Both empty removes it. */
@@ -5275,7 +5259,7 @@ export interface Workbook {
   setWorkbookProtection(protection: WorkbookProtection): Status;
   /** Returns the protected ranges of `sheet` in file order. */
   getProtectedRanges(sheet: number): ListResult<ProtectedRange>;
-  /** Appends a protected range. `name` must be non-empty and unique on the sheet; `sqref` must parse as A1 ranges. */
+  /** Appends a protected range. `name` must be non-empty and unique on the sheet; `ranges` must hold at least one rectangle. */
   addProtectedRange(sheet: number, range: ProtectedRange): Status;
   /** Replaces protected range `index`. */
   updateProtectedRange(sheet: number, index: number, range: ProtectedRange): Status;

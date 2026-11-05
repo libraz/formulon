@@ -216,8 +216,7 @@ export function registerCellsIo(Module, test) {
     const wb = Module.Workbook.createDefault();
     try {
       const created = wb.addTable({
-        sheetIndex: 0,
-        ref: 'A1:B3',
+        range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 } },
         name: 'Sales',
         columns: ['Product', 'Amount'],
         styleName: 'TableStyleMedium2',
@@ -227,7 +226,7 @@ export function registerCellsIo(Module, test) {
       assert.ok(created.status.ok, `createTable failed: ${JSON.stringify(created.status)}`);
       const before = wb.getTable(created.index);
       assert.ok(before.status.ok);
-      assert.equal(before.ref, 'A1:B3');
+      assert.deepEqual(before.range.rect, { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 });
 
       const beforeSaved = wb.save();
       assert.ok(beforeSaved.status.ok);
@@ -237,12 +236,12 @@ export function registerCellsIo(Module, test) {
       assert.match(beforeXml, /totalsRowCount="1"/);
 
       // An empty update object is a partial no-op. This specifically covers
-      // the WASM-to-C mapping of omitted ref/style/row flags to preservation
+      // the WASM-to-C mapping of omitted rect/style/row flags to preservation
       // sentinels rather than empty/false defaults.
       assert.ok(wb.updateTable(created.index, {}).ok);
       const after = wb.getTable(created.index);
       assert.ok(after.status.ok);
-      assert.equal(after.ref, before.ref);
+      assert.deepEqual(after.range.rect, before.range.rect);
 
       const saved = wb.save();
       assert.ok(saved.status.ok, `save failed: ${JSON.stringify(saved.status)}`);
@@ -255,7 +254,7 @@ export function registerCellsIo(Module, test) {
         assert.ok(loaded.isValid(), `load failed: ${Module.getLastErrorMessage()}`);
         const reloaded = loaded.getTable(created.index);
         assert.ok(reloaded.status.ok);
-        assert.equal(reloaded.ref, 'A1:B3');
+        assert.deepEqual(reloaded.range.rect, { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 });
         const roundTripped = loaded.save();
         assert.ok(roundTripped.status.ok);
         const roundTrippedXml = readZipEntryText(roundTripped.bytes, 'xl/tables/table1.xml');
@@ -271,13 +270,12 @@ export function registerCellsIo(Module, test) {
   });
 
   test('table update rethrows nested getter failures before changing the table', () => {
-    const getterFields = ['ref', 'styleName', 'headerRow', 'totalsRow'];
+    const getterFields = ['rect', 'styleName', 'headerRow', 'totalsRow'];
     for (const field of getterFields) {
       const wb = Module.Workbook.createDefault();
       try {
         const created = wb.addTable({
-          sheetIndex: 0,
-          ref: 'A1:B3',
+          range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 } },
           name: 'Sales',
           columns: ['Product', 'Amount'],
           styleName: 'TableStyleMedium2',
@@ -305,8 +303,7 @@ export function registerCellsIo(Module, test) {
     const wb = Module.Workbook.createDefault();
     try {
       const created = wb.addTable({
-        sheetIndex: 0,
-        ref: 'A1:B3',
+        range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 } },
         name: 'Sales',
         columns: ['Product', 'Amount'],
         styleName: 'TableStyleMedium2',
@@ -314,7 +311,12 @@ export function registerCellsIo(Module, test) {
         totalsRow: true,
       });
       assert.ok(created.status.ok, `createTable failed: ${JSON.stringify(created.status)}`);
-      const values = { ref: 'A1:B4', styleName: 'TableStyleLight9', headerRow: true, totalsRow: false };
+      const values = {
+        rect: { firstRow: 0, firstCol: 0, lastRow: 3, lastCol: 1 },
+        styleName: 'TableStyleLight9',
+        headerRow: true,
+        totalsRow: false,
+      };
       const reads = Object.fromEntries(Object.keys(values).map((key) => [key, 0]));
       const spec = {};
       for (const [key, value] of Object.entries(values)) {
@@ -329,14 +331,14 @@ export function registerCellsIo(Module, test) {
       }
       const result = wb.updateTable(created.index, spec);
       assert.ok(result.ok, JSON.stringify(result));
-      assert.deepEqual(reads, { ref: 1, styleName: 1, headerRow: 1, totalsRow: 1 });
-      assert.equal(wb.getTable(created.index).ref, 'A1:B4');
+      assert.deepEqual(reads, { rect: 1, styleName: 1, headerRow: 1, totalsRow: 1 });
+      assert.deepEqual(wb.getTable(created.index).range.rect, { firstRow: 0, firstCol: 0, lastRow: 3, lastCol: 1 });
     } finally {
       wb.delete();
     }
   });
 
-  test('createTable rejects a narrowing sheetIndex before table_create', () => {
+  test('createTable rejects a narrowing range.sheet before table_create', () => {
     const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Symbol('table sheet')];
     for (const value of invalid) {
       const wb = Module.Workbook.createDefault();
@@ -344,13 +346,12 @@ export function registerCellsIo(Module, test) {
         assert.throws(
           () =>
             wb.addTable({
-              sheetIndex: value,
-              ref: 'A1:B3',
+              range: { sheet: value, rect: { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 } },
               name: 'BadTable',
               columns: ['Product', 'Amount'],
             }),
           nestedErrorClass(value),
-          `createTable sheetIndex=${String(value)} accepted`,
+          `createTable range.sheet=${String(value)} accepted`,
         );
         assert.equal(wb.getTableCount().value, 0);
       } finally {
@@ -399,7 +400,7 @@ export function registerCellsIo(Module, test) {
     try {
       assert.ok(
         wb.addCfRule(0, {
-          sqref: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
+          ranges: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
           type: 3,
           dataBar: {
             min: { type: 3 },
@@ -430,7 +431,7 @@ export function registerCellsIo(Module, test) {
         // The decoded bar fed straight back reproduces the same rule.
         assert.ok(
           loaded.addCfRule(0, {
-            sqref: [{ firstRow: 4, firstCol: 0, lastRow: 6, lastCol: 0 }],
+            ranges: [{ firstRow: 4, firstCol: 0, lastRow: 6, lastCol: 0 }],
             type: 3,
             dataBar: bar,
           }).status.ok,
@@ -452,7 +453,7 @@ export function registerCellsIo(Module, test) {
     try {
       assert.ok(
         wb.addCfRule(0, {
-          sqref: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
+          ranges: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
           type: 3,
           dataBar: { min: { type: 3 }, max: { type: 4 }, fill: { r: 0, g: 0, b: 255 } },
         }).status.ok,
@@ -487,7 +488,7 @@ export function registerCellsIo(Module, test) {
       assert.ok(dxf.status.ok, `addDxf failed: ${JSON.stringify(dxf.status)}`);
       assert.ok(
         wb.addCfRule(0, {
-          sqref: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+          ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
           type: 1,
           op: 5,
           formula1: '10',

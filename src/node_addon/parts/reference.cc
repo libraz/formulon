@@ -32,16 +32,6 @@ bool OptionsArg(const Napi::CallbackInfo& info, size_t idx, const char* api, Nap
   return true;
 }
 
-/// Reads a required uint32 property; a missing one is a TypeError.
-uint32_t RequiredU32(CheckedSpecReader& reader, const Napi::Object& owner, const char* key, const char* api) {
-  bool present = false;
-  const uint32_t v = reader.U32(owner, key, 0U, &present);
-  if (reader.ok() && !present) {
-    Napi::TypeError::New(owner.Env(), std::string(api) + ": `" + key + "` is required").ThrowAsJavaScriptException();
-  }
-  return v;
-}
-
 }  // namespace
 
 Napi::Value Workbook::ParseReference(const Napi::CallbackInfo& info) {
@@ -70,8 +60,8 @@ Napi::Value Workbook::ParseReference(const Napi::CallbackInfo& info) {
   }
   const std::string text = ArgString(info, 0);
   fm_parsed_reference_t ref{};
-  const fm_status_t rc = fm_workbook_parse_reference(handle_, text.c_str(), r1c1 ? 1 : 0, has_row ? 1 : 0, base_row,
-                                                     base_col, &ref);
+  const fm_status_t rc =
+      fm_workbook_parse_reference(handle_, text.c_str(), r1c1 ? 1 : 0, has_row ? 1 : 0, base_row, base_col, &ref);
   if (rc != 0) {
     return ThrowLastError(env);
   }
@@ -80,10 +70,7 @@ Napi::Value Workbook::ParseReference(const Napi::CallbackInfo& info) {
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("sheetName", ref.has_sheet != 0 ? JsString(env, ref.sheet_name) : env.Null());
-  out.Set("row0", Napi::Number::New(env, ref.rect.first_row));
-  out.Set("col0", Napi::Number::New(env, ref.rect.first_col));
-  out.Set("row1", Napi::Number::New(env, ref.rect.last_row));
-  out.Set("col1", Napi::Number::New(env, ref.rect.last_col));
+  out.Set("rect", RangeToJs(env, ref.rect));
   return out;
 }
 
@@ -102,10 +89,16 @@ Napi::Value Workbook::FormatReference(const Napi::CallbackInfo& info) {
   std::string sheet_name;
   const bool has_sheet = reader.String(range, "sheetName", &sheet_name);
   fm_cell_rect_t rect{};
-  rect.first_row = RequiredU32(reader, range, "row0", "formatReference");
-  rect.first_col = reader.ok() ? RequiredU32(reader, range, "col0", "formatReference") : 0U;
-  rect.last_row = reader.ok() ? RequiredU32(reader, range, "row1", "formatReference") : 0U;
-  rect.last_col = reader.ok() ? RequiredU32(reader, range, "col1", "formatReference") : 0U;
+  Napi::Object rect_object;
+  if (!reader.Object(range, "rect", &rect_object)) {
+    if (reader.ok()) {
+      Napi::TypeError::New(env, "formatReference: `rect` is required").ThrowAsJavaScriptException();
+    }
+    return env.Undefined();
+  }
+  if (!ReadCellRect(reader, rect_object, &rect)) {
+    return env.Undefined();
+  }
   const bool absolute = reader.ok() && reader.Bool(options, "absolute", false);
   if (!reader.ok()) {
     return env.Undefined();

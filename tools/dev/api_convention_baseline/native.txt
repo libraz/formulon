@@ -1,12 +1,3 @@
-R11.multi	print_area.set	rangesA1	`setSheetPrintArea(rangesA1: string)` should take `CellRect[]`
-R11.multi	record.conditional_format_entry	sqref	`ConditionalFormatEntry.sqref: ReadonlyArray<ConditionalFormatRange>` should be `ranges: CellRect[]`
-R11.multi	record.conditional_format_input	sqref	`ConditionalFormatInput.sqref: ReadonlyArray<ConditionalFormatRange>` should be `ranges: CellRect[]`
-R11.multi	record.protected_range	sqref	`ProtectedRange.sqref: string` should be `ranges: CellRect[]`
-R11.multi	record.sheet_print_area_result	ranges	`SheetPrintAreaResult.ranges: string` should be `ranges: CellRect[]`
-R11.multi	record.table_entry	ref	`TableEntry.ref: string` should be `ranges: CellRect[]`
-R11.multi	record.table_input	ref	`TableInput.ref: string` should be `ranges: CellRect[]`
-R11.multi	record.table_update_input	ref	`TableUpdateInput.ref: string` should be `ranges: CellRect[]`
-R11.sheet	record.chart_sheet_range	-	`ChartSheetRange` pairs a sheet with a rectangle; use `SheetRect`
 R12	auto_filter_xml.get	method	`getSheetAutoFilterXml` is on wasm but not on native
 R12	auto_filter_xml.set	method	`setSheetAutoFilterXml` is on wasm but not on native
 R12	cell_style_xf.add	method	`addCellStyleXf` is on wasm but not on native

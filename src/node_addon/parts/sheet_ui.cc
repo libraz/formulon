@@ -277,7 +277,11 @@ Napi::Object ProtectedRangeToJs(Napi::Env env, const fm_protected_range_t& r) {
   Napi::Object item = Napi::Object::New(env);
   item.Set("spinCount", Napi::Number::New(env, r.spin_count));
   item.Set("name", JsString(env, r.name));
-  item.Set("sqref", JsString(env, r.sqref));
+  Napi::Array ranges = Napi::Array::New(env, r.range_count);
+  for (size_t i = 0; i < r.range_count; ++i) {
+    ranges.Set(static_cast<uint32_t>(i), RangeToJs(env, r.ranges[i]));
+  }
+  item.Set("ranges", ranges);
   item.Set("password", JsString(env, r.password));
   item.Set("algorithmName", JsString(env, r.algorithm_name));
   item.Set("hashValue", JsString(env, r.hash_value));
@@ -296,26 +300,31 @@ Napi::Value EditProtectedRange(fm_workbook_t* const& handle, const Napi::Callbac
   }
   Napi::Object in = Workbook::ArgObject(info, idx);
   CheckedSpecReader reader(env);
-  std::string text[7];
+  std::string text[6];
   (void)reader.String(in, "name", &text[0]);
-  (void)reader.String(in, "sqref", &text[1]);
-  (void)reader.String(in, "password", &text[2]);
-  (void)reader.String(in, "algorithmName", &text[3]);
-  (void)reader.String(in, "hashValue", &text[4]);
-  (void)reader.String(in, "saltValue", &text[5]);
-  (void)reader.String(in, "securityDescriptor", &text[6]);
+  std::vector<fm_cell_rect_t> ranges;
+  Napi::Array ranges_array;
+  if (reader.RequiredArray(in, "ranges", &ranges_array)) {
+    (void)ReadCellRects(reader, ranges_array, "ranges", &ranges);
+  }
+  (void)reader.String(in, "password", &text[1]);
+  (void)reader.String(in, "algorithmName", &text[2]);
+  (void)reader.String(in, "hashValue", &text[3]);
+  (void)reader.String(in, "saltValue", &text[4]);
+  (void)reader.String(in, "securityDescriptor", &text[5]);
   fm_protected_range_t r{};
   r.spin_count = reader.U32(in, "spinCount", 0U);
   if (!reader.ok()) {
     return env.Undefined();
   }
   r.name = text[0].c_str();
-  r.sqref = text[1].c_str();
-  r.password = text[2].c_str();
-  r.algorithm_name = text[3].c_str();
-  r.hash_value = text[4].c_str();
-  r.salt_value = text[5].c_str();
-  r.security_descriptor = text[6].c_str();
+  r.ranges = ranges.data();
+  r.range_count = ranges.size();
+  r.password = text[1].c_str();
+  r.algorithm_name = text[2].c_str();
+  r.hash_value = text[3].c_str();
+  r.salt_value = text[4].c_str();
+  r.security_descriptor = text[5].c_str();
   return MakeStatus(env, edit(handle, r));
 }
 
@@ -445,8 +454,8 @@ namespace {
 Napi::Object ValidationToJs(Napi::Env env, const fm_data_validation_t& v) {
   Napi::Object item = Napi::Object::New(env);
   Napi::Array ranges = Napi::Array::New(env);
-  for (uint32_t r = 0; r < v.range_count; ++r) {
-    ranges.Set(r, RangeToJs(env, v.ranges[r]));
+  for (size_t r = 0; r < v.range_count; ++r) {
+    ranges.Set(static_cast<uint32_t>(r), RangeToJs(env, v.ranges[r]));
   }
   item.Set("ranges", ranges);
   item.Set("type", Napi::Number::New(env, v.type));
@@ -485,7 +494,7 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
   // `fm_sheet_add_validation` returns.
   std::vector<fm_cell_rect_t> ranges_buf;
   Napi::Array ranges_arr;
-  if (reader.Array(v, "ranges", &ranges_arr)) {
+  if (reader.RequiredArray(v, "ranges", &ranges_arr)) {
     const uint32_t n = ranges_arr.Length();
     ranges_buf.reserve(n);
     for (uint32_t i = 0; i < n && reader.ok(); ++i) {
@@ -519,7 +528,7 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
 
   fm_data_validation_t dv{};
   dv.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
-  dv.range_count = static_cast<uint32_t>(ranges_buf.size());
+  dv.range_count = ranges_buf.size();
   dv.type = reader.U8(v, "type", 0U);
   dv.op = reader.U8(v, "op", 0U);
   dv.error_style = reader.U8(v, "errorStyle", 0U);

@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -187,34 +186,24 @@ extern "C" fm_status_t fm_sheet_set_pivot_name(fm_workbook_t* wb, std::size_t sh
 }
 
 extern "C" fm_status_t fm_sheet_set_pivot_anchor(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                                                 std::uint32_t anchor_row, std::uint32_t anchor_col,
-                                                 std::uint32_t span_rows, std::uint32_t span_cols) {
+                                                 const fm_cell_rect_t* rect) {
   clear_last_error();
+  if (wb == nullptr || rect == nullptr) {
+    return null_argument("fm_sheet_set_pivot_anchor");
+  }
   formulon::pivot::PivotTable* table = nullptr;
   if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_sheet_set_pivot_anchor", &table);
       rc != 0) {
     return rc;
   }
-  // A span must be at least 1x1 and its far corner must stay inside the
-  // grid; reject before `set_anchor` so downstream layout never iterates
-  // an out-of-grid or wrapped rectangle. The far corner is computed in 64
-  // bits and saturated, so `anchor + span` cannot wrap back into the grid.
-  if (span_rows == 0U || span_cols == 0U) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_set_pivot_anchor: span out of grid",
-                             "span_rows=" + std::to_string(span_rows) + " span_cols=" + std::to_string(span_cols));
-  }
-  const auto far_edge = [](std::uint32_t anchor, std::uint32_t span) {
-    return static_cast<std::uint32_t>(std::min<std::uint64_t>(static_cast<std::uint64_t>(anchor) + span - 1U,
-                                                              std::numeric_limits<std::uint32_t>::max()));
-  };
-  if (auto rc = check_sheet_rect(anchor_row, anchor_col, far_edge(anchor_row, span_rows),
-                                 far_edge(anchor_col, span_cols), "fm_sheet_set_pivot_anchor");
-      rc != 0) {
+  // Reject before `set_anchor` so downstream layout never iterates an
+  // out-of-grid or inverted rectangle.
+  if (auto rc = check_sheet_rect(*rect, "fm_sheet_set_pivot_anchor"); rc != 0) {
     return rc;
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
-  table->set_anchor(anchor_row, anchor_col, span_rows, span_cols);
+  table->set_anchor(rect->first_row, rect->first_col, rect->last_row - rect->first_row + 1U,
+                    rect->last_col - rect->first_col + 1U);
   return edit.commit();
 }
 

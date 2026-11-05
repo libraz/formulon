@@ -575,6 +575,17 @@ bool JsNarrowNumericReader::require_array(const emscripten::val& value, const ch
   return false;
 }
 
+bool JsNarrowNumericReader::require_object(const emscripten::val& value, const char* field) {
+  if (!ok()) {
+    return false;
+  }
+  if (js_value_present(value) && value.typeOf().strictlyEquals(emscripten::val("object"))) {
+    return true;
+  }
+  reject_type(field, "an object");
+  return false;
+}
+
 bool JsNarrowNumericReader::ok() const {
   return message_.empty();
 }
@@ -800,9 +811,20 @@ std::vector<fm_cell_rect_t> js_pull_ranges(const emscripten::val& v, const char*
   if (reader == nullptr) {
     return {};
   }
-  std::vector<fm_cell_rect_t> out;
   const emscripten::val array = reader->value(v, key, key);
-  if (!reader->ok() || !js_value_present(array)) {
+  if (!reader->ok()) {
+    return {};
+  }
+  return js_pull_range_array(array, key, reader);
+}
+
+std::vector<fm_cell_rect_t> js_pull_range_array(const emscripten::val& array, const char* key,
+                                                JsNarrowNumericReader* reader) {
+  if (reader == nullptr) {
+    return {};
+  }
+  std::vector<fm_cell_rect_t> out;
+  if (!js_value_present(array)) {
     return out;
   }
   if (!reader->require_array(array, key)) {
@@ -814,7 +836,7 @@ std::vector<fm_cell_rect_t> js_pull_ranges(const emscripten::val& v, const char*
   }
   out.reserve(n);
   for (uint32_t i = 0; i < n; ++i) {
-    const emscripten::val range = reader->array_element(array, i, "sqref[]");
+    const emscripten::val range = reader->array_element(array, i, "ranges[]");
     if (!reader->ok()) {
       return out;
     }

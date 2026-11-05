@@ -91,8 +91,7 @@ class TableColumn(NamedTuple):
 class Table(NamedTuple):
     name: str
     display_name: str
-    ref: str
-    sheet_index: int
+    range: SheetRect
     style_name: str = ...
     has_style_info: bool = ...
     show_first_column: bool = ...
@@ -142,7 +141,7 @@ class PaginationResult:
     # The declared `_xlnm.Print_Area`; empty when the sheet declares none
     # (not backfilled with the used range, so `page_count` can be non-zero
     # while this is empty).
-    print_area: List[tuple[int, int, int, int]]
+    print_area: List[CellRect]
     horizontal_breaks: List[int]
     vertical_breaks: List[int]
     paper: PaperInfo
@@ -688,6 +687,11 @@ class CellRect:
     last_row: int
     last_col: int
     def __init__(self, first_row: int, first_col: int, last_row: int, last_col: int) -> None: ...
+
+@dataclass(frozen=True)
+class SheetRect:
+    sheet: int
+    rect: CellRect
 
 @dataclass(frozen=True)
 class Hyperlink:
@@ -1383,21 +1387,13 @@ class ChartInfo:
     na_as_blank: Optional[bool]
 
 @dataclass
-class ChartSheetRange:
-    sheet: int
-    top: int
-    left: int
-    bottom: int
-    right: int
-
-@dataclass
 class ChartSeriesRanges:
-    name: List[ChartSheetRange] = ...
-    categories: List[ChartSheetRange] = ...
-    values: List[ChartSheetRange] = ...
-    x: List[ChartSheetRange] = ...
-    y: List[ChartSheetRange] = ...
-    size: List[ChartSheetRange] = ...
+    name: List[SheetRect] = ...
+    categories: List[SheetRect] = ...
+    values: List[SheetRect] = ...
+    x: List[SheetRect] = ...
+    y: List[SheetRect] = ...
+    size: List[SheetRect] = ...
 
 @dataclass
 class ChartDataSeries:
@@ -1555,7 +1551,7 @@ class DataValidationInput:
     def __init__(
         self,
         type: int,
-        ranges: List[CellRect] = ...,
+        ranges: List[CellRect],
         op: int = ...,
         error_style: Union[ValidationErrorStyle, int] = ...,
         allow_blank: bool = ...,
@@ -1603,7 +1599,7 @@ class WorkbookProtection:
 
 class ProtectedRange:
     name: str
-    sqref: str
+    ranges: List[CellRect]
     password: str
     algorithm_name: str
     hash_value: str
@@ -1613,7 +1609,7 @@ class ProtectedRange:
     def __init__(
         self,
         name: str,
-        sqref: str,
+        ranges: List[CellRect],
         password: str = ...,
         algorithm_name: str = ...,
         hash_value: str = ...,
@@ -1842,7 +1838,7 @@ class ConditionalFormat:
     type: int
     priority: int
     stop_if_true: bool
-    sqref: List[CellRect]
+    ranges: List[CellRect]
     dxf_id: Optional[int]
     formula1: str
     formula2: str
@@ -1860,7 +1856,7 @@ class ConditionalFormat:
     icon_set: Optional[IconSet]
 
 class ConditionalFormatInput:
-    sqref: List[CellRect]
+    ranges: List[CellRect]
     type: int
     priority: int
     stop_if_true: bool
@@ -1882,7 +1878,7 @@ class ConditionalFormatInput:
     icon_set: Optional[IconSet]
     def __init__(
         self,
-        sqref: List[CellRect],
+        ranges: List[CellRect],
         type: int,
         priority: int = ...,
         stop_if_true: bool = ...,
@@ -1919,10 +1915,7 @@ class SpillInfo:
 @dataclass(frozen=True)
 class ParsedReference:
     sheet_name: Optional[str]
-    row0: int
-    col0: int
-    row1: int
-    col1: int
+    rect: CellRect
 
 @dataclass(frozen=True)
 class ArrayFormula:
@@ -2593,7 +2586,7 @@ class Workbook:
     def add_table(
         self,
         sheet: int,
-        ref: str,
+        rect: CellRect,
         name: str,
         display_name: str,
         column_names: Sequence[str],
@@ -2628,7 +2621,7 @@ class Workbook:
     def update_table(
         self,
         index: int,
-        ref: str,
+        rect: CellRect,
         style_name: Optional[str] = ...,
         header_row: Optional[bool] = ...,
         totals_row: Optional[bool] = ...,
@@ -2743,8 +2736,8 @@ class Workbook:
     def get_sheet_pr_xml(self, sheet: int) -> str: ...
     def set_sheet_pr_xml(self, sheet: int, xml: str) -> None: ...
     def set_fit_to_page(self, sheet: int, enabled: bool) -> None: ...
-    def get_print_area(self, sheet: int) -> str: ...
-    def set_print_area(self, sheet: int, ranges_a1: str) -> None: ...
+    def get_print_area(self, sheet: int) -> List[CellRect]: ...
+    def set_print_area(self, sheet: int, ranges: Sequence[CellRect]) -> None: ...
     def get_print_titles(self, sheet: int) -> tuple[str, str]: ...
     def set_print_titles(self, sheet: int, repeat_rows: str = ..., repeat_cols: str = ...) -> None: ...
     def add_row_break(self, sheet: int, row: int, manual: bool = ...) -> None: ...
@@ -3204,10 +3197,7 @@ class Workbook:
         self,
         sheet: int,
         pivot_index: int,
-        anchor_row: int,
-        anchor_col: int,
-        span_rows: int,
-        span_cols: int,
+        rect: CellRect,
     ) -> None: ...
     def set_pivot_grand_totals(self, sheet: int, pivot_index: int, rows_enabled: bool, cols_enabled: bool) -> None: ...
     def set_pivot_style_info(
@@ -3360,10 +3350,7 @@ class Workbook:
     ) -> Optional[ParsedReference]: ...
     def format_reference(
         self,
-        row0: int,
-        col0: int,
-        row1: int,
-        col1: int,
+        rect: CellRect,
         *,
         sheet_name: Optional[str] = ...,
         absolute: bool = ...,

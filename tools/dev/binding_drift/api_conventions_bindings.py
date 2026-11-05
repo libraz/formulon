@@ -55,6 +55,8 @@ _SHEET_FIELDS = frozenset({"sheet", "sheet_index"})
 _COLLECTION_SCOPES = ("workbook", "sheet", "process")
 _EDGE_QUADS = (CELL_RECT_FIELDS, ("top", "left", "bottom", "right"), ("row", "col", "last_row", "last_col"))
 _JS_EDGE_QUADS = (("firstRow", "firstCol", "lastRow", "lastCol"), ("top", "left", "bottom", "right"))
+# Loose corners a record keyed by a sheet name (a reference) may spell instead of `rect`.
+_NAMED_EDGE_QUADS = (("row0", "col0", "row1", "col1"),)
 
 _SCALAR_RESULTS = {"string": "StringResult", "number": "NumberResult", "int": "NumberResult", "double": "NumberResult"}
 _PY_SCALARS = {"string": ("str",), "number": ("int", "float"), "int": ("int",), "double": ("float",)}
@@ -1379,7 +1381,8 @@ def _edge_quad(names: Set[str], quads: Sequence[Sequence[str]]) -> bool:
 @_owned("R11.sheet")
 def _rule_sheet_ranges(ctx: Context) -> Iterable[Violation]:
     """A range on another sheet is `fm_sheet_rect_t { size_t sheet_index; fm_cell_rect_t rect; }` in C and
-    `SheetRect { sheet, rect }` in the bindings; no other record pairs a sheet index with a rectangle.
+    `SheetRect { sheet, rect }` in the bindings; no other record pairs a sheet index with a rectangle. A
+    record keyed by a sheet name (`ParsedReference`) carries its rectangle as `rect`, not loose corners.
     """
     for typedef in ctx.typedefs:
         if typedef.kind != "struct":
@@ -1412,6 +1415,15 @@ def _rule_sheet_ranges(ctx: Context) -> Iterable[Violation]:
             if decl.kind != "interface":
                 continue
             names = {m.name for m in decl.members if not m.is_method}
+            if "sheetName" in names and _edge_quad(names, _JS_EDGE_QUADS + _NAMED_EDGE_QUADS):
+                yield _violation(
+                    ctx,
+                    "R11.sheet",
+                    surface,
+                    _key(ctx, surface, decl.name),
+                    "rect",
+                    f"`{decl.name}` spells its rectangle as loose coordinates; use `rect: CellRect`",
+                )
             if not ({"sheet", "sheetIndex"} & names):
                 continue
             has_rect = _edge_quad(names, _JS_EDGE_QUADS) or "rect" in names
@@ -1436,6 +1448,15 @@ def _rule_sheet_ranges(ctx: Context) -> Iterable[Violation]:
                 )
     for name, cls in sorted(found.py.classes.items()):
         names = set(cls.fields)
+        if "sheet_name" in names and _edge_quad(names, _EDGE_QUADS + _NAMED_EDGE_QUADS):
+            yield _violation(
+                ctx,
+                "R11.sheet",
+                "py",
+                _key(ctx, "py", name),
+                "rect",
+                f"`{name}` spells its rectangle as loose coordinates; use `rect: CellRect`",
+            )
         if not ({"sheet", "sheet_index"} & names):
             continue
         has_rect = _edge_quad(names, _EDGE_QUADS) or "rect" in names

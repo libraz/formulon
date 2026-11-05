@@ -718,7 +718,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value InvokePivotFieldOrder(const Napi::CallbackInfo& info, PivotFieldOrderFn fn);
 
   // Shared bodies for the per-sheet string accessors (the five raw
-  // print-settings fragment pairs and the print area) and the two break
+  // print-settings fragment pairs) and the two break
   // enumerators. The getter returns `{status, <field>: string}`.
   using SheetStringGetFn = fm_status_t (*)(const fm_workbook_t*, size_t, const char**);
   using SheetStringSetFn = fm_status_t (*)(fm_workbook_t*, size_t, const char*);

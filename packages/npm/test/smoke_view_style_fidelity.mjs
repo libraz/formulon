@@ -138,7 +138,7 @@ test('custom icon sets round-trip through the conditional-format API', async () 
     { iconSet: '5Boxes', iconId: 4 },
   ];
   const rule = (list) => ({
-    sqref: [{ firstRow: 0, firstCol: 0, lastRow: 9, lastCol: 0 }],
+    ranges: [{ firstRow: 0, firstCol: 0, lastRow: 9, lastCol: 0 }],
     type: 4,
     iconSet: {
       name: 0,

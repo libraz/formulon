@@ -9,15 +9,14 @@ const release = (wb) => wb.dispose();
 // engine through the staged bundle like the calc core, so each gets a
 // round trip here.
 
-function salesWorkbook(mod, ref = 'A1:B3', totalsRow = false) {
+function salesWorkbook(mod, rect = { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 }, totalsRow = false) {
   const wb = mod.Workbook.createDefault();
   assert.ok(wb.setText(0, 0, 0, 'Product').ok);
   assert.ok(wb.setText(0, 0, 1, 'Amount').ok);
   assert.ok(wb.setNumber(0, 1, 1, 10).ok);
   assert.ok(wb.setNumber(0, 2, 1, 20).ok);
   const created = wb.addTable({
-    sheetIndex: 0,
-    ref,
+    range: { sheet: 0, rect },
     name: 'Sales',
     columns: ['Product', 'Amount'],
     styleName: 'TableStyleLight9',
@@ -79,7 +78,7 @@ test('updateTable keeps the toggles across a style name change', async () => {
 
 test('setTableColumnTotals writes the totals-row cells', async () => {
   const mod = await getModule();
-  const wb = salesWorkbook(mod, 'A1:B4', true);
+  const wb = salesWorkbook(mod, { firstRow: 0, firstCol: 0, lastRow: 3, lastCol: 1 }, true);
   try {
     assert.ok(wb.setTableColumnTotals(0, 0, { label: 'Total' }).ok);
     assert.ok(wb.setTableColumnTotals(0, 1, { function: 'sum' }).ok);
@@ -108,11 +107,18 @@ test('updateTable renames the table and its structured references', async () => 
     assert.equal(table.name, 'Revenue');
     assert.equal(table.displayName, 'Revenue');
     assert.equal(wb.getFormula(0, 0, 3).formula, '=SUM(Revenue[Amount])');
-    const other = wb.addTable({ sheetIndex: 0, ref: 'F1:F2', name: 'Other', columns: ['X'] });
+    const other = wb.addTable({
+      range: { sheet: 0, rect: { firstRow: 0, firstCol: 5, lastRow: 1, lastCol: 5 } },
+      name: 'Other',
+      columns: ['X'],
+    });
     assert.ok(other.status.ok);
     // A clash is refused and leaves the rest of the update unapplied.
-    assert.equal(wb.updateTable(other.index, { name: 'revenue', ref: 'F1:F5' }).ok, false);
-    assert.equal(wb.getTable(other.index).ref, 'F1:F2');
+    assert.equal(
+      wb.updateTable(other.index, { name: 'revenue', rect: { firstRow: 0, firstCol: 5, lastRow: 4, lastCol: 5 } }).ok,
+      false,
+    );
+    assert.deepEqual(wb.getTable(other.index).range.rect, { firstRow: 0, firstCol: 5, lastRow: 1, lastCol: 5 });
   } finally {
     release(wb);
   }
@@ -189,5 +195,21 @@ test('custom table styles round-trip and a table can use one', async () => {
     assert.equal(reloaded.getTableStyleDefaults().tableStyle, 'TableStyleMedium2');
   } finally {
     release(reloaded);
+  }
+});
+
+test('addTable throws TypeError for a missing range or range.rect', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    const rect = { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 };
+    const columns = ['Product', 'Amount'];
+    assert.throws(() => wb.addTable({ name: 'T', columns }), TypeError);
+    assert.throws(() => wb.addTable({ range: { sheet: 0 }, name: 'T', columns }), TypeError);
+    assert.throws(() => wb.addTable({ range: { rect }, name: 'T', columns }), TypeError);
+    assert.equal(wb.getTableCount().value, 0);
+    assert.ok(wb.addTable({ range: { sheet: 0, rect }, name: 'T', columns }).status.ok);
+  } finally {
+    release(wb);
   }
 });

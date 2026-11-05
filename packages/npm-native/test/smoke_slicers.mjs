@@ -41,7 +41,11 @@ const salesWorkbook = (mod) => {
   assert.ok(wb.setText(0, 0, 0, 'Product').ok);
   assert.ok(wb.setText(0, 0, 1, 'Amount').ok);
   assert.ok(wb.setNumber(0, 1, 1, 10).ok);
-  const created = wb.addTable({ sheetIndex: 0, ref: 'A1:B2', name: 'Sales', columns: ['Product', 'Amount'] });
+  const created = wb.addTable({
+    range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 } },
+    name: 'Sales',
+    columns: ['Product', 'Amount'],
+  });
   assert.ok(created.status.ok, JSON.stringify(created.status));
   return wb;
 };

@@ -230,9 +230,9 @@ extern "C" fm_status_t fm_sheet_get_selection(const fm_workbook_t* wb, size_t sh
 }
 
 extern "C" fm_status_t fm_sheet_set_selection(fm_workbook_t* wb, size_t sheet_index, uint32_t active_row,
-                                              uint32_t active_col, const fm_cell_rect_t* ranges, size_t count) {
+                                              uint32_t active_col, const fm_cell_rect_t* ranges, size_t range_count) {
   clear_last_error();
-  if (count != 0U && ranges == nullptr) {
+  if (range_count != 0U && ranges == nullptr) {
     return null_argument("fm_sheet_set_selection", "ranges");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_selection"); rc != 0) {
@@ -243,7 +243,7 @@ extern "C" fm_status_t fm_sheet_set_selection(fm_workbook_t* wb, size_t sheet_in
                              "fm_sheet_set_selection: active cell out of grid");
   }
   std::vector<formulon::MergeRange> selected;
-  for (std::size_t i = 0; i < count; ++i) {
+  for (std::size_t i = 0; i < range_count; ++i) {
     const fm_cell_rect_t& r = ranges[i];
     if (!formulon::Sheet::coord_in_grid(r.first_row, r.first_col) ||
         !formulon::Sheet::coord_in_grid(r.last_row, r.last_col) || r.first_row > r.last_row ||

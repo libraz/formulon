@@ -26,6 +26,7 @@ from formulon import (
     ChartTitleKind,
     DrawingObjectKind,
     FormulonError,
+    SheetRect,
     Workbook,
 )
 
@@ -142,11 +143,7 @@ class ChartReadTests(unittest.TestCase):
             self.assertIsNone(s0.x)
             self.assertIsNone(s0.sizes)
             self.assertEqual(len(s0.ranges.name), 1)
-            self.assertEqual(
-                (s0.ranges.values[0].sheet, s0.ranges.values[0].top, s0.ranges.values[0].left),
-                (0, 1, 1),
-            )
-            self.assertEqual((s0.ranges.values[0].bottom, s0.ranges.values[0].right), (4, 1))
+            self.assertEqual(s0.ranges.values[0], SheetRect(sheet=0, rect=CellRect(1, 1, 4, 1)))
             self.assertEqual(s0.ranges.x, [])
 
             # The handle is a snapshot of the cells at the call.

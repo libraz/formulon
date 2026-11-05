@@ -189,10 +189,10 @@ TEST(PivotTableWriter, AnAuthoredSpanIsReEmittedAndNeverReprojected) {
 }
 
 TEST(PivotTableWriter, AWiderDeliberateSpanOutranksASmallerProjection) {
-  // `fm_sheet_set_pivot_anchor` takes spans, so a caller that passes
-  // them means them. Over-reserving is not the failure mode -- Excel
-  // recomputes the range on refresh -- so the projection must not shrink
-  // a range someone asked for, or those two parameters would be dead.
+  // `fm_sheet_set_pivot_anchor` takes the reserved rectangle, so a caller
+  // that passes one means it. Over-reserving is not the failure mode --
+  // Excel recomputes the range on refresh -- so the projection must not
+  // shrink a range someone asked for, or that argument would be dead.
   pivot::PivotTable table;
   table.set_anchor(0U, 0U, 8U, 4U);
   const std::string xml = write_pivot_table_definition(table, PivotRenderedSpan{4U, 2U});

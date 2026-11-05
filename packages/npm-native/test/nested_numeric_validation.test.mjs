@@ -6,7 +6,7 @@ const RANGE = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
 
 function dataBarRule(overrides = {}) {
   return {
-    sqref: [RANGE],
+    ranges: [RANGE],
     type: 3,
     dataBar: {
       min: { type: 3 },
@@ -206,15 +206,15 @@ test('conditional-format arrays skip nullish entries and keep later records', as
     const added = wb.addCfRule(0, {
       // Include null, undefined, and a hole before the valid range. The old
       // reader skipped those entries and still passed the later range to C.
-      sqref: Object.assign(new Array(4), { 0: null, 1: undefined, 3: RANGE }),
+      ranges: Object.assign(new Array(4), { 0: null, 1: undefined, 3: RANGE }),
       type: 3,
       dataBar: { min: { type: 3 }, max: { type: 4 } },
     });
     assert.ok(added.status.ok, JSON.stringify(added.status));
     const stored = wb.getConditionalFormats(0);
     assert.equal(stored.length, 1);
-    assert.equal(stored[0].sqref.length, 1);
-    assert.deepEqual(stored[0].sqref[0], RANGE);
+    assert.equal(stored[0].ranges.length, 1);
+    assert.deepEqual(stored[0].ranges[0], RANGE);
   } finally {
     wb.dispose();
   }

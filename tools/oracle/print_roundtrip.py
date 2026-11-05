@@ -187,7 +187,14 @@ def _apply_print_settings(wb: Any, sheet: int, spec: Dict[str, Any]) -> None:
 
     print_area = spec.get("print_area")
     if isinstance(print_area, str) and print_area:
-        wb.set_print_area(sheet, print_area)
+        # The case spells the area as comma-separated A1 ranges.
+        rects = []
+        for token in print_area.split(","):
+            parsed = wb.parse_reference(token)
+            if parsed is None:
+                raise RoundtripSpecError(f"print_area token is not an A1 range: {token!r}")
+            rects.append(parsed.rect)
+        wb.set_print_area(sheet, rects)
 
     titles = spec.get("print_titles")
     if isinstance(titles, dict):

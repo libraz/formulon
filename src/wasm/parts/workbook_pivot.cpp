@@ -329,12 +329,16 @@ JsStatus JsWorkbook::pivotSetName(uint32_t sheet, uint32_t pivotIdx, const std::
                                            : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotSetAnchor(uint32_t sheet, uint32_t pivotIdx, uint32_t anchorRow, uint32_t anchorCol,
-                                    uint32_t spanRows, uint32_t spanCols) {
+JsStatus JsWorkbook::pivotSetAnchor(uint32_t sheet, uint32_t pivotIdx, emscripten::val rect) {
   if (handle_ == nullptr) {
     return invalid_handle_status();
   }
-  return status_from_rc(fm_sheet_set_pivot_anchor(handle_, sheet, pivotIdx, anchorRow, anchorCol, spanRows, spanCols));
+  JsNarrowNumericReader reader("setPivotAnchor");
+  const fm_cell_rect_t r = js_pull_range(rect, &reader);
+  if (!reader.ok()) {
+    return reader.failure();
+  }
+  return status_from_rc(fm_sheet_set_pivot_anchor(handle_, sheet, pivotIdx, &r));
 }
 
 JsStatus JsWorkbook::pivotSetGrandTotals(uint32_t sheet, uint32_t pivotIdx, bool rowsEnabled, bool colsEnabled) {

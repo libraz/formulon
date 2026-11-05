@@ -142,7 +142,7 @@ class CustomIconTests(unittest.TestCase):
     @staticmethod
     def _rule(icons: list[CfIcon]) -> ConditionalFormatInput:
         return ConditionalFormatInput(
-            sqref=[CellRect(0, 0, 9, 0)],
+            ranges=[CellRect(0, 0, 9, 0)],
             type=4,
             icon_set=IconSet(
                 name=0,

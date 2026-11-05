@@ -107,7 +107,6 @@ __all__ = [
     "ChartSeriesInfo",
     "ChartSeriesPatch",
     "ChartSeriesRanges",
-    "ChartSheetRange",
     "ChartSourceInfo",
     "ChartTitle",
     "ChartTitleKind",
@@ -148,6 +147,7 @@ __all__ = [
     "IconSet",
     "MarginsPt",
     "CellRect",
+    "SheetRect",
     "PageLayout",
     "PaperInfo",
     "PassthroughPart",
@@ -493,8 +493,8 @@ class Table(NamedTuple):
 
     name: str
     display_name: str
-    ref: str
-    sheet_index: int
+    #: The table's sheet and range.
+    range: SheetRect
     style_name: str = ""
     has_style_info: bool = False
     show_first_column: bool = False
@@ -1115,6 +1115,14 @@ class CellRect:
 
 
 @dataclass(frozen=True)
+class SheetRect:
+    """A cell rectangle on sheet index ``sheet``."""
+
+    sheet: int
+    rect: CellRect
+
+
+@dataclass(frozen=True)
 class Hyperlink:
     """A sheet hyperlink covering the cells of ``rect``."""
 
@@ -1166,14 +1174,15 @@ class DataValidation:
 class DataValidationInput:
     """Argument shape for :meth:`Workbook.add_validation`.
 
-    Every field except ``type`` defaults to a benign zero/false/empty so
-    callers populate only the parts they need. ``show_dropdown`` defaults
+    Every field except ``type`` and ``ranges`` (at least one rectangle)
+    defaults to a benign zero/false/empty so callers populate only the
+    parts they need. ``show_dropdown`` defaults
     to ``True`` to match the OOXML default (the in-cell dropdown arrow is
     shown for ``list`` validations unless explicitly suppressed).
     """
 
     type: int
-    ranges: List[CellRect] = field(default_factory=list)
+    ranges: List[CellRect]
     op: int = 0
     error_style: Union[ValidationErrorStyle, int] = ValidationErrorStyle.STOP
     allow_blank: bool = False
@@ -1832,26 +1841,15 @@ class ChartInfo:
 
 
 @dataclass
-class ChartSheetRange:
-    """A rectangle of cells on one sheet (0-based, inclusive)."""
-
-    sheet: int
-    top: int
-    left: int
-    bottom: int
-    right: int
-
-
-@dataclass
 class ChartSeriesRanges:
     """The resolved rectangles of each series input."""
 
-    name: List[ChartSheetRange] = field(default_factory=list)
-    categories: List[ChartSheetRange] = field(default_factory=list)
-    values: List[ChartSheetRange] = field(default_factory=list)
-    x: List[ChartSheetRange] = field(default_factory=list)
-    y: List[ChartSheetRange] = field(default_factory=list)
-    size: List[ChartSheetRange] = field(default_factory=list)
+    name: List[SheetRect] = field(default_factory=list)
+    categories: List[SheetRect] = field(default_factory=list)
+    values: List[SheetRect] = field(default_factory=list)
+    x: List[SheetRect] = field(default_factory=list)
+    y: List[SheetRect] = field(default_factory=list)
+    size: List[SheetRect] = field(default_factory=list)
 
 
 @dataclass
@@ -2067,10 +2065,10 @@ class WorkbookProtection:
 
 @dataclass
 class ProtectedRange:
-    """A sheet ``<protectedRange>``; ``sqref`` is the A1 range list (``"B2:C3 E5"``)."""
+    """A sheet ``<protectedRange>`` covering the rectangles of ``ranges``."""
 
     name: str
-    sqref: str
+    ranges: List[CellRect]
     password: str = ""
     algorithm_name: str = ""
     hash_value: str = ""
@@ -2207,8 +2205,7 @@ class PaginationResult:
     """Resolved physical pagination for one worksheet.
 
     ``print_area`` is the sheet's declared ``_xlnm.Print_Area`` as
-    inclusive, zero-based ``(first_row, first_col, last_row, last_col)``
-    rectangles. It is empty when the sheet declares no print area and is
+    :class:`CellRect` rectangles. It is empty when the sheet declares no print area and is
     not backfilled with the used range; pagination itself still falls back
     to the used range, so ``page_count`` can be non-zero while this is
     empty. Break lists contain the zero-based row or column a new physical
@@ -2216,7 +2213,7 @@ class PaginationResult:
     """
 
     page_count: int
-    print_area: List[tuple[int, int, int, int]]
+    print_area: List[CellRect]
     horizontal_breaks: List[int]
     vertical_breaks: List[int]
     paper: "PaperInfo"
@@ -2532,7 +2529,7 @@ class ConditionalFormat:
     type: int
     priority: int
     stop_if_true: bool
-    sqref: List[CellRect]
+    ranges: List[CellRect]
     dxf_id: Optional[int]
     formula1: str
     formula2: str
@@ -2558,7 +2555,7 @@ class ConditionalFormatInput:
     icon-set rules. The C ABI validates each payload's cardinality.
     """
 
-    sqref: List[CellRect]
+    ranges: List[CellRect]
     type: int
     priority: int = 0
     stop_if_true: bool = False
@@ -2603,13 +2600,10 @@ class SpillInfo:
 
 @dataclass(frozen=True)
 class ParsedReference:
-    """A parsed reference: a 0-based, inclusive rectangle and its sheet qualifier (``None`` when unqualified)."""
+    """A parsed reference: the rectangle ``rect`` and its sheet qualifier (``None`` when unqualified)."""
 
     sheet_name: Optional[str]
-    row0: int
-    col0: int
-    row1: int
-    col1: int
+    rect: CellRect
 
 
 @dataclass(frozen=True)
@@ -4156,8 +4150,8 @@ def _read_chart_data(data: int) -> ChartData:
         ranges = ChartSeriesRanges()
         for role, key in enumerate(_CHART_ROLES):
             for j in range(s["range_count"][role]):
-                r = _read_struct(LIB.fm_chart_data_get_range_at, S.CHART_SHEET_RANGE, data, i, role, j)
-                getattr(ranges, key).append(ChartSheetRange(**r))
+                r = _read_struct(LIB.fm_chart_data_get_range_at, S.SHEET_RECT, data, i, role, j)
+                getattr(ranges, key).append(SheetRect(sheet=r["sheet_index"], rect=_cell_rect_from(r["rect"])))
         series.append(
             ChartDataSeries(
                 plot_index=s["plot_index"],
@@ -4365,6 +4359,12 @@ def _pack_cell_rect_array(ranges: Sequence[CellRect], scope: _ArgScope) -> int:
     for i, r in enumerate(ranges):
         _pack_cell_rect_at(ptr + i * size, r)
     return ptr
+
+
+def _decode_cell_rect_array(ptr: int, count: int) -> List[CellRect]:
+    """Decode the ``count`` contiguous ``fm_cell_rect_t`` values at ``ptr``."""
+    size = S.CELL_RECT.size
+    return [_decode_cell_rect_at(ptr + i * size) for i in range(count)]
 
 
 def _check_value(value: Value) -> Value:
@@ -5470,17 +5470,17 @@ class Workbook:
         with _ArgScope() as scope:
             name_ptr = scope.out_ptr()
             display_ptr = scope.out_ptr()
-            ref_ptr = scope.out_ptr()
+            rect_ptr = scope.struct(S.CELL_RECT)
             sheet_ptr = scope.out_ptr()
             info_ptr = scope.struct(S.TABLE_INFO)
             column_ptr = scope.struct(S.TABLE_COLUMN_INFO)
             for i in range(n):
                 h = self._check_live()
-                status = LIB.fm_workbook_get_table(h, _uint(i, "idx"), name_ptr, display_ptr, ref_ptr, sheet_ptr)
+                status = LIB.fm_workbook_get_table(h, _uint(i, "idx"), name_ptr, display_ptr, rect_ptr, sheet_ptr)
                 _check(status, "fm_workbook_get_table")
                 name = LIB.read_cstr(LIB.read_u32(name_ptr))
                 display = LIB.read_cstr(LIB.read_u32(display_ptr))
-                ref = LIB.read_cstr(LIB.read_u32(ref_ptr))
+                rect = _decode_cell_rect_at(rect_ptr)
                 sheet = LIB.read_u32(sheet_ptr)
                 S.zero_struct(LIB, S.TABLE_INFO, info_ptr)
                 _check(LIB.fm_workbook_get_table_info(h, _uint(i, "index"), info_ptr), "fm_workbook_get_table_info")
@@ -5504,8 +5504,7 @@ class Workbook:
                 yield Table(
                     name=name,
                     display_name=display,
-                    ref=ref,
-                    sheet_index=sheet,
+                    range=SheetRect(sheet=sheet, rect=rect),
                     style_name=LIB.read_cstr(info["style_name"]),
                     has_style_info=info["style_present"] != 0,
                     show_first_column=info["show_first_column"] != 0,
@@ -5520,7 +5519,7 @@ class Workbook:
     def add_table(
         self,
         sheet: int,
-        ref: str,
+        rect: CellRect,
         name: str,
         display_name: str,
         column_names: Sequence[str],
@@ -5533,20 +5532,21 @@ class Workbook:
         show_row_stripes: Optional[bool] = None,
         show_column_stripes: Optional[bool] = None,
     ) -> int:
-        """Create a worksheet table and return its index.
+        """Create a worksheet table over ``rect`` and return its index.
 
         ``column_names`` must hold one non-empty, table-unique header per
-        column in ``ref``, and its length must equal the width of ``ref``.
+        column of the range, and its length must equal the range's width.
         An empty ``style_name`` omits ``<tableStyleInfo>``; a styled table
         starts with row stripes on and the other toggles off, and a supplied
         ``show_*`` overrides that (without a style name it writes an unnamed
         style element). With ``header_row`` set, the caller still owns the
-        header cells: Excel expects the first row of ``ref`` to hold exactly
+        header cells: Excel expects the first row of the range to hold exactly
         these names.
         """
         h = self._require()
         with _ArgScope() as scope:
-            ref_ptr = scope.cstr(ref)
+            rect_ptr = scope.struct(S.CELL_RECT)
+            _pack_cell_rect_at(rect_ptr, rect)
             name_ptr = scope.nonempty_cstr(name)
             display_ptr = scope.nonempty_cstr(display_name)
             style_ptr = scope.nonempty_cstr(style_name)
@@ -5560,7 +5560,7 @@ class Workbook:
                 LIB.fm_workbook_add_table(
                     h,
                     _uint(sheet, "sheet_index"),
-                    ref_ptr,
+                    rect_ptr,
                     name_ptr,
                     display_ptr,
                     array_ptr,
@@ -5695,7 +5695,7 @@ class Workbook:
     def update_table(
         self,
         index: int,
-        ref: str,
+        rect: CellRect,
         style_name: Optional[str] = None,
         header_row: Optional[bool] = None,
         totals_row: Optional[bool] = None,
@@ -5709,7 +5709,7 @@ class Workbook:
     ) -> None:
         """Replace a table's range and optional visual style.
 
-        ``ref`` is required and must keep the width the table's column
+        ``rect`` is required and must keep the width the table's column
         list already describes. ``style_name=None`` preserves the existing
         style; a new name keeps the four toggles, and an empty string removes
         ``<tableStyleInfo>`` -- unless a ``show_*`` toggle is also given, which
@@ -5730,7 +5730,7 @@ class Workbook:
                 next_display = name if name is not None else current.display_name
             self.rename_table(index, next_name, next_display)
         try:
-            self._table_update(index, ref, style_name, header_row, totals_row)
+            self._table_update(index, rect, style_name, header_row, totals_row)
             toggles = (show_first_column, show_last_column, show_row_stripes, show_column_stripes)
             if any(t is not None for t in toggles):
                 self._table_apply_style_toggles(index, toggles)
@@ -5742,20 +5742,21 @@ class Workbook:
     def _table_update(
         self,
         index: int,
-        ref: str,
+        rect: CellRect,
         style_name: Optional[str],
         header_row: Optional[bool],
         totals_row: Optional[bool],
     ) -> None:
         h = self._require()
         with _ArgScope() as scope:
-            ref_ptr = scope.cstr(ref)
+            rect_ptr = scope.struct(S.CELL_RECT)
+            _pack_cell_rect_at(rect_ptr, rect)
             style_ptr = scope.opt_cstr(style_name)
             _check(
                 LIB.fm_workbook_update_table(
                     h,
                     _uint(index, "index"),
-                    ref_ptr,
+                    rect_ptr,
                     style_ptr,
                     _sint(_tristate(header_row), "header_row"),
                     _sint(_tristate(totals_row), "totals_row"),
@@ -6454,7 +6455,6 @@ class Workbook:
     )
     _PROTECTED_RANGE_TEXT = (
         "name",
-        "sqref",
         "password",
         "algorithm_name",
         "hash_value",
@@ -6521,6 +6521,7 @@ class Workbook:
                 out.append(
                     ProtectedRange(
                         spin_count=d["spin_count"],
+                        ranges=_decode_cell_rect_array(d["ranges"], d["range_count"]),
                         **{fld: LIB.read_cstr(d[fld]) for fld in self._PROTECTED_RANGE_TEXT},
                     )
                 )
@@ -6530,7 +6531,15 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PROTECTED_RANGE)
-            S.PROTECTED_RANGE.pack(LIB, ptr, {"spin_count": _uint(protected.spin_count, "spin_count")})
+            S.PROTECTED_RANGE.pack(
+                LIB,
+                ptr,
+                {
+                    "spin_count": _uint(protected.spin_count, "spin_count"),
+                    "ranges": _pack_cell_rect_array(protected.ranges, scope),
+                    "range_count": _uint(len(protected.ranges), "range_count"),
+                },
+            )
             for fld in self._PROTECTED_RANGE_TEXT:
                 S.write_str_field(LIB, ptr, S.PROTECTED_RANGE, fld, getattr(protected, fld), scope)
             _check(fn(h, *leading, ptr), name)
@@ -8332,7 +8341,7 @@ class Workbook:
                 range_count = _read_count(LIB.fm_pagination_get_print_area_count, pagination)
                 break_count = _read_count(LIB.fm_pagination_get_row_break_count, pagination)
                 vertical_break_count = _read_count(LIB.fm_pagination_get_col_break_count, pagination)
-                range_ptr = scope.alloc(16)
+                range_ptr = scope.struct(S.CELL_RECT)
                 value_ptr = scope.out_ptr()
                 scale_ptr = scope.alloc(8)
                 # Sized for the largest pagination detail struct (fm_page_layout_t).
@@ -8343,7 +8352,7 @@ class Workbook:
                         LIB.fm_pagination_get_print_area_at(pagination, _uint(i, "index"), range_ptr),
                         "fm_pagination_get_print_area_at",
                     )
-                    print_area.append(struct.unpack("<IIII", LIB.read_bytes(range_ptr, 16)))
+                    print_area.append(_decode_cell_rect_at(range_ptr))
                 horizontal_breaks = []
                 for i in range(break_count):
                     _check(
@@ -8791,33 +8800,36 @@ class Workbook:
 
     # -- Print settings: area and titles -----------------------------------
 
-    def get_print_area(self, sheet: int) -> str:
-        """Return the print area as comma-separated A1 ranges, or ``""``.
+    def get_print_area(self, sheet: int) -> List[CellRect]:
+        """Return the print area's rectangles, empty when none is declared.
 
-        A whole-axis area reads back expanded to explicit corners (``"A:D"``
-        becomes ``"A1:D1048576"``), because this reports the rectangles the
+        A whole-axis area reads back expanded to the grid edge (``A:D``
+        becomes ``A1:D1048576``), because this reports the rectangles the
         paginator resolves rather than the authored shape.
         """
         h = self._require()
-        return _read_cstr_out(
-            LIB.fm_sheet_get_print_area,
-            h,
-            _uint(sheet, "sheet_index"),
-            default_op="fm_sheet_get_print_area",
-        )
+        with _ArgScope() as scope:
+            ranges_out = scope.out_ptr()
+            count_out = scope.out_ptr()
+            _check(
+                LIB.fm_sheet_get_print_area(h, _uint(sheet, "sheet_index"), ranges_out, count_out),
+                "fm_sheet_get_print_area",
+            )
+            return _decode_cell_rect_array(LIB.read_u32(ranges_out), LIB.read_u32(count_out))
 
-    def set_print_area(self, sheet: int, ranges_a1: str) -> None:
-        """Write ``_xlnm.Print_Area`` from one or more A1 ranges.
+    def set_print_area(self, sheet: int, ranges: Sequence[CellRect]) -> None:
+        """Write ``_xlnm.Print_Area`` from one or more rectangles, printed in order.
 
-        Accepts ``"A1:F8"``, ``"A1:B10,D5:E20"``, ``"A:D"`` or ``"1:50"``,
-        with or without ``$``. Corners are absolutised and each area is
-        qualified with this sheet's name. An empty string removes the name.
+        A rectangle spanning every row or column is stored as whole columns
+        or rows. An empty list removes the name.
         """
         h = self._require()
         with _ArgScope() as scope:
-            ranges_ptr = scope.cstr(ranges_a1)
+            ranges_ptr = _pack_cell_rect_array(ranges, scope)
             _check(
-                LIB.fm_sheet_set_print_area(h, _uint(sheet, "sheet_index"), ranges_ptr),
+                LIB.fm_sheet_set_print_area(
+                    h, _uint(sheet, "sheet_index"), ranges_ptr, _uint(len(ranges), "range_count")
+                ),
                 "fm_sheet_set_print_area",
             )
 
@@ -9618,19 +9630,7 @@ class Workbook:
                 "fm_sheet_get_cf_rule",
             )
             d = S.CF_RULE.unpack(LIB, ptr)
-            sqref: List[CellRect] = []
-            base = d["sqref"]
-            rsize = S.CELL_RECT.size
-            for i in range(d["sqref_count"]):
-                rd = S.CELL_RECT.unpack(LIB, base + i * rsize)
-                sqref.append(
-                    CellRect(
-                        first_row=rd["first_row"],
-                        first_col=rd["first_col"],
-                        last_row=rd["last_row"],
-                        last_col=rd["last_col"],
-                    )
-                )
+            ranges = _decode_cell_rect_array(d["ranges"], d["range_count"])
             color_scale = None
             if d["color_scale_count"]:
                 thresholds = [
@@ -9696,7 +9696,7 @@ class Workbook:
                 type=d["type"],
                 priority=d["priority"],
                 stop_if_true=bool(d["stop_if_true"]),
-                sqref=sqref,
+                ranges=ranges,
                 dxf_id=d["dxf_id"] if d["dxf_id_engaged"] else None,
                 formula1=LIB.read_cstr(d["formula1"]),
                 formula2=LIB.read_cstr(d["formula2"]),
@@ -9753,24 +9753,10 @@ class Workbook:
                     "time_period_engaged": 1 if rule.time_period is not None else 0,
                 },
             )
-            sqref_ptr = 0
-            if rule.sqref:
-                rsize = S.CELL_RECT.size
-                sqref_ptr = scope.alloc(rsize * len(rule.sqref))
-                for i, r in enumerate(rule.sqref):
-                    S.CELL_RECT.pack(
-                        LIB,
-                        sqref_ptr + i * rsize,
-                        {
-                            "first_row": _uint(r.first_row, "first_row"),
-                            "first_col": _uint(r.first_col, "first_col"),
-                            "last_row": _uint(r.last_row, "last_row"),
-                            "last_col": _uint(r.last_col, "last_col"),
-                        },
-                    )
+            ranges_ptr = _pack_cell_rect_array(rule.ranges, scope)
             ro = S.CF_RULE.offsets
-            LIB.write_bytes(ptr + ro["sqref"][1], struct.pack("<I", sqref_ptr))
-            LIB.write_bytes(ptr + ro["sqref_count"][1], struct.pack("<I", len(rule.sqref)))
+            LIB.write_bytes(ptr + ro["ranges"][1], struct.pack("<I", ranges_ptr))
+            LIB.write_bytes(ptr + ro["range_count"][1], struct.pack("<I", len(rule.ranges)))
             S.write_str_field(LIB, ptr, S.CF_RULE, "id", rule.id, scope)
             S.write_str_field(LIB, ptr, S.CF_RULE, "formula1", rule.formula1, scope)
             S.write_str_field(LIB, ptr, S.CF_RULE, "formula2", rule.formula2, scope)
@@ -11236,25 +11222,17 @@ class Workbook:
         self,
         sheet: int,
         pivot_index: int,
-        anchor_row: int,
-        anchor_col: int,
-        span_rows: int,
-        span_cols: int,
+        rect: CellRect,
     ) -> None:
-        """Update the pivot's anchor cell and span."""
+        """Set the rectangle the pivot reserves (``<location ref>``); its top-left cell is the anchor."""
         h = self._require()
-        _check(
-            LIB.fm_sheet_set_pivot_anchor(
-                h,
-                _uint(sheet, "sheet_index"),
-                _uint(pivot_index, "pivot_index"),
-                _uint(anchor_row, "anchor_row"),
-                _uint(anchor_col, "anchor_col"),
-                _uint(span_rows, "span_rows"),
-                _uint(span_cols, "span_cols"),
-            ),
-            "fm_sheet_set_pivot_anchor",
-        )
+        with _ArgScope() as scope:
+            rp = scope.struct(S.CELL_RECT)
+            _pack_cell_rect_at(rp, rect)
+            _check(
+                LIB.fm_sheet_set_pivot_anchor(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), rp),
+                "fm_sheet_set_pivot_anchor",
+            )
 
     def set_pivot_grand_totals(self, sheet: int, pivot_index: int, rows_enabled: bool, cols_enabled: bool) -> None:
         """Toggle the row / column grand-total bands."""
@@ -12338,23 +12316,17 @@ class Workbook:
                 return None
             return ParsedReference(
                 sheet_name=LIB.read_cstr(d["sheet_name"]) if d["has_sheet"] else None,
-                row0=d["rect"]["first_row"],
-                col0=d["rect"]["first_col"],
-                row1=d["rect"]["last_row"],
-                col1=d["rect"]["last_col"],
+                rect=_cell_rect_from(d["rect"]),
             )
 
     def format_reference(
         self,
-        row0: int,
-        col0: int,
-        row1: int,
-        col1: int,
+        rect: CellRect,
         *,
         sheet_name: Optional[str] = None,
         absolute: bool = False,
     ) -> str:
-        """Format the inclusive rectangle as A1 reference text (``B:D``, ``2:11``, ``'My Sheet'!A1``).
+        """Format ``rect`` as A1 reference text (``B:D``, ``2:11``, ``'My Sheet'!A1``).
 
         Raises:
           FormulonError: with ``kInvalidArgument`` for a coordinate outside the grid or a reversed rectangle.
@@ -12363,7 +12335,7 @@ class Workbook:
         with _ArgScope() as scope:
             out = scope.out_ptr()
             rp = scope.struct(S.CELL_RECT)
-            _pack_cell_rect_at(rp, CellRect(row0, col0, row1, col1))
+            _pack_cell_rect_at(rp, rect)
             _check(
                 LIB.fm_workbook_format_reference(
                     h,

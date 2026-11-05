@@ -427,13 +427,10 @@ val copy_doubles(const double* data, size_t n) {
   return out;
 }
 
-val range_to_val(const fm_chart_sheet_range_t& r) {
+val range_to_val(const fm_sheet_rect_t& r) {
   val o = val::object();
-  put(o, "sheet", val(r.sheet));
-  put(o, "top", val(r.top));
-  put(o, "left", val(r.left));
-  put(o, "bottom", val(r.bottom));
-  put(o, "right", val(r.right));
+  put(o, "sheet", val(r.sheet_index));
+  put(o, "rect", cell_rect_to_val(r.rect));
   return o;
 }
 
@@ -459,7 +456,7 @@ val data_series_to_val(const fm_chart_data_t* data, size_t index, fm_status_t& r
   for (int32_t role = 0; role < kRoleCount; ++role) {
     val list = val::array();
     for (size_t i = 0; i < s.range_count[role]; ++i) {
-      fm_chart_sheet_range_t r{};
+      fm_sheet_rect_t r{};
       if (!step(rc, fm_chart_data_get_range_at(data, index, role, i, &r))) {
         break;
       }

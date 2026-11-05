@@ -96,7 +96,8 @@ TEST(FormulonCApiPivot, SavedScratchPivotEmitsLocationRequiredDefaults) {
   std::size_t pivot_idx = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
 
-  ASSERT_EQ(fm_sheet_set_pivot_anchor(wb.handle, 0, pivot_idx, 0U, 3U, 5U, 2U), 0) << fm_get_last_error_message();
+  const fm_cell_rect_t location{0U, 3U, 4U, 4U};
+  ASSERT_EQ(fm_sheet_set_pivot_anchor(wb.handle, 0, pivot_idx, &location), 0) << fm_get_last_error_message();
 
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();

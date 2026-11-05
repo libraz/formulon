@@ -401,12 +401,13 @@ test('print settings: header/footer sections take decoded text', async () => {
 test('print settings: print area, titles and manual breaks', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.ok(wb.setPrintArea(0, 'A1:F8').ok);
-  assert.equal(wb.getPrintArea(0).ranges, 'A1:F8');
-  assert.equal(wb.setPrintArea(0, 'not-a-range').ok, false);
-  assert.equal(wb.getPrintArea(0).ranges, 'A1:F8');
-  assert.ok(wb.setPrintArea(0, '').ok);
-  assert.equal(wb.getPrintArea(0).ranges, '');
+  assert.ok(wb.setPrintArea(0, [{ firstRow: 0, firstCol: 0, lastRow: 7, lastCol: 5 }]).ok);
+  assert.deepEqual(wb.getPrintArea(0).ranges, [{ firstRow: 0, firstCol: 0, lastRow: 7, lastCol: 5 }]);
+  assert.equal(wb.setPrintArea(0, [{ firstRow: 5, firstCol: 0, lastRow: 4, lastCol: 0 }]).ok, false);
+  assert.deepEqual(wb.getPrintArea(0).ranges, [{ firstRow: 0, firstCol: 0, lastRow: 7, lastCol: 5 }]);
+  assert.throws(() => wb.setPrintArea(0, 'A1:F8'), TypeError);
+  assert.ok(wb.setPrintArea(0, []).ok);
+  assert.deepEqual(wb.getPrintArea(0).ranges, []);
 
   assert.ok(wb.setPrintTitles(0, '1:2', 'A:A').ok);
   const titles = wb.getPrintTitles(0);

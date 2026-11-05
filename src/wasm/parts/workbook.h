@@ -259,7 +259,7 @@ class JsWorkbook {
 
   /// Print area as comma-separated A1 ranges. `{ status, ranges }`.
   emscripten::val getSheetPrintArea(uint32_t sheet) const;
-  JsStatus setSheetPrintArea(uint32_t sheet, const std::string& rangesA1);
+  JsStatus setSheetPrintArea(uint32_t sheet, emscripten::val ranges);
 
   /// Repeat rows / columns. `{ status, repeatRows, repeatCols }`.
   emscripten::val getSheetPrintTitles(uint32_t sheet) const;
@@ -615,8 +615,7 @@ class JsWorkbook {
                                uint32_t anchorCol);
   JsStatus pivotRemove(uint32_t sheet, uint32_t pivotIdx);
   JsStatus pivotSetName(uint32_t sheet, uint32_t pivotIdx, const std::string& name);
-  JsStatus pivotSetAnchor(uint32_t sheet, uint32_t pivotIdx, uint32_t anchorRow, uint32_t anchorCol, uint32_t spanRows,
-                          uint32_t spanCols);
+  JsStatus pivotSetAnchor(uint32_t sheet, uint32_t pivotIdx, emscripten::val rect);
   JsStatus pivotSetGrandTotals(uint32_t sheet, uint32_t pivotIdx, bool rowsEnabled, bool colsEnabled);
   JsStatus pivotSetStyleInfo(uint32_t sheet, uint32_t pivotIdx, emscripten::val info);
   emscripten::val pivotGetLayout(uint32_t sheet, uint32_t pivotIdx) const;

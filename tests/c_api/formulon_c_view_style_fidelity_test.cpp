@@ -352,8 +352,8 @@ fm_cf_rule_t IconRule(const fm_cell_rect_t* sqref, fm_cfvo_t* thresholds, const 
                       uint32_t icon_count) {
   fm_cf_rule_t rule{};
   rule.type = 4;  // IconSet
-  rule.sqref = sqref;
-  rule.sqref_count = 1;
+  rule.ranges = sqref;
+  rule.range_count = 1;
   rule.icon_set_engaged = 1;
   rule.icon_set_name = 0;  // Three_Arrows
   thresholds[0].type = 1;  // Percent

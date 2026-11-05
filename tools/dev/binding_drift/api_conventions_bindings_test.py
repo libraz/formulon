@@ -891,6 +891,26 @@ class RangeTest(BindingRuleTestBase):
             ],
         )
 
+    def test_r11_sheet_named_reference(self) -> None:
+        bad = self.fixture.context(
+            RECT,
+            wasm="export interface ParsedReference { sheetName: string | null; row0: number; col0: number;"
+            " row1: number; col1: number }\n",
+            py_workbook="class ParsedReference:\n    sheet_name: Optional[str]\n    row0: int\n    col0: int\n"
+            "    row1: int\n    col1: int\n",
+        )
+        good = self.fixture.context(
+            RECT,
+            wasm="export interface ParsedReference { sheetName: string | null; rect: CellRect }\n",
+            py_workbook="class ParsedReference:\n    sheet_name: Optional[str]\n    rect: CellRect\n",
+        )
+        self.assert_rule(
+            "R11.sheet",
+            bad,
+            good,
+            [("py", "ParsedReference", "rect"), ("wasm", "ParsedReference", "rect")],
+        )
+
 
 class EntryPointTest(BindingRuleTestBase):
     LEDGER = {"entries": {"memory_usage.get": {"kind": "op", "js": "getMemoryUsage", "surfaces": ["native"]}}}

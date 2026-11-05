@@ -168,8 +168,8 @@ TEST(FormulonCApiCfMutate, IconSetFloorSurvivesSaveAndLoad) {
   fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule{};
   rule.type = 4;  // IconSet
-  rule.sqref = &sqref;
-  rule.sqref_count = 1;
+  rule.ranges = &sqref;
+  rule.range_count = 1;
   rule.icon_set_engaged = 1;
   rule.icon_set_name = 2;  // Three_Flags
   fm_cfvo_t thresholds[2]{};
@@ -208,8 +208,8 @@ TEST(FormulonCApiCfMutate, UnengagedIconSetFloorIsExcelsDefault) {
   fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule{};
   rule.type = 4;  // IconSet
-  rule.sqref = &sqref;
-  rule.sqref_count = 1;
+  rule.ranges = &sqref;
+  rule.range_count = 1;
   rule.icon_set_engaged = 1;
   fm_cfvo_t thresholds[2]{};
   rule.icon_set_thresholds = thresholds;

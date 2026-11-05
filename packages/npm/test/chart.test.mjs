@@ -132,7 +132,10 @@ test('insertChart creates a two-cell chart that getChart and getChartData read b
     assert.equal(data.series[0].x, null);
     assert.equal(data.series[0].sizes, null);
     assert.equal(data.series[0].ranges.values.length, 1);
-    assert.deepEqual(data.series[0].ranges.values[0], { sheet: 0, top: 1, left: 1, bottom: 4, right: 1 });
+    assert.deepEqual(data.series[0].ranges.values[0], {
+      sheet: 0,
+      rect: { firstRow: 1, firstCol: 1, lastRow: 4, lastCol: 1 },
+    });
     assert.deepEqual(data.unresolved, []);
 
     // Resolved data follows the cells.

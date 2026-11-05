@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "node_addon/parts/addon_common.h"
 #include "node_addon/parts/workbook_class.h"
@@ -124,11 +125,32 @@ Napi::Value Workbook::SetSheetFitToPage(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::GetSheetPrintArea(const Napi::CallbackInfo& info) {
-  return SheetStringGetter(info, &fm_sheet_get_print_area, "ranges");
+  Napi::Env env = info.Env();
+  const fm_cell_rect_t* found = nullptr;
+  size_t count = 0;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_print_area(handle_, ArgU32(info, 0), &found, &count) : kBindingInvalidHandle;
+  Napi::Array ranges = Napi::Array::New(env);
+  for (size_t i = 0; rc == 0 && i < count; ++i) {
+    ranges.Set(static_cast<uint32_t>(i), RangeToJs(env, found[i]));
+  }
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("status", MakeStatus(env, rc));
+  result.Set("ranges", ranges);
+  return result;
 }
 
 Napi::Value Workbook::SetSheetPrintArea(const Napi::CallbackInfo& info) {
-  return SheetStringSetter(info, &fm_sheet_set_print_area);
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  CheckedSpecReader reader(env);
+  std::vector<fm_cell_rect_t> ranges;
+  if (!ReadCellRects(reader, info[1], "ranges", &ranges)) {
+    return env.Undefined();
+  }
+  return MakeStatus(env, fm_sheet_set_print_area(handle_, ArgU32(info, 0), ranges.data(), ranges.size()));
 }
 
 Napi::Value Workbook::GetSheetPrintTitles(const Napi::CallbackInfo& info) {
@@ -188,8 +210,8 @@ Napi::Value Workbook::BreaksArray(const Napi::CallbackInfo& info, bool rows) {
   }
   const uint32_t sheet = ArgU32(info, 0);
   std::size_t count = 0;
-  const fm_status_t count_rc =
-      rows ? fm_sheet_get_row_break_count(handle_, sheet, &count) : fm_sheet_get_col_break_count(handle_, sheet, &count);
+  const fm_status_t count_rc = rows ? fm_sheet_get_row_break_count(handle_, sheet, &count)
+                                    : fm_sheet_get_col_break_count(handle_, sheet, &count);
   if (count_rc != 0) {
     return MakeFieldResult(env, MakeErrorStatus(env, count_rc), "breaks", Napi::Array::New(env));
   }
@@ -496,7 +518,8 @@ Napi::Value Workbook::Paginate(const Napi::CallbackInfo& info) {
   result.Set("printArea", print_area);
   result.Set("horizontalBreaks", horizontal_breaks);
   result.Set("verticalBreaks", vertical_breaks);
-  result.Set("pageCount", Napi::Number::New(env, static_cast<double>(PaginationCount(pagination, &fm_pagination_get_page_count))));
+  result.Set("pageCount",
+             Napi::Number::New(env, static_cast<double>(PaginationCount(pagination, &fm_pagination_get_page_count))));
   SetPaginationDetail(env, result, pagination);
   fm_pagination_destroy(pagination);
   return result;

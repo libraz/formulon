@@ -265,8 +265,8 @@ TEST(FormulonCApiCf, ExpressionRuleEvaluatesFunctionsAndQualifiedRefs) {
   rule.formula1 = "AND(A1>10,Sheet2!A1=5)";
   rule.dxf_id_engaged = 1;
   rule.dxf_id = 3;
-  rule.sqref = &sqref;
-  rule.sqref_count = 1;
+  rule.ranges = &sqref;
+  rule.range_count = 1;
   std::size_t rule_index = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
   EXPECT_EQ(rule_index, 0U);
@@ -299,8 +299,8 @@ TEST(FormulonCApiCf, ExpressionRuleRecursivelyEvaluatesFormulaCells) {
   rule.formula1 = "A1>10";
   rule.dxf_id_engaged = 1;
   rule.dxf_id = 4;
-  rule.sqref = &sqref;
-  rule.sqref_count = 1;
+  rule.ranges = &sqref;
+  rule.range_count = 1;
   std::size_t rule_index = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index), 0) << fm_get_last_error_message();
   EXPECT_EQ(rule_index, 0U);

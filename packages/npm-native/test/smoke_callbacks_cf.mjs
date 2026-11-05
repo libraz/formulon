@@ -82,7 +82,7 @@ test('evaluateCfRange requires todaySerial; NaN disables timePeriod rules', asyn
   const dxf = wb.addDxf({ font: { bold: true } });
   assert.ok(dxf.status.ok, JSON.stringify(dxf.status));
   const add = wb.addCfRule(0, {
-    sqref: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+    ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
     type: 15,
     timePeriod: 0,
     dxfId: dxf.index,

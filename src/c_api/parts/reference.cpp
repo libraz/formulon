@@ -25,23 +25,12 @@ using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::format_rect_a1;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::store_cstr;
-
-namespace {
-
-// One endpoint of a whole-column / whole-row pair: the text before the `:`
-// `format_a1` writes between the two copies of the axis.
-std::string whole_axis_endpoint(const formulon::parser::Reference& ref) {
-  std::string text = formulon::parser::format_a1(ref);
-  text.resize(text.rfind(':'));
-  return text;
-}
-
-}  // namespace
 
 extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, const char* text, int32_t r1c1,
                                                    int32_t has_base, uint32_t base_row, uint32_t base_col,
@@ -124,30 +113,8 @@ extern "C" fm_status_t fm_workbook_format_reference(const fm_workbook_t* wb, con
   if (auto rc = check_enum_domain(absolute, 1, kApi, "absolute"); rc != 0) {
     return rc;
   }
-  formulon::parser::Reference first;
-  first.sheet = sheet_name != nullptr ? std::string_view(sheet_name) : std::string_view();
-  first.row = row0;
-  first.col = col0;
-  first.row_abs = absolute == 1;
-  first.col_abs = absolute == 1;
-  formulon::parser::Reference second = first;
-  second.sheet = std::string_view();
-  second.row = row1;
-  second.col = col1;
-  std::string text;
-  if (row0 == 0U && row1 == formulon::Sheet::kMaxRows - 1U) {
-    first.is_full_col = true;
-    second.is_full_col = true;
-    text = whole_axis_endpoint(first) + ":" + whole_axis_endpoint(second);
-  } else if (col0 == 0U && col1 == formulon::Sheet::kMaxCols - 1U) {
-    first.is_full_row = true;
-    second.is_full_row = true;
-    text = whole_axis_endpoint(first) + ":" + whole_axis_endpoint(second);
-  } else if (row0 == row1 && col0 == col1) {
-    text = formulon::parser::format_a1(first);
-  } else {
-    text = formulon::parser::format_a1(first) + ":" + formulon::parser::format_a1(second);
-  }
-  *out_text = publish_scratch(wb, std::move(text));
+  *out_text = publish_scratch(
+      wb,
+      format_rect_a1(sheet_name != nullptr ? std::string_view(sheet_name) : std::string_view(), *range, absolute == 1));
   return 0;
 }

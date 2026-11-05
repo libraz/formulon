@@ -128,16 +128,11 @@ Napi::Value Workbook::GetConditionalFormats(const Napi::CallbackInfo& info) {
     item.Set("type", Napi::Number::New(env, static_cast<uint32_t>(rule.type)));
     item.Set("priority", Napi::Number::New(env, rule.priority));
     item.Set("stopIfTrue", Napi::Boolean::New(env, rule.stop_if_true != 0));
-    Napi::Array sqref = Napi::Array::New(env, rule.sqref_count);
-    for (uint32_t r = 0; r < rule.sqref_count; ++r) {
-      Napi::Object rng = Napi::Object::New(env);
-      rng.Set("firstRow", Napi::Number::New(env, rule.sqref[r].first_row));
-      rng.Set("firstCol", Napi::Number::New(env, rule.sqref[r].first_col));
-      rng.Set("lastRow", Napi::Number::New(env, rule.sqref[r].last_row));
-      rng.Set("lastCol", Napi::Number::New(env, rule.sqref[r].last_col));
-      sqref.Set(r, rng);
+    Napi::Array ranges = Napi::Array::New(env, rule.range_count);
+    for (size_t r = 0; r < rule.range_count; ++r) {
+      ranges.Set(static_cast<uint32_t>(r), RangeToJs(env, rule.ranges[r]));
     }
-    item.Set("sqref", sqref);
+    item.Set("ranges", ranges);
     if (rule.dxf_id_engaged != 0) {
       item.Set("dxfId", Napi::Number::New(env, rule.dxf_id));
     }
@@ -269,9 +264,9 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   std::vector<fm_cf_icon_t> icon_set_icons;
   formulon::c_api::BorrowedStringArena cfvo_strings;
   CheckedSpecReader reader(env);
-  Napi::Array sqref_arr;
-  if (reader.Array(v, "sqref", &sqref_arr)) {
-    const uint32_t n = sqref_arr.Length();
+  Napi::Array ranges_arr;
+  if (reader.Array(v, "ranges", &ranges_arr)) {
+    const uint32_t n = ranges_arr.Length();
     if (!reader.ok()) {
       return env.Undefined();
     }
@@ -281,7 +276,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
         break;
       }
       Napi::Value rng_v;
-      if (!reader.ArrayElement(sqref_arr, i, &rng_v)) {
+      if (!reader.ArrayElement(ranges_arr, i, &rng_v)) {
         if (!reader.ok()) {
           break;
         }
@@ -317,8 +312,8 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   if (dxf_id_present) {
     rule.dxf_id_engaged = 1;
   }
-  rule.sqref = ranges_buf.empty() ? nullptr : ranges_buf.data();
-  rule.sqref_count = static_cast<uint32_t>(ranges_buf.size());
+  rule.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
+  rule.range_count = ranges_buf.size();
   rule.formula1 = formula1.empty() ? nullptr : formula1.c_str();
   rule.formula2 = formula2.empty() ? nullptr : formula2.c_str();
   bool op_present = false;

@@ -175,8 +175,8 @@ const char* last_error_context();
 
 // Hard cap on the number of cell ranges any single C-API call may carry.
 // Validation lists and conditional-format sqrefs are unbounded on the
-// wire (`uint32_t`), so a hostile caller can pass `0xFFFFFFFF` and force
-// a 4 GiB `reserve()` before the loop body even runs. 16384 is several
+// wire (`size_t`), so a hostile caller can pass `SIZE_MAX` and force
+// a huge `reserve()` before the loop body even runs. 16384 is several
 // orders of magnitude past Excel's own usage (sheets rarely exceed a
 // handful of CF sqrefs) but high enough that no legitimate caller will
 // trip the cap.
@@ -186,7 +186,23 @@ constexpr std::uint32_t kMaxRangesPerCApiCall = 16384U;
 // the per-call range cap. The caller threads the result back as the
 // fail-fast path so the body never starts the per-range loop with a
 // bogus reservation.
-bool check_range_count(std::uint32_t n, const char* api);
+bool check_range_count(std::size_t n, const char* api);
+
+// Validates a required `const fm_cell_rect_t* ranges, size_t range_count`
+// list: at least one entry (`kInvalidArgument`), `ranges` non-NULL
+// (`kBindingNullPointer`), at most the per-call cap, and every rectangle
+// ordered and inside the grid (`kInvalidArgument`).
+fm_status_t check_rect_list(const fm_cell_rect_t* ranges, std::size_t range_count, const char* api);
+
+// Copies `ranges` into the handle's rectangle scratch (read-scratch-backed
+// lifetime) and returns the published array, or NULL when it is empty.
+const fm_cell_rect_t* publish_rects(const fm_workbook_t* wb, const std::vector<formulon::MergeRange>& ranges);
+
+// A1 text of an in-grid, ordered `rect`, qualified by `sheet_name` when it is
+// non-empty: one endpoint for a single cell, `B:D` for a rectangle spanning
+// every row, `2:11` for one spanning every column, `$` anchors when
+// `absolute`.
+std::string format_rect_a1(std::string_view sheet_name, const fm_cell_rect_t& rect, bool absolute);
 
 // Resolves a non-NULL `profile_id` to its `ExcelProfile`. Returns 0, or sets
 // `kInvalidArgument` ("<api>: unknown profile", context `profile_id=<id>`).
@@ -482,6 +498,10 @@ struct fm_workbook {
   // Stops behind the `gradient_stops` view of `fm_workbook_get_fill` /
   // `fm_workbook_get_dxf`; refreshed by each of those calls.
   formulon::c_api::BorrowedArrayArena<fm_gradient_stop_t> gradient_stop_scratch;
+  // Rectangles behind the `const fm_cell_rect_t*` outputs of the print-area,
+  // protected-range and table getters (`publish_rects`); each call replaces
+  // the previous array.
+  formulon::c_api::BorrowedArrayArena<fm_cell_rect_t> rect_scratch;
 
   // Result of the most recent `fm_sheet_evaluate_formula_array`. Owns its
   // own text storage so cells stay readable via

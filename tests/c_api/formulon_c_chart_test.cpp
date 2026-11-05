@@ -46,7 +46,7 @@ static_assert(sizeof(fm_chart_data_series_t) == (kWasm32 ? 56U : 112U), "fm_char
 static_assert(offsetof(fm_chart_data_series_t, x_format_code) == (kWasm32 ? 52U : 104U),
               "fm_chart_data_series_t x_format_code offset changed");
 static_assert(sizeof(fm_chart_data_points_t) == (kWasm32 ? 20U : 40U), "fm_chart_data_points_t ABI layout changed");
-static_assert(sizeof(fm_chart_sheet_range_t) == (kWasm32 ? 20U : 24U), "fm_chart_sheet_range_t ABI layout changed");
+static_assert(sizeof(fm_sheet_rect_t) == (kWasm32 ? 20U : 24U), "fm_sheet_rect_t ABI layout changed");
 static_assert(sizeof(fm_chart_axis_title_text_t) == (kWasm32 ? 8U : 16U),
               "fm_chart_axis_title_text_t ABI layout changed");
 static_assert(sizeof(fm_chart_unresolved_t) == (kWasm32 ? 12U : 24U), "fm_chart_unresolved_t ABI layout changed");
@@ -349,13 +349,13 @@ TEST(FormulonCApiChart, ResolvedDataAccessors) {
     EXPECT_EQ(points.states[i], FM_CHART_POINT_VALUE);
   }
 
-  fm_chart_sheet_range_t r{};
+  fm_sheet_rect_t r{};
   ASSERT_EQ(fm_chart_data_get_range_at(data.handle, 0, FM_CHART_ROLE_VALUES, 0, &r), 0);
-  EXPECT_EQ(r.sheet, 0U);
-  EXPECT_EQ(r.top, 1U);
-  EXPECT_EQ(r.left, 1U);
-  EXPECT_EQ(r.bottom, 4U);
-  EXPECT_EQ(r.right, 1U);
+  EXPECT_EQ(r.sheet_index, 0U);
+  EXPECT_EQ(r.rect.first_row, 1U);
+  EXPECT_EQ(r.rect.first_col, 1U);
+  EXPECT_EQ(r.rect.last_row, 4U);
+  EXPECT_EQ(r.rect.last_col, 1U);
   EXPECT_EQ(fm_chart_data_get_range_at(data.handle, 0, FM_CHART_ROLE_X, 0, &r), kInvalidArgument);
   EXPECT_EQ(fm_chart_data_get_range_at(data.handle, 0, 6, 0, &r), kInvalidArgument);
   EXPECT_EQ(fm_chart_data_get_range_at(data.handle, 3, FM_CHART_ROLE_VALUES, 0, &r), kInvalidArgument);
