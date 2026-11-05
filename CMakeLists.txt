@@ -295,6 +295,7 @@ set(FORMULON_CORE_SOURCES
   src/pivot/pivot_index.cpp
   src/pivot/field_grouping.cpp
   src/pivot/calculated.cpp
+  src/pivot/calculated_edit.cpp
   src/pivot/pivot_layout.cpp
   src/pivot/pivot_layout_axis.cpp
   src/pivot/pivot_layout_emit.cpp
