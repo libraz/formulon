@@ -115,29 +115,10 @@ Value round_to_digits(const Value* args, std::uint32_t arity, RoundFn round, boo
   return to_finite_value(round(value.value(), d));
 }
 
-// CEILING / FLOOR / MROUND / TRUNC treat empty-string text as `#VALUE!` rather
-// than coercing it to zero (which is what the general arithmetic rule in
-// `coerce_to_number` does). This matters because the subsequent `s == 0`
-// branch would otherwise convert `FLOOR(10, "")` to `#DIV/0!` -- Excel's
-// observed behaviour is `#VALUE!`.
-inline bool is_empty_text(const Value& v) {
-  if (v.kind() != ValueKind::Text)
-    return false;
-  const std::string_view t = v.as_text();
-  for (char c : t) {
-    if (c != ' ' && c != '\t')
-      return false;
-  }
-  return true;
-}
-
 // TRUNC(value, digits?) - truncate toward zero at `digits` decimals (default
 // 0), on the digits of the value's 15-significant-digit view. `digits` may be
 // negative (e.g. `TRUNC(1234.5, -1) = 1230`).
 Value Trunc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  if (is_empty_text(args[0]) || (arity >= 2 && is_empty_text(args[1]))) {
-    return Value::error(ErrorCode::Value);
-  }
   return round_to_digits(args, arity, &builtins_detail::round_down_decimals);
 }
 
@@ -262,9 +243,6 @@ inline double signum(double x) {
 // (`FLOOR(7.1, 0.1)` is 7.1, not 7).
 template <typename RoundFn>
 Value legacy_significance_round(const Value* args, const Value& zero_significance, RoundFn round) {
-  if (is_empty_text(args[0]) || is_empty_text(args[1])) {
-    return Value::error(ErrorCode::Value);
-  }
   auto operands = builtins_detail::read_number_pair(args, 0, 1);
   if (!operands) {
     return Value::error(operands.error());
@@ -330,9 +308,6 @@ Value Floor(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // with ties rounded away from zero. Opposite-signed inputs yield #NUM!;
 // `multiple = 0` returns 0 (Excel's documented quirk).
 Value MRound(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  if (is_empty_text(args[0]) || is_empty_text(args[1])) {
-    return Value::error(ErrorCode::Value);
-  }
   // Excel 365 rejects direct Bool arguments to MROUND with #VALUE!
   // (mirrors the strict-Bool rejection in BIN2*/OCT2*/HEX2*). Number
   // and Text arguments still coerce normally.

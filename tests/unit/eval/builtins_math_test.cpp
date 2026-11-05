@@ -910,6 +910,18 @@ TEST(ExactRemainderAndAngles, MatchesExcelValues) {
   }
 }
 
+// Empty or blank-only text is #VALUE! in the rounding family rather than a
+// zero significance (`FLOOR(10, "")` is not #DIV/0!).
+TEST(RoundingFamily, EmptyOrBlankTextIsValue) {
+  for (const char* src :
+       {"=TRUNC(\"\")", "=TRUNC(\" \")", "=TRUNC(CHAR(9))", "=TRUNC(1,\" \")", "=FLOOR(10,\"\")", "=FLOOR(10,CHAR(9))",
+        "=CEILING(\"\",\" \")", "=CEILING(10,\"\")", "=MROUND(\"\",\" \")", "=MROUND(10,CHAR(9))"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << src;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
