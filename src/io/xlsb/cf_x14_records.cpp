@@ -1103,36 +1103,8 @@ Expected<void, Error> reconcile_x14_rules(std::vector<std::uint8_t>& records,
       }
     }
   }
-  // The load-time view of the records: `ixti` indexes the source table, so a
-  // rule the reader could adopt decodes here too.
-  std::vector<XlsbSheetRange> source_ranges;
-  for (const XlsbExternSheetEntry& entry : extern_sheets) {
-    const auto itab = [&ctx](const std::string& name) {
-      const auto at = std::find(ctx.sheet_names.begin(), ctx.sheet_names.end(), name);
-      return at == ctx.sheet_names.end() ? -1 : static_cast<std::int32_t>(at - ctx.sheet_names.begin());
-    };
-    XlsbSheetRange range;
-    if (entry.external_book != 0U || entry.unresolved) {
-      range.external_book = entry.external_book != 0U ? entry.external_book : 1U;
-    } else if (entry.first.empty() && entry.last.empty()) {
-      range.itab_first = range.itab_last = -2;
-    } else {
-      range.itab_first = itab(entry.first);
-      range.itab_last = itab(entry.last);
-    }
-    source_ranges.push_back(range);
-  }
-  std::vector<XlsbName> source_names;
-  for (const auto& [key, ilbl] : ctx.name_table) {
-    if (ilbl != 0U) {
-      source_names.resize(std::max<std::size_t>(source_names.size(), ilbl));
-      source_names[ilbl - 1U].name = key;
-    }
-  }
-  const XlsbExternalBooks no_books;
-  const auto own = std::find(ctx.sheet_names.begin(), ctx.sheet_names.end(), own_sheet);
-  const FeatureFormulaReadContext read_ctx{ctx.sheet_names, source_names, source_ranges, no_books,
-                                           static_cast<std::size_t>(own - ctx.sheet_names.begin())};
+  const FeatureFormulaLoadView load_view(ctx, extern_sheets, own_sheet);
+  const FeatureFormulaReadContext& read_ctx = load_view.context();
   Expected<void, Error> status = Expected<void, Error>::Ok();
   RewriteX14Rules(records, [&](const std::vector<FramedRecord>& recs, std::size_t first, std::size_t last,
                                const std::vector<MergeRange>& ranges, std::size_t) {

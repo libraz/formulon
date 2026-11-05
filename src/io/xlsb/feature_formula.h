@@ -42,6 +42,25 @@ struct FeatureFormulaWriteContext {
   const NameTable& name_table;
 };
 
+/// The load-time view of records encoded through a write context: `ixti`
+/// indexes `extern_sheets` and `ilbl` the write context's name table, so a
+/// formula the reader could adopt decodes through `context()` too.
+class FeatureFormulaLoadView final {
+ public:
+  FeatureFormulaLoadView(const FeatureFormulaWriteContext& ctx, const std::vector<XlsbExternSheetEntry>& extern_sheets,
+                         std::string_view own_sheet);
+  FeatureFormulaLoadView(const FeatureFormulaLoadView&) = delete;
+  FeatureFormulaLoadView& operator=(const FeatureFormulaLoadView&) = delete;
+
+  const FeatureFormulaReadContext& context() const { return context_; }
+
+ private:
+  std::vector<XlsbSheetRange> sheet_ranges_;
+  std::vector<XlsbName> names_;
+  XlsbExternalBooks no_books_;
+  FeatureFormulaReadContext context_;
+};
+
 /// A feature formula as its records carry it: `cce` + `rgce` + `cb` +
 /// `rgcb` (`bytes`), plus the size field BrtBeginCFRule / BrtCFVO keep
 /// alongside it (`cb_fmla`). Excel writes `cce` plus 2 per reference token

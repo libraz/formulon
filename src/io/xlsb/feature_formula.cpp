@@ -2,6 +2,7 @@
 
 #include "io/xlsb/feature_formula.h"
 
+#include <algorithm>
 #include <string>
 #include <utility>
 
@@ -39,6 +40,36 @@ void emit_sqref(std::vector<std::uint8_t>& dst, const std::vector<MergeRange>& r
   emit_u32(dst, static_cast<std::uint32_t>(ranges.size()));
   for (const MergeRange& r : ranges) {
     emit_rfx(dst, r);
+  }
+}
+
+FeatureFormulaLoadView::FeatureFormulaLoadView(const FeatureFormulaWriteContext& ctx,
+                                               const std::vector<XlsbExternSheetEntry>& extern_sheets,
+                                               std::string_view own_sheet)
+    : context_{ctx.sheet_names, names_, sheet_ranges_, no_books_,
+               static_cast<std::size_t>(std::find(ctx.sheet_names.begin(), ctx.sheet_names.end(), own_sheet) -
+                                        ctx.sheet_names.begin())} {
+  for (const XlsbExternSheetEntry& entry : extern_sheets) {
+    const auto itab = [&ctx](const std::string& name) {
+      const auto at = std::find(ctx.sheet_names.begin(), ctx.sheet_names.end(), name);
+      return at == ctx.sheet_names.end() ? -1 : static_cast<std::int32_t>(at - ctx.sheet_names.begin());
+    };
+    XlsbSheetRange range;
+    if (entry.external_book != 0U || entry.unresolved) {
+      range.external_book = entry.external_book != 0U ? entry.external_book : 1U;
+    } else if (entry.first.empty() && entry.last.empty()) {
+      range.itab_first = range.itab_last = -2;
+    } else {
+      range.itab_first = itab(entry.first);
+      range.itab_last = itab(entry.last);
+    }
+    sheet_ranges_.push_back(range);
+  }
+  for (const auto& [key, ilbl] : ctx.name_table) {
+    if (ilbl != 0U) {
+      names_.resize(std::max<std::size_t>(names_.size(), ilbl));
+      names_[ilbl - 1U].name = key;
+    }
   }
 }
 
