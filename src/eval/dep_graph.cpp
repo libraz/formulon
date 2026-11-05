@@ -32,6 +32,16 @@ constexpr DepGraph::DependencySource kAllSources[] = {DepGraph::DependencySource
                                                       DepGraph::DependencySource::kSpillFootprint,
                                                       DepGraph::DependencySource::kDynamicReference};
 
+constexpr std::uint8_t all_source_bits() noexcept {
+  std::uint8_t mask = 0;
+  for (const DepGraph::DependencySource source : kAllSources) {
+    mask = static_cast<std::uint8_t>(mask | source_bit(source));
+  }
+  return mask;
+}
+
+constexpr std::uint8_t kAllSourceBits = all_source_bits();
+
 }  // namespace
 
 void DepGraph::add_dependency(CellNodeId dependent, CellNodeId dependency) {
@@ -301,9 +311,6 @@ void DepGraph::clear_dependencies_of(CellNodeId dependent) {
   std::vector<CellNodeId> dependencies = std::move(fwd->second);
   forward_.erase(fwd);
   dynamic_by_dependent_.erase(dependent);
-  constexpr std::uint8_t kAllSourceBits = static_cast<std::uint8_t>(source_bit(DependencySource::kAuthored) |
-                                                                    source_bit(DependencySource::kSpillFootprint) |
-                                                                    source_bit(DependencySource::kDynamicReference));
   clear_outgoing_sources(dependent, dependencies, kAllSourceBits, dependent_was_known);
 }
 
@@ -456,18 +463,6 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_subset(
   std::vector<std::vector<CellNodeId>> sccs;
   std::int64_t next_index = 0;
 
-  // Empty adjacency (used when a node has no outgoing edges) — kept on
-  // the stack so we can return a stable reference.
-  static const std::vector<CellNodeId> kEmptyNeighbors;
-
-  auto neighbors_of = [&](CellNodeId node) -> const std::vector<CellNodeId>& {
-    auto pos = forward_.find(node);
-    if (pos == forward_.end()) {
-      return kEmptyNeighbors;
-    }
-    return pos->second;
-  };
-
   for (CellNodeId root : all_nodes) {
     if (visits.count(root) != 0U) {
       continue;
@@ -481,7 +476,7 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_subset(
 
     while (!frames.empty()) {
       Frame& top = frames.back();
-      const std::vector<CellNodeId>& adj = neighbors_of(top.node);
+      const std::vector<CellNodeId>& adj = dependencies_of_ref(top.node);
       if (top.neighbor_idx < adj.size()) {
         CellNodeId neighbor = adj[top.neighbor_idx++];
         if (nodes.count(neighbor) == 0U) {
