@@ -95,6 +95,33 @@ std::string Repeat(const std::string& unit, std::size_t times) {
 
 const char* const kEmoji = "\xF0\x9F\x98\x80";  // two UTF-16 code units
 
+// Read options with every string copied into owned storage. The getter's
+// strings are read-scratch views that the next successful read may invalidate.
+class OwnedPivotOptions {
+ public:
+  explicit OwnedPivotOptions(const fm_pivot_options_t& read) : options_(read) {
+    const char* fm_pivot_options_t::*const members[] = {
+        &fm_pivot_options_t::error_caption, &fm_pivot_options_t::missing_caption, &fm_pivot_options_t::alt_text,
+        &fm_pivot_options_t::alt_text_summary, &fm_pivot_options_t::grand_total_caption};
+    static_assert(sizeof(members) / sizeof(members[0]) == kStrings, "one owned copy per string member");
+    for (std::size_t i = 0; i < kStrings; ++i) {
+      if (read.*members[i] != nullptr) {
+        texts_[i] = read.*members[i];
+        options_.*members[i] = texts_[i].c_str();
+      }
+    }
+  }
+  OwnedPivotOptions(const OwnedPivotOptions&) = delete;
+  OwnedPivotOptions& operator=(const OwnedPivotOptions&) = delete;
+
+  const fm_pivot_options_t* get() const { return &options_; }
+
+ private:
+  static constexpr std::size_t kStrings = 5;
+  fm_pivot_options_t options_;
+  std::string texts_[kStrings];
+};
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -153,17 +180,17 @@ TEST(FormulonCApiPivotOptions, GrandTotalCaptionBoundaries) {
   fm_pivot_options_t o{};
   ASSERT_EQ(fm_sheet_get_pivot_options(wb.handle, 0U, kPivot, &o), 0);
   EXPECT_EQ(std::string(o.grand_total_caption), at_limit);
+  const OwnedPivotOptions keep(o);
 
   EXPECT_EQ(SetGrandTotalCaption(wb.handle, 0U, kPivot, Repeat(kEmoji, 128).c_str()), kInvalidArgument);
   EXPECT_EQ(SetGrandTotalCaption(wb.handle, 0U, kPivot, Repeat("a", 256).c_str()), kInvalidArgument);
   EXPECT_EQ(SetGrandTotalCaption(wb.handle, 0U, kPivot, "\xC3"), kBindingUtf8EncodingError);
-  const fm_pivot_options_t keep = o;
-  EXPECT_EQ(fm_sheet_set_pivot_options(wb.handle, 9U, kPivot, &keep), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_set_pivot_options(wb.handle, 0U, 9U, &keep), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_pivot_options(wb.handle, 0U, std::numeric_limits<std::size_t>::max(), &keep),
+  EXPECT_EQ(fm_sheet_set_pivot_options(wb.handle, 9U, kPivot, keep.get()), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_pivot_options(wb.handle, 0U, 9U, keep.get()), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_pivot_options(wb.handle, 0U, std::numeric_limits<std::size_t>::max(), keep.get()),
             kInvalidArgument);
   EXPECT_EQ(fm_sheet_get_pivot_options(wb.handle, 0U, std::numeric_limits<std::size_t>::max(), &o), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_pivot_options(nullptr, 0U, kPivot, &keep), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_set_pivot_options(nullptr, 0U, kPivot, keep.get()), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_get_pivot_options(wb.handle, 0U, kPivot, nullptr), kBindingNullPointer);
   // The rejected calls left the accepted caption alone.
   ASSERT_EQ(fm_sheet_get_pivot_options(wb.handle, 0U, kPivot, &o), 0);

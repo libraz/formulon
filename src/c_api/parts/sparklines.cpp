@@ -222,6 +222,9 @@ extern "C" fm_status_t fm_sheet_add_sparkline_group(fm_workbook_t* wb, size_t sh
   if (group == nullptr || items == nullptr || out_index == nullptr) {
     return null_argument("fm_sheet_add_sparkline_group");
   }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_sparkline_group"); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_utf8("fm_sheet_add_sparkline_group", {group->date_axis_ref}); rc != 0) {
     return rc;
   }
@@ -245,6 +248,9 @@ extern "C" fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t
   if (group == nullptr) {
     return set_binding_error(FormulonErrorCode::kBindingNullPointer, "fm_sheet_update_sparkline_group: NULL group");
   }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_update_sparkline_group"); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_utf8("fm_sheet_update_sparkline_group", {group->date_axis_ref}); rc != 0) {
     return rc;
   }
@@ -259,6 +265,9 @@ extern "C" fm_status_t fm_sheet_set_sparkline_group_sparklines(fm_workbook_t* wb
   if (items == nullptr) {
     return set_binding_error(FormulonErrorCode::kBindingNullPointer,
                              "fm_sheet_set_sparkline_group_sparklines: NULL items");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_sparkline_group_sparklines"); rc != 0) {
+    return rc;
   }
   if (auto rc = check_items_utf8(items, count, "fm_sheet_set_sparkline_group_sparklines"); rc != 0) {
     return rc;

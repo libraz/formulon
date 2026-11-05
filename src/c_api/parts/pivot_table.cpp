@@ -533,6 +533,9 @@ extern "C" fm_status_t fm_sheet_add_pivot_data_field(fm_workbook_t* wb, std::siz
   if (wb == nullptr || spec == nullptr || out_index == nullptr) {
     return null_argument("fm_sheet_add_pivot_data_field");
   }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_pivot_data_field"); rc != 0) {
+    return rc;
+  }
   if (auto rc = validate(*spec, "fm_sheet_add_pivot_data_field"); rc != 0) {
     return rc;
   }
@@ -577,6 +580,9 @@ extern "C" fm_status_t fm_sheet_set_pivot_data_field(fm_workbook_t* wb, std::siz
   clear_last_error();
   if (wb == nullptr || spec == nullptr) {
     return null_argument("fm_sheet_set_pivot_data_field");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_pivot_data_field"); rc != 0) {
+    return rc;
   }
   if (auto rc = validate(*spec, "fm_sheet_set_pivot_data_field"); rc != 0) {
     return rc;
@@ -827,6 +833,9 @@ extern "C" fm_status_t fm_sheet_set_pivot_options(fm_workbook_t* wb, std::size_t
   constexpr const char* kApi = "fm_sheet_set_pivot_options";
   if (wb == nullptr || options == nullptr) {
     return null_argument(kApi);
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
+    return rc;
   }
   const fm_pivot_options_t& o = *options;
   if (auto rc =

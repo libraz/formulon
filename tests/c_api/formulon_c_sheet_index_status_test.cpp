@@ -3,7 +3,8 @@
 // in one order -- handle, NULL pointers, sheet index, everything else -- and
 // reports an out-of-range sheet as FM_STATUS_SHEET_INDEX_OUT_OF_RANGE. A
 // successful call leaves the last-error state empty. Every `fm_cell_rect_t`
-// argument rejects an inverted or off-grid rectangle as invalid.
+// argument rejects an inverted or off-grid rectangle as invalid. A record
+// argument's fields are ordinary arguments, checked after the sheet.
 
 #include <cstddef>
 #include <cstdint>
@@ -46,6 +47,7 @@ struct SheetIndexCall {
   std::uint32_t rect_mask;  // pointer slots that are single `const fm_cell_rect_t*` arguments
   fm_status_t (*call)(fm_workbook_t* wb, std::size_t sheet_index, ZeroSlots& slots);
   void (*release)(ZeroSlots& slots);
+  void (*poison)(ZeroSlots& slots);  // makes every field of each input record invalid
 };
 
 #include "sheet_index_calls.inc"
@@ -114,6 +116,28 @@ TEST(FormulonCApiSheetIndexStatus, MalformedUtf8IsCheckedAfterTheSheet) {
     EXPECT_EQ(rc, FM_STATUS_SHEET_INDEX_OUT_OF_RANGE) << entry.name << ": " << fm_get_last_error_message();
   }
   EXPECT_GT(text_calls, 0U);
+}
+
+// Malformed text, integers at their type's maximum and NaN doubles in a record
+// argument still lose to an out-of-range sheet.
+TEST(FormulonCApiSheetIndexStatus, MalformedRecordIsCheckedAfterTheSheet) {
+  std::size_t record_calls = 0;
+  for (const SheetIndexCall& entry : kSheetIndexCalls) {
+    if (entry.poison == nullptr) {
+      continue;
+    }
+    ++record_calls;
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+    ZeroSlots slots;
+    entry.poison(slots);
+    const fm_status_t rc = entry.call(wb.handle, 1U, slots);
+    if (entry.release != nullptr) {
+      entry.release(slots);
+    }
+    EXPECT_EQ(rc, FM_STATUS_SHEET_INDEX_OUT_OF_RANGE) << entry.name << ": " << fm_get_last_error_message();
+  }
+  EXPECT_GT(record_calls, 0U);
 }
 
 TEST(FormulonCApiSheetIndexStatus, NullHandleIsCheckedBeforeTheSheet) {

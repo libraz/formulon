@@ -310,6 +310,9 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_axis(fm_workbook_t* wb, std::siz
   if (wb == nullptr) {
     return null_argument("fm_sheet_set_pivot_field_axis", "wb");
   }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_pivot_field_axis"); rc != 0) {
+    return rc;
+  }
   // -1 takes the field off every axis.
   fm_status_t enum_status =
       axis == kPivotAxisNone ? 0 : check_enum_domain(axis, 3, "fm_sheet_set_pivot_field_axis", "axis");
@@ -595,6 +598,9 @@ extern "C" fm_status_t fm_sheet_add_pivot_field_shared_item(fm_workbook_t* wb, s
   if (out_index == nullptr) {
     return null_argument("fm_sheet_add_pivot_field_shared_item", "out_index");
   }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_pivot_field_shared_item"); rc != 0) {
+    return rc;
+  }
   // A shared item is stored as a 32-bit cache index; a wider one names no item.
   if (cache_index > std::numeric_limits<std::uint32_t>::max()) {
     return check_index(cache_index, std::numeric_limits<std::uint32_t>::max(), "fm_sheet_add_pivot_field_shared_item",
@@ -656,6 +662,9 @@ extern "C" fm_status_t fm_sheet_add_pivot_field_subtotal_fn(fm_workbook_t* wb, s
   clear_last_error();
   if (wb == nullptr) {
     return null_argument("fm_sheet_add_pivot_field_subtotal_fn", "wb");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_pivot_field_subtotal_fn"); rc != 0) {
+    return rc;
   }
   fm_status_t enum_status = check_enum_domain(agg, 10, "fm_sheet_add_pivot_field_subtotal_fn", "aggregation");
   if (enum_status != 0) {
