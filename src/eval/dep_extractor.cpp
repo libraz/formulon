@@ -99,6 +99,20 @@ const WalkState::LexicalBinding* lookup_lexical(std::string_view name, const Wal
   return nullptr;
 }
 
+// The lexical binding an unqualified `NameRef` denotes, or nullptr for any
+// other node.
+const WalkState::LexicalBinding* lookup_unqualified_lexical(const parser::AstNode& node, const WalkState& state) {
+  if (node.kind() == parser::NodeKind::NameRef && node.as_name_sheet().empty()) {
+    return lookup_lexical(node.as_name(), state);
+  }
+  return nullptr;
+}
+
+// True for `Name`, `Sheet1!Name` and `[0]!Name`.
+bool is_defined_name_ref(const parser::AstNode& node) {
+  return node.kind() == parser::NodeKind::NameRef || parser::is_self_book_name_ref(node);
+}
+
 // The definition a `NameRef` denotes: `Sheet1!Name` in Sheet1's scope, an
 // unqualified name in the formula's own.
 const DefinedName* find_name_ref_definition(const parser::AstNode& name_ref, const WalkState& state) {
@@ -195,43 +209,39 @@ void emit_rect(WalkState& state, std::uint16_t sheet_id, const DeclaredRect& rec
   }
 }
 
+// The footprint of a static endpoint pair. A bare side takes the other side's
+// sheet; two qualified sides must agree, else the pair has no footprint.
+std::optional<Footprint> pair_footprint(const parser::Reference& lhs, const parser::Reference& rhs,
+                                        const WalkState& state) {
+  if (!lhs.sheet.empty() && !rhs.sheet.empty() && !sheet_names::equal(lhs.sheet, rhs.sheet)) {
+    return std::nullopt;
+  }
+  parser::Reference probe{};
+  probe.sheet = lhs.sheet.empty() ? rhs.sheet : lhs.sheet;
+  Footprint out;
+  if (!resolve_sheet_id(probe, state, &out.sheet_id)) {
+    return std::nullopt;
+  }
+  const auto rect = declared_rect(lhs, rhs);
+  if (!rect) {
+    return std::nullopt;
+  }
+  out.sheet_explicit = !probe.sheet.empty();
+  out.rect = rect.value();
+  return out;
+}
+
 // Flattens the rectangle [lhs, rhs] into per-cell dependencies. Both
 // endpoints must be plain `Ref` nodes; complex ranges (OFFSET-based,
 // INDIRECT, etc.) are silently ignored — dynamic shapes cannot be statically
 // resolved here. Whole-column / whole-row endpoints are captured as compact
 // rectangles without flattening their 1,048,576 potential cells.
 void emit_range_cells(WalkState& state, const parser::Reference& lhs, const parser::Reference& rhs) {
-  // Resolve the effective sheet for the rectangle. Mirrors the policy in
-  // `EvalContext::expand_range`: the parser keeps the qualifier on the LHS
-  // for `Sheet2!A1:B2`, so the RHS often has an empty qualifier and inherits.
-  std::string_view effective_sheet;
-  if (!lhs.sheet.empty() && !rhs.sheet.empty()) {
-    // Mismatched qualifiers are an evaluator-level #REF!; statically we
-    // simply skip the range.
-    if (!sheet_names::equal(lhs.sheet, rhs.sheet)) {
-      return;
-    }
-    effective_sheet = lhs.sheet;
-  } else if (!lhs.sheet.empty()) {
-    effective_sheet = lhs.sheet;
-  } else if (!rhs.sheet.empty()) {
-    effective_sheet = rhs.sheet;
+  // Mismatched qualifiers are an evaluator-level #REF!, and a malformed or
+  // mixed-axis pair is an evaluator error; statically both are omitted.
+  if (const std::optional<Footprint> footprint = pair_footprint(lhs, rhs, state)) {
+    emit_rect(state, footprint->sheet_id, footprint->rect);
   }
-
-  parser::Reference probe{};
-  probe.sheet = effective_sheet;
-  std::uint16_t target_sheet_id = state.current_sheet_id;
-  if (!resolve_sheet_id(probe, state, &target_sheet_id)) {
-    return;
-  }
-
-  const auto normalized = declared_rect(lhs, rhs);
-  if (!normalized) {
-    // The evaluator reports malformed or mixed-axis references as an error;
-    // static extraction simply omits a shape it cannot model safely.
-    return;
-  }
-  emit_rect(state, target_sheet_id, normalized.value());
 }
 
 // Forward decl for the recursive walker.
@@ -348,7 +358,7 @@ void expand_defined_name(const DefinedName& def, WalkState& state, bool invoked,
       // to the same definition remains a lambda value and must not invent
       // dependencies from its body.
       walk_invoked_lambda_body(root, state, args);
-    } else if (invoked && (root.kind() == parser::NodeKind::NameRef || parser::is_self_book_name_ref(root))) {
+    } else if (invoked && is_defined_name_ref(root)) {
       // Preserve the common alias shape (`Alias = NamedLambda`) without
       // repeatedly walking the lambda body. Any non-defined alias is handled
       // by the ordinary NameRef walker and contributes no static deps.
@@ -374,16 +384,14 @@ bool walk_callable_arg(const parser::AstNode& arg, WalkState& state, const Defer
     walk_invoked_lambda_body(arg, state, args);
     return true;
   }
-  if (arg.kind() == parser::NodeKind::NameRef && arg.as_name_sheet().empty()) {
-    if (const WalkState::LexicalBinding* lexical = lookup_lexical(arg.as_name(), state); lexical != nullptr) {
-      if (lexical->lambda == nullptr) {
-        return false;
-      }
-      walk_invoked_lambda_body(*lexical->lambda, state, args);
-      return true;
+  if (const WalkState::LexicalBinding* lexical = lookup_unqualified_lexical(arg, state); lexical != nullptr) {
+    if (lexical->lambda == nullptr) {
+      return false;
     }
+    walk_invoked_lambda_body(*lexical->lambda, state, args);
+    return true;
   }
-  if (arg.kind() != parser::NodeKind::NameRef && !parser::is_self_book_name_ref(arg)) {
+  if (!is_defined_name_ref(arg)) {
     return false;
   }
   const DefinedName* def = find_name_ref_definition(arg, state);
@@ -486,27 +494,6 @@ std::optional<Footprint> union_footprints(const Footprint& a, const Footprint& b
 
 std::optional<Footprint> reference_footprint(const parser::AstNode& node, WalkState& state);
 
-// The footprint of a static endpoint pair, with `emit_range_cells`'s sheet rule.
-std::optional<Footprint> pair_footprint(const parser::Reference& lhs, const parser::Reference& rhs,
-                                        const WalkState& state) {
-  if (!lhs.sheet.empty() && !rhs.sheet.empty() && !sheet_names::equal(lhs.sheet, rhs.sheet)) {
-    return std::nullopt;
-  }
-  parser::Reference probe{};
-  probe.sheet = lhs.sheet.empty() ? rhs.sheet : lhs.sheet;
-  Footprint out;
-  if (!resolve_sheet_id(probe, state, &out.sheet_id)) {
-    return std::nullopt;
-  }
-  const auto rect = declared_rect(lhs, rhs);
-  if (!rect) {
-    return std::nullopt;
-  }
-  out.sheet_explicit = !probe.sheet.empty();
-  out.rect = rect.value();
-  return out;
-}
-
 // The footprint of a reference-returning call: the union over every argument
 // that can be the returned reference. Literal arguments name no reference
 // (the `:` fails if one is picked) and are skipped.
@@ -585,10 +572,8 @@ std::optional<Footprint> reference_footprint(const parser::AstNode& node, WalkSt
 
     case parser::NodeKind::NameRef:
     case parser::NodeKind::ExternalRef: {
-      if (node.kind() == parser::NodeKind::NameRef && node.as_name_sheet().empty()) {
-        if (const WalkState::LexicalBinding* lexical = lookup_lexical(node.as_name(), state); lexical != nullptr) {
-          return lexical->footprint;
-        }
+      if (const WalkState::LexicalBinding* lexical = lookup_unqualified_lexical(node, state); lexical != nullptr) {
+        return lexical->footprint;
       }
       const DefinedName* def = find_name_ref_definition(node, state);
       if (def == nullptr) {
@@ -683,10 +668,8 @@ bool is_static_reference(const parser::AstNode& node, WalkState& state) {
       return true;
     case parser::NodeKind::NameRef:
     case parser::NodeKind::ExternalRef: {
-      if (node.kind() == parser::NodeKind::NameRef && node.as_name_sheet().empty()) {
-        if (const WalkState::LexicalBinding* lexical = lookup_lexical(node.as_name(), state); lexical != nullptr) {
-          return lexical->deferred != nullptr;
-        }
+      if (const WalkState::LexicalBinding* lexical = lookup_unqualified_lexical(node, state); lexical != nullptr) {
+        return lexical->deferred != nullptr;
       }
       const DefinedName* def = find_name_ref_definition(node, state);
       if (def == nullptr) {
@@ -721,10 +704,8 @@ const parser::AstNode* deferrable_reference(const parser::AstNode& node, WalkSta
       }
       return &node;
     case parser::NodeKind::NameRef:
-      if (node.as_name_sheet().empty()) {
-        if (const WalkState::LexicalBinding* lexical = lookup_lexical(node.as_name(), state); lexical != nullptr) {
-          return lexical->deferred;
-        }
+      if (const WalkState::LexicalBinding* lexical = lookup_unqualified_lexical(node, state); lexical != nullptr) {
+        return lexical->deferred;
       }
       return nullptr;
     default:
@@ -781,20 +762,7 @@ void walk_range_op(const parser::AstNode& node, WalkState& state) {
 
 void walk_ref(const parser::AstNode& node, WalkState& state) {
   const parser::Reference& ref = node.as_ref();
-  const auto normalized = declared_rect(ref, ref);
-  if (!normalized) {
-    return;
-  }
-  std::uint16_t sheet_id = state.current_sheet_id;
-  if (!resolve_sheet_id(ref, state, &sheet_id)) {
-    return;  // Unknown sheet: skip silently.
-  }
-  if (normalized.value().whole_axis) {
-    add_range_dep(state, CellRangeDependency{sheet_id, normalized.value().row_first, normalized.value().row_last,
-                                             normalized.value().col_first, normalized.value().col_last});
-    return;
-  }
-  add_cell_dep(state, CellNodeId{sheet_id, ref.row, ref.col});
+  emit_range_cells(state, ref, ref);
 }
 
 void walk_spill_ref(const parser::AstNode& node, WalkState& state) {
@@ -862,13 +830,11 @@ void walk_name_ref(const parser::AstNode& node, WalkState& state) {
   // Lexical LET / LAMBDA bindings shadow workbook names. A binding's
   // initializer or argument was walked where it was bound, unless it is a
   // deferred reference, which this value read walks now.
-  if (node.as_name_sheet().empty()) {
-    if (const WalkState::LexicalBinding* lexical = lookup_lexical(node.as_name(), state); lexical != nullptr) {
-      if (lexical->deferred != nullptr) {
-        walk(*lexical->deferred, state);
-      }
-      return;
+  if (const WalkState::LexicalBinding* lexical = lookup_unqualified_lexical(node, state); lexical != nullptr) {
+    if (lexical->deferred != nullptr) {
+      walk(*lexical->deferred, state);
     }
+    return;
   }
   // Resolve against the workbook's defined-name list. A miss (the name
   // is undefined, scoped to a different sheet, or hidden behind a cycle
@@ -979,10 +945,8 @@ void walk_let_binding(const parser::AstNode& node, WalkState& state) {
     const parser::AstNode* lambda = nullptr;
     if (expr.kind() == parser::NodeKind::Lambda) {
       lambda = &expr;
-    } else if (expr.kind() == parser::NodeKind::NameRef && expr.as_name_sheet().empty()) {
-      if (const WalkState::LexicalBinding* prior = lookup_lexical(expr.as_name(), state); prior != nullptr) {
-        lambda = prior->lambda;
-      }
+    } else if (const WalkState::LexicalBinding* prior = lookup_unqualified_lexical(expr, state); prior != nullptr) {
+      lambda = prior->lambda;
     }
     state.lexical_stack.push_back({node.as_let_binding_name(i), lambda, footprint, deferred});
   }
@@ -995,7 +959,7 @@ void walk_lambda_call(const parser::AstNode& node, WalkState& state) {
   const std::uint32_t arity = node.as_lambda_call_arity();
   DeferredArgs deferred(arity, nullptr);
   const DefinedName* def = nullptr;
-  if (callee.kind() == parser::NodeKind::NameRef || parser::is_self_book_name_ref(callee)) {
+  if (is_defined_name_ref(callee)) {
     def = find_name_ref_definition(callee, state);
   }
   if (callee.kind() == parser::NodeKind::Lambda || def != nullptr) {
@@ -1008,7 +972,7 @@ void walk_lambda_call(const parser::AstNode& node, WalkState& state) {
     // lambda *value*, the body IS evaluated here, so its cell refs and
     // volatile calls are genuine dependencies that must reach the graph.
     walk_invoked_lambda_body(callee, state, &deferred);
-  } else if (callee.kind() == parser::NodeKind::NameRef || parser::is_self_book_name_ref(callee)) {
+  } else if (is_defined_name_ref(callee)) {
     // `Sheet1!Fn(5)` / `[0]!Fn(5)`: qualified spellings of `Fn(5)`, which
     // invoke the definition just as the `Call` case does.
     if (def != nullptr) {
