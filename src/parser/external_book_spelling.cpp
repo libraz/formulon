@@ -342,14 +342,7 @@ std::string spell_self_book_names(std::string_view text, std::string_view file_n
     return std::string(text);
   }
   std::string book;
-  const bool quote = self_book_name_needs_quoting(file_name);
-  if (quote) {
-    book.push_back('\'');
-  }
-  append_quote_escaped(file_name, book);
-  if (quote) {
-    book.push_back('\'');
-  }
+  append_sheet_name_quoted_if(file_name, self_book_name_needs_quoting(file_name), book);
   std::string out;
   out.reserve(text.size() + book.size());
   std::size_t i = 0;
