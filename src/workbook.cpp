@@ -49,6 +49,8 @@
 #include "parser/parser_detail.h"
 #include "parser/ref_transforms.h"
 #include "parser/reference.h"
+#include "parser/structured_ref_payload.h"
+#include "parser/structured_ref_spelling.h"
 #include "passthrough_part.h"
 #include "phonetic.h"
 #include "pivot/pivot_cache.h"
@@ -1161,6 +1163,118 @@ Expected<void, Error> Workbook::rename_table(std::size_t index, std::string name
   return Expected<void, Error>::Ok();
 }
 
+namespace {
+
+/// Maps a structured reference through one table naming `old_column` to the
+/// same reference naming `new_column`, re-spelled in the stored form.
+class TableColumnRenameTransform final : public parser::RefTransform {
+ public:
+  TableColumnRenameTransform(std::string_view table_name, std::string_view table_display_name,
+                             std::string_view old_column, std::string_view new_column)
+      : table_name_(table_name),
+        table_display_name_(table_display_name),
+        old_column_(old_column),
+        new_column_(new_column) {}
+
+  std::optional<parser::Reference> apply(const parser::Reference& ref) const override { return ref; }
+
+  std::optional<parser::StructuredRefTarget> apply_structured_ref(std::string_view table,
+                                                                  std::string_view column) const override {
+    if (!strings::case_insensitive_eq(table, table_name_) &&
+        !strings::case_insensitive_eq(table, table_display_name_)) {
+      return parser::StructuredRefTarget{table, {}};
+    }
+    std::optional<parser::StructuredRefPayload> payload = parser::parse_structured_ref_payload_text(column);
+    if (!payload) {
+      return parser::StructuredRefTarget{table, {}};
+    }
+    bool renamed = false;
+    for (std::string& name : payload->columns) {
+      if (strings::case_insensitive_eq(name, old_column_)) {
+        name.assign(new_column_);
+        renamed = true;
+      }
+    }
+    if (!renamed) {
+      return parser::StructuredRefTarget{table, {}};
+    }
+    return parser::StructuredRefTarget{table, parser::stored_payload(*payload)};
+  }
+
+ private:
+  std::string_view table_name_;
+  std::string_view table_display_name_;
+  std::string_view old_column_;
+  std::string_view new_column_;
+};
+
+}  // namespace
+
+Expected<std::string, Error> Workbook::rename_table_column(std::size_t table, std::size_t column,
+                                                           std::string_view name) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  if (table >= tables_.size()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "rename_table_column: table index out of range",
+                      "table=" + std::to_string(table) + " table_count=" + std::to_string(tables_.size()));
+  }
+  std::vector<TableColumn>& columns = tables_[table].columns;
+  if (column >= columns.size()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "rename_table_column: column index out of range",
+                      "column=" + std::to_string(column) + " column_count=" + std::to_string(columns.size()));
+  }
+  const auto taken = [&columns, column](std::string_view candidate) {
+    for (std::size_t i = 0; i < columns.size(); ++i) {
+      if (i != column && strings::case_insensitive_eq(columns[i].name, candidate)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  // An empty header takes `<word>N` from N = 1; a duplicate takes `<name>N` from N = 2.
+  std::string final_name(name);
+  if (name.empty() || taken(name)) {
+    const std::string stem =
+        name.empty() ? std::string(new_workbook_defaults(excel_profile_.locale).column_word) : std::string(name);
+    for (std::size_t n = name.empty() ? 1U : 2U;; ++n) {
+      final_name = stem + std::to_string(n);
+      if (!taken(final_name)) {
+        break;
+      }
+    }
+  }
+
+  const TableMetadata& meta = tables_[table];
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  const std::string old_name = columns[column].name;
+  const bool renamed = final_name != old_name;
+  if (renamed) {
+    const TableColumnRenameTransform transform(meta.name, meta.display_name, old_name, final_name);
+    std::vector<std::uint32_t> ignored_cache_ids;
+    bool defined_names_changed = false;
+    rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, {}, {}, {},
+                                ignored_cache_ids, defined_names_changed);
+    RETURN_IF_ERROR(chart_ref::rewrite_all(*this, transform));
+    tables_[table].columns[column].name = final_name;
+    if (defined_names_changed) {
+      mark_all_formulas_dirty_locked(sheets_, mutator);
+    }
+  }
+  const std::optional<MergeRange> rect = parse_a1_rectangle(tables_[table].ref);
+  if (tables_[table].header_row && rect.has_value() && tables_[table].sheet_index < sheets_.size()) {
+    const std::uint32_t header_col = rect->first_col + static_cast<std::uint32_t>(column);
+    sheets_[tables_[table].sheet_index].set_cell_text(rect->first_row, header_col, final_name);
+    const eval::CellNodeId node = make_node(tables_[table].sheet_index, rect->first_row, header_col);
+    for (const eval::CellNodeId dependent : mutator.dep_graph().dependents_of_ref(node)) {
+      mutator.mark_dirty(dependent);
+    }
+    mutator.mark_range_dependents_dirty(node);
+  }
+  if (renamed) {
+    reindex_formulas_referencing_table(sheets_, mutator, *this, {tables_[table].name, tables_[table].display_name});
+  }
+  return final_name;
+}
+
 const Sheet* Workbook::sheet_by_name(std::string_view name) const noexcept {
   for (const Sheet& s : sheets_) {
     if (sheet_names::equal(s.name(), name)) {
@@ -1774,9 +1888,44 @@ std::string Workbook::ingest_stored_formula(std::string_view stored, FormulaSour
   return text;
 }
 
+namespace {
+
+/// Where a formula is entered, for the bare-table-name predicate: the
+/// defined names visible there are workbook-scope ones and `sheet`'s locals.
+struct EnteredNameScope {
+  const Workbook* workbook;
+  std::int32_t sheet;  ///< -1 for workbook scope only.
+};
+
+bool IsBareTableName(const void* ctx, std::string_view name) {
+  const EnteredNameScope& scope = *static_cast<const EnteredNameScope*>(ctx);
+  if (!scope.workbook->is_table_name(name)) {
+    return false;
+  }
+  for (const DefinedName& entry : scope.workbook->defined_names()) {
+    if ((entry.local_sheet_id < 0 || entry.local_sheet_id == scope.sheet) &&
+        strings::case_insensitive_eq(entry.name, name)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+}  // namespace
+
+std::string Workbook::bind_entered_structured_refs(std::string_view text, std::size_t sheet, std::uint32_t row,
+                                                   std::uint32_t col) const {
+  const std::optional<std::size_t> own = table_containing(sheet, row, col);
+  const std::string_view own_table = own ? std::string_view(tables_[*own].display_name) : std::string_view();
+  const EnteredNameScope scope{this, static_cast<std::int32_t>(sheet)};
+  return parser::bind_structured_refs(text, own_table, parser::BareTableNamePredicate{&IsBareTableName, &scope});
+}
+
 void Workbook::ingest_entered_formula(std::string& formula) {
   formula = normalize_formula_text(std::move(formula), FormulaSource::kEntered);
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  const EnteredNameScope scope{this, -1};
+  formula = parser::bind_structured_refs(formula, {}, parser::BareTableNamePredicate{&IsBareTableName, &scope});
   if (!file_name_.empty()) {
     formula = parser::bind_self_book_names(formula, file_name_);
   }

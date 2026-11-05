@@ -48,6 +48,7 @@ struct NewWorkbookDefaults {
   const char* chart_word;    ///< Default chart name word ("Chart 1").
   const char* picture_word;  ///< Default picture name word.
   const char* table_word;    ///< Default table name word.
+  const char* column_word;   ///< Default table column name word ("Column1").
 };
 
 /// The table row for `locale`.

@@ -455,9 +455,18 @@ class Workbook {
   std::string ingest_stored_formula(std::string_view stored, FormulaSource source);
 
   /// Model spelling of entered formula text, in place:
-  /// `normalize_formula_text(formula, kEntered)`, then
-  /// `bind_self_book_names`, then `bind_external_books`.
+  /// `normalize_formula_text(formula, kEntered)`, then the structured-
+  /// reference bind of a formula outside every table (`T[@X]` to the long
+  /// form, a bare table name not hidden by a workbook-scope defined name to
+  /// `T[]`), then `bind_self_book_names`, then `bind_external_books`.
   void ingest_entered_formula(std::string& formula);
+
+  /// The stored form of the structured references in `text` entered at
+  /// (`sheet`, `row`, `col`) (`parser::bind_structured_refs`): an unqualified
+  /// `[...]` takes the table holding that cell, and a bare table name not
+  /// hidden by a defined name visible from `sheet` gains `[]`.
+  std::string bind_entered_structured_refs(std::string_view text, std::size_t sheet, std::uint32_t row,
+                                           std::uint32_t col) const;
 
   /// The file name the workbook is shown under, extension included and
   /// without a directory; empty when unset. A formula bar spells `[0]!Name`
@@ -768,6 +777,17 @@ class Workbook {
   /// validity and uniqueness are the caller's; returns `kInvalidArgument`
   /// only for an out-of-range `index`.
   Expected<void, Error> rename_table(std::size_t index, std::string name, std::string display_name);
+
+  /// Renames column `column` of table `table` from a typed header and
+  /// returns the name it takes: an empty `name` becomes the profile's column
+  /// word plus the lowest unused N >= 1, a name another column already uses
+  /// (ASCII case-insensitive) gains the lowest unused N >= 2, and anything
+  /// else, spaces and a case-only change included, is kept. Every structured
+  /// reference to the old name through this table is rewritten (cell,
+  /// defined-name, metadata and chart formulas), and the header cell, when
+  /// the table has a header row, receives the name as text. Returns
+  /// `kInvalidArgument` for an out-of-range index.
+  Expected<std::string, Error> rename_table_column(std::size_t table, std::size_t column, std::string_view name);
 
   /// Read-only access to the verbatim parts the reader did not model.
   /// The writer emits each entry as-is. `<Override>`-listed parts

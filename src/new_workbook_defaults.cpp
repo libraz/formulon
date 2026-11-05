@@ -27,25 +27,31 @@ constexpr NewSheetMargins kPtBrMargins = {
                 0.31496062000000002}};
 
 // @size-budget: 2 KB
-// Indexed by `ExcelLocale`; values from Mac Excel 365 16.113 new workbooks.
+// Indexed by `ExcelLocale`; values from Mac Excel 365 16.113 new workbooks (column words 16.114).
 constexpr NewWorkbookDefaults kDefaults[] = {
-    {"游ゴシック", 128, 6, false, "標準", 20, "Sheet1", &kDefaultMargins, "グラフ", "図", "テーブル"},         // ja_JP
-    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Sheet1", &kDefaultMargins, "Chart", "Picture", "Table"},      // en_US
-    {"Aptos Narrow", 0, 0, false, "Standard", 16, "Tabelle1", &kDeMargins, "Diagramm", "Grafik", "Tabelle"},   // de_DE
-    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Feuil1", &kDefaultMargins, "Graphique", "Image", "Tableau"},  // fr_FR
-    {"等线", 134, 9, true, "常规", 16, "Sheet1", &kDefaultMargins, "图表", "图片", "表"},                      // zh_CN
-    {"맑은 고딕", 129, 8, true, "표준", 18, "Sheet1", &kDefaultMargins, "차트", "그림", "표"},                 // ko_KR
-    {"Tahoma", 222, 0, false, "ปกติ", 15, "Sheet1", &kDefaultMargins, "แผนภูมิ", "รูปภาพ", "Table"},               // th_TH
-    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Hoja1", &kDefaultMargins, "Gráfico", "Imagen", "Tabla"},      // es_ES
-    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Hoja1", &kDefaultMargins, "Gráfico", "Imagen", "Tabla"},      // es_MX
-    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Planilha1", &kPtBrMargins, "Gráfico", "Imagem", "Tabela"},    // pt_BR
-    {"Aptos Narrow", 204, 0, false, "Обычный", 16, "Лист1", &kDefaultMargins, "Диаграмма", "Рисунок",
-     "Таблица"},                                                                                  // ru_RU
-    {"新細明體", 136, 9, true, "一般", 15, "工作表1", &kDefaultMargins, "圖表", "圖片", "表格"},  // zh_TW
-    {"Aptos Narrow", 0, 0, false, "Normale", 16, "Foglio1", &kDefaultMargins, "Grafico", "Immagine",
-     "Tabella"},  // it_IT
-    {"Aptos Narrow", 0, 0, false, "Standaard", 16, "Blad1", &kDefaultMargins, "Grafiek", "Afbeelding",
-     "Tabel"},  // nl_NL
+    {"游ゴシック", 128, 6, false, "標準", 20, "Sheet1", &kDefaultMargins, "グラフ", "図", "テーブル", "列"},  // ja_JP
+    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Sheet1", &kDefaultMargins, "Chart", "Picture", "Table",
+     "Column"},  // en_US
+    {"Aptos Narrow", 0, 0, false, "Standard", 16, "Tabelle1", &kDeMargins, "Diagramm", "Grafik", "Tabelle",
+     "Spalte"},  // de_DE
+    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Feuil1", &kDefaultMargins, "Graphique", "Image", "Tableau",
+     "Colonne"},                                                                                           // fr_FR
+    {"等线", 134, 9, true, "常规", 16, "Sheet1", &kDefaultMargins, "图表", "图片", "表", "列"},            // zh_CN
+    {"맑은 고딕", 129, 8, true, "표준", 18, "Sheet1", &kDefaultMargins, "차트", "그림", "표", "열"},       // ko_KR
+    {"Tahoma", 222, 0, false, "ปกติ", 15, "Sheet1", &kDefaultMargins, "แผนภูมิ", "รูปภาพ", "Table", "คอลัมน์"},  // th_TH
+    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Hoja1", &kDefaultMargins, "Gráfico", "Imagen", "Tabla",
+     "Columna"},  // es_ES
+    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Hoja1", &kDefaultMargins, "Gráfico", "Imagen", "Tabla",
+     "Columna"},  // es_MX
+    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Planilha1", &kPtBrMargins, "Gráfico", "Imagem", "Tabela",
+     "Coluna"},  // pt_BR
+    {"Aptos Narrow", 204, 0, false, "Обычный", 16, "Лист1", &kDefaultMargins, "Диаграмма", "Рисунок", "Таблица",
+     "Столбец"},                                                                                        // ru_RU
+    {"新細明體", 136, 9, true, "一般", 15, "工作表1", &kDefaultMargins, "圖表", "圖片", "表格", "欄"},  // zh_TW
+    {"Aptos Narrow", 0, 0, false, "Normale", 16, "Foglio1", &kDefaultMargins, "Grafico", "Immagine", "Tabella",
+     "Colonna"},  // it_IT
+    {"Aptos Narrow", 0, 0, false, "Standaard", 16, "Blad1", &kDefaultMargins, "Grafiek", "Afbeelding", "Tabel",
+     "Kolom"},  // nl_NL
 };
 static_assert(sizeof(kDefaults) / sizeof(kDefaults[0]) == static_cast<std::size_t>(ExcelLocale::kNlNL) + 1U,
               "one row per ExcelLocale");

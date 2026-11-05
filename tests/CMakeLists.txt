@@ -33,6 +33,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/sheet_cached_text_test.cpp
   unit/workbook_test.cpp
   unit/workbook_tables_test.cpp
+  unit/workbook_table_column_rename_test.cpp
   unit/derived_guid_test.cpp
   unit/workbook_external_bind_test.cpp
   unit/auto_filter_eval_test.cpp

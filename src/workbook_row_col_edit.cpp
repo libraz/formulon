@@ -24,6 +24,7 @@
 #include "eval/recalc_engine.h"
 #include "io/auto_filter_xml.h"
 #include "io/worksheet_child_refs.h"
+#include "new_workbook_defaults.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/ast_shift.h"
@@ -351,11 +352,11 @@ std::vector<BlockedSpillFootprint> remap_blocked_spill_footprints(const std::vec
 
 // Gives a table the column entries its rewritten `ref` spans: a column delete
 // removes the deleted columns' entries, and an insert inside the table adds
-// `ColumnN` entries with fresh ids, writing their header cells. `before` is
-// the table's extent before the edit.
+// `<column_word>N` entries with fresh ids, writing their header cells.
+// `before` is the table's extent before the edit.
 void update_table_columns(TableMetadata& table, const MergeRange& before, const MergeRange& after, Sheet& sheet,
                           std::size_t sheet_index, const eval::RecalcEngine::LockedMutator& mutator,
-                          const StructuralEdit& edit) {
+                          const StructuralEdit& edit, std::string_view column_word) {
   const std::uint64_t edit_end = static_cast<std::uint64_t>(edit.index) + edit.count;  // exclusive
   if (edit.is_delete) {
     // The deleted columns inside the table, as offsets from its first column.
@@ -389,7 +390,7 @@ void update_table_columns(TableMetadata& table, const MergeRange& before, const 
     TableColumn column;
     column.id = next_id++;
     do {
-      column.name = "Column" + std::to_string(suffix++);
+      column.name = std::string(column_word) + std::to_string(suffix++);
     } while (name_taken(column.name));
     if (table.header_row) {
       const std::uint32_t col = edit.index + i;
@@ -416,7 +417,7 @@ std::vector<std::string> update_tables_for_row_col_edit(std::vector<TableMetadat
                                                         std::size_t sheet_index,
                                                         const std::vector<std::string>& refs_before,
                                                         const eval::RecalcEngine::LockedMutator& mutator,
-                                                        const StructuralEdit& edit) {
+                                                        const StructuralEdit& edit, std::string_view column_word) {
   std::vector<std::string> changed;
   std::vector<TableMetadata> retained;
   retained.reserve(tables.size());
@@ -434,7 +435,7 @@ std::vector<std::string> update_tables_for_row_col_edit(std::vector<TableMetadat
     }
     const std::optional<MergeRange> before = parse_a1_rectangle(refs_before[i]);
     if (before.has_value() && !edit.row_axis) {
-      update_table_columns(table, *before, *after, sheet, sheet_index, mutator, edit);
+      update_table_columns(table, *before, *after, sheet, sheet_index, mutator, edit, column_word);
     }
     if (!table.sort_state_xml.empty()) {
       WorksheetRawExtensions sort_state{WorksheetRawChild{
@@ -651,7 +652,8 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   }
   const std::vector<std::string> changed_tables = update_tables_for_row_col_edit(
       wb.mutable_tables(), target, sheet_index, table_refs_before, mutator,
-      StructuralEdit{origin, count, edit == parser::RowColEdit::kDelete, axis == parser::RowColAxis::kRow});
+      StructuralEdit{origin, count, edit == parser::RowColEdit::kDelete, axis == parser::RowColAxis::kRow},
+      new_workbook_defaults(wb.excel_profile().locale).column_word);
   std::vector<std::string> filters_after;
   filters_after.push_back(io::auto_filter_xml(target.auto_filter()));
   for (TableMetadata& table : wb.mutable_tables()) {
