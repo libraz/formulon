@@ -252,6 +252,12 @@ TEST(AstDumpNameRef, Plain) {
   EXPECT_EQ(dump_sexpr(*n), "(name foo)");
 }
 
+TEST(AstDumpNameRef, QuotedSheetDoublesEmbeddedQuote) {
+  Arena a;
+  AstNode* n = make_sheet_name_ref(a, "it's", "Foo", true);
+  EXPECT_EQ(dump_sexpr(*n), "(name 'it''s'!Foo)");
+}
+
 // ---------------------------------------------------------------------------
 // Operators
 // ---------------------------------------------------------------------------

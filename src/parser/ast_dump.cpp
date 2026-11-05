@@ -199,14 +199,7 @@ void DumpInto(const AstNode& node, std::string& out) {
     case NodeKind::NameRef:
       out.append("(name ");
       if (const std::string_view sheet = node.as_name_sheet(); !sheet.empty()) {
-        const bool quoted = node.as_name_sheet_quoted() || local_sheet_needs_quoting_a1(sheet);
-        if (quoted) {
-          out.push_back('\'');
-        }
-        out.append(sheet);
-        if (quoted) {
-          out.push_back('\'');
-        }
+        append_sheet_name_quoted_if(sheet, node.as_name_sheet_quoted() || local_sheet_needs_quoting_a1(sheet), out);
         out.push_back('!');
       }
       out.append(node.as_name());
