@@ -563,6 +563,13 @@ std::optional<ChartGrouping> grouping_of(std::string_view name) {
   return std::nullopt;
 }
 
+/// Appends the `val` of each `name` child of `parent` to `plot.axis_ids`.
+void read_axis_ids(const xml_node& parent, std::string_view name, ChartPlot& plot) {
+  for (const xml_node& ax_id : children_local(parent, name)) {
+    plot.axis_ids.push_back(static_cast<std::uint32_t>(ax_id.attribute("val").as_uint()));
+  }
+}
+
 ChartSeries read_series(const Workbook& wb, const xml_node& ser, bool filtered) {
   ChartSeries s;
   s.idx = uint_of(kid(ser, "idx")).value_or(0U);
@@ -616,9 +623,7 @@ ChartPlot read_plot(const Workbook& wb, const xml_node& node, ChartPlotType type
   if (const xml_node dlbls = kid(node, "dLbls")) {
     plot.labels = read_labels(wb, dlbls);
   }
-  for (const xml_node& ax_id : children_local(node, "axId")) {
-    plot.axis_ids.push_back(static_cast<std::uint32_t>(ax_id.attribute("val").as_uint()));
-  }
+  read_axis_ids(node, "axId", plot);
   for (const xml_node& ser : children_local(node, "ser")) {
     plot.series.push_back(read_series(wb, ser, false));
   }
@@ -981,9 +986,7 @@ void read_chartex(const xml_node& root, ChartModel& model) {
         }
       }
     }
-    for (const xml_node& ax_id : children_local(ser, "axisId")) {
-      plot.axis_ids.push_back(static_cast<std::uint32_t>(ax_id.attribute("val").as_uint()));
-    }
+    read_axis_ids(ser, "axisId", plot);
     plot.series.push_back(std::move(s));
   }
   model.plots.push_back(std::move(plot));

@@ -29,6 +29,7 @@
 #include <memory>
 #include <numeric>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -188,10 +189,6 @@ Aggregation aggregation_from_subtotal_fn(SubtotalFn fn) {
   return static_cast<Aggregation>(static_cast<std::uint8_t>(fn));
 }
 
-bool same_value(const Value& a, const Value& b) {
-  return !value_less(a, b) && !value_less(b, a);
-}
-
 /// Steps 2-8 on `table`, which is `source` with the plan's hidden Sum data
 /// fields appended.
 Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const PivotTable& source, const PivotCache& cache,
@@ -348,11 +345,11 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
       }
       const PivotCacheField& cache_field = cache.fields()[fi];
       const PivotField& field = table.fields()[fi];
-      std::vector<Value> hidden;
+      std::set<Value, ValueLess> hidden;
       for (const PivotItem& item : field.items) {
         if (!item.visible) {
           if (const std::optional<Value> key = pivot_item_record_value(cache, fi, item)) {
-            hidden.push_back(*key);
+            hidden.insert(*key);
           }
         }
       }
@@ -360,9 +357,7 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
         const bool calculated =
             k < cache_field.shared_item_is_calculated.size() && cache_field.shared_item_is_calculated[k];
         const Value& key = cache_field.shared_items[k];
-        if ((!calculated && !field.show_all) ||
-            std::any_of(hidden.begin(), hidden.end(), [&](const Value& h) { return same_value(h, key); }) ||
-            (!calculated && !passes_own_filters(fi, k))) {
+        if ((!calculated && !field.show_all) || hidden.count(key) != 0 || (!calculated && !passes_own_filters(fi, k))) {
           continue;
         }
         items[depth].push_back(RecordlessItem{key, calculated});

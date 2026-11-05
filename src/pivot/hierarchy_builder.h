@@ -263,11 +263,12 @@ void walk_subtotal_tree(HierNode& tree, const std::vector<HierLevel>& levels, co
     std::size_t child_cursor;
     std::size_t depth;
     std::size_t collected_start;
-    std::vector<std::string> labels;
   };
 
+  // Label path of the frame on top; entry `i` is the label at depth `i + 1`.
+  std::vector<std::string> path;
   std::vector<Frame> stack;
-  stack.push_back({&tree, ordered_children(tree, levels, 0), 0, 0, 0, {}});
+  stack.push_back({&tree, ordered_children(tree, levels, 0), 0, 0, 0});
 
   while (!stack.empty()) {
     Frame& top = stack.back();
@@ -280,7 +281,8 @@ void walk_subtotal_tree(HierNode& tree, const std::vector<HierLevel>& levels, co
         // custom subtotal functions.
         const bool wants_subtotal = field != nullptr && (field->default_subtotal || !field->subtotal_fns.empty());
         if (wants_subtotal) {
-          emit_subtotal(top.labels, top.depth - 1, top.collected_start, stack_leaves);
+          path.resize(top.depth);
+          emit_subtotal(path, top.depth - 1, top.collected_start, stack_leaves);
         }
       }
       stack.pop_back();
@@ -292,10 +294,10 @@ void walk_subtotal_tree(HierNode& tree, const std::vector<HierLevel>& levels, co
     if (child->children.empty()) {
       stack_leaves.push_back(child->leaf_index);
     } else {
-      std::vector<std::string> labels = top.labels;
-      labels.push_back(label);
-      stack.push_back({child, ordered_children(*child, levels, top.depth + 1U), 0, top.depth + 1U, stack_leaves.size(),
-                       std::move(labels)});
+      path.resize(top.depth);
+      path.push_back(label);
+      stack.push_back(
+          {child, ordered_children(*child, levels, top.depth + 1U), 0, top.depth + 1U, stack_leaves.size()});
     }
   }
 }

@@ -80,6 +80,11 @@ struct ValueLess {
   bool operator()(const Value& a, const Value& b) const noexcept { return value_less(a, b); }
 };
 
+/// True when neither value orders before the other, i.e. they are one item.
+inline bool same_value(const Value& a, const Value& b) noexcept {
+  return !value_less(a, b) && !value_less(b, a);
+}
+
 /// Renders a cache `Value` to the same string that would appear in a
 /// `PivotItem::name`. Mirrors what the OOXML reader would have written
 /// out: numbers as their canonical decimal, bools as TRUE/FALSE, errors

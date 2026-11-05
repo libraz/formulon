@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -548,12 +547,10 @@ Expected<std::vector<PassthroughPart>, Error> refreshed_chart_parts(const Workbo
   ASSIGN_OR_RETURN(std::vector<SheetChartPartRef> charts, all_chart_parts(wb));
   std::vector<PassthroughPart> out;
   const io::PassthroughPartIndex source_index(wb.passthrough_parts());
-  std::set<std::string> seen;
-  for (const SheetChartPartRef& entry : charts) {
+  for (const SheetChartPartRef* chart :
+       unique_chart_parts(charts, [](const SheetChartPartRef& e) { return e.ref.is_chartex; })) {
+    const SheetChartPartRef& entry = *chart;
     const std::string& path = entry.ref.part_path;
-    if (path.empty() || entry.ref.is_chartex || !seen.insert(path).second) {
-      continue;
-    }
     const PassthroughPart* part = source_index.find(path);
     pugi::xml_document doc;
     if (part == nullptr || !parse_chart_part(part->bytes, doc)) {

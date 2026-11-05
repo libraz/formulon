@@ -299,6 +299,11 @@ inline xml_node fragment(pugi::xml_document& frag, const std::string& xml) {
   return load_xml(frag, xml) ? frag.first_child() : xml_node();
 }
 
+/// Opening of a data-point element: `<c:dPt><c:idx val="idx"/>`.
+inline std::string data_point_open(std::uint32_t idx) {
+  return "<c:dPt><c:idx val=\"" + std::to_string(idx) + "\"/>";
+}
+
 void load_palette(const Workbook& wb, const std::string& chart_path, Palette& out);
 
 /// A chart part from the insert template, for its default elements, in the colours of chart `c`.

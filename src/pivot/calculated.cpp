@@ -41,10 +41,6 @@ Error precondition(std::string message) {
   return make_error(FormulonErrorCode::kPreconditionFailed, std::move(message));
 }
 
-bool same_value(const Value& a, const Value& b) {
-  return !value_less(a, b) && !value_less(b, a);
-}
-
 bool same_name(std::string_view a, std::string_view b) {
   return same_value(Value::text(a), Value::text(b));
 }

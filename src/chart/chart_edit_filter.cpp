@@ -347,9 +347,9 @@ void vary_bar(xml_node plot, bool on, const Palette& palette) {
           ++next_original;
         }
         pugi::xml_document frag;
-        const xml_node point = fragment(frag, "<c:dPt><c:idx val=\"" + std::to_string(p) +
-                                                  "\"/><c:invertIfNegative val=\"0\"/><c:bubble3D val=\"0\"/>" +
-                                                  accent_sppr(palette, p) + "</c:dPt>");
+        const xml_node point =
+            fragment(frag, data_point_open(p) + "<c:invertIfNegative val=\"0\"/><c:bubble3D val=\"0\"/>" +
+                               accent_sppr(palette, p) + "</c:dPt>");
         if (next_original < original_points.size()) {
           ser.insert_copy_before(point, original_points[next_original]);
         } else if (later_schema_slot) {

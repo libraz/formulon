@@ -325,6 +325,23 @@ Cell base_cell_by_path(const Grid& g, const BaseSpec& s, std::size_t ri, std::si
   return li.has_value() ? base_cell(g, s, ri, ci, *li) : Cell{};
 }
 
+// Sum of the base-axis cells at the lines in [first, last), left to right; the first error wins, blanks are
+// skipped, and a sum with no value is blank.
+template <class It>
+Cell sum_base_cells(const Grid& g, const BaseSpec& s, std::size_t ri, std::size_t ci, It first, It last) {
+  Cell sum;
+  for (; first != last; ++first) {
+    const Cell x = base_cell(g, s, ri, ci, *first);
+    if (x.error()) {
+      return x;
+    }
+    if (!x.blank()) {
+      sum = sum.blank() ? x : make_num(sum.n + x.n);
+    }
+  }
+  return sum;
+}
+
 Cell base_mode_cell(const Grid& g, const BaseSpec& s, std::size_t ri, std::size_t ci) {
   const Axis& ax = s.base.on_row ? g.rows : g.cols;
   const std::size_t cur = s.base.on_row ? ri : ci;
@@ -355,17 +372,7 @@ Cell base_mode_cell(const Grid& g, const BaseSpec& s, std::size_t ri, std::size_
 
   if (mode == ShowValuesAs::RunningTotalInRow || mode == ShowValuesAs::RunningTotalInCol ||
       mode == ShowValuesAs::PercentOfRunningTotal) {
-    Cell run;
-    for (std::size_t k = 0; k <= pos; ++k) {
-      const Cell x = base_cell(g, s, ri, ci, sib[k]);
-      if (x.error()) {
-        run = x;
-        break;
-      }
-      if (!x.blank()) {
-        run = run.blank() ? x : make_num(run.n + x.n);
-      }
-    }
+    Cell run = sum_base_cells(g, s, ri, ci, sib.begin(), sib.begin() + static_cast<std::ptrdiff_t>(pos) + 1);
     if (run.blank()) {
       run = make_num(0.0);
     }
@@ -381,16 +388,7 @@ Cell base_mode_cell(const Grid& g, const BaseSpec& s, std::size_t ri, std::size_
     if (p.size() == d + 1) {
       total = base_cell_by_path(g, s, ri, ci, Path(p.begin(), p.begin() + static_cast<std::ptrdiff_t>(d)));
     } else {
-      for (const std::size_t li : sib) {
-        const Cell x = base_cell(g, s, ri, ci, li);
-        if (x.error()) {
-          total = x;
-          break;
-        }
-        if (!x.blank()) {
-          total = total.blank() ? x : make_num(total.n + x.n);
-        }
-      }
+      total = sum_base_cells(g, s, ri, ci, sib.begin(), sib.end());
     }
     if (total.blank()) {
       return Cell{};

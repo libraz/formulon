@@ -486,8 +486,7 @@ Expected<void, Error> set_chart_point(Workbook& wb, std::size_t sheet, std::uint
   const std::string_view name = local_name(node);
   if (!point && !is_pie(node)) {
     pugi::xml_document frag;
-    const std::string x = "<c:dPt><c:idx val=\"" + std::to_string(point_idx) + "\"/>" +
-                          (is_bar(node) ? "<c:invertIfNegative val=\"0\"/>" : "") +
+    const std::string x = data_point_open(point_idx) + (is_bar(node) ? "<c:invertIfNegative val=\"0\"/>" : "") +
                           "<c:bubble3D val=\"0\"/><c:spPr><a:effectLst/></c:spPr></c:dPt>";
     point = insert_point(ser, fragment(frag, x), point_idx);
     // As Excel saves a new point: a bar or area point repeats the series fill and line, a line point the series
@@ -506,9 +505,8 @@ Expected<void, Error> set_chart_point(Workbook& wb, std::size_t sheet, std::uint
     }
   } else if (!point) {
     pugi::xml_document frag;
-    point = insert_point(
-        ser, fragment(frag, "<c:dPt><c:idx val=\"" + std::to_string(point_idx) + "\"/><c:bubble3D val=\"0\"/></c:dPt>"),
-        point_idx);
+    point =
+        insert_point(ser, fragment(frag, data_point_open(point_idx) + "<c:bubble3D val=\"0\"/></c:dPt>"), point_idx);
   }
   RETURN_IF_ERROR(apply_shape(point, kPointOrder, marker_filled(node) ? ChartFillPatch{} : patch.fill, patch.line));
   RETURN_IF_ERROR(apply_marker(point, kPointOrder, patch.marker));

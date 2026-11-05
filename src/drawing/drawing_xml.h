@@ -20,6 +20,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -167,6 +168,22 @@ Expected<std::vector<ChartPartRef>, Error> list_chart_parts(const Workbook& wb, 
 /// `list_chart_parts` over every sheet, chartsheets included. A sheet whose
 /// drawing does not parse contributes nothing.
 Expected<std::vector<SheetChartPartRef>, Error> all_chart_parts(const Workbook& wb);
+
+/// The entries of `parts` with a non-empty part path, in order, keeping the
+/// first entry per path. Entries for which `skip(entry)` is true are dropped
+/// before the path is recorded, so a later entry of the same part still counts.
+template <class Skip>
+std::vector<const SheetChartPartRef*> unique_chart_parts(const std::vector<SheetChartPartRef>& parts, Skip&& skip) {
+  std::vector<const SheetChartPartRef*> out;
+  std::set<std::string> seen;
+  for (const SheetChartPartRef& entry : parts) {
+    if (entry.ref.part_path.empty() || skip(entry) || !seen.insert(entry.ref.part_path).second) {
+      continue;
+    }
+    out.push_back(&entry);
+  }
+  return out;
+}
 
 /// Reads an `xdr:from` / `xdr:to` marker.
 AnchorPoint read_anchor_point(const pugi::xml_node& marker);

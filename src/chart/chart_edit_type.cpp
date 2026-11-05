@@ -202,8 +202,8 @@ void convert_points(const xml_node& from, xml_node to, Family old_family, Family
   for (const xml_node& d : children_local(from, "dPt")) {
     const std::uint32_t idx = val_u(d, "idx");
     pugi::xml_document frag;
-    xml_node p = fragment(frag, "<c:dPt><c:idx val=\"" + std::to_string(idx) + "\"/>" +
-                                    (bar ? "<c:invertIfNegative val=\"0\"/>" : "") + "<c:bubble3D val=\"0\"/></c:dPt>");
+    xml_node p = fragment(frag, data_point_open(idx) + (bar ? "<c:invertIfNegative val=\"0\"/>" : "") +
+                                    "<c:bubble3D val=\"0\"/></c:dPt>");
     if (new_family != Family::kFill) {
       if (const xml_node marker = child_local(to, "marker")) {
         copy_at(p, marker, kPointOrder);

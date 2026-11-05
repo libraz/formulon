@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <initializer_list>
 #include <optional>
-#include <set>
 #include <string>
 #include <string_view>
 
@@ -472,12 +471,9 @@ Expected<std::vector<std::string>, Error> collect_formula_texts(const Workbook& 
     return parts.error();
   }
   std::vector<std::string> texts;
-  std::set<std::string> seen;
-  for (const SheetChartPartRef& entry : parts.value()) {
-    const std::string& path = entry.ref.part_path;
-    if (entry.sheet == exclude_sheet || path.empty() || !seen.insert(path).second) {
-      continue;
-    }
+  for (const SheetChartPartRef* entry :
+       unique_chart_parts(parts.value(), [&](const SheetChartPartRef& e) { return e.sheet == exclude_sheet; })) {
+    const std::string& path = entry->ref.part_path;
     pugi::xml_document doc;
     if (!io::ooxml::load_part_dom(wb, path, "chart_ref", doc)) {
       continue;
@@ -496,12 +492,9 @@ Expected<void, Error> rewrite_all(Workbook& wb, const parser::RefTransform& tran
   if (!parts) {
     return parts.error();
   }
-  std::set<std::string> seen;
-  for (const SheetChartPartRef& entry : parts.value()) {
-    const std::string& path = entry.ref.part_path;
-    if (path.empty() || !seen.insert(path).second) {
-      continue;
-    }
+  for (const SheetChartPartRef* entry :
+       unique_chart_parts(parts.value(), [](const SheetChartPartRef&) { return false; })) {
+    const std::string& path = entry->ref.part_path;
     pugi::xml_document doc;
     if (!io::ooxml::load_part_dom(wb, path, "chart_ref", doc)) {
       continue;
