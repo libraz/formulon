@@ -144,8 +144,8 @@ TEST(FormulaLocalize, CanonicalizeRoundTripsLocalize) {
 TEST(FormulaLocalize, KeepsUnlocalizedTextVerbatim) {
   // Whitespace and lowercase spellings survive; LOG10 lexes as a cell reference.
   EXPECT_EQ(localize_in(ExcelLocale::kDeDE, "= sum( 1 , LOG10(A1) )"), "= SUMME( 1 ; LOG10(A1) )");
-  // No capture covers structured-reference separators or item specifiers.
-  EXPECT_EQ(localize_in(ExcelLocale::kDeDE, "=SUM(T[[#Headers],[A]],1)"), "=SUMME(T[[#Headers],[A]];1)");
+  // Structured-reference items take the locale's specifier words and list separator.
+  EXPECT_EQ(localize_in(ExcelLocale::kDeDE, "=SUM(T[[#Headers],[A]],1)"), "=SUMME(T[[#Kopfzeilen];[A]];1)");
   // A name that is not a call keeps its spelling.
   EXPECT_EQ(localize_in(ExcelLocale::kDeDE, "=SUM+1"), "=SUM+1");
   EXPECT_EQ(localize_in(ExcelLocale::kDeDE, "='a,b'!A1"), "='a,b'!A1");
@@ -237,6 +237,65 @@ TEST(FormulaLocalize, EnglishRewriteIsIdentityOnGoldenFormulas) {
     ++checked;
   }
   EXPECT_GT(checked, formulas.size() * 9 / 10);
+}
+
+struct SpecifierRow {
+  ExcelLocale locale;
+  const char* all;
+  const char* data;
+  const char* headers;
+  const char* totals;
+  char separator;
+};
+
+const SpecifierRow kSpecifierRows[] = {
+    {ExcelLocale::kJaJP, "すべて", "データ", "見出し", "集計", ','},
+    {ExcelLocale::kEnUS, "All", "Data", "Headers", "Totals", ','},
+    {ExcelLocale::kDeDE, "Alle", "Daten", "Kopfzeilen", "Ergebnisse", ';'},
+    {ExcelLocale::kFrFR, "Tout", "Données", "En-têtes", "Totaux", ';'},
+    {ExcelLocale::kEsES, "Todo", "Datos", "Encabezados", "Totales", ';'},
+    {ExcelLocale::kEsMX, "Todo", "Datos", "Encabezados", "Totales", ','},
+    {ExcelLocale::kItIT, "Tutti", "Dati", "Intestazioni", "Totali", ';'},
+    {ExcelLocale::kPtBR, "Tudo", "Dados", "Cabeçalhos", "Totais", ';'},
+    {ExcelLocale::kRuRU, "Все", "Данные", "Заголовки", "Итоги", ';'},
+    {ExcelLocale::kNlNL, "Alles", "Gegevens", "Kopteksten", "Totalen", ';'},
+    {ExcelLocale::kZhCN, "全部", "数据", "标题", "汇总", ','},
+    {ExcelLocale::kZhTW, "全部", "資料", "標題", "總計", ','},
+    {ExcelLocale::kKoKR, "모두", "데이터", "머리글", "요약", ','},
+    {ExcelLocale::kThTH, "All", "Data", "Headers", "Totals", ','},
+};
+
+TEST(FormulaLocalize, StructuredRefSpecifierWordsAndSeparatorInEveryLocale) {
+  for (const SpecifierRow& row : kSpecifierRows) {
+    const std::string sep(1, row.separator);
+    const std::string cases[][2] = {
+        {"=tblSales[[#All],[Qty]]", std::string("=tblSales[[#") + row.all + "]" + sep + "[Qty]]"},
+        {"=tblSales[[#Data],[Qty]]", std::string("=tblSales[[#") + row.data + "]" + sep + "[Qty]]"},
+        {"=tblSales[[#Headers],[Qty]]", std::string("=tblSales[[#") + row.headers + "]" + sep + "[Qty]]"},
+        {"=tblSales[[#Totals],[Qty]]", std::string("=tblSales[[#") + row.totals + "]" + sep + "[Qty]]"},
+        {"=tblSales[#Headers]", std::string("=tblSales[#") + row.headers + "]"},
+        {"=tblSales[[#Headers],[#Data],[Qty]]",
+         std::string("=tblSales[[#") + row.headers + "]" + sep + "[#" + row.data + "]" + sep + "[Qty]]"},
+    };
+    for (const auto& c : cases) {
+      EXPECT_EQ(localize_in(row.locale, c[0]), c[1]) << c[0];
+      EXPECT_EQ(canonicalize_in(row.locale, c[1]), c[0]) << c[1];
+    }
+  }
+}
+
+TEST(FormulaLocalize, StructuredRefSpecifierGermanTotals) {
+  EXPECT_EQ(localize_in(ExcelLocale::kDeDE, "=tblSales[[#Totals],[Qty]]"), "=tblSales[[#Ergebnisse];[Qty]]");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kDeDE, "=tblSales[[#Ergebnisse];[Qty]]"), "=tblSales[[#Totals],[Qty]]");
+}
+
+TEST(FormulaLocalize, StructuredRefSpecifierLeavesThisRowAndColumnNames) {
+  EXPECT_EQ(localize_in(ExcelLocale::kDeDE, "=SUM(t[a,b],1.5)"), "=SUMME(t[a,b];1,5)");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kDeDE, "=SUMME(t[a,b];1,5)"), "=SUM(t[a,b],1.5)");
+  EXPECT_EQ(localize_in(ExcelLocale::kDeDE, "=t[[a,b],[c]]"), "=t[[a,b];[c]]");
+  EXPECT_EQ(localize_in(ExcelLocale::kDeDE, "=t[[#This Row],[a']b]]"), "=t[[#This Row];[a']b]]");
+  EXPECT_EQ(localize_in(ExcelLocale::kJaJP, "=tblSales[@]"), "=tblSales[@]");
+  EXPECT_EQ(localize_in(ExcelLocale::kJaJP, "=[@Qty]"), "=[@Qty]");
 }
 
 }  // namespace

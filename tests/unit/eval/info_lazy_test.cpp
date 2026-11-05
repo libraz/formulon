@@ -10,15 +10,19 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 #include "eval/eval_context.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
+#include "table.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
@@ -196,6 +200,60 @@ TEST(BuiltinsFormulaText, EnteredFormulaShowsRespelledLiterals) {
   const Value v = EvalWith("=FORMULATEXT(A1)", ctx);
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "=1.5+ -1E+21*SUM(0,0.00001)-2");
+}
+
+// tblSales covers A1:C6; F2 (outside) and C2 (inside) hold stored references.
+Workbook MakeTableWorkbook() {
+  Workbook wb = MakeThreeSheetWorkbook();
+  TableMetadata table;
+  table.id = 1;
+  table.name = "tblSales";
+  table.display_name = "tblSales";
+  table.ref = "A1:C6";
+  table.columns.emplace_back(1U, "Item", "", "", "");
+  table.columns.emplace_back(2U, "Qty", "", "", "");
+  table.columns.emplace_back(3U, "Calc", "", "", "");
+  wb.mutable_tables().push_back(table);
+  wb.sheet(0).set_cell_formula(1, 2, "=tblSales[[#This Row],[Qty]]");
+  wb.sheet(0).set_cell_formula(1, 7, "=tblSales[[#This Row],[Qty]]");
+  wb.sheet(0).set_cell_formula(1, 8, "=COUNTA(tblSales[[#Headers],[Qty]])");
+  wb.sheet(0).set_cell_formula(1, 9, "=tblSales[[#This Row],[Qty]:[Calc]]");
+  return wb;
+}
+
+std::string FormulaTextOf(const Workbook& wb, std::string_view ref) {
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith(std::string("=FORMULATEXT(") + std::string(ref) + ")", ctx);
+  EXPECT_TRUE(v.is_text());
+  return v.is_text() ? std::string(v.as_text()) : std::string();
+}
+
+TEST(BuiltinsFormulaText, StructuredRefInsideTableOmitsTableName) {
+  const Workbook wb = MakeTableWorkbook();
+  EXPECT_EQ(FormulaTextOf(wb, "C2"), "=[@Qty]");
+}
+
+TEST(BuiltinsFormulaText, StructuredRefOutsideTableKeepsTableName) {
+  const Workbook wb = MakeTableWorkbook();
+  EXPECT_EQ(FormulaTextOf(wb, "H2"), "=tblSales[@Qty]");
+}
+
+TEST(BuiltinsFormulaText, StructuredRefMultiColumnThisRowOutside) {
+  const Workbook wb = MakeTableWorkbook();
+  EXPECT_EQ(FormulaTextOf(wb, "J2"), "=tblSales[@[Qty]:[Calc]]");
+}
+
+TEST(BuiltinsFormulaText, StructuredRefSpecifierIsLocalizedInJapaneseProfile) {
+  Workbook wb = MakeTableWorkbook();
+  wb.set_excel_profile(ExcelProfile{ExcelHost::kMac365, ExcelLocale::kJaJP});
+  EXPECT_EQ(FormulaTextOf(wb, "I2"), "=COUNTA(tblSales[[#見出し],[Qty]])");
+}
+
+TEST(BuiltinsFormulaText, StructuredRefWholeRowShowsBareAt) {
+  Workbook wb = MakeTableWorkbook();
+  wb.sheet(0).set_cell_formula(1, 10, "=tblSales[[#This Row]]");
+  EXPECT_EQ(FormulaTextOf(wb, "K2"), "=tblSales[@]");
 }
 
 // ---------------------------------------------------------------------------

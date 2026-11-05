@@ -38,6 +38,7 @@
 #include "parser/ast.h"
 #include "parser/formula_prefix.h"
 #include "parser/reference.h"
+#include "parser/structured_ref_spelling.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -296,9 +297,20 @@ Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const Fun
   // Show the formula as typed: storage prefixes are stripped outside string
   // literals and only at identifier boundaries.
   const std::string stripped = parser::strip_storage_prefixes(cell->formula_text);
-  std::string shown = localize_formula_text(stripped, current_eval_profile());
+  // Structured references show as the target cell's table displays them.
+  const Workbook* wb = ctx.workbook();
+  std::string_view own_table;
+  if (wb != nullptr) {
+    if (const std::size_t sheet_number = find_sheet_index(*wb, *target.value().sheet); sheet_number != 0) {
+      if (const auto table = wb->table_containing(sheet_number - 1, target.value().row, target.value().col)) {
+        own_table = wb->tables()[*table].display_name;
+      }
+    }
+  }
+  std::string shown =
+      localize_formula_text(parser::display_structured_refs(stripped, own_table), current_eval_profile());
   // The workbook's own names show under its file name, as in the formula bar.
-  if (const Workbook* wb = ctx.workbook(); wb != nullptr && wb->spells_self_book_names(shown)) {
+  if (wb != nullptr && wb->spells_self_book_names(shown)) {
     shown = wb->spell_self_book_names(shown);
   }
   // A legacy array formula shows in braces.

@@ -23,7 +23,9 @@ const char* canonical_function_name(ExcelLocale locale, std::string_view localiz
 /// displays it under `profile`: localized function names, separators,
 /// booleans and error names, and number literals in their normalized form
 /// (`1.5E-3` reads back as `0.0015`). Everything else, including whitespace,
-/// strings and structured-reference brackets, is kept verbatim. A leading `=`
+/// strings and column names, is kept verbatim. Inside structured-reference
+/// brackets the `#All`/`#Data`/`#Headers`/`#Totals` words and the separator
+/// between bracketed items take the profile's spelling. A leading `=`
 /// is preserved. Pure text rewrite: the grammar is never validated.
 std::string localize_formula_text(std::string_view formula, ExcelProfile profile);
 

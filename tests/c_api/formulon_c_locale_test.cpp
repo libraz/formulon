@@ -58,17 +58,19 @@ TEST(FormulonCApiLocale, FrenchFormulaConversion) {
   EXPECT_EQ(canonicalize("=SOMME({1.2;3.4})", fr), "=SUM({1,2;3,4})");
 }
 
-TEST(FormulonCApiLocale, QuotedAndStructuredTextIsUntouched) {
+TEST(FormulonCApiLocale, QuotedTextIsUntouchedAndStructuredItemsLocalize) {
   struct Case {
     const char* profile;
     const char* sum;
+    const char* headers;
   };
-  for (const Case& c : {Case{"mac-365-de_DE", "SUMME"}, Case{"mac-365-fr_FR", "SOMME"}}) {
+  for (const Case& c : {Case{"mac-365-de_DE", "SUMME", "#Kopfzeilen"}, Case{"mac-365-fr_FR", "SOMME", "#En-têtes"}}) {
     const std::string shown = std::string("=") + c.sum + "(\"a,b;1.5\";'x,y;z'!A1)";
     EXPECT_EQ(localize("=SUM(\"a,b;1.5\",'x,y;z'!A1)", c.profile), shown) << c.profile;
     EXPECT_EQ(canonicalize(shown.c_str(), c.profile), "=SUM(\"a,b;1.5\",'x,y;z'!A1)") << c.profile;
 
-    const std::string table = std::string("=") + c.sum + "(T[[#Headers],[a;b]];1)";
+    // Specifier words and the item separator follow the locale; a column name keeps its text.
+    const std::string table = std::string("=") + c.sum + "(T[[" + c.headers + "];[a;b]];1)";
     EXPECT_EQ(localize("=SUM(T[[#Headers],[a;b]],1)", c.profile), table) << c.profile;
     EXPECT_EQ(canonicalize(table.c_str(), c.profile), "=SUM(T[[#Headers],[a;b]],1)") << c.profile;
   }
