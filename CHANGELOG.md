@@ -42,6 +42,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A workbook file name: `fm_workbook_set_file_name` / `fm_workbook_file_name`
+  (`setFileName` / `fileName`, `set_file_name` / `file_name`). When it is
+  set, every function that returns formula text, and `FORMULATEXT`, shows a
+  reference to this workbook's own names as the formula bar does
+  (`=Book.xlsx!Rate`, `='My Book.xlsx'!Rate`) instead of the stored
+  `[0]!Rate`. The same spelling, and `[Book.xlsx]Sheet1!A1`, can be entered
+  and refer to this workbook; no external link is created. The name must end
+  in a workbook extension. The command-line tools set it from the input
+  file.
+
 - Date grouping works the way Excel's Group command does. Seconds, minutes,
   hours, days (with an interval), months, quarters and years each become a
   group field in the pivot cache, so a grouped workbook loads, evaluates and
@@ -156,6 +166,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A conditional formatting rule added without an id gets one in the form
+  Excel uses, `{00000000-000E-0000-<sheet>-0000<priority>}`, in place of the
+  `{FC000000-…}` form.
+- `fm_workbook_cell_at`, `fm_workbook_defined_name_at` and the validation,
+  table and pivot field formula views are documented as valid until the next
+  read that uses the handle's scratch buffer, like the other text getters. A
+  view now points into scratch storage when a file name is set and the text
+  needs the workbook name spelled out.
+
 - A pivot table's report is kept in the sheet cells, as Excel keeps it. Every
   pivot table edit writes the report into its range with Excel's cell formats,
   and formulas that read the range see it; deleting a pivot table clears its
@@ -199,11 +218,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a name referenced as `Sheet2!Rate` becomes workbook-scoped and the
   reference becomes `[0]!Rate`, or binds to an existing workbook-scoped name
   of the same name. Names nothing else references are dropped as before.
+  A reference from another surviving name, from a chart series or from a
+  LAMBDA call (`=Sheet2!Fn(3)` becomes `=[0]!Fn(3)`, not `#REF!`) keeps the
+  name too, and a kept name keeps the names its body reaches through
+  `Sheet2!Name`. An unqualified name in its body does not keep that name.
 - Deleting a sheet sends structured references to the tables on it to
   `#REF!` (`=SUM(#REF!)`); they kept naming the deleted table before.
 - Conditional formatting formulas read from a file drop a qualifier naming
   their own sheet (`Sheet3!$A$1>0` on Sheet3 is `$A$1>0`), as Excel does on
-  load, so a later row deletion gives `#REF!>0`.
+  load, so a later row deletion gives `#REF!>0`. The same applies to color
+  scale, data bar and icon set thresholds, to data validation formulas, and
+  to a 3-D reference whose both ends are the own sheet
+  (`Sheet3:Sheet3!$A$1`). A sheet-scoped name keeps its qualifier.
+- Conditional formatting rules and data validations that reference another
+  sheet are read from the x14 extension of an Excel file (`.xlsx`) and from
+  its 2010 records (`.xlsb`). Before, they were missing from the model: they
+  were not evaluated, not listed, and not updated by structural edits. They
+  are written back the same way, so a rule that references another sheet no
+  longer goes into the base element, and it stays in the extension after
+  the sheet it references is deleted.
+- In `.xlsb` conditional formatting and data validation formulas, a relative
+  reference to another sheet is stored as an offset from the rule's first
+  cell, as Excel stores it. Excel read the old form as a different column
+  (`Sheet1!A:A` on G1:G3 came back as `Sheet1!G:G`).
 - XLSB stores a qualified or deleted-sheet `#REF!` the way Excel does (a
   sheet-bound reference error, or the address through a deleted-sheet
   entry), and reads those forms back with their sheet or address: an Excel
