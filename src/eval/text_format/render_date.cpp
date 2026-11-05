@@ -141,14 +141,6 @@ void append_elapsed_int_dbnum(std::string& out, long long value, std::size_t wid
 
 constexpr std::size_t kMaxMeaningfulFractionDigits = 15;
 
-std::uint64_t power10(std::size_t exponent) noexcept {
-  std::uint64_t result = 1;
-  for (std::size_t i = 0; i < exponent; ++i) {
-    result *= 10;
-  }
-  return result;
-}
-
 // Japanese era classification. The boundary table and classifier live in
 // `eval/japanese_era.{h,cpp}` so the pivot date-grouping path can share
 // the same anchors. We re-export the type as a local alias so the rest
@@ -185,7 +177,7 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
   const std::size_t meaningful_fraction_digits = requested_fraction_digits < kMaxMeaningfulFractionDigits
                                                      ? requested_fraction_digits
                                                      : kMaxMeaningfulFractionDigits;
-  const std::uint64_t fraction_scale = power10(meaningful_fraction_digits);
+  const std::uint64_t fraction_scale = pow10_capped(static_cast<int>(meaningful_fraction_digits));
   std::uint64_t fraction_ticks =
       static_cast<std::uint64_t>(std::floor(subsecond * static_cast<double>(fraction_scale) + 0.5));
   long long rounded_seconds_in_day = whole_seconds;

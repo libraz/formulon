@@ -10,6 +10,7 @@
 #define FORMULON_EVAL_TEXT_FORMAT_RENDER_COMMON_H_
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
 
@@ -69,6 +70,16 @@ bool decimal_digits_all_zero(std::string_view digits) noexcept;
 // to zero. Excel shows no more than 15 significant digits: `2^60` displays
 // as `1152921504606850000`, not the exact 19-digit integer `%.0f` prints.
 void cap_integer_significant_digits(std::string* digits);
+
+// 10^n for n up to 18 (larger n is clamped); n <= 0 gives 1. Placeholder
+// runs wider than 18 digits keep their layout without overflowing.
+inline std::uint64_t pow10_capped(int n) noexcept {
+  std::uint64_t r = 1;
+  for (int i = 0; i < n && i < 18; ++i) {
+    r *= 10;
+  }
+  return r;
+}
 
 }  // namespace number_format_detail
 }  // namespace text_format

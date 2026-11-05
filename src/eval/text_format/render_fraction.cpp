@@ -31,17 +31,6 @@ namespace {
 // string: a finite double's whole part can run to 309 digits.
 constexpr std::uint64_t kMaxVariableDenominator = 9999999ULL;
 
-// Compute 10^N without overflow for the supported placeholder widths.
-// best_rational applies Excel's seven-digit variable-denominator cap; wider
-// placeholder runs retain their layout.
-std::uint64_t fraction_pow10(int n) noexcept {
-  std::uint64_t r = 1;
-  for (int i = 0; i < n && i < 18; ++i) {
-    r *= 10;
-  }
-  return r;
-}
-
 // Excel takes the last convergent of the binary64 continued-fraction expansion
 // whose denominator fits, never a semiconvergent, even a closer one: 0.5627
 // gives 4/7 rather than 5/9, and 0.6125 gives 3/5 rather than 5/8.
@@ -257,7 +246,7 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
     fraction_num = scaled > 0.0 ? static_cast<std::uint64_t>(scaled) : 0U;
   } else {
     // The numerator is uncapped so improper forms such as `?/?` render `2469/2`.
-    const std::uint64_t max_q = fraction_pow10(section.fraction_den_max_digits) - 1U;
+    const std::uint64_t max_q = pow10_capped(section.fraction_den_max_digits) - 1U;
     best_rational(target, max_q, &fraction_num, &den);
   }
 
