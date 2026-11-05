@@ -88,86 +88,7 @@ bool is_date_codepoint(std::uint32_t cp) noexcept {
   }
   const char c = fullwidth_ascii(cp);
   return c == 'y' || c == 'Y' || c == 'm' || c == 'M' || c == 'd' || c == 'D' || c == 'h' || c == 'H' || c == 's' ||
-         c == 'S' || c == 'g' || c == 'G' || c == 'e';
-}
-
-char date_codepoint_letter(std::uint32_t cp) noexcept {
-  if (cp >= 'A' && cp <= 'Z') {
-    return strings::ascii_to_lower(static_cast<char>(cp));
-  }
-  if (cp >= 'a' && cp <= 'z') {
-    return static_cast<char>(cp);
-  }
-  if (!is_fullwidth_ascii(cp)) {
-    return '\0';
-  }
-  const char c = fullwidth_ascii(cp);
-  switch (c) {
-    case 'y':
-    case 'Y':
-    case 'm':
-    case 'M':
-    case 'd':
-    case 'D':
-    case 'h':
-    case 'H':
-    case 's':
-    case 'S':
-    case 'g':
-    case 'G':
-    case 'e':
-    case 'E':
-      return strings::ascii_to_lower(c);
-    default:
-      return '\0';
-  }
-}
-
-bool is_latin_codepoint(std::uint32_t cp) noexcept {
-  if ((cp >= 'A' && cp <= 'Z') || (cp >= 'a' && cp <= 'z')) {
-    return true;
-  }
-  if (!is_fullwidth_ascii(cp)) {
-    return false;
-  }
-  const char c = fullwidth_ascii(cp);
-  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
-}
-
-std::size_t previous_scalar_begin(std::string_view fmt, std::size_t i) noexcept {
-  if (i == 0) {
-    return 0;
-  }
-  std::size_t begin = i - 1;
-  while (begin > 0) {
-    const auto byte = static_cast<unsigned char>(fmt[begin]);
-    if ((byte & 0xC0U) != 0x80U) {
-      break;
-    }
-    --begin;
-  }
-  return begin;
-}
-
-bool should_fold_date_codepoint(std::string_view fmt, std::size_t i, std::size_t width, std::uint32_t cp) noexcept {
-  const char letter = date_codepoint_letter(cp);
-  if (letter == '\0') {
-    return false;
-  }
-  if (i > 0) {
-    const Utf8Scalar previous = decode_utf8(fmt, previous_scalar_begin(fmt, i));
-    if (previous.valid && is_latin_codepoint(previous.codepoint) &&
-        date_codepoint_letter(previous.codepoint) != letter) {
-      return false;
-    }
-  }
-  if (i + width < fmt.size()) {
-    const Utf8Scalar next = decode_utf8(fmt, i + width);
-    if (next.valid && is_latin_codepoint(next.codepoint) && date_codepoint_letter(next.codepoint) != letter) {
-      return false;
-    }
-  }
-  return true;
+         c == 'S' || c == 'g' || c == 'G' || c == 'e' || c == 'E' || c == 'b' || c == 'B';
 }
 
 bool is_a_codepoint(std::uint32_t cp) noexcept {
@@ -439,10 +360,9 @@ std::string normalize_fullwidth_format_syntax(std::string_view fmt, std::string_
       continue;
     }
 
-    // Full-width date/time runs (`ｙ`, `ｍ`, `ｄ`, `ｈ`, `ｓ`, `ｇ`, `ｅ`) are
-    // canonicalised one scalar at a time. Other full-width Latin letters,
-    // including the lone `Ａ` literal observed in Excel, are preserved.
-    if (is_date_codepoint(cp) && should_fold_date_codepoint(fmt, i, width, cp)) {
+    // Full-width date/time codes (`ｙ ｍ ｄ ｈ ｓ ｇ ｅ ｂ`, either case) always fold to
+    // their ASCII letter, whatever the neighbours. Other full-width letters, `Ａ` included, stay literal.
+    if (is_date_codepoint(cp)) {
       const char c = fullwidth_ascii(cp);
       out.push_back(strings::ascii_to_lower(c));
       i += width;

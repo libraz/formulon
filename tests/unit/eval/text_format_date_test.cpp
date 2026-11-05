@@ -145,6 +145,33 @@ TEST(DateFormatJaJpFullWidth, DateAndTimeRuns) {
   EXPECT_EQ(Render(45366.0, "ｙｙｙｙ‘ｍｍ’ｄｄ"), "2024‘03’15");
 }
 
+// A full-width date code folds to its ASCII letter whatever its neighbours.
+TEST(DateFormatJaJpFullWidth, FullWidthDateCodesAlwaysFold) {
+  EXPECT_EQ(Render(45000.0, "ＥＥ"), "05");
+  EXPECT_EQ(Render(45000.0, "Ｅ"), "5");
+  EXPECT_EQ(Render(45000.0, "yyyyＥ"), "20235");
+  EXPECT_EQ(Render(45000.0, "yyyy/mm/ddＥ"), "2023/03/155");
+  EXPECT_EQ(Render(45000.0, "ｅ"), "5");
+  EXPECT_EQ(Render(45000.0, "ｅｅ"), "05");
+  EXPECT_EQ(Render(45000.0, "EE"), "05");
+  EXPECT_EQ(Render(45000.0, "yyyyｅ"), "20235");
+  EXPECT_EQ(Render(45000.0, "ｙｙｙｙｍｍ"), "202303");
+  EXPECT_EQ(Render(45000.0, "ｍｓ"), "00");
+  EXPECT_EQ(Render(45000.0, "yyyyｍｍ"), "202303");
+  EXPECT_EQ(Render(45000.0, "ｙｙｙｙ/ｍｍ/ｄｄ"), "2023/03/15");
+  EXPECT_EQ(Render(45000.0, "ｙｙｙｙ年ｍ月ｄ日"), "2023年3月15日");
+  EXPECT_EQ(Render(45000.0, "ｇｇｇｅ"), "令和5");
+  EXPECT_EQ(Render(45000.0, "ｅｙ"), "523");
+  EXPECT_EQ(Render(45000.0, "ｄｄｄ"), "Wed");
+  EXPECT_EQ(Render(45000.0, "Ａｙ"), "Ａ23");
+  EXPECT_EQ(Render(45000.0, "ｙＡ"), "23Ａ");
+  EXPECT_EQ(Render(45000.0, "ｙｂ"), "2366");
+  EXPECT_EQ(Render(45000.0, "bｙ"), "6623");
+  EXPECT_EQ(Render(45000.0, "ＥＹ"), "523");
+  EXPECT_EQ(Render(1234.5, "0.0Ｅ+0"), "1.2E+3");
+  EXPECT_EQ(Render(1234.5, "0.0E+0"), "1.2E+3");
+}
+
 TEST(DateFormatJaJpFullWidth, AmPmAndWeekdayMarkers) {
   const double morning = 9.5 / 24.0;
   const double afternoon = 13.5 / 24.0;
