@@ -1,0 +1,790 @@
+#!/usr/bin/env python3
+"""Apply the name ledger's renames to a source tree in one simultaneous pass.
+
+Reads ``tools/api/names.yaml`` and rewrites every ``was`` name to the entry's
+current name, per surface and only in the textual forms below, so a record
+field or another language's call that happens to share a spelling is left
+alone:
+
+* C functions, typedefs and enum constants: ``\\b<old>\\b`` in every file.
+* JS methods: ``.old(``, the registration strings of the embind / N-API
+  layers, member declarations of ``Workbook`` / ``WorkbookCtor`` /
+  ``FormulonModule`` in ``.d.ts`` files, ``{@link Workbook.old}``,
+  ```old(``` and ```Workbook.old```; process functions also as bare
+  identifiers. JS type names: ``\\b<Old>\\b``. Scope: ``.mjs`` / ``.js`` /
+  ``.d.ts``, ``src/wasm`` / ``src/node_addon`` and Markdown.
+* Python methods and functions: ``def old(`` in the package, ``.old(``, the
+  strings of ``__all__`` and of the parity test's ``METHODS``, ``:meth:`` /
+  ``:func:`` targets. Python class names: ``\\b<Old>\\b``. Scope: ``.py`` /
+  ``.pyi`` and Markdown.
+
+Markdown fences are matched to their language; prose follows the nearest
+preceding fence (the Python package's own docs default to Python). Entries
+with ``replaced_by``, ``kind: field`` entries and ``drop`` names are never
+rewritten. A C name one entry gives up and another takes (a hand-over) is
+rewritten in the same pass, and skipped once the tree no longer spells the
+taker's former name.
+
+Modes:
+  (default)             rewrite the tree in place
+  <dir> ...             rewrite those directories instead (a downstream checkout)
+  --check               exit 1 when a former name is still spelled in a rewritten form
+  --check-fields        exit 1 when a record's field set differs from HEAD
+  --check-comment-only  exit 1 when an engine-internal file differs from HEAD outside comments
+  --report-prose        list the former names still present as plain words
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import subprocess
+import sys
+from collections import defaultdict
+from pathlib import Path
+from typing import Callable, Dict, Iterable, Iterator, List, NamedTuple, Optional, Sequence, Set, Tuple
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+LEDGER_PATH = REPO_ROOT / "tools" / "api" / "names.yaml"
+
+EXCLUDED_FILES = frozenset(
+    {
+        "tools/dev/c_abi_baseline.txt",
+        "tools/dev/c_abi_breaks.txt",
+        "tools/api/names.yaml",
+        "tools/api/apply_renames.py",
+        "tools/api/gen_migration_table.py",
+        # The convention checker's own tests use former names as rule fixtures.
+        "tools/dev/binding_drift_test.py",
+        "tools/dev/binding_drift/api_conventions_bindings_test.py",
+    }
+)
+EXCLUDED_DIRS = ("backup", ".claude", "node_modules", "third_party", ".git")
+# Ledger tooling reasons about former names, and baseline messages are informational.
+EXCLUDED_TREES = ("tools/api/", "tools/dev/api_convention_baseline/")
+EXCLUDED_DIR_PREFIXES = ("build", ".venv")
+CHANGELOG = "CHANGELOG.md"
+UNRELEASED = "## [Unreleased]"
+
+# Engine-internal trees whose diff may only touch comments.
+COMMENT_ONLY_DIRS = ("src/eval/", "src/io/", "src/parser/", "src/pivot/", "src/utils/", "src/cf/")
+
+JS_EXTS = (".mjs", ".js", ".cjs", ".ts")
+PY_EXTS = (".py", ".pyi")
+MD_EXTS = (".md",)
+CPP_EXTS = (".c", ".cc", ".cpp", ".h", ".hpp")
+JS_BINDING_DIRS = ("src/wasm/", "src/node_addon/")
+PY_PACKAGE_DIR = "packages/python/formulon/"
+PY_DOC_DIR = "packages/python/"
+PARITY_TEST = "packages/python/tests/test_surface_parity.py"
+DTS_MEMBER_INTERFACES = ("Workbook", "WorkbookCtor", "FormulonModule")
+
+_FENCE_RE = re.compile(r"^\s*(```+|~~~+)\s*([A-Za-z0-9_+-]*)")
+_FENCE_LANG = {
+    "js": "js",
+    "javascript": "js",
+    "mjs": "js",
+    "ts": "js",
+    "typescript": "js",
+    "tsx": "js",
+    "python": "py",
+    "py": "py",
+    "pycon": "py",
+}
+
+
+# ---------------------------------------------------------------------------
+# Rename maps.
+# ---------------------------------------------------------------------------
+
+
+class Renames(NamedTuple):
+    c: Dict[str, str]
+    js_methods: Dict[str, str]
+    js_free: Dict[str, str]
+    js_types: Dict[str, str]
+    py_methods: Dict[str, str]
+    py_free: Dict[str, str]
+    py_static_to_free: Dict[str, str]
+    py_types: Dict[str, str]
+    handed_over: Dict[str, Tuple[str, str]]  # name -> (giver's new name, taker's former name)
+
+
+_TYPE_KINDS = frozenset({"record", "enum", "typedef", "constant"})
+
+
+def load_ledger(path: Path = LEDGER_PATH) -> dict:
+    import yaml  # type: ignore
+
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or data.get("schema") != 1 or not isinstance(data.get("entries"), dict):
+        raise SystemExit(f"apply_renames: {path} is not a `schema: 1` ledger")
+    return data
+
+
+def _pairs(entries: Dict[str, dict], field: str) -> Iterator[Tuple[str, dict, str, str]]:
+    """(key, entry, former, current) for every rewritable rename on `field`."""
+    for key, entry in entries.items():
+        if not isinstance(entry, dict) or "replaced_by" in entry or entry.get("kind") == "field":
+            continue
+        was = entry.get("was") if isinstance(entry.get("was"), dict) else {}
+        old, new = was.get(field), entry.get(field)
+        drop = entry.get("drop") if isinstance(entry.get("drop"), dict) else {}
+        if not isinstance(old, str) or old == drop.get(field):
+            continue
+        if not isinstance(new, str):
+            raise SystemExit(f"apply_renames: `{key}` renames {field} `{old}` to nothing and does not drop it")
+        if old != new:
+            yield key, entry, old, new
+
+
+def build_renames(data: dict) -> Renames:
+    entries = data["entries"]
+    c: Dict[str, str] = {}
+    for _key, _entry, old, new in _pairs(entries, "c"):
+        c[old] = new
+    taken = {new: old for old, new in c.items()}
+    handed_over = {old: (new, taken[old]) for old, new in c.items() if old in taken}
+    js_methods: Dict[str, str] = {}
+    js_free: Dict[str, str] = {}
+    js_types: Dict[str, str] = {}
+    for _key, entry, old, new in _pairs(entries, "js"):
+        if entry.get("kind") in _TYPE_KINDS:
+            js_types[old] = new
+        elif entry.get("scope") == "process" or entry.get("kind") == "free":
+            js_free[old] = new
+        else:
+            js_methods[old.split(".", 1)[-1]] = new.split(".", 1)[-1]
+    py_methods: Dict[str, str] = {}
+    py_free: Dict[str, str] = {}
+    py_static: Dict[str, str] = {}
+    py_types: Dict[str, str] = {}
+    for _key, entry, old, new in _pairs(entries, "py"):
+        if entry.get("kind") in _TYPE_KINDS:
+            py_types[old] = new
+        elif old.startswith("Workbook.") and not new.startswith("Workbook."):
+            py_static[old.split(".", 1)[1]] = new
+        elif not old.startswith("Workbook.") and (entry.get("scope") == "process" or entry.get("kind") == "free"):
+            py_free[old] = new
+        else:
+            py_methods[old.split(".", 1)[-1]] = new.split(".", 1)[-1]
+    return Renames(c, js_methods, js_free, js_types, py_methods, py_free, py_static, py_types, handed_over)
+
+
+# ---------------------------------------------------------------------------
+# Files.
+# ---------------------------------------------------------------------------
+
+
+def _excluded(rel: str) -> bool:
+    if rel in EXCLUDED_FILES or rel.startswith(EXCLUDED_TREES):
+        return True
+    parts = rel.split("/")
+    for part in parts[:-1]:
+        if part in EXCLUDED_DIRS or part.startswith(EXCLUDED_DIR_PREFIXES):
+            return True
+    return False
+
+
+def tree_files(root: Path) -> List[str]:
+    """Relative paths of the candidate text files under `root`."""
+    if (root / ".git").exists():
+        out = subprocess.run(["git", "-C", str(root), "ls-files", "-z"], check=True, capture_output=True).stdout.decode(
+            "utf-8"
+        )
+        rels = [p for p in out.split("\0") if p]
+    else:
+        rels = []
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [d for d in dirnames if d not in EXCLUDED_DIRS and not d.startswith(EXCLUDED_DIR_PREFIXES)]
+            for name in filenames:
+                rels.append(os.path.relpath(os.path.join(dirpath, name), root).replace(os.sep, "/"))
+    return sorted(r for r in rels if not _excluded(r) and (root / r).is_file())
+
+
+def read_text(path: Path) -> Optional[str]:
+    raw = path.read_bytes()
+    if b"\0" in raw[:8192]:
+        return None
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Replacement forms.
+# ---------------------------------------------------------------------------
+
+Sub = Callable[[str], Tuple[str, int]]
+
+
+def _alternation(names: Iterable[str]) -> str:
+    return "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True))
+
+
+class Form(NamedTuple):
+    """One textual form: a regex with group `name`, rewritten through `table`.
+
+    Without `template` only the `name` group changes; with it the whole match
+    becomes `template` formatted with the new name and the match's groups.
+    """
+
+    regex: "re.Pattern[str]"
+    table: Dict[str, str]
+    template: Optional[str] = None
+
+    def apply(self, text: str) -> Tuple[str, int]:
+        count = 0
+
+        def repl(m: "re.Match[str]") -> str:
+            nonlocal count
+            new = self.table.get(m.group("name"))
+            if new is None:
+                return m.group(0)
+            count += 1
+            if self.template is not None:
+                return self.template.format(new=new, **{k: v or "" for k, v in m.groupdict().items()})
+            start, end = m.span("name")
+            base = m.start()
+            whole = m.group(0)
+            return whole[: start - base] + new + whole[end - base :]
+
+        return self.regex.sub(repl, text), count
+
+
+def _form(pattern: str, table: Dict[str, str], flags: int = 0, template: Optional[str] = None) -> Optional[Form]:
+    if not table:
+        return None
+    regex = re.compile(pattern.replace("NAME", f"(?P<name>{_alternation(table)})"), flags)
+    return Form(regex, table, template)
+
+
+class Forms(NamedTuple):
+    c: List[Form]
+    js_code: List[Form]
+    js_types: List[Form]
+    js_binding: List[Form]
+    js_prose: List[Form]
+    dts_members: Optional[Form]
+    py_code: List[Form]
+    py_package: List[Form]
+    py_types: List[Form]
+    py_prose: List[Form]
+
+
+def build_forms(r: Renames, c_table: Dict[str, str]) -> Forms:
+    methods_and_free = {**r.js_methods, **r.js_free}
+    py_callables = {**r.py_methods, **r.py_free}
+
+    def keep(*forms: Optional[Form]) -> List[Form]:
+        return [f for f in forms if f is not None]
+
+    js_backticks = keep(
+        _form(r"\{@link\s+Workbook\.NAME\}", methods_and_free),
+        _form(r"`Workbook\.NAME`", methods_and_free),
+        _form(r"`NAME\(", methods_and_free),
+    )
+    js_types = keep(_form(r"\bNAME\b", r.js_types))
+    py_backticks = keep(
+        _form(r":(?:meth|func):`~?(?:[\w.]*\.)?NAME`", py_callables),
+        _form(r"`(?:Workbook\.)?NAME\(", py_callables),
+    )
+    # A static method that became a module function loses its `Workbook.` qualifier.
+    py_statics = keep(
+        _form(
+            r":(?:meth|func):`(?P<tilde>~?)(?P<pkg>formulon\.)?Workbook\.NAME`",
+            r.py_static_to_free,
+            template=":func:`{tilde}{pkg}{new}`",
+        ),
+        _form(r"\bWorkbook\.NAME\(", r.py_static_to_free, template="{new}("),
+        _form(r"`Workbook\.NAME`", r.py_static_to_free, template="`{new}`"),
+    )
+    return Forms(
+        c=keep(_form(r"\bNAME\b", c_table)),
+        js_code=keep(
+            _form(r"\.NAME\(", methods_and_free),
+            _form(r"\bNAME\b", r.js_free),
+            *js_backticks,
+        ),
+        js_types=js_types,
+        js_binding=keep(
+            _form(r"\b(?:function|class_function)\(\s*\"NAME\"", methods_and_free),
+            _form(r"Method<[^>]*>\(\s*\"NAME\"", methods_and_free),
+            _form(r"exports\.Set\(\s*\"NAME\"", r.js_free),
+            _form(r"Function::New\([^;]*?\"NAME\"\s*\)", r.js_free),
+            *js_backticks,
+        ),
+        js_prose=keep(_form(r"\.NAME\(", methods_and_free), *js_backticks),
+        dts_members=_form(r"^(\s+)NAME(\s*[<(?:])", methods_and_free, re.M),
+        py_code=keep(
+            *py_statics,
+            _form(r"\.NAME\(", r.py_methods),
+            _form(r"\.NAME\(", r.py_free),
+            _form(r"(?<![\w.])NAME\(", r.py_free),
+            *py_backticks,
+        ),
+        py_package=keep(
+            _form(r"\bdef\s+NAME\(", {**py_callables, **r.py_static_to_free}),
+        ),
+        py_types=keep(_form(r"\bNAME\b", r.py_types)),
+        py_prose=keep(
+            *py_statics,
+            _form(r"\.NAME\(", py_callables),
+            *py_backticks,
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Per-file rewrite.
+# ---------------------------------------------------------------------------
+
+
+Counts = Dict[str, int]
+
+
+def _run(forms: Sequence[Form], text: str, counts: Counts, label: str) -> str:
+    for form in forms:
+        text, n = form.apply(text)
+        if n:
+            counts[label] = counts.get(label, 0) + n
+    return text
+
+
+def _dts_members(form: Optional[Form], text: str, counts: Counts) -> str:
+    """Rewrites member declarations inside `Workbook`, `WorkbookCtor` and `FormulonModule`."""
+    if form is None:
+        return text
+    out: List[str] = []
+    pos = 0
+    for m in re.finditer(r"^export\s+(?:declare\s+)?interface\s+(\w+)[^{]*\{", text, re.M):
+        if m.group(1) not in DTS_MEMBER_INTERFACES:
+            continue
+        start = m.end()
+        depth, i = 1, start
+        while i < len(text) and depth:
+            depth += {"{": 1, "}": -1}.get(text[i], 0)
+            i += 1
+        body, n = form.apply(text[start:i])
+        if n:
+            counts["js"] = counts.get("js", 0) + n
+        out.append(text[pos:start])
+        out.append(body)
+        pos = i
+    out.append(text[pos:])
+    return "".join(out)
+
+
+def _list_region(text: str, opener: "re.Pattern[str]", table: Dict[str, str], counts: Counts, label: str) -> str:
+    """Rewrites quoted strings inside the bracketed list that follows `opener`."""
+    m = opener.search(text)
+    if not m or not table:
+        return text
+    start = m.end()
+    end = text.find("]", start)
+    region = re.sub(
+        r"([\"'])(%s)\1" % _alternation(table),
+        lambda s: s.group(1) + table[s.group(2)] + s.group(1),
+        text[start:end],
+    )
+    changed = sum(
+        1
+        for a, b in zip(re.findall(r"[\"'](\w+)[\"']", text[start:end]), re.findall(r"[\"'](\w+)[\"']", region))
+        if a != b
+    )
+    if changed:
+        counts[label] = counts.get(label, 0) + changed
+    return text[:start] + region + text[end:]
+
+
+def _markdown(text: str, rel: str, f: Forms, counts: Counts) -> str:
+    lines = text.splitlines(keepends=True)
+    blocks: List[Tuple[str, List[str]]] = []
+    fence: Optional[str] = None
+    lang = "py" if rel.startswith(PY_DOC_DIR) else "js"
+    current = f"prose:{lang}"
+    buf: List[str] = []
+    prose_lang = lang
+    for line in lines:
+        m = _FENCE_RE.match(line)
+        if fence is None and m:
+            blocks.append((current, buf))
+            fence = m.group(1)
+            fence_lang = _FENCE_LANG.get(m.group(2).lower(), "other")
+            if fence_lang in ("js", "py"):
+                prose_lang = fence_lang
+            current = f"fence:{fence_lang}"
+            buf = [line]
+            continue
+        if fence is not None and line.strip().startswith(fence[0] * 3) and line.strip().strip(fence[0]) == "":
+            buf.append(line)
+            blocks.append((current, buf))
+            fence, current, buf = None, f"prose:{prose_lang}", []
+            continue
+        buf.append(line)
+    blocks.append((current, buf))
+    out: List[str] = []
+    for kind, chunk in blocks:
+        body = "".join(chunk)
+        if kind == "fence:js":
+            body = _run(f.js_code + f.js_types, body, counts, "js")
+        elif kind == "fence:py":
+            body = _run(f.py_code + f.py_types, body, counts, "py")
+        elif kind.startswith("prose") or kind == "fence:other":
+            which = kind.split(":")[1] if kind.startswith("prose") else lang
+            if which == "py":
+                body = _run(f.py_prose + f.py_types, body, counts, "py")
+                body = _run(f.js_prose + f.js_types, body, counts, "js")
+            else:
+                body = _run(f.js_prose + f.js_types, body, counts, "js")
+                body = _run(f.py_prose + f.py_types, body, counts, "py")
+        out.append(body)
+    return "".join(out)
+
+
+# A Python file outside the package is rewritten only when it uses the package.
+_PY_CONSUMER_RE = re.compile(r"^\s*(?:import\s+formulon\b|from\s+formulon\b)", re.M)
+_ALL_RE = re.compile(r"^__all__\s*(?::[^=]*)?=\s*\[", re.M)
+_METHODS_RE = re.compile(r"^\s*METHODS\s*=\s*\[", re.M)
+
+
+def rewrite(text: str, rel: str, f: Forms, r: Renames, counts: Counts) -> str:
+    """The rewritten text of the file at `rel`."""
+    if rel == CHANGELOG:
+        head, sep, tail = _split_changelog(text)
+        return _markdown(_run(f.c, head, counts, "c"), rel, f, counts) + sep + tail
+    text = _run(f.c, text, counts, "c")
+    ext = os.path.splitext(rel)[1]
+    is_dts = rel.endswith(".d.ts")
+    if rel.endswith(MD_EXTS):
+        return _markdown(text, rel, f, counts)
+    if rel.startswith(JS_BINDING_DIRS) and ext in CPP_EXTS:
+        text = _run(f.js_binding, text, counts, "js")
+        return text
+    if ext in JS_EXTS:
+        if is_dts:
+            text = _dts_members(f.dts_members, text, counts)
+        text = _run(f.js_code + f.js_types, text, counts, "js")
+        return text
+    if ext in PY_EXTS:
+        if not (rel.startswith(PY_DOC_DIR) or _PY_CONSUMER_RE.search(text)):
+            return text
+        if rel.startswith(PY_PACKAGE_DIR):
+            text = _run(f.py_package, text, counts, "py")
+            if rel.endswith("__init__.py") or rel.endswith("__init__.pyi"):
+                table = {**r.py_free, **r.py_types, **r.py_static_to_free}
+                text = _list_region(text, _ALL_RE, table, counts, "py")
+        if rel == PARITY_TEST:
+            text = _list_region(text, _METHODS_RE, {**r.py_methods, **r.py_static_to_free}, counts, "py")
+        text = _run(f.py_code + f.py_types, text, counts, "py")
+        return _py_imports(text, r.py_free, counts)
+    return text
+
+
+_PY_IMPORT_RE = re.compile(r"^(\s*from\s+formulon(?:\.\w+)?\s+import\s+)(\([^)]*\)|[^\n]*)", re.M)
+
+
+def _py_imports(text: str, table: Dict[str, str], counts: Counts) -> str:
+    """Rewrites module-function names inside `from formulon import ...` statements."""
+    if not table:
+        return text
+    word = re.compile(rf"\b({_alternation(table)})\b")
+
+    def repl(m: "re.Match[str]") -> str:
+        body, n = word.subn(lambda w: table[w.group(1)], m.group(2))
+        if n:
+            counts["py"] = counts.get("py", 0) + n
+        return m.group(1) + body
+
+    return _PY_IMPORT_RE.sub(repl, text)
+
+
+def _split_changelog(text: str) -> Tuple[str, str, str]:
+    """(Unreleased section, "", released sections); everything after Unreleased is history."""
+    start = text.find(UNRELEASED)
+    if start < 0:
+        first = re.search(r"^## \[", text, re.M)
+        return (text[: first.start()], "", text[first.start() :]) if first else (text, "", "")
+    nxt = re.search(r"^## \[", text[start + len(UNRELEASED) :], re.M)
+    if not nxt:
+        return text, "", ""
+    cut = start + len(UNRELEASED) + nxt.start()
+    return text[:cut], "", text[cut:]
+
+
+# ---------------------------------------------------------------------------
+# Driver.
+# ---------------------------------------------------------------------------
+
+
+def _hand_over_table(r: Renames, contents: Dict[str, str]) -> Dict[str, str]:
+    """The C table, minus hand-over names the tree has already rewritten."""
+    table = dict(r.c)
+    texts = [_split_changelog(t)[0] if rel == CHANGELOG else t for rel, t in contents.items()]
+    for name, (giver_new, taker_old) in r.handed_over.items():
+        taker_seen = any(re.search(rf"\b{re.escape(taker_old)}\b", t) for t in texts)
+        giver_seen = any(re.search(rf"\b{re.escape(giver_new)}\b", t) for t in texts)
+        if giver_seen and not taker_seen:
+            table.pop(name, None)
+    return table
+
+
+def plan(
+    root: Path, renames: Renames, rels: Optional[Sequence[str]] = None
+) -> Tuple[Dict[str, Tuple[str, str]], Dict[str, Counts]]:
+    """{rel: (old text, new text)} for every file the renames change, and per-file counts."""
+    contents: Dict[str, str] = {}
+    for rel in rels if rels is not None else tree_files(root):
+        text = read_text(root / rel)
+        if text is not None:
+            contents[rel] = text
+    c_table = _hand_over_table(renames, contents)
+    forms = build_forms(renames, c_table)
+    changes: Dict[str, Tuple[str, str]] = {}
+    per_file: Dict[str, Counts] = {}
+    for rel, text in contents.items():
+        counts: Counts = {}
+        new = rewrite(text, rel, forms, renames, counts)
+        if new != text:
+            changes[rel] = (text, new)
+            per_file[rel] = counts
+    return changes, per_file
+
+
+def _summarise(per_file: Dict[str, Counts]) -> Dict[str, int]:
+    total: Dict[str, int] = defaultdict(int)
+    for counts in per_file.values():
+        for label, n in counts.items():
+            total[label] += n
+    return dict(total)
+
+
+def cmd_apply(roots: Sequence[Path], renames: Renames) -> int:
+    for root in roots:
+        changes, per_file = plan(root, renames)
+        for rel, (_old, new) in changes.items():
+            (root / rel).write_text(new, encoding="utf-8")
+        total = _summarise(per_file)
+        print(
+            f"apply_renames: {root}: {len(changes)} files, " + ", ".join(f"{k} {v}" for k, v in sorted(total.items()))
+        )
+    return 0
+
+
+def cmd_check(roots: Sequence[Path], renames: Renames) -> int:
+    bad = 0
+    for root in roots:
+        changes, per_file = plan(root, renames)
+        for rel in sorted(changes):
+            print(f"apply_renames --check: {rel}: former names remain ({per_file[rel]})")
+            bad += 1
+    if not bad:
+        print("apply_renames --check: no former name remains")
+    return 1 if bad else 0
+
+
+# --- --check-fields ---------------------------------------------------------
+
+
+def _git_show(root: Path, rel: str) -> Optional[str]:
+    proc = subprocess.run(["git", "-C", str(root), "show", f"HEAD:{rel}"], capture_output=True)
+    if proc.returncode != 0:
+        return None
+    try:
+        return proc.stdout.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
+def _ts_record_fields(text: str) -> Dict[str, Set[str]]:
+    sys.path.insert(0, str(REPO_ROOT / "tools" / "dev"))
+    from binding_drift.api_conventions_bindings import JsSurface  # type: ignore
+
+    surface = JsSurface(text)
+    out = {}
+    for name, decl in surface.decls.items():
+        if decl.kind != "interface" or name in DTS_MEMBER_INTERFACES:
+            continue
+        out[name] = {m.name for m in decl.members if not m.is_method}
+    return out
+
+
+def _py_record_fields(sources: Dict[str, str]) -> Dict[str, Set[str]]:
+    sys.path.insert(0, str(REPO_ROOT / "tools" / "dev"))
+    from binding_drift.api_conventions_bindings import PySurface  # type: ignore
+
+    surface = PySurface(sources)
+    return {name: set(cls.fields) for name, cls in surface.classes.items() if name != "Workbook"}
+
+
+def _c_record_fields(text: str) -> Dict[str, Set[str]]:
+    sys.path.insert(0, str(REPO_ROOT / "tools" / "dev"))
+    from binding_drift.api_conventions import parse_header  # type: ignore
+
+    _fns, typedefs = parse_header(text)
+    return {t.name: {p.name for p in t.fields} for t in typedefs if getattr(t, "fields", None)}
+
+
+def cmd_check_fields(root: Path, renames: Renames) -> int:
+    problems: List[str] = []
+    dts = ["src/wasm/formulon.d.ts", "packages/npm-native/index.d.ts"]
+    for rel in dts:
+        before, after = _git_show(root, rel), read_text(root / rel)
+        if before is None or after is None:
+            continue
+        problems += _compare_fields(rel, _ts_record_fields(before), _ts_record_fields(after), renames.js_types)
+    pkg = root / PY_PACKAGE_DIR
+    rels = sorted(p.relative_to(root).as_posix() for p in pkg.glob("*.py"))
+    before = {Path(r).name: _git_show(root, r) or "" for r in rels}
+    after = {Path(r).name: read_text(root / r) or "" for r in rels}
+    problems += _compare_fields(PY_PACKAGE_DIR, _py_record_fields(before), _py_record_fields(after), renames.py_types)
+    header = "src/c_api/formulon_c.h"
+    before_h, after_h = _git_show(root, header), read_text(root / header)
+    if before_h is not None and after_h is not None:
+        problems += _compare_fields(header, _c_record_fields(before_h), _c_record_fields(after_h), renames.c)
+    for p in problems:
+        print(f"apply_renames --check-fields: {p}")
+    if not problems:
+        print("apply_renames --check-fields: every record keeps its field set")
+    return 1 if problems else 0
+
+
+def _compare_fields(
+    where: str, before: Dict[str, Set[str]], after: Dict[str, Set[str]], types: Dict[str, str]
+) -> List[str]:
+    out = []
+    for name, fields in sorted(before.items()):
+        new = types.get(name, name)
+        if new not in after:
+            out.append(f"{where}: record `{name}` (now `{new}`) is gone")
+            continue
+        if after[new] != fields:
+            gone, added = sorted(fields - after[new]), sorted(after[new] - fields)
+            out.append(f"{where}: `{new}` fields changed (removed {gone}, added {added})")
+    return out
+
+
+# --- --check-comment-only ---------------------------------------------------
+
+
+def _strip_comments(text: str) -> List[str]:
+    """Code tokens of a C++ source with comments removed; string and char literals kept."""
+    out: List[str] = []
+    i, n = 0, len(text)
+    buf: List[str] = []
+    while i < n:
+        ch = text[i]
+        if text.startswith("//", i):
+            j = text.find("\n", i)
+            i = n if j < 0 else j
+            continue
+        if text.startswith("/*", i):
+            j = text.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+            buf.append(" ")
+            continue
+        if ch in "\"'":
+            j = i + 1
+            while j < n and text[j] != ch:
+                j += 2 if text[j] == "\\" else 1
+            buf.append(text[i : j + 1])
+            i = j + 1
+            continue
+        buf.append(ch)
+        i += 1
+    out = "".join(buf).split()
+    return out
+
+
+def _comment_only_scope(rel: str) -> bool:
+    if rel.startswith(COMMENT_ONLY_DIRS):
+        return True
+    return rel.startswith("src/") and rel.count("/") == 1 and rel.endswith(".h")
+
+
+def cmd_check_comment_only(root: Path) -> int:
+    proc = subprocess.run(
+        ["git", "-C", str(root), "diff", "--name-only", "HEAD", "--", "src"], check=True, capture_output=True
+    )
+    problems = []
+    for rel in proc.stdout.decode().split():
+        if not _comment_only_scope(rel):
+            continue
+        before, after = _git_show(root, rel), read_text(root / rel)
+        if before is None or after is None or _strip_comments(before) != _strip_comments(after):
+            problems.append(rel)
+    for rel in problems:
+        print(f"apply_renames --check-comment-only: {rel}: differs from HEAD outside comments")
+    if not problems:
+        print("apply_renames --check-comment-only: engine-internal changes are comment-only")
+    return 1 if problems else 0
+
+
+# --- --report-prose ---------------------------------------------------------
+
+
+def cmd_report_prose(root: Path, renames: Renames, limit: int) -> int:
+    """Former JS / Python names still present as plain words, by name."""
+    groups = {
+        "js": ({**renames.js_methods, **renames.js_free, **renames.js_types}, JS_EXTS + MD_EXTS),
+        "py": (
+            {**renames.py_methods, **renames.py_free, **renames.py_static_to_free, **renames.py_types},
+            PY_EXTS + MD_EXTS,
+        ),
+    }
+    total = 0
+    for label, (table, exts) in groups.items():
+        regex = re.compile(rf"\b(?:{_alternation(table)})\b")
+        hits: Dict[str, List[str]] = defaultdict(list)
+        for rel in tree_files(root):
+            in_scope = rel.endswith(exts) or (label == "js" and rel.startswith(JS_BINDING_DIRS))
+            if not in_scope or (rel == CHANGELOG):
+                continue
+            text = read_text(root / rel)
+            if text is None:
+                continue
+            for lineno, line in enumerate(text.splitlines(), 1):
+                for m in regex.finditer(line):
+                    hits[m.group(0)].append(f"{rel}:{lineno}: {line.strip()[:120]}")
+        count = sum(len(v) for v in hits.values())
+        total += count
+        print(f"apply_renames --report-prose: {label}: {count} occurrences of {len(hits)} former names")
+        shown = 0
+        for name in sorted(hits, key=lambda k: -len(hits[k])):
+            if shown >= limit:
+                break
+            print(f"  {name} ({len(hits[name])}): {hits[name][0]}")
+            shown += 1
+    return 0
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("dirs", nargs="*", type=Path, help="directories to rewrite (default: this repository)")
+    parser.add_argument("--ledger", type=Path, default=LEDGER_PATH)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--check", action="store_true", help="fail when a former name remains")
+    mode.add_argument("--check-fields", action="store_true", help="fail when a record field set differs from HEAD")
+    mode.add_argument(
+        "--check-comment-only", action="store_true", help="fail when engine internals change outside comments"
+    )
+    mode.add_argument("--report-prose", action="store_true", help="list former names left as plain words")
+    parser.add_argument("--limit", type=int, default=15, help="names shown per surface by --report-prose")
+    args = parser.parse_args(argv)
+    renames = build_renames(load_ledger(args.ledger))
+    roots = [d.resolve() for d in args.dirs] or [REPO_ROOT]
+    if args.check:
+        return cmd_check(roots, renames)
+    if args.check_fields:
+        return cmd_check_fields(roots[0], renames)
+    if args.check_comment_only:
+        return cmd_check_comment_only(roots[0])
+    if args.report_prose:
+        return cmd_report_prose(roots[0], renames, args.limit)
+    return cmd_apply(roots, renames)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
