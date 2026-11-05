@@ -13,10 +13,8 @@
 // the snapshot is written, so a diff is never taken on a workbook that
 // quietly lost content.
 
-#include <cerrno>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <ostream>
 #include <sstream>
 #include <string>
@@ -29,6 +27,7 @@
 #include "cli/diagnostics.h"
 #include "cli/file_io.h"
 #include "cli/render.h"
+#include "cli/workbook_load.h"
 #include "utils/error.h"
 
 namespace formulon {
@@ -37,6 +36,10 @@ namespace cli {
 namespace {
 
 enum class DumpMode { kFormulas, kValues, kSheets, kMetadata };
+
+std::string escape_c_string(const char* text) {
+  return escape_single_line(view_or_empty(text));
+}
 
 void print_dump_usage(std::ostream& out) {
   out << "Usage: formulon dump [--formulas|--values|--sheets|--metadata] [--] <in.xlsx>\n"
@@ -60,7 +63,7 @@ fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, std::ostream& out
     if (auto rc = fm_workbook_sheet_name(wb, s, &sheet_name); rc != 0) {
       return rc;
     }
-    const std::string escaped_sheet_name = escape_single_line(view_or_empty(sheet_name));
+    const std::string escaped_sheet_name = escape_c_string(sheet_name);
     std::size_t cell_count = 0;
     if (auto rc = fm_workbook_cell_count(wb, s, &cell_count); rc != 0) {
       return rc;
@@ -91,7 +94,7 @@ fm_status_t dump_sheets(const fm_workbook_t* wb, std::ostream& out) {
     if (auto rc = fm_workbook_sheet_name(wb, s, &sheet_name); rc != 0) {
       return rc;
     }
-    out << escape_single_line(view_or_empty(sheet_name)) << '\n';
+    out << escape_c_string(sheet_name) << '\n';
   }
   return 0;
 }
@@ -112,14 +115,13 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
     if (auto rc = fm_workbook_defined_name_at(wb, i, &name, &formula, &local_sheet_id); rc != 0) {
       return rc;
     }
-    const std::string rendered =
-        escape_single_line(view_or_empty(name)) + ' ' + escape_single_line(view_or_empty(formula));
+    const std::string rendered = escape_c_string(name) + ' ' + escape_c_string(formula);
     if (local_sheet_id >= 0 && static_cast<std::size_t>(local_sheet_id) < n_sheets) {
       const char* sheet_name = nullptr;
       if (auto rc = fm_workbook_sheet_name(wb, static_cast<std::size_t>(local_sheet_id), &sheet_name); rc != 0) {
         return rc;
       }
-      snapshot << escape_single_line(view_or_empty(sheet_name)) << '!';
+      snapshot << escape_c_string(sheet_name) << '!';
     } else if (local_sheet_id >= 0) {
       snapshot << '#' << local_sheet_id << '!';
     }
@@ -135,8 +137,8 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
     if (auto rc = fm_workbook_table_at(wb, i, &name, &display, &ref, &sheet_index); rc != 0) {
       return rc;
     }
-    snapshot << escape_single_line(view_or_empty(name)) << ' ' << escape_single_line(view_or_empty(display)) << ' '
-             << sheet_index << ' ' << escape_single_line(view_or_empty(ref)) << '\n';
+    snapshot << escape_c_string(name) << ' ' << escape_c_string(display) << ' ' << sheet_index << ' '
+             << escape_c_string(ref) << '\n';
   }
   snapshot << "[passthrough_parts]\n";
   const std::size_t n_parts = fm_workbook_passthrough_count(wb);
@@ -145,7 +147,7 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
     if (auto rc = fm_workbook_passthrough_at(wb, i, &path); rc != 0) {
       return rc;
     }
-    snapshot << escape_single_line(view_or_empty(path)) << '\n';
+    snapshot << escape_c_string(path) << '\n';
   }
   out << snapshot.str();
   return 0;
@@ -224,29 +226,8 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
     return kExitUsage;
   }
 
-  std::vector<std::uint8_t> bytes;
-  if (auto rc = read_file(input_path, bytes); rc != 0) {
-    err << "formulon: dump: cannot read '" << input_path << "': " << std::strerror(errno) << '\n';
-    return rc;
-  }
-
   WorkbookGuard wb;
-  if (auto rc = fm_workbook_load(bytes.data(), bytes.size(), &wb.handle); rc != 0) {
-    emit_last_error(err, "dump");
-    return rc;
-  }
-  set_file_name_from_path(wb.handle, input_path);
-
-  if (auto rc = apply_shared_options(wb.handle, shared); rc != 0) {
-    emit_last_error(err, "dump");
-    return rc;
-  }
-
-  // A snapshot the user diffs against another snapshot has to say what the
-  // load could not carry across, or the diff is taken on a silently
-  // incomplete workbook.
-  if (auto rc = emit_read_diagnostics(wb.handle, err, "dump"); rc != 0) {
-    emit_last_error(err, "dump");
+  if (auto rc = load_workbook_file(input_path, shared, wb, err, "dump"); rc != 0) {
     return rc;
   }
 

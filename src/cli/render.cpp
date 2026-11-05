@@ -165,7 +165,7 @@ std::string render_value_json(const fm_value_t& v) {
       break;
     case FM_VAL_TEXT:
       out.push_back('"');
-      append_json_escaped(out, v.u.text != nullptr ? std::string_view(v.u.text) : std::string_view{});
+      append_json_escaped(out, view_or_empty(v.u.text));
       out.push_back('"');
       break;
     case FM_VAL_ERROR:

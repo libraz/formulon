@@ -604,6 +604,7 @@ if(FM_BUILD_CLI)
     src/cli/diagnostics.cpp
     src/cli/file_io.cpp
     src/cli/render.cpp
+    src/cli/workbook_load.cpp
   )
   add_executable(formulon_cli ${FORMULON_CLI_SOURCES})
   target_link_libraries(formulon_cli PRIVATE formulon_static)

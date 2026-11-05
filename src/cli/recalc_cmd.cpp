@@ -33,6 +33,7 @@
 #include "cli/cli.h"
 #include "cli/diagnostics.h"
 #include "cli/file_io.h"
+#include "cli/workbook_load.h"
 #include "utils/strings.h"
 
 namespace formulon {
@@ -56,6 +57,9 @@ void print_recalc_usage(std::ostream& out) {
   print_shared_options(out);
 }
 
+/// Largest worker count `--threads` accepts.
+constexpr std::uint32_t kMaxRecalcThreads = 8U;
+
 bool parse_thread_count(std::string_view text, std::uint32_t* out) {
   if (text.empty()) {
     return false;
@@ -71,7 +75,7 @@ bool parse_thread_count(std::string_view text, std::uint32_t* out) {
     }
     parsed = parsed * 10U + digit;
   }
-  if (parsed > 8U) {
+  if (parsed > kMaxRecalcThreads) {
     return false;
   }
   *out = parsed;
@@ -181,26 +185,8 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     return kExitUsage;
   }
 
-  std::vector<std::uint8_t> bytes;
-  if (auto rc = read_file(input_path, bytes); rc != 0) {
-    err << "formulon: recalc: cannot read '" << input_path << "': " << std::strerror(errno) << '\n';
-    return rc;
-  }
-
   WorkbookGuard wb;
-  if (auto rc = fm_workbook_load(bytes.data(), bytes.size(), &wb.handle); rc != 0) {
-    emit_last_error(err, "recalc");
-    return rc;
-  }
-  set_file_name_from_path(wb.handle, input_path);
-
-  if (auto rc = apply_shared_options(wb.handle, shared); rc != 0) {
-    emit_last_error(err, "recalc");
-    return rc;
-  }
-
-  if (auto rc = emit_read_diagnostics(wb.handle, err, "recalc"); rc != 0) {
-    emit_last_error(err, "recalc");
+  if (auto rc = load_workbook_file(input_path, shared, wb, err, "recalc"); rc != 0) {
     return rc;
   }
 

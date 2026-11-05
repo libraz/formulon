@@ -1,8 +1,6 @@
-#include <cerrno>
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -13,6 +11,7 @@
 #include "cli/cli.h"
 #include "cli/diagnostics.h"
 #include "cli/file_io.h"
+#include "cli/workbook_load.h"
 
 namespace formulon::cli {
 namespace {
@@ -86,26 +85,8 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
     return kExitUsage;
   }
 
-  std::vector<std::uint8_t> bytes;
-  if (const auto status = read_file(input_path, bytes); status != 0) {
-    err << "formulon: paginate: cannot read '" << input_path << "': " << std::strerror(errno) << '\n';
-    return status;
-  }
   WorkbookGuard workbook;
-  if (const auto status = fm_workbook_load(bytes.data(), bytes.size(), &workbook.handle); status != 0) {
-    emit_last_error(err, "paginate");
-    return status;
-  }
-  set_file_name_from_path(workbook.handle, input_path);
-  if (const auto status = apply_shared_options(workbook.handle, shared); status != 0) {
-    emit_last_error(err, "paginate");
-    return status;
-  }
-  // Geometry resolved from a workbook that lost content on load is the
-  // geometry of a different workbook, so the losses are reported before
-  // any of it is written.
-  if (const auto status = emit_read_diagnostics(workbook.handle, err, "paginate"); status != 0) {
-    emit_last_error(err, "paginate");
+  if (const auto status = load_workbook_file(input_path, shared, workbook, err, "paginate"); status != 0) {
     return status;
   }
   PaginationGuard pagination;

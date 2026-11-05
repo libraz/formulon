@@ -9,6 +9,7 @@
 #include <climits>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <ios>
 #include <limits>
