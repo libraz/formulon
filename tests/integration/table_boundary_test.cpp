@@ -31,8 +31,15 @@
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
+#include "io/ooxml_reader.h"
+#include "io/ooxml_writer.h"
+#include "io/xlsb/reader.h"
+#include "io/xlsb/writer.h"
 #include "sheet.h"
 #include "table.h"
+#include "utils/error.h"
+#include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -332,6 +339,45 @@ TEST(TableBoundary, UnknownTableNameSurfacesNameError) {
   const Value v = StoredValue(wb, 0U, 0U, 4U);
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Name);
+}
+
+// ---------------------------------------------------------------------------
+// Dependencies of structured references in a loaded file
+// ---------------------------------------------------------------------------
+
+Expected<Workbook, Error> Reload(const Workbook& wb, bool xlsb) {
+  if (xlsb) {
+    ASSIGN_OR_RETURN(auto bytes, io::xlsb::write_xlsb(wb));
+    ASSIGN_OR_RETURN(auto read, io::xlsb::read_xlsb(io::ByteSpan{bytes.data(), bytes.size()}));
+    return std::move(read.workbook);
+  }
+  ASSIGN_OR_RETURN(auto bytes, io::write_ooxml(wb));
+  ASSIGN_OR_RETURN(auto read, io::read_ooxml(io::ByteSpan{bytes.data(), bytes.size()}));
+  return std::move(read.workbook);
+}
+
+TEST(TableBoundary, LoadedStructuredReferencesFollowTableEdits) {
+  for (const bool xlsb : {false, true}) {
+    SCOPED_TRACE(xlsb ? "xlsb" : "xlsx");
+    Workbook wb = MakeSalesWorkbook();
+    ASSERT_TRUE(wb.set_cell_formula(0U, 0U, 5U, "=SUM(Sales[Amount])"));
+    ASSERT_TRUE(wb.set_cell_formula(0U, 1U, 3U, "=Sales[[#This Row],[Amount]]*2"));
+    ASSERT_TRUE(wb.set_cell_formula(0U, 2U, 5U, "=Sales[[#Headers],[Amount]]"));
+    ASSERT_TRUE(wb.recalc(eval::default_registry()));
+    auto loaded_or = Reload(wb, xlsb);
+    ASSERT_TRUE(loaded_or.has_value()) << loaded_or.error().message;
+    Workbook loaded = std::move(loaded_or.value());
+    ASSERT_TRUE(loaded.recalc(eval::default_registry()));
+    EXPECT_EQ(StoredValue(loaded, 0U, 0U, 5U), Value::number(100.0));
+    EXPECT_EQ(StoredValue(loaded, 0U, 1U, 3U), Value::number(20.0));
+
+    ASSERT_TRUE(loaded.set_cell_value(0U, 1U, 2U, Value::number(15.0)));
+    ASSERT_TRUE(loaded.set_cell_value(0U, 0U, 2U, Value::text("Total")));
+    ASSERT_TRUE(loaded.recalc(eval::default_registry()));
+    EXPECT_EQ(StoredValue(loaded, 0U, 0U, 5U), Value::number(105.0));
+    EXPECT_EQ(StoredValue(loaded, 0U, 1U, 3U), Value::number(30.0));
+    EXPECT_EQ(StoredValue(loaded, 0U, 2U, 5U), Value::text("Total"));
+  }
 }
 
 }  // namespace

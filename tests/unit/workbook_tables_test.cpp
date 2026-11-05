@@ -1,9 +1,14 @@
+#include <cstdint>
 #include <string>
 #include <utility>
+#include <vector>
 
+#include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "table.h"
 #include "utils/error.h"
+#include "value.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -86,6 +91,73 @@ TEST(WorkbookTables, NextDefaultTableNameIsCaseInsensitive) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(wb.add_table(make_table("TABLE1", "A1:A3", 1)).has_value());
   EXPECT_EQ(wb.next_default_table_name("table"), "table2");
+}
+
+void Recalc(Workbook& wb) {
+  ASSERT_TRUE(wb.recalc(eval::default_registry()));
+}
+
+Value At(const Workbook& wb, std::uint32_t row, std::uint32_t col) {
+  return wb.sheet(0).resolve_cell_value(row, col);
+}
+
+// Sales on A1:B5: header row, data rows 2-4 (B = 1, 2, 3), totals row 5.
+void FillSales(Workbook& wb) {
+  for (std::uint32_t r = 1; r <= 3; ++r) {
+    ASSERT_TRUE(wb.set_cell_value(0, r, 1, Value::number(static_cast<double>(r))));
+  }
+}
+
+TableMetadata sales_with_totals() {
+  TableMetadata table = make_table("Sales", "A1:B5", 2);
+  table.id = 1;
+  table.columns[0].id = 1;
+  table.columns[1].id = 2;
+  table.totals_row = true;
+  return table;
+}
+
+TEST(WorkbookTables, SetTablesRegistersFormulasReadBeforeTheirTable) {
+  // A reader stores cell formulas before the table list, as a file load does.
+  Workbook wb = Workbook::create();
+  FillSales(wb);
+  ASSERT_TRUE(wb.set_cell_formula(0, 4, 1, "=SUBTOTAL(109,Sales[C2])"));
+  ASSERT_TRUE(wb.set_cell_formula(0, 0, 3, "=SUM(Sales[C2])"));
+  ASSERT_TRUE(wb.set_cell_formula(0, 1, 3, "=Sales[[#Totals],[C2]]"));
+  ASSERT_TRUE(wb.set_cell_formula(0, 2, 3, "=Sales[[#Headers],[C1]]"));
+  ASSERT_TRUE(wb.set_cell_value(0, 0, 0, Value::text("C1")));
+  std::vector<TableMetadata> tables;
+  tables.push_back(sales_with_totals());
+  wb.set_tables(std::move(tables));
+  Recalc(wb);
+  EXPECT_EQ(At(wb, 4, 1), Value::number(6.0));
+  EXPECT_EQ(At(wb, 0, 3), Value::number(6.0));
+  EXPECT_EQ(At(wb, 1, 3), Value::number(6.0));
+
+  ASSERT_TRUE(wb.set_cell_value(0, 2, 1, Value::number(100.0)));
+  ASSERT_TRUE(wb.set_cell_value(0, 0, 0, Value::text("Region")));
+  Recalc(wb);
+  EXPECT_EQ(At(wb, 4, 1), Value::number(104.0));
+  EXPECT_EQ(At(wb, 0, 3), Value::number(104.0));
+  EXPECT_EQ(At(wb, 1, 3), Value::number(104.0));
+  EXPECT_EQ(At(wb, 2, 3), Value::text("Region"));
+}
+
+TEST(WorkbookTables, ThisRowReferenceFollowsItsOwnRow) {
+  Workbook wb = Workbook::create();
+  FillSales(wb);
+  ASSERT_TRUE(wb.add_table(make_table("Sales", "A1:B4", 2)).has_value());
+  ASSERT_TRUE(wb.set_cell_formula(0, 1, 2, "=Sales[[#This Row],[C2]]*10"));
+  ASSERT_TRUE(wb.set_cell_formula(0, 2, 2, "=Sales[@C2]*10"));
+  Recalc(wb);
+  EXPECT_EQ(At(wb, 1, 2), Value::number(10.0));
+  EXPECT_EQ(At(wb, 2, 2), Value::number(20.0));
+
+  ASSERT_TRUE(wb.set_cell_value(0, 1, 1, Value::number(7.0)));
+  ASSERT_TRUE(wb.set_cell_value(0, 2, 1, Value::number(8.0)));
+  Recalc(wb);
+  EXPECT_EQ(At(wb, 1, 2), Value::number(70.0));
+  EXPECT_EQ(At(wb, 2, 2), Value::number(80.0));
 }
 
 }  // namespace

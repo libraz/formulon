@@ -142,8 +142,9 @@ struct ExtractedDeps {
 /// Walks `node` and reports the cell dependencies and volatility status of
 /// the formula it represents.
 ///
-/// `current_sheet_id` is the sheet that owns the formula being analysed:
-/// unqualified references resolve to that sheet. `workbook` is consulted
+/// `formula_cell` is the cell that owns the formula being analysed:
+/// unqualified references resolve to its sheet, and a `[#This Row]`
+/// structured reference to its row. `workbook` is consulted
 /// for sheet-qualified references; passing a workbook with no matching
 /// sheet causes the qualified reference to be skipped (it is neither a
 /// dependency nor a volatility trigger). The function never mutates
@@ -159,7 +160,7 @@ struct ExtractedDeps {
 /// call registers the bounding box of every reference that call could return
 /// (`A1:INDEX(C1:C10,n)` registers A1:C10); OFFSET / INDIRECT endpoints have
 /// no static footprint and are covered by `has_dynamic_reference` instead.
-ExtractedDeps extract_deps(const parser::AstNode& node, std::uint16_t current_sheet_id, const Workbook& workbook);
+ExtractedDeps extract_deps(const parser::AstNode& node, CellNodeId formula_cell, const Workbook& workbook);
 
 }  // namespace eval
 }  // namespace formulon

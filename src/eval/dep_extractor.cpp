@@ -75,6 +75,8 @@ struct WalkState {
   ExtractedDeps* out;
   std::unordered_set<CellNodeId, CellNodeIdHash> seen;
   std::uint16_t current_sheet_id;
+  /// The formula cell's row, which a `[#This Row]` reference reads.
+  std::uint32_t current_row;
   // Scope unqualified defined names resolve in: the formula's own sheet,
   // or the owning sheet while a sheet-local name's body is expanded.
   std::uint16_t name_scope_sheet_id;
@@ -410,14 +412,9 @@ bool walk_callable_arg(const parser::AstNode& arg, WalkState& state, const Defer
 //     the structured ref is unresolvable the evaluator will emit
 //     `#NAME?` / `#REF!` at eval time and there are no static deps to
 //     register.
-//   * Implicit intersection (`Table[@Col]`, the `kThisRow` bit) is
-//     statically unresolvable because the row depends on the formula
-//     cell's evaluation row context, which `extract_deps` does not have.
-//     We skip such references silently — the evaluator will surface the
-//     actual single-cell dep when the implicit intersection resolves.
-//     This mirrors the concession `walk_range_op` already makes for
-//     OFFSET / INDIRECT-shaped endpoints: dynamic shapes cannot be
-//     statically pinned.
+//   * `[#This Row]` (`Table[@Col]`) pins the formula cell's own row; a
+//     formula outside the table's data rows resolves to nothing here and
+//     to `#VALUE!` in the evaluator.
 //   * Table-resize events must trigger a dep re-extraction at the recalc
 //     layer; this layer pins the rectangle once and never re-evaluates.
 //
@@ -437,19 +434,7 @@ bool structured_ref_rect(const parser::AstNode& node, const WalkState& state, st
   StructuredRefSelector sel = std::move(sel_or).value();
   sel.table_name = table_name;
 
-  // Implicit intersection: row context is the formula cell's row, which
-  // is not known here. The evaluator owns this dep at eval time.
-  if ((sel.specifiers & StructuredRefSpecifiers::kThisRow) != 0u) {
-    return false;
-  }
-
-  // `resolve_structured_ref` only consults `current_sheet_index` for
-  // future cross-sheet contracts; the row argument is consumed only when
-  // `kThisRow` is set, which we already short-circuited above. Pass the
-  // walk's current sheet for `current_sheet_index` and 0 for the row to
-  // keep the call shape stable.
-  auto rect_or =
-      resolve_structured_ref(sel, *state.workbook, /*current_sheet_index=*/state.current_sheet_id, /*current_row=*/0u);
+  auto rect_or = resolve_structured_ref(sel, *state.workbook, state.current_sheet_id, state.current_row);
   if (!rect_or) {
     return false;  // Unknown table / column / missing band: silent skip.
   }
@@ -1149,13 +1134,14 @@ void walk(const parser::AstNode& node, WalkState& state) {
 
 }  // namespace
 
-ExtractedDeps extract_deps(const parser::AstNode& node, std::uint16_t current_sheet_id, const Workbook& workbook) {
+ExtractedDeps extract_deps(const parser::AstNode& node, CellNodeId formula_cell, const Workbook& workbook) {
   ExtractedDeps deps;
   // The arena owns any ASTs parsed for defined-name expansion. It lives only
   // as long as this call so the parsed nodes never outlive the walk; the
   // caller-supplied `node` is unrelated and stays in its own arena.
   Arena name_arena;
-  WalkState state{&deps, {}, current_sheet_id, current_sheet_id, &workbook, &name_arena, {}, {}, {}};
+  WalkState state{&deps, {}, formula_cell.sheet_id, formula_cell.row, formula_cell.sheet_id, &workbook, &name_arena, {},
+                  {},    {}};
   walk(node, state);
   return deps;
 }

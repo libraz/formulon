@@ -51,7 +51,7 @@ TEST(DepExtractor, StructuredRefDefaultModifierFlattensDataColumn) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("SUM(Sales[Amount])", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, /*current_sheet_id=*/0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
 
   std::vector<CellNodeId> expected;
@@ -74,7 +74,7 @@ TEST(DepExtractor, StructuredRefAboveLimitUsesCompactRangeDependency) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("SUM(Sales[Amount])", arena);
   ASSERT_NE(root, nullptr);
-  const ExtractedDeps deps = extract_deps(*root, /*current_sheet_id=*/0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
   ASSERT_EQ(deps.range_deps.size(), 1U);
@@ -97,7 +97,7 @@ TEST(DepExtractor, StructuredRefDataExcludesTotalsRow) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("SUM(Sales[Amount])", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
 
   std::vector<CellNodeId> expected;
@@ -118,7 +118,7 @@ TEST(DepExtractor, StructuredRefHeadersOnly) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("Sales[#Headers]", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
 
   std::vector<CellNodeId> expected = {
@@ -140,7 +140,7 @@ TEST(DepExtractor, StructuredRefTotalsOnly) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("Sales[#Totals]", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
 
   std::vector<CellNodeId> expected = {
@@ -162,7 +162,7 @@ TEST(DepExtractor, StructuredRefAllCoversFullRectangle) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("Sales[#All]", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
 
   std::vector<CellNodeId> expected;
@@ -188,7 +188,7 @@ TEST(DepExtractor, StructuredRefAllAreaWithSpecificColumn) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("Sales[[#All],[Amount]]", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
 
   std::vector<CellNodeId> expected;
@@ -198,12 +198,23 @@ TEST(DepExtractor, StructuredRefAllAreaWithSpecificColumn) {
   EXPECT_EQ(Sorted(deps.cell_deps), Sorted(expected));
 }
 
-TEST(DepExtractor, StructuredRefImplicitIntersectionSilentSkip) {
+TEST(DepExtractor, StructuredRefThisRowPinsTheFormulaRow) {
   Workbook wb = Workbook::create();
-  // Sales[@Amount] resolves at evaluator time to a single cell on the
-  // formula's row. The dep extractor cannot know the formula's row, so
-  // it silently skips — the evaluator surfaces the actual dep when the
-  // implicit intersection resolves at eval time.
+  std::vector<TableMetadata> tables;
+  tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/false,
+                             {"Region", "Amount", "Date"}));
+  wb.set_tables(std::move(tables));
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("Sales[@Amount]*Sales[[#This Row],[Date]]", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 4U, 3U}, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  EXPECT_EQ(Sorted(deps.cell_deps), Sorted({CellNodeId{0U, 4U, 1U}, CellNodeId{0U, 4U, 2U}}));
+}
+
+TEST(DepExtractor, StructuredRefThisRowOutsideTheDataRowsHasNoDependency) {
+  Workbook wb = Workbook::create();
   std::vector<TableMetadata> tables;
   tables.push_back(MakeTable("Sales", "A1:C10", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/false,
                              {"Region", "Amount", "Date"}));
@@ -212,9 +223,8 @@ TEST(DepExtractor, StructuredRefImplicitIntersectionSilentSkip) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("Sales[@Amount]", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
-  EXPECT_FALSE(deps.is_volatile);
-  EXPECT_TRUE(deps.cell_deps.empty());
+  EXPECT_TRUE(extract_deps(*root, CellNodeId{0U, 0U, 5U}, wb).cell_deps.empty());   // header row
+  EXPECT_TRUE(extract_deps(*root, CellNodeId{0U, 10U, 5U}, wb).cell_deps.empty());  // below the table
 }
 
 TEST(DepExtractor, StructuredRefUnknownTableSilentSkip) {
@@ -224,7 +234,7 @@ TEST(DepExtractor, StructuredRefUnknownTableSilentSkip) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("NoSuchTable[Col]", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
 }
@@ -240,7 +250,7 @@ TEST(DepExtractor, StructuredRefUnknownColumnSilentSkip) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("Sales[NotAColumn]", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
 }
@@ -259,7 +269,7 @@ TEST(DepExtractor, StructuredRefCrossSheetTableLandsOnTableSheet) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("SUM(Sales[Amount])", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, /*current_sheet_id=*/0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
 
   std::vector<CellNodeId> expected;
@@ -285,7 +295,7 @@ TEST(DepExtractor, StructuredRefHeadersOnHeaderlessTableSilentSkip) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("Sales[#Headers]", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
 }

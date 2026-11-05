@@ -23,7 +23,7 @@ TEST(DepExtractor, BinaryAddTwoCellRefs) {
   const parser::AstNode* root = ParseFormula("A1+B2", arena);
   ASSERT_NE(root, nullptr);
 
-  ExtractedDeps deps = extract_deps(*root, /*current_sheet_id=*/0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
 
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_EQ(deps.cell_deps.size(), 2u);
@@ -40,7 +40,7 @@ TEST(DepExtractor, RangeOpFlattensCells) {
   const parser::AstNode* root = ParseFormula("SUM(A1:A3)", arena);
   ASSERT_NE(root, nullptr);
 
-  ExtractedDeps deps = extract_deps(*root, /*current_sheet_id=*/0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_EQ(deps.cell_deps.size(), 3u);
   std::vector<CellNodeId> expected = {
@@ -56,7 +56,7 @@ TEST(DepExtractor, NowIsVolatile) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("NOW()", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_TRUE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
 }
@@ -69,7 +69,7 @@ TEST(DepExtractor, LowerCaseNowIsVolatile) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("now()", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_TRUE(deps.is_volatile);
 }
 
@@ -78,7 +78,7 @@ TEST(DepExtractor, MixedCaseOffsetIsVolatile) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("Offset(A1,1,1)", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_TRUE(deps.is_volatile);
 }
 
@@ -87,7 +87,7 @@ TEST(DepExtractor, RandIsVolatile) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("RAND()", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_TRUE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
 }
@@ -102,7 +102,7 @@ TEST(DepExtractor, ValueVolatileCallsCarryNoDynamicReference) {
     Arena arena;
     const parser::AstNode* root = ParseFormula(formula, arena);
     ASSERT_NE(root, nullptr) << formula;
-    ExtractedDeps deps = extract_deps(*root, 0U, wb);
+    ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
     EXPECT_TRUE(deps.is_volatile) << formula;
     EXPECT_FALSE(deps.has_dynamic_reference) << formula;
   }
@@ -115,7 +115,7 @@ TEST(DepExtractor, IndirectAndOffsetCarryADynamicReference) {
     Arena arena;
     const parser::AstNode* root = ParseFormula(formula, arena);
     ASSERT_NE(root, nullptr) << formula;
-    ExtractedDeps deps = extract_deps(*root, 0U, wb);
+    ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
     EXPECT_TRUE(deps.is_volatile) << formula;
     EXPECT_TRUE(deps.has_dynamic_reference) << formula;
   }
@@ -128,7 +128,7 @@ TEST(DepExtractor, ShadowedIndirectCarriesNoDynamicReference) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("LET(INDIRECT,LAMBDA(x,x+1),INDIRECT(1))", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_FALSE(deps.has_dynamic_reference);
 }
@@ -139,7 +139,7 @@ TEST(DepExtractor, MixedScalarAndRangeNonVolatile) {
   // A1 + SUM(B1:B3) -> 4 deps total: A1, B1, B2, B3.
   const parser::AstNode* root = ParseFormula("A1+SUM(B1:B3)", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   std::vector<CellNodeId> expected = {
       CellNodeId{0U, 0U, 0U},  // A1
@@ -157,7 +157,7 @@ TEST(DepExtractor, CrossSheetRefResolvesToTargetSheetId) {
   const parser::AstNode* root = ParseFormula("Sheet2!A1", arena);
   ASSERT_NE(root, nullptr);
   // The formula lives on Sheet1 (index 0) but reads from Sheet2 (index 1).
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   ASSERT_EQ(deps.cell_deps.size(), 1u);
   EXPECT_EQ(deps.cell_deps[0], (CellNodeId{1U, 0U, 0U}));
@@ -170,7 +170,7 @@ TEST(DepExtractor, UnknownSheetRefIsSkipped) {
   // rather than emitting a bogus CellNodeId on sheet 0.
   const parser::AstNode* root = ParseFormula("GhostSheet!A1", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
 }
@@ -182,7 +182,7 @@ TEST(DepExtractor, WholeColumnRefUsesCompactRangeDependency) {
   // non-volatile formula re-execute on every recalc pass.
   const parser::AstNode* root = ParseFormula("SUM(A:A)", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
   ASSERT_EQ(deps.range_deps.size(), 1U);
@@ -198,7 +198,7 @@ TEST(DepExtractor, WholeRowRefUsesCompactRangeDependency) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("SUM(1:1)", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
   ASSERT_EQ(deps.range_deps.size(), 1U);
@@ -214,7 +214,7 @@ TEST(DepExtractor, WholeAxisSpanNormalizesEveryAstForm) {
 
   const parser::AstNode* columns = ParseFormula("SUM(A:C)", arena);
   ASSERT_NE(columns, nullptr);
-  const ExtractedDeps column_deps = extract_deps(*columns, 0U, wb);
+  const ExtractedDeps column_deps = extract_deps(*columns, CellNodeId{0U, 0U, 0U}, wb);
   ASSERT_EQ(column_deps.range_deps.size(), 1U);
   EXPECT_EQ(column_deps.range_deps[0].row_first, 0U);
   EXPECT_EQ(column_deps.range_deps[0].row_last, Sheet::kMaxRows - 1U);
@@ -224,7 +224,7 @@ TEST(DepExtractor, WholeAxisSpanNormalizesEveryAstForm) {
   arena.reset();
   const parser::AstNode* rows = ParseFormula("SUM(1:3)", arena);
   ASSERT_NE(rows, nullptr);
-  const ExtractedDeps row_deps = extract_deps(*rows, 0U, wb);
+  const ExtractedDeps row_deps = extract_deps(*rows, CellNodeId{0U, 0U, 0U}, wb);
   ASSERT_EQ(row_deps.range_deps.size(), 1U);
   EXPECT_EQ(row_deps.range_deps[0].row_first, 0U);
   EXPECT_EQ(row_deps.range_deps[0].row_last, 2U);
@@ -240,7 +240,7 @@ TEST(DepExtractor, WholeAxisSpanNormalizationReachesNamesAndLambdas) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("Apply(1)", arena);
   ASSERT_NE(root, nullptr);
-  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   ASSERT_EQ(deps.range_deps.size(), 1U);
   EXPECT_EQ(deps.range_deps[0].row_first, 0U);
   EXPECT_EQ(deps.range_deps[0].row_last, Sheet::kMaxRows - 1U);
@@ -256,7 +256,7 @@ TEST(DepExtractor, BoundedRectAtLimitStillFlattens) {
   // ordering guarantees they carry.
   const parser::AstNode* root = ParseFormula("SUM(A1:A1024)", arena);
   ASSERT_NE(root, nullptr);
-  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.range_deps.empty());
   EXPECT_EQ(deps.cell_deps.size(), kMaxMaterializedDependencyCells);
@@ -270,7 +270,7 @@ TEST(DepExtractor, BoundedRectAboveLimitUsesCompactRangeDependency) {
   // instead.
   const parser::AstNode* root = ParseFormula("SUM(A1:A1025)", arena);
   ASSERT_NE(root, nullptr);
-  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
   ASSERT_EQ(deps.range_deps.size(), 1U);
@@ -293,7 +293,7 @@ TEST(DepExtractor, OversizedRectUsesCompactRangeDependency) {
   // keeps the dependency real at a fixed cost.
   const parser::AstNode* root = ParseFormula("SUM(A1:XFD1048576)", arena);
   ASSERT_NE(root, nullptr);
-  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
   ASSERT_EQ(deps.range_deps.size(), 1U);
@@ -311,7 +311,7 @@ TEST(DepExtractor, UnresolvedNameRefIsSkipped) {
   // mirroring the policy used for unknown sheet qualifiers.
   const parser::AstNode* root = ParseFormula("MyName", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
 }
@@ -324,7 +324,7 @@ TEST(DepExtractor, ArrayLiteralIsTraversedButContainsOnlyLiterals) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("{1,2;3,4}", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
 }
@@ -335,7 +335,7 @@ TEST(DepExtractor, DuplicateRefDeduplicated) {
   // A1+A1+A1 — the walker should emit A1 only once.
   const parser::AstNode* root = ParseFormula("A1+A1+A1", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   ASSERT_EQ(deps.cell_deps.size(), 1u);
   EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));
@@ -347,7 +347,7 @@ TEST(DepExtractor, NestedVolatileInsideArithmetic) {
   // 1 + RAND() — volatility should still bubble out from the inner call.
   const parser::AstNode* root = ParseFormula("1+RAND()", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_TRUE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
 }
@@ -360,7 +360,7 @@ TEST(DepExtractor, LambdaBodyNotDescendedInto) {
   // capture analysis is out of scope), so cell_deps is empty.
   const parser::AstNode* root = ParseFormula("LAMBDA(x,x+A1)", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
 }
@@ -375,7 +375,7 @@ TEST(DepExtractor, LetBindingInitialiserAndBodyBothEmitCellDeps) {
   // changes.
   const parser::AstNode* root = ParseFormula("LET(x,A1,x+B1)", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   std::vector<CellNodeId> expected = {
       CellNodeId{0U, 0U, 0U},  // A1
@@ -392,7 +392,7 @@ TEST(DepExtractor, LetBindingBoundNameDoesNotEmitDeps) {
   // and only the initialiser's A1 is recorded.
   const parser::AstNode* root = ParseFormula("LET(x,A1,x)", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   ASSERT_EQ(deps.cell_deps.size(), 1u);
   EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));
@@ -405,7 +405,7 @@ TEST(DepExtractor, LetBodyVolatileCallIsDetected) {
   // descent, RAND() must promote the formula to volatile.
   const parser::AstNode* root = ParseFormula("LET(x,1,x+RAND())", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_TRUE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
 }
@@ -418,7 +418,7 @@ TEST(DepExtractor, LetNestedLetBodiesAreDescended) {
   // three cell deps must surface through both layers of body descent.
   const parser::AstNode* root = ParseFormula("LET(a,A1,LET(b,B1,a+b+C1))", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   std::vector<CellNodeId> expected = {
       CellNodeId{0U, 0U, 0U},  // A1
@@ -436,7 +436,7 @@ TEST(DepExtractor, RangeAcrossSheetQualifierOnLeft) {
   // inherits. All four cells should land on sheet 1.
   const parser::AstNode* root = ParseFormula("SUM(Sheet2!A1:B2)", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   std::vector<CellNodeId> expected = {
       CellNodeId{1U, 0U, 0U},

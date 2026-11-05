@@ -571,7 +571,7 @@ void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNod
   graph_.clear_dependencies_of(cell);
   drop_cell_registrations_locked(cell);
 
-  const ExtractedDeps deps = extract_deps(ast, cell.sheet_id, workbook);
+  const ExtractedDeps deps = extract_deps(ast, cell, workbook);
   for (CellNodeId dep : deps.cell_deps) {
     graph_.add_dependency(cell, dep);
     referenced_cells_.add(dep);

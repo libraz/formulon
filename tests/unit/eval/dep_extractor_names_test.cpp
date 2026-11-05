@@ -26,7 +26,7 @@ TEST(DepExtractor, NameRefWorkbookScopedSingleCell) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("MyName+1", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, /*current_sheet_id=*/0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   ASSERT_EQ(deps.cell_deps.size(), 1u);
   EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));
@@ -43,7 +43,7 @@ TEST(DepExtractor, NameRefWorkbookScopedRangeFlattens) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("SUM(MyRange)", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   std::vector<CellNodeId> expected = {
       CellNodeId{0U, 0U, 0U},  // A1
@@ -65,7 +65,7 @@ TEST(DepExtractor, NameRefIndirectionResolves) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("Name1", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   ASSERT_EQ(deps.cell_deps.size(), 1u);
   EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));
@@ -87,11 +87,11 @@ TEST(DepExtractor, NameRefSheetScopedBeatsWorkbookScoped) {
   const parser::AstNode* root = ParseFormula("Foo", arena);
   ASSERT_NE(root, nullptr);
 
-  ExtractedDeps from_sheet0 = extract_deps(*root, /*current_sheet_id=*/0U, wb);
+  ExtractedDeps from_sheet0 = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   ASSERT_EQ(from_sheet0.cell_deps.size(), 1u);
   EXPECT_EQ(from_sheet0.cell_deps[0], (CellNodeId{0U, 0U, 1U}));  // B1 on sheet 0
 
-  ExtractedDeps from_sheet1 = extract_deps(*root, /*current_sheet_id=*/1U, wb);
+  ExtractedDeps from_sheet1 = extract_deps(*root, CellNodeId{1U, 0U, 0U}, wb);
   ASSERT_EQ(from_sheet1.cell_deps.size(), 1u);
   EXPECT_EQ(from_sheet1.cell_deps[0], (CellNodeId{1U, 0U, 0U}));  // A1 on sheet 1
 }
@@ -107,7 +107,7 @@ TEST(DepExtractor, NameRefCycleTerminates) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("Loop", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   // The assertion that matters is that the test terminates. Cycle policy:
   // silent skip on re-entry — no deps, not volatile.
   EXPECT_FALSE(deps.is_volatile);
@@ -121,7 +121,7 @@ TEST(DepExtractor, NameRefMissingNameIsSilentSkip) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("MissingName", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
 }
@@ -136,7 +136,7 @@ TEST(DepExtractor, NameRefVolatileBodyPropagates) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("RandName", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_TRUE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
 }
@@ -150,7 +150,7 @@ TEST(DepExtractor, QualifiedBuiltinNameBodyHasNoCellDependencies) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("Region", arena);
   ASSERT_NE(root, nullptr);
-  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
 }
@@ -161,7 +161,7 @@ TEST(DepExtractor, NamedLambdaBodyCellsAndVolatilityAreExpandedOnce) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("Named(5)", arena);
   ASSERT_NE(root, nullptr);
-  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_TRUE(deps.is_volatile);
   ASSERT_EQ(deps.cell_deps.size(), 1U);
   EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));  // A1
@@ -176,7 +176,7 @@ TEST(DepExtractor, NamedLambdaParameterShadowsDefinedName) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("F(5)", arena);
   ASSERT_NE(root, nullptr);
-  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   ASSERT_EQ(deps.cell_deps.size(), 1U);
   EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));  // A1, not x -> B1
 }
@@ -190,7 +190,7 @@ TEST(DepExtractor, NamedLambdaDoesNotInheritCallerLetScope) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("LET(x,A1,F(1)+x)", arena);
   ASSERT_NE(root, nullptr);
-  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   std::vector<CellNodeId> expected = {
       CellNodeId{0U, 0U, 0U},  // LET initializer A1, read through x
       CellNodeId{0U, 0U, 1U},  // defined x -> B1 inside F
@@ -204,7 +204,7 @@ TEST(DepExtractor, NamedLambdaRecursiveBodyIsFinite) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("Fact(5)", arena);
   ASSERT_NE(root, nullptr);
-  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   ASSERT_EQ(deps.cell_deps.size(), 1U);
   EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));  // A1, one body expansion
 }
@@ -214,7 +214,7 @@ TEST(DepExtractor, LetBoundLambdaBodyIsExpandedOnCall) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("LET(f,LAMBDA(x,A1+x),f(1))", arena);
   ASSERT_NE(root, nullptr);
-  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   ASSERT_EQ(deps.cell_deps.size(), 1U);
   EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));  // A1 in invoked body
 }
@@ -225,7 +225,7 @@ TEST(DepExtractor, NamedLambdaExpansionRestoresCallerLetBindings) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("LET(f,LAMBDA(x,B1+x),Named(1)+f(2))", arena);
   ASSERT_NE(root, nullptr);
-  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   std::vector<CellNodeId> expected = {
       CellNodeId{0U, 0U, 0U},  // Named body A1
       CellNodeId{0U, 0U, 1U},  // caller LET lambda body B1
@@ -239,7 +239,7 @@ TEST(DepExtractor, LambdaNamesShadowBuiltinVolatility) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("LET(RAND,LAMBDA(x,x),NOW(1)+RAND(2))", arena);
   ASSERT_NE(root, nullptr);
-  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
 }
 
@@ -254,7 +254,7 @@ TEST(DepExtractor, NameRefCaseInsensitive) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("foo+1", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   ASSERT_EQ(deps.cell_deps.size(), 1u);
   EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));
@@ -269,7 +269,7 @@ TEST(DepExtractor, LetBindingShadowingIsCaseInsensitive) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("LET(FOO,A1,fOo+B1)", arena);
   ASSERT_NE(root, nullptr);
-  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
 
   const std::vector<CellNodeId> expected = {
       CellNodeId{0U, 0U, 0U},  // A1, the LET initializer used by fOo
@@ -288,7 +288,7 @@ TEST(DepExtractor, LambdaParameterShadowingIsCaseInsensitive) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("F(5)", arena);
   ASSERT_NE(root, nullptr);
-  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
 
   ASSERT_EQ(deps.cell_deps.size(), 1U);
   EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));  // A1, not x -> B1

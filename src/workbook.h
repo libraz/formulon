@@ -722,9 +722,11 @@ class Workbook {
   /// and A1 rectangle before the writer rebuilds its relationships.
   std::vector<TableMetadata>& mutable_tables() noexcept { return tables_; }
 
-  /// Replaces the workbook's table-metadata list. Move-assigns for the
-  /// same reason as `set_defined_names`.
-  void set_tables(std::vector<TableMetadata> tables) { tables_ = std::move(tables); }
+  /// Replaces the workbook's table-metadata list and re-registers every
+  /// formula whose structured reference names a table of the old or new
+  /// list, as `set_defined_names` does for names: a reader stores cell
+  /// formulas before their tables.
+  void set_tables(std::vector<TableMetadata> tables);
 
   /// Validates and appends `table`, assigning its id, default AutoFilter and
   /// the formula reindex a new table needs; returns its index in `tables()`.

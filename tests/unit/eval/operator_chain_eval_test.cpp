@@ -150,7 +150,7 @@ TEST(OperatorChainEval, DependenciesCoverEveryOperand) {
   const std::string text = RefChain(1000U);
   const parser::AstNode* root = ParseFormula(text, arena);
   ASSERT_NE(root, nullptr);
-  const ExtractedDeps deps = extract_deps(*root, /*current_sheet_id=*/0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_EQ(deps.cell_deps.size(), 1000U);
   EXPECT_NE(std::find(deps.cell_deps.begin(), deps.cell_deps.end(), (CellNodeId{0U, 999U, 0U})), deps.cell_deps.end());
   EXPECT_FALSE(deps.is_volatile);

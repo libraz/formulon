@@ -105,6 +105,18 @@ Expected<std::size_t, Error> Workbook::add_table(TableMetadata table) {
   return tables_.size() - 1U;
 }
 
+void Workbook::set_tables(std::vector<TableMetadata> tables) {
+  std::vector<std::string> names;
+  for (const std::vector<TableMetadata>* list : {&tables_, &tables}) {
+    for (const TableMetadata& table : *list) {
+      names.push_back(table.name);
+      names.push_back(table.display_name);
+    }
+  }
+  tables_ = std::move(tables);
+  reindex_formulas_for_table_change(names);
+}
+
 std::string Workbook::next_default_table_name(std::string_view word) const {
   const std::vector<io::xlsb::XlsbRetainedTable> retained = io::xlsb::xlsb_retained_tables(*this);
   for (std::size_t n = 1;; ++n) {

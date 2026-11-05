@@ -32,7 +32,7 @@ ExtractedDeps ExtractFrom(std::string_view source, const Workbook& wb) {
   Arena arena;
   const parser::AstNode* root = ParseFormula(source, arena);
   EXPECT_NE(root, nullptr);
-  return root == nullptr ? ExtractedDeps{} : extract_deps(*root, 0U, wb);
+  return root == nullptr ? ExtractedDeps{} : extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
 }
 
 bool HasRangeDep(const ExtractedDeps& deps, CellRangeDependency want) {
@@ -50,7 +50,7 @@ TEST(DepExtractor, ThreeDFullColumnUsesCompactRangeDependencies) {
   const parser::AstNode* root = ParseFormula("SUM(Sheet1:Sheet3!A:A)", arena);
   ASSERT_NE(root, nullptr);
 
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
   ASSERT_EQ(deps.range_deps.size(), 3U);
@@ -73,7 +73,7 @@ TEST(DepExtractor, ThreeDRangeAboveLimitUsesCompactRangeDependencyPerSheet) {
   const parser::AstNode* root = ParseFormula("SUM(Sheet1:Sheet3!A1:B1000)", arena);
   ASSERT_NE(root, nullptr);
 
-  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
   ASSERT_EQ(deps.range_deps.size(), 3U);
@@ -94,7 +94,7 @@ TEST(DepExtractor, ThreeDWholeAxisSpansPreserveBothAxes) {
   const parser::AstNode* root = ParseFormula("SUM(Sheet1:Sheet3!A:C)+SUM(Sheet1:Sheet3!1:3)", arena);
   ASSERT_NE(root, nullptr);
 
-  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
   ASSERT_EQ(deps.range_deps.size(), 6U);
   for (std::size_t sheet = 0; sheet < 3U; ++sheet) {
     const CellRangeDependency& columns = deps.range_deps[sheet];
@@ -268,7 +268,7 @@ TEST(DepExtractor, ThreeDSpanMetadataIsNormalizedAndDeduplicatedAcrossExpansion)
   Arena arena;
   const parser::AstNode* root = ParseFormula("SUM(First:Second!A1:A3)+SUM(Second:First!A1:A3)+SUM(Outer)+F(0)", arena);
   ASSERT_NE(root, nullptr);
-  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
 
   ASSERT_EQ(deps.three_d_spans.size(), 1U);
   EXPECT_EQ(deps.three_d_spans[0], (ThreeDSheetSpanDependency{0U, 1U}));
@@ -282,7 +282,7 @@ TEST(DepExtractor, ThreeDSpanMetadataIncludesWholeAxisReferences) {
   Arena arena;
   const parser::AstNode* root = ParseFormula("SUM(First:Second!A:A)+SUM(First:Second!1:1)", arena);
   ASSERT_NE(root, nullptr);
-  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  const ExtractedDeps deps = extract_deps(*root, CellNodeId{0U, 0U, 0U}, wb);
 
   ASSERT_EQ(deps.three_d_spans.size(), 1U);
   EXPECT_EQ(deps.three_d_spans[0], (ThreeDSheetSpanDependency{0U, 1U}));
