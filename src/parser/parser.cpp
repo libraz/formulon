@@ -985,10 +985,10 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
     case TokenKind::LBracket: {
       // `[` opening an atom that is no bare `[book]sheet!` qualifier: the
       // self-book name `[0]!Name`, which is how Excel stores `Book!Name`; or
-      // a *bare* structured reference (`=[@col]`, `=[col]`), which has no
-      // table to qualify against and stays `UnsupportedConstruct`, as does a
-      // qualifier whose book or sheet needs quoting
-      // (`=[My Book.xlsx]Sheet!A1`) and another book's name written
+      // a *bare* structured reference (`=[@col]`, `=[col]`), which binds to
+      // `bare_structured_ref_table` and without one stays
+      // `UnsupportedConstruct`, as does a qualifier whose book or sheet needs
+      // quoting (`=[My Book.xlsx]Sheet!A1`) and another book's name written
       // `[book]!Name`.
       //
       // Table-qualified structured refs (`=Table[col]`, `=Table[@col]`)
@@ -1010,6 +1010,7 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
       const Token& lbracket = peek();
       bool found_close = false;
       std::uint32_t depth = 1;
+      std::size_t close_offset = 0;
       for (std::size_t i = 1;; ++i) {
         const TokenKind k = peek_kind_at(i);
         if (k == TokenKind::Eof) {
@@ -1021,9 +1022,29 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
           --depth;
           if (depth == 0) {
             found_close = true;
+            close_offset = i;
             break;
           }
         }
+      }
+      if (found_close && !opts_.bare_structured_ref_table.empty()) {
+        // Inside a table, `[...]` names that table.
+        const Token& rbracket = peek_at(close_offset);
+        const auto payload_start = static_cast<std::size_t>(lbracket.lexeme.data() + 1 - source_.data());
+        const auto payload_end = static_cast<std::size_t>(rbracket.lexeme.data() - source_.data());
+        struct_ref_byte_spans_.emplace_back(static_cast<std::uint32_t>(payload_start),
+                                            static_cast<std::uint32_t>(payload_end));
+        const TextRange span = SpanRange(lbracket.range, rbracket.range);
+        for (std::size_t i = 0; i <= close_offset; ++i) {
+          advance();
+        }
+        AstNode* n = make_structured_ref(arena_, opts_.bare_structured_ref_table,
+                                         source_.substr(payload_start, payload_end - payload_start),
+                                         StructuredRefModifier::None);
+        if (n != nullptr) {
+          n->set_range(span);
+        }
+        return n;
       }
       const ParseErrorCode code =
           found_close ? ParseErrorCode::UnsupportedConstruct : ParseErrorCode::UnbalancedBrackets;

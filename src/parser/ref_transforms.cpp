@@ -80,14 +80,14 @@ std::optional<std::string_view> SheetCopyTransform::apply_name_sheet(std::string
   return rename_.apply_name_sheet(sheet);
 }
 
-std::optional<std::string_view> SheetCopyTransform::apply_structured_ref(std::string_view table,
-                                                                         std::string_view /*column*/) const {
+std::optional<StructuredRefTarget> SheetCopyTransform::apply_structured_ref(std::string_view table,
+                                                                            std::string_view /*column*/) const {
   for (const std::pair<std::string, std::string>& entry : table_map_) {
     if (strings::case_insensitive_eq(table, entry.first)) {
-      return std::string_view(entry.second);
+      return StructuredRefTarget{entry.second, {}};
     }
   }
-  return table;
+  return StructuredRefTarget{table, {}};
 }
 
 SheetRemovalTransform::SheetRemovalTransform(const std::vector<std::string_view>& pre_removal_sheet_order,

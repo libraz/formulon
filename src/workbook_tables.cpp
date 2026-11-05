@@ -1,5 +1,6 @@
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -125,6 +126,29 @@ std::string Workbook::next_default_table_name(std::string_view word) const {
       return candidate;
     }
   }
+}
+
+std::optional<std::size_t> Workbook::table_containing(std::size_t sheet_index, std::uint32_t row,
+                                                      std::uint32_t col) const noexcept {
+  for (std::size_t i = 0; i < tables_.size(); ++i) {
+    if (tables_[i].sheet_index != sheet_index) {
+      continue;
+    }
+    const std::optional<MergeRange> rect = parse_a1_rectangle(tables_[i].ref);
+    if (rect && row >= rect->first_row && row <= rect->last_row && col >= rect->first_col && col <= rect->last_col) {
+      return i;
+    }
+  }
+  return std::nullopt;
+}
+
+bool Workbook::is_table_name(std::string_view name) const noexcept {
+  for (const TableMetadata& table : tables_) {
+    if (strings::case_insensitive_eq(table.name, name) || strings::case_insensitive_eq(table.display_name, name)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 }  // namespace formulon

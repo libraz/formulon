@@ -10,8 +10,8 @@
 
 namespace formulon {
 
-std::optional<std::string_view> TableLossTransform::apply_structured_ref(std::string_view table,
-                                                                         std::string_view column) const {
+std::optional<parser::StructuredRefTarget> TableLossTransform::apply_structured_ref(std::string_view table,
+                                                                                    std::string_view column) const {
   for (const TableLoss& loss : losses_) {
     if (!strings::case_insensitive_eq(table, loss.name) && !strings::case_insensitive_eq(table, loss.display_name)) {
       continue;

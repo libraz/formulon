@@ -48,7 +48,8 @@ class TableLossTransform final : public parser::RefTransform {
     return inner_.rebinds_name_to_book(sheet, name);
   }
 
-  std::optional<std::string_view> apply_structured_ref(std::string_view table, std::string_view column) const override;
+  std::optional<parser::StructuredRefTarget> apply_structured_ref(std::string_view table,
+                                                                  std::string_view column) const override;
 
  private:
   const parser::RefTransform& inner_;

@@ -361,7 +361,12 @@ const std::vector<Token>& Tokenizer::tokens() {
     // Dispatch on the leading byte.
     switch (c) {
       case '"':
-        scan_quoted('"', TokenKind::String, LexerErrorCode::UnterminatedString);
+        // Inside a bracket a double quote is a column-name character.
+        if (bracket_depth_ > 0) {
+          emit_single_char(TokenKind::Ident);
+        } else {
+          scan_quoted('"', TokenKind::String, LexerErrorCode::UnterminatedString);
+        }
         continue;
       case '\'':
         // Inside a bracket an apostrophe is the ECMA-376 18.5.1.10

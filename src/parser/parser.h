@@ -97,6 +97,10 @@ struct ParserOptions {
   /// rewritten from an already length-checked formula raise it to the
   /// rewritten length.
   std::uint32_t max_formula_length_utf16 = TokenizerOptions{}.max_formula_length_utf16;
+  /// Table an unqualified structured reference (`[@Qty]`, `[Qty]`) binds
+  /// to, as for a formula entered inside that table. Empty rejects one as
+  /// `UnsupportedConstruct`. Must outlive the parse result.
+  std::string_view bare_structured_ref_table;
 };
 
 /// Single-shot Pratt parser.

@@ -742,6 +742,15 @@ class Workbook {
   /// of any table (compared case-insensitively), as `add_table` checks.
   std::string next_default_table_name(std::string_view word) const;
 
+  /// Index in `tables()` of the first table on `sheet_index` whose `ref`
+  /// (header through totals row) contains the 0-based (`row`, `col`).
+  std::optional<std::size_t> table_containing(std::size_t sheet_index, std::uint32_t row,
+                                              std::uint32_t col) const noexcept;
+
+  /// True when `name` is the name or display name of a table, compared
+  /// ASCII case-insensitively. Defined names are not consulted.
+  bool is_table_name(std::string_view name) const noexcept;
+
   /// Re-registers dep-graph edges and dirties every formula cell whose
   /// structured reference names one of `table_names` (typically a table's
   /// `name` and `display_name`). Call after a `mutable_tables()` edit

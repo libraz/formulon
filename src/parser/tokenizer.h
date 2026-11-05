@@ -19,8 +19,9 @@
 //     parser reinterprets them into a `StructuredRef` AST node
 //     (`Parser::parse_ident_or_call_or_full_col`). This keeps the lexer
 //     small and lets the parser handle the context-sensitive grammar.
-//     Bare structured refs with no table name (`[@col]` on its own) are
-//     rejected by the parser as `UnsupportedConstruct`.
+//     Bare structured refs with no table name (`[@col]` on its own) bind to
+//     `ParserOptions::bare_structured_ref_table`, and without one the parser
+//     rejects them as `UnsupportedConstruct`.
 //   * Cross-workbook qualifiers spelled bare (`[Book.xlsx]Sheet!`,
 //     `[Book.xlsx]S1:S2!`) are one `ExternalQualifier` token, scanned only
 //     where an operand may start and only when the whole shape up to the

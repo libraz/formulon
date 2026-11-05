@@ -1,13 +1,15 @@
 //
 // R1C1 formatter. Reference-bearing nodes and the operators around them are
 // rendered here; leaves that carry no cell reference (literals, names,
-// structured references, array constants) are delegated to `format_formula`.
+// stored-form structured references, array constants) are delegated to
+// `format_formula`.
 // Parenthesis counts come from `collect_parenthesized_nodes`, so grouping
 // matches the A1 formatter exactly.
 
 #include "parser/ast_format_r1c1.h"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -15,6 +17,8 @@
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/reference.h"
+#include "parser/structured_ref_payload.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace parser {
@@ -113,6 +117,7 @@ bool IsReferenceShaped(const AstNode& node) noexcept {
 struct Emitter {
   Host host;
   ParenCounts parens;
+  const StructuredRefDisplay* display;
 
   void emit(const AstNode& node, std::string& out) const {
     switch (node.kind()) {
@@ -122,8 +127,13 @@ struct Emitter {
         }
         out.append(format_formula(node));
         return;
-      case NodeKind::Literal:
       case NodeKind::StructuredRef:
+        if (display != nullptr) {
+          break;
+        }
+        out.append(format_formula(node));
+        return;
+      case NodeKind::Literal:
       case NodeKind::ArrayLiteral:
       case NodeKind::ErrorPlaceholder:
         // No cell reference inside; the A1 formatter's text (own parentheses
@@ -160,6 +170,19 @@ struct Emitter {
       out.push_back(':');
       AppendCell(site->last, host, out);
     }
+  }
+
+  // Only reached with `display` set; a payload that does not parse prints as stored.
+  void emit_structured_ref(const AstNode& node, std::string& out) const {
+    const std::string_view table = node.as_structured_ref_table();
+    const std::optional<StructuredRefPayload> payload =
+        parse_structured_ref_payload_text(node.as_structured_ref_column());
+    if (!payload) {
+      out.append(table).append("[").append(node.as_structured_ref_column()).push_back(']');
+      return;
+    }
+    const bool inside = !display->own_table.empty() && strings::case_insensitive_eq(table, display->own_table);
+    out.append(display_structured_ref(table, *payload, inside));
   }
 
   void emit_args(std::uint32_t count, const AstNode& (AstNode::*arg)(std::uint32_t) const, const AstNode& node,
@@ -300,8 +323,10 @@ struct Emitter {
       case NodeKind::ErrorLiteral:
         emit_error_literal(node, out);
         return;
-      case NodeKind::Literal:
       case NodeKind::StructuredRef:
+        emit_structured_ref(node, out);
+        return;
+      case NodeKind::Literal:
       case NodeKind::ArrayLiteral:
       case NodeKind::ErrorPlaceholder:
         // Delegated in `emit`.
@@ -312,11 +337,12 @@ struct Emitter {
 
 }  // namespace
 
-std::string format_formula_r1c1(const AstNode& node, std::uint32_t anchor_row, std::uint32_t anchor_col) {
+std::string format_formula_r1c1(const AstNode& node, std::uint32_t anchor_row, std::uint32_t anchor_col,
+                                const StructuredRefDisplay* display) {
   if (!ast_depth_within_limit(node, kMaxFormulaAstDepth)) {
     return "#REF!";
   }
-  Emitter emitter{{static_cast<std::int64_t>(anchor_row), static_cast<std::int64_t>(anchor_col)}, {}};
+  Emitter emitter{{static_cast<std::int64_t>(anchor_row), static_cast<std::int64_t>(anchor_col)}, {}, display};
   collect_parenthesized_nodes(node, emitter.parens);
   std::string out;
   out.reserve(64);

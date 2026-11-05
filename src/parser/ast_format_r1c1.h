@@ -13,6 +13,7 @@
 #include <string>
 
 #include "parser/ast.h"
+#include "parser/structured_ref_payload.h"
 
 namespace formulon {
 namespace parser {
@@ -25,7 +26,11 @@ namespace parser {
 /// reference prints as a single axis (`C[-2]`, `R1`) and a range as
 /// `<start>:<end>`. A `@` in front of a reference or range is dropped. The
 /// result carries no leading `=`.
-std::string format_formula_r1c1(const AstNode& node, std::uint32_t anchor_row, std::uint32_t anchor_col);
+///
+/// With `display`, structured references print in the formula-bar form for
+/// a cell in `display->own_table`; without it, as stored.
+std::string format_formula_r1c1(const AstNode& node, std::uint32_t anchor_row, std::uint32_t anchor_col,
+                                const StructuredRefDisplay* display = nullptr);
 
 }  // namespace parser
 }  // namespace formulon

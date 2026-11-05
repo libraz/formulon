@@ -1110,12 +1110,12 @@ class TableRenameTransform final : public parser::RefTransform {
 
   std::optional<parser::Reference> apply(const parser::Reference& ref) const override { return ref; }
 
-  std::optional<std::string_view> apply_structured_ref(std::string_view table,
-                                                       std::string_view /*column*/) const override {
+  std::optional<parser::StructuredRefTarget> apply_structured_ref(std::string_view table,
+                                                                  std::string_view /*column*/) const override {
     if (strings::case_insensitive_eq(table, old_name_) || strings::case_insensitive_eq(table, old_display_name_)) {
-      return new_name_;
+      return parser::StructuredRefTarget{new_name_, {}};
     }
-    return table;
+    return parser::StructuredRefTarget{table, {}};
   }
 
  private:

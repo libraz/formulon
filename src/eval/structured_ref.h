@@ -28,6 +28,7 @@
 #include <string>
 #include <string_view>
 
+#include "parser/structured_ref_payload.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -39,17 +40,10 @@ struct TableMetadata;
 
 namespace eval {
 
-/// Bitmask of the area selectors (`#All`, `#Data`, `#Headers`, `#Totals`,
-/// `#This Row` aka `@`) attached to a structured reference. A reference may
-/// carry more than one selector (e.g. `Table[[#Headers],[Col]]`); a reference
-/// with no `#`-prefixed selector and no leading `@` defaults to `kData`.
-struct StructuredRefSpecifiers {
-  static constexpr std::uint8_t kAll = 1u << 0u;
-  static constexpr std::uint8_t kData = 1u << 1u;
-  static constexpr std::uint8_t kHeaders = 1u << 2u;
-  static constexpr std::uint8_t kTotals = 1u << 3u;
-  static constexpr std::uint8_t kThisRow = 1u << 4u;
-};
+/// Bitmask of the area selectors attached to a structured reference. A
+/// reference with no `#`-prefixed selector and no leading `@` defaults to
+/// `kData`.
+using parser::StructuredRefSpecifiers;
 
 /// Parsed shape of a structured reference's bracket payload.
 ///

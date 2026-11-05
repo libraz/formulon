@@ -276,6 +276,8 @@ set(FORMULON_CORE_SOURCES
   src/parser/parser_reference.cpp
   src/parser/parser_let_lambda.cpp
   src/parser/ref_transforms.cpp
+  src/parser/structured_ref_payload.cpp
+  src/parser/structured_ref_spelling.cpp
   src/pivot/aggregator.cpp
   src/pivot/filter_engine.cpp
   src/pivot/hierarchy_builder.cpp

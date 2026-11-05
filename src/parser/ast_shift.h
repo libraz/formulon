@@ -51,6 +51,13 @@ enum class RefCollapse : std::uint8_t {
   kKeepAddress,
 };
 
+/// What `RefTransform::apply_structured_ref` maps a structured reference to.
+struct StructuredRefTarget {
+  std::string_view table;
+  /// The new bracket payload; empty keeps the node's payload.
+  std::string column;
+};
+
 /// Generic reference-rewriting policy for `shift_refs`.
 ///
 /// Implementations override `apply` for the common case (sheet-local cell
@@ -115,12 +122,13 @@ class RefTransform {
     return false;
   }
 
-  /// Rewrites the table name of a structured reference (`Table1[Col]`).
-  /// `column` is the node's bracket payload verbatim
-  /// (`eval::parse_structured_ref_payload` reads it). The default is an
+  /// Rewrites the table name and bracket payload of a structured reference
+  /// (`Table1[Col]`). `column` is the node's bracket payload verbatim
+  /// (`parse_structured_ref_payload_text` reads it). The default is an
   /// identity mapping. Returning `std::nullopt` -- the table, or a column the
   /// payload names, is gone -- collapses the reference to `#REF!`.
-  virtual std::optional<std::string_view> apply_structured_ref(std::string_view table, std::string_view column) const;
+  virtual std::optional<StructuredRefTarget> apply_structured_ref(std::string_view table,
+                                                                  std::string_view column) const;
 };
 
 /// Walks `root` and produces a new tree with every reference rewritten via

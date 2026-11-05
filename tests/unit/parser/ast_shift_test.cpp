@@ -877,11 +877,12 @@ class TableEditTransform final : public RefTransform {
  public:
   std::optional<Reference> apply(const Reference& ref) const override { return ref; }
 
-  std::optional<std::string_view> apply_structured_ref(std::string_view table, std::string_view column) const override {
+  std::optional<StructuredRefTarget> apply_structured_ref(std::string_view table,
+                                                          std::string_view column) const override {
     if (table == "Gone" || column.find("Dropped") != std::string_view::npos) {
       return std::nullopt;
     }
-    return table == "Old" ? std::string_view("New") : table;
+    return StructuredRefTarget{table == "Old" ? std::string_view("New") : table, {}};
   }
 };
 

@@ -50,9 +50,9 @@ std::optional<std::string_view> RefTransform::apply_name_sheet(std::string_view 
   return sheet;
 }
 
-std::optional<std::string_view> RefTransform::apply_structured_ref(std::string_view table,
-                                                                   std::string_view /*column*/) const {
-  return table;
+std::optional<StructuredRefTarget> RefTransform::apply_structured_ref(std::string_view table,
+                                                                      std::string_view /*column*/) const {
+  return StructuredRefTarget{table, {}};
 }
 
 namespace {
@@ -243,14 +243,16 @@ const AstNode* TransformRef3D(const AstNode& node, Arena& arena, const RefTransf
 
 const AstNode* TransformStructuredRef(const AstNode& node, Arena& arena, const RefTransform& transform) {
   const std::string_view table = node.as_structured_ref_table();
-  const std::optional<std::string_view> mapped = transform.apply_structured_ref(table, node.as_structured_ref_column());
+  const std::string_view column = node.as_structured_ref_column();
+  const std::optional<StructuredRefTarget> mapped = transform.apply_structured_ref(table, column);
   if (!mapped.has_value()) {
     return MakeRefError(arena);
   }
-  if (*mapped == table) {
+  const std::string_view new_column = mapped->column.empty() ? column : std::string_view(mapped->column);
+  if (mapped->table == table && new_column == column) {
     return &node;
   }
-  return make_structured_ref(arena, *mapped, node.as_structured_ref_column(), node.as_structured_ref_modifier());
+  return make_structured_ref(arena, mapped->table, new_column, node.as_structured_ref_modifier());
 }
 
 const AstNode* TransformNameRef(const AstNode& node, Arena& arena, const RefTransform& transform) {

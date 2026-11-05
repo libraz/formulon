@@ -198,6 +198,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/parser/range_chain_test.cpp
   unit/parser/let_test.cpp
   unit/parser/ref_transforms_test.cpp
+  unit/parser/structured_ref_spelling_test.cpp
   unit/parser/sheet_copy_transform_test.cpp
   unit/eval/jp_kana_table_test.cpp
   unit/eval/tree_walker_test.cpp

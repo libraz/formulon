@@ -80,7 +80,8 @@ class SheetCopyTransform final : public RefTransform {
   std::optional<Reference> apply(const Reference& ref) const override;
   std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const override;
   std::optional<std::string_view> apply_name_sheet(std::string_view sheet) const override;
-  std::optional<std::string_view> apply_structured_ref(std::string_view table, std::string_view column) const override;
+  std::optional<StructuredRefTarget> apply_structured_ref(std::string_view table,
+                                                          std::string_view column) const override;
   RefCollapse collapse_form() const noexcept override { return RefCollapse::kKeepAddress; }
 
  private:
