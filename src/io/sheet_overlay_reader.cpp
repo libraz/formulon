@@ -171,91 +171,147 @@ void apply_hyperlink_rels(std::vector<Hyperlink>& hyperlinks,
   }
 }
 
-Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::xml_node& worksheet,
-                                                                   ReadDiagnostics* diagnostics) {
-  std::vector<DataValidation> out;
-  if (!worksheet) {
-    return out;
-  }
-  pugi::xml_node dvs = worksheet.child("dataValidations");
-  if (!dvs) {
-    return out;
-  }
-  for (pugi::xml_node dv = dvs.child("dataValidation"); dv; dv = dv.next_sibling("dataValidation")) {
-    DataValidation v;
-    const std::string_view sqref = attr_str(dv, "sqref");
-    if (sqref.empty()) {
-      SkipOverlayEntry("dataValidations", "sqref attribute missing or empty", sqref, diagnostics);
+namespace {
+
+constexpr const char* kX14DataValidationsExtUri = "{CCE6A557-97BC-4b89-ADB6-D9C93CAAB3DF}";
+
+/// Calls `fn(container)` for every `<x14:dataValidations>` under the
+/// worksheet `<extLst>`.
+template <typename Fn>
+void ForEachX14DataValidations(const pugi::xml_node& worksheet, Fn&& fn) {
+  for (pugi::xml_node ext = worksheet.child("extLst").child("ext"); ext; ext = ext.next_sibling("ext")) {
+    if (std::string_view(ext.attribute("uri").value()) != kX14DataValidationsExtUri) {
       continue;
     }
-    auto ranges_or = ParseSqrefRanges(sqref);
-    if (!ranges_or) {
-      SkipOverlayEntry("dataValidations", "sqref unparseable", sqref, diagnostics);
-      continue;
+    for (pugi::xml_node c = ext.child("x14:dataValidations"); c; c = c.next_sibling("x14:dataValidations")) {
+      fn(c);
     }
-    v.ranges = std::move(ranges_or.value());
+  }
+}
 
-    // type
-    v.type = enum_from_name(kDataValidationTypeNames, attr_str(dv, "type"), std::uint8_t{0});
+/// Reads one `<dataValidation>` (main) or `<x14:dataValidation>` into `out`.
+/// The x14 form keeps its sqref and formulas in child elements.
+void ReadDataValidationEntry(const pugi::xml_node& dv, bool x14, std::vector<DataValidation>& out,
+                             ReadDiagnostics* diagnostics) {
+  DataValidation v;
+  const std::string_view sqref = x14 ? std::string_view(dv.child("xm:sqref").text().get()) : attr_str(dv, "sqref");
+  if (sqref.empty()) {
+    SkipOverlayEntry("dataValidations", "sqref attribute missing or empty", sqref, diagnostics);
+    return;
+  }
+  auto ranges_or = ParseSqrefRanges(sqref);
+  if (!ranges_or) {
+    SkipOverlayEntry("dataValidations", "sqref unparseable", sqref, diagnostics);
+    return;
+  }
+  v.ranges = std::move(ranges_or.value());
+  v.x14_placement = x14;
 
-    // operator ("between" / unspecified is 0)
-    v.op = enum_from_name(kDataValidationOperatorNames, attr_str(dv, "operator"), std::uint8_t{0});
+  // type
+  v.type = enum_from_name(kDataValidationTypeNames, attr_str(dv, "type"), std::uint8_t{0});
 
-    // errorStyle
-    v.error_style = enum_from_name(kDataValidationErrorStyleNames, attr_str(dv, "errorStyle"), std::uint8_t{0});
+  // operator ("between" / unspecified is 0)
+  v.op = enum_from_name(kDataValidationOperatorNames, attr_str(dv, "operator"), std::uint8_t{0});
 
-    // Boolean attributes default to false: Excel omits allowBlank when it
-    // is off (the .xlsb twin's fAllowBlank bit is clear) and writes "1"
-    // when it is on.
-    v.allow_blank = false;
-    if (pugi::xml_attribute ab = dv.attribute("allowBlank"); ab) {
-      v.allow_blank = parse_xml_bool(ab.value());
+  // errorStyle
+  v.error_style = enum_from_name(kDataValidationErrorStyleNames, attr_str(dv, "errorStyle"), std::uint8_t{0});
+
+  // Boolean attributes default to false: Excel omits allowBlank when it
+  // is off (the .xlsb twin's fAllowBlank bit is clear) and writes "1"
+  // when it is on.
+  v.allow_blank = false;
+  if (pugi::xml_attribute ab = dv.attribute("allowBlank"); ab) {
+    v.allow_blank = parse_xml_bool(ab.value());
+  }
+  if (pugi::xml_attribute sim = dv.attribute("showInputMessage"); sim) {
+    v.show_input_message = parse_xml_bool(sim.value());
+  }
+  if (pugi::xml_attribute sem = dv.attribute("showErrorMessage"); sem) {
+    v.show_error_message = parse_xml_bool(sem.value());
+  }
+  // `showDropDown` has inverted semantics: presence with a true value
+  // suppresses the arrow, so the user-facing `show_dropdown` is the
+  // negation of the raw attribute (absent/false attribute => shown).
+  if (pugi::xml_attribute sdd = dv.attribute("showDropDown"); sdd) {
+    v.show_dropdown = !parse_xml_bool(sdd.value());
+  }
+
+  v.error_title.assign(attr_str(dv, "errorTitle"));
+  v.error_message.assign(attr_str(dv, "error"));
+  v.prompt_title.assign(attr_str(dv, "promptTitle"));
+  v.prompt_message.assign(attr_str(dv, "prompt"));
+  {
+    std::vector<std::pair<std::string, std::string>> extra;
+    capture_unknown_attrs(
+        dv,
+        {"sqref", "type", "operator", "errorStyle", "allowBlank", "showInputMessage", "showErrorMessage",
+         "showDropDown", "errorTitle", "error", "promptTitle", "prompt", x14 ? "xr:uid" : ""},
+        extra);
+    append_raw_attrs(v.extra_attrs, extra);
+  }
+
+  // `AppendOoxmlTextUnescaped` decodes the OOXML `_xHHHH_` control-
+  // character escapes the writer emits for this slot (`AppendXmlEscaped`
+  // in ooxml/sheet_xml_builder.cpp), on top of `.text().get()`'s
+  // ordinary XML entity decoding.
+  if (x14) {
+    if (pugi::xml_node f1 = dv.child("x14:formula1").child("xm:f"); f1) {
+      v.formula1 = ReadValidationFormula(f1);
     }
-    if (pugi::xml_attribute sim = dv.attribute("showInputMessage"); sim) {
-      v.show_input_message = parse_xml_bool(sim.value());
+    if (pugi::xml_node f2 = dv.child("x14:formula2").child("xm:f"); f2) {
+      v.formula2 = ReadValidationFormula(f2);
     }
-    if (pugi::xml_attribute sem = dv.attribute("showErrorMessage"); sem) {
-      v.show_error_message = parse_xml_bool(sem.value());
-    }
-    // `showDropDown` has inverted semantics: presence with a true value
-    // suppresses the arrow, so the user-facing `show_dropdown` is the
-    // negation of the raw attribute (absent/false attribute => shown).
-    if (pugi::xml_attribute sdd = dv.attribute("showDropDown"); sdd) {
-      v.show_dropdown = !parse_xml_bool(sdd.value());
-    }
-
-    v.error_title.assign(attr_str(dv, "errorTitle"));
-    v.error_message.assign(attr_str(dv, "error"));
-    v.prompt_title.assign(attr_str(dv, "promptTitle"));
-    v.prompt_message.assign(attr_str(dv, "prompt"));
-    {
-      std::vector<std::pair<std::string, std::string>> extra;
-      capture_unknown_attrs(dv,
-                            {"sqref", "type", "operator", "errorStyle", "allowBlank", "showInputMessage",
-                             "showErrorMessage", "showDropDown", "errorTitle", "error", "promptTitle", "prompt"},
-                            extra);
-      append_raw_attrs(v.extra_attrs, extra);
-    }
-
-    // `AppendOoxmlTextUnescaped` decodes the OOXML `_xHHHH_` control-
-    // character escapes the writer emits for this slot (`AppendXmlEscaped`
-    // in ooxml/sheet_xml_builder.cpp), on top of `.text().get()`'s
-    // ordinary XML entity decoding.
+  } else {
     if (pugi::xml_node f1 = dv.child("formula1"); f1) {
       v.formula1 = ReadValidationFormula(f1);
     }
     if (pugi::xml_node f2 = dv.child("formula2"); f2) {
       v.formula2 = ReadValidationFormula(f2);
     }
-
-    out.push_back(std::move(v));
   }
+
+  out.push_back(std::move(v));
+}
+
+}  // namespace
+
+bool data_validation_sqref_readable(std::string_view sqref) {
+  return !sqref.empty() && static_cast<bool>(ParseSqrefRanges(sqref));
+}
+
+Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::xml_node& worksheet,
+                                                                   ReadDiagnostics* diagnostics) {
+  std::vector<DataValidation> out;
+  if (!worksheet) {
+    return out;
+  }
+  if (pugi::xml_node dvs = worksheet.child("dataValidations"); dvs) {
+    for (pugi::xml_node dv = dvs.child("dataValidation"); dv; dv = dv.next_sibling("dataValidation")) {
+      ReadDataValidationEntry(dv, false, out, diagnostics);
+    }
+  }
+  ForEachX14DataValidations(worksheet, [&](const pugi::xml_node& container) {
+    for (pugi::xml_node dv = container.child("x14:dataValidation"); dv; dv = dv.next_sibling("x14:dataValidation")) {
+      ReadDataValidationEntry(dv, true, out, diagnostics);
+    }
+  });
   return out;
 }
 
 std::string read_data_validations_extra_attrs(const pugi::xml_node& worksheet) {
   std::vector<std::pair<std::string, std::string>> extra;
-  capture_unknown_attrs(worksheet.child("dataValidations"), {"count"}, extra);
+  if (pugi::xml_node main = worksheet.child("dataValidations"); main) {
+    capture_unknown_attrs(main, {"count"}, extra);
+  } else {
+    // The container attributes live on the x14 one when no main one is written.
+    bool found = false;
+    ForEachX14DataValidations(worksheet, [&](const pugi::xml_node& container) {
+      if (!found) {
+        found = true;
+        capture_unknown_attrs(container, {"count"}, extra);
+      }
+    });
+  }
   std::string out;
   append_raw_attrs(out, extra);
   return out;

@@ -1158,6 +1158,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
          {&state.tail.before_merges, &state.tail.after_merges_before_hyperlinks, &state.tail.after_hyperlinks}) {
       take_x14_rules(*slot, feature_ctx, formats);
       apply_x14_data_bar_overlays(ByteSpan{slot->data(), slot->size()}, formats);
+      take_x14_validations(*slot, feature_ctx, wb.sheet(sheet_index).mutable_validations());
     }
     // Sparkline groups the records describe move into the sheet's extension XML.
     std::string ext_lst = wb.sheet(sheet_index).ext_lst_xml();

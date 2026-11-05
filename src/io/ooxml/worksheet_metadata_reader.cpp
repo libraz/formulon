@@ -12,6 +12,7 @@
 #include "io/auto_filter_xml.h"
 #include "io/cf_overlay.h"
 #include "io/cf_reader.h"
+#include "io/dv_overlay.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/print_settings_parse.h"
 #include "io/package_diagnostics.h"
@@ -216,7 +217,7 @@ Expected<void, Error> apply_worksheet_metadata(const pugi::xml_document& doc, st
         }
       }
     }
-    wb.sheet(i).set_ext_lst_xml(strip_x14_cf_rules(raw_xml(ext_lst), adopted));
+    wb.sheet(i).set_ext_lst_xml(strip_x14_data_validations(strip_x14_cf_rules(raw_xml(ext_lst), adopted)));
   }
   // Capture the worksheet root's extra namespace declarations so any
   // prefixed attribute carried inside a raw capture above resolves when

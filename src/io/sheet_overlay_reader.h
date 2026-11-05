@@ -7,6 +7,7 @@
 #define FORMULON_IO_SHEET_OVERLAY_READER_H_
 
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -64,6 +65,10 @@ void apply_hyperlink_rels(std::vector<Hyperlink>& hyperlinks,
 /// `read_merges`, `diagnostics` included.
 Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::xml_node& worksheet,
                                                                    ReadDiagnostics* diagnostics = nullptr);
+
+/// True when `sqref` is non-empty and every token parses: the entries
+/// `read_data_validations` keeps, as opposed to the ones it drops.
+bool data_validation_sqref_readable(std::string_view sqref);
 
 /// The `<dataValidations>` attributes other than `count` (`disablePrompts`,
 /// `xWindow`, `yWindow`) as escaped ` name="value"` pairs; empty when the

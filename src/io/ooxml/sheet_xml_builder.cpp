@@ -18,7 +18,7 @@
 #include "io/auto_filter_xml.h"
 #include "io/cf_overlay.h"
 #include "io/cf_writer.h"
-#include "io/data_validation_attr_names.h"
+#include "io/dv_overlay.h"
 #include "io/ooxml/cell_ref_writer.h"
 #include "io/ooxml/emission_plan.h"
 #include "io/ooxml/relationship_writer.h"
@@ -100,13 +100,20 @@ std::string BuildMergeCellsBlock(const Sheet& sheet) {
 }
 
 std::string BuildDataValidationsBlock(const Sheet& sheet, const parser::ExternalBookIndexer* indexer) {
-  if (sheet.validations().empty()) {
+  // Validations stored in the x14 extension are written by `merge_x14_dv_entries`.
+  std::vector<const DataValidation*> main_dvs;
+  for (const DataValidation& v : sheet.validations()) {
+    if (!data_validation_in_x14(v, sheet.name())) {
+      main_dvs.push_back(&v);
+    }
+  }
+  if (main_dvs.empty()) {
     return {};
   }
   std::string out;
-  out.reserve(96 + sheet.validations().size() * 96);
+  out.reserve(96 + main_dvs.size() * 96);
   out.append("<dataValidations");
-  append_xml_attr_uint(out, "count", sheet.validations().size());
+  append_xml_attr_uint(out, "count", main_dvs.size());
   out.append(sheet.validations_extra_attrs());
   out.append(">");
   const auto append_formula = [&](const char* tag, const std::string& formula) {
@@ -117,45 +124,10 @@ std::string BuildDataValidationsBlock(const Sheet& sheet, const parser::External
     AppendXmlEscaped(out, storage_feature_formula(formula, indexer));
     out.append("</").append(tag).append(">");
   };
-  for (const DataValidation& v : sheet.validations()) {
+  for (const DataValidation* dv : main_dvs) {
+    const DataValidation& v = *dv;
     out.append("<dataValidation");
-    if (const std::string_view t = enum_name(kDataValidationTypeNames, v.type); !t.empty()) {
-      append_xml_attr(out, "type", t);
-    }
-    if (const std::string_view op = enum_name(kDataValidationOperatorNames, v.op); !op.empty()) {
-      append_xml_attr(out, "operator", op);
-    }
-    if (const std::string_view es = enum_name(kDataValidationErrorStyleNames, v.error_style); !es.empty()) {
-      append_xml_attr(out, "errorStyle", es);
-    }
-    if (v.allow_blank) {
-      emit_xsd_bool_attr(out, "allowBlank", true);
-    }
-    if (v.show_input_message) {
-      emit_xsd_bool_attr(out, "showInputMessage", true);
-    }
-    if (v.show_error_message) {
-      emit_xsd_bool_attr(out, "showErrorMessage", true);
-    }
-    // `showDropDown` is inverted per ECMA-376: writing "1" SUPPRESSES the
-    // in-cell arrow, so it is only emitted when the arrow should be
-    // hidden. Omitting the attribute preserves Excel's default (shown).
-    if (!v.show_dropdown) {
-      emit_xsd_bool_attr(out, "showDropDown", true);
-    }
-    if (!v.error_title.empty()) {
-      append_xml_attr(out, "errorTitle", v.error_title);
-    }
-    if (!v.error_message.empty()) {
-      append_xml_attr(out, "error", v.error_message);
-    }
-    if (!v.prompt_title.empty()) {
-      append_xml_attr(out, "promptTitle", v.prompt_title);
-    }
-    if (!v.prompt_message.empty()) {
-      append_xml_attr(out, "prompt", v.prompt_message);
-    }
-    out.append(v.extra_attrs);
+    append_data_validation_attrs(out, v);
     out.append(" sqref=\"");
     for (std::size_t i = 0; i < v.ranges.size(); ++i) {
       if (i > 0) {
@@ -664,10 +636,12 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // Data-bar settings with no legacy attribute live in the worksheet
   // `<extLst>`, which is emitted much further down; build them here so
   // the CF model is read once.
-  const std::string ext_lst_xml =
-      merge_x14_cf_entries(sheet.ext_lst_xml(), sheet.conditional_formats(), indexer, cf_sheet);
-  const std::string merges_xml = BuildMergeCellsBlock(sheet);
   const std::string dv_xml = BuildDataValidationsBlock(sheet, indexer);
+  // With no `<dataValidations>` written, its attributes move to the x14 container.
+  const std::string ext_lst_xml = merge_x14_dv_entries(
+      merge_x14_cf_entries(sheet.ext_lst_xml(), sheet.conditional_formats(), indexer, cf_sheet), sheet.validations(),
+      sheet.name(), indexer, dv_xml.empty() ? std::string_view(sheet.validations_extra_attrs()) : std::string_view());
+  const std::string merges_xml = BuildMergeCellsBlock(sheet);
   const std::string hl_xml = BuildHyperlinksBlock(sheet, hyperlink_rids);
   // <sheetProtection> sits between <sheetData> and <mergeCells> per
   // ECMA-376 document order. Helper returns "" when protection is

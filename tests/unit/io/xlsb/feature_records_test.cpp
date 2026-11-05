@@ -33,6 +33,10 @@
 //   dxfnum     CF dxfs with number formats, alone and with a font
 //   dxfhand    CF dxfs with a font name, a size, alignment and protection;
 //              Excel keeps only the name
+//
+// `structural_ref_m7.{xlsb,xlsx}` (Excel-saved) holds validations on Sheet3:
+// G1-G3 name only their own sheet, G4 (list `Sheet1!$A$1:$A$3`) and G5
+// (custom `Sheet1!$A$1>0`) another, so Excel stores those two as BrtDVal14.
 
 #include <algorithm>
 #include <cmath>
@@ -879,6 +883,169 @@ TEST(XlsbFeatureRecords, XlsxSourcedFeaturesAreWrittenToXlsb) {
   auto styles = zip.read_entry("xl/styles.bin");
   ASSERT_TRUE(static_cast<bool>(styles));
   EXPECT_EQ(DxfRecords(SpanOf(styles.value())).size(), from_xlsx.styles().dxfs.size());
+}
+
+constexpr std::uint16_t kDVal = 64;
+constexpr std::uint16_t kBeginDVals = 573;
+constexpr std::uint16_t kDVal14 = 1053;
+constexpr std::uint16_t kBeginDVals14 = 1054;
+constexpr std::uint16_t kEndDVals14 = 1154;
+const char* const kM7Sheet3 = "xl/worksheets/sheet2.bin";
+
+std::string M7Path(const char* ext) {
+  return std::string(FORMULON_FIXTURES_DIR) + "/excel/structural_ref_m7." + ext;
+}
+
+std::string Hex(io::ByteSpan bytes) {
+  std::string out;
+  for (std::size_t i = 0; i < bytes.size; ++i) {
+    char hex[4];
+    std::snprintf(hex, sizeof(hex), "%02x ", bytes.data[i]);
+    out += hex;
+  }
+  return out;
+}
+
+/// Payloads of every `type` record in `part`, hex-encoded, in stream order.
+std::vector<std::string> RecordPayloads(const std::vector<std::uint8_t>& xlsb, const std::string& part,
+                                        std::uint16_t type) {
+  std::vector<std::string> out;
+  io::ZipReader zip;
+  if (!zip.open(SpanOf(xlsb))) {
+    ADD_FAILURE() << "zip open failed";
+    return out;
+  }
+  auto body = zip.read_entry(part);
+  if (!body) {
+    ADD_FAILURE() << "missing part " << part;
+    return out;
+  }
+  io::ByteSpan cursor = SpanOf(body.value());
+  while (cursor.size != 0U) {
+    auto rec = io::xlsb::read_record(cursor);
+    if (!rec) {
+      ADD_FAILURE() << "record walk failed";
+      break;
+    }
+    if (rec.value().type == type) {
+      out.push_back(Hex(rec.value().payload));
+    }
+  }
+  return out;
+}
+
+/// The validation records of `part` that the model owns, one list per kind.
+std::vector<std::vector<std::string>> ValidationRecords(const std::vector<std::uint8_t>& xlsb,
+                                                        const std::string& part) {
+  std::vector<std::vector<std::string>> out;
+  for (const std::uint16_t type : {kBeginDVals, kDVal, kBeginDVals14, kDVal14, kEndDVals14}) {
+    out.push_back(RecordPayloads(xlsb, part, type));
+  }
+  return out;
+}
+
+TEST(XlsbDv14, LoadsToTheModelOfExcelsXlsx) {
+  const Workbook from_xlsb = ReadXlsbBytes(ReadFileBytes(M7Path("xlsb")));
+  const std::vector<std::uint8_t> xlsx = ReadFileBytes(M7Path("xlsx"));
+  auto from_xlsx = io::read_ooxml(SpanOf(xlsx));
+  ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
+  EXPECT_EQ(DescribeFeatures(from_xlsb), DescribeFeatures(from_xlsx.value().workbook));
+
+  const std::vector<DataValidation>& dvs = from_xlsb.sheet(1).validations();
+  ASSERT_EQ(dvs.size(), 5U);
+  for (std::size_t i = 0; i < 3U; ++i) {
+    EXPECT_FALSE(dvs[i].x14_placement) << i;
+  }
+  EXPECT_TRUE(dvs[3].x14_placement);
+  EXPECT_EQ(dvs[3].type, 3U);
+  EXPECT_EQ(Canonical(dvs[3].formula1), Canonical(std::string("Sheet1!$A$1:$A$3")));
+  ASSERT_EQ(dvs[3].ranges.size(), 1U);
+  EXPECT_EQ(dvs[3].ranges[0].first_row, 3U);
+  EXPECT_EQ(dvs[3].ranges[0].first_col, 6U);
+  EXPECT_FALSE(dvs[3].allow_blank);
+  EXPECT_TRUE(dvs[3].show_dropdown);
+  EXPECT_TRUE(dvs[4].x14_placement);
+  EXPECT_EQ(dvs[4].type, 7U);
+  EXPECT_EQ(Canonical(dvs[4].formula1), Canonical(std::string("Sheet1!$A$1>0")));
+  EXPECT_TRUE(dvs[4].formula2.empty());
+  ASSERT_EQ(dvs[4].ranges.size(), 1U);
+  EXPECT_EQ(dvs[4].ranges[0].first_row, 4U);
+}
+
+// An engine save keeps Excel's split and Excel's bytes: the own-sheet
+// validations in BrtDVal with a count of 3, G4 and G5 in BrtDVal14.
+TEST(XlsbDv14, EngineSaveRoutesCrossSheetValidationsToDv14) {
+  const std::vector<std::uint8_t> source = ReadFileBytes(M7Path("xlsb"));
+  const Workbook wb = ReadXlsbBytes(source);
+  auto written = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+  const auto records = ValidationRecords(written.value(), kM7Sheet3);
+  EXPECT_EQ(records, ValidationRecords(source, kM7Sheet3));
+  EXPECT_EQ(records[1].size(), 3U);
+  EXPECT_EQ(records[3].size(), 2U);
+
+  const Workbook back = ReadXlsbBytes(written.value());
+  EXPECT_EQ(DescribeFeatures(back), DescribeFeatures(wb));
+  auto again = io::xlsb::write_xlsb(back);
+  ASSERT_TRUE(static_cast<bool>(again)) << again.error().message;
+  EXPECT_EQ(ValidationRecords(again.value(), kM7Sheet3), records);
+}
+
+// Validations from the .xlsx twin carry no retained records; the writer
+// builds the BrtDVal14 container itself.
+TEST(XlsbDv14, XlsxSourcedCrossSheetValidationsAreWrittenAsDv14) {
+  const std::vector<std::uint8_t> xlsx = ReadFileBytes(M7Path("xlsx"));
+  auto from_xlsx = io::read_ooxml(SpanOf(xlsx));
+  ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
+  const Workbook& wb = from_xlsx.value().workbook;
+  auto written = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+  const auto records = ValidationRecords(written.value(), kM7Sheet3);
+  const auto excel = ValidationRecords(ReadFileBytes(M7Path("xlsb")), kM7Sheet3);
+  EXPECT_EQ(records[0], excel[0]);
+  EXPECT_EQ(records[1], excel[1]);
+  EXPECT_EQ(records[2], excel[2]);
+  EXPECT_EQ(records[3].size(), 2U);
+  EXPECT_EQ(records[4].size(), 1U);
+  EXPECT_EQ(DescribeFeatures(ReadXlsbBytes(written.value())), DescribeFeatures(wb));
+}
+
+// A BrtDVal14 the reader cannot adopt (here one with an IME mode, which the
+// model does not carry) is written back byte for byte beside the adopted one.
+TEST(XlsbDv14, UnadoptableRecordSurvivesASave) {
+  Workbook wb = ReadXlsbBytes(ReadFileBytes(M7Path("xlsb")));
+  Sheet& sheet = wb.sheet(1);
+  XlsbSheetTail tail = sheet.xlsb_tail();
+  std::vector<io::ByteSpan> dv14;
+  for (const io::xlsb::FramedRecord& r : io::xlsb::split_records(tail.after_hyperlinks)) {
+    if (r.type == kDVal14) {
+      dv14.push_back(r.payload);
+    }
+  }
+  ASSERT_EQ(dv14.size(), 2U);
+  ASSERT_EQ(dv14[1].size, 81U);
+  // G5's flag word follows the FRTHeader, its FRTSqref and its 13-byte
+  // formula, at payload offset 61; mdImeMode starts at bit 10.
+  const std::size_t g5 = static_cast<std::size_t>(dv14[1].data - tail.after_hyperlinks.data());
+  tail.after_hyperlinks[g5 + 62U] |= 0x04U;
+  const std::string patched = Hex(io::ByteSpan{tail.after_hyperlinks.data() + g5, 81U});
+  sheet.set_xlsb_tail(std::move(tail));
+  // The reader would not have adopted it.
+  sheet.mutable_validations().pop_back();
+
+  const std::vector<std::string> excel = RecordPayloads(ReadFileBytes(M7Path("xlsb")), kM7Sheet3, kDVal14);
+  ASSERT_EQ(excel.size(), 2U);
+  auto written = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+  EXPECT_EQ(RecordPayloads(written.value(), kM7Sheet3, kDVal14), (std::vector<std::string>{excel[0], patched}));
+  EXPECT_EQ(RecordPayloads(written.value(), kM7Sheet3, kBeginDVals14),
+            RecordPayloads(ReadFileBytes(M7Path("xlsb")), kM7Sheet3, kBeginDVals14));
+
+  const Workbook back = ReadXlsbBytes(written.value());
+  EXPECT_EQ(back.sheet(1).validations().size(), 4U);
+  auto again = io::xlsb::write_xlsb(back);
+  ASSERT_TRUE(static_cast<bool>(again)) << again.error().message;
+  EXPECT_EQ(RecordPayloads(again.value(), kM7Sheet3, kDVal14), (std::vector<std::string>{excel[0], patched}));
 }
 
 }  // namespace

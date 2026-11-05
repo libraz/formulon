@@ -1,6 +1,7 @@
 // Record ids shared by the future-record (FRT / AC) wrappers, the x14
-// conditional-formatting, sparkline and print-option records around them, and
-// the autofilter / table-style records several readers dispatch on.
+// conditional-formatting, data-validation, sparkline and print-option records
+// around them, and the autofilter / table-style records several readers
+// dispatch on.
 
 #ifndef FORMULON_IO_XLSB_FRT_RECORDS_H_
 #define FORMULON_IO_XLSB_FRT_RECORDS_H_
@@ -38,12 +39,15 @@ inline constexpr std::uint16_t kBeginCondFmt14 = 1046;
 inline constexpr std::uint16_t kEndCondFmt14 = 1047;
 inline constexpr std::uint16_t kBeginCfRule14 = 1048;
 inline constexpr std::uint16_t kCfvo14 = 1050;
+inline constexpr std::uint16_t kDVal14 = 1053;
+inline constexpr std::uint16_t kBeginDVals14 = 1054;
 inline constexpr std::uint16_t kBeginSparklines = 1056;
 inline constexpr std::uint16_t kEndSparklines = 1057;
 inline constexpr std::uint16_t kBeginSparklineGroups = 1058;
 inline constexpr std::uint16_t kEndSparklineGroups = 1059;
 inline constexpr std::uint16_t kBeginCfs14 = 1135;
 inline constexpr std::uint16_t kEndCfs14 = 1136;
+inline constexpr std::uint16_t kEndDVals14 = 1154;
 inline constexpr std::uint16_t kUid = 3072;
 
 }  // namespace xlsb

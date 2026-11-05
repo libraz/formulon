@@ -205,8 +205,9 @@ TEST(OoxmlX14CrossSheet, CfColourScaleWithCrossSheetCfvoLoads) {
   const cf::CFRule* p2 = RuleWithPriority(wb.sheet(1), 2);
   ASSERT_NE(p2, nullptr);
   EXPECT_EQ(p2->formula1.value_or(""), "Sheet3!$A$1>0");
-  // The data-validation extension is not this reader's and stays captured.
-  EXPECT_NE(wb.sheet(1).ext_lst_xml().find("x14:dataValidations"), std::string::npos);
+  // The data validations of the same extension list are in the model too.
+  EXPECT_EQ(wb.sheet(1).ext_lst_xml().find("x14:dataValidations"), std::string::npos);
+  EXPECT_EQ(wb.sheet(1).validations().size(), 2U);
 }
 
 TEST(OoxmlX14CrossSheet, CfResaveWritesExcelXml) {
@@ -293,6 +294,137 @@ TEST(OoxmlX14CrossSheet, CfRuleWhoseTargetSheetIsDeletedStaysInX14) {
   ASSERT_EQ(blocks.count(kM6Id1), 1U) << xml;
   EXPECT_NE(blocks.at(kM6Id1).find("<xm:f>#REF!&gt;0</xm:f>"), std::string::npos) << blocks.at(kM6Id1);
   EXPECT_EQ(MainBlocks(xml).find("#REF!"), std::string::npos) << xml;
+}
+
+/// Every `<x14:dataValidation>` of the worksheet part `xml`, keyed by sqref,
+/// without its `xr:uid` (the only attribute a save leaves out).
+std::map<std::string, std::string> X14Dvs(const std::string& xml) {
+  std::map<std::string, std::string> out;
+  pugi::xml_document doc;
+  if (!doc.load_string(xml.c_str())) {
+    ADD_FAILURE() << "worksheet does not parse";
+    return out;
+  }
+  for (pugi::xml_node ext : doc.child("worksheet").child("extLst").children("ext")) {
+    for (pugi::xml_node dv : ext.child("x14:dataValidations").children("x14:dataValidation")) {
+      dv.remove_attribute("xr:uid");
+      out[dv.child("xm:sqref").text().get()] = io::raw_xml(dv);
+    }
+  }
+  return out;
+}
+
+const DataValidation* DvAt(const Sheet& sheet, std::uint32_t row, std::uint32_t col) {
+  for (const DataValidation& v : sheet.validations()) {
+    for (const MergeRange& r : v.ranges) {
+      if (r.first_row == row && r.first_col == col) {
+        return &v;
+      }
+    }
+  }
+  return nullptr;
+}
+
+TEST(OoxmlX14CrossSheet, DvExcelValidationsLoadIntoTheModel) {
+  const Workbook wb = Load(ReadFixture("structural_ref_m7.xlsx"));
+  const Sheet& sheet = wb.sheet(1);
+  ASSERT_EQ(sheet.validations().size(), 5U);
+  const DataValidation* own = DvAt(sheet, 0, 6);
+  const DataValidation* list = DvAt(sheet, 3, 6);
+  const DataValidation* custom = DvAt(sheet, 4, 6);
+  ASSERT_NE(own, nullptr);
+  ASSERT_NE(list, nullptr);
+  ASSERT_NE(custom, nullptr);
+  EXPECT_FALSE(own->x14_placement);
+  EXPECT_EQ(own->formula1, "$A$1:$A$3");
+  EXPECT_TRUE(list->x14_placement);
+  EXPECT_EQ(list->formula1, "Sheet1!$A$1:$A$3");
+  EXPECT_TRUE(custom->x14_placement);
+  EXPECT_EQ(custom->formula1, "Sheet1!$A$1>0");
+  EXPECT_TRUE(list->extra_attrs.empty()) << list->extra_attrs;
+  EXPECT_EQ(sheet.ext_lst_xml().find("x14:dataValidations"), std::string::npos) << sheet.ext_lst_xml();
+}
+
+TEST(OoxmlX14CrossSheet, DvResaveWritesExcelXml) {
+  const std::vector<std::uint8_t> excel = ReadFixture("structural_ref_m7.xlsx");
+  const std::string excel_xml = ReadPart(excel, "xl/worksheets/sheet2.xml");
+  const std::string saved_xml = ReadPart(Save(Load(excel)), "xl/worksheets/sheet2.xml");
+  const std::map<std::string, std::string> expected = X14Dvs(excel_xml);
+  const std::map<std::string, std::string> actual = X14Dvs(saved_xml);
+  ASSERT_EQ(expected.size(), 2U);
+  EXPECT_EQ(actual, expected) << saved_xml;
+  EXPECT_EQ(Count(saved_xml, "Sheet1!$A$1:$A$3"), 1U) << saved_xml;
+  EXPECT_EQ(Count(saved_xml, "Sheet1!$A$1&gt;0"), 1U) << saved_xml;
+  EXPECT_NE(saved_xml.find("<dataValidations count=\"3\">"), std::string::npos) << saved_xml;
+  EXPECT_NE(saved_xml.find("<x14:dataValidations count=\"2\" xmlns:xm="), std::string::npos) << saved_xml;
+}
+
+TEST(OoxmlX14CrossSheet, DvSecondRoundTripIsStable) {
+  const std::vector<std::uint8_t> once = Save(Load(ReadFixture("structural_ref_m7.xlsx")));
+  const std::vector<std::uint8_t> twice = Save(Load(once));
+  const std::string sheet_twice = ReadPart(twice, "xl/worksheets/sheet2.xml");
+  EXPECT_EQ(X14Dvs(sheet_twice), X14Dvs(ReadPart(once, "xl/worksheets/sheet2.xml")));
+  EXPECT_EQ(Count(sheet_twice, "<x14:dataValidation "), 2U) << sheet_twice;
+}
+
+TEST(OoxmlX14CrossSheet, DvSheetOfCrossSheetValidationsOmitsTheMainElement) {
+  const std::vector<std::uint8_t> excel = ReadFixture("structural_ref_m10b.xlsx");
+  const std::string saved_xml = ReadPart(Save(Load(excel)), "xl/worksheets/sheet2.xml");
+  EXPECT_EQ(saved_xml.find("<dataValidations"), std::string::npos) << saved_xml;
+  EXPECT_EQ(X14Dvs(saved_xml), X14Dvs(ReadPart(excel, "xl/worksheets/sheet2.xml"))) << saved_xml;
+  EXPECT_EQ(Count(saved_xml, "<x14:dataValidation "), 2U) << saved_xml;
+}
+
+TEST(OoxmlX14CrossSheet, DvContainerAttributesMoveToTheX14Container) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  DataValidation v;
+  v.ranges.push_back(MergeRange{0, 0, 0, 0});
+  v.type = 3;
+  v.formula1 = "Sheet1!$A$1:$A$3";
+  wb.sheet(1).mutable_validations().push_back(v);
+  wb.sheet(1).set_validations_extra_attrs(" disablePrompts=\"1\"");
+  const std::vector<std::uint8_t> bytes = Save(wb);
+  const std::string xml = ReadPart(bytes, "xl/worksheets/sheet2.xml");
+  EXPECT_EQ(xml.find("<dataValidations"), std::string::npos) << xml;
+  EXPECT_NE(xml.find(" disablePrompts=\"1\""), std::string::npos) << xml;
+  const Workbook again = Load(bytes);
+  ASSERT_EQ(again.sheet(1).validations().size(), 1U);
+  EXPECT_EQ(again.sheet(1).validations_extra_attrs(), " disablePrompts=\"1\"");
+}
+
+TEST(OoxmlX14CrossSheet, DvValidationWhoseTargetSheetIsDeletedStaysInX14) {
+  Workbook wb = Load(ReadFixture("structural_ref_m10b.xlsx"));
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(0)));
+  const std::string xml = ReadPart(Save(wb), "xl/worksheets/sheet1.xml");
+  const std::map<std::string, std::string> dvs = X14Dvs(xml);
+  ASSERT_EQ(dvs.count("G1"), 1U) << xml;
+  EXPECT_NE(dvs.at("G1").find("<xm:f>#REF!</xm:f>"), std::string::npos) << dvs.at("G1");
+  EXPECT_EQ(xml.find("<dataValidations"), std::string::npos) << xml;
+}
+
+TEST(OoxmlX14CrossSheet, DvUnreadableEntrySurvivesAndAdoptedOnesAreNotDuplicated) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  wb.sheet(1).set_ext_lst_xml(
+      "<extLst><ext uri=\"{CCE6A557-97BC-4b89-ADB6-D9C93CAAB3DF}\" "
+      "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\">"
+      "<x14:dataValidations count=\"2\" xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\">"
+      "<x14:dataValidation type=\"list\"><x14:formula1><xm:f>Sheet1!$A$1:$A$3</xm:f></x14:formula1>"
+      "<xm:sqref>G1</xm:sqref></x14:dataValidation>"
+      "<x14:dataValidation type=\"list\"><x14:formula1><xm:f>Sheet1!$A$1:$A$3</xm:f></x14:formula1>"
+      "<xm:sqref>not a range</xm:sqref></x14:dataValidation>"
+      "</x14:dataValidations></ext></extLst>");
+  const std::vector<std::uint8_t> once = Save(wb);
+  const Workbook loaded = Load(once);
+  ASSERT_EQ(loaded.sheet(1).validations().size(), 1U);
+  EXPECT_NE(loaded.sheet(1).ext_lst_xml().find("not a range"), std::string::npos);
+  EXPECT_EQ(loaded.sheet(1).ext_lst_xml().find("<xm:sqref>G1<"), std::string::npos);
+  const std::string xml = ReadPart(Save(loaded), "xl/worksheets/sheet2.xml");
+  EXPECT_EQ(Count(xml, "<xm:sqref>not a range</xm:sqref>"), 1U) << xml;
+  EXPECT_EQ(Count(xml, "<xm:sqref>G1</xm:sqref>"), 1U) << xml;
+  EXPECT_EQ(Count(xml, "<x14:dataValidation "), 2U) << xml;
+  EXPECT_EQ(Count(xml, "<x14:dataValidations "), 1U) << xml;
 }
 
 TEST(OoxmlX14CrossSheet, CfCrossSheetDataBarIsOneX14Rule) {

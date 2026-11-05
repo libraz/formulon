@@ -17,6 +17,7 @@
 
 #include "cell.h"
 #include "cf/cf_types.h"
+#include "io/dv_overlay.h"
 #include "io/dynamic_array_formula.h"
 #include "io/protection_xml.h"
 #include "io/xlsb/cell_writer.h"
@@ -254,11 +255,14 @@ Expected<void, Error> EmitFormattingAndValidation(std::vector<std::uint8_t>& bod
       return s;
     }
   }
-  if (raw_dvals != static_cast<std::ptrdiff_t>(retained.size()) && !sheet.validations().empty()) {
+  const bool listed_dvals =
+      std::any_of(sheet.validations().begin(), sheet.validations().end(),
+                  [&sheet](const DataValidation& v) { return !data_validation_in_x14(v, sheet.name()); });
+  if (raw_dvals != static_cast<std::ptrdiff_t>(retained.size()) && listed_dvals) {
     return make_error(FormulonErrorCode::kIoXlsbRetainedPartStale,
                       "retained XLSB data validations cannot be merged with model validations", "context=write_xlsb");
   }
-  if (auto s = emit_dv_block(body, sheet.validations(), ctx); !s) {
+  if (auto s = emit_dv_block(body, sheet.validations(), ctx, sheet.name()); !s) {
     return s;
   }
   body.insert(body.end(), retained.begin() + raw_dvals, retained.end());
@@ -575,6 +579,11 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
                                    rules14_linked);
       !rules14) {
     return std::move(rules14.error());
+  }
+  // Validations naming another sheet are model-owned BrtDVal14 records,
+  // rewritten in place like the x14 CF rules.
+  if (auto dvals14 = place_x14_validations(tail, sheet.validations(), frt_ctx, sheet.name()); !dvals14) {
+    return std::move(dvals14.error());
   }
   if (auto sparklines = add_sparkline_groups(tail.after_hyperlinks, sheet.ext_lst_xml(), frt_ctx, sheet.name(),
                                              deferred_sparkline_groups);

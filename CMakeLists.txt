@@ -154,6 +154,7 @@ set(FORMULON_CORE_SOURCES
   src/io/auto_filter_xml.cpp
   src/io/cell_parser.cpp
   src/io/cf_overlay.cpp
+  src/io/dv_overlay.cpp
   src/io/cf_reader.cpp
   src/io/color_spec_xml.cpp
   src/io/threaded_comments_io.cpp
