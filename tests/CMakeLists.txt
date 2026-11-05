@@ -647,6 +647,11 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} -m tools.dev.binding_drift_test
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  add_test(
+    NAME BindingDriftLedgerRuleTests
+    COMMAND ${_FORMULON_BEHAVIOR_PY} -m tools.dev.binding_drift.api_conventions_bindings_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
   # Structural invariants enforced by "exactly one implementation exists":
   # the bounds-checked array-allocation seam (what keeps a wasm32
   # `rows * cols` from wrapping into a short buffer) and the raw-XML
