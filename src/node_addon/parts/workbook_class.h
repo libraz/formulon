@@ -439,6 +439,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value AddBorder(const Napi::CallbackInfo& info);
   Napi::Value AddNumFmt(const Napi::CallbackInfo& info);
   Napi::Value AddXf(const Napi::CallbackInfo& info);
+  Napi::Value AddCellStyleXf(const Napi::CallbackInfo& info);
   Napi::Value AddDxf(const Napi::CallbackInfo& info);
   Napi::Value FontCount(const Napi::CallbackInfo& info);
   Napi::Value FillCount(const Napi::CallbackInfo& info);
@@ -505,6 +506,10 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   /// populated cells that fail their rule (paged like `getCellsInRange`).
   Napi::Value ValidateValue(const Napi::CallbackInfo& info);
   Napi::Value ListInvalidCells(const Napi::CallbackInfo& info);
+
+  // Raw AutoFilter XML fragment of a sheet.
+  Napi::Value GetAutoFilterXml(const Napi::CallbackInfo& info);
+  Napi::Value SetAutoFilterXml(const Napi::CallbackInfo& info);
 
   // Typed AutoFilter, sheet and table scoped.
   Napi::Value GetAutoFilter(const Napi::CallbackInfo& info);

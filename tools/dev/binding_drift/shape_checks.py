@@ -222,7 +222,7 @@ _STYLE_RECORD_COMPOSITES = {
     },
 }
 
-_TS_FIELD_RE = re.compile(r"^\s*([A-Za-z_$][A-Za-z0-9_$]*)\??\s*:", re.MULTILINE)
+_TS_FIELD_RE = re.compile(r"^\s*(?:readonly\s+)?([A-Za-z_$][A-Za-z0-9_$]*)\??\s*:", re.MULTILINE)
 _PY_FIELD_RE = re.compile(r"^    ([a-z_][A-Za-z0-9_]*)\s*:", re.MULTILINE)
 
 

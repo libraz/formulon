@@ -21,6 +21,7 @@ from formulon import (
     ChartMarkerSymbol,
     ChartPlotType,
     ChartPointState,
+    ChartPreviewOverridesInput,
     ChartSeriesDirection,
     ChartTitle,
     ChartTitleKind,
@@ -177,22 +178,25 @@ class ChartReadTests(unittest.TestCase):
         wb, oid = _chart()
         with wb:
             self.assertEqual(len(wb.get_chart_preview(0, oid).series), 3)
-            rows = wb.get_chart_preview(0, oid, {"direction": ChartSeriesDirection.ROWS})
+            rows = wb.get_chart_preview(0, oid, ChartPreviewOverridesInput(direction=ChartSeriesDirection.ROWS))
             self.assertEqual(len(rows.series), 4)
-            narrow = wb.get_chart_preview(0, oid, {"source": "Sheet1!$A$1:$B$5"})
+            narrow = wb.get_chart_preview(0, oid, ChartPreviewOverridesInput(source="Sheet1!$A$1:$B$5"))
             self.assertEqual(len(narrow.series), 1)
             self.assertEqual(narrow.series[0].name, "S1")
-            headerless = wb.get_chart_preview(0, oid, {"source": "Sheet1!$B$2:$B$5", "header_row": False})
+            headerless = wb.get_chart_preview(
+                0, oid, ChartPreviewOverridesInput(source="Sheet1!$B$2:$B$5", header_row=False)
+            )
             self.assertEqual(headerless.series[0].values, [2.0, 4.0, 6.0, 8.0])
             self.assertEqual(len(wb.get_chart(0, oid).plots[0].series), 3)
             self.assertEqual(wb.get_chart(0, oid).source.range, SOURCE)
 
+            plain = wb.get_chart_preview(0, oid)
+            self.assertEqual(wb.get_chart_preview(0, oid, ChartPreviewOverridesInput(direction=None)), plain)
+
             with self.assertRaises(FormulonError):
-                wb.get_chart_preview(0, oid, {"source": "not a range"})
-            with self.assertRaises(FormulonError):
-                wb.get_chart_preview(0, oid, {"direction": None})
+                wb.get_chart_preview(0, oid, ChartPreviewOverridesInput(source="not a range"))
             with self.assertRaises(TypeError):
-                wb.get_chart_preview(0, oid, {"colour": 1})  # type: ignore[typeddict-unknown-key]
+                ChartPreviewOverridesInput(colour=1)  # type: ignore[call-arg]
 
     def test_save_and_load_keep_the_chart(self) -> None:
         wb, oid = _chart(title="Kept")
@@ -280,8 +284,8 @@ class ChartEditTests(unittest.TestCase):
             # Blanks plot as zero, so a #N/A shown as blank differs from one left as a gap.
             wb.set_chart_display(0, oid, {"blanks_as": ChartBlanksAs.ZERO, "na_as_blank": False})
             today = wb.get_chart_data(0, oid).series[0].states
-            on = wb.get_chart_preview(0, oid, {"na_as_blank": True}).series[0].states
-            off = wb.get_chart_preview(0, oid, {"na_as_blank": False}).series[0].states
+            on = wb.get_chart_preview(0, oid, ChartPreviewOverridesInput(na_as_blank=True)).series[0].states
+            off = wb.get_chart_preview(0, oid, ChartPreviewOverridesInput(na_as_blank=False)).series[0].states
             self.assertEqual(on[0], on[1])
             self.assertNotEqual(off[0], off[1])
             self.assertEqual(off, today)

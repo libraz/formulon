@@ -177,7 +177,7 @@ class FormulonError(Exception):
     message: str
     context: str
 
-    def __new__(cls, status: int, *args, **kwargs):
+    def __new__(cls, status: int, *args: object, **kwargs: object) -> "FormulonError":
         if cls is FormulonError:
             if status == StatusCode.INVALID_ARGUMENT:
                 cls = InvalidArgumentError

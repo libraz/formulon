@@ -296,9 +296,10 @@ test('a surviving note keeps its own shape when notes are added', async () => {
   assert.equal(new Set(vml.match(/id="_x0000_s\d+"/g)).size, 3);
   assert.equal(vml.match(/visibility:visible/g).length, 2);
   const again = mod.Workbook.load(saved.bytes).value;
-  assert.equal(again.getCommentVisible(0, 1, 1).value, 1);
-  assert.equal(again.getCommentVisible(0, 3, 3).value, 1);
-  assert.equal(again.getCommentVisible(0, 8, 8).value, 0);
+  assert.equal(again.getCommentVisible(0, 1, 1).value, true);
+  assert.equal(again.getCommentVisible(0, 3, 3).value, true);
+  assert.equal(again.getCommentVisible(0, 8, 8).value, false);
+  assert.equal(again.getCommentVisible(0, 9, 9).value, null);
   release(again);
   release(first);
   release(wb);

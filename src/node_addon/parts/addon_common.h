@@ -144,6 +144,10 @@ Napi::Object MakeStringFieldResult(Napi::Env env, fm_status_t code, const char* 
 /// carried only on success and reads 0 otherwise.
 Napi::Object MakeNumberResult(Napi::Env env, fm_status_t code, double value);
 
+/// Builds the `{ status, value }` BoolResult from `code`; `value` is
+/// `flag != 0` on success and `false` otherwise.
+Napi::Object MakeBoolResult(Napi::Env env, fm_status_t code, int32_t flag);
+
 /// Builds the `{ status, value }` StringResult from `code`; `value` is
 /// carried only on success and reads "" otherwise (as does a NULL `value`).
 Napi::Object MakeStringResult(Napi::Env env, fm_status_t code, const char* value);

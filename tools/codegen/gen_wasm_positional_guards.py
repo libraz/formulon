@@ -26,7 +26,7 @@ from typing import Iterable
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_NODE_SOURCE = REPO_ROOT / "src/node_addon/parts/workbook_class.cc"
 DEFAULT_WASM_SOURCE = REPO_ROOT / "src/wasm/parts/bindings_register.cpp"
-EXPECTED_NODE_REGISTRATIONS = 433
+EXPECTED_NODE_REGISTRATIONS = 436
 
 MASK_NAMES = (
     "u32",
@@ -46,19 +46,10 @@ WASM_METHOD = re.compile(r"\.function\(\s*\"([A-Za-z0-9_]+)\"")
 WASM_FREE_FUNCTION = re.compile(r"\bfunction\(\s*\"([A-Za-z0-9_]+)\"")
 
 # The Node class has one lifecycle helper that is intentionally not exposed
-# by the embind class. Three embind methods have no Node counterpart:
-# getAutoFilterXml and setAutoFilterXml (WASM_ONLY_GUARDS) and
-# addCellStyleXf, which carries only an object argument (WASM_UNGUARDED_METHODS).
-# Every method both surfaces share takes its spec from the Node registration.
-# Keeping these sets explicit makes a future binding drift fail at generation
-# time instead of silently losing validation.
+# by the embind class. Every other method both surfaces share takes its spec
+# from the Node registration. Keeping the set explicit makes a future binding
+# drift fail at generation time instead of silently losing validation.
 NODE_ONLY_METHODS = frozenset(("getMemoryUsage",))
-WASM_UNGUARDED_METHODS = frozenset(("addCellStyleXf",))
-
-WASM_ONLY_GUARDS = {
-    "getAutoFilterXml": {"u32": 0x1},
-    "setAutoFilterXml": {"u32": 0x1, "string": 0x2},
-}
 
 FREE_FUNCTION_GUARDS = {
     "evalFormula": {"string": 0x1},
@@ -214,7 +205,7 @@ def _check_free_functions(source: Path) -> None:
 def _check_surface(node: Iterable[Registration], wasm_methods: set[str]) -> None:
     registrations = list(node)
     node_names = {entry.js_name for entry in registrations}
-    expected_wasm = (node_names - NODE_ONLY_METHODS) | set(WASM_ONLY_GUARDS) | WASM_UNGUARDED_METHODS
+    expected_wasm = node_names - NODE_ONLY_METHODS
     if wasm_methods != expected_wasm:
         missing = sorted(expected_wasm - wasm_methods)
         extra = sorted(wasm_methods - expected_wasm)
@@ -225,14 +216,6 @@ def _build_metadata(node: list[Registration]) -> dict[str, object]:
     workbook: dict[str, dict[str, int]] = {
         entry.js_name: entry.as_js_spec() for entry in sorted(node, key=lambda entry: entry.js_name)
     }
-    # These embind-only methods have no primitive positional arguments, but
-    # they still cross a native Workbook frame. Include them in the generated
-    # wrapper with an empty spec so nested getters cannot destroy the receiver
-    # while the call is active.
-    for name in WASM_UNGUARDED_METHODS:
-        workbook[name] = {}
-    for name, spec in WASM_ONLY_GUARDS.items():
-        workbook[name] = dict(spec)
     return {
         "nodeRegistrationCount": len(node),
         "workbook": dict(sorted(workbook.items())),
@@ -500,6 +483,16 @@ def _render(metadata: dict[str, object]) -> str:
       if (owner !== workbook.prototype) {{
         Object.defineProperty(workbook.prototype, key, {{ ...descriptor, value: guarded }});
       }}
+    }}
+    // `using` calls dispose(); embind's own [Symbol.dispose] detaches the
+    // wrapper instead, so the Workbook rebinds the symbol to the guarded
+    // dispose(). The inherited embind method stays guarded above.
+    if (typeof Symbol.dispose === 'symbol') {{
+      Object.defineProperty(workbook.prototype, Symbol.dispose, {{
+        value: workbook.prototype.dispose,
+        writable: true,
+        configurable: true,
+      }});
     }}
     module[installKey] = true;
   }}

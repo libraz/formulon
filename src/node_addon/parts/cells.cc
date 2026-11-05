@@ -250,10 +250,7 @@ Napi::Value Workbook::GetCellShowPhonetic(const Napi::CallbackInfo& info) {
   const fm_status_t rc = handle_ != nullptr
                              ? fm_sheet_get_cell_show_phonetic(handle_, address.sheet, address.row, address.col, &show)
                              : kBindingInvalidHandle;
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("status", MakeStatus(env, rc));
-  out.Set("show", Napi::Boolean::New(env, rc == 0 && show != 0));
-  return out;
+  return MakeBoolResult(env, rc, show);
 }
 
 Napi::Value Workbook::SetCellShowPhonetic(const Napi::CallbackInfo& info) {

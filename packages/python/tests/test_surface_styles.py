@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
 from formulon import (
     ColorSpec,
@@ -109,7 +110,7 @@ class StyleTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             index = wb.add_font(FontRecord(name="Arial", size=12.0, vert_align=1, color_argb=0xFF112233))
             edited = wb.get_font(index)
-            edited.color_argb = 0xFF00FF00
+            edited = replace(edited, color_argb=0xFF00FF00)
             recolored = wb.add_font(edited)
             self.assertNotEqual(recolored, index)
             reread = wb.get_font(recolored)

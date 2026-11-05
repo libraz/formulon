@@ -42,19 +42,10 @@ from .ts_decl import (
     _parse_js_constants,
 )
 
-# embind auto-adds a `delete()` finaliser to every `class_<T>` -- it has no
-# corresponding `.function(...)` registration, so it must be excluded before
-# comparing the WASM Workbook interface against bindings_register.cpp.
-WASM_AUTO_METHODS = {"delete"}
-
 # Intentional binding differences are kept exact. This makes a newly added
 # method or a removed method fail drift checking instead of becoming a stale
 # exception in one binding.
-WASM_ONLY_METHODS = {
-    "addCellStyleXf",
-    "getAutoFilterXml",
-    "setAutoFilterXml",
-}
+WASM_ONLY_METHODS: set = set()
 NODE_ONLY_METHODS = {"getMemoryUsage"}
 
 # Pure-JS free functions declared in packages/npm-native/index.d.ts that are
@@ -79,7 +70,7 @@ def check_dts_wasm() -> List[str]:
     free_cpp = set(re.findall(r'(?<!\.)\bfunction\("([^"]+)"', cpp_text))
 
     dts_text = _read(WASM_DTS)
-    instance_dts = _extract_ts_methods(_find_interface_body(dts_text, "Workbook", WASM_DTS)) - WASM_AUTO_METHODS
+    instance_dts = _extract_ts_methods(_find_interface_body(dts_text, "Workbook", WASM_DTS))
     static_dts = _extract_ts_methods(_find_interface_body(dts_text, "WorkbookCtor", WASM_DTS))
     free_dts = _extract_ts_methods(_find_interface_body(dts_text, "FormulonModule", WASM_DTS))
 
@@ -328,7 +319,7 @@ def check_dts_enums() -> List[str]:
         ts_values = _extract_ts_enum(dts_text, ts_name)
         if ts_values is None:
             problems.append(
-                f"dts-enums: could not find/parse `export enum {ts_name}` in {WASM_DTS.relative_to(REPO_ROOT)}"
+                f"dts-enums: could not find/parse the `{ts_name}` table in {WASM_DTS.relative_to(REPO_ROOT)}"
             )
             continue
 

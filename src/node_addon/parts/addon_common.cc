@@ -564,6 +564,10 @@ Napi::Object MakeNumberResult(Napi::Env env, fm_status_t code, double value) {
   return MakeNumberFieldResult(env, code, "value", value);
 }
 
+Napi::Object MakeBoolResult(Napi::Env env, fm_status_t code, int32_t flag) {
+  return MakeFieldResult(env, MakeStatus(env, code), "value", Napi::Boolean::New(env, code == 0 && flag != 0));
+}
+
 Napi::Object MakeStringResult(Napi::Env env, fm_status_t code, const char* value) {
   return MakeStringFieldResult(env, code, "value", value);
 }

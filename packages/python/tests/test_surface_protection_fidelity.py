@@ -152,6 +152,11 @@ class NoteVisibilityTests(unittest.TestCase):
                 with self.assertRaises(FormulonError):
                     reloaded.set_comment_visible(0, 7, 7, True)
 
+    def test_out_of_range_sheet_raises_instead_of_returning_none(self) -> None:
+        with Workbook.create_default() as wb:
+            with self.assertRaises(FormulonError):
+                wb.get_comment_visible(99, 1, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

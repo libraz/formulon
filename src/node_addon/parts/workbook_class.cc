@@ -364,11 +364,13 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::EvaluateAutoFilter, 0x1ULL>("evaluateAutoFilter"),
           GuardedInstanceMethod<&Workbook::EvaluateTableAutoFilter, 0x1ULL>("evaluateTableAutoFilter"),
           GuardedInstanceMethod<&Workbook::GetAutoFilter, 0x1ULL>("getAutoFilter"),
+          GuardedInstanceMethod<&Workbook::GetAutoFilterXml, 0x1ULL>("getAutoFilterXml"),
           GuardedInstanceMethod<&Workbook::GetPersons>("listPeople"),
           GuardedInstanceMethod<&Workbook::GetTableAutoFilter, 0x1ULL>("getTableAutoFilter"),
           GuardedInstanceMethod<&Workbook::GetThreadedComments, 0x1ULL>("listThreadedComments"),
           GuardedInstanceMethod<&Workbook::ListInvalidCells, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL, 0x2ULL, 0x6ULL>("getInvalidCells"),
           GuardedInstanceMethod<&Workbook::RemoveAutoFilter, 0x1ULL>("removeAutoFilter"),
+          GuardedInstanceMethod<&Workbook::SetAutoFilterXml, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setAutoFilterXml"),
           GuardedInstanceMethod<&Workbook::RemovePerson, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("removePerson"),
           GuardedInstanceMethod<&Workbook::GetPerson, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("getPerson"),
           GuardedInstanceMethod<&Workbook::RemoveTableAutoFilter, 0x1ULL>("removeTableAutoFilter"),
@@ -425,6 +427,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::RemoveChartSeries, 0xFULL>("removeChartSeries"),
           GuardedInstanceMethod<&Workbook::SetChartSource, 0x3ULL, 0x8ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setChartSource"),
           GuardedInstanceMethod<&Workbook::AddXf, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("addCellXf"),
+          GuardedInstanceMethod<&Workbook::AddCellStyleXf, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("addCellStyleXf"),
           GuardedInstanceMethod<&Workbook::BorderCount>("getBorderCount"),
           GuardedInstanceMethod<&Workbook::CalcMode>("getCalcMode"),
           GuardedInstanceMethod<&Workbook::FullPrecision>("getFullPrecision"),
@@ -778,6 +781,12 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::XfCount>("getCellXfCount"),
       });
   // clang-format on
+  // `using` calls [Symbol.dispose]; it is the same function as dispose().
+  const Napi::Value dispose_symbol = env.Global().Get("Symbol").As<Napi::Object>().Get("dispose");
+  if (dispose_symbol.IsSymbol()) {
+    Napi::Object prototype = constructor.Get("prototype").As<Napi::Object>();
+    prototype.Set(dispose_symbol, prototype.Get("dispose"));
+  }
   auto* const state = new WorkbookClassState{};
   state->constructor = Napi::Persistent(constructor);
   env.SetInstanceData(state);

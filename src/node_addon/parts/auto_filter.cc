@@ -12,6 +12,23 @@
 
 namespace formulon_node {
 
+// ---- AutoFilter XML fragment ----------------------------------------
+
+Napi::Value Workbook::GetAutoFilterXml(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const char* xml = nullptr;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_auto_filter_xml(handle_, ArgU32(info, 0), &xml) : kBindingInvalidHandle;
+  return MakeStringResult(env, rc, xml);
+}
+
+Napi::Value Workbook::SetAutoFilterXml(const Napi::CallbackInfo& info) {
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::string xml = ArgString(info, 1);
+    return fm_sheet_set_auto_filter_xml(handle, ArgU32(info, 0), xml.c_str());
+  });
+}
+
 // ---- Typed AutoFilter -----------------------------------------------
 
 namespace {

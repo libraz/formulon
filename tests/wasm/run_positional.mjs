@@ -252,6 +252,17 @@ export function registerPositional(Module, test, hookProbe) {
     }
   });
 
+  test('WASM Workbook [Symbol.dispose] is dispose(): the handle goes, the wrapper stays', () => {
+    const wb = Module.Workbook.createDefault().value;
+    assert.equal(wb[Symbol.dispose], wb.dispose);
+    wb[Symbol.dispose]();
+    wb[Symbol.dispose]();
+    assert.equal(wb.isValid(), false);
+    assert.equal(wb.isDeleted(), false);
+    assert.equal(wb.getSheetCount().status.code, 7000);
+    wb.delete();
+  });
+
   test('WASM lifecycle depth follows empty Proxy Workbook receivers', () => {
     const wb = Module.Workbook.createDefault().value;
     const proxy = new Proxy(wb, {});

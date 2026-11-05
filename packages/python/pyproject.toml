@@ -76,7 +76,6 @@ include-package-data = true
 [tool.setuptools.package-data]
 formulon = [
   "py.typed",
-  "*.pyi",
 ]
 "formulon._wasm" = [
   "formulon_capi.wasm",

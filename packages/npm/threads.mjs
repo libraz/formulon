@@ -4,7 +4,10 @@
 // workers load formulon_threads_core.js directly, not this shim (see
 // scripts/stage.mjs).
 
-import createFormulon from './formulon_threads_core.js';
+import * as common from './common.js';
+import createModule from './formulon_threads_core.js';
 
-export default createFormulon;
+export default async function createFormulon(opts) {
+  return Object.assign(await createModule(opts), common);
+}
 export * from './common.js';

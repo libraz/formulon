@@ -245,6 +245,7 @@ class PyFunc(NamedTuple):
     params: Tuple[Tuple[str, str], ...]
     returns: str
     decorators: Tuple[str, ...]
+    defaults: Tuple[Tuple[str, str], ...] = ()
 
 
 class PyClass(NamedTuple):
@@ -266,7 +267,9 @@ def _py_func(node: ast.AST, method: bool) -> PyFunc:
     )
     returns = ast.unparse(node.returns) if node.returns is not None else ""  # type: ignore[attr-defined]
     decorators = tuple(ast.unparse(d) for d in node.decorator_list)  # type: ignore[attr-defined]
-    return PyFunc(node.name, params, returns, decorators)  # type: ignore[attr-defined]
+    defaults = [(a.arg, ast.unparse(d)) for a, d in zip(reversed(positional), reversed(args.defaults))]
+    defaults += [(a.arg, ast.unparse(d)) for a, d in zip(args.kwonlyargs, args.kw_defaults) if d is not None]
+    return PyFunc(node.name, params, returns, decorators, tuple(defaults))  # type: ignore[attr-defined]
 
 
 def _py_class(node: ast.ClassDef) -> PyClass:
@@ -580,6 +583,10 @@ def _positional_params(fn: CFunction) -> List[CParam]:
 # ---------------------------------------------------------------------------
 
 
+# Symbol-keyed members that alias a named method and are covered by that method's entry.
+_SYMBOL_ALIASES = {"[Symbol.dispose]": "dispose"}
+
+
 @_owned("R0.coverage")
 def _rule_coverage(ctx: Context) -> Iterable[Violation]:
     """Every exported symbol on every surface is the current name of a ledger entry that lists the surface.
@@ -590,6 +597,10 @@ def _rule_coverage(ctx: Context) -> Iterable[Violation]:
     for surface in ("c", *BINDING_SURFACES):
         field = _field(surface)
         for symbol in sorted(_symbols(ctx, surface)):
+            if symbol in _SYMBOL_ALIASES and surface != "c":
+                key, entry = _lookup(ctx, surface, _SYMBOL_ALIASES[symbol])
+                if key is not None and entry.get(field) == _SYMBOL_ALIASES[symbol]:
+                    continue
             key, entry = _lookup(ctx, surface, symbol)
             if key is None:
                 yield _violation(ctx, "R0.coverage", surface, symbol, symbol, f"`{symbol}` has no ledger entry")
@@ -922,7 +933,13 @@ def _type_name(ctx: Context, spec: str, field: str) -> Optional[str]:
             if isinstance(name, str):
                 return name
         return _pascal(ref)
-    if prefix in ("union", "literal"):
+    if prefix == "union":
+        record = ctx.ledger.entries.get(f"record.{'_'.join(_words(ref))}")
+        if isinstance(record, dict):
+            name = record.get(field)
+            return name if isinstance(name, str) else None
+        return ref
+    if prefix == "literal":
         return ref
     return None
 
@@ -942,12 +959,32 @@ def _mentions(text: str, name: str) -> bool:
     return re.search(rf"(?<![\w$]){re.escape(name)}(?![\w$])", text) is not None
 
 
-def _scalar_type_problems(ctx: Context, entry: dict, field: str, returns: str, params: Dict[str, str]):
-    """(discriminator, message) pairs for the ledger's `returns` / `params` on one binding member."""
+_OPTIONAL_BOOL_RE = re.compile(r"(?:typing\.)?Optional\[bool\]|bool\s*\|\s*None|None\s*\|\s*bool")
+
+
+def _scalar_type_problems(
+    ctx: Context,
+    entry: dict,
+    field: str,
+    returns: str,
+    params: Dict[str, str],
+    defaults: Dict[str, str],
+    lookup: bool = False,
+):
+    """(discriminator, message) pairs for the ledger's `returns` / `params` on one binding member.
+
+    On the Python surface a `bool` parameter may be `Optional[bool] = None` (absent means unchanged), and a
+    boolean natural-key lookup returns `Optional[bool]`.
+    """
     bool_return = ("BoolResult", "boolean") if field == "js" else ("bool",)
     spec = entry.get("returns")
     if isinstance(spec, str):
-        if spec == "bool" and not any(returns == t or returns.startswith(t + "<") for t in bool_return):
+        if spec == "bool" and field == "py" and lookup:
+            if not _OPTIONAL_BOOL_RE.fullmatch(returns):
+                yield "return", f"returns `{returns}`; a boolean lookup result is `Optional[bool]`"
+        elif spec == "bool" and field == "js" and lookup and returns == "OptionalResult<boolean>":
+            pass
+        elif spec == "bool" and not any(returns == t or returns.startswith(t + "<") for t in bool_return):
             yield "return", f"returns `{returns}`; a boolean result is `{bool_return[0]}`"
         name = _type_name(ctx, spec, field)
         if name and not _mentions(returns, name):
@@ -958,7 +995,10 @@ def _scalar_type_problems(ctx: Context, entry: dict, field: str, returns: str, p
         actual = params.get(_camel(param) if field == "js" else param)
         if actual is None:
             continue
-        if spec == "bool" and actual != ("boolean" if field == "js" else "bool"):
+        optional_default = (
+            field == "py" and _OPTIONAL_BOOL_RE.fullmatch(actual) is not None and defaults.get(param) == "None"
+        )
+        if spec == "bool" and actual != ("boolean" if field == "js" else "bool") and not optional_default:
             yield param, f"parameter `{param}: {actual}` is a boolean"
         name = _type_name(ctx, spec, field)
         if name and not _mentions(actual, name):
@@ -970,12 +1010,16 @@ def _rule_js_types(ctx: Context) -> Iterable[Violation]:
     """Ledger `returns` / `params` on the JS surfaces: a boolean is `boolean` (`BoolResult` as a result), an
     `enum:<key>` names the enum's type, a `union:<Name>` names the string-literal union.
     """
+    lookups = _optional_lookups(ctx)
     for key, entry in _typed_entries(ctx):
         for surface in JS_SURFACES:
             _, member = _member_for(_callables(ctx, surface), entry, "js")
             if member is None:
                 continue
-            for disc, message in _scalar_type_problems(ctx, entry, "js", member.type, dict(member.params)):
+            problems = _scalar_type_problems(
+                ctx, entry, "js", member.type, dict(member.params), {}, lookup=key in lookups
+            )
+            for disc, message in problems:
                 yield _violation(ctx, "R6.js", surface, key, disc, f"`{member.name}`: {message}")
 
 
@@ -984,11 +1028,15 @@ def _rule_py_types(ctx: Context) -> Iterable[Violation]:
     """Ledger `returns` / `params` on the Python surface: a boolean is `bool`, an `enum:<key>` names the
     `IntEnum`, a `union:<Name>` names the `Literal` alias.
     """
+    lookups = _optional_lookups(ctx)
     for key, entry in _typed_entries(ctx):
         name, fn = _member_for(_callables(ctx, "py"), entry, "py")
         if fn is None:
             continue
-        for disc, message in _scalar_type_problems(ctx, entry, "py", fn.returns, dict(fn.params)):
+        problems = _scalar_type_problems(
+            ctx, entry, "py", fn.returns, dict(fn.params), dict(fn.defaults), lookup=key in lookups
+        )
+        for disc, message in problems:
             yield _violation(ctx, "R6.py", "py", key, disc, f"`{name}`: {message}")
 
 

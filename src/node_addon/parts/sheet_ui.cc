@@ -197,12 +197,14 @@ Napi::Value Workbook::SetComment(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::GetCommentVisible(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+    return MakeOptionalResult(env, NullHandleError(env), env.Null());
   }
   int32_t visible = 0;
   const fm_status_t rc =
       fm_sheet_get_comment_visible(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &visible);
-  return MakeNumberResult(env, rc, visible);
+  const bool absent = rc == FM_STATUS_NOT_FOUND;
+  return MakeOptionalResult(env, absent ? 0 : rc, absent ? 0 : 1,
+                            rc == 0 ? Napi::Value(Napi::Boolean::New(env, visible != 0)) : env.Null());
 }
 
 Napi::Value Workbook::SetCommentVisible(const Napi::CallbackInfo& info) {

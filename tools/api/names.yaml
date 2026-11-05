@@ -28,7 +28,7 @@ collections:
   sparkline: { key: index, ops: [sparkline.get] }
   external_link: { key: index, ops: [external_link.get, external_link.get_count] }
   cell_phonetic_run: { key: index, ops: [cell_phonetic_run.get, cell_phonetic_run.get_count] }
-  comment: { key: natural, by: cell, plural: comments, ops: [comment.get, comment.get_at, comment.get_count, comment.set] }
+  comment: { key: natural, by: cell, plural: comments, ops: [comment.get, comment.get_at, comment.get_count, comment.set, comment_visible.get] }
   threaded_comment: { key: natural, by: id, plural: threaded_comments, ops: [threaded_comment.add, threaded_comment.get, threaded_comment.get_at, threaded_comment.get_count, threaded_comment.remove, threaded_comment.update] }
   person: { key: natural, by: id, plural: people, ops: [person.add, person.get, person.get_at, person.get_count, person.remove] }
   hyperlink: { key: natural, by: cell, plural: hyperlinks, ops: [hyperlink.add, hyperlink.get, hyperlink.get_at, hyperlink.get_count, hyperlink.remove, hyperlink.remove_at] }
@@ -1499,8 +1499,9 @@ entries:
   record.cell_show_phonetic_result:
     kind: record
     role: result
-    js: CellShowPhoneticResult
     surfaces: [wasm, native]
+    replaced_by: record.bool_result
+    closes: R8.js
     was: { js: CellShowPhoneticResult }
   record.cell_xf_index_result:
     kind: record
@@ -1883,6 +1884,11 @@ entries:
     js: ListResult
     surfaces: [wasm, native]
     was: { js: ListResult }
+  record.patch:
+    kind: record
+    js: Patch
+    surfaces: [wasm, native]
+    was: { js: Patch }
   record.optional_result:
     kind: record
     role: result
@@ -1907,7 +1913,7 @@ entries:
   record.merge_function_metadata:
     kind: record
     js: MergeFunctionMetadata
-    surfaces: [wasm]
+    surfaces: [wasm, native]
     was: { js: MergeFunctionMetadata }
   record.merged_function_metadata_result:
     kind: record
@@ -1921,6 +1927,12 @@ entries:
     surfaces: [wasm, native]
     was: { js: NumFmtResult }
     drop: { js: NumFmtResult, closes: R8.js }
+  record.bool_result:
+    kind: record
+    role: result
+    js: BoolResult
+    surfaces: [wasm, native]
+    was: { js: BoolResult }
   record.number_result:
     kind: record
     role: result
@@ -2010,8 +2022,9 @@ entries:
   record.pivot_cache_shared_item_is_date_result:
     kind: record
     role: result
-    js: PivotCacheSharedItemIsDateResult
     surfaces: [wasm, native]
+    replaced_by: record.bool_result
+    closes: R8.js
     was: { js: PivotCacheSharedItemIsDateResult }
   record.pivot_calculated_item_result:
     kind: record
@@ -2076,14 +2089,16 @@ entries:
   record.pivot_projection_pending_result:
     kind: record
     role: result
-    js: PivotProjectionPendingResult
     surfaces: [wasm, native]
+    replaced_by: record.bool_result
+    closes: R8.js
     was: { js: PivotProjectionPendingResult }
   record.pivot_report_layout_result:
     kind: record
     role: result
-    js: PivotReportLayoutResult
     surfaces: [wasm, native]
+    replaced_by: record.number_result
+    closes: R8.js
     was: { js: PivotReportLayoutResult }
   record.pivot_style_info_result:
     kind: record
@@ -2930,7 +2945,6 @@ entries:
     c: fm_sheet_evaluate_cf_formula
     js: evaluateCfFormula
     py: evaluate_cf_formula
-    returns: bool
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_evaluate_cf_formula, js: evaluateConditionalFormula, py: evaluate_cf_formula }
   formula_array.evaluate:
@@ -3072,7 +3086,6 @@ entries:
     c: fm_sheet_get_display_text
     js: getDisplayText
     py: get_display_text
-    returns: "enum:display_status"
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_display_text, js: getDisplayText, py: get_display_text }
   value.format:
@@ -3082,7 +3095,6 @@ entries:
     c: fm_workbook_format_value
     js: formatValue
     py: format_value
-    returns: "enum:display_status"
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_format_value, js: formatValue, py: format_value }
   defined_name.get_count:
@@ -5067,7 +5079,7 @@ entries:
     c: fm_sheet_set_pivot_field_date_group
     js: setPivotFieldDateGroup
     py: set_pivot_field_date_group
-    params: { calendar: "enum:pivot_calendar", periods: "enum:pivot_date_period" }
+    params: { calendar: "enum:pivot_calendar" }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_set_date_group, js: pivotFieldSetDateGroup, py: pivot_field_set_date_group }
   pivot_field_date_group.clear:
@@ -6989,7 +7001,7 @@ entries:
     c: fm_sheet_set_chart_title
     js: setChartTitle
     py: set_chart_title
-    params: { title: "enum:chart_title_kind" }
+    params: { title: "union:ChartTitle" }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_chart_title, js: setChartTitle, py: set_chart_title }
   chart_legend.set:
@@ -10682,6 +10694,20 @@ entries:
     surfaces: [wasm, native]
     closes: R8.js
     was: { js: xfIndex }
+  field.cell_show_phonetic_result_value:
+    kind: field
+    record: record.cell_show_phonetic_result
+    js: value
+    surfaces: [wasm, native]
+    closes: R8.js
+    was: { js: show }
+  field.pivot_report_layout_result_value:
+    kind: field
+    record: record.pivot_report_layout_result
+    js: value
+    surfaces: [wasm, native]
+    closes: R8.js
+    was: { js: layout }
   field.partial_recalc_result_value:
     kind: field
     record: record.partial_recalc_result

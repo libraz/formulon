@@ -6,6 +6,7 @@ import io
 import re
 import unittest
 import zipfile
+from dataclasses import replace
 
 from formulon import (
     AnchorKind,
@@ -156,10 +157,9 @@ class SparklineGroupTests(unittest.TestCase):
                 )
 
                 first = [loaded.get_sparkline_group(0, i) for i in range(loaded.get_sparkline_group_count(0))][0]
-                first.type = SparklineType.STACKED
-                first.high = True
-                first.date_axis = True
-                first.date_axis_ref = "Sheet1!A4:D4"
+                first = replace(
+                    first, type=SparklineType.STACKED, high=True, date_axis=True, date_axis_ref="Sheet1!A4:D4"
+                )
                 loaded.update_sparkline_group(0, 0, first)
                 updated = [loaded.get_sparkline_group(0, i) for i in range(loaded.get_sparkline_group_count(0))][0]
                 self.assertEqual((updated.type, updated.high, updated.date_axis), (SparklineType.STACKED, True, True))

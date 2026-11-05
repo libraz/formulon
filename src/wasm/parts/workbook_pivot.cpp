@@ -200,14 +200,11 @@ JsStatus JsWorkbook::pivotCacheFieldAddSharedItemDate(uint32_t cacheId, uint32_t
 
 emscripten::val JsWorkbook::pivotCacheFieldSharedItemIsDate(uint32_t cacheId, uint32_t fieldIdx,
                                                             uint32_t itemIdx) const {
-  emscripten::val o = emscripten::val::object();
   int32_t isDate = 0;
   const fm_status_t rc = handle_ != nullptr ? fm_workbook_is_pivot_cache_field_shared_item_date(
                                                   handle_, cacheId, fieldIdx, itemIdx, &isDate)
                                             : kBindingInvalidHandle;
-  o.set("status", status_from_rc(rc));
-  o.set("value", rc == 0 && isDate != 0);
-  return o;
+  return bool_result(rc, isDate);
 }
 
 JsStatus JsWorkbook::pivotCacheFieldAddSharedItemText(uint32_t cacheId, uint32_t fieldIdx, const std::string& utf8) {
@@ -372,17 +369,11 @@ JsStatus JsWorkbook::pivotSetStyleInfo(uint32_t sheet, uint32_t pivotIdx, emscri
                                                       last_column ? 1 : 0));
 }
 
-emscripten::val JsWorkbook::pivotGetLayout(uint32_t sheet, uint32_t pivotIdx) const {
-  emscripten::val o = emscripten::val::object();
+JsNumberResult JsWorkbook::pivotGetLayout(uint32_t sheet, uint32_t pivotIdx) const {
   std::int32_t layout = FM_PIVOT_REPORT_LAYOUT_COMPACT;
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_pivot_report_layout(handle_, sheet, pivotIdx, &layout) : kBindingInvalidHandle;
-  if (rc != 0) {
-    layout = FM_PIVOT_REPORT_LAYOUT_COMPACT;
-  }
-  o.set("status", status_from_rc(rc));
-  o.set("layout", static_cast<uint32_t>(layout));
-  return o;
+  return number_result(rc, static_cast<double>(layout));
 }
 
 JsStatus JsWorkbook::pivotSetLayout(uint32_t sheet, uint32_t pivotIdx, uint32_t layout) {
@@ -881,13 +872,10 @@ JsStatus JsWorkbook::pivotProject(uint32_t sheet, uint32_t pivotIdx) {
 }
 
 emscripten::val JsWorkbook::pivotProjectionPending(uint32_t sheet, uint32_t pivotIdx) const {
-  emscripten::val o = emscripten::val::object();
   int32_t pending = 0;
   const fm_status_t rc = handle_ != nullptr ? fm_sheet_is_pivot_projection_pending(handle_, sheet, pivotIdx, &pending)
                                             : kBindingInvalidHandle;
-  o.set("status", status_from_rc(rc));
-  o.set("value", rc == 0 && pending != 0);
-  return o;
+  return bool_result(rc, pending);
 }
 
 JsAddStyleResult JsWorkbook::pivotShowDetails(uint32_t sheet, uint32_t pivotIdx, uint32_t row, uint32_t col) {

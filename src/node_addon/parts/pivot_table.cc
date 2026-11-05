@@ -170,13 +170,13 @@ Napi::Value Workbook::PivotSetStyleInfo(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PivotGetLayout(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeNumberFieldResult(env, kBindingInvalidHandle, "layout", 0);
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   std::int32_t layout = FM_PIVOT_REPORT_LAYOUT_COMPACT;
   fm_status_t rc = fm_sheet_get_pivot_report_layout(handle_, sheet, pivot_idx, &layout);
-  return MakeNumberFieldResult(env, rc, "layout", layout);
+  return MakeNumberResult(env, rc, layout);
 }
 
 Napi::Value Workbook::PivotSetLayout(const Napi::CallbackInfo& info) {
@@ -716,10 +716,7 @@ Napi::Value Workbook::PivotProjectionPending(const Napi::CallbackInfo& info) {
                              ? fm_sheet_is_pivot_projection_pending(handle_, static_cast<std::size_t>(ArgU32(info, 0)),
                                                                     static_cast<std::size_t>(ArgU32(info, 1)), &pending)
                              : kBindingInvalidHandle;
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("status", MakeStatus(env, rc));
-  out.Set("value", Napi::Boolean::New(env, rc == 0 && pending != 0));
-  return out;
+  return MakeBoolResult(env, rc, pending);
 }
 
 Napi::Value Workbook::PivotShowDetails(const Napi::CallbackInfo& info) {

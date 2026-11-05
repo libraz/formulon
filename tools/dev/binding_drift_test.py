@@ -3,13 +3,30 @@
 
 from __future__ import annotations
 
+import importlib.util
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from tools.dev.binding_drift import abi_checks, api_conventions, declaration_checks, readme_checks, ts_decl
+from tools.dev.binding_drift import (
+    abi_checks,
+    api_conventions,
+    declaration_checks,
+    enum_decl,
+    readme_checks,
+    shape_checks,
+    ts_decl,
+)
+
+
+def _load_gen_native_dts():
+    path = Path(__file__).resolve().parents[1] / "codegen" / "gen_native_dts.py"
+    spec = importlib.util.spec_from_file_location("gen_native_dts", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class JavaScriptSurfaceTest(unittest.TestCase):
@@ -719,6 +736,65 @@ class HeaderErrorCodesTest(unittest.TestCase):
         problems = self.problems("/** @return `FM_STATUS_OK` on success. */\n")
         self.assertEqual(len(problems), 1)
         self.assertIn("quotes no status code", problems[0])
+
+
+class DeclarationTableTest(unittest.TestCase):
+    def test_enum_ordinals_are_read_from_a_const_table(self) -> None:
+        text = "export const Mode: Readonly<{\n  A: 0;\n  B: 1;\n  C: 5;\n}>;\nexport type Mode = 0 | 1 | 5;\n"
+        self.assertEqual(enum_decl._extract_ts_enum(text, "Mode"), [0, 1, 5])
+        self.assertIsNone(enum_decl._extract_ts_enum(text, "Other"))
+
+    def test_record_fields_are_read_through_readonly(self) -> None:
+        body = "  readonly alpha: number;\n  beta?: string;\n  readonly gamma?: boolean;\n"
+        self.assertEqual(set(shape_checks._TS_FIELD_RE.findall(body)), {"alpha", "beta", "gamma"})
+
+
+class NativeDtsGeneratorTest(unittest.TestCase):
+    WASM = (
+        '//\n// WASM header.\n//\n\n/// <reference lib="esnext.disposable" />\n\n'
+        "export const Kind: Readonly<{\n  A: 0;\n}>;\n\n"
+        "export interface Workbook {\n  isValid(): boolean;\n}\n\n"
+        "// <entry-point:begin>\n"
+        "export interface FormulonModule {\n"
+        "  /** Factory. */\n  Workbook: WorkbookCtor;\n\n"
+        "  Kind: typeof Kind;\n"
+        "  /** Library version.\n   *  Second line. */\n  getVersion(): string;\n"
+        "  setLevel(\n    level: number,\n  ): Status;\n"
+        "}\n"
+        "export default function createFormulon(): Promise<FormulonModule>;\n"
+        "// <entry-point:end>\n"
+    )
+    DELTA = "// delta\nexport interface Workbook {\n  /** Bytes. */\n  getMemoryUsage(): number;\n}\n"
+
+    def setUp(self) -> None:
+        self.gen = _load_gen_native_dts()
+        self.out = self.gen.generate(self.WASM, self.DELTA)
+
+    def test_wasm_header_and_entry_region_are_replaced(self) -> None:
+        self.assertNotIn("WASM header", self.out)
+        self.assertNotIn("FormulonModule", self.out)
+        self.assertNotIn("createFormulon", self.out)
+        self.assertNotIn("entry-point", self.out)
+        self.assertIn('/// <reference lib="esnext.disposable" />', self.out)
+
+    def test_module_members_become_exports_and_default_keys(self) -> None:
+        self.assertIn("/** Factory. */\nexport const Workbook: WorkbookCtor;", self.out)
+        self.assertIn("/** Library version.\n *  Second line. */\nexport function getVersion(): string;", self.out)
+        self.assertIn("export function setLevel(\n  level: number,\n): Status;", self.out)
+        self.assertNotIn("export const Kind: typeof", self.out)
+        keys = self.out[self.out.index("declare const _default: {") :]
+        for key in ("Workbook: WorkbookCtor;", "Kind: typeof Kind;", "getVersion: typeof getVersion;"):
+            self.assertIn(key, keys)
+
+    def test_delta_members_are_spliced_into_the_workbook_interface(self) -> None:
+        interface = self.out[self.out.index("export interface Workbook {") :]
+        interface = interface[: interface.index("\n}\n")]
+        self.assertIn("isValid(): boolean;", interface)
+        self.assertIn("/** Bytes. */\n  getMemoryUsage(): number;", interface)
+
+    def test_missing_entry_markers_are_an_error(self) -> None:
+        with self.assertRaises(self.gen.GenError):
+            self.gen.generate("export interface Workbook {\n}\n", self.DELTA)
 
 
 if __name__ == "__main__":

@@ -185,13 +185,13 @@ JsStatus JsWorkbook::setComment(uint32_t sheet, uint32_t row, uint32_t col, cons
   return status_from_rc(rc);
 }
 
-JsNumberResult JsWorkbook::getCommentVisible(uint32_t sheet, uint32_t row, uint32_t col) const {
-  if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0);
-  }
+emscripten::val JsWorkbook::getCommentVisible(uint32_t sheet, uint32_t row, uint32_t col) const {
   int32_t visible = 0;
-  const fm_status_t rc = fm_sheet_get_comment_visible(handle_, sheet, row, col, &visible);
-  return number_result(rc, visible);
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_comment_visible(handle_, sheet, row, col, &visible) : kBindingInvalidHandle;
+  const bool absent = rc == FM_STATUS_NOT_FOUND;
+  return optional_result(absent ? 0 : rc, absent ? 0 : 1,
+                         rc == 0 ? emscripten::val(visible != 0) : emscripten::val::null());
 }
 
 JsStatus JsWorkbook::setCommentVisible(uint32_t sheet, uint32_t row, uint32_t col, bool visible) {

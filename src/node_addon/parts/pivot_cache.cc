@@ -201,10 +201,7 @@ Napi::Value Workbook::PivotCacheFieldSharedItemIsDate(const Napi::CallbackInfo& 
                                                   handle_, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)),
                                                   static_cast<std::size_t>(ArgU32(info, 2)), &is_date)
                                             : kBindingInvalidHandle;
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("status", MakeStatus(env, rc));
-  out.Set("value", Napi::Boolean::New(env, rc == 0 && is_date != 0));
-  return out;
+  return MakeBoolResult(env, rc, is_date);
 }
 
 Napi::Value Workbook::PivotCacheFieldAddSharedItemText(const Napi::CallbackInfo& info) {

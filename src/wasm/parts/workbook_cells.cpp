@@ -191,10 +191,7 @@ emscripten::val JsWorkbook::getCellShowPhonetic(uint32_t sheet, uint32_t row, ui
   int32_t show = 0;
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_cell_show_phonetic(handle_, sheet, row, col, &show) : kBindingInvalidHandle;
-  emscripten::val o = emscripten::val::object();
-  o.set("status", rc == 0 ? ok_status() : error_status(rc));
-  o.set("show", rc == 0 && show != 0);
-  return o;
+  return bool_result(rc, show);
 }
 
 JsStatus JsWorkbook::setCellShowPhonetic(uint32_t sheet, uint32_t row, uint32_t col, bool show) {

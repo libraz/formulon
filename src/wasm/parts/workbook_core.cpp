@@ -527,13 +527,10 @@ JsStatus JsWorkbook::setCalcMode(uint32_t mode) {
                                            : kBindingInvalidHandle);
 }
 
-JsNumberResult JsWorkbook::fullPrecision() const {
-  if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
-  }
+emscripten::val JsWorkbook::fullPrecision() const {
   std::int32_t value = 1;
-  const fm_status_t rc = fm_workbook_get_full_precision(handle_, &value);
-  return number_result(rc, static_cast<double>(value));
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_full_precision(handle_, &value) : kBindingInvalidHandle;
+  return bool_result(rc, value);
 }
 
 JsStatus JsWorkbook::setFullPrecision(bool fullPrecision) {
@@ -541,13 +538,10 @@ JsStatus JsWorkbook::setFullPrecision(bool fullPrecision) {
                                            : kBindingInvalidHandle);
 }
 
-JsNumberResult JsWorkbook::calcOnSave() const {
-  if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
-  }
+emscripten::val JsWorkbook::calcOnSave() const {
   std::int32_t value = 1;
-  const fm_status_t rc = fm_workbook_get_calc_on_save(handle_, &value);
-  return number_result(rc, static_cast<double>(value));
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_calc_on_save(handle_, &value) : kBindingInvalidHandle;
+  return bool_result(rc, value);
 }
 
 JsStatus JsWorkbook::setCalcOnSave(bool calcOnSave) {
@@ -569,13 +563,10 @@ JsStatus JsWorkbook::setRefMode(uint32_t mode) {
                                            : kBindingInvalidHandle);
 }
 
-JsNumberResult JsWorkbook::date1904() const {
-  if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
-  }
+emscripten::val JsWorkbook::date1904() const {
   std::int32_t value = 0;
-  const fm_status_t rc = fm_workbook_get_date1904(handle_, &value);
-  return number_result(rc, static_cast<double>(value));
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_date1904(handle_, &value) : kBindingInvalidHandle;
+  return bool_result(rc, value);
 }
 
 JsStatus JsWorkbook::setDate1904(bool date1904) {

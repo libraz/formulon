@@ -46,7 +46,9 @@ async function main() {
 
   const ambientConstEnum = src.match(exportedAmbientConstEnum);
   if (ambientConstEnum) {
-    console.error(`check-dts: exported ambient const enum ${ambientConstEnum[1]} is not supported; use a regular enum`);
+    console.error(
+      `check-dts: exported ambient const enum ${ambientConstEnum[1]} is not supported; declare a const table and a union type`,
+    );
     process.exit(1);
   }
 

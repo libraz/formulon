@@ -869,7 +869,7 @@ def _class_public_methods(tree: ast.AST) -> dict[str, Set[str]]:
 
 
 def check_python_stub_methods() -> List[str]:
-    """Every public method of a runtime class is in the stub, and vice versa.
+    """Every public method of a runtime class is in the stub, and vice versa; a package without a stub passes.
 
     Both sides are read with `ast` (the runtime package is never imported, as
     that would load the WASM module). A stub class is compared with the
@@ -887,6 +887,9 @@ def check_python_stub_methods() -> List[str]:
             continue
         for name, methods in _class_public_methods(tree).items():
             runtime.setdefault(name, set()).update(methods)
+
+    if not PYTHON_STUB.is_file():
+        return problems
 
     try:
         stub_tree = ast.parse(_read(PYTHON_STUB), filename=str(PYTHON_STUB))

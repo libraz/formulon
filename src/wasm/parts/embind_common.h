@@ -391,6 +391,10 @@ emscripten::val record_result(fm_status_t rc, emscripten::val record);
 /// Builds a `JsNumberResult` from `rc`, carrying `value` only on success.
 JsNumberResult number_result(fm_status_t rc, double value);
 
+/// Builds a `{status, value}` boolean result from `rc`; `value` is `flag != 0`
+/// on success and `false` otherwise.
+emscripten::val bool_result(fm_status_t rc, std::int32_t flag);
+
 /// Builds a `JsStringResult` from `rc`, carrying `value` only on success.
 /// A NULL `value` becomes the empty string.
 JsStringResult string_result(fm_status_t rc, const char* value);

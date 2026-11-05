@@ -635,6 +635,12 @@ JsNumberResult number_result(fm_status_t rc, double value) {
   return out;
 }
 
+emscripten::val bool_result(fm_status_t rc, std::int32_t flag) {
+  emscripten::val out = emscripten::val::object();
+  out.set("value", rc == 0 && flag != 0);
+  return record_result(rc, out);
+}
+
 JsStringResult string_result(fm_status_t rc, const char* value) {
   JsStringResult out;
   out.status = status_from_rc(rc);

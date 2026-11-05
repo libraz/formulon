@@ -159,22 +159,18 @@ test('evalFormula evaluates read-only against a blank anchor', async () => {
   }
 });
 
-// Parses the staged `export enum X { A = 0, ... }` declarations into
+// Parses the staged `export const X: Readonly<{ A: 0; ... }>` declarations into
 // {name: {member: ordinal}}. Name presence alone is not enough: a staged
 // bundle carrying a stale ordinal ships a constant that silently means
 // something else, and nothing upstream of dist/ can see that.
 function declaredOrdinalTables(dts) {
   const tables = {};
-  const blocks = dts.matchAll(/^export enum (\w+) \{([^}]*)\}/gm);
+  const blocks = dts.matchAll(/^export const (\w+): Readonly<\{([^}]*)\}>;/gm);
   for (const [, name, body] of blocks) {
     const members = {};
-    let next = 0;
-    for (const line of body.split(',')) {
-      const m = line.trim().match(/^(\w+)\s*(?:=\s*(-?\d+))?$/);
-      if (!m) continue;
-      if (m[2] !== undefined) next = Number(m[2]);
-      members[m[1]] = next;
-      next += 1;
+    for (const line of body.split(';')) {
+      const m = line.trim().match(/^(\w+):\s*(-?\d+)$/);
+      if (m) members[m[1]] = Number(m[2]);
     }
     tables[name] = members;
   }
@@ -649,21 +645,21 @@ test('active sheet is recorded in bookViews and survives a round trip', async ()
 test('the show-phonetic flag survives value writes and a round trip', async () => {
   const Module = await getModule();
   const wb = Module.Workbook.createDefault().value;
-  assert.equal(wb.getCellShowPhonetic(0, 0, 0).show, false);
+  assert.equal(wb.getCellShowPhonetic(0, 0, 0).value, false);
   assert.ok(wb.setText(0, 0, 0, '漢字').ok);
   assert.ok(wb.setCellShowPhonetic(0, 0, 0, true).ok);
   assert.ok(wb.setText(0, 0, 0, '漢字').ok);
-  assert.equal(wb.getCellShowPhonetic(0, 0, 0).show, true);
+  assert.equal(wb.getCellShowPhonetic(0, 0, 0).value, true);
   const saved = wb.save();
   assert.ok(saved.status.ok, JSON.stringify(saved.status));
   const loaded = Module.Workbook.load(saved.bytes).value;
   try {
-    assert.equal(loaded.getCellShowPhonetic(0, 0, 0).show, true);
+    assert.equal(loaded.getCellShowPhonetic(0, 0, 0).value, true);
     assert.ok(loaded.setCellShowPhonetic(0, 0, 0, false).ok);
-    assert.equal(loaded.getCellShowPhonetic(0, 0, 0).show, false);
+    assert.equal(loaded.getCellShowPhonetic(0, 0, 0).value, false);
     const rejected = loaded.getCellShowPhonetic(99, 0, 0);
     assert.equal(rejected.status.ok, false);
-    assert.equal(rejected.show, false);
+    assert.equal(rejected.value, false);
     assert.equal(loaded.setCellShowPhonetic(99, 0, 0, true).ok, false);
   } finally {
     loaded.delete();

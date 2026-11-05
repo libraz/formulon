@@ -75,14 +75,14 @@ Napi::Value Workbook::SetCalcMode(const Napi::CallbackInfo& info) {
 
 namespace {
 
-/// Reads one boolean workbook flag as a `{ status, value }` NumberResult.
+/// Reads one boolean workbook flag as a `{ status, value }` BoolResult.
 Napi::Value FlagResult(Napi::Env env, fm_workbook_t* handle, fm_status_t (*read)(const fm_workbook_t*, int32_t*)) {
   if (handle == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+    return MakeBoolResult(env, kBindingInvalidHandle, 0);
   }
   int32_t value = 0;
   const fm_status_t rc = read(handle, &value);
-  return MakeNumberResult(env, rc, value);
+  return MakeBoolResult(env, rc, value);
 }
 
 }  // namespace

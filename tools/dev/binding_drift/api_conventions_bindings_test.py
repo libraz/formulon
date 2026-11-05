@@ -224,6 +224,20 @@ class CoverageTest(BindingRuleTestBase):
             ],
         )
 
+    def test_symbol_dispose_is_covered_by_the_dispose_entry(self) -> None:
+        ledger = {
+            "entries": {
+                "workbook.class": {"kind": "class", "js": "Workbook"},
+                "workbook.destroy": {"kind": "op", "scope": "workbook", "noun": "workbook", "js": "dispose"},
+            }
+        }
+        body = "  dispose(): void;\n  [Symbol.dispose](): void;\n"
+        found = hits(self.fixture.context("", ledger, wasm=_wb(body), native=_wb(body)), "R0.coverage")
+        self.assertEqual(found, [])
+        body = "  [Symbol.dispose](): void;\n"
+        found = hits(self.fixture.context("", {"entries": {}}, wasm=_wb(body), native=_wb(body)), "R0.coverage")
+        self.assertIn(("wasm", "[Symbol.dispose]", "[Symbol.dispose]"), found)
+
 
 class ScopeTest(BindingRuleTestBase):
     LEDGER = {
@@ -659,6 +673,108 @@ class ScalarTypeTest(BindingRuleTestBase):
             good,
             [("py", "page_setup.set_orientation", "orientation"), ("py", "workbook.get_date1904", "return")],
         )
+
+
+class OptionalBoolTest(BindingRuleTestBase):
+    LEDGER = {
+        "entries": {
+            "sheet.class": {"kind": "class", "js": "Workbook", "py": "Workbook"},
+            "flag.set": {
+                "kind": "op",
+                "js": "setFlag",
+                "py": "set_flag",
+                "params": {"enabled": "bool"},
+            },
+            "comment_visible.get": {
+                "kind": "op",
+                "scope": "sheet",
+                "noun": "comment_visible",
+                "c": "fm_sheet_get_comment_visible",
+                "js": "getCommentVisible",
+                "py": "get_comment_visible",
+                "returns": "bool",
+            },
+            "chart_title.set": {
+                "kind": "op",
+                "js": "setChartTitle",
+                "py": "set_chart_title",
+                "params": {"title": "union:ChartTitle"},
+            },
+            "record.chart_title": {"kind": "record", "role": "result", "py": "ChartTitle"},
+        },
+        "collections": {"comment_visible": {"key": "natural", "ops": ["comment_visible.get"]}},
+    }
+    JS = _wb(
+        "  setFlag(enabled?: boolean): Status;\n  setChartTitle(title: string | null | { kind: number }): Status;\n"
+    )
+
+    def py_context(self, body: str):
+        return self.fixture.context("", self.LEDGER, wasm=self.JS, native=self.JS, py_workbook=_py_wb(body))
+
+    def test_optional_bool_with_none_default_is_accepted(self) -> None:
+        ctx = self.py_context(
+            "    def set_flag(self, *, enabled: Optional[bool] = None) -> None: ...\n"
+            "    def set_chart_title(self, title: Union[str, None, ChartTitle]) -> None: ...\n"
+        )
+        self.assertEqual(hits(ctx, "R6.py"), [])
+        ctx = self.py_context(
+            "    def set_flag(self, enabled: bool | None = None) -> None: ...\n"
+            "    def set_chart_title(self, title: Union[str, None, ChartTitle]) -> None: ...\n"
+        )
+        self.assertEqual(hits(ctx, "R6.py"), [])
+
+    def test_optional_bool_without_none_default_is_flagged(self) -> None:
+        for sig in ("enabled: Optional[bool]", "enabled: Optional[bool] = True"):
+            ctx = self.py_context(
+                f"    def set_flag(self, {sig}) -> None: ...\n"
+                "    def set_chart_title(self, title: Union[str, None, ChartTitle]) -> None: ...\n"
+            )
+            self.assertEqual(hits(ctx, "R6.py"), [("py", "flag.set", "enabled")])
+
+    def test_plain_bool_is_still_accepted(self) -> None:
+        ctx = self.py_context(
+            "    def set_flag(self, enabled: bool) -> None: ...\n"
+            "    def set_chart_title(self, title: Union[str, None, ChartTitle]) -> None: ...\n"
+        )
+        self.assertEqual(hits(ctx, "R6.py"), [])
+
+    def test_record_union_names_the_record_on_py_only(self) -> None:
+        ctx = self.py_context(
+            "    def set_flag(self, enabled: bool) -> None: ...\n"
+            "    def set_chart_title(self, title: str) -> None: ...\n"
+        )
+        self.assertEqual(hits(ctx, "R6.py"), [("py", "chart_title.set", "title")])
+
+    def test_boolean_lookup_accepts_optional_result_on_js(self) -> None:
+        py = _py_wb(
+            "    def set_flag(self, enabled: bool) -> None: ...\n"
+            "    def set_chart_title(self, title: Union[str, None, ChartTitle]) -> None: ...\n"
+            "    def get_comment_visible(self, sheet: int, cell: str) -> Optional[bool]: ...\n"
+        )
+        head = (
+            "  setFlag(enabled?: boolean): Status;\n  setChartTitle(title: string | null | { kind: number }): Status;\n"
+        )
+        good = _wb(head + "  getCommentVisible(sheet: number, cell: string): OptionalResult<boolean>;\n")
+        bad = _wb(head + "  getCommentVisible(sheet: number, cell: string): NumberResult;\n")
+        self.assertEqual(
+            hits(self.fixture.context("", self.LEDGER, wasm=good, native=good, py_workbook=py), "R6.js"), []
+        )
+        self.assertEqual(
+            hits(self.fixture.context("", self.LEDGER, wasm=bad, native=good, py_workbook=py), "R6.js"),
+            [("wasm", "comment_visible.get", "return")],
+        )
+
+    def test_boolean_lookup_returns_optional_bool(self) -> None:
+        body = (
+            "    def set_flag(self, enabled: bool) -> None: ...\n"
+            "    def set_chart_title(self, title: Union[str, None, ChartTitle]) -> None: ...\n"
+        )
+        bad = self.py_context(body + "    def get_comment_visible(self, sheet: int, cell: str) -> bool: ...\n")
+        good = self.py_context(
+            body + "    def get_comment_visible(self, sheet: int, cell: str) -> Optional[bool]: ...\n"
+        )
+        self.assertEqual(hits(bad, "R6.py"), [("py", "comment_visible.get", "return")])
+        self.assertEqual(hits(good, "R6.py"), [])
 
 
 class RecordRoleTest(BindingRuleTestBase):

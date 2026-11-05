@@ -725,21 +725,21 @@ test('active sheet is recorded in bookViews and survives a round trip', async ()
 test('the show-phonetic flag survives value writes and a round trip', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault().value;
-  assert.equal(wb.getCellShowPhonetic(0, 0, 0).show, false);
+  assert.equal(wb.getCellShowPhonetic(0, 0, 0).value, false);
   assert.ok(wb.setText(0, 0, 0, '漢字').ok);
   assert.ok(wb.setCellShowPhonetic(0, 0, 0, true).ok);
   assert.ok(wb.setText(0, 0, 0, '漢字').ok);
-  assert.equal(wb.getCellShowPhonetic(0, 0, 0).show, true);
+  assert.equal(wb.getCellShowPhonetic(0, 0, 0).value, true);
   const saved = wb.save();
   assert.ok(saved.status.ok, JSON.stringify(saved.status));
   const loaded = mod.Workbook.load(saved.bytes).value;
   try {
-    assert.equal(loaded.getCellShowPhonetic(0, 0, 0).show, true);
+    assert.equal(loaded.getCellShowPhonetic(0, 0, 0).value, true);
     assert.ok(loaded.setCellShowPhonetic(0, 0, 0, false).ok);
-    assert.equal(loaded.getCellShowPhonetic(0, 0, 0).show, false);
+    assert.equal(loaded.getCellShowPhonetic(0, 0, 0).value, false);
     const rejected = loaded.getCellShowPhonetic(99, 0, 0);
     assert.equal(rejected.status.ok, false);
-    assert.equal(rejected.show, false);
+    assert.equal(rejected.value, false);
     assert.equal(loaded.setCellShowPhonetic(99, 0, 0, true).ok, false);
   } finally {
     loaded.dispose();

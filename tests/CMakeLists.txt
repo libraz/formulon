@@ -640,6 +640,13 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/codegen/gen_status_codes.py --check
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  # packages/npm-native/index.d.ts is the output of gen_native_dts.py over
+  # src/wasm/formulon.d.ts and packages/npm-native/dts-delta.d.ts.
+  add_test(
+    NAME NativeDtsCodegenDrift
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/codegen/gen_native_dts.py --check
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
   # Unit tests of the drift checks themselves, so a check that stops
   # detecting anything fails here instead of reporting "no drift".
   add_test(

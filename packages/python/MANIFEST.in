@@ -4,7 +4,6 @@ include README.md
 include pyproject.toml
 include setup.py
 include formulon/py.typed
-include formulon/*.pyi
 recursive-include formulon/_wasm *.wasm
 prune tests
 prune scripts

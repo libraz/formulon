@@ -6,7 +6,7 @@ import re
 from typing import List, Optional
 
 # ---------------------------------------------------------------------------
-# Check 5: src/wasm/formulon.d.ts `export enum` ordinals <-> their C/C++
+# Check 5: src/wasm/formulon.d.ts enum tables (`export const X: Readonly<{...}>`) <-> their C/C++
 #          source enum. embind never registers these as a real `enum_<T>`
 #          (that would cost WASM size for values only ever crossing the
 #          boundary as plain numbers); the `.d.ts` copy is therefore the
@@ -73,10 +73,8 @@ def _extract_cpp_enum_class(text: str, enum_name: str) -> Optional[List[int]]:
 
 
 def _extract_ts_enum(text: str, enum_name: str) -> Optional[List[int]]:
-    match = re.search(r"export (?:const )?enum\s+" + re.escape(enum_name) + r"\s*\{([^}]*)\}", text, re.DOTALL)
-    if not match:
-        return None
-    return _parse_enum_body(match.group(1))
+    members = _parse_ts_named_enum(text, enum_name)
+    return None if members is None else list(members.values())
 
 
 def _parse_ts_named_enum(text: str, name: str) -> Optional[dict]:

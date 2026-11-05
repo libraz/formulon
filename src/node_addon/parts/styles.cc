@@ -624,6 +624,13 @@ Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
       [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_cell_xf(handle, &xf, idx); });
 }
 
+Napi::Value Workbook::AddCellStyleXf(const Napi::CallbackInfo& info) {
+  fm_cell_xf_t xf{};
+  return AddStyleRecord(
+      info, [&](CheckedSpecReader& reader, const Napi::Object& record) { PullCellXf(reader, record, &xf); },
+      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_cell_style_xf(handle, &xf, idx); });
+}
+
 Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
   std::string font_name;
   std::string num_fmt_code;

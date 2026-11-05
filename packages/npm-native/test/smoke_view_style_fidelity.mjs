@@ -166,20 +166,20 @@ test('custom icon sets round-trip through the conditional-format API', async () 
 test('calcPr accessors and the date system', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault().value;
-  assert.equal(wb.getFullPrecision().value, 1);
-  assert.equal(wb.getCalcOnSave().value, 1);
+  assert.equal(wb.getFullPrecision().value, true);
+  assert.equal(wb.getCalcOnSave().value, true);
   assert.equal(wb.getRefMode().value, 0);
-  assert.equal(wb.getDate1904().value, 0);
+  assert.equal(wb.getDate1904().value, false);
   assert.ok(wb.setFullPrecision(false).ok);
   assert.ok(wb.setCalcOnSave(false).ok);
   assert.ok(wb.setRefMode(1).ok);
   assert.ok(wb.setDate1904(true).ok);
   assert.equal(wb.setRefMode(9).ok, false);
   const loaded = roundTrip(mod, wb);
-  assert.equal(loaded.getFullPrecision().value, 0);
-  assert.equal(loaded.getCalcOnSave().value, 0);
+  assert.equal(loaded.getFullPrecision().value, false);
+  assert.equal(loaded.getCalcOnSave().value, false);
   assert.equal(loaded.getRefMode().value, 1);
-  assert.equal(loaded.getDate1904().value, 1);
+  assert.equal(loaded.getDate1904().value, true);
   release(loaded);
   release(wb);
 });

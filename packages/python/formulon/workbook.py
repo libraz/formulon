@@ -1282,7 +1282,7 @@ class AutoFilterSortState:
     conditions: List[AutoFilterSortCondition] = field(default_factory=list)
 
 
-@dataclass
+@dataclass(frozen=True)
 class AutoFilter:
     """A sheet or table AutoFilter; ``range`` includes the header row, ``sort`` may be ``None``."""
 
@@ -1306,7 +1306,7 @@ class ValidationOutcome:
     error_style: Union[ValidationErrorStyle, int]
 
 
-@dataclass
+@dataclass(frozen=True)
 class Mention:
     """One ``@person`` mention; ``start`` and ``length`` are UTF-16 code units."""
 
@@ -1316,7 +1316,7 @@ class Mention:
     length: int
 
 
-@dataclass
+@dataclass(frozen=True)
 class ThreadedComment:
     """A threaded comment: a thread opener, or a reply when ``parent_id`` is non-empty."""
 
@@ -1331,7 +1331,7 @@ class ThreadedComment:
     mentions: List[Mention] = field(default_factory=list)
 
 
-@dataclass
+@dataclass(frozen=True)
 class Person:
     """One entry of the workbook's person list."""
 
@@ -1341,7 +1341,7 @@ class Person:
     provider_id: str = ""
 
 
-@dataclass
+@dataclass(frozen=True)
 class ImageInfo:
     """Format and pixel size of an image."""
 
@@ -1350,7 +1350,7 @@ class ImageInfo:
     px_height: int
 
 
-@dataclass
+@dataclass(frozen=True)
 class DrawingObject:
     """One anchored object of a sheet's drawing; sizes and offsets are in EMU."""
 
@@ -1374,7 +1374,7 @@ class DrawingObject:
     media_path: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class Shape:
     """A shape, connector or group of a sheet's drawing; sizes and offsets are in EMU.
 
@@ -1411,7 +1411,7 @@ class Shape:
     hidden: bool
 
 
-@dataclass
+@dataclass(frozen=True)
 class Slicer:
     """A table slicer of a worksheet; sizes and offsets are in EMU.
 
@@ -1454,7 +1454,7 @@ class DataTableInput:
     deleted: bool
 
 
-@dataclass
+@dataclass(frozen=True)
 class DataTable:
     """A What-If data table (``TABLE()``): its result range and input cells, all 0-based.
 
@@ -1471,7 +1471,7 @@ class DataTable:
     col_input: Optional[DataTableInput]
 
 
-@dataclass
+@dataclass(frozen=True)
 class Sparkline:
     """One sparkline: the data ``formula`` (a sheet-qualified range without ``=``) and its single A1 ``location``."""
 
@@ -1479,7 +1479,7 @@ class Sparkline:
     location: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class SparklineGroup:
     """A sparkline group of a sheet's worksheet extension list.
 
@@ -1664,7 +1664,7 @@ class ChartLabelPosition(IntEnum):
     RIGHT = 8
 
 
-@dataclass
+@dataclass(frozen=True)
 class ChartDataSource:
     """One series input: ``kind`` is ``"none"``, ``"ref"`` (``formula`` set) or ``"literal"`` (``literal`` set)."""
 
@@ -1673,7 +1673,7 @@ class ChartDataSource:
     literal: List[Union[float, str]] = field(default_factory=list)
 
 
-@dataclass
+@dataclass(frozen=True)
 class ChartTitle:
     """A chart or axis title; ``text`` is the flattened rich text (``TEXT``), ``formula`` the reference (``REF``)."""
 
@@ -1821,7 +1821,7 @@ class ChartSourceInfo:
     header_column: bool
 
 
-@dataclass
+@dataclass(frozen=True)
 class ChartInfo:
     """The typed view of a chart (:meth:`Workbook.get_chart`); ``source`` is ``None`` when series share no rectangle."""
 
@@ -1858,7 +1858,7 @@ class ChartSeriesRanges:
     size: List[SheetRect] = field(default_factory=list)
 
 
-@dataclass
+@dataclass(frozen=True)
 class ChartDataSeries:
     """One resolved series; ``values`` and ``states`` (:class:`ChartPointState`) are parallel.
 
@@ -1892,7 +1892,7 @@ class ChartCategories:
     generated: bool
 
 
-@dataclass
+@dataclass(frozen=True)
 class ChartAxisTitleText:
     """Resolved title text of one axis."""
 
@@ -1900,7 +1900,7 @@ class ChartAxisTitleText:
     text: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class ChartUnresolved:
     """An input that did not resolve; its points read as gaps.
 
@@ -1939,28 +1939,28 @@ class ChartLinePatch(TypedDict, total=False):
     transparency: Optional[float]
     width_pt: Optional[float]
     dash: Optional[Union[ChartLineDash, int]]
-    none: bool
+    none: Optional[bool]
 
 
 class ChartMarkerPatch(TypedDict, total=False):
     """Marker patch; ``symbol`` rejects ``None``."""
 
-    symbol: Union[ChartMarkerSymbol, int]
+    symbol: Optional[Union[ChartMarkerSymbol, int]]
     size: Optional[float]
-    fill: ChartFillPatch
-    line: ChartLinePatch
+    fill: Optional[ChartFillPatch]
+    line: Optional[ChartLinePatch]
 
 
 class ChartLabelsPatch(TypedDict, total=False):
     """Data-label patch; the ``show_*`` flags are bools and reject ``None``."""
 
-    show_value: bool
-    show_category: bool
-    show_series: bool
-    show_percent: bool
-    show_legend_key: bool
+    show_value: Optional[bool]
+    show_category: Optional[bool]
+    show_series: Optional[bool]
+    show_percent: Optional[bool]
+    show_legend_key: Optional[bool]
     separator: Optional[str]
-    position: Union[ChartLabelPosition, int]
+    position: Optional[Union[ChartLabelPosition, int]]
     number_format: Optional[str]
     font_color: Optional[int]
     font_size_pt: Optional[float]
@@ -1974,35 +1974,35 @@ class ChartSeriesPatch(TypedDict, total=False):
     or ``labels`` removes it.
     """
 
-    name: str
-    categories: str
-    values: str
-    x: str
-    y: str
-    size: str
-    fill: ChartFillPatch
-    line: ChartLinePatch
+    name: Optional[str]
+    categories: Optional[str]
+    values: Optional[str]
+    x: Optional[str]
+    y: Optional[str]
+    size: Optional[str]
+    fill: Optional[ChartFillPatch]
+    line: Optional[ChartLinePatch]
     marker: Optional[ChartMarkerPatch]
-    smooth: bool
+    smooth: Optional[bool]
     labels: Optional[ChartLabelsPatch]
 
 
 class ChartPointPatch(TypedDict, total=False):
     """Data-point patch; an empty patch (or ``None``) removes the point's formatting."""
 
-    fill: ChartFillPatch
-    line: ChartLinePatch
+    fill: Optional[ChartFillPatch]
+    line: Optional[ChartLinePatch]
     marker: Optional[ChartMarkerPatch]
 
 
 class ChartPlotPatch(TypedDict, total=False):
     """Plot-group patch; a field the plot type does not have is rejected. ``hole_size`` is 10..90 (doughnut only)."""
 
-    gap_width: int
-    overlap: int
-    first_slice_angle: int
-    vary_colors: bool
-    hole_size: int
+    gap_width: Optional[int]
+    overlap: Optional[int]
+    first_slice_angle: Optional[int]
+    vary_colors: Optional[bool]
+    hole_size: Optional[int]
 
 
 class ChartAxisPatch(TypedDict, total=False):
@@ -2016,30 +2016,31 @@ class ChartAxisPatch(TypedDict, total=False):
     ``crosses_at`` is read when ``crosses`` is ``AT``.
     """
 
-    visible: bool
-    title: Union[str, ChartTitle, None]
+    visible: Optional[bool]
+    title: Optional[Union[str, ChartTitle]]
     min: Optional[float]
     max: Optional[float]
     major_unit: Optional[float]
     number_format: Optional[str]
-    major_gridlines: bool
-    reversed: bool
+    major_gridlines: Optional[bool]
+    reversed: Optional[bool]
     log_base: Optional[float]
-    crosses: Union[ChartAxisCrosses, int]
-    crosses_at: float
+    crosses: Optional[Union[ChartAxisCrosses, int]]
+    crosses_at: Optional[float]
     tick_label_position: Optional[str]
 
 
-class ChartPreviewOverridesInput(TypedDict, total=False):
-    """Overrides for :meth:`Workbook.get_chart_preview`; an omitted key keeps the chart's own value."""
+@dataclass
+class ChartPreviewOverridesInput:
+    """Overrides for :meth:`Workbook.get_chart_preview`; a field left ``None`` keeps the chart's own value."""
 
-    source: str
-    direction: Union[ChartSeriesDirection, int]
-    header_row: bool
-    header_column: bool
-    blanks_as: Union[ChartBlanksAs, int]
-    plot_visible_only: bool
-    na_as_blank: bool
+    source: Optional[str] = None
+    direction: Optional[Union[ChartSeriesDirection, int]] = None
+    header_row: Optional[bool] = None
+    header_column: Optional[bool] = None
+    blanks_as: Optional[Union[ChartBlanksAs, int]] = None
+    plot_visible_only: Optional[bool] = None
+    na_as_blank: Optional[bool] = None
 
 
 class ChartDisplayPatch(TypedDict, total=False):
@@ -2050,7 +2051,7 @@ class ChartDisplayPatch(TypedDict, total=False):
     na_as_blank: Optional[bool]
 
 
-@dataclass
+@dataclass(frozen=True)
 class WorkbookProtection:
     """Workbook ``<workbookProtection>``. Hash fields are stored as given; the host computes them."""
 
@@ -2069,7 +2070,7 @@ class WorkbookProtection:
     revisions_spin_count: int = 0
 
 
-@dataclass
+@dataclass(frozen=True)
 class ProtectedRange:
     """A sheet ``<protectedRange>`` covering the rectangles of ``ranges``."""
 
@@ -2083,7 +2084,7 @@ class ProtectedRange:
     security_descriptor: str = ""
 
 
-@dataclass
+@dataclass(frozen=True)
 class SheetProtection:
     """Sheet ``<sheetProtection>`` flags. Booleans are real ``bool``."""
 
@@ -2449,13 +2450,13 @@ class CfMatch:
     priority: int
     dxf_id_engaged: bool
     dxf_id: int
-    color: tuple  # (r, g, b, a)
+    color: Tuple[int, int, int, int]  # (r, g, b, a)
     bar_length_pct: float
     bar_axis_position_pct: float
     bar_is_negative: bool
-    bar_fill: tuple
+    bar_fill: Tuple[int, int, int, int]
     bar_border_engaged: bool
-    bar_border: tuple
+    bar_border: Tuple[int, int, int, int]
     bar_gradient: bool
     icon_set_name: int
     icon_index: int
@@ -2771,7 +2772,7 @@ class CellXf:
     hidden: bool = False
 
 
-@dataclass
+@dataclass(frozen=True)
 class ColorSpec:
     """How an OOXML ``<color>`` element expressed its value.
 
@@ -2790,7 +2791,7 @@ class ColorSpec:
     indexed: int = 0
 
 
-@dataclass
+@dataclass(frozen=True)
 class PhoneticRun:
     """One ``<rPh>`` block: ``text`` reads the span ``[sb, eb)``.
 
@@ -2822,7 +2823,7 @@ class PhoneticProperties:
     alignment: int = 0
 
 
-@dataclass
+@dataclass(frozen=True)
 class FontRecord:
     """A font record (``add_font`` input / ``get_font`` result).
 
@@ -2868,7 +2869,7 @@ class FontRecord:
     color: ColorSpec = field(default_factory=ColorSpec)
 
 
-@dataclass
+@dataclass(frozen=True)
 class GradientStop:
     """One ``<stop>`` of a gradient fill: a colour at ``position`` (0..1)."""
 
@@ -2895,7 +2896,7 @@ class GradientFill:
     stops: List[GradientStop] = field(default_factory=list)
 
 
-@dataclass
+@dataclass(frozen=True)
 class FillRecord:
     """A fill record.
 
@@ -3418,7 +3419,7 @@ class PivotCalculatedItem:
     scoped: bool
 
 
-@dataclass
+@dataclass(frozen=True)
 class PivotDataFieldSpec:
     """Argument shape for ``pivot_data_field_add`` / ``pivot_data_field_set``.
 
@@ -3437,7 +3438,7 @@ class PivotDataFieldSpec:
     show_as_base_item: int = -1
 
 
-@dataclass
+@dataclass(frozen=True)
 class PivotFilterSpec:
     """Argument shape for :meth:`Workbook.add_pivot_filter`."""
 
@@ -4966,7 +4967,7 @@ class Workbook:
     def __enter__(self) -> "Workbook":
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> None:  # type: ignore[no-untyped-def]
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
         self.close()
 
     def __del__(self) -> None:  # pragma: no cover -- GC ordering best-effort
@@ -6714,16 +6715,14 @@ class Workbook:
             ptr = scope.struct(S.WORKBOOK_PROTECTION)
             _check(LIB.fm_workbook_get_workbook_protection(h, ptr), "fm_workbook_get_workbook_protection")
             d = S.WORKBOOK_PROTECTION.unpack(LIB, ptr)
-            prot = WorkbookProtection(
+            return WorkbookProtection(
                 lock_structure=bool(d["lock_structure"]),
                 lock_windows=bool(d["lock_windows"]),
                 lock_revision=bool(d["lock_revision"]),
                 workbook_spin_count=d["workbook_spin_count"],
                 revisions_spin_count=d["revisions_spin_count"],
+                **{fld: LIB.read_cstr(d[fld]) for fld in self._WORKBOOK_PROTECTION_TEXT},
             )
-            for fld in self._WORKBOOK_PROTECTION_TEXT:
-                setattr(prot, fld, LIB.read_cstr(d[fld]))
-            return prot
 
     def set_workbook_protection(self, protection: WorkbookProtection) -> None:
         """Replace the modelled ``<workbookProtection>`` attributes; an all-empty record removes the element."""
@@ -6948,17 +6947,15 @@ class Workbook:
                 "fm_sheet_get_sheet_protection",
             )
             d = S.SHEET_PROTECTION.unpack(LIB, ptr)
-            prot = SheetProtection(
+            return SheetProtection(
                 enabled=bool(d["enabled"]),
                 algorithm_name=LIB.read_cstr(d["algorithm_name"]),
                 hash_value=LIB.read_cstr(d["hash_value"]),
                 salt_value=LIB.read_cstr(d["salt_value"]),
                 spin_count=d["spin_count"],
                 legacy_password=LIB.read_cstr(d["legacy_password"]),
+                **{flag: bool(d[flag]) for flag in self._PROTECT_FLAGS},
             )
-            for flag in self._PROTECT_FLAGS:
-                setattr(prot, flag, bool(d[flag]))
-            return prot
 
     def set_sheet_protection(self, sheet: int, protection: SheetProtection) -> None:
         """Replace the sheet's ``<sheetProtection>`` flags wholesale."""
@@ -8140,11 +8137,11 @@ class Workbook:
         the chart's derived range.
         """
         h = self._require()
-        overrides = overrides or {}
+        given = {k: v for k, v in vars(overrides).items() if v is not None} if overrides is not None else {}
         with _ArgScope() as scope:
-            fields = _encode_patch(_PREVIEW_OVERRIDE_SPEC, overrides, ("source",), "preview override", scope)
-            if "source" in overrides:
-                fields["source"] = scope.cstr(overrides["source"])
+            fields = _encode_patch(_PREVIEW_OVERRIDE_SPEC, given, ("source",), "preview override", scope)
+            if "source" in given:
+                fields["source"] = scope.cstr(given["source"])
             ptr = scope.struct(S.CHART_PREVIEW_OVERRIDES)
             S.CHART_PREVIEW_OVERRIDES.pack(LIB, ptr, fields)
             data = _read_count(
@@ -9728,7 +9725,7 @@ class Workbook:
 
     # -- Conditional formatting --------------------------------------------
     @staticmethod
-    def _decode_cf_color(d: Dict[str, int], prefix: str) -> tuple:
+    def _decode_cf_color(d: Dict[str, int], prefix: str) -> Tuple[int, int, int, int]:
         return (
             d[prefix + "r"],
             d[prefix + "g"],

@@ -179,13 +179,13 @@ class JsWorkbook {
   emscripten::val getIterative() const;
   JsNumberResult calcMode() const;
   JsStatus setCalcMode(uint32_t mode);
-  JsNumberResult fullPrecision() const;
+  emscripten::val fullPrecision() const;
   JsStatus setFullPrecision(bool fullPrecision);
-  JsNumberResult calcOnSave() const;
+  emscripten::val calcOnSave() const;
   JsStatus setCalcOnSave(bool calcOnSave);
   JsNumberResult refMode() const;
   JsStatus setRefMode(uint32_t mode);
-  JsNumberResult date1904() const;
+  emscripten::val date1904() const;
   JsStatus setDate1904(bool date1904);
   /// `{status, now}` where `now` is the pinned wall-clock reading as
   /// `{year, month, day, hour, minute, second}`, or `null` when the workbook
@@ -445,7 +445,7 @@ class JsWorkbook {
   emscripten::val getComments(uint32_t sheet) const;
   JsStatus setComment(uint32_t sheet, uint32_t row, uint32_t col, const std::string& author, const std::string& text);
   /// `{ status, value }`: whether the note at the cell is shown without hovering (0 or 1).
-  JsNumberResult getCommentVisible(uint32_t sheet, uint32_t row, uint32_t col) const;
+  emscripten::val getCommentVisible(uint32_t sheet, uint32_t row, uint32_t col) const;
   JsStatus setCommentVisible(uint32_t sheet, uint32_t row, uint32_t col, bool visible);
 
   /// `{ status, protection }`: the workbook's `<workbookProtection>`.
@@ -634,7 +634,7 @@ class JsWorkbook {
   JsStatus pivotSetAnchor(uint32_t sheet, uint32_t pivotIdx, emscripten::val rect);
   JsStatus pivotSetGrandTotals(uint32_t sheet, uint32_t pivotIdx, bool rowsEnabled, bool colsEnabled);
   JsStatus pivotSetStyleInfo(uint32_t sheet, uint32_t pivotIdx, emscripten::val info);
-  emscripten::val pivotGetLayout(uint32_t sheet, uint32_t pivotIdx) const;
+  JsNumberResult pivotGetLayout(uint32_t sheet, uint32_t pivotIdx) const;
   JsStatus pivotSetLayout(uint32_t sheet, uint32_t pivotIdx, uint32_t layout);
   /// Definition read-back; works for pivots created in-session and loaded
   /// from a package alike. `pivotCacheId` returns `{ status, index: cacheId }`.

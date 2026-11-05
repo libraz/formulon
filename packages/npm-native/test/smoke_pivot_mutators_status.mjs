@@ -402,7 +402,7 @@ const PIVOT_MUTATORS = [
     {
       act: (b) => b.wb.setPivotReportLayout(0, b.pivot, 1),
       expect: (b) => {
-        assert.equal(b.wb.getPivotReportLayout(0, b.pivot).layout, 1);
+        assert.equal(b.wb.getPivotReportLayout(0, b.pivot).value, 1);
         assert.deepEqual(pivotGrid(b.wb), ['Region|Sum of Amount', 'East|15', 'West|37', '総計|52']);
       },
     },
@@ -993,6 +993,7 @@ const STATUS_ACCESSORS = [
   ['getPivotFieldCount', null, [99, 0]],
   ['getPivotFieldItemCount', null, [99, 0, 0]],
   ['getPivotName', null, [99, 0]],
+  ['getPivotReportLayout', null, [99, 0]],
   ['getPivotDataFieldCount', null, [99, 0]],
   ['getPivotFilterCount', null, [99, 0]],
   ['getFontCount', [], null],
@@ -1032,6 +1033,8 @@ function assertFailurePayload(name, r) {
   else if ('engaged' in r) assert.equal(r.engaged, false, name);
   else if ('arrayFormula' in r) assert.equal(r.arrayFormula, null, name);
   else if (typeof r.value === 'string') assert.equal(r.value, '', name);
+  else if (r.value === null) assert.equal(r.value, null, name);
+  else if (typeof r.value === 'boolean') assert.equal(r.value, false, name);
   else assert.equal(r.value, 0, name);
 }
 

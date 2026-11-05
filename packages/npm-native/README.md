@@ -43,33 +43,20 @@ Why prefer the native build:
 This package exposes the shared `Workbook` surface of the WASM-backed
 `@libraz/formulon` package, all marshalling to the identical C-ABI
 functions. Its TypeScript declarations and its native class table
-register 433 instance methods plus the four static factories. Of those
-instance methods, 432 are shared with WASM; three remain WASM-only, while
-`getMemoryUsage()` is a native-only lifecycle helper.
+register 436 instance methods plus the four static factories. Of those
+instance methods, 435 are shared with WASM; zero remain WASM-only, while
+`getMemoryUsage()` is a native-only helper.
 The shared `Workbook` methods use the same status-bearing result envelopes
 and field shapes; switching packages still requires updating the module
-import and validating the target platform's native prebuild. The additional
-native-only methods are operational helpers; the three
-WASM-only methods remain available through the WASM package.
+import and validating the target platform's native prebuild. The
+declarations are generated from the WASM package's, so the two cannot differ
+in any shared record, type or method.
 
-The WASM-only methods are, in full:
-
-```
-addCellStyleXf
-getSheetAutoFilterXml, setSheetAutoFilterXml
-```
-
-Calling any of them on a native `Workbook` is a TypeScript error and a
-runtime `is not a function`. The two XML methods exchange the raw
-`<autoFilter>` fragment; the typed `getAutoFilter` / `setAutoFilter` pair
-covers the same state on both packages. `addCellStyleXf` has no native
-binding yet, so a named style's base format can only be created through the
-WASM package or the Python one.
-
-Two methods exist only here, both because a native workbook lives outside
-the JS heap in a way the WASM build's does not: `dispose()` releases the
-handle without waiting for finalization, and `getMemoryUsage()` reports the
-workbook's estimated native footprint. `recalcParallel(threadCount)` is
+One method exists only here, because a native workbook lives outside the JS
+heap in a way the WASM build's does not: `getMemoryUsage()` reports the
+workbook's estimated native footprint. `dispose()`, also reachable as
+`[Symbol.dispose]()` for a `using` declaration, releases the handle on both
+packages without waiting for finalization. `recalcParallel(threadCount)` is
 available on both the native and WASM packages and returns the parallel SCC
 telemetry described in the API declarations. See
 [Memory accounting](#memory-accounting).
