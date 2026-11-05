@@ -182,6 +182,110 @@ ParseErrorCode PromoteLexerCode(LexerErrorCode lc) noexcept {
   return ParseErrorCode::LexerInvalidCharacter;
 }
 
+// Drops layout whitespace from `raw` into `tokens`, keeping runs that can be an
+// intersection operator, then reclassifies cell-shaped function names.
+void FilterWhitespaceTokens(const std::vector<Token>& raw, std::vector<Token>& tokens) {
+  tokens.reserve(raw.size());
+  // `RefCandidate` includes structurally reference-shaped token kinds: bare
+  // cell refs, identifiers (which may resolve to a defined name or, when
+  // followed by `(`, a reference-returning call), a closing paren (which
+  // terminates a parenthesised reference or function call), a closing
+  // bracket (which terminates a structured reference), and a number (the
+  // whole-row form `2:2` begins and ends with a Number, so an intersect
+  // operand like `B:B 2:2` brackets the whitespace with Number on the
+  // right). The Pratt parser ultimately decides whether the AST shape
+  // allows the intersection: a bare-literal operand is re-rejected there,
+  // so admitting Number here only widens the conservative candidate set.
+  auto is_ref_left_candidate = [](TokenKind k) noexcept {
+    return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::SheetName || k == TokenKind::RParen ||
+           k == TokenKind::RBracket || k == TokenKind::Number;
+  };
+  // `RParen` / `RBracket` are deliberately absent here even though they are
+  // reference-shaped on the left: an intersection RHS is an expression, and
+  // neither token can ever start one. Admitting them made a trailing space
+  // before a closing paren or bracket (`SUM(A1 )`, `SUM(A1:A10 )`) retain
+  // the whitespace as a candidate operator; the Pratt loop then tried to
+  // parse an RHS starting at `)`/`]`, produced an error/placeholder node,
+  // and wrapped the bare reference in a spurious IntersectOp -- turning a
+  // formula real Excel accepts into #NAME?.
+  auto is_ref_right_candidate = [](TokenKind k) noexcept {
+    return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::SheetName || k == TokenKind::LParen ||
+           k == TokenKind::Number || k == TokenKind::ExternalQualifier;
+  };
+  // A `[` opens an intersection RHS only as a workbook-index name qualifier
+  // (`A1:A5 [0]!Rng`); any other bracket belongs to a structured reference.
+  auto is_book_qualifier_at = [&raw](std::size_t j) noexcept {
+    return j + 3 < raw.size() && raw[j].kind == TokenKind::LBracket && raw[j + 1].kind == TokenKind::Number &&
+           raw[j + 2].kind == TokenKind::RBracket && raw[j + 3].kind == TokenKind::Bang;
+  };
+  // Walk `raw` with a sliding window over the most recent non-whitespace
+  // token and the next non-whitespace token after each whitespace run. If
+  // both bracket the whitespace as reference-shaped, keep it; otherwise drop.
+  for (std::size_t i = 0; i < raw.size(); ++i) {
+    const Token& t = raw[i];
+    if (t.kind != TokenKind::Whitespace) {
+      tokens.push_back(t);
+      continue;
+    }
+    // Find the next non-whitespace token after this run.
+    TokenKind next_kind = TokenKind::Eof;
+    bool next_book_qualifier = false;
+    for (std::size_t j = i + 1; j < raw.size(); ++j) {
+      if (raw[j].kind != TokenKind::Whitespace) {
+        next_kind = raw[j].kind;
+        next_book_qualifier = is_book_qualifier_at(j);
+        break;
+      }
+    }
+    // A qualifier is glued to its `!` (`Data !A1` is no reference), so a
+    // space before a `!` is kept for the parser to reject.
+    if (next_kind == TokenKind::Bang) {
+      tokens.push_back(t);
+      continue;
+    }
+    // Find the previous non-whitespace token already pushed onto `tokens`.
+    TokenKind prev_kind = tokens.empty() ? TokenKind::Eof : tokens.back().kind;
+    // A cell-shaped token followed by a spaced opening parenthesis is
+    // ambiguous at the token level: `LOG10 (100)` is a function call, while
+    // `A1 (B1:C5)` and `A1:A3 (B1:D1)` are Excel's intersection operator.
+    // Only a lexeme that is genuinely a function name takes the call
+    // reading; every other cell-shaped lexeme keeps the whitespace so the
+    // Pratt loop can promote it to an intersection. A cell-shaped token
+    // closing a range tail is never a function name either way.
+    const bool cellref_call_space = next_kind == TokenKind::LParen && prev_kind == TokenKind::CellRef &&
+                                    is_cellref_shaped_function_name(tokens.back().lexeme) &&
+                                    (tokens.size() < 2 || tokens[tokens.size() - 2].kind != TokenKind::Colon);
+    if (is_ref_left_candidate(prev_kind) && (is_ref_right_candidate(next_kind) || next_book_qualifier) &&
+        !cellref_call_space) {
+      tokens.push_back(t);
+    }
+    // Otherwise: drop. Subsequent iterations resume on the next token.
+  }
+
+  // A cell-shaped token followed by `(` is a function name only when it is
+  // one (`LOG10(100)`); any other, and every sheet-qualified one
+  // (`Sheet1!LOG10(100)`), is a cell reference invoked as a callee, which
+  // Excel accepts and evaluates to #REF! (`A1(1)`).
+  for (std::size_t i = 0; i + 1 < tokens.size(); ++i) {
+    if (tokens[i].kind != TokenKind::CellRef || tokens[i + 1].kind != TokenKind::LParen)
+      continue;
+    if (i > 0 && tokens[i - 1].kind == TokenKind::Bang)
+      continue;
+    if (!is_cellref_shaped_function_name(tokens[i].lexeme))
+      continue;
+    tokens[i].kind = TokenKind::Ident;
+  }
+}
+
+ParseError MakeParseError(ParseErrorCode code, TextRange range, std::string_view offending) {
+  ParseError e;
+  e.code = code;
+  e.range = range;
+  e.message = std::string_view(default_message(code));
+  e.offending_token = offending;
+  return e;
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -240,24 +344,12 @@ void Parser::record_error_with_token(ParseErrorCode code, TextRange range, std::
   // `max_error_count == 1` edge, where zero real diagnostics are
   // recorded and the sentinel alone occupies the single slot.
   if (opts_.max_error_count > 0 && errors_.size() + 1 >= opts_.max_error_count) {
-    ParseError sentinel;
-    sentinel.code = ParseErrorCode::TooManyErrors;
-    sentinel.range = range;
-    sentinel.message = std::string_view(default_message(ParseErrorCode::TooManyErrors));
-    sentinel.severity = Severity::Error;
-    errors_.push_back(sentinel);
+    errors_.push_back(MakeParseError(ParseErrorCode::TooManyErrors, range, std::string_view{}));
     bailed_ = true;
     return;
   }
 
-  ParseError e;
-  e.code = code;
-  e.range = range;
-  e.message = std::string_view(default_message(code));
-  e.offending_token = offending;
-  e.severity = Severity::Error;
-  e.suggestion = std::string_view{};
-  errors_.push_back(e);
+  errors_.push_back(MakeParseError(code, range, offending));
 }
 
 void Parser::promote_lexer_errors(const std::vector<LexerError>& lex_errors) {
@@ -350,96 +442,7 @@ AstNode* Parser::parse() {
   tokenizer_opts.max_formula_length_utf16 = opts_.max_formula_length_utf16;
   Tokenizer tz(source_, tokenizer_opts);
   const auto& raw = tz.tokens();
-  tokens_.reserve(raw.size());
-  // `RefCandidate` includes structurally reference-shaped token kinds: bare
-  // cell refs, identifiers (which may resolve to a defined name or, when
-  // followed by `(`, a reference-returning call), a closing paren (which
-  // terminates a parenthesised reference or function call), a closing
-  // bracket (which terminates a structured reference), and a number (the
-  // whole-row form `2:2` begins and ends with a Number, so an intersect
-  // operand like `B:B 2:2` brackets the whitespace with Number on the
-  // right). The Pratt parser ultimately decides whether the AST shape
-  // allows the intersection: a bare-literal operand is re-rejected there,
-  // so admitting Number here only widens the conservative candidate set.
-  auto is_ref_left_candidate = [](TokenKind k) noexcept {
-    return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::SheetName || k == TokenKind::RParen ||
-           k == TokenKind::RBracket || k == TokenKind::Number;
-  };
-  // `RParen` / `RBracket` are deliberately absent here even though they are
-  // reference-shaped on the left: an intersection RHS is an expression, and
-  // neither token can ever start one. Admitting them made a trailing space
-  // before a closing paren or bracket (`SUM(A1 )`, `SUM(A1:A10 )`) retain
-  // the whitespace as a candidate operator; the Pratt loop then tried to
-  // parse an RHS starting at `)`/`]`, produced an error/placeholder node,
-  // and wrapped the bare reference in a spurious IntersectOp -- turning a
-  // formula real Excel accepts into #NAME?.
-  auto is_ref_right_candidate = [](TokenKind k) noexcept {
-    return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::SheetName || k == TokenKind::LParen ||
-           k == TokenKind::Number || k == TokenKind::ExternalQualifier;
-  };
-  // A `[` opens an intersection RHS only as a workbook-index name qualifier
-  // (`A1:A5 [0]!Rng`); any other bracket belongs to a structured reference.
-  auto is_book_qualifier_at = [&raw](std::size_t j) noexcept {
-    return j + 3 < raw.size() && raw[j].kind == TokenKind::LBracket && raw[j + 1].kind == TokenKind::Number &&
-           raw[j + 2].kind == TokenKind::RBracket && raw[j + 3].kind == TokenKind::Bang;
-  };
-  // Walk `raw` with a sliding window over the most recent non-whitespace
-  // token and the next non-whitespace token after each whitespace run. If
-  // both bracket the whitespace as reference-shaped, keep it; otherwise drop.
-  for (std::size_t i = 0; i < raw.size(); ++i) {
-    const Token& t = raw[i];
-    if (t.kind != TokenKind::Whitespace) {
-      tokens_.push_back(t);
-      continue;
-    }
-    // Find the next non-whitespace token after this run.
-    TokenKind next_kind = TokenKind::Eof;
-    bool next_book_qualifier = false;
-    for (std::size_t j = i + 1; j < raw.size(); ++j) {
-      if (raw[j].kind != TokenKind::Whitespace) {
-        next_kind = raw[j].kind;
-        next_book_qualifier = is_book_qualifier_at(j);
-        break;
-      }
-    }
-    // A qualifier is glued to its `!` (`Data !A1` is no reference), so a
-    // space before a `!` is kept for the parser to reject.
-    if (next_kind == TokenKind::Bang) {
-      tokens_.push_back(t);
-      continue;
-    }
-    // Find the previous non-whitespace token already pushed onto `tokens_`.
-    TokenKind prev_kind = tokens_.empty() ? TokenKind::Eof : tokens_.back().kind;
-    // A cell-shaped token followed by a spaced opening parenthesis is
-    // ambiguous at the token level: `LOG10 (100)` is a function call, while
-    // `A1 (B1:C5)` and `A1:A3 (B1:D1)` are Excel's intersection operator.
-    // Only a lexeme that is genuinely a function name takes the call
-    // reading; every other cell-shaped lexeme keeps the whitespace so the
-    // Pratt loop can promote it to an intersection. A cell-shaped token
-    // closing a range tail is never a function name either way.
-    const bool cellref_call_space = next_kind == TokenKind::LParen && prev_kind == TokenKind::CellRef &&
-                                    is_cellref_shaped_function_name(tokens_.back().lexeme) &&
-                                    (tokens_.size() < 2 || tokens_[tokens_.size() - 2].kind != TokenKind::Colon);
-    if (is_ref_left_candidate(prev_kind) && (is_ref_right_candidate(next_kind) || next_book_qualifier) &&
-        !cellref_call_space) {
-      tokens_.push_back(t);
-    }
-    // Otherwise: drop. Subsequent iterations resume on the next token.
-  }
-
-  // A cell-shaped token followed by `(` is a function name only when it is
-  // one (`LOG10(100)`); any other, and every sheet-qualified one
-  // (`Sheet1!LOG10(100)`), is a cell reference invoked as a callee, which
-  // Excel accepts and evaluates to #REF! (`A1(1)`).
-  for (std::size_t i = 0; i + 1 < tokens_.size(); ++i) {
-    if (tokens_[i].kind != TokenKind::CellRef || tokens_[i + 1].kind != TokenKind::LParen)
-      continue;
-    if (i > 0 && tokens_[i - 1].kind == TokenKind::Bang)
-      continue;
-    if (!is_cellref_shaped_function_name(tokens_[i].lexeme))
-      continue;
-    tokens_[i].kind = TokenKind::Ident;
-  }
+  FilterWhitespaceTokens(raw, tokens_);
 
   // Lift any tokenizer-level errors before parsing so callers see them even
   // if the parse otherwise succeeds. Promotion does not bail the parser.
