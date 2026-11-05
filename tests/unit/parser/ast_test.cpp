@@ -12,6 +12,7 @@
 
 #include "eval/builtin_names.h"
 #include "gtest/gtest.h"
+#include "parser/parser.h"
 #include "parser/reference.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -543,6 +544,38 @@ TEST(AstNodeRange, SetRangeIsRoundTripped) {
   EXPECT_EQ(n->range().end, 10u);
   EXPECT_EQ(n->range().line, 2u);
   EXPECT_EQ(n->range().column, 3u);
+}
+
+bool OtherSheet(std::string_view formula, std::string_view own) {
+  static Arena arena;
+  Parser p(formula, arena);
+  const AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << formula;
+  EXPECT_TRUE(p.errors().empty()) << formula;
+  return root != nullptr && references_other_sheet(*root, own);
+}
+
+TEST(AstReferencesOtherSheet, QualifiedReferences) {
+  EXPECT_TRUE(OtherSheet("Sheet1!$A$1>0", "Sheet2"));
+  EXPECT_TRUE(OtherSheet("SUM(Sheet1!A:A)>0", "Sheet2"));
+  EXPECT_TRUE(OtherSheet("Sheet1:Sheet3!A1", "Sheet2"));
+  EXPECT_FALSE(OtherSheet("$A$1>0", "Sheet2"));
+  EXPECT_FALSE(OtherSheet("sheet2!$A$1>0", "Sheet2"));
+  EXPECT_FALSE(OtherSheet("Sheet2:Sheet2!A1", "Sheet2"));
+}
+
+TEST(AstReferencesOtherSheet, NamesExternalBooksAndIndirectDoNotCount) {
+  EXPECT_FALSE(OtherSheet("Nm>0", "Sheet2"));
+  EXPECT_FALSE(OtherSheet("Sheet1!Nm>0", "Sheet2"));
+  EXPECT_FALSE(OtherSheet("INDIRECT(\"Sheet1!A1\")>0", "Sheet2"));
+  EXPECT_FALSE(OtherSheet("[1]Data!A1", "Sheet2"));
+}
+
+TEST(AstReferencesOtherSheet, CollapsedReferenceSites) {
+  EXPECT_TRUE(OtherSheet("#REF!$A$1>0", "Sheet2"));
+  EXPECT_TRUE(OtherSheet("Sheet1!#REF!>0", "Sheet2"));
+  EXPECT_FALSE(OtherSheet("Sheet2!#REF!>0", "Sheet2"));
+  EXPECT_FALSE(OtherSheet("#REF!>0", "Sheet2"));
 }
 
 }  // namespace

@@ -959,6 +959,25 @@ TEST(AstFormat, WrittenParenthesesAreKept) {
   }
 }
 
+TEST(AstFormat, BookPrefixLeadingDigit) {
+  // Only this workbook's own name quotes for a leading digit; an external
+  // book name in front of a name stays bare.
+  EXPECT_TRUE(self_book_name_needs_quoting("1Book.xlsx"));
+  EXPECT_TRUE(self_book_name_needs_quoting(".Book.xlsx"));
+  EXPECT_FALSE(self_book_name_needs_quoting("Book1.xlsx"));
+  Arena a;
+  Parser p("'1Book.xlsx'!Name+1", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  ASSERT_TRUE(p.errors().empty());
+  EXPECT_EQ(format_formula(*root), "1Book.xlsx!Name+1");
+  Arena b;
+  Parser q("[1Book.xlsx]Sheet1!A1", b);
+  AstNode* sheet_root = q.parse();
+  ASSERT_NE(sheet_root, nullptr);
+  EXPECT_EQ(format_formula(*sheet_root), "[1Book.xlsx]Sheet1!A1");
+}
+
 }  // namespace
 }  // namespace parser
 }  // namespace formulon

@@ -37,6 +37,18 @@ struct ExternalBookResolver {
 /// `[0]!Name`, structured references and string literals are left alone.
 std::string spell_external_books(std::string_view stored, const ExternalBookResolver& resolver);
 
+/// Rewrites every `[0]!Name` in `text` to `<file_name>!Name`, quoting the book
+/// like a name-prefix book (`'M5 b-1.xlsx'!Name`). String literals are left
+/// alone; an empty `file_name` returns `text` unchanged.
+std::string spell_self_book_names(std::string_view text, std::string_view file_name);
+
+/// The inverse for entered text: `<file_name>!Name` and `'<file_name>'!Name`
+/// (the book equal to `file_name` ignoring case, followed by a name rather
+/// than a cell or area) become `[0]!Name`, and `[<file_name>]Sheet!ref`
+/// becomes `Sheet!ref`. Everything else is kept byte for byte; an empty
+/// `file_name` returns `text` unchanged.
+std::string bind_self_book_names(std::string_view text, std::string_view file_name);
+
 /// Decodes every `%XX` escape in `s`; a malformed escape is kept as written.
 std::string percent_decode(std::string_view s);
 

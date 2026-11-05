@@ -14,6 +14,7 @@
 #include "parser/parser_detail.h"
 #include "parser/reference.h"
 #include "parser/token.h"
+#include "sheet_name.h"
 #include "utils/arena.h"
 #include "utils/expected.h"  // FM_CHECK
 #include "utils/strings.h"
@@ -861,6 +862,29 @@ bool is_self_book_name_ref(const AstNode& node) noexcept {
   return node.kind() == NodeKind::ExternalRef && node.as_external_ref_book() == "0" &&
          node.as_external_ref_path().empty() && node.as_external_ref_sheet().empty() &&
          !node.as_external_ref_name().empty();
+}
+
+bool references_other_sheet(const AstNode& root, std::string_view own_sheet) {
+  const auto other = [&](std::string_view sheet) { return !sheet.empty() && !sheet_names::equal(sheet, own_sheet); };
+  switch (root.kind()) {
+    case NodeKind::Ref:
+      return other(root.as_ref().sheet);
+    case NodeKind::SpillRef:
+      if (root.as_spill_ref_anchor_expr() == nullptr) {
+        return other(root.as_spill_ref().sheet);
+      }
+      break;
+    case NodeKind::Ref3D:
+      return other(root.as_ref3d_sheet_begin()) || other(root.as_ref3d_sheet_end());
+    case NodeKind::ErrorLiteral:
+      if (const RefErrorSite* site = root.as_ref_error_site(); site != nullptr) {
+        return site->form == RefErrorSite::Form::kDeadSheet || other(site->sheet);
+      }
+      return false;
+    default:
+      break;
+  }
+  return any_child_node(root, [&](const AstNode& child) { return references_other_sheet(child, own_sheet); });
 }
 
 bool is_cellref_shaped_function_name(std::string_view lexeme) noexcept {

@@ -241,6 +241,56 @@ std::size_t QuotedRunEnd(std::string_view s, std::size_t pos, char quote) noexce
   return j < s.size() ? j + 1 : s.size();
 }
 
+// True when a defined name (not a cell, area, number or boolean) starts at
+// `pos`.
+bool NameStartsAt(std::string_view s, std::size_t pos) noexcept {
+  const std::size_t end = ScanRun(s, pos);
+  return end > pos && !local_sheet_needs_quoting_a1(s.substr(pos, end - pos)) && (end >= s.size() || s[end] != ':');
+}
+
+// True when `c` before a `[` or a bare run makes it a continuation rather
+// than the start of an operand.
+bool ContinuesOperand(char c) noexcept {
+  return IsRunByte(c) || c == ']' || c == ')' || c == '\'';
+}
+
+// Appends the local spelling of the sheet part `sheets` (`S` or `S1:S2`)
+// followed by `!`.
+void AppendLocalQualifier(std::string* out, std::string_view sheets) {
+  bool quote = false;
+  std::size_t begin = 0;
+  while (begin <= sheets.size()) {
+    std::size_t colon = sheets.find(':', begin);
+    if (colon == std::string_view::npos) {
+      colon = sheets.size();
+    }
+    quote = quote || local_sheet_needs_quoting_a1(sheets.substr(begin, colon - begin));
+    begin = colon + 1;
+  }
+  if (quote) {
+    out->push_back('\'');
+    AppendQuoted(out, sheets);
+    out->push_back('\'');
+  } else {
+    out->append(sheets);
+  }
+  out->push_back('!');
+}
+
+// `[book]` opening `content` when it names `file_name`: returns the index
+// after `]`, else npos.
+std::size_t SelfBookBracketEnd(std::string_view content, std::size_t pos, std::string_view file_name) noexcept {
+  if (pos >= content.size() || content[pos] != '[') {
+    return std::string_view::npos;
+  }
+  const std::size_t close = content.find(']', pos);
+  if (close == std::string_view::npos ||
+      !strings::case_insensitive_eq(content.substr(pos + 1, close - pos - 1), file_name)) {
+    return std::string_view::npos;
+  }
+  return close + 1;
+}
+
 }  // namespace
 
 std::string percent_decode(std::string_view s) {
@@ -300,6 +350,124 @@ std::string spell_external_books(std::string_view stored, const ExternalBookReso
           continue;
         }
       }
+      ++depth;
+    } else if (c == ']' && depth > 0) {
+      --depth;
+    }
+    out.push_back(c);
+    ++i;
+  }
+  return out;
+}
+
+std::string spell_self_book_names(std::string_view text, std::string_view file_name) {
+  if (file_name.empty() || text.find("[0]!") == std::string_view::npos) {
+    return std::string(text);
+  }
+  std::string book;
+  const bool quote = self_book_name_needs_quoting(file_name);
+  if (quote) {
+    book.push_back('\'');
+  }
+  AppendQuoted(&book, file_name);
+  if (quote) {
+    book.push_back('\'');
+  }
+  std::string out;
+  out.reserve(text.size() + book.size());
+  std::size_t i = 0;
+  while (i < text.size()) {
+    const char c = text[i];
+    if (c == '"' || c == '\'') {
+      const std::size_t j = QuotedRunEnd(text, i, c);
+      out.append(text.substr(i, j - i));
+      i = j;
+      continue;
+    }
+    if (text.compare(i, 4, "[0]!") == 0 && (i == 0 || !ContinuesOperand(text[i - 1])) && NameStartsAt(text, i + 4)) {
+      out.append(book);
+      out.push_back('!');
+      i += 4;
+      continue;
+    }
+    out.push_back(c);
+    ++i;
+  }
+  return out;
+}
+
+std::string bind_self_book_names(std::string_view text, std::string_view file_name) {
+  if (file_name.empty()) {
+    return std::string(text);
+  }
+  std::string out;
+  out.reserve(text.size());
+  std::string content;
+  int depth = 0;
+  std::size_t i = 0;
+  while (i < text.size()) {
+    const char c = text[i];
+    if (c == '"') {
+      const std::size_t j = QuotedRunEnd(text, i, '"');
+      out.append(text.substr(i, j - i));
+      i = j;
+      continue;
+    }
+    if (c == '\'' && depth == 0) {
+      const std::size_t j = QuotedRunEnd(text, i, '\'');
+      const bool closed = j - i >= 2 && text[j - 1] == '\'';
+      content.clear();
+      for (std::size_t k = i + 1; closed && k + 1 < j; ++k) {
+        content.push_back(text[k]);
+        if (text[k] == '\'') {
+          ++k;
+        }
+      }
+      if (closed && j < text.size() && text[j] == '!') {
+        if (strings::case_insensitive_eq(content, file_name) && NameStartsAt(text, j + 1)) {
+          out.append("[0]!");
+          i = j + 1;
+          continue;
+        }
+        const std::size_t sheets = SelfBookBracketEnd(content, 0, file_name);
+        if (sheets != std::string_view::npos && sheets < content.size()) {
+          AppendLocalQualifier(&out, std::string_view(content).substr(sheets));
+          i = j + 1;
+          continue;
+        }
+      }
+      out.append(text.substr(i, j - i));
+      i = j;
+      continue;
+    }
+    if (depth == 0 && c == '[' && (i == 0 || !ContinuesOperand(text[i - 1]))) {
+      const std::size_t sheets_begin = SelfBookBracketEnd(text, i, file_name);
+      if (sheets_begin != std::string_view::npos) {
+        std::size_t end = ScanRun(text, sheets_begin);
+        if (end > sheets_begin && end < text.size() && text[end] == ':') {
+          const std::size_t second = ScanRun(text, end + 1);
+          end = second > end + 1 ? second : end;
+        }
+        if (end > sheets_begin && end < text.size() && text[end] == '!') {
+          AppendLocalQualifier(&out, text.substr(sheets_begin, end - sheets_begin));
+          i = end + 1;
+          continue;
+        }
+      }
+    }
+    if (depth == 0 && IsRunByte(c)) {
+      const std::size_t end = ScanRun(text, i);
+      if (end < text.size() && text[end] == '!' && strings::case_insensitive_eq(text.substr(i, end - i), file_name) &&
+          NameStartsAt(text, end + 1)) {
+        out.append("[0]!");
+        i = end + 1;
+        continue;
+      }
+      out.append(text.substr(i, end - i));
+      i = end;
+      continue;
+    }
+    if (c == '[') {
       ++depth;
     } else if (c == ']' && depth > 0) {
       --depth;

@@ -100,6 +100,11 @@ bool local_sheet_needs_quoting_r1c1(std::string_view name) noexcept;
 /// characters other than U+3000 and U+FEFF.
 bool external_book_needs_quoting(std::string_view book) noexcept;
 
+/// `external_book_needs_quoting` plus a leading digit or `.`: the rule for this
+/// workbook's own file name in front of a name (`'1Book.xlsx'!Name`). An
+/// external book's name in the same position stays bare (`1Book.xlsx!Name`).
+bool self_book_name_needs_quoting(std::string_view book) noexcept;
+
 /// True iff the sheet part of a cross-workbook qualifier opens with a digit or `.`
 /// or contains a byte outside the bare run. Unlike a local sheet, a cell-,
 /// R1C1- or bool-shaped name stays bare (`[Book.xlsx]S2!A1`).

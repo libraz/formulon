@@ -170,6 +170,43 @@ TEST(ExternalBookSpellingDisplayPath, PercentInPlainPathIsLiteral) {
   EXPECT_EQ(display_path_for_link_target("/Users/a%20b/Book.xlsx"), "/Users/a%20b/");
 }
 
+TEST(SelfBook, SpellsBookNamesWithQuoting) {
+  EXPECT_EQ(spell_self_book_names("[0]!LN+1", "M5.xlsx"), "M5.xlsx!LN+1");
+  EXPECT_EQ(spell_self_book_names("[0]!LN+1", "M5 b-1.xlsx"), "'M5 b-1.xlsx'!LN+1");
+  EXPECT_EQ(spell_self_book_names("[0]!LN", "1M5.xlsx"), "'1M5.xlsx'!LN");
+  EXPECT_EQ(spell_self_book_names("[0]!LN", "It's.xlsx"), "'It''s.xlsx'!LN");
+  EXPECT_EQ(spell_self_book_names("[0]!A(1)+[0]!B", "M5.xlsx"), "M5.xlsx!A(1)+M5.xlsx!B");
+}
+
+TEST(SelfBook, SpellingLeavesLiteralsAndEmptyNameAlone) {
+  EXPECT_EQ(spell_self_book_names("\"[0]!LN\"&[0]!LN", "M5.xlsx"), "\"[0]!LN\"&M5.xlsx!LN");
+  EXPECT_EQ(spell_self_book_names("[0]!LN", ""), "[0]!LN");
+}
+
+TEST(SelfBook, BindsBookPrefixedNames) {
+  EXPECT_EQ(bind_self_book_names("M5.xlsx!LN*3", "M5.xlsx"), "[0]!LN*3");
+  EXPECT_EQ(bind_self_book_names("'M5.xlsx'!LN", "M5.xlsx"), "[0]!LN");
+  EXPECT_EQ(bind_self_book_names("m5.XLSX!LN", "M5.xlsx"), "[0]!LN");
+  EXPECT_EQ(bind_self_book_names("'M5 b-1.xlsx'!LN+1", "M5 b-1.xlsx"), "[0]!LN+1");
+  EXPECT_EQ(bind_self_book_names("'1M5.xlsx'!LN", "1M5.xlsx"), "[0]!LN");
+  EXPECT_EQ(bind_self_book_names("'It''s.xlsx'!LN", "It's.xlsx"), "[0]!LN");
+}
+
+TEST(SelfBook, BindsBookQualifiedSheets) {
+  EXPECT_EQ(bind_self_book_names("[M5.xlsx]Sheet1!A1", "M5.xlsx"), "Sheet1!A1");
+  EXPECT_EQ(bind_self_book_names("'[M5.xlsx]My Sheet'!A1+1", "M5.xlsx"), "'My Sheet'!A1+1");
+  EXPECT_EQ(bind_self_book_names("'[M5.xlsx]Sheet1'!A1", "M5.xlsx"), "Sheet1!A1");
+  EXPECT_EQ(bind_self_book_names("[m5.xlsx]S2!A1", "M5.xlsx"), "'S2'!A1");
+}
+
+TEST(SelfBook, BindingLeavesTheRestByteIdentical) {
+  EXPECT_EQ(bind_self_book_names("M5.xlsx!A1", "M5.xlsx"), "M5.xlsx!A1");
+  EXPECT_EQ(bind_self_book_names("'M5.xlsx'!$A$1:B2", "M5.xlsx"), "'M5.xlsx'!$A$1:B2");
+  EXPECT_EQ(bind_self_book_names("\"M5.xlsx!LN\"&Other.xlsx!LN", "M5.xlsx"), "\"M5.xlsx!LN\"&Other.xlsx!LN");
+  EXPECT_EQ(bind_self_book_names("[Other.xlsx]Sheet1!A1+Table1[Col]", "M5.xlsx"), "[Other.xlsx]Sheet1!A1+Table1[Col]");
+  EXPECT_EQ(bind_self_book_names("M5.xlsx!LN", ""), "M5.xlsx!LN");
+}
+
 }  // namespace
 }  // namespace parser
 }  // namespace formulon

@@ -161,6 +161,10 @@ bool external_book_needs_quoting(std::string_view book) noexcept {
   return book.empty() || !IsBareRun(book);
 }
 
+bool self_book_name_needs_quoting(std::string_view book) noexcept {
+  return external_book_needs_quoting(book) || OpensLikeNumber(book);
+}
+
 bool external_sheet_needs_quoting(std::string_view sheet) noexcept {
   return !sheet.empty() && (OpensLikeNumber(sheet) || !IsBareRun(sheet));
 }
