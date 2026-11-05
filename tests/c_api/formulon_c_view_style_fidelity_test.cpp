@@ -177,20 +177,20 @@ TEST(FormulonCApiFontToggles, OutlineShadowCondenseExtendRoundTrip) {
   font.condense = 1;
   font.has_extend = 1;
   font.extend = 1;
-  uint32_t index = 0;
+  std::size_t index = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, font, &index), 0);
-  uint32_t same = 0;
+  std::size_t same = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, font, &same), 0);
   EXPECT_EQ(same, index);
   font.extend = 0;
-  uint32_t other = 0;
+  std::size_t other = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, font, &other), 0);
   EXPECT_NE(other, index);
 
   fm_cell_xf_t xf{};
-  xf.font_index = index;
+  xf.font_index = static_cast<uint32_t>(index);
   xf.apply_font = 1;
-  uint32_t xf_index = 0;
+  std::size_t xf_index = 0;
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &xf_index), 0);
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, xf_index), 0);
 
@@ -243,13 +243,13 @@ TEST(FormulonCApiGradientFill, AddGetAndDedup) {
   stops[1].color.tint = 0.5;
   fm_fill_record_t fill = GradientFill(stops, 2);
 
-  uint32_t index = 0;
+  std::size_t index = 0;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, fill, &index), 0);
-  uint32_t same = 0;
+  std::size_t same = 0;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, fill, &same), 0);
   EXPECT_EQ(same, index);
   stops[1].position = 0.9;
-  uint32_t other = 0;
+  std::size_t other = 0;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, fill, &other), 0);
   EXPECT_NE(other, index);
 
@@ -283,7 +283,7 @@ TEST(FormulonCApiGradientFill, NonFiniteNumbersAndNullStopsAreSanitised) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_fill_record_t fill = GradientFill(nullptr, 5);
   fill.gradient_degree = std::numeric_limits<double>::infinity();
-  uint32_t index = 0;
+  std::size_t index = 0;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, fill, &index), 0);
   fm_fill_record_t back{};
   ASSERT_EQ(fm_workbook_get_fill(wb.handle, index, &back), 0);
@@ -302,12 +302,12 @@ TEST(FormulonCApiGradientFill, SurvivesSaveLoadOnCellsAndDxfs) {
     stops[i].color_argb = stops[i].color.rgb;
   }
   fm_fill_record_t fill = GradientFill(stops, 3);
-  uint32_t fill_index = 0;
+  std::size_t fill_index = 0;
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, fill, &fill_index), 0);
   fm_cell_xf_t xf{};
-  xf.fill_index = fill_index;
+  xf.fill_index = static_cast<uint32_t>(fill_index);
   xf.apply_fill = 1;
-  uint32_t xf_index = 0;
+  std::size_t xf_index = 0;
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &xf_index), 0);
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, xf_index), 0);
 
@@ -317,7 +317,7 @@ TEST(FormulonCApiGradientFill, SurvivesSaveLoadOnCellsAndDxfs) {
   dxf.fill.gradient_type = FM_GRADIENT_LINEAR;
   dxf.fill.gradient_degree = 45.0;
   dxf.fill.gradient_left = dxf.fill.gradient_right = dxf.fill.gradient_top = dxf.fill.gradient_bottom = 0.0;
-  uint32_t dxf_index = 0;
+  std::size_t dxf_index = 0;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, dxf, &dxf_index), 0);
 
   WorkbookGuard reloaded;
@@ -451,7 +451,7 @@ TEST(FormulonCApiCalcOptions, DefaultsAndRoundTrip) {
   EXPECT_EQ(flag, 1);
   ASSERT_EQ(fm_workbook_get_date1904(wb.handle, &flag), 0);
   EXPECT_EQ(flag, 0);
-  fm_ref_mode_t mode = FM_REF_MODE_R1C1;
+  int32_t mode = FM_REF_MODE_R1C1;
   ASSERT_EQ(fm_workbook_get_ref_mode(wb.handle, &mode), 0);
   EXPECT_EQ(mode, FM_REF_MODE_A1);
 

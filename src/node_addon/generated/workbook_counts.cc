@@ -17,7 +17,9 @@ Napi::Value Workbook::DefinedNameCount(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
-  return MakeNumberResult(env, 0, static_cast<double>(fm_workbook_get_defined_name_count(handle_)));
+  std::size_t count = 0;
+  const fm_status_t rc = fm_workbook_get_defined_name_count(handle_, &count);
+  return MakeNumberResult(env, rc, static_cast<double>(count));
 }
 
 Napi::Value Workbook::PassthroughCount(const Napi::CallbackInfo& info) {
@@ -25,7 +27,9 @@ Napi::Value Workbook::PassthroughCount(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
-  return MakeNumberResult(env, 0, static_cast<double>(fm_workbook_get_passthrough_count(handle_)));
+  std::size_t count = 0;
+  const fm_status_t rc = fm_workbook_get_passthrough_count(handle_, &count);
+  return MakeNumberResult(env, rc, static_cast<double>(count));
 }
 
 Napi::Value Workbook::SheetCount(const Napi::CallbackInfo& info) {
@@ -33,7 +37,9 @@ Napi::Value Workbook::SheetCount(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
-  return MakeNumberResult(env, 0, static_cast<double>(fm_workbook_get_sheet_count(handle_)));
+  std::size_t count = 0;
+  const fm_status_t rc = fm_workbook_get_sheet_count(handle_, &count);
+  return MakeNumberResult(env, rc, static_cast<double>(count));
 }
 
 Napi::Value Workbook::TableCount(const Napi::CallbackInfo& info) {
@@ -41,7 +47,9 @@ Napi::Value Workbook::TableCount(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
-  return MakeNumberResult(env, 0, static_cast<double>(fm_workbook_get_table_count(handle_)));
+  std::size_t count = 0;
+  const fm_status_t rc = fm_workbook_get_table_count(handle_, &count);
+  return MakeNumberResult(env, rc, static_cast<double>(count));
 }
 
 }  // namespace formulon_node

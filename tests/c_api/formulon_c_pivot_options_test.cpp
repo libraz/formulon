@@ -542,12 +542,12 @@ TEST(FormulonCApiPivotOptions, ShowDetailsAddsASheetBeforeThePivotAndActivatesIt
   std::uint32_t col = 0;
   ASSERT_TRUE(FindCell(wb.handle, FM_PIVOT_CELL_DATA, &row, &col));
 
-  const std::size_t before = fm_workbook_get_sheet_count(wb.handle);
+  const std::size_t before = count_of(fm_workbook_get_sheet_count, wb.handle);
   std::size_t created = 99;
   ASSERT_EQ(fm_sheet_show_pivot_details(wb.handle, 0U, kPivot, row, col, &created), 0) << fm_get_last_error_message();
   EXPECT_EQ(created, 0U);
-  EXPECT_EQ(fm_workbook_get_sheet_count(wb.handle), before + 1U);
-  std::uint32_t active = 99;
+  EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), before + 1U);
+  std::size_t active = 99;
   ASSERT_EQ(fm_workbook_get_active_sheet(wb.handle, &active), 0);
   EXPECT_EQ(active, 0U);
   // The pivot moved with its sheet.
@@ -574,7 +574,7 @@ TEST(FormulonCApiPivotOptions, ShowDetailsRejectsBadCellsAndArguments) {
   EXPECT_EQ(fm_sheet_show_pivot_details(wb.handle, 0U, kPivot, row, col, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_show_pivot_details(nullptr, 0U, kPivot, row, col, &created), kBindingNullPointer);
   EXPECT_EQ(created, 99U);
-  EXPECT_EQ(fm_workbook_get_sheet_count(wb.handle), 1U);
+  EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 1U);
 
   Table(wb).set_enable_drill(false);
   EXPECT_EQ(fm_sheet_show_pivot_details(wb.handle, 0U, kPivot, row, col, &created), kPreconditionFailed);

@@ -56,7 +56,14 @@ emscripten::val breaks_array(const fm_workbook_t* handle, uint32_t sheet, bool r
     out.set("breaks", items);
     return out;
   }
-  const size_t count = rows ? fm_sheet_get_row_break_count(handle, sheet) : fm_sheet_get_col_break_count(handle, sheet);
+  size_t count = 0;
+  const fm_status_t count_rc =
+      rows ? fm_sheet_get_row_break_count(handle, sheet, &count) : fm_sheet_get_col_break_count(handle, sheet, &count);
+  if (count_rc != 0) {
+    out.set("status", error_status(count_rc));
+    out.set("breaks", emscripten::val::array());
+    return out;
+  }
   for (size_t i = 0; i < count; ++i) {
     fm_page_break_t brk{};
     const fm_status_t rc =

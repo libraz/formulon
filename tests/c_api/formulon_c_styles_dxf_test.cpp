@@ -21,7 +21,7 @@ TEST(FormulonCApiStyles, DifferentialFormatGetterExposesCfDxfTable) {
   dxf.num_fmt_code = "0.00";
   styles.dxfs.push_back(dxf);
 
-  uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_workbook_get_dxf_count(wb.handle, &count), 0);
   EXPECT_EQ(count, 1U);
 
@@ -61,13 +61,13 @@ TEST(FormulonCApiStyles, AddDxfDedupsAndReadsBack) {
   dxf.num_fmt_id = 164;
   dxf.num_fmt_code = "0.00";
 
-  uint32_t a = 0xFFFFFFFFU;
-  uint32_t b = 0xFFFFFFFFU;
+  std::size_t a = 0xFFFFFFFFU;
+  std::size_t b = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, dxf, &a), 0);
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, dxf, &b), 0);
   EXPECT_EQ(a, b);
 
-  uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_workbook_get_dxf_count(wb.handle, &count), 0);
   EXPECT_EQ(count, 1U);
 
@@ -96,7 +96,7 @@ TEST(FormulonCApiStyles, DxfFontRoundTripsVerticalAlignmentThroughOoxml) {
   dxf.font.size = 9.0;
   dxf.font.color_argb = 0xFF112233U;
   dxf.font.vert_align = 1;  // superscript
-  uint32_t index = 0xFFFFFFFFU;
+  std::size_t index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, dxf, &index), 0);
 
   const std::string xml = formulon::io::write_styles(wb.handle->workbook().styles());
@@ -106,12 +106,12 @@ TEST(FormulonCApiStyles, DxfFontRoundTripsVerticalAlignmentThroughOoxml) {
   ASSERT_EQ(fm_workbook_get_dxf(wb.handle, index, &loaded), 0);
   EXPECT_EQ(loaded.font.vert_align, 1U);
 
-  uint32_t count_before = 0;
+  std::size_t count_before = 0;
   ASSERT_EQ(fm_workbook_get_dxf_count(wb.handle, &count_before), 0);
-  uint32_t reindex = 0xFFFFFFFFU;
+  std::size_t reindex = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, loaded, &reindex), 0);
   EXPECT_EQ(reindex, index);
-  uint32_t count_after = 0;
+  std::size_t count_after = 0;
   ASSERT_EQ(fm_workbook_get_dxf_count(wb.handle, &count_after), 0);
   EXPECT_EQ(count_after, count_before);
 }
@@ -127,8 +127,8 @@ TEST(FormulonCApiStyles, DxfAlignmentAndProtectionPreserveIdentityThroughOoxml) 
   fm_dxf_record_t protection{};
   protection.protection_xml = protection_input.c_str();
 
-  uint32_t alignment_index = 0xFFFFFFFFU;
-  uint32_t protection_index = 0xFFFFFFFFU;
+  std::size_t alignment_index = 0xFFFFFFFFU;
+  std::size_t protection_index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, alignment, &alignment_index), 0);
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, protection, &protection_index), 0);
   EXPECT_NE(alignment_index, protection_index);
@@ -148,8 +148,8 @@ TEST(FormulonCApiStyles, DxfAlignmentAndProtectionPreserveIdentityThroughOoxml) 
   EXPECT_STREQ(got_protection.alignment_xml, "");
   EXPECT_STREQ(got_protection.protection_xml, "<protection locked=\"0\" hidden=\"1\"/>");
 
-  uint32_t alignment_again = 0xFFFFFFFFU;
-  uint32_t protection_again = 0xFFFFFFFFU;
+  std::size_t alignment_again = 0xFFFFFFFFU;
+  std::size_t protection_again = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, got_alignment, &alignment_again), 0);
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, got_protection, &protection_again), 0);
   EXPECT_EQ(alignment_again, alignment_index);
@@ -174,8 +174,8 @@ TEST(FormulonCApiStyles, DxfAlignmentAndProtectionPreserveIdentityThroughOoxml) 
   EXPECT_STREQ(reloaded_protection.alignment_xml, "");
   EXPECT_STREQ(reloaded_protection.protection_xml, "<protection locked=\"0\" hidden=\"1\"/>");
 
-  uint32_t reloaded_alignment_again = 0xFFFFFFFFU;
-  uint32_t reloaded_protection_again = 0xFFFFFFFFU;
+  std::size_t reloaded_alignment_again = 0xFFFFFFFFU;
+  std::size_t reloaded_protection_again = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_dxf(reloaded.handle, reloaded_alignment, &reloaded_alignment_again), 0);
   ASSERT_EQ(fm_workbook_add_dxf(reloaded.handle, reloaded_protection, &reloaded_protection_again), 0);
   EXPECT_EQ(reloaded_alignment_again, alignment_index);
@@ -201,7 +201,7 @@ TEST(FormulonCApiStyles, DxfFontDistinguishesAnExplicitBoldOffFromAnAbsentToggle
   leave_bold_alone.font.name = "";
   leave_bold_alone.font.size = 11.0;
   leave_bold_alone.font.color_argb = 0xFF000000U;
-  uint32_t index = 0xFFFFFFFFU;
+  std::size_t index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, leave_bold_alone, &index), 0);
   EXPECT_NE(index, 0U);
 
@@ -221,7 +221,7 @@ TEST(FormulonCApiStyles, DxfFontWithoutSizeRoundTripsAndCellFontKeepsSize) {
   dxf.font.bold = 1;
   dxf.font.color_argb = 0xFF000000U;
   ASSERT_EQ(dxf.font.has_size, 0);
-  uint32_t index = 0xFFFFFFFFU;
+  std::size_t index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, dxf, &index), 0);
 
   fm_dxf_record_t loaded{};
@@ -237,7 +237,7 @@ TEST(FormulonCApiStyles, DxfFontWithoutSizeRoundTripsAndCellFontKeepsSize) {
   // With the flag set the dxf writes its size.
   dxf.font.has_size = 1;
   dxf.font.size = 13.0;
-  uint32_t sized = 0xFFFFFFFFU;
+  std::size_t sized = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, dxf, &sized), 0);
   EXPECT_NE(sized, index);
   ASSERT_EQ(fm_workbook_get_dxf(wb.handle, sized, &loaded), 0);
@@ -248,7 +248,7 @@ TEST(FormulonCApiStyles, DxfFontWithoutSizeRoundTripsAndCellFontKeepsSize) {
   cell.name = "Arial";
   cell.size = 14.0;
   cell.color_argb = 0xFF000000U;
-  uint32_t font_index = 0xFFFFFFFFU;
+  std::size_t font_index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, cell, &font_index), 0);
   fm_font_record_t font_out{};
   ASSERT_EQ(fm_workbook_get_font(wb.handle, font_index, &font_out), 0);

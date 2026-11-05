@@ -522,8 +522,8 @@ fm_status_t clear_body(fm_workbook_t* wb, const Target& target, const char* api)
   return finish_status(result);
 }
 
-fm_status_t evaluate_body(const fm_workbook_t* wb, const Target& target, uint8_t* out_match, size_t cap,
-                          size_t* out_len, uint32_t* out_first_row, const char* api) {
+fm_status_t evaluate_body(const fm_workbook_t* wb, const Target& target, uint8_t* buf, size_t cap, size_t* out_len,
+                          uint32_t* out_first_row, const char* api) {
   if (auto rc = require_typed(target, api); rc != 0) {
     return rc;
   }
@@ -535,15 +535,15 @@ fm_status_t evaluate_body(const fm_workbook_t* wb, const Target& target, uint8_t
   const std::vector<bool>& flags = matches.value();
   const std::size_t written = std::min(cap, flags.size());
   for (std::size_t i = 0; i < written; ++i) {
-    out_match[i] = flags[i] ? 1U : 0U;
+    buf[i] = flags[i] ? 1U : 0U;
   }
   *out_len = flags.size();
   *out_first_row = target.filter->range.first_row + 1U;
   return 0;
 }
 
-bool evaluate_args_missing(const uint8_t* out_match, size_t cap, const size_t* out_len, const uint32_t* out_first_row) {
-  return out_len == nullptr || out_first_row == nullptr || (out_match == nullptr && cap > 0U);
+bool evaluate_args_missing(const uint8_t* buf, size_t cap, const size_t* out_len, const uint32_t* out_first_row) {
+  return out_len == nullptr || out_first_row == nullptr || (buf == nullptr && cap > 0U);
 }
 
 }  // namespace
@@ -603,18 +603,18 @@ extern "C" fm_status_t fm_sheet_clear_auto_filter(fm_workbook_t* wb, size_t shee
   return clear_body(wb, target, kApi);
 }
 
-extern "C" fm_status_t fm_sheet_evaluate_auto_filter(const fm_workbook_t* wb, size_t sheet_index, uint8_t* out_match,
+extern "C" fm_status_t fm_sheet_evaluate_auto_filter(const fm_workbook_t* wb, size_t sheet_index, uint8_t* buf,
                                                      size_t cap, size_t* out_len, uint32_t* out_first_row) {
   clear_last_error();
   constexpr const char* kApi = "fm_sheet_evaluate_auto_filter";
-  if (evaluate_args_missing(out_match, cap, out_len, out_first_row)) {
+  if (evaluate_args_missing(buf, cap, out_len, out_first_row)) {
     return null_argument("fm_sheet_evaluate_auto_filter");
   }
   Target target;
   if (auto rc = resolve_sheet(wb, sheet_index, kApi, &target); rc != 0) {
     return rc;
   }
-  return evaluate_body(wb, target, out_match, cap, out_len, out_first_row, kApi);
+  return evaluate_body(wb, target, buf, cap, out_len, out_first_row, kApi);
 }
 
 // --- table ------------------------------------------------------------------
@@ -674,19 +674,18 @@ extern "C" fm_status_t fm_workbook_clear_table_auto_filter(fm_workbook_t* wb, si
   return clear_body(wb, target, kApi);
 }
 
-extern "C" fm_status_t fm_workbook_evaluate_table_auto_filter(const fm_workbook_t* wb, size_t table_index,
-                                                              uint8_t* out_match, size_t cap, size_t* out_len,
-                                                              uint32_t* out_first_row) {
+extern "C" fm_status_t fm_workbook_evaluate_table_auto_filter(const fm_workbook_t* wb, size_t table_index, uint8_t* buf,
+                                                              size_t cap, size_t* out_len, uint32_t* out_first_row) {
   clear_last_error();
   constexpr const char* kApi = "fm_workbook_evaluate_table_auto_filter";
-  if (evaluate_args_missing(out_match, cap, out_len, out_first_row)) {
+  if (evaluate_args_missing(buf, cap, out_len, out_first_row)) {
     return null_argument("fm_workbook_evaluate_table_auto_filter");
   }
   Target target;
   if (auto rc = resolve_table(wb, table_index, kApi, &target); rc != 0) {
     return rc;
   }
-  return evaluate_body(wb, target, out_match, cap, out_len, out_first_row, kApi);
+  return evaluate_body(wb, target, buf, cap, out_len, out_first_row, kApi);
 }
 
 extern "C" fm_status_t fm_sheet_get_auto_filter_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml) {

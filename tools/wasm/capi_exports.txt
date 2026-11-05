@@ -464,7 +464,7 @@ fm_set_log_min_level
 fm_set_log_sink
 
 # -- Print settings / pagination ---------------------------------------------------
-fm_workbook_get_pagination
+fm_sheet_get_pagination
 fm_pagination_destroy
 fm_pagination_get_page_count
 fm_pagination_get_print_area_count

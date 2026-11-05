@@ -209,7 +209,7 @@ extern "C" fm_status_t fm_sheet_set_column_collapsed(fm_workbook_t* wb, size_t s
 }
 
 extern "C" fm_status_t fm_sheet_set_column_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
-                                                 uint32_t xf_index) {
+                                                 size_t xf_index) {
   static constexpr const char* kFn = "fm_sheet_set_column_style";
   clear_last_error();
   if (auto rc = check_sheet_column_span(wb, sheet_index, first, last, kFn); rc != 0) {
@@ -218,7 +218,8 @@ extern "C" fm_status_t fm_sheet_set_column_style(fm_workbook_t* wb, size_t sheet
   if (auto rc = check_cell_xf_index(wb, xf_index, kFn); rc != 0) {
     return rc;
   }
-  formulon::set_column_style_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last, true, xf_index);
+  formulon::set_column_style_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last, true,
+                                  static_cast<std::uint32_t>(xf_index));
   return 0;
 }
 
@@ -332,7 +333,7 @@ extern "C" fm_status_t fm_sheet_set_row_collapsed(fm_workbook_t* wb, size_t shee
 }
 
 extern "C" fm_status_t fm_sheet_set_row_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
-                                              uint32_t xf_index) {
+                                              size_t xf_index) {
   static constexpr const char* kFn = "fm_sheet_set_row_style";
   clear_last_error();
   if (auto rc = check_sheet_row_span(wb, sheet_index, first, last, kFn); rc != 0) {
@@ -342,7 +343,8 @@ extern "C" fm_status_t fm_sheet_set_row_style(fm_workbook_t* wb, size_t sheet_in
     return rc;
   }
   formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
-  formulon::set_row_style_span(sheet.mutable_layout(), first, last, xf_index, sheet.format_defaults().zero_height);
+  formulon::set_row_style_span(sheet.mutable_layout(), first, last, static_cast<std::uint32_t>(xf_index),
+                               sheet.format_defaults().zero_height);
   return 0;
 }
 

@@ -875,7 +875,7 @@ emscripten::val js_border_side(const fm_border_side_t& s) {
 }
 
 bool pull_value(JsNarrowNumericReader& reader, const emscripten::val& value, std::string& text, fm_value_t* out) {
-  out->kind = static_cast<fm_value_kind_t>(reader.i32(value, "kind", 0, "value.kind"));
+  out->kind = reader.i32(value, "kind", 0, "value.kind");
   text = reader.string(value, "text", "value.text");
   switch (out->kind) {
     case FM_VAL_NUMBER:

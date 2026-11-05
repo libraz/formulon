@@ -401,7 +401,7 @@ TEST(FormulonCApiChart, ScatterDataCarriesX) {
   FillGrid(wb.handle);
   fm_cell_xf_t x_xf{};
   x_xf.num_fmt_id = 2;  // built-in 0.00, on the x column only
-  uint32_t x_xf_index = 0;
+  std::size_t x_xf_index = 0;
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, x_xf, &x_xf_index), 0);
   ASSERT_EQ(fm_sheet_set_range_xf_index(wb.handle, 0, 1, 5, 4, 5, x_xf_index), 0);
   const uint32_t id = Insert(wb.handle, FM_CHART_INSERT_SCATTER, "Sheet1!$F$1:$G$5");
@@ -774,7 +774,7 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   patch.name = "Sheet1!$D$1";
   patch.categories = "Sheet1!$A$2:$A$5";
   patch.values = "Sheet1!$D$2:$D$5";
-  uint32_t added = 0;
+  std::size_t added = 0;
   ASSERT_EQ(fm_sheet_add_chart_series(wb.handle, 0, id, 0, &patch, &added), 0) << fm_get_last_error_message();
   EXPECT_EQ(added, 3U);
   Open(wb.handle, id, &chart);
@@ -1075,7 +1075,7 @@ TEST(FormulonCApiChart, ChartexAndPivotChartsRefuseEdits) {
   fm_chart_series_patch_t rename{};
   rename.name = "Sheet1!$A$1";
   EXPECT_EQ(fm_sheet_set_chart_series(pv.handle, p.sheet, p.id, 0, 0, &rename), kUnsupportedKind);
-  uint32_t added = 0;
+  std::size_t added = 0;
   EXPECT_EQ(fm_sheet_add_chart_series(pv.handle, p.sheet, p.id, 0, &rename, &added), kUnsupportedKind);
   EXPECT_EQ(fm_sheet_remove_chart_series(pv.handle, p.sheet, p.id, 0, 0), kUnsupportedKind);
   const uint32_t hidden[] = {0U};

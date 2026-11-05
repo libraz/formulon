@@ -101,8 +101,13 @@ extern "C" fm_status_t fm_get_locale_facts(const char* profile_id, fm_locale_fac
   return 0;
 }
 
-extern "C" size_t fm_get_locale_error_name_count(void) {
-  return formulon::kErrorNameCount;
+extern "C" fm_status_t fm_get_locale_error_name_count(size_t* out_count) {
+  clear_last_error();
+  if (out_count == nullptr) {
+    return null_argument("fm_get_locale_error_name_count", "out_count");
+  }
+  *out_count = formulon::kErrorNameCount;
+  return 0;
 }
 
 extern "C" fm_status_t fm_get_locale_error_name_at(const char* profile_id, size_t index, const char** out_canonical,

@@ -6,6 +6,7 @@
 
 #include "color_resolve.h"
 #include "formulon_c_cf_test_helpers.h"
+#include "formulon_c_count_of.h"
 
 TEST(FormulonCApiCf, EvaluateRangeOnEmptyCfWorkbookReturnsZero) {
   WorkbookGuard wb;
@@ -14,7 +15,7 @@ TEST(FormulonCApiCf, EvaluateRangeOnEmptyCfWorkbookReturnsZero) {
   CfResultsGuard results;
   ASSERT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, 0, 0, 9, 9, std::nan(""), &results.handle), 0);
   ASSERT_NE(results.handle, nullptr);
-  EXPECT_EQ(fm_cf_results_get_cell_count(results.handle), 0U);
+  EXPECT_EQ(count_of(fm_cf_results_get_cell_count, results.handle), 0U);
 }
 
 TEST(FormulonCApiCf, EvaluateRangeWithCellIsRule) {
@@ -43,7 +44,7 @@ TEST(FormulonCApiCf, EvaluateRangeWithCellIsRule) {
   CfResultsGuard results;
   ASSERT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, 0, 0, 2, 0, std::nan(""), &results.handle), 0);
   ASSERT_NE(results.handle, nullptr);
-  ASSERT_EQ(fm_cf_results_get_cell_count(results.handle), 2U);
+  ASSERT_EQ(count_of(fm_cf_results_get_cell_count, results.handle), 2U);
 
   // First matched cell: A2 (row=1).
   std::uint32_t row = 0;
@@ -110,7 +111,7 @@ TEST(FormulonCApiCf, EvaluateWholeColumnRangeReturnsBlockMatches) {
       fm_sheet_evaluate_cf_range(wb.handle, 0, 0, 0, formulon::cf::kCfMaxRows - 1U, 0, std::nan(""), &results.handle),
       0)
       << fm_get_last_error_message();
-  ASSERT_EQ(fm_cf_results_get_cell_count(results.handle), 1U);
+  ASSERT_EQ(count_of(fm_cf_results_get_cell_count, results.handle), 1U);
 
   std::uint32_t row = 0;
   std::uint32_t col = 0;
@@ -156,7 +157,7 @@ TEST(FormulonCApiCf, EvaluateRangeWithColorScale) {
 
   CfResultsGuard results;
   ASSERT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, 0, 0, 2, 0, std::nan(""), &results.handle), 0);
-  ASSERT_EQ(fm_cf_results_get_cell_count(results.handle), 3U);
+  ASSERT_EQ(count_of(fm_cf_results_get_cell_count, results.handle), 3U);
 
   const std::vector<std::tuple<std::uint8_t, std::uint8_t, std::uint8_t>> expected = {
       {255, 0, 0},    // A1 = 0  → red endpoint
@@ -192,7 +193,7 @@ TEST(FormulonCApiCf, OutOfRangeIndicesReturnInvalidArgument) {
 
   CfResultsGuard results;
   ASSERT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, 0, 0, 0, 0, std::nan(""), &results.handle), 0);
-  ASSERT_EQ(fm_cf_results_get_cell_count(results.handle), 0U);
+  ASSERT_EQ(count_of(fm_cf_results_get_cell_count, results.handle), 0U);
 
   std::uint32_t row = 0;
   std::uint32_t col = 0;
@@ -262,7 +263,7 @@ TEST(FormulonCApiCf, ExpressionRuleEvaluatesFunctionsAndQualifiedRefs) {
   CfResultsGuard results;
   ASSERT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, 0, 0, 0, 0, std::nan(""), &results.handle), 0)
       << fm_get_last_error_message();
-  ASSERT_EQ(fm_cf_results_get_cell_count(results.handle), 1U);
+  ASSERT_EQ(count_of(fm_cf_results_get_cell_count, results.handle), 1U);
 
   fm_cf_match_t match{};
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &match), 0);
@@ -296,7 +297,7 @@ TEST(FormulonCApiCf, ExpressionRuleRecursivelyEvaluatesFormulaCells) {
   CfResultsGuard results;
   ASSERT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, 0, 0, 0, 0, std::nan(""), &results.handle), 0)
       << fm_get_last_error_message();
-  ASSERT_EQ(fm_cf_results_get_cell_count(results.handle), 1U);
+  ASSERT_EQ(count_of(fm_cf_results_get_cell_count, results.handle), 1U);
 
   fm_cf_match_t match{};
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &match), 0);
@@ -370,7 +371,7 @@ TEST(FormulonCApiCf, ThemeColorScalePayloadIsResolvedNotBlack) {
 
   CfResultsGuard results;
   ASSERT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, 0, 0, 2, 0, std::nan(""), &results.handle), 0);
-  ASSERT_EQ(fm_cf_results_get_cell_count(results.handle), 3U);
+  ASSERT_EQ(count_of(fm_cf_results_get_cell_count, results.handle), 3U);
   const auto& block = wb.handle->workbook().sheet(0).conditional_formats()[0];
   const std::uint32_t low = ResolvedArgb(wb.handle->workbook(), block.rules[0].color_scale->colors[0],
                                          formulon::ColorContext::kFillForeground);
@@ -398,7 +399,7 @@ TEST(FormulonCApiCf, ThemeColorDataBarEvaluatedPayloadIsResolvedNotBlack) {
 
   CfResultsGuard results;
   ASSERT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, 0, 1, 2, 1, std::nan(""), &results.handle), 0);
-  ASSERT_GT(fm_cf_results_get_cell_count(results.handle), 0U);
+  ASSERT_GT(count_of(fm_cf_results_get_cell_count, results.handle), 0U);
   const auto& bar = *wb.handle->workbook().sheet(0).conditional_formats()[1].rules[0].data_bar;
   const std::uint32_t expected = ResolvedArgb(wb.handle->workbook(), bar.fill, formulon::ColorContext::kFillForeground);
   ASSERT_NE(expected & 0xFFFFFFU, 0U);

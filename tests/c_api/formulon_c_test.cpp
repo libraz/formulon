@@ -117,7 +117,7 @@ TEST(FormulonCApi, TableCreateUpdateRemoveRoundTripsThroughOoxml) {
   ASSERT_EQ(
       fm_workbook_add_table(wb.handle, 0, "A1:B3", "Sales", "Sales", columns, 2, "TableStyleMedium2", 1, 0, &index), 0);
   EXPECT_EQ(index, 0U);
-  EXPECT_EQ(fm_workbook_get_table_count(wb.handle), 1U);
+  EXPECT_EQ(count_of(fm_workbook_get_table_count, wb.handle), 1U);
 
   const char* name = nullptr;
   const char* display_name = nullptr;
@@ -138,7 +138,7 @@ TEST(FormulonCApi, TableCreateUpdateRemoveRoundTripsThroughOoxml) {
   EXPECT_STREQ(ref, "A1:B4");
 
   ASSERT_EQ(fm_workbook_remove_table(loaded.handle, 0), 0);
-  EXPECT_EQ(fm_workbook_get_table_count(loaded.handle), 0U);
+  EXPECT_EQ(count_of(fm_workbook_get_table_count, loaded.handle), 0U);
 }
 TEST(FormulonCApi, TableMutationsReindexStructuredRefDependents) {
   // A `StructuredRef` resolves to a static rectangle once, at formula
@@ -194,7 +194,7 @@ TEST(FormulonCApi, TableRangeMustMatchTheColumnList) {
   EXPECT_NE(fm_workbook_add_table(wb.handle, 0, "A1:C3", "Sales", "Sales", columns, 2, "", 1, 0, &index), 0);
   EXPECT_NE(fm_workbook_add_table(wb.handle, 0, "Sheet1!A1:B3", "Sales", "Sales", columns, 2, "", 1, 0, &index), 0);
   EXPECT_NE(fm_workbook_add_table(wb.handle, 0, "$A$1:$B$3", "Sales", "Sales", columns, 2, "", 1, 0, &index), 0);
-  EXPECT_EQ(fm_workbook_get_table_count(wb.handle), 0U);
+  EXPECT_EQ(count_of(fm_workbook_get_table_count, wb.handle), 0U);
 
   ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, "A1:B3", "Sales", "Sales", columns, 2, "", 1, 0, &index), 0);
   // Growing rows is fine; growing columns would orphan the column list.
@@ -220,7 +220,7 @@ TEST(FormulonCApi, TableNamesAndDisplayNamesShareTheCaseInsensitiveNamespace) {
     EXPECT_NE(fm_workbook_add_table(wb.handle, 0, "C1:C3", identity[0], identity[1], columns, 1, "", 1, 0, &index), 0);
     EXPECT_STREQ(fm_get_last_error_message(), "fm_workbook_add_table: table name already exists");
     EXPECT_EQ(index, 99U);
-    EXPECT_EQ(fm_workbook_get_table_count(wb.handle), 1U);
+    EXPECT_EQ(count_of(fm_workbook_get_table_count, wb.handle), 1U);
   }
 }
 
@@ -235,7 +235,7 @@ TEST(FormulonCApi, TableDuplicateColumnAtEndRejectsAtomicallyAndUniqueNamesRound
       static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   EXPECT_STREQ(fm_get_last_error_message(), "fm_workbook_add_table: column name is duplicated");
   EXPECT_EQ(index, 99U);
-  EXPECT_EQ(fm_workbook_get_table_count(wb.handle), 0U);
+  EXPECT_EQ(count_of(fm_workbook_get_table_count, wb.handle), 0U);
 
   const char* unique_columns[] = {"Product", "Area", "商品"};
   ASSERT_EQ(fm_workbook_add_table(wb.handle, 0U, "A1:C3", "Valid", "Valid", unique_columns, 3U, "", 1, 0, &index), 0);
@@ -356,19 +356,19 @@ TEST(FormulonCApi, PaginationSnapshotExposesBreaksAndUsedRangeFallback) {
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 199, 0, 2.0), 0);
 
   fm_pagination_t* pagination = nullptr;
-  ASSERT_EQ(fm_workbook_get_pagination(wb.handle, 0, &pagination), 0);
+  ASSERT_EQ(fm_sheet_get_pagination(wb.handle, 0, &pagination), 0);
   ASSERT_NE(pagination, nullptr);
   // 200 default-height rows in one column: the row axis breaks, the column
   // axis does not. The exact break row follows the geometry model and is
   // pinned by the workbook oracle, so this asserts the ABI's shape -- a
   // reported count that matches what the indexed accessor will hand back,
   // and an out-of-range index that fails rather than reading past the end.
-  const auto breaks = static_cast<std::uint32_t>(fm_pagination_get_row_break_count(pagination));
+  const auto breaks = static_cast<std::uint32_t>(count_of(fm_pagination_get_row_break_count, pagination));
   ASSERT_GE(breaks, 1U);
-  EXPECT_EQ(fm_pagination_get_page_count(pagination), breaks + 1U);
+  EXPECT_EQ(count_of(fm_pagination_get_page_count, pagination), breaks + 1U);
   // No explicit _xlnm.Print_Area is reported even though pagination falls
   // back to the used range internally.
-  EXPECT_EQ(fm_pagination_get_print_area_count(pagination), 0U);
+  EXPECT_EQ(count_of(fm_pagination_get_print_area_count, pagination), 0U);
   std::uint32_t row = 0;
   std::uint32_t previous = 0;
   for (std::uint32_t i = 0; i < breaks; ++i) {
@@ -377,12 +377,12 @@ TEST(FormulonCApi, PaginationSnapshotExposesBreaksAndUsedRangeFallback) {
     EXPECT_LE(row, 199U);
     previous = row;
   }
-  EXPECT_EQ(fm_pagination_get_col_break_count(pagination), 0U);
+  EXPECT_EQ(count_of(fm_pagination_get_col_break_count, pagination), 0U);
   EXPECT_NE(fm_pagination_get_row_break_at(pagination, breaks, &row), 0);
   fm_pagination_destroy(pagination);
 
-  EXPECT_NE(fm_workbook_get_pagination(nullptr, 0, &pagination), 0);
-  EXPECT_NE(fm_workbook_get_pagination(wb.handle, 0, nullptr), 0);
+  EXPECT_NE(fm_sheet_get_pagination(nullptr, 0, &pagination), 0);
+  EXPECT_NE(fm_sheet_get_pagination(wb.handle, 0, nullptr), 0);
 }
 TEST(FormulonCApi, CellPhoneticCanBeReadClearedAndRejectsInvalidArguments) {
   WorkbookGuard wb;
@@ -451,7 +451,7 @@ TEST(FormulonCApi, CellPhoneticRunsPreserveTheirSpans) {
   const fm_phonetic_run_t runs[] = {{0U, 2U, "トウキョウ"}, {2U, 3U, "ト"}};
   ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, runs, 2U), 0);
 
-  uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_cell_phonetic_run_count(wb.handle, 0, 0, 0, &count), 0);
   EXPECT_EQ(count, 2U);
 
@@ -502,7 +502,7 @@ TEST(FormulonCApi, CellPhoneticRunsRejectMalformedInput) {
   // A rejected batch leaves the previous annotation intact.
   ASSERT_EQ(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, ok, 1U), 0);
   EXPECT_NE(fm_sheet_set_cell_phonetic_runs(wb.handle, 0, 0, 0, overlapping, 2U), 0);
-  uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_cell_phonetic_run_count(wb.handle, 0, 0, 0, &count), 0);
   EXPECT_EQ(count, 1U);
 

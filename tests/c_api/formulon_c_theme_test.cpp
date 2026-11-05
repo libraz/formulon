@@ -415,9 +415,9 @@ namespace {
 /// one carrying a themed font, a solid literal fill, an indexed left border,
 /// a date format and explicit protection.
 struct PrecedenceXfs {
-  uint32_t cell = 0;
-  uint32_t row = 0;
-  uint32_t column = 0;
+  std::size_t cell = 0;
+  std::size_t row = 0;
+  std::size_t column = 0;
 };
 
 PrecedenceXfs AddPrecedenceXfs(fm_workbook_t* wb) {
@@ -427,27 +427,27 @@ PrecedenceXfs AddPrecedenceXfs(fm_workbook_t* wb) {
   font.color.kind = kFmColorTheme;
   font.color.theme = 4;
   font.color.tint = 0.4;
-  uint32_t font_index = 0;
+  std::size_t font_index = 0;
   EXPECT_EQ(fm_workbook_add_font(wb, font, &font_index), 0);
   fm_fill_record_t fill{};
   fill.pattern = 1;
   fill.fg.kind = kFmColorRgb;
   fill.fg.rgb = 0xFFFF0000U;
   fill.fg_argb = 0xFFFF0000U;
-  uint32_t fill_index = 0;
+  std::size_t fill_index = 0;
   EXPECT_EQ(fm_workbook_add_fill(wb, fill, &fill_index), 0);
   fm_border_record_t border{};
   border.left.style = 1;
   border.left.color.kind = kFmColorIndexed;
   border.left.color.indexed = 12;
-  uint32_t border_index = 0;
+  std::size_t border_index = 0;
   EXPECT_EQ(fm_workbook_add_border(wb, border, &border_index), 0);
 
   PrecedenceXfs out;
   fm_cell_xf_t cell{};
-  cell.font_index = font_index;
-  cell.fill_index = fill_index;
-  cell.border_index = border_index;
+  cell.font_index = static_cast<uint32_t>(font_index);
+  cell.fill_index = static_cast<uint32_t>(fill_index);
+  cell.border_index = static_cast<uint32_t>(border_index);
   cell.num_fmt_id = 14;
   cell.has_protection = 1;
   cell.locked = 0;
@@ -502,13 +502,13 @@ TEST(FormulonCApiEffectiveStyle, CellRowColumnDefaultPrecedence) {
     int32_t source;
     uint32_t xf;
   } kCases[] = {
-      {4, 0, 0, xfs.cell},    // A5: the cell's own xf
-      {4, 1, 1, xfs.row},     // B5: no cell, the customFormat row
-      {4, 2, 1, xfs.row},     // C5: the row wins over the column
-      {0, 2, 2, xfs.column},  // C1: the column
-      {6, 2, 2, xfs.column},  // C7: a row style without customFormat is inert
-      {6, 0, 3, 0U},          // A7: nothing applies
-      {0, 0, 3, 0U},          // A1: nothing applies
+      {4, 0, 0, static_cast<uint32_t>(xfs.cell)},    // A5: the cell's own xf
+      {4, 1, 1, static_cast<uint32_t>(xfs.row)},     // B5: no cell, the customFormat row
+      {4, 2, 1, static_cast<uint32_t>(xfs.row)},     // C5: the row wins over the column
+      {0, 2, 2, static_cast<uint32_t>(xfs.column)},  // C1: the column
+      {6, 2, 2, static_cast<uint32_t>(xfs.column)},  // C7: a row style without customFormat is inert
+      {6, 0, 3, 0U},                                 // A7: nothing applies
+      {0, 0, 3, 0U},                                 // A1: nothing applies
   };
   for (const auto& c : kCases) {
     const fm_effective_style_t style = Effective(loaded.handle, c.row, c.col);

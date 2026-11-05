@@ -4830,7 +4830,7 @@ class Workbook:
     def get_sheet_count(self) -> int:
         """Number of sheets in the workbook."""
         h = self._require()
-        return int(LIB.fm_workbook_get_sheet_count(h))
+        return _read_count(LIB.fm_workbook_get_sheet_count, h)
 
     def get_active_sheet(self) -> int:
         """Index of the active sheet (``activeTab`` of the first workbook view).
@@ -5421,7 +5421,7 @@ class Workbook:
     def list_defined_names(self) -> Iterator[DefinedName]:
         """Iterate over every defined name in declaration order."""
         h = self._require()
-        n = int(LIB.fm_workbook_get_defined_name_count(h))
+        n = _read_count(LIB.fm_workbook_get_defined_name_count, h)
         # Scratch is hoisted out of the loop (as in iter_cells): each
         # LIB.alloc/free is a locked WASM call, so per-item slots would
         # make the walk cost O(n) allocator round-trips on top of the
@@ -5454,7 +5454,7 @@ class Workbook:
     def iter_tables(self) -> Iterator[Table]:
         """Iterate over every table in declaration order."""
         h = self._require()
-        n = int(LIB.fm_workbook_get_table_count(h))
+        n = _read_count(LIB.fm_workbook_get_table_count, h)
         # Scratch hoisted out of the loop; see iter_defined_names.
         with _ArgScope() as scope:
             name_ptr = scope.out_ptr()
@@ -5760,7 +5760,7 @@ class Workbook:
     def list_passthroughs(self) -> Iterator[PassthroughPart]:
         """Iterate over passthrough OOXML part paths."""
         h = self._require()
-        n = int(LIB.fm_workbook_get_passthrough_count(h))
+        n = _read_count(LIB.fm_workbook_get_passthrough_count, h)
         # Scratch hoisted out of the loop; see iter_defined_names.
         with _ArgScope() as scope:
             path_ptr = scope.out_ptr()
@@ -6192,7 +6192,6 @@ class Workbook:
                 LIB,
                 vp,
                 {
-                    "sheet": _uint(sheet, "sheet"),
                     "first_row": _uint(first_row, "first_row"),
                     "last_row": _uint(last_row, "last_row"),
                     "first_col": _uint(first_col, "first_col"),
@@ -6200,7 +6199,7 @@ class Workbook:
                 },
             )
             _check(
-                LIB.fm_sheet_recalc_viewport(h, vp, out),
+                LIB.fm_sheet_recalc_viewport(h, _uint(sheet, "sheet"), vp, out),
                 "fm_sheet_recalc_viewport",
             )
             return LIB.read_u32(out)
@@ -8363,19 +8362,19 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
-            _check(LIB.fm_workbook_get_pagination(h, _uint(sheet, "sheet_index"), out), "fm_workbook_get_pagination")
+            _check(LIB.fm_sheet_get_pagination(h, _uint(sheet, "sheet_index"), out), "fm_sheet_get_pagination")
             pagination = LIB.read_u32(out)
             if pagination == 0:
                 raise FormulonError(
                     StatusCode.BINDING_NULL_POINTER,
-                    op="fm_workbook_get_pagination",
+                    op="fm_sheet_get_pagination",
                     _diagnostic_override=("returned OK with a null pagination handle", ""),
                 )
             try:
-                page_count = int(LIB.fm_pagination_get_page_count(pagination))
-                range_count = int(LIB.fm_pagination_get_print_area_count(pagination))
-                break_count = int(LIB.fm_pagination_get_row_break_count(pagination))
-                vertical_break_count = int(LIB.fm_pagination_get_col_break_count(pagination))
+                page_count = _read_count(LIB.fm_pagination_get_page_count, pagination)
+                range_count = _read_count(LIB.fm_pagination_get_print_area_count, pagination)
+                break_count = _read_count(LIB.fm_pagination_get_row_break_count, pagination)
+                vertical_break_count = _read_count(LIB.fm_pagination_get_col_break_count, pagination)
                 range_ptr = scope.alloc(16)
                 value_ptr = scope.out_ptr()
                 scale_ptr = scope.alloc(8)
@@ -8934,7 +8933,7 @@ class Workbook:
 
     def _read_breaks(self, sheet: int, count_export: str, at_export: str) -> List[PageBreak]:
         h = self._require()
-        count = int(getattr(LIB, count_export)(h, _uint(sheet, "sheet_index")))
+        count = _read_count(getattr(LIB, count_export), h, _uint(sheet, "sheet_index"))
         out: List[PageBreak] = []
         with _ArgScope() as scope:
             ptr = scope.struct(S.PAGE_BREAK)
@@ -9570,7 +9569,7 @@ class Workbook:
                 )
                 results = LIB.read_u32(out)
                 cells: List[CfCellResult] = []
-                n = LIB.fm_cf_results_get_cell_count(results)
+                n = _read_count(LIB.fm_cf_results_get_cell_count, results)
                 # One fixed set of out slots for the whole walk: allocating
                 # per cell would put a locked WASM malloc/free pair on every
                 # item, which dominates the cost of a viewport-sized range.
@@ -10206,7 +10205,7 @@ class Workbook:
             code_ptr = scope.cstr(format_code)
             out = scope.out_ptr()
             _check(LIB.fm_workbook_add_num_fmt(h, code_ptr, out), "fm_workbook_add_num_fmt")
-            return struct.unpack("<H", LIB.read_bytes(out, 2))[0]
+            return LIB.read_u32(out)
 
     def add_cell_xf(self, record: CellXf) -> int:
         """Add (dedup) an ``<xf>`` record; return its index."""
@@ -10714,7 +10713,7 @@ class Workbook:
                 rows = LIB.read_u32(rows_p)
                 cols = LIB.read_u32(cols_p)
                 cells: List[PivotCell] = []
-                n = LIB.fm_pivot_cells_get_cell_count(handle)
+                n = _read_count(LIB.fm_pivot_cells_get_cell_count, handle)
                 # One scratch block for the whole walk; see iter_defined_names.
                 cptr = scope.struct(S.PIVOT_CELL)
                 for i in range(n):
@@ -12335,7 +12334,7 @@ class Workbook:
                 )
                 handle = LIB.read_u32(out)
                 nodes: List[CellNode] = []
-                n = LIB.fm_cell_nodes_get_node_count(handle)
+                n = _read_count(LIB.fm_cell_nodes_get_node_count, handle)
                 # One scratch block for the whole walk; see iter_defined_names.
                 nptr = scope.struct(S.CELL_NODE)
                 for i in range(n):
@@ -12496,7 +12495,7 @@ class Workbook:
     @staticmethod
     def function_count() -> int:
         """Return the total number of registered Formulon functions."""
-        return int(LIB.fm_get_function_count())
+        return _read_count(LIB.fm_get_function_count)
 
     @staticmethod
     def function_name_at(index: int) -> str:
@@ -12715,7 +12714,7 @@ def get_locale_facts(profile_id: ExcelProfileId) -> LocaleFacts:
         _check(LIB.fm_get_locale_facts(pid_ptr, ptr), "fm_get_locale_facts")
         d = S.LOCALE_FACTS.unpack(LIB, ptr)
         errors = []
-        for index in range(int(LIB.fm_get_locale_error_name_count())):
+        for index in range(_read_count(LIB.fm_get_locale_error_name_count)):
             _check(
                 LIB.fm_get_locale_error_name_at(
                     pid_ptr, _uint(index, "error_index"), canonical_out, localized_out, measured_out

@@ -20,36 +20,36 @@ JsNumberResult JsWorkbook::borderCount() const {
   if (handle_ == nullptr) {
     return number_result(kBindingInvalidHandle, 0.0);
   }
-  uint32_t n = 0;
-  const fm_status_t rc = fm_workbook_get_border_count(handle_, &n);
-  return number_result(rc, static_cast<double>(n));
+  std::size_t count = 0;
+  const fm_status_t rc = fm_workbook_get_border_count(handle_, &count);
+  return number_result(rc, static_cast<double>(count));
 }
 
 JsNumberResult JsWorkbook::fillCount() const {
   if (handle_ == nullptr) {
     return number_result(kBindingInvalidHandle, 0.0);
   }
-  uint32_t n = 0;
-  const fm_status_t rc = fm_workbook_get_fill_count(handle_, &n);
-  return number_result(rc, static_cast<double>(n));
+  std::size_t count = 0;
+  const fm_status_t rc = fm_workbook_get_fill_count(handle_, &count);
+  return number_result(rc, static_cast<double>(count));
 }
 
 JsNumberResult JsWorkbook::fontCount() const {
   if (handle_ == nullptr) {
     return number_result(kBindingInvalidHandle, 0.0);
   }
-  uint32_t n = 0;
-  const fm_status_t rc = fm_workbook_get_font_count(handle_, &n);
-  return number_result(rc, static_cast<double>(n));
+  std::size_t count = 0;
+  const fm_status_t rc = fm_workbook_get_font_count(handle_, &count);
+  return number_result(rc, static_cast<double>(count));
 }
 
 JsNumberResult JsWorkbook::xfCount() const {
   if (handle_ == nullptr) {
     return number_result(kBindingInvalidHandle, 0.0);
   }
-  uint32_t n = 0;
-  const fm_status_t rc = fm_workbook_get_cell_xf_count(handle_, &n);
-  return number_result(rc, static_cast<double>(n));
+  std::size_t count = 0;
+  const fm_status_t rc = fm_workbook_get_cell_xf_count(handle_, &count);
+  return number_result(rc, static_cast<double>(count));
 }
 
 }  // namespace parts

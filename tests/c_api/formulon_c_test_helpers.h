@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_count_of.h"
 
 // Small ownership guards shared by the C ABI topic tests.  Keeping the
 // lifetime rules in one header makes each topic file focus on its contract.

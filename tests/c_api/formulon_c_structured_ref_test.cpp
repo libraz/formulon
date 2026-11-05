@@ -132,7 +132,7 @@ std::string Rename(const WorkbookGuard& wb, std::size_t column, const char* name
 }
 
 std::string DefinedName(const WorkbookGuard& wb, const std::string& wanted) {
-  const std::size_t count = fm_workbook_get_defined_name_count(wb.handle);
+  const std::size_t count = count_of(fm_workbook_get_defined_name_count, wb.handle);
   for (std::size_t i = 0; i < count; ++i) {
     const char* name = nullptr;
     const char* formula = nullptr;

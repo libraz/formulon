@@ -311,12 +311,6 @@ fm_status_t validate(const fm_pivot_data_field_spec_t& spec, const char* api);
 // with the entry point.
 fm_status_t validate(const fm_pivot_filter_spec_t& spec, const char* api);
 
-// Validates a viewport rectangle. A collapsed rectangle is allowed (it
-// recalculates nothing, as the header states), so only the sheet index
-// is constrained here; the bound against `sheet_count` needs the
-// workbook and stays with the entry point.
-fm_status_t validate(const fm_viewport& viewport, const char* api);
-
 // Translates a `Value` into a C-side `fm_value_t`. For text variants the
 // payload is appended to `store` and the returned pointer is a stable,
 // NUL-terminated `c_str()` into it. Read-path callers pass the per-handle
@@ -356,6 +350,14 @@ fm_status_t check_cell_coord(std::uint32_t row, std::uint32_t col, const char* a
 // `<field>=<index> count=<size>` context and returns the error status.
 fm_status_t check_index(std::size_t index, std::size_t size, const char* fn, const char* field);
 
+// Narrows an ABI `size_t` index for an engine call taking `uint32_t`,
+// saturating so the engine's own range check refuses an oversized index
+// instead of a truncated one naming another element.
+inline std::uint32_t saturate_index(std::size_t index) {
+  return index > std::numeric_limits<std::uint32_t>::max() ? std::numeric_limits<std::uint32_t>::max()
+                                                           : static_cast<std::uint32_t>(index);
+}
+
 // `check_sheet_index` followed by `check_row_index`.
 fm_status_t check_sheet_row(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row, const char* fn);
 
@@ -383,7 +385,7 @@ constexpr std::uint8_t kMaxOutlineLevel = 7U;
 
 // `check_index` of `xf_index` against the workbook's cell-XF table. Every
 // setter storing a cell, row or column `xf_index` runs it before writing.
-fm_status_t check_cell_xf_index(const fm_workbook_t* wb, std::uint32_t xf_index, const char* fn);
+fm_status_t check_cell_xf_index(const fm_workbook_t* wb, std::size_t xf_index, const char* fn);
 
 // Rejects hiding or removing sheet `index` when it is the workbook's only
 // visible sheet: Excel repairs a file whose sheets are all hidden. Returns

@@ -21,6 +21,7 @@
 
 #include <emscripten/val.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -720,10 +721,10 @@ class JsWorkbook {
   JsStatus pivotFilterRemoveAt(uint32_t sheet, uint32_t pivotIdx, uint32_t filterIdx);
 
  private:
-  using RowColEditFn = fm_status_t (*)(fm_workbook_t*, uint32_t, uint32_t, uint32_t);
+  using RowColEditFn = fm_status_t (*)(fm_workbook_t*, std::size_t, uint32_t, uint32_t);
   JsStatus invoke_row_col_edit(RowColEditFn fn, uint32_t sheet, uint32_t index, uint32_t count);
 
-  using TraceFn = fm_status_t (*)(const fm_workbook_t*, uint32_t, uint32_t, uint32_t, uint32_t, fm_cell_nodes_t**);
+  using TraceFn = fm_status_t (*)(const fm_workbook_t*, std::size_t, uint32_t, uint32_t, uint32_t, fm_cell_nodes_t**);
   emscripten::val trace_to_val(TraceFn fn, uint32_t sheet, uint32_t row, uint32_t col, uint32_t depth) const;
 
   // Re-points the engine's `user_data` at this wrapper. Called after a

@@ -228,12 +228,13 @@ extern "C" fm_status_t fm_sheet_set_drawing_name(fm_workbook_t* wb, size_t sheet
 }
 
 extern "C" fm_status_t fm_sheet_set_drawing_z_order(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                                    uint32_t index) {
+                                                    size_t index) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_drawing_z_order"); rc != 0) {
     return rc;
   }
-  return finish_status(formulon::set_drawing_z_order(wb->workbook(), sheet_index, object_id, index));
+  return finish_status(formulon::set_drawing_z_order(wb->workbook(), sheet_index, object_id,
+                                                     formulon::c_api::parts::saturate_index(index)));
 }
 
 extern "C" fm_status_t fm_sheet_snapshot_drawing(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,

@@ -512,18 +512,6 @@ fm_status_t validate(const fm_pivot_filter_spec_t& spec, const char* api) {
   return check_enum_domain(spec.type, FM_PIVOT_FILTER_DATE_M12, api, "type");
 }
 
-fm_status_t validate(const fm_viewport& viewport, const char* api) {
-  // `SheetCellRange::sheet_id` is `std::uint16_t`; reject the narrowing
-  // path so a caller-supplied sheet > 0xFFFF does not silently address a
-  // different sheet (or wrap to 0). Excel's own cap is far below 0xFFFF.
-  if (viewport.sheet > 0xFFFFU) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "viewport->sheet exceeds 16-bit sheet id range",
-                             std::string(api) + ": sheet=" + std::to_string(viewport.sheet));
-  }
-  return 0;
-}
-
 void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out) {
   switch (v.kind()) {
     case formulon::ValueKind::Blank:
@@ -699,7 +687,7 @@ fm_status_t check_utf8(const char* api, std::initializer_list<const char*> texts
   return 0;
 }
 
-fm_status_t check_cell_xf_index(const fm_workbook_t* wb, std::uint32_t xf_index, const char* fn) {
+fm_status_t check_cell_xf_index(const fm_workbook_t* wb, std::size_t xf_index, const char* fn) {
   return check_index(xf_index, wb->workbook().styles().cell_xfs.size(), fn, "xf_index");
 }
 

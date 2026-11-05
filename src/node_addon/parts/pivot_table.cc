@@ -165,9 +165,9 @@ Napi::Value Workbook::PivotGetLayout(const Napi::CallbackInfo& info) {
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  fm_pivot_report_layout_t layout = FM_PIVOT_REPORT_LAYOUT_COMPACT;
+  std::int32_t layout = FM_PIVOT_REPORT_LAYOUT_COMPACT;
   fm_status_t rc = fm_sheet_get_pivot_report_layout(handle_, sheet, pivot_idx, &layout);
-  return MakeNumberFieldResult(env, rc, "layout", static_cast<uint32_t>(layout));
+  return MakeNumberFieldResult(env, rc, "layout", layout);
 }
 
 Napi::Value Workbook::PivotSetLayout(const Napi::CallbackInfo& info) {

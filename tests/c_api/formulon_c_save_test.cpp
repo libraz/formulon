@@ -161,7 +161,7 @@ TEST(FormulonCApi, SaveLoadRoundTrip) {
 
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(buf.data, buf.len, &loaded.handle), 0);
-  EXPECT_EQ(fm_workbook_get_sheet_count(loaded.handle), 2U);
+  EXPECT_EQ(count_of(fm_workbook_get_sheet_count, loaded.handle), 2U);
 
   const char* sheet0 = nullptr;
   ASSERT_EQ(fm_workbook_get_sheet_name(loaded.handle, 0, &sheet0), 0);
@@ -527,7 +527,7 @@ TEST(FormulonCApi, LoadRoutesXlsbBytesToXlsbReader) {
 
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(xlsb.data(), xlsb.size(), &loaded.handle), 0);
-  EXPECT_EQ(fm_workbook_get_sheet_count(loaded.handle), 1U);
+  EXPECT_EQ(count_of(fm_workbook_get_sheet_count, loaded.handle), 1U);
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 0, 0, &v), 0);

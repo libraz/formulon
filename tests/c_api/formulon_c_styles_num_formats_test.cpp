@@ -65,18 +65,18 @@ TEST(FormulonCApiStyles, AddNumFmtUsesEffectiveBuiltinMapping) {
   ASSERT_NE(resolved, nullptr);
   EXPECT_STREQ(resolved, "yyyy");
 
-  uint16_t override_id = 0xFFFFU;
+  uint32_t override_id = 0xFFFFU;
   ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "yyyy", &override_id), 0);
   EXPECT_EQ(override_id, 14U);
 
-  uint16_t builtin_code_id = 0xFFFFU;
+  uint32_t builtin_code_id = 0xFFFFU;
   ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "mm-dd-yy", &builtin_code_id), 0);
   EXPECT_GE(builtin_code_id, 164U);
   ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, builtin_code_id, &resolved), 0);
   ASSERT_NE(resolved, nullptr);
   EXPECT_STREQ(resolved, "mm-dd-yy");
 
-  uint16_t builtin_code_again = 0xFFFFU;
+  uint32_t builtin_code_again = 0xFFFFU;
   ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "mm-dd-yy", &builtin_code_again), 0);
   EXPECT_EQ(builtin_code_again, builtin_code_id);
 }
@@ -120,7 +120,7 @@ TEST(FormulonCApiStyles, InvalidCustomNumFmtStringIndexDoesNotShadowBuiltin) {
   ASSERT_NE(resolved, nullptr);
   EXPECT_STREQ(resolved, "mm-dd-yy");
 
-  uint16_t id = 0xFFFFU;
+  uint32_t id = 0xFFFFU;
   ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "mm-dd-yy", &id), 0);
   EXPECT_EQ(id, 14U);
 }
@@ -135,11 +135,11 @@ TEST(FormulonCApiStyles, DuplicateNumFmtFirstValidRecordWins) {
   ASSERT_NE(resolved, nullptr);
   EXPECT_STREQ(resolved, "yyyy");
 
-  uint16_t first_id = 0xFFFFU;
+  uint32_t first_id = 0xFFFFU;
   ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "yyyy", &first_id), 0);
   EXPECT_EQ(first_id, 14U);
 
-  uint16_t shadowed_id = 0xFFFFU;
+  uint32_t shadowed_id = 0xFFFFU;
   ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "dd/mm/yyyy", &shadowed_id), 0);
   EXPECT_GE(shadowed_id, 164U);
   ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, shadowed_id, &resolved), 0);
@@ -161,11 +161,11 @@ TEST(FormulonCApiStyles, DuplicateNumFmtInvalidFirstThenValidRecordWins) {
   ASSERT_NE(resolved, nullptr);
   EXPECT_STREQ(resolved, "dd/mm/yyyy");
 
-  uint16_t valid_id = 0xFFFFU;
+  uint32_t valid_id = 0xFFFFU;
   ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "dd/mm/yyyy", &valid_id), 0);
   EXPECT_EQ(valid_id, 14U);
 
-  uint16_t invalid_id = 0xFFFFU;
+  uint32_t invalid_id = 0xFFFFU;
   ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "yyyy", &invalid_id), 0);
   EXPECT_GE(invalid_id, 164U);
   ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, invalid_id, &resolved), 0);
@@ -190,7 +190,7 @@ TEST(FormulonCApiStyles, DuplicateNumFmtAllInvalidRecordsFallBackToBuiltin) {
   ASSERT_NE(resolved, nullptr);
   EXPECT_STREQ(resolved, "mm-dd-yy");
 
-  uint16_t builtin_id = 0xFFFFU;
+  uint32_t builtin_id = 0xFFFFU;
   ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "mm-dd-yy", &builtin_id), 0);
   EXPECT_EQ(builtin_id, 14U);
 }
@@ -210,11 +210,11 @@ TEST(FormulonCApiStyles, UnknownNumFmtIdRejected) {
 TEST(FormulonCApiStyles, AddNumFmtBuiltinReturnsBuiltinId) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  uint16_t id = 0xFFFFU;
+  uint32_t id = 0xFFFFU;
   ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "General", &id), 0);
   EXPECT_EQ(id, 0U);
   // Adding a built-in must not create a custom entry.
-  uint32_t font_count = 7;  // unrelated, just ensure other tables untouched
+  std::size_t font_count = 7;  // unrelated, just ensure other tables untouched
   EXPECT_EQ(fm_workbook_get_font_count(wb.handle, &font_count), 0);
   EXPECT_EQ(font_count, 1U);  // the seeded default only
 }
@@ -222,7 +222,7 @@ TEST(FormulonCApiStyles, AddNumFmtBuiltinReturnsBuiltinId) {
 TEST(FormulonCApiStyles, AddNumFmtCustomReturnsCustomId) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  uint16_t id = 0;
+  uint32_t id = 0;
   ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "\"USD\" #,##0", &id), 0);
   EXPECT_GE(id, 164U);
   // Resolves through the read-side getter.
@@ -235,8 +235,8 @@ TEST(FormulonCApiStyles, AddNumFmtCustomReturnsCustomId) {
 TEST(FormulonCApiStyles, AddNumFmtCustomDedup) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  uint16_t a = 0;
-  uint16_t b = 0;
+  uint32_t a = 0;
+  uint32_t b = 0;
   ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "\"USD\" #,##0", &a), 0);
   ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "\"USD\" #,##0", &b), 0);
   EXPECT_EQ(a, b);
@@ -253,7 +253,7 @@ TEST(FormulonCApiStyles, AddNumFmtExhaustionReturnsPreconditionWithoutMutation) 
   styles.num_fmts.push_back(max_record);
   const std::size_t strings_before = styles.num_fmt_strings.size();
   const std::size_t records_before = styles.num_fmts.size();
-  uint16_t out = 0xBEEFU;
+  uint32_t out = 0xBEEFU;
   EXPECT_EQ(fm_workbook_add_num_fmt(wb.handle, "new-format", &out),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed));
   EXPECT_EQ(out, 0xBEEFU);

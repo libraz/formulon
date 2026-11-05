@@ -355,15 +355,15 @@ emscripten::val js_cell_xf_result(fm_status_t rc, fm_cell_xf_t xf) {
 
 emscripten::val JsWorkbook::getCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) const {
   emscripten::val o = emscripten::val::object();
-  uint32_t xf = 0;
+  std::size_t xf = 0;
   if (handle_ == nullptr) {
     o.set("status", invalid_handle_status());
-    o.set("xfIndex", xf);
+    o.set("xfIndex", 0U);
     return o;
   }
   fm_status_t rc = fm_sheet_get_cell_xf_index(handle_, sheet, row, col, &xf);
   o.set("status", status_from_rc(rc));
-  o.set("xfIndex", rc == 0 ? xf : 0U);
+  o.set("xfIndex", rc == 0 ? static_cast<uint32_t>(xf) : 0U);
   return o;
 }
 
@@ -428,9 +428,8 @@ emscripten::val JsWorkbook::getBorder(uint32_t border_index) const {
 emscripten::val JsWorkbook::getNumFmt(uint32_t num_fmt_id) const {
   emscripten::val o = emscripten::val::object();
   const char* s = nullptr;
-  const fm_status_t rc = handle_ != nullptr
-                             ? fm_workbook_get_num_fmt_string(handle_, static_cast<uint16_t>(num_fmt_id), &s)
-                             : kBindingInvalidHandle;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_get_num_fmt_string(handle_, num_fmt_id, &s) : kBindingInvalidHandle;
   o.set("status", status_from_rc(rc));
   o.set("numFmtId", rc == 0 ? num_fmt_id : 0U);
   js_set_cstr(o, "formatCode", rc == 0 ? s : nullptr);
@@ -490,7 +489,7 @@ JsAddStyleResult JsWorkbook::addFont(emscripten::val record) {
     r.status = reader.failure();
     return r;
   }
-  uint32_t idx = 0;
+  std::size_t idx = 0;
   const fm_status_t rc = fm_workbook_add_font(handle_, fr, &idx);
   return index_result(rc, idx);
 }
@@ -536,7 +535,7 @@ JsAddStyleResult JsWorkbook::addFill(emscripten::val record) {
     r.status = reader.failure();
     return r;
   }
-  uint32_t idx = 0;
+  std::size_t idx = 0;
   const fm_status_t rc = fm_workbook_add_fill(handle_, fr, &idx);
   return index_result(rc, idx);
 }
@@ -553,7 +552,7 @@ JsAddStyleResult JsWorkbook::addBorder(emscripten::val record) {
     r.status = reader.failure();
     return r;
   }
-  uint32_t idx = 0;
+  std::size_t idx = 0;
   const fm_status_t rc = fm_workbook_add_border(handle_, br, &idx);
   return index_result(rc, idx);
 }
@@ -564,7 +563,7 @@ JsAddNumFmtResult JsWorkbook::addNumFmt(const std::string& format_code) {
     r.status = invalid_handle_status();
     return r;
   }
-  uint16_t id = 0;
+  uint32_t id = 0;
   fm_status_t rc = fm_workbook_add_num_fmt(handle_, format_code.c_str(), &id);
   if (rc != 0) {
     r.status = error_status(rc);
@@ -588,7 +587,7 @@ JsAddStyleResult JsWorkbook::addXf(emscripten::val record) {
     r.status = reader.failure();
     return r;
   }
-  uint32_t idx = 0;
+  std::size_t idx = 0;
   const fm_status_t rc = fm_workbook_add_cell_xf(handle_, xf, &idx);
   return index_result(rc, idx);
 }
@@ -644,7 +643,7 @@ JsAddStyleResult JsWorkbook::addDxf(emscripten::val record) {
     return r;
   }
 
-  uint32_t idx = 0;
+  std::size_t idx = 0;
   const fm_status_t rc = fm_workbook_add_dxf(handle_, dxf, &idx);
   return index_result(rc, idx);
 }
@@ -658,7 +657,7 @@ JsNumberResult JsWorkbook::dxfCount() const {
   if (handle_ == nullptr) {
     return number_result(kBindingInvalidHandle, 0.0);
   }
-  uint32_t n = 0;
+  std::size_t n = 0;
   const fm_status_t rc = fm_workbook_get_dxf_count(handle_, &n);
   return number_result(rc, static_cast<double>(n));
 }
@@ -670,7 +669,7 @@ JsNumberResult JsWorkbook::cellStyleCount() const {
   if (handle_ == nullptr) {
     return number_result(kBindingInvalidHandle, 0.0);
   }
-  uint32_t n = 0;
+  std::size_t n = 0;
   const fm_status_t rc = fm_workbook_get_cell_style_count(handle_, &n);
   return number_result(rc, static_cast<double>(n));
 }
@@ -679,7 +678,7 @@ JsNumberResult JsWorkbook::cellStyleXfCount() const {
   if (handle_ == nullptr) {
     return number_result(kBindingInvalidHandle, 0.0);
   }
-  uint32_t n = 0;
+  std::size_t n = 0;
   const fm_status_t rc = fm_workbook_get_cell_style_xf_count(handle_, &n);
   return number_result(rc, static_cast<double>(n));
 }
@@ -755,7 +754,7 @@ JsNumberResult JsWorkbook::tableStyleCount() const {
   if (handle_ == nullptr) {
     return number_result(kBindingInvalidHandle, 0.0);
   }
-  uint32_t n = 0;
+  std::size_t n = 0;
   const fm_status_t rc = fm_workbook_get_table_style_count(handle_, &n);
   return number_result(rc, static_cast<double>(n));
 }

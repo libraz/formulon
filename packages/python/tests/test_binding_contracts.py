@@ -67,20 +67,20 @@ class FormulonErrorStatusTests(unittest.TestCase):
     def test_paginate_null_result_raises_formulon_error_with_status(self) -> None:
         """The defensive null-handle path must not raise ValueError."""
         with Workbook.create_default() as wb:
-            # Force `fm_workbook_get_pagination` to report success while leaving
+            # Force `fm_sheet_get_pagination` to report success while leaving
             # the out-slot at 0, which is the branch under test.
-            real_paginate = _c.LIB.fm_workbook_get_pagination
+            real_paginate = _c.LIB.fm_sheet_get_pagination
 
             def fake_paginate(handle, sheet, out):
                 real_paginate(handle, sheet, out)
                 _c.LIB.write_bytes(out, b"\x00\x00\x00\x00")
                 return 0
 
-            with mock.patch.object(_c.LIB, "fm_workbook_get_pagination", fake_paginate, create=True):
+            with mock.patch.object(_c.LIB, "fm_sheet_get_pagination", fake_paginate, create=True):
                 with self.assertRaises(FormulonError) as caught:
                     wb.get_pagination(0)
         self.assertEqual(caught.exception.code, 7001)
-        self.assertIn("fm_workbook_get_pagination", str(caught.exception))
+        self.assertIn("fm_sheet_get_pagination", str(caught.exception))
 
 
 class ErrorOperationNameTests(unittest.TestCase):
@@ -1168,11 +1168,16 @@ class AbiScratchBlockTests(unittest.TestCase):
             wb.set_defined_name_scoped("_xlnm.Print_Area", "Sheet1!$A$1:$C$5", 0)
             out = _c.LIB.alloc(4)
             try:
-                self.assertEqual(_c.LIB.fm_workbook_get_pagination(wb._require(), 0, out), 0)
+                self.assertEqual(_c.LIB.fm_sheet_get_pagination(wb._require(), 0, out), 0)
                 pagination = _c.LIB.read_u32(out)
                 self.assertNotEqual(pagination, 0)
                 try:
-                    self.assertGreater(int(_c.LIB.fm_pagination_get_print_area_count(pagination)), 0)
+                    count = _c.LIB.alloc(4)
+                    try:
+                        self.assertEqual(_c.LIB.fm_pagination_get_print_area_count(pagination, count), 0)
+                        self.assertGreater(_c.LIB.read_u32(count), 0)
+                    finally:
+                        _c.LIB.free(count)
                     ptr = self._guarded_block(size)
                     try:
                         self.assertEqual(_c.LIB.fm_pagination_get_print_area_at(pagination, 0, ptr), 0)

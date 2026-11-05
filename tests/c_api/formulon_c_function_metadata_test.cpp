@@ -8,6 +8,7 @@
 #include <unordered_set>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_count_of.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 
@@ -140,11 +141,11 @@ TEST(FormulonCApiFunctionMetadata, JapaneseRenamesTheListedFunctions) {
 }
 
 TEST(FormulonCApiFunctionMetadata, FunctionCountIsPositive) {
-  EXPECT_GT(fm_get_function_count(), 100U);
+  EXPECT_GT(count_of(fm_get_function_count), 100U);
 }
 
 TEST(FormulonCApiFunctionMetadata, FunctionNamesAreSortedAndComplete) {
-  const std::size_t count = fm_get_function_count();
+  const std::size_t count = count_of(fm_get_function_count);
   ASSERT_GT(count, 0U);
   const char* prev = nullptr;
   for (std::size_t i = 0; i < count; ++i) {
@@ -169,7 +170,7 @@ TEST(FormulonCApiFunctionMetadata, NameAtOutOfRangeReturnsInvalidArgument) {
 // The catalog must still enumerate them and resolve their metadata.
 TEST(FormulonCApiFunctionMetadata, EnumerationIncludesLazyAndSpecialForms) {
   std::unordered_set<std::string> names;
-  const std::size_t count = fm_get_function_count();
+  const std::size_t count = count_of(fm_get_function_count);
   for (std::size_t i = 0; i < count; ++i) {
     const char* name = nullptr;
     ASSERT_EQ(fm_get_function_name_at(i, &name), 0);
@@ -218,7 +219,7 @@ TEST(FormulonCApiFunctionMetadata, LazyFormLookupIsCaseInsensitive) {
 // locale-invariant and a function-text table growing inside the engine would
 // break the merge contract in `docs/function-metadata-schema.md`.
 TEST(FormulonCApiFunctionMetadata, EveryEnumeratedNameRoundTripsAcrossAllCatalogApis) {
-  const std::size_t count = fm_get_function_count();
+  const std::size_t count = count_of(fm_get_function_count);
   ASSERT_GT(count, 0U);
   for (const char* profile : {"win-365-en_US", "mac-365-zh_CN"}) {
     for (std::size_t i = 0; i < count; ++i) {

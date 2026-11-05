@@ -30,7 +30,7 @@ std::string SheetName(const fm_workbook_t* wb, std::size_t index) {
 }
 
 std::size_t SheetCount(const fm_workbook_t* wb) {
-  return fm_workbook_get_sheet_count(wb);
+  return count_of(fm_workbook_get_sheet_count, wb);
 }
 
 /// Sheet1 holding A1 = 5 and B1 = A1 * 2.
@@ -45,7 +45,7 @@ void MakeSingleSheet(WorkbookGuard& wb) {
 void ExpectCopyStatus(fm_workbook_t* wb, std::uint32_t source, std::uint32_t insert_before, const char* name,
                       fm_status_t status) {
   const std::size_t before = SheetCount(wb);
-  std::uint32_t out = kSentinel;
+  std::size_t out = kSentinel;
   EXPECT_EQ(fm_workbook_copy_sheet(wb, source, insert_before, name, &out), status) << fm_get_last_error_message();
   if (status != 0) {
     EXPECT_EQ(SheetCount(wb), before);
@@ -58,7 +58,7 @@ void ExpectCopyStatus(fm_workbook_t* wb, std::uint32_t source, std::uint32_t ins
 TEST(CApiCopySheet, SingleSheetAutomaticName) {
   WorkbookGuard wb;
   MakeSingleSheet(wb);
-  std::uint32_t out = kSentinel;
+  std::size_t out = kSentinel;
   ASSERT_EQ(fm_workbook_copy_sheet(wb.handle, 0, 1, nullptr, &out), 0) << fm_get_last_error_message();
   EXPECT_EQ(out, 1U);
   ASSERT_EQ(SheetCount(wb.handle), 2U);
@@ -74,7 +74,7 @@ TEST(CApiCopySheet, SingleSheetAutomaticName) {
 TEST(CApiCopySheet, ExplicitNameAndInsertBeforeFirst) {
   WorkbookGuard wb;
   MakeSingleSheet(wb);
-  std::uint32_t out = kSentinel;
+  std::size_t out = kSentinel;
   ASSERT_EQ(fm_workbook_copy_sheet(wb.handle, 0, 0, "Archive", &out), 0) << fm_get_last_error_message();
   EXPECT_EQ(out, 0U);
   EXPECT_EQ(SheetName(wb.handle, 0), "Archive");
@@ -85,7 +85,7 @@ TEST(CApiCopySheet, AppendAtSheetCountAfterReindex) {
   WorkbookGuard wb;
   MakeSingleSheet(wb);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other"), 0);
-  std::uint32_t out = kSentinel;
+  std::size_t out = kSentinel;
   ASSERT_EQ(fm_workbook_copy_sheet(wb.handle, 0, 2, "Tail", &out), 0) << fm_get_last_error_message();
   EXPECT_EQ(out, 2U);
   ASSERT_EQ(SheetCount(wb.handle), 3U);
@@ -138,7 +138,7 @@ TEST(CApiCopySheet, NullArguments) {
   WorkbookGuard wb;
   MakeSingleSheet(wb);
   const fm_status_t null_pointer = Code(FormulonErrorCode::kBindingNullPointer);
-  std::uint32_t out = kSentinel;
+  std::size_t out = kSentinel;
   EXPECT_EQ(fm_workbook_copy_sheet(nullptr, 0, 1, nullptr, &out), null_pointer);
   EXPECT_EQ(fm_workbook_copy_sheet(wb.handle, 0, 1, nullptr, nullptr), null_pointer);
   EXPECT_EQ(SheetCount(wb.handle), 1U);

@@ -686,9 +686,9 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
       // call commits a default value for it.
       return env.Undefined();
     }
-    uint32_t idx = 0;
+    std::size_t idx = 0;
     const fm_status_t rc = add(handle_, &idx);
-    return MakeNumberFieldResult(env, rc, "index", idx);
+    return MakeNumberFieldResult(env, rc, "index", static_cast<double>(idx));
   }
 
   /// Object result `{status, ...}` for a getter: `call(handle_)` fills the
@@ -711,7 +711,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
     return out;
   }
 
-  using RowColEditFn = fm_status_t (*)(fm_workbook_t*, uint32_t, uint32_t, uint32_t);
+  using RowColEditFn = fm_status_t (*)(fm_workbook_t*, size_t, uint32_t, uint32_t);
   Napi::Value InvokeRowColEdit(const Napi::CallbackInfo& info, RowColEditFn fn);
 
   using PivotFieldOrderFn = fm_status_t (*)(fm_workbook_t*, size_t, size_t, const uint32_t*, size_t);

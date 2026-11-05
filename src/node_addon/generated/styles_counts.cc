@@ -17,9 +17,9 @@ Napi::Value Workbook::BorderCount(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
-  uint32_t n = 0;
-  const fm_status_t rc = fm_workbook_get_border_count(handle_, &n);
-  return MakeNumberResult(env, rc, n);
+  std::size_t count = 0;
+  const fm_status_t rc = fm_workbook_get_border_count(handle_, &count);
+  return MakeNumberResult(env, rc, static_cast<double>(count));
 }
 
 Napi::Value Workbook::FillCount(const Napi::CallbackInfo& info) {
@@ -27,9 +27,9 @@ Napi::Value Workbook::FillCount(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
-  uint32_t n = 0;
-  const fm_status_t rc = fm_workbook_get_fill_count(handle_, &n);
-  return MakeNumberResult(env, rc, n);
+  std::size_t count = 0;
+  const fm_status_t rc = fm_workbook_get_fill_count(handle_, &count);
+  return MakeNumberResult(env, rc, static_cast<double>(count));
 }
 
 Napi::Value Workbook::FontCount(const Napi::CallbackInfo& info) {
@@ -37,9 +37,9 @@ Napi::Value Workbook::FontCount(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
-  uint32_t n = 0;
-  const fm_status_t rc = fm_workbook_get_font_count(handle_, &n);
-  return MakeNumberResult(env, rc, n);
+  std::size_t count = 0;
+  const fm_status_t rc = fm_workbook_get_font_count(handle_, &count);
+  return MakeNumberResult(env, rc, static_cast<double>(count));
 }
 
 Napi::Value Workbook::XfCount(const Napi::CallbackInfo& info) {
@@ -47,9 +47,9 @@ Napi::Value Workbook::XfCount(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
-  uint32_t n = 0;
-  const fm_status_t rc = fm_workbook_get_cell_xf_count(handle_, &n);
-  return MakeNumberResult(env, rc, n);
+  std::size_t count = 0;
+  const fm_status_t rc = fm_workbook_get_cell_xf_count(handle_, &count);
+  return MakeNumberResult(env, rc, static_cast<double>(count));
 }
 
 }  // namespace formulon_node

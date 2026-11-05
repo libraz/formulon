@@ -66,10 +66,10 @@ class DiagnosticCaptureTests(unittest.TestCase):
         self.assertIs(first, second)
 
     def test_non_status_nonzero_result_does_not_read_or_clear_pending(self) -> None:
-        instance, calls = _fake_instance("fm_workbook_get_sheet_count", 17)
+        instance, calls = _fake_instance("fm_get_version", 17)
         instance._last_diagnostic.value = (99, "pending message", "pending context")
 
-        self.assertEqual(instance.fm_workbook_get_sheet_count(0), 17)
+        self.assertEqual(instance.fm_get_version(), 17)
         self.assertEqual(calls, {"message": 0, "context": 0})
         self.assertEqual(instance.last_diagnostic(99), ("pending message", "pending context"))
 

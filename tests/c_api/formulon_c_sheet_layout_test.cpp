@@ -1115,7 +1115,7 @@ TEST(FormulonCApiSheetLayout, EnteredValuesTakeTheAxisStyle) {
   ASSERT_EQ(fm_sheet_set_blank(wb.handle, 0, 7U, 1U), 0);
 
   const auto xf_at = [&](uint32_t row, uint32_t col) {
-    uint32_t xf = 99U;
+    std::size_t xf = 99U;
     EXPECT_EQ(fm_sheet_get_cell_xf_index(wb.handle, 0, row, col, &xf), 0);
     return xf;
   };

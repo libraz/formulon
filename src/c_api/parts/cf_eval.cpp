@@ -162,12 +162,13 @@ extern "C" void fm_cf_results_destroy(fm_cf_results_t* results) {
   delete results;
 }
 
-extern "C" size_t fm_cf_results_get_cell_count(const fm_cf_results_t* results) {
+extern "C" fm_status_t fm_cf_results_get_cell_count(const fm_cf_results_t* results, size_t* out_count) {
   clear_last_error();
-  if (results == nullptr) {
-    return 0;
+  if (results == nullptr || out_count == nullptr) {
+    return null_argument("fm_cf_results_get_cell_count");
   }
-  return results->matches.size();
+  *out_count = results->matches.size();
+  return 0;
 }
 
 extern "C" fm_status_t fm_cf_results_get_cell_at(const fm_cf_results_t* results, size_t cell_idx, uint32_t* out_row,

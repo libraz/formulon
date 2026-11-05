@@ -174,7 +174,7 @@ TEST(FormulonCApiPivot, CountAndLayoutLoadedPivot) {
   EXPECT_EQ(cols, 2U);
 
   std::vector<fm_pivot_cell_t> cells;
-  const std::size_t cell_count = fm_pivot_cells_get_cell_count(projected.handle);
+  const std::size_t cell_count = count_of(fm_pivot_cells_get_cell_count, projected.handle);
   ASSERT_GT(cell_count, 0U);
   cells.resize(cell_count);
   for (std::size_t i = 0; i < cell_count; ++i) {

@@ -35,7 +35,7 @@ class StructLayoutTests(unittest.TestCase):
         "SHEET_PROTECTION": 88,
         "WORKBOOK_PROTECTION": 52,
         "PROTECTED_RANGE": 32,
-        "VIEWPORT": 20,
+        "VIEWPORT": 16,
         "CELL_NODE": 12,
         "PHONETIC_RUN": 12,
         "CFVO": 12,

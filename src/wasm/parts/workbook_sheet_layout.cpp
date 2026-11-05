@@ -98,9 +98,9 @@ void set_pagination_detail(emscripten::val* result, const fm_pagination_t* pagin
     fm_pagination_get_scale(pagination, &scale);
     fm_pagination_get_page_order(pagination, &page_order);
     fm_pagination_get_print_titles(pagination, &titles);
-    page_count = fm_pagination_get_page_count(pagination);
-    horizontal_count = fm_pagination_get_row_break_count(pagination);
-    vertical_count = fm_pagination_get_col_break_count(pagination);
+    fm_pagination_get_page_count(pagination, &page_count);
+    fm_pagination_get_row_break_count(pagination, &horizontal_count);
+    fm_pagination_get_col_break_count(pagination, &vertical_count);
   }
   emscripten::val paper_val = emscripten::val::object();
   paper_val.set("widthPt", paper.width_pt);
@@ -182,11 +182,12 @@ emscripten::val JsWorkbook::paginate(uint32_t sheet) const {
     return fail(invalid_handle_status());
   }
   fm_pagination_t* pagination = nullptr;
-  const fm_status_t rc = fm_workbook_get_pagination(handle_, sheet, &pagination);
+  const fm_status_t rc = fm_sheet_get_pagination(handle_, sheet, &pagination);
   if (rc != 0) {
     return fail(error_status(rc));
   }
-  const std::size_t area_count = fm_pagination_get_print_area_count(pagination);
+  std::size_t area_count = 0;
+  fm_pagination_get_print_area_count(pagination, &area_count);
   for (std::size_t i = 0; i < area_count; ++i) {
     fm_print_range_t range{};
     if (fm_pagination_get_print_area_at(pagination, i, &range) != 0) {
@@ -199,14 +200,16 @@ emscripten::val JsWorkbook::paginate(uint32_t sheet) const {
     item.set("lastCol", range.last_col);
     print_area.set(i, item);
   }
-  const std::size_t horizontal_count = fm_pagination_get_row_break_count(pagination);
+  std::size_t horizontal_count = 0;
+  fm_pagination_get_row_break_count(pagination, &horizontal_count);
   for (std::size_t i = 0; i < horizontal_count; ++i) {
     uint32_t row = 0;
     if (fm_pagination_get_row_break_at(pagination, i, &row) == 0) {
       horizontal_breaks.set(i, row);
     }
   }
-  const std::size_t vertical_count = fm_pagination_get_col_break_count(pagination);
+  std::size_t vertical_count = 0;
+  fm_pagination_get_col_break_count(pagination, &vertical_count);
   for (std::size_t i = 0; i < vertical_count; ++i) {
     uint32_t col = 0;
     if (fm_pagination_get_col_break_at(pagination, i, &col) == 0) {
@@ -217,7 +220,9 @@ emscripten::val JsWorkbook::paginate(uint32_t sheet) const {
   result.set("printArea", print_area);
   result.set("horizontalBreaks", horizontal_breaks);
   result.set("verticalBreaks", vertical_breaks);
-  result.set("pageCount", fm_pagination_get_page_count(pagination));
+  std::size_t page_count = 0;
+  fm_pagination_get_page_count(pagination, &page_count);
+  result.set("pageCount", page_count);
   set_pagination_detail(&result, pagination);
   fm_pagination_destroy(pagination);
   return result;

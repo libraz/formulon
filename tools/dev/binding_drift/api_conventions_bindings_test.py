@@ -259,6 +259,32 @@ class ScopeTest(BindingRuleTestBase):
             ],
         )
 
+    def test_r1_scope_sheet_arg_exempts_a_workbook_scope_sheet_index(self) -> None:
+        def ledger(sheet_arg: bool) -> dict:
+            add = {"kind": "op", "c": "fm_workbook_add_table", "scope": "workbook", "noun": "table"}
+            if sheet_arg:
+                add["sheet_arg"] = "tables are indexed across the workbook"
+            return {"entries": {"table.add": add}}
+
+        header = "FM_API fm_status_t fm_workbook_add_table(fm_workbook_t* wb, size_t sheet_index, size_t* out_index);\n"
+        self.assert_rule(
+            "R1.scope",
+            self.fixture.context(header, ledger(False)),
+            self.fixture.context(header, ledger(True)),
+            [("c", "table.add", "scope")],
+        )
+
+    def test_r1_scope_buffer_handle_is_the_bytes_pointer(self) -> None:
+        ledger = {
+            "entries": {"buffer.destroy": {"kind": "op", "c": "fm_buffer_destroy", "scope": "buffer", "noun": "buffer"}}
+        }
+        self.assert_rule(
+            "R1.scope",
+            self.fixture.context("FM_API void fm_buffer_destroy(char* bytes);\n", ledger),
+            self.fixture.context("FM_API void fm_buffer_destroy(uint8_t* bytes);\n", ledger),
+            [("c", "buffer.destroy", "handle")],
+        )
+
 
 class CollectionTest(BindingRuleTestBase):
     def test_r3_suffix(self) -> None:

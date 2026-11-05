@@ -116,16 +116,16 @@ constexpr std::string_view kDefaultPivotStyle = "PivotStyleLight16";
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_get_table_style_count(fm_workbook_t* wb, uint32_t* out_count) {
+extern "C" fm_status_t fm_workbook_get_table_style_count(const fm_workbook_t* wb, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
     return null_argument("fm_workbook_get_table_style_count");
   }
-  *out_count = static_cast<uint32_t>(wb->workbook().styles().table_styles.styles.size());
+  *out_count = wb->workbook().styles().table_styles.styles.size();
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_table_style_at(fm_workbook_t* wb, uint32_t index, fm_table_style_t* out) {
+extern "C" fm_status_t fm_workbook_get_table_style_at(const fm_workbook_t* wb, size_t index, fm_table_style_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument("fm_workbook_get_table_style_at");
@@ -146,13 +146,14 @@ extern "C" fm_status_t fm_workbook_get_table_style_at(fm_workbook_t* wb, uint32_
     elements.push_back(c);
   }
   fresh_read_scratch(wb);
-  wb->table_style_element_scratch.clear();
+  fm_workbook_t* scratch = const_cast<fm_workbook_t*>(wb);
+  scratch->table_style_element_scratch.clear();
   *out = fm_table_style_t{};
   out->name = style.name.c_str();
   out->pivot = style.pivot ? 1 : 0;
   out->table = style.table ? 1 : 0;
   out->element_count = static_cast<uint32_t>(elements.size());
-  out->elements = wb->table_style_element_scratch.adopt(std::move(elements));
+  out->elements = scratch->table_style_element_scratch.adopt(std::move(elements));
   return 0;
 }
 
@@ -251,7 +252,7 @@ extern "C" fm_status_t fm_workbook_remove_table_style(fm_workbook_t* wb, const c
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_table_style_defaults(fm_workbook_t* wb, const char** out_table_style,
+extern "C" fm_status_t fm_workbook_get_table_style_defaults(const fm_workbook_t* wb, const char** out_table_style,
                                                             const char** out_pivot_style) {
   clear_last_error();
   if (wb == nullptr || out_table_style == nullptr || out_pivot_style == nullptr) {

@@ -1021,10 +1021,10 @@ Napi::Value Workbook::AddChartSeries(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  uint32_t series_idx = 0;
+  std::size_t series_idx = 0;
   const fm_status_t rc =
       fm_sheet_add_chart_series(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &patch, &series_idx);
-  out.Set("seriesIdx", JsNumber(env, rc == 0 ? series_idx : 0));
+  out.Set("seriesIdx", JsNumber(env, rc == 0 ? static_cast<double>(series_idx) : 0));
   out.Set("status", MakeStatus(env, rc));
   return out;
 }

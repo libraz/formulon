@@ -18,7 +18,7 @@ namespace {
 // Shared bridge for `precedents` / `dependents`: invokes the C ABI
 // entry point, copies the result into a `ListResult` of {sheet, row, col}
 // objects, and frees the C-owned handle.
-using TraceFn = fm_status_t (*)(const fm_workbook_t*, uint32_t, uint32_t, uint32_t, uint32_t, fm_cell_nodes_t**);
+using TraceFn = fm_status_t (*)(const fm_workbook_t*, std::size_t, uint32_t, uint32_t, uint32_t, fm_cell_nodes_t**);
 
 Napi::Array TraceToArray(const Napi::CallbackInfo& info, const fm_workbook_t* handle, TraceFn fn) {
   Napi::Env env = info.Env();
@@ -35,7 +35,8 @@ Napi::Array TraceToArray(const Napi::CallbackInfo& info, const fm_workbook_t* ha
   if (rc != 0) {
     return FinishListResult(env, arr, rc);
   }
-  const std::size_t count = fm_cell_nodes_get_node_count(nodes);
+  std::size_t count = 0;
+  rc = fm_cell_nodes_get_node_count(nodes, &count);
   std::size_t emitted = 0;
   for (std::size_t i = 0; i < count; ++i) {
     fm_cell_node_t n{};
@@ -157,13 +158,13 @@ Napi::Value Workbook::GetExternalLinks(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return FinishListResult(env, arr, kBindingInvalidHandle);
   }
-  uint32_t count = 0;
+  std::size_t count = 0;
   fm_status_t rc = fm_workbook_get_external_link_count(handle_, &count);
   if (rc != 0) {
     return FinishListResult(env, arr, rc);
   }
   std::size_t emitted = 0;
-  for (uint32_t i = 0; i < count; ++i) {
+  for (std::size_t i = 0; i < count; ++i) {
     fm_external_link_record_t rec{};
     rc = fm_workbook_get_external_link(handle_, i, &rec);
     if (rc != 0) {
@@ -217,9 +218,9 @@ Napi::Value Workbook::FunctionMetadata(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::FunctionNames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
-  const std::size_t n = fm_get_function_count();
-  fm_status_t rc = 0;
-  for (std::size_t i = 0; i < n; ++i) {
+  std::size_t n = 0;
+  fm_status_t rc = fm_get_function_count(&n);
+  for (std::size_t i = 0; rc == 0 && i < n; ++i) {
     const char* name = nullptr;
     rc = fm_get_function_name_at(i, &name);
     if (rc != 0) {
@@ -275,7 +276,8 @@ Napi::Value Workbook::LocaleFacts(const Napi::CallbackInfo& info) {
   facts.Set("measured", Napi::Boolean::New(env, f.measured != 0));
   facts.Set("collationMeasured", Napi::Boolean::New(env, f.collation_measured != 0));
   Napi::Array errors = Napi::Array::New(env);
-  const std::size_t n = fm_get_locale_error_name_count();
+  std::size_t n = 0;
+  rc = fm_get_locale_error_name_count(&n);
   for (std::size_t i = 0; i < n && rc == 0; ++i) {
     const char* canonical = nullptr;
     const char* localized = nullptr;

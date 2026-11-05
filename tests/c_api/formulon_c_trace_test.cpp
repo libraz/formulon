@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_count_of.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 
@@ -27,7 +28,7 @@ TEST(FormulonCApiTrace, EmptyWorkbookReturnsEmpty) {
 
   CellNodesGuard nodes;
   ASSERT_EQ(fm_sheet_get_precedents(wb.handle, 0, 0, 0, 1, &nodes.handle), 0);
-  EXPECT_EQ(fm_cell_nodes_get_node_count(nodes.handle), 0U);
+  EXPECT_EQ(count_of(fm_cell_nodes_get_node_count, nodes.handle), 0U);
 }
 
 TEST(FormulonCApiTrace, DirectPrecedentsOfFormula) {
@@ -41,7 +42,7 @@ TEST(FormulonCApiTrace, DirectPrecedentsOfFormula) {
 
   CellNodesGuard nodes;
   ASSERT_EQ(fm_sheet_get_precedents(wb.handle, 0, 0, 2, 1, &nodes.handle), 0);
-  ASSERT_EQ(fm_cell_nodes_get_node_count(nodes.handle), 2U);
+  ASSERT_EQ(count_of(fm_cell_nodes_get_node_count, nodes.handle), 2U);
   bool saw_a1 = false;
   bool saw_b1 = false;
   for (std::size_t i = 0; i < 2; ++i) {
@@ -69,7 +70,7 @@ TEST(FormulonCApiTrace, DirectDependentsOfRoot) {
 
   CellNodesGuard nodes;
   ASSERT_EQ(fm_sheet_get_dependents(wb.handle, 0, 0, 0, 1, &nodes.handle), 0);
-  ASSERT_EQ(fm_cell_nodes_get_node_count(nodes.handle), 2U);
+  ASSERT_EQ(count_of(fm_cell_nodes_get_node_count, nodes.handle), 2U);
 }
 
 TEST(FormulonCApiTrace, CompactRangeIsVisibleInBothDirections) {
@@ -86,7 +87,7 @@ TEST(FormulonCApiTrace, CompactRangeIsVisibleInBothDirections) {
 
   CellNodesGuard precedents;
   ASSERT_EQ(fm_sheet_get_precedents(wb.handle, 0, 0, 1, 1, &precedents.handle), 0);
-  ASSERT_EQ(fm_cell_nodes_get_node_count(precedents.handle), 2U);
+  ASSERT_EQ(count_of(fm_cell_nodes_get_node_count, precedents.handle), 2U);
   fm_cell_node_t first{};
   fm_cell_node_t second{};
   ASSERT_EQ(fm_cell_nodes_get_node_at(precedents.handle, 0, &first), 0);
@@ -98,7 +99,7 @@ TEST(FormulonCApiTrace, CompactRangeIsVisibleInBothDirections) {
 
   CellNodesGuard dependents;
   ASSERT_EQ(fm_sheet_get_dependents(wb.handle, 0, 4999, 0, 1, &dependents.handle), 0);
-  ASSERT_EQ(fm_cell_nodes_get_node_count(dependents.handle), 1U);
+  ASSERT_EQ(count_of(fm_cell_nodes_get_node_count, dependents.handle), 1U);
   fm_cell_node_t watcher{};
   ASSERT_EQ(fm_cell_nodes_get_node_at(dependents.handle, 0, &watcher), 0);
   EXPECT_EQ(watcher.row, 0U);
@@ -117,7 +118,7 @@ TEST(FormulonCApiTrace, CompactRangeOverFormulaReportsOnlyCells) {
 
   CellNodesGuard precedents;
   ASSERT_EQ(fm_sheet_get_precedents(wb.handle, 0, 0, 1, 2, &precedents.handle), 0);
-  ASSERT_EQ(fm_cell_nodes_get_node_count(precedents.handle), 2U);
+  ASSERT_EQ(count_of(fm_cell_nodes_get_node_count, precedents.handle), 2U);
   for (std::size_t i = 0; i < 2U; ++i) {
     fm_cell_node_t n{};
     ASSERT_EQ(fm_cell_nodes_get_node_at(precedents.handle, i, &n), 0);
@@ -127,7 +128,7 @@ TEST(FormulonCApiTrace, CompactRangeOverFormulaReportsOnlyCells) {
 
   CellNodesGuard dependents;
   ASSERT_EQ(fm_sheet_get_dependents(wb.handle, 0, 4999, 0, 2, &dependents.handle), 0);
-  ASSERT_EQ(fm_cell_nodes_get_node_count(dependents.handle), 1U);
+  ASSERT_EQ(count_of(fm_cell_nodes_get_node_count, dependents.handle), 1U);
   fm_cell_node_t watcher{};
   ASSERT_EQ(fm_cell_nodes_get_node_at(dependents.handle, 0, &watcher), 0);
   EXPECT_EQ(watcher.sheet, 0U);
@@ -147,12 +148,12 @@ TEST(FormulonCApiTrace, DepthExpandsTransitively) {
   // depth=1 → only B1
   CellNodesGuard d1;
   ASSERT_EQ(fm_sheet_get_precedents(wb.handle, 0, 0, 2, 1, &d1.handle), 0);
-  EXPECT_EQ(fm_cell_nodes_get_node_count(d1.handle), 1U);
+  EXPECT_EQ(count_of(fm_cell_nodes_get_node_count, d1.handle), 1U);
 
   // depth=2 → B1 + A1
   CellNodesGuard d2;
   ASSERT_EQ(fm_sheet_get_precedents(wb.handle, 0, 0, 2, 2, &d2.handle), 0);
-  EXPECT_EQ(fm_cell_nodes_get_node_count(d2.handle), 2U);
+  EXPECT_EQ(count_of(fm_cell_nodes_get_node_count, d2.handle), 2U);
 }
 
 TEST(FormulonCApiTrace, DepthCapPreventsRunaway) {
@@ -165,7 +166,7 @@ TEST(FormulonCApiTrace, DepthCapPreventsRunaway) {
   CellNodesGuard n;
   ASSERT_EQ(fm_sheet_get_precedents(wb.handle, 0, 0, 0, 1000, &n.handle), 0);
   // No precedents (literal) → result empty regardless of depth.
-  EXPECT_EQ(fm_cell_nodes_get_node_count(n.handle), 0U);
+  EXPECT_EQ(count_of(fm_cell_nodes_get_node_count, n.handle), 0U);
 }
 
 TEST(FormulonCApiTrace, OutOfRangeSheetReturnsInvalidArgument) {
@@ -204,6 +205,7 @@ TEST(FormulonCApiTrace, NullArgsReturnBindingNullPointer) {
 
 TEST(FormulonCApiTrace, DestroyHandlesNullSafely) {
   fm_cell_nodes_destroy(nullptr);
-  EXPECT_EQ(fm_cell_nodes_get_node_count(nullptr), 0U);
-  SUCCEED();
+  std::size_t count = 0;
+  EXPECT_EQ(fm_cell_nodes_get_node_count(nullptr, &count),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }

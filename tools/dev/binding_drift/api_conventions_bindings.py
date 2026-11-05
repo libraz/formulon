@@ -613,11 +613,15 @@ def _rule_coverage(ctx: Context) -> Iterable[Violation]:
 # ---------------------------------------------------------------------------
 
 
+# Scopes whose handle is not an `fm_<scope>_t`: a buffer is the bytes pointer a save returns.
+_SCOPE_HANDLE_TYPES = {"buffer": "uint8_t"}
+
+
 @_owned("R1.scope")
 def _rule_scope(ctx: Context) -> Iterable[Violation]:
     """A `sheet`-scope function takes `(fm_workbook_t*, size_t sheet_index, ...)`; a `workbook`-scope function
-    takes the workbook handle and no sheet index unless its noun is `sheet`; a result-handle scope takes
-    `fm_<scope>_t*` first.
+    takes the workbook handle and no sheet index unless its noun is `sheet` or the entry carries `sheet_arg:`;
+    a result-handle scope takes `fm_<scope>_t*` (or its `_SCOPE_HANDLE_TYPES` type) first.
     """
     for fn in ctx.functions:
         key = ctx.op_key(fn.name)
@@ -626,7 +630,7 @@ def _rule_scope(ctx: Context) -> Iterable[Violation]:
         if scope not in SCOPES:
             continue
         handle = fn.params[0] if fn.params else None
-        want = f"fm_{'workbook' if scope in ('workbook', 'sheet') else scope}_t"
+        want = _SCOPE_HANDLE_TYPES.get(scope) or f"fm_{'workbook' if scope in ('workbook', 'sheet') else scope}_t"
         if handle is None or ctx.target_c(handle.base_type) != want:
             yield ctx.c_violation(
                 "R1.scope", fn.name, "handle", f"{fn.name}: `{scope}` scope takes `{want}*` first", fn.line
@@ -641,7 +645,7 @@ def _rule_scope(ctx: Context) -> Iterable[Violation]:
                     f"{fn.name}: `sheet` scope takes `size_t sheet_index` second",
                     fn.line,
                 )
-        elif scope == "workbook" and entry.get("noun") != "sheet":
+        elif scope == "workbook" and entry.get("noun") != "sheet" and "sheet_arg" not in entry:
             if any(p.role_name in _SHEET_FIELDS and p.pointer_depth == 0 for p in fn.params[1:]):
                 yield ctx.c_violation(
                     "R1.scope",

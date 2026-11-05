@@ -24,7 +24,7 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::check_index;
-using formulon::c_api::parts::check_sheet_u32;
+using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
@@ -80,7 +80,7 @@ std::vector<formulon::eval::CellNodeId> bfs_collect(formulon::eval::CellNodeId s
 
 // The direction is a runtime flag rather than a template parameter so the
 // BFS body and its hash set are linked once for both entry points.
-fm_status_t trace_impl(bool precedents, const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
+fm_status_t trace_impl(bool precedents, const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
                        std::uint32_t col, std::uint32_t depth, fm_cell_nodes_t** out) {
   clear_last_error();
   const char* fn_name = precedents ? "fm_sheet_get_precedents" : "fm_sheet_get_dependents";
@@ -90,13 +90,13 @@ fm_status_t trace_impl(bool precedents, const fm_workbook_t* wb, std::uint32_t s
         precedents ? "fm_sheet_get_precedents: NULL argument" : "fm_sheet_get_dependents: NULL argument");
   }
   *out = nullptr;
-  if (auto rc = check_sheet_u32(wb, sheet, fn_name); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, fn_name); rc != 0) {
     return rc;
   }
   const auto& workbook = wb->workbook();
   const auto& engine = workbook.recalc_engine();
   const auto& graph = engine.dep_graph();
-  formulon::eval::CellNodeId seed{static_cast<std::uint16_t>(sheet), row, col};
+  formulon::eval::CellNodeId seed{static_cast<std::uint16_t>(sheet_index), row, col};
   // A reference wide enough to be registered as a compact rectangle owns no
   // per-cell graph edge, so the raw adjacency lists alone would hide
   // `=SUM(A1:A5000)` from both trace directions. Fold the rectangle's
@@ -120,26 +120,27 @@ fm_status_t trace_impl(bool precedents, const fm_workbook_t* wb, std::uint32_t s
 
 }  // namespace
 
-extern "C" fm_status_t fm_sheet_get_precedents(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
+extern "C" fm_status_t fm_sheet_get_precedents(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
                                                std::uint32_t col, std::uint32_t depth, fm_cell_nodes_t** out) {
-  return trace_impl(true, wb, sheet, row, col, depth, out);
+  return trace_impl(true, wb, sheet_index, row, col, depth, out);
 }
 
-extern "C" fm_status_t fm_sheet_get_dependents(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
+extern "C" fm_status_t fm_sheet_get_dependents(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
                                                std::uint32_t col, std::uint32_t depth, fm_cell_nodes_t** out) {
-  return trace_impl(false, wb, sheet, row, col, depth, out);
+  return trace_impl(false, wb, sheet_index, row, col, depth, out);
 }
 
 extern "C" void fm_cell_nodes_destroy(fm_cell_nodes_t* nodes) {
   delete nodes;
 }
 
-extern "C" size_t fm_cell_nodes_get_node_count(const fm_cell_nodes_t* nodes) {
+extern "C" fm_status_t fm_cell_nodes_get_node_count(const fm_cell_nodes_t* nodes, size_t* out_count) {
   clear_last_error();
-  if (nodes == nullptr) {
-    return 0;
+  if (nodes == nullptr || out_count == nullptr) {
+    return null_argument("fm_cell_nodes_get_node_count");
   }
-  return nodes->nodes.size();
+  *out_count = nodes->nodes.size();
+  return 0;
 }
 
 extern "C" fm_status_t fm_cell_nodes_get_node_at(const fm_cell_nodes_t* nodes, std::size_t idx, fm_cell_node_t* out) {

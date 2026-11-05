@@ -175,7 +175,7 @@ typedef enum {
  *   * `FM_VAL_LAMBDA`  — lambdas are reserved.
  */
 typedef struct {
-  fm_value_kind_t kind;
+  int32_t kind; /* fm_value_kind_t */
   union {
     double number;
     int32_t boolean;
@@ -544,15 +544,12 @@ FM_API void fm_buffer_destroy(uint8_t* bytes);
 /* -------------------------------------------------------------------------- */
 
 /**
- * @brief Returns the number of sheets in the workbook.
+ * @brief Writes the number of sheets in the workbook to `*out_count`.
  *
- * Returns `0` when `wb == NULL`; this is unambiguous because
- * Workbooks never expose zero sheets through `fm_workbook_create_default`
- * (always at least `"Sheet1"`), and an `fm_workbook_create_empty`
- * caller is expected to consult the return value via the construction
- * status, not by polling sheet count.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_count` is NULL.
  */
-FM_API size_t fm_workbook_get_sheet_count(const fm_workbook_t* wb);
+FM_API fm_status_t fm_workbook_get_sheet_count(const fm_workbook_t* wb, size_t* out_count);
 
 /**
  * @brief Returns the display name of the sheet at `index` (UTF-8).
@@ -604,7 +601,7 @@ FM_API fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* utf8_nam
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when either index is out of range.
  */
-FM_API fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, uint32_t from_index, uint32_t to_index);
+FM_API fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, size_t from_index, size_t to_index);
 
 /**
  * @brief Copies the worksheet at `source_index` into the workbook.
@@ -639,8 +636,8 @@ FM_API fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, uint32_t from_index
  *         content the copy cannot model (unrecognised relationships, slicers,
  *         shapes, pivot charts, or a drawing retained from an `.xlsb`).
  */
-FM_API fm_status_t fm_workbook_copy_sheet(fm_workbook_t* wb, uint32_t source_index, uint32_t insert_before,
-                                          const char* new_name, uint32_t* out_index);
+FM_API fm_status_t fm_workbook_copy_sheet(fm_workbook_t* wb, size_t source_index, size_t insert_before,
+                                          const char* new_name, size_t* out_index);
 
 /**
  * @brief Reads the active sheet: the first `<workbookView>`'s `activeTab`.
@@ -655,7 +652,7 @@ FM_API fm_status_t fm_workbook_copy_sheet(fm_workbook_t* wb, uint32_t source_ind
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_index` is `NULL`.
  */
-FM_API fm_status_t fm_workbook_get_active_sheet(const fm_workbook_t* wb, uint32_t* out_index);
+FM_API fm_status_t fm_workbook_get_active_sheet(const fm_workbook_t* wb, size_t* out_index);
 
 /**
  * @brief Marks sheet `index` active so a save records it.
@@ -671,7 +668,7 @@ FM_API fm_status_t fm_workbook_get_active_sheet(const fm_workbook_t* wb, uint32_
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index` is not a sheet of the workbook or
  *         the sheet is hidden or very hidden.
  */
-FM_API fm_status_t fm_workbook_set_active_sheet(fm_workbook_t* wb, uint32_t index);
+FM_API fm_status_t fm_workbook_set_active_sheet(fm_workbook_t* wb, size_t index);
 
 /**
  * @brief Removes the sheet at `index`.
@@ -700,7 +697,7 @@ FM_API fm_status_t fm_workbook_set_active_sheet(fm_workbook_t* wb, uint32_t inde
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index` is the only visible sheet
  *         (the workbook is left unchanged).
  */
-FM_API fm_status_t fm_workbook_remove_sheet(fm_workbook_t* wb, uint32_t index);
+FM_API fm_status_t fm_workbook_remove_sheet(fm_workbook_t* wb, size_t index);
 
 /**
  * @brief Renames the sheet at `index` to `new_name` (UTF-8).
@@ -725,7 +722,7 @@ FM_API fm_status_t fm_workbook_remove_sheet(fm_workbook_t* wb, uint32_t index);
  *         normalization, full (expanding) case folding, locale tailoring, or
  *         a claim of full Excel-equivalence.
  */
-FM_API fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, uint32_t index, const char* new_name);
+FM_API fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, size_t index, const char* new_name);
 
 /**
  * @brief Sets (or appends, or removes) a workbook-scoped defined name.
@@ -807,7 +804,7 @@ FM_API fm_status_t fm_workbook_set_defined_name_attrs(fm_workbook_t* wb, const c
  */
 
 /**
- * @brief Inserts `count` rows at `row` on `sheet`. Cells at `row` and
+ * @brief Inserts `count` rows at `row` on `sheet_index`. Cells at `row` and
  *        beyond shift forward; cells pushed past the sheet bound are
  *        dropped. References across the workbook are rewritten to
  *        track the new positions; references that would land past the
@@ -815,36 +812,36 @@ FM_API fm_status_t fm_workbook_set_defined_name_attrs(fm_workbook_t* wb, const c
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range, `row` is
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, `row` is
  *         past the sheet bound, or `count == 0`. Delete operations also
  *         reject a `count` that extends past the sheet bound;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when the edit cuts into a data table,
  *         legacy array block or PivotTable, or would push one of them or a
  *         table past the sheet bound; the workbook is unchanged.
  */
-FM_API fm_status_t fm_sheet_insert_rows(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t count);
+FM_API fm_status_t fm_sheet_insert_rows(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t count);
 
 /**
- * @brief Deletes `count` rows starting at `row` on `sheet`. The deleted
+ * @brief Deletes `count` rows starting at `row` on `sheet_index`. The deleted
  *        rows are dropped wholesale; subsequent rows shift back.
  *        References pointing inside the deleted interval collapse to
  *        `#REF!`; references past the deletion shift back.
  *
  * @return Same status codes as `fm_sheet_insert_rows`.
  */
-FM_API fm_status_t fm_sheet_delete_rows(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t count);
+FM_API fm_status_t fm_sheet_delete_rows(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t count);
 
 /**
- * @brief Inserts `count` columns at `col` on `sheet`. Mirrors
+ * @brief Inserts `count` columns at `col` on `sheet_index`. Mirrors
  *        `fm_sheet_insert_rows` along the column axis.
  */
-FM_API fm_status_t fm_sheet_insert_cols(fm_workbook_t* wb, uint32_t sheet, uint32_t col, uint32_t count);
+FM_API fm_status_t fm_sheet_insert_cols(fm_workbook_t* wb, size_t sheet_index, uint32_t col, uint32_t count);
 
 /**
- * @brief Deletes `count` columns starting at `col` on `sheet`. Mirrors
+ * @brief Deletes `count` columns starting at `col` on `sheet_index`. Mirrors
  *        `fm_sheet_delete_rows` along the column axis.
  */
-FM_API fm_status_t fm_sheet_delete_cols(fm_workbook_t* wb, uint32_t sheet, uint32_t col, uint32_t count);
+FM_API fm_status_t fm_sheet_delete_cols(fm_workbook_t* wb, size_t sheet_index, uint32_t col, uint32_t count);
 
 /* -------------------------------------------------------------------------- */
 /* Cell mutation                                                              */
@@ -1171,7 +1168,7 @@ FM_API fm_status_t fm_sheet_get_cell_phonetic(const fm_workbook_t* wb, size_t sh
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_cell_phonetic_run_count(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
-                                                        uint32_t col, uint32_t* out_count);
+                                                        uint32_t col, size_t* out_count);
 
 /**
  * @brief Reads the `run_index`-th `<rPh>` block of a cell.
@@ -1187,7 +1184,7 @@ FM_API fm_status_t fm_sheet_get_cell_phonetic_run_count(const fm_workbook_t* wb,
  *         `run_index` is past the cell's run count.
  */
 FM_API fm_status_t fm_sheet_get_cell_phonetic_run(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
-                                                  uint32_t col, uint32_t run_index, fm_phonetic_run_t* out);
+                                                  uint32_t col, size_t run_index, fm_phonetic_run_t* out);
 
 /**
  * @brief Reads how a cell's phonetic guide renders (OOXML `<phoneticPr>`).
@@ -1259,7 +1256,7 @@ FM_API fm_status_t fm_sheet_get_cell_show_phonetic(const fm_workbook_t* wb, size
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, the
  *         cell is absent, or the cached value is not a lambda.
  */
-FM_API fm_status_t fm_sheet_get_lambda_text(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+FM_API fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                             const char** out_text);
 
 /* -------------------------------------------------------------------------- */
@@ -1696,15 +1693,16 @@ FM_API fm_status_t fm_workbook_format_value(const fm_workbook_t* wb, const fm_va
                                             const char** out_text, int32_t* out_status);
 
 /**
- * @brief Returns the number of defined names attached to the workbook.
+ * @brief Writes the number of defined names attached to the workbook to
+ *        `*out_count`.
  *
  * Defined names round-trip through OOXML even when not yet evaluated.
  * Counts every `<definedName>` entry in declaration order.
  *
- * @return `0` when `wb == NULL`; otherwise the size of the workbook's
- *         defined-name list.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_count` is NULL.
  */
-FM_API size_t fm_workbook_get_defined_name_count(const fm_workbook_t* wb);
+FM_API fm_status_t fm_workbook_get_defined_name_count(const fm_workbook_t* wb, size_t* out_count);
 
 /**
  * @brief Reads the `idx`-th defined name with its scope.
@@ -1745,12 +1743,12 @@ FM_API fm_status_t fm_workbook_get_defined_name_attrs_at(const fm_workbook_t* wb
                                                          int32_t* out_hidden);
 
 /**
- * @brief Returns the number of tables attached to the workbook.
+ * @brief Writes the number of tables attached to the workbook to `*out_count`.
  *
- * @return `0` when `wb == NULL`; otherwise the size of the workbook's
- *         table-metadata list.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_count` is NULL.
  */
-FM_API size_t fm_workbook_get_table_count(const fm_workbook_t* wb);
+FM_API fm_status_t fm_workbook_get_table_count(const fm_workbook_t* wb, size_t* out_count);
 
 /**
  * @brief Reads the `idx`-th table's identifying metadata.
@@ -1950,13 +1948,13 @@ FM_API fm_status_t fm_workbook_set_table_column_totals(fm_workbook_t* wb, size_t
                                                        const char* function, const char* label, const char* formula);
 
 /**
- * @brief Returns the number of passthrough OOXML parts the reader
- *        carried through unchanged.
+ * @brief Writes the number of passthrough OOXML parts the reader carried
+ *        through unchanged to `*out_count`.
  *
- * @return `0` when `wb == NULL`; otherwise the size of the workbook's
- *         passthrough-part list.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_count` is NULL.
  */
-FM_API size_t fm_workbook_get_passthrough_count(const fm_workbook_t* wb);
+FM_API fm_status_t fm_workbook_get_passthrough_count(const fm_workbook_t* wb, size_t* out_count);
 
 /**
  * @brief Reads the `idx`-th passthrough part's path.
@@ -2019,44 +2017,44 @@ typedef struct {
 
 /**
  * @brief Appends a hyperlink covering the inclusive rectangle
- *        `(hl.row, hl.col)..(hl.last_row, hl.last_col)` to `sheet`.
+ *        `(hl.row, hl.col)..(hl.last_row, hl.last_col)` to `sheet_index`.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range or the hyperlink
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or the hyperlink
  *         rectangle is inverted or outside the Excel grid.
  */
-FM_API fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, uint32_t sheet, fm_hyperlink_t hl);
+FM_API fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, size_t sheet_index, fm_hyperlink_t hl);
 
 /**
  * @brief Removes every hyperlink anchored at the exact `(row, col)`
- *        cell on `sheet`. No-op when nothing matches.
+ *        cell on `sheet_index`. No-op when nothing matches.
  *
  * @return `FM_STATUS_OK` (0) on success (including the no-match case);
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
-FM_API fm_status_t fm_sheet_remove_hyperlink(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col);
+FM_API fm_status_t fm_sheet_remove_hyperlink(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col);
 
 /**
- * @brief Removes the hyperlink at `index` on `sheet`. Mirrors the
+ * @brief Removes the hyperlink at `index` on `sheet_index`. Mirrors the
  *        index domain of fm_sheet_get_hyperlink_at.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` or `index` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `index` is out of range.
  */
-FM_API fm_status_t fm_sheet_remove_hyperlink_at(fm_workbook_t* wb, uint32_t sheet, uint32_t index);
+FM_API fm_status_t fm_sheet_remove_hyperlink_at(fm_workbook_t* wb, size_t sheet_index, size_t index);
 
 /**
- * @brief Drops every hyperlink on `sheet`. No-op when the sheet
+ * @brief Drops every hyperlink on `sheet_index`. No-op when the sheet
  *        already has no hyperlinks.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
-FM_API fm_status_t fm_sheet_clear_hyperlinks(fm_workbook_t* wb, uint32_t sheet);
+FM_API fm_status_t fm_sheet_clear_hyperlinks(fm_workbook_t* wb, size_t sheet_index);
 
 /**
  * @brief Appends a merge range to the sheet's merge list.
@@ -2065,13 +2063,13 @@ FM_API fm_status_t fm_sheet_clear_hyperlinks(fm_workbook_t* wb, uint32_t sheet);
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range or the merge
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or the merge
  *         rectangle is outside the Excel grid.
  */
-FM_API fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, uint32_t sheet, fm_merge_range merge);
+FM_API fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, size_t sheet_index, fm_merge_range merge);
 
 /**
- * @brief Removes every merge range on `sheet` that overlaps `range`
+ * @brief Removes every merge range on `sheet_index` that overlaps `range`
  *        (inclusive rectangle intersection). No-op when nothing
  *        overlaps. `range` corners are normalised internally so the
  *        caller may pass either (first <= last) or transposed corners,
@@ -2079,34 +2077,34 @@ FM_API fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, uint32_t sheet, fm_merg
  *
  * @return `FM_STATUS_OK` (0) on success (including the no-overlap case);
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
-FM_API fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, uint32_t sheet, fm_merge_range range);
+FM_API fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, size_t sheet_index, fm_merge_range range);
 
 /**
- * @brief Removes the merge at `index` on `sheet`. Mirrors the
+ * @brief Removes the merge at `index` on `sheet_index`. Mirrors the
  *        index domain of fm_sheet_get_merge_at.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` or `index` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `index` is out of range.
  */
-FM_API fm_status_t fm_sheet_remove_merge_at(fm_workbook_t* wb, uint32_t sheet, uint32_t index);
+FM_API fm_status_t fm_sheet_remove_merge_at(fm_workbook_t* wb, size_t sheet_index, size_t index);
 
 /**
- * @brief Drops every merge range on `sheet`. No-op when the sheet
+ * @brief Drops every merge range on `sheet_index`. No-op when the sheet
  *        already has no merges.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
-FM_API fm_status_t fm_sheet_clear_merges(fm_workbook_t* wb, uint32_t sheet);
+FM_API fm_status_t fm_sheet_clear_merges(fm_workbook_t* wb, size_t sheet_index);
 
 /**
  * @brief Reads `(out_row, out_col, out_author, out_text)` for the
- *        comment at `(row, col)` on `sheet`. Returns `FM_STATUS_NOT_FOUND` (6) when no
- *        comment is anchored there, and `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is
+ *        comment at `(row, col)` on `sheet_index`. Returns `FM_STATUS_NOT_FOUND` (6) when no
+ *        comment is anchored there, and `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is
  *        out of range.
  *
  * `out->author` and `out->text` are model-backed views into the workbook
@@ -2114,21 +2112,21 @@ FM_API fm_status_t fm_sheet_clear_merges(fm_workbook_t* wb, uint32_t sheet);
  * comment list or until the handle is destroyed. Reads do not invalidate
  * them.
  */
-FM_API fm_status_t fm_sheet_get_comment(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+FM_API fm_status_t fm_sheet_get_comment(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                         fm_comment_t* out);
 
 /**
- * @brief Returns the number of comments attached to `sheet`, including
+ * @brief Returns the number of comments attached to `sheet_index`, including
  *        comments anchored on cells that carry no value.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
-FM_API fm_status_t fm_sheet_get_comment_count(fm_workbook_t* wb, uint32_t sheet, uint32_t* out_count);
+FM_API fm_status_t fm_sheet_get_comment_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
 
 /**
- * @brief Reads the `index`-th comment on `sheet` into `out`, in storage
+ * @brief Reads the `index`-th comment on `sheet_index` into `out`, in storage
  *        order. Unlike `fm_sheet_get_comment`, this enumerates every
  *        comment on the sheet regardless of whether the anchor cell holds
  *        a value, so callers can discover comments without already
@@ -2139,38 +2137,41 @@ FM_API fm_status_t fm_sheet_get_comment_count(fm_workbook_t* wb, uint32_t sheet,
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` or `index` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `index` is out of range.
  */
-FM_API fm_status_t fm_sheet_get_comment_at(fm_workbook_t* wb, uint32_t sheet, uint32_t index, fm_comment_t* out);
+FM_API fm_status_t fm_sheet_get_comment_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
+                                           fm_comment_t* out);
 
 /**
- * @brief Reads the `index`-th hyperlink on `sheet` into `out`.
+ * @brief Reads the `index`-th hyperlink on `sheet_index` into `out`.
  *
  * String fields in `out` are model-backed views (see `fm_hyperlink_t`).
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` or `index` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `index` is out of range.
  */
-FM_API fm_status_t fm_sheet_get_hyperlink_at(fm_workbook_t* wb, uint32_t sheet, uint32_t index, fm_hyperlink_t* out);
+FM_API fm_status_t fm_sheet_get_hyperlink_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
+                                             fm_hyperlink_t* out);
 
 /**
- * @brief Returns the number of hyperlinks attached to `sheet`.
+ * @brief Returns the number of hyperlinks attached to `sheet_index`.
  */
-FM_API fm_status_t fm_sheet_get_hyperlink_count(fm_workbook_t* wb, uint32_t sheet, uint32_t* out_count);
+FM_API fm_status_t fm_sheet_get_hyperlink_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
 
 /**
- * @brief Reads the `index`-th merge range on `sheet`.
+ * @brief Reads the `index`-th merge range on `sheet_index`.
  */
-FM_API fm_status_t fm_sheet_get_merge_at(fm_workbook_t* wb, uint32_t sheet, uint32_t index, fm_merge_range* out);
+FM_API fm_status_t fm_sheet_get_merge_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
+                                         fm_merge_range* out);
 
 /**
- * @brief Returns the number of merge ranges attached to `sheet`.
+ * @brief Returns the number of merge ranges attached to `sheet_index`.
  */
-FM_API fm_status_t fm_sheet_get_merge_count(fm_workbook_t* wb, uint32_t sheet, uint32_t* out_count);
+FM_API fm_status_t fm_sheet_get_merge_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
 
 /**
- * @brief Copies every merge range on `sheet` that intersects `range` into
+ * @brief Copies every merge range on `sheet_index` that intersects `range` into
  *        the caller's buffer, in storage order.
  *
  * `*out_count` always receives the total number of intersecting merges; at
@@ -2181,26 +2182,26 @@ FM_API fm_status_t fm_sheet_get_merge_count(fm_workbook_t* wb, uint32_t sheet, u
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_count` is `NULL`, or `out`
  *         is `NULL` while `capacity > 0`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
-FM_API fm_status_t fm_sheet_get_merges_in_range(fm_workbook_t* wb, uint32_t sheet, fm_merge_range range,
+FM_API fm_status_t fm_sheet_get_merges_in_range(const fm_workbook_t* wb, size_t sheet_index, fm_merge_range range,
                                                 fm_merge_range* out, uint32_t capacity, uint32_t* out_count);
 
 /**
- * @brief Inserts or replaces the comment at `(row, col)` on `sheet`.
+ * @brief Inserts or replaces the comment at `(row, col)` on `sheet_index`.
  *        Pass `text == NULL || text[0] == '\0'` to remove an existing
  *        comment. The strings are copied into the workbook handle's text
  *        storage. The coordinate must lie within the Excel grid.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range or the coordinate
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or the coordinate
  *         is outside the Excel grid;
  *         `FM_STATUS_THREADED_COMMENT_INVALID` (9006) when the cell already holds a threaded
  *         comment (a cell carries a note or a thread, never both).
  *         Replacing a note keeps its `xr:uid`.
  */
-FM_API fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+FM_API fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                         const char* author, const char* text);
 
 /**
@@ -2209,10 +2210,10 @@ FM_API fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, uint32_t sheet, uint3
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_visible` is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range;
  *         `FM_STATUS_NOT_FOUND` (6) when no note is anchored at the cell.
  */
-FM_API fm_status_t fm_sheet_get_comment_visible(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+FM_API fm_status_t fm_sheet_get_comment_visible(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                                 int32_t* out_visible);
 
 /**
@@ -2221,10 +2222,10 @@ FM_API fm_status_t fm_sheet_get_comment_visible(fm_workbook_t* wb, uint32_t shee
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range;
  *         `FM_STATUS_NOT_FOUND` (6) when no note is anchored at the cell.
  */
-FM_API fm_status_t fm_sheet_set_comment_visible(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+FM_API fm_status_t fm_sheet_set_comment_visible(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                                 int32_t visible);
 
 /* -------------------------------------------------------------------------- */
@@ -2262,7 +2263,7 @@ typedef struct {
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`.
  */
-FM_API fm_status_t fm_workbook_get_workbook_protection(fm_workbook_t* wb, fm_workbook_protection_t* out);
+FM_API fm_status_t fm_workbook_get_workbook_protection(const fm_workbook_t* wb, fm_workbook_protection_t* out);
 
 /**
  * @brief Replaces the modelled attributes of `<workbookProtection>`. A record
@@ -2291,22 +2292,22 @@ typedef struct {
 } fm_protected_range_t;
 
 /**
- * @brief Number of protected ranges on `sheet`.
+ * @brief Number of protected ranges on `sheet_index`.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_count` is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
-FM_API fm_status_t fm_sheet_get_protected_range_count(fm_workbook_t* wb, uint32_t sheet, uint32_t* out_count);
+FM_API fm_status_t fm_sheet_get_protected_range_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
 
 /**
  * @brief Reads protected range `index` in file order.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` or `index` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `index` is out of range.
  */
-FM_API fm_status_t fm_sheet_get_protected_range(fm_workbook_t* wb, uint32_t sheet, uint32_t index,
+FM_API fm_status_t fm_sheet_get_protected_range(const fm_workbook_t* wb, size_t sheet_index, size_t index,
                                                 fm_protected_range_t* out);
 
 /**
@@ -2316,17 +2317,18 @@ FM_API fm_status_t fm_sheet_get_protected_range(fm_workbook_t* wb, uint32_t shee
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `range` is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range, `name` is empty or
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, `name` is empty or
  *         already names another range of the sheet, or `sqref` does not parse
  *         as an A1 range list.
  */
-FM_API fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, uint32_t sheet, const fm_protected_range_t* range);
+FM_API fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sheet_index,
+                                                const fm_protected_range_t* range);
 
 /**
  * @brief Replaces protected range `index`; the argument checks of
  *        `fm_sheet_add_protected_range` apply, with `index` also validated.
  */
-FM_API fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, uint32_t sheet, uint32_t index,
+FM_API fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t sheet_index, size_t index,
                                                    const fm_protected_range_t* range);
 
 /**
@@ -2334,9 +2336,9 @@ FM_API fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, uint32_t s
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` or `index` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `index` is out of range.
  */
-FM_API fm_status_t fm_sheet_remove_protected_range(fm_workbook_t* wb, uint32_t sheet, uint32_t index);
+FM_API fm_status_t fm_sheet_remove_protected_range(fm_workbook_t* wb, size_t sheet_index, size_t index);
 
 /** @brief Data-validation error style (`fm_data_validation_t::error_style`, `fm_validation_outcome_t::error_style`). */
 typedef enum {
@@ -2393,16 +2395,16 @@ typedef struct {
 } fm_data_validation_t;
 
 /**
- * @brief Returns the number of data-validation rules attached to `sheet`.
+ * @brief Returns the number of data-validation rules attached to `sheet_index`.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
-FM_API fm_status_t fm_sheet_get_validation_count(fm_workbook_t* wb, uint32_t sheet, uint32_t* out_count);
+FM_API fm_status_t fm_sheet_get_validation_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
 
 /**
- * @brief Reads the `index`-th data-validation rule on `sheet` into `out`.
+ * @brief Reads the `index`-th data-validation rule on `sheet_index` into `out`.
  *
  * Every pointer in `*out` (`ranges` and the six string fields) is a
  * model-backed view owned by the workbook handle. It remains valid until the
@@ -2417,9 +2419,9 @@ FM_API fm_status_t fm_sheet_get_validation_count(fm_workbook_t* wb, uint32_t she
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` or `index` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `index` is out of range.
  */
-FM_API fm_status_t fm_sheet_get_validation(fm_workbook_t* wb, uint32_t sheet, uint32_t index,
+FM_API fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, size_t sheet_index, size_t index,
                                            fm_data_validation_t* out);
 
 /**
@@ -2439,7 +2441,7 @@ FM_API fm_status_t fm_sheet_get_validation(fm_workbook_t* wb, uint32_t sheet, ui
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range, when
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, when
  *         `v.range_count > 0 && v.ranges == NULL` or `v.range_count`
  *         exceeds the per-call range cap, when any supplied range is
  *         outside the Excel grid, or when `v.type`, `v.op` or
@@ -2447,26 +2449,26 @@ FM_API fm_status_t fm_sheet_get_validation(fm_workbook_t* wb, uint32_t sheet, ui
  *         `FM_STATUS_PARSER_UNEXPECTED_TOKEN` (1000) when a non-empty `v.formula1` or
  *         `v.formula2` does not parse (the rule is not stored).
  */
-FM_API fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, uint32_t sheet, fm_data_validation_t v);
+FM_API fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, size_t sheet_index, fm_data_validation_t v);
 
 /**
- * @brief Removes the validation rule at `index` on `sheet`.
+ * @brief Removes the validation rule at `index` on `sheet_index`.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` or `index` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or `index` is out of range.
  */
-FM_API fm_status_t fm_sheet_remove_validation(fm_workbook_t* wb, uint32_t sheet, uint32_t index);
+FM_API fm_status_t fm_sheet_remove_validation(fm_workbook_t* wb, size_t sheet_index, size_t index);
 
 /**
- * @brief Drops every validation rule on `sheet`. No-op when the sheet
+ * @brief Drops every validation rule on `sheet_index`. No-op when the sheet
  *        already has no rules.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
-FM_API fm_status_t fm_sheet_clear_validations(fm_workbook_t* wb, uint32_t sheet);
+FM_API fm_status_t fm_sheet_clear_validations(fm_workbook_t* wb, size_t sheet_index);
 
 /**
  * @brief Result of checking a value against the data-validation rule that
@@ -2813,7 +2815,7 @@ typedef enum {
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_mode` is NULL.
  */
-FM_API fm_status_t fm_workbook_get_calc_mode(const fm_workbook_t* wb, fm_calc_mode_t* out_mode);
+FM_API fm_status_t fm_workbook_get_calc_mode(const fm_workbook_t* wb, int32_t* out_mode);
 
 /**
  * @brief Sets the workbook's calc mode.
@@ -2861,7 +2863,7 @@ FM_API fm_status_t fm_workbook_set_calc_on_save(fm_workbook_t* wb, int32_t calc_
 
 /** @brief Reads `<calcPr refMode>` as an `fm_ref_mode_t`. @return `FM_STATUS_OK` (0), or
  * `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is NULL. */
-FM_API fm_status_t fm_workbook_get_ref_mode(const fm_workbook_t* wb, fm_ref_mode_t* out);
+FM_API fm_status_t fm_workbook_get_ref_mode(const fm_workbook_t* wb, int32_t* out);
 
 /**
  * @brief Sets `<calcPr refMode>` from a raw `fm_ref_mode_t` ordinal.
@@ -3102,7 +3104,7 @@ typedef struct {
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is NULL;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) if `sheet_index` is out of range.
  */
-FM_API fm_status_t fm_sheet_get_sheet_protection(const fm_workbook_t* wb, uint32_t sheet_index,
+FM_API fm_status_t fm_sheet_get_sheet_protection(const fm_workbook_t* wb, size_t sheet_index,
                                                  fm_sheet_protection_t* out);
 
 /**
@@ -3116,11 +3118,11 @@ FM_API fm_status_t fm_sheet_get_sheet_protection(const fm_workbook_t* wb, uint32
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `in` is NULL;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) if `sheet_index` is out of range.
  */
-FM_API fm_status_t fm_sheet_set_sheet_protection(fm_workbook_t* wb, uint32_t sheet_index,
+FM_API fm_status_t fm_sheet_set_sheet_protection(fm_workbook_t* wb, size_t sheet_index,
                                                  const fm_sheet_protection_t* in);
 
 /**
- * @brief Workbook-relative viewport rectangle, expressed in 0-based
+ * @brief Viewport rectangle on one sheet, expressed in 0-based
  *        inclusive coordinates. Used by `fm_sheet_recalc_viewport`.
  *
  * `last_row` / `last_col` are inclusive — a single-cell viewport sets
@@ -3129,7 +3131,6 @@ FM_API fm_status_t fm_sheet_set_sheet_protection(fm_workbook_t* wb, uint32_t she
  * a no-op recalc.
  */
 typedef struct {
-  uint32_t sheet;     /**< 0-based sheet index. */
   uint32_t first_row; /**< First row, 0-based, inclusive. */
   uint32_t last_row;  /**< Last row, 0-based, inclusive. */
   uint32_t first_col; /**< First column, 0-based, inclusive. */
@@ -3161,6 +3162,7 @@ typedef int32_t (*fm_iterative_progress_cb)(uint32_t iteration, double max_resid
  * overlaps them) will visit them.
  *
  * @param wb                     Workbook handle. Must be non-NULL.
+ * @param sheet_index            0-based sheet the viewport lies on.
  * @param viewport               Viewport rectangle. Must be non-NULL.
  * @param out_recomputed_count   Optional. Receives the number of cells
  *                               actually recomputed during this call.
@@ -3169,11 +3171,11 @@ typedef int32_t (*fm_iterative_progress_cb)(uint32_t iteration, double max_resid
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `viewport` is NULL;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `viewport->sheet` is past the last
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is past the last
  *           sheet, or exceeds the 16-bit range a sheet id is stored in;
  *         a `kEval*` / `kGraph*` code on engine failure.
  */
-FM_API fm_status_t fm_sheet_recalc_viewport(fm_workbook_t* wb, const fm_viewport* viewport,
+FM_API fm_status_t fm_sheet_recalc_viewport(fm_workbook_t* wb, size_t sheet_index, const fm_viewport* viewport,
                                             uint32_t* out_recomputed_count);
 
 /**
@@ -3264,7 +3266,7 @@ typedef struct {
  * it.
  */
 typedef struct {
-  fm_cf_match_kind_t kind;
+  int32_t kind; /* fm_cf_match_kind_t */
   int32_t priority;
   int32_t dxf_id_engaged; /* 0/1 */
   uint32_t dxf_id;
@@ -3299,35 +3301,39 @@ typedef struct {
  * `fm_pagination_get_page_count` reports is the true total; it is never a
  * truncated one.
  */
-FM_API fm_status_t fm_workbook_get_pagination(const fm_workbook_t* wb, size_t sheet_index, fm_pagination_t** out);
+FM_API fm_status_t fm_sheet_get_pagination(const fm_workbook_t* wb, size_t sheet_index, fm_pagination_t** out);
 
 /** @brief Releases a pagination result. `pagination == NULL` is a no-op. */
 FM_API void fm_pagination_destroy(fm_pagination_t* pagination);
 
-/** @brief Returns the total physical page count, or zero for `NULL`. */
-FM_API uint32_t fm_pagination_get_page_count(const fm_pagination_t* pagination);
+/** @brief Writes the total physical page count to `*out_count`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) for a NULL argument. */
+FM_API fm_status_t fm_pagination_get_page_count(const fm_pagination_t* pagination, size_t* out_count);
 
-/** @brief Number of rectangles in the sheet's declared `_xlnm.Print_Area`,
- *         or zero for `NULL`.
+/** @brief Writes the number of rectangles in the sheet's declared
+ *         `_xlnm.Print_Area` to `*out_count`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) for a NULL argument.
  *
  * Zero also means the sheet declares no print area, mirroring Excel's own
  * `PageSetup.PrintArea`; it is not backfilled with the used range. Pagination
  * still falls back to the used range in that case, so
  * `fm_pagination_get_page_count` can be non-zero while this is zero. */
-FM_API size_t fm_pagination_get_print_area_count(const fm_pagination_t* pagination);
+FM_API fm_status_t fm_pagination_get_print_area_count(const fm_pagination_t* pagination, size_t* out_count);
 
 /** @brief Copies a resolved print-area rectangle by index. */
 FM_API fm_status_t fm_pagination_get_print_area_at(const fm_pagination_t* pagination, size_t index,
                                                    fm_print_range_t* out);
 
-/** @brief Number of horizontal (row) page breaks, or zero for `NULL`. */
-FM_API size_t fm_pagination_get_row_break_count(const fm_pagination_t* pagination);
+/** @brief Writes the number of horizontal (row) page breaks to `*out_count`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) for a NULL argument. */
+FM_API fm_status_t fm_pagination_get_row_break_count(const fm_pagination_t* pagination, size_t* out_count);
 
 /** @brief Reads a 0-based row index that a horizontal break precedes. */
 FM_API fm_status_t fm_pagination_get_row_break_at(const fm_pagination_t* pagination, size_t index, uint32_t* out_row);
 
-/** @brief Number of vertical (column) page breaks, or zero for `NULL`. */
-FM_API size_t fm_pagination_get_col_break_count(const fm_pagination_t* pagination);
+/** @brief Writes the number of vertical (column) page breaks to `*out_count`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) for a NULL argument. */
+FM_API fm_status_t fm_pagination_get_col_break_count(const fm_pagination_t* pagination, size_t* out_count);
 
 /** @brief Reads a 0-based column index that a vertical break precedes. */
 FM_API fm_status_t fm_pagination_get_col_break_at(const fm_pagination_t* pagination, size_t index, uint32_t* out_col);
@@ -3499,7 +3505,7 @@ FM_API fm_status_t fm_sheet_get_page_setup_xml(const fm_workbook_t* wb, size_t s
  * An empty string removes the element and resets the structured views it
  * feeds (orientation / paper size / scale / fit-to-width / fit-to-height)
  * to their ECMA-376 defaults. Otherwise the structured views are re-derived
- * from the new fragment immediately, so a `fm_workbook_get_pagination` that
+ * from the new fragment immediately, so a `fm_sheet_get_pagination` that
  * follows observes the new settings.
  *
  * `fitToPage` is NOT part of `<pageSetup>` - it lives in
@@ -3683,22 +3689,14 @@ FM_API fm_status_t fm_sheet_remove_col_break(fm_workbook_t* wb, size_t sheet_ind
 FM_API fm_status_t fm_sheet_clear_breaks(fm_workbook_t* wb, size_t sheet_index);
 
 /**
- * @brief Number of row breaks declared on the sheet, or zero on any
- *        argument error.
+ * @brief Writes the number of row breaks declared on the sheet to
+ *        `*out_count`.
  *
- * The return type carries no status, so zero is ambiguous: it is both
- * "this axis holds no breaks" and "`wb` is `NULL` or `sheet_index` is
- * past the last sheet". The two are told apart by the thread-local
- * diagnostic, which this call clears on entry and populates only on
- * rejection - `fm_get_last_error_message()` is the empty string after a
- * successful count and non-empty after a rejected one.
- *
- * A caller enumerating breaks as count-then-`fm_sheet_get_row_break_at` must
- * check that message after the count. The `_at` loop is what would
- * otherwise surface `FM_STATUS_INVALID_ARGUMENT` (2), and on a zero count it never
- * runs, so a bad sheet index reads back as an empty break list.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_count` is NULL;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `sheet_index` is out of range.
  */
-FM_API size_t fm_sheet_get_row_break_count(const fm_workbook_t* wb, size_t sheet_index);
+FM_API fm_status_t fm_sheet_get_row_break_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
 
 /**
  * @brief Copies the row break at `index` (ascending by row).
@@ -3712,11 +3710,10 @@ FM_API fm_status_t fm_sheet_get_row_break_at(const fm_workbook_t* wb, size_t she
                                              fm_page_break_t* out);
 
 /**
- * @brief Number of column breaks declared on the sheet, or zero on any
- *        argument error. Same zero-is-ambiguous contract as
- *        `fm_sheet_get_row_break_count`.
+ * @brief Writes the number of column breaks declared on the sheet to
+ *        `*out_count`. Same status contract as `fm_sheet_get_row_break_count`.
  */
-FM_API size_t fm_sheet_get_col_break_count(const fm_workbook_t* wb, size_t sheet_index);
+FM_API fm_status_t fm_sheet_get_col_break_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
 
 /**
  * @brief Copies the column break at `index` (ascending by column).
@@ -3887,10 +3884,11 @@ FM_API fm_status_t fm_sheet_evaluate_cf_range(const fm_workbook_t* wb, size_t sh
 FM_API void fm_cf_results_destroy(fm_cf_results_t* results);
 
 /**
- * @brief Returns the number of cells in the result that produced at
- *        least one match. Returns `0` when `results == NULL`.
+ * @brief Writes the number of cells in the result that produced at least
+ *        one match to `*out_count`. `FM_STATUS_BINDING_NULL_POINTER` (7001)
+ *        when `results` or `out_count` is NULL.
  */
-FM_API size_t fm_cf_results_get_cell_count(const fm_cf_results_t* results);
+FM_API fm_status_t fm_cf_results_get_cell_count(const fm_cf_results_t* results, size_t* out_count);
 
 /**
  * @brief Reads cell `cell_idx`'s coordinates and match count.
@@ -4283,12 +4281,12 @@ typedef struct fm_cell_nodes fm_cell_nodes_t;
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `out` is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  *
  * On success the caller owns `*out` and must free it with
  * `fm_cell_nodes_destroy`.
  */
-FM_API fm_status_t fm_sheet_get_precedents(const fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+FM_API fm_status_t fm_sheet_get_precedents(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                            uint32_t depth, fm_cell_nodes_t** out);
 
 /**
@@ -4300,7 +4298,7 @@ FM_API fm_status_t fm_sheet_get_precedents(const fm_workbook_t* wb, uint32_t she
  * Same semantics as `fm_sheet_get_precedents` for ownership and seed
  * exclusion.
  */
-FM_API fm_status_t fm_sheet_get_dependents(const fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+FM_API fm_status_t fm_sheet_get_dependents(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                            uint32_t depth, fm_cell_nodes_t** out);
 
 /**
@@ -4309,10 +4307,11 @@ FM_API fm_status_t fm_sheet_get_dependents(const fm_workbook_t* wb, uint32_t she
 FM_API void fm_cell_nodes_destroy(fm_cell_nodes_t* nodes);
 
 /**
- * @brief Returns the number of cells in the result. Returns `0` when
- *        `nodes == NULL`.
+ * @brief Writes the number of cells in the result to `*out_count`.
+ *        `FM_STATUS_BINDING_NULL_POINTER` (7001) when `nodes` or
+ *        `out_count` is NULL.
  */
-FM_API size_t fm_cell_nodes_get_node_count(const fm_cell_nodes_t* nodes);
+FM_API fm_status_t fm_cell_nodes_get_node_count(const fm_cell_nodes_t* nodes, size_t* out_count);
 
 /**
  * @brief Reads cell `idx` from the result.
@@ -4354,7 +4353,7 @@ typedef struct {
   uint32_t row;
   uint32_t col;
   fm_value_t value;
-  fm_pivot_cell_kind_t kind;
+  int32_t kind; /* fm_pivot_cell_kind_t */
   uint32_t depth;
   const char* field_name;
   const char* number_format;
@@ -4399,10 +4398,11 @@ FM_API fm_status_t fm_sheet_get_pivot_layout(const fm_workbook_t* wb, size_t she
 FM_API void fm_pivot_cells_destroy(fm_pivot_cells_t* cells);
 
 /**
- * @brief Returns the number of projected cells. Returns `0` when
- *        `cells == NULL`.
+ * @brief Writes the number of projected cells to `*out_count`.
+ *        `FM_STATUS_BINDING_NULL_POINTER` (7001) when `cells` or
+ *        `out_count` is NULL.
  */
-FM_API size_t fm_pivot_cells_get_cell_count(const fm_pivot_cells_t* cells);
+FM_API fm_status_t fm_pivot_cells_get_cell_count(const fm_pivot_cells_t* cells, size_t* out_count);
 
 /**
  * @brief Returns the projected layout bounds.
@@ -4651,7 +4651,7 @@ typedef enum {
 typedef struct {
   const char* source_name;
   const char* custom_name;
-  fm_pivot_axis_t axis;
+  int32_t axis; /* fm_pivot_axis_t */
   int32_t subtotal_top;
   const char* number_format;
 } fm_pivot_field_spec_t;
@@ -4685,9 +4685,9 @@ typedef struct {
 typedef struct {
   const char* name;
   uint32_t field_index;
-  fm_pivot_aggregation_t aggregation;
+  int32_t aggregation; /* fm_pivot_aggregation_t */
   const char* number_format;
-  fm_pivot_show_values_as_t show_as;
+  int32_t show_as; /* fm_pivot_show_values_as_t */
   int32_t show_as_base_field;
   int32_t show_as_base_item;
 } fm_pivot_data_field_spec_t;
@@ -4815,14 +4815,14 @@ typedef struct {
  *                        NULL for every other type.
  */
 typedef struct {
-  fm_pivot_axis_t axis;
+  int32_t axis; /* fm_pivot_axis_t */
   const char* field_name;
-  fm_pivot_filter_type_t type;
-  fm_pivot_filter_value_kind_t value_kind;
+  int32_t type;       /* fm_pivot_filter_type_t */
+  int32_t value_kind; /* fm_pivot_filter_value_kind_t */
   int32_t value_int;
   double value_double;
   const char* value_text;
-  fm_pivot_filter_value_kind_t value_high_kind;
+  int32_t value_high_kind; /* fm_pivot_filter_value_kind_t */
   int32_t value_high_int;
   double value_high_double;
   uint32_t data_field_index;
@@ -5387,7 +5387,7 @@ FM_API fm_status_t fm_sheet_set_pivot_style_info(fm_workbook_t* wb, size_t sheet
 
 /** @brief Reads the pivot's compact / tabular / outline report layout. */
 FM_API fm_status_t fm_sheet_get_pivot_report_layout(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                    fm_pivot_report_layout_t* out_layout);
+                                                    int32_t* out_layout);
 
 /**
  * @brief Sets the pivot's compact / tabular / outline report layout.
@@ -5579,7 +5579,7 @@ FM_API fm_status_t fm_sheet_add_pivot_field_item(fm_workbook_t* wb, size_t sheet
  * `visible` is a 32-bit boolean.
  */
 FM_API fm_status_t fm_sheet_add_pivot_field_shared_item(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                        size_t field_idx, uint32_t cache_index, int32_t visible);
+                                                        size_t field_idx, size_t cache_index, int32_t visible);
 
 /** @brief Drops every manual-filter item from pivot field `field_idx`. */
 FM_API fm_status_t fm_sheet_clear_pivot_field_items(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -6041,9 +6041,9 @@ typedef struct {
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
-FM_API fm_status_t fm_sheet_get_spill_info(const fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+FM_API fm_status_t fm_sheet_get_spill_info(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                            fm_spill_info_t* out);
 
 /* -------------------------------------------------------------------------- */
@@ -6083,10 +6083,10 @@ typedef struct {
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range or the coordinate
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range or the coordinate
  *         is outside the grid.
  */
-FM_API fm_status_t fm_sheet_get_array_formula(const fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+FM_API fm_status_t fm_sheet_get_array_formula(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                               fm_array_formula_t* out);
 
 /**
@@ -6103,7 +6103,7 @@ FM_API fm_status_t fm_sheet_get_array_formula(const fm_workbook_t* wb, uint32_t 
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `formula` is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` is out of range, `rows` or `cols`
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range, `rows` or `cols`
  *         is zero, or the rectangle leaves the grid or exceeds the
  *         dynamic-array cell ceiling;
  *         a parser code when `formula` does not parse;
@@ -6112,7 +6112,7 @@ FM_API fm_status_t fm_sheet_get_array_formula(const fm_workbook_t* wb, uint32_t 
  *         area, a data table or a PivotTable, or (for more than one cell) a
  *         table.
  */
-FM_API fm_status_t fm_sheet_set_array_formula(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+FM_API fm_status_t fm_sheet_set_array_formula(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                               uint32_t rows, uint32_t cols, const char* formula);
 
 /* -------------------------------------------------------------------------- */
@@ -6173,7 +6173,7 @@ typedef struct {
   const char* canonical_name;
   uint32_t min_arity;
   uint32_t max_arity;
-  fm_function_availability_t availability;
+  int32_t availability; /* fm_function_availability_t */
   /* Always `NULL` - supplied by the host's provider document. */
   const char* signature_template;
   /* Always `NULL` - supplied by the host's provider document. */
@@ -6195,11 +6195,13 @@ typedef struct {
 FM_API fm_status_t fm_get_function_metadata(const char* name, fm_function_metadata_t* out);
 
 /**
- * @brief Returns the total number of registered Formulon functions.
+ * @brief Writes the total number of registered Formulon functions to
+ *        `*out_count`; `FM_STATUS_BINDING_NULL_POINTER` (7001) when
+ *        `out_count` is NULL.
  *
  * Drives the canonical-name iterator (`fm_get_function_name_at`).
  */
-FM_API size_t fm_get_function_count(void);
+FM_API fm_status_t fm_get_function_count(size_t* out_count);
 
 /**
  * @brief Returns the canonical name of the `idx`-th registered function.
@@ -6348,8 +6350,8 @@ typedef enum {
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `profile_id` is not a documented profile
  *           (context `profile_id=<id>`) or `strength` is out of range.
  */
-FM_API fm_status_t fm_compare_text(const char* a, const char* b, const char* profile_id,
-                                   fm_collation_strength_t strength, int32_t* out_order);
+FM_API fm_status_t fm_compare_text(const char* a, const char* b, const char* profile_id, int32_t strength,
+                                   int32_t* out_order);
 
 /**
  * @brief Classifies `count` values into equivalence classes.
@@ -6378,16 +6380,16 @@ FM_API fm_status_t fm_compare_text(const char* a, const char* b, const char* pro
  *           out-of-range error code, or an array / reference / lambda kind.
  */
 FM_API fm_status_t fm_get_collation_classes(const fm_value_t* values, size_t count, const char* profile_id,
-                                            fm_collation_strength_t strength, uint32_t* out_class_ids,
-                                            uint32_t* out_class_count);
+                                            int32_t strength, uint32_t* out_class_ids, uint32_t* out_class_count);
 
 /**
- * @brief Returns the number of error values, the bound of `index` in
- *        `fm_get_locale_error_name_at`.
+ * @brief Writes the number of error values, the bound of `index` in
+ *        `fm_get_locale_error_name_at`, to `*out_count`;
+ *        `FM_STATUS_BINDING_NULL_POINTER` (7001) when `out_count` is NULL.
  *
  * `index` uses the `fm_error_code_t` numbering (`4` is `#NAME?`).
  */
-FM_API size_t fm_get_locale_error_name_count(void);
+FM_API fm_status_t fm_get_locale_error_name_count(size_t* out_count);
 
 /**
  * @brief Returns the canonical and the `profile_id`-localized spelling of
@@ -6971,20 +6973,20 @@ FM_API fm_status_t fm_sheet_clear_auto_filter(fm_workbook_t* wb, size_t sheet_in
 /**
  * @brief Evaluates the sheet AutoFilter without changing the sheet.
  *
- * Body row `*out_first_row + i` matches the criteria when `out_match[i]` is
+ * Body row `*out_first_row + i` matches the criteria when `buf[i]` is
  * 1. `*out_len` always receives the number of body rows; at most `cap`
- * flags are written. Call with `cap == 0` (`out_match` may then be `NULL`)
+ * flags are written. Call with `cap == 0` (`buf` may then be `NULL`)
  * to size the buffer first.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `out_len` or `out_first_row` is
- *         `NULL`, or `out_match` is `NULL` while `cap > 0`;
+ *         `NULL`, or `buf` is `NULL` while `cap > 0`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range;
  *         `FM_STATUS_NOT_FOUND` (6) when the sheet has no AutoFilter;
  *         `FM_STATUS_AUTO_FILTER_INVALID` (8006) when it did not parse into the model.
  */
-FM_API fm_status_t fm_sheet_evaluate_auto_filter(const fm_workbook_t* wb, size_t sheet_index, uint8_t* out_match,
-                                                 size_t cap, size_t* out_len, uint32_t* out_first_row);
+FM_API fm_status_t fm_sheet_evaluate_auto_filter(const fm_workbook_t* wb, size_t sheet_index, uint8_t* buf, size_t cap,
+                                                 size_t* out_len, uint32_t* out_first_row);
 
 /**
  * @brief Table counterparts of the sheet AutoFilter entry points.
@@ -7002,9 +7004,8 @@ FM_API fm_status_t fm_workbook_set_table_auto_filter(fm_workbook_t* wb, size_t t
 FM_API fm_status_t fm_workbook_remove_table_auto_filter(fm_workbook_t* wb, size_t table_index);
 FM_API fm_status_t fm_workbook_apply_table_auto_filter(fm_workbook_t* wb, size_t table_index);
 FM_API fm_status_t fm_workbook_clear_table_auto_filter(fm_workbook_t* wb, size_t table_index);
-FM_API fm_status_t fm_workbook_evaluate_table_auto_filter(const fm_workbook_t* wb, size_t table_index,
-                                                          uint8_t* out_match, size_t cap, size_t* out_len,
-                                                          uint32_t* out_first_row);
+FM_API fm_status_t fm_workbook_evaluate_table_auto_filter(const fm_workbook_t* wb, size_t table_index, uint8_t* buf,
+                                                          size_t cap, size_t* out_len, uint32_t* out_first_row);
 
 /**
  * @brief Sets or replaces the column width override for the inclusive
@@ -7100,7 +7101,7 @@ FM_API fm_status_t fm_sheet_set_column_collapsed(fm_workbook_t* wb, size_t sheet
  *         out of range.
  */
 FM_API fm_status_t fm_sheet_set_column_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
-                                             uint32_t xf_index);
+                                             size_t xf_index);
 
 /**
  * @brief Removes the cell-style XF from the inclusive column span
@@ -7186,7 +7187,7 @@ FM_API fm_status_t fm_sheet_set_row_collapsed(fm_workbook_t* wb, size_t sheet_in
  *         out of range.
  */
 FM_API fm_status_t fm_sheet_set_row_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
-                                          uint32_t xf_index);
+                                          size_t xf_index);
 
 /**
  * @brief Removes the cell-style XF from the inclusive row span
@@ -8079,7 +8080,7 @@ typedef struct {
 
 /**
  * @brief Reads the `xf_index` (style record id) attached to the cell at
- *        `(row, col)` on `sheet`.
+ *        `(row, col)` on `sheet_index`.
  *
  * Returns `0` (the default xf) when the cell is absent — callers that
  * need to distinguish "no cell" from "default-formatted cell" should
@@ -8089,11 +8090,11 @@ typedef struct {
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` is out of range.
  */
-FM_API fm_status_t fm_sheet_get_cell_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
-                                              uint32_t* out_xf_index);
+FM_API fm_status_t fm_sheet_get_cell_xf_index(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                              size_t* out_xf_index);
 
 /**
- * @brief Stores `xf_index` on the cell at `(row, col)` on `sheet`.
+ * @brief Stores `xf_index` on the cell at `(row, col)` on `sheet_index`.
  *
  * Materialises the cell as a default-blank slot when none exists yet,
  * mirroring the row-vector growth semantics of
@@ -8107,12 +8108,12 @@ FM_API fm_status_t fm_sheet_get_cell_xf_index(fm_workbook_t* wb, uint32_t sheet,
  *           `xf_index` is not below `fm_workbook_get_cell_xf_count` (no cell
  *           is materialised).
  */
-FM_API fm_status_t fm_sheet_set_cell_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
-                                              uint32_t xf_index);
+FM_API fm_status_t fm_sheet_set_cell_xf_index(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                              size_t xf_index);
 
 /**
  * @brief Removes the direct style assignment from the cell at `(row, col)`
- *        on `sheet`, so a blank cell inherits its row / column style again.
+ *        on `sheet_index`, so a blank cell inherits its row / column style again.
  *
  * Resets the cell's `xf_index` to `0` and drops the explicit-assignment
  * mark; the value, formula, phonetic runs and comments are kept. An
@@ -8126,7 +8127,7 @@ FM_API fm_status_t fm_sheet_set_cell_xf_index(fm_workbook_t* wb, uint32_t sheet,
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or the address is out of range.
  */
-FM_API fm_status_t fm_sheet_clear_cell_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col);
+FM_API fm_status_t fm_sheet_clear_cell_xf_index(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col);
 
 /**
  * @brief Stores `xf_index` on every cell in the inclusive rectangle
@@ -8142,15 +8143,15 @@ FM_API fm_status_t fm_sheet_clear_cell_xf_index(fm_workbook_t* wb, uint32_t shee
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet` or a corner is out of range, or
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_index` or a corner is out of range, or
  *           `xf_index` is not below `fm_workbook_get_cell_xf_count` (checked
  *           before any cell is written);
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when the rectangle exceeds the per-call
  *         cell ceiling.
  */
-FM_API fm_status_t fm_sheet_set_range_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t first_row,
+FM_API fm_status_t fm_sheet_set_range_xf_index(fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
                                                uint32_t first_col, uint32_t last_row, uint32_t last_col,
-                                               uint32_t xf_index);
+                                               size_t xf_index);
 
 /**
  * @brief Reads the `xf_index`-th `<xf>` record from the workbook's
@@ -8164,7 +8165,7 @@ FM_API fm_status_t fm_sheet_set_range_xf_index(fm_workbook_t* wb, uint32_t sheet
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `xf_index >= cell_xfs.size()`.
  */
-FM_API fm_status_t fm_workbook_get_cell_xf(fm_workbook_t* wb, uint32_t xf_index, fm_cell_xf_t* out);
+FM_API fm_status_t fm_workbook_get_cell_xf(const fm_workbook_t* wb, size_t xf_index, fm_cell_xf_t* out);
 
 /**
  * @brief Reads the `font_index`-th font record from the workbook's
@@ -8174,7 +8175,7 @@ FM_API fm_status_t fm_workbook_get_cell_xf(fm_workbook_t* wb, uint32_t xf_index,
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `font_index >= fonts.size()`.
  */
-FM_API fm_status_t fm_workbook_get_font(fm_workbook_t* wb, uint32_t font_index, fm_font_record_t* out);
+FM_API fm_status_t fm_workbook_get_font(const fm_workbook_t* wb, size_t font_index, fm_font_record_t* out);
 
 /**
  * @brief Looks up the effective format string for `num_fmt_id`.
@@ -8198,7 +8199,7 @@ FM_API fm_status_t fm_workbook_get_font(fm_workbook_t* wb, uint32_t font_index, 
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the id is unknown.
  */
-FM_API fm_status_t fm_workbook_get_num_fmt_string(fm_workbook_t* wb, uint16_t num_fmt_id, const char** out);
+FM_API fm_status_t fm_workbook_get_num_fmt_string(const fm_workbook_t* wb, uint32_t num_fmt_id, const char** out);
 
 /**
  * @brief Reads the `fill_index`-th fill record from the workbook's
@@ -8208,7 +8209,7 @@ FM_API fm_status_t fm_workbook_get_num_fmt_string(fm_workbook_t* wb, uint16_t nu
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `fill_index >= fills.size()`.
  */
-FM_API fm_status_t fm_workbook_get_fill(fm_workbook_t* wb, uint32_t fill_index, fm_fill_record_t* out);
+FM_API fm_status_t fm_workbook_get_fill(const fm_workbook_t* wb, size_t fill_index, fm_fill_record_t* out);
 
 /**
  * @brief Reads the `border_index`-th border record from the workbook's
@@ -8218,7 +8219,7 @@ FM_API fm_status_t fm_workbook_get_fill(fm_workbook_t* wb, uint32_t fill_index, 
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `border_index >= borders.size()`.
  */
-FM_API fm_status_t fm_workbook_get_border(fm_workbook_t* wb, uint32_t border_index, fm_border_record_t* out);
+FM_API fm_status_t fm_workbook_get_border(const fm_workbook_t* wb, size_t border_index, fm_border_record_t* out);
 
 /**
  * @brief Returns the number of `<dxf>` differential-format records
@@ -8227,7 +8228,7 @@ FM_API fm_status_t fm_workbook_get_border(fm_workbook_t* wb, uint32_t border_ind
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
-FM_API fm_status_t fm_workbook_get_dxf_count(fm_workbook_t* wb, uint32_t* out_count);
+FM_API fm_status_t fm_workbook_get_dxf_count(const fm_workbook_t* wb, size_t* out_count);
 
 /**
  * @brief Reads the `dxf_index`-th differential-format record.
@@ -8236,7 +8237,7 @@ FM_API fm_status_t fm_workbook_get_dxf_count(fm_workbook_t* wb, uint32_t* out_co
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `dxf_index >= dxfs.size()`.
  */
-FM_API fm_status_t fm_workbook_get_dxf(fm_workbook_t* wb, uint32_t dxf_index, fm_dxf_record_t* out);
+FM_API fm_status_t fm_workbook_get_dxf(const fm_workbook_t* wb, size_t dxf_index, fm_dxf_record_t* out);
 
 /**
  * @brief Adds a `<dxf>` differential-format record to the workbook's
@@ -8251,7 +8252,7 @@ FM_API fm_status_t fm_workbook_get_dxf(fm_workbook_t* wb, uint32_t dxf_index, fm
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_dxf_index` is `NULL`.
  */
-FM_API fm_status_t fm_workbook_add_dxf(fm_workbook_t* wb, fm_dxf_record_t record, uint32_t* out_dxf_index);
+FM_API fm_status_t fm_workbook_add_dxf(fm_workbook_t* wb, fm_dxf_record_t record, size_t* out_dxf_index);
 
 /**
  * @brief One region of a custom table style (`fm_table_style_t`).
@@ -8299,7 +8300,7 @@ typedef struct {
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
-FM_API fm_status_t fm_workbook_get_table_style_count(fm_workbook_t* wb, uint32_t* out_count);
+FM_API fm_status_t fm_workbook_get_table_style_count(const fm_workbook_t* wb, size_t* out_count);
 
 /**
  * @brief Reads the `index`-th custom table style.
@@ -8308,7 +8309,7 @@ FM_API fm_status_t fm_workbook_get_table_style_count(fm_workbook_t* wb, uint32_t
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index` is out of range.
  */
-FM_API fm_status_t fm_workbook_get_table_style_at(fm_workbook_t* wb, uint32_t index, fm_table_style_t* out);
+FM_API fm_status_t fm_workbook_get_table_style_at(const fm_workbook_t* wb, size_t index, fm_table_style_t* out);
 
 /**
  * @brief Adds a custom table style, or replaces the one with the same name
@@ -8349,7 +8350,7 @@ FM_API fm_status_t fm_workbook_remove_table_style(fm_workbook_t* wb, const char*
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
-FM_API fm_status_t fm_workbook_get_table_style_defaults(fm_workbook_t* wb, const char** out_table_style,
+FM_API fm_status_t fm_workbook_get_table_style_defaults(const fm_workbook_t* wb, const char** out_table_style,
                                                         const char** out_pivot_style);
 
 /**
@@ -8369,7 +8370,7 @@ FM_API fm_status_t fm_workbook_set_table_style_defaults(fm_workbook_t* wb, const
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
-FM_API fm_status_t fm_workbook_get_font_count(fm_workbook_t* wb, uint32_t* out_count);
+FM_API fm_status_t fm_workbook_get_font_count(const fm_workbook_t* wb, size_t* out_count);
 
 /**
  * @brief Returns the number of fill records currently registered in the
@@ -8378,7 +8379,7 @@ FM_API fm_status_t fm_workbook_get_font_count(fm_workbook_t* wb, uint32_t* out_c
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
-FM_API fm_status_t fm_workbook_get_fill_count(fm_workbook_t* wb, uint32_t* out_count);
+FM_API fm_status_t fm_workbook_get_fill_count(const fm_workbook_t* wb, size_t* out_count);
 
 /**
  * @brief Returns the number of border records currently registered in
@@ -8387,7 +8388,7 @@ FM_API fm_status_t fm_workbook_get_fill_count(fm_workbook_t* wb, uint32_t* out_c
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
-FM_API fm_status_t fm_workbook_get_border_count(fm_workbook_t* wb, uint32_t* out_count);
+FM_API fm_status_t fm_workbook_get_border_count(const fm_workbook_t* wb, size_t* out_count);
 
 /**
  * @brief Returns the number of `<xf>` records currently registered in
@@ -8397,7 +8398,7 @@ FM_API fm_status_t fm_workbook_get_border_count(fm_workbook_t* wb, uint32_t* out
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
-FM_API fm_status_t fm_workbook_get_cell_xf_count(fm_workbook_t* wb, uint32_t* out_count);
+FM_API fm_status_t fm_workbook_get_cell_xf_count(const fm_workbook_t* wb, size_t* out_count);
 
 /**
  * @brief Returns the number of named cell styles (`<cellStyle>` entries)
@@ -8407,7 +8408,7 @@ FM_API fm_status_t fm_workbook_get_cell_xf_count(fm_workbook_t* wb, uint32_t* ou
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
-FM_API fm_status_t fm_workbook_get_cell_style_count(fm_workbook_t* wb, uint32_t* out_count);
+FM_API fm_status_t fm_workbook_get_cell_style_count(const fm_workbook_t* wb, size_t* out_count);
 
 /**
  * @brief Reads the `index`-th named cell style. The returned `name` is a
@@ -8418,7 +8419,7 @@ FM_API fm_status_t fm_workbook_get_cell_style_count(fm_workbook_t* wb, uint32_t*
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index >= cell_styles.size()`.
  */
-FM_API fm_status_t fm_workbook_get_cell_style_at(fm_workbook_t* wb, uint32_t index, fm_cell_style_record_t* out);
+FM_API fm_status_t fm_workbook_get_cell_style_at(const fm_workbook_t* wb, size_t index, fm_cell_style_record_t* out);
 
 /**
  * @brief Returns the number of `<cellStyleXfs>` records — the named-
@@ -8428,7 +8429,7 @@ FM_API fm_status_t fm_workbook_get_cell_style_at(fm_workbook_t* wb, uint32_t ind
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
-FM_API fm_status_t fm_workbook_get_cell_style_xf_count(fm_workbook_t* wb, uint32_t* out_count);
+FM_API fm_status_t fm_workbook_get_cell_style_xf_count(const fm_workbook_t* wb, size_t* out_count);
 
 /**
  * @brief Reads the `index`-th `<cellStyleXfs>` record (named-style xf
@@ -8439,7 +8440,7 @@ FM_API fm_status_t fm_workbook_get_cell_style_xf_count(fm_workbook_t* wb, uint32
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index >= cell_style_xfs.size()`.
  */
-FM_API fm_status_t fm_workbook_get_cell_style_xf(fm_workbook_t* wb, uint32_t index, fm_cell_xf_t* out);
+FM_API fm_status_t fm_workbook_get_cell_style_xf(const fm_workbook_t* wb, size_t index, fm_cell_xf_t* out);
 
 /**
  * @brief Adds a font record to the workbook's styles table, deduplicating
@@ -8463,7 +8464,7 @@ FM_API fm_status_t fm_workbook_get_cell_style_xf(fm_workbook_t* wb, uint32_t ind
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_index` is `NULL`.
  */
-FM_API fm_status_t fm_workbook_add_font(fm_workbook_t* wb, fm_font_record_t record, uint32_t* out_index);
+FM_API fm_status_t fm_workbook_add_font(fm_workbook_t* wb, fm_font_record_t record, size_t* out_index);
 
 /**
  * @brief Overwrites the `font_index`-th font record in place.
@@ -8486,7 +8487,7 @@ FM_API fm_status_t fm_workbook_add_font(fm_workbook_t* wb, fm_font_record_t reco
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `font_index >= fonts.size()`.
  */
-FM_API fm_status_t fm_workbook_set_font(fm_workbook_t* wb, uint32_t font_index, fm_font_record_t record);
+FM_API fm_status_t fm_workbook_set_font(fm_workbook_t* wb, size_t font_index, fm_font_record_t record);
 
 /**
  * @brief Declares the workbook's default font.
@@ -8533,7 +8534,7 @@ FM_API fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, fm_font_recor
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_index` is `NULL`.
  */
-FM_API fm_status_t fm_workbook_add_fill(fm_workbook_t* wb, fm_fill_record_t record, uint32_t* out_index);
+FM_API fm_status_t fm_workbook_add_fill(fm_workbook_t* wb, fm_fill_record_t record, size_t* out_index);
 
 /**
  * @brief Adds a border record to the workbook's styles table, deduplicating
@@ -8549,7 +8550,7 @@ FM_API fm_status_t fm_workbook_add_fill(fm_workbook_t* wb, fm_fill_record_t reco
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_index` is `NULL`.
  */
-FM_API fm_status_t fm_workbook_add_border(fm_workbook_t* wb, fm_border_record_t record, uint32_t* out_index);
+FM_API fm_status_t fm_workbook_add_border(fm_workbook_t* wb, fm_border_record_t record, size_t* out_index);
 
 /**
  * @brief Adds a number-format code to the workbook's styles table,
@@ -8579,7 +8580,7 @@ FM_API fm_status_t fm_workbook_add_border(fm_workbook_t* wb, fm_border_record_t 
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_num_fmt_id` is `NULL`;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when no custom OOXML id remains.
  */
-FM_API fm_status_t fm_workbook_add_num_fmt(fm_workbook_t* wb, const char* format_code, uint16_t* out_num_fmt_id);
+FM_API fm_status_t fm_workbook_add_num_fmt(fm_workbook_t* wb, const char* format_code, uint32_t* out_num_fmt_id);
 
 /**
  * @brief Adds an `<xf>` record to the workbook's styles table,
@@ -8609,7 +8610,7 @@ FM_API fm_status_t fm_workbook_add_num_fmt(fm_workbook_t* wb, const char* format
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_xf_index` is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) for any out-of-range / unregistered field.
  */
-FM_API fm_status_t fm_workbook_add_cell_xf(fm_workbook_t* wb, fm_cell_xf_t record, uint32_t* out_xf_index);
+FM_API fm_status_t fm_workbook_add_cell_xf(fm_workbook_t* wb, fm_cell_xf_t record, size_t* out_xf_index);
 
 /** Adds and deduplicates a named-style xf including optional alignment
  * attributes. `has_alignment` preserves an explicit empty child. Invalid
@@ -8952,7 +8953,7 @@ typedef struct {
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
-FM_API fm_status_t fm_workbook_get_external_link_count(fm_workbook_t* wb, uint32_t* out_count);
+FM_API fm_status_t fm_workbook_get_external_link_count(const fm_workbook_t* wb, size_t* out_count);
 
 /**
  * @brief Reads the `index`-th external-link record (1-based document
@@ -8965,7 +8966,7 @@ FM_API fm_status_t fm_workbook_get_external_link_count(fm_workbook_t* wb, uint32
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `index >= external_link_count`.
  */
-FM_API fm_status_t fm_workbook_get_external_link(fm_workbook_t* wb, uint32_t index, fm_external_link_record_t* out);
+FM_API fm_status_t fm_workbook_get_external_link(const fm_workbook_t* wb, size_t index, fm_external_link_record_t* out);
 
 /* -------------------------------------------------------------------------- */
 /* Drawing objects                                                            */
@@ -9247,7 +9248,7 @@ FM_API fm_status_t fm_sheet_set_drawing_name(fm_workbook_t* wb, size_t sheet_ind
  *         or was retained from an `.xlsb` package.
  */
 FM_API fm_status_t fm_sheet_set_drawing_z_order(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                                uint32_t index);
+                                                size_t index);
 
 /**
  * @brief Captures the picture or chart `object_id` as an opaque, versioned
@@ -10806,7 +10807,7 @@ FM_API fm_status_t fm_sheet_set_chart_display(fm_workbook_t* wb, size_t sheet_in
  *         chart.
  */
 FM_API fm_status_t fm_sheet_set_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
-                                             uint32_t series_idx, const fm_chart_series_patch_t* patch);
+                                             size_t series_idx, const fm_chart_series_patch_t* patch);
 
 /**
  * @brief Patches point `point_idx` of series `series_idx`; a patch that
@@ -10816,8 +10817,7 @@ FM_API fm_status_t fm_sheet_set_chart_series(fm_workbook_t* wb, size_t sheet_ind
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `patch` is `NULL`.
  */
 FM_API fm_status_t fm_sheet_set_chart_point(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
-                                            uint32_t series_idx, uint32_t point_idx,
-                                            const fm_chart_point_patch_t* patch);
+                                            size_t series_idx, size_t point_idx, const fm_chart_point_patch_t* patch);
 
 /**
  * @brief Patches plot group `plot`.
@@ -10852,7 +10852,7 @@ FM_API fm_status_t fm_sheet_set_chart_filter(fm_workbook_t* wb, size_t sheet_ind
  *         `FM_STATUS_IO_CHART_UNSUPPORTED_KIND` (5027) for a pivot chart.
  */
 FM_API fm_status_t fm_sheet_add_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
-                                             const fm_chart_series_patch_t* patch, uint32_t* out_series_idx);
+                                             const fm_chart_series_patch_t* patch, size_t* out_series_idx);
 
 /**
  * @brief Removes the series with `c:idx` `series_idx` from plot group `plot`.
@@ -10861,7 +10861,7 @@ FM_API fm_status_t fm_sheet_add_chart_series(fm_workbook_t* wb, size_t sheet_ind
  *         `FM_STATUS_IO_CHART_UNSUPPORTED_KIND` (5027) for a pivot chart.
  */
 FM_API fm_status_t fm_sheet_remove_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
-                                                uint32_t series_idx);
+                                                size_t series_idx);
 
 /**
  * @brief Rebuilds every series from `source` by the insert splitting rules,

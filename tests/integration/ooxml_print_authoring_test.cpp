@@ -222,7 +222,9 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   EXPECT_STREQ(rows, "1:2");
   EXPECT_STREQ(cols, "");
 
-  ASSERT_EQ(fm_sheet_get_row_break_count(reloaded.handle, 0), 1U);
+  std::size_t row_break_count = 0;
+  ASSERT_EQ(fm_sheet_get_row_break_count(reloaded.handle, 0, &row_break_count), 0);
+  ASSERT_EQ(row_break_count, 1U);
   fm_page_break_t brk{};
   ASSERT_EQ(fm_sheet_get_row_break_at(reloaded.handle, 0, 0, &brk), 0);
   EXPECT_EQ(brk.id, 39U);

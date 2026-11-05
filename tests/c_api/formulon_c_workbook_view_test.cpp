@@ -74,9 +74,9 @@ void Load(const std::vector<std::uint8_t>& bytes, WorkbookGuard& out) {
 }
 
 std::uint32_t ActiveSheet(const fm_workbook_t* wb) {
-  std::uint32_t index = 99;
+  std::size_t index = 99;
   EXPECT_EQ(fm_workbook_get_active_sheet(wb, &index), 0) << fm_get_last_error_message();
-  return index;
+  return static_cast<std::uint32_t>(index);
 }
 
 }  // namespace
@@ -120,7 +120,7 @@ TEST(FormulonCApiWorkbookView, ActiveSheetRejectsBadArguments) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   EXPECT_EQ(fm_workbook_set_active_sheet(wb.handle, 1), kInvalidArgument);
   EXPECT_EQ(ActiveSheet(wb.handle), 0U);
-  std::uint32_t index = 7;
+  std::size_t index = 7;
   EXPECT_NE(fm_workbook_get_active_sheet(nullptr, &index), 0);
   EXPECT_NE(fm_workbook_get_active_sheet(wb.handle, nullptr), 0);
   EXPECT_NE(fm_workbook_set_active_sheet(nullptr, 0), 0);
@@ -238,7 +238,7 @@ TEST(FormulonCApiWorkbookView, SheetEditsKeepTheActiveSheetValid) {
   ASSERT_EQ(fm_workbook_move_sheet(wb.handle, 0, 2), 0);
   EXPECT_EQ(ActiveSheet(wb.handle), 2U);
   ASSERT_EQ(fm_workbook_remove_sheet(wb.handle, 2), 0);
-  EXPECT_LT(ActiveSheet(wb.handle), fm_workbook_get_sheet_count(wb.handle));
+  EXPECT_LT(ActiveSheet(wb.handle), count_of(fm_workbook_get_sheet_count, wb.handle));
   EXPECT_EQ(ActiveSheet(wb.handle), 1U);
 }
 

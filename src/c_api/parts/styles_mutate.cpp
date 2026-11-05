@@ -345,7 +345,7 @@ formulon::BorderRecord border_from_c(const fm_border_record_t& record) noexcept 
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_add_font(fm_workbook_t* wb, fm_font_record_t record, uint32_t* out_index) {
+extern "C" fm_status_t fm_workbook_add_font(fm_workbook_t* wb, fm_font_record_t record, size_t* out_index) {
   clear_last_error();
   if (wb == nullptr || out_index == nullptr) {
     return null_argument("fm_workbook_add_font");
@@ -364,7 +364,7 @@ extern "C" fm_status_t fm_workbook_add_font(fm_workbook_t* wb, fm_font_record_t 
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_set_font(fm_workbook_t* wb, uint32_t font_index, fm_font_record_t record) {
+extern "C" fm_status_t fm_workbook_set_font(fm_workbook_t* wb, size_t font_index, fm_font_record_t record) {
   clear_last_error();
   if (wb == nullptr) {
     return null_argument("fm_workbook_set_font");
@@ -406,7 +406,7 @@ extern "C" fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, fm_font_r
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_add_fill(fm_workbook_t* wb, fm_fill_record_t record, uint32_t* out_index) {
+extern "C" fm_status_t fm_workbook_add_fill(fm_workbook_t* wb, fm_fill_record_t record, size_t* out_index) {
   clear_last_error();
   if (wb == nullptr || out_index == nullptr) {
     return null_argument("fm_workbook_add_fill");
@@ -419,7 +419,7 @@ extern "C" fm_status_t fm_workbook_add_fill(fm_workbook_t* wb, fm_fill_record_t 
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_add_border(fm_workbook_t* wb, fm_border_record_t record, uint32_t* out_index) {
+extern "C" fm_status_t fm_workbook_add_border(fm_workbook_t* wb, fm_border_record_t record, size_t* out_index) {
   clear_last_error();
   if (wb == nullptr || out_index == nullptr) {
     return null_argument("fm_workbook_add_border");
@@ -432,7 +432,7 @@ extern "C" fm_status_t fm_workbook_add_border(fm_workbook_t* wb, fm_border_recor
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_add_num_fmt(fm_workbook_t* wb, const char* format_code, uint16_t* out_num_fmt_id) {
+extern "C" fm_status_t fm_workbook_add_num_fmt(fm_workbook_t* wb, const char* format_code, uint32_t* out_num_fmt_id) {
   clear_last_error();
   if (wb == nullptr || out_num_fmt_id == nullptr) {
     return null_argument("fm_workbook_add_num_fmt");
@@ -492,7 +492,7 @@ extern "C" fm_status_t fm_workbook_add_num_fmt(fm_workbook_t* wb, const char* fo
 
 namespace {
 
-fm_status_t add_cell_xf_impl(fm_workbook_t* wb, const fm_cell_xf_t& record, uint32_t* out_xf_index, const char* api) {
+fm_status_t add_cell_xf_impl(fm_workbook_t* wb, const fm_cell_xf_t& record, size_t* out_xf_index, const char* api) {
   if (wb == nullptr || out_xf_index == nullptr) {
     const std::string message = std::string(api) + ": NULL argument";
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, message.c_str());
@@ -537,7 +537,7 @@ fm_status_t add_cell_xf_impl(fm_workbook_t* wb, const fm_cell_xf_t& record, uint
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_add_cell_xf(fm_workbook_t* wb, fm_cell_xf_t record, uint32_t* out_xf_index) {
+extern "C" fm_status_t fm_workbook_add_cell_xf(fm_workbook_t* wb, fm_cell_xf_t record, size_t* out_xf_index) {
   clear_last_error();
   return add_cell_xf_impl(wb, record, out_xf_index, "fm_workbook_add_cell_xf");
 }
@@ -789,7 +789,7 @@ extern "C" fm_status_t fm_workbook_add_batch(fm_workbook_t* wb, const fm_styles_
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_add_dxf(fm_workbook_t* wb, fm_dxf_record_t record, uint32_t* out_dxf_index) {
+extern "C" fm_status_t fm_workbook_add_dxf(fm_workbook_t* wb, fm_dxf_record_t record, size_t* out_dxf_index) {
   clear_last_error();
   if (wb == nullptr || out_dxf_index == nullptr) {
     return null_argument("fm_workbook_add_dxf");
@@ -829,11 +829,11 @@ extern "C" fm_status_t fm_workbook_add_dxf(fm_workbook_t* wb, fm_dxf_record_t re
   formulon::StylesTable& styles = wb->workbook().mutable_styles();
   for (std::size_t i = 0; i < styles.dxfs.size(); ++i) {
     if (dxf_records_equal(styles.dxfs[i], candidate)) {
-      *out_dxf_index = static_cast<uint32_t>(i);
+      *out_dxf_index = i;
       return 0;
     }
   }
   styles.dxfs.push_back(std::move(candidate));
-  *out_dxf_index = static_cast<uint32_t>(styles.dxfs.size() - 1);
+  *out_dxf_index = styles.dxfs.size() - 1;
   return 0;
 }

@@ -27,14 +27,14 @@ int main(void) {
   // consumer binds by signature: the XF record crosses by value, so its width
   // is part of the calling convention, and the sheet-view record is written
   // through a caller-supplied pointer.
-  fm_status_t (*get_cell_xf)(fm_workbook_t*, uint32_t, fm_cell_xf_t*) = fm_workbook_get_cell_xf;
-  fm_status_t (*add_cell_xf)(fm_workbook_t*, fm_cell_xf_t, uint32_t*) = fm_workbook_add_cell_xf;
-  fm_status_t (*get_cell_style_xf)(fm_workbook_t*, uint32_t, fm_cell_xf_t*) = fm_workbook_get_cell_style_xf;
+  fm_status_t (*get_cell_xf)(const fm_workbook_t*, size_t, fm_cell_xf_t*) = fm_workbook_get_cell_xf;
+  fm_status_t (*add_cell_xf)(fm_workbook_t*, fm_cell_xf_t, size_t*) = fm_workbook_add_cell_xf;
+  fm_status_t (*get_cell_style_xf)(const fm_workbook_t*, size_t, fm_cell_xf_t*) = fm_workbook_get_cell_style_xf;
   fm_status_t (*add_cell_style_xf)(fm_workbook_t*, fm_cell_xf_t, uint32_t*) = fm_workbook_add_cell_style_xf;
   fm_status_t (*get_view)(const fm_workbook_t*, size_t, fm_sheet_view_t*) = fm_sheet_get_view;
   fm_status_t (*defined_name_at)(const fm_workbook_t*, size_t, const char**, const char**, int32_t*) =
       fm_workbook_get_defined_name_at;
-  fm_status_t (*pivot_add_item_at)(fm_workbook_t*, size_t, size_t, size_t, uint32_t, int32_t) =
+  fm_status_t (*pivot_add_item_at)(fm_workbook_t*, size_t, size_t, size_t, size_t, int32_t) =
       fm_sheet_add_pivot_field_shared_item;
   // The two entry points whose records no binding marshals, written out in
   // full so a parameter added to either is a compile error here rather than a
@@ -128,7 +128,7 @@ int main(void) {
       fm_sheet_get_image;
   fm_status_t (*set_drawing_anchor)(fm_workbook_t*, size_t, uint32_t, const fm_drawing_anchor_t*) =
       fm_sheet_set_drawing_anchor;
-  fm_status_t (*set_drawing_z_order)(fm_workbook_t*, size_t, uint32_t, uint32_t) = fm_sheet_set_drawing_z_order;
+  fm_status_t (*set_drawing_z_order)(fm_workbook_t*, size_t, uint32_t, size_t) = fm_sheet_set_drawing_z_order;
   fm_status_t (*snapshot_drawing)(const fm_workbook_t*, size_t, uint32_t, uint8_t**, size_t*) =
       fm_sheet_snapshot_drawing;
   fm_status_t (*restore_drawing)(fm_workbook_t*, size_t, const uint8_t*, size_t, uint32_t, uint32_t*) =

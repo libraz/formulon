@@ -294,16 +294,16 @@ Napi::Object CellXfResultToJs(Napi::Env env, fm_status_t rc, fm_cell_xf_t xf) {
 }
 
 // Shared body of the style-pool count getters that take no argument.
-using StyleCountFn = fm_status_t (*)(fm_workbook_t*, uint32_t*);
+using StyleCountFn = fm_status_t (*)(const fm_workbook_t*, std::size_t*);
 
-Napi::Value StyleCountResult(const Napi::CallbackInfo& info, fm_workbook_t* handle, StyleCountFn fn) {
+Napi::Value StyleCountResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle, StyleCountFn fn) {
   Napi::Env env = info.Env();
   if (handle == nullptr) {
     return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
-  uint32_t n = 0;
+  std::size_t n = 0;
   const fm_status_t rc = fn(handle, &n);
-  return MakeNumberResult(env, rc, n);
+  return MakeNumberResult(env, rc, static_cast<double>(n));
 }
 
 /// Reads the major or minor script-font list as `{script, typeface}` records.
@@ -416,9 +416,9 @@ Napi::Value Workbook::GetCellXfIndex(const Napi::CallbackInfo& info) {
   const uint32_t sheet = ArgU32(info, 0);
   const uint32_t row = ArgU32(info, 1);
   const uint32_t col = ArgU32(info, 2);
-  uint32_t xf = 0;
+  std::size_t xf = 0;
   fm_status_t rc = fm_sheet_get_cell_xf_index(handle_, sheet, row, col, &xf);
-  return MakeNumberFieldResult(env, rc, "xfIndex", xf);
+  return MakeNumberFieldResult(env, rc, "xfIndex", static_cast<double>(xf));
 }
 
 Napi::Value Workbook::SetCellXfIndex(const Napi::CallbackInfo& info) {
@@ -548,7 +548,7 @@ Napi::Value Workbook::AddFont(const Napi::CallbackInfo& info) {
   fm_font_record_t fr{};
   return AddStyleRecord(
       info, [&](CheckedSpecReader& reader, const Napi::Object& record) { PullFontRecord(reader, record, &name, &fr); },
-      [&](fm_workbook_t* handle, uint32_t* idx) { return fm_workbook_add_font(handle, fr, idx); });
+      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_font(handle, fr, idx); });
 }
 
 Napi::Value Workbook::SetFont(const Napi::CallbackInfo& info) {
@@ -591,14 +591,14 @@ Napi::Value Workbook::AddFill(const Napi::CallbackInfo& info) {
   std::vector<fm_gradient_stop_t> stops;
   return AddStyleRecord(
       info, [&](CheckedSpecReader& reader, const Napi::Object& record) { fr = PullFillRecord(reader, record, &stops); },
-      [&](fm_workbook_t* handle, uint32_t* idx) { return fm_workbook_add_fill(handle, fr, idx); });
+      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_fill(handle, fr, idx); });
 }
 
 Napi::Value Workbook::AddBorder(const Napi::CallbackInfo& info) {
   fm_border_record_t br{};
   return AddStyleRecord(
       info, [&](CheckedSpecReader& reader, const Napi::Object& record) { br = PullBorderRecord(reader, record); },
-      [&](fm_workbook_t* handle, uint32_t* idx) { return fm_workbook_add_border(handle, br, idx); });
+      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_border(handle, br, idx); });
 }
 
 Napi::Value Workbook::AddNumFmt(const Napi::CallbackInfo& info) {
@@ -607,16 +607,16 @@ Napi::Value Workbook::AddNumFmt(const Napi::CallbackInfo& info) {
     return MakeNumberFieldResult(env, NullHandleError(env), "numFmtId", 0);
   }
   const std::string code = ArgString(info, 0);
-  uint16_t id = 0;
+  uint32_t id = 0;
   fm_status_t rc = fm_workbook_add_num_fmt(handle_, code.c_str(), &id);
-  return MakeNumberFieldResult(env, rc, "numFmtId", static_cast<uint32_t>(id));
+  return MakeNumberFieldResult(env, rc, "numFmtId", id);
 }
 
 Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
   fm_cell_xf_t xf{};
   return AddStyleRecord(
       info, [&](CheckedSpecReader& reader, const Napi::Object& record) { PullCellXf(reader, record, &xf); },
-      [&](fm_workbook_t* handle, uint32_t* idx) { return fm_workbook_add_cell_xf(handle, xf, idx); });
+      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_cell_xf(handle, xf, idx); });
 }
 
 Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
@@ -660,7 +660,7 @@ Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
         dxf.alignment_xml = alignment_xml.c_str();
         dxf.protection_xml = protection_xml.c_str();
       },
-      [&](fm_workbook_t* handle, uint32_t* idx) { return fm_workbook_add_dxf(handle, dxf, idx); });
+      [&](fm_workbook_t* handle, std::size_t* idx) { return fm_workbook_add_dxf(handle, dxf, idx); });
 }
 
 // ---- Style pool counts ----------------------------------------------

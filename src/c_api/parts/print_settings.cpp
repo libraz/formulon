@@ -305,13 +305,18 @@ fm_status_t add_break(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t 
 // enumerate by count-then-`break_at` must consult the diagnostic, since
 // the `break_at` loop that would otherwise surface the status never runs
 // on a zero count.
-std::size_t break_count(const fm_workbook_t* wb, std::size_t sheet_index, bool rows, const char* fn) {
+fm_status_t break_count(const fm_workbook_t* wb, std::size_t sheet_index, bool rows, const char* fn,
+                        std::size_t* out_count) {
   clear_last_error();
-  if (check_sheet_index(wb, sheet_index, fn) != 0) {
-    return 0;
+  if (out_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, fn, "arg=out_count");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+    return rc;
   }
   const SheetPrintSettings& print = wb->workbook().sheet(sheet_index).print_settings();
-  return rows ? print.manual_row_breaks.size() : print.manual_col_breaks.size();
+  *out_count = rows ? print.manual_row_breaks.size() : print.manual_col_breaks.size();
+  return 0;
 }
 
 fm_status_t break_at(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t index, bool rows, const char* fn,
@@ -477,8 +482,8 @@ extern "C" fm_status_t fm_sheet_clear_breaks(fm_workbook_t* wb, size_t sheet_ind
   return 0;
 }
 
-extern "C" size_t fm_sheet_get_row_break_count(const fm_workbook_t* wb, size_t sheet_index) {
-  return break_count(wb, sheet_index, /*rows=*/true, "fm_sheet_get_row_break_count");
+extern "C" fm_status_t fm_sheet_get_row_break_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
+  return break_count(wb, sheet_index, /*rows=*/true, "fm_sheet_get_row_break_count", out_count);
 }
 
 extern "C" fm_status_t fm_sheet_get_row_break_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
@@ -486,8 +491,8 @@ extern "C" fm_status_t fm_sheet_get_row_break_at(const fm_workbook_t* wb, size_t
   return break_at(wb, sheet_index, index, /*rows=*/true, "fm_sheet_get_row_break_at", out);
 }
 
-extern "C" size_t fm_sheet_get_col_break_count(const fm_workbook_t* wb, size_t sheet_index) {
-  return break_count(wb, sheet_index, /*rows=*/false, "fm_sheet_get_col_break_count");
+extern "C" fm_status_t fm_sheet_get_col_break_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
+  return break_count(wb, sheet_index, /*rows=*/false, "fm_sheet_get_col_break_count", out_count);
 }
 
 extern "C" fm_status_t fm_sheet_get_col_break_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,

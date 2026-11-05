@@ -9,6 +9,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "formulon_c_count_of.h"
 #include "gtest/gtest.h"
 #include "miniz.h"
 #include "pivot/pivot_table.h"
@@ -104,7 +105,7 @@ template <typename Enum>
 }
 
 [[maybe_unused]] inline std::vector<fm_pivot_cell_t> CollectCells(fm_pivot_cells_t* handle) {
-  const std::size_t n = fm_pivot_cells_get_cell_count(handle);
+  const std::size_t n = count_of(fm_pivot_cells_get_cell_count, handle);
   std::vector<fm_pivot_cell_t> out(n);
   for (std::size_t i = 0; i < n; ++i) {
     EXPECT_EQ(fm_pivot_cells_get_cell_at(handle, i, &out[i]), 0);

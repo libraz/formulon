@@ -24,7 +24,7 @@ TEST(FormulonCApi, CreateAndDestroy) {
   EXPECT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_NE(wb.handle, nullptr);
   // create() always seeds a single Sheet1.
-  EXPECT_EQ(fm_workbook_get_sheet_count(wb.handle), 1U);
+  EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 1U);
   const char* name = nullptr;
   EXPECT_EQ(fm_workbook_get_sheet_name(wb.handle, 0, &name), 0);
   ASSERT_NE(name, nullptr);
@@ -33,10 +33,10 @@ TEST(FormulonCApi, CreateAndDestroy) {
 TEST(FormulonCApi, CreateEmptyAndAddSheet) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_empty(&wb.handle), 0);
-  EXPECT_EQ(fm_workbook_get_sheet_count(wb.handle), 0U);
+  EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 0U);
   EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "Data"), 0);
   EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "Stats"), 0);
-  EXPECT_EQ(fm_workbook_get_sheet_count(wb.handle), 2U);
+  EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 2U);
 
   const char* n0 = nullptr;
   const char* n1 = nullptr;
@@ -55,10 +55,10 @@ TEST(FormulonCApi, AddSheetValidatesNameAndRejectsDuplicate) {
   EXPECT_NE(fm_workbook_add_sheet(wb.handle, "data"), 0);
   EXPECT_NE(fm_workbook_add_sheet(wb.handle, "a/b"), 0);
   EXPECT_NE(fm_workbook_add_sheet(wb.handle, ""), 0);
-  EXPECT_EQ(fm_workbook_get_sheet_count(wb.handle), 1U);
+  EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 1U);
   // A valid, distinct name still succeeds.
   EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "Stats"), 0);
-  EXPECT_EQ(fm_workbook_get_sheet_count(wb.handle), 2U);
+  EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 2U);
 }
 TEST(FormulonCApi, NumberLiteralRoundTrip) {
   WorkbookGuard wb;

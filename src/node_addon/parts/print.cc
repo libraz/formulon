@@ -187,7 +187,12 @@ Napi::Value Workbook::BreaksArray(const Napi::CallbackInfo& info, bool rows) {
     return MakeFieldResult(env, NullHandleError(env), "breaks", items);
   }
   const uint32_t sheet = ArgU32(info, 0);
-  const std::size_t count = rows ? fm_sheet_get_row_break_count(handle_, sheet) : fm_sheet_get_col_break_count(handle_, sheet);
+  std::size_t count = 0;
+  const fm_status_t count_rc =
+      rows ? fm_sheet_get_row_break_count(handle_, sheet, &count) : fm_sheet_get_col_break_count(handle_, sheet, &count);
+  if (count_rc != 0) {
+    return MakeFieldResult(env, MakeErrorStatus(env, count_rc), "breaks", Napi::Array::New(env));
+  }
   for (std::size_t i = 0; i < count; ++i) {
     fm_page_break_t brk{};
     const fm_status_t rc =
@@ -342,6 +347,15 @@ Napi::Value Workbook::GetSheetPageMargins(const Napi::CallbackInfo& info) {
 
 namespace {
 
+// Count reported by a pagination count getter, which cannot fail on a live
+// handle with a non-null out-param.
+std::size_t PaginationCount(const fm_pagination_t* pagination,
+                            fm_status_t (*count_fn)(const fm_pagination_t*, std::size_t*)) {
+  std::size_t count = 0;
+  (void)count_fn(pagination, &count);
+  return count;
+}
+
 Napi::Object RectToJs(Napi::Env env, const fm_rect_pt_t& r) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("x", Napi::Number::New(env, r.x));
@@ -370,7 +384,7 @@ void SetPaginationDetail(Napi::Env env, Napi::Object result, const fm_pagination
     (void)fm_pagination_get_scale(pagination, &scale);
     (void)fm_pagination_get_page_order(pagination, &page_order);
     (void)fm_pagination_get_print_titles(pagination, &titles);
-    for (std::size_t i = 0; i < fm_pagination_get_page_count(pagination); ++i) {
+    for (std::size_t i = 0; i < PaginationCount(pagination, &fm_pagination_get_page_count); ++i) {
       fm_page_layout_t page{};
       if (fm_pagination_get_page_at(pagination, i, &page) != 0) {
         continue;
@@ -387,13 +401,13 @@ void SetPaginationDetail(Napi::Env env, Napi::Object result, const fm_pagination
       item.Set("heightPt", Napi::Number::New(env, page.height_pt));
       pages.Set(i, item);
     }
-    for (std::size_t i = 0; i < fm_pagination_get_row_break_count(pagination); ++i) {
+    for (std::size_t i = 0; i < PaginationCount(pagination, &fm_pagination_get_row_break_count); ++i) {
       int32_t manual = 0;
       if (fm_pagination_is_row_break_manual(pagination, i, &manual) == 0) {
         horizontal_manual.Set(i, Napi::Boolean::New(env, manual != 0));
       }
     }
-    for (std::size_t i = 0; i < fm_pagination_get_col_break_count(pagination); ++i) {
+    for (std::size_t i = 0; i < PaginationCount(pagination, &fm_pagination_get_col_break_count); ++i) {
       int32_t manual = 0;
       if (fm_pagination_is_col_break_manual(pagination, i, &manual) == 0) {
         vertical_manual.Set(i, Napi::Boolean::New(env, manual != 0));
@@ -452,7 +466,7 @@ Napi::Value Workbook::Paginate(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   fm_pagination_t* pagination = nullptr;
-  const fm_status_t rc = fm_workbook_get_pagination(handle_, ArgU32(info, 0), &pagination);
+  const fm_status_t rc = fm_sheet_get_pagination(handle_, ArgU32(info, 0), &pagination);
   if (rc != 0) {
     result.Set("status", MakeErrorStatus(env, rc));
     result.Set("printArea", print_area);
@@ -462,7 +476,7 @@ Napi::Value Workbook::Paginate(const Napi::CallbackInfo& info) {
     SetPaginationDetail(env, result, nullptr);
     return result;
   }
-  for (std::size_t i = 0; i < fm_pagination_get_print_area_count(pagination); ++i) {
+  for (std::size_t i = 0; i < PaginationCount(pagination, &fm_pagination_get_print_area_count); ++i) {
     fm_print_range_t range{};
     if (fm_pagination_get_print_area_at(pagination, i, &range) != 0) {
       continue;
@@ -474,13 +488,13 @@ Napi::Value Workbook::Paginate(const Napi::CallbackInfo& info) {
     item.Set("lastCol", Napi::Number::New(env, range.last_col));
     print_area.Set(i, item);
   }
-  for (std::size_t i = 0; i < fm_pagination_get_row_break_count(pagination); ++i) {
+  for (std::size_t i = 0; i < PaginationCount(pagination, &fm_pagination_get_row_break_count); ++i) {
     uint32_t row = 0;
     if (fm_pagination_get_row_break_at(pagination, i, &row) == 0) {
       horizontal_breaks.Set(i, Napi::Number::New(env, row));
     }
   }
-  for (std::size_t i = 0; i < fm_pagination_get_col_break_count(pagination); ++i) {
+  for (std::size_t i = 0; i < PaginationCount(pagination, &fm_pagination_get_col_break_count); ++i) {
     uint32_t col = 0;
     if (fm_pagination_get_col_break_at(pagination, i, &col) == 0) {
       vertical_breaks.Set(i, Napi::Number::New(env, col));
@@ -490,7 +504,7 @@ Napi::Value Workbook::Paginate(const Napi::CallbackInfo& info) {
   result.Set("printArea", print_area);
   result.Set("horizontalBreaks", horizontal_breaks);
   result.Set("verticalBreaks", vertical_breaks);
-  result.Set("pageCount", Napi::Number::New(env, fm_pagination_get_page_count(pagination)));
+  result.Set("pageCount", Napi::Number::New(env, static_cast<double>(PaginationCount(pagination, &fm_pagination_get_page_count))));
   SetPaginationDetail(env, result, pagination);
   fm_pagination_destroy(pagination);
   return result;

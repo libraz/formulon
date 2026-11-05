@@ -431,7 +431,7 @@ TEST(FormulonCApiPivot, PivotReportLayoutRoundTripsThroughApi) {
   std::size_t pivot_idx = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
 
-  fm_pivot_report_layout_t layout = FM_PIVOT_REPORT_LAYOUT_TABULAR;
+  int32_t layout = FM_PIVOT_REPORT_LAYOUT_TABULAR;
   ASSERT_EQ(fm_sheet_get_pivot_report_layout(wb.handle, 0, pivot_idx, &layout), 0);
   EXPECT_EQ(layout, FM_PIVOT_REPORT_LAYOUT_COMPACT);
 
@@ -829,7 +829,7 @@ TEST(FormulonCApiPivot, PivotProjectionUsesWorkbookLocaleAndReportLayout) {
   EXPECT_EQ(cols, 2U);  // Tabular exposes its two row-field columns.
 
   bool saw_japanese_total = false;
-  const std::size_t cell_count = fm_pivot_cells_get_cell_count(projected.handle);
+  const std::size_t cell_count = count_of(fm_pivot_cells_get_cell_count, projected.handle);
   for (std::size_t i = 0; i < cell_count; ++i) {
     fm_pivot_cell_t cell{};
     ASSERT_EQ(fm_pivot_cells_get_cell_at(projected.handle, i, &cell), 0);

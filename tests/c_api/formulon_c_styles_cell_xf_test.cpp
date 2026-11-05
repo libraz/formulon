@@ -5,7 +5,7 @@
 TEST(FormulonCApiStyles, CellXfIndexDefaultsToZero) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  uint32_t xf = 99;
+  std::size_t xf = 99;
   EXPECT_EQ(fm_sheet_get_cell_xf_index(wb.handle, 0, 0, 0, &xf), 0);
   EXPECT_EQ(xf, 0U);
 }
@@ -15,7 +15,7 @@ TEST(FormulonCApiStyles, CellXfIndexRoundTrips) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(43);
   EXPECT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 5, 7, 42), 0);
-  uint32_t xf = 0;
+  std::size_t xf = 0;
   EXPECT_EQ(fm_sheet_get_cell_xf_index(wb.handle, 0, 5, 7, &xf), 0);
   EXPECT_EQ(xf, 42U);
 }
@@ -28,7 +28,7 @@ TEST(FormulonCApiStyles, SetXfIndexRejectsBadSheet) {
 }
 
 TEST(FormulonCApiStyles, NullArgumentRejected) {
-  uint32_t xf = 0;
+  std::size_t xf = 0;
   EXPECT_NE(fm_sheet_get_cell_xf_index(nullptr, 0, 0, 0, &xf), 0);
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
@@ -71,7 +71,7 @@ TEST(FormulonCApiStyles, CellXfAdderDiagnosticsUseInvokedApi) {
     EXPECT_EQ(std::string(message).rfind(prefix, 0), 0U) << message;
   };
 
-  uint32_t index = 0;
+  std::size_t index = 0;
   fm_cell_xf_t cell_xf{};
   expect_prefix(fm_workbook_add_cell_xf(nullptr, cell_xf, &index), "fm_workbook_add_cell_xf:");
 
@@ -110,7 +110,7 @@ TEST(FormulonCApiStyles, SetThenSaveLoadPreservesXfIndex) {
 
   WorkbookGuard wb2;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
-  uint32_t xf = 0;
+  std::size_t xf = 0;
   EXPECT_EQ(fm_sheet_get_cell_xf_index(wb2.handle, 0, 0, 0, &xf), 0);
   EXPECT_EQ(xf, 7U);
 }
@@ -118,24 +118,24 @@ TEST(FormulonCApiStyles, SetThenSaveLoadPreservesXfIndex) {
 TEST(FormulonCApiStyles, AddCellXfDedupReturnsExistingIndex) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  uint32_t font_idx = 0;
-  uint32_t fill_idx = 0;
-  uint32_t border_idx = 0;
+  std::size_t font_idx = 0;
+  std::size_t fill_idx = 0;
+  std::size_t border_idx = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, MakeArial(), &font_idx), 0);
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, MakeRedFill(), &fill_idx), 0);
   ASSERT_EQ(fm_workbook_add_border(wb.handle, MakeThinBoxBorder(), &border_idx), 0);
 
   fm_cell_xf_t xf{};
-  xf.font_index = font_idx;
-  xf.fill_index = fill_idx;
-  xf.border_index = border_idx;
+  xf.font_index = static_cast<uint32_t>(font_idx);
+  xf.fill_index = static_cast<uint32_t>(fill_idx);
+  xf.border_index = static_cast<uint32_t>(border_idx);
   xf.num_fmt_id = 0;  // built-in General
   xf.horizontal_align = 1;
   xf.vertical_align = 2;
   xf.wrap_text = 1;
 
-  uint32_t a = 0xFFFFFFFFU;
-  uint32_t b = 0xFFFFFFFFU;
+  std::size_t a = 0xFFFFFFFFU;
+  std::size_t b = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &a), 0);
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &b), 0);
   EXPECT_EQ(a, b);
@@ -144,17 +144,17 @@ TEST(FormulonCApiStyles, AddCellXfDedupReturnsExistingIndex) {
 TEST(FormulonCApiStyles, AddCellXfDistinctReturnsNewIndex) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  uint32_t font_idx = 0;
-  uint32_t fill_idx = 0;
-  uint32_t border_idx = 0;
+  std::size_t font_idx = 0;
+  std::size_t fill_idx = 0;
+  std::size_t border_idx = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, MakeArial(), &font_idx), 0);
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, MakeRedFill(), &fill_idx), 0);
   ASSERT_EQ(fm_workbook_add_border(wb.handle, MakeThinBoxBorder(), &border_idx), 0);
 
   fm_cell_xf_t xf{};
-  xf.font_index = font_idx;
-  xf.fill_index = fill_idx;
-  xf.border_index = border_idx;
+  xf.font_index = static_cast<uint32_t>(font_idx);
+  xf.fill_index = static_cast<uint32_t>(fill_idx);
+  xf.border_index = static_cast<uint32_t>(border_idx);
   xf.num_fmt_id = 0;
   xf.horizontal_align = 1;
   xf.vertical_align = 2;
@@ -162,8 +162,8 @@ TEST(FormulonCApiStyles, AddCellXfDistinctReturnsNewIndex) {
 
   xf.has_wrap_text = 1;
 
-  uint32_t a = 0;
-  uint32_t b = 0;
+  std::size_t a = 0;
+  std::size_t b = 0;
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &a), 0);
   // Flip wrap_text — distinct record.
   xf.wrap_text = 0;
@@ -174,18 +174,18 @@ TEST(FormulonCApiStyles, AddCellXfDistinctReturnsNewIndex) {
 TEST(FormulonCApiStyles, AddCellXfGrowsTable) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  uint32_t font_idx = 0;
-  uint32_t fill_idx = 0;
-  uint32_t border_idx = 0;
+  std::size_t font_idx = 0;
+  std::size_t fill_idx = 0;
+  std::size_t border_idx = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, MakeArial(), &font_idx), 0);
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, MakeRedFill(), &fill_idx), 0);
   ASSERT_EQ(fm_workbook_add_border(wb.handle, MakeThinBoxBorder(), &border_idx), 0);
-  uint32_t before = 0;
+  std::size_t before = 0;
   ASSERT_EQ(fm_workbook_get_cell_xf_count(wb.handle, &before), 0);
   fm_cell_xf_t xf{};
-  xf.font_index = font_idx;
-  xf.fill_index = fill_idx;
-  xf.border_index = border_idx;
+  xf.font_index = static_cast<uint32_t>(font_idx);
+  xf.fill_index = static_cast<uint32_t>(fill_idx);
+  xf.border_index = static_cast<uint32_t>(border_idx);
   xf.num_fmt_id = 0;
   // Distinguish this record from the all-zero placeholder xf that
   // `ensure_default_cell_xf` seeds at index 0 so the caller's record is
@@ -193,9 +193,9 @@ TEST(FormulonCApiStyles, AddCellXfGrowsTable) {
   // presence flag is what makes the value part of the record.
   xf.wrap_text = 1;
   xf.has_wrap_text = 1;
-  uint32_t idx = 0;
+  std::size_t idx = 0;
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &idx), 0);
-  uint32_t after = 0;
+  std::size_t after = 0;
   ASSERT_EQ(fm_workbook_get_cell_xf_count(wb.handle, &after), 0);
   // Index 0 is the seeded default xf.
   EXPECT_EQ(before, 1U);
@@ -206,9 +206,9 @@ TEST(FormulonCApiStyles, AddCellXfGrowsTable) {
 TEST(FormulonCApiStyles, AddCellXfOnFreshWorkbookKeepsZeroAsDefault) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  uint32_t font_idx = 0;
-  uint32_t fill_idx = 0;
-  uint32_t border_idx = 0;
+  std::size_t font_idx = 0;
+  std::size_t fill_idx = 0;
+  std::size_t border_idx = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, MakeArial(), &font_idx), 0);
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, MakeRedFill(), &fill_idx), 0);
   ASSERT_EQ(fm_workbook_add_border(wb.handle, MakeThinBoxBorder(), &border_idx), 0);
@@ -221,9 +221,9 @@ TEST(FormulonCApiStyles, AddCellXfOnFreshWorkbookKeepsZeroAsDefault) {
   EXPECT_EQ(border_idx, 1U);
 
   fm_cell_xf_t xf{};
-  xf.font_index = font_idx;
-  xf.fill_index = fill_idx;
-  xf.border_index = border_idx;
+  xf.font_index = static_cast<uint32_t>(font_idx);
+  xf.fill_index = static_cast<uint32_t>(fill_idx);
+  xf.border_index = static_cast<uint32_t>(border_idx);
   xf.num_fmt_id = 0;
   // Distinguish this record from the all-zero placeholder xf that
   // `ensure_default_cell_xf` seeds at index 0 so the caller's record is
@@ -232,7 +232,7 @@ TEST(FormulonCApiStyles, AddCellXfOnFreshWorkbookKeepsZeroAsDefault) {
   xf.wrap_text = 1;
   xf.has_wrap_text = 1;
 
-  uint32_t xf_idx = 0;
+  std::size_t xf_idx = 0;
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &xf_idx), 0);
   EXPECT_NE(xf_idx, 0U);
 
@@ -254,36 +254,36 @@ TEST(FormulonCApiStyles, AddCellXfRejectsOutOfRangeIndex) {
   xf.fill_index = 0;
   xf.border_index = 0;
   xf.num_fmt_id = 0;
-  uint32_t idx = 0xFFFFFFFFU;
+  std::size_t idx = 0xFFFFFFFFU;
   EXPECT_NE(fm_workbook_add_cell_xf(wb.handle, xf, &idx), 0);
 }
 
 TEST(FormulonCApiStyles, AddCellXfRejectsUnknownNumFmt) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  uint32_t font_idx = 0;
-  uint32_t fill_idx = 0;
-  uint32_t border_idx = 0;
+  std::size_t font_idx = 0;
+  std::size_t fill_idx = 0;
+  std::size_t border_idx = 0;
   ASSERT_EQ(fm_workbook_add_font(wb.handle, MakeArial(), &font_idx), 0);
   ASSERT_EQ(fm_workbook_add_fill(wb.handle, MakeRedFill(), &fill_idx), 0);
   ASSERT_EQ(fm_workbook_add_border(wb.handle, MakeThinBoxBorder(), &border_idx), 0);
 
   fm_cell_xf_t xf{};
-  xf.font_index = font_idx;
-  xf.fill_index = fill_idx;
-  xf.border_index = border_idx;
+  xf.font_index = static_cast<uint32_t>(font_idx);
+  xf.fill_index = static_cast<uint32_t>(fill_idx);
+  xf.border_index = static_cast<uint32_t>(border_idx);
   xf.num_fmt_id = 200;  // not a registered custom and not a documented built-in
-  uint32_t idx = 0xFFFFFFFFU;
+  std::size_t idx = 0xFFFFFFFFU;
   EXPECT_NE(fm_workbook_add_cell_xf(wb.handle, xf, &idx), 0);
 }
 
 TEST(FormulonCApiStyles, AddNullArgumentRejected) {
-  uint32_t idx = 0;
+  std::size_t idx = 0;
   EXPECT_NE(fm_workbook_add_font(nullptr, MakeArial(), &idx), 0);
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   EXPECT_NE(fm_workbook_add_font(wb.handle, MakeArial(), nullptr), 0);
-  uint16_t id = 0;
+  uint32_t id = 0;
   EXPECT_NE(fm_workbook_add_num_fmt(nullptr, "General", &id), 0);
   EXPECT_NE(fm_workbook_add_num_fmt(wb.handle, "General", nullptr), 0);
   EXPECT_NE(fm_workbook_add_dxf(nullptr, fm_dxf_record_t{}, &idx), 0);
@@ -327,7 +327,7 @@ void ExpectFlagged(const fm_cell_xf_t& xf) {
 TEST(FormulonCApiStyles, XfApplyFlagsRoundTrip) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  uint32_t xf_index = 0;
+  std::size_t xf_index = 0;
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, MakeFlaggedXf(), &xf_index), 0);
   ASSERT_NE(xf_index, 0U);
   uint32_t style_xf_id = 0;
@@ -350,7 +350,7 @@ TEST(FormulonCApiStyles, XfApplyFlagsRoundTrip) {
 
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
-  uint32_t reloaded_index = 0;
+  std::size_t reloaded_index = 0;
   ASSERT_EQ(fm_sheet_get_cell_xf_index(reloaded.handle, 0, 0, 0, &reloaded_index), 0);
   fm_cell_xf_t after{};
   ASSERT_EQ(fm_workbook_get_cell_xf(reloaded.handle, reloaded_index, &after), 0);
@@ -368,8 +368,8 @@ TEST(FormulonCApiStyles, XfProtectionDistinguishesDedup) {
   locked.locked = 1;
   fm_cell_xf_t unlocked = locked;
   unlocked.locked = 0;
-  uint32_t a = 0;
-  uint32_t b = 0;
+  std::size_t a = 0;
+  std::size_t b = 0;
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, locked, &a), 0);
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, unlocked, &b), 0);
   EXPECT_NE(a, b);
@@ -379,7 +379,7 @@ TEST(FormulonCApiStyles, XfProtectionDistinguishesDedup) {
   fm_cell_xf_t absent{};
   absent.locked = 0;
   absent.hidden = 1;
-  uint32_t c = 99;
+  std::size_t c = 99;
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, absent, &c), 0);
   EXPECT_EQ(c, 0U);
   fm_cell_xf_t got{};
@@ -514,7 +514,7 @@ TEST(FormulonCApiStyles, AddCellXfDoesNotReuseARecordWithUnmodelledAttributes) {
     xfs.push_back(loaded);
     fm_cell_xf_t request{};
     ASSERT_EQ(fm_workbook_get_cell_xf(wb.handle, 1U, &request), 0);
-    uint32_t index = 99U;
+    std::size_t index = 99U;
     ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, request, &index), 0) << fm_get_last_error_message();
     if (pivot_button) {
       EXPECT_EQ(index, 2U);

@@ -20,28 +20,36 @@ JsNumberResult JsWorkbook::definedNameCount() const {
   if (handle_ == nullptr) {
     return number_result(kBindingInvalidHandle, 0.0);
   }
-  return number_result(0, static_cast<double>(fm_workbook_get_defined_name_count(handle_)));
+  std::size_t count = 0;
+  const fm_status_t rc = fm_workbook_get_defined_name_count(handle_, &count);
+  return number_result(rc, static_cast<double>(count));
 }
 
 JsNumberResult JsWorkbook::passthroughCount() const {
   if (handle_ == nullptr) {
     return number_result(kBindingInvalidHandle, 0.0);
   }
-  return number_result(0, static_cast<double>(fm_workbook_get_passthrough_count(handle_)));
+  std::size_t count = 0;
+  const fm_status_t rc = fm_workbook_get_passthrough_count(handle_, &count);
+  return number_result(rc, static_cast<double>(count));
 }
 
 JsNumberResult JsWorkbook::sheetCount() const {
   if (handle_ == nullptr) {
     return number_result(kBindingInvalidHandle, 0.0);
   }
-  return number_result(0, static_cast<double>(fm_workbook_get_sheet_count(handle_)));
+  std::size_t count = 0;
+  const fm_status_t rc = fm_workbook_get_sheet_count(handle_, &count);
+  return number_result(rc, static_cast<double>(count));
 }
 
 JsNumberResult JsWorkbook::tableCount() const {
   if (handle_ == nullptr) {
     return number_result(kBindingInvalidHandle, 0.0);
   }
-  return number_result(0, static_cast<double>(fm_workbook_get_table_count(handle_)));
+  std::size_t count = 0;
+  const fm_status_t rc = fm_workbook_get_table_count(handle_, &count);
+  return number_result(rc, static_cast<double>(count));
 }
 
 }  // namespace parts

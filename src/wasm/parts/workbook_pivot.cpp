@@ -367,7 +367,7 @@ JsStatus JsWorkbook::pivotSetStyleInfo(uint32_t sheet, uint32_t pivotIdx, emscri
 
 emscripten::val JsWorkbook::pivotGetLayout(uint32_t sheet, uint32_t pivotIdx) const {
   emscripten::val o = emscripten::val::object();
-  fm_pivot_report_layout_t layout = FM_PIVOT_REPORT_LAYOUT_COMPACT;
+  std::int32_t layout = FM_PIVOT_REPORT_LAYOUT_COMPACT;
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_pivot_report_layout(handle_, sheet, pivotIdx, &layout) : kBindingInvalidHandle;
   if (rc != 0) {

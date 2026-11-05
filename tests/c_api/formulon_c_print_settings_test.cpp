@@ -7,7 +7,7 @@
 // stays on the pure-C surface. Two properties get repeated attention
 // because they are what the surface is for: a fragment the engine stores
 // must be one Excel can open, and a setting written through any of the
-// three surfaces must be visible to `fm_workbook_get_pagination` immediately.
+// three surfaces must be visible to `fm_sheet_get_pagination` immediately.
 
 #include <cstddef>
 #include <cstdint>
@@ -16,6 +16,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "formulon_c_count_of.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
 #include "utils/error.h"
@@ -370,7 +371,7 @@ TEST(FormulonCApiPrintSettings, BreaksUpsertStaySortedAndReplaceInPlace) {
   ASSERT_EQ(fm_sheet_add_row_break(wb.handle, 0, 40, 1), 0);
   ASSERT_EQ(fm_sheet_add_row_break(wb.handle, 0, 10, 1), 0);
   ASSERT_EQ(fm_sheet_add_row_break(wb.handle, 0, 25, 0), 0);
-  ASSERT_EQ(fm_sheet_get_row_break_count(wb.handle, 0), 3U);
+  ASSERT_EQ(count_of(fm_sheet_get_row_break_count, wb.handle, 0), 3U);
 
   fm_page_break_t brk{};
   ASSERT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 0, &brk), 0);
@@ -386,7 +387,7 @@ TEST(FormulonCApiPrintSettings, BreaksUpsertStaySortedAndReplaceInPlace) {
 
   // Re-adding an existing index replaces it rather than duplicating.
   ASSERT_EQ(fm_sheet_add_row_break(wb.handle, 0, 25, 1), 0);
-  EXPECT_EQ(fm_sheet_get_row_break_count(wb.handle, 0), 3U);
+  EXPECT_EQ(count_of(fm_sheet_get_row_break_count, wb.handle, 0), 3U);
   ASSERT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 1, &brk), 0);
   EXPECT_EQ(brk.id, 25U);
   EXPECT_EQ(brk.manual, 1);
@@ -414,7 +415,7 @@ TEST(FormulonCApiPrintSettings, LoadedBreaksAreNormalisedBeforeTheAbiObservesThe
   ASSERT_EQ(fm_workbook_load(bytes.value().data(), bytes.value().size(), &wb.handle), 0);
 
   // The duplicate is gone and what remains is strictly increasing.
-  ASSERT_EQ(fm_sheet_get_col_break_count(wb.handle, 0), 3U);
+  ASSERT_EQ(count_of(fm_sheet_get_col_break_count, wb.handle, 0), 3U);
   fm_page_break_t brk{};
   std::uint32_t previous = 0;
   for (std::size_t i = 0; i < 3U; ++i) {
@@ -429,9 +430,9 @@ TEST(FormulonCApiPrintSettings, LoadedBreaksAreNormalisedBeforeTheAbiObservesThe
 
   // The mutators now find what the enumeration reports.
   EXPECT_EQ(fm_sheet_remove_col_break(wb.handle, 0, 12), 0);
-  EXPECT_EQ(fm_sheet_get_col_break_count(wb.handle, 0), 2U);
+  EXPECT_EQ(count_of(fm_sheet_get_col_break_count, wb.handle, 0), 2U);
   ASSERT_EQ(fm_sheet_add_col_break(wb.handle, 0, 12, 1), 0);
-  EXPECT_EQ(fm_sheet_get_col_break_count(wb.handle, 0), 3U);
+  EXPECT_EQ(count_of(fm_sheet_get_col_break_count, wb.handle, 0), 3U);
   ASSERT_EQ(fm_sheet_get_col_break_at(wb.handle, 0, 1, &brk), 0);
   EXPECT_EQ(brk.id, 12U);
 }
@@ -455,7 +456,7 @@ TEST(FormulonCApiPrintSettings, LoadedBreakCountStaysWithinTheAuthoringCap) {
 
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_load(bytes.value().data(), bytes.value().size(), &wb.handle), 0);
-  EXPECT_EQ(fm_sheet_get_row_break_count(wb.handle, 0), formulon::kMaxManualBreaksPerAxis);
+  EXPECT_EQ(count_of(fm_sheet_get_row_break_count, wb.handle, 0), formulon::kMaxManualBreaksPerAxis);
 
   // An index already present is an in-place replacement, so it is
   // accepted at the cap; a new one is what the cap refuses.
@@ -465,36 +466,39 @@ TEST(FormulonCApiPrintSettings, LoadedBreakCountStaysWithinTheAuthoringCap) {
   EXPECT_EQ(fm_sheet_add_row_break(wb.handle, 0, formulon::Sheet::kMaxRows - 1U, 1), kPreconditionFailed);
 }
 
-TEST(FormulonCApiPrintSettings, BreakCountSignalsARejectedSheetThroughTheDiagnostic) {
-  // `size_t` leaves no room for a status, so a rejected count and an empty
-  // axis both read as zero. A caller enumerating breaks as
-  // count-then-`_at` never reaches the `_at` call that would surface the
-  // rejection, so the diagnostic is the only thing that separates the two
-  // and it has to be reliable in both directions.
+TEST(FormulonCApiPrintSettings, BreakCountReportsARejectedSheetThroughItsStatus) {
+  // An empty axis and a rejected sheet both leave nothing to enumerate; the
+  // status is what separates them, with the diagnostic agreeing.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  const std::size_t sheet_count = fm_workbook_get_sheet_count(wb.handle);
+  const std::size_t sheet_count = count_of(fm_workbook_get_sheet_count, wb.handle);
+  constexpr fm_status_t kNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
+  std::size_t count = 99U;
 
   // Empty axis: zero, and no diagnostic.
-  EXPECT_EQ(fm_sheet_get_row_break_count(wb.handle, 0), 0U);
+  EXPECT_EQ(fm_sheet_get_row_break_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 0U);
   EXPECT_STREQ(fm_get_last_error_message(), "");
-  EXPECT_EQ(fm_sheet_get_col_break_count(wb.handle, 0), 0U);
+  EXPECT_EQ(fm_sheet_get_col_break_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 0U);
   EXPECT_STREQ(fm_get_last_error_message(), "");
 
-  // Sheet past the end: zero, and a diagnostic naming the entry point.
-  EXPECT_EQ(fm_sheet_get_row_break_count(wb.handle, sheet_count), 0U);
+  // Sheet past the end: a rejection, and a diagnostic naming the entry point.
+  EXPECT_EQ(fm_sheet_get_row_break_count(wb.handle, sheet_count, &count), kInvalidArgument);
   EXPECT_STRNE(fm_get_last_error_message(), "");
-  EXPECT_EQ(fm_sheet_get_col_break_count(wb.handle, sheet_count), 0U);
+  EXPECT_EQ(fm_sheet_get_col_break_count(wb.handle, sheet_count, &count), kInvalidArgument);
   EXPECT_STRNE(fm_get_last_error_message(), "");
 
-  // NULL handle takes the same path.
-  EXPECT_EQ(fm_sheet_get_row_break_count(nullptr, 0), 0U);
+  // NULL handle and NULL out-param.
+  EXPECT_EQ(fm_sheet_get_row_break_count(nullptr, 0, &count), kNullPointer);
+  EXPECT_STRNE(fm_get_last_error_message(), "");
+  EXPECT_EQ(fm_sheet_get_row_break_count(wb.handle, 0, nullptr), kNullPointer);
   EXPECT_STRNE(fm_get_last_error_message(), "");
 
   // A populated axis clears the previous rejection rather than inheriting
   // it, so the empty message stays a trustworthy success signal.
   ASSERT_EQ(fm_sheet_add_row_break(wb.handle, 0, 10, 1), 0);
-  EXPECT_EQ(fm_sheet_get_row_break_count(wb.handle, 0), 1U);
+  EXPECT_EQ(count_of(fm_sheet_get_row_break_count, wb.handle, 0), 1U);
   EXPECT_STREQ(fm_get_last_error_message(), "");
 
   // The indexed reader rejects the same sheet outright.
@@ -521,7 +525,7 @@ TEST(FormulonCApiPrintSettings, RemovingAnAbsentBreakSucceeds) {
   EXPECT_EQ(fm_sheet_remove_row_break(wb.handle, 0, 7), 0);
   ASSERT_EQ(fm_sheet_add_row_break(wb.handle, 0, 7, 1), 0);
   EXPECT_EQ(fm_sheet_remove_row_break(wb.handle, 0, 7), 0);
-  EXPECT_EQ(fm_sheet_get_row_break_count(wb.handle, 0), 0U);
+  EXPECT_EQ(count_of(fm_sheet_get_row_break_count, wb.handle, 0), 0U);
 }
 
 TEST(FormulonCApiPrintSettings, ClearBreaksEmptiesBothAxes) {
@@ -530,8 +534,8 @@ TEST(FormulonCApiPrintSettings, ClearBreaksEmptiesBothAxes) {
   ASSERT_EQ(fm_sheet_add_row_break(wb.handle, 0, 3, 1), 0);
   ASSERT_EQ(fm_sheet_add_col_break(wb.handle, 0, 4, 1), 0);
   ASSERT_EQ(fm_sheet_clear_breaks(wb.handle, 0), 0);
-  EXPECT_EQ(fm_sheet_get_row_break_count(wb.handle, 0), 0U);
-  EXPECT_EQ(fm_sheet_get_col_break_count(wb.handle, 0), 0U);
+  EXPECT_EQ(count_of(fm_sheet_get_row_break_count, wb.handle, 0), 0U);
+  EXPECT_EQ(count_of(fm_sheet_get_col_break_count, wb.handle, 0), 0U);
 }
 
 TEST(FormulonCApiPrintSettings, BreaksRejectOutOfGridAndOverflow) {
@@ -729,8 +733,8 @@ namespace {
 /// Paginates sheet 0 and returns its page count.
 std::uint32_t PageCount(fm_workbook_t* wb) {
   PaginationGuard pagination;
-  EXPECT_EQ(fm_workbook_get_pagination(wb, 0, &pagination.handle), 0);
-  return fm_pagination_get_page_count(pagination.handle);
+  EXPECT_EQ(fm_sheet_get_pagination(wb, 0, &pagination.handle), 0);
+  return static_cast<std::uint32_t>(count_of(fm_pagination_get_page_count, pagination.handle));
 }
 
 /// Fills `A1:T200` so the sheet needs more than one page either way.
@@ -813,6 +817,7 @@ TEST(FormulonCApiPrintSettings, NullArgumentsReportBindingNullPointer) {
   EXPECT_EQ(fm_sheet_set_print_options(wb.handle, 0, nullptr), kNullPointer);
   EXPECT_EQ(fm_sheet_set_header_footer(wb.handle, 0, nullptr), kNullPointer);
   EXPECT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 0, nullptr), kNullPointer);
+  EXPECT_EQ(fm_sheet_get_row_break_count(wb.handle, 0, nullptr), kNullPointer);
 }
 
 TEST(FormulonCApiPrintSettings, OutOfRangeSheetIndexIsRejectedEverywhere) {
@@ -824,5 +829,6 @@ TEST(FormulonCApiPrintSettings, OutOfRangeSheetIndexIsRejectedEverywhere) {
   EXPECT_EQ(fm_sheet_set_fit_to_page(wb.handle, 9, 1), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_print_area(wb.handle, 9, "A1:B2"), kInvalidArgument);
   EXPECT_EQ(fm_sheet_add_row_break(wb.handle, 9, 1, 1), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_get_row_break_count(wb.handle, 9), 0U);
+  std::size_t count = 0;
+  EXPECT_EQ(fm_sheet_get_row_break_count(wb.handle, 9, &count), kInvalidArgument);
 }

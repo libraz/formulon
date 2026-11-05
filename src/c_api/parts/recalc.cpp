@@ -22,7 +22,6 @@ using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
-using formulon::c_api::parts::validate;
 
 namespace {
 
@@ -148,7 +147,7 @@ extern "C" fm_status_t fm_workbook_get_iterative(const fm_workbook_t* wb, int32_
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_calc_mode(const fm_workbook_t* wb, fm_calc_mode_t* out_mode) {
+extern "C" fm_status_t fm_workbook_get_calc_mode(const fm_workbook_t* wb, std::int32_t* out_mode) {
   clear_last_error();
   if (wb == nullptr || out_mode == nullptr) {
     return null_argument("fm_workbook_get_calc_mode");
@@ -238,7 +237,7 @@ extern "C" fm_status_t fm_workbook_set_calc_on_save(fm_workbook_t* wb, std::int3
   });
 }
 
-extern "C" fm_status_t fm_workbook_get_ref_mode(const fm_workbook_t* wb, fm_ref_mode_t* out) {
+extern "C" fm_status_t fm_workbook_get_ref_mode(const fm_workbook_t* wb, std::int32_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument("fm_workbook_get_ref_mode");
@@ -380,7 +379,7 @@ extern "C" fm_status_t fm_workbook_set_file_name(fm_workbook_t* wb, const char* 
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_recalc_viewport(fm_workbook_t* wb, const fm_viewport* viewport,
+extern "C" fm_status_t fm_sheet_recalc_viewport(fm_workbook_t* wb, size_t sheet_index, const fm_viewport* viewport,
                                                 uint32_t* out_recomputed_count) {
   clear_last_error();
   if (wb == nullptr || viewport == nullptr) {
@@ -390,14 +389,18 @@ extern "C" fm_status_t fm_sheet_recalc_viewport(fm_workbook_t* wb, const fm_view
   // matches nothing, so the call would report a successful no-op recalc
   // and the caller would keep rendering stale values. Every other entry
   // point that takes a sheet rejects the same input.
-  if (auto rc = check_sheet_index(wb, viewport->sheet, "fm_sheet_recalc_viewport"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_recalc_viewport"); rc != 0) {
     return rc;
   }
-  if (auto rc = validate(*viewport, "fm_sheet_recalc_viewport"); rc != 0) {
-    return rc;
+  // `SheetCellRange::sheet_id` is 16-bit; refuse an index it cannot hold
+  // rather than recalculating a different sheet.
+  if (sheet_index > 0xFFFFU) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_recalc_viewport: sheet_index exceeds 16-bit sheet id range",
+                             "sheet_index=" + std::to_string(sheet_index));
   }
   formulon::eval::SheetCellRange range;
-  range.sheet_id = static_cast<std::uint16_t>(viewport->sheet);
+  range.sheet_id = static_cast<std::uint16_t>(sheet_index);
   range.first_row = viewport->first_row;
   range.last_row = viewport->last_row;
   range.first_col = viewport->first_col;

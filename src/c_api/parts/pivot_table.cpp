@@ -272,7 +272,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_style_info(fm_workbook_t* wb, std::siz
 }
 
 extern "C" fm_status_t fm_sheet_get_pivot_report_layout(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                        std::size_t pivot_index, fm_pivot_report_layout_t* out_layout) {
+                                                        std::size_t pivot_index, std::int32_t* out_layout) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
   if (auto rc =
@@ -496,7 +496,7 @@ fm_status_t fill_data_field(const formulon::Workbook& workbook, const formulon::
       return rc;
     }
   }
-  out->aggregation = pivot_agg_from_fm(spec.aggregation);
+  out->aggregation = pivot_agg_from_fm(static_cast<fm_pivot_aggregation_t>(spec.aggregation));
   const formulon::pivot::PivotCache* cache = find_cache(workbook, table.pivot_cache_id());
   if (cache != nullptr) {
     if (auto checked = formulon::pivot::check_aggregation_with_calculated_items(*cache, out->aggregation); !checked) {
@@ -515,7 +515,7 @@ fm_status_t fill_data_field(const formulon::Workbook& workbook, const formulon::
   }
   out->field_index = spec.field_index;
   out->number_format = spec.number_format != nullptr ? spec.number_format : "";
-  out->show_as = pivot_show_as_from_fm(spec.show_as);
+  out->show_as = pivot_show_as_from_fm(static_cast<fm_pivot_show_values_as_t>(spec.show_as));
   if (spec.show_as_base_field >= 0) {
     out->show_as_base_field = static_cast<std::uint32_t>(spec.show_as_base_field);
   } else {

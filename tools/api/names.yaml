@@ -3057,6 +3057,7 @@ entries:
     c: fm_workbook_add_table
     js: addTable
     py: add_table
+    sheet_arg: "tables are indexed across the workbook; the sheet is where the new table lands, as add_sheet takes a position"
     params: { header_row: bool, totals_row: bool, show_first_column: bool, show_last_column: bool, show_row_stripes: bool, show_column_stripes: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_table_create, js: createTable, py: table_create }
@@ -3771,9 +3772,9 @@ entries:
     was: { c: fm_workbook_set_iterative_progress, js: setIterativeProgress }
   pagination.get:
     kind: op
-    scope: workbook
+    scope: sheet
     noun: pagination
-    c: fm_workbook_get_pagination
+    c: fm_sheet_get_pagination
     js: getPagination
     py: get_pagination
     surfaces: [c, wasm, native, py]
@@ -3782,7 +3783,7 @@ entries:
     kind: op
     scope: pagination
     noun: pagination
-    qualifies: "result handle of the workbook-scope get_pagination"
+    qualifies: "result handle of the sheet-scope get_pagination"
     c: fm_pagination_destroy
     surfaces: [c]
     was: { c: fm_pagination_destroy }

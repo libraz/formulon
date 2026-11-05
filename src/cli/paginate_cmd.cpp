@@ -92,15 +92,25 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
     return status;
   }
   PaginationGuard pagination;
-  if (const auto status = fm_workbook_get_pagination(workbook.handle, sheet_index, &pagination.handle); status != 0) {
+  if (const auto status = fm_sheet_get_pagination(workbook.handle, sheet_index, &pagination.handle); status != 0) {
     emit_last_error(err, "paginate");
     return status;
   }
 
+  std::size_t page_count = 0;
+  if (const auto status = fm_pagination_get_page_count(pagination.handle, &page_count); status != 0) {
+    emit_last_error(err, "paginate");
+    return status;
+  }
+  std::size_t print_area_count = 0;
+  if (const auto status = fm_pagination_get_print_area_count(pagination.handle, &print_area_count); status != 0) {
+    emit_last_error(err, "paginate");
+    return status;
+  }
   out << "sheet=" << sheet_index << '\n';
-  out << "pages=" << fm_pagination_get_page_count(pagination.handle) << '\n';
+  out << "pages=" << page_count << '\n';
   out << "print_area=";
-  for (std::size_t i = 0; i < fm_pagination_get_print_area_count(pagination.handle); ++i) {
+  for (std::size_t i = 0; i < print_area_count; ++i) {
     fm_print_range_t range{};
     if (const auto status = fm_pagination_get_print_area_at(pagination.handle, i, &range); status != 0) {
       emit_last_error(err, "paginate");
@@ -113,8 +123,13 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
   out << '\n';
   const auto emit_breaks = [&](std::string_view label, auto count_fn, auto at_fn) -> bool {
+    std::size_t count = 0;
+    if (const auto status = count_fn(pagination.handle, &count); status != 0) {
+      emit_last_error(err, "paginate");
+      return false;
+    }
     out << label << '=';
-    for (std::size_t i = 0; i < count_fn(pagination.handle); ++i) {
+    for (std::size_t i = 0; i < count; ++i) {
       uint32_t value = 0;
       if (const auto status = at_fn(pagination.handle, i, &value); status != 0) {
         emit_last_error(err, "paginate");

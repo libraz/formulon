@@ -31,7 +31,7 @@ TEST_F(FormulonCApiSheetFeatures, MergeAddAndIterate) {
   m.last_row = 1;
   m.last_col = 2;
   ASSERT_EQ(fm_sheet_add_merge(wb_, 0, m), 0);
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
   fm_merge_range got{};
@@ -56,7 +56,7 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkAddAndIterate) {
   hl.display = "Click";
   hl.tooltip = "Open site";
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, hl), 0);
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
   fm_hyperlink_t out{};
@@ -99,7 +99,7 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkRejectsInvertedRectangleAtomically) {
   hl.target = "https://invalid.example";
   EXPECT_EQ(fm_sheet_add_hyperlink(wb_, 0U, hl), invalid);
 
-  std::uint32_t count = 99U;
+  std::size_t count = 99U;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0U, &count), 0);
   EXPECT_EQ(count, 0U);
 }
@@ -182,7 +182,7 @@ TEST_F(FormulonCApiSheetFeatures, CommentEnumerateAllIncludingEmptyCell) {
   ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Alice", "Hello"), 0);
   ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 5, 3, "Bob", "Empty cell note"), 0);
 
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_comment_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 2U);
 
@@ -206,7 +206,7 @@ TEST_F(FormulonCApiSheetFeatures, CommentEnumerateAllIncludingEmptyCell) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentEnumerateCountZeroWhenNone) {
-  std::uint32_t count = 123;
+  std::size_t count = 123;
   ASSERT_EQ(fm_sheet_get_comment_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 0U);
 }
@@ -220,7 +220,7 @@ TEST_F(FormulonCApiSheetFeatures, CommentEnumerateOutOfRangeIndex) {
 TEST_F(FormulonCApiSheetFeatures, SheetIndexOutOfRange) {
   fm_merge_range m{};
   EXPECT_NE(fm_sheet_add_merge(wb_, 999, m), 0);
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   EXPECT_NE(fm_sheet_get_merge_count(wb_, 999, &count), 0);
 }
 
@@ -233,7 +233,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveMergeByRangeOverlap) {
   ASSERT_EQ(fm_sheet_add_merge(wb_, 0, c), 0);
   fm_merge_range q{0, 0, 1, 4};
   ASSERT_EQ(fm_sheet_remove_merge(wb_, 0, q), 0);
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
   fm_merge_range got{};
@@ -249,7 +249,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveMergeByRangeNoOverlap) {
   ASSERT_EQ(fm_sheet_add_merge(wb_, 0, a), 0);
   fm_merge_range q{4, 2, 5, 3};
   ASSERT_EQ(fm_sheet_remove_merge(wb_, 0, q), 0);
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 1U);
 }
@@ -260,7 +260,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveMergeAtValid) {
   ASSERT_EQ(fm_sheet_add_merge(wb_, 0, a), 0);
   ASSERT_EQ(fm_sheet_add_merge(wb_, 0, b), 0);
   ASSERT_EQ(fm_sheet_remove_merge_at(wb_, 0, 0), 0);
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
   fm_merge_range got{};
@@ -275,7 +275,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveMergeAtOutOfRange) {
   fm_merge_range a{0, 0, 1, 1};
   ASSERT_EQ(fm_sheet_add_merge(wb_, 0, a), 0);
   EXPECT_NE(fm_sheet_remove_merge_at(wb_, 0, 99), 0);
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 1U);
 }
@@ -288,7 +288,7 @@ TEST_F(FormulonCApiSheetFeatures, ClearMerges) {
   ASSERT_EQ(fm_sheet_add_merge(wb_, 0, b), 0);
   ASSERT_EQ(fm_sheet_add_merge(wb_, 0, c), 0);
   ASSERT_EQ(fm_sheet_clear_merges(wb_, 0), 0);
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 0U);
   // Calling clear again is still kOk.
@@ -326,7 +326,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowCol) {
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, c), 0);
   // Removes both entries anchored at (1, 2); leaves the (3, 4) entry.
   ASSERT_EQ(fm_sheet_remove_hyperlink(wb_, 0, 1, 2), 0);
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
   fm_hyperlink_t got{};
@@ -346,7 +346,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowColNoMatch) {
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, a), 0);
   // No hyperlink anchored at (5, 5); call is still kOk.
   ASSERT_EQ(fm_sheet_remove_hyperlink(wb_, 0, 5, 5), 0);
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 1U);
 }
@@ -367,7 +367,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkAtValid) {
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, a), 0);
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, b), 0);
   ASSERT_EQ(fm_sheet_remove_hyperlink_at(wb_, 0, 0), 0);
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
   fm_hyperlink_t got{};
@@ -386,7 +386,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkAtOutOfRange) {
   a.target = "https://a.example";
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, a), 0);
   EXPECT_NE(fm_sheet_remove_hyperlink_at(wb_, 0, 99), 0);
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 1U);
 }
@@ -414,7 +414,7 @@ TEST_F(FormulonCApiSheetFeatures, ClearHyperlinks) {
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, b), 0);
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, c), 0);
   ASSERT_EQ(fm_sheet_clear_hyperlinks(wb_, 0), 0);
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 0U);
   // Calling clear again is still kOk.
@@ -430,7 +430,7 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkRemovalSheetIndexOutOfRange) {
 // ---- Data validations ------------------------------------------------------
 
 TEST_F(FormulonCApiSheetFeatures, ValidationCountEmpty) {
-  std::uint32_t count = 99U;
+  std::size_t count = 99U;
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 0U);
 }
@@ -454,7 +454,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationAddSingleRangeAndIterate) {
   v.prompt_message = "Select a value";
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, v), 0);
 
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
 
@@ -519,7 +519,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationCoversEveryTypeAndOpEnum) {
       ASSERT_EQ(fm_sheet_add_validation(wb_, 0, v), 0);
     }
   }
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 8U * 8U);
   // Probe a couple of entries for fidelity.
@@ -556,7 +556,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationRejectsEnumOrdinalsPastTheirDomain) 
   unknown_error_style.error_style = 3;
   expect_rejected(unknown_error_style, "error_style");
 
-  std::uint32_t count = 99U;
+  std::size_t count = 99U;
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 0U);
 }
@@ -574,7 +574,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationRemoveAtValid) {
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, a), 0);
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, b), 0);
   ASSERT_EQ(fm_sheet_remove_validation(wb_, 0, 0), 0);
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
   fm_data_validation_t got{};
@@ -586,7 +586,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationRemoveAtOutOfRange) {
   fm_data_validation_t a{};
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, a), 0);
   EXPECT_NE(fm_sheet_remove_validation(wb_, 0, 99), 0);
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 1U);
 }
@@ -597,7 +597,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationClear) {
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, a), 0);
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, b), 0);
   ASSERT_EQ(fm_sheet_clear_validations(wb_, 0), 0);
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 0U);
   // Calling clear again is still kOk.
@@ -606,7 +606,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationClear) {
 
 TEST_F(FormulonCApiSheetFeatures, ValidationSheetIndexOutOfRange) {
   fm_data_validation_t v{};
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   EXPECT_NE(fm_sheet_get_validation_count(wb_, 999, &count), 0);
   fm_data_validation_t got{};
   EXPECT_NE(fm_sheet_get_validation(wb_, 999, 0, &got), 0);
@@ -654,7 +654,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationAddRejectsNullRangesWithCount) {
   v.range_count = 3;
   v.ranges = nullptr;  // contradicts range_count.
   EXPECT_NE(fm_sheet_add_validation(wb_, 0, v), 0);
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 0U);
 }
@@ -668,7 +668,7 @@ TEST_F(FormulonCApiSheetFeatures, MutatorsRejectOutOfGridCoordinatesBeforeMutati
   hyperlink.last_row = 0U;
   hyperlink.last_col = formulon::Sheet::kMaxCols;
   EXPECT_EQ(fm_sheet_add_hyperlink(wb_, 0U, hyperlink), invalid);
-  std::uint32_t count = 99U;
+  std::size_t count = 99U;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0U, &count), 0);
   EXPECT_EQ(count, 0U);
 

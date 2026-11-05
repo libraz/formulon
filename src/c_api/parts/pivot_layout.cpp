@@ -161,11 +161,13 @@ extern "C" void fm_pivot_cells_destroy(fm_pivot_cells_t* cells) {
   delete cells;
 }
 
-extern "C" std::size_t fm_pivot_cells_get_cell_count(const fm_pivot_cells_t* cells) {
-  if (cells == nullptr) {
-    return 0;
+extern "C" fm_status_t fm_pivot_cells_get_cell_count(const fm_pivot_cells_t* cells, std::size_t* out_count) {
+  clear_last_error();
+  if (cells == nullptr || out_count == nullptr) {
+    return null_argument("fm_pivot_cells_get_cell_count");
   }
-  return cells->cells.size();
+  *out_count = cells->cells.size();
+  return 0;
 }
 
 extern "C" fm_status_t fm_pivot_cells_get_bounds(const fm_pivot_cells_t* cells, std::uint32_t* out_top,

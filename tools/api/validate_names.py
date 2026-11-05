@@ -41,7 +41,7 @@ KINDS = frozenset({"op", "list", "free", "factory", "record", "field", "typedef"
 FIELDS = frozenset(
     {
         "kind", "scope", "noun", "qualifies", "record", "role", "from", "c", "js", "py", "enum", "returns",
-        "params", "surfaces", "exception", "replaced_by", "closes", "was", "drop", "flag",
+        "params", "surfaces", "exception", "replaced_by", "closes", "was", "drop", "flag", "sheet_arg",
     }
 )  # fmt: skip
 ROLES = frozenset({"result", "input", "patch"})
@@ -130,9 +130,11 @@ def check_schema(data) -> List[str]:
                 )
             elif value.startswith("enum:") and f"enum.{value[5:]}" not in entries:
                 problems.append(f"{where}: {slot} names enum {value[5:]!r}, which has no `enum.{value[5:]}` entry")
-        for text_field in ("flag", "exception"):
+        for text_field in ("flag", "exception", "sheet_arg"):
             if text_field in entry and (not isinstance(entry[text_field], str) or not entry[text_field].strip()):
                 problems.append(f"{where}: {text_field} must be a non-empty string")
+        if "sheet_arg" in entry and entry.get("scope") != "workbook":
+            problems.append(f"{where}: `sheet_arg` excuses a sheet index on a workbook-scope entry only")
         if not any(f in entry for f in (*NAME_FIELDS, "was", "replaced_by")):
             problems.append(f"{where}: names nothing")
     for name, collection in collections.items():

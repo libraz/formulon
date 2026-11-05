@@ -50,9 +50,9 @@ fm_protected_range_t Range(const char* name, const char* sqref) {
 }
 
 uint32_t RangeCount(const WorkbookGuard& wb) {
-  uint32_t count = 0;
+  std::size_t count = 0;
   EXPECT_EQ(fm_sheet_get_protected_range_count(wb.handle, 0, &count), 0);
-  return count;
+  return static_cast<uint32_t>(count);
 }
 
 }  // namespace
@@ -212,7 +212,7 @@ TEST(FormulonCApiProtectedRanges, ArgumentsAreValidated) {
   EXPECT_EQ(fm_sheet_remove_protected_range(wb.handle, 0, 5), kInvalidArgument);
   fm_protected_range_t out{};
   EXPECT_EQ(fm_sheet_get_protected_range(wb.handle, 0, 5, &out), kInvalidArgument);
-  uint32_t count = 0;
+  std::size_t count = 0;
   EXPECT_EQ(fm_sheet_get_protected_range_count(wb.handle, 9, &count), kInvalidArgument);
   EXPECT_EQ(RangeCount(wb), 1U);
 }

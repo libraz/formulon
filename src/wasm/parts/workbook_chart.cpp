@@ -1015,9 +1015,9 @@ val JsWorkbook::addChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot,
   if (!read_patch_arg(reader, patch, &p, kSeriesWr, arena)) {
     return id_envelope(argument_error(reader), "seriesIdx", 0U);
   }
-  uint32_t series_idx = 0;
+  std::size_t series_idx = 0;
   const fm_status_t rc = fm_sheet_add_chart_series(handle_, sheet, objectId, plot, &p, &series_idx);
-  return id_envelope(status_from_rc(rc), "seriesIdx", rc == 0 ? series_idx : 0U);
+  return id_envelope(status_from_rc(rc), "seriesIdx", rc == 0 ? static_cast<uint32_t>(series_idx) : 0U);
 }
 
 JsStatus JsWorkbook::removeChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIdx) {

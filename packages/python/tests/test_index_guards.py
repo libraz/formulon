@@ -405,7 +405,7 @@ class ArgumentSweepTests(unittest.TestCase):
         )
         self.assertEqual(len(findings), 1, findings)
         self.assertIn("via _read_count", findings[0])
-        self.assertIn("sheet <- int(sheet)", findings[0])
+        self.assertIn("sheet_index <- int(sheet)", findings[0])
 
     def test_sweep_catches_a_packed_struct_field(self) -> None:
         findings = _sweep_source('S.HYPERLINK.pack(LIB, ptr, {"row": int(row)})', _parse_header(_HEADER))

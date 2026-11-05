@@ -307,7 +307,7 @@ TEST(FormulonCApiPivot, FieldNumberFormatRoundTripsAsNumFmtId) {
   std::uint32_t cache_id = 0;
   std::size_t pivot_idx = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
-  std::uint16_t custom_id = 0;
+  uint32_t custom_id = 0;
   ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "0.000", &custom_id), 0) << fm_get_last_error_message();
   const std::string custom = std::to_string(custom_id);
   ASSERT_EQ(fm_sheet_set_pivot_field_number_format(wb.handle, 0, pivot_idx, 1, custom.c_str()), 0)

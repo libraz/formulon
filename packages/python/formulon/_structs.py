@@ -262,7 +262,6 @@ SHEET_PROTECTION = Struct(
 VIEWPORT = Struct(
     "fm_viewport",
     [
-        ("sheet", U32),
         ("first_row", U32),
         ("last_row", U32),
         ("first_col", U32),

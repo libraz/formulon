@@ -65,7 +65,12 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
   if (rc != 0) {
     return MakeFieldResult(env, MakeErrorStatus(env, rc), "cells", Napi::Array::New(env));
   }
-  const std::size_t cell_count = fm_cf_results_get_cell_count(results);
+  std::size_t cell_count = 0;
+  rc = fm_cf_results_get_cell_count(results, &cell_count);
+  if (rc != 0) {
+    fm_cf_results_destroy(results);
+    return MakeFieldResult(env, MakeErrorStatus(env, rc), "cells", Napi::Array::New(env));
+  }
   Napi::Array cells = Napi::Array::New(env, cell_count);
   std::size_t emitted = 0;
   for (std::size_t i = 0; i < cell_count; ++i) {

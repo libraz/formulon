@@ -41,7 +41,7 @@ namespace {
 
 // Stores one numeric payload slot. NaN and infinities have no spelling in a
 // saved filter, so they are refused.
-fm_status_t numeric_payload(fm_pivot_filter_value_kind_t kind, std::int32_t as_int, double as_double,
+fm_status_t numeric_payload(std::int32_t kind, std::int32_t as_int, double as_double,
                             std::variant<std::monostate, int, double, std::string>& out, const char* api,
                             const char* field) {
   if (kind == FM_PIVOT_FILTER_VALUE_INT) {
@@ -71,7 +71,7 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
   if (table == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
-  const formulon::pivot::FilterType type = pivot_filter_type_from_fm(spec->type);
+  const formulon::pivot::FilterType type = pivot_filter_type_from_fm(static_cast<fm_pivot_filter_type_t>(spec->type));
   const bool caption = formulon::pivot::is_caption_filter_type(type);
   const bool ranged = formulon::pivot::is_range_filter_type(type);
   const std::string kind_detail = "type=" + std::to_string(static_cast<int>(spec->type)) +
@@ -107,7 +107,7 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
                              std::string("field_name=") + spec->field_name);
   }
   formulon::pivot::PivotFilter filter;
-  filter.axis = pivot_axis_from_fm(spec->axis);
+  filter.axis = pivot_axis_from_fm(static_cast<fm_pivot_axis_t>(spec->axis));
   filter.field_name = spec->field_name;
   filter.type = type;
   filter.data_field_index = spec->data_field_index;

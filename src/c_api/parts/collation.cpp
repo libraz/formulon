@@ -30,7 +30,7 @@ using formulon::c_api::parts::value_from_fm;
 
 namespace {
 
-fm_status_t check_strength(fm_collation_strength_t strength, const char* api, formulon::eval::CollationStrength* out) {
+fm_status_t check_strength(std::int32_t strength, const char* api, formulon::eval::CollationStrength* out) {
   if (strength != FM_COLLATION_COMPARE && strength != FM_COLLATION_DYNAMIC && strength != FM_COLLATION_CLASSIC_EXACT) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              (std::string(api) + ": strength out of range").c_str());
@@ -41,8 +41,8 @@ fm_status_t check_strength(fm_collation_strength_t strength, const char* api, fo
 
 }  // namespace
 
-extern "C" fm_status_t fm_compare_text(const char* a, const char* b, const char* profile_id,
-                                       fm_collation_strength_t strength, int32_t* out_order) {
+extern "C" fm_status_t fm_compare_text(const char* a, const char* b, const char* profile_id, int32_t strength,
+                                       int32_t* out_order) {
   static constexpr const char* kApi = "fm_compare_text";
   clear_last_error();
   if (a == nullptr || b == nullptr || profile_id == nullptr || out_order == nullptr) {
@@ -65,8 +65,7 @@ extern "C" fm_status_t fm_compare_text(const char* a, const char* b, const char*
 }
 
 extern "C" fm_status_t fm_get_collation_classes(const fm_value_t* values, size_t count, const char* profile_id,
-                                                fm_collation_strength_t strength, uint32_t* out_class_ids,
-                                                uint32_t* out_class_count) {
+                                                int32_t strength, uint32_t* out_class_ids, uint32_t* out_class_count) {
   static constexpr const char* kApi = "fm_get_collation_classes";
   clear_last_error();
   if (profile_id == nullptr || out_class_count == nullptr ||

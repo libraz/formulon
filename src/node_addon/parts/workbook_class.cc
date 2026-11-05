@@ -273,7 +273,7 @@ Napi::Value Workbook::InvokeRowColEdit(const Napi::CallbackInfo& info, RowColEdi
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  const uint32_t sheet = ArgU32(info, 0);
+  const std::size_t sheet = ArgU32(info, 0);
   const uint32_t index = ArgU32(info, 1);
   const uint32_t count = ArgU32(info, 2);
   return MakeStatus(env, fn(handle_, sheet, index, count));

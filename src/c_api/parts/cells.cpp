@@ -41,7 +41,6 @@ using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
-using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::display_formula;
@@ -432,7 +431,7 @@ extern "C" fm_status_t fm_sheet_get_cell_phonetic(const fm_workbook_t* wb, size_
 }
 
 extern "C" fm_status_t fm_sheet_get_cell_phonetic_run_count(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
-                                                            uint32_t col, uint32_t* out_count) {
+                                                            uint32_t col, size_t* out_count) {
   clear_last_error();
   const formulon::Cell* cell = nullptr;
   if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, "fm_sheet_get_cell_phonetic_run_count", out_count,
@@ -440,12 +439,12 @@ extern "C" fm_status_t fm_sheet_get_cell_phonetic_run_count(const fm_workbook_t*
       rc != 0) {
     return rc;
   }
-  *out_count = cell == nullptr ? 0U : static_cast<uint32_t>(cell->phonetic_runs.size());
+  *out_count = cell == nullptr ? 0U : cell->phonetic_runs.size();
   return 0;
 }
 
 extern "C" fm_status_t fm_sheet_get_cell_phonetic_run(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
-                                                      uint32_t col, uint32_t run_index, fm_phonetic_run_t* out) {
+                                                      uint32_t col, size_t run_index, fm_phonetic_run_t* out) {
   clear_last_error();
   const formulon::Cell* cell = nullptr;
   if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, "fm_sheet_get_cell_phonetic_run", out, "out", &cell);
@@ -491,7 +490,7 @@ extern "C" fm_status_t fm_sheet_get_cell_phonetic_properties(const fm_workbook_t
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_get_lambda_text(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+extern "C" fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                                 const char** out_text) {
   clear_last_error();
   if (out_text == nullptr) {
@@ -655,17 +654,17 @@ extern "C" fm_status_t fm_sheet_get_cell_at(const fm_workbook_t* wb, size_t shee
 // Dynamic-array spill payload
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_sheet_get_spill_info(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
+extern "C" fm_status_t fm_sheet_get_spill_info(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
                                                std::uint32_t col, fm_spill_info_t* out) {
   clear_last_error();
   if (out == nullptr) {
     return null_argument("fm_sheet_get_spill_info");
   }
-  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_spill_info"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_spill_info"); rc != 0) {
     return rc;
   }
   *out = fm_spill_info_t{};
-  const auto& s = wb->workbook().sheet(sheet);
+  const auto& s = wb->workbook().sheet(sheet_index);
   // Try anchor lookup first; fall back to phantom-coverage map.
   const formulon::SpillRegion* region = s.spill_region_at_anchor(row, col);
   if (region == nullptr) {
@@ -697,20 +696,21 @@ extern "C" fm_status_t fm_sheet_get_spill_info(const fm_workbook_t* wb, std::uin
 // Legacy array (CSE) formulas
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_sheet_get_array_formula(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
+extern "C" fm_status_t fm_sheet_get_array_formula(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
                                                   std::uint32_t col, fm_array_formula_t* out) {
   clear_last_error();
   if (out == nullptr) {
     return null_argument("fm_sheet_get_array_formula");
   }
-  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_array_formula"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_array_formula"); rc != 0) {
     return rc;
   }
   if (auto rc = check_cell_coord(row, col, "fm_sheet_get_array_formula"); rc != 0) {
     return rc;
   }
   *out = fm_array_formula_t{};
-  const std::optional<formulon::Workbook::ArrayFormulaInfo> info = wb->workbook().array_formula_at(sheet, row, col);
+  const std::optional<formulon::Workbook::ArrayFormulaInfo> info =
+      wb->workbook().array_formula_at(sheet_index, row, col);
   if (!info.has_value()) {
     return 0;
   }
@@ -720,16 +720,16 @@ extern "C" fm_status_t fm_sheet_get_array_formula(const fm_workbook_t* wb, std::
   out->cols = info->cols;
   out->formula = publish_scratch(
       wb, display_formula_text(wb->workbook(), info->formula,
-                               table_display_name_at(wb->workbook(), sheet, info->anchor_row, info->anchor_col)));
+                               table_display_name_at(wb->workbook(), sheet_index, info->anchor_row, info->anchor_col)));
   out->engaged = 1;
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_set_array_formula(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
+extern "C" fm_status_t fm_sheet_set_array_formula(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
                                                   std::uint32_t col, std::uint32_t rows, std::uint32_t cols,
                                                   const char* formula) {
   clear_last_error();
-  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_set_array_formula"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_array_formula"); rc != 0) {
     return rc;
   }
   if (formula == nullptr) {
@@ -739,13 +739,13 @@ extern "C" fm_status_t fm_sheet_set_array_formula(fm_workbook_t* wb, std::uint32
     return rc;
   }
   std::string bound;
-  if (auto rc = check_entered_cell_formula("fm_sheet_set_array_formula", wb, sheet, row, col, formula,
+  if (auto rc = check_entered_cell_formula("fm_sheet_set_array_formula", wb, sheet_index, row, col, formula,
                                            "row=" + std::to_string(row) + " col=" + std::to_string(col), &bound);
       rc != 0) {
     return rc;
   }
-  return enter_cell(wb, sheet, row, col, [&](formulon::Workbook& book) {
-    return book.set_array_formula(sheet, row, col, rows, cols, std::move(bound));
+  return enter_cell(wb, sheet_index, row, col, [&](formulon::Workbook& book) {
+    return book.set_array_formula(sheet_index, row, col, rows, cols, std::move(bound));
   });
 }
 

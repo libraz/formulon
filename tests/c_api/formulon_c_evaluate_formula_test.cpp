@@ -312,7 +312,7 @@ TEST(EvaluateFormulaArray, MergeAtAnchorBlocksVerticalSpill) {
   fm_value_t anchor{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0U, 0U, 0U, &anchor), 0);
   EXPECT_EQ(anchor.kind, FM_VAL_BLANK);
-  uint32_t merge_count = 0;
+  std::size_t merge_count = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb.handle, 0U, &merge_count), 0);
   EXPECT_EQ(merge_count, 1U);
 }

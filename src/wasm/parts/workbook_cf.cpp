@@ -73,7 +73,14 @@ emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, uint32_t firstRow, u
     r.set("cells", cells);
     return r;
   }
-  const std::size_t cell_count = fm_cf_results_get_cell_count(results);
+  std::size_t cell_count = 0;
+  rc = fm_cf_results_get_cell_count(results, &cell_count);
+  if (rc != 0) {
+    fm_cf_results_destroy(results);
+    r.set("status", error_status(rc));
+    r.set("cells", cells);
+    return r;
+  }
   std::size_t emitted_cells = 0;
   for (std::size_t i = 0; i < cell_count; ++i) {
     uint32_t row = 0;

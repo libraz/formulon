@@ -35,7 +35,7 @@ struct BufferGuard {
 TEST(FormulonCApiCalcMode, FreshWorkbookDefaultsToAuto) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_calc_mode_t mode = FM_CALC_MODE_MANUAL;  // poison
+  int32_t mode = FM_CALC_MODE_MANUAL;  // poison
   ASSERT_EQ(fm_workbook_get_calc_mode(wb.handle, &mode), 0);
   EXPECT_EQ(mode, FM_CALC_MODE_AUTO);
 }
@@ -45,7 +45,7 @@ TEST(FormulonCApiCalcMode, SetThenGetReturnsRequestedMode) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   ASSERT_EQ(fm_workbook_set_calc_mode(wb.handle, FM_CALC_MODE_MANUAL), 0);
-  fm_calc_mode_t mode = FM_CALC_MODE_AUTO;
+  int32_t mode = FM_CALC_MODE_AUTO;
   ASSERT_EQ(fm_workbook_get_calc_mode(wb.handle, &mode), 0);
   EXPECT_EQ(mode, FM_CALC_MODE_MANUAL);
 
@@ -134,7 +134,7 @@ TEST(FormulonCApiCalcMode, UnknownModeRejected) {
     EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument)) << raw;
   }
   // Workbook state should be unchanged after a rejected set.
-  fm_calc_mode_t mode = FM_CALC_MODE_MANUAL;
+  int32_t mode = FM_CALC_MODE_MANUAL;
   ASSERT_EQ(fm_workbook_get_calc_mode(wb.handle, &mode), 0);
   EXPECT_EQ(mode, FM_CALC_MODE_AUTO);
 }
@@ -194,7 +194,7 @@ TEST(FormulonCApiCalcMode, UnknownExcelProfileIdRejected) {
 }
 
 TEST(FormulonCApiCalcMode, NullArgsReturnBindingNullPointer) {
-  fm_calc_mode_t mode = FM_CALC_MODE_AUTO;
+  int32_t mode = FM_CALC_MODE_AUTO;
   EXPECT_EQ(fm_workbook_get_calc_mode(nullptr, &mode),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 
@@ -230,7 +230,7 @@ TEST(FormulonCApiCalcMode, ManualModeRoundTripsThroughOoxml) {
 
   WorkbookGuard wb2;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
-  fm_calc_mode_t mode = FM_CALC_MODE_AUTO;
+  int32_t mode = FM_CALC_MODE_AUTO;
   ASSERT_EQ(fm_workbook_get_calc_mode(wb2.handle, &mode), 0);
   EXPECT_EQ(mode, FM_CALC_MODE_MANUAL);
 }
@@ -245,7 +245,7 @@ TEST(FormulonCApiCalcMode, AutoNoTableModeRoundTripsThroughOoxml) {
 
   WorkbookGuard wb2;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
-  fm_calc_mode_t mode = FM_CALC_MODE_AUTO;
+  int32_t mode = FM_CALC_MODE_AUTO;
   ASSERT_EQ(fm_workbook_get_calc_mode(wb2.handle, &mode), 0);
   EXPECT_EQ(mode, FM_CALC_MODE_AUTO_NO_TABLE);
 }
@@ -269,7 +269,7 @@ TEST(FormulonCApiCalcMode, IterativeOptionsRoundTripThroughCalcPr) {
 
   WorkbookGuard wb2;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
-  fm_calc_mode_t mode = FM_CALC_MODE_AUTO;
+  int32_t mode = FM_CALC_MODE_AUTO;
   ASSERT_EQ(fm_workbook_get_calc_mode(wb2.handle, &mode), 0);
   EXPECT_EQ(mode, FM_CALC_MODE_MANUAL);
   // Iterative attributes are observed indirectly: a cyclic A1=B1+1,
@@ -297,7 +297,7 @@ TEST(FormulonCApiCalcMode, AutoModeOmitsCalcPrFromOoxml) {
 
   WorkbookGuard wb2;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
-  fm_calc_mode_t mode = FM_CALC_MODE_MANUAL;  // poison
+  int32_t mode = FM_CALC_MODE_MANUAL;  // poison
   ASSERT_EQ(fm_workbook_get_calc_mode(wb2.handle, &mode), 0);
   EXPECT_EQ(mode, FM_CALC_MODE_AUTO);
 }

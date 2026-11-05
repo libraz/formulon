@@ -37,9 +37,9 @@ std::string SheetName(const WorkbookGuard& wb, std::size_t index) {
 }
 
 std::uint32_t CommentCount(const WorkbookGuard& wb) {
-  std::uint32_t count = 99U;
+  std::size_t count = 99U;
   EXPECT_EQ(fm_sheet_get_comment_count(wb.handle, 0, &count), 0) << fm_get_last_error_message();
-  return count;
+  return static_cast<std::uint32_t>(count);
 }
 
 }  // namespace
@@ -60,10 +60,10 @@ TEST(FormulonCApiUtf8Input, MalformedTextIsRefusedWithTheWorkbookUnchanged) {
     EXPECT_STREQ(fm_get_last_error_message(), "fm_workbook_set_defined_name: text is not valid UTF-8");
   }
   EXPECT_EQ(CellCount(wb), 0U);
-  EXPECT_EQ(fm_workbook_get_sheet_count(wb.handle), 1U);
+  EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 1U);
   EXPECT_EQ(SheetName(wb, 0), sheet_name);
   EXPECT_EQ(CommentCount(wb), 0U);
-  EXPECT_EQ(fm_workbook_get_defined_name_count(wb.handle), 0U);
+  EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 0U);
 }
 
 TEST(FormulonCApiUtf8Input, MalformedTextIsRefusedByReadOnlyEntryPoints) {

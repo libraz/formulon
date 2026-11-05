@@ -39,7 +39,7 @@ fm_cell_style_record_t StyleRecord(const char* name, uint32_t xf_id, uint32_t bu
 
 /// Returns the index of the named style, or `UINT32_MAX` when absent.
 uint32_t FindStyle(fm_workbook_t* wb, const char* name, fm_cell_style_record_t* out) {
-  uint32_t count = 0;
+  std::size_t count = 0;
   EXPECT_EQ(fm_workbook_get_cell_style_count(wb, &count), 0);
   for (uint32_t i = 0; i < count; ++i) {
     EXPECT_EQ(fm_workbook_get_cell_style_at(wb, i, out), 0);
@@ -51,7 +51,7 @@ uint32_t FindStyle(fm_workbook_t* wb, const char* name, fm_cell_style_record_t* 
 }
 
 /// Adds a named-style xf distinct from Normal's (a bold font and a date format).
-uint32_t AddBoldDateStyleXf(fm_workbook_t* wb, uint32_t* out_font) {
+uint32_t AddBoldDateStyleXf(fm_workbook_t* wb, std::size_t* out_font) {
   fm_font_record_t font{};
   font.name = "Calibri";
   font.size = 11.0;
@@ -59,7 +59,7 @@ uint32_t AddBoldDateStyleXf(fm_workbook_t* wb, uint32_t* out_font) {
   font.has_bold = 1;
   EXPECT_EQ(fm_workbook_add_font(wb, font, out_font), 0);
   fm_cell_xf_t xf{};
-  xf.font_index = *out_font;
+  xf.font_index = static_cast<uint32_t>(*out_font);
   xf.num_fmt_id = 14;
   uint32_t xf_id = 0;
   EXPECT_EQ(fm_workbook_add_cell_style_xf(wb, xf, &xf_id), 0);
@@ -75,8 +75,8 @@ TEST(FormulonCApiNamedStyles, FreshWorkbookHasSeededNormalStyle) {
   // reference it without a save/load cycle.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  uint32_t cs_count = 99;
-  uint32_t cs_xf_count = 99;
+  std::size_t cs_count = 99;
+  std::size_t cs_xf_count = 99;
   EXPECT_EQ(fm_workbook_get_cell_style_count(wb.handle, &cs_count), 0);
   EXPECT_EQ(fm_workbook_get_cell_style_xf_count(wb.handle, &cs_xf_count), 0);
   EXPECT_EQ(cs_count, 1U);
@@ -104,7 +104,7 @@ TEST(FormulonCApiNamedStyles, IndexOutOfRangeReturnsInvalidArgument) {
 TEST(FormulonCApiNamedStyles, NullArgsReturnBindingNullPointer) {
   fm_cell_style_record_t cs{};
   fm_cell_xf_t xf{};
-  uint32_t count = 0;
+  std::size_t count = 0;
   EXPECT_EQ(fm_workbook_get_cell_style_count(nullptr, &count),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   EXPECT_EQ(fm_workbook_get_cell_style_xf_count(nullptr, &count),
@@ -132,8 +132,8 @@ TEST(FormulonCApiNamedStyles, RoundTripPreservesSeededNamedStyles) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  uint32_t live_cs_count = 99;
-  uint32_t live_cs_xf_count = 99;
+  std::size_t live_cs_count = 99;
+  std::size_t live_cs_xf_count = 99;
   ASSERT_EQ(fm_workbook_get_cell_style_count(wb.handle, &live_cs_count), 0);
   ASSERT_EQ(fm_workbook_get_cell_style_xf_count(wb.handle, &live_cs_xf_count), 0);
   EXPECT_EQ(live_cs_count, 1U);
@@ -147,8 +147,8 @@ TEST(FormulonCApiNamedStyles, RoundTripPreservesSeededNamedStyles) {
   ASSERT_EQ(fm_workbook_load(saved_data, saved_len, &wb2.handle), 0);
   fm_buffer_destroy(saved_data);
 
-  uint32_t cs_count = 99;
-  uint32_t cs_xf_count = 99;
+  std::size_t cs_count = 99;
+  std::size_t cs_xf_count = 99;
   EXPECT_EQ(fm_workbook_get_cell_style_count(wb2.handle, &cs_count), 0);
   EXPECT_EQ(fm_workbook_get_cell_style_xf_count(wb2.handle, &cs_xf_count), 0);
   EXPECT_EQ(cs_count, 1U);
@@ -178,7 +178,7 @@ TEST(FormulonCApiNamedStyles, RoundTripPreservesSeededNamedStyles) {
 TEST(FormulonCApiNamedStyles, BuiltinId53RoundTrips) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  uint32_t font = 0;
+  std::size_t font = 0;
   const uint32_t xf_id = AddBoldDateStyleXf(wb.handle, &font);
   const fm_cell_style_record_t record = StyleRecord("Explanatory Text", xf_id, 53U);
   ASSERT_EQ(fm_workbook_set_cell_style(wb.handle, &record), 0);
@@ -198,7 +198,7 @@ TEST(FormulonCApiNamedStyles, BuiltinId53RoundTrips) {
 TEST(FormulonCApiNamedStyles, SetCellStyleCarriesEveryFieldAndReplacesByName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  uint32_t font = 0;
+  std::size_t font = 0;
   const uint32_t xf_id = AddBoldDateStyleXf(wb.handle, &font);
   fm_cell_style_record_t record = StyleRecord("RowLevel_4", xf_id, 1U);
   record.i_level = 3;
@@ -221,11 +221,11 @@ TEST(FormulonCApiNamedStyles, SetCellStyleCarriesEveryFieldAndReplacesByName) {
   EXPECT_EQ(reread.custom_builtin, 1);
 
   // Setting the same name again overwrites every field instead of appending.
-  uint32_t before = 0;
+  std::size_t before = 0;
   ASSERT_EQ(fm_workbook_get_cell_style_count(wb.handle, &before), 0);
   const fm_cell_style_record_t replacement = StyleRecord("RowLevel_4", 0U, FM_CELL_STYLE_BUILTIN_ID_NONE);
   ASSERT_EQ(fm_workbook_set_cell_style(wb.handle, &replacement), 0);
-  uint32_t after = 0;
+  std::size_t after = 0;
   ASSERT_EQ(fm_workbook_get_cell_style_count(wb.handle, &after), 0);
   EXPECT_EQ(after, before);
   ASSERT_NE(FindStyle(wb.handle, "RowLevel_4", &reread), UINT32_MAX);
@@ -268,7 +268,7 @@ TEST(FormulonCApiNamedStyles, SetCellStyleRejectsInvalidRecords) {
 TEST(FormulonCApiNamedStyles, RemoveCellStyleRepointsXfs) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  uint32_t bold = 0;
+  std::size_t bold = 0;
   const uint32_t xf_id = AddBoldDateStyleXf(wb.handle, &bold);
   const fm_cell_style_record_t record = StyleRecord("Dated", xf_id, FM_CELL_STYLE_BUILTIN_ID_NONE);
   ASSERT_EQ(fm_workbook_set_cell_style(wb.handle, &record), 0);
@@ -276,15 +276,15 @@ TEST(FormulonCApiNamedStyles, RemoveCellStyleRepointsXfs) {
   // The font is the cell's own (apply_font); the number format is inherited.
   fm_cell_xf_t cell_xf{};
   cell_xf.xf_id = xf_id;
-  cell_xf.font_index = bold;
+  cell_xf.font_index = static_cast<uint32_t>(bold);
   cell_xf.num_fmt_id = 14;
   cell_xf.apply_font = 1;
-  uint32_t cell_xf_index = 0;
+  std::size_t cell_xf_index = 0;
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, cell_xf, &cell_xf_index), 0);
 
-  uint32_t xf_count = 0;
-  uint32_t style_xf_count = 0;
-  uint32_t style_count = 0;
+  std::size_t xf_count = 0;
+  std::size_t style_xf_count = 0;
+  std::size_t style_count = 0;
   ASSERT_EQ(fm_workbook_get_cell_xf_count(wb.handle, &xf_count), 0);
   ASSERT_EQ(fm_workbook_get_cell_style_xf_count(wb.handle, &style_xf_count), 0);
   ASSERT_EQ(fm_workbook_get_cell_style_count(wb.handle, &style_count), 0);
@@ -300,7 +300,7 @@ TEST(FormulonCApiNamedStyles, RemoveCellStyleRepointsXfs) {
   EXPECT_EQ(reread.apply_number_format, 0);
 
   // Neither xf table is compacted; only the cellStyle record is gone.
-  uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_workbook_get_cell_xf_count(wb.handle, &count), 0);
   EXPECT_EQ(count, xf_count);
   ASSERT_EQ(fm_workbook_get_cell_style_xf_count(wb.handle, &count), 0);
@@ -314,7 +314,7 @@ TEST(FormulonCApiNamedStyles, RemoveCellStyleRepointsXfs) {
 TEST(FormulonCApiNamedStyles, RemoveCellStyleKeepsXfsOfASharedStyleXf) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  uint32_t bold = 0;
+  std::size_t bold = 0;
   const uint32_t xf_id = AddBoldDateStyleXf(wb.handle, &bold);
   const fm_cell_style_record_t first = StyleRecord("First", xf_id, FM_CELL_STYLE_BUILTIN_ID_NONE);
   const fm_cell_style_record_t second = StyleRecord("Second", xf_id, FM_CELL_STYLE_BUILTIN_ID_NONE);
@@ -322,9 +322,9 @@ TEST(FormulonCApiNamedStyles, RemoveCellStyleKeepsXfsOfASharedStyleXf) {
   ASSERT_EQ(fm_workbook_set_cell_style(wb.handle, &second), 0);
   fm_cell_xf_t cell_xf{};
   cell_xf.xf_id = xf_id;
-  cell_xf.font_index = bold;
+  cell_xf.font_index = static_cast<uint32_t>(bold);
   cell_xf.num_fmt_id = 14;
-  uint32_t cell_xf_index = 0;
+  std::size_t cell_xf_index = 0;
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, cell_xf, &cell_xf_index), 0);
 
   ASSERT_EQ(fm_workbook_remove_cell_style(wb.handle, "First"), 0);
@@ -341,7 +341,7 @@ TEST(FormulonCApiNamedStyles, RemoveCellStyleRejectsNormalAndUnknownNames) {
   EXPECT_EQ(fm_workbook_remove_cell_style(wb.handle, "Missing"), kInvalidArgument);
   EXPECT_EQ(fm_workbook_remove_cell_style(nullptr, "Normal"), kNullPointer);
   EXPECT_EQ(fm_workbook_remove_cell_style(wb.handle, nullptr), kNullPointer);
-  uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_workbook_get_cell_style_count(wb.handle, &count), 0);
   EXPECT_EQ(count, 1U);
 }

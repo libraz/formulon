@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -211,7 +212,7 @@ extern "C" fm_status_t fm_sheet_add_pivot_field(fm_workbook_t* wb, std::size_t s
   formulon::pivot::PivotField& field = fields[index];
   field.source_name = spec->source_name;
   field.custom_name = spec->custom_name != nullptr ? spec->custom_name : "";
-  field.axis = pivot_axis_from_fm(spec->axis);
+  field.axis = pivot_axis_from_fm(static_cast<fm_pivot_axis_t>(spec->axis));
   field.subtotal_top = spec->subtotal_top != 0;
   field.number_format = spec->number_format != nullptr ? spec->number_format : "";
   sync_field_order(*table, static_cast<std::uint32_t>(index));
@@ -572,19 +573,25 @@ extern "C" fm_status_t fm_sheet_add_pivot_field_item(fm_workbook_t* wb, std::siz
 
 extern "C" fm_status_t fm_sheet_add_pivot_field_shared_item(fm_workbook_t* wb, std::size_t sheet_index,
                                                             std::size_t pivot_index, std::size_t field_idx,
-                                                            std::uint32_t cache_index, std::int32_t visible) {
+                                                            std::size_t cache_index, std::int32_t visible) {
   clear_last_error();
-  return mutate_pivot_field(wb, sheet_index, pivot_index, field_idx, "fm_sheet_add_pivot_field_shared_item",
-                            [cache_index, visible](formulon::pivot::PivotField& field) {
-                              // The label is left empty: evaluation derives it from the bound shared item
-                              // (`pivot_item_label`). A binding that resolves to a blank value has no
-                              // label, which is what makes this the constructor for the blank item.
-                              formulon::pivot::PivotItem item;
-                              item.visible = visible != 0;
-                              item.has_cache_index = true;
-                              item.cache_index = cache_index;
-                              field.items.push_back(std::move(item));
-                            });
+  // A shared item is stored as a 32-bit cache index; a wider one names no item.
+  if (cache_index > std::numeric_limits<std::uint32_t>::max()) {
+    return check_index(cache_index, std::numeric_limits<std::uint32_t>::max(), "fm_sheet_add_pivot_field_shared_item",
+                       "cache_index");
+  }
+  return mutate_pivot_field(
+      wb, sheet_index, pivot_index, field_idx, "fm_sheet_add_pivot_field_shared_item",
+      [cache_index = static_cast<std::uint32_t>(cache_index), visible](formulon::pivot::PivotField& field) {
+        // The label is left empty: evaluation derives it from the bound shared item
+        // (`pivot_item_label`). A binding that resolves to a blank value has no
+        // label, which is what makes this the constructor for the blank item.
+        formulon::pivot::PivotItem item;
+        item.visible = visible != 0;
+        item.has_cache_index = true;
+        item.cache_index = cache_index;
+        field.items.push_back(std::move(item));
+      });
 }
 
 extern "C" fm_status_t fm_sheet_clear_pivot_field_items(fm_workbook_t* wb, std::size_t sheet_index,

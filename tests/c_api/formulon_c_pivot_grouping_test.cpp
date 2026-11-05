@@ -215,7 +215,7 @@ fm_status_t BuildBlankItemPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, 
 // Sum of every `FM_PIVOT_CELL_DATA` cell in the projected layout.
 double SumDataCells(fm_pivot_cells_t* handle) {
   double total = 0.0;
-  const std::size_t n = fm_pivot_cells_get_cell_count(handle);
+  const std::size_t n = count_of(fm_pivot_cells_get_cell_count, handle);
   for (std::size_t i = 0; i < n; ++i) {
     fm_pivot_cell_t cell{};
     EXPECT_EQ(fm_pivot_cells_get_cell_at(handle, i, &cell), 0);

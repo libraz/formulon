@@ -143,7 +143,7 @@ void LoadFixture(const std::string& name, WorkbookGuard* out) {
 
 // One report cell, copied out of the layout handle.
 struct Shown {
-  fm_value_kind_t kind = FM_VAL_BLANK;
+  int32_t kind = FM_VAL_BLANK;
   double number = 0.0;
   std::int32_t error = 0;
   std::string text;

@@ -145,9 +145,9 @@ emscripten::val JsWorkbook::getCellPhoneticRuns(uint32_t sheet, uint32_t row, ui
     o.set("runs", out);
     return o;
   }
-  uint32_t count = 0;
+  std::size_t count = 0;
   fm_status_t rc = fm_sheet_get_cell_phonetic_run_count(handle_, sheet, row, col, &count);
-  for (uint32_t i = 0; rc == 0 && i < count; ++i) {
+  for (std::size_t i = 0; rc == 0 && i < count; ++i) {
     fm_phonetic_run_t run{};
     rc = fm_sheet_get_cell_phonetic_run(handle_, sheet, row, col, i, &run);
     if (rc != 0) {
@@ -644,7 +644,12 @@ emscripten::val JsWorkbook::pivotLayout(uint32_t sheet, uint32_t pivotIndex) con
   }
 
   emscripten::val arr = emscripten::val::array();
-  const std::size_t count = fm_pivot_cells_get_cell_count(cells);
+  std::size_t count = 0;
+  rc = fm_pivot_cells_get_cell_count(cells, &count);
+  if (rc != 0) {
+    fm_pivot_cells_destroy(cells);
+    return empty_pivot_layout_result(error_status(rc));
+  }
   std::size_t emitted = 0;
   for (std::size_t i = 0; i < count; ++i) {
     fm_pivot_cell_t cell{};
@@ -672,14 +677,14 @@ emscripten::val JsWorkbook::getExternalLinks() const {
     arr.set("status", invalid_handle_status());
     return arr;
   }
-  uint32_t count = 0;
+  std::size_t count = 0;
   fm_status_t rc = fm_workbook_get_external_link_count(handle_, &count);
   if (rc != 0) {
     arr.set("status", status_from_rc(rc));
     return arr;
   }
   uint32_t emitted = 0;
-  for (uint32_t i = 0; i < count; ++i) {
+  for (std::size_t i = 0; i < count; ++i) {
     fm_external_link_record_t rec{};
     rc = fm_workbook_get_external_link(handle_, i, &rec);
     if (rc != 0) {

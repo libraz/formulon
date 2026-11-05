@@ -60,8 +60,7 @@ DEFAULT_C_HEADER = REPO_ROOT / "src" / "c_api" / "formulon_c.h"
 # ---------------------------------------------------------------------------
 
 VALID_BODY_KINDS = {
-    "direct_size_t",
-    "status_uint32_out",
+    "status_sizet_out",
     "status_sizet_out_with_sheet",
 }
 
@@ -162,24 +161,15 @@ def _select_body_template(body: str, templates: Dict[str, str]) -> str:
 #
 # Two patterns:
 #
-#   direct_size_t:
-#       extern "C" size_t NAME(const fm_workbook_t* wb) {
-#         clear_last_error();
-#         if (wb == nullptr) {
-#           return 0;
-#         }
-#         return ACCESSOR;
-#       }
-#
-#   status_uint32_out:
-#       extern "C" fm_status_t NAME(fm_workbook_t* wb, uint32_t* out_count) {
+#   status_sizet_out:
+#       extern "C" fm_status_t NAME(const fm_workbook_t* wb, size_t* out_count) {
 #         clear_last_error();
 #         if (wb == nullptr || out_count == nullptr) {
 #           return set_binding_error(
 #               formulon::FormulonErrorCode::kBindingNullPointer,
 #               "NAME: NULL argument");
 #         }
-#         *out_count = static_cast<uint32_t>(ACCESSOR);
+#         *out_count = ACCESSOR;
 #         return 0;
 #       }
 #
@@ -200,24 +190,14 @@ def _select_body_template(body: str, templates: Dict[str, str]) -> str:
 #       }
 
 
-_CAPI_BODY_DIRECT_SIZE_T = """\
-extern "C" size_t {name}(const fm_workbook_t* wb) {{
-  clear_last_error();
-  if (wb == nullptr) {{
-    return 0;
-  }}
-  return {accessor};
-}}
-"""
-
-_CAPI_BODY_STATUS_U32_OUT = """\
-extern "C" fm_status_t {name}(fm_workbook_t* wb, uint32_t* out_count) {{
+_CAPI_BODY_STATUS_SIZE_OUT = """\
+extern "C" fm_status_t {name}(const fm_workbook_t* wb, size_t* out_count) {{
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {{
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "{name}: NULL argument");
   }}
-  *out_count = static_cast<uint32_t>({accessor});
+  *out_count = {accessor};
   return 0;
 }}
 """
@@ -240,8 +220,7 @@ extern "C" fm_status_t {name}(const fm_workbook_t* wb, size_t sheet_index, size_
 """
 
 _CAPI_BODY_TEMPLATES = {
-    "direct_size_t": _CAPI_BODY_DIRECT_SIZE_T,
-    "status_uint32_out": _CAPI_BODY_STATUS_U32_OUT,
+    "status_sizet_out": _CAPI_BODY_STATUS_SIZE_OUT,
     "status_sizet_out_with_sheet": _CAPI_BODY_STATUS_SIZE_WITH_SHEET,
 }
 
@@ -294,23 +273,14 @@ def _emit_capi_entry(e: dict) -> str:
 # NumberResult, so a destroyed handle or a rejected argument is visible
 # to the caller instead of reading as a zero count.
 
-_EMBIND_BODY_DIRECT_SIZE_T = """\
+_EMBIND_BODY_STATUS_SIZE_OUT = """\
 JsNumberResult JsWorkbook::{embind_cpp}() const {{
   if (handle_ == nullptr) {{
     return number_result(kBindingInvalidHandle, 0.0);
   }}
-  return number_result(0, static_cast<double>({capi}(handle_)));
-}}
-"""
-
-_EMBIND_BODY_STATUS_U32_OUT = """\
-JsNumberResult JsWorkbook::{embind_cpp}() const {{
-  if (handle_ == nullptr) {{
-    return number_result(kBindingInvalidHandle, 0.0);
-  }}
-  uint32_t n = 0;
-  const fm_status_t rc = {capi}(handle_, &n);
-  return number_result(rc, static_cast<double>(n));
+  std::size_t count = 0;
+  const fm_status_t rc = {capi}(handle_, &count);
+  return number_result(rc, static_cast<double>(count));
 }}
 """
 
@@ -326,8 +296,7 @@ JsNumberResult JsWorkbook::{embind_cpp}(uint32_t sheet) const {{
 """
 
 _EMBIND_BODY_TEMPLATES = {
-    "direct_size_t": _EMBIND_BODY_DIRECT_SIZE_T,
-    "status_uint32_out": _EMBIND_BODY_STATUS_U32_OUT,
+    "status_sizet_out": _EMBIND_BODY_STATUS_SIZE_OUT,
     "status_sizet_out_with_sheet": _EMBIND_BODY_STATUS_SIZE_WITH_SHEET,
 }
 
@@ -378,25 +347,15 @@ def _emit_embind_entry(e: dict) -> str:
 # `{ status, value }` NumberResult, with a destroyed handle reported as
 # `kBindingInvalidHandle`.
 
-_NODE_BODY_DIRECT_SIZE_T = """\
+_NODE_BODY_STATUS_SIZE_OUT = """\
 Napi::Value Workbook::{node_cpp}(const Napi::CallbackInfo& info) {{
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {{
     return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }}
-  return MakeNumberResult(env, 0, static_cast<double>({capi}(handle_)));
-}}
-"""
-
-_NODE_BODY_STATUS_U32_OUT = """\
-Napi::Value Workbook::{node_cpp}(const Napi::CallbackInfo& info) {{
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {{
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
-  }}
-  uint32_t n = 0;
-  const fm_status_t rc = {capi}(handle_, &n);
-  return MakeNumberResult(env, rc, n);
+  std::size_t count = 0;
+  const fm_status_t rc = {capi}(handle_, &count);
+  return MakeNumberResult(env, rc, static_cast<double>(count));
 }}
 """
 
@@ -414,8 +373,7 @@ Napi::Value Workbook::{node_cpp}(const Napi::CallbackInfo& info) {{
 """
 
 _NODE_BODY_TEMPLATES = {
-    "direct_size_t": _NODE_BODY_DIRECT_SIZE_T,
-    "status_uint32_out": _NODE_BODY_STATUS_U32_OUT,
+    "status_sizet_out": _NODE_BODY_STATUS_SIZE_OUT,
     "status_sizet_out_with_sheet": _NODE_BODY_STATUS_SIZE_WITH_SHEET,
 }
 

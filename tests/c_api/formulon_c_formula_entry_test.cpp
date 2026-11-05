@@ -10,6 +10,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "formulon_c_count_of.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 #include "workbook.h"
@@ -153,7 +154,7 @@ TEST(FormulonCApiFormulaEntry, BracketNameWithoutBangIsAcceptedAsAName) {
       EXPECT_EQ(value.u.boolean, 0);
     }
   }
-  std::uint32_t links = 1;
+  std::size_t links = 1;
   ASSERT_EQ(fm_workbook_get_external_link_count(wb.handle, &links), 0);
   EXPECT_EQ(links, 0U);
 }
@@ -163,7 +164,7 @@ TEST(FormulonCApiFormulaEntry, DefinedNameRejectsUnparseableTextAndKeepsState) {
   MakeWorkbook(&wb);
   ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "Rate", "Sheet1!$A$1"), 0);
   ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Local", "Sheet1!$B$1", 0), 0);
-  ASSERT_EQ(fm_workbook_get_defined_name_count(wb.handle), 2U);
+  ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 2U);
   for (const std::string& formula : RejectedFormulas()) {
     SCOPED_TRACE(formula);
     EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, "Rate", formula.c_str()), kParserUnexpectedToken);
@@ -176,7 +177,7 @@ TEST(FormulonCApiFormulaEntry, DefinedNameRejectsUnparseableTextAndKeepsState) {
         std::string::npos);
     EXPECT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Fresh", formula.c_str(), -1), kParserUnexpectedToken);
   }
-  ASSERT_EQ(fm_workbook_get_defined_name_count(wb.handle), 2U);
+  ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 2U);
   const char* name = nullptr;
   const char* formula = nullptr;
   int32_t scope = 0;
@@ -193,11 +194,11 @@ TEST(FormulonCApiFormulaEntry, DefinedNameAcceptsParseableAndEmptyText) {
   EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, "Missing", "Gone!$A$1"), 0);
   EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, "Const", "1.5"), 0);
   EXPECT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Local", "'S2'!$A$1", 1), 0);
-  ASSERT_EQ(fm_workbook_get_defined_name_count(wb.handle), 4U);
+  ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 4U);
   // An empty formula removes the entry rather than being parsed.
   EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, "Const", ""), 0);
   EXPECT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Local", "", 1), 0);
-  EXPECT_EQ(fm_workbook_get_defined_name_count(wb.handle), 2U);
+  EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 2U);
 }
 
 fm_cf_rule_t MakeCfRule(const fm_cf_cell_range_t* sqref, const char* formula1, const char* formula2) {
@@ -272,7 +273,7 @@ TEST(FormulonCApiFormulaEntry, AddValidationRejectsUnparseableFormulasAndKeepsSt
               kParserUnexpectedToken);
     EXPECT_NE(std::string(fm_get_last_error_context()).find("formula2"), std::string::npos);
   }
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_validation_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 1U);
 }
@@ -289,7 +290,7 @@ TEST(FormulonCApiFormulaEntry, AddValidationAcceptsEveryListAndScalarShape) {
   EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, MakeValidation(&range, 1, "-3.5", "TODAY()")), 0);
   EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, MakeValidation(&range, 7, "ISNUMBER(A1)", "")), 0);
   EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, MakeValidation(&range, 0, nullptr, nullptr)), 0);
-  std::uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_validation_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 7U);
 }

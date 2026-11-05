@@ -24,9 +24,9 @@ struct WorkbookGuard {
 };
 
 uint32_t LinkCount(fm_workbook_t* wb) {
-  uint32_t count = 99;
+  std::size_t count = 99;
   EXPECT_EQ(fm_workbook_get_external_link_count(wb, &count), 0);
-  return count;
+  return static_cast<uint32_t>(count);
 }
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
@@ -59,7 +59,7 @@ void CreateWithName(WorkbookGuard* wb) {
 TEST(FormulonCApiExternalLinks, FreshWorkbookHasZeroLinks) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  uint32_t count = 99;
+  std::size_t count = 99;
   EXPECT_EQ(fm_workbook_get_external_link_count(wb.handle, &count), 0);
   EXPECT_EQ(count, 0U);
 }
@@ -74,7 +74,7 @@ TEST(FormulonCApiExternalLinks, IndexOutOfRangeReturnsInvalidArgument) {
 
 TEST(FormulonCApiExternalLinks, NullArgsReturnBindingNullPointer) {
   fm_external_link_record_t rec{};
-  uint32_t count = 0;
+  std::size_t count = 0;
   EXPECT_EQ(fm_workbook_get_external_link_count(nullptr, &count),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   EXPECT_EQ(fm_workbook_get_external_link(nullptr, 0, &rec),
@@ -102,7 +102,7 @@ TEST(FormulonCApiExternalLinks, RoundTripPreservesZeroCount) {
   ASSERT_EQ(fm_workbook_load(saved_data, saved_len, &wb2.handle), 0);
   fm_buffer_destroy(saved_data);
 
-  uint32_t count = 99;
+  std::size_t count = 99;
   EXPECT_EQ(fm_workbook_get_external_link_count(wb2.handle, &count), 0);
   EXPECT_EQ(count, 0U);
 }

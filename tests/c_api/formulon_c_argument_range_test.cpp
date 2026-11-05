@@ -19,9 +19,9 @@ fm_sheet_view_t View(const WorkbookGuard& wb, std::size_t sheet) {
 }
 
 std::uint32_t ActiveSheet(const WorkbookGuard& wb) {
-  std::uint32_t index = 99U;
+  std::size_t index = 99U;
   EXPECT_EQ(fm_workbook_get_active_sheet(wb.handle, &index), 0) << fm_get_last_error_message();
-  return index;
+  return static_cast<std::uint32_t>(index);
 }
 
 std::size_t CellCount(const WorkbookGuard& wb) {
@@ -102,7 +102,7 @@ TEST(FormulonCApiArgumentRange, CellXfIndexPastTheTableIsRejectedBeforeAnyWrite)
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(3U);
-  std::uint32_t count = 0U;
+  std::size_t count = 0U;
   ASSERT_EQ(fm_workbook_get_cell_xf_count(wb.handle, &count), 0);
   ASSERT_EQ(count, 3U);
 
@@ -116,7 +116,7 @@ TEST(FormulonCApiArgumentRange, CellXfIndexPastTheTableIsRejectedBeforeAnyWrite)
   SaveAndReload(wb, FM_WORKBOOK_FORMAT_XLSX, &reloaded);
   const std::pair<std::uint32_t, std::uint32_t> kStyled[] = {{1U, 1U}, {3U, 0U}, {4U, 0U}};
   for (const auto& [row, col] : kStyled) {
-    std::uint32_t xf = 0U;
+    std::size_t xf = 0U;
     ASSERT_EQ(fm_sheet_get_cell_xf_index(reloaded.handle, 0, row, col, &xf), 0);
     EXPECT_EQ(xf, count - 1U) << row << "," << col;
   }
@@ -188,13 +188,13 @@ TEST(FormulonCApiArgumentRange, TheOnlyVisibleSheetCannotBeRemoved) {
   ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_HIDDEN), 0);
 
   EXPECT_EQ(fm_workbook_remove_sheet(wb.handle, 0), kInvalidArgument);
-  EXPECT_EQ(fm_workbook_get_sheet_count(wb.handle), 2U);
+  EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 2U);
   EXPECT_EQ(View(wb, 0).visibility, FM_SHEET_VISIBLE);
   EXPECT_EQ(ActiveSheet(wb), 0U);
 
   // A hidden sheet can still go, which leaves the visible one in place.
   EXPECT_EQ(fm_workbook_remove_sheet(wb.handle, 1), 0) << fm_get_last_error_message();
-  EXPECT_EQ(fm_workbook_get_sheet_count(wb.handle), 1U);
+  EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 1U);
 }
 
 TEST(FormulonCApiArgumentRange, CountHelpersClearThePreviousError) {
@@ -203,11 +203,14 @@ TEST(FormulonCApiArgumentRange, CountHelpersClearThePreviousError) {
   ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 99U, 1U, 1U), kInvalidArgument);
   ASSERT_STRNE(fm_get_last_error_message(), "");
 
-  EXPECT_EQ(fm_workbook_get_sheet_count(nullptr), 0U);
+  EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 1U);
   EXPECT_STREQ(fm_get_last_error_message(), "");
   EXPECT_STREQ(fm_get_last_error_context(), "");
 
+  fm_pagination_t* pagination = nullptr;
+  ASSERT_EQ(fm_sheet_get_pagination(wb.handle, 0, &pagination), 0);
   ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 99U, 1U, 1U), kInvalidArgument);
-  EXPECT_EQ(fm_pagination_get_page_count(nullptr), 0U);
+  EXPECT_EQ(count_of(fm_pagination_get_page_count, pagination), 0U);
   EXPECT_STREQ(fm_get_last_error_message(), "");
+  fm_pagination_destroy(pagination);
 }

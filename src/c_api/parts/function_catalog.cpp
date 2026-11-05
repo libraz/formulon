@@ -136,8 +136,13 @@ extern "C" fm_status_t fm_get_function_metadata(const char* name, fm_function_me
   return 0;
 }
 
-extern "C" std::size_t fm_get_function_count(void) {
-  return sorted_function_names().size();
+extern "C" fm_status_t fm_get_function_count(std::size_t* out_count) {
+  clear_last_error();
+  if (out_count == nullptr) {
+    return null_argument("fm_get_function_count", "out_count");
+  }
+  *out_count = sorted_function_names().size();
+  return 0;
 }
 
 extern "C" fm_status_t fm_get_function_name_at(std::size_t idx, const char** out_name) {

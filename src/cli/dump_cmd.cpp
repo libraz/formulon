@@ -58,7 +58,10 @@ void print_dump_usage(std::ostream& out) {
 // non-blank cell (`Sheet!A1 <rendered>`) on every sheet.
 fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, std::ostream& out) {
   const bool formulas = mode == DumpMode::kFormulas;
-  const std::size_t n_sheets = fm_workbook_get_sheet_count(wb);
+  std::size_t n_sheets = 0;
+  if (auto rc = fm_workbook_get_sheet_count(wb, &n_sheets); rc != 0) {
+    return rc;
+  }
   for (std::size_t s = 0; s < n_sheets; ++s) {
     const char* sheet_name = nullptr;
     if (auto rc = fm_workbook_get_sheet_name(wb, s, &sheet_name); rc != 0) {
@@ -89,7 +92,10 @@ fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, std::ostream& out
 
 // Emits one sheet name per line in document order.
 fm_status_t dump_sheets(const fm_workbook_t* wb, std::ostream& out) {
-  const std::size_t n_sheets = fm_workbook_get_sheet_count(wb);
+  std::size_t n_sheets = 0;
+  if (auto rc = fm_workbook_get_sheet_count(wb, &n_sheets); rc != 0) {
+    return rc;
+  }
   for (std::size_t s = 0; s < n_sheets; ++s) {
     const char* sheet_name = nullptr;
     if (auto rc = fm_workbook_get_sheet_name(wb, s, &sheet_name); rc != 0) {
@@ -105,10 +111,16 @@ fm_status_t dump_sheets(const fm_workbook_t* wb, std::ostream& out) {
 // can diff "now empty" vs "had entries".
 fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
   std::ostringstream snapshot;
-  const std::size_t n_sheets = fm_workbook_get_sheet_count(wb);
+  std::size_t n_sheets = 0;
+  if (auto rc = fm_workbook_get_sheet_count(wb, &n_sheets); rc != 0) {
+    return rc;
+  }
 
   snapshot << "[defined_names]\n";
-  const std::size_t n_names = fm_workbook_get_defined_name_count(wb);
+  std::size_t n_names = 0;
+  if (auto rc = fm_workbook_get_defined_name_count(wb, &n_names); rc != 0) {
+    return rc;
+  }
   for (std::size_t i = 0; i < n_names; ++i) {
     const char* name = nullptr;
     const char* formula = nullptr;
@@ -129,7 +141,10 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
     snapshot << rendered << '\n';
   }
   snapshot << "[tables]\n";
-  const std::size_t n_tables = fm_workbook_get_table_count(wb);
+  std::size_t n_tables = 0;
+  if (auto rc = fm_workbook_get_table_count(wb, &n_tables); rc != 0) {
+    return rc;
+  }
   for (std::size_t i = 0; i < n_tables; ++i) {
     const char* name = nullptr;
     const char* display = nullptr;
@@ -142,7 +157,10 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
              << escape_c_string(ref) << '\n';
   }
   snapshot << "[passthrough_parts]\n";
-  const std::size_t n_parts = fm_workbook_get_passthrough_count(wb);
+  std::size_t n_parts = 0;
+  if (auto rc = fm_workbook_get_passthrough_count(wb, &n_parts); rc != 0) {
+    return rc;
+  }
   for (std::size_t i = 0; i < n_parts; ++i) {
     const char* path = nullptr;
     if (auto rc = fm_workbook_get_passthrough_at(wb, i, &path); rc != 0) {

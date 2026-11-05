@@ -42,8 +42,7 @@ _C_HEADER_DECL_RE = re.compile(r"\bFM_API\b[^;{]*?\b(fm_[A-Za-z0-9_]+)\s*\(")
 # Body kinds the generator understands. Kept in sync with
 # `tools/codegen/gen_bindings.py::VALID_BODY_KINDS`.
 VALID_BODY_KINDS = {
-    "direct_size_t",
-    "status_uint32_out",
+    "status_sizet_out",
     "status_sizet_out_with_sheet",
 }
 

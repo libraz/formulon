@@ -8,6 +8,7 @@
 #include <string>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_count_of.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 #include "value.h"
@@ -176,7 +177,7 @@ TEST(FormulonCApiLocale, FactsRejectBadArguments) {
 }
 
 TEST(FormulonCApiLocale, ErrorNames) {
-  EXPECT_EQ(fm_get_locale_error_name_count(), std::size(formulon::kErrorTable));
+  EXPECT_EQ(count_of(fm_get_locale_error_name_count), std::size(formulon::kErrorTable));
   const size_t na = static_cast<size_t>(formulon::ErrorCode::NA);
   const size_t name = static_cast<size_t>(formulon::ErrorCode::Name);
   ASSERT_EQ(name, 4U);
@@ -209,9 +210,9 @@ TEST(FormulonCApiLocale, ErrorNames) {
   EXPECT_STREQ(localized, "#DIV/0!");
   EXPECT_EQ(measured, 1);
 
-  EXPECT_EQ(
-      fm_get_locale_error_name_at("mac-365-de_DE", fm_get_locale_error_name_count(), &canonical, &localized, &measured),
-      kInvalid);
+  EXPECT_EQ(fm_get_locale_error_name_at("mac-365-de_DE", count_of(fm_get_locale_error_name_count), &canonical,
+                                        &localized, &measured),
+            kInvalid);
   EXPECT_EQ(fm_get_locale_error_name_at("bogus", na, &canonical, &localized, &measured), kInvalid);
   EXPECT_EQ(fm_get_locale_error_name_at(nullptr, na, &canonical, &localized, &measured), kNullPtr);
   EXPECT_EQ(fm_get_locale_error_name_at("mac-365-de_DE", na, &canonical, &localized, nullptr), kNullPtr);

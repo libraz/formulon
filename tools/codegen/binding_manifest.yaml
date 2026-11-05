@@ -7,9 +7,10 @@
 # ABI declarations stay in src/c_api/formulon_c.h (hand-written).
 #
 # Two body kinds are supported so far:
-#   - direct_size_t: C ABI returns `size_t` directly, no sheet arg.
-#   - status_uint32_out: C ABI returns `fm_status_t`, writes a uint32
-#     count into an out param; may take a sheet_index in front.
+#   - status_sizet_out: C ABI returns `fm_status_t` and writes a `size_t`
+#     count into a trailing out param; no sheet arg.
+#   - status_sizet_out_with_sheet: the same, with a `size_t sheet_index`
+#     in front of the out param.
 #
 # Each entry describes one C ABI function plus its embind and N-API
 # JS-facing method names. The JS surface (method name on the Workbook
@@ -19,10 +20,10 @@
 version: 1
 
 functions:
-  # ----- Direct size_t getters: workbook-level pools ---------------------
+  # ----- status + size_t out: workbook-level pools -----------------------
   - name: fm_workbook_get_sheet_count
     area: workbook_counts
-    body: direct_size_t
+    body: status_sizet_out
     accessor: "wb->workbook().sheet_count()"
     js_method: sheetCount
     embind_cpp: sheetCount
@@ -30,7 +31,7 @@ functions:
 
   - name: fm_workbook_get_defined_name_count
     area: workbook_counts
-    body: direct_size_t
+    body: status_sizet_out
     accessor: "wb->workbook().defined_names().size()"
     js_method: definedNameCount
     embind_cpp: definedNameCount
@@ -38,7 +39,7 @@ functions:
 
   - name: fm_workbook_get_table_count
     area: workbook_counts
-    body: direct_size_t
+    body: status_sizet_out
     accessor: "wb->workbook().tables().size()"
     js_method: tableCount
     embind_cpp: tableCount
@@ -46,16 +47,16 @@ functions:
 
   - name: fm_workbook_get_passthrough_count
     area: workbook_counts
-    body: direct_size_t
+    body: status_sizet_out
     accessor: "wb->workbook().passthrough_parts().size()"
     js_method: passthroughCount
     embind_cpp: passthroughCount
     node_cpp: PassthroughCount
 
-  # ----- status + uint32 out: styles pools -------------------------------
+  # ----- status + size_t out: styles pools -------------------------------
   - name: fm_workbook_get_font_count
     area: styles_counts
-    body: status_uint32_out
+    body: status_sizet_out
     accessor: "wb->workbook().styles().fonts.size()"
     js_method: fontCount
     embind_cpp: fontCount
@@ -63,7 +64,7 @@ functions:
 
   - name: fm_workbook_get_fill_count
     area: styles_counts
-    body: status_uint32_out
+    body: status_sizet_out
     accessor: "wb->workbook().styles().fills.size()"
     js_method: fillCount
     embind_cpp: fillCount
@@ -71,7 +72,7 @@ functions:
 
   - name: fm_workbook_get_border_count
     area: styles_counts
-    body: status_uint32_out
+    body: status_sizet_out
     accessor: "wb->workbook().styles().borders.size()"
     js_method: borderCount
     embind_cpp: borderCount
@@ -79,7 +80,7 @@ functions:
 
   - name: fm_workbook_get_cell_xf_count
     area: styles_counts
-    body: status_uint32_out
+    body: status_sizet_out
     accessor: "wb->workbook().styles().cell_xfs.size()"
     js_method: xfCount
     embind_cpp: xfCount

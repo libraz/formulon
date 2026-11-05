@@ -26,13 +26,13 @@ struct fm_pagination {
   formulon::print::PaginationResult result;
 };
 
-extern "C" fm_status_t fm_workbook_get_pagination(const fm_workbook_t* wb, size_t sheet_index, fm_pagination_t** out) {
+extern "C" fm_status_t fm_sheet_get_pagination(const fm_workbook_t* wb, size_t sheet_index, fm_pagination_t** out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_get_pagination: NULL out");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_pagination: NULL out");
   }
   *out = nullptr;
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_get_pagination"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_pagination"); rc != 0) {
     return rc;
   }
   auto paginated = formulon::print::paginate(wb->workbook(), static_cast<std::uint32_t>(sheet_index));
@@ -49,14 +49,22 @@ extern "C" void fm_pagination_destroy(fm_pagination_t* pagination) {
   delete pagination;
 }
 
-extern "C" uint32_t fm_pagination_get_page_count(const fm_pagination_t* pagination) {
+extern "C" fm_status_t fm_pagination_get_page_count(const fm_pagination_t* pagination, size_t* out_count) {
   clear_last_error();
-  return pagination == nullptr ? 0U : pagination->result.page_count;
+  if (pagination == nullptr || out_count == nullptr) {
+    return null_argument("fm_pagination_get_page_count");
+  }
+  *out_count = pagination->result.page_count;
+  return 0;
 }
 
-extern "C" size_t fm_pagination_get_print_area_count(const fm_pagination_t* pagination) {
+extern "C" fm_status_t fm_pagination_get_print_area_count(const fm_pagination_t* pagination, size_t* out_count) {
   clear_last_error();
-  return pagination == nullptr ? 0U : pagination->result.print_area.size();
+  if (pagination == nullptr || out_count == nullptr) {
+    return null_argument("fm_pagination_get_print_area_count");
+  }
+  *out_count = pagination->result.print_area.size();
+  return 0;
 }
 
 extern "C" fm_status_t fm_pagination_get_print_area_at(const fm_pagination_t* pagination, size_t index,
@@ -97,9 +105,13 @@ fm_status_t break_entry(const fm_pagination_t* pagination, size_t index, const v
 
 }  // namespace
 
-extern "C" size_t fm_pagination_get_row_break_count(const fm_pagination_t* pagination) {
+extern "C" fm_status_t fm_pagination_get_row_break_count(const fm_pagination_t* pagination, size_t* out_count) {
   clear_last_error();
-  return pagination == nullptr ? 0U : pagination->result.h_breaks.size();
+  if (pagination == nullptr || out_count == nullptr) {
+    return null_argument("fm_pagination_get_row_break_count");
+  }
+  *out_count = pagination->result.h_breaks.size();
+  return 0;
 }
 
 extern "C" fm_status_t fm_pagination_get_row_break_at(const fm_pagination_t* pagination, size_t index,
@@ -113,9 +125,13 @@ extern "C" fm_status_t fm_pagination_get_row_break_at(const fm_pagination_t* pag
   return 0;
 }
 
-extern "C" size_t fm_pagination_get_col_break_count(const fm_pagination_t* pagination) {
+extern "C" fm_status_t fm_pagination_get_col_break_count(const fm_pagination_t* pagination, size_t* out_count) {
   clear_last_error();
-  return pagination == nullptr ? 0U : pagination->result.v_breaks.size();
+  if (pagination == nullptr || out_count == nullptr) {
+    return null_argument("fm_pagination_get_col_break_count");
+  }
+  *out_count = pagination->result.v_breaks.size();
+  return 0;
 }
 
 extern "C" fm_status_t fm_pagination_get_col_break_at(const fm_pagination_t* pagination, size_t index,

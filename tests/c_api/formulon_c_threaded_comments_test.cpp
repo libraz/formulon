@@ -201,7 +201,7 @@ TEST(FormulonCApiThreadedComments, ThreadRepliesAndMentionsRoundTrip) {
   EXPECT_EQ(reply.mentions[0].start, 5U);
 
   // The legacy stub Excel stores for the thread is not listed as a note.
-  std::uint32_t notes = 9;
+  std::size_t notes = 9;
   ASSERT_EQ(fm_sheet_get_comment_count(reloaded.handle, 0, &notes), 0);
   EXPECT_EQ(notes, 0U);
 }

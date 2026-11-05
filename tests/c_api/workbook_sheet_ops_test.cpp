@@ -10,6 +10,7 @@
 #include <string>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_count_of.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 #include "value.h"
@@ -98,7 +99,7 @@ TEST(WorkbookSheetOpsCApi, AddRejectsNamesExcelsUiRefusesAsRenameDoes) {
     EXPECT_STREQ(fm_get_status_name(added), "INVALID_SHEET_NAME") << name;
     EXPECT_EQ(added, fm_workbook_rename_sheet(wb.handle, 0U, name)) << name;
   }
-  EXPECT_EQ(fm_workbook_get_sheet_count(wb.handle), 1U);
+  EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 1U);
   EXPECT_STREQ(SheetName(wb.handle, 0U), "Valid");
   // An inner apostrophe is an ordinary character.
   EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "a'b"), 0);
@@ -122,7 +123,7 @@ TEST(WorkbookSheetOpsCApi, RemoveDropsSheet) {
   WorkbookGuard wb;
   MakeThreeSheets(wb);
   ASSERT_EQ(fm_workbook_remove_sheet(wb.handle, 1), 0);
-  EXPECT_EQ(fm_workbook_get_sheet_count(wb.handle), 2U);
+  EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 2U);
   EXPECT_STREQ(SheetName(wb.handle, 0), "Alpha");
   EXPECT_STREQ(SheetName(wb.handle, 1), "Gamma");
 }
@@ -132,7 +133,7 @@ TEST(WorkbookSheetOpsCApi, RemoveRejectsLastSheet) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);  // single Sheet1
   fm_status_t rc = fm_workbook_remove_sheet(wb.handle, 0);
   EXPECT_NE(rc, 0);
-  EXPECT_EQ(fm_workbook_get_sheet_count(wb.handle), 1U);
+  EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 1U);
 }
 
 TEST(WorkbookSheetOpsCApi, RemoveRejectsOutOfRange) {
@@ -178,10 +179,10 @@ TEST(WorkbookSheetOpsCApi, MoveRejectsOutOfRange) {
 TEST(WorkbookSheetOpsCApi, SetDefinedNameAddsAndUpdates) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  EXPECT_EQ(fm_workbook_get_defined_name_count(wb.handle), 0U);
+  EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 0U);
 
   ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "MyName", "=42"), 0);
-  EXPECT_EQ(fm_workbook_get_defined_name_count(wb.handle), 1U);
+  EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 1U);
 
   const char* nm = nullptr;
   const char* fr = nullptr;
@@ -192,7 +193,7 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameAddsAndUpdates) {
 
   // Update the formula text via case-insensitive match.
   ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "MYNAME", "=99"), 0);
-  EXPECT_EQ(fm_workbook_get_defined_name_count(wb.handle), 1U);
+  EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 1U);
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &nm, &fr, nullptr), 0);
   EXPECT_STREQ(nm, "MyName");  // authored case preserved
   EXPECT_STREQ(fr, "99");
@@ -204,7 +205,7 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameScopedAllowsWorkbookAndSheetNames) {
 
   ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "Rate", "=1"), 0);
   ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Rate", "=2", 1), 0);
-  EXPECT_EQ(fm_workbook_get_defined_name_count(wb.handle), 2U);
+  EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 2U);
 
   const char* nm = nullptr;
   const char* fr = nullptr;
@@ -226,7 +227,7 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameScopedAllowsWorkbookAndSheetNames) {
   EXPECT_EQ(local_sheet_id, 1);
 
   ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Rate", "", 1), 0);
-  EXPECT_EQ(fm_workbook_get_defined_name_count(wb.handle), 1U);
+  EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 1U);
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &nm, &fr, &local_sheet_id), 0);
   EXPECT_EQ(local_sheet_id, -1);
 }
@@ -245,7 +246,7 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameDropsTheLeadingEquals) {
   const char* expected[] = {"Sheet1!$A$1", "Sheet1!$B$2", "Sheet1!$C$3"};
   const char* nm = nullptr;
   const char* fr = nullptr;
-  ASSERT_EQ(fm_workbook_get_defined_name_count(wb.handle), 3U);
+  ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 3U);
   for (std::size_t i = 0; i < 3U; ++i) {
     ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, i, &nm, &fr, nullptr), 0);
     EXPECT_STREQ(fr, expected[i]) << nm;
@@ -258,7 +259,7 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameDropsTheLeadingEquals) {
   const fm_status_t loaded = fm_workbook_load(bytes, len, &reloaded.handle);
   fm_buffer_destroy(bytes);
   ASSERT_EQ(loaded, 0);
-  ASSERT_EQ(fm_workbook_get_defined_name_count(reloaded.handle), 3U);
+  ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, reloaded.handle), 3U);
   // The writer may reorder names, so match them by name.
   const char* names[] = {"Foo", "Bar", "Baz"};
   for (std::size_t i = 0; i < 3U; ++i) {
@@ -284,7 +285,7 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameEmptyFormulaRemoves) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "Tmp", "=1"), 0);
   ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "Tmp", ""), 0);
-  EXPECT_EQ(fm_workbook_get_defined_name_count(wb.handle), 0U);
+  EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 0U);
 }
 
 TEST(WorkbookSheetOpsCApi, SetDefinedNameRejectsEmptyName) {
@@ -337,8 +338,8 @@ TEST(WorkbookSheetOpsCApi, InsertRowsAndColumnsShiftCells) {
 TEST(WorkbookSheetOpsCApi, EmptyMetadataListsExposeTheirCAbiContracts) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  EXPECT_EQ(fm_workbook_get_table_count(wb.handle), 0U);
-  EXPECT_EQ(fm_workbook_get_passthrough_count(wb.handle), 0U);
+  EXPECT_EQ(count_of(fm_workbook_get_table_count, wb.handle), 0U);
+  EXPECT_EQ(count_of(fm_workbook_get_passthrough_count, wb.handle), 0U);
 
   const char* name = nullptr;
   const char* display_name = nullptr;

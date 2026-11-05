@@ -18,22 +18,22 @@ namespace {
 // Enumerates a per-sheet list through its count / at-index pair into a
 // `ListResult` array, stopping at the first failed element read.
 template <typename T>
-Napi::Value SheetListResult(const Napi::CallbackInfo& info, fm_workbook_t* handle,
-                            fm_status_t (*count_fn)(fm_workbook_t*, uint32_t, uint32_t*),
-                            fm_status_t (*at_fn)(fm_workbook_t*, uint32_t, uint32_t, T*),
+Napi::Value SheetListResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle,
+                            fm_status_t (*count_fn)(const fm_workbook_t*, std::size_t, std::size_t*),
+                            fm_status_t (*at_fn)(const fm_workbook_t*, std::size_t, std::size_t, T*),
                             Napi::Object (*to_js)(Napi::Env, const T&)) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
   if (handle == nullptr) {
     return FinishListResult(env, arr, kBindingInvalidHandle);
   }
-  const uint32_t sheet = Workbook::ArgU32(info, 0);
-  uint32_t count = 0;
+  const std::size_t sheet = Workbook::ArgU32(info, 0);
+  std::size_t count = 0;
   fm_status_t rc = count_fn(handle, sheet, &count);
   if (rc != 0) {
     return FinishListResult(env, arr, rc);
   }
-  for (uint32_t i = 0; i < count; ++i) {
+  for (std::size_t i = 0; i < count; ++i) {
     T entry{};
     rc = at_fn(handle, sheet, i, &entry);
     if (rc != 0) {
@@ -45,7 +45,7 @@ Napi::Value SheetListResult(const Napi::CallbackInfo& info, fm_workbook_t* handl
 }
 
 // Shared body of the per-sheet merge add / remove entries taking `(sheet, range)`.
-using MergeEditFn = fm_status_t (*)(fm_workbook_t*, uint32_t, fm_merge_range);
+using MergeEditFn = fm_status_t (*)(fm_workbook_t*, std::size_t, fm_merge_range);
 
 // `handle` aliases the wrapper's member, so the C call sees the handle as it
 // is after the range getters ran, not a copy taken before them.

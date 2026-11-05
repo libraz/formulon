@@ -51,7 +51,8 @@ emscripten::val JsWorkbook::trace_to_val(TraceFn fn, uint32_t sheet, uint32_t ro
     arr.set("status", status_from_rc(rc));
     return arr;
   }
-  const std::size_t count = fm_cell_nodes_get_node_count(nodes);
+  std::size_t count = 0;
+  rc = fm_cell_nodes_get_node_count(nodes, &count);
   for (std::size_t i = 0; i < count; ++i) {
     fm_cell_node_t n{};
     rc = fm_cell_nodes_get_node_at(nodes, i, &n);
@@ -109,9 +110,9 @@ emscripten::val JsWorkbook::functionMetadata(const std::string& name) const {
 
 emscripten::val JsWorkbook::functionNames() const {
   emscripten::val arr = emscripten::val::array();
-  const std::size_t n = fm_get_function_count();
-  fm_status_t rc = 0;
-  for (std::size_t i = 0; i < n; ++i) {
+  std::size_t n = 0;
+  fm_status_t rc = fm_get_function_count(&n);
+  for (std::size_t i = 0; rc == 0 && i < n; ++i) {
     const char* name = nullptr;
     rc = fm_get_function_name_at(i, &name);
     if (rc != 0) {
@@ -167,7 +168,8 @@ emscripten::val JsWorkbook::localeFacts(const std::string& profile_id) const {
   facts.set("measured", f.measured != 0);
   facts.set("collationMeasured", f.collation_measured != 0);
   emscripten::val errors = emscripten::val::array();
-  const std::size_t n = fm_get_locale_error_name_count();
+  std::size_t n = 0;
+  rc = fm_get_locale_error_name_count(&n);
   for (std::size_t i = 0; i < n && rc == 0; ++i) {
     const char* canonical = nullptr;
     const char* localized = nullptr;
@@ -256,8 +258,7 @@ emscripten::val JsWorkbook::compareText(const std::string& a, const std::string&
                                         const std::string& profile_id) const {
   emscripten::val o = emscripten::val::object();
   int32_t order = 0;
-  const fm_status_t rc =
-      fm_compare_text(a.c_str(), b.c_str(), profile_id.c_str(), static_cast<fm_collation_strength_t>(strength), &order);
+  const fm_status_t rc = fm_compare_text(a.c_str(), b.c_str(), profile_id.c_str(), strength, &order);
   o.set("status", status_from_rc(rc));
   o.set("order", rc == 0 ? order : 0);
   return o;
@@ -299,9 +300,8 @@ emscripten::val JsWorkbook::collationClasses(emscripten::val values, int32_t str
   }
   std::vector<uint32_t> ids(n);
   uint32_t class_count = 0;
-  const fm_status_t rc =
-      fm_get_collation_classes(items.data(), n, profile_id.c_str(), static_cast<fm_collation_strength_t>(strength),
-                               n == 0 ? nullptr : ids.data(), &class_count);
+  const fm_status_t rc = fm_get_collation_classes(items.data(), n, profile_id.c_str(), strength,
+                                                  n == 0 ? nullptr : ids.data(), &class_count);
   o.set("status", status_from_rc(rc));
   if (rc == 0) {
     emscripten::val u32 = emscripten::val::global("Uint32Array").new_(n);

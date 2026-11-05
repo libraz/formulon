@@ -6,6 +6,7 @@
 
 #include <emscripten/val.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -24,7 +25,7 @@ namespace {
 
 // Reads `range` and hands it to `edit`, the add or remove half of the merge API.
 JsStatus edit_merge(fm_workbook_t* wb, uint32_t sheet, const emscripten::val& range, const char* operation,
-                    fm_status_t (*edit)(fm_workbook_t*, uint32_t, fm_merge_range)) {
+                    fm_status_t (*edit)(fm_workbook_t*, std::size_t, fm_merge_range)) {
   if (wb == nullptr) {
     return invalid_handle_status();
   }
@@ -58,24 +59,25 @@ namespace {
 
 // Reads list element `index` of `sheet` into `*out`; the per-kind half of
 // `sheet_list`.
-using SheetListItemFn = fm_status_t (*)(fm_workbook_t*, uint32_t, uint32_t, emscripten::val*);
+using SheetListItemFn = fm_status_t (*)(const fm_workbook_t*, uint32_t, std::size_t, emscripten::val*);
 
 // Enumerates a per-sheet list through its count / at-index pair into a
 // `ListResult` array, stopping at the first failed element read.
-emscripten::val sheet_list(fm_workbook_t* wb, uint32_t sheet,
-                           fm_status_t (*count_fn)(fm_workbook_t*, uint32_t, uint32_t*), SheetListItemFn item_fn) {
+emscripten::val sheet_list(const fm_workbook_t* wb, uint32_t sheet,
+                           fm_status_t (*count_fn)(const fm_workbook_t*, std::size_t, std::size_t*),
+                           SheetListItemFn item_fn) {
   emscripten::val arr = emscripten::val::array();
   if (wb == nullptr) {
     arr.set("status", invalid_handle_status());
     return arr;
   }
-  uint32_t count = 0;
+  std::size_t count = 0;
   fm_status_t rc = count_fn(wb, sheet, &count);
   if (rc != 0) {
     arr.set("status", status_from_rc(rc));
     return arr;
   }
-  for (uint32_t i = 0; i < count; ++i) {
+  for (std::size_t i = 0; i < count; ++i) {
     emscripten::val item = emscripten::val::undefined();
     rc = item_fn(wb, sheet, i, &item);
     if (rc != 0) {
@@ -88,7 +90,7 @@ emscripten::val sheet_list(fm_workbook_t* wb, uint32_t sheet,
   return arr;
 }
 
-fm_status_t merge_item(fm_workbook_t* wb, uint32_t sheet, uint32_t index, emscripten::val* out) {
+fm_status_t merge_item(const fm_workbook_t* wb, uint32_t sheet, std::size_t index, emscripten::val* out) {
   fm_merge_range m{};
   const fm_status_t rc = fm_sheet_get_merge_at(wb, sheet, index, &m);
   if (rc != 0) {
@@ -173,7 +175,7 @@ emscripten::val JsWorkbook::getCommentResult(uint32_t sheet, uint32_t row, uint3
 
 namespace {
 
-fm_status_t comment_item(fm_workbook_t* wb, uint32_t sheet, uint32_t index, emscripten::val* out) {
+fm_status_t comment_item(const fm_workbook_t* wb, uint32_t sheet, std::size_t index, emscripten::val* out) {
   fm_comment_t c{};
   const fm_status_t rc = fm_sheet_get_comment_at(wb, sheet, index, &c);
   if (rc != 0) {
@@ -288,7 +290,7 @@ JsStatus JsWorkbook::setWorkbookProtection(emscripten::val protection) {
 
 namespace {
 
-fm_status_t protected_range_item(fm_workbook_t* wb, uint32_t sheet, uint32_t index, emscripten::val* out) {
+fm_status_t protected_range_item(const fm_workbook_t* wb, uint32_t sheet, std::size_t index, emscripten::val* out) {
   fm_protected_range_t r{};
   const fm_status_t rc = fm_sheet_get_protected_range(wb, sheet, index, &r);
   if (rc != 0) {
@@ -401,7 +403,7 @@ JsStatus JsWorkbook::clearHyperlinks(uint32_t sheet) {
 
 namespace {
 
-fm_status_t hyperlink_item(fm_workbook_t* wb, uint32_t sheet, uint32_t index, emscripten::val* out) {
+fm_status_t hyperlink_item(const fm_workbook_t* wb, uint32_t sheet, std::size_t index, emscripten::val* out) {
   fm_hyperlink_t h{};
   const fm_status_t rc = fm_sheet_get_hyperlink_at(wb, sheet, index, &h);
   if (rc != 0) {
@@ -428,7 +430,7 @@ emscripten::val JsWorkbook::getHyperlinks(uint32_t sheet) const {
 
 namespace {
 
-fm_status_t validation_item(fm_workbook_t* wb, uint32_t sheet, uint32_t index, emscripten::val* out) {
+fm_status_t validation_item(const fm_workbook_t* wb, uint32_t sheet, std::size_t index, emscripten::val* out) {
   fm_data_validation_t v{};
   const fm_status_t rc = fm_sheet_get_validation(wb, sheet, index, &v);
   if (rc != 0) {

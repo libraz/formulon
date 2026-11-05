@@ -413,18 +413,18 @@ fm_dxf_record_t FillDxf() {
 TEST(FormulonCApiTableStyles, CustomStyleRoundTripsAndATableUsesIt) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
-  uint32_t dxf = 99;
+  std::size_t dxf = 99;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, FillDxf(), &dxf), 0);
 
   const fm_table_style_element_t elements[] = {
-      {"wholeTable", 1U, 1, dxf},
-      {"headerRow", 1U, 1, dxf},
-      {"firstRowStripe", 2U, 1, dxf},
+      {"wholeTable", 1U, 1, static_cast<uint32_t>(dxf)},
+      {"headerRow", 1U, 1, static_cast<uint32_t>(dxf)},
+      {"firstRowStripe", 2U, 1, static_cast<uint32_t>(dxf)},
       {"totalRow", 1U, 0, 0U},
   };
   fm_table_style_t style{"Corporate", 0, 1, elements, 4U};
   ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &style), 0);
-  uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_workbook_get_table_style_count(wb.handle, &count), 0);
   EXPECT_EQ(count, 1U);
   const char* default_table = nullptr;
@@ -485,15 +485,16 @@ TEST(FormulonCApiTableStyles, CustomStyleRoundTripsAndATableUsesIt) {
 TEST(FormulonCApiTableStyles, SetReplacesByNameAndValidates) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  uint32_t dxf = 0;
+  std::size_t dxf = 0;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, FillDxf(), &dxf), 0);
-  const fm_table_style_element_t one[] = {{"wholeTable", 1U, 1, dxf}};
+  const fm_table_style_element_t one[] = {{"wholeTable", 1U, 1, static_cast<uint32_t>(dxf)}};
   fm_table_style_t style{"Mine", 1, 1, one, 1U};
   ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &style), 0);
-  const fm_table_style_element_t two[] = {{"pageFieldLabels", 1U, 0, 0U}, {"blankRow", 1U, 1, dxf}};
+  const fm_table_style_element_t two[] = {{"pageFieldLabels", 1U, 0, 0U},
+                                          {"blankRow", 1U, 1, static_cast<uint32_t>(dxf)}};
   fm_table_style_t replaced{"MINE", 1, 0, two, 2U};
   ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &replaced), 0);
-  uint32_t count = 0;
+  std::size_t count = 0;
   ASSERT_EQ(fm_workbook_get_table_style_count(wb.handle, &count), 0);
   EXPECT_EQ(count, 1U);
   fm_table_style_t got{};
@@ -512,7 +513,7 @@ TEST(FormulonCApiTableStyles, SetReplacesByNameAndValidates) {
   const fm_table_style_element_t zero_size[] = {{"firstRowStripe", 0U, 0, 0U}};
   bad = fm_table_style_t{"Other", 1, 1, zero_size, 1U};
   EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &bad), kInvalidArgument);
-  const fm_table_style_element_t dangling[] = {{"wholeTable", 1U, 1, dxf + 1U}};
+  const fm_table_style_element_t dangling[] = {{"wholeTable", 1U, 1, static_cast<uint32_t>(dxf + 1U)}};
   bad = fm_table_style_t{"Other", 1, 1, dangling, 1U};
   EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &bad), kInvalidArgument);
   bad = fm_table_style_t{"TableStyleMedium2", 1, 1, nullptr, 0U};
@@ -591,14 +592,14 @@ std::vector<std::uint8_t> RetainedSalesPackage(std::uint32_t id) {
 TEST(FormulonCApiTable, CreateRejectsTheNameOfAVerbatimXlsbTable) {
   WorkbookGuard wb;
   Load(RetainedSalesPackage(3), wb);
-  ASSERT_EQ(fm_workbook_get_table_count(wb.handle), 0U);
+  ASSERT_EQ(count_of(fm_workbook_get_table_count, wb.handle), 0U);
   const char* columns[] = {"A", "B"};
   std::size_t index = 0;
   EXPECT_EQ(fm_workbook_add_table(wb.handle, 0, "E1:F3", "sales", "sales", columns, 2, nullptr, 1, 0, &index),
             kInvalidArgument);
   EXPECT_EQ(fm_workbook_add_table(wb.handle, 0, "E1:F3", "Fresh", "SALES", columns, 2, nullptr, 1, 0, &index),
             kInvalidArgument);
-  EXPECT_EQ(fm_workbook_get_table_count(wb.handle), 0U);
+  EXPECT_EQ(count_of(fm_workbook_get_table_count, wb.handle), 0U);
   EXPECT_EQ(fm_workbook_add_table(wb.handle, 0, "E1:F3", "Fresh", "Fresh", columns, 2, nullptr, 1, 0, &index), 0);
 }
 

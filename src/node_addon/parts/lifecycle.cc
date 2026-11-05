@@ -58,9 +58,9 @@ Napi::Value Workbook::CalcMode(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
-  fm_calc_mode_t mode = FM_CALC_MODE_AUTO;
+  std::int32_t mode = FM_CALC_MODE_AUTO;
   const fm_status_t rc = fm_workbook_get_calc_mode(handle_, &mode);
-  return MakeNumberResult(env, rc, static_cast<int32_t>(mode));
+  return MakeNumberResult(env, rc, mode);
 }
 
 Napi::Value Workbook::SetCalcMode(const Napi::CallbackInfo& info) {
@@ -110,9 +110,9 @@ Napi::Value Workbook::RefMode(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
-  fm_ref_mode_t mode = FM_REF_MODE_A1;
+  std::int32_t mode = FM_REF_MODE_A1;
   const fm_status_t rc = fm_workbook_get_ref_mode(handle_, &mode);
-  return MakeNumberResult(env, rc, static_cast<int32_t>(mode));
+  return MakeNumberResult(env, rc, mode);
 }
 
 Napi::Value Workbook::SetRefMode(const Napi::CallbackInfo& info) {
@@ -281,7 +281,7 @@ Napi::Value Workbook::PartialRecalc(const Napi::CallbackInfo& info) {
   const Napi::Object vpobj = ArgObject(info, 0);
   fm_viewport vp{};
   CheckedSpecReader reader(env);
-  vp.sheet = reader.U32(vpobj, "sheet", 0U);
+  const std::size_t sheet = reader.U32(vpobj, "sheet", 0U);
   vp.first_row = reader.U32(vpobj, "firstRow", 0U);
   vp.last_row = reader.U32(vpobj, "lastRow", 0U);
   vp.first_col = reader.U32(vpobj, "firstCol", 0U);
@@ -291,7 +291,7 @@ Napi::Value Workbook::PartialRecalc(const Napi::CallbackInfo& info) {
   }
   uint32_t recomputed = 0;
   (void)TakeIterativeProgressThrew();
-  fm_status_t rc = fm_sheet_recalc_viewport(handle_, &vp, &recomputed);
+  fm_status_t rc = fm_sheet_recalc_viewport(handle_, sheet, &vp, &recomputed);
   const bool callback_threw = TakeIterativeProgressThrew();
   if (rc != 0) {
     return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "recomputed", 0);

@@ -94,8 +94,8 @@ void BuildHostPivot(fm_workbook_t* wb) {
 struct Cell {
   std::uint32_t row;
   std::uint32_t col;
-  fm_pivot_cell_kind_t kind;
-  fm_value_kind_t value_kind;
+  int32_t kind;
+  int32_t value_kind;
   std::string text;
   double number;
   bool operator==(const Cell& o) const {
@@ -295,7 +295,7 @@ TEST(FormulonCApiPivotSaveShape, EditOverlappingAMergeIsRefusedAndUndone) {
   EXPECT_EQ(data_fields, 1U);
   EXPECT_EQ(SheetValue(wb.handle, 0U, 5U).kind, FM_VAL_BLANK);
   ExpectSheetNumber(wb.handle, 3U, kValueCol, 1000.0);
-  std::uint32_t merges = 0;
+  std::size_t merges = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb.handle, 0U, &merges), 0);
   EXPECT_EQ(merges, 1U);
   EXPECT_EQ(Pending(wb.handle), 0);

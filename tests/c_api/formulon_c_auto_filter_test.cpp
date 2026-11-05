@@ -14,6 +14,7 @@
 #include "auto_filter.h"
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "formulon_c_count_of.h"
 #include "gtest/gtest.h"
 #include "io/auto_filter_xml.h"
 #include "utils/error.h"
@@ -64,7 +65,7 @@ std::set<std::uint32_t> HiddenRows(const fm_workbook_t* wb) {
 }
 
 bool HasDefinedName(const fm_workbook_t* wb, const std::string& wanted) {
-  const std::size_t count = fm_workbook_get_defined_name_count(wb);
+  const std::size_t count = count_of(fm_workbook_get_defined_name_count, wb);
   for (std::size_t i = 0; i < count; ++i) {
     const char* name = nullptr;
     const char* formula = nullptr;

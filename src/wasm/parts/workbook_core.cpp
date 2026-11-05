@@ -303,7 +303,7 @@ JsAddStyleResult JsWorkbook::copySheet(uint32_t sourceIndex, uint32_t insertBefo
   if (has_name) {
     name = newName.as<std::string>();
   }
-  uint32_t out = 0;
+  std::size_t out = 0;
   const fm_status_t rc =
       fm_workbook_copy_sheet(handle_, sourceIndex, insertBefore, has_name ? name.c_str() : nullptr, &out);
   return index_result(rc, out);
@@ -315,7 +315,7 @@ JsAddStyleResult JsWorkbook::activeSheet() const {
     r.status = invalid_handle_status();
     return r;
   }
-  uint32_t out = 0;
+  std::size_t out = 0;
   const fm_status_t rc = fm_workbook_get_active_sheet(handle_, &out);
   return index_result(rc, out);
 }
@@ -500,7 +500,7 @@ JsNumberResult JsWorkbook::calcMode() const {
   if (handle_ == nullptr) {
     return number_result(kBindingInvalidHandle, 0.0);
   }
-  fm_calc_mode_t mode = FM_CALC_MODE_AUTO;
+  std::int32_t mode = FM_CALC_MODE_AUTO;
   const fm_status_t rc = fm_workbook_get_calc_mode(handle_, &mode);
   return number_result(rc, static_cast<double>(mode));
 }
@@ -542,7 +542,7 @@ JsNumberResult JsWorkbook::refMode() const {
   if (handle_ == nullptr) {
     return number_result(kBindingInvalidHandle, 0.0);
   }
-  fm_ref_mode_t mode = FM_REF_MODE_A1;
+  std::int32_t mode = FM_REF_MODE_A1;
   const fm_status_t rc = fm_workbook_get_ref_mode(handle_, &mode);
   return number_result(rc, static_cast<double>(mode));
 }
@@ -651,10 +651,10 @@ emscripten::val JsWorkbook::partialRecalc(emscripten::val viewport) {
     o.set("recomputed", static_cast<uint32_t>(0));
     return o;
   }
-  fm_viewport vp{vp_sheet, bounds.first_row, bounds.last_row, bounds.first_col, bounds.last_col};
+  fm_viewport vp{bounds.first_row, bounds.last_row, bounds.first_col, bounds.last_col};
   uint32_t recomputed = 0;
   progress_callback_threw_ = false;
-  fm_status_t rc = fm_sheet_recalc_viewport(handle_, &vp, &recomputed);
+  fm_status_t rc = fm_sheet_recalc_viewport(handle_, vp_sheet, &vp, &recomputed);
   const bool callback_threw = progress_callback_threw_;
   progress_callback_threw_ = false;
   if (rc != 0) {

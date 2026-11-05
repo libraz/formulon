@@ -20,42 +20,42 @@
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 
-extern "C" fm_status_t fm_workbook_get_border_count(fm_workbook_t* wb, uint32_t* out_count) {
+extern "C" fm_status_t fm_workbook_get_border_count(const fm_workbook_t* wb, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_get_border_count: NULL argument");
   }
-  *out_count = static_cast<uint32_t>(wb->workbook().styles().borders.size());
+  *out_count = wb->workbook().styles().borders.size();
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_cell_xf_count(fm_workbook_t* wb, uint32_t* out_count) {
+extern "C" fm_status_t fm_workbook_get_cell_xf_count(const fm_workbook_t* wb, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_get_cell_xf_count: NULL argument");
   }
-  *out_count = static_cast<uint32_t>(wb->workbook().styles().cell_xfs.size());
+  *out_count = wb->workbook().styles().cell_xfs.size();
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_fill_count(fm_workbook_t* wb, uint32_t* out_count) {
+extern "C" fm_status_t fm_workbook_get_fill_count(const fm_workbook_t* wb, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_get_fill_count: NULL argument");
   }
-  *out_count = static_cast<uint32_t>(wb->workbook().styles().fills.size());
+  *out_count = wb->workbook().styles().fills.size();
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_font_count(fm_workbook_t* wb, uint32_t* out_count) {
+extern "C" fm_status_t fm_workbook_get_font_count(const fm_workbook_t* wb, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_get_font_count: NULL argument");
   }
-  *out_count = static_cast<uint32_t>(wb->workbook().styles().fonts.size());
+  *out_count = wb->workbook().styles().fonts.size();
   return 0;
 }
