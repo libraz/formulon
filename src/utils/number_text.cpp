@@ -286,6 +286,20 @@ int format_unsigned_base(char* buf, std::size_t cap, unsigned long long v, int m
   return out.finish();
 }
 
+int exponential(char* buf, std::size_t cap, double v, int frac_digits, bool tie_toward_zero) {
+  Out out(buf, cap);
+  if (!put_sign_or_special(&out, v)) {
+    return out.finish();
+  }
+  if (frac_digits < 0) {
+    frac_digits = 0;
+  }
+  Digits g;
+  precision_digits(std::fabs(v), frac_digits + 1, &g, tie_toward_zero);
+  put_exponential(&out, g, frac_digits);
+  return out.finish();
+}
+
 }  // namespace
 
 int format_fixed(char* buf, std::size_t cap, double v, int frac_digits) {
@@ -310,31 +324,11 @@ std::string fixed_string(double v, int frac_digits) {
 }
 
 int format_exponential(char* buf, std::size_t cap, double v, int frac_digits) {
-  Out out(buf, cap);
-  if (!put_sign_or_special(&out, v)) {
-    return out.finish();
-  }
-  if (frac_digits < 0) {
-    frac_digits = 0;
-  }
-  Digits g;
-  precision_digits(std::fabs(v), frac_digits + 1, &g);
-  put_exponential(&out, g, frac_digits);
-  return out.finish();
+  return exponential(buf, cap, v, frac_digits, /*tie_toward_zero=*/false);
 }
 
 int format_exponential_tie_toward_zero(char* buf, std::size_t cap, double v, int frac_digits) {
-  Out out(buf, cap);
-  if (!put_sign_or_special(&out, v)) {
-    return out.finish();
-  }
-  if (frac_digits < 0) {
-    frac_digits = 0;
-  }
-  Digits g;
-  precision_digits(std::fabs(v), frac_digits + 1, &g, /*tie_toward_zero=*/true);
-  put_exponential(&out, g, frac_digits);
-  return out.finish();
+  return exponential(buf, cap, v, frac_digits, /*tie_toward_zero=*/true);
 }
 
 int format_general(char* buf, std::size_t cap, double v, int precision) {
