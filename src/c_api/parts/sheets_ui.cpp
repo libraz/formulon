@@ -26,6 +26,7 @@ using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::ingest_entered_formula;
 using formulon::c_api::parts::may_respell_formula;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::validate;
@@ -52,8 +53,7 @@ using SheetItemSize = std::size_t (*)(const formulon::Sheet& sheet);
 fm_status_t sheet_item_count(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t* out_count, const char* fn,
                              SheetItemSize size_of) {
   if (out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             (std::string(fn) + ": out_count is NULL").c_str());
+    return null_argument(fn, "out_count");
   }
   if (auto rc = check_sheet_u32(wb, sheet, fn); rc != 0) {
     return rc;
@@ -146,8 +146,7 @@ extern "C" fm_status_t fm_sheet_get_hyperlink_at(fm_workbook_t* wb, std::uint32_
                                                  fm_hyperlink* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_hyperlink_at: out is NULL");
+    return null_argument("fm_sheet_get_hyperlink_at", "out");
   }
   if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_hyperlink_at"); rc != 0) {
     return rc;
@@ -219,7 +218,7 @@ extern "C" fm_status_t fm_sheet_get_merge_at(fm_workbook_t* wb, std::uint32_t sh
                                              fm_merge_range* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_merge_at: out is NULL");
+    return null_argument("fm_sheet_get_merge_at", "out");
   }
   if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_merge_at"); rc != 0) {
     return rc;
@@ -246,8 +245,7 @@ extern "C" fm_status_t fm_sheet_merges_in_range(fm_workbook_t* wb, std::uint32_t
                                                 fm_merge_range* out, std::uint32_t capacity, std::uint32_t* out_count) {
   clear_last_error();
   if (out_count == nullptr || (out == nullptr && capacity > 0U)) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_merges_in_range: NULL argument");
+    return null_argument("fm_sheet_merges_in_range");
   }
   if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_merges_in_range"); rc != 0) {
     return rc;
@@ -276,7 +274,7 @@ extern "C" fm_status_t fm_sheet_get_comment_at(fm_workbook_t* wb, std::uint32_t 
                                                std::uint32_t col, fm_comment* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_comment_at: out is NULL");
+    return null_argument("fm_sheet_get_comment_at", "out");
   }
   if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_comment_at"); rc != 0) {
     return rc;
@@ -301,8 +299,7 @@ extern "C" fm_status_t fm_sheet_get_comment_at_index(fm_workbook_t* wb, std::uin
                                                      fm_comment* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_comment_at_index: out is NULL");
+    return null_argument("fm_sheet_get_comment_at_index", "out");
   }
   if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_comment_at_index"); rc != 0) {
     return rc;
@@ -380,8 +377,7 @@ extern "C" fm_status_t fm_sheet_get_comment_visible(fm_workbook_t* wb, std::uint
                                                     std::uint32_t col, std::int32_t* out_visible) {
   clear_last_error();
   if (out_visible == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_comment_visible: out_visible is NULL");
+    return null_argument("fm_sheet_get_comment_visible", "out_visible");
   }
   if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_comment_visible"); rc != 0) {
     return rc;
@@ -443,8 +439,7 @@ extern "C" fm_status_t fm_sheet_get_validation_at(fm_workbook_t* wb, std::uint32
                                                   fm_data_validation* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_validation_at: out is NULL");
+    return null_argument("fm_sheet_get_validation_at", "out");
   }
   if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_validation_at"); rc != 0) {
     return rc;
@@ -556,8 +551,7 @@ extern "C" fm_status_t fm_sheet_get_protection(const fm_workbook_t* wb, uint32_t
                                                fm_sheet_protection_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_protection: NULL argument");
+    return null_argument("fm_sheet_get_protection");
   }
   if (auto rc = check_sheet_u32(wb, sheet_index, "fm_sheet_get_protection"); rc != 0) {
     return rc;
@@ -592,8 +586,7 @@ extern "C" fm_status_t fm_sheet_set_protection(fm_workbook_t* wb, uint32_t sheet
                                                const fm_sheet_protection_t* in) {
   clear_last_error();
   if (in == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_set_protection: NULL argument");
+    return null_argument("fm_sheet_set_protection");
   }
   if (auto rc = check_sheet_u32(wb, sheet_index, "fm_sheet_set_protection"); rc != 0) {
     return rc;

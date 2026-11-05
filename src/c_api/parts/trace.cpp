@@ -26,6 +26,7 @@
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 
 struct fm_cell_nodes {
@@ -144,7 +145,7 @@ extern "C" size_t fm_cell_nodes_count(const fm_cell_nodes_t* nodes) {
 extern "C" fm_status_t fm_cell_nodes_at(const fm_cell_nodes_t* nodes, std::size_t idx, fm_cell_node_t* out) {
   clear_last_error();
   if (nodes == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_cell_nodes_at: NULL argument");
+    return null_argument("fm_cell_nodes_at");
   }
   if (auto rc = check_index(idx, nodes->nodes.size(), "fm_cell_nodes_at", "idx"); rc != 0) {
     return rc;

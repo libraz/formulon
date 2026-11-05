@@ -93,6 +93,12 @@ fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* mess
 // Binding error for a NULL required argument: "<api>: NULL argument".
 fm_status_t null_argument(const char* api);
 
+// Binding error for a NULL required argument: "<api>: <what> is NULL".
+fm_status_t null_argument(const char* api, const char* what);
+
+// kInvalidArgument binding error "<api>: <what>" carrying `context`.
+fm_status_t invalid_argument(const char* api, const char* what, std::string context);
+
 // `text` as an owned string; NULL reads as empty.
 inline std::string text_or_empty(const char* text) {
   return text != nullptr ? std::string(text) : std::string();

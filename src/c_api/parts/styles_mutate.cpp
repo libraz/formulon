@@ -28,6 +28,8 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
+using formulon::c_api::parts::invalid_argument;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::num_fmt_id_known;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::text_or_empty;
@@ -125,51 +127,48 @@ void ensure_default_cell_xf(formulon::StylesTable& styles) {
 /// would hide the caller's ordering mistake and emit a dangling index that
 /// Excel reports as a repairable file.
 fm_status_t validate_xf_references(const formulon::StylesTable& styles, const fm_cell_xf& record, const char* api) {
-  auto reject = [api](const char* what, std::string context) {
-    const std::string message = std::string(api) + ": " + what;
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, message.c_str(), std::move(context));
-  };
   if (record.font_index >= styles.fonts.size()) {
-    return reject("font_index out of range", "font_index=" + std::to_string(record.font_index) +
-                                                 " fonts_count=" + std::to_string(styles.fonts.size()));
+    return invalid_argument(
+        api, "font_index out of range",
+        "font_index=" + std::to_string(record.font_index) + " fonts_count=" + std::to_string(styles.fonts.size()));
   }
   if (record.fill_index >= styles.fills.size()) {
-    return reject("fill_index out of range", "fill_index=" + std::to_string(record.fill_index) +
-                                                 " fills_count=" + std::to_string(styles.fills.size()));
+    return invalid_argument(
+        api, "fill_index out of range",
+        "fill_index=" + std::to_string(record.fill_index) + " fills_count=" + std::to_string(styles.fills.size()));
   }
   if (record.border_index >= styles.borders.size()) {
-    return reject("border_index out of range", "border_index=" + std::to_string(record.border_index) +
-                                                   " borders_count=" + std::to_string(styles.borders.size()));
+    return invalid_argument(api, "border_index out of range",
+                            "border_index=" + std::to_string(record.border_index) +
+                                " borders_count=" + std::to_string(styles.borders.size()));
   }
   if (!num_fmt_id_known(styles, record.num_fmt_id)) {
-    return reject("num_fmt_id not registered", "num_fmt_id=" + std::to_string(record.num_fmt_id));
+    return invalid_argument(api, "num_fmt_id not registered", "num_fmt_id=" + std::to_string(record.num_fmt_id));
   }
   return 0;
 }
 
 fm_status_t validate_xf_alignment(const fm_cell_xf& record, const char* api) {
-  auto reject = [api](const char* what, std::string context) {
-    const std::string message = std::string(api) + ": " + what;
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, message.c_str(), std::move(context));
-  };
   // The presence flags are authoritative. Values for an omitted attribute
   // are ignored, including malformed alignment enum ordinals. The accepted
   // ordinals are the canonical writer mapping for the corresponding XML
   // string enums (general..distributed and top..distributed).
   if (record.has_horizontal_align != 0 && record.horizontal_align > 7U) {
-    return reject("horizontal_align out of range", "horizontal_align=" + std::to_string(record.horizontal_align));
+    return invalid_argument(api, "horizontal_align out of range",
+                            "horizontal_align=" + std::to_string(record.horizontal_align));
   }
   if (record.has_vertical_align != 0 && record.vertical_align > 4U) {
-    return reject("vertical_align out of range", "vertical_align=" + std::to_string(record.vertical_align));
+    return invalid_argument(api, "vertical_align out of range",
+                            "vertical_align=" + std::to_string(record.vertical_align));
   }
   if (record.has_text_rotation != 0 && record.text_rotation > 180U && record.text_rotation != 255U) {
-    return reject("text_rotation out of range", "text_rotation=" + std::to_string(record.text_rotation));
+    return invalid_argument(api, "text_rotation out of range", "text_rotation=" + std::to_string(record.text_rotation));
   }
   if (record.has_indent != 0 && record.indent > 255U) {
-    return reject("indent out of range", "indent=" + std::to_string(record.indent));
+    return invalid_argument(api, "indent out of range", "indent=" + std::to_string(record.indent));
   }
   if (record.has_reading_order != 0 && record.reading_order > 2U) {
-    return reject("reading_order out of range", "reading_order=" + std::to_string(record.reading_order));
+    return invalid_argument(api, "reading_order out of range", "reading_order=" + std::to_string(record.reading_order));
   }
   return 0;
 }
@@ -349,7 +348,7 @@ formulon::BorderRecord border_from_c(const fm_border_record& record) noexcept {
 extern "C" fm_status_t fm_styles_add_font(fm_workbook_t* wb, fm_font_record record, uint32_t* out_index) {
   clear_last_error();
   if (wb == nullptr || out_index == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_add_font: NULL argument");
+    return null_argument("fm_styles_add_font");
   }
   if (fm_status_t rc = check_finite_non_negative(record.size, "fm_styles_add_font", "font.size"); rc != 0) {
     return rc;
@@ -368,7 +367,7 @@ extern "C" fm_status_t fm_styles_add_font(fm_workbook_t* wb, fm_font_record reco
 extern "C" fm_status_t fm_styles_set_font(fm_workbook_t* wb, uint32_t font_index, fm_font_record record) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_set_font: NULL argument");
+    return null_argument("fm_styles_set_font");
   }
   formulon::StylesTable& styles = wb->workbook().mutable_styles();
   // No `ensure_default_style_roots` here: growing the table to satisfy an
@@ -390,8 +389,7 @@ extern "C" fm_status_t fm_styles_set_font(fm_workbook_t* wb, uint32_t font_index
 extern "C" fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, fm_font_record record) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_set_default_font: NULL argument");
+    return null_argument("fm_workbook_set_default_font");
   }
   if (fm_status_t rc = check_finite_non_negative(record.size, "fm_workbook_set_default_font", "font.size"); rc != 0) {
     return rc;
@@ -411,7 +409,7 @@ extern "C" fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, fm_font_r
 extern "C" fm_status_t fm_styles_add_fill(fm_workbook_t* wb, fm_fill_record record, uint32_t* out_index) {
   clear_last_error();
   if (wb == nullptr || out_index == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_add_fill: NULL argument");
+    return null_argument("fm_styles_add_fill");
   }
   formulon::FillRecord candidate = fill_from_c(record);
 
@@ -424,7 +422,7 @@ extern "C" fm_status_t fm_styles_add_fill(fm_workbook_t* wb, fm_fill_record reco
 extern "C" fm_status_t fm_styles_add_border(fm_workbook_t* wb, fm_border_record record, uint32_t* out_index) {
   clear_last_error();
   if (wb == nullptr || out_index == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_add_border: NULL argument");
+    return null_argument("fm_styles_add_border");
   }
   formulon::BorderRecord candidate = border_from_c(record);
 
@@ -437,7 +435,7 @@ extern "C" fm_status_t fm_styles_add_border(fm_workbook_t* wb, fm_border_record 
 extern "C" fm_status_t fm_styles_add_num_fmt(fm_workbook_t* wb, const char* format_code, uint16_t* out_num_fmt_id) {
   clear_last_error();
   if (wb == nullptr || out_num_fmt_id == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_add_num_fmt: NULL argument");
+    return null_argument("fm_styles_add_num_fmt");
   }
   if (auto rc = check_utf8("fm_styles_add_num_fmt", {format_code}); rc != 0) {
     return rc;
@@ -547,8 +545,7 @@ extern "C" fm_status_t fm_styles_add_cell_xf(fm_workbook_t* wb, fm_cell_xf recor
 extern "C" fm_status_t fm_styles_add_cell_style_xf(fm_workbook_t* wb, fm_cell_xf record, uint32_t* out_xf_id) {
   clear_last_error();
   if (wb == nullptr || out_xf_id == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_add_cell_style_xf: NULL argument");
+    return null_argument("fm_styles_add_cell_style_xf");
   }
   if (fm_status_t rc = validate_xf_alignment(record, "fm_styles_add_cell_style_xf"); rc != 0) {
     return rc;
@@ -566,8 +563,7 @@ extern "C" fm_status_t fm_styles_add_cell_style_xf(fm_workbook_t* wb, fm_cell_xf
 extern "C" fm_status_t fm_styles_set_cell_style(fm_workbook_t* wb, const fm_cell_style_record_t* record) {
   clear_last_error();
   if (wb == nullptr || record == nullptr || record->name == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_set_cell_style: NULL argument");
+    return null_argument("fm_styles_set_cell_style");
   }
   if (auto rc = check_utf8("fm_styles_set_cell_style", {record->name}); rc != 0) {
     return rc;
@@ -612,8 +608,7 @@ extern "C" fm_status_t fm_styles_set_cell_style(fm_workbook_t* wb, const fm_cell
 extern "C" fm_status_t fm_styles_remove_cell_style(fm_workbook_t* wb, const char* name) {
   clear_last_error();
   if (wb == nullptr || name == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_remove_cell_style: NULL argument");
+    return null_argument("fm_styles_remove_cell_style");
   }
   if (auto rc = check_utf8("fm_styles_remove_cell_style", {name}); rc != 0) {
     return rc;
@@ -624,15 +619,14 @@ extern "C" fm_status_t fm_styles_remove_cell_style(fm_workbook_t* wb, const char
 extern "C" fm_status_t fm_styles_add_batch(fm_workbook_t* wb, const fm_styles_batch* batch) {
   clear_last_error();
   if (wb == nullptr || batch == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_add_batch: NULL argument");
+    return null_argument("fm_styles_add_batch");
   }
   if ((batch->font_count != 0U && (batch->fonts == nullptr || batch->font_indices == nullptr)) ||
       (batch->fill_count != 0U && (batch->fills == nullptr || batch->fill_indices == nullptr)) ||
       (batch->border_count != 0U && (batch->borders == nullptr || batch->border_indices == nullptr)) ||
       (batch->cell_xf_count != 0U && (batch->cell_xfs == nullptr || batch->cell_xf_indices == nullptr)) ||
       (batch->num_fmt_count != 0U && (batch->num_fmt_codes == nullptr || batch->num_fmt_ids == nullptr))) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_add_batch: non-empty array is NULL");
+    return null_argument("fm_styles_add_batch", "non-empty array");
   }
   for (size_t i = 0; i < batch->font_count; ++i) {
     if (fm_status_t rc = check_finite_non_negative(batch->fonts[i].size, "fm_styles_add_batch", "font.size"); rc != 0) {
@@ -796,7 +790,7 @@ extern "C" fm_status_t fm_styles_add_batch(fm_workbook_t* wb, const fm_styles_ba
 extern "C" fm_status_t fm_styles_add_dxf(fm_workbook_t* wb, fm_dxf_record record, uint32_t* out_dxf_index) {
   clear_last_error();
   if (wb == nullptr || out_dxf_index == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_add_dxf: NULL argument");
+    return null_argument("fm_styles_add_dxf");
   }
   if (record.font_engaged != 0 && record.font.has_size != 0) {
     if (fm_status_t rc = check_finite_non_negative(record.font.size, "fm_styles_add_dxf", "font.size"); rc != 0) {

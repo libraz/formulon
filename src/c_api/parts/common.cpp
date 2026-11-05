@@ -634,6 +634,16 @@ fm_status_t null_argument(const char* api) {
                            (std::string(api) + ": NULL argument").c_str());
 }
 
+fm_status_t null_argument(const char* api, const char* what) {
+  return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                           (std::string(api) + ": " + what + " is NULL").c_str());
+}
+
+fm_status_t invalid_argument(const char* api, const char* what, std::string context) {
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, (std::string(api) + ": " + what).c_str(),
+                           std::move(context));
+}
+
 fm_status_t check_sheet_row(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row, const char* fn) {
   if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
     return rc;

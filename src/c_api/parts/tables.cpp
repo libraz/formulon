@@ -32,6 +32,7 @@ using formulon::c_api::parts::display_formula;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::may_respell_formula;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -270,7 +271,7 @@ extern "C" fm_status_t fm_workbook_table_at(const fm_workbook_t* wb, size_t idx,
   clear_last_error();
   if (wb == nullptr || out_name == nullptr || out_display_name == nullptr || out_ref == nullptr ||
       out_sheet_index == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_table_at: NULL argument");
+    return null_argument("fm_workbook_table_at");
   }
   const auto& tables = wb->workbook().tables();
   if (auto rc = check_index(idx, tables.size(), "fm_workbook_table_at", "idx"); rc != 0) {
@@ -291,8 +292,7 @@ extern "C" fm_status_t fm_workbook_table_create(fm_workbook_t* wb, size_t sheet_
   clear_last_error();
   if (wb == nullptr || ref == nullptr || name == nullptr || display_name == nullptr || column_names == nullptr ||
       out_index == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_table_create: NULL argument");
+    return null_argument("fm_workbook_table_create");
   }
   if (auto rc = check_utf8("fm_workbook_table_create", {ref, name, display_name, style_name}); rc != 0) {
     return rc;
@@ -336,8 +336,7 @@ extern "C" fm_status_t fm_workbook_table_update(fm_workbook_t* wb, size_t index,
                                                 const char* style_name, int32_t header_row, int32_t totals_row) {
   clear_last_error();
   if (wb == nullptr || ref == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_table_update: NULL argument");
+    return null_argument("fm_workbook_table_update");
   }
   if (auto rc = check_utf8("fm_workbook_table_update", {ref, style_name}); rc != 0) {
     return rc;
@@ -413,7 +412,7 @@ extern "C" fm_status_t fm_workbook_table_update(fm_workbook_t* wb, size_t index,
 extern "C" fm_status_t fm_workbook_table_remove(fm_workbook_t* wb, size_t index) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_table_remove: wb is NULL");
+    return null_argument("fm_workbook_table_remove", "wb");
   }
   auto& tables = wb->workbook().mutable_tables();
   if (index >= tables.size()) {
@@ -438,8 +437,7 @@ extern "C" fm_status_t fm_workbook_table_remove(fm_workbook_t* wb, size_t index)
 extern "C" fm_status_t fm_workbook_table_get_info(const fm_workbook_t* wb, size_t index, fm_table_info_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_table_get_info: NULL argument");
+    return null_argument("fm_workbook_table_get_info");
   }
   const auto& tables = wb->workbook().tables();
   if (auto rc = check_index(index, tables.size(), "fm_workbook_table_get_info", "index"); rc != 0) {
@@ -464,8 +462,7 @@ extern "C" fm_status_t fm_workbook_table_get_column(const fm_workbook_t* wb, siz
                                                     fm_table_column_info_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_table_get_column: NULL argument");
+    return null_argument("fm_workbook_table_get_column");
   }
   const auto& tables = wb->workbook().tables();
   if (auto rc = check_index(index, tables.size(), "fm_workbook_table_get_column", "index"); rc != 0) {
@@ -493,8 +490,7 @@ extern "C" fm_status_t fm_workbook_table_set_style_info(fm_workbook_t* wb, size_
                                                         int32_t show_row_stripes, int32_t show_column_stripes) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_table_set_style_info: wb is NULL");
+    return null_argument("fm_workbook_table_set_style_info", "wb");
   }
   auto& tables = wb->workbook().mutable_tables();
   if (auto rc = check_index(index, tables.size(), "fm_workbook_table_set_style_info", "index"); rc != 0) {
@@ -517,8 +513,7 @@ extern "C" fm_status_t fm_workbook_table_rename(fm_workbook_t* wb, size_t index,
                                                 const char* display_name) {
   clear_last_error();
   if (wb == nullptr || name == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_table_rename: NULL argument");
+    return null_argument("fm_workbook_table_rename");
   }
   if (auto rc = check_utf8("fm_workbook_table_rename", {name, display_name}); rc != 0) {
     return rc;
@@ -541,8 +536,7 @@ extern "C" fm_status_t fm_workbook_table_rename_column(fm_workbook_t* wb, size_t
                                                        const char** out_name) {
   clear_last_error();
   if (wb == nullptr || name == nullptr || out_name == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_table_rename_column: NULL argument");
+    return null_argument("fm_workbook_table_rename_column");
   }
   formulon::Workbook& book = wb->workbook();
   if (auto rc = check_index(index, book.tables().size(), "fm_workbook_table_rename_column", "index"); rc != 0) {
@@ -568,8 +562,7 @@ extern "C" fm_status_t fm_workbook_table_set_column_totals(fm_workbook_t* wb, si
                                                            const char* formula) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_table_set_column_totals: wb is NULL");
+    return null_argument("fm_workbook_table_set_column_totals", "wb");
   }
   formulon::Workbook& book = wb->workbook();
   auto& tables = book.mutable_tables();

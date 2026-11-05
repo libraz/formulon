@@ -29,6 +29,7 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::FragmentValidation;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -607,8 +608,7 @@ extern "C" fm_status_t fm_sheet_evaluate_auto_filter(const fm_workbook_t* wb, si
   clear_last_error();
   constexpr const char* kApi = "fm_sheet_evaluate_auto_filter";
   if (evaluate_args_missing(out_match, cap, out_len, out_first_row)) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_evaluate_auto_filter: NULL argument");
+    return null_argument("fm_sheet_evaluate_auto_filter");
   }
   Target target;
   if (auto rc = resolve_sheet(wb, sheet_index, kApi, &target); rc != 0) {
@@ -677,8 +677,7 @@ extern "C" fm_status_t fm_table_evaluate_auto_filter(const fm_workbook_t* wb, si
   clear_last_error();
   constexpr const char* kApi = "fm_table_evaluate_auto_filter";
   if (evaluate_args_missing(out_match, cap, out_len, out_first_row)) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_table_evaluate_auto_filter: NULL argument");
+    return null_argument("fm_table_evaluate_auto_filter");
   }
   Target target;
   if (auto rc = resolve_table(wb, table_index, kApi, &target); rc != 0) {

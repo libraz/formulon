@@ -33,6 +33,7 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::find_cache;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::mark_cache_pivots_pending;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::pivot_axis_from_fm;
 using formulon::c_api::parts::pivot_axis_to_fm;
 using formulon::c_api::parts::pivot_calendar_from_fm;
@@ -168,8 +169,7 @@ extern "C" fm_status_t fm_workbook_pivot_field_add(fm_workbook_t* wb, std::size_
                                                    const fm_pivot_field_spec_t* spec, std::size_t* out_field_idx) {
   clear_last_error();
   if (wb == nullptr || spec == nullptr || out_field_idx == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_field_add: NULL argument");
+    return null_argument("fm_workbook_pivot_field_add");
   }
   if (auto rc = validate(*spec, "fm_workbook_pivot_field_add"); rc != 0) {
     return rc;
@@ -252,7 +252,7 @@ formulon::pivot::PivotField* lookup_pivot_field_mut(fm_workbook_t* wb, std::size
                                                     std::size_t field_idx, const char* fn,
                                                     formulon::pivot::PivotTable** out_table) {
   if (wb == nullptr) {
-    set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, (std::string(fn) + ": wb is NULL").c_str());
+    null_argument(fn, "wb");
     return nullptr;
   }
   const formulon::pivot::PivotTable* table = nullptr;
@@ -272,8 +272,7 @@ fm_status_t resolve_pivot_field(fm_workbook_t* wb, std::size_t sheet_index, std:
                                 std::size_t field_idx, const char* fn, formulon::pivot::PivotTable** table,
                                 formulon::pivot::PivotField** field) {
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             (std::string(fn) + ": wb is NULL").c_str());
+    return null_argument(fn, "wb");
   }
   *field = lookup_pivot_field_mut(wb, sheet_index, pivot_index, field_idx, fn, table);
   return *field != nullptr ? 0 : static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
@@ -310,8 +309,7 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_axis(fm_workbook_t* wb, std::
                                                         std::int32_t axis) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_field_set_axis: wb is NULL");
+    return null_argument("fm_workbook_pivot_field_set_axis", "wb");
   }
   // -1 takes the field off every axis.
   fm_status_t enum_status =
@@ -342,8 +340,7 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_sort(fm_workbook_t* wb, std::
                                                         std::int32_t order, const char* by_field) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_field_set_sort: wb is NULL");
+    return null_argument("fm_workbook_pivot_field_set_sort", "wb");
   }
   fm_status_t enum_status = check_enum_domain(order, FM_PIVOT_SORT_MANUAL, "fm_workbook_pivot_field_set_sort", "order");
   if (enum_status != 0) {
@@ -536,8 +533,7 @@ extern "C" fm_status_t fm_workbook_pivot_field_add_item(fm_workbook_t* wb, std::
                                                         const char* utf8_name, std::int32_t visible) {
   clear_last_error();
   if (utf8_name == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_field_add_item: utf8_name is NULL");
+    return null_argument("fm_workbook_pivot_field_add_item", "utf8_name");
   }
   if (auto rc = check_utf8("fm_workbook_pivot_field_add_item", {utf8_name}); rc != 0) {
     return rc;
@@ -626,8 +622,7 @@ extern "C" fm_status_t fm_workbook_pivot_field_add_subtotal_fn(fm_workbook_t* wb
                                                                std::int32_t agg) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_field_add_subtotal_fn: wb is NULL");
+    return null_argument("fm_workbook_pivot_field_add_subtotal_fn", "wb");
   }
   fm_status_t enum_status = check_enum_domain(agg, 10, "fm_workbook_pivot_field_add_subtotal_fn", "aggregation");
   if (enum_status != 0) {
@@ -654,8 +649,7 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_date_group(fm_workbook_t* wb,
                                                               double end_or_nan) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_field_set_date_group: wb is NULL");
+    return null_argument("fm_workbook_pivot_field_set_date_group", "wb");
   }
   if (fm_status_t rc = check_enum_domain(calendar, 1, "fm_workbook_pivot_field_set_date_group", "calendar"); rc != 0) {
     return rc;
@@ -672,8 +666,7 @@ extern "C" fm_status_t fm_workbook_pivot_field_clear_date_group(fm_workbook_t* w
                                                                 std::size_t pivot_index, std::size_t field_idx) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_field_clear_date_group: wb is NULL");
+    return null_argument("fm_workbook_pivot_field_clear_date_group", "wb");
   }
   return finish_cache_grouping(wb, sheet_index, pivot_index,
                                formulon::pivot::clear_date_group(wb->workbook(), sheet_index, pivot_index, field_idx));
@@ -684,8 +677,7 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_number_format(fm_workbook_t* 
                                                                  const char* utf8) {
   clear_last_error();
   if (utf8 == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_field_set_number_format: utf8 is NULL");
+    return null_argument("fm_workbook_pivot_field_set_number_format", "utf8");
   }
   formulon::pivot::PivotTable* table = nullptr;
   formulon::pivot::PivotField* field = nullptr;
@@ -707,8 +699,7 @@ extern "C" fm_status_t fm_workbook_pivot_field_at(const fm_workbook_t* wb, std::
                                                   fm_pivot_field_info_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_field_at: NULL argument");
+    return null_argument("fm_workbook_pivot_field_at");
   }
   const formulon::pivot::PivotTable* table = nullptr;
   const formulon::pivot::PivotField* field =
@@ -760,8 +751,7 @@ extern "C" fm_status_t fm_workbook_pivot_field_item_count(const fm_workbook_t* w
                                                           std::size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_field_item_count: NULL argument");
+    return null_argument("fm_workbook_pivot_field_item_count");
   }
   const formulon::pivot::PivotField* field =
       lookup_pivot_field(wb, sheet_index, pivot_index, field_idx, "fm_workbook_pivot_field_item_count", nullptr);
@@ -777,8 +767,7 @@ extern "C" fm_status_t fm_workbook_pivot_field_item_at(const fm_workbook_t* wb, 
                                                        std::size_t item_idx, fm_pivot_item_info_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_field_item_at: NULL argument");
+    return null_argument("fm_workbook_pivot_field_item_at");
   }
   const formulon::pivot::PivotField* field =
       lookup_pivot_field(wb, sheet_index, pivot_index, field_idx, "fm_workbook_pivot_field_item_at", nullptr);

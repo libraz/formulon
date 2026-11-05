@@ -88,8 +88,7 @@ formulon::pivot::PivotTable* resolve_pivot_mut(formulon::Workbook& wb, std::size
 fm_status_t resolve_pivot_checked(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index, const char* fn,
                                   formulon::pivot::PivotTable** out) {
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             (std::string(fn) + ": wb is NULL").c_str());
+    return null_argument(fn, "wb");
   }
   *out = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, fn);
   return *out != nullptr ? 0 : static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
@@ -103,8 +102,7 @@ fm_status_t resolve_pivot_checked(const fm_workbook_t* wb, std::initializer_list
     null_arg = null_arg || arg == nullptr;
   }
   if (null_arg) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             (std::string(fn) + ": NULL argument").c_str());
+    return null_argument(fn);
   }
   *out = resolve_pivot(wb->workbook(), sheet_index, pivot_index, fn);
   return *out != nullptr ? 0 : static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);

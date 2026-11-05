@@ -18,6 +18,7 @@ using formulon::c_api::parts::check_finite_non_negative;
 using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -51,7 +52,7 @@ bool iterative_progress_adapter(std::uint32_t iteration, double max_residual, st
 extern "C" fm_status_t fm_workbook_recalc(fm_workbook_t* wb) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_recalc: wb is NULL");
+    return null_argument("fm_workbook_recalc", "wb");
   }
   auto r = wb->workbook().recalc(formulon::eval::default_registry());
   if (!r) {
@@ -67,8 +68,7 @@ extern "C" fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t t
     *out_stats = fm_parallel_recalc_stats{};
   }
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_recalc_parallel: wb is NULL");
+    return null_argument("fm_workbook_recalc_parallel", "wb");
   }
   if (thread_count > formulon::eval::kMaxSchedulerThreads) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
@@ -103,7 +103,7 @@ extern "C" fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enab
                                                  double max_change) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_set_iterative: wb is NULL");
+    return null_argument("fm_workbook_set_iterative", "wb");
   }
   if (const fm_status_t st = check_finite_non_negative(max_change, "fm_workbook_set_iterative", "max_change")) {
     return st;
@@ -127,8 +127,7 @@ extern "C" fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enab
 extern "C" fm_status_t fm_workbook_set_iterative_enabled(fm_workbook_t* wb, int32_t enabled) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_set_iterative_enabled: wb is NULL");
+    return null_argument("fm_workbook_set_iterative_enabled", "wb");
   }
   formulon::IterativeOptions opts = wb->workbook().iterative_options();
   opts.enabled = enabled != 0;
@@ -140,8 +139,7 @@ extern "C" fm_status_t fm_workbook_get_iterative(const fm_workbook_t* wb, int32_
                                                  uint32_t* out_max_iterations, double* out_max_change) {
   clear_last_error();
   if (wb == nullptr || out_enabled == nullptr || out_max_iterations == nullptr || out_max_change == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_get_iterative: NULL argument");
+    return null_argument("fm_workbook_get_iterative");
   }
   const formulon::IterativeOptions& opts = wb->workbook().iterative_options();
   *out_enabled = opts.enabled ? 1 : 0;
@@ -153,7 +151,7 @@ extern "C" fm_status_t fm_workbook_get_iterative(const fm_workbook_t* wb, int32_
 extern "C" fm_status_t fm_workbook_calc_mode(const fm_workbook_t* wb, fm_calc_mode_t* out_mode) {
   clear_last_error();
   if (wb == nullptr || out_mode == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_calc_mode: NULL argument");
+    return null_argument("fm_workbook_calc_mode");
   }
   switch (wb->workbook().calc_mode()) {
     case formulon::Workbook::CalcMode::kAuto:
@@ -172,7 +170,7 @@ extern "C" fm_status_t fm_workbook_calc_mode(const fm_workbook_t* wb, fm_calc_mo
 extern "C" fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, std::int32_t mode) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_set_calc_mode: wb is NULL");
+    return null_argument("fm_workbook_set_calc_mode", "wb");
   }
   formulon::Workbook::CalcMode resolved = formulon::Workbook::CalcMode::kAuto;
   switch (mode) {
@@ -243,7 +241,7 @@ extern "C" fm_status_t fm_workbook_set_calc_on_save(fm_workbook_t* wb, std::int3
 extern "C" fm_status_t fm_workbook_ref_mode(const fm_workbook_t* wb, fm_ref_mode_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_ref_mode: NULL argument");
+    return null_argument("fm_workbook_ref_mode");
   }
   *out = wb->workbook().calc_options().ref_mode == formulon::RefMode::kR1C1 ? FM_REF_MODE_R1C1 : FM_REF_MODE_A1;
   return 0;
@@ -252,7 +250,7 @@ extern "C" fm_status_t fm_workbook_ref_mode(const fm_workbook_t* wb, fm_ref_mode
 extern "C" fm_status_t fm_workbook_set_ref_mode(fm_workbook_t* wb, std::int32_t mode) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_set_ref_mode: wb is NULL");
+    return null_argument("fm_workbook_set_ref_mode", "wb");
   }
   if (mode != FM_REF_MODE_A1 && mode != FM_REF_MODE_R1C1) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_set_ref_mode: unknown mode");
@@ -275,7 +273,7 @@ extern "C" fm_status_t fm_workbook_pinned_now(const fm_workbook_t* wb, fm_civil_
                                               std::int32_t* out_pinned) {
   clear_last_error();
   if (wb == nullptr || out_now == nullptr || out_pinned == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_pinned_now: NULL argument");
+    return null_argument("fm_workbook_pinned_now");
   }
   *out_now = fm_civil_time_t{};
   const auto& pinned = wb->workbook().pinned_now();
@@ -294,8 +292,7 @@ extern "C" fm_status_t fm_workbook_pinned_now(const fm_workbook_t* wb, fm_civil_
 extern "C" fm_status_t fm_workbook_set_pinned_now(fm_workbook_t* wb, const fm_civil_time_t* now) {
   clear_last_error();
   if (wb == nullptr || now == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_set_pinned_now: NULL argument");
+    return null_argument("fm_workbook_set_pinned_now");
   }
   // Validated rather than normalised: `days_from_civil` would happily roll
   // month 13 into the next January, and a pin that silently moved would make
@@ -319,8 +316,7 @@ extern "C" fm_status_t fm_workbook_set_pinned_now(fm_workbook_t* wb, const fm_ci
 extern "C" fm_status_t fm_workbook_clear_pinned_now(fm_workbook_t* wb) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_clear_pinned_now: wb is NULL");
+    return null_argument("fm_workbook_clear_pinned_now", "wb");
   }
   wb->workbook().clear_pinned_now();
   return 0;
@@ -329,8 +325,7 @@ extern "C" fm_status_t fm_workbook_clear_pinned_now(fm_workbook_t* wb) {
 extern "C" fm_status_t fm_workbook_excel_profile_id(const fm_workbook_t* wb, const char** out_profile_id) {
   clear_last_error();
   if (wb == nullptr || out_profile_id == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_excel_profile_id: NULL argument");
+    return null_argument("fm_workbook_excel_profile_id");
   }
   *out_profile_id = formulon::excel_profile_id(wb->workbook().excel_profile());
   return 0;
@@ -339,8 +334,7 @@ extern "C" fm_status_t fm_workbook_excel_profile_id(const fm_workbook_t* wb, con
 extern "C" fm_status_t fm_workbook_set_excel_profile_id(fm_workbook_t* wb, const char* profile_id) {
   clear_last_error();
   if (wb == nullptr || profile_id == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_set_excel_profile_id: NULL argument");
+    return null_argument("fm_workbook_set_excel_profile_id");
   }
   formulon::ExcelProfile profile;
   if (auto rc = check_profile_id(profile_id, "fm_workbook_set_excel_profile_id", &profile); rc != 0) {
@@ -362,7 +356,7 @@ extern "C" fm_status_t fm_workbook_set_excel_profile_id(fm_workbook_t* wb, const
 extern "C" fm_status_t fm_workbook_file_name(const fm_workbook_t* wb, const char** out_name) {
   clear_last_error();
   if (wb == nullptr || out_name == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_file_name: NULL argument");
+    return null_argument("fm_workbook_file_name");
   }
   *out_name = publish_scratch(wb, wb->workbook().file_name());
   return 0;
@@ -371,8 +365,7 @@ extern "C" fm_status_t fm_workbook_file_name(const fm_workbook_t* wb, const char
 extern "C" fm_status_t fm_workbook_set_file_name(fm_workbook_t* wb, const char* name) {
   clear_last_error();
   if (wb == nullptr || name == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_set_file_name: NULL argument");
+    return null_argument("fm_workbook_set_file_name");
   }
   formulon::Workbook& book = wb->workbook();
   const bool changed = book.file_name() != name;
@@ -390,8 +383,7 @@ extern "C" fm_status_t fm_workbook_partial_recalc(fm_workbook_t* wb, const fm_vi
                                                   uint32_t* out_recomputed_count) {
   clear_last_error();
   if (wb == nullptr || viewport == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_partial_recalc: NULL argument");
+    return null_argument("fm_workbook_partial_recalc");
   }
   // A sheet index past the end reaches the engine as a closure that
   // matches nothing, so the call would report a successful no-op recalc
@@ -423,8 +415,7 @@ extern "C" fm_status_t fm_workbook_set_iterative_progress(fm_workbook_t* wb, fm_
                                                           void* user_data) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_set_iterative_progress: wb is NULL");
+    return null_argument("fm_workbook_set_iterative_progress", "wb");
   }
   wb->iterative_progress_cb = cb;
   wb->iterative_progress_user_data = cb == nullptr ? nullptr : user_data;

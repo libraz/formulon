@@ -42,6 +42,7 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::ingest_entered_formula;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::validate;
@@ -379,7 +380,7 @@ fm_status_t store_cfvo_formulas(fm_workbook_t* wb, formulon::cf::CFRule* out_rul
 extern "C" fm_status_t fm_sheet_cf_count(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_cf_count: NULL argument");
+    return null_argument("fm_sheet_cf_count");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_cf_count"); rc != 0) {
     return rc;
@@ -396,7 +397,7 @@ extern "C" fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, std::size_t s
                                           fm_cf_rule_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_cf_get_at: NULL argument");
+    return null_argument("fm_sheet_cf_get_at");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_cf_get_at"); rc != 0) {
     return rc;
@@ -427,8 +428,7 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
                                             std::size_t* out_index) {
   clear_last_error();
   if (out_index == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_cf_add_rule: out_index is NULL");
+    return null_argument("fm_sheet_cf_add_rule", "out_index");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_cf_add_rule"); rc != 0) {
     return rc;

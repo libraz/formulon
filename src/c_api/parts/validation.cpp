@@ -22,6 +22,7 @@ using formulon::c_api::parts::cell_range_page_size;
 using formulon::c_api::parts::check_cell_cursor;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::value_from_fm;
@@ -47,8 +48,7 @@ extern "C" fm_status_t fm_sheet_validate_value(const fm_workbook_t* wb, size_t s
   clear_last_error();
   constexpr const char* kApi = "fm_sheet_validate_value";
   if (proposed == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_validate_value: NULL argument");
+    return null_argument("fm_sheet_validate_value");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
     return rc;

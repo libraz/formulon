@@ -12,13 +12,13 @@
 
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 
 extern "C" fm_status_t fm_workbook_external_link_count(fm_workbook_t* wb, uint32_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_external_link_count: NULL argument");
+    return null_argument("fm_workbook_external_link_count");
   }
   *out_count = static_cast<uint32_t>(wb->workbook().external_links().size());
   return 0;
@@ -27,8 +27,7 @@ extern "C" fm_status_t fm_workbook_external_link_count(fm_workbook_t* wb, uint32
 extern "C" fm_status_t fm_workbook_external_link_at(fm_workbook_t* wb, uint32_t index, fm_external_link_record_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_external_link_at: NULL argument");
+    return null_argument("fm_workbook_external_link_at");
   }
   const auto& links = wb->workbook().external_links();
   if (auto rc = check_index(index, links.size(), "fm_workbook_external_link_at", "index"); rc != 0) {

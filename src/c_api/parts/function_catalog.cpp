@@ -52,6 +52,7 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 
 namespace {
@@ -115,7 +116,7 @@ const std::vector<std::string>& sorted_function_names() {
 extern "C" fm_status_t fm_function_metadata(const char* name, fm_function_metadata_t* out) {
   clear_last_error();
   if (name == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_function_metadata: NULL argument");
+    return null_argument("fm_function_metadata");
   }
   *out = fm_function_metadata_t{};
   if (auto rc = check_utf8("fm_function_metadata", {name}); rc != 0) {
@@ -162,7 +163,7 @@ extern "C" std::size_t fm_function_count(void) {
 extern "C" fm_status_t fm_function_name_at(std::size_t idx, const char** out_name) {
   clear_last_error();
   if (out_name == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_function_name_at: out_name is NULL");
+    return null_argument("fm_function_name_at", "out_name");
   }
   const auto& names = sorted_function_names();
   if (auto rc = check_index(idx, names.size(), "fm_function_name_at", "idx"); rc != 0) {
@@ -210,7 +211,7 @@ extern "C" fm_status_t fm_function_localize(const char* canonical_name, const ch
                                             const char** out_localized) {
   clear_last_error();
   if (canonical_name == nullptr || profile_id == nullptr || out_localized == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_function_localize: NULL argument");
+    return null_argument("fm_function_localize");
   }
   return resolve_function_name("fm_function_localize", "canonical_name", canonical_name, profile_id, /*localize=*/true,
                                out_localized);
@@ -220,8 +221,7 @@ extern "C" fm_status_t fm_function_canonicalize(const char* localized_name, cons
                                                 const char** out_canonical) {
   clear_last_error();
   if (localized_name == nullptr || profile_id == nullptr || out_canonical == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_function_canonicalize: NULL argument");
+    return null_argument("fm_function_canonicalize");
   }
   return resolve_function_name("fm_function_canonicalize", "localized_name", localized_name, profile_id,
                                /*localize=*/false, out_canonical);

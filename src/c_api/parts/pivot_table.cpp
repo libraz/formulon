@@ -36,6 +36,7 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::find_cache;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::pivot_agg_from_fm;
 using formulon::c_api::parts::pivot_count;
 using formulon::c_api::parts::pivot_show_as_from_fm;
@@ -97,8 +98,7 @@ extern "C" fm_status_t fm_workbook_pivot_create(fm_workbook_t* wb, std::size_t s
                                                 std::uint32_t anchor_col, std::size_t* out_pivot_index) {
   clear_last_error();
   if (utf8_name == nullptr || out_pivot_index == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_create: NULL argument");
+    return null_argument("fm_workbook_pivot_create");
   }
   if (auto rc = check_utf8("fm_workbook_pivot_create", {utf8_name}); rc != 0) {
     return rc;
@@ -169,8 +169,7 @@ extern "C" fm_status_t fm_workbook_pivot_set_name(fm_workbook_t* wb, std::size_t
                                                   const char* utf8_name) {
   clear_last_error();
   if (wb == nullptr || utf8_name == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_set_name: NULL argument");
+    return null_argument("fm_workbook_pivot_set_name");
   }
   if (auto rc = check_utf8("fm_workbook_pivot_set_name", {utf8_name}); rc != 0) {
     return rc;
@@ -237,8 +236,7 @@ extern "C" fm_status_t fm_workbook_pivot_show_details(fm_workbook_t* wb, std::si
                                                       std::size_t* out_sheet_index) {
   clear_last_error();
   if (wb == nullptr || out_sheet_index == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_show_details: NULL argument");
+    return null_argument("fm_workbook_pivot_show_details");
   }
   formulon::Expected<std::size_t, formulon::Error> created =
       wb->workbook().show_pivot_details(sheet_index, pivot_index, row, col);
@@ -293,8 +291,7 @@ extern "C" fm_status_t fm_workbook_pivot_set_layout(fm_workbook_t* wb, std::size
                                                     std::int32_t layout) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_set_layout: wb is NULL");
+    return null_argument("fm_workbook_pivot_set_layout", "wb");
   }
   if (layout != FM_PIVOT_LAYOUT_COMPACT && layout != FM_PIVOT_LAYOUT_TABULAR && layout != FM_PIVOT_LAYOUT_OUTLINE) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
@@ -331,12 +328,10 @@ bool has_values_level(const formulon::pivot::PivotTable& table) {
 fm_status_t set_field_order(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                             const std::uint32_t* indices, std::size_t count, bool row, const char* fn) {
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             (std::string(fn) + ": wb is NULL").c_str());
+    return null_argument(fn, "wb");
   }
   if (count > 0 && indices == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             (std::string(fn) + ": indices is NULL").c_str());
+    return null_argument(fn, "indices");
   }
   auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, fn);
   if (table == nullptr) {
@@ -543,8 +538,7 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_add(fm_workbook_t* wb, std::
                                                         std::size_t* out_idx) {
   clear_last_error();
   if (wb == nullptr || spec == nullptr || out_idx == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_data_field_add: NULL argument");
+    return null_argument("fm_workbook_pivot_data_field_add");
   }
   if (auto rc = validate(*spec, "fm_workbook_pivot_data_field_add"); rc != 0) {
     return rc;
@@ -591,8 +585,7 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_set(fm_workbook_t* wb, std::
                                                         const fm_pivot_data_field_spec_t* spec) {
   clear_last_error();
   if (wb == nullptr || spec == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_data_field_set: NULL argument");
+    return null_argument("fm_workbook_pivot_data_field_set");
   }
   if (auto rc = validate(*spec, "fm_workbook_pivot_data_field_set"); rc != 0) {
     return rc;
@@ -843,8 +836,7 @@ extern "C" fm_status_t fm_workbook_pivot_set_options(fm_workbook_t* wb, std::siz
   clear_last_error();
   constexpr const char* kApi = "fm_workbook_pivot_set_options";
   if (wb == nullptr || options == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             (std::string(kApi) + ": NULL argument").c_str());
+    return null_argument(kApi);
   }
   const fm_pivot_options_t& o = *options;
   if (auto rc =

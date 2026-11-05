@@ -25,6 +25,7 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::TextStore;
 
@@ -55,8 +56,7 @@ extern "C" fm_status_t fm_workbook_get_theme_colors(const fm_workbook_t* wb, fm_
                                                     int32_t* out_source) {
   clear_last_error();
   if (wb == nullptr || out == nullptr || out_source == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_get_theme_colors: NULL argument");
+    return null_argument("fm_workbook_get_theme_colors");
   }
   const formulon::LoadedTheme loaded = wb->workbook().load_theme();
   for (std::size_t i = 0; i < formulon::kThemeColorCount; ++i) {
@@ -69,8 +69,7 @@ extern "C" fm_status_t fm_workbook_get_theme_colors(const fm_workbook_t* wb, fm_
 extern "C" fm_status_t fm_workbook_set_theme_colors(fm_workbook_t* wb, const fm_theme_colors* colors) {
   clear_last_error();
   if (wb == nullptr || colors == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_set_theme_colors: NULL argument");
+    return null_argument("fm_workbook_set_theme_colors");
   }
   formulon::ThemeColors model{};
   for (std::size_t i = 0; i < formulon::kThemeColorCount; ++i) {
@@ -82,8 +81,7 @@ extern "C" fm_status_t fm_workbook_set_theme_colors(fm_workbook_t* wb, const fm_
 extern "C" fm_status_t fm_workbook_get_theme_fonts(const fm_workbook_t* wb, fm_theme_fonts* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_get_theme_fonts: NULL argument");
+    return null_argument("fm_workbook_get_theme_fonts");
   }
   formulon::ThemeFonts fonts = wb->workbook().load_theme().theme.fonts;
   TextStore& store = fresh_read_scratch(wb);
@@ -102,8 +100,7 @@ extern "C" fm_status_t fm_workbook_set_theme_fonts(fm_workbook_t* wb, const fm_t
   clear_last_error();
   if (wb == nullptr || fonts == nullptr || fonts->major_latin == nullptr || fonts->major_east_asian == nullptr ||
       fonts->minor_latin == nullptr || fonts->minor_east_asian == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_set_theme_fonts: NULL argument");
+    return null_argument("fm_workbook_set_theme_fonts");
   }
   if (auto rc = check_utf8("fm_workbook_set_theme_fonts",
                            {fonts->major_latin, fonts->major_east_asian, fonts->minor_latin, fonts->minor_east_asian});
@@ -121,8 +118,7 @@ extern "C" fm_status_t fm_workbook_set_theme_fonts(fm_workbook_t* wb, const fm_t
 extern "C" fm_status_t fm_workbook_theme_script_font_count(const fm_workbook_t* wb, int32_t major, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_theme_script_font_count: NULL argument");
+    return null_argument("fm_workbook_theme_script_font_count");
   }
   const formulon::LoadedTheme loaded = wb->workbook().load_theme();
   *out_count = loaded.source != formulon::ThemeSource::kPart
@@ -135,8 +131,7 @@ extern "C" fm_status_t fm_workbook_theme_script_font_at(const fm_workbook_t* wb,
                                                         const char** out_script, const char** out_typeface) {
   clear_last_error();
   if (wb == nullptr || out_script == nullptr || out_typeface == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_theme_script_font_at: NULL argument");
+    return null_argument("fm_workbook_theme_script_font_at");
   }
   const formulon::LoadedTheme loaded = wb->workbook().load_theme();
   const bool from_part = loaded.source == formulon::ThemeSource::kPart;
@@ -158,8 +153,7 @@ extern "C" fm_status_t fm_workbook_set_theme_script_font(fm_workbook_t* wb, int3
                                                          const char* typeface) {
   clear_last_error();
   if (wb == nullptr || script == nullptr || typeface == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_set_theme_script_font: NULL argument");
+    return null_argument("fm_workbook_set_theme_script_font");
   }
   if (auto rc = check_utf8("fm_workbook_set_theme_script_font", {script, typeface}); rc != 0) {
     return rc;
@@ -170,8 +164,7 @@ extern "C" fm_status_t fm_workbook_set_theme_script_font(fm_workbook_t* wb, int3
 extern "C" fm_status_t fm_workbook_reset_theme(fm_workbook_t* wb) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_reset_theme: NULL argument");
+    return null_argument("fm_workbook_reset_theme");
   }
   return finish_status(wb->workbook().reset_theme());
 }
@@ -181,8 +174,7 @@ extern "C" fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, fm_col
   static constexpr const char* kFn = "fm_workbook_resolve_color";
   clear_last_error();
   if (wb == nullptr || out_argb == nullptr || out_resolution == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_resolve_color: NULL argument");
+    return null_argument("fm_workbook_resolve_color");
   }
   if (auto rc = check_enum_domain(context, static_cast<std::int64_t>(formulon::ColorContext::kBorder), kFn, "context");
       rc != 0) {
@@ -215,8 +207,7 @@ extern "C" fm_status_t fm_sheet_get_effective_style(const fm_workbook_t* wb, siz
                                                     uint32_t col, fm_effective_style* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_effective_style: NULL argument");
+    return null_argument("fm_sheet_get_effective_style");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_effective_style"); rc != 0) {
     return rc;

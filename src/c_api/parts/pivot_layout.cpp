@@ -30,6 +30,7 @@
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
@@ -78,8 +79,7 @@ extern "C" fm_status_t fm_workbook_pivot_layout(const fm_workbook_t* wb, std::si
                                                 std::size_t pivot_index, fm_pivot_cells_t** out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_layout: NULL argument");
+    return null_argument("fm_workbook_pivot_layout");
   }
   *out = nullptr;
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_pivot_layout"); rc != 0) {
@@ -173,7 +173,7 @@ extern "C" fm_status_t fm_pivot_cells_bounds(const fm_pivot_cells_t* cells, std:
                                              std::uint32_t* out_cols) {
   clear_last_error();
   if (cells == nullptr || out_top == nullptr || out_left == nullptr || out_rows == nullptr || out_cols == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_pivot_cells_bounds: NULL argument");
+    return null_argument("fm_pivot_cells_bounds");
   }
   *out_top = cells->top;
   *out_left = cells->left;
@@ -185,7 +185,7 @@ extern "C" fm_status_t fm_pivot_cells_bounds(const fm_pivot_cells_t* cells, std:
 extern "C" fm_status_t fm_pivot_cells_at(const fm_pivot_cells_t* cells, std::size_t idx, fm_pivot_cell_t* out) {
   clear_last_error();
   if (cells == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_pivot_cells_at: NULL argument");
+    return null_argument("fm_pivot_cells_at");
   }
   if (auto rc = check_index(idx, cells->cells.size(), "fm_pivot_cells_at", "idx"); rc != 0) {
     return rc;

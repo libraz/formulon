@@ -19,6 +19,7 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::value_from_fm;
@@ -47,8 +48,7 @@ extern "C" fm_status_t fm_workbook_get_display_text(const fm_workbook_t* wb, siz
                                                     uint32_t col, const char** out_text, int32_t* out_status) {
   clear_last_error();
   if (out_text == nullptr || out_status == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_get_display_text: NULL argument");
+    return null_argument("fm_workbook_get_display_text");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_get_display_text"); rc != 0) {
     return rc;
@@ -68,8 +68,7 @@ extern "C" fm_status_t fm_workbook_format_value(const fm_workbook_t* wb, const f
                                                 const char* format_code, const char** out_text, int32_t* out_status) {
   clear_last_error();
   if (wb == nullptr || value == nullptr || format_code == nullptr || out_text == nullptr || out_status == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_format_value: NULL argument");
+    return null_argument("fm_workbook_format_value");
   }
   if (auto rc = check_utf8("fm_workbook_format_value", {format_code}); rc != 0) {
     return rc;

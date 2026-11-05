@@ -63,8 +63,7 @@ extern "C" fm_status_t fm_pagination_print_area_at(const fm_pagination_t* pagina
                                                    fm_print_range_t* out) {
   clear_last_error();
   if (pagination == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_pagination_print_area_at: NULL argument");
+    return null_argument("fm_pagination_print_area_at");
   }
   if (auto rc = check_index(index, pagination->result.print_area.size(), "fm_pagination_print_area_at", "index");
       rc != 0) {
@@ -133,7 +132,7 @@ extern "C" fm_status_t fm_pagination_vertical_break_at(const fm_pagination_t* pa
 extern "C" fm_status_t fm_pagination_paper(const fm_pagination_t* pagination, fm_paper_info* out) {
   clear_last_error();
   if (pagination == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_pagination_paper: NULL argument");
+    return null_argument("fm_pagination_paper");
   }
   const formulon::print::PaperInfo& paper = pagination->result.paper;
   *out = fm_paper_info{};
@@ -147,7 +146,7 @@ extern "C" fm_status_t fm_pagination_paper(const fm_pagination_t* pagination, fm
 extern "C" fm_status_t fm_pagination_margins(const fm_pagination_t* pagination, fm_margins_pt* out) {
   clear_last_error();
   if (pagination == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_pagination_margins: NULL argument");
+    return null_argument("fm_pagination_margins");
   }
   const formulon::print::MarginsPt& margins = pagination->result.margins;
   *out = fm_margins_pt{margins.left, margins.right, margins.top, margins.bottom, margins.header, margins.footer};
@@ -157,8 +156,7 @@ extern "C" fm_status_t fm_pagination_margins(const fm_pagination_t* pagination, 
 extern "C" fm_status_t fm_pagination_printable(const fm_pagination_t* pagination, fm_rect_pt* out) {
   clear_last_error();
   if (pagination == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_pagination_printable: NULL argument");
+    return null_argument("fm_pagination_printable");
   }
   const formulon::print::RectPt& rect = pagination->result.printable;
   *out = fm_rect_pt{rect.x, rect.y, rect.width, rect.height};
@@ -168,7 +166,7 @@ extern "C" fm_status_t fm_pagination_printable(const fm_pagination_t* pagination
 extern "C" fm_status_t fm_pagination_scale(const fm_pagination_t* pagination, double* out_scale) {
   clear_last_error();
   if (pagination == nullptr || out_scale == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_pagination_scale: NULL argument");
+    return null_argument("fm_pagination_scale");
   }
   *out_scale = pagination->result.scale;
   return 0;
@@ -177,8 +175,7 @@ extern "C" fm_status_t fm_pagination_scale(const fm_pagination_t* pagination, do
 extern "C" fm_status_t fm_pagination_page_order(const fm_pagination_t* pagination, int32_t* out_order) {
   clear_last_error();
   if (pagination == nullptr || out_order == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_pagination_page_order: NULL argument");
+    return null_argument("fm_pagination_page_order");
   }
   *out_order = static_cast<int32_t>(pagination->result.page_order);
   return 0;
@@ -187,8 +184,7 @@ extern "C" fm_status_t fm_pagination_page_order(const fm_pagination_t* paginatio
 extern "C" fm_status_t fm_pagination_print_titles(const fm_pagination_t* pagination, fm_print_titles* out) {
   clear_last_error();
   if (pagination == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_pagination_print_titles: NULL argument");
+    return null_argument("fm_pagination_print_titles");
   }
   const formulon::print::PrintTitleSpan& titles = pagination->result.print_titles;
   *out = fm_print_titles{};
@@ -204,7 +200,7 @@ extern "C" fm_status_t fm_pagination_print_titles(const fm_pagination_t* paginat
 extern "C" fm_status_t fm_pagination_page_at(const fm_pagination_t* pagination, size_t index, fm_page_layout* out) {
   clear_last_error();
   if (pagination == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_pagination_page_at: NULL argument");
+    return null_argument("fm_pagination_page_at");
   }
   if (auto rc = check_index(index, pagination->result.pages.size(), "fm_pagination_page_at", "index"); rc != 0) {
     return rc;

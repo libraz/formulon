@@ -22,6 +22,7 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 
 namespace {
@@ -47,8 +48,7 @@ fm_status_t convert_formula(const char* api, const char* formula, const char* pr
                             const char** out_formula) {
   clear_last_error();
   if (formula == nullptr || profile_id == nullptr || out_formula == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             (std::string(api) + ": NULL argument").c_str());
+    return null_argument(api);
   }
   if (auto rc = check_utf8(api, {formula}); rc != 0) {
     return rc;
@@ -77,7 +77,7 @@ extern "C" fm_status_t fm_formula_canonicalize(const char* formula, const char* 
 extern "C" fm_status_t fm_locale_facts(const char* profile_id, fm_locale_facts_t* out) {
   clear_last_error();
   if (profile_id == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_locale_facts: NULL argument");
+    return null_argument("fm_locale_facts");
   }
   formulon::ExcelProfile profile;
   if (auto rc = check_profile_id(profile_id, "fm_locale_facts", &profile); rc != 0) {
@@ -109,7 +109,7 @@ extern "C" fm_status_t fm_locale_error_name(const char* profile_id, size_t error
                                             const char** out_localized, int32_t* out_measured) {
   clear_last_error();
   if (profile_id == nullptr || out_canonical == nullptr || out_localized == nullptr || out_measured == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_locale_error_name: NULL argument");
+    return null_argument("fm_locale_error_name");
   }
   formulon::ExcelProfile profile;
   if (auto rc = check_profile_id(profile_id, "fm_locale_error_name", &profile); rc != 0) {

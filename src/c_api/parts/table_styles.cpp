@@ -19,6 +19,7 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 
 namespace {
@@ -118,8 +119,7 @@ constexpr std::string_view kDefaultPivotStyle = "PivotStyleLight16";
 extern "C" fm_status_t fm_styles_get_table_style_count(fm_workbook_t* wb, uint32_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_get_table_style_count: NULL argument");
+    return null_argument("fm_styles_get_table_style_count");
   }
   *out_count = static_cast<uint32_t>(wb->workbook().styles().table_styles.styles.size());
   return 0;
@@ -128,8 +128,7 @@ extern "C" fm_status_t fm_styles_get_table_style_count(fm_workbook_t* wb, uint32
 extern "C" fm_status_t fm_styles_get_table_style(fm_workbook_t* wb, uint32_t index, fm_table_style_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_get_table_style: NULL argument");
+    return null_argument("fm_styles_get_table_style");
   }
   const auto& styles = wb->workbook().styles().table_styles.styles;
   if (auto rc = check_index(index, styles.size(), "fm_styles_get_table_style", "index"); rc != 0) {
@@ -161,8 +160,7 @@ extern "C" fm_status_t fm_styles_set_table_style(fm_workbook_t* wb, const fm_tab
   clear_last_error();
   if (wb == nullptr || style == nullptr || style->name == nullptr ||
       (style->element_count != 0U && style->elements == nullptr)) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_set_table_style: NULL argument");
+    return null_argument("fm_styles_set_table_style");
   }
   if (auto rc = check_utf8("fm_styles_set_table_style", {style->name}); rc != 0) {
     return rc;
@@ -231,8 +229,7 @@ extern "C" fm_status_t fm_styles_set_table_style(fm_workbook_t* wb, const fm_tab
 extern "C" fm_status_t fm_styles_remove_table_style(fm_workbook_t* wb, const char* name) {
   clear_last_error();
   if (wb == nullptr || name == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_remove_table_style: NULL argument");
+    return null_argument("fm_styles_remove_table_style");
   }
   if (auto rc = check_utf8("fm_styles_remove_table_style", {name}); rc != 0) {
     return rc;
@@ -258,8 +255,7 @@ extern "C" fm_status_t fm_styles_get_table_style_defaults(fm_workbook_t* wb, con
                                                           const char** out_pivot_style) {
   clear_last_error();
   if (wb == nullptr || out_table_style == nullptr || out_pivot_style == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_get_table_style_defaults: NULL argument");
+    return null_argument("fm_styles_get_table_style_defaults");
   }
   const formulon::TableStylesSection& section = wb->workbook().styles().table_styles;
   *out_table_style = section.default_table_style.c_str();
@@ -271,8 +267,7 @@ extern "C" fm_status_t fm_styles_set_table_style_defaults(fm_workbook_t* wb, con
                                                           const char* pivot_style) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_set_table_style_defaults: wb is NULL");
+    return null_argument("fm_styles_set_table_style_defaults", "wb");
   }
   if (auto rc = check_utf8("fm_styles_set_table_style_defaults", {table_style, pivot_style}); rc != 0) {
     return rc;

@@ -28,6 +28,7 @@ using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 
@@ -63,7 +64,7 @@ extern "C" fm_status_t fm_cell_set_xf_index(fm_workbook_t* wb, uint32_t sheet, u
                                             uint32_t xf_index) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_cell_set_xf_index: wb is NULL");
+    return null_argument("fm_cell_set_xf_index", "wb");
   }
   if (auto rc = check_cell_xf_index(wb, xf_index, "fm_cell_set_xf_index"); rc != 0) {
     return rc;
@@ -74,7 +75,7 @@ extern "C" fm_status_t fm_cell_set_xf_index(fm_workbook_t* wb, uint32_t sheet, u
 extern "C" fm_status_t fm_cell_clear_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_cell_clear_xf_index: wb is NULL");
+    return null_argument("fm_cell_clear_xf_index", "wb");
   }
   return finish_status(wb->workbook().clear_cell_xf_index(sheet, row, col));
 }
@@ -162,7 +163,7 @@ void cell_xf_to_c(const formulon::CellXf& xf, fm_cell_xf* out) {
 extern "C" fm_status_t fm_styles_get_cell_xf(fm_workbook_t* wb, uint32_t xf_index, fm_cell_xf* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_get_cell_xf: NULL argument");
+    return null_argument("fm_styles_get_cell_xf");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
   if (auto rc = check_index(xf_index, styles.cell_xfs.size(), "fm_styles_get_cell_xf", "xf_index"); rc != 0) {
@@ -267,7 +268,7 @@ void border_to_c(const formulon::BorderRecord& b, fm_border_record* out) noexcep
 extern "C" fm_status_t fm_styles_get_font(fm_workbook_t* wb, uint32_t font_index, fm_font_record* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_get_font: NULL argument");
+    return null_argument("fm_styles_get_font");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
   if (auto rc = check_index(font_index, styles.fonts.size(), "fm_styles_get_font", "font_index"); rc != 0) {
@@ -280,8 +281,7 @@ extern "C" fm_status_t fm_styles_get_font(fm_workbook_t* wb, uint32_t font_index
 extern "C" fm_status_t fm_styles_get_num_fmt_string(fm_workbook_t* wb, uint16_t num_fmt_id, const char** out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_get_num_fmt_string: NULL argument");
+    return null_argument("fm_styles_get_num_fmt_string");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
   std::optional<std::string_view> resolved = effective_num_fmt(styles, num_fmt_id);
@@ -300,7 +300,7 @@ extern "C" fm_status_t fm_styles_get_num_fmt_string(fm_workbook_t* wb, uint16_t 
 extern "C" fm_status_t fm_styles_get_fill(fm_workbook_t* wb, uint32_t fill_index, fm_fill_record* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_get_fill: NULL argument");
+    return null_argument("fm_styles_get_fill");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
   if (auto rc = check_index(fill_index, styles.fills.size(), "fm_styles_get_fill", "fill_index"); rc != 0) {
@@ -314,7 +314,7 @@ extern "C" fm_status_t fm_styles_get_fill(fm_workbook_t* wb, uint32_t fill_index
 extern "C" fm_status_t fm_styles_get_border(fm_workbook_t* wb, uint32_t border_index, fm_border_record* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_get_border: NULL argument");
+    return null_argument("fm_styles_get_border");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
   if (auto rc = check_index(border_index, styles.borders.size(), "fm_styles_get_border", "border_index"); rc != 0) {
@@ -327,8 +327,7 @@ extern "C" fm_status_t fm_styles_get_border(fm_workbook_t* wb, uint32_t border_i
 extern "C" fm_status_t fm_styles_get_dxf_count(fm_workbook_t* wb, uint32_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_get_dxf_count: NULL argument");
+    return null_argument("fm_styles_get_dxf_count");
   }
   *out_count = static_cast<uint32_t>(wb->workbook().styles().dxfs.size());
   return 0;
@@ -337,7 +336,7 @@ extern "C" fm_status_t fm_styles_get_dxf_count(fm_workbook_t* wb, uint32_t* out_
 extern "C" fm_status_t fm_styles_get_dxf(fm_workbook_t* wb, uint32_t dxf_index, fm_dxf_record* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_get_dxf: NULL argument");
+    return null_argument("fm_styles_get_dxf");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
   if (auto rc = check_index(dxf_index, styles.dxfs.size(), "fm_styles_get_dxf", "dxf_index"); rc != 0) {
@@ -376,8 +375,7 @@ extern "C" fm_status_t fm_styles_get_dxf(fm_workbook_t* wb, uint32_t dxf_index, 
 extern "C" fm_status_t fm_styles_get_cell_style_count(fm_workbook_t* wb, uint32_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_get_cell_style_count: NULL argument");
+    return null_argument("fm_styles_get_cell_style_count");
   }
   *out_count = static_cast<uint32_t>(wb->workbook().styles().cell_styles.size());
   return 0;
@@ -386,8 +384,7 @@ extern "C" fm_status_t fm_styles_get_cell_style_count(fm_workbook_t* wb, uint32_
 extern "C" fm_status_t fm_styles_get_cell_style(fm_workbook_t* wb, uint32_t index, fm_cell_style_record_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_get_cell_style: NULL argument");
+    return null_argument("fm_styles_get_cell_style");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
   if (auto rc = check_index(index, styles.cell_styles.size(), "fm_styles_get_cell_style", "index"); rc != 0) {
@@ -406,8 +403,7 @@ extern "C" fm_status_t fm_styles_get_cell_style(fm_workbook_t* wb, uint32_t inde
 extern "C" fm_status_t fm_styles_get_cell_style_xf_count(fm_workbook_t* wb, uint32_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_get_cell_style_xf_count: NULL argument");
+    return null_argument("fm_styles_get_cell_style_xf_count");
   }
   *out_count = static_cast<uint32_t>(wb->workbook().styles().cell_style_xfs.size());
   return 0;
@@ -416,8 +412,7 @@ extern "C" fm_status_t fm_styles_get_cell_style_xf_count(fm_workbook_t* wb, uint
 extern "C" fm_status_t fm_styles_get_cell_style_xf(fm_workbook_t* wb, uint32_t index, fm_cell_xf* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_get_cell_style_xf: NULL argument");
+    return null_argument("fm_styles_get_cell_style_xf");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
   if (auto rc = check_index(index, styles.cell_style_xfs.size(), "fm_styles_get_cell_style_xf", "index"); rc != 0) {

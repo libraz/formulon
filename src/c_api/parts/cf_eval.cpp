@@ -33,6 +33,7 @@
 
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 
@@ -114,8 +115,7 @@ extern "C" fm_status_t fm_workbook_cf_evaluate_range(const fm_workbook_t* wb, si
                                                      double today_serial, fm_cf_results_t** out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_cf_evaluate_range: NULL argument");
+    return null_argument("fm_workbook_cf_evaluate_range");
   }
   *out = nullptr;
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_cf_evaluate_range"); rc != 0) {
@@ -174,7 +174,7 @@ extern "C" fm_status_t fm_cf_results_cell_at(const fm_cf_results_t* results, siz
                                              uint32_t* out_col, size_t* out_match_count) {
   clear_last_error();
   if (results == nullptr || out_row == nullptr || out_col == nullptr || out_match_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_cf_results_cell_at: NULL argument");
+    return null_argument("fm_cf_results_cell_at");
   }
   if (cell_idx >= results->matches.size()) {
     return set_binding_error(
@@ -192,7 +192,7 @@ extern "C" fm_status_t fm_cf_results_match_at(const fm_cf_results_t* results, si
                                               fm_cf_match_t* out) {
   clear_last_error();
   if (results == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_cf_results_match_at: NULL argument");
+    return null_argument("fm_cf_results_match_at");
   }
   if (cell_idx >= results->matches.size()) {
     return set_binding_error(

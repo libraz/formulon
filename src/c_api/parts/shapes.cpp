@@ -21,6 +21,7 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fill_anchor;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
@@ -134,7 +135,7 @@ extern "C" fm_status_t fm_sheet_insert_shape(fm_workbook_t* wb, size_t sheet_ind
   clear_last_error();
   constexpr const char* kApi = "fm_sheet_insert_shape";
   if (spec == nullptr || out_object_id == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_insert_shape: NULL argument");
+    return null_argument("fm_sheet_insert_shape");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
     return rc;

@@ -36,6 +36,7 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::copy_owned_bytes;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::kMaxOutlineLevel;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 
@@ -62,8 +63,7 @@ fm_status_t check_sheet_row_span(const fm_workbook_t* wb, size_t sheet_index, ui
 extern "C" fm_status_t fm_sheet_get_column_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_column_count: NULL argument");
+    return null_argument("fm_sheet_get_column_count");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_column_count"); rc != 0) {
     return rc;
@@ -76,7 +76,7 @@ extern "C" fm_status_t fm_sheet_get_column(const fm_workbook_t* wb, size_t sheet
                                            fm_column_layout_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_column: NULL argument");
+    return null_argument("fm_sheet_get_column");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_column"); rc != 0) {
     return rc;
@@ -101,8 +101,7 @@ extern "C" fm_status_t fm_sheet_get_column(const fm_workbook_t* wb, size_t sheet
 extern "C" fm_status_t fm_sheet_get_row_override_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_row_override_count: NULL argument");
+    return null_argument("fm_sheet_get_row_override_count");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_row_override_count"); rc != 0) {
     return rc;
@@ -115,8 +114,7 @@ extern "C" fm_status_t fm_sheet_get_row_override(const fm_workbook_t* wb, size_t
                                                  fm_row_layout_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_row_override: NULL argument");
+    return null_argument("fm_sheet_get_row_override");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_row_override"); rc != 0) {
     return rc;
@@ -500,8 +498,7 @@ extern "C" fm_status_t fm_sheet_get_format_defaults(const fm_workbook_t* wb, siz
                                                     fm_sheet_format_defaults* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_format_defaults: NULL argument");
+    return null_argument("fm_sheet_get_format_defaults");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_format_defaults"); rc != 0) {
     return rc;
@@ -526,8 +523,7 @@ extern "C" fm_status_t fm_sheet_set_format_defaults(fm_workbook_t* wb, size_t sh
                                                     const fm_sheet_format_defaults* defaults) {
   clear_last_error();
   if (defaults == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_set_format_defaults: NULL argument");
+    return null_argument("fm_sheet_set_format_defaults");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_format_defaults"); rc != 0) {
     return rc;

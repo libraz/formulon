@@ -48,6 +48,7 @@ using formulon::c_api::parts::display_formula;
 using formulon::c_api::parts::display_formula_text;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -167,7 +168,7 @@ extern "C" fm_status_t fm_workbook_set_text(fm_workbook_t* wb, size_t sheet_inde
     return rc;
   }
   if (utf8 == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_set_text: utf8 is NULL");
+    return null_argument("fm_workbook_set_text", "utf8");
   }
   if (auto rc = check_utf8("fm_workbook_set_text", {utf8}); rc != 0) {
     return rc;
@@ -188,8 +189,7 @@ extern "C" fm_status_t fm_workbook_set_cell_phonetic(fm_workbook_t* wb, size_t s
     return rc;
   }
   if (utf8 == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_set_cell_phonetic: utf8 is NULL");
+    return null_argument("fm_workbook_set_cell_phonetic", "utf8");
   }
   if (auto rc = check_utf8("fm_workbook_set_cell_phonetic", {utf8}); rc != 0) {
     return rc;
@@ -214,8 +214,7 @@ extern "C" fm_status_t fm_workbook_set_cell_phonetic_runs(fm_workbook_t* wb, siz
     return rc;
   }
   if (runs == nullptr && count != 0U) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_set_cell_phonetic_runs: runs is NULL");
+    return null_argument("fm_workbook_set_cell_phonetic_runs", "runs");
   }
   if (auto rc = check_cell_coord(row, col, "fm_workbook_set_cell_phonetic_runs"); rc != 0) {
     return rc;
@@ -322,8 +321,7 @@ namespace {
 fm_status_t lookup_phonetic_cell(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                  const char* fn, const void* out, const char* out_name, const formulon::Cell** cell) {
   if (out_name != nullptr && out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             (std::string(fn) + ": " + out_name + " is NULL").c_str());
+    return null_argument(fn, out_name);
   }
   if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
     return rc;
@@ -378,8 +376,7 @@ extern "C" fm_status_t fm_workbook_set_formula(fm_workbook_t* wb, size_t sheet_i
     return rc;
   }
   if (formula == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_set_formula: formula is NULL");
+    return null_argument("fm_workbook_set_formula", "formula");
   }
   std::string bound;
   if (auto rc = check_entered_cell_formula("fm_workbook_set_formula", wb, sheet_index, row, col, formula,
@@ -400,7 +397,7 @@ extern "C" fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t she
                                              fm_value_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_get_value: NULL argument");
+    return null_argument("fm_workbook_get_value");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_get_value"); rc != 0) {
     return rc;
@@ -500,8 +497,7 @@ extern "C" fm_status_t fm_workbook_lambda_text_at(fm_workbook_t* wb, size_t shee
                                                   const char** out_text) {
   clear_last_error();
   if (out_text == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_lambda_text_at: NULL argument");
+    return null_argument("fm_workbook_lambda_text_at");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_lambda_text_at"); rc != 0) {
     return rc;
@@ -612,7 +608,7 @@ extern "C" fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet
                                            uint32_t* out_col, const char** out_formula, fm_value_t* out_value) {
   clear_last_error();
   if (out_row == nullptr || out_col == nullptr || out_value == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_cell_at: NULL argument");
+    return null_argument("fm_workbook_cell_at");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_cell_at"); rc != 0) {
     return rc;
@@ -665,7 +661,7 @@ extern "C" fm_status_t fm_workbook_spill_info(const fm_workbook_t* wb, std::uint
                                               std::uint32_t col, fm_spill_info_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_spill_info: NULL argument");
+    return null_argument("fm_workbook_spill_info");
   }
   if (auto rc = check_sheet_u32(wb, sheet, "fm_workbook_spill_info"); rc != 0) {
     return rc;
@@ -707,8 +703,7 @@ extern "C" fm_status_t fm_workbook_get_array_formula(const fm_workbook_t* wb, st
                                                      std::uint32_t col, fm_array_formula_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_get_array_formula: NULL argument");
+    return null_argument("fm_workbook_get_array_formula");
   }
   if (auto rc = check_sheet_u32(wb, sheet, "fm_workbook_get_array_formula"); rc != 0) {
     return rc;
@@ -740,8 +735,7 @@ extern "C" fm_status_t fm_workbook_set_array_formula(fm_workbook_t* wb, std::uin
     return rc;
   }
   if (formula == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_set_array_formula: formula is NULL");
+    return null_argument("fm_workbook_set_array_formula", "formula");
   }
   if (auto rc = check_cell_coord(row, col, "fm_workbook_set_array_formula"); rc != 0) {
     return rc;
@@ -768,8 +762,7 @@ namespace {
 fm_status_t read_stored_formula(const fm_workbook_t* wb, size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                 const char** out_formula, const char* api, std::string* out_text) {
   if (out_formula == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             (std::string(api) + ": NULL argument").c_str());
+    return null_argument(api);
   }
   if (auto rc = check_sheet_index(wb, sheet_index, api); rc != 0) {
     return rc;
@@ -869,7 +862,7 @@ extern "C" fm_status_t fm_sheet_cells_in_range(const fm_workbook_t* wb, size_t s
 extern "C" fm_status_t fm_cell_range_count(const fm_cell_range_t* range, size_t* out_count) {
   clear_last_error();
   if (range == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_cell_range_count: NULL argument");
+    return null_argument("fm_cell_range_count");
   }
   *out_count = range->entries.size();
   return 0;
@@ -879,7 +872,7 @@ extern "C" fm_status_t fm_cell_range_at(const fm_cell_range_t* range, size_t idx
                                         const char** out_formula, fm_value_t* out_value) {
   clear_last_error();
   if (range == nullptr || out_row == nullptr || out_col == nullptr || out_value == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_cell_range_at: NULL argument");
+    return null_argument("fm_cell_range_at");
   }
   if (auto rc = check_index(idx, range->entries.size(), "fm_cell_range_at", "idx"); rc != 0) {
     return rc;
@@ -897,8 +890,7 @@ extern "C" fm_status_t fm_cell_range_at(const fm_cell_range_t* range, size_t idx
 extern "C" fm_status_t fm_cell_range_next_cursor(const fm_cell_range_t* range, uint64_t* out_cursor) {
   clear_last_error();
   if (range == nullptr || out_cursor == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_cell_range_next_cursor: NULL argument");
+    return null_argument("fm_cell_range_next_cursor");
   }
   *out_cursor = range->next_cursor;
   return 0;

@@ -27,6 +27,7 @@ using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::value_to_fm;
@@ -64,8 +65,7 @@ extern "C" fm_status_t fm_workbook_evaluate_formula(const fm_workbook_t* wb, siz
                                                     uint32_t col, const char* formula, fm_value_t* out) {
   clear_last_error();
   if (out == nullptr || formula == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_evaluate_formula: NULL argument");
+    return null_argument("fm_workbook_evaluate_formula");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_evaluate_formula"); rc != 0) {
     return rc;
@@ -100,8 +100,7 @@ extern "C" fm_status_t fm_workbook_evaluate_formula_array(const fm_workbook_t* w
                                                           uint32_t* out_cols) {
   clear_last_error();
   if (out_rows == nullptr || out_cols == nullptr || formula == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_evaluate_formula_array: NULL argument");
+    return null_argument("fm_workbook_evaluate_formula_array");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_evaluate_formula_array"); rc != 0) {
     return rc;
@@ -163,8 +162,7 @@ extern "C" fm_status_t fm_workbook_evaluate_formula_array(const fm_workbook_t* w
 extern "C" fm_status_t fm_workbook_evaluate_formula_array_cell(const fm_workbook_t* wb, size_t index, fm_value_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_evaluate_formula_array_cell: NULL argument");
+    return null_argument("fm_workbook_evaluate_formula_array_cell");
   }
   const AdhocArrayStash& stash = wb->adhoc_array;
   if (auto rc = check_index(index, stash.cells.size(), "fm_workbook_evaluate_formula_array_cell", "index"); rc != 0) {
@@ -182,8 +180,7 @@ extern "C" fm_status_t fm_workbook_evaluate_cf_formula(const fm_workbook_t* wb, 
                                                        const char* formula, fm_value_t* out) {
   clear_last_error();
   if (out == nullptr || formula == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_evaluate_cf_formula: NULL argument");
+    return null_argument("fm_workbook_evaluate_cf_formula");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_evaluate_cf_formula"); rc != 0) {
     return rc;

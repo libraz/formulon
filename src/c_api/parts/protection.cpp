@@ -22,6 +22,7 @@ using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::text_or_empty;
@@ -70,8 +71,7 @@ fm_status_t CheckRange(const std::vector<formulon::ProtectedRange>& ranges, cons
 extern "C" fm_status_t fm_workbook_get_protection(fm_workbook_t* wb, fm_workbook_protection_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_get_protection: NULL argument");
+    return null_argument("fm_workbook_get_protection");
   }
   const formulon::WorkbookProtection p =
       formulon::io::parse_workbook_protection(wb->workbook().workbook_protection_xml());
@@ -95,8 +95,7 @@ extern "C" fm_status_t fm_workbook_get_protection(fm_workbook_t* wb, fm_workbook
 extern "C" fm_status_t fm_workbook_set_protection(fm_workbook_t* wb, const fm_workbook_protection_t* protection) {
   clear_last_error();
   if (wb == nullptr || protection == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_set_protection: NULL argument");
+    return null_argument("fm_workbook_set_protection");
   }
   if (auto rc = check_utf8(
           "fm_workbook_set_protection",

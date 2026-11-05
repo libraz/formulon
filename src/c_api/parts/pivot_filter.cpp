@@ -21,6 +21,8 @@
 
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::invalid_argument;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::pivot_axis_from_fm;
 using formulon::c_api::parts::pivot_axis_to_fm;
 using formulon::c_api::parts::pivot_count;
@@ -57,12 +59,10 @@ fm_status_t numeric_payload(fm_pivot_filter_value_kind_t kind, std::int32_t as_i
 fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                                   const fm_pivot_filter_spec_t* spec, const char* api) {
   if (wb == nullptr || spec == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             (std::string(api) + ": NULL argument").c_str());
+    return null_argument(api);
   }
   if (spec->field_name == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             (std::string(api) + ": spec->field_name is NULL").c_str());
+    return null_argument(api, "spec->field_name");
   }
   if (auto rc = validate(*spec, api); rc != 0) {
     return rc;
@@ -74,27 +74,25 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
   const formulon::pivot::FilterType type = pivot_filter_type_from_fm(spec->type);
   const bool caption = formulon::pivot::is_caption_filter_type(type);
   const bool ranged = formulon::pivot::is_range_filter_type(type);
-  const auto invalid = [&](const char* what, const std::string& detail) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, (std::string(api) + ": " + what).c_str(),
-                             detail);
-  };
   const std::string kind_detail = "type=" + std::to_string(static_cast<int>(spec->type)) +
                                   " value_kind=" + std::to_string(static_cast<int>(spec->value_kind));
   if (formulon::pivot::is_operandless_filter_type(type)) {
     if (spec->value_kind != FM_PIVOT_FILTER_VALUE_NONE) {
-      return invalid("this filter type takes no value", kind_detail);
+      return invalid_argument(api, "this filter type takes no value", kind_detail);
     }
   } else if (spec->value_kind == FM_PIVOT_FILTER_VALUE_NONE) {
-    return invalid("spec->value_kind is unset", kind_detail);
+    return invalid_argument(api, "spec->value_kind is unset", kind_detail);
   } else if (caption != (spec->value_kind == FM_PIVOT_FILTER_VALUE_TEXT)) {
-    return invalid(caption ? "a label filter takes a text value" : "this filter type takes a number", kind_detail);
+    return invalid_argument(api, caption ? "a label filter takes a text value" : "this filter type takes a number",
+                            kind_detail);
   }
   const bool text_high = caption && ranged;
   if (text_high != (spec->value_high_text != nullptr) ||
       text_high != (spec->value_high_kind == FM_PIVOT_FILTER_VALUE_TEXT)) {
-    return invalid(text_high ? "a label range takes its upper bound in value_high_text"
-                             : "value_high_text is only taken by a label range",
-                   "type=" + std::to_string(static_cast<int>(spec->type)));
+    return invalid_argument(api,
+                            text_high ? "a label range takes its upper bound in value_high_text"
+                                      : "value_high_text is only taken by a label range",
+                            "type=" + std::to_string(static_cast<int>(spec->type)));
   }
   if (formulon::pivot::is_value_filter_type(type)) {
     if (auto rc = check_index(spec->data_field_index, table->data_fields().size(), api, "data_field_index"); rc != 0) {
@@ -123,15 +121,14 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
       break;
     case FM_PIVOT_FILTER_VALUE_TEXT:
       if (spec->value_text == nullptr) {
-        return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                                 (std::string(api) + ": spec->value_text is NULL").c_str());
+        return null_argument(api, "spec->value_text");
       }
       filter.value = std::string(spec->value_text);
       break;
     case FM_PIVOT_FILTER_VALUE_NONE:
       break;
     default:
-      return invalid("spec->value_kind is out of range", kind_detail);
+      return invalid_argument(api, "spec->value_kind is out of range", kind_detail);
   }
   switch (spec->value_high_kind) {
     case FM_PIVOT_FILTER_VALUE_INT:
@@ -162,7 +159,7 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
         type == formulon::pivot::FilterType::ValueTop10 || type == formulon::pivot::FilterType::ValueBottomCount ||
         type == formulon::pivot::FilterType::ValueTopSum || type == formulon::pivot::FilterType::ValueBottomSum;
     if ((percent && (amount < 0.0 || amount > 100.0)) || (count_or_sum && amount <= 0.0)) {
-      return invalid("value is out of range for this filter type", kind_detail);
+      return invalid_argument(api, "value is out of range for this filter type", kind_detail);
     }
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
@@ -260,8 +257,7 @@ extern "C" fm_status_t fm_workbook_pivot_filter_remove_at(fm_workbook_t* wb, std
                                                           std::size_t pivot_index, std::size_t filter_idx) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_filter_remove_at: wb is NULL");
+    return null_argument("fm_workbook_pivot_filter_remove_at", "wb");
   }
   auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_filter_remove_at");
   if (table == nullptr) {

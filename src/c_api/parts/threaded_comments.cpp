@@ -21,6 +21,7 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
@@ -197,8 +198,7 @@ extern "C" fm_status_t fm_sheet_remove_threaded_comment(fm_workbook_t* wb, size_
 extern "C" fm_status_t fm_workbook_person_count(const fm_workbook_t* wb, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_person_count: NULL argument");
+    return null_argument("fm_workbook_person_count");
   }
   *out_count = wb->workbook().persons().size();
   return 0;
@@ -207,7 +207,7 @@ extern "C" fm_status_t fm_workbook_person_count(const fm_workbook_t* wb, size_t*
 extern "C" fm_status_t fm_workbook_person_at(const fm_workbook_t* wb, size_t idx, fm_person* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_person_at: NULL argument");
+    return null_argument("fm_workbook_person_at");
   }
   const auto& persons = wb->workbook().persons();
   if (auto rc = check_index(idx, persons.size(), "fm_workbook_person_at", "idx"); rc != 0) {
@@ -225,7 +225,7 @@ extern "C" fm_status_t fm_workbook_person_at(const fm_workbook_t* wb, size_t idx
 extern "C" fm_status_t fm_workbook_add_person(fm_workbook_t* wb, const fm_person* person) {
   clear_last_error();
   if (wb == nullptr || person == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_add_person: NULL argument");
+    return null_argument("fm_workbook_add_person");
   }
   if (auto rc = check_utf8("fm_workbook_add_person",
                            {person->id, person->display_name, person->user_id, person->provider_id});
@@ -243,8 +243,7 @@ extern "C" fm_status_t fm_workbook_add_person(fm_workbook_t* wb, const fm_person
 extern "C" fm_status_t fm_workbook_remove_person(fm_workbook_t* wb, const char* id) {
   clear_last_error();
   if (wb == nullptr || id == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_remove_person: NULL argument");
+    return null_argument("fm_workbook_remove_person");
   }
   if (auto rc = check_utf8("fm_workbook_remove_person", {id}); rc != 0) {
     return rc;

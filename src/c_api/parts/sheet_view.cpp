@@ -21,6 +21,7 @@ using formulon::c_api::parts::check_keeps_visible_sheet;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 
 extern "C" fm_status_t fm_sheet_set_zoom(fm_workbook_t* wb, size_t sheet_index, uint32_t zoom_scale) {
@@ -125,7 +126,7 @@ extern "C" fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_i
 extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_index, fm_sheet_view_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_view: NULL argument");
+    return null_argument("fm_sheet_get_view");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_view"); rc != 0) {
     return rc;
@@ -203,7 +204,7 @@ extern "C" fm_status_t fm_sheet_get_selection(const fm_workbook_t* wb, size_t sh
   clear_last_error();
   if (out_active_row == nullptr || out_active_col == nullptr || out_total == nullptr ||
       (out_ranges == nullptr && capacity != 0U)) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_selection: NULL argument");
+    return null_argument("fm_sheet_get_selection");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_selection"); rc != 0) {
     return rc;
@@ -232,8 +233,7 @@ extern "C" fm_status_t fm_sheet_set_selection(fm_workbook_t* wb, size_t sheet_in
                                               uint32_t active_col, const fm_merge_range* ranges, size_t count) {
   clear_last_error();
   if (count != 0U && ranges == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_set_selection: ranges is NULL");
+    return null_argument("fm_sheet_set_selection", "ranges");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_selection"); rc != 0) {
     return rc;

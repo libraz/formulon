@@ -27,14 +27,13 @@ using formulon::c_api::parts::copy_owned_bytes;
 using formulon::c_api::parts::fill_anchor;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::TextStore;
 
 namespace {
-
-constexpr const char* kNullPointer = "NULL argument";
 
 fm_image_info to_fm(const formulon::ImageInfo& info) {
   return fm_image_info{static_cast<int32_t>(info.format), info.px_width, info.px_height};
@@ -46,8 +45,7 @@ extern "C" fm_status_t fm_workbook_probe_image(const fm_workbook_t* wb, const ui
                                                fm_image_info* out) {
   clear_last_error();
   if (wb == nullptr || bytes == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_probe_image: NULL argument");
+    return null_argument("fm_workbook_probe_image");
   }
   auto info = formulon::probe_image(bytes, len);
   if (!info) {
@@ -148,8 +146,7 @@ extern "C" fm_status_t fm_sheet_insert_image(fm_workbook_t* wb, size_t sheet_ind
   clear_last_error();
   constexpr const char* kApi = "fm_sheet_insert_image";
   if (bytes == nullptr || opts == nullptr || out_object_id == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             (std::string(kApi) + ": " + kNullPointer).c_str());
+    return null_argument(kApi);
   }
   if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
     return rc;
@@ -192,8 +189,7 @@ extern "C" fm_status_t fm_sheet_set_drawing_anchor(fm_workbook_t* wb, size_t she
   clear_last_error();
   constexpr const char* kApi = "fm_sheet_set_drawing_anchor";
   if (anchor == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             (std::string(kApi) + ": " + kNullPointer).c_str());
+    return null_argument(kApi);
   }
   if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
     return rc;
@@ -218,8 +214,7 @@ extern "C" fm_status_t fm_sheet_set_drawing_name(fm_workbook_t* wb, size_t sheet
   clear_last_error();
   constexpr const char* kApi = "fm_sheet_set_drawing_name";
   if (name == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             (std::string(kApi) + ": name is NULL").c_str());
+    return null_argument(kApi, "name");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
     return rc;
@@ -250,8 +245,7 @@ extern "C" fm_status_t fm_sheet_snapshot_drawing(const fm_workbook_t* wb, size_t
     *out_len = 0;
   }
   if (out_bytes == nullptr || out_len == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             (std::string(kApi) + ": " + kNullPointer).c_str());
+    return null_argument(kApi);
   }
   if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
     return rc;
@@ -270,8 +264,7 @@ extern "C" fm_status_t fm_sheet_restore_drawing(fm_workbook_t* wb, size_t sheet_
   clear_last_error();
   constexpr const char* kApi = "fm_sheet_restore_drawing";
   if (bytes == nullptr || out_object_id == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             (std::string(kApi) + ": " + kNullPointer).c_str());
+    return null_argument(kApi);
   }
   if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
     return rc;

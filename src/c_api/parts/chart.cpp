@@ -507,32 +507,33 @@ extern "C" fm_status_t fm_chart_info(const fm_chart_t* chart, fm_chart_info_t* o
   return 0;
 }
 
-extern "C" fm_status_t fm_chart_legend_hidden_at(const fm_chart_t* chart, size_t idx, uint32_t* out) {
-  clear_last_error();
-  constexpr const char* kApi = "fm_chart_legend_hidden_at";
+namespace {
+
+// Reads `list[idx]` into `*out` after the NULL and range checks shared by the index-list accessors.
+fm_status_t index_list_at(const fm_chart_t* chart, const std::vector<std::uint32_t>* list, size_t idx,
+                          std::uint32_t* out, const char* api) {
   if (chart == nullptr || out == nullptr) {
-    return null_argument(kApi);
+    return null_argument(api);
   }
-  const std::vector<std::uint32_t>& list = chart->model.legend.hidden_series_idx;
-  if (auto rc = check_index(idx, list.size(), kApi, "idx"); rc != 0) {
+  if (auto rc = check_index(idx, list->size(), api, "idx"); rc != 0) {
     return rc;
   }
-  *out = list[idx];
+  *out = (*list)[idx];
   return 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_chart_legend_hidden_at(const fm_chart_t* chart, size_t idx, uint32_t* out) {
+  clear_last_error();
+  return index_list_at(chart, chart != nullptr ? &chart->model.legend.hidden_series_idx : nullptr, idx, out,
+                       "fm_chart_legend_hidden_at");
 }
 
 extern "C" fm_status_t fm_chart_hidden_category_at(const fm_chart_t* chart, size_t idx, uint32_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_hidden_category_at";
-  if (chart == nullptr || out == nullptr) {
-    return null_argument(kApi);
-  }
-  const std::vector<std::uint32_t>& list = chart->model.category_filter;
-  if (auto rc = check_index(idx, list.size(), kApi, "idx"); rc != 0) {
-    return rc;
-  }
-  *out = list[idx];
-  return 0;
+  return index_list_at(chart, chart != nullptr ? &chart->model.category_filter : nullptr, idx, out,
+                       "fm_chart_hidden_category_at");
 }
 
 extern "C" fm_status_t fm_chart_plot_at(const fm_chart_t* chart, size_t plot, fm_chart_plot_t* out) {

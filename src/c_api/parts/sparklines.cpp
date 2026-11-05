@@ -18,6 +18,7 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
@@ -217,7 +218,7 @@ extern "C" fm_status_t fm_sheet_add_sparkline_group(fm_workbook_t* wb, size_t sh
                                                     size_t count) {
   clear_last_error();
   if (group == nullptr || items == nullptr) {
-    return set_binding_error(FormulonErrorCode::kBindingNullPointer, "fm_sheet_add_sparkline_group: NULL argument");
+    return null_argument("fm_sheet_add_sparkline_group");
   }
   if (auto rc = check_utf8("fm_sheet_add_sparkline_group", {group->date_axis_ref}); rc != 0) {
     return rc;

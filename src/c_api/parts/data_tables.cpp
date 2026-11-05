@@ -13,6 +13,7 @@
 
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 
@@ -97,8 +98,7 @@ extern "C" fm_status_t fm_sheet_remove_data_table(fm_workbook_t* wb, size_t shee
 extern "C" fm_status_t fm_workbook_recalc_data_tables(fm_workbook_t* wb) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_recalc_data_tables: wb is NULL");
+    return null_argument("fm_workbook_recalc_data_tables", "wb");
   }
   auto r = wb->workbook().recalc_data_tables(formulon::eval::default_registry());
   if (!r) {
