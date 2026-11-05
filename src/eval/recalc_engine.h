@@ -539,6 +539,12 @@ class RecalcEngine {
                                                          const std::vector<CellNodeId>& component,
                                                          const char* iterative_oom_message);
 
+  /// Condenses the dirty `nodes` into strongly connected components in
+  /// reverse-topological order, settling dynamic-read cycles and fusing
+  /// iterative components when iteration is enabled. The caller holds `mutex_`.
+  std::vector<std::vector<CellNodeId>> condense_dirty_locked(
+      DynamicReadPass& dynamic, const std::unordered_set<CellNodeId, CellNodeIdHash>& nodes);
+
   /// Evaluates every component of `sccs` (reverse-topological order) that has
   /// a dirty member, restricted to `closure` when non-null. Singletons go
   /// through `evaluate_formula_cell_locked`, cycles through

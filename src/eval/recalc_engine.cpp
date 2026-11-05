@@ -171,6 +171,16 @@ void RecalcEngine::mark_edges_dirty_locked(const std::vector<DepGraph::Edge>& ed
   }
 }
 
+std::vector<std::vector<CellNodeId>> RecalcEngine::condense_dirty_locked(
+    DynamicReadPass& dynamic, const std::unordered_set<CellNodeId, CellNodeIdHash>& nodes) {
+  std::vector<std::vector<CellNodeId>> sccs = graph_.tarjan_scc_subset(nodes);
+  dynamic.settle_sccs(sccs, nodes);
+  if (iterative_.enabled) {
+    fuse_cyclic_components(&sccs, graph_);
+  }
+  return sccs;
+}
+
 void RecalcEngine::seed_dirty_locked(std::uint32_t* volatile_cells) {
   volatiles_.for_each([&](CellNodeId cell) {
     if (!dirty_.contains(cell)) {
@@ -534,11 +544,7 @@ recalc_next_wave:
   std::unordered_set<CellNodeId, CellNodeIdHash> dirty_nodes;
   dirty_nodes.reserve(dirty_.size());
   dirty_.for_each([&](CellNodeId c) { dirty_nodes.insert(c); });
-  std::vector<std::vector<CellNodeId>> sccs = graph_.tarjan_scc_subset(dirty_nodes);
-  dynamic.settle_sccs(sccs, dirty_nodes);
-  if (iterative_.enabled) {
-    fuse_cyclic_components(&sccs, graph_);
-  }
+  std::vector<std::vector<CellNodeId>> sccs = condense_dirty_locked(dynamic, dirty_nodes);
 
   // ---- Phase 4: evaluate every dirty SCC. ----
   // Also track which dirty cells have been visited via the SCC walk, so a

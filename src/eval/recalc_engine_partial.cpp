@@ -261,11 +261,7 @@ partial_recalc_next_wave:
   std::unordered_set<CellNodeId, CellNodeIdHash> dirty_closure;
   dirty_closure.reserve(propagation_queue.size());
   for_each_dirty_in_closure([&](CellNodeId c) { dirty_closure.insert(c); });
-  std::vector<std::vector<CellNodeId>> sccs = graph_.tarjan_scc_subset(dirty_closure);
-  dynamic.settle_sccs(sccs, dirty_closure);
-  if (iterative_.enabled) {
-    fuse_cyclic_components(&sccs, graph_);
-  }
+  std::vector<std::vector<CellNodeId>> sccs = condense_dirty_locked(dynamic, dirty_closure);
   std::unordered_set<CellNodeId, CellNodeIdHash> visited_in_sccs;
   RETURN_IF_ERROR(evaluate_dirty_components_locked(pass, sccs, &closure, kArenaExhaustedPartial, visited_in_sccs));
 

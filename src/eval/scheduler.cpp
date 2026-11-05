@@ -674,11 +674,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
     std::unordered_set<CellNodeId, CellNodeIdHash> dirty_nodes;
     dirty_nodes.reserve(engine.dirty_.size());
     engine.dirty_.for_each([&](CellNodeId c) { dirty_nodes.insert(c); });
-    std::vector<std::vector<CellNodeId>> dirty_sccs = engine.graph_.tarjan_scc_subset(dirty_nodes);
-    dynamic.settle_sccs(dirty_sccs, dirty_nodes);
-    if (engine.iterative_options().enabled) {
-      fuse_cyclic_components(&dirty_sccs, engine.graph_);
-    }
+    std::vector<std::vector<CellNodeId>> dirty_sccs = engine.condense_dirty_locked(dynamic, dirty_nodes);
     scc_nodes_considered += dirty_nodes.size();
 
     // Assign condensed-graph indices. Every emitted component is dirty by
@@ -875,7 +871,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
     }
 
     // Phase 4b: standalone-dirty cells (no graph edges, e.g. `=NOW()`).
-    // These are not in any SCC; sweep them serially. The fast `cells_to_scc`
+    // These are not in any SCC; sweep them serially. The fast `cell_to_scc`
     // map already covers every cell that landed in a dirty SCC.
     std::vector<CellNodeId> standalone_dirty;
     engine.dirty_.for_each([&](CellNodeId c) {
