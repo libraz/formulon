@@ -1,5 +1,5 @@
 //
-// `formulon dump <in.xlsx> [--formulas|--values|--sheets|--metadata]`.
+// `formulon dump <in> [--formulas|--values|--sheets|--metadata]`.
 //
 // Renders a stable, diff-friendly snapshot of a workbook so it can be
 // fed into `diff(1)` between recalc passes. The four flags are
@@ -42,14 +42,15 @@ std::string escape_c_string(const char* text) {
 }
 
 void print_dump_usage(std::ostream& out) {
-  out << "Usage: formulon dump [--formulas|--values|--sheets|--metadata] [--] <in.xlsx>\n"
+  out << "Usage: formulon dump [--formulas|--values|--sheets|--metadata] [--] <in>\n"
       << "\n"
-      << "Print a diff-friendly snapshot of <in.xlsx>:\n"
+      << "Print a diff-friendly snapshot of <in>, an xlsx or xlsb file:\n"
       << "  --formulas  list every formula cell (default)\n"
-      << "  --values    list every non-blank cell with its rendered value\n"
+      << "  --values    recalculate, then list every non-blank cell with its rendered value\n"
       << "  --sheets    list sheet names in document order\n"
       << "  --metadata  list defined names, tables and passthrough parts\n"
-      << "  --           end options; the next token is the input path\n";
+      << "  --           end options; the next token is the input path\n"
+      << "Plain output escapes only \\n, \\r, \\t and \\\\.\n";
   print_shared_options(out);
 }
 

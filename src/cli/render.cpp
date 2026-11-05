@@ -118,7 +118,25 @@ std::string render_value(const fm_value_t& v) {
 std::string escape_single_line(std::string_view text) {
   std::string out;
   out.reserve(text.size());
-  append_json_escaped(out, text);
+  for (const char c : text) {
+    switch (c) {
+      case '\n':
+        out.append("\\n");
+        break;
+      case '\r':
+        out.append("\\r");
+        break;
+      case '\t':
+        out.append("\\t");
+        break;
+      case '\\':
+        out.append("\\\\");
+        break;
+      default:
+        out.push_back(c);
+        break;
+    }
+  }
   return out;
 }
 

@@ -11,6 +11,7 @@
 #include "cli/cli.h"
 #include "cli/diagnostics.h"
 #include "cli/file_io.h"
+#include "cli/render.h"
 #include "cli/workbook_load.h"
 
 namespace formulon::cli {
@@ -22,10 +23,11 @@ struct PaginationGuard {
 };
 
 void print_paginate_usage(std::ostream& out) {
-  out << "Usage: formulon paginate [--sheet INDEX] [--] <in.xlsx>\n"
+  out << "Usage: formulon paginate [--sheet INDEX] [--] <in>\n"
       << "\n"
       << "Resolve a worksheet's print area, automatic page breaks, and physical page count.\n"
-      << "INDEX is zero-based and defaults to 0. Output coordinates are zero-based inclusive.\n"
+      << "INDEX is zero-based and defaults to 0. print_area lists A1 ranges (e.g. B2:D5);\n"
+      << "break positions are zero-based. <in> is an xlsx or xlsb file.\n"
       << "  --           end options; the next token is the input path\n";
   print_shared_options(out);
 }
@@ -107,7 +109,7 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
     if (i != 0) {
       out << ',';
     }
-    out << range.first_row << ':' << range.first_col << '-' << range.last_row << ':' << range.last_col;
+    out << format_a1(range.first_row, range.first_col) << ':' << format_a1(range.last_row, range.last_col);
   }
   out << '\n';
   const auto emit_breaks = [&](std::string_view label, auto count_fn, auto at_fn) -> bool {

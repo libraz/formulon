@@ -50,9 +50,10 @@ std::string format_a1(std::uint32_t row, std::uint32_t col);
 /// comment for the per-kind rules.
 std::string render_value(const fm_value_t& v);
 
-/// Returns `text` with JSON-style escapes for backslash, quote, and ASCII
-/// control characters, but without surrounding quotes. Use for line-oriented
-/// output such as `dump`, where embedded newlines must not create records.
+/// Returns `text` with only newline, carriage return, tab and backslash
+/// escaped (`\n`, `\r`, `\t`, `\\`). Quotes and other bytes pass through, so a
+/// plain-output line can be pasted back. Use for line-oriented output such as
+/// `dump`, where embedded newlines must not create records.
 std::string escape_single_line(std::string_view text);
 
 /// Returns `text` as a view, or an empty view for a NULL C string.

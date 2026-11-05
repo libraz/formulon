@@ -39,7 +39,11 @@ void print_eval_usage(std::ostream& out) {
       << "\n"
       << "Evaluate <formula> on a fresh empty workbook and print the result.\n"
       << "Cell-level Excel errors (#NAME?, #DIV/0!, ...) print to stdout and\n"
-      << "do NOT cause a non-zero exit code; only structural failures do.\n";
+      << "do NOT cause a non-zero exit code; only structural failures do.\n"
+      << "  --json       print each value as {\"kind\":...,\"value\":...} JSON\n"
+      << "  --repeat N   evaluate N times and report the elapsed time on stderr\n"
+      << "  --           end options; the next token is the formula\n"
+      << "Plain output escapes only \\n, \\r, \\t and \\\\.\n";
   print_shared_options(out);
 }
 
@@ -172,6 +176,7 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
 
   if (!formula_seen) {
+    err << "formulon: eval: missing formula\n";
     print_eval_usage(err);
     return kExitUsage;
   }
