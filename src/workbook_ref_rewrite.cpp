@@ -94,6 +94,12 @@ pugi::xml_node first_workbook_view(const pugi::xml_document& document) {
   return root.child("workbookView");
 }
 
+// `text` rewritten under `transform`, or nothing when it is unchanged.
+std::optional<std::string> rewritten_formula(std::string_view text, const parser::RefTransform& transform) {
+  FormulaRewriteResult result = rewrite_formula(text, transform);
+  return result.changed ? std::optional<std::string>(std::move(result.text)) : std::nullopt;
+}
+
 }  // namespace
 
 std::uint32_t book_views_active_tab(const std::string& book_views_xml) {
@@ -202,10 +208,8 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
     // Formulas inside retained extensions: sparkline sources, x14 rule and
     // validation formulas.
     std::string ext_lst = sheet.ext_lst_xml();
-    if (io::remap_ext_lst_formulas(ext_lst, [&transform](std::string_view text) -> std::optional<std::string> {
-          FormulaRewriteResult result = rewrite_formula(text, transform);
-          return result.changed ? std::optional<std::string>(std::move(result.text)) : std::nullopt;
-        })) {
+    if (io::remap_ext_lst_formulas(
+            ext_lst, [&transform](std::string_view text) { return rewritten_formula(text, transform); })) {
       sheet.set_ext_lst_xml(std::move(ext_lst));
     }
     if (!sheet.xlsb_tail().empty()) {
@@ -341,11 +345,7 @@ void shift_retained_extension_ranges(Sheet& sheet, std::uint32_t index, std::uin
   const bool clones = !is_delete && index > 0U;
   const io::SparklineClone clone{row_axis, index - 1U, count};
   std::string ext_lst = sheet.ext_lst_xml();
-  if (io::remap_ext_lst_sqrefs(
-          ext_lst, remap, clones ? &clone : nullptr, [](std::string_view text, const parser::RefTransform& transform) {
-            FormulaRewriteResult result = rewrite_formula(text, transform);
-            return result.changed ? std::optional<std::string>(std::move(result.text)) : std::nullopt;
-          })) {
+  if (io::remap_ext_lst_sqrefs(ext_lst, remap, clones ? &clone : nullptr, rewritten_formula)) {
     sheet.set_ext_lst_xml(std::move(ext_lst));
   }
   const StructuralEdit edit{index, count, is_delete, row_axis};
