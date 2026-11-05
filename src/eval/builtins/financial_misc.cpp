@@ -37,9 +37,6 @@ using builtins_detail::read_number_triple;
 // integer quote is already "decimal". The caller passes the truncated
 // integer denominator; this helper just computes the scale.
 Expected<double, ErrorCode> dollar_scale_from_denom(double denom_raw) {
-  if (!std::isfinite(denom_raw)) {
-    return ErrorCode::Num;
-  }
   if (denom_raw < 0.0) {
     return ErrorCode::Num;
   }
@@ -190,7 +187,7 @@ Value FvSchedule(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
       return Value::error(ErrorCode::Num);
     }
   }
-  return to_finite_value(result);
+  return Value::number(result);
 }
 
 // --- PDURATION(rate, pv, fv) -------------------------------------------

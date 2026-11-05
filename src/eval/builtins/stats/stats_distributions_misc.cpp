@@ -46,9 +46,9 @@ static Expected<NumberTriple, ErrorCode> read_confidence_args(const Value* args)
     return std::move(input.error());
   }
   const auto [alpha, sd, size_raw] = input.value();
-  // Reject negative / non-finite sizes before flooring. Excel truncates
+  // Reject negative sizes before flooring. Excel truncates
   // toward zero for positives but does not silently convert negatives.
-  if (std::isnan(size_raw) || std::isinf(size_raw) || size_raw < 1.0) {
+  if (size_raw < 1.0) {
     return ErrorCode::Num;
   }
   const double n = std::floor(size_raw);
