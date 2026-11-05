@@ -421,4 +421,18 @@ eval::CellNodeId make_node(std::size_t sheet_index, std::uint32_t row, std::uint
   return eval::CellNodeId{static_cast<std::uint16_t>(sheet_index), row, col};
 }
 
+void mark_all_formulas_dirty_locked(const std::vector<Sheet>& sheets,
+                                    const eval::RecalcEngine::LockedMutator& mutator) {
+  for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
+    for (const auto& [row, cells] : sheets[sheet_idx].rows()) {
+      for (const auto& [col, cell] : cells) {
+        if (cell.formula_text.empty()) {
+          continue;
+        }
+        mutator.mark_dirty(eval::CellNodeId{static_cast<std::uint16_t>(sheet_idx), row, col});
+      }
+    }
+  }
+}
+
 }  // namespace formulon

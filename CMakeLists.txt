@@ -143,6 +143,9 @@ set(FORMULON_CORE_SOURCES
   src/sheet_spill.cpp
   src/sheet_name_casefold_data.cpp
   src/workbook.cpp
+  src/workbook_auto_filter.cpp
+  src/workbook_cell_edit.cpp
+  src/workbook_sheets.cpp
   src/workbook_copy_sheet.cpp
   src/workbook_pivot_details.cpp
   src/workbook_pivot_projection.cpp

@@ -98,6 +98,7 @@ void reindex_formulas_referencing_table(std::vector<Sheet>& sheets, const eval::
 void mark_row_visibility_dependents_dirty_locked(const std::vector<Sheet>& sheets,
                                                  const eval::RecalcEngine::LockedMutator& mutator,
                                                  const std::vector<DefinedName>& defined_names);
+void mark_all_formulas_dirty_locked(const std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator);
 
 }  // namespace formulon
 

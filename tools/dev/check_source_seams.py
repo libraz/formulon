@@ -144,6 +144,9 @@ _FACADE_FILES = frozenset(
         "workbook_table_loss.h",
         "workbook_table_loss.cpp",
         "workbook_sheet_mutation.h",
+        "workbook_sheets.cpp",
+        "workbook_auto_filter.cpp",
+        "workbook_cell_edit.cpp",
     }
 )
 
