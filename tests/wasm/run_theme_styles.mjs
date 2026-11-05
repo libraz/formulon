@@ -24,7 +24,7 @@ const themeSpec = (theme, tint) => ({ kind: 2, rgb: 0, theme, tint, indexed: 0 }
 export function registerThemeStyles(Module, test) {
   test('getTheme reports the default theme until a part exists', () => {
     withWorkbook(Module, (wb) => {
-      const t = wb.getTheme();
+      const t = wb.getThemeFonts();
       assert.ok(t.status.ok);
       assert.equal(t.source, SOURCE_DEFAULT);
       assert.equal(t.colors.length, 12);
@@ -48,16 +48,16 @@ export function registerThemeStyles(Module, test) {
           minorEastAsian: 'MS Mincho',
         }).ok,
       );
-      const live = wb.getTheme();
+      const live = wb.getThemeFonts();
       assert.equal(live.source, SOURCE_PART);
       assert.deepEqual(live.colors, colors);
       assert.equal(live.fonts.majorLatin, 'Arial');
 
       const saved = wb.save();
       assert.ok(saved.status.ok);
-      const reloaded = Module.Workbook.loadBytes(saved.bytes);
+      const reloaded = Module.Workbook.load(saved.bytes);
       try {
-        const t = reloaded.getTheme();
+        const t = reloaded.getThemeFonts();
         assert.equal(t.source, SOURCE_PART);
         assert.deepEqual(t.colors, colors);
         assert.equal(t.fonts.minorLatin, 'Verdana');
@@ -70,22 +70,22 @@ export function registerThemeStyles(Module, test) {
 
   test('resetTheme returns an edited theme to the default and drops the part', () => {
     withWorkbook(Module, (wb) => {
-      assert.ok(wb.resetTheme().ok);
-      assert.equal(wb.getTheme().source, SOURCE_DEFAULT);
+      assert.ok(wb.clearTheme().ok);
+      assert.equal(wb.getThemeFonts().source, SOURCE_DEFAULT);
       const colors = Array.from({ length: 12 }, (_, i) => 0xff101010 + i);
       assert.ok(wb.setThemeColors(colors).ok);
-      assert.equal(wb.getTheme().source, SOURCE_PART);
-      assert.ok(wb.resetTheme().ok);
-      const t = wb.getTheme();
+      assert.equal(wb.getThemeFonts().source, SOURCE_PART);
+      assert.ok(wb.clearTheme().ok);
+      const t = wb.getThemeFonts();
       assert.equal(t.source, SOURCE_DEFAULT);
       assert.equal(t.colors[4], ACCENT1_DEFAULT);
 
       const saved = wb.save();
       assert.ok(saved.status.ok);
       assert.equal(Buffer.from(saved.bytes).includes('xl/theme/theme1.xml'), false);
-      const reloaded = Module.Workbook.loadBytes(saved.bytes);
+      const reloaded = Module.Workbook.load(saved.bytes);
       try {
-        assert.equal(reloaded.getTheme().source, SOURCE_DEFAULT);
+        assert.equal(reloaded.getThemeFonts().source, SOURCE_DEFAULT);
       } finally {
         reloaded.delete();
       }
@@ -110,7 +110,7 @@ export function registerThemeStyles(Module, test) {
       assert.equal(fromDefault.argb, ACCENT1_DEFAULT);
       assert.equal(fromDefault.resolution, RESOLUTION_DEFAULT_THEME);
 
-      assert.ok(wb.setThemeColors(wb.getTheme().colors).ok);
+      assert.ok(wb.setThemeColors(wb.getThemeFonts().colors).ok);
       const lighter = wb.resolveColor(themeSpec(4, 0.4), CONTEXT_FILL_FG);
       assert.equal(lighter.argb, 0xff44b3e1);
       assert.equal(lighter.resolution, RESOLUTION_EXACT);
@@ -150,7 +150,7 @@ export function registerThemeStyles(Module, test) {
         fg: { kind: 1, rgb: 0xffff0000, theme: 0, tint: 0, indexed: 0 },
         bg: { kind: 4, rgb: 0, theme: 0, tint: 0, indexed: 0 },
       });
-      const xf = wb.addXf({
+      const xf = wb.addCellXf({
         fontIndex: font.index,
         fillIndex: fill.index,
         borderIndex: 0,
@@ -190,8 +190,8 @@ export function registerThemeStyles(Module, test) {
 
   test('clearCellXfIndex restores row / column inheritance', () => {
     withWorkbook(Module, (wb) => {
-      const xfCol = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 14 });
-      const xfCell = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 10 });
+      const xfCol = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 14 });
+      const xfCell = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 10 });
       assert.ok(xfCol.status.ok && xfCell.status.ok);
       assert.ok(wb.setColumnStyle(0, 0, 0, xfCol.index).ok);
       assert.ok(wb.setCellXfIndex(0, 0, 0, xfCell.index).ok);
@@ -209,31 +209,31 @@ export function registerThemeStyles(Module, test) {
       assert.equal(e.source, 0);
       assert.equal(e.xfIndex, 0);
 
-      const before = wb.cellCount(0).value;
+      const before = wb.getCellCount(0).value;
       assert.ok(wb.clearCellXfIndex(0, 7, 7).ok);
-      assert.equal(wb.cellCount(0).value, before);
+      assert.equal(wb.getCellCount(0).value, before);
       assert.equal(wb.clearCellXfIndex(99, 0, 0).ok, false);
     });
   });
 
   test('attribute patch over a column keeps the row style (bases / remap / snapshot / restore)', () => {
     withWorkbook(Module, (wb) => {
-      const rowXf = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 14 });
-      const xfA = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 9 });
-      const xfB = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 10 });
+      const rowXf = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 14 });
+      const xfA = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 9 });
+      const xfB = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 10 });
       assert.ok(rowXf.status.ok && xfA.status.ok && xfB.status.ok);
       assert.ok(wb.setRowStyle(0, 2, 2, rowXf.index).ok);
       assert.equal(wb.getEffectiveStyle(0, 2, 1).source, 1);
       assert.equal(wb.setRowStyle(0, 5, 4, rowXf.index).ok, false);
 
-      const bases = wb.rangeStyleBases(0, 0, 1, 1048575, 1);
+      const bases = wb.getRangeStyleBases(0, 0, 1, 1048575, 1);
       assert.ok(bases.status.ok, JSON.stringify(bases.status));
       assert.ok(bases.xfIndices.includes(0) && bases.xfIndices.includes(rowXf.index));
       // Row 2 of a one-column selection is a single cell; excluding it hides the row style.
-      const excluded = wb.rangeStyleBasesExcluding(0, 0, 1, 1048575, 1, [2, 2, 9], [1, 1, 9]);
+      const excluded = wb.getRangeStyleBasesExcluding(0, 0, 1, 1048575, 1, [2, 2, 9], [1, 1, 9]);
       assert.ok(excluded.status.ok, JSON.stringify(excluded.status));
       assert.deepEqual(excluded.xfIndices, [0]);
-      assert.equal(wb.rangeStyleBasesExcluding(0, 0, 1, 1048575, 1, [2], []).status.ok, false);
+      assert.equal(wb.getRangeStyleBasesExcluding(0, 0, 1, 1048575, 1, [2], []).status.ok, false);
 
       const snap = wb.snapshotRangeStyle(0, 0, 1, 1048575, 1);
       assert.ok(snap.status.ok && snap.bytes.length > 0);
@@ -302,7 +302,7 @@ export function registerThemeStyles(Module, test) {
     const wb = Module.Workbook.createForProfile('mac-365-ja_JP');
     try {
       assert.ok(wb.isValid());
-      assert.equal(wb.excelProfileId().value, 'mac-365-ja_JP');
+      assert.equal(wb.getExcelProfileId().value, 'mac-365-ja_JP');
       const font = wb.getFont(0);
       assert.equal(font.name, '游ゴシック');
       assert.equal(font.size, 12);
@@ -319,7 +319,7 @@ export function registerThemeStyles(Module, test) {
 
   test('getTheme lists the 47 script faces and setThemeScriptFont round-trips', () => {
     withWorkbook(Module, (wb) => {
-      const t = wb.getTheme();
+      const t = wb.getThemeFonts();
       assert.equal(t.majorScripts.length, 47);
       assert.equal(t.minorScripts.length, 47);
       const minor = Object.fromEntries(t.minorScripts.map((s) => [s.script, s.typeface]));
@@ -329,9 +329,9 @@ export function registerThemeStyles(Module, test) {
       assert.ok(wb.setThemeScriptFont(false, 'Hang', 'Test Face').ok);
       const saved = wb.save();
       assert.ok(saved.status.ok);
-      const reloaded = Module.Workbook.loadBytes(saved.bytes);
+      const reloaded = Module.Workbook.load(saved.bytes);
       try {
-        const r = reloaded.getTheme();
+        const r = reloaded.getThemeFonts();
         assert.equal(r.minorScripts.length, 47);
         const after = Object.fromEntries(r.minorScripts.map((s) => [s.script, s.typeface]));
         assert.equal(after.Hang, 'Test Face');

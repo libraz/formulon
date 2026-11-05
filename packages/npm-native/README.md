@@ -45,7 +45,7 @@ This package exposes the shared `Workbook` surface of the WASM-backed
 functions. Its TypeScript declarations and its native class table
 register 420 instance methods plus the four static factories. Of those
 instance methods, 418 are shared with WASM; three remain WASM-only, while
-`dispose()` and `memoryUsage()` are native-only lifecycle helpers.
+`dispose()` and `getMemoryUsage()` are native-only lifecycle helpers.
 The shared `Workbook` methods use the same status-bearing result envelopes
 and field shapes; switching packages still requires updating the module
 import and validating the target platform's native prebuild. The additional
@@ -68,7 +68,7 @@ WASM package or the Python one.
 
 Two methods exist only here, both because a native workbook lives outside
 the JS heap in a way the WASM build's does not: `dispose()` releases the
-handle without waiting for finalization, and `memoryUsage()` reports the
+handle without waiting for finalization, and `getMemoryUsage()` reports the
 workbook's estimated native footprint. `recalcParallel(threadCount)` is
 available on both the native and WASM packages and returns the parallel SCC
 telemetry described in the API declarations. See
@@ -80,7 +80,7 @@ own; what they do is reachable from both JS packages:
 - `fm_workbook_set_iterative_enabled` toggles iterative calculation and keeps
   the stored cap and threshold. In JS, read them back and pass them on:
   `const it = wb.getIterative(); wb.setIterative(on, it.maxIterations, it.maxChange)`.
-- `fm_styles_add_batch` registers fonts, fills, borders and cell xfs in one
+- `fm_workbook_add_batch` registers fonts, fills, borders and cell xfs in one
   all-or-nothing call. JS registers the same records one call each
   (`addFont`, `addFill`, `addBorder`, `addXf`), so a failure part-way leaves
   the records added before it in place.
@@ -158,12 +158,12 @@ workbook's estimated native footprint to V8 as external memory when it is
 created, loaded, recalculated or disposed.
 
 How much that report influences collection is up to the runtime, and it
-is not visible through `process.memoryUsage().external` on current Node
+is not visible through `process.getMemoryUsage().external` on current Node
 versions. Treat it as a hint, not as a substitute for releasing
 workbooks: `dispose()` is the one mechanism that frees the memory at a
 point you choose.
 
-`wb.memoryUsage()` returns the current estimate — the cell store, shared
+`wb.getMemoryUsage()` returns the current estimate — the cell store, shared
 strings, passthrough parts and workbook metadata — and refreshes the
 report at the same time. That refresh matters for a long-running writer:
 between the points listed above the reported figure goes stale, because

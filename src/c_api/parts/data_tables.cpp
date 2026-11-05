@@ -29,7 +29,7 @@ formulon::DataTableInput input_of(int32_t has, uint32_t row, uint32_t col) {
 
 }  // namespace
 
-extern "C" fm_status_t fm_sheet_add_data_table(fm_workbook_t* wb, size_t sheet_index, const fm_data_table* spec) {
+extern "C" fm_status_t fm_sheet_add_data_table(fm_workbook_t* wb, size_t sheet_index, const fm_data_table_t* spec) {
   clear_last_error();
   if (spec == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_add_data_table: NULL spec");
@@ -47,18 +47,18 @@ extern "C" fm_status_t fm_sheet_add_data_table(fm_workbook_t* wb, size_t sheet_i
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_data_table_at(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
-                                              int32_t* out_present, fm_data_table* out) {
+extern "C" fm_status_t fm_sheet_get_data_table(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                               int32_t* out_present, fm_data_table_t* out) {
   clear_last_error();
   if (out_present == nullptr || out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_data_table_at: NULL out argument");
+                             "fm_sheet_get_data_table: NULL out argument");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_data_table_at"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_data_table"); rc != 0) {
     return rc;
   }
   *out_present = 0;
-  *out = fm_data_table{};
+  *out = fm_data_table_t{};
   const formulon::DataTable* table = wb->workbook().data_table_at(sheet_index, row, col);
   if (table == nullptr) {
     return 0;

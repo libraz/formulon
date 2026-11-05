@@ -18,7 +18,7 @@ from formulon.workbook import (
 class GeometryTests(unittest.TestCase):
     def test_format_defaults_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_sheet_format_defaults(
+            wb.set_format_defaults(
                 0,
                 SheetFormatDefaults(
                     default_col_width=12.5,
@@ -28,33 +28,33 @@ class GeometryTests(unittest.TestCase):
                     has_default_row_height=True,
                 ),
             )
-            d = wb.get_sheet_format_defaults(0)
+            d = wb.get_format_defaults(0)
             self.assertEqual(d.default_col_width, 12.5)
             self.assertEqual(d.default_row_height, 18.0)
             self.assertEqual(d.base_col_width, 9.0)
             self.assertTrue(d.has_default_col_width)
             self.assertTrue(d.has_default_row_height)
             with self.assertRaises(FormulonError):
-                wb.set_sheet_format_defaults(0, SheetFormatDefaults(default_col_width=-1.0, has_default_col_width=True))
+                wb.set_format_defaults(0, SheetFormatDefaults(default_col_width=-1.0, has_default_col_width=True))
 
     def test_clear_column_width_follows_default_and_keeps_state(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_sheet_format_defaults(
+            wb.set_format_defaults(
                 0, SheetFormatDefaults(default_col_width=10.0, base_col_width=8.0, has_default_col_width=True)
             )
             wb.set_column_width(0, 0, 0, 10.0)
             wb.clear_column_width(0, 0, 0)
-            wb.set_sheet_format_defaults(
+            wb.set_format_defaults(
                 0, SheetFormatDefaults(default_col_width=20.0, base_col_width=8.0, has_default_col_width=True)
             )
             self.assertEqual(wb.get_column_width_pt(0, 0), wb.get_column_width_pt(0, 1))
-            self.assertEqual(wb.get_sheet_columns(0), [])
+            self.assertEqual(wb.list_col_overrides(0), [])
 
             wb.set_column_width(0, 0, 4, 20.0)
             wb.set_column_hidden(0, 2, 2, True)
             wb.set_column_outline(0, 2, 2, 3)
             wb.clear_column_width(0, 1, 3)
-            cols = wb.get_sheet_columns(0)
+            cols = wb.list_col_overrides(0)
             self.assertEqual(
                 [(c.first, c.last, c.has_width, c.hidden, c.outline_level) for c in cols],
                 [(0, 0, True, False, 0), (2, 2, False, True, 3), (4, 4, True, False, 0)],
@@ -79,9 +79,9 @@ class GeometryTests(unittest.TestCase):
 
             wb.clear_column_style(0, 1, 1)
             wb.clear_row_style(0, 2, 2)
-            cols = wb.get_sheet_columns(0)
+            cols = wb.list_col_overrides(0)
             self.assertEqual([(c.first, c.last, c.has_width, c.has_style) for c in cols], [(1, 1, True, False)])
-            self.assertEqual(wb.get_sheet_row_overrides(0), [])
+            self.assertEqual(wb.list_row_overrides(0), [])
             with self.assertRaises(FormulonError):
                 wb.set_column_style(0, 0, 0, 1000)
             with self.assertRaises(FormulonError):
@@ -91,9 +91,9 @@ class GeometryTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             xf = wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=2))
             wb.set_row_style(0, 0, 999, xf)
-            self.assertEqual(len(wb.get_sheet_row_overrides(0)), 1000)
+            self.assertEqual(len(wb.list_row_overrides(0)), 1000)
             wb.clear_row_style(0, 0, 999)
-            self.assertEqual(wb.get_sheet_row_overrides(0), [])
+            self.assertEqual(wb.list_row_overrides(0), [])
             with self.assertRaises(FormulonError):
                 wb.set_row_style(0, 5, 3, xf)
 
@@ -104,9 +104,9 @@ class GeometryTests(unittest.TestCase):
             a = wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=2))
             b = wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=3))
             wb.set_row_style(0, 2, 2, r)
-            self.assertEqual(wb.range_style_bases(0, 0, 1, last_row, 1), [0, r])
+            self.assertEqual(wb.get_range_style_bases(0, 0, 1, last_row, 1), [0, r])
             # Row 2 of a one-column selection is a single cell; excluding it hides the row style.
-            self.assertEqual(wb.range_style_bases_excluding(0, 0, 1, last_row, 1, [(2, 1), (2, 1), (9, 9)]), [0])
+            self.assertEqual(wb.get_range_style_bases_excluding(0, 0, 1, last_row, 1, [(2, 1), (2, 1), (9, 9)]), [0])
 
             snap = wb.snapshot_range_style(0, 0, 1, last_row, 1)
             wb.remap_range_style(0, 0, 1, last_row, 1, {0: a, r: b})
@@ -126,11 +126,11 @@ class GeometryTests(unittest.TestCase):
 
     def test_effective_format_defaults(self) -> None:
         with Workbook.create_default() as wb:
-            d = wb.get_sheet_format_defaults(0)
+            d = wb.get_format_defaults(0)
             # Stored width of the base-8 Calibri 11 default (64 px, shown as 8.43).
             self.assertEqual(d.effective_default_col_width, 2340 / 256)
             self.assertEqual(d.effective_default_row_height, 102 / 7)
-            wb.set_sheet_format_defaults(
+            wb.set_format_defaults(
                 0,
                 SheetFormatDefaults(
                     default_col_width=12.5,
@@ -140,28 +140,28 @@ class GeometryTests(unittest.TestCase):
                     has_default_row_height=True,
                 ),
             )
-            d = wb.get_sheet_format_defaults(0)
+            d = wb.get_format_defaults(0)
             self.assertEqual(d.effective_default_col_width, 12.5)
             self.assertEqual(d.effective_default_row_height, 20.25)
 
     def test_row_height_override_and_clear(self) -> None:
         with Workbook.create_default() as wb:
             wb.set_row_height(0, 2, 30.0)
-            rows = wb.get_sheet_row_overrides(0)
+            rows = wb.list_row_overrides(0)
             self.assertEqual(len(rows), 1)
             self.assertTrue(rows[0].has_height)
             self.assertTrue(rows[0].custom_height)
             self.assertEqual(rows[0].height, 30.0)
             self.assertEqual(wb.get_row_height_pt(0, 2), 30.0)
             wb.clear_row_height(0, 2)
-            self.assertEqual(wb.get_sheet_row_overrides(0), [])
+            self.assertEqual(wb.list_row_overrides(0), [])
             wb.clear_row_height(0, 2)
 
     def test_row_auto_height_stays_automatic(self) -> None:
         with Workbook.create_default() as wb:
             wb.set_row_hidden(0, 4, True)
             wb.set_row_auto_height(0, 4, 31.5)
-            rows = wb.get_sheet_row_overrides(0)
+            rows = wb.list_row_overrides(0)
             self.assertEqual(len(rows), 1)
             self.assertTrue(rows[0].has_height)
             self.assertFalse(rows[0].custom_height)
@@ -197,11 +197,11 @@ class GeometryTests(unittest.TestCase):
                 self.assertGreater(model.normal_font_size, 0.0)
                 self.assertTrue(model.normal_font_name)
                 self.assertEqual(model.platform, "win")
-                pt = wb.column_chars_to_pt(0, 10.0, mode)
-                self.assertAlmostEqual(wb.column_pt_to_chars(0, pt, mode), 10.0, places=6)
-                self.assertEqual(wb.column_chars_to_pt(0, 0.0, mode), 0.0)
+                pt = wb.convert_column_chars_to_pt(0, 10.0, mode)
+                self.assertAlmostEqual(wb.convert_column_pt_to_chars(0, pt, mode), 10.0, places=6)
+                self.assertEqual(wb.convert_column_chars_to_pt(0, 0.0, mode), 0.0)
             with self.assertRaises(FormulonError):
-                wb.column_chars_to_pt(0, -1.0)
+                wb.convert_column_chars_to_pt(0, -1.0)
 
 
 class FormulaAndRangeTests(unittest.TestCase):
@@ -337,7 +337,7 @@ class PaginationDetailTests(unittest.TestCase):
             for r in range(0, 120):
                 wb.set_number(0, r, 0, float(r))
             wb.add_row_break(0, 10, True)
-            p = wb.paginate(0)
+            p = wb.get_pagination(0)
             self.assertGreater(p.paper.width_pt, 0.0)
             self.assertGreater(p.paper.height_pt, 0.0)
             self.assertTrue(p.paper.known)

@@ -90,7 +90,7 @@ TEST(PivotTableWriter, LocationRequiredAttrsDefaultIndependentlyAndPreserveZero)
 
 TEST(PivotTableWriter, RenderedSpanRaisesAPlaceholderSpan) {
   pivot::PivotTable table;
-  table.set_anchor(0U, 0U, 1U, 1U);  // the placeholder `fm_workbook_pivot_create` installs
+  table.set_anchor(0U, 0U, 1U, 1U);  // the placeholder `fm_sheet_add_pivot` installs
   const std::string xml = write_pivot_table_definition(table, PivotRenderedSpan{4U, 3U});
   EXPECT_NE(xml.find("<location ref=\"A1:C4\""), std::string::npos) << "xml=" << xml;
 }
@@ -189,7 +189,7 @@ TEST(PivotTableWriter, AnAuthoredSpanIsReEmittedAndNeverReprojected) {
 }
 
 TEST(PivotTableWriter, AWiderDeliberateSpanOutranksASmallerProjection) {
-  // `fm_workbook_pivot_set_anchor` takes spans, so a caller that passes
+  // `fm_sheet_set_pivot_anchor` takes spans, so a caller that passes
   // them means them. Over-reserving is not the failure mode -- Excel
   // recomputes the range on refresh -- so the projection must not shrink
   // a range someone asked for, or those two parameters would be dead.

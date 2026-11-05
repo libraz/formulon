@@ -34,7 +34,7 @@ function fillNumbers(wb) {
 const range = (firstRow, firstCol, lastRow, lastCol) => ({ firstRow, firstCol, lastRow, lastCol });
 const hiddenRows = (wb) =>
   wb
-    .getSheetRowOverrides(0)
+    .listRowOverrides(0)
     .rows.filter((r) => r.hidden)
     .map((r) => r.row);
 
@@ -157,7 +157,7 @@ export function registerFilterValidationComments(Module, test) {
   test('table AutoFilter methods mirror the sheet ones', () => {
     withWorkbook(Module, (wb) => {
       fillNumbers(wb);
-      const created = wb.createTable({ sheetIndex: 0, ref: 'A1:A6', name: 'Nums', columns: ['N'] });
+      const created = wb.addTable({ sheetIndex: 0, ref: 'A1:A6', name: 'Nums', columns: ['N'] });
       assert.ok(created.status.ok, JSON.stringify(created.status));
       const table = created.index;
       const got = wb.getTableAutoFilter(table);
@@ -299,7 +299,7 @@ export function registerFilterValidationComments(Module, test) {
   test('threaded mention and image integer readers throw before C mutation', () => {
     withWorkbook(Module, (wb) => {
       assert.ok(wb.addPerson({ id: ALICE, displayName: 'Alice' }).ok);
-      const beforeComments = wb.getThreadedComments(0).comments.length;
+      const beforeComments = wb.listThreadedComments(0).comments.length;
       assert.throws(
         () =>
           wb.addThreadedComment(0, {
@@ -313,25 +313,25 @@ export function registerFilterValidationComments(Module, test) {
           }),
         RangeError,
       );
-      assert.equal(wb.getThreadedComments(0).comments.length, beforeComments);
+      assert.equal(wb.listThreadedComments(0).comments.length, beforeComments);
 
       for (const value of [Number.NaN, 1.5, Symbol('rowOffEmu')]) {
         assert.throws(
-          () => wb.insertImage(0, new Uint8Array([1, 2, 3]), { rowOffEmu: value }),
+          () => wb.addImage(0, new Uint8Array([1, 2, 3]), { rowOffEmu: value }),
           typeof value === 'symbol' ? TypeError : RangeError,
           `rowOffEmu=${String(value)}`,
         );
         assert.equal(wb.listDrawingObjects(0).length, 0);
       }
 
-      const boundary = wb.insertImage(0, new Uint8Array([1, 2, 3]), {
+      const boundary = wb.addImage(0, new Uint8Array([1, 2, 3]), {
         rowOffEmu: -(2 ** 63),
         colOffEmu: 2 ** 63 - 1024,
       });
       assert.equal(boundary.status.ok, false);
       assert.equal(wb.listDrawingObjects(0).length, 0);
 
-      assert.throws(() => wb.insertImage(0, new Uint8Array([1, 2, 3]), { widthEmu: 2 ** 63 }), RangeError);
+      assert.throws(() => wb.addImage(0, new Uint8Array([1, 2, 3]), { widthEmu: 2 ** 63 }), RangeError);
       assert.equal(wb.listDrawingObjects(0).length, 0);
     });
   });
@@ -382,7 +382,7 @@ export function registerFilterValidationComments(Module, test) {
           throw new Error('bytes getter should stay inside the JS reader boundary');
         },
       });
-      const imageResult = wb.insertImage(0, bytesProxy, {});
+      const imageResult = wb.addImage(0, bytesProxy, {});
       assert.equal(imageResult.status.ok, false);
       assert.equal(imageResult.status.status, 2);
       assert.equal(wb.listDrawingObjects(0).length, 0);
@@ -426,7 +426,7 @@ export function registerFilterValidationComments(Module, test) {
       assert.ok(wb.setNumber(0, 3, 0, 7).ok);
       assert.ok(wb.setNumber(0, 4, 0, 70).ok);
 
-      const all = wb.listInvalidCells(0);
+      const all = wb.getInvalidCells(0);
       assert.ok(all.status.ok, JSON.stringify(all.status));
       assert.deepEqual(
         all.cells.map((c) => [c.row, c.col]),
@@ -438,28 +438,28 @@ export function registerFilterValidationComments(Module, test) {
       );
       assert.equal(all.nextCursor, null);
 
-      const first = wb.listInvalidCells(0, 0, 2);
+      const first = wb.getInvalidCells(0, 0, 2);
       assert.equal(first.cells.length, 2);
       assert.notEqual(first.nextCursor, null);
-      const rest = wb.listInvalidCells(0, first.nextCursor, 2);
+      const rest = wb.getInvalidCells(0, first.nextCursor, 2);
       assert.deepEqual(
         rest.cells.map((c) => c.row),
         [4],
       );
       assert.equal(rest.nextCursor, null);
 
-      assert.equal(wb.listInvalidCells(99).status.ok, false);
-      assert.throws(() => wb.listInvalidCells(0, -1), RangeError);
+      assert.equal(wb.getInvalidCells(99).status.ok, false);
+      assert.throws(() => wb.getInvalidCells(0, -1), RangeError);
     });
   });
 
   test('persons and threaded comments support the full CRUD cycle', () => {
     withWorkbook(Module, (wb) => {
-      assert.deepEqual(wb.getPersons().persons, []);
+      assert.deepEqual(wb.listPeople().persons, []);
       assert.ok(wb.addPerson({ id: ALICE, displayName: 'Alice', userId: 'alice', providerId: 'None' }).ok);
       assert.ok(wb.addPerson({ id: BOB, displayName: 'Bob', userId: 'bob', providerId: 'None' }).ok);
       assert.equal(wb.addPerson({ id: ALICE, displayName: 'Dup' }).ok, false);
-      const persons = wb.getPersons();
+      const persons = wb.listPeople();
       assert.ok(persons.status.ok);
       assert.deepEqual(
         persons.persons.map((p) => p.displayName),
@@ -467,7 +467,7 @@ export function registerFilterValidationComments(Module, test) {
       );
       assert.equal(persons.persons[0].userId, 'alice');
 
-      assert.deepEqual(wb.getThreadedComments(0).comments, []);
+      assert.deepEqual(wb.listThreadedComments(0).comments, []);
       const opened = wb.addThreadedComment(0, {
         id: THREAD,
         row: 2,
@@ -488,7 +488,7 @@ export function registerFilterValidationComments(Module, test) {
         }).ok,
       );
 
-      const list = wb.getThreadedComments(0);
+      const list = wb.listThreadedComments(0);
       assert.ok(list.status.ok);
       assert.equal(list.comments.length, 2);
       const [head, reply] = list.comments;
@@ -502,25 +502,25 @@ export function registerFilterValidationComments(Module, test) {
       assert.deepEqual(reply.mentions, []);
 
       assert.equal(wb.removePerson(BOB).ok, false);
-      assert.ok(wb.editThreadedComment(0, THREAD, 'Edited', []).ok);
-      assert.equal(wb.getThreadedComments(0).comments[0].text, 'Edited');
-      assert.deepEqual(wb.getThreadedComments(0).comments[0].mentions, []);
-      assert.equal(wb.editThreadedComment(0, '{00000000-0000-4000-8000-000000000000}', 'x', []).ok, false);
+      assert.ok(wb.updateThreadedComment(0, THREAD, 'Edited', []).ok);
+      assert.equal(wb.listThreadedComments(0).comments[0].text, 'Edited');
+      assert.deepEqual(wb.listThreadedComments(0).comments[0].mentions, []);
+      assert.equal(wb.updateThreadedComment(0, '{00000000-0000-4000-8000-000000000000}', 'x', []).ok, false);
 
       assert.ok(wb.setThreadResolved(0, THREAD, true).ok);
-      assert.equal(wb.getThreadedComments(0).comments[0].done, true);
+      assert.equal(wb.listThreadedComments(0).comments[0].done, true);
       assert.ok(wb.setThreadResolved(0, THREAD, false).ok);
-      assert.equal(wb.getThreadedComments(0).comments[0].done, false);
+      assert.equal(wb.listThreadedComments(0).comments[0].done, false);
 
       assert.ok(wb.removeThreadedComment(0, REPLY).ok);
-      assert.equal(wb.getThreadedComments(0).comments.length, 1);
+      assert.equal(wb.listThreadedComments(0).comments.length, 1);
       assert.ok(wb.removeThreadedComment(0, THREAD).ok);
-      assert.equal(wb.getThreadedComments(0).comments.length, 0);
+      assert.equal(wb.listThreadedComments(0).comments.length, 0);
       assert.equal(wb.removeThreadedComment(0, THREAD).ok, false);
 
       assert.ok(wb.removePerson(BOB).ok);
-      assert.equal(wb.getPersons().persons.length, 1);
-      assert.equal(wb.getThreadedComments(99).status.ok, false);
+      assert.equal(wb.listPeople().persons.length, 1);
+      assert.equal(wb.listThreadedComments(99).status.ok, false);
     });
   });
 }

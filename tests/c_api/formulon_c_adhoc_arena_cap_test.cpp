@@ -1,6 +1,6 @@
 //
-// The ad-hoc evaluation entry points (`fm_workbook_evaluate_formula`,
-// `fm_workbook_evaluate_formula_array`, `fm_workbook_evaluate_cf_formula`)
+// The ad-hoc evaluation entry points (`fm_sheet_evaluate_formula`,
+// `fm_sheet_evaluate_formula_array`, `fm_sheet_evaluate_cf_formula`)
 // each back one caller-supplied formula with a per-call arena. That arena
 // must carry a finite byte ceiling so a hostile formula surfaces as a
 // recoverable status instead of an allocation failure that aborts the host.
@@ -47,23 +47,23 @@ TEST(AdhocEvalArenaCap, ArenaBuiltLikeTheAdhocEntryPointsRefusesRequestPastCeili
 
 TEST(AdhocEvalArenaCap, EvaluationStillSucceedsUnderTheCap) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 10.0), 0);  // A1
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 10.0), 0);  // A1
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   fm_value_t scalar{};
-  ASSERT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 0, 1, "=A1*2", &scalar), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 1, "=A1*2", &scalar), 0);
   EXPECT_EQ(scalar.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(scalar.u.number, 20.0);
 
   uint32_t rows = 0;
   uint32_t cols = 0;
-  ASSERT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 1, "=SEQUENCE(3,2)", &rows, &cols), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 1, "=SEQUENCE(3,2)", &rows, &cols), 0);
   EXPECT_EQ(rows, 3U);
   EXPECT_EQ(cols, 2U);
 
   fm_value_t fired{};
-  ASSERT_EQ(fm_workbook_evaluate_cf_formula(wb.handle, 0, 0, 1, 0, 1, "=A1>5", &fired), 0);
+  ASSERT_EQ(fm_sheet_evaluate_cf_formula(wb.handle, 0, 0, 1, 0, 1, "=A1>5", &fired), 0);
   EXPECT_EQ(fired.kind, FM_VAL_BOOL);
   EXPECT_EQ(fired.u.boolean, 1);
 }

@@ -9,7 +9,7 @@ signature carries an enum or a predicate verb states it in `returns` /
 `params`. An `exception:` exempts an entry from the derivation checks.
 
 `--coverage` additionally requires every symbol the current tree exports
-to be named by some entry's `was`. Entries carrying `flag:` are listed in
+to be named by some entry's current or `was` name. Entries carrying `flag:` are listed in
 either mode; they do not fail validation.
 """
 
@@ -166,6 +166,9 @@ def _is_c_swap(entries: Dict[str, dict], surfaces: Optional[extract_names.Surfac
     if not (was_a and was_b and was_a == entries[b].get("c")):
         return False
     fa, fb = surfaces.functions.get(was_a), surfaces.functions.get(was_b)
+    if fb is None:
+        # After the rename the tree declares the two current names instead.
+        fa, fb = surfaces.functions.get(entries[a].get("c") or ""), surfaces.functions.get(was_a)
     return fa is not None and fb is not None and len(fa.params) != len(fb.params)
 
 
@@ -280,11 +283,19 @@ def check_typed_slots(entries: Dict[str, dict], surfaces: Optional[extract_names
 
 
 def check_coverage(entries: Dict[str, dict], surfaces: extract_names.Surfaces) -> List[str]:
-    """Each exported symbol is some entry's `was` name, on a surface that entry lists.
+    """Each exported symbol is some entry's current or `was` name, on a surface that entry lists.
 
-    A dropped name or a `replaced_by` entry needs no surface: it leaves the tree.
+    A current name wins, so the tree is covered both before and after the renames land. A dropped
+    name or a `replaced_by` entry needs no surface: it leaves the tree.
     """
     owner: Dict[tuple, str] = {}
+    for key, entry in entries.items():
+        if entry.get("kind") == "field":
+            continue
+        for name_field in NAME_FIELDS:
+            name = entry.get(name_field)
+            if isinstance(name, str):
+                owner.setdefault((name_field, name), key)
     for key, entry in entries.items():
         for name_field, name in (entry.get("was") or {}).items():
             owner.setdefault((name_field, name), key)
@@ -293,7 +304,9 @@ def check_coverage(entries: Dict[str, dict], surfaces: extract_names.Surfaces) -
         name_field = "c" if surface == "c" else "py" if surface == "py" else "js"
         key = owner.get((name_field, symbol))
         if key is None:
-            problems.append(f"R0.coverage: [{surface}] {symbol} is exported but no entry's `was.{name_field}` names it")
+            problems.append(
+                f"R0.coverage: [{surface}] {symbol} is exported but no entry's `{name_field}` or `was.{name_field}` names it"
+            )
             continue
         entry = entries[key]
         leaving = "replaced_by" in entry or symbol in (entry.get("drop") or {}).values()

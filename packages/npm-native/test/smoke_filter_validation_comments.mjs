@@ -15,7 +15,7 @@ function must(r, what) {
 
 function hiddenRows(wb) {
   return wb
-    .getSheetRowOverrides(0)
+    .listRowOverrides(0)
     .rows.filter((r) => r.hidden)
     .map((r) => r.row);
 }
@@ -142,7 +142,7 @@ test('table AutoFilter entry points reject a table index that does not exist', a
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    assert.equal(wb.tableCount().value, 0);
+    assert.equal(wb.getTableCount().value, 0);
     const got = wb.getTableAutoFilter(0);
     assert.equal(got.status.ok, false);
     assert.equal(got.autoFilter, null);
@@ -199,8 +199,8 @@ test('validateValue and listInvalidCells follow the rule covering a cell', async
     must(wb.setNumber(0, 0, 1, 5), 'setNumber');
     must(wb.setNumber(0, 1, 1, 50), 'setNumber');
     must(wb.setNumber(0, 2, 1, 70), 'setNumber');
-    const page = wb.listInvalidCells(0);
-    must(page, 'listInvalidCells');
+    const page = wb.getInvalidCells(0);
+    must(page, 'getInvalidCells');
     assert.deepEqual(
       page.cells.map((c) => [c.row, c.col, c.value.number]),
       [
@@ -210,15 +210,15 @@ test('validateValue and listInvalidCells follow the rule covering a cell', async
     );
     assert.equal(page.nextCursor, null);
 
-    const first = wb.listInvalidCells(0, 0, 1);
+    const first = wb.getInvalidCells(0, 0, 1);
     assert.equal(first.cells.length, 1);
     assert.equal(typeof first.nextCursor, 'number');
-    const second = wb.listInvalidCells(0, first.nextCursor, 1);
+    const second = wb.getInvalidCells(0, first.nextCursor, 1);
     assert.deepEqual(
       second.cells.map((c) => c.row),
       [2],
     );
-    assert.equal(wb.listInvalidCells(99).status.ok, false);
+    assert.equal(wb.getInvalidCells(99).status.ok, false);
   } finally {
     wb.dispose();
   }
@@ -228,12 +228,12 @@ test('threaded comments cover a thread, a reply with a mention, resolution and r
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    assert.equal(wb.getPersons().persons.length, 0);
-    assert.ok(wb.getPersons().status.ok);
+    assert.equal(wb.listPeople().persons.length, 0);
+    assert.ok(wb.listPeople().status.ok);
     must(wb.addPerson({ id: ANN, displayName: 'Ann', userId: 'ann@example.com', providerId: 'AD' }), 'addPerson Ann');
     must(wb.addPerson({ id: BOB, displayName: 'Bob', userId: '', providerId: 'None' }), 'addPerson Bob');
     assert.equal(wb.addPerson({ id: ANN, displayName: 'Ann again' }).ok, false);
-    const persons = wb.getPersons();
+    const persons = wb.listPeople();
     assert.deepEqual(
       persons.persons.map((p) => [p.id, p.displayName, p.userId, p.providerId]),
       [
@@ -264,8 +264,8 @@ test('threaded comments cover a thread, a reply with a mention, resolution and r
       }),
       'reply',
     );
-    const result = wb.getThreadedComments(0);
-    must(result, 'getThreadedComments');
+    const result = wb.listThreadedComments(0);
+    must(result, 'listThreadedComments');
     const list = result.comments;
     assert.equal(list.length, 2);
     assert.equal(list[0].id, THREAD);
@@ -280,30 +280,30 @@ test('threaded comments cover a thread, a reply with a mention, resolution and r
     assert.deepEqual(list[1].mentions, [{ personId: ANN, mentionId: MENTION, start: 0, length: 4 }]);
 
     must(
-      wb.editThreadedComment(0, REPLY, '@Ann fixed', [{ personId: ANN, mentionId: MENTION, start: 0, length: 4 }]),
+      wb.updateThreadedComment(0, REPLY, '@Ann fixed', [{ personId: ANN, mentionId: MENTION, start: 0, length: 4 }]),
       'edit',
     );
-    assert.equal(wb.getThreadedComments(0).comments[1].text, '@Ann fixed');
-    must(wb.editThreadedComment(0, REPLY, 'plain', []), 'edit without mentions');
-    assert.deepEqual(wb.getThreadedComments(0).comments[1].mentions, []);
+    assert.equal(wb.listThreadedComments(0).comments[1].text, '@Ann fixed');
+    must(wb.updateThreadedComment(0, REPLY, 'plain', []), 'edit without mentions');
+    assert.deepEqual(wb.listThreadedComments(0).comments[1].mentions, []);
 
     must(wb.setThreadResolved(0, THREAD, true), 'resolve');
-    assert.equal(wb.getThreadedComments(0).comments[0].done, true);
+    assert.equal(wb.listThreadedComments(0).comments[0].done, true);
     must(wb.setThreadResolved(0, THREAD, false), 'reopen');
-    assert.equal(wb.getThreadedComments(0).comments[0].done, false);
+    assert.equal(wb.listThreadedComments(0).comments[0].done, false);
 
     assert.equal(wb.removePerson(ANN).ok, false, 'a person with comments stays');
-    assert.equal(wb.editThreadedComment(0, '{00000000-0000-0000-0000-000000000000}', 'x', []).ok, false);
+    assert.equal(wb.updateThreadedComment(0, '{00000000-0000-0000-0000-000000000000}', 'x', []).ok, false);
     assert.equal(wb.setThreadResolved(0, REPLY, true).ok, false, 'a reply is not a thread');
     assert.throws(() => wb.addThreadedComment(0, null), TypeError);
-    assert.equal(wb.getThreadedComments(99).status.ok, false);
+    assert.equal(wb.listThreadedComments(99).status.ok, false);
 
     must(wb.removeThreadedComment(0, REPLY), 'remove reply');
-    assert.equal(wb.getThreadedComments(0).comments.length, 1);
+    assert.equal(wb.listThreadedComments(0).comments.length, 1);
     must(wb.removeThreadedComment(0, THREAD), 'remove thread');
-    assert.equal(wb.getThreadedComments(0).comments.length, 0);
+    assert.equal(wb.listThreadedComments(0).comments.length, 0);
     must(wb.removePerson(ANN), 'removePerson');
-    assert.equal(wb.getPersons().persons.length, 1);
+    assert.equal(wb.listPeople().persons.length, 1);
     assert.equal(wb.removePerson(ANN).ok, false);
   } finally {
     wb.dispose();
@@ -317,8 +317,8 @@ test('the new accessors report a released handle', async () => {
   assert.equal(wb.getAutoFilter(0).status.status, 7000);
   assert.equal(wb.evaluateAutoFilter(0).status.status, 7000);
   assert.equal(wb.validateValue(0, 0, 0, { kind: 0 }).status.status, 7000);
-  assert.equal(wb.listInvalidCells(0).status.status, 7000);
-  assert.equal(wb.getThreadedComments(0).status.status, 7000);
-  assert.equal(wb.getPersons().status.status, 7000);
+  assert.equal(wb.getInvalidCells(0).status.status, 7000);
+  assert.equal(wb.listThreadedComments(0).status.status, 7000);
+  assert.equal(wb.listPeople().status.status, 7000);
   assert.equal(wb.addPerson({ id: ANN, displayName: 'Ann' }).status, 7000);
 });

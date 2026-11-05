@@ -86,7 +86,7 @@ test('threaded mention and image integer fields reject before C mutation', async
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const beforeComments = wb.getThreadedComments(0).comments.length;
+    const beforeComments = wb.listThreadedComments(0).comments.length;
     assert.throws(
       () =>
         wb.addThreadedComment(0, {
@@ -97,19 +97,19 @@ test('threaded mention and image integer fields reject before C mutation', async
         }),
       RangeError,
     );
-    assert.equal(wb.getThreadedComments(0).comments.length, beforeComments);
+    assert.equal(wb.listThreadedComments(0).comments.length, beforeComments);
 
-    assert.throws(() => wb.insertImage(0, new Uint8Array([1, 2, 3]), { rowOffEmu: Number.NaN }), RangeError);
+    assert.throws(() => wb.addImage(0, new Uint8Array([1, 2, 3]), { rowOffEmu: Number.NaN }), RangeError);
     assert.equal(wb.listDrawingObjects(0).length, 0);
 
     assert.doesNotThrow(() =>
-      wb.insertImage(0, new Uint8Array([1, 2, 3]), {
+      wb.addImage(0, new Uint8Array([1, 2, 3]), {
         rowOffEmu: -(2 ** 63),
         colOffEmu: 2 ** 63 - 1024,
       }),
     );
 
-    assert.throws(() => wb.insertImage(0, new Uint8Array([1, 2, 3]), { widthEmu: 2 ** 63 }), RangeError);
+    assert.throws(() => wb.addImage(0, new Uint8Array([1, 2, 3]), { widthEmu: 2 ** 63 }), RangeError);
     assert.equal(wb.listDrawingObjects(0).length, 0);
   } finally {
     wb.dispose();

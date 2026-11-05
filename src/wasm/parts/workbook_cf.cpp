@@ -67,19 +67,19 @@ emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, uint32_t firstRow, u
   }
   fm_cf_results_t* results = nullptr;
   fm_status_t rc =
-      fm_workbook_cf_evaluate_range(handle_, sheet, firstRow, firstCol, lastRow, lastCol, todaySerial, &results);
+      fm_sheet_evaluate_cf_range(handle_, sheet, firstRow, firstCol, lastRow, lastCol, todaySerial, &results);
   if (rc != 0) {
     r.set("status", error_status(rc));
     r.set("cells", cells);
     return r;
   }
-  const std::size_t cell_count = fm_cf_results_cell_count(results);
+  const std::size_t cell_count = fm_cf_results_get_cell_count(results);
   std::size_t emitted_cells = 0;
   for (std::size_t i = 0; i < cell_count; ++i) {
     uint32_t row = 0;
     uint32_t col = 0;
     std::size_t match_count = 0;
-    if (fm_cf_results_cell_at(results, i, &row, &col, &match_count) != 0) {
+    if (fm_cf_results_get_cell_at(results, i, &row, &col, &match_count) != 0) {
       // Skip entries the C ABI declines to materialise; this is purely
       // defensive -- the index is always valid by construction.
       continue;
@@ -89,7 +89,7 @@ emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, uint32_t firstRow, u
     std::size_t emitted_matches = 0;
     for (std::size_t j = 0; j < match_count; ++j) {
       fm_cf_match_t m{};
-      if (fm_cf_results_match_at(results, i, j, &m) != 0) {
+      if (fm_cf_results_get_match_at(results, i, j, &m) != 0) {
         continue;
       }
       matches.set(emitted_matches, emscripten::val(translate_cf_match(m)));
@@ -114,14 +114,14 @@ emscripten::val JsWorkbook::getConditionalFormats(uint32_t sheet) const {
     return arr;
   }
   std::size_t count = 0;
-  fm_status_t rc = fm_sheet_cf_count(handle_, sheet, &count);
+  fm_status_t rc = fm_sheet_get_cf_rule_count(handle_, sheet, &count);
   if (rc != 0) {
     arr.set("status", status_from_rc(rc));
     return arr;
   }
   for (std::size_t i = 0; i < count; ++i) {
     fm_cf_rule_t rule{};
-    rc = fm_sheet_cf_get_at(handle_, sheet, i, &rule);
+    rc = fm_sheet_get_cf_rule(handle_, sheet, i, &rule);
     if (rc != 0) {
       arr.set("status", status_from_rc(rc));
       return arr;
@@ -270,7 +270,7 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
   std::vector<fm_cfvo_t> icon_set_thresholds;
   std::vector<fm_cf_icon_t> icon_set_icons;
   formulon::c_api::BorrowedStringArena cfvo_strings;
-  JsNarrowNumericReader reader("addConditionalFormat");
+  JsNarrowNumericReader reader("addCfRule");
   const std::vector<fm_merge_range> merge_ranges = js_pull_ranges(v, "sqref", &reader);
   std::vector<fm_cf_cell_range_t> ranges_buf;
   ranges_buf.reserve(merge_ranges.size());
@@ -433,16 +433,16 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
   }
 
   std::size_t new_index = 0;
-  const fm_status_t rc = fm_sheet_cf_add_rule(handle_, sheet, rule, &new_index);
+  const fm_status_t rc = fm_sheet_add_cf_rule(handle_, sheet, rule, &new_index);
   return index_result(rc, new_index);
 }
 
 JsStatus JsWorkbook::removeConditionalFormatAt(uint32_t sheet, uint32_t index) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_cf_remove_at(handle_, sheet, index) : kBindingInvalidHandle);
+  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_cf_rule(handle_, sheet, index) : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::clearConditionalFormats(uint32_t sheet) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_cf_clear(handle_, sheet) : kBindingInvalidHandle);
+  return status_from_rc(handle_ != nullptr ? fm_sheet_clear_cf_rules(handle_, sheet) : kBindingInvalidHandle);
 }
 
 }  // namespace parts

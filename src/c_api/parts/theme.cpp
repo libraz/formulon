@@ -31,8 +31,8 @@ using formulon::c_api::parts::TextStore;
 
 namespace {
 
-static_assert(sizeof(fm_theme_colors::argb) / sizeof(fm_theme_colors::argb[0]) == formulon::kThemeColorCount,
-              "fm_theme_colors must carry every scheme colour");
+static_assert(sizeof(fm_theme_colors_t::argb) / sizeof(fm_theme_colors_t::argb[0]) == formulon::kThemeColorCount,
+              "fm_theme_colors_t must carry every scheme colour");
 static_assert(FM_COLOR_CONTEXT_FONT == static_cast<int>(formulon::ColorContext::kFont), "colour context drift");
 static_assert(FM_COLOR_CONTEXT_FILL_FG == static_cast<int>(formulon::ColorContext::kFillForeground),
               "colour context drift");
@@ -52,7 +52,7 @@ static_assert(FM_COLOR_RESOLUTION_AUTO_CONTEXT == static_cast<int>(formulon::Col
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_get_theme_colors(const fm_workbook_t* wb, fm_theme_colors* out,
+extern "C" fm_status_t fm_workbook_get_theme_colors(const fm_workbook_t* wb, fm_theme_colors_t* out,
                                                     int32_t* out_source) {
   clear_last_error();
   if (wb == nullptr || out == nullptr || out_source == nullptr) {
@@ -66,7 +66,7 @@ extern "C" fm_status_t fm_workbook_get_theme_colors(const fm_workbook_t* wb, fm_
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_set_theme_colors(fm_workbook_t* wb, const fm_theme_colors* colors) {
+extern "C" fm_status_t fm_workbook_set_theme_colors(fm_workbook_t* wb, const fm_theme_colors_t* colors) {
   clear_last_error();
   if (wb == nullptr || colors == nullptr) {
     return null_argument("fm_workbook_set_theme_colors");
@@ -78,7 +78,7 @@ extern "C" fm_status_t fm_workbook_set_theme_colors(fm_workbook_t* wb, const fm_
   return finish_status(wb->workbook().set_theme_colors(model));
 }
 
-extern "C" fm_status_t fm_workbook_get_theme_fonts(const fm_workbook_t* wb, fm_theme_fonts* out) {
+extern "C" fm_status_t fm_workbook_get_theme_fonts(const fm_workbook_t* wb, fm_theme_fonts_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument("fm_workbook_get_theme_fonts");
@@ -96,7 +96,7 @@ extern "C" fm_status_t fm_workbook_get_theme_fonts(const fm_workbook_t* wb, fm_t
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_set_theme_fonts(fm_workbook_t* wb, const fm_theme_fonts* fonts) {
+extern "C" fm_status_t fm_workbook_set_theme_fonts(fm_workbook_t* wb, const fm_theme_fonts_t* fonts) {
   clear_last_error();
   if (wb == nullptr || fonts == nullptr || fonts->major_latin == nullptr || fonts->major_east_asian == nullptr ||
       fonts->minor_latin == nullptr || fonts->minor_east_asian == nullptr) {
@@ -115,10 +115,11 @@ extern "C" fm_status_t fm_workbook_set_theme_fonts(fm_workbook_t* wb, const fm_t
   return finish_status(wb->workbook().set_theme_fonts(model));
 }
 
-extern "C" fm_status_t fm_workbook_theme_script_font_count(const fm_workbook_t* wb, int32_t major, size_t* out_count) {
+extern "C" fm_status_t fm_workbook_get_theme_script_font_count(const fm_workbook_t* wb, int32_t major,
+                                                               size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return null_argument("fm_workbook_theme_script_font_count");
+    return null_argument("fm_workbook_get_theme_script_font_count");
   }
   const formulon::LoadedTheme loaded = wb->workbook().load_theme();
   *out_count = loaded.source != formulon::ThemeSource::kPart
@@ -127,11 +128,11 @@ extern "C" fm_status_t fm_workbook_theme_script_font_count(const fm_workbook_t* 
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_theme_script_font_at(const fm_workbook_t* wb, int32_t major, size_t idx,
-                                                        const char** out_script, const char** out_typeface) {
+extern "C" fm_status_t fm_workbook_get_theme_script_font_at(const fm_workbook_t* wb, int32_t major, size_t idx,
+                                                            const char** out_script, const char** out_typeface) {
   clear_last_error();
   if (wb == nullptr || out_script == nullptr || out_typeface == nullptr) {
-    return null_argument("fm_workbook_theme_script_font_at");
+    return null_argument("fm_workbook_get_theme_script_font_at");
   }
   const formulon::LoadedTheme loaded = wb->workbook().load_theme();
   const bool from_part = loaded.source == formulon::ThemeSource::kPart;
@@ -139,7 +140,7 @@ extern "C" fm_status_t fm_workbook_theme_script_font_at(const fm_workbook_t* wb,
       major != 0 ? loaded.theme.major_scripts : loaded.theme.minor_scripts;
   if (idx >= (from_part ? scripts.size() : formulon::kOfficeScriptCount)) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_theme_script_font_at: index out of range", "idx=" + std::to_string(idx));
+                             "fm_workbook_get_theme_script_font_at: index out of range", "idx=" + std::to_string(idx));
   }
   TextStore& store = fresh_read_scratch(wb);
   store.emplace_back(from_part ? scripts[idx].script : formulon::office_script(idx));
@@ -161,15 +162,15 @@ extern "C" fm_status_t fm_workbook_set_theme_script_font(fm_workbook_t* wb, int3
   return finish_status(wb->workbook().set_theme_script_font(major != 0, script, typeface));
 }
 
-extern "C" fm_status_t fm_workbook_reset_theme(fm_workbook_t* wb) {
+extern "C" fm_status_t fm_workbook_clear_theme(fm_workbook_t* wb) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_reset_theme");
+    return null_argument("fm_workbook_clear_theme");
   }
   return finish_status(wb->workbook().reset_theme());
 }
 
-extern "C" fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, fm_color_spec spec, int32_t context,
+extern "C" fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, fm_color_spec_t spec, int32_t context,
                                                  uint32_t* out_argb, int32_t* out_resolution) {
   static constexpr const char* kFn = "fm_workbook_resolve_color";
   clear_last_error();
@@ -204,7 +205,7 @@ extern "C" fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, fm_col
 }
 
 extern "C" fm_status_t fm_sheet_get_effective_style(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
-                                                    uint32_t col, fm_effective_style* out) {
+                                                    uint32_t col, fm_effective_style_t* out) {
   clear_last_error();
   if (out == nullptr) {
     return null_argument("fm_sheet_get_effective_style");
@@ -219,7 +220,7 @@ extern "C" fm_status_t fm_sheet_get_effective_style(const fm_workbook_t* wb, siz
   }
   const formulon::Workbook& workbook = wb->workbook();
   formulon::EffectiveStyle style = formulon::effective_style(workbook, workbook.sheet(sheet_index), row, col);
-  *out = fm_effective_style{};
+  *out = fm_effective_style_t{};
   out->xf_index = style.xf_index;
   out->source = static_cast<int32_t>(style.source);
   out->font_index = style.font_index;

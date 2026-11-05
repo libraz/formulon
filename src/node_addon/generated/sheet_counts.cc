@@ -19,7 +19,7 @@ Napi::Value Workbook::CellCount(const Napi::CallbackInfo& info) {
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_cell_count(handle_, sheet, &count);
+  const fm_status_t rc = fm_sheet_get_cell_count(handle_, sheet, &count);
   return MakeNumberResult(env, rc, static_cast<double>(count));
 }
 
@@ -30,7 +30,7 @@ Napi::Value Workbook::PivotCount(const Napi::CallbackInfo& info) {
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_pivot_count(handle_, sheet, &count);
+  const fm_status_t rc = fm_sheet_get_pivot_count(handle_, sheet, &count);
   return MakeNumberResult(env, rc, static_cast<double>(count));
 }
 

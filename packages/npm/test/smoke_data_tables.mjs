@@ -131,7 +131,7 @@ test('a data table survives save and load as a dataTable formula and follows row
   assert.match(sheet, /<f t="dataTable" ref="B3:B5"[^>]*r1="B1"[^>]*\/>/);
   assert.equal((sheet.match(/t="dataTable"/g) ?? []).length, 1);
 
-  const loaded = mod.Workbook.loadBytes(saved.bytes);
+  const loaded = mod.Workbook.load(saved.bytes);
   assert.deepEqual(loaded.getDataTable(0, 4, 1).dataTable.colInput, { row: 0, col: 1, deleted: false });
   assert.equal(loaded.setNumber(0, 4, 1, 1).ok, false);
   assert.ok(loaded.insertRows(0, 0, 2).ok);

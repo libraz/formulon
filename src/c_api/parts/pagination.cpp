@@ -26,13 +26,13 @@ struct fm_pagination {
   formulon::print::PaginationResult result;
 };
 
-extern "C" fm_status_t fm_workbook_paginate(const fm_workbook_t* wb, size_t sheet_index, fm_pagination_t** out) {
+extern "C" fm_status_t fm_workbook_get_pagination(const fm_workbook_t* wb, size_t sheet_index, fm_pagination_t** out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_paginate: NULL out");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_get_pagination: NULL out");
   }
   *out = nullptr;
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_paginate"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_get_pagination"); rc != 0) {
     return rc;
   }
   auto paginated = formulon::print::paginate(wb->workbook(), static_cast<std::uint32_t>(sheet_index));
@@ -49,23 +49,23 @@ extern "C" void fm_pagination_destroy(fm_pagination_t* pagination) {
   delete pagination;
 }
 
-extern "C" uint32_t fm_pagination_page_count(const fm_pagination_t* pagination) {
+extern "C" uint32_t fm_pagination_get_page_count(const fm_pagination_t* pagination) {
   clear_last_error();
   return pagination == nullptr ? 0U : pagination->result.page_count;
 }
 
-extern "C" size_t fm_pagination_print_area_count(const fm_pagination_t* pagination) {
+extern "C" size_t fm_pagination_get_print_area_count(const fm_pagination_t* pagination) {
   clear_last_error();
   return pagination == nullptr ? 0U : pagination->result.print_area.size();
 }
 
-extern "C" fm_status_t fm_pagination_print_area_at(const fm_pagination_t* pagination, size_t index,
-                                                   fm_print_range_t* out) {
+extern "C" fm_status_t fm_pagination_get_print_area_at(const fm_pagination_t* pagination, size_t index,
+                                                       fm_print_range_t* out) {
   clear_last_error();
   if (pagination == nullptr || out == nullptr) {
-    return null_argument("fm_pagination_print_area_at");
+    return null_argument("fm_pagination_get_print_area_at");
   }
-  if (auto rc = check_index(index, pagination->result.print_area.size(), "fm_pagination_print_area_at", "index");
+  if (auto rc = check_index(index, pagination->result.print_area.size(), "fm_pagination_get_print_area_at", "index");
       rc != 0) {
     return rc;
   }
@@ -97,15 +97,15 @@ fm_status_t break_entry(const fm_pagination_t* pagination, size_t index, const v
 
 }  // namespace
 
-extern "C" size_t fm_pagination_horizontal_break_count(const fm_pagination_t* pagination) {
+extern "C" size_t fm_pagination_get_row_break_count(const fm_pagination_t* pagination) {
   clear_last_error();
   return pagination == nullptr ? 0U : pagination->result.h_breaks.size();
 }
 
-extern "C" fm_status_t fm_pagination_horizontal_break_at(const fm_pagination_t* pagination, size_t index,
-                                                         uint32_t* out_row) {
+extern "C" fm_status_t fm_pagination_get_row_break_at(const fm_pagination_t* pagination, size_t index,
+                                                      uint32_t* out_row) {
   uint32_t value = 0;
-  if (auto rc = break_entry(pagination, index, out_row, true, false, "fm_pagination_horizontal_break_at", &value);
+  if (auto rc = break_entry(pagination, index, out_row, true, false, "fm_pagination_get_row_break_at", &value);
       rc != 0) {
     return rc;
   }
@@ -113,15 +113,15 @@ extern "C" fm_status_t fm_pagination_horizontal_break_at(const fm_pagination_t* 
   return 0;
 }
 
-extern "C" size_t fm_pagination_vertical_break_count(const fm_pagination_t* pagination) {
+extern "C" size_t fm_pagination_get_col_break_count(const fm_pagination_t* pagination) {
   clear_last_error();
   return pagination == nullptr ? 0U : pagination->result.v_breaks.size();
 }
 
-extern "C" fm_status_t fm_pagination_vertical_break_at(const fm_pagination_t* pagination, size_t index,
-                                                       uint32_t* out_col) {
+extern "C" fm_status_t fm_pagination_get_col_break_at(const fm_pagination_t* pagination, size_t index,
+                                                      uint32_t* out_col) {
   uint32_t value = 0;
-  if (auto rc = break_entry(pagination, index, out_col, false, false, "fm_pagination_vertical_break_at", &value);
+  if (auto rc = break_entry(pagination, index, out_col, false, false, "fm_pagination_get_col_break_at", &value);
       rc != 0) {
     return rc;
   }
@@ -129,13 +129,13 @@ extern "C" fm_status_t fm_pagination_vertical_break_at(const fm_pagination_t* pa
   return 0;
 }
 
-extern "C" fm_status_t fm_pagination_paper(const fm_pagination_t* pagination, fm_paper_info* out) {
+extern "C" fm_status_t fm_pagination_get_paper(const fm_pagination_t* pagination, fm_paper_info_t* out) {
   clear_last_error();
   if (pagination == nullptr || out == nullptr) {
-    return null_argument("fm_pagination_paper");
+    return null_argument("fm_pagination_get_paper");
   }
   const formulon::print::PaperInfo& paper = pagination->result.paper;
-  *out = fm_paper_info{};
+  *out = fm_paper_info_t{};
   out->width_pt = paper.width_pt;
   out->height_pt = paper.height_pt;
   out->landscape = paper.landscape ? 1 : 0;
@@ -143,51 +143,51 @@ extern "C" fm_status_t fm_pagination_paper(const fm_pagination_t* pagination, fm
   return 0;
 }
 
-extern "C" fm_status_t fm_pagination_margins(const fm_pagination_t* pagination, fm_margins_pt* out) {
+extern "C" fm_status_t fm_pagination_get_margins(const fm_pagination_t* pagination, fm_margins_pt_t* out) {
   clear_last_error();
   if (pagination == nullptr || out == nullptr) {
-    return null_argument("fm_pagination_margins");
+    return null_argument("fm_pagination_get_margins");
   }
   const formulon::print::MarginsPt& margins = pagination->result.margins;
-  *out = fm_margins_pt{margins.left, margins.right, margins.top, margins.bottom, margins.header, margins.footer};
+  *out = fm_margins_pt_t{margins.left, margins.right, margins.top, margins.bottom, margins.header, margins.footer};
   return 0;
 }
 
-extern "C" fm_status_t fm_pagination_printable(const fm_pagination_t* pagination, fm_rect_pt* out) {
+extern "C" fm_status_t fm_pagination_get_printable(const fm_pagination_t* pagination, fm_rect_pt_t* out) {
   clear_last_error();
   if (pagination == nullptr || out == nullptr) {
-    return null_argument("fm_pagination_printable");
+    return null_argument("fm_pagination_get_printable");
   }
   const formulon::print::RectPt& rect = pagination->result.printable;
-  *out = fm_rect_pt{rect.x, rect.y, rect.width, rect.height};
+  *out = fm_rect_pt_t{rect.x, rect.y, rect.width, rect.height};
   return 0;
 }
 
-extern "C" fm_status_t fm_pagination_scale(const fm_pagination_t* pagination, double* out_scale) {
+extern "C" fm_status_t fm_pagination_get_scale(const fm_pagination_t* pagination, double* out_scale) {
   clear_last_error();
   if (pagination == nullptr || out_scale == nullptr) {
-    return null_argument("fm_pagination_scale");
+    return null_argument("fm_pagination_get_scale");
   }
   *out_scale = pagination->result.scale;
   return 0;
 }
 
-extern "C" fm_status_t fm_pagination_page_order(const fm_pagination_t* pagination, int32_t* out_order) {
+extern "C" fm_status_t fm_pagination_get_page_order(const fm_pagination_t* pagination, int32_t* out_order) {
   clear_last_error();
   if (pagination == nullptr || out_order == nullptr) {
-    return null_argument("fm_pagination_page_order");
+    return null_argument("fm_pagination_get_page_order");
   }
   *out_order = static_cast<int32_t>(pagination->result.page_order);
   return 0;
 }
 
-extern "C" fm_status_t fm_pagination_print_titles(const fm_pagination_t* pagination, fm_print_titles* out) {
+extern "C" fm_status_t fm_pagination_get_print_titles(const fm_pagination_t* pagination, fm_print_titles_t* out) {
   clear_last_error();
   if (pagination == nullptr || out == nullptr) {
-    return null_argument("fm_pagination_print_titles");
+    return null_argument("fm_pagination_get_print_titles");
   }
   const formulon::print::PrintTitleSpan& titles = pagination->result.print_titles;
-  *out = fm_print_titles{};
+  *out = fm_print_titles_t{};
   out->has_rows = titles.has_rows ? 1 : 0;
   out->first_row = titles.first_row;
   out->last_row = titles.last_row;
@@ -197,16 +197,17 @@ extern "C" fm_status_t fm_pagination_print_titles(const fm_pagination_t* paginat
   return 0;
 }
 
-extern "C" fm_status_t fm_pagination_page_at(const fm_pagination_t* pagination, size_t index, fm_page_layout* out) {
+extern "C" fm_status_t fm_pagination_get_page_at(const fm_pagination_t* pagination, size_t index,
+                                                 fm_page_layout_t* out) {
   clear_last_error();
   if (pagination == nullptr || out == nullptr) {
-    return null_argument("fm_pagination_page_at");
+    return null_argument("fm_pagination_get_page_at");
   }
-  if (auto rc = check_index(index, pagination->result.pages.size(), "fm_pagination_page_at", "index"); rc != 0) {
+  if (auto rc = check_index(index, pagination->result.pages.size(), "fm_pagination_get_page_at", "index"); rc != 0) {
     return rc;
   }
   const formulon::print::PageLayout& page = pagination->result.pages[index];
-  *out = fm_page_layout{};
+  *out = fm_page_layout_t{};
   out->area_index = page.area_index;
   out->first_row = page.first_row;
   out->last_row = page.last_row;
@@ -219,11 +220,10 @@ extern "C" fm_status_t fm_pagination_page_at(const fm_pagination_t* pagination, 
   return 0;
 }
 
-extern "C" fm_status_t fm_pagination_horizontal_break_is_manual(const fm_pagination_t* pagination, size_t index,
-                                                                int32_t* out_manual) {
+extern "C" fm_status_t fm_pagination_is_row_break_manual(const fm_pagination_t* pagination, size_t index,
+                                                         int32_t* out_manual) {
   uint32_t value = 0;
-  if (auto rc =
-          break_entry(pagination, index, out_manual, true, true, "fm_pagination_horizontal_break_is_manual", &value);
+  if (auto rc = break_entry(pagination, index, out_manual, true, true, "fm_pagination_is_row_break_manual", &value);
       rc != 0) {
     return rc;
   }
@@ -231,11 +231,10 @@ extern "C" fm_status_t fm_pagination_horizontal_break_is_manual(const fm_paginat
   return 0;
 }
 
-extern "C" fm_status_t fm_pagination_vertical_break_is_manual(const fm_pagination_t* pagination, size_t index,
-                                                              int32_t* out_manual) {
+extern "C" fm_status_t fm_pagination_is_col_break_manual(const fm_pagination_t* pagination, size_t index,
+                                                         int32_t* out_manual) {
   uint32_t value = 0;
-  if (auto rc =
-          break_entry(pagination, index, out_manual, false, true, "fm_pagination_vertical_break_is_manual", &value);
+  if (auto rc = break_entry(pagination, index, out_manual, false, true, "fm_pagination_is_col_break_manual", &value);
       rc != 0) {
     return rc;
   }

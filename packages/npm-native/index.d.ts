@@ -15,7 +15,7 @@
 //
 //   * The native binding exposes `dispose()` for deterministic release;
 //     GC finalization remains a fallback.
-//   * The native binding exposes `memoryUsage()` so a host can size a
+//   * The native binding exposes `getMemoryUsage()` so a host can size a
 //     workbook by what its handle owns rather than by the handle.
 //
 // Three methods go the other way and are WASM-only; see "Surface parity"
@@ -417,7 +417,7 @@ export interface NumberResult<T extends number = number> {
   value: T;
 }
 
-/** Return type of `Workbook.cellAt(sheet, idx)`. */
+/** Return type of `Workbook.getCellAt(sheet, idx)`. */
 export interface CellEntry {
   status: Status;
   row?: number;
@@ -463,7 +463,7 @@ export interface TableColumnEntry {
   totalsRowFormula: string;
 }
 
-/** Return type of `Workbook.tableAt(idx)`. `styleName` is empty without a
+/** Return type of `Workbook.getTable(idx)`. `styleName` is empty without a
  *  style and may name a custom style (`getTableStyle`); `hasStyleInfo` is
  *  false when the table has no `<tableStyleInfo>` (the toggles then read
  *  false). The row counts are 0 or 1. */
@@ -640,7 +640,7 @@ export interface PivotCell {
   numberFormat: string;
 }
 
-/** Return type of `Workbook.pivotLayout(sheet, pivotIndex)`. */
+/** Return type of `Workbook.getPivotLayout(sheet, pivotIndex)`. */
 export interface PivotLayoutResult {
   status: Status;
   /** Absolute 0-based top row of the rectangular pivot layout. */
@@ -684,7 +684,7 @@ export const PivotAggregation: Readonly<{
 export type PivotAggregation = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 /** Show-values-as derivation applied to a data-field aggregate.
- *  Mirrors `fm_pivot_show_as_t`. */
+ *  Mirrors `fm_pivot_show_values_as_t`. */
 export const PivotShowValuesAs: Readonly<{
   Normal: 0;
   PercentOfRow: 1;
@@ -904,7 +904,7 @@ export const PivotSortOrder: Readonly<{
 /** Union of the {@link PivotSortOrder} ordinals. */
 export type PivotSortOrder = 0 | 1 | 2;
 
-/** Pivot report layout form. Mirrors `fm_pivot_layout_t`. */
+/** Pivot report layout form. Mirrors `fm_pivot_report_layout_t`. */
 export const PivotReportLayout: Readonly<{
   Compact: 0;
   Tabular: 1;
@@ -913,9 +913,9 @@ export const PivotReportLayout: Readonly<{
 /** Union of the {@link PivotReportLayout} ordinals. */
 export type PivotReportLayout = 0 | 1 | 2;
 
-/** Plain-data spec for `Workbook.pivotFieldAdd`. Mirrors
+/** Plain-data spec for `Workbook.addPivotField`. Mirrors
  *  `fm_pivot_field_spec_t`. */
-export interface PivotFieldSpec {
+export interface PivotFieldSpecInput {
   sourceName: string;
   customName?: string;
   /** One of `PivotAxis.*`. */
@@ -928,7 +928,7 @@ export interface PivotFieldSpec {
   numberFormat?: string;
 }
 
-/** Plain-data spec for `Workbook.pivotDataFieldAdd` /
+/** Plain-data spec for `Workbook.addPivotDataField` /
  *  `pivotDataFieldSet`. Mirrors `fm_pivot_data_field_spec_t`. Pass
  *  `-1` for `showAsBaseField` / `showAsBaseItem` to mean "unset". */
 export interface PivotDataFieldSpec {
@@ -948,7 +948,7 @@ export interface PivotDataFieldSpec {
   showAsBaseItem?: number;
 }
 
-/** Plain-data spec for `Workbook.pivotFilterAdd`. Mirrors
+/** Plain-data spec for `Workbook.addPivotFilter`. Mirrors
  *  `fm_pivot_filter_spec_t`. */
 export interface PivotFilterSpec {
   /** One of `PivotAxis.*`. */
@@ -973,7 +973,7 @@ export interface PivotFilterSpec {
 }
 
 /** Worksheet source metadata for a pivot cache. Input shape for
- *  `Workbook.pivotCacheSetWorksheetSource`. */
+ *  `Workbook.setPivotCacheWorksheetSource`. */
 export interface PivotWorksheetSource {
   present: boolean;
   ref?: string;
@@ -981,7 +981,7 @@ export interface PivotWorksheetSource {
   name?: string;
 }
 
-/** Return type of `Workbook.pivotCacheGetWorksheetSource(cacheId)`. */
+/** Return type of `Workbook.getPivotCacheWorksheetSource(cacheId)`. */
 export interface PivotWorksheetSourceResult extends PivotWorksheetSource {
   status: Status;
   ref: string;
@@ -989,7 +989,7 @@ export interface PivotWorksheetSourceResult extends PivotWorksheetSource {
   name: string;
 }
 
-/** Return type of `Workbook.pivotGetLayout(sheet, pivotIdx)`. */
+/** Return type of `Workbook.getPivotReportLayout(sheet, pivotIdx)`. */
 export interface PivotReportLayoutResult {
   status: Status;
   /** One of `PivotReportLayout.*`. */
@@ -1008,7 +1008,7 @@ export interface PivotStyleInfo {
   showLastColumn?: boolean;
 }
 
-/** Return type of `Workbook.pivotGetStyleInfo(...)`. `present` is false when
+/** Return type of `Workbook.getPivotStyleInfo(...)`. `present` is false when
     the definition has no style element (the other fields are then empty). */
 export interface PivotStyleInfoResult {
   status: Status;
@@ -1056,7 +1056,7 @@ export interface PivotOptions {
   enableDrill: boolean;
 }
 
-/** Return type of `Workbook.pivotGetOptions(...)`. */
+/** Return type of `Workbook.getPivotOptions(...)`. */
 export interface PivotOptionsResult extends PivotOptions {
   status: Status;
 }
@@ -1071,12 +1071,12 @@ export interface PivotCacheOptions {
   refreshOnLoad: boolean;
 }
 
-/** Return type of `Workbook.pivotCacheGetOptions(...)`. */
+/** Return type of `Workbook.getPivotCacheOptions(...)`. */
 export interface PivotCacheOptionsResult extends PivotCacheOptions {
   status: Status;
 }
 
-/** Return type of `Workbook.pivotCacheCalculatedItemAt(...)`. */
+/** Return type of `Workbook.getPivotCacheCalculatedItem(...)`. */
 export interface PivotCalculatedItemResult {
   status: Status;
   /** Index of the cache field the item belongs to. */
@@ -1087,34 +1087,34 @@ export interface PivotCalculatedItemResult {
   scoped: boolean;
 }
 
-/** Return type of `Workbook.pivotProjectionPending(...)`. */
+/** Return type of `Workbook.isPivotProjectionPending(...)`. */
 export interface PivotProjectionPendingResult {
   status: Status;
   value: boolean;
 }
 
-/** Return type of `Workbook.pivotCacheFieldSharedItemIsDate(...)`. */
+/** Return type of `Workbook.isPivotCacheFieldSharedItemDate(...)`. */
 export interface PivotCacheSharedItemIsDateResult {
   status: Status;
   value: boolean;
 }
 
-/** Return type of `Workbook.pivotGetGrandTotals(...)`. */
+/** Return type of `Workbook.getPivotGrandTotals(...)`. */
 export interface PivotGrandTotalsResult {
   status: Status;
   rows: boolean;
   cols: boolean;
 }
 
-/** Return type of `Workbook.pivotRowFieldOrder` / `pivotColFieldOrder`:
+/** Return type of `Workbook.getPivotRowFieldOrder` / `pivotColFieldOrder`:
  *  the indices `pivotSetRowFieldOrder` / `pivotSetColFieldOrder` take. */
 export interface PivotFieldOrderResult {
   status: Status;
   indices: number[];
 }
 
-/** Return type of `Workbook.pivotFieldAt(...)`. `sourceName`, `customName`,
- *  `axis`, `subtotalTop` and `numberFormat` match `PivotFieldSpec`, except
+/** Return type of `Workbook.getPivotField(...)`. `sourceName`, `customName`,
+ *  `axis`, `subtotalTop` and `numberFormat` match `PivotFieldSpecInput`, except
  *  that `axis` is `-1` for a field that sits on no axis. */
 export interface PivotFieldResult {
   status: Status;
@@ -1151,7 +1151,7 @@ export interface PivotFieldResult {
   subtotalFns: PivotAggregation[];
 }
 
-/** Return type of `Workbook.pivotFieldItemAt(...)`. */
+/** Return type of `Workbook.getPivotFieldItem(...)`. */
 export interface PivotItemResult {
   status: Status;
   /** The item's own label; empty for an item bound only by cache index. */
@@ -1166,7 +1166,7 @@ export interface PivotItemResult {
   showDetail: boolean;
 }
 
-/** Return type of `Workbook.pivotDataFieldAt(...)`. Same shape as
+/** Return type of `Workbook.getPivotDataField(...)`. Same shape as
  *  `PivotDataFieldSpec` with every member present; `showAsBaseField` /
  *  `showAsBaseItem` are `-1` when unset and `numberFormat` is `""` for none. */
 export interface PivotDataFieldResult {
@@ -1182,7 +1182,7 @@ export interface PivotDataFieldResult {
   showAsBaseItem: number;
 }
 
-/** Return type of `Workbook.pivotFilterAt(...)`: the stored filter plus a
+/** Return type of `Workbook.getPivotFilter(...)`: the stored filter plus a
  *  status envelope. Field names and semantics match `PivotFilterSpec`.
  *
  *  The filter list is saved as the definition's `<filters>` block. A loaded
@@ -1262,7 +1262,7 @@ export const RefMode: Readonly<{
 /** Union of the {@link RefMode} ordinals. */
 export type RefMode = 0 | 1;
 
-/** Which fold of text comparison `compareText` and `collationClasses` apply.
+/** Which fold of text comparison `compareText` and `getCollationClasses` apply.
  *  Mirrors `fm_collation_strength_t`: `Compare` is the fold of `=`, criteria,
  *  SEARCH and approximate lookup; `Dynamic` the fold of SORT, UNIQUE, XLOOKUP,
  *  GROUPBY and pivots; `ClassicExact` the fold of MATCH 0 and VLOOKUP FALSE.
@@ -1339,7 +1339,7 @@ export type ExcelProfileId =
   | 'win-365-nl_NL';
 
 /** A wall-clock reading in local civil fields, as read back from
- *  `Workbook.pinnedNow()`. `month` is 1-12 and `day` is 1-31; the other
+ *  `Workbook.getPinnedNow()`. `month` is 1-12 and `day` is 1-31; the other
  *  fields follow the usual 24-hour ranges. */
 export interface CivilTime {
   year: number;
@@ -1350,7 +1350,7 @@ export interface CivilTime {
   second: number;
 }
 
-/** Return type of `Workbook.pinnedNow()`. `now` is `null` when the workbook
+/** Return type of `Workbook.getPinnedNow()`. `now` is `null` when the workbook
  *  follows the host clock, and on failure. */
 export interface PinnedNowResult {
   status: Status;
@@ -1506,7 +1506,7 @@ export interface SheetPrintXmlResult {
   xml: string;
 }
 
-/** Result of `Workbook.getSheetPrintArea`. `ranges` is comma-separated A1
+/** Result of `Workbook.getPrintArea`. `ranges` is comma-separated A1
  * (`"A1:F8"`, `"A1:B10,D5:E20"`), empty when no print area is declared. A
  * whole-axis area reads back expanded to explicit corners. */
 export interface SheetPrintAreaResult {
@@ -1514,7 +1514,7 @@ export interface SheetPrintAreaResult {
   ranges: string;
 }
 
-/** Result of `Workbook.getSheetPrintTitles`. Either span is empty when
+/** Result of `Workbook.getPrintTitles`. Either span is empty when
  * that axis has no repeat setting. */
 export interface SheetPrintTitlesResult {
   status: Status;
@@ -1534,7 +1534,7 @@ export interface PageBreak {
   manual: boolean;
 }
 
-/** Result of `Workbook.getSheetRowBreaks` / `getSheetColBreaks`. */
+/** Result of `Workbook.listRowBreaks` / `getSheetColBreaks`. */
 export interface SheetPageBreaksResult {
   status: Status;
   breaks: PageBreak[];
@@ -1557,7 +1557,7 @@ export type Orientation = 0 | 1 | 2;
  * `<sheetPr><pageSetUpPr>`. It selects the fit-to-page mode, and
  * `fitToWidth` / `fitToHeight` state the target, so "fit onto one page"
  * needs all three. */
-export interface PageSetupInput {
+export interface PageSetup {
   orientation?: Orientation;
   /** OOXML paperSize code; 9 = A4. */
   paperSize?: number;
@@ -1568,7 +1568,7 @@ export interface PageSetupInput {
   fitToPage?: boolean;
 }
 
-/** Result of `Workbook.getSheetPageSetup`. Every value carries the setting
+/** Result of `Workbook.getPageSetup`. Every value carries the setting
  * in force; the `*Stated` flags say whether the XML declares it, which is
  * the only way to tell `scale="100"` from an absent attribute. */
 export interface SheetPageSetupResult {
@@ -1589,7 +1589,7 @@ export interface SheetPageSetupResult {
 
 /** Partial `<pageMargins>` update, in inches. A negative, infinite or NaN
  * margin is rejected: the paginator subtracts these from the paper. */
-export interface PageMarginsInput {
+export interface PageMargins {
   left?: number;
   right?: number;
   top?: number;
@@ -1598,7 +1598,7 @@ export interface PageMarginsInput {
   footer?: number;
 }
 
-/** Result of `Workbook.getSheetPageMargins`, in inches. */
+/** Result of `Workbook.getPageMargins`, in inches. */
 export interface SheetPageMarginsResult {
   status: Status;
   left: number;
@@ -1870,7 +1870,7 @@ export const ShapePaint: Readonly<{
 /** Union of the {@link ShapePaint} ordinals. */
 export type ShapePaint = 0 | 1 | 2 | 3;
 
-/** Table slicer item order. Mirrors `fm_slicer_sort_t`. */
+/** Table slicer item order. Mirrors `fm_slicer_sort_order_t`. */
 export const SlicerSortOrder: Readonly<{
   Ascending: 0;
   Descending: 1;
@@ -2168,7 +2168,7 @@ export interface SheetView {
 }
 
 /** The active pane's selection: the active cell and the selected ranges.
- *  Input of `Workbook.setSheetSelection`; `ranges` may be empty or omitted,
+ *  Input of `Workbook.setSelection`; `ranges` may be empty or omitted,
  *  which selects the active cell alone. */
 export interface SheetSelection {
   activeRow: number;
@@ -2176,7 +2176,7 @@ export interface SheetSelection {
   ranges?: ReadonlyArray<MergeRange>;
 }
 
-/** Return type of `Workbook.getSheetSelection(sheet)`, read as it is saved:
+/** Return type of `Workbook.getSelection(sheet)`, read as it is saved:
  *  a pane that stores no selection reports A1 with the single range A1 (the
  *  pane's top-left cell for a frozen or split view's active pane), and an
  *  active cell outside every range moves to the first range's top-left. */
@@ -2187,7 +2187,7 @@ export interface SheetSelectionResult {
   ranges: MergeRange[];
 }
 
-/** Return type of `Workbook.getSheetView(sheet)`. */
+/** Return type of `Workbook.getView(sheet)`. */
 export interface SheetViewResult {
   status: Status;
   view: SheetView;
@@ -2246,7 +2246,7 @@ export interface ColumnLayout {
   styleXf: number;
 }
 
-/** Return type of `Workbook.getSheetColumns(sheet)`. */
+/** Return type of `Workbook.listColOverrides(sheet)`. */
 export interface ColumnsResult {
   status: Status;
   columns: ReadonlyArray<ColumnLayout>;
@@ -2270,7 +2270,7 @@ export interface RowLayout {
   customHeight: number;
 }
 
-/** Return type of `Workbook.getSheetRowOverrides(sheet)`. */
+/** Return type of `Workbook.listRowOverrides(sheet)`. */
 export interface RowsResult {
   status: Status;
   rows: ReadonlyArray<RowLayout>;
@@ -2284,7 +2284,7 @@ export interface MergeRange {
   lastCol: number;
 }
 
-/** Return type of `Workbook.getSheetFormatDefaults(sheet)`; also the
+/** Return type of `Workbook.getFormatDefaults(sheet)`; also the
  *  argument shape of `setSheetFormatDefaults`. `defaultColWidth` is a
  *  stored width (padding included) and `defaultRowHeight` in points, each meaningful only
  *  when its `has*` flag is set. `baseColWidth` is in characters (OOXML
@@ -2304,7 +2304,7 @@ export interface SheetFormatDefaults {
   zeroHeight: boolean;
 }
 
-/** Return type of `Workbook.getSheetFormatDefaults(sheet)`. The effective
+/** Return type of `Workbook.getFormatDefaults(sheet)`. The effective
  *  values are read-only and ignored by `setSheetFormatDefaults`. */
 export interface SheetFormatDefaultsResult extends SheetFormatDefaults {
   status: Status;
@@ -2489,14 +2489,14 @@ export interface Person {
   providerId: string;
 }
 
-/** Result of `Workbook.getThreadedComments`, in file order: each thread's
+/** Result of `Workbook.listThreadedComments`, in file order: each thread's
  *  opening comment followed by its replies. */
 export interface ThreadedCommentsResult {
   status: Status;
   comments: ThreadedComment[];
 }
 
-/** Result of `Workbook.getPersons`. */
+/** Result of `Workbook.listPeople`. */
 export interface PersonsResult {
   status: Status;
   persons: Person[];
@@ -2515,7 +2515,7 @@ export interface ImageResult extends ImageInfoResult {
   bytes: Uint8Array;
 }
 
-/** Result of `Workbook.insertImage` and `Workbook.restoreDrawing`; `objectId` is zero on failure. */
+/** Result of `Workbook.addImage` and `Workbook.restoreDrawing`; `objectId` is zero on failure. */
 export interface InsertImageResult {
   status: Status;
   objectId: number;
@@ -2537,7 +2537,7 @@ export interface ImagePlacement {
   heightEmu?: number;
 }
 
-/** Result of `Workbook.rangeStyleBases`; `xfIndices` is ascending and empty on failure. */
+/** Result of `Workbook.getRangeStyleBases`; `xfIndices` is ascending and empty on failure. */
 export interface RangeStyleBasesResult {
   status: Status;
   xfIndices: number[];
@@ -2972,10 +2972,10 @@ export interface ChartData {
   unresolved: { seriesIdx: number; source: string; axisId: number }[];
 }
 
-/** Options of `Workbook.insertChart`. An omitted `headerRow` / `headerColumn` follows Excel's detection, an omitted `title`
+/** Options of `Workbook.addChart`. An omitted `headerRow` / `headerColumn` follows Excel's detection, an omitted `title`
  *  is Excel's automatic title and an empty one is no title. `placement` defaults to a two-cell anchor, and a zero
  *  `widthEmu` / `heightEmu` means Excel's default frame. */
-export interface ChartInsertOptions {
+export interface ChartInsertInput {
   kind: ChartInsertKind;
   grouping?: ChartGrouping;
   source: string;
@@ -3081,7 +3081,7 @@ export interface ChartDisplayPatch {
 }
 
 /** Overrides `previewChartData` applies to a copy of the chart; an omitted field keeps the chart's own value. */
-export interface ChartPreviewOverrides {
+export interface ChartPreviewOverridesInput {
   source?: string;
   direction?: ChartSeriesDirection;
   headerRow?: boolean;
@@ -3103,7 +3103,7 @@ export interface ChartDataResult {
   data: ChartData | null;
 }
 
-/** Result of `Workbook.insertChart`; `objectId` is zero on failure. */
+/** Result of `Workbook.addChart`; `objectId` is zero on failure. */
 export interface InsertChartResult {
   status: Status;
   objectId: number;
@@ -3120,7 +3120,7 @@ export interface AddChartSeriesResult {
  *  the 0-based top-left cell and `rowOffEmu` / `colOffEmu` the offset inside
  *  it. A zero `widthEmu` / `heightEmu` means the pixel size times 9525. An
  *  empty `name` becomes `Picture <id>`. */
-export interface ImageInsertOptions {
+export interface ImageInsertInput {
   name?: string;
   descr?: string;
   anchorKind?: AnchorKind;
@@ -3159,8 +3159,8 @@ export interface DisplayTextResult {
   displayStatus: DisplayStatus;
 }
 
-/** Sheet hyperlink entry as returned by `getHyperlinks(sheet)`. */
-export interface HyperlinkEntry {
+/** Sheet hyperlink entry as returned by `listHyperlinks(sheet)`. */
+export interface Hyperlink {
   row: number;
   col: number;
   /** Inclusive bottom-right endpoint of the hyperlink rectangle. */
@@ -3177,7 +3177,7 @@ export interface HyperlinkEntry {
 }
 
 /** Cell comment entry returned by `getComment(sheet, row, col)`. */
-export interface CommentEntry {
+export interface Comment {
   author: string;
   text: string;
 }
@@ -3185,7 +3185,7 @@ export interface CommentEntry {
 /** Status-bearing comment lookup returned by `getCommentResult`. */
 export interface CommentResult {
   status: Status;
-  comment: CommentEntry | null;
+  comment: Comment | null;
 }
 
 /** Workbook-level protection (`<workbookProtection>`). Booleans are stored as 0/1.
@@ -3227,15 +3227,15 @@ export interface ProtectedRange {
   securityDescriptor: string;
 }
 
-/** Sheet-wide comment entry returned by `getComments(sheet)`. Extends
- *  `CommentEntry` with the anchor cell so comments on otherwise-empty
+/** Sheet-wide comment entry returned by `listComments(sheet)`. Extends
+ *  `Comment` with the anchor cell so comments on otherwise-empty
  *  cells can be discovered without already knowing their `(row, col)`. */
-export interface SheetCommentEntry extends CommentEntry {
+export interface SheetCommentEntry extends Comment {
   row: number;
   col: number;
 }
 
-/** One cell-range entry inside a `DataValidationEntry.ranges`. Identical
+/** One cell-range entry inside a `DataValidation.ranges`. Identical
  *  shape to `MergeRange`; declared separately so the data-validation
  *  surface can evolve independently of the merge surface. */
 export interface DataValidationRange {
@@ -3256,7 +3256,7 @@ export interface DataValidationRange {
  *                       6 greaterThanOrEqual, 7 lessThanOrEqual.
  *    * `errorStyle`  — a `ValidationErrorStyle`.
  */
-export interface DataValidationEntry {
+export interface DataValidation {
   readonly ranges: ReadonlyArray<DataValidationRange>;
   readonly type: number;
   readonly op: number;
@@ -3298,8 +3298,8 @@ export interface DataValidationInput {
   promptMessage?: string;
 }
 
-/** @deprecated Use {@link DataValidationEntry} instead. */
-export type ValidationEntry = DataValidationEntry;
+/** @deprecated Use {@link DataValidation} instead. */
+export type ValidationEntry = DataValidation;
 
 /** Return type of `Workbook.getCellXfIndex(sheet, row, col)`. */
 export interface CellXfIndexResult {
@@ -3595,7 +3595,7 @@ export interface BorderResult extends BorderRecord {
   status: Status;
 }
 
-/** Return type of `Workbook.getNumFmt(numFmtId)`. */
+/** Return type of `Workbook.getNumFmtString(numFmtId)`. */
 export interface NumFmtResult {
   status: Status;
   numFmtId: number;
@@ -3692,7 +3692,7 @@ export interface ThemeScriptFont {
   typeface: string;
 }
 
-/** Return type of `Workbook.getTheme()`. */
+/** Return type of `Workbook.getThemeFonts()`. */
 export interface ThemeResult {
   status: Status;
   /** One of `ThemeSource.*`. */
@@ -3870,7 +3870,7 @@ export interface CfIconInput {
   iconId: number;
 }
 
-/** Argument shape accepted by `addConditionalFormat(sheet, rule)`.
+/** Argument shape accepted by `addCfRule(sheet, rule)`.
  *
  *  When `priority` is missing, zero, or negative, the engine assigns
  *  `existing_max + 1`. When `id` is missing or empty, the engine
@@ -3997,7 +3997,7 @@ export interface CompareTextResult {
   order: number;
 }
 
-/** Result of `Workbook.collationClasses`. */
+/** Result of `Workbook.getCollationClasses`. */
 export interface CollationClassesResult {
   status: Status;
   /** One class id per input value; empty when `status` is not ok. */
@@ -4005,14 +4005,14 @@ export interface CollationClassesResult {
   classCount: number;
 }
 
-/** Return type of `Workbook.localeFacts(profileId)`. `facts` is `null` on
+/** Return type of `Workbook.getLocaleFacts(profileId)`. `facts` is `null` on
  *  failure (an unknown profile id). */
 export interface LocaleFactsResult {
   status: Status;
   facts: LocaleFacts | null;
 }
 
-/** Result envelope for `functionMetadata(name)`. `ok` is
+/** Result envelope for `getFunctionMetadata(name)`. `ok` is
  *  `false` when no function matches `name`; the remaining fields are
  *  then absent. When `ok` is `true`, `name` / `minArity` / `maxArity`
  *  are always populated; `signatureTemplate` and `description` are
@@ -4076,7 +4076,7 @@ export interface ArrayFormulaResult {
   readonly arrayFormula: ArrayFormula | null;
 }
 
-/** Spill region info returned by `spillInfo(sheet, row, col)`. On failure
+/** Spill region info returned by `getSpillInfo(sheet, row, col)`. On failure
  *  `engaged` is `false` and the other fields are zero. */
 export interface SpillInfo {
   readonly status: Status;
@@ -4147,7 +4147,7 @@ export interface RecalcViewport {
   lastCol: number;
 }
 
-/** Return type of `Workbook.partialRecalc(viewport)`. */
+/** Return type of `Workbook.recalcViewport(viewport)`. */
 export interface PartialRecalcResult {
   status: Status;
   /** Number of cells the engine actually evaluated. */
@@ -4241,7 +4241,7 @@ export interface Workbook {
    *  cell writes. The value covers the cell store, shared strings,
    *  passthrough parts and workbook metadata; it is an estimate, not an
    *  allocation ledger. */
-  memoryUsage(): number;
+  getMemoryUsage(): number;
 
   // Cell mutation.
   /** Stores a numeric literal. NaN and infinity are rejected with `kInvalidArgument`; so is an out-of-range `sheet`. */
@@ -4298,7 +4298,7 @@ export interface Workbook {
    *  `evaluateFormulaArray` for the whole multi-cell result).
    *  Note: a self-reference reads the target cell's cached value rather than
    *  raising `#REF!`, since the ad-hoc formula never joins the dep graph. */
-  evaluateFormulaText(sheet: number, row: number, col: number, formula: string): EvalResult;
+  evaluateFormula(sheet: number, row: number, col: number, formula: string): EvalResult;
   /** Evaluates `formula` as if entered at `(sheet, row, col)` and returns the
    *  whole multi-cell result without mutating the workbook. Unlike
    *  `evaluateFormulaText` (which reduces an array to its top-left element),
@@ -4312,7 +4312,7 @@ export interface Workbook {
    *  `(anchorRow, anchorCol)` (the CF-applied range's top-left). The result
    *  is coerced with Excel's CF rules: error / blank / text / numeric-zero
    *  yield `false`, any non-zero number yields `true`. Read-only. */
-  evaluateConditionalFormula(
+  evaluateCfFormula(
     sheet: number,
     row: number,
     col: number,
@@ -4345,7 +4345,7 @@ export interface Workbook {
   /** Recalculates only cells touched by the supplied viewport. Reports
    *  status 7003 with `recomputed` at zero when a throwing
    *  `IterativeProgressCallback` cut the pass short. */
-  partialRecalc(viewport: RecalcViewport): PartialRecalcResult;
+  recalcViewport(viewport: RecalcViewport): PartialRecalcResult;
   /** Sets iterative calculation. When disabled (the default) cyclic references surface `#REF!`.
    *  `maxIterations` is clamped to `[1, 32767]` (Excel's own limit) and `getIterative` reports the
    *  clamped value; `maxChange` is the absolute convergence threshold. */
@@ -4368,7 +4368,7 @@ export interface Workbook {
   /** Serialises using an explicit format and reports loss/defer counters. */
   saveWithDiagnostics(format: WorkbookFormat | number): SaveDiagnosticsResult;
   /** Returns the loss counters captured when this handle was loaded. */
-  readDiagnostics(): ReadDiagnosticsResult;
+  getDiagnostics(): ReadDiagnosticsResult;
 
   // Workbook-level calc policy / behaviour profile.
   /** Workbook-level calc mode (Excel `<calcPr calcMode>` policy). Apart
@@ -4377,21 +4377,21 @@ export interface Workbook {
    *  value — every `recalc()` honours all dirty cells. The mode is
    *  round-trip metadata surfaced here so the UI can mirror Excel's state.
    *  `value` is one of the `CalcMode` codes. */
-  calcMode(): NumberResult<CalcMode>;
+  getCalcMode(): NumberResult<CalcMode>;
   /** Sets the calc mode; only `AutoNoTable` changes evaluation (`recalc()` skips the data tables). Returns `kInvalidArgument` for a value outside `CalcMode`. */
   setCalcMode(mode: CalcMode): Status;
   /** `<calcPr fullPrecision>` as 0/1; 0 is "set precision as displayed". Metadata only. */
-  fullPrecision(): NumberResult;
+  getFullPrecision(): NumberResult;
   setFullPrecision(fullPrecision: boolean): Status;
   /** `<calcPr calcOnSave>` as 0/1 (default 1). */
-  calcOnSave(): NumberResult;
+  getCalcOnSave(): NumberResult;
   setCalcOnSave(calcOnSave: boolean): Status;
   /** `<calcPr refMode>` as a `RefMode` code. */
-  refMode(): NumberResult<RefMode>;
+  getRefMode(): NumberResult<RefMode>;
   /** Returns `kInvalidArgument` for a value outside `RefMode`. */
   setRefMode(mode: RefMode): Status;
   /** The 1904 date system flag (`<workbookPr date1904>`) as 0/1. */
-  date1904(): NumberResult;
+  getDate1904(): NumberResult;
   /** Switches the date system without converting stored serials, so every date shifts by 1462 days. */
   setDate1904(date1904: boolean): Status;
   /** The workbook's pinned wall-clock reading as `now`, or `now: null`
@@ -4407,7 +4407,7 @@ export interface Workbook {
    *  Model state, not file state: `save()` does not record it and a reloaded
    *  workbook comes back unpinned. Existing formula cells keep their cached
    *  values until the next `recalc()`. */
-  pinnedNow(): PinnedNowResult;
+  getPinnedNow(): PinnedNowResult;
   /** Pins the workbook clock. Returns `kInvalidArgument` unless `year` is in
    *  `[1900, 9999]`, `month` in `[1, 12]`, `day` within that month's real
    *  length, `hour` in `[0, 23]`, and `minute` / `second` in `[0, 59]` — the
@@ -4420,7 +4420,7 @@ export interface Workbook {
   /** Full formula-behaviour profile id. Defaults to `win-365-en_US`.
    * Pick another locale or host with any {@link ExcelProfileId}.
    */
-  excelProfileId(): StringResult<ExcelProfileId>;
+  getExcelProfileId(): StringResult<ExcelProfileId>;
   /** Selects the formula-behaviour profile; `kInvalidArgument` for an id that is not an {@link ExcelProfileId}.
    *  Cached formula values are not recomputed until the next `recalc()`. */
   setExcelProfileId(profileId: ExcelProfileId): Status;
@@ -4428,8 +4428,8 @@ export interface Workbook {
    *  While set, every formula getter spells a reference to the workbook's own defined name (stored `[0]!Name`)
    *  as `Book.xlsx!Name`, quoted when needed (`'My Book.xlsx'!Name`); unset, it reads `[0]!Name`.
    *  Loading from bytes leaves it unset. */
-  fileName(): StringResult;
-  /** Sets `fileName()`; `""` unsets it. Entered formulas then read `Book.xlsx!Name` and `[Book.xlsx]Sheet1!A1`
+  getFileName(): StringResult;
+  /** Sets `getFileName()`; `""` unsets it. Entered formulas then read `Book.xlsx!Name` and `[Book.xlsx]Sheet1!A1`
    *  as this workbook and create no external link. `kInvalidArgument` when the name lacks a workbook extension,
    *  holds one of `[ ] : / \ ? *`, is longer than 218 bytes, or equals an external link's book name. */
   setFileName(name: string): Status;
@@ -4452,7 +4452,7 @@ export interface Workbook {
   /** Moves the sheet from `fromIdx` to `toIdx` (post-removal index). */
   moveSheet(fromIdx: number, toIdx: number): Status;
   /** Copies the worksheet at `sourceIndex` into the workbook before the sheet now at `insertBefore`
-   *  (`sheetCount()` appends) and returns `{ status, index }` with the copy's index. Without `newName` the copy
+   *  (`getSheetCount()` appends) and returns `{ status, index }` with the copy's index. Without `newName` the copy
    *  is named `Src (2)`; an explicit name follows the `addSheet` rules. References qualified with the source
    *  sheet are re-pointed at the copy, tables are renamed, and the active sheet does not change. Fails with
    *  `kSheetIndexOutOfRange`, `kInvalidSheetName`, `kSheetCountLimitExceeded`, `kPreconditionFailed` (very
@@ -4460,14 +4460,14 @@ export interface Workbook {
    *  model); the workbook is unchanged on failure. */
   copySheet(sourceIndex: number, insertBefore: number, newName?: string): AddStyleResult;
   /** Number of sheets. */
-  sheetCount(): NumberResult;
+  getSheetCount(): NumberResult;
   /** Display name of the sheet at `idx`; `kInvalidArgument` when `idx` is out of range. */
-  sheetName(idx: number): StringResult;
+  getSheetName(idx: number): StringResult;
   /** Returns `{ status, index }`: the sheet the first `<workbookView>` marks
    *  active (`activeTab`); without workbook views (an XLSB load) the first
    *  tab-selected sheet; `0` when neither is recorded. Removing or hiding the
    *  active sheet activates the next visible sheet, else the previous one. */
-  activeSheet(): AddStyleResult;
+  getActiveSheet(): AddStyleResult;
   /** Marks sheet `sheet` active so a save records it, creating a minimal
    *  `<bookViews>` when the workbook has none. Other `<workbookView>`
    *  attributes survive; `firstSheet` is lowered to `sheet` when larger. The
@@ -4520,9 +4520,9 @@ export interface Workbook {
   /** Number of written coordinates on `sheet`: cells set by any value, formula or format setter,
    *  `setBlank`, or a spill anchor commit or rejection (clearing keeps the slot),
    *  plus spill phantoms that have no stored slot. Unwritten columns are not counted. */
-  cellCount(sheet: number): NumberResult;
+  getCellCount(sheet: number): NumberResult;
   /** Reads the `idx`-th counted coordinate, `idx` in `[0, cellCount)`, ordered by `(row, col)` ascending. */
-  cellAt(sheet: number, idx: number): CellEntry;
+  getCellAt(sheet: number, idx: number): CellEntry;
   /** Reads the cell's stored formula in A1 notation (leading `=` included); `formula` is `null` for a non-formula cell.
    *  The text is returned as entered; a formula loaded from a file shows book names, not `[N]` indexes. */
   getFormula(sheet: number, row: number, col: number): FormulaResult;
@@ -4542,12 +4542,12 @@ export interface Workbook {
   /** Reads the `idx`-th defined name with its scope; `kInvalidArgument` when `idx` is out of range. */
   definedNameAt(idx: number): DefinedNameEntry;
   /** Number of worksheet tables in the workbook. */
-  tableCount(): NumberResult;
+  getTableCount(): NumberResult;
   /** Reads the `idx`-th table's identifying metadata; `kInvalidArgument` when `idx` is out of range. */
-  tableAt(idx: number): TableEntry;
+  getTable(idx: number): TableEntry;
   /** Creates a worksheet table; `index` of the result is its workbook-wide table index (see `tableAt`).
    *  `input.columns` must hold one unique, non-empty header per column of `input.ref`. */
-  createTable(input: TableInput): AddStyleResult;
+  addTable(input: TableInput): AddStyleResult;
   /** Partially updates a table. Omitted fields preserve their current
    *  values. A supplied `ref` must keep the table's existing column count;
    *  an empty `styleName` clears the style. */
@@ -4574,9 +4574,9 @@ export interface Workbook {
   /** Reads the path of the `idx`-th passthrough part; `kInvalidArgument` when `idx` is out of range. */
   passthroughAt(idx: number): PassthroughEntry;
   /** Returns the number of PivotTables anchored on `sheet`. */
-  pivotCount(sheet: number): NumberResult;
+  getPivotCount(sheet: number): NumberResult;
   /** Evaluates and projects a PivotTable into concrete grid cells. */
-  pivotLayout(sheet: number, pivotIndex: number): PivotLayoutResult;
+  getPivotLayout(sheet: number, pivotIndex: number): PivotLayoutResult;
 
   // ---- PivotCache mutation -----------------------------------------------
   /** Returns the number of pivot caches owned by the workbook. */
@@ -4586,79 +4586,79 @@ export interface Workbook {
   pivotCacheIdAt(idx: number): AddStyleResult;
   /** Creates a new empty pivot cache. Pass `0` for `requestedId` to
    *  auto-assign. Returns `{ status, index: cacheId }`. */
-  pivotCacheCreate(requestedId: number): AddStyleResult;
+  addPivotCache(requestedId: number): AddStyleResult;
   /** Removes the pivot cache with id `cacheId`. Fails if any pivot
    *  table still references it. */
-  pivotCacheRemove(cacheId: number): Status;
+  removePivotCache(cacheId: number): Status;
   /** Reads the cache's worksheet source range / defined-name metadata. */
-  pivotCacheGetWorksheetSource(cacheId: number): PivotWorksheetSourceResult;
+  getPivotCacheWorksheetSource(cacheId: number): PivotWorksheetSourceResult;
   /** Sets or clears the cache's worksheet source metadata. */
-  pivotCacheSetWorksheetSource(cacheId: number, source: PivotWorksheetSource): Status;
+  setPivotCacheWorksheetSource(cacheId: number, source: PivotWorksheetSource): Status;
 
   /** Number of fields on the cache identified by `cacheId`. */
-  pivotCacheFieldCount(cacheId: number): NumberResult;
+  getPivotCacheFieldCount(cacheId: number): NumberResult;
   /** Reads the name of the cache field at `fieldIdx`. */
-  pivotCacheFieldName(cacheId: number, fieldIdx: number): StringResult;
+  getPivotCacheFieldName(cacheId: number, fieldIdx: number): StringResult;
   /** Appends a new field with the given UTF-8 name to the cache.
    *  `index` carries the new field's index. */
-  pivotCacheFieldAdd(cacheId: number, name: string): AddStyleResult;
+  addPivotCacheField(cacheId: number, name: string): AddStyleResult;
   /** Drops every field (and every record) from the cache. */
-  pivotCacheFieldClear(cacheId: number): Status;
+  clearPivotCacheFields(cacheId: number): Status;
 
   /** Number of shared items configured on cache field `fieldIdx`. */
-  pivotCacheFieldSharedItemCount(cacheId: number, fieldIdx: number): NumberResult;
+  getPivotCacheFieldSharedItemCount(cacheId: number, fieldIdx: number): NumberResult;
   /** Reads shared item `itemIdx` of cache field `fieldIdx`; date items read back as serial numbers.
    *  Fails with `kInvalidArgument` when `itemIdx` is not below the shared item count. */
-  pivotCacheFieldSharedItemValue(cacheId: number, fieldIdx: number, itemIdx: number): CellResult;
+  getPivotCacheFieldSharedItemValue(cacheId: number, fieldIdx: number, itemIdx: number): CellResult;
   /** Appends a numeric shared item to cache field `fieldIdx`. */
-  pivotCacheFieldAddSharedItemNumber(cacheId: number, fieldIdx: number, value: number): Status;
+  addPivotCacheFieldSharedItemNumber(cacheId: number, fieldIdx: number, value: number): Status;
   /** Appends a date shared item to cache field `fieldIdx`. `serial` is a date serial in the workbook's
    *  date system, as a cell holds it; it must be finite, non-negative and not past 9999-12-31, else
    *  `kInvalidArgument`. Saved with seconds precision. */
-  pivotCacheFieldAddSharedItemDate(cacheId: number, fieldIdx: number, serial: number): Status;
+  addPivotCacheFieldSharedItemDate(cacheId: number, fieldIdx: number, serial: number): Status;
   /** Reports whether shared item `itemIdx` of cache field `fieldIdx` is a date.
    *  Fails with `kInvalidArgument` when `itemIdx` is not below the shared item count. */
-  pivotCacheFieldSharedItemIsDate(cacheId: number, fieldIdx: number, itemIdx: number): PivotCacheSharedItemIsDateResult;
+  isPivotCacheFieldSharedItemDate(cacheId: number, fieldIdx: number, itemIdx: number): PivotCacheSharedItemIsDateResult;
   /** Appends a text shared item to cache field `fieldIdx`. */
-  pivotCacheFieldAddSharedItemText(cacheId: number, fieldIdx: number, value: string): Status;
+  addPivotCacheFieldSharedItemText(cacheId: number, fieldIdx: number, value: string): Status;
   /** Appends a boolean shared item to cache field `fieldIdx`. */
-  pivotCacheFieldAddSharedItemBool(cacheId: number, fieldIdx: number, value: boolean): Status;
+  addPivotCacheFieldSharedItemBool(cacheId: number, fieldIdx: number, value: boolean): Status;
   /** Appends a blank shared item to cache field `fieldIdx`. */
-  pivotCacheFieldAddSharedItemBlank(cacheId: number, fieldIdx: number): Status;
+  addPivotCacheFieldSharedItemBlank(cacheId: number, fieldIdx: number): Status;
   /** Appends an Excel error shared item to cache field `fieldIdx`. */
-  pivotCacheFieldAddSharedItemError(cacheId: number, fieldIdx: number, errorCode: number): Status;
+  addPivotCacheFieldSharedItemError(cacheId: number, fieldIdx: number, errorCode: number): Status;
   /** Drops every shared item from cache field `fieldIdx`. */
-  pivotCacheFieldClearSharedItems(cacheId: number, fieldIdx: number): Status;
+  clearPivotCacheFieldSharedItems(cacheId: number, fieldIdx: number): Status;
 
   /** Returns the number of records on the cache. */
-  pivotCacheRecordCount(cacheId: number): NumberResult;
+  getPivotCacheRecordCount(cacheId: number): NumberResult;
   /** Appends a new empty record. `index` carries the new record's index. */
-  pivotCacheRecordAdd(cacheId: number): AddStyleResult;
+  addPivotCacheRecord(cacheId: number): AddStyleResult;
   /** Drops every record from the cache. */
-  pivotCacheRecordClear(cacheId: number): Status;
+  clearPivotCacheRecords(cacheId: number): Status;
   /** Sets cell `(recordIdx, fieldIdx)` to a numeric value. */
-  pivotCacheRecordSetNumber(cacheId: number, recordIdx: number, fieldIdx: number, value: number): Status;
+  setPivotCacheRecordNumber(cacheId: number, recordIdx: number, fieldIdx: number, value: number): Status;
   /** Sets cell `(recordIdx, fieldIdx)` to an inline date; `serial` is validated as in
    *  `pivotCacheFieldAddSharedItemDate` and saved with seconds precision. */
-  pivotCacheRecordSetDate(cacheId: number, recordIdx: number, fieldIdx: number, serial: number): Status;
+  setPivotCacheRecordDate(cacheId: number, recordIdx: number, fieldIdx: number, serial: number): Status;
   /** Sets cell `(recordIdx, fieldIdx)` to a UTF-8 text value. */
-  pivotCacheRecordSetText(cacheId: number, recordIdx: number, fieldIdx: number, value: string): Status;
+  setPivotCacheRecordText(cacheId: number, recordIdx: number, fieldIdx: number, value: string): Status;
   /** Sets cell `(recordIdx, fieldIdx)` to a boolean value. */
-  pivotCacheRecordSetBool(cacheId: number, recordIdx: number, fieldIdx: number, value: boolean): Status;
+  setPivotCacheRecordBool(cacheId: number, recordIdx: number, fieldIdx: number, value: boolean): Status;
   /** Sets cell `(recordIdx, fieldIdx)` to Blank. */
-  pivotCacheRecordSetBlank(cacheId: number, recordIdx: number, fieldIdx: number): Status;
+  setPivotCacheRecordBlank(cacheId: number, recordIdx: number, fieldIdx: number): Status;
   /** Sets cell `(recordIdx, fieldIdx)` to an Excel error value. */
-  pivotCacheRecordSetError(cacheId: number, recordIdx: number, fieldIdx: number, errorCode: number): Status;
+  setPivotCacheRecordError(cacheId: number, recordIdx: number, fieldIdx: number, errorCode: number): Status;
 
   // ---- PivotTable mutation -----------------------------------------------
   /** Creates a new empty pivot table. Returns `{ status, index: pivotIdx }`. */
-  pivotCreate(sheet: number, name: string, cacheId: number, anchorRow: number, anchorCol: number): AddStyleResult;
+  addPivot(sheet: number, name: string, cacheId: number, anchorRow: number, anchorCol: number): AddStyleResult;
   /** Removes the pivot table at `pivotIdx`. */
-  pivotRemove(sheet: number, pivotIdx: number): Status;
+  removePivot(sheet: number, pivotIdx: number): Status;
   /** Renames the pivot table. */
-  pivotSetName(sheet: number, pivotIdx: number, name: string): Status;
+  setPivotName(sheet: number, pivotIdx: number, name: string): Status;
   /** Updates the pivot's anchor cell and span. */
-  pivotSetAnchor(
+  setPivotAnchor(
     sheet: number,
     pivotIdx: number,
     anchorRow: number,
@@ -4667,71 +4667,71 @@ export interface Workbook {
     spanCols: number,
   ): Status;
   /** Toggles the row / column grand total bands on the pivot. */
-  pivotSetGrandTotals(sheet: number, pivotIdx: number, rowsEnabled: boolean, colsEnabled: boolean): Status;
+  setPivotGrandTotals(sheet: number, pivotIdx: number, rowsEnabled: boolean, colsEnabled: boolean): Status;
   /** Sets the pivot's table style and toggles, making the style element
    *  present. New pivots start as `PivotStyleLight16` with row / column
    *  headers and last column on. */
-  pivotSetStyleInfo(sheet: number, pivotIdx: number, info: PivotStyleInfo): Status;
+  setPivotStyleInfo(sheet: number, pivotIdx: number, info: PivotStyleInfo): Status;
   /** Reads the pivot's compact / tabular / outline report layout. */
-  pivotGetLayout(sheet: number, pivotIdx: number): PivotReportLayoutResult;
+  getPivotReportLayout(sheet: number, pivotIdx: number): PivotReportLayoutResult;
   /** Sets the pivot's compact / tabular / outline report layout. One of
    *  `PivotReportLayout.*`. */
-  pivotSetLayout(sheet: number, pivotIdx: number, layout: PivotReportLayout): Status;
+  setPivotReportLayout(sheet: number, pivotIdx: number, layout: PivotReportLayout): Status;
   /** Returns `{ status, index: cacheId }`: the cache the pivot draws from.
    *  The definition read-backs here work for pivots created in-session and
    *  loaded from a package alike. */
-  pivotCacheId(sheet: number, pivotIdx: number): AddStyleResult;
+  getPivotCacheId(sheet: number, pivotIdx: number): AddStyleResult;
   /** Reads the pivot's name. */
-  pivotName(sheet: number, pivotIdx: number): StringResult;
+  getPivotName(sheet: number, pivotIdx: number): StringResult;
   /** Reads the row / column grand total flags `pivotSetGrandTotals` writes. */
-  pivotGetGrandTotals(sheet: number, pivotIdx: number): PivotGrandTotalsResult;
+  getPivotGrandTotals(sheet: number, pivotIdx: number): PivotGrandTotalsResult;
   /** Reads the table style `pivotSetStyleInfo` writes. */
-  pivotGetStyleInfo(sheet: number, pivotIdx: number): PivotStyleInfoResult;
+  getPivotStyleInfo(sheet: number, pivotIdx: number): PivotStyleInfoResult;
   /** Reads the row-axis field order (the list `pivotSetRowFieldOrder` takes). */
-  pivotRowFieldOrder(sheet: number, pivotIdx: number): PivotFieldOrderResult;
+  getPivotRowFieldOrder(sheet: number, pivotIdx: number): PivotFieldOrderResult;
   /** Reads the column-axis field order. */
-  pivotColFieldOrder(sheet: number, pivotIdx: number): PivotFieldOrderResult;
+  getPivotColFieldOrder(sheet: number, pivotIdx: number): PivotFieldOrderResult;
   /** Reads the PivotTable Options of the pivot table. */
-  pivotGetOptions(sheet: number, pivotIdx: number): PivotOptionsResult;
+  getPivotOptions(sheet: number, pivotIdx: number): PivotOptionsResult;
   /** Writes PivotTable Options. Every member is optional: an omitted key keeps
    *  the pivot's current value, and a string member set to `''` clears it. */
-  pivotSetOptions(sheet: number, pivotIdx: number, options: Partial<PivotOptions>): Status;
+  setPivotOptions(sheet: number, pivotIdx: number, options: Partial<PivotOptions>): Status;
   /** Reads the options of the pivot cache `cacheId`. */
-  pivotCacheGetOptions(cacheId: number): PivotCacheOptionsResult;
+  getPivotCacheOptions(cacheId: number): PivotCacheOptionsResult;
   /** Writes pivot cache options. Every member is optional: an omitted key keeps
    *  the cache's current value. */
-  pivotCacheSetOptions(cacheId: number, options: Partial<PivotCacheOptions>): Status;
+  setPivotCacheOptions(cacheId: number, options: Partial<PivotCacheOptions>): Status;
   /** Adds calculated field `name` with `formula` (English, naming cache fields
    *  only) as the cache's last field. `index` carries its field index. */
-  pivotCacheCalculatedFieldAdd(cacheId: number, name: string, formula: string): AddStyleResult;
+  addPivotCacheCalculatedField(cacheId: number, name: string, formula: string): AddStyleResult;
   /** Replaces the formula of calculated field `fieldIdx`. */
-  pivotCacheCalculatedFieldSetFormula(cacheId: number, fieldIdx: number, formula: string): Status;
+  setPivotCacheCalculatedFieldFormula(cacheId: number, fieldIdx: number, formula: string): Status;
   /** Removes calculated field `fieldIdx` and its data fields. */
-  pivotCacheCalculatedFieldRemove(cacheId: number, fieldIdx: number): Status;
+  removePivotCacheCalculatedField(cacheId: number, fieldIdx: number): Status;
   /** Reads the formula of cache field `fieldIdx` without a leading `=`; empty
    *  when the field is not calculated. */
-  pivotCacheFieldFormula(cacheId: number, fieldIdx: number): StringResult;
+  getPivotCacheFieldFormula(cacheId: number, fieldIdx: number): StringResult;
   /** Adds calculated item `name` with `formula` to cache field `fieldIdx`. */
-  pivotCacheCalculatedItemAdd(cacheId: number, fieldIdx: number, name: string, formula: string): Status;
+  addPivotCacheCalculatedItem(cacheId: number, fieldIdx: number, name: string, formula: string): Status;
   /** Number of calculated items in the cache, in solve order. */
-  pivotCacheCalculatedItemCount(cacheId: number): NumberResult;
+  getPivotCacheCalculatedItemCount(cacheId: number): NumberResult;
   /** Reads calculated item `idx` (in solve order). */
-  pivotCacheCalculatedItemAt(cacheId: number, idx: number): PivotCalculatedItemResult;
+  getPivotCacheCalculatedItem(cacheId: number, idx: number): PivotCalculatedItemResult;
   /** Replaces the formula of calculated item `idx`. */
-  pivotCacheCalculatedItemSetFormula(cacheId: number, idx: number, formula: string): Status;
+  setPivotCacheCalculatedItemFormula(cacheId: number, idx: number, formula: string): Status;
   /** Moves calculated item `idx` to position `newIdx` in solve order. */
-  pivotCacheCalculatedItemMove(cacheId: number, idx: number, newIdx: number): Status;
+  movePivotCacheCalculatedItem(cacheId: number, idx: number, newIdx: number): Status;
   /** Removes calculated item `idx`. */
-  pivotCacheCalculatedItemRemove(cacheId: number, idx: number): Status;
+  removePivotCacheCalculatedItem(cacheId: number, idx: number): Status;
   /** Renames the pivot field in the report; `''` clears the custom name. */
-  pivotFieldSetCustomName(sheet: number, pivotIdx: number, fieldIdx: number, name: string): Status;
+  setPivotFieldCustomName(sheet: number, pivotIdx: number, fieldIdx: number, name: string): Status;
   /** Lists (or stops listing) the field's items without data. */
-  pivotFieldSetShowAll(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  setPivotFieldShowAll(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
   /** Reads the name a data field over pivot field `fieldIdx` with
    *  `aggregation` would get from an empty name, without adding one.
    *  `excludeDataField` is the data field a `pivotDataFieldSet` would replace,
    *  whose name is not counted as taken; omit it for the add case. */
-  pivotDataFieldDefaultName(
+  getPivotDataFieldDefaultName(
     sheet: number,
     pivotIdx: number,
     fieldIdx: number,
@@ -4739,17 +4739,17 @@ export interface Workbook {
     excludeDataField?: number,
   ): StringResult;
   /** Writes the pivot's report into its sheet cells now. */
-  pivotProject(sheet: number, pivotIdx: number): Status;
+  projectPivot(sheet: number, pivotIdx: number): Status;
   /** Whether a cache change left the pivot's sheet cells stale. */
-  pivotProjectionPending(sheet: number, pivotIdx: number): PivotProjectionPendingResult;
+  isPivotProjectionPending(sheet: number, pivotIdx: number): PivotProjectionPendingResult;
   /** Writes the source records behind the data or total cell (`row`, `col`)
    *  onto a new sheet inserted before the pivot's sheet, as Show Details
    *  does. Returns `{ status, index: newSheetIndex }`; sheets at and after
    *  the pivot's sheet shift by one. */
-  pivotShowDetails(sheet: number, pivotIdx: number, row: number, col: number): AddStyleResult;
+  showPivotDetails(sheet: number, pivotIdx: number, row: number, col: number): AddStyleResult;
 
   /** Number of fields configured on the pivot. */
-  pivotFieldCount(sheet: number, pivotIdx: number): NumberResult;
+  getPivotFieldCount(sheet: number, pivotIdx: number): NumberResult;
   /** Places a field on the pivot. Returns `{ status, index: fieldIdx }`.
    *  A pivot's fields are positional over its cache's fields (field `i` is
    *  cache field `i`): when `sourceName` names a cache field the pivot first
@@ -4758,54 +4758,54 @@ export interface Workbook {
    *  adding it again updates it. A name the cache lacks appends a field.
    *  A field added on the row or column axis is appended to that axis's
    *  order. */
-  pivotFieldAdd(sheet: number, pivotIdx: number, spec: PivotFieldSpec): AddStyleResult;
+  addPivotField(sheet: number, pivotIdx: number, spec: PivotFieldSpecInput): AddStyleResult;
   /** Reads the definition of field `fieldIdx`. */
-  pivotFieldAt(sheet: number, pivotIdx: number, fieldIdx: number): PivotFieldResult;
+  getPivotField(sheet: number, pivotIdx: number, fieldIdx: number): PivotFieldResult;
   /** Number of items in the field's item list (what `pivotFieldAddItem` /
    *  `pivotFieldAddItemAt` append to). */
-  pivotFieldItemCount(sheet: number, pivotIdx: number, fieldIdx: number): NumberResult;
+  getPivotFieldItemCount(sheet: number, pivotIdx: number, fieldIdx: number): NumberResult;
   /** Reads item `itemIdx` of the field; the index `pivotFieldSetItemVisible`
    *  takes. */
-  pivotFieldItemAt(sheet: number, pivotIdx: number, fieldIdx: number, itemIdx: number): PivotItemResult;
+  getPivotFieldItem(sheet: number, pivotIdx: number, fieldIdx: number, itemIdx: number): PivotItemResult;
   /** Drops every field from the pivot, emptying the row and column orders. */
-  pivotFieldClear(sheet: number, pivotIdx: number): Status;
+  clearPivotFields(sheet: number, pivotIdx: number): Status;
   /** Sets the axis of pivot field `fieldIdx`. Moving onto the row or column
    *  axis appends the field to that axis's order; moving off removes it.
    *  `-1` takes the field off every axis, as unchecking it in a field list
    *  does: its data fields are removed (later data-field indices shift
    *  down), as are filters naming it and value filters scoring a
    *  removed data field; its item visibility is kept. */
-  pivotFieldSetAxis(sheet: number, pivotIdx: number, fieldIdx: number, axis: PivotAxis | -1): Status;
+  setPivotFieldAxis(sheet: number, pivotIdx: number, fieldIdx: number, axis: PivotAxis | -1): Status;
   /** Sets the sibling order of pivot field `fieldIdx`; `order` is one of
    *  `PivotSortOrder.*`. `PivotSortOrder.Manual` keeps items in
    *  `pivotFieldAddItem` order and takes no `byField`; for the other orders
    *  an empty `byField` sorts by label. */
-  pivotFieldSetSort(sheet: number, pivotIdx: number, fieldIdx: number, order: PivotSortOrder, byField: string): Status;
+  setPivotFieldSort(sheet: number, pivotIdx: number, fieldIdx: number, order: PivotSortOrder, byField: string): Status;
   /** Sets the `subtotal_top` flag on pivot field `fieldIdx`. */
-  pivotFieldSetSubtotalTop(sheet: number, pivotIdx: number, fieldIdx: number, top: boolean): Status;
+  setPivotFieldSubtotalTop(sheet: number, pivotIdx: number, fieldIdx: number, top: boolean): Status;
   /** Turns the automatic subtotal of pivot field `fieldIdx` on or off.
    *  Custom subtotal functions replace it whatever this says. */
-  pivotFieldSetDefaultSubtotal(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  setPivotFieldDefaultSubtotal(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
   /** Sets whether a blank row follows each item block of the field. */
-  pivotFieldSetInsertBlankRow(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  setPivotFieldInsertBlankRow(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
   /** Sets whether the field repeats its item labels on every row of a
    *  block. */
-  pivotFieldSetFillDownLabels(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  setPivotFieldFillDownLabels(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
   /** Expands or collapses every item of the field with its subtotal row. */
-  pivotFieldSetShowDetail(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  setPivotFieldShowDetail(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
   /** Expands or collapses item `itemIdx` of the field. */
-  pivotFieldSetItemShowDetail(sheet: number, pivotIdx: number, fieldIdx: number, itemIdx: number, on: boolean): Status;
+  setPivotFieldItemShowDetail(sheet: number, pivotIdx: number, fieldIdx: number, itemIdx: number, on: boolean): Status;
   /** Shows `caption` instead of the value of item `itemIdx`. An empty
    *  string, or a caption equal to the item's own value, clears it; a
    *  caption another item of the field already shows is rejected. */
-  pivotFieldSetItemCaption(sheet: number, pivotIdx: number, fieldIdx: number, itemIdx: number, caption: string): Status;
+  setPivotFieldItemCaption(sheet: number, pivotIdx: number, fieldIdx: number, itemIdx: number, caption: string): Status;
   /** Appends a manual-filter item to pivot field `fieldIdx`, addressed by
    *  its label. The item binds to the first shared item of the cache field
    *  that renders as `name` (unbound when none does), and the filter engine
    *  matches source records by comparing their rendered label against
    *  `name`. An empty `name` therefore cannot express the blank item,
    *  which has no label of its own; use `pivotFieldAddItemAt`. */
-  pivotFieldAddItem(sheet: number, pivotIdx: number, fieldIdx: number, name: string, visible: boolean): Status;
+  addPivotFieldItem(sheet: number, pivotIdx: number, fieldIdx: number, name: string, visible: boolean): Status;
   /** Appends a manual-filter item to pivot field `fieldIdx`, addressed by
    *  its position in the bound cache field's shared items -- the same
    *  index space as OOXML `<item x="N">`. The label is resolved from that
@@ -4813,11 +4813,17 @@ export interface Workbook {
    *  item. `cacheIndex` is not validated: the cache field may be filled in
    *  after the pivot definition, and an index that resolves to nothing
    *  yields an item with an empty label that filters nothing. */
-  pivotFieldAddItemAt(sheet: number, pivotIdx: number, fieldIdx: number, cacheIndex: number, visible: boolean): Status;
+  addPivotFieldSharedItem(
+    sheet: number,
+    pivotIdx: number,
+    fieldIdx: number,
+    cacheIndex: number,
+    visible: boolean,
+  ): Status;
   /** Drops every manual-filter item from pivot field `fieldIdx`. */
-  pivotFieldClearItems(sheet: number, pivotIdx: number, fieldIdx: number): Status;
+  clearPivotFieldItems(sheet: number, pivotIdx: number, fieldIdx: number): Status;
   /** Toggles the visibility of item `itemIdx` on field `fieldIdx`. */
-  pivotFieldSetItemVisible(
+  setPivotFieldItemVisible(
     sheet: number,
     pivotIdx: number,
     fieldIdx: number,
@@ -4825,9 +4831,9 @@ export interface Workbook {
     visible: boolean,
   ): Status;
   /** Appends a subtotal-fn entry to pivot field `fieldIdx`. */
-  pivotFieldAddSubtotalFn(sheet: number, pivotIdx: number, fieldIdx: number, agg: PivotAggregation): Status;
+  addPivotFieldSubtotalFn(sheet: number, pivotIdx: number, fieldIdx: number, agg: PivotAggregation): Status;
   /** Drops every subtotal-fn entry from pivot field `fieldIdx`. */
-  pivotFieldClearSubtotalFns(sheet: number, pivotIdx: number, fieldIdx: number): Status;
+  clearPivotFieldSubtotalFns(sheet: number, pivotIdx: number, fieldIdx: number): Status;
   /** Groups the date field `fieldIdx` (a source field, or one of its group
    *  fields) by the `PivotDatePeriod` bits of `periods`, as Excel's Group
    *  command does, replacing any grouping it has. Each period becomes a
@@ -4841,7 +4847,7 @@ export interface Workbook {
    *  last (the midnight after it for a date without a time). An empty or
    *  unknown mask, a zero interval, an invalid bound, a start after the end
    *  or a field holding anything but dates is `kInvalidArgument`. */
-  pivotFieldSetDateGroup(
+  setPivotFieldDateGroup(
     sheet: number,
     pivotIdx: number,
     fieldIdx: number,
@@ -4856,43 +4862,43 @@ export interface Workbook {
    *  returns to the axis position its group fields held. A field that is
    *  not grouped is left as it is. `kPreconditionFailed` when the group
    *  fields are not the last fields of the cache. */
-  pivotFieldClearDateGroup(sheet: number, pivotIdx: number, fieldIdx: number): Status;
+  clearPivotFieldDateGroup(sheet: number, pivotIdx: number, fieldIdx: number): Status;
   /** Sets the `numFmtId` of pivot field `fieldIdx`, as a decimal string
    *  naming a built-in id or one returned by `addNumFmt`. Pass an empty
    *  string to clear; any other unknown id is rejected. */
-  pivotFieldSetNumberFormat(sheet: number, pivotIdx: number, fieldIdx: number, utf8: string): Status;
+  setPivotFieldNumberFormat(sheet: number, pivotIdx: number, fieldIdx: number, utf8: string): Status;
 
   /** Replaces the row-axis field order with `indices`. Each entry must
    *  be `< pivotFieldCount` and appear once. The list is the axis's whole
    *  membership: listed fields move onto the row axis and fields left out
    *  come off it. Pass an empty array to clear. */
-  pivotSetRowFieldOrder(sheet: number, pivotIdx: number, indices: ReadonlyArray<number>): Status;
+  setPivotRowFieldOrder(sheet: number, pivotIdx: number, indices: ReadonlyArray<number>): Status;
   /** Replaces the column-axis field order. Same contract as rows. */
-  pivotSetColFieldOrder(sheet: number, pivotIdx: number, indices: ReadonlyArray<number>): Status;
+  setPivotColFieldOrder(sheet: number, pivotIdx: number, indices: ReadonlyArray<number>): Status;
 
   /** Number of `<dataField>` entries on the pivot. */
-  pivotDataFieldCount(sheet: number, pivotIdx: number): NumberResult;
+  getPivotDataFieldCount(sheet: number, pivotIdx: number): NumberResult;
   /** Appends a new data-field entry. An omitted or empty `spec.name` is
    *  derived from the workbook profile; see {@link PivotDataFieldSpec}. */
-  pivotDataFieldAdd(sheet: number, pivotIdx: number, spec: PivotDataFieldSpec): AddStyleResult;
+  addPivotDataField(sheet: number, pivotIdx: number, spec: PivotDataFieldSpec): AddStyleResult;
   /** Reads data field `dataFieldIdx`. */
-  pivotDataFieldAt(sheet: number, pivotIdx: number, dataFieldIdx: number): PivotDataFieldResult;
+  getPivotDataField(sheet: number, pivotIdx: number, dataFieldIdx: number): PivotDataFieldResult;
   /** Drops every data-field entry from the pivot. */
-  pivotDataFieldClear(sheet: number, pivotIdx: number): Status;
+  clearPivotDataFields(sheet: number, pivotIdx: number): Status;
   /** Replaces the data-field entry at `dataFieldIdx` in place. An omitted
    *  or empty `spec.name` is derived as in `pivotDataFieldAdd`. */
-  pivotDataFieldSet(sheet: number, pivotIdx: number, dataFieldIdx: number, spec: PivotDataFieldSpec): Status;
+  setPivotDataField(sheet: number, pivotIdx: number, dataFieldIdx: number, spec: PivotDataFieldSpec): Status;
 
   /** Number of filters on the pivot -- see {@link PivotFilterResult}. */
-  pivotFilterCount(sheet: number, pivotIdx: number): NumberResult;
+  getPivotFilterCount(sheet: number, pivotIdx: number): NumberResult;
   /** Appends a filter, saved with the pivot; see {@link PivotFilterResult}. */
-  pivotFilterAdd(sheet: number, pivotIdx: number, spec: PivotFilterSpec): Status;
+  addPivotFilter(sheet: number, pivotIdx: number, spec: PivotFilterSpec): Status;
   /** Reads the filter at `filterIdx`; see {@link PivotFilterResult}. */
-  pivotFilterAt(sheet: number, pivotIdx: number, filterIdx: number): PivotFilterResult;
+  getPivotFilter(sheet: number, pivotIdx: number, filterIdx: number): PivotFilterResult;
   /** Drops every listed filter from the pivot. */
-  pivotFilterClear(sheet: number, pivotIdx: number): Status;
+  clearPivotFilters(sheet: number, pivotIdx: number): Status;
   /** Removes the filter at `filterIdx`. */
-  pivotFilterRemoveAt(sheet: number, pivotIdx: number, filterIdx: number): Status;
+  removePivotFilter(sheet: number, pivotIdx: number, filterIdx: number): Status;
 
   // Defined names. A non-empty `formula` that does not parse is rejected
   // with `kParserUnexpectedToken`.
@@ -4924,132 +4930,132 @@ export interface Workbook {
   ): CfRangeResult;
 
   /** Computes print-area page breaks and physical page count for `sheet`. */
-  paginate(sheet: number): PaginationResult;
+  getPagination(sheet: number): PaginationResult;
 
   /** Reads the worksheet's `<pageSetup>` fragment; empty when absent. */
-  getSheetPageSetupXml(sheet: number): SheetPrintXmlResult;
+  getPageSetupXml(sheet: number): SheetPrintXmlResult;
   /** Replaces `<pageSetup>`; empty removes it and restores the defaults.
    *  A fragment carrying `r:id` is rejected unless the sheet already has a
    *  printerSettings part, since the reference would otherwise dangle. */
-  setSheetPageSetupXml(sheet: number, xml: string): Status;
+  setPageSetupXml(sheet: number, xml: string): Status;
   /** Reads the worksheet's `<pageMargins>` fragment; empty when absent. */
-  getSheetPageMarginsXml(sheet: number): SheetPrintXmlResult;
+  getPageMarginsXml(sheet: number): SheetPrintXmlResult;
   /** Replaces `<pageMargins>`; empty removes it. */
-  setSheetPageMarginsXml(sheet: number, xml: string): Status;
+  setPageMarginsXml(sheet: number, xml: string): Status;
   /** Reads the worksheet's `<printOptions>` fragment; empty when absent. */
-  getSheetPrintOptionsXml(sheet: number): SheetPrintXmlResult;
+  getPrintOptionsXml(sheet: number): SheetPrintXmlResult;
   /** Replaces `<printOptions>`; empty removes it. */
-  setSheetPrintOptionsXml(sheet: number, xml: string): Status;
+  setPrintOptionsXml(sheet: number, xml: string): Status;
   /** Reads the worksheet's `<headerFooter>` fragment; empty when absent. */
-  getSheetHeaderFooterXml(sheet: number): SheetPrintXmlResult;
+  getHeaderFooterXml(sheet: number): SheetPrintXmlResult;
   /** Replaces `<headerFooter>`; empty removes it. Header codes live in XML
    *  element text, so a hand-built fragment writes them escaped
    *  (`<oddHeader>&amp;C...</oddHeader>`); `setSheetHeaderFooter` takes the
    *  decoded text instead. */
-  setSheetHeaderFooterXml(sheet: number, xml: string): Status;
+  setHeaderFooterXml(sheet: number, xml: string): Status;
   /** Reads the worksheet's `<sheetPr>` fragment; empty when absent. It also
    *  carries the tab colour and VBA code name, not just print settings. */
-  getSheetSheetPrXml(sheet: number): SheetPrintXmlResult;
+  getSheetPrXml(sheet: number): SheetPrintXmlResult;
   /** Replaces `<sheetPr>`; empty removes it. */
-  setSheetSheetPrXml(sheet: number, xml: string): Status;
+  setSheetPrXml(sheet: number, xml: string): Status;
   /** Sets or clears `<sheetPr><pageSetUpPr fitToPage>` without disturbing
    *  anything else `<sheetPr>` carries. */
-  setSheetFitToPage(sheet: number, enabled: boolean): Status;
+  setFitToPage(sheet: number, enabled: boolean): Status;
 
   /** Reads `_xlnm.Print_Area` as comma-separated A1 ranges. */
-  getSheetPrintArea(sheet: number): SheetPrintAreaResult;
+  getPrintArea(sheet: number): SheetPrintAreaResult;
   /** Writes `_xlnm.Print_Area` from one or more comma-separated A1 ranges
    *  (`"A1:F8"`, `"A1:B10,D5:E20"`, `"A:D"`). Empty removes it. */
-  setSheetPrintArea(sheet: number, rangesA1: string): Status;
+  setPrintArea(sheet: number, rangesA1: string): Status;
   /** Reads `_xlnm.Print_Titles` as a row span and a column span. */
-  getSheetPrintTitles(sheet: number): SheetPrintTitlesResult;
+  getPrintTitles(sheet: number): SheetPrintTitlesResult;
   /** Writes `_xlnm.Print_Titles`. Both empty removes it. */
-  setSheetPrintTitles(sheet: number, repeatRows: string, repeatCols: string): Status;
+  setPrintTitles(sheet: number, repeatRows: string, repeatCols: string): Status;
 
   /** Upserts a row break before `row`, spanning the whole sheet. */
-  addSheetRowBreak(sheet: number, row: number, manual: boolean): Status;
+  addRowBreak(sheet: number, row: number, manual: boolean): Status;
   /** Upserts a column break before `col`, spanning the whole sheet. */
-  addSheetColBreak(sheet: number, col: number, manual: boolean): Status;
+  addColBreak(sheet: number, col: number, manual: boolean): Status;
   /** Removes the row break at `row`. An absent break is a no-op. */
-  removeSheetRowBreak(sheet: number, row: number): Status;
+  removeRowBreak(sheet: number, row: number): Status;
   /** Removes the column break at `col`. An absent break is a no-op. */
-  removeSheetColBreak(sheet: number, col: number): Status;
+  removeColBreak(sheet: number, col: number): Status;
   /** Removes every manual break on both axes. */
-  clearSheetBreaks(sheet: number): Status;
+  clearBreaks(sheet: number): Status;
   /** Returns the row breaks, ascending by row. */
-  getSheetRowBreaks(sheet: number): SheetPageBreaksResult;
+  listRowBreaks(sheet: number): SheetPageBreaksResult;
   /** Returns the column breaks, ascending by column. */
-  getSheetColBreaks(sheet: number): SheetPageBreaksResult;
+  listColBreaks(sheet: number): SheetPageBreaksResult;
 
   /** Applies a partial `<pageSetup>` update. */
-  setSheetPageSetup(sheet: number, setup: PageSetupInput): Status;
+  setPageSetup(sheet: number, setup: PageSetup): Status;
   /** Applies a partial `<pageMargins>` update, in inches. */
-  setSheetPageMargins(sheet: number, margins: PageMarginsInput): Status;
+  setPageMargins(sheet: number, margins: PageMargins): Status;
   /** Applies a partial `<printOptions>` update. */
-  setSheetPrintOptions(sheet: number, options: PrintOptionsInput): Status;
+  setPrintOptions(sheet: number, options: PrintOptionsInput): Status;
   /** Applies a partial `<headerFooter>` update. */
-  setSheetHeaderFooter(sheet: number, headerFooter: HeaderFooterInput): Status;
+  setHeaderFooter(sheet: number, headerFooter: HeaderFooterInput): Status;
   /** Reads the effective page setup and which attributes state it. */
-  getSheetPageSetup(sheet: number): SheetPageSetupResult;
+  getPageSetup(sheet: number): SheetPageSetupResult;
   /** Reads the effective page margins, in inches. */
-  getSheetPageMargins(sheet: number): SheetPageMarginsResult;
+  getPageMargins(sheet: number): SheetPageMarginsResult;
 
   // Sheet view / layout.
   /** Reads the full per-sheet view (zoom, freeze, tab-hidden, and the
    *  display / orientation flags). */
-  getSheetView(sheet: number): SheetViewResult;
+  getView(sheet: number): SheetViewResult;
   /** Sets the sheet zoom percentage (clamped to `[10, 400]`). */
-  setSheetZoom(sheet: number, zoomScale: number): Status;
+  setZoom(sheet: number, zoomScale: number): Status;
   /** Sets the frozen pane in `(rows, cols)`. */
-  setSheetFreeze(sheet: number, freezeRows: number, freezeCols: number): Status;
+  setFreeze(sheet: number, freezeRows: number, freezeCols: number): Status;
   /** Sets the sheet tab's hidden flag — the two-state view of
    *  `setSheetVisibility`. `true` on an already very-hidden sheet leaves
    *  it very-hidden rather than demoting it, since "hidden" says nothing
    *  that sheet does not already satisfy; `false` shows it from either
    *  hidden state. Hiding the only visible sheet fails with
    *  `kInvalidArgument` and leaves it visible. */
-  setSheetTabHidden(sheet: number, hidden: boolean): Status;
+  setTabHidden(sheet: number, hidden: boolean): Status;
   /** Sets the sheet tab's visibility to one of the three states. The only
    *  way to newly state `SheetVisibility.VeryHidden`, and the only way to
    *  demote a very-hidden sheet to plain hidden; `setSheetTabHidden` can
    *  express neither. A value outside `SheetVisibility` fails with
    *  `kInvalidArgument` and leaves the sheet unchanged. So does hiding the only
    *  visible sheet. */
-  setSheetVisibility(sheet: number, visibility: SheetVisibility): Status;
+  setVisibility(sheet: number, visibility: SheetVisibility): Status;
   /** Sets the sheet's `showGridLines` flag. */
-  setSheetShowGridLines(sheet: number, show: boolean): Status;
+  setShowGridLines(sheet: number, show: boolean): Status;
   /** Sets the sheet's `showRowColHeaders` flag. */
-  setSheetShowRowColHeaders(sheet: number, show: boolean): Status;
+  setShowRowColHeaders(sheet: number, show: boolean): Status;
   /** Sets the sheet's `showZeros` flag. */
-  setSheetShowZeros(sheet: number, show: boolean): Status;
+  setShowZeros(sheet: number, show: boolean): Status;
   /** Sets the sheet's `showFormulas` flag. */
-  setSheetShowFormulas(sheet: number, show: boolean): Status;
+  setShowFormulas(sheet: number, show: boolean): Status;
   /** Sets the sheet's `showOutlineSymbols` flag. */
-  setSheetShowOutlineSymbols(sheet: number, show: boolean): Status;
+  setShowOutlineSymbols(sheet: number, show: boolean): Status;
   /** Sets the sheet's `rightToLeft` flag. */
-  setSheetRightToLeft(sheet: number, rightToLeft: boolean): Status;
+  setRightToLeft(sheet: number, rightToLeft: boolean): Status;
   /** Sets the sheet's `tabSelected` flag. */
-  setSheetTabSelected(sheet: number, selected: boolean): Status;
+  setTabSelected(sheet: number, selected: boolean): Status;
   /** Sets the sheet view's scroll origin (`<sheetView topLeftCell>`). */
-  setSheetTopLeft(sheet: number, row: number, col: number): Status;
+  setTopLeft(sheet: number, row: number, col: number): Status;
   /** Sets the first visible cell of a frozen or split view's lower-right
    *  pane. It must lie past any frozen rows and columns; rejected without
    *  panes. Changing the freeze resets it to the first unfrozen cell. */
-  setSheetPaneTopLeft(sheet: number, row: number, col: number): Status;
+  setPaneTopLeft(sheet: number, row: number, col: number): Status;
   /** Splits the view at `xTwips` / `yTwips` (`0` for none on that axis;
    *  `0, 0` removes the split). Replaces any freeze, as `setSheetFreeze`
    *  replaces a split. Negative or non-finite values fail with
    *  `kInvalidArgument` and leave the view unchanged. */
-  setSheetSplit(sheet: number, xTwips: number, yTwips: number): Status;
+  setSplit(sheet: number, xTwips: number, yTwips: number): Status;
   /** Reads the active pane's selection (active cell and ranges). */
-  getSheetSelection(sheet: number): SheetSelectionResult;
+  getSelection(sheet: number): SheetSelectionResult;
   /** Replaces the active pane's selection. In a frozen or split view the
    *  selection belongs to the pane the view is active in; other panes' are
    *  kept. */
-  setSheetSelection(sheet: number, selection: SheetSelection): Status;
+  setSelection(sheet: number, selection: SheetSelection): Status;
   /** Sets the sheet's `<sheetView view="...">` mode: `""`,
    *  `"pageBreakPreview"`, or `"pageLayout"`. Stored verbatim. */
-  setSheetViewMode(sheet: number, mode: string): Status;
+  setViewMode(sheet: number, mode: string): Status;
   /** Reads the sheet's `<sheetProtection>` flags. Strings are
    *  deep-copied; the returned object is independent of the workbook's
    *  storage. */
@@ -5059,7 +5065,7 @@ export interface Workbook {
   setSheetProtection(sheet: number, protection: SheetProtection): Status;
 
   /** Returns the column-layout overrides on `sheet` in storage order. */
-  getSheetColumns(sheet: number): ColumnsResult;
+  listColOverrides(sheet: number): ColumnsResult;
   /** Sets / replaces the column width override on `[first, last]`. `width` is a stored width:
    *  characters with the column padding included, as `<col width>` holds it. */
   setColumnWidth(sheet: number, first: number, last: number, width: number): Status;
@@ -5074,7 +5080,7 @@ export interface Workbook {
   setColumnStyle(sheet: number, first: number, last: number, xfIndex: number): Status;
 
   /** Returns the row-layout overrides on `sheet`. */
-  getSheetRowOverrides(sheet: number): RowsResult;
+  listRowOverrides(sheet: number): RowsResult;
   /** Sets / replaces the row height at `row` as a manual height (`customHeight`), which stays put when the row's content or font changes. */
   setRowHeight(sheet: number, row: number, height: number): Status;
   /** Stores `height` as the cached value of `row`'s automatic height: saved as `ht` without `customHeight`, so the row keeps following its content and font. Row style, hidden, outline and collapsed state are kept; `clearRowHeight` drops it. */
@@ -5086,9 +5092,9 @@ export interface Workbook {
   /** Removes the cell-style XF on `[first, last]`, retaining other column attributes. */
   clearColumnStyle(sheet: number, first: number, last: number): Status;
   /** Reads the sheet's default column / row metrics (`<sheetFormatPr>`). */
-  getSheetFormatDefaults(sheet: number): SheetFormatDefaultsResult;
+  getFormatDefaults(sheet: number): SheetFormatDefaultsResult;
   /** Replaces the sheet's default column / row metrics. A `has*` flag left out is inferred from the matching value. */
-  setSheetFormatDefaults(sheet: number, defaults: Partial<SheetFormatDefaults>): Status;
+  setFormatDefaults(sheet: number, defaults: Partial<SheetFormatDefaults>): Status;
   /** Reads the rectangle covering `range` in points from the top-left of A1. `mode` is a geometry mode: 0 display (screen figure, 96 DPI), 1 print (the DPI-stable figure pagination breaks on). */
   getCellRectPt(sheet: number, range: MergeRange, mode: GeometryMode): CellRectResult;
   /** Effective width of column `col` in points; 0 when hidden. */
@@ -5098,9 +5104,9 @@ export interface Workbook {
   /** Reads the character-unit to point conversion for the workbook's Normal font. */
   getWidthModel(sheet: number, mode: GeometryMode): WidthModelResult;
   /** Converts a stored column width (padding included) to points, snapped to whole screen pixels. */
-  columnCharsToPt(sheet: number, mode: GeometryMode, chars: number): NumberResult;
+  convertColumnCharsToPt(sheet: number, mode: GeometryMode, chars: number): NumberResult;
   /** Inverse of `columnCharsToPt`: the stored width Excel writes for a column of `pt`. */
-  columnPtToChars(sheet: number, mode: GeometryMode, pt: number): NumberResult;
+  convertColumnPtToChars(sheet: number, mode: GeometryMode, pt: number): NumberResult;
   /** Sets / replaces the row hidden flag at `row`. */
   setRowHidden(sheet: number, row: number, hidden: boolean): Status;
   /** Sets / replaces the row outline level at `row`. A level above 7, the
@@ -5123,7 +5129,7 @@ export interface Workbook {
    * each one's patched XF with `addFont` / `addCellXf`, then apply the pairs with
    * `remapRangeStyle`.
    */
-  rangeStyleBases(
+  getRangeStyleBases(
     sheet: number,
     firstRow: number,
     firstCol: number,
@@ -5137,7 +5143,7 @@ export interface Workbook {
    * their style). Excluded cells outside the selection and repeats are ignored; excluding every
    * cell yields an empty list. Fails when the arrays differ in length.
    */
-  rangeStyleBasesExcluding(
+  getRangeStyleBasesExcluding(
     sheet: number,
     firstRow: number,
     firstCol: number,
@@ -5179,7 +5185,7 @@ export interface Workbook {
   /** Returns `{ status, xfIndex }` for the cell at `(sheet, row, col)`. */
   getCellXfIndex(sheet: number, row: number, col: number): CellXfIndexResult;
   /** Persists `xfIndex` on the cell at `(sheet, row, col)`. An index not
-   *  below `xfCount()` fails with `kInvalidArgument`. */
+   *  below `getCellXfCount()` fails with `kInvalidArgument`. */
   setCellXfIndex(sheet: number, row: number, col: number, xfIndex: number): Status;
   /**
    * Removes the direct style assignment from the cell at `(sheet, row, col)`
@@ -5192,7 +5198,7 @@ export interface Workbook {
   clearCellXfIndex(sheet: number, row: number, col: number): Status;
   /** Applies `xfIndex` across an inclusive rectangle, materialising blank
    *  cells so an empty ruled box renders. Saves one call per cell. An
-   *  index not below `xfCount()` fails with `kInvalidArgument`. */
+   *  index not below `getCellXfCount()` fails with `kInvalidArgument`. */
   setRangeXfIndex(
     sheet: number,
     firstRow: number,
@@ -5211,7 +5217,7 @@ export interface Workbook {
   /** Returns the border record at `borderIndex`, including its ColorSpec selectors. */
   getBorder(borderIndex: number): BorderResult;
   /** Returns the format string registered for `numFmtId`. */
-  getNumFmt(numFmtId: number): NumFmtResult;
+  getNumFmtString(numFmtId: number): NumFmtResult;
   /** Returns the differential-format record referenced by CF `dxfId`. */
   getDxf(dxfIndex: number): DxfResult;
 
@@ -5244,28 +5250,28 @@ export interface Workbook {
    *  Out-of-range font/fill/border indices or unregistered `numFmtId`
    *  surface `kInvalidArgument` rather than auto-growing the parallel
    *  tables. */
-  addXf(record: CellXf): AddStyleResult;
+  addCellXf(record: CellXf): AddStyleResult;
   /** Adds a differential format (`<dxf>`) record (deduplicating against
    *  existing entries). */
   addDxf(record: DxfRecord): AddStyleResult;
 
   /** Returns the number of font records currently registered. */
-  fontCount(): NumberResult;
+  getFontCount(): NumberResult;
   /** Returns the number of fill records currently registered. */
-  fillCount(): NumberResult;
+  getFillCount(): NumberResult;
   /** Returns the number of border records currently registered. */
-  borderCount(): NumberResult;
+  getBorderCount(): NumberResult;
   /** Returns the number of `<xf>` records currently registered. */
-  xfCount(): NumberResult;
+  getCellXfCount(): NumberResult;
   /** Returns the number of `<dxf>` records available for CF `dxfId`. */
-  dxfCount(): NumberResult;
+  getDxfCount(): NumberResult;
 
   // Named cell styles.
   /** Returns the number of named cell styles (`<cellStyle>` entries). */
   cellStyleCount(): NumberResult;
   /** Returns the number of `<cellStyleXfs>` records — the named-style xf
    *  table referenced by `CellStyleResult.xfId`. */
-  cellStyleXfCount(): NumberResult;
+  getCellStyleXfCount(): NumberResult;
   /** Returns the named cell style at `index`. Out-of-range indices
    *  surface `kInvalidArgument` via `status`. */
   getCellStyle(index: number): CellStyleResult;
@@ -5299,7 +5305,7 @@ export interface Workbook {
 
   // Theme, colour resolution, effective style.
   /** Reads the theme's 12 scheme colours and typefaces. */
-  getTheme(): ThemeResult;
+  getThemeFonts(): ThemeResult;
   /** Writes the theme's 12 scheme colours (0xFFRRGGBB, `a:clrScheme` order; alpha ignored). */
   setThemeColors(colors: number[]): Status;
   /** Writes the theme's major / minor typefaces. */
@@ -5311,7 +5317,7 @@ export interface Workbook {
    *  `typeface` non-empty, else the status is not ok. */
   setThemeScriptFont(major: boolean, script: string, typeface: string): Status;
   /** Removes the theme part so the workbook reports the default theme (`source` is `Default`). Excel adds a theme part again when it saves the file. */
-  resetTheme(): Status;
+  clearTheme(): Status;
   /** Resolves a colour specification to the colour Excel renders. */
   resolveColor(spec: ColorSpec, context: ColorContext): ResolvedColorResult;
   /** Reads the formatting a cell shows: its xf with colours resolved against the theme and palette. */
@@ -5327,16 +5333,16 @@ export interface Workbook {
   /** Drops every merge on `sheet`. */
   clearMerges(sheet: number): Status;
   /** Returns every merge range on `sheet` as a JS array. */
-  getMerges(sheet: number): ListResult<MergeRange>;
+  listMerges(sheet: number): ListResult<MergeRange>;
   /** Returns every merge on `sheet` that intersects `range` (inclusive), in storage order. */
   getMergesInRange(sheet: number, range: MergeRange): ListResult<MergeRange>;
   /** Returns the cell comment at `(sheet, row, col)`, or `null` when absent. */
-  getComment(sheet: number, row: number, col: number): CommentEntry | null;
+  getComment(sheet: number, row: number, col: number): Comment | null;
   /** Returns a comment lookup result that distinguishes absence from an invalid sheet or handle. */
   getCommentResult(sheet: number, row: number, col: number): CommentResult;
   /** Returns every comment on `sheet`, including comments anchored on
    *  cells that carry no value. */
-  getComments(sheet: number): ListResult<SheetCommentEntry>;
+  listComments(sheet: number): ListResult<SheetCommentEntry>;
   /** Sets / replaces the cell comment. Pass an empty `text` to remove. */
   setComment(sheet: number, row: number, col: number, author: string, text: string): Status;
   /** Whether the note at `(sheet, row, col)` is shown without hovering (`value` 0 or 1). */
@@ -5387,21 +5393,21 @@ export interface Workbook {
   /** Drops every hyperlink on `sheet`. */
   clearHyperlinks(sheet: number): Status;
   /** Returns every hyperlink on `sheet` as a JS array. */
-  getHyperlinks(sheet: number): ListResult<HyperlinkEntry>;
+  listHyperlinks(sheet: number): ListResult<Hyperlink>;
   /** Returns every data-validation rule on `sheet` in storage order. */
-  getValidations(sheet: number): ListResult<DataValidationEntry>;
+  getValidations(sheet: number): ListResult<DataValidation>;
   /** Appends a data-validation rule to `sheet`. A non-empty `formula1` / `formula2`
    *  that does not parse is rejected with `kParserUnexpectedToken`. */
   addValidation(sheet: number, validation: DataValidationInput): Status;
   /** Removes the validation rule at `index`. Returns `kInvalidArgument`
    *  if `index` is out of range. */
-  removeValidationAt(sheet: number, index: number): Status;
+  removeValidation(sheet: number, index: number): Status;
   /** Drops every validation rule on `sheet`. */
   clearValidations(sheet: number): Status;
   /** Checks `value` against the data-validation rule covering `(row, col)` without storing it. */
   validateValue(sheet: number, row: number, col: number, value: Value): ValidationOutcomeResult;
   /** Enumerates the populated cells whose value fails their validation rule, one page at a time; `cursor` and `limit` follow `getCellsInRange`. */
-  listInvalidCells(sheet: number, cursor?: number | null, limit?: number | null): CellsInRangeResult;
+  getInvalidCells(sheet: number, cursor?: number | null, limit?: number | null): CellsInRangeResult;
 
   /** Reads the sheet AutoFilter; `autoFilter` is `null` when the sheet has none. */
   getAutoFilter(sheet: number): AutoFilterResult;
@@ -5429,17 +5435,17 @@ export interface Workbook {
   evaluateTableAutoFilter(table: number): AutoFilterEvalResult;
 
   /** Returns every threaded comment on `sheet` in file order: each thread's opening comment followed by its replies. */
-  getThreadedComments(sheet: number): ThreadedCommentsResult;
+  listThreadedComments(sheet: number): ThreadedCommentsResult;
   /** Adds a threaded comment. An empty `parentId` opens a new thread at `row`/`col`; otherwise it replies to that thread. */
   addThreadedComment(sheet: number, comment: Partial<ThreadedComment> & Pick<ThreadedComment, 'id' | 'text'>): Status;
   /** Replaces the text and mentions of the comment with `id`. */
-  editThreadedComment(sheet: number, id: string, text: string, mentions: Mention[]): Status;
+  updateThreadedComment(sheet: number, id: string, text: string, mentions: Mention[]): Status;
   /** Sets the resolved state of the thread opened by `threadId`. */
   setThreadResolved(sheet: number, threadId: string, done: boolean): Status;
   /** Removes the comment with `id`; removing an opening comment removes its whole thread. */
   removeThreadedComment(sheet: number, id: string): Status;
   /** Returns the workbook's person list in file order. */
-  getPersons(): PersonsResult;
+  listPeople(): PersonsResult;
   /** Appends a person to the workbook's person list. Fails with `kThreadedCommentInvalid` when the id is
    *  malformed or already listed, or the display name is empty. */
   addPerson(person: Person): Status;
@@ -5447,13 +5453,13 @@ export interface Workbook {
   removePerson(id: string): Status;
 
   /** Sniffs the format and pixel size of PNG, JPEG, GIF or BMP bytes from the header alone. */
-  probeImage(bytes: Uint8Array): ImageInfoResult;
+  getImageInfo(bytes: Uint8Array): ImageInfoResult;
   /** Lists the anchored objects of the sheet's drawing in document order. */
   listDrawingObjects(sheet: number): ListResult<DrawingObject>;
   /** Returns a copy of the media bytes of the picture `objectId`. */
   getImage(sheet: number, objectId: number): ImageResult;
   /** Inserts an image as a new anchored picture and returns its object id. */
-  insertImage(sheet: number, bytes: Uint8Array, opts?: ImageInsertOptions): InsertImageResult;
+  addImage(sheet: number, bytes: Uint8Array, opts?: ImageInsertInput): InsertImageResult;
   /** Removes the picture or chart `objectId` and the parts only it reaches; other drawing content is kept. */
   removeDrawing(sheet: number, objectId: number): Status;
   /** Moves and resizes the picture or chart `objectId`, keeping its id, crop, rotation and every other element. */
@@ -5472,7 +5478,7 @@ export interface Workbook {
   /** Lists the shapes, connectors and groups of the sheet's drawing in z-order (back first); children of a group are not listed. */
   listShapes(sheet: number): ListResult<Shape>;
   /** Appends a shape on top and returns its id; a sheet without a drawing gets one and existing drawing content is kept. */
-  insertShape(sheet: number, spec: ShapeInput): InsertImageResult;
+  addShape(sheet: number, spec: ShapeInput): InsertImageResult;
   /** Applies the fields `spec` names to the shape `objectId`; every other part of its XML is kept. */
   updateShape(sheet: number, objectId: number, spec: ShapeInput): Status;
   /** Removes the shape, connector or group `objectId` with its children. */
@@ -5495,7 +5501,7 @@ export interface Workbook {
   getDataTable(sheet: number, row: number, col: number): DataTableResult;
   /** Removes the data table containing `(row, col)` and blanks its result cells. `kDataTableInvalid` (8005) when none covers the cell. */
   removeDataTable(sheet: number, row: number, col: number): Status;
-  /** Recomputes every data table now, whatever the calc mode. `recalc()` does the same after a pass that had a dirty cell or a volatile formula, except under `CalcMode.AutoNoTable`, which leaves it to this call; `partialRecalc()` never computes tables. */
+  /** Recomputes every data table now, whatever the calc mode. `recalc()` does the same after a pass that had a dirty cell or a volatile formula, except under `CalcMode.AutoNoTable`, which leaves it to this call; `recalcViewport()` never computes tables. */
   recalcDataTables(): Status;
 
   // Sparkline groups. A group is addressed by its position in `listSparklineGroups`; adding or removing one shifts later indices.
@@ -5516,9 +5522,9 @@ export interface Workbook {
   /** Resolves the chart's series against the current cell values. */
   getChartData(sheet: number, objectId: number): ChartDataResult;
   /** Resolves the series as if `overrides` were applied to the chart; the workbook is not changed. */
-  previewChartData(sheet: number, objectId: number, overrides: ChartPreviewOverrides): ChartDataResult;
+  getChartPreview(sheet: number, objectId: number, overrides: ChartPreviewOverridesInput): ChartDataResult;
   /** Creates a chart with filled caches and returns its object id. */
-  insertChart(sheet: number, options: ChartInsertOptions): InsertChartResult;
+  addChart(sheet: number, options: ChartInsertInput): InsertChartResult;
   /** Replaces plot group `plot` with `kind`; `grouping` applies to column, bar, line and area. */
   setChartType(sheet: number, objectId: number, plot: number, kind: ChartInsertKind, grouping?: ChartGrouping): Status;
   /** Sets the chart title text, or removes the title with `null`. A {@link ChartTitleInfo} sets that kind, so `{ kind: ChartTitleKind.Auto }` returns the title to Excel's automatic one. */
@@ -5581,32 +5587,32 @@ export interface Workbook {
    *  add/remove/clear mutation on the same sheet renumbers the sequence.
    *  A non-empty `formula1` / `formula2` that does not parse is rejected
    *  with `kParserUnexpectedToken`. */
-  addConditionalFormat(sheet: number, rule: ConditionalFormatInput): AddStyleResult;
+  addCfRule(sheet: number, rule: ConditionalFormatInput): AddStyleResult;
   /** Removes the CF rule at `index` (flattened order). When the
    *  containing block becomes empty it is removed too. */
-  removeConditionalFormatAt(sheet: number, index: number): Status;
+  removeCfRule(sheet: number, index: number): Status;
   /** Drops every CF block on `sheet`. */
-  clearConditionalFormats(sheet: number): Status;
+  clearCfRules(sheet: number): Status;
 
   // Dependency-graph trace.
   /** Returns the cells that `(sheet, row, col)` directly reads (1-step
    *  precedents) when `depth <= 1`, or every cell reached within `depth`
    *  BFS steps otherwise. `depth` is capped at 32. An invalid sheet, row
    *  or column yields an empty list with `status.ok === false`. */
-  precedents(sheet: number, row: number, col: number, depth: number): ListResult<CellNode>;
+  getPrecedents(sheet: number, row: number, col: number, depth: number): ListResult<CellNode>;
   /** Returns the cells that read `(sheet, row, col)` directly (1-step
    *  dependents). Same depth semantics as `precedents`. */
-  dependents(sheet: number, row: number, col: number, depth: number): ListResult<CellNode>;
+  getDependents(sheet: number, row: number, col: number, depth: number): ListResult<CellNode>;
 
   // Function catalog.
   /** Returns metadata for the function `name` (case-insensitive). When
    *  the function is unknown, returns `{ok: false}`. The result is
    *  locale-invariant: the description / signature fields are always
    *  `undefined` (see {@link FunctionMetadataResult}). */
-  functionMetadata(name: string): FunctionMetadataResult;
+  getFunctionMetadata(name: string): FunctionMetadataResult;
   /** Returns every registered function's canonical name in ascending
    *  sort order. */
-  functionNames(): ListResult<string>;
+  listFunctionNames(): ListResult<string>;
 
   /** Returns the localized display name for the canonical function
    *  `canonicalName` under `profileId`. `de_DE`, `fr_FR`, `es_ES`, `es_MX`,
@@ -5635,7 +5641,7 @@ export interface Workbook {
   canonicalizeFormula(formula: string, profileId: ExcelProfileId): StringResult;
   /** Returns the locale facts (separators, boolean names, date order,
    *  currency, error names) of `profileId`. */
-  localeFacts(profileId: ExcelProfileId): LocaleFactsResult;
+  getLocaleFacts(profileId: ExcelProfileId): LocaleFactsResult;
   /** Compares two texts under `profileId` and returns the sign of the
    *  result in `order`. `strength` picks the fold (see
    *  {@link CollationStrength}); it is a text comparison, not Excel's `=`
@@ -5662,7 +5668,7 @@ export interface Workbook {
    *  - Feed it kind-preserving values (cell getters, paged range reads);
    *    `evaluateFormulaArray` returns range blanks as 0, losing the
    *    blank/zero distinction. */
-  collationClasses(values: Value[], strength: CollationStrength, profileId: ExcelProfileId): CollationClassesResult;
+  getCollationClasses(values: Value[], strength: CollationStrength, profileId: ExcelProfileId): CollationClassesResult;
 
   // External links.
   /** Returns every external-link record carried by the workbook in
@@ -5679,7 +5685,7 @@ export interface Workbook {
    *  region; per-cell values are read via `getValue`, which is already
    *  spill-aware. Otherwise `engaged` is `false` and the other fields
    *  are zero. */
-  spillInfo(sheet: number, row: number, col: number): SpillInfo;
+  getSpillInfo(sheet: number, row: number, col: number): SpillInfo;
 
   /** Parses `text` as `INDIRECT` reads a reference under the workbook's profile: A1, or R1C1 with the
    *  profile's letters when `options.r1c1` is set. Accepts an optional local sheet qualifier, `$` markers, a
@@ -5732,8 +5738,8 @@ export interface WorkbookCtor {
    *  `.xlsx` vs `.xlsb` from the package contents (there is no filename
    *  to route on). The returned wrapper may be unusable (subsequent
    *  calls return `kBindingInvalidHandle`) on failure; consult
-   *  `lastErrorMessage()` for diagnostics. */
-  loadBytes(bytes: Uint8Array): Workbook;
+   *  `getLastErrorMessage()` for diagnostics. */
+  load(bytes: Uint8Array): Workbook;
 }
 
 /** Factory object for native `Workbook` handles (`createDefault`, `createEmpty`, `loadBytes`, ...). */
@@ -5748,22 +5754,19 @@ export const Workbook: WorkbookCtor;
 export function evalFormula(formula: string): EvalResult;
 
 /** Library version string (UTF-8). */
-export function version(): string;
-
-/** Alias of {@link version}, matching the WASM binding's name. */
-export function versionString(): string;
+export function getVersion(): string;
 
 /** Most-recent thread-local error message. */
-export function lastErrorMessage(): string;
+export function getLastErrorMessage(): string;
 
 /** Most-recent thread-local error context. */
-export function lastErrorContext(): string;
+export function getLastErrorContext(): string;
 
 /** Static description of `status` (e.g. `"kOk"`). */
-export function statusString(status: number): string;
+export function getStatusName(status: number): string;
 
 /** Excel display literal for a cell error code (e.g. `"#DIV/0!"`). */
-export function errorDisplayName(errorCode: number): string;
+export function getErrorDisplayName(errorCode: number): string;
 
 /** Sets the engine's minimum structured-log severity (a `LogLevel`
  *  ordinal). This is **process-wide** state, not per `Workbook`. The
@@ -5787,7 +5790,7 @@ export function setLogMinLevel(level: number): Status;
 export function setLogSink(sink: ((record: Uint8Array) => void) | null): Status;
 
 /** Merge a host-supplied metadata entry over the engine's structural
- *  `functionMetadata()` result. Pure and side-effect-free; it does not
+ *  `getFunctionMetadata()` result. Pure and side-effect-free; it does not
  *  touch the native addon.
  *
  *  Field precedence (first non-nullish wins):
@@ -5813,12 +5816,11 @@ export function mergeFunctionMetadata(
 declare const _default: {
   Workbook: WorkbookCtor;
   evalFormula: typeof evalFormula;
-  version: typeof version;
-  versionString: typeof versionString;
-  lastErrorMessage: typeof lastErrorMessage;
-  lastErrorContext: typeof lastErrorContext;
-  statusString: typeof statusString;
-  errorDisplayName: typeof errorDisplayName;
+  getVersion: typeof getVersion;
+  getLastErrorMessage: typeof getLastErrorMessage;
+  getLastErrorContext: typeof getLastErrorContext;
+  getStatusName: typeof getStatusName;
+  getErrorDisplayName: typeof getErrorDisplayName;
   setLogMinLevel: typeof setLogMinLevel;
   setLogSink: typeof setLogSink;
   mergeFunctionMetadata: typeof mergeFunctionMetadata;

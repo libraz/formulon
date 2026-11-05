@@ -8,7 +8,7 @@ const release = (wb) => wb.delete();
 const roundTrip = (mod, wb) => {
   const saved = wb.save();
   assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  return mod.Workbook.loadBytes(saved.bytes);
+  return mod.Workbook.load(saved.bytes);
 };
 
 const fullProtection = {

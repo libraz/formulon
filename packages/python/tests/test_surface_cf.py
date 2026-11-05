@@ -6,7 +6,7 @@ import unittest
 
 from formulon import (
     CfColor,
-    CfValueObject,
+    Cfvo,
     ColorScale,
     ConditionalFormatInput,
     DataBar,
@@ -24,7 +24,7 @@ class ConditionalFormatTests(unittest.TestCase):
                 wb.set_number(0, r, 0, float(r * 5))  # A1=0, A2=5, A3=10
             # A rule's dxf_id must resolve against a registered dxf.
             dxf_index = wb.add_dxf(DifferentialFormat())
-            wb.add_conditional_format(
+            wb.add_cf_rule(
                 0,
                 ConditionalFormatInput(
                     sqref=[MergeRange(0, 0, 2, 0)],
@@ -47,12 +47,12 @@ class ConditionalFormatTests(unittest.TestCase):
             self.assertIn((2, 0), matched)
             self.assertNotIn((0, 0), matched)
 
-            wb.clear_conditional_formats(0)
+            wb.clear_cf_rules(0)
             self.assertEqual(wb.get_conditional_formats(0), [])
 
     def test_cell_is_op_alone_is_engaged(self) -> None:
         with Workbook.create_default() as wb:
-            wb.add_conditional_format(
+            wb.add_cf_rule(
                 0,
                 ConditionalFormatInput(sqref=[MergeRange(0, 0, 2, 0)], type=1, op=3, formula1="5"),
             )
@@ -65,7 +65,7 @@ class ConditionalFormatTests(unittest.TestCase):
 
     def test_unset_rank_reads_back_none(self) -> None:
         with Workbook.create_default() as wb:
-            wb.add_conditional_format(0, ConditionalFormatInput(sqref=[MergeRange(0, 0, 2, 0)], type=5))
+            wb.add_cf_rule(0, ConditionalFormatInput(sqref=[MergeRange(0, 0, 2, 0)], type=5))
             rule = wb.get_conditional_formats(0)[0]
             self.assertIsNone(rule.rank)
             self.assertIsNone(rule.op)
@@ -74,16 +74,14 @@ class ConditionalFormatTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             dxf_index = wb.add_dxf(DifferentialFormat())
             sqref = [MergeRange(0, 0, 2, 0)]
-            wb.add_conditional_format(
-                0, ConditionalFormatInput(sqref=sqref, type=1, op=0, formula1="1", dxf_id=dxf_index)
-            )
-            wb.add_conditional_format(0, ConditionalFormatInput(sqref=sqref, type=5, rank=0, dxf_id=dxf_index))
-            wb.add_conditional_format(0, ConditionalFormatInput(sqref=sqref, type=6, std_dev=0.0))
-            wb.add_conditional_format(0, ConditionalFormatInput(sqref=sqref, type=15, time_period=0))
+            wb.add_cf_rule(0, ConditionalFormatInput(sqref=sqref, type=1, op=0, formula1="1", dxf_id=dxf_index))
+            wb.add_cf_rule(0, ConditionalFormatInput(sqref=sqref, type=5, rank=0, dxf_id=dxf_index))
+            wb.add_cf_rule(0, ConditionalFormatInput(sqref=sqref, type=6, std_dev=0.0))
+            wb.add_cf_rule(0, ConditionalFormatInput(sqref=sqref, type=15, time_period=0))
             first = wb.get_conditional_formats(0)
-            wb.clear_conditional_formats(0)
+            wb.clear_cf_rules(0)
             for r in first:
-                wb.add_conditional_format(
+                wb.add_cf_rule(
                     0,
                     ConditionalFormatInput(
                         sqref=r.sqref,
@@ -116,29 +114,29 @@ class ConditionalFormatTests(unittest.TestCase):
                     sqref=[MergeRange(0, 0, 2, 0)],
                     type=2,
                     color_scale=ColorScale(
-                        [CfValueObject(3), CfValueObject(4)],
+                        [Cfvo(3), Cfvo(4)],
                         [CfColor(255, 0, 0), CfColor(0, 255, 0)],
                     ),
                 ),
                 ConditionalFormatInput(
                     sqref=[MergeRange(0, 1, 2, 1)],
                     type=3,
-                    data_bar=DataBar(CfValueObject(3), CfValueObject(4), CfColor(0, 0, 255)),
+                    data_bar=DataBar(Cfvo(3), Cfvo(4), CfColor(0, 0, 255)),
                 ),
                 ConditionalFormatInput(
                     sqref=[MergeRange(0, 2, 2, 2)],
                     type=4,
-                    icon_set=IconSet(0, [CfValueObject(1, "33"), CfValueObject(1, "67")]),
+                    icon_set=IconSet(0, [Cfvo(1, "33"), Cfvo(1, "67")]),
                 ),
             ]
             for rule in rules:
-                wb.add_conditional_format(0, rule)
+                wb.add_cf_rule(0, rule)
             got = wb.get_conditional_formats(0)
             self.assertEqual(got[0].color_scale.colors[1], CfColor(0, 255, 0))
             self.assertEqual(got[1].data_bar.fill, CfColor(0, 0, 255))
             self.assertEqual(got[2].icon_set.thresholds[1].value, "67")
 
-    # `CfValueObject.type`: 0 num, 1 percent, 2 percentile, 3 min, 4 max,
+    # `Cfvo.type`: 0 num, 1 percent, 2 percentile, 3 min, 4 max,
     # 5 formula, 6 autoMin, 7 autoMax. Every threshold below states a
     # `value`, which is what puts a borrowed string behind each CFVO.
     EXPECTED_CFVO_VALUES = ["0", "50", "100", "5", "95", "0", "33", "67"]
@@ -151,20 +149,20 @@ class ConditionalFormatTests(unittest.TestCase):
                 sqref=[MergeRange(0, 0, 4, 0)],
                 type=2,
                 color_scale=ColorScale(
-                    [CfValueObject(0, "0"), CfValueObject(1, "50"), CfValueObject(0, "100")],
+                    [Cfvo(0, "0"), Cfvo(1, "50"), Cfvo(0, "100")],
                     [CfColor(248, 105, 107), CfColor(255, 235, 132), CfColor(99, 190, 123)],
                 ),
             ),
             ConditionalFormatInput(
                 sqref=[MergeRange(0, 1, 4, 1)],
                 type=3,
-                data_bar=DataBar(CfValueObject(0, "5"), CfValueObject(0, "95"), CfColor(0, 112, 192)),
+                data_bar=DataBar(Cfvo(0, "5"), Cfvo(0, "95"), CfColor(0, 112, 192)),
             ),
             ConditionalFormatInput(
                 sqref=[MergeRange(0, 2, 4, 2)],
                 type=4,
                 # 4Arrows: a 4-icon set carries three thresholds.
-                icon_set=IconSet(8, [CfValueObject(1, "0"), CfValueObject(1, "33"), CfValueObject(1, "67")]),
+                icon_set=IconSet(8, [Cfvo(1, "0"), Cfvo(1, "33"), Cfvo(1, "67")]),
             ),
         ]
 
@@ -188,7 +186,7 @@ class ConditionalFormatTests(unittest.TestCase):
         # wrong or empty even though the rule count and colors look right.
         with Workbook.create_default() as wb:
             for rule in self._cfvo_rules():
-                wb.add_conditional_format(0, rule)
+                wb.add_cf_rule(0, rule)
 
             in_session = wb.get_conditional_formats(0)
             self.assertEqual(len(in_session), 3)
@@ -214,8 +212,8 @@ class ConditionalFormatTests(unittest.TestCase):
         # before: the values came back from the model and disappeared on
         # the way through the file.
         bar = DataBar(
-            CfValueObject(3),
-            CfValueObject(4),
+            Cfvo(3),
+            Cfvo(4),
             CfColor(0, 0, 255),
             gradient=False,
             axis_position=1,
@@ -226,7 +224,7 @@ class ConditionalFormatTests(unittest.TestCase):
             direction=2,
         )
         with Workbook.create_default() as wb:
-            wb.add_conditional_format(0, ConditionalFormatInput(sqref=[MergeRange(0, 0, 2, 0)], type=3, data_bar=bar))
+            wb.add_cf_rule(0, ConditionalFormatInput(sqref=[MergeRange(0, 0, 2, 0)], type=3, data_bar=bar))
             saved = wb.save()
 
         with Workbook.load(saved) as reloaded:
@@ -239,28 +237,26 @@ class ConditionalFormatTests(unittest.TestCase):
             self.assertEqual(got.axis_color, CfColor(1, 2, 3))
             self.assertEqual(got.direction, 2)
             # Feeding the decoded bar straight back must reproduce it.
-            reloaded.add_conditional_format(
-                0, ConditionalFormatInput(sqref=[MergeRange(4, 0, 6, 0)], type=3, data_bar=got)
-            )
+            reloaded.add_cf_rule(0, ConditionalFormatInput(sqref=[MergeRange(4, 0, 6, 0)], type=3, data_bar=got))
             self.assertEqual(reloaded.get_conditional_formats(0)[1].data_bar, got)
 
     def test_icon_set_floor_survives_save_and_load(self) -> None:
-        icons = IconSet(2, [CfValueObject(0, "7"), CfValueObject(0, "9")], floor=CfValueObject(0, "5", gte=False))
+        icons = IconSet(2, [Cfvo(0, "7"), Cfvo(0, "9")], floor=Cfvo(0, "5", gte=False))
         with Workbook.create_default() as wb:
-            wb.add_conditional_format(0, ConditionalFormatInput(sqref=[MergeRange(0, 0, 9, 0)], type=4, icon_set=icons))
+            wb.add_cf_rule(0, ConditionalFormatInput(sqref=[MergeRange(0, 0, 9, 0)], type=4, icon_set=icons))
             saved = wb.save()
         with Workbook.load(saved) as reloaded:
             got = reloaded.get_conditional_formats(0)[0].icon_set
-            self.assertEqual(got.floor, CfValueObject(0, "5", gte=False))
+            self.assertEqual(got.floor, Cfvo(0, "5", gte=False))
 
     def test_omitted_data_bar_x14_fields_keep_the_model_defaults(self) -> None:
         with Workbook.create_default() as wb:
-            wb.add_conditional_format(
+            wb.add_cf_rule(
                 0,
                 ConditionalFormatInput(
                     sqref=[MergeRange(0, 0, 2, 0)],
                     type=3,
-                    data_bar=DataBar(CfValueObject(3), CfValueObject(4), CfColor(0, 0, 255)),
+                    data_bar=DataBar(Cfvo(3), Cfvo(4), CfColor(0, 0, 255)),
                 ),
             )
             got = wb.get_conditional_formats(0)[0].data_bar

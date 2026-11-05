@@ -47,7 +47,7 @@ emscripten::val reject(int32_t kind, const std::string& message) {
 }
 
 emscripten::val reject_last_error() {
-  return reject(kReferenceRangeError, fm_last_error_message());
+  return reject(kReferenceRangeError, fm_get_last_error_message());
 }
 
 /// `options` as an object (absent reads as `{}`); false after recording a TypeError for another type.
@@ -98,7 +98,7 @@ emscripten::val JsWorkbook::parseReference(const std::string& text, emscripten::
   if (has_row != has_col) {
     return reject(kReferenceTypeError, "parseReference: `baseRow` and `baseCol` must be given together");
   }
-  fm_reference_t ref{};
+  fm_parsed_reference_t ref{};
   const fm_status_t rc =
       fm_workbook_parse_reference(handle_, text.c_str(), r1c1 ? 1 : 0, has_row ? 1 : 0, base_row, base_col, &ref);
   if (rc != 0) {

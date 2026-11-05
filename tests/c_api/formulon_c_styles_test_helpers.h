@@ -17,80 +17,83 @@
 
 namespace {
 
-// `fm_styles_add_cell_xf` takes this struct BY VALUE, so its size is part of
+// `fm_workbook_add_cell_xf` takes this struct BY VALUE, so its size is part of
 // the calling convention rather than merely of a buffer: a caller compiled
 // against a different definition reads its arguments from the wrong registers
 // and stack slots with no diagnosable failure. Pin the layout here so a change
 // has to break the build and be acknowledged.
-static_assert(sizeof(fm_cell_xf) == 128U, "fm_cell_xf ABI layout changed");
-static_assert(offsetof(fm_cell_xf, font_index) == 0U, "fm_cell_xf.font_index offset changed");
-static_assert(offsetof(fm_cell_xf, fill_index) == 4U, "fm_cell_xf.fill_index offset changed");
-static_assert(offsetof(fm_cell_xf, border_index) == 8U, "fm_cell_xf.border_index offset changed");
-static_assert(offsetof(fm_cell_xf, num_fmt_id) == 12U, "fm_cell_xf.num_fmt_id offset changed");
-static_assert(offsetof(fm_cell_xf, horizontal_align) == 14U, "fm_cell_xf.horizontal_align offset changed");
-static_assert(offsetof(fm_cell_xf, vertical_align) == 15U, "fm_cell_xf.vertical_align offset changed");
-static_assert(offsetof(fm_cell_xf, wrap_text) == 16U, "fm_cell_xf.wrap_text offset changed");
-static_assert(offsetof(fm_cell_xf, justify_last_line) == 20U, "fm_cell_xf.justify_last_line offset changed");
-static_assert(offsetof(fm_cell_xf, xf_id) == 24U, "fm_cell_xf.xf_id offset changed");
-static_assert(offsetof(fm_cell_xf, has_alignment) == 28U, "fm_cell_xf.has_alignment offset changed");
-static_assert(offsetof(fm_cell_xf, has_text_rotation) == 32U, "fm_cell_xf.has_text_rotation offset changed");
-static_assert(offsetof(fm_cell_xf, reading_order) == 68U, "fm_cell_xf.reading_order offset changed");
-static_assert(offsetof(fm_cell_xf, has_horizontal_align) == 72U, "fm_cell_xf.has_horizontal_align offset changed");
-static_assert(offsetof(fm_cell_xf, has_vertical_align) == 76U, "fm_cell_xf.has_vertical_align offset changed");
-static_assert(offsetof(fm_cell_xf, has_wrap_text) == 80U, "fm_cell_xf.has_wrap_text offset changed");
-static_assert(offsetof(fm_cell_xf, has_justify_last_line) == 84U, "fm_cell_xf.has_justify_last_line offset changed");
-static_assert(offsetof(fm_cell_xf, apply_number_format) == 88U, "fm_cell_xf.apply_number_format offset changed");
-static_assert(offsetof(fm_cell_xf, quote_prefix) == 112U, "fm_cell_xf.quote_prefix offset changed");
-static_assert(offsetof(fm_cell_xf, has_protection) == 116U, "fm_cell_xf.has_protection offset changed");
-static_assert(offsetof(fm_cell_xf, hidden) == 124U, "fm_cell_xf.hidden offset changed");
-static_assert(sizeof(fm_dxf_record) == (sizeof(void*) == 4U ? 456U : 472U), "fm_dxf_record ABI layout changed");
-static_assert(offsetof(fm_dxf_record, num_fmt_code) == (sizeof(void*) == 4U ? 440U : 448U),
-              "fm_dxf_record.num_fmt_code offset changed");
-static_assert(offsetof(fm_dxf_record, alignment_xml) == (sizeof(void*) == 4U ? 444U : 456U),
-              "fm_dxf_record.alignment_xml offset changed");
-static_assert(offsetof(fm_dxf_record, protection_xml) == (sizeof(void*) == 4U ? 448U : 464U),
-              "fm_dxf_record.protection_xml offset changed");
-static_assert(sizeof(fm_font_record) == 120U, "fm_font_record ABI layout changed");
-static_assert(sizeof(fm_fill_record) == (sizeof(void*) == 4U ? 120U : 128U), "fm_fill_record ABI layout changed");
-static_assert(sizeof(fm_gradient_stop) == 40U, "fm_gradient_stop ABI layout changed");
+static_assert(sizeof(fm_cell_xf_t) == 128U, "fm_cell_xf_t ABI layout changed");
+static_assert(offsetof(fm_cell_xf_t, font_index) == 0U, "fm_cell_xf_t.font_index offset changed");
+static_assert(offsetof(fm_cell_xf_t, fill_index) == 4U, "fm_cell_xf_t.fill_index offset changed");
+static_assert(offsetof(fm_cell_xf_t, border_index) == 8U, "fm_cell_xf_t.border_index offset changed");
+static_assert(offsetof(fm_cell_xf_t, num_fmt_id) == 12U, "fm_cell_xf_t.num_fmt_id offset changed");
+static_assert(offsetof(fm_cell_xf_t, horizontal_align) == 14U, "fm_cell_xf_t.horizontal_align offset changed");
+static_assert(offsetof(fm_cell_xf_t, vertical_align) == 15U, "fm_cell_xf_t.vertical_align offset changed");
+static_assert(offsetof(fm_cell_xf_t, wrap_text) == 16U, "fm_cell_xf_t.wrap_text offset changed");
+static_assert(offsetof(fm_cell_xf_t, justify_last_line) == 20U, "fm_cell_xf_t.justify_last_line offset changed");
+static_assert(offsetof(fm_cell_xf_t, xf_id) == 24U, "fm_cell_xf_t.xf_id offset changed");
+static_assert(offsetof(fm_cell_xf_t, has_alignment) == 28U, "fm_cell_xf_t.has_alignment offset changed");
+static_assert(offsetof(fm_cell_xf_t, has_text_rotation) == 32U, "fm_cell_xf_t.has_text_rotation offset changed");
+static_assert(offsetof(fm_cell_xf_t, reading_order) == 68U, "fm_cell_xf_t.reading_order offset changed");
+static_assert(offsetof(fm_cell_xf_t, has_horizontal_align) == 72U, "fm_cell_xf_t.has_horizontal_align offset changed");
+static_assert(offsetof(fm_cell_xf_t, has_vertical_align) == 76U, "fm_cell_xf_t.has_vertical_align offset changed");
+static_assert(offsetof(fm_cell_xf_t, has_wrap_text) == 80U, "fm_cell_xf_t.has_wrap_text offset changed");
+static_assert(offsetof(fm_cell_xf_t, has_justify_last_line) == 84U,
+              "fm_cell_xf_t.has_justify_last_line offset changed");
+static_assert(offsetof(fm_cell_xf_t, apply_number_format) == 88U, "fm_cell_xf_t.apply_number_format offset changed");
+static_assert(offsetof(fm_cell_xf_t, quote_prefix) == 112U, "fm_cell_xf_t.quote_prefix offset changed");
+static_assert(offsetof(fm_cell_xf_t, has_protection) == 116U, "fm_cell_xf_t.has_protection offset changed");
+static_assert(offsetof(fm_cell_xf_t, hidden) == 124U, "fm_cell_xf_t.hidden offset changed");
+static_assert(sizeof(fm_dxf_record_t) == (sizeof(void*) == 4U ? 456U : 472U), "fm_dxf_record_t ABI layout changed");
+static_assert(offsetof(fm_dxf_record_t, num_fmt_code) == (sizeof(void*) == 4U ? 440U : 448U),
+              "fm_dxf_record_t.num_fmt_code offset changed");
+static_assert(offsetof(fm_dxf_record_t, alignment_xml) == (sizeof(void*) == 4U ? 444U : 456U),
+              "fm_dxf_record_t.alignment_xml offset changed");
+static_assert(offsetof(fm_dxf_record_t, protection_xml) == (sizeof(void*) == 4U ? 448U : 464U),
+              "fm_dxf_record_t.protection_xml offset changed");
+static_assert(sizeof(fm_font_record_t) == 120U, "fm_font_record_t ABI layout changed");
+static_assert(sizeof(fm_fill_record_t) == (sizeof(void*) == 4U ? 120U : 128U), "fm_fill_record_t ABI layout changed");
+static_assert(sizeof(fm_gradient_stop_t) == 40U, "fm_gradient_stop_t ABI layout changed");
 
-// `fm_styles_batch` is fifteen pointer-width slots: five (array, count,
+// `fm_styles_batch_t` is fifteen pointer-width slots: five (array, count,
 // out-indices) triples whose `size_t` counts are the same width as a pointer on
 // both targets. Unlike its neighbours it is reached by no binding -- only the C
-// and C++ callers of `fm_styles_add_batch` -- so nothing cross-checks it from
+// and C++ callers of `fm_workbook_add_batch` -- so nothing cross-checks it from
 // the other side of the boundary and every offset is pinned here instead. A
 // reorder within the struct moves no total size, which is exactly why the
 // per-member offsets and not just `sizeof` are recorded.
-static_assert(sizeof(fm_styles_batch) == 15U * sizeof(void*), "fm_styles_batch ABI layout changed");
-static_assert(alignof(fm_styles_batch) == alignof(void*), "fm_styles_batch ABI alignment changed");
-static_assert(offsetof(fm_styles_batch, fonts) == 0U * sizeof(void*), "fm_styles_batch.fonts offset changed");
-static_assert(offsetof(fm_styles_batch, font_count) == 1U * sizeof(void*), "fm_styles_batch.font_count offset changed");
-static_assert(offsetof(fm_styles_batch, font_indices) == 2U * sizeof(void*),
-              "fm_styles_batch.font_indices offset changed");
-static_assert(offsetof(fm_styles_batch, fills) == 3U * sizeof(void*), "fm_styles_batch.fills offset changed");
-static_assert(offsetof(fm_styles_batch, fill_count) == 4U * sizeof(void*), "fm_styles_batch.fill_count offset changed");
-static_assert(offsetof(fm_styles_batch, fill_indices) == 5U * sizeof(void*),
-              "fm_styles_batch.fill_indices offset changed");
-static_assert(offsetof(fm_styles_batch, borders) == 6U * sizeof(void*), "fm_styles_batch.borders offset changed");
-static_assert(offsetof(fm_styles_batch, border_count) == 7U * sizeof(void*),
-              "fm_styles_batch.border_count offset changed");
-static_assert(offsetof(fm_styles_batch, border_indices) == 8U * sizeof(void*),
-              "fm_styles_batch.border_indices offset changed");
-static_assert(offsetof(fm_styles_batch, cell_xfs) == 9U * sizeof(void*), "fm_styles_batch.cell_xfs offset changed");
-static_assert(offsetof(fm_styles_batch, cell_xf_count) == 10U * sizeof(void*),
-              "fm_styles_batch.cell_xf_count offset changed");
-static_assert(offsetof(fm_styles_batch, cell_xf_indices) == 11U * sizeof(void*),
-              "fm_styles_batch.cell_xf_indices offset changed");
-static_assert(offsetof(fm_styles_batch, num_fmt_codes) == 12U * sizeof(void*),
-              "fm_styles_batch.num_fmt_codes offset changed");
-static_assert(offsetof(fm_styles_batch, num_fmt_count) == 13U * sizeof(void*),
-              "fm_styles_batch.num_fmt_count offset changed");
-static_assert(offsetof(fm_styles_batch, num_fmt_ids) == 14U * sizeof(void*),
-              "fm_styles_batch.num_fmt_ids offset changed");
+static_assert(sizeof(fm_styles_batch_t) == 15U * sizeof(void*), "fm_styles_batch_t ABI layout changed");
+static_assert(alignof(fm_styles_batch_t) == alignof(void*), "fm_styles_batch_t ABI alignment changed");
+static_assert(offsetof(fm_styles_batch_t, fonts) == 0U * sizeof(void*), "fm_styles_batch_t.fonts offset changed");
+static_assert(offsetof(fm_styles_batch_t, font_count) == 1U * sizeof(void*),
+              "fm_styles_batch_t.font_count offset changed");
+static_assert(offsetof(fm_styles_batch_t, font_indices) == 2U * sizeof(void*),
+              "fm_styles_batch_t.font_indices offset changed");
+static_assert(offsetof(fm_styles_batch_t, fills) == 3U * sizeof(void*), "fm_styles_batch_t.fills offset changed");
+static_assert(offsetof(fm_styles_batch_t, fill_count) == 4U * sizeof(void*),
+              "fm_styles_batch_t.fill_count offset changed");
+static_assert(offsetof(fm_styles_batch_t, fill_indices) == 5U * sizeof(void*),
+              "fm_styles_batch_t.fill_indices offset changed");
+static_assert(offsetof(fm_styles_batch_t, borders) == 6U * sizeof(void*), "fm_styles_batch_t.borders offset changed");
+static_assert(offsetof(fm_styles_batch_t, border_count) == 7U * sizeof(void*),
+              "fm_styles_batch_t.border_count offset changed");
+static_assert(offsetof(fm_styles_batch_t, border_indices) == 8U * sizeof(void*),
+              "fm_styles_batch_t.border_indices offset changed");
+static_assert(offsetof(fm_styles_batch_t, cell_xfs) == 9U * sizeof(void*), "fm_styles_batch_t.cell_xfs offset changed");
+static_assert(offsetof(fm_styles_batch_t, cell_xf_count) == 10U * sizeof(void*),
+              "fm_styles_batch_t.cell_xf_count offset changed");
+static_assert(offsetof(fm_styles_batch_t, cell_xf_indices) == 11U * sizeof(void*),
+              "fm_styles_batch_t.cell_xf_indices offset changed");
+static_assert(offsetof(fm_styles_batch_t, num_fmt_codes) == 12U * sizeof(void*),
+              "fm_styles_batch_t.num_fmt_codes offset changed");
+static_assert(offsetof(fm_styles_batch_t, num_fmt_count) == 13U * sizeof(void*),
+              "fm_styles_batch_t.num_fmt_count offset changed");
+static_assert(offsetof(fm_styles_batch_t, num_fmt_ids) == 14U * sizeof(void*),
+              "fm_styles_batch_t.num_fmt_ids offset changed");
 // The slots are pointer-width because `size_t` is, on every target this ABI
 // ships to. Pinned separately so a target where that stops holding fails here
 // rather than silently re-laying the struct out.
-static_assert(sizeof(size_t) == sizeof(void*), "fm_styles_batch assumes size_t is pointer-width");
+static_assert(sizeof(size_t) == sizeof(void*), "fm_styles_batch_t assumes size_t is pointer-width");
 
 struct WorkbookGuard {
   fm_workbook_t* handle = nullptr;
@@ -103,7 +106,7 @@ struct WorkbookGuard {
 struct BufferGuard {
   uint8_t* data = nullptr;
   size_t len = 0;
-  ~BufferGuard() { fm_buffer_free(data); }
+  ~BufferGuard() { fm_buffer_destroy(data); }
   BufferGuard() = default;
   BufferGuard(const BufferGuard&) = delete;
   BufferGuard& operator=(const BufferGuard&) = delete;
@@ -162,8 +165,8 @@ struct BufferGuard {
   return {styles_part.value().begin(), styles_part.value().end()};
 }
 
-[[maybe_unused]] inline fm_font_record MakeArial() {
-  fm_font_record r{};
+[[maybe_unused]] inline fm_font_record_t MakeArial() {
+  fm_font_record_t r{};
   r.name = "Arial";
   r.size = 12.0;
   r.color_argb = 0xFF112233U;
@@ -174,16 +177,16 @@ struct BufferGuard {
   return r;
 }
 
-[[maybe_unused]] inline fm_fill_record MakeRedFill() {
-  fm_fill_record r{};
+[[maybe_unused]] inline fm_fill_record_t MakeRedFill() {
+  fm_fill_record_t r{};
   r.pattern = 1;  // solid
   r.fg_argb = 0xFFFF0000U;
   r.bg_argb = 0xFF000000U;
   return r;
 }
 
-[[maybe_unused]] inline fm_border_record MakeThinBoxBorder() {
-  fm_border_record r{};
+[[maybe_unused]] inline fm_border_record_t MakeThinBoxBorder() {
+  fm_border_record_t r{};
   r.left.style = 1;  // thin
   r.left.color_argb = 0xFF000000U;
   r.right = r.left;

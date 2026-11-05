@@ -35,11 +35,11 @@ Napi::Array TraceToArray(const Napi::CallbackInfo& info, const fm_workbook_t* ha
   if (rc != 0) {
     return FinishListResult(env, arr, rc);
   }
-  const std::size_t count = fm_cell_nodes_count(nodes);
+  const std::size_t count = fm_cell_nodes_get_node_count(nodes);
   std::size_t emitted = 0;
   for (std::size_t i = 0; i < count; ++i) {
     fm_cell_node_t n{};
-    rc = fm_cell_nodes_at(nodes, i, &n);
+    rc = fm_cell_nodes_get_node_at(nodes, i, &n);
     if (rc != 0) {
       break;
     }
@@ -72,11 +72,11 @@ Napi::Value MapProfileText(const Napi::CallbackInfo& info, ProfileTextMapFn fn) 
 // ---- Trace precedents / dependents ----------------------------------
 
 Napi::Value Workbook::Precedents(const Napi::CallbackInfo& info) {
-  return TraceToArray(info, handle_, fm_workbook_precedents);
+  return TraceToArray(info, handle_, fm_sheet_get_precedents);
 }
 
 Napi::Value Workbook::Dependents(const Napi::CallbackInfo& info) {
-  return TraceToArray(info, handle_, fm_workbook_dependents);
+  return TraceToArray(info, handle_, fm_sheet_get_dependents);
 }
 
 // ---- Dynamic-array spill info ---------------------------------------
@@ -98,7 +98,7 @@ Napi::Value Workbook::SpillInfo(const Napi::CallbackInfo& info) {
   const uint32_t row = ArgU32(info, 1);
   const uint32_t col = ArgU32(info, 2);
   fm_spill_info_t spill{};
-  const fm_status_t rc = fm_workbook_spill_info(handle_, sheet, row, col, &spill);
+  const fm_status_t rc = fm_sheet_get_spill_info(handle_, sheet, row, col, &spill);
   out.Set("status", MakeStatus(env, rc));
   if (rc != 0) {
     return out;
@@ -124,7 +124,7 @@ Napi::Value Workbook::GetArrayFormula(const Napi::CallbackInfo& info) {
   }
   fm_array_formula_t array{};
   const fm_status_t rc =
-      fm_workbook_get_array_formula(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &array);
+      fm_sheet_get_array_formula(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &array);
   out.Set("status", MakeStatus(env, rc));
   if (rc != 0 || array.engaged == 0) {
     return out;
@@ -144,7 +144,7 @@ Napi::Value Workbook::GetArrayFormula(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::SetArrayFormula(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const std::string formula = ArgString(info, 5);
-    return fm_workbook_set_array_formula(handle, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), ArgU32(info, 3),
+    return fm_sheet_set_array_formula(handle, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), ArgU32(info, 3),
                                          ArgU32(info, 4), formula.c_str());
   });
 }
@@ -158,14 +158,14 @@ Napi::Value Workbook::GetExternalLinks(const Napi::CallbackInfo& info) {
     return FinishListResult(env, arr, kBindingInvalidHandle);
   }
   uint32_t count = 0;
-  fm_status_t rc = fm_workbook_external_link_count(handle_, &count);
+  fm_status_t rc = fm_workbook_get_external_link_count(handle_, &count);
   if (rc != 0) {
     return FinishListResult(env, arr, rc);
   }
   std::size_t emitted = 0;
   for (uint32_t i = 0; i < count; ++i) {
     fm_external_link_record_t rec{};
-    rc = fm_workbook_external_link_at(handle_, i, &rec);
+    rc = fm_workbook_get_external_link(handle_, i, &rec);
     if (rc != 0) {
       return FinishListResult(env, arr, rc);
     }
@@ -189,7 +189,7 @@ Napi::Value Workbook::FunctionMetadata(const Napi::CallbackInfo& info) {
   Napi::Object out = Napi::Object::New(env);
   const std::string name = ArgString(info, 0);
   fm_function_metadata_t md{};
-  fm_status_t rc = fm_function_metadata(name.c_str(), &md);
+  fm_status_t rc = fm_get_function_metadata(name.c_str(), &md);
   if (rc != 0) {
     out.Set("ok", Napi::Boolean::New(env, false));
     return out;
@@ -217,11 +217,11 @@ Napi::Value Workbook::FunctionMetadata(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::FunctionNames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
-  const std::size_t n = fm_function_count();
+  const std::size_t n = fm_get_function_count();
   fm_status_t rc = 0;
   for (std::size_t i = 0; i < n; ++i) {
     const char* name = nullptr;
-    rc = fm_function_name_at(i, &name);
+    rc = fm_get_function_name_at(i, &name);
     if (rc != 0) {
       break;
     }
@@ -231,19 +231,19 @@ Napi::Value Workbook::FunctionNames(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::LocalizeFunctionName(const Napi::CallbackInfo& info) {
-  return MapProfileText(info, &fm_function_localize);
+  return MapProfileText(info, &fm_localize_function_name);
 }
 
 Napi::Value Workbook::CanonicalizeFunctionName(const Napi::CallbackInfo& info) {
-  return MapProfileText(info, &fm_function_canonicalize);
+  return MapProfileText(info, &fm_canonicalize_function_name);
 }
 
 Napi::Value Workbook::LocalizeFormula(const Napi::CallbackInfo& info) {
-  return MapProfileText(info, &fm_formula_localize);
+  return MapProfileText(info, &fm_localize_formula);
 }
 
 Napi::Value Workbook::CanonicalizeFormula(const Napi::CallbackInfo& info) {
-  return MapProfileText(info, &fm_formula_canonicalize);
+  return MapProfileText(info, &fm_canonicalize_formula);
 }
 
 Napi::Value Workbook::LocaleFacts(const Napi::CallbackInfo& info) {
@@ -252,7 +252,7 @@ Napi::Value Workbook::LocaleFacts(const Napi::CallbackInfo& info) {
   out.Set("facts", env.Null());
   const std::string profile_id = ArgString(info, 0);
   fm_locale_facts_t f{};
-  fm_status_t rc = fm_locale_facts(profile_id.c_str(), &f);
+  fm_status_t rc = fm_get_locale_facts(profile_id.c_str(), &f);
   if (rc != 0) {
     out.Set("status", MakeStatus(env, rc));
     return out;
@@ -275,12 +275,12 @@ Napi::Value Workbook::LocaleFacts(const Napi::CallbackInfo& info) {
   facts.Set("measured", Napi::Boolean::New(env, f.measured != 0));
   facts.Set("collationMeasured", Napi::Boolean::New(env, f.collation_measured != 0));
   Napi::Array errors = Napi::Array::New(env);
-  const std::size_t n = fm_locale_error_name_count();
+  const std::size_t n = fm_get_locale_error_name_count();
   for (std::size_t i = 0; i < n && rc == 0; ++i) {
     const char* canonical = nullptr;
     const char* localized = nullptr;
     std::int32_t measured = 0;
-    rc = fm_locale_error_name(profile_id.c_str(), i, &canonical, &localized, &measured);
+    rc = fm_get_locale_error_name_at(profile_id.c_str(), i, &canonical, &localized, &measured);
     if (rc != 0) {
       break;
     }
@@ -306,7 +306,7 @@ Napi::Value Workbook::CompareText(const Napi::CallbackInfo& info) {
   const auto strength = static_cast<fm_collation_strength_t>(ArgU32(info, 2));
   const std::string profile_id = ArgString(info, 3);
   int32_t order = 0;
-  const fm_status_t rc = fm_text_compare(a.c_str(), b.c_str(), profile_id.c_str(), strength, &order);
+  const fm_status_t rc = fm_compare_text(a.c_str(), b.c_str(), profile_id.c_str(), strength, &order);
   out.Set("status", MakeStatus(env, rc));
   out.Set("order", Napi::Number::New(env, rc == 0 ? order : 0));
   return out;
@@ -319,7 +319,7 @@ Napi::Value Workbook::CollationClasses(const Napi::CallbackInfo& info) {
   out.Set("classCount", Napi::Number::New(env, 0));
   Napi::Array array;
   if (!ArrayArg(info, 0, &array)) {
-    out.Set("status", MakeBindingArgumentError(env, "collationClasses expects (values:Value[], strength, profileId)"));
+    out.Set("status", MakeBindingArgumentError(env, "getCollationClasses expects (values:Value[], strength, profileId)"));
     return out;
   }
   const uint32_t n = array.Length();
@@ -336,12 +336,12 @@ Napi::Value Workbook::CollationClasses(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
     if (!element.IsObject()) {
-      out.Set("status", MakeBindingError(env, kInvalidArgument, "collationClasses: each value must be an object"));
+      out.Set("status", MakeBindingError(env, kInvalidArgument, "getCollationClasses: each value must be an object"));
       return out;
     }
     const Napi::Object spec = element.As<Napi::Object>();
     if (!spec.Has("kind")) {
-      out.Set("status", MakeBindingError(env, kInvalidArgument, "collationClasses: each value requires a `kind`"));
+      out.Set("status", MakeBindingError(env, kInvalidArgument, "getCollationClasses: each value requires a `kind`"));
       return out;
     }
     values[i] = fm_value_t{};
@@ -353,7 +353,7 @@ Napi::Value Workbook::CollationClasses(const Napi::CallbackInfo& info) {
   Napi::Uint32Array ids = Napi::Uint32Array::New(env, n);
   uint32_t class_count = 0;
   const fm_status_t rc =
-      fm_collation_classes(values.data(), n, profile_id.c_str(), strength, n == 0 ? nullptr : ids.Data(), &class_count);
+      fm_get_collation_classes(values.data(), n, profile_id.c_str(), strength, n == 0 ? nullptr : ids.Data(), &class_count);
   out.Set("status", MakeStatus(env, rc));
   if (rc == 0) {
     out.Set("classIds", ids);

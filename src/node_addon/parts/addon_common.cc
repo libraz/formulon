@@ -19,7 +19,7 @@ Napi::Uint8Array CopyBytes(Napi::Env env, const uint8_t* bytes, std::size_t len)
 
 Napi::Uint8Array TakeSavedBytes(Napi::Env env, uint8_t* bytes, std::size_t len) {
   Napi::Uint8Array copy = CopyBytes(env, bytes, len);
-  fm_buffer_free(bytes);
+  fm_buffer_destroy(bytes);
   return copy;
 }
 
@@ -28,7 +28,7 @@ Napi::Object SnapshotBytesResult(Napi::Env env, fm_status_t rc, uint8_t* bytes, 
   if (rc == 0) {
     out.Set("bytes", TakeSavedBytes(env, bytes, len));
   } else {
-    fm_buffer_free(bytes);
+    fm_buffer_destroy(bytes);
     out.Set("bytes", Napi::Uint8Array::New(env, 0));
   }
   out.Set("status", MakeStatus(env, rc));
@@ -444,7 +444,7 @@ Napi::Object MakeErrorStatus(Napi::Env env, fm_status_t code) {
     // whatever call came before. Synthesise the message here instead.
     return MakeBindingError(env, code, "the workbook handle was already destroyed");
   }
-  return MakeStatusEnvelope(env, false, code, fm_last_error_message(), fm_last_error_context());
+  return MakeStatusEnvelope(env, false, code, fm_get_last_error_message(), fm_get_last_error_context());
 }
 
 Napi::Object MakeStatus(Napi::Env env, fm_status_t code) {
@@ -629,7 +629,7 @@ void BuildDataFieldSpec(CheckedSpecReader& reader, const Napi::Object& spec, fm_
   out.field_index = reader.U32(spec, "fieldIndex", 0U);
   out.aggregation = static_cast<fm_pivot_aggregation_t>(reader.U32(spec, "aggregation", 0U));
   out.number_format = has_nfmt ? nfmt_buf.c_str() : nullptr;
-  out.show_as = static_cast<fm_pivot_show_as_t>(reader.U32(spec, "showAs", 0U));
+  out.show_as = static_cast<fm_pivot_show_values_as_t>(reader.U32(spec, "showAs", 0U));
   out.show_as_base_field = reader.I32(spec, "showAsBaseField", -1);
   out.show_as_base_item = reader.I32(spec, "showAsBaseItem", -1);
 }

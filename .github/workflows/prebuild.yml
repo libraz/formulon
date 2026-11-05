@@ -103,7 +103,7 @@ jobs:
           if-no-files-found: error
 
   # v0.9.4 incident: a C ABI change (struct layout + a new out-param
-  # on fm_sheet_cf_add_rule) shipped through develop and main untouched
+  # on fm_sheet_add_cf_rule) shipped through develop and main untouched
   # because ci.yml only exercises the native ctest suite and a WASM
   # smoke test, and this workflow's own `prebuild` job only exercises
   # the Node addon. The Python/wasmtime binding (packages/python/) was

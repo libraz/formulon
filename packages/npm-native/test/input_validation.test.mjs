@@ -75,11 +75,11 @@ test('module-level numeric and string positions reject coercion and overflow', (
         if (!(error instanceof expected)) failures.push(label + ':' + error.name);
       }
     }
-    probe('status-symbol', TypeError, () => addon.statusString(Symbol('status')));
-    probe('status-fraction', RangeError, () => addon.statusString(1.5));
-    probe('status-overflow', RangeError, () => addon.statusString(2 ** 31));
-    probe('error-symbol', TypeError, () => addon.errorDisplayName(Symbol('error')));
-    probe('error-nan', RangeError, () => addon.errorDisplayName(Number.NaN));
+    probe('status-symbol', TypeError, () => addon.getStatusName(Symbol('status')));
+    probe('status-fraction', RangeError, () => addon.getStatusName(1.5));
+    probe('status-overflow', RangeError, () => addon.getStatusName(2 ** 31));
+    probe('error-symbol', TypeError, () => addon.getErrorDisplayName(Symbol('error')));
+    probe('error-nan', RangeError, () => addon.getErrorDisplayName(Number.NaN));
     probe('log-symbol', TypeError, () => addon.setLogMinLevel(Symbol('log')));
     probe('log-underflow', RangeError, () => addon.setLogMinLevel(-(2 ** 31) - 1));
     probe('formula-symbol', TypeError, () => addon.evalFormula(Symbol('formula')));
@@ -130,7 +130,7 @@ test('iterative caps use the signed int32 contract', () => {
 test('sheet, structural, enum, and read positions reject non-number primitives', () => {
   const wb = addon.Workbook.createDefault();
   try {
-    assert.throws(() => wb.sheetName(Symbol('sheet')), TypeError);
+    assert.throws(() => wb.getSheetName(Symbol('sheet')), TypeError);
     assert.throws(() => wb.insertRows(0, 0, 1.5), RangeError);
     assert.throws(() => wb.setCalcMode(1.5), RangeError);
     assert.throws(() => wb.getValue(Symbol('sheet'), 0, 0), TypeError);
@@ -151,14 +151,14 @@ test('paging cursor and limit reject values outside native integer ranges', () =
   try {
     for (const value of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53, 2 ** 64]) {
       assert.throws(() => wb.getCellsInRange(0, range, value), RangeError, `get cursor=${String(value)}`);
-      assert.throws(() => wb.listInvalidCells(0, value), RangeError, `invalid cursor=${String(value)}`);
+      assert.throws(() => wb.getInvalidCells(0, value), RangeError, `invalid cursor=${String(value)}`);
     }
     for (const value of [2 ** 32, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       assert.throws(() => wb.getCellsInRange(0, range, undefined, value), RangeError, `get limit=${String(value)}`);
-      assert.throws(() => wb.listInvalidCells(0, undefined, value), RangeError, `invalid limit=${String(value)}`);
+      assert.throws(() => wb.getInvalidCells(0, undefined, value), RangeError, `invalid limit=${String(value)}`);
     }
     assert.doesNotThrow(() => wb.getCellsInRange(0, range, Number.MAX_SAFE_INTEGER));
-    assert.doesNotThrow(() => wb.listInvalidCells(0, Number.MAX_SAFE_INTEGER));
+    assert.doesNotThrow(() => wb.getInvalidCells(0, Number.MAX_SAFE_INTEGER));
   } finally {
     wb.dispose();
   }
@@ -168,14 +168,14 @@ test('missing required positional arguments are rejected; optional ones keep the
   const wb = addon.Workbook.createDefault();
   try {
     assert.throws(() => wb.setIterative(true), TypeError);
-    assert.throws(() => wb.setSheetVisibility(0), TypeError);
+    assert.throws(() => wb.setVisibility(0), TypeError);
     assert.equal(wb.getIterative().maxIterations, 100, 'the rejected setIterative must not store a cap');
-    assert.equal(wb.functionMetadata('SUM').ok, true);
+    assert.equal(wb.getFunctionMetadata('SUM').ok, true);
     const range = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
     assert.doesNotThrow(() => wb.getCellsInRange(0, range, undefined, undefined));
-    assert.doesNotThrow(() => wb.listInvalidCells(0, undefined, undefined));
+    assert.doesNotThrow(() => wb.getInvalidCells(0, undefined, undefined));
     assert.doesNotThrow(() => wb.getCellsInRange(0, range, null, null));
-    assert.doesNotThrow(() => wb.listInvalidCells(0, null, null));
+    assert.doesNotThrow(() => wb.getInvalidCells(0, null, null));
   } finally {
     wb.dispose();
   }

@@ -53,13 +53,13 @@ __all__ = [
     "CalcMode",
     "Cell",
     "CellNode",
-    "CellStyle",
+    "CellStyleRecord",
     "CellXf",
     "CfCellResult",
     "CfColor",
     "CfIcon",
     "CfMatch",
-    "CfValueObject",
+    "Cfvo",
     "ColorContext",
     "GradientFill",
     "GradientStop",
@@ -102,14 +102,14 @@ __all__ = [
     "ChartPointPatch",
     "ChartPointState",
     "ChartDisplayPatch",
-    "ChartPreviewOverrides",
+    "ChartPreviewOverridesInput",
     "ChartSeriesDirection",
     "ChartSeriesInfo",
     "ChartSeriesPatch",
     "ChartSeriesRanges",
     "ChartSheetRange",
     "ChartSourceInfo",
-    "ChartTitleInfo",
+    "ChartTitle",
     "ChartTitleKind",
     "ChartUnresolved",
     "FilterKind",
@@ -135,7 +135,7 @@ __all__ = [
     "DisplayStatus",
     "EffectiveStyle",
     "ErrorCode",
-    "ExternalLink",
+    "ExternalLinkRecord",
     "ExternalLinkKind",
     "FillRecord",
     "FontRecord",
@@ -161,7 +161,7 @@ __all__ = [
     "PivotDataFieldSpec",
     "PivotDatePeriod",
     "PivotFieldInfo",
-    "PivotFieldSpec",
+    "PivotFieldSpecInput",
     "PivotFilterSpec",
     "PivotFilterType",
     "PivotFilterValueKind",
@@ -332,7 +332,7 @@ def _check(status: int, op: str) -> None:
 
 # `_uint` / `_sint` live in `formulon._c` (imported above) alongside
 # `FormulonError`: they validate a value right at the WASM call boundary
-# that module owns, and `_c.py`'s own `fm_status_string` call needs one too.
+# that module owns, and `_c.py`'s own `fm_get_status_name` call needs one too.
 
 # ---------------------------------------------------------------------------
 # Value POD
@@ -459,7 +459,7 @@ class Cell(NamedTuple):
 
 
 class DefinedName(NamedTuple):
-    """One row of ``Workbook.iter_defined_names()``."""
+    """One row of ``Workbook.list_defined_names()``."""
 
     name: str
     formula: str
@@ -532,7 +532,7 @@ class TableStyle:
 
 
 class PassthroughPart(NamedTuple):
-    """One row of ``Workbook.iter_passthrough()``."""
+    """One row of ``Workbook.list_passthroughs()``."""
 
     path: str
 
@@ -565,7 +565,7 @@ class CollationStrength(IntEnum):
 
 @dataclass(frozen=True)
 class CollationClasses:
-    """Result of :meth:`Workbook.collation_classes`.
+    """Result of :func:`get_collation_classes`.
 
     ``class_ids`` holds one id per input value, dense from 0 in ascending
     SORT order; ``class_count`` is the number of distinct classes.
@@ -739,7 +739,7 @@ class ShapePaint(IntEnum):
 
 
 class SlicerSortOrder(IntEnum):
-    """Item sort order of a table slicer (``fm_slicer_sort_t``)."""
+    """Item sort order of a table slicer (``fm_slicer_sort_order_t``)."""
 
     ASCENDING = 0
     DESCENDING = 1
@@ -879,7 +879,7 @@ class ErrorCode(IntEnum):
 
 
 class ExternalLinkKind(IntEnum):
-    """External-link kind carried by :attr:`ExternalLink.kind`."""
+    """External-link kind carried by :attr:`ExternalLinkRecord.kind`."""
 
     UNKNOWN = 0
     EXTERNAL_BOOK = 1
@@ -1032,7 +1032,7 @@ class PivotFilterValueKind(IntEnum):
 
 class PivotDatePeriod(IntFlag):
     """Calendar periods of a pivot date group, combined into the ``periods``
-    mask of :meth:`Workbook.pivot_field_set_date_group`."""
+    mask of :meth:`Workbook.set_pivot_field_date_group`."""
 
     SECONDS = 1
     MINUTES = 2
@@ -1075,7 +1075,7 @@ class PivotSortOrder(IntEnum):
     """Sibling item order of a pivot field (``fm_pivot_sort_order_t``).
 
     ``MANUAL`` keeps items in the order added with
-    :meth:`Workbook.pivot_field_add_item` and takes no ``by_field`` key.
+    :meth:`Workbook.add_pivot_field_item` and takes no ``by_field`` key.
     """
 
     DESCENDING = 0
@@ -1095,7 +1095,7 @@ PIVOT_VALUES_FIELD = -2
 _PIVOT_VALUES_FIELD_C = 0xFFFFFFFE
 _PIVOT_NO_DATA_FIELD = 0xFFFFFFFF
 
-# Sentinel for ``CellStyle.builtin_id`` meaning "custom (no builtinId)".
+# Sentinel for ``CellStyleRecord.builtin_id`` meaning "custom (no builtinId)".
 CELL_STYLE_BUILTIN_ID_NONE = S.CELL_STYLE_BUILTIN_ID_NONE
 
 
@@ -1529,7 +1529,7 @@ class ChartPlotType(IntEnum):
 
 
 class ChartInsertKind(IntEnum):
-    """Kinds :meth:`Workbook.insert_chart` and :meth:`Workbook.set_chart_type` produce (``fm_chart_insert_kind_t``)."""
+    """Kinds :meth:`Workbook.add_chart` and :meth:`Workbook.set_chart_type` produce (``fm_chart_insert_kind_t``)."""
 
     COLUMN = 0
     BAR = 1
@@ -1664,7 +1664,7 @@ class ChartDataSource:
 
 
 @dataclass
-class ChartTitleInfo:
+class ChartTitle:
     """A chart or axis title; ``text`` is the flattened rich text (``TEXT``), ``formula`` the reference (``REF``)."""
 
     kind: Union[ChartTitleKind, int]
@@ -1786,7 +1786,7 @@ class ChartAxisInfo:
     reversed: bool
     number_format: Optional[str]
     source_linked: bool
-    title: ChartTitleInfo
+    title: ChartTitle
     major_gridlines: bool
     minor_gridlines: bool
     tick_label_position: Optional[str]
@@ -1821,7 +1821,7 @@ class ChartInfo:
     is_chartex: bool
     is_pivot_chart: bool
     on_chartsheet: bool
-    title: ChartTitleInfo
+    title: ChartTitle
     auto_title_deleted: Optional[bool]
     legend: ChartLegendInfo
     blanks_as: Union[ChartBlanksAs, int]
@@ -2010,7 +2010,7 @@ class ChartAxisPatch(TypedDict, total=False):
     """Axis patch.
 
     ``title`` takes the forms of :meth:`Workbook.set_chart_title`: text, or a
-    :class:`ChartTitleInfo` (``AUTO`` leaves the text to the viewer, ``NONE``
+    :class:`ChartTitle` (``AUTO`` leaves the text to the viewer, ``NONE``
     removes the title). ``None`` on ``title`` removes the axis title, on
     ``log_base`` makes the axis linear and on ``tick_label_position``
     (``nextTo``, ``low``, ``high``, ``none``) restores the default.
@@ -2018,7 +2018,7 @@ class ChartAxisPatch(TypedDict, total=False):
     """
 
     visible: bool
-    title: Union[str, ChartTitleInfo, None]
+    title: Union[str, ChartTitle, None]
     min: Optional[float]
     max: Optional[float]
     major_unit: Optional[float]
@@ -2031,8 +2031,8 @@ class ChartAxisPatch(TypedDict, total=False):
     tick_label_position: Optional[str]
 
 
-class ChartPreviewOverrides(TypedDict, total=False):
-    """Overrides for :meth:`Workbook.preview_chart_data`; an omitted key keeps the chart's own value."""
+class ChartPreviewOverridesInput(TypedDict, total=False):
+    """Overrides for :meth:`Workbook.get_chart_preview`; an omitted key keeps the chart's own value."""
 
     source: str
     direction: Union[ChartSeriesDirection, int]
@@ -2452,7 +2452,7 @@ class CfColor:
 
 
 @dataclass(frozen=True)
-class CfValueObject:
+class Cfvo:
     """One conditional-format threshold (``fm_cfvo_t``)."""
 
     type: int
@@ -2462,7 +2462,7 @@ class CfValueObject:
 
 @dataclass(frozen=True)
 class ColorScale:
-    thresholds: List[CfValueObject]
+    thresholds: List[Cfvo]
     colors: List[CfColor]
 
 
@@ -2478,8 +2478,8 @@ class DataBar:
     returned by ``get_conditional_format_at`` reproduces the rule.
     """
 
-    minimum: CfValueObject
-    maximum: CfValueObject
+    minimum: Cfvo
+    maximum: Cfvo
     fill: CfColor
     show_value: bool = True
     min_length_pct: int = 10
@@ -2508,11 +2508,11 @@ class IconSet:
     """
 
     name: int
-    thresholds: List[CfValueObject]
+    thresholds: List[Cfvo]
     reverse: bool = False
     show_value: bool = True
     percent: bool = True
-    floor: Optional[CfValueObject] = None
+    floor: Optional[Cfvo] = None
     #: Custom icon set: the icon drawn for each level, empty when the set
     #: draws its own icons.
     icons: List["CfIcon"] = field(default_factory=list)
@@ -2559,7 +2559,7 @@ class ConditionalFormat:
 
 @dataclass
 class ConditionalFormatInput:
-    """Argument shape for :meth:`Workbook.add_conditional_format`.
+    """Argument shape for :meth:`Workbook.add_cf_rule`.
 
     Set the corresponding visual payload for color-scale, data-bar, or
     icon-set rules. The C ABI validates each payload's cardinality.
@@ -3030,7 +3030,7 @@ def _decode_fill(ptr: int) -> FillRecord:
 
 
 def _pack_fill(ptr: int, record: FillRecord, scope: _ArgScope) -> None:
-    """Write ``record`` into the ``fm_fill_record`` at ``ptr``; the gradient
+    """Write ``record`` into the ``fm_fill_record_t`` at ``ptr``; the gradient
     stops are allocated through ``scope``."""
     values: Dict[str, object] = {
         "pattern": _uint(record.pattern, "pattern", 8),
@@ -3122,7 +3122,7 @@ class StyleBatchIndices(NamedTuple):
 
 
 @dataclass(frozen=True)
-class CellStyle:
+class CellStyleRecord:
     """A named cell style (``<cellStyle>`` entry)."""
 
     name: str
@@ -3200,7 +3200,7 @@ class EffectiveStyle:
 
 
 @dataclass(frozen=True)
-class ExternalLink:
+class ExternalLinkRecord:
     """An external-link record (``<externalReferences>`` entry)."""
 
     index: int
@@ -3245,8 +3245,8 @@ class PivotWorksheetSource:
 
 
 @dataclass
-class PivotFieldSpec:
-    """Argument shape for :meth:`Workbook.pivot_field_add`.
+class PivotFieldSpecInput:
+    """Argument shape for :meth:`Workbook.add_pivot_field`.
 
     ``subtotal_top`` defaults to ``True``, Excel's default: a group's subtotal
     sits on its own heading row. ``False`` heads the group with a label-only
@@ -3262,7 +3262,7 @@ class PivotFieldSpec:
 
 @dataclass(frozen=True)
 class PivotFieldInfo:
-    """A pivot field's definition, as read by :meth:`Workbook.pivot_field_at`.
+    """A pivot field's definition, as read by :meth:`Workbook.get_pivot_field`.
 
     ``axis`` is ``None`` for a field that sits on no axis. ``cache_field_index``
     is the bound pivot-cache field (pivot field ``i`` binds to cache field
@@ -3295,7 +3295,7 @@ class PivotFieldInfo:
 
 @dataclass(frozen=True)
 class PivotItemInfo:
-    """One pivot-field item, as read by :meth:`Workbook.pivot_field_item_at`.
+    """One pivot-field item, as read by :meth:`Workbook.get_pivot_field_item`.
 
     ``name`` is the item's own label (empty for an item bound only by cache
     index); ``cache_index`` indexes the bound cache field's shared items and
@@ -3313,7 +3313,7 @@ class PivotItemInfo:
 
 @dataclass(frozen=True)
 class PivotStyleInfo:
-    """A pivot table's style, as read by :meth:`Workbook.pivot_style_info`.
+    """A pivot table's style, as read by :meth:`Workbook.get_pivot_style_info`.
 
     ``present`` is false when the definition has no style element; ``name``
     is empty when the element carries no style name.
@@ -3330,9 +3330,9 @@ class PivotStyleInfo:
 
 @dataclass(frozen=True)
 class PivotOptions:
-    """The PivotTable Options of one pivot table, as read by :meth:`Workbook.pivot_get_options`.
+    """The PivotTable Options of one pivot table, as read by :meth:`Workbook.get_pivot_options`.
 
-    :meth:`Workbook.pivot_set_options` changes only the members that are not
+    :meth:`Workbook.set_pivot_options` changes only the members that are not
     ``None``; a read always fills every member. A string option reads ``""``
     when unset and is cleared by setting ``""``. A ``missing_caption`` of
     exactly ``-`` is written as the number 0.
@@ -3369,7 +3369,7 @@ class PivotOptions:
 
 @dataclass(frozen=True)
 class PivotCacheOptions:
-    """The options of one pivot cache, as read by :meth:`Workbook.pivot_cache_get_options`.
+    """The options of one pivot cache, as read by :meth:`Workbook.get_pivot_cache_options`.
 
     ``missing_items_limit`` is ``-1`` for automatic, ``0`` for none, or up to 1048576.
     """
@@ -3381,7 +3381,7 @@ class PivotCacheOptions:
 
 @dataclass(frozen=True)
 class PivotCalculatedItem:
-    """One calculated item, as read by :meth:`Workbook.pivot_cache_calculated_item_at`.
+    """One calculated item, as read by :meth:`Workbook.get_pivot_cache_calculated_item`.
 
     ``formula`` has no leading ``=``; ``scoped`` is true for an entry read from
     a file that applies the formula only where the item meets items of other fields.
@@ -3414,7 +3414,7 @@ class PivotDataFieldSpec:
 
 @dataclass
 class PivotFilterSpec:
-    """Argument shape for :meth:`Workbook.pivot_filter_add`."""
+    """Argument shape for :meth:`Workbook.add_pivot_filter`."""
 
     axis: "PivotAxis | int"
     field_name: str
@@ -3431,7 +3431,7 @@ class PivotFilterSpec:
 
 
 def _cell_xf_fields(record: CellXf) -> Dict[str, object]:
-    """Project a :class:`CellXf` onto the ``fm_cell_xf`` field map.
+    """Project a :class:`CellXf` onto the ``fm_cell_xf_t`` field map.
 
     Shared by the direct ``<xf>`` writer and the named-style ``<xf>``
     writer, which pack the same struct, so the presence-flag defaulting
@@ -3588,7 +3588,7 @@ class _ArgScope:
 
 
 def _read_image_info(ptr: int) -> ImageInfo:
-    """Decode an ``fm_image_info`` block."""
+    """Decode an ``fm_image_info_t`` block."""
     d = S.IMAGE_INFO.unpack(LIB, ptr)
     return ImageInfo(format=d["format"], px_width=d["px_width"], px_height=d["px_height"])
 
@@ -3649,7 +3649,7 @@ def _pack_shape(
     rotation,
     hidden,
 ) -> int:
-    """Build an ``fm_shape`` input block; a ``None`` argument is a field left out of the mask."""
+    """Build an ``fm_shape_t`` input block; a ``None`` argument is a field left out of the mask."""
     ptr = scope.struct_array(S.SHAPE, 1)
     mask = 0
     values: Dict[str, int] = {}
@@ -3722,7 +3722,7 @@ def _pack_slicer(
     sort_order,
     cross_filter,
 ) -> int:
-    """Build an ``fm_slicer`` input block; a ``None`` argument is a field left out of the mask.
+    """Build an ``fm_slicer_t`` input block; a ``None`` argument is a field left out of the mask.
 
     ``anchor`` is ``None`` or ``(from_row, from_col, to_row, to_col)`` with optional trailing
     ``(from_row_off, from_col_off, to_row_off, to_col_off)``.
@@ -3782,7 +3782,7 @@ _SPARKLINE_COLORS = (
 
 
 def _pack_sparkline_group(scope: _ArgScope, group: SparklineGroup) -> int:
-    """Build an ``fm_sparkline_group`` input block from ``group`` (``sparklines`` is passed separately)."""
+    """Build an ``fm_sparkline_group_t`` input block from ``group`` (``sparklines`` is passed separately)."""
     ptr = scope.struct_array(S.SPARKLINE_GROUP, 1)
     S.SPARKLINE_GROUP.pack(
         LIB,
@@ -3815,7 +3815,7 @@ def _pack_sparkline_group(scope: _ArgScope, group: SparklineGroup) -> int:
 
 
 def _pack_sparklines(scope: _ArgScope, sparklines: Sequence[Sparkline]) -> int:
-    """Build an ``fm_sparkline`` array; an empty list still gets a valid block (the core rejects a zero count)."""
+    """Build an ``fm_sparkline_t`` array; an empty list still gets a valid block (the core rejects a zero count)."""
     ptr = scope.struct_array(S.SPARKLINE, max(len(sparklines), 1))
     for i, item in enumerate(sparklines):
         base = ptr + i * S.SPARKLINE.size
@@ -3950,8 +3950,8 @@ def _read_struct(fn, layout: S.Struct, *args) -> Dict[str, object]:
         return layout.unpack(LIB, ptr)
 
 
-def _read_chart_title(d: Dict[str, object]) -> ChartTitleInfo:
-    return ChartTitleInfo(
+def _read_chart_title(d: Dict[str, object]) -> ChartTitle:
+    return ChartTitle(
         kind=_enum(ChartTitleKind, d["kind"]), text=LIB.read_cstr(d["text"]), formula=LIB.read_cstr(d["formula"])
     )
 
@@ -4001,17 +4001,17 @@ def _read_chart_data_source(chart: int, plot: int, series: int, role: int, d: Di
     literal: List[Union[float, str]] = []
     if kind == "literal":
         for i in range(d["literal_count"]):
-            point = _read_struct(LIB.fm_chart_series_literal_at, S.CHART_LITERAL, chart, plot, series, role, i)
+            point = _read_struct(LIB.fm_chart_get_series_literal_at, S.CHART_LITERAL, chart, plot, series, role, i)
             literal.append(LIB.read_cstr(point["text"]) if point["is_text"] else point["number"])
     return ChartDataSource(kind=kind, formula=LIB.read_cstr(d["formula"]), literal=literal)
 
 
 def _read_chart_series(chart: int, plot: int, series: int) -> ChartSeriesInfo:
-    d = _read_struct(LIB.fm_chart_series_at, S.CHART_SERIES, chart, plot, series)
+    d = _read_struct(LIB.fm_chart_get_series_at, S.CHART_SERIES, chart, plot, series)
     sources = {key: _read_chart_data_source(chart, plot, series, role, d[key]) for role, key in enumerate(_CHART_ROLES)}
     points: List[ChartPointInfo] = []
     for i in range(d["point_count"]):
-        p = _read_struct(LIB.fm_chart_series_point_at, S.CHART_POINT, chart, plot, series, i)
+        p = _read_struct(LIB.fm_chart_get_series_point_at, S.CHART_POINT, chart, plot, series, i)
         points.append(
             ChartPointInfo(
                 idx=p["idx"],
@@ -4035,7 +4035,7 @@ def _read_chart_series(chart: int, plot: int, series: int) -> ChartSeriesInfo:
 
 
 def _read_chart_plot(chart: int, plot: int) -> ChartPlotInfo:
-    d = _read_struct(LIB.fm_chart_plot_at, S.CHART_PLOT, chart, plot)
+    d = _read_struct(LIB.fm_chart_get_plot_at, S.CHART_PLOT, chart, plot)
     return ChartPlotInfo(
         type=_enum(ChartPlotType, d["type"]),
         chartex_layout=LIB.read_cstr(d["chartex_layout"]) or None,
@@ -4047,7 +4047,7 @@ def _read_chart_plot(chart: int, plot: int) -> ChartPlotInfo:
         hole_size=d["hole_size"] if d["has_hole_size"] else None,
         first_slice_angle=d["first_slice_angle"] if d["has_first_slice_angle"] else None,
         axis_ids=[
-            _read_count(LIB.fm_chart_plot_axis_id_at, chart, _uint(plot, "plot"), _uint(i, "idx"))
+            _read_count(LIB.fm_chart_get_plot_axis_id_at, chart, _uint(plot, "plot"), _uint(i, "idx"))
             for i in range(d["axis_id_count"])
         ],
         series=[_read_chart_series(chart, plot, i) for i in range(d["series_count"])],
@@ -4055,7 +4055,7 @@ def _read_chart_plot(chart: int, plot: int) -> ChartPlotInfo:
 
 
 def _read_chart_axis(chart: int, idx: int) -> ChartAxisInfo:
-    d = _read_struct(LIB.fm_chart_axis_at, S.CHART_AXIS, chart, idx)
+    d = _read_struct(LIB.fm_chart_get_axis_at, S.CHART_AXIS, chart, idx)
     return ChartAxisInfo(
         id=d["id"],
         kind=_enum(ChartAxisKind, d["kind"]),
@@ -4081,7 +4081,7 @@ def _read_chart_axis(chart: int, idx: int) -> ChartAxisInfo:
 
 def _read_chart(chart: int) -> ChartInfo:
     """Decode an open ``fm_chart_t`` handle."""
-    d = _read_struct(LIB.fm_chart_info, S.CHART_INFO, chart)
+    d = _read_struct(LIB.fm_chart_get_info, S.CHART_INFO, chart)
     source = None
     if d["source_range"]:
         source = ChartSourceInfo(
@@ -4103,7 +4103,7 @@ def _read_chart(chart: int) -> ChartInfo:
             position=_enum(ChartLegendPosition, d["legend_position"]),
             overlay=bool(d["legend_overlay"]),
             hidden_series=[
-                _read_count(LIB.fm_chart_legend_hidden_at, chart, _uint(i, "idx"))
+                _read_count(LIB.fm_chart_get_legend_hidden_at, chart, _uint(i, "idx"))
                 for i in range(d["legend_hidden_count"])
             ],
         ),
@@ -4115,7 +4115,7 @@ def _read_chart(chart: int) -> ChartInfo:
         plots=[_read_chart_plot(chart, i) for i in range(d["plot_count"])],
         axes=[_read_chart_axis(chart, i) for i in range(d["axis_count"])],
         hidden_categories=[
-            _read_count(LIB.fm_chart_hidden_category_at, chart, _uint(i, "idx"))
+            _read_count(LIB.fm_chart_get_hidden_category_at, chart, _uint(i, "idx"))
             for i in range(d["hidden_category_count"])
         ],
         source=source,
@@ -4133,7 +4133,7 @@ def _read_chart_data_array(ptr: int, count: int, fmt: str, width: int) -> Option
 
 def _read_chart_data(data: int) -> ChartData:
     """Decode an open ``fm_chart_data_t`` handle."""
-    info = _read_struct(LIB.fm_chart_data_info, S.CHART_DATA_INFO, data)
+    info = _read_struct(LIB.fm_chart_data_get_info, S.CHART_DATA_INFO, data)
     labels: List[str] = []
     values: List[float] = []
     with _ArgScope() as scope:
@@ -4141,31 +4141,32 @@ def _read_chart_data(data: int) -> ChartData:
         value_out = scope.alloc(8)
         for i in range(info["category_label_count"]):
             _check(
-                LIB.fm_chart_data_category_at(data, _uint(i, "idx"), label_out, value_out), "fm_chart_data_category_at"
+                LIB.fm_chart_data_get_category_at(data, _uint(i, "idx"), label_out, value_out),
+                "fm_chart_data_get_category_at",
             )
             labels.append(LIB.read_cstr(LIB.read_u32(label_out)))
             values.append(LIB.read_f64(value_out))
         levels: List[List[str]] = []
         for level in range(info["category_level_count"]):
-            size = _read_count(LIB.fm_chart_data_category_level_size, data, _uint(level, "level"))
+            size = _read_count(LIB.fm_chart_data_get_category_level_size, data, _uint(level, "level"))
             names: List[str] = []
             for i in range(size):
                 _check(
-                    LIB.fm_chart_data_category_level_at(data, _uint(level, "level"), _uint(i, "idx"), label_out),
-                    "fm_chart_data_category_level_at",
+                    LIB.fm_chart_data_get_category_level_at(data, _uint(level, "level"), _uint(i, "idx"), label_out),
+                    "fm_chart_data_get_category_level_at",
                 )
                 names.append(LIB.read_cstr(LIB.read_u32(label_out)))
             levels.append(names)
 
     series: List[ChartDataSeries] = []
     for i in range(info["series_count"]):
-        s = _read_struct(LIB.fm_chart_data_series_at, S.CHART_DATA_SERIES, data, i)
-        points = _read_struct(LIB.fm_chart_data_series_points, S.CHART_DATA_POINTS, data, i)
+        s = _read_struct(LIB.fm_chart_data_get_series_at, S.CHART_DATA_SERIES, data, i)
+        points = _read_struct(LIB.fm_chart_data_get_series_points, S.CHART_DATA_POINTS, data, i)
         n = points["count"]
         ranges = ChartSeriesRanges()
         for role, key in enumerate(_CHART_ROLES):
             for j in range(s["range_count"][role]):
-                r = _read_struct(LIB.fm_chart_data_range_at, S.CHART_SHEET_RANGE, data, i, role, j)
+                r = _read_struct(LIB.fm_chart_data_get_range_at, S.CHART_SHEET_RANGE, data, i, role, j)
                 getattr(ranges, key).append(ChartSheetRange(**r))
         series.append(
             ChartDataSeries(
@@ -4197,23 +4198,23 @@ def _read_chart_data(data: int) -> ChartData:
         axis_title_texts=[
             ChartAxisTitleText(axis_id=t["axis_id"], text=LIB.read_cstr(t["text"]))
             for t in (
-                _read_struct(LIB.fm_chart_data_axis_title_at, S.CHART_AXIS_TITLE_TEXT, data, i)
+                _read_struct(LIB.fm_chart_data_get_axis_title_at, S.CHART_AXIS_TITLE_TEXT, data, i)
                 for i in range(info["axis_title_count"])
             )
         ],
         unresolved=[
             ChartUnresolved(series_idx=u["series_idx"], source=LIB.read_cstr(u["source"]), axis_id=u["axis_id"])
             for u in (
-                _read_struct(LIB.fm_chart_data_unresolved_at, S.CHART_UNRESOLVED, data, i)
+                _read_struct(LIB.fm_chart_data_get_unresolved_at, S.CHART_UNRESOLVED, data, i)
                 for i in range(info["unresolved_count"])
             )
         ],
     )
 
 
-def _title_fields(title: Union[str, ChartTitleInfo], scope: _ArgScope) -> Dict[str, object]:
-    """Encode a title given as its text or as a :class:`ChartTitleInfo` (``fm_chart_title_t``)."""
-    if isinstance(title, ChartTitleInfo):
+def _title_fields(title: Union[str, ChartTitle], scope: _ArgScope) -> Dict[str, object]:
+    """Encode a title given as its text or as a :class:`ChartTitle` (``fm_chart_title_t``)."""
+    if isinstance(title, ChartTitle):
         return {
             "kind": _sint(title.kind, "kind"),
             "text": scope.cstr(title.text),
@@ -4359,7 +4360,7 @@ def _read_owned_buffer(fn, *args, default_op: str = "save") -> bytes:
             return LIB.read_bytes(data_ptr, data_len)
         finally:
             if data_ptr:
-                LIB.fm_buffer_free(data_ptr)
+                LIB.fm_buffer_destroy(data_ptr)
 
 
 def _pack_merge_array(ranges: Sequence[MergeRange], scope: _ArgScope) -> int:
@@ -4402,7 +4403,7 @@ def _write_value_input(value: Value, value_ptr: int, scope: _ArgScope) -> None:
 
 
 def _pack_mentions(mentions: Sequence[Mention], scope: _ArgScope) -> int:
-    """Pack ``mentions`` into a contiguous ``fm_mention`` array (0 when empty)."""
+    """Pack ``mentions`` into a contiguous ``fm_mention_t`` array (0 when empty)."""
     if not mentions:
         return 0
     base = scope.struct_array(S.MENTION, len(mentions))
@@ -4531,7 +4532,7 @@ def _pack_sort_condition(ptr: int, cond: AutoFilterSortCondition, scope: _ArgSco
 
 
 def _pack_auto_filter(ptr: int, af: AutoFilter, scope: _ArgScope) -> None:
-    """Fill the ``fm_auto_filter`` at ``ptr``; every nested buffer is allocated through ``scope``."""
+    """Fill the ``fm_auto_filter_t`` at ``ptr``; every nested buffer is allocated through ``scope``."""
     S.AUTO_FILTER.pack(
         LIB,
         ptr,
@@ -4676,8 +4677,8 @@ class Workbook:
         wb = cls()
         with _ArgScope() as scope:
             out_ptr = scope.out_ptr()
-            status = LIB.fm_workbook_create(out_ptr)
-            _check(status, "fm_workbook_create")
+            status = LIB.fm_workbook_create_default(out_ptr)
+            _check(status, "fm_workbook_create_default")
             wb._handle = LIB.read_u32(out_ptr)
         return wb
 
@@ -4687,7 +4688,7 @@ class Workbook:
 
         ``profile_id`` has the form ``{mac,win}-365-<locale>`` (see
         :meth:`set_excel_profile_id`). The workbook carries that profile as
-        its :meth:`excel_profile_id` and takes the profile's locale defaults:
+        its :meth:`get_excel_profile_id` and takes the profile's locale defaults:
         body font (name, charset, minor theme scheme), phonetic font (font 1,
         ja/ko/zh only), Normal style name, vertical alignment, first sheet
         name, row height, margins and phonetic settings. ``mac-*`` values are
@@ -4777,7 +4778,7 @@ class Workbook:
         """``True`` while the handle is still alive."""
         return self._handle != 0
 
-    def memory_usage(self) -> int:
+    def get_memory_usage(self) -> int:
         """Return an estimate of the workbook's heap footprint, in bytes.
 
         Intended for a host that pools workbooks and needs a size to
@@ -4794,7 +4795,7 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
-            _check(LIB.fm_workbook_memory_usage(h, out), "fm_workbook_memory_usage")
+            _check(LIB.fm_workbook_get_memory_usage(h, out), "fm_workbook_get_memory_usage")
             return LIB.read_u32(out)
 
     def _require(self) -> int:
@@ -4826,12 +4827,12 @@ class Workbook:
             return self._handle
 
     # -- Sheets ------------------------------------------------------------
-    def sheet_count(self) -> int:
+    def get_sheet_count(self) -> int:
         """Number of sheets in the workbook."""
         h = self._require()
-        return int(LIB.fm_workbook_sheet_count(h))
+        return int(LIB.fm_workbook_get_sheet_count(h))
 
-    def active_sheet(self) -> int:
+    def get_active_sheet(self) -> int:
         """Index of the active sheet (``activeTab`` of the first workbook view).
 
         Without workbook views (an XLSB load) the first tab-selected sheet;
@@ -4852,14 +4853,14 @@ class Workbook:
         h = self._require()
         _check(LIB.fm_workbook_set_active_sheet(h, _uint(index, "index")), "fm_workbook_set_active_sheet")
 
-    def sheet_name(self, index: int) -> str:
+    def get_sheet_name(self, index: int) -> str:
         """Display name (UTF-8) of the sheet at ``index``."""
         h = self._require()
         return _read_cstr_out(
-            LIB.fm_workbook_sheet_name,
+            LIB.fm_workbook_get_sheet_name,
             h,
             _uint(index, "index"),
-            default_op="fm_workbook_sheet_name",
+            default_op="fm_workbook_get_sheet_name",
         )
 
     def add_sheet(self, name: str) -> None:
@@ -4877,10 +4878,10 @@ class Workbook:
         ``sheet``, ``row`` and ``col`` are all 0-based.
         """
         h = self._require()
-        status = LIB.fm_workbook_set_number(
+        status = LIB.fm_sheet_set_number(
             h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), float(value)
         )
-        _check(status, "fm_workbook_set_number")
+        _check(status, "fm_sheet_set_number")
 
     def set_bool(self, sheet: int, row: int, col: int, value: bool) -> None:
         """Store the boolean ``value`` at ``(sheet, row, col)``.
@@ -4888,10 +4889,10 @@ class Workbook:
         ``sheet``, ``row`` and ``col`` are all 0-based.
         """
         h = self._require()
-        status = LIB.fm_workbook_set_bool(
+        status = LIB.fm_sheet_set_bool(
             h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), 1 if value else 0
         )
-        _check(status, "fm_workbook_set_bool")
+        _check(status, "fm_sheet_set_bool")
 
     def set_error(self, sheet: int, row: int, col: int, error_code: int) -> None:
         """Store an Excel cell error at ``(sheet, row, col)``.
@@ -4903,10 +4904,10 @@ class Workbook:
         ordinals come back out through :attr:`Value.error_code`.
         """
         h = self._require()
-        status = LIB.fm_workbook_set_error(
+        status = LIB.fm_sheet_set_error(
             h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), _sint(error_code, "error")
         )
-        _check(status, "fm_workbook_set_error")
+        _check(status, "fm_sheet_set_error")
 
     def set_text(self, sheet: int, row: int, col: int, value: str) -> None:
         """Store the string ``value`` at ``(sheet, row, col)``.
@@ -4918,10 +4919,10 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             text_ptr = scope.cstr(value)
-            status = LIB.fm_workbook_set_text(
+            status = LIB.fm_sheet_set_text(
                 h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), text_ptr
             )
-            _check(status, "fm_workbook_set_text")
+            _check(status, "fm_sheet_set_text")
 
     def set_blank(self, sheet: int, row: int, col: int) -> None:
         """Clear the cell at ``(sheet, row, col)``.
@@ -4930,8 +4931,8 @@ class Workbook:
         stored value or formula; cell formatting is unaffected.
         """
         h = self._require()
-        status = LIB.fm_workbook_set_blank(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"))
-        _check(status, "fm_workbook_set_blank")
+        status = LIB.fm_sheet_set_blank(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"))
+        _check(status, "fm_sheet_set_blank")
 
     def set_formula(self, sheet: int, row: int, col: int, formula: str) -> None:
         """Store the formula ``formula`` at ``(sheet, row, col)``.
@@ -4943,12 +4944,12 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             formula_ptr = scope.cstr(formula)
-            status = LIB.fm_workbook_set_formula(
+            status = LIB.fm_sheet_set_formula(
                 h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), formula_ptr
             )
-            _check(status, "fm_workbook_set_formula")
+            _check(status, "fm_sheet_set_formula")
 
-    def set_phonetic(self, sheet: int, row: int, col: int, text: str) -> None:
+    def set_cell_phonetic(self, sheet: int, row: int, col: int, text: str) -> None:
         """Set the cell's phonetic guide (OOXML ``<rPh>``, furigana).
 
         ``sheet``, ``row`` and ``col`` are all 0-based. An empty ``text``
@@ -4958,16 +4959,16 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             text_ptr = scope.cstr(text)
-            status = LIB.fm_workbook_set_cell_phonetic(
+            status = LIB.fm_sheet_set_cell_phonetic(
                 h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), text_ptr
             )
-            _check(status, "fm_workbook_set_cell_phonetic")
+            _check(status, "fm_sheet_set_cell_phonetic")
 
-    def set_phonetic_runs(self, sheet: int, row: int, col: int, runs: Sequence[PhoneticRun]) -> None:
+    def set_cell_phonetic_runs(self, sheet: int, row: int, col: int, runs: Sequence[PhoneticRun]) -> None:
         """Set the cell's phonetic guide as one ``<rPh>`` block per run.
 
         ``sheet``, ``row`` and ``col`` are all 0-based. An empty ``runs``
-        removes the guide. Unlike :meth:`set_phonetic`, which annotates the
+        removes the guide. Unlike :meth:`set_cell_phonetic`, which annotates the
         whole cell, this keeps the spans each reading covers -- the
         difference ``PHONETIC`` and a partially annotated cell depend on.
 
@@ -4977,7 +4978,7 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             ptr = _pack_phonetic_run_array(runs, scope)
-            status = LIB.fm_workbook_set_cell_phonetic_runs(
+            status = LIB.fm_sheet_set_cell_phonetic_runs(
                 h,
                 _uint(sheet, "sheet_index"),
                 _uint(row, "row"),
@@ -4985,23 +4986,23 @@ class Workbook:
                 ptr,
                 _uint(len(runs), "count"),
             )
-            _check(status, "fm_workbook_set_cell_phonetic_runs")
+            _check(status, "fm_sheet_set_cell_phonetic_runs")
 
     def get_phonetic_runs(self, sheet: int, row: int, col: int) -> List[PhoneticRun]:
         """Return the cell's ``<rPh>`` blocks, spans included.
 
         ``sheet``, ``row`` and ``col`` are all 0-based. An unannotated cell
-        yields an empty list. :meth:`get_phonetic` returns the same readings
+        yields an empty list. :meth:`get_cell_phonetic` returns the same readings
         concatenated, without the spans.
         """
         h = self._require()
         count = _read_count(
-            LIB.fm_workbook_get_cell_phonetic_run_count,
+            LIB.fm_sheet_get_cell_phonetic_run_count,
             h,
             _uint(sheet, "sheet_index"),
             _uint(row, "row"),
             _uint(col, "col"),
-            default_op="fm_workbook_get_cell_phonetic_run_count",
+            default_op="fm_sheet_get_cell_phonetic_run_count",
         )
         out: List[PhoneticRun] = []
         with _ArgScope() as scope:
@@ -5009,7 +5010,7 @@ class Workbook:
             for i in range(count):
                 S.zero_struct(LIB, S.PHONETIC_RUN, run_ptr)
                 _check(
-                    LIB.fm_workbook_get_cell_phonetic_run(
+                    LIB.fm_sheet_get_cell_phonetic_run(
                         h,
                         _uint(sheet, "sheet_index"),
                         _uint(row, "row"),
@@ -5017,7 +5018,7 @@ class Workbook:
                         _uint(i, "run_index"),
                         run_ptr,
                     ),
-                    "fm_workbook_get_cell_phonetic_run",
+                    "fm_sheet_get_cell_phonetic_run",
                 )
                 fields = S.PHONETIC_RUN.unpack(LIB, run_ptr)
                 # Decoded before the next read: the text points into the
@@ -5031,18 +5032,18 @@ class Workbook:
                 )
         return out
 
-    def set_phonetic_properties(self, sheet: int, row: int, col: int, properties: PhoneticProperties) -> None:
+    def set_cell_phonetic_properties(self, sheet: int, row: int, col: int, properties: PhoneticProperties) -> None:
         """Set how the cell's phonetic guide renders.
 
         ``sheet``, ``row`` and ``col`` are all 0-based. Independent of
-        :meth:`set_phonetic_runs` in both directions: editing the readings
+        :meth:`set_cell_phonetic_runs` in both directions: editing the readings
         does not reset the rendering, and this does not touch the readings.
         Only observable on a cell that has runs, and every value-setting
         method clears both, so call it after the cell's text.
         """
         h = self._require()
         _check(
-            LIB.fm_workbook_set_cell_phonetic_properties(
+            LIB.fm_sheet_set_cell_phonetic_properties(
                 h,
                 _uint(sheet, "sheet_index"),
                 _uint(row, "row"),
@@ -5051,10 +5052,10 @@ class Workbook:
                 _uint(properties.type, "type"),
                 _uint(properties.alignment, "alignment"),
             ),
-            "fm_workbook_set_cell_phonetic_properties",
+            "fm_sheet_set_cell_phonetic_properties",
         )
 
-    def get_phonetic_properties(self, sheet: int, row: int, col: int) -> PhoneticProperties:
+    def get_cell_phonetic_properties(self, sheet: int, row: int, col: int) -> PhoneticProperties:
         """Return how the cell's phonetic guide renders.
 
         ``sheet``, ``row`` and ``col`` are all 0-based. A cell with no
@@ -5066,7 +5067,7 @@ class Workbook:
             type_ptr = scope.out_ptr()
             alignment_ptr = scope.out_ptr()
             _check(
-                LIB.fm_workbook_get_cell_phonetic_properties(
+                LIB.fm_sheet_get_cell_phonetic_properties(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(row, "row"),
@@ -5075,7 +5076,7 @@ class Workbook:
                     type_ptr,
                     alignment_ptr,
                 ),
-                "fm_workbook_get_cell_phonetic_properties",
+                "fm_sheet_get_cell_phonetic_properties",
             )
             return PhoneticProperties(
                 font_id=LIB.read_u32(font_ptr),
@@ -5083,18 +5084,18 @@ class Workbook:
                 alignment=LIB.read_u32(alignment_ptr),
             )
 
-    def has_phonetic_properties(self, sheet: int, row: int, col: int) -> bool:
+    def has_cell_phonetic_properties(self, sheet: int, row: int, col: int) -> bool:
         """Whether the cell's phonetic properties are explicit.
 
         True when they came from a ``<phoneticPr>`` element or
-        :meth:`set_phonetic_properties` (an all-zero triple included), false
+        :meth:`set_cell_phonetic_properties` (an all-zero triple included), false
         for the state an absent element resolves to. The JS bindings report
         it as ``present`` on the phonetic-properties result.
         """
         h = self._require()
         return bool(
             _read_count(
-                LIB.fm_workbook_has_cell_phonetic_properties,
+                LIB.fm_sheet_has_cell_phonetic_properties,
                 h,
                 _uint(sheet, "sheet_index"),
                 _uint(row, "row"),
@@ -5102,12 +5103,12 @@ class Workbook:
             )
         )
 
-    def get_show_phonetic(self, sheet: int, row: int, col: int) -> bool:
+    def get_cell_show_phonetic(self, sheet: int, row: int, col: int) -> bool:
         """Whether the cell shows its phonetic guide (``<c ph="1">``)."""
         h = self._require()
         return bool(
             _read_count(
-                LIB.fm_workbook_get_cell_show_phonetic,
+                LIB.fm_sheet_get_cell_show_phonetic,
                 h,
                 _uint(sheet, "sheet_index"),
                 _uint(row, "row"),
@@ -5115,7 +5116,7 @@ class Workbook:
             )
         )
 
-    def set_show_phonetic(self, sheet: int, row: int, col: int, show: bool) -> None:
+    def set_cell_show_phonetic(self, sheet: int, row: int, col: int, show: bool) -> None:
         """Set the cell's "Show Phonetic" display flag.
 
         Independent of the readings: value writes clear the readings but keep
@@ -5123,25 +5124,25 @@ class Workbook:
         """
         h = self._require()
         _check(
-            LIB.fm_workbook_set_cell_show_phonetic(
+            LIB.fm_sheet_set_cell_show_phonetic(
                 h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), 1 if show else 0
             ),
-            "fm_workbook_set_cell_show_phonetic",
+            "fm_sheet_set_cell_show_phonetic",
         )
 
-    def get_phonetic(self, sheet: int, row: int, col: int) -> str:
+    def get_cell_phonetic(self, sheet: int, row: int, col: int) -> str:
         """Return the cell's phonetic guide, or ``""`` when it has none.
 
         ``sheet``, ``row`` and ``col`` are all 0-based.
         """
         h = self._require()
         return _read_cstr_out(
-            LIB.fm_workbook_get_cell_phonetic,
+            LIB.fm_sheet_get_cell_phonetic,
             h,
             _uint(sheet, "sheet_index"),
             _uint(row, "row"),
             _uint(col, "col"),
-            default_op="fm_workbook_get_cell_phonetic",
+            default_op="fm_sheet_get_cell_phonetic",
         )
 
     # -- Cell read ---------------------------------------------------------
@@ -5155,10 +5156,10 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             value_ptr = scope.alloc(fm_value_t_size)
-            status = LIB.fm_workbook_get_value(
+            status = LIB.fm_sheet_get_value(
                 h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), value_ptr
             )
-            _check(status, "fm_workbook_get_value")
+            _check(status, "fm_sheet_get_value")
             return Value._from_wasm(value_ptr)
 
     # -- Ad-hoc array evaluation ------------------------------------------
@@ -5171,7 +5172,7 @@ class Workbook:
             formula_ptr = scope.cstr(formula)
             value_ptr = scope.alloc(fm_value_t_size)
             _check(
-                LIB.fm_workbook_evaluate_cf_formula(
+                LIB.fm_sheet_evaluate_cf_formula(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(row, "row"),
@@ -5181,7 +5182,7 @@ class Workbook:
                     formula_ptr,
                     value_ptr,
                 ),
-                "fm_workbook_evaluate_cf_formula",
+                "fm_sheet_evaluate_cf_formula",
             )
             return Value._from_wasm(value_ptr).boolean is True
 
@@ -5248,10 +5249,10 @@ class Workbook:
             formula_ptr = scope.cstr(formula)
             rows_ptr = scope.out_ptr()
             cols_ptr = scope.out_ptr()
-            status = LIB.fm_workbook_evaluate_formula_array(
+            status = LIB.fm_sheet_evaluate_formula_array(
                 h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), formula_ptr, rows_ptr, cols_ptr
             )
-            _check(status, "fm_workbook_evaluate_formula_array")
+            _check(status, "fm_sheet_evaluate_formula_array")
             return LIB.read_u32(rows_ptr), LIB.read_u32(cols_ptr)
 
     # -- Recalc ------------------------------------------------------------
@@ -5354,7 +5355,7 @@ class Workbook:
                 data = b"" if data_len == 0 or data_ptr == 0 else LIB.read_bytes(data_ptr, data_len)
             finally:
                 if data_ptr:
-                    LIB.fm_buffer_free(data_ptr)
+                    LIB.fm_buffer_destroy(data_ptr)
             d = S.SAVE_DIAGNOSTICS.unpack(LIB, diag_ptr)
             return SaveDiagnostics(
                 bytes=data,
@@ -5365,12 +5366,12 @@ class Workbook:
                 renumbered_part_count=d["renumbered_part_count"],
             )
 
-    def read_diagnostics(self) -> ReadDiagnostics:
+    def get_diagnostics(self) -> ReadDiagnostics:
         """Return the loss counters captured when this workbook was loaded."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.READ_DIAGNOSTICS)
-            _check(LIB.fm_workbook_read_diagnostics(h, ptr), "fm_workbook_read_diagnostics")
+            _check(LIB.fm_workbook_get_diagnostics(h, ptr), "fm_workbook_get_diagnostics")
             d = S.READ_DIAGNOSTICS.unpack(LIB, ptr)
             return ReadDiagnostics(
                 undecoded_formula_count=d["undecoded_formula_count"],
@@ -5392,7 +5393,7 @@ class Workbook:
         a cell enumeration after a workbook mutation.
         """
         h = self._require()
-        n = _read_count(LIB.fm_workbook_cell_count, h, _uint(sheet, "sheet_index"))
+        n = _read_count(LIB.fm_sheet_get_cell_count, h, _uint(sheet, "sheet_index"))
         # Scratch: row(4) + col(4) + formula_ptr(4) + value(16) = 28 bytes.
         # Allocate them as separate slots so the ABI's
         # individual out-parameter contract is respected.
@@ -5406,10 +5407,10 @@ class Workbook:
             LIB.write_bytes(formula_ptr, b"\x00\x00\x00\x00")
             for i in range(n):
                 h = self._check_live()
-                status = LIB.fm_workbook_cell_at(
+                status = LIB.fm_sheet_get_cell_at(
                     h, _uint(sheet, "sheet_index"), _uint(i, "idx"), row_ptr, col_ptr, formula_ptr, value_ptr
                 )
-                _check(status, "fm_workbook_cell_at")
+                _check(status, "fm_sheet_get_cell_at")
                 row = LIB.read_u32(row_ptr)
                 col = LIB.read_u32(col_ptr)
                 formula_addr = LIB.read_u32(formula_ptr)
@@ -5417,10 +5418,10 @@ class Workbook:
                 value = Value._from_wasm(value_ptr)
                 yield Cell(row=row, col=col, formula=formula, value=value)
 
-    def iter_defined_names(self) -> Iterator[DefinedName]:
+    def list_defined_names(self) -> Iterator[DefinedName]:
         """Iterate over every defined name in declaration order."""
         h = self._require()
-        n = int(LIB.fm_workbook_defined_name_count(h))
+        n = int(LIB.fm_workbook_get_defined_name_count(h))
         # Scratch is hoisted out of the loop (as in iter_cells): each
         # LIB.alloc/free is a locked WASM call, so per-item slots would
         # make the walk cost O(n) allocator round-trips on top of the
@@ -5433,11 +5434,11 @@ class Workbook:
             hidden_ptr = scope.out_ptr()
             for i in range(n):
                 h = self._check_live()
-                status = LIB.fm_workbook_defined_name_at(h, _uint(i, "idx"), name_ptr, formula_ptr, local_sheet_ptr)
-                _check(status, "fm_workbook_defined_name_at")
+                status = LIB.fm_workbook_get_defined_name_at(h, _uint(i, "idx"), name_ptr, formula_ptr, local_sheet_ptr)
+                _check(status, "fm_workbook_get_defined_name_at")
                 _check(
-                    LIB.fm_workbook_defined_name_attrs_at(h, _uint(i, "idx"), comment_ptr, hidden_ptr),
-                    "fm_workbook_defined_name_attrs_at",
+                    LIB.fm_workbook_get_defined_name_attrs_at(h, _uint(i, "idx"), comment_ptr, hidden_ptr),
+                    "fm_workbook_get_defined_name_attrs_at",
                 )
                 name = LIB.read_cstr(LIB.read_u32(name_ptr))
                 formula = LIB.read_cstr(LIB.read_u32(formula_ptr))
@@ -5453,7 +5454,7 @@ class Workbook:
     def iter_tables(self) -> Iterator[Table]:
         """Iterate over every table in declaration order."""
         h = self._require()
-        n = int(LIB.fm_workbook_table_count(h))
+        n = int(LIB.fm_workbook_get_table_count(h))
         # Scratch hoisted out of the loop; see iter_defined_names.
         with _ArgScope() as scope:
             name_ptr = scope.out_ptr()
@@ -5464,21 +5465,21 @@ class Workbook:
             column_ptr = scope.struct(S.TABLE_COLUMN_INFO)
             for i in range(n):
                 h = self._check_live()
-                status = LIB.fm_workbook_table_at(h, _uint(i, "idx"), name_ptr, display_ptr, ref_ptr, sheet_ptr)
-                _check(status, "fm_workbook_table_at")
+                status = LIB.fm_workbook_get_table(h, _uint(i, "idx"), name_ptr, display_ptr, ref_ptr, sheet_ptr)
+                _check(status, "fm_workbook_get_table")
                 name = LIB.read_cstr(LIB.read_u32(name_ptr))
                 display = LIB.read_cstr(LIB.read_u32(display_ptr))
                 ref = LIB.read_cstr(LIB.read_u32(ref_ptr))
                 sheet = LIB.read_u32(sheet_ptr)
                 S.zero_struct(LIB, S.TABLE_INFO, info_ptr)
-                _check(LIB.fm_workbook_table_get_info(h, _uint(i, "index"), info_ptr), "fm_workbook_table_get_info")
+                _check(LIB.fm_workbook_get_table_info(h, _uint(i, "index"), info_ptr), "fm_workbook_get_table_info")
                 info = S.TABLE_INFO.unpack(LIB, info_ptr)
                 columns = []
                 for c in range(info["column_count"]):
                     S.zero_struct(LIB, S.TABLE_COLUMN_INFO, column_ptr)
                     _check(
-                        LIB.fm_workbook_table_get_column(h, _uint(i, "index"), _uint(c, "column"), column_ptr),
-                        "fm_workbook_table_get_column",
+                        LIB.fm_workbook_get_table_column(h, _uint(i, "index"), _uint(c, "column"), column_ptr),
+                        "fm_workbook_get_table_column",
                     )
                     col = S.TABLE_COLUMN_INFO.unpack(LIB, column_ptr)
                     columns.append(
@@ -5505,7 +5506,7 @@ class Workbook:
                     columns=tuple(columns),
                 )
 
-    def table_create(
+    def add_table(
         self,
         sheet: int,
         ref: str,
@@ -5545,7 +5546,7 @@ class Workbook:
                 LIB.write_bytes(array_ptr, b"".join(struct.pack("<I", p) for p in name_ptrs))
             out = scope.out_ptr()
             _check(
-                LIB.fm_workbook_table_create(
+                LIB.fm_workbook_add_table(
                     h,
                     _uint(sheet, "sheet_index"),
                     ref_ptr,
@@ -5558,7 +5559,7 @@ class Workbook:
                     1 if totals_row else 0,
                     out,
                 ),
-                "fm_workbook_table_create",
+                "fm_workbook_add_table",
             )
             index = LIB.read_u32(out)
         toggles = (show_first_column, show_last_column, show_row_stripes, show_column_stripes)
@@ -5566,7 +5567,7 @@ class Workbook:
             try:
                 self._table_apply_style_toggles(index, toggles)
             except BaseException:
-                self.table_remove(index)
+                self.remove_table(index)
                 raise
         return index
 
@@ -5580,9 +5581,9 @@ class Workbook:
             current.show_column_stripes,
         )
         merged = [existing[i] if t is None else t for i, t in enumerate(toggles)]
-        self.table_set_style_info(index, current.style_name, *merged)
+        self.set_table_style_info(index, current.style_name, *merged)
 
-    def table_set_style_info(
+    def set_table_style_info(
         self,
         index: int,
         style_name: Optional[str],
@@ -5599,7 +5600,7 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             _check(
-                LIB.fm_workbook_table_set_style_info(
+                LIB.fm_workbook_set_table_style_info(
                     h,
                     _uint(index, "index"),
                     scope.nonempty_cstr(style_name),
@@ -5608,10 +5609,10 @@ class Workbook:
                     1 if show_row_stripes else 0,
                     1 if show_column_stripes else 0,
                 ),
-                "fm_workbook_table_set_style_info",
+                "fm_workbook_set_table_style_info",
             )
 
-    def table_rename(self, index: int, name: str, display_name: Optional[str] = None) -> None:
+    def rename_table(self, index: int, name: str, display_name: Optional[str] = None) -> None:
         """Rename table ``index``; ``display_name=None`` uses ``name`` for both.
 
         Names must be non-empty and unique case-insensitively across tables.
@@ -5624,11 +5625,11 @@ class Workbook:
             name_ptr = scope.cstr(name)
             display_ptr = scope.opt_cstr(display_name)
             _check(
-                LIB.fm_workbook_table_rename(h, _uint(index, "index"), name_ptr, display_ptr),
-                "fm_workbook_table_rename",
+                LIB.fm_workbook_rename_table(h, _uint(index, "index"), name_ptr, display_ptr),
+                "fm_workbook_rename_table",
             )
 
-    def table_rename_column(self, index: int, column: int, name: str) -> str:
+    def rename_table_column(self, index: int, column: int, name: str) -> str:
         """Rename column ``column`` (0-based) of table ``index`` and return the final name.
 
         As typing over the header cell does: an empty ``name`` takes the
@@ -5645,12 +5646,12 @@ class Workbook:
             name_ptr = scope.cstr(name)
             out = scope.out_ptr()
             _check(
-                LIB.fm_workbook_table_rename_column(h, _uint(index, "index"), _uint(column, "column"), name_ptr, out),
-                "fm_workbook_table_rename_column",
+                LIB.fm_workbook_rename_table_column(h, _uint(index, "index"), _uint(column, "column"), name_ptr, out),
+                "fm_workbook_rename_table_column",
             )
             return LIB.read_cstr(LIB.read_u32(out))
 
-    def table_set_column_totals(
+    def set_table_column_totals(
         self,
         index: int,
         column: int,
@@ -5669,7 +5670,7 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             _check(
-                LIB.fm_workbook_table_set_column_totals(
+                LIB.fm_workbook_set_table_column_totals(
                     h,
                     _uint(index, "index"),
                     _uint(column, "column"),
@@ -5677,10 +5678,10 @@ class Workbook:
                     scope.nonempty_cstr(label),
                     scope.nonempty_cstr(formula),
                 ),
-                "fm_workbook_table_set_column_totals",
+                "fm_workbook_set_table_column_totals",
             )
 
-    def table_update(
+    def update_table(
         self,
         index: int,
         ref: str,
@@ -5702,10 +5703,10 @@ class Workbook:
         style; a new name keeps the four toggles, and an empty string removes
         ``<tableStyleInfo>`` -- unless a ``show_*`` toggle is also given, which
         writes the element back without a style name, as
-        :meth:`table_set_style_info` does. ``header_row=None`` / ``totals_row=None``
+        :meth:`set_table_style_info` does. ``header_row=None`` / ``totals_row=None``
         preserve those flags; turning the totals row on writes each column's
         totals cell. ``name`` / ``display_name`` rename the table as
-        :meth:`table_rename` does (``display_name`` follows ``name`` unless
+        :meth:`rename_table` does (``display_name`` follows ``name`` unless
         given). The update is all-or-nothing.
         """
         renaming = name is not None or display_name is not None
@@ -5716,7 +5717,7 @@ class Workbook:
                 next_display = display_name
             else:
                 next_display = name if name is not None else current.display_name
-            self.table_rename(index, next_name, next_display)
+            self.rename_table(index, next_name, next_display)
         try:
             self._table_update(index, ref, style_name, header_row, totals_row)
             toggles = (show_first_column, show_last_column, show_row_stripes, show_column_stripes)
@@ -5724,7 +5725,7 @@ class Workbook:
                 self._table_apply_style_toggles(index, toggles)
         except BaseException:
             if renaming:
-                self.table_rename(index, current.name, current.display_name)
+                self.rename_table(index, current.name, current.display_name)
             raise
 
     def _table_update(
@@ -5740,7 +5741,7 @@ class Workbook:
             ref_ptr = scope.cstr(ref)
             style_ptr = scope.opt_cstr(style_name)
             _check(
-                LIB.fm_workbook_table_update(
+                LIB.fm_workbook_update_table(
                     h,
                     _uint(index, "index"),
                     ref_ptr,
@@ -5748,25 +5749,25 @@ class Workbook:
                     _sint(_tristate(header_row), "header_row"),
                     _sint(_tristate(totals_row), "totals_row"),
                 ),
-                "fm_workbook_table_update",
+                "fm_workbook_update_table",
             )
 
-    def table_remove(self, index: int) -> None:
+    def remove_table(self, index: int) -> None:
         """Remove the table at ``index``."""
         h = self._require()
-        _check(LIB.fm_workbook_table_remove(h, _uint(index, "index")), "fm_workbook_table_remove")
+        _check(LIB.fm_workbook_remove_table(h, _uint(index, "index")), "fm_workbook_remove_table")
 
-    def iter_passthrough(self) -> Iterator[PassthroughPart]:
+    def list_passthroughs(self) -> Iterator[PassthroughPart]:
         """Iterate over passthrough OOXML part paths."""
         h = self._require()
-        n = int(LIB.fm_workbook_passthrough_count(h))
+        n = int(LIB.fm_workbook_get_passthrough_count(h))
         # Scratch hoisted out of the loop; see iter_defined_names.
         with _ArgScope() as scope:
             path_ptr = scope.out_ptr()
             for i in range(n):
                 h = self._check_live()
-                status = LIB.fm_workbook_passthrough_at(h, _uint(i, "idx"), path_ptr)
-                _check(status, "fm_workbook_passthrough_at")
+                status = LIB.fm_workbook_get_passthrough_at(h, _uint(i, "idx"), path_ptr)
+                _check(status, "fm_workbook_get_passthrough_at")
                 path = LIB.read_cstr(LIB.read_u32(path_ptr))
                 yield PassthroughPart(path=path)
 
@@ -5914,8 +5915,8 @@ class Workbook:
         """
         h = self._require()
         _check(
-            LIB.fm_workbook_insert_rows(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(count, "count")),
-            "fm_workbook_insert_rows",
+            LIB.fm_sheet_insert_rows(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(count, "count")),
+            "fm_sheet_insert_rows",
         )
 
     def delete_rows(self, sheet: int, row: int, count: int) -> None:
@@ -5931,8 +5932,8 @@ class Workbook:
         """
         h = self._require()
         _check(
-            LIB.fm_workbook_delete_rows(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(count, "count")),
-            "fm_workbook_delete_rows",
+            LIB.fm_sheet_delete_rows(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(count, "count")),
+            "fm_sheet_delete_rows",
         )
 
     def insert_cols(self, sheet: int, col: int, count: int) -> None:
@@ -5948,8 +5949,8 @@ class Workbook:
         """
         h = self._require()
         _check(
-            LIB.fm_workbook_insert_cols(h, _uint(sheet, "sheet"), _uint(col, "col"), _uint(count, "count")),
-            "fm_workbook_insert_cols",
+            LIB.fm_sheet_insert_cols(h, _uint(sheet, "sheet"), _uint(col, "col"), _uint(count, "count")),
+            "fm_sheet_insert_cols",
         )
 
     def delete_cols(self, sheet: int, col: int, count: int) -> None:
@@ -5965,17 +5966,17 @@ class Workbook:
         """
         h = self._require()
         _check(
-            LIB.fm_workbook_delete_cols(h, _uint(sheet, "sheet"), _uint(col, "col"), _uint(count, "count")),
-            "fm_workbook_delete_cols",
+            LIB.fm_sheet_delete_cols(h, _uint(sheet, "sheet"), _uint(col, "col"), _uint(count, "count")),
+            "fm_sheet_delete_cols",
         )
 
     # -- Calc policy / behaviour profile -----------------------------------
-    def calc_mode(self) -> CalcMode:
+    def get_calc_mode(self) -> CalcMode:
         """Return the workbook's calc mode (round-trip metadata)."""
         h = self._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
-            _check(LIB.fm_workbook_calc_mode(h, out), "fm_workbook_calc_mode")
+            _check(LIB.fm_workbook_get_calc_mode(h, out), "fm_workbook_get_calc_mode")
             return CalcMode(LIB.read_i32(out))
 
     def set_calc_mode(self, mode: "CalcMode | int") -> None:
@@ -5990,9 +5991,9 @@ class Workbook:
             _check(fn(h, out), op)
             return bool(LIB.read_i32(out))
 
-    def full_precision(self) -> bool:
+    def get_full_precision(self) -> bool:
         """Return ``<calcPr fullPrecision>``; false is "set precision as displayed" (metadata only)."""
-        return self._read_flag(LIB.fm_workbook_full_precision, "fm_workbook_full_precision")
+        return self._read_flag(LIB.fm_workbook_get_full_precision, "fm_workbook_get_full_precision")
 
     def set_full_precision(self, full_precision: bool) -> None:
         """Set ``<calcPr fullPrecision>``."""
@@ -6002,21 +6003,21 @@ class Workbook:
             "fm_workbook_set_full_precision",
         )
 
-    def calc_on_save(self) -> bool:
+    def get_calc_on_save(self) -> bool:
         """Return ``<calcPr calcOnSave>`` (default true)."""
-        return self._read_flag(LIB.fm_workbook_calc_on_save, "fm_workbook_calc_on_save")
+        return self._read_flag(LIB.fm_workbook_get_calc_on_save, "fm_workbook_get_calc_on_save")
 
     def set_calc_on_save(self, calc_on_save: bool) -> None:
         """Set ``<calcPr calcOnSave>``."""
         h = self._require()
         _check(LIB.fm_workbook_set_calc_on_save(h, 1 if calc_on_save else 0), "fm_workbook_set_calc_on_save")
 
-    def ref_mode(self) -> RefMode:
+    def get_ref_mode(self) -> RefMode:
         """Return ``<calcPr refMode>``: the reference notation formulas are shown in."""
         h = self._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
-            _check(LIB.fm_workbook_ref_mode(h, out), "fm_workbook_ref_mode")
+            _check(LIB.fm_workbook_get_ref_mode(h, out), "fm_workbook_get_ref_mode")
             return RefMode(LIB.read_i32(out))
 
     def set_ref_mode(self, mode: "RefMode | int") -> None:
@@ -6024,23 +6025,23 @@ class Workbook:
         h = self._require()
         _check(LIB.fm_workbook_set_ref_mode(h, _sint(mode, "mode")), "fm_workbook_set_ref_mode")
 
-    def date1904(self) -> bool:
+    def get_date1904(self) -> bool:
         """Return whether the workbook uses the 1904 date system."""
-        return self._read_flag(LIB.fm_workbook_date1904, "fm_workbook_date1904")
+        return self._read_flag(LIB.fm_workbook_get_date1904, "fm_workbook_get_date1904")
 
     def set_date1904(self, date1904: bool) -> None:
         """Switch the date system. Stored serials keep their numbers, so every date shifts by 1462 days."""
         h = self._require()
         _check(LIB.fm_workbook_set_date1904(h, 1 if date1904 else 0), "fm_workbook_set_date1904")
 
-    def pinned_now(self) -> "CivilTime | None":
+    def get_pinned_now(self) -> "CivilTime | None":
         """Return the pinned wall-clock reading, or ``None`` when the
         workbook follows the host clock (the default)."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.CIVIL_TIME)
             flag = scope.out_ptr()
-            _check(LIB.fm_workbook_pinned_now(h, ptr, flag), "fm_workbook_pinned_now")
+            _check(LIB.fm_workbook_get_pinned_now(h, ptr, flag), "fm_workbook_get_pinned_now")
             if LIB.read_i32(flag) == 0:
                 return None
             d = S.CIVIL_TIME.unpack(LIB, ptr)
@@ -6104,7 +6105,7 @@ class Workbook:
         h = self._require()
         _check(LIB.fm_workbook_clear_pinned_now(h), "fm_workbook_clear_pinned_now")
 
-    def excel_profile_id(
+    def get_excel_profile_id(
         self,
     ) -> ExcelProfileId:
         """Return the active Excel formula profile id.
@@ -6116,8 +6117,8 @@ class Workbook:
         with _ArgScope() as scope:
             out = scope.out_ptr()
             _check(
-                LIB.fm_workbook_excel_profile_id(h, out),
-                "fm_workbook_excel_profile_id",
+                LIB.fm_workbook_get_excel_profile_id(h, out),
+                "fm_workbook_get_excel_profile_id",
             )
             return cast(
                 ExcelProfileId,
@@ -6141,7 +6142,7 @@ class Workbook:
                 "fm_workbook_set_excel_profile_id",
             )
 
-    def file_name(self) -> str:
+    def get_file_name(self) -> str:
         """Return the file name the workbook is shown under, or ``""`` when unset.
 
         While set, every formula getter spells a reference to the workbook's
@@ -6151,11 +6152,11 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
-            _check(LIB.fm_workbook_file_name(h, out), "fm_workbook_file_name")
+            _check(LIB.fm_workbook_get_file_name(h, out), "fm_workbook_get_file_name")
             return LIB.read_cstr(LIB.read_u32(out)) or ""
 
     def set_file_name(self, name: str) -> None:
-        """Set :meth:`file_name`, extension included and without a directory; ``""`` unsets it.
+        """Set :meth:`get_file_name`, extension included and without a directory; ``""`` unsets it.
 
         Entered formulas then read ``Book.xlsx!Name`` and ``[Book.xlsx]Sheet1!A1``
         as this workbook and create no external link.
@@ -6174,7 +6175,7 @@ class Workbook:
     # Note: ``fm_workbook_set_iterative_progress`` (the per-sweep callback)
     # is intentionally NOT bound -- it takes a C function pointer that the
     # wasmtime-py host cannot synthesise into the module's function table.
-    def partial_recalc(
+    def recalc_viewport(
         self,
         sheet: int,
         first_row: int,
@@ -6199,22 +6200,22 @@ class Workbook:
                 },
             )
             _check(
-                LIB.fm_workbook_partial_recalc(h, vp, out),
-                "fm_workbook_partial_recalc",
+                LIB.fm_sheet_recalc_viewport(h, vp, out),
+                "fm_sheet_recalc_viewport",
             )
             return LIB.read_u32(out)
 
     # -- Lambda text -------------------------------------------------------
-    def lambda_text_at(self, sheet: int, row: int, col: int) -> str:
+    def get_lambda_text(self, sheet: int, row: int, col: int) -> str:
         """Render the lambda cached at ``(sheet, row, col)`` as text."""
         h = self._require()
         return _read_cstr_out(
-            LIB.fm_workbook_lambda_text_at,
+            LIB.fm_sheet_get_lambda_text,
             h,
             _uint(sheet, "sheet_index"),
             _uint(row, "row"),
             _uint(col, "col"),
-            default_op="fm_workbook_lambda_text_at",
+            default_op="fm_sheet_get_lambda_text",
         )
 
     # -- Merges ------------------------------------------------------------
@@ -6253,7 +6254,7 @@ class Workbook:
         h = self._require()
         return _read_count(LIB.fm_sheet_get_merge_count, h, _uint(sheet, "sheet"))
 
-    def get_merges(self, sheet: int) -> List[MergeRange]:
+    def list_merges(self, sheet: int) -> List[MergeRange]:
         """Return every merge range on ``sheet``."""
         h = self._require()
         n = self.merge_count(sheet)
@@ -6359,7 +6360,7 @@ class Workbook:
         h = self._require()
         return _read_count(LIB.fm_sheet_get_hyperlink_count, h, _uint(sheet, "sheet"))
 
-    def get_hyperlinks(self, sheet: int) -> List[Hyperlink]:
+    def list_hyperlinks(self, sheet: int) -> List[Hyperlink]:
         """Return every hyperlink on ``sheet``."""
         h = self._require()
         n = self.hyperlink_count(sheet)
@@ -6394,10 +6395,10 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.COMMENT)
-            status = LIB.fm_sheet_get_comment_at(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), ptr)
+            status = LIB.fm_sheet_get_comment(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), ptr)
             if status == _STATUS_NOT_FOUND:
                 return None
-            _check(status, "fm_sheet_get_comment_at")
+            _check(status, "fm_sheet_get_comment")
             d = S.COMMENT.unpack(LIB, ptr)
             return Comment(
                 author=LIB.read_cstr(d["author"]),
@@ -6422,7 +6423,7 @@ class Workbook:
         h = self._require()
         return _read_count(LIB.fm_sheet_get_comment_count, h, _uint(sheet, "sheet"))
 
-    def get_comments(self, sheet: int) -> List[CommentEntry]:
+    def list_comments(self, sheet: int) -> List[CommentEntry]:
         """Return every comment on ``sheet`` in storage order.
 
         Unlike :meth:`get_comment`, this discovers comments on otherwise
@@ -6436,8 +6437,8 @@ class Workbook:
             for index in range(self.comment_count(sheet)):
                 S.zero_struct(LIB, S.COMMENT, ptr)
                 _check(
-                    LIB.fm_sheet_get_comment_at_index(h, _uint(sheet, "sheet"), _uint(index, "index"), ptr),
-                    "fm_sheet_get_comment_at_index",
+                    LIB.fm_sheet_get_comment_at(h, _uint(sheet, "sheet"), _uint(index, "index"), ptr),
+                    "fm_sheet_get_comment_at",
                 )
                 d = S.COMMENT.unpack(LIB, ptr)
                 out.append(CommentEntry(d["row"], d["col"], LIB.read_cstr(d["author"]), LIB.read_cstr(d["text"])))
@@ -6492,7 +6493,7 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.WORKBOOK_PROTECTION)
-            _check(LIB.fm_workbook_get_protection(h, ptr), "fm_workbook_get_protection")
+            _check(LIB.fm_workbook_get_workbook_protection(h, ptr), "fm_workbook_get_workbook_protection")
             d = S.WORKBOOK_PROTECTION.unpack(LIB, ptr)
             prot = WorkbookProtection(
                 lock_structure=bool(d["lock_structure"]),
@@ -6523,12 +6524,12 @@ class Workbook:
             )
             for fld in self._WORKBOOK_PROTECTION_TEXT:
                 S.write_str_field(LIB, ptr, S.WORKBOOK_PROTECTION, fld, getattr(protection, fld), scope)
-            _check(LIB.fm_workbook_set_protection(h, ptr), "fm_workbook_set_protection")
+            _check(LIB.fm_workbook_set_workbook_protection(h, ptr), "fm_workbook_set_workbook_protection")
 
-    def protected_range_count(self, sheet: int) -> int:
+    def get_protected_range_count(self, sheet: int) -> int:
         """Return the number of protected ranges on ``sheet``."""
         h = self._require()
-        return _read_count(LIB.fm_sheet_protected_range_count, h, _uint(sheet, "sheet"))
+        return _read_count(LIB.fm_sheet_get_protected_range_count, h, _uint(sheet, "sheet"))
 
     def get_protected_ranges(self, sheet: int) -> List[ProtectedRange]:
         """Return the protected ranges of ``sheet`` in file order."""
@@ -6536,7 +6537,7 @@ class Workbook:
         out: List[ProtectedRange] = []
         with _ArgScope() as scope:
             ptr = scope.struct(S.PROTECTED_RANGE)
-            for index in range(self.protected_range_count(sheet)):
+            for index in range(self.get_protected_range_count(sheet)):
                 S.zero_struct(LIB, S.PROTECTED_RANGE, ptr)
                 _check(
                     LIB.fm_sheet_get_protected_range(h, _uint(sheet, "sheet"), _uint(index, "index"), ptr),
@@ -6584,26 +6585,26 @@ class Workbook:
         )
 
     # -- Data validations --------------------------------------------------
-    def validation_count(self, sheet: int) -> int:
+    def get_validation_count(self, sheet: int) -> int:
         """Return the number of data-validation rules on ``sheet``."""
         h = self._require()
         return _read_count(LIB.fm_sheet_get_validation_count, h, _uint(sheet, "sheet"))
 
-    def get_validation_at(self, sheet: int, index: int) -> DataValidation:
+    def get_validation(self, sheet: int, index: int) -> DataValidation:
         """Read the ``index``-th data-validation rule on ``sheet``."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.DATA_VALIDATION)
             _check(
-                LIB.fm_sheet_get_validation_at(h, _uint(sheet, "sheet"), _uint(index, "index"), ptr),
-                "fm_sheet_get_validation_at",
+                LIB.fm_sheet_get_validation(h, _uint(sheet, "sheet"), _uint(index, "index"), ptr),
+                "fm_sheet_get_validation",
             )
             return self._decode_validation(ptr)
 
     def get_validations(self, sheet: int) -> List[DataValidation]:
         """Return every data-validation rule on ``sheet``."""
-        n = self.validation_count(sheet)
-        return [self.get_validation_at(sheet, i) for i in range(n)]
+        n = self.get_validation_count(sheet)
+        return [self.get_validation(sheet, i) for i in range(n)]
 
     @staticmethod
     def _decode_validation(ptr: int) -> DataValidation:
@@ -6669,12 +6670,12 @@ class Workbook:
                 "fm_sheet_add_validation",
             )
 
-    def remove_validation_at(self, sheet: int, index: int) -> None:
+    def remove_validation(self, sheet: int, index: int) -> None:
         """Remove the validation rule at ``index`` on ``sheet``."""
         h = self._require()
         _check(
-            LIB.fm_sheet_remove_validation_at(h, _uint(sheet, "sheet"), _uint(index, "index")),
-            "fm_sheet_remove_validation_at",
+            LIB.fm_sheet_remove_validation(h, _uint(sheet, "sheet"), _uint(index, "index")),
+            "fm_sheet_remove_validation",
         )
 
     def clear_validations(self, sheet: int) -> None:
@@ -6711,8 +6712,8 @@ class Workbook:
         with _ArgScope() as scope:
             ptr = scope.struct(S.SHEET_PROTECTION)
             _check(
-                LIB.fm_sheet_get_protection(h, _uint(sheet, "sheet_index"), ptr),
-                "fm_sheet_get_protection",
+                LIB.fm_sheet_get_sheet_protection(h, _uint(sheet, "sheet_index"), ptr),
+                "fm_sheet_get_sheet_protection",
             )
             d = S.SHEET_PROTECTION.unpack(LIB, ptr)
             prot = SheetProtection(
@@ -6742,8 +6743,8 @@ class Workbook:
             for fld in ("algorithm_name", "hash_value", "salt_value", "legacy_password"):
                 S.write_str_field(LIB, ptr, S.SHEET_PROTECTION, fld, getattr(protection, fld), scope)
             _check(
-                LIB.fm_sheet_set_protection(h, _uint(sheet, "sheet_index"), ptr),
-                "fm_sheet_set_protection",
+                LIB.fm_sheet_set_sheet_protection(h, _uint(sheet, "sheet_index"), ptr),
+                "fm_sheet_set_sheet_protection",
             )
 
     # -- Geometry / display ------------------------------------------------
@@ -6763,7 +6764,7 @@ class Workbook:
             "fm_sheet_clear_column_width",
         )
 
-    def get_sheet_format_defaults(self, sheet: int) -> SheetFormatDefaults:
+    def get_format_defaults(self, sheet: int) -> SheetFormatDefaults:
         """Read the sheet's default column / row metrics (``<sheetFormatPr>``)."""
         h = self._require()
         with _ArgScope() as scope:
@@ -6785,11 +6786,11 @@ class Workbook:
                 effective_default_row_height=d["effective_default_row_height"],
             )
 
-    def set_sheet_format_defaults(self, sheet: int, defaults: SheetFormatDefaults) -> None:
+    def set_format_defaults(self, sheet: int, defaults: SheetFormatDefaults) -> None:
         """Replace the sheet's default column / row metrics; a ``None`` flag keeps the stored one."""
         h = self._require()
         if defaults.custom_height is None or defaults.zero_height is None:
-            stored = self.get_sheet_format_defaults(sheet)
+            stored = self.get_format_defaults(sheet)
             custom_height = stored.custom_height if defaults.custom_height is None else defaults.custom_height
             zero_height = stored.zero_height if defaults.zero_height is None else defaults.zero_height
         else:
@@ -6829,7 +6830,7 @@ class Workbook:
         with _ArgScope() as scope:
             ptr = scope.struct(S.RECT_PT)
             _check(
-                LIB.fm_sheet_cell_rect_pt(
+                LIB.fm_sheet_get_cell_rect_pt(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(cell_range.first_row, "first_row"),
@@ -6839,7 +6840,7 @@ class Workbook:
                     _sint(mode, "mode"),
                     ptr,
                 ),
-                "fm_sheet_cell_rect_pt",
+                "fm_sheet_get_cell_rect_pt",
             )
             return RectPt(**S.RECT_PT.unpack(LIB, ptr))
 
@@ -6847,13 +6848,13 @@ class Workbook:
         """Return the effective width of ``col`` in points (0 when hidden)."""
         h = self._require()
         return self._read_f64_out(
-            LIB.fm_sheet_column_width_pt, h, _uint(sheet, "sheet_index"), _uint(col, "col"), _sint(mode, "mode")
+            LIB.fm_sheet_get_column_width_pt, h, _uint(sheet, "sheet_index"), _uint(col, "col"), _sint(mode, "mode")
         )
 
     def get_row_height_pt(self, sheet: int, row: int) -> float:
         """Return the effective height of ``row`` in points (0 when hidden)."""
         h = self._require()
-        return self._read_f64_out(LIB.fm_sheet_row_height_pt, h, _uint(sheet, "sheet_index"), _uint(row, "row"))
+        return self._read_f64_out(LIB.fm_sheet_get_row_height_pt, h, _uint(sheet, "sheet_index"), _uint(row, "row"))
 
     def get_width_model(self, sheet: int, mode: Union[GeometryMode, int] = GeometryMode.DISPLAY) -> WidthModel:
         """Return the character-unit to point conversion model in ``mode``."""
@@ -6861,8 +6862,8 @@ class Workbook:
         with _ArgScope() as scope:
             ptr = scope.struct(S.WIDTH_MODEL)
             _check(
-                LIB.fm_sheet_width_model(h, _uint(sheet, "sheet_index"), _sint(mode, "mode"), ptr),
-                "fm_sheet_width_model",
+                LIB.fm_sheet_get_width_model(h, _uint(sheet, "sheet_index"), _sint(mode, "mode"), ptr),
+                "fm_sheet_get_width_model",
             )
             d = S.WIDTH_MODEL.unpack(LIB, ptr)
             return WidthModel(
@@ -6874,20 +6875,22 @@ class Workbook:
                 platform=LIB.read_cstr(d["platform"]),
             )
 
-    def column_chars_to_pt(
+    def convert_column_chars_to_pt(
         self, sheet: int, chars: float, mode: Union[GeometryMode, int] = GeometryMode.DISPLAY
     ) -> float:
         """Convert a stored column width (padding included) to points, snapped to whole screen pixels."""
         h = self._require()
         return self._read_f64_out(
-            LIB.fm_sheet_column_chars_to_pt, h, _uint(sheet, "sheet_index"), _sint(mode, "mode"), float(chars)
+            LIB.fm_sheet_convert_column_chars_to_pt, h, _uint(sheet, "sheet_index"), _sint(mode, "mode"), float(chars)
         )
 
-    def column_pt_to_chars(self, sheet: int, pt: float, mode: Union[GeometryMode, int] = GeometryMode.DISPLAY) -> float:
+    def convert_column_pt_to_chars(
+        self, sheet: int, pt: float, mode: Union[GeometryMode, int] = GeometryMode.DISPLAY
+    ) -> float:
         """Convert points to the stored column width Excel writes for that column."""
         h = self._require()
         return self._read_f64_out(
-            LIB.fm_sheet_column_pt_to_chars, h, _uint(sheet, "sheet_index"), _sint(mode, "mode"), float(pt)
+            LIB.fm_sheet_convert_column_pt_to_chars, h, _uint(sheet, "sheet_index"), _sint(mode, "mode"), float(pt)
         )
 
     def _read_formula_text(self, fn, op: str, sheet: int, row: int, col: int) -> Optional[str]:
@@ -6904,13 +6907,11 @@ class Workbook:
 
     def get_formula(self, sheet: int, row: int, col: int) -> Optional[str]:
         """Return the stored A1 formula (leading ``=`` included), or ``None`` for a non-formula cell."""
-        return self._read_formula_text(LIB.fm_workbook_get_formula, "fm_workbook_get_formula", sheet, row, col)
+        return self._read_formula_text(LIB.fm_sheet_get_formula, "fm_sheet_get_formula", sheet, row, col)
 
     def get_formula_r1c1(self, sheet: int, row: int, col: int) -> Optional[str]:
         """Return the formula in R1C1 notation relative to the cell, or ``None`` for a non-formula cell."""
-        return self._read_formula_text(
-            LIB.fm_workbook_get_formula_r1c1, "fm_workbook_get_formula_r1c1", sheet, row, col
-        )
+        return self._read_formula_text(LIB.fm_sheet_get_formula_r1c1, "fm_sheet_get_formula_r1c1", sheet, row, col)
 
     def get_cells_in_range(
         self,
@@ -6927,8 +6928,8 @@ class Workbook:
         """
         h = self._require()
         return self._read_cell_range_page(
-            "fm_sheet_cells_in_range",
-            LIB.fm_sheet_cells_in_range,
+            "fm_sheet_get_cells_in_range",
+            LIB.fm_sheet_get_cells_in_range,
             h,
             _uint(sheet, "sheet_index"),
             _uint(cell_range.first_row, "first_row"),
@@ -6953,7 +6954,7 @@ class Workbook:
                 _diagnostic_override=("returned OK with a null cell-range handle", ""),
             )
         try:
-            count = _read_count(LIB.fm_cell_range_count, handle)
+            count = _read_count(LIB.fm_cell_range_get_cell_count, handle)
             with _ArgScope() as scope:
                 row_ptr = scope.out_ptr()
                 col_ptr = scope.out_ptr()
@@ -6964,8 +6965,10 @@ class Workbook:
                 for i in range(count):
                     LIB.write_bytes(formula_ptr, b"\x00\x00\x00\x00")
                     _check(
-                        LIB.fm_cell_range_at(handle, _uint(i, "idx"), row_ptr, col_ptr, formula_ptr, value_ptr),
-                        "fm_cell_range_at",
+                        LIB.fm_cell_range_get_cell_at(
+                            handle, _uint(i, "idx"), row_ptr, col_ptr, formula_ptr, value_ptr
+                        ),
+                        "fm_cell_range_get_cell_at",
                     )
                     formula_addr = LIB.read_u32(formula_ptr)
                     cells.append(
@@ -7054,34 +7057,50 @@ class Workbook:
     def get_table_auto_filter(self, table_index: int) -> Optional[AutoFilter]:
         """Return the AutoFilter of table ``table_index``, or ``None`` when it has none."""
         return self._read_auto_filter(
-            LIB.fm_table_get_auto_filter, table_index, "fm_table_get_auto_filter", "table_index"
+            LIB.fm_workbook_get_table_auto_filter, table_index, "fm_workbook_get_table_auto_filter", "table_index"
         )
 
     def set_table_auto_filter(self, table_index: int, auto_filter: AutoFilter) -> None:
         """Replace the AutoFilter of table ``table_index``."""
         self._write_auto_filter(
-            LIB.fm_table_set_auto_filter, table_index, auto_filter, "fm_table_set_auto_filter", "table_index"
+            LIB.fm_workbook_set_table_auto_filter,
+            table_index,
+            auto_filter,
+            "fm_workbook_set_table_auto_filter",
+            "table_index",
         )
 
     def remove_table_auto_filter(self, table_index: int) -> None:
         """Remove the AutoFilter of table ``table_index`` (no-op when absent)."""
         h = self._require()
-        _check(LIB.fm_table_remove_auto_filter(h, _uint(table_index, "table_index")), "fm_table_remove_auto_filter")
+        _check(
+            LIB.fm_workbook_remove_table_auto_filter(h, _uint(table_index, "table_index")),
+            "fm_workbook_remove_table_auto_filter",
+        )
 
     def apply_table_auto_filter(self, table_index: int) -> None:
         """Hide the body rows the table AutoFilter excludes and show the rest."""
         h = self._require()
-        _check(LIB.fm_table_apply_auto_filter(h, _uint(table_index, "table_index")), "fm_table_apply_auto_filter")
+        _check(
+            LIB.fm_workbook_apply_table_auto_filter(h, _uint(table_index, "table_index")),
+            "fm_workbook_apply_table_auto_filter",
+        )
 
     def clear_table_auto_filter(self, table_index: int) -> None:
         """Drop every column criterion of the table AutoFilter and show all its body rows."""
         h = self._require()
-        _check(LIB.fm_table_clear_auto_filter(h, _uint(table_index, "table_index")), "fm_table_clear_auto_filter")
+        _check(
+            LIB.fm_workbook_clear_table_auto_filter(h, _uint(table_index, "table_index")),
+            "fm_workbook_clear_table_auto_filter",
+        )
 
     def evaluate_table_auto_filter(self, table_index: int) -> "tuple[int, List[bool]]":
         """Evaluate the table AutoFilter; returns ``(first_row, match)`` as :meth:`evaluate_auto_filter`."""
         return self._evaluate_auto_filter(
-            LIB.fm_table_evaluate_auto_filter, table_index, "fm_table_evaluate_auto_filter", "table_index"
+            LIB.fm_workbook_evaluate_table_auto_filter,
+            table_index,
+            "fm_workbook_evaluate_table_auto_filter",
+            "table_index",
         )
 
     # -- Validation checks -----------------------------------------------------
@@ -7107,7 +7126,7 @@ class Workbook:
             error_style=d["error_style"],
         )
 
-    def list_invalid_cells(
+    def get_invalid_cells(
         self, sheet: int, cursor: Optional[int] = None, limit: Optional[int] = None
     ) -> "tuple[List[Cell], Optional[int]]":
         """Return one page of the populated cells failing their data-validation rule (row-major).
@@ -7117,8 +7136,8 @@ class Workbook:
         """
         h = self._require()
         return self._read_cell_range_page(
-            "fm_sheet_list_invalid_cells",
-            LIB.fm_sheet_list_invalid_cells,
+            "fm_sheet_get_invalid_cells",
+            LIB.fm_sheet_get_invalid_cells,
             h,
             _uint(sheet, "sheet_index"),
             _uint(cursor or 0, "cursor", 64),
@@ -7126,18 +7145,18 @@ class Workbook:
         )
 
     # -- Threaded comments and persons -------------------------------------------
-    def get_threaded_comments(self, sheet: int) -> List[ThreadedComment]:
+    def list_threaded_comments(self, sheet: int) -> List[ThreadedComment]:
         """Return the sheet's threaded comments in file order (openers followed by their replies)."""
         h = self._require()
-        n = _read_count(LIB.fm_sheet_threaded_comment_count, h, _uint(sheet, "sheet_index"))
+        n = _read_count(LIB.fm_sheet_get_threaded_comment_count, h, _uint(sheet, "sheet_index"))
         with _ArgScope() as scope:
             ptr = scope.struct(S.THREADED_COMMENT)
             out: List[ThreadedComment] = []
             for i in range(n):
                 S.zero_struct(LIB, S.THREADED_COMMENT, ptr)
                 _check(
-                    LIB.fm_sheet_threaded_comment_at(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr),
-                    "fm_sheet_threaded_comment_at",
+                    LIB.fm_sheet_get_threaded_comment_at(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr),
+                    "fm_sheet_get_threaded_comment_at",
                 )
                 d = S.THREADED_COMMENT.unpack(LIB, ptr)
                 out.append(
@@ -7177,7 +7196,7 @@ class Workbook:
                 "fm_sheet_add_threaded_comment",
             )
 
-    def edit_threaded_comment(self, sheet: int, comment_id: str, text: str, mentions: Sequence[Mention] = ()) -> None:
+    def update_threaded_comment(self, sheet: int, comment_id: str, text: str, mentions: Sequence[Mention] = ()) -> None:
         """Replace the text and mentions of the comment ``comment_id``."""
         h = self._require()
         with _ArgScope() as scope:
@@ -7185,10 +7204,10 @@ class Workbook:
             text_ptr = scope.cstr(text)
             mentions_ptr = _pack_mentions(mentions, scope)
             _check(
-                LIB.fm_sheet_edit_threaded_comment(
+                LIB.fm_sheet_update_threaded_comment(
                     h, _uint(sheet, "sheet_index"), id_ptr, text_ptr, mentions_ptr, _uint(len(mentions), "count")
                 ),
-                "fm_sheet_edit_threaded_comment",
+                "fm_sheet_update_threaded_comment",
             )
 
     def set_thread_resolved(self, sheet: int, thread_id: str, done: bool) -> None:
@@ -7212,28 +7231,28 @@ class Workbook:
             )
 
     # -- Drawing images ------------------------------------------------------
-    def probe_image(self, data: Union[bytes, bytearray, memoryview]) -> ImageInfo:
+    def get_image_info(self, data: Union[bytes, bytearray, memoryview]) -> ImageInfo:
         """Sniff the format and pixel size of PNG, JPEG, GIF or BMP bytes without touching the workbook."""
         h = self._require()
         raw = bytes(data)
         with _ArgScope() as scope:
             buf = scope.buffer(raw)
             info = scope.struct(S.IMAGE_INFO)
-            _check(LIB.fm_workbook_probe_image(h, buf, _uint(len(raw), "len"), info), "fm_workbook_probe_image")
+            _check(LIB.fm_workbook_get_image_info(h, buf, _uint(len(raw), "len"), info), "fm_workbook_get_image_info")
             return _read_image_info(info)
 
     def list_drawing_objects(self, sheet: int) -> List[DrawingObject]:
         """Return the anchored objects of the sheet's drawing in document order."""
         h = self._require()
-        n = _read_count(LIB.fm_sheet_drawing_object_count, h, _uint(sheet, "sheet_index"))
+        n = _read_count(LIB.fm_sheet_get_drawing_object_count, h, _uint(sheet, "sheet_index"))
         with _ArgScope() as scope:
             ptr = scope.struct(S.DRAWING_OBJECT)
             out: List[DrawingObject] = []
             for i in range(n):
                 S.zero_struct(LIB, S.DRAWING_OBJECT, ptr)
                 _check(
-                    LIB.fm_sheet_drawing_object_at(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr),
-                    "fm_sheet_drawing_object_at",
+                    LIB.fm_sheet_get_drawing_object_at(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr),
+                    "fm_sheet_get_drawing_object_at",
                 )
                 d = S.DRAWING_OBJECT.unpack(LIB, ptr)
                 out.append(
@@ -7275,7 +7294,7 @@ class Workbook:
             )
             return LIB.read_bytes(LIB.read_u32(bytes_ptr), LIB.read_u32(len_ptr))
 
-    def insert_image(
+    def add_image(
         self,
         sheet: int,
         data: Union[bytes, bytearray, memoryview],
@@ -7319,8 +7338,8 @@ class Workbook:
             S.write_str_field(LIB, ptr, S.IMAGE_INSERT, "name", name, scope)
             S.write_str_field(LIB, ptr, S.IMAGE_INSERT, "descr", descr, scope)
             _check(
-                LIB.fm_sheet_insert_image(h, _uint(sheet, "sheet_index"), buf, _uint(len(raw), "len"), ptr, out),
-                "fm_sheet_insert_image",
+                LIB.fm_sheet_add_image(h, _uint(sheet, "sheet_index"), buf, _uint(len(raw), "len"), ptr, out),
+                "fm_sheet_add_image",
             )
             return LIB.read_u32(out)
 
@@ -7417,7 +7436,7 @@ class Workbook:
                 return LIB.read_bytes(data_ptr, LIB.read_u32(len_ptr))
             finally:
                 if data_ptr:
-                    LIB.fm_buffer_free(data_ptr)
+                    LIB.fm_buffer_destroy(data_ptr)
 
     def restore_drawing(self, sheet: int, data: Union[bytes, bytearray, memoryview], *, new_id: bool = False) -> int:
         """Put a :meth:`snapshot_drawing` capture back and return the object's id.
@@ -7445,13 +7464,16 @@ class Workbook:
         Children of a group are not listed.
         """
         h = self._require()
-        n = _read_count(LIB.fm_sheet_shape_count, h, _uint(sheet, "sheet_index"))
+        n = _read_count(LIB.fm_sheet_get_shape_count, h, _uint(sheet, "sheet_index"))
         with _ArgScope() as scope:
             ptr = scope.struct(S.SHAPE)
             out: List[Shape] = []
             for i in range(n):
                 S.zero_struct(LIB, S.SHAPE, ptr)
-                _check(LIB.fm_sheet_shape_at(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr), "fm_sheet_shape_at")
+                _check(
+                    LIB.fm_sheet_get_shape_at(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr),
+                    "fm_sheet_get_shape_at",
+                )
                 d = S.SHAPE.unpack(LIB, ptr)
                 out.append(
                     Shape(
@@ -7484,7 +7506,7 @@ class Workbook:
                 )
         return out
 
-    def insert_shape(
+    def add_shape(
         self,
         sheet: int,
         *,
@@ -7529,7 +7551,7 @@ class Workbook:
                 from_col_off, to_row, to_col, to_row_off, to_col_off, cx, cy, fill_kind, fill_rgb, line_kind,
                 line_rgb, line_width_emu, rotation, hidden,
             )  # fmt: skip
-            _check(LIB.fm_sheet_insert_shape(h, _uint(sheet, "sheet_index"), ptr, out), "fm_sheet_insert_shape")
+            _check(LIB.fm_sheet_add_shape(h, _uint(sheet, "sheet_index"), ptr, out), "fm_sheet_add_shape")
             return LIB.read_u32(out)
 
     def update_shape(
@@ -7590,14 +7612,15 @@ class Workbook:
     def list_slicers(self, sheet: int) -> List[Slicer]:
         """Return the table slicers hosted by the sheet; slicers over a pivot cache are not listed."""
         h = self._require()
-        n = _read_count(LIB.fm_sheet_slicer_count, h, _uint(sheet, "sheet_index"))
+        n = _read_count(LIB.fm_sheet_get_slicer_count, h, _uint(sheet, "sheet_index"))
         with _ArgScope() as scope:
             ptr = scope.struct(S.SLICER)
             out: List[Slicer] = []
             for i in range(n):
                 S.zero_struct(LIB, S.SLICER, ptr)
                 _check(
-                    LIB.fm_sheet_slicer_at(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr), "fm_sheet_slicer_at"
+                    LIB.fm_sheet_get_slicer_at(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr),
+                    "fm_sheet_get_slicer_at",
                 )
                 d = S.SLICER.unpack(LIB, ptr)
                 out.append(
@@ -7736,10 +7759,10 @@ class Workbook:
             present = scope.out_ptr()
             ptr = scope.struct(S.DATA_TABLE)
             _check(
-                LIB.fm_sheet_data_table_at(
+                LIB.fm_sheet_get_data_table(
                     h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), present, ptr
                 ),
-                "fm_sheet_data_table_at",
+                "fm_sheet_get_data_table",
             )
             if not LIB.read_u32(present):
                 return None
@@ -7776,7 +7799,7 @@ class Workbook:
     def list_sparkline_groups(self, sheet: int) -> List[SparklineGroup]:
         """Return the sheet's sparkline groups in document order, each with its sparklines."""
         h = self._require()
-        n = _read_count(LIB.fm_sheet_sparkline_group_count, h, _uint(sheet, "sheet_index"))
+        n = _read_count(LIB.fm_sheet_get_sparkline_group_count, h, _uint(sheet, "sheet_index"))
         with _ArgScope() as scope:
             group_ptr = scope.struct(S.SPARKLINE_GROUP)
             item_ptr = scope.struct(S.SPARKLINE)
@@ -7784,8 +7807,8 @@ class Workbook:
             for i in range(n):
                 S.zero_struct(LIB, S.SPARKLINE_GROUP, group_ptr)
                 _check(
-                    LIB.fm_sheet_sparkline_group_at(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), group_ptr),
-                    "fm_sheet_sparkline_group_at",
+                    LIB.fm_sheet_get_sparkline_group(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), group_ptr),
+                    "fm_sheet_get_sparkline_group",
                 )
                 d = S.SPARKLINE_GROUP.unpack(LIB, group_ptr)
                 group = SparklineGroup(
@@ -7818,10 +7841,10 @@ class Workbook:
                 for k in range(d["sparkline_count"]):
                     S.zero_struct(LIB, S.SPARKLINE, item_ptr)
                     _check(
-                        LIB.fm_sheet_sparkline_at(
+                        LIB.fm_sheet_get_sparkline(
                             h, _uint(sheet, "sheet_index"), _uint(i, "idx"), _uint(k, "idx"), item_ptr
                         ),
-                        "fm_sheet_sparkline_at",
+                        "fm_sheet_get_sparkline",
                     )
                     item = S.SPARKLINE.unpack(LIB, item_ptr)
                     group.sparklines.append(
@@ -7884,7 +7907,7 @@ class Workbook:
         or the chart part does not parse.
         """
         h = self._require()
-        chart = _read_count(LIB.fm_sheet_chart_open, h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"))
+        chart = _read_count(LIB.fm_sheet_get_chart, h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"))
         try:
             return _read_chart(chart)
         finally:
@@ -7893,14 +7916,14 @@ class Workbook:
     def get_chart_data(self, sheet: int, object_id: int) -> ChartData:
         """Resolve the chart's series against the current cell values by Excel's rules."""
         h = self._require()
-        data = _read_count(LIB.fm_sheet_chart_data_open, h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"))
+        data = _read_count(LIB.fm_sheet_get_chart_data, h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"))
         try:
             return _read_chart_data(data)
         finally:
             LIB.fm_chart_data_destroy(data)
 
-    def preview_chart_data(
-        self, sheet: int, object_id: int, overrides: Optional[ChartPreviewOverrides] = None
+    def get_chart_preview(
+        self, sheet: int, object_id: int, overrides: Optional[ChartPreviewOverridesInput] = None
     ) -> ChartData:
         """Resolve the data of a copy of the chart with ``overrides`` applied; the workbook is unchanged.
 
@@ -7917,7 +7940,7 @@ class Workbook:
             ptr = scope.struct(S.CHART_PREVIEW_OVERRIDES)
             S.CHART_PREVIEW_OVERRIDES.pack(LIB, ptr, fields)
             data = _read_count(
-                LIB.fm_sheet_chart_preview_open,
+                LIB.fm_sheet_get_chart_preview,
                 h,
                 _uint(sheet, "sheet_index"),
                 _uint(object_id, "object_id"),
@@ -7929,7 +7952,7 @@ class Workbook:
             if data:
                 LIB.fm_chart_data_destroy(data)
 
-    def insert_chart(
+    def add_chart(
         self,
         sheet: int,
         kind: Union[ChartInsertKind, int],
@@ -7958,7 +7981,7 @@ class Workbook:
         column, bar, line and area charts. ``header_row`` / ``header_column``
         ``None`` follow Excel's detection. ``title`` is ``None`` for Excel's
         automatic title, ``""`` for none, else the text. The placement reads as
-        for :meth:`insert_image` (an empty ``name`` becomes ``Chart <id>``),
+        for :meth:`add_image` (an empty ``name`` becomes ``Chart <id>``),
         except that a zero ``width_emu`` or ``height_emu`` means Excel's default
         360 x 216 pt frame and the anchor defaults to two-cell.
         """
@@ -7986,7 +8009,7 @@ class Workbook:
                     "placement": placement,
                 },
             )
-            _check(LIB.fm_sheet_insert_chart(h, _uint(sheet, "sheet_index"), ptr, out), "fm_sheet_insert_chart")
+            _check(LIB.fm_sheet_add_chart(h, _uint(sheet, "sheet_index"), ptr, out), "fm_sheet_add_chart")
             return LIB.read_u32(out)
 
     def set_chart_type(
@@ -8011,10 +8034,10 @@ class Workbook:
             "fm_sheet_set_chart_type",
         )
 
-    def set_chart_title(self, sheet: int, object_id: int, title: Union[str, None, ChartTitleInfo]) -> None:
+    def set_chart_title(self, sheet: int, object_id: int, title: Union[str, None, ChartTitle]) -> None:
         """Set the chart title to ``title``; ``None`` removes it.
 
-        A :class:`ChartTitleInfo` sets that kind, so ``ChartTitleInfo(ChartTitleKind.AUTO, "", "")``
+        A :class:`ChartTitle` sets that kind, so ``ChartTitle(ChartTitleKind.AUTO, "", "")``
         returns the title to Excel's automatic one.
         """
         h = self._require()
@@ -8236,16 +8259,16 @@ class Workbook:
                 "fm_sheet_set_chart_source",
             )
 
-    def get_persons(self) -> List[Person]:
+    def list_people(self) -> List[Person]:
         """Return the workbook's person list in file order."""
         h = self._require()
-        n = _read_count(LIB.fm_workbook_person_count, h)
+        n = _read_count(LIB.fm_workbook_get_person_count, h)
         with _ArgScope() as scope:
             ptr = scope.struct(S.PERSON)
             out: List[Person] = []
             for i in range(n):
                 S.zero_struct(LIB, S.PERSON, ptr)
-                _check(LIB.fm_workbook_person_at(h, _uint(i, "idx"), ptr), "fm_workbook_person_at")
+                _check(LIB.fm_workbook_get_person_at(h, _uint(i, "idx"), ptr), "fm_workbook_get_person_at")
                 d = S.PERSON.unpack(LIB, ptr)
                 out.append(
                     Person(
@@ -8281,8 +8304,8 @@ class Workbook:
             count_ptr = scope.out_ptr()
             # Size the buffer first, then fetch.
             _check(
-                LIB.fm_sheet_merges_in_range(h, _uint(sheet, "sheet_index"), range_ptr, 0, 0, count_ptr),
-                "fm_sheet_merges_in_range",
+                LIB.fm_sheet_get_merges_in_range(h, _uint(sheet, "sheet_index"), range_ptr, 0, 0, count_ptr),
+                "fm_sheet_get_merges_in_range",
             )
             total = LIB.read_u32(count_ptr)
             if total == 0:
@@ -8290,10 +8313,10 @@ class Workbook:
             size = S.MERGE_RANGE.size
             buf = scope.struct_array(S.MERGE_RANGE, total)
             _check(
-                LIB.fm_sheet_merges_in_range(
+                LIB.fm_sheet_get_merges_in_range(
                     h, _uint(sheet, "sheet_index"), range_ptr, buf, _uint(total, "capacity"), count_ptr
                 ),
-                "fm_sheet_merges_in_range",
+                "fm_sheet_get_merges_in_range",
             )
             out: List[MergeRange] = []
             for i in range(min(total, LIB.read_u32(count_ptr))):
@@ -8307,10 +8330,10 @@ class Workbook:
             text_ptr = scope.out_ptr()
             status_ptr = scope.out_ptr()
             _check(
-                LIB.fm_workbook_get_display_text(
+                LIB.fm_sheet_get_display_text(
                     h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), text_ptr, status_ptr
                 ),
-                "fm_workbook_get_display_text",
+                "fm_sheet_get_display_text",
             )
             return LIB.read_cstr(LIB.read_u32(text_ptr)), DisplayStatus(LIB.read_i32(status_ptr))
 
@@ -8331,7 +8354,7 @@ class Workbook:
             return LIB.read_cstr(LIB.read_u32(text_ptr)), DisplayStatus(LIB.read_i32(status_ptr))
 
     # -- Sheet view / layout -----------------------------------------------
-    def paginate(self, sheet: int) -> PaginationResult:
+    def get_pagination(self, sheet: int) -> PaginationResult:
         """Resolve the worksheet's print area, page breaks, and page count.
 
         The result is a snapshot: later workbook or layout changes do not
@@ -8340,62 +8363,62 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
-            _check(LIB.fm_workbook_paginate(h, _uint(sheet, "sheet_index"), out), "fm_workbook_paginate")
+            _check(LIB.fm_workbook_get_pagination(h, _uint(sheet, "sheet_index"), out), "fm_workbook_get_pagination")
             pagination = LIB.read_u32(out)
             if pagination == 0:
                 raise FormulonError(
                     StatusCode.BINDING_NULL_POINTER,
-                    op="fm_workbook_paginate",
+                    op="fm_workbook_get_pagination",
                     _diagnostic_override=("returned OK with a null pagination handle", ""),
                 )
             try:
-                page_count = int(LIB.fm_pagination_page_count(pagination))
-                range_count = int(LIB.fm_pagination_print_area_count(pagination))
-                break_count = int(LIB.fm_pagination_horizontal_break_count(pagination))
-                vertical_break_count = int(LIB.fm_pagination_vertical_break_count(pagination))
+                page_count = int(LIB.fm_pagination_get_page_count(pagination))
+                range_count = int(LIB.fm_pagination_get_print_area_count(pagination))
+                break_count = int(LIB.fm_pagination_get_row_break_count(pagination))
+                vertical_break_count = int(LIB.fm_pagination_get_col_break_count(pagination))
                 range_ptr = scope.alloc(16)
                 value_ptr = scope.out_ptr()
                 scale_ptr = scope.alloc(8)
-                # Sized for the largest pagination detail struct (fm_page_layout).
+                # Sized for the largest pagination detail struct (fm_page_layout_t).
                 struct_ptr = scope.struct(S.PAGE_LAYOUT)
                 print_area = []
                 for i in range(range_count):
                     _check(
-                        LIB.fm_pagination_print_area_at(pagination, _uint(i, "index"), range_ptr),
-                        "fm_pagination_print_area_at",
+                        LIB.fm_pagination_get_print_area_at(pagination, _uint(i, "index"), range_ptr),
+                        "fm_pagination_get_print_area_at",
                     )
                     print_area.append(struct.unpack("<IIII", LIB.read_bytes(range_ptr, 16)))
                 horizontal_breaks = []
                 for i in range(break_count):
                     _check(
-                        LIB.fm_pagination_horizontal_break_at(pagination, _uint(i, "index"), value_ptr),
-                        "fm_pagination_horizontal_break_at",
+                        LIB.fm_pagination_get_row_break_at(pagination, _uint(i, "index"), value_ptr),
+                        "fm_pagination_get_row_break_at",
                     )
                     horizontal_breaks.append(LIB.read_u32(value_ptr))
                 vertical_breaks = []
                 for i in range(vertical_break_count):
                     _check(
-                        LIB.fm_pagination_vertical_break_at(pagination, _uint(i, "index"), value_ptr),
-                        "fm_pagination_vertical_break_at",
+                        LIB.fm_pagination_get_col_break_at(pagination, _uint(i, "index"), value_ptr),
+                        "fm_pagination_get_col_break_at",
                     )
                     vertical_breaks.append(LIB.read_u32(value_ptr))
                 horizontal_break_manual = []
                 for i in range(break_count):
                     _check(
-                        LIB.fm_pagination_horizontal_break_is_manual(pagination, _uint(i, "index"), value_ptr),
-                        "fm_pagination_horizontal_break_is_manual",
+                        LIB.fm_pagination_is_row_break_manual(pagination, _uint(i, "index"), value_ptr),
+                        "fm_pagination_is_row_break_manual",
                     )
                     horizontal_break_manual.append(bool(LIB.read_i32(value_ptr)))
                 vertical_break_manual = []
                 for i in range(vertical_break_count):
                     _check(
-                        LIB.fm_pagination_vertical_break_is_manual(pagination, _uint(i, "index"), value_ptr),
-                        "fm_pagination_vertical_break_is_manual",
+                        LIB.fm_pagination_is_col_break_manual(pagination, _uint(i, "index"), value_ptr),
+                        "fm_pagination_is_col_break_manual",
                     )
                     vertical_break_manual.append(bool(LIB.read_i32(value_ptr)))
-                _check(LIB.fm_pagination_scale(pagination, scale_ptr), "fm_pagination_scale")
+                _check(LIB.fm_pagination_get_scale(pagination, scale_ptr), "fm_pagination_get_scale")
                 scale = LIB.read_f64(scale_ptr)
-                _check(LIB.fm_pagination_page_order(pagination, value_ptr), "fm_pagination_page_order")
+                _check(LIB.fm_pagination_get_page_order(pagination, value_ptr), "fm_pagination_get_page_order")
                 page_order = LIB.read_i32(value_ptr)
 
                 def read_struct(layout: S.Struct, fn, op: str) -> Dict[str, int]:
@@ -8403,11 +8426,15 @@ class Workbook:
                     _check(fn(pagination, struct_ptr), op)
                     return layout.unpack(LIB, struct_ptr)
 
-                d = read_struct(S.PAPER_INFO, LIB.fm_pagination_paper, "fm_pagination_paper")
+                d = read_struct(S.PAPER_INFO, LIB.fm_pagination_get_paper, "fm_pagination_get_paper")
                 paper = PaperInfo(d["width_pt"], d["height_pt"], bool(d["landscape"]), bool(d["known"]))
-                margins = MarginsPt(**read_struct(S.MARGINS_PT, LIB.fm_pagination_margins, "fm_pagination_margins"))
-                printable = RectPt(**read_struct(S.RECT_PT, LIB.fm_pagination_printable, "fm_pagination_printable"))
-                d = read_struct(S.PRINT_TITLES, LIB.fm_pagination_print_titles, "fm_pagination_print_titles")
+                margins = MarginsPt(
+                    **read_struct(S.MARGINS_PT, LIB.fm_pagination_get_margins, "fm_pagination_get_margins")
+                )
+                printable = RectPt(
+                    **read_struct(S.RECT_PT, LIB.fm_pagination_get_printable, "fm_pagination_get_printable")
+                )
+                d = read_struct(S.PRINT_TITLES, LIB.fm_pagination_get_print_titles, "fm_pagination_get_print_titles")
                 print_titles = PrintTitles(
                     has_rows=bool(d["has_rows"]),
                     first_row=d["first_row"],
@@ -8420,8 +8447,8 @@ class Workbook:
                 for i in range(page_count):
                     S.zero_struct(LIB, S.PAGE_LAYOUT, struct_ptr)
                     _check(
-                        LIB.fm_pagination_page_at(pagination, _uint(i, "index"), struct_ptr),
-                        "fm_pagination_page_at",
+                        LIB.fm_pagination_get_page_at(pagination, _uint(i, "index"), struct_ptr),
+                        "fm_pagination_get_page_at",
                     )
                     pages.append(PageLayout(**S.PAGE_LAYOUT.unpack(LIB, struct_ptr)))
                 return PaginationResult(
@@ -8442,7 +8469,7 @@ class Workbook:
             finally:
                 LIB.fm_pagination_destroy(pagination)
 
-    def get_sheet_view(self, sheet: int) -> SheetView:
+    def get_view(self, sheet: int) -> SheetView:
         """Read the full per-sheet view (zoom, freeze, tab-hidden, and the
         display / orientation flags)."""
         h = self._require()
@@ -8472,14 +8499,14 @@ class Workbook:
                 show_outline_symbols=bool(d["show_outline_symbols"]),
             )
 
-    def set_sheet_zoom(self, sheet: int, zoom_scale: int) -> None:
+    def set_zoom(self, sheet: int, zoom_scale: int) -> None:
         """Set the sheet zoom percentage (clamped to ``[10, 400]``)."""
         h = self._require()
         _check(
             LIB.fm_sheet_set_zoom(h, _uint(sheet, "sheet_index"), _uint(zoom_scale, "zoom_scale")), "fm_sheet_set_zoom"
         )
 
-    def set_sheet_freeze(self, sheet: int, freeze_rows: int, freeze_cols: int) -> None:
+    def set_freeze(self, sheet: int, freeze_rows: int, freeze_cols: int) -> None:
         """Set the frozen pane in ``(rows, cols)``."""
         h = self._require()
         _check(
@@ -8489,10 +8516,10 @@ class Workbook:
             "fm_sheet_set_freeze",
         )
 
-    def set_sheet_tab_hidden(self, sheet: int, hidden: bool) -> None:
+    def set_tab_hidden(self, sheet: int, hidden: bool) -> None:
         """Set the sheet tab's hidden flag.
 
-        The two-state view of :meth:`set_sheet_visibility`. ``True`` on an
+        The two-state view of :meth:`set_visibility`. ``True`` on an
         already very-hidden sheet leaves it very-hidden rather than
         demoting it, since "hidden" says nothing that sheet does not
         already satisfy; ``False`` shows it from either hidden state.
@@ -8507,12 +8534,12 @@ class Workbook:
             "fm_sheet_set_tab_hidden",
         )
 
-    def set_sheet_visibility(self, sheet: int, visibility: "SheetVisibility | int") -> None:
+    def set_visibility(self, sheet: int, visibility: "SheetVisibility | int") -> None:
         """Set the sheet tab's visibility to one of the three states.
 
         The only way to newly state :attr:`SheetVisibility.VERY_HIDDEN`, and
         the only way to demote a very-hidden sheet to plain hidden;
-        :meth:`set_sheet_tab_hidden` can express neither.
+        :meth:`set_tab_hidden` can express neither.
 
         Raises:
           FormulonError: with ``kInvalidArgument`` for an unknown state or
@@ -8524,7 +8551,7 @@ class Workbook:
             "fm_sheet_set_visibility",
         )
 
-    def set_sheet_show_grid_lines(self, sheet: int, show: bool) -> None:
+    def set_show_grid_lines(self, sheet: int, show: bool) -> None:
         """Set the sheet's ``showGridLines`` flag."""
         h = self._require()
         _check(
@@ -8532,7 +8559,7 @@ class Workbook:
             "fm_sheet_set_show_grid_lines",
         )
 
-    def set_sheet_show_row_col_headers(self, sheet: int, show: bool) -> None:
+    def set_show_row_col_headers(self, sheet: int, show: bool) -> None:
         """Set the sheet's ``showRowColHeaders`` flag."""
         h = self._require()
         _check(
@@ -8540,7 +8567,7 @@ class Workbook:
             "fm_sheet_set_show_row_col_headers",
         )
 
-    def set_sheet_show_zeros(self, sheet: int, show: bool) -> None:
+    def set_show_zeros(self, sheet: int, show: bool) -> None:
         """Set the sheet's ``showZeros`` flag."""
         h = self._require()
         _check(
@@ -8548,7 +8575,7 @@ class Workbook:
             "fm_sheet_set_show_zeros",
         )
 
-    def set_sheet_show_formulas(self, sheet: int, show: bool) -> None:
+    def set_show_formulas(self, sheet: int, show: bool) -> None:
         """Set the sheet's ``showFormulas`` flag."""
         h = self._require()
         _check(
@@ -8556,7 +8583,7 @@ class Workbook:
             "fm_sheet_set_show_formulas",
         )
 
-    def set_sheet_show_outline_symbols(self, sheet: int, show: bool) -> None:
+    def set_show_outline_symbols(self, sheet: int, show: bool) -> None:
         """Set the sheet's ``showOutlineSymbols`` flag."""
         h = self._require()
         _check(
@@ -8564,7 +8591,7 @@ class Workbook:
             "fm_sheet_set_show_outline_symbols",
         )
 
-    def set_sheet_right_to_left(self, sheet: int, right_to_left: bool) -> None:
+    def set_right_to_left(self, sheet: int, right_to_left: bool) -> None:
         """Set the sheet's ``rightToLeft`` flag."""
         h = self._require()
         _check(
@@ -8572,7 +8599,7 @@ class Workbook:
             "fm_sheet_set_right_to_left",
         )
 
-    def set_sheet_top_left(self, sheet: int, row: int, col: int) -> None:
+    def set_top_left(self, sheet: int, row: int, col: int) -> None:
         """Set the sheet view's scroll origin (``topLeftCell``)."""
         h = self._require()
         _check(
@@ -8580,7 +8607,7 @@ class Workbook:
             "fm_sheet_set_top_left",
         )
 
-    def set_sheet_pane_top_left(self, sheet: int, row: int, col: int) -> None:
+    def set_pane_top_left(self, sheet: int, row: int, col: int) -> None:
         """Set the first visible cell of a frozen or split view's lower-right pane.
 
         The cell must lie past any frozen rows and columns, and the sheet must
@@ -8593,11 +8620,11 @@ class Workbook:
             "fm_sheet_set_pane_top_left",
         )
 
-    def set_sheet_split(self, sheet: int, x_twips: float, y_twips: float) -> None:
+    def set_split(self, sheet: int, x_twips: float, y_twips: float) -> None:
         """Split the view at ``x_twips`` / ``y_twips`` (0 for none on that axis).
 
         ``(0, 0)`` removes the split. A split replaces any freeze, as
-        :meth:`set_sheet_freeze` replaces a split. Negative or non-finite
+        :meth:`set_freeze` replaces a split. Negative or non-finite
         values raise and leave the view unchanged.
         """
         h = self._require()
@@ -8606,7 +8633,7 @@ class Workbook:
             "fm_sheet_set_split",
         )
 
-    def get_sheet_selection(self, sheet: int) -> Tuple[Tuple[int, int], List[MergeRange]]:
+    def get_selection(self, sheet: int) -> Tuple[Tuple[int, int], List[MergeRange]]:
         """Return ``((active_row, active_col), ranges)`` of the active pane's selection.
 
         The selection reads as it is saved: a pane that stores none reports A1
@@ -8637,9 +8664,7 @@ class Workbook:
             ranges = [_decode_merge_at(array_ptr + i * size) for i in range(total)]
             return (LIB.read_u32(row_ptr), LIB.read_u32(col_ptr)), ranges
 
-    def set_sheet_selection(
-        self, sheet: int, active_row: int, active_col: int, ranges: Sequence[MergeRange] = ()
-    ) -> None:
+    def set_selection(self, sheet: int, active_row: int, active_col: int, ranges: Sequence[MergeRange] = ()) -> None:
         """Replace the active pane's selection; no ``ranges`` selects the active cell alone."""
         h = self._require()
         with _ArgScope() as scope:
@@ -8656,7 +8681,7 @@ class Workbook:
                 "fm_sheet_set_selection",
             )
 
-    def set_sheet_tab_selected(self, sheet: int, selected: bool) -> None:
+    def set_tab_selected(self, sheet: int, selected: bool) -> None:
         """Set the sheet's ``tabSelected`` flag."""
         h = self._require()
         _check(
@@ -8664,7 +8689,7 @@ class Workbook:
             "fm_sheet_set_tab_selected",
         )
 
-    def set_sheet_view_mode(self, sheet: int, mode: str) -> None:
+    def set_view_mode(self, sheet: int, mode: str) -> None:
         """Set the sheet's ``<sheetView view="...">`` mode: ``""``,
         ``"pageBreakPreview"``, or ``"pageLayout"``. Stored verbatim.
 
@@ -8919,13 +8944,13 @@ class Workbook:
                 out.append(PageBreak(id=d["id"], min=d["min"], max=d["max"], manual=bool(d["manual"])))
         return out
 
-    def get_row_breaks(self, sheet: int) -> List[PageBreak]:
+    def list_row_breaks(self, sheet: int) -> List[PageBreak]:
         """Return the row breaks, ascending by row."""
-        return self._read_breaks(sheet, "fm_sheet_row_break_count", "fm_sheet_row_break_at")
+        return self._read_breaks(sheet, "fm_sheet_get_row_break_count", "fm_sheet_get_row_break_at")
 
-    def get_col_breaks(self, sheet: int) -> List[PageBreak]:
+    def list_col_breaks(self, sheet: int) -> List[PageBreak]:
         """Return the column breaks, ascending by column."""
-        return self._read_breaks(sheet, "fm_sheet_col_break_count", "fm_sheet_col_break_at")
+        return self._read_breaks(sheet, "fm_sheet_get_col_break_count", "fm_sheet_get_col_break_at")
 
     # -- Print settings: typed patch setters -------------------------------
     #
@@ -9133,10 +9158,10 @@ class Workbook:
                 footer_stated=bool(d["footer_engaged"]),
             )
 
-    def get_sheet_columns(self, sheet: int) -> List[ColumnLayout]:
+    def list_col_overrides(self, sheet: int) -> List[ColumnLayout]:
         """Return the column-layout overrides on ``sheet``."""
         h = self._require()
-        n = _read_count(LIB.fm_sheet_get_column_count, h, _uint(sheet, "sheet_index"))
+        n = _read_count(LIB.fm_sheet_get_col_override_count, h, _uint(sheet, "sheet_index"))
         out: List[ColumnLayout] = []
         # One scratch block for the whole walk; see iter_defined_names.
         with _ArgScope() as scope:
@@ -9144,8 +9169,8 @@ class Workbook:
             for i in range(n):
                 S.zero_struct(LIB, S.COLUMN_LAYOUT, ptr)
                 _check(
-                    LIB.fm_sheet_get_column(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr),
-                    "fm_sheet_get_column",
+                    LIB.fm_sheet_get_col_override_at(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr),
+                    "fm_sheet_get_col_override_at",
                 )
                 d = S.COLUMN_LAYOUT.unpack(LIB, ptr)
                 out.append(
@@ -9229,7 +9254,7 @@ class Workbook:
             "fm_sheet_clear_column_style",
         )
 
-    def get_sheet_row_overrides(self, sheet: int) -> List[RowLayout]:
+    def list_row_overrides(self, sheet: int) -> List[RowLayout]:
         """Return the row-layout overrides on ``sheet``."""
         h = self._require()
         n = _read_count(LIB.fm_sheet_get_row_override_count, h, _uint(sheet, "sheet_index"))
@@ -9240,8 +9265,8 @@ class Workbook:
             for i in range(n):
                 S.zero_struct(LIB, S.ROW_LAYOUT, ptr)
                 _check(
-                    LIB.fm_sheet_get_row_override(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr),
-                    "fm_sheet_get_row_override",
+                    LIB.fm_sheet_get_row_override_at(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr),
+                    "fm_sheet_get_row_override_at",
                 )
                 d = S.ROW_LAYOUT.unpack(LIB, ptr)
                 out.append(
@@ -9329,7 +9354,9 @@ class Workbook:
             "fm_sheet_clear_row_style",
         )
 
-    def range_style_bases(self, sheet: int, first_row: int, first_col: int, last_row: int, last_col: int) -> List[int]:
+    def get_range_style_bases(
+        self, sheet: int, first_row: int, first_col: int, last_row: int, last_col: int
+    ) -> List[int]:
         """List, ascending, every cell XF some cell of the selection resolves to.
 
         The rectangle is a selection: full height is a column selection, full
@@ -9338,9 +9365,9 @@ class Workbook:
         bases, build a patched XF for each with :meth:`add_font` /
         :meth:`add_cell_xf`, then apply them with :meth:`remap_range_style`.
         """
-        return self.range_style_bases_excluding(sheet, first_row, first_col, last_row, last_col, ())
+        return self.get_range_style_bases_excluding(sheet, first_row, first_col, last_row, last_col, ())
 
-    def range_style_bases_excluding(
+    def get_range_style_bases_excluding(
         self,
         sheet: int,
         first_row: int,
@@ -9349,7 +9376,7 @@ class Workbook:
         last_col: int,
         excluded: Sequence[Tuple[int, int]],
     ) -> List[int]:
-        """:meth:`range_style_bases` over the selection less the ``(row, col)`` cells in ``excluded``.
+        """:meth:`get_range_style_bases` over the selection less the ``(row, col)`` cells in ``excluded``.
 
         An excluded cell contributes no XF, neither its own nor the row, column
         or default style beneath it. Cells outside the selection and repeats are
@@ -9366,7 +9393,7 @@ class Workbook:
             len_ptr = scope.out_ptr()
             # Size the buffer first, then fetch.
             _check(
-                LIB.fm_sheet_range_style_bases_excluding(
+                LIB.fm_sheet_get_range_style_bases_excluding(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(first_row, "first_row"),
@@ -9380,14 +9407,14 @@ class Workbook:
                     0,
                     len_ptr,
                 ),
-                "fm_sheet_range_style_bases_excluding",
+                "fm_sheet_get_range_style_bases_excluding",
             )
             total = LIB.read_u32(len_ptr)
             if total == 0:
                 return []
             buf = scope.alloc(4 * total)
             _check(
-                LIB.fm_sheet_range_style_bases_excluding(
+                LIB.fm_sheet_get_range_style_bases_excluding(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(first_row, "first_row"),
@@ -9401,7 +9428,7 @@ class Workbook:
                     _uint(total, "cap"),
                     len_ptr,
                 ),
-                "fm_sheet_range_style_bases_excluding",
+                "fm_sheet_get_range_style_bases_excluding",
             )
             n = min(total, LIB.read_u32(len_ptr))
             return list(struct.unpack("<%dI" % n, LIB.read_bytes(buf, 4 * n)))
@@ -9413,7 +9440,7 @@ class Workbook:
 
         An XF absent from ``mapping`` is kept. Each target must be a valid cell
         XF, else :class:`FormulonError` and nothing changes. Patch an attribute
-        by reading :meth:`range_style_bases`, adding a patched XF for each base
+        by reading :meth:`get_range_style_bases`, adding a patched XF for each base
         and passing ``{base: patched}``. Undo with :meth:`snapshot_range_style`
         taken beforehand and :meth:`restore_range_style`.
         """
@@ -9470,7 +9497,7 @@ class Workbook:
                 return LIB.read_bytes(data_ptr, LIB.read_u32(len_ptr))
             finally:
                 if data_ptr:
-                    LIB.fm_buffer_free(data_ptr)
+                    LIB.fm_buffer_destroy(data_ptr)
 
     def restore_range_style(self, sheet: int, data: Union[bytes, bytearray, memoryview]) -> None:
         """Put a :meth:`snapshot_range_style` capture back on ``sheet``.
@@ -9529,7 +9556,7 @@ class Workbook:
             results = 0
             try:
                 _check(
-                    LIB.fm_workbook_cf_evaluate_range(
+                    LIB.fm_sheet_evaluate_cf_range(
                         h,
                         _uint(sheet, "sheet_index"),
                         _uint(first_row, "first_row"),
@@ -9539,11 +9566,11 @@ class Workbook:
                         float(today_serial),
                         out,
                     ),
-                    "fm_workbook_cf_evaluate_range",
+                    "fm_sheet_evaluate_cf_range",
                 )
                 results = LIB.read_u32(out)
                 cells: List[CfCellResult] = []
-                n = LIB.fm_cf_results_cell_count(results)
+                n = LIB.fm_cf_results_get_cell_count(results)
                 # One fixed set of out slots for the whole walk: allocating
                 # per cell would put a locked WASM malloc/free pair on every
                 # item, which dominates the cost of a viewport-sized range.
@@ -9553,8 +9580,8 @@ class Workbook:
                 mptr = scope.struct(S.CF_MATCH)
                 for ci in range(n):
                     _check(
-                        LIB.fm_cf_results_cell_at(results, _uint(ci, "cell_idx"), rp, cp, mcp),
-                        "fm_cf_results_cell_at",
+                        LIB.fm_cf_results_get_cell_at(results, _uint(ci, "cell_idx"), rp, cp, mcp),
+                        "fm_cf_results_get_cell_at",
                     )
                     row = LIB.read_u32(rp)
                     col = LIB.read_u32(cp)
@@ -9563,8 +9590,10 @@ class Workbook:
                     for mi in range(mcount):
                         S.zero_struct(LIB, S.CF_MATCH, mptr)
                         _check(
-                            LIB.fm_cf_results_match_at(results, _uint(ci, "cell_idx"), _uint(mi, "match_idx"), mptr),
-                            "fm_cf_results_match_at",
+                            LIB.fm_cf_results_get_match_at(
+                                results, _uint(ci, "cell_idx"), _uint(mi, "match_idx"), mptr
+                            ),
+                            "fm_cf_results_get_match_at",
                         )
                         d = S.CF_MATCH.unpack(LIB, mptr)
                         matches.append(
@@ -9592,22 +9621,20 @@ class Workbook:
                 if results:
                     LIB.fm_cf_results_destroy(results)
 
-    def cf_count(self, sheet: int) -> int:
+    def get_cf_rule_count(self, sheet: int) -> int:
         """Return the number of CF rules on ``sheet`` (flattened)."""
         h = self._require()
         return _read_count(
-            LIB.fm_sheet_cf_count,
+            LIB.fm_sheet_get_cf_rule_count,
             h,
             _uint(sheet, "sheet_index"),
-            default_op="fm_sheet_cf_count",
+            default_op="fm_sheet_get_cf_rule_count",
         )
 
     @staticmethod
-    def _decode_cfvo(ptr: int) -> CfValueObject:
+    def _decode_cfvo(ptr: int) -> Cfvo:
         d = S.CFVO.unpack(LIB, ptr)
-        return CfValueObject(
-            type=d["type"], value=LIB.read_cstr(d["value"]) if d["value"] else None, gte=bool(d["gte"])
-        )
+        return Cfvo(type=d["type"], value=LIB.read_cstr(d["value"]) if d["value"] else None, gte=bool(d["gte"]))
 
     @staticmethod
     def _decode_cf_color_at(ptr: int) -> CfColor:
@@ -9615,7 +9642,7 @@ class Workbook:
         return CfColor(d["r"], d["g"], d["b"], d["a"])
 
     @staticmethod
-    def _write_cfvo(ptr: int, value: CfValueObject, scope: _ArgScope) -> None:
+    def _write_cfvo(ptr: int, value: Cfvo, scope: _ArgScope) -> None:
         S.CFVO.pack(LIB, ptr, {"type": _uint(value.type, "type", 8), "gte": 1 if value.gte else 0})
         if value.value is not None:
             S.write_str_field(LIB, ptr, S.CFVO, "value", value.value, scope)
@@ -9633,14 +9660,14 @@ class Workbook:
             },
         )
 
-    def get_conditional_format_at(self, sheet: int, index: int) -> ConditionalFormat:
+    def get_cf_rule(self, sheet: int, index: int) -> ConditionalFormat:
         """Read the ``index``-th CF rule on ``sheet`` (flattened order)."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.CF_RULE)
             _check(
-                LIB.fm_sheet_cf_get_at(h, _uint(sheet, "sheet_index"), _uint(index, "idx"), ptr),
-                "fm_sheet_cf_get_at",
+                LIB.fm_sheet_get_cf_rule(h, _uint(sheet, "sheet_index"), _uint(index, "idx"), ptr),
+                "fm_sheet_get_cf_rule",
             )
             d = S.CF_RULE.unpack(LIB, ptr)
             sqref: List[MergeRange] = []
@@ -9741,10 +9768,10 @@ class Workbook:
 
     def get_conditional_formats(self, sheet: int) -> List[ConditionalFormat]:
         """Return every CF rule on ``sheet`` in flattened priority order."""
-        n = self.cf_count(sheet)
-        return [self.get_conditional_format_at(sheet, i) for i in range(n)]
+        n = self.get_cf_rule_count(sheet)
+        return [self.get_cf_rule(sheet, i) for i in range(n)]
 
-    def add_conditional_format(self, sheet: int, rule: ConditionalFormatInput) -> int:
+    def add_cf_rule(self, sheet: int, rule: ConditionalFormatInput) -> int:
         """Append a CF rule to ``sheet``; return its index.
 
         Every rule type is accepted, the visual ones included: a color scale,
@@ -9879,23 +9906,23 @@ class Workbook:
                     LIB.write_bytes(ptr + ro["icon_set_icons"][1], struct.pack("<I", icons_ptr))
                     LIB.write_bytes(ptr + ro["icon_set_icon_count"][1], struct.pack("<I", len(icon_set.icons)))
             _check(
-                LIB.fm_sheet_cf_add_rule(h, _uint(sheet, "sheet_index"), ptr, out),
-                "fm_sheet_cf_add_rule",
+                LIB.fm_sheet_add_cf_rule(h, _uint(sheet, "sheet_index"), ptr, out),
+                "fm_sheet_add_cf_rule",
             )
             return LIB.read_u32(out)
 
-    def remove_conditional_format_at(self, sheet: int, index: int) -> None:
+    def remove_cf_rule(self, sheet: int, index: int) -> None:
         """Remove the CF rule at ``index`` on ``sheet`` (flattened order)."""
         h = self._require()
         _check(
-            LIB.fm_sheet_cf_remove_at(h, _uint(sheet, "sheet_index"), _uint(index, "idx")),
-            "fm_sheet_cf_remove_at",
+            LIB.fm_sheet_remove_cf_rule(h, _uint(sheet, "sheet_index"), _uint(index, "idx")),
+            "fm_sheet_remove_cf_rule",
         )
 
-    def clear_conditional_formats(self, sheet: int) -> None:
+    def clear_cf_rules(self, sheet: int) -> None:
         """Drop every CF block on ``sheet``."""
         h = self._require()
-        _check(LIB.fm_sheet_cf_clear(h, _uint(sheet, "sheet_index")), "fm_sheet_cf_clear")
+        _check(LIB.fm_sheet_clear_cf_rules(h, _uint(sheet, "sheet_index")), "fm_sheet_clear_cf_rules")
 
     # -- Styles ------------------------------------------------------------
     def get_cell_xf_index(self, sheet: int, row: int, col: int) -> int:
@@ -9904,8 +9931,8 @@ class Workbook:
         with _ArgScope() as scope:
             out = scope.out_ptr()
             _check(
-                LIB.fm_cell_get_xf_index(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), out),
-                "fm_cell_get_xf_index",
+                LIB.fm_sheet_get_cell_xf_index(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), out),
+                "fm_sheet_get_cell_xf_index",
             )
             return LIB.read_u32(out)
 
@@ -9918,10 +9945,10 @@ class Workbook:
         """
         h = self._require()
         _check(
-            LIB.fm_cell_set_xf_index(
+            LIB.fm_sheet_set_cell_xf_index(
                 h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), _uint(xf_index, "xf_index")
             ),
-            "fm_cell_set_xf_index",
+            "fm_sheet_set_cell_xf_index",
         )
 
     def clear_cell_xf_index(self, sheet: int, row: int, col: int) -> None:
@@ -9934,8 +9961,8 @@ class Workbook:
         """
         h = self._require()
         _check(
-            LIB.fm_cell_clear_xf_index(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col")),
-            "fm_cell_clear_xf_index",
+            LIB.fm_sheet_clear_cell_xf_index(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col")),
+            "fm_sheet_clear_cell_xf_index",
         )
 
     def set_range_xf_index(
@@ -10006,19 +10033,24 @@ class Workbook:
     def get_cell_xf(self, xf_index: int) -> CellXf:
         """Return the resolved ``<xf>`` record at ``xf_index``."""
         return self._get_style_record(
-            LIB.fm_styles_get_cell_xf, S.CELL_XF, xf_index, "xf_index", self._decode_cell_xf, "fm_styles_get_cell_xf"
+            LIB.fm_workbook_get_cell_xf,
+            S.CELL_XF,
+            xf_index,
+            "xf_index",
+            self._decode_cell_xf,
+            "fm_workbook_get_cell_xf",
         )
 
     def get_font(self, font_index: int) -> FontRecord:
         """Return the font record at ``font_index``."""
         return self._get_style_record(
-            LIB.fm_styles_get_font, S.FONT_RECORD, font_index, "font_index", _decode_font, "fm_styles_get_font"
+            LIB.fm_workbook_get_font, S.FONT_RECORD, font_index, "font_index", _decode_font, "fm_workbook_get_font"
         )
 
     def get_fill(self, fill_index: int) -> FillRecord:
         """Return the fill record at ``fill_index``."""
         return self._get_style_record(
-            LIB.fm_styles_get_fill, S.FILL_RECORD, fill_index, "fill_index", _decode_fill, "fm_styles_get_fill"
+            LIB.fm_workbook_get_fill, S.FILL_RECORD, fill_index, "fill_index", _decode_fill, "fm_workbook_get_fill"
         )
 
     def get_border(self, border_index: int) -> Dict[str, object]:
@@ -10029,12 +10061,12 @@ class Workbook:
         carries ``diagonal_up`` / ``diagonal_down`` booleans.
         """
         return self._get_style_record(
-            LIB.fm_styles_get_border,
+            LIB.fm_workbook_get_border,
             S.BORDER_RECORD,
             border_index,
             "border_index",
             _decode_border_record,
-            "fm_styles_get_border",
+            "fm_workbook_get_border",
         )
 
     def get_dxf(self, dxf_index: int) -> DifferentialFormat:
@@ -10042,7 +10074,7 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.DXF_RECORD)
-            _check(LIB.fm_styles_get_dxf(h, _uint(dxf_index, "dxf_index"), ptr), "fm_styles_get_dxf")
+            _check(LIB.fm_workbook_get_dxf(h, _uint(dxf_index, "dxf_index"), ptr), "fm_workbook_get_dxf")
             d = S.DXF_RECORD.unpack(LIB, ptr)
             offsets = S.DXF_RECORD.offsets
             font = _decode_font(ptr + offsets["font"][1]) if d["font_engaged"] else None
@@ -10057,43 +10089,43 @@ class Workbook:
                 protection_xml=LIB.read_cstr(d["protection_xml"]),
             )
 
-    def get_num_fmt(self, num_fmt_id: int) -> str:
+    def get_num_fmt_string(self, num_fmt_id: int) -> str:
         """Return the format code registered for ``num_fmt_id``."""
         h = self._require()
         return _read_cstr_out(
-            LIB.fm_styles_get_num_fmt_string,
+            LIB.fm_workbook_get_num_fmt_string,
             h,
             _uint(num_fmt_id, "num_fmt_id", 16),
-            default_op="fm_styles_get_num_fmt_string",
+            default_op="fm_workbook_get_num_fmt_string",
         )
 
-    def font_count(self) -> int:
+    def get_font_count(self) -> int:
         """Return the number of font records registered."""
-        return self._style_count(LIB.fm_styles_get_font_count)
+        return self._style_count(LIB.fm_workbook_get_font_count)
 
-    def fill_count(self) -> int:
+    def get_fill_count(self) -> int:
         """Return the number of fill records registered."""
-        return self._style_count(LIB.fm_styles_get_fill_count)
+        return self._style_count(LIB.fm_workbook_get_fill_count)
 
-    def border_count(self) -> int:
+    def get_border_count(self) -> int:
         """Return the number of border records registered."""
-        return self._style_count(LIB.fm_styles_get_border_count)
+        return self._style_count(LIB.fm_workbook_get_border_count)
 
-    def cell_xf_count(self) -> int:
+    def get_cell_xf_count(self) -> int:
         """Return the number of ``<xf>`` records registered."""
-        return self._style_count(LIB.fm_styles_get_cell_xf_count)
+        return self._style_count(LIB.fm_workbook_get_cell_xf_count)
 
     def cell_style_count(self) -> int:
         """Return the number of named cell styles."""
-        return self._style_count(LIB.fm_styles_get_cell_style_count)
+        return self._style_count(LIB.fm_workbook_get_cell_style_count)
 
-    def cell_style_xf_count(self) -> int:
+    def get_cell_style_xf_count(self) -> int:
         """Return the number of ``<cellStyleXfs>`` records."""
-        return self._style_count(LIB.fm_styles_get_cell_style_xf_count)
+        return self._style_count(LIB.fm_workbook_get_cell_style_xf_count)
 
-    def dxf_count(self) -> int:
+    def get_dxf_count(self) -> int:
         """Return the number of differential formats available to CF rules."""
-        return self._style_count(LIB.fm_styles_get_dxf_count)
+        return self._style_count(LIB.fm_workbook_get_dxf_count)
 
     def _style_count(self, fn) -> int:
         h = self._require()
@@ -10106,7 +10138,7 @@ class Workbook:
             ptr = scope.struct(S.FONT_RECORD)
             out = scope.out_ptr()
             _pack_font(ptr, record, scope)
-            _check(LIB.fm_styles_add_font(h, ptr, out), "fm_styles_add_font")
+            _check(LIB.fm_workbook_add_font(h, ptr, out), "fm_workbook_add_font")
             return LIB.read_u32(out)
 
     def set_font(self, font_index: int, record: FontRecord) -> None:
@@ -10121,8 +10153,8 @@ class Workbook:
             ptr = scope.struct(S.FONT_RECORD)
             _pack_font(ptr, record, scope)
             _check(
-                LIB.fm_styles_set_font(h, _uint(font_index, "font_index"), ptr),
-                "fm_styles_set_font",
+                LIB.fm_workbook_set_font(h, _uint(font_index, "font_index"), ptr),
+                "fm_workbook_set_font",
             )
 
     def set_default_font(self, record: FontRecord) -> None:
@@ -10147,7 +10179,7 @@ class Workbook:
             ptr = scope.struct(S.FILL_RECORD)
             out = scope.out_ptr()
             _pack_fill(ptr, record, scope)
-            _check(LIB.fm_styles_add_fill(h, ptr, out), "fm_styles_add_fill")
+            _check(LIB.fm_workbook_add_fill(h, ptr, out), "fm_workbook_add_fill")
             return LIB.read_u32(out)
 
     def add_border(self, sides: Dict[str, object]) -> int:
@@ -10164,7 +10196,7 @@ class Workbook:
             ptr = scope.struct(S.BORDER_RECORD)
             out = scope.out_ptr()
             _pack_border_record(ptr, sides)
-            _check(LIB.fm_styles_add_border(h, ptr, out), "fm_styles_add_border")
+            _check(LIB.fm_workbook_add_border(h, ptr, out), "fm_workbook_add_border")
             return LIB.read_u32(out)
 
     def add_num_fmt(self, format_code: str) -> int:
@@ -10173,12 +10205,12 @@ class Workbook:
         with _ArgScope() as scope:
             code_ptr = scope.cstr(format_code)
             out = scope.out_ptr()
-            _check(LIB.fm_styles_add_num_fmt(h, code_ptr, out), "fm_styles_add_num_fmt")
+            _check(LIB.fm_workbook_add_num_fmt(h, code_ptr, out), "fm_workbook_add_num_fmt")
             return struct.unpack("<H", LIB.read_bytes(out, 2))[0]
 
     def add_cell_xf(self, record: CellXf) -> int:
         """Add (dedup) an ``<xf>`` record; return its index."""
-        return self._add_xf_record(record, LIB.fm_styles_add_cell_xf, "fm_styles_add_cell_xf")
+        return self._add_xf_record(record, LIB.fm_workbook_add_cell_xf, "fm_workbook_add_cell_xf")
 
     def add_cell_style_xf(self, record: CellXf) -> int:
         """Add (dedup) a named-style ``<xf>``; return its ``<cellStyleXfs>`` id.
@@ -10187,7 +10219,7 @@ class Workbook:
         the records a ``<cellStyle>`` points at; :meth:`add_cell_xf` writes
         the per-cell ``<cellXfs>`` pool instead.
         """
-        return self._add_xf_record(record, LIB.fm_styles_add_cell_style_xf, "fm_styles_add_cell_style_xf")
+        return self._add_xf_record(record, LIB.fm_workbook_add_cell_style_xf, "fm_workbook_add_cell_style_xf")
 
     def _add_xf_record(self, record: CellXf, fn, op: str) -> int:
         h = self._require()
@@ -10276,7 +10308,7 @@ class Workbook:
                 fields.update(num_fmt_codes=codes, num_fmt_count=len(num_fmt_list), num_fmt_ids=num_fmt_ids)
 
             S.STYLES_BATCH.pack(LIB, batch, fields)
-            _check(LIB.fm_styles_add_batch(h, batch), "fm_styles_add_batch")
+            _check(LIB.fm_workbook_add_batch(h, batch), "fm_workbook_add_batch")
 
             def read_u32_array(ptr: int, count: int) -> List[int]:
                 if count == 0:
@@ -10325,10 +10357,10 @@ class Workbook:
             S.write_str_field(LIB, ptr, S.DXF_RECORD, "num_fmt_code", record.num_fmt_code, scope)
             S.write_str_field(LIB, ptr, S.DXF_RECORD, "alignment_xml", record.alignment_xml, scope)
             S.write_str_field(LIB, ptr, S.DXF_RECORD, "protection_xml", record.protection_xml, scope)
-            _check(LIB.fm_styles_add_dxf(h, ptr, out), "fm_styles_add_dxf")
+            _check(LIB.fm_workbook_add_dxf(h, ptr, out), "fm_workbook_add_dxf")
             return LIB.read_u32(out)
 
-    def set_cell_style(self, record: CellStyle) -> None:
+    def set_cell_style(self, record: CellStyleRecord) -> None:
         """Add or replace the named ``<cellStyle>`` record ``record.name``.
 
         ``record.xf_id`` must reference an existing named-style xf -- register
@@ -10351,7 +10383,7 @@ class Workbook:
                 },
             )
             S.write_str_field(LIB, ptr, S.CELL_STYLE_RECORD, "name", record.name, scope, allow_empty=True)
-            _check(LIB.fm_styles_set_cell_style(h, ptr), "fm_styles_set_cell_style")
+            _check(LIB.fm_workbook_set_cell_style(h, ptr), "fm_workbook_set_cell_style")
 
     def remove_cell_style(self, name: str) -> None:
         """Remove the named cell style ``name``.
@@ -10362,18 +10394,18 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             name_ptr = scope.cstr(name)
-            _check(LIB.fm_styles_remove_cell_style(h, name_ptr), "fm_styles_remove_cell_style")
+            _check(LIB.fm_workbook_remove_cell_style(h, name_ptr), "fm_workbook_remove_cell_style")
 
     def table_style_count(self) -> int:
         """Return the number of custom table / PivotTable styles."""
-        return self._style_count(LIB.fm_styles_get_table_style_count)
+        return self._style_count(LIB.fm_workbook_get_table_style_count)
 
     def get_table_style(self, index: int) -> TableStyle:
         """Return the custom table style at ``index``."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.TABLE_STYLE)
-            _check(LIB.fm_styles_get_table_style(h, _uint(index, "index"), ptr), "fm_styles_get_table_style")
+            _check(LIB.fm_workbook_get_table_style_at(h, _uint(index, "index"), ptr), "fm_workbook_get_table_style_at")
             d = S.TABLE_STYLE.unpack(LIB, ptr)
             elements = []
             for i in range(d["element_count"]):
@@ -10429,7 +10461,7 @@ class Workbook:
                     "element_count": _uint(len(style.elements), "element_count"),
                 },
             )
-            _check(LIB.fm_styles_set_table_style(h, ptr), "fm_styles_set_table_style")
+            _check(LIB.fm_workbook_set_table_style(h, ptr), "fm_workbook_set_table_style")
 
     def remove_table_style(self, name: str) -> None:
         """Remove the custom table style ``name``.
@@ -10440,17 +10472,17 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             name_ptr = scope.cstr(name)
-            _check(LIB.fm_styles_remove_table_style(h, name_ptr), "fm_styles_remove_table_style")
+            _check(LIB.fm_workbook_remove_table_style(h, name_ptr), "fm_workbook_remove_table_style")
 
-    def table_style_defaults(self) -> Tuple[str, str]:
+    def get_table_style_defaults(self) -> Tuple[str, str]:
         """Return the default ``(table_style, pivot_style)`` names; empty when unset."""
         h = self._require()
         with _ArgScope() as scope:
             table_ptr = scope.out_ptr()
             pivot_ptr = scope.out_ptr()
             _check(
-                LIB.fm_styles_get_table_style_defaults(h, table_ptr, pivot_ptr),
-                "fm_styles_get_table_style_defaults",
+                LIB.fm_workbook_get_table_style_defaults(h, table_ptr, pivot_ptr),
+                "fm_workbook_get_table_style_defaults",
             )
             return LIB.read_cstr(LIB.read_u32(table_ptr)), LIB.read_cstr(LIB.read_u32(pivot_ptr))
 
@@ -10460,11 +10492,11 @@ class Workbook:
         with _ArgScope() as scope:
             ptrs = [scope.opt_cstr(value) for value in (table_style, pivot_style)]
             _check(
-                LIB.fm_styles_set_table_style_defaults(h, ptrs[0], ptrs[1]),
-                "fm_styles_set_table_style_defaults",
+                LIB.fm_workbook_set_table_style_defaults(h, ptrs[0], ptrs[1]),
+                "fm_workbook_set_table_style_defaults",
             )
 
-    def get_theme(self) -> Theme:
+    def get_theme_fonts(self) -> Theme:
         """Read the theme's 12 scheme colours and typefaces.
 
         The default theme is reported when the part is absent or unparseable;
@@ -10498,17 +10530,17 @@ class Workbook:
     def _read_theme_script_fonts(h: int, major: bool) -> Tuple[ThemeScriptFont, ...]:
         """Read one theme font set; each pair is decoded before the next call (read-scratch strings)."""
         flag = 1 if major else 0
-        count = _read_count(LIB.fm_workbook_theme_script_font_count, h, _sint(flag, "major"))
+        count = _read_count(LIB.fm_workbook_get_theme_script_font_count, h, _sint(flag, "major"))
         with _ArgScope() as scope:
             script_out = scope.out_ptr()
             face_out = scope.out_ptr()
             result: List[ThemeScriptFont] = []
             for idx in range(count):
                 _check(
-                    LIB.fm_workbook_theme_script_font_at(
+                    LIB.fm_workbook_get_theme_script_font_at(
                         h, _sint(flag, "major"), _uint(idx, "idx"), script_out, face_out
                     ),
-                    "fm_workbook_theme_script_font_at",
+                    "fm_workbook_get_theme_script_font_at",
                 )
                 result.append(
                     ThemeScriptFont(
@@ -10557,14 +10589,14 @@ class Workbook:
                 "fm_workbook_set_theme_script_font",
             )
 
-    def reset_theme(self) -> None:
+    def clear_theme(self) -> None:
         """Remove the theme part so the workbook reports the default theme.
 
-        :meth:`get_theme` then reports ``ThemeSource.DEFAULT``. Excel adds a
+        :meth:`get_theme_fonts` then reports ``ThemeSource.DEFAULT``. Excel adds a
         theme part again when it saves the file.
         """
         h = self._require()
-        _check(LIB.fm_workbook_reset_theme(h), "fm_workbook_reset_theme")
+        _check(LIB.fm_workbook_clear_theme(h), "fm_workbook_clear_theme")
 
     def resolve_color(self, spec: ColorSpec, context: Union[ColorContext, int] = ColorContext.FONT) -> ResolvedColor:
         """Resolve ``spec`` to the ``0xAARRGGBB`` Excel renders.
@@ -10614,17 +10646,17 @@ class Workbook:
                 num_fmt_code=LIB.read_cstr(d["num_fmt_code"]),
             )
 
-    def get_cell_style(self, index: int) -> CellStyle:
+    def get_cell_style(self, index: int) -> CellStyleRecord:
         """Return the named cell style at ``index``."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.CELL_STYLE_RECORD)
             _check(
-                LIB.fm_styles_get_cell_style(h, _uint(index, "index"), ptr),
-                "fm_styles_get_cell_style",
+                LIB.fm_workbook_get_cell_style_at(h, _uint(index, "index"), ptr),
+                "fm_workbook_get_cell_style_at",
             )
             d = S.CELL_STYLE_RECORD.unpack(LIB, ptr)
-            return CellStyle(
+            return CellStyleRecord(
                 name=LIB.read_cstr(d["name"]),
                 xf_id=d["xf_id"],
                 builtin_id=d["builtin_id"],
@@ -10639,23 +10671,23 @@ class Workbook:
         with _ArgScope() as scope:
             ptr = scope.struct(S.CELL_XF)
             _check(
-                LIB.fm_styles_get_cell_style_xf(h, _uint(index, "index"), ptr),
-                "fm_styles_get_cell_style_xf",
+                LIB.fm_workbook_get_cell_style_xf(h, _uint(index, "index"), ptr),
+                "fm_workbook_get_cell_style_xf",
             )
             return self._decode_cell_xf(ptr)
 
     # -- Pivot layout projection -------------------------------------------
-    def pivot_count(self, sheet: int) -> int:
+    def get_pivot_count(self, sheet: int) -> int:
         """Return the number of PivotTables anchored on ``sheet``."""
         h = self._require()
         return _read_count(
-            LIB.fm_workbook_pivot_count,
+            LIB.fm_sheet_get_pivot_count,
             h,
             _uint(sheet, "sheet_index"),
-            default_op="fm_workbook_pivot_count",
+            default_op="fm_sheet_get_pivot_count",
         )
 
-    def pivot_layout(self, sheet: int, pivot_index: int) -> PivotLayout:
+    def get_pivot_layout(self, sheet: int, pivot_index: int) -> PivotLayout:
         """Evaluate and project a PivotTable into concrete grid cells."""
         h = self._require()
         with _ArgScope() as scope:
@@ -10663,10 +10695,10 @@ class Workbook:
             handle = 0
             try:
                 _check(
-                    LIB.fm_workbook_pivot_layout(
+                    LIB.fm_sheet_get_pivot_layout(
                         h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), out
                     ),
-                    "fm_workbook_pivot_layout",
+                    "fm_sheet_get_pivot_layout",
                 )
                 handle = LIB.read_u32(out)
                 top_p = scope.out_ptr()
@@ -10674,22 +10706,22 @@ class Workbook:
                 rows_p = scope.out_ptr()
                 cols_p = scope.out_ptr()
                 _check(
-                    LIB.fm_pivot_cells_bounds(handle, top_p, left_p, rows_p, cols_p),
-                    "fm_pivot_cells_bounds",
+                    LIB.fm_pivot_cells_get_bounds(handle, top_p, left_p, rows_p, cols_p),
+                    "fm_pivot_cells_get_bounds",
                 )
                 top = LIB.read_u32(top_p)
                 left = LIB.read_u32(left_p)
                 rows = LIB.read_u32(rows_p)
                 cols = LIB.read_u32(cols_p)
                 cells: List[PivotCell] = []
-                n = LIB.fm_pivot_cells_count(handle)
+                n = LIB.fm_pivot_cells_get_cell_count(handle)
                 # One scratch block for the whole walk; see iter_defined_names.
                 cptr = scope.struct(S.PIVOT_CELL)
                 for i in range(n):
                     S.zero_struct(LIB, S.PIVOT_CELL, cptr)
                     _check(
-                        LIB.fm_pivot_cells_at(handle, _uint(i, "idx"), cptr),
-                        "fm_pivot_cells_at",
+                        LIB.fm_pivot_cells_get_cell_at(handle, _uint(i, "idx"), cptr),
+                        "fm_pivot_cells_get_cell_at",
                     )
                     d = S.PIVOT_CELL.unpack(LIB, cptr)
                     value = Value._from_wasm(cptr + S.PIVOT_CELL_VALUE_OFFSET)
@@ -10713,26 +10745,26 @@ class Workbook:
     def pivot_cache_count(self) -> int:
         """Return the number of pivot caches owned by the workbook."""
         h = self._require()
-        return _read_count(LIB.fm_workbook_pivot_cache_count, h, default_op="fm_workbook_pivot_cache_count")
+        return _read_count(LIB.fm_workbook_get_pivot_cache_count, h, default_op="fm_workbook_get_pivot_cache_count")
 
     def pivot_cache_id_at(self, index: int) -> int:
         """Return the cache id at flat ``index``."""
         h = self._require()
         return _read_count(
-            LIB.fm_workbook_pivot_cache_id_at,
+            LIB.fm_workbook_get_pivot_cache_id_at,
             h,
             _uint(index, "idx"),
-            default_op="fm_workbook_pivot_cache_id_at",
+            default_op="fm_workbook_get_pivot_cache_id_at",
         )
 
-    def pivot_cache_create(self, requested_id: int = 0) -> int:
+    def add_pivot_cache(self, requested_id: int = 0) -> int:
         """Create a new empty pivot cache; return its assigned id."""
         h = self._require()
         return _read_count(
-            LIB.fm_workbook_pivot_cache_create,
+            LIB.fm_workbook_add_pivot_cache,
             h,
             _uint(requested_id, "requested_id"),
-            default_op="fm_workbook_pivot_cache_create",
+            default_op="fm_workbook_add_pivot_cache",
         )
 
     def get_pivot_cache_worksheet_source(self, cache_id: int) -> Optional[PivotWorksheetSource]:
@@ -10744,10 +10776,10 @@ class Workbook:
             out_sheet = scope.out_ptr()
             out_name = scope.out_ptr()
             _check(
-                LIB.fm_workbook_pivot_cache_get_worksheet_source(
+                LIB.fm_workbook_get_pivot_cache_worksheet_source(
                     h, _uint(cache_id, "cache_id"), present, out_ref, out_sheet, out_name
                 ),
-                "fm_workbook_pivot_cache_get_worksheet_source",
+                "fm_workbook_get_pivot_cache_worksheet_source",
             )
             if not LIB.read_i32(present):
                 return None
@@ -10764,20 +10796,20 @@ class Workbook:
             values = () if source is None else (source.ref, source.sheet, source.name)
             pointers = [scope.opt_cstr(value) for value in values] if source is not None else [0, 0, 0]
             _check(
-                LIB.fm_workbook_pivot_cache_set_worksheet_source(
+                LIB.fm_workbook_set_pivot_cache_worksheet_source(
                     h, _uint(cache_id, "cache_id"), 0 if source is None else 1, *pointers
                 ),
-                "fm_workbook_pivot_cache_set_worksheet_source",
+                "fm_workbook_set_pivot_cache_worksheet_source",
             )
 
-    def pivot_cache_get_options(self, cache_id: int) -> PivotCacheOptions:
+    def get_pivot_cache_options(self, cache_id: int) -> PivotCacheOptions:
         """Read the options of the pivot cache; see :class:`PivotCacheOptions`."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_CACHE_OPTIONS)
             _check(
-                LIB.fm_workbook_pivot_cache_get_options(h, _uint(cache_id, "cache_id"), ptr),
-                "fm_workbook_pivot_cache_get_options",
+                LIB.fm_workbook_get_pivot_cache_options(h, _uint(cache_id, "cache_id"), ptr),
+                "fm_workbook_get_pivot_cache_options",
             )
             d = S.PIVOT_CACHE_OPTIONS.unpack(LIB, ptr)
             return PivotCacheOptions(
@@ -10786,7 +10818,7 @@ class Workbook:
                 refresh_on_load=d["refresh_on_load"] != 0,
             )
 
-    def pivot_cache_set_options(self, cache_id: int, options: PivotCacheOptions) -> None:
+    def set_pivot_cache_options(self, cache_id: int, options: PivotCacheOptions) -> None:
         """Write every member of ``options`` to the pivot cache; see :class:`PivotCacheOptions`."""
         h = self._require()
         if not isinstance(options, PivotCacheOptions):
@@ -10803,11 +10835,11 @@ class Workbook:
                 },
             )
             _check(
-                LIB.fm_workbook_pivot_cache_set_options(h, _uint(cache_id, "cache_id"), ptr),
-                "fm_workbook_pivot_cache_set_options",
+                LIB.fm_workbook_set_pivot_cache_options(h, _uint(cache_id, "cache_id"), ptr),
+                "fm_workbook_set_pivot_cache_options",
             )
 
-    def pivot_cache_calculated_field_add(self, cache_id: int, name: str, formula: str) -> int:
+    def add_pivot_cache_calculated_field(self, cache_id: int, name: str, formula: str) -> int:
         """Add calculated field ``name`` as the last cache field; return its index.
 
         The formula is in English canonical form and names cache fields only,
@@ -10819,47 +10851,47 @@ class Workbook:
             formula_ptr = scope.cstr(formula)
             out = scope.out_ptr()
             _check(
-                LIB.fm_workbook_pivot_cache_calculated_field_add(
+                LIB.fm_workbook_add_pivot_cache_calculated_field(
                     h, _uint(cache_id, "cache_id"), name_ptr, formula_ptr, out
                 ),
-                "fm_workbook_pivot_cache_calculated_field_add",
+                "fm_workbook_add_pivot_cache_calculated_field",
             )
             return LIB.read_u32(out)
 
-    def pivot_cache_calculated_field_set_formula(self, cache_id: int, field_index: int, formula: str) -> None:
+    def set_pivot_cache_calculated_field_formula(self, cache_id: int, field_index: int, formula: str) -> None:
         """Replace the formula of calculated field ``field_index``."""
         h = self._require()
         with _ArgScope() as scope:
             formula_ptr = scope.cstr(formula)
             _check(
-                LIB.fm_workbook_pivot_cache_calculated_field_set_formula(
+                LIB.fm_workbook_set_pivot_cache_calculated_field_formula(
                     h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), formula_ptr
                 ),
-                "fm_workbook_pivot_cache_calculated_field_set_formula",
+                "fm_workbook_set_pivot_cache_calculated_field_formula",
             )
 
-    def pivot_cache_calculated_field_remove(self, cache_id: int, field_index: int) -> None:
+    def remove_pivot_cache_calculated_field(self, cache_id: int, field_index: int) -> None:
         """Remove calculated field ``field_index`` and its data fields in every pivot table."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_calculated_field_remove(
+            LIB.fm_workbook_remove_pivot_cache_calculated_field(
                 h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index")
             ),
-            "fm_workbook_pivot_cache_calculated_field_remove",
+            "fm_workbook_remove_pivot_cache_calculated_field",
         )
 
-    def pivot_cache_field_formula(self, cache_id: int, field_idx: int) -> str:
+    def get_pivot_cache_field_formula(self, cache_id: int, field_idx: int) -> str:
         """Return the formula of cache field ``field_idx`` without a leading ``=``; ``""`` when not calculated."""
         h = self._require()
         return _read_cstr_out(
-            LIB.fm_workbook_pivot_cache_field_formula,
+            LIB.fm_workbook_get_pivot_cache_field_formula,
             h,
             _uint(cache_id, "cache_id"),
             _uint(field_idx, "field_idx"),
-            default_op="fm_workbook_pivot_cache_field_formula",
+            default_op="fm_workbook_get_pivot_cache_field_formula",
         )
 
-    def pivot_cache_calculated_item_add(self, cache_id: int, field_index: int, name: str, formula: str) -> None:
+    def add_pivot_cache_calculated_item(self, cache_id: int, field_index: int, name: str, formula: str) -> None:
         """Add calculated item ``name`` to cache field ``field_index``; it is last in solve order.
 
         The formula names items of the same field, as ``North``, ``'North East'``,
@@ -10870,25 +10902,25 @@ class Workbook:
             name_ptr = scope.cstr(name)
             formula_ptr = scope.cstr(formula)
             _check(
-                LIB.fm_workbook_pivot_cache_calculated_item_add(
+                LIB.fm_workbook_add_pivot_cache_calculated_item(
                     h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), name_ptr, formula_ptr
                 ),
-                "fm_workbook_pivot_cache_calculated_item_add",
+                "fm_workbook_add_pivot_cache_calculated_item",
             )
 
-    def pivot_cache_calculated_item_count(self, cache_id: int) -> int:
+    def get_pivot_cache_calculated_item_count(self, cache_id: int) -> int:
         """Return the number of calculated items in the cache, in solve order."""
         h = self._require()
-        return _read_count(LIB.fm_workbook_pivot_cache_calculated_item_count, h, _uint(cache_id, "cache_id"))
+        return _read_count(LIB.fm_workbook_get_pivot_cache_calculated_item_count, h, _uint(cache_id, "cache_id"))
 
-    def pivot_cache_calculated_item_at(self, cache_id: int, idx: int) -> PivotCalculatedItem:
+    def get_pivot_cache_calculated_item(self, cache_id: int, idx: int) -> PivotCalculatedItem:
         """Read calculated item ``idx`` (in solve order)."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_CALCULATED_ITEM)
             _check(
-                LIB.fm_workbook_pivot_cache_calculated_item_at(h, _uint(cache_id, "cache_id"), _uint(idx, "idx"), ptr),
-                "fm_workbook_pivot_cache_calculated_item_at",
+                LIB.fm_workbook_get_pivot_cache_calculated_item(h, _uint(cache_id, "cache_id"), _uint(idx, "idx"), ptr),
+                "fm_workbook_get_pivot_cache_calculated_item",
             )
             d = S.PIVOT_CALCULATED_ITEM.unpack(LIB, ptr)
             return PivotCalculatedItem(
@@ -10898,127 +10930,127 @@ class Workbook:
                 scoped=d["scoped"] != 0,
             )
 
-    def pivot_cache_calculated_item_set_formula(self, cache_id: int, idx: int, formula: str) -> None:
+    def set_pivot_cache_calculated_item_formula(self, cache_id: int, idx: int, formula: str) -> None:
         """Replace the formula of calculated item ``idx``."""
         h = self._require()
         with _ArgScope() as scope:
             formula_ptr = scope.cstr(formula)
             _check(
-                LIB.fm_workbook_pivot_cache_calculated_item_set_formula(
+                LIB.fm_workbook_set_pivot_cache_calculated_item_formula(
                     h, _uint(cache_id, "cache_id"), _uint(idx, "idx"), formula_ptr
                 ),
-                "fm_workbook_pivot_cache_calculated_item_set_formula",
+                "fm_workbook_set_pivot_cache_calculated_item_formula",
             )
 
-    def pivot_cache_calculated_item_move(self, cache_id: int, idx: int, new_idx: int) -> None:
+    def move_pivot_cache_calculated_item(self, cache_id: int, idx: int, new_idx: int) -> None:
         """Move calculated item ``idx`` to position ``new_idx`` in solve order."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_calculated_item_move(
+            LIB.fm_workbook_move_pivot_cache_calculated_item(
                 h, _uint(cache_id, "cache_id"), _uint(idx, "idx"), _uint(new_idx, "new_idx")
             ),
-            "fm_workbook_pivot_cache_calculated_item_move",
+            "fm_workbook_move_pivot_cache_calculated_item",
         )
 
-    def pivot_cache_calculated_item_remove(self, cache_id: int, idx: int) -> None:
+    def remove_pivot_cache_calculated_item(self, cache_id: int, idx: int) -> None:
         """Remove calculated item ``idx``, its item in the cache field and in every pivot table."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_calculated_item_remove(h, _uint(cache_id, "cache_id"), _uint(idx, "idx")),
-            "fm_workbook_pivot_cache_calculated_item_remove",
+            LIB.fm_workbook_remove_pivot_cache_calculated_item(h, _uint(cache_id, "cache_id"), _uint(idx, "idx")),
+            "fm_workbook_remove_pivot_cache_calculated_item",
         )
 
-    def pivot_cache_remove(self, cache_id: int) -> None:
+    def remove_pivot_cache(self, cache_id: int) -> None:
         """Remove the pivot cache with id ``cache_id``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_remove(h, _uint(cache_id, "cache_id")),
-            "fm_workbook_pivot_cache_remove",
+            LIB.fm_workbook_remove_pivot_cache(h, _uint(cache_id, "cache_id")),
+            "fm_workbook_remove_pivot_cache",
         )
 
-    def pivot_cache_field_count(self, cache_id: int) -> int:
+    def get_pivot_cache_field_count(self, cache_id: int) -> int:
         """Return the number of fields on the cache."""
         h = self._require()
-        return _read_count(LIB.fm_workbook_pivot_cache_field_count, h, _uint(cache_id, "cache_id"))
+        return _read_count(LIB.fm_workbook_get_pivot_cache_field_count, h, _uint(cache_id, "cache_id"))
 
-    def pivot_cache_field_name(self, cache_id: int, field_idx: int) -> str:
+    def get_pivot_cache_field_name(self, cache_id: int, field_idx: int) -> str:
         """Read the name of cache field ``field_idx``."""
         h = self._require()
         return _read_cstr_out(
-            LIB.fm_workbook_pivot_cache_field_name,
+            LIB.fm_workbook_get_pivot_cache_field_name,
             h,
             _uint(cache_id, "cache_id"),
             _uint(field_idx, "field_idx"),
-            default_op="fm_workbook_pivot_cache_field_name",
+            default_op="fm_workbook_get_pivot_cache_field_name",
         )
 
-    def pivot_cache_field_add(self, cache_id: int, name: str) -> int:
+    def add_pivot_cache_field(self, cache_id: int, name: str) -> int:
         """Append a field to the cache; return its index."""
         h = self._require()
         with _ArgScope() as scope:
             name_ptr = scope.cstr(name)
             out = scope.out_ptr()
             _check(
-                LIB.fm_workbook_pivot_cache_field_add(h, _uint(cache_id, "cache_id"), name_ptr, out),
-                "fm_workbook_pivot_cache_field_add",
+                LIB.fm_workbook_add_pivot_cache_field(h, _uint(cache_id, "cache_id"), name_ptr, out),
+                "fm_workbook_add_pivot_cache_field",
             )
             return LIB.read_u32(out)
 
-    def pivot_cache_field_clear(self, cache_id: int) -> None:
+    def clear_pivot_cache_fields(self, cache_id: int) -> None:
         """Drop every field (and record) from the cache."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_field_clear(h, _uint(cache_id, "cache_id")),
-            "fm_workbook_pivot_cache_field_clear",
+            LIB.fm_workbook_clear_pivot_cache_fields(h, _uint(cache_id, "cache_id")),
+            "fm_workbook_clear_pivot_cache_fields",
         )
 
-    def pivot_cache_field_shared_item_count(self, cache_id: int, field_idx: int) -> int:
+    def get_pivot_cache_field_shared_item_count(self, cache_id: int, field_idx: int) -> int:
         """Return the shared-item count on cache field ``field_idx``."""
         h = self._require()
         return _read_count(
-            LIB.fm_workbook_pivot_cache_field_shared_item_count,
+            LIB.fm_workbook_get_pivot_cache_field_shared_item_count,
             h,
             _uint(cache_id, "cache_id"),
             _uint(field_idx, "field_idx"),
         )
 
-    def pivot_cache_field_shared_item_value(self, cache_id: int, field_idx: int, item_idx: int) -> Value:
+    def get_pivot_cache_field_shared_item_value(self, cache_id: int, field_idx: int, item_idx: int) -> Value:
         """Return shared item ``item_idx`` of cache field ``field_idx``.
 
         Date items are stored as serial numbers and read back as numbers; use
-        :meth:`pivot_cache_field_shared_item_is_date` to tell them from plain numbers.
+        :meth:`is_pivot_cache_field_shared_item_date` to tell them from plain numbers.
         """
         h = self._require()
         with _ArgScope() as scope:
             value_ptr = scope.alloc(fm_value_t_size)
-            status = LIB.fm_workbook_pivot_cache_field_shared_item_value(
+            status = LIB.fm_workbook_get_pivot_cache_field_shared_item_value(
                 h,
                 _uint(cache_id, "cache_id"),
                 _uint(field_idx, "field_idx"),
                 _uint(item_idx, "item_idx"),
                 value_ptr,
             )
-            _check(status, "fm_workbook_pivot_cache_field_shared_item_value")
+            _check(status, "fm_workbook_get_pivot_cache_field_shared_item_value")
             return Value._from_wasm(value_ptr)
 
-    def pivot_cache_field_shared_item_is_date(self, cache_id: int, field_idx: int, item_idx: int) -> bool:
+    def is_pivot_cache_field_shared_item_date(self, cache_id: int, field_idx: int, item_idx: int) -> bool:
         """Return whether shared item ``item_idx`` of cache field ``field_idx`` is a date item."""
         h = self._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
             _check(
-                LIB.fm_workbook_pivot_cache_field_shared_item_is_date(
+                LIB.fm_workbook_is_pivot_cache_field_shared_item_date(
                     h,
                     _uint(cache_id, "cache_id"),
                     _uint(field_idx, "field_idx"),
                     _uint(item_idx, "item_idx"),
                     out,
                 ),
-                "fm_workbook_pivot_cache_field_shared_item_is_date",
+                "fm_workbook_is_pivot_cache_field_shared_item_date",
             )
             return LIB.read_i32(out) != 0
 
-    def pivot_cache_field_add_shared_item_date(self, cache_id: int, field_idx: int, serial: float) -> None:
+    def add_pivot_cache_field_shared_item_date(self, cache_id: int, field_idx: int, serial: float) -> None:
         """Append a date shared item to a cache field.
 
         ``serial`` is a date serial in the workbook's date system, as a cell holds
@@ -11026,113 +11058,113 @@ class Workbook:
         """
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_field_add_shared_item_date(
+            LIB.fm_workbook_add_pivot_cache_field_shared_item_date(
                 h, _uint(cache_id, "cache_id"), _uint(field_idx, "field_idx"), float(serial)
             ),
-            "fm_workbook_pivot_cache_field_add_shared_item_date",
+            "fm_workbook_add_pivot_cache_field_shared_item_date",
         )
 
-    def pivot_cache_field_add_shared_item_number(self, cache_id: int, field_idx: int, value: float) -> None:
+    def add_pivot_cache_field_shared_item_number(self, cache_id: int, field_idx: int, value: float) -> None:
         """Append a numeric shared item to a cache field."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_field_add_shared_item_number(
+            LIB.fm_workbook_add_pivot_cache_field_shared_item_number(
                 h, _uint(cache_id, "cache_id"), _uint(field_idx, "field_idx"), float(value)
             ),
-            "fm_workbook_pivot_cache_field_add_shared_item_number",
+            "fm_workbook_add_pivot_cache_field_shared_item_number",
         )
 
-    def pivot_cache_field_add_shared_item_text(self, cache_id: int, field_idx: int, value: str) -> None:
+    def add_pivot_cache_field_shared_item_text(self, cache_id: int, field_idx: int, value: str) -> None:
         """Append a text shared item to a cache field."""
         h = self._require()
         with _ArgScope() as scope:
             vp = scope.cstr(value)
             _check(
-                LIB.fm_workbook_pivot_cache_field_add_shared_item_text(
+                LIB.fm_workbook_add_pivot_cache_field_shared_item_text(
                     h, _uint(cache_id, "cache_id"), _uint(field_idx, "field_idx"), vp
                 ),
-                "fm_workbook_pivot_cache_field_add_shared_item_text",
+                "fm_workbook_add_pivot_cache_field_shared_item_text",
             )
 
-    def pivot_cache_field_add_shared_item_bool(self, cache_id: int, field_idx: int, value: bool) -> None:
+    def add_pivot_cache_field_shared_item_bool(self, cache_id: int, field_idx: int, value: bool) -> None:
         """Append a boolean shared item to a cache field."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_field_add_shared_item_bool(
+            LIB.fm_workbook_add_pivot_cache_field_shared_item_bool(
                 h, _uint(cache_id, "cache_id"), _uint(field_idx, "field_idx"), 1 if value else 0
             ),
-            "fm_workbook_pivot_cache_field_add_shared_item_bool",
+            "fm_workbook_add_pivot_cache_field_shared_item_bool",
         )
 
-    def pivot_cache_field_add_shared_item_blank(self, cache_id: int, field_idx: int) -> None:
+    def add_pivot_cache_field_shared_item_blank(self, cache_id: int, field_idx: int) -> None:
         """Append a blank shared item to a cache field."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_field_add_shared_item_blank(
+            LIB.fm_workbook_add_pivot_cache_field_shared_item_blank(
                 h, _uint(cache_id, "cache_id"), _uint(field_idx, "field_idx")
             ),
-            "fm_workbook_pivot_cache_field_add_shared_item_blank",
+            "fm_workbook_add_pivot_cache_field_shared_item_blank",
         )
 
-    def pivot_cache_field_add_shared_item_error(self, cache_id: int, field_idx: int, error_code: int) -> None:
+    def add_pivot_cache_field_shared_item_error(self, cache_id: int, field_idx: int, error_code: int) -> None:
         """Append an Excel error shared item to a cache field."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_field_add_shared_item_error(
+            LIB.fm_workbook_add_pivot_cache_field_shared_item_error(
                 h, _uint(cache_id, "cache_id"), _uint(field_idx, "field_idx"), _sint(error_code, "error")
             ),
-            "fm_workbook_pivot_cache_field_add_shared_item_error",
+            "fm_workbook_add_pivot_cache_field_shared_item_error",
         )
 
-    def pivot_cache_field_clear_shared_items(self, cache_id: int, field_idx: int) -> None:
+    def clear_pivot_cache_field_shared_items(self, cache_id: int, field_idx: int) -> None:
         """Drop every shared item from a cache field."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_field_clear_shared_items(
+            LIB.fm_workbook_clear_pivot_cache_field_shared_items(
                 h, _uint(cache_id, "cache_id"), _uint(field_idx, "field_idx")
             ),
-            "fm_workbook_pivot_cache_field_clear_shared_items",
+            "fm_workbook_clear_pivot_cache_field_shared_items",
         )
 
-    def pivot_cache_record_count(self, cache_id: int) -> int:
+    def get_pivot_cache_record_count(self, cache_id: int) -> int:
         """Return the number of records on the cache."""
         h = self._require()
-        return _read_count(LIB.fm_workbook_pivot_cache_record_count, h, _uint(cache_id, "cache_id"))
+        return _read_count(LIB.fm_workbook_get_pivot_cache_record_count, h, _uint(cache_id, "cache_id"))
 
-    def pivot_cache_record_add(self, cache_id: int) -> int:
+    def add_pivot_cache_record(self, cache_id: int) -> int:
         """Append an empty record to the cache; return its index."""
         h = self._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
             _check(
-                LIB.fm_workbook_pivot_cache_record_add(h, _uint(cache_id, "cache_id"), out),
-                "fm_workbook_pivot_cache_record_add",
+                LIB.fm_workbook_add_pivot_cache_record(h, _uint(cache_id, "cache_id"), out),
+                "fm_workbook_add_pivot_cache_record",
             )
             return LIB.read_u32(out)
 
-    def pivot_cache_record_clear(self, cache_id: int) -> None:
+    def clear_pivot_cache_records(self, cache_id: int) -> None:
         """Drop every record from the cache."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_record_clear(h, _uint(cache_id, "cache_id")),
-            "fm_workbook_pivot_cache_record_clear",
+            LIB.fm_workbook_clear_pivot_cache_records(h, _uint(cache_id, "cache_id")),
+            "fm_workbook_clear_pivot_cache_records",
         )
 
-    def pivot_cache_record_set_number(self, cache_id: int, record_idx: int, field_idx: int, value: float) -> None:
+    def set_pivot_cache_record_number(self, cache_id: int, record_idx: int, field_idx: int, value: float) -> None:
         """Set cache cell ``(record_idx, field_idx)`` to a number."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_record_set_number(
+            LIB.fm_workbook_set_pivot_cache_record_number(
                 h,
                 _uint(cache_id, "cache_id"),
                 _uint(record_idx, "record_idx"),
                 _uint(field_idx, "field_idx"),
                 float(value),
             ),
-            "fm_workbook_pivot_cache_record_set_number",
+            "fm_workbook_set_pivot_cache_record_number",
         )
 
-    def pivot_cache_record_set_date(self, cache_id: int, record_idx: int, field_idx: int, serial: float) -> None:
+    def set_pivot_cache_record_date(self, cache_id: int, record_idx: int, field_idx: int, serial: float) -> None:
         """Set cache cell ``(record_idx, field_idx)`` to a date.
 
         ``serial`` is a date serial in the workbook's date system, as a cell holds
@@ -11140,75 +11172,75 @@ class Workbook:
         """
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_record_set_date(
+            LIB.fm_workbook_set_pivot_cache_record_date(
                 h,
                 _uint(cache_id, "cache_id"),
                 _uint(record_idx, "record_idx"),
                 _uint(field_idx, "field_idx"),
                 float(serial),
             ),
-            "fm_workbook_pivot_cache_record_set_date",
+            "fm_workbook_set_pivot_cache_record_date",
         )
 
-    def pivot_cache_record_set_text(self, cache_id: int, record_idx: int, field_idx: int, value: str) -> None:
+    def set_pivot_cache_record_text(self, cache_id: int, record_idx: int, field_idx: int, value: str) -> None:
         """Set cache cell ``(record_idx, field_idx)`` to text."""
         h = self._require()
         with _ArgScope() as scope:
             vp = scope.cstr(value)
             _check(
-                LIB.fm_workbook_pivot_cache_record_set_text(
+                LIB.fm_workbook_set_pivot_cache_record_text(
                     h, _uint(cache_id, "cache_id"), _uint(record_idx, "record_idx"), _uint(field_idx, "field_idx"), vp
                 ),
-                "fm_workbook_pivot_cache_record_set_text",
+                "fm_workbook_set_pivot_cache_record_text",
             )
 
-    def pivot_cache_record_set_bool(self, cache_id: int, record_idx: int, field_idx: int, value: bool) -> None:
+    def set_pivot_cache_record_bool(self, cache_id: int, record_idx: int, field_idx: int, value: bool) -> None:
         """Set cache cell ``(record_idx, field_idx)`` to a boolean."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_record_set_bool(
+            LIB.fm_workbook_set_pivot_cache_record_bool(
                 h,
                 _uint(cache_id, "cache_id"),
                 _uint(record_idx, "record_idx"),
                 _uint(field_idx, "field_idx"),
                 1 if value else 0,
             ),
-            "fm_workbook_pivot_cache_record_set_bool",
+            "fm_workbook_set_pivot_cache_record_bool",
         )
 
-    def pivot_cache_record_set_blank(self, cache_id: int, record_idx: int, field_idx: int) -> None:
+    def set_pivot_cache_record_blank(self, cache_id: int, record_idx: int, field_idx: int) -> None:
         """Set cache cell ``(record_idx, field_idx)`` to blank."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_record_set_blank(
+            LIB.fm_workbook_set_pivot_cache_record_blank(
                 h, _uint(cache_id, "cache_id"), _uint(record_idx, "record_idx"), _uint(field_idx, "field_idx")
             ),
-            "fm_workbook_pivot_cache_record_set_blank",
+            "fm_workbook_set_pivot_cache_record_blank",
         )
 
-    def pivot_cache_record_set_error(self, cache_id: int, record_idx: int, field_idx: int, error_code: int) -> None:
+    def set_pivot_cache_record_error(self, cache_id: int, record_idx: int, field_idx: int, error_code: int) -> None:
         """Set cache cell ``(record_idx, field_idx)`` to an Excel error."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_record_set_error(
+            LIB.fm_workbook_set_pivot_cache_record_error(
                 h,
                 _uint(cache_id, "cache_id"),
                 _uint(record_idx, "record_idx"),
                 _uint(field_idx, "field_idx"),
                 _sint(error_code, "error"),
             ),
-            "fm_workbook_pivot_cache_record_set_error",
+            "fm_workbook_set_pivot_cache_record_error",
         )
 
     # -- Pivot tables ------------------------------------------------------
-    def pivot_create(self, sheet: int, name: str, cache_id: int, anchor_row: int, anchor_col: int) -> int:
+    def add_pivot(self, sheet: int, name: str, cache_id: int, anchor_row: int, anchor_col: int) -> int:
         """Create a new empty pivot table; return its flat index."""
         h = self._require()
         with _ArgScope() as scope:
             name_ptr = scope.cstr(name)
             out = scope.out_ptr()
             _check(
-                LIB.fm_workbook_pivot_create(
+                LIB.fm_sheet_add_pivot(
                     h,
                     _uint(sheet, "sheet_index"),
                     name_ptr,
@@ -11217,7 +11249,7 @@ class Workbook:
                     _uint(anchor_col, "anchor_col"),
                     out,
                 ),
-                "fm_workbook_pivot_create",
+                "fm_sheet_add_pivot",
             )
             return LIB.read_u32(out)
 
@@ -11227,10 +11259,10 @@ class Workbook:
         with _ArgScope() as scope:
             out = scope.out_ptr()
             _check(
-                LIB.fm_workbook_pivot_get_layout(
+                LIB.fm_sheet_get_pivot_report_layout(
                     h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), out
                 ),
-                "fm_workbook_pivot_get_layout",
+                "fm_sheet_get_pivot_report_layout",
             )
             return PivotReportLayout(LIB.read_i32(out))
 
@@ -11238,33 +11270,33 @@ class Workbook:
         """Set the pivot's compact, tabular, or outline report layout."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_set_layout(
+            LIB.fm_sheet_set_pivot_report_layout(
                 h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _sint(layout, "layout")
             ),
-            "fm_workbook_pivot_set_layout",
+            "fm_sheet_set_pivot_report_layout",
         )
 
-    def pivot_remove(self, sheet: int, pivot_index: int) -> None:
+    def remove_pivot(self, sheet: int, pivot_index: int) -> None:
         """Remove the pivot table at ``pivot_index``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_remove(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")),
-            "fm_workbook_pivot_remove",
+            LIB.fm_sheet_remove_pivot(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")),
+            "fm_sheet_remove_pivot",
         )
 
-    def pivot_set_name(self, sheet: int, pivot_index: int, name: str) -> None:
+    def set_pivot_name(self, sheet: int, pivot_index: int, name: str) -> None:
         """Rename the pivot table."""
         h = self._require()
         with _ArgScope() as scope:
             name_ptr = scope.cstr(name)
             _check(
-                LIB.fm_workbook_pivot_set_name(
+                LIB.fm_sheet_set_pivot_name(
                     h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), name_ptr
                 ),
-                "fm_workbook_pivot_set_name",
+                "fm_sheet_set_pivot_name",
             )
 
-    def pivot_set_anchor(
+    def set_pivot_anchor(
         self,
         sheet: int,
         pivot_index: int,
@@ -11276,7 +11308,7 @@ class Workbook:
         """Update the pivot's anchor cell and span."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_set_anchor(
+            LIB.fm_sheet_set_pivot_anchor(
                 h,
                 _uint(sheet, "sheet_index"),
                 _uint(pivot_index, "pivot_index"),
@@ -11285,24 +11317,24 @@ class Workbook:
                 _uint(span_rows, "span_rows"),
                 _uint(span_cols, "span_cols"),
             ),
-            "fm_workbook_pivot_set_anchor",
+            "fm_sheet_set_pivot_anchor",
         )
 
-    def pivot_set_grand_totals(self, sheet: int, pivot_index: int, rows_enabled: bool, cols_enabled: bool) -> None:
+    def set_pivot_grand_totals(self, sheet: int, pivot_index: int, rows_enabled: bool, cols_enabled: bool) -> None:
         """Toggle the row / column grand-total bands."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_set_grand_totals(
+            LIB.fm_sheet_set_pivot_grand_totals(
                 h,
                 _uint(sheet, "sheet_index"),
                 _uint(pivot_index, "pivot_index"),
                 1 if rows_enabled else 0,
                 1 if cols_enabled else 0,
             ),
-            "fm_workbook_pivot_set_grand_totals",
+            "fm_sheet_set_pivot_grand_totals",
         )
 
-    def pivot_set_style_info(
+    def set_pivot_style_info(
         self,
         sheet: int,
         pivot_index: int,
@@ -11322,7 +11354,7 @@ class Workbook:
         with _ArgScope() as scope:
             name_ptr = scope.nonempty_cstr(name)
             _check(
-                LIB.fm_workbook_pivot_set_style_info(
+                LIB.fm_sheet_set_pivot_style_info(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(pivot_index, "pivot_index"),
@@ -11333,47 +11365,47 @@ class Workbook:
                     1 if show_col_stripes else 0,
                     1 if show_last_column else 0,
                 ),
-                "fm_workbook_pivot_set_style_info",
+                "fm_sheet_set_pivot_style_info",
             )
 
-    def pivot_cache_id(self, sheet: int, pivot_index: int) -> int:
+    def get_pivot_cache_id(self, sheet: int, pivot_index: int) -> int:
         """Return the ``cache_id`` of the pivot cache the pivot draws from."""
         h = self._require()
         return _read_count(
-            LIB.fm_workbook_pivot_get_cache_id, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
+            LIB.fm_sheet_get_pivot_cache_id, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
         )
 
-    def pivot_name(self, sheet: int, pivot_index: int) -> str:
+    def get_pivot_name(self, sheet: int, pivot_index: int) -> str:
         """Return the pivot's name."""
         h = self._require()
         return _read_cstr_out(
-            LIB.fm_workbook_pivot_get_name, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
+            LIB.fm_sheet_get_pivot_name, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
         )
 
-    def pivot_grand_totals(self, sheet: int, pivot_index: int) -> Tuple[bool, bool]:
-        """Return ``(rows, cols)``, the flags :meth:`pivot_set_grand_totals` writes."""
+    def get_pivot_grand_totals(self, sheet: int, pivot_index: int) -> Tuple[bool, bool]:
+        """Return ``(rows, cols)``, the flags :meth:`set_pivot_grand_totals` writes."""
         h = self._require()
         with _ArgScope() as scope:
             rows = scope.out_ptr()
             cols = scope.out_ptr()
             _check(
-                LIB.fm_workbook_pivot_get_grand_totals(
+                LIB.fm_sheet_get_pivot_grand_totals(
                     h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), rows, cols
                 ),
-                "fm_workbook_pivot_get_grand_totals",
+                "fm_sheet_get_pivot_grand_totals",
             )
             return LIB.read_i32(rows) != 0, LIB.read_i32(cols) != 0
 
-    def pivot_style_info(self, sheet: int, pivot_index: int) -> PivotStyleInfo:
-        """Return the table style :meth:`pivot_set_style_info` writes."""
+    def get_pivot_style_info(self, sheet: int, pivot_index: int) -> PivotStyleInfo:
+        """Return the table style :meth:`set_pivot_style_info` writes."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_STYLE_INFO)
             _check(
-                LIB.fm_workbook_pivot_get_style_info(
+                LIB.fm_sheet_get_pivot_style_info(
                     h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr
                 ),
-                "fm_workbook_pivot_get_style_info",
+                "fm_sheet_get_pivot_style_info",
             )
             d = S.PIVOT_STYLE_INFO.unpack(LIB, ptr)
             return PivotStyleInfo(
@@ -11401,28 +11433,28 @@ class Workbook:
             raw = LIB.read_bytes(LIB.read_u32(out_ptr), 4 * count)
             return [PIVOT_VALUES_FIELD if v == _PIVOT_VALUES_FIELD_C else v for v in struct.unpack("<%dI" % count, raw)]
 
-    def pivot_row_field_order(self, sheet: int, pivot_index: int) -> List[int]:
-        """Return the row-axis field order (the list :meth:`pivot_set_row_field_order` takes)."""
-        return self._pivot_get_field_order(LIB.fm_workbook_pivot_get_row_field_order, sheet, pivot_index)
+    def get_pivot_row_field_order(self, sheet: int, pivot_index: int) -> List[int]:
+        """Return the row-axis field order (the list :meth:`set_pivot_row_field_order` takes)."""
+        return self._pivot_get_field_order(LIB.fm_sheet_get_pivot_row_field_order, sheet, pivot_index)
 
-    def pivot_col_field_order(self, sheet: int, pivot_index: int) -> List[int]:
+    def get_pivot_col_field_order(self, sheet: int, pivot_index: int) -> List[int]:
         """Return the column-axis field order. Same contract as rows."""
-        return self._pivot_get_field_order(LIB.fm_workbook_pivot_get_col_field_order, sheet, pivot_index)
+        return self._pivot_get_field_order(LIB.fm_sheet_get_pivot_col_field_order, sheet, pivot_index)
 
-    def pivot_field_at(self, sheet: int, pivot_index: int, field_idx: int) -> PivotFieldInfo:
+    def get_pivot_field(self, sheet: int, pivot_index: int, field_idx: int) -> PivotFieldInfo:
         """Read the definition of pivot field ``field_idx``."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_FIELD_INFO)
             _check(
-                LIB.fm_workbook_pivot_field_at(
+                LIB.fm_sheet_get_pivot_field(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(pivot_index, "pivot_index"),
                     _uint(field_idx, "field_idx"),
                     ptr,
                 ),
-                "fm_workbook_pivot_field_at",
+                "fm_sheet_get_pivot_field",
             )
             d = S.PIVOT_FIELD_INFO.unpack(LIB, ptr)
             return PivotFieldInfo(
@@ -11444,24 +11476,24 @@ class Workbook:
                 show_all=d["show_all"] != 0,
             )
 
-    def pivot_field_item_count(self, sheet: int, pivot_index: int, field_idx: int) -> int:
+    def get_pivot_field_item_count(self, sheet: int, pivot_index: int, field_idx: int) -> int:
         """Return the number of items in pivot field ``field_idx``'s item list."""
         h = self._require()
         return _read_count(
-            LIB.fm_workbook_pivot_field_item_count,
+            LIB.fm_sheet_get_pivot_field_item_count,
             h,
             _uint(sheet, "sheet_index"),
             _uint(pivot_index, "pivot_index"),
             _uint(field_idx, "field_idx"),
         )
 
-    def pivot_field_item_at(self, sheet: int, pivot_index: int, field_idx: int, item_idx: int) -> PivotItemInfo:
+    def get_pivot_field_item(self, sheet: int, pivot_index: int, field_idx: int, item_idx: int) -> PivotItemInfo:
         """Read item ``item_idx`` of pivot field ``field_idx``."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_ITEM_INFO)
             _check(
-                LIB.fm_workbook_pivot_field_item_at(
+                LIB.fm_sheet_get_pivot_field_item(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(pivot_index, "pivot_index"),
@@ -11469,7 +11501,7 @@ class Workbook:
                     _uint(item_idx, "item_idx"),
                     ptr,
                 ),
-                "fm_workbook_pivot_field_item_at",
+                "fm_sheet_get_pivot_field_item",
             )
             d = S.PIVOT_ITEM_INFO.unpack(LIB, ptr)
             return PivotItemInfo(
@@ -11480,20 +11512,20 @@ class Workbook:
                 show_detail=d["show_detail"] != 0,
             )
 
-    def pivot_data_field_at(self, sheet: int, pivot_index: int, data_field_idx: int) -> PivotDataFieldSpec:
+    def get_pivot_data_field(self, sheet: int, pivot_index: int, data_field_idx: int) -> PivotDataFieldSpec:
         """Read data field ``data_field_idx`` in the shape ``pivot_data_field_add`` accepts."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_DATA_FIELD_SPEC)
             _check(
-                LIB.fm_workbook_pivot_data_field_at(
+                LIB.fm_sheet_get_pivot_data_field(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(pivot_index, "pivot_index"),
                     _uint(data_field_idx, "data_field_idx"),
                     ptr,
                 ),
-                "fm_workbook_pivot_data_field_at",
+                "fm_sheet_get_pivot_data_field",
             )
             d = S.PIVOT_DATA_FIELD_SPEC.unpack(LIB, ptr)
             return PivotDataFieldSpec(
@@ -11506,14 +11538,14 @@ class Workbook:
                 show_as_base_item=d["show_as_base_item"],
             )
 
-    def pivot_field_count(self, sheet: int, pivot_index: int) -> int:
+    def get_pivot_field_count(self, sheet: int, pivot_index: int) -> int:
         """Return the number of fields configured on the pivot."""
         h = self._require()
         return _read_count(
-            LIB.fm_workbook_pivot_field_count, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
+            LIB.fm_sheet_get_pivot_field_count, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
         )
 
-    def pivot_field_add(self, sheet: int, pivot_index: int, spec: PivotFieldSpec) -> int:
+    def add_pivot_field(self, sheet: int, pivot_index: int, spec: PivotFieldSpecInput) -> int:
         """Place a field on the pivot; return its index.
 
         A pivot's fields are positional over its cache's fields (field ``i``
@@ -11547,22 +11579,22 @@ class Workbook:
                 scope,
             )
             _check(
-                LIB.fm_workbook_pivot_field_add(
+                LIB.fm_sheet_add_pivot_field(
                     h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr, out
                 ),
-                "fm_workbook_pivot_field_add",
+                "fm_sheet_add_pivot_field",
             )
             return LIB.read_u32(out)
 
-    def pivot_field_clear(self, sheet: int, pivot_index: int) -> None:
+    def clear_pivot_fields(self, sheet: int, pivot_index: int) -> None:
         """Drop every field from the pivot."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_clear(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")),
-            "fm_workbook_pivot_field_clear",
+            LIB.fm_sheet_clear_pivot_fields(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")),
+            "fm_sheet_clear_pivot_fields",
         )
 
-    def pivot_field_set_axis(self, sheet: int, pivot_index: int, field_idx: int, axis: "PivotAxis | int") -> None:
+    def set_pivot_field_axis(self, sheet: int, pivot_index: int, field_idx: int, axis: "PivotAxis | int") -> None:
         """Set the axis of pivot field ``field_idx``.
 
         Moving onto the row or column axis appends the field to that axis's
@@ -11573,17 +11605,17 @@ class Workbook:
         """
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_set_axis(
+            LIB.fm_sheet_set_pivot_field_axis(
                 h,
                 _uint(sheet, "sheet_index"),
                 _uint(pivot_index, "pivot_index"),
                 _uint(field_idx, "field_idx"),
                 _sint(axis, "axis"),
             ),
-            "fm_workbook_pivot_field_set_axis",
+            "fm_sheet_set_pivot_field_axis",
         )
 
-    def pivot_field_set_sort(
+    def set_pivot_field_sort(
         self,
         sheet: int,
         pivot_index: int,
@@ -11599,7 +11631,7 @@ class Workbook:
         with _ArgScope() as scope:
             by_ptr = scope.nonempty_cstr(by_field)
             _check(
-                LIB.fm_workbook_pivot_field_set_sort(
+                LIB.fm_sheet_set_pivot_field_sort(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(pivot_index, "pivot_index"),
@@ -11607,21 +11639,21 @@ class Workbook:
                     _sint(order, "order"),
                     by_ptr,
                 ),
-                "fm_workbook_pivot_field_set_sort",
+                "fm_sheet_set_pivot_field_sort",
             )
 
-    def pivot_field_set_subtotal_top(self, sheet: int, pivot_index: int, field_idx: int, top: bool) -> None:
+    def set_pivot_field_subtotal_top(self, sheet: int, pivot_index: int, field_idx: int, top: bool) -> None:
         """Set the ``subtotal_top`` flag on pivot field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_set_subtotal_top(
+            LIB.fm_sheet_set_pivot_field_subtotal_top(
                 h,
                 _uint(sheet, "sheet_index"),
                 _uint(pivot_index, "pivot_index"),
                 _uint(field_idx, "field_idx"),
                 1 if top else 0,
             ),
-            "fm_workbook_pivot_field_set_subtotal_top",
+            "fm_sheet_set_pivot_field_subtotal_top",
         )
 
     def _pivot_field_set_flag(self, fn, sheet: int, pivot_index: int, field_idx: int, on: bool) -> None:
@@ -11637,32 +11669,32 @@ class Workbook:
             getattr(fn, "__name__", "pivot_field_set_flag"),
         )
 
-    def pivot_field_set_default_subtotal(self, sheet: int, pivot_index: int, field_idx: int, on: bool) -> None:
+    def set_pivot_field_default_subtotal(self, sheet: int, pivot_index: int, field_idx: int, on: bool) -> None:
         """Turn the automatic subtotal of pivot field ``field_idx`` on or off.
 
         Custom subtotal functions replace the automatic subtotal whatever this flag says.
         """
-        self._pivot_field_set_flag(LIB.fm_workbook_pivot_field_set_default_subtotal, sheet, pivot_index, field_idx, on)
+        self._pivot_field_set_flag(LIB.fm_sheet_set_pivot_field_default_subtotal, sheet, pivot_index, field_idx, on)
 
-    def pivot_field_set_insert_blank_row(self, sheet: int, pivot_index: int, field_idx: int, on: bool) -> None:
+    def set_pivot_field_insert_blank_row(self, sheet: int, pivot_index: int, field_idx: int, on: bool) -> None:
         """Set whether a blank row follows each item block of pivot field ``field_idx``."""
-        self._pivot_field_set_flag(LIB.fm_workbook_pivot_field_set_insert_blank_row, sheet, pivot_index, field_idx, on)
+        self._pivot_field_set_flag(LIB.fm_sheet_set_pivot_field_insert_blank_row, sheet, pivot_index, field_idx, on)
 
-    def pivot_field_set_fill_down_labels(self, sheet: int, pivot_index: int, field_idx: int, on: bool) -> None:
+    def set_pivot_field_fill_down_labels(self, sheet: int, pivot_index: int, field_idx: int, on: bool) -> None:
         """Set whether pivot field ``field_idx`` repeats its item labels on every row of a block."""
-        self._pivot_field_set_flag(LIB.fm_workbook_pivot_field_set_fill_down_labels, sheet, pivot_index, field_idx, on)
+        self._pivot_field_set_flag(LIB.fm_sheet_set_pivot_field_fill_down_labels, sheet, pivot_index, field_idx, on)
 
-    def pivot_field_set_show_detail(self, sheet: int, pivot_index: int, field_idx: int, on: bool) -> None:
+    def set_pivot_field_show_detail(self, sheet: int, pivot_index: int, field_idx: int, on: bool) -> None:
         """Expand (``True``) or collapse (``False``) every item of pivot field ``field_idx`` and its subtotal row."""
-        self._pivot_field_set_flag(LIB.fm_workbook_pivot_field_set_show_detail, sheet, pivot_index, field_idx, on)
+        self._pivot_field_set_flag(LIB.fm_sheet_set_pivot_field_show_detail, sheet, pivot_index, field_idx, on)
 
-    def pivot_field_set_item_show_detail(
+    def set_pivot_field_item_show_detail(
         self, sheet: int, pivot_index: int, field_idx: int, item_idx: int, on: bool
     ) -> None:
         """Expand (``True``) or collapse (``False``) item ``item_idx`` of pivot field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_set_item_show_detail(
+            LIB.fm_sheet_set_pivot_field_item_show_detail(
                 h,
                 _uint(sheet, "sheet_index"),
                 _uint(pivot_index, "pivot_index"),
@@ -11670,10 +11702,10 @@ class Workbook:
                 _uint(item_idx, "item_idx"),
                 1 if on else 0,
             ),
-            "fm_workbook_pivot_field_set_item_show_detail",
+            "fm_sheet_set_pivot_field_item_show_detail",
         )
 
-    def pivot_field_set_item_caption(
+    def set_pivot_field_item_caption(
         self, sheet: int, pivot_index: int, field_idx: int, item_idx: int, caption: Optional[str]
     ) -> None:
         """Show ``caption`` instead of the value of item ``item_idx``; ``None`` or ``""`` clears it.
@@ -11685,7 +11717,7 @@ class Workbook:
         with _ArgScope() as scope:
             cap_ptr = scope.nonempty_cstr(caption)
             _check(
-                LIB.fm_workbook_pivot_field_set_item_caption(
+                LIB.fm_sheet_set_pivot_field_item_caption(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(pivot_index, "pivot_index"),
@@ -11693,19 +11725,17 @@ class Workbook:
                     _uint(item_idx, "item_idx"),
                     cap_ptr,
                 ),
-                "fm_workbook_pivot_field_set_item_caption",
+                "fm_sheet_set_pivot_field_item_caption",
             )
 
-    def pivot_get_options(self, sheet: int, pivot_index: int) -> PivotOptions:
+    def get_pivot_options(self, sheet: int, pivot_index: int) -> PivotOptions:
         """Read the PivotTable Options of the pivot; see :class:`PivotOptions`."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_OPTIONS)
             _check(
-                LIB.fm_workbook_pivot_get_options(
-                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr
-                ),
-                "fm_workbook_pivot_get_options",
+                LIB.fm_sheet_get_pivot_options(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr),
+                "fm_sheet_get_pivot_options",
             )
             d = S.PIVOT_OPTIONS.unpack(LIB, ptr)
 
@@ -11738,7 +11768,7 @@ class Workbook:
                 enable_drill=d["enable_drill"] != 0,
             )
 
-    def pivot_set_options(self, sheet: int, pivot_index: int, options: PivotOptions) -> None:
+    def set_pivot_options(self, sheet: int, pivot_index: int, options: PivotOptions) -> None:
         """Change the PivotTable Options named by ``options``; members left ``None`` keep their value.
 
         See :class:`PivotOptions`.
@@ -11746,7 +11776,7 @@ class Workbook:
         h = self._require()
         if not isinstance(options, PivotOptions):
             raise TypeError(f"expected PivotOptions, got {type(options).__name__}")
-        current = self.pivot_get_options(sheet, pivot_index)
+        current = self.get_pivot_options(sheet, pivot_index)
 
         def pick(name: str) -> Any:
             value = getattr(options, name)
@@ -11782,57 +11812,55 @@ class Workbook:
             for name in ("error_caption", "missing_caption", "alt_text", "alt_text_summary", "grand_total_caption"):
                 S.write_str_field(LIB, ptr, S.PIVOT_OPTIONS, name, pick(name), scope)
             _check(
-                LIB.fm_workbook_pivot_set_options(
-                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr
-                ),
-                "fm_workbook_pivot_set_options",
+                LIB.fm_sheet_set_pivot_options(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr),
+                "fm_sheet_set_pivot_options",
             )
 
-    def pivot_project(self, sheet: int, pivot_index: int) -> None:
+    def project_pivot(self, sheet: int, pivot_index: int) -> None:
         """Write the pivot's report into its sheet cells now and clear its pending flag.
 
         Raises when the report would overlap another structure; the pivot stays pending.
         """
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_project(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")),
-            "fm_workbook_pivot_project",
+            LIB.fm_sheet_project_pivot(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")),
+            "fm_sheet_project_pivot",
         )
 
-    def pivot_projection_pending(self, sheet: int, pivot_index: int) -> bool:
+    def is_pivot_projection_pending(self, sheet: int, pivot_index: int) -> bool:
         """Return whether a cache change left the pivot's sheet cells stale."""
         h = self._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
             _check(
-                LIB.fm_workbook_pivot_projection_pending(
+                LIB.fm_sheet_is_pivot_projection_pending(
                     h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), out
                 ),
-                "fm_workbook_pivot_projection_pending",
+                "fm_sheet_is_pivot_projection_pending",
             )
             return LIB.read_i32(out) != 0
 
-    def pivot_field_set_custom_name(self, sheet: int, pivot_index: int, field_idx: int, name: Optional[str]) -> None:
+    def set_pivot_field_custom_name(self, sheet: int, pivot_index: int, field_idx: int, name: Optional[str]) -> None:
         """Rename pivot field ``field_idx`` in the report; ``None`` or ``""`` restores its source name."""
         h = self._require()
         with _ArgScope() as scope:
             name_ptr = scope.nonempty_cstr(name)
             _check(
-                LIB.fm_workbook_pivot_field_set_custom_name(
+                LIB.fm_sheet_set_pivot_field_custom_name(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(pivot_index, "pivot_index"),
                     _uint(field_idx, "field_idx"),
                     name_ptr,
                 ),
-                "fm_workbook_pivot_field_set_custom_name",
+                "fm_sheet_set_pivot_field_custom_name",
             )
 
-    def pivot_field_set_show_all(self, sheet: int, pivot_index: int, field_idx: int, on: bool) -> None:
+    def set_pivot_field_show_all(self, sheet: int, pivot_index: int, field_idx: int, on: bool) -> None:
         """Set whether pivot field ``field_idx`` lists items without data."""
-        self._pivot_field_set_flag(LIB.fm_workbook_pivot_field_set_show_all, sheet, pivot_index, field_idx, on)
+        self._pivot_field_set_flag(LIB.fm_sheet_set_pivot_field_show_all, sheet, pivot_index, field_idx, on)
 
-    def pivot_data_field_default_name(
+    def get_pivot_data_field_default_name(
         self,
         sheet: int,
         pivot_index: int,
@@ -11842,7 +11870,7 @@ class Workbook:
     ) -> str:
         """Return the name a data field over ``field_index`` would get from an empty name.
 
-        Nothing changes. ``exclude_data_field`` is the entry :meth:`pivot_data_field_set`
+        Nothing changes. ``exclude_data_field`` is the entry :meth:`set_pivot_data_field`
         would replace, whose name is not counted as taken; ``None`` for the add case.
         """
         h = self._require()
@@ -11850,17 +11878,17 @@ class Workbook:
             _PIVOT_NO_DATA_FIELD if exclude_data_field is None else _uint(exclude_data_field, "exclude_data_field")
         )
         return _read_cstr_out(
-            LIB.fm_workbook_pivot_data_field_default_name,
+            LIB.fm_sheet_get_pivot_data_field_default_name,
             h,
             _uint(sheet, "sheet_index"),
             _uint(pivot_index, "pivot_index"),
             _uint(field_index, "field_index"),
             _sint(aggregation, "aggregation"),
             exclude,
-            default_op="fm_workbook_pivot_data_field_default_name",
+            default_op="fm_sheet_get_pivot_data_field_default_name",
         )
 
-    def pivot_show_details(self, sheet: int, pivot_index: int, row: int, col: int) -> int:
+    def show_pivot_details(self, sheet: int, pivot_index: int, row: int, col: int) -> int:
         """Write the source records behind pivot cell (``row``, ``col``) onto a new sheet.
 
         Returns the new sheet's index. The sheet is inserted immediately before the pivot's
@@ -11871,7 +11899,7 @@ class Workbook:
         with _ArgScope() as scope:
             out = scope.out_ptr()
             _check(
-                LIB.fm_workbook_pivot_show_details(
+                LIB.fm_sheet_show_pivot_details(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(pivot_index, "pivot_index"),
@@ -11879,23 +11907,23 @@ class Workbook:
                     _uint(col, "col"),
                     out,
                 ),
-                "fm_workbook_pivot_show_details",
+                "fm_sheet_show_pivot_details",
             )
             return LIB.read_u32(out)
 
-    def pivot_field_add_item(self, sheet: int, pivot_index: int, field_idx: int, name: str, visible: bool) -> None:
+    def add_pivot_field_item(self, sheet: int, pivot_index: int, field_idx: int, name: str, visible: bool) -> None:
         """Append a manual-filter item addressed by its label.
 
         The item carries no cache binding, so records are matched by
         comparing their rendered label against ``name``. The blank item has
         no label of its own; build it with
-        :meth:`pivot_field_add_item_at` instead.
+        :meth:`add_pivot_field_shared_item` instead.
         """
         h = self._require()
         with _ArgScope() as scope:
             name_ptr = scope.cstr(name)
             _check(
-                LIB.fm_workbook_pivot_field_add_item(
+                LIB.fm_sheet_add_pivot_field_item(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(pivot_index, "pivot_index"),
@@ -11903,10 +11931,10 @@ class Workbook:
                     name_ptr,
                     1 if visible else 0,
                 ),
-                "fm_workbook_pivot_field_add_item",
+                "fm_sheet_add_pivot_field_item",
             )
 
-    def pivot_field_add_item_at(
+    def add_pivot_field_shared_item(
         self, sheet: int, pivot_index: int, field_idx: int, cache_index: int, visible: bool
     ) -> None:
         """Append a manual-filter item addressed by its cache shared-item index.
@@ -11918,7 +11946,7 @@ class Workbook:
         """
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_add_item_at(
+            LIB.fm_sheet_add_pivot_field_shared_item(
                 h,
                 _uint(sheet, "sheet_index"),
                 _uint(pivot_index, "pivot_index"),
@@ -11926,20 +11954,20 @@ class Workbook:
                 _uint(cache_index, "cache_index"),
                 1 if visible else 0,
             ),
-            "fm_workbook_pivot_field_add_item_at",
+            "fm_sheet_add_pivot_field_shared_item",
         )
 
-    def pivot_field_clear_items(self, sheet: int, pivot_index: int, field_idx: int) -> None:
+    def clear_pivot_field_items(self, sheet: int, pivot_index: int, field_idx: int) -> None:
         """Drop every manual-filter item from pivot field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_clear_items(
+            LIB.fm_sheet_clear_pivot_field_items(
                 h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _uint(field_idx, "field_idx")
             ),
-            "fm_workbook_pivot_field_clear_items",
+            "fm_sheet_clear_pivot_field_items",
         )
 
-    def pivot_field_set_item_visible(
+    def set_pivot_field_item_visible(
         self,
         sheet: int,
         pivot_index: int,
@@ -11950,7 +11978,7 @@ class Workbook:
         """Toggle the visibility of item ``item_idx`` on field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_set_item_visible(
+            LIB.fm_sheet_set_pivot_field_item_visible(
                 h,
                 _uint(sheet, "sheet_index"),
                 _uint(pivot_index, "pivot_index"),
@@ -11958,36 +11986,36 @@ class Workbook:
                 _uint(item_idx, "item_idx"),
                 1 if visible else 0,
             ),
-            "fm_workbook_pivot_field_set_item_visible",
+            "fm_sheet_set_pivot_field_item_visible",
         )
 
-    def pivot_field_add_subtotal_fn(
+    def add_pivot_field_subtotal_fn(
         self, sheet: int, pivot_index: int, field_idx: int, agg: "PivotAggregation | int"
     ) -> None:
         """Append a subtotal-fn entry to pivot field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_add_subtotal_fn(
+            LIB.fm_sheet_add_pivot_field_subtotal_fn(
                 h,
                 _uint(sheet, "sheet_index"),
                 _uint(pivot_index, "pivot_index"),
                 _uint(field_idx, "field_idx"),
                 _sint(agg, "agg"),
             ),
-            "fm_workbook_pivot_field_add_subtotal_fn",
+            "fm_sheet_add_pivot_field_subtotal_fn",
         )
 
-    def pivot_field_clear_subtotal_fns(self, sheet: int, pivot_index: int, field_idx: int) -> None:
+    def clear_pivot_field_subtotal_fns(self, sheet: int, pivot_index: int, field_idx: int) -> None:
         """Drop every subtotal-fn entry from pivot field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_clear_subtotal_fns(
+            LIB.fm_sheet_clear_pivot_field_subtotal_fns(
                 h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _uint(field_idx, "field_idx")
             ),
-            "fm_workbook_pivot_field_clear_subtotal_fns",
+            "fm_sheet_clear_pivot_field_subtotal_fns",
         )
 
-    def pivot_field_set_date_group(
+    def set_pivot_field_date_group(
         self,
         sheet: int,
         pivot_index: int,
@@ -12015,7 +12043,7 @@ class Workbook:
         """
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_set_date_group(
+            LIB.fm_sheet_set_pivot_field_date_group(
                 h,
                 _uint(sheet, "sheet_index"),
                 _uint(pivot_index, "pivot_index"),
@@ -12026,10 +12054,10 @@ class Workbook:
                 float(start),
                 float(end),
             ),
-            "fm_workbook_pivot_field_set_date_group",
+            "fm_sheet_set_pivot_field_date_group",
         )
 
-    def pivot_field_clear_date_group(self, sheet: int, pivot_index: int, field_idx: int) -> None:
+    def clear_pivot_field_date_group(self, sheet: int, pivot_index: int, field_idx: int) -> None:
         """Remove the date grouping of pivot field ``field_idx``.
 
         ``field_idx`` is a source field or one of its group fields. The group
@@ -12038,13 +12066,13 @@ class Workbook:
         """
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_clear_date_group(
+            LIB.fm_sheet_clear_pivot_field_date_group(
                 h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _uint(field_idx, "field_idx")
             ),
-            "fm_workbook_pivot_field_clear_date_group",
+            "fm_sheet_clear_pivot_field_date_group",
         )
 
-    def pivot_field_set_number_format(self, sheet: int, pivot_index: int, field_idx: int, fmt: str) -> None:
+    def set_pivot_field_number_format(self, sheet: int, pivot_index: int, field_idx: int, fmt: str) -> None:
         """Set the ``numFmtId`` of pivot field ``field_idx``.
 
         ``fmt`` is a decimal id string naming a built-in format or one returned
@@ -12054,17 +12082,17 @@ class Workbook:
         with _ArgScope() as scope:
             fmt_ptr = scope.cstr(fmt)
             _check(
-                LIB.fm_workbook_pivot_field_set_number_format(
+                LIB.fm_sheet_set_pivot_field_number_format(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(pivot_index, "pivot_index"),
                     _uint(field_idx, "field_idx"),
                     fmt_ptr,
                 ),
-                "fm_workbook_pivot_field_set_number_format",
+                "fm_sheet_set_pivot_field_number_format",
             )
 
-    def pivot_set_row_field_order(self, sheet: int, pivot_index: int, indices: Sequence[int]) -> None:
+    def set_pivot_row_field_order(self, sheet: int, pivot_index: int, indices: Sequence[int]) -> None:
         """Replace the row-axis field order with ``indices``.
 
         The list is the axis's whole membership: listed fields move onto the
@@ -12072,19 +12100,19 @@ class Workbook:
         ``PIVOT_VALUES_FIELD`` (``-2``) places the Σ Values level.
         """
         self._pivot_set_field_order(
-            LIB.fm_workbook_pivot_set_row_field_order,
+            LIB.fm_sheet_set_pivot_row_field_order,
             _uint(sheet, "sheet_index"),
             _uint(pivot_index, "pivot_index"),
             indices,
         )
 
-    def pivot_set_col_field_order(self, sheet: int, pivot_index: int, indices: Sequence[int]) -> None:
+    def set_pivot_col_field_order(self, sheet: int, pivot_index: int, indices: Sequence[int]) -> None:
         """Replace the column-axis field order with ``indices``.
 
-        Same contract as :meth:`pivot_set_row_field_order`.
+        Same contract as :meth:`set_pivot_row_field_order`.
         """
         self._pivot_set_field_order(
-            LIB.fm_workbook_pivot_set_col_field_order,
+            LIB.fm_sheet_set_pivot_col_field_order,
             _uint(sheet, "sheet_index"),
             _uint(pivot_index, "pivot_index"),
             indices,
@@ -12106,28 +12134,28 @@ class Workbook:
                 getattr(fn, "__name__", "pivot_set_field_order"),
             )
 
-    def pivot_data_field_count(self, sheet: int, pivot_index: int) -> int:
+    def get_pivot_data_field_count(self, sheet: int, pivot_index: int) -> int:
         """Return the number of ``<dataField>`` entries on the pivot."""
         h = self._require()
         return _read_count(
-            LIB.fm_workbook_pivot_data_field_count, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
+            LIB.fm_sheet_get_pivot_data_field_count, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
         )
 
-    def pivot_data_field_add(self, sheet: int, pivot_index: int, spec: PivotDataFieldSpec) -> int:
+    def add_pivot_data_field(self, sheet: int, pivot_index: int, spec: PivotDataFieldSpec) -> int:
         """Append a data-field entry; return its index."""
         h = self._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
             ptr = self._pack_data_field_spec(spec, scope)
             _check(
-                LIB.fm_workbook_pivot_data_field_add(
+                LIB.fm_sheet_add_pivot_data_field(
                     h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr, out
                 ),
-                "fm_workbook_pivot_data_field_add",
+                "fm_sheet_add_pivot_data_field",
             )
             return LIB.read_u32(out)
 
-    def pivot_data_field_set(
+    def set_pivot_data_field(
         self,
         sheet: int,
         pivot_index: int,
@@ -12139,14 +12167,14 @@ class Workbook:
         with _ArgScope() as scope:
             ptr = self._pack_data_field_spec(spec, scope)
             _check(
-                LIB.fm_workbook_pivot_data_field_set(
+                LIB.fm_sheet_set_pivot_data_field(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(pivot_index, "pivot_index"),
                     _uint(data_field_idx, "data_field_idx"),
                     ptr,
                 ),
-                "fm_workbook_pivot_data_field_set",
+                "fm_sheet_set_pivot_data_field",
             )
 
     @staticmethod
@@ -12174,43 +12202,43 @@ class Workbook:
         )
         return ptr
 
-    def pivot_data_field_clear(self, sheet: int, pivot_index: int) -> None:
+    def clear_pivot_data_fields(self, sheet: int, pivot_index: int) -> None:
         """Drop every data-field entry from the pivot."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_data_field_clear(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")),
-            "fm_workbook_pivot_data_field_clear",
+            LIB.fm_sheet_clear_pivot_data_fields(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")),
+            "fm_sheet_clear_pivot_data_fields",
         )
 
-    def pivot_filter_count(self, sheet: int, pivot_index: int) -> int:
-        """Return the number of filters on the pivot; see :meth:`pivot_filter_at`."""
+    def get_pivot_filter_count(self, sheet: int, pivot_index: int) -> int:
+        """Return the number of filters on the pivot; see :meth:`get_pivot_filter`."""
         h = self._require()
         return _read_count(
-            LIB.fm_workbook_pivot_filter_count, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
+            LIB.fm_sheet_get_pivot_filter_count, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
         )
 
-    def pivot_filter_at(self, sheet: int, pivot_index: int, filter_idx: int) -> PivotFilterSpec:
+    def get_pivot_filter(self, sheet: int, pivot_index: int, filter_idx: int) -> PivotFilterSpec:
         """Read the filter at ``filter_idx`` without mutating it.
 
         The filter list is saved as the definition's ``<filters>`` block. A
         loaded file's caption contains / begins-with, top-N count, value
         greater-than / between and date-between entries appear here, naming
         their field by source name. Its other entries are not listed, still
-        filter, survive :meth:`pivot_filter_clear` /
-        :meth:`pivot_filter_remove_at`, and are saved verbatim.
+        filter, survive :meth:`clear_pivot_filters` /
+        :meth:`remove_pivot_filter`, and are saved verbatim.
         """
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_FILTER_SPEC)
             _check(
-                LIB.fm_workbook_pivot_filter_at(
+                LIB.fm_sheet_get_pivot_filter(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(pivot_index, "pivot_index"),
                     _uint(filter_idx, "filter_idx"),
                     ptr,
                 ),
-                "fm_workbook_pivot_filter_at",
+                "fm_sheet_get_pivot_filter",
             )
             d = S.PIVOT_FILTER_SPEC.unpack(LIB, ptr)
             return PivotFilterSpec(
@@ -12228,8 +12256,8 @@ class Workbook:
                 value_high_text=LIB.read_cstr(d["value_high_text"]),
             )
 
-    def pivot_filter_add(self, sheet: int, pivot_index: int, spec: PivotFilterSpec) -> None:
-        """Append a filter to the pivot; it is saved with it. See :meth:`pivot_filter_at`."""
+    def add_pivot_filter(self, sheet: int, pivot_index: int, spec: PivotFilterSpec) -> None:
+        """Append a filter to the pivot; it is saved with it. See :meth:`get_pivot_filter`."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_FILTER_SPEC)
@@ -12252,45 +12280,43 @@ class Workbook:
             S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC, "value_text", spec.value_text, scope)
             S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC, "value_high_text", spec.value_high_text, scope)
             _check(
-                LIB.fm_workbook_pivot_filter_add(
-                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr
-                ),
-                "fm_workbook_pivot_filter_add",
+                LIB.fm_sheet_add_pivot_filter(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr),
+                "fm_sheet_add_pivot_filter",
             )
 
-    def pivot_filter_clear(self, sheet: int, pivot_index: int) -> None:
+    def clear_pivot_filters(self, sheet: int, pivot_index: int) -> None:
         """Drop every listed filter from the pivot."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_filter_clear(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")),
-            "fm_workbook_pivot_filter_clear",
+            LIB.fm_sheet_clear_pivot_filters(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")),
+            "fm_sheet_clear_pivot_filters",
         )
 
-    def pivot_filter_remove_at(self, sheet: int, pivot_index: int, filter_idx: int) -> None:
+    def remove_pivot_filter(self, sheet: int, pivot_index: int, filter_idx: int) -> None:
         """Remove the filter at ``filter_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_filter_remove_at(
+            LIB.fm_sheet_remove_pivot_filter(
                 h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _uint(filter_idx, "filter_idx")
             ),
-            "fm_workbook_pivot_filter_remove_at",
+            "fm_sheet_remove_pivot_filter",
         )
 
     # -- Dependency-graph trace --------------------------------------------
-    def precedents(self, sheet: int, row: int, col: int, depth: int = 1) -> List[CellNode]:
+    def get_precedents(self, sheet: int, row: int, col: int, depth: int = 1) -> List[CellNode]:
         """Return the cells ``(sheet, row, col)`` reads (up to ``depth``)."""
         return self._trace(
-            LIB.fm_workbook_precedents,
+            LIB.fm_sheet_get_precedents,
             _uint(sheet, "sheet"),
             _uint(row, "row"),
             _uint(col, "col"),
             _uint(depth, "depth"),
         )
 
-    def dependents(self, sheet: int, row: int, col: int, depth: int = 1) -> List[CellNode]:
+    def get_dependents(self, sheet: int, row: int, col: int, depth: int = 1) -> List[CellNode]:
         """Return the cells that read ``(sheet, row, col)`` (up to ``depth``)."""
         return self._trace(
-            LIB.fm_workbook_dependents,
+            LIB.fm_sheet_get_dependents,
             _uint(sheet, "sheet"),
             _uint(row, "row"),
             _uint(col, "col"),
@@ -12309,12 +12335,12 @@ class Workbook:
                 )
                 handle = LIB.read_u32(out)
                 nodes: List[CellNode] = []
-                n = LIB.fm_cell_nodes_count(handle)
+                n = LIB.fm_cell_nodes_get_node_count(handle)
                 # One scratch block for the whole walk; see iter_defined_names.
                 nptr = scope.struct(S.CELL_NODE)
                 for i in range(n):
                     S.zero_struct(LIB, S.CELL_NODE, nptr)
-                    _check(LIB.fm_cell_nodes_at(handle, _uint(i, "idx"), nptr), "fm_cell_nodes_at")
+                    _check(LIB.fm_cell_nodes_get_node_at(handle, _uint(i, "idx"), nptr), "fm_cell_nodes_get_node_at")
                     d = S.CELL_NODE.unpack(LIB, nptr)
                     nodes.append(CellNode(sheet=d["sheet"], row=d["row"], col=d["col"]))
                 return nodes
@@ -12323,14 +12349,14 @@ class Workbook:
                     LIB.fm_cell_nodes_destroy(handle)
 
     # -- Dynamic-array spill -----------------------------------------------
-    def spill_info(self, sheet: int, row: int, col: int) -> SpillInfo:
+    def get_spill_info(self, sheet: int, row: int, col: int) -> SpillInfo:
         """Return dynamic-array spill info for ``(sheet, row, col)``."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.SPILL_INFO)
             _check(
-                LIB.fm_workbook_spill_info(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), ptr),
-                "fm_workbook_spill_info",
+                LIB.fm_sheet_get_spill_info(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), ptr),
+                "fm_sheet_get_spill_info",
             )
             d = S.SPILL_INFO.unpack(LIB, ptr)
             return SpillInfo(
@@ -12426,8 +12452,8 @@ class Workbook:
         with _ArgScope() as scope:
             ptr = scope.struct(S.ARRAY_FORMULA)
             _check(
-                LIB.fm_workbook_get_array_formula(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), ptr),
-                "fm_workbook_get_array_formula",
+                LIB.fm_sheet_get_array_formula(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), ptr),
+                "fm_sheet_get_array_formula",
             )
             d = S.ARRAY_FORMULA.unpack(LIB, ptr)
             if not d["engaged"]:
@@ -12455,7 +12481,7 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             formula_ptr = scope.cstr(formula)
-            status = LIB.fm_workbook_set_array_formula(
+            status = LIB.fm_sheet_set_array_formula(
                 h,
                 _uint(sheet, "sheet"),
                 _uint(row, "row"),
@@ -12464,224 +12490,44 @@ class Workbook:
                 _uint(cols, "cols"),
                 formula_ptr,
             )
-            _check(status, "fm_workbook_set_array_formula")
+            _check(status, "fm_sheet_set_array_formula")
 
     # -- Function catalog (workbook-independent) ---------------------------
     @staticmethod
     def function_count() -> int:
         """Return the total number of registered Formulon functions."""
-        return int(LIB.fm_function_count())
+        return int(LIB.fm_get_function_count())
 
     @staticmethod
     def function_name_at(index: int) -> str:
         """Return the canonical name of the ``index``-th function."""
         return _read_cstr_out(
-            LIB.fm_function_name_at,
+            LIB.fm_get_function_name_at,
             _uint(index, "idx"),
-            default_op="fm_function_name_at",
+            default_op="fm_get_function_name_at",
         )
 
-    @staticmethod
-    def function_metadata(name: str) -> Optional[FunctionMetadata]:
-        """Return metadata for ``name`` or ``None`` when unknown.
-
-        The metadata is locale-invariant.
-
-        Args:
-          name: canonical function name, matched case-insensitively.
-
-        Returns:
-          The metadata, or ``None`` when ``name`` matches no registered
-          function.
-        """
-        with _ArgScope() as scope:
-            name_ptr = scope.cstr(name)
-            ptr = scope.struct(S.FUNCTION_METADATA)
-            status = LIB.fm_function_metadata(name_ptr, ptr)
-            if status != 0:
-                return None
-            d = S.FUNCTION_METADATA.unpack(LIB, ptr)
-            sig = LIB.read_cstr(d["signature_template"]) if d["signature_template"] else None
-            desc = LIB.read_cstr(d["description"]) if d["description"] else None
-            # 0xFFFFFFFF is the unbounded / unknown-arity sentinel; expose it
-            # as None so callers do not treat it as a concrete upper bound.
-            raw_max = d["max_arity"]
-            max_arity = None if raw_max == 0xFFFFFFFF else raw_max
-            return FunctionMetadata(
-                name=LIB.read_cstr(d["canonical_name"]),
-                min_arity=d["min_arity"],
-                max_arity=max_arity,
-                availability=d["availability"],
-                signature_template=sig,
-                description=desc,
-            )
-
-    @staticmethod
-    def _map_profile_text(fn_name: str, text: str, profile_id: str) -> str:
-        """Call a ``(text, profile_id) -> text`` catalog entry point."""
-        with _ArgScope() as scope:
-            text_ptr = scope.cstr(text)
-            pid_ptr = scope.cstr(profile_id)
-            return _read_cstr_out(getattr(LIB, fn_name), text_ptr, pid_ptr, default_op=fn_name)
-
-    @staticmethod
-    def localize_function_name(canonical_name: str, profile_id: ExcelProfileId) -> str:
-        """Return the display name of ``canonical_name`` under ``profile_id``."""
-        return Workbook._map_profile_text("fm_function_localize", canonical_name, profile_id)
-
-    @staticmethod
-    def canonicalize_function_name(localized_name: str, profile_id: ExcelProfileId) -> str:
-        """Return the canonical English name for ``localized_name`` under ``profile_id``."""
-        return Workbook._map_profile_text("fm_function_canonicalize", localized_name, profile_id)
-
-    @staticmethod
-    def localize_formula(formula: str, profile_id: ExcelProfileId) -> str:
-        """Rewrite stored (en-invariant) formula text into ``profile_id``'s spelling.
-
-        Function names, list / array separators, decimal points, booleans
-        and error names take the locale form; strings, quoted sheet names,
-        external qualifiers and structured-reference brackets are kept
-        verbatim. A pure text rewrite: the grammar is not validated.
-        """
-        return Workbook._map_profile_text("fm_formula_localize", formula, profile_id)
-
-    @staticmethod
-    def canonicalize_formula(formula: str, profile_id: ExcelProfileId) -> str:
-        """Rewrite ``profile_id``-spelled formula text into the en-invariant form."""
-        return Workbook._map_profile_text("fm_formula_canonicalize", formula, profile_id)
-
-    @staticmethod
-    def locale_facts(profile_id: ExcelProfileId) -> LocaleFacts:
-        """Return the locale facts (separators, names, currency, error names) of ``profile_id``.
-
-        Raises:
-          FormulonError: when ``profile_id`` is not a documented profile.
-        """
-        with _ArgScope() as scope:
-            pid_ptr = scope.cstr(profile_id)
-            ptr = scope.struct(S.LOCALE_FACTS)
-            canonical_out = scope.out_ptr()
-            localized_out = scope.out_ptr()
-            measured_out = scope.out_ptr()
-            _check(LIB.fm_locale_facts(pid_ptr, ptr), "fm_locale_facts")
-            d = S.LOCALE_FACTS.unpack(LIB, ptr)
-            errors = []
-            for index in range(int(LIB.fm_locale_error_name_count())):
-                _check(
-                    LIB.fm_locale_error_name(
-                        pid_ptr, _uint(index, "error_index"), canonical_out, localized_out, measured_out
-                    ),
-                    "fm_locale_error_name",
-                )
-                errors.append(
-                    ErrorName(
-                        canonical=LIB.read_cstr(LIB.read_u32(canonical_out)),
-                        localized=LIB.read_cstr(LIB.read_u32(localized_out)),
-                        measured=LIB.read_u32(measured_out) != 0,
-                    )
-                )
-            return LocaleFacts(
-                decimal_separator=LIB.read_cstr(d["decimal_separator"]),
-                group_separator=LIB.read_cstr(d["group_separator"]),
-                list_separator=LIB.read_cstr(d["list_separator"]),
-                array_column_separator=LIB.read_cstr(d["array_column_separator"]),
-                array_row_separator=LIB.read_cstr(d["array_row_separator"]),
-                true_name=LIB.read_cstr(d["true_name"]),
-                false_name=LIB.read_cstr(d["false_name"]),
-                date_order=_DATE_ORDERS[d["date_order"]],
-                currency_symbol=LIB.read_cstr(d["currency_symbol"]),
-                currency_suffix=d["currency_suffix"] != 0,
-                currency_space=d["currency_space"] != 0,
-                currency_default_decimals=d["currency_default_decimals"],
-                measured=d["measured"] != 0,
-                collation_measured=d["collation_measured"] != 0,
-                error_names=tuple(errors),
-            )
-
-    @staticmethod
-    def compare_text(a: str, b: str, strength: CollationStrength, profile_id: ExcelProfileId) -> int:
-        """Compare two texts under the collation of ``profile_id``.
-
-        Returns -1, 0 or 1. This is the text fold only, not ``=`` on two
-        cells. ``strength`` selects which fold applies.
-
-        Raises:
-          FormulonError: on an unknown ``profile_id`` or an out-of-range ``strength``.
-        """
-        with _ArgScope() as scope:
-            a_ptr = scope.cstr(a)
-            b_ptr = scope.cstr(b)
-            pid_ptr = scope.cstr(profile_id)
-            out = scope.out_ptr()
-            _check(
-                LIB.fm_text_compare(a_ptr, b_ptr, pid_ptr, _sint(strength, "strength"), out),
-                "fm_text_compare",
-            )
-            return struct.unpack("<i", LIB.read_bytes(out, 4))[0]
-
-    @staticmethod
-    def collation_classes(
-        values: Sequence[Value], strength: CollationStrength, profile_id: ExcelProfileId
-    ) -> CollationClasses:
-        """Classify ``values`` into collation-ordered equivalence classes.
-
-        Two values share an id only when they have the same kind and compare
-        equal under the ``strength`` text fold (``-0`` equals ``0``; blanks
-        are always equal). Ids are dense from 0 in ascending SORT order:
-        numbers < text < booleans < errors < blanks. ``strength`` selects the
-        text fold only; type boundaries never depend on it.
-
-        Ids are valid only within one call. Usage:
-
-        * Dedup or checklist order: take the first position of each id and
-          order by id.
-        * Sort: stable-sort by id; reverse for descending, keeping blanks last.
-        * Re-applying a saved selection: classify the saved values plus the
-          column values in one call and select the matching ids.
-
-        Raises:
-          FormulonError: on an unknown ``profile_id``, an out-of-range
-            ``strength``, a non-finite number or an out-of-range error code.
-        """
-        values = [_check_value(v) for v in values]
-        n = len(values)
-        with _ArgScope() as scope:
-            pid_ptr = scope.cstr(profile_id)
-            count_out = scope.alloc(4)
-            base = scope.value_array(n)
-            for i, v in enumerate(values):
-                _write_value_input(v, base + i * fm_value_t_size, scope)
-            ids = 0
-            if n:
-                ids = scope.alloc(4 * n)
-            _check(
-                LIB.fm_collation_classes(base, _uint(n, "count"), pid_ptr, _sint(strength, "strength"), ids, count_out),
-                "fm_collation_classes",
-            )
-            class_ids = list(struct.unpack(f"<{n}I", LIB.read_bytes(ids, 4 * n))) if n else []
-            return CollationClasses(class_ids=class_ids, class_count=LIB.read_u32(count_out))
-
     # -- External links ----------------------------------------------------
-    def external_link_count(self) -> int:
+    def get_external_link_count(self) -> int:
         """Return the number of external-link records on the workbook."""
         h = self._require()
         return _read_count(
-            LIB.fm_workbook_external_link_count,
+            LIB.fm_workbook_get_external_link_count,
             h,
-            default_op="fm_workbook_external_link_count",
+            default_op="fm_workbook_get_external_link_count",
         )
 
-    def get_external_link_at(self, index: int) -> ExternalLink:
+    def get_external_link(self, index: int) -> ExternalLinkRecord:
         """Read the ``index``-th external-link record."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.EXTERNAL_LINK_RECORD)
             _check(
-                LIB.fm_workbook_external_link_at(h, _uint(index, "index"), ptr),
-                "fm_workbook_external_link_at",
+                LIB.fm_workbook_get_external_link(h, _uint(index, "index"), ptr),
+                "fm_workbook_get_external_link",
             )
             d = S.EXTERNAL_LINK_RECORD.unpack(LIB, ptr)
-            return ExternalLink(
+            return ExternalLinkRecord(
                 index=d["index"],
                 rel_id=LIB.read_cstr(d["rel_id"]),
                 part_path=LIB.read_cstr(d["part_path"]),
@@ -12690,10 +12536,10 @@ class Workbook:
                 kind=ExternalLinkKind(d["kind"]),
             )
 
-    def get_external_links(self) -> List[ExternalLink]:
+    def get_external_links(self) -> List[ExternalLinkRecord]:
         """Return every external-link record in document order."""
-        n = self.external_link_count()
-        return [self.get_external_link_at(i) for i in range(n)]
+        n = self.get_external_link_count()
+        return [self.get_external_link(i) for i in range(n)]
 
 
 def _lock_workbook_method(method):
@@ -12776,3 +12622,192 @@ def _install_workbook_locks() -> None:
 
 
 _install_workbook_locks()
+
+
+# -- Function catalog and locale (process-wide) -----------------------------
+@_lock_workbook_method
+def get_function_metadata(name: str) -> Optional[FunctionMetadata]:
+    """Return metadata for ``name`` or ``None`` when unknown.
+
+    The metadata is locale-invariant.
+
+    Args:
+      name: canonical function name, matched case-insensitively.
+
+    Returns:
+      The metadata, or ``None`` when ``name`` matches no registered
+      function.
+    """
+    with _ArgScope() as scope:
+        name_ptr = scope.cstr(name)
+        ptr = scope.struct(S.FUNCTION_METADATA)
+        status = LIB.fm_get_function_metadata(name_ptr, ptr)
+        if status != 0:
+            return None
+        d = S.FUNCTION_METADATA.unpack(LIB, ptr)
+        sig = LIB.read_cstr(d["signature_template"]) if d["signature_template"] else None
+        desc = LIB.read_cstr(d["description"]) if d["description"] else None
+        # 0xFFFFFFFF is the unbounded / unknown-arity sentinel; expose it
+        # as None so callers do not treat it as a concrete upper bound.
+        raw_max = d["max_arity"]
+        max_arity = None if raw_max == 0xFFFFFFFF else raw_max
+        return FunctionMetadata(
+            name=LIB.read_cstr(d["canonical_name"]),
+            min_arity=d["min_arity"],
+            max_arity=max_arity,
+            availability=d["availability"],
+            signature_template=sig,
+            description=desc,
+        )
+
+
+def _map_profile_text(fn_name: str, text: str, profile_id: str) -> str:
+    """Call a ``(text, profile_id) -> text`` catalog entry point."""
+    with _ArgScope() as scope:
+        text_ptr = scope.cstr(text)
+        pid_ptr = scope.cstr(profile_id)
+        return _read_cstr_out(getattr(LIB, fn_name), text_ptr, pid_ptr, default_op=fn_name)
+
+
+@_lock_workbook_method
+def localize_function_name(canonical_name: str, profile_id: ExcelProfileId) -> str:
+    """Return the display name of ``canonical_name`` under ``profile_id``."""
+    return _map_profile_text("fm_localize_function_name", canonical_name, profile_id)
+
+
+@_lock_workbook_method
+def canonicalize_function_name(localized_name: str, profile_id: ExcelProfileId) -> str:
+    """Return the canonical English name for ``localized_name`` under ``profile_id``."""
+    return _map_profile_text("fm_canonicalize_function_name", localized_name, profile_id)
+
+
+@_lock_workbook_method
+def localize_formula(formula: str, profile_id: ExcelProfileId) -> str:
+    """Rewrite stored (en-invariant) formula text into ``profile_id``'s spelling.
+
+    Function names, list / array separators, decimal points, booleans
+    and error names take the locale form; strings, quoted sheet names,
+    external qualifiers and structured-reference brackets are kept
+    verbatim. A pure text rewrite: the grammar is not validated.
+    """
+    return _map_profile_text("fm_localize_formula", formula, profile_id)
+
+
+@_lock_workbook_method
+def canonicalize_formula(formula: str, profile_id: ExcelProfileId) -> str:
+    """Rewrite ``profile_id``-spelled formula text into the en-invariant form."""
+    return _map_profile_text("fm_canonicalize_formula", formula, profile_id)
+
+
+@_lock_workbook_method
+def get_locale_facts(profile_id: ExcelProfileId) -> LocaleFacts:
+    """Return the locale facts (separators, names, currency, error names) of ``profile_id``.
+
+    Raises:
+      FormulonError: when ``profile_id`` is not a documented profile.
+    """
+    with _ArgScope() as scope:
+        pid_ptr = scope.cstr(profile_id)
+        ptr = scope.struct(S.LOCALE_FACTS)
+        canonical_out = scope.out_ptr()
+        localized_out = scope.out_ptr()
+        measured_out = scope.out_ptr()
+        _check(LIB.fm_get_locale_facts(pid_ptr, ptr), "fm_get_locale_facts")
+        d = S.LOCALE_FACTS.unpack(LIB, ptr)
+        errors = []
+        for index in range(int(LIB.fm_get_locale_error_name_count())):
+            _check(
+                LIB.fm_get_locale_error_name_at(
+                    pid_ptr, _uint(index, "error_index"), canonical_out, localized_out, measured_out
+                ),
+                "fm_get_locale_error_name_at",
+            )
+            errors.append(
+                ErrorName(
+                    canonical=LIB.read_cstr(LIB.read_u32(canonical_out)),
+                    localized=LIB.read_cstr(LIB.read_u32(localized_out)),
+                    measured=LIB.read_u32(measured_out) != 0,
+                )
+            )
+        return LocaleFacts(
+            decimal_separator=LIB.read_cstr(d["decimal_separator"]),
+            group_separator=LIB.read_cstr(d["group_separator"]),
+            list_separator=LIB.read_cstr(d["list_separator"]),
+            array_column_separator=LIB.read_cstr(d["array_column_separator"]),
+            array_row_separator=LIB.read_cstr(d["array_row_separator"]),
+            true_name=LIB.read_cstr(d["true_name"]),
+            false_name=LIB.read_cstr(d["false_name"]),
+            date_order=_DATE_ORDERS[d["date_order"]],
+            currency_symbol=LIB.read_cstr(d["currency_symbol"]),
+            currency_suffix=d["currency_suffix"] != 0,
+            currency_space=d["currency_space"] != 0,
+            currency_default_decimals=d["currency_default_decimals"],
+            measured=d["measured"] != 0,
+            collation_measured=d["collation_measured"] != 0,
+            error_names=tuple(errors),
+        )
+
+
+@_lock_workbook_method
+def compare_text(a: str, b: str, strength: CollationStrength, profile_id: ExcelProfileId) -> int:
+    """Compare two texts under the collation of ``profile_id``.
+
+    Returns -1, 0 or 1. This is the text fold only, not ``=`` on two
+    cells. ``strength`` selects which fold applies.
+
+    Raises:
+      FormulonError: on an unknown ``profile_id`` or an out-of-range ``strength``.
+    """
+    with _ArgScope() as scope:
+        a_ptr = scope.cstr(a)
+        b_ptr = scope.cstr(b)
+        pid_ptr = scope.cstr(profile_id)
+        out = scope.out_ptr()
+        _check(
+            LIB.fm_compare_text(a_ptr, b_ptr, pid_ptr, _sint(strength, "strength"), out),
+            "fm_compare_text",
+        )
+        return struct.unpack("<i", LIB.read_bytes(out, 4))[0]
+
+
+@_lock_workbook_method
+def get_collation_classes(
+    values: Sequence[Value], strength: CollationStrength, profile_id: ExcelProfileId
+) -> CollationClasses:
+    """Classify ``values`` into collation-ordered equivalence classes.
+
+    Two values share an id only when they have the same kind and compare
+    equal under the ``strength`` text fold (``-0`` equals ``0``; blanks
+    are always equal). Ids are dense from 0 in ascending SORT order:
+    numbers < text < booleans < errors < blanks. ``strength`` selects the
+    text fold only; type boundaries never depend on it.
+
+    Ids are valid only within one call. Usage:
+
+    * Dedup or checklist order: take the first position of each id and
+      order by id.
+    * Sort: stable-sort by id; reverse for descending, keeping blanks last.
+    * Re-applying a saved selection: classify the saved values plus the
+      column values in one call and select the matching ids.
+
+    Raises:
+      FormulonError: on an unknown ``profile_id``, an out-of-range
+        ``strength``, a non-finite number or an out-of-range error code.
+    """
+    values = [_check_value(v) for v in values]
+    n = len(values)
+    with _ArgScope() as scope:
+        pid_ptr = scope.cstr(profile_id)
+        count_out = scope.alloc(4)
+        base = scope.value_array(n)
+        for i, v in enumerate(values):
+            _write_value_input(v, base + i * fm_value_t_size, scope)
+        ids = 0
+        if n:
+            ids = scope.alloc(4 * n)
+        _check(
+            LIB.fm_get_collation_classes(base, _uint(n, "count"), pid_ptr, _sint(strength, "strength"), ids, count_out),
+            "fm_get_collation_classes",
+        )
+        class_ids = list(struct.unpack(f"<{n}I", LIB.read_bytes(ids, 4 * n))) if n else []
+        return CollationClasses(class_ids=class_ids, class_count=LIB.read_u32(count_out))

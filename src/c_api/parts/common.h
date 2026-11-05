@@ -44,12 +44,12 @@ const char* store_cstr(TextStore& store, std::string_view text);
 
 // Allocates an owned copy of `bytes` for a C-ABI out parameter. The caller
 // remains responsible for validating the out pointers before calling this;
-// zero-length input intentionally still uses `new[]` so `fm_buffer_free` can
+// zero-length input intentionally still uses `new[]` so `fm_buffer_destroy` can
 // release the returned pointer exactly like a non-empty buffer.
 void copy_owned_bytes(const std::vector<std::uint8_t>& bytes, std::uint8_t** out_bytes, std::size_t* out_len);
 
 // Per-handle stash for the most recent ad-hoc array evaluation
-// (`fm_workbook_evaluate_formula_array`). The two-step array surface
+// (`fm_sheet_evaluate_formula_array`). The two-step array surface
 // evaluates once, stashes the whole result here, then hands cells back one
 // at a time by row-major index. The evaluation arena is discarded when the
 // producing call returns, so any `Text` cell is deep-copied into `text_owner`
@@ -297,7 +297,7 @@ fm_status_t validate(const fm_cf_rule_t& rule, const char* api);
 
 // Validates a data-validation record: range shape and rectangles, the
 // `type` / `op` / `error_style` domains, and the UTF-8 of the four messages.
-fm_status_t validate(const fm_data_validation& v, const char* api);
+fm_status_t validate(const fm_data_validation_t& v, const char* api);
 
 // Validates a pivot field spec: required and UTF-8 strings and the `axis` domain.
 fm_status_t validate(const fm_pivot_field_spec_t& spec, const char* api);
@@ -439,9 +439,9 @@ struct fm_workbook {
 
   void clear_cell_enumeration_cache() noexcept { cell_enumeration_cache = {}; }
 
-  // Storage behind every borrowed field `fm_sheet_cf_get_at` fills. They are
+  // Storage behind every borrowed field `fm_sheet_get_cf_rule` fills. They are
   // separate from `read_scratch` on purpose: only a successful
-  // `fm_sheet_cf_get_at` clears and refreshes them, so neither an unrelated
+  // `fm_sheet_get_cf_rule` clears and refreshes them, so neither an unrelated
   // read nor a CF mutation can invalidate a rule the caller is still holding.
   // That is what makes the ABI's only edit path - get, remove, add back -
   // safe to execute as documented. Validation-rejected CF calls leave them
@@ -463,17 +463,17 @@ struct fm_workbook {
   // threaded-comment and custom table-style getters. They carry
   // `read_scratch`'s lifetime: each producer clears them together with
   // `read_scratch` before refilling.
-  formulon::c_api::BorrowedArrayArena<fm_filter_column> filter_column_scratch;
+  formulon::c_api::BorrowedArrayArena<fm_filter_column_t> filter_column_scratch;
   formulon::c_api::BorrowedArrayArena<const char*> filter_value_scratch;
-  formulon::c_api::BorrowedArrayArena<fm_date_group_item> date_group_scratch;
-  formulon::c_api::BorrowedArrayArena<fm_sort_condition> sort_condition_scratch;
-  formulon::c_api::BorrowedArrayArena<fm_mention> mention_scratch;
+  formulon::c_api::BorrowedArrayArena<fm_date_group_item_t> date_group_scratch;
+  formulon::c_api::BorrowedArrayArena<fm_sort_condition_t> sort_condition_scratch;
+  formulon::c_api::BorrowedArrayArena<fm_mention_t> mention_scratch;
   formulon::c_api::BorrowedArrayArena<fm_table_style_element_t> table_style_element_scratch;
-  // Stops behind the `gradient_stops` view of `fm_styles_get_fill` /
-  // `fm_styles_get_dxf`; refreshed by each of those calls.
-  formulon::c_api::BorrowedArrayArena<fm_gradient_stop> gradient_stop_scratch;
+  // Stops behind the `gradient_stops` view of `fm_workbook_get_fill` /
+  // `fm_workbook_get_dxf`; refreshed by each of those calls.
+  formulon::c_api::BorrowedArrayArena<fm_gradient_stop_t> gradient_stop_scratch;
 
-  // Result of the most recent `fm_workbook_evaluate_formula_array`. Owns its
+  // Result of the most recent `fm_sheet_evaluate_formula_array`. Owns its
   // own text storage so cells stay readable via
   // `fm_workbook_evaluate_formula_array_cell` after the producing call's
   // arena is gone; superseded by the next array evaluation on this handle.

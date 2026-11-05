@@ -1,5 +1,5 @@
 //
-// Smoke tests for `fm_workbook_partial_recalc` and
+// Smoke tests for `fm_sheet_recalc_viewport` and
 // `fm_workbook_set_iterative_progress`. The tests exercise the C ABI
 // surface only; the deeper engine semantics live in the unit-test
 // suite (`tests/unit/eval/partial_recalc_test.cpp`,
@@ -55,10 +55,10 @@ extern "C" int32_t record_user_data(uint32_t /*iteration*/, double /*max_residua
 
 TEST(FormulonCApiPartialRecalc, RecomputesOnlyClosure) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 5.0), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 1, "=A1+1"), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 2, "=A1*3"), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 5.0), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, "=A1+1"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 2, "=A1*3"), 0);
 
   // Viewport: B1 only (sheet 0, row 0, col 1).
   fm_viewport vp{};
@@ -68,26 +68,26 @@ TEST(FormulonCApiPartialRecalc, RecomputesOnlyClosure) {
   vp.first_col = 1;
   vp.last_col = 1;
   uint32_t recomputed = 0;
-  ASSERT_EQ(fm_workbook_partial_recalc(wb.handle, &vp, &recomputed), 0);
+  ASSERT_EQ(fm_sheet_recalc_viewport(wb.handle, &vp, &recomputed), 0);
   // Only B1 was a formula in the closure.
   EXPECT_EQ(recomputed, 1U);
 
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 1, &v), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 1, &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 6.0);
   // C1 was not in the closure: still blank.
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 2, &v), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 2, &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_BLANK);
 }
 
 TEST(FormulonCApiPartialRecalc, NullArgumentsRejected) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_viewport vp{};
-  EXPECT_EQ(fm_workbook_partial_recalc(nullptr, &vp, nullptr),
+  EXPECT_EQ(fm_sheet_recalc_viewport(nullptr, &vp, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_workbook_partial_recalc(wb.handle, nullptr, nullptr),
+  EXPECT_EQ(fm_sheet_recalc_viewport(wb.handle, nullptr, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 
@@ -96,11 +96,11 @@ TEST(FormulonCApiPartialRecalc, SheetIndexPastTheLastSheetRejected) {
   // closure and reports a successful no-op, so an off-by-one viewport
   // from a UI leaves stale values on screen with nothing to notice.
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 5.0), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 1, "=A1+1"), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 5.0), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, "=A1+1"), 0);
 
-  const size_t sheet_count = fm_workbook_sheet_count(wb.handle);
+  const size_t sheet_count = fm_workbook_get_sheet_count(wb.handle);
   ASSERT_GT(sheet_count, 0U);
 
   fm_viewport vp{};
@@ -110,25 +110,25 @@ TEST(FormulonCApiPartialRecalc, SheetIndexPastTheLastSheetRejected) {
   for (const uint32_t sheet : {static_cast<uint32_t>(sheet_count), 0x10000U, 0xFFFFFFFFU}) {
     vp.sheet = sheet;
     uint32_t recomputed = 99U;
-    EXPECT_EQ(fm_workbook_partial_recalc(wb.handle, &vp, &recomputed), invalid) << sheet;
+    EXPECT_EQ(fm_sheet_recalc_viewport(wb.handle, &vp, &recomputed), invalid) << sheet;
   }
 
   // B1 stayed dirty rather than being reported as recomputed.
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 1, &v), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 1, &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_BLANK);
 
   // The last valid sheet index still works.
   vp.sheet = static_cast<uint32_t>(sheet_count) - 1U;
   uint32_t recomputed = 0;
-  ASSERT_EQ(fm_workbook_partial_recalc(wb.handle, &vp, &recomputed), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_recalc_viewport(wb.handle, &vp, &recomputed), 0) << fm_get_last_error_message();
   EXPECT_EQ(recomputed, 1U);
 }
 
 TEST(FormulonCApiPartialRecalc, OutCountOptional) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=42"), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=42"), 0);
   fm_viewport vp{};
   vp.sheet = 0;
   vp.first_row = 0;
@@ -136,20 +136,20 @@ TEST(FormulonCApiPartialRecalc, OutCountOptional) {
   vp.first_col = 0;
   vp.last_col = 0;
   // Passing NULL for `out_recomputed_count` is allowed.
-  EXPECT_EQ(fm_workbook_partial_recalc(wb.handle, &vp, nullptr), 0);
+  EXPECT_EQ(fm_sheet_recalc_viewport(wb.handle, &vp, nullptr), 0);
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &v), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 42.0);
 }
 
 TEST(FormulonCApiPartialRecalc, IterativeProgressContinueRunsToConvergence) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   // Enable iterative calc.
   ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, 100, 0.001), 0);
   // Build a self-referential cell: A1 = (A1 + 10) / 2 → fixed point 10.
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=(A1+10)/2"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=(A1+10)/2"), 0);
 
   g_callback_invocations.store(0);
   ASSERT_EQ(fm_workbook_set_iterative_progress(wb.handle, &always_continue, nullptr), 0);
@@ -157,16 +157,16 @@ TEST(FormulonCApiPartialRecalc, IterativeProgressContinueRunsToConvergence) {
   EXPECT_GT(g_callback_invocations.load(), 0);
   // Cell should converge near 10.
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &v), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_NEAR(v.u.number, 10.0, 0.01);
 }
 
 TEST(FormulonCApiPartialRecalc, IterativeProgressAbortStopsEarly) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, 100, 0.001), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=(A1+10)/2"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=(A1+10)/2"), 0);
 
   g_callback_invocations.store(0);
   ASSERT_EQ(fm_workbook_set_iterative_progress(wb.handle, &always_abort, nullptr), 0);
@@ -176,7 +176,7 @@ TEST(FormulonCApiPartialRecalc, IterativeProgressAbortStopsEarly) {
   // (NOT #NUM!), and the callback was invoked exactly once.
   EXPECT_EQ(g_callback_invocations.load(), 1);
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &v), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
   // Partial (not converged, not error).
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
 }
@@ -188,9 +188,9 @@ TEST(FormulonCApiPartialRecalc, IterativeProgressNullArgumentRejected) {
 
 TEST(FormulonCApiPartialRecalc, IterativeProgressForwardsCallerUserData) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, 100, 0.001), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=(A1+10)/2"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=(A1+10)/2"), 0);
 
   int marker = 0;
   g_observed_user_data = nullptr;
@@ -203,9 +203,9 @@ TEST(FormulonCApiPartialRecalc, IterativeProgressForwardsCallerUserData) {
 
 TEST(FormulonCApiPartialRecalc, IterativeProgressClearedByNullCallback) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, 100, 0.001), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=(A1+10)/2"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=(A1+10)/2"), 0);
 
   ASSERT_EQ(fm_workbook_set_iterative_progress(wb.handle, &always_abort, nullptr), 0);
   ASSERT_EQ(fm_workbook_set_iterative_progress(wb.handle, nullptr, nullptr), 0);
@@ -215,7 +215,7 @@ TEST(FormulonCApiPartialRecalc, IterativeProgressClearedByNullCallback) {
   // convergence instead of stopping after the first sweep.
   EXPECT_EQ(g_callback_invocations.load(), 0);
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &v), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_NEAR(v.u.number, 10.0, 0.01);
 }

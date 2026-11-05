@@ -111,34 +111,34 @@ const formulon::pivot::PivotCacheField* lookup_cache_field(const fm_workbook_t* 
 // PivotCache lifecycle / enumeration
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_workbook_pivot_cache_count(const fm_workbook_t* wb, std::size_t* out_count) {
+extern "C" fm_status_t fm_workbook_get_pivot_cache_count(const fm_workbook_t* wb, std::size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_count");
+    return null_argument("fm_workbook_get_pivot_cache_count");
   }
   *out_count = wb->workbook().pivot_caches().size();
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_id_at(const fm_workbook_t* wb, std::size_t idx,
-                                                     std::uint32_t* out_cache_id) {
+extern "C" fm_status_t fm_workbook_get_pivot_cache_id_at(const fm_workbook_t* wb, std::size_t idx,
+                                                         std::uint32_t* out_cache_id) {
   clear_last_error();
   if (wb == nullptr || out_cache_id == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_id_at");
+    return null_argument("fm_workbook_get_pivot_cache_id_at");
   }
   const auto& caches = wb->workbook().pivot_caches();
-  if (auto rc = check_index(idx, caches.size(), "fm_workbook_pivot_cache_id_at", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, caches.size(), "fm_workbook_get_pivot_cache_id_at", "idx"); rc != 0) {
     return rc;
   }
   *out_cache_id = caches[idx]->cache_id();
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_create(fm_workbook_t* wb, std::uint32_t requested_id,
-                                                      std::uint32_t* out_cache_id) {
+extern "C" fm_status_t fm_workbook_add_pivot_cache(fm_workbook_t* wb, std::uint32_t requested_id,
+                                                   std::uint32_t* out_cache_id) {
   clear_last_error();
   if (wb == nullptr || out_cache_id == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_create");
+    return null_argument("fm_workbook_add_pivot_cache");
   }
   std::uint32_t assigned = requested_id;
   if (requested_id == 0U) {
@@ -155,14 +155,14 @@ extern "C" fm_status_t fm_workbook_pivot_cache_create(fm_workbook_t* wb, std::ui
     }
     if (any && max_id == std::numeric_limits<std::uint32_t>::max()) {
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "fm_workbook_pivot_cache_create: auto-assignment would overflow",
+                               "fm_workbook_add_pivot_cache: auto-assignment would overflow",
                                "max_existing_id=" + std::to_string(max_id));
     }
     assigned = any ? (max_id + 1U) : 1U;
   } else {
     if (find_cache(wb->workbook(), requested_id) != nullptr) {
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "fm_workbook_pivot_cache_create: requested_id already in use",
+                               "fm_workbook_add_pivot_cache: requested_id already in use",
                                "requested_id=" + std::to_string(requested_id));
     }
   }
@@ -173,10 +173,10 @@ extern "C" fm_status_t fm_workbook_pivot_cache_create(fm_workbook_t* wb, std::ui
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_remove(fm_workbook_t* wb, std::uint32_t cache_id) {
+extern "C" fm_status_t fm_workbook_remove_pivot_cache(fm_workbook_t* wb, std::uint32_t cache_id) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_remove", "wb");
+    return null_argument("fm_workbook_remove_pivot_cache", "wb");
   }
   formulon::Workbook& book = wb->workbook();
   // Reject removal when any pivot still references the cache.
@@ -185,7 +185,7 @@ extern "C" fm_status_t fm_workbook_pivot_cache_remove(fm_workbook_t* wb, std::ui
     for (const auto& pt : sheet.pivot_tables()) {
       if (pt != nullptr && pt->pivot_cache_id() == cache_id) {
         return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                                 "fm_workbook_pivot_cache_remove: cache still referenced by a pivot table",
+                                 "fm_workbook_remove_pivot_cache: cache still referenced by a pivot table",
                                  "cache_id=" + std::to_string(cache_id) + " sheet_index=" + std::to_string(s));
       }
     }
@@ -198,19 +198,19 @@ extern "C" fm_status_t fm_workbook_pivot_cache_remove(fm_workbook_t* wb, std::ui
     }
   }
   return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                           "fm_workbook_pivot_cache_remove: cache_id not found",
+                           "fm_workbook_remove_pivot_cache: cache_id not found",
                            "cache_id=" + std::to_string(cache_id));
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_get_worksheet_source(const fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_get_pivot_cache_worksheet_source(const fm_workbook_t* wb, std::uint32_t cache_id,
                                                                     std::int32_t* out_present, const char** out_ref,
                                                                     const char** out_sheet, const char** out_name) {
   clear_last_error();
   if (wb == nullptr || out_present == nullptr || out_ref == nullptr || out_sheet == nullptr || out_name == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_get_worksheet_source");
+    return null_argument("fm_workbook_get_pivot_cache_worksheet_source");
   }
   const formulon::pivot::PivotCache* cache = nullptr;
-  if (fm_status_t rc = resolve_cache(wb, cache_id, "fm_workbook_pivot_cache_get_worksheet_source", &cache); rc != 0) {
+  if (fm_status_t rc = resolve_cache(wb, cache_id, "fm_workbook_get_pivot_cache_worksheet_source", &cache); rc != 0) {
     return rc;
   }
   const formulon::pivot::WorksheetSource& src = cache->worksheet_source();
@@ -221,12 +221,12 @@ extern "C" fm_status_t fm_workbook_pivot_cache_get_worksheet_source(const fm_wor
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_set_worksheet_source(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_set_pivot_cache_worksheet_source(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                     std::int32_t present, const char* ref,
                                                                     const char* sheet, const char* name) {
   clear_last_error();
   formulon::pivot::PivotCache* cache = nullptr;
-  if (fm_status_t rc = resolve_cache_mut(wb, cache_id, "fm_workbook_pivot_cache_set_worksheet_source", &cache);
+  if (fm_status_t rc = resolve_cache_mut(wb, cache_id, "fm_workbook_set_pivot_cache_worksheet_source", &cache);
       rc != 0) {
     return rc;
   }
@@ -236,7 +236,7 @@ extern "C" fm_status_t fm_workbook_pivot_cache_set_worksheet_source(fm_workbook_
     invalidate_pivot_results_for_cache(wb->workbook(), cache_id);
     return 0;
   }
-  if (auto rc = check_utf8("fm_workbook_pivot_cache_set_worksheet_source", {ref, sheet, name}); rc != 0) {
+  if (auto rc = check_utf8("fm_workbook_set_pivot_cache_worksheet_source", {ref, sheet, name}); rc != 0) {
     return rc;
   }
   // A worksheet source replaces whatever source kind the cache was read with,
@@ -255,28 +255,28 @@ extern "C" fm_status_t fm_workbook_pivot_cache_set_worksheet_source(fm_workbook_
 // PivotCache fields + shared items
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_workbook_pivot_cache_field_count(const fm_workbook_t* wb, std::uint32_t cache_id,
-                                                           std::size_t* out_count) {
+extern "C" fm_status_t fm_workbook_get_pivot_cache_field_count(const fm_workbook_t* wb, std::uint32_t cache_id,
+                                                               std::size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_field_count");
+    return null_argument("fm_workbook_get_pivot_cache_field_count");
   }
   const formulon::pivot::PivotCache* cache = nullptr;
-  if (fm_status_t rc = resolve_cache(wb, cache_id, "fm_workbook_pivot_cache_field_count", &cache); rc != 0) {
+  if (fm_status_t rc = resolve_cache(wb, cache_id, "fm_workbook_get_pivot_cache_field_count", &cache); rc != 0) {
     return rc;
   }
   *out_count = cache->fields().size();
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_field_name(const fm_workbook_t* wb, std::uint32_t cache_id,
-                                                          std::size_t field_idx, const char** out_utf8) {
+extern "C" fm_status_t fm_workbook_get_pivot_cache_field_name(const fm_workbook_t* wb, std::uint32_t cache_id,
+                                                              std::size_t field_idx, const char** out_utf8) {
   clear_last_error();
   if (wb == nullptr || out_utf8 == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_field_name");
+    return null_argument("fm_workbook_get_pivot_cache_field_name");
   }
   fm_status_t status = 0;
-  const auto* field = lookup_cache_field(wb, cache_id, field_idx, "fm_workbook_pivot_cache_field_name", &status);
+  const auto* field = lookup_cache_field(wb, cache_id, field_idx, "fm_workbook_get_pivot_cache_field_name", &status);
   if (field == nullptr) {
     return status;
   }
@@ -284,17 +284,17 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_name(const fm_workbook_t* w
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_field_add(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_add_pivot_cache_field(fm_workbook_t* wb, std::uint32_t cache_id,
                                                          const char* utf8_name, std::size_t* out_field_idx) {
   clear_last_error();
   if (wb == nullptr || utf8_name == nullptr || out_field_idx == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_field_add");
+    return null_argument("fm_workbook_add_pivot_cache_field");
   }
-  if (auto rc = check_utf8("fm_workbook_pivot_cache_field_add", {utf8_name}); rc != 0) {
+  if (auto rc = check_utf8("fm_workbook_add_pivot_cache_field", {utf8_name}); rc != 0) {
     return rc;
   }
   formulon::pivot::PivotCache* cache = nullptr;
-  if (fm_status_t rc = resolve_cache_mut(wb, cache_id, "fm_workbook_pivot_cache_field_add", &cache); rc != 0) {
+  if (fm_status_t rc = resolve_cache_mut(wb, cache_id, "fm_workbook_add_pivot_cache_field", &cache); rc != 0) {
     return rc;
   }
   formulon::pivot::PivotCacheField field;
@@ -307,10 +307,10 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_add(fm_workbook_t* wb, std:
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_field_clear(fm_workbook_t* wb, std::uint32_t cache_id) {
+extern "C" fm_status_t fm_workbook_clear_pivot_cache_fields(fm_workbook_t* wb, std::uint32_t cache_id) {
   clear_last_error();
   formulon::pivot::PivotCache* cache = nullptr;
-  if (fm_status_t rc = resolve_cache_mut(wb, cache_id, "fm_workbook_pivot_cache_field_clear", &cache); rc != 0) {
+  if (fm_status_t rc = resolve_cache_mut(wb, cache_id, "fm_workbook_clear_pivot_cache_fields", &cache); rc != 0) {
     return rc;
   }
   cache->mutable_fields().clear();
@@ -319,15 +319,17 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_clear(fm_workbook_t* wb, st
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_field_shared_item_count(const fm_workbook_t* wb, std::uint32_t cache_id,
-                                                                       std::size_t field_idx, std::size_t* out_count) {
+extern "C" fm_status_t fm_workbook_get_pivot_cache_field_shared_item_count(const fm_workbook_t* wb,
+                                                                           std::uint32_t cache_id,
+                                                                           std::size_t field_idx,
+                                                                           std::size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_field_shared_item_count");
+    return null_argument("fm_workbook_get_pivot_cache_field_shared_item_count");
   }
   fm_status_t status = 0;
   const auto* field =
-      lookup_cache_field(wb, cache_id, field_idx, "fm_workbook_pivot_cache_field_shared_item_count", &status);
+      lookup_cache_field(wb, cache_id, field_idx, "fm_workbook_get_pivot_cache_field_shared_item_count", &status);
   if (field == nullptr) {
     return status;
   }
@@ -335,21 +337,22 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_shared_item_count(const fm_
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_field_shared_item_value(const fm_workbook_t* wb, std::uint32_t cache_id,
-                                                                       std::size_t field_idx, std::size_t item_idx,
-                                                                       fm_value_t* out) {
+extern "C" fm_status_t fm_workbook_get_pivot_cache_field_shared_item_value(const fm_workbook_t* wb,
+                                                                           std::uint32_t cache_id,
+                                                                           std::size_t field_idx, std::size_t item_idx,
+                                                                           fm_value_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_field_shared_item_value");
+    return null_argument("fm_workbook_get_pivot_cache_field_shared_item_value");
   }
   fm_status_t status = 0;
   const auto* field =
-      lookup_cache_field(wb, cache_id, field_idx, "fm_workbook_pivot_cache_field_shared_item_value", &status);
+      lookup_cache_field(wb, cache_id, field_idx, "fm_workbook_get_pivot_cache_field_shared_item_value", &status);
   if (field == nullptr) {
     return status;
   }
   if (fm_status_t rc = check_index(item_idx, field->shared_items.size(),
-                                   "fm_workbook_pivot_cache_field_shared_item_value", "item_idx");
+                                   "fm_workbook_get_pivot_cache_field_shared_item_value", "item_idx");
       rc != 0) {
     return rc;
   }
@@ -357,22 +360,22 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_shared_item_value(const fm_
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_field_shared_item_is_date(const fm_workbook_t* wb,
+extern "C" fm_status_t fm_workbook_is_pivot_cache_field_shared_item_date(const fm_workbook_t* wb,
                                                                          std::uint32_t cache_id, std::size_t field_idx,
                                                                          std::size_t item_idx,
                                                                          std::int32_t* out_is_date) {
   clear_last_error();
   if (wb == nullptr || out_is_date == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_field_shared_item_is_date");
+    return null_argument("fm_workbook_is_pivot_cache_field_shared_item_date");
   }
   fm_status_t status = 0;
   const auto* field =
-      lookup_cache_field(wb, cache_id, field_idx, "fm_workbook_pivot_cache_field_shared_item_is_date", &status);
+      lookup_cache_field(wb, cache_id, field_idx, "fm_workbook_is_pivot_cache_field_shared_item_date", &status);
   if (field == nullptr) {
     return status;
   }
   if (fm_status_t rc = check_index(item_idx, field->shared_items.size(),
-                                   "fm_workbook_pivot_cache_field_shared_item_is_date", "item_idx");
+                                   "fm_workbook_is_pivot_cache_field_shared_item_date", "item_idx");
       rc != 0) {
     return rc;
   }
@@ -405,15 +408,15 @@ formulon::pivot::PivotCacheField* lookup_cache_field_mut(fm_workbook_t* wb, std:
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_pivot_cache_field_add_shared_item_number(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_number(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                             std::size_t field_idx, double value) {
   clear_last_error();
-  if (const fm_status_t st = check_finite(value, "fm_workbook_pivot_cache_field_add_shared_item_number", "value")) {
+  if (const fm_status_t st = check_finite(value, "fm_workbook_add_pivot_cache_field_shared_item_number", "value")) {
     return st;
   }
   fm_status_t status = 0;
   auto* field =
-      lookup_cache_field_mut(wb, cache_id, field_idx, "fm_workbook_pivot_cache_field_add_shared_item_number", &status);
+      lookup_cache_field_mut(wb, cache_id, field_idx, "fm_workbook_add_pivot_cache_field_shared_item_number", &status);
   if (field == nullptr) {
     return status;
   }
@@ -421,22 +424,22 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_add_shared_item_number(fm_w
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_field_add_shared_item_date(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_date(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                           std::size_t field_idx, double serial) {
   clear_last_error();
-  if (const fm_status_t st = check_finite(serial, "fm_workbook_pivot_cache_field_add_shared_item_date", "serial")) {
+  if (const fm_status_t st = check_finite(serial, "fm_workbook_add_pivot_cache_field_shared_item_date", "serial")) {
     return st;
   }
   if (wb == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_field_add_shared_item_date", "wb");
+    return null_argument("fm_workbook_add_pivot_cache_field_shared_item_date", "wb");
   }
   if (!formulon::pivot::is_valid_date_serial(serial, wb->workbook().date1904())) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_cache_field_add_shared_item_date: serial is not a valid date");
+                             "fm_workbook_add_pivot_cache_field_shared_item_date: serial is not a valid date");
   }
   fm_status_t status = 0;
   auto* field =
-      lookup_cache_field_mut(wb, cache_id, field_idx, "fm_workbook_pivot_cache_field_add_shared_item_date", &status);
+      lookup_cache_field_mut(wb, cache_id, field_idx, "fm_workbook_add_pivot_cache_field_shared_item_date", &status);
   if (field == nullptr) {
     return status;
   }
@@ -446,23 +449,23 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_add_shared_item_date(fm_wor
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_field_add_shared_item_text(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_text(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                           std::size_t field_idx, const char* utf8) {
   clear_last_error();
   if (utf8 == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_field_add_shared_item_text", "utf8");
+    return null_argument("fm_workbook_add_pivot_cache_field_shared_item_text", "utf8");
   }
-  if (auto rc = check_utf8("fm_workbook_pivot_cache_field_add_shared_item_text", {utf8}); rc != 0) {
+  if (auto rc = check_utf8("fm_workbook_add_pivot_cache_field_shared_item_text", {utf8}); rc != 0) {
     return rc;
   }
   formulon::pivot::PivotCache* cache = nullptr;
-  if (fm_status_t rc = resolve_cache_mut(wb, cache_id, "fm_workbook_pivot_cache_field_add_shared_item_text", &cache);
+  if (fm_status_t rc = resolve_cache_mut(wb, cache_id, "fm_workbook_add_pivot_cache_field_shared_item_text", &cache);
       rc != 0) {
     return rc;
   }
   if (field_idx >= cache->fields().size()) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_cache_field_add_shared_item_text: field_idx out of range",
+                             "fm_workbook_add_pivot_cache_field_shared_item_text: field_idx out of range",
                              "field_idx=" + std::to_string(field_idx));
   }
   cache->mutable_fields()[field_idx].shared_items.push_back(intern_cache_text(*cache, std::string_view(utf8)));
@@ -470,12 +473,12 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_add_shared_item_text(fm_wor
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_field_add_shared_item_bool(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_bool(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                           std::size_t field_idx, std::int32_t value) {
   clear_last_error();
   fm_status_t status = 0;
   auto* field =
-      lookup_cache_field_mut(wb, cache_id, field_idx, "fm_workbook_pivot_cache_field_add_shared_item_bool", &status);
+      lookup_cache_field_mut(wb, cache_id, field_idx, "fm_workbook_add_pivot_cache_field_shared_item_bool", &status);
   if (field == nullptr) {
     return status;
   }
@@ -483,12 +486,12 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_add_shared_item_bool(fm_wor
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_field_add_shared_item_blank(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_blank(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                            std::size_t field_idx) {
   clear_last_error();
   fm_status_t status = 0;
   auto* field =
-      lookup_cache_field_mut(wb, cache_id, field_idx, "fm_workbook_pivot_cache_field_add_shared_item_blank", &status);
+      lookup_cache_field_mut(wb, cache_id, field_idx, "fm_workbook_add_pivot_cache_field_shared_item_blank", &status);
   if (field == nullptr) {
     return status;
   }
@@ -496,16 +499,16 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_add_shared_item_blank(fm_wo
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_field_add_shared_item_error(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_error(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                            std::size_t field_idx,
                                                                            fm_error_code_t error) {
   clear_last_error();
   if (!is_valid_error_code(error)) {
-    return set_invalid_error_code("fm_workbook_pivot_cache_field_add_shared_item_error", error);
+    return set_invalid_error_code("fm_workbook_add_pivot_cache_field_shared_item_error", error);
   }
   fm_status_t status = 0;
   auto* field =
-      lookup_cache_field_mut(wb, cache_id, field_idx, "fm_workbook_pivot_cache_field_add_shared_item_error", &status);
+      lookup_cache_field_mut(wb, cache_id, field_idx, "fm_workbook_add_pivot_cache_field_shared_item_error", &status);
   if (field == nullptr) {
     return status;
   }
@@ -513,12 +516,12 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_add_shared_item_error(fm_wo
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_field_clear_shared_items(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_clear_pivot_cache_field_shared_items(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                         std::size_t field_idx) {
   clear_last_error();
   fm_status_t status = 0;
   auto* field =
-      lookup_cache_field_mut(wb, cache_id, field_idx, "fm_workbook_pivot_cache_field_clear_shared_items", &status);
+      lookup_cache_field_mut(wb, cache_id, field_idx, "fm_workbook_clear_pivot_cache_field_shared_items", &status);
   if (field == nullptr) {
     return status;
   }
@@ -531,28 +534,28 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_clear_shared_items(fm_workb
 // PivotCache records
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_workbook_pivot_cache_record_count(const fm_workbook_t* wb, std::uint32_t cache_id,
-                                                            std::size_t* out_count) {
+extern "C" fm_status_t fm_workbook_get_pivot_cache_record_count(const fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                std::size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_record_count");
+    return null_argument("fm_workbook_get_pivot_cache_record_count");
   }
   const formulon::pivot::PivotCache* cache = nullptr;
-  if (fm_status_t rc = resolve_cache(wb, cache_id, "fm_workbook_pivot_cache_record_count", &cache); rc != 0) {
+  if (fm_status_t rc = resolve_cache(wb, cache_id, "fm_workbook_get_pivot_cache_record_count", &cache); rc != 0) {
     return rc;
   }
   *out_count = cache->records().size();
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_record_add(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_add_pivot_cache_record(fm_workbook_t* wb, std::uint32_t cache_id,
                                                           std::size_t* out_record_idx) {
   clear_last_error();
   if (wb == nullptr || out_record_idx == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_record_add");
+    return null_argument("fm_workbook_add_pivot_cache_record");
   }
   formulon::pivot::PivotCache* cache = nullptr;
-  if (fm_status_t rc = resolve_cache_mut(wb, cache_id, "fm_workbook_pivot_cache_record_add", &cache); rc != 0) {
+  if (fm_status_t rc = resolve_cache_mut(wb, cache_id, "fm_workbook_add_pivot_cache_record", &cache); rc != 0) {
     return rc;
   }
   cache->mutable_records().emplace_back();
@@ -561,10 +564,10 @@ extern "C" fm_status_t fm_workbook_pivot_cache_record_add(fm_workbook_t* wb, std
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_record_clear(fm_workbook_t* wb, std::uint32_t cache_id) {
+extern "C" fm_status_t fm_workbook_clear_pivot_cache_records(fm_workbook_t* wb, std::uint32_t cache_id) {
   clear_last_error();
   formulon::pivot::PivotCache* cache = nullptr;
-  if (fm_status_t rc = resolve_cache_mut(wb, cache_id, "fm_workbook_pivot_cache_record_clear", &cache); rc != 0) {
+  if (fm_status_t rc = resolve_cache_mut(wb, cache_id, "fm_workbook_clear_pivot_cache_records", &cache); rc != 0) {
     return rc;
   }
   cache->mutable_records().clear();
@@ -644,33 +647,33 @@ fm_status_t set_record_cell(fm_workbook_t* wb, std::uint32_t cache_id, std::size
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_pivot_cache_record_set_number(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_set_pivot_cache_record_number(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                  std::size_t record_idx, std::size_t field_idx,
                                                                  double value) {
   clear_last_error();
-  if (const fm_status_t st = check_finite(value, "fm_workbook_pivot_cache_record_set_number", "value")) {
+  if (const fm_status_t st = check_finite(value, "fm_workbook_set_pivot_cache_record_number", "value")) {
     return st;
   }
-  return set_record_cell(wb, cache_id, record_idx, field_idx, "fm_workbook_pivot_cache_record_set_number",
+  return set_record_cell(wb, cache_id, record_idx, field_idx, "fm_workbook_set_pivot_cache_record_number",
                          formulon::Value::number(value));
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_record_set_date(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_set_pivot_cache_record_date(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                std::size_t record_idx, std::size_t field_idx,
                                                                double serial) {
   clear_last_error();
-  if (const fm_status_t st = check_finite(serial, "fm_workbook_pivot_cache_record_set_date", "serial")) {
+  if (const fm_status_t st = check_finite(serial, "fm_workbook_set_pivot_cache_record_date", "serial")) {
     return st;
   }
   if (wb == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_record_set_date", "wb");
+    return null_argument("fm_workbook_set_pivot_cache_record_date", "wb");
   }
   if (!formulon::pivot::is_valid_date_serial(serial, wb->workbook().date1904())) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_cache_record_set_date: serial is not a valid date");
+                             "fm_workbook_set_pivot_cache_record_date: serial is not a valid date");
   }
   fm_status_t status = 0;
-  auto* rec = lookup_record_mut(wb, cache_id, record_idx, field_idx, "fm_workbook_pivot_cache_record_set_date", nullptr,
+  auto* rec = lookup_record_mut(wb, cache_id, record_idx, field_idx, "fm_workbook_set_pivot_cache_record_date", nullptr,
                                 &status);
   if (rec == nullptr) {
     return status;
@@ -684,19 +687,19 @@ extern "C" fm_status_t fm_workbook_pivot_cache_record_set_date(fm_workbook_t* wb
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_record_set_text(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_set_pivot_cache_record_text(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                std::size_t record_idx, std::size_t field_idx,
                                                                const char* utf8) {
   clear_last_error();
   if (utf8 == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_record_set_text", "utf8");
+    return null_argument("fm_workbook_set_pivot_cache_record_text", "utf8");
   }
-  if (auto rc = check_utf8("fm_workbook_pivot_cache_record_set_text", {utf8}); rc != 0) {
+  if (auto rc = check_utf8("fm_workbook_set_pivot_cache_record_text", {utf8}); rc != 0) {
     return rc;
   }
   formulon::pivot::PivotCache* cache = nullptr;
   fm_status_t status = 0;
-  auto* rec = lookup_record_mut(wb, cache_id, record_idx, field_idx, "fm_workbook_pivot_cache_record_set_text", &cache,
+  auto* rec = lookup_record_mut(wb, cache_id, record_idx, field_idx, "fm_workbook_set_pivot_cache_record_text", &cache,
                                 &status);
   if (rec == nullptr) {
     return status;
@@ -710,29 +713,29 @@ extern "C" fm_status_t fm_workbook_pivot_cache_record_set_text(fm_workbook_t* wb
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_record_set_bool(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_set_pivot_cache_record_bool(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                std::size_t record_idx, std::size_t field_idx,
                                                                std::int32_t value) {
   clear_last_error();
-  return set_record_cell(wb, cache_id, record_idx, field_idx, "fm_workbook_pivot_cache_record_set_bool",
+  return set_record_cell(wb, cache_id, record_idx, field_idx, "fm_workbook_set_pivot_cache_record_bool",
                          formulon::Value::boolean(value != 0));
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_record_set_blank(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_set_pivot_cache_record_blank(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                 std::size_t record_idx, std::size_t field_idx) {
   clear_last_error();
-  return set_record_cell(wb, cache_id, record_idx, field_idx, "fm_workbook_pivot_cache_record_set_blank",
+  return set_record_cell(wb, cache_id, record_idx, field_idx, "fm_workbook_set_pivot_cache_record_blank",
                          formulon::Value::blank());
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_record_set_error(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_set_pivot_cache_record_error(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                 std::size_t record_idx, std::size_t field_idx,
                                                                 fm_error_code_t error) {
   clear_last_error();
   if (!is_valid_error_code(error)) {
-    return set_invalid_error_code("fm_workbook_pivot_cache_record_set_error", error);
+    return set_invalid_error_code("fm_workbook_set_pivot_cache_record_error", error);
   }
-  return set_record_cell(wb, cache_id, record_idx, field_idx, "fm_workbook_pivot_cache_record_set_error",
+  return set_record_cell(wb, cache_id, record_idx, field_idx, "fm_workbook_set_pivot_cache_record_error",
                          formulon::Value::error(static_cast<formulon::ErrorCode>(error)));
 }
 
@@ -757,14 +760,14 @@ std::int32_t missing_items_limit_to_fm(std::optional<std::uint32_t> limit) {
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_pivot_cache_get_options(const fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_get_pivot_cache_options(const fm_workbook_t* wb, std::uint32_t cache_id,
                                                            fm_pivot_cache_options_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_get_options");
+    return null_argument("fm_workbook_get_pivot_cache_options");
   }
   const formulon::pivot::PivotCache* cache = nullptr;
-  if (fm_status_t rc = resolve_cache(wb, cache_id, "fm_workbook_pivot_cache_get_options", &cache); rc != 0) {
+  if (fm_status_t rc = resolve_cache(wb, cache_id, "fm_workbook_get_pivot_cache_options", &cache); rc != 0) {
     return rc;
   }
   fm_pivot_cache_options_t result{};
@@ -775,10 +778,10 @@ extern "C" fm_status_t fm_workbook_pivot_cache_get_options(const fm_workbook_t* 
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_set_options(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_set_pivot_cache_options(fm_workbook_t* wb, std::uint32_t cache_id,
                                                            const fm_pivot_cache_options_t* options) {
   clear_last_error();
-  constexpr const char* kApi = "fm_workbook_pivot_cache_set_options";
+  constexpr const char* kApi = "fm_workbook_set_pivot_cache_options";
   if (wb == nullptr || options == nullptr) {
     return null_argument(kApi);
   }
@@ -862,11 +865,11 @@ using CalculatedTables = std::vector<formulon::pivot::PivotTable*>;
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_pivot_cache_calculated_field_add(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_add_pivot_cache_calculated_field(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                     const char* name, const char* formula,
                                                                     std::size_t* out_field_index) {
   clear_last_error();
-  constexpr const char* kApi = "fm_workbook_pivot_cache_calculated_field_add";
+  constexpr const char* kApi = "fm_workbook_add_pivot_cache_calculated_field";
   if (wb == nullptr || out_field_index == nullptr) {
     return null_argument(kApi);
   }
@@ -895,11 +898,11 @@ extern "C" fm_status_t fm_workbook_pivot_cache_calculated_field_add(fm_workbook_
   return status;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_calculated_field_set_formula(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_set_pivot_cache_calculated_field_formula(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                             std::size_t field_index,
                                                                             const char* formula) {
   clear_last_error();
-  constexpr const char* kApi = "fm_workbook_pivot_cache_calculated_field_set_formula";
+  constexpr const char* kApi = "fm_workbook_set_pivot_cache_calculated_field_formula";
   if (wb == nullptr) {
     return null_argument(kApi, "wb");
   }
@@ -913,24 +916,24 @@ extern "C" fm_status_t fm_workbook_pivot_cache_calculated_field_set_formula(fm_w
       });
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_calculated_field_remove(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_remove_pivot_cache_calculated_field(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                        std::size_t field_index) {
   clear_last_error();
-  return edit_calculated(wb, cache_id, "fm_workbook_pivot_cache_calculated_field_remove",
+  return edit_calculated(wb, cache_id, "fm_workbook_remove_pivot_cache_calculated_field",
                          [&](formulon::pivot::PivotCache& cache, const CalculatedTables& tables,
                              formulon::eval::PivotFormulaEvaluator& host) {
                            return formulon::pivot::remove_calculated_field(cache, tables, field_index, host);
                          });
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_field_formula(const fm_workbook_t* wb, std::uint32_t cache_id,
-                                                             std::size_t field_idx, const char** out_utf8) {
+extern "C" fm_status_t fm_workbook_get_pivot_cache_field_formula(const fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                 std::size_t field_idx, const char** out_utf8) {
   clear_last_error();
   if (wb == nullptr || out_utf8 == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_field_formula");
+    return null_argument("fm_workbook_get_pivot_cache_field_formula");
   }
   fm_status_t status = 0;
-  const auto* field = lookup_cache_field(wb, cache_id, field_idx, "fm_workbook_pivot_cache_field_formula", &status);
+  const auto* field = lookup_cache_field(wb, cache_id, field_idx, "fm_workbook_get_pivot_cache_field_formula", &status);
   if (field == nullptr) {
     return status;
   }
@@ -944,11 +947,11 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_formula(const fm_workbook_t
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_calculated_item_add(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_add_pivot_cache_calculated_item(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                    std::size_t field_index, const char* name,
                                                                    const char* formula) {
   clear_last_error();
-  constexpr const char* kApi = "fm_workbook_pivot_cache_calculated_item_add";
+  constexpr const char* kApi = "fm_workbook_add_pivot_cache_calculated_item";
   if (wb == nullptr) {
     return null_argument(kApi, "wb");
   }
@@ -970,24 +973,26 @@ extern "C" fm_status_t fm_workbook_pivot_cache_calculated_item_add(fm_workbook_t
                          });
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_calculated_item_count(const fm_workbook_t* wb, std::uint32_t cache_id,
-                                                                     std::size_t* out_count) {
+extern "C" fm_status_t fm_workbook_get_pivot_cache_calculated_item_count(const fm_workbook_t* wb,
+                                                                         std::uint32_t cache_id,
+                                                                         std::size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return null_argument("fm_workbook_pivot_cache_calculated_item_count");
+    return null_argument("fm_workbook_get_pivot_cache_calculated_item_count");
   }
   const formulon::pivot::PivotCache* cache = nullptr;
-  if (fm_status_t rc = resolve_cache(wb, cache_id, "fm_workbook_pivot_cache_calculated_item_count", &cache); rc != 0) {
+  if (fm_status_t rc = resolve_cache(wb, cache_id, "fm_workbook_get_pivot_cache_calculated_item_count", &cache);
+      rc != 0) {
     return rc;
   }
   *out_count = cache->calculated_items().size();
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_calculated_item_at(const fm_workbook_t* wb, std::uint32_t cache_id,
-                                                                  std::size_t idx, fm_pivot_calculated_item_t* out) {
+extern "C" fm_status_t fm_workbook_get_pivot_cache_calculated_item(const fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                   std::size_t idx, fm_pivot_calculated_item_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_workbook_pivot_cache_calculated_item_at";
+  constexpr const char* kApi = "fm_workbook_get_pivot_cache_calculated_item";
   if (wb == nullptr || out == nullptr) {
     return null_argument(kApi);
   }
@@ -1027,10 +1032,10 @@ extern "C" fm_status_t fm_workbook_pivot_cache_calculated_item_at(const fm_workb
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_calculated_item_set_formula(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_set_pivot_cache_calculated_item_formula(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                            std::size_t idx, const char* formula) {
   clear_last_error();
-  constexpr const char* kApi = "fm_workbook_pivot_cache_calculated_item_set_formula";
+  constexpr const char* kApi = "fm_workbook_set_pivot_cache_calculated_item_formula";
   if (wb == nullptr) {
     return null_argument(kApi, "wb");
   }
@@ -1044,20 +1049,20 @@ extern "C" fm_status_t fm_workbook_pivot_cache_calculated_item_set_formula(fm_wo
       });
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_calculated_item_move(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_move_pivot_cache_calculated_item(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                     std::size_t idx, std::size_t new_idx) {
   clear_last_error();
   return edit_calculated(
-      wb, cache_id, "fm_workbook_pivot_cache_calculated_item_move",
+      wb, cache_id, "fm_workbook_move_pivot_cache_calculated_item",
       [&](formulon::pivot::PivotCache& cache, const CalculatedTables&, formulon::eval::PivotFormulaEvaluator&) {
         return formulon::pivot::move_calculated_item(cache, idx, new_idx);
       });
 }
 
-extern "C" fm_status_t fm_workbook_pivot_cache_calculated_item_remove(fm_workbook_t* wb, std::uint32_t cache_id,
+extern "C" fm_status_t fm_workbook_remove_pivot_cache_calculated_item(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                       std::size_t idx) {
   clear_last_error();
-  return edit_calculated(wb, cache_id, "fm_workbook_pivot_cache_calculated_item_remove",
+  return edit_calculated(wb, cache_id, "fm_workbook_remove_pivot_cache_calculated_item",
                          [&](formulon::pivot::PivotCache& cache, const CalculatedTables& tables,
                              formulon::eval::PivotFormulaEvaluator& host) {
                            return formulon::pivot::remove_calculated_item(cache, tables, idx, host);

@@ -81,7 +81,7 @@ class PackageDiagnosticsTests(unittest.TestCase):
                     formula1='"Yes,No"',
                 ),
             )
-            wb.add_conditional_format(
+            wb.add_cf_rule(
                 0,
                 ConditionalFormatInput(
                     sqref=[MergeRange(0, 0, 0, 0)],
@@ -111,7 +111,7 @@ class PackageDiagnosticsTests(unittest.TestCase):
             self.assertIsInstance(wb.save_as(WorkbookFormat.XLSB), bytes)
 
             with Workbook.load(xlsb.bytes) as loaded:
-                read = loaded.read_diagnostics()
+                read = loaded.get_diagnostics()
                 self.assertIsInstance(read, ReadDiagnostics)
                 self.assertEqual(read.undecoded_formula_count, 0)
                 self.assertEqual(read.undecoded_defined_name_count, 0)
@@ -120,7 +120,7 @@ class PackageDiagnosticsTests(unittest.TestCase):
                 self.assertEqual(read.unknown_content_type_count, 0)
 
             with Workbook.load(_append_empty_zip_entry(xlsb.bytes, "xl/preserved.bin")) as preserved_loaded:
-                preserved = preserved_loaded.read_diagnostics()
+                preserved = preserved_loaded.get_diagnostics()
                 self.assertEqual(preserved.undecoded_part_count, 0)
 
     def test_diagnostic_scratch_is_freed_when_a_later_allocation_fails(self) -> None:

@@ -30,10 +30,10 @@ using formulon::c_api::parts::TextStore;
 namespace {
 
 // Converts `slicer` to the model spec; a non-zero return is the status to report.
-fm_status_t to_spec(const fm_slicer& slicer, const char* api, formulon::SlicerSpec& spec) {
+fm_status_t to_spec(const fm_slicer_t& slicer, const char* api, formulon::SlicerSpec& spec) {
   spec.fields = slicer.fields;
   if ((slicer.fields & FM_SLICER_FIELD_SORT_ORDER) != 0U) {
-    if (auto rc = check_enum_domain(slicer.sort_order, FM_SLICER_SORT_DESCENDING, api, "sort_order"); rc != 0) {
+    if (auto rc = check_enum_domain(slicer.sort_order, FM_SLICER_SORT_ORDER_DESCENDING, api, "sort_order"); rc != 0) {
       return rc;
     }
   }
@@ -59,12 +59,13 @@ fm_status_t to_spec(const fm_slicer& slicer, const char* api, formulon::SlicerSp
 
 }  // namespace
 
-extern "C" fm_status_t fm_sheet_slicer_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
+extern "C" fm_status_t fm_sheet_get_slicer_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_slicer_count: NULL out_count");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_get_slicer_count: NULL out_count");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_slicer_count"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_slicer_count"); rc != 0) {
     return rc;
   }
   auto slicers = formulon::list_slicers(wb->workbook(), sheet_index);
@@ -75,12 +76,13 @@ extern "C" fm_status_t fm_sheet_slicer_count(const fm_workbook_t* wb, size_t she
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_slicer_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx, fm_slicer* out) {
+extern "C" fm_status_t fm_sheet_get_slicer_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
+                                              fm_slicer_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_slicer_at: NULL out");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_slicer_at: NULL out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_slicer_at"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_slicer_at"); rc != 0) {
     return rc;
   }
   auto slicers = formulon::list_slicers(wb->workbook(), sheet_index);
@@ -88,13 +90,13 @@ extern "C" fm_status_t fm_sheet_slicer_at(const fm_workbook_t* wb, size_t sheet_
     return set_last_error(slicers.error());
   }
   const std::vector<formulon::SlicerInfo>& list = slicers.value();
-  if (auto rc = check_index(idx, list.size(), "fm_sheet_slicer_at", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, list.size(), "fm_sheet_get_slicer_at", "idx"); rc != 0) {
     return rc;
   }
   const formulon::SlicerInfo& info = list[idx];
   const formulon::DrawingObject& obj = info.object;
   TextStore& store = fresh_read_scratch(wb);
-  *out = fm_slicer{};
+  *out = fm_slicer_t{};
   out->object_id = obj.object_id;
   out->column_count = info.column_count;
   out->sort_order = static_cast<int32_t>(info.sort_order);
@@ -111,7 +113,7 @@ extern "C" fm_status_t fm_sheet_slicer_at(const fm_workbook_t* wb, size_t sheet_
 }
 
 extern "C" fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
-                                           size_t column_index, const fm_slicer* spec, uint32_t* out_object_id) {
+                                           size_t column_index, const fm_slicer_t* spec, uint32_t* out_object_id) {
   clear_last_error();
   constexpr const char* kApi = "fm_sheet_add_slicer";
   if (spec == nullptr || out_object_id == nullptr) {
@@ -133,7 +135,7 @@ extern "C" fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index
 }
 
 extern "C" fm_status_t fm_sheet_update_slicer(fm_workbook_t* wb, size_t sheet_index, size_t idx,
-                                              const fm_slicer* spec) {
+                                              const fm_slicer_t* spec) {
   clear_last_error();
   constexpr const char* kApi = "fm_sheet_update_slicer";
   if (spec == nullptr) {

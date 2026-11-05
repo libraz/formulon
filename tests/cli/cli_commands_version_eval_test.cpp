@@ -127,7 +127,7 @@ TEST(FormulonCli, EvalMalformedSyntaxMatchesTheAdHocCApiEntryPoint) {
   ASSERT_EQ(fm_workbook_add_sheet(wb, "Sheet1"), 0);
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
-  ASSERT_EQ(fm_workbook_evaluate_formula_array(wb, 0, 0, 0, "=1+", &rows, &cols), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb, 0, 0, 0, "=1+", &rows, &cols), 0);
   EXPECT_EQ(rows, 1U);
   EXPECT_EQ(cols, 1U);
   fm_value_t value{};

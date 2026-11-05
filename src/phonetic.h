@@ -62,7 +62,7 @@ struct PhoneticProperties {
 ///
 /// This is the cell's reading with no regard for which characters each
 /// run covers -- the shape a furigana field wants, and what the C ABI's
-/// `fm_workbook_get_cell_phonetic` returns. `PHONETIC`'s result is a
+/// `fm_sheet_get_cell_phonetic` returns. `PHONETIC`'s result is a
 /// different projection and is built by `eval::compose_phonetic`.
 inline std::string flatten_phonetic(const std::vector<PhoneticRun>& runs) {
   std::string out;

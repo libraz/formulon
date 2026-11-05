@@ -956,7 +956,7 @@ TEST(OoxmlReader, UnresolvableCfDxfIdIsDisengagedOnLoad) {
 
   // The invariant itself, stated over the whole loaded workbook: no
   // surface can be handed a `dxf_id` the styles table would reject, which
-  // is the only way `fm_styles_get_dxf` can fail on a workbook that
+  // is the only way `fm_workbook_get_dxf` can fail on a workbook that
   // loaded.
   for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
     for (const cf::ConditionalFormat& cfmt : wb.sheet(s).conditional_formats()) {

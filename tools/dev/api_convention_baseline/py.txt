@@ -1,212 +1,3 @@
-R0.coverage	active_sheet.get	active_sheet	`active_sheet` is a former name; the ledger has `get_active_sheet`
-R0.coverage	border.get_count	border_count	`border_count` is a former name; the ledger has `get_border_count`
-R0.coverage	calc_mode.get	calc_mode	`calc_mode` is a former name; the ledger has `get_calc_mode`
-R0.coverage	calc_on_save.get	calc_on_save	`calc_on_save` is a former name; the ledger has `get_calc_on_save`
-R0.coverage	cell_phonetic.get	get_phonetic	`get_phonetic` is a former name; the ledger has `get_cell_phonetic`
-R0.coverage	cell_phonetic.set	set_phonetic	`set_phonetic` is a former name; the ledger has `set_cell_phonetic`
-R0.coverage	cell_phonetic_properties.get	get_phonetic_properties	`get_phonetic_properties` is a former name; the ledger has `get_cell_phonetic_properties`
-R0.coverage	cell_phonetic_properties.has	has_phonetic_properties	`has_phonetic_properties` is a former name; the ledger has `has_cell_phonetic_properties`
-R0.coverage	cell_phonetic_properties.set	set_phonetic_properties	`set_phonetic_properties` is a former name; the ledger has `set_cell_phonetic_properties`
-R0.coverage	cell_phonetic_runs.set	set_phonetic_runs	`set_phonetic_runs` is a former name; the ledger has `set_cell_phonetic_runs`
-R0.coverage	cell_show_phonetic.get	get_show_phonetic	`get_show_phonetic` is a former name; the ledger has `get_cell_show_phonetic`
-R0.coverage	cell_show_phonetic.set	set_show_phonetic	`set_show_phonetic` is a former name; the ledger has `set_cell_show_phonetic`
-R0.coverage	cell_style_xf.get_count	cell_style_xf_count	`cell_style_xf_count` is a former name; the ledger has `get_cell_style_xf_count`
-R0.coverage	cell_xf.get_count	cell_xf_count	`cell_xf_count` is a former name; the ledger has `get_cell_xf_count`
-R0.coverage	cf_rule.add	add_conditional_format	`add_conditional_format` is a former name; the ledger has `add_cf_rule`
-R0.coverage	cf_rule.clear	clear_conditional_formats	`clear_conditional_formats` is a former name; the ledger has `clear_cf_rules`
-R0.coverage	cf_rule.get	get_conditional_format_at	`get_conditional_format_at` is a former name; the ledger has `get_cf_rule`
-R0.coverage	cf_rule.get_count	cf_count	`cf_count` is a former name; the ledger has `get_cf_rule_count`
-R0.coverage	cf_rule.remove	remove_conditional_format_at	`remove_conditional_format_at` is a former name; the ledger has `remove_cf_rule`
-R0.coverage	chart.add	insert_chart	`insert_chart` is a former name; the ledger has `add_chart`
-R0.coverage	chart_preview.get	preview_chart_data	`preview_chart_data` is a former name; the ledger has `get_chart_preview`
-R0.coverage	col_breaks.list	get_col_breaks	`get_col_breaks` is a former name; the ledger has `list_col_breaks`
-R0.coverage	col_overrides.list	get_sheet_columns	`get_sheet_columns` is a former name; the ledger has `list_col_overrides`
-R0.coverage	collation_classes.get	Workbook.collation_classes	`Workbook.collation_classes` is a former name; the ledger has `get_collation_classes`
-R0.coverage	column_chars_to_pt.convert	column_chars_to_pt	`column_chars_to_pt` is a former name; the ledger has `convert_column_chars_to_pt`
-R0.coverage	column_pt_to_chars.convert	column_pt_to_chars	`column_pt_to_chars` is a former name; the ledger has `convert_column_pt_to_chars`
-R0.coverage	comments.list	get_comments	`get_comments` is a former name; the ledger has `list_comments`
-R0.coverage	date1904.get	date1904	`date1904` is a former name; the ledger has `get_date1904`
-R0.coverage	defined_names.list	iter_defined_names	`iter_defined_names` is a former name; the ledger has `list_defined_names`
-R0.coverage	dependents.get	dependents	`dependents` is a former name; the ledger has `get_dependents`
-R0.coverage	diagnostics.get	read_diagnostics	`read_diagnostics` is a former name; the ledger has `get_diagnostics`
-R0.coverage	dxf.get_count	dxf_count	`dxf_count` is a former name; the ledger has `get_dxf_count`
-R0.coverage	error_display_name.get	error_display_name	`error_display_name` is a former name; the ledger has `get_error_display_name`
-R0.coverage	excel_profile_id.get	excel_profile_id	`excel_profile_id` is a former name; the ledger has `get_excel_profile_id`
-R0.coverage	external_link.get	get_external_link_at	`get_external_link_at` is a former name; the ledger has `get_external_link`
-R0.coverage	external_link.get_count	external_link_count	`external_link_count` is a former name; the ledger has `get_external_link_count`
-R0.coverage	file_name.get	file_name	`file_name` is a former name; the ledger has `get_file_name`
-R0.coverage	fill.get_count	fill_count	`fill_count` is a former name; the ledger has `get_fill_count`
-R0.coverage	font.get_count	font_count	`font_count` is a former name; the ledger has `get_font_count`
-R0.coverage	format_defaults.get	get_sheet_format_defaults	`get_sheet_format_defaults` is a former name; the ledger has `get_format_defaults`
-R0.coverage	format_defaults.set	set_sheet_format_defaults	`set_sheet_format_defaults` is a former name; the ledger has `set_format_defaults`
-R0.coverage	formula.canonicalize	Workbook.canonicalize_formula	`Workbook.canonicalize_formula` is a former name; the ledger has `canonicalize_formula`
-R0.coverage	formula.localize	Workbook.localize_formula	`Workbook.localize_formula` is a former name; the ledger has `localize_formula`
-R0.coverage	freeze.set	set_sheet_freeze	`set_sheet_freeze` is a former name; the ledger has `set_freeze`
-R0.coverage	full_precision.get	full_precision	`full_precision` is a former name; the ledger has `get_full_precision`
-R0.coverage	function.canonicalize_name	Workbook.canonicalize_function_name	`Workbook.canonicalize_function_name` is a former name; the ledger has `canonicalize_function_name`
-R0.coverage	function.localize_name	Workbook.localize_function_name	`Workbook.localize_function_name` is a former name; the ledger has `localize_function_name`
-R0.coverage	function_metadata.get	Workbook.function_metadata	`Workbook.function_metadata` is a former name; the ledger has `get_function_metadata`
-R0.coverage	hyperlinks.list	get_hyperlinks	`get_hyperlinks` is a former name; the ledger has `list_hyperlinks`
-R0.coverage	image.add	insert_image	`insert_image` is a former name; the ledger has `add_image`
-R0.coverage	image_info.get	probe_image	`probe_image` is a former name; the ledger has `get_image_info`
-R0.coverage	invalid_cells.get	list_invalid_cells	`list_invalid_cells` is a former name; the ledger has `get_invalid_cells`
-R0.coverage	lambda_text.get	lambda_text_at	`lambda_text_at` is a former name; the ledger has `get_lambda_text`
-R0.coverage	locale_facts.get	Workbook.locale_facts	`Workbook.locale_facts` is a former name; the ledger has `get_locale_facts`
-R0.coverage	memory_usage.get	memory_usage	`memory_usage` is a former name; the ledger has `get_memory_usage`
-R0.coverage	merges.list	get_merges	`get_merges` is a former name; the ledger has `list_merges`
-R0.coverage	num_fmt_string.get	get_num_fmt	`get_num_fmt` is a former name; the ledger has `get_num_fmt_string`
-R0.coverage	pagination.get	paginate	`paginate` is a former name; the ledger has `get_pagination`
-R0.coverage	pane_top_left.set	set_sheet_pane_top_left	`set_sheet_pane_top_left` is a former name; the ledger has `set_pane_top_left`
-R0.coverage	partial.recalc	partial_recalc	`partial_recalc` is a former name; the ledger has `recalc_viewport`
-R0.coverage	passthroughs.list	iter_passthrough	`iter_passthrough` is a former name; the ledger has `list_passthroughs`
-R0.coverage	people.list	get_persons	`get_persons` is a former name; the ledger has `list_people`
-R0.coverage	pinned_now.get	pinned_now	`pinned_now` is a former name; the ledger has `get_pinned_now`
-R0.coverage	pivot.create	pivot_create	`pivot_create` is a former name; the ledger has `add_pivot`
-R0.coverage	pivot.get_count	pivot_count	`pivot_count` is a former name; the ledger has `get_pivot_count`
-R0.coverage	pivot.remove	pivot_remove	`pivot_remove` is a former name; the ledger has `remove_pivot`
-R0.coverage	pivot_anchor.set	pivot_set_anchor	`pivot_set_anchor` is a former name; the ledger has `set_pivot_anchor`
-R0.coverage	pivot_cache.create	pivot_cache_create	`pivot_cache_create` is a former name; the ledger has `add_pivot_cache`
-R0.coverage	pivot_cache.get_id	pivot_cache_id	`pivot_cache_id` is a former name; the ledger has `get_pivot_cache_id`
-R0.coverage	pivot_cache.remove	pivot_cache_remove	`pivot_cache_remove` is a former name; the ledger has `remove_pivot_cache`
-R0.coverage	pivot_cache_calculated_field.add	pivot_cache_calculated_field_add	`pivot_cache_calculated_field_add` is a former name; the ledger has `add_pivot_cache_calculated_field`
-R0.coverage	pivot_cache_calculated_field.remove	pivot_cache_calculated_field_remove	`pivot_cache_calculated_field_remove` is a former name; the ledger has `remove_pivot_cache_calculated_field`
-R0.coverage	pivot_cache_calculated_field_formula.set	pivot_cache_calculated_field_set_formula	`pivot_cache_calculated_field_set_formula` is a former name; the ledger has `set_pivot_cache_calculated_field_formula`
-R0.coverage	pivot_cache_calculated_item.add	pivot_cache_calculated_item_add	`pivot_cache_calculated_item_add` is a former name; the ledger has `add_pivot_cache_calculated_item`
-R0.coverage	pivot_cache_calculated_item.get	pivot_cache_calculated_item_at	`pivot_cache_calculated_item_at` is a former name; the ledger has `get_pivot_cache_calculated_item`
-R0.coverage	pivot_cache_calculated_item.get_count	pivot_cache_calculated_item_count	`pivot_cache_calculated_item_count` is a former name; the ledger has `get_pivot_cache_calculated_item_count`
-R0.coverage	pivot_cache_calculated_item.move	pivot_cache_calculated_item_move	`pivot_cache_calculated_item_move` is a former name; the ledger has `move_pivot_cache_calculated_item`
-R0.coverage	pivot_cache_calculated_item.remove	pivot_cache_calculated_item_remove	`pivot_cache_calculated_item_remove` is a former name; the ledger has `remove_pivot_cache_calculated_item`
-R0.coverage	pivot_cache_calculated_item_formula.set	pivot_cache_calculated_item_set_formula	`pivot_cache_calculated_item_set_formula` is a former name; the ledger has `set_pivot_cache_calculated_item_formula`
-R0.coverage	pivot_cache_field.add	pivot_cache_field_add	`pivot_cache_field_add` is a former name; the ledger has `add_pivot_cache_field`
-R0.coverage	pivot_cache_field.clear	pivot_cache_field_clear	`pivot_cache_field_clear` is a former name; the ledger has `clear_pivot_cache_fields`
-R0.coverage	pivot_cache_field.get_count	pivot_cache_field_count	`pivot_cache_field_count` is a former name; the ledger has `get_pivot_cache_field_count`
-R0.coverage	pivot_cache_field_formula.get	pivot_cache_field_formula	`pivot_cache_field_formula` is a former name; the ledger has `get_pivot_cache_field_formula`
-R0.coverage	pivot_cache_field_name.get	pivot_cache_field_name	`pivot_cache_field_name` is a former name; the ledger has `get_pivot_cache_field_name`
-R0.coverage	pivot_cache_field_shared_item.get_count	pivot_cache_field_shared_item_count	`pivot_cache_field_shared_item_count` is a former name; the ledger has `get_pivot_cache_field_shared_item_count`
-R0.coverage	pivot_cache_field_shared_item_blank.add	pivot_cache_field_add_shared_item_blank	`pivot_cache_field_add_shared_item_blank` is a former name; the ledger has `add_pivot_cache_field_shared_item_blank`
-R0.coverage	pivot_cache_field_shared_item_bool.add	pivot_cache_field_add_shared_item_bool	`pivot_cache_field_add_shared_item_bool` is a former name; the ledger has `add_pivot_cache_field_shared_item_bool`
-R0.coverage	pivot_cache_field_shared_item_date.add	pivot_cache_field_add_shared_item_date	`pivot_cache_field_add_shared_item_date` is a former name; the ledger has `add_pivot_cache_field_shared_item_date`
-R0.coverage	pivot_cache_field_shared_item_date.is	pivot_cache_field_shared_item_is_date	`pivot_cache_field_shared_item_is_date` is a former name; the ledger has `is_pivot_cache_field_shared_item_date`
-R0.coverage	pivot_cache_field_shared_item_error.add	pivot_cache_field_add_shared_item_error	`pivot_cache_field_add_shared_item_error` is a former name; the ledger has `add_pivot_cache_field_shared_item_error`
-R0.coverage	pivot_cache_field_shared_item_number.add	pivot_cache_field_add_shared_item_number	`pivot_cache_field_add_shared_item_number` is a former name; the ledger has `add_pivot_cache_field_shared_item_number`
-R0.coverage	pivot_cache_field_shared_item_text.add	pivot_cache_field_add_shared_item_text	`pivot_cache_field_add_shared_item_text` is a former name; the ledger has `add_pivot_cache_field_shared_item_text`
-R0.coverage	pivot_cache_field_shared_item_value.get	pivot_cache_field_shared_item_value	`pivot_cache_field_shared_item_value` is a former name; the ledger has `get_pivot_cache_field_shared_item_value`
-R0.coverage	pivot_cache_field_shared_items.clear	pivot_cache_field_clear_shared_items	`pivot_cache_field_clear_shared_items` is a former name; the ledger has `clear_pivot_cache_field_shared_items`
-R0.coverage	pivot_cache_options.get	pivot_cache_get_options	`pivot_cache_get_options` is a former name; the ledger has `get_pivot_cache_options`
-R0.coverage	pivot_cache_options.set	pivot_cache_set_options	`pivot_cache_set_options` is a former name; the ledger has `set_pivot_cache_options`
-R0.coverage	pivot_cache_record.add	pivot_cache_record_add	`pivot_cache_record_add` is a former name; the ledger has `add_pivot_cache_record`
-R0.coverage	pivot_cache_record.clear	pivot_cache_record_clear	`pivot_cache_record_clear` is a former name; the ledger has `clear_pivot_cache_records`
-R0.coverage	pivot_cache_record.get_count	pivot_cache_record_count	`pivot_cache_record_count` is a former name; the ledger has `get_pivot_cache_record_count`
-R0.coverage	pivot_cache_record_blank.set	pivot_cache_record_set_blank	`pivot_cache_record_set_blank` is a former name; the ledger has `set_pivot_cache_record_blank`
-R0.coverage	pivot_cache_record_bool.set	pivot_cache_record_set_bool	`pivot_cache_record_set_bool` is a former name; the ledger has `set_pivot_cache_record_bool`
-R0.coverage	pivot_cache_record_date.set	pivot_cache_record_set_date	`pivot_cache_record_set_date` is a former name; the ledger has `set_pivot_cache_record_date`
-R0.coverage	pivot_cache_record_error.set	pivot_cache_record_set_error	`pivot_cache_record_set_error` is a former name; the ledger has `set_pivot_cache_record_error`
-R0.coverage	pivot_cache_record_number.set	pivot_cache_record_set_number	`pivot_cache_record_set_number` is a former name; the ledger has `set_pivot_cache_record_number`
-R0.coverage	pivot_cache_record_text.set	pivot_cache_record_set_text	`pivot_cache_record_set_text` is a former name; the ledger has `set_pivot_cache_record_text`
-R0.coverage	pivot_col_field_order.get	pivot_col_field_order	`pivot_col_field_order` is a former name; the ledger has `get_pivot_col_field_order`
-R0.coverage	pivot_col_field_order.set	pivot_set_col_field_order	`pivot_set_col_field_order` is a former name; the ledger has `set_pivot_col_field_order`
-R0.coverage	pivot_data_field.add	pivot_data_field_add	`pivot_data_field_add` is a former name; the ledger has `add_pivot_data_field`
-R0.coverage	pivot_data_field.clear	pivot_data_field_clear	`pivot_data_field_clear` is a former name; the ledger has `clear_pivot_data_fields`
-R0.coverage	pivot_data_field.get	pivot_data_field_at	`pivot_data_field_at` is a former name; the ledger has `get_pivot_data_field`
-R0.coverage	pivot_data_field.get_count	pivot_data_field_count	`pivot_data_field_count` is a former name; the ledger has `get_pivot_data_field_count`
-R0.coverage	pivot_data_field.set	pivot_data_field_set	`pivot_data_field_set` is a former name; the ledger has `set_pivot_data_field`
-R0.coverage	pivot_data_field_default_name.get	pivot_data_field_default_name	`pivot_data_field_default_name` is a former name; the ledger has `get_pivot_data_field_default_name`
-R0.coverage	pivot_field.add	pivot_field_add	`pivot_field_add` is a former name; the ledger has `add_pivot_field`
-R0.coverage	pivot_field.clear	pivot_field_clear	`pivot_field_clear` is a former name; the ledger has `clear_pivot_fields`
-R0.coverage	pivot_field.get	pivot_field_at	`pivot_field_at` is a former name; the ledger has `get_pivot_field`
-R0.coverage	pivot_field.get_count	pivot_field_count	`pivot_field_count` is a former name; the ledger has `get_pivot_field_count`
-R0.coverage	pivot_field_axis.set	pivot_field_set_axis	`pivot_field_set_axis` is a former name; the ledger has `set_pivot_field_axis`
-R0.coverage	pivot_field_custom_name.set	pivot_field_set_custom_name	`pivot_field_set_custom_name` is a former name; the ledger has `set_pivot_field_custom_name`
-R0.coverage	pivot_field_date_group.clear	pivot_field_clear_date_group	`pivot_field_clear_date_group` is a former name; the ledger has `clear_pivot_field_date_group`
-R0.coverage	pivot_field_date_group.set	pivot_field_set_date_group	`pivot_field_set_date_group` is a former name; the ledger has `set_pivot_field_date_group`
-R0.coverage	pivot_field_default_subtotal.set	pivot_field_set_default_subtotal	`pivot_field_set_default_subtotal` is a former name; the ledger has `set_pivot_field_default_subtotal`
-R0.coverage	pivot_field_fill_down_labels.set	pivot_field_set_fill_down_labels	`pivot_field_set_fill_down_labels` is a former name; the ledger has `set_pivot_field_fill_down_labels`
-R0.coverage	pivot_field_insert_blank_row.set	pivot_field_set_insert_blank_row	`pivot_field_set_insert_blank_row` is a former name; the ledger has `set_pivot_field_insert_blank_row`
-R0.coverage	pivot_field_item.add	pivot_field_add_item	`pivot_field_add_item` is a former name; the ledger has `add_pivot_field_item`
-R0.coverage	pivot_field_item.add_at	pivot_field_add_item_at	`pivot_field_add_item_at` is a former name; the ledger has `add_pivot_field_shared_item`
-R0.coverage	pivot_field_item.get	pivot_field_item_at	`pivot_field_item_at` is a former name; the ledger has `get_pivot_field_item`
-R0.coverage	pivot_field_item.get_count	pivot_field_item_count	`pivot_field_item_count` is a former name; the ledger has `get_pivot_field_item_count`
-R0.coverage	pivot_field_item_caption.set	pivot_field_set_item_caption	`pivot_field_set_item_caption` is a former name; the ledger has `set_pivot_field_item_caption`
-R0.coverage	pivot_field_item_show_detail.set	pivot_field_set_item_show_detail	`pivot_field_set_item_show_detail` is a former name; the ledger has `set_pivot_field_item_show_detail`
-R0.coverage	pivot_field_item_visible.set	pivot_field_set_item_visible	`pivot_field_set_item_visible` is a former name; the ledger has `set_pivot_field_item_visible`
-R0.coverage	pivot_field_items.clear	pivot_field_clear_items	`pivot_field_clear_items` is a former name; the ledger has `clear_pivot_field_items`
-R0.coverage	pivot_field_number_format.set	pivot_field_set_number_format	`pivot_field_set_number_format` is a former name; the ledger has `set_pivot_field_number_format`
-R0.coverage	pivot_field_show_all.set	pivot_field_set_show_all	`pivot_field_set_show_all` is a former name; the ledger has `set_pivot_field_show_all`
-R0.coverage	pivot_field_show_detail.set	pivot_field_set_show_detail	`pivot_field_set_show_detail` is a former name; the ledger has `set_pivot_field_show_detail`
-R0.coverage	pivot_field_sort.set	pivot_field_set_sort	`pivot_field_set_sort` is a former name; the ledger has `set_pivot_field_sort`
-R0.coverage	pivot_field_subtotal_fn.add	pivot_field_add_subtotal_fn	`pivot_field_add_subtotal_fn` is a former name; the ledger has `add_pivot_field_subtotal_fn`
-R0.coverage	pivot_field_subtotal_fns.clear	pivot_field_clear_subtotal_fns	`pivot_field_clear_subtotal_fns` is a former name; the ledger has `clear_pivot_field_subtotal_fns`
-R0.coverage	pivot_field_subtotal_top.set	pivot_field_set_subtotal_top	`pivot_field_set_subtotal_top` is a former name; the ledger has `set_pivot_field_subtotal_top`
-R0.coverage	pivot_filter.add	pivot_filter_add	`pivot_filter_add` is a former name; the ledger has `add_pivot_filter`
-R0.coverage	pivot_filter.clear	pivot_filter_clear	`pivot_filter_clear` is a former name; the ledger has `clear_pivot_filters`
-R0.coverage	pivot_filter.get	pivot_filter_at	`pivot_filter_at` is a former name; the ledger has `get_pivot_filter`
-R0.coverage	pivot_filter.get_count	pivot_filter_count	`pivot_filter_count` is a former name; the ledger has `get_pivot_filter_count`
-R0.coverage	pivot_filter.remove	pivot_filter_remove_at	`pivot_filter_remove_at` is a former name; the ledger has `remove_pivot_filter`
-R0.coverage	pivot_grand_totals.get	pivot_grand_totals	`pivot_grand_totals` is a former name; the ledger has `get_pivot_grand_totals`
-R0.coverage	pivot_grand_totals.set	pivot_set_grand_totals	`pivot_set_grand_totals` is a former name; the ledger has `set_pivot_grand_totals`
-R0.coverage	pivot_layout.get	pivot_layout	`pivot_layout` is a former name; the ledger has `get_pivot_layout`
-R0.coverage	pivot_name.get	pivot_name	`pivot_name` is a former name; the ledger has `get_pivot_name`
-R0.coverage	pivot_name.set	pivot_set_name	`pivot_set_name` is a former name; the ledger has `set_pivot_name`
-R0.coverage	pivot_options.get	pivot_get_options	`pivot_get_options` is a former name; the ledger has `get_pivot_options`
-R0.coverage	pivot_options.set	pivot_set_options	`pivot_set_options` is a former name; the ledger has `set_pivot_options`
-R0.coverage	pivot_project.get	pivot_project	`pivot_project` is a former name; the ledger has `project_pivot`
-R0.coverage	pivot_projection_pending.get	pivot_projection_pending	`pivot_projection_pending` is a former name; the ledger has `is_pivot_projection_pending`
-R0.coverage	pivot_row_field_order.get	pivot_row_field_order	`pivot_row_field_order` is a former name; the ledger has `get_pivot_row_field_order`
-R0.coverage	pivot_row_field_order.set	pivot_set_row_field_order	`pivot_set_row_field_order` is a former name; the ledger has `set_pivot_row_field_order`
-R0.coverage	pivot_show_details.get	pivot_show_details	`pivot_show_details` is a former name; the ledger has `show_pivot_details`
-R0.coverage	pivot_style_info.get	pivot_style_info	`pivot_style_info` is a former name; the ledger has `get_pivot_style_info`
-R0.coverage	pivot_style_info.set	pivot_set_style_info	`pivot_set_style_info` is a former name; the ledger has `set_pivot_style_info`
-R0.coverage	precedents.get	precedents	`precedents` is a former name; the ledger has `get_precedents`
-R0.coverage	protected_range.get_count	protected_range_count	`protected_range_count` is a former name; the ledger has `get_protected_range_count`
-R0.coverage	range_style_bases.get	range_style_bases	`range_style_bases` is a former name; the ledger has `get_range_style_bases`
-R0.coverage	range_style_bases_excluding.get	range_style_bases_excluding	`range_style_bases_excluding` is a former name; the ledger has `get_range_style_bases_excluding`
-R0.coverage	record.cell_style_record	CellStyle	`CellStyle` is a former name; the ledger has `CellStyleRecord`
-R0.coverage	record.cfvo	CfValueObject	`CfValueObject` is a former name; the ledger has `Cfvo`
-R0.coverage	record.chart_preview_overrides	ChartPreviewOverrides	`ChartPreviewOverrides` is a former name; the ledger has `ChartPreviewOverridesInput`
-R0.coverage	record.chart_title	ChartTitleInfo	`ChartTitleInfo` is a former name; the ledger has `ChartTitle`
-R0.coverage	record.external_link_record	ExternalLink	`ExternalLink` is a former name; the ledger has `ExternalLinkRecord`
-R0.coverage	record.pivot_field_spec	PivotFieldSpec	`PivotFieldSpec` is a former name; the ledger has `PivotFieldSpecInput`
-R0.coverage	ref_mode.get	ref_mode	`ref_mode` is a former name; the ledger has `get_ref_mode`
-R0.coverage	right_to_left.set	set_sheet_right_to_left	`set_sheet_right_to_left` is a former name; the ledger has `set_right_to_left`
-R0.coverage	row_breaks.list	get_row_breaks	`get_row_breaks` is a former name; the ledger has `list_row_breaks`
-R0.coverage	row_overrides.list	get_sheet_row_overrides	`get_sheet_row_overrides` is a former name; the ledger has `list_row_overrides`
-R0.coverage	selection.get	get_sheet_selection	`get_sheet_selection` is a former name; the ledger has `get_selection`
-R0.coverage	selection.set	set_sheet_selection	`set_sheet_selection` is a former name; the ledger has `set_selection`
-R0.coverage	shape.add	insert_shape	`insert_shape` is a former name; the ledger has `add_shape`
-R0.coverage	sheet.get_count	sheet_count	`sheet_count` is a former name; the ledger has `get_sheet_count`
-R0.coverage	sheet_name.get	sheet_name	`sheet_name` is a former name; the ledger has `get_sheet_name`
-R0.coverage	show_formulas.set	set_sheet_show_formulas	`set_sheet_show_formulas` is a former name; the ledger has `set_show_formulas`
-R0.coverage	show_grid_lines.set	set_sheet_show_grid_lines	`set_sheet_show_grid_lines` is a former name; the ledger has `set_show_grid_lines`
-R0.coverage	show_outline_symbols.set	set_sheet_show_outline_symbols	`set_sheet_show_outline_symbols` is a former name; the ledger has `set_show_outline_symbols`
-R0.coverage	show_row_col_headers.set	set_sheet_show_row_col_headers	`set_sheet_show_row_col_headers` is a former name; the ledger has `set_show_row_col_headers`
-R0.coverage	show_zeros.set	set_sheet_show_zeros	`set_sheet_show_zeros` is a former name; the ledger has `set_show_zeros`
-R0.coverage	spill_info.get	spill_info	`spill_info` is a former name; the ledger has `get_spill_info`
-R0.coverage	split.set	set_sheet_split	`set_sheet_split` is a former name; the ledger has `set_split`
-R0.coverage	tab_hidden.set	set_sheet_tab_hidden	`set_sheet_tab_hidden` is a former name; the ledger has `set_tab_hidden`
-R0.coverage	tab_selected.set	set_sheet_tab_selected	`set_sheet_tab_selected` is a former name; the ledger has `set_tab_selected`
-R0.coverage	table.create	table_create	`table_create` is a former name; the ledger has `add_table`
-R0.coverage	table.remove	table_remove	`table_remove` is a former name; the ledger has `remove_table`
-R0.coverage	table.rename	table_rename	`table_rename` is a former name; the ledger has `rename_table`
-R0.coverage	table.update	table_update	`table_update` is a former name; the ledger has `update_table`
-R0.coverage	table_column.rename	table_rename_column	`table_rename_column` is a former name; the ledger has `rename_table_column`
-R0.coverage	table_column_totals.set	table_set_column_totals	`table_set_column_totals` is a former name; the ledger has `set_table_column_totals`
-R0.coverage	table_style_defaults.get	table_style_defaults	`table_style_defaults` is a former name; the ledger has `get_table_style_defaults`
-R0.coverage	table_style_info.set	table_set_style_info	`table_set_style_info` is a former name; the ledger has `set_table_style_info`
-R0.coverage	text.compare	Workbook.compare_text	`Workbook.compare_text` is a former name; the ledger has `compare_text`
-R0.coverage	theme.clear	reset_theme	`reset_theme` is a former name; the ledger has `clear_theme`
-R0.coverage	theme_fonts.get	get_theme	`get_theme` is a former name; the ledger has `get_theme_fonts`
-R0.coverage	threaded_comment.update	edit_threaded_comment	`edit_threaded_comment` is a former name; the ledger has `update_threaded_comment`
-R0.coverage	threaded_comments.list	get_threaded_comments	`get_threaded_comments` is a former name; the ledger has `list_threaded_comments`
-R0.coverage	top_left.set	set_sheet_top_left	`set_sheet_top_left` is a former name; the ledger has `set_top_left`
-R0.coverage	validation.get	get_validation_at	`get_validation_at` is a former name; the ledger has `get_validation`
-R0.coverage	validation.get_count	validation_count	`validation_count` is a former name; the ledger has `get_validation_count`
-R0.coverage	validation.remove	remove_validation_at	`remove_validation_at` is a former name; the ledger has `remove_validation`
-R0.coverage	version.get	library_version	`library_version` is a former name; the ledger has `get_version`
-R0.coverage	version.get.version_string	version_string	`version_string` is dropped from the py surface
-R0.coverage	view.get	get_sheet_view	`get_sheet_view` is a former name; the ledger has `get_view`
-R0.coverage	view_mode.set	set_sheet_view_mode	`set_sheet_view_mode` is a former name; the ledger has `set_view_mode`
-R0.coverage	visibility.set	set_sheet_visibility	`set_sheet_visibility` is a former name; the ledger has `set_visibility`
-R0.coverage	zoom.set	set_sheet_zoom	`set_sheet_zoom` is a former name; the ledger has `set_zoom`
 R11.multi	print_area.set	ranges_a1	`set_print_area(ranges_a1: str)` should take `List[CellRect]`
 R11.multi	record.conditional_format	sqref	`ConditionalFormat.sqref: List[MergeRange]` should be `ranges: List[CellRect]`
 R11.multi	record.conditional_format_input	sqref	`ConditionalFormatInput.sqref: List[MergeRange]` should be `ranges: List[CellRect]`
@@ -215,161 +6,31 @@ R11.multi	record.table	ref	`Table.ref: str` should be `ranges: List[CellRect]`
 R11.multi	table.create	ref	`table_create(ref: str)` should take `List[CellRect]`
 R11.multi	table.update	ref	`table_update(ref: str)` should take `List[CellRect]`
 R11.sheet	record.chart_sheet_range	-	`ChartSheetRange` pairs a sheet with a rectangle; use `SheetRect`
-R5.derive	active_sheet.get	-	`active_sheet` does not derive from `fm_workbook_get_active_sheet` (`get_active_sheet`)
-R5.derive	batch.add	-	`add_batch` does not derive from `fm_styles_add_batch` (`styles_add_batch`)
-R5.derive	border.add	-	`add_border` does not derive from `fm_styles_add_border` (`styles_add_border`)
-R5.derive	border.get	-	`get_border` does not derive from `fm_styles_get_border` (`styles_get_border`)
-R5.derive	border.get_count	-	`border_count` does not derive from `fm_styles_get_border_count` (`styles_get_border_count`)
-R5.derive	cell_phonetic.get	-	`get_phonetic` does not derive from `fm_workbook_get_cell_phonetic` (`get_cell_phonetic`)
-R5.derive	cell_phonetic.set	-	`set_phonetic` does not derive from `fm_workbook_set_cell_phonetic` (`set_cell_phonetic`)
-R5.derive	cell_phonetic_properties.get	-	`get_phonetic_properties` does not derive from `fm_workbook_get_cell_phonetic_properties` (`get_cell_phonetic_properties`)
-R5.derive	cell_phonetic_properties.has	-	`has_phonetic_properties` does not derive from `fm_workbook_has_cell_phonetic_properties` (`has_cell_phonetic_properties`)
-R5.derive	cell_phonetic_properties.set	-	`set_phonetic_properties` does not derive from `fm_workbook_set_cell_phonetic_properties` (`set_cell_phonetic_properties`)
-R5.derive	cell_phonetic_runs.set	-	`set_phonetic_runs` does not derive from `fm_workbook_set_cell_phonetic_runs` (`set_cell_phonetic_runs`)
-R5.derive	cell_rect_pt.get	-	`get_cell_rect_pt` does not derive from `fm_sheet_cell_rect_pt` (`cell_rect_pt`)
-R5.derive	cell_show_phonetic.get	-	`get_show_phonetic` does not derive from `fm_workbook_get_cell_show_phonetic` (`get_cell_show_phonetic`)
-R5.derive	cell_show_phonetic.set	-	`set_show_phonetic` does not derive from `fm_workbook_set_cell_show_phonetic` (`set_cell_show_phonetic`)
-R5.derive	cell_style.remove	-	`remove_cell_style` does not derive from `fm_styles_remove_cell_style` (`styles_remove_cell_style`)
-R5.derive	cell_style.set	-	`set_cell_style` does not derive from `fm_styles_set_cell_style` (`styles_set_cell_style`)
-R5.derive	cell_style_xf.add	-	`add_cell_style_xf` does not derive from `fm_styles_add_cell_style_xf` (`styles_add_cell_style_xf`)
-R5.derive	cell_style_xf.get	-	`get_cell_style_xf` does not derive from `fm_styles_get_cell_style_xf` (`styles_get_cell_style_xf`)
-R5.derive	cell_style_xf.get_count	-	`cell_style_xf_count` does not derive from `fm_styles_get_cell_style_xf_count` (`styles_get_cell_style_xf_count`)
-R5.derive	cell_xf.add	-	`add_cell_xf` does not derive from `fm_styles_add_cell_xf` (`styles_add_cell_xf`)
-R5.derive	cell_xf.get	-	`get_cell_xf` does not derive from `fm_styles_get_cell_xf` (`styles_get_cell_xf`)
-R5.derive	cell_xf.get_count	-	`cell_xf_count` does not derive from `fm_styles_get_cell_xf_count` (`styles_get_cell_xf_count`)
-R5.derive	cell_xf_index.clear	-	`clear_cell_xf_index` does not derive from `fm_cell_clear_xf_index` (`cell_clear_xf_index`)
-R5.derive	cell_xf_index.get	-	`get_cell_xf_index` does not derive from `fm_cell_get_xf_index` (`cell_get_xf_index`)
-R5.derive	cell_xf_index.set	-	`set_cell_xf_index` does not derive from `fm_cell_set_xf_index` (`cell_set_xf_index`)
-R5.derive	cells_in_range.get	-	`get_cells_in_range` does not derive from `fm_sheet_cells_in_range` (`cells_in_range`)
-R5.derive	cf_range.evaluate	-	`evaluate_cf_range` does not derive from `fm_workbook_cf_evaluate_range` (`cf_evaluate_range`)
-R5.derive	cf_rule.add	-	`add_conditional_format` does not derive from `fm_sheet_cf_add_rule` (`cf_add_rule`)
-R5.derive	cf_rule.clear	-	`clear_conditional_formats` does not derive from `fm_sheet_cf_clear` (`cf_clear`)
-R5.derive	cf_rule.get	-	`get_conditional_format_at` does not derive from `fm_sheet_cf_get_at` (`cf_get_at`)
-R5.derive	cf_rule.remove	-	`remove_conditional_format_at` does not derive from `fm_sheet_cf_remove_at` (`cf_remove_at`)
-R5.derive	chart.get	-	`get_chart` does not derive from `fm_sheet_chart_open` (`chart_open`)
-R5.derive	chart_data.get	-	`get_chart_data` does not derive from `fm_sheet_chart_data_open` (`chart_data_open`)
-R5.derive	chart_preview.get	-	`preview_chart_data` does not derive from `fm_sheet_chart_preview_open` (`chart_preview_open`)
-R5.derive	collation_classes.get	-	`Workbook.collation_classes` does not derive from `fm_collation_classes` (`collation_classes`)
-R5.derive	column_width_pt.get	-	`get_column_width_pt` does not derive from `fm_sheet_column_width_pt` (`column_width_pt`)
-R5.derive	comment.get	-	`get_comment` does not derive from `fm_sheet_get_comment_at` (`get_comment_at`)
-R5.derive	data_table.get	-	`get_data_table` does not derive from `fm_sheet_data_table_at` (`data_table_at`)
-R5.derive	dxf.add	-	`add_dxf` does not derive from `fm_styles_add_dxf` (`styles_add_dxf`)
-R5.derive	dxf.get	-	`get_dxf` does not derive from `fm_styles_get_dxf` (`styles_get_dxf`)
-R5.derive	dxf.get_count	-	`dxf_count` does not derive from `fm_styles_get_dxf_count` (`styles_get_dxf_count`)
-R5.derive	enum.pivot_layout	-	`PivotReportLayout` does not derive from `fm_pivot_layout_t` (`PivotLayout`)
-R5.derive	enum.pivot_show_as	-	`PivotShowValuesAs` does not derive from `fm_pivot_show_as_t` (`PivotShowAs`)
-R5.derive	enum.slicer_sort	-	`SlicerSortOrder` does not derive from `fm_slicer_sort_t` (`SlicerSort`)
-R5.derive	external_link.get	-	`get_external_link_at` does not derive from `fm_workbook_external_link_at` (`external_link_at`)
-R5.derive	fill.add	-	`add_fill` does not derive from `fm_styles_add_fill` (`styles_add_fill`)
-R5.derive	fill.get	-	`get_fill` does not derive from `fm_styles_get_fill` (`styles_get_fill`)
-R5.derive	fill.get_count	-	`fill_count` does not derive from `fm_styles_get_fill_count` (`styles_get_fill_count`)
-R5.derive	font.add	-	`add_font` does not derive from `fm_styles_add_font` (`styles_add_font`)
-R5.derive	font.get	-	`get_font` does not derive from `fm_styles_get_font` (`styles_get_font`)
-R5.derive	font.get_count	-	`font_count` does not derive from `fm_styles_get_font_count` (`styles_get_font_count`)
-R5.derive	font.set	-	`set_font` does not derive from `fm_styles_set_font` (`styles_set_font`)
-R5.derive	format_defaults.get	-	`get_sheet_format_defaults` does not derive from `fm_sheet_get_format_defaults` (`get_format_defaults`)
-R5.derive	format_defaults.set	-	`set_sheet_format_defaults` does not derive from `fm_sheet_set_format_defaults` (`set_format_defaults`)
-R5.derive	formula.canonicalize	-	`Workbook.canonicalize_formula` does not derive from `fm_formula_canonicalize` (`formula_canonicalize`)
-R5.derive	formula.localize	-	`Workbook.localize_formula` does not derive from `fm_formula_localize` (`formula_localize`)
-R5.derive	freeze.set	-	`set_sheet_freeze` does not derive from `fm_sheet_set_freeze` (`set_freeze`)
-R5.derive	function.canonicalize_name	-	`Workbook.canonicalize_function_name` does not derive from `fm_function_canonicalize` (`function_canonicalize`)
-R5.derive	function.localize_name	-	`Workbook.localize_function_name` does not derive from `fm_function_localize` (`function_localize`)
-R5.derive	function_metadata.get	-	`Workbook.function_metadata` does not derive from `fm_function_metadata` (`function_metadata`)
-R5.derive	locale_facts.get	-	`Workbook.locale_facts` does not derive from `fm_locale_facts` (`locale_facts`)
-R5.derive	merges_in_range.get	-	`get_merges_in_range` does not derive from `fm_sheet_merges_in_range` (`merges_in_range`)
-R5.derive	num_fmt.add	-	`add_num_fmt` does not derive from `fm_styles_add_num_fmt` (`styles_add_num_fmt`)
-R5.derive	num_fmt_string.get	-	`get_num_fmt` does not derive from `fm_styles_get_num_fmt_string` (`styles_get_num_fmt_string`)
-R5.derive	pane_top_left.set	-	`set_sheet_pane_top_left` does not derive from `fm_sheet_set_pane_top_left` (`set_pane_top_left`)
-R5.derive	pivot_cache.get_id	-	`pivot_cache_id` does not derive from `fm_workbook_pivot_get_cache_id` (`pivot_get_cache_id`)
-R5.derive	pivot_cache_worksheet_source.get	-	`get_pivot_cache_worksheet_source` does not derive from `fm_workbook_pivot_cache_get_worksheet_source` (`pivot_cache_get_worksheet_source`)
-R5.derive	pivot_cache_worksheet_source.set	-	`set_pivot_cache_worksheet_source` does not derive from `fm_workbook_pivot_cache_set_worksheet_source` (`pivot_cache_set_worksheet_source`)
-R5.derive	pivot_col_field_order.get	-	`pivot_col_field_order` does not derive from `fm_workbook_pivot_get_col_field_order` (`pivot_get_col_field_order`)
-R5.derive	pivot_grand_totals.get	-	`pivot_grand_totals` does not derive from `fm_workbook_pivot_get_grand_totals` (`pivot_get_grand_totals`)
-R5.derive	pivot_name.get	-	`pivot_name` does not derive from `fm_workbook_pivot_get_name` (`pivot_get_name`)
-R5.derive	pivot_report_layout.get	-	`get_pivot_report_layout` does not derive from `fm_workbook_pivot_get_layout` (`pivot_get_layout`)
-R5.derive	pivot_report_layout.set	-	`set_pivot_report_layout` does not derive from `fm_workbook_pivot_set_layout` (`pivot_set_layout`)
-R5.derive	pivot_row_field_order.get	-	`pivot_row_field_order` does not derive from `fm_workbook_pivot_get_row_field_order` (`pivot_get_row_field_order`)
-R5.derive	pivot_style_info.get	-	`pivot_style_info` does not derive from `fm_workbook_pivot_get_style_info` (`pivot_get_style_info`)
-R5.derive	record.cell_style_record	-	`CellStyle` does not derive from `fm_cell_style_record_t` (`CellStyleRecord`)
-R5.derive	record.cfvo	-	`CfValueObject` does not derive from `fm_cfvo_t` (`Cfvo`)
-R5.derive	record.chart_preview_overrides	-	`ChartPreviewOverrides` does not derive from `fm_chart_preview_overrides` (`ChartPreviewOverridesInput`)
-R5.derive	record.chart_title	-	`ChartTitleInfo` does not derive from `fm_chart_title_t` (`ChartTitle`)
-R5.derive	record.external_link_record	-	`ExternalLink` does not derive from `fm_external_link_record_t` (`ExternalLinkRecord`)
-R5.derive	record.pivot_field_spec	-	`PivotFieldSpec` does not derive from `fm_pivot_field_spec_t` (`PivotFieldSpecInput`)
-R5.derive	record.reference	-	`ParsedReference` does not derive from `fm_reference_t` (`Reference`)
-R5.derive	right_to_left.set	-	`set_sheet_right_to_left` does not derive from `fm_sheet_set_right_to_left` (`set_right_to_left`)
-R5.derive	row_height_pt.get	-	`get_row_height_pt` does not derive from `fm_sheet_row_height_pt` (`row_height_pt`)
-R5.derive	selection.get	-	`get_sheet_selection` does not derive from `fm_sheet_get_selection` (`get_selection`)
-R5.derive	selection.set	-	`set_sheet_selection` does not derive from `fm_sheet_set_selection` (`set_selection`)
-R5.derive	sheet_protection.get	-	`get_sheet_protection` does not derive from `fm_sheet_get_protection` (`get_protection`)
-R5.derive	sheet_protection.set	-	`set_sheet_protection` does not derive from `fm_sheet_set_protection` (`set_protection`)
-R5.derive	show_formulas.set	-	`set_sheet_show_formulas` does not derive from `fm_sheet_set_show_formulas` (`set_show_formulas`)
-R5.derive	show_grid_lines.set	-	`set_sheet_show_grid_lines` does not derive from `fm_sheet_set_show_grid_lines` (`set_show_grid_lines`)
-R5.derive	show_outline_symbols.set	-	`set_sheet_show_outline_symbols` does not derive from `fm_sheet_set_show_outline_symbols` (`set_show_outline_symbols`)
-R5.derive	show_row_col_headers.set	-	`set_sheet_show_row_col_headers` does not derive from `fm_sheet_set_show_row_col_headers` (`set_show_row_col_headers`)
-R5.derive	show_zeros.set	-	`set_sheet_show_zeros` does not derive from `fm_sheet_set_show_zeros` (`set_show_zeros`)
-R5.derive	split.set	-	`set_sheet_split` does not derive from `fm_sheet_set_split` (`set_split`)
-R5.derive	tab_hidden.set	-	`set_sheet_tab_hidden` does not derive from `fm_sheet_set_tab_hidden` (`set_tab_hidden`)
-R5.derive	tab_selected.set	-	`set_sheet_tab_selected` does not derive from `fm_sheet_set_tab_selected` (`set_tab_selected`)
-R5.derive	table_auto_filter.apply	-	`apply_table_auto_filter` does not derive from `fm_table_apply_auto_filter` (`table_apply_auto_filter`)
-R5.derive	table_auto_filter.clear	-	`clear_table_auto_filter` does not derive from `fm_table_clear_auto_filter` (`table_clear_auto_filter`)
-R5.derive	table_auto_filter.evaluate	-	`evaluate_table_auto_filter` does not derive from `fm_table_evaluate_auto_filter` (`table_evaluate_auto_filter`)
-R5.derive	table_auto_filter.get	-	`get_table_auto_filter` does not derive from `fm_table_get_auto_filter` (`table_get_auto_filter`)
-R5.derive	table_auto_filter.remove	-	`remove_table_auto_filter` does not derive from `fm_table_remove_auto_filter` (`table_remove_auto_filter`)
-R5.derive	table_auto_filter.set	-	`set_table_auto_filter` does not derive from `fm_table_set_auto_filter` (`table_set_auto_filter`)
-R5.derive	table_style.remove	-	`remove_table_style` does not derive from `fm_styles_remove_table_style` (`styles_remove_table_style`)
-R5.derive	table_style.set	-	`set_table_style` does not derive from `fm_styles_set_table_style` (`styles_set_table_style`)
-R5.derive	table_style_defaults.get	-	`table_style_defaults` does not derive from `fm_styles_get_table_style_defaults` (`styles_get_table_style_defaults`)
-R5.derive	table_style_defaults.set	-	`set_table_style_defaults` does not derive from `fm_styles_set_table_style_defaults` (`styles_set_table_style_defaults`)
-R5.derive	text.compare	-	`Workbook.compare_text` does not derive from `fm_text_compare` (`text_compare`)
-R5.derive	theme_fonts.get	-	`get_theme` does not derive from `fm_workbook_get_theme_fonts` (`get_theme_fonts`)
-R5.derive	top_left.set	-	`set_sheet_top_left` does not derive from `fm_sheet_set_top_left` (`set_top_left`)
-R5.derive	validation.get_count	-	`validation_count` does not derive from `fm_sheet_get_validation_count` (`get_validation_count`)
-R5.derive	version.get	-	`library_version` does not derive from `fm_version_string` (`version_string`)
-R5.derive	view.get	-	`get_sheet_view` does not derive from `fm_sheet_get_view` (`get_view`)
-R5.derive	view_mode.set	-	`set_sheet_view_mode` does not derive from `fm_sheet_set_view_mode` (`set_view_mode`)
-R5.derive	visibility.set	-	`set_sheet_visibility` does not derive from `fm_sheet_set_visibility` (`set_visibility`)
-R5.derive	width_model.get	-	`get_width_model` does not derive from `fm_sheet_width_model` (`width_model`)
-R5.derive	workbook.create	-	`Workbook.create_default` does not derive from `fm_workbook_create` (`Workbook.create`)
-R5.derive	workbook_protection.get	-	`get_workbook_protection` does not derive from `fm_workbook_get_protection` (`get_protection`)
-R5.derive	workbook_protection.set	-	`set_workbook_protection` does not derive from `fm_workbook_set_protection` (`set_protection`)
-R5.derive	zoom.set	-	`set_sheet_zoom` does not derive from `fm_sheet_set_zoom` (`set_zoom`)
 R5.list	cell.list.iter_cells	iter_cells	`iter_cells` is dropped from the py surface
 R5.list	cell_phonetic_run.list.get_cell_phonetic_runs	get_phonetic_runs	`get_phonetic_runs` is dropped from the py surface
 R5.list	cell_style.get_at	get_cell_style	`get_cell_style` is dropped from the py surface
 R5.list	cell_style.get_count	cell_style_count	`cell_style_count` is dropped from the py surface
 R5.list	cell_styles.list	missing	`list_cell_styles` is not on the py Workbook
 R5.list	cf_rule.list.get_conditional_formats	get_conditional_formats	`get_conditional_formats` is dropped from the py surface
-R5.list	col_breaks.list	missing	`list_col_breaks` is not on the py Workbook
-R5.list	col_overrides.list	missing	`list_col_overrides` is not on the py Workbook
 R5.list	comment.get_count	comment_count	`comment_count` is dropped from the py surface
-R5.list	comments.list	missing	`list_comments` is not on the py Workbook
-R5.list	defined_names.list	missing	`list_defined_names` is not on the py Workbook
 R5.list	external_link.list.get_external_links	get_external_links	`get_external_links` is dropped from the py surface
 R5.list	function.get_count	Workbook.function_count	`Workbook.function_count` is dropped from the py surface
 R5.list	function.get_name_at	Workbook.function_name_at	`Workbook.function_name_at` is dropped from the py surface
 R5.list	function_names.list	missing	`list_function_names` is not on the py Workbook
 R5.list	function_names.list	name	`list_function_names` should be `list_functions`
 R5.list	hyperlink.get_count	hyperlink_count	`hyperlink_count` is dropped from the py surface
-R5.list	hyperlinks.list	missing	`list_hyperlinks` is not on the py Workbook
 R5.list	locale_error_names.list	missing	`list_locale_error_names` is not on the py Workbook
 R5.list	merge.get_count	merge_count	`merge_count` is dropped from the py surface
-R5.list	merges.list	missing	`list_merges` is not on the py Workbook
-R5.list	passthroughs.list	missing	`list_passthroughs` is not on the py Workbook
-R5.list	people.list	missing	`list_people` is not on the py Workbook
 R5.list	pivot_cache.get_count	pivot_cache_count	`pivot_cache_count` is dropped from the py surface
 R5.list	pivot_cache.get_id_at	pivot_cache_id_at	`pivot_cache_id_at` is dropped from the py surface
 R5.list	pivot_cache_ids.list	missing	`list_pivot_cache_ids` is not on the py Workbook
 R5.list	pivot_cache_ids.list	name	`list_pivot_cache_ids` should be `list_pivot_caches`
 R5.list	protected_range.list.get_protected_ranges	get_protected_ranges	`get_protected_ranges` is dropped from the py surface
-R5.list	row_breaks.list	missing	`list_row_breaks` is not on the py Workbook
-R5.list	row_overrides.list	missing	`list_row_overrides` is not on the py Workbook
 R5.list	sparkline_group.list.list_sparkline_groups	list_sparkline_groups	`list_sparkline_groups` is dropped from the py surface
 R5.list	table.list.iter_tables	iter_tables	`iter_tables` is dropped from the py surface
 R5.list	table_style.get_at	get_table_style	`get_table_style` is dropped from the py surface
 R5.list	table_style.get_count	table_style_count	`table_style_count` is dropped from the py surface
 R5.list	table_styles.list	missing	`list_table_styles` is not on the py Workbook
-R5.list	threaded_comments.list	missing	`list_threaded_comments` is not on the py Workbook
 R5.list	validation.list.get_validations	get_validations	`get_validations` is dropped from the py surface
 R6.py	chart.add	header_column	`insert_chart`: parameter `header_column: Optional[bool]` is a boolean
 R6.py	chart.add	header_row	`insert_chart`: parameter `header_row: Optional[bool]` is a boolean
@@ -430,7 +91,6 @@ R7.py	record.chart_plot_patch	vary_colors	`ChartPlotPatch.vary_colors: bool` is 
 R7.py	record.chart_point_patch	fill	`ChartPointPatch.fill: ChartFillPatch` is not `Optional[...]`
 R7.py	record.chart_point_patch	line	`ChartPointPatch.line: ChartLinePatch` is not `Optional[...]`
 R7.py	record.chart_preview_overrides	dataclass	`ChartPreviewOverrides` is an input; make it a dataclass
-R7.py	record.chart_preview_overrides	name	`ChartPreviewOverrides` is an input record; name it `<Name>Input`
 R7.py	record.chart_series_patch	categories	`ChartSeriesPatch.categories: str` is not `Optional[...]`
 R7.py	record.chart_series_patch	fill	`ChartSeriesPatch.fill: ChartFillPatch` is not `Optional[...]`
 R7.py	record.chart_series_patch	line	`ChartSeriesPatch.line: ChartLinePatch` is not `Optional[...]`
@@ -453,7 +113,6 @@ R7.py	record.mention	dataclass	`Mention` is a result; make it a frozen dataclass
 R7.py	record.person	dataclass	`Person` is a result; make it a frozen dataclass
 R7.py	record.phonetic_run	dataclass	`PhoneticRun` is a result; make it a frozen dataclass
 R7.py	record.pivot_data_field_spec	dataclass	`PivotDataFieldSpec` is a result; make it a frozen dataclass
-R7.py	record.pivot_field_spec	name	`PivotFieldSpec` is an input record; name it `<Name>Input`
 R7.py	record.pivot_filter_spec	dataclass	`PivotFilterSpec` is a result; make it a frozen dataclass
 R7.py	record.protected_range	dataclass	`ProtectedRange` is a result; make it a frozen dataclass
 R7.py	record.shape	dataclass	`Shape` is a result; make it a frozen dataclass

@@ -65,17 +65,17 @@ std::vector<std::uint8_t> BuildPackage(std::string_view book_views, std::string_
 
 std::vector<std::uint8_t> Save(fm_workbook_t* wb, fm_workbook_format_t format = FM_WORKBOOK_FORMAT_XLSX) {
   BufferGuard saved;
-  EXPECT_EQ(fm_workbook_save_as(wb, format, &saved.data, &saved.len), 0) << fm_last_error_message();
+  EXPECT_EQ(fm_workbook_save_as(wb, format, &saved.data, &saved.len), 0) << fm_get_last_error_message();
   return std::vector<std::uint8_t>(saved.data, saved.data + saved.len);
 }
 
 void Load(const std::vector<std::uint8_t>& bytes, WorkbookGuard& out) {
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &out.handle), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &out.handle), 0) << fm_get_last_error_message();
 }
 
 std::uint32_t ActiveSheet(const fm_workbook_t* wb) {
   std::uint32_t index = 99;
-  EXPECT_EQ(fm_workbook_get_active_sheet(wb, &index), 0) << fm_last_error_message();
+  EXPECT_EQ(fm_workbook_get_active_sheet(wb, &index), 0) << fm_get_last_error_message();
   return index;
 }
 
@@ -83,12 +83,12 @@ std::uint32_t ActiveSheet(const fm_workbook_t* wb) {
 
 TEST(FormulonCApiWorkbookView, ActiveSheetDefaultsToFirstAndSynthesizesBookViews) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second"), 0);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Third"), 0);
   EXPECT_EQ(ActiveSheet(wb.handle), 0U);
 
-  ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 2), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 2), 0) << fm_get_last_error_message();
   EXPECT_EQ(ActiveSheet(wb.handle), 2U);
 
   const std::vector<std::uint8_t> saved = Save(wb.handle);
@@ -117,7 +117,7 @@ TEST(FormulonCApiWorkbookView, SetActiveSheetKeepsOtherAttributesAndClampsFirstS
 
 TEST(FormulonCApiWorkbookView, ActiveSheetRejectsBadArguments) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   EXPECT_EQ(fm_workbook_set_active_sheet(wb.handle, 1), kInvalidArgument);
   EXPECT_EQ(ActiveSheet(wb.handle), 0U);
   std::uint32_t index = 7;
@@ -128,11 +128,11 @@ TEST(FormulonCApiWorkbookView, ActiveSheetRejectsBadArguments) {
 
 TEST(FormulonCApiWorkbookView, SetActiveSheetMovesTabSelectionAndSurvivesXlsb) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second"), 0);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Third"), 0);
   ASSERT_EQ(fm_sheet_set_tab_selected(wb.handle, 0, 1), 0);
-  ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 2), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 2), 0) << fm_get_last_error_message();
   for (std::size_t i = 0; i < 3; ++i) {
     fm_sheet_view_t view{};
     ASSERT_EQ(fm_sheet_get_view(wb.handle, i, &view), 0);
@@ -146,7 +146,7 @@ TEST(FormulonCApiWorkbookView, SetActiveSheetMovesTabSelectionAndSurvivesXlsb) {
 
 TEST(FormulonCApiWorkbookView, SetActiveSheetRejectsHiddenSheets) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Hidden"), 0);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "VeryHidden"), 0);
   ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_HIDDEN), 0);
@@ -160,7 +160,7 @@ TEST(FormulonCApiWorkbookView, SetActiveSheetRejectsHiddenSheets) {
 // nearest visible one on the left, when the active sheet is hidden or deleted.
 TEST(FormulonCApiWorkbookView, HidingOrRemovingTheActiveSheetActivatesTheNextVisibleOne) {
   const auto five_sheets = [](WorkbookGuard& wb) {
-    ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+    ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
     for (const char* name : {"S1", "S2", "S3", "S4"}) {
       ASSERT_EQ(fm_workbook_add_sheet(wb.handle, name), 0);
     }
@@ -214,18 +214,18 @@ TEST(FormulonCApiWorkbookView, HidingOrRemovingTheActiveSheetActivatesTheNextVis
 // constants and blanks.
 TEST(FormulonCApiWorkbookView, SavesWriteShowPhoneticOnNonFormulaCellsOnly) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=1+1"), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 1, 5.0), 0);
-  ASSERT_EQ(fm_workbook_set_cell_show_phonetic(wb.handle, 0, 0, 0, 1), 0);
-  ASSERT_EQ(fm_workbook_set_cell_show_phonetic(wb.handle, 0, 0, 1, 1), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=1+1"), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 1, 5.0), 0);
+  ASSERT_EQ(fm_sheet_set_cell_show_phonetic(wb.handle, 0, 0, 0, 1), 0);
+  ASSERT_EQ(fm_sheet_set_cell_show_phonetic(wb.handle, 0, 0, 1, 1), 0);
   for (const fm_workbook_format_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
     WorkbookGuard reloaded;
     Load(Save(wb.handle, format), reloaded);
     int32_t show = -1;
-    ASSERT_EQ(fm_workbook_get_cell_show_phonetic(reloaded.handle, 0, 0, 0, &show), 0);
+    ASSERT_EQ(fm_sheet_get_cell_show_phonetic(reloaded.handle, 0, 0, 0, &show), 0);
     EXPECT_EQ(show, 0) << "format " << format;
-    ASSERT_EQ(fm_workbook_get_cell_show_phonetic(reloaded.handle, 0, 0, 1, &show), 0);
+    ASSERT_EQ(fm_sheet_get_cell_show_phonetic(reloaded.handle, 0, 0, 1, &show), 0);
     EXPECT_EQ(show, 1) << "format " << format;
   }
 }
@@ -238,29 +238,29 @@ TEST(FormulonCApiWorkbookView, SheetEditsKeepTheActiveSheetValid) {
   ASSERT_EQ(fm_workbook_move_sheet(wb.handle, 0, 2), 0);
   EXPECT_EQ(ActiveSheet(wb.handle), 2U);
   ASSERT_EQ(fm_workbook_remove_sheet(wb.handle, 2), 0);
-  EXPECT_LT(ActiveSheet(wb.handle), fm_workbook_sheet_count(wb.handle));
+  EXPECT_LT(ActiveSheet(wb.handle), fm_workbook_get_sheet_count(wb.handle));
   EXPECT_EQ(ActiveSheet(wb.handle), 1U);
 }
 
 TEST(FormulonCApiWorkbookView, ShowPhoneticSurvivesValueWritesAndRoundTrips) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   int32_t show = -1;
-  ASSERT_EQ(fm_workbook_get_cell_show_phonetic(wb.handle, 0, 0, 0, &show), 0);
+  ASSERT_EQ(fm_sheet_get_cell_show_phonetic(wb.handle, 0, 0, 0, &show), 0);
   EXPECT_EQ(show, 0);
 
-  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "漢字"), 0);
-  ASSERT_EQ(fm_workbook_set_cell_phonetic(wb.handle, 0, 0, 0, "かんじ"), 0);
-  ASSERT_EQ(fm_workbook_set_cell_show_phonetic(wb.handle, 0, 0, 0, 1), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "漢字"), 0);
+  ASSERT_EQ(fm_sheet_set_cell_phonetic(wb.handle, 0, 0, 0, "かんじ"), 0);
+  ASSERT_EQ(fm_sheet_set_cell_show_phonetic(wb.handle, 0, 0, 0, 1), 0);
   // A flag on a cell with no content is kept as well.
-  ASSERT_EQ(fm_workbook_set_cell_show_phonetic(wb.handle, 0, 4, 2, 1), 0);
+  ASSERT_EQ(fm_sheet_set_cell_show_phonetic(wb.handle, 0, 4, 2, 1), 0);
 
   // Re-entering the value clears the readings but not the display flag.
-  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "漢字"), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "漢字"), 0);
   const char* phonetic = nullptr;
-  ASSERT_EQ(fm_workbook_get_cell_phonetic(wb.handle, 0, 0, 0, &phonetic), 0);
+  ASSERT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, &phonetic), 0);
   EXPECT_STREQ(phonetic, "");
-  ASSERT_EQ(fm_workbook_get_cell_show_phonetic(wb.handle, 0, 0, 0, &show), 0);
+  ASSERT_EQ(fm_sheet_get_cell_show_phonetic(wb.handle, 0, 0, 0, &show), 0);
   EXPECT_EQ(show, 1);
 
   for (const fm_workbook_format_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
@@ -270,19 +270,19 @@ TEST(FormulonCApiWorkbookView, ShowPhoneticSurvivesValueWritesAndRoundTrips) {
     }
     WorkbookGuard reloaded;
     Load(saved, reloaded);
-    ASSERT_EQ(fm_workbook_get_cell_show_phonetic(reloaded.handle, 0, 0, 0, &show), 0);
+    ASSERT_EQ(fm_sheet_get_cell_show_phonetic(reloaded.handle, 0, 0, 0, &show), 0);
     EXPECT_EQ(show, 1) << "format " << format;
-    ASSERT_EQ(fm_workbook_get_cell_show_phonetic(reloaded.handle, 0, 4, 2, &show), 0);
+    ASSERT_EQ(fm_sheet_get_cell_show_phonetic(reloaded.handle, 0, 4, 2, &show), 0);
     EXPECT_EQ(show, 1) << "format " << format;
-    ASSERT_EQ(fm_workbook_get_cell_show_phonetic(reloaded.handle, 0, 1, 1, &show), 0);
+    ASSERT_EQ(fm_sheet_get_cell_show_phonetic(reloaded.handle, 0, 1, 1, &show), 0);
     EXPECT_EQ(show, 0);
   }
 
-  ASSERT_EQ(fm_workbook_set_cell_show_phonetic(wb.handle, 0, 0, 0, 0), 0);
-  ASSERT_EQ(fm_workbook_get_cell_show_phonetic(wb.handle, 0, 0, 0, &show), 0);
+  ASSERT_EQ(fm_sheet_set_cell_show_phonetic(wb.handle, 0, 0, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_get_cell_show_phonetic(wb.handle, 0, 0, 0, &show), 0);
   EXPECT_EQ(show, 0);
-  EXPECT_EQ(fm_workbook_set_cell_show_phonetic(wb.handle, 9, 0, 0, 1), kInvalidArgument);
-  EXPECT_EQ(fm_workbook_get_cell_show_phonetic(wb.handle, 0, 0, 0, nullptr),
+  EXPECT_EQ(fm_sheet_set_cell_show_phonetic(wb.handle, 9, 0, 0, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_cell_show_phonetic(wb.handle, 0, 0, 0, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 
@@ -300,18 +300,18 @@ TEST(FormulonCApiWorkbookView, RowColumnAndCellPhoneticFlagsAreReadAndPreserved)
   Load(BuildPackage("", sheet), wb);
 
   int32_t show = -1;
-  ASSERT_EQ(fm_workbook_get_cell_show_phonetic(wb.handle, 0, 0, 0, &show), 0);
+  ASSERT_EQ(fm_sheet_get_cell_show_phonetic(wb.handle, 0, 0, 0, &show), 0);
   EXPECT_EQ(show, 1);
-  ASSERT_EQ(fm_workbook_get_cell_show_phonetic(wb.handle, 0, 0, 1, &show), 0);
+  ASSERT_EQ(fm_sheet_get_cell_show_phonetic(wb.handle, 0, 0, 1, &show), 0);
   EXPECT_EQ(show, 0);
-  ASSERT_EQ(fm_workbook_get_cell_show_phonetic(wb.handle, 0, 1, 0, &show), 0);
+  ASSERT_EQ(fm_sheet_get_cell_show_phonetic(wb.handle, 0, 1, 0, &show), 0);
   EXPECT_EQ(show, 1);
 
   // An absent `<phoneticPr>` is the inferred all-zero triple; an element spelling it out is explicit.
   int32_t present = -1;
-  ASSERT_EQ(fm_workbook_has_cell_phonetic_properties(wb.handle, 0, 0, 0, &present), 0);
+  ASSERT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, 0, 0, &present), 0);
   EXPECT_EQ(present, 0);
-  ASSERT_EQ(fm_workbook_has_cell_phonetic_properties(wb.handle, 0, 0, 1, &present), 0);
+  ASSERT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, 0, 1, &present), 0);
   EXPECT_EQ(present, 1);
 
   const std::string saved_sheet = ExtractZipEntry(Save(wb.handle), "xl/worksheets/sheet1.xml");
@@ -322,43 +322,43 @@ TEST(FormulonCApiWorkbookView, RowColumnAndCellPhoneticFlagsAreReadAndPreserved)
 
 TEST(FormulonCApiWorkbookView, PhoneticPropertiesPresenceTracksExplicitTriples) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "漢字"), 0);
-  ASSERT_EQ(fm_workbook_set_cell_phonetic(wb.handle, 0, 0, 0, "かんじ"), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "漢字"), 0);
+  ASSERT_EQ(fm_sheet_set_cell_phonetic(wb.handle, 0, 0, 0, "かんじ"), 0);
 
   int32_t present = -1;
-  ASSERT_EQ(fm_workbook_has_cell_phonetic_properties(wb.handle, 0, 0, 0, &present), 0);
+  ASSERT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, 0, 0, &present), 0);
   EXPECT_EQ(present, 0);
   // An absent cell reports "not present" rather than failing.
-  ASSERT_EQ(fm_workbook_has_cell_phonetic_properties(wb.handle, 0, 7, 7, &present), 0);
+  ASSERT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, 7, 7, &present), 0);
   EXPECT_EQ(present, 0);
 
-  ASSERT_EQ(fm_workbook_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 0, 0, 0), 0);
-  ASSERT_EQ(fm_workbook_has_cell_phonetic_properties(wb.handle, 0, 0, 0, &present), 0);
+  ASSERT_EQ(fm_sheet_set_cell_phonetic_properties(wb.handle, 0, 0, 0, 0, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, 0, 0, &present), 0);
   EXPECT_EQ(present, 1);
 
   // The all-zero triple is written out and reads back explicit.
   const std::vector<std::uint8_t> saved = Save(wb.handle);
   WorkbookGuard reloaded;
   Load(saved, reloaded);
-  ASSERT_EQ(fm_workbook_has_cell_phonetic_properties(reloaded.handle, 0, 0, 0, &present), 0);
+  ASSERT_EQ(fm_sheet_has_cell_phonetic_properties(reloaded.handle, 0, 0, 0, &present), 0);
   EXPECT_EQ(present, 1);
   uint32_t font_id = 9;
   uint32_t type = 9;
   uint32_t alignment = 9;
-  ASSERT_EQ(fm_workbook_get_cell_phonetic_properties(reloaded.handle, 0, 0, 0, &font_id, &type, &alignment), 0);
+  ASSERT_EQ(fm_sheet_get_cell_phonetic_properties(reloaded.handle, 0, 0, 0, &font_id, &type, &alignment), 0);
   EXPECT_EQ(font_id, 0U);
   EXPECT_EQ(type, 0U);
   EXPECT_EQ(alignment, 0U);
 
   // A value write drops the guide, the triple and its presence together.
-  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "漢字"), 0);
-  ASSERT_EQ(fm_workbook_has_cell_phonetic_properties(wb.handle, 0, 0, 0, &present), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "漢字"), 0);
+  ASSERT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, 0, 0, &present), 0);
   EXPECT_EQ(present, 0);
 
-  EXPECT_EQ(fm_workbook_has_cell_phonetic_properties(wb.handle, 0, 0, 0, nullptr),
+  EXPECT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 0, 0, 0, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_workbook_has_cell_phonetic_properties(wb.handle, 5, 0, 0, &present), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_has_cell_phonetic_properties(wb.handle, 5, 0, 0, &present), kInvalidArgument);
 }
 
 TEST(FormulonCApiWorkbookView, SheetViewScrollAndSelectionRoundTripFromAPackage) {
@@ -460,7 +460,7 @@ TEST(FormulonCApiWorkbookView, UnfrozenSplitViewSavesEveryPaneSelectionTheExcelW
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.pane_top_left_row, 9U);
   EXPECT_EQ(view.pane_top_left_col, 3U);
-  ASSERT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 9, 3), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 9, 3), 0) << fm_get_last_error_message();
   for (const fm_workbook_format_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
     WorkbookGuard reloaded;
     Load(Save(wb.handle, format), reloaded);
@@ -478,7 +478,7 @@ TEST(FormulonCApiWorkbookView, UnfrozenSplitViewSavesEveryPaneSelectionTheExcelW
 // cell and writes the other panes' default selections.
 TEST(FormulonCApiWorkbookView, FreezeWithoutASelectionSelectsThePaneOrigin) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 2, 1), 0);
   uint32_t row = 0;
   uint32_t col = 0;
@@ -496,7 +496,7 @@ TEST(FormulonCApiWorkbookView, FreezeWithoutASelectionSelectsThePaneOrigin) {
 // Excel moves an active cell outside every range to the first range's top-left.
 TEST(FormulonCApiWorkbookView, ActiveCellOutsideTheRangesReadsAndSavesAsTheFirstRangesCorner) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const fm_merge_range ranges[] = {{2, 2, 3, 3}, {9, 0, 9, 0}};
   ASSERT_EQ(fm_sheet_set_selection(wb.handle, 0, 0, 7, ranges, 2), 0);
   uint32_t row = 99;
@@ -538,20 +538,20 @@ TEST(FormulonCApiWorkbookView, AFileDropsTheShowPhoneticFlagOfFormulaCells) {
   WorkbookGuard wb;
   Load(BuildPackage("", sheet), wb);
   int32_t show = -1;
-  ASSERT_EQ(fm_workbook_get_cell_show_phonetic(wb.handle, 0, 0, 0, &show), 0);
+  ASSERT_EQ(fm_sheet_get_cell_show_phonetic(wb.handle, 0, 0, 0, &show), 0);
   EXPECT_EQ(show, 1);
-  ASSERT_EQ(fm_workbook_get_cell_show_phonetic(wb.handle, 0, 0, 1, &show), 0);
+  ASSERT_EQ(fm_sheet_get_cell_show_phonetic(wb.handle, 0, 0, 1, &show), 0);
   EXPECT_EQ(show, 0);
   // A flag set in memory survives a formula and returns with a constant.
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=2"), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 5.0), 0);
-  ASSERT_EQ(fm_workbook_get_cell_show_phonetic(wb.handle, 0, 0, 0, &show), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=2"), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 5.0), 0);
+  ASSERT_EQ(fm_sheet_get_cell_show_phonetic(wb.handle, 0, 0, 0, &show), 0);
   EXPECT_EQ(show, 1);
 }
 
 TEST(FormulonCApiWorkbookView, SettersWriteTheFrozenPaneTheDesktopWayAndRoundTrip) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 2, 1), 0);
   // Without a stored pane origin the first unfrozen cell is reported and written.
   fm_sheet_view_t view{};
@@ -564,7 +564,7 @@ TEST(FormulonCApiWorkbookView, SettersWriteTheFrozenPaneTheDesktopWayAndRoundTri
   EXPECT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 1, 6), kInvalidArgument);  // inside the frozen rows
   EXPECT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 4, 0), kInvalidArgument);  // inside the frozen columns
   const fm_merge_range ranges[] = {{41, 7, 43, 8}, {50, 9, 50, 9}};
-  ASSERT_EQ(fm_sheet_set_selection(wb.handle, 0, 41, 7, ranges, 2), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_set_selection(wb.handle, 0, 41, 7, ranges, 2), 0) << fm_get_last_error_message();
   EXPECT_EQ(fm_sheet_set_selection(wb.handle, 0, 0, 0, ranges, 0), 0);  // replaces: active cell alone
   ASSERT_EQ(fm_sheet_set_selection(wb.handle, 0, 41, 7, ranges, 2), 0);
   const fm_merge_range inverted{3, 3, 1, 1};
@@ -619,13 +619,13 @@ TEST(FormulonCApiWorkbookView, SettersWriteTheFrozenPaneTheDesktopWayAndRoundTri
 
 TEST(FormulonCApiWorkbookView, SetSplitReadsBackRoundTripsAndExchangesWithFreeze) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_sheet_view_t view{};
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.split_x, 0.0);
   EXPECT_EQ(view.split_y, 0.0);
 
-  ASSERT_EQ(fm_sheet_set_split(wb.handle, 0, 2000.0, 1500.0), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_set_split(wb.handle, 0, 2000.0, 1500.0), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.split_x, 2000.0);
   EXPECT_EQ(view.split_y, 1500.0);
@@ -672,7 +672,7 @@ TEST(FormulonCApiWorkbookView, SetSplitReadsBackRoundTripsAndExchangesWithFreeze
 
 TEST(FormulonCApiWorkbookView, SetSplitRehomesTheActiveSelectionAndKeepsTheViewOnInvalidInput) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 2, 1), 0);
   ASSERT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 40, 6), 0);
   const fm_merge_range ranges[] = {{41, 7, 43, 8}};

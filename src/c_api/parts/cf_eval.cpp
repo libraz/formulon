@@ -110,20 +110,20 @@ void fill_match(const formulon::cf::CFMatch& match, fm_cf_match_t* out) {
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_cf_evaluate_range(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
-                                                     uint32_t first_col, uint32_t last_row, uint32_t last_col,
-                                                     double today_serial, fm_cf_results_t** out) {
+extern "C" fm_status_t fm_sheet_evaluate_cf_range(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
+                                                  uint32_t first_col, uint32_t last_row, uint32_t last_col,
+                                                  double today_serial, fm_cf_results_t** out) {
   clear_last_error();
   if (out == nullptr) {
-    return null_argument("fm_workbook_cf_evaluate_range");
+    return null_argument("fm_sheet_evaluate_cf_range");
   }
   *out = nullptr;
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_cf_evaluate_range"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_evaluate_cf_range"); rc != 0) {
     return rc;
   }
   if (!formulon::Sheet::rect_in_grid(first_row, first_col, last_row, last_col)) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_cf_evaluate_range: rect out of grid",
+                             "fm_sheet_evaluate_cf_range: rect out of grid",
                              "first=(" + std::to_string(first_row) + "," + std::to_string(first_col) + ") last=(" +
                                  std::to_string(last_row) + "," + std::to_string(last_col) + ")");
   }
@@ -162,7 +162,7 @@ extern "C" void fm_cf_results_destroy(fm_cf_results_t* results) {
   delete results;
 }
 
-extern "C" size_t fm_cf_results_cell_count(const fm_cf_results_t* results) {
+extern "C" size_t fm_cf_results_get_cell_count(const fm_cf_results_t* results) {
   clear_last_error();
   if (results == nullptr) {
     return 0;
@@ -170,15 +170,15 @@ extern "C" size_t fm_cf_results_cell_count(const fm_cf_results_t* results) {
   return results->matches.size();
 }
 
-extern "C" fm_status_t fm_cf_results_cell_at(const fm_cf_results_t* results, size_t cell_idx, uint32_t* out_row,
-                                             uint32_t* out_col, size_t* out_match_count) {
+extern "C" fm_status_t fm_cf_results_get_cell_at(const fm_cf_results_t* results, size_t cell_idx, uint32_t* out_row,
+                                                 uint32_t* out_col, size_t* out_match_count) {
   clear_last_error();
   if (results == nullptr || out_row == nullptr || out_col == nullptr || out_match_count == nullptr) {
-    return null_argument("fm_cf_results_cell_at");
+    return null_argument("fm_cf_results_get_cell_at");
   }
   if (cell_idx >= results->matches.size()) {
     return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_cf_results_cell_at: cell_idx out of range",
+        formulon::FormulonErrorCode::kInvalidArgument, "fm_cf_results_get_cell_at: cell_idx out of range",
         "cell_idx=" + std::to_string(cell_idx) + " cell_count=" + std::to_string(results->matches.size()));
   }
   const auto& entry = results->matches[cell_idx];
@@ -188,21 +188,21 @@ extern "C" fm_status_t fm_cf_results_cell_at(const fm_cf_results_t* results, siz
   return 0;
 }
 
-extern "C" fm_status_t fm_cf_results_match_at(const fm_cf_results_t* results, size_t cell_idx, size_t match_idx,
-                                              fm_cf_match_t* out) {
+extern "C" fm_status_t fm_cf_results_get_match_at(const fm_cf_results_t* results, size_t cell_idx, size_t match_idx,
+                                                  fm_cf_match_t* out) {
   clear_last_error();
   if (results == nullptr || out == nullptr) {
-    return null_argument("fm_cf_results_match_at");
+    return null_argument("fm_cf_results_get_match_at");
   }
   if (cell_idx >= results->matches.size()) {
     return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_cf_results_match_at: cell_idx out of range",
+        formulon::FormulonErrorCode::kInvalidArgument, "fm_cf_results_get_match_at: cell_idx out of range",
         "cell_idx=" + std::to_string(cell_idx) + " cell_count=" + std::to_string(results->matches.size()));
   }
   const auto& entry = results->matches[cell_idx];
   if (match_idx >= entry.matches.size()) {
     return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_cf_results_match_at: match_idx out of range",
+        formulon::FormulonErrorCode::kInvalidArgument, "fm_cf_results_get_match_at: match_idx out of range",
         "match_idx=" + std::to_string(match_idx) + " match_count=" + std::to_string(entry.matches.size()));
   }
   fill_match(entry.matches[match_idx], out);

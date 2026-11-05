@@ -32,18 +32,18 @@ struct WorkbookGuard {
 
 }  // namespace
 
-// Looping `fm_workbook_get_value` over a text cell must keep the per-handle
+// Looping `fm_sheet_get_value` over a text cell must keep the per-handle
 // read scratch bounded (one entry, not one-per-iteration).
 TEST(FormulonCApiReadScratch, GetValueDoesNotGrowScratch) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "hello"), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "hello"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   constexpr int kIterations = 10000;
   for (int i = 0; i < kIterations; ++i) {
     fm_value_t v{};
-    ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &v), 0);
+    ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
     ASSERT_EQ(v.kind, FM_VAL_TEXT);
     ASSERT_NE(v.u.text, nullptr);
     EXPECT_STREQ(v.u.text, "hello");
@@ -54,21 +54,21 @@ TEST(FormulonCApiReadScratch, GetValueDoesNotGrowScratch) {
   EXPECT_LE(wb.handle->read_scratch.size(), 1U);
 }
 
-// `fm_workbook_lambda_text_at` shares the same read scratch. A validation-
+// `fm_sheet_get_lambda_text` shares the same read scratch. A validation-
 // rejected call on a non-lambda cell must leave the previous successful text
 // pointer, value, and scratch size intact.
 TEST(FormulonCApiReadScratch, MixedReadsStayBounded) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "alpha"), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 1, 0, 42.0), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "alpha"), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 1, 0, 42.0), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   for (int i = 0; i < 5000; ++i) {
     fm_value_t v{};
-    ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &v), 0);
+    ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
     fm_value_t n{};
-    ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 1, 0, &n), 0);
+    ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 1, 0, &n), 0);
     EXPECT_EQ(n.kind, FM_VAL_NUMBER);
   }
   EXPECT_LE(wb.handle->read_scratch.size(), 1U);
@@ -76,12 +76,12 @@ TEST(FormulonCApiReadScratch, MixedReadsStayBounded) {
 
 TEST(FormulonCApiReadScratch, RejectedLambdaReadPreservesPreviousScratch) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "alpha"), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "alpha"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   fm_value_t value{};
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &value), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &value), 0);
   ASSERT_EQ(value.kind, FM_VAL_TEXT);
   ASSERT_NE(value.u.text, nullptr);
   const char* previous_pointer = value.u.text;
@@ -89,7 +89,7 @@ TEST(FormulonCApiReadScratch, RejectedLambdaReadPreservesPreviousScratch) {
   const std::size_t previous_size = wb.handle->read_scratch.size();
 
   const char* rejected_output = nullptr;
-  EXPECT_EQ(fm_workbook_lambda_text_at(wb.handle, 0, 0, 0, &rejected_output),
+  EXPECT_EQ(fm_sheet_get_lambda_text(wb.handle, 0, 0, 0, &rejected_output),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   EXPECT_EQ(rejected_output, nullptr);
   EXPECT_EQ(wb.handle->read_scratch.size(), previous_size);
@@ -102,15 +102,15 @@ TEST(FormulonCApiReadScratch, RejectedLambdaReadPreservesPreviousScratch) {
 // the handle's transient view.
 TEST(FormulonCApiReadScratch, AlternatingReadsStayBoundedAndCopiedTextSurvives) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "first"), 0);
-  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 1, "second"), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "first"), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 1, "second"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   std::string retained;
   for (int i = 0; i < 5000; ++i) {
     fm_value_t first{};
-    ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &first), 0);
+    ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &first), 0);
     ASSERT_EQ(first.kind, FM_VAL_TEXT);
     ASSERT_NE(first.u.text, nullptr);
     if (i == 0) {
@@ -118,7 +118,7 @@ TEST(FormulonCApiReadScratch, AlternatingReadsStayBoundedAndCopiedTextSurvives) 
     }
 
     fm_value_t second{};
-    ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 1, &second), 0);
+    ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 1, &second), 0);
     ASSERT_EQ(second.kind, FM_VAL_TEXT);
     ASSERT_NE(second.u.text, nullptr);
     EXPECT_STREQ(second.u.text, "second");
@@ -131,16 +131,16 @@ TEST(FormulonCApiReadScratch, AlternatingReadsStayBoundedAndCopiedTextSurvives) 
 // read-scratch refresh must not alter a previously returned sheet name.
 TEST(FormulonCApiReadScratch, ModelBackedSheetNameSurvivesScratchRead) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "payload"), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "payload"), 0);
 
   const char* sheet_name = nullptr;
-  ASSERT_EQ(fm_workbook_sheet_name(wb.handle, 0, &sheet_name), 0);
+  ASSERT_EQ(fm_workbook_get_sheet_name(wb.handle, 0, &sheet_name), 0);
   ASSERT_NE(sheet_name, nullptr);
   const std::string expected_name = sheet_name;
 
   fm_value_t value{};
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &value), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &value), 0);
   ASSERT_EQ(value.kind, FM_VAL_TEXT);
   ASSERT_NE(value.u.text, nullptr);
   EXPECT_STREQ(value.u.text, "payload");
@@ -154,9 +154,9 @@ TEST(FormulonCApiReadScratch, ModelBackedSheetNameSurvivesScratchRead) {
 // need retention.
 TEST(FormulonCApiReadScratch, AllScratchProducersStayBoundedWhenAlternated) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "cell"), 0);
-  ASSERT_EQ(fm_workbook_set_cell_phonetic(wb.handle, 0, 0, 0, "kana"), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "cell"), 0);
+  ASSERT_EQ(fm_sheet_set_cell_phonetic(wb.handle, 0, 0, 0, "kana"), 0);
   ASSERT_EQ(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<autoFilter ref=\"A1:C10\"/>"), 0);
 
   // Build a lambda value directly in an arena so the lambda text producer
@@ -197,27 +197,27 @@ TEST(FormulonCApiReadScratch, AllScratchProducersStayBoundedWhenAlternated) {
   cf_input.color_scale_colors = colors;
   cf_input.color_scale_count = 3;
   std::size_t cf_index = 0;
-  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, cf_input, &cf_index), 0);
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, cf_input, &cf_index), 0);
   ASSERT_EQ(cf_index, 0U);
 
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   constexpr int kIterations = 500;
   for (int i = 0; i < kIterations; ++i) {
     fm_value_t cell_value{};
-    ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &cell_value), 0);
+    ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &cell_value), 0);
 
     const char* phonetic = nullptr;
-    ASSERT_EQ(fm_workbook_get_cell_phonetic(wb.handle, 0, 0, 0, &phonetic), 0);
+    ASSERT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, &phonetic), 0);
 
     const char* lambda_text = nullptr;
-    ASSERT_EQ(fm_workbook_lambda_text_at(wb.handle, 0, 0, 1, &lambda_text), 0);
+    ASSERT_EQ(fm_sheet_get_lambda_text(wb.handle, 0, 0, 1, &lambda_text), 0);
 
     fm_value_t adhoc_value{};
-    ASSERT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 0, 0, "=\"adhoc\"", &adhoc_value), 0);
+    ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=\"adhoc\"", &adhoc_value), 0);
 
     uint32_t rows = 0;
     uint32_t cols = 0;
-    ASSERT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 0, "=\"array\"", &rows, &cols), 0);
+    ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=\"array\"", &rows, &cols), 0);
     ASSERT_EQ(rows, 1U);
     ASSERT_EQ(cols, 1U);
     fm_value_t array_value{};
@@ -227,7 +227,7 @@ TEST(FormulonCApiReadScratch, AllScratchProducersStayBoundedWhenAlternated) {
     ASSERT_EQ(fm_sheet_get_auto_filter_xml(wb.handle, 0, &auto_filter), 0);
 
     fm_cf_rule_t cf_value{};
-    ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, 0, &cf_value), 0);
+    ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &cf_value), 0);
 
     EXPECT_LE(wb.handle->read_scratch.size(), 3U);
     EXPECT_LE(wb.handle->cfvo_scratch.size(), 3U);
@@ -241,22 +241,22 @@ TEST(FormulonCApiReadScratch, AllScratchProducersStayBoundedWhenAlternated) {
 // text through later reads.
 TEST(FormulonCApiReadScratch, RepeatedTextOverwritesDoNotRetainHistoricalBuffers) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   constexpr int kWrites = 1000;
   for (int i = 0; i < kWrites; ++i) {
     const std::string text = "value-" + std::to_string(i);
-    ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, text.c_str()), 0);
+    ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, text.c_str()), 0);
   }
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   for (int i = 0; i < 1000; ++i) {
     fm_value_t v{};
-    ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &v), 0);
+    ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
   }
 
   EXPECT_TRUE(wb.handle->workbook().text_storage().empty());
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &v), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &v), 0);
   ASSERT_EQ(v.kind, FM_VAL_TEXT);
   EXPECT_STREQ(v.u.text, "value-999");
 }

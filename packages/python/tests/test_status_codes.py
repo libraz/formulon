@@ -46,8 +46,8 @@ class StatusCodeTest(unittest.TestCase):
             StatusCode.BINDING_INVALID_HANDLE,
         ):
             with self.subTest(member=member.name):
-                self.assertEqual(LIB.read_cstr(LIB.fm_status_string(int(member))), member.name)
-        self.assertEqual(LIB.read_cstr(LIB.fm_status_string(123456)), "UNRECOGNIZED_STATUS")
+                self.assertEqual(LIB.read_cstr(LIB.fm_get_status_name(int(member))), member.name)
+        self.assertEqual(LIB.read_cstr(LIB.fm_get_status_name(123456)), "UNRECOGNIZED_STATUS")
 
 
 class ExceptionFamilyTest(unittest.TestCase):
@@ -103,7 +103,7 @@ class ExceptionFamilyTest(unittest.TestCase):
         self.assertNotEqual(ctx.exception.code, StatusCode.OK)
         with Workbook.create_default() as wb:
             with self.assertRaises(NotFoundError) as missing:
-                wb.rename_sheet(wb.sheet_count(), "x")
+                wb.rename_sheet(wb.get_sheet_count(), "x")
             self.assertEqual(missing.exception.code, StatusCode.SHEET_INDEX_OUT_OF_RANGE)
             with self.assertRaises(FormulonError) as invalid:
                 wb.rename_sheet(0, "")

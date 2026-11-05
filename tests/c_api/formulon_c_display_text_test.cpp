@@ -54,7 +54,7 @@ Bytes SavePackage(fm_workbook_t* wb) {
   if (data != nullptr) {
     result.assign(data, data + len);
   }
-  fm_buffer_free(data);
+  fm_buffer_destroy(data);
   return result;
 }
 
@@ -118,7 +118,7 @@ Bytes SaveXlsbPackage(fm_workbook_t* wb) {
   if (data != nullptr) {
     result.assign(data, data + len);
   }
-  fm_buffer_free(data);
+  fm_buffer_destroy(data);
   return result;
 }
 
@@ -153,80 +153,80 @@ Bytes PackageWithNonGeneralDefaultXf(fm_workbook_t* wb, std::string sheet_xml) {
 
 TEST(FormulonCApiDisplayText, CellUsesItsNumberFormat) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_cell_xf xf{};
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_xf_t xf{};
   xf.num_fmt_id = 2;  // built-in 0.00
   uint32_t xf_index = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &xf_index), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.5), 0);
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0, 0, xf_index), 0);
-  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 1, 0, "plain"), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &xf_index), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 1.5), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, xf_index), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 1, 0, "plain"), 0);
 
   const char* text = nullptr;
   int32_t status = -1;
-  ASSERT_EQ(fm_workbook_get_display_text(wb.handle, 0, 0, 0, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(wb.handle, 0, 0, 0, &text, &status), 0);
   EXPECT_STREQ(text, "1.50");
   EXPECT_EQ(status, FM_DISPLAY_OK);
-  ASSERT_EQ(fm_workbook_get_display_text(wb.handle, 0, 1, 0, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(wb.handle, 0, 1, 0, &text, &status), 0);
   EXPECT_STREQ(text, "plain");
-  ASSERT_EQ(fm_workbook_get_display_text(wb.handle, 0, 5, 5, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(wb.handle, 0, 5, 5, &text, &status), 0);
   EXPECT_STREQ(text, "");
   EXPECT_EQ(status, FM_DISPLAY_OK);
 }
 
 TEST(FormulonCApiDisplayText, SpillCellsDisplayResolvedValuesWithTheirOwnFormat) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(2,2)"), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(2,2)"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   fm_value_t value{};
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 1, 1, &value), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 1, 1, &value), 0);
   ASSERT_EQ(value.kind, FM_VAL_NUMBER);
   EXPECT_EQ(value.u.number, 4.0);
   const char* text = nullptr;
   int32_t status = -1;
-  ASSERT_EQ(fm_workbook_get_display_text(wb.handle, 0, 1, 1, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(wb.handle, 0, 1, 1, &text, &status), 0);
   EXPECT_STREQ(text, "4");
   EXPECT_EQ(status, FM_DISPLAY_OK);
 
-  fm_cell_xf xf{};
+  fm_cell_xf_t xf{};
   xf.num_fmt_id = 2;  // 0.00
   uint32_t xf_index = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &xf_index), 0);
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 1, 1, xf_index), 0);
-  ASSERT_EQ(fm_workbook_get_display_text(wb.handle, 0, 1, 1, &text, &status), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &xf_index), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1, 1, xf_index), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(wb.handle, 0, 1, 1, &text, &status), 0);
   EXPECT_STREQ(text, "4.00");
   EXPECT_EQ(status, FM_DISPLAY_OK);
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 1, 1, &value), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 1, 1, &value), 0);
   EXPECT_EQ(value.u.number, 4.0);
 
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,1)"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,1)"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
-  ASSERT_EQ(fm_workbook_get_display_text(wb.handle, 0, 1, 1, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(wb.handle, 0, 1, 1, &text, &status), 0);
   EXPECT_STREQ(text, "");
 }
 
 TEST(FormulonCApiDisplayText, SpillPhantomsUseColumnRowAndCellStylePrecedence) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  fm_cell_xf percent{};
+  fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   uint32_t column_xf = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, percent, &column_xf), 0);
-  fm_cell_xf decimal{};
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  fm_cell_xf_t decimal{};
   decimal.num_fmt_id = 2;  // 0.00
   uint32_t row_xf = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, decimal, &row_xf), 0);
-  fm_cell_xf explicit_cell{};
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, decimal, &row_xf), 0);
+  fm_cell_xf_t explicit_cell{};
   explicit_cell.num_fmt_id = 9;  // 0%
   uint32_t cell_xf = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, explicit_cell, &cell_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, explicit_cell, &cell_xf), 0);
 
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(2,2)"), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 1, 2, 0.125), 0);
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 1, 2, cell_xf), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(2,2)"), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 1, 2, 0.125), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1, 2, cell_xf), 0);
   const std::string sheet =
       "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
@@ -245,19 +245,19 @@ TEST(FormulonCApiDisplayText, SpillPhantomsUseColumnRowAndCellStylePrecedence) {
 
   const char* text = nullptr;
   int32_t status = -1;
-  ASSERT_EQ(fm_workbook_get_display_text(loaded.handle, 0, 0, 1, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "200.00%");
   EXPECT_EQ(status, FM_DISPLAY_OK);
-  ASSERT_EQ(fm_workbook_get_display_text(loaded.handle, 0, 1, 1, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 1, 1, &text, &status), 0);
   EXPECT_STREQ(text, "4.00");
   EXPECT_EQ(status, FM_DISPLAY_OK);
   // C2 carries an explicit xf and therefore beats row 2's inherited decimal
   // format, even though the row and the cell both sit outside the spill.
-  ASSERT_EQ(fm_workbook_get_display_text(loaded.handle, 0, 1, 2, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 1, 2, &text, &status), 0);
   EXPECT_STREQ(text, "13%");
   EXPECT_EQ(status, FM_DISPLAY_OK);
 
-  fm_effective_style style{};
+  fm_effective_style_t style{};
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 2);  // column
   EXPECT_STREQ(style.num_fmt_code, "0.00%");
@@ -271,23 +271,23 @@ TEST(FormulonCApiDisplayText, SpillPhantomsUseColumnRowAndCellStylePrecedence) {
 
 TEST(FormulonCApiDisplayText, SpillPhantomWithoutLayoutUsesDefaultXfZero) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_cell_xf percent{};
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // An unassigned non-default XF must not leak.
   uint32_t percent_xf = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, percent, &percent_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &percent_xf), 0);
   ASSERT_NE(percent_xf, 0U);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(2,2)"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(2,2)"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   const char* text = nullptr;
   int32_t status = -1;
-  ASSERT_EQ(fm_workbook_get_display_text(wb.handle, 0, 0, 1, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(wb.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "2");
-  ASSERT_EQ(fm_workbook_get_display_text(wb.handle, 0, 1, 1, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(wb.handle, 0, 1, 1, &text, &status), 0);
   EXPECT_STREQ(text, "4");
   EXPECT_EQ(status, FM_DISPLAY_OK);
-  fm_effective_style style{};
+  fm_effective_style_t style{};
   ASSERT_EQ(fm_sheet_get_effective_style(wb.handle, 0, 1, 1, &style), 0);
   EXPECT_EQ(style.source, 3);  // default xf 0
   EXPECT_STREQ(style.num_fmt_code, "General");
@@ -295,8 +295,8 @@ TEST(FormulonCApiDisplayText, SpillPhantomWithoutLayoutUsesDefaultXfZero) {
 
 TEST(FormulonCApiDisplayText, SpillPhantomUsesNonGeneralDefaultXfZero) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(2,2)"), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(2,2)"), 0);
   const std::string sheet =
       "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
@@ -308,10 +308,10 @@ TEST(FormulonCApiDisplayText, SpillPhantomUsesNonGeneralDefaultXfZero) {
 
   const char* text = nullptr;
   int32_t status = -1;
-  ASSERT_EQ(fm_workbook_get_display_text(loaded.handle, 0, 1, 1, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 1, 1, &text, &status), 0);
   EXPECT_STREQ(text, "4.00");
   EXPECT_EQ(status, FM_DISPLAY_OK);
-  fm_effective_style style{};
+  fm_effective_style_t style{};
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 1, 1, &style), 0);
   EXPECT_EQ(style.source, 3);  // the non-General default xf 0
   EXPECT_STREQ(style.num_fmt_code, "0.00");
@@ -319,8 +319,8 @@ TEST(FormulonCApiDisplayText, SpillPhantomUsesNonGeneralDefaultXfZero) {
 
 TEST(FormulonCApiDisplayText, InvalidRowXfFallsBackToDefaultRecord) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(2,2)"), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(2,2)"), 0);
   const std::string sheet =
       "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
@@ -333,10 +333,10 @@ TEST(FormulonCApiDisplayText, InvalidRowXfFallsBackToDefaultRecord) {
 
   const char* text = nullptr;
   int32_t status = -1;
-  ASSERT_EQ(fm_workbook_get_display_text(loaded.handle, 0, 1, 1, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 1, 1, &text, &status), 0);
   EXPECT_STREQ(text, "4.00");
   EXPECT_EQ(status, FM_DISPLAY_OK);
-  fm_effective_style style{};
+  fm_effective_style_t style{};
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 1, 1, &style), 0);
   EXPECT_EQ(style.source, 1);     // the row override still supplies precedence
   EXPECT_EQ(style.xf_index, 0U);  // its raw index is out of range
@@ -345,13 +345,13 @@ TEST(FormulonCApiDisplayText, InvalidRowXfFallsBackToDefaultRecord) {
 
 TEST(FormulonCApiDisplayText, MaterializedBlankGapDoesNotShadowColumnStyle) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_cell_xf percent{};
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   uint32_t column_xf = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, percent, &column_xf), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 2, "=B1"), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 2, "=B1"), 0);
   const std::string sheet =
       "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
@@ -367,13 +367,13 @@ TEST(FormulonCApiDisplayText, MaterializedBlankGapDoesNotShadowColumnStyle) {
 
   const char* text = nullptr;
   int32_t status = -1;
-  ASSERT_EQ(fm_workbook_get_display_text(loaded.handle, 0, 0, 1, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "200.00%");
   EXPECT_EQ(status, FM_DISPLAY_OK);
-  ASSERT_EQ(fm_workbook_get_display_text(loaded.handle, 0, 0, 2, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 0, 2, &text, &status), 0);
   EXPECT_STREQ(text, "2");
   EXPECT_EQ(status, FM_DISPLAY_OK);
-  fm_effective_style style{};
+  fm_effective_style_t style{};
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 2);  // column, despite the unwritten gap
   EXPECT_STREQ(style.num_fmt_code, "0.00%");
@@ -381,13 +381,13 @@ TEST(FormulonCApiDisplayText, MaterializedBlankGapDoesNotShadowColumnStyle) {
 
 TEST(FormulonCApiDisplayText, ExplicitDefaultCellXfOverridesInheritedColumnFormat) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_cell_xf percent{};
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   uint32_t column_xf = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
   ASSERT_NE(column_xf, 0U);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
 
   WorkbookGuard loaded;
   LoadPackage(PackageWithColumnPercentSpill(wb.handle, column_xf), &loaded);
@@ -395,15 +395,15 @@ TEST(FormulonCApiDisplayText, ExplicitDefaultCellXfOverridesInheritedColumnForma
 
   const char* text = nullptr;
   int32_t status = -1;
-  ASSERT_EQ(fm_workbook_get_display_text(loaded.handle, 0, 0, 1, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "200.00%");
   EXPECT_EQ(status, FM_DISPLAY_OK);
 
-  ASSERT_EQ(fm_cell_set_xf_index(loaded.handle, 0, 0, 1, 0), 0);
-  ASSERT_EQ(fm_workbook_get_display_text(loaded.handle, 0, 0, 1, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(loaded.handle, 0, 0, 1, 0), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "2");
   EXPECT_EQ(status, FM_DISPLAY_OK);
-  fm_effective_style style{};
+  fm_effective_style_t style{};
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 0);  // explicit cell, even though its xf is the default record
   EXPECT_EQ(style.xf_index, 0U);
@@ -414,7 +414,7 @@ TEST(FormulonCApiDisplayText, ExplicitDefaultCellXfOverridesInheritedColumnForma
   WorkbookGuard reloaded;
   LoadPackage(saved, &reloaded);
   ASSERT_EQ(fm_workbook_recalc(reloaded.handle), 0);
-  ASSERT_EQ(fm_workbook_get_display_text(reloaded.handle, 0, 0, 1, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(reloaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "2");
   EXPECT_EQ(status, FM_DISPLAY_OK);
   ASSERT_EQ(fm_sheet_get_effective_style(reloaded.handle, 0, 0, 1, &style), 0);
@@ -425,13 +425,13 @@ TEST(FormulonCApiDisplayText, ExplicitDefaultCellXfOverridesInheritedColumnForma
 
 TEST(FormulonCApiDisplayText, ExplicitDefaultRangeXfOverridesInheritedColumnFormat) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_cell_xf percent{};
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   uint32_t column_xf = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
   ASSERT_NE(column_xf, 0U);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
 
   WorkbookGuard loaded;
   LoadPackage(PackageWithColumnPercentSpill(wb.handle, column_xf), &loaded);
@@ -440,10 +440,10 @@ TEST(FormulonCApiDisplayText, ExplicitDefaultRangeXfOverridesInheritedColumnForm
 
   const char* text = nullptr;
   int32_t status = -1;
-  ASSERT_EQ(fm_workbook_get_display_text(loaded.handle, 0, 0, 1, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "2");
   EXPECT_EQ(status, FM_DISPLAY_OK);
-  fm_effective_style style{};
+  fm_effective_style_t style{};
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 0);  // explicit range cell
   EXPECT_EQ(style.xf_index, 0U);
@@ -452,25 +452,25 @@ TEST(FormulonCApiDisplayText, ExplicitDefaultRangeXfOverridesInheritedColumnForm
 
 TEST(FormulonCApiDisplayText, XlsbPreservesNonDefaultXfOnBlankCell) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_cell_xf percent{};
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   uint32_t column_xf = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, percent, &column_xf), 0);
-  fm_cell_xf decimal{};
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  fm_cell_xf_t decimal{};
   decimal.num_fmt_id = 2;  // 0.00
   uint32_t cell_xf = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, decimal, &cell_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, decimal, &cell_xf), 0);
   ASSERT_NE(cell_xf, 0U);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
 
   WorkbookGuard loaded;
   LoadPackage(PackageWithColumnPercentSpill(wb.handle, column_xf), &loaded);
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
   // B2 is outside the one-row spill, so this blank cell exercises ordinary
   // cell serialization while inheriting the column format when unstyled.
-  ASSERT_EQ(fm_cell_set_xf_index(loaded.handle, 0, 1, 1, cell_xf), 0);
-  fm_effective_style style{};
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(loaded.handle, 0, 1, 1, cell_xf), 0);
+  fm_effective_style_t style{};
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 1, 1, &style), 0);
   EXPECT_EQ(style.source, 0);
   EXPECT_EQ(style.xf_index, cell_xf);
@@ -488,20 +488,20 @@ TEST(FormulonCApiDisplayText, XlsbPreservesNonDefaultXfOnBlankCell) {
 
 TEST(FormulonCApiDisplayText, XlsbPreservesExplicitDefaultXfOnBlankCell) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_cell_xf percent{};
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   uint32_t column_xf = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, percent, &column_xf), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
 
   WorkbookGuard loaded;
   LoadPackage(PackageWithColumnPercentSpill(wb.handle, column_xf), &loaded);
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
   // An explicit default XF must block inherited column formatting even though
   // B2 remains a blank cell outside the spill footprint.
-  ASSERT_EQ(fm_cell_set_xf_index(loaded.handle, 0, 1, 1, 0), 0);
-  fm_effective_style style{};
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(loaded.handle, 0, 1, 1, 0), 0);
+  fm_effective_style_t style{};
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 1, 1, &style), 0);
   EXPECT_EQ(style.source, 0);
   EXPECT_EQ(style.xf_index, 0U);
@@ -519,23 +519,23 @@ TEST(FormulonCApiDisplayText, XlsbPreservesExplicitDefaultXfOnBlankCell) {
 
 TEST(FormulonCApiDisplayText, XlsbKeepsInheritedFormatOnUnstyledSpillPhantom) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_cell_xf percent{};
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   uint32_t column_xf = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
   ASSERT_NE(column_xf, 0U);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
 
   WorkbookGuard loaded;
   LoadPackage(PackageWithColumnPercentSpill(wb.handle, column_xf), &loaded);
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
   const char* text = nullptr;
   int32_t status = -1;
-  ASSERT_EQ(fm_workbook_get_display_text(loaded.handle, 0, 0, 1, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "200.00%");
   fm_value_t value{};
-  ASSERT_EQ(fm_workbook_get_value(loaded.handle, 0, 0, 1, &value), 0);
+  ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 0, 1, &value), 0);
   ASSERT_EQ(value.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(value.u.number, 2.0);
 
@@ -544,12 +544,12 @@ TEST(FormulonCApiDisplayText, XlsbKeepsInheritedFormatOnUnstyledSpillPhantom) {
   WorkbookGuard reloaded;
   LoadPackage(saved, &reloaded);
   ASSERT_EQ(fm_workbook_recalc(reloaded.handle), 0);
-  ASSERT_EQ(fm_workbook_get_display_text(reloaded.handle, 0, 0, 1, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(reloaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "200.00%");
-  ASSERT_EQ(fm_workbook_get_value(reloaded.handle, 0, 0, 1, &value), 0);
+  ASSERT_EQ(fm_sheet_get_value(reloaded.handle, 0, 0, 1, &value), 0);
   ASSERT_EQ(value.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(value.u.number, 2.0);
-  fm_effective_style style{};
+  fm_effective_style_t style{};
   ASSERT_EQ(fm_sheet_get_effective_style(reloaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 0);  // serialized effective XF on the phantom cell
   EXPECT_EQ(style.xf_index, column_xf);
@@ -558,27 +558,27 @@ TEST(FormulonCApiDisplayText, XlsbKeepsInheritedFormatOnUnstyledSpillPhantom) {
 
 TEST(FormulonCApiDisplayText, XlsbKeepsExplicitDefaultXfOnSpillPhantom) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_cell_xf percent{};
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   uint32_t column_xf = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
   ASSERT_NE(column_xf, 0U);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
 
   WorkbookGuard loaded;
   LoadPackage(PackageWithColumnPercentSpill(wb.handle, column_xf), &loaded);
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
-  ASSERT_EQ(fm_cell_set_xf_index(loaded.handle, 0, 0, 1, 0), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(loaded.handle, 0, 0, 1, 0), 0);
   const char* text = nullptr;
   int32_t status = -1;
-  ASSERT_EQ(fm_workbook_get_display_text(loaded.handle, 0, 0, 1, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(loaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "2");
   fm_value_t value{};
-  ASSERT_EQ(fm_workbook_get_value(loaded.handle, 0, 0, 1, &value), 0);
+  ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 0, 1, &value), 0);
   ASSERT_EQ(value.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(value.u.number, 2.0);
-  fm_effective_style style{};
+  fm_effective_style_t style{};
   ASSERT_EQ(fm_sheet_get_effective_style(loaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 0);  // explicit cell XF0
   EXPECT_EQ(style.xf_index, 0U);
@@ -589,9 +589,9 @@ TEST(FormulonCApiDisplayText, XlsbKeepsExplicitDefaultXfOnSpillPhantom) {
   WorkbookGuard reloaded;
   LoadPackage(saved, &reloaded);
   ASSERT_EQ(fm_workbook_recalc(reloaded.handle), 0);
-  ASSERT_EQ(fm_workbook_get_display_text(reloaded.handle, 0, 0, 1, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(reloaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "2");
-  ASSERT_EQ(fm_workbook_get_value(reloaded.handle, 0, 0, 1, &value), 0);
+  ASSERT_EQ(fm_sheet_get_value(reloaded.handle, 0, 0, 1, &value), 0);
   ASSERT_EQ(value.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(value.u.number, 2.0);
   ASSERT_EQ(fm_sheet_get_effective_style(reloaded.handle, 0, 0, 1, &style), 0);
@@ -602,13 +602,13 @@ TEST(FormulonCApiDisplayText, XlsbKeepsExplicitDefaultXfOnSpillPhantom) {
 
 TEST(FormulonCApiDisplayText, XlsxKeepsInheritedFormatOnUnstyledSpillPhantom) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_cell_xf percent{};
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   uint32_t column_xf = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
   ASSERT_NE(column_xf, 0U);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
 
   WorkbookGuard loaded;
   LoadPackage(PackageWithColumnPercentSpill(wb.handle, column_xf), &loaded);
@@ -621,9 +621,9 @@ TEST(FormulonCApiDisplayText, XlsxKeepsInheritedFormatOnUnstyledSpillPhantom) {
   ASSERT_EQ(fm_workbook_recalc(reloaded.handle), 0);
   const char* text = nullptr;
   int32_t status = -1;
-  ASSERT_EQ(fm_workbook_get_display_text(reloaded.handle, 0, 0, 1, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(reloaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "200.00%");
-  fm_effective_style style{};
+  fm_effective_style_t style{};
   ASSERT_EQ(fm_sheet_get_effective_style(reloaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 0);  // serialized effective XF on the phantom cell
   EXPECT_EQ(style.xf_index, column_xf);
@@ -632,18 +632,18 @@ TEST(FormulonCApiDisplayText, XlsxKeepsInheritedFormatOnUnstyledSpillPhantom) {
 
 TEST(FormulonCApiDisplayText, XlsxKeepsExplicitDefaultXfOnSpillPhantom) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_cell_xf percent{};
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_xf_t percent{};
   percent.num_fmt_id = 10;  // 0.00%
   uint32_t column_xf = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, percent, &column_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, percent, &column_xf), 0);
   ASSERT_NE(column_xf, 0U);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)"), 0);
 
   WorkbookGuard loaded;
   LoadPackage(PackageWithColumnPercentSpill(wb.handle, column_xf), &loaded);
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
-  ASSERT_EQ(fm_cell_set_xf_index(loaded.handle, 0, 0, 1, 0), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(loaded.handle, 0, 0, 1, 0), 0);
 
   const Bytes saved = SavePackage(loaded.handle);
   ASSERT_FALSE(saved.empty());
@@ -652,9 +652,9 @@ TEST(FormulonCApiDisplayText, XlsxKeepsExplicitDefaultXfOnSpillPhantom) {
   ASSERT_EQ(fm_workbook_recalc(reloaded.handle), 0);
   const char* text = nullptr;
   int32_t status = -1;
-  ASSERT_EQ(fm_workbook_get_display_text(reloaded.handle, 0, 0, 1, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(reloaded.handle, 0, 0, 1, &text, &status), 0);
   EXPECT_STREQ(text, "2");
-  fm_effective_style style{};
+  fm_effective_style_t style{};
   ASSERT_EQ(fm_sheet_get_effective_style(reloaded.handle, 0, 0, 1, &style), 0);
   EXPECT_EQ(style.source, 0);  // explicit cell XF0 survived the phantom cell
   EXPECT_EQ(style.xf_index, 0U);
@@ -663,57 +663,57 @@ TEST(FormulonCApiDisplayText, XlsxKeepsExplicitDefaultXfOnSpillPhantom) {
 
 TEST(FormulonCApiDisplayText, ReferencesPreserveValuesAndUseDestinationFormats) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_cell_xf xf{};
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_xf_t xf{};
   xf.num_fmt_id = 2;  // 0.00
   uint32_t decimal_xf = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &decimal_xf), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &decimal_xf), 0);
   xf.num_fmt_id = 10;  // 0.00%
   uint32_t percent_xf = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &percent_xf), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 0.125), 0);
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0, 0, decimal_xf), 0);
-  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 1, 0, "0012.345"), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 3, 0, "=1/0"), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &percent_xf), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 0.125), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, decimal_xf), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 1, 0, "0012.345"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 3, 0, "=1/0"), 0);
   for (uint32_t row = 0; row < 4; ++row) {
     const std::string formula = "=A" + std::to_string(row + 1);
-    ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, row, 1, formula.c_str()), 0);
-    ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, row, 1, percent_xf), 0);
+    ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, row, 1, formula.c_str()), 0);
+    ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, row, 1, percent_xf), 0);
   }
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 2, "=A1*100"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 2, "=A1*100"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   const char* text = nullptr;
   int32_t status = -1;
-  ASSERT_EQ(fm_workbook_get_display_text(wb.handle, 0, 0, 0, &text, &status), 0);
+  ASSERT_EQ(fm_sheet_get_display_text(wb.handle, 0, 0, 0, &text, &status), 0);
   EXPECT_STREQ(text, "0.13");
   const char* expected[] = {"12.50%", "0012.345", "0.00%", "#DIV/0!"};
   for (uint32_t row = 0; row < 4; ++row) {
-    ASSERT_EQ(fm_workbook_get_display_text(wb.handle, 0, row, 1, &text, &status), 0);
+    ASSERT_EQ(fm_sheet_get_display_text(wb.handle, 0, row, 1, &text, &status), 0);
     EXPECT_STREQ(text, expected[row]);
     EXPECT_EQ(status, FM_DISPLAY_OK);
   }
   fm_value_t value{};
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 1, &value), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 1, &value), 0);
   ASSERT_EQ(value.kind, FM_VAL_NUMBER);
   EXPECT_EQ(value.u.number, 0.125);
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 1, 1, &value), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 1, 1, &value), 0);
   ASSERT_EQ(value.kind, FM_VAL_TEXT);
   EXPECT_STREQ(value.u.text, "0012.345");
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 2, 1, &value), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 2, 1, &value), 0);
   ASSERT_EQ(value.kind, FM_VAL_NUMBER);
   EXPECT_EQ(value.u.number, 0.0);
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 3, 1, &value), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 3, 1, &value), 0);
   ASSERT_EQ(value.kind, FM_VAL_ERROR);
   EXPECT_EQ(value.u.error_code, static_cast<int32_t>(formulon::ErrorCode::Div0));
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 2, &value), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 2, &value), 0);
   ASSERT_EQ(value.kind, FM_VAL_NUMBER);
   EXPECT_EQ(value.u.number, 12.5);
 }
 
 TEST(FormulonCApiDisplayText, OutOfCalendarDateOverflows) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const auto rendered = Format(wb.handle, Number(-1.0), "yyyy/m/d");
   EXPECT_EQ(rendered.first, "########");
   EXPECT_EQ(rendered.second, FM_DISPLAY_OVERFLOW);
@@ -721,7 +721,7 @@ TEST(FormulonCApiDisplayText, OutOfCalendarDateOverflows) {
 
 TEST(FormulonCApiDisplayText, FormatValueCoversEveryScalarKind) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   EXPECT_EQ(Format(wb.handle, Number(1234.5), "#,##0").first, "1,235");
   EXPECT_EQ(Format(wb.handle, Number(0.25), "").first, "0.25");
 
@@ -747,7 +747,7 @@ TEST(FormulonCApiDisplayText, FormatValueCoversEveryScalarKind) {
 
 TEST(FormulonCApiDisplayText, FormatValueFollowsWorkbookDateSystem) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   EXPECT_EQ(Format(wb.handle, Number(1.0), "yyyy-mm-dd").first, "1900-01-01");
   wb.handle->workbook().set_date1904(true);
   EXPECT_EQ(Format(wb.handle, Number(1.0), "yyyy-mm-dd").first, "1904-01-02");
@@ -755,12 +755,12 @@ TEST(FormulonCApiDisplayText, FormatValueFollowsWorkbookDateSystem) {
 
 TEST(FormulonCApiDisplayText, RejectsBadArguments) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* text = nullptr;
   int32_t status = 0;
-  EXPECT_EQ(fm_workbook_get_display_text(wb.handle, 3, 0, 0, &text, &status), kInvalidArgument);
-  EXPECT_EQ(fm_workbook_get_display_text(wb.handle, 0, 0, 16384U, &text, &status), kInvalidArgument);
-  EXPECT_NE(fm_workbook_get_display_text(wb.handle, 0, 0, 0, nullptr, &status), 0);
+  EXPECT_EQ(fm_sheet_get_display_text(wb.handle, 3, 0, 0, &text, &status), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_display_text(wb.handle, 0, 0, 16384U, &text, &status), kInvalidArgument);
+  EXPECT_NE(fm_sheet_get_display_text(wb.handle, 0, 0, 0, nullptr, &status), 0);
 
   fm_value_t value = Number(std::numeric_limits<double>::quiet_NaN());
   EXPECT_EQ(fm_workbook_format_value(wb.handle, &value, "0", &text, &status), kInvalidArgument);

@@ -18,7 +18,7 @@
 //   * `0` on success.
 //   * Any value mirrored from `fm_status_t`: bound by `set_last_error`
 //     in the C API, so the CLI surfaces the diagnostic by reading
-//     `fm_last_error_message()` and prefixing with the subcommand name.
+//     `fm_get_last_error_message()` and prefixing with the subcommand name.
 //   * `64` on a usage error (mirrors sysexits(3) `EX_USAGE`).
 //   * Any other engine / I/O / binding failure maps to the stable
 //     generic-failure exit code `1`. The detailed `fm_status_t` remains
@@ -163,7 +163,7 @@ inline int flush_output(std::ostream& out, std::ostream& err, std::string_view s
 /// `flush_output` like any other: a script reading `$(formulon --version)`
 /// must not receive an empty string together with a success status.
 inline int print_version(std::ostream& out, std::ostream& err) {
-  const char* version = fm_version_string();
+  const char* version = fm_get_version();
   out << (version != nullptr ? version : "") << '\n';
   return flush_output(out, err, "version");
 }

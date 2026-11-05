@@ -103,13 +103,11 @@ const native = require_(nativePath);
 
 export const Workbook = native.Workbook;
 export const evalFormula = native.evalFormula;
-export const version = native.version;
-/** Alias of {@link version}, matching the WASM binding's name. */
-export const versionString = native.versionString;
-export const lastErrorMessage = native.lastErrorMessage;
-export const lastErrorContext = native.lastErrorContext;
-export const statusString = native.statusString;
-export const errorDisplayName = native.errorDisplayName;
+export const getVersion = native.getVersion;
+export const getLastErrorMessage = native.getLastErrorMessage;
+export const getLastErrorContext = native.getLastErrorContext;
+export const getStatusName = native.getStatusName;
+export const getErrorDisplayName = native.getErrorDisplayName;
 export const setLogMinLevel = native.setLogMinLevel;
 export const setLogSink = native.setLogSink;
 
@@ -184,12 +182,11 @@ export {
 export default {
   Workbook,
   evalFormula,
-  version,
-  versionString,
-  lastErrorMessage,
-  lastErrorContext,
-  statusString,
-  errorDisplayName,
+  getVersion,
+  getLastErrorMessage,
+  getLastErrorContext,
+  getStatusName,
+  getErrorDisplayName,
   setLogMinLevel,
   setLogSink,
   mergeFunctionMetadata,

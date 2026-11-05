@@ -20,7 +20,7 @@ namespace formulon_node {
 /// An array result is reduced to its top-left element.
 Napi::Value EvalFormula(const Napi::CallbackInfo& info);
 
-/// Returns the engine version string (`fm_version_string`).
+/// Returns the engine version string (`fm_get_version`).
 Napi::Value Version(const Napi::CallbackInfo& info);
 
 /// Returns the thread-local last-error message snapshot.

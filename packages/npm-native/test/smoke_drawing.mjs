@@ -60,19 +60,19 @@ test('images probe, insert, list, read back, survive save and load, and remove',
   const wb = mod.Workbook.createDefault();
   try {
     const png = makePng(4);
-    const probe = must(wb.probeImage(png), 'probeImage');
+    const probe = must(wb.getImageInfo(png), 'getImageInfo');
     assert.equal(probe.format, mod.ImageFormat.Png);
     assert.equal(probe.pxWidth, 4);
     assert.equal(probe.pxHeight, 1);
-    assert.equal(wb.probeImage(new Uint8Array([1, 2, 3])).status.ok, false);
+    assert.equal(wb.getImageInfo(new Uint8Array([1, 2, 3])).status.ok, false);
 
     const empty = wb.listDrawingObjects(0);
     assert.ok(empty.status.ok);
     assert.equal(empty.length, 0);
 
     const ins = must(
-      wb.insertImage(0, png, { name: 'logo', descr: 'alt', anchorKind: mod.AnchorKind.OneCell, row: 2, col: 3 }),
-      'insertImage',
+      wb.addImage(0, png, { name: 'logo', descr: 'alt', anchorKind: mod.AnchorKind.OneCell, row: 2, col: 3 }),
+      'addImage',
     );
     assert.ok(ins.objectId > 0);
 
@@ -102,7 +102,7 @@ test('images probe, insert, list, read back, survive save and load, and remove',
     check(wb);
 
     const saved = must(wb.save(), 'save');
-    const wb2 = mod.Workbook.loadBytes(saved.bytes ?? saved);
+    const wb2 = mod.Workbook.load(saved.bytes ?? saved);
     try {
       const id = check(wb2);
       must(wb2.removeDrawing(0, id), 'removeDrawing');
@@ -114,10 +114,10 @@ test('images probe, insert, list, read back, survive save and load, and remove',
     }
 
     // `opts` is optional: defaults place the picture at A1.
-    const plain = must(wb.insertImage(0, png), 'insertImage without opts');
+    const plain = must(wb.addImage(0, png), 'insertImage without opts');
     assert.notEqual(plain.objectId, ins.objectId);
     assert.equal(wb.getImage(99, 1).status.ok, false);
-    assert.equal(wb.insertImage(0, new Uint8Array([1, 2, 3]), {}).status.ok, false);
+    assert.equal(wb.addImage(0, new Uint8Array([1, 2, 3]), {}).status.ok, false);
   } finally {
     wb.dispose();
   }
@@ -127,7 +127,7 @@ test('setDrawingAnchor moves and resizes a picture and keeps its id', async () =
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const ins = must(wb.insertImage(0, makePng(4), { name: 'logo', row: 1, col: 1 }), 'insertImage');
+    const ins = must(wb.addImage(0, makePng(4), { name: 'logo', row: 1, col: 1 }), 'addImage');
     must(
       wb.setDrawingAnchor(0, ins.objectId, {
         anchorKind: mod.AnchorKind.TwoCell,
@@ -162,9 +162,9 @@ test('setDrawingZOrder reorders pictures in listDrawingObjects order', async () 
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const a = must(wb.insertImage(0, makePng(2), { row: 0 }), 'insertImage a');
-    const b = must(wb.insertImage(0, makePng(2), { row: 3 }), 'insertImage b');
-    const c = must(wb.insertImage(0, makePng(2), { row: 6 }), 'insertImage c');
+    const a = must(wb.addImage(0, makePng(2), { row: 0 }), 'insertImage a');
+    const b = must(wb.addImage(0, makePng(2), { row: 3 }), 'insertImage b');
+    const c = must(wb.addImage(0, makePng(2), { row: 6 }), 'insertImage c');
     const ids = () => Array.from(wb.listDrawingObjects(0), (o) => o.objectId);
     assert.deepEqual(ids(), [a.objectId, b.objectId, c.objectId]);
     must(wb.setDrawingZOrder(0, c.objectId, 0), 'setDrawingZOrder');
@@ -181,8 +181,8 @@ test('snapshotDrawing and restoreDrawing bring back a removed, moved or copied p
   const wb = mod.Workbook.createDefault();
   try {
     const png = makePng(4);
-    const a = must(wb.insertImage(0, png, { name: 'A', row: 1 }), 'insertImage a');
-    const b = must(wb.insertImage(0, makePng(2), { name: 'B', row: 4 }), 'insertImage b');
+    const a = must(wb.addImage(0, png, { name: 'A', row: 1 }), 'insertImage a');
+    const b = must(wb.addImage(0, makePng(2), { name: 'B', row: 4 }), 'insertImage b');
     const snap = must(wb.snapshotDrawing(0, a.objectId), 'snapshotDrawing');
     assert.ok(snap.bytes instanceof Uint8Array);
     assert.ok(snap.bytes.length > 0);
@@ -219,7 +219,7 @@ test('setDrawingName renames a picture and keeps its id', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const ins = must(wb.insertImage(0, makePng(4), { name: 'logo', row: 1, col: 1 }), 'insertImage');
+    const ins = must(wb.addImage(0, makePng(4), { name: 'logo', row: 1, col: 1 }), 'addImage');
     must(wb.setDrawingName(0, ins.objectId, 'banner'), 'setDrawingName');
     const o = wb.listDrawingObjects(0)[0];
     assert.equal(o.objectId, ins.objectId);

@@ -21,7 +21,7 @@ JsNumberResult JsWorkbook::borderCount() const {
     return number_result(kBindingInvalidHandle, 0.0);
   }
   uint32_t n = 0;
-  const fm_status_t rc = fm_styles_get_border_count(handle_, &n);
+  const fm_status_t rc = fm_workbook_get_border_count(handle_, &n);
   return number_result(rc, static_cast<double>(n));
 }
 
@@ -30,7 +30,7 @@ JsNumberResult JsWorkbook::fillCount() const {
     return number_result(kBindingInvalidHandle, 0.0);
   }
   uint32_t n = 0;
-  const fm_status_t rc = fm_styles_get_fill_count(handle_, &n);
+  const fm_status_t rc = fm_workbook_get_fill_count(handle_, &n);
   return number_result(rc, static_cast<double>(n));
 }
 
@@ -39,7 +39,7 @@ JsNumberResult JsWorkbook::fontCount() const {
     return number_result(kBindingInvalidHandle, 0.0);
   }
   uint32_t n = 0;
-  const fm_status_t rc = fm_styles_get_font_count(handle_, &n);
+  const fm_status_t rc = fm_workbook_get_font_count(handle_, &n);
   return number_result(rc, static_cast<double>(n));
 }
 
@@ -48,7 +48,7 @@ JsNumberResult JsWorkbook::xfCount() const {
     return number_result(kBindingInvalidHandle, 0.0);
   }
   uint32_t n = 0;
-  const fm_status_t rc = fm_styles_get_cell_xf_count(handle_, &n);
+  const fm_status_t rc = fm_workbook_get_cell_xf_count(handle_, &n);
   return number_result(rc, static_cast<double>(n));
 }
 

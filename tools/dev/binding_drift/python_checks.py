@@ -644,7 +644,7 @@ def check_python_call_signatures() -> List[str]:
 # of the C layout and compared field for field.
 _PYTHON_INLINE_DECODERS = (
     ("Value._from_wasm", "fm_value_t"),
-    ("Workbook.paginate", "fm_print_range_t"),
+    ("Workbook.get_pagination", "fm_print_range_t"),
 )
 
 # Python-side size literals for a struct with no `_structs.Struct` entry, as
@@ -660,7 +660,7 @@ _PYTHON_SIZE_CONSTANTS = (
 # `static_assert` tripwire in tests/c_api instead; listing them here keeps the
 # absence deliberate, and `python-call-signatures` fails if a binding starts
 # passing one an unmeasurable block.
-_UNMODELLED_C_STRUCTS = {"fm_styles_batch"}
+_UNMODELLED_C_STRUCTS = {"fm_styles_batch_t"}
 
 _STRUCT_FORMAT_WIDTHS = {"b": 1, "B": 1, "h": 2, "H": 2, "i": 4, "I": 4, "q": 8, "Q": 8, "f": 4, "d": 8}
 

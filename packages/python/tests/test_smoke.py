@@ -36,23 +36,19 @@ class VersionTests(unittest.TestCase):
         self.assertRegex(formulon.__version__, r"^\d+\.\d+\.\d+")
 
     def test_package_version_matches_library_version(self) -> None:
-        # __version__ and the C-ABI library_version() both descend from the
+        # __version__ and the C-ABI get_version() both descend from the
         # same MAJOR.MINOR.PATCH source (pyproject.toml / src/version.h are
         # bumped together by the release skill); they must agree.
-        self.assertEqual(formulon.__version__, formulon.library_version())
+        self.assertEqual(formulon.__version__, formulon.get_version())
 
     def test_library_version_non_empty(self) -> None:
-        v = formulon.library_version()
+        v = formulon.get_version()
         self.assertIsInstance(v, str)
         self.assertGreater(len(v), 0, f"expected non-empty version, got {v!r}")
 
-    def test_version_string_alias(self) -> None:
-        # Backward-compat alias matching the npm binding's name.
-        self.assertEqual(formulon.version_string(), formulon.library_version())
-
     def test_error_display_name_returns_excel_literal(self) -> None:
-        self.assertEqual(formulon.error_display_name(1), "#DIV/0!")
-        self.assertEqual(formulon.error_display_name(999), "#UNKNOWN!")
+        self.assertEqual(formulon.get_error_display_name(1), "#DIV/0!")
+        self.assertEqual(formulon.get_error_display_name(999), "#UNKNOWN!")
 
 
 class EvalFormulaTests(unittest.TestCase):
@@ -89,15 +85,15 @@ class WorkbookLifecycleTests(unittest.TestCase):
     def test_create_default_has_one_sheet(self) -> None:
         with Workbook.create_default() as wb:
             self.assertTrue(wb.is_valid)
-            self.assertEqual(wb.sheet_count(), 1)
-            self.assertEqual(wb.sheet_name(0), "Sheet1")
+            self.assertEqual(wb.get_sheet_count(), 1)
+            self.assertEqual(wb.get_sheet_name(0), "Sheet1")
 
     def test_create_empty_has_no_sheets(self) -> None:
         with Workbook.create_empty() as wb:
-            self.assertEqual(wb.sheet_count(), 0)
+            self.assertEqual(wb.get_sheet_count(), 0)
             wb.add_sheet("S1")
-            self.assertEqual(wb.sheet_count(), 1)
-            self.assertEqual(wb.sheet_name(0), "S1")
+            self.assertEqual(wb.get_sheet_count(), 1)
+            self.assertEqual(wb.get_sheet_name(0), "S1")
 
     def test_unicode_sheet_identity_rejects_duplicate_and_renames_casing(self) -> None:
         with Workbook.create_empty() as wb:
@@ -107,11 +103,11 @@ class WorkbookLifecycleTests(unittest.TestCase):
                 wb.add_sheet("ä")
             with self.assertRaises(FormulonError):
                 wb.rename_sheet(1, "ä")
-            self.assertEqual(wb.sheet_name(0), "Ä")
-            self.assertEqual(wb.sheet_name(1), "Ö")
+            self.assertEqual(wb.get_sheet_name(0), "Ä")
+            self.assertEqual(wb.get_sheet_name(1), "Ö")
             wb.rename_sheet(0, "ä")
-            self.assertEqual(wb.sheet_name(0), "ä")
-            self.assertEqual(wb.sheet_name(1), "Ö")
+            self.assertEqual(wb.get_sheet_name(0), "ä")
+            self.assertEqual(wb.get_sheet_name(1), "Ö")
 
     def test_close_is_idempotent(self) -> None:
         wb = Workbook.create_default()
@@ -131,7 +127,7 @@ class WorkbookLifecycleTests(unittest.TestCase):
         self.assertNotEqual(status, 0)
         wb.close()
         with self.assertRaises(FormulonError) as ctx:
-            wb.sheet_count()
+            wb.get_sheet_count()
         error = ctx.exception
         self.assertEqual(error.code, 7000)
         self.assertEqual(error.message, "handle is NULL or already closed")
@@ -256,7 +252,7 @@ class WorkbookRoundtripTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.set_comment(0, 2, 3, "Ada", "review")
             self.assertEqual(wb.comment_count(0), 1)
-            self.assertEqual(wb.get_comments(0), [(2, 3, "Ada", "review")])
+            self.assertEqual(wb.list_comments(0), [(2, 3, "Ada", "review")])
             self.assertTrue(wb.evaluate_cf_formula(0, 0, 0, 0, 0, "=A1=0"))
 
     def test_paginate_returns_resolved_breaks(self) -> None:
@@ -267,7 +263,7 @@ class WorkbookRoundtripTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.set_number(0, 0, 0, 1.0)
             wb.set_number(0, 400, 0, 2.0)
-            result = wb.paginate(0)
+            result = wb.get_pagination(0)
             self.assertGreaterEqual(result.page_count, 2)
             self.assertEqual(result.print_area, [])
             self.assertTrue(result.horizontal_breaks)
@@ -384,11 +380,11 @@ class IterationTests(unittest.TestCase):
 
     def test_iter_defined_names_empty_workbook(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertEqual(list(wb.iter_defined_names()), [])
+            self.assertEqual(list(wb.list_defined_names()), [])
 
     def test_iter_passthrough_empty_workbook(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertEqual(list(wb.iter_passthrough()), [])
+            self.assertEqual(list(wb.list_passthroughs()), [])
 
 
 class IteratorHandleLivenessTests(unittest.TestCase):
@@ -409,7 +405,7 @@ class IteratorHandleLivenessTests(unittest.TestCase):
         wb = Workbook.create_default()
         wb.set_defined_name("NameOne", "=1")
         wb.set_defined_name("NameTwo", "=2")
-        it = wb.iter_defined_names()
+        it = wb.list_defined_names()
         next(it)
         wb.close()
         with self.assertRaises(FormulonError):
@@ -420,8 +416,8 @@ class IteratorHandleLivenessTests(unittest.TestCase):
         wb.add_sheet("Sheet2")
         wb.set_text(0, 0, 0, "A")
         wb.set_text(1, 0, 0, "A")
-        wb.table_create(0, "A1:A1", "TableOne", "TableOne", ["A"])
-        wb.table_create(1, "A1:A1", "TableTwo", "TableTwo", ["A"])
+        wb.add_table(0, "A1:A1", "TableOne", "TableOne", ["A"])
+        wb.add_table(1, "A1:A1", "TableTwo", "TableTwo", ["A"])
         it = wb.iter_tables()
         next(it)
         wb.close()
@@ -432,13 +428,13 @@ class IteratorHandleLivenessTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.set_text(0, 0, 0, "Qty")
             wb.set_number(0, 1, 0, 2)
-            wb.table_create(0, "A1:A2", "T", "T", ["Qty"])
+            wb.add_table(0, "A1:A2", "T", "T", ["Qty"])
             wb.set_formula(0, 0, 2, "=SUM(T[Qty])")
-            self.assertEqual(wb.table_rename_column(0, 0, "Amount"), "Amount")
+            self.assertEqual(wb.rename_table_column(0, 0, "Amount"), "Amount")
             self.assertEqual(wb.get_formula(0, 0, 2), "=SUM(T[Amount])")
-            self.assertEqual(wb.table_rename_column(0, 0, ""), "Column1")
+            self.assertEqual(wb.rename_table_column(0, 0, ""), "Column1")
             with self.assertRaises(FormulonError):
-                wb.table_rename_column(0, 1, "X")
+                wb.rename_table_column(0, 1, "X")
 
 
 if __name__ == "__main__":

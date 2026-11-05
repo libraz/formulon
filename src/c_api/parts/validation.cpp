@@ -44,7 +44,7 @@ struct Candidate {
 }  // namespace
 
 extern "C" fm_status_t fm_sheet_validate_value(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
-                                               const fm_value_t* proposed, fm_validation_outcome* out) {
+                                               const fm_value_t* proposed, fm_validation_outcome_t* out) {
   clear_last_error();
   constexpr const char* kApi = "fm_sheet_validate_value";
   if (proposed == nullptr || out == nullptr) {
@@ -62,7 +62,7 @@ extern "C" fm_status_t fm_sheet_validate_value(const fm_workbook_t* wb, size_t s
   if (!outcome) {
     return set_last_error(outcome.error());
   }
-  *out = fm_validation_outcome{};
+  *out = fm_validation_outcome_t{};
   out->has_rule = outcome.value().has_rule ? 1 : 0;
   out->valid = outcome.value().valid ? 1 : 0;
   out->rule_index = outcome.value().rule_index;
@@ -70,12 +70,12 @@ extern "C" fm_status_t fm_sheet_validate_value(const fm_workbook_t* wb, size_t s
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_list_invalid_cells(const fm_workbook_t* wb, size_t sheet_index, uint64_t cursor,
-                                                   uint32_t limit, fm_cell_range_t** out) {
+extern "C" fm_status_t fm_sheet_get_invalid_cells(const fm_workbook_t* wb, size_t sheet_index, uint64_t cursor,
+                                                  uint32_t limit, fm_cell_range_t** out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_list_invalid_cells";
+  constexpr const char* kApi = "fm_sheet_get_invalid_cells";
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_list_invalid_cells: NULL out");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_invalid_cells: NULL out");
   }
   *out = nullptr;
   if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {

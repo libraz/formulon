@@ -68,11 +68,11 @@ export function registerPositional(Module, test, hookProbe) {
 
       const errorControl = wb.setError(1, 0, 0, -1);
       assert.equal(typeof errorControl.ok, 'boolean');
-      assert.equal(typeof Module.statusString(-1), 'string');
-      assert.equal(typeof Module.errorDisplayName(-1), 'string');
+      assert.equal(typeof Module.getStatusName(-1), 'string');
+      assert.equal(typeof Module.getErrorDisplayName(-1), 'string');
       assert.equal(typeof Module.setLogMinLevel(-1).ok, 'boolean');
-      expectTypeError(() => Module.statusString(Symbol('status')));
-      expectTypeError(() => Module.errorDisplayName(Symbol('error')));
+      expectTypeError(() => Module.getStatusName(Symbol('status')));
+      expectTypeError(() => Module.getErrorDisplayName(Symbol('error')));
       expectTypeError(() => Module.setLogMinLevel(Symbol('level')));
     } finally {
       wb.delete();
@@ -100,16 +100,16 @@ export function registerPositional(Module, test, hookProbe) {
       for (const value of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53, 2 ** 64]) {
         expectRangeError(() => wb.getCellsInRange(0, RANGE, value, 1));
         expectRangeError(() => wb.getCellsInRange(0, RANGE, 0, value));
-        expectRangeError(() => wb.listInvalidCells(0, value, 1));
-        expectRangeError(() => wb.listInvalidCells(0, 0, value));
+        expectRangeError(() => wb.getInvalidCells(0, value, 1));
+        expectRangeError(() => wb.getInvalidCells(0, 0, value));
       }
       expectTypeError(() => wb.getCellsInRange(0, RANGE, Symbol('cursor'), 1));
-      expectTypeError(() => wb.listInvalidCells(0, Symbol('cursor'), 1));
+      expectTypeError(() => wb.getInvalidCells(0, Symbol('cursor'), 1));
 
       assert.equal(wb.getCellsInRange(0, RANGE, null, null).status.ok, true);
       assert.equal(wb.getCellsInRange(0, RANGE, undefined, undefined).status.ok, true);
-      assert.equal(wb.listInvalidCells(0, null, null).status.ok, true);
-      assert.equal(wb.listInvalidCells(0, undefined, undefined).status.ok, true);
+      assert.equal(wb.getInvalidCells(0, null, null).status.ok, true);
+      assert.equal(wb.getInvalidCells(0, undefined, undefined).status.ok, true);
       assert.equal(wb.getValue(0, 0, 0).value.number, 42);
     } finally {
       wb.delete();
@@ -119,16 +119,16 @@ export function registerPositional(Module, test, hookProbe) {
   test('WASM-only table and auto-filter positions are guarded', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      for (const method of ['removeTable', 'updateTable', 'getSheetAutoFilterXml']) {
+      for (const method of ['removeTable', 'updateTable', 'getAutoFilterXml']) {
         expectRangeError(() => wb[method](2 ** 32, {}));
       }
-      expectRangeError(() => wb.setSheetAutoFilterXml(2 ** 32, ''));
-      expectTypeError(() => wb.setSheetAutoFilterXml(0, Symbol('xml')));
+      expectRangeError(() => wb.setAutoFilterXml(2 ** 32, ''));
+      expectTypeError(() => wb.setAutoFilterXml(0, Symbol('xml')));
 
-      const got = wb.getSheetAutoFilterXml(0);
+      const got = wb.getAutoFilterXml(0);
       assert.equal(typeof got.status.ok, 'boolean');
       assert.equal(typeof got.xml, 'string');
-      assert.equal(typeof wb.setSheetAutoFilterXml(0, '').ok, 'boolean');
+      assert.equal(typeof wb.setAutoFilterXml(0, '').ok, 'boolean');
     } finally {
       wb.delete();
     }
@@ -164,8 +164,8 @@ export function registerPositional(Module, test, hookProbe) {
         return entry;
       };
       const getCellsLeaf = leaf('getCellsInRange', 4);
-      const listInvalidLeaf = leaf('listInvalidCells', 3);
-      const insertImageLeaf = leaf('insertImage', 3);
+      const listInvalidLeaf = leaf('getInvalidCells', 3);
+      const insertImageLeaf = leaf('addImage', 3);
 
       expectRangeError(() => getCellsLeaf.call(wb, 0, RANGE, 2 ** 64, 1));
       expectRangeError(() => listInvalidLeaf.call(wb, 0, -1, 1));
@@ -173,8 +173,8 @@ export function registerPositional(Module, test, hookProbe) {
       assert.equal(wb.getValue(0, 0, 0).value.number, 42);
 
       assert.equal(wb.getCellsInRange(0, RANGE, 0, 1).status.ok, true);
-      assert.equal(wb.listInvalidCells(0, 0, 1).status.ok, true);
-      assert.equal(typeof wb.insertImage(0, new Uint8Array(), {}).status.ok, 'boolean');
+      assert.equal(wb.getInvalidCells(0, 0, 1).status.ok, true);
+      assert.equal(typeof wb.addImage(0, new Uint8Array(), {}).status.ok, 'boolean');
 
       const nestedRange = {};
       Object.defineProperties(nestedRange, {
@@ -203,7 +203,7 @@ export function registerPositional(Module, test, hookProbe) {
     for (const lifecycle of ['delete', 'deleteLater', Symbol.dispose]) {
       const wb = Module.Workbook.createDefault();
       try {
-        const before = wb.xfCount().value;
+        const before = wb.getCellXfCount().value;
         const spec = {};
         Object.defineProperty(spec, 'horizontalAlign', {
           get() {
@@ -212,11 +212,11 @@ export function registerPositional(Module, test, hookProbe) {
           },
         });
         assert.throws(
-          () => wb.addXf(spec),
+          () => wb.addCellXf(spec),
           /cannot dispose Workbook during an active method call/,
           `${String(lifecycle)} unexpectedly succeeded`,
         );
-        assert.equal(wb.xfCount().value, before);
+        assert.equal(wb.getCellXfCount().value, before);
         assert.equal(wb.isDeleted(), false);
       } finally {
         deleteAfterLifecycleProbe(wb, lifecycle);
@@ -231,7 +231,7 @@ export function registerPositional(Module, test, hookProbe) {
       const descriptor = Object.getOwnPropertyDescriptor(inherited, lifecycle);
       assert.equal(typeof descriptor?.value, 'function', `${String(lifecycle)} descriptor missing`);
       try {
-        const before = wb.xfCount().value;
+        const before = wb.getCellXfCount().value;
         const spec = {};
         Object.defineProperty(spec, 'horizontalAlign', {
           get() {
@@ -240,11 +240,11 @@ export function registerPositional(Module, test, hookProbe) {
           },
         });
         assert.throws(
-          () => wb.addXf(spec),
+          () => wb.addCellXf(spec),
           /cannot dispose Workbook during an active method call/,
           `${String(lifecycle)} inherited call unexpectedly succeeded`,
         );
-        assert.equal(wb.xfCount().value, before);
+        assert.equal(wb.getCellXfCount().value, before);
         assert.equal(wb.isDeleted(), false);
       } finally {
         deleteAfterLifecycleProbe(wb, lifecycle);
@@ -270,7 +270,7 @@ export function registerPositional(Module, test, hookProbe) {
           return 1;
         },
       });
-      const originalDeleteResult = proxy.addXf(originalDeleteSpec);
+      const originalDeleteResult = proxy.addCellXf(originalDeleteSpec);
       assert.ok(originalDeleteResult.status.ok, JSON.stringify(originalDeleteResult.status));
       assert.ok(originalDeleteError instanceof TypeError);
       assert.equal(proxy.isDeleted(), false);
@@ -287,7 +287,7 @@ export function registerPositional(Module, test, hookProbe) {
           return 1;
         },
       });
-      const proxyDeleteResult = proxy.addXf(proxyDeleteSpec);
+      const proxyDeleteResult = proxy.addCellXf(proxyDeleteSpec);
       assert.ok(proxyDeleteResult.status.ok, JSON.stringify(proxyDeleteResult.status));
       assert.ok(proxyDeleteError instanceof TypeError);
       assert.equal(wb.isDeleted(), false);
@@ -311,7 +311,7 @@ export function registerPositional(Module, test, hookProbe) {
           return 1;
         },
       });
-      const result = wb.addXf(spec);
+      const result = wb.addCellXf(spec);
       assert.ok(result.status.ok, JSON.stringify(result.status));
       assert.ok(caught instanceof TypeError);
       assert.equal(wb.isDeleted(), false);

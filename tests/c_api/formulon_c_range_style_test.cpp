@@ -1,4 +1,4 @@
-// Attribute-only formatting of a selection (fm_sheet_range_style_bases /
+// Attribute-only formatting of a selection (fm_sheet_get_range_style_bases /
 // fm_sheet_remap_range_style) and its undo capture. The expectations mirror
 // how Mac Excel 365 propagates a font-size change over a column, row, range
 // and whole-sheet selection when other rows / columns carry styles.
@@ -31,12 +31,12 @@ const std::vector<std::uint32_t> kFrom = {0U, 1U, 2U};
 const std::vector<std::uint32_t> kTo = {5U, 6U, 7U};
 
 void MakeWorkbook(WorkbookGuard& wb) {
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(10U);
 }
 
 std::pair<std::int32_t, std::uint32_t> Effective(const WorkbookGuard& wb, std::uint32_t row, std::uint32_t col) {
-  fm_effective_style style{};
+  fm_effective_style_t style{};
   EXPECT_EQ(fm_sheet_get_effective_style(wb.handle, 0, row, col, &style), 0);
   return {style.source, style.xf_index};
 }
@@ -47,10 +47,10 @@ fm_status_t Remap(WorkbookGuard& wb, std::uint32_t r1, std::uint32_t c1, std::ui
 
 std::vector<fm_column_layout_t> Columns(const WorkbookGuard& wb) {
   size_t count = 0;
-  EXPECT_EQ(fm_sheet_get_column_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(fm_sheet_get_col_override_count(wb.handle, 0, &count), 0);
   std::vector<fm_column_layout_t> out(count);
   for (size_t i = 0; i < count; ++i) {
-    EXPECT_EQ(fm_sheet_get_column(wb.handle, 0, i, &out[i]), 0);
+    EXPECT_EQ(fm_sheet_get_col_override_at(wb.handle, 0, i, &out[i]), 0);
   }
   return out;
 }
@@ -92,8 +92,8 @@ TEST(FormulonCApiRangeStyle, ColumnSelectionCrossesStyledRows) {
   WorkbookGuard wb;
   MakeWorkbook(wb);
   ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 2U, 2U, 1U), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 9U, 1U, 5.0), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 9U, 2U, 7.0), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 9U, 1U, 5.0), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 9U, 2U, 7.0), 0);
 
   ASSERT_EQ(Remap(wb, 0U, 1U, kLastRow, 1U), 0);
 
@@ -110,7 +110,7 @@ TEST(FormulonCApiRangeStyle, ColumnSelectionCrossesStyledRows) {
   EXPECT_EQ(Effective(wb, 50000U, 1U), Eff(kSourceColumn, 5U));
   EXPECT_EQ(CellAt(wb, 50000U, 1U), nullptr);
 
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 60000U, 1U, 1.0), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 60000U, 1U, 1.0), 0);
   EXPECT_EQ(Effective(wb, 60000U, 1U), Eff(kSourceCell, 5U));  // a later entry takes the column style
 }
 
@@ -118,7 +118,7 @@ TEST(FormulonCApiRangeStyle, RowSelectionCrossesStyledColumns) {
   WorkbookGuard wb;
   MakeWorkbook(wb);
   ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 2U, 2U, 2U), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 3U, 2U, 1.0), 0);  // C4, enters with the column style
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 3U, 2U, 1.0), 0);  // C4, enters with the column style
 
   ASSERT_EQ(Remap(wb, 2U, 0U, 4U, kLastCol), 0);
 
@@ -190,7 +190,7 @@ TEST(FormulonCApiRangeStyle, WholeSheetNeedsNoIntersectionCells) {
   MakeWorkbook(wb);
   ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 2U, 2U, 1U), 0);
   ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 2U, 2U, 2U), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 6U, 4U, 3.0), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 6U, 4U, 3.0), 0);
 
   ASSERT_EQ(Remap(wb, 0U, 0U, kLastRow, kLastCol), 0);
 
@@ -211,7 +211,7 @@ TEST(FormulonCApiRangeStyle, WholeSheetNeedsNoIntersectionCells) {
   ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &rows), 0);
   EXPECT_EQ(rows, 1U);
   size_t cells = 0;
-  ASSERT_EQ(fm_workbook_cell_count(wb.handle, 0, &cells), 0);
+  ASSERT_EQ(fm_sheet_get_cell_count(wb.handle, 0, &cells), 0);
   EXPECT_EQ(cells, 1U);
 }
 
@@ -220,13 +220,13 @@ TEST(FormulonCApiRangeStyle, BasesListEveryXfTheSelectionResolvesTo) {
   MakeWorkbook(wb);
   ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 2U, 2U, 1U), 0);
   ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 2U, 2U, 2U), 0);
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 9U, 1U, 4U), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 9U, 1U, 4U), 0);
 
   size_t len = 99;
-  ASSERT_EQ(fm_sheet_range_style_bases(wb.handle, 0, 0U, 1U, kLastRow, 1U, nullptr, 0U, &len), 0);
+  ASSERT_EQ(fm_sheet_get_range_style_bases(wb.handle, 0, 0U, 1U, kLastRow, 1U, nullptr, 0U, &len), 0);
   ASSERT_EQ(len, 3U);
   std::vector<std::uint32_t> xfs(len);
-  ASSERT_EQ(fm_sheet_range_style_bases(wb.handle, 0, 0U, 1U, kLastRow, 1U, xfs.data(), xfs.size(), &len), 0);
+  ASSERT_EQ(fm_sheet_get_range_style_bases(wb.handle, 0, 0U, 1U, kLastRow, 1U, xfs.data(), xfs.size(), &len), 0);
   EXPECT_EQ(xfs, (std::vector<std::uint32_t>{0U, 1U, 4U}));
 }
 
@@ -234,9 +234,9 @@ std::vector<std::uint32_t> Bases(const WorkbookGuard& wb, std::uint32_t first_ro
                                  std::uint32_t last_row, std::uint32_t last_col) {
   std::vector<std::uint32_t> xfs(16U);
   size_t len = 0;
-  EXPECT_EQ(
-      fm_sheet_range_style_bases(wb.handle, 0, first_row, first_col, last_row, last_col, xfs.data(), xfs.size(), &len),
-      0);
+  EXPECT_EQ(fm_sheet_get_range_style_bases(wb.handle, 0, first_row, first_col, last_row, last_col, xfs.data(),
+                                           xfs.size(), &len),
+            0);
   xfs.resize(len);
   return xfs;
 }
@@ -244,7 +244,7 @@ std::vector<std::uint32_t> Bases(const WorkbookGuard& wb, std::uint32_t first_ro
 TEST(FormulonCApiRangeStyle, BasesOmitStylesNoCellResolvesTo) {
   WorkbookGuard wb;
   MakeWorkbook(wb);
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 2U, 2U, 1U), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 2U, 2U, 1U), 0);
   EXPECT_EQ(Bases(wb, 2U, 2U, 2U, 2U), (std::vector<std::uint32_t>{1U}));
   EXPECT_EQ(Bases(wb, 2U, 2U, 2U, 3U), (std::vector<std::uint32_t>{0U, 1U}));
 
@@ -255,8 +255,8 @@ TEST(FormulonCApiRangeStyle, BasesOmitStylesNoCellResolvesTo) {
   EXPECT_EQ(Bases(wb, 5U, 4U, 7U, 4U), (std::vector<std::uint32_t>{2U, 3U}));
 
   // Owning cells covering a whole styled row leave the row style unused.
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 5U, 4U, 4U), 0);
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 6U, 4U, 4U), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 5U, 4U, 4U), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 6U, 4U, 4U), 0);
   EXPECT_EQ(Bases(wb, 5U, 4U, 6U, 4U), (std::vector<std::uint32_t>{4U}));
 }
 
@@ -271,9 +271,10 @@ std::vector<std::uint32_t> BasesExcluding(const WorkbookGuard& wb, std::uint32_t
   }
   std::vector<std::uint32_t> xfs(16U);
   size_t len = 0;
-  EXPECT_EQ(fm_sheet_range_style_bases_excluding(wb.handle, 0, first_row, first_col, last_row, last_col, rows.data(),
-                                                 cols.data(), rows.size(), xfs.data(), xfs.size(), &len),
-            0);
+  EXPECT_EQ(
+      fm_sheet_get_range_style_bases_excluding(wb.handle, 0, first_row, first_col, last_row, last_col, rows.data(),
+                                               cols.data(), rows.size(), xfs.data(), xfs.size(), &len),
+      0);
   xfs.resize(len);
   return xfs;
 }
@@ -282,10 +283,10 @@ TEST(FormulonCApiRangeStyle, ExcludedCellsContributeNoXf) {
   WorkbookGuard wb;
   MakeWorkbook(wb);
   // Whole sheet: A1 carries its own XF, which the host overrides and excludes.
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0U, 0U, 1U), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0U, 0U, 1U), 0);
   EXPECT_EQ(BasesExcluding(wb, 0U, 0U, kLastRow, kLastCol, {{0U, 0U}}), (std::vector<std::uint32_t>{0U}));
   // A far cell's own XF is still reported.
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 99999U, 25U, 2U), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 99999U, 25U, 2U), 0);
   EXPECT_EQ(BasesExcluding(wb, 0U, 0U, kLastRow, kLastCol, {{0U, 0U}}), (std::vector<std::uint32_t>{0U, 2U}));
   // No exclusions is the plain listing.
   EXPECT_EQ(BasesExcluding(wb, 0U, 0U, kLastRow, kLastCol, {}), Bases(wb, 0U, 0U, kLastRow, kLastCol));
@@ -296,7 +297,7 @@ TEST(FormulonCApiRangeStyle, ExcludedCellsHideTheAxisStyleBeneathThem) {
   MakeWorkbook(wb);
   ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 5U, 5U, 3U), 0);
   ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 4U, 4U, 2U), 0);
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 5U, 3U, 4U), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 5U, 3U, 4U), 0);
 
   // Row 5 over C..D: D5 owns its XF, C5 is excluded, so the row style is unused.
   EXPECT_EQ(BasesExcluding(wb, 5U, 2U, 5U, 3U, {{5U, 2U}}), (std::vector<std::uint32_t>{4U}));
@@ -312,10 +313,11 @@ TEST(FormulonCApiRangeStyle, ExcludingRejectsNullArraysAndBadRects) {
   WorkbookGuard wb;
   MakeWorkbook(wb);
   size_t len = 0;
-  EXPECT_EQ(fm_sheet_range_style_bases_excluding(wb.handle, 0, 0U, 0U, 1U, 1U, nullptr, nullptr, 1U, nullptr, 0U, &len),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(
+      fm_sheet_get_range_style_bases_excluding(wb.handle, 0, 0U, 0U, 1U, 1U, nullptr, nullptr, 1U, nullptr, 0U, &len),
+      static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   const std::uint32_t one = 0U;
-  EXPECT_EQ(fm_sheet_range_style_bases_excluding(wb.handle, 9, 0U, 0U, 1U, 1U, &one, &one, 1U, nullptr, 0U, &len),
+  EXPECT_EQ(fm_sheet_get_range_style_bases_excluding(wb.handle, 9, 0U, 0U, 1U, 1U, &one, &one, 1U, nullptr, 0U, &len),
             kInvalidArgument);
 }
 
@@ -324,7 +326,7 @@ TEST(FormulonCApiRangeStyle, SnapshotRestoresPriorInheritance) {
   MakeWorkbook(wb);
   ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 2U, 2U, 1U), 0);
   ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 2U, 2U, 2U), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 9U, 1U, "=1+2"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 9U, 1U, "=1+2"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   for (const auto& rect : std::vector<std::vector<std::uint32_t>>{
@@ -425,7 +427,7 @@ TEST(FormulonCApiRangeStyle, RejectsBadPairsAndOversizedWritesWithoutMutation) {
   EXPECT_EQ(Remap(wb, 0U, 0U, 2048U, 1023U), kPreconditionFailed);
 
   size_t cells = 0;
-  ASSERT_EQ(fm_workbook_cell_count(wb.handle, 0, &cells), 0);
+  ASSERT_EQ(fm_sheet_get_cell_count(wb.handle, 0, &cells), 0);
   EXPECT_EQ(cells, 0U);
   size_t rows = 0;
   ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &rows), 0);
@@ -436,8 +438,8 @@ TEST(FormulonCApiRangeStyle, RejectsBadPairsAndOversizedWritesWithoutMutation) {
 TEST(FormulonCApiRangeStyle, CountsOwnedCellWritesAgainstColumnBudgetAtomically) {
   WorkbookGuard wb;
   MakeWorkbook(wb);
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0U, 0U, 1U), 0);
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 1U, 0U, 1U), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0U, 0U, 1U), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1U, 0U, 1U), 0);
 
   const formulon::StyleRect rect{0U, 0U, kLastRow, 0U};
   const std::vector<formulon::XfRemap> remap{{1U, 2U}};
@@ -466,9 +468,9 @@ TEST(FormulonCApiRangeStyle, CountsAxisRunAndOwnedWritesOnceAtExactBudget) {
   MakeWorkbook(wb);
   ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 0U, 1U, 1U), 0);
   ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 1U, 1U, 1U), 0);
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0U, 0U, 1U), 0);  // owner inside the inherited run
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 1U, 0U, 1U), 0);  // owner outside the run
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 1U, 1U, 3U), 0);  // identity-mapped owner, also outside
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0U, 0U, 1U), 0);  // owner inside the inherited run
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1U, 0U, 1U), 0);  // owner outside the run
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1U, 1U, 3U), 0);  // identity-mapped owner, also outside
 
   const formulon::StyleRect rect{0U, 0U, 1U, kLastCol};
   const std::vector<formulon::XfRemap> remap{{1U, 2U}};
@@ -499,9 +501,9 @@ TEST(FormulonCApiRangeStyle, CountsAxisRunAndOwnedWritesOnceAtExactBudget) {
 TEST(FormulonCApiRangeStyle, CountsSparseWholeSheetOwnersAtExactBudget) {
   WorkbookGuard wb;
   MakeWorkbook(wb);
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0U, 0U, 1U), 0);
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 1U, 0U, 1U), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 2U, 2U, 4.0), 0);  // implicit owner with xf 0
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0U, 0U, 1U), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1U, 0U, 1U), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 2U, 2U, 4.0), 0);  // implicit owner with xf 0
 
   const formulon::StyleRect rect{0U, 0U, kLastRow, kLastCol};
   const std::vector<formulon::XfRemap> remap{{1U, 2U}};
@@ -532,7 +534,7 @@ TEST(FormulonCApiRangeStyle, CountsSparseWholeSheetOwnersAtExactBudget) {
 TEST(FormulonCApiRangeStyle, RestoreRejectsMalformedCaptures) {
   WorkbookGuard wb;
   MakeWorkbook(wb);
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0U, 0U, 9U), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0U, 0U, 9U), 0);
   BufferGuard capture;
   ASSERT_EQ(fm_sheet_snapshot_range_style(wb.handle, 0, 0U, 0U, 1U, 1U, &capture.data, &capture.len), 0);
 
@@ -550,7 +552,7 @@ TEST(FormulonCApiRangeStyle, RestoreRejectsMalformedCaptures) {
   EXPECT_EQ(fm_sheet_restore_range_style(wb.handle, 0, junk, sizeof(junk)), kInvalidArgument);
 
   WorkbookGuard smaller;
-  ASSERT_EQ(fm_workbook_create(&smaller.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&smaller.handle), 0);
   EXPECT_EQ(fm_sheet_restore_range_style(smaller.handle, 0, capture.data, capture.len), kInvalidArgument);
   EXPECT_EQ(smaller.handle->workbook().sheet(0).cell_at(0U, 0U), nullptr);
 }

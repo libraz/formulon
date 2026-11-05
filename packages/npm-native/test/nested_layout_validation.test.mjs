@@ -80,7 +80,7 @@ test('sheet protection stops at a throwing nested getter before native mutation'
 test('sheet format defaults stops at a throwing nested getter before native mutation', () => {
   const wb = addon.Workbook.createDefault();
   try {
-    const before = wb.getSheetFormatDefaults(0);
+    const before = wb.getFormatDefaults(0);
     const spec = { defaultColWidth: 12.5 };
     Object.defineProperty(spec, 'defaultRowHeight', {
       enumerable: true,
@@ -88,8 +88,8 @@ test('sheet format defaults stops at a throwing nested getter before native muta
         throw new Error('format getter');
       },
     });
-    assert.throws(() => wb.setSheetFormatDefaults(0, spec), /format getter/);
-    assert.deepEqual(wb.getSheetFormatDefaults(0), before);
+    assert.throws(() => wb.setFormatDefaults(0, spec), /format getter/);
+    assert.deepEqual(wb.getFormatDefaults(0), before);
   } finally {
     wb.dispose();
   }
@@ -118,7 +118,7 @@ test('partial recalc rejects fractional nested viewport coordinates before recal
   try {
     assert.ok(wb.setNumber(0, 0, 0, 1).ok);
     assert.ok(wb.setFormula(0, 0, 1, '=A1+1').ok);
-    assert.throws(() => wb.partialRecalc({ ...RANGE, sheet: 0, firstRow: 1.5 }), RangeError);
+    assert.throws(() => wb.recalcViewport({ ...RANGE, sheet: 0, firstRow: 1.5 }), RangeError);
     const viewport = { sheet: 0, firstRow: 0, lastRow: 0, firstCol: 0, lastCol: 0 };
     Object.defineProperty(viewport, 'lastCol', {
       enumerable: true,
@@ -126,7 +126,7 @@ test('partial recalc rejects fractional nested viewport coordinates before recal
         throw new Error('viewport getter');
       },
     });
-    assert.throws(() => wb.partialRecalc(viewport), /viewport getter/);
+    assert.throws(() => wb.recalcViewport(viewport), /viewport getter/);
     const value = wb.getValue(0, 0, 1);
     assert.equal(value.status.ok, true, JSON.stringify(value.status));
     assert.equal(value.value.kind, 0);

@@ -168,8 +168,8 @@ TEST(FormulonCli, DumpMetadataDistinguishesDefinedNameScope) {
   PathGuard g_in(in);
 
   fm_workbook_t* wb = nullptr;
-  ASSERT_EQ(fm_workbook_create(&wb), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb, 0, 0, 0, 1.0), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb, 0, 0, 0, 1.0), 0);
   ASSERT_EQ(fm_workbook_set_defined_name(wb, "WorkbookConst", "=1"), 0);
   ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb, "SheetLocal", "=Sheet1!$A$1", 0), 0);
   ASSERT_EQ(fm_workbook_recalc(wb), 0);
@@ -180,7 +180,7 @@ TEST(FormulonCli, DumpMetadataDistinguishesDefinedNameScope) {
   ASSERT_TRUE(out);
   out.write(reinterpret_cast<const char*>(bytes), static_cast<std::streamsize>(len));
   out.close();
-  fm_buffer_free(bytes);
+  fm_buffer_destroy(bytes);
   fm_workbook_destroy(wb);
 
   CliRun r = run_cli({"dump", "--metadata", in});

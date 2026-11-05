@@ -23,7 +23,7 @@ struct WorkbookGuard {
 struct BufferGuard {
   uint8_t* data = nullptr;
   size_t len = 0;
-  ~BufferGuard() { fm_buffer_free(data); }
+  ~BufferGuard() { fm_buffer_destroy(data); }
   BufferGuard() = default;
   BufferGuard(const BufferGuard&) = delete;
   BufferGuard& operator=(const BufferGuard&) = delete;
@@ -33,13 +33,13 @@ constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::Form
 constexpr fm_status_t kNotFound = static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound);
 
 void Create(WorkbookGuard* wb) {
-  ASSERT_EQ(fm_workbook_create(&wb->handle), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_create_default(&wb->handle), 0) << fm_get_last_error_message();
 }
 
 void RoundTrip(const WorkbookGuard& wb, WorkbookGuard* out) {
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_last_error_message();
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &out->handle), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &out->handle), 0) << fm_get_last_error_message();
 }
 
 fm_protected_range_t Range(const char* name, const char* sqref) {
@@ -51,7 +51,7 @@ fm_protected_range_t Range(const char* name, const char* sqref) {
 
 uint32_t RangeCount(const WorkbookGuard& wb) {
   uint32_t count = 0;
-  EXPECT_EQ(fm_sheet_protected_range_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(fm_sheet_get_protected_range_count(wb.handle, 0, &count), 0);
   return count;
 }
 
@@ -62,7 +62,7 @@ TEST(FormulonCApiWorkbookProtection, AbsentByDefault) {
   Create(&wb);
   fm_workbook_protection_t p{};
   p.lock_structure = 7;
-  ASSERT_EQ(fm_workbook_get_protection(wb.handle, &p), 0);
+  ASSERT_EQ(fm_workbook_get_workbook_protection(wb.handle, &p), 0);
   EXPECT_EQ(p.lock_structure, 0);
   EXPECT_EQ(p.workbook_spin_count, 0U);
   EXPECT_STREQ(p.workbook_hash_value, "");
@@ -85,12 +85,12 @@ TEST(FormulonCApiWorkbookProtection, EveryFieldRoundTripsThroughSaveAndLoad) {
   in.revisions_algorithm_name = "SHA-256";
   in.revisions_hash_value = "cmV2";
   in.revisions_salt_value = "c2Fs";
-  ASSERT_EQ(fm_workbook_set_protection(wb.handle, &in), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_set_workbook_protection(wb.handle, &in), 0) << fm_get_last_error_message();
 
   WorkbookGuard loaded;
   RoundTrip(wb, &loaded);
   fm_workbook_protection_t out{};
-  ASSERT_EQ(fm_workbook_get_protection(loaded.handle, &out), 0);
+  ASSERT_EQ(fm_workbook_get_workbook_protection(loaded.handle, &out), 0);
   EXPECT_EQ(out.lock_structure, 1);
   EXPECT_EQ(out.lock_windows, 1);
   EXPECT_EQ(out.lock_revision, 1);
@@ -111,13 +111,13 @@ TEST(FormulonCApiWorkbookProtection, AnAllEmptyRecordRemovesTheElement) {
   Create(&wb);
   fm_workbook_protection_t in{};
   in.lock_structure = 1;
-  ASSERT_EQ(fm_workbook_set_protection(wb.handle, &in), 0);
+  ASSERT_EQ(fm_workbook_set_workbook_protection(wb.handle, &in), 0);
   fm_workbook_protection_t cleared{};
-  ASSERT_EQ(fm_workbook_set_protection(wb.handle, &cleared), 0);
+  ASSERT_EQ(fm_workbook_set_workbook_protection(wb.handle, &cleared), 0);
   WorkbookGuard loaded;
   RoundTrip(wb, &loaded);
   fm_workbook_protection_t out{};
-  ASSERT_EQ(fm_workbook_get_protection(loaded.handle, &out), 0);
+  ASSERT_EQ(fm_workbook_get_workbook_protection(loaded.handle, &out), 0);
   EXPECT_EQ(out.lock_structure, 0);
 }
 
@@ -125,10 +125,10 @@ TEST(FormulonCApiWorkbookProtection, NullArgumentsAreRejected) {
   WorkbookGuard wb;
   Create(&wb);
   fm_workbook_protection_t p{};
-  EXPECT_NE(fm_workbook_get_protection(nullptr, &p), 0);
-  EXPECT_NE(fm_workbook_get_protection(wb.handle, nullptr), 0);
-  EXPECT_NE(fm_workbook_set_protection(nullptr, &p), 0);
-  EXPECT_NE(fm_workbook_set_protection(wb.handle, nullptr), 0);
+  EXPECT_NE(fm_workbook_get_workbook_protection(nullptr, &p), 0);
+  EXPECT_NE(fm_workbook_get_workbook_protection(wb.handle, nullptr), 0);
+  EXPECT_NE(fm_workbook_set_workbook_protection(nullptr, &p), 0);
+  EXPECT_NE(fm_workbook_set_workbook_protection(wb.handle, nullptr), 0);
 }
 
 TEST(FormulonCApiProtectedRanges, AddListUpdateRemove) {
@@ -142,8 +142,8 @@ TEST(FormulonCApiProtectedRanges, AddListUpdateRemove) {
   totals.salt_value = "cw==";
   totals.spin_count = 100000;
   totals.security_descriptor = "O:WDG:WD";
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &inputs), 0) << fm_last_error_message();
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &totals), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &inputs), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &totals), 0) << fm_get_last_error_message();
   EXPECT_EQ(RangeCount(wb), 2U);
 
   WorkbookGuard loaded;
@@ -162,7 +162,7 @@ TEST(FormulonCApiProtectedRanges, AddListUpdateRemove) {
   EXPECT_STREQ(out.security_descriptor, "O:WDG:WD");
 
   fm_protected_range_t renamed = Range("Renamed", "D4");
-  ASSERT_EQ(fm_sheet_update_protected_range(loaded.handle, 0, 0, &renamed), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_update_protected_range(loaded.handle, 0, 0, &renamed), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_protected_range(loaded.handle, 0, 0, &out), 0);
   EXPECT_STREQ(out.name, "Renamed");
   EXPECT_STREQ(out.sqref, "D4");
@@ -181,13 +181,13 @@ TEST(FormulonCApiProtectedRanges, SqrefFollowsRowAndColumnEdits) {
   Create(&wb);
   const fm_protected_range_t r = Range("Inputs", "B2:C3 E5");
   ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &r), 0);
-  ASSERT_EQ(fm_workbook_insert_rows(wb.handle, 0, 0, 2), 0);
-  ASSERT_EQ(fm_workbook_insert_cols(wb.handle, 0, 0, 1), 0);
+  ASSERT_EQ(fm_sheet_insert_rows(wb.handle, 0, 0, 2), 0);
+  ASSERT_EQ(fm_sheet_insert_cols(wb.handle, 0, 0, 1), 0);
   fm_protected_range_t out{};
   ASSERT_EQ(fm_sheet_get_protected_range(wb.handle, 0, 0, &out), 0);
   EXPECT_STREQ(out.sqref, "C4:D5 F7");
   // Deleting every row the range covers removes it.
-  ASSERT_EQ(fm_workbook_delete_rows(wb.handle, 0, 3, 4), 0);
+  ASSERT_EQ(fm_sheet_delete_rows(wb.handle, 0, 3, 4), 0);
   EXPECT_EQ(RangeCount(wb), 0U);
 }
 
@@ -213,7 +213,7 @@ TEST(FormulonCApiProtectedRanges, ArgumentsAreValidated) {
   fm_protected_range_t out{};
   EXPECT_EQ(fm_sheet_get_protected_range(wb.handle, 0, 5, &out), kInvalidArgument);
   uint32_t count = 0;
-  EXPECT_EQ(fm_sheet_protected_range_count(wb.handle, 9, &count), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_protected_range_count(wb.handle, 9, &count), kInvalidArgument);
   EXPECT_EQ(RangeCount(wb), 1U);
 }
 

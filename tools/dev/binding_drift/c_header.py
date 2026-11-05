@@ -73,7 +73,7 @@ class _Wasm32Layouts:
     """Measures the C ABI's structs against the wasm32 ABI, from the header.
 
     Struct members are resolved recursively, so an embedded POD is measured
-    rather than quoted: changing a field of `fm_color_spec` moves every struct
+    rather than quoted: changing a field of `fm_color_spec_t` moves every struct
     that embeds it, and the Python side is checked against the new offsets.
     """
 

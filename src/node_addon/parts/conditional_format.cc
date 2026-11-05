@@ -61,18 +61,18 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
   const double today_serial = ArgDouble(info, 5);
   fm_cf_results_t* results = nullptr;
   fm_status_t rc =
-      fm_workbook_cf_evaluate_range(handle_, sheet, first_row, first_col, last_row, last_col, today_serial, &results);
+      fm_sheet_evaluate_cf_range(handle_, sheet, first_row, first_col, last_row, last_col, today_serial, &results);
   if (rc != 0) {
     return MakeFieldResult(env, MakeErrorStatus(env, rc), "cells", Napi::Array::New(env));
   }
-  const std::size_t cell_count = fm_cf_results_cell_count(results);
+  const std::size_t cell_count = fm_cf_results_get_cell_count(results);
   Napi::Array cells = Napi::Array::New(env, cell_count);
   std::size_t emitted = 0;
   for (std::size_t i = 0; i < cell_count; ++i) {
     uint32_t row = 0;
     uint32_t col = 0;
     std::size_t match_count = 0;
-    if (fm_cf_results_cell_at(results, i, &row, &col, &match_count) != 0) {
+    if (fm_cf_results_get_cell_at(results, i, &row, &col, &match_count) != 0) {
       // Defensive: skip entries the C ABI declines to materialise.
       continue;
     }
@@ -80,7 +80,7 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
     std::size_t mj = 0;
     for (std::size_t j = 0; j < match_count; ++j) {
       fm_cf_match_t m{};
-      if (fm_cf_results_match_at(results, i, j, &m) != 0) {
+      if (fm_cf_results_get_match_at(results, i, j, &m) != 0) {
         continue;
       }
       matches.Set(static_cast<uint32_t>(mj), TranslateCfMatch(env, m));
@@ -107,14 +107,14 @@ Napi::Value Workbook::GetConditionalFormats(const Napi::CallbackInfo& info) {
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   std::size_t count = 0;
-  fm_status_t rc = fm_sheet_cf_count(handle_, sheet, &count);
+  fm_status_t rc = fm_sheet_get_cf_rule_count(handle_, sheet, &count);
   if (rc != 0) {
     return FinishListResult(env, arr, rc);
   }
   std::size_t emitted = 0;
   for (std::size_t i = 0; i < count; ++i) {
     fm_cf_rule_t rule{};
-    rc = fm_sheet_cf_get_at(handle_, sheet, i, &rule);
+    rc = fm_sheet_get_cf_rule(handle_, sheet, i, &rule);
     if (rc != 0) {
       return FinishListResult(env, arr, rc);
     }
@@ -253,7 +253,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
 
   // Pull every JS field into local storage first; the C ABI receives
   // borrowed `const char*` views that must stay valid until
-  // `fm_sheet_cf_add_rule` returns. Threshold value strings go into an
+  // `fm_sheet_add_cf_rule` returns. Threshold value strings go into an
   // arena rather than a vector: the colorScale, dataBar and iconSet
   // branches below all feed the same store, and a vector would relocate
   // the earlier strings as the later branches add theirs.
@@ -503,12 +503,12 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   std::size_t new_index = 0;
-  fm_status_t rc = fm_sheet_cf_add_rule(handle_, sheet, rule, &new_index);
+  fm_status_t rc = fm_sheet_add_cf_rule(handle_, sheet, rule, &new_index);
   return MakeNumberFieldResult(env, rc, "index", static_cast<double>(new_index));
 }
 
 Napi::Value Workbook::RemoveConditionalFormatAt(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_cf_remove_at);
+  return InvokeSheetCall(info, &fm_sheet_remove_cf_rule);
 }
 
 Napi::Value Workbook::ClearConditionalFormats(const Napi::CallbackInfo& info) {
@@ -517,7 +517,7 @@ Napi::Value Workbook::ClearConditionalFormats(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  fm_status_t rc = fm_sheet_cf_clear(handle_, sheet);
+  fm_status_t rc = fm_sheet_clear_cf_rules(handle_, sheet);
   return MakeStatus(env, rc);
 }
 }  // namespace formulon_node

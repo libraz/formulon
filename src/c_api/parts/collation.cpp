@@ -41,9 +41,9 @@ fm_status_t check_strength(fm_collation_strength_t strength, const char* api, fo
 
 }  // namespace
 
-extern "C" fm_status_t fm_text_compare(const char* a, const char* b, const char* profile_id,
+extern "C" fm_status_t fm_compare_text(const char* a, const char* b, const char* profile_id,
                                        fm_collation_strength_t strength, int32_t* out_order) {
-  static constexpr const char* kApi = "fm_text_compare";
+  static constexpr const char* kApi = "fm_compare_text";
   clear_last_error();
   if (a == nullptr || b == nullptr || profile_id == nullptr || out_order == nullptr) {
     return null_argument(kApi);
@@ -64,10 +64,10 @@ extern "C" fm_status_t fm_text_compare(const char* a, const char* b, const char*
   return 0;
 }
 
-extern "C" fm_status_t fm_collation_classes(const fm_value_t* values, size_t count, const char* profile_id,
-                                            fm_collation_strength_t strength, uint32_t* out_class_ids,
-                                            uint32_t* out_class_count) {
-  static constexpr const char* kApi = "fm_collation_classes";
+extern "C" fm_status_t fm_get_collation_classes(const fm_value_t* values, size_t count, const char* profile_id,
+                                                fm_collation_strength_t strength, uint32_t* out_class_ids,
+                                                uint32_t* out_class_count) {
+  static constexpr const char* kApi = "fm_get_collation_classes";
   clear_last_error();
   if (profile_id == nullptr || out_class_count == nullptr ||
       (count > 0 && (values == nullptr || out_class_ids == nullptr))) {
@@ -82,7 +82,8 @@ extern "C" fm_status_t fm_collation_classes(const fm_value_t* values, size_t cou
     return rc;
   }
   if (count > std::numeric_limits<std::uint32_t>::max()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_collation_classes: count too large");
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_get_collation_classes: count too large");
   }
   std::vector<formulon::Value> converted;
   converted.reserve(count);

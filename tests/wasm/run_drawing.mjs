@@ -61,12 +61,12 @@ export function registerDrawing(Module, test) {
 
   test('probeImage reports the format and pixel size, and rejects non-images', () => {
     withWorkbook(Module, (wb) => {
-      const info = wb.probeImage(makePng(3, 2));
+      const info = wb.getImageInfo(makePng(3, 2));
       assert.ok(info.status.ok, JSON.stringify(info.status));
       assert.equal(info.format, ImageFormat.Png);
       assert.equal(info.pxWidth, 3);
       assert.equal(info.pxHeight, 2);
-      const bad = wb.probeImage(new Uint8Array([1, 2, 3, 4]));
+      const bad = wb.getImageInfo(new Uint8Array([1, 2, 3, 4]));
       assert.equal(bad.status.ok, false);
       assert.equal(bad.pxWidth, 0);
     });
@@ -78,7 +78,7 @@ export function registerDrawing(Module, test) {
       assert.equal(wb.listDrawingObjects(0).length, 0);
       assert.ok(wb.listDrawingObjects(0).status.ok);
 
-      const ins = wb.insertImage(0, png, { name: 'Logo', descr: 'alt text', row: 2, col: 1, colOffEmu: 100 });
+      const ins = wb.addImage(0, png, { name: 'Logo', descr: 'alt text', row: 2, col: 1, colOffEmu: 100 });
       assert.ok(ins.status.ok, JSON.stringify(ins.status));
       assert.ok(ins.objectId > 0);
 
@@ -111,7 +111,7 @@ export function registerDrawing(Module, test) {
 
       const saved = wb.save();
       assert.ok(saved.status.ok, JSON.stringify(saved.status));
-      const loaded = Module.Workbook.loadBytes(saved.bytes);
+      const loaded = Module.Workbook.load(saved.bytes);
       try {
         check(loaded);
         const rm = loaded.removeDrawing(0, ins.objectId);
@@ -127,7 +127,7 @@ export function registerDrawing(Module, test) {
 
   test('insertImage honours a two-cell anchor, an explicit size and the editAs mode', () => {
     withWorkbook(Module, (wb) => {
-      const ins = wb.insertImage(0, makePng(2, 2), {
+      const ins = wb.addImage(0, makePng(2, 2), {
         anchorKind: AnchorKind.TwoCell,
         editAs: AnchorEditAs.OneCell,
         widthEmu: 2 * EMU_PER_PX * 10,
@@ -146,10 +146,10 @@ export function registerDrawing(Module, test) {
 
   test('image calls report failures on the envelope without throwing', () => {
     withWorkbook(Module, (wb) => {
-      assert.equal(wb.insertImage(0, new Uint8Array([1, 2, 3, 4])).status.ok, false);
-      assert.equal(wb.insertImage(0, new Uint8Array([1, 2, 3, 4])).objectId, 0);
-      assert.equal(wb.insertImage(99, makePng(1, 1)).status.ok, false);
-      assert.equal(wb.insertImage(0, makePng(1, 1), { anchorKind: AnchorKind.Absolute }).status.ok, false);
+      assert.equal(wb.addImage(0, new Uint8Array([1, 2, 3, 4])).status.ok, false);
+      assert.equal(wb.addImage(0, new Uint8Array([1, 2, 3, 4])).objectId, 0);
+      assert.equal(wb.addImage(99, makePng(1, 1)).status.ok, false);
+      assert.equal(wb.addImage(0, makePng(1, 1), { anchorKind: AnchorKind.Absolute }).status.ok, false);
       assert.equal(wb.listDrawingObjects(99).status.ok, false);
       const img = wb.getImage(0, 12345);
       assert.equal(img.status.ok, false);
@@ -159,7 +159,7 @@ export function registerDrawing(Module, test) {
 
   test('setDrawingAnchor moves and resizes a picture and keeps its id', () => {
     withWorkbook(Module, (wb) => {
-      const ins = wb.insertImage(0, makePng(4, 3), { name: 'Logo', row: 1, col: 1 });
+      const ins = wb.addImage(0, makePng(4, 3), { name: 'Logo', row: 1, col: 1 });
       assert.ok(ins.status.ok, JSON.stringify(ins.status));
       const moved = wb.setDrawingAnchor(0, ins.objectId, {
         anchorKind: AnchorKind.TwoCell,
@@ -190,9 +190,9 @@ export function registerDrawing(Module, test) {
 
   test('setDrawingZOrder reorders pictures in listDrawingObjects order', () => {
     withWorkbook(Module, (wb) => {
-      const a = wb.insertImage(0, makePng(2, 2), { row: 0 });
-      const b = wb.insertImage(0, makePng(2, 2), { row: 3 });
-      const c = wb.insertImage(0, makePng(2, 2), { row: 6 });
+      const a = wb.addImage(0, makePng(2, 2), { row: 0 });
+      const b = wb.addImage(0, makePng(2, 2), { row: 3 });
+      const c = wb.addImage(0, makePng(2, 2), { row: 6 });
       const ids = () => Array.from(wb.listDrawingObjects(0), (o) => o.objectId);
       assert.deepEqual(ids(), [a.objectId, b.objectId, c.objectId]);
       assert.ok(wb.setDrawingZOrder(0, c.objectId, 0).ok);
@@ -206,8 +206,8 @@ export function registerDrawing(Module, test) {
   test('snapshotDrawing and restoreDrawing bring back a removed, moved or copied picture', () => {
     withWorkbook(Module, (wb) => {
       const png = makePng(4, 3);
-      const a = wb.insertImage(0, png, { name: 'A', row: 1 });
-      const b = wb.insertImage(0, makePng(2, 2), { name: 'B', row: 4 });
+      const a = wb.addImage(0, png, { name: 'A', row: 1 });
+      const b = wb.addImage(0, makePng(2, 2), { name: 'B', row: 4 });
       const snap = wb.snapshotDrawing(0, a.objectId);
       assert.ok(snap.status.ok, JSON.stringify(snap.status));
       assert.ok(snap.bytes instanceof Uint8Array);

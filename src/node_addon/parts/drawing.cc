@@ -61,11 +61,11 @@ Napi::Value Workbook::ProbeImage(const Napi::CallbackInfo& info) {
     return out;
   }
   if (!ReadImageBytes(info, 0, data, len)) {
-    out.Set("status", MakeBindingArgumentError(env, "probeImage expects (bytes:Uint8Array)"));
+    out.Set("status", MakeBindingArgumentError(env, "getImageInfo expects (bytes:Uint8Array)"));
     return out;
   }
-  fm_image_info img{};
-  const fm_status_t rc = fm_workbook_probe_image(handle_, data, len, &img);
+  fm_image_info_t img{};
+  const fm_status_t rc = fm_workbook_get_image_info(handle_, data, len, &img);
   if (rc == 0) {
     out.Set("format", JsNumber(env, img.format));
     out.Set("pxWidth", JsNumber(env, img.px_width));
@@ -83,10 +83,10 @@ Napi::Value Workbook::ListDrawingObjects(const Napi::CallbackInfo& info) {
   }
   const uint32_t sheet = ArgU32(info, 0);
   size_t count = 0;
-  fm_status_t rc = fm_sheet_drawing_object_count(handle_, sheet, &count);
+  fm_status_t rc = fm_sheet_get_drawing_object_count(handle_, sheet, &count);
   for (size_t i = 0; rc == 0 && i < count; ++i) {
-    fm_drawing_object o{};
-    rc = fm_sheet_drawing_object_at(handle_, sheet, i, &o);
+    fm_drawing_object_t o{};
+    rc = fm_sheet_get_drawing_object_at(handle_, sheet, i, &o);
     if (rc != 0) {
       break;
     }
@@ -127,7 +127,7 @@ Napi::Value Workbook::GetImage(const Napi::CallbackInfo& info) {
   }
   const uint8_t* bytes = nullptr;
   size_t len = 0;
-  fm_image_info img{};
+  fm_image_info_t img{};
   const fm_status_t rc = fm_sheet_get_image(handle_, ArgU32(info, 0), ArgU32(info, 1), &bytes, &len, &img);
   if (rc == 0) {
     // The C pointer dies on the next mutation, so the bytes are copied out.
@@ -151,7 +151,7 @@ Napi::Value Workbook::InsertImage(const Napi::CallbackInfo& info) {
     return out;
   }
   BytesWithOpts args;
-  if (!ReadBytesWithOpts(info, "insertImage expects (sheet:number, bytes:Uint8Array, opts?:object)", out, args)) {
+  if (!ReadBytesWithOpts(info, "addImage expects (sheet:number, bytes:Uint8Array, opts?:object)", out, args)) {
     return out;
   }
   CheckedSpecReader reader(env);
@@ -159,7 +159,7 @@ Napi::Value Workbook::InsertImage(const Napi::CallbackInfo& info) {
   std::string descr;
   reader.String(args.spec, "name", &name);
   reader.String(args.spec, "descr", &descr);
-  fm_image_insert opts{};
+  fm_image_insert_t opts{};
   opts.name = name.c_str();
   opts.descr = descr.c_str();
   PullPlacement(reader, args.spec, opts, FM_ANCHOR_KIND_ONE_CELL);
@@ -167,7 +167,7 @@ Napi::Value Workbook::InsertImage(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   uint32_t object_id = 0;
-  const fm_status_t rc = fm_sheet_insert_image(handle_, ArgU32(info, 0), args.data, args.len, &opts, &object_id);
+  const fm_status_t rc = fm_sheet_add_image(handle_, ArgU32(info, 0), args.data, args.len, &opts, &object_id);
   out.Set("objectId", JsNumber(env, rc == 0 ? object_id : 0));
   out.Set("status", MakeStatus(env, rc));
   return out;
@@ -184,7 +184,7 @@ Napi::Value Workbook::SetDrawingAnchor(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   const Napi::Object spec = ArgObject(info, 2);
-  fm_drawing_anchor anchor{};
+  fm_drawing_anchor_t anchor{};
   PullPlacement(reader, spec, anchor, FM_ANCHOR_KIND_ONE_CELL);
   if (!reader.ok()) {
     return env.Undefined();

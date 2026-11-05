@@ -129,7 +129,7 @@ entries:
     first_noted: 2026-09-30
     last_verified_excel_version: "16.113.4"
   # -- ad-hoc evaluate-formula scalar reduction (intentional API shape) ----
-  # `fm_workbook_evaluate_formula` (and the WASM / Node
+  # `fm_sheet_evaluate_formula` (and the WASM / Node
   # `evaluateFormulaText`) return a single scalar. When the evaluated
   # formula produces an array/spill (e.g. `=SEQUENCE(3)`), the API reduces
   # it to the top-left element. In a real Excel cell the same formula would
@@ -145,7 +145,7 @@ entries:
     mode: skip-oracle
     scope: api-contract
     evidence: [tests/c_api/formulon_c_evaluate_formula_test.cpp]
-    reason: "fm_workbook_evaluate_formula / evaluateFormulaText reduce an array result to its top-left element (Phase 1 scalar API shape); a real cell would spill. Intentional API-shape divergence, not implicit intersection or an Excel bug."
+    reason: "fm_sheet_evaluate_formula / evaluateFormulaText reduce an array result to its top-left element (Phase 1 scalar API shape); a real cell would spill. Intentional API-shape divergence, not implicit intersection or an Excel bug."
     prefer: formulon
     first_noted: 2026-07-03
     last_verified_excel_version: "16.111.2"
@@ -717,7 +717,7 @@ entries:
     mode: skip-oracle
     scope: api-contract
     evidence: [src/c_api/formulon_c.h]
-    reason: "An ad-hoc evaluation (fm_workbook_evaluate_formula and its siblings) is never inserted into the dependency graph, so a formula that refers to its own anchor cell reads that cell's cached value: =A1+1 anchored at an empty A1 gives 1. Excel with automatic calculation leaves such a cell at 0 (manual calculation gives 1). Whole-axis and bounded self-rectangles are answered by the walker's cycle rule and give 0 on this path too."
+    reason: "An ad-hoc evaluation (fm_sheet_evaluate_formula and its siblings) is never inserted into the dependency graph, so a formula that refers to its own anchor cell reads that cell's cached value: =A1+1 anchored at an empty A1 gives 1. Excel with automatic calculation leaves such a cell at 0 (manual calculation gives 1). Whole-axis and bounded self-rectangles are answered by the walker's cycle rule and give 0 on this path too."
     prefer: formulon
     first_noted: 2026-10-18
     last_verified_excel_version: "16.113.4"

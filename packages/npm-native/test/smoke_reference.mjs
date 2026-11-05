@@ -11,7 +11,7 @@ test('spillInfo reports a spill blocked by a value', async () => {
     assert.ok(wb.setFormula(0, 1, 3, '=SEQUENCE(5)').ok);
     assert.ok(wb.setText(0, 3, 3, 'x').ok);
     assert.ok(wb.recalc().ok);
-    const blocked = wb.spillInfo(0, 1, 3);
+    const blocked = wb.getSpillInfo(0, 1, 3);
     assert.equal(blocked.engaged, false);
     assert.equal(blocked.blocked, true);
     assert.equal(blocked.anchorRow, 1);
@@ -19,13 +19,13 @@ test('spillInfo reports a spill blocked by a value', async () => {
     assert.equal(blocked.rows, 5);
     assert.equal(blocked.cols, 1);
     // Only the anchor reports the attempt.
-    assert.equal(wb.spillInfo(0, 2, 3).blocked, false);
+    assert.equal(wb.getSpillInfo(0, 2, 3).blocked, false);
     assert.ok(wb.setBlank(0, 3, 3).ok);
     assert.ok(wb.recalc().ok);
-    const engaged = wb.spillInfo(0, 1, 3);
+    const engaged = wb.getSpillInfo(0, 1, 3);
     assert.equal(engaged.engaged, true);
     assert.equal(engaged.blocked, false);
-    assert.equal(wb.spillInfo(0, 0, 0).blocked, false);
+    assert.equal(wb.getSpillInfo(0, 0, 0).blocked, false);
   } finally {
     dispose(wb);
   }

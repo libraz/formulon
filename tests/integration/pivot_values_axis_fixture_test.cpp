@@ -71,9 +71,9 @@ std::string ElementBody(const std::string& xml, const std::string& tag) {
 std::vector<std::uint32_t> ReadOrder(const fm_workbook_t* wb, bool row) {
   const std::uint32_t* indices = nullptr;
   std::size_t count = 0;
-  const fm_status_t status = row ? fm_workbook_pivot_get_row_field_order(wb, 0U, 0U, &indices, &count)
-                                 : fm_workbook_pivot_get_col_field_order(wb, 0U, 0U, &indices, &count);
-  EXPECT_EQ(status, 0) << fm_last_error_message();
+  const fm_status_t status = row ? fm_sheet_get_pivot_row_field_order(wb, 0U, 0U, &indices, &count)
+                                 : fm_sheet_get_pivot_col_field_order(wb, 0U, 0U, &indices, &count);
+  EXPECT_EQ(status, 0) << fm_get_last_error_message();
   if (status != 0 || count == 0U) {
     return {};
   }
@@ -83,9 +83,9 @@ std::vector<std::uint32_t> ReadOrder(const fm_workbook_t* wb, bool row) {
 std::string SavedPivotXml(fm_workbook_t* wb) {
   std::uint8_t* data = nullptr;
   std::size_t len = 0;
-  EXPECT_EQ(fm_workbook_save(wb, &data, &len), 0) << fm_last_error_message();
+  EXPECT_EQ(fm_workbook_save(wb, &data, &len), 0) << fm_get_last_error_message();
   const std::string xml = ExtractEntry(data, len, "xl/pivotTables/pivotTable1.xml");
-  fm_buffer_free(data);
+  fm_buffer_destroy(data);
   return xml;
 }
 
@@ -100,7 +100,7 @@ class PivotValuesAxisFixture : public ::testing::TestWithParam<Case> {
     const std::string path = std::string(FORMULON_FIXTURES_DIR) + "/excel/pivot_options/" + GetParam().file;
     const std::vector<std::uint8_t> bytes = ReadFileBytes(path);
     ASSERT_FALSE(bytes.empty()) << "could not read " << path;
-    ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb_.handle), 0) << fm_last_error_message();
+    ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb_.handle), 0) << fm_get_last_error_message();
   }
 
   WorkbookHandle wb_;
@@ -126,16 +126,16 @@ TEST_P(PivotValuesAxisFixture, MovingTheValuesFieldToTheColumnsGivesTheDefaultLa
   uint32_t rows_before = 0;
   uint32_t cols_before = 0;
   fm_pivot_cells_t* layout = nullptr;
-  ASSERT_EQ(fm_workbook_pivot_layout(wb_.handle, 0U, 0U, &layout), 0) << fm_last_error_message();
-  ASSERT_EQ(fm_pivot_cells_bounds(layout, &top, &left, &rows_before, &cols_before), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_layout(wb_.handle, 0U, 0U, &layout), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_pivot_cells_get_bounds(layout, &top, &left, &rows_before, &cols_before), 0);
   fm_pivot_cells_destroy(layout);
 
   std::vector<std::uint32_t> columns = {FM_PIVOT_VALUES_FIELD};
-  ASSERT_EQ(fm_workbook_pivot_set_col_field_order(wb_.handle, 0U, 0U, columns.data(), columns.size()), 0)
-      << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_set_pivot_col_field_order(wb_.handle, 0U, 0U, columns.data(), columns.size()), 0)
+      << fm_get_last_error_message();
   std::vector<std::uint32_t> rows(GetParam().rows.begin(), GetParam().rows.end() - 1);
-  ASSERT_EQ(fm_workbook_pivot_set_row_field_order(wb_.handle, 0U, 0U, rows.data(), rows.size()), 0)
-      << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb_.handle, 0U, 0U, rows.data(), rows.size()), 0)
+      << fm_get_last_error_message();
 
   EXPECT_EQ(ReadOrder(wb_.handle, true), rows);
   EXPECT_EQ(ReadOrder(wb_.handle, false), columns);
@@ -143,8 +143,8 @@ TEST_P(PivotValuesAxisFixture, MovingTheValuesFieldToTheColumnsGivesTheDefaultLa
   // One row per label instead of one per label and data field, one column per data field.
   uint32_t rows_after = 0;
   uint32_t cols_after = 0;
-  ASSERT_EQ(fm_workbook_pivot_layout(wb_.handle, 0U, 0U, &layout), 0) << fm_last_error_message();
-  ASSERT_EQ(fm_pivot_cells_bounds(layout, &top, &left, &rows_after, &cols_after), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_layout(wb_.handle, 0U, 0U, &layout), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_pivot_cells_get_bounds(layout, &top, &left, &rows_after, &cols_after), 0);
   fm_pivot_cells_destroy(layout);
   EXPECT_LT(rows_after, rows_before);
   EXPECT_GT(cols_after, cols_before);
@@ -157,10 +157,10 @@ TEST_P(PivotValuesAxisFixture, MovingTheValuesFieldToTheColumnsGivesTheDefaultLa
 
 TEST_P(PivotValuesAxisFixture, MovingItBackToTheRowsRestoresTheExcelPlacement) {
   std::vector<std::uint32_t> columns = {FM_PIVOT_VALUES_FIELD};
-  ASSERT_EQ(fm_workbook_pivot_set_col_field_order(wb_.handle, 0U, 0U, columns.data(), columns.size()), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_col_field_order(wb_.handle, 0U, 0U, columns.data(), columns.size()), 0);
   std::vector<std::uint32_t> rows = GetParam().rows;
-  ASSERT_EQ(fm_workbook_pivot_set_row_field_order(wb_.handle, 0U, 0U, rows.data(), rows.size()), 0)
-      << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb_.handle, 0U, 0U, rows.data(), rows.size()), 0)
+      << fm_get_last_error_message();
   EXPECT_EQ(ReadOrder(wb_.handle, true), GetParam().rows);
   EXPECT_TRUE(ReadOrder(wb_.handle, false).empty());
 

@@ -28,7 +28,7 @@ namespace cli {
 /// has to reach the user whether or not the command goes on to succeed.
 /// Verbosity flags do not gate it — a dropped formula is not chatter.
 ///
-/// Returns the status of the underlying `fm_workbook_read_diagnostics`
+/// Returns the status of the underlying `fm_workbook_get_diagnostics`
 /// query so a handle failure propagates to the caller unchanged.
 fm_status_t emit_read_diagnostics(const fm_workbook_t* wb, std::ostream& err, std::string_view subcommand);
 

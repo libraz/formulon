@@ -270,7 +270,7 @@ def _struct_pack_slots(node: ast.Call, scope, helpers: dict, module_name: str, f
     """Check the integer fields written by ``S.<LAYOUT>.pack(LIB, ptr, ...)``.
 
     The ABI reads these through a pointer, so the header signature says
-    only ``fm_hyperlink*`` and the scalar sweep sees nothing. The value
+    only ``fm_hyperlink_t*`` and the scalar sweep sees nothing. The value
     still crosses into WASM, and out of range it dies inside
     ``struct.pack`` with an exception the API never documents.
     """
@@ -384,14 +384,14 @@ class ArgumentSweepTests(unittest.TestCase):
         # Guards the guard: a header-parsing or AST-walking regression would
         # otherwise make the sweep above vacuously pass.
         functions = _parse_header(_HEADER)
-        self.assertIn("fm_workbook_set_number", functions)
+        self.assertIn("fm_sheet_set_number", functions)
         self.assertEqual(
-            [t for t, _n in functions["fm_workbook_set_number"]],
+            [t for t, _n in functions["fm_sheet_set_number"]],
             ["fm_workbook_t*", "size_t", "uint32_t", "uint32_t", "double"],
         )
 
     def test_sweep_catches_a_direct_call(self) -> None:
-        findings = _sweep_source("LIB.fm_workbook_set_number(h, int(sheet), 0, 0, 1.0)", _parse_header(_HEADER))
+        findings = _sweep_source("LIB.fm_sheet_set_number(h, int(sheet), 0, 0, 1.0)", _parse_header(_HEADER))
         self.assertEqual(len(findings), 1, findings)
         self.assertIn("sheet_index <- int(sheet)", findings[0])
 
@@ -459,7 +459,7 @@ class ArgumentSweepTests(unittest.TestCase):
     def test_sweep_accepts_the_guarded_forms(self) -> None:
         functions = _parse_header(_HEADER)
         for source in (
-            'LIB.fm_workbook_set_number(h, _uint(sheet, "sheet_index"), 0, 0, 1.0)',
+            'LIB.fm_sheet_set_number(h, _uint(sheet, "sheet_index"), 0, 0, 1.0)',
             '_read_count(LIB.fm_sheet_get_merge_count, h, _uint(sheet, "sheet"))',
             'S.HYPERLINK.pack(LIB, ptr, {"row": _uint(row, "row")})',
         ):
@@ -522,7 +522,7 @@ class IndexRangeTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 wb.set_formula(0, 0, 2**48, "=1")
             with self.assertRaises(ValueError):
-                wb.sheet_name(2**32 + 0)
+                wb.get_sheet_name(2**32 + 0)
 
     def test_error_message_names_the_parameter(self) -> None:
         with Workbook.create_default() as wb:
@@ -536,7 +536,7 @@ class IndexRangeTests(unittest.TestCase):
         # and the getter answered about a different sheet -- a plausible
         # count for a question the caller never asked.
         with Workbook.create_default() as wb:
-            for name in ("merge_count", "hyperlink_count", "comment_count", "validation_count"):
+            for name in ("merge_count", "hyperlink_count", "comment_count", "get_validation_count"):
                 with self.subTest(getter=name):
                     with self.assertRaises(ValueError):
                         getattr(wb, name)(2**32)
@@ -544,9 +544,9 @@ class IndexRangeTests(unittest.TestCase):
     def test_trace_walk_rejects_a_wrapping_index(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(ValueError):
-                wb.precedents(0, 2**32 + 5, 0, 1)
+                wb.get_precedents(0, 2**32 + 5, 0, 1)
             with self.assertRaises(ValueError):
-                wb.dependents(0, 0, 0, 2**32)
+                wb.get_dependents(0, 0, 0, 2**32)
 
     def test_packed_coordinates_raise_value_error_naming_the_parameter(self) -> None:
         # A coordinate packed into a struct never appears as a scalar

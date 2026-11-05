@@ -28,7 +28,7 @@ def _sales() -> Workbook:
     wb.set_text(0, 0, 0, "Product")
     wb.set_text(0, 0, 1, "Amount")
     wb.set_number(0, 1, 1, 10.0)
-    wb.table_create(0, "A1:B2", "Sales", "Sales", ["Product", "Amount"])
+    wb.add_table(0, "A1:B2", "Sales", "Sales", ["Product", "Amount"])
     return wb
 
 
@@ -85,7 +85,7 @@ class SlicerTests(unittest.TestCase):
             wb.add_slicer(0, 0, 0, anchor=ANCHOR)
             wb.add_slicer(0, 0, 1, anchor=ANCHOR)
             self.assertEqual(len(wb.list_slicers(0)), 2)
-            wb.table_remove(0)
+            wb.remove_table(0)
             self.assertEqual(wb.list_slicers(0), [])
             parts = _parts(wb.save())
             for name in ("xl/slicers/slicer1.xml", "xl/slicerCaches/slicerCache1.xml"):

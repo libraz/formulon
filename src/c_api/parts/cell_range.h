@@ -1,7 +1,7 @@
 //
 // Owned page handle behind `fm_cell_range_t`, shared by the entry points that
 // enumerate cells with a resumable `row * 16384 + col` cursor
-// (`fm_sheet_cells_in_range`, `fm_sheet_list_invalid_cells`).
+// (`fm_sheet_get_cells_in_range`, `fm_sheet_get_invalid_cells`).
 
 #ifndef FORMULON_C_API_PARTS_CELL_RANGE_H_
 #define FORMULON_C_API_PARTS_CELL_RANGE_H_

@@ -21,7 +21,7 @@ JsNumberResult JsWorkbook::cellCount(uint32_t sheet) const {
     return number_result(kBindingInvalidHandle, 0.0);
   }
   std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_cell_count(handle_, sheet, &count);
+  const fm_status_t rc = fm_sheet_get_cell_count(handle_, sheet, &count);
   return number_result(rc, static_cast<double>(count));
 }
 
@@ -30,7 +30,7 @@ JsNumberResult JsWorkbook::pivotCount(uint32_t sheet) const {
     return number_result(kBindingInvalidHandle, 0.0);
   }
   std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_pivot_count(handle_, sheet, &count);
+  const fm_status_t rc = fm_sheet_get_pivot_count(handle_, sheet, &count);
   return number_result(rc, static_cast<double>(count));
 }
 

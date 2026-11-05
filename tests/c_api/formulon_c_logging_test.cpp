@@ -31,7 +31,7 @@ struct WorkbookGuard {
 struct BufferGuard {
   uint8_t* data = nullptr;
   size_t len = 0;
-  ~BufferGuard() { fm_buffer_free(data); }
+  ~BufferGuard() { fm_buffer_destroy(data); }
   BufferGuard() = default;
   BufferGuard(const BufferGuard&) = delete;
   BufferGuard& operator=(const BufferGuard&) = delete;
@@ -55,7 +55,7 @@ class CApiLogging : public ::testing::Test {
 // noisiest producer on the save path.
 void BuildFormulaWorkbook(fm_workbook_t* handle) {
   for (uint32_t row = 0; row < 64U; ++row) {
-    ASSERT_EQ(fm_workbook_set_formula(handle, 0, row, 0, "=ROW()+COLUMN()"), 0);
+    ASSERT_EQ(fm_sheet_set_formula(handle, 0, row, 0, "=ROW()+COLUMN()"), 0);
   }
   ASSERT_EQ(fm_workbook_recalc(handle), 0);
 }
@@ -70,7 +70,7 @@ TEST_F(CApiLogging, DefaultConfigurationEmitsNothingForALoadSaveRoundTrip) {
   ASSERT_EQ(fm_set_log_sink(&CollectRecord, &records), 0);
 
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   BuildFormulaWorkbook(wb.handle);
 
   BufferGuard xlsx;
@@ -134,7 +134,7 @@ TEST_F(CApiLogging, MinLevelRejectsOrdinalsOutsideTheEnum) {
   for (const int32_t level : invalid) {
     EXPECT_EQ(fm_set_log_min_level(level), static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument))
         << "level=" << level;
-    EXPECT_STREQ(fm_last_error_message(), "fm_set_log_min_level: unknown level");
+    EXPECT_STREQ(fm_get_last_error_message(), "fm_set_log_min_level: unknown level");
   }
   // Every documented ordinal is accepted.
   for (int32_t level = FM_LOG_LEVEL_DEBUG; level <= FM_LOG_LEVEL_OFF; ++level) {

@@ -17,13 +17,13 @@ assert.ok(addonPath, 'native addon not found; set FORMULON_NODE_ADDON or stage d
 const addon = createRequire(import.meta.url)(addonPath);
 
 function readSetup(wb) {
-  const result = wb.getSheetPageSetup(0);
+  const result = wb.getPageSetup(0);
   assert.equal(result.status.ok, true, JSON.stringify(result.status));
   return result;
 }
 
 function readMargins(wb) {
-  const result = wb.getSheetPageMargins(0);
+  const result = wb.getPageMargins(0);
   assert.equal(result.status.ok, true, JSON.stringify(result.status));
   return result;
 }
@@ -31,12 +31,12 @@ function readMargins(wb) {
 test('page setup narrow fields reject lossy values before native mutation', () => {
   const wb = addon.Workbook.createDefault();
   try {
-    assert.equal(wb.setSheetPageSetup(0, { scale: 125 }).ok, true);
+    assert.equal(wb.setPageSetup(0, { scale: 125 }).ok, true);
     for (const value of [2 ** 32 + 100, 100.5, Number.NaN, Number.POSITIVE_INFINITY, -1]) {
-      assert.throws(() => wb.setSheetPageSetup(0, { scale: value }), RangeError, `scale=${String(value)}`);
+      assert.throws(() => wb.setPageSetup(0, { scale: value }), RangeError, `scale=${String(value)}`);
       assert.equal(readSetup(wb).scale, 125, `invalid scale changed the stored value: ${String(value)}`);
     }
-    assert.throws(() => wb.setSheetPageSetup(0, { scale: Symbol('scale') }), TypeError);
+    assert.throws(() => wb.setPageSetup(0, { scale: Symbol('scale') }), TypeError);
     assert.equal(readSetup(wb).scale, 125);
   } finally {
     wb.dispose();
@@ -46,10 +46,10 @@ test('page setup narrow fields reject lossy values before native mutation', () =
 test('all page setup integer fields share the checked reader', () => {
   const wb = addon.Workbook.createDefault();
   try {
-    assert.equal(wb.setSheetPageSetup(0, { scale: 125 }).ok, true);
+    assert.equal(wb.setPageSetup(0, { scale: 125 }).ok, true);
     const before = readSetup(wb);
     for (const key of ['orientation', 'paperSize', 'fitToWidth', 'fitToHeight']) {
-      assert.throws(() => wb.setSheetPageSetup(0, { [key]: 2 ** 32 + 1 }), RangeError, key);
+      assert.throws(() => wb.setPageSetup(0, { [key]: 2 ** 32 + 1 }), RangeError, key);
       assert.equal(readSetup(wb)[key], before[key], `${key} failure changed the stored value`);
     }
   } finally {
@@ -60,7 +60,7 @@ test('all page setup integer fields share the checked reader', () => {
 test('reader preserves fractional doubles and rejects pending getters before C mutation', () => {
   const wb = addon.Workbook.createDefault();
   try {
-    assert.ok(wb.setSheetPageMargins(0, { left: 0.25, top: 1.5 }).ok);
+    assert.ok(wb.setPageMargins(0, { left: 0.25, top: 1.5 }).ok);
     const margins = readMargins(wb);
     assert.equal(margins.left, 0.25);
     assert.equal(margins.top, 1.5);
@@ -72,7 +72,7 @@ test('reader preserves fractional doubles and rejects pending getters before C m
         throw new Error('scale getter');
       },
     });
-    assert.throws(() => wb.setSheetPageSetup(0, setup), /scale getter/);
+    assert.throws(() => wb.setPageSetup(0, setup), /scale getter/);
     assert.equal(readSetup(wb).scale, 100);
 
     const marginsWithGetter = {};
@@ -82,7 +82,7 @@ test('reader preserves fractional doubles and rejects pending getters before C m
         throw new Error('left getter');
       },
     });
-    assert.throws(() => wb.setSheetPageMargins(0, marginsWithGetter), /left getter/);
+    assert.throws(() => wb.setPageMargins(0, marginsWithGetter), /left getter/);
     const unchanged = readMargins(wb);
     assert.equal(unchanged.left, 0.25);
     assert.equal(unchanged.top, 1.5);
@@ -101,7 +101,7 @@ test('print option and header/footer readers stop before native mutation on gett
         throw new Error('gridLines getter');
       },
     });
-    assert.throws(() => wb.setSheetPrintOptions(0, options), /gridLines getter/);
+    assert.throws(() => wb.setPrintOptions(0, options), /gridLines getter/);
 
     const headerFooter = {};
     Object.defineProperty(headerFooter, 'oddHeader', {
@@ -110,8 +110,8 @@ test('print option and header/footer readers stop before native mutation on gett
         throw new Error('oddHeader getter');
       },
     });
-    assert.throws(() => wb.setSheetHeaderFooter(0, headerFooter), /oddHeader getter/);
-    assert.equal(wb.getSheetHeaderFooterXml(0).xml, '');
+    assert.throws(() => wb.setHeaderFooter(0, headerFooter), /oddHeader getter/);
+    assert.equal(wb.getHeaderFooterXml(0).xml, '');
   } finally {
     wb.dispose();
   }
@@ -120,7 +120,7 @@ test('print option and header/footer readers stop before native mutation on gett
 test('nested print readers snapshot each stateful getter once', () => {
   const wb = addon.Workbook.createDefault();
   try {
-    assert.equal(wb.setSheetPageSetup(0, { paperSize: 42 }).ok, true);
+    assert.equal(wb.setPageSetup(0, { paperSize: 42 }).ok, true);
     let paperSizeReads = 0;
     const firstPaperSize = {};
     Object.defineProperty(firstPaperSize, 'paperSize', {
@@ -129,7 +129,7 @@ test('nested print readers snapshot each stateful getter once', () => {
         return paperSizeReads === 1 ? 9 : undefined;
       },
     });
-    assert.equal(wb.setSheetPageSetup(0, firstPaperSize).ok, true);
+    assert.equal(wb.setPageSetup(0, firstPaperSize).ok, true);
     assert.equal(paperSizeReads, 1);
     assert.equal(readSetup(wb).paperSize, 9);
     assert.equal(readSetup(wb).paperSizeStated, true);
@@ -142,7 +142,7 @@ test('nested print readers snapshot each stateful getter once', () => {
         return omittedPaperSizeReads === 1 ? undefined : 9;
       },
     });
-    assert.equal(wb.setSheetPageSetup(0, omittedPaperSize).ok, true);
+    assert.equal(wb.setPageSetup(0, omittedPaperSize).ok, true);
     assert.equal(omittedPaperSizeReads, 1);
     assert.equal(readSetup(wb).paperSize, 9);
     assert.equal(readSetup(wb).paperSizeStated, true);
@@ -155,7 +155,7 @@ test('nested print readers snapshot each stateful getter once', () => {
         return leftReads === 1 ? 0.75 : undefined;
       },
     });
-    assert.equal(wb.setSheetPageMargins(0, firstMargin).ok, true);
+    assert.equal(wb.setPageMargins(0, firstMargin).ok, true);
     assert.equal(leftReads, 1);
     assert.equal(readMargins(wb).left, 0.75);
 
@@ -167,9 +167,9 @@ test('nested print readers snapshot each stateful getter once', () => {
         return gridReads === 1;
       },
     });
-    assert.equal(wb.setSheetPrintOptions(0, firstGrid).ok, true);
+    assert.equal(wb.setPrintOptions(0, firstGrid).ok, true);
     assert.equal(gridReads, 1);
-    assert.match(wb.getSheetPrintOptionsXml(0).xml, /gridLines="true"/);
+    assert.match(wb.getPrintOptionsXml(0).xml, /gridLines="true"/);
 
     let omittedGridReads = 0;
     const omittedGrid = {};
@@ -179,9 +179,9 @@ test('nested print readers snapshot each stateful getter once', () => {
         return omittedGridReads === 1 ? undefined : false;
       },
     });
-    assert.equal(wb.setSheetPrintOptions(0, omittedGrid).ok, true);
+    assert.equal(wb.setPrintOptions(0, omittedGrid).ok, true);
     assert.equal(omittedGridReads, 1);
-    assert.match(wb.getSheetPrintOptionsXml(0).xml, /gridLines="true"/);
+    assert.match(wb.getPrintOptionsXml(0).xml, /gridLines="true"/);
 
     let headerFlagReads = 0;
     const headerFlag = {};
@@ -191,9 +191,9 @@ test('nested print readers snapshot each stateful getter once', () => {
         return headerFlagReads === 1;
       },
     });
-    assert.equal(wb.setSheetHeaderFooter(0, headerFlag).ok, true);
+    assert.equal(wb.setHeaderFooter(0, headerFlag).ok, true);
     assert.equal(headerFlagReads, 1);
-    assert.match(wb.getSheetHeaderFooterXml(0).xml, /differentFirst="true"/);
+    assert.match(wb.getHeaderFooterXml(0).xml, /differentFirst="true"/);
   } finally {
     wb.dispose();
   }

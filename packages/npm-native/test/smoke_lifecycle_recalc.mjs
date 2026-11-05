@@ -116,8 +116,8 @@ test('Workbook.createEmpty + addSheet -> sheetCount/sheetName work', async () =>
   const mod = await getModule();
   const wb = mod.Workbook.createEmpty();
   assert.ok(wb.addSheet('Sheet1').ok);
-  assert.equal(wb.sheetCount().value, 1);
-  const sn = wb.sheetName(0);
+  assert.equal(wb.getSheetCount().value, 1);
+  const sn = wb.getSheetName(0);
   assert.ok(sn.status.ok);
   assert.equal(sn.value, 'Sheet1');
 });
@@ -131,13 +131,13 @@ test('Unicode sheet identity rejects folded duplicate and permits casing rename'
   const collision = wb.renameSheet(1, 'ä');
   assert.equal(collision.ok, false);
   assert.notEqual(collision.status, 0);
-  assert.equal(wb.sheetName(0).value, 'Ä');
-  assert.equal(wb.sheetName(1).value, 'Ö');
+  assert.equal(wb.getSheetName(0).value, 'Ä');
+  assert.equal(wb.getSheetName(1).value, 'Ö');
   assert.ok(wb.renameSheet(0, 'ä').ok);
-  const sn = wb.sheetName(0);
+  const sn = wb.getSheetName(0);
   assert.ok(sn.status.ok);
   assert.equal(sn.value, 'ä');
-  assert.equal(wb.sheetName(1).value, 'Ö');
+  assert.equal(wb.getSheetName(1).value, 'Ö');
   wb.dispose();
 });
 
@@ -150,7 +150,7 @@ test('save() returns Uint8Array; loadBytes round-trips the value', async () => {
   assert.ok(sr.bytes instanceof Uint8Array, 'expected Uint8Array');
   assert.ok(sr.bytes.length > 0, 'expected non-empty save buffer');
 
-  const wb2 = mod.Workbook.loadBytes(sr.bytes);
+  const wb2 = mod.Workbook.load(sr.bytes);
   const r = wb2.getValue(0, 0, 0);
   assert.ok(r.status.ok, `loaded getValue: ${JSON.stringify(r.status)}`);
   assert.equal(r.value.kind, mod.ValueKind.Number);
@@ -159,9 +159,9 @@ test('save() returns Uint8Array; loadBytes round-trips the value', async () => {
 
 test('loadBytes rejects invalid input with a fresh diagnostic', async () => {
   const mod = await getModule();
-  const loaded = mod.Workbook.loadBytes(new Uint16Array([1]));
+  const loaded = mod.Workbook.load(new Uint16Array([1]));
   assert.equal(loaded.isValid(), false);
-  assert.match(mod.lastErrorMessage(), /NULL or empty input/);
+  assert.match(mod.getLastErrorMessage(), /NULL or empty input/);
 });
 
 // -- Expanded surface coverage -----------------------------------------
@@ -189,7 +189,7 @@ test('memoryUsage grows with the workbook and reads zero after dispose', async (
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
 
-  const empty = wb.memoryUsage();
+  const empty = wb.getMemoryUsage();
   assert.ok(empty > 0, `an empty workbook still owns storage, got ${empty}`);
 
   // Distinct strings so the shared-string storage cannot fold them into
@@ -197,11 +197,11 @@ test('memoryUsage grows with the workbook and reads zero after dispose', async (
   for (let row = 0; row < 2000; row += 1) {
     wb.setText(0, row, 0, `payload-${row}-${'x'.repeat(64)}`);
   }
-  const filled = wb.memoryUsage();
+  const filled = wb.getMemoryUsage();
   assert.ok(filled > empty, `expected growth, got ${empty} -> ${filled}`);
 
   wb.dispose();
-  assert.equal(wb.memoryUsage(), 0);
+  assert.equal(wb.getMemoryUsage(), 0);
 });
 
 test('memoryUsage is stable across repeated calls and survives a recalc', async () => {
@@ -215,13 +215,13 @@ test('memoryUsage is stable across repeated calls and survives a recalc', async 
     wb.setFormula(0, row, 0, `=${row}+1`);
   }
 
-  const first = wb.memoryUsage();
-  assert.equal(wb.memoryUsage(), first);
+  const first = wb.getMemoryUsage();
+  assert.equal(wb.getMemoryUsage(), first);
 
   assert.equal(wb.recalc().ok, true);
-  const afterRecalc = wb.memoryUsage();
+  const afterRecalc = wb.getMemoryUsage();
   assert.ok(afterRecalc >= first, `recalc must not shrink the estimate: ${first} -> ${afterRecalc}`);
-  assert.equal(wb.memoryUsage(), afterRecalc);
+  assert.equal(wb.getMemoryUsage(), afterRecalc);
 
   wb.dispose();
 });
@@ -242,16 +242,16 @@ test('copySheet names the copy automatically or explicitly and reports bad argum
   const auto = wb.copySheet(0, 1);
   assert.ok(auto.status.ok, JSON.stringify(auto.status));
   assert.equal(auto.index, 1);
-  assert.equal(wb.sheetName(1).value, 'Sheet1 (2)');
+  assert.equal(wb.getSheetName(1).value, 'Sheet1 (2)');
   const named = wb.copySheet(0, 0, 'Archive');
   assert.ok(named.status.ok, JSON.stringify(named.status));
   assert.equal(named.index, 0);
-  assert.equal(wb.sheetName(0).value, 'Archive');
+  assert.equal(wb.getSheetName(0).value, 'Archive');
   assert.ok(wb.recalc().ok);
   assert.equal(wb.getValue(0, 0, 1).value.number, 10);
   assert.equal(wb.copySheet(9, 0).status.status, 5050);
   assert.equal(wb.copySheet(0, 9).status.status, 5050);
   assert.equal(wb.copySheet(0, 0, '').status.status, 5051);
-  assert.equal(wb.sheetCount().value, 3);
+  assert.equal(wb.getSheetCount().value, 3);
   wb.dispose();
 });

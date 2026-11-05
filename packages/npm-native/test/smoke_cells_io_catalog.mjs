@@ -9,7 +9,7 @@ test('comments round-trip: setComment + getComment', async () => {
   const sc = wb.setComment(0, 1, 1, 'libraz', 'hello world');
   assert.ok(sc.ok, `setComment: ${JSON.stringify(sc)}`);
   const c = wb.getComment(0, 1, 1);
-  assert.ok(c !== null, 'expected non-null CommentEntry');
+  assert.ok(c !== null, 'expected non-null Comment');
   assert.equal(c.author, 'libraz');
   assert.equal(c.text, 'hello world');
   // Removing surfaces null on the next read.
@@ -41,14 +41,14 @@ test('cellCount + cellAt enumerate stored cells', async () => {
   assert.ok(wb.setNumber(0, 0, 1, 2).ok);
   assert.ok(wb.setFormula(0, 1, 0, '=A1+B1').ok);
   assert.ok(wb.recalc().ok);
-  const n = wb.cellCount(0).value;
+  const n = wb.getCellCount(0).value;
   assert.equal(typeof n, 'number');
   assert.ok(n >= 3, `expected >= 3 stored cells, got ${n}`);
   // Iterate; one of the entries should carry our formula.
   let foundFormula = false;
   for (let i = 0; i < n; ++i) {
-    const e = wb.cellAt(0, i);
-    assert.ok(e.status.ok, `cellAt(${i}): ${JSON.stringify(e.status)}`);
+    const e = wb.getCellAt(0, i);
+    assert.ok(e.status.ok, `getCellAt(${i}): ${JSON.stringify(e.status)}`);
     assert.equal(typeof e.row, 'number');
     assert.equal(typeof e.col, 'number');
     if (e.formula === '=A1+B1') {
@@ -69,14 +69,14 @@ test('default export exposes CfMatchKind ordinals', async () => {
   assert.equal(mod.CfMatchKind.IconSet, 3);
 });
 
-test('default export exposes ErrorCode ordinals and versionString alias', async () => {
+test('default export exposes ErrorCode ordinals and getVersion', async () => {
   const mod = await getModule();
   assert.equal(typeof mod.ErrorCode, 'object');
   assert.equal(mod.ErrorCode.Div0, 1);
   assert.equal(mod.ErrorCode.Ref, 3);
   assert.equal(mod.ErrorCode.NA, 6);
-  assert.equal(typeof mod.versionString, 'function');
-  assert.equal(mod.versionString(), mod.version());
+  assert.equal(typeof mod.getVersion, 'function');
+  assert.ok(mod.getVersion().length > 0);
 });
 
 test('setError() rejects a missing errorCode argument', async () => {
@@ -124,7 +124,7 @@ test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable 
   const dxf = wb.addDxf({ font: { bold: true } });
   assert.ok(dxf.status.ok, JSON.stringify(dxf.status));
   assert.ok(
-    wb.addConditionalFormat(0, {
+    wb.addCfRule(0, {
       sqref: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
       type: 1,
       op: 5,
@@ -152,16 +152,16 @@ test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable 
   // The binary writer never reassigns a part id.
   assert.equal(xlsb.renumberedPartCount, 0);
 
-  const loaded = mod.Workbook.loadBytes(xlsb.bytes);
-  const read = loaded.readDiagnostics();
+  const loaded = mod.Workbook.load(xlsb.bytes);
+  const read = loaded.getDiagnostics();
   assert.ok(read.status.ok, JSON.stringify(read.status));
   assert.equal(read.undecodedFormulaCount, 0);
   assert.equal(read.undecodedDefinedNameCount, 0);
   assert.equal(read.undecodedPartCount, 0);
   assert.equal(read.skippedFeatureCount, 0);
   assert.equal(read.unknownContentTypeCount, 0);
-  const preservedLoaded = mod.Workbook.loadBytes(appendEmptyZipEntry(xlsb.bytes, 'xl/preserved.bin'));
-  const preserved = preservedLoaded.readDiagnostics();
+  const preservedLoaded = mod.Workbook.load(appendEmptyZipEntry(xlsb.bytes, 'xl/preserved.bin'));
+  const preserved = preservedLoaded.getDiagnostics();
   assert.ok(preserved.status.ok, JSON.stringify(preserved.status));
   assert.equal(preserved.undecodedPartCount, 0);
   preservedLoaded.dispose();
@@ -178,8 +178,8 @@ test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable 
 
 test('invalid workbook read diagnostics return a zeroed failure envelope', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.loadBytes(new Uint8Array());
-  const read = wb.readDiagnostics();
+  const wb = mod.Workbook.load(new Uint8Array());
+  const read = wb.getDiagnostics();
   assert.ok(!read.status.ok, JSON.stringify(read));
   assert.equal(read.undecodedFormulaCount, 0);
   assert.equal(read.undecodedDefinedNameCount, 0);
@@ -242,16 +242,16 @@ test('addValidation / getValidations / removeValidationAt / clearValidations rou
   assert.equal(list[1].ranges[1].firstRow, 6);
 
   // removeValidationAt removes the first rule.
-  assert.ok(wb.removeValidationAt(0, 0).ok);
+  assert.ok(wb.removeValidation(0, 0).ok);
   const after = wb.getValidations(0);
   assert.equal(after.length, 1);
   assert.equal(after[0].type, 2);
 
   // Out-of-range index is rejected.
-  assert.ok(!wb.removeValidationAt(0, 99).ok);
+  assert.ok(!wb.removeValidation(0, 99).ok);
   // Sheet-out-of-range is rejected on every entry.
   assert.ok(!wb.addValidation(999, listRule).ok);
-  assert.ok(!wb.removeValidationAt(999, 0).ok);
+  assert.ok(!wb.removeValidation(999, 0).ok);
   assert.ok(!wb.clearValidations(999).ok);
 
   // clearValidations drops everything; safe to call again.
@@ -273,7 +273,7 @@ test('addConditionalFormat + getConditionalFormats + clearConditionalFormats rou
   const dxf = wb.addDxf({ font: { bold: true } });
   assert.ok(dxf.status.ok, JSON.stringify(dxf.status));
   // cellIs rule (type 1) comparing the cell to a literal.
-  const add = wb.addConditionalFormat(0, {
+  const add = wb.addCfRule(0, {
     sqref: [{ firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 0 }],
     type: 1,
     op: 5,
@@ -291,12 +291,12 @@ test('addConditionalFormat + getConditionalFormats + clearConditionalFormats rou
   assert.equal(list[0].sqref[0].lastRow, 4);
   assert.equal(list[0].formula1, '10');
   // removeConditionalFormatAt drops the only rule.
-  assert.ok(wb.removeConditionalFormatAt(0, 0).ok);
+  assert.ok(wb.removeCfRule(0, 0).ok);
   assert.equal(wb.getConditionalFormats(0).length, 0);
   // clearConditionalFormats is a safe no-op on an empty sheet.
-  assert.ok(wb.clearConditionalFormats(0).ok);
+  assert.ok(wb.clearCfRules(0).ok);
   // Sheet-out-of-range is rejected.
-  assert.ok(!wb.clearConditionalFormats(999).ok);
+  assert.ok(!wb.clearCfRules(999).ok);
 });
 
 test('data bar x14 fields survive save and load', async () => {
@@ -306,7 +306,7 @@ test('data bar x14 fields survive save and load', async () => {
   // lost. Only a save/load cycle pins them.
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const add = wb.addConditionalFormat(0, {
+  const add = wb.addCfRule(0, {
     sqref: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
     type: 3,
     dataBar: {
@@ -326,7 +326,7 @@ test('data bar x14 fields survive save and load', async () => {
 
   const saved = wb.save();
   assert.ok(saved.status.ok);
-  const loaded = mod.Workbook.loadBytes(saved.bytes);
+  const loaded = mod.Workbook.load(saved.bytes);
   const bar = loaded.getConditionalFormats(0)[0].dataBar;
   assert.equal(bar.gradient, false);
   assert.equal(bar.axisPosition, 1);
@@ -337,7 +337,7 @@ test('data bar x14 fields survive save and load', async () => {
   assert.equal(bar.direction, 2);
 
   // The decoded bar fed straight back must reproduce the same rule.
-  const again = loaded.addConditionalFormat(0, {
+  const again = loaded.addCfRule(0, {
     sqref: [{ firstRow: 4, firstCol: 0, lastRow: 6, lastCol: 0 }],
     type: 3,
     dataBar: bar,
@@ -356,7 +356,7 @@ test('data bar x14 fields survive save and load', async () => {
 test('icon set floor survives save and load', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const add = wb.addConditionalFormat(0, {
+  const add = wb.addCfRule(0, {
     sqref: [{ firstRow: 0, firstCol: 0, lastRow: 9, lastCol: 0 }],
     type: 4,
     iconSet: {
@@ -371,7 +371,7 @@ test('icon set floor survives save and load', async () => {
   assert.ok(add.status.ok, `addConditionalFormat: ${JSON.stringify(add)}`);
   const saved = wb.save();
   assert.ok(saved.status.ok);
-  const loaded = mod.Workbook.loadBytes(saved.bytes);
+  const loaded = mod.Workbook.load(saved.bytes);
   const floor = loaded.getConditionalFormats(0)[0].iconSet.floor;
   assert.equal(floor.type, 0);
   assert.equal(floor.value, '5');
@@ -383,7 +383,7 @@ test('icon set floor survives save and load', async () => {
 test('omitted data bar x14 fields keep the model defaults', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const add = wb.addConditionalFormat(0, {
+  const add = wb.addCfRule(0, {
     sqref: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
     type: 3,
     dataBar: { min: { type: 3 }, max: { type: 4 }, fill: { r: 0, g: 0, b: 255 } },
@@ -406,7 +406,7 @@ test('named cell styles: cellStyleCount / getCellStyle / cellStyleXfCount', asyn
   const count = wb.cellStyleCount().value;
   assert.equal(typeof count, 'number');
   assert.ok(count >= 0);
-  assert.equal(typeof wb.cellStyleXfCount().value, 'number');
+  assert.equal(typeof wb.getCellStyleXfCount().value, 'number');
   if (count > 0) {
     const cs = wb.getCellStyle(0);
     assert.ok(cs.status.ok, `getCellStyle: ${JSON.stringify(cs.status)}`);
@@ -423,21 +423,21 @@ test('setCalcMode / calcMode round-trip the calc policy', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   // Default is automatic (0).
-  assert.equal(wb.calcMode().value, 0);
+  assert.equal(wb.getCalcMode().value, 0);
   assert.ok(wb.setCalcMode(1).ok);
-  assert.equal(wb.calcMode().value, 1);
+  assert.equal(wb.getCalcMode().value, 1);
   assert.ok(wb.setCalcMode(2).ok);
-  assert.equal(wb.calcMode().value, 2);
+  assert.equal(wb.getCalcMode().value, 2);
 });
 
 test('setPinnedNow / pinnedNow / clearPinnedNow drive the clock seam', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   // Unpinned by default: the workbook follows the host clock.
-  assert.equal(wb.pinnedNow().now, null);
+  assert.equal(wb.getPinnedNow().now, null);
 
   assert.ok(wb.setPinnedNow(2026, 4, 23, 15, 30, 45).ok);
-  assert.deepEqual(wb.pinnedNow().now, {
+  assert.deepEqual(wb.getPinnedNow().now, {
     year: 2026,
     month: 4,
     day: 23,
@@ -447,7 +447,7 @@ test('setPinnedNow / pinnedNow / clearPinnedNow drive the clock seam', async () 
   });
 
   // 2026-04-23 is serial 46135 under the 1900 date system.
-  const today = wb.evaluateFormulaText(0, 0, 0, '=TODAY()');
+  const today = wb.evaluateFormula(0, 0, 0, '=TODAY()');
   assert.ok(today.status.ok, `evaluateFormulaText: ${JSON.stringify(today.status)}`);
   assert.equal(today.value.number, 46135);
 
@@ -456,17 +456,17 @@ test('setPinnedNow / pinnedNow / clearPinnedNow drive the clock seam', async () 
   assert.equal(wb.setPinnedNow(2025, 2, 29, 0, 0, 0).ok, false);
 
   assert.ok(wb.clearPinnedNow().ok);
-  assert.equal(wb.pinnedNow().now, null);
+  assert.equal(wb.getPinnedNow().now, null);
 });
 
 test('excelProfileId / setExcelProfileId round-trip the profile id', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const def = wb.excelProfileId().value;
+  const def = wb.getExcelProfileId().value;
   assert.equal(typeof def, 'string');
   assert.ok(def.length > 0);
   assert.ok(wb.setExcelProfileId('mac-365-ja_JP').ok);
-  assert.equal(wb.excelProfileId().value, 'mac-365-ja_JP');
+  assert.equal(wb.getExcelProfileId().value, 'mac-365-ja_JP');
 });
 
 // Values are the mac-365-* oracle captures of `DOLLAR(-1234.567)`; the
@@ -507,13 +507,13 @@ const PROFILE_LOCALES = [
 test('setExcelProfileId switches a live workbook through every profile id', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.equal(wb.excelProfileId().value, 'win-365-en_US');
+  assert.equal(wb.getExcelProfileId().value, 'win-365-en_US');
   assert.ok(wb.setFormula(0, 0, 0, '=DOLLAR(-1234.567)').ok);
   for (const host of ['mac', 'win']) {
     for (const locale of PROFILE_LOCALES) {
       const id = `${host}-365-${locale}`;
       assert.ok(wb.setExcelProfileId(id).ok, id);
-      assert.equal(wb.excelProfileId().value, id);
+      assert.equal(wb.getExcelProfileId().value, id);
       assert.ok(wb.recalc().ok, id);
       if (id in PROFILE_DOLLAR) {
         assert.equal(wb.getValue(0, 0, 0).value.text, PROFILE_DOLLAR[id], id);
@@ -523,26 +523,26 @@ test('setExcelProfileId switches a live workbook through every profile id', asyn
   assert.equal(wb.setExcelProfileId('mac-365-xx_XX').ok, false);
 });
 
-test('functionNames + functionMetadata expose the catalog', async () => {
+test('functionNames + getFunctionMetadata expose the catalog', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const names = wb.functionNames();
+  const names = wb.listFunctionNames();
   assert.ok(Array.isArray(names));
   assert.ok(names.length > 0, 'expected a non-empty function catalog');
   assert.ok(names.includes('SUM'), 'expected SUM in the catalog');
-  const md = wb.functionMetadata('SUM');
+  const md = wb.getFunctionMetadata('SUM');
   assert.equal(md.ok, true);
   assert.equal(md.name, 'SUM');
   assert.equal(typeof md.minArity, 'number');
   // Unknown function returns { ok: false }.
-  const miss = wb.functionMetadata('NOT_A_REAL_FUNCTION_XYZ');
+  const miss = wb.getFunctionMetadata('NOT_A_REAL_FUNCTION_XYZ');
   assert.equal(miss.ok, false);
 });
 
 test('mergeFunctionMetadata overlays provider metadata; is identity without a provider', async () => {
   const mod = await getModule();
   assert.equal(typeof mod.mergeFunctionMetadata, 'function');
-  const base = mod.Workbook.createDefault().functionMetadata('XLOOKUP');
+  const base = mod.Workbook.createDefault().getFunctionMetadata('XLOOKUP');
   assert.equal(base.ok, true);
   // The engine leaves display metadata empty.
   assert.equal(base.signatureTemplate, undefined);
@@ -610,11 +610,11 @@ test('formula and function-name localization is keyed by profile id', async () =
   }
 });
 
-test('localeFacts reports separators, names, error spellings and measurement', async () => {
+test('getLocaleFacts reports separators, names, error spellings and measurement', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const mac = wb.localeFacts('mac-365-de_DE');
+    const mac = wb.getLocaleFacts('mac-365-de_DE');
     assert.ok(mac.status.ok);
     assert.equal(mac.facts.decimalSeparator, ',');
     assert.equal(mac.facts.listSeparator, ';');
@@ -623,10 +623,10 @@ test('localeFacts reports separators, names, error spellings and measurement', a
     assert.equal(mac.facts.collationMeasured, true);
     const na = mac.facts.errorNames.find((e) => e.canonical === '#N/A');
     assert.equal(na.localized, '#NV');
-    assert.equal(wb.localeFacts('win-365-de_DE').facts.measured, false);
-    assert.equal(wb.localeFacts('win-365-ja_JP').facts.collationMeasured, false);
-    assert.equal(wb.localeFacts('win-365-en_US').facts.decimalSeparator, '.');
-    const bad = wb.localeFacts('nope');
+    assert.equal(wb.getLocaleFacts('win-365-de_DE').facts.measured, false);
+    assert.equal(wb.getLocaleFacts('win-365-ja_JP').facts.collationMeasured, false);
+    assert.equal(wb.getLocaleFacts('win-365-en_US').facts.decimalSeparator, '.');
+    const bad = wb.getLocaleFacts('nope');
     assert.equal(bad.status.ok, false);
     assert.equal(bad.facts, null);
   } finally {
@@ -658,7 +658,7 @@ test('compareText folds by strength and rejects bad arguments', async () => {
   }
 });
 
-test('collationClasses orders by kind, folds text by strength, and copies its output', async () => {
+test('getCollationClasses orders by kind, folds text by strength, and copies its output', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
@@ -672,7 +672,7 @@ test('collationClasses orders by kind, folds text by strength, and copies its ou
       { kind: 1, number: 0 },
       { kind: 2, boolean: 0 },
     ];
-    const r = wb.collationClasses(values, 1, 'mac-365-en_US');
+    const r = wb.getCollationClasses(values, 1, 'mac-365-en_US');
     assert.ok(r.status.ok);
     assert.ok(r.classIds instanceof Uint32Array);
     assert.equal(r.classIds.length, 8);
@@ -685,7 +685,7 @@ test('collationClasses orders by kind, folds text by strength, and copies its ou
     assert.ok(num0 < num1 && boolFalse < boolTrue);
 
     const snapshot = Array.from(r.classIds);
-    const other = wb.collationClasses(
+    const other = wb.getCollationClasses(
       [
         { kind: 3, text: 'z' },
         { kind: 3, text: 'y' },
@@ -696,7 +696,7 @@ test('collationClasses orders by kind, folds text by strength, and copies its ou
     assert.ok(other.status.ok);
     assert.deepEqual(Array.from(r.classIds), snapshot);
 
-    const folded = wb.collationClasses(
+    const folded = wb.getCollationClasses(
       [
         { kind: 3, text: 'a' },
         { kind: 3, text: 'A' },
@@ -707,24 +707,24 @@ test('collationClasses orders by kind, folds text by strength, and copies its ou
     assert.equal(folded.classIds[0], folded.classIds[1]);
     assert.equal(folded.classCount, 1);
 
-    const empty = wb.collationClasses([], 1, 'mac-365-en_US');
+    const empty = wb.getCollationClasses([], 1, 'mac-365-en_US');
     assert.ok(empty.status.ok);
     assert.equal(empty.classIds.length, 0);
     assert.equal(empty.classCount, 0);
 
-    const noKind = wb.collationClasses([{ number: 1 }], 1, 'mac-365-en_US');
+    const noKind = wb.getCollationClasses([{ number: 1 }], 1, 'mac-365-en_US');
     assert.equal(noKind.status.ok, false);
     assert.equal(noKind.classIds.length, 0);
     assert.equal(noKind.classCount, 0);
-    assert.equal(wb.collationClasses({}, 1, 'mac-365-en_US').status.ok, false);
-    assert.equal(wb.collationClasses([{ kind: 1, number: 1 }], 1, 'nope').status.ok, false);
-    assert.throws(() => wb.collationClasses(values, -1, 'mac-365-en_US'), RangeError);
+    assert.equal(wb.getCollationClasses({}, 1, 'mac-365-en_US').status.ok, false);
+    assert.equal(wb.getCollationClasses([{ kind: 1, number: 1 }], 1, 'nope').status.ok, false);
+    assert.throws(() => wb.getCollationClasses(values, -1, 'mac-365-en_US'), RangeError);
   } finally {
     wb.dispose();
   }
 });
 
-test('collationClasses timing on 100k mixed CJK/ASCII texts', async () => {
+test('getCollationClasses timing on 100k mixed CJK/ASCII texts', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
@@ -742,11 +742,11 @@ test('collationClasses timing on 100k mixed CJK/ASCII texts', async () => {
       values.push({ kind: 3, text });
     }
     const t0 = process.hrtime.bigint();
-    const r = wb.collationClasses(values, 1, 'mac-365-ja_JP');
+    const r = wb.getCollationClasses(values, 1, 'mac-365-ja_JP');
     const ms = Number(process.hrtime.bigint() - t0) / 1e6;
     assert.ok(r.status.ok);
     assert.equal(r.classIds.length, 100000);
-    console.log(`collationClasses 100k mixed CJK/ASCII texts: ${ms.toFixed(0)} ms (${r.classCount} classes)`);
+    console.log(`getCollationClasses 100k mixed CJK/ASCII texts: ${ms.toFixed(0)} ms (${r.classCount} classes)`);
   } finally {
     wb.dispose();
   }
@@ -760,7 +760,7 @@ test('precedents / dependents return arrays for a small formula graph', async ()
   assert.ok(wb.setFormula(0, 1, 0, '=A1+B1').ok); // A2 = A1 + B1
   assert.ok(wb.recalc().ok);
   // A2 reads A1 and B1.
-  const prec = wb.precedents(0, 1, 0, 1);
+  const prec = wb.getPrecedents(0, 1, 0, 1);
   assert.ok(Array.isArray(prec));
   assert.equal(prec.length, 2);
   for (const node of prec) {
@@ -769,7 +769,7 @@ test('precedents / dependents return arrays for a small formula graph', async ()
     assert.equal(typeof node.col, 'number');
   }
   // A1 is read by A2.
-  const dep = wb.dependents(0, 0, 0, 1);
+  const dep = wb.getDependents(0, 0, 0, 1);
   assert.ok(Array.isArray(dep));
   assert.equal(dep.length, 1);
   assert.equal(dep[0].row, 1);
@@ -780,13 +780,13 @@ test('spillInfo reports a dynamic-array region', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   // Non-spill cell: engaged is false, fields zeroed.
-  const none = wb.spillInfo(0, 0, 0);
+  const none = wb.getSpillInfo(0, 0, 0);
   assert.equal(typeof none.engaged, 'boolean');
   assert.equal(none.engaged, false);
   // A spilling dynamic array anchored at A1.
   assert.ok(wb.setFormula(0, 0, 0, '=SEQUENCE(3,1)').ok);
   assert.ok(wb.recalc().ok);
-  const info = wb.spillInfo(0, 0, 0);
+  const info = wb.getSpillInfo(0, 0, 0);
   assert.equal(info.engaged, true);
   assert.equal(info.anchorRow, 0);
   assert.equal(info.anchorCol, 0);

@@ -1,6 +1,6 @@
 //
 // End-to-end tests for the ad-hoc, side-effect-free formula evaluation C
-// ABI: `fm_workbook_evaluate_formula` / `fm_workbook_evaluate_cf_formula`.
+// ABI: `fm_sheet_evaluate_formula` / `fm_sheet_evaluate_cf_formula`.
 // Exercises anchoring, cross-sheet resolution, defined names, the
 // documented array-to-scalar reduction, the self-reference stale-read
 // caveat, Excel CF-predicate coercion, and the read-only purity guarantee.
@@ -26,8 +26,8 @@ struct WorkbookGuard {
 
 // Builds a single-sheet workbook with A1=10, B1=20 (recalculated).
 void seed_ab(fm_workbook_t* wb) {
-  ASSERT_EQ(fm_workbook_set_number(wb, 0, 0, 0, 10.0), 0);  // A1
-  ASSERT_EQ(fm_workbook_set_number(wb, 0, 0, 1, 20.0), 0);  // B1
+  ASSERT_EQ(fm_sheet_set_number(wb, 0, 0, 0, 10.0), 0);  // A1
+  ASSERT_EQ(fm_sheet_set_number(wb, 0, 0, 1, 20.0), 0);  // B1
   ASSERT_EQ(fm_workbook_recalc(wb), 0);
 }
 
@@ -35,22 +35,22 @@ void seed_ab(fm_workbook_t* wb) {
 
 TEST(EvaluateFormula, ScalarArithmeticAgainstCells) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   seed_ab(wb.handle);
 
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 0, 2, "=A1+B1", &v), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 2, "=A1+B1", &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 30.0);
 }
 
 TEST(EvaluateFormula, LeadingEqualsOptional) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   seed_ab(wb.handle);
 
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 0, 2, "A1*2", &v), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 2, "A1*2", &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 20.0);
 }
@@ -59,39 +59,39 @@ TEST(EvaluateFormula, LeadingEqualsOptional) {
 // 1-based; the (row, col) arguments are 0-based.
 TEST(EvaluateFormula, RowColumnAnchoredAtTarget) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_value_t r{};
-  ASSERT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 4, 2, "=ROW()", &r), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 4, 2, "=ROW()", &r), 0);
   EXPECT_EQ(r.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(r.u.number, 5.0);
 
   fm_value_t c{};
-  ASSERT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 4, 2, "=COLUMN()", &c), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 4, 2, "=COLUMN()", &c), 0);
   EXPECT_EQ(c.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(c.u.number, 3.0);
 }
 
 TEST(EvaluateFormula, CrossSheetReference) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Data"), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 1, 0, 0, 99.0), 0);  // Data!A1
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 1, 0, 0, 99.0), 0);  // Data!A1
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 0, 0, "=Data!A1", &v), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=Data!A1", &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 99.0);
 }
 
 TEST(EvaluateFormula, WorkbookScopedDefinedName) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "TAX", "0.08"), 0);
 
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 0, 0, "=TAX*100", &v), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=TAX*100", &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 8.0);
 }
@@ -102,10 +102,10 @@ TEST(EvaluateFormula, WorkbookScopedDefinedName) {
 // implicit intersection and NOT spilling.
 TEST(EvaluateFormula, ArrayResultReducesToTopLeft) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &v), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 1.0);
 }
@@ -114,10 +114,10 @@ TEST(EvaluateFormula, ArrayResultReducesToTopLeft) {
 // formula, independent of the outer scalar reduction.
 TEST(EvaluateFormula, SingleOperatorEvaluates) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 0, 0, "=SINGLE(SEQUENCE(3))", &v), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=SINGLE(SEQUENCE(3))", &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 1.0);
 }
@@ -129,12 +129,12 @@ TEST(EvaluateFormula, SingleOperatorEvaluates) {
 // is caught rather than silently drifting.
 TEST(EvaluateFormula, SelfReferenceReadsCachedValue) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 7.0), 0);  // A1
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 7.0), 0);  // A1
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 0, 0, "=A1", &v), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=A1", &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 7.0);
 }
@@ -144,51 +144,51 @@ TEST(EvaluateFormula, SelfReferenceReadsCachedValue) {
 // const-workbook purity contract.
 TEST(EvaluateFormula, IsSideEffectFree) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 10.0), 0);  // A1
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 10.0), 0);  // A1
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   fm_value_t discard{};
-  ASSERT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 0, 1, "=A1+A1", &discard), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 1, "=A1+A1", &discard), 0);
 
   // A1 is unchanged, and the anchor cell B1 was never written.
   fm_value_t a1{};
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &a1), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &a1), 0);
   EXPECT_EQ(a1.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(a1.u.number, 10.0);
   fm_value_t b1{};
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 1, &b1), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 1, &b1), 0);
   EXPECT_EQ(b1.kind, FM_VAL_BLANK);
 }
 
 TEST(EvaluateFormula, NullArgumentsRejected) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_value_t v{};
-  EXPECT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 0, 0, nullptr, &v),
+  EXPECT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, nullptr, &v),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 0, 0, "=1", nullptr),
+  EXPECT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=1", nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 
 TEST(EvaluateFormula, SheetIndexOutOfRange) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_value_t v{};
-  EXPECT_EQ(fm_workbook_evaluate_formula(wb.handle, 99, 0, 0, "=1", &v),
+  EXPECT_EQ(fm_sheet_evaluate_formula(wb.handle, 99, 0, 0, "=1", &v),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 
 TEST(EvaluateFormula, TargetOutsideSheetIsRejected) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_value_t v{};
-  EXPECT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, formulon::Sheet::kMaxRows, 0, "=1", &v),
+  EXPECT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, formulon::Sheet::kMaxRows, 0, "=1", &v),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  EXPECT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 0, formulon::Sheet::kMaxCols, "=1", &v),
+  EXPECT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, formulon::Sheet::kMaxCols, "=1", &v),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 
@@ -199,11 +199,11 @@ TEST(EvaluateFormula, TargetOutsideSheetIsRejected) {
 // A column vector: =SEQUENCE(3) is 3 rows x 1 col, values 1,2,3 row-major.
 TEST(EvaluateFormulaArray, ColumnVectorPreservesAllCells) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   uint32_t rows = 0;
   uint32_t cols = 0;
-  ASSERT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &rows, &cols), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &rows, &cols), 0);
   EXPECT_EQ(rows, 3U);
   EXPECT_EQ(cols, 1U);
 
@@ -218,11 +218,11 @@ TEST(EvaluateFormulaArray, ColumnVectorPreservesAllCells) {
 // A 2x3 matrix: =SEQUENCE(2,3) fills row-major 1..6.
 TEST(EvaluateFormulaArray, MatrixDimensionsAndRowMajorOrder) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   uint32_t rows = 0;
   uint32_t cols = 0;
-  ASSERT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(2,3)", &rows, &cols), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(2,3)", &rows, &cols), 0);
   EXPECT_EQ(rows, 2U);
   EXPECT_EQ(cols, 3U);
 
@@ -236,11 +236,11 @@ TEST(EvaluateFormulaArray, MatrixDimensionsAndRowMajorOrder) {
 
 TEST(EvaluateFormulaArray, ExpandBlankPadProjectsToZeroAndNestedCountSkipsIt) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   uint32_t rows = 0;
   uint32_t cols = 0;
-  ASSERT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 0, "=EXPAND({1,2;3,4},3,4,)", &rows, &cols), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=EXPAND({1,2;3,4},3,4,)", &rows, &cols), 0);
   EXPECT_EQ(rows, 3U);
   EXPECT_EQ(cols, 4U);
 
@@ -255,24 +255,24 @@ TEST(EvaluateFormulaArray, ExpandBlankPadProjectsToZeroAndNestedCountSkipsIt) {
   }
 
   fm_value_t count{};
-  ASSERT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 0, 0, "=COUNT(EXPAND({1,2;3,4},3,4,))", &count), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=COUNT(EXPAND({1,2;3,4},3,4,))", &count), 0);
   ASSERT_EQ(count.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(count.u.number, 4.0);
 }
 
 TEST(EvaluateFormulaArray, ForeignSpillPhantomSurfacesSpill) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   // First create a real spill at A1:A2. The ad-hoc API is read-only, so its
   // second evaluation can be anchored at the existing phantom A2 without
   // clearing the foreign region.
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(2,1)"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(2,1)"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   uint32_t rows = 0;
   uint32_t cols = 0;
-  ASSERT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 1, 0, "=SEQUENCE(2,1)", &rows, &cols), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 1, 0, "=SEQUENCE(2,1)", &rows, &cols), 0);
   EXPECT_EQ(rows, 1U);
   EXPECT_EQ(cols, 1U);
 
@@ -283,14 +283,14 @@ TEST(EvaluateFormulaArray, ForeignSpillPhantomSurfacesSpill) {
 
   // The foreign spill and its phantom remain intact after the read-only call.
   fm_value_t phantom{};
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 1, 0, &phantom), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 1, 0, &phantom), 0);
   ASSERT_EQ(phantom.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(phantom.u.number, 2.0);
 }
 
 TEST(EvaluateFormulaArray, MergeAtAnchorBlocksVerticalSpill) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   // Exact A1:B1 merge with a would-be A1:A2 spill. Ad-hoc evaluation is
   // read-only, but it must still surface Excel's #SPILL! collision result.
@@ -299,7 +299,7 @@ TEST(EvaluateFormulaArray, MergeAtAnchorBlocksVerticalSpill) {
 
   uint32_t rows = 0;
   uint32_t cols = 0;
-  ASSERT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0U, 0U, 0U, "=SEQUENCE(2,1)", &rows, &cols), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0U, 0U, 0U, "=SEQUENCE(2,1)", &rows, &cols), 0);
   EXPECT_EQ(rows, 1U);
   EXPECT_EQ(cols, 1U);
 
@@ -310,7 +310,7 @@ TEST(EvaluateFormulaArray, MergeAtAnchorBlocksVerticalSpill) {
 
   // The ad-hoc call does not write the anchor or alter the merge metadata.
   fm_value_t anchor{};
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0U, 0U, 0U, &anchor), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0U, 0U, 0U, &anchor), 0);
   EXPECT_EQ(anchor.kind, FM_VAL_BLANK);
   uint32_t merge_count = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb.handle, 0U, &merge_count), 0);
@@ -320,11 +320,11 @@ TEST(EvaluateFormulaArray, MergeAtAnchorBlocksVerticalSpill) {
 // A scalar result is reported as a 1x1 array, index 0 carrying the value.
 TEST(EvaluateFormulaArray, ScalarReportedAsOneByOne) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   uint32_t rows = 0;
   uint32_t cols = 0;
-  ASSERT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 0, "=1+2", &rows, &cols), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=1+2", &rows, &cols), 0);
   EXPECT_EQ(rows, 1U);
   EXPECT_EQ(cols, 1U);
 
@@ -339,11 +339,11 @@ TEST(EvaluateFormulaArray, ScalarReportedAsOneByOne) {
 // is safe. Broadcasting concat over a 1x2 SEQUENCE yields {"1x","2x"}.
 TEST(EvaluateFormulaArray, TextCellsStayValidAfterEvaluation) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   uint32_t rows = 0;
   uint32_t cols = 0;
-  ASSERT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)&\"x\"", &rows, &cols), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)&\"x\"", &rows, &cols), 0);
   EXPECT_EQ(rows, 1U);
   EXPECT_EQ(cols, 2U);
 
@@ -361,21 +361,21 @@ TEST(EvaluateFormulaArray, TextCellsStayValidAfterEvaluation) {
 // same array formula that the array API preserves must still degrade here.
 TEST(EvaluateFormulaArray, ScalarApiStillReducesToTopLeft) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &v), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 1.0);
 }
 
 TEST(EvaluateFormulaArray, IndexOutOfRangeRejected) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   uint32_t rows = 0;
   uint32_t cols = 0;
-  ASSERT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &rows, &cols), 0);
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &rows, &cols), 0);
 
   fm_value_t v{};
   EXPECT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, 3, &v),
@@ -384,13 +384,13 @@ TEST(EvaluateFormulaArray, IndexOutOfRangeRejected) {
 
 TEST(EvaluateFormulaArray, NullArgumentsRejected) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   uint32_t rows = 0;
   uint32_t cols = 0;
-  EXPECT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 0, nullptr, &rows, &cols),
+  EXPECT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, nullptr, &rows, &cols),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 0, "=1", nullptr, &cols),
+  EXPECT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=1", nullptr, &cols),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 
   fm_value_t v{};
@@ -402,23 +402,23 @@ TEST(EvaluateFormulaArray, NullArgumentsRejected) {
 
 TEST(EvaluateFormulaArray, SheetIndexOutOfRange) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   uint32_t rows = 0;
   uint32_t cols = 0;
-  EXPECT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 99, 0, 0, "=1", &rows, &cols),
+  EXPECT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 99, 0, 0, "=1", &rows, &cols),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 
 TEST(EvaluateFormulaArray, TargetOutsideSheetIsRejected) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   uint32_t rows = 0;
   uint32_t cols = 0;
-  EXPECT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, formulon::Sheet::kMaxRows, 0, "=1", &rows, &cols),
+  EXPECT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, formulon::Sheet::kMaxRows, 0, "=1", &rows, &cols),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  EXPECT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, formulon::Sheet::kMaxCols, "=1", &rows, &cols),
+  EXPECT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, formulon::Sheet::kMaxCols, "=1", &rows, &cols),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 
@@ -431,11 +431,11 @@ TEST(EvaluateFormulaArray, TargetOutsideSheetIsRejected) {
 // TRUE — the generic evaluator would instead propagate the raw error/value.
 TEST(EvaluateCfFormula, ExcelPredicateCoercion) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   auto fires = [&](const char* formula) {
     fm_value_t v{};
-    EXPECT_EQ(fm_workbook_evaluate_cf_formula(wb.handle, 0, 0, 0, 0, 0, formula, &v), 0);
+    EXPECT_EQ(fm_sheet_evaluate_cf_formula(wb.handle, 0, 0, 0, 0, 0, formula, &v), 0);
     EXPECT_EQ(v.kind, FM_VAL_BOOL);
     return v.u.boolean != 0;
   };
@@ -455,40 +455,40 @@ TEST(EvaluateCfFormula, ExcelPredicateCoercion) {
 // not fire); at target A2 it shifts to A2 (=1, fires).
 TEST(EvaluateCfFormula, RelativeRefShiftedFromAnchor) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 0.0), 0);  // A1 = 0
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 1, 0, 1.0), 0);  // A2 = 1
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 0.0), 0);  // A1 = 0
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 1, 0, 1.0), 0);  // A2 = 1
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   fm_value_t at_a1{};
-  ASSERT_EQ(fm_workbook_evaluate_cf_formula(wb.handle, 0, 0, 0, 0, 0, "=A1=1", &at_a1), 0);
+  ASSERT_EQ(fm_sheet_evaluate_cf_formula(wb.handle, 0, 0, 0, 0, 0, "=A1=1", &at_a1), 0);
   EXPECT_EQ(at_a1.u.boolean, 0);  // A1 == 1 ? 0 == 1 -> FALSE
 
   fm_value_t at_a2{};
-  ASSERT_EQ(fm_workbook_evaluate_cf_formula(wb.handle, 0, 1, 0, 0, 0, "=A1=1", &at_a2), 0);
+  ASSERT_EQ(fm_sheet_evaluate_cf_formula(wb.handle, 0, 1, 0, 0, 0, "=A1=1", &at_a2), 0);
   EXPECT_EQ(at_a2.u.boolean, 1);  // shifted to A2 == 1 -> TRUE
 }
 
 TEST(EvaluateCfFormula, NullArgumentsRejected) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_value_t v{};
-  EXPECT_EQ(fm_workbook_evaluate_cf_formula(wb.handle, 0, 0, 0, 0, 0, nullptr, &v),
+  EXPECT_EQ(fm_sheet_evaluate_cf_formula(wb.handle, 0, 0, 0, 0, 0, nullptr, &v),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 
 TEST(EvaluateCfFormula, TargetAndAnchorOutsideSheetAreRejected) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_value_t v{};
-  EXPECT_EQ(fm_workbook_evaluate_cf_formula(wb.handle, 0, formulon::Sheet::kMaxRows, 0, 0, 0, "=1", &v),
+  EXPECT_EQ(fm_sheet_evaluate_cf_formula(wb.handle, 0, formulon::Sheet::kMaxRows, 0, 0, 0, "=1", &v),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  EXPECT_EQ(fm_workbook_evaluate_cf_formula(wb.handle, 0, 0, formulon::Sheet::kMaxCols, 0, 0, "=1", &v),
+  EXPECT_EQ(fm_sheet_evaluate_cf_formula(wb.handle, 0, 0, formulon::Sheet::kMaxCols, 0, 0, "=1", &v),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  EXPECT_EQ(fm_workbook_evaluate_cf_formula(wb.handle, 0, 0, 0, formulon::Sheet::kMaxRows, 0, "=1", &v),
+  EXPECT_EQ(fm_sheet_evaluate_cf_formula(wb.handle, 0, 0, 0, formulon::Sheet::kMaxRows, 0, "=1", &v),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  EXPECT_EQ(fm_workbook_evaluate_cf_formula(wb.handle, 0, 0, 0, 0, formulon::Sheet::kMaxCols, "=1", &v),
+  EXPECT_EQ(fm_sheet_evaluate_cf_formula(wb.handle, 0, 0, 0, 0, formulon::Sheet::kMaxCols, "=1", &v),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }

@@ -217,7 +217,7 @@ formulon::pivot::SubtotalFn pivot_subtotal_from_fm(fm_pivot_aggregation_t agg) {
   return static_cast<formulon::pivot::SubtotalFn>(agg);
 }
 
-formulon::pivot::ShowValuesAs pivot_show_as_from_fm(fm_pivot_show_as_t show_as) {
+formulon::pivot::ShowValuesAs pivot_show_as_from_fm(fm_pivot_show_values_as_t show_as) {
   return static_cast<formulon::pivot::ShowValuesAs>(show_as);
 }
 

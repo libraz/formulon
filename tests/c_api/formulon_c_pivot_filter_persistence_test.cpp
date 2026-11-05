@@ -121,7 +121,7 @@ std::vector<std::uint8_t> BuildFilterPackage(std::string_view region_field_attrs
 
 std::set<std::string> RowLabels(fm_workbook_t* wb) {
   PivotCellsGuard projected;
-  EXPECT_EQ(fm_workbook_pivot_layout(wb, 0, 0, &projected.handle), 0) << fm_last_error_message();
+  EXPECT_EQ(fm_sheet_get_pivot_layout(wb, 0, 0, &projected.handle), 0) << fm_get_last_error_message();
   std::set<std::string> out;
   for (const fm_pivot_cell_t& cell : CollectCells(projected.handle)) {
     if (cell.kind == FM_PIVOT_CELL_ROW_LABEL && cell.value.kind == FM_VAL_TEXT && cell.value.u.text != nullptr) {
@@ -133,7 +133,7 @@ std::set<std::string> RowLabels(fm_workbook_t* wb) {
 
 std::vector<std::uint8_t> Save(fm_workbook_t* wb) {
   BufferGuard saved;
-  EXPECT_EQ(fm_workbook_save(wb, &saved.data, &saved.len), 0) << fm_last_error_message();
+  EXPECT_EQ(fm_workbook_save(wb, &saved.data, &saved.len), 0) << fm_get_last_error_message();
   return std::vector<std::uint8_t>(saved.data, saved.data + saved.len);
 }
 
@@ -196,8 +196,8 @@ TEST(FormulonCApiPivotFilterPersistence, EachFilterTypeSurvivesSaveAndReload) {
   for (const FilterCase& c : cases) {
     SCOPED_TRACE(c.label);
     WorkbookGuard wb;
-    ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &wb.handle), 0) << fm_last_error_message();
-    ASSERT_EQ(fm_workbook_pivot_filter_add(wb.handle, 0, 0, &c.spec), 0) << fm_last_error_message();
+    ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &wb.handle), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, 0, &c.spec), 0) << fm_get_last_error_message();
     EXPECT_EQ(RowLabels(wb.handle), c.kept);
 
     const std::vector<std::uint8_t> saved = Save(wb.handle);
@@ -205,12 +205,12 @@ TEST(FormulonCApiPivotFilterPersistence, EachFilterTypeSurvivesSaveAndReload) {
     EXPECT_NE(saved_xml.find("<filters count=\"1\">"), std::string::npos) << saved_xml;
 
     WorkbookGuard back;
-    ASSERT_EQ(fm_workbook_load(saved.data(), saved.size(), &back.handle), 0) << fm_last_error_message();
+    ASSERT_EQ(fm_workbook_load(saved.data(), saved.size(), &back.handle), 0) << fm_get_last_error_message();
     std::size_t count = 0;
-    ASSERT_EQ(fm_workbook_pivot_filter_count(back.handle, 0, 0, &count), 0);
+    ASSERT_EQ(fm_sheet_get_pivot_filter_count(back.handle, 0, 0, &count), 0);
     ASSERT_EQ(count, 1U);
     fm_pivot_filter_spec_t read{};
-    ASSERT_EQ(fm_workbook_pivot_filter_at(back.handle, 0, 0, 0, &read), 0) << fm_last_error_message();
+    ASSERT_EQ(fm_sheet_get_pivot_filter(back.handle, 0, 0, 0, &read), 0) << fm_get_last_error_message();
     EXPECT_EQ(read.type, c.spec.type);
     EXPECT_STREQ(read.field_name, c.spec.field_name);
     EXPECT_EQ(read.axis, FM_PIVOT_AXIS_ROW);
@@ -233,18 +233,18 @@ TEST(FormulonCApiPivotFilterPersistence, EachFilterTypeSurvivesSaveAndReload) {
 // A pivot assembled entirely through the C ABI persists its filter too.
 TEST(FormulonCApiPivotFilterPersistence, ScratchPivotFilterSurvivesSaveAndReload) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_idx = 0;
-  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
   const fm_pivot_filter_spec_t spec = TextSpec(FM_PIVOT_FILTER_LABEL_BEGINS_WITH, "Region", "N");
-  ASSERT_EQ(fm_workbook_pivot_filter_add(wb.handle, 0, pivot_idx, &spec), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_idx, &spec), 0) << fm_get_last_error_message();
   const std::vector<std::uint8_t> saved = Save(wb.handle);
 
   WorkbookGuard back;
-  ASSERT_EQ(fm_workbook_load(saved.data(), saved.size(), &back.handle), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data(), saved.size(), &back.handle), 0) << fm_get_last_error_message();
   std::size_t count = 0;
-  ASSERT_EQ(fm_workbook_pivot_filter_count(back.handle, 0, 0, &count), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_filter_count(back.handle, 0, 0, &count), 0);
   EXPECT_EQ(count, 1U);
   EXPECT_TRUE(LayoutHasText(back.handle, 0, "North"));
   EXPECT_FALSE(LayoutHasText(back.handle, 0, "South"));
@@ -273,20 +273,20 @@ constexpr std::string_view kMixedFilters =
 TEST(FormulonCApiPivotFilterPersistence, LoadedUnsupportedFiltersAreKeptVerbatim) {
   const std::vector<std::uint8_t> package = BuildFilterPackage("", kMixedFilters);
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &wb.handle), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &wb.handle), 0) << fm_get_last_error_message();
   std::size_t count = 0;
-  ASSERT_EQ(fm_workbook_pivot_filter_count(wb.handle, 0, 0, &count), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_filter_count(wb.handle, 0, 0, &count), 0);
   ASSERT_EQ(count, 3U);
   const fm_pivot_filter_type_t types[] = {FM_PIVOT_FILTER_LABEL_NOT_EQUAL, FM_PIVOT_FILTER_VALUE_TOP_10,
                                           FM_PIVOT_FILTER_VALUE_TOP_PERCENT};
   for (std::size_t i = 0; i < 3U; ++i) {
     fm_pivot_filter_spec_t read{};
-    ASSERT_EQ(fm_workbook_pivot_filter_at(wb.handle, 0, 0, i, &read), 0) << fm_last_error_message();
+    ASSERT_EQ(fm_sheet_get_pivot_filter(wb.handle, 0, 0, i, &read), 0) << fm_get_last_error_message();
     EXPECT_EQ(read.type, types[i]);
     EXPECT_STREQ(read.field_name, "Region");
   }
   fm_pivot_filter_spec_t top{};
-  ASSERT_EQ(fm_workbook_pivot_filter_at(wb.handle, 0, 0, 1, &top), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_get_pivot_filter(wb.handle, 0, 0, 1, &top), 0) << fm_get_last_error_message();
   EXPECT_EQ(top.value_kind, FM_PIVOT_FILTER_VALUE_INT);
   EXPECT_EQ(top.value_int, 2);
   // not-East, then top 2 of North 400 / South 200, then the top 50% of 600.
@@ -296,16 +296,16 @@ TEST(FormulonCApiPivotFilterPersistence, LoadedUnsupportedFiltersAreKeptVerbatim
   const std::vector<std::uint8_t> saved = Save(wb.handle);
   EXPECT_EQ(FiltersBlock(ExtractZipEntry(saved, "xl/pivotTables/pivotTable1.xml")), std::string(kMixedFilters));
   WorkbookGuard back;
-  ASSERT_EQ(fm_workbook_load(saved.data(), saved.size(), &back.handle), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data(), saved.size(), &back.handle), 0) << fm_get_last_error_message();
   EXPECT_EQ(RowLabels(back.handle), kept);
 
-  ASSERT_EQ(fm_workbook_pivot_filter_remove_at(back.handle, 0, 0, 1), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_remove_pivot_filter(back.handle, 0, 0, 1), 0) << fm_get_last_error_message();
   const std::string edited = FiltersBlock(SavedPivotXml(back.handle));
   EXPECT_EQ(edited.rfind("<filters count=\"3\">", 0), 0U) << edited;
   EXPECT_EQ(edited.find("type=\"count\""), std::string::npos) << edited;
   EXPECT_LT(edited.find("captionNotEqual"), edited.find("percent"));
   EXPECT_LT(edited.find("percent"), edited.find("someFutureFamily"));
-  ASSERT_EQ(fm_workbook_pivot_filter_clear(back.handle, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_clear_pivot_filters(back.handle, 0, 0), 0);
   const std::string cleared = FiltersBlock(SavedPivotXml(back.handle));
   EXPECT_EQ(cleared.rfind("<filters count=\"1\">", 0), 0U) << cleared;
   EXPECT_NE(cleared.find("someFutureFamily"), std::string::npos) << cleared;
@@ -316,30 +316,30 @@ TEST(FormulonCApiPivotFilterPersistence, LoadedUnsupportedFiltersAreKeptVerbatim
 // file that carries it.
 TEST(FormulonCApiPivotFilterPersistence, SubtotalFunctionsReadBack) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_idx = 0;
-  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
   fm_pivot_field_info_t info{};
-  ASSERT_EQ(fm_workbook_pivot_field_at(wb.handle, 0, pivot_idx, 0, &info), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_idx, 0, &info), 0);
   EXPECT_EQ(info.default_subtotal, 1);
   EXPECT_EQ(info.subtotal_fns, 0U);
 
-  ASSERT_EQ(fm_workbook_pivot_field_add_subtotal_fn(wb.handle, 0, pivot_idx, 0, FM_PIVOT_AGG_COUNT), 0);
-  ASSERT_EQ(fm_workbook_pivot_field_add_subtotal_fn(wb.handle, 0, pivot_idx, 0, FM_PIVOT_AGG_SUM), 0);
-  ASSERT_EQ(fm_workbook_pivot_field_at(wb.handle, 0, pivot_idx, 0, &info), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_subtotal_fn(wb.handle, 0, pivot_idx, 0, FM_PIVOT_AGG_COUNT), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_subtotal_fn(wb.handle, 0, pivot_idx, 0, FM_PIVOT_AGG_SUM), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_idx, 0, &info), 0);
   const std::uint32_t sum_count = (1U << FM_PIVOT_AGG_SUM) | (1U << FM_PIVOT_AGG_COUNT);
   EXPECT_EQ(info.default_subtotal, 0);
   EXPECT_EQ(info.subtotal_fns, sum_count);
 
   const std::vector<std::uint8_t> saved = Save(wb.handle);
   WorkbookGuard back;
-  ASSERT_EQ(fm_workbook_load(saved.data(), saved.size(), &back.handle), 0) << fm_last_error_message();
-  ASSERT_EQ(fm_workbook_pivot_field_at(back.handle, 0, 0, 0, &info), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data(), saved.size(), &back.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_pivot_field(back.handle, 0, 0, 0, &info), 0);
   EXPECT_EQ(info.default_subtotal, 0);
   EXPECT_EQ(info.subtotal_fns, sum_count);
   // The value field carries the default.
-  ASSERT_EQ(fm_workbook_pivot_field_at(back.handle, 0, 0, 1, &info), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field(back.handle, 0, 0, 1, &info), 0);
   EXPECT_EQ(info.default_subtotal, 1);
   EXPECT_EQ(info.subtotal_fns, 0U);
 
@@ -350,8 +350,8 @@ TEST(FormulonCApiPivotFilterPersistence, SubtotalFunctionsReadBack) {
     SCOPED_TRACE(std::string(attrs));
     const std::vector<std::uint8_t> package = BuildFilterPackage(attrs, "");
     WorkbookGuard loaded;
-    ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &loaded.handle), 0) << fm_last_error_message();
-    ASSERT_EQ(fm_workbook_pivot_field_at(loaded.handle, 0, 0, 0, &info), 0);
+    ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &loaded.handle), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_sheet_get_pivot_field(loaded.handle, 0, 0, 0, &info), 0);
     EXPECT_EQ(info.default_subtotal, want_default);
     EXPECT_EQ(info.subtotal_fns, want_fns);
   }

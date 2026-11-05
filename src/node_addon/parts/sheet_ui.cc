@@ -99,13 +99,13 @@ Napi::Value Workbook::GetMergesInRange(const Napi::CallbackInfo& info) {
   }
   const uint32_t sheet = ArgU32(info, 0);
   uint32_t total = 0;
-  fm_status_t rc = fm_sheet_merges_in_range(handle_, sheet, range, nullptr, 0, &total);
+  fm_status_t rc = fm_sheet_get_merges_in_range(handle_, sheet, range, nullptr, 0, &total);
   if (rc != 0) {
     return FinishListResult(env, arr, rc);
   }
   std::vector<fm_merge_range> merges(total);
   uint32_t again = 0;
-  rc = fm_sheet_merges_in_range(handle_, sheet, range, merges.data(), total, &again);
+  rc = fm_sheet_get_merges_in_range(handle_, sheet, range, merges.data(), total, &again);
   if (rc != 0) {
     return FinishListResult(env, arr, rc);
   }
@@ -125,8 +125,8 @@ Napi::Value Workbook::GetComment(const Napi::CallbackInfo& info) {
   const uint32_t sheet = ArgU32(info, 0);
   const uint32_t row = ArgU32(info, 1);
   const uint32_t col = ArgU32(info, 2);
-  fm_comment c{};
-  if (fm_sheet_get_comment_at(handle_, sheet, row, col, &c) != 0) {
+  fm_comment_t c{};
+  if (fm_sheet_get_comment(handle_, sheet, row, col, &c) != 0) {
     return env.Null();
   }
   Napi::Object o = Napi::Object::New(env);
@@ -143,8 +143,8 @@ Napi::Value Workbook::GetCommentResult(const Napi::CallbackInfo& info) {
   const uint32_t sheet = ArgU32(info, 0);
   const uint32_t row = ArgU32(info, 1);
   const uint32_t col = ArgU32(info, 2);
-  fm_comment c{};
-  const fm_status_t rc = fm_sheet_get_comment_at(handle_, sheet, row, col, &c);
+  fm_comment_t c{};
+  const fm_status_t rc = fm_sheet_get_comment(handle_, sheet, row, col, &c);
   if (rc != 0) {
     return MakeFieldResult(env, MakeErrorStatus(env, rc), "comment", env.Null());
   }
@@ -156,7 +156,7 @@ Napi::Value Workbook::GetCommentResult(const Napi::CallbackInfo& info) {
 
 namespace {
 
-Napi::Object CommentToJs(Napi::Env env, const fm_comment& c) {
+Napi::Object CommentToJs(Napi::Env env, const fm_comment_t& c) {
   Napi::Object item = Napi::Object::New(env);
   item.Set("row", Napi::Number::New(env, c.row));
   item.Set("col", Napi::Number::New(env, c.col));
@@ -168,7 +168,7 @@ Napi::Object CommentToJs(Napi::Env env, const fm_comment& c) {
 }  // namespace
 
 Napi::Value Workbook::GetComments(const Napi::CallbackInfo& info) {
-  return SheetListResult(info, handle_, &fm_sheet_get_comment_count, &fm_sheet_get_comment_at_index, &CommentToJs);
+  return SheetListResult(info, handle_, &fm_sheet_get_comment_count, &fm_sheet_get_comment_at, &CommentToJs);
 }
 
 Napi::Value Workbook::SetComment(const Napi::CallbackInfo& info) {
@@ -214,7 +214,7 @@ Napi::Value Workbook::GetWorkbookProtection(const Napi::CallbackInfo& info) {
     return MakeFieldResult(env, NullHandleError(env), "protection", env.Null());
   }
   fm_workbook_protection_t p{};
-  const fm_status_t rc = fm_workbook_get_protection(handle_, &p);
+  const fm_status_t rc = fm_workbook_get_workbook_protection(handle_, &p);
   if (rc != 0) {
     return MakeFieldResult(env, MakeErrorStatus(env, rc), "protection", env.Null());
   }
@@ -268,7 +268,7 @@ Napi::Value Workbook::SetWorkbookProtection(const Napi::CallbackInfo& info) {
   p.revisions_algorithm_name = text[5].c_str();
   p.revisions_hash_value = text[6].c_str();
   p.revisions_salt_value = text[7].c_str();
-  return MakeStatus(env, fm_workbook_set_protection(handle_, &p));
+  return MakeStatus(env, fm_workbook_set_workbook_protection(handle_, &p));
 }
 
 namespace {
@@ -322,7 +322,7 @@ Napi::Value EditProtectedRange(fm_workbook_t* const& handle, const Napi::Callbac
 }  // namespace
 
 Napi::Value Workbook::GetProtectedRanges(const Napi::CallbackInfo& info) {
-  return SheetListResult(info, handle_, &fm_sheet_protected_range_count, &fm_sheet_get_protected_range,
+  return SheetListResult(info, handle_, &fm_sheet_get_protected_range_count, &fm_sheet_get_protected_range,
                          &ProtectedRangeToJs);
 }
 
@@ -357,12 +357,12 @@ fm_status_t AddHyperlinkFromArgs(fm_workbook_t* wb, const Napi::CallbackInfo& in
   const uint32_t last_col = ranged ? Workbook::ArgU32(info, 4) : col;
   const std::size_t text_idx = ranged ? 5 : 3;
   // Keep the std::string buffers alive until after the C ABI call so the
-  // borrowed `const char*` pointers in `fm_hyperlink` stay valid.
+  // borrowed `const char*` pointers in `fm_hyperlink_t` stay valid.
   const std::string target = Workbook::ArgString(info, text_idx);
   const std::string display = Workbook::ArgString(info, text_idx + 1);
   const std::string tooltip = Workbook::ArgString(info, text_idx + 2);
   const std::string location = Workbook::ArgString(info, text_idx + 3);
-  fm_hyperlink hl{};
+  fm_hyperlink_t hl{};
   hl.row = row;
   hl.col = col;
   hl.last_row = last_row;
@@ -411,7 +411,7 @@ Napi::Value Workbook::AddHyperlinkRange(const Napi::CallbackInfo& info) {
 
 namespace {
 
-Napi::Object HyperlinkToJs(Napi::Env env, const fm_hyperlink& h) {
+Napi::Object HyperlinkToJs(Napi::Env env, const fm_hyperlink_t& h) {
   Napi::Object item = Napi::Object::New(env);
   item.Set("row", Napi::Number::New(env, h.row));
   item.Set("col", Napi::Number::New(env, h.col));
@@ -446,7 +446,7 @@ Napi::Value Workbook::ClearHyperlinks(const Napi::CallbackInfo& info) {
 
 namespace {
 
-Napi::Object ValidationToJs(Napi::Env env, const fm_data_validation& v) {
+Napi::Object ValidationToJs(Napi::Env env, const fm_data_validation_t& v) {
   Napi::Object item = Napi::Object::New(env);
   Napi::Array ranges = Napi::Array::New(env);
   for (uint32_t r = 0; r < v.range_count; ++r) {
@@ -472,7 +472,7 @@ Napi::Object ValidationToJs(Napi::Env env, const fm_data_validation& v) {
 }  // namespace
 
 Napi::Value Workbook::GetValidations(const Napi::CallbackInfo& info) {
-  return SheetListResult(info, handle_, &fm_sheet_get_validation_count, &fm_sheet_get_validation_at, &ValidationToJs);
+  return SheetListResult(info, handle_, &fm_sheet_get_validation_count, &fm_sheet_get_validation, &ValidationToJs);
 }
 
 Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
@@ -521,7 +521,7 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
   reader.String(v, "promptTitle", &prompt_title);
   reader.String(v, "promptMessage", &prompt_message);
 
-  fm_data_validation dv{};
+  fm_data_validation_t dv{};
   dv.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
   dv.range_count = static_cast<uint32_t>(ranges_buf.size());
   dv.type = reader.U8(v, "type", 0U);
@@ -545,7 +545,7 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::RemoveValidationAt(const Napi::CallbackInfo& info) {
-  return InvokeSheetCall(info, &fm_sheet_remove_validation_at);
+  return InvokeSheetCall(info, &fm_sheet_remove_validation);
 }
 
 Napi::Value Workbook::ClearValidations(const Napi::CallbackInfo& info) {
@@ -558,7 +558,7 @@ namespace {
 
 // Reads the `Mention[]` at `arr`; `ids` backs the borrowed strings.
 bool ReadMentions(CheckedSpecReader& reader, const Napi::Value& arr, std::vector<std::string>& ids,
-                  std::vector<fm_mention>& out) {
+                  std::vector<fm_mention_t>& out) {
   Napi::Array list;
   if (!reader.Array(arr, "mentions", &list)) {
     return reader.ok();
@@ -580,7 +580,7 @@ bool ReadMentions(CheckedSpecReader& reader, const Napi::Value& arr, std::vector
     reader.String(m, "mentionId", &mention_id);
     ids.push_back(std::move(person_id));
     ids.push_back(std::move(mention_id));
-    fm_mention c{};
+    fm_mention_t c{};
     c.person_id = ids[ids.size() - 2].c_str();
     c.mention_id = ids.back().c_str();
     c.start = reader.U32(m, "start", 0U);
@@ -603,10 +603,10 @@ Napi::Value Workbook::GetThreadedComments(const Napi::CallbackInfo& info) {
   }
   const uint32_t sheet = ArgU32(info, 0);
   size_t count = 0;
-  fm_status_t rc = fm_sheet_threaded_comment_count(handle_, sheet, &count);
+  fm_status_t rc = fm_sheet_get_threaded_comment_count(handle_, sheet, &count);
   for (size_t i = 0; rc == 0 && i < count; ++i) {
-    fm_threaded_comment c{};
-    rc = fm_sheet_threaded_comment_at(handle_, sheet, i, &c);
+    fm_threaded_comment_t c{};
+    rc = fm_sheet_get_threaded_comment_at(handle_, sheet, i, &c);
     if (rc != 0) {
       break;
     }
@@ -652,12 +652,12 @@ Napi::Value Workbook::AddThreadedComment(const Napi::CallbackInfo& info) {
   reader.String(spec, "text", &text);
   reader.String(spec, "parentId", &parent_id);
   std::vector<std::string> mention_ids;
-  std::vector<fm_mention> mentions;
+  std::vector<fm_mention_t> mentions;
   Napi::Array mention_array;
   if (reader.Array(spec, "mentions", &mention_array)) {
     ReadMentions(reader, mention_array, mention_ids, mentions);
   }
-  fm_threaded_comment c{};
+  fm_threaded_comment_t c{};
   c.id = id.c_str();
   c.row = reader.U32(spec, "row", 0U);
   c.col = reader.U32(spec, "col", 0U);
@@ -683,14 +683,14 @@ Napi::Value Workbook::EditThreadedComment(const Napi::CallbackInfo& info) {
   const std::string id = ArgString(info, 1);
   const std::string text = ArgString(info, 2);
   std::vector<std::string> mention_ids;
-  std::vector<fm_mention> mentions;
+  std::vector<fm_mention_t> mentions;
   if (info.Length() > 3) {
     ReadMentions(reader, info[3], mention_ids, mentions);
   }
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_sheet_edit_threaded_comment(handle_, ArgU32(info, 0), id.c_str(), text.c_str(),
+  return MakeStatus(env, fm_sheet_update_threaded_comment(handle_, ArgU32(info, 0), id.c_str(), text.c_str(),
                                                         mentions.empty() ? nullptr : mentions.data(),
                                                         static_cast<uint32_t>(mentions.size())));
 }
@@ -716,10 +716,10 @@ Napi::Value Workbook::GetPersons(const Napi::CallbackInfo& info) {
     return MakeFieldResult(env, NullHandleError(env), "persons", arr);
   }
   size_t count = 0;
-  fm_status_t rc = fm_workbook_person_count(handle_, &count);
+  fm_status_t rc = fm_workbook_get_person_count(handle_, &count);
   for (size_t i = 0; rc == 0 && i < count; ++i) {
-    fm_person p{};
-    rc = fm_workbook_person_at(handle_, i, &p);
+    fm_person_t p{};
+    rc = fm_workbook_get_person_at(handle_, i, &p);
     if (rc != 0) {
       break;
     }
@@ -748,7 +748,7 @@ Napi::Value Workbook::AddPerson(const Napi::CallbackInfo& info) {
   reader.String(spec, "displayName", &display_name);
   reader.String(spec, "userId", &user_id);
   reader.String(spec, "providerId", &provider_id);
-  fm_person p{};
+  fm_person_t p{};
   p.id = id.c_str();
   p.display_name = display_name.c_str();
   p.user_id = user_id.c_str();

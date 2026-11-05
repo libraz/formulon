@@ -421,7 +421,7 @@ export const StatusCode = Object.freeze({
 
 /**
  * Merge a host-supplied metadata entry over the engine's structural
- * `functionMetadata()` result.
+ * `getFunctionMetadata()` result.
  *
  * This is a pure, side-effect-free helper: it does not touch the engine.
  * The engine returns `signatureTemplate` / `description` as
@@ -437,7 +437,7 @@ export const StatusCode = Object.freeze({
  *     `entry.description` -> `base.description`
  *   - localizedName: `entry.aliases[locale]` -> `base.name`
  *
- * @param {object} base A `FunctionMetadataResult` from `functionMetadata()`.
+ * @param {object} base A `FunctionMetadataResult` from `getFunctionMetadata()`.
  * @param {object|undefined} entry The provider's `functions[NAME]` entry, or
  *   `undefined`/`null` to leave `base` unchanged (signature/description
  *   stay `undefined`).

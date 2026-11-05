@@ -27,7 +27,7 @@ bool PullRange(CheckedSpecReader& reader, const Napi::Object& spec, const char* 
   return ReadMergeRange(reader, object, out);
 }
 
-Napi::Object FilterColumnToJs(Napi::Env env, const fm_filter_column& c) {
+Napi::Object FilterColumnToJs(Napi::Env env, const fm_filter_column_t& c) {
   Napi::Object o = Napi::Object::New(env);
   o.Set("colId", JsNumber(env, c.col_id));
   o.Set("hiddenButton", JsBool(env, c.hidden_button));
@@ -41,7 +41,7 @@ Napi::Object FilterColumnToJs(Napi::Env env, const fm_filter_column& c) {
   o.Set("values", values);
   Napi::Array groups = Napi::Array::New(env, c.date_group_count);
   for (uint32_t i = 0; i < c.date_group_count; ++i) {
-    const fm_date_group_item& g = c.date_groups[i];
+    const fm_date_group_item_t& g = c.date_groups[i];
     Napi::Object item = Napi::Object::New(env);
     item.Set("year", JsNumber(env, g.year));
     item.Set("month", JsNumber(env, g.month));
@@ -79,7 +79,7 @@ Napi::Object FilterColumnToJs(Napi::Env env, const fm_filter_column& c) {
   return o;
 }
 
-Napi::Object AutoFilterToJs(Napi::Env env, const fm_auto_filter& f) {
+Napi::Object AutoFilterToJs(Napi::Env env, const fm_auto_filter_t& f) {
   Napi::Object o = Napi::Object::New(env);
   o.Set("range", RangeToJs(env, f.range));
   Napi::Array columns = Napi::Array::New(env, f.column_count);
@@ -98,7 +98,7 @@ Napi::Object AutoFilterToJs(Napi::Env env, const fm_auto_filter& f) {
   sort.Set("sortMethod", JsNumber(env, f.sort_method));
   Napi::Array conditions = Napi::Array::New(env, f.condition_count);
   for (uint32_t i = 0; i < f.condition_count; ++i) {
-    const fm_sort_condition& c = f.conditions[i];
+    const fm_sort_condition_t& c = f.conditions[i];
     Napi::Object item = Napi::Object::New(env);
     item.Set("ref", RangeToJs(env, c.ref));
     item.Set("descending", JsBool(env, c.descending));
@@ -116,15 +116,15 @@ Napi::Object AutoFilterToJs(Napi::Env env, const fm_auto_filter& f) {
   return o;
 }
 
-// Owns the strings and arrays an `fm_auto_filter` borrows from.
+// Owns the strings and arrays an `fm_auto_filter_t` borrows from.
 struct AutoFilterInput {
-  fm_auto_filter filter{};
-  std::vector<fm_filter_column> columns;
-  std::vector<fm_sort_condition> conditions;
+  fm_auto_filter_t filter{};
+  std::vector<fm_filter_column_t> columns;
+  std::vector<fm_sort_condition_t> conditions;
   // A deque never relocates its elements, so the `c_str()` views stay valid.
   std::deque<std::string> strings;
   std::vector<std::vector<const char*>> value_ptrs;
-  std::vector<std::vector<fm_date_group_item>> groups;
+  std::vector<std::vector<fm_date_group_item_t>> groups;
 
   const char* Keep(std::string s) {
     strings.push_back(std::move(s));
@@ -132,8 +132,8 @@ struct AutoFilterInput {
   }
 };
 
-void ReadFilterColumn(CheckedSpecReader& reader, const Napi::Object& spec, AutoFilterInput& in, fm_filter_column& c) {
-  c = fm_filter_column{};
+void ReadFilterColumn(CheckedSpecReader& reader, const Napi::Object& spec, AutoFilterInput& in, fm_filter_column_t& c) {
+  c = fm_filter_column_t{};
   c.col_id = reader.U32(spec, "colId", 0U);
   c.hidden_button = reader.Bool(spec, "hiddenButton", false) ? 1 : 0;
   c.show_button = reader.Bool(spec, "showButton", true) ? 1 : 0;
@@ -158,7 +158,7 @@ void ReadFilterColumn(CheckedSpecReader& reader, const Napi::Object& spec, AutoF
   c.values = ptrs.empty() ? nullptr : ptrs.data();
   c.value_count = static_cast<uint32_t>(ptrs.size());
   in.groups.emplace_back();
-  std::vector<fm_date_group_item>& groups = in.groups.back();
+  std::vector<fm_date_group_item_t>& groups = in.groups.back();
   Napi::Array date_groups;
   if (reader.Array(spec, "dateGroups", &date_groups)) {
     const Napi::Array& arr = date_groups;
@@ -171,7 +171,7 @@ void ReadFilterColumn(CheckedSpecReader& reader, const Napi::Object& spec, AutoF
       if (!reader.Object(group_value, "dateGroups[]", &g)) {
         break;
       }
-      fm_date_group_item item{};
+      fm_date_group_item_t item{};
       item.year = reader.U16(g, "year", 0U);
       item.month = reader.U8(g, "month", 0U);
       item.day = reader.U8(g, "day", 0U);
@@ -220,8 +220,8 @@ void ReadFilterColumn(CheckedSpecReader& reader, const Napi::Object& spec, AutoF
   c.has_icon_id = reader.Bool(spec, "hasIconId", false) ? 1 : 0;
 }
 
-void ReadSortCondition(CheckedSpecReader& reader, const Napi::Object& spec, AutoFilterInput& in, fm_sort_condition& c) {
-  c = fm_sort_condition{};
+void ReadSortCondition(CheckedSpecReader& reader, const Napi::Object& spec, AutoFilterInput& in, fm_sort_condition_t& c) {
+  c = fm_sort_condition_t{};
   PullRange(reader, spec, "ref", &c.ref);
   c.descending = reader.Bool(spec, "descending", false) ? 1 : 0;
   c.sort_by = reader.I32(spec, "sortBy", 0);
@@ -241,7 +241,7 @@ bool ReadAutoFilter(CheckedSpecReader& reader, const Napi::CallbackInfo& info, s
   if (!ObjectArg(info, idx, &spec)) {
     return false;
   }
-  fm_auto_filter& f = in.filter;
+  fm_auto_filter_t& f = in.filter;
   PullRange(reader, spec, "range", &f.range);
   Napi::Array columns;
   if (reader.Array(spec, "columns", &columns)) {
@@ -312,10 +312,10 @@ Napi::Value GetAutoFilterImpl(const Napi::CallbackInfo& info, const fm_workbook_
     return MakeFieldResult(env, NullHandleError(env), "autoFilter", env.Null());
   }
   const size_t idx = Workbook::ArgU32(info, 0);
-  fm_auto_filter af{};
+  fm_auto_filter_t af{};
   int32_t present = 0;
   const fm_status_t rc =
-      table ? fm_table_get_auto_filter(wb, idx, &af, &present) : fm_sheet_get_auto_filter(wb, idx, &af, &present);
+      table ? fm_workbook_get_table_auto_filter(wb, idx, &af, &present) : fm_sheet_get_auto_filter(wb, idx, &af, &present);
   const bool has = rc == 0 && present != 0;
   return MakeFieldResult(env, MakeStatus(env, rc), "autoFilter",
                          has ? static_cast<Napi::Value>(AutoFilterToJs(env, af)) : env.Null());
@@ -331,7 +331,7 @@ Napi::Value EvaluateAutoFilterImpl(const Napi::CallbackInfo& info, const fm_work
   out.Set("firstRow", JsNumber(env, 0));
   out.Set("match", Napi::Array::New(env));
   auto call = [&](uint8_t* buf, size_t cap, size_t* len, uint32_t* first) {
-    return table ? fm_table_evaluate_auto_filter(wb, idx, buf, cap, len, first)
+    return table ? fm_workbook_evaluate_table_auto_filter(wb, idx, buf, cap, len, first)
                  : fm_sheet_evaluate_auto_filter(wb, idx, buf, cap, len, first);
   };
   size_t len = 0;
@@ -356,7 +356,7 @@ Napi::Value EvaluateAutoFilterImpl(const Napi::CallbackInfo& info, const fm_work
 }
 
 // Shared bodies of the sheet / table AutoFilter mutators.
-using AutoFilterSetFn = fm_status_t (*)(fm_workbook_t*, size_t, const fm_auto_filter*);
+using AutoFilterSetFn = fm_status_t (*)(fm_workbook_t*, size_t, const fm_auto_filter_t*);
 using AutoFilterOpFn = fm_status_t (*)(fm_workbook_t*, size_t);
 
 // `handle` aliases the wrapper's member, so the C call sees the handle as it
@@ -402,7 +402,7 @@ Napi::Value Workbook::SetAutoFilter(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetTableAutoFilter(const Napi::CallbackInfo& info) {
-  return SetAutoFilterImpl(info, handle_, &fm_table_set_auto_filter,
+  return SetAutoFilterImpl(info, handle_, &fm_workbook_set_table_auto_filter,
                            "setTableAutoFilter expects (tableIdx:number, autoFilter:object)");
 }
 
@@ -411,7 +411,7 @@ Napi::Value Workbook::RemoveAutoFilter(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::RemoveTableAutoFilter(const Napi::CallbackInfo& info) {
-  return InvokeAutoFilterOp(info, handle_, &fm_table_remove_auto_filter);
+  return InvokeAutoFilterOp(info, handle_, &fm_workbook_remove_table_auto_filter);
 }
 
 Napi::Value Workbook::ApplyAutoFilter(const Napi::CallbackInfo& info) {
@@ -419,7 +419,7 @@ Napi::Value Workbook::ApplyAutoFilter(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::ApplyTableAutoFilter(const Napi::CallbackInfo& info) {
-  return InvokeAutoFilterOp(info, handle_, &fm_table_apply_auto_filter);
+  return InvokeAutoFilterOp(info, handle_, &fm_workbook_apply_table_auto_filter);
 }
 
 Napi::Value Workbook::ClearAutoFilter(const Napi::CallbackInfo& info) {
@@ -427,7 +427,7 @@ Napi::Value Workbook::ClearAutoFilter(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::ClearTableAutoFilter(const Napi::CallbackInfo& info) {
-  return InvokeAutoFilterOp(info, handle_, &fm_table_clear_auto_filter);
+  return InvokeAutoFilterOp(info, handle_, &fm_workbook_clear_table_auto_filter);
 }
 
 Napi::Value Workbook::EvaluateAutoFilter(const Napi::CallbackInfo& info) {

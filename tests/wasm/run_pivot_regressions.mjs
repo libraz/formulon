@@ -10,34 +10,34 @@ function makeCheckedPivot(Module) {
     assert.ok(status.ok, `${what}: ${JSON.stringify(status)}`);
     return result;
   };
-  const cache = must(wb.pivotCacheCreate(0), 'pivotCacheCreate').index;
+  const cache = must(wb.addPivotCache(0), 'addPivotCache').index;
   must(
-    wb.pivotCacheSetWorksheetSource(cache, { present: true, ref: 'A1:B3', sheet: 'Sheet1' }),
-    'pivotCacheSetWorksheetSource',
+    wb.setPivotCacheWorksheetSource(cache, { present: true, ref: 'A1:B3', sheet: 'Sheet1' }),
+    'setPivotCacheWorksheetSource',
   );
-  must(wb.pivotCacheFieldAdd(cache, 'Region'), 'pivotCacheFieldAdd Region');
-  must(wb.pivotCacheFieldAdd(cache, 'Amount'), 'pivotCacheFieldAdd Amount');
+  must(wb.addPivotCacheField(cache, 'Region'), 'pivotCacheFieldAdd Region');
+  must(wb.addPivotCacheField(cache, 'Amount'), 'pivotCacheFieldAdd Amount');
   for (const [region, amount] of [
     ['East', 10],
     ['West', 30],
   ]) {
-    const record = must(wb.pivotCacheRecordAdd(cache), 'pivotCacheRecordAdd').index;
-    must(wb.pivotCacheRecordSetText(cache, record, 0, region), 'pivotCacheRecordSetText');
-    must(wb.pivotCacheRecordSetNumber(cache, record, 1, amount), 'pivotCacheRecordSetNumber');
+    const record = must(wb.addPivotCacheRecord(cache), 'addPivotCacheRecord').index;
+    must(wb.setPivotCacheRecordText(cache, record, 0, region), 'setPivotCacheRecordText');
+    must(wb.setPivotCacheRecordNumber(cache, record, 1, amount), 'setPivotCacheRecordNumber');
   }
-  const pivot = must(wb.pivotCreate(0, 'Pivot1', cache, 0, 4), 'pivotCreate').index;
-  const region = must(wb.pivotFieldAdd(0, pivot, { sourceName: 'Region', axis: 0 }), 'region field').index;
-  const amount = must(wb.pivotFieldAdd(0, pivot, { sourceName: 'Amount', axis: 2 }), 'amount field').index;
-  must(wb.pivotSetRowFieldOrder(0, pivot, [region]), 'pivotSetRowFieldOrder');
+  const pivot = must(wb.addPivot(0, 'Pivot1', cache, 0, 4), 'addPivot').index;
+  const region = must(wb.addPivotField(0, pivot, { sourceName: 'Region', axis: 0 }), 'region field').index;
+  const amount = must(wb.addPivotField(0, pivot, { sourceName: 'Amount', axis: 2 }), 'amount field').index;
+  must(wb.setPivotRowFieldOrder(0, pivot, [region]), 'setPivotRowFieldOrder');
   must(
-    wb.pivotDataFieldAdd(0, pivot, { name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 }),
-    'pivotDataFieldAdd',
+    wb.addPivotDataField(0, pivot, { name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 }),
+    'addPivotDataField',
   );
   return { wb, pivot, region, amount };
 }
 
 function checkedPivotGrid(wb, pivot) {
-  const layout = wb.pivotLayout(0, pivot);
+  const layout = wb.getPivotLayout(0, pivot);
   assert.ok(layout.status.ok, JSON.stringify(layout.status));
   const rows = new Map();
   for (const cell of layout.cells) {
@@ -55,35 +55,35 @@ export function registerPivotRegressions(Module, test) {
   test('pivotFieldAddItemAt hides the blank item an empty label cannot name', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      const cache = wb.pivotCacheCreate(0);
+      const cache = wb.addPivotCache(0);
       assert.ok(cache.status.ok, `pivotCacheCreate: ${JSON.stringify(cache.status)}`);
-      const region = wb.pivotCacheFieldAdd(cache.index, 'Region');
+      const region = wb.addPivotCacheField(cache.index, 'Region');
       assert.ok(region.status.ok);
-      const amount = wb.pivotCacheFieldAdd(cache.index, 'Amount');
+      const amount = wb.addPivotCacheField(cache.index, 'Amount');
       assert.ok(amount.status.ok);
       // Shared item 0 renders as "North"; shared item 1 is the blank, which
       // carries no label of its own and can only be named by its index.
-      assert.ok(wb.pivotCacheFieldAddSharedItemText(cache.index, region.index, 'North').ok);
-      assert.ok(wb.pivotCacheFieldAddSharedItemBlank(cache.index, region.index).ok);
+      assert.ok(wb.addPivotCacheFieldSharedItemText(cache.index, region.index, 'North').ok);
+      assert.ok(wb.addPivotCacheFieldSharedItemBlank(cache.index, region.index).ok);
 
-      const first = wb.pivotCacheRecordAdd(cache.index);
+      const first = wb.addPivotCacheRecord(cache.index);
       assert.ok(first.status.ok);
-      assert.ok(wb.pivotCacheRecordSetNumber(cache.index, first.index, region.index, 0).ok);
-      assert.ok(wb.pivotCacheRecordSetNumber(cache.index, first.index, amount.index, 100).ok);
-      const second = wb.pivotCacheRecordAdd(cache.index);
+      assert.ok(wb.setPivotCacheRecordNumber(cache.index, first.index, region.index, 0).ok);
+      assert.ok(wb.setPivotCacheRecordNumber(cache.index, first.index, amount.index, 100).ok);
+      const second = wb.addPivotCacheRecord(cache.index);
       assert.ok(second.status.ok);
-      assert.ok(wb.pivotCacheRecordSetBlank(cache.index, second.index, region.index).ok);
-      assert.ok(wb.pivotCacheRecordSetNumber(cache.index, second.index, amount.index, 200).ok);
+      assert.ok(wb.setPivotCacheRecordBlank(cache.index, second.index, region.index).ok);
+      assert.ok(wb.setPivotCacheRecordNumber(cache.index, second.index, amount.index, 200).ok);
 
-      const pivot = wb.pivotCreate(0, 'PT', cache.index, 0, 0);
+      const pivot = wb.addPivot(0, 'PT', cache.index, 0, 0);
       assert.ok(pivot.status.ok, `pivotCreate: ${JSON.stringify(pivot.status)}`);
-      const regionField = wb.pivotFieldAdd(0, pivot.index, { sourceName: 'Region', axis: 0 });
+      const regionField = wb.addPivotField(0, pivot.index, { sourceName: 'Region', axis: 0 });
       assert.ok(regionField.status.ok);
-      const amountField = wb.pivotFieldAdd(0, pivot.index, { sourceName: 'Amount', axis: 2 });
+      const amountField = wb.addPivotField(0, pivot.index, { sourceName: 'Amount', axis: 2 });
       assert.ok(amountField.status.ok);
-      assert.ok(wb.pivotSetRowFieldOrder(0, pivot.index, [regionField.index]).ok);
+      assert.ok(wb.setPivotRowFieldOrder(0, pivot.index, [regionField.index]).ok);
       assert.ok(
-        wb.pivotDataFieldAdd(0, pivot.index, {
+        wb.addPivotDataField(0, pivot.index, {
           name: 'Sum of Amount',
           fieldIndex: amountField.index,
           aggregation: 0,
@@ -91,7 +91,7 @@ export function registerPivotRegressions(Module, test) {
       );
 
       const sumDataCells = () => {
-        const layout = wb.pivotLayout(0, pivot.index);
+        const layout = wb.getPivotLayout(0, pivot.index);
         assert.ok(layout.status.ok, `pivotLayout: ${JSON.stringify(layout.status)}`);
         let total = 0;
         for (const cell of layout.cells) {
@@ -103,8 +103,8 @@ export function registerPivotRegressions(Module, test) {
       };
       assert.equal(sumDataCells(), 300);
 
-      assert.ok(wb.pivotFieldAddItem(0, pivot.index, regionField.index, 'North', true).ok);
-      assert.ok(wb.pivotFieldAddItemAt(0, pivot.index, regionField.index, 1, false).ok);
+      assert.ok(wb.addPivotFieldItem(0, pivot.index, regionField.index, 'North', true).ok);
+      assert.ok(wb.addPivotFieldSharedItem(0, pivot.index, regionField.index, 1, false).ok);
       assert.equal(sumDataCells(), 100);
     } finally {
       wb.delete();
@@ -116,23 +116,23 @@ export function registerPivotRegressions(Module, test) {
     for (const value of invalid) {
       const { wb, pivot } = makeCheckedPivot(Module);
       try {
-        const before = wb.pivotFieldCount(0, pivot).value;
+        const before = wb.getPivotFieldCount(0, pivot).value;
         assert.throws(
-          () => wb.pivotFieldAdd(0, pivot, { sourceName: 'Region', axis: value }),
+          () => wb.addPivotField(0, pivot, { sourceName: 'Region', axis: value }),
           nestedErrorClass(value),
           `pivotFieldAdd axis=${String(value)} accepted`,
         );
-        assert.equal(wb.pivotFieldCount(0, pivot).value, before);
+        assert.equal(wb.getPivotFieldCount(0, pivot).value, before);
       } finally {
         wb.delete();
       }
 
       const data = makeCheckedPivot(Module);
       try {
-        const before = data.wb.pivotDataFieldCount(0, data.pivot).value;
+        const before = data.wb.getPivotDataFieldCount(0, data.pivot).value;
         assert.throws(
           () =>
-            data.wb.pivotDataFieldAdd(0, data.pivot, {
+            data.wb.addPivotDataField(0, data.pivot, {
               name: 'Bad',
               fieldIndex: value,
               aggregation: 0,
@@ -140,7 +140,7 @@ export function registerPivotRegressions(Module, test) {
           nestedErrorClass(value),
           `pivotDataFieldAdd fieldIndex=${String(value)} accepted`,
         );
-        assert.equal(data.wb.pivotDataFieldCount(0, data.pivot).value, before);
+        assert.equal(data.wb.getPivotDataFieldCount(0, data.pivot).value, before);
       } finally {
         data.wb.delete();
       }
@@ -158,10 +158,10 @@ export function registerPivotRegressions(Module, test) {
     for (const override of invalid) {
       const { wb, pivot } = makeCheckedPivot(Module);
       try {
-        const before = wb.pivotFilterCount(0, pivot).value;
+        const before = wb.getPivotFilterCount(0, pivot).value;
         assert.throws(
           () =>
-            wb.pivotFilterAdd(0, pivot, {
+            wb.addPivotFilter(0, pivot, {
               axis: 0,
               fieldName: 'Region',
               type: 1,
@@ -172,7 +172,7 @@ export function registerPivotRegressions(Module, test) {
           nestedErrorClass(Object.values(override)[0]),
           `pivotFilterAdd ${String(Object.values(override)[0])} accepted`,
         );
-        assert.equal(wb.pivotFilterCount(0, pivot).value, before);
+        assert.equal(wb.getPivotFilterCount(0, pivot).value, before);
         assert.deepEqual(checkedPivotGrid(wb, pivot), CHECKED_PIVOT_GRID);
       } finally {
         wb.delete();
@@ -186,7 +186,7 @@ export function registerPivotRegressions(Module, test) {
       const { wb, pivot } = makeCheckedPivot(Module);
       try {
         assert.throws(
-          () => wb.pivotSetRowFieldOrder(0, pivot, [value]),
+          () => wb.setPivotRowFieldOrder(0, pivot, [value]),
           nestedErrorClass(value),
           `pivotSetRowFieldOrder element=${String(value)} accepted`,
         );
@@ -200,7 +200,7 @@ export function registerPivotRegressions(Module, test) {
   test('pivot valid nested controls and nullish defaults remain accepted', () => {
     const { wb, pivot, amount } = makeCheckedPivot(Module);
     try {
-      const data = wb.pivotDataFieldAdd(0, pivot, {
+      const data = wb.addPivotDataField(0, pivot, {
         name: 'Count of Amount',
         fieldIndex: amount,
         aggregation: 1,
@@ -210,8 +210,8 @@ export function registerPivotRegressions(Module, test) {
         showAsBaseItem: undefined,
       });
       assert.ok(data.status.ok, JSON.stringify(data.status));
-      assert.equal(wb.pivotDataFieldCount(0, pivot).value, 2);
-      const filter = wb.pivotFilterAdd(0, pivot, {
+      assert.equal(wb.getPivotDataFieldCount(0, pivot).value, 2);
+      const filter = wb.addPivotFilter(0, pivot, {
         axis: 0,
         fieldName: 'Region',
         type: 1,
@@ -219,7 +219,7 @@ export function registerPivotRegressions(Module, test) {
         valueDouble: 15,
       });
       assert.ok(filter.ok, JSON.stringify(filter));
-      assert.ok(wb.pivotSetRowFieldOrder(0, pivot, [0]).ok);
+      assert.ok(wb.setPivotRowFieldOrder(0, pivot, [0]).ok);
     } finally {
       wb.delete();
     }
@@ -228,7 +228,7 @@ export function registerPivotRegressions(Module, test) {
   test('pivot nested getter failures are rethrown before any C mutation', () => {
     const { wb, pivot } = makeCheckedPivot(Module);
     try {
-      const fieldCount = wb.pivotFieldCount(0, pivot).value;
+      const fieldCount = wb.getPivotFieldCount(0, pivot).value;
       const fieldSpec = { axis: 0 };
       Object.defineProperty(fieldSpec, 'sourceName', {
         enumerable: true,
@@ -236,8 +236,8 @@ export function registerPivotRegressions(Module, test) {
           throw new Error('pivot field getter');
         },
       });
-      assert.throws(() => wb.pivotFieldAdd(0, pivot, fieldSpec), /pivot field getter/);
-      assert.equal(wb.pivotFieldCount(0, pivot).value, fieldCount);
+      assert.throws(() => wb.addPivotField(0, pivot, fieldSpec), /pivot field getter/);
+      assert.equal(wb.getPivotFieldCount(0, pivot).value, fieldCount);
 
       const indices = [];
       Object.defineProperty(indices, 0, {
@@ -246,7 +246,7 @@ export function registerPivotRegressions(Module, test) {
           throw new Error('pivot order getter');
         },
       });
-      assert.throws(() => wb.pivotSetRowFieldOrder(0, pivot, indices), /pivot order getter/);
+      assert.throws(() => wb.setPivotRowFieldOrder(0, pivot, indices), /pivot order getter/);
       assert.deepEqual(checkedPivotGrid(wb, pivot), CHECKED_PIVOT_GRID);
     } finally {
       wb.delete();
@@ -261,7 +261,7 @@ export function registerPivotRegressions(Module, test) {
       assert.equal(stale.status.ok, false);
       assert.ok(stale.status.message.length > 0);
 
-      const rejected = wb.createTable({ sheetIndex: 0, ref: 'A1:B2', name: 'T' });
+      const rejected = wb.addTable({ sheetIndex: 0, ref: 'A1:B2', name: 'T' });
       assert.equal(rejected.status.ok, false);
       assert.notEqual(rejected.status.message, stale.status.message);
       assert.match(rejected.status.message, /columns/);
@@ -275,9 +275,9 @@ export function registerPivotRegressions(Module, test) {
     const wb = Module.Workbook.createDefault();
     try {
       for (const list of [
-        wb.getMerges(99),
-        wb.getComments(99),
-        wb.getHyperlinks(99),
+        wb.listMerges(99),
+        wb.listComments(99),
+        wb.listHyperlinks(99),
         wb.getValidations(99),
         wb.getConditionalFormats(99),
       ]) {
@@ -319,7 +319,7 @@ export function registerPivotRegressions(Module, test) {
         const formula = `=${'SUM('.repeat(depth)}A1${')'.repeat(depth)}`;
         let out;
         try {
-          out = wb.evaluateFormulaText(0, 1, 0, formula);
+          out = wb.evaluateFormula(0, 1, 0, formula);
         } catch (e) {
           // Past this point the instance is gone and its worker threads keep
           // the process alive, so reporting and continuing would hang rather

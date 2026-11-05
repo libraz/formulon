@@ -25,7 +25,7 @@ class StyleTests(unittest.TestCase):
             fill = wb.add_fill(FillRecord(pattern=1, fg_argb=0xFFFF0000))
             nf = wb.add_num_fmt("0.00")
             self.assertGreater(nf, 0)
-            self.assertEqual(wb.get_num_fmt(nf), "0.00")
+            self.assertEqual(wb.get_num_fmt_string(nf), "0.00")
 
             # add_cell_xf validates indices against the parallel tables, so a
             # border must exist before it can be referenced.
@@ -101,9 +101,9 @@ class StyleTests(unittest.TestCase):
             index = wb.add_font(FontRecord(name="Arial", size=12.0, vert_align=1, color_argb=0xFF112233))
             self.assertEqual(wb.get_font(index).vert_align, 1)
 
-            before = wb.font_count()
+            before = wb.get_font_count()
             self.assertEqual(wb.add_font(wb.get_font(index)), index)
-            self.assertEqual(wb.font_count(), before)
+            self.assertEqual(wb.get_font_count(), before)
 
     def test_font_one_field_rewrite_preserves_the_superscript(self) -> None:
         with Workbook.create_default() as wb:
@@ -123,9 +123,9 @@ class StyleTests(unittest.TestCase):
             self.assertIsNotNone(got.font)
             self.assertEqual(got.font.vert_align, 1)
 
-            before = wb.dxf_count()
+            before = wb.get_dxf_count()
             self.assertEqual(wb.add_dxf(got), index)
-            self.assertEqual(wb.dxf_count(), before)
+            self.assertEqual(wb.get_dxf_count(), before)
 
     def test_dxf_font_without_size_reads_back_without_size(self) -> None:
         with Workbook.create_default() as wb:
@@ -146,7 +146,7 @@ class StyleTests(unittest.TestCase):
             )
             index = wb.add_dxf(record)
             self.assertEqual(wb.add_dxf(record), index)
-            self.assertEqual(wb.dxf_count(), 1)
+            self.assertEqual(wb.get_dxf_count(), 1)
             got = wb.get_dxf(index)
             self.assertIsNotNone(got.font)
             self.assertEqual(got.font.name, "Arial")

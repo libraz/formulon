@@ -32,7 +32,7 @@ TEST(FormulonCli, RecalcRoundTripsFormulae) {
   ASSERT_EQ(fm_workbook_recalc(wb), 0);
 
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_get_value(wb, 0, 0, 1, &v), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb, 0, 0, 1, &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 8.0);
   fm_workbook_destroy(wb);
@@ -76,7 +76,7 @@ TEST(FormulonCli, RecalcThreadsUsesParallelSchedulerAndSavesWideDag) {
   fm_workbook_t* wb = nullptr;
   ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb), 0);
   fm_value_t value{};
-  ASSERT_EQ(fm_workbook_get_value(wb, 0U, 47U, 1U, &value), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb, 0U, 47U, 1U, &value), 0);
   EXPECT_EQ(value.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(value.u.number, 97.0);
   fm_workbook_destroy(wb);
@@ -223,7 +223,7 @@ TEST(FormulonCli, RecalcXlsbOutputExtensionWritesXlsbContainer) {
   ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb), 0);
   ASSERT_EQ(fm_workbook_recalc(wb), 0);
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_get_value(wb, 0, 0, 1, &v), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb, 0, 0, 1, &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 8.0);
   fm_workbook_destroy(wb);

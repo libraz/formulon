@@ -35,7 +35,7 @@ Napi::Value InputToJs(Napi::Env env, int32_t has, uint32_t row, uint32_t col, in
 }  // namespace
 
 Napi::Value Workbook::AddDataTable(const Napi::CallbackInfo& info) {
-  fm_data_table table{};
+  fm_data_table_t table{};
   return InvokeSheetSpec(
       info, "addDataTable expects (sheet:number, spec:object)",
       [&](CheckedSpecReader& reader, const Napi::Object& spec) {
@@ -60,9 +60,9 @@ Napi::Value Workbook::GetDataTable(const Napi::CallbackInfo& info) {
     return out;
   }
   int32_t present = 0;
-  fm_data_table t{};
+  fm_data_table_t t{};
   const fm_status_t rc =
-      fm_sheet_data_table_at(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &present, &t);
+      fm_sheet_get_data_table(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &present, &t);
   out.Set("status", MakeStatus(env, rc));
   if (rc != 0 || present == 0) {
     return out;

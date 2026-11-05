@@ -44,7 +44,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   const std::string fragment(reinterpret_cast<const char*>(data + 1), size - 1);
 
   fm_workbook_t* wb = nullptr;
-  if (fm_workbook_create(&wb) != 0 || wb == nullptr) {
+  if (fm_workbook_create_default(&wb) != 0 || wb == nullptr) {
     return 0;
   }
   (void)kSetters[selector](wb, 0, fragment.c_str());
@@ -53,7 +53,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   // accepted fragment feeds the structured views, and a rejected one must
   // have left them untouched.
   fm_pagination_t* pagination = nullptr;
-  if (fm_workbook_paginate(wb, 0, &pagination) == 0) {
+  if (fm_workbook_get_pagination(wb, 0, &pagination) == 0) {
     fm_pagination_destroy(pagination);
   }
 

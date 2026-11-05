@@ -6,7 +6,7 @@ test('Workbook.createDefault produces a valid single-sheet workbook', async () =
   const wb = Module.Workbook.createDefault();
   try {
     assert.ok(wb.isValid());
-    assert.equal(wb.sheetCount().value, 1);
+    assert.equal(wb.getSheetCount().value, 1);
   } finally {
     wb.delete();
   }
@@ -17,11 +17,11 @@ test('print settings: raw XML round-trips and rejects malformed fragments', asyn
   const wb = Module.Workbook.createDefault();
   try {
     // An absent element reads back as the empty string, never null.
-    assert.equal(wb.getSheetPageSetupXml(0).xml, '');
+    assert.equal(wb.getPageSetupXml(0).xml, '');
 
     const fragment = '<pageSetup paperSize="9" orientation="portrait" scale="85"/>';
-    assert.ok(wb.setSheetPageSetupXml(0, fragment).ok);
-    assert.equal(wb.getSheetPageSetupXml(0).xml, fragment);
+    assert.ok(wb.setPageSetupXml(0, fragment).ok);
+    assert.equal(wb.getPageSetupXml(0).xml, fragment);
 
     for (const bad of [
       '<pageSetup/><pageSetup/>',
@@ -29,14 +29,14 @@ test('print settings: raw XML round-trips and rejects malformed fragments', asyn
       '<pageSetup orientation="portrait"',
       '<x:pageSetup/>',
     ]) {
-      assert.equal(wb.setSheetPageSetupXml(0, bad).ok, false, `expected rejection for ${bad}`);
+      assert.equal(wb.setPageSetupXml(0, bad).ok, false, `expected rejection for ${bad}`);
     }
     // A rejected set leaves the stored fragment untouched.
-    assert.equal(wb.getSheetPageSetupXml(0).xml, fragment);
+    assert.equal(wb.getPageSetupXml(0).xml, fragment);
 
-    assert.ok(wb.setSheetPageSetupXml(0, '').ok);
-    assert.equal(wb.getSheetPageSetupXml(0).xml, '');
-    const cleared = wb.getSheetPageSetup(0);
+    assert.ok(wb.setPageSetupXml(0, '').ok);
+    assert.equal(wb.getPageSetupXml(0).xml, '');
+    const cleared = wb.getPageSetup(0);
     assert.ok(cleared.status.ok);
     assert.equal(cleared.scale, 100);
     assert.equal(cleared.scaleStated, false);
@@ -50,11 +50,11 @@ test('print settings: typed patch leaves unstated attributes alone', async () =>
   const wb = Module.Workbook.createDefault();
   try {
     assert.ok(
-      wb.setSheetPageSetupXml(0, '<pageSetup paperSize="9" orientation="portrait" horizontalDpi="600" copies="3"/>').ok,
+      wb.setPageSetupXml(0, '<pageSetup paperSize="9" orientation="portrait" horizontalDpi="600" copies="3"/>').ok,
     );
-    assert.ok(wb.setSheetPageSetup(0, { orientation: 2 }).ok);
+    assert.ok(wb.setPageSetup(0, { orientation: 2 }).ok);
 
-    const xml = wb.getSheetPageSetupXml(0).xml;
+    const xml = wb.getPageSetupXml(0).xml;
     assert.match(xml, /orientation="landscape"/);
     // Attributes the engine does not model must survive the patch, or the
     // "open a template and change one thing" route loses data.
@@ -63,9 +63,9 @@ test('print settings: typed patch leaves unstated attributes alone', async () =>
     assert.match(xml, /paperSize="9"/);
 
     // A print scale outside Excel's range is rejected, not clamped.
-    assert.equal(wb.setSheetPageSetup(0, { scale: 9 }).ok, false);
-    assert.equal(wb.setSheetPageSetup(0, { scale: 401 }).ok, false);
-    assert.ok(wb.setSheetPageSetup(0, { scale: 400 }).ok);
+    assert.equal(wb.setPageSetup(0, { scale: 9 }).ok, false);
+    assert.equal(wb.setPageSetup(0, { scale: 401 }).ok, false);
+    assert.ok(wb.setPageSetup(0, { scale: 400 }).ok);
   } finally {
     wb.delete();
   }
@@ -80,9 +80,9 @@ test('print settings: a change reaches paginate with no save cycle', async () =>
         assert.ok(wb.setNumber(0, row, col, 1).ok);
       }
     }
-    const portrait = wb.paginate(0).pageCount;
-    assert.ok(wb.setSheetPageSetup(0, { orientation: 2 }).ok);
-    assert.notEqual(wb.paginate(0).pageCount, portrait);
+    const portrait = wb.getPagination(0).pageCount;
+    assert.ok(wb.setPageSetup(0, { orientation: 2 }).ok);
+    assert.notEqual(wb.getPagination(0).pageCount, portrait);
   } finally {
     wb.delete();
   }
@@ -95,7 +95,7 @@ test('print settings: an authored report survives save and load', async () => {
   try {
     assert.ok(wb.setText(0, 0, 0, '売上').ok);
     assert.ok(
-      wb.setSheetPageSetup(0, {
+      wb.setPageSetup(0, {
         paperSize: 9,
         orientation: 1,
         fitToPage: true,
@@ -103,12 +103,12 @@ test('print settings: an authored report survives save and load', async () => {
         fitToHeight: 0,
       }).ok,
     );
-    assert.ok(wb.setSheetPageMargins(0, { left: 0.5, right: 0.5, top: 0.8, bottom: 0.8 }).ok);
-    assert.ok(wb.setSheetPrintOptions(0, { horizontalCentered: true }).ok);
-    assert.ok(wb.setSheetHeaderFooter(0, { oddHeader: '&C月次報告', oddFooter: '&R&P / &N' }).ok);
-    assert.ok(wb.setSheetPrintArea(0, 'A1:F80').ok);
-    assert.ok(wb.setSheetPrintTitles(0, '1:2', '').ok);
-    assert.ok(wb.addSheetRowBreak(0, 39, true).ok);
+    assert.ok(wb.setPageMargins(0, { left: 0.5, right: 0.5, top: 0.8, bottom: 0.8 }).ok);
+    assert.ok(wb.setPrintOptions(0, { horizontalCentered: true }).ok);
+    assert.ok(wb.setHeaderFooter(0, { oddHeader: '&C月次報告', oddFooter: '&R&P / &N' }).ok);
+    assert.ok(wb.setPrintArea(0, 'A1:F80').ok);
+    assert.ok(wb.setPrintTitles(0, '1:2', '').ok);
+    assert.ok(wb.addRowBreak(0, 39, true).ok);
 
     const saved = wb.save();
     assert.ok(saved.status.ok, JSON.stringify(saved.status));
@@ -117,22 +117,22 @@ test('print settings: an authored report survives save and load', async () => {
     wb.delete();
   }
 
-  const reloaded = Module.Workbook.loadBytes(bytes);
+  const reloaded = Module.Workbook.load(bytes);
   try {
-    const setup = reloaded.getSheetPageSetup(0);
+    const setup = reloaded.getPageSetup(0);
     assert.ok(setup.status.ok);
     assert.equal(setup.paperSize, 9);
     assert.equal(setup.orientation, 1);
     assert.equal(setup.fitToPage, true);
     assert.equal(setup.fitToHeight, 0);
-    assert.equal(reloaded.getSheetPageMargins(0).left, 0.5);
-    assert.equal(reloaded.getSheetPrintArea(0).ranges, 'A1:F80');
-    const titles = reloaded.getSheetPrintTitles(0);
+    assert.equal(reloaded.getPageMargins(0).left, 0.5);
+    assert.equal(reloaded.getPrintArea(0).ranges, 'A1:F80');
+    const titles = reloaded.getPrintTitles(0);
     assert.equal(titles.repeatRows, '1:2');
     assert.equal(titles.repeatCols, '');
     // The header code is stored escaped and decodes back to `&C...`.
-    assert.match(reloaded.getSheetHeaderFooterXml(0).xml, /<oddHeader>&amp;C月次報告<\/oddHeader>/);
-    const breaks = reloaded.getSheetRowBreaks(0);
+    assert.match(reloaded.getHeaderFooterXml(0).xml, /<oddHeader>&amp;C月次報告<\/oddHeader>/);
+    const breaks = reloaded.listRowBreaks(0);
     assert.deepEqual(
       breaks.breaks.map((b) => b.id),
       [39],
@@ -147,7 +147,14 @@ test('setRangeXfIndex applies one xf across a rectangle', async () => {
   const Module = await getModule();
   const wb = Module.Workbook.createDefault();
   try {
-    const xf = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 0, wrapText: true, hasWrapText: true });
+    const xf = wb.addCellXf({
+      fontIndex: 0,
+      fillIndex: 0,
+      borderIndex: 0,
+      numFmtId: 0,
+      wrapText: true,
+      hasWrapText: true,
+    });
     assert.ok(xf.status.ok, JSON.stringify(xf.status));
     assert.ok(wb.setRangeXfIndex(0, 0, 0, 2, 2, xf.index).ok);
     // Cells that held nothing are materialised so the ruled box renders.
@@ -172,7 +179,7 @@ test('sheet layout getters preserve explicit width presence flags', async () => 
     assert.ok(wb.setColumnHidden(0, 1, 1, true).ok);
     assert.ok(wb.setRowHeight(0, 3, 30).ok);
 
-    const columns = wb.getSheetColumns(0);
+    const columns = wb.listColOverrides(0);
     assert.ok(columns.status.ok, `getSheetColumns: ${JSON.stringify(columns.status)}`);
     const widthZero = columns.columns.find((column) => column.first === 0 && column.last === 0);
     assert.ok(widthZero);
@@ -187,7 +194,7 @@ test('sheet layout getters preserve explicit width presence flags', async () => 
     assert.equal(typeof hidden.hasWidth, 'number');
     assert.equal(hidden.hasWidth, 0);
 
-    const rows = wb.getSheetRowOverrides(0);
+    const rows = wb.listRowOverrides(0);
     assert.ok(rows.status.ok, `getSheetRowOverrides: ${JSON.stringify(rows.status)}`);
     const row = rows.rows.find((entry) => entry.row === 3);
     assert.ok(row);
@@ -209,13 +216,13 @@ test('Unicode sheet identity rejects folded duplicate and permits casing rename'
     const collision = wb.renameSheet(1, 'ä');
     assert.equal(collision.ok, false);
     assert.notEqual(collision.status, 0);
-    assert.equal(wb.sheetName(0).value, 'Ä');
-    assert.equal(wb.sheetName(1).value, 'Ö');
+    assert.equal(wb.getSheetName(0).value, 'Ä');
+    assert.equal(wb.getSheetName(1).value, 'Ö');
     assert.ok(wb.renameSheet(0, 'ä').ok);
-    const sn = wb.sheetName(0);
+    const sn = wb.getSheetName(0);
     assert.ok(sn.status.ok);
     assert.equal(sn.value, 'ä');
-    assert.equal(wb.sheetName(1).value, 'Ö');
+    assert.equal(wb.getSheetName(1).value, 'Ö');
   } finally {
     wb.delete();
   }

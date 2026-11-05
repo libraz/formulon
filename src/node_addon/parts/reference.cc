@@ -14,7 +14,7 @@ constexpr const char* kDestroyedMessage = "the workbook handle was already destr
 
 /// Throws the C ABI's last error as a RangeError (an out-of-grid or unordered argument).
 Napi::Value ThrowLastError(Napi::Env env) {
-  Napi::RangeError::New(env, fm_last_error_message()).ThrowAsJavaScriptException();
+  Napi::RangeError::New(env, fm_get_last_error_message()).ThrowAsJavaScriptException();
   return env.Undefined();
 }
 
@@ -69,7 +69,7 @@ Napi::Value Workbook::ParseReference(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const std::string text = ArgString(info, 0);
-  fm_reference_t ref{};
+  fm_parsed_reference_t ref{};
   const fm_status_t rc = fm_workbook_parse_reference(handle_, text.c_str(), r1c1 ? 1 : 0, has_row ? 1 : 0, base_row,
                                                      base_col, &ref);
   if (rc != 0) {

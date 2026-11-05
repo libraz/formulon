@@ -92,17 +92,17 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
     return status;
   }
   PaginationGuard pagination;
-  if (const auto status = fm_workbook_paginate(workbook.handle, sheet_index, &pagination.handle); status != 0) {
+  if (const auto status = fm_workbook_get_pagination(workbook.handle, sheet_index, &pagination.handle); status != 0) {
     emit_last_error(err, "paginate");
     return status;
   }
 
   out << "sheet=" << sheet_index << '\n';
-  out << "pages=" << fm_pagination_page_count(pagination.handle) << '\n';
+  out << "pages=" << fm_pagination_get_page_count(pagination.handle) << '\n';
   out << "print_area=";
-  for (std::size_t i = 0; i < fm_pagination_print_area_count(pagination.handle); ++i) {
+  for (std::size_t i = 0; i < fm_pagination_get_print_area_count(pagination.handle); ++i) {
     fm_print_range_t range{};
-    if (const auto status = fm_pagination_print_area_at(pagination.handle, i, &range); status != 0) {
+    if (const auto status = fm_pagination_get_print_area_at(pagination.handle, i, &range); status != 0) {
       emit_last_error(err, "paginate");
       return status;
     }
@@ -128,8 +128,8 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
     out << '\n';
     return true;
   };
-  if (!emit_breaks("horizontal_breaks", fm_pagination_horizontal_break_count, fm_pagination_horizontal_break_at) ||
-      !emit_breaks("vertical_breaks", fm_pagination_vertical_break_count, fm_pagination_vertical_break_at)) {
+  if (!emit_breaks("horizontal_breaks", fm_pagination_get_row_break_count, fm_pagination_get_row_break_at) ||
+      !emit_breaks("vertical_breaks", fm_pagination_get_col_break_count, fm_pagination_get_col_break_at)) {
     return 1;
   }
   return flush_output(out, err, "paginate");

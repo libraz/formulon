@@ -42,7 +42,7 @@ export function registerLayoutValidation(Module, test) {
       assert.throws(() => wb.setSheetProtection(0, protectionInput), /wasm protection getter/);
       assert.deepEqual(protection(wb), beforeProtection);
 
-      const beforeFormat = wb.getSheetFormatDefaults(0);
+      const beforeFormat = wb.getFormatDefaults(0);
       const formatInput = { defaultColWidth: 12.5 };
       Object.defineProperty(formatInput, 'defaultRowHeight', {
         enumerable: true,
@@ -50,8 +50,8 @@ export function registerLayoutValidation(Module, test) {
           throw new Error('wasm format getter');
         },
       });
-      assert.throws(() => wb.setSheetFormatDefaults(0, formatInput), /wasm format getter/);
-      assert.deepEqual(wb.getSheetFormatDefaults(0), beforeFormat);
+      assert.throws(() => wb.setFormatDefaults(0, formatInput), /wasm format getter/);
+      assert.deepEqual(wb.getFormatDefaults(0), beforeFormat);
     });
   });
 
@@ -70,7 +70,7 @@ export function registerLayoutValidation(Module, test) {
 
       assert.ok(wb.setNumber(0, 0, 0, 1).ok);
       assert.ok(wb.setFormula(0, 0, 1, '=A1+1').ok);
-      assert.throws(() => wb.partialRecalc({ ...RANGE, sheet: 0, firstRow: 1.5 }), RangeError);
+      assert.throws(() => wb.recalcViewport({ ...RANGE, sheet: 0, firstRow: 1.5 }), RangeError);
 
       const throwingViewport = { sheet: 0, firstRow: 0, lastRow: 0, firstCol: 0 };
       Object.defineProperty(throwingViewport, 'lastCol', {
@@ -79,7 +79,7 @@ export function registerLayoutValidation(Module, test) {
           throw new Error('wasm viewport getter');
         },
       });
-      assert.throws(() => wb.partialRecalc(throwingViewport), /wasm viewport getter/);
+      assert.throws(() => wb.recalcViewport(throwingViewport), /wasm viewport getter/);
     });
   });
 }

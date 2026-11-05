@@ -17,7 +17,7 @@ namespace parts {
 
 namespace {
 
-emscripten::val slicer_to_val(const fm_slicer& s) {
+emscripten::val slicer_to_val(const fm_slicer_t& s) {
   emscripten::val o = emscripten::val::object();
   o.set("objectId", s.object_id);
   o.set("columnCount", s.column_count);
@@ -49,8 +49,8 @@ struct SlicerText {
 };
 
 /// Reads the fields `spec` carries; the `fields` mask names exactly those.
-fm_slicer pull_slicer(JsNarrowNumericReader& reader, const emscripten::val& spec, SlicerText& store) {
-  fm_slicer s{};
+fm_slicer_t pull_slicer(JsNarrowNumericReader& reader, const emscripten::val& spec, SlicerText& store) {
+  fm_slicer_t s{};
   const auto has = [&](const char* key) { return reader.ok() && js_value_present(reader.value(spec, key, key)); };
   if (has("name")) {
     s.fields |= FM_SLICER_FIELD_NAME;
@@ -95,8 +95,8 @@ fm_slicer pull_slicer(JsNarrowNumericReader& reader, const emscripten::val& spec
 }
 
 fm_status_t slicer_item(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
-  fm_slicer s{};
-  const fm_status_t rc = fm_sheet_slicer_at(handle, sheet, index, &s);
+  fm_slicer_t s{};
+  const fm_status_t rc = fm_sheet_get_slicer_at(handle, sheet, index, &s);
   if (rc == 0) {
     *out = slicer_to_val(s);
   }
@@ -107,7 +107,7 @@ fm_status_t slicer_item(const fm_workbook_t* handle, size_t sheet, size_t index,
 
 emscripten::val JsWorkbook::listSlicers(uint32_t sheet) const {
   emscripten::val arr = emscripten::val::array();
-  arr.set("status", status_from_rc(js_collect_list(handle_, sheet, &fm_sheet_slicer_count, &slicer_item, arr)));
+  arr.set("status", status_from_rc(js_collect_list(handle_, sheet, &fm_sheet_get_slicer_count, &slicer_item, arr)));
   return arr;
 }
 
@@ -120,7 +120,7 @@ emscripten::val JsWorkbook::addSlicer(uint32_t sheet, uint32_t table, uint32_t c
   }
   JsNarrowNumericReader reader("addSlicer");
   SlicerText store;
-  const fm_slicer slicer = pull_slicer(reader, spec, store);
+  const fm_slicer_t slicer = pull_slicer(reader, spec, store);
   if (!reader.ok()) {
     o.set("status", reader.failure());
     return o;
@@ -138,7 +138,7 @@ JsStatus JsWorkbook::updateSlicer(uint32_t sheet, uint32_t index, emscripten::va
   }
   JsNarrowNumericReader reader("updateSlicer");
   SlicerText store;
-  const fm_slicer slicer = pull_slicer(reader, spec, store);
+  const fm_slicer_t slicer = pull_slicer(reader, spec, store);
   if (!reader.ok()) {
     return reader.failure();
   }

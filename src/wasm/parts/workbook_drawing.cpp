@@ -22,7 +22,7 @@ namespace parts {
 namespace {
 
 /// Envelope for the image calls: `status` plus the header info, zeroed on failure.
-emscripten::val image_info_to_val(JsStatus status, const fm_image_info& info) {
+emscripten::val image_info_to_val(JsStatus status, const fm_image_info_t& info) {
   const bool ok = status.ok;
   emscripten::val o = emscripten::val::object();
   o.set("status", status);
@@ -40,7 +40,7 @@ emscripten::val image_id_result(JsStatus status, uint32_t object_id) {
   return o;
 }
 
-emscripten::val drawing_object_to_val(const fm_drawing_object& d) {
+emscripten::val drawing_object_to_val(const fm_drawing_object_t& d) {
   emscripten::val o = emscripten::val::object();
   o.set("objectId", d.object_id);
   o.set("kind", d.kind);
@@ -62,8 +62,8 @@ emscripten::val drawing_object_to_val(const fm_drawing_object& d) {
 }
 
 fm_status_t drawing_object_item(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
-  fm_drawing_object d{};
-  const fm_status_t rc = fm_sheet_drawing_object_at(handle, sheet, index, &d);
+  fm_drawing_object_t d{};
+  const fm_status_t rc = fm_sheet_get_drawing_object_at(handle, sheet, index, &d);
   if (rc == 0) {
     *out = drawing_object_to_val(d);
   }
@@ -72,9 +72,9 @@ fm_status_t drawing_object_item(const fm_workbook_t* handle, size_t sheet, size_
 
 }  // namespace
 
-fm_drawing_anchor pull_drawing_anchor(JsNarrowNumericReader& reader, const emscripten::val& placement,
-                                      int32_t default_anchor_kind) {
-  fm_drawing_anchor anchor{};
+fm_drawing_anchor_t pull_drawing_anchor(JsNarrowNumericReader& reader, const emscripten::val& placement,
+                                        int32_t default_anchor_kind) {
+  fm_drawing_anchor_t anchor{};
   anchor.anchor_kind = reader.i32(placement, "anchorKind", default_anchor_kind, "placement.anchorKind");
   anchor.edit_as = reader.i32(placement, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL, "placement.editAs");
   anchor.row = reader.u32(placement, "row", 0U, "placement.row");
@@ -86,7 +86,7 @@ fm_drawing_anchor pull_drawing_anchor(JsNarrowNumericReader& reader, const emscr
   return anchor;
 }
 
-void set_insert_placement(fm_image_insert& ins, const fm_drawing_anchor& anchor) {
+void set_insert_placement(fm_image_insert_t& ins, const fm_drawing_anchor_t& anchor) {
   ins.anchor_kind = anchor.anchor_kind;
   ins.edit_as = anchor.edit_as;
   ins.row = anchor.row;
@@ -99,35 +99,35 @@ void set_insert_placement(fm_image_insert& ins, const fm_drawing_anchor& anchor)
 
 emscripten::val JsWorkbook::probeImage(emscripten::val bytes) const {
   if (handle_ == nullptr) {
-    return image_info_to_val(invalid_handle_status(), fm_image_info{});
+    return image_info_to_val(invalid_handle_status(), fm_image_info_t{});
   }
   const JsBytesReadResult bytes_result = val_to_bytes_checked(bytes);
   if (!bytes_result.ok) {
-    return image_info_to_val(binding_error_status(kInvalidArgument, bytes_result.message.c_str()), fm_image_info{});
+    return image_info_to_val(binding_error_status(kInvalidArgument, bytes_result.message.c_str()), fm_image_info_t{});
   }
   const std::vector<uint8_t>& data = bytes_result.bytes;
-  fm_image_info info{};
-  const fm_status_t rc = fm_workbook_probe_image(handle_, data.data(), data.size(), &info);
+  fm_image_info_t info{};
+  const fm_status_t rc = fm_workbook_get_image_info(handle_, data.data(), data.size(), &info);
   return image_info_to_val(status_from_rc(rc), info);
 }
 
 emscripten::val JsWorkbook::listDrawingObjects(uint32_t sheet) const {
   emscripten::val arr = emscripten::val::array();
-  arr.set("status",
-          status_from_rc(js_collect_list(handle_, sheet, &fm_sheet_drawing_object_count, &drawing_object_item, arr)));
+  arr.set("status", status_from_rc(js_collect_list(handle_, sheet, &fm_sheet_get_drawing_object_count,
+                                                   &drawing_object_item, arr)));
   return arr;
 }
 
 emscripten::val JsWorkbook::getImage(uint32_t sheet, uint32_t objectId) const {
   emscripten::val o;
   if (handle_ == nullptr) {
-    o = image_info_to_val(invalid_handle_status(), fm_image_info{});
+    o = image_info_to_val(invalid_handle_status(), fm_image_info_t{});
     o.set("bytes", bytes_to_val(nullptr, 0));
     return o;
   }
   const uint8_t* data = nullptr;
   size_t len = 0;
-  fm_image_info info{};
+  fm_image_info_t info{};
   const fm_status_t rc = fm_sheet_get_image(handle_, sheet, objectId, &data, &len, &info);
   o = image_info_to_val(status_from_rc(rc), info);
   o.set("bytes", bytes_to_val(rc == 0 ? data : nullptr, rc == 0 ? len : 0));
@@ -140,14 +140,14 @@ emscripten::val JsWorkbook::insertImage(uint32_t sheet, emscripten::val bytes, e
   }
   std::string name_store;
   std::string descr_store;
-  JsNarrowNumericReader reader("insertImage");
+  JsNarrowNumericReader reader("addImage");
   const emscripten::val options = js_object_or_empty(opts);
   const JsBytesReadResult bytes_result = val_to_bytes_checked(bytes);
   if (!bytes_result.ok) {
     return image_id_result(binding_error_status(kInvalidArgument, bytes_result.message.c_str()), 0U);
   }
   const std::vector<uint8_t>& data = bytes_result.bytes;
-  fm_image_insert ins{};
+  fm_image_insert_t ins{};
   ins.name = reader.optional_string(options, "name", name_store, "image.name");
   ins.descr = reader.optional_string(options, "descr", descr_store, "image.descr");
   set_insert_placement(ins, pull_drawing_anchor(reader, options, FM_ANCHOR_KIND_ONE_CELL));
@@ -155,7 +155,7 @@ emscripten::val JsWorkbook::insertImage(uint32_t sheet, emscripten::val bytes, e
     return image_id_result(reader.failure(), 0U);
   }
   uint32_t id = 0;
-  const fm_status_t rc = fm_sheet_insert_image(handle_, sheet, data.data(), data.size(), &ins, &id);
+  const fm_status_t rc = fm_sheet_add_image(handle_, sheet, data.data(), data.size(), &ins, &id);
   return image_id_result(status_from_rc(rc), rc == 0 ? id : 0U);
 }
 
@@ -174,7 +174,7 @@ JsStatus JsWorkbook::setDrawingAnchor(uint32_t sheet, uint32_t objectId, emscrip
   }
   JsNarrowNumericReader reader("setDrawingAnchor");
   const emscripten::val options = js_object_or_empty(placement);
-  const fm_drawing_anchor anchor = pull_drawing_anchor(reader, options, FM_ANCHOR_KIND_ONE_CELL);
+  const fm_drawing_anchor_t anchor = pull_drawing_anchor(reader, options, FM_ANCHOR_KIND_ONE_CELL);
   if (!reader.ok()) {
     return reader.failure();
   }

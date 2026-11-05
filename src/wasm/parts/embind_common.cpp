@@ -199,8 +199,8 @@ JsStatus error_status(int32_t code) {
   JsStatus s;
   s.ok = false;
   s.status = code;
-  s.message = string_from_cstr(fm_last_error_message());
-  s.context = string_from_cstr(fm_last_error_context());
+  s.message = string_from_cstr(fm_get_last_error_message());
+  s.context = string_from_cstr(fm_get_last_error_context());
   return s;
 }
 
@@ -755,7 +755,7 @@ emscripten::val snapshot_bytes_result(fm_status_t rc, uint8_t* data, std::size_t
   emscripten::val o = emscripten::val::object();
   o.set("status", status_from_rc(rc));
   o.set("bytes", bytes_to_val(rc == 0 ? data : nullptr, rc == 0 ? len : 0));
-  fm_buffer_free(data);
+  fm_buffer_destroy(data);
   return o;
 }
 
@@ -804,8 +804,8 @@ std::vector<fm_merge_range> js_pull_ranges(const emscripten::val& v, const char*
   return out;
 }
 
-fm_color_spec js_pull_color_spec(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader) {
-  fm_color_spec spec{};
+fm_color_spec_t js_pull_color_spec(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader) {
+  fm_color_spec_t spec{};
   if (reader == nullptr) {
     return spec;
   }
@@ -824,8 +824,8 @@ fm_color_spec js_pull_color_spec(const emscripten::val& v, const char* key, JsNa
   return spec;
 }
 
-fm_border_side js_pull_border_side(const emscripten::val& v, JsNarrowNumericReader* reader) {
-  fm_border_side s{};
+fm_border_side_t js_pull_border_side(const emscripten::val& v, JsNarrowNumericReader* reader) {
+  fm_border_side_t s{};
   if (reader == nullptr || !js_value_present(v)) {
     return s;
   }
@@ -856,7 +856,7 @@ void js_set_cstr_fields(emscripten::val& o, const JsStrField* fields, std::size_
   }
 }
 
-emscripten::val js_color_spec(const fm_color_spec& spec) {
+emscripten::val js_color_spec(const fm_color_spec_t& spec) {
   emscripten::val o = emscripten::val::object();
   o.set("kind", static_cast<uint32_t>(spec.kind));
   o.set("rgb", spec.rgb);
@@ -866,7 +866,7 @@ emscripten::val js_color_spec(const fm_color_spec& spec) {
   return o;
 }
 
-emscripten::val js_border_side(const fm_border_side& s) {
+emscripten::val js_border_side(const fm_border_side_t& s) {
   emscripten::val o = emscripten::val::object();
   o.set("style", static_cast<uint32_t>(s.style));
   o.set("colorArgb", s.color_argb);

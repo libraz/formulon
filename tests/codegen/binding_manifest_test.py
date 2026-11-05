@@ -141,7 +141,7 @@ class BindingManifestTest(unittest.TestCase):
         # make the coverage test vacuously pass): the header must expose at
         # least the entries the manifest references.
         declared = set(_C_HEADER_DECL_RE.findall(C_HEADER.read_text()))
-        self.assertIn("fm_workbook_sheet_count", declared)
+        self.assertIn("fm_workbook_get_sheet_count", declared)
 
     # ---- Snapshot (generator vs checked-in output) -----------------------
 

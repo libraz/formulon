@@ -25,7 +25,7 @@ struct SaveBuffer {
   SaveBuffer() = default;
   SaveBuffer(const SaveBuffer&) = delete;
   SaveBuffer& operator=(const SaveBuffer&) = delete;
-  ~SaveBuffer() { fm_buffer_free(data); }
+  ~SaveBuffer() { fm_buffer_destroy(data); }
 };
 
 }  // namespace cli

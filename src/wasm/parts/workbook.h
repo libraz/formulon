@@ -95,7 +95,7 @@ class JsWorkbook {
   /// Stores a cell's furigana as one `<rPh>` block per element of `runs`,
   /// each `{ sb, eb, text }`. Unlike `setCellPhonetic`, which annotates the
   /// whole cell, this preserves which characters each reading covers. See
-  /// `fm_workbook_set_cell_phonetic_runs` for the ordering rules.
+  /// `fm_sheet_set_cell_phonetic_runs` for the ordering rules.
   JsStatus setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val runs);
 
   /// Stores how the cell's guide renders: `fontId`, `type` (0=halfwidth
@@ -139,7 +139,7 @@ class JsWorkbook {
 
   /// Evaluates `formula` as if entered at `(sheet, row, col)` and returns a
   /// single scalar result without mutating the workbook. Array results are
-  /// reduced to their top-left element. See `fm_workbook_evaluate_formula`.
+  /// reduced to their top-left element. See `fm_sheet_evaluate_formula`.
   JsEvalResult evaluateFormulaText(uint32_t sheet, uint32_t row, uint32_t col, const std::string& formula) const;
 
   /// Evaluates `formula` as if entered at `(sheet, row, col)` and returns the
@@ -149,13 +149,13 @@ class JsWorkbook {
   /// `{ status, rows, cols, cells }`, where `cells` is a `rows` x `cols`
   /// nested array of Value objects (row-major, `cells[r][c]`); a scalar
   /// result is reported as a 1x1 array. See
-  /// `fm_workbook_evaluate_formula_array`.
+  /// `fm_sheet_evaluate_formula_array`.
   emscripten::val evaluateFormulaArray(uint32_t sheet, uint32_t row, uint32_t col, const std::string& formula) const;
 
   /// Evaluates `formula` as a conditional-formatting predicate anchored at
   /// `(sheet, row, col)`, with relative refs written relative to
   /// `(anchorRow, anchorCol)`; returns a coerced boolean result. See
-  /// `fm_workbook_evaluate_cf_formula`.
+  /// `fm_sheet_evaluate_cf_formula`.
   JsEvalResult evaluateConditionalFormula(uint32_t sheet, uint32_t row, uint32_t col, uint32_t anchorRow,
                                           uint32_t anchorCol, const std::string& formula) const;
 
@@ -383,7 +383,7 @@ class JsWorkbook {
 
   JsAddStyleResult addFont(emscripten::val record);
   /// Overwrites an existing font slot; every xf naming it restyles at once.
-  /// See `fm_styles_set_font`.
+  /// See `fm_workbook_set_font`.
   JsStatus setFont(uint32_t font_index, emscripten::val record);
   /// Declares the workbook's default font -- font 0, the record an unstyled
   /// cell resolves to. See `fm_workbook_set_default_font`.
@@ -794,11 +794,11 @@ JsStatus set_log_sink(emscripten::val sink);
 /// Reads a placement record (`anchorKind`, `editAs`, `row`, `col`, the EMU
 /// offsets and size) shared by the picture, chart and re-anchor calls; an
 /// absent `anchorKind` takes `default_anchor_kind`.
-fm_drawing_anchor pull_drawing_anchor(JsNarrowNumericReader& reader, const emscripten::val& placement,
-                                      int32_t default_anchor_kind);
+fm_drawing_anchor_t pull_drawing_anchor(JsNarrowNumericReader& reader, const emscripten::val& placement,
+                                        int32_t default_anchor_kind);
 
 /// Copies `anchor` into the placement fields of `ins`.
-void set_insert_placement(fm_image_insert& ins, const fm_drawing_anchor& anchor);
+void set_insert_placement(fm_image_insert_t& ins, const fm_drawing_anchor_t& anchor);
 
 }  // namespace parts
 }  // namespace wasm

@@ -28,7 +28,7 @@
 //   * `parts/auto_filter.cc`      -- typed AutoFilter for sheets and
 //     tables.
 //   * `parts/drawing.cc`          -- drawing images.
-//   * `parts/free_funcs.{h,cc}`    -- evalFormula / version /
+//   * `parts/free_funcs.{h,cc}`    -- evalFormula / getVersion /
 //     lastError* / statusString / the process-wide structured-log
 //     controls.
 //
@@ -77,12 +77,11 @@ namespace {
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("Workbook", formulon_node::Workbook::GetClass(env));
   exports.Set("evalFormula", Napi::Function::New(env, &formulon_node::EvalFormula, "evalFormula"));
-  exports.Set("version", Napi::Function::New(env, &formulon_node::Version, "version"));
-  exports.Set("versionString", Napi::Function::New(env, &formulon_node::Version, "versionString"));
-  exports.Set("lastErrorMessage", Napi::Function::New(env, &formulon_node::LastErrorMessage, "lastErrorMessage"));
-  exports.Set("lastErrorContext", Napi::Function::New(env, &formulon_node::LastErrorContext, "lastErrorContext"));
-  exports.Set("statusString", Napi::Function::New(env, &formulon_node::StatusString, "statusString"));
-  exports.Set("errorDisplayName", Napi::Function::New(env, &formulon_node::ErrorDisplayName, "errorDisplayName"));
+  exports.Set("getVersion", Napi::Function::New(env, &formulon_node::Version, "getVersion"));
+  exports.Set("getLastErrorMessage", Napi::Function::New(env, &formulon_node::LastErrorMessage, "getLastErrorMessage"));
+  exports.Set("getLastErrorContext", Napi::Function::New(env, &formulon_node::LastErrorContext, "getLastErrorContext"));
+  exports.Set("getStatusName", Napi::Function::New(env, &formulon_node::StatusString, "getStatusName"));
+  exports.Set("getErrorDisplayName", Napi::Function::New(env, &formulon_node::ErrorDisplayName, "getErrorDisplayName"));
   exports.Set("setLogMinLevel", Napi::Function::New(env, &formulon_node::SetLogMinLevel, "setLogMinLevel"));
   exports.Set("setLogSink", Napi::Function::New(env, &formulon_node::SetLogSink, "setLogSink"));
   return exports;

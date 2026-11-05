@@ -337,14 +337,14 @@ class PatchReader {
   fm_status_t rc_ = 0;
 };
 
-formulon::ChartFillPatch read_fill(PatchReader& r, const fm_chart_fill_patch& p) {
+formulon::ChartFillPatch read_fill(PatchReader& r, const fm_chart_fill_patch_t& p) {
   formulon::ChartFillPatch out;
   r.field(p.color_op, p.color, out.color, "fill.color_op");
   r.field(p.transparency_op, p.transparency_pct, out.transparency_pct, "fill.transparency_op");
   return out;
 }
 
-formulon::ChartLinePatch read_line(PatchReader& r, const fm_chart_line_patch& p) {
+formulon::ChartLinePatch read_line(PatchReader& r, const fm_chart_line_patch_t& p) {
   formulon::ChartLinePatch out;
   r.field(p.color_op, p.color, out.color, "line.color_op");
   r.field(p.transparency_op, p.transparency_pct, out.transparency_pct, "line.transparency_op");
@@ -354,7 +354,7 @@ formulon::ChartLinePatch read_line(PatchReader& r, const fm_chart_line_patch& p)
   return out;
 }
 
-formulon::ChartMarkerPatch read_marker(PatchReader& r, const fm_chart_marker_patch& p) {
+formulon::ChartMarkerPatch read_marker(PatchReader& r, const fm_chart_marker_patch_t& p) {
   formulon::ChartMarkerPatch out;
   r.enum_optional(p.symbol_op, p.symbol, formulon::ChartMarkerSymbol::kDash, out.symbol, "marker.symbol");
   r.field(p.size_op, p.size, out.size, "marker.size_op");
@@ -363,7 +363,7 @@ formulon::ChartMarkerPatch read_marker(PatchReader& r, const fm_chart_marker_pat
   return out;
 }
 
-formulon::ChartLabelsPatch read_labels(PatchReader& r, const fm_chart_labels_patch& p) {
+formulon::ChartLabelsPatch read_labels(PatchReader& r, const fm_chart_labels_patch_t& p) {
   formulon::ChartLabelsPatch out;
   r.flag(p.show_value_op, p.show_value, out.show_val, "labels.show_value_op");
   r.flag(p.show_category_op, p.show_category, out.show_cat, "labels.show_category_op");
@@ -384,7 +384,7 @@ void read_ref(PatchReader& r, const char* text, std::optional<std::string>& out,
   }
 }
 
-formulon::ChartSeriesPatch read_series(PatchReader& r, const fm_chart_series_patch& p) {
+formulon::ChartSeriesPatch read_series(PatchReader& r, const fm_chart_series_patch_t& p) {
   formulon::ChartSeriesPatch out;
   read_ref(r, p.name, out.name, "name");
   read_ref(r, p.categories, out.cat, "categories");
@@ -432,10 +432,10 @@ fm_status_t edit_entry(const fm_workbook_t* wb, std::size_t sheet_index, const v
 // Chart model reads
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_sheet_chart_open(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                           fm_chart_t** out) {
+extern "C" fm_status_t fm_sheet_get_chart(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                          fm_chart_t** out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_chart_open";
+  constexpr const char* kApi = "fm_sheet_get_chart";
   if (out == nullptr) {
     return null_argument(kApi);
   }
@@ -458,10 +458,10 @@ extern "C" void fm_chart_destroy(fm_chart_t* chart) {
   delete chart;
 }
 
-extern "C" fm_status_t fm_chart_info(const fm_chart_t* chart, fm_chart_info_t* out) {
+extern "C" fm_status_t fm_chart_get_info(const fm_chart_t* chart, fm_chart_info_t* out) {
   clear_last_error();
   if (chart == nullptr || out == nullptr) {
-    return null_argument("fm_chart_info");
+    return null_argument("fm_chart_get_info");
   }
   const formulon::ChartModel& m = chart->model;
   *out = fm_chart_info_t{};
@@ -524,21 +524,21 @@ fm_status_t index_list_at(const fm_chart_t* chart, const std::vector<std::uint32
 
 }  // namespace
 
-extern "C" fm_status_t fm_chart_legend_hidden_at(const fm_chart_t* chart, size_t idx, uint32_t* out) {
+extern "C" fm_status_t fm_chart_get_legend_hidden_at(const fm_chart_t* chart, size_t idx, uint32_t* out) {
   clear_last_error();
   return index_list_at(chart, chart != nullptr ? &chart->model.legend.hidden_series_idx : nullptr, idx, out,
-                       "fm_chart_legend_hidden_at");
+                       "fm_chart_get_legend_hidden_at");
 }
 
-extern "C" fm_status_t fm_chart_hidden_category_at(const fm_chart_t* chart, size_t idx, uint32_t* out) {
+extern "C" fm_status_t fm_chart_get_hidden_category_at(const fm_chart_t* chart, size_t idx, uint32_t* out) {
   clear_last_error();
   return index_list_at(chart, chart != nullptr ? &chart->model.category_filter : nullptr, idx, out,
-                       "fm_chart_hidden_category_at");
+                       "fm_chart_get_hidden_category_at");
 }
 
-extern "C" fm_status_t fm_chart_plot_at(const fm_chart_t* chart, size_t plot, fm_chart_plot_t* out) {
+extern "C" fm_status_t fm_chart_get_plot_at(const fm_chart_t* chart, size_t plot, fm_chart_plot_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_plot_at";
+  constexpr const char* kApi = "fm_chart_get_plot_at";
   if (chart == nullptr || out == nullptr) {
     return null_argument(kApi);
   }
@@ -566,9 +566,9 @@ extern "C" fm_status_t fm_chart_plot_at(const fm_chart_t* chart, size_t plot, fm
   return 0;
 }
 
-extern "C" fm_status_t fm_chart_plot_axis_id_at(const fm_chart_t* chart, size_t plot, size_t idx, uint32_t* out) {
+extern "C" fm_status_t fm_chart_get_plot_axis_id_at(const fm_chart_t* chart, size_t plot, size_t idx, uint32_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_plot_axis_id_at";
+  constexpr const char* kApi = "fm_chart_get_plot_axis_id_at";
   if (chart == nullptr || out == nullptr) {
     return null_argument(kApi);
   }
@@ -583,9 +583,10 @@ extern "C" fm_status_t fm_chart_plot_axis_id_at(const fm_chart_t* chart, size_t 
   return 0;
 }
 
-extern "C" fm_status_t fm_chart_series_at(const fm_chart_t* chart, size_t plot, size_t series, fm_chart_series_t* out) {
+extern "C" fm_status_t fm_chart_get_series_at(const fm_chart_t* chart, size_t plot, size_t series,
+                                              fm_chart_series_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_series_at";
+  constexpr const char* kApi = "fm_chart_get_series_at";
   if (chart == nullptr || out == nullptr) {
     return null_argument(kApi);
   }
@@ -618,10 +619,10 @@ extern "C" fm_status_t fm_chart_series_at(const fm_chart_t* chart, size_t plot, 
   return 0;
 }
 
-extern "C" fm_status_t fm_chart_series_literal_at(const fm_chart_t* chart, size_t plot, size_t series, int32_t role,
-                                                  size_t idx, fm_chart_literal_t* out) {
+extern "C" fm_status_t fm_chart_get_series_literal_at(const fm_chart_t* chart, size_t plot, size_t series, int32_t role,
+                                                      size_t idx, fm_chart_literal_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_series_literal_at";
+  constexpr const char* kApi = "fm_chart_get_series_literal_at";
   if (chart == nullptr || out == nullptr) {
     return null_argument(kApi);
   }
@@ -642,10 +643,10 @@ extern "C" fm_status_t fm_chart_series_literal_at(const fm_chart_t* chart, size_
   return 0;
 }
 
-extern "C" fm_status_t fm_chart_series_point_at(const fm_chart_t* chart, size_t plot, size_t series, size_t idx,
-                                                fm_chart_point_t* out) {
+extern "C" fm_status_t fm_chart_get_series_point_at(const fm_chart_t* chart, size_t plot, size_t series, size_t idx,
+                                                    fm_chart_point_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_series_point_at";
+  constexpr const char* kApi = "fm_chart_get_series_point_at";
   if (chart == nullptr || out == nullptr) {
     return null_argument(kApi);
   }
@@ -668,9 +669,9 @@ extern "C" fm_status_t fm_chart_series_point_at(const fm_chart_t* chart, size_t 
   return 0;
 }
 
-extern "C" fm_status_t fm_chart_axis_at(const fm_chart_t* chart, size_t idx, fm_chart_axis_t* out) {
+extern "C" fm_status_t fm_chart_get_axis_at(const fm_chart_t* chart, size_t idx, fm_chart_axis_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_axis_at";
+  constexpr const char* kApi = "fm_chart_get_axis_at";
   if (chart == nullptr || out == nullptr) {
     return null_argument(kApi);
   }
@@ -705,10 +706,10 @@ extern "C" fm_status_t fm_chart_axis_at(const fm_chart_t* chart, size_t idx, fm_
 // Resolved chart data
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_sheet_chart_data_open(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                                fm_chart_data_t** out) {
+extern "C" fm_status_t fm_sheet_get_chart_data(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                               fm_chart_data_t** out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_chart_data_open";
+  constexpr const char* kApi = "fm_sheet_get_chart_data";
   if (out == nullptr) {
     return null_argument(kApi);
   }
@@ -724,10 +725,11 @@ extern "C" fm_status_t fm_sheet_chart_data_open(const fm_workbook_t* wb, size_t 
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_chart_preview_open(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                                   const fm_chart_preview_overrides* overrides, fm_chart_data_t** out) {
+extern "C" fm_status_t fm_sheet_get_chart_preview(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                                  const fm_chart_preview_overrides_t* overrides,
+                                                  fm_chart_data_t** out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_chart_preview_open";
+  constexpr const char* kApi = "fm_sheet_get_chart_preview";
   if (out != nullptr) {
     *out = nullptr;
   }
@@ -768,10 +770,10 @@ extern "C" void fm_chart_data_destroy(fm_chart_data_t* data) {
   delete data;
 }
 
-extern "C" fm_status_t fm_chart_data_info(const fm_chart_data_t* data, fm_chart_data_info_t* out) {
+extern "C" fm_status_t fm_chart_data_get_info(const fm_chart_data_t* data, fm_chart_data_info_t* out) {
   clear_last_error();
   if (data == nullptr || out == nullptr) {
-    return null_argument("fm_chart_data_info");
+    return null_argument("fm_chart_data_get_info");
   }
   const formulon::ChartData& d = data->data;
   *out = fm_chart_data_info_t{};
@@ -789,10 +791,10 @@ extern "C" fm_status_t fm_chart_data_info(const fm_chart_data_t* data, fm_chart_
   return 0;
 }
 
-extern "C" fm_status_t fm_chart_data_category_at(const fm_chart_data_t* data, size_t idx, const char** out_label,
-                                                 double* out_value) {
+extern "C" fm_status_t fm_chart_data_get_category_at(const fm_chart_data_t* data, size_t idx, const char** out_label,
+                                                     double* out_value) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_data_category_at";
+  constexpr const char* kApi = "fm_chart_data_get_category_at";
   if (data == nullptr || out_label == nullptr || out_value == nullptr) {
     return null_argument(kApi);
   }
@@ -805,9 +807,10 @@ extern "C" fm_status_t fm_chart_data_category_at(const fm_chart_data_t* data, si
   return 0;
 }
 
-extern "C" fm_status_t fm_chart_data_category_level_size(const fm_chart_data_t* data, size_t level, size_t* out_count) {
+extern "C" fm_status_t fm_chart_data_get_category_level_size(const fm_chart_data_t* data, size_t level,
+                                                             size_t* out_count) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_data_category_level_size";
+  constexpr const char* kApi = "fm_chart_data_get_category_level_size";
   if (data == nullptr || out_count == nullptr) {
     return null_argument(kApi);
   }
@@ -819,10 +822,10 @@ extern "C" fm_status_t fm_chart_data_category_level_size(const fm_chart_data_t* 
   return 0;
 }
 
-extern "C" fm_status_t fm_chart_data_category_level_at(const fm_chart_data_t* data, size_t level, size_t idx,
-                                                       const char** out_label) {
+extern "C" fm_status_t fm_chart_data_get_category_level_at(const fm_chart_data_t* data, size_t level, size_t idx,
+                                                           const char** out_label) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_data_category_level_at";
+  constexpr const char* kApi = "fm_chart_data_get_category_level_at";
   if (data == nullptr || out_label == nullptr) {
     return null_argument(kApi);
   }
@@ -837,10 +840,10 @@ extern "C" fm_status_t fm_chart_data_category_level_at(const fm_chart_data_t* da
   return 0;
 }
 
-extern "C" fm_status_t fm_chart_data_series_at(const fm_chart_data_t* data, size_t series,
-                                               fm_chart_data_series_t* out) {
+extern "C" fm_status_t fm_chart_data_get_series_at(const fm_chart_data_t* data, size_t series,
+                                                   fm_chart_data_series_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_data_series_at";
+  constexpr const char* kApi = "fm_chart_data_get_series_at";
   if (data == nullptr || out == nullptr) {
     return null_argument(kApi);
   }
@@ -863,10 +866,10 @@ extern "C" fm_status_t fm_chart_data_series_at(const fm_chart_data_t* data, size
   return 0;
 }
 
-extern "C" fm_status_t fm_chart_data_series_points(const fm_chart_data_t* data, size_t series,
-                                                   fm_chart_data_points_t* out) {
+extern "C" fm_status_t fm_chart_data_get_series_points(const fm_chart_data_t* data, size_t series,
+                                                       fm_chart_data_points_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_data_series_points";
+  constexpr const char* kApi = "fm_chart_data_get_series_points";
   if (data == nullptr || out == nullptr) {
     return null_argument(kApi);
   }
@@ -884,10 +887,10 @@ extern "C" fm_status_t fm_chart_data_series_points(const fm_chart_data_t* data, 
   return 0;
 }
 
-extern "C" fm_status_t fm_chart_data_range_at(const fm_chart_data_t* data, size_t series, int32_t role, size_t idx,
-                                              fm_chart_sheet_range_t* out) {
+extern "C" fm_status_t fm_chart_data_get_range_at(const fm_chart_data_t* data, size_t series, int32_t role, size_t idx,
+                                                  fm_chart_sheet_range_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_data_range_at";
+  constexpr const char* kApi = "fm_chart_data_get_range_at";
   if (data == nullptr || out == nullptr) {
     return null_argument(kApi);
   }
@@ -906,10 +909,10 @@ extern "C" fm_status_t fm_chart_data_range_at(const fm_chart_data_t* data, size_
   return 0;
 }
 
-extern "C" fm_status_t fm_chart_data_axis_title_at(const fm_chart_data_t* data, size_t idx,
-                                                   fm_chart_axis_title_text_t* out) {
+extern "C" fm_status_t fm_chart_data_get_axis_title_at(const fm_chart_data_t* data, size_t idx,
+                                                       fm_chart_axis_title_text_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_data_axis_title_at";
+  constexpr const char* kApi = "fm_chart_data_get_axis_title_at";
   if (data == nullptr || out == nullptr) {
     return null_argument(kApi);
   }
@@ -921,10 +924,10 @@ extern "C" fm_status_t fm_chart_data_axis_title_at(const fm_chart_data_t* data, 
   return 0;
 }
 
-extern "C" fm_status_t fm_chart_data_unresolved_at(const fm_chart_data_t* data, size_t idx,
-                                                   fm_chart_unresolved_t* out) {
+extern "C" fm_status_t fm_chart_data_get_unresolved_at(const fm_chart_data_t* data, size_t idx,
+                                                       fm_chart_unresolved_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_data_unresolved_at";
+  constexpr const char* kApi = "fm_chart_data_get_unresolved_at";
   if (data == nullptr || out == nullptr) {
     return null_argument(kApi);
   }
@@ -940,9 +943,9 @@ extern "C" fm_status_t fm_chart_data_unresolved_at(const fm_chart_data_t* data, 
 // Creation and edits
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_sheet_insert_chart(fm_workbook_t* wb, size_t sheet_index, const fm_chart_insert* opts,
-                                             uint32_t* out_object_id) {
-  constexpr const char* kApi = "fm_sheet_insert_chart";
+extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index, const fm_chart_insert_t* opts,
+                                          uint32_t* out_object_id) {
+  constexpr const char* kApi = "fm_sheet_add_chart";
   if (auto rc = edit_entry(wb, sheet_index, opts, kApi); rc != 0) {
     return rc;
   }
@@ -975,7 +978,7 @@ extern "C" fm_status_t fm_sheet_insert_chart(fm_workbook_t* wb, size_t sheet_ind
     model.title = std::string(opts->title);
   }
   model.legend = static_cast<formulon::ChartLegendPosition>(opts->legend);
-  const fm_image_insert& p = opts->placement;
+  const fm_image_insert_t& p = opts->placement;
   model.placement.anchor_kind = static_cast<formulon::AnchorKind>(p.anchor_kind);
   model.placement.edit_as = static_cast<formulon::EditAs>(p.edit_as);
   model.placement.row = p.row;
@@ -1029,7 +1032,7 @@ extern "C" fm_status_t fm_sheet_set_chart_title(fm_workbook_t* wb, size_t sheet_
 }
 
 extern "C" fm_status_t fm_sheet_set_chart_legend(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                                 const fm_chart_legend_patch* legend) {
+                                                 const fm_chart_legend_patch_t* legend) {
   constexpr const char* kApi = "fm_sheet_set_chart_legend";
   if (auto rc = edit_entry(wb, sheet_index, legend, kApi); rc != 0) {
     return rc;
@@ -1054,7 +1057,7 @@ extern "C" fm_status_t fm_sheet_set_chart_legend(fm_workbook_t* wb, size_t sheet
 }
 
 extern "C" fm_status_t fm_sheet_set_chart_axis(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                               uint32_t axis_id, const fm_chart_axis_patch* patch) {
+                                               uint32_t axis_id, const fm_chart_axis_patch_t* patch) {
   constexpr const char* kApi = "fm_sheet_set_chart_axis";
   if (auto rc = edit_entry(wb, sheet_index, patch, kApi); rc != 0) {
     return rc;
@@ -1088,7 +1091,7 @@ extern "C" fm_status_t fm_sheet_set_chart_axis(fm_workbook_t* wb, size_t sheet_i
 }
 
 extern "C" fm_status_t fm_sheet_set_chart_display(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                                  const fm_chart_display_patch* patch) {
+                                                  const fm_chart_display_patch_t* patch) {
   constexpr const char* kApi = "fm_sheet_set_chart_display";
   if (auto rc = edit_entry(wb, sheet_index, patch, kApi); rc != 0) {
     return rc;
@@ -1108,7 +1111,7 @@ extern "C" fm_status_t fm_sheet_set_chart_display(fm_workbook_t* wb, size_t shee
 }
 
 extern "C" fm_status_t fm_sheet_set_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
-                                                 uint32_t series_idx, const fm_chart_series_patch* patch) {
+                                                 uint32_t series_idx, const fm_chart_series_patch_t* patch) {
   constexpr const char* kApi = "fm_sheet_set_chart_series";
   if (auto rc = edit_entry(wb, sheet_index, patch, kApi); rc != 0) {
     return rc;
@@ -1124,7 +1127,7 @@ extern "C" fm_status_t fm_sheet_set_chart_series(fm_workbook_t* wb, size_t sheet
 
 extern "C" fm_status_t fm_sheet_set_chart_point(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
                                                 uint32_t series_idx, uint32_t point_idx,
-                                                const fm_chart_point_patch* patch) {
+                                                const fm_chart_point_patch_t* patch) {
   constexpr const char* kApi = "fm_sheet_set_chart_point";
   if (auto rc = edit_entry(wb, sheet_index, patch, kApi); rc != 0) {
     return rc;
@@ -1144,7 +1147,7 @@ extern "C" fm_status_t fm_sheet_set_chart_point(fm_workbook_t* wb, size_t sheet_
 }
 
 extern "C" fm_status_t fm_sheet_set_chart_plot(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
-                                               const fm_chart_plot_patch* patch) {
+                                               const fm_chart_plot_patch_t* patch) {
   constexpr const char* kApi = "fm_sheet_set_chart_plot";
   if (auto rc = edit_entry(wb, sheet_index, patch, kApi); rc != 0) {
     return rc;
@@ -1185,7 +1188,7 @@ extern "C" fm_status_t fm_sheet_set_chart_filter(fm_workbook_t* wb, size_t sheet
 }
 
 extern "C" fm_status_t fm_sheet_add_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
-                                                 const fm_chart_series_patch* patch, uint32_t* out_series_idx) {
+                                                 const fm_chart_series_patch_t* patch, uint32_t* out_series_idx) {
   constexpr const char* kApi = "fm_sheet_add_chart_series";
   if (auto rc = edit_entry(wb, sheet_index, patch, kApi); rc != 0) {
     return rc;

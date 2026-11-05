@@ -160,7 +160,7 @@ JsWorkbook& JsWorkbook::operator=(JsWorkbook&& other) noexcept {
 
 JsWorkbook* JsWorkbook::createDefault() {
   auto wb = std::unique_ptr<JsWorkbook>(new JsWorkbook());
-  fm_status_t rc = fm_workbook_create(&wb->handle_);
+  fm_status_t rc = fm_workbook_create_default(&wb->handle_);
   if (rc != 0) {
     // The handle remains null; the caller can read lastErrorMessage().
     // We still return the object so JS can inspect status via a
@@ -207,7 +207,7 @@ void finish_save(fm_status_t rc, uint8_t* out, std::size_t len, JsStatus& status
     return;
   }
   bytes = bytes_to_val(out, len);
-  fm_buffer_free(out);
+  fm_buffer_destroy(out);
   status = ok_status();
 }
 
@@ -268,7 +268,7 @@ JsReadDiagnosticsResult JsWorkbook::readDiagnostics() const {
     return r;
   }
   fm_read_diagnostics_t d{};
-  fm_status_t rc = fm_workbook_read_diagnostics(handle_, &d);
+  fm_status_t rc = fm_workbook_get_diagnostics(handle_, &d);
   if (rc != 0) {
     r.status = error_status(rc);
     return r;
@@ -371,19 +371,19 @@ JsStatus JsWorkbook::invoke_row_col_edit(RowColEditFn fn, uint32_t sheet, uint32
 }
 
 JsStatus JsWorkbook::insertRows(uint32_t sheet, uint32_t row, uint32_t count) {
-  return invoke_row_col_edit(fm_workbook_insert_rows, sheet, row, count);
+  return invoke_row_col_edit(fm_sheet_insert_rows, sheet, row, count);
 }
 
 JsStatus JsWorkbook::deleteRows(uint32_t sheet, uint32_t row, uint32_t count) {
-  return invoke_row_col_edit(fm_workbook_delete_rows, sheet, row, count);
+  return invoke_row_col_edit(fm_sheet_delete_rows, sheet, row, count);
 }
 
 JsStatus JsWorkbook::insertCols(uint32_t sheet, uint32_t col, uint32_t count) {
-  return invoke_row_col_edit(fm_workbook_insert_cols, sheet, col, count);
+  return invoke_row_col_edit(fm_sheet_insert_cols, sheet, col, count);
 }
 
 JsStatus JsWorkbook::deleteCols(uint32_t sheet, uint32_t col, uint32_t count) {
-  return invoke_row_col_edit(fm_workbook_delete_cols, sheet, col, count);
+  return invoke_row_col_edit(fm_sheet_delete_cols, sheet, col, count);
 }
 
 // `JsWorkbook::sheetCount` is now emitted by the binding codegen (see
@@ -391,7 +391,7 @@ JsStatus JsWorkbook::deleteCols(uint32_t sheet, uint32_t col, uint32_t count) {
 
 JsStringResult JsWorkbook::sheetName(uint32_t idx) const {
   const char* name = nullptr;
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_sheet_name(handle_, idx, &name) : kBindingInvalidHandle;
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_sheet_name(handle_, idx, &name) : kBindingInvalidHandle;
   return string_result(rc, name);
 }
 
@@ -438,7 +438,7 @@ JsParallelRecalcResult JsWorkbook::recalcParallel(emscripten::val threadCount) {
     return r;
   }
 
-  fm_parallel_recalc_stats stats{};
+  fm_parallel_recalc_stats_t stats{};
   const uint32_t native_thread_count = static_cast<uint32_t>(requested);
   progress_callback_threw_ = false;
   const fm_status_t rc = fm_workbook_recalc_parallel(handle_, native_thread_count, &stats);
@@ -501,7 +501,7 @@ JsNumberResult JsWorkbook::calcMode() const {
     return number_result(kBindingInvalidHandle, 0.0);
   }
   fm_calc_mode_t mode = FM_CALC_MODE_AUTO;
-  const fm_status_t rc = fm_workbook_calc_mode(handle_, &mode);
+  const fm_status_t rc = fm_workbook_get_calc_mode(handle_, &mode);
   return number_result(rc, static_cast<double>(mode));
 }
 
@@ -515,7 +515,7 @@ JsNumberResult JsWorkbook::fullPrecision() const {
     return number_result(kBindingInvalidHandle, 0.0);
   }
   std::int32_t value = 1;
-  const fm_status_t rc = fm_workbook_full_precision(handle_, &value);
+  const fm_status_t rc = fm_workbook_get_full_precision(handle_, &value);
   return number_result(rc, static_cast<double>(value));
 }
 
@@ -529,7 +529,7 @@ JsNumberResult JsWorkbook::calcOnSave() const {
     return number_result(kBindingInvalidHandle, 0.0);
   }
   std::int32_t value = 1;
-  const fm_status_t rc = fm_workbook_calc_on_save(handle_, &value);
+  const fm_status_t rc = fm_workbook_get_calc_on_save(handle_, &value);
   return number_result(rc, static_cast<double>(value));
 }
 
@@ -543,7 +543,7 @@ JsNumberResult JsWorkbook::refMode() const {
     return number_result(kBindingInvalidHandle, 0.0);
   }
   fm_ref_mode_t mode = FM_REF_MODE_A1;
-  const fm_status_t rc = fm_workbook_ref_mode(handle_, &mode);
+  const fm_status_t rc = fm_workbook_get_ref_mode(handle_, &mode);
   return number_result(rc, static_cast<double>(mode));
 }
 
@@ -557,7 +557,7 @@ JsNumberResult JsWorkbook::date1904() const {
     return number_result(kBindingInvalidHandle, 0.0);
   }
   std::int32_t value = 0;
-  const fm_status_t rc = fm_workbook_date1904(handle_, &value);
+  const fm_status_t rc = fm_workbook_get_date1904(handle_, &value);
   return number_result(rc, static_cast<double>(value));
 }
 
@@ -575,7 +575,7 @@ emscripten::val JsWorkbook::pinnedNow() const {
   }
   fm_civil_time_t now{};
   std::int32_t pinned = 0;
-  const fm_status_t rc = fm_workbook_pinned_now(handle_, &now, &pinned);
+  const fm_status_t rc = fm_workbook_get_pinned_now(handle_, &now, &pinned);
   out.set("status", status_from_rc(rc));
   if (rc != 0 || pinned == 0) {
     return out;
@@ -614,7 +614,7 @@ JsStringResult JsWorkbook::excelProfileId() const {
     return string_result(kBindingInvalidHandle, nullptr);
   }
   const char* id = nullptr;
-  const fm_status_t rc = fm_workbook_excel_profile_id(handle_, &id);
+  const fm_status_t rc = fm_workbook_get_excel_profile_id(handle_, &id);
   return string_result(rc, id);
 }
 
@@ -628,7 +628,7 @@ JsStringResult JsWorkbook::fileName() const {
     return string_result(kBindingInvalidHandle, nullptr);
   }
   const char* name = nullptr;
-  const fm_status_t rc = fm_workbook_file_name(handle_, &name);
+  const fm_status_t rc = fm_workbook_get_file_name(handle_, &name);
   return string_result(rc, name);
 }
 
@@ -643,7 +643,7 @@ emscripten::val JsWorkbook::partialRecalc(emscripten::val viewport) {
     o.set("recomputed", static_cast<uint32_t>(0));
     return o;
   }
-  JsNarrowNumericReader reader("partialRecalc");
+  JsNarrowNumericReader reader("recalcViewport");
   const uint32_t vp_sheet = reader.u32(viewport, "sheet", 0U, "viewport.sheet");
   const fm_merge_range bounds = js_pull_range(viewport, &reader);
   if (!reader.ok()) {
@@ -654,7 +654,7 @@ emscripten::val JsWorkbook::partialRecalc(emscripten::val viewport) {
   fm_viewport vp{vp_sheet, bounds.first_row, bounds.last_row, bounds.first_col, bounds.last_col};
   uint32_t recomputed = 0;
   progress_callback_threw_ = false;
-  fm_status_t rc = fm_workbook_partial_recalc(handle_, &vp, &recomputed);
+  fm_status_t rc = fm_sheet_recalc_viewport(handle_, &vp, &recomputed);
   const bool callback_threw = progress_callback_threw_;
   progress_callback_threw_ = false;
   if (rc != 0) {
@@ -748,7 +748,7 @@ JsEvalResult eval_formula(const std::string& formula) {
     return r;
   }
   fm_value_t v{};
-  rc = fm_workbook_evaluate_formula(wb, 0, 0, 0, formula.c_str(), &v);
+  rc = fm_sheet_evaluate_formula(wb, 0, 0, 0, formula.c_str(), &v);
   if (rc != 0) {
     r.status = error_status(rc);
     fm_workbook_destroy(wb);
@@ -761,23 +761,23 @@ JsEvalResult eval_formula(const std::string& formula) {
 }
 
 std::string version_string() {
-  return string_from_cstr(fm_version_string());
+  return string_from_cstr(fm_get_version());
 }
 
 std::string status_string(int32_t status) {
-  return string_from_cstr(fm_status_string(static_cast<fm_status_t>(status)));
+  return string_from_cstr(fm_get_status_name(static_cast<fm_status_t>(status)));
 }
 
 std::string error_display_name(int32_t error_code) {
-  return string_from_cstr(fm_error_display_name(static_cast<fm_error_code_t>(error_code)));
+  return string_from_cstr(fm_get_error_display_name(static_cast<fm_error_code_t>(error_code)));
 }
 
 std::string last_error_message() {
-  return string_from_cstr(fm_last_error_message());
+  return string_from_cstr(fm_get_last_error_message());
 }
 
 std::string last_error_context() {
-  return string_from_cstr(fm_last_error_context());
+  return string_from_cstr(fm_get_last_error_context());
 }
 
 // ---- Structured logging (process-wide, not per handle) --------------------

@@ -31,7 +31,7 @@ namespace {
 // without it `EvalContext::dispatch_array_result` is inert and recursive
 // `resolve_ref` never commits a spill, so the workbook is never mutated.
 //
-// The ad-hoc drivers are documented (see `fm_workbook_evaluate_formula` in
+// The ad-hoc drivers are documented (see `fm_sheet_evaluate_formula` in
 // `formulon_c.h`) to be a single-pass evaluation decoupled from iterative
 // calc: a self-reference reads the cell's cached value rather than engaging
 // the `evaluate()`-level fixed-point driver. Suppressing it here mirrors

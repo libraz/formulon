@@ -148,10 +148,10 @@ TEST(FormulonCApi, LoadMapsCorruptAndEncryptedContainersToIoErrors) {
 }
 TEST(FormulonCApi, SaveLoadRoundTrip) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second"), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 7.0), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 1, 0, "=A1+1"), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 7.0), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1, 0, "=A1+1"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   BufferGuard buf;
@@ -161,24 +161,24 @@ TEST(FormulonCApi, SaveLoadRoundTrip) {
 
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(buf.data, buf.len, &loaded.handle), 0);
-  EXPECT_EQ(fm_workbook_sheet_count(loaded.handle), 2U);
+  EXPECT_EQ(fm_workbook_get_sheet_count(loaded.handle), 2U);
 
   const char* sheet0 = nullptr;
-  ASSERT_EQ(fm_workbook_sheet_name(loaded.handle, 0, &sheet0), 0);
+  ASSERT_EQ(fm_workbook_get_sheet_name(loaded.handle, 0, &sheet0), 0);
   EXPECT_STREQ(sheet0, "Sheet1");
 
   // The literal A1=7 must round-trip; the formula B1=A1+1 may need a
   // recalc on the loaded workbook to populate its cached value.
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
   fm_value_t a1{};
-  ASSERT_EQ(fm_workbook_get_value(loaded.handle, 0, 0, 0, &a1), 0);
+  ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 0, 0, &a1), 0);
   EXPECT_EQ(a1.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(a1.u.number, 7.0);
 }
 TEST(FormulonCApi, SaveExXlsxMatchesSave) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 7.0), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 7.0), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   BufferGuard xlsx_buf;
@@ -194,8 +194,8 @@ TEST(FormulonCApi, SaveExXlsxMatchesSave) {
 }
 TEST(FormulonCApi, SaveExXlsbProducesLoadableXlsbContainer) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 42.0), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 42.0), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   BufferGuard xlsb_buf;
@@ -213,14 +213,14 @@ TEST(FormulonCApi, SaveExXlsbProducesLoadableXlsbContainer) {
   ASSERT_EQ(fm_workbook_load(xlsb_buf.data, xlsb_buf.len, &loaded.handle), 0);
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_get_value(loaded.handle, 0, 0, 0, &v), 0);
+  ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 0, 0, &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 42.0);
 }
 TEST(FormulonCApi, SaveWithDiagnosticsReportsTheXlsbCountersAndLeavesTheXlsxOnesZero) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=T[C]"), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=T[C]"), 0);
 
   auto& sheet = wb.handle->workbook().sheet(0);
   formulon::Hyperlink hyperlink;
@@ -258,8 +258,8 @@ TEST(FormulonCApi, SaveWithDiagnosticsCarriesTheOoxmlWriterCountersAcrossTheAbi)
   // pins that they survive the projection onto `fm_save_diagnostics_t`
   // instead of arriving as zero.
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.0), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 1.0), 0);
 
   // A preserved copy of a part the writer always generates loses the
   // collision and is dropped; a relationship whose target part is absent is
@@ -287,8 +287,8 @@ TEST(FormulonCApi, SaveWithDiagnosticsCarriesTheOoxmlWriterCountersAcrossTheAbi)
 }
 TEST(FormulonCApi, ReadDiagnosticsAreZeroForCleanRoundTrip) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 42.0), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 42.0), 0);
 
   for (const fm_workbook_format_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
     BufferGuard bytes;
@@ -297,7 +297,7 @@ TEST(FormulonCApi, ReadDiagnosticsAreZeroForCleanRoundTrip) {
     ASSERT_EQ(fm_workbook_load(bytes.data, bytes.len, &loaded.handle), 0);
 
     fm_read_diagnostics_t d{99U, 99U, 99U, 99U, 99U};
-    ASSERT_EQ(fm_workbook_read_diagnostics(loaded.handle, &d), 0);
+    ASSERT_EQ(fm_workbook_get_diagnostics(loaded.handle, &d), 0);
     EXPECT_EQ(d.undecoded_formula_count, 0U) << "format=" << format;
     EXPECT_EQ(d.undecoded_defined_name_count, 0U) << "format=" << format;
     EXPECT_EQ(d.undecoded_part_count, 0U) << "format=" << format;
@@ -307,12 +307,12 @@ TEST(FormulonCApi, ReadDiagnosticsAreZeroForCleanRoundTrip) {
 }
 TEST(FormulonCApi, DiagnosticsEntryPointsInitializeOutputsOnFailure) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   // A workbook that was never loaded reports every counter as zero rather
   // than leaving the caller's struct untouched.
   fm_read_diagnostics_t read{99U, 99U, 99U, 99U, 99U};
-  ASSERT_EQ(fm_workbook_read_diagnostics(wb.handle, &read), 0);
+  ASSERT_EQ(fm_workbook_get_diagnostics(wb.handle, &read), 0);
   EXPECT_EQ(read.undecoded_formula_count, 0U);
   EXPECT_EQ(read.skipped_feature_count, 0U);
 
@@ -329,7 +329,7 @@ TEST(FormulonCApi, DiagnosticsEntryPointsInitializeOutputsOnFailure) {
   EXPECT_EQ(save.renumbered_part_count, 0U);
 
   read = fm_read_diagnostics_t{99U, 99U, 99U, 99U, 99U};
-  EXPECT_NE(fm_workbook_read_diagnostics(nullptr, &read), 0);
+  EXPECT_NE(fm_workbook_get_diagnostics(nullptr, &read), 0);
   EXPECT_EQ(read.undecoded_formula_count, 0U);
   EXPECT_EQ(read.undecoded_defined_name_count, 0U);
   EXPECT_EQ(read.undecoded_part_count, 0U);
@@ -338,7 +338,7 @@ TEST(FormulonCApi, DiagnosticsEntryPointsInitializeOutputsOnFailure) {
 }
 TEST(FormulonCApi, ReadDiagnosticsPreservesUnknownPartFromDeterministicFixture) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   BufferGuard bytes;
   ASSERT_EQ(fm_workbook_save_as(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &bytes.data, &bytes.len), 0);
   const std::vector<std::uint8_t> fixture =
@@ -347,7 +347,7 @@ TEST(FormulonCApi, ReadDiagnosticsPreservesUnknownPartFromDeterministicFixture) 
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(fixture.data(), fixture.size(), &loaded.handle), 0);
   fm_read_diagnostics_t d{};
-  ASSERT_EQ(fm_workbook_read_diagnostics(loaded.handle, &d), 0);
+  ASSERT_EQ(fm_workbook_get_diagnostics(loaded.handle, &d), 0);
   EXPECT_EQ(d.undecoded_formula_count, 0U);
   EXPECT_EQ(d.undecoded_defined_name_count, 0U);
   // Unknown package parts are retained as passthrough data, so loading the
@@ -356,17 +356,17 @@ TEST(FormulonCApi, ReadDiagnosticsPreservesUnknownPartFromDeterministicFixture) 
 }
 TEST(FormulonCApi, DiagnosticFailuresNameTheInvokedSymbol) {
   fm_read_diagnostics_t read{77U, 77U, 77U, 77U, 77U};
-  EXPECT_NE(fm_workbook_read_diagnostics(nullptr, &read), 0);
+  EXPECT_NE(fm_workbook_get_diagnostics(nullptr, &read), 0);
   EXPECT_EQ(read.undecoded_formula_count, 0U);
   EXPECT_EQ(read.skipped_feature_count, 0U);
-  EXPECT_STREQ(fm_last_error_message(), "fm_workbook_read_diagnostics: NULL argument");
+  EXPECT_STREQ(fm_get_last_error_message(), "fm_workbook_get_diagnostics: NULL argument");
 
   uint8_t* bytes = reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(1));
   size_t len = 77U;
   EXPECT_NE(fm_workbook_save_as(nullptr, FM_WORKBOOK_FORMAT_XLSB, &bytes, &len), 0);
   EXPECT_EQ(bytes, nullptr);
   EXPECT_EQ(len, 0U);
-  EXPECT_STREQ(fm_last_error_message(), "fm_workbook_save_as: NULL argument");
+  EXPECT_STREQ(fm_get_last_error_message(), "fm_workbook_save_as: NULL argument");
 
   fm_save_diagnostics_t save{77U, 77U, 77U, 77U, 77U};
   bytes = reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(1));
@@ -376,13 +376,13 @@ TEST(FormulonCApi, DiagnosticFailuresNameTheInvokedSymbol) {
   EXPECT_EQ(len, 0U);
   EXPECT_EQ(save.downgraded_formula_count, 0U);
   EXPECT_EQ(save.renumbered_part_count, 0U);
-  EXPECT_STREQ(fm_last_error_message(), "fm_workbook_save_with_diagnostics: NULL argument");
+  EXPECT_STREQ(fm_get_last_error_message(), "fm_workbook_save_with_diagnostics: NULL argument");
 }
 TEST(FormulonCApi, EverySaveEntryPointZeroesOutParamsOnFailure) {
   // The whole save family shares one failure-path contract, so a caller may
   // reuse the same out variables across calls and free unconditionally. A
   // member that left a previous call's pointer in place would hand that
-  // stale pointer to `fm_buffer_free` a second time.
+  // stale pointer to `fm_buffer_destroy` a second time.
   uint8_t* const poison = reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(1));
 
   uint8_t* bytes = poison;
@@ -390,7 +390,7 @@ TEST(FormulonCApi, EverySaveEntryPointZeroesOutParamsOnFailure) {
   EXPECT_NE(fm_workbook_save(nullptr, &bytes, &len), 0);
   EXPECT_EQ(bytes, nullptr);
   EXPECT_EQ(len, 0U);
-  EXPECT_STREQ(fm_last_error_message(), "fm_workbook_save: NULL argument");
+  EXPECT_STREQ(fm_get_last_error_message(), "fm_workbook_save: NULL argument");
 
   bytes = poison;
   len = 77U;
@@ -413,7 +413,7 @@ TEST(FormulonCApi, EverySaveEntryPointZeroesOutParamsOnFailure) {
   // A NULL out-parameter is rejected without being dereferenced, on the base
   // entry point as well as the extended ones.
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   len = 77U;
   EXPECT_NE(fm_workbook_save(wb.handle, nullptr, &len), 0);
   EXPECT_EQ(len, 0U);
@@ -425,8 +425,8 @@ TEST(FormulonCApi, BaseSaveProducesTheSameBytesAsTheXlsxFormatSelector) {
   // The header declares the two equivalent; delegating the base entry point
   // to the shared implementation is what keeps that true.
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=1+2"), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=1+2"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   BufferGuard base;
@@ -441,7 +441,7 @@ TEST(FormulonCApi, BaseSaveProducesTheSameBytesAsTheXlsxFormatSelector) {
 TEST(FormulonCApi, ReservedStatusCodesKeepTheirSlotsAndSpelling) {
   // Some documented codes are allocated but no shipping path builds them.
   // The header promises numeric identity with `formulon::FormulonErrorCode`,
-  // so those slots must not be reused or renumbered, and `fm_status_string`
+  // so those slots must not be reused or renumbered, and `fm_get_status_name`
   // must keep naming them exactly: only a value outside the enum may fall
   // back to `"UNRECOGNIZED_STATUS"`.
   struct Reserved {
@@ -459,39 +459,39 @@ TEST(FormulonCApi, ReservedStatusCodesKeepTheirSlotsAndSpelling) {
       {6004, "CRYPTO_KEY_DERIVATION_FAILED"},
   };
   for (const Reserved& entry : reserved) {
-    EXPECT_STREQ(fm_status_string(entry.code), entry.name) << "code=" << entry.code;
+    EXPECT_STREQ(fm_get_status_name(entry.code), entry.name) << "code=" << entry.code;
   }
 
   // The reserved crypto band is not what an encrypted package reports; a
   // binding offering a password prompt must branch on `IO_ZIP_ENCRYPTED`.
-  EXPECT_STREQ(fm_status_string(static_cast<fm_status_t>(formulon::FormulonErrorCode::kIoZipEncrypted)),
+  EXPECT_STREQ(fm_get_status_name(static_cast<fm_status_t>(formulon::FormulonErrorCode::kIoZipEncrypted)),
                "IO_ZIP_ENCRYPTED");
-  EXPECT_STREQ(fm_status_string(123456), "UNRECOGNIZED_STATUS");
+  EXPECT_STREQ(fm_get_status_name(123456), "UNRECOGNIZED_STATUS");
 }
 TEST(FormulonCApi, MemoryUsageTracksTheWorkbookAndRejectsNulls) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   size_t empty = 0U;
-  ASSERT_EQ(fm_workbook_memory_usage(wb.handle, &empty), 0);
+  ASSERT_EQ(fm_workbook_get_memory_usage(wb.handle, &empty), 0);
   EXPECT_GT(empty, 0U);
 
   for (uint32_t row = 0; row < 200U; ++row) {
-    ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, row, 0, "=1+2"), 0);
+    ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, row, 0, "=1+2"), 0);
   }
   size_t filled = 0U;
-  ASSERT_EQ(fm_workbook_memory_usage(wb.handle, &filled), 0);
+  ASSERT_EQ(fm_workbook_get_memory_usage(wb.handle, &filled), 0);
   EXPECT_GT(filled, empty);
 
   // Both NULL arguments are rejected rather than silently reporting 0,
   // which is what lets a binding distinguish "empty" from "broken".
   size_t scratch = 0U;
-  EXPECT_NE(fm_workbook_memory_usage(nullptr, &scratch), 0);
-  EXPECT_NE(fm_workbook_memory_usage(wb.handle, nullptr), 0);
+  EXPECT_NE(fm_workbook_get_memory_usage(nullptr, &scratch), 0);
+  EXPECT_NE(fm_workbook_get_memory_usage(wb.handle, nullptr), 0);
 }
 TEST(FormulonCApi, SaveExRejectsUnknownFormat) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   const std::int32_t invalid_formats[] = {99, std::numeric_limits<std::int32_t>::min(),
                                           std::numeric_limits<std::int32_t>::max()};
@@ -527,17 +527,17 @@ TEST(FormulonCApi, LoadRoutesXlsbBytesToXlsbReader) {
 
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(xlsb.data(), xlsb.size(), &loaded.handle), 0);
-  EXPECT_EQ(fm_workbook_sheet_count(loaded.handle), 1U);
+  EXPECT_EQ(fm_workbook_get_sheet_count(loaded.handle), 1U);
 
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_get_value(loaded.handle, 0, 0, 0, &v), 0);
+  ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 0, 0, &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 123.5);
 }
 TEST(FormulonCApi, SaveLoadFormulaTextResult) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 1, 0, "=UPPER(\"world\")"), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1, 0, "=UPPER(\"world\")"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   BufferGuard buf;
@@ -549,15 +549,15 @@ TEST(FormulonCApi, SaveLoadFormulaTextResult) {
   ASSERT_EQ(fm_workbook_load(buf.data, buf.len, &loaded.handle), 0);
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_get_value(loaded.handle, 0, 1, 0, &v), 0);
+  ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 1, 0, &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_TEXT);
   ASSERT_NE(v.u.text, nullptr);
   EXPECT_STREQ(v.u.text, "WORLD");
 }
 TEST(FormulonCApi, SaveLoadFormulaBoolResult) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 2, 0, "=TRUE()"), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 2, 0, "=TRUE()"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   BufferGuard buf;
@@ -569,14 +569,14 @@ TEST(FormulonCApi, SaveLoadFormulaBoolResult) {
   ASSERT_EQ(fm_workbook_load(buf.data, buf.len, &loaded.handle), 0);
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_get_value(loaded.handle, 0, 2, 0, &v), 0);
+  ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 2, 0, &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_BOOL);
   EXPECT_EQ(v.u.boolean, 1);
 }
 TEST(FormulonCApi, SaveLoadFormulaErrorResult) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 3, 0, "=1/0"), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 3, 0, "=1/0"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   BufferGuard buf;
@@ -588,19 +588,19 @@ TEST(FormulonCApi, SaveLoadFormulaErrorResult) {
   ASSERT_EQ(fm_workbook_load(buf.data, buf.len, &loaded.handle), 0);
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_get_value(loaded.handle, 0, 3, 0, &v), 0);
+  ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 3, 0, &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_ERROR);
   EXPECT_EQ(v.u.error_code, 1);
 }
 
 TEST(FormulonCApi, ThreadLocalLastErrorIsolation) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   // Establish a known last-error on the main thread.
   fm_value_t v{};
-  ASSERT_NE(fm_workbook_get_value(nullptr, 0, 0, 0, &v), 0);
-  const std::string main_msg = fm_last_error_message();
+  ASSERT_NE(fm_sheet_get_value(nullptr, 0, 0, 0, &v), 0);
+  const std::string main_msg = fm_get_last_error_message();
   EXPECT_GT(main_msg.size(), 0U);
 
   // A worker thread triggers a *different* error path; the main
@@ -609,38 +609,38 @@ TEST(FormulonCApi, ThreadLocalLastErrorIsolation) {
   std::thread worker([&]() {
     // Out-of-range sheet on a freshly created workbook on this thread.
     fm_workbook_t* local = nullptr;
-    if (fm_workbook_create(&local) != 0) {
+    if (fm_workbook_create_default(&local) != 0) {
       return;
     }
-    worker_rc.store(fm_workbook_set_number(local, 99, 0, 0, 1.0));
+    worker_rc.store(fm_sheet_set_number(local, 99, 0, 0, 1.0));
     fm_workbook_destroy(local);
   });
   worker.join();
   EXPECT_NE(worker_rc.load(), 0);
 
   // Main thread's diagnostic survived the worker's run.
-  EXPECT_EQ(std::string(fm_last_error_message()), main_msg);
+  EXPECT_EQ(std::string(fm_get_last_error_message()), main_msg);
 }
 TEST(FormulonCApi, StatusStringCoversKnownCodes) {
   // Spot-check a handful of band-spanning codes.
-  EXPECT_STREQ(fm_status_string(0), "OK");
-  EXPECT_STREQ(fm_status_string(2), "INVALID_ARGUMENT");
-  EXPECT_STREQ(fm_status_string(7000), "BINDING_INVALID_HANDLE");
-  EXPECT_STREQ(fm_status_string(7001), "BINDING_NULL_POINTER");
+  EXPECT_STREQ(fm_get_status_name(0), "OK");
+  EXPECT_STREQ(fm_get_status_name(2), "INVALID_ARGUMENT");
+  EXPECT_STREQ(fm_get_status_name(7000), "BINDING_INVALID_HANDLE");
+  EXPECT_STREQ(fm_get_status_name(7001), "BINDING_NULL_POINTER");
   // Unknown numeric values must still return a non-NULL fallback.
-  const char* unknown = fm_status_string(123456);
+  const char* unknown = fm_get_status_name(123456);
   ASSERT_NE(unknown, nullptr);
   EXPECT_GT(std::strlen(unknown), 0U);
 }
 TEST(FormulonCApi, ErrorDisplayNameUsesExcelLiterals) {
-  EXPECT_STREQ(fm_error_display_name(0), "#NULL!");
-  EXPECT_STREQ(fm_error_display_name(1), "#DIV/0!");
-  EXPECT_STREQ(fm_error_display_name(3), "#REF!");
-  EXPECT_STREQ(fm_error_display_name(-1), "#UNKNOWN!");
-  EXPECT_STREQ(fm_error_display_name(999), "#UNKNOWN!");
+  EXPECT_STREQ(fm_get_error_display_name(0), "#NULL!");
+  EXPECT_STREQ(fm_get_error_display_name(1), "#DIV/0!");
+  EXPECT_STREQ(fm_get_error_display_name(3), "#REF!");
+  EXPECT_STREQ(fm_get_error_display_name(-1), "#UNKNOWN!");
+  EXPECT_STREQ(fm_get_error_display_name(999), "#UNKNOWN!");
 }
 TEST(FormulonCApi, VersionStringNonEmpty) {
-  const char* v = fm_version_string();
+  const char* v = fm_get_version();
   ASSERT_NE(v, nullptr);
   EXPECT_GT(std::strlen(v), 0U);
 }

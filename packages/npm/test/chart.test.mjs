@@ -36,13 +36,13 @@ function newBook(mod) {
 
 function insert(wb, mod, extra = {}) {
   const r = must(
-    wb.insertChart(0, {
+    wb.addChart(0, {
       kind: mod.ChartInsertKind.Column,
       source: 'Sheet1!$A$1:$D$5',
       legend: mod.ChartLegendPosition.Right,
       ...extra,
     }),
-    'insertChart',
+    'addChart',
   );
   assert.ok(r.objectId > 0);
   return r.objectId;
@@ -171,7 +171,7 @@ test('insertChart covers the creation kinds and omitted options', async () => {
     assert.equal(barPlot.grouping, mod.ChartGrouping.Stacked);
     assert.equal(chartOf(wb, bar).title.kind, mod.ChartTitleKind.None);
 
-    const xXf = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 2 });
+    const xXf = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 2 });
     assert.ok(xXf.status.ok, JSON.stringify(xXf.status));
     assert.ok(wb.setRangeXfIndex(0, 1, 5, 4, 5, xXf.index).ok);
     const scatter = insert(wb, mod, { kind: mod.ChartInsertKind.Scatter, source: 'Sheet1!$F$1:$G$5' });
@@ -241,8 +241,8 @@ test('typed chart edits are visible through getChart', async () => {
     assert.equal(chartOf(wb, id).plotVisibleOnly, true);
     assert.equal(wb.setChartDisplay(0, id, { blanksAs: mod.ChartBlanksAs.Absent }).ok, false);
     assert.throws(() => wb.setChartDisplay(0, id, 5), TypeError);
-    must(wb.previewChartData(0, id, { naAsBlank: true }), 'previewChartData naAsBlank');
-    must(wb.previewChartData(0, id, { naAsBlank: false }), 'previewChartData naAsBlank false');
+    must(wb.getChartPreview(0, id, { naAsBlank: true }), 'previewChartData naAsBlank');
+    must(wb.getChartPreview(0, id, { naAsBlank: false }), 'previewChartData naAsBlank false');
     assert.equal(chartOf(wb, id).naAsBlank, null);
 
     must(wb.setChartPlot(0, id, 0, { gapWidth: 40, overlap: 10, varyColors: true }), 'setChartPlot');
@@ -402,21 +402,21 @@ test('previewChartData resolves a draft without changing the chart', async () =>
     const id = insert(wb, mod);
     const before = JSON.stringify(chartOf(wb, id));
     const preview = must(
-      wb.previewChartData(0, id, { source: 'Sheet1!$A$1:$B$5', blanksAs: mod.ChartBlanksAs.Gap }),
-      'previewChartData',
+      wb.getChartPreview(0, id, { source: 'Sheet1!$A$1:$B$5', blanksAs: mod.ChartBlanksAs.Gap }),
+      'getChartPreview',
     ).data;
     assert.equal(preview.series.length, 1);
     assert.deepEqual([...preview.series[0].values], [2, 4, 6, 8]);
     const rows = must(
-      wb.previewChartData(0, id, { direction: mod.ChartSeriesDirection.Rows, headerRow: true, headerColumn: true }),
+      wb.getChartPreview(0, id, { direction: mod.ChartSeriesDirection.Rows, headerRow: true, headerColumn: true }),
       'previewChartData rows',
     ).data;
     assert.equal(rows.series.length, 4);
     assert.equal(JSON.stringify(chartOf(wb, id)), before);
     // No overrides is the chart as it stands.
-    assert.equal(must(wb.previewChartData(0, id, {}), 'previewChartData {}').data.series.length, 3);
-    assert.equal(wb.previewChartData(0, id, { source: 'NoSuchSheet!A1:B2' }).status.ok, false);
-    assert.equal(wb.previewChartData(0, 9999, {}).data, null);
+    assert.equal(must(wb.getChartPreview(0, id, {}), 'previewChartData {}').data.series.length, 3);
+    assert.equal(wb.getChartPreview(0, id, { source: 'NoSuchSheet!A1:B2' }).status.ok, false);
+    assert.equal(wb.getChartPreview(0, 9999, {}).data, null);
   } finally {
     wb.delete();
   }
@@ -430,7 +430,7 @@ test('a chart survives save and load and goes through the drawing operations', a
     const other = insert(wb, mod, { kind: mod.ChartInsertKind.Line, source: 'Sheet1!$A$1:$B$5' });
 
     const saved = must(wb.save(), 'save');
-    const wb2 = mod.Workbook.loadBytes(saved.bytes);
+    const wb2 = mod.Workbook.load(saved.bytes);
     try {
       assert.equal(chartOf(wb2, id).title.text, 'Kept');
       assert.deepEqual([...dataOf(wb2, id).series[0].values], [2, 4, 6, 8]);
@@ -494,13 +494,13 @@ test('chart calls report failures in their status and reject malformed arguments
     assert.equal(noData.data, null);
 
     // An unresolvable source writes nothing.
-    const bad = wb.insertChart(0, { kind: mod.ChartInsertKind.Column, source: 'NoSuchSheet!A1:B2' });
+    const bad = wb.addChart(0, { kind: mod.ChartInsertKind.Column, source: 'NoSuchSheet!A1:B2' });
     assert.equal(bad.status.ok, false);
     assert.equal(bad.status.status, 5026);
     assert.equal(bad.objectId, 0);
     assert.equal(wb.listDrawingObjects(0).length, 1);
-    assert.equal(wb.insertChart(0, { kind: 99, source: 'A1:B2' }).status.ok, false);
-    assert.throws(() => wb.insertChart(0, 'A1:B2'), TypeError);
+    assert.equal(wb.addChart(0, { kind: 99, source: 'A1:B2' }).status.ok, false);
+    assert.throws(() => wb.addChart(0, 'A1:B2'), TypeError);
 
     assert.equal(wb.setChartSeries(0, id, 0, 0, { values: '' }).ok, false);
     assert.equal(wb.setChartSeries(0, id, 0, 0, { values: 'NoSuchSheet!A1:A2' }).status, 5026);

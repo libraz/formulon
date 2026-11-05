@@ -49,22 +49,22 @@ TEST(FormulaLocalize, FunctionNameTable) {
 
 TEST(FormulaLocalize, CatalogApiReadsTheSameTable) {
   const char* out = nullptr;
-  ASSERT_EQ(fm_function_localize("sum", "mac-365-de_DE", &out), 0);
+  ASSERT_EQ(fm_localize_function_name("sum", "mac-365-de_DE", &out), 0);
   EXPECT_STREQ(out, "SUMME");
-  ASSERT_EQ(fm_function_localize("ABS", "mac-365-fr_FR", &out), 0);
+  ASSERT_EQ(fm_localize_function_name("ABS", "mac-365-fr_FR", &out), 0);
   EXPECT_STREQ(out, "ABS");
-  ASSERT_EQ(fm_function_canonicalize("SOMME", "mac-365-fr_FR", &out), 0);
+  ASSERT_EQ(fm_canonicalize_function_name("SOMME", "mac-365-fr_FR", &out), 0);
   EXPECT_STREQ(out, "SUM");
-  ASSERT_EQ(fm_function_canonicalize("TRIM", "mac-365-fr_FR", &out), 0);
+  ASSERT_EQ(fm_canonicalize_function_name("TRIM", "mac-365-fr_FR", &out), 0);
   EXPECT_STREQ(out, "MIRR");
   // The canonical spelling stays accepted as a fallback.
-  ASSERT_EQ(fm_function_canonicalize("sum", "mac-365-de_DE", &out), 0);
+  ASSERT_EQ(fm_canonicalize_function_name("sum", "mac-365-de_DE", &out), 0);
   EXPECT_STREQ(out, "SUM");
-  ASSERT_EQ(fm_function_localize("DOLLAR", "mac-365-ja_JP", &out), 0);
+  ASSERT_EQ(fm_localize_function_name("DOLLAR", "mac-365-ja_JP", &out), 0);
   EXPECT_STREQ(out, "YEN");
   fm_function_metadata_t md{};
-  EXPECT_EQ(fm_function_metadata("SUM", &md), 0);
-  EXPECT_NE(fm_function_canonicalize("SUMME", "mac-365-fr_FR", &out), 0);
+  EXPECT_EQ(fm_get_function_metadata("SUM", &md), 0);
+  EXPECT_NE(fm_canonicalize_function_name("SUMME", "mac-365-fr_FR", &out), 0);
 }
 
 // Expected values are the locale_tokens.formulatext_* captures.

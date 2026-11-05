@@ -49,7 +49,7 @@ struct CfResultsGuard {
 struct BufferGuard {
   uint8_t* data = nullptr;
   size_t len = 0;
-  ~BufferGuard() { fm_buffer_free(data); }
+  ~BufferGuard() { fm_buffer_destroy(data); }
   BufferGuard() = default;
   BufferGuard(const BufferGuard&) = delete;
   BufferGuard& operator=(const BufferGuard&) = delete;
@@ -76,11 +76,11 @@ template <typename MutateFn>
   }
   const auto& src = bytes.value();
   EXPECT_EQ(fm_workbook_load(src.data(), src.size(), &guard.handle), 0)
-      << "fm_workbook_load: " << fm_last_error_message();
+      << "fm_workbook_load: " << fm_get_last_error_message();
   return guard;
 }
 
-// Registers `count` `<dxf>` slots on an existing handle. `fm_sheet_cf_add_rule`
+// Registers `count` `<dxf>` slots on an existing handle. `fm_sheet_add_cf_rule`
 // refuses a `dxf_id` past the end of the table, so a mutation test that
 // engages a differential format has to seed the table first.
 [[maybe_unused]] inline void SeedDxfs(fm_workbook_t* handle, std::size_t count) {

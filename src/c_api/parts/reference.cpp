@@ -45,7 +45,7 @@ std::string whole_axis_endpoint(const formulon::parser::Reference& ref) {
 
 extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, const char* text, int32_t r1c1,
                                                    int32_t has_base, uint32_t base_row, uint32_t base_col,
-                                                   fm_reference_t* out) {
+                                                   fm_parsed_reference_t* out) {
   static constexpr const char* kApi = "fm_workbook_parse_reference";
   clear_last_error();
   if (wb == nullptr || text == nullptr || out == nullptr) {
@@ -65,7 +65,7 @@ extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, cons
       return rc;
     }
   }
-  *out = fm_reference_t{};
+  *out = fm_parsed_reference_t{};
   namespace refs = formulon::eval::refs_internal;
   refs::A1Parse parsed;
   {

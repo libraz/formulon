@@ -134,33 +134,33 @@ class PrintSettingsTests(unittest.TestCase):
             wb.add_row_break(0, 40)
             wb.add_row_break(0, 10)
             wb.add_col_break(0, 5)
-            rows = wb.get_row_breaks(0)
+            rows = wb.list_row_breaks(0)
             # Kept sorted by index regardless of insertion order.
             self.assertEqual([b.id for b in rows], [10, 40])
             self.assertEqual(rows[0].max, 16383)
             self.assertTrue(rows[0].manual)
-            self.assertEqual(wb.get_col_breaks(0)[0].max, 1048575)
+            self.assertEqual(wb.list_col_breaks(0)[0].max, 1048575)
 
             # Re-adding an existing index replaces rather than duplicates.
             wb.add_row_break(0, 10, manual=False)
-            rows = wb.get_row_breaks(0)
+            rows = wb.list_row_breaks(0)
             self.assertEqual(len(rows), 2)
             self.assertFalse(rows[0].manual)
 
             # Removing an absent break is not an error.
             wb.remove_row_break(0, 999)
             wb.clear_breaks(0)
-            self.assertEqual(wb.get_row_breaks(0), [])
-            self.assertEqual(wb.get_col_breaks(0), [])
+            self.assertEqual(wb.list_row_breaks(0), [])
+            self.assertEqual(wb.list_col_breaks(0), [])
 
     def test_settings_reach_paginate_without_a_save_cycle(self) -> None:
         with Workbook.create_default() as wb:
             for row in range(200):
                 for col in range(20):
                     wb.set_number(0, row, col, 1.0)
-            portrait = wb.paginate(0).page_count
+            portrait = wb.get_pagination(0).page_count
             wb.set_page_setup(0, orientation=2)
-            self.assertNotEqual(wb.paginate(0).page_count, portrait)
+            self.assertNotEqual(wb.get_pagination(0).page_count, portrait)
 
     def test_authored_report_survives_save_and_load(self) -> None:
         with Workbook.create_default() as wb:
@@ -182,7 +182,7 @@ class PrintSettingsTests(unittest.TestCase):
             self.assertAlmostEqual(reloaded.get_page_margins(0).left, 0.5)
             self.assertEqual(reloaded.get_print_area(0), "A1:F80")
             self.assertEqual(reloaded.get_print_titles(0), ("1:2", ""))
-            self.assertEqual([b.id for b in reloaded.get_row_breaks(0)], [39])
+            self.assertEqual([b.id for b in reloaded.list_row_breaks(0)], [39])
 
     def test_set_range_xf_index_materialises_the_rectangle(self) -> None:
         with Workbook.create_default() as wb:

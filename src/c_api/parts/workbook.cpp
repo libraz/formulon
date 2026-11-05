@@ -121,7 +121,7 @@ fm_status_t save_with_diagnostics_impl(const fm_workbook_t* wb, std::int32_t for
   return 0;
 }
 
-/// Shared body of `fm_workbook_create` / `fm_workbook_create_empty`.
+/// Shared body of `fm_workbook_create_default` / `fm_workbook_create_empty`.
 fm_status_t create_handle(fm_workbook_t** out, formulon::Workbook (*factory)(), const char* null_out_message) {
   clear_last_error();
   if (out == nullptr) {
@@ -140,8 +140,8 @@ fm_status_t create_handle(fm_workbook_t** out, formulon::Workbook (*factory)(), 
 // Construction / lifecycle
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_workbook_create(fm_workbook_t** out) {
-  return create_handle(out, &formulon::Workbook::create, "fm_workbook_create: out is NULL");
+extern "C" fm_status_t fm_workbook_create_default(fm_workbook_t** out) {
+  return create_handle(out, &formulon::Workbook::create, "fm_workbook_create_default: out is NULL");
 }
 
 extern "C" fm_status_t fm_workbook_create_for_profile(const char* profile_id, fm_workbook_t** out) {
@@ -210,22 +210,22 @@ extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_wor
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_read_diagnostics(const fm_workbook_t* wb, fm_read_diagnostics_t* out_diagnostics) {
+extern "C" fm_status_t fm_workbook_get_diagnostics(const fm_workbook_t* wb, fm_read_diagnostics_t* out_diagnostics) {
   clear_last_error();
   if (out_diagnostics != nullptr) {
     *out_diagnostics = fm_read_diagnostics_t{};
   }
   if (wb == nullptr || out_diagnostics == nullptr) {
-    return null_argument("fm_workbook_read_diagnostics");
+    return null_argument("fm_workbook_get_diagnostics");
   }
   *out_diagnostics = wb->read_diagnostics;
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_memory_usage(const fm_workbook_t* wb, size_t* out_bytes) {
+extern "C" fm_status_t fm_workbook_get_memory_usage(const fm_workbook_t* wb, size_t* out_bytes) {
   clear_last_error();
   if (wb == nullptr || out_bytes == nullptr || !wb->wb.has_value()) {
-    return null_argument("fm_workbook_memory_usage");
+    return null_argument("fm_workbook_get_memory_usage");
   }
   *out_bytes = wb->wb->approximate_memory_bytes();
   return 0;
@@ -262,7 +262,7 @@ extern "C" fm_status_t fm_workbook_save_as(const fm_workbook_t* wb, std::int32_t
   return save_with_diagnostics_impl(wb, format, out_bytes, out_len, &diagnostics, "fm_workbook_save_as");
 }
 
-extern "C" void fm_buffer_free(uint8_t* bytes) {
+extern "C" void fm_buffer_destroy(uint8_t* bytes) {
   delete[] bytes;
 }
 
@@ -270,15 +270,16 @@ extern "C" void fm_buffer_free(uint8_t* bytes) {
 // Sheets
 // ---------------------------------------------------------------------------
 //
-// `fm_workbook_sheet_count` is now emitted by the binding codegen (see
+// `fm_workbook_get_sheet_count` is now emitted by the binding codegen (see
 // `src/c_api/generated/workbook_counts.cpp`).
 
-extern "C" fm_status_t fm_workbook_sheet_name(const fm_workbook_t* wb, size_t index, const char** out_utf8) {
+extern "C" fm_status_t fm_workbook_get_sheet_name(const fm_workbook_t* wb, size_t index, const char** out_utf8) {
   clear_last_error();
   if (wb == nullptr || out_utf8 == nullptr) {
-    return null_argument("fm_workbook_sheet_name");
+    return null_argument("fm_workbook_get_sheet_name");
   }
-  if (auto rc = check_index(index, wb->workbook().sheet_count(), "fm_workbook_sheet_name", "sheet_index"); rc != 0) {
+  if (auto rc = check_index(index, wb->workbook().sheet_count(), "fm_workbook_get_sheet_name", "sheet_index");
+      rc != 0) {
     return rc;
   }
   // `Sheet::name()` returns `const std::string&`, so `c_str()` is
@@ -461,34 +462,34 @@ extern "C" fm_status_t fm_workbook_set_defined_name_attrs(fm_workbook_t* wb, con
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_insert_rows(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t count) {
+extern "C" fm_status_t fm_sheet_insert_rows(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t count) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_insert_rows");
+    return null_argument("fm_sheet_insert_rows");
   }
   return finish_status(wb->workbook().insert_rows(sheet, row, count));
 }
 
-extern "C" fm_status_t fm_workbook_delete_rows(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t count) {
+extern "C" fm_status_t fm_sheet_delete_rows(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t count) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_delete_rows");
+    return null_argument("fm_sheet_delete_rows");
   }
   return finish_status(wb->workbook().delete_rows(sheet, row, count));
 }
 
-extern "C" fm_status_t fm_workbook_insert_cols(fm_workbook_t* wb, uint32_t sheet, uint32_t col, uint32_t count) {
+extern "C" fm_status_t fm_sheet_insert_cols(fm_workbook_t* wb, uint32_t sheet, uint32_t col, uint32_t count) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_insert_cols");
+    return null_argument("fm_sheet_insert_cols");
   }
   return finish_status(wb->workbook().insert_cols(sheet, col, count));
 }
 
-extern "C" fm_status_t fm_workbook_delete_cols(fm_workbook_t* wb, uint32_t sheet, uint32_t col, uint32_t count) {
+extern "C" fm_status_t fm_sheet_delete_cols(fm_workbook_t* wb, uint32_t sheet, uint32_t col, uint32_t count) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_delete_cols");
+    return null_argument("fm_sheet_delete_cols");
   }
   return finish_status(wb->workbook().delete_cols(sheet, col, count));
 }
@@ -497,18 +498,18 @@ extern "C" fm_status_t fm_workbook_delete_cols(fm_workbook_t* wb, uint32_t sheet
 // Defined names / passthrough parts (read-side iteration)
 // ---------------------------------------------------------------------------
 //
-// `fm_workbook_defined_name_count`, `fm_workbook_table_count`, and
-// `fm_workbook_passthrough_count` are now emitted by the binding
+// `fm_workbook_get_defined_name_count`, `fm_workbook_get_table_count`, and
+// `fm_workbook_get_passthrough_count` are now emitted by the binding
 // codegen (see `src/c_api/generated/workbook_counts.cpp`).
 
-extern "C" fm_status_t fm_workbook_defined_name_at(const fm_workbook_t* wb, size_t idx, const char** out_name,
-                                                   const char** out_formula, int32_t* out_local_sheet_id) {
+extern "C" fm_status_t fm_workbook_get_defined_name_at(const fm_workbook_t* wb, size_t idx, const char** out_name,
+                                                       const char** out_formula, int32_t* out_local_sheet_id) {
   clear_last_error();
   if (wb == nullptr || out_name == nullptr || out_formula == nullptr) {
-    return null_argument("fm_workbook_defined_name_at");
+    return null_argument("fm_workbook_get_defined_name_at");
   }
   const auto& names = wb->workbook().defined_names();
-  if (auto rc = check_index(idx, names.size(), "fm_workbook_defined_name_at", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, names.size(), "fm_workbook_get_defined_name_at", "idx"); rc != 0) {
     return rc;
   }
   *out_name = names[idx].name.c_str();
@@ -522,14 +523,14 @@ extern "C" fm_status_t fm_workbook_defined_name_at(const fm_workbook_t* wb, size
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_defined_name_attrs_at(const fm_workbook_t* wb, size_t idx, const char** out_comment,
-                                                         int32_t* out_hidden) {
+extern "C" fm_status_t fm_workbook_get_defined_name_attrs_at(const fm_workbook_t* wb, size_t idx,
+                                                             const char** out_comment, int32_t* out_hidden) {
   clear_last_error();
   if (wb == nullptr || out_comment == nullptr || out_hidden == nullptr) {
-    return null_argument("fm_workbook_defined_name_attrs_at");
+    return null_argument("fm_workbook_get_defined_name_attrs_at");
   }
   const auto& names = wb->workbook().defined_names();
-  if (auto rc = check_index(idx, names.size(), "fm_workbook_defined_name_attrs_at", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, names.size(), "fm_workbook_get_defined_name_attrs_at", "idx"); rc != 0) {
     return rc;
   }
   *out_comment = names[idx].comment.c_str();
@@ -537,13 +538,13 @@ extern "C" fm_status_t fm_workbook_defined_name_attrs_at(const fm_workbook_t* wb
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_passthrough_at(const fm_workbook_t* wb, size_t idx, const char** out_path) {
+extern "C" fm_status_t fm_workbook_get_passthrough_at(const fm_workbook_t* wb, size_t idx, const char** out_path) {
   clear_last_error();
   if (wb == nullptr || out_path == nullptr) {
-    return null_argument("fm_workbook_passthrough_at");
+    return null_argument("fm_workbook_get_passthrough_at");
   }
   const auto& parts = wb->workbook().passthrough_parts();
-  if (auto rc = check_index(idx, parts.size(), "fm_workbook_passthrough_at", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, parts.size(), "fm_workbook_get_passthrough_at", "idx"); rc != 0) {
     return rc;
   }
   *out_path = parts[idx].path.c_str();

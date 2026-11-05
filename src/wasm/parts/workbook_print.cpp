@@ -56,11 +56,11 @@ emscripten::val breaks_array(const fm_workbook_t* handle, uint32_t sheet, bool r
     out.set("breaks", items);
     return out;
   }
-  const size_t count = rows ? fm_sheet_row_break_count(handle, sheet) : fm_sheet_col_break_count(handle, sheet);
+  const size_t count = rows ? fm_sheet_get_row_break_count(handle, sheet) : fm_sheet_get_col_break_count(handle, sheet);
   for (size_t i = 0; i < count; ++i) {
     fm_page_break_t brk{};
     const fm_status_t rc =
-        rows ? fm_sheet_row_break_at(handle, sheet, i, &brk) : fm_sheet_col_break_at(handle, sheet, i, &brk);
+        rows ? fm_sheet_get_row_break_at(handle, sheet, i, &brk) : fm_sheet_get_col_break_at(handle, sheet, i, &brk);
     if (rc != 0) {
       out.set("status", error_status(rc));
       out.set("breaks", emscripten::val::array());
@@ -204,7 +204,7 @@ JsStatus JsWorkbook::setSheetPageSetup(uint32_t sheet, emscripten::val setup) {
   if (handle_ == nullptr) {
     return invalid_handle_status();
   }
-  JsNarrowNumericReader reader("setSheetPageSetup");
+  JsNarrowNumericReader reader("setPageSetup");
   fm_page_setup_t out{};
   const emscripten::val orientation = reader.value(setup, "orientation", "pageSetup.orientation");
   out.orientation_engaged = js_value_present(orientation) ? 1 : 0;
@@ -234,7 +234,7 @@ JsStatus JsWorkbook::setSheetPageMargins(uint32_t sheet, emscripten::val margins
   if (handle_ == nullptr) {
     return invalid_handle_status();
   }
-  JsNarrowNumericReader reader("setSheetPageMargins");
+  JsNarrowNumericReader reader("setPageMargins");
   fm_page_margins_t out{};
   const emscripten::val left = reader.value(margins, "left", "pageMargins.left");
   out.left_engaged = js_value_present(left) ? 1 : 0;
@@ -264,7 +264,7 @@ JsStatus JsWorkbook::setSheetPrintOptions(uint32_t sheet, emscripten::val option
   if (handle_ == nullptr) {
     return invalid_handle_status();
   }
-  JsNarrowNumericReader reader("setSheetPrintOptions");
+  JsNarrowNumericReader reader("setPrintOptions");
   fm_print_options_t out{};
   const emscripten::val grid_lines = reader.value(options, "gridLines", "printOptions.gridLines");
   out.grid_lines_engaged = js_value_present(grid_lines) ? 1 : 0;
@@ -297,7 +297,7 @@ JsStatus JsWorkbook::setSheetHeaderFooter(uint32_t sheet, emscripten::val header
   std::string even_footer;
   std::string first_header;
   std::string first_footer;
-  JsNarrowNumericReader reader("setSheetHeaderFooter");
+  JsNarrowNumericReader reader("setHeaderFooter");
   fm_header_footer_t out{};
   const emscripten::val odd_header_value = reader.value(headerFooter, "oddHeader", "headerFooter.oddHeader");
   out.odd_header = reader.optional_string_value(odd_header_value, odd_header, "headerFooter.oddHeader");

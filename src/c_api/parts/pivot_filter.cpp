@@ -169,24 +169,24 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_pivot_filter_count(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                      std::size_t pivot_index, std::size_t* out_count) {
+extern "C" fm_status_t fm_sheet_get_pivot_filter_count(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                       std::size_t pivot_index, std::size_t* out_count) {
   clear_last_error();
-  return pivot_count(wb, sheet_index, pivot_index, out_count, "fm_workbook_pivot_filter_count",
+  return pivot_count(wb, sheet_index, pivot_index, out_count, "fm_sheet_get_pivot_filter_count",
                      [](const formulon::pivot::PivotTable& table) { return table.active_filters().size(); });
 }
 
-extern "C" fm_status_t fm_workbook_pivot_filter_at(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                   std::size_t pivot_index, std::size_t filter_idx,
-                                                   fm_pivot_filter_spec_t* out) {
+extern "C" fm_status_t fm_sheet_get_pivot_filter(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                 std::size_t pivot_index, std::size_t filter_idx,
+                                                 fm_pivot_filter_spec_t* out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
-  if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, "fm_workbook_pivot_filter_at", &table);
+  if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, "fm_sheet_get_pivot_filter", &table);
       rc != 0) {
     return rc;
   }
   const auto& filters = table->active_filters();
-  if (auto rc = check_index(filter_idx, filters.size(), "fm_workbook_pivot_filter_at", "filter_idx"); rc != 0) {
+  if (auto rc = check_index(filter_idx, filters.size(), "fm_sheet_get_pivot_filter", "filter_idx"); rc != 0) {
     return rc;
   }
 
@@ -194,11 +194,11 @@ extern "C" fm_status_t fm_workbook_pivot_filter_at(const fm_workbook_t* wb, std:
   const auto axis = pivot_axis_to_fm(filter.axis);
   if (!axis.has_value()) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_filter_at: model axis is not representable");
+                             "fm_sheet_get_pivot_filter: model axis is not representable");
   }
   if (filter.type > formulon::pivot::FilterType::DateM12) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_filter_at: model filter type is not representable");
+                             "fm_sheet_get_pivot_filter: model filter type is not representable");
   }
 
   fm_pivot_filter_spec_t result{};
@@ -234,17 +234,17 @@ extern "C" fm_status_t fm_workbook_pivot_filter_at(const fm_workbook_t* wb, std:
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_filter_add(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                                                    const fm_pivot_filter_spec_t* spec) {
+extern "C" fm_status_t fm_sheet_add_pivot_filter(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
+                                                 const fm_pivot_filter_spec_t* spec) {
   clear_last_error();
-  return add_pivot_filter_impl(wb, sheet_index, pivot_index, spec, "fm_workbook_pivot_filter_add");
+  return add_pivot_filter_impl(wb, sheet_index, pivot_index, spec, "fm_sheet_add_pivot_filter");
 }
 
-extern "C" fm_status_t fm_workbook_pivot_filter_clear(fm_workbook_t* wb, std::size_t sheet_index,
-                                                      std::size_t pivot_index) {
+extern "C" fm_status_t fm_sheet_clear_pivot_filters(fm_workbook_t* wb, std::size_t sheet_index,
+                                                    std::size_t pivot_index) {
   clear_last_error();
   formulon::pivot::PivotTable* table = nullptr;
-  if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_workbook_pivot_filter_clear", &table);
+  if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_sheet_clear_pivot_filters", &table);
       rc != 0) {
     return rc;
   }
@@ -253,18 +253,17 @@ extern "C" fm_status_t fm_workbook_pivot_filter_clear(fm_workbook_t* wb, std::si
   return edit.commit();
 }
 
-extern "C" fm_status_t fm_workbook_pivot_filter_remove_at(fm_workbook_t* wb, std::size_t sheet_index,
-                                                          std::size_t pivot_index, std::size_t filter_idx) {
+extern "C" fm_status_t fm_sheet_remove_pivot_filter(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
+                                                    std::size_t filter_idx) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_pivot_filter_remove_at", "wb");
+    return null_argument("fm_sheet_remove_pivot_filter", "wb");
   }
-  auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_filter_remove_at");
+  auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, "fm_sheet_remove_pivot_filter");
   if (table == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
-  if (auto rc =
-          check_index(filter_idx, table->active_filters().size(), "fm_workbook_pivot_filter_remove_at", "filter_idx");
+  if (auto rc = check_index(filter_idx, table->active_filters().size(), "fm_sheet_remove_pivot_filter", "filter_idx");
       rc != 0) {
     return rc;
   }

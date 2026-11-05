@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 
 from formulon import (
-    CellStyle,
+    CellStyleRecord,
     CellXf,
     ColorContext,
     ColorResolution,
@@ -39,7 +39,7 @@ def _xf(font_index: int) -> CellXf:
 class ThemeTests(unittest.TestCase):
     def test_get_theme_reports_twelve_colors_and_fonts(self) -> None:
         with Workbook.create_default() as wb:
-            theme = wb.get_theme()
+            theme = wb.get_theme_fonts()
         self.assertIn(theme.source, (ThemeSource.PART, ThemeSource.DEFAULT))
         self.assertEqual(len(theme.colors), 12)
         self.assertTrue(theme.fonts.minor_latin)
@@ -48,7 +48,7 @@ class ThemeTests(unittest.TestCase):
         colors = [0xFF000000 | (0x112233 * (i + 1) & 0xFFFFFF) for i in range(12)]
         with Workbook.create_default() as wb:
             wb.set_theme_colors(colors)
-            theme = wb.get_theme()
+            theme = wb.get_theme_fonts()
             with self.assertRaises(ValueError):
                 wb.set_theme_colors(colors[:11])
         self.assertEqual(theme.source, ThemeSource.PART)
@@ -58,17 +58,17 @@ class ThemeTests(unittest.TestCase):
         fonts = ThemeFonts("Arial", "MS Gothic", "Verdana", "Meiryo")
         with Workbook.create_default() as wb:
             wb.set_theme_fonts(fonts)
-            self.assertEqual(wb.get_theme().fonts, fonts)
+            self.assertEqual(wb.get_theme_fonts().fonts, fonts)
 
     def test_reset_theme_returns_to_default(self) -> None:
         colors = [0xFF000000 | (0x112233 * (i + 1) & 0xFFFFFF) for i in range(12)]
         with Workbook.create_default() as wb:
-            wb.reset_theme()
-            self.assertEqual(wb.get_theme().source, ThemeSource.DEFAULT)
+            wb.clear_theme()
+            self.assertEqual(wb.get_theme_fonts().source, ThemeSource.DEFAULT)
             wb.set_theme_colors(colors)
-            self.assertEqual(wb.get_theme().source, ThemeSource.PART)
-            wb.reset_theme()
-            theme = wb.get_theme()
+            self.assertEqual(wb.get_theme_fonts().source, ThemeSource.PART)
+            wb.clear_theme()
+            theme = wb.get_theme_fonts()
             self.assertEqual(theme.source, ThemeSource.DEFAULT)
             self.assertNotEqual(theme.colors, colors)
             self.assertNotIn(b"xl/theme/theme1.xml", wb.save())
@@ -166,7 +166,7 @@ class NamedStyleTests(unittest.TestCase):
     def test_set_and_remove_cell_style(self) -> None:
         with Workbook.create_default() as wb:
             xf_id = wb.add_cell_style_xf(_xf(0))
-            wb.set_cell_style(CellStyle("Mine", xf_id, hidden=True))
+            wb.set_cell_style(CellStyleRecord("Mine", xf_id, hidden=True))
             names = {wb.get_cell_style(i).name: wb.get_cell_style(i) for i in range(wb.cell_style_count())}
             self.assertIn("Mine", names)
             self.assertEqual(names["Mine"].xf_id, xf_id)
@@ -177,13 +177,13 @@ class NamedStyleTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.remove_cell_style("Mine")
             with self.assertRaises(FormulonError):
-                wb.set_cell_style(CellStyle("", xf_id))
+                wb.set_cell_style(CellStyleRecord("", xf_id))
 
 
 class CreateForProfileTests(unittest.TestCase):
     def test_mac_ja_jp_defaults(self) -> None:
         with Workbook.create_for_profile("mac-365-ja_JP") as wb:
-            self.assertEqual(wb.excel_profile_id(), "mac-365-ja_JP")
+            self.assertEqual(wb.get_excel_profile_id(), "mac-365-ja_JP")
             body = wb.get_font(0)
             self.assertEqual(body.name, "游ゴシック")
             self.assertEqual(body.size, 12.0)
@@ -200,7 +200,7 @@ class CreateForProfileTests(unittest.TestCase):
 class ThemeScriptFontTests(unittest.TestCase):
     def test_default_theme_reports_47_scripts(self) -> None:
         with Workbook.create_for_profile("mac-365-ja_JP") as wb:
-            theme = wb.get_theme()
+            theme = wb.get_theme_fonts()
         self.assertEqual(len(theme.major_scripts), 47)
         self.assertIsInstance(theme.major_scripts[0], ThemeScriptFont)
         self.assertEqual(len(theme.minor_scripts), 47)
@@ -210,11 +210,11 @@ class ThemeScriptFontTests(unittest.TestCase):
 
     def test_set_script_font_roundtrip(self) -> None:
         with Workbook.create_for_profile("mac-365-en_US") as wb:
-            before = {s.script: s.typeface for s in wb.get_theme().minor_scripts}
+            before = {s.script: s.typeface for s in wb.get_theme_fonts().minor_scripts}
             wb.set_theme_script_font(False, "Hang", "Test Face")
             data = wb.save()
         with Workbook.load(data) as wb2:
-            theme = wb2.get_theme()
+            theme = wb2.get_theme_fonts()
         self.assertEqual(len(theme.minor_scripts), 47)
         after = {s.script: s.typeface for s in theme.minor_scripts}
         self.assertEqual(after.pop("Hang"), "Test Face")

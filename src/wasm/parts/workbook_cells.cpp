@@ -22,12 +22,12 @@ namespace parts {
 // ---- Cell value / formula setters ---------------------------------------
 
 JsStatus JsWorkbook::setNumber(uint32_t sheet, uint32_t row, uint32_t col, double value) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_set_number(handle_, sheet, row, col, value)
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_number(handle_, sheet, row, col, value)
                                            : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setBool(uint32_t sheet, uint32_t row, uint32_t col, bool value) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_set_bool(handle_, sheet, row, col, value ? 1 : 0)
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_bool(handle_, sheet, row, col, value ? 1 : 0)
                                            : kBindingInvalidHandle);
 }
 
@@ -42,18 +42,17 @@ JsStatus JsWorkbook::setError(uint32_t sheet, uint32_t row, uint32_t col, emscri
   if (!js_value_present(errorCode)) {
     return binding_error_status(kInvalidArgument, "setError: `errorCode` is required");
   }
-  fm_status_t rc =
-      fm_workbook_set_error(handle_, sheet, row, col, static_cast<fm_error_code_t>(errorCode.as<int32_t>()));
+  fm_status_t rc = fm_sheet_set_error(handle_, sheet, row, col, static_cast<fm_error_code_t>(errorCode.as<int32_t>()));
   return status_from_rc(rc);
 }
 
 JsStatus JsWorkbook::setText(uint32_t sheet, uint32_t row, uint32_t col, const std::string& text) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_set_text(handle_, sheet, row, col, text.c_str())
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_text(handle_, sheet, row, col, text.c_str())
                                            : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setCellPhonetic(uint32_t sheet, uint32_t row, uint32_t col, const std::string& phonetic) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_set_cell_phonetic(handle_, sheet, row, col, phonetic.c_str())
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_cell_phonetic(handle_, sheet, row, col, phonetic.c_str())
                                            : kBindingInvalidHandle);
 }
 
@@ -91,7 +90,7 @@ JsStatus JsWorkbook::setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t 
   for (uint32_t i = 0; i < count; ++i) {
     records[i].text = texts[i].c_str();
   }
-  const fm_status_t rc = fm_workbook_set_cell_phonetic_runs(handle_, sheet, row, col, records.data(), records.size());
+  const fm_status_t rc = fm_sheet_set_cell_phonetic_runs(handle_, sheet, row, col, records.data(), records.size());
   return status_from_rc(rc);
 }
 
@@ -106,16 +105,16 @@ JsStatus JsWorkbook::setCellPhoneticProperties(uint32_t sheet, uint32_t row, uin
   if (!reader.ok()) {
     return reader.failure();
   }
-  const fm_status_t rc = fm_workbook_set_cell_phonetic_properties(handle_, sheet, row, col, font_id, type, alignment);
+  const fm_status_t rc = fm_sheet_set_cell_phonetic_properties(handle_, sheet, row, col, font_id, type, alignment);
   return status_from_rc(rc);
 }
 
 JsStatus JsWorkbook::setBlank(uint32_t sheet, uint32_t row, uint32_t col) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_set_blank(handle_, sheet, row, col) : kBindingInvalidHandle);
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_blank(handle_, sheet, row, col) : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setFormula(uint32_t sheet, uint32_t row, uint32_t col, const std::string& formula) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_set_formula(handle_, sheet, row, col, formula.c_str())
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_formula(handle_, sheet, row, col, formula.c_str())
                                            : kBindingInvalidHandle);
 }
 
@@ -126,7 +125,7 @@ JsCellResult JsWorkbook::getValue(uint32_t sheet, uint32_t row, uint32_t col) co
     return r;
   }
   fm_value_t v{};
-  fm_status_t rc = fm_workbook_get_value(handle_, sheet, row, col, &v);
+  fm_status_t rc = fm_sheet_get_value(handle_, sheet, row, col, &v);
   adopt_value(rc, v, r.status, r.value);
   return r;
 }
@@ -134,7 +133,7 @@ JsCellResult JsWorkbook::getValue(uint32_t sheet, uint32_t row, uint32_t col) co
 emscripten::val JsWorkbook::getCellPhonetic(uint32_t sheet, uint32_t row, uint32_t col) const {
   const char* text = nullptr;
   const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_get_cell_phonetic(handle_, sheet, row, col, &text) : kBindingInvalidHandle;
+      handle_ != nullptr ? fm_sheet_get_cell_phonetic(handle_, sheet, row, col, &text) : kBindingInvalidHandle;
   return js_text_result(rc, "value", text);
 }
 
@@ -147,10 +146,10 @@ emscripten::val JsWorkbook::getCellPhoneticRuns(uint32_t sheet, uint32_t row, ui
     return o;
   }
   uint32_t count = 0;
-  fm_status_t rc = fm_workbook_get_cell_phonetic_run_count(handle_, sheet, row, col, &count);
+  fm_status_t rc = fm_sheet_get_cell_phonetic_run_count(handle_, sheet, row, col, &count);
   for (uint32_t i = 0; rc == 0 && i < count; ++i) {
     fm_phonetic_run_t run{};
-    rc = fm_workbook_get_cell_phonetic_run(handle_, sheet, row, col, i, &run);
+    rc = fm_sheet_get_cell_phonetic_run(handle_, sheet, row, col, i, &run);
     if (rc != 0) {
       break;
     }
@@ -177,11 +176,11 @@ emscripten::val JsWorkbook::getCellPhoneticProperties(uint32_t sheet, uint32_t r
   uint32_t type = 0;
   uint32_t alignment = 0;
   int32_t present = 0;
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_cell_phonetic_properties(handle_, sheet, row, col,
-                                                                                       &font_id, &type, &alignment)
-                                            : kBindingInvalidHandle;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_cell_phonetic_properties(handle_, sheet, row, col, &font_id, &type, &alignment)
+                         : kBindingInvalidHandle;
   if (rc == 0) {
-    (void)fm_workbook_has_cell_phonetic_properties(handle_, sheet, row, col, &present);
+    (void)fm_sheet_has_cell_phonetic_properties(handle_, sheet, row, col, &present);
   }
   // The payload keys are declared unconditionally, so a failure reports the
   // defaults beside the status rather than dropping them.
@@ -202,7 +201,7 @@ emscripten::val JsWorkbook::getCellPhoneticProperties(uint32_t sheet, uint32_t r
 emscripten::val JsWorkbook::getCellShowPhonetic(uint32_t sheet, uint32_t row, uint32_t col) const {
   int32_t show = 0;
   const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_get_cell_show_phonetic(handle_, sheet, row, col, &show) : kBindingInvalidHandle;
+      handle_ != nullptr ? fm_sheet_get_cell_show_phonetic(handle_, sheet, row, col, &show) : kBindingInvalidHandle;
   emscripten::val o = emscripten::val::object();
   o.set("status", rc == 0 ? ok_status() : error_status(rc));
   o.set("show", rc == 0 && show != 0);
@@ -210,7 +209,7 @@ emscripten::val JsWorkbook::getCellShowPhonetic(uint32_t sheet, uint32_t row, ui
 }
 
 JsStatus JsWorkbook::setCellShowPhonetic(uint32_t sheet, uint32_t row, uint32_t col, bool show) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_set_cell_show_phonetic(handle_, sheet, row, col, show ? 1 : 0)
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_cell_show_phonetic(handle_, sheet, row, col, show ? 1 : 0)
                                            : kBindingInvalidHandle);
 }
 
@@ -222,7 +221,7 @@ JsEvalResult JsWorkbook::evaluateFormulaText(uint32_t sheet, uint32_t row, uint3
     return r;
   }
   fm_value_t v{};
-  fm_status_t rc = fm_workbook_evaluate_formula(handle_, sheet, row, col, formula.c_str(), &v);
+  fm_status_t rc = fm_sheet_evaluate_formula(handle_, sheet, row, col, formula.c_str(), &v);
   adopt_value(rc, v, r.status, r.value);
   return r;
 }
@@ -235,7 +234,7 @@ JsEvalResult JsWorkbook::evaluateConditionalFormula(uint32_t sheet, uint32_t row
     return r;
   }
   fm_value_t v{};
-  fm_status_t rc = fm_workbook_evaluate_cf_formula(handle_, sheet, row, col, anchorRow, anchorCol, formula.c_str(), &v);
+  fm_status_t rc = fm_sheet_evaluate_cf_formula(handle_, sheet, row, col, anchorRow, anchorCol, formula.c_str(), &v);
   adopt_value(rc, v, r.status, r.value);
   return r;
 }
@@ -255,7 +254,7 @@ emscripten::val JsWorkbook::evaluateFormulaArray(uint32_t sheet, uint32_t row, u
   }
   uint32_t rows = 0;
   uint32_t cols = 0;
-  fm_status_t rc = fm_workbook_evaluate_formula_array(handle_, sheet, row, col, formula.c_str(), &rows, &cols);
+  fm_status_t rc = fm_sheet_evaluate_formula_array(handle_, sheet, row, col, formula.c_str(), &rows, &cols);
   if (rc != 0) {
     return fail(rc);
   }
@@ -284,7 +283,7 @@ emscripten::val JsWorkbook::evaluateFormulaArray(uint32_t sheet, uint32_t row, u
 emscripten::val JsWorkbook::getLambdaText(uint32_t sheet, uint32_t row, uint32_t col) const {
   const char* text = nullptr;
   const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_lambda_text_at(handle_, sheet, row, col, &text) : kBindingInvalidHandle;
+      handle_ != nullptr ? fm_sheet_get_lambda_text(handle_, sheet, row, col, &text) : kBindingInvalidHandle;
   return js_text_result(rc, "text", text);
 }
 
@@ -305,7 +304,7 @@ emscripten::val JsWorkbook::cellAt(uint32_t sheet, uint32_t idx) const {
   uint32_t col = 0;
   const char* formula = nullptr;
   fm_value_t v{};
-  fm_status_t rc = fm_workbook_cell_at(handle_, sheet, idx, &row, &col, &formula, &v);
+  fm_status_t rc = fm_sheet_get_cell_at(handle_, sheet, idx, &row, &col, &formula, &v);
   if (rc != 0) {
     o.set("status", error_status(rc));
     return o;
@@ -327,7 +326,7 @@ emscripten::val JsWorkbook::definedNameAt(uint32_t idx) const {
   const char* name = nullptr;
   const char* formula = nullptr;
   int32_t local_sheet_id = -1;
-  fm_status_t rc = fm_workbook_defined_name_at(handle_, idx, &name, &formula, &local_sheet_id);
+  fm_status_t rc = fm_workbook_get_defined_name_at(handle_, idx, &name, &formula, &local_sheet_id);
   if (rc != 0) {
     o.set("status", error_status(rc));
     return o;
@@ -338,7 +337,7 @@ emscripten::val JsWorkbook::definedNameAt(uint32_t idx) const {
   o.set("localSheetId", local_sheet_id);
   const char* comment = nullptr;
   int32_t hidden = 0;
-  if (fm_workbook_defined_name_attrs_at(handle_, idx, &comment, &hidden) == 0) {
+  if (fm_workbook_get_defined_name_attrs_at(handle_, idx, &comment, &hidden) == 0) {
     js_set_cstr(o, "comment", comment);
     o.set("hidden", hidden != 0);
   }
@@ -355,17 +354,17 @@ emscripten::val JsWorkbook::tableAt(uint32_t idx) const {
   const char* display = nullptr;
   const char* ref = nullptr;
   std::size_t sheet_index = 0;
-  fm_status_t rc = fm_workbook_table_at(handle_, idx, &name, &display, &ref, &sheet_index);
+  fm_status_t rc = fm_workbook_get_table(handle_, idx, &name, &display, &ref, &sheet_index);
   if (rc != 0) {
     o.set("status", error_status(rc));
     return o;
   }
   fm_table_info_t info{};
-  rc = fm_workbook_table_get_info(handle_, idx, &info);
+  rc = fm_workbook_get_table_info(handle_, idx, &info);
   emscripten::val columns = emscripten::val::array();
   for (uint32_t i = 0; rc == 0 && i < info.column_count; ++i) {
     fm_table_column_info_t column{};
-    rc = fm_workbook_table_get_column(handle_, idx, i, &column);
+    rc = fm_workbook_get_table_column(handle_, idx, i, &column);
     if (rc == 0) {
       emscripten::val c = emscripten::val::object();
       js_set_cstr(c, "name", column.name);
@@ -431,14 +430,14 @@ JsTableStyleToggles js_table_style_toggles(JsNarrowNumericReader& reader, const 
 /// style name.
 fm_status_t apply_table_style_toggles(fm_workbook_t* handle, uint32_t idx, const JsTableStyleToggles& toggles) {
   fm_table_info_t info{};
-  if (const fm_status_t rc = fm_workbook_table_get_info(handle, idx, &info); rc != 0) {
+  if (const fm_status_t rc = fm_workbook_get_table_info(handle, idx, &info); rc != 0) {
     return rc;
   }
   // A table without the element takes the creation defaults underneath.
   const bool present = info.style_present != 0;
   const std::string name = info.style_name != nullptr ? info.style_name : "";
   const auto pick = [](int32_t supplied, int32_t current) { return supplied >= 0 ? supplied : current; };
-  return fm_workbook_table_set_style_info(handle, idx, name.c_str(), pick(toggles.first_column, info.show_first_column),
+  return fm_workbook_set_table_style_info(handle, idx, name.c_str(), pick(toggles.first_column, info.show_first_column),
                                           pick(toggles.last_column, info.show_last_column),
                                           pick(toggles.row_stripes, present ? info.show_row_stripes : 1),
                                           pick(toggles.column_stripes, info.show_column_stripes));
@@ -452,28 +451,28 @@ JsAddStyleResult JsWorkbook::createTable(emscripten::val spec) {
     out.status = invalid_handle_status();
     return out;
   }
-  JsNarrowNumericReader reader("createTable");
-  const uint32_t sheet = reader.u32(spec, "sheetIndex", 0U, "createTable.sheetIndex");
-  const std::string ref = reader.string(spec, "ref", "createTable.ref");
-  const std::string name = reader.string(spec, "name", "createTable.name");
-  std::string display_name = reader.string(spec, "displayName", "createTable.displayName");
+  JsNarrowNumericReader reader("addTable");
+  const uint32_t sheet = reader.u32(spec, "sheetIndex", 0U, "addTable.sheetIndex");
+  const std::string ref = reader.string(spec, "ref", "addTable.ref");
+  const std::string name = reader.string(spec, "name", "addTable.name");
+  std::string display_name = reader.string(spec, "displayName", "addTable.displayName");
   if (display_name.empty()) {
     display_name = name;
   }
-  const std::string style_name = reader.string(spec, "styleName", "createTable.styleName");
-  const bool header_row = reader.boolean(spec, "headerRow", true, "createTable.headerRow");
-  const bool totals_row = reader.boolean(spec, "totalsRow", false, "createTable.totalsRow");
-  const emscripten::val columns = reader.value(spec, "columns", "createTable.columns");
+  const std::string style_name = reader.string(spec, "styleName", "addTable.styleName");
+  const bool header_row = reader.boolean(spec, "headerRow", true, "addTable.headerRow");
+  const bool totals_row = reader.boolean(spec, "totalsRow", false, "addTable.totalsRow");
+  const emscripten::val columns = reader.value(spec, "columns", "addTable.columns");
   const JsTableStyleToggles toggles = js_table_style_toggles(reader, spec);
   if (!reader.ok()) {
     out.status = reader.failure();
     return out;
   }
-  if (!reader.is_array(columns, "createTable.columns")) {
-    out.status = binding_error_status(kInvalidArgument, "createTable: `columns` must be an array of column names");
+  if (!reader.is_array(columns, "addTable.columns")) {
+    out.status = binding_error_status(kInvalidArgument, "addTable: `columns` must be an array of column names");
     return out;
   }
-  const uint32_t count = reader.length(columns, "createTable.columns.length");
+  const uint32_t count = reader.length(columns, "addTable.columns.length");
   if (!reader.ok()) {
     out.status = reader.failure();
     return out;
@@ -483,8 +482,8 @@ JsAddStyleResult JsWorkbook::createTable(emscripten::val spec) {
   std::vector<std::string> names;
   names.reserve(count);
   for (uint32_t i = 0; i < count && reader.ok(); ++i) {
-    const emscripten::val column = reader.array_element(columns, i, "createTable.columns[]");
-    names.push_back(reader.string_value(column, "createTable.columns[]"));
+    const emscripten::val column = reader.array_element(columns, i, "addTable.columns[]");
+    names.push_back(reader.string_value(column, "addTable.columns[]"));
   }
   if (!reader.ok()) {
     out.status = reader.failure();
@@ -497,8 +496,8 @@ JsAddStyleResult JsWorkbook::createTable(emscripten::val spec) {
   }
   size_t index = 0;
   const fm_status_t rc =
-      fm_workbook_table_create(handle_, sheet, ref.c_str(), name.c_str(), display_name.c_str(), pointers.data(),
-                               pointers.size(), style_name.c_str(), header_row ? 1 : 0, totals_row ? 1 : 0, &index);
+      fm_workbook_add_table(handle_, sheet, ref.c_str(), name.c_str(), display_name.c_str(), pointers.data(),
+                            pointers.size(), style_name.c_str(), header_row ? 1 : 0, totals_row ? 1 : 0, &index);
   if (rc != 0) {
     out.status = error_status(rc);
     return out;
@@ -506,7 +505,7 @@ JsAddStyleResult JsWorkbook::createTable(emscripten::val spec) {
   if (toggles.any()) {
     if (const fm_status_t style_rc = apply_table_style_toggles(handle_, static_cast<uint32_t>(index), toggles);
         style_rc != 0) {
-      fm_workbook_table_remove(handle_, index);
+      fm_workbook_remove_table(handle_, index);
       out.status = error_status(style_rc);
       return out;
     }
@@ -545,7 +544,7 @@ JsStatus JsWorkbook::updateTable(uint32_t idx, emscripten::val spec) {
   const char* current_ref = nullptr;
   std::size_t ignored_sheet = 0;
   if (const fm_status_t lookup_rc =
-          fm_workbook_table_at(handle_, idx, &current_name, &current_display_name, &current_ref, &ignored_sheet);
+          fm_workbook_get_table(handle_, idx, &current_name, &current_display_name, &current_ref, &ignored_sheet);
       lookup_rc != 0) {
     return status_from_rc(lookup_rc);
   }
@@ -560,18 +559,18 @@ JsStatus JsWorkbook::updateTable(uint32_t idx, emscripten::val spec) {
     const std::string next_name = name_ptr != nullptr ? name : old_name;
     const std::string next_display_name =
         display_name_ptr != nullptr ? display_name : (name_ptr != nullptr ? name : old_display_name);
-    if (const fm_status_t rc = fm_workbook_table_rename(handle_, idx, next_name.c_str(), next_display_name.c_str());
+    if (const fm_status_t rc = fm_workbook_rename_table(handle_, idx, next_name.c_str(), next_display_name.c_str());
         rc != 0) {
       return status_from_rc(rc);
     }
   }
   fm_status_t rc =
-      fm_workbook_table_update(handle_, idx, effective_ref.c_str(), style_name_ptr, header_row, totals_row);
+      fm_workbook_update_table(handle_, idx, effective_ref.c_str(), style_name_ptr, header_row, totals_row);
   if (rc == 0 && toggles.any()) {
     rc = apply_table_style_toggles(handle_, idx, toggles);
   }
   if (rc != 0 && renaming) {
-    fm_workbook_table_rename(handle_, idx, old_name.c_str(), old_display_name.c_str());
+    fm_workbook_rename_table(handle_, idx, old_name.c_str(), old_display_name.c_str());
   }
   return status_from_rc(rc);
 }
@@ -591,17 +590,17 @@ JsStatus JsWorkbook::setTableColumnTotals(uint32_t idx, uint32_t column, emscrip
     return reader.failure();
   }
   return status_from_rc(
-      fm_workbook_table_set_column_totals(handle_, idx, column, function_ptr, label_ptr, formula_ptr));
+      fm_workbook_set_table_column_totals(handle_, idx, column, function_ptr, label_ptr, formula_ptr));
 }
 
 JsStatus JsWorkbook::removeTable(uint32_t idx) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_table_remove(handle_, idx) : kBindingInvalidHandle);
+  return status_from_rc(handle_ != nullptr ? fm_workbook_remove_table(handle_, idx) : kBindingInvalidHandle);
 }
 
 JsStringResult JsWorkbook::renameTableColumn(uint32_t idx, uint32_t column, const std::string& name) {
   const char* final_name = nullptr;
   const fm_status_t rc = handle_ != nullptr
-                             ? fm_workbook_table_rename_column(handle_, idx, column, name.c_str(), &final_name)
+                             ? fm_workbook_rename_table_column(handle_, idx, column, name.c_str(), &final_name)
                              : kBindingInvalidHandle;
   return string_result(rc, final_name);
 }
@@ -613,7 +612,7 @@ emscripten::val JsWorkbook::passthroughAt(uint32_t idx) const {
     return o;
   }
   const char* path = nullptr;
-  fm_status_t rc = fm_workbook_passthrough_at(handle_, idx, &path);
+  fm_status_t rc = fm_workbook_get_passthrough_at(handle_, idx, &path);
   if (rc != 0) {
     o.set("status", error_status(rc));
     return o;
@@ -629,7 +628,7 @@ emscripten::val JsWorkbook::pivotLayout(uint32_t sheet, uint32_t pivotIndex) con
   }
 
   fm_pivot_cells_t* cells = nullptr;
-  fm_status_t rc = fm_workbook_pivot_layout(handle_, sheet, pivotIndex, &cells);
+  fm_status_t rc = fm_sheet_get_pivot_layout(handle_, sheet, pivotIndex, &cells);
   if (rc != 0) {
     return empty_pivot_layout_result(error_status(rc));
   }
@@ -638,18 +637,18 @@ emscripten::val JsWorkbook::pivotLayout(uint32_t sheet, uint32_t pivotIndex) con
   uint32_t left = 0;
   uint32_t rows = 0;
   uint32_t cols = 0;
-  rc = fm_pivot_cells_bounds(cells, &top, &left, &rows, &cols);
+  rc = fm_pivot_cells_get_bounds(cells, &top, &left, &rows, &cols);
   if (rc != 0) {
     fm_pivot_cells_destroy(cells);
     return empty_pivot_layout_result(error_status(rc));
   }
 
   emscripten::val arr = emscripten::val::array();
-  const std::size_t count = fm_pivot_cells_count(cells);
+  const std::size_t count = fm_pivot_cells_get_cell_count(cells);
   std::size_t emitted = 0;
   for (std::size_t i = 0; i < count; ++i) {
     fm_pivot_cell_t cell{};
-    if (fm_pivot_cells_at(cells, i, &cell) != 0) {
+    if (fm_pivot_cells_get_cell_at(cells, i, &cell) != 0) {
       continue;
     }
     arr.set(emitted, pivot_cell_to_val(cell));
@@ -674,7 +673,7 @@ emscripten::val JsWorkbook::getExternalLinks() const {
     return arr;
   }
   uint32_t count = 0;
-  fm_status_t rc = fm_workbook_external_link_count(handle_, &count);
+  fm_status_t rc = fm_workbook_get_external_link_count(handle_, &count);
   if (rc != 0) {
     arr.set("status", status_from_rc(rc));
     return arr;
@@ -682,7 +681,7 @@ emscripten::val JsWorkbook::getExternalLinks() const {
   uint32_t emitted = 0;
   for (uint32_t i = 0; i < count; ++i) {
     fm_external_link_record_t rec{};
-    rc = fm_workbook_external_link_at(handle_, i, &rec);
+    rc = fm_workbook_get_external_link(handle_, i, &rec);
     if (rc != 0) {
       arr.set("status", status_from_rc(rc));
       return arr;
@@ -741,7 +740,7 @@ bool js_optional_index(const emscripten::val& v, double dflt, double max, double
 void fill_cells_page(emscripten::val& o, fm_cell_range_t* page) {
   std::size_t count = 0;
   uint64_t next = 0;
-  fm_cell_range_count(page, &count);
+  fm_cell_range_get_cell_count(page, &count);
   fm_cell_range_next_cursor(page, &next);
   emscripten::val cells = emscripten::val::array();
   for (std::size_t i = 0; i < count; ++i) {
@@ -749,7 +748,7 @@ void fill_cells_page(emscripten::val& o, fm_cell_range_t* page) {
     uint32_t col = 0;
     const char* formula = nullptr;
     fm_value_t v{};
-    if (fm_cell_range_at(page, i, &row, &col, &formula, &v) != 0) {
+    if (fm_cell_range_get_cell_at(page, i, &row, &col, &formula, &v) != 0) {
       continue;
     }
     emscripten::val cell = emscripten::val::object();
@@ -772,14 +771,14 @@ void fill_cells_page(emscripten::val& o, fm_cell_range_t* page) {
 emscripten::val JsWorkbook::getFormula(uint32_t sheet, uint32_t row, uint32_t col) const {
   const char* formula = nullptr;
   const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_get_formula(handle_, sheet, row, col, &formula) : kBindingInvalidHandle;
+      handle_ != nullptr ? fm_sheet_get_formula(handle_, sheet, row, col, &formula) : kBindingInvalidHandle;
   return formula_envelope(rc, formula);
 }
 
 emscripten::val JsWorkbook::getFormulaR1C1(uint32_t sheet, uint32_t row, uint32_t col) const {
   const char* formula = nullptr;
   const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_get_formula_r1c1(handle_, sheet, row, col, &formula) : kBindingInvalidHandle;
+      handle_ != nullptr ? fm_sheet_get_formula_r1c1(handle_, sheet, row, col, &formula) : kBindingInvalidHandle;
   return formula_envelope(rc, formula);
 }
 
@@ -808,8 +807,8 @@ emscripten::val JsWorkbook::getCellsInRange(uint32_t sheet, emscripten::val rang
   }
   fm_cell_range_t* page = nullptr;
   const fm_status_t rc =
-      fm_sheet_cells_in_range(handle_, sheet, bounds.first_row, bounds.first_col, bounds.last_row, bounds.last_col,
-                              static_cast<uint64_t>(cursor_value), static_cast<uint32_t>(limit_value), &page);
+      fm_sheet_get_cells_in_range(handle_, sheet, bounds.first_row, bounds.first_col, bounds.last_row, bounds.last_col,
+                                  static_cast<uint64_t>(cursor_value), static_cast<uint32_t>(limit_value), &page);
   if (rc != 0) {
     o.set("status", error_status(rc));
     return o;
@@ -831,12 +830,12 @@ emscripten::val JsWorkbook::listInvalidCells(uint32_t sheet, emscripten::val cur
   if (!js_optional_index(cursor, 0.0, kMaxSafeInteger, &cursor_value) ||
       !js_optional_index(limit, 0.0, kMaxU32, &limit_value)) {
     o.set("status", binding_error_status(kInvalidArgument,
-                                         "listInvalidCells: `cursor` and `limit` must be non-negative integers"));
+                                         "getInvalidCells: `cursor` and `limit` must be non-negative integers"));
     return o;
   }
   fm_cell_range_t* page = nullptr;
-  const fm_status_t rc = fm_sheet_list_invalid_cells(handle_, sheet, static_cast<uint64_t>(cursor_value),
-                                                     static_cast<uint32_t>(limit_value), &page);
+  const fm_status_t rc = fm_sheet_get_invalid_cells(handle_, sheet, static_cast<uint64_t>(cursor_value),
+                                                    static_cast<uint32_t>(limit_value), &page);
   if (rc != 0) {
     o.set("status", error_status(rc));
     return o;
@@ -869,7 +868,7 @@ emscripten::val JsWorkbook::validateValue(uint32_t sheet, uint32_t row, uint32_t
     o.set("status", reader.failure());
     return o;
   }
-  fm_validation_outcome outcome{};
+  fm_validation_outcome_t outcome{};
   const fm_status_t rc = fm_sheet_validate_value(handle_, sheet, row, col, &proposed, &outcome);
   o.set("status", status_from_rc(rc));
   if (rc == 0) {
@@ -885,7 +884,7 @@ emscripten::val JsWorkbook::getDisplayText(uint32_t sheet, uint32_t row, uint32_
   const char* text = nullptr;
   int32_t display_status = 0;
   const fm_status_t rc = handle_ != nullptr
-                             ? fm_workbook_get_display_text(handle_, sheet, row, col, &text, &display_status)
+                             ? fm_sheet_get_display_text(handle_, sheet, row, col, &text, &display_status)
                              : kBindingInvalidHandle;
   return display_envelope(rc, text, display_status);
 }

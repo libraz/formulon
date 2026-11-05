@@ -43,7 +43,7 @@ _DTS_SURFACE_ONLY_TYPES = {
     # native addon, which is `require`d rather than instantiated.
     ("wasm", "FormulonModule"),
     ("wasm", "FormulonModuleOptions"),
-    # Reachable only from `getSheetAutoFilterXml`, which is in
+    # Reachable only from `getAutoFilterXml`, which is in
     # WASM_ONLY_METHODS.
     ("wasm", "SheetAutoFilterXmlResult"),
 }
@@ -176,11 +176,11 @@ def check_dts_shared_shapes() -> List[str]:
 
 # Public type name -> the C struct it projects.
 _STYLE_RECORD_STRUCTS = {
-    "CellXf": "fm_cell_xf",
-    "ColorSpec": "fm_color_spec",
-    "FontRecord": "fm_font_record",
-    "FillRecord": "fm_fill_record",
-    "BorderSide": "fm_border_side",
+    "CellXf": "fm_cell_xf_t",
+    "ColorSpec": "fm_color_spec_t",
+    "FontRecord": "fm_font_record_t",
+    "FillRecord": "fm_fill_record_t",
+    "BorderSide": "fm_border_side_t",
 }
 
 # Deliberate omissions, keyed by (surface, type name). Python models a border
@@ -196,7 +196,7 @@ _STYLE_RECORD_EXEMPT_TYPES = {
 # host drop the distinction entirely, so each entry lists the value field the
 # flag governs and both are required to exist together.
 _STYLE_RECORD_PRESENCE_FLAGS = {
-    "fm_cell_xf": {
+    "fm_cell_xf_t": {
         "has_text_rotation": "text_rotation",
         "has_indent": "indent",
         "has_relative_indent": "relative_indent",
@@ -210,7 +210,7 @@ _STYLE_RECORD_PRESENCE_FLAGS = {
 # `gradient` object. Each entry names the binding field and the C fields it
 # replaces, all of which must still exist in the struct.
 _STYLE_RECORD_COMPOSITES = {
-    "fm_fill_record": {
+    "fm_fill_record_t": {
         "gradient": (
             "has_gradient",
             "gradient_type",

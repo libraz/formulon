@@ -12,7 +12,7 @@ namespace formulon_node {
 
 namespace {
 
-Napi::Object MakeParallelRecalcResult(Napi::Env env, Napi::Object status, const fm_parallel_recalc_stats& stats) {
+Napi::Object MakeParallelRecalcResult(Napi::Env env, Napi::Object status, const fm_parallel_recalc_stats_t& stats) {
   Napi::Object stats_obj = Napi::Object::New(env);
   // The C ABI counters are uint64_t. The engine's counters are bounded well
   // below Number.MAX_SAFE_INTEGER for a single call, so this conversion is
@@ -59,7 +59,7 @@ Napi::Value Workbook::CalcMode(const Napi::CallbackInfo& info) {
     return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   fm_calc_mode_t mode = FM_CALC_MODE_AUTO;
-  const fm_status_t rc = fm_workbook_calc_mode(handle_, &mode);
+  const fm_status_t rc = fm_workbook_get_calc_mode(handle_, &mode);
   return MakeNumberResult(env, rc, static_cast<int32_t>(mode));
 }
 
@@ -88,7 +88,7 @@ Napi::Value FlagResult(Napi::Env env, fm_workbook_t* handle, fm_status_t (*read)
 }  // namespace
 
 Napi::Value Workbook::FullPrecision(const Napi::CallbackInfo& info) {
-  return FlagResult(info.Env(), handle_, &fm_workbook_full_precision);
+  return FlagResult(info.Env(), handle_, &fm_workbook_get_full_precision);
 }
 
 Napi::Value Workbook::SetFullPrecision(const Napi::CallbackInfo& info) {
@@ -97,7 +97,7 @@ Napi::Value Workbook::SetFullPrecision(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::CalcOnSave(const Napi::CallbackInfo& info) {
-  return FlagResult(info.Env(), handle_, &fm_workbook_calc_on_save);
+  return FlagResult(info.Env(), handle_, &fm_workbook_get_calc_on_save);
 }
 
 Napi::Value Workbook::SetCalcOnSave(const Napi::CallbackInfo& info) {
@@ -111,7 +111,7 @@ Napi::Value Workbook::RefMode(const Napi::CallbackInfo& info) {
     return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   fm_ref_mode_t mode = FM_REF_MODE_A1;
-  const fm_status_t rc = fm_workbook_ref_mode(handle_, &mode);
+  const fm_status_t rc = fm_workbook_get_ref_mode(handle_, &mode);
   return MakeNumberResult(env, rc, static_cast<int32_t>(mode));
 }
 
@@ -120,7 +120,7 @@ Napi::Value Workbook::SetRefMode(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::Date1904(const Napi::CallbackInfo& info) {
-  return FlagResult(info.Env(), handle_, &fm_workbook_date1904);
+  return FlagResult(info.Env(), handle_, &fm_workbook_get_date1904);
 }
 
 Napi::Value Workbook::SetDate1904(const Napi::CallbackInfo& info) {
@@ -134,7 +134,7 @@ Napi::Value Workbook::PinnedNow(const Napi::CallbackInfo& info) {
   }
   fm_civil_time_t now{};
   std::int32_t pinned = 0;
-  const fm_status_t rc = fm_workbook_pinned_now(handle_, &now, &pinned);
+  const fm_status_t rc = fm_workbook_get_pinned_now(handle_, &now, &pinned);
   if (rc != 0 || pinned == 0) {
     return MakeFieldResult(env, MakeStatus(env, rc), "now", env.Null());
   }
@@ -177,7 +177,7 @@ Napi::Value Workbook::ExcelProfileId(const Napi::CallbackInfo& info) {
     return MakeStringResult(env, kBindingInvalidHandle, nullptr);
   }
   const char* id = nullptr;
-  const fm_status_t rc = fm_workbook_excel_profile_id(handle_, &id);
+  const fm_status_t rc = fm_workbook_get_excel_profile_id(handle_, &id);
   return MakeStringResult(env, rc, id);
 }
 
@@ -197,7 +197,7 @@ Napi::Value Workbook::FileName(const Napi::CallbackInfo& info) {
     return MakeStringResult(env, kBindingInvalidHandle, nullptr);
   }
   const char* name = nullptr;
-  const fm_status_t rc = fm_workbook_file_name(handle_, &name);
+  const fm_status_t rc = fm_workbook_get_file_name(handle_, &name);
   return MakeStringResult(env, rc, name);
 }
 
@@ -238,7 +238,7 @@ Napi::Value Workbook::Recalc(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::RecalcParallel(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  fm_parallel_recalc_stats stats{};
+  fm_parallel_recalc_stats_t stats{};
   if (handle_ == nullptr) {
     return MakeParallelRecalcResult(env, NullHandleError(env), stats);
   }
@@ -260,7 +260,7 @@ Napi::Value Workbook::RecalcParallel(const Napi::CallbackInfo& info) {
   if (rc == 0 && callback_threw) {
     // Same shape as an engine failure: the pass did not finish, so the
     // counters are not reported.
-    stats = fm_parallel_recalc_stats{};
+    stats = fm_parallel_recalc_stats_t{};
     SyncExternalMemory(env);
     return MakeParallelRecalcResult(env, MakeCallbackThrewStatus(env), stats);
   }
@@ -291,7 +291,7 @@ Napi::Value Workbook::PartialRecalc(const Napi::CallbackInfo& info) {
   }
   uint32_t recomputed = 0;
   (void)TakeIterativeProgressThrew();
-  fm_status_t rc = fm_workbook_partial_recalc(handle_, &vp, &recomputed);
+  fm_status_t rc = fm_sheet_recalc_viewport(handle_, &vp, &recomputed);
   const bool callback_threw = TakeIterativeProgressThrew();
   if (rc != 0) {
     return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "recomputed", 0);
@@ -413,7 +413,7 @@ Napi::Value Workbook::MemoryUsage(const Napi::CallbackInfo& info) {
     return Napi::Number::New(env, 0);
   }
   size_t bytes = 0;
-  if (fm_workbook_memory_usage(handle_, &bytes) != 0) {
+  if (fm_workbook_get_memory_usage(handle_, &bytes) != 0) {
     return Napi::Number::New(env, 0);
   }
   // Re-report the measurement already in hand: a script that has been
@@ -488,7 +488,7 @@ Napi::Value Workbook::ReadDiagnostics(const Napi::CallbackInfo& info) {
     return out;
   }
   fm_read_diagnostics_t d{};
-  fm_status_t rc = fm_workbook_read_diagnostics(handle_, &d);
+  fm_status_t rc = fm_workbook_get_diagnostics(handle_, &d);
   if (rc != 0) {
     out.Set("status", MakeErrorStatus(env, rc));
     return out;

@@ -46,9 +46,9 @@ import createFormulon from '@libraz/formulon';
 import { readFile, writeFile } from 'node:fs/promises';
 
 const Module = await createFormulon();
-const wb = Module.Workbook.loadBytes(await readFile('input.xlsx'));
+const wb = Module.Workbook.load(await readFile('input.xlsx'));
 try {
-  if (!wb.isValid()) throw new Error(Module.lastErrorMessage());
+  if (!wb.isValid()) throw new Error(Module.getLastErrorMessage());
 
   wb.setNumber(0, 0, 0, 42);        // Sheet1!A1
   wb.setFormula(0, 1, 0, '=A1*2');  // Sheet1!A2

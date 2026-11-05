@@ -7,7 +7,7 @@ test('getTheme reads the default theme of a fresh workbook', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const theme = wb.getTheme();
+    const theme = wb.getThemeFonts();
     assert.ok(theme.status.ok, JSON.stringify(theme.status));
     assert.ok([0, 1].includes(theme.source), `source ${theme.source}`);
     assert.equal(theme.colors.length, 12);
@@ -34,7 +34,7 @@ test('setThemeColors and setThemeFonts round-trip through getTheme', async () =>
         minorEastAsian: 'Yu Mincho',
       }).ok,
     );
-    const theme = wb.getTheme();
+    const theme = wb.getThemeFonts();
     assert.ok(theme.status.ok);
     assert.equal(theme.source, 0);
     assert.deepEqual(theme.colors, colors);
@@ -54,13 +54,13 @@ test('resetTheme returns an edited theme to the default', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    assert.ok(wb.resetTheme().ok);
-    assert.equal(wb.getTheme().source, 1);
+    assert.ok(wb.clearTheme().ok);
+    assert.equal(wb.getThemeFonts().source, 1);
     const colors = Array.from({ length: 12 }, (_, i) => (0xff000000 | (0x112233 + i * 0x010101)) >>> 0);
     assert.ok(wb.setThemeColors(colors).ok);
-    assert.equal(wb.getTheme().source, 0);
-    assert.ok(wb.resetTheme().ok);
-    const theme = wb.getTheme();
+    assert.equal(wb.getThemeFonts().source, 0);
+    assert.ok(wb.clearTheme().ok);
+    const theme = wb.getThemeFonts();
     assert.equal(theme.source, 1);
     assert.equal(theme.colors[4] >>> 0, DEFAULT_ACCENT1 >>> 0);
 
@@ -104,7 +104,7 @@ test('getEffectiveStyle reports the cell xf with resolved colours', async () => 
   try {
     const font = wb.addFont({ name: 'Arial', size: 11, colorArgb: 0xffff0000 });
     assert.ok(font.status.ok);
-    const xf = wb.addXf({ fontIndex: font.index, fillIndex: 0, borderIndex: 0, numFmtId: 0, applyFont: true });
+    const xf = wb.addCellXf({ fontIndex: font.index, fillIndex: 0, borderIndex: 0, numFmtId: 0, applyFont: true });
     assert.ok(xf.status.ok);
     assert.ok(wb.setCellXfIndex(0, 2, 3, xf.index).ok);
 
@@ -135,8 +135,8 @@ test('clearCellXfIndex restores row / column inheritance', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const xfCol = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 14 });
-    const xfCell = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 10 });
+    const xfCol = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 14 });
+    const xfCell = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 10 });
     assert.ok(xfCol.status.ok && xfCell.status.ok);
     assert.ok(wb.setColumnStyle(0, 0, 0, xfCol.index).ok);
     assert.ok(wb.setCellXfIndex(0, 0, 0, xfCell.index).ok);
@@ -154,9 +154,9 @@ test('clearCellXfIndex restores row / column inheritance', async () => {
     assert.equal(e.source, 0);
     assert.equal(e.xfIndex, 0);
 
-    const before = wb.cellCount(0).value;
+    const before = wb.getCellCount(0).value;
     assert.ok(wb.clearCellXfIndex(0, 7, 7).ok);
-    assert.equal(wb.cellCount(0).value, before);
+    assert.equal(wb.getCellCount(0).value, before);
     assert.equal(wb.clearCellXfIndex(99, 0, 0).ok, false);
   } finally {
     wb.dispose();
@@ -167,22 +167,22 @@ test('attribute patch over a column keeps the row style (bases / remap / snapsho
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const rowXf = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 14 });
-    const xfA = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 9 });
-    const xfB = wb.addXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 10 });
+    const rowXf = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 14 });
+    const xfA = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 9 });
+    const xfB = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 10 });
     assert.ok(rowXf.status.ok && xfA.status.ok && xfB.status.ok);
     assert.ok(wb.setRowStyle(0, 2, 2, rowXf.index).ok);
     assert.equal(wb.getEffectiveStyle(0, 2, 1).source, 1);
     assert.equal(wb.setRowStyle(0, 5, 4, rowXf.index).ok, false);
 
-    const bases = wb.rangeStyleBases(0, 0, 1, 1048575, 1);
+    const bases = wb.getRangeStyleBases(0, 0, 1, 1048575, 1);
     assert.ok(bases.status.ok, JSON.stringify(bases.status));
     assert.ok(bases.xfIndices.includes(0) && bases.xfIndices.includes(rowXf.index));
     // Row 2 of a one-column selection is a single cell; excluding it hides the row style.
-    const excluded = wb.rangeStyleBasesExcluding(0, 0, 1, 1048575, 1, [2, 2, 9], [1, 1, 9]);
+    const excluded = wb.getRangeStyleBasesExcluding(0, 0, 1, 1048575, 1, [2, 2, 9], [1, 1, 9]);
     assert.ok(excluded.status.ok, JSON.stringify(excluded.status));
     assert.deepEqual(excluded.xfIndices, [0]);
-    assert.equal(wb.rangeStyleBasesExcluding(0, 0, 1, 1048575, 1, [2], []).status.ok, false);
+    assert.equal(wb.getRangeStyleBasesExcluding(0, 0, 1, 1048575, 1, [2], []).status.ok, false);
 
     const snap = wb.snapshotRangeStyle(0, 0, 1, 1048575, 1);
     assert.ok(snap.status.ok && snap.bytes.length > 0);
@@ -273,7 +273,7 @@ test('createForProfile builds the locale defaults and reports a bad id as an inv
   const wb = mod.Workbook.createForProfile('mac-365-ja_JP');
   try {
     assert.ok(wb.isValid());
-    assert.equal(wb.excelProfileId().value, 'mac-365-ja_JP');
+    assert.equal(wb.getExcelProfileId().value, 'mac-365-ja_JP');
     const font = wb.getFont(0);
     assert.equal(font.name, '游ゴシック');
     assert.equal(font.size, 12);
@@ -292,7 +292,7 @@ test('getTheme lists the 47 script faces and setThemeScriptFont round-trips', as
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const t = wb.getTheme();
+    const t = wb.getThemeFonts();
     assert.equal(t.majorScripts.length, 47);
     assert.equal(t.minorScripts.length, 47);
     const minor = Object.fromEntries(t.minorScripts.map((s) => [s.script, s.typeface]));
@@ -302,9 +302,9 @@ test('getTheme lists the 47 script faces and setThemeScriptFont round-trips', as
     assert.ok(wb.setThemeScriptFont(false, 'Hang', 'Test Face').ok);
     const saved = wb.save();
     assert.ok(saved.status.ok);
-    const reloaded = mod.Workbook.loadBytes(saved.bytes);
+    const reloaded = mod.Workbook.load(saved.bytes);
     try {
-      const r = reloaded.getTheme();
+      const r = reloaded.getThemeFonts();
       assert.equal(r.minorScripts.length, 47);
       const after = Object.fromEntries(r.minorScripts.map((s) => [s.script, s.typeface]));
       assert.equal(after.Hang, 'Test Face');

@@ -26,7 +26,7 @@ struct WorkbookGuard {
 
 TEST(CApiSetIterative, RejectsNonFiniteOrNegativeMaxChangeAndKeepsOptions) {
   WorkbookGuard g;
-  ASSERT_EQ(fm_workbook_create(&g.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&g.handle), 0);
   ASSERT_EQ(fm_workbook_set_iterative(g.handle, 1, 50, 0.25), 0);
   for (const double bad : {kNaN, kInf, -kInf, -1.0}) {
     EXPECT_EQ(fm_workbook_set_iterative(g.handle, 0, 7, bad), kInvalidArgument);
@@ -42,33 +42,33 @@ TEST(CApiSetIterative, RejectsNonFiniteOrNegativeMaxChangeAndKeepsOptions) {
 
 TEST(CApiSetIterative, AcceptsZeroMaxChange) {
   WorkbookGuard g;
-  ASSERT_EQ(fm_workbook_create(&g.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&g.handle), 0);
   EXPECT_EQ(fm_workbook_set_iterative(g.handle, 1, 10, 0.0), 0);
 }
 
 TEST(CApiPivotCacheNumbers, RejectNonFiniteValues) {
   WorkbookGuard g;
-  ASSERT_EQ(fm_workbook_create(&g.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&g.handle), 0);
   uint32_t cache_id = 0;
-  ASSERT_EQ(fm_workbook_pivot_cache_create(g.handle, 0, &cache_id), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache(g.handle, 0, &cache_id), 0);
   size_t field_idx = 0;
-  ASSERT_EQ(fm_workbook_pivot_cache_field_add(g.handle, cache_id, "f", &field_idx), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field(g.handle, cache_id, "f", &field_idx), 0);
   size_t record_idx = 0;
-  ASSERT_EQ(fm_workbook_pivot_cache_record_add(g.handle, cache_id, &record_idx), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_record(g.handle, cache_id, &record_idx), 0);
   for (const double bad : {kNaN, kInf, -kInf}) {
-    EXPECT_EQ(fm_workbook_pivot_cache_field_add_shared_item_number(g.handle, cache_id, field_idx, bad),
+    EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_number(g.handle, cache_id, field_idx, bad),
               kInvalidArgument);
-    EXPECT_EQ(fm_workbook_pivot_cache_record_set_number(g.handle, cache_id, record_idx, field_idx, bad),
+    EXPECT_EQ(fm_workbook_set_pivot_cache_record_number(g.handle, cache_id, record_idx, field_idx, bad),
               kInvalidArgument);
-    EXPECT_EQ(fm_workbook_pivot_cache_field_add_shared_item_date(g.handle, cache_id, field_idx, bad), kInvalidArgument);
-    EXPECT_EQ(fm_workbook_pivot_cache_record_set_date(g.handle, cache_id, record_idx, field_idx, bad),
+    EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_date(g.handle, cache_id, field_idx, bad), kInvalidArgument);
+    EXPECT_EQ(fm_workbook_set_pivot_cache_record_date(g.handle, cache_id, record_idx, field_idx, bad),
               kInvalidArgument);
   }
   size_t count = 99;
-  ASSERT_EQ(fm_workbook_pivot_cache_field_shared_item_count(g.handle, cache_id, field_idx, &count), 0);
+  ASSERT_EQ(fm_workbook_get_pivot_cache_field_shared_item_count(g.handle, cache_id, field_idx, &count), 0);
   EXPECT_EQ(count, 0U);
-  EXPECT_EQ(fm_workbook_pivot_cache_field_add_shared_item_number(g.handle, cache_id, field_idx, 1.5), 0);
-  EXPECT_EQ(fm_workbook_pivot_cache_record_set_number(g.handle, cache_id, record_idx, field_idx, 1.5), 0);
+  EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_number(g.handle, cache_id, field_idx, 1.5), 0);
+  EXPECT_EQ(fm_workbook_set_pivot_cache_record_number(g.handle, cache_id, record_idx, field_idx, 1.5), 0);
 }
 
 TEST(CApiCreateForProfile, UnknownProfileNullsOutPointer) {

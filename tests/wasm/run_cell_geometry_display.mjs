@@ -14,12 +14,12 @@ function withWorkbook(Module, fn) {
 export function registerCellGeometryDisplay(Module, test) {
   test('clearColumnWidth returns a column to the sheet default and follows later default changes', () => {
     withWorkbook(Module, (wb) => {
-      assert.ok(wb.setSheetFormatDefaults(0, { defaultColWidth: 10 }).ok);
+      assert.ok(wb.setFormatDefaults(0, { defaultColWidth: 10 }).ok);
       assert.ok(wb.setColumnWidth(0, 0, 0, 10).ok);
       assert.ok(wb.clearColumnWidth(0, 0, 0).ok);
-      assert.ok(wb.setSheetFormatDefaults(0, { defaultColWidth: 20 }).ok);
+      assert.ok(wb.setFormatDefaults(0, { defaultColWidth: 20 }).ok);
       assert.equal(wb.getColumnWidthPt(0, 0, 0).value, wb.getColumnWidthPt(0, 1, 0).value);
-      assert.equal(wb.getSheetColumns(0).columns.length, 0);
+      assert.equal(wb.listColOverrides(0).columns.length, 0);
     });
   });
 
@@ -29,7 +29,7 @@ export function registerCellGeometryDisplay(Module, test) {
       assert.ok(wb.setColumnHidden(0, 2, 2, true).ok);
       assert.ok(wb.setColumnOutline(0, 2, 2, 3).ok);
       assert.ok(wb.clearColumnWidth(0, 1, 3).ok);
-      const cols = wb.getSheetColumns(0).columns;
+      const cols = wb.listColOverrides(0).columns;
       assert.deepEqual(
         cols.map((c) => [c.first, c.last, c.hasWidth, c.hidden, c.outlineLevel]),
         [
@@ -39,22 +39,22 @@ export function registerCellGeometryDisplay(Module, test) {
         ],
       );
       assert.ok(wb.clearColumnWidth(0, 8, 9).ok);
-      assert.equal(wb.getSheetColumns(0).columns.length, 3);
+      assert.equal(wb.listColOverrides(0).columns.length, 3);
       assert.equal(wb.clearColumnWidth(0, 5, 3).ok, false);
       assert.equal(wb.clearColumnWidth(0, 0, 16384).ok, false);
       assert.equal(wb.clearColumnWidth(9, 0, 0).ok, false);
-      assert.equal(wb.getSheetColumns(0).columns.length, 3);
+      assert.equal(wb.listColOverrides(0).columns.length, 3);
     });
   });
 
   test('getSheetFormatDefaults reports the effective default width and height', () => {
     withWorkbook(Module, (wb) => {
-      let d = wb.getSheetFormatDefaults(0);
+      let d = wb.getFormatDefaults(0);
       assert.equal(d.hasDefaultColWidth, false);
       assert.equal(d.effectiveDefaultColWidth, 2340 / 256); // Base-8 Calibri 11 default, shown as 8.43.
       assert.equal(d.effectiveDefaultRowHeight, 102 / 7);
-      assert.ok(wb.setSheetFormatDefaults(0, { defaultColWidth: 12.5, defaultRowHeight: 20.25 }).ok);
-      d = wb.getSheetFormatDefaults(0);
+      assert.ok(wb.setFormatDefaults(0, { defaultColWidth: 12.5, defaultRowHeight: 20.25 }).ok);
+      d = wb.getFormatDefaults(0);
       assert.equal(d.effectiveDefaultColWidth, 12.5);
       assert.equal(d.effectiveDefaultRowHeight, 20.25);
     });
@@ -223,13 +223,13 @@ export function registerCellGeometryDisplay(Module, test) {
   test('row heights: clearRowHeight and the has/custom flags on row overrides', () => {
     withWorkbook(Module, (wb) => {
       assert.ok(wb.setRowHeight(0, 3, 30).ok);
-      const rows = wb.getSheetRowOverrides(0).rows;
+      const rows = wb.listRowOverrides(0).rows;
       assert.equal(rows.length, 1);
       assert.equal(rows[0].height, 30);
       assert.equal(rows[0].hasHeight, 1);
       assert.equal(rows[0].customHeight, 1);
       assert.ok(wb.clearRowHeight(0, 3).ok);
-      assert.equal(wb.getSheetRowOverrides(0).rows.length, 0);
+      assert.equal(wb.listRowOverrides(0).rows.length, 0);
       assert.ok(wb.clearRowHeight(0, 3).ok);
       assert.equal(wb.clearRowHeight(9, 0).ok, false);
     });
@@ -239,7 +239,7 @@ export function registerCellGeometryDisplay(Module, test) {
     withWorkbook(Module, (wb) => {
       assert.ok(wb.setRowHidden(0, 4, true).ok);
       assert.ok(wb.setRowAutoHeight(0, 4, 31.5).ok);
-      const rows = wb.getSheetRowOverrides(0).rows;
+      const rows = wb.listRowOverrides(0).rows;
       assert.equal(rows.length, 1);
       assert.equal(rows[0].height, 31.5);
       assert.equal(rows[0].hasHeight, 1);
@@ -251,23 +251,23 @@ export function registerCellGeometryDisplay(Module, test) {
 
   test('sheet format defaults round-trip with presence flags', () => {
     withWorkbook(Module, (wb) => {
-      const initial = wb.getSheetFormatDefaults(0);
+      const initial = wb.getFormatDefaults(0);
       assert.ok(initial.status.ok);
       assert.equal(initial.hasDefaultColWidth, false);
       assert.equal(initial.hasDefaultRowHeight, false);
       assert.equal(initial.baseColWidth, 8);
 
-      assert.ok(wb.setSheetFormatDefaults(0, { defaultColWidth: 10, defaultRowHeight: 18, baseColWidth: 9 }).ok);
-      const set = wb.getSheetFormatDefaults(0);
+      assert.ok(wb.setFormatDefaults(0, { defaultColWidth: 10, defaultRowHeight: 18, baseColWidth: 9 }).ok);
+      const set = wb.getFormatDefaults(0);
       assert.equal(set.defaultColWidth, 10);
       assert.equal(set.defaultRowHeight, 18);
       assert.equal(set.baseColWidth, 9);
       assert.equal(set.hasDefaultColWidth, true);
       assert.equal(set.hasDefaultRowHeight, true);
 
-      assert.equal(wb.setSheetFormatDefaults(0, { defaultColWidth: -1 }).ok, false);
-      assert.equal(wb.getSheetFormatDefaults(0).defaultColWidth, 10);
-      assert.equal(wb.getSheetFormatDefaults(9).status.ok, false);
+      assert.equal(wb.setFormatDefaults(0, { defaultColWidth: -1 }).ok, false);
+      assert.equal(wb.getFormatDefaults(0).defaultColWidth, 10);
+      assert.equal(wb.getFormatDefaults(9).status.ok, false);
     });
   });
 
@@ -299,14 +299,14 @@ export function registerCellGeometryDisplay(Module, test) {
       assert.ok(model.pointsPerChar > 0);
       assert.ok(model.platform.length > 0);
 
-      const pt = wb.columnCharsToPt(0, 0, 10);
+      const pt = wb.convertColumnCharsToPt(0, 0, 10);
       assert.ok(pt.status.ok);
       // Stored width 10 is Truncate((2560 + 18) / 256 * 7) = 70 px with Calibri 11.
       assert.equal(pt.value, 70 * 0.75);
-      const chars = wb.columnPtToChars(0, 0, pt.value);
+      const chars = wb.convertColumnPtToChars(0, 0, pt.value);
       assert.ok(Math.abs(chars.value - 10) < 1e-6);
-      assert.equal(wb.columnCharsToPt(0, 0, 0).value, 0);
-      assert.equal(wb.columnCharsToPt(0, 0, -1).status.ok, false);
+      assert.equal(wb.convertColumnCharsToPt(0, 0, 0).value, 0);
+      assert.equal(wb.convertColumnCharsToPt(0, 0, -1).status.ok, false);
       assert.equal(wb.getWidthModel(0, 7).status.ok, false);
       assert.equal(wb.getCellRectPt(0, range, 7).status.ok, false);
     });
@@ -321,7 +321,7 @@ export function registerCellGeometryDisplay(Module, test) {
       assert.equal(base.quotePrefix, false);
       assert.equal(base.applyFont, false);
 
-      const added = wb.addXf({
+      const added = wb.addCellXf({
         fontIndex: 0,
         fillIndex: 0,
         borderIndex: 0,
@@ -351,9 +351,9 @@ export function registerCellGeometryDisplay(Module, test) {
     withWorkbook(Module, (wb) => {
       assert.ok(wb.setNumber(0, 0, 0, 1).ok);
       assert.ok(wb.setNumber(0, 120, 0, 2).ok);
-      assert.ok(wb.addSheetRowBreak(0, 10, true).ok);
-      assert.ok(wb.setSheetPrintTitles(0, '1:2', '').ok);
-      const r = wb.paginate(0);
+      assert.ok(wb.addRowBreak(0, 10, true).ok);
+      assert.ok(wb.setPrintTitles(0, '1:2', '').ok);
+      const r = wb.getPagination(0);
       assert.ok(r.status.ok);
       assert.ok(r.paper.widthPt > 0 && r.paper.heightPt > 0);
       assert.equal(typeof r.paper.landscape, 'boolean');
@@ -377,7 +377,7 @@ export function registerCellGeometryDisplay(Module, test) {
       assert.equal(r.horizontalBreakManual[manualAt], true);
       assert.ok(r.horizontalBreakManual.some((m) => m === false));
 
-      const failed = wb.paginate(9);
+      const failed = wb.getPagination(9);
       assert.equal(failed.status.ok, false);
       assert.deepEqual(failed.pages, []);
       assert.equal(failed.paper.known, false);

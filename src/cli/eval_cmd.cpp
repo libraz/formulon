@@ -206,8 +206,7 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
   uint32_t result_cols = 0;
   const auto t0 = Clock::now();
   for (long i = 0; i < passes; ++i) {
-    if (auto rc =
-            fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 0, formula_str.c_str(), &result_rows, &result_cols);
+    if (auto rc = fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, formula_str.c_str(), &result_rows, &result_cols);
         rc != 0) {
       emit_last_error(err, "eval");
       return rc;

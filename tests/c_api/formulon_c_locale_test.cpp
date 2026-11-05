@@ -28,13 +28,13 @@ constexpr fm_status_t kNullPtr = static_cast<fm_status_t>(formulon::FormulonErro
 
 std::string localize(const char* formula, const char* profile) {
   const char* out = nullptr;
-  EXPECT_EQ(fm_formula_localize(formula, profile, &out), 0) << profile;
+  EXPECT_EQ(fm_localize_formula(formula, profile, &out), 0) << profile;
   return out != nullptr ? out : "<null>";
 }
 
 std::string canonicalize(const char* formula, const char* profile) {
   const char* out = nullptr;
-  EXPECT_EQ(fm_formula_canonicalize(formula, profile, &out), 0) << profile;
+  EXPECT_EQ(fm_canonicalize_formula(formula, profile, &out), 0) << profile;
   return out != nullptr ? out : "<null>";
 }
 
@@ -98,28 +98,28 @@ TEST(FormulonCApiLocale, EveryProfileRoundTrips) {
 
 TEST(FormulonCApiLocale, FormulaBufferIsReplacedByTheNextCall) {
   const char* first = nullptr;
-  ASSERT_EQ(fm_formula_localize("=SUM(1.5,2)", "mac-365-de_DE", &first), 0);
+  ASSERT_EQ(fm_localize_formula("=SUM(1.5,2)", "mac-365-de_DE", &first), 0);
   const std::string copy = first;
   const char* second = nullptr;
-  ASSERT_EQ(fm_formula_canonicalize(copy.c_str(), "mac-365-de_DE", &second), 0);
+  ASSERT_EQ(fm_canonicalize_formula(copy.c_str(), "mac-365-de_DE", &second), 0);
   EXPECT_STREQ(second, "=SUM(1.5,2)");
 }
 
 TEST(FormulonCApiLocale, FormulaConversionRejectsBadArguments) {
   const char* out = nullptr;
-  EXPECT_EQ(fm_formula_localize(nullptr, "mac-365-de_DE", &out), kNullPtr);
-  EXPECT_EQ(fm_formula_localize("=1", nullptr, &out), kNullPtr);
-  EXPECT_EQ(fm_formula_localize("=1", "mac-365-de_DE", nullptr), kNullPtr);
-  EXPECT_EQ(fm_formula_canonicalize("=1", nullptr, &out), kNullPtr);
-  EXPECT_EQ(fm_formula_localize("=1", "de_DE", &out), kInvalid);
-  EXPECT_STREQ(fm_last_error_context(), "profile_id=de_DE");
-  EXPECT_EQ(fm_formula_canonicalize("=1", "mac-365-xx_XX", &out), kInvalid);
-  EXPECT_STREQ(fm_last_error_context(), "profile_id=mac-365-xx_XX");
+  EXPECT_EQ(fm_localize_formula(nullptr, "mac-365-de_DE", &out), kNullPtr);
+  EXPECT_EQ(fm_localize_formula("=1", nullptr, &out), kNullPtr);
+  EXPECT_EQ(fm_localize_formula("=1", "mac-365-de_DE", nullptr), kNullPtr);
+  EXPECT_EQ(fm_canonicalize_formula("=1", nullptr, &out), kNullPtr);
+  EXPECT_EQ(fm_localize_formula("=1", "de_DE", &out), kInvalid);
+  EXPECT_STREQ(fm_get_last_error_context(), "profile_id=de_DE");
+  EXPECT_EQ(fm_canonicalize_formula("=1", "mac-365-xx_XX", &out), kInvalid);
+  EXPECT_STREQ(fm_get_last_error_context(), "profile_id=mac-365-xx_XX");
 }
 
 TEST(FormulonCApiLocale, FactsForGermanFrenchAndJapanese) {
   fm_locale_facts_t de{};
-  ASSERT_EQ(fm_locale_facts("mac-365-de_DE", &de), 0);
+  ASSERT_EQ(fm_get_locale_facts("mac-365-de_DE", &de), 0);
   EXPECT_STREQ(de.decimal_separator, ",");
   EXPECT_STREQ(de.group_separator, ".");
   EXPECT_STREQ(de.list_separator, ";");
@@ -134,14 +134,14 @@ TEST(FormulonCApiLocale, FactsForGermanFrenchAndJapanese) {
   EXPECT_EQ(de.measured, 1);
 
   fm_locale_facts_t fr{};
-  ASSERT_EQ(fm_locale_facts("mac-365-fr_FR", &fr), 0);
+  ASSERT_EQ(fm_get_locale_facts("mac-365-fr_FR", &fr), 0);
   EXPECT_STREQ(fr.decimal_separator, ",");
   EXPECT_STREQ(fr.true_name, "VRAI");
   EXPECT_STREQ(fr.false_name, "FAUX");
   EXPECT_EQ(fr.date_order, FM_DATE_ORDER_DMY);
 
   fm_locale_facts_t ja{};
-  ASSERT_EQ(fm_locale_facts("mac-365-ja_JP", &ja), 0);
+  ASSERT_EQ(fm_get_locale_facts("mac-365-ja_JP", &ja), 0);
   EXPECT_STREQ(ja.decimal_separator, ".");
   EXPECT_STREQ(ja.group_separator, ",");
   EXPECT_STREQ(ja.list_separator, ",");
@@ -154,14 +154,14 @@ TEST(FormulonCApiLocale, FactsForGermanFrenchAndJapanese) {
 
 TEST(FormulonCApiLocale, MeasuredFlagFollowsTheProfile) {
   fm_locale_facts_t facts{};
-  ASSERT_EQ(fm_locale_facts("win-365-de_DE", &facts), 0);
+  ASSERT_EQ(fm_get_locale_facts("win-365-de_DE", &facts), 0);
   EXPECT_EQ(facts.measured, 0);
-  ASSERT_EQ(fm_locale_facts("win-365-ja_JP", &facts), 0);
+  ASSERT_EQ(fm_get_locale_facts("win-365-ja_JP", &facts), 0);
   EXPECT_EQ(facts.measured, 1);
-  ASSERT_EQ(fm_locale_facts("win-365-en_US", &facts), 0);
+  ASSERT_EQ(fm_get_locale_facts("win-365-en_US", &facts), 0);
   EXPECT_EQ(facts.measured, 0);
   for (const char* profile : kAllProfiles) {
-    ASSERT_EQ(fm_locale_facts(profile, &facts), 0) << profile;
+    ASSERT_EQ(fm_get_locale_facts(profile, &facts), 0) << profile;
     const bool measured = std::strncmp(profile, "mac-", 4) == 0 || std::strcmp(profile, "win-365-ja_JP") == 0;
     EXPECT_EQ(facts.measured, measured ? 1 : 0) << profile;
   }
@@ -169,14 +169,14 @@ TEST(FormulonCApiLocale, MeasuredFlagFollowsTheProfile) {
 
 TEST(FormulonCApiLocale, FactsRejectBadArguments) {
   fm_locale_facts_t facts{};
-  EXPECT_EQ(fm_locale_facts(nullptr, &facts), kNullPtr);
-  EXPECT_EQ(fm_locale_facts("mac-365-de_DE", nullptr), kNullPtr);
-  EXPECT_EQ(fm_locale_facts("nope", &facts), kInvalid);
-  EXPECT_STREQ(fm_last_error_context(), "profile_id=nope");
+  EXPECT_EQ(fm_get_locale_facts(nullptr, &facts), kNullPtr);
+  EXPECT_EQ(fm_get_locale_facts("mac-365-de_DE", nullptr), kNullPtr);
+  EXPECT_EQ(fm_get_locale_facts("nope", &facts), kInvalid);
+  EXPECT_STREQ(fm_get_last_error_context(), "profile_id=nope");
 }
 
 TEST(FormulonCApiLocale, ErrorNames) {
-  EXPECT_EQ(fm_locale_error_name_count(), std::size(formulon::kErrorTable));
+  EXPECT_EQ(fm_get_locale_error_name_count(), std::size(formulon::kErrorTable));
   const size_t na = static_cast<size_t>(formulon::ErrorCode::NA);
   const size_t name = static_cast<size_t>(formulon::ErrorCode::Name);
   ASSERT_EQ(name, 4U);
@@ -184,46 +184,47 @@ TEST(FormulonCApiLocale, ErrorNames) {
   const char* canonical = nullptr;
   const char* localized = nullptr;
   int32_t measured = -1;
-  ASSERT_EQ(fm_locale_error_name("mac-365-de_DE", na, &canonical, &localized, &measured), 0);
+  ASSERT_EQ(fm_get_locale_error_name_at("mac-365-de_DE", na, &canonical, &localized, &measured), 0);
   EXPECT_STREQ(canonical, "#N/A");
   EXPECT_STREQ(localized, "#NV");
   EXPECT_EQ(measured, 1);
 
-  ASSERT_EQ(fm_locale_error_name("win-365-de_DE", na, &canonical, &localized, &measured), 0);
+  ASSERT_EQ(fm_get_locale_error_name_at("win-365-de_DE", na, &canonical, &localized, &measured), 0);
   EXPECT_STREQ(localized, "#NV");
   EXPECT_EQ(measured, 0);
 
-  ASSERT_EQ(fm_locale_error_name("mac-365-de_DE", name, &canonical, &localized, &measured), 0);
+  ASSERT_EQ(fm_get_locale_error_name_at("mac-365-de_DE", name, &canonical, &localized, &measured), 0);
   EXPECT_STREQ(canonical, "#NAME?");
   EXPECT_EQ(measured, 1);
 
-  ASSERT_EQ(fm_locale_error_name("mac-365-de_DE", static_cast<size_t>(formulon::ErrorCode::Field), &canonical,
-                                 &localized, &measured),
+  ASSERT_EQ(fm_get_locale_error_name_at("mac-365-de_DE", static_cast<size_t>(formulon::ErrorCode::Field), &canonical,
+                                        &localized, &measured),
             0);
   EXPECT_STREQ(canonical, "#FIELD!");
   EXPECT_EQ(measured, 0);
 
-  ASSERT_EQ(fm_locale_error_name("mac-365-fr_FR", static_cast<size_t>(formulon::ErrorCode::Div0), &canonical,
-                                 &localized, &measured),
+  ASSERT_EQ(fm_get_locale_error_name_at("mac-365-fr_FR", static_cast<size_t>(formulon::ErrorCode::Div0), &canonical,
+                                        &localized, &measured),
             0);
   EXPECT_STREQ(localized, "#DIV/0!");
   EXPECT_EQ(measured, 1);
 
-  EXPECT_EQ(fm_locale_error_name("mac-365-de_DE", fm_locale_error_name_count(), &canonical, &localized, &measured),
-            kInvalid);
-  EXPECT_EQ(fm_locale_error_name("bogus", na, &canonical, &localized, &measured), kInvalid);
-  EXPECT_EQ(fm_locale_error_name(nullptr, na, &canonical, &localized, &measured), kNullPtr);
-  EXPECT_EQ(fm_locale_error_name("mac-365-de_DE", na, &canonical, &localized, nullptr), kNullPtr);
+  EXPECT_EQ(
+      fm_get_locale_error_name_at("mac-365-de_DE", fm_get_locale_error_name_count(), &canonical, &localized, &measured),
+      kInvalid);
+  EXPECT_EQ(fm_get_locale_error_name_at("bogus", na, &canonical, &localized, &measured), kInvalid);
+  EXPECT_EQ(fm_get_locale_error_name_at(nullptr, na, &canonical, &localized, &measured), kNullPtr);
+  EXPECT_EQ(fm_get_locale_error_name_at("mac-365-de_DE", na, &canonical, &localized, nullptr), kNullPtr);
 }
 
 TEST(FormulonCApiLocale, CollationMeasuredFollowsTheHost) {
   fm_locale_facts_t facts{};
-  ASSERT_EQ(fm_locale_facts("mac-365-ja_JP", &facts), 0);
+  ASSERT_EQ(fm_get_locale_facts("mac-365-ja_JP", &facts), 0);
   EXPECT_EQ(facts.collation_measured, 1);
-  ASSERT_EQ(fm_locale_facts("win-365-ja_JP", &facts), 0);
+  ASSERT_EQ(fm_get_locale_facts("win-365-ja_JP", &facts), 0);
   EXPECT_EQ(facts.measured, 1);
   EXPECT_EQ(facts.collation_measured, 0);
-  ASSERT_EQ(fm_locale_facts("win-365-en_US", &facts), 0);
+  ASSERT_EQ(fm_get_locale_facts("win-365-en_US", &facts), 0);
   EXPECT_EQ(facts.collation_measured, 0);
 }
 

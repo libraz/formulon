@@ -52,10 +52,10 @@ WASM_AUTO_METHODS = {"delete"}
 # exception in one binding.
 WASM_ONLY_METHODS = {
     "addCellStyleXf",
-    "getSheetAutoFilterXml",
-    "setSheetAutoFilterXml",
+    "getAutoFilterXml",
+    "setAutoFilterXml",
 }
-NODE_ONLY_METHODS = {"dispose", "memoryUsage"}
+NODE_ONLY_METHODS = {"dispose", "getMemoryUsage"}
 
 # Pure-JS free functions declared in packages/npm-native/index.d.ts that are
 # intentionally NOT backed by a native `exports.Set(...)` registration -- they
@@ -304,11 +304,11 @@ _DTS_ENUM_SOURCES = {
     "PivotCellKind": (CAPI_HEADER, "fm_pivot_cell_kind_t", _extract_c_typedef_enum),
     "PivotAxis": (CAPI_HEADER, "fm_pivot_axis_t", _extract_c_typedef_enum),
     "PivotAggregation": (CAPI_HEADER, "fm_pivot_aggregation_t", _extract_c_typedef_enum),
-    "PivotShowValuesAs": (CAPI_HEADER, "fm_pivot_show_as_t", _extract_c_typedef_enum),
+    "PivotShowValuesAs": (CAPI_HEADER, "fm_pivot_show_values_as_t", _extract_c_typedef_enum),
     "PivotFilterType": (CAPI_HEADER, "fm_pivot_filter_type_t", _extract_c_typedef_enum),
     "PivotCalendar": (CAPI_HEADER, "fm_pivot_calendar_t", _extract_c_typedef_enum),
     "PivotSortOrder": (CAPI_HEADER, "fm_pivot_sort_order_t", _extract_c_typedef_enum),
-    "PivotReportLayout": (CAPI_HEADER, "fm_pivot_layout_t", _extract_c_typedef_enum),
+    "PivotReportLayout": (CAPI_HEADER, "fm_pivot_report_layout_t", _extract_c_typedef_enum),
     "PivotFilterValueKind": (CAPI_HEADER, "fm_pivot_filter_value_kind_t", _extract_c_typedef_enum),
     "SheetVisibility": (CAPI_HEADER, "fm_sheet_visibility_t", _extract_c_typedef_enum),
     "CollationStrength": (CAPI_HEADER, "fm_collation_strength_t", _extract_c_typedef_enum),

@@ -21,10 +21,10 @@ constexpr std::array<ProfileCase, 4> kProfiles = {{
 
 bool write_formula_fixture(const std::string& path, const char* formula) {
   fm_workbook_t* workbook = nullptr;
-  if (fm_workbook_create(&workbook) != 0) {
+  if (fm_workbook_create_default(&workbook) != 0) {
     return false;
   }
-  const bool formula_set = fm_workbook_set_formula(workbook, 0, 0, 0, formula) == 0;
+  const bool formula_set = fm_sheet_set_formula(workbook, 0, 0, 0, formula) == 0;
   std::uint8_t* bytes = nullptr;
   std::size_t length = 0;
   const bool saved = formula_set && fm_workbook_save(workbook, &bytes, &length) == 0;
@@ -36,7 +36,7 @@ bool write_formula_fixture(const std::string& path, const char* formula) {
       wrote = output.good();
     }
   }
-  fm_buffer_free(bytes);
+  fm_buffer_destroy(bytes);
   fm_workbook_destroy(workbook);
   return saved && wrote;
 }
@@ -55,8 +55,8 @@ std::string first_cell_text(const std::string& path) {
   std::uint32_t row = 0;
   std::uint32_t col = 0;
   fm_value_t value{};
-  const bool read = fm_workbook_cell_count(workbook, 0, &cell_count) == 0 && cell_count != 0 &&
-                    fm_workbook_cell_at(workbook, 0, 0, &row, &col, nullptr, &value) == 0;
+  const bool read = fm_sheet_get_cell_count(workbook, 0, &cell_count) == 0 && cell_count != 0 &&
+                    fm_sheet_get_cell_at(workbook, 0, 0, &row, &col, nullptr, &value) == 0;
   const std::string text = read && value.kind == FM_VAL_TEXT && value.u.text != nullptr ? value.u.text : std::string{};
   fm_workbook_destroy(workbook);
   return text;

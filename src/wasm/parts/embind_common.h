@@ -439,7 +439,7 @@ JsCfMatch translate_cf_match(const fm_cf_match_t& m);
 emscripten::val merge_range_to_val(const fm_merge_range& m);
 
 /// Builds the empty `{status, top:0, left:0, rows:0, cols:0, cells:[]}`
-/// envelope shape used by `pivotLayout()` on failure paths.
+/// envelope shape used by `getPivotLayout()` on failure paths.
 emscripten::val empty_pivot_layout_result(JsStatus status);
 
 /// Translates one `fm_pivot_cell_t` into a JS object suitable for
@@ -498,11 +498,11 @@ std::vector<fm_merge_range> js_pull_ranges(const emscripten::val& v, const char*
 /// makes the writer emit the sibling `*Argb` as literal `rgb`. A supplied
 /// selector is authoritative; the binding does not resolve theme/indexed /
 /// auto colours.
-fm_color_spec js_pull_color_spec(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader);
+fm_color_spec_t js_pull_color_spec(const emscripten::val& v, const char* key, JsNarrowNumericReader* reader);
 
 /// Pulls a `{style, colorArgb, color}` border-side record out of `v`,
 /// defaulting every absent field to zero.
-fm_border_side js_pull_border_side(const emscripten::val& v, JsNarrowNumericReader* reader);
+fm_border_side_t js_pull_border_side(const emscripten::val& v, JsNarrowNumericReader* reader);
 
 /// One string field of a record built by `js_set_cstr_fields`.
 struct JsStrField {
@@ -531,10 +531,10 @@ inline void js_set_cstr_fields(emscripten::val& o, const JsStrField (&fields)[N]
 /// Builds the JS mirror of a colour specification. Reads emit it
 /// unconditionally so a get / edit / add cycle passes the theme or
 /// indexed colour straight back and keeps hitting style-table dedup.
-emscripten::val js_color_spec(const fm_color_spec& spec);
+emscripten::val js_color_spec(const fm_color_spec_t& spec);
 
 /// Builds the JS mirror of a border side.
-emscripten::val js_border_side(const fm_border_side& s);
+emscripten::val js_border_side(const fm_border_side_t& s);
 
 }  // namespace parts
 }  // namespace wasm

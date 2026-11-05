@@ -63,25 +63,25 @@ std::optional<std::string> optional_text(const char* text) {
   return text != nullptr && text[0] != '\0' ? std::optional<std::string>(text) : std::nullopt;
 }
 
-fm_pivot_layout_t pivot_layout_to_fm(formulon::pivot::PivotLayout layout) {
+fm_pivot_report_layout_t pivot_layout_to_fm(formulon::pivot::PivotLayout layout) {
   switch (layout) {
     case formulon::pivot::PivotLayout::Tabular:
-      return FM_PIVOT_LAYOUT_TABULAR;
+      return FM_PIVOT_REPORT_LAYOUT_TABULAR;
     case formulon::pivot::PivotLayout::Outline:
-      return FM_PIVOT_LAYOUT_OUTLINE;
+      return FM_PIVOT_REPORT_LAYOUT_OUTLINE;
     case formulon::pivot::PivotLayout::Compact:
     default:
-      return FM_PIVOT_LAYOUT_COMPACT;
+      return FM_PIVOT_REPORT_LAYOUT_COMPACT;
   }
 }
 
 formulon::pivot::PivotLayout pivot_layout_from_fm(std::int32_t layout) {
   switch (layout) {
-    case FM_PIVOT_LAYOUT_TABULAR:
+    case FM_PIVOT_REPORT_LAYOUT_TABULAR:
       return formulon::pivot::PivotLayout::Tabular;
-    case FM_PIVOT_LAYOUT_OUTLINE:
+    case FM_PIVOT_REPORT_LAYOUT_OUTLINE:
       return formulon::pivot::PivotLayout::Outline;
-    case FM_PIVOT_LAYOUT_COMPACT:
+    case FM_PIVOT_REPORT_LAYOUT_COMPACT:
     default:
       return formulon::pivot::PivotLayout::Compact;
   }
@@ -93,33 +93,32 @@ formulon::pivot::PivotLayout pivot_layout_from_fm(std::int32_t layout) {
 // PivotTable lifecycle / metadata
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_workbook_pivot_create(fm_workbook_t* wb, std::size_t sheet_index, const char* utf8_name,
-                                                std::uint32_t cache_id, std::uint32_t anchor_row,
-                                                std::uint32_t anchor_col, std::size_t* out_pivot_index) {
+extern "C" fm_status_t fm_sheet_add_pivot(fm_workbook_t* wb, std::size_t sheet_index, const char* utf8_name,
+                                          std::uint32_t cache_id, std::uint32_t anchor_row, std::uint32_t anchor_col,
+                                          std::size_t* out_pivot_index) {
   clear_last_error();
   if (utf8_name == nullptr || out_pivot_index == nullptr) {
-    return null_argument("fm_workbook_pivot_create");
+    return null_argument("fm_sheet_add_pivot");
   }
-  if (auto rc = check_utf8("fm_workbook_pivot_create", {utf8_name}); rc != 0) {
+  if (auto rc = check_utf8("fm_sheet_add_pivot", {utf8_name}); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_pivot_create"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_pivot"); rc != 0) {
     return rc;
   }
   if (find_cache(wb->workbook(), cache_id) == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_create: cache_id not found", "cache_id=" + std::to_string(cache_id));
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_add_pivot: cache_id not found",
+                             "cache_id=" + std::to_string(cache_id));
   }
   if (!formulon::Sheet::coord_in_grid(anchor_row, anchor_col)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_create: anchor out of grid",
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_add_pivot: anchor out of grid",
                              "row=" + std::to_string(anchor_row) + " col=" + std::to_string(anchor_col));
   }
   auto table = std::make_unique<formulon::pivot::PivotTable>();
   table->set_name(utf8_name);
   table->set_pivot_cache_id(cache_id);
   // Default span of 1x1 anchored at the requested cell; callers can
-  // adjust via `fm_workbook_pivot_set_anchor`.
+  // adjust via `fm_sheet_set_pivot_anchor`.
   table->set_anchor(anchor_row, anchor_col, 1U, 1U);
   // Excel stores the Values caption in the creating UI's wording and keeps it
   // when the file is opened under another locale.
@@ -146,14 +145,14 @@ extern "C" fm_status_t fm_workbook_pivot_create(fm_workbook_t* wb, std::size_t s
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_remove(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index) {
+extern "C" fm_status_t fm_sheet_remove_pivot(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_pivot_remove"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_remove_pivot"); rc != 0) {
     return rc;
   }
   formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   auto& pivots = sheet.mutable_pivot_tables();
-  if (auto rc = check_index(pivot_index, pivots.size(), "fm_workbook_pivot_remove", "pivot_index"); rc != 0) {
+  if (auto rc = check_index(pivot_index, pivots.size(), "fm_sheet_remove_pivot", "pivot_index"); rc != 0) {
     return rc;
   }
   // Deleting a report clears the cells and merges it wrote.
@@ -165,17 +164,17 @@ extern "C" fm_status_t fm_workbook_pivot_remove(fm_workbook_t* wb, std::size_t s
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_set_name(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                                                  const char* utf8_name) {
+extern "C" fm_status_t fm_sheet_set_pivot_name(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
+                                               const char* utf8_name) {
   clear_last_error();
   if (wb == nullptr || utf8_name == nullptr) {
-    return null_argument("fm_workbook_pivot_set_name");
+    return null_argument("fm_sheet_set_pivot_name");
   }
-  if (auto rc = check_utf8("fm_workbook_pivot_set_name", {utf8_name}); rc != 0) {
+  if (auto rc = check_utf8("fm_sheet_set_pivot_name", {utf8_name}); rc != 0) {
     return rc;
   }
   formulon::pivot::PivotTable* table = nullptr;
-  if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_workbook_pivot_set_name", &table);
+  if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_sheet_set_pivot_name", &table);
       rc != 0) {
     return rc;
   }
@@ -184,12 +183,12 @@ extern "C" fm_status_t fm_workbook_pivot_set_name(fm_workbook_t* wb, std::size_t
   return edit.commit();
 }
 
-extern "C" fm_status_t fm_workbook_pivot_set_anchor(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                                                    std::uint32_t anchor_row, std::uint32_t anchor_col,
-                                                    std::uint32_t span_rows, std::uint32_t span_cols) {
+extern "C" fm_status_t fm_sheet_set_pivot_anchor(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
+                                                 std::uint32_t anchor_row, std::uint32_t anchor_col,
+                                                 std::uint32_t span_rows, std::uint32_t span_cols) {
   clear_last_error();
   formulon::pivot::PivotTable* table = nullptr;
-  if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_workbook_pivot_set_anchor", &table);
+  if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_sheet_set_pivot_anchor", &table);
       rc != 0) {
     return rc;
   }
@@ -199,7 +198,7 @@ extern "C" fm_status_t fm_workbook_pivot_set_anchor(fm_workbook_t* wb, std::size
   // bits and saturated, so `anchor + span` cannot wrap back into the grid.
   if (span_rows == 0U || span_cols == 0U) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_set_anchor: span out of grid",
+                             "fm_sheet_set_pivot_anchor: span out of grid",
                              "span_rows=" + std::to_string(span_rows) + " span_cols=" + std::to_string(span_cols));
   }
   const auto far_edge = [](std::uint32_t anchor, std::uint32_t span) {
@@ -207,7 +206,7 @@ extern "C" fm_status_t fm_workbook_pivot_set_anchor(fm_workbook_t* wb, std::size
                                                               std::numeric_limits<std::uint32_t>::max()));
   };
   if (auto rc = check_sheet_rect(anchor_row, anchor_col, far_edge(anchor_row, span_rows),
-                                 far_edge(anchor_col, span_cols), "fm_workbook_pivot_set_anchor");
+                                 far_edge(anchor_col, span_cols), "fm_sheet_set_pivot_anchor");
       rc != 0) {
     return rc;
   }
@@ -216,13 +215,12 @@ extern "C" fm_status_t fm_workbook_pivot_set_anchor(fm_workbook_t* wb, std::size
   return edit.commit();
 }
 
-extern "C" fm_status_t fm_workbook_pivot_set_grand_totals(fm_workbook_t* wb, std::size_t sheet_index,
-                                                          std::size_t pivot_index, std::int32_t rows_enabled,
-                                                          std::int32_t cols_enabled) {
+extern "C" fm_status_t fm_sheet_set_pivot_grand_totals(fm_workbook_t* wb, std::size_t sheet_index,
+                                                       std::size_t pivot_index, std::int32_t rows_enabled,
+                                                       std::int32_t cols_enabled) {
   clear_last_error();
   formulon::pivot::PivotTable* table = nullptr;
-  if (fm_status_t rc =
-          resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_workbook_pivot_set_grand_totals", &table);
+  if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_sheet_set_pivot_grand_totals", &table);
       rc != 0) {
     return rc;
   }
@@ -231,12 +229,11 @@ extern "C" fm_status_t fm_workbook_pivot_set_grand_totals(fm_workbook_t* wb, std
   return edit.commit();
 }
 
-extern "C" fm_status_t fm_workbook_pivot_show_details(fm_workbook_t* wb, std::size_t sheet_index,
-                                                      std::size_t pivot_index, std::uint32_t row, std::uint32_t col,
-                                                      std::size_t* out_sheet_index) {
+extern "C" fm_status_t fm_sheet_show_pivot_details(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
+                                                   std::uint32_t row, std::uint32_t col, std::size_t* out_sheet_index) {
   clear_last_error();
   if (wb == nullptr || out_sheet_index == nullptr) {
-    return null_argument("fm_workbook_pivot_show_details");
+    return null_argument("fm_sheet_show_pivot_details");
   }
   formulon::Expected<std::size_t, formulon::Error> created =
       wb->workbook().show_pivot_details(sheet_index, pivot_index, row, col);
@@ -247,18 +244,18 @@ extern "C" fm_status_t fm_workbook_pivot_show_details(fm_workbook_t* wb, std::si
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_set_style_info(fm_workbook_t* wb, std::size_t sheet_index,
-                                                        std::size_t pivot_index, const char* utf8_style_name,
-                                                        std::int32_t show_row_headers, std::int32_t show_col_headers,
-                                                        std::int32_t show_row_stripes, std::int32_t show_col_stripes,
-                                                        std::int32_t show_last_column) {
+extern "C" fm_status_t fm_sheet_set_pivot_style_info(fm_workbook_t* wb, std::size_t sheet_index,
+                                                     std::size_t pivot_index, const char* utf8_style_name,
+                                                     std::int32_t show_row_headers, std::int32_t show_col_headers,
+                                                     std::int32_t show_row_stripes, std::int32_t show_col_stripes,
+                                                     std::int32_t show_last_column) {
   clear_last_error();
   formulon::pivot::PivotTable* table = nullptr;
-  if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_workbook_pivot_set_style_info", &table);
+  if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_sheet_set_pivot_style_info", &table);
       rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8("fm_workbook_pivot_set_style_info", {utf8_style_name}); rc != 0) {
+  if (auto rc = check_utf8("fm_sheet_set_pivot_style_info", {utf8_style_name}); rc != 0) {
     return rc;
   }
   formulon::pivot::PivotStyleInfo info;
@@ -274,12 +271,12 @@ extern "C" fm_status_t fm_workbook_pivot_set_style_info(fm_workbook_t* wb, std::
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_get_layout(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                    std::size_t pivot_index, fm_pivot_layout_t* out_layout) {
+extern "C" fm_status_t fm_sheet_get_pivot_report_layout(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                        std::size_t pivot_index, fm_pivot_report_layout_t* out_layout) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
   if (auto rc =
-          resolve_pivot_checked(wb, {out_layout}, sheet_index, pivot_index, "fm_workbook_pivot_get_layout", &table);
+          resolve_pivot_checked(wb, {out_layout}, sheet_index, pivot_index, "fm_sheet_get_pivot_report_layout", &table);
       rc != 0) {
     return rc;
   }
@@ -287,19 +284,20 @@ extern "C" fm_status_t fm_workbook_pivot_get_layout(const fm_workbook_t* wb, std
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_set_layout(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                                                    std::int32_t layout) {
+extern "C" fm_status_t fm_sheet_set_pivot_report_layout(fm_workbook_t* wb, std::size_t sheet_index,
+                                                        std::size_t pivot_index, std::int32_t layout) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_pivot_set_layout", "wb");
+    return null_argument("fm_sheet_set_pivot_report_layout", "wb");
   }
-  if (layout != FM_PIVOT_LAYOUT_COMPACT && layout != FM_PIVOT_LAYOUT_TABULAR && layout != FM_PIVOT_LAYOUT_OUTLINE) {
+  if (layout != FM_PIVOT_REPORT_LAYOUT_COMPACT && layout != FM_PIVOT_REPORT_LAYOUT_TABULAR &&
+      layout != FM_PIVOT_REPORT_LAYOUT_OUTLINE) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_set_layout: layout out of range",
+                             "fm_sheet_set_pivot_report_layout: layout out of range",
                              "layout=" + std::to_string(static_cast<int>(layout)));
   }
   formulon::pivot::PivotTable* table = nullptr;
-  if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_workbook_pivot_set_layout", &table);
+  if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_sheet_set_pivot_report_layout", &table);
       rc != 0) {
     return rc;
   }
@@ -450,28 +448,28 @@ fm_status_t set_field_order(fm_workbook_t* wb, std::size_t sheet_index, std::siz
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_pivot_set_row_field_order(fm_workbook_t* wb, std::size_t sheet_index,
-                                                             std::size_t pivot_index, const std::uint32_t* indices,
-                                                             std::size_t count) {
+extern "C" fm_status_t fm_sheet_set_pivot_row_field_order(fm_workbook_t* wb, std::size_t sheet_index,
+                                                          std::size_t pivot_index, const std::uint32_t* indices,
+                                                          std::size_t count) {
   clear_last_error();
-  return set_field_order(wb, sheet_index, pivot_index, indices, count, true, "fm_workbook_pivot_set_row_field_order");
+  return set_field_order(wb, sheet_index, pivot_index, indices, count, true, "fm_sheet_set_pivot_row_field_order");
 }
 
-extern "C" fm_status_t fm_workbook_pivot_set_col_field_order(fm_workbook_t* wb, std::size_t sheet_index,
-                                                             std::size_t pivot_index, const std::uint32_t* indices,
-                                                             std::size_t count) {
+extern "C" fm_status_t fm_sheet_set_pivot_col_field_order(fm_workbook_t* wb, std::size_t sheet_index,
+                                                          std::size_t pivot_index, const std::uint32_t* indices,
+                                                          std::size_t count) {
   clear_last_error();
-  return set_field_order(wb, sheet_index, pivot_index, indices, count, false, "fm_workbook_pivot_set_col_field_order");
+  return set_field_order(wb, sheet_index, pivot_index, indices, count, false, "fm_sheet_set_pivot_col_field_order");
 }
 
 // ---------------------------------------------------------------------------
 // PivotTable data fields
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_workbook_pivot_data_field_count(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                          std::size_t pivot_index, std::size_t* out_count) {
+extern "C" fm_status_t fm_sheet_get_pivot_data_field_count(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                           std::size_t pivot_index, std::size_t* out_count) {
   clear_last_error();
-  return pivot_count(wb, sheet_index, pivot_index, out_count, "fm_workbook_pivot_data_field_count",
+  return pivot_count(wb, sheet_index, pivot_index, out_count, "fm_sheet_get_pivot_data_field_count",
                      [](const formulon::pivot::PivotTable& table) { return table.data_fields().size(); });
 }
 
@@ -533,26 +531,25 @@ fm_status_t fill_data_field(const formulon::Workbook& workbook, const formulon::
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_pivot_data_field_add(fm_workbook_t* wb, std::size_t sheet_index,
-                                                        std::size_t pivot_index, const fm_pivot_data_field_spec_t* spec,
-                                                        std::size_t* out_idx) {
+extern "C" fm_status_t fm_sheet_add_pivot_data_field(fm_workbook_t* wb, std::size_t sheet_index,
+                                                     std::size_t pivot_index, const fm_pivot_data_field_spec_t* spec,
+                                                     std::size_t* out_idx) {
   clear_last_error();
   if (wb == nullptr || spec == nullptr || out_idx == nullptr) {
-    return null_argument("fm_workbook_pivot_data_field_add");
+    return null_argument("fm_sheet_add_pivot_data_field");
   }
-  if (auto rc = validate(*spec, "fm_workbook_pivot_data_field_add"); rc != 0) {
+  if (auto rc = validate(*spec, "fm_sheet_add_pivot_data_field"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_num_fmt_id_text(wb->workbook(), spec->number_format, "fm_workbook_pivot_data_field_add");
-      rc != 0) {
+  if (auto rc = check_num_fmt_id_text(wb->workbook(), spec->number_format, "fm_sheet_add_pivot_data_field"); rc != 0) {
     return rc;
   }
-  auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_data_field_add");
+  auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, "fm_sheet_add_pivot_data_field");
   if (table == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
   formulon::pivot::PivotDataField df;
-  if (auto rc = fill_data_field(wb->workbook(), *table, *spec, std::nullopt, "fm_workbook_pivot_data_field_add", &df);
+  if (auto rc = fill_data_field(wb->workbook(), *table, *spec, std::nullopt, "fm_sheet_add_pivot_data_field", &df);
       rc != 0) {
     return rc;
   }
@@ -566,12 +563,11 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_add(fm_workbook_t* wb, std::
   return status;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_data_field_clear(fm_workbook_t* wb, std::size_t sheet_index,
-                                                          std::size_t pivot_index) {
+extern "C" fm_status_t fm_sheet_clear_pivot_data_fields(fm_workbook_t* wb, std::size_t sheet_index,
+                                                        std::size_t pivot_index) {
   clear_last_error();
   formulon::pivot::PivotTable* table = nullptr;
-  if (fm_status_t rc =
-          resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_workbook_pivot_data_field_clear", &table);
+  if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_sheet_clear_pivot_data_fields", &table);
       rc != 0) {
     return rc;
   }
@@ -580,31 +576,30 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_clear(fm_workbook_t* wb, std
   return edit.commit();
 }
 
-extern "C" fm_status_t fm_workbook_pivot_data_field_set(fm_workbook_t* wb, std::size_t sheet_index,
-                                                        std::size_t pivot_index, std::size_t data_field_idx,
-                                                        const fm_pivot_data_field_spec_t* spec) {
+extern "C" fm_status_t fm_sheet_set_pivot_data_field(fm_workbook_t* wb, std::size_t sheet_index,
+                                                     std::size_t pivot_index, std::size_t data_field_idx,
+                                                     const fm_pivot_data_field_spec_t* spec) {
   clear_last_error();
   if (wb == nullptr || spec == nullptr) {
-    return null_argument("fm_workbook_pivot_data_field_set");
+    return null_argument("fm_sheet_set_pivot_data_field");
   }
-  if (auto rc = validate(*spec, "fm_workbook_pivot_data_field_set"); rc != 0) {
+  if (auto rc = validate(*spec, "fm_sheet_set_pivot_data_field"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_num_fmt_id_text(wb->workbook(), spec->number_format, "fm_workbook_pivot_data_field_set");
-      rc != 0) {
+  if (auto rc = check_num_fmt_id_text(wb->workbook(), spec->number_format, "fm_sheet_set_pivot_data_field"); rc != 0) {
     return rc;
   }
-  auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_data_field_set");
+  auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, "fm_sheet_set_pivot_data_field");
   if (table == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
-  if (auto rc = check_index(data_field_idx, table->data_fields().size(), "fm_workbook_pivot_data_field_set",
-                            "data_field_idx");
+  if (auto rc =
+          check_index(data_field_idx, table->data_fields().size(), "fm_sheet_set_pivot_data_field", "data_field_idx");
       rc != 0) {
     return rc;
   }
   formulon::pivot::PivotDataField df;
-  if (auto rc = fill_data_field(wb->workbook(), *table, *spec, data_field_idx, "fm_workbook_pivot_data_field_set", &df);
+  if (auto rc = fill_data_field(wb->workbook(), *table, *spec, data_field_idx, "fm_sheet_set_pivot_data_field", &df);
       rc != 0) {
     return rc;
   }
@@ -655,12 +650,12 @@ fm_status_t get_field_order(const fm_workbook_t* wb, std::size_t sheet_index, st
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_pivot_get_cache_id(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                      std::size_t pivot_index, std::uint32_t* out_cache_id) {
+extern "C" fm_status_t fm_sheet_get_pivot_cache_id(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                   std::size_t pivot_index, std::uint32_t* out_cache_id) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
   if (auto rc =
-          resolve_pivot_checked(wb, {out_cache_id}, sheet_index, pivot_index, "fm_workbook_pivot_get_cache_id", &table);
+          resolve_pivot_checked(wb, {out_cache_id}, sheet_index, pivot_index, "fm_sheet_get_pivot_cache_id", &table);
       rc != 0) {
     return rc;
   }
@@ -668,11 +663,11 @@ extern "C" fm_status_t fm_workbook_pivot_get_cache_id(const fm_workbook_t* wb, s
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_get_name(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                  std::size_t pivot_index, const char** out_name) {
+extern "C" fm_status_t fm_sheet_get_pivot_name(const fm_workbook_t* wb, std::size_t sheet_index,
+                                               std::size_t pivot_index, const char** out_name) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
-  if (auto rc = resolve_pivot_checked(wb, {out_name}, sheet_index, pivot_index, "fm_workbook_pivot_get_name", &table);
+  if (auto rc = resolve_pivot_checked(wb, {out_name}, sheet_index, pivot_index, "fm_sheet_get_pivot_name", &table);
       rc != 0) {
     return rc;
   }
@@ -680,13 +675,13 @@ extern "C" fm_status_t fm_workbook_pivot_get_name(const fm_workbook_t* wb, std::
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_get_grand_totals(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                          std::size_t pivot_index, std::int32_t* out_rows,
-                                                          std::int32_t* out_cols) {
+extern "C" fm_status_t fm_sheet_get_pivot_grand_totals(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                       std::size_t pivot_index, std::int32_t* out_rows,
+                                                       std::int32_t* out_cols) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
   if (auto rc = resolve_pivot_checked(wb, {out_rows, out_cols}, sheet_index, pivot_index,
-                                      "fm_workbook_pivot_get_grand_totals", &table);
+                                      "fm_sheet_get_pivot_grand_totals", &table);
       rc != 0) {
     return rc;
   }
@@ -695,11 +690,11 @@ extern "C" fm_status_t fm_workbook_pivot_get_grand_totals(const fm_workbook_t* w
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_get_style_info(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                        std::size_t pivot_index, fm_pivot_style_info_t* out) {
+extern "C" fm_status_t fm_sheet_get_pivot_style_info(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                     std::size_t pivot_index, fm_pivot_style_info_t* out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
-  if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, "fm_workbook_pivot_get_style_info", &table);
+  if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, "fm_sheet_get_pivot_style_info", &table);
       rc != 0) {
     return rc;
   }
@@ -718,17 +713,17 @@ extern "C" fm_status_t fm_workbook_pivot_get_style_info(const fm_workbook_t* wb,
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_data_field_at(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                       std::size_t pivot_index, std::size_t data_field_idx,
-                                                       fm_pivot_data_field_spec_t* out) {
+extern "C" fm_status_t fm_sheet_get_pivot_data_field(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                     std::size_t pivot_index, std::size_t data_field_idx,
+                                                     fm_pivot_data_field_spec_t* out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
-  if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, "fm_workbook_pivot_data_field_at", &table);
+  if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, "fm_sheet_get_pivot_data_field", &table);
       rc != 0) {
     return rc;
   }
   if (auto rc =
-          check_index(data_field_idx, table->data_fields().size(), "fm_workbook_pivot_data_field_at", "data_field_idx");
+          check_index(data_field_idx, table->data_fields().size(), "fm_sheet_get_pivot_data_field", "data_field_idx");
       rc != 0) {
     return rc;
   }
@@ -738,7 +733,7 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_at(const fm_workbook_t* wb, 
   result.field_index = df.field_index;
   result.aggregation = static_cast<fm_pivot_aggregation_t>(df.aggregation);
   result.number_format = df.number_format.c_str();
-  result.show_as = static_cast<fm_pivot_show_as_t>(df.show_as);
+  result.show_as = static_cast<fm_pivot_show_values_as_t>(df.show_as);
   result.show_as_base_field =
       df.show_as_base_field.has_value() ? static_cast<std::int32_t>(*df.show_as_base_field) : -1;
   result.show_as_base_item = df.show_as_base_item.has_value() ? static_cast<std::int32_t>(*df.show_as_base_item) : -1;
@@ -746,20 +741,20 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_at(const fm_workbook_t* wb, 
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_get_row_field_order(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                             std::size_t pivot_index, const std::uint32_t** out_indices,
-                                                             std::size_t* out_count) {
+extern "C" fm_status_t fm_sheet_get_pivot_row_field_order(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                          std::size_t pivot_index, const std::uint32_t** out_indices,
+                                                          std::size_t* out_count) {
   clear_last_error();
   return get_field_order(wb, sheet_index, pivot_index, out_indices, out_count, true,
-                         "fm_workbook_pivot_get_row_field_order");
+                         "fm_sheet_get_pivot_row_field_order");
 }
 
-extern "C" fm_status_t fm_workbook_pivot_get_col_field_order(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                             std::size_t pivot_index, const std::uint32_t** out_indices,
-                                                             std::size_t* out_count) {
+extern "C" fm_status_t fm_sheet_get_pivot_col_field_order(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                          std::size_t pivot_index, const std::uint32_t** out_indices,
+                                                          std::size_t* out_count) {
   clear_last_error();
   return get_field_order(wb, sheet_index, pivot_index, out_indices, out_count, false,
-                         "fm_workbook_pivot_get_col_field_order");
+                         "fm_sheet_get_pivot_col_field_order");
 }
 
 // ---------------------------------------------------------------------------
@@ -791,11 +786,11 @@ fm_status_t check_option_range(std::uint32_t value, std::uint32_t current, std::
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_pivot_get_options(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                     std::size_t pivot_index, fm_pivot_options_t* out) {
+extern "C" fm_status_t fm_sheet_get_pivot_options(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                  std::size_t pivot_index, fm_pivot_options_t* out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
-  if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, "fm_workbook_pivot_get_options", &table);
+  if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, "fm_sheet_get_pivot_options", &table);
       rc != 0) {
     return rc;
   }
@@ -831,10 +826,10 @@ extern "C" fm_status_t fm_workbook_pivot_get_options(const fm_workbook_t* wb, st
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_set_options(fm_workbook_t* wb, std::size_t sheet_index,
-                                                     std::size_t pivot_index, const fm_pivot_options_t* options) {
+extern "C" fm_status_t fm_sheet_set_pivot_options(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
+                                                  const fm_pivot_options_t* options) {
   clear_last_error();
-  constexpr const char* kApi = "fm_workbook_pivot_set_options";
+  constexpr const char* kApi = "fm_sheet_set_pivot_options";
   if (wb == nullptr || options == nullptr) {
     return null_argument(kApi);
   }
@@ -897,12 +892,12 @@ extern "C" fm_status_t fm_workbook_pivot_set_options(fm_workbook_t* wb, std::siz
   return edit.commit();
 }
 
-extern "C" fm_status_t fm_workbook_pivot_data_field_default_name(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                                 std::size_t pivot_index, std::size_t field_index,
-                                                                 std::int32_t aggregation,
-                                                                 std::size_t exclude_data_field, const char** out) {
+extern "C" fm_status_t fm_sheet_get_pivot_data_field_default_name(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                                  std::size_t pivot_index, std::size_t field_index,
+                                                                  std::int32_t aggregation,
+                                                                  std::size_t exclude_data_field, const char** out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_workbook_pivot_data_field_default_name";
+  constexpr const char* kApi = "fm_sheet_get_pivot_data_field_default_name";
   const formulon::pivot::PivotTable* table = nullptr;
   if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, kApi, &table); rc != 0) {
     return rc;
@@ -931,11 +926,10 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_default_name(const fm_workbo
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_project(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index) {
+extern "C" fm_status_t fm_sheet_project_pivot(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index) {
   clear_last_error();
   formulon::pivot::PivotTable* table = nullptr;
-  if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_workbook_pivot_project", &table);
-      rc != 0) {
+  if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_sheet_project_pivot", &table); rc != 0) {
     return rc;
   }
   if (auto projected = project_pivot(wb->workbook(), sheet_index, pivot_index); !projected) {
@@ -944,12 +938,12 @@ extern "C" fm_status_t fm_workbook_pivot_project(fm_workbook_t* wb, std::size_t 
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_projection_pending(const fm_workbook_t* wb, std::size_t sheet_index,
+extern "C" fm_status_t fm_sheet_is_pivot_projection_pending(const fm_workbook_t* wb, std::size_t sheet_index,
                                                             std::size_t pivot_index, std::int32_t* out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
   if (auto rc =
-          resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, "fm_workbook_pivot_projection_pending", &table);
+          resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, "fm_sheet_is_pivot_projection_pending", &table);
       rc != 0) {
     return rc;
   }

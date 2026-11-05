@@ -1,5 +1,5 @@
 //
-// C ABI - diagnostics (`fm_last_error_*`, `fm_status_string`, Excel error
+// C ABI - diagnostics (`fm_last_error_*`, `fm_get_status_name`, Excel error
 // display names) and the process-wide structured-log configuration.
 //
 // Thin pass-through to the thread-local diagnostic buffers populated by
@@ -18,20 +18,20 @@
 #include "utils/structured_log.h"
 #include "value.h"
 
-extern "C" const char* fm_last_error_message(void) {
+extern "C" const char* fm_get_last_error_message(void) {
   return formulon::c_api::parts::last_error_message();
 }
 
-extern "C" const char* fm_last_error_context(void) {
+extern "C" const char* fm_get_last_error_context(void) {
   return formulon::c_api::parts::last_error_context();
 }
 
-extern "C" const char* fm_status_string(fm_status_t status) {
+extern "C" const char* fm_get_status_name(fm_status_t status) {
   const char* name = formulon::c_api::status_name(status);
   return name != nullptr ? name : "UNRECOGNIZED_STATUS";
 }
 
-extern "C" const char* fm_error_display_name(fm_error_code_t error) {
+extern "C" const char* fm_get_error_display_name(fm_error_code_t error) {
   constexpr auto kLastError = static_cast<fm_error_code_t>(formulon::ErrorCode::Unknown);
   if (error < 0 || error > kLastError) {
     return formulon::display_name(formulon::ErrorCode::Unknown);

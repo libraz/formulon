@@ -159,7 +159,7 @@ CF_CELL_RANGE = Struct(
 )
 
 HYPERLINK = Struct(
-    "fm_hyperlink",
+    "fm_hyperlink_t",
     [
         ("row", U32),
         ("col", U32),
@@ -173,7 +173,7 @@ HYPERLINK = Struct(
 )
 
 COMMENT = Struct(
-    "fm_comment",
+    "fm_comment_t",
     [("row", U32), ("col", U32), ("author", PTR), ("text", PTR)],
 )
 
@@ -211,7 +211,7 @@ PROTECTED_RANGE = Struct(
 )
 
 DATA_VALIDATION = Struct(
-    "fm_data_validation",
+    "fm_data_validation_t",
     [
         ("ranges", PTR),
         ("range_count", U32),
@@ -384,8 +384,8 @@ CELL_NODE = Struct(
 )
 
 # One ``<rPh>`` block. Passed both ways: as an element of the array
-# ``fm_workbook_set_cell_phonetic_runs`` takes, and as the out-parameter of
-# ``fm_workbook_get_cell_phonetic_run``.
+# ``fm_sheet_set_cell_phonetic_runs`` takes, and as the out-parameter of
+# ``fm_sheet_get_cell_phonetic_run``.
 PHONETIC_RUN = Struct(
     "fm_phonetic_run_t",
     [("sb", U32), ("eb", U32), ("text", PTR)],
@@ -602,7 +602,7 @@ SPILL_INFO = Struct(
 )
 
 REFERENCE = Struct(
-    "fm_reference_t",
+    "fm_parsed_reference_t",
     [
         ("valid", I32),
         ("has_sheet", I32),
@@ -726,7 +726,7 @@ ROW_LAYOUT = Struct(
 )
 
 SHEET_FORMAT_DEFAULTS = Struct(
-    "fm_sheet_format_defaults",
+    "fm_sheet_format_defaults_t",
     [
         ("default_col_width", F64),
         ("default_row_height", F64),
@@ -741,12 +741,12 @@ SHEET_FORMAT_DEFAULTS = Struct(
 )
 
 RECT_PT = Struct(
-    "fm_rect_pt",
+    "fm_rect_pt_t",
     [("x", F64), ("y", F64), ("width", F64), ("height", F64)],
 )
 
 WIDTH_MODEL = Struct(
-    "fm_width_model",
+    "fm_width_model_t",
     [
         ("points_per_char", F64),
         ("padding_pt", F64),
@@ -759,12 +759,12 @@ WIDTH_MODEL = Struct(
 )
 
 PAPER_INFO = Struct(
-    "fm_paper_info",
+    "fm_paper_info_t",
     [("width_pt", F64), ("height_pt", F64), ("landscape", I32), ("known", I32)],
 )
 
 MARGINS_PT = Struct(
-    "fm_margins_pt",
+    "fm_margins_pt_t",
     [
         ("left", F64),
         ("right", F64),
@@ -776,7 +776,7 @@ MARGINS_PT = Struct(
 )
 
 PRINT_TITLES = Struct(
-    "fm_print_titles",
+    "fm_print_titles_t",
     [
         ("has_rows", I32),
         ("first_row", U32),
@@ -788,7 +788,7 @@ PRINT_TITLES = Struct(
 )
 
 PAGE_LAYOUT = Struct(
-    "fm_page_layout",
+    "fm_page_layout_t",
     [
         ("area_index", U32),
         ("first_row", U32),
@@ -805,7 +805,7 @@ PAGE_LAYOUT = Struct(
 # Every optional alignment attribute has an explicit presence flag so zero /
 # false values can be round-tripped.
 CELL_XF = Struct(
-    "fm_cell_xf",
+    "fm_cell_xf_t",
     [
         ("font_index", U32),
         ("fill_index", U32),
@@ -845,16 +845,16 @@ CELL_XF = Struct(
 )
 
 COLOR_SPEC = Struct(
-    "fm_color_spec",
+    "fm_color_spec_t",
     [("tint", F64), ("rgb", U32), ("theme", U32), ("indexed", U32), ("kind", U8)],
 )
-# Inline ``fm_color_spec``. Nested rather than flattened into its owner: it
+# Inline ``fm_color_spec_t``. Nested rather than flattened into its owner: it
 # is 8-aligned, so its trailing padding is part of the C layout and a flat
 # field list would place the following member too early.
 COLOR_SPEC_BLOB = ("blob_color_spec", COLOR_SPEC.size, 8)
 
 FONT_RECORD = Struct(
-    "fm_font_record",
+    "fm_font_record_t",
     [
         ("name", PTR),
         ("size", F64),
@@ -886,12 +886,12 @@ FONT_RECORD = Struct(
 )
 
 GRADIENT_STOP = Struct(
-    "fm_gradient_stop",
+    "fm_gradient_stop_t",
     [("position", F64), ("color_argb", U32), ("color", COLOR_SPEC_BLOB)],
 )
 
 FILL_RECORD = Struct(
-    "fm_fill_record",
+    "fm_fill_record_t",
     [
         ("pattern", U8),
         ("fg_argb", U32),
@@ -912,13 +912,13 @@ FILL_RECORD = Struct(
 )
 
 BORDER_SIDE = Struct(
-    "fm_border_side",
+    "fm_border_side_t",
     [("style", U8), ("color_argb", U32), ("color", COLOR_SPEC_BLOB)],
 )
 BORDER_SIDE_BLOB = ("blob_border_side", BORDER_SIDE.size, 8)
 
 BORDER_RECORD = Struct(
-    "fm_border_record",
+    "fm_border_record_t",
     [
         ("left", BORDER_SIDE_BLOB),
         ("right", BORDER_SIDE_BLOB),
@@ -930,7 +930,7 @@ BORDER_RECORD = Struct(
     ],
 )
 
-# Inline members of ``fm_dxf_record``. They deliberately remain opaque here:
+# Inline members of ``fm_dxf_record_t``. They deliberately remain opaque here:
 # callers marshal them through the standalone layouts above at their recorded
 # offsets.
 FONT_RECORD_BLOB = ("blob_font_record", FONT_RECORD.size, 8)
@@ -938,7 +938,7 @@ FILL_RECORD_BLOB = ("blob_fill_record", FILL_RECORD.size, 8)
 BORDER_RECORD_BLOB = ("blob_border_record", BORDER_RECORD.size, 8)
 
 DXF_RECORD = Struct(
-    "fm_dxf_record",
+    "fm_dxf_record_t",
     [
         ("font_engaged", I32),
         ("font", FONT_RECORD_BLOB),
@@ -956,7 +956,7 @@ DXF_RECORD = Struct(
 
 # ``size_t`` is 4 bytes on wasm32, so the count fields share PTR's layout.
 STYLES_BATCH = Struct(
-    "fm_styles_batch",
+    "fm_styles_batch_t",
     [
         ("fonts", PTR),
         ("font_count", PTR),
@@ -988,10 +988,10 @@ CELL_STYLE_RECORD = Struct(
     ],
 )
 
-THEME_COLORS = Struct("fm_theme_colors", [("argb", ("blob_u32x12", 48, 4))])
+THEME_COLORS = Struct("fm_theme_colors_t", [("argb", ("blob_u32x12", 48, 4))])
 
 THEME_FONTS = Struct(
-    "fm_theme_fonts",
+    "fm_theme_fonts_t",
     [
         ("major_latin", PTR),
         ("major_east_asian", PTR),
@@ -1001,7 +1001,7 @@ THEME_FONTS = Struct(
 )
 
 EFFECTIVE_STYLE = Struct(
-    "fm_effective_style",
+    "fm_effective_style_t",
     [
         ("xf_index", U32),
         ("source", I32),
@@ -1146,7 +1146,7 @@ def write_str_field(
     (``kBindingNullPointer``), but Excel legitimately produces empty-reading
     runs (see ``src/io/xlsb/sst_reader.cpp``'s out-of-range kana slices), so
     ``get_phonetic_runs()``'s own output could not always round-trip back
-    through ``set_phonetic_runs()``.
+    through ``set_cell_phonetic_runs()``.
     """
     ptr = scope.opt_cstr(value) if allow_empty else scope.nonempty_cstr(value)
     if ptr == 0:
@@ -1160,7 +1160,7 @@ def write_str_field(
 # ---------------------------------------------------------------------------
 
 DATE_GROUP_ITEM = Struct(
-    "fm_date_group_item",
+    "fm_date_group_item_t",
     [
         ("year", U16),
         ("month", U8),
@@ -1173,7 +1173,7 @@ DATE_GROUP_ITEM = Struct(
 )
 
 FILTER_COLUMN = Struct(
-    "fm_filter_column",
+    "fm_filter_column_t",
     [
         ("col_id", U32),
         ("hidden_button", I32),
@@ -1211,7 +1211,7 @@ FILTER_COLUMN = Struct(
 )
 
 SORT_CONDITION = Struct(
-    "fm_sort_condition",
+    "fm_sort_condition_t",
     [
         ("ref", MERGE_RANGE_BLOB),
         ("descending", I32),
@@ -1226,7 +1226,7 @@ SORT_CONDITION = Struct(
 )
 
 AUTO_FILTER = Struct(
-    "fm_auto_filter",
+    "fm_auto_filter_t",
     [
         ("range", MERGE_RANGE_BLOB),
         ("columns", PTR),
@@ -1242,7 +1242,7 @@ AUTO_FILTER = Struct(
 )
 
 VALIDATION_OUTCOME = Struct(
-    "fm_validation_outcome",
+    "fm_validation_outcome_t",
     [
         ("has_rule", I32),
         ("valid", I32),
@@ -1253,12 +1253,12 @@ VALIDATION_OUTCOME = Struct(
 )
 
 MENTION = Struct(
-    "fm_mention",
+    "fm_mention_t",
     [("person_id", PTR), ("mention_id", PTR), ("start", U32), ("length", U32)],
 )
 
 THREADED_COMMENT = Struct(
-    "fm_threaded_comment",
+    "fm_threaded_comment_t",
     [
         ("id", PTR),
         ("row", U32),
@@ -1274,7 +1274,7 @@ THREADED_COMMENT = Struct(
 )
 
 PERSON = Struct(
-    "fm_person",
+    "fm_person_t",
     [("id", PTR), ("display_name", PTR), ("user_id", PTR), ("provider_id", PTR)],
 )
 
@@ -1284,12 +1284,12 @@ PERSON = Struct(
 # ---------------------------------------------------------------------------
 
 IMAGE_INFO = Struct(
-    "fm_image_info",
+    "fm_image_info_t",
     [("format", I32), ("px_width", U32), ("px_height", U32)],
 )
 
 DRAWING_OBJECT = Struct(
-    "fm_drawing_object",
+    "fm_drawing_object_t",
     [
         ("object_id", U32),
         ("kind", I32),
@@ -1313,7 +1313,7 @@ DRAWING_OBJECT = Struct(
 )
 
 IMAGE_INSERT = Struct(
-    "fm_image_insert",
+    "fm_image_insert_t",
     [
         ("name", PTR),
         ("descr", PTR),
@@ -1329,7 +1329,7 @@ IMAGE_INSERT = Struct(
 )
 
 DRAWING_ANCHOR = Struct(
-    "fm_drawing_anchor",
+    "fm_drawing_anchor_t",
     [
         ("anchor_kind", I32),
         ("edit_as", I32),
@@ -1344,7 +1344,7 @@ DRAWING_ANCHOR = Struct(
 
 
 SHAPE = Struct(
-    "fm_shape",
+    "fm_shape_t",
     [
         ("fields", U32),
         ("object_id", U32),
@@ -1376,7 +1376,7 @@ SHAPE = Struct(
 )
 
 DATA_TABLE = Struct(
-    "fm_data_table",
+    "fm_data_table_t",
     [
         ("first_row", U32),
         ("first_col", U32),
@@ -1396,7 +1396,7 @@ DATA_TABLE = Struct(
 )
 
 SLICER = Struct(
-    "fm_slicer",
+    "fm_slicer_t",
     [
         ("fields", U32),
         ("object_id", U32),
@@ -1422,10 +1422,10 @@ SLICER = Struct(
     ],
 )
 
-SPARKLINE = Struct("fm_sparkline", [("formula", PTR), ("location", PTR)])
+SPARKLINE = Struct("fm_sparkline_t", [("formula", PTR), ("location", PTR)])
 
 SPARKLINE_GROUP = Struct(
-    "fm_sparkline_group",
+    "fm_sparkline_group_t",
     [
         ("color_series", COLOR_SPEC_BLOB),
         ("color_negative", COLOR_SPEC_BLOB),
@@ -1648,7 +1648,7 @@ CHART_AXIS = Struct(
 )
 
 CHART_PREVIEW_OVERRIDES = Struct(
-    "fm_chart_preview_overrides",
+    "fm_chart_preview_overrides_t",
     [
         ("source", PTR),
         ("direction_op", I32),
@@ -1719,7 +1719,7 @@ CHART_UNRESOLVED = Struct(
 )
 
 CHART_INSERT = Struct(
-    "fm_chart_insert",
+    "fm_chart_insert_t",
     [
         ("kind", I32),
         ("grouping", I32),
@@ -1734,7 +1734,7 @@ CHART_INSERT = Struct(
 )
 
 CHART_FILL_PATCH = Struct(
-    "fm_chart_fill_patch",
+    "fm_chart_fill_patch_t",
     [
         ("color_op", I32),
         ("color", U32),
@@ -1744,7 +1744,7 @@ CHART_FILL_PATCH = Struct(
 )
 
 CHART_LINE_PATCH = Struct(
-    "fm_chart_line_patch",
+    "fm_chart_line_patch_t",
     [
         ("color_op", I32),
         ("color", U32),
@@ -1760,7 +1760,7 @@ CHART_LINE_PATCH = Struct(
 )
 
 CHART_MARKER_PATCH = Struct(
-    "fm_chart_marker_patch",
+    "fm_chart_marker_patch_t",
     [
         ("symbol_op", I32),
         ("symbol", I32),
@@ -1772,7 +1772,7 @@ CHART_MARKER_PATCH = Struct(
 )
 
 CHART_LABELS_PATCH = Struct(
-    "fm_chart_labels_patch",
+    "fm_chart_labels_patch_t",
     [
         ("show_value_op", I32),
         ("show_value", I32),
@@ -1798,7 +1798,7 @@ CHART_LABELS_PATCH = Struct(
 )
 
 CHART_SERIES_PATCH = Struct(
-    "fm_chart_series_patch",
+    "fm_chart_series_patch_t",
     [
         ("name", PTR),
         ("categories", PTR),
@@ -1818,7 +1818,7 @@ CHART_SERIES_PATCH = Struct(
 )
 
 CHART_POINT_PATCH = Struct(
-    "fm_chart_point_patch",
+    "fm_chart_point_patch_t",
     [
         ("fill", nested(CHART_FILL_PATCH)),
         ("line", nested(CHART_LINE_PATCH)),
@@ -1828,7 +1828,7 @@ CHART_POINT_PATCH = Struct(
 )
 
 CHART_PLOT_PATCH = Struct(
-    "fm_chart_plot_patch",
+    "fm_chart_plot_patch_t",
     [
         ("gap_width_op", I32),
         ("gap_width", U32),
@@ -1844,7 +1844,7 @@ CHART_PLOT_PATCH = Struct(
 )
 
 CHART_AXIS_PATCH = Struct(
-    "fm_chart_axis_patch",
+    "fm_chart_axis_patch_t",
     [
         ("visible_op", I32),
         ("visible", I32),
@@ -1873,7 +1873,7 @@ CHART_AXIS_PATCH = Struct(
 )
 
 CHART_LEGEND_PATCH = Struct(
-    "fm_chart_legend_patch",
+    "fm_chart_legend_patch_t",
     [
         ("position", I32),
         ("overlay", I32),
@@ -1884,7 +1884,7 @@ CHART_LEGEND_PATCH = Struct(
 )
 
 CHART_DISPLAY_PATCH = Struct(
-    "fm_chart_display_patch",
+    "fm_chart_display_patch_t",
     [
         ("blanks_as_op", I32),
         ("blanks_as", I32),

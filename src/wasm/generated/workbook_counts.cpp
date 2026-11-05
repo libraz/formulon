@@ -20,28 +20,28 @@ JsNumberResult JsWorkbook::definedNameCount() const {
   if (handle_ == nullptr) {
     return number_result(kBindingInvalidHandle, 0.0);
   }
-  return number_result(0, static_cast<double>(fm_workbook_defined_name_count(handle_)));
+  return number_result(0, static_cast<double>(fm_workbook_get_defined_name_count(handle_)));
 }
 
 JsNumberResult JsWorkbook::passthroughCount() const {
   if (handle_ == nullptr) {
     return number_result(kBindingInvalidHandle, 0.0);
   }
-  return number_result(0, static_cast<double>(fm_workbook_passthrough_count(handle_)));
+  return number_result(0, static_cast<double>(fm_workbook_get_passthrough_count(handle_)));
 }
 
 JsNumberResult JsWorkbook::sheetCount() const {
   if (handle_ == nullptr) {
     return number_result(kBindingInvalidHandle, 0.0);
   }
-  return number_result(0, static_cast<double>(fm_workbook_sheet_count(handle_)));
+  return number_result(0, static_cast<double>(fm_workbook_get_sheet_count(handle_)));
 }
 
 JsNumberResult JsWorkbook::tableCount() const {
   if (handle_ == nullptr) {
     return number_result(kBindingInvalidHandle, 0.0);
   }
-  return number_result(0, static_cast<double>(fm_workbook_table_count(handle_)));
+  return number_result(0, static_cast<double>(fm_workbook_get_table_count(handle_)));
 }
 
 }  // namespace parts

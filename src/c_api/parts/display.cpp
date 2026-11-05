@@ -44,18 +44,18 @@ void publish(const fm_workbook_t* wb, formulon::text_format::DisplayText display
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_get_display_text(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
-                                                    uint32_t col, const char** out_text, int32_t* out_status) {
+extern "C" fm_status_t fm_sheet_get_display_text(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                 uint32_t col, const char** out_text, int32_t* out_status) {
   clear_last_error();
   if (out_text == nullptr || out_status == nullptr) {
-    return null_argument("fm_workbook_get_display_text");
+    return null_argument("fm_sheet_get_display_text");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_get_display_text"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_display_text"); rc != 0) {
     return rc;
   }
   if (!formulon::Sheet::coord_in_grid(row, col)) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_get_display_text: cell coordinate out of range",
+                             "fm_sheet_get_display_text: cell coordinate out of range",
                              "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
   const formulon::Workbook& workbook = wb->workbook();

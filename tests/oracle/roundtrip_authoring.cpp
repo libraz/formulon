@@ -36,9 +36,9 @@ struct WorkbookDeleter {
 using WorkbookHandle = std::unique_ptr<fm_workbook_t, WorkbookDeleter>;
 
 /// Same, for the save buffer -- which must go back through
-/// `fm_buffer_free`, not `free`.
+/// `fm_buffer_destroy`, not `free`.
 struct BufferDeleter {
-  void operator()(std::uint8_t* bytes) const { fm_buffer_free(bytes); }
+  void operator()(std::uint8_t* bytes) const { fm_buffer_destroy(bytes); }
 };
 using BufferHandle = std::unique_ptr<std::uint8_t, BufferDeleter>;
 
@@ -117,33 +117,32 @@ Expected<void, Error> write_cell(fm_workbook_t* wb, std::uint32_t sheet, const s
   const JsonValue* value_v = rec.is_object() ? rec.find("value") : nullptr;
 
   if (kind == "blank") {
-    return checked(fm_workbook_set_blank(wb, sheet, row, col), "fm_workbook_set_blank");
+    return checked(fm_sheet_set_blank(wb, sheet, row, col), "fm_sheet_set_blank");
   }
   if (kind == "number") {
     if (value_v == nullptr || !value_v->is_number()) {
       return invalid("number cell " + addr + " has no numeric value");
     }
-    return checked(fm_workbook_set_number(wb, sheet, row, col, value_v->as_number()), "fm_workbook_set_number");
+    return checked(fm_sheet_set_number(wb, sheet, row, col, value_v->as_number()), "fm_sheet_set_number");
   }
   if (kind == "bool") {
     if (value_v == nullptr || !value_v->is_bool()) {
       return invalid("bool cell " + addr + " has no boolean value");
     }
-    return checked(fm_workbook_set_bool(wb, sheet, row, col, value_v->as_bool() ? 1 : 0), "fm_workbook_set_bool");
+    return checked(fm_sheet_set_bool(wb, sheet, row, col, value_v->as_bool() ? 1 : 0), "fm_sheet_set_bool");
   }
   if (kind == "text") {
     if (value_v == nullptr || !value_v->is_string()) {
       return invalid("text cell " + addr + " has no string value");
     }
-    return checked(fm_workbook_set_text(wb, sheet, row, col, value_v->as_string().c_str()), "fm_workbook_set_text");
+    return checked(fm_sheet_set_text(wb, sheet, row, col, value_v->as_string().c_str()), "fm_sheet_set_text");
   }
   if (kind == "formula") {
     const JsonValue* formula_v = rec.is_object() ? rec.find("formula") : nullptr;
     if (formula_v == nullptr || !formula_v->is_string()) {
       return invalid("formula cell " + addr + " has no formula string");
     }
-    return checked(fm_workbook_set_formula(wb, sheet, row, col, formula_v->as_string().c_str()),
-                   "fm_workbook_set_formula");
+    return checked(fm_sheet_set_formula(wb, sheet, row, col, formula_v->as_string().c_str()), "fm_sheet_set_formula");
   }
   return invalid("cell kind '" + kind + "' is not supported in a roundtrip case (" + addr + ")");
 }
@@ -183,7 +182,7 @@ Expected<std::map<std::string, std::uint32_t>, Error> apply_sheets(fm_workbook_t
     // capture half does the same, so `roundtrip.sheet` resolves identically
     // on both halves.
     const char* default_name = nullptr;
-    RETURN_IF_ERROR(checked(fm_workbook_sheet_name(wb, 0, &default_name), "fm_workbook_sheet_name"));
+    RETURN_IF_ERROR(checked(fm_workbook_get_sheet_name(wb, 0, &default_name), "fm_workbook_get_sheet_name"));
     indices[default_name != nullptr ? default_name : ""] = 0;
   }
   return indices;
@@ -579,7 +578,7 @@ Expected<RoundtripObservation, Error> observe_saved_bytes(const std::uint8_t* by
 
 Expected<std::map<std::string, std::uint32_t>, Error> roundtrip_sheet_indices(const JsonValue& spec) {
   fm_workbook_t* raw = nullptr;
-  RETURN_IF_ERROR(checked(fm_workbook_create(&raw), "fm_workbook_create"));
+  RETURN_IF_ERROR(checked(fm_workbook_create_default(&raw), "fm_workbook_create_default"));
   WorkbookHandle wb(raw);
   return apply_sheets(wb.get(), spec);
 }
@@ -593,12 +592,12 @@ Expected<RoundtripObservation, Error> observe_roundtrip_from_spec(const JsonValu
     return invalid("spec has no 'roundtrip' block");
   }
 
-  // `fm_workbook_create` rather than `fm_workbook_create_empty`: it is the
+  // `fm_workbook_create_default` rather than `fm_workbook_create_empty`: it is the
   // factory a caller reaches for, so the fixture carries the same seeded
   // style table a real authored report would -- and it is what the capture
   // side's `Workbook.create_default()` calls.
   fm_workbook_t* raw = nullptr;
-  RETURN_IF_ERROR(checked(fm_workbook_create(&raw), "fm_workbook_create"));
+  RETURN_IF_ERROR(checked(fm_workbook_create_default(&raw), "fm_workbook_create_default"));
   WorkbookHandle wb(raw);
 
   std::map<std::string, std::uint32_t> sheets;

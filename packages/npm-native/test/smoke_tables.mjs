@@ -15,7 +15,7 @@ function salesWorkbook(mod, ref = 'A1:B3', totalsRow = false) {
   assert.ok(wb.setText(0, 0, 1, 'Amount').ok);
   assert.ok(wb.setNumber(0, 1, 1, 10).ok);
   assert.ok(wb.setNumber(0, 2, 1, 20).ok);
-  const created = wb.createTable({
+  const created = wb.addTable({
     sheetIndex: 0,
     ref,
     name: 'Sales',
@@ -32,7 +32,7 @@ test('tableAt reads the style toggles, row counts and columns', async () => {
   const mod = await getModule();
   const wb = salesWorkbook(mod);
   try {
-    const table = wb.tableAt(0);
+    const table = wb.getTable(0);
     assert.ok(table.status.ok, JSON.stringify(table.status));
     assert.equal(table.styleName, 'TableStyleLight9');
     assert.equal(table.hasStyleInfo, true);
@@ -65,9 +65,9 @@ test('updateTable keeps the toggles across a style name change', async () => {
   } finally {
     release(wb);
   }
-  const reloaded = mod.Workbook.loadBytes(bytes);
+  const reloaded = mod.Workbook.load(bytes);
   try {
-    const table = reloaded.tableAt(0);
+    const table = reloaded.getTable(0);
     assert.equal(table.styleName, 'TableStyleMedium4');
     assert.equal(table.showFirstColumn, true);
     assert.equal(table.showRowStripes, false);
@@ -88,11 +88,11 @@ test('setTableColumnTotals writes the totals-row cells', async () => {
     assert.equal(wb.getValue(0, 3, 1).value.number, 30);
     assert.equal(wb.getValue(0, 3, 0).value.text, 'Total');
     assert.equal(wb.setTableColumnTotals(0, 1, { function: 'median' }).ok, false);
-    const columns = wb.tableAt(0).columns;
+    const columns = wb.getTable(0).columns;
     assert.equal(columns[0].totalsRowLabel, 'Total');
     assert.equal(columns[1].totalsRowFunction, 'sum');
     assert.ok(wb.setTableColumnTotals(0, 1, { function: 'custom', formula: '=MAX(Sales[Amount])' }).ok);
-    assert.equal(wb.tableAt(0).columns[1].totalsRowFormula, 'MAX([Amount])');
+    assert.equal(wb.getTable(0).columns[1].totalsRowFormula, 'MAX([Amount])');
   } finally {
     release(wb);
   }
@@ -104,15 +104,15 @@ test('updateTable renames the table and its structured references', async () => 
   try {
     assert.ok(wb.setFormula(0, 0, 3, '=SUM(Sales[Amount])').ok);
     assert.ok(wb.updateTable(0, { name: 'Revenue' }).ok);
-    const table = wb.tableAt(0);
+    const table = wb.getTable(0);
     assert.equal(table.name, 'Revenue');
     assert.equal(table.displayName, 'Revenue');
     assert.equal(wb.getFormula(0, 0, 3).formula, '=SUM(Revenue[Amount])');
-    const other = wb.createTable({ sheetIndex: 0, ref: 'F1:F2', name: 'Other', columns: ['X'] });
+    const other = wb.addTable({ sheetIndex: 0, ref: 'F1:F2', name: 'Other', columns: ['X'] });
     assert.ok(other.status.ok);
     // A clash is refused and leaves the rest of the update unapplied.
     assert.equal(wb.updateTable(other.index, { name: 'revenue', ref: 'F1:F5' }).ok, false);
-    assert.equal(wb.tableAt(other.index).ref, 'F1:F2');
+    assert.equal(wb.getTable(other.index).ref, 'F1:F2');
   } finally {
     release(wb);
   }
@@ -166,7 +166,7 @@ test('custom table styles round-trip and a table can use one', async () => {
   } finally {
     release(wb);
   }
-  const reloaded = mod.Workbook.loadBytes(bytes);
+  const reloaded = mod.Workbook.load(bytes);
   try {
     const got = reloaded.getTableStyle(0);
     assert.ok(got.status.ok, JSON.stringify(got.status));
@@ -181,7 +181,7 @@ test('custom table styles round-trip and a table can use one', async () => {
         ['totalRow', 1, undefined],
       ],
     );
-    assert.equal(reloaded.tableAt(0).styleName, 'Corporate');
+    assert.equal(reloaded.getTable(0).styleName, 'Corporate');
     assert.ok(reloaded.setTableStyleDefaults({ tableStyle: 'Corporate' }).ok);
     assert.equal(reloaded.getTableStyleDefaults().tableStyle, 'Corporate');
     assert.ok(reloaded.removeTableStyle('corporate').ok);

@@ -409,7 +409,7 @@ fm_status_t validate(const fm_cf_rule_t& rule, const char* api) {
   return check_guid(rule.id, api, "id");
 }
 
-fm_status_t validate(const fm_data_validation& v, const char* api) {
+fm_status_t validate(const fm_data_validation_t& v, const char* api) {
   if (v.range_count > 0 && v.ranges == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "ranges is NULL while range_count > 0",
                              std::string(api) + ": range_count=" + std::to_string(v.range_count));
@@ -499,7 +499,7 @@ fm_status_t validate(const fm_pivot_data_field_spec_t& spec, const char* api) {
   if (auto rc = check_enum_domain(spec.aggregation, FM_PIVOT_AGG_VARP, api, "aggregation"); rc != 0) {
     return rc;
   }
-  return check_enum_domain(spec.show_as, FM_PIVOT_SHOW_AS_RANK_DESCENDING, api, "show_as");
+  return check_enum_domain(spec.show_as, FM_PIVOT_SHOW_VALUES_AS_RANK_DESCENDING, api, "show_as");
 }
 
 fm_status_t validate(const fm_pivot_filter_spec_t& spec, const char* api) {

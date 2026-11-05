@@ -47,23 +47,23 @@ WASM_FREE_FUNCTION = re.compile(r"\bfunction\(\s*\"([A-Za-z0-9_]+)\"")
 
 # The Node class has two lifecycle helpers that are intentionally not exposed
 # by the embind class. Three embind methods have no Node counterpart:
-# getSheetAutoFilterXml and setSheetAutoFilterXml (WASM_ONLY_GUARDS) and
+# getAutoFilterXml and setAutoFilterXml (WASM_ONLY_GUARDS) and
 # addCellStyleXf, which carries only an object argument (WASM_UNGUARDED_METHODS).
 # Every method both surfaces share takes its spec from the Node registration.
 # Keeping these sets explicit makes a future binding drift fail at generation
 # time instead of silently losing validation.
-NODE_ONLY_METHODS = frozenset(("dispose", "memoryUsage"))
+NODE_ONLY_METHODS = frozenset(("dispose", "getMemoryUsage"))
 WASM_UNGUARDED_METHODS = frozenset(("addCellStyleXf",))
 
 WASM_ONLY_GUARDS = {
-    "getSheetAutoFilterXml": {"u32": 0x1},
-    "setSheetAutoFilterXml": {"u32": 0x1, "string": 0x2},
+    "getAutoFilterXml": {"u32": 0x1},
+    "setAutoFilterXml": {"u32": 0x1, "string": 0x2},
 }
 
 FREE_FUNCTION_GUARDS = {
     "evalFormula": {"string": 0x1},
-    "statusString": {"i32": 0x1},
-    "errorDisplayName": {"i32": 0x1},
+    "getStatusName": {"i32": 0x1},
+    "getErrorDisplayName": {"i32": 0x1},
     "setLogMinLevel": {"i32": 0x1},
 }
 

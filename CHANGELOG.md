@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### BREAKING
 
-- **C ABI:** `fm_workbook_pivot_field_set_date_group` (`pivotFieldSetDateGroup`,
+- **C ABI:** `fm_sheet_set_pivot_field_date_group` (`pivotFieldSetDateGroup`,
   `pivot_field_set_date_group`) takes a mask of `FM_PIVOT_PERIOD_*` bits, a
   calendar, an interval in days and start and end serials (NaN for automatic)
   in place of a granularity and year arguments. `fm_pivot_date_grouping_t` and
@@ -26,12 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   quarter and month); the existing numbers are unchanged.
   `fm_pivot_field_info_t` gains `show_all` at its end. A caller compiled
   against an earlier header must be recompiled.
-- **C ABI:** `fm_sheet_set_chart_display` takes a `fm_chart_display_patch`
+- **C ABI:** `fm_sheet_set_chart_display` takes a `fm_chart_display_patch_t`
   (keep / clear / set per field, like the legend and axis patches) in place of
   its `blanks_as` and `plot_vis_only` arguments. To port a call, clear a field
   whose old value was `ABSENT` and set the others; `ABSENT` as a set value is
   now `kInvalidArgument`. `fm_chart_info_t` gains `na_as_blank`,
-  `fm_chart_preview_overrides` gains `na_as_blank_op` / `na_as_blank`, and
+  `fm_chart_preview_overrides_t` gains `na_as_blank_op` / `na_as_blank`, and
   `fm_spill_info_t` gains `blocked`, each at its end. A caller compiled
   against an earlier header must be recompiled.
 - `setChartDisplay(sheet, objectId, patch)` (JavaScript) and
@@ -42,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- A workbook file name: `fm_workbook_set_file_name` / `fm_workbook_file_name`
+- A workbook file name: `fm_workbook_set_file_name` / `fm_workbook_get_file_name`
   (`setFileName` / `fileName`, `set_file_name` / `file_name`). When it is
   set, every function that returns formula text, and `FORMULATEXT`, shows a
   reference to this workbook's own names as the formula bar does
@@ -60,23 +60,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   group fields.
 - Pivot field and item labels that hold dates or numbers are drawn in the
   field's number format.
-- Pivot report options: per field `fm_workbook_pivot_field_set_default_subtotal`,
+- Pivot report options: per field `fm_sheet_set_pivot_field_default_subtotal`,
   `_set_insert_blank_row`, `_set_fill_down_labels` and `_set_show_detail`
   (`pivotFieldSetShowDetail`, `pivot_field_set_show_detail`, and so on), and
   the grand total caption and autofit flag in `fm_pivot_options_t`. The layout
   draws the grand total caption, blank rows, repeated labels and collapsed
   items as Excel does, and loaded files keep them.
-- `fm_workbook_pivot_field_set_item_caption` renames an item without changing
-  the value it stands for; `fm_workbook_pivot_field_set_item_show_detail`
+- `fm_sheet_set_pivot_field_item_caption` renames an item without changing
+  the value it stands for; `fm_sheet_set_pivot_field_item_show_detail`
   expands or collapses one item. `fm_pivot_item_info_t` reports both. A
   caption is at most 255 UTF-16 units and may not repeat another item's label
   in the field.
 - The Values level ("Σ Values") appears in the row and column field orders as
   `FM_PIVOT_VALUES_FIELD` (-2 in JavaScript and Python), at its position
-  among the fields. Listing it in `fm_workbook_pivot_set_row_field_order` or
+  among the fields. Listing it in `fm_sheet_set_pivot_row_field_order` or
   `_set_col_field_order` moves it to that axis. It needs two or more data
   fields, and the axis that holds it must keep listing it.
-- `fm_workbook_pivot_show_details` (`pivotShowDetails`, `pivot_show_details`)
+- `fm_sheet_show_pivot_details` (`pivotShowDetails`, `pivot_show_details`)
   runs Show Details on a data, subtotal or grand total cell: it adds a sheet
   with the matching source rows in a table, before the pivot's sheet, and
   makes it the active sheet. Sheets from the pivot's sheet onward move up by
@@ -86,14 +86,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shared by pictures, charts, shapes and slicers, and default chart, picture
   and table names use the workbook locale's word.
 
-- `fm_workbook_pivot_cache_field_shared_item_value`
+- `fm_workbook_get_pivot_cache_field_shared_item_value`
   (`pivotCacheFieldSharedItemValue`, `pivot_cache_field_shared_item_value`)
   reads one shared item of a pivot cache field, so a refresh can keep the
   existing item order.
-- Pivot cache dates: `fm_workbook_pivot_cache_field_add_shared_item_date`
-  and `fm_workbook_pivot_cache_record_set_date` store a serial as a date
+- Pivot cache dates: `fm_workbook_add_pivot_cache_field_shared_item_date`
+  and `fm_workbook_set_pivot_cache_record_date` store a serial as a date
   (`<d>`) rather than a number, and
-  `fm_workbook_pivot_cache_field_shared_item_is_date` reads the mark back
+  `fm_workbook_is_pivot_cache_field_shared_item_date` reads the mark back
   (`pivotCacheFieldAddSharedItemDate`, `pivotCacheRecordSetDate`,
   `pivotCacheFieldSharedItemIsDate`; `pivot_cache_field_add_shared_item_date`,
   and so on). A serial outside the workbook's date system is refused. Date
@@ -103,57 +103,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stores a row's automatic height without marking it custom, so a refreshed
   height is saved as `ht` alone and the row keeps following its content and
   font.
-- `fm_sheet_range_style_bases_excluding` (`rangeStyleBasesExcluding`,
+- `fm_sheet_get_range_style_bases_excluding` (`rangeStyleBasesExcluding`,
   `range_style_bases_excluding`) lists the XFs a selection resolves to while
   leaving out given cells, for hosts that resolve those cells' style
   themselves.
-- `fm_workbook_get_array_formula` / `fm_workbook_set_array_formula`
+- `fm_sheet_get_array_formula` / `fm_sheet_set_array_formula`
   (`getArrayFormula` / `setArrayFormula`, `get_array_formula` /
   `set_array_formula`) read and enter legacy (Ctrl+Shift+Enter) array
   formulas. The getter reports the block's range and formula from any of its
   cells. The setter refuses a rectangle that partly overlaps another block or
   intersects a merge, a data table or a PivotTable.
 
-- Calculated fields: `fm_workbook_pivot_cache_calculated_field_add`,
+- Calculated fields: `fm_workbook_add_pivot_cache_calculated_field`,
   `_calculated_field_set_formula`, `_calculated_field_remove` and
-  `fm_workbook_pivot_cache_field_formula` (`pivotCacheCalculatedFieldAdd`,
+  `fm_workbook_get_pivot_cache_field_formula` (`pivotCacheCalculatedFieldAdd`,
   `pivot_cache_calculated_field_add`, and so on). A calculated field shows its
   formula over the Sums of the fields it names, totals included, and is saved
   in Excel's form.
-- Calculated items: `fm_workbook_pivot_cache_calculated_item_add`, `_count`,
+- Calculated items: `fm_workbook_add_pivot_cache_calculated_item`, `_count`,
   `_at` (`fm_pivot_calculated_item_t`), `_set_formula`, `_move` and `_remove`
   (`pivotCacheCalculatedItemAdd`, `pivot_cache_calculated_item_add`, and so
   on). Items are evaluated in the context of each cell, the field's totals
   include them, and where items meet the one later in solve order wins. A data
   field cannot use Average, StdDev, StdDevP, Var or VarP beside them.
-- PivotTable options in one struct: `fm_workbook_pivot_get_options` /
-  `fm_workbook_pivot_set_options` with `fm_pivot_options_t`
+- PivotTable options in one struct: `fm_sheet_get_pivot_options` /
+  `fm_sheet_set_pivot_options` with `fm_pivot_options_t`
   (`pivotGetOptions` / `pivotSetOptions`, `pivot_get_options` /
   `pivot_set_options`): error and empty-cell captions, field headers, classic
   grid layout, empty rows and columns, report filter wrapping, merged labels,
   compact indent, print titles, alternative text and the rest of the options
   dialog. The layout draws those that change the report.
-- Pivot cache options: `fm_workbook_pivot_cache_get_options` /
+- Pivot cache options: `fm_workbook_get_pivot_cache_options` /
   `_set_options` with `fm_pivot_cache_options_t` (`pivotCacheGetOptions`,
   `pivot_cache_get_options`): saving the source records, the missing-items
   limit and refresh on open. A cache saved without records writes no records
   part.
-- `fm_workbook_pivot_field_set_custom_name` (`pivotFieldSetCustomName`,
+- `fm_sheet_set_pivot_field_custom_name` (`pivotFieldSetCustomName`,
   `pivot_field_set_custom_name`) renames a pivot field in the report, and
-  `fm_workbook_pivot_field_set_show_all` (`pivotFieldSetShowAll`,
+  `fm_sheet_set_pivot_field_show_all` (`pivotFieldSetShowAll`,
   `pivot_field_set_show_all`) lists its items without data.
-- `fm_workbook_pivot_data_field_default_name` (`pivotDataFieldDefaultName`,
+- `fm_sheet_get_pivot_data_field_default_name` (`pivotDataFieldDefaultName`,
   `pivot_data_field_default_name`) reads the name a new data field would get,
   without adding one.
-- `fm_workbook_pivot_project` (`pivotProject`, `pivot_project`) writes a
-  pivot's report into its cells now, and `fm_workbook_pivot_projection_pending`
+- `fm_sheet_project_pivot` (`pivotProject`, `pivot_project`) writes a
+  pivot's report into its cells now, and `fm_sheet_is_pivot_projection_pending`
   (`pivotProjectionPending`, `pivot_projection_pending`) tells whether a cache
   change left them stale.
 - Charts read and write "Show #N/A as an empty cell" (`c16r3:dispNaAsBlank`):
   `na_as_blank` in `fm_chart_info_t` (`naAsBlank`, `na_as_blank`), the
   `na_as_blank` field of the display patch, and a preview override. Turning it
   off removes the extension, as Excel writes it.
-- `fm_workbook_spill_info` (`spillInfo`, `spill_info`) reports a spill that is
+- `fm_sheet_get_spill_info` (`spillInfo`, `spill_info`) reports a spill that is
   blocked with `#SPILL!`: at the anchor, `blocked` is 1 and the anchor, rows
   and columns give the range the spill tried to fill, so a host can outline
   it as Excel does.
@@ -164,7 +164,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   writes a rectangle back as A1 text, quoting the sheet name as a formula
   does.
 
-- `fm_workbook_table_rename_column` (`renameTableColumn`,
+- `fm_workbook_rename_table_column` (`renameTableColumn`,
   `table_rename_column`) renames a table column as typing over its header
   does, and returns the final name. An empty name takes the locale's word
   with the lowest unused number (`Column1`, `列1`, `Spalte1`), and a name
@@ -176,14 +176,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `fm_function_metadata` (`functionMetadata`, `function_metadata`) reports the
+- `fm_get_function_metadata` (`functionMetadata`, `function_metadata`) reports the
   argument counts formula entry accepts for every built-in, including the
   functions it used to report as `0` with no upper bound (`IF` 2 to 3,
   `XLOOKUP` 3 to 6, `SUMIFS` 3 or more, `LET` 3 to 253, `LAMBDA` 1 to 254).
 - A conditional formatting rule added without an id gets one in the form
   Excel uses, `{00000000-000E-0000-<sheet>-0000<priority>}`, in place of the
   `{FC000000-…}` form.
-- `fm_workbook_cell_at`, `fm_workbook_defined_name_at` and the validation,
+- `fm_sheet_get_cell_at`, `fm_workbook_get_defined_name_at` and the validation,
   table and pivot field formula views are documented as valid until the next
   read that uses the handle's scratch buffer, like the other text getters. A
   view now points into scratch storage when a file name is set and the text
@@ -195,15 +195,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   range. An edit or a new pivot table whose report would overlap another
   pivot table, a table, a data table, an array formula or a merge now fails
   with `kPreconditionFailed` and changes nothing. A cache edit leaves the
-  cells stale until the pivot's next edit, `fm_workbook_pivot_project` or a
+  cells stale until the pivot's next edit, `fm_sheet_project_pivot` or a
   save, which writes them first.
 - A data field named by the engine takes a number after the name, as Excel
   does, when the name is already taken by another data field or a field
   ("Sum of Amt2").
 - A pivot table created through the API starts with the options Excel gives a
   new pivot: item print titles on, compact indent 0 and one filter per field.
-- Loaded pivot filters of every type are listed by `fm_workbook_pivot_filter_at`
-  and removed by `fm_workbook_pivot_filter_clear`.
+- Loaded pivot filters of every type are listed by `fm_sheet_get_pivot_filter`
+  and removed by `fm_sheet_clear_pivot_filters`.
 - The WASM size report's Brotli ceilings moved to 1280 KiB soft / 1344 KiB
   hard, to take in the pivot layout, date grouping and drawing-name API.
 
@@ -216,9 +216,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   brackets in the workbook's locale (`[[#Kopfzeilen];[Qty]]`). Formula
   setters accept this form and store Excel's long form; a bare table name is
   stored as `tblSales[]`.
-- Writing a value into a table's header cell (`fm_workbook_set_text`,
+- Writing a value into a table's header cell (`fm_sheet_set_text`,
   `_set_number`, `_set_bool`, `_set_error`, `_set_blank`) renames the column
-  as `fm_workbook_table_rename_column` does. Clearing it gives the default
+  as `fm_workbook_rename_table_column` does. Clearing it gives the default
   name instead of an empty header.
 
 ### Fixed

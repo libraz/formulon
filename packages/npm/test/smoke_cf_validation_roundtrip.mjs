@@ -80,7 +80,7 @@ test('CFVO value strings survive getConditionalFormats and a save/load cycle', a
   try {
     assert.equal(wb.getConditionalFormats(0).length, 0);
     for (const rule of [COLOR_SCALE_RULE, DATA_BAR_RULE, ICON_SET_RULE]) {
-      const added = wb.addConditionalFormat(0, rule);
+      const added = wb.addCfRule(0, rule);
       assert.ok(added.status.ok, `addConditionalFormat type=${rule.type}: ${JSON.stringify(added.status)}`);
     }
 
@@ -110,7 +110,7 @@ test('CFVO value strings survive getConditionalFormats and a save/load cycle', a
     wb.delete();
   }
 
-  const reloaded = Module.Workbook.loadBytes(bytes);
+  const reloaded = Module.Workbook.load(bytes);
   try {
     const rules = reloaded.getConditionalFormats(0);
     assert.equal(rules.length, 3);
@@ -170,7 +170,7 @@ test('merges, comments and hyperlinks round-trip through save and load', async (
     assert.ok(wb.setComment(0, 2, 1, '校閲者', '要確認').ok);
     assert.ok(wb.addHyperlink(0, 3, 0, 'https://example.com/', '例', 'ツールチップ', '').ok);
 
-    const merges = wb.getMerges(0);
+    const merges = wb.listMerges(0);
     assert.ok(merges.status.ok, JSON.stringify(merges.status));
     assert.equal(merges.length, 1);
     assert.equal(merges[0].lastCol, 3);
@@ -196,19 +196,19 @@ test('merges, comments and hyperlinks round-trip through save and load', async (
     wb.delete();
   }
 
-  const reloaded = Module.Workbook.loadBytes(bytes);
+  const reloaded = Module.Workbook.load(bytes);
   try {
-    assert.equal(reloaded.getMerges(0).length, 1);
-    assert.equal(reloaded.getMerges(0)[0].lastCol, 3);
+    assert.equal(reloaded.listMerges(0).length, 1);
+    assert.equal(reloaded.listMerges(0)[0].lastCol, 3);
 
-    const comments = reloaded.getComments(0);
+    const comments = reloaded.listComments(0);
     assert.ok(comments.status.ok, JSON.stringify(comments.status));
     assert.equal(comments.length, 1);
     assert.equal(comments[0].row, 2);
     assert.equal(comments[0].col, 1);
     assert.equal(comments[0].text, '要確認');
 
-    const links = reloaded.getHyperlinks(0);
+    const links = reloaded.listHyperlinks(0);
     assert.ok(links.status.ok, JSON.stringify(links.status));
     assert.equal(links.length, 1);
     assert.equal(links[0].row, 3);

@@ -15,7 +15,7 @@ const load = async () => {
 const roundTrip = (mod, wb) => {
   const saved = wb.save();
   assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  return mod.Workbook.loadBytes(saved.bytes);
+  return mod.Workbook.load(saved.bytes);
 };
 
 // Reads one stored or deflated entry of a ZIP archive by name.
@@ -61,9 +61,9 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   const mod = await load();
   const wb = mod.Workbook.createDefault();
   assert.equal(wb.listShapes(0).length, 0);
-  const rect = wb.insertShape(0, box(mod));
+  const rect = wb.addShape(0, box(mod));
   assert.ok(rect.status.ok, JSON.stringify(rect.status));
-  const line = wb.insertShape(0, {
+  const line = wb.addShape(0, {
     prst: 'line',
     anchorKind: mod.AnchorKind.OneCell,
     fromRow: 10,
@@ -124,16 +124,16 @@ test('shapes insert, list, update, remove and round-trip', async () => {
 test('shape arguments are validated', async () => {
   const mod = await load();
   const wb = mod.Workbook.createDefault();
-  assert.equal(wb.insertShape(0, { prst: 'rect' }).status.ok, false);
-  assert.equal(wb.insertShape(0, { ...box(mod), anchorKind: 9 }).status.ok, false);
-  assert.equal(wb.insertShape(0, { ...box(mod), fillKind: mod.ShapePaint.Other }).status.ok, false);
-  assert.equal(wb.insertShape(0, { ...box(mod), toRow: 0 }).status.ok, false);
-  assert.equal(wb.insertShape(0, { ...box(mod), prst: 'a"/>' }).status.ok, false);
-  assert.equal(wb.insertShape(5, box(mod)).status.ok, false);
+  assert.equal(wb.addShape(0, { prst: 'rect' }).status.ok, false);
+  assert.equal(wb.addShape(0, { ...box(mod), anchorKind: 9 }).status.ok, false);
+  assert.equal(wb.addShape(0, { ...box(mod), fillKind: mod.ShapePaint.Other }).status.ok, false);
+  assert.equal(wb.addShape(0, { ...box(mod), toRow: 0 }).status.ok, false);
+  assert.equal(wb.addShape(0, { ...box(mod), prst: 'a"/>' }).status.ok, false);
+  assert.equal(wb.addShape(5, box(mod)).status.ok, false);
   assert.equal(wb.listShapes(0).length, 0);
   assert.equal(wb.updateShape(0, 99, { name: 'x' }).ok, false);
   assert.equal(wb.removeShape(0, 99).ok, false);
-  assert.throws(() => wb.insertShape(0, { ...box(mod), fromRow: -1 }), RangeError);
+  assert.throws(() => wb.addShape(0, { ...box(mod), fromRow: -1 }), RangeError);
   release(wb);
 });
 
@@ -251,7 +251,7 @@ test('a surviving note keeps its own shape when notes are added', async () => {
   assert.equal(vml.match(/<v:shape /g).length, 3);
   assert.equal(new Set(vml.match(/id="_x0000_s\d+"/g)).size, 3);
   assert.equal(vml.match(/visibility:visible/g).length, 2);
-  const again = mod.Workbook.loadBytes(saved.bytes);
+  const again = mod.Workbook.load(saved.bytes);
   assert.equal(again.getCommentVisible(0, 1, 1).value, 1);
   assert.equal(again.getCommentVisible(0, 3, 3).value, 1);
   assert.equal(again.getCommentVisible(0, 8, 8).value, 0);

@@ -46,8 +46,8 @@ class ShapeTests(unittest.TestCase):
     def test_insert_list_update_remove_and_round_trip(self) -> None:
         with Workbook.create_default() as wb:
             self.assertEqual(wb.list_shapes(0), [])
-            rect = wb.insert_shape(0, **_box())
-            line = wb.insert_shape(
+            rect = wb.add_shape(0, **_box())
+            line = wb.add_shape(
                 0,
                 anchor_kind=AnchorKind.ONE_CELL,
                 from_row=10,
@@ -94,9 +94,9 @@ class ShapeTests(unittest.TestCase):
                 _box(prst='a"/>'),
             ):
                 with self.assertRaises(FormulonError):
-                    wb.insert_shape(0, **bad)
+                    wb.add_shape(0, **bad)
             with self.assertRaises(FormulonError):
-                wb.insert_shape(5, **_box())
+                wb.add_shape(5, **_box())
             self.assertEqual(wb.list_shapes(0), [])
             with self.assertRaises(FormulonError):
                 wb.update_shape(0, 99, name="x")

@@ -658,7 +658,7 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, const st
 ///
 /// An axis field with no authored items gets one per shared item, in its sort
 /// order. Authored items resolve to a shared item by their cache index, else
-/// by label (as `fm_workbook_pivot_field_add_item` binds), else by position;
+/// by label (as `fm_sheet_add_pivot_field_item` binds), else by position;
 /// shared items none of them names follow, visible.
 std::vector<pivot::PivotItem> BoundItems(const pivot::PivotField& field, const PivotCacheFieldWritePlan* fp) {
   if (fp == nullptr || !fp->derived) {
@@ -1025,7 +1025,7 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   // revises the span it was created with as fields are added. Over-sizing
   // is not a failure -- Excel reserves the range and recomputes it on
   // refresh -- so a caller that deliberately set a wider span through
-  // `fm_workbook_pivot_set_anchor` keeps it.
+  // `fm_sheet_set_pivot_anchor` keeps it.
   std::uint32_t span_rows = table.span_rows();
   std::uint32_t span_cols = table.span_cols();
   std::uint32_t ref_top = table.anchor_row();

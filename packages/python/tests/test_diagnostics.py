@@ -39,8 +39,8 @@ def _fake_instance(function_name: str, function_result: int) -> tuple[_c._WasmIn
     calls = {"message": 0, "context": 0}
     exports = {
         function_name: _Export(function_result, calls),
-        "fm_last_error_message": _Export(0x100, calls, "message"),
-        "fm_last_error_context": _Export(0x200, calls, "context"),
+        "fm_get_last_error_message": _Export(0x100, calls, "message"),
+        "fm_get_last_error_context": _Export(0x200, calls, "context"),
     }
     instance = object.__new__(_c._WasmInstance)
     instance._engine = None
@@ -58,26 +58,26 @@ def _fake_instance(function_name: str, function_result: int) -> tuple[_c._WasmIn
 
 class DiagnosticCaptureTests(unittest.TestCase):
     def test_export_wrapper_is_cached_per_instance(self) -> None:
-        instance, _calls = _fake_instance("fm_workbook_sheet_count", 17)
+        instance, _calls = _fake_instance("fm_workbook_get_sheet_count", 17)
 
-        first = instance.fm_workbook_sheet_count
-        second = instance.fm_workbook_sheet_count
+        first = instance.fm_workbook_get_sheet_count
+        second = instance.fm_workbook_get_sheet_count
 
         self.assertIs(first, second)
 
     def test_non_status_nonzero_result_does_not_read_or_clear_pending(self) -> None:
-        instance, calls = _fake_instance("fm_workbook_sheet_count", 17)
+        instance, calls = _fake_instance("fm_workbook_get_sheet_count", 17)
         instance._last_diagnostic.value = (99, "pending message", "pending context")
 
-        self.assertEqual(instance.fm_workbook_sheet_count(0), 17)
+        self.assertEqual(instance.fm_workbook_get_sheet_count(0), 17)
         self.assertEqual(calls, {"message": 0, "context": 0})
         self.assertEqual(instance.last_diagnostic(99), ("pending message", "pending context"))
 
     def test_pointer_status_string_does_not_read_or_clear_pending(self) -> None:
-        instance, calls = _fake_instance("fm_status_string", 0x1234)
+        instance, calls = _fake_instance("fm_get_status_name", 0x1234)
         instance._last_diagnostic.value = (7, "pending message", "pending context")
 
-        self.assertEqual(instance.fm_status_string(7), 0x1234)
+        self.assertEqual(instance.fm_get_status_name(7), 0x1234)
         self.assertEqual(calls, {"message": 0, "context": 0})
         self.assertEqual(instance.last_diagnostic(7), ("pending message", "pending context"))
 
@@ -136,7 +136,7 @@ class WasmTrapPoisoningTests(unittest.TestCase):
         trapping = _TrappingExport("out of memory")
         instance._exports["fm_workbook_recalc"] = trapping
         other_calls: dict[str, int] = {"other": 0}
-        instance._exports["fm_workbook_sheet_count"] = _Export(0, other_calls, "other")
+        instance._exports["fm_workbook_get_sheet_count"] = _Export(0, other_calls, "other")
 
         with self.assertRaises(_c.FormulonError):
             instance.fm_workbook_recalc(0)
@@ -145,7 +145,7 @@ class WasmTrapPoisoningTests(unittest.TestCase):
         # A second call, even to an export that never itself traps, is
         # rejected without touching the (possibly corrupted) module.
         with self.assertRaises(_c.FormulonError) as caught:
-            instance.fm_workbook_sheet_count(0)
+            instance.fm_workbook_get_sheet_count(0)
         self.assertEqual(other_calls, {"other": 0})
         self.assertEqual(caught.exception.code.name, "INTERNAL_ERROR")
 

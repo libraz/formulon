@@ -11,7 +11,7 @@ export function registerSparseRows(Module, test) {
         assert.ok(wb.setNumber(0, r, 0, r).ok);
         assert.ok(wb.setNumber(0, r, LAST_COL, r).ok);
       }
-      const added = wb.addXf({
+      const added = wb.addCellXf({
         fontIndex: 0,
         fillIndex: 0,
         borderIndex: 0,
@@ -25,21 +25,21 @@ export function registerSparseRows(Module, test) {
       assert.ok(wb.setRangeXfIndex(0, 0, LAST_COL, ROWS - 1, LAST_COL, added.index).ok);
 
       // Gap columns are not stored, so the count is exactly the written cells.
-      const count = wb.cellCount(0);
+      const count = wb.getCellCount(0);
       assert.ok(count.status.ok);
       assert.equal(count.value, ROWS * 2);
 
-      const first = wb.cellAt(0, 0);
+      const first = wb.getCellAt(0, 0);
       assert.ok(first.status.ok);
       assert.equal(first.row, 0);
       assert.equal(first.col, 0);
 
-      const second = wb.cellAt(0, 1);
+      const second = wb.getCellAt(0, 1);
       assert.ok(second.status.ok);
       assert.equal(second.row, 0);
       assert.equal(second.col, LAST_COL);
 
-      const last = wb.cellAt(0, ROWS * 2 - 1);
+      const last = wb.getCellAt(0, ROWS * 2 - 1);
       assert.ok(last.status.ok);
       assert.equal(last.row, ROWS - 1);
       assert.equal(last.col, LAST_COL);

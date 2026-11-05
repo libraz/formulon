@@ -51,6 +51,8 @@ _A1_MULTI_NAMES = frozenset({"sqref", "ranges_a1", "ranges"})
 _JS_A1_MULTI_NAMES = frozenset({"sqref", "rangesA1", "ranges"})
 _TEXT_VERBS = frozenset({"parse", "format", "resolve", "convert", "localize", "canonicalize", "evaluate"})
 _SHEET_FIELDS = frozenset({"sheet", "sheet_index"})
+# Scopes whose `_at` / `_count` address a ledger collection; any other scope is a result handle.
+_COLLECTION_SCOPES = ("workbook", "sheet", "process")
 _EDGE_QUADS = (CELL_RECT_FIELDS, ("top", "left", "bottom", "right"), ("row", "col", "last_row", "last_col"))
 _JS_EDGE_QUADS = (("firstRow", "firstCol", "lastRow", "lastCol"), ("top", "left", "bottom", "right"))
 
@@ -666,7 +668,7 @@ def _collections(ctx: Context) -> Iterator[Tuple[str, str, List[str]]]:
 def _rule_suffix(ctx: Context) -> Iterable[Violation]:
     """`_at` and `_count` belong to collections: an index-keyed collection addresses by `<thing>_index` with no
     `_at`; an `_at` elsewhere is an enumeration position taking `size_t index`; every `_at` / `_count` function
-    is an op of a ledger collection.
+    is an op of a ledger collection, or enumerates the elements of a result handle.
     """
     by_key = _functions_by_key(ctx)
     member_of: Dict[str, str] = {}
@@ -693,7 +695,8 @@ def _rule_suffix(ctx: Context) -> Iterable[Violation]:
                     fn.line,
                 )
     for key, fn in sorted(by_key.items()):
-        if _suffixed(fn.name) and c_verb(fn.name) != "set" and key not in member_of:
+        handle_element = ctx.ledger.entry(key).get("scope") not in (None, *_COLLECTION_SCOPES)
+        if _suffixed(fn.name) and c_verb(fn.name) != "set" and key not in member_of and not handle_element:
             yield ctx.c_violation(
                 "R3.suffix",
                 fn.name,

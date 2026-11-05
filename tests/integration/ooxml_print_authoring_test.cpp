@@ -79,7 +79,7 @@ struct WorkbookGuard {
 struct BufferGuard {
   std::uint8_t* data = nullptr;
   std::size_t len = 0;
-  ~BufferGuard() { fm_buffer_free(data); }
+  ~BufferGuard() { fm_buffer_destroy(data); }
   BufferGuard() = default;
   BufferGuard(const BufferGuard&) = delete;
   BufferGuard& operator=(const BufferGuard&) = delete;
@@ -105,8 +105,8 @@ int ChildPosition(const pugi::xml_node& worksheet, const char* name) {
 
 TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "\xE5\xA3\xB2\xE4\xB8\x8A"), 0);  // 売上
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "\xE5\xA3\xB2\xE4\xB8\x8A"), 0);  // 売上
 
   fm_page_setup_t setup{};
   setup.paper_size_engaged = 1;
@@ -222,9 +222,9 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   EXPECT_STREQ(rows, "1:2");
   EXPECT_STREQ(cols, "");
 
-  ASSERT_EQ(fm_sheet_row_break_count(reloaded.handle, 0), 1U);
+  ASSERT_EQ(fm_sheet_get_row_break_count(reloaded.handle, 0), 1U);
   fm_page_break_t brk{};
-  ASSERT_EQ(fm_sheet_row_break_at(reloaded.handle, 0, 0, &brk), 0);
+  ASSERT_EQ(fm_sheet_get_row_break_at(reloaded.handle, 0, 0, &brk), 0);
   EXPECT_EQ(brk.id, 39U);
   EXPECT_EQ(brk.manual, 1);
 }

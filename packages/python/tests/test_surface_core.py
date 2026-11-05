@@ -184,7 +184,7 @@ class StructLayoutTests(unittest.TestCase):
     def test_hand_marshalled_record_sizes(self) -> None:
         self.assertEqual(_c.fm_value_t_size, 16)
         self.assertEqual(S.VALUE_BLOB, ("blob16", 16, 8))
-        source = inspect.getsource(Workbook.paginate)
+        source = inspect.getsource(Workbook.get_pagination)
         self.assertIn('struct.unpack("<IIII", LIB.read_bytes(range_ptr, 16))', source)
 
     def test_layouts_match_c_header(self) -> None:
@@ -232,18 +232,18 @@ class DefinedNameTests(unittest.TestCase):
     def test_defined_name_set_get_remove(self) -> None:
         with Workbook.create_default() as wb:
             wb.set_defined_name("MyRef", "Sheet1!$A$1")
-            names = {dn.name: dn.formula for dn in wb.iter_defined_names()}
+            names = {dn.name: dn.formula for dn in wb.list_defined_names()}
             self.assertIn("MyRef", names)
             self.assertEqual(names["MyRef"], "Sheet1!$A$1")
 
             # Updating in place replaces the formula text.
             wb.set_defined_name("MyRef", "Sheet1!$B$2")
-            names = {dn.name: dn.formula for dn in wb.iter_defined_names()}
+            names = {dn.name: dn.formula for dn in wb.list_defined_names()}
             self.assertEqual(names["MyRef"], "Sheet1!$B$2")
 
             # An empty formula removes the entry.
             wb.set_defined_name("MyRef", "")
-            self.assertNotIn("MyRef", {dn.name for dn in wb.iter_defined_names()})
+            self.assertNotIn("MyRef", {dn.name for dn in wb.list_defined_names()})
 
     def test_scoped_defined_name_set_get_remove(self) -> None:
         with Workbook.create_empty() as wb:
@@ -251,7 +251,7 @@ class DefinedNameTests(unittest.TestCase):
             wb.add_sheet("Sheet2")
             wb.set_defined_name("Rate", "=1")
             wb.set_defined_name_scoped("Rate", "=2", 1)
-            names = {(dn.name, dn.local_sheet_id): dn.formula for dn in wb.iter_defined_names()}
+            names = {(dn.name, dn.local_sheet_id): dn.formula for dn in wb.list_defined_names()}
             # The setter drops the leading "=", as the file form carries none.
             self.assertEqual(names[("Rate", -1)], "1")
             self.assertEqual(names[("Rate", 1)], "2")
@@ -259,28 +259,28 @@ class DefinedNameTests(unittest.TestCase):
             wb.set_defined_name_scoped("Rate", "", 1)
             self.assertNotIn(
                 ("Rate", 1),
-                {(dn.name, dn.local_sheet_id) for dn in wb.iter_defined_names()},
+                {(dn.name, dn.local_sheet_id) for dn in wb.list_defined_names()},
             )
 
 
 class CalcPolicyTests(unittest.TestCase):
     def test_calc_mode_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertEqual(wb.calc_mode(), CalcMode.AUTO)
+            self.assertEqual(wb.get_calc_mode(), CalcMode.AUTO)
             wb.set_calc_mode(CalcMode.MANUAL)
-            self.assertEqual(wb.calc_mode(), CalcMode.MANUAL)
+            self.assertEqual(wb.get_calc_mode(), CalcMode.MANUAL)
 
     def test_pinned_now_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
             # Unpinned by default: the workbook follows the host clock.
-            self.assertIsNone(wb.pinned_now())
+            self.assertIsNone(wb.get_pinned_now())
             wb.set_pinned_now(2026, 4, 23, 15, 30, 45)
-            self.assertEqual(wb.pinned_now(), CivilTime(2026, 4, 23, 15, 30, 45))
+            self.assertEqual(wb.get_pinned_now(), CivilTime(2026, 4, 23, 15, 30, 45))
             # 2026-04-23 is serial 46135 under the 1900 date system.
             grid = wb.evaluate_formula_array(0, 0, 0, "=TODAY()")
             self.assertEqual(grid[0][0].number, 46135.0)
             wb.clear_pinned_now()
-            self.assertIsNone(wb.pinned_now())
+            self.assertIsNone(wb.get_pinned_now())
 
     def test_pinned_now_rejects_a_non_calendar_instant(self) -> None:
         with Workbook.create_default() as wb:
@@ -289,13 +289,13 @@ class CalcPolicyTests(unittest.TestCase):
                 wb.set_pinned_now(2026, 13, 1)
             with self.assertRaises(FormulonError):
                 wb.set_pinned_now(2025, 2, 29)
-            self.assertIsNone(wb.pinned_now())
+            self.assertIsNone(wb.get_pinned_now())
 
     def test_excel_profile_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertTrue(wb.excel_profile_id())
+            self.assertTrue(wb.get_excel_profile_id())
             wb.set_excel_profile_id("mac-365-ja_JP")
-            self.assertEqual(wb.excel_profile_id(), "mac-365-ja_JP")
+            self.assertEqual(wb.get_excel_profile_id(), "mac-365-ja_JP")
 
     def test_excel_profile_switches_live_workbook(self) -> None:
         # mac-365-* values are the oracle captures of DOLLAR(-1234.567); the
@@ -333,13 +333,13 @@ class CalcPolicyTests(unittest.TestCase):
             "nl_NL",
         )
         with Workbook.create_default() as wb:
-            self.assertEqual(wb.excel_profile_id(), "win-365-en_US")
+            self.assertEqual(wb.get_excel_profile_id(), "win-365-en_US")
             wb.set_formula(0, 0, 0, "=DOLLAR(-1234.567)")
             for host in ("mac", "win"):
                 for locale in locales:
                     profile_id = f"{host}-365-{locale}"
                     wb.set_excel_profile_id(profile_id)
-                    self.assertEqual(wb.excel_profile_id(), profile_id)
+                    self.assertEqual(wb.get_excel_profile_id(), profile_id)
                     wb.recalc()
                     if profile_id in dollar:
                         self.assertEqual(wb.get_value(0, 0, 0).to_python(), dollar[profile_id], profile_id)
@@ -352,7 +352,7 @@ class PartialRecalcTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.set_number(0, 0, 0, 10.0)  # A1
             wb.set_formula(0, 0, 1, "=A1*2")  # B1
-            recomputed = wb.partial_recalc(0, 0, 0, 1, 1)
+            recomputed = wb.recalc_viewport(0, 0, 0, 1, 1)
             self.assertGreater(recomputed, 0)
             self.assertEqual(wb.get_value(0, 0, 1).to_python(), 20.0)
 
@@ -363,9 +363,9 @@ class TraceTests(unittest.TestCase):
             wb.set_number(0, 0, 0, 1.0)  # A1
             wb.set_formula(0, 0, 1, "=A1")  # B1
             wb.recalc()
-            prec = wb.precedents(0, 0, 1, 1)
+            prec = wb.get_precedents(0, 0, 1, 1)
             self.assertIn((0, 0, 0), [(p.sheet, p.row, p.col) for p in prec])
-            deps = wb.dependents(0, 0, 0, 1)
+            deps = wb.get_dependents(0, 0, 0, 1)
             self.assertIn((0, 0, 1), [(d.sheet, d.row, d.col) for d in deps])
 
 
@@ -374,7 +374,7 @@ class SpillTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.set_formula(0, 0, 0, "=SEQUENCE(3)")
             wb.recalc()
-            info = wb.spill_info(0, 0, 0)
+            info = wb.get_spill_info(0, 0, 0)
             self.assertTrue(info.engaged)
             self.assertEqual(info.rows, 3)
             self.assertEqual((info.anchor_row, info.anchor_col), (0, 0))
@@ -385,11 +385,11 @@ class SpillTests(unittest.TestCase):
             wb.set_formula(0, 0, 0, "=SEQUENCE(5)")
             wb.set_number(0, 3, 0, 1.0)
             wb.recalc()
-            info = wb.spill_info(0, 0, 0)
+            info = wb.get_spill_info(0, 0, 0)
             self.assertTrue(info.blocked)
             self.assertFalse(info.engaged)
             self.assertEqual((info.anchor_row, info.anchor_col, info.rows, info.cols), (0, 0, 5, 1))
-            self.assertFalse(wb.spill_info(0, 1, 0).blocked)
+            self.assertFalse(wb.get_spill_info(0, 1, 0).blocked)
 
 
 class ArrayFormulaTests(unittest.TestCase):
@@ -422,7 +422,7 @@ class ArrayFormulaTests(unittest.TestCase):
 class ExternalLinkTests(unittest.TestCase):
     def test_fresh_workbook_has_no_external_links(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertEqual(wb.external_link_count(), 0)
+            self.assertEqual(wb.get_external_link_count(), 0)
             self.assertEqual(wb.get_external_links(), [])
 
 

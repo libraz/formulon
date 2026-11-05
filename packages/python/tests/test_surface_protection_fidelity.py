@@ -56,7 +56,7 @@ class ProtectedRangeTests(unittest.TestCase):
             )
             with Workbook.load(wb.save()) as reloaded:
                 ranges = reloaded.get_protected_ranges(0)
-                self.assertEqual(reloaded.protected_range_count(0), 2)
+                self.assertEqual(reloaded.get_protected_range_count(0), 2)
                 self.assertEqual([r.name for r in ranges], ["Inputs", "Totals"])
                 self.assertEqual(ranges[0].sqref, "B2:C3 E5")
                 self.assertEqual(ranges[0].password, "CC1A")
@@ -86,7 +86,7 @@ class ProtectedRangeTests(unittest.TestCase):
                 wb.update_protected_range(0, 5, ProtectedRange(name="Other", sqref="B1"))
             with self.assertRaises(FormulonError):
                 wb.remove_protected_range(0, 5)
-            self.assertEqual(wb.protected_range_count(0), 1)
+            self.assertEqual(wb.get_protected_range_count(0), 1)
 
 
 class NoteVisibilityTests(unittest.TestCase):

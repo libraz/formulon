@@ -106,7 +106,7 @@ def _apply_sheets(wb: Any, case: Dict[str, Any]) -> Dict[str, int]:
         for addr, rec in (cells or {}).items():
             _write_cell(wb, position, addr, rec)
     if not indices:
-        indices[wb.sheet_name(0)] = 0
+        indices[wb.get_sheet_name(0)] = 0
     return indices
 
 

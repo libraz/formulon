@@ -81,26 +81,26 @@ Napi::Value Workbook::SheetName(const Napi::CallbackInfo& info) {
   }
   const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
   const char* name = nullptr;
-  fm_status_t rc = fm_workbook_sheet_name(handle_, idx, &name);
+  fm_status_t rc = fm_workbook_get_sheet_name(handle_, idx, &name);
   return MakeStringResult(env, rc, name);
 }
 
 // ---- Row / column structural edits ----------------------------------
 
 Napi::Value Workbook::InsertRows(const Napi::CallbackInfo& info) {
-  return InvokeRowColEdit(info, fm_workbook_insert_rows);
+  return InvokeRowColEdit(info, fm_sheet_insert_rows);
 }
 
 Napi::Value Workbook::DeleteRows(const Napi::CallbackInfo& info) {
-  return InvokeRowColEdit(info, fm_workbook_delete_rows);
+  return InvokeRowColEdit(info, fm_sheet_delete_rows);
 }
 
 Napi::Value Workbook::InsertCols(const Napi::CallbackInfo& info) {
-  return InvokeRowColEdit(info, fm_workbook_insert_cols);
+  return InvokeRowColEdit(info, fm_sheet_insert_cols);
 }
 
 Napi::Value Workbook::DeleteCols(const Napi::CallbackInfo& info) {
-  return InvokeRowColEdit(info, fm_workbook_delete_cols);
+  return InvokeRowColEdit(info, fm_sheet_delete_cols);
 }
 
 // ---- Iteration / metadata accessors ---------------------------------
@@ -120,7 +120,7 @@ Napi::Value Workbook::CellAt(const Napi::CallbackInfo& info) {
       [&](fm_workbook_t* handle) {
         const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
         const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 1));
-        return fm_workbook_cell_at(handle, sheet, idx, &row, &col, &formula, &v);
+        return fm_sheet_get_cell_at(handle, sheet, idx, &row, &col, &formula, &v);
       },
       [&](Napi::Object& out) {
         Napi::Env env = info.Env();
@@ -145,8 +145,8 @@ Napi::Value Workbook::DefinedNameAt(const Napi::CallbackInfo& info) {
       info,
       [&](fm_workbook_t* handle) {
         const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
-        const fm_status_t rc = fm_workbook_defined_name_at(handle, idx, &name, &formula, &local_sheet_id);
-        return rc != 0 ? rc : fm_workbook_defined_name_attrs_at(handle, idx, &comment, &hidden);
+        const fm_status_t rc = fm_workbook_get_defined_name_at(handle, idx, &name, &formula, &local_sheet_id);
+        return rc != 0 ? rc : fm_workbook_get_defined_name_attrs_at(handle, idx, &comment, &hidden);
       },
       [&](Napi::Object& out) {
         Napi::Env env = info.Env();
@@ -171,14 +171,14 @@ Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
       info,
       [&](fm_workbook_t* handle) {
         const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
-        fm_status_t rc = fm_workbook_table_at(handle, idx, &name, &display, &ref, &sheet_index);
+        fm_status_t rc = fm_workbook_get_table(handle, idx, &name, &display, &ref, &sheet_index);
         if (rc == 0) {
-          rc = fm_workbook_table_get_info(handle, idx, &table);
+          rc = fm_workbook_get_table_info(handle, idx, &table);
         }
         columns.resize(rc == 0 ? table.column_count : 0U);
         totals_formulas.resize(columns.size());
         for (std::size_t i = 0; rc == 0 && i < columns.size(); ++i) {
-          rc = fm_workbook_table_get_column(handle, idx, i, &columns[i]);
+          rc = fm_workbook_get_table_column(handle, idx, i, &columns[i]);
           if (rc == 0) {
             totals_formulas[i] = columns[i].totals_row_formula;
           }
@@ -244,13 +244,13 @@ TableStyleToggles ReadTableStyleToggles(CheckedSpecReader& reader, const Napi::O
 /// style name; a table without the element takes the creation defaults.
 fm_status_t ApplyTableStyleToggles(fm_workbook_t* handle, std::size_t idx, const TableStyleToggles& toggles) {
   fm_table_info_t current{};
-  if (const fm_status_t rc = fm_workbook_table_get_info(handle, idx, &current); rc != 0) {
+  if (const fm_status_t rc = fm_workbook_get_table_info(handle, idx, &current); rc != 0) {
     return rc;
   }
   const bool present = current.style_present != 0;
   const std::string name = current.style_name != nullptr ? current.style_name : "";
   const auto pick = [](int32_t supplied, int32_t existing) { return supplied >= 0 ? supplied : existing; };
-  return fm_workbook_table_set_style_info(handle, idx, name.c_str(),
+  return fm_workbook_set_table_style_info(handle, idx, name.c_str(),
                                           pick(toggles.first_column, current.show_first_column),
                                           pick(toggles.last_column, current.show_last_column),
                                           pick(toggles.row_stripes, present ? current.show_row_stripes : 1),
@@ -296,7 +296,7 @@ Napi::Value Workbook::CreateTable(const Napi::CallbackInfo& info) {
   }
   if (!has_columns) {
     return MakeIndexResult(
-        env, MakeBindingArgumentError(env, "createTable: `columns` must be an array of column names"), 0U);
+        env, MakeBindingArgumentError(env, "addTable: `columns` must be an array of column names"), 0U);
   }
   // `names` has stopped growing, so its `c_str()` views stay put.
   std::vector<const char*> pointers;
@@ -306,12 +306,12 @@ Napi::Value Workbook::CreateTable(const Napi::CallbackInfo& info) {
   }
   std::size_t index = 0;
   fm_status_t rc =
-      fm_workbook_table_create(handle_, sheet, ref.c_str(), name.c_str(), display_name.c_str(), pointers.data(),
+      fm_workbook_add_table(handle_, sheet, ref.c_str(), name.c_str(), display_name.c_str(), pointers.data(),
                                pointers.size(), style_name.c_str(), header_row ? 1 : 0, totals_row ? 1 : 0, &index);
   if (rc == 0 && toggles.any()) {
     rc = ApplyTableStyleToggles(handle_, index, toggles);
     if (rc != 0) {
-      fm_workbook_table_remove(handle_, index);
+      fm_workbook_remove_table(handle_, index);
     }
   }
   return MakeIndexResult(env, rc, static_cast<uint32_t>(index));
@@ -345,7 +345,7 @@ Napi::Value Workbook::UpdateTable(const Napi::CallbackInfo& info) {
   const char* current_ref = nullptr;
   std::size_t ignored_sheet = 0;
   if (const fm_status_t rc =
-          fm_workbook_table_at(handle_, idx, &current_name, &current_display_name, &current_ref, &ignored_sheet);
+          fm_workbook_get_table(handle_, idx, &current_name, &current_display_name, &current_ref, &ignored_sheet);
       rc != 0) {
     return MakeStatus(env, rc);
   }
@@ -361,18 +361,18 @@ Napi::Value Workbook::UpdateTable(const Napi::CallbackInfo& info) {
   if (renaming) {
     const std::string next_name = has_name ? name : old_name;
     const std::string next_display_name = has_display_name ? display_name : (has_name ? name : old_display_name);
-    if (const fm_status_t rc = fm_workbook_table_rename(handle_, idx, next_name.c_str(), next_display_name.c_str());
+    if (const fm_status_t rc = fm_workbook_rename_table(handle_, idx, next_name.c_str(), next_display_name.c_str());
         rc != 0) {
       return MakeStatus(env, rc);
     }
   }
-  fm_status_t rc = fm_workbook_table_update(handle_, idx, ref.c_str(), has_style ? style_name.c_str() : nullptr,
+  fm_status_t rc = fm_workbook_update_table(handle_, idx, ref.c_str(), has_style ? style_name.c_str() : nullptr,
                                             header_row, totals_row);
   if (rc == 0 && toggles.any()) {
     rc = ApplyTableStyleToggles(handle_, idx, toggles);
   }
   if (rc != 0 && renaming) {
-    fm_workbook_table_rename(handle_, idx, old_name.c_str(), old_display_name.c_str());
+    fm_workbook_rename_table(handle_, idx, old_name.c_str(), old_display_name.c_str());
   }
   return MakeStatus(env, rc);
 }
@@ -382,7 +382,7 @@ Napi::Value Workbook::RemoveTable(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  return MakeStatus(env, fm_workbook_table_remove(handle_, static_cast<std::size_t>(ArgU32(info, 0))));
+  return MakeStatus(env, fm_workbook_remove_table(handle_, static_cast<std::size_t>(ArgU32(info, 0))));
 }
 
 Napi::Value Workbook::SetTableColumnTotals(const Napi::CallbackInfo& info) {
@@ -403,7 +403,7 @@ Napi::Value Workbook::SetTableColumnTotals(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_workbook_table_set_column_totals(
+  return MakeStatus(env, fm_workbook_set_table_column_totals(
                              handle_, idx, column, has_function ? function.c_str() : nullptr,
                              has_label ? label.c_str() : nullptr, has_formula ? formula.c_str() : nullptr));
 }
@@ -417,7 +417,7 @@ Napi::Value Workbook::RenameTableColumn(const Napi::CallbackInfo& info) {
   const std::size_t column = static_cast<std::size_t>(ArgU32(info, 1));
   const std::string name = ArgString(info, 2);
   const char* final_name = nullptr;
-  const fm_status_t rc = fm_workbook_table_rename_column(handle_, idx, column, name.c_str(), &final_name);
+  const fm_status_t rc = fm_workbook_rename_table_column(handle_, idx, column, name.c_str(), &final_name);
   return MakeStringResult(env, rc, final_name);
 }
 
@@ -427,7 +427,7 @@ Napi::Value Workbook::PassthroughAt(const Napi::CallbackInfo& info) {
       info,
       [&](fm_workbook_t* handle) {
         const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
-        return fm_workbook_passthrough_at(handle, idx, &path);
+        return fm_workbook_get_passthrough_at(handle, idx, &path);
       },
       [&](Napi::Object& out) { out.Set("path", JsString(info.Env(), path)); });
 }
@@ -441,7 +441,7 @@ Napi::Value Workbook::PivotLayout(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
   fm_pivot_cells_t* cells = nullptr;
-  fm_status_t rc = fm_workbook_pivot_layout(handle_, sheet, pivot_index, &cells);
+  fm_status_t rc = fm_sheet_get_pivot_layout(handle_, sheet, pivot_index, &cells);
   if (rc != 0) {
     return EmptyPivotLayoutResult(env, MakeErrorStatus(env, rc));
   }
@@ -450,22 +450,22 @@ Napi::Value Workbook::PivotLayout(const Napi::CallbackInfo& info) {
   uint32_t left = 0;
   uint32_t rows = 0;
   uint32_t cols = 0;
-  rc = fm_pivot_cells_bounds(cells, &top, &left, &rows, &cols);
+  rc = fm_pivot_cells_get_bounds(cells, &top, &left, &rows, &cols);
   if (rc != 0) {
     fm_pivot_cells_destroy(cells);
     return EmptyPivotLayoutResult(env, MakeErrorStatus(env, rc));
   }
 
-  const std::size_t count = fm_pivot_cells_count(cells);
+  const std::size_t count = fm_pivot_cells_get_cell_count(cells);
   // Pre-sized `Array::New(env, count)` would leave trailing `undefined`
-  // holes whenever `fm_pivot_cells_at` skips an index below, so grow
+  // holes whenever `fm_pivot_cells_get_cell_at` skips an index below, so grow
   // the array dynamically and track a separate `emitted` counter —
   // matching the dense-array contract the other list getters use.
   Napi::Array arr = Napi::Array::New(env);
   std::size_t emitted = 0;
   for (std::size_t i = 0; i < count; ++i) {
     fm_pivot_cell_t cell{};
-    if (fm_pivot_cells_at(cells, i, &cell) != 0) {
+    if (fm_pivot_cells_get_cell_at(cells, i, &cell) != 0) {
       continue;
     }
     arr.Set(static_cast<uint32_t>(emitted), TranslatePivotCell(env, cell));

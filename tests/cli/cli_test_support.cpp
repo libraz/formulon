@@ -210,15 +210,15 @@ int open_descriptor_count() {
 bool write_fixture_workbook(const std::string& path, std::string_view extra_text, bool iterative,
                             int32_t max_iterations, double max_change) {
   fm_workbook_t* wb = nullptr;
-  if (fm_workbook_create(&wb) != 0) {
+  if (fm_workbook_create_default(&wb) != 0) {
     return false;
   }
   // A1 = 7 (literal), B1 = =A1+1 (formula).
-  if (fm_workbook_set_number(wb, 0, 0, 0, 7.0) != 0) {
+  if (fm_sheet_set_number(wb, 0, 0, 0, 7.0) != 0) {
     fm_workbook_destroy(wb);
     return false;
   }
-  if (fm_workbook_set_formula(wb, 0, 0, 1, "=A1+1") != 0) {
+  if (fm_sheet_set_formula(wb, 0, 0, 1, "=A1+1") != 0) {
     fm_workbook_destroy(wb);
     return false;
   }
@@ -230,7 +230,7 @@ bool write_fixture_workbook(const std::string& path, std::string_view extra_text
     fm_workbook_destroy(wb);
     return false;
   }
-  if (!extra_text.empty() && fm_workbook_set_text(wb, 0, 1, 0, std::string(extra_text).c_str()) != 0) {
+  if (!extra_text.empty() && fm_sheet_set_text(wb, 0, 1, 0, std::string(extra_text).c_str()) != 0) {
     fm_workbook_destroy(wb);
     return false;
   }
@@ -242,13 +242,13 @@ bool write_fixture_workbook(const std::string& path, std::string_view extra_text
   }
   std::ofstream out(path, std::ios::binary | std::ios::trunc);
   if (!out) {
-    fm_buffer_free(bytes);
+    fm_buffer_destroy(bytes);
     fm_workbook_destroy(wb);
     return false;
   }
   out.write(reinterpret_cast<const char*>(bytes), static_cast<std::streamsize>(len));
   out.close();
-  fm_buffer_free(bytes);
+  fm_buffer_destroy(bytes);
   fm_workbook_destroy(wb);
   return out.good();
 }
@@ -259,14 +259,14 @@ bool write_fixture_workbook(const std::string& path, std::string_view extra_text
 // last lane we inspect after reopening.
 bool write_wide_recalc_fixture(const std::string& path) {
   fm_workbook_t* wb = nullptr;
-  if (fm_workbook_create(&wb) != 0) {
+  if (fm_workbook_create_default(&wb) != 0) {
     return false;
   }
   constexpr std::uint32_t kRows = 48U;
   for (std::uint32_t row = 0U; row < kRows; ++row) {
     const std::string formula = "=A" + std::to_string(row + 1U) + "*2+1";
-    if (fm_workbook_set_number(wb, 0U, row, 0U, static_cast<double>(row + 1U)) != 0 ||
-        fm_workbook_set_formula(wb, 0U, row, 1U, formula.c_str()) != 0) {
+    if (fm_sheet_set_number(wb, 0U, row, 0U, static_cast<double>(row + 1U)) != 0 ||
+        fm_sheet_set_formula(wb, 0U, row, 1U, formula.c_str()) != 0) {
       fm_workbook_destroy(wb);
       return false;
     }
@@ -279,13 +279,13 @@ bool write_wide_recalc_fixture(const std::string& path) {
   }
   std::ofstream out(path, std::ios::binary | std::ios::trunc);
   if (!out) {
-    fm_buffer_free(bytes);
+    fm_buffer_destroy(bytes);
     fm_workbook_destroy(wb);
     return false;
   }
   out.write(reinterpret_cast<const char*>(bytes), static_cast<std::streamsize>(len));
   out.close();
-  fm_buffer_free(bytes);
+  fm_buffer_destroy(bytes);
   fm_workbook_destroy(wb);
   return out.good();
 }
@@ -318,21 +318,21 @@ bool write_out_of_range_defined_names_fixture(const std::string& path) {
 
 bool write_lossy_xlsx_fixture(const std::string& path) {
   fm_workbook_t* wb = nullptr;
-  if (fm_workbook_create(&wb) != 0) {
+  if (fm_workbook_create_default(&wb) != 0) {
     return false;
   }
-  if (fm_workbook_set_formula(wb, 0, 0, 0, "=T[C]") != 0) {
+  if (fm_sheet_set_formula(wb, 0, 0, 0, "=T[C]") != 0) {
     fm_workbook_destroy(wb);
     return false;
   }
-  fm_hyperlink hyperlink{};
+  fm_hyperlink_t hyperlink{};
   hyperlink.target = "https://example.com";
   if (fm_sheet_add_hyperlink(wb, 0, hyperlink) != 0) {
     fm_workbook_destroy(wb);
     return false;
   }
   fm_merge_range range{0, 0, 0, 0};
-  fm_data_validation validation{};
+  fm_data_validation_t validation{};
   validation.ranges = &range;
   validation.range_count = 1;
   validation.type = 3;
@@ -350,13 +350,13 @@ bool write_lossy_xlsx_fixture(const std::string& path) {
   }
   std::ofstream out(path, std::ios::binary | std::ios::trunc);
   if (!out) {
-    fm_buffer_free(bytes);
+    fm_buffer_destroy(bytes);
     fm_workbook_destroy(wb);
     return false;
   }
   out.write(reinterpret_cast<const char*>(bytes), static_cast<std::streamsize>(len));
   out.close();
-  fm_buffer_free(bytes);
+  fm_buffer_destroy(bytes);
   fm_workbook_destroy(wb);
   return out.good();
 }
@@ -454,7 +454,7 @@ bool write_lossy_ooxml_fixture(const std::string& path) {
 
 bool write_dropped_xlsb_fixture(const std::string& path) {
   fm_workbook_t* wb = nullptr;
-  if (fm_workbook_create(&wb) != 0)
+  if (fm_workbook_create_default(&wb) != 0)
     return false;
   std::uint8_t* raw = nullptr;
   std::size_t len = 0;
@@ -464,7 +464,7 @@ bool write_dropped_xlsb_fixture(const std::string& path) {
     return false;
   std::vector<std::uint8_t> fixture =
       append_empty_zip_entry(std::vector<std::uint8_t>(raw, raw + len), "xl/dropped.unknown");
-  fm_buffer_free(raw);
+  fm_buffer_destroy(raw);
   if (fixture.empty())
     return false;
   std::ofstream out(path, std::ios::binary | std::ios::trunc);

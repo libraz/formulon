@@ -30,7 +30,7 @@ using formulon::c_api::parts::text_or_empty;
 namespace {
 
 // Copies `count` caller mentions into the model shape.
-fm_status_t mentions_from_fm(const fm_mention* mentions, uint32_t count, const char* api,
+fm_status_t mentions_from_fm(const fm_mention_t* mentions, uint32_t count, const char* api,
                              std::vector<formulon::Mention>* out) {
   if (mentions == nullptr && count != 0U) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
@@ -62,42 +62,43 @@ fm_workbook_t* reset_scratch(const fm_workbook_t* wb) {
 
 }  // namespace
 
-extern "C" fm_status_t fm_sheet_threaded_comment_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
+extern "C" fm_status_t fm_sheet_get_threaded_comment_count(const fm_workbook_t* wb, size_t sheet_index,
+                                                           size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_threaded_comment_count: NULL out_count");
+                             "fm_sheet_get_threaded_comment_count: NULL out_count");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_threaded_comment_count"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_threaded_comment_count"); rc != 0) {
     return rc;
   }
   *out_count = wb->workbook().sheet(sheet_index).threaded_comments().size();
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_threaded_comment_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
-                                                    fm_threaded_comment* out) {
+extern "C" fm_status_t fm_sheet_get_threaded_comment_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
+                                                        fm_threaded_comment_t* out) {
   clear_last_error();
   if (out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_threaded_comment_at: NULL out");
+                             "fm_sheet_get_threaded_comment_at: NULL out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_threaded_comment_at"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_threaded_comment_at"); rc != 0) {
     return rc;
   }
   const auto& list = wb->workbook().sheet(sheet_index).threaded_comments();
-  if (auto rc = check_index(idx, list.size(), "fm_sheet_threaded_comment_at", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, list.size(), "fm_sheet_get_threaded_comment_at", "idx"); rc != 0) {
     return rc;
   }
   const formulon::ThreadedComment& c = list[idx];
   fm_workbook_t* scratch = reset_scratch(wb);
-  std::vector<fm_mention> mentions;
+  std::vector<fm_mention_t> mentions;
   mentions.reserve(c.mentions.size());
   for (const formulon::Mention& m : c.mentions) {
-    mentions.push_back(fm_mention{store_cstr(scratch->read_scratch, m.person_id),
-                                  store_cstr(scratch->read_scratch, m.mention_id), m.start, m.length});
+    mentions.push_back(fm_mention_t{store_cstr(scratch->read_scratch, m.person_id),
+                                    store_cstr(scratch->read_scratch, m.mention_id), m.start, m.length});
   }
-  *out = fm_threaded_comment{};
+  *out = fm_threaded_comment_t{};
   out->id = store_cstr(scratch->read_scratch, c.id);
   out->row = c.row;
   out->col = c.col;
@@ -112,7 +113,7 @@ extern "C" fm_status_t fm_sheet_threaded_comment_at(const fm_workbook_t* wb, siz
 }
 
 extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t sheet_index,
-                                                     const fm_threaded_comment* comment) {
+                                                     const fm_threaded_comment_t* comment) {
   clear_last_error();
   constexpr const char* kApi = "fm_sheet_add_threaded_comment";
   if (comment == nullptr) {
@@ -142,14 +143,14 @@ extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t s
   return finish_status(wb->workbook().add_threaded_comment(sheet_index, std::move(model)));
 }
 
-extern "C" fm_status_t fm_sheet_edit_threaded_comment(fm_workbook_t* wb, size_t sheet_index, const char* id,
-                                                      const char* text, const fm_mention* mentions,
-                                                      uint32_t mention_count) {
+extern "C" fm_status_t fm_sheet_update_threaded_comment(fm_workbook_t* wb, size_t sheet_index, const char* id,
+                                                        const char* text, const fm_mention_t* mentions,
+                                                        uint32_t mention_count) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_edit_threaded_comment";
+  constexpr const char* kApi = "fm_sheet_update_threaded_comment";
   if (id == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_edit_threaded_comment: NULL id");
+                             "fm_sheet_update_threaded_comment: NULL id");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
     return rc;
@@ -195,22 +196,22 @@ extern "C" fm_status_t fm_sheet_remove_threaded_comment(fm_workbook_t* wb, size_
   return finish_status(wb->workbook().remove_threaded_comment(sheet_index, id));
 }
 
-extern "C" fm_status_t fm_workbook_person_count(const fm_workbook_t* wb, size_t* out_count) {
+extern "C" fm_status_t fm_workbook_get_person_count(const fm_workbook_t* wb, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return null_argument("fm_workbook_person_count");
+    return null_argument("fm_workbook_get_person_count");
   }
   *out_count = wb->workbook().persons().size();
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_person_at(const fm_workbook_t* wb, size_t idx, fm_person* out) {
+extern "C" fm_status_t fm_workbook_get_person_at(const fm_workbook_t* wb, size_t idx, fm_person_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return null_argument("fm_workbook_person_at");
+    return null_argument("fm_workbook_get_person_at");
   }
   const auto& persons = wb->workbook().persons();
-  if (auto rc = check_index(idx, persons.size(), "fm_workbook_person_at", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, persons.size(), "fm_workbook_get_person_at", "idx"); rc != 0) {
     return rc;
   }
   const formulon::Person& p = persons[idx];
@@ -222,7 +223,7 @@ extern "C" fm_status_t fm_workbook_person_at(const fm_workbook_t* wb, size_t idx
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_add_person(fm_workbook_t* wb, const fm_person* person) {
+extern "C" fm_status_t fm_workbook_add_person(fm_workbook_t* wb, const fm_person_t* person) {
   clear_last_error();
   if (wb == nullptr || person == nullptr) {
     return null_argument("fm_workbook_add_person");

@@ -62,10 +62,10 @@ extern "C" fm_status_t fm_workbook_recalc(fm_workbook_t* wb) {
 }
 
 extern "C" fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t thread_count,
-                                                   fm_parallel_recalc_stats* out_stats) {
+                                                   fm_parallel_recalc_stats_t* out_stats) {
   clear_last_error();
   if (out_stats != nullptr) {
-    *out_stats = fm_parallel_recalc_stats{};
+    *out_stats = fm_parallel_recalc_stats_t{};
   }
   if (wb == nullptr) {
     return null_argument("fm_workbook_recalc_parallel", "wb");
@@ -148,10 +148,10 @@ extern "C" fm_status_t fm_workbook_get_iterative(const fm_workbook_t* wb, int32_
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_calc_mode(const fm_workbook_t* wb, fm_calc_mode_t* out_mode) {
+extern "C" fm_status_t fm_workbook_get_calc_mode(const fm_workbook_t* wb, fm_calc_mode_t* out_mode) {
   clear_last_error();
   if (wb == nullptr || out_mode == nullptr) {
-    return null_argument("fm_workbook_calc_mode");
+    return null_argument("fm_workbook_get_calc_mode");
   }
   switch (wb->workbook().calc_mode()) {
     case formulon::Workbook::CalcMode::kAuto:
@@ -216,8 +216,8 @@ fm_status_t write_workbook_flag(fm_workbook_t* wb, const char* fn, Write write) 
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_full_precision(const fm_workbook_t* wb, std::int32_t* out) {
-  return read_workbook_flag(wb, out, "fm_workbook_full_precision",
+extern "C" fm_status_t fm_workbook_get_full_precision(const fm_workbook_t* wb, std::int32_t* out) {
+  return read_workbook_flag(wb, out, "fm_workbook_get_full_precision",
                             [](const formulon::Workbook& w) { return w.calc_options().full_precision; });
 }
 
@@ -227,8 +227,8 @@ extern "C" fm_status_t fm_workbook_set_full_precision(fm_workbook_t* wb, std::in
   });
 }
 
-extern "C" fm_status_t fm_workbook_calc_on_save(const fm_workbook_t* wb, std::int32_t* out) {
-  return read_workbook_flag(wb, out, "fm_workbook_calc_on_save",
+extern "C" fm_status_t fm_workbook_get_calc_on_save(const fm_workbook_t* wb, std::int32_t* out) {
+  return read_workbook_flag(wb, out, "fm_workbook_get_calc_on_save",
                             [](const formulon::Workbook& w) { return w.calc_options().calc_on_save; });
 }
 
@@ -238,10 +238,10 @@ extern "C" fm_status_t fm_workbook_set_calc_on_save(fm_workbook_t* wb, std::int3
   });
 }
 
-extern "C" fm_status_t fm_workbook_ref_mode(const fm_workbook_t* wb, fm_ref_mode_t* out) {
+extern "C" fm_status_t fm_workbook_get_ref_mode(const fm_workbook_t* wb, fm_ref_mode_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return null_argument("fm_workbook_ref_mode");
+    return null_argument("fm_workbook_get_ref_mode");
   }
   *out = wb->workbook().calc_options().ref_mode == formulon::RefMode::kR1C1 ? FM_REF_MODE_R1C1 : FM_REF_MODE_A1;
   return 0;
@@ -260,8 +260,9 @@ extern "C" fm_status_t fm_workbook_set_ref_mode(fm_workbook_t* wb, std::int32_t 
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_date1904(const fm_workbook_t* wb, std::int32_t* out) {
-  return read_workbook_flag(wb, out, "fm_workbook_date1904", [](const formulon::Workbook& w) { return w.date1904(); });
+extern "C" fm_status_t fm_workbook_get_date1904(const fm_workbook_t* wb, std::int32_t* out) {
+  return read_workbook_flag(wb, out, "fm_workbook_get_date1904",
+                            [](const formulon::Workbook& w) { return w.date1904(); });
 }
 
 extern "C" fm_status_t fm_workbook_set_date1904(fm_workbook_t* wb, std::int32_t date1904) {
@@ -269,11 +270,11 @@ extern "C" fm_status_t fm_workbook_set_date1904(fm_workbook_t* wb, std::int32_t 
                              [date1904](formulon::Workbook& w) { w.set_date1904(date1904 != 0); });
 }
 
-extern "C" fm_status_t fm_workbook_pinned_now(const fm_workbook_t* wb, fm_civil_time_t* out_now,
-                                              std::int32_t* out_pinned) {
+extern "C" fm_status_t fm_workbook_get_pinned_now(const fm_workbook_t* wb, fm_civil_time_t* out_now,
+                                                  std::int32_t* out_pinned) {
   clear_last_error();
   if (wb == nullptr || out_now == nullptr || out_pinned == nullptr) {
-    return null_argument("fm_workbook_pinned_now");
+    return null_argument("fm_workbook_get_pinned_now");
   }
   *out_now = fm_civil_time_t{};
   const auto& pinned = wb->workbook().pinned_now();
@@ -322,10 +323,10 @@ extern "C" fm_status_t fm_workbook_clear_pinned_now(fm_workbook_t* wb) {
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_excel_profile_id(const fm_workbook_t* wb, const char** out_profile_id) {
+extern "C" fm_status_t fm_workbook_get_excel_profile_id(const fm_workbook_t* wb, const char** out_profile_id) {
   clear_last_error();
   if (wb == nullptr || out_profile_id == nullptr) {
-    return null_argument("fm_workbook_excel_profile_id");
+    return null_argument("fm_workbook_get_excel_profile_id");
   }
   *out_profile_id = formulon::excel_profile_id(wb->workbook().excel_profile());
   return 0;
@@ -353,10 +354,10 @@ extern "C" fm_status_t fm_workbook_set_excel_profile_id(fm_workbook_t* wb, const
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_file_name(const fm_workbook_t* wb, const char** out_name) {
+extern "C" fm_status_t fm_workbook_get_file_name(const fm_workbook_t* wb, const char** out_name) {
   clear_last_error();
   if (wb == nullptr || out_name == nullptr) {
-    return null_argument("fm_workbook_file_name");
+    return null_argument("fm_workbook_get_file_name");
   }
   *out_name = publish_scratch(wb, wb->workbook().file_name());
   return 0;
@@ -379,20 +380,20 @@ extern "C" fm_status_t fm_workbook_set_file_name(fm_workbook_t* wb, const char* 
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_partial_recalc(fm_workbook_t* wb, const fm_viewport* viewport,
-                                                  uint32_t* out_recomputed_count) {
+extern "C" fm_status_t fm_sheet_recalc_viewport(fm_workbook_t* wb, const fm_viewport* viewport,
+                                                uint32_t* out_recomputed_count) {
   clear_last_error();
   if (wb == nullptr || viewport == nullptr) {
-    return null_argument("fm_workbook_partial_recalc");
+    return null_argument("fm_sheet_recalc_viewport");
   }
   // A sheet index past the end reaches the engine as a closure that
   // matches nothing, so the call would report a successful no-op recalc
   // and the caller would keep rendering stale values. Every other entry
   // point that takes a sheet rejects the same input.
-  if (auto rc = check_sheet_index(wb, viewport->sheet, "fm_workbook_partial_recalc"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, viewport->sheet, "fm_sheet_recalc_viewport"); rc != 0) {
     return rc;
   }
-  if (auto rc = validate(*viewport, "fm_workbook_partial_recalc"); rc != 0) {
+  if (auto rc = validate(*viewport, "fm_sheet_recalc_viewport"); rc != 0) {
     return rc;
   }
   formulon::eval::SheetCellRange range;

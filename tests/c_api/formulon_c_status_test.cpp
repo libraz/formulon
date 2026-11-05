@@ -1,6 +1,6 @@
 //
 // Status codes of the C ABI: the generated `FM_STATUS_*` defines, the names
-// `fm_status_string` returns, and their agreement with the engine's own
+// `fm_get_status_name` returns, and their agreement with the engine's own
 // error enum.
 
 #include <cctype>
@@ -42,15 +42,15 @@ TEST(FormulonCStatus, DefinesCarryTheEngineValues) {
 }
 
 TEST(FormulonCStatus, StatusStringIsOkForZero) {
-  EXPECT_STREQ(fm_status_string(0), "OK");
-  EXPECT_STREQ(fm_status_string(FM_STATUS_SHEET_INDEX_OUT_OF_RANGE), "SHEET_INDEX_OUT_OF_RANGE");
-  EXPECT_STREQ(fm_status_string(FM_STATUS_PARSER_INVALID_R1C1), "PARSER_INVALID_R1C1");
+  EXPECT_STREQ(fm_get_status_name(0), "OK");
+  EXPECT_STREQ(fm_get_status_name(FM_STATUS_SHEET_INDEX_OUT_OF_RANGE), "SHEET_INDEX_OUT_OF_RANGE");
+  EXPECT_STREQ(fm_get_status_name(FM_STATUS_PARSER_INVALID_R1C1), "PARSER_INVALID_R1C1");
 }
 
 TEST(FormulonCStatus, UnknownValuesAreUnrecognizedNotUnknownError) {
-  EXPECT_STREQ(fm_status_string(FM_STATUS_UNKNOWN_ERROR), "UNKNOWN_ERROR");
+  EXPECT_STREQ(fm_get_status_name(FM_STATUS_UNKNOWN_ERROR), "UNKNOWN_ERROR");
   for (const fm_status_t value : {-1, 10, 999, 1015, 5051 + 100, 10000, 123456, INT32_MIN, INT32_MAX}) {
-    EXPECT_STREQ(fm_status_string(value), "UNRECOGNIZED_STATUS") << value;
+    EXPECT_STREQ(fm_get_status_name(value), "UNRECOGNIZED_STATUS") << value;
   }
 }
 
@@ -58,7 +58,7 @@ TEST(FormulonCStatus, EveryEngineCodeIsNamedAndNothingElseIs) {
   int named = 0;
   for (fm_status_t value = 0; value < 10000; ++value) {
     const char* engine_name = formulon::to_cstring(static_cast<formulon::FormulonErrorCode>(value));
-    const std::string c_name = fm_status_string(value);
+    const std::string c_name = fm_get_status_name(value);
     if (c_name == "UNRECOGNIZED_STATUS") {
       EXPECT_STREQ(engine_name, "kUnknownError") << value;
     } else {

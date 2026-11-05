@@ -97,7 +97,7 @@ def _load_manifest(path: Path) -> Tuple[int, List[dict]]:
 
 
 # Matches a declared C-ABI entry point in the hand-written header, e.g.
-# `FM_API fm_status_t fm_workbook_cell_count(...)`. We only need the
+# `FM_API fm_status_t fm_sheet_get_cell_count(...)`. We only need the
 # function-name token, so the pattern is intentionally permissive about the
 # return type and ignores the argument list.
 _C_HEADER_DECL_RE = re.compile(r"\bFM_API\b[^;{]*?\b(fm_[A-Za-z0-9_]+)\s*\(")

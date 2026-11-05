@@ -51,7 +51,7 @@ void emit_ooxml_read_diagnostics(std::ostream& err, std::string_view subcommand,
 
 fm_status_t emit_read_diagnostics(const fm_workbook_t* wb, std::ostream& err, std::string_view subcommand) {
   fm_read_diagnostics_t diagnostics{};
-  if (auto rc = fm_workbook_read_diagnostics(wb, &diagnostics); rc != 0) {
+  if (auto rc = fm_workbook_get_diagnostics(wb, &diagnostics); rc != 0) {
     return rc;
   }
   emit_xlsb_read_diagnostics(err, subcommand, diagnostics);
@@ -82,8 +82,8 @@ void emit_write_diagnostics(std::ostream& err, std::string_view subcommand, fm_w
 }
 
 void emit_last_error(std::ostream& err, std::string_view subcommand) {
-  err << "formulon: " << subcommand << ": " << fm_last_error_message();
-  const char* ctx = fm_last_error_context();
+  err << "formulon: " << subcommand << ": " << fm_get_last_error_message();
+  const char* ctx = fm_get_last_error_context();
   if (ctx != nullptr && ctx[0] != '\0') {
     err << " (" << ctx << ')';
   }

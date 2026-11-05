@@ -44,9 +44,9 @@ class DrawingImageTests(unittest.TestCase):
     def test_probe_image(self) -> None:
         wb = Workbook.create_default()
         try:
-            self.assertEqual(wb.probe_image(_png(3, 2)), ImageInfo(ImageFormat.PNG, 3, 2))
+            self.assertEqual(wb.get_image_info(_png(3, 2)), ImageInfo(ImageFormat.PNG, 3, 2))
             with self.assertRaises(FormulonError):
-                wb.probe_image(b"not an image")
+                wb.get_image_info(b"not an image")
         finally:
             wb.close()
 
@@ -55,7 +55,7 @@ class DrawingImageTests(unittest.TestCase):
         wb = Workbook.create_default()
         try:
             self.assertEqual(wb.list_drawing_objects(0), [])
-            oid = wb.insert_image(0, png, name="logo", descr="a logo", row=2, col=1, row_off_emu=100)
+            oid = wb.add_image(0, png, name="logo", descr="a logo", row=2, col=1, row_off_emu=100)
             objs = wb.list_drawing_objects(0)
             self.assertEqual(len(objs), 1)
             obj = objs[0]
@@ -88,7 +88,7 @@ class DrawingImageTests(unittest.TestCase):
     def test_two_cell_anchor_and_explicit_size(self) -> None:
         wb = Workbook.create_default()
         try:
-            wb.insert_image(
+            wb.add_image(
                 0,
                 _png(2, 2),
                 anchor_kind=AnchorKind.TWO_CELL,
@@ -106,7 +106,7 @@ class DrawingImageTests(unittest.TestCase):
         wb = Workbook.create_default()
         try:
             with self.assertRaises(FormulonError):
-                wb.insert_image(0, b"junk")
+                wb.add_image(0, b"junk")
             with self.assertRaises(FormulonError):
                 wb.get_image(0, 12345)
         finally:
@@ -114,7 +114,7 @@ class DrawingImageTests(unittest.TestCase):
 
     def test_set_drawing_anchor_moves_and_resizes(self) -> None:
         with Workbook.create_default() as wb:
-            oid = wb.insert_image(0, _png(4, 3), name="logo", row=1, col=1)
+            oid = wb.add_image(0, _png(4, 3), name="logo", row=1, col=1)
             wb.set_drawing_anchor(
                 0,
                 oid,
@@ -139,7 +139,7 @@ class DrawingImageTests(unittest.TestCase):
     def test_set_drawing_name_renames_the_object(self) -> None:
         wb = Workbook.create_default()
         try:
-            oid = wb.insert_image(0, _png(2, 2), name="logo")
+            oid = wb.add_image(0, _png(2, 2), name="logo")
             wb.set_drawing_name(0, oid, "renamed")
             self.assertEqual(wb.list_drawing_objects(0)[0].name, "renamed")
             with self.assertRaises(FormulonError):
@@ -151,9 +151,9 @@ class DrawingImageTests(unittest.TestCase):
 
     def test_set_drawing_z_order_reorders_the_list(self) -> None:
         with Workbook.create_default() as wb:
-            a = wb.insert_image(0, _png(2, 2), row=0)
-            b = wb.insert_image(0, _png(2, 2), row=3)
-            c = wb.insert_image(0, _png(2, 2), row=6)
+            a = wb.add_image(0, _png(2, 2), row=0)
+            b = wb.add_image(0, _png(2, 2), row=3)
+            c = wb.add_image(0, _png(2, 2), row=6)
             self.assertEqual([o.object_id for o in wb.list_drawing_objects(0)], [a, b, c])
             wb.set_drawing_z_order(0, c, 0)
             self.assertEqual([o.object_id for o in wb.list_drawing_objects(0)], [c, a, b])
@@ -165,8 +165,8 @@ class DrawingImageTests(unittest.TestCase):
     def test_snapshot_and_restore_drawing(self) -> None:
         png = _png(4, 3)
         with Workbook.create_default() as wb:
-            a = wb.insert_image(0, png, name="A", row=1)
-            b = wb.insert_image(0, _png(2, 2), name="B", row=4)
+            a = wb.add_image(0, png, name="A", row=1)
+            b = wb.add_image(0, _png(2, 2), name="B", row=4)
             snap = wb.snapshot_drawing(0, a)
             self.assertIsInstance(snap, bytes)
             self.assertGreater(len(snap), 0)

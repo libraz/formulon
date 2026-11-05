@@ -89,7 +89,7 @@ class _RecordingWorkbook:
     def add_sheet(self, name):
         self.order.append(name)
 
-    def sheet_name(self, index):
+    def get_sheet_name(self, index):
         return self.default_name
 
     def set_blank(self, *args):
@@ -200,8 +200,8 @@ class AuthoringTest(unittest.TestCase):
         data = rt.author_case(_case({"sheet": "Sheet1", "row_breaks": [21], "col_breaks": ["D"]}), module=_formulon)
         reloaded = _formulon.Workbook.load(data)
         try:
-            rows = reloaded.get_row_breaks(0)
-            cols = reloaded.get_col_breaks(0)
+            rows = reloaded.list_row_breaks(0)
+            cols = reloaded.list_col_breaks(0)
         finally:
             reloaded.close()
         # A case states 1-based rows, matching the rest of the schema; the

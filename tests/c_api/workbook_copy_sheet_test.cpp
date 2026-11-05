@@ -25,19 +25,19 @@ constexpr std::uint32_t kSentinel = 0xDEADBEEFU;
 
 std::string SheetName(const fm_workbook_t* wb, std::size_t index) {
   const char* name = nullptr;
-  EXPECT_EQ(fm_workbook_sheet_name(wb, index, &name), 0);
+  EXPECT_EQ(fm_workbook_get_sheet_name(wb, index, &name), 0);
   return name == nullptr ? std::string() : std::string(name);
 }
 
 std::size_t SheetCount(const fm_workbook_t* wb) {
-  return fm_workbook_sheet_count(wb);
+  return fm_workbook_get_sheet_count(wb);
 }
 
 /// Sheet1 holding A1 = 5 and B1 = A1 * 2.
 void MakeSingleSheet(WorkbookGuard& wb) {
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 5.0), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 1, "=A1*2"), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 5.0), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, "=A1*2"), 0);
 }
 
 /// Copies sheet 0 before `insert_before` and expects `status`, leaving the
@@ -46,7 +46,7 @@ void ExpectCopyStatus(fm_workbook_t* wb, std::uint32_t source, std::uint32_t ins
                       fm_status_t status) {
   const std::size_t before = SheetCount(wb);
   std::uint32_t out = kSentinel;
-  EXPECT_EQ(fm_workbook_copy_sheet(wb, source, insert_before, name, &out), status) << fm_last_error_message();
+  EXPECT_EQ(fm_workbook_copy_sheet(wb, source, insert_before, name, &out), status) << fm_get_last_error_message();
   if (status != 0) {
     EXPECT_EQ(SheetCount(wb), before);
     EXPECT_EQ(out, kSentinel);
@@ -59,14 +59,14 @@ TEST(CApiCopySheet, SingleSheetAutomaticName) {
   WorkbookGuard wb;
   MakeSingleSheet(wb);
   std::uint32_t out = kSentinel;
-  ASSERT_EQ(fm_workbook_copy_sheet(wb.handle, 0, 1, nullptr, &out), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_copy_sheet(wb.handle, 0, 1, nullptr, &out), 0) << fm_get_last_error_message();
   EXPECT_EQ(out, 1U);
   ASSERT_EQ(SheetCount(wb.handle), 2U);
   EXPECT_EQ(SheetName(wb.handle, 1), "Sheet1 (2)");
 
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   fm_value_t value{};
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 1, 0, 1, &value), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 1, 0, 1, &value), 0);
   EXPECT_EQ(value.kind, FM_VAL_NUMBER);
   EXPECT_EQ(value.u.number, 10.0);
 }
@@ -75,7 +75,7 @@ TEST(CApiCopySheet, ExplicitNameAndInsertBeforeFirst) {
   WorkbookGuard wb;
   MakeSingleSheet(wb);
   std::uint32_t out = kSentinel;
-  ASSERT_EQ(fm_workbook_copy_sheet(wb.handle, 0, 0, "Archive", &out), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_copy_sheet(wb.handle, 0, 0, "Archive", &out), 0) << fm_get_last_error_message();
   EXPECT_EQ(out, 0U);
   EXPECT_EQ(SheetName(wb.handle, 0), "Archive");
   EXPECT_EQ(SheetName(wb.handle, 1), "Sheet1");
@@ -86,7 +86,7 @@ TEST(CApiCopySheet, AppendAtSheetCountAfterReindex) {
   MakeSingleSheet(wb);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other"), 0);
   std::uint32_t out = kSentinel;
-  ASSERT_EQ(fm_workbook_copy_sheet(wb.handle, 0, 2, "Tail", &out), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_copy_sheet(wb.handle, 0, 2, "Tail", &out), 0) << fm_get_last_error_message();
   EXPECT_EQ(out, 2U);
   ASSERT_EQ(SheetCount(wb.handle), 3U);
   EXPECT_EQ(SheetName(wb.handle, 1), "Other");
@@ -146,7 +146,7 @@ TEST(CApiCopySheet, NullArguments) {
 
 TEST(CApiCopySheet, SheetCountLimit) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   formulon::Workbook& model = wb.handle->workbook();
   std::string name;
   while (model.sheet_count() < formulon::Workbook::kMaxSheets) {
@@ -161,29 +161,28 @@ TEST(CApiCopySheet, VeryHiddenSourceRefused) {
   WorkbookGuard wb;
   MakeSingleSheet(wb);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible"), 0);
-  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VERY_HIDDEN), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VERY_HIDDEN), 0) << fm_get_last_error_message();
   ExpectCopyStatus(wb.handle, 0, 2, nullptr, Code(FormulonErrorCode::kPreconditionFailed));
 }
 
 TEST(CApiCopySheet, SlicerSourceRefusedWithoutChange) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "Product"), 0);
-  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 1, "Amount"), 0);
-  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 1, 0, "Widget"), 0);
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 1, 1, 10.0), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "Product"), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 1, "Amount"), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 1, 0, "Widget"), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 1, 1, 10.0), 0);
   const char* columns[] = {"Product", "Amount"};
   std::size_t table = 99U;
   ASSERT_EQ(
-      fm_workbook_table_create(wb.handle, 0, "A1:B2", "Sales", "Sales", columns, 2, "TableStyleMedium2", 1, 0, &table),
-      0);
-  fm_slicer spec{};
+      fm_workbook_add_table(wb.handle, 0, "A1:B2", "Sales", "Sales", columns, 2, "TableStyleMedium2", 1, 0, &table), 0);
+  fm_slicer_t spec{};
   spec.fields = FM_SLICER_FIELD_ANCHOR;
   spec.from_row = 4;
   spec.from_col = 3;
   spec.to_row = 14;
   spec.to_col = 5;
   std::uint32_t id = 0;
-  ASSERT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, &spec, &id), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, &spec, &id), 0) << fm_get_last_error_message();
   ExpectCopyStatus(wb.handle, 0, 1, nullptr, Code(FormulonErrorCode::kNotImplemented));
 }

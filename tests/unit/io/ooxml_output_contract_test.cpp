@@ -333,7 +333,7 @@ struct WorkbookHandle {
 
 TEST(OoxmlPageMargins, PartialPatchStillWritesEveryRequiredAttribute) {
   WorkbookHandle wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   // Engage two of the six. ECMA-376 makes all six required, so the other
   // four have to be filled from the schema defaults rather than omitted.
@@ -349,7 +349,7 @@ TEST(OoxmlPageMargins, PartialPatchStillWritesEveryRequiredAttribute) {
   ASSERT_EQ(fm_workbook_save(wb.handle, &bytes, &len), 0);
   ASSERT_NE(bytes, nullptr);
   const std::vector<std::uint8_t> package(bytes, bytes + len);
-  fm_buffer_free(bytes);
+  fm_buffer_destroy(bytes);
 
   std::string sheet_xml;
   ASSERT_TRUE(test::extract_part(test::span_of(package), "xl/worksheets/sheet1.xml", &sheet_xml));

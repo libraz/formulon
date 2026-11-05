@@ -9,41 +9,41 @@ namespace {
 
 fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::size_t* out_pivot_index) {
   std::uint32_t cache_id = 0;
-  fm_status_t st = fm_workbook_pivot_cache_create(wb, 0, &cache_id);
+  fm_status_t st = fm_workbook_add_pivot_cache(wb, 0, &cache_id);
   if (st != 0) {
     return st;
   }
-  st = fm_workbook_pivot_cache_set_worksheet_source(wb, cache_id, /*present=*/1, "A1:B71", "Sheet1", nullptr);
+  st = fm_workbook_set_pivot_cache_worksheet_source(wb, cache_id, /*present=*/1, "A1:B71", "Sheet1", nullptr);
   if (st != 0) {
     return st;
   }
   std::size_t date_idx = 99;
-  st = fm_workbook_pivot_cache_field_add(wb, cache_id, "Date", &date_idx);
+  st = fm_workbook_add_pivot_cache_field(wb, cache_id, "Date", &date_idx);
   if (st != 0) {
     return st;
   }
   std::size_t amount_idx = 99;
-  st = fm_workbook_pivot_cache_field_add(wb, cache_id, "Amount", &amount_idx);
+  st = fm_workbook_add_pivot_cache_field(wb, cache_id, "Amount", &amount_idx);
   if (st != 0) {
     return st;
   }
   for (double serial = 0.0; serial <= 70.0; serial += 1.0) {
     std::size_t rec_idx = 99;
-    st = fm_workbook_pivot_cache_record_add(wb, cache_id, &rec_idx);
+    st = fm_workbook_add_pivot_cache_record(wb, cache_id, &rec_idx);
     if (st != 0) {
       return st;
     }
-    st = fm_workbook_pivot_cache_record_set_number(wb, cache_id, rec_idx, date_idx, serial);
+    st = fm_workbook_set_pivot_cache_record_number(wb, cache_id, rec_idx, date_idx, serial);
     if (st != 0) {
       return st;
     }
-    st = fm_workbook_pivot_cache_record_set_number(wb, cache_id, rec_idx, amount_idx, 1.0);
+    st = fm_workbook_set_pivot_cache_record_number(wb, cache_id, rec_idx, amount_idx, 1.0);
     if (st != 0) {
       return st;
     }
   }
   std::size_t pivot_idx = 99;
-  st = fm_workbook_pivot_create(wb, 0, "PT", cache_id, /*anchor_row=*/0U, /*anchor_col=*/3U, &pivot_idx);
+  st = fm_sheet_add_pivot(wb, 0, "PT", cache_id, /*anchor_row=*/0U, /*anchor_col=*/3U, &pivot_idx);
   if (st != 0) {
     return st;
   }
@@ -54,7 +54,7 @@ fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::s
   date_spec.subtotal_top = 0;
   date_spec.number_format = "";
   std::size_t date_field = 99;
-  st = fm_workbook_pivot_field_add(wb, 0, pivot_idx, &date_spec, &date_field);
+  st = fm_sheet_add_pivot_field(wb, 0, pivot_idx, &date_spec, &date_field);
   if (st != 0) {
     return st;
   }
@@ -65,12 +65,12 @@ fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::s
   amount_spec.subtotal_top = 0;
   amount_spec.number_format = "";
   std::size_t amount_field = 99;
-  st = fm_workbook_pivot_field_add(wb, 0, pivot_idx, &amount_spec, &amount_field);
+  st = fm_sheet_add_pivot_field(wb, 0, pivot_idx, &amount_spec, &amount_field);
   if (st != 0) {
     return st;
   }
   const std::uint32_t row_order[] = {static_cast<std::uint32_t>(date_field)};
-  st = fm_workbook_pivot_set_row_field_order(wb, 0, pivot_idx, row_order, 1U);
+  st = fm_sheet_set_pivot_row_field_order(wb, 0, pivot_idx, row_order, 1U);
   if (st != 0) {
     return st;
   }
@@ -79,18 +79,18 @@ fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::s
   df_spec.field_index = static_cast<std::uint32_t>(amount_field);
   df_spec.aggregation = FM_PIVOT_AGG_SUM;
   df_spec.number_format = "";
-  df_spec.show_as = FM_PIVOT_SHOW_AS_NORMAL;
+  df_spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
   df_spec.show_as_base_field = -1;
   df_spec.show_as_base_item = -1;
   std::size_t df_idx = 99;
-  st = fm_workbook_pivot_data_field_add(wb, 0, pivot_idx, &df_spec, &df_idx);
+  st = fm_sheet_add_pivot_data_field(wb, 0, pivot_idx, &df_spec, &df_idx);
   if (st != 0) {
     return st;
   }
   // Grouped last: the group field is appended after every source field.
-  st = fm_workbook_pivot_field_set_date_group(wb, 0, pivot_idx, date_field, FM_PIVOT_PERIOD_DAYS,
-                                              FM_PIVOT_CALENDAR_GREGORIAN, /*interval_days=*/7, start_serial,
-                                              /*end_or_nan=*/std::numeric_limits<double>::quiet_NaN());
+  st = fm_sheet_set_pivot_field_date_group(wb, 0, pivot_idx, date_field, FM_PIVOT_PERIOD_DAYS,
+                                           FM_PIVOT_CALENDAR_GREGORIAN, /*interval_days=*/7, start_serial,
+                                           /*end_or_nan=*/std::numeric_limits<double>::quiet_NaN());
   if (st != 0) {
     return st;
   }
@@ -125,46 +125,46 @@ std::vector<std::pair<std::string, double>> CollectDaysGroupRows(fm_pivot_cells_
 // 0, which is what a name-addressed item silently binds to.
 fm_status_t BuildBlankItemPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, std::size_t* out_pivot_index) {
   std::uint32_t cache_id = 0;
-  if (fm_status_t st = fm_workbook_pivot_cache_create(wb, 0U, &cache_id); st != 0) {
+  if (fm_status_t st = fm_workbook_add_pivot_cache(wb, 0U, &cache_id); st != 0) {
     return st;
   }
   std::size_t region_idx = 99;
   std::size_t amount_idx = 99;
-  if (fm_status_t st = fm_workbook_pivot_cache_field_add(wb, cache_id, "Region", &region_idx); st != 0) {
+  if (fm_status_t st = fm_workbook_add_pivot_cache_field(wb, cache_id, "Region", &region_idx); st != 0) {
     return st;
   }
-  if (fm_status_t st = fm_workbook_pivot_cache_field_add(wb, cache_id, "Amount", &amount_idx); st != 0) {
+  if (fm_status_t st = fm_workbook_add_pivot_cache_field(wb, cache_id, "Amount", &amount_idx); st != 0) {
     return st;
   }
-  if (fm_status_t st = fm_workbook_pivot_cache_field_add_shared_item_text(wb, cache_id, region_idx, "North"); st != 0) {
+  if (fm_status_t st = fm_workbook_add_pivot_cache_field_shared_item_text(wb, cache_id, region_idx, "North"); st != 0) {
     return st;
   }
-  if (fm_status_t st = fm_workbook_pivot_cache_field_add_shared_item_blank(wb, cache_id, region_idx); st != 0) {
+  if (fm_status_t st = fm_workbook_add_pivot_cache_field_shared_item_blank(wb, cache_id, region_idx); st != 0) {
     return st;
   }
 
   std::size_t rec_idx = 99;
-  if (fm_status_t st = fm_workbook_pivot_cache_record_add(wb, cache_id, &rec_idx); st != 0) {
+  if (fm_status_t st = fm_workbook_add_pivot_cache_record(wb, cache_id, &rec_idx); st != 0) {
     return st;
   }
-  if (fm_status_t st = fm_workbook_pivot_cache_record_set_number(wb, cache_id, rec_idx, region_idx, 0.0); st != 0) {
+  if (fm_status_t st = fm_workbook_set_pivot_cache_record_number(wb, cache_id, rec_idx, region_idx, 0.0); st != 0) {
     return st;
   }
-  if (fm_status_t st = fm_workbook_pivot_cache_record_set_number(wb, cache_id, rec_idx, amount_idx, 100.0); st != 0) {
+  if (fm_status_t st = fm_workbook_set_pivot_cache_record_number(wb, cache_id, rec_idx, amount_idx, 100.0); st != 0) {
     return st;
   }
-  if (fm_status_t st = fm_workbook_pivot_cache_record_add(wb, cache_id, &rec_idx); st != 0) {
+  if (fm_status_t st = fm_workbook_add_pivot_cache_record(wb, cache_id, &rec_idx); st != 0) {
     return st;
   }
-  if (fm_status_t st = fm_workbook_pivot_cache_record_set_blank(wb, cache_id, rec_idx, region_idx); st != 0) {
+  if (fm_status_t st = fm_workbook_set_pivot_cache_record_blank(wb, cache_id, rec_idx, region_idx); st != 0) {
     return st;
   }
-  if (fm_status_t st = fm_workbook_pivot_cache_record_set_number(wb, cache_id, rec_idx, amount_idx, 200.0); st != 0) {
+  if (fm_status_t st = fm_workbook_set_pivot_cache_record_number(wb, cache_id, rec_idx, amount_idx, 200.0); st != 0) {
     return st;
   }
 
   std::size_t pivot_idx = 99;
-  if (fm_status_t st = fm_workbook_pivot_create(wb, 0, "PT", cache_id, 0U, 0U, &pivot_idx); st != 0) {
+  if (fm_status_t st = fm_sheet_add_pivot(wb, 0, "PT", cache_id, 0U, 0U, &pivot_idx); st != 0) {
     return st;
   }
   fm_pivot_field_spec_t region_spec{};
@@ -174,7 +174,7 @@ fm_status_t BuildBlankItemPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, 
   region_spec.subtotal_top = 0;
   region_spec.number_format = "";
   std::size_t region_field = 99;
-  if (fm_status_t st = fm_workbook_pivot_field_add(wb, 0, pivot_idx, &region_spec, &region_field); st != 0) {
+  if (fm_status_t st = fm_sheet_add_pivot_field(wb, 0, pivot_idx, &region_spec, &region_field); st != 0) {
     return st;
   }
   fm_pivot_field_spec_t amount_spec{};
@@ -184,11 +184,11 @@ fm_status_t BuildBlankItemPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, 
   amount_spec.subtotal_top = 0;
   amount_spec.number_format = "";
   std::size_t amount_field = 99;
-  if (fm_status_t st = fm_workbook_pivot_field_add(wb, 0, pivot_idx, &amount_spec, &amount_field); st != 0) {
+  if (fm_status_t st = fm_sheet_add_pivot_field(wb, 0, pivot_idx, &amount_spec, &amount_field); st != 0) {
     return st;
   }
   const std::uint32_t row_order[] = {static_cast<std::uint32_t>(region_field)};
-  if (fm_status_t st = fm_workbook_pivot_set_row_field_order(wb, 0, pivot_idx, row_order, 1U); st != 0) {
+  if (fm_status_t st = fm_sheet_set_pivot_row_field_order(wb, 0, pivot_idx, row_order, 1U); st != 0) {
     return st;
   }
   fm_pivot_data_field_spec_t df_spec{};
@@ -196,11 +196,11 @@ fm_status_t BuildBlankItemPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, 
   df_spec.field_index = static_cast<std::uint32_t>(amount_field);
   df_spec.aggregation = FM_PIVOT_AGG_SUM;
   df_spec.number_format = "";
-  df_spec.show_as = FM_PIVOT_SHOW_AS_NORMAL;
+  df_spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
   df_spec.show_as_base_field = -1;
   df_spec.show_as_base_item = -1;
   std::size_t df_idx = 99;
-  if (fm_status_t st = fm_workbook_pivot_data_field_add(wb, 0, pivot_idx, &df_spec, &df_idx); st != 0) {
+  if (fm_status_t st = fm_sheet_add_pivot_data_field(wb, 0, pivot_idx, &df_spec, &df_idx); st != 0) {
     return st;
   }
   if (out_cache_id != nullptr) {
@@ -215,10 +215,10 @@ fm_status_t BuildBlankItemPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, 
 // Sum of every `FM_PIVOT_CELL_DATA` cell in the projected layout.
 double SumDataCells(fm_pivot_cells_t* handle) {
   double total = 0.0;
-  const std::size_t n = fm_pivot_cells_count(handle);
+  const std::size_t n = fm_pivot_cells_get_cell_count(handle);
   for (std::size_t i = 0; i < n; ++i) {
     fm_pivot_cell_t cell{};
-    EXPECT_EQ(fm_pivot_cells_at(handle, i, &cell), 0);
+    EXPECT_EQ(fm_pivot_cells_get_cell_at(handle, i, &cell), 0);
     if (cell.kind == FM_PIVOT_CELL_DATA && cell.value.kind == FM_VAL_NUMBER) {
       total += cell.value.u.number;
     }
@@ -274,15 +274,15 @@ TEST(FormulonCApiPivot, DaysGroupMatchesPivotWeek1900FixtureThroughTheAbi) {
 
   for (const auto& variant : variants) {
     WorkbookGuard wb;
-    ASSERT_EQ(fm_workbook_create(&wb.handle), 0) << variant.name;
+    ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0) << variant.name;
     ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
     std::size_t pivot_idx = 0;
     ASSERT_EQ(BuildDaysGroupedPivot(wb.handle, variant.start_serial, &pivot_idx), 0)
-        << variant.name << ": " << fm_last_error_message();
+        << variant.name << ": " << fm_get_last_error_message();
 
     PivotCellsGuard projected;
-    ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0)
-        << variant.name << ": " << fm_last_error_message();
+    ASSERT_EQ(fm_sheet_get_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0)
+        << variant.name << ": " << fm_get_last_error_message();
 
     const std::vector<std::pair<std::string, double>> rows = CollectDaysGroupRows(projected.handle);
     ASSERT_EQ(rows.size(), variant.expected->size()) << variant.name;
@@ -295,137 +295,137 @@ TEST(FormulonCApiPivot, DaysGroupMatchesPivotWeek1900FixtureThroughTheAbi) {
 
 TEST(FormulonCApiPivot, DateGroupRegroupsByPeriodsAndClearsThroughAGroupField) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
   std::size_t pivot_idx = 0;
   ASSERT_EQ(BuildDaysGroupedPivot(wb.handle, std::numeric_limits<double>::quiet_NaN(), &pivot_idx), 0)
-      << fm_last_error_message();
+      << fm_get_last_error_message();
   const double kAuto = std::numeric_limits<double>::quiet_NaN();
 
   // Regrouping through the days group field (2) replaces it on the base.
   ASSERT_EQ(
-      fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, 2, FM_PIVOT_PERIOD_MONTHS | FM_PIVOT_PERIOD_YEARS,
-                                             FM_PIVOT_CALENDAR_GREGORIAN, 1, kAuto, kAuto),
+      fm_sheet_set_pivot_field_date_group(wb.handle, 0, pivot_idx, 2, FM_PIVOT_PERIOD_MONTHS | FM_PIVOT_PERIOD_YEARS,
+                                          FM_PIVOT_CALENDAR_GREGORIAN, 1, kAuto, kAuto),
       0)
-      << fm_last_error_message();
+      << fm_get_last_error_message();
   std::size_t field_count = 0;
-  ASSERT_EQ(fm_workbook_pivot_field_count(wb.handle, 0, pivot_idx, &field_count), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field_count(wb.handle, 0, pivot_idx, &field_count), 0);
   EXPECT_EQ(field_count, 4U);
   fm_pivot_field_info_t date{};
-  ASSERT_EQ(fm_workbook_pivot_field_at(wb.handle, 0, pivot_idx, 0, &date), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_idx, 0, &date), 0);
   EXPECT_EQ(date.date_periods, FM_PIVOT_PERIOD_MONTHS | FM_PIVOT_PERIOD_YEARS);
   EXPECT_EQ(date.date_calendar, FM_PIVOT_CALENDAR_GREGORIAN);
   EXPECT_EQ(date.group_base_index, -1);
   EXPECT_EQ(date.axis, -1);
   fm_pivot_field_info_t months{};
-  ASSERT_EQ(fm_workbook_pivot_field_at(wb.handle, 0, pivot_idx, 2, &months), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_idx, 2, &months), 0);
   EXPECT_STREQ(months.source_name, "\xE6\x9C\x88 (Date)");  // 月 (Date)
   EXPECT_EQ(months.group_base_index, 0);
   EXPECT_EQ(months.date_periods, 0U);
   EXPECT_EQ(months.axis, FM_PIVOT_AXIS_ROW);
   const std::uint32_t* order = nullptr;
   std::size_t order_count = 0;
-  ASSERT_EQ(fm_workbook_pivot_get_row_field_order(wb.handle, 0, pivot_idx, &order, &order_count), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_row_field_order(wb.handle, 0, pivot_idx, &order, &order_count), 0);
   ASSERT_EQ(order_count, 2U);
   EXPECT_EQ(order[0], 3U);
   EXPECT_EQ(order[1], 2U);
   EXPECT_TRUE(LayoutHasText(wb.handle, pivot_idx, "1900\xE5\xB9\xB4"));  // 1900年
   EXPECT_TRUE(LayoutHasText(wb.handle, pivot_idx, "3\xE6\x9C\x88"));     // 3月
 
-  ASSERT_EQ(fm_workbook_pivot_field_clear_date_group(wb.handle, 0, pivot_idx, 3), 0) << fm_last_error_message();
-  ASSERT_EQ(fm_workbook_pivot_field_count(wb.handle, 0, pivot_idx, &field_count), 0);
+  ASSERT_EQ(fm_sheet_clear_pivot_field_date_group(wb.handle, 0, pivot_idx, 3), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_pivot_field_count(wb.handle, 0, pivot_idx, &field_count), 0);
   EXPECT_EQ(field_count, 2U);
-  ASSERT_EQ(fm_workbook_pivot_field_at(wb.handle, 0, pivot_idx, 0, &date), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_idx, 0, &date), 0);
   EXPECT_EQ(date.date_periods, 0U);
   EXPECT_EQ(date.axis, FM_PIVOT_AXIS_ROW);
-  ASSERT_EQ(fm_workbook_pivot_get_row_field_order(wb.handle, 0, pivot_idx, &order, &order_count), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_row_field_order(wb.handle, 0, pivot_idx, &order, &order_count), 0);
   ASSERT_EQ(order_count, 1U);
   EXPECT_EQ(order[0], 0U);
   std::uint32_t cache_id = 0;
-  ASSERT_EQ(fm_workbook_pivot_get_cache_id(wb.handle, 0, pivot_idx, &cache_id), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_cache_id(wb.handle, 0, pivot_idx, &cache_id), 0);
   std::size_t cache_fields = 0;
-  ASSERT_EQ(fm_workbook_pivot_cache_field_count(wb.handle, cache_id, &cache_fields), 0);
+  ASSERT_EQ(fm_workbook_get_pivot_cache_field_count(wb.handle, cache_id, &cache_fields), 0);
   EXPECT_EQ(cache_fields, 2U);
 }
 
 TEST(FormulonCApiPivot, AddItemAtBindsTheBlankItemByCacheIndex) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_idx = 0;
-  ASSERT_EQ(BuildBlankItemPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+  ASSERT_EQ(BuildBlankItemPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
 
   // Both source rows contribute before any manual filter exists.
   {
     PivotCellsGuard projected;
-    ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
+    ASSERT_EQ(fm_sheet_get_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_get_last_error_message();
     EXPECT_DOUBLE_EQ(SumDataCells(projected.handle), 300.0);
   }
 
   // The blank shared item is at cache index 1, so the index-addressed adder is
   // the only way to name it: an empty label carries no binding of its own.
-  ASSERT_EQ(fm_workbook_pivot_field_add_item(wb.handle, 0, pivot_idx, 0, "North", 1), 0);
-  ASSERT_EQ(fm_workbook_pivot_field_add_item_at(wb.handle, 0, pivot_idx, 0, /*cache_index=*/1U, /*visible=*/0), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_idx, 0, "North", 1), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_idx, 0, /*cache_index=*/1U, /*visible=*/0), 0);
   {
     PivotCellsGuard projected;
-    ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
+    ASSERT_EQ(fm_sheet_get_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_get_last_error_message();
     EXPECT_DOUBLE_EQ(SumDataCells(projected.handle), 100.0);
   }
 }
 
 TEST(FormulonCApiPivot, AddItemWithEmptyNameCannotHideTheBlankRow) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_idx = 0;
-  ASSERT_EQ(BuildBlankItemPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+  ASSERT_EQ(BuildBlankItemPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
 
   // A name-addressed item defaults to cache index 0, which here holds
   // "North". The item is unlabelled, so it takes its label from that binding
   // and hides North, never the blank row. This is the gap
-  // `fm_workbook_pivot_field_add_item_at` closes.
-  ASSERT_EQ(fm_workbook_pivot_field_add_item(wb.handle, 0, pivot_idx, 0, "North", 1), 0);
-  ASSERT_EQ(fm_workbook_pivot_field_add_item(wb.handle, 0, pivot_idx, 0, "", 0), 0);
+  // `fm_sheet_add_pivot_field_shared_item` closes.
+  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_idx, 0, "North", 1), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_idx, 0, "", 0), 0);
   PivotCellsGuard projected;
-  ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_get_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_get_last_error_message();
   EXPECT_DOUBLE_EQ(SumDataCells(projected.handle), 200.0);
 }
 
 TEST(FormulonCApiPivot, AddItemAtHidesANonBlankItemBeforeAnyReload) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_idx = 0;
-  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
-  ASSERT_EQ(fm_workbook_pivot_field_clear_items(wb.handle, 0, pivot_idx, 0), 0);
-  ASSERT_EQ(fm_workbook_pivot_field_add_item_at(wb.handle, 0, pivot_idx, 0, /*cache_index=*/1U, /*visible=*/0), 0);
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_clear_pivot_field_items(wb.handle, 0, pivot_idx, 0), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_idx, 0, /*cache_index=*/1U, /*visible=*/0), 0);
   {
     PivotCellsGuard projected;
-    ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
+    ASSERT_EQ(fm_sheet_get_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_get_last_error_message();
     EXPECT_DOUBLE_EQ(SumDataCells(projected.handle), 400.0);  // North only: 100 + 300.
   }
   EXPECT_FALSE(LayoutHasText(wb.handle, pivot_idx, "South"));
 
   // The label is derived at evaluation time, so repopulating the shared
   // items after the item was added changes nothing.
-  ASSERT_EQ(fm_workbook_pivot_cache_field_clear_shared_items(wb.handle, cache_id, 0), 0);
-  ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_text(wb.handle, cache_id, 0, "North"), 0);
-  ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_text(wb.handle, cache_id, 0, "South"), 0);
+  ASSERT_EQ(fm_workbook_clear_pivot_cache_field_shared_items(wb.handle, cache_id, 0), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache_id, 0, "North"), 0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache_id, 0, "South"), 0);
   PivotCellsGuard projected;
-  ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_get_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_get_last_error_message();
   EXPECT_DOUBLE_EQ(SumDataCells(projected.handle), 400.0);
 }
 
 TEST(FormulonCApiPivot, SoleVisiblePageItemAddedByCacheIndexNamesItsValue) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_idx = 0;
-  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
-  ASSERT_EQ(fm_workbook_pivot_set_row_field_order(wb.handle, 0, pivot_idx, nullptr, 0U), 0);
-  ASSERT_EQ(fm_workbook_pivot_field_set_axis(wb.handle, 0, pivot_idx, 0, FM_PIVOT_AXIS_PAGE), 0);
-  ASSERT_EQ(fm_workbook_pivot_field_clear_items(wb.handle, 0, pivot_idx, 0), 0);
-  ASSERT_EQ(fm_workbook_pivot_field_add_item_at(wb.handle, 0, pivot_idx, 0, /*cache_index=*/0U, /*visible=*/0), 0);
-  ASSERT_EQ(fm_workbook_pivot_field_add_item_at(wb.handle, 0, pivot_idx, 0, /*cache_index=*/1U, /*visible=*/1), 0);
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb.handle, 0, pivot_idx, nullptr, 0U), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, pivot_idx, 0, FM_PIVOT_AXIS_PAGE), 0);
+  ASSERT_EQ(fm_sheet_clear_pivot_field_items(wb.handle, 0, pivot_idx, 0), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_idx, 0, /*cache_index=*/0U, /*visible=*/0), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_idx, 0, /*cache_index=*/1U, /*visible=*/1), 0);
   EXPECT_TRUE(LayoutHasText(wb.handle, pivot_idx, "South"));
 }

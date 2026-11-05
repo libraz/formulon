@@ -26,7 +26,7 @@ namespace formulon_node {
 /// and must outlive the C call. A missing `kind` reads as blank.
 bool ReadValueSpec(CheckedSpecReader& reader, const Napi::Object& spec, std::string& text, fm_value_t& value);
 
-/// Reads the placement fields shared by `fm_image_insert`, `fm_drawing_anchor`
+/// Reads the placement fields shared by `fm_image_insert_t`, `fm_drawing_anchor_t`
 /// and a chart's `placement`; only the default anchor kind differs by caller.
 template <typename Record>
 void PullPlacement(CheckedSpecReader& reader, const Napi::Object& spec, Record& record, int32_t default_anchor_kind) {
@@ -118,7 +118,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetRefMode(const Napi::CallbackInfo& info);
   Napi::Value Date1904(const Napi::CallbackInfo& info);
   Napi::Value SetDate1904(const Napi::CallbackInfo& info);
-  /// Clock seam: `pinnedNow()` returns `{year, ..., second}` or `null`;
+  /// Clock seam: `getPinnedNow()` returns `{year, ..., second}` or `null`;
   /// `setPinnedNow(y, mo, d, h, mi, s)` and `clearPinnedNow()` return a
   /// status. See `fm_workbook_set_pinned_now` for the accepted ranges.
   Napi::Value PinnedNow(const Napi::CallbackInfo& info);
@@ -130,7 +130,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value ExcelProfileId(const Napi::CallbackInfo& info);
   /// SetExcelProfileId accepts the same 28 ids.
   Napi::Value SetExcelProfileId(const Napi::CallbackInfo& info);
-  /// The file name `[0]!Name` is spelled with; see `fm_workbook_file_name`.
+  /// The file name `[0]!Name` is spelled with; see `fm_workbook_get_file_name`.
   Napi::Value FileName(const Napi::CallbackInfo& info);
   Napi::Value SetFileName(const Napi::CallbackInfo& info);
 

@@ -2,23 +2,23 @@ import assert from 'node:assert/strict';
 import { VAL } from './smoke_support.mjs';
 
 export function registerSurfaceRecalc(Module, test, threadsBuild) {
-  test('versionString is non-empty', () => {
-    const v = Module.versionString();
+  test('getVersion is non-empty', () => {
+    const v = Module.getVersion();
     assert.equal(typeof v, 'string');
     assert.ok(v.length > 0, `expected non-empty version, got ${JSON.stringify(v)}`);
   });
 
-  test('statusString covers known codes', () => {
-    assert.equal(Module.statusString(0), 'OK');
+  test('getStatusName covers known codes', () => {
+    assert.equal(Module.getStatusName(0), 'OK');
     // Unknown / out-of-band codes still return a non-null string.
-    const unknown = Module.statusString(123456);
+    const unknown = Module.getStatusName(123456);
     assert.equal(typeof unknown, 'string');
     assert.ok(unknown.length > 0);
   });
 
-  test('errorDisplayName returns Excel literals', () => {
-    assert.equal(Module.errorDisplayName(1), '#DIV/0!');
-    assert.equal(Module.errorDisplayName(999), '#UNKNOWN!');
+  test('getErrorDisplayName returns Excel literals', () => {
+    assert.equal(Module.getErrorDisplayName(1), '#DIV/0!');
+    assert.equal(Module.getErrorDisplayName(999), '#UNKNOWN!');
   });
 
   test('evalFormula(=SUM(1,2,3)) returns NUMBER 6', () => {
@@ -95,8 +95,8 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
     const wb = Module.Workbook.createDefault();
     try {
       assert.ok(wb.isValid());
-      assert.equal(wb.sheetCount().value, 1);
-      const nameRes = wb.sheetName(0);
+      assert.equal(wb.getSheetCount().value, 1);
+      const nameRes = wb.getSheetName(0);
       assert.ok(nameRes.status.ok);
       assert.equal(nameRes.value, 'Sheet1');
 
@@ -116,7 +116,7 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
 
       // addSheet should grow sheetCount.
       assert.ok(wb.addSheet('Second').ok);
-      assert.equal(wb.sheetCount().value, 2);
+      assert.equal(wb.getSheetCount().value, 2);
     } finally {
       wb.delete();
     }
@@ -222,7 +222,7 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
       // force a break under any plausible body height.
       assert.ok(wb.setNumber(0, 0, 0, 1).ok);
       assert.ok(wb.setNumber(0, 400, 0, 2).ok);
-      const result = wb.paginate(0);
+      const result = wb.getPagination(0);
       assert.ok(result.status.ok, `status=${JSON.stringify(result.status)}`);
       assert.ok(result.pageCount >= 2, `pageCount=${result.pageCount}`);
       assert.deepEqual(result.printArea, []);
@@ -241,10 +241,10 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
     const wb = Module.Workbook.createDefault();
     try {
       // Unpinned by default: the workbook follows the host clock.
-      assert.equal(wb.pinnedNow().now, null);
+      assert.equal(wb.getPinnedNow().now, null);
 
       assert.ok(wb.setPinnedNow(2026, 4, 23, 15, 30, 45).ok);
-      assert.deepEqual(wb.pinnedNow().now, {
+      assert.deepEqual(wb.getPinnedNow().now, {
         year: 2026,
         month: 4,
         day: 23,
@@ -265,7 +265,7 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
       assert.equal(wb.setPinnedNow(2025, 2, 29, 0, 0, 0).ok, false);
 
       assert.ok(wb.clearPinnedNow().ok);
-      assert.equal(wb.pinnedNow().now, null);
+      assert.equal(wb.getPinnedNow().now, null);
     } finally {
       wb.delete();
     }

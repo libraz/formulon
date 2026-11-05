@@ -548,7 +548,7 @@ TEST(OoxmlWriterPivot, PivotTableWithUnresolvableCacheIdEmitsNoRels) {
 //     the model happened to carry.
 //
 //     A table assembled in memory keeps whatever span it was created with
-//     -- `fm_workbook_pivot_create` installs a 1x1 placeholder and nothing
+//     -- `fm_sheet_add_pivot` installs a 1x1 placeholder and nothing
 //     revises it as fields are added. Excel opens such a file cleanly and
 //     recognises the pivot, then terminates the moment the report is
 //     refreshed, so the defect is invisible to a round-trip assertion and

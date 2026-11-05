@@ -54,28 +54,28 @@ fm_status_t resolve_xf(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32
 
 }  // namespace
 
-extern "C" fm_status_t fm_cell_get_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
-                                            uint32_t* out_xf_index) {
+extern "C" fm_status_t fm_sheet_get_cell_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+                                                  uint32_t* out_xf_index) {
   clear_last_error();
-  return resolve_xf(wb, sheet, row, col, out_xf_index, "fm_cell_get_xf_index");
+  return resolve_xf(wb, sheet, row, col, out_xf_index, "fm_sheet_get_cell_xf_index");
 }
 
-extern "C" fm_status_t fm_cell_set_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
-                                            uint32_t xf_index) {
+extern "C" fm_status_t fm_sheet_set_cell_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+                                                  uint32_t xf_index) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_cell_set_xf_index", "wb");
+    return null_argument("fm_sheet_set_cell_xf_index", "wb");
   }
-  if (auto rc = check_cell_xf_index(wb, xf_index, "fm_cell_set_xf_index"); rc != 0) {
+  if (auto rc = check_cell_xf_index(wb, xf_index, "fm_sheet_set_cell_xf_index"); rc != 0) {
     return rc;
   }
   return finish_status(wb->workbook().set_cell_xf_index(sheet, row, col, xf_index));
 }
 
-extern "C" fm_status_t fm_cell_clear_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col) {
+extern "C" fm_status_t fm_sheet_clear_cell_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_cell_clear_xf_index", "wb");
+    return null_argument("fm_sheet_clear_cell_xf_index", "wb");
   }
   return finish_status(wb->workbook().clear_cell_xf_index(sheet, row, col));
 }
@@ -120,7 +120,7 @@ namespace {
 
 /// Projects one engine record onto the flat C record. The whole model is
 /// carried, so both XF tables share this and neither getter is lossy.
-void cell_xf_to_c(const formulon::CellXf& xf, fm_cell_xf* out) {
+void cell_xf_to_c(const formulon::CellXf& xf, fm_cell_xf_t* out) {
   out->font_index = xf.font_index;
   out->fill_index = xf.fill_index;
   out->border_index = xf.border_index;
@@ -160,13 +160,13 @@ void cell_xf_to_c(const formulon::CellXf& xf, fm_cell_xf* out) {
 
 }  // namespace
 
-extern "C" fm_status_t fm_styles_get_cell_xf(fm_workbook_t* wb, uint32_t xf_index, fm_cell_xf* out) {
+extern "C" fm_status_t fm_workbook_get_cell_xf(fm_workbook_t* wb, uint32_t xf_index, fm_cell_xf_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return null_argument("fm_styles_get_cell_xf");
+    return null_argument("fm_workbook_get_cell_xf");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
-  if (auto rc = check_index(xf_index, styles.cell_xfs.size(), "fm_styles_get_cell_xf", "xf_index"); rc != 0) {
+  if (auto rc = check_index(xf_index, styles.cell_xfs.size(), "fm_workbook_get_cell_xf", "xf_index"); rc != 0) {
     return rc;
   }
   cell_xf_to_c(styles.cell_xfs[xf_index], out);
@@ -175,7 +175,7 @@ extern "C" fm_status_t fm_styles_get_cell_xf(fm_workbook_t* wb, uint32_t xf_inde
 
 namespace {
 
-void color_to_c(const formulon::ColorSpec& src, fm_color_spec* out) noexcept {
+void color_to_c(const formulon::ColorSpec& src, fm_color_spec_t* out) noexcept {
   out->tint = src.tint;
   out->rgb = src.rgb;
   out->theme = src.theme;
@@ -185,9 +185,9 @@ void color_to_c(const formulon::ColorSpec& src, fm_color_spec* out) noexcept {
 
 /// Projects a model font onto the public record. Every field the styles
 /// writer can observe is carried, including the presence flags and the
-/// round-trip colour specification, so `fm_styles_add_font(out)` names the
+/// round-trip colour specification, so `fm_workbook_add_font(out)` names the
 /// record it was read from instead of appending a lossy copy of it.
-void font_to_c(const formulon::FontRecord& f, fm_font_record* out) noexcept {
+void font_to_c(const formulon::FontRecord& f, fm_font_record_t* out) noexcept {
   out->name = f.name.c_str();
   out->size = f.size;
   out->color_argb = f.color_argb;
@@ -216,7 +216,7 @@ void font_to_c(const formulon::FontRecord& f, fm_font_record* out) noexcept {
   color_to_c(f.color, &out->color);
 }
 
-void fill_to_c(const formulon::FillRecord& f, fm_fill_record* out, fm_workbook_t* wb) {
+void fill_to_c(const formulon::FillRecord& f, fm_fill_record_t* out, fm_workbook_t* wb) {
   out->pattern = f.pattern;
   out->fg_argb = f.fg_argb;
   out->bg_argb = f.bg_argb;
@@ -234,10 +234,10 @@ void fill_to_c(const formulon::FillRecord& f, fm_fill_record* out, fm_workbook_t
   if (!f.has_gradient) {
     return;
   }
-  std::vector<fm_gradient_stop> stops;
+  std::vector<fm_gradient_stop_t> stops;
   stops.reserve(f.gradient.stops.size());
   for (const formulon::GradientStop& stop : f.gradient.stops) {
-    fm_gradient_stop c{};
+    fm_gradient_stop_t c{};
     c.position = stop.position;
     c.color_argb = stop.argb;
     color_to_c(stop.color, &c.color);
@@ -247,13 +247,13 @@ void fill_to_c(const formulon::FillRecord& f, fm_fill_record* out, fm_workbook_t
   out->gradient_stops = wb->gradient_stop_scratch.adopt(std::move(stops));
 }
 
-void border_side_to_c(const formulon::BorderSide& src, fm_border_side* out) noexcept {
+void border_side_to_c(const formulon::BorderSide& src, fm_border_side_t* out) noexcept {
   out->style = src.style;
   out->color_argb = src.color_argb;
   color_to_c(src.color, &out->color);
 }
 
-void border_to_c(const formulon::BorderRecord& b, fm_border_record* out) noexcept {
+void border_to_c(const formulon::BorderRecord& b, fm_border_record_t* out) noexcept {
   border_side_to_c(b.left, &out->left);
   border_side_to_c(b.right, &out->right);
   border_side_to_c(b.top, &out->top);
@@ -265,23 +265,23 @@ void border_to_c(const formulon::BorderRecord& b, fm_border_record* out) noexcep
 
 }  // namespace
 
-extern "C" fm_status_t fm_styles_get_font(fm_workbook_t* wb, uint32_t font_index, fm_font_record* out) {
+extern "C" fm_status_t fm_workbook_get_font(fm_workbook_t* wb, uint32_t font_index, fm_font_record_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return null_argument("fm_styles_get_font");
+    return null_argument("fm_workbook_get_font");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
-  if (auto rc = check_index(font_index, styles.fonts.size(), "fm_styles_get_font", "font_index"); rc != 0) {
+  if (auto rc = check_index(font_index, styles.fonts.size(), "fm_workbook_get_font", "font_index"); rc != 0) {
     return rc;
   }
   font_to_c(styles.fonts[font_index], out);
   return 0;
 }
 
-extern "C" fm_status_t fm_styles_get_num_fmt_string(fm_workbook_t* wb, uint16_t num_fmt_id, const char** out) {
+extern "C" fm_status_t fm_workbook_get_num_fmt_string(fm_workbook_t* wb, uint16_t num_fmt_id, const char** out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return null_argument("fm_styles_get_num_fmt_string");
+    return null_argument("fm_workbook_get_num_fmt_string");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
   std::optional<std::string_view> resolved = effective_num_fmt(styles, num_fmt_id);
@@ -293,17 +293,17 @@ extern "C" fm_status_t fm_styles_get_num_fmt_string(fm_workbook_t* wb, uint16_t 
     *out = resolved->data();
     return 0;
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_num_fmt_string: id not found",
-                           "num_fmt_id=" + std::to_string(num_fmt_id));
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                           "fm_workbook_get_num_fmt_string: id not found", "num_fmt_id=" + std::to_string(num_fmt_id));
 }
 
-extern "C" fm_status_t fm_styles_get_fill(fm_workbook_t* wb, uint32_t fill_index, fm_fill_record* out) {
+extern "C" fm_status_t fm_workbook_get_fill(fm_workbook_t* wb, uint32_t fill_index, fm_fill_record_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return null_argument("fm_styles_get_fill");
+    return null_argument("fm_workbook_get_fill");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
-  if (auto rc = check_index(fill_index, styles.fills.size(), "fm_styles_get_fill", "fill_index"); rc != 0) {
+  if (auto rc = check_index(fill_index, styles.fills.size(), "fm_workbook_get_fill", "fill_index"); rc != 0) {
     return rc;
   }
   wb->gradient_stop_scratch.clear();
@@ -311,38 +311,38 @@ extern "C" fm_status_t fm_styles_get_fill(fm_workbook_t* wb, uint32_t fill_index
   return 0;
 }
 
-extern "C" fm_status_t fm_styles_get_border(fm_workbook_t* wb, uint32_t border_index, fm_border_record* out) {
+extern "C" fm_status_t fm_workbook_get_border(fm_workbook_t* wb, uint32_t border_index, fm_border_record_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return null_argument("fm_styles_get_border");
+    return null_argument("fm_workbook_get_border");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
-  if (auto rc = check_index(border_index, styles.borders.size(), "fm_styles_get_border", "border_index"); rc != 0) {
+  if (auto rc = check_index(border_index, styles.borders.size(), "fm_workbook_get_border", "border_index"); rc != 0) {
     return rc;
   }
   border_to_c(styles.borders[border_index], out);
   return 0;
 }
 
-extern "C" fm_status_t fm_styles_get_dxf_count(fm_workbook_t* wb, uint32_t* out_count) {
+extern "C" fm_status_t fm_workbook_get_dxf_count(fm_workbook_t* wb, uint32_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return null_argument("fm_styles_get_dxf_count");
+    return null_argument("fm_workbook_get_dxf_count");
   }
   *out_count = static_cast<uint32_t>(wb->workbook().styles().dxfs.size());
   return 0;
 }
 
-extern "C" fm_status_t fm_styles_get_dxf(fm_workbook_t* wb, uint32_t dxf_index, fm_dxf_record* out) {
+extern "C" fm_status_t fm_workbook_get_dxf(fm_workbook_t* wb, uint32_t dxf_index, fm_dxf_record_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return null_argument("fm_styles_get_dxf");
+    return null_argument("fm_workbook_get_dxf");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
-  if (auto rc = check_index(dxf_index, styles.dxfs.size(), "fm_styles_get_dxf", "dxf_index"); rc != 0) {
+  if (auto rc = check_index(dxf_index, styles.dxfs.size(), "fm_workbook_get_dxf", "dxf_index"); rc != 0) {
     return rc;
   }
-  *out = fm_dxf_record{};
+  *out = fm_dxf_record_t{};
   wb->gradient_stop_scratch.clear();
   const formulon::DifferentialFormat& dxf = styles.dxfs[dxf_index];
   out->font_engaged = dxf.has_font ? 1 : 0;
@@ -367,27 +367,27 @@ extern "C" fm_status_t fm_styles_get_dxf(fm_workbook_t* wb, uint32_t dxf_index, 
 
 // `fm_styles_get_{font,fill,border,cell_xf}_count` are now emitted by
 // the binding codegen (see `src/c_api/generated/styles_counts.cpp`).
-// `fm_styles_get_cell_style_count` /
-// `fm_styles_get_cell_style_xf_count` stay hand-written because the JS
+// `fm_workbook_get_cell_style_count` /
+// `fm_workbook_get_cell_style_xf_count` stay hand-written because the JS
 // surface only exposes them on the embind binding; they are not part of
 // the cross-binding manifest.
 
-extern "C" fm_status_t fm_styles_get_cell_style_count(fm_workbook_t* wb, uint32_t* out_count) {
+extern "C" fm_status_t fm_workbook_get_cell_style_count(fm_workbook_t* wb, uint32_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return null_argument("fm_styles_get_cell_style_count");
+    return null_argument("fm_workbook_get_cell_style_count");
   }
   *out_count = static_cast<uint32_t>(wb->workbook().styles().cell_styles.size());
   return 0;
 }
 
-extern "C" fm_status_t fm_styles_get_cell_style(fm_workbook_t* wb, uint32_t index, fm_cell_style_record_t* out) {
+extern "C" fm_status_t fm_workbook_get_cell_style_at(fm_workbook_t* wb, uint32_t index, fm_cell_style_record_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return null_argument("fm_styles_get_cell_style");
+    return null_argument("fm_workbook_get_cell_style_at");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
-  if (auto rc = check_index(index, styles.cell_styles.size(), "fm_styles_get_cell_style", "index"); rc != 0) {
+  if (auto rc = check_index(index, styles.cell_styles.size(), "fm_workbook_get_cell_style_at", "index"); rc != 0) {
     return rc;
   }
   const formulon::CellStyleRecord& cs = styles.cell_styles[index];
@@ -400,22 +400,22 @@ extern "C" fm_status_t fm_styles_get_cell_style(fm_workbook_t* wb, uint32_t inde
   return 0;
 }
 
-extern "C" fm_status_t fm_styles_get_cell_style_xf_count(fm_workbook_t* wb, uint32_t* out_count) {
+extern "C" fm_status_t fm_workbook_get_cell_style_xf_count(fm_workbook_t* wb, uint32_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return null_argument("fm_styles_get_cell_style_xf_count");
+    return null_argument("fm_workbook_get_cell_style_xf_count");
   }
   *out_count = static_cast<uint32_t>(wb->workbook().styles().cell_style_xfs.size());
   return 0;
 }
 
-extern "C" fm_status_t fm_styles_get_cell_style_xf(fm_workbook_t* wb, uint32_t index, fm_cell_xf* out) {
+extern "C" fm_status_t fm_workbook_get_cell_style_xf(fm_workbook_t* wb, uint32_t index, fm_cell_xf_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return null_argument("fm_styles_get_cell_style_xf");
+    return null_argument("fm_workbook_get_cell_style_xf");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
-  if (auto rc = check_index(index, styles.cell_style_xfs.size(), "fm_styles_get_cell_style_xf", "index"); rc != 0) {
+  if (auto rc = check_index(index, styles.cell_style_xfs.size(), "fm_workbook_get_cell_style_xf", "index"); rc != 0) {
     return rc;
   }
   cell_xf_to_c(styles.cell_style_xfs[index], out);

@@ -29,7 +29,7 @@ emscripten::val entry_list(const fm_workbook_t* handle, uint32_t sheet, JsListCo
 
 fm_status_t column_entry(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
   fm_column_layout_t entry{};
-  if (const fm_status_t rc = fm_sheet_get_column(handle, sheet, index, &entry); rc != 0) {
+  if (const fm_status_t rc = fm_sheet_get_col_override_at(handle, sheet, index, &entry); rc != 0) {
     return rc;
   }
   *out = emscripten::val::object();
@@ -49,7 +49,7 @@ fm_status_t column_entry(const fm_workbook_t* handle, size_t sheet, size_t index
 
 fm_status_t row_entry(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
   fm_row_layout_t entry{};
-  if (const fm_status_t rc = fm_sheet_get_row_override(handle, sheet, index, &entry); rc != 0) {
+  if (const fm_status_t rc = fm_sheet_get_row_override_at(handle, sheet, index, &entry); rc != 0) {
     return rc;
   }
   *out = emscripten::val::object();
@@ -69,7 +69,7 @@ uint8_t clamp_outline_level(uint32_t level) {
   return static_cast<uint8_t>(level > 255U ? 255U : level);
 }
 
-emscripten::val js_rect_pt(const fm_rect_pt& r) {
+emscripten::val js_rect_pt(const fm_rect_pt_t& r) {
   emscripten::val o = emscripten::val::object();
   o.set("x", r.x);
   o.set("y", r.y);
@@ -82,25 +82,25 @@ emscripten::val js_rect_pt(const fm_rect_pt& r) {
 /// yields the all-zero record, so the key set does not depend on whether
 /// the layout succeeded.
 void set_pagination_detail(emscripten::val* result, const fm_pagination_t* pagination) {
-  fm_paper_info paper{};
-  fm_margins_pt margins{};
-  fm_rect_pt printable{};
+  fm_paper_info_t paper{};
+  fm_margins_pt_t margins{};
+  fm_rect_pt_t printable{};
   double scale = 0.0;
   int32_t page_order = 0;
-  fm_print_titles titles{};
+  fm_print_titles_t titles{};
   std::size_t page_count = 0;
   std::size_t horizontal_count = 0;
   std::size_t vertical_count = 0;
   if (pagination != nullptr) {
-    fm_pagination_paper(pagination, &paper);
-    fm_pagination_margins(pagination, &margins);
-    fm_pagination_printable(pagination, &printable);
-    fm_pagination_scale(pagination, &scale);
-    fm_pagination_page_order(pagination, &page_order);
-    fm_pagination_print_titles(pagination, &titles);
-    page_count = fm_pagination_page_count(pagination);
-    horizontal_count = fm_pagination_horizontal_break_count(pagination);
-    vertical_count = fm_pagination_vertical_break_count(pagination);
+    fm_pagination_get_paper(pagination, &paper);
+    fm_pagination_get_margins(pagination, &margins);
+    fm_pagination_get_printable(pagination, &printable);
+    fm_pagination_get_scale(pagination, &scale);
+    fm_pagination_get_page_order(pagination, &page_order);
+    fm_pagination_get_print_titles(pagination, &titles);
+    page_count = fm_pagination_get_page_count(pagination);
+    horizontal_count = fm_pagination_get_row_break_count(pagination);
+    vertical_count = fm_pagination_get_col_break_count(pagination);
   }
   emscripten::val paper_val = emscripten::val::object();
   paper_val.set("widthPt", paper.width_pt);
@@ -129,8 +129,8 @@ void set_pagination_detail(emscripten::val* result, const fm_pagination_t* pagin
   result->set("printTitles", titles_val);
   emscripten::val pages = emscripten::val::array();
   for (std::size_t i = 0; i < page_count; ++i) {
-    fm_page_layout page{};
-    if (fm_pagination_page_at(pagination, i, &page) != 0) {
+    fm_page_layout_t page{};
+    if (fm_pagination_get_page_at(pagination, i, &page) != 0) {
       continue;
     }
     emscripten::val item = emscripten::val::object();
@@ -149,14 +149,14 @@ void set_pagination_detail(emscripten::val* result, const fm_pagination_t* pagin
   emscripten::val horizontal_manual = emscripten::val::array();
   for (std::size_t i = 0; i < horizontal_count; ++i) {
     int32_t manual = 0;
-    fm_pagination_horizontal_break_is_manual(pagination, i, &manual);
+    fm_pagination_is_row_break_manual(pagination, i, &manual);
     horizontal_manual.call<void>("push", manual != 0);
   }
   result->set("horizontalBreakManual", horizontal_manual);
   emscripten::val vertical_manual = emscripten::val::array();
   for (std::size_t i = 0; i < vertical_count; ++i) {
     int32_t manual = 0;
-    fm_pagination_vertical_break_is_manual(pagination, i, &manual);
+    fm_pagination_is_col_break_manual(pagination, i, &manual);
     vertical_manual.call<void>("push", manual != 0);
   }
   result->set("verticalBreakManual", vertical_manual);
@@ -182,14 +182,14 @@ emscripten::val JsWorkbook::paginate(uint32_t sheet) const {
     return fail(invalid_handle_status());
   }
   fm_pagination_t* pagination = nullptr;
-  const fm_status_t rc = fm_workbook_paginate(handle_, sheet, &pagination);
+  const fm_status_t rc = fm_workbook_get_pagination(handle_, sheet, &pagination);
   if (rc != 0) {
     return fail(error_status(rc));
   }
-  const std::size_t area_count = fm_pagination_print_area_count(pagination);
+  const std::size_t area_count = fm_pagination_get_print_area_count(pagination);
   for (std::size_t i = 0; i < area_count; ++i) {
     fm_print_range_t range{};
-    if (fm_pagination_print_area_at(pagination, i, &range) != 0) {
+    if (fm_pagination_get_print_area_at(pagination, i, &range) != 0) {
       continue;
     }
     emscripten::val item = emscripten::val::object();
@@ -199,17 +199,17 @@ emscripten::val JsWorkbook::paginate(uint32_t sheet) const {
     item.set("lastCol", range.last_col);
     print_area.set(i, item);
   }
-  const std::size_t horizontal_count = fm_pagination_horizontal_break_count(pagination);
+  const std::size_t horizontal_count = fm_pagination_get_row_break_count(pagination);
   for (std::size_t i = 0; i < horizontal_count; ++i) {
     uint32_t row = 0;
-    if (fm_pagination_horizontal_break_at(pagination, i, &row) == 0) {
+    if (fm_pagination_get_row_break_at(pagination, i, &row) == 0) {
       horizontal_breaks.set(i, row);
     }
   }
-  const std::size_t vertical_count = fm_pagination_vertical_break_count(pagination);
+  const std::size_t vertical_count = fm_pagination_get_col_break_count(pagination);
   for (std::size_t i = 0; i < vertical_count; ++i) {
     uint32_t col = 0;
-    if (fm_pagination_vertical_break_at(pagination, i, &col) == 0) {
+    if (fm_pagination_get_col_break_at(pagination, i, &col) == 0) {
       vertical_breaks.set(i, col);
     }
   }
@@ -217,7 +217,7 @@ emscripten::val JsWorkbook::paginate(uint32_t sheet) const {
   result.set("printArea", print_area);
   result.set("horizontalBreaks", horizontal_breaks);
   result.set("verticalBreaks", vertical_breaks);
-  result.set("pageCount", fm_pagination_page_count(pagination));
+  result.set("pageCount", fm_pagination_get_page_count(pagination));
   set_pagination_detail(&result, pagination);
   fm_pagination_destroy(pagination);
   return result;
@@ -265,7 +265,7 @@ JsSheetProtectionResult JsWorkbook::getSheetProtection(uint32_t sheet) const {
     return r;
   }
   fm_sheet_protection_t p{};
-  fm_status_t rc = fm_sheet_get_protection(handle_, sheet, &p);
+  fm_status_t rc = fm_sheet_get_sheet_protection(handle_, sheet, &p);
   if (rc != 0) {
     r.status = error_status(rc);
     return r;
@@ -350,7 +350,7 @@ JsStatus JsWorkbook::setSheetProtection(uint32_t sheet, emscripten::val input) {
   p.sort = in.sort;
   p.auto_filter = in.autoFilter;
   p.pivot_tables = in.pivotTables;
-  fm_status_t rc = fm_sheet_set_protection(handle_, sheet, &p);
+  fm_status_t rc = fm_sheet_set_sheet_protection(handle_, sheet, &p);
   return status_from_rc(rc);
 }
 
@@ -443,7 +443,7 @@ JsStatus JsWorkbook::setSheetSelection(uint32_t sheet, emscripten::val selection
   if (handle_ == nullptr) {
     return invalid_handle_status();
   }
-  JsNarrowNumericReader reader("setSheetSelection");
+  JsNarrowNumericReader reader("setSelection");
   const uint32_t row = reader.u32(selection, "activeRow", 0U, "selection.activeRow");
   const uint32_t col = reader.u32(selection, "activeCol", 0U, "selection.activeCol");
   const std::vector<fm_merge_range> ranges = js_pull_ranges(selection, "ranges", &reader);
@@ -466,7 +466,7 @@ JsStatus JsWorkbook::setSheetViewMode(uint32_t sheet, std::string mode) {
 // ---- Column layout overrides --------------------------------------------
 
 emscripten::val JsWorkbook::getSheetColumns(uint32_t sheet) const {
-  return entry_list(handle_, sheet, &fm_sheet_get_column_count, "columns", &column_entry);
+  return entry_list(handle_, sheet, &fm_sheet_get_col_override_count, "columns", &column_entry);
 }
 
 JsStatus JsWorkbook::setColumnWidth(uint32_t sheet, uint32_t first, uint32_t last, double width) {
@@ -550,12 +550,12 @@ emscripten::val range_style_bases_result(fm_workbook_t* handle, uint32_t sheet, 
   emscripten::val o = emscripten::val::object();
   o.set("xfIndices", emscripten::val::array());
   size_t len = 0;
-  fm_status_t rc = fm_sheet_range_style_bases_excluding(handle, sheet, firstRow, firstCol, lastRow, lastCol,
-                                                        rows.data(), cols.data(), rows.size(), nullptr, 0, &len);
+  fm_status_t rc = fm_sheet_get_range_style_bases_excluding(handle, sheet, firstRow, firstCol, lastRow, lastCol,
+                                                            rows.data(), cols.data(), rows.size(), nullptr, 0, &len);
   std::vector<uint32_t> xfs(len);
   if (rc == 0 && len > 0) {
-    rc = fm_sheet_range_style_bases_excluding(handle, sheet, firstRow, firstCol, lastRow, lastCol, rows.data(),
-                                              cols.data(), rows.size(), xfs.data(), xfs.size(), &len);
+    rc = fm_sheet_get_range_style_bases_excluding(handle, sheet, firstRow, firstCol, lastRow, lastCol, rows.data(),
+                                                  cols.data(), rows.size(), xfs.data(), xfs.size(), &len);
   }
   if (rc != 0) {
     o.set("status", status_from_rc(rc));
@@ -592,18 +592,19 @@ emscripten::val JsWorkbook::rangeStyleBasesExcluding(uint32_t sheet, uint32_t fi
     o.set("status", invalid_handle_status());
     return o;
   }
-  JsNarrowNumericReader reader("rangeStyleBasesExcluding");
+  JsNarrowNumericReader reader("getRangeStyleBasesExcluding");
   if (!reader.is_array(excludedRows, "excludedRows") || !reader.is_array(excludedCols, "excludedCols")) {
-    o.set("status", binding_error_status(kInvalidArgument,
-                                         "rangeStyleBasesExcluding: `excludedRows` and `excludedCols` must be arrays "
-                                         "of numbers"));
+    o.set("status",
+          binding_error_status(kInvalidArgument,
+                               "getRangeStyleBasesExcluding: `excludedRows` and `excludedCols` must be arrays "
+                               "of numbers"));
     return o;
   }
   const uint32_t count = reader.length(excludedRows, "excludedRows");
   if (reader.ok() && count != reader.length(excludedCols, "excludedCols")) {
     o.set("status", binding_error_status(
                         kInvalidArgument,
-                        "rangeStyleBasesExcluding: `excludedRows` and `excludedCols` must have the same length"));
+                        "getRangeStyleBasesExcluding: `excludedRows` and `excludedCols` must have the same length"));
     return o;
   }
   std::vector<uint32_t> rows(count);
@@ -681,10 +682,10 @@ JsStatus JsWorkbook::clearColumnWidth(uint32_t sheet, uint32_t first, uint32_t l
 // ---- Sheet format defaults and point geometry ---------------------------
 
 emscripten::val JsWorkbook::getSheetFormatDefaults(uint32_t sheet) const {
-  fm_sheet_format_defaults d{};
+  fm_sheet_format_defaults_t d{};
   const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_format_defaults(handle_, sheet, &d) : kBindingInvalidHandle;
   if (rc != 0) {
-    d = fm_sheet_format_defaults{};
+    d = fm_sheet_format_defaults_t{};
   }
   emscripten::val o = emscripten::val::object();
   o.set("status", status_from_rc(rc));
@@ -704,7 +705,7 @@ JsStatus JsWorkbook::setSheetFormatDefaults(uint32_t sheet, emscripten::val defa
   if (handle_ == nullptr) {
     return invalid_handle_status();
   }
-  JsNarrowNumericReader reader("setSheetFormatDefaults");
+  JsNarrowNumericReader reader("setFormatDefaults");
   const emscripten::val default_col_width = reader.value(defaults, "defaultColWidth", "format.defaultColWidth");
   const emscripten::val default_row_height = reader.value(defaults, "defaultRowHeight", "format.defaultRowHeight");
   const emscripten::val base_col_width = reader.value(defaults, "baseColWidth", "format.baseColWidth");
@@ -717,9 +718,9 @@ JsStatus JsWorkbook::setSheetFormatDefaults(uint32_t sheet, emscripten::val defa
   const emscripten::val custom_height = reader.value(defaults, "customHeight", "format.customHeight");
   const emscripten::val zero_height = reader.value(defaults, "zeroHeight", "format.zeroHeight");
   // An omitted flag keeps the stored one.
-  fm_sheet_format_defaults d{};
+  fm_sheet_format_defaults_t d{};
   if (handle_ != nullptr && fm_sheet_get_format_defaults(handle_, sheet, &d) != 0) {
-    d = fm_sheet_format_defaults{};
+    d = fm_sheet_format_defaults_t{};
   }
   d.default_col_width = reader.number_value(default_col_width, 0.0, "format.defaultColWidth");
   d.default_row_height = reader.number_value(default_row_height, 0.0, "format.defaultRowHeight");
@@ -735,7 +736,7 @@ JsStatus JsWorkbook::setSheetFormatDefaults(uint32_t sheet, emscripten::val defa
 }
 
 emscripten::val JsWorkbook::getCellRectPt(uint32_t sheet, emscripten::val range, int32_t mode) const {
-  fm_rect_pt r{};
+  fm_rect_pt_t r{};
   JsStatus status;
   if (handle_ == nullptr) {
     status = invalid_handle_status();
@@ -746,10 +747,10 @@ emscripten::val JsWorkbook::getCellRectPt(uint32_t sheet, emscripten::val range,
       status = reader.failure();
     } else {
       const fm_status_t rc =
-          fm_sheet_cell_rect_pt(handle_, sheet, b.first_row, b.first_col, b.last_row, b.last_col, mode, &r);
+          fm_sheet_get_cell_rect_pt(handle_, sheet, b.first_row, b.first_col, b.last_row, b.last_col, mode, &r);
       status = status_from_rc(rc);
       if (rc != 0) {
-        r = fm_rect_pt{};
+        r = fm_rect_pt_t{};
       }
     }
   }
@@ -761,21 +762,23 @@ emscripten::val JsWorkbook::getCellRectPt(uint32_t sheet, emscripten::val range,
 JsNumberResult JsWorkbook::getColumnWidthPt(uint32_t sheet, uint32_t col, int32_t mode) const {
   double pt = 0.0;
   const fm_status_t rc =
-      handle_ != nullptr ? fm_sheet_column_width_pt(handle_, sheet, col, mode, &pt) : kBindingInvalidHandle;
+      handle_ != nullptr ? fm_sheet_get_column_width_pt(handle_, sheet, col, mode, &pt) : kBindingInvalidHandle;
   return number_result(rc, pt);
 }
 
 JsNumberResult JsWorkbook::getRowHeightPt(uint32_t sheet, uint32_t row) const {
   double pt = 0.0;
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_row_height_pt(handle_, sheet, row, &pt) : kBindingInvalidHandle;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_row_height_pt(handle_, sheet, row, &pt) : kBindingInvalidHandle;
   return number_result(rc, pt);
 }
 
 emscripten::val JsWorkbook::getWidthModel(uint32_t sheet, int32_t mode) const {
-  fm_width_model m{};
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_width_model(handle_, sheet, mode, &m) : kBindingInvalidHandle;
+  fm_width_model_t m{};
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_width_model(handle_, sheet, mode, &m) : kBindingInvalidHandle;
   if (rc != 0) {
-    m = fm_width_model{};
+    m = fm_width_model_t{};
   }
   emscripten::val o = emscripten::val::object();
   o.set("status", status_from_rc(rc));
@@ -790,15 +793,15 @@ emscripten::val JsWorkbook::getWidthModel(uint32_t sheet, int32_t mode) const {
 
 JsNumberResult JsWorkbook::columnCharsToPt(uint32_t sheet, int32_t mode, double chars) const {
   double pt = 0.0;
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_sheet_column_chars_to_pt(handle_, sheet, mode, chars, &pt) : kBindingInvalidHandle;
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_convert_column_chars_to_pt(handle_, sheet, mode, chars, &pt)
+                                            : kBindingInvalidHandle;
   return number_result(rc, pt);
 }
 
 JsNumberResult JsWorkbook::columnPtToChars(uint32_t sheet, int32_t mode, double pt) const {
   double chars = 0.0;
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_sheet_column_pt_to_chars(handle_, sheet, mode, pt, &chars) : kBindingInvalidHandle;
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_convert_column_pt_to_chars(handle_, sheet, mode, pt, &chars)
+                                            : kBindingInvalidHandle;
   return number_result(rc, chars);
 }
 

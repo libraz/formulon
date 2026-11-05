@@ -296,7 +296,7 @@ val source_to_val(const fm_chart_t* chart, size_t plot, size_t series, int32_t r
   val literal = val::array();
   for (size_t i = 0; i < src.literal_count; ++i) {
     fm_chart_literal_t lit{};
-    if (!step(rc, fm_chart_series_literal_at(chart, plot, series, role, i, &lit))) {
+    if (!step(rc, fm_chart_get_series_literal_at(chart, plot, series, role, i, &lit))) {
       break;
     }
     push(literal, lit.is_text != 0 ? val(string_from_cstr(lit.text)) : val(lit.number));
@@ -307,7 +307,7 @@ val source_to_val(const fm_chart_t* chart, size_t plot, size_t series, int32_t r
 
 val series_to_val(const fm_chart_t* chart, size_t plot, size_t index, fm_status_t& rc) {
   fm_chart_series_t s{};
-  if (!step(rc, fm_chart_series_at(chart, plot, index, &s))) {
+  if (!step(rc, fm_chart_get_series_at(chart, plot, index, &s))) {
     return val::object();
   }
   val o = fields_to_val(&s, kSeriesRd);
@@ -318,7 +318,7 @@ val series_to_val(const fm_chart_t* chart, size_t plot, size_t index, fm_status_
   val points = val::array();
   for (size_t i = 0; i < s.point_count; ++i) {
     fm_chart_point_t p{};
-    if (!step(rc, fm_chart_series_point_at(chart, plot, index, i, &p))) {
+    if (!step(rc, fm_chart_get_series_point_at(chart, plot, index, i, &p))) {
       break;
     }
     push(points, fields_to_val(&p, kPointRd));
@@ -329,7 +329,7 @@ val series_to_val(const fm_chart_t* chart, size_t plot, size_t index, fm_status_
 
 val plot_to_val(const fm_chart_t* chart, size_t index, fm_status_t& rc) {
   fm_chart_plot_t p{};
-  if (!step(rc, fm_chart_plot_at(chart, index, &p))) {
+  if (!step(rc, fm_chart_get_plot_at(chart, index, &p))) {
     return val::object();
   }
   val o = fields_to_val(&p, kPlotRd);
@@ -343,7 +343,7 @@ val plot_to_val(const fm_chart_t* chart, size_t index, fm_status_t& rc) {
   val axis_ids = val::array();
   for (size_t i = 0; i < p.axis_id_count; ++i) {
     uint32_t id = 0;
-    if (!step(rc, fm_chart_plot_axis_id_at(chart, index, i, &id))) {
+    if (!step(rc, fm_chart_get_plot_axis_id_at(chart, index, i, &id))) {
       break;
     }
     push(axis_ids, val(id));
@@ -373,7 +373,7 @@ val indices_to_val(size_t count, fm_status_t& rc, Fetch fetch) {
 
 val chart_to_val(const fm_chart_t* chart, fm_status_t& rc) {
   fm_chart_info_t info{};
-  if (!step(rc, fm_chart_info(chart, &info))) {
+  if (!step(rc, fm_chart_get_info(chart, &info))) {
     return val::object();
   }
   val o = fields_to_val(&info, kInfoRd);
@@ -382,7 +382,7 @@ val chart_to_val(const fm_chart_t* chart, fm_status_t& rc) {
   put(legend, "position", val(info.legend_position));
   put(legend, "overlay", val(info.legend_overlay != 0));
   put(legend, "hiddenSeries", indices_to_val(info.legend_hidden_count, rc, [&](size_t i, uint32_t* out) {
-        return fm_chart_legend_hidden_at(chart, i, out);
+        return fm_chart_get_legend_hidden_at(chart, i, out);
       }));
   put(o, "legend", legend);
 
@@ -394,7 +394,7 @@ val chart_to_val(const fm_chart_t* chart, fm_status_t& rc) {
   val axes = val::array();
   for (size_t i = 0; i < info.axis_count; ++i) {
     fm_chart_axis_t axis{};
-    if (!step(rc, fm_chart_axis_at(chart, i, &axis))) {
+    if (!step(rc, fm_chart_get_axis_at(chart, i, &axis))) {
       break;
     }
     val a = fields_to_val(&axis, kAxisRd);
@@ -403,7 +403,7 @@ val chart_to_val(const fm_chart_t* chart, fm_status_t& rc) {
   }
   put(o, "axes", axes);
   put(o, "hiddenCategories", indices_to_val(info.hidden_category_count, rc, [&](size_t i, uint32_t* out) {
-        return fm_chart_hidden_category_at(chart, i, out);
+        return fm_chart_get_hidden_category_at(chart, i, out);
       }));
 
   val source = val::null();
@@ -440,8 +440,8 @@ val range_to_val(const fm_chart_sheet_range_t& r) {
 val data_series_to_val(const fm_chart_data_t* data, size_t index, fm_status_t& rc) {
   fm_chart_data_series_t s{};
   fm_chart_data_points_t pts{};
-  if (!step(rc, fm_chart_data_series_at(data, index, &s)) ||
-      !step(rc, fm_chart_data_series_points(data, index, &pts))) {
+  if (!step(rc, fm_chart_data_get_series_at(data, index, &s)) ||
+      !step(rc, fm_chart_data_get_series_points(data, index, &pts))) {
     return val::object();
   }
   val o = val::object();
@@ -460,7 +460,7 @@ val data_series_to_val(const fm_chart_data_t* data, size_t index, fm_status_t& r
     val list = val::array();
     for (size_t i = 0; i < s.range_count[role]; ++i) {
       fm_chart_sheet_range_t r{};
-      if (!step(rc, fm_chart_data_range_at(data, index, role, i, &r))) {
+      if (!step(rc, fm_chart_data_get_range_at(data, index, role, i, &r))) {
         break;
       }
       push(list, range_to_val(r));
@@ -473,7 +473,7 @@ val data_series_to_val(const fm_chart_data_t* data, size_t index, fm_status_t& r
 
 val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
   fm_chart_data_info_t info{};
-  if (!step(rc, fm_chart_data_info(data, &info))) {
+  if (!step(rc, fm_chart_data_get_info(data, &info))) {
     return val::object();
   }
   val o = val::object();
@@ -486,7 +486,7 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
   for (size_t i = 0; i < info.category_label_count; ++i) {
     const char* label = nullptr;
     double value = 0.0;
-    if (!step(rc, fm_chart_data_category_at(data, i, &label, &value))) {
+    if (!step(rc, fm_chart_data_get_category_at(data, i, &label, &value))) {
       break;
     }
     push(labels, val(string_from_cstr(label)));
@@ -496,10 +496,10 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
   for (size_t level = 0; level < info.category_level_count && rc == 0; ++level) {
     size_t count = 0;
     val row = val::array();
-    if (step(rc, fm_chart_data_category_level_size(data, level, &count))) {
+    if (step(rc, fm_chart_data_get_category_level_size(data, level, &count))) {
       for (size_t i = 0; i < count && rc == 0; ++i) {
         const char* label = nullptr;
-        if (step(rc, fm_chart_data_category_level_at(data, level, i, &label))) {
+        if (step(rc, fm_chart_data_get_category_level_at(data, level, i, &label))) {
           push(row, val(string_from_cstr(label)));
         }
       }
@@ -524,7 +524,7 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
   val axis_titles = val::array();
   for (size_t i = 0; i < info.axis_title_count; ++i) {
     fm_chart_axis_title_text_t t{};
-    if (!step(rc, fm_chart_data_axis_title_at(data, i, &t))) {
+    if (!step(rc, fm_chart_data_get_axis_title_at(data, i, &t))) {
       break;
     }
     val item = val::object();
@@ -536,7 +536,7 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
   val unresolved = val::array();
   for (size_t i = 0; i < info.unresolved_count; ++i) {
     fm_chart_unresolved_t u{};
-    if (!step(rc, fm_chart_data_unresolved_at(data, i, &u))) {
+    if (!step(rc, fm_chart_data_get_unresolved_at(data, i, &u))) {
       break;
     }
     val item = val::object();
@@ -578,93 +578,93 @@ struct WrField {
 // clang-format on
 
 constexpr WrField kFillWr[] = {
-    WR("color", fm_chart_fill_patch, kU32, color_op, color),
-    WR("transparency", fm_chart_fill_patch, kF64, transparency_op, transparency_pct),
+    WR("color", fm_chart_fill_patch_t, kU32, color_op, color),
+    WR("transparency", fm_chart_fill_patch_t, kF64, transparency_op, transparency_pct),
     WR_END,
 };
 
 constexpr WrField kLineWr[] = {
-    WR("color", fm_chart_line_patch, kU32, color_op, color),
-    WR("transparency", fm_chart_line_patch, kF64, transparency_op, transparency_pct),
-    WR("widthPt", fm_chart_line_patch, kF64, width_op, width_pt),
-    WR("dash", fm_chart_line_patch, kI32, dash_op, dash),
-    WR("none", fm_chart_line_patch, kBool, none_op, none),
+    WR("color", fm_chart_line_patch_t, kU32, color_op, color),
+    WR("transparency", fm_chart_line_patch_t, kF64, transparency_op, transparency_pct),
+    WR("widthPt", fm_chart_line_patch_t, kF64, width_op, width_pt),
+    WR("dash", fm_chart_line_patch_t, kI32, dash_op, dash),
+    WR("none", fm_chart_line_patch_t, kBool, none_op, none),
     WR_END,
 };
 
 constexpr WrField kMarkerWr[] = {
-    WR("symbol", fm_chart_marker_patch, kI32, symbol_op, symbol),
-    WR("size", fm_chart_marker_patch, kF64, size_op, size),
-    WR_OBJ("fill", fm_chart_marker_patch, fill, kFillWr),
-    WR_OBJ("line", fm_chart_marker_patch, line, kLineWr),
+    WR("symbol", fm_chart_marker_patch_t, kI32, symbol_op, symbol),
+    WR("size", fm_chart_marker_patch_t, kF64, size_op, size),
+    WR_OBJ("fill", fm_chart_marker_patch_t, fill, kFillWr),
+    WR_OBJ("line", fm_chart_marker_patch_t, line, kLineWr),
     WR_END,
 };
 
 constexpr WrField kLabelsWr[] = {
-    WR("showValue", fm_chart_labels_patch, kBool, show_value_op, show_value),
-    WR("showCategory", fm_chart_labels_patch, kBool, show_category_op, show_category),
-    WR("showSeries", fm_chart_labels_patch, kBool, show_series_op, show_series),
-    WR("showPercent", fm_chart_labels_patch, kBool, show_percent_op, show_percent),
-    WR("showLegendKey", fm_chart_labels_patch, kBool, show_legend_key_op, show_legend_key),
-    WR("separator", fm_chart_labels_patch, kStr, separator_op, separator),
-    WR("position", fm_chart_labels_patch, kI32, position_op, position),
-    WR("numberFormat", fm_chart_labels_patch, kStr, number_format_op, number_format),
-    WR("fontColor", fm_chart_labels_patch, kU32, font_color_op, font_color),
-    WR("fontSizePt", fm_chart_labels_patch, kF64, font_size_op, font_size_pt),
+    WR("showValue", fm_chart_labels_patch_t, kBool, show_value_op, show_value),
+    WR("showCategory", fm_chart_labels_patch_t, kBool, show_category_op, show_category),
+    WR("showSeries", fm_chart_labels_patch_t, kBool, show_series_op, show_series),
+    WR("showPercent", fm_chart_labels_patch_t, kBool, show_percent_op, show_percent),
+    WR("showLegendKey", fm_chart_labels_patch_t, kBool, show_legend_key_op, show_legend_key),
+    WR("separator", fm_chart_labels_patch_t, kStr, separator_op, separator),
+    WR("position", fm_chart_labels_patch_t, kI32, position_op, position),
+    WR("numberFormat", fm_chart_labels_patch_t, kStr, number_format_op, number_format),
+    WR("fontColor", fm_chart_labels_patch_t, kU32, font_color_op, font_color),
+    WR("fontSizePt", fm_chart_labels_patch_t, kF64, font_size_op, font_size_pt),
     WR_END,
 };
 
 constexpr WrField kSeriesWr[] = {
-    WR_REF("name", fm_chart_series_patch, name),
-    WR_REF("categories", fm_chart_series_patch, categories),
-    WR_REF("values", fm_chart_series_patch, values),
-    WR_REF("x", fm_chart_series_patch, x),
-    WR_REF("y", fm_chart_series_patch, y),
-    WR_REF("size", fm_chart_series_patch, size),
-    WR_OBJ("fill", fm_chart_series_patch, fill, kFillWr),
-    WR_OBJ("line", fm_chart_series_patch, line, kLineWr),
-    WR_OBJ_OP("marker", fm_chart_series_patch, marker_op, marker, kMarkerWr),
-    WR("smooth", fm_chart_series_patch, kBool, smooth_op, smooth),
-    WR_OBJ_OP("labels", fm_chart_series_patch, labels_op, labels, kLabelsWr),
+    WR_REF("name", fm_chart_series_patch_t, name),
+    WR_REF("categories", fm_chart_series_patch_t, categories),
+    WR_REF("values", fm_chart_series_patch_t, values),
+    WR_REF("x", fm_chart_series_patch_t, x),
+    WR_REF("y", fm_chart_series_patch_t, y),
+    WR_REF("size", fm_chart_series_patch_t, size),
+    WR_OBJ("fill", fm_chart_series_patch_t, fill, kFillWr),
+    WR_OBJ("line", fm_chart_series_patch_t, line, kLineWr),
+    WR_OBJ_OP("marker", fm_chart_series_patch_t, marker_op, marker, kMarkerWr),
+    WR("smooth", fm_chart_series_patch_t, kBool, smooth_op, smooth),
+    WR_OBJ_OP("labels", fm_chart_series_patch_t, labels_op, labels, kLabelsWr),
     WR_END,
 };
 
 constexpr WrField kPointWr[] = {
-    WR_OBJ("fill", fm_chart_point_patch, fill, kFillWr),
-    WR_OBJ("line", fm_chart_point_patch, line, kLineWr),
-    WR_OBJ_OP("marker", fm_chart_point_patch, marker_op, marker, kMarkerWr),
+    WR_OBJ("fill", fm_chart_point_patch_t, fill, kFillWr),
+    WR_OBJ("line", fm_chart_point_patch_t, line, kLineWr),
+    WR_OBJ_OP("marker", fm_chart_point_patch_t, marker_op, marker, kMarkerWr),
     WR_END,
 };
 
 constexpr WrField kPlotWr[] = {
-    WR("gapWidth", fm_chart_plot_patch, kU32, gap_width_op, gap_width),
-    WR("overlap", fm_chart_plot_patch, kI32, overlap_op, overlap),
-    WR("firstSliceAngle", fm_chart_plot_patch, kU32, first_slice_angle_op, first_slice_angle),
-    WR("varyColors", fm_chart_plot_patch, kBool, vary_colors_op, vary_colors),
-    WR("holeSize", fm_chart_plot_patch, kU32, hole_size_op, hole_size),
+    WR("gapWidth", fm_chart_plot_patch_t, kU32, gap_width_op, gap_width),
+    WR("overlap", fm_chart_plot_patch_t, kI32, overlap_op, overlap),
+    WR("firstSliceAngle", fm_chart_plot_patch_t, kU32, first_slice_angle_op, first_slice_angle),
+    WR("varyColors", fm_chart_plot_patch_t, kBool, vary_colors_op, vary_colors),
+    WR("holeSize", fm_chart_plot_patch_t, kU32, hole_size_op, hole_size),
     WR_END,
 };
 
 constexpr WrField kAxisWr[] = {
-    WR("visible", fm_chart_axis_patch, kBool, visible_op, visible),
-    WR("title", fm_chart_axis_patch, kTitle, title_op, title),
-    WR("min", fm_chart_axis_patch, kF64, min_op, min),
-    WR("max", fm_chart_axis_patch, kF64, max_op, max),
-    WR("majorUnit", fm_chart_axis_patch, kF64, major_unit_op, major_unit),
-    WR("numberFormat", fm_chart_axis_patch, kStr, number_format_op, number_format),
-    WR("majorGridlines", fm_chart_axis_patch, kBool, major_gridlines_op, major_gridlines),
-    WR("reversed", fm_chart_axis_patch, kBool, reversed_op, reversed),
-    WR("logBase", fm_chart_axis_patch, kF64, log_base_op, log_base),
-    WR("crosses", fm_chart_axis_patch, kI32, crosses_op, crosses),
-    WR_PLAIN("crossesAt", fm_chart_axis_patch, crosses_at),
-    WR("tickLabelPosition", fm_chart_axis_patch, kStr, tick_label_pos_op, tick_label_pos),
+    WR("visible", fm_chart_axis_patch_t, kBool, visible_op, visible),
+    WR("title", fm_chart_axis_patch_t, kTitle, title_op, title),
+    WR("min", fm_chart_axis_patch_t, kF64, min_op, min),
+    WR("max", fm_chart_axis_patch_t, kF64, max_op, max),
+    WR("majorUnit", fm_chart_axis_patch_t, kF64, major_unit_op, major_unit),
+    WR("numberFormat", fm_chart_axis_patch_t, kStr, number_format_op, number_format),
+    WR("majorGridlines", fm_chart_axis_patch_t, kBool, major_gridlines_op, major_gridlines),
+    WR("reversed", fm_chart_axis_patch_t, kBool, reversed_op, reversed),
+    WR("logBase", fm_chart_axis_patch_t, kF64, log_base_op, log_base),
+    WR("crosses", fm_chart_axis_patch_t, kI32, crosses_op, crosses),
+    WR_PLAIN("crossesAt", fm_chart_axis_patch_t, crosses_at),
+    WR("tickLabelPosition", fm_chart_axis_patch_t, kStr, tick_label_pos_op, tick_label_pos),
     WR_END,
 };
 
 constexpr WrField kDisplayWr[] = {
-    WR("blanksAs", fm_chart_display_patch, kI32, blanks_as_op, blanks_as),
-    WR("plotVisibleOnly", fm_chart_display_patch, kBool, plot_vis_only_op, plot_vis_only),
-    WR("naAsBlank", fm_chart_display_patch, kBool, na_as_blank_op, na_as_blank),
+    WR("blanksAs", fm_chart_display_patch_t, kI32, blanks_as_op, blanks_as),
+    WR("plotVisibleOnly", fm_chart_display_patch_t, kBool, plot_vis_only_op, plot_vis_only),
+    WR("naAsBlank", fm_chart_display_patch_t, kBool, na_as_blank_op, na_as_blank),
     WR_END,
 };
 
@@ -792,7 +792,7 @@ val JsWorkbook::getChart(uint32_t sheet, uint32_t objectId) const {
     return read_envelope(kBindingInvalidHandle, "chart", val::null());
   }
   fm_chart_t* raw = nullptr;
-  fm_status_t rc = fm_sheet_chart_open(handle_, sheet, objectId, &raw);
+  fm_status_t rc = fm_sheet_get_chart(handle_, sheet, objectId, &raw);
   const std::unique_ptr<fm_chart_t, ChartDeleter> chart(raw);
   return read_envelope(rc, "chart", rc == 0 ? chart_to_val(chart.get(), rc) : val::null());
 }
@@ -802,7 +802,7 @@ val JsWorkbook::getChartData(uint32_t sheet, uint32_t objectId) const {
     return read_envelope(kBindingInvalidHandle, "data", val::null());
   }
   fm_chart_data_t* raw = nullptr;
-  const fm_status_t rc = fm_sheet_chart_data_open(handle_, sheet, objectId, &raw);
+  const fm_status_t rc = fm_sheet_get_chart_data(handle_, sheet, objectId, &raw);
   return open_chart_data_val(rc, raw);
 }
 
@@ -810,10 +810,10 @@ val JsWorkbook::previewChartData(uint32_t sheet, uint32_t objectId, val override
   if (handle_ == nullptr) {
     return read_envelope(kBindingInvalidHandle, "data", val::null());
   }
-  JsNarrowNumericReader reader("previewChartData");
+  JsNarrowNumericReader reader("getChartPreview");
   const val spec = js_object_or_empty(overrides);
   std::string source_store;
-  fm_chart_preview_overrides o{};
+  fm_chart_preview_overrides_t o{};
   o.source = reader.optional_string(spec, "source", source_store, "source");
   // A `null` or omitted override stays unset.
   const auto set = [&](const char* key, int32_t& op, int32_t& out, bool is_bool) {
@@ -833,7 +833,7 @@ val JsWorkbook::previewChartData(uint32_t sheet, uint32_t objectId, val override
     return envelope(argument_error(reader), "data", val::null());
   }
   fm_chart_data_t* raw = nullptr;
-  const fm_status_t rc = fm_sheet_chart_preview_open(handle_, sheet, objectId, &o, &raw);
+  const fm_status_t rc = fm_sheet_get_chart_preview(handle_, sheet, objectId, &o, &raw);
   return open_chart_data_val(rc, raw);
 }
 
@@ -844,14 +844,14 @@ val JsWorkbook::insertChart(uint32_t sheet, val options) {
     return id_envelope(invalid_handle_status(), "objectId", 0U);
   }
   if (!options.typeOf().strictlyEquals(val("object"))) {
-    return id_envelope(binding_error_status(kInvalidArgument, "insertChart expects (sheet:number, options:object)"),
+    return id_envelope(binding_error_status(kInvalidArgument, "addChart expects (sheet:number, options:object)"),
                        "objectId", 0U);
   }
-  JsNarrowNumericReader reader("insertChart");
+  JsNarrowNumericReader reader("addChart");
   std::string name_store;
   std::string descr_store;
   std::string title_store;
-  fm_chart_insert opts{};
+  fm_chart_insert_t opts{};
   opts.kind = reader.i32(options, "kind", FM_CHART_INSERT_COLUMN, "kind");
   opts.grouping = reader.i32(options, "grouping", FM_CHART_GROUPING_CLUSTERED, "grouping");
   const std::string source = reader.string(options, "source", "source");
@@ -870,7 +870,7 @@ val JsWorkbook::insertChart(uint32_t sheet, val options) {
     return id_envelope(argument_error(reader), "objectId", 0U);
   }
   uint32_t object_id = 0;
-  const fm_status_t rc = fm_sheet_insert_chart(handle_, sheet, &opts, &object_id);
+  const fm_status_t rc = fm_sheet_add_chart(handle_, sheet, &opts, &object_id);
   return id_envelope(status_from_rc(rc), "objectId", rc == 0 ? object_id : 0U);
 }
 
@@ -913,7 +913,7 @@ JsStatus JsWorkbook::setChartLegend(uint32_t sheet, uint32_t objectId, int32_t p
   if (!reader.ok()) {
     return argument_error(reader);
   }
-  fm_chart_legend_patch legend{};
+  fm_chart_legend_patch_t legend{};
   legend.position = position;
   legend.overlay = overlay ? 1 : 0;
   if (js_value_present(hiddenSeries)) {
@@ -930,7 +930,7 @@ JsStatus JsWorkbook::setChartAxis(uint32_t sheet, uint32_t objectId, uint32_t ax
   }
   JsNarrowNumericReader reader("setChartAxis");
   Arena arena;
-  fm_chart_axis_patch p{};
+  fm_chart_axis_patch_t p{};
   if (!read_patch_arg(reader, patch, &p, kAxisWr, arena)) {
     return argument_error(reader);
   }
@@ -943,7 +943,7 @@ JsStatus JsWorkbook::setChartDisplay(uint32_t sheet, uint32_t objectId, val patc
   }
   JsNarrowNumericReader reader("setChartDisplay");
   Arena arena;
-  fm_chart_display_patch p{};
+  fm_chart_display_patch_t p{};
   if (!read_patch_arg(reader, patch, &p, kDisplayWr, arena)) {
     return argument_error(reader);
   }
@@ -956,7 +956,7 @@ JsStatus JsWorkbook::setChartSeries(uint32_t sheet, uint32_t objectId, uint32_t 
   }
   JsNarrowNumericReader reader("setChartSeries");
   Arena arena;
-  fm_chart_series_patch p{};
+  fm_chart_series_patch_t p{};
   if (!read_patch_arg(reader, patch, &p, kSeriesWr, arena)) {
     return argument_error(reader);
   }
@@ -970,7 +970,7 @@ JsStatus JsWorkbook::setChartPoint(uint32_t sheet, uint32_t objectId, uint32_t p
   }
   JsNarrowNumericReader reader("setChartPoint");
   Arena arena;
-  fm_chart_point_patch p{};
+  fm_chart_point_patch_t p{};
   // A null or empty patch removes the point's formatting.
   if (!read_patch_arg(reader, patch, &p, kPointWr, arena)) {
     return argument_error(reader);
@@ -984,7 +984,7 @@ JsStatus JsWorkbook::setChartPlot(uint32_t sheet, uint32_t objectId, uint32_t pl
   }
   JsNarrowNumericReader reader("setChartPlot");
   Arena arena;
-  fm_chart_plot_patch p{};
+  fm_chart_plot_patch_t p{};
   if (!read_patch_arg(reader, patch, &p, kPlotWr, arena)) {
     return argument_error(reader);
   }
@@ -1011,7 +1011,7 @@ val JsWorkbook::addChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot,
   }
   JsNarrowNumericReader reader("addChartSeries");
   Arena arena;
-  fm_chart_series_patch p{};
+  fm_chart_series_patch_t p{};
   if (!read_patch_arg(reader, patch, &p, kSeriesWr, arena)) {
     return id_envelope(argument_error(reader), "seriesIdx", 0U);
   }

@@ -197,7 +197,7 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     }
   }
 
-  fm_parallel_recalc_stats parallel_stats{};
+  fm_parallel_recalc_stats_t parallel_stats{};
   if (parallel) {
     if (auto rc = fm_workbook_recalc_parallel(wb.handle, thread_count, &parallel_stats); rc != 0) {
       emit_last_error(err, "recalc");

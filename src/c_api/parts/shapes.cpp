@@ -30,7 +30,7 @@ using formulon::c_api::parts::TextStore;
 namespace {
 
 // Converts `shape` to the model spec; a non-zero return is the status to report.
-fm_status_t to_spec(const fm_shape& shape, const char* api, formulon::ShapeSpec& spec) {
+fm_status_t to_spec(const fm_shape_t& shape, const char* api, formulon::ShapeSpec& spec) {
   using formulon::AnchorKind;
   using formulon::EditAs;
   spec.fields = shape.fields;
@@ -74,12 +74,13 @@ fm_status_t to_spec(const fm_shape& shape, const char* api, formulon::ShapeSpec&
 
 }  // namespace
 
-extern "C" fm_status_t fm_sheet_shape_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
+extern "C" fm_status_t fm_sheet_get_shape_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_shape_count: NULL out_count");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_get_shape_count: NULL out_count");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_shape_count"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_shape_count"); rc != 0) {
     return rc;
   }
   auto shapes = formulon::list_shapes(wb->workbook(), sheet_index);
@@ -90,12 +91,12 @@ extern "C" fm_status_t fm_sheet_shape_count(const fm_workbook_t* wb, size_t shee
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_shape_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx, fm_shape* out) {
+extern "C" fm_status_t fm_sheet_get_shape_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx, fm_shape_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_shape_at: NULL out");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_shape_at: NULL out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_shape_at"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_shape_at"); rc != 0) {
     return rc;
   }
   auto shapes = formulon::list_shapes(wb->workbook(), sheet_index);
@@ -103,13 +104,13 @@ extern "C" fm_status_t fm_sheet_shape_at(const fm_workbook_t* wb, size_t sheet_i
     return set_last_error(shapes.error());
   }
   const std::vector<formulon::ShapeInfo>& list = shapes.value();
-  if (auto rc = check_index(idx, list.size(), "fm_sheet_shape_at", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, list.size(), "fm_sheet_get_shape_at", "idx"); rc != 0) {
     return rc;
   }
   const formulon::ShapeInfo& info = list[idx];
   const formulon::DrawingObject& obj = info.object;
   TextStore& store = fresh_read_scratch(wb);
-  *out = fm_shape{};
+  *out = fm_shape_t{};
   out->object_id = obj.object_id;
   out->kind = static_cast<int32_t>(obj.kind);
   out->edit_as = static_cast<int32_t>(obj.edit_as);
@@ -130,12 +131,12 @@ extern "C" fm_status_t fm_sheet_shape_at(const fm_workbook_t* wb, size_t sheet_i
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_insert_shape(fm_workbook_t* wb, size_t sheet_index, const fm_shape* spec,
-                                             uint32_t* out_object_id) {
+extern "C" fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index, const fm_shape_t* spec,
+                                          uint32_t* out_object_id) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_insert_shape";
+  constexpr const char* kApi = "fm_sheet_add_shape";
   if (spec == nullptr || out_object_id == nullptr) {
-    return null_argument("fm_sheet_insert_shape");
+    return null_argument("fm_sheet_add_shape");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
     return rc;
@@ -153,7 +154,7 @@ extern "C" fm_status_t fm_sheet_insert_shape(fm_workbook_t* wb, size_t sheet_ind
 }
 
 extern "C" fm_status_t fm_sheet_update_shape(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                             const fm_shape* spec) {
+                                             const fm_shape_t* spec) {
   clear_last_error();
   constexpr const char* kApi = "fm_sheet_update_shape";
   if (spec == nullptr) {

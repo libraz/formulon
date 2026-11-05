@@ -117,11 +117,11 @@ emscripten::val JsWorkbook::getMergesInRange(uint32_t sheet, emscripten::val ran
     return arr;
   }
   uint32_t total = 0;
-  fm_status_t rc = fm_sheet_merges_in_range(handle_, sheet, query, nullptr, 0, &total);
+  fm_status_t rc = fm_sheet_get_merges_in_range(handle_, sheet, query, nullptr, 0, &total);
   std::vector<fm_merge_range> found(rc == 0 ? total : 0);
   if (rc == 0 && total > 0) {
     uint32_t written = 0;
-    rc = fm_sheet_merges_in_range(handle_, sheet, query, found.data(), total, &written);
+    rc = fm_sheet_get_merges_in_range(handle_, sheet, query, found.data(), total, &written);
     found.resize(rc == 0 ? written : 0);
   }
   if (rc != 0) {
@@ -141,8 +141,8 @@ emscripten::val JsWorkbook::getComment(uint32_t sheet, uint32_t row, uint32_t co
   if (handle_ == nullptr) {
     return emscripten::val::null();
   }
-  fm_comment c{};
-  if (fm_sheet_get_comment_at(handle_, sheet, row, col, &c) != 0) {
+  fm_comment_t c{};
+  if (fm_sheet_get_comment(handle_, sheet, row, col, &c) != 0) {
     return emscripten::val::null();
   }
   emscripten::val o = emscripten::val::object();
@@ -157,8 +157,8 @@ emscripten::val JsWorkbook::getCommentResult(uint32_t sheet, uint32_t row, uint3
     out.set("comment", emscripten::val::null());
     return out;
   }
-  fm_comment c{};
-  const fm_status_t rc = fm_sheet_get_comment_at(handle_, sheet, row, col, &c);
+  fm_comment_t c{};
+  const fm_status_t rc = fm_sheet_get_comment(handle_, sheet, row, col, &c);
   if (rc != 0) {
     out.set("status", status_from_rc(rc));
     out.set("comment", emscripten::val::null());
@@ -174,8 +174,8 @@ emscripten::val JsWorkbook::getCommentResult(uint32_t sheet, uint32_t row, uint3
 namespace {
 
 fm_status_t comment_item(fm_workbook_t* wb, uint32_t sheet, uint32_t index, emscripten::val* out) {
-  fm_comment c{};
-  const fm_status_t rc = fm_sheet_get_comment_at_index(wb, sheet, index, &c);
+  fm_comment_t c{};
+  const fm_status_t rc = fm_sheet_get_comment_at(wb, sheet, index, &c);
   if (rc != 0) {
     return rc;
   }
@@ -228,7 +228,7 @@ emscripten::val JsWorkbook::getWorkbookProtection() const {
     out.set("protection", emscripten::val::null());
     return out;
   }
-  const fm_status_t rc = fm_workbook_get_protection(handle_, &p);
+  const fm_status_t rc = fm_workbook_get_workbook_protection(handle_, &p);
   if (rc != 0) {
     out.set("status", status_from_rc(rc));
     out.set("protection", emscripten::val::null());
@@ -283,7 +283,7 @@ JsStatus JsWorkbook::setWorkbookProtection(emscripten::val protection) {
   if (!reader.ok()) {
     return reader.failure();
   }
-  return status_from_rc(fm_workbook_set_protection(handle_, &p));
+  return status_from_rc(fm_workbook_set_workbook_protection(handle_, &p));
 }
 
 namespace {
@@ -310,7 +310,7 @@ fm_status_t protected_range_item(fm_workbook_t* wb, uint32_t sheet, uint32_t ind
 }  // namespace
 
 emscripten::val JsWorkbook::getProtectedRanges(uint32_t sheet) const {
-  return sheet_list(handle_, sheet, &fm_sheet_protected_range_count, &protected_range_item);
+  return sheet_list(handle_, sheet, &fm_sheet_get_protected_range_count, &protected_range_item);
 }
 
 namespace {
@@ -372,7 +372,7 @@ JsStatus JsWorkbook::addHyperlinkRange(uint32_t sheet, uint32_t row, uint32_t co
   if (handle_ == nullptr) {
     return invalid_handle_status();
   }
-  fm_hyperlink hl{};
+  fm_hyperlink_t hl{};
   hl.row = row;
   hl.col = col;
   hl.last_row = lastRow;
@@ -402,7 +402,7 @@ JsStatus JsWorkbook::clearHyperlinks(uint32_t sheet) {
 namespace {
 
 fm_status_t hyperlink_item(fm_workbook_t* wb, uint32_t sheet, uint32_t index, emscripten::val* out) {
-  fm_hyperlink h{};
+  fm_hyperlink_t h{};
   const fm_status_t rc = fm_sheet_get_hyperlink_at(wb, sheet, index, &h);
   if (rc != 0) {
     return rc;
@@ -429,8 +429,8 @@ emscripten::val JsWorkbook::getHyperlinks(uint32_t sheet) const {
 namespace {
 
 fm_status_t validation_item(fm_workbook_t* wb, uint32_t sheet, uint32_t index, emscripten::val* out) {
-  fm_data_validation v{};
-  const fm_status_t rc = fm_sheet_get_validation_at(wb, sheet, index, &v);
+  fm_data_validation_t v{};
+  const fm_status_t rc = fm_sheet_get_validation(wb, sheet, index, &v);
   if (rc != 0) {
     return rc;
   }
@@ -485,7 +485,7 @@ JsStatus JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
     return reader.failure();
   }
 
-  fm_data_validation dv{};
+  fm_data_validation_t dv{};
   dv.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
   dv.range_count = static_cast<uint32_t>(ranges_buf.size());
   dv.type = reader.u8(v, "type", 0U, "validation.type");
@@ -512,8 +512,7 @@ JsStatus JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
 }
 
 JsStatus JsWorkbook::removeValidationAt(uint32_t sheet, uint32_t index) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_validation_at(handle_, sheet, index)
-                                           : kBindingInvalidHandle);
+  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_validation(handle_, sheet, index) : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::clearValidations(uint32_t sheet) {
@@ -524,11 +523,11 @@ JsStatus JsWorkbook::clearValidations(uint32_t sheet) {
 
 namespace {
 
-/// Owns the strings behind a list of `fm_mention`.
+/// Owns the strings behind a list of `fm_mention_t`.
 struct MentionStore {
   std::vector<std::string> person_ids;
   std::vector<std::string> mention_ids;
-  std::vector<fm_mention> items;
+  std::vector<fm_mention_t> items;
 };
 
 void pull_mentions(const emscripten::val& list, MentionStore& st, JsNarrowNumericReader& reader) {
@@ -561,7 +560,7 @@ void pull_mentions(const emscripten::val& list, MentionStore& st, JsNarrowNumeri
   }
 }
 
-emscripten::val mention_to_val(const fm_mention& m) {
+emscripten::val mention_to_val(const fm_mention_t& m) {
   emscripten::val o = emscripten::val::object();
   o.set("start", m.start);
   o.set("length", m.length);
@@ -569,7 +568,7 @@ emscripten::val mention_to_val(const fm_mention& m) {
   return o;
 }
 
-emscripten::val threaded_comment_to_val(const fm_threaded_comment& c) {
+emscripten::val threaded_comment_to_val(const fm_threaded_comment_t& c) {
   emscripten::val o = emscripten::val::object();
   o.set("row", c.row);
   o.set("col", c.col);
@@ -585,7 +584,7 @@ emscripten::val threaded_comment_to_val(const fm_threaded_comment& c) {
   return o;
 }
 
-emscripten::val person_to_val(const fm_person& p) {
+emscripten::val person_to_val(const fm_person_t& p) {
   emscripten::val o = emscripten::val::object();
   js_set_cstr_fields(
       o, {{"id", p.id}, {"displayName", p.display_name}, {"userId", p.user_id}, {"providerId", p.provider_id}});
@@ -593,8 +592,8 @@ emscripten::val person_to_val(const fm_person& p) {
 }
 
 fm_status_t threaded_comment_item(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
-  fm_threaded_comment c{};
-  const fm_status_t rc = fm_sheet_threaded_comment_at(handle, sheet, index, &c);
+  fm_threaded_comment_t c{};
+  const fm_status_t rc = fm_sheet_get_threaded_comment_at(handle, sheet, index, &c);
   if (rc == 0) {
     *out = threaded_comment_to_val(c);
   }
@@ -603,12 +602,12 @@ fm_status_t threaded_comment_item(const fm_workbook_t* handle, size_t sheet, siz
 
 // Persons are workbook-scoped; the sheet argument is ignored.
 fm_status_t person_count(const fm_workbook_t* handle, size_t, size_t* out) {
-  return fm_workbook_person_count(handle, out);
+  return fm_workbook_get_person_count(handle, out);
 }
 
 fm_status_t person_item(const fm_workbook_t* handle, size_t, size_t index, emscripten::val* out) {
-  fm_person p{};
-  const fm_status_t rc = fm_workbook_person_at(handle, index, &p);
+  fm_person_t p{};
+  const fm_status_t rc = fm_workbook_get_person_at(handle, index, &p);
   if (rc == 0) {
     *out = person_to_val(p);
   }
@@ -621,7 +620,7 @@ emscripten::val JsWorkbook::getThreadedComments(uint32_t sheet) const {
   emscripten::val o = emscripten::val::object();
   emscripten::val comments = emscripten::val::array();
   o.set("comments", comments);
-  o.set("status", status_from_rc(js_collect_list(handle_, sheet, &fm_sheet_threaded_comment_count,
+  o.set("status", status_from_rc(js_collect_list(handle_, sheet, &fm_sheet_get_threaded_comment_count,
                                                  &threaded_comment_item, comments)));
   return o;
 }
@@ -644,7 +643,7 @@ JsStatus JsWorkbook::addThreadedComment(uint32_t sheet, emscripten::val comment)
   if (!reader.ok()) {
     return reader.failure();
   }
-  fm_threaded_comment c{};
+  fm_threaded_comment_t c{};
   c.id = id.c_str();
   c.row = reader.u32(comment, "row", 0U, "comment.row");
   c.col = reader.u32(comment, "col", 0U, "comment.col");
@@ -666,15 +665,15 @@ JsStatus JsWorkbook::editThreadedComment(uint32_t sheet, const std::string& id, 
   if (handle_ == nullptr) {
     return invalid_handle_status();
   }
-  JsNarrowNumericReader reader("editThreadedComment");
+  JsNarrowNumericReader reader("updateThreadedComment");
   MentionStore store;
   pull_mentions(mentions, store, reader);
   if (!reader.ok()) {
     return reader.failure();
   }
-  return status_from_rc(fm_sheet_edit_threaded_comment(handle_, sheet, id.c_str(), text.c_str(),
-                                                       store.items.empty() ? nullptr : store.items.data(),
-                                                       static_cast<uint32_t>(store.items.size())));
+  return status_from_rc(fm_sheet_update_threaded_comment(handle_, sheet, id.c_str(), text.c_str(),
+                                                         store.items.empty() ? nullptr : store.items.data(),
+                                                         static_cast<uint32_t>(store.items.size())));
 }
 
 JsStatus JsWorkbook::setThreadResolved(uint32_t sheet, const std::string& threadId, bool done) {
@@ -708,7 +707,7 @@ JsStatus JsWorkbook::addPerson(emscripten::val person) {
   if (!reader.ok()) {
     return reader.failure();
   }
-  const fm_person p = {id.c_str(), display_name.c_str(), user_id.c_str(), provider_id.c_str()};
+  const fm_person_t p = {id.c_str(), display_name.c_str(), user_id.c_str(), provider_id.c_str()};
   return status_from_rc(fm_workbook_add_person(handle_, &p));
 }
 

@@ -217,7 +217,11 @@ class Ledger:
         for giver, taker in ((a, b), (b, a)):
             gave = (self.entry(giver).get("was") or {}).get("c")
             took = (self.entry(taker).get("was") or {}).get("c")
-            counts = (self.c_param_counts.get(gave or ""), self.c_param_counts.get(took or ""))
+            # Before the rename the header declares both former names, after it both current ones.
+            if (took or "") in self.c_param_counts:
+                counts = (self.c_param_counts.get(gave or ""), self.c_param_counts.get(took or ""))
+            else:
+                counts = (self.c_param_counts.get(self.entry(giver).get("c") or ""), self.c_param_counts.get(name))
             if (
                 gave == name != self.entry(giver).get("c")
                 and self.entry(taker).get("c") == name
@@ -232,17 +236,19 @@ class Ledger:
         return bool(self.data)
 
     def key_for(self, name_field: str, symbol: str) -> Optional[str]:
-        """Ledger key whose `<name_field>` or `was.<name_field>` names `symbol`."""
+        """Ledger key whose `<name_field>` or `was.<name_field>` names `symbol`; a current name wins a hand-over."""
         index = self._index.get(name_field)
         if index is None:
             index = {}
+            claims = []
             for key, entry in self.entries.items():
                 if not isinstance(entry, dict):
                     continue
                 was = entry.get("was") if isinstance(entry.get("was"), dict) else {}
-                for name in (entry.get(name_field), was.get(name_field)):
-                    if not isinstance(name, str):
-                        continue
+                claims.append((0, key, entry.get(name_field)))
+                claims.append((1, key, was.get(name_field)))
+            for _order, key, name in sorted(claims, key=lambda c: c[0]):
+                if isinstance(name, str):
                     owner = index.setdefault(name, key)
                     if owner != key and not (name_field == "c" and self._handed_over(owner, key, name)):
                         self.problems.append(

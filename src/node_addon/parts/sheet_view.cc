@@ -171,7 +171,7 @@ Napi::Value Workbook::GetSheetProtection(const Napi::CallbackInfo& info) {
   // defaulted record rather than tripping over a missing key.
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   fm_sheet_protection_t p{};
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_protection(handle_, sheet, &p) : kBindingInvalidHandle;
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_sheet_protection(handle_, sheet, &p) : kBindingInvalidHandle;
   if (rc != 0) {
     p = fm_sheet_protection_t{};
   }
@@ -250,7 +250,7 @@ Napi::Value Workbook::SetSheetProtection(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  fm_status_t rc = fm_sheet_set_protection(handle_, sheet, &p);
+  fm_status_t rc = fm_sheet_set_sheet_protection(handle_, sheet, &p);
   return MakeStatus(env, rc);
 }
 
@@ -375,7 +375,7 @@ Napi::Value Workbook::SetSheetViewMode(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::GetSheetColumns(const Napi::CallbackInfo& info) {
-  return SheetLayoutList(info, handle_, "columns", &fm_sheet_get_column_count, &fm_sheet_get_column, &ColumnLayoutToJs);
+  return SheetLayoutList(info, handle_, "columns", &fm_sheet_get_col_override_count, &fm_sheet_get_col_override_at, &ColumnLayoutToJs);
 }
 
 Napi::Value Workbook::SetColumnWidth(const Napi::CallbackInfo& info) {
@@ -409,7 +409,7 @@ Napi::Value Workbook::SetColumnStyle(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::GetSheetRowOverrides(const Napi::CallbackInfo& info) {
-  return SheetLayoutList(info, handle_, "rows", &fm_sheet_get_row_override_count, &fm_sheet_get_row_override,
+  return SheetLayoutList(info, handle_, "rows", &fm_sheet_get_row_override_count, &fm_sheet_get_row_override_at,
                          &RowLayoutToJs);
 }
 
@@ -435,11 +435,11 @@ Napi::Value Workbook::ClearColumnStyle(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::GetSheetFormatDefaults(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  fm_sheet_format_defaults d{};
+  fm_sheet_format_defaults_t d{};
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_format_defaults(handle_, ArgU32(info, 0), &d) : kBindingInvalidHandle;
   if (rc != 0) {
-    d = fm_sheet_format_defaults{};
+    d = fm_sheet_format_defaults_t{};
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("status", MakeStatus(env, rc));
@@ -465,9 +465,9 @@ Napi::Value Workbook::SetSheetFormatDefaults(const Napi::CallbackInfo& info) {
   bool has_default_col_width = false;
   bool has_default_row_height = false;
   // An omitted flag keeps the stored one.
-  fm_sheet_format_defaults d{};
+  fm_sheet_format_defaults_t d{};
   if (fm_sheet_get_format_defaults(handle_, ArgU32(info, 0), &d) != 0) {
-    d = fm_sheet_format_defaults{};
+    d = fm_sheet_format_defaults_t{};
   }
   d.default_col_width = reader.Double(spec, "defaultColWidth", 0.0, &has_default_col_width);
   d.default_row_height = reader.Double(spec, "defaultRowHeight", 0.0, &has_default_row_height);
@@ -486,7 +486,7 @@ Napi::Value Workbook::SetSheetFormatDefaults(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::GetCellRectPt(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  fm_rect_pt rect{};
+  fm_rect_pt_t rect{};
   Napi::Object status = Napi::Object::New(env);
   if (handle_ == nullptr) {
     status = NullHandleError(env);
@@ -500,10 +500,10 @@ Napi::Value Workbook::GetCellRectPt(const Napi::CallbackInfo& info) {
     if (!reader.ok()) {
       return env.Undefined();
     }
-    const fm_status_t rc = fm_sheet_cell_rect_pt(handle_, ArgU32(info, 0), first_row, first_col, last_row, last_col,
+    const fm_status_t rc = fm_sheet_get_cell_rect_pt(handle_, ArgU32(info, 0), first_row, first_col, last_row, last_col,
                                                  ArgMode(info, 2), &rect);
     if (rc != 0) {
-      rect = fm_rect_pt{};
+      rect = fm_rect_pt_t{};
     }
     status = MakeStatus(env, rc);
   }
@@ -522,7 +522,7 @@ Napi::Value Workbook::GetColumnWidthPt(const Napi::CallbackInfo& info) {
     return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   double pt = 0.0;
-  const fm_status_t rc = fm_sheet_column_width_pt(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgMode(info, 2), &pt);
+  const fm_status_t rc = fm_sheet_get_column_width_pt(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgMode(info, 2), &pt);
   return MakeNumberResult(env, rc, pt);
 }
 
@@ -532,17 +532,17 @@ Napi::Value Workbook::GetRowHeightPt(const Napi::CallbackInfo& info) {
     return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   double pt = 0.0;
-  const fm_status_t rc = fm_sheet_row_height_pt(handle_, ArgU32(info, 0), ArgU32(info, 1), &pt);
+  const fm_status_t rc = fm_sheet_get_row_height_pt(handle_, ArgU32(info, 0), ArgU32(info, 1), &pt);
   return MakeNumberResult(env, rc, pt);
 }
 
 Napi::Value Workbook::GetWidthModel(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  fm_width_model model{};
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_width_model(handle_, ArgU32(info, 0), ArgMode(info, 1), &model)
+  fm_width_model_t model{};
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_width_model(handle_, ArgU32(info, 0), ArgMode(info, 1), &model)
                                             : kBindingInvalidHandle;
   if (rc != 0) {
-    model = fm_width_model{};
+    model = fm_width_model_t{};
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("status", MakeStatus(env, rc));
@@ -556,11 +556,11 @@ Napi::Value Workbook::GetWidthModel(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::ColumnCharsToPt(const Napi::CallbackInfo& info) {
-  return ConvertColumnUnit(info, handle_, &fm_sheet_column_chars_to_pt);
+  return ConvertColumnUnit(info, handle_, &fm_sheet_convert_column_chars_to_pt);
 }
 
 Napi::Value Workbook::ColumnPtToChars(const Napi::CallbackInfo& info) {
-  return ConvertColumnUnit(info, handle_, &fm_sheet_column_pt_to_chars);
+  return ConvertColumnUnit(info, handle_, &fm_sheet_convert_column_pt_to_chars);
 }
 
 Napi::Value Workbook::SetRowHidden(const Napi::CallbackInfo& info) {
@@ -599,11 +599,11 @@ Napi::Object RangeStyleBasesResult(Napi::Env env, fm_workbook_t* handle, const u
   Napi::Object out = Napi::Object::New(env);
   out.Set("xfIndices", Napi::Array::New(env));
   size_t len = 0;
-  fm_status_t rc = fm_sheet_range_style_bases_excluding(handle, rect[0], rect[1], rect[2], rect[3], rect[4],
+  fm_status_t rc = fm_sheet_get_range_style_bases_excluding(handle, rect[0], rect[1], rect[2], rect[3], rect[4],
                                                         rows.data(), cols.data(), rows.size(), nullptr, 0, &len);
   std::vector<uint32_t> xfs(len);
   if (rc == 0 && len > 0) {
-    rc = fm_sheet_range_style_bases_excluding(handle, rect[0], rect[1], rect[2], rect[3], rect[4], rows.data(),
+    rc = fm_sheet_get_range_style_bases_excluding(handle, rect[0], rect[1], rect[2], rect[3], rect[4], rows.data(),
                                               cols.data(), rows.size(), xfs.data(), xfs.size(), &len);
   }
   if (rc != 0) {
@@ -668,11 +668,11 @@ Napi::Value Workbook::RangeStyleBasesExcluding(const Napi::CallbackInfo& info) {
   Napi::Array cols_arr;
   if (!ArrayArg(info, 5, &rows_arr) || !ArrayArg(info, 6, &cols_arr)) {
     return refused(
-        "rangeStyleBasesExcluding expects (sheet, firstRow, firstCol, lastRow, lastCol, excludedRows:number[], "
+        "getRangeStyleBasesExcluding expects (sheet, firstRow, firstCol, lastRow, lastCol, excludedRows:number[], "
         "excludedCols:number[])");
   }
   if (rows_arr.Length() != cols_arr.Length()) {
-    return refused("rangeStyleBasesExcluding: excludedRows and excludedCols must have the same length");
+    return refused("getRangeStyleBasesExcluding: excludedRows and excludedCols must have the same length");
   }
   CheckedSpecReader reader(env);
   std::vector<uint32_t> rows;

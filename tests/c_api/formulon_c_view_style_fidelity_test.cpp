@@ -30,7 +30,7 @@ struct WorkbookGuard {
 struct BufferGuard {
   uint8_t* data = nullptr;
   size_t len = 0;
-  ~BufferGuard() { fm_buffer_free(data); }
+  ~BufferGuard() { fm_buffer_destroy(data); }
   BufferGuard() = default;
   BufferGuard(const BufferGuard&) = delete;
   BufferGuard& operator=(const BufferGuard&) = delete;
@@ -42,7 +42,7 @@ constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::Form
 void RoundTrip(const WorkbookGuard& wb, WorkbookGuard* out, std::string* part_xml = nullptr,
                const char* part = "xl/worksheets/sheet1.xml") {
   BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
   if (part_xml != nullptr) {
     formulon::io::ZipReader zip;
     ASSERT_TRUE(static_cast<bool>(zip.open(formulon::io::ByteSpan{saved.data, saved.len})));
@@ -50,7 +50,7 @@ void RoundTrip(const WorkbookGuard& wb, WorkbookGuard* out, std::string* part_xm
     ASSERT_TRUE(static_cast<bool>(entry));
     part_xml->assign(reinterpret_cast<const char*>(entry.value().data()), entry.value().size());
   }
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &out->handle), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &out->handle), 0) << fm_get_last_error_message();
 }
 
 bool Has(const std::string& text, const char* needle) {
@@ -62,7 +62,7 @@ fm_row_layout_t RowOverride(const WorkbookGuard& wb, std::uint32_t row) {
   EXPECT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &count), 0);
   for (size_t i = 0; i < count; ++i) {
     fm_row_layout_t entry{};
-    EXPECT_EQ(fm_sheet_get_row_override(wb.handle, 0, i, &entry), 0);
+    EXPECT_EQ(fm_sheet_get_row_override_at(wb.handle, 0, i, &entry), 0);
     if (entry.row == row) {
       return entry;
     }
@@ -78,7 +78,7 @@ fm_row_layout_t RowOverride(const WorkbookGuard& wb, std::uint32_t row) {
 
 TEST(FormulonCApiOutline, CollapsedIsReadBackAndRoundTrips) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 1, 2), 0);
   ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 2, 1), 0);
   ASSERT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 3, 1), 0);
@@ -98,11 +98,11 @@ TEST(FormulonCApiOutline, CollapsedIsReadBackAndRoundTrips) {
   EXPECT_EQ(RowOverride(reloaded, 2).collapsed, 0);
 
   size_t count = 0;
-  ASSERT_EQ(fm_sheet_get_column_count(reloaded.handle, 0, &count), 0);
+  ASSERT_EQ(fm_sheet_get_col_override_count(reloaded.handle, 0, &count), 0);
   int collapsed_spans = 0;
   for (size_t i = 0; i < count; ++i) {
     fm_column_layout_t col{};
-    ASSERT_EQ(fm_sheet_get_column(reloaded.handle, 0, i, &col), 0);
+    ASSERT_EQ(fm_sheet_get_col_override_at(reloaded.handle, 0, i, &col), 0);
     collapsed_spans += col.collapsed != 0 ? 1 : 0;
   }
   EXPECT_EQ(collapsed_spans, 1);
@@ -110,7 +110,7 @@ TEST(FormulonCApiOutline, CollapsedIsReadBackAndRoundTrips) {
 
 TEST(FormulonCApiOutline, ClearingCollapsedRemovesAnOtherwiseEmptyOverride) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 5, 1), 0);
   ASSERT_EQ(fm_sheet_set_column_collapsed(wb.handle, 0, 1, 2, 1), 0);
   ASSERT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 5, 0), 0);
@@ -119,14 +119,14 @@ TEST(FormulonCApiOutline, ClearingCollapsedRemovesAnOtherwiseEmptyOverride) {
   size_t rows = 0;
   size_t cols = 0;
   ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &rows), 0);
-  ASSERT_EQ(fm_sheet_get_column_count(wb.handle, 0, &cols), 0);
+  ASSERT_EQ(fm_sheet_get_col_override_count(wb.handle, 0, &cols), 0);
   EXPECT_EQ(rows, 0U);
   EXPECT_EQ(cols, 0U);
 }
 
 TEST(FormulonCApiOutline, CollapsedSettersRejectBadArguments) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   EXPECT_EQ(fm_sheet_set_row_collapsed(wb.handle, 9, 0, 1), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 1048576U, 1), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_column_collapsed(wb.handle, 0, 3, 2, 1), kInvalidArgument);
@@ -138,7 +138,7 @@ TEST(FormulonCApiOutline, CollapsedSettersRejectBadArguments) {
 
 TEST(FormulonCApiSheetViewFlags, ShowFormulasAndOutlineSymbolsRoundTrip) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_sheet_view_t view{};
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
   EXPECT_EQ(view.show_formulas, 0);
@@ -164,8 +164,8 @@ TEST(FormulonCApiSheetViewFlags, ShowFormulasAndOutlineSymbolsRoundTrip) {
 
 TEST(FormulonCApiFontToggles, OutlineShadowCondenseExtendRoundTrip) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_font_record font{};
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_font_record_t font{};
   font.name = "Arial";
   font.size = 12.0;
   font.color_argb = 0xFF000000U;
@@ -178,26 +178,26 @@ TEST(FormulonCApiFontToggles, OutlineShadowCondenseExtendRoundTrip) {
   font.has_extend = 1;
   font.extend = 1;
   uint32_t index = 0;
-  ASSERT_EQ(fm_styles_add_font(wb.handle, font, &index), 0);
+  ASSERT_EQ(fm_workbook_add_font(wb.handle, font, &index), 0);
   uint32_t same = 0;
-  ASSERT_EQ(fm_styles_add_font(wb.handle, font, &same), 0);
+  ASSERT_EQ(fm_workbook_add_font(wb.handle, font, &same), 0);
   EXPECT_EQ(same, index);
   font.extend = 0;
   uint32_t other = 0;
-  ASSERT_EQ(fm_styles_add_font(wb.handle, font, &other), 0);
+  ASSERT_EQ(fm_workbook_add_font(wb.handle, font, &other), 0);
   EXPECT_NE(other, index);
 
-  fm_cell_xf xf{};
+  fm_cell_xf_t xf{};
   xf.font_index = index;
   xf.apply_font = 1;
   uint32_t xf_index = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &xf_index), 0);
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0, 0, xf_index), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &xf_index), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, xf_index), 0);
 
   WorkbookGuard reloaded;
   RoundTrip(wb, &reloaded);
-  fm_font_record back{};
-  ASSERT_EQ(fm_styles_get_font(reloaded.handle, index, &back), 0);
+  fm_font_record_t back{};
+  ASSERT_EQ(fm_workbook_get_font(reloaded.handle, index, &back), 0);
   EXPECT_EQ(back.has_outline, 1);
   EXPECT_EQ(back.outline, 1);
   EXPECT_EQ(back.has_shadow, 1);
@@ -213,8 +213,8 @@ TEST(FormulonCApiFontToggles, OutlineShadowCondenseExtendRoundTrip) {
 
 namespace {
 
-fm_fill_record GradientFill(fm_gradient_stop* stops, size_t count) {
-  fm_fill_record fill{};
+fm_fill_record_t GradientFill(fm_gradient_stop_t* stops, size_t count) {
+  fm_fill_record_t fill{};
   fill.has_gradient = 1;
   fill.gradient_type = FM_GRADIENT_PATH;
   fill.gradient_degree = 0.0;
@@ -231,8 +231,8 @@ fm_fill_record GradientFill(fm_gradient_stop* stops, size_t count) {
 
 TEST(FormulonCApiGradientFill, AddGetAndDedup) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_gradient_stop stops[2]{};
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_gradient_stop_t stops[2]{};
   stops[0].position = 0.0;
   stops[0].color_argb = 0xFFFF0000U;
   stops[0].color.kind = kFmColorRgb;
@@ -241,20 +241,20 @@ TEST(FormulonCApiGradientFill, AddGetAndDedup) {
   stops[1].color.kind = kFmColorTheme;
   stops[1].color.theme = 4;
   stops[1].color.tint = 0.5;
-  fm_fill_record fill = GradientFill(stops, 2);
+  fm_fill_record_t fill = GradientFill(stops, 2);
 
   uint32_t index = 0;
-  ASSERT_EQ(fm_styles_add_fill(wb.handle, fill, &index), 0);
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, fill, &index), 0);
   uint32_t same = 0;
-  ASSERT_EQ(fm_styles_add_fill(wb.handle, fill, &same), 0);
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, fill, &same), 0);
   EXPECT_EQ(same, index);
   stops[1].position = 0.9;
   uint32_t other = 0;
-  ASSERT_EQ(fm_styles_add_fill(wb.handle, fill, &other), 0);
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, fill, &other), 0);
   EXPECT_NE(other, index);
 
-  fm_fill_record back{};
-  ASSERT_EQ(fm_styles_get_fill(wb.handle, index, &back), 0);
+  fm_fill_record_t back{};
+  ASSERT_EQ(fm_workbook_get_fill(wb.handle, index, &back), 0);
   EXPECT_EQ(back.has_gradient, 1);
   EXPECT_EQ(back.gradient_type, FM_GRADIENT_PATH);
   EXPECT_EQ(back.gradient_left, 0.5);
@@ -270,9 +270,9 @@ TEST(FormulonCApiGradientFill, AddGetAndDedup) {
 
 TEST(FormulonCApiGradientFill, PatternFillsReportNoGradient) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_fill_record back{};
-  ASSERT_EQ(fm_styles_get_fill(wb.handle, 0, &back), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_fill_record_t back{};
+  ASSERT_EQ(fm_workbook_get_fill(wb.handle, 0, &back), 0);
   EXPECT_EQ(back.has_gradient, 0);
   EXPECT_EQ(back.gradient_stop_count, 0U);
   EXPECT_EQ(back.gradient_stops, nullptr);
@@ -280,45 +280,45 @@ TEST(FormulonCApiGradientFill, PatternFillsReportNoGradient) {
 
 TEST(FormulonCApiGradientFill, NonFiniteNumbersAndNullStopsAreSanitised) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_fill_record fill = GradientFill(nullptr, 5);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_fill_record_t fill = GradientFill(nullptr, 5);
   fill.gradient_degree = std::numeric_limits<double>::infinity();
   uint32_t index = 0;
-  ASSERT_EQ(fm_styles_add_fill(wb.handle, fill, &index), 0);
-  fm_fill_record back{};
-  ASSERT_EQ(fm_styles_get_fill(wb.handle, index, &back), 0);
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, fill, &index), 0);
+  fm_fill_record_t back{};
+  ASSERT_EQ(fm_workbook_get_fill(wb.handle, index, &back), 0);
   EXPECT_EQ(back.gradient_degree, 0.0);
   EXPECT_EQ(back.gradient_stop_count, 0U);
 }
 
 TEST(FormulonCApiGradientFill, SurvivesSaveLoadOnCellsAndDxfs) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_gradient_stop stops[3]{};
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_gradient_stop_t stops[3]{};
   for (int i = 0; i < 3; ++i) {
     stops[i].position = i * 0.5;
     stops[i].color.kind = kFmColorRgb;
     stops[i].color.rgb = 0xFF000000U | (0x40U * static_cast<uint32_t>(i + 1));
     stops[i].color_argb = stops[i].color.rgb;
   }
-  fm_fill_record fill = GradientFill(stops, 3);
+  fm_fill_record_t fill = GradientFill(stops, 3);
   uint32_t fill_index = 0;
-  ASSERT_EQ(fm_styles_add_fill(wb.handle, fill, &fill_index), 0);
-  fm_cell_xf xf{};
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, fill, &fill_index), 0);
+  fm_cell_xf_t xf{};
   xf.fill_index = fill_index;
   xf.apply_fill = 1;
   uint32_t xf_index = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &xf_index), 0);
-  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0, 0, xf_index), 0);
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, xf, &xf_index), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, xf_index), 0);
 
-  fm_dxf_record dxf{};
+  fm_dxf_record_t dxf{};
   dxf.fill_engaged = 1;
   dxf.fill = GradientFill(stops, 3);
   dxf.fill.gradient_type = FM_GRADIENT_LINEAR;
   dxf.fill.gradient_degree = 45.0;
   dxf.fill.gradient_left = dxf.fill.gradient_right = dxf.fill.gradient_top = dxf.fill.gradient_bottom = 0.0;
   uint32_t dxf_index = 0;
-  ASSERT_EQ(fm_styles_add_dxf(wb.handle, dxf, &dxf_index), 0);
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, dxf, &dxf_index), 0);
 
   WorkbookGuard reloaded;
   std::string xml;
@@ -326,15 +326,15 @@ TEST(FormulonCApiGradientFill, SurvivesSaveLoadOnCellsAndDxfs) {
   EXPECT_TRUE(Has(xml, "<gradientFill type=\"path\" left=\"0.5\" right=\"0.5\" top=\"0.25\" bottom=\"0.75\">")) << xml;
   EXPECT_TRUE(Has(xml, "<gradientFill degree=\"45\">")) << xml;
 
-  fm_fill_record back{};
-  ASSERT_EQ(fm_styles_get_fill(reloaded.handle, fill_index, &back), 0);
+  fm_fill_record_t back{};
+  ASSERT_EQ(fm_workbook_get_fill(reloaded.handle, fill_index, &back), 0);
   ASSERT_EQ(back.has_gradient, 1);
   ASSERT_EQ(back.gradient_stop_count, 3U);
   EXPECT_EQ(back.gradient_stops[2].position, 1.0);
   EXPECT_EQ(back.gradient_stops[2].color.rgb, 0xFF0000C0U);
 
-  fm_dxf_record dxf_back{};
-  ASSERT_EQ(fm_styles_get_dxf(reloaded.handle, dxf_index, &dxf_back), 0);
+  fm_dxf_record_t dxf_back{};
+  ASSERT_EQ(fm_workbook_get_dxf(reloaded.handle, dxf_index, &dxf_back), 0);
   ASSERT_EQ(dxf_back.fill_engaged, 1);
   EXPECT_EQ(dxf_back.fill.has_gradient, 1);
   EXPECT_EQ(dxf_back.fill.gradient_degree, 45.0);
@@ -374,16 +374,16 @@ fm_cf_rule_t IconRule(const fm_cf_cell_range_t* sqref, fm_cfvo_t* thresholds, co
 
 TEST(FormulonCApiCustomIcons, RoundTripThroughSaveAndLoad) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cf_cell_range_t sqref{0, 0, 9, 0};
   fm_cfvo_t thresholds[2]{};
   const fm_cf_icon_t icons[3] = {{"3Triangles", 0}, {"NoIcons", 0}, {"5Boxes", 4}};
   size_t rule_index = 0;
-  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, IconRule(&sqref, thresholds, icons, 3), &rule_index), 0)
-      << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, IconRule(&sqref, thresholds, icons, 3), &rule_index), 0)
+      << fm_get_last_error_message();
 
   fm_cf_rule_t added{};
-  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, rule_index, &added), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, rule_index, &added), 0);
   ASSERT_EQ(added.icon_set_icon_count, 3U);
   EXPECT_STREQ(added.icon_set_icons[1].icon_set, "NoIcons");
 
@@ -392,7 +392,7 @@ TEST(FormulonCApiCustomIcons, RoundTripThroughSaveAndLoad) {
   RoundTrip(wb, &reloaded, &xml);
   EXPECT_TRUE(Has(xml, "<x14:cfIcon iconSet=\"3Triangles\" iconId=\"0\"/>")) << xml;
   fm_cf_rule_t back{};
-  ASSERT_EQ(fm_sheet_cf_get_at(reloaded.handle, 0, 0, &back), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule(reloaded.handle, 0, 0, &back), 0);
   ASSERT_EQ(back.icon_set_icon_count, 3U);
   EXPECT_STREQ(back.icon_set_icons[0].icon_set, "3Triangles");
   EXPECT_STREQ(back.icon_set_icons[2].icon_set, "5Boxes");
@@ -401,39 +401,39 @@ TEST(FormulonCApiCustomIcons, RoundTripThroughSaveAndLoad) {
 
 TEST(FormulonCApiCustomIcons, RulesWithoutIconsReportNone) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cf_cell_range_t sqref{0, 0, 9, 0};
   fm_cfvo_t thresholds[2]{};
   size_t rule_index = 0;
-  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, IconRule(&sqref, thresholds, nullptr, 0), &rule_index), 0);
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, IconRule(&sqref, thresholds, nullptr, 0), &rule_index), 0);
   fm_cf_rule_t back{};
-  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, rule_index, &back), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, rule_index, &back), 0);
   EXPECT_EQ(back.icon_set_icon_count, 0U);
   EXPECT_EQ(back.icon_set_icons, nullptr);
 }
 
 TEST(FormulonCApiCustomIcons, MalformedIconListsAreRejected) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cf_cell_range_t sqref{0, 0, 9, 0};
   fm_cfvo_t thresholds[2]{};
   size_t rule_index = 0;
   const fm_cf_icon_t too_few[2] = {{"3Arrows", 0}, {"3Arrows", 1}};
-  EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, IconRule(&sqref, thresholds, too_few, 2), &rule_index),
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, IconRule(&sqref, thresholds, too_few, 2), &rule_index),
             kInvalidArgument);
   const fm_cf_icon_t unknown_set[3] = {{"3Arrows", 0}, {"7Dwarfs", 1}, {"3Arrows", 2}};
-  EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, IconRule(&sqref, thresholds, unknown_set, 3), &rule_index),
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, IconRule(&sqref, thresholds, unknown_set, 3), &rule_index),
             kInvalidArgument);
   const fm_cf_icon_t id_out_of_set[3] = {{"3Arrows", 0}, {"3Arrows", 3}, {"3Arrows", 2}};
-  EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, IconRule(&sqref, thresholds, id_out_of_set, 3), &rule_index),
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, IconRule(&sqref, thresholds, id_out_of_set, 3), &rule_index),
             kInvalidArgument);
   const fm_cf_icon_t null_set[3] = {{"3Arrows", 0}, {nullptr, 0}, {"3Arrows", 2}};
-  EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, IconRule(&sqref, thresholds, null_set, 3), &rule_index),
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, IconRule(&sqref, thresholds, null_set, 3), &rule_index),
             kInvalidArgument);
-  EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, IconRule(&sqref, thresholds, nullptr, 3), &rule_index),
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, IconRule(&sqref, thresholds, nullptr, 3), &rule_index),
             kInvalidArgument);
   size_t count = 0;
-  ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(fm_sheet_get_cf_rule_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 0U);
 }
 
@@ -443,16 +443,16 @@ TEST(FormulonCApiCustomIcons, MalformedIconListsAreRejected) {
 
 TEST(FormulonCApiCalcOptions, DefaultsAndRoundTrip) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   int32_t flag = -1;
-  ASSERT_EQ(fm_workbook_full_precision(wb.handle, &flag), 0);
+  ASSERT_EQ(fm_workbook_get_full_precision(wb.handle, &flag), 0);
   EXPECT_EQ(flag, 1);
-  ASSERT_EQ(fm_workbook_calc_on_save(wb.handle, &flag), 0);
+  ASSERT_EQ(fm_workbook_get_calc_on_save(wb.handle, &flag), 0);
   EXPECT_EQ(flag, 1);
-  ASSERT_EQ(fm_workbook_date1904(wb.handle, &flag), 0);
+  ASSERT_EQ(fm_workbook_get_date1904(wb.handle, &flag), 0);
   EXPECT_EQ(flag, 0);
   fm_ref_mode_t mode = FM_REF_MODE_R1C1;
-  ASSERT_EQ(fm_workbook_ref_mode(wb.handle, &mode), 0);
+  ASSERT_EQ(fm_workbook_get_ref_mode(wb.handle, &mode), 0);
   EXPECT_EQ(mode, FM_REF_MODE_A1);
 
   ASSERT_EQ(fm_workbook_set_full_precision(wb.handle, 0), 0);
@@ -468,22 +468,22 @@ TEST(FormulonCApiCalcOptions, DefaultsAndRoundTrip) {
   EXPECT_TRUE(Has(xml, "calcOnSave=\"0\"")) << xml;
   EXPECT_TRUE(Has(xml, "refMode=\"R1C1\"")) << xml;
   EXPECT_TRUE(Has(xml, "date1904=\"1\"")) << xml;
-  ASSERT_EQ(fm_workbook_full_precision(reloaded.handle, &flag), 0);
+  ASSERT_EQ(fm_workbook_get_full_precision(reloaded.handle, &flag), 0);
   EXPECT_EQ(flag, 0);
-  ASSERT_EQ(fm_workbook_calc_on_save(reloaded.handle, &flag), 0);
+  ASSERT_EQ(fm_workbook_get_calc_on_save(reloaded.handle, &flag), 0);
   EXPECT_EQ(flag, 0);
-  ASSERT_EQ(fm_workbook_date1904(reloaded.handle, &flag), 0);
+  ASSERT_EQ(fm_workbook_get_date1904(reloaded.handle, &flag), 0);
   EXPECT_EQ(flag, 1);
-  ASSERT_EQ(fm_workbook_ref_mode(reloaded.handle, &mode), 0);
+  ASSERT_EQ(fm_workbook_get_ref_mode(reloaded.handle, &mode), 0);
   EXPECT_EQ(mode, FM_REF_MODE_R1C1);
 }
 
 TEST(FormulonCApiCalcOptions, NullArgumentsAreRejected) {
   int32_t flag = 0;
-  EXPECT_NE(fm_workbook_full_precision(nullptr, &flag), 0);
+  EXPECT_NE(fm_workbook_get_full_precision(nullptr, &flag), 0);
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  EXPECT_NE(fm_workbook_date1904(wb.handle, nullptr), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  EXPECT_NE(fm_workbook_get_date1904(wb.handle, nullptr), 0);
   EXPECT_NE(fm_workbook_set_calc_on_save(nullptr, 1), 0);
 }
 
@@ -493,37 +493,37 @@ TEST(FormulonCApiCalcOptions, NullArgumentsAreRejected) {
 
 TEST(FormulonCApiDefinedNameAttrs, SetReadBackAndKeepAcrossReplacement) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Rate", "Sheet1!$A$1", -1), 0);
   EXPECT_EQ(fm_workbook_set_defined_name_attrs(wb.handle, "Nope", -1, "x", 1), kInvalidArgument);
   ASSERT_EQ(fm_workbook_set_defined_name_attrs(wb.handle, "rate", -1, "Tax rate", 1), 0);
 
   const char* comment = nullptr;
   int32_t hidden = -1;
-  ASSERT_EQ(fm_workbook_defined_name_attrs_at(wb.handle, 0, &comment, &hidden), 0);
+  ASSERT_EQ(fm_workbook_get_defined_name_attrs_at(wb.handle, 0, &comment, &hidden), 0);
   EXPECT_STREQ(comment, "Tax rate");
   EXPECT_EQ(hidden, 1);
 
   // A replacement keeps the attributes; a NULL / negative argument leaves one alone.
   ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Rate", "Sheet1!$B$2", -1), 0);
   ASSERT_EQ(fm_workbook_set_defined_name_attrs(wb.handle, "Rate", -1, nullptr, 0), 0);
-  ASSERT_EQ(fm_workbook_defined_name_attrs_at(wb.handle, 0, &comment, &hidden), 0);
+  ASSERT_EQ(fm_workbook_get_defined_name_attrs_at(wb.handle, 0, &comment, &hidden), 0);
   EXPECT_STREQ(comment, "Tax rate");
   EXPECT_EQ(hidden, 0);
 
-  EXPECT_EQ(fm_workbook_defined_name_attrs_at(wb.handle, 4, &comment, &hidden), kInvalidArgument);
-  EXPECT_NE(fm_workbook_defined_name_attrs_at(wb.handle, 0, nullptr, &hidden), 0);
+  EXPECT_EQ(fm_workbook_get_defined_name_attrs_at(wb.handle, 4, &comment, &hidden), kInvalidArgument);
+  EXPECT_NE(fm_workbook_get_defined_name_attrs_at(wb.handle, 0, nullptr, &hidden), 0);
 
   ASSERT_EQ(fm_workbook_set_defined_name_attrs(wb.handle, "Rate", -1, "Tax rate", 1), 0);
   WorkbookGuard reloaded;
   RoundTrip(wb, &reloaded);
-  ASSERT_EQ(fm_workbook_defined_name_attrs_at(reloaded.handle, 0, &comment, &hidden), 0);
+  ASSERT_EQ(fm_workbook_get_defined_name_attrs_at(reloaded.handle, 0, &comment, &hidden), 0);
   EXPECT_STREQ(comment, "Tax rate");
   EXPECT_EQ(hidden, 1);
 
   // Clearing the comment with an empty string.
   ASSERT_EQ(fm_workbook_set_defined_name_attrs(reloaded.handle, "Rate", -1, "", -1), 0);
-  ASSERT_EQ(fm_workbook_defined_name_attrs_at(reloaded.handle, 0, &comment, &hidden), 0);
+  ASSERT_EQ(fm_workbook_get_defined_name_attrs_at(reloaded.handle, 0, &comment, &hidden), 0);
   EXPECT_STREQ(comment, "");
   EXPECT_EQ(hidden, 1);
 }
@@ -534,8 +534,8 @@ TEST(FormulonCApiDefinedNameAttrs, SetReadBackAndKeepAcrossReplacement) {
 
 TEST(FormulonCApiFormatDefaultFlags, CustomHeightAndZeroHeightRoundTrip) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_sheet_format_defaults d{};
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_sheet_format_defaults_t d{};
   ASSERT_EQ(fm_sheet_get_format_defaults(wb.handle, 0, &d), 0);
   EXPECT_EQ(d.custom_height, 0);
   EXPECT_EQ(d.zero_height, 0);
@@ -552,7 +552,7 @@ TEST(FormulonCApiFormatDefaultFlags, CustomHeightAndZeroHeightRoundTrip) {
   std::string xml;
   RoundTrip(wb, &reloaded, &xml);
   EXPECT_TRUE(Has(xml, "customHeight=\"1\"")) << xml;
-  fm_sheet_format_defaults back{};
+  fm_sheet_format_defaults_t back{};
   ASSERT_EQ(fm_sheet_get_format_defaults(reloaded.handle, 0, &back), 0);
   EXPECT_EQ(back.custom_height, 1);
   EXPECT_EQ(back.default_row_height, 18.0);
@@ -566,7 +566,7 @@ TEST(FormulonCApiFormatDefaultFlags, CustomHeightAndZeroHeightRoundTrip) {
   ASSERT_EQ(fm_sheet_get_format_defaults(again.handle, 0, &back), 0);
   EXPECT_EQ(back.zero_height, 1);
   EXPECT_EQ(back.effective_default_row_height, 0.0);
-  fm_sheet_format_defaults cleared{};
+  fm_sheet_format_defaults_t cleared{};
   cleared.base_col_width = 8.0;
   ASSERT_EQ(fm_sheet_set_format_defaults(again.handle, 0, &cleared), 0);
   ASSERT_EQ(fm_sheet_get_format_defaults(again.handle, 0, &back), 0);

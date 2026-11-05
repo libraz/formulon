@@ -68,10 +68,10 @@ fm_status_t CheckRange(const std::vector<formulon::ProtectedRange>& ranges, cons
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_get_protection(fm_workbook_t* wb, fm_workbook_protection_t* out) {
+extern "C" fm_status_t fm_workbook_get_workbook_protection(fm_workbook_t* wb, fm_workbook_protection_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return null_argument("fm_workbook_get_protection");
+    return null_argument("fm_workbook_get_workbook_protection");
   }
   const formulon::WorkbookProtection p =
       formulon::io::parse_workbook_protection(wb->workbook().workbook_protection_xml());
@@ -92,13 +92,14 @@ extern "C" fm_status_t fm_workbook_get_protection(fm_workbook_t* wb, fm_workbook
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_set_protection(fm_workbook_t* wb, const fm_workbook_protection_t* protection) {
+extern "C" fm_status_t fm_workbook_set_workbook_protection(fm_workbook_t* wb,
+                                                           const fm_workbook_protection_t* protection) {
   clear_last_error();
   if (wb == nullptr || protection == nullptr) {
-    return null_argument("fm_workbook_set_protection");
+    return null_argument("fm_workbook_set_workbook_protection");
   }
   if (auto rc = check_utf8(
-          "fm_workbook_set_protection",
+          "fm_workbook_set_workbook_protection",
           {protection->workbook_password, protection->workbook_algorithm_name, protection->workbook_hash_value,
            protection->workbook_salt_value, protection->revisions_password, protection->revisions_algorithm_name,
            protection->revisions_hash_value, protection->revisions_salt_value});
@@ -124,13 +125,13 @@ extern "C" fm_status_t fm_workbook_set_protection(fm_workbook_t* wb, const fm_wo
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_protected_range_count(fm_workbook_t* wb, uint32_t sheet, uint32_t* out_count) {
+extern "C" fm_status_t fm_sheet_get_protected_range_count(fm_workbook_t* wb, uint32_t sheet, uint32_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_protected_range_count: NULL out_count");
+                             "fm_sheet_get_protected_range_count: NULL out_count");
   }
-  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_protected_range_count"); rc != 0) {
+  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_protected_range_count"); rc != 0) {
     return rc;
   }
   *out_count =

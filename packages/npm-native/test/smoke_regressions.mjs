@@ -160,7 +160,7 @@ test('CFVO value strings survive getConditionalFormats and a save/load cycle', a
   let bytes;
   try {
     for (const rule of [COLOR_SCALE_RULE, DATA_BAR_RULE, ICON_SET_RULE]) {
-      const added = wb.addConditionalFormat(0, rule);
+      const added = wb.addCfRule(0, rule);
       assert.ok(added.status.ok, `addConditionalFormat type=${rule.type}: ${JSON.stringify(added.status)}`);
     }
 
@@ -190,7 +190,7 @@ test('CFVO value strings survive getConditionalFormats and a save/load cycle', a
     wb.dispose();
   }
 
-  const reloaded = mod.Workbook.loadBytes(bytes);
+  const reloaded = mod.Workbook.load(bytes);
   try {
     const rules = reloaded.getConditionalFormats(0);
     assert.equal(rules.length, 3);
@@ -273,35 +273,35 @@ test('pivotFieldAddItemAt hides the blank item an empty label cannot name', asyn
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const cache = wb.pivotCacheCreate(0);
+    const cache = wb.addPivotCache(0);
     assert.ok(cache.status.ok, `pivotCacheCreate: ${JSON.stringify(cache.status)}`);
-    const region = wb.pivotCacheFieldAdd(cache.index, 'Region');
+    const region = wb.addPivotCacheField(cache.index, 'Region');
     assert.ok(region.status.ok);
-    const amount = wb.pivotCacheFieldAdd(cache.index, 'Amount');
+    const amount = wb.addPivotCacheField(cache.index, 'Amount');
     assert.ok(amount.status.ok);
     // Shared item 0 renders as "North"; shared item 1 is the blank, which
     // carries no label of its own and can only be named by its index.
-    assert.ok(wb.pivotCacheFieldAddSharedItemText(cache.index, region.index, 'North').ok);
-    assert.ok(wb.pivotCacheFieldAddSharedItemBlank(cache.index, region.index).ok);
+    assert.ok(wb.addPivotCacheFieldSharedItemText(cache.index, region.index, 'North').ok);
+    assert.ok(wb.addPivotCacheFieldSharedItemBlank(cache.index, region.index).ok);
 
-    const first = wb.pivotCacheRecordAdd(cache.index);
+    const first = wb.addPivotCacheRecord(cache.index);
     assert.ok(first.status.ok);
-    assert.ok(wb.pivotCacheRecordSetNumber(cache.index, first.index, region.index, 0).ok);
-    assert.ok(wb.pivotCacheRecordSetNumber(cache.index, first.index, amount.index, 100).ok);
-    const second = wb.pivotCacheRecordAdd(cache.index);
+    assert.ok(wb.setPivotCacheRecordNumber(cache.index, first.index, region.index, 0).ok);
+    assert.ok(wb.setPivotCacheRecordNumber(cache.index, first.index, amount.index, 100).ok);
+    const second = wb.addPivotCacheRecord(cache.index);
     assert.ok(second.status.ok);
-    assert.ok(wb.pivotCacheRecordSetBlank(cache.index, second.index, region.index).ok);
-    assert.ok(wb.pivotCacheRecordSetNumber(cache.index, second.index, amount.index, 200).ok);
+    assert.ok(wb.setPivotCacheRecordBlank(cache.index, second.index, region.index).ok);
+    assert.ok(wb.setPivotCacheRecordNumber(cache.index, second.index, amount.index, 200).ok);
 
-    const pivot = wb.pivotCreate(0, 'PT', cache.index, 0, 0);
+    const pivot = wb.addPivot(0, 'PT', cache.index, 0, 0);
     assert.ok(pivot.status.ok, `pivotCreate: ${JSON.stringify(pivot.status)}`);
-    const regionField = wb.pivotFieldAdd(0, pivot.index, { sourceName: 'Region', axis: 0 });
+    const regionField = wb.addPivotField(0, pivot.index, { sourceName: 'Region', axis: 0 });
     assert.ok(regionField.status.ok);
-    const amountField = wb.pivotFieldAdd(0, pivot.index, { sourceName: 'Amount', axis: 2 });
+    const amountField = wb.addPivotField(0, pivot.index, { sourceName: 'Amount', axis: 2 });
     assert.ok(amountField.status.ok);
-    assert.ok(wb.pivotSetRowFieldOrder(0, pivot.index, [regionField.index]).ok);
+    assert.ok(wb.setPivotRowFieldOrder(0, pivot.index, [regionField.index]).ok);
     assert.ok(
-      wb.pivotDataFieldAdd(0, pivot.index, {
+      wb.addPivotDataField(0, pivot.index, {
         name: 'Sum of Amount',
         fieldIndex: amountField.index,
         aggregation: 0,
@@ -309,7 +309,7 @@ test('pivotFieldAddItemAt hides the blank item an empty label cannot name', asyn
     );
 
     const sumDataCells = () => {
-      const layout = wb.pivotLayout(0, pivot.index);
+      const layout = wb.getPivotLayout(0, pivot.index);
       assert.ok(layout.status.ok, `pivotLayout: ${JSON.stringify(layout.status)}`);
       let total = 0;
       for (const cell of layout.cells) {
@@ -321,8 +321,8 @@ test('pivotFieldAddItemAt hides the blank item an empty label cannot name', asyn
     };
     assert.equal(sumDataCells(), 300);
 
-    assert.ok(wb.pivotFieldAddItem(0, pivot.index, regionField.index, 'North', true).ok);
-    assert.ok(wb.pivotFieldAddItemAt(0, pivot.index, regionField.index, 1, false).ok);
+    assert.ok(wb.addPivotFieldItem(0, pivot.index, regionField.index, 'North', true).ok);
+    assert.ok(wb.addPivotFieldSharedItem(0, pivot.index, regionField.index, 1, false).ok);
     assert.equal(sumDataCells(), 100);
   } finally {
     wb.dispose();
@@ -439,54 +439,54 @@ test('setSheetVisibility states veryHidden, which the bool setter cannot', async
   const wb = mod.Workbook.createDefault();
   try {
     const read = () => {
-      const r = wb.getSheetView(0);
+      const r = wb.getView(0);
       assert.ok(r.status.ok, `getSheetView: ${JSON.stringify(r.status)}`);
       return r.view;
     };
     assert.equal(read().visibility, mod.SheetVisibility.Visible);
     assert.equal(read().tabHidden, 0);
     // The only visible sheet cannot be hidden: kInvalidArgument, sheet left alone.
-    for (const refused of [wb.setSheetVisibility(0, mod.SheetVisibility.Hidden), wb.setSheetTabHidden(0, true)]) {
+    for (const refused of [wb.setVisibility(0, mod.SheetVisibility.Hidden), wb.setTabHidden(0, true)]) {
       assert.equal(refused.ok, false);
       assert.equal(refused.status, 2);
     }
     assert.equal(read().visibility, mod.SheetVisibility.Visible);
     // The last sheet keeps its own refusal (kCannotRemoveLastSheet).
     assert.equal(wb.removeSheet(0).status, 5052);
-    assert.equal(wb.sheetCount().value, 1);
+    assert.equal(wb.getSheetCount().value, 1);
     // A second sheet lets the first one change state, but removing the first
     // while the second is hidden would leave no visible sheet.
     assert.ok(wb.addSheet('Second').ok);
-    assert.ok(wb.setSheetTabHidden(1, true).ok);
+    assert.ok(wb.setTabHidden(1, true).ok);
     const lastVisible = wb.removeSheet(0);
     assert.equal(lastVisible.ok, false);
     assert.equal(lastVisible.status, 2);
-    assert.equal(wb.sheetCount().value, 2);
-    assert.ok(wb.setSheetTabHidden(1, false).ok);
+    assert.equal(wb.getSheetCount().value, 2);
+    assert.ok(wb.setTabHidden(1, false).ok);
 
-    assert.ok(wb.setSheetVisibility(0, mod.SheetVisibility.VeryHidden).ok);
+    assert.ok(wb.setVisibility(0, mod.SheetVisibility.VeryHidden).ok);
     // The two-state view stays consistent: a very-hidden sheet reads as
     // hidden to a caller that knows only the bool, never as visible.
     assert.equal(read().visibility, mod.SheetVisibility.VeryHidden);
     assert.equal(read().tabHidden, 1);
 
     // Asking for plain "hidden" must not weaken the stronger state.
-    assert.ok(wb.setSheetTabHidden(0, true).ok);
+    assert.ok(wb.setTabHidden(0, true).ok);
     assert.equal(read().visibility, mod.SheetVisibility.VeryHidden);
 
     // Demotion is the other direction the bool cannot express.
-    assert.ok(wb.setSheetVisibility(0, mod.SheetVisibility.Hidden).ok);
+    assert.ok(wb.setVisibility(0, mod.SheetVisibility.Hidden).ok);
     assert.equal(read().visibility, mod.SheetVisibility.Hidden);
     assert.equal(read().tabHidden, 1);
 
     // Showing the sheet clears either hidden state.
-    assert.ok(wb.setSheetTabHidden(0, false).ok);
+    assert.ok(wb.setTabHidden(0, false).ok);
     assert.equal(read().visibility, mod.SheetVisibility.Visible);
     assert.equal(read().tabHidden, 0);
 
     // An unknown ordinal is refused and leaves the sheet alone.
-    assert.ok(wb.setSheetVisibility(0, mod.SheetVisibility.VeryHidden).ok);
-    assert.equal(wb.setSheetVisibility(0, 3).ok, false);
+    assert.ok(wb.setVisibility(0, mod.SheetVisibility.VeryHidden).ok);
+    assert.equal(wb.setVisibility(0, 3).ok, false);
     assert.equal(read().visibility, mod.SheetVisibility.VeryHidden);
   } finally {
     wb.dispose();

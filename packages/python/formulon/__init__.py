@@ -2,7 +2,7 @@
 
 Public API:
   * :func:`eval_formula` -- one-shot formula evaluation.
-  * :func:`library_version` -- query the underlying ``libformulon`` build.
+  * :func:`get_version` -- query the underlying ``libformulon`` build.
   * :class:`Workbook` -- full workbook lifecycle.
   * :class:`Value`, :class:`ValueKind` -- cell value POD.
   * :class:`FormulonError` -- host-side failure exception.
@@ -41,13 +41,13 @@ from .workbook import (
     CalcMode,
     Cell,
     CellNode,
-    CellStyle,
+    CellStyleRecord,
     CellXf,
     CfCellResult,
     CfColor,
     CfIcon,
     CfMatch,
-    CfValueObject,
+    Cfvo,
     ChartAxisCrosses,
     ChartAxisInfo,
     ChartAxisKind,
@@ -81,14 +81,14 @@ from .workbook import (
     ChartPointInfo,
     ChartPointPatch,
     ChartPointState,
-    ChartPreviewOverrides,
+    ChartPreviewOverridesInput,
     ChartSeriesDirection,
     ChartSeriesInfo,
     ChartSeriesPatch,
     ChartSeriesRanges,
     ChartSheetRange,
     ChartSourceInfo,
-    ChartTitleInfo,
+    ChartTitle,
     ChartTitleKind,
     ChartUnresolved,
     CivilTime,
@@ -119,8 +119,8 @@ from .workbook import (
     EffectiveStyleSource,
     ErrorCode,
     ErrorName,
-    ExternalLink,
     ExternalLinkKind,
+    ExternalLinkRecord,
     FillRecord,
     FilterKind,
     FilterOperator,
@@ -161,7 +161,7 @@ from .workbook import (
     PivotDataFieldSpec,
     PivotDatePeriod,
     PivotFieldInfo,
-    PivotFieldSpec,
+    PivotFieldSpecInput,
     PivotFilterSpec,
     PivotFilterType,
     PivotFilterValueKind,
@@ -217,6 +217,14 @@ from .workbook import (
     WorkbookProtection,
     _check,
     _sint,
+    canonicalize_formula,
+    canonicalize_function_name,
+    compare_text,
+    get_collation_classes,
+    get_function_metadata,
+    get_locale_facts,
+    localize_formula,
+    localize_function_name,
 )
 
 
@@ -263,7 +271,7 @@ def _resolve_version() -> str:
                     break
 
     # Last resort: the version baked into the loaded WASM module.
-    return decode_cstr(LIB.fm_version_string())
+    return decode_cstr(LIB.fm_get_version())
 
 
 __version__ = _resolve_version()
@@ -282,13 +290,13 @@ __all__ = [
     "RefMode",
     "Cell",
     "CellNode",
-    "CellStyle",
+    "CellStyleRecord",
     "CellXf",
     "CfCellResult",
     "CfColor",
     "CfIcon",
     "CfMatch",
-    "CfValueObject",
+    "Cfvo",
     "CivilTime",
     "CollationClasses",
     "CollationStrength",
@@ -306,7 +314,7 @@ __all__ = [
     "DifferentialFormat",
     "ErrorCode",
     "ErrorName",
-    "ExternalLink",
+    "ExternalLinkRecord",
     "ExternalLinkKind",
     "FillRecord",
     "LogLevel",
@@ -344,7 +352,7 @@ __all__ = [
     "PivotDataFieldSpec",
     "PivotDatePeriod",
     "PivotFieldInfo",
-    "PivotFieldSpec",
+    "PivotFieldSpecInput",
     "PivotFilterSpec",
     "PivotFilterType",
     "PivotFilterValueKind",
@@ -430,14 +438,14 @@ __all__ = [
     "ChartPointInfo",
     "ChartPointPatch",
     "ChartPointState",
-    "ChartPreviewOverrides",
+    "ChartPreviewOverridesInput",
     "ChartSeriesDirection",
     "ChartSeriesInfo",
     "ChartSeriesPatch",
     "ChartSeriesRanges",
     "ChartSheetRange",
     "ChartSourceInfo",
-    "ChartTitleInfo",
+    "ChartTitle",
     "ChartTitleKind",
     "ChartUnresolved",
     "DrawingObject",
@@ -464,34 +472,37 @@ __all__ = [
     "WorkbookProtection",
     "WorkbookFormat",
     "__version__",
-    "error_display_name",
+    "get_error_display_name",
     "eval_formula",
-    "library_version",
+    "get_version",
     "set_log_min_level",
     "merge_function_metadata",
-    "version_string",
+    "canonicalize_formula",
+    "canonicalize_function_name",
+    "compare_text",
+    "get_collation_classes",
+    "get_function_metadata",
+    "get_locale_facts",
+    "localize_formula",
+    "localize_function_name",
 ]
 
 
-def library_version() -> str:
+def get_version() -> str:
     """Return the version string baked into the loaded WASM module.
 
     Returns:
-      The result of ``fm_version_string()``. Always non-empty.
+      The result of ``fm_get_version()``. Always non-empty.
     """
-    return decode_cstr(LIB.fm_version_string())
+    return decode_cstr(LIB.fm_get_version())
 
 
-def error_display_name(error_code: int) -> str:
+def get_error_display_name(error_code: int) -> str:
     """Return an Excel literal such as ``"#DIV/0!"`` for an error code.
 
     Unknown numeric values return ``"#UNKNOWN!"``.
     """
-    return decode_cstr(LIB.fm_error_display_name(_sint(error_code, "error")))
-
-
-# Backward-compat alias mirroring the npm binding's ``versionString`` name.
-version_string = library_version
+    return decode_cstr(LIB.fm_get_error_display_name(_sint(error_code, "error")))
 
 
 def set_log_min_level(level: int) -> None:

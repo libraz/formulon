@@ -83,11 +83,11 @@ std::vector<formulon::eval::CellNodeId> bfs_collect(formulon::eval::CellNodeId s
 fm_status_t trace_impl(bool precedents, const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
                        std::uint32_t col, std::uint32_t depth, fm_cell_nodes_t** out) {
   clear_last_error();
-  const char* fn_name = precedents ? "fm_workbook_precedents" : "fm_workbook_dependents";
+  const char* fn_name = precedents ? "fm_sheet_get_precedents" : "fm_sheet_get_dependents";
   if (out == nullptr) {
     return set_binding_error(
         formulon::FormulonErrorCode::kBindingNullPointer,
-        precedents ? "fm_workbook_precedents: NULL argument" : "fm_workbook_dependents: NULL argument");
+        precedents ? "fm_sheet_get_precedents: NULL argument" : "fm_sheet_get_dependents: NULL argument");
   }
   *out = nullptr;
   if (auto rc = check_sheet_u32(wb, sheet, fn_name); rc != 0) {
@@ -120,13 +120,13 @@ fm_status_t trace_impl(bool precedents, const fm_workbook_t* wb, std::uint32_t s
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_precedents(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
-                                              std::uint32_t col, std::uint32_t depth, fm_cell_nodes_t** out) {
+extern "C" fm_status_t fm_sheet_get_precedents(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
+                                               std::uint32_t col, std::uint32_t depth, fm_cell_nodes_t** out) {
   return trace_impl(true, wb, sheet, row, col, depth, out);
 }
 
-extern "C" fm_status_t fm_workbook_dependents(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
-                                              std::uint32_t col, std::uint32_t depth, fm_cell_nodes_t** out) {
+extern "C" fm_status_t fm_sheet_get_dependents(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
+                                               std::uint32_t col, std::uint32_t depth, fm_cell_nodes_t** out) {
   return trace_impl(false, wb, sheet, row, col, depth, out);
 }
 
@@ -134,7 +134,7 @@ extern "C" void fm_cell_nodes_destroy(fm_cell_nodes_t* nodes) {
   delete nodes;
 }
 
-extern "C" size_t fm_cell_nodes_count(const fm_cell_nodes_t* nodes) {
+extern "C" size_t fm_cell_nodes_get_node_count(const fm_cell_nodes_t* nodes) {
   clear_last_error();
   if (nodes == nullptr) {
     return 0;
@@ -142,12 +142,12 @@ extern "C" size_t fm_cell_nodes_count(const fm_cell_nodes_t* nodes) {
   return nodes->nodes.size();
 }
 
-extern "C" fm_status_t fm_cell_nodes_at(const fm_cell_nodes_t* nodes, std::size_t idx, fm_cell_node_t* out) {
+extern "C" fm_status_t fm_cell_nodes_get_node_at(const fm_cell_nodes_t* nodes, std::size_t idx, fm_cell_node_t* out) {
   clear_last_error();
   if (nodes == nullptr || out == nullptr) {
-    return null_argument("fm_cell_nodes_at");
+    return null_argument("fm_cell_nodes_get_node_at");
   }
-  if (auto rc = check_index(idx, nodes->nodes.size(), "fm_cell_nodes_at", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, nodes->nodes.size(), "fm_cell_nodes_get_node_at", "idx"); rc != 0) {
     return rc;
   }
   out->sheet = static_cast<std::uint32_t>(nodes->nodes[idx].sheet_id);

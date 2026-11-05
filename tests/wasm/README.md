@@ -35,7 +35,7 @@ exercises every embind export at least once:
   `getValue`, `setIterative`
 - `addSheet`, `sheetCount`, `sheetName`
 - `cellCount`, `cellAt`
-- `save()` / `loadBytes()` round-trip on a small workbook
+- `save()` / `load()` round-trip on a small workbook
 
 A failing test prints `FAIL <name>` plus a stack trace, and the runner
 exits 1. A successful run exits 0 with a one-line `Smoke summary:` line.

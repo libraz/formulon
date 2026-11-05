@@ -33,7 +33,7 @@ collections:
   person: { key: natural, by: id, plural: people, ops: [person.add, person.get_at, person.get_count, person.remove] }
   hyperlink: { key: natural, by: cell, plural: hyperlinks, ops: [hyperlink.add, hyperlink.get_at, hyperlink.get_count, hyperlink.remove, hyperlink.remove_at] }
   merge: { key: natural, by: rect, plural: merges, ops: [merge.add, merge.get_at, merge.get_count, merge.remove, merge.remove_at], no_getter: "the element is its rectangle; a lookup by key returns nothing more" }
-  defined_name: { key: natural, by: name, plural: defined_names, ops: [defined_name.get, defined_name.get_at, defined_name.get_count, defined_name.remove, defined_name.set] }
+  defined_name: { key: natural, by: name, plural: defined_names, ops: [defined_name.get, defined_name.get_at, defined_name.get_count, defined_name.remove, defined_name.set, defined_name_attrs.get_at] }
   data_table: { key: natural, by: cell, plural: data_tables, ops: [data_table.add, data_table.get, data_table.remove] }
   lambda_text: { key: natural, by: cell, plural: lambda_texts, ops: [lambda_text.get] }
   pivot_cache: { key: natural, by: cache_id, plural: pivot_caches, ops: [pivot_cache.create, pivot_cache.get_count, pivot_cache.get_id, pivot_cache.get_id_at, pivot_cache.remove] }

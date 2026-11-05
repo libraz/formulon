@@ -1,7 +1,7 @@
 """Host-injected function-metadata provider seam.
 
 The calculation engine ships no human-readable function documentation:
-:meth:`Workbook.function_metadata` returns only structural data (name,
+:func:`get_function_metadata` returns only structural data (name,
 arity, availability) and leaves ``signature_template`` / ``description``
 as ``None``. That content is a display concern, so a host supplies its own
 metadata document and merges it over the engine result at display time.
@@ -102,13 +102,13 @@ def merge_function_metadata(
 
     Args:
       base: a :class:`FunctionMetadata` from
-        :meth:`Workbook.function_metadata`.
+        :func:`get_function_metadata`.
       entry: the provider's ``functions[NAME]`` mapping, or ``None`` to
         leave ``base`` unchanged (``signature_template`` / ``description``
         stay ``None``).
       locale: a BCP-47 display locale tag (e.g. ``"fr-FR"``) matching the
         keys in ``aliases`` / ``localized``. Independent of the numeric
-        locale code passed to :meth:`Workbook.function_metadata`.
+        locale code passed to :func:`get_function_metadata`.
 
     Returns:
       ``base`` verbatim when ``entry`` is ``None``; otherwise a

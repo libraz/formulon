@@ -172,7 +172,7 @@ class AutoFilterTests(unittest.TestCase):
             self.assertEqual(first_row, 1)
             self.assertEqual(match, [False, False, True, True, True])
             wb.apply_auto_filter(0)
-            hidden = [r.row for r in wb.get_sheet_row_overrides(0) if r.hidden]
+            hidden = [r.row for r in wb.list_row_overrides(0) if r.hidden]
             self.assertEqual(hidden, [1, 2])
             wb.clear_auto_filter(0)
             got = wb.get_auto_filter(0)
@@ -204,7 +204,7 @@ class AutoFilterTests(unittest.TestCase):
             for i in range(1, 4):
                 wb.set_number(0, i, 0, float(i))
                 wb.set_number(0, i, 1, 0.0)
-            idx = wb.table_create(0, "A1:B4", "T1", "T1", ["n", "m"])
+            idx = wb.add_table(0, "A1:B4", "T1", "T1", ["n", "m"])
             wb.remove_table_auto_filter(idx)
             self.assertIsNone(wb.get_table_auto_filter(idx))
             wb.set_table_auto_filter(
@@ -267,14 +267,14 @@ class ValidationCheckTests(unittest.TestCase):
         with self._wb_with_list_rule() as wb:
             for r, v in enumerate(["Yes", "bad1", "No", "bad2", "bad3"]):
                 wb.set_text(0, r, 3, v)
-            cells, cursor = wb.list_invalid_cells(0)
+            cells, cursor = wb.get_invalid_cells(0)
             self.assertEqual([c.row for c in cells], [1, 3, 4])
             self.assertIsNone(cursor)
             seen = []
             cursor = None
             pages = 0
             while True:
-                page, cursor = wb.list_invalid_cells(0, cursor, 2)
+                page, cursor = wb.get_invalid_cells(0, cursor, 2)
                 pages += 1
                 seen += [(c.row, c.value.text) for c in page]
                 if cursor is None:
@@ -282,7 +282,7 @@ class ValidationCheckTests(unittest.TestCase):
             self.assertEqual(seen, [(1, "bad1"), (3, "bad2"), (4, "bad3")])
             self.assertGreaterEqual(pages, 2)
             with self.assertRaises(FormulonError):
-                wb.list_invalid_cells(99)
+                wb.get_invalid_cells(99)
 
 
 class ThreadedCommentTests(unittest.TestCase):
@@ -294,11 +294,11 @@ class ThreadedCommentTests(unittest.TestCase):
 
     def test_persons(self) -> None:
         with self._wb() as wb:
-            persons = wb.get_persons()
+            persons = wb.list_people()
             self.assertEqual([p.display_name for p in persons], ["Alice", "Bob"])
             self.assertEqual(persons[0], Person(ALICE, "Alice", "alice@example.com", "AD"))
             wb.remove_person(BOB)
-            self.assertEqual([p.id for p in wb.get_persons()], [ALICE])
+            self.assertEqual([p.id for p in wb.list_people()], [ALICE])
             with self.assertRaises(FormulonError):
                 wb.remove_person(BOB)
             with self.assertRaises(FormulonError):
@@ -306,7 +306,7 @@ class ThreadedCommentTests(unittest.TestCase):
 
     def test_thread_with_reply_and_mention(self) -> None:
         with self._wb() as wb:
-            self.assertEqual(wb.get_threaded_comments(0), [])
+            self.assertEqual(wb.list_threaded_comments(0), [])
             opener = ThreadedComment(id=THREAD, row=2, col=1, person_id=ALICE, created=STAMP, text="Check this")
             wb.add_threaded_comment(0, opener)
             reply = ThreadedComment(
@@ -320,7 +320,7 @@ class ThreadedCommentTests(unittest.TestCase):
                 ],
             )
             wb.add_threaded_comment(0, reply)
-            got = wb.get_threaded_comments(0)
+            got = wb.list_threaded_comments(0)
             self.assertEqual([c.id for c in got], [THREAD, REPLY])
             self.assertEqual((got[0].row, got[0].col, got[0].text), (2, 1, "Check this"))
             self.assertEqual((got[1].row, got[1].col, got[1].parent_id), (2, 1, THREAD))
@@ -329,19 +329,19 @@ class ThreadedCommentTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.remove_person(ALICE)
 
-            wb.edit_threaded_comment(0, REPLY, "plain", [])
-            self.assertEqual(wb.get_threaded_comments(0)[1].text, "plain")
-            self.assertEqual(wb.get_threaded_comments(0)[1].mentions, [])
+            wb.update_threaded_comment(0, REPLY, "plain", [])
+            self.assertEqual(wb.list_threaded_comments(0)[1].text, "plain")
+            self.assertEqual(wb.list_threaded_comments(0)[1].mentions, [])
 
             wb.set_thread_resolved(0, THREAD, True)
-            self.assertTrue(wb.get_threaded_comments(0)[0].done)
+            self.assertTrue(wb.list_threaded_comments(0)[0].done)
             wb.set_thread_resolved(0, THREAD, False)
-            self.assertFalse(wb.get_threaded_comments(0)[0].done)
+            self.assertFalse(wb.list_threaded_comments(0)[0].done)
 
             wb.remove_threaded_comment(0, REPLY)
-            self.assertEqual([c.id for c in wb.get_threaded_comments(0)], [THREAD])
+            self.assertEqual([c.id for c in wb.list_threaded_comments(0)], [THREAD])
             wb.remove_threaded_comment(0, THREAD)
-            self.assertEqual(wb.get_threaded_comments(0), [])
+            self.assertEqual(wb.list_threaded_comments(0), [])
             wb.remove_person(ALICE)
 
     def test_invalid_comment_is_rejected(self) -> None:
@@ -349,7 +349,7 @@ class ThreadedCommentTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.add_threaded_comment(0, ThreadedComment(id="not-a-guid", person_id=ALICE, created=STAMP, text="x"))
             with self.assertRaises(FormulonError):
-                wb.edit_threaded_comment(0, THREAD, "x")
+                wb.update_threaded_comment(0, THREAD, "x")
             with self.assertRaises(FormulonError):
                 wb.set_thread_resolved(0, THREAD, True)
             with self.assertRaises(FormulonError):

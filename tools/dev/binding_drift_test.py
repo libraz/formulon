@@ -271,6 +271,20 @@ class LedgerRenameChainTest(unittest.TestCase):
         self.assertEqual(validate.check_chains(entries, self._surfaces(fm_sheet_get_p=4, fm_sheet_get_q=5)), [])
         self.assertTrue(validate.check_chains(entries, self._surfaces(fm_sheet_get_p=4, fm_sheet_get_q=4)))
 
+    def test_c_name_handed_over_is_allowed_once_the_tree_is_renamed(self) -> None:
+        validate = self._validate_names()
+        surfaces = self._surfaces(fm_sheet_get_x=5, fm_sheet_get_x_at=4)
+        self.assertEqual(validate.check_chains(self._entries(), surfaces), [])
+
+    def test_coverage_accepts_the_former_or_the_current_name(self) -> None:
+        validate = self._validate_names()
+        entries = self._entries()
+        for exported in (("fm_sheet_get_x_at", "fm_sheet_get_x_idx"), ("fm_sheet_get_x", "fm_sheet_get_x_at")):
+            surfaces = SimpleNamespace(exported=lambda names=exported: [("c", n) for n in names])
+            self.assertEqual(validate.check_coverage(entries, surfaces), [])
+        surfaces = SimpleNamespace(exported=lambda: [("c", "fm_sheet_get_y")])
+        self.assertTrue(validate.check_coverage(entries, surfaces))
+
     def test_equal_parameter_counts_stay_a_chain(self) -> None:
         validate = self._validate_names()
         problems = validate.check_chains(self._entries(), self._surfaces(fm_sheet_get_x_at=4, fm_sheet_get_x_idx=4))

@@ -1,7 +1,7 @@
 # Function metadata provider schema
 
 Formulon's calculation engine deliberately ships **no** human-readable
-function documentation. `functionMetadata(name)` returns only the
+function documentation. `getFunctionMetadata(name)` returns only the
 data the engine actually owns — canonical name, arity bounds, and an
 availability class — and leaves `signatureTemplate` / `description` as
 `NULL` (empty). Display-name tables beyond the engine's own function-name
@@ -22,9 +22,9 @@ parsed or evaluated.
   A formula written with a localized function name (formula-language
   localization) is **not** interpreted by this seam — that is a separate
   engine-level concern and is out of scope here.
-- The engine's own locale calls — `fm_function_localize` /
-  `fm_function_canonicalize` (and the formula-text and locale-facts calls
-  `fm_formula_localize`, `fm_formula_canonicalize`, `fm_locale_facts`) — are
+- The engine's own locale calls — `fm_localize_function_name` /
+  `fm_canonicalize_function_name` (and the formula-text and locale-facts calls
+  `fm_localize_formula`, `fm_canonicalize_formula`, `fm_get_locale_facts`) — are
   keyed by an Excel profile id (`{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,
   zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}`) and are **not** driven by this provider. They carry
   Excel's own spelling of function names, separators and error names; this

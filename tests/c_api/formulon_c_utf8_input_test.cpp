@@ -26,19 +26,19 @@ const char* const kMalformed[] = {kLoneSurrogate, kTruncated};
 
 std::size_t CellCount(const WorkbookGuard& wb) {
   std::size_t cells = 99U;
-  EXPECT_EQ(fm_workbook_cell_count(wb.handle, 0, &cells), 0) << fm_last_error_message();
+  EXPECT_EQ(fm_sheet_get_cell_count(wb.handle, 0, &cells), 0) << fm_get_last_error_message();
   return cells;
 }
 
 std::string SheetName(const WorkbookGuard& wb, std::size_t index) {
   const char* name = nullptr;
-  EXPECT_EQ(fm_workbook_sheet_name(wb.handle, index, &name), 0) << fm_last_error_message();
+  EXPECT_EQ(fm_workbook_get_sheet_name(wb.handle, index, &name), 0) << fm_get_last_error_message();
   return name != nullptr ? name : "";
 }
 
 std::uint32_t CommentCount(const WorkbookGuard& wb) {
   std::uint32_t count = 99U;
-  EXPECT_EQ(fm_sheet_get_comment_count(wb.handle, 0, &count), 0) << fm_last_error_message();
+  EXPECT_EQ(fm_sheet_get_comment_count(wb.handle, 0, &count), 0) << fm_get_last_error_message();
   return count;
 }
 
@@ -46,36 +46,36 @@ std::uint32_t CommentCount(const WorkbookGuard& wb) {
 
 TEST(FormulonCApiUtf8Input, MalformedTextIsRefusedWithTheWorkbookUnchanged) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const std::string sheet_name = SheetName(wb, 0);
   for (const char* bad : kMalformed) {
-    EXPECT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, bad), kUtf8Error);
-    EXPECT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 1, (std::string("=\"") + bad + "\"").c_str()), kUtf8Error);
+    EXPECT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, bad), kUtf8Error);
+    EXPECT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, (std::string("=\"") + bad + "\"").c_str()), kUtf8Error);
     EXPECT_EQ(fm_workbook_rename_sheet(wb.handle, 0, bad), kUtf8Error);
     EXPECT_EQ(fm_workbook_add_sheet(wb.handle, bad), kUtf8Error);
     EXPECT_EQ(fm_sheet_set_comment(wb.handle, 0, 0, 2, "author", bad), kUtf8Error);
     EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, bad, "=1"), kUtf8Error);
     EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, "Name", (std::string("=\"") + bad + "\"").c_str()), kUtf8Error);
     // The diagnostic never echoes the rejected bytes.
-    EXPECT_STREQ(fm_last_error_message(), "fm_workbook_set_defined_name: text is not valid UTF-8");
+    EXPECT_STREQ(fm_get_last_error_message(), "fm_workbook_set_defined_name: text is not valid UTF-8");
   }
   EXPECT_EQ(CellCount(wb), 0U);
-  EXPECT_EQ(fm_workbook_sheet_count(wb.handle), 1U);
+  EXPECT_EQ(fm_workbook_get_sheet_count(wb.handle), 1U);
   EXPECT_EQ(SheetName(wb, 0), sheet_name);
   EXPECT_EQ(CommentCount(wb), 0U);
-  EXPECT_EQ(fm_workbook_defined_name_count(wb.handle), 0U);
+  EXPECT_EQ(fm_workbook_get_defined_name_count(wb.handle), 0U);
 }
 
 TEST(FormulonCApiUtf8Input, MalformedTextIsRefusedByReadOnlyEntryPoints) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   for (const char* bad : kMalformed) {
     std::int32_t order = 99;
-    EXPECT_EQ(fm_text_compare(bad, "a", "win-365-en_US", FM_COLLATION_COMPARE, &order), kUtf8Error);
-    EXPECT_EQ(fm_text_compare("a", bad, "win-365-en_US", FM_COLLATION_COMPARE, &order), kUtf8Error);
+    EXPECT_EQ(fm_compare_text(bad, "a", "win-365-en_US", FM_COLLATION_COMPARE, &order), kUtf8Error);
+    EXPECT_EQ(fm_compare_text("a", bad, "win-365-en_US", FM_COLLATION_COMPARE, &order), kUtf8Error);
     EXPECT_EQ(order, 99);
     fm_value_t value{};
-    EXPECT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 0, 0, (std::string("=LEN(\"") + bad + "\")").c_str(), &value),
+    EXPECT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, (std::string("=LEN(\"") + bad + "\")").c_str(), &value),
               kUtf8Error);
     fm_value_t text{};
     text.kind = FM_VAL_TEXT;
@@ -88,19 +88,19 @@ TEST(FormulonCApiUtf8Input, MalformedTextIsRefusedByReadOnlyEntryPoints) {
 
 TEST(FormulonCApiUtf8Input, WellFormedMultibyteTextPasses) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, kValidMultibyte), 0) << fm_last_error_message();
-  ASSERT_EQ(fm_workbook_rename_sheet(wb.handle, 0, kValidMultibyte), 0) << fm_last_error_message();
-  ASSERT_EQ(fm_sheet_set_comment(wb.handle, 0, 0, 1, "author", kValidMultibyte), 0) << fm_last_error_message();
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 2, (std::string("=\"") + kValidMultibyte + "\"").c_str()), 0)
-      << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, kValidMultibyte), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_rename_sheet(wb.handle, 0, kValidMultibyte), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_comment(wb.handle, 0, 0, 1, "author", kValidMultibyte), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 2, (std::string("=\"") + kValidMultibyte + "\"").c_str()), 0)
+      << fm_get_last_error_message();
   std::int32_t order = 99;
-  ASSERT_EQ(fm_text_compare(kValidMultibyte, kValidMultibyte, "win-365-en_US", FM_COLLATION_COMPARE, &order), 0)
-      << fm_last_error_message();
+  ASSERT_EQ(fm_compare_text(kValidMultibyte, kValidMultibyte, "win-365-en_US", FM_COLLATION_COMPARE, &order), 0)
+      << fm_get_last_error_message();
   EXPECT_EQ(order, 0);
 
   fm_value_t value{};
-  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &value), 0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &value), 0);
   ASSERT_EQ(value.kind, FM_VAL_TEXT);
   EXPECT_STREQ(value.u.text, kValidMultibyte);
   EXPECT_EQ(SheetName(wb, 0), kValidMultibyte);

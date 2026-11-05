@@ -35,7 +35,7 @@ test('delete() from a spec getter during a call is refused and the call does not
     assert.throws(() => wb.addProtectedRange(0, spec()), refused);
     assert.throws(() => wb.updateProtectedRange(0, 0, spec()), refused);
     assert.throws(() => wb.setAutoFilter(0, spec()), refused);
-    assert.throws(() => wb.insertShape(0, spec()), refused);
+    assert.throws(() => wb.addShape(0, spec()), refused);
     assert.throws(() => wb.addMerge(0, spec()), refused);
     assert.equal(wb.isValid(), true);
     assert.equal(wb.getProtectedRanges(0).length, 0);
@@ -133,13 +133,13 @@ test('a primitive or null where an object is declared throws TypeError and chang
     assert.throws(() => wb.setSheetProtection(0, null), TypeError);
     assert.deepEqual(wb.getSheetProtection(0).protection, protectionBefore);
 
-    const fonts = wb.fontCount().value;
+    const fonts = wb.getFontCount().value;
     assert.throws(() => wb.addFont(null), TypeError);
     assert.throws(() => wb.addFont(1), TypeError);
     assert.throws(() => wb.setDefaultFont(null), TypeError);
-    assert.equal(wb.fontCount().value, fonts);
+    assert.equal(wb.getFontCount().value, fonts);
 
-    assert.throws(() => wb.partialRecalc('x'), TypeError);
+    assert.throws(() => wb.recalcViewport('x'), TypeError);
     assert.throws(() => wb.getCellRectPt(0, null, 0), TypeError);
     assert.throws(() => wb.setCellPhoneticProperties(0, 0, 0, 'x'), TypeError);
     assert.throws(() => wb.restoreRangeStyle(0, null), TypeError);
@@ -156,7 +156,7 @@ test('an argument a method rejects with a status reports kInvalidArgument', asyn
       ['setThemeColors([])', wb.setThemeColors([])],
       ['restoreRangeStyle(0, {})', wb.restoreRangeStyle(0, {})],
       ['remapRangeStyle mismatched lengths', wb.remapRangeStyle(0, 0, 0, 0, 0, [1], [])],
-      ['probeImage({})', wb.probeImage({})],
+      ['probeImage({})', wb.getImageInfo({})],
     ]) {
       const status = typeof result.ok === 'boolean' ? result : result.status;
       assert.equal(status.ok, false, label);
@@ -191,7 +191,7 @@ test('a lone surrogate in a spec string is stored as U+FFFD', async () => {
   const wb = mod.Workbook.createDefault();
   try {
     assert.ok(wb.addPerson({ id: PERSON_ID, displayName: 'a\uD800b' }).ok);
-    const person = wb.getPersons().persons.find((p) => p.id === PERSON_ID);
+    const person = wb.listPeople().persons.find((p) => p.id === PERSON_ID);
     assert.equal(person.displayName, 'a\uFFFDb');
     assert.ok(wb.setText(0, 0, 0, 'x\uDC00').ok);
     assert.equal(wb.getValue(0, 0, 0).value.text, 'x\uFFFD');
@@ -236,7 +236,7 @@ test('every method called from the iterative progress callback throws and change
       assert.ok(thrown[name] instanceof TypeError, `${name} must throw`);
       assert.match(thrown[name].message, /kGraphRecalcReentrant, 4005/, name);
     }
-    assert.equal(wb.sheetCount().value, 2);
+    assert.equal(wb.getSheetCount().value, 2);
     assert.equal(wb.getValue(1, 5, 5).value.number, 42);
     assert.equal(wb.getValue(1, 0, 0).value.kind, 0, 'the refused setFormula wrote nothing');
   } finally {

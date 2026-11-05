@@ -19,7 +19,7 @@ const rejected = (call) => {
 const roundTrip = (mod, wb) => {
   const saved = wb.save();
   assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  return mod.Workbook.loadBytes(saved.bytes);
+  return mod.Workbook.load(saved.bytes);
 };
 
 test('collapsed reads back on rows and columns and survives save/load', async () => {
@@ -31,13 +31,13 @@ test('collapsed reads back on rows and columns and survives save/load', async ()
   assert.ok(wb.setColumnCollapsed(0, 4, 4, true).ok);
   const collapsedRows = (b) =>
     b
-      .getSheetRowOverrides(0)
+      .listRowOverrides(0)
       .rows.filter((r) => r.collapsed)
       .map((r) => r.row);
   assert.deepEqual(collapsedRows(wb), [3]);
   const loaded = roundTrip(mod, wb);
   assert.deepEqual(collapsedRows(loaded), [3]);
-  assert.equal(loaded.getSheetColumns(0).columns.filter((c) => c.collapsed).length, 1);
+  assert.equal(loaded.listColOverrides(0).columns.filter((c) => c.collapsed).length, 1);
   // Clearing the flag drops an override that carries nothing else.
   assert.ok(loaded.setRowCollapsed(0, 3, false).ok);
   assert.deepEqual(collapsedRows(loaded), []);
@@ -50,13 +50,13 @@ test('collapsed reads back on rows and columns and survives save/load', async ()
 test('showFormulas and showOutlineSymbols read back and round-trip', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const initial = wb.getSheetView(0).view;
+  const initial = wb.getView(0).view;
   assert.equal(initial.showFormulas, 0);
   assert.equal(initial.showOutlineSymbols, 1);
-  assert.ok(wb.setSheetShowFormulas(0, true).ok);
-  assert.ok(wb.setSheetShowOutlineSymbols(0, false).ok);
+  assert.ok(wb.setShowFormulas(0, true).ok);
+  assert.ok(wb.setShowOutlineSymbols(0, false).ok);
   const loaded = roundTrip(mod, wb);
-  const view = loaded.getSheetView(0).view;
+  const view = loaded.getView(0).view;
   assert.equal(view.showFormulas, 1);
   assert.equal(view.showOutlineSymbols, 0);
   release(loaded);
@@ -149,16 +149,13 @@ test('custom icon sets round-trip through the conditional-format API', async () 
       icons: list,
     },
   });
-  const added = wb.addConditionalFormat(0, rule(icons));
+  const added = wb.addCfRule(0, rule(icons));
   assert.ok(added.status.ok, JSON.stringify(added.status));
   const loaded = roundTrip(mod, wb);
   const back = loaded.getConditionalFormats(0).find((r) => r.iconSet);
   assert.deepEqual(back.iconSet.icons, icons);
-  assert.equal(wb.addConditionalFormat(0, rule(icons.slice(0, 2))).status.ok, false);
-  assert.equal(
-    wb.addConditionalFormat(0, rule([icons[0], { iconSet: '7Dwarfs', iconId: 0 }, icons[2]])).status.ok,
-    false,
-  );
+  assert.equal(wb.addCfRule(0, rule(icons.slice(0, 2))).status.ok, false);
+  assert.equal(wb.addCfRule(0, rule([icons[0], { iconSet: '7Dwarfs', iconId: 0 }, icons[2]])).status.ok, false);
   release(loaded);
   release(wb);
 });
@@ -166,20 +163,20 @@ test('custom icon sets round-trip through the conditional-format API', async () 
 test('calcPr accessors and the date system', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.equal(wb.fullPrecision().value, 1);
-  assert.equal(wb.calcOnSave().value, 1);
-  assert.equal(wb.refMode().value, 0);
-  assert.equal(wb.date1904().value, 0);
+  assert.equal(wb.getFullPrecision().value, 1);
+  assert.equal(wb.getCalcOnSave().value, 1);
+  assert.equal(wb.getRefMode().value, 0);
+  assert.equal(wb.getDate1904().value, 0);
   assert.ok(wb.setFullPrecision(false).ok);
   assert.ok(wb.setCalcOnSave(false).ok);
   assert.ok(wb.setRefMode(1).ok);
   assert.ok(wb.setDate1904(true).ok);
   assert.equal(wb.setRefMode(9).ok, false);
   const loaded = roundTrip(mod, wb);
-  assert.equal(loaded.fullPrecision().value, 0);
-  assert.equal(loaded.calcOnSave().value, 0);
-  assert.equal(loaded.refMode().value, 1);
-  assert.equal(loaded.date1904().value, 1);
+  assert.equal(loaded.getFullPrecision().value, 0);
+  assert.equal(loaded.getCalcOnSave().value, 0);
+  assert.equal(loaded.getRefMode().value, 1);
+  assert.equal(loaded.getDate1904().value, 1);
   release(loaded);
   release(wb);
 });
@@ -187,17 +184,17 @@ test('calcPr accessors and the date system', async () => {
 test("the file name spells and binds the workbook's own names", async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.equal(wb.fileName().value, '');
+  assert.equal(wb.getFileName().value, '');
   assert.ok(wb.setDefinedName('LN', '10').ok);
   assert.ok(wb.setFileName('M5.xlsx').ok);
-  assert.equal(wb.fileName().value, 'M5.xlsx');
+  assert.equal(wb.getFileName().value, 'M5.xlsx');
   assert.ok(wb.setFormula(0, 0, 0, '=M5.xlsx!LN+1').ok);
   assert.equal(wb.getFormula(0, 0, 0).formula, '=M5.xlsx!LN+1');
-  assert.equal(wb.cellAt(0, 0).formula, '=M5.xlsx!LN+1');
+  assert.equal(wb.getCellAt(0, 0).formula, '=M5.xlsx!LN+1');
   assert.ok(wb.setFileName('M5 b-1.xlsx').ok);
   assert.equal(wb.getFormula(0, 0, 0).formula, "='M5 b-1.xlsx'!LN+1");
   assert.equal(wb.setFileName('Book1').ok, false);
-  assert.equal(wb.fileName().value, 'M5 b-1.xlsx');
+  assert.equal(wb.getFileName().value, 'M5 b-1.xlsx');
   assert.ok(wb.setFileName('').ok);
   assert.equal(wb.getFormula(0, 0, 0).formula, '=[0]!LN+1');
   release(wb);
@@ -225,21 +222,18 @@ test('defined-name comment and hidden read back, set and survive a replacement',
 test('sheet format defaults expose customHeight and zeroHeight and keep omitted flags', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const initial = wb.getSheetFormatDefaults(0);
+  const initial = wb.getFormatDefaults(0);
   assert.equal(initial.customHeight, false);
   assert.equal(initial.zeroHeight, false);
-  assert.ok(wb.setSheetFormatDefaults(0, { defaultRowHeight: 18, customHeight: true }).ok);
-  assert.deepEqual([wb.getSheetFormatDefaults(0).customHeight, wb.getSheetFormatDefaults(0).zeroHeight], [true, false]);
+  assert.ok(wb.setFormatDefaults(0, { defaultRowHeight: 18, customHeight: true }).ok);
+  assert.deepEqual([wb.getFormatDefaults(0).customHeight, wb.getFormatDefaults(0).zeroHeight], [true, false]);
   // An omitted flag keeps the stored one.
-  assert.ok(wb.setSheetFormatDefaults(0, { defaultRowHeight: 18, zeroHeight: true }).ok);
+  assert.ok(wb.setFormatDefaults(0, { defaultRowHeight: 18, zeroHeight: true }).ok);
   const loaded = roundTrip(mod, wb);
-  const defaults = loaded.getSheetFormatDefaults(0);
+  const defaults = loaded.getFormatDefaults(0);
   assert.deepEqual([defaults.customHeight, defaults.zeroHeight, defaults.defaultRowHeight], [true, true, 18]);
-  assert.ok(loaded.setSheetFormatDefaults(0, { defaultRowHeight: 18, customHeight: false, zeroHeight: false }).ok);
-  assert.deepEqual(
-    [loaded.getSheetFormatDefaults(0).customHeight, loaded.getSheetFormatDefaults(0).zeroHeight],
-    [false, false],
-  );
+  assert.ok(loaded.setFormatDefaults(0, { defaultRowHeight: 18, customHeight: false, zeroHeight: false }).ok);
+  assert.deepEqual([loaded.getFormatDefaults(0).customHeight, loaded.getFormatDefaults(0).zeroHeight], [false, false]);
   release(loaded);
   release(wb);
 });

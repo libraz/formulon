@@ -187,7 +187,7 @@ std::string StateAfterSettingTabHidden(const std::vector<std::uint8_t>& bytes, i
   std::vector<std::uint8_t> package;
   if (saved != nullptr) {
     package.assign(saved, saved + saved_len);
-    fm_buffer_free(saved);
+    fm_buffer_destroy(saved);
   }
   fm_workbook_destroy(handle);
   const std::string workbook_xml = ReadPartText(package, "xl/workbook.xml");

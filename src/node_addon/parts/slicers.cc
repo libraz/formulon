@@ -18,8 +18,8 @@ struct SlicerText {
 };
 
 // Reads the fields `spec` carries; the `fields` mask names exactly those.
-fm_slicer PullSlicer(CheckedSpecReader& reader, const Napi::Object& spec, SlicerText& store) {
-  fm_slicer s{};
+fm_slicer_t PullSlicer(CheckedSpecReader& reader, const Napi::Object& spec, SlicerText& store) {
+  fm_slicer_t s{};
   bool present = false;
   if (reader.String(spec, "name", &store.name)) {
     s.fields |= FM_SLICER_FIELD_NAME;
@@ -65,10 +65,10 @@ Napi::Value Workbook::ListSlicers(const Napi::CallbackInfo& info) {
   }
   const uint32_t sheet = ArgU32(info, 0);
   size_t count = 0;
-  fm_status_t rc = fm_sheet_slicer_count(handle_, sheet, &count);
+  fm_status_t rc = fm_sheet_get_slicer_count(handle_, sheet, &count);
   for (size_t i = 0; rc == 0 && i < count; ++i) {
-    fm_slicer s{};
-    rc = fm_sheet_slicer_at(handle_, sheet, i, &s);
+    fm_slicer_t s{};
+    rc = fm_sheet_get_slicer_at(handle_, sheet, i, &s);
     if (rc != 0) {
       break;
     }
@@ -108,7 +108,7 @@ Napi::Value Workbook::AddSlicer(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   SlicerText store;
-  const fm_slicer slicer = PullSlicer(reader, ArgObject(info, 3), store);
+  const fm_slicer_t slicer = PullSlicer(reader, ArgObject(info, 3), store);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -127,7 +127,7 @@ Napi::Value Workbook::UpdateSlicer(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   SlicerText store;
-  const fm_slicer slicer = PullSlicer(reader, ArgObject(info, 2), store);
+  const fm_slicer_t slicer = PullSlicer(reader, ArgObject(info, 2), store);
   if (!reader.ok()) {
     return env.Undefined();
   }

@@ -25,9 +25,9 @@ export function registerSheetPivot(Module, test) {
   test('renameSheet updates the sheet name', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      assert.equal(wb.sheetCount().value, 1);
+      assert.equal(wb.getSheetCount().value, 1);
       assert.ok(wb.renameSheet(0, 'Renamed').ok);
-      const r = wb.sheetName(0);
+      const r = wb.getSheetName(0);
       assert.ok(r.status.ok);
       assert.equal(r.value, 'Renamed');
     } finally {
@@ -52,11 +52,11 @@ export function registerSheetPivot(Module, test) {
       assert.ok(wb.addSheet('A').ok);
       assert.ok(wb.addSheet('B').ok);
       assert.ok(wb.addSheet('C').ok);
-      assert.equal(wb.sheetCount().value, 3);
+      assert.equal(wb.getSheetCount().value, 3);
       assert.ok(wb.removeSheet(1).ok);
-      assert.equal(wb.sheetCount().value, 2);
-      assert.equal(wb.sheetName(0).value, 'A');
-      assert.equal(wb.sheetName(1).value, 'C');
+      assert.equal(wb.getSheetCount().value, 2);
+      assert.equal(wb.getSheetName(0).value, 'A');
+      assert.equal(wb.getSheetName(1).value, 'C');
     } finally {
       wb.delete();
     }
@@ -79,9 +79,9 @@ export function registerSheetPivot(Module, test) {
       assert.ok(wb.addSheet('Gamma').ok);
       // Move Alpha (0) to the end. Excel semantics: to=2 (post-removal).
       assert.ok(wb.moveSheet(0, 2).ok);
-      assert.equal(wb.sheetName(0).value, 'Beta');
-      assert.equal(wb.sheetName(1).value, 'Gamma');
-      assert.equal(wb.sheetName(2).value, 'Alpha');
+      assert.equal(wb.getSheetName(0).value, 'Beta');
+      assert.equal(wb.getSheetName(1).value, 'Gamma');
+      assert.equal(wb.getSheetName(2).value, 'Alpha');
     } finally {
       wb.delete();
     }
@@ -120,11 +120,11 @@ export function registerSheetPivot(Module, test) {
       assert.ok(wb.setFormula(0, 1, 0, '=A1+B1').ok);
       assert.ok(wb.recalc().ok);
 
-      const count = wb.cellCount(0).value;
+      const count = wb.getCellCount(0).value;
       assert.ok(count >= 3, `expected >=3 cells, got ${count}`);
 
       // The very first iteration entry should be A1 (row=0, col=0).
-      const c0 = wb.cellAt(0, 0);
+      const c0 = wb.getCellAt(0, 0);
       assert.ok(c0.status.ok);
       assert.equal(c0.row, 0);
       assert.equal(c0.col, 0);
@@ -139,12 +139,12 @@ export function registerSheetPivot(Module, test) {
   test('failed entry lookups omit optional payload fields', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      for (const entry of [wb.cellAt(99, 0), wb.definedNameAt(0), wb.tableAt(0), wb.passthroughAt(0)]) {
+      for (const entry of [wb.getCellAt(99, 0), wb.definedNameAt(0), wb.getTable(0), wb.passthroughAt(0)]) {
         assert.equal(entry.status.ok, false);
       }
-      assert.ok(!('value' in wb.cellAt(99, 0)));
+      assert.ok(!('value' in wb.getCellAt(99, 0)));
       assert.ok(!('name' in wb.definedNameAt(0)));
-      assert.ok(!('name' in wb.tableAt(0)));
+      assert.ok(!('name' in wb.getTable(0)));
       assert.ok(!('path' in wb.passthroughAt(0)));
     } finally {
       wb.delete();
@@ -154,9 +154,9 @@ export function registerSheetPivot(Module, test) {
   test('pivotCount + pivotLayout expose PivotTable projection status', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      assert.equal(wb.pivotCount(0).value, 0);
+      assert.equal(wb.getPivotCount(0).value, 0);
 
-      const missing = wb.pivotLayout(0, 0);
+      const missing = wb.getPivotLayout(0, 0);
       assert.equal(missing.status.ok, false);
       assert.notEqual(missing.status.status, 0);
       assert.equal(missing.top, 0);
@@ -170,13 +170,13 @@ export function registerSheetPivot(Module, test) {
   });
 
   test('pivotLayout projects loaded PivotTable cells for grid rendering', () => {
-    const wb = Module.Workbook.loadBytes(buildPivotWorkbookBytes());
+    const wb = Module.Workbook.load(buildPivotWorkbookBytes());
     try {
-      assert.ok(wb.isValid(), Module.lastErrorMessage());
-      assert.equal(wb.pivotCount(0).value, 0);
-      assert.equal(wb.pivotCount(1).value, 1);
+      assert.ok(wb.isValid(), Module.getLastErrorMessage());
+      assert.equal(wb.getPivotCount(0).value, 0);
+      assert.equal(wb.getPivotCount(1).value, 1);
 
-      const layout = wb.pivotLayout(1, 0);
+      const layout = wb.getPivotLayout(1, 0);
       assert.ok(layout.status.ok, `status=${JSON.stringify(layout.status)}`);
       assert.equal(layout.top, 0);
       assert.equal(layout.left, 3);

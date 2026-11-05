@@ -36,9 +36,9 @@ struct Parsed {
 
 Parsed Parse(fm_workbook_t* wb, const char* text, int32_t r1c1 = 0, int32_t has_base = 0, uint32_t base_row = 0,
              uint32_t base_col = 0) {
-  fm_reference_t out{};
+  fm_parsed_reference_t out{};
   EXPECT_EQ(fm_workbook_parse_reference(wb, text, r1c1, has_base, base_row, base_col, &out), 0)
-      << text << ": " << fm_last_error_message();
+      << text << ": " << fm_get_last_error_message();
   Parsed p;
   p.valid = out.valid == 1;
   p.has_sheet = out.has_sheet == 1;
@@ -74,7 +74,7 @@ std::string Format(fm_workbook_t* wb, const char* sheet, uint32_t row0, uint32_t
                    int32_t absolute = 0) {
   const char* text = nullptr;
   EXPECT_EQ(fm_workbook_format_reference(wb, sheet, row0, col0, row1, col1, absolute, &text), 0)
-      << fm_last_error_message();
+      << fm_get_last_error_message();
   return text != nullptr ? std::string(text) : std::string("<null>");
 }
 
@@ -82,7 +82,7 @@ std::string Format(fm_workbook_t* wb, const char* sheet, uint32_t row0, uint32_t
 
 TEST(FormulonCApiReference, ParsesA1Shapes) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   Parsed p = Parse(wb.handle, "A1");
   ExpectRange(p, 0, 0, 0, 0);
@@ -96,7 +96,7 @@ TEST(FormulonCApiReference, ParsesA1Shapes) {
 
 TEST(FormulonCApiReference, ParsesSheetQualifiers) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   struct Row {
     const char* text;
     const char* sheet;
@@ -123,7 +123,7 @@ TEST(FormulonCApiReference, ParsesSheetQualifiers) {
 
 TEST(FormulonCApiReference, NonReferencesReadInvalid) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* rows[] = {
       "XFE1",
       "A1048577",
@@ -147,7 +147,7 @@ TEST(FormulonCApiReference, NonReferencesReadInvalid) {
 
 TEST(FormulonCApiReference, ParsesR1C1UnderTheWorkbookProfile) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   ExpectRange(Parse(wb.handle, "R2C3", 1), 1, 2, 1, 2);
   ExpectRange(Parse(wb.handle, "R[-1]C", 1, 1, 5, 5), 4, 5, 4, 5);
@@ -156,15 +156,15 @@ TEST(FormulonCApiReference, ParsesR1C1UnderTheWorkbookProfile) {
   EXPECT_FALSE(Parse(wb.handle, "R[-1]C", 1).valid);
 
   WorkbookGuard de;
-  ASSERT_EQ(fm_workbook_create(&de.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&de.handle), 0);
   ASSERT_EQ(fm_workbook_set_excel_profile_id(de.handle, "mac-365-de_DE"), 0);
   ExpectRange(Parse(de.handle, "Z2S3", 1), 1, 2, 1, 2);
 }
 
 TEST(FormulonCApiReference, SheetNameOutlivesTheNextParserCall) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_reference_t out{};
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_parsed_reference_t out{};
   ASSERT_EQ(fm_workbook_parse_reference(wb.handle, "'My Sheet'!A1", 0, 0, 0, 0, &out), 0);
   ASSERT_EQ(out.has_sheet, 1);
   // The parser's own sheet view lives in thread-local scratch the next parse reuses.
@@ -175,8 +175,8 @@ TEST(FormulonCApiReference, SheetNameOutlivesTheNextParserCall) {
 
 TEST(FormulonCApiReference, ParseRejectsBadArguments) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_reference_t out{};
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_parsed_reference_t out{};
   EXPECT_EQ(fm_workbook_parse_reference(nullptr, "A1", 0, 0, 0, 0, &out), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_parse_reference(wb.handle, nullptr, 0, 0, 0, 0, &out), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_parse_reference(wb.handle, "A1", 0, 0, 0, 0, nullptr), kBindingNullPointer);
@@ -191,7 +191,7 @@ TEST(FormulonCApiReference, ParseRejectsBadArguments) {
 
 TEST(FormulonCApiReference, FormatsA1) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   EXPECT_EQ(Format(wb.handle, nullptr, 0, 0, 0, 0), "A1");
   EXPECT_EQ(Format(wb.handle, "", 0, 0, 0, 0), "A1");
@@ -208,7 +208,7 @@ TEST(FormulonCApiReference, FormatsA1) {
 
 TEST(FormulonCApiReference, FormatRejectsBadArguments) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* text = nullptr;
   EXPECT_EQ(fm_workbook_format_reference(nullptr, nullptr, 0, 0, 0, 0, 0, &text), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_format_reference(wb.handle, nullptr, 0, 0, 0, 0, 0, nullptr), kBindingNullPointer);
@@ -222,7 +222,7 @@ TEST(FormulonCApiReference, FormatRejectsBadArguments) {
 
 TEST(FormulonCApiReference, FormatThenParseRoundTrips) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* sheets[] = {"Sheet1", "My Sheet", "O'Brien", "売上", "Sheet.1", "1a", "A1", "TRUE"};
   struct Rect {
     uint32_t row0, col0, row1, col1;

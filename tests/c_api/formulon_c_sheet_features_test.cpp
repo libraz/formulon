@@ -19,7 +19,7 @@ namespace {
 
 class FormulonCApiSheetFeatures : public ::testing::Test {
  protected:
-  void SetUp() override { ASSERT_EQ(fm_workbook_create(&wb_), 0); }
+  void SetUp() override { ASSERT_EQ(fm_workbook_create_default(&wb_), 0); }
   void TearDown() override { fm_workbook_destroy(wb_); }
   fm_workbook_t* wb_ = nullptr;
 };
@@ -47,7 +47,7 @@ TEST_F(FormulonCApiSheetFeatures, MergeOutOfRangeIndex) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, HyperlinkAddAndIterate) {
-  fm_hyperlink hl{};
+  fm_hyperlink_t hl{};
   hl.row = 1;
   hl.col = 2;
   hl.last_row = 1;
@@ -59,7 +59,7 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkAddAndIterate) {
   std::uint32_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
-  fm_hyperlink out{};
+  fm_hyperlink_t out{};
   ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0, 0, &out), 0);
   EXPECT_EQ(out.row, 1U);
   EXPECT_EQ(out.col, 2U);
@@ -72,7 +72,7 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkAddAndIterate) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, HyperlinkRangeAddAndIterate) {
-  fm_hyperlink hl{};
+  fm_hyperlink_t hl{};
   hl.row = 7U;
   hl.col = 8U;
   hl.last_row = 9U;
@@ -80,7 +80,7 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkRangeAddAndIterate) {
   hl.target = "https://range.example";
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0U, hl), 0);
 
-  fm_hyperlink out{};
+  fm_hyperlink_t out{};
   ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0U, 0U, &out), 0);
   EXPECT_EQ(out.row, 7U);
   EXPECT_EQ(out.col, 8U);
@@ -91,7 +91,7 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkRangeAddAndIterate) {
 
 TEST_F(FormulonCApiSheetFeatures, HyperlinkRejectsInvertedRectangleAtomically) {
   const fm_status_t invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-  fm_hyperlink hl{};
+  fm_hyperlink_t hl{};
   hl.row = 9U;
   hl.col = 8U;
   hl.last_row = 7U;
@@ -105,33 +105,32 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkRejectsInvertedRectangleAtomically) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, HyperlinkAcceptsNullStringFields) {
-  fm_hyperlink hl{};
+  fm_hyperlink_t hl{};
   hl.row = 0;
   hl.col = 0;
   hl.last_row = 0;
   hl.last_col = 0;
   // All string pointers null => empty target/display/etc.
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, hl), 0);
-  fm_hyperlink got{};
+  fm_hyperlink_t got{};
   ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0, 0, &got), 0);
   EXPECT_STREQ(got.target, "");
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentSetGetAndRemove) {
   ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Alice", "Hello"), 0);
-  fm_comment got{};
-  ASSERT_EQ(fm_sheet_get_comment_at(wb_, 0, 1, 1, &got), 0);
+  fm_comment_t got{};
+  ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 1, 1, &got), 0);
   EXPECT_STREQ(got.author, "Alice");
   EXPECT_STREQ(got.text, "Hello");
   // Replace with new text at the same cell.
   ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Bob", "World"), 0);
-  ASSERT_EQ(fm_sheet_get_comment_at(wb_, 0, 1, 1, &got), 0);
+  ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 1, 1, &got), 0);
   EXPECT_STREQ(got.author, "Bob");
   EXPECT_STREQ(got.text, "World");
   // Empty text removes.
   ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Bob", ""), 0);
-  EXPECT_EQ(fm_sheet_get_comment_at(wb_, 0, 1, 1, &got),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
+  EXPECT_EQ(fm_sheet_get_comment(wb_, 0, 1, 1, &got), static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentRejectedOnThreadedCell) {
@@ -148,9 +147,8 @@ TEST_F(FormulonCApiSheetFeatures, CommentRejectedOnThreadedCell) {
   ASSERT_TRUE(static_cast<bool>(wb.add_threaded_comment(0, thread)));
   EXPECT_EQ(fm_sheet_set_comment(wb_, 0, 2, 3, "Bob", "Note"),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kThreadedCommentInvalid));
-  fm_comment got{};
-  EXPECT_EQ(fm_sheet_get_comment_at(wb_, 0, 2, 3, &got),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
+  fm_comment_t got{};
+  EXPECT_EQ(fm_sheet_get_comment(wb_, 0, 2, 3, &got), static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
   // A neighbouring cell still takes a note.
   EXPECT_EQ(fm_sheet_set_comment(wb_, 0, 2, 4, "Bob", "Note"), 0);
 }
@@ -163,19 +161,17 @@ TEST_F(FormulonCApiSheetFeatures, CommentReplaceKeepsRevisionUid) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentLookupDistinguishesAbsenceFromInvalidSheet) {
-  fm_comment got{};
-  EXPECT_EQ(fm_sheet_get_comment_at(wb_, 0, 0, 0, &got),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
-  EXPECT_EQ(fm_sheet_get_comment_at(wb_, 99, 0, 0, &got),
+  fm_comment_t got{};
+  EXPECT_EQ(fm_sheet_get_comment(wb_, 0, 0, 0, &got), static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
+  EXPECT_EQ(fm_sheet_get_comment(wb_, 99, 0, 0, &got),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentRemoveViaNullText) {
   ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 0, 0, "Alice", "x"), 0);
   ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 0, 0, nullptr, nullptr), 0);
-  fm_comment got{};
-  EXPECT_EQ(fm_sheet_get_comment_at(wb_, 0, 0, 0, &got),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
+  fm_comment_t got{};
+  EXPECT_EQ(fm_sheet_get_comment(wb_, 0, 0, 0, &got), static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentEnumerateAllIncludingEmptyCell) {
@@ -193,8 +189,8 @@ TEST_F(FormulonCApiSheetFeatures, CommentEnumerateAllIncludingEmptyCell) {
   bool saw_alice = false;
   bool saw_bob = false;
   for (std::uint32_t i = 0; i < count; ++i) {
-    fm_comment got{};
-    ASSERT_EQ(fm_sheet_get_comment_at_index(wb_, 0, i, &got), 0);
+    fm_comment_t got{};
+    ASSERT_EQ(fm_sheet_get_comment_at(wb_, 0, i, &got), 0);
     if (got.row == 1U && got.col == 1U) {
       EXPECT_STREQ(got.author, "Alice");
       EXPECT_STREQ(got.text, "Hello");
@@ -217,8 +213,8 @@ TEST_F(FormulonCApiSheetFeatures, CommentEnumerateCountZeroWhenNone) {
 
 TEST_F(FormulonCApiSheetFeatures, CommentEnumerateOutOfRangeIndex) {
   ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 0, 0, "Alice", "x"), 0);
-  fm_comment got{};
-  EXPECT_NE(fm_sheet_get_comment_at_index(wb_, 0, 999, &got), 0);
+  fm_comment_t got{};
+  EXPECT_NE(fm_sheet_get_comment_at(wb_, 0, 999, &got), 0);
 }
 
 TEST_F(FormulonCApiSheetFeatures, SheetIndexOutOfRange) {
@@ -307,19 +303,19 @@ TEST_F(FormulonCApiSheetFeatures, MergeRemovalSheetIndexOutOfRange) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowCol) {
-  fm_hyperlink a{};
+  fm_hyperlink_t a{};
   a.row = 1;
   a.col = 2;
   a.last_row = 1;
   a.last_col = 2;
   a.target = "https://a.example";
-  fm_hyperlink b{};
+  fm_hyperlink_t b{};
   b.row = 3;
   b.col = 4;
   b.last_row = 3;
   b.last_col = 4;
   b.target = "https://b.example";
-  fm_hyperlink c{};
+  fm_hyperlink_t c{};
   c.row = 1;
   c.col = 2;
   c.last_row = 1;
@@ -333,7 +329,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowCol) {
   std::uint32_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
-  fm_hyperlink got{};
+  fm_hyperlink_t got{};
   ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0, 0, &got), 0);
   EXPECT_EQ(got.row, 3U);
   EXPECT_EQ(got.col, 4U);
@@ -341,7 +337,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowCol) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowColNoMatch) {
-  fm_hyperlink a{};
+  fm_hyperlink_t a{};
   a.row = 1;
   a.col = 2;
   a.last_row = 1;
@@ -356,13 +352,13 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowColNoMatch) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkAtValid) {
-  fm_hyperlink a{};
+  fm_hyperlink_t a{};
   a.row = 1;
   a.col = 1;
   a.last_row = 1;
   a.last_col = 1;
   a.target = "https://a.example";
-  fm_hyperlink b{};
+  fm_hyperlink_t b{};
   b.row = 2;
   b.col = 2;
   b.last_row = 2;
@@ -374,7 +370,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkAtValid) {
   std::uint32_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
-  fm_hyperlink got{};
+  fm_hyperlink_t got{};
   ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0, 0, &got), 0);
   EXPECT_EQ(got.row, 2U);
   EXPECT_EQ(got.col, 2U);
@@ -382,7 +378,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkAtValid) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkAtOutOfRange) {
-  fm_hyperlink a{};
+  fm_hyperlink_t a{};
   a.row = 0;
   a.col = 0;
   a.last_row = 0;
@@ -396,19 +392,19 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkAtOutOfRange) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, ClearHyperlinks) {
-  fm_hyperlink a{};
+  fm_hyperlink_t a{};
   a.row = 0;
   a.col = 0;
   a.last_row = 0;
   a.last_col = 0;
   a.target = "https://a.example";
-  fm_hyperlink b{};
+  fm_hyperlink_t b{};
   b.row = 1;
   b.col = 1;
   b.last_row = 1;
   b.last_col = 1;
   b.target = "https://b.example";
-  fm_hyperlink c{};
+  fm_hyperlink_t c{};
   c.row = 2;
   c.col = 2;
   c.last_row = 2;
@@ -441,7 +437,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationCountEmpty) {
 
 TEST_F(FormulonCApiSheetFeatures, ValidationAddSingleRangeAndIterate) {
   fm_merge_range r{1, 2, 3, 4};
-  fm_data_validation v{};
+  fm_data_validation_t v{};
   v.ranges = &r;
   v.range_count = 1;
   v.type = 3;         // list
@@ -462,8 +458,8 @@ TEST_F(FormulonCApiSheetFeatures, ValidationAddSingleRangeAndIterate) {
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
 
-  fm_data_validation got{};
-  ASSERT_EQ(fm_sheet_get_validation_at(wb_, 0, 0, &got), 0);
+  fm_data_validation_t got{};
+  ASSERT_EQ(fm_sheet_get_validation(wb_, 0, 0, &got), 0);
   EXPECT_EQ(got.range_count, 1U);
   ASSERT_NE(got.ranges, nullptr);
   EXPECT_EQ(got.ranges[0].first_row, 1U);
@@ -488,7 +484,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationAddSingleRangeAndIterate) {
 
 TEST_F(FormulonCApiSheetFeatures, ValidationAddMultiRangeRoundTrip) {
   fm_merge_range ranges[3] = {{0, 0, 1, 1}, {3, 3, 4, 4}, {7, 7, 9, 9}};
-  fm_data_validation v{};
+  fm_data_validation_t v{};
   v.ranges = ranges;
   v.range_count = 3;
   v.type = 2;  // decimal
@@ -498,8 +494,8 @@ TEST_F(FormulonCApiSheetFeatures, ValidationAddMultiRangeRoundTrip) {
   v.formula2 = "100";
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, v), 0);
 
-  fm_data_validation got{};
-  ASSERT_EQ(fm_sheet_get_validation_at(wb_, 0, 0, &got), 0);
+  fm_data_validation_t got{};
+  ASSERT_EQ(fm_sheet_get_validation(wb_, 0, 0, &got), 0);
   ASSERT_EQ(got.range_count, 3U);
   ASSERT_NE(got.ranges, nullptr);
   EXPECT_EQ(got.ranges[1].first_row, 3U);
@@ -515,7 +511,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationCoversEveryTypeAndOpEnum) {
   // Walk every type/op pair so the binding never silently drops a value.
   for (std::uint8_t type = 0; type <= 7; ++type) {
     for (std::uint8_t op = 0; op <= 7; ++op) {
-      fm_data_validation v{};
+      fm_data_validation_t v{};
       v.type = type;
       v.op = op;
       v.error_style = static_cast<std::uint8_t>(op % 3);
@@ -527,11 +523,11 @@ TEST_F(FormulonCApiSheetFeatures, ValidationCoversEveryTypeAndOpEnum) {
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 8U * 8U);
   // Probe a couple of entries for fidelity.
-  fm_data_validation got{};
-  ASSERT_EQ(fm_sheet_get_validation_at(wb_, 0, 0, &got), 0);
+  fm_data_validation_t got{};
+  ASSERT_EQ(fm_sheet_get_validation(wb_, 0, 0, &got), 0);
   EXPECT_EQ(got.type, 0);
   EXPECT_EQ(got.op, 0);
-  ASSERT_EQ(fm_sheet_get_validation_at(wb_, 0, 63, &got), 0);
+  ASSERT_EQ(fm_sheet_get_validation(wb_, 0, 63, &got), 0);
   EXPECT_EQ(got.type, 7);
   EXPECT_EQ(got.op, 7);
 }
@@ -540,22 +536,22 @@ TEST_F(FormulonCApiSheetFeatures, ValidationRejectsEnumOrdinalsPastTheirDomain) 
   // The writer emits an absent attribute for an ordinal it does not
   // recognise, so a mistyped `type` would save as "no validation at all"
   // and the author would only notice on opening the file in Excel.
-  const auto expect_rejected = [this](fm_data_validation v, const char* what) {
+  const auto expect_rejected = [this](fm_data_validation_t v, const char* what) {
     EXPECT_EQ(fm_sheet_add_validation(wb_, 0, v),
               static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument))
         << what;
   };
 
-  fm_data_validation unknown_type{};
+  fm_data_validation_t unknown_type{};
   unknown_type.type = 8;
   expect_rejected(unknown_type, "type");
 
-  fm_data_validation unknown_op{};
+  fm_data_validation_t unknown_op{};
   unknown_op.type = 1;
   unknown_op.op = 8;
   expect_rejected(unknown_op, "op");
 
-  fm_data_validation unknown_error_style{};
+  fm_data_validation_t unknown_error_style{};
   unknown_error_style.type = 1;
   unknown_error_style.error_style = 3;
   expect_rejected(unknown_error_style, "error_style");
@@ -566,38 +562,38 @@ TEST_F(FormulonCApiSheetFeatures, ValidationRejectsEnumOrdinalsPastTheirDomain) 
 }
 
 TEST_F(FormulonCApiSheetFeatures, ValidationGetAtOutOfRange) {
-  fm_data_validation got{};
-  EXPECT_NE(fm_sheet_get_validation_at(wb_, 0, 99, &got), 0);
+  fm_data_validation_t got{};
+  EXPECT_NE(fm_sheet_get_validation(wb_, 0, 99, &got), 0);
 }
 
 TEST_F(FormulonCApiSheetFeatures, ValidationRemoveAtValid) {
-  fm_data_validation a{};
+  fm_data_validation_t a{};
   a.type = 1;
-  fm_data_validation b{};
+  fm_data_validation_t b{};
   b.type = 2;
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, a), 0);
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, b), 0);
-  ASSERT_EQ(fm_sheet_remove_validation_at(wb_, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_remove_validation(wb_, 0, 0), 0);
   std::uint32_t count = 0;
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
   ASSERT_EQ(count, 1U);
-  fm_data_validation got{};
-  ASSERT_EQ(fm_sheet_get_validation_at(wb_, 0, 0, &got), 0);
+  fm_data_validation_t got{};
+  ASSERT_EQ(fm_sheet_get_validation(wb_, 0, 0, &got), 0);
   EXPECT_EQ(got.type, 2);  // `b` survived.
 }
 
 TEST_F(FormulonCApiSheetFeatures, ValidationRemoveAtOutOfRange) {
-  fm_data_validation a{};
+  fm_data_validation_t a{};
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, a), 0);
-  EXPECT_NE(fm_sheet_remove_validation_at(wb_, 0, 99), 0);
+  EXPECT_NE(fm_sheet_remove_validation(wb_, 0, 99), 0);
   std::uint32_t count = 0;
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 1U);
 }
 
 TEST_F(FormulonCApiSheetFeatures, ValidationClear) {
-  fm_data_validation a{};
-  fm_data_validation b{};
+  fm_data_validation_t a{};
+  fm_data_validation_t b{};
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, a), 0);
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, b), 0);
   ASSERT_EQ(fm_sheet_clear_validations(wb_, 0), 0);
@@ -609,42 +605,42 @@ TEST_F(FormulonCApiSheetFeatures, ValidationClear) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, ValidationSheetIndexOutOfRange) {
-  fm_data_validation v{};
+  fm_data_validation_t v{};
   std::uint32_t count = 0;
   EXPECT_NE(fm_sheet_get_validation_count(wb_, 999, &count), 0);
-  fm_data_validation got{};
-  EXPECT_NE(fm_sheet_get_validation_at(wb_, 999, 0, &got), 0);
+  fm_data_validation_t got{};
+  EXPECT_NE(fm_sheet_get_validation(wb_, 999, 0, &got), 0);
   EXPECT_NE(fm_sheet_add_validation(wb_, 999, v), 0);
-  EXPECT_NE(fm_sheet_remove_validation_at(wb_, 999, 0), 0);
+  EXPECT_NE(fm_sheet_remove_validation(wb_, 999, 0), 0);
   EXPECT_NE(fm_sheet_clear_validations(wb_, 999), 0);
 }
 
 TEST_F(FormulonCApiSheetFeatures, ValidationBorrowedPointersStableAcrossReads) {
   fm_merge_range r{0, 0, 5, 5};
-  fm_data_validation v{};
+  fm_data_validation_t v{};
   v.ranges = &r;
   v.range_count = 1;
   v.type = 7;
   v.formula1 = "=A1>0";
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, v), 0);
-  fm_data_validation got_a{};
-  ASSERT_EQ(fm_sheet_get_validation_at(wb_, 0, 0, &got_a), 0);
+  fm_data_validation_t got_a{};
+  ASSERT_EQ(fm_sheet_get_validation(wb_, 0, 0, &got_a), 0);
   // Repeated reads with no intervening mutation must surface the same
   // borrowed pointers (the engine-side `std::string::c_str()` and
   // `std::vector::data()` are stable until the next mutation).
-  fm_data_validation got_b{};
-  ASSERT_EQ(fm_sheet_get_validation_at(wb_, 0, 0, &got_b), 0);
+  fm_data_validation_t got_b{};
+  ASSERT_EQ(fm_sheet_get_validation(wb_, 0, 0, &got_b), 0);
   EXPECT_EQ(got_a.formula1, got_b.formula1);
   EXPECT_EQ(got_a.ranges, got_b.ranges);
 }
 
 TEST_F(FormulonCApiSheetFeatures, ValidationAddNullStringFieldsBecomeEmpty) {
-  fm_data_validation v{};
+  fm_data_validation_t v{};
   v.type = 1;
   // Every string left as nullptr; getter must surface "" not nullptr.
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, v), 0);
-  fm_data_validation got{};
-  ASSERT_EQ(fm_sheet_get_validation_at(wb_, 0, 0, &got), 0);
+  fm_data_validation_t got{};
+  ASSERT_EQ(fm_sheet_get_validation(wb_, 0, 0, &got), 0);
   ASSERT_NE(got.formula1, nullptr);
   EXPECT_STREQ(got.formula1, "");
   ASSERT_NE(got.formula2, nullptr);
@@ -654,7 +650,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationAddNullStringFieldsBecomeEmpty) {
 }
 
 TEST_F(FormulonCApiSheetFeatures, ValidationAddRejectsNullRangesWithCount) {
-  fm_data_validation v{};
+  fm_data_validation_t v{};
   v.range_count = 3;
   v.ranges = nullptr;  // contradicts range_count.
   EXPECT_NE(fm_sheet_add_validation(wb_, 0, v), 0);
@@ -666,7 +662,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationAddRejectsNullRangesWithCount) {
 TEST_F(FormulonCApiSheetFeatures, MutatorsRejectOutOfGridCoordinatesBeforeMutation) {
   const fm_status_t invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 
-  fm_hyperlink hyperlink{};
+  fm_hyperlink_t hyperlink{};
   hyperlink.row = 0U;
   hyperlink.col = formulon::Sheet::kMaxCols;
   hyperlink.last_row = 0U;
@@ -689,7 +685,7 @@ TEST_F(FormulonCApiSheetFeatures, MutatorsRejectOutOfGridCoordinatesBeforeMutati
       {0U, 0U, 0U, 0U},
       {0U, 0U, 0U, formulon::Sheet::kMaxCols},
   };
-  fm_data_validation validation{};
+  fm_data_validation_t validation{};
   validation.ranges = validation_ranges;
   validation.range_count = 2U;
   EXPECT_EQ(fm_sheet_add_validation(wb_, 0U, validation), invalid);
@@ -703,23 +699,23 @@ TEST_F(FormulonCApiSheetFeatures, MutatorsRejectOutOfGridCoordinatesBeforeMutati
   ASSERT_EQ(fm_workbook_save(wb_, &saved, &saved_len), 0);
   ASSERT_NE(saved, nullptr);
   EXPECT_GT(saved_len, 0U);
-  fm_buffer_free(saved);
+  fm_buffer_destroy(saved);
 }
 
 // DV formulas are stored as files carry them: one leading '=' is dropped, so
 // a save / load cycle returns the text the setter stored.
 TEST_F(FormulonCApiSheetFeatures, ValidationStoresFormulasWithoutTheLeadingEquals) {
   fm_merge_range r{0, 0, 5, 0};
-  fm_data_validation v{};
+  fm_data_validation_t v{};
   v.ranges = &r;
   v.range_count = 1;
   v.type = 1;  // whole
   v.op = 0;    // between
   v.formula1 = "=$B$1";
   v.formula2 = "=$B$1+10";
-  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, v), 0) << fm_last_error_message();
-  fm_data_validation got{};
-  ASSERT_EQ(fm_sheet_get_validation_at(wb_, 0, 0, &got), 0);
+  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, v), 0) << fm_get_last_error_message();
+  fm_data_validation_t got{};
+  ASSERT_EQ(fm_sheet_get_validation(wb_, 0, 0, &got), 0);
   EXPECT_STREQ(got.formula1, "$B$1");
   EXPECT_STREQ(got.formula2, "$B$1+10");
 
@@ -732,9 +728,9 @@ TEST_F(FormulonCApiSheetFeatures, ValidationStoresFormulasWithoutTheLeadingEqual
   ASSERT_EQ(fm_workbook_save(wb_, &saved, &saved_len), 0);
   fm_workbook_t* reloaded = nullptr;
   const fm_status_t loaded = fm_workbook_load(saved, saved_len, &reloaded);
-  fm_buffer_free(saved);
+  fm_buffer_destroy(saved);
   ASSERT_EQ(loaded, 0);
-  ASSERT_EQ(fm_sheet_get_validation_at(reloaded, 0, 0, &got), 0);
+  ASSERT_EQ(fm_sheet_get_validation(reloaded, 0, 0, &got), 0);
   EXPECT_STREQ(got.formula1, "$B$1");
   EXPECT_STREQ(got.formula2, "$B$1+10");
   fm_workbook_destroy(reloaded);

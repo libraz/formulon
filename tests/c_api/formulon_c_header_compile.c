@@ -17,30 +17,30 @@ static int32_t ContinueIteration(uint32_t iteration, double max_residual, uint32
 
 int main(void) {
   fm_iterative_progress_cb callback = ContinueIteration;
-  fm_parallel_recalc_stats stats = {0};
-  fm_status_t (*parallel_recalc)(fm_workbook_t*, uint32_t, fm_parallel_recalc_stats*) = fm_workbook_recalc_parallel;
+  fm_parallel_recalc_stats_t stats = {0};
+  fm_status_t (*parallel_recalc)(fm_workbook_t*, uint32_t, fm_parallel_recalc_stats_t*) = fm_workbook_recalc_parallel;
   fm_status_t (*save_diagnostics)(const fm_workbook_t*, int32_t, uint8_t**, size_t*, fm_save_diagnostics_t*) =
       fm_workbook_save_with_diagnostics;
-  fm_status_t (*read_diagnostics)(const fm_workbook_t*, fm_read_diagnostics_t*) = fm_workbook_read_diagnostics;
+  fm_status_t (*read_diagnostics)(const fm_workbook_t*, fm_read_diagnostics_t*) = fm_workbook_get_diagnostics;
   fm_status_t (*save_as)(const fm_workbook_t*, int32_t, uint8_t**, size_t*) = fm_workbook_save_as;
   // Written out in full because these are the entry points a third-party C
   // consumer binds by signature: the XF record crosses by value, so its width
   // is part of the calling convention, and the sheet-view record is written
   // through a caller-supplied pointer.
-  fm_status_t (*get_cell_xf)(fm_workbook_t*, uint32_t, fm_cell_xf*) = fm_styles_get_cell_xf;
-  fm_status_t (*add_cell_xf)(fm_workbook_t*, fm_cell_xf, uint32_t*) = fm_styles_add_cell_xf;
-  fm_status_t (*get_cell_style_xf)(fm_workbook_t*, uint32_t, fm_cell_xf*) = fm_styles_get_cell_style_xf;
-  fm_status_t (*add_cell_style_xf)(fm_workbook_t*, fm_cell_xf, uint32_t*) = fm_styles_add_cell_style_xf;
+  fm_status_t (*get_cell_xf)(fm_workbook_t*, uint32_t, fm_cell_xf_t*) = fm_workbook_get_cell_xf;
+  fm_status_t (*add_cell_xf)(fm_workbook_t*, fm_cell_xf_t, uint32_t*) = fm_workbook_add_cell_xf;
+  fm_status_t (*get_cell_style_xf)(fm_workbook_t*, uint32_t, fm_cell_xf_t*) = fm_workbook_get_cell_style_xf;
+  fm_status_t (*add_cell_style_xf)(fm_workbook_t*, fm_cell_xf_t, uint32_t*) = fm_workbook_add_cell_style_xf;
   fm_status_t (*get_view)(const fm_workbook_t*, size_t, fm_sheet_view_t*) = fm_sheet_get_view;
   fm_status_t (*defined_name_at)(const fm_workbook_t*, size_t, const char**, const char**, int32_t*) =
-      fm_workbook_defined_name_at;
+      fm_workbook_get_defined_name_at;
   fm_status_t (*pivot_add_item_at)(fm_workbook_t*, size_t, size_t, size_t, uint32_t, int32_t) =
-      fm_workbook_pivot_field_add_item_at;
+      fm_sheet_add_pivot_field_shared_item;
   // The two entry points whose records no binding marshals, written out in
   // full so a parameter added to either is a compile error here rather than a
   // silently-wrong C caller.
-  fm_status_t (*add_styles_batch)(fm_workbook_t*, const fm_styles_batch*) = fm_styles_add_batch;
-  fm_status_t (*print_area_at)(const fm_pagination_t*, size_t, fm_print_range_t*) = fm_pagination_print_area_at;
+  fm_status_t (*add_styles_batch)(fm_workbook_t*, const fm_styles_batch_t*) = fm_workbook_add_batch;
+  fm_status_t (*print_area_at)(const fm_pagination_t*, size_t, fm_print_range_t*) = fm_pagination_get_print_area_at;
   // Both counter structs must lay out identically on native and wasm32, so a
   // binding's hand-written offsets cannot drift from the compiler's. Five
   // 4-byte counters, no padding, in either target.
@@ -48,56 +48,56 @@ int main(void) {
   _Static_assert(sizeof(fm_save_diagnostics_t) == 5 * sizeof(uint32_t), "fm_save_diagnostics_t must be packed");
   // Pinned from C as well as C++: a C consumer built against a narrower
   // definition of either record is miscompiled rather than diagnosed.
-  _Static_assert(sizeof(fm_cell_xf) == 128, "fm_cell_xf ABI layout changed");
+  _Static_assert(sizeof(fm_cell_xf_t) == 128, "fm_cell_xf_t ABI layout changed");
   _Static_assert(sizeof(fm_row_layout_t) == 40, "fm_row_layout_t ABI layout changed");
   _Static_assert(sizeof(fm_sheet_view_t) == 88, "fm_sheet_view_t ABI layout changed");
   // The three records a C consumer marshals without help from any binding:
   // `fm_value_t` comes back from every cell read, `fm_print_range_t` from
-  // pagination, and `fm_styles_batch` is passed in by pointer with fifteen
+  // pagination, and `fm_styles_batch_t` is passed in by pointer with fifteen
   // pointer-width slots. The first two are target-independent; the batch is
   // pinned in terms of `sizeof(void*)` because its `size_t` counts are not.
   _Static_assert(sizeof(fm_value_t) == 16, "fm_value_t ABI layout changed");
   _Static_assert(offsetof(fm_value_t, u) == 8, "fm_value_t.u offset changed");
   _Static_assert(sizeof(fm_print_range_t) == 16, "fm_print_range_t ABI layout changed");
   _Static_assert(offsetof(fm_print_range_t, last_col) == 12, "fm_print_range_t.last_col offset changed");
-  _Static_assert(sizeof(fm_styles_batch) == 15 * sizeof(void*), "fm_styles_batch ABI layout changed");
-  _Static_assert(offsetof(fm_styles_batch, num_fmt_ids) == 14 * sizeof(void*),
-                 "fm_styles_batch.num_fmt_ids offset changed");
+  _Static_assert(sizeof(fm_styles_batch_t) == 15 * sizeof(void*), "fm_styles_batch_t ABI layout changed");
+  _Static_assert(offsetof(fm_styles_batch_t, num_fmt_ids) == 14 * sizeof(void*),
+                 "fm_styles_batch_t.num_fmt_ids offset changed");
   // Records the geometry, display and pagination-detail entry points write
   // through caller pointers. All but the width model are target-independent.
-  _Static_assert(sizeof(fm_sheet_format_defaults) == 56, "fm_sheet_format_defaults ABI layout changed");
-  _Static_assert(sizeof(fm_rect_pt) == 32, "fm_rect_pt ABI layout changed");
-  _Static_assert(sizeof(fm_width_model) == (sizeof(void*) == 4 ? 40 : 48), "fm_width_model ABI layout changed");
-  _Static_assert(sizeof(fm_paper_info) == 24, "fm_paper_info ABI layout changed");
-  _Static_assert(sizeof(fm_margins_pt) == 48, "fm_margins_pt ABI layout changed");
-  _Static_assert(sizeof(fm_print_titles) == 24, "fm_print_titles ABI layout changed");
-  _Static_assert(sizeof(fm_page_layout) == 56, "fm_page_layout ABI layout changed");
+  _Static_assert(sizeof(fm_sheet_format_defaults_t) == 56, "fm_sheet_format_defaults_t ABI layout changed");
+  _Static_assert(sizeof(fm_rect_pt_t) == 32, "fm_rect_pt_t ABI layout changed");
+  _Static_assert(sizeof(fm_width_model_t) == (sizeof(void*) == 4 ? 40 : 48), "fm_width_model_t ABI layout changed");
+  _Static_assert(sizeof(fm_paper_info_t) == 24, "fm_paper_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_margins_pt_t) == 48, "fm_margins_pt_t ABI layout changed");
+  _Static_assert(sizeof(fm_print_titles_t) == 24, "fm_print_titles_t ABI layout changed");
+  _Static_assert(sizeof(fm_page_layout_t) == 56, "fm_page_layout_t ABI layout changed");
   fm_status_t (*cells_in_range)(const fm_workbook_t*, size_t, uint32_t, uint32_t, uint32_t, uint32_t, uint64_t,
-                                uint32_t, fm_cell_range_t**) = fm_sheet_cells_in_range;
+                                uint32_t, fm_cell_range_t**) = fm_sheet_get_cells_in_range;
   fm_status_t (*format_value)(const fm_workbook_t*, const fm_value_t*, const char*, const char**, int32_t*) =
       fm_workbook_format_value;
   // Records the AutoFilter, validation and threaded-comment entry points read
   // and write. The pointer-bearing ones are pinned per target.
-  _Static_assert(sizeof(fm_date_group_item) == 8, "fm_date_group_item ABI layout changed");
-  _Static_assert(sizeof(fm_filter_column) == (sizeof(void*) == 4 ? 152 : 192), "fm_filter_column ABI layout changed");
-  _Static_assert(sizeof(fm_sort_condition) == (sizeof(void*) == 4 ? 48 : 56), "fm_sort_condition ABI layout changed");
-  _Static_assert(sizeof(fm_auto_filter) == (sizeof(void*) == 4 ? 64 : 80), "fm_auto_filter ABI layout changed");
-  _Static_assert(sizeof(fm_validation_outcome) == 16, "fm_validation_outcome ABI layout changed");
-  _Static_assert(sizeof(fm_mention) == (sizeof(void*) == 4 ? 16 : 24), "fm_mention ABI layout changed");
-  _Static_assert(sizeof(fm_threaded_comment) == (sizeof(void*) == 4 ? 40 : 72),
-                 "fm_threaded_comment ABI layout changed");
-  _Static_assert(sizeof(fm_person) == 4 * sizeof(void*), "fm_person ABI layout changed");
-  _Static_assert(sizeof(fm_image_info) == 12, "fm_image_info ABI layout changed");
-  _Static_assert(sizeof(fm_drawing_object) == (sizeof(void*) == 4 ? 96 : 112), "fm_drawing_object ABI layout changed");
-  _Static_assert(sizeof(fm_image_insert) == (sizeof(void*) == 4 ? 56 : 64), "fm_image_insert ABI layout changed");
-  _Static_assert(sizeof(fm_drawing_anchor) == 48, "fm_drawing_anchor ABI layout changed");
+  _Static_assert(sizeof(fm_date_group_item_t) == 8, "fm_date_group_item_t ABI layout changed");
+  _Static_assert(sizeof(fm_filter_column_t) == (sizeof(void*) == 4 ? 152 : 192), "fm_filter_column_t ABI layout changed");
+  _Static_assert(sizeof(fm_sort_condition_t) == (sizeof(void*) == 4 ? 48 : 56), "fm_sort_condition_t ABI layout changed");
+  _Static_assert(sizeof(fm_auto_filter_t) == (sizeof(void*) == 4 ? 64 : 80), "fm_auto_filter_t ABI layout changed");
+  _Static_assert(sizeof(fm_validation_outcome_t) == 16, "fm_validation_outcome_t ABI layout changed");
+  _Static_assert(sizeof(fm_mention_t) == (sizeof(void*) == 4 ? 16 : 24), "fm_mention_t ABI layout changed");
+  _Static_assert(sizeof(fm_threaded_comment_t) == (sizeof(void*) == 4 ? 40 : 72),
+                 "fm_threaded_comment_t ABI layout changed");
+  _Static_assert(sizeof(fm_person_t) == 4 * sizeof(void*), "fm_person_t ABI layout changed");
+  _Static_assert(sizeof(fm_image_info_t) == 12, "fm_image_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_drawing_object_t) == (sizeof(void*) == 4 ? 96 : 112), "fm_drawing_object_t ABI layout changed");
+  _Static_assert(sizeof(fm_image_insert_t) == (sizeof(void*) == 4 ? 56 : 64), "fm_image_insert_t ABI layout changed");
+  _Static_assert(sizeof(fm_drawing_anchor_t) == 48, "fm_drawing_anchor_t ABI layout changed");
   _Static_assert(FM_DRAWING_RESTORE_NEW_ID == 1u, "FM_DRAWING_RESTORE_NEW_ID changed");
-  _Static_assert(sizeof(fm_shape) == (sizeof(void*) == 4 ? 136 : 144), "fm_shape ABI layout changed");
-  _Static_assert(sizeof(fm_slicer) == (sizeof(void*) == 4 ? 104 : 128), "fm_slicer ABI layout changed");
-  _Static_assert(sizeof(fm_data_table) == 56, "fm_data_table ABI layout changed");
-  _Static_assert(sizeof(fm_sparkline) == 2 * sizeof(void*), "fm_sparkline ABI layout changed");
-  _Static_assert(sizeof(fm_sparkline_group) == (sizeof(void*) == 4 ? 288 : 296),
-                 "fm_sparkline_group ABI layout changed");
+  _Static_assert(sizeof(fm_shape_t) == (sizeof(void*) == 4 ? 136 : 144), "fm_shape_t ABI layout changed");
+  _Static_assert(sizeof(fm_slicer_t) == (sizeof(void*) == 4 ? 104 : 128), "fm_slicer_t ABI layout changed");
+  _Static_assert(sizeof(fm_data_table_t) == 56, "fm_data_table_t ABI layout changed");
+  _Static_assert(sizeof(fm_sparkline_t) == 2 * sizeof(void*), "fm_sparkline_t ABI layout changed");
+  _Static_assert(sizeof(fm_sparkline_group_t) == (sizeof(void*) == 4 ? 288 : 296),
+                 "fm_sparkline_group_t ABI layout changed");
   // Table and custom table-style records, pinned per target.
   _Static_assert(sizeof(fm_table_info_t) == (sizeof(void*) == 4 ? 36 : 40), "fm_table_info_t ABI layout changed");
   _Static_assert(sizeof(fm_table_column_info_t) == 4 * sizeof(void*), "fm_table_column_info_t ABI layout changed");
@@ -109,34 +109,34 @@ int main(void) {
                  "fm_workbook_protection_t ABI layout changed");
   _Static_assert(sizeof(fm_protected_range_t) == (sizeof(void*) == 4 ? 32 : 64),
                  "fm_protected_range_t ABI layout changed");
-  fm_status_t (*get_auto_filter)(const fm_workbook_t*, size_t, fm_auto_filter*, int32_t*) = fm_sheet_get_auto_filter;
-  fm_status_t (*set_table_auto_filter)(fm_workbook_t*, size_t, const fm_auto_filter*) = fm_table_set_auto_filter;
+  fm_status_t (*get_auto_filter)(const fm_workbook_t*, size_t, fm_auto_filter_t*, int32_t*) = fm_sheet_get_auto_filter;
+  fm_status_t (*set_table_auto_filter)(fm_workbook_t*, size_t, const fm_auto_filter_t*) = fm_workbook_set_table_auto_filter;
   fm_status_t (*evaluate_auto_filter)(const fm_workbook_t*, size_t, uint8_t*, size_t, size_t*, uint32_t*) =
       fm_sheet_evaluate_auto_filter;
   fm_status_t (*validate_value)(const fm_workbook_t*, size_t, uint32_t, uint32_t, const fm_value_t*,
-                                fm_validation_outcome*) = fm_sheet_validate_value;
+                                fm_validation_outcome_t*) = fm_sheet_validate_value;
   fm_status_t (*list_invalid_cells)(const fm_workbook_t*, size_t, uint64_t, uint32_t, fm_cell_range_t**) =
-      fm_sheet_list_invalid_cells;
-  fm_status_t (*add_threaded_comment)(fm_workbook_t*, size_t, const fm_threaded_comment*) =
+      fm_sheet_get_invalid_cells;
+  fm_status_t (*add_threaded_comment)(fm_workbook_t*, size_t, const fm_threaded_comment_t*) =
       fm_sheet_add_threaded_comment;
-  fm_status_t (*edit_threaded_comment)(fm_workbook_t*, size_t, const char*, const char*, const fm_mention*, uint32_t) =
-      fm_sheet_edit_threaded_comment;
-  fm_status_t (*person_at)(const fm_workbook_t*, size_t, fm_person*) = fm_workbook_person_at;
-  fm_status_t (*insert_image)(fm_workbook_t*, size_t, const uint8_t*, size_t, const fm_image_insert*, uint32_t*) =
-      fm_sheet_insert_image;
-  fm_status_t (*get_image)(const fm_workbook_t*, size_t, uint32_t, const uint8_t**, size_t*, fm_image_info*) =
+  fm_status_t (*edit_threaded_comment)(fm_workbook_t*, size_t, const char*, const char*, const fm_mention_t*, uint32_t) =
+      fm_sheet_update_threaded_comment;
+  fm_status_t (*person_at)(const fm_workbook_t*, size_t, fm_person_t*) = fm_workbook_get_person_at;
+  fm_status_t (*insert_image)(fm_workbook_t*, size_t, const uint8_t*, size_t, const fm_image_insert_t*, uint32_t*) =
+      fm_sheet_add_image;
+  fm_status_t (*get_image)(const fm_workbook_t*, size_t, uint32_t, const uint8_t**, size_t*, fm_image_info_t*) =
       fm_sheet_get_image;
-  fm_status_t (*set_drawing_anchor)(fm_workbook_t*, size_t, uint32_t, const fm_drawing_anchor*) =
+  fm_status_t (*set_drawing_anchor)(fm_workbook_t*, size_t, uint32_t, const fm_drawing_anchor_t*) =
       fm_sheet_set_drawing_anchor;
   fm_status_t (*set_drawing_z_order)(fm_workbook_t*, size_t, uint32_t, uint32_t) = fm_sheet_set_drawing_z_order;
   fm_status_t (*snapshot_drawing)(const fm_workbook_t*, size_t, uint32_t, uint8_t**, size_t*) =
       fm_sheet_snapshot_drawing;
   fm_status_t (*restore_drawing)(fm_workbook_t*, size_t, const uint8_t*, size_t, uint32_t, uint32_t*) =
       fm_sheet_restore_drawing;
-  fm_status_t (*reset_theme)(fm_workbook_t*) = fm_workbook_reset_theme;
-  fm_status_t (*set_table_style)(fm_workbook_t*, const fm_table_style_t*) = fm_styles_set_table_style;
+  fm_status_t (*reset_theme)(fm_workbook_t*) = fm_workbook_clear_theme;
+  fm_status_t (*set_table_style)(fm_workbook_t*, const fm_table_style_t*) = fm_workbook_set_table_style;
   fm_status_t (*set_column_totals)(fm_workbook_t*, size_t, size_t, const char*, const char*, const char*) =
-      fm_workbook_table_set_column_totals;
+      fm_workbook_set_table_column_totals;
   (void)cells_in_range;
   (void)set_table_style;
   (void)set_column_totals;

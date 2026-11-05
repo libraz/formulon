@@ -34,7 +34,7 @@ bool present(JsNarrowNumericReader& reader, const emscripten::val& owner, const 
   return reader.ok() && js_value_present(reader.value(owner, key, key));
 }
 
-emscripten::val shape_to_val(const fm_shape& s) {
+emscripten::val shape_to_val(const fm_shape_t& s) {
   emscripten::val o = emscripten::val::object();
   o.set("objectId", s.object_id);
   o.set("kind", s.kind);
@@ -69,8 +69,8 @@ struct ShapeText {
 };
 
 /// Reads the fields `spec` carries; the `fields` mask names exactly those.
-fm_shape pull_shape(JsNarrowNumericReader& reader, const emscripten::val& spec, ShapeText& store) {
-  fm_shape s{};
+fm_shape_t pull_shape(JsNarrowNumericReader& reader, const emscripten::val& spec, ShapeText& store) {
+  fm_shape_t s{};
   if (present(reader, spec, "name")) {
     s.fields |= FM_SHAPE_FIELD_NAME;
     s.name = reader.optional_string(spec, "name", store.name, "shape.name");
@@ -127,13 +127,13 @@ fm_shape pull_shape(JsNarrowNumericReader& reader, const emscripten::val& spec, 
   return s;
 }
 
-fm_color_spec* group_color(fm_sparkline_group& g, std::size_t i) {
-  fm_color_spec* const colors[] = {&g.color_series, &g.color_negative, &g.color_axis, &g.color_markers,
-                                   &g.color_first,  &g.color_last,     &g.color_high, &g.color_low};
+fm_color_spec_t* group_color(fm_sparkline_group_t& g, std::size_t i) {
+  fm_color_spec_t* const colors[] = {&g.color_series, &g.color_negative, &g.color_axis, &g.color_markers,
+                                     &g.color_first,  &g.color_last,     &g.color_high, &g.color_low};
   return colors[i];
 }
 
-emscripten::val sparkline_group_to_val(fm_sparkline_group g, emscripten::val sparklines) {
+emscripten::val sparkline_group_to_val(fm_sparkline_group_t g, emscripten::val sparklines) {
   emscripten::val o = emscripten::val::object();
   for (std::size_t i = 0; i < 8U; ++i) {
     o.set(kSparklineColorKeys[i], js_color_spec(*group_color(g, i)));
@@ -160,8 +160,8 @@ emscripten::val sparkline_group_to_val(fm_sparkline_group g, emscripten::val spa
 }
 
 /// Reads a group spec; absent keys take the defaults of a new line group.
-fm_sparkline_group pull_group(JsNarrowNumericReader& reader, const emscripten::val& spec, std::string& ref_store) {
-  fm_sparkline_group g{};
+fm_sparkline_group_t pull_group(JsNarrowNumericReader& reader, const emscripten::val& spec, std::string& ref_store) {
+  fm_sparkline_group_t g{};
   for (std::size_t i = 0; i < 8U; ++i) {
     *group_color(g, i) = js_pull_color_spec(spec, kSparklineColorKeys[i], &reader);
   }
@@ -193,7 +193,7 @@ fm_sparkline_group pull_group(JsNarrowNumericReader& reader, const emscripten::v
 
 /// Reads `[{ formula, location }]`; `texts` keeps the strings `items` points into.
 bool pull_sparklines(JsNarrowNumericReader& reader, const emscripten::val& array, std::vector<std::string>& texts,
-                     std::vector<fm_sparkline>& items) {
+                     std::vector<fm_sparkline_t>& items) {
   if (!reader.is_array(array, "sparklines")) {
     return false;
   }
@@ -205,14 +205,14 @@ bool pull_sparklines(JsNarrowNumericReader& reader, const emscripten::val& array
     texts.push_back(reader.string(item, "location", "sparkline.location"));
   }
   for (std::size_t i = 0; reader.ok() && i < texts.size(); i += 2U) {
-    items.push_back(fm_sparkline{texts[i].c_str(), texts[i + 1U].c_str()});
+    items.push_back(fm_sparkline_t{texts[i].c_str(), texts[i + 1U].c_str()});
   }
   return reader.ok();
 }
 
 fm_status_t shape_item(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
-  fm_shape s{};
-  const fm_status_t rc = fm_sheet_shape_at(handle, sheet, index, &s);
+  fm_shape_t s{};
+  const fm_status_t rc = fm_sheet_get_shape_at(handle, sheet, index, &s);
   if (rc == 0) {
     *out = shape_to_val(s);
   }
@@ -221,15 +221,15 @@ fm_status_t shape_item(const fm_workbook_t* handle, size_t sheet, size_t index, 
 
 // Reads sparkline group `index` with its sparklines nested under `sparklines`.
 fm_status_t sparkline_group_item(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
-  fm_sparkline_group g{};
-  fm_status_t rc = fm_sheet_sparkline_group_at(handle, sheet, index, &g);
+  fm_sparkline_group_t g{};
+  fm_status_t rc = fm_sheet_get_sparkline_group(handle, sheet, index, &g);
   if (rc != 0) {
     return rc;
   }
   emscripten::val group = sparkline_group_to_val(g, emscripten::val::array());
   for (size_t k = 0; rc == 0 && k < g.sparkline_count; ++k) {
-    fm_sparkline item{};
-    rc = fm_sheet_sparkline_at(handle, sheet, index, k, &item);
+    fm_sparkline_t item{};
+    rc = fm_sheet_get_sparkline(handle, sheet, index, k, &item);
     if (rc == 0) {
       emscripten::val o = emscripten::val::object();
       js_set_cstr_fields(o, {{"formula", item.formula}, {"location", item.location}});
@@ -244,7 +244,7 @@ fm_status_t sparkline_group_item(const fm_workbook_t* handle, size_t sheet, size
 
 emscripten::val JsWorkbook::listShapes(uint32_t sheet) const {
   emscripten::val arr = emscripten::val::array();
-  arr.set("status", status_from_rc(js_collect_list(handle_, sheet, &fm_sheet_shape_count, &shape_item, arr)));
+  arr.set("status", status_from_rc(js_collect_list(handle_, sheet, &fm_sheet_get_shape_count, &shape_item, arr)));
   return arr;
 }
 
@@ -252,14 +252,14 @@ emscripten::val JsWorkbook::insertShape(uint32_t sheet, emscripten::val spec) {
   if (handle_ == nullptr) {
     return object_id_result(invalid_handle_status(), 0U);
   }
-  JsNarrowNumericReader reader("insertShape");
+  JsNarrowNumericReader reader("addShape");
   ShapeText store;
-  const fm_shape shape = pull_shape(reader, spec, store);
+  const fm_shape_t shape = pull_shape(reader, spec, store);
   if (!reader.ok()) {
     return object_id_result(reader.failure(), 0U);
   }
   uint32_t id = 0;
-  const fm_status_t rc = fm_sheet_insert_shape(handle_, sheet, &shape, &id);
+  const fm_status_t rc = fm_sheet_add_shape(handle_, sheet, &shape, &id);
   return object_id_result(status_from_rc(rc), rc == 0 ? id : 0U);
 }
 
@@ -269,7 +269,7 @@ JsStatus JsWorkbook::updateShape(uint32_t sheet, uint32_t objectId, emscripten::
   }
   JsNarrowNumericReader reader("updateShape");
   ShapeText store;
-  const fm_shape shape = pull_shape(reader, spec, store);
+  const fm_shape_t shape = pull_shape(reader, spec, store);
   if (!reader.ok()) {
     return reader.failure();
   }
@@ -282,8 +282,8 @@ JsStatus JsWorkbook::removeShape(uint32_t sheet, uint32_t objectId) {
 
 emscripten::val JsWorkbook::listSparklineGroups(uint32_t sheet) const {
   emscripten::val arr = emscripten::val::array();
-  arr.set("status",
-          status_from_rc(js_collect_list(handle_, sheet, &fm_sheet_sparkline_group_count, &sparkline_group_item, arr)));
+  arr.set("status", status_from_rc(js_collect_list(handle_, sheet, &fm_sheet_get_sparkline_group_count,
+                                                   &sparkline_group_item, arr)));
   return arr;
 }
 
@@ -294,8 +294,8 @@ JsStatus JsWorkbook::addSparklineGroup(uint32_t sheet, emscripten::val spec) {
   JsNarrowNumericReader reader("addSparklineGroup");
   std::string ref_store;
   std::vector<std::string> texts;
-  std::vector<fm_sparkline> items;
-  const fm_sparkline_group group = pull_group(reader, spec, ref_store);
+  std::vector<fm_sparkline_t> items;
+  const fm_sparkline_group_t group = pull_group(reader, spec, ref_store);
   if (reader.ok()) {
     pull_sparklines(reader, reader.value(spec, "sparklines", "group.sparklines"), texts, items);
   }
@@ -303,7 +303,7 @@ JsStatus JsWorkbook::addSparklineGroup(uint32_t sheet, emscripten::val spec) {
     return reader.failure();
   }
   // An empty array reaches the core, which rejects it; keep a valid pointer to pass.
-  fm_sparkline none{};
+  fm_sparkline_t none{};
   return status_from_rc(
       fm_sheet_add_sparkline_group(handle_, sheet, &group, items.empty() ? &none : items.data(), items.size()));
 }
@@ -314,7 +314,7 @@ JsStatus JsWorkbook::updateSparklineGroup(uint32_t sheet, uint32_t index, emscri
   }
   JsNarrowNumericReader reader("updateSparklineGroup");
   std::string ref_store;
-  const fm_sparkline_group group = pull_group(reader, spec, ref_store);
+  const fm_sparkline_group_t group = pull_group(reader, spec, ref_store);
   if (!reader.ok()) {
     return reader.failure();
   }
@@ -327,12 +327,12 @@ JsStatus JsWorkbook::setSparklineGroupSparklines(uint32_t sheet, uint32_t index,
   }
   JsNarrowNumericReader reader("setSparklineGroupSparklines");
   std::vector<std::string> texts;
-  std::vector<fm_sparkline> items;
+  std::vector<fm_sparkline_t> items;
   pull_sparklines(reader, sparklines, texts, items);
   if (!reader.ok()) {
     return reader.failure();
   }
-  fm_sparkline none{};
+  fm_sparkline_t none{};
   return status_from_rc(fm_sheet_set_sparkline_group_sparklines(handle_, sheet, index,
                                                                 items.empty() ? &none : items.data(), items.size()));
 }

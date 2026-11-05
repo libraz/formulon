@@ -44,9 +44,9 @@ test('StatusCode keys are PascalCase code names', async () => {
   }
 });
 
-test('statusString names a code without its prefix and flags unknown values', async () => {
+test('getStatusName names a code without its prefix and flags unknown values', async () => {
   const mod = await getModule();
-  assert.equal(mod.statusString(mod.StatusCode.Ok), 'OK');
-  assert.equal(mod.statusString(mod.StatusCode.SheetIndexOutOfRange), 'SHEET_INDEX_OUT_OF_RANGE');
-  assert.equal(mod.statusString(123456), 'UNRECOGNIZED_STATUS');
+  assert.equal(mod.getStatusName(mod.StatusCode.Ok), 'OK');
+  assert.equal(mod.getStatusName(mod.StatusCode.SheetIndexOutOfRange), 'SHEET_INDEX_OUT_OF_RANGE');
+  assert.equal(mod.getStatusName(123456), 'UNRECOGNIZED_STATUS');
 });

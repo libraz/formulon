@@ -103,7 +103,7 @@ export function registerCellsIo(Module, test) {
 
       const saved = wb.save();
       assert.ok(saved.status.ok);
-      const loaded = Module.Workbook.loadBytes(saved.bytes);
+      const loaded = Module.Workbook.load(saved.bytes);
       try {
         assert.deepEqual(phoneticProps(loaded, 0, 0, 0), { fontId: 3, type: 2, alignment: 2 });
       } finally {
@@ -206,7 +206,7 @@ export function registerCellsIo(Module, test) {
       const added = wb.addFont({ name: 'Meiryo', size: 12 });
       assert.ok(wb.setFont(added.index, { name: 'MS Gothic', size: 9 }).ok);
       assert.equal(wb.getFont(added.index).name, 'MS Gothic');
-      assert.equal(wb.setFont(wb.fontCount().value, { name: 'MS Gothic', size: 9 }).ok, false);
+      assert.equal(wb.setFont(wb.getFontCount().value, { name: 'MS Gothic', size: 9 }).ok, false);
     } finally {
       wb.delete();
     }
@@ -215,7 +215,7 @@ export function registerCellsIo(Module, test) {
   test('table update omits fields without resetting existing metadata', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      const created = wb.createTable({
+      const created = wb.addTable({
         sheetIndex: 0,
         ref: 'A1:B3',
         name: 'Sales',
@@ -225,7 +225,7 @@ export function registerCellsIo(Module, test) {
         totalsRow: true,
       });
       assert.ok(created.status.ok, `createTable failed: ${JSON.stringify(created.status)}`);
-      const before = wb.tableAt(created.index);
+      const before = wb.getTable(created.index);
       assert.ok(before.status.ok);
       assert.equal(before.ref, 'A1:B3');
 
@@ -240,7 +240,7 @@ export function registerCellsIo(Module, test) {
       // the WASM-to-C mapping of omitted ref/style/row flags to preservation
       // sentinels rather than empty/false defaults.
       assert.ok(wb.updateTable(created.index, {}).ok);
-      const after = wb.tableAt(created.index);
+      const after = wb.getTable(created.index);
       assert.ok(after.status.ok);
       assert.equal(after.ref, before.ref);
 
@@ -250,10 +250,10 @@ export function registerCellsIo(Module, test) {
       assert.match(afterXml, /name="TableStyleMedium2"/);
       assert.match(afterXml, /headerRowCount="0"/);
       assert.match(afterXml, /totalsRowCount="1"/);
-      const loaded = Module.Workbook.loadBytes(saved.bytes);
+      const loaded = Module.Workbook.load(saved.bytes);
       try {
-        assert.ok(loaded.isValid(), `load failed: ${Module.lastErrorMessage()}`);
-        const reloaded = loaded.tableAt(created.index);
+        assert.ok(loaded.isValid(), `load failed: ${Module.getLastErrorMessage()}`);
+        const reloaded = loaded.getTable(created.index);
         assert.ok(reloaded.status.ok);
         assert.equal(reloaded.ref, 'A1:B3');
         const roundTripped = loaded.save();
@@ -275,7 +275,7 @@ export function registerCellsIo(Module, test) {
     for (const field of getterFields) {
       const wb = Module.Workbook.createDefault();
       try {
-        const created = wb.createTable({
+        const created = wb.addTable({
           sheetIndex: 0,
           ref: 'A1:B3',
           name: 'Sales',
@@ -304,7 +304,7 @@ export function registerCellsIo(Module, test) {
   test('table update reads each optional field once before the C call', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      const created = wb.createTable({
+      const created = wb.addTable({
         sheetIndex: 0,
         ref: 'A1:B3',
         name: 'Sales',
@@ -330,7 +330,7 @@ export function registerCellsIo(Module, test) {
       const result = wb.updateTable(created.index, spec);
       assert.ok(result.ok, JSON.stringify(result));
       assert.deepEqual(reads, { ref: 1, styleName: 1, headerRow: 1, totalsRow: 1 });
-      assert.equal(wb.tableAt(created.index).ref, 'A1:B4');
+      assert.equal(wb.getTable(created.index).ref, 'A1:B4');
     } finally {
       wb.delete();
     }
@@ -343,7 +343,7 @@ export function registerCellsIo(Module, test) {
       try {
         assert.throws(
           () =>
-            wb.createTable({
+            wb.addTable({
               sheetIndex: value,
               ref: 'A1:B3',
               name: 'BadTable',
@@ -352,14 +352,14 @@ export function registerCellsIo(Module, test) {
           nestedErrorClass(value),
           `createTable sheetIndex=${String(value)} accepted`,
         );
-        assert.equal(wb.tableCount().value, 0);
+        assert.equal(wb.getTableCount().value, 0);
       } finally {
         wb.delete();
       }
     }
   });
 
-  test('save() + Workbook.loadBytes() round-trip preserves a literal', () => {
+  test('save() + Workbook.load() round-trip preserves a literal', () => {
     const wb = Module.Workbook.createDefault();
     let saved = null;
     try {
@@ -376,10 +376,10 @@ export function registerCellsIo(Module, test) {
       wb.delete();
     }
 
-    const loaded = Module.Workbook.loadBytes(saved);
+    const loaded = Module.Workbook.load(saved);
     try {
-      assert.ok(loaded.isValid(), `load failed: ${Module.lastErrorMessage()}`);
-      assert.ok(loaded.sheetCount().value >= 1);
+      assert.ok(loaded.isValid(), `load failed: ${Module.getLastErrorMessage()}`);
+      assert.ok(loaded.getSheetCount().value >= 1);
       assert.ok(loaded.recalc().ok);
       const a1 = loaded.getValue(0, 0, 0);
       assert.ok(a1.status.ok);
@@ -398,7 +398,7 @@ export function registerCellsIo(Module, test) {
     const wb = Module.Workbook.createDefault();
     try {
       assert.ok(
-        wb.addConditionalFormat(0, {
+        wb.addCfRule(0, {
           sqref: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
           type: 3,
           dataBar: {
@@ -416,9 +416,9 @@ export function registerCellsIo(Module, test) {
       );
       const saved = wb.save();
       assert.ok(saved.status.ok, `save failed: ${JSON.stringify(saved.status)}`);
-      const loaded = Module.Workbook.loadBytes(saved.bytes);
+      const loaded = Module.Workbook.load(saved.bytes);
       try {
-        assert.ok(loaded.isValid(), `load failed: ${Module.lastErrorMessage()}`);
+        assert.ok(loaded.isValid(), `load failed: ${Module.getLastErrorMessage()}`);
         const bar = loaded.getConditionalFormats(0)[0].dataBar;
         assert.equal(bar.gradient, false);
         assert.equal(bar.axisPosition, 1);
@@ -429,7 +429,7 @@ export function registerCellsIo(Module, test) {
 
         // The decoded bar fed straight back reproduces the same rule.
         assert.ok(
-          loaded.addConditionalFormat(0, {
+          loaded.addCfRule(0, {
             sqref: [{ firstRow: 4, firstCol: 0, lastRow: 6, lastCol: 0 }],
             type: 3,
             dataBar: bar,
@@ -451,7 +451,7 @@ export function registerCellsIo(Module, test) {
     const wb = Module.Workbook.createDefault();
     try {
       assert.ok(
-        wb.addConditionalFormat(0, {
+        wb.addCfRule(0, {
           sqref: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
           type: 3,
           dataBar: { min: { type: 3 }, max: { type: 4 }, fill: { r: 0, g: 0, b: 255 } },
@@ -486,7 +486,7 @@ export function registerCellsIo(Module, test) {
       const dxf = wb.addDxf({ font: { bold: true } });
       assert.ok(dxf.status.ok, `addDxf failed: ${JSON.stringify(dxf.status)}`);
       assert.ok(
-        wb.addConditionalFormat(0, {
+        wb.addCfRule(0, {
           sqref: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
           type: 1,
           op: 5,
@@ -510,9 +510,9 @@ export function registerCellsIo(Module, test) {
       // The binary writer never reassigns a part id.
       assert.equal(xlsb.renumberedPartCount, 0);
 
-      const loaded = Module.Workbook.loadBytes(xlsb.bytes);
+      const loaded = Module.Workbook.load(xlsb.bytes);
       try {
-        const read = loaded.readDiagnostics();
+        const read = loaded.getDiagnostics();
         assert.ok(read.status.ok, `read diagnostics failed: ${JSON.stringify(read.status)}`);
         assert.equal(read.undecodedFormulaCount, 0);
         assert.equal(read.undecodedDefinedNameCount, 0);
@@ -522,9 +522,9 @@ export function registerCellsIo(Module, test) {
       } finally {
         loaded.delete();
       }
-      const preservedLoaded = Module.Workbook.loadBytes(appendEmptyZipEntry(xlsb.bytes, 'xl/preserved.bin'));
+      const preservedLoaded = Module.Workbook.load(appendEmptyZipEntry(xlsb.bytes, 'xl/preserved.bin'));
       try {
-        const preserved = preservedLoaded.readDiagnostics();
+        const preserved = preservedLoaded.getDiagnostics();
         assert.ok(preserved.status.ok, `passthrough diagnostics failed: ${JSON.stringify(preserved.status)}`);
         assert.equal(preserved.undecodedPartCount, 0);
       } finally {
@@ -545,29 +545,29 @@ export function registerCellsIo(Module, test) {
   });
 
   test('Workbook.loadBytes reports empty input instead of leaving stale diagnostics', () => {
-    const wb = Module.Workbook.loadBytes(new Uint8Array());
+    const wb = Module.Workbook.load(new Uint8Array());
     try {
       assert.equal(wb.isValid(), false);
-      assert.match(Module.lastErrorMessage(), /NULL or empty input/);
+      assert.match(Module.getLastErrorMessage(), /NULL or empty input/);
     } finally {
       wb.delete();
     }
   });
 
   test('Workbook.loadBytes rejects non-Uint8Array input like the native binding', () => {
-    const wb = Module.Workbook.loadBytes(new Uint16Array([1]));
+    const wb = Module.Workbook.load(new Uint16Array([1]));
     try {
       assert.equal(wb.isValid(), false);
-      assert.match(Module.lastErrorMessage(), /NULL or empty input/);
+      assert.match(Module.getLastErrorMessage(), /NULL or empty input/);
     } finally {
       wb.delete();
     }
   });
 
   test('invalid workbook read diagnostics return a zeroed failure envelope', () => {
-    const wb = Module.Workbook.loadBytes(new Uint8Array());
+    const wb = Module.Workbook.load(new Uint8Array());
     try {
-      const read = wb.readDiagnostics();
+      const read = wb.getDiagnostics();
       assert.ok(!read.status.ok, `invalid handle unexpectedly succeeded: ${JSON.stringify(read)}`);
       assert.equal(read.undecodedFormulaCount, 0);
       assert.equal(read.undecodedDefinedNameCount, 0);
@@ -585,7 +585,7 @@ export function registerCellsIo(Module, test) {
     assert.equal(r.value.kind, VAL.ERROR);
   });
 
-  test('parser failure populates lastErrorMessage', () => {
+  test('parser failure populates getLastErrorMessage', () => {
     // An obviously unparseable formula. The C ABI either surfaces a
     // non-zero status (parser error) or returns ok with an Error
     // value — accept either, but the diagnostic should be readable
@@ -593,7 +593,7 @@ export function registerCellsIo(Module, test) {
     const r = Module.evalFormula('=#GARBAGE');
     if (!r.status.ok) {
       assert.equal(typeof r.status.message, 'string');
-      const msg = Module.lastErrorMessage();
+      const msg = Module.getLastErrorMessage();
       assert.equal(typeof msg, 'string');
     } else {
       // Acceptable alternative: the formula parses to something that
@@ -626,7 +626,7 @@ export function registerCellsIo(Module, test) {
     }
   });
 
-  test('collationClasses orders by kind, folds text by strength, and copies its output', () => {
+  test('getCollationClasses orders by kind, folds text by strength, and copies its output', () => {
     const wb = Module.Workbook.createDefault();
     try {
       const values = [
@@ -639,7 +639,7 @@ export function registerCellsIo(Module, test) {
         { kind: 1, number: 0 },
         { kind: 2, boolean: 0 },
       ];
-      const r = wb.collationClasses(values, 1, 'mac-365-en_US');
+      const r = wb.getCollationClasses(values, 1, 'mac-365-en_US');
       assert.ok(r.status.ok);
       assert.ok(r.classIds instanceof Uint32Array);
       assert.equal(r.classIds.length, 8);
@@ -652,7 +652,7 @@ export function registerCellsIo(Module, test) {
       assert.ok(num0 < num1 && boolFalse < boolTrue);
 
       const snapshot = Array.from(r.classIds);
-      const other = wb.collationClasses(
+      const other = wb.getCollationClasses(
         [
           { kind: 3, text: 'z' },
           { kind: 3, text: 'y' },
@@ -663,7 +663,7 @@ export function registerCellsIo(Module, test) {
       assert.ok(other.status.ok);
       assert.deepEqual(Array.from(r.classIds), snapshot);
 
-      const folded = wb.collationClasses(
+      const folded = wb.getCollationClasses(
         [
           { kind: 3, text: 'a' },
           { kind: 3, text: 'A' },
@@ -674,24 +674,24 @@ export function registerCellsIo(Module, test) {
       assert.equal(folded.classIds[0], folded.classIds[1]);
       assert.equal(folded.classCount, 1);
 
-      const empty = wb.collationClasses([], 1, 'mac-365-en_US');
+      const empty = wb.getCollationClasses([], 1, 'mac-365-en_US');
       assert.ok(empty.status.ok);
       assert.equal(empty.classIds.length, 0);
       assert.equal(empty.classCount, 0);
 
-      const noKind = wb.collationClasses([{ number: 1 }], 1, 'mac-365-en_US');
+      const noKind = wb.getCollationClasses([{ number: 1 }], 1, 'mac-365-en_US');
       assert.equal(noKind.status.ok, false);
       assert.equal(noKind.classIds.length, 0);
       assert.equal(noKind.classCount, 0);
-      assert.equal(wb.collationClasses({}, 1, 'mac-365-en_US').status.ok, false);
-      assert.equal(wb.collationClasses([{ kind: 1, number: 1 }], 1, 'nope').status.ok, false);
-      assert.throws(() => wb.collationClasses(values, -1, 'mac-365-en_US'), RangeError);
+      assert.equal(wb.getCollationClasses({}, 1, 'mac-365-en_US').status.ok, false);
+      assert.equal(wb.getCollationClasses([{ kind: 1, number: 1 }], 1, 'nope').status.ok, false);
+      assert.throws(() => wb.getCollationClasses(values, -1, 'mac-365-en_US'), RangeError);
     } finally {
       wb.delete();
     }
   });
 
-  test('collationClasses timing on 100k mixed CJK/ASCII texts', () => {
+  test('getCollationClasses timing on 100k mixed CJK/ASCII texts', () => {
     const wb = Module.Workbook.createDefault();
     try {
       const cjk = [
@@ -708,22 +708,22 @@ export function registerCellsIo(Module, test) {
         values.push({ kind: 3, text });
       }
       const t0 = process.hrtime.bigint();
-      const r = wb.collationClasses(values, 1, 'mac-365-ja_JP');
+      const r = wb.getCollationClasses(values, 1, 'mac-365-ja_JP');
       const ms = Number(process.hrtime.bigint() - t0) / 1e6;
       assert.ok(r.status.ok);
       assert.equal(r.classIds.length, 100000);
-      console.log(`collationClasses 100k mixed CJK/ASCII texts: ${ms.toFixed(0)} ms (${r.classCount} classes)`);
+      console.log(`getCollationClasses 100k mixed CJK/ASCII texts: ${ms.toFixed(0)} ms (${r.classCount} classes)`);
     } finally {
       wb.delete();
     }
   });
 
-  test('localeFacts reports collationMeasured per host', () => {
+  test('getLocaleFacts reports collationMeasured per host', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      assert.equal(wb.localeFacts('mac-365-de_DE').facts.collationMeasured, true);
-      assert.equal(wb.localeFacts('win-365-ja_JP').facts.collationMeasured, false);
-      assert.equal(wb.localeFacts('win-365-en_US').facts.collationMeasured, false);
+      assert.equal(wb.getLocaleFacts('mac-365-de_DE').facts.collationMeasured, true);
+      assert.equal(wb.getLocaleFacts('win-365-ja_JP').facts.collationMeasured, false);
+      assert.equal(wb.getLocaleFacts('win-365-en_US').facts.collationMeasured, false);
     } finally {
       wb.delete();
     }

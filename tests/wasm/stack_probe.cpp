@@ -207,7 +207,7 @@ __attribute__((noinline)) std::size_t measure_evaluate(const std::string& formul
   const std::string src = "=" + formula;
   fm_value_t v{};
   paint_free_stack();
-  const fm_status_t rc = fm_workbook_evaluate_formula(wb, 0, 1, 0, src.c_str(), &v);
+  const fm_status_t rc = fm_sheet_evaluate_formula(wb, 0, 1, 0, src.c_str(), &v);
   const std::size_t peak = peak_since_paint();
   if (expected >= 0.0 && (rc != 0 || v.kind != FM_VAL_NUMBER || v.u.number != expected)) {
     fail("a formula at a nesting limit did not evaluate to its value");
@@ -243,11 +243,11 @@ int main() {
   }
 
   fm_workbook_t* wb = nullptr;
-  if (fm_workbook_create(&wb) != 0) {
+  if (fm_workbook_create_default(&wb) != 0) {
     fail("could not create a workbook to drive the evaluate path");
     return 1;
   }
-  fm_workbook_set_number(wb, 0, 0, 0, 7.0);
+  fm_sheet_set_number(wb, 0, 0, 0, 7.0);
 
   const int kOps = static_cast<int>(kMaxOperatorNesting);
   const int kParens = static_cast<int>(kMaxGroupingParenDepth);

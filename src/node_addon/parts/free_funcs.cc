@@ -115,22 +115,22 @@ Napi::Value EvalFormula(const Napi::CallbackInfo& info) {
     return out;
   }
   fm_value_t v{};
-  rc = fm_workbook_evaluate_formula(wb, 0, 0, 0, formula.c_str(), &v);
+  rc = fm_sheet_evaluate_formula(wb, 0, 0, 0, formula.c_str(), &v);
   Napi::Object out = MakeValueResult(env, rc, v);
   fm_workbook_destroy(wb);
   return out;
 }
 
 Napi::Value Version(const Napi::CallbackInfo& info) {
-  return JsString(info.Env(), fm_version_string());
+  return JsString(info.Env(), fm_get_version());
 }
 
 Napi::Value LastErrorMessage(const Napi::CallbackInfo& info) {
-  return JsString(info.Env(), fm_last_error_message());
+  return JsString(info.Env(), fm_get_last_error_message());
 }
 
 Napi::Value LastErrorContext(const Napi::CallbackInfo& info) {
-  return JsString(info.Env(), fm_last_error_context());
+  return JsString(info.Env(), fm_get_last_error_context());
 }
 
 Napi::Value StatusString(const Napi::CallbackInfo& info) {
@@ -139,7 +139,7 @@ Napi::Value StatusString(const Napi::CallbackInfo& info) {
   if (!ReadInt32(info, 0, &code)) {
     return env.Undefined();
   }
-  const char* s = fm_status_string(static_cast<fm_status_t>(code));
+  const char* s = fm_get_status_name(static_cast<fm_status_t>(code));
   return JsString(env, s);
 }
 
@@ -149,7 +149,7 @@ Napi::Value ErrorDisplayName(const Napi::CallbackInfo& info) {
   if (!ReadInt32(info, 0, &code)) {
     return env.Undefined();
   }
-  const char* s = fm_error_display_name(static_cast<fm_error_code_t>(code));
+  const char* s = fm_get_error_display_name(static_cast<fm_error_code_t>(code));
   return JsString(env, s);
 }
 

@@ -307,7 +307,7 @@ struct SortSpec {
   /// by that field's aggregate.
   std::string by_field;
   /// True when the order was stated rather than defaulted: read from an
-  /// explicit `sortType`, or set through `fm_workbook_pivot_field_set_sort`.
+  /// explicit `sortType`, or set through `fm_sheet_set_pivot_field_sort`.
   /// The writer spells `sortType` out for a field on an axis or one whose
   /// order was stated, so a sorted field taken off the report keeps its order.
   bool stated = false;

@@ -46,7 +46,7 @@ JsStatus JsWorkbook::addDataTable(uint32_t sheet, emscripten::val spec) {
     return invalid_handle_status();
   }
   JsNarrowNumericReader reader("addDataTable");
-  fm_data_table table{};
+  fm_data_table_t table{};
   const fm_merge_range range = js_pull_range(spec, &reader);
   table.first_row = range.first_row;
   table.first_col = range.first_col;
@@ -70,8 +70,8 @@ emscripten::val JsWorkbook::getDataTable(uint32_t sheet, uint32_t row, uint32_t 
     return o;
   }
   int32_t present = 0;
-  fm_data_table t{};
-  const fm_status_t rc = fm_sheet_data_table_at(handle_, sheet, row, col, &present, &t);
+  fm_data_table_t t{};
+  const fm_status_t rc = fm_sheet_get_data_table(handle_, sheet, row, col, &present, &t);
   o.set("status", status_from_rc(rc));
   if (rc == 0 && present != 0) {
     emscripten::val table = emscripten::val::object();

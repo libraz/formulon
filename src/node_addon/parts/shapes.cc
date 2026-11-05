@@ -16,13 +16,13 @@ namespace {
 constexpr const char* kSparklineColorKeys[] = {"colorSeries", "colorNegative", "colorAxis", "colorMarkers",
                                                "colorFirst",  "colorLast",     "colorHigh", "colorLow"};
 
-fm_color_spec* GroupColor(fm_sparkline_group& g, size_t i) {
-  fm_color_spec* const colors[] = {&g.color_series, &g.color_negative, &g.color_axis, &g.color_markers,
+fm_color_spec_t* GroupColor(fm_sparkline_group_t& g, size_t i) {
+  fm_color_spec_t* const colors[] = {&g.color_series, &g.color_negative, &g.color_axis, &g.color_markers,
                                    &g.color_first,  &g.color_last,     &g.color_high, &g.color_low};
   return colors[i];
 }
 
-Napi::Object ColorToJs(Napi::Env env, const fm_color_spec& spec) {
+Napi::Object ColorToJs(Napi::Env env, const fm_color_spec_t& spec) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("kind", JsNumber(env, spec.kind));
   out.Set("rgb", JsNumber(env, spec.rgb));
@@ -32,8 +32,8 @@ Napi::Object ColorToJs(Napi::Env env, const fm_color_spec& spec) {
   return out;
 }
 
-fm_color_spec PullColor(CheckedSpecReader& reader, const Napi::Object& owner, const char* key) {
-  fm_color_spec spec{};
+fm_color_spec_t PullColor(CheckedSpecReader& reader, const Napi::Object& owner, const char* key) {
+  fm_color_spec_t spec{};
   Napi::Object v;
   if (!reader.Object(owner, key, &v)) {
     return spec;
@@ -53,8 +53,8 @@ struct ShapeText {
 };
 
 // Reads the fields `spec` carries; the `fields` mask names exactly those.
-fm_shape PullShape(CheckedSpecReader& reader, const Napi::Object& spec, ShapeText& store) {
-  fm_shape s{};
+fm_shape_t PullShape(CheckedSpecReader& reader, const Napi::Object& spec, ShapeText& store) {
+  fm_shape_t s{};
   bool present = false;
   if (reader.String(spec, "name", &store.name)) {
     s.fields |= FM_SHAPE_FIELD_NAME;
@@ -111,8 +111,8 @@ fm_shape PullShape(CheckedSpecReader& reader, const Napi::Object& spec, ShapeTex
 }
 
 // Reads a group spec; absent keys take the defaults of a new line group.
-fm_sparkline_group PullGroup(CheckedSpecReader& reader, const Napi::Object& spec, std::string& ref_store) {
-  fm_sparkline_group g{};
+fm_sparkline_group_t PullGroup(CheckedSpecReader& reader, const Napi::Object& spec, std::string& ref_store) {
+  fm_sparkline_group_t g{};
   for (size_t i = 0; i < 8U; ++i) {
     *GroupColor(g, i) = PullColor(reader, spec, kSparklineColorKeys[i]);
   }
@@ -143,7 +143,7 @@ fm_sparkline_group PullGroup(CheckedSpecReader& reader, const Napi::Object& spec
 
 // Reads `[{ formula, location }]`; `texts` keeps the strings `items` points into.
 bool PullSparklines(CheckedSpecReader& reader, const Napi::Array& array, std::vector<std::string>& texts,
-                    std::vector<fm_sparkline>& items) {
+                    std::vector<fm_sparkline_t>& items) {
   const uint32_t count = array.Length();
   texts.reserve(2U * count);
   for (uint32_t i = 0; i < count; ++i) {
@@ -161,7 +161,7 @@ bool PullSparklines(CheckedSpecReader& reader, const Napi::Array& array, std::ve
     texts.push_back(std::move(location));
   }
   for (size_t i = 0; i < texts.size(); i += 2U) {
-    items.push_back(fm_sparkline{texts[i].c_str(), texts[i + 1U].c_str()});
+    items.push_back(fm_sparkline_t{texts[i].c_str(), texts[i + 1U].c_str()});
   }
   return reader.ok();
 }
@@ -176,10 +176,10 @@ Napi::Value Workbook::ListShapes(const Napi::CallbackInfo& info) {
   }
   const uint32_t sheet = ArgU32(info, 0);
   size_t count = 0;
-  fm_status_t rc = fm_sheet_shape_count(handle_, sheet, &count);
+  fm_status_t rc = fm_sheet_get_shape_count(handle_, sheet, &count);
   for (size_t i = 0; rc == 0 && i < count; ++i) {
-    fm_shape s{};
-    rc = fm_sheet_shape_at(handle_, sheet, i, &s);
+    fm_shape_t s{};
+    rc = fm_sheet_get_shape_at(handle_, sheet, i, &s);
     if (rc != 0) {
       break;
     }
@@ -224,12 +224,12 @@ Napi::Value Workbook::InsertShape(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   ShapeText store;
-  const fm_shape shape = PullShape(reader, ArgObject(info, 1), store);
+  const fm_shape_t shape = PullShape(reader, ArgObject(info, 1), store);
   if (!reader.ok()) {
     return env.Undefined();
   }
   uint32_t object_id = 0;
-  const fm_status_t rc = fm_sheet_insert_shape(handle_, ArgU32(info, 0), &shape, &object_id);
+  const fm_status_t rc = fm_sheet_add_shape(handle_, ArgU32(info, 0), &shape, &object_id);
   out.Set("objectId", JsNumber(env, rc == 0 ? object_id : 0));
   out.Set("status", MakeStatus(env, rc));
   return out;
@@ -242,7 +242,7 @@ Napi::Value Workbook::UpdateShape(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   ShapeText store;
-  const fm_shape shape = PullShape(reader, ArgObject(info, 2), store);
+  const fm_shape_t shape = PullShape(reader, ArgObject(info, 2), store);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -261,10 +261,10 @@ Napi::Value Workbook::ListSparklineGroups(const Napi::CallbackInfo& info) {
   }
   const uint32_t sheet = ArgU32(info, 0);
   size_t count = 0;
-  fm_status_t rc = fm_sheet_sparkline_group_count(handle_, sheet, &count);
+  fm_status_t rc = fm_sheet_get_sparkline_group_count(handle_, sheet, &count);
   for (size_t i = 0; rc == 0 && i < count; ++i) {
-    fm_sparkline_group g{};
-    rc = fm_sheet_sparkline_group_at(handle_, sheet, i, &g);
+    fm_sparkline_group_t g{};
+    rc = fm_sheet_get_sparkline_group(handle_, sheet, i, &g);
     if (rc != 0) {
       break;
     }
@@ -292,8 +292,8 @@ Napi::Value Workbook::ListSparklineGroups(const Napi::CallbackInfo& info) {
     Napi::Array sparklines = Napi::Array::New(env);
     const size_t n = g.sparkline_count;
     for (size_t k = 0; rc == 0 && k < n; ++k) {
-      fm_sparkline sp{};
-      rc = fm_sheet_sparkline_at(handle_, sheet, i, k, &sp);
+      fm_sparkline_t sp{};
+      rc = fm_sheet_get_sparkline(handle_, sheet, i, k, &sp);
       if (rc == 0) {
         Napi::Object entry = Napi::Object::New(env);
         entry.Set("formula", JsString(env, sp.formula));
@@ -316,8 +316,8 @@ Napi::Value Workbook::AddSparklineGroup(const Napi::CallbackInfo& info) {
   const Napi::Object spec = ArgObject(info, 1);
   std::string ref_store;
   std::vector<std::string> texts;
-  std::vector<fm_sparkline> items;
-  const fm_sparkline_group group = PullGroup(reader, spec, ref_store);
+  std::vector<fm_sparkline_t> items;
+  const fm_sparkline_group_t group = PullGroup(reader, spec, ref_store);
   Napi::Array array;
   if (reader.Array(spec, "sparklines", &array)) {
     PullSparklines(reader, array, texts, items);
@@ -326,7 +326,7 @@ Napi::Value Workbook::AddSparklineGroup(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   // No array, or an empty one, reaches the core as zero sparklines and is rejected there.
-  fm_sparkline none{};
+  fm_sparkline_t none{};
   return MakeStatus(env, fm_sheet_add_sparkline_group(handle_, ArgU32(info, 0), &group,
                                                       items.empty() ? &none : items.data(), items.size()));
 }
@@ -338,7 +338,7 @@ Napi::Value Workbook::UpdateSparklineGroup(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   std::string ref_store;
-  const fm_sparkline_group group = PullGroup(reader, ArgObject(info, 2), ref_store);
+  const fm_sparkline_group_t group = PullGroup(reader, ArgObject(info, 2), ref_store);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -357,11 +357,11 @@ Napi::Value Workbook::SetSparklineGroupSparklines(const Napi::CallbackInfo& info
   }
   CheckedSpecReader reader(env);
   std::vector<std::string> texts;
-  std::vector<fm_sparkline> items;
+  std::vector<fm_sparkline_t> items;
   if (!PullSparklines(reader, sparklines, texts, items) && !reader.ok()) {
     return env.Undefined();
   }
-  fm_sparkline none{};
+  fm_sparkline_t none{};
   return MakeStatus(env, fm_sheet_set_sparkline_group_sparklines(handle_, ArgU32(info, 0), ArgU32(info, 1),
                                                                  items.empty() ? &none : items.data(), items.size()));
 }

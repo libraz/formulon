@@ -18,7 +18,7 @@ struct WorkbookGuard {
 struct BufferGuard {
   std::uint8_t* data = nullptr;
   std::size_t len = 0;
-  ~BufferGuard() { fm_buffer_free(data); }
+  ~BufferGuard() { fm_buffer_destroy(data); }
   BufferGuard() = default;
   BufferGuard(const BufferGuard&) = delete;
   BufferGuard& operator=(const BufferGuard&) = delete;

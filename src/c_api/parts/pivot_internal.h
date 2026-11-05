@@ -81,7 +81,7 @@ void invalidate_pivot_result(formulon::Workbook& wb, formulon::pivot::PivotTable
 void invalidate_pivot_results_for_cache(formulon::Workbook& wb, std::uint32_t cache_id);
 
 // Marks every pivot drawing from cache `cache_id` as projection-pending: its
-// sheet cells are stale until its next table edit, `fm_workbook_pivot_project`
+// sheet cells are stale until its next table edit, `fm_sheet_project_pivot`
 // or a save. A cache edit does not project, so building records one by one
 // never re-evaluates every pivot per call.
 void mark_cache_pivots_pending(formulon::Workbook& wb, std::uint32_t cache_id);
@@ -129,7 +129,7 @@ formulon::Value intern_cache_text(formulon::pivot::PivotCache& cache, std::strin
 formulon::pivot::PivotAxis pivot_axis_from_fm(fm_pivot_axis_t axis);
 formulon::pivot::Aggregation pivot_agg_from_fm(fm_pivot_aggregation_t agg);
 formulon::pivot::SubtotalFn pivot_subtotal_from_fm(fm_pivot_aggregation_t agg);
-formulon::pivot::ShowValuesAs pivot_show_as_from_fm(fm_pivot_show_as_t show_as);
+formulon::pivot::ShowValuesAs pivot_show_as_from_fm(fm_pivot_show_values_as_t show_as);
 formulon::pivot::FilterType pivot_filter_type_from_fm(fm_pivot_filter_type_t t);
 formulon::pivot::CalendarSystem pivot_calendar_from_fm(fm_pivot_calendar_t c);
 

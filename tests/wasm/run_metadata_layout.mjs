@@ -5,7 +5,7 @@ export function registerMetadataLayout(Module, test) {
     const wb = Module.Workbook.createDefault();
     try {
       assert.ok(wb.addMerge(0, { firstRow: 0, lastRow: 1, firstCol: 0, lastCol: 2 }).ok);
-      const merges = wb.getMerges(0);
+      const merges = wb.listMerges(0);
       assert.equal(merges.length, 1);
       assert.equal(merges[0].firstRow, 0);
       assert.equal(merges[0].lastCol, 2);
@@ -23,17 +23,17 @@ export function registerMetadataLayout(Module, test) {
       assert.ok(wb.addMerge(0, b).ok);
       // removeMerge with an overlap that hits `a` only.
       assert.ok(wb.removeMerge(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }).ok);
-      const list = wb.getMerges(0);
+      const list = wb.listMerges(0);
       assert.equal(list.length, 1);
       assert.equal(list[0].firstRow, 4);
       // removeMergeAt drops the survivor by index.
       assert.ok(wb.removeMergeAt(0, 0).ok);
-      assert.equal(wb.getMerges(0).length, 0);
+      assert.equal(wb.listMerges(0).length, 0);
       // clearMerges nukes the remainder; safe on an empty list.
       assert.ok(wb.addMerge(0, a).ok);
       assert.ok(wb.addMerge(0, b).ok);
       assert.ok(wb.clearMerges(0).ok);
-      assert.equal(wb.getMerges(0).length, 0);
+      assert.equal(wb.listMerges(0).length, 0);
     } finally {
       wb.delete();
     }
@@ -42,7 +42,7 @@ export function registerMetadataLayout(Module, test) {
   test('hyperlinks are read after save+load', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      assert.equal(wb.getHyperlinks(0).length, 0);
+      assert.equal(wb.listHyperlinks(0).length, 0);
     } finally {
       wb.delete();
     }
@@ -51,13 +51,13 @@ export function registerMetadataLayout(Module, test) {
   test('addHyperlink + getHyperlinks round-trip', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      assert.equal(wb.getHyperlinks(0).length, 0);
+      assert.equal(wb.listHyperlinks(0).length, 0);
       // Three entries with progressively more optional fields populated.
       assert.ok(wb.addHyperlink(0, 1, 2, 'https://example.com/', '', '', '').ok);
       assert.ok(wb.addHyperlink(0, 3, 4, 'mailto:hello@example.com', 'Hello', '', '').ok);
       assert.ok(wb.addHyperlink(0, 5, 6, '', 'See X', 'Internal link', 'Sheet1!A1').ok);
       assert.ok(wb.addHyperlinkRange(0, 7, 8, 9, 10, 'https://example.com/range', 'Range', 'Range tip', '').ok);
-      const list = wb.getHyperlinks(0);
+      const list = wb.listHyperlinks(0);
       assert.equal(list.length, 4);
       assert.equal(list[0].row, 1);
       assert.equal(list[0].col, 2);
@@ -95,7 +95,7 @@ export function registerMetadataLayout(Module, test) {
       assert.ok(!wb.addHyperlink(999, 0, 0, 'https://x/', '', '', '').ok);
       // clearHyperlinks drops everything.
       assert.ok(wb.clearHyperlinks(0).ok);
-      assert.equal(wb.getHyperlinks(0).length, 0);
+      assert.equal(wb.listHyperlinks(0).length, 0);
     } finally {
       wb.delete();
     }
@@ -114,7 +114,7 @@ export function registerMetadataLayout(Module, test) {
       assert.ok(!wb.removeHyperlinkAt(999, 0).ok);
       assert.ok(!wb.clearHyperlinks(999).ok);
       // Final list still matches the post-save+load read.
-      assert.equal(wb.getHyperlinks(0).length, 0);
+      assert.equal(wb.listHyperlinks(0).length, 0);
     } finally {
       wb.delete();
     }
@@ -234,13 +234,13 @@ export function registerMetadataLayout(Module, test) {
       assert.equal(b.ranges[1].lastRow, 9);
 
       // removeValidationAt drops the first rule.
-      assert.ok(wb.removeValidationAt(0, 0).ok);
+      assert.ok(wb.removeValidation(0, 0).ok);
       const after = wb.getValidations(0);
       assert.equal(after.length, 1);
       assert.equal(after[0].type, 2);
 
       // Out-of-range index is rejected.
-      assert.ok(!wb.removeValidationAt(0, 99).ok);
+      assert.ok(!wb.removeValidation(0, 99).ok);
 
       // clearValidations drops everything; safe to call again.
       assert.ok(wb.clearValidations(0).ok);
@@ -249,7 +249,7 @@ export function registerMetadataLayout(Module, test) {
 
       // Sheet-out-of-range is rejected on every entry.
       assert.ok(!wb.addValidation(999, listRule).ok);
-      assert.ok(!wb.removeValidationAt(999, 0).ok);
+      assert.ok(!wb.removeValidation(999, 0).ok);
       assert.ok(!wb.clearValidations(999).ok);
     } finally {
       wb.delete();
@@ -264,14 +264,14 @@ export function registerMetadataLayout(Module, test) {
       assert.ok(Array.isArray(cf.cells));
 
       assert.ok(wb.setColumnWidth(0, 2, 2, 18).ok);
-      const columns = wb.getSheetColumns(0);
+      const columns = wb.listColOverrides(0);
       assert.ok(columns.status.ok);
       assert.ok(Array.isArray(columns.columns));
       assert.equal(columns.columns[0].first, 2);
       assert.equal(columns.columns[0].width, 18);
 
       assert.ok(wb.setRowHeight(0, 3, 22).ok);
-      const rows = wb.getSheetRowOverrides(0);
+      const rows = wb.listRowOverrides(0);
       assert.ok(rows.status.ok);
       assert.ok(Array.isArray(rows.rows));
       assert.equal(rows.rows[0].row, 3);
@@ -353,13 +353,13 @@ export function registerMetadataLayout(Module, test) {
   test('typed print patches throw on lossy numbers before changing the page setup', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      assert.ok(wb.setSheetPageSetup(0, { orientation: 2, scale: 125 }).ok);
+      assert.ok(wb.setPageSetup(0, { orientation: 2, scale: 125 }).ok);
       const expectRejected = (patch, field) => {
-        assert.throws(() => wb.setSheetPageSetup(0, patch), {
+        assert.throws(() => wb.setPageSetup(0, patch), {
           name: 'RangeError',
-          message: new RegExp(`setSheetPageSetup.*\`${field}\``),
+          message: new RegExp(`setPageSetup.*\`${field}\``),
         });
-        const setup = wb.getSheetPageSetup(0);
+        const setup = wb.getPageSetup(0);
         assert.equal(setup.orientation, 2);
         assert.equal(setup.scale, 125);
       };
@@ -372,8 +372,8 @@ export function registerMetadataLayout(Module, test) {
 
       // Nullish values keep the old patch meaning: the attribute is omitted
       // from this update and the prior value remains in force.
-      assert.ok(wb.setSheetPageSetup(0, { scale: null, orientation: undefined }).ok);
-      const unchanged = wb.getSheetPageSetup(0);
+      assert.ok(wb.setPageSetup(0, { scale: null, orientation: undefined }).ok);
+      const unchanged = wb.getPageSetup(0);
       assert.equal(unchanged.orientation, 2);
       assert.equal(unchanged.scale, 125);
     } finally {
@@ -384,29 +384,29 @@ export function registerMetadataLayout(Module, test) {
   test('typed print patches throw on coercion and preserve header/footer fields', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      assert.ok(wb.setSheetPrintOptions(0, { gridLines: true }).ok);
+      assert.ok(wb.setPrintOptions(0, { gridLines: true }).ok);
       const throwingOptions = {};
       Object.defineProperty(throwingOptions, 'gridLines', {
         get() {
           throw new Error('print-options getter');
         },
       });
-      assert.throws(() => wb.setSheetPrintOptions(0, throwingOptions), /print-options getter/);
-      assert.match(wb.getSheetPrintOptionsXml(0).xml, /gridLines="true"/);
+      assert.throws(() => wb.setPrintOptions(0, throwingOptions), /print-options getter/);
+      assert.match(wb.getPrintOptionsXml(0).xml, /gridLines="true"/);
 
-      assert.ok(wb.setSheetPageMargins(0, { left: 0.5 }).ok);
-      assert.throws(() => wb.setSheetPageMargins(0, { left: '0.75' }), {
+      assert.ok(wb.setPageMargins(0, { left: 0.5 }).ok);
+      assert.throws(() => wb.setPageMargins(0, { left: '0.75' }), {
         name: 'TypeError',
-        message: /setSheetPageMargins.*left/,
+        message: /setPageMargins.*left/,
       });
-      assert.equal(wb.getSheetPageMargins(0).left, 0.5);
+      assert.equal(wb.getPageMargins(0).left, 0.5);
 
-      assert.ok(wb.setSheetHeaderFooter(0, { oddHeader: 'before' }).ok);
-      assert.throws(() => wb.setSheetHeaderFooter(0, { oddHeader: 42 }), {
+      assert.ok(wb.setHeaderFooter(0, { oddHeader: 'before' }).ok);
+      assert.throws(() => wb.setHeaderFooter(0, { oddHeader: 42 }), {
         name: 'TypeError',
-        message: /setSheetHeaderFooter.*oddHeader/,
+        message: /setHeaderFooter.*oddHeader/,
       });
-      assert.match(wb.getSheetHeaderFooterXml(0).xml, /before/);
+      assert.match(wb.getHeaderFooterXml(0).xml, /before/);
     } finally {
       wb.delete();
     }
@@ -415,7 +415,7 @@ export function registerMetadataLayout(Module, test) {
   test('header/footer getter failures are rethrown before any mutation', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      assert.ok(wb.setSheetHeaderFooter(0, { oddHeader: 'before' }).ok);
+      assert.ok(wb.setHeaderFooter(0, { oddHeader: 'before' }).ok);
       const lateFailure = { oddHeader: 'after' };
       Object.defineProperty(lateFailure, 'alignWithMargins', {
         get() {
@@ -423,9 +423,9 @@ export function registerMetadataLayout(Module, test) {
         },
       });
 
-      assert.throws(() => wb.setSheetHeaderFooter(0, lateFailure), /late header getter/);
-      assert.match(wb.getSheetHeaderFooterXml(0).xml, /before/);
-      assert.doesNotMatch(wb.getSheetHeaderFooterXml(0).xml, /after/);
+      assert.throws(() => wb.setHeaderFooter(0, lateFailure), /late header getter/);
+      assert.match(wb.getHeaderFooterXml(0).xml, /before/);
+      assert.doesNotMatch(wb.getHeaderFooterXml(0).xml, /after/);
     } finally {
       wb.delete();
     }
@@ -435,54 +435,54 @@ export function registerMetadataLayout(Module, test) {
     const wb = Module.Workbook.createDefault();
     try {
       const read = () => {
-        const r = wb.getSheetView(0);
+        const r = wb.getView(0);
         assert.ok(r.status.ok, `getSheetView: ${JSON.stringify(r.status)}`);
         return r.view;
       };
       assert.equal(read().visibility, 0);
       assert.equal(read().tabHidden, 0);
       // The only visible sheet cannot be hidden: kInvalidArgument, sheet left alone.
-      for (const refused of [wb.setSheetVisibility(0, 1), wb.setSheetTabHidden(0, true)]) {
+      for (const refused of [wb.setVisibility(0, 1), wb.setTabHidden(0, true)]) {
         assert.equal(refused.ok, false);
         assert.equal(refused.status, 2);
       }
       assert.equal(read().visibility, 0);
       // The last sheet keeps its own refusal (kCannotRemoveLastSheet).
       assert.equal(wb.removeSheet(0).status, 5052);
-      assert.equal(wb.sheetCount().value, 1);
+      assert.equal(wb.getSheetCount().value, 1);
       // A second sheet lets the first one change state, but removing the first
       // while the second is hidden would leave no visible sheet.
       assert.ok(wb.addSheet('Second').ok);
-      assert.ok(wb.setSheetTabHidden(1, true).ok);
+      assert.ok(wb.setTabHidden(1, true).ok);
       const lastVisible = wb.removeSheet(0);
       assert.equal(lastVisible.ok, false);
       assert.equal(lastVisible.status, 2);
-      assert.equal(wb.sheetCount().value, 2);
-      assert.ok(wb.setSheetTabHidden(1, false).ok);
+      assert.equal(wb.getSheetCount().value, 2);
+      assert.ok(wb.setTabHidden(1, false).ok);
 
-      assert.ok(wb.setSheetVisibility(0, 2).ok);
+      assert.ok(wb.setVisibility(0, 2).ok);
       // The two-state view stays consistent: a very-hidden sheet reads as
       // hidden to a caller that knows only the bool, never as visible.
       assert.equal(read().visibility, 2);
       assert.equal(read().tabHidden, 1);
 
       // Asking for plain "hidden" must not weaken the stronger state.
-      assert.ok(wb.setSheetTabHidden(0, true).ok);
+      assert.ok(wb.setTabHidden(0, true).ok);
       assert.equal(read().visibility, 2);
 
       // Demotion is the other direction the bool cannot express.
-      assert.ok(wb.setSheetVisibility(0, 1).ok);
+      assert.ok(wb.setVisibility(0, 1).ok);
       assert.equal(read().visibility, 1);
       assert.equal(read().tabHidden, 1);
 
       // Showing the sheet clears either hidden state.
-      assert.ok(wb.setSheetTabHidden(0, false).ok);
+      assert.ok(wb.setTabHidden(0, false).ok);
       assert.equal(read().visibility, 0);
       assert.equal(read().tabHidden, 0);
 
       // An unknown ordinal is refused and leaves the sheet alone.
-      assert.ok(wb.setSheetVisibility(0, 2).ok);
-      assert.equal(wb.setSheetVisibility(0, 3).ok, false);
+      assert.ok(wb.setVisibility(0, 2).ok);
+      assert.equal(wb.setVisibility(0, 3).ok, false);
       assert.equal(read().visibility, 2);
     } finally {
       wb.delete();

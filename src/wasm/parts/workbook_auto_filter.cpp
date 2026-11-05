@@ -38,8 +38,8 @@ namespace {
 /// The six AutoFilter entry points, once for sheets and once for tables, so
 /// every JS method below is written a single time.
 struct AutoFilterOps {
-  fm_status_t (*get)(const fm_workbook_t*, size_t, fm_auto_filter*, int32_t*);
-  fm_status_t (*set)(fm_workbook_t*, size_t, const fm_auto_filter*);
+  fm_status_t (*get)(const fm_workbook_t*, size_t, fm_auto_filter_t*, int32_t*);
+  fm_status_t (*set)(fm_workbook_t*, size_t, const fm_auto_filter_t*);
   fm_status_t (*remove)(fm_workbook_t*, size_t);
   fm_status_t (*apply)(fm_workbook_t*, size_t);
   fm_status_t (*clear)(fm_workbook_t*, size_t);
@@ -49,11 +49,11 @@ struct AutoFilterOps {
 constexpr AutoFilterOps kSheetAutoFilter = {fm_sheet_get_auto_filter,    fm_sheet_set_auto_filter,
                                             fm_sheet_remove_auto_filter, fm_sheet_apply_auto_filter,
                                             fm_sheet_clear_auto_filter,  fm_sheet_evaluate_auto_filter};
-constexpr AutoFilterOps kTableAutoFilter = {fm_table_get_auto_filter,    fm_table_set_auto_filter,
-                                            fm_table_remove_auto_filter, fm_table_apply_auto_filter,
-                                            fm_table_clear_auto_filter,  fm_table_evaluate_auto_filter};
+constexpr AutoFilterOps kTableAutoFilter = {
+    fm_workbook_get_table_auto_filter,   fm_workbook_set_table_auto_filter,   fm_workbook_remove_table_auto_filter,
+    fm_workbook_apply_table_auto_filter, fm_workbook_clear_table_auto_filter, fm_workbook_evaluate_table_auto_filter};
 
-emscripten::val date_group_to_val(const fm_date_group_item& d) {
+emscripten::val date_group_to_val(const fm_date_group_item_t& d) {
   emscripten::val o = emscripten::val::object();
   o.set("year", static_cast<uint32_t>(d.year));
   o.set("month", static_cast<uint32_t>(d.month));
@@ -65,7 +65,7 @@ emscripten::val date_group_to_val(const fm_date_group_item& d) {
   return o;
 }
 
-emscripten::val filter_column_to_val(const fm_filter_column& c) {
+emscripten::val filter_column_to_val(const fm_filter_column_t& c) {
   emscripten::val o = emscripten::val::object();
   o.set("colId", c.col_id);
   o.set("hiddenButton", c.hidden_button != 0);
@@ -105,7 +105,7 @@ emscripten::val filter_column_to_val(const fm_filter_column& c) {
   return o;
 }
 
-emscripten::val sort_condition_to_val(const fm_sort_condition& c) {
+emscripten::val sort_condition_to_val(const fm_sort_condition_t& c) {
   emscripten::val o = emscripten::val::object();
   o.set("ref", merge_range_to_val(c.ref));
   o.set("descending", c.descending != 0);
@@ -119,7 +119,7 @@ emscripten::val sort_condition_to_val(const fm_sort_condition& c) {
   return o;
 }
 
-emscripten::val auto_filter_to_val(const fm_auto_filter& f) {
+emscripten::val auto_filter_to_val(const fm_auto_filter_t& f) {
   emscripten::val o = emscripten::val::object();
   o.set("range", merge_range_to_val(f.range));
   emscripten::val columns = emscripten::val::array();
@@ -145,11 +145,11 @@ emscripten::val auto_filter_to_val(const fm_auto_filter& f) {
   return o;
 }
 
-/// Owns the strings and arrays one `fm_filter_column` points into.
+/// Owns the strings and arrays one `fm_filter_column_t` points into.
 struct FilterColumnStore {
   std::vector<std::string> values;
   std::vector<const char*> value_ptrs;
-  std::vector<fm_date_group_item> date_groups;
+  std::vector<fm_date_group_item_t> date_groups;
   std::string val1;
   std::string val2;
   std::string val_iso;
@@ -169,8 +169,8 @@ emscripten::val js_pull_array(const emscripten::val& v, const char* key, JsNarro
   return reader.is_array(a, key) ? a : emscripten::val::array();
 }
 
-fm_date_group_item pull_date_group(const emscripten::val& v, JsNarrowNumericReader& reader) {
-  fm_date_group_item d{};
+fm_date_group_item_t pull_date_group(const emscripten::val& v, JsNarrowNumericReader& reader) {
+  fm_date_group_item_t d{};
   d.year = reader.u16(v, "year", 0U, "dateGroups[].year");
   d.month = reader.u8(v, "month", 0U, "dateGroups[].month");
   d.day = reader.u8(v, "day", 0U, "dateGroups[].day");
@@ -185,9 +185,9 @@ int32_t pull_flag(const emscripten::val& v, const char* key, JsNarrowNumericRead
   return reader.boolean(v, key, dflt, key) ? 1 : 0;
 }
 
-void pull_filter_column(const emscripten::val& v, FilterColumnStore& st, fm_filter_column& c,
+void pull_filter_column(const emscripten::val& v, FilterColumnStore& st, fm_filter_column_t& c,
                         JsNarrowNumericReader& reader) {
-  c = fm_filter_column{};
+  c = fm_filter_column_t{};
   c.col_id = reader.u32(v, "colId", 0U, "filterColumn.colId");
   if (!reader.ok()) {
     return;
@@ -293,9 +293,9 @@ void pull_filter_column(const emscripten::val& v, FilterColumnStore& st, fm_filt
   c.has_icon_id = pull_flag(v, "hasIconId", reader);
 }
 
-void pull_sort_condition(const emscripten::val& v, std::string& custom_list, fm_sort_condition& c,
+void pull_sort_condition(const emscripten::val& v, std::string& custom_list, fm_sort_condition_t& c,
                          JsNarrowNumericReader& reader) {
-  c = fm_sort_condition{};
+  c = fm_sort_condition_t{};
   c.ref = js_pull_range(reader.value(v, "ref", "sortCondition.ref"), &reader);
   if (!reader.ok()) {
     return;
@@ -327,7 +327,7 @@ emscripten::val get_auto_filter(const fm_workbook_t* wb, const AutoFilterOps& op
     o.set("status", invalid_handle_status());
     return o;
   }
-  fm_auto_filter f{};
+  fm_auto_filter_t f{};
   int32_t present = 0;
   const fm_status_t rc = ops.get(wb, index, &f, &present);
   o.set("status", status_from_rc(rc));
@@ -342,7 +342,7 @@ JsStatus set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t i
     return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setAutoFilter");
-  fm_auto_filter f{};
+  fm_auto_filter_t f{};
   f.range = js_pull_range(reader.value(filter, "range", "autoFilter.range"), &reader);
   if (!reader.ok()) {
     return reader.failure();
@@ -353,7 +353,7 @@ JsStatus set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t i
     return reader.failure();
   }
   std::vector<FilterColumnStore> stores(column_count);
-  std::vector<fm_filter_column> cols(column_count);
+  std::vector<fm_filter_column_t> cols(column_count);
   for (uint32_t i = 0; i < column_count; ++i) {
     if (!reader.ok()) {
       break;
@@ -374,7 +374,7 @@ JsStatus set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t i
   f.column_count = column_count;
   const emscripten::val sort = reader.value(filter, "sort", "autoFilter.sort");
   std::vector<std::string> custom_lists;
-  std::vector<fm_sort_condition> conditions;
+  std::vector<fm_sort_condition_t> conditions;
   if (js_value_present(sort)) {
     f.has_sort = 1;
     f.sort_ref = js_pull_range(reader.value(sort, "ref", "sort.ref"), &reader);
@@ -487,15 +487,15 @@ JsStatus JsWorkbook::setTableAutoFilter(uint32_t table, emscripten::val filter) 
 }
 
 JsStatus JsWorkbook::removeTableAutoFilter(uint32_t table) {
-  return run_auto_filter(handle_, fm_table_remove_auto_filter, table);
+  return run_auto_filter(handle_, fm_workbook_remove_table_auto_filter, table);
 }
 
 JsStatus JsWorkbook::applyTableAutoFilter(uint32_t table) {
-  return run_auto_filter(handle_, fm_table_apply_auto_filter, table);
+  return run_auto_filter(handle_, fm_workbook_apply_table_auto_filter, table);
 }
 
 JsStatus JsWorkbook::clearTableAutoFilter(uint32_t table) {
-  return run_auto_filter(handle_, fm_table_clear_auto_filter, table);
+  return run_auto_filter(handle_, fm_workbook_clear_table_auto_filter, table);
 }
 
 emscripten::val JsWorkbook::evaluateTableAutoFilter(uint32_t table) const {

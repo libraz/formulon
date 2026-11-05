@@ -9,25 +9,26 @@ from pathlib import Path
 import formulon
 from formulon import (
     Workbook,
+    get_function_metadata,
 )
 
 
 class FunctionCatalogTests(unittest.TestCase):
     def test_catalog_metadata(self) -> None:
         self.assertGreater(Workbook.function_count(), 0)
-        meta = Workbook.function_metadata("SUM")
+        meta = get_function_metadata("SUM")
         self.assertIsNotNone(meta)
         self.assertEqual(meta.name, "SUM")
         self.assertGreaterEqual(meta.min_arity, 1)
         # SUM is an unbounded variadic; the sentinel is normalized to None.
         self.assertIsNone(meta.max_arity)
         # Lazy-dispatch forms (not in the eager registry) still resolve.
-        xlookup = Workbook.function_metadata("XLOOKUP")
+        xlookup = get_function_metadata("XLOOKUP")
         self.assertIsNotNone(xlookup)
         self.assertEqual(xlookup.name, "XLOOKUP")
         names = {Workbook.function_name_at(i) for i in range(Workbook.function_count())}
         self.assertIn("XLOOKUP", names)
-        self.assertIsNone(Workbook.function_metadata("NOT_A_REAL_FUNCTION"))
+        self.assertIsNone(get_function_metadata("NOT_A_REAL_FUNCTION"))
 
     def test_function_name_at(self) -> None:
         name = Workbook.function_name_at(0)
@@ -35,7 +36,7 @@ class FunctionCatalogTests(unittest.TestCase):
         self.assertGreater(len(name), 0)
 
     def test_merge_function_metadata(self) -> None:
-        base = Workbook.function_metadata("XLOOKUP")
+        base = get_function_metadata("XLOOKUP")
         self.assertIsNotNone(base)
         # The engine leaves display metadata empty.
         self.assertIsNone(base.signature_template)
@@ -90,7 +91,7 @@ class FunctionCatalogTests(unittest.TestCase):
 
         for name, entry in functions.items():
             self.assertEqual(name, name.upper(), f"{name} is not an uppercase key")
-            base = Workbook.function_metadata(name)
+            base = get_function_metadata(name)
             self.assertIsNotNone(base, f"{name} is not a function this engine knows")
             self.assertEqual(base.name, name, f"{name} is not the canonical spelling")
             # Merging must actually reach the entry: an alias-only entry

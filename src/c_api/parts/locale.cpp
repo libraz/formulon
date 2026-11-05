@@ -43,7 +43,7 @@ const char* one_char(char c) noexcept {
   return &kOneChar[2 * static_cast<std::size_t>(static_cast<unsigned char>(c))];
 }
 
-// Shared body of `fm_formula_localize` / `fm_formula_canonicalize`.
+// Shared body of `fm_localize_formula` / `fm_canonicalize_formula`.
 fm_status_t convert_formula(const char* api, const char* formula, const char* profile_id, bool localize,
                             const char** out_formula) {
   clear_last_error();
@@ -66,21 +66,21 @@ fm_status_t convert_formula(const char* api, const char* formula, const char* pr
 
 }  // namespace
 
-extern "C" fm_status_t fm_formula_localize(const char* formula, const char* profile_id, const char** out_formula) {
-  return convert_formula("fm_formula_localize", formula, profile_id, /*localize=*/true, out_formula);
+extern "C" fm_status_t fm_localize_formula(const char* formula, const char* profile_id, const char** out_formula) {
+  return convert_formula("fm_localize_formula", formula, profile_id, /*localize=*/true, out_formula);
 }
 
-extern "C" fm_status_t fm_formula_canonicalize(const char* formula, const char* profile_id, const char** out_formula) {
-  return convert_formula("fm_formula_canonicalize", formula, profile_id, /*localize=*/false, out_formula);
+extern "C" fm_status_t fm_canonicalize_formula(const char* formula, const char* profile_id, const char** out_formula) {
+  return convert_formula("fm_canonicalize_formula", formula, profile_id, /*localize=*/false, out_formula);
 }
 
-extern "C" fm_status_t fm_locale_facts(const char* profile_id, fm_locale_facts_t* out) {
+extern "C" fm_status_t fm_get_locale_facts(const char* profile_id, fm_locale_facts_t* out) {
   clear_last_error();
   if (profile_id == nullptr || out == nullptr) {
-    return null_argument("fm_locale_facts");
+    return null_argument("fm_get_locale_facts");
   }
   formulon::ExcelProfile profile;
-  if (auto rc = check_profile_id(profile_id, "fm_locale_facts", &profile); rc != 0) {
+  if (auto rc = check_profile_id(profile_id, "fm_get_locale_facts", &profile); rc != 0) {
     return rc;
   }
   const formulon::LocaleFacts& facts = formulon::locale_facts(profile);
@@ -101,25 +101,25 @@ extern "C" fm_status_t fm_locale_facts(const char* profile_id, fm_locale_facts_t
   return 0;
 }
 
-extern "C" size_t fm_locale_error_name_count(void) {
+extern "C" size_t fm_get_locale_error_name_count(void) {
   return formulon::kErrorNameCount;
 }
 
-extern "C" fm_status_t fm_locale_error_name(const char* profile_id, size_t error_index, const char** out_canonical,
-                                            const char** out_localized, int32_t* out_measured) {
+extern "C" fm_status_t fm_get_locale_error_name_at(const char* profile_id, size_t index, const char** out_canonical,
+                                                   const char** out_localized, int32_t* out_measured) {
   clear_last_error();
   if (profile_id == nullptr || out_canonical == nullptr || out_localized == nullptr || out_measured == nullptr) {
-    return null_argument("fm_locale_error_name");
+    return null_argument("fm_get_locale_error_name_at");
   }
   formulon::ExcelProfile profile;
-  if (auto rc = check_profile_id(profile_id, "fm_locale_error_name", &profile); rc != 0) {
+  if (auto rc = check_profile_id(profile_id, "fm_get_locale_error_name_at", &profile); rc != 0) {
     return rc;
   }
-  if (auto rc = check_index(error_index, formulon::kErrorNameCount, "fm_locale_error_name", "error_index"); rc != 0) {
+  if (auto rc = check_index(index, formulon::kErrorNameCount, "fm_get_locale_error_name_at", "index"); rc != 0) {
     return rc;
   }
-  *out_canonical = formulon::kErrorTable[error_index].display_name;
-  *out_localized = formulon::locale_facts(profile).error_names[error_index].data();
-  *out_measured = formulon::is_measured_profile(profile) && formulon::error_name_measured(error_index) ? 1 : 0;
+  *out_canonical = formulon::kErrorTable[index].display_name;
+  *out_localized = formulon::locale_facts(profile).error_names[index].data();
+  *out_measured = formulon::is_measured_profile(profile) && formulon::error_name_measured(index) ? 1 : 0;
   return 0;
 }
