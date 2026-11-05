@@ -93,18 +93,14 @@ Napi::Value OptionsFlag(Napi::Env env, int32_t v) {
 }  // namespace
 
 Napi::Value Workbook::PivotCreate(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeIndexResult(env, NullHandleError(env), 0);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const std::string name = ArgString(info, 1);
-  const uint32_t cache_id = ArgU32(info, 2);
-  const uint32_t anchor_row = ArgU32(info, 3);
-  const uint32_t anchor_col = ArgU32(info, 4);
-  std::size_t out = 0;
-  fm_status_t rc = fm_sheet_add_pivot(handle_, sheet, name.c_str(), cache_id, anchor_row, anchor_col, &out);
-  return MakeIndexResult(env, rc, static_cast<uint32_t>(out));
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+    const std::string name = ArgString(info, 1);
+    const uint32_t cache_id = ArgU32(info, 2);
+    const uint32_t anchor_row = ArgU32(info, 3);
+    const uint32_t anchor_col = ArgU32(info, 4);
+    return fm_sheet_add_pivot(handle, sheet, name.c_str(), cache_id, anchor_row, anchor_col, out);
+  });
 }
 
 Napi::Value Workbook::PivotRemove(const Napi::CallbackInfo& info) {
@@ -584,16 +580,11 @@ Napi::Value Workbook::PivotCacheSetOptions(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::PivotCacheCalculatedFieldAdd(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeIndexResult(env, NullHandleError(env), 0);
-  }
-  const std::string name = ArgString(info, 1);
-  const std::string formula = ArgString(info, 2);
-  std::size_t out = 0;
-  const fm_status_t rc =
-      fm_workbook_add_pivot_cache_calculated_field(handle_, ArgU32(info, 0), name.c_str(), formula.c_str(), &out);
-  return MakeIndexResult(env, rc, static_cast<uint32_t>(out));
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    const std::string name = ArgString(info, 1);
+    const std::string formula = ArgString(info, 2);
+    return fm_workbook_add_pivot_cache_calculated_field(handle, ArgU32(info, 0), name.c_str(), formula.c_str(), out);
+  });
 }
 
 Napi::Value Workbook::PivotCacheCalculatedFieldSetFormula(const Napi::CallbackInfo& info) {
@@ -720,15 +711,11 @@ Napi::Value Workbook::PivotProjectionPending(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::PivotShowDetails(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeIndexResult(env, NullHandleError(env), 0);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  std::size_t out = 0;
-  const fm_status_t rc = fm_sheet_show_pivot_details(handle_, sheet, pivot_idx, ArgU32(info, 2), ArgU32(info, 3), &out);
-  return MakeIndexResult(env, rc, static_cast<uint32_t>(out));
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+    const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+    return fm_sheet_show_pivot_details(handle, sheet, pivot_idx, ArgU32(info, 2), ArgU32(info, 3), out);
+  });
 }
 
 namespace {

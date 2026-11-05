@@ -15,14 +15,10 @@ namespace formulon_node {
 // ---- Sheet operations -----------------------------------------------
 
 Napi::Value Workbook::AddSheet(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeIndexResult(env, NullHandleError(env), 0);
-  }
-  const std::string name = ArgString(info, 0);
-  std::size_t out = 0;
-  const fm_status_t rc = fm_workbook_add_sheet(handle_, name.c_str(), &out);
-  return MakeIndexResult(env, rc, static_cast<uint32_t>(out));
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    const std::string name = ArgString(info, 0);
+    return fm_workbook_add_sheet(handle, name.c_str(), out);
+  });
 }
 
 Napi::Value Workbook::RemoveSheet(const Napi::CallbackInfo& info) {
@@ -65,13 +61,7 @@ Napi::Value Workbook::CopySheet(const Napi::CallbackInfo& info) {
 // `src/node_addon/generated/workbook_counts.cc`).
 
 Napi::Value Workbook::ActiveSheet(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeIndexResult(env, NullHandleError(env), 0);
-  }
-  std::size_t out = 0;
-  const fm_status_t rc = fm_workbook_get_active_sheet(handle_, &out);
-  return MakeIndexResult(env, rc, static_cast<uint32_t>(out));
+  return IndexCall(info, [](fm_workbook_t* handle, std::size_t* out) { return fm_workbook_get_active_sheet(handle, out); });
 }
 
 Napi::Value Workbook::SetActiveSheet(const Napi::CallbackInfo& info) {
