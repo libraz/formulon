@@ -34,7 +34,7 @@ class ConditionalFormatTests(unittest.TestCase):
                     dxf_id=dxf_index,
                 ),
             )
-            rules = wb.get_conditional_formats(0)
+            rules = [wb.get_cf_rule(0, i) for i in range(wb.get_cf_rule_count(0))]
             self.assertEqual(len(rules), 1)
             self.assertEqual(rules[0].type, 1)
             self.assertEqual(rules[0].formula1, "4")
@@ -48,7 +48,7 @@ class ConditionalFormatTests(unittest.TestCase):
             self.assertNotIn((0, 0), matched)
 
             wb.clear_cf_rules(0)
-            self.assertEqual(wb.get_conditional_formats(0), [])
+            self.assertEqual([wb.get_cf_rule(0, i) for i in range(wb.get_cf_rule_count(0))], [])
 
     def test_cell_is_op_alone_is_engaged(self) -> None:
         with Workbook.create_default() as wb:
@@ -56,7 +56,7 @@ class ConditionalFormatTests(unittest.TestCase):
                 0,
                 ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=1, op=3, formula1="5"),
             )
-            rule = wb.get_conditional_formats(0)[0]
+            rule = [wb.get_cf_rule(0, i) for i in range(wb.get_cf_rule_count(0))][0]
             self.assertEqual(rule.op, 3)
             self.assertIsNone(rule.rank)
             self.assertIsNone(rule.std_dev)
@@ -66,7 +66,7 @@ class ConditionalFormatTests(unittest.TestCase):
     def test_unset_rank_reads_back_none(self) -> None:
         with Workbook.create_default() as wb:
             wb.add_cf_rule(0, ConditionalFormatInput(ranges=[CellRect(0, 0, 2, 0)], type=5))
-            rule = wb.get_conditional_formats(0)[0]
+            rule = [wb.get_cf_rule(0, i) for i in range(wb.get_cf_rule_count(0))][0]
             self.assertIsNone(rule.rank)
             self.assertIsNone(rule.op)
 
@@ -78,7 +78,7 @@ class ConditionalFormatTests(unittest.TestCase):
             wb.add_cf_rule(0, ConditionalFormatInput(ranges=sqref, type=5, rank=0, dxf_id=dxf_index))
             wb.add_cf_rule(0, ConditionalFormatInput(ranges=sqref, type=6, std_dev=0.0))
             wb.add_cf_rule(0, ConditionalFormatInput(ranges=sqref, type=15, time_period=0))
-            first = wb.get_conditional_formats(0)
+            first = [wb.get_cf_rule(0, i) for i in range(wb.get_cf_rule_count(0))]
             wb.clear_cf_rules(0)
             for r in first:
                 wb.add_cf_rule(
@@ -102,7 +102,7 @@ class ConditionalFormatTests(unittest.TestCase):
                         time_period=r.time_period,
                     ),
                 )
-            again = wb.get_conditional_formats(0)
+            again = [wb.get_cf_rule(0, i) for i in range(wb.get_cf_rule_count(0))]
             for x, y in zip(first, again):
                 for f in ("op", "rank", "std_dev", "time_period", "dxf_id"):
                     self.assertEqual(getattr(x, f), getattr(y, f), f)
@@ -131,7 +131,7 @@ class ConditionalFormatTests(unittest.TestCase):
             ]
             for rule in rules:
                 wb.add_cf_rule(0, rule)
-            got = wb.get_conditional_formats(0)
+            got = [wb.get_cf_rule(0, i) for i in range(wb.get_cf_rule_count(0))]
             self.assertEqual(got[0].color_scale.colors[1], CfColor(0, 255, 0))
             self.assertEqual(got[1].data_bar.fill, CfColor(0, 0, 255))
             self.assertEqual(got[2].icon_set.thresholds[1].value, "67")
@@ -188,7 +188,7 @@ class ConditionalFormatTests(unittest.TestCase):
             for rule in self._cfvo_rules():
                 wb.add_cf_rule(0, rule)
 
-            in_session = wb.get_conditional_formats(0)
+            in_session = [wb.get_cf_rule(0, i) for i in range(wb.get_cf_rule_count(0))]
             self.assertEqual(len(in_session), 3)
             self.assertEqual(self._cfvo_values(in_session), self.EXPECTED_CFVO_VALUES)
             by_type = {rule.type: rule for rule in in_session}
@@ -201,7 +201,7 @@ class ConditionalFormatTests(unittest.TestCase):
             saved = wb.save()
 
         with Workbook.load(saved) as reloaded:
-            rules = reloaded.get_conditional_formats(0)
+            rules = [reloaded.get_cf_rule(0, i) for i in range(reloaded.get_cf_rule_count(0))]
             self.assertEqual(len(rules), 3)
             self.assertEqual(self._cfvo_values(rules), self.EXPECTED_CFVO_VALUES)
 
@@ -228,7 +228,7 @@ class ConditionalFormatTests(unittest.TestCase):
             saved = wb.save()
 
         with Workbook.load(saved) as reloaded:
-            got = reloaded.get_conditional_formats(0)[0].data_bar
+            got = [reloaded.get_cf_rule(0, i) for i in range(reloaded.get_cf_rule_count(0))][0].data_bar
             self.assertIs(got.gradient, False)
             self.assertEqual(got.axis_position, 1)
             self.assertEqual(got.negative_fill, CfColor(255, 0, 0))
@@ -238,7 +238,9 @@ class ConditionalFormatTests(unittest.TestCase):
             self.assertEqual(got.direction, 2)
             # Feeding the decoded bar straight back must reproduce it.
             reloaded.add_cf_rule(0, ConditionalFormatInput(ranges=[CellRect(4, 0, 6, 0)], type=3, data_bar=got))
-            self.assertEqual(reloaded.get_conditional_formats(0)[1].data_bar, got)
+            self.assertEqual(
+                [reloaded.get_cf_rule(0, i) for i in range(reloaded.get_cf_rule_count(0))][1].data_bar, got
+            )
 
     def test_icon_set_floor_survives_save_and_load(self) -> None:
         icons = IconSet(2, [Cfvo(0, "7"), Cfvo(0, "9")], floor=Cfvo(0, "5", gte=False))
@@ -246,7 +248,7 @@ class ConditionalFormatTests(unittest.TestCase):
             wb.add_cf_rule(0, ConditionalFormatInput(ranges=[CellRect(0, 0, 9, 0)], type=4, icon_set=icons))
             saved = wb.save()
         with Workbook.load(saved) as reloaded:
-            got = reloaded.get_conditional_formats(0)[0].icon_set
+            got = [reloaded.get_cf_rule(0, i) for i in range(reloaded.get_cf_rule_count(0))][0].icon_set
             self.assertEqual(got.floor, Cfvo(0, "5", gte=False))
 
     def test_omitted_data_bar_x14_fields_keep_the_model_defaults(self) -> None:
@@ -259,7 +261,7 @@ class ConditionalFormatTests(unittest.TestCase):
                     data_bar=DataBar(Cfvo(3), Cfvo(4), CfColor(0, 0, 255)),
                 ),
             )
-            got = wb.get_conditional_formats(0)[0].data_bar
+            got = [wb.get_cf_rule(0, i) for i in range(wb.get_cf_rule_count(0))][0].data_bar
             # The getter engages all six, so they read back as the defaults
             # rather than as `None`.
             self.assertIs(got.gradient, True)

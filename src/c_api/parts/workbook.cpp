@@ -515,9 +515,17 @@ extern "C" fm_status_t fm_sheet_delete_cols(fm_workbook_t* wb, size_t sheet_inde
 // Defined names / passthrough parts (read-side iteration)
 // ---------------------------------------------------------------------------
 //
-// `fm_workbook_get_defined_name_count`, `fm_workbook_get_table_count`, and
-// `fm_workbook_get_passthrough_count` are now emitted by the binding
-// codegen (see `src/c_api/generated/workbook_counts.cpp`).
+// `fm_workbook_get_table_count` is emitted by the binding codegen (see
+// `src/c_api/generated/workbook_counts.cpp`).
+
+extern "C" fm_status_t fm_workbook_get_defined_name_count(const fm_workbook_t* wb, size_t* out_count) {
+  clear_last_error();
+  if (wb == nullptr || out_count == nullptr) {
+    return null_argument("fm_workbook_get_defined_name_count");
+  }
+  *out_count = wb->workbook().defined_names().size();
+  return 0;
+}
 
 extern "C" fm_status_t fm_workbook_get_defined_name_at(const fm_workbook_t* wb, size_t idx, const char** out_name,
                                                        const char** out_formula, int32_t* out_local_sheet_id) {
@@ -612,6 +620,15 @@ extern "C" fm_status_t fm_workbook_remove_defined_name(fm_workbook_t* wb, const 
                              "name=" + std::string(name) + " local_sheet_id=" + std::to_string(local_sheet_id));
   }
   return finish_status(wb->workbook().set_defined_name_scoped(std::string(name), std::string(), local_sheet_id));
+}
+
+extern "C" fm_status_t fm_workbook_get_passthrough_count(const fm_workbook_t* wb, size_t* out_count) {
+  clear_last_error();
+  if (wb == nullptr || out_count == nullptr) {
+    return null_argument("fm_workbook_get_passthrough_count");
+  }
+  *out_count = wb->workbook().passthrough_parts().size();
+  return 0;
 }
 
 extern "C" fm_status_t fm_workbook_get_passthrough_at(const fm_workbook_t* wb, size_t idx, const char** out_path) {

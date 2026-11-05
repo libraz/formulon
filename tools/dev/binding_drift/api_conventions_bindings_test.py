@@ -534,6 +534,26 @@ class DerivationTest(BindingRuleTestBase):
             ],
         )
 
+    def test_a_process_list_may_be_a_module_function(self) -> None:
+        ledger = {
+            "collections": {"function": {"key": "natural", "plural": "function_names", "ops": ["function.get_count"]}},
+            "entries": {
+                "function_names.list": {
+                    "kind": "list",
+                    "from": ["function.get_count"],
+                    "py": "list_function_names",
+                    "surfaces": ["py"],
+                },
+            },
+        }
+        ctx = self.fixture.context(
+            "",
+            ledger,
+            py_init="__all__ = ['list_function_names']\n",
+            py_workbook="def list_function_names() -> list: ...\n",
+        )
+        self.assertEqual(hits(ctx, "R5.list"), [])
+
     def test_a_drop_reports_under_the_rule_it_closes(self) -> None:
         ledger = {"entries": {"cf.get_at": {"kind": "op", "drop": {"js": "getCfAt", "closes": "R12"}}}}
         ctx = self.fixture.context(

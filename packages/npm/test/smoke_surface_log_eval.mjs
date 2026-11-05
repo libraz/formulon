@@ -453,6 +453,10 @@ test('getLocaleFacts reports separators, names, error spellings and measurement'
     assert.equal(mac.facts.measured, true);
     const na = mac.facts.errorNames.find((e) => e.canonical === '#N/A');
     assert.equal(na.localized, '#NV');
+    const listed = wb.listLocaleErrorNames('mac-365-de_DE');
+    assert.ok(listed.status.ok);
+    assert.deepEqual([...listed], mac.facts.errorNames);
+    assert.equal(wb.listLocaleErrorNames('nope').status.ok, false);
     assert.equal(wb.getLocaleFacts('win-365-de_DE').facts.measured, false);
     assert.equal(wb.getLocaleFacts('win-365-en_US').facts.decimalSeparator, '.');
     const bad = wb.getLocaleFacts('nope');
@@ -467,7 +471,7 @@ test('pivot definition read-backs report what the setters wrote', async () => {
   const Module = await getModule();
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
-    assert.equal(wb.getPivotCacheId(0, pivot).index, wb.pivotCacheIdAt(0).index);
+    assert.equal(wb.getPivotCacheId(0, pivot).index, wb.listPivotCaches()[0]);
     assert.equal(wb.getPivotName(0, pivot).value, 'Pivot1');
     assert.deepEqual((({ rows, cols }) => ({ rows, cols }))(wb.getPivotGrandTotals(0, pivot)), {
       rows: true,

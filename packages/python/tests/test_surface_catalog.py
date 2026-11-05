@@ -8,14 +8,14 @@ from pathlib import Path
 
 import formulon
 from formulon import (
-    Workbook,
     get_function_metadata,
+    list_function_names,
 )
 
 
 class FunctionCatalogTests(unittest.TestCase):
     def test_catalog_metadata(self) -> None:
-        self.assertGreater(Workbook.function_count(), 0)
+        self.assertGreater(len(list_function_names()), 0)
         meta = get_function_metadata("SUM")
         self.assertIsNotNone(meta)
         self.assertEqual(meta.name, "SUM")
@@ -26,14 +26,13 @@ class FunctionCatalogTests(unittest.TestCase):
         xlookup = get_function_metadata("XLOOKUP")
         self.assertIsNotNone(xlookup)
         self.assertEqual(xlookup.name, "XLOOKUP")
-        names = {Workbook.function_name_at(i) for i in range(Workbook.function_count())}
-        self.assertIn("XLOOKUP", names)
+        self.assertIn("XLOOKUP", list_function_names())
         self.assertIsNone(get_function_metadata("NOT_A_REAL_FUNCTION"))
 
-    def test_function_name_at(self) -> None:
-        name = Workbook.function_name_at(0)
-        self.assertIsInstance(name, str)
-        self.assertGreater(len(name), 0)
+    def test_list_function_names(self) -> None:
+        names = list_function_names()
+        self.assertTrue(all(isinstance(name, str) and name for name in names))
+        self.assertEqual(names, sorted(names))
 
     def test_merge_function_metadata(self) -> None:
         base = get_function_metadata("XLOOKUP")

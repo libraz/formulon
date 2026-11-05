@@ -75,7 +75,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // Cell read.
   Napi::Value GetValue(const Napi::CallbackInfo& info);
   Napi::Value GetCellPhonetic(const Napi::CallbackInfo& info);
-  Napi::Value GetCellPhoneticRuns(const Napi::CallbackInfo& info);
+  Napi::Value GetCellPhoneticRunCount(const Napi::CallbackInfo& info);
+  Napi::Value GetCellPhoneticRun(const Napi::CallbackInfo& info);
   Napi::Value GetCellPhoneticProperties(const Napi::CallbackInfo& info);
 
   // Ad-hoc, side-effect-free formula evaluation.
@@ -144,7 +145,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetArrayFormula(const Napi::CallbackInfo& info);
 
   // External links.
-  Napi::Value GetExternalLinks(const Napi::CallbackInfo& info);
+  Napi::Value GetExternalLinkCount(const Napi::CallbackInfo& info);
+  Napi::Value GetExternalLink(const Napi::CallbackInfo& info);
 
   // Function catalog.
   Napi::Value FunctionMetadata(const Napi::CallbackInfo& info);
@@ -154,6 +156,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value LocalizeFormula(const Napi::CallbackInfo& info);
   Napi::Value CanonicalizeFormula(const Napi::CallbackInfo& info);
   Napi::Value LocaleFacts(const Napi::CallbackInfo& info);
+  Napi::Value ListLocaleErrorNames(const Napi::CallbackInfo& info);
   Napi::Value CompareText(const Napi::CallbackInfo& info);
   Napi::Value CollationClasses(const Napi::CallbackInfo& info);
 
@@ -217,8 +220,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetCellsInRange(const Napi::CallbackInfo& info);
   Napi::Value GetDisplayText(const Napi::CallbackInfo& info);
   Napi::Value FormatValue(const Napi::CallbackInfo& info);
-  Napi::Value DefinedNameCount(const Napi::CallbackInfo& info);
-  Napi::Value DefinedNameAt(const Napi::CallbackInfo& info);
+  Napi::Value ListDefinedNames(const Napi::CallbackInfo& info);
   Napi::Value GetDefinedName(const Napi::CallbackInfo& info);
   Napi::Value RemoveDefinedName(const Napi::CallbackInfo& info);
   Napi::Value TableCount(const Napi::CallbackInfo& info);
@@ -228,15 +230,13 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value RemoveTable(const Napi::CallbackInfo& info);
   Napi::Value SetTableColumnTotals(const Napi::CallbackInfo& info);
   Napi::Value RenameTableColumn(const Napi::CallbackInfo& info);
-  Napi::Value PassthroughCount(const Napi::CallbackInfo& info);
-  Napi::Value PassthroughAt(const Napi::CallbackInfo& info);
+  Napi::Value ListPassthroughs(const Napi::CallbackInfo& info);
   Napi::Value GetPassthrough(const Napi::CallbackInfo& info);
   Napi::Value PivotCount(const Napi::CallbackInfo& info);
   Napi::Value PivotLayout(const Napi::CallbackInfo& info);
 
   // PivotCache mutation.
-  Napi::Value PivotCacheCount(const Napi::CallbackInfo& info);
-  Napi::Value PivotCacheIdAt(const Napi::CallbackInfo& info);
+  Napi::Value ListPivotCaches(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheCreate(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheRemove(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheGetWorksheetSource(const Napi::CallbackInfo& info);
@@ -357,7 +357,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
 
   // Conditional formatting.
   Napi::Value EvaluateCfRange(const Napi::CallbackInfo& info);
-  Napi::Value GetConditionalFormats(const Napi::CallbackInfo& info);
+  Napi::Value GetCfRuleCount(const Napi::CallbackInfo& info);
+  Napi::Value GetCfRule(const Napi::CallbackInfo& info);
   Napi::Value AddConditionalFormat(const Napi::CallbackInfo& info);
   Napi::Value RemoveConditionalFormatAt(const Napi::CallbackInfo& info);
   Napi::Value ClearConditionalFormats(const Napi::CallbackInfo& info);
@@ -484,7 +485,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetCommentVisible(const Napi::CallbackInfo& info);
   Napi::Value GetWorkbookProtection(const Napi::CallbackInfo& info);
   Napi::Value SetWorkbookProtection(const Napi::CallbackInfo& info);
-  Napi::Value GetProtectedRanges(const Napi::CallbackInfo& info);
+  Napi::Value GetProtectedRangeCount(const Napi::CallbackInfo& info);
+  Napi::Value GetProtectedRange(const Napi::CallbackInfo& info);
   Napi::Value AddProtectedRange(const Napi::CallbackInfo& info);
   Napi::Value UpdateProtectedRange(const Napi::CallbackInfo& info);
   Napi::Value RemoveProtectedRange(const Napi::CallbackInfo& info);
@@ -495,7 +497,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value RemoveHyperlink(const Napi::CallbackInfo& info);
   Napi::Value RemoveHyperlinkAt(const Napi::CallbackInfo& info);
   Napi::Value ClearHyperlinks(const Napi::CallbackInfo& info);
-  Napi::Value GetValidations(const Napi::CallbackInfo& info);
+  Napi::Value GetValidationCount(const Napi::CallbackInfo& info);
+  Napi::Value GetValidation(const Napi::CallbackInfo& info);
   Napi::Value AddValidation(const Napi::CallbackInfo& info);
   Napi::Value RemoveValidationAt(const Napi::CallbackInfo& info);
   Napi::Value ClearValidations(const Napi::CallbackInfo& info);
@@ -558,7 +561,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetDataTable(const Napi::CallbackInfo& info);
   Napi::Value RemoveDataTable(const Napi::CallbackInfo& info);
   Napi::Value RecalcDataTables(const Napi::CallbackInfo& info);
-  Napi::Value ListSparklineGroups(const Napi::CallbackInfo& info);
+  Napi::Value GetSparklineGroupCount(const Napi::CallbackInfo& info);
+  Napi::Value GetSparklineGroup(const Napi::CallbackInfo& info);
   Napi::Value AddSparklineGroup(const Napi::CallbackInfo& info);
   Napi::Value UpdateSparklineGroup(const Napi::CallbackInfo& info);
   Napi::Value SetSparklineGroupSparklines(const Napi::CallbackInfo& info);

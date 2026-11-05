@@ -1,5 +1,5 @@
 import test from 'node:test';
-import { appendEmptyZipEntry, assert, getModule } from './smoke_support.mjs';
+import { appendEmptyZipEntry, assert, getModule, readAll } from './smoke_support.mjs';
 
 test('comments round-trip: setComment + getComment', async () => {
   const mod = await getModule();
@@ -189,11 +189,17 @@ test('invalid workbook read diagnostics return a zeroed failure envelope', async
   wb.dispose();
 });
 
-test('addValidation / getValidations / removeValidationAt / clearValidations round-trip', async () => {
+test('addValidation / getValidation / removeValidationAt / clearValidations round-trip', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   // Empty by default.
-  assert.equal(wb.getValidations(0).length, 0);
+  assert.equal(
+    readAll(
+      () => wb.getValidationCount(0),
+      (i) => wb.getValidation(0, i),
+    ).length,
+    0,
+  );
 
   // List-type validation at A1:B3.
   const listRule = {
@@ -226,7 +232,10 @@ test('addValidation / getValidations / removeValidationAt / clearValidations rou
   };
   assert.ok(wb.addValidation(0, decimalRule).status.ok);
 
-  const list = wb.getValidations(0);
+  const list = readAll(
+    () => wb.getValidationCount(0),
+    (i) => wb.getValidation(0, i),
+  );
   assert.equal(list.length, 2);
   // Booleans must arrive as JS booleans, not 0/1.
   assert.equal(typeof list[0].allowBlank, 'boolean');
@@ -243,7 +252,10 @@ test('addValidation / getValidations / removeValidationAt / clearValidations rou
 
   // removeValidationAt removes the first rule.
   assert.ok(wb.removeValidation(0, 0).ok);
-  const after = wb.getValidations(0);
+  const after = readAll(
+    () => wb.getValidationCount(0),
+    (i) => wb.getValidation(0, i),
+  );
   assert.equal(after.length, 1);
   assert.equal(after[0].type, 2);
 
@@ -256,7 +268,13 @@ test('addValidation / getValidations / removeValidationAt / clearValidations rou
 
   // clearValidations drops everything; safe to call again.
   assert.ok(wb.clearValidations(0).ok);
-  assert.equal(wb.getValidations(0).length, 0);
+  assert.equal(
+    readAll(
+      () => wb.getValidationCount(0),
+      (i) => wb.getValidation(0, i),
+    ).length,
+    0,
+  );
   assert.ok(wb.clearValidations(0).ok);
 });
 
@@ -265,10 +283,16 @@ test('addValidation / getValidations / removeValidationAt / clearValidations rou
 // from the WASM package. They assert sensible return shapes rather than
 // deep semantics; the point is "the addon wires them and does not throw".
 
-test('addConditionalFormat + getConditionalFormats + clearConditionalFormats round-trip', async () => {
+test('addConditionalFormat + getCfRule + clearConditionalFormats round-trip', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.equal(wb.getConditionalFormats(0).length, 0);
+  assert.equal(
+    readAll(
+      () => wb.getCfRuleCount(0),
+      (i) => wb.getCfRule(0, i),
+    ).length,
+    0,
+  );
   // A CF rule's dxfId must resolve against a registered dxf.
   const dxf = wb.addDxf({ font: { bold: true } });
   assert.ok(dxf.status.ok, JSON.stringify(dxf.status));
@@ -283,7 +307,10 @@ test('addConditionalFormat + getConditionalFormats + clearConditionalFormats rou
   });
   assert.ok(add.status.ok, `addConditionalFormat: ${JSON.stringify(add)}`);
   assert.equal(typeof add.index, 'number');
-  const list = wb.getConditionalFormats(0);
+  const list = readAll(
+    () => wb.getCfRuleCount(0),
+    (i) => wb.getCfRule(0, i),
+  );
   assert.equal(list.length, 1);
   assert.equal(list[0].type, 1);
   assert.equal(typeof list[0].id, 'string');
@@ -292,7 +319,13 @@ test('addConditionalFormat + getConditionalFormats + clearConditionalFormats rou
   assert.equal(list[0].formula1, '10');
   // removeConditionalFormatAt drops the only rule.
   assert.ok(wb.removeCfRule(0, 0).ok);
-  assert.equal(wb.getConditionalFormats(0).length, 0);
+  assert.equal(
+    readAll(
+      () => wb.getCfRuleCount(0),
+      (i) => wb.getCfRule(0, i),
+    ).length,
+    0,
+  );
   // clearConditionalFormats is a safe no-op on an empty sheet.
   assert.ok(wb.clearCfRules(0).ok);
   // Sheet-out-of-range is rejected.
@@ -327,7 +360,10 @@ test('data bar x14 fields survive save and load', async () => {
   const saved = wb.save();
   assert.ok(saved.status.ok);
   const loaded = mod.Workbook.load(saved.bytes);
-  const bar = loaded.getConditionalFormats(0)[0].dataBar;
+  const bar = readAll(
+    () => loaded.getCfRuleCount(0),
+    (i) => loaded.getCfRule(0, i),
+  )[0].dataBar;
   assert.equal(bar.gradient, false);
   assert.equal(bar.axisPosition, 1);
   assert.equal(bar.negativeFill.r, 255);
@@ -343,7 +379,10 @@ test('data bar x14 fields survive save and load', async () => {
     dataBar: bar,
   });
   assert.ok(again.status.ok, `re-add: ${JSON.stringify(again)}`);
-  const reread = loaded.getConditionalFormats(0)[1].dataBar;
+  const reread = readAll(
+    () => loaded.getCfRuleCount(0),
+    (i) => loaded.getCfRule(0, i),
+  )[1].dataBar;
   assert.equal(reread.gradient, false);
   assert.equal(reread.axisPosition, 1);
   assert.equal(reread.axisColor.b, 3);
@@ -372,7 +411,10 @@ test('icon set floor survives save and load', async () => {
   const saved = wb.save();
   assert.ok(saved.status.ok);
   const loaded = mod.Workbook.load(saved.bytes);
-  const floor = loaded.getConditionalFormats(0)[0].iconSet.floor;
+  const floor = readAll(
+    () => loaded.getCfRuleCount(0),
+    (i) => loaded.getCfRule(0, i),
+  )[0].iconSet.floor;
   assert.equal(floor.type, 0);
   assert.equal(floor.value, '5');
   assert.equal(floor.gte, false);
@@ -389,7 +431,10 @@ test('omitted data bar x14 fields keep the model defaults', async () => {
     dataBar: { min: { type: 3 }, max: { type: 4 }, fill: { r: 0, g: 0, b: 255 } },
   });
   assert.ok(add.status.ok, `addConditionalFormat: ${JSON.stringify(add)}`);
-  const bar = wb.getConditionalFormats(0)[0].dataBar;
+  const bar = readAll(
+    () => wb.getCfRuleCount(0),
+    (i) => wb.getCfRule(0, i),
+  )[0].dataBar;
   // The getter engages all six, so they read back as the defaults rather
   // than as absent keys.
   assert.equal(bar.gradient, true);
@@ -623,6 +668,10 @@ test('getLocaleFacts reports separators, names, error spellings and measurement'
     assert.equal(mac.facts.collationMeasured, true);
     const na = mac.facts.errorNames.find((e) => e.canonical === '#N/A');
     assert.equal(na.localized, '#NV');
+    const listed = wb.listLocaleErrorNames('mac-365-de_DE');
+    assert.ok(listed.status.ok);
+    assert.deepEqual([...listed], mac.facts.errorNames);
+    assert.equal(wb.listLocaleErrorNames('nope').status.ok, false);
     assert.equal(wb.getLocaleFacts('win-365-de_DE').facts.measured, false);
     assert.equal(wb.getLocaleFacts('win-365-ja_JP').facts.collationMeasured, false);
     assert.equal(wb.getLocaleFacts('win-365-en_US').facts.decimalSeparator, '.');
@@ -836,12 +885,11 @@ test('getLambdaText is wired and reports the documented contract', async () => {
   assert.equal(num.status.ok, false);
 });
 
-test('getExternalLinks returns an array (empty for a fresh workbook)', async () => {
+test('a fresh workbook has no external links', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const links = wb.getExternalLinks();
-  assert.ok(Array.isArray(links));
-  assert.equal(links.length, 0);
+  assert.deepEqual([wb.getExternalLinkCount().status.ok, wb.getExternalLinkCount().value], [true, 0]);
+  assert.equal(wb.getExternalLink(0).status.ok, false);
 });
 
 test('getSheetProtection / setSheetProtection round-trip the protection flags', async () => {

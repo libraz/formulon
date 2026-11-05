@@ -12,26 +12,6 @@
 
 namespace formulon_node {
 
-Napi::Value Workbook::DefinedNameCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
-  }
-  std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_get_defined_name_count(handle_, &count);
-  return MakeNumberResult(env, rc, static_cast<double>(count));
-}
-
-Napi::Value Workbook::PassthroughCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
-  }
-  std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_get_passthrough_count(handle_, &count);
-  return MakeNumberResult(env, rc, static_cast<double>(count));
-}
-
 Napi::Value Workbook::SheetCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

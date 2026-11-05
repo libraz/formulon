@@ -1,6 +1,6 @@
 import test from 'node:test';
 import { inflateRawSync } from 'node:zlib';
-import { assert, getModule } from './smoke_support.mjs';
+import { assert, getModule, readAll } from './smoke_support.mjs';
 
 // ---- Drawing shapes, sparkline groups and legacy note shapes -----------------
 
@@ -152,13 +152,21 @@ const sparklineGroup = (mod) => ({
 test('sparkline groups add, list, update, replace, remove and follow row edits', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.equal(wb.listSparklineGroups(0).length, 0);
+  assert.equal(
+    readAll(
+      () => wb.getSparklineGroupCount(0),
+      (i) => wb.getSparklineGroup(0, i),
+    ).length,
+    0,
+  );
   assert.ok(wb.addSparklineGroup(0, sparklineGroup(mod)).status.ok);
   assert.ok(wb.addSparklineGroup(0, { sparklines: [{ formula: 'Sheet1!A9:D9', location: 'G9' }] }).status.ok);
 
   const loaded = roundTrip(mod, wb);
-  const groups = loaded.listSparklineGroups(0);
-  assert.ok(groups.status.ok);
+  const groups = readAll(
+    () => loaded.getSparklineGroupCount(0),
+    (i) => loaded.getSparklineGroup(0, i),
+  );
   assert.equal(groups.length, 2);
   const [first, second] = groups;
   assert.equal(first.type, mod.SparklineType.Column);
@@ -182,8 +190,20 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   assert.equal(second.lineWeight, 0.75);
 
   assert.ok(loaded.insertRows(0, 0, 2).ok);
-  assert.equal(loaded.listSparklineGroups(0)[0].sparklines[1].location, 'F4');
-  assert.equal(loaded.listSparklineGroups(0)[0].sparklines[1].formula, 'Sheet1!A4:D4');
+  assert.equal(
+    readAll(
+      () => loaded.getSparklineGroupCount(0),
+      (i) => loaded.getSparklineGroup(0, i),
+    )[0].sparklines[1].location,
+    'F4',
+  );
+  assert.equal(
+    readAll(
+      () => loaded.getSparklineGroupCount(0),
+      (i) => loaded.getSparklineGroup(0, i),
+    )[0].sparklines[1].formula,
+    'Sheet1!A4:D4',
+  );
 
   // Update rewrites the modelled fields and keeps the sparklines.
   assert.ok(
@@ -195,7 +215,10 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
       dateAxisRef: 'Sheet1!A4:D4',
     }).ok,
   );
-  const updated = loaded.listSparklineGroups(0)[0];
+  const updated = readAll(
+    () => loaded.getSparklineGroupCount(0),
+    (i) => loaded.getSparklineGroup(0, i),
+  )[0];
   assert.equal(updated.type, mod.SparklineType.Stacked);
   assert.equal(updated.high, true);
   assert.equal(updated.dateAxis, true);
@@ -203,10 +226,28 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   assert.equal(updated.sparklines.length, 2);
 
   assert.ok(loaded.setSparklineGroupSparklines(0, 0, [{ formula: 'Sheet1!B1:B5', location: 'H1' }]).ok);
-  assert.deepEqual(loaded.listSparklineGroups(0)[0].sparklines, [{ formula: 'Sheet1!B1:B5', location: 'H1' }]);
+  assert.deepEqual(
+    readAll(
+      () => loaded.getSparklineGroupCount(0),
+      (i) => loaded.getSparklineGroup(0, i),
+    )[0].sparklines,
+    [{ formula: 'Sheet1!B1:B5', location: 'H1' }],
+  );
   assert.ok(loaded.removeSparklineGroup(0, 0).ok);
-  assert.equal(loaded.listSparklineGroups(0).length, 1);
-  assert.equal(loaded.listSparklineGroups(0)[0].sparklines[0].location, 'G11');
+  assert.equal(
+    readAll(
+      () => loaded.getSparklineGroupCount(0),
+      (i) => loaded.getSparklineGroup(0, i),
+    ).length,
+    1,
+  );
+  assert.equal(
+    readAll(
+      () => loaded.getSparklineGroupCount(0),
+      (i) => loaded.getSparklineGroup(0, i),
+    )[0].sparklines[0].location,
+    'G11',
+  );
   release(loaded);
   release(wb);
 });
@@ -225,7 +266,13 @@ test('sparkline group arguments are validated', async () => {
   assert.equal(wb.addSparklineGroup(0, { type: 7, sparklines: good }).status.ok, false);
   assert.equal(wb.addSparklineGroup(0, { lineWeight: -1, sparklines: good }).status.ok, false);
   assert.equal(wb.addSparklineGroup(4, { sparklines: good }).status.ok, false);
-  assert.equal(wb.listSparklineGroups(0).length, 0);
+  assert.equal(
+    readAll(
+      () => wb.getSparklineGroupCount(0),
+      (i) => wb.getSparklineGroup(0, i),
+    ).length,
+    0,
+  );
   assert.equal(wb.updateSparklineGroup(0, 0, {}).ok, false);
   assert.equal(wb.setSparklineGroupSparklines(0, 0, good).ok, false);
   assert.equal(wb.removeSparklineGroup(0, 0).ok, false);

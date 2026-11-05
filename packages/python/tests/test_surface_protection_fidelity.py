@@ -66,7 +66,7 @@ class ProtectedRangeTests(unittest.TestCase):
                 ),
             )
             with Workbook.load(wb.save()) as reloaded:
-                ranges = reloaded.get_protected_ranges(0)
+                ranges = [reloaded.get_protected_range(0, i) for i in range(reloaded.get_protected_range_count(0))]
                 self.assertEqual(reloaded.get_protected_range_count(0), 2)
                 self.assertEqual([r.name for r in ranges], ["Inputs", "Totals"])
                 self.assertEqual(ranges[0].ranges, [CellRect(1, 1, 2, 2), CellRect(4, 4, 4, 4)])
@@ -76,12 +76,28 @@ class ProtectedRangeTests(unittest.TestCase):
 
                 reloaded.insert_rows(0, 0, 2)
                 self.assertEqual(
-                    reloaded.get_protected_ranges(0)[0].ranges, [CellRect(3, 1, 4, 2), CellRect(6, 4, 6, 4)]
+                    [reloaded.get_protected_range(0, i) for i in range(reloaded.get_protected_range_count(0))][
+                        0
+                    ].ranges,
+                    [CellRect(3, 1, 4, 2), CellRect(6, 4, 6, 4)],
                 )
                 reloaded.update_protected_range(0, 0, ProtectedRange(name="Renamed", ranges=[CellRect(3, 3, 3, 3)]))
-                self.assertEqual(reloaded.get_protected_ranges(0)[0].password, "")
+                self.assertEqual(
+                    [reloaded.get_protected_range(0, i) for i in range(reloaded.get_protected_range_count(0))][
+                        0
+                    ].password,
+                    "",
+                )
                 reloaded.remove_protected_range(0, 0)
-                self.assertEqual([r.name for r in reloaded.get_protected_ranges(0)], ["Totals"])
+                self.assertEqual(
+                    [
+                        r.name
+                        for r in [
+                            reloaded.get_protected_range(0, i) for i in range(reloaded.get_protected_range_count(0))
+                        ]
+                    ],
+                    ["Totals"],
+                )
 
     def test_arguments_are_validated(self) -> None:
         with Workbook.create_default() as wb:
@@ -111,7 +127,7 @@ class RangeInputTests(unittest.TestCase):
                 ConditionalFormatInput(type=0)  # type: ignore[call-arg]
             with self.assertRaises(TypeError):
                 wb.add_table(0, None, "T", "T", ["A"])  # type: ignore[arg-type]
-            self.assertEqual(list(wb.iter_tables()), [])
+            self.assertEqual([wb.get_table(i) for i in range(wb.get_table_count())], [])
 
     def test_an_empty_validation_range_list_is_rejected(self) -> None:
         with Workbook.create_default() as wb:

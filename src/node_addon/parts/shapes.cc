@@ -269,58 +269,58 @@ Napi::Value Workbook::RemoveShape(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_sheet_remove_shape);
 }
 
-Napi::Value Workbook::ListSparklineGroups(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::GetSparklineGroupCount(const Napi::CallbackInfo& info) {
+  std::size_t count = 0;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_sparkline_group_count(handle_, ArgU32(info, 0), &count) : kBindingInvalidHandle;
+  return MakeNumberResult(info.Env(), rc, static_cast<double>(count));
+}
+
+Napi::Value Workbook::GetSparklineGroup(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Array arr = Napi::Array::New(env);
-  if (handle_ == nullptr) {
-    return FinishListResult(env, arr, kBindingInvalidHandle);
+  const fm_workbook_t* handle = handle_;
+  const std::size_t sheet = ArgU32(info, 0);
+  const std::size_t index = ArgU32(info, 1);
+  fm_sparkline_group_t g{};
+  fm_status_t rc = handle != nullptr ? fm_sheet_get_sparkline_group(handle, sheet, index, &g) : kBindingInvalidHandle;
+  if (rc != 0) {
+    g = fm_sparkline_group_t{};
   }
-  const uint32_t sheet = ArgU32(info, 0);
-  size_t count = 0;
-  fm_status_t rc = fm_sheet_get_sparkline_group_count(handle_, sheet, &count);
-  for (size_t i = 0; rc == 0 && i < count; ++i) {
-    fm_sparkline_group_t g{};
-    rc = fm_sheet_get_sparkline_group(handle_, sheet, i, &g);
-    if (rc != 0) {
-      break;
-    }
-    Napi::Object item = Napi::Object::New(env);
-    for (size_t c = 0; c < 8U; ++c) {
-      item.Set(kSparklineColorKeys[c], ColorToJs(env, *GroupColor(g, c)));
-    }
-    item.Set("type", JsNumber(env, g.type));
-    item.Set("markers", Napi::Boolean::New(env, g.markers != 0));
-    item.Set("high", Napi::Boolean::New(env, g.high != 0));
-    item.Set("low", Napi::Boolean::New(env, g.low != 0));
-    item.Set("first", Napi::Boolean::New(env, g.first != 0));
-    item.Set("last", Napi::Boolean::New(env, g.last != 0));
-    item.Set("negative", Napi::Boolean::New(env, g.negative != 0));
-    item.Set("displayXAxis", Napi::Boolean::New(env, g.display_x_axis != 0));
-    item.Set("displayHidden", Napi::Boolean::New(env, g.display_hidden != 0));
-    item.Set("minAxisType", JsNumber(env, g.min_axis_type));
-    item.Set("maxAxisType", JsNumber(env, g.max_axis_type));
-    item.Set("manualMin", g.has_manual_min != 0 ? JsNumber(env, g.manual_min) : env.Null());
-    item.Set("manualMax", g.has_manual_max != 0 ? JsNumber(env, g.manual_max) : env.Null());
-    item.Set("dateAxis", Napi::Boolean::New(env, g.date_axis != 0));
-    item.Set("dateAxisRef", JsString(env, g.date_axis_ref));
-    item.Set("lineWeight", JsNumber(env, g.line_weight));
-    item.Set("emptyCellsAs", JsNumber(env, g.empty_cells_as));
-    Napi::Array sparklines = Napi::Array::New(env);
-    const size_t n = g.sparkline_count;
-    for (size_t k = 0; rc == 0 && k < n; ++k) {
-      fm_sparkline_t sp{};
-      rc = fm_sheet_get_sparkline(handle_, sheet, i, k, &sp);
-      if (rc == 0) {
-        Napi::Object entry = Napi::Object::New(env);
-        entry.Set("formula", JsString(env, sp.formula));
-        entry.Set("location", JsString(env, sp.location));
-        sparklines.Set(static_cast<uint32_t>(k), entry);
-      }
-    }
-    item.Set("sparklines", sparklines);
-    arr.Set(static_cast<uint32_t>(i), item);
+  Napi::Object item = Napi::Object::New(env);
+  for (size_t c = 0; c < 8U; ++c) {
+    item.Set(kSparklineColorKeys[c], ColorToJs(env, *GroupColor(g, c)));
   }
-  return FinishListResult(env, arr, rc);
+  item.Set("type", JsNumber(env, g.type));
+  item.Set("markers", Napi::Boolean::New(env, g.markers != 0));
+  item.Set("high", Napi::Boolean::New(env, g.high != 0));
+  item.Set("low", Napi::Boolean::New(env, g.low != 0));
+  item.Set("first", Napi::Boolean::New(env, g.first != 0));
+  item.Set("last", Napi::Boolean::New(env, g.last != 0));
+  item.Set("negative", Napi::Boolean::New(env, g.negative != 0));
+  item.Set("displayXAxis", Napi::Boolean::New(env, g.display_x_axis != 0));
+  item.Set("displayHidden", Napi::Boolean::New(env, g.display_hidden != 0));
+  item.Set("minAxisType", JsNumber(env, g.min_axis_type));
+  item.Set("maxAxisType", JsNumber(env, g.max_axis_type));
+  item.Set("manualMin", g.has_manual_min != 0 ? JsNumber(env, g.manual_min) : env.Null());
+  item.Set("manualMax", g.has_manual_max != 0 ? JsNumber(env, g.manual_max) : env.Null());
+  item.Set("dateAxis", Napi::Boolean::New(env, g.date_axis != 0));
+  item.Set("dateAxisRef", JsString(env, g.date_axis_ref));
+  item.Set("lineWeight", JsNumber(env, g.line_weight));
+  item.Set("emptyCellsAs", JsNumber(env, g.empty_cells_as));
+  Napi::Array sparklines = Napi::Array::New(env);
+  const size_t n = rc == 0 ? g.sparkline_count : 0U;
+  for (size_t k = 0; rc == 0 && k < n; ++k) {
+    fm_sparkline_t sp{};
+    rc = fm_sheet_get_sparkline(handle, sheet, index, k, &sp);
+    if (rc == 0) {
+      Napi::Object entry = Napi::Object::New(env);
+      entry.Set("formula", JsString(env, sp.formula));
+      entry.Set("location", JsString(env, sp.location));
+      sparklines.Set(static_cast<uint32_t>(k), entry);
+    }
+  }
+  item.Set("sparklines", rc == 0 ? sparklines : Napi::Array::New(env));
+  return FinishItemResult(env, item, rc);
 }
 
 Napi::Value Workbook::AddSparklineGroup(const Napi::CallbackInfo& info) {

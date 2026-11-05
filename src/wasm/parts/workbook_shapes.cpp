@@ -219,7 +219,8 @@ fm_status_t shape_item(const fm_workbook_t* handle, size_t sheet, size_t index, 
   return rc;
 }
 
-// Reads sparkline group `index` with its sparklines nested under `sparklines`.
+// Reads sparkline group `index` with its sparklines nested under `sparklines`;
+// a failed read leaves `*out` untouched.
 fm_status_t sparkline_group_item(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
   fm_sparkline_group_t g{};
   fm_status_t rc = fm_sheet_get_sparkline_group(handle, sheet, index, &g);
@@ -236,7 +237,9 @@ fm_status_t sparkline_group_item(const fm_workbook_t* handle, size_t sheet, size
       group["sparklines"].call<void>("push", o);
     }
   }
-  *out = group;
+  if (rc == 0) {
+    *out = group;
+  }
   return rc;
 }
 
@@ -288,11 +291,15 @@ JsStatus JsWorkbook::removeShape(uint32_t sheet, uint32_t objectId) {
   return status_from_rc(handle_ != nullptr ? fm_sheet_remove_shape(handle_, sheet, objectId) : kBindingInvalidHandle);
 }
 
-emscripten::val JsWorkbook::listSparklineGroups(uint32_t sheet) const {
-  emscripten::val arr = emscripten::val::array();
-  arr.set("status", status_from_rc(js_collect_list(handle_, sheet, &fm_sheet_get_sparkline_group_count,
-                                                   &sparkline_group_item, arr)));
-  return arr;
+JsNumberResult JsWorkbook::getSparklineGroupCount(uint32_t sheet) const {
+  return js_count_result(handle_, sheet, &fm_sheet_get_sparkline_group_count);
+}
+
+emscripten::val JsWorkbook::getSparklineGroup(uint32_t sheet, uint32_t sparklineGroupIndex) const {
+  emscripten::val group = sparkline_group_to_val(fm_sparkline_group_t{}, emscripten::val::array());
+  const fm_status_t rc =
+      handle_ != nullptr ? sparkline_group_item(handle_, sheet, sparklineGroupIndex, &group) : kBindingInvalidHandle;
+  return record_result(rc, group);
 }
 
 JsAddStyleResult JsWorkbook::addSparklineGroup(uint32_t sheet, emscripten::val spec) {

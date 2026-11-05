@@ -536,7 +536,7 @@ class IndexRangeTests(unittest.TestCase):
         # and the getter answered about a different sheet -- a plausible
         # count for a question the caller never asked.
         with Workbook.create_default() as wb:
-            for name in ("merge_count", "hyperlink_count", "comment_count", "get_validation_count"):
+            for name in ("list_merges", "list_hyperlinks", "list_comments", "get_validation_count"):
                 with self.subTest(getter=name):
                     with self.assertRaises(ValueError):
                         getattr(wb, name)(2**32)

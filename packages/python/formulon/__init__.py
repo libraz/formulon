@@ -223,6 +223,8 @@ from .workbook import (
     get_collation_classes,
     get_function_metadata,
     get_locale_facts,
+    list_function_names,
+    list_locale_error_names,
     localize_formula,
     localize_function_name,
 )
@@ -483,6 +485,8 @@ __all__ = [
     "get_collation_classes",
     "get_function_metadata",
     "get_locale_facts",
+    "list_function_names",
+    "list_locale_error_names",
     "localize_formula",
     "localize_function_name",
 ]

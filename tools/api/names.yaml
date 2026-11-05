@@ -38,7 +38,7 @@ collections:
   lambda_text: { key: natural, by: cell, plural: lambda_texts, ops: [lambda_text.get] }
   pivot_cache: { key: natural, by: cache_id, plural: pivot_caches, ops: [pivot_cache.create, pivot_cache.get_count, pivot_cache.get_id_at, pivot_cache.remove], no_getter: "addressed by cache_id through the per-property cache getters" }
   num_fmt: { key: natural, by: num_fmt_id, plural: num_fmts, ops: [num_fmt.add, num_fmt_string.get] }
-  function: { key: natural, by: name, plural: functions, ops: [function.canonicalize_name, function.get_count, function.get_name_at, function.localize_name, function_metadata.get] }
+  function: { key: natural, by: name, plural: function_names, ops: [function.canonicalize_name, function.get_count, function.get_name_at, function.localize_name, function_metadata.get] }
   locale_error_name: { key: natural, by: "error code", plural: locale_error_names, ops: [locale_error_name.get_at, locale_error_name.get_count, error_display_name.get] }
   row_break: { key: natural, by: row, plural: row_breaks, ops: [row_break.add, row_break.get_at, row_break.get_count, row_break.remove], no_getter: "the element is its row number; a lookup by key returns nothing more" }
   col_break: { key: natural, by: col, plural: col_breaks, ops: [col_break.add, col_break.get_at, col_break.get_count, col_break.remove], no_getter: "the element is its column number; a lookup by key returns nothing more" }
@@ -1672,11 +1672,6 @@ entries:
     replaced_by: record.cell_rect
     closes: R11.rect
     was: { js: DataValidationRange }
-  record.defined_name_entry:
-    kind: record
-    js: DefinedNameEntry
-    surfaces: [wasm, native]
-    was: { js: DefinedNameEntry }
   record.display_text_result:
     kind: record
     role: result
@@ -1838,6 +1833,36 @@ entries:
     js: LambdaTextResult
     surfaces: [wasm, native]
     was: { js: LambdaTextResult }
+  record.conditional_format_result:
+    kind: record
+    role: result
+    js: ConditionalFormatResult
+    surfaces: [wasm, native]
+  record.data_validation_result:
+    kind: record
+    role: result
+    js: DataValidationResult
+    surfaces: [wasm, native]
+  record.external_link_result:
+    kind: record
+    role: result
+    js: ExternalLinkResult
+    surfaces: [wasm, native]
+  record.phonetic_run_result:
+    kind: record
+    role: result
+    js: PhoneticRunResult
+    surfaces: [wasm, native]
+  record.protected_range_result:
+    kind: record
+    role: result
+    js: ProtectedRangeResult
+    surfaces: [wasm, native]
+  record.sparkline_group_result:
+    kind: record
+    role: result
+    js: SparklineGroupResult
+    surfaces: [wasm, native]
   record.list_result:
     kind: record
     role: result
@@ -1937,11 +1962,6 @@ entries:
     js: PartialRecalcResult
     surfaces: [wasm, native]
     was: { js: PartialRecalcResult }
-  record.passthrough_entry:
-    kind: record
-    js: PassthroughEntry
-    surfaces: [wasm, native]
-    was: { js: PassthroughEntry }
   record.persons_result:
     kind: record
     role: result
@@ -1960,12 +1980,6 @@ entries:
     js: PhoneticPropertiesResult
     surfaces: [wasm, native]
     was: { js: PhoneticPropertiesResult }
-  record.phonetic_runs_result:
-    kind: record
-    role: result
-    js: PhoneticRunsResult
-    surfaces: [wasm, native]
-    was: { js: PhoneticRunsResult }
   record.pinned_now_result:
     kind: record
     role: result
@@ -2815,14 +2829,18 @@ entries:
     scope: sheet
     noun: cell_phonetic_run
     c: fm_sheet_get_cell_phonetic_run_count
-    surfaces: [c]
+    js: getCellPhoneticRunCount
+    py: get_cell_phonetic_run_count
+    surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_cell_phonetic_run_count }
   cell_phonetic_run.get:
     kind: op
     scope: sheet
     noun: cell_phonetic_run
     c: fm_sheet_get_cell_phonetic_run
-    surfaces: [c]
+    js: getCellPhoneticRun
+    py: get_cell_phonetic_run
+    surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_cell_phonetic_run }
   cell_phonetic_properties.get:
     kind: op
@@ -2943,7 +2961,8 @@ entries:
     noun: cell
     c: fm_sheet_get_cell_count
     js: getCellCount
-    surfaces: [c, wasm, native]
+    py: get_cell_count
+    surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_cell_count, js: cellCount }
   cell.get_at:
     kind: op
@@ -2951,7 +2970,8 @@ entries:
     noun: cell
     c: fm_sheet_get_cell_at
     js: getCellAt
-    surfaces: [c, wasm, native]
+    py: get_cell_at
+    surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_cell_at, js: cellAt }
   formula.get:
     kind: op
@@ -3058,7 +3078,8 @@ entries:
     noun: table
     c: fm_workbook_get_table_count
     js: getTableCount
-    surfaces: [c, wasm, native]
+    py: get_table_count
+    surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_table_count, js: tableCount }
   table.get:
     kind: op
@@ -3066,7 +3087,8 @@ entries:
     noun: table
     c: fm_workbook_get_table
     js: getTable
-    surfaces: [c, wasm, native]
+    py: get_table
+    surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_table_at, js: tableAt }
   table.create:
     kind: op
@@ -3364,15 +3386,18 @@ entries:
     scope: sheet
     noun: protected_range
     c: fm_sheet_get_protected_range_count
+    js: getProtectedRangeCount
     py: get_protected_range_count
-    surfaces: [c, py]
+    surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_protected_range_count, py: protected_range_count }
   protected_range.get:
     kind: op
     scope: sheet
     noun: protected_range
     c: fm_sheet_get_protected_range
-    surfaces: [c]
+    js: getProtectedRange
+    py: get_protected_range
+    surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_get_protected_range }
   protected_range.add:
     kind: op
@@ -3406,16 +3431,18 @@ entries:
     scope: sheet
     noun: validation
     c: fm_sheet_get_validation_count
+    js: getValidationCount
     py: get_validation_count
-    surfaces: [c, py]
+    surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_get_validation_count, py: validation_count }
   validation.get:
     kind: op
     scope: sheet
     noun: validation
     c: fm_sheet_get_validation
+    js: getValidation
     py: get_validation
-    surfaces: [c, py]
+    surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_get_validation_at, py: get_validation_at }
   validation.add:
     kind: op
@@ -4233,16 +4260,18 @@ entries:
     scope: sheet
     noun: cf_rule
     c: fm_sheet_get_cf_rule_count
+    js: getCfRuleCount
     py: get_cf_rule_count
-    surfaces: [c, py]
+    surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_cf_count, py: cf_count }
   cf_rule.get:
     kind: op
     scope: sheet
     noun: cf_rule
     c: fm_sheet_get_cf_rule
+    js: getCfRule
     py: get_cf_rule
-    surfaces: [c, py]
+    surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_cf_get_at, py: get_conditional_format_at }
   cf_rule.add:
     kind: op
@@ -6467,16 +6496,18 @@ entries:
     scope: workbook
     noun: external_link
     c: fm_workbook_get_external_link_count
+    js: getExternalLinkCount
     py: get_external_link_count
-    surfaces: [c, py]
+    surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_external_link_count, py: external_link_count }
   external_link.get:
     kind: op
     scope: workbook
     noun: external_link
     c: fm_workbook_get_external_link
+    js: getExternalLink
     py: get_external_link
-    surfaces: [c, py]
+    surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_external_link_at, py: get_external_link_at }
   image_info.get:
     kind: op
@@ -6667,14 +6698,18 @@ entries:
     scope: sheet
     noun: sparkline_group
     c: fm_sheet_get_sparkline_group_count
-    surfaces: [c]
+    js: getSparklineGroupCount
+    py: get_sparkline_group_count
+    surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_sparkline_group_count }
   sparkline_group.get:
     kind: op
     scope: sheet
     noun: sparkline_group
     c: fm_sheet_get_sparkline_group
-    surfaces: [c]
+    js: getSparklineGroup
+    py: get_sparkline_group
+    surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_sparkline_group_at }
   sparkline.get:
     kind: op
@@ -7320,8 +7355,8 @@ entries:
   pivot_cache_ids.list:
     kind: list
     from: [pivot_cache.get_count, pivot_cache.get_id_at]
-    js: listPivotCacheIds
-    py: list_pivot_cache_ids
+    js: listPivotCaches
+    py: list_pivot_caches
     surfaces: [wasm, native, py]
   table.list.iter_tables:
     kind: list

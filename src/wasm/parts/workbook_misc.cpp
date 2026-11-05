@@ -3,8 +3,8 @@
 // `precedents` / `dependents` and their shared `trace_to_val` bridge,
 // `functionMetadata` / `functionNames` / `localizeFunctionName` /
 // `canonicalizeFunctionName` / `localizeFormula` / `canonicalizeFormula` /
-// `localeFacts`, `compareText` / `collationClasses`, `spillInfo`, and the
-// legacy array formula accessors.
+// `localeFacts` / `listLocaleErrorNames`, `compareText` / `collationClasses`,
+// `spillInfo`, and the legacy array formula accessors.
 
 #include <emscripten/val.h>
 
@@ -142,6 +142,31 @@ JsStringResult JsWorkbook::canonicalizeFormula(const std::string& formula, const
   return map_profile_text(fm_canonicalize_formula, formula, profile_id);
 }
 
+namespace {
+
+// Appends profile `profile_id`'s localized error names to `list`, in error-code order.
+fm_status_t collect_locale_error_names(const std::string& profile_id, emscripten::val& list) {
+  std::size_t n = 0;
+  fm_status_t rc = fm_get_locale_error_name_count(&n);
+  for (std::size_t i = 0; i < n && rc == 0; ++i) {
+    const char* canonical = nullptr;
+    const char* localized = nullptr;
+    std::int32_t measured = 0;
+    rc = fm_get_locale_error_name_at(profile_id.c_str(), i, &canonical, &localized, &measured);
+    if (rc != 0) {
+      break;
+    }
+    emscripten::val item = emscripten::val::object();
+    js_set_cstr(item, "canonical", canonical);
+    js_set_cstr(item, "localized", localized);
+    item.set("measured", measured != 0);
+    list.set(static_cast<uint32_t>(i), item);
+  }
+  return rc;
+}
+
+}  // namespace
+
 emscripten::val JsWorkbook::localeFacts(const std::string& profile_id) const {
   emscripten::val o = emscripten::val::object();
   o.set("facts", emscripten::val::null());
@@ -168,28 +193,19 @@ emscripten::val JsWorkbook::localeFacts(const std::string& profile_id) const {
   facts.set("measured", f.measured != 0);
   facts.set("collationMeasured", f.collation_measured != 0);
   emscripten::val errors = emscripten::val::array();
-  std::size_t n = 0;
-  rc = fm_get_locale_error_name_count(&n);
-  for (std::size_t i = 0; i < n && rc == 0; ++i) {
-    const char* canonical = nullptr;
-    const char* localized = nullptr;
-    std::int32_t measured = 0;
-    rc = fm_get_locale_error_name_at(profile_id.c_str(), i, &canonical, &localized, &measured);
-    if (rc != 0) {
-      break;
-    }
-    emscripten::val item = emscripten::val::object();
-    js_set_cstr(item, "canonical", canonical);
-    js_set_cstr(item, "localized", localized);
-    item.set("measured", measured != 0);
-    errors.set(static_cast<uint32_t>(i), item);
-  }
+  rc = collect_locale_error_names(profile_id, errors);
   facts.set("errorNames", errors);
   o.set("status", status_from_rc(rc));
   if (rc == 0) {
     o.set("facts", facts);
   }
   return o;
+}
+
+emscripten::val JsWorkbook::listLocaleErrorNames(const std::string& profile_id) const {
+  emscripten::val arr = emscripten::val::array();
+  arr.set("status", status_from_rc(collect_locale_error_names(profile_id, arr)));
+  return arr;
 }
 
 // ---- Spill info --------------------------------------------------------

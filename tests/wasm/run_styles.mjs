@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readAll } from './smoke_support.mjs';
 
 const isNestedRangeValue = (value) => typeof value === 'number';
 
@@ -527,21 +528,42 @@ export function registerStyles(Module, test) {
         dxfId: dxf.index,
         dataBar: { min: { type: 3 }, max: { type: 4 }, fill: { r: 1, g: 2, b: 3 } },
       };
-      const cfBefore = wb.getConditionalFormats(0).length;
+      const cfBefore = readAll(
+        () => wb.getCfRuleCount(0),
+        (i) => wb.getCfRule(0, i),
+      ).length;
       assert.throws(() => wb.addCfRule(0, base), RangeError);
-      assert.equal(wb.getConditionalFormats(0).length, cfBefore);
+      assert.equal(
+        readAll(
+          () => wb.getCfRuleCount(0),
+          (i) => wb.getCfRule(0, i),
+        ).length,
+        cfBefore,
+      );
 
       const rangeRule = structuredClone(base);
       rangeRule.priority = 0;
       rangeRule.ranges[0].firstRow = 0x100000000;
       assert.throws(() => wb.addCfRule(0, rangeRule), RangeError);
-      assert.equal(wb.getConditionalFormats(0).length, cfBefore);
+      assert.equal(
+        readAll(
+          () => wb.getCfRuleCount(0),
+          (i) => wb.getCfRule(0, i),
+        ).length,
+        cfBefore,
+      );
 
       const notArray = structuredClone(base);
       notArray.priority = 0;
       notArray.ranges = 'A1';
       assert.throws(() => wb.addCfRule(0, notArray), TypeError);
-      assert.equal(wb.getConditionalFormats(0).length, cfBefore);
+      assert.equal(
+        readAll(
+          () => wb.getCfRuleCount(0),
+          (i) => wb.getCfRule(0, i),
+        ).length,
+        cfBefore,
+      );
     } finally {
       wb.delete();
     }
@@ -599,14 +621,24 @@ export function registerStyles(Module, test) {
         ['cfvo.type=256', { dataBar: { min: { type: 256 } } }],
       ];
       for (const [label, override] of invalid) {
-        const before = wb.getConditionalFormats(0).length;
+        const before = readAll(
+          () => wb.getCfRuleCount(0),
+          (i) => wb.getCfRule(0, i),
+        ).length;
         const rule = structuredClone(base);
         Object.assign(rule.dataBar, override.dataBar);
         if (override.dataBar.min) {
           rule.dataBar.min = override.dataBar.min;
         }
         assert.throws(() => wb.addCfRule(0, rule), RangeError, `${label} accepted`);
-        assert.equal(wb.getConditionalFormats(0).length, before, `${label}: mutation changed count`);
+        assert.equal(
+          readAll(
+            () => wb.getCfRuleCount(0),
+            (i) => wb.getCfRule(0, i),
+          ).length,
+          before,
+          `${label}: mutation changed count`,
+        );
       }
     } finally {
       wb.delete();
@@ -632,7 +664,14 @@ export function registerStyles(Module, test) {
           isNestedRangeValue(value) ? RangeError : TypeError,
           `dataBar.fill.r=${String(value)} accepted`,
         );
-        assert.equal(wb.getConditionalFormats(0).length, 0, `dataBar.fill.r=${String(value)} mutated rules`);
+        assert.equal(
+          readAll(
+            () => wb.getCfRuleCount(0),
+            (i) => wb.getCfRule(0, i),
+          ).length,
+          0,
+          `dataBar.fill.r=${String(value)} mutated rules`,
+        );
       } finally {
         wb.delete();
       }
@@ -656,7 +695,10 @@ export function registerStyles(Module, test) {
         },
       });
       assert.ok(result.status.ok, JSON.stringify(result.status));
-      const bar = wb.getConditionalFormats(0)[0].dataBar;
+      const bar = readAll(
+        () => wb.getCfRuleCount(0),
+        (i) => wb.getCfRule(0, i),
+      )[0].dataBar;
       assert.equal(bar.fill.r, 0);
       assert.equal(bar.fill.g, 0);
       assert.equal(bar.fill.b, 3);
@@ -665,7 +707,13 @@ export function registerStyles(Module, test) {
       assert.equal(bar.maxLengthPct, 90);
       assert.equal(bar.axisPosition, 0);
       assert.equal(bar.direction, 0);
-      assert.equal(wb.getConditionalFormats(0)[0].dataBar.min.gte, true);
+      assert.equal(
+        readAll(
+          () => wb.getCfRuleCount(0),
+          (i) => wb.getCfRule(0, i),
+        )[0].dataBar.min.gte,
+        true,
+      );
     } finally {
       wb.delete();
     }
@@ -712,7 +760,13 @@ export function registerStyles(Module, test) {
       const cf = wb.addCfRule(0, rule);
       assert.ok(cf.status.ok, JSON.stringify(cf.status));
       assert.equal(dxfReads, 1);
-      assert.equal(wb.getConditionalFormats(0)[0].dxfId, secondDxf.index);
+      assert.equal(
+        readAll(
+          () => wb.getCfRuleCount(0),
+          (i) => wb.getCfRule(0, i),
+        )[0].dxfId,
+        secondDxf.index,
+      );
 
       const lateFont = { name: 'late font '.repeat(1024) };
       Object.defineProperty(lateFont, 'size', {

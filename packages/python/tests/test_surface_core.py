@@ -417,7 +417,7 @@ class ExternalLinkTests(unittest.TestCase):
     def test_fresh_workbook_has_no_external_links(self) -> None:
         with Workbook.create_default() as wb:
             self.assertEqual(wb.get_external_link_count(), 0)
-            self.assertEqual(wb.get_external_links(), [])
+            self.assertEqual([wb.get_external_link(i) for i in range(wb.get_external_link_count())], [])
 
 
 if __name__ == "__main__":

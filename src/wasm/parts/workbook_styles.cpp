@@ -712,7 +712,7 @@ emscripten::val table_style_to_val(const fm_table_style_t& style) {
 }
 
 // Style tables are workbook-scoped; the sheet argument is ignored.
-fm_status_t cell_style_count(const fm_workbook_t* handle, size_t, size_t* out) {
+fm_status_t count_cell_styles(const fm_workbook_t* handle, size_t, size_t* out) {
   return fm_workbook_get_cell_style_count(handle, out);
 }
 
@@ -725,7 +725,7 @@ fm_status_t cell_style_item(const fm_workbook_t* handle, size_t, size_t index, e
   return rc;
 }
 
-fm_status_t table_style_count(const fm_workbook_t* handle, size_t, size_t* out) {
+fm_status_t count_table_styles(const fm_workbook_t* handle, size_t, size_t* out) {
   return fm_workbook_get_table_style_count(handle, out);
 }
 
@@ -742,7 +742,7 @@ fm_status_t table_style_item(const fm_workbook_t* handle, size_t, size_t index, 
 
 emscripten::val JsWorkbook::listCellStyles() const {
   emscripten::val arr = emscripten::val::array();
-  arr.set("status", status_from_rc(js_collect_list(handle_, 0U, &cell_style_count, &cell_style_item, arr)));
+  arr.set("status", status_from_rc(js_collect_list(handle_, 0U, &count_cell_styles, &cell_style_item, arr)));
   return arr;
 }
 
@@ -805,7 +805,7 @@ JsStatus JsWorkbook::removeCellStyle(const std::string& name) {
 
 emscripten::val JsWorkbook::listTableStyles() const {
   emscripten::val arr = emscripten::val::array();
-  arr.set("status", status_from_rc(js_collect_list(handle_, 0U, &table_style_count, &table_style_item, arr)));
+  arr.set("status", status_from_rc(js_collect_list(handle_, 0U, &count_table_styles, &table_style_item, arr)));
   return arr;
 }
 

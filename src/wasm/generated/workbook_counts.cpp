@@ -16,24 +16,6 @@ namespace formulon {
 namespace wasm {
 namespace parts {
 
-JsNumberResult JsWorkbook::definedNameCount() const {
-  if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
-  }
-  std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_get_defined_name_count(handle_, &count);
-  return number_result(rc, static_cast<double>(count));
-}
-
-JsNumberResult JsWorkbook::passthroughCount() const {
-  if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
-  }
-  std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_get_passthrough_count(handle_, &count);
-  return number_result(rc, static_cast<double>(count));
-}
-
 JsNumberResult JsWorkbook::sheetCount() const {
   if (handle_ == nullptr) {
     return number_result(kBindingInvalidHandle, 0.0);

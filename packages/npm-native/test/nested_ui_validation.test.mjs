@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { assert, getModule, pkgRoot } from './smoke_support.mjs';
+import { assert, getModule, pkgRoot, readAll } from './smoke_support.mjs';
 
 const RANGE = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
 
@@ -12,14 +12,23 @@ test('validation and merge range integers reject narrowing before mutation', asy
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const before = wb.getValidations(0).length;
+    const before = readAll(
+      () => wb.getValidationCount(0),
+      (i) => wb.getValidation(0, i),
+    ).length;
     for (const value of [256, Number.NaN, Number.POSITIVE_INFINITY, 1.5, -1]) {
       assert.throws(
         () => wb.addValidation(0, { ranges: [RANGE], type: value }),
         RangeError,
         `validation type=${String(value)}`,
       );
-      assert.equal(wb.getValidations(0).length, before);
+      assert.equal(
+        readAll(
+          () => wb.getValidationCount(0),
+          (i) => wb.getValidation(0, i),
+        ).length,
+        before,
+      );
     }
 
     assert.throws(
@@ -27,7 +36,13 @@ test('validation and merge range integers reject narrowing before mutation', asy
       RangeError,
       'validation range firstRow',
     );
-    assert.equal(wb.getValidations(0).length, before);
+    assert.equal(
+      readAll(
+        () => wb.getValidationCount(0),
+        (i) => wb.getValidation(0, i),
+      ).length,
+      before,
+    );
   } finally {
     wb.dispose();
   }
@@ -138,7 +153,13 @@ test('UI reader stops at a throwing getter and leaves the workbook unchanged', a
       },
     });
     assert.throws(() => wb.addValidation(0, validation), /validation getter/);
-    assert.equal(wb.getValidations(0).length, 0);
+    assert.equal(
+      readAll(
+        () => wb.getValidationCount(0),
+        (i) => wb.getValidation(0, i),
+      ).length,
+      0,
+    );
   } finally {
     wb.dispose();
   }

@@ -144,7 +144,7 @@ test('pivot definition read-backs report what the setters wrote', async () => {
   const mod = await getModule();
   const { wb, pivot } = makePivotWorkbook(mod.Workbook);
   try {
-    assert.equal(wb.getPivotCacheId(0, pivot).index, wb.pivotCacheIdAt(0).index);
+    assert.equal(wb.getPivotCacheId(0, pivot).index, wb.listPivotCaches()[0]);
     assert.equal(wb.getPivotName(0, pivot).value, 'Pivot1');
     assert.deepEqual((({ rows, cols }) => ({ rows, cols }))(wb.getPivotGrandTotals(0, pivot)), {
       rows: true,

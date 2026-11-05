@@ -1,5 +1,5 @@
 import test from 'node:test';
-import { assert, getModule } from './smoke_support.mjs';
+import { assert, getModule, readAll } from './smoke_support.mjs';
 
 // ---- Sheet-annotation surfaces -----------------------------------------
 //
@@ -73,19 +73,27 @@ function cfvoValues(rules) {
 
 const EXPECTED_CFVO_VALUES = Object.freeze(['0', '50', '100', '5', '95', '0', '33', '67']);
 
-test('CFVO value strings survive getConditionalFormats and a save/load cycle', async () => {
+test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
   const Module = await getModule();
   const wb = Module.Workbook.createDefault();
   let bytes;
   try {
-    assert.equal(wb.getConditionalFormats(0).length, 0);
+    assert.equal(
+      readAll(
+        () => wb.getCfRuleCount(0),
+        (i) => wb.getCfRule(0, i),
+      ).length,
+      0,
+    );
     for (const rule of [COLOR_SCALE_RULE, DATA_BAR_RULE, ICON_SET_RULE]) {
       const added = wb.addCfRule(0, rule);
       assert.ok(added.status.ok, `addConditionalFormat type=${rule.type}: ${JSON.stringify(added.status)}`);
     }
 
-    const inSession = wb.getConditionalFormats(0);
-    assert.ok(inSession.status.ok, JSON.stringify(inSession.status));
+    const inSession = readAll(
+      () => wb.getCfRuleCount(0),
+      (i) => wb.getCfRule(0, i),
+    );
     assert.equal(inSession.length, 3);
     assert.deepEqual(cfvoValues(inSession), EXPECTED_CFVO_VALUES);
     // The threshold types travel with the values; a type read back as 0
@@ -112,7 +120,10 @@ test('CFVO value strings survive getConditionalFormats and a save/load cycle', a
 
   const reloaded = Module.Workbook.load(bytes);
   try {
-    const rules = reloaded.getConditionalFormats(0);
+    const rules = readAll(
+      () => reloaded.getCfRuleCount(0),
+      (i) => reloaded.getCfRule(0, i),
+    );
     assert.equal(rules.length, 3);
     assert.deepEqual(cfvoValues(rules), EXPECTED_CFVO_VALUES);
   } finally {
@@ -133,8 +144,10 @@ test('addValidation defaults every omitted boolean to false', async () => {
         formula1: '"Yes,No"',
       }).status.ok,
     );
-    const rules = wb.getValidations(0);
-    assert.ok(rules.status.ok, JSON.stringify(rules.status));
+    const rules = readAll(
+      () => wb.getValidationCount(0),
+      (i) => wb.getValidation(0, i),
+    );
     assert.equal(rules.length, 1);
     const rule = rules[0];
     assert.equal(typeof rule.allowBlank, 'boolean');
@@ -161,7 +174,13 @@ test('addValidation defaults every omitted boolean to false', async () => {
         formula1: '"A,B"',
       }).status.ok,
     );
-    assert.equal(wb.getValidations(0)[1].allowBlank, true);
+    assert.equal(
+      readAll(
+        () => wb.getValidationCount(0),
+        (i) => wb.getValidation(0, i),
+      )[1].allowBlank,
+      true,
+    );
   } finally {
     wb.delete();
   }

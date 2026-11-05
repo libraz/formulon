@@ -20,26 +20,6 @@
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 
-extern "C" fm_status_t fm_workbook_get_defined_name_count(const fm_workbook_t* wb, size_t* out_count) {
-  clear_last_error();
-  if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_get_defined_name_count: NULL argument");
-  }
-  *out_count = wb->workbook().defined_names().size();
-  return 0;
-}
-
-extern "C" fm_status_t fm_workbook_get_passthrough_count(const fm_workbook_t* wb, size_t* out_count) {
-  clear_last_error();
-  if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_get_passthrough_count: NULL argument");
-  }
-  *out_count = wb->workbook().passthrough_parts().size();
-  return 0;
-}
-
 extern "C" fm_status_t fm_workbook_get_sheet_count(const fm_workbook_t* wb, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {

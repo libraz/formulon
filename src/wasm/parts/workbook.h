@@ -130,7 +130,8 @@ class JsWorkbook {
   /// Reads a cell's furigana as `{ status, runs: [{ sb, eb, text }] }`,
   /// spans included. `getCellPhonetic` returns the same readings
   /// concatenated, without the spans.
-  emscripten::val getCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col) const;
+  JsNumberResult getCellPhoneticRunCount(uint32_t sheet, uint32_t row, uint32_t col) const;
+  emscripten::val getCellPhoneticRun(uint32_t sheet, uint32_t row, uint32_t col, uint32_t phoneticRunIndex) const;
 
   /// Reads the guide's rendering back as `{ fontId, type, alignment }`.
   /// A cell with no annotation reports the all-zero triple.
@@ -207,8 +208,7 @@ class JsWorkbook {
   JsNumberResult cellCount(uint32_t sheet) const;
   emscripten::val cellAt(uint32_t sheet, uint32_t idx) const;
 
-  JsNumberResult definedNameCount() const;
-  emscripten::val definedNameAt(uint32_t idx) const;
+  emscripten::val listDefinedNames() const;
   emscripten::val getDefinedName(const std::string& name, int32_t localSheetId) const;
   JsStatus removeDefinedName(const std::string& name, int32_t localSheetId);
 
@@ -223,8 +223,7 @@ class JsWorkbook {
   /// Renames column `column` of table `idx`; `value` is the final name.
   JsStringResult renameTableColumn(uint32_t idx, uint32_t column, const std::string& name);
 
-  JsNumberResult passthroughCount() const;
-  emscripten::val passthroughAt(uint32_t idx) const;
+  emscripten::val listPassthroughs() const;
   emscripten::val getPassthrough(const std::string& path) const;
 
   JsNumberResult pivotCount(uint32_t sheet) const;
@@ -429,7 +428,8 @@ class JsWorkbook {
   /// `{ status, xfIndex, source, ..., font, borders, numFmtCode }`: the formatting a cell shows.
   emscripten::val getEffectiveStyle(uint32_t sheet, uint32_t row, uint32_t col) const;
 
-  emscripten::val getExternalLinks() const;
+  JsNumberResult getExternalLinkCount() const;
+  emscripten::val getExternalLink(uint32_t externalLinkIndex) const;
 
   // ---- Sheet UI features (merges / hyperlinks / comments / validations) --
 
@@ -450,7 +450,8 @@ class JsWorkbook {
   emscripten::val getWorkbookProtection() const;
   JsStatus setWorkbookProtection(emscripten::val protection);
   /// The sheet's `<protectedRange>` entries, in file order.
-  emscripten::val getProtectedRanges(uint32_t sheet) const;
+  JsNumberResult getProtectedRangeCount(uint32_t sheet) const;
+  emscripten::val getProtectedRange(uint32_t sheet, uint32_t protectedRangeIndex) const;
   JsAddStyleResult addProtectedRange(uint32_t sheet, emscripten::val range);
   JsStatus updateProtectedRange(uint32_t sheet, uint32_t index, emscripten::val range);
   JsStatus removeProtectedRange(uint32_t sheet, uint32_t index);
@@ -525,7 +526,8 @@ class JsWorkbook {
   JsStatus removeDataTable(uint32_t sheet, uint32_t row, uint32_t col);
   JsStatus recalcDataTables();
 
-  emscripten::val listSparklineGroups(uint32_t sheet) const;
+  JsNumberResult getSparklineGroupCount(uint32_t sheet) const;
+  emscripten::val getSparklineGroup(uint32_t sheet, uint32_t sparklineGroupIndex) const;
   JsAddStyleResult addSparklineGroup(uint32_t sheet, emscripten::val spec);
   JsStatus updateSparklineGroup(uint32_t sheet, uint32_t index, emscripten::val spec);
   JsStatus setSparklineGroupSparklines(uint32_t sheet, uint32_t index, emscripten::val sparklines);
@@ -552,14 +554,16 @@ class JsWorkbook {
   JsStatus setChartSource(uint32_t sheet, uint32_t objectId, const std::string& source, int32_t direction,
                           emscripten::val headerRow, emscripten::val headerColumn);
 
-  emscripten::val getValidations(uint32_t sheet) const;
+  JsNumberResult getValidationCount(uint32_t sheet) const;
+  emscripten::val getValidation(uint32_t sheet, uint32_t validationIndex) const;
   JsAddStyleResult addValidation(uint32_t sheet, emscripten::val v);
   JsStatus removeValidationAt(uint32_t sheet, uint32_t index);
   JsStatus clearValidations(uint32_t sheet);
 
   // ---- Conditional formats -----------------------------------------------
 
-  emscripten::val getConditionalFormats(uint32_t sheet) const;
+  JsNumberResult getCfRuleCount(uint32_t sheet) const;
+  emscripten::val getCfRule(uint32_t sheet, uint32_t cfRuleIndex) const;
   JsAddStyleResult addConditionalFormat(uint32_t sheet, emscripten::val v);
   JsStatus removeConditionalFormatAt(uint32_t sheet, uint32_t index);
   JsStatus clearConditionalFormats(uint32_t sheet);
@@ -575,6 +579,7 @@ class JsWorkbook {
   JsStringResult localizeFormula(const std::string& formula, const std::string& profile_id) const;
   JsStringResult canonicalizeFormula(const std::string& formula, const std::string& profile_id) const;
   emscripten::val localeFacts(const std::string& profile_id) const;
+  emscripten::val listLocaleErrorNames(const std::string& profile_id) const;
   emscripten::val compareText(const std::string& a, const std::string& b, int32_t strength,
                               const std::string& profile_id) const;
   emscripten::val collationClasses(emscripten::val values, int32_t strength, const std::string& profile_id) const;
@@ -586,8 +591,7 @@ class JsWorkbook {
 
   // ---- PivotCache mutation -----------------------------------------------
 
-  JsNumberResult pivotCacheCount() const;
-  JsAddStyleResult pivotCacheIdAt(uint32_t idx) const;
+  emscripten::val listPivotCaches() const;
   JsAddStyleResult pivotCacheCreate(uint32_t requestedId);
   JsStatus pivotCacheRemove(uint32_t cacheId);
   emscripten::val pivotCacheGetWorksheetSource(uint32_t cacheId) const;

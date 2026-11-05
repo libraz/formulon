@@ -104,143 +104,142 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
 
 // ---- Conditional formatting (read / mutate) -------------------------
 
-Napi::Value Workbook::GetConditionalFormats(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  Napi::Array arr = Napi::Array::New(env);
-  if (handle_ == nullptr) {
-    return FinishListResult(env, arr, kBindingInvalidHandle);
+namespace {
+
+// Builds the `ConditionalFormatEntry` shape of `rule`.
+Napi::Object CfRuleToJs(Napi::Env env, const fm_cf_rule_t& rule) {
+  Napi::Object item = Napi::Object::New(env);
+  item.Set("id", JsString(env, rule.id));
+  item.Set("type", Napi::Number::New(env, static_cast<uint32_t>(rule.type)));
+  item.Set("priority", Napi::Number::New(env, rule.priority));
+  item.Set("stopIfTrue", Napi::Boolean::New(env, rule.stop_if_true != 0));
+  Napi::Array ranges = Napi::Array::New(env, rule.range_count);
+  for (size_t r = 0; r < rule.range_count; ++r) {
+    ranges.Set(static_cast<uint32_t>(r), RangeToJs(env, rule.ranges[r]));
   }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  item.Set("ranges", ranges);
+  if (rule.dxf_id_engaged != 0) {
+    item.Set("dxfId", Napi::Number::New(env, rule.dxf_id));
+  }
+  if (rule.formula1 != nullptr) {
+    item.Set("formula1", Napi::String::New(env, rule.formula1));
+  }
+  if (rule.formula2 != nullptr) {
+    item.Set("formula2", Napi::String::New(env, rule.formula2));
+  }
+  if (rule.op_engaged != 0) {
+    item.Set("op", Napi::Number::New(env, static_cast<uint32_t>(rule.op)));
+  }
+  if (rule.rank_engaged != 0) {
+    item.Set("rank", Napi::Number::New(env, rule.rank));
+    item.Set("percent", Napi::Boolean::New(env, rule.percent != 0));
+    item.Set("bottom", Napi::Boolean::New(env, rule.bottom != 0));
+  }
+  // aboveAverage flags are always engineered but only meaningful for
+  // the AboveAverage rule type; surface them only there to mirror the
+  // embind shape.
+  if (rule.type == 6 /* AboveAverage */) {
+    item.Set("aboveAverage", Napi::Boolean::New(env, rule.above_average != 0));
+    item.Set("equalAverage", Napi::Boolean::New(env, rule.equal_average != 0));
+    if (rule.std_dev_engaged != 0) {
+      item.Set("stdDev", Napi::Number::New(env, rule.std_dev));
+    }
+  }
+  if (rule.text != nullptr) {
+    item.Set("text", Napi::String::New(env, rule.text));
+  }
+  if (rule.time_period_engaged != 0) {
+    item.Set("timePeriod", Napi::Number::New(env, static_cast<uint32_t>(rule.time_period)));
+  }
+  if (rule.color_scale_count > 0 && rule.color_scale_thresholds != nullptr && rule.color_scale_colors != nullptr) {
+    Napi::Object color_scale = Napi::Object::New(env);
+    Napi::Array thresholds = Napi::Array::New(env, rule.color_scale_count);
+    Napi::Array colors = Napi::Array::New(env, rule.color_scale_count);
+    for (uint32_t j = 0; j < rule.color_scale_count; ++j) {
+      thresholds.Set(j, CfvoToJs(env, rule.color_scale_thresholds[j]));
+      colors.Set(j, TranslateCfColor(env, rule.color_scale_colors[j]));
+    }
+    color_scale.Set("thresholds", thresholds);
+    color_scale.Set("colors", colors);
+    item.Set("colorScale", color_scale);
+  }
+  if (rule.data_bar_engaged != 0) {
+    Napi::Object data_bar = Napi::Object::New(env);
+    data_bar.Set("min", CfvoToJs(env, rule.data_bar_min));
+    data_bar.Set("max", CfvoToJs(env, rule.data_bar_max));
+    data_bar.Set("fill", TranslateCfColor(env, rule.data_bar_fill));
+    data_bar.Set("showValue", Napi::Boolean::New(env, rule.data_bar_show_value != 0));
+    data_bar.Set("minLengthPct", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_min_length_pct)));
+    data_bar.Set("maxLengthPct", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_max_length_pct)));
+    // `x14` extension payload. Each key appears only when the C ABI
+    // reports the matching `*_engaged` flag, so an absent key means the
+    // rule keeps the model default and the object round-trips through
+    // `addConditionalFormat` unchanged. The getter engages all six.
+    if (rule.data_bar_gradient_engaged != 0) {
+      data_bar.Set("gradient", Napi::Boolean::New(env, rule.data_bar_gradient != 0));
+    }
+    if (rule.data_bar_axis_position_engaged != 0) {
+      data_bar.Set("axisPosition", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_axis_position)));
+    }
+    if (rule.data_bar_negative_fill_engaged != 0) {
+      data_bar.Set("negativeFill", TranslateCfColor(env, rule.data_bar_negative_fill));
+    }
+    if (rule.data_bar_border_engaged != 0) {
+      data_bar.Set("border", TranslateCfColor(env, rule.data_bar_border));
+    }
+    if (rule.data_bar_negative_border_engaged != 0) {
+      data_bar.Set("negativeBorder", TranslateCfColor(env, rule.data_bar_negative_border));
+    }
+    if (rule.data_bar_axis_color_engaged != 0) {
+      data_bar.Set("axisColor", TranslateCfColor(env, rule.data_bar_axis_color));
+    }
+    data_bar.Set("direction", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_direction)));
+    item.Set("dataBar", data_bar);
+  }
+  if (rule.icon_set_engaged != 0) {
+    Napi::Object icon_set = Napi::Object::New(env);
+    icon_set.Set("name", Napi::Number::New(env, static_cast<uint32_t>(rule.icon_set_name)));
+    Napi::Array thresholds = Napi::Array::New(env, rule.icon_set_threshold_count);
+    for (uint32_t j = 0; j < rule.icon_set_threshold_count; ++j) {
+      thresholds.Set(j, CfvoToJs(env, rule.icon_set_thresholds[j]));
+    }
+    icon_set.Set("thresholds", thresholds);
+    icon_set.Set("reverse", Napi::Boolean::New(env, rule.icon_set_reverse != 0));
+    icon_set.Set("showValue", Napi::Boolean::New(env, rule.icon_set_show_value != 0));
+    icon_set.Set("percent", Napi::Boolean::New(env, rule.icon_set_percent != 0));
+    if (rule.icon_set_floor_engaged != 0) {
+      icon_set.Set("floor", CfvoToJs(env, rule.icon_set_floor));
+    }
+    if (rule.icon_set_icon_count != 0U) {
+      Napi::Array icons = Napi::Array::New(env, rule.icon_set_icon_count);
+      for (uint32_t j = 0; j < rule.icon_set_icon_count; ++j) {
+        Napi::Object icon = Napi::Object::New(env);
+        icon.Set("iconSet", JsString(env, rule.icon_set_icons[j].icon_set));
+        icon.Set("iconId", Napi::Number::New(env, rule.icon_set_icons[j].icon_id));
+        icons.Set(j, icon);
+      }
+      icon_set.Set("icons", icons);
+    }
+    item.Set("iconSet", icon_set);
+  }
+  return item;
+}
+
+}  // namespace
+
+Napi::Value Workbook::GetCfRuleCount(const Napi::CallbackInfo& info) {
   std::size_t count = 0;
-  fm_status_t rc = fm_sheet_get_cf_rule_count(handle_, sheet, &count);
-  if (rc != 0) {
-    return FinishListResult(env, arr, rc);
-  }
-  std::size_t emitted = 0;
-  for (std::size_t i = 0; i < count; ++i) {
-    fm_cf_rule_t rule{};
-    rc = fm_sheet_get_cf_rule(handle_, sheet, i, &rule);
-    if (rc != 0) {
-      return FinishListResult(env, arr, rc);
-    }
-    Napi::Object item = Napi::Object::New(env);
-    item.Set("id", JsString(env, rule.id));
-    item.Set("type", Napi::Number::New(env, static_cast<uint32_t>(rule.type)));
-    item.Set("priority", Napi::Number::New(env, rule.priority));
-    item.Set("stopIfTrue", Napi::Boolean::New(env, rule.stop_if_true != 0));
-    Napi::Array ranges = Napi::Array::New(env, rule.range_count);
-    for (size_t r = 0; r < rule.range_count; ++r) {
-      ranges.Set(static_cast<uint32_t>(r), RangeToJs(env, rule.ranges[r]));
-    }
-    item.Set("ranges", ranges);
-    if (rule.dxf_id_engaged != 0) {
-      item.Set("dxfId", Napi::Number::New(env, rule.dxf_id));
-    }
-    if (rule.formula1 != nullptr) {
-      item.Set("formula1", Napi::String::New(env, rule.formula1));
-    }
-    if (rule.formula2 != nullptr) {
-      item.Set("formula2", Napi::String::New(env, rule.formula2));
-    }
-    if (rule.op_engaged != 0) {
-      item.Set("op", Napi::Number::New(env, static_cast<uint32_t>(rule.op)));
-    }
-    if (rule.rank_engaged != 0) {
-      item.Set("rank", Napi::Number::New(env, rule.rank));
-      item.Set("percent", Napi::Boolean::New(env, rule.percent != 0));
-      item.Set("bottom", Napi::Boolean::New(env, rule.bottom != 0));
-    }
-    // aboveAverage flags are always engineered but only meaningful for
-    // the AboveAverage rule type; surface them only there to mirror the
-    // embind shape.
-    if (rule.type == 6 /* AboveAverage */) {
-      item.Set("aboveAverage", Napi::Boolean::New(env, rule.above_average != 0));
-      item.Set("equalAverage", Napi::Boolean::New(env, rule.equal_average != 0));
-      if (rule.std_dev_engaged != 0) {
-        item.Set("stdDev", Napi::Number::New(env, rule.std_dev));
-      }
-    }
-    if (rule.text != nullptr) {
-      item.Set("text", Napi::String::New(env, rule.text));
-    }
-    if (rule.time_period_engaged != 0) {
-      item.Set("timePeriod", Napi::Number::New(env, static_cast<uint32_t>(rule.time_period)));
-    }
-    if (rule.color_scale_count > 0 && rule.color_scale_thresholds != nullptr && rule.color_scale_colors != nullptr) {
-      Napi::Object color_scale = Napi::Object::New(env);
-      Napi::Array thresholds = Napi::Array::New(env, rule.color_scale_count);
-      Napi::Array colors = Napi::Array::New(env, rule.color_scale_count);
-      for (uint32_t j = 0; j < rule.color_scale_count; ++j) {
-        thresholds.Set(j, CfvoToJs(env, rule.color_scale_thresholds[j]));
-        colors.Set(j, TranslateCfColor(env, rule.color_scale_colors[j]));
-      }
-      color_scale.Set("thresholds", thresholds);
-      color_scale.Set("colors", colors);
-      item.Set("colorScale", color_scale);
-    }
-    if (rule.data_bar_engaged != 0) {
-      Napi::Object data_bar = Napi::Object::New(env);
-      data_bar.Set("min", CfvoToJs(env, rule.data_bar_min));
-      data_bar.Set("max", CfvoToJs(env, rule.data_bar_max));
-      data_bar.Set("fill", TranslateCfColor(env, rule.data_bar_fill));
-      data_bar.Set("showValue", Napi::Boolean::New(env, rule.data_bar_show_value != 0));
-      data_bar.Set("minLengthPct", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_min_length_pct)));
-      data_bar.Set("maxLengthPct", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_max_length_pct)));
-      // `x14` extension payload. Each key appears only when the C ABI
-      // reports the matching `*_engaged` flag, so an absent key means the
-      // rule keeps the model default and the object round-trips through
-      // `addConditionalFormat` unchanged. The getter engages all six.
-      if (rule.data_bar_gradient_engaged != 0) {
-        data_bar.Set("gradient", Napi::Boolean::New(env, rule.data_bar_gradient != 0));
-      }
-      if (rule.data_bar_axis_position_engaged != 0) {
-        data_bar.Set("axisPosition", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_axis_position)));
-      }
-      if (rule.data_bar_negative_fill_engaged != 0) {
-        data_bar.Set("negativeFill", TranslateCfColor(env, rule.data_bar_negative_fill));
-      }
-      if (rule.data_bar_border_engaged != 0) {
-        data_bar.Set("border", TranslateCfColor(env, rule.data_bar_border));
-      }
-      if (rule.data_bar_negative_border_engaged != 0) {
-        data_bar.Set("negativeBorder", TranslateCfColor(env, rule.data_bar_negative_border));
-      }
-      if (rule.data_bar_axis_color_engaged != 0) {
-        data_bar.Set("axisColor", TranslateCfColor(env, rule.data_bar_axis_color));
-      }
-      data_bar.Set("direction", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_direction)));
-      item.Set("dataBar", data_bar);
-    }
-    if (rule.icon_set_engaged != 0) {
-      Napi::Object icon_set = Napi::Object::New(env);
-      icon_set.Set("name", Napi::Number::New(env, static_cast<uint32_t>(rule.icon_set_name)));
-      Napi::Array thresholds = Napi::Array::New(env, rule.icon_set_threshold_count);
-      for (uint32_t j = 0; j < rule.icon_set_threshold_count; ++j) {
-        thresholds.Set(j, CfvoToJs(env, rule.icon_set_thresholds[j]));
-      }
-      icon_set.Set("thresholds", thresholds);
-      icon_set.Set("reverse", Napi::Boolean::New(env, rule.icon_set_reverse != 0));
-      icon_set.Set("showValue", Napi::Boolean::New(env, rule.icon_set_show_value != 0));
-      icon_set.Set("percent", Napi::Boolean::New(env, rule.icon_set_percent != 0));
-      if (rule.icon_set_floor_engaged != 0) {
-        icon_set.Set("floor", CfvoToJs(env, rule.icon_set_floor));
-      }
-      if (rule.icon_set_icon_count != 0U) {
-        Napi::Array icons = Napi::Array::New(env, rule.icon_set_icon_count);
-        for (uint32_t j = 0; j < rule.icon_set_icon_count; ++j) {
-          Napi::Object icon = Napi::Object::New(env);
-          icon.Set("iconSet", JsString(env, rule.icon_set_icons[j].icon_set));
-          icon.Set("iconId", Napi::Number::New(env, rule.icon_set_icons[j].icon_id));
-          icons.Set(j, icon);
-        }
-        icon_set.Set("icons", icons);
-      }
-      item.Set("iconSet", icon_set);
-    }
-    arr.Set(static_cast<uint32_t>(emitted), item);
-    ++emitted;
-  }
-  return FinishListResult(env, arr, 0);
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_cf_rule_count(handle_, ArgU32(info, 0), &count) : kBindingInvalidHandle;
+  return MakeNumberResult(info.Env(), rc, static_cast<double>(count));
+}
+
+Napi::Value Workbook::GetCfRule(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  fm_cf_rule_t rule{};
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_cf_rule(handle_, ArgU32(info, 0), ArgU32(info, 1), &rule)
+                                            : kBindingInvalidHandle;
+  return FinishItemResult(env, CfRuleToJs(env, rc == 0 ? rule : fm_cf_rule_t{}), rc);
 }
 
 Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {

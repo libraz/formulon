@@ -217,7 +217,6 @@ _BETWEEN_10_20 = PivotFilterSpec(
 _PIVOT_READERS = {
     "get_pivot_count",
     "get_pivot_layout",
-    "pivot_cache_count",
     "get_pivot_cache_field_count",
     "get_pivot_cache_field_name",
     "get_pivot_cache_field_shared_item_count",
@@ -295,14 +294,13 @@ class PivotMutatorTableTests(unittest.TestCase):
 
         def cache_create(t: Any, f: _PivotFixture, r: int) -> None:
             eq(r, 77)
-            eq(f.wb.pivot_cache_count(), 2)
+            eq(len(f.wb.list_pivot_caches()), 2)
 
         def cache_remove_setup(f: _PivotFixture) -> None:
             f.spare = f.wb.add_pivot_cache()  # type: ignore[attr-defined]
 
         def cache_remove(t: Any, f: _PivotFixture, r: None) -> None:
-            eq(f.wb.pivot_cache_count(), 1)
-            eq(f.wb.pivot_cache_id_at(0), f.cache)
+            eq(f.wb.list_pivot_caches(), [f.cache])
 
         def cache_source(t: Any, f: _PivotFixture, r: None) -> None:
             source = f.wb.get_pivot_cache_worksheet_source(f.cache)
@@ -621,7 +619,7 @@ class PivotMutatorTableTests(unittest.TestCase):
                 project,
             ),
             "add_pivot_cache": (None, lambda f: f.wb.add_pivot_cache(77), None, cache_create),
-            "pivot_cache_id_at": (None, lambda f: f.wb.pivot_cache_id_at(0), None, lambda t, f, r: eq(r, f.cache)),
+            "list_pivot_caches": (None, lambda f: f.wb.list_pivot_caches(), None, lambda t, f, r: eq(r, [f.cache])),
             "remove_pivot_cache": (cache_remove_setup, lambda f: f.wb.remove_pivot_cache(f.spare), None, cache_remove),
             "set_pivot_cache_worksheet_source": (
                 None,
@@ -1366,7 +1364,7 @@ class PivotFieldBindingTests(unittest.TestCase):
             pivot = self._wide_pivot(wb)
             self.assertIn(b"pivotCacheDefinition1.xml", wb.save())
             wb.remove_pivot(0, pivot)
-            self.assertEqual(wb.pivot_cache_count(), 1)
+            self.assertEqual(len(wb.list_pivot_caches()), 1)
             self.assertNotIn(b"pivotCacheDefinition1.xml", wb.save())
 
 

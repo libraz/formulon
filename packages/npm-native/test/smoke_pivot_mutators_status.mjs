@@ -127,11 +127,10 @@ const PIVOT_MUTATORS = [
       act: (b) => b.wb.addPivotCache(77),
       expect: (b, r) => {
         assert.equal(r.index, 77);
-        assert.equal(b.wb.pivotCacheCount().value, 2);
+        assert.equal(b.wb.listPivotCaches().length, 2);
       },
     },
   ],
-  ['pivotCacheIdAt', { act: (b) => b.wb.pivotCacheIdAt(0), expect: (b, r) => assert.equal(r.index, b.cacheId) }],
   [
     'getPivotCacheId',
     { act: (b) => b.wb.getPivotCacheId(0, b.pivot), expect: (b, r) => assert.equal(r.index, b.cacheId) },
@@ -144,8 +143,8 @@ const PIVOT_MUTATORS = [
       },
       act: (b) => b.wb.removePivotCache(b.spare),
       expect: (b) => {
-        assert.equal(b.wb.pivotCacheCount().value, 1);
-        assert.equal(b.wb.pivotCacheIdAt(0).index, b.cacheId);
+        assert.equal(b.wb.listPivotCaches().length, 1);
+        assert.deepEqual([...b.wb.listPivotCaches()], [b.cacheId]);
       },
     },
   ],
@@ -969,11 +968,17 @@ test('pivot filters and subtotal functions survive save and reload', async () =>
 const STATUS_ACCESSORS = [
   ['getSheetCount', [], null],
   ['getCellCount', [0], [99]],
-  ['definedNameCount', [], null],
+  ['getCfRuleCount', [0], [99]],
+  ['getValidationCount', [0], [99]],
+  ['getProtectedRangeCount', [0], [99]],
+  ['getSparklineGroupCount', [0], [99]],
+  ['getCellPhoneticRunCount', [0, 0, 0], [99, 0, 0]],
+  ['getExternalLinkCount', [], null],
+  ['listDefinedNames', [], null],
   ['getTableCount', [], null],
-  ['passthroughCount', [], null],
+  ['listPassthroughs', [], null],
   ['getPivotCount', [0], [99]],
-  ['pivotCacheCount', [], null],
+  ['listPivotCaches', [], null],
   ['getPivotCacheFieldCount', null, [9999]],
   ['getPivotCacheFieldSharedItemCount', null, [9999, 0]],
   ['getPivotCacheRecordCount', null, [9999]],
@@ -1010,6 +1015,7 @@ const STATUS_ACCESSORS = [
   ['getPrecedents', [0, 0, 0, 1], [99, 0, 0, 1]],
   ['getDependents', [0, 0, 0, 1], [99, 0, 0, 1]],
   ['listFunctionNames', [], null],
+  ['listLocaleErrorNames', ['win-365-en_US'], ['nope']],
 ];
 
 // The payload a failed call must fall back to, keyed by what it returns.
@@ -1058,7 +1064,7 @@ test('fallible accessors report their status on success, rejection and a release
   // Every accessor, including the ones no argument can fail, reports the
   // released handle instead of a default reading.
   for (const [name, okArgs, badArgs] of STATUS_ACCESSORS) {
-    if (name.endsWith('FunctionName') || name === 'listFunctionNames') continue;
+    if (name.endsWith('FunctionName') || name === 'listFunctionNames' || name === 'listLocaleErrorNames') continue;
     const r = dead[name](...(okArgs ?? badArgs));
     assert.equal(r.status.ok, false, `${name} after release`);
     assert.equal(r.status.status, 7000, name);
@@ -1076,9 +1082,6 @@ test('list getters carry a status and stop at the first element failure', async 
       ['listMerges', () => wb.listMerges(0)],
       ['listComments', () => wb.listComments(0)],
       ['listHyperlinks', () => wb.listHyperlinks(0)],
-      ['getValidations', () => wb.getValidations(0)],
-      ['getConditionalFormats', () => wb.getConditionalFormats(0)],
-      ['getExternalLinks', () => wb.getExternalLinks()],
       ['listDrawingObjects', () => wb.listDrawingObjects(0)],
     ]) {
       const list = call();
@@ -1092,8 +1095,6 @@ test('list getters carry a status and stop at the first element failure', async 
       ['listMerges', () => wb.listMerges(99)],
       ['listComments', () => wb.listComments(99)],
       ['listHyperlinks', () => wb.listHyperlinks(99)],
-      ['getValidations', () => wb.getValidations(99)],
-      ['getConditionalFormats', () => wb.getConditionalFormats(99)],
       ['listDrawingObjects', () => wb.listDrawingObjects(99)],
     ]) {
       const list = call();

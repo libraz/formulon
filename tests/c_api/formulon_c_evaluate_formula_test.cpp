@@ -331,9 +331,9 @@ TEST(EvaluateFormulaArray, MergeAtAnchorBlocksVerticalSpill) {
   fm_value_t anchor{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0U, 0U, 0U, &anchor), 0);
   EXPECT_EQ(anchor.kind, FM_VAL_BLANK);
-  std::size_t merge_count = 0;
-  ASSERT_EQ(fm_sheet_get_merge_count(wb.handle, 0U, &merge_count), 0);
-  EXPECT_EQ(merge_count, 1U);
+  std::size_t merges = 0;
+  ASSERT_EQ(fm_sheet_get_merge_count(wb.handle, 0U, &merges), 0);
+  EXPECT_EQ(merges, 1U);
 }
 
 // A scalar result is reported as a 1x1 array, index 0 carrying the value.

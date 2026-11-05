@@ -29,14 +29,6 @@ functions:
     embind_cpp: sheetCount
     node_cpp: SheetCount
 
-  - name: fm_workbook_get_defined_name_count
-    area: workbook_counts
-    body: status_sizet_out
-    accessor: "wb->workbook().defined_names().size()"
-    js_method: definedNameCount
-    embind_cpp: definedNameCount
-    node_cpp: DefinedNameCount
-
   - name: fm_workbook_get_table_count
     area: workbook_counts
     body: status_sizet_out
@@ -44,14 +36,6 @@ functions:
     js_method: tableCount
     embind_cpp: tableCount
     node_cpp: TableCount
-
-  - name: fm_workbook_get_passthrough_count
-    area: workbook_counts
-    body: status_sizet_out
-    accessor: "wb->workbook().passthrough_parts().size()"
-    js_method: passthroughCount
-    embind_cpp: passthroughCount
-    node_cpp: PassthroughCount
 
   # ----- status + size_t out: styles pools -------------------------------
   - name: fm_workbook_get_font_count

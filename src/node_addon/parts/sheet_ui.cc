@@ -44,6 +44,28 @@ Napi::Value SheetListResult(const Napi::CallbackInfo& info, const fm_workbook_t*
   return FinishListResult(env, arr, 0);
 }
 
+// Reads element `(sheet, index)` of a per-sheet index-keyed collection into
+// its `<Record> & {status}` result.
+template <typename T>
+Napi::Value SheetItemResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle,
+                            fm_status_t (*at_fn)(const fm_workbook_t*, std::size_t, std::size_t, T*),
+                            Napi::Object (*to_js)(Napi::Env, const T&)) {
+  Napi::Env env = info.Env();
+  T entry{};
+  const fm_status_t rc = handle != nullptr ? at_fn(handle, Workbook::ArgU32(info, 0), Workbook::ArgU32(info, 1), &entry)
+                                           : kBindingInvalidHandle;
+  return FinishItemResult(env, to_js(env, rc == 0 ? entry : T{}), rc);
+}
+
+// Reads the element count of a per-sheet collection into a `NumberResult`.
+Napi::Value SheetCountResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle,
+                             fm_status_t (*count_fn)(const fm_workbook_t*, std::size_t, std::size_t*)) {
+  std::size_t count = 0;
+  const fm_status_t rc =
+      handle != nullptr ? count_fn(handle, Workbook::ArgU32(info, 0), &count) : kBindingInvalidHandle;
+  return MakeNumberResult(info.Env(), rc, static_cast<double>(count));
+}
+
 // Shared body of the per-sheet merge add / remove entries taking `(sheet, range)`.
 using MergeEditFn = fm_status_t (*)(fm_workbook_t*, std::size_t, const fm_cell_rect_t*);
 
@@ -330,9 +352,12 @@ Napi::Value EditProtectedRange(fm_workbook_t* const& handle, const Napi::Callbac
 
 }  // namespace
 
-Napi::Value Workbook::GetProtectedRanges(const Napi::CallbackInfo& info) {
-  return SheetListResult(info, handle_, &fm_sheet_get_protected_range_count, &fm_sheet_get_protected_range,
-                         &ProtectedRangeToJs);
+Napi::Value Workbook::GetProtectedRangeCount(const Napi::CallbackInfo& info) {
+  return SheetCountResult(info, handle_, &fm_sheet_get_protected_range_count);
+}
+
+Napi::Value Workbook::GetProtectedRange(const Napi::CallbackInfo& info) {
+  return SheetItemResult(info, handle_, &fm_sheet_get_protected_range, &ProtectedRangeToJs);
 }
 
 Napi::Value Workbook::AddProtectedRange(const Napi::CallbackInfo& info) {
@@ -494,8 +519,12 @@ Napi::Object ValidationToJs(Napi::Env env, const fm_data_validation_t& v) {
 
 }  // namespace
 
-Napi::Value Workbook::GetValidations(const Napi::CallbackInfo& info) {
-  return SheetListResult(info, handle_, &fm_sheet_get_validation_count, &fm_sheet_get_validation, &ValidationToJs);
+Napi::Value Workbook::GetValidationCount(const Napi::CallbackInfo& info) {
+  return SheetCountResult(info, handle_, &fm_sheet_get_validation_count);
+}
+
+Napi::Value Workbook::GetValidation(const Napi::CallbackInfo& info) {
+  return SheetItemResult(info, handle_, &fm_sheet_get_validation, &ValidationToJs);
 }
 
 Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {

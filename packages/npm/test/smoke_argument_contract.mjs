@@ -3,7 +3,7 @@
 // `packages/npm-native/test/smoke_argument_contract.mjs` holds the mirror.
 
 import test from 'node:test';
-import { assert, getModule, VAL } from './smoke_support.mjs';
+import { assert, getModule, readAll, VAL } from './smoke_support.mjs';
 
 const PERSON_ID = '{11111111-1111-4111-8111-111111111111}';
 
@@ -38,7 +38,13 @@ test('delete() from a spec getter during a call is refused and the call does not
     assert.throws(() => wb.addShape(0, spec()), refused);
     assert.throws(() => wb.addMerge(0, spec()), refused);
     assert.equal(wb.isValid(), true);
-    assert.equal(wb.getProtectedRanges(0).length, 0);
+    assert.equal(
+      readAll(
+        () => wb.getProtectedRangeCount(0),
+        (i) => wb.getProtectedRange(0, i),
+      ).length,
+      0,
+    );
     assert.ok(wb.setNumber(0, 0, 0, 1).ok);
   } finally {
     wb.delete();
@@ -111,10 +117,10 @@ test('a missing required argument throws TypeError and commits nothing', async (
     assert.equal(wb.getValue(0, 0, 0).value.kind, VAL.BLANK);
 
     assert.ok(wb.setDefinedName('X', '=1').ok);
-    const nameBefore = wb.definedNameAt(0);
+    const nameBefore = wb.listDefinedNames()[0];
     assert.throws(() => wb.setDefinedName('X'), TypeError);
-    assert.equal(wb.definedNameCount().value, 1);
-    assert.deepEqual(wb.definedNameAt(0), nameBefore);
+    assert.equal(wb.listDefinedNames().length, 1);
+    assert.deepEqual(wb.listDefinedNames()[0], nameBefore);
 
     assert.throws(() => wb.setIterative(true), TypeError);
     assert.equal(wb.getIterative().enabled, false);

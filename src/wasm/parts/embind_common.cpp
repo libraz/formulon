@@ -615,6 +615,17 @@ fm_status_t js_collect_list(const fm_workbook_t* handle, size_t sheet, JsListCou
   return rc;
 }
 
+JsNumberResult js_count_result(const fm_workbook_t* handle, size_t sheet, JsListCount count) {
+  size_t n = 0;
+  const fm_status_t rc = handle != nullptr ? count(handle, sheet, &n) : kBindingInvalidHandle;
+  return number_result(rc, static_cast<double>(n));
+}
+
+emscripten::val record_result(fm_status_t rc, emscripten::val record) {
+  record.set("status", status_from_rc(rc));
+  return record;
+}
+
 JsNumberResult number_result(fm_status_t rc, double value) {
   JsNumberResult out;
   out.status = status_from_rc(rc);

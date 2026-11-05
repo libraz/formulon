@@ -85,6 +85,18 @@ function emitXlsbWarning(Module, xlsbFormat) {
   }
 }
 
+// Reads every element of an index-keyed collection through its count / index
+// getter pair, each element without its status.
+function readAll(count, get) {
+  const n = count();
+  assert.ok(n.status.ok, JSON.stringify(n.status));
+  return Array.from({ length: n.value }, (_, i) => {
+    const { status, ...item } = get(i);
+    assert.ok(status.ok, JSON.stringify(status));
+    return item;
+  });
+}
+
 export {
   assert,
   emitXlsbWarning,
@@ -96,6 +108,7 @@ export {
   path,
   pkgJsonPath,
   pkgRoot,
+  readAll,
   readFile,
   threadsEntry,
   VAL,

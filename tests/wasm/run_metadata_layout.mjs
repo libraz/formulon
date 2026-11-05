@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readAll } from './smoke_support.mjs';
 
 export function registerMetadataLayout(Module, test) {
   test('addMerge / getMerges round-trip', () => {
@@ -157,10 +158,13 @@ export function registerMetadataLayout(Module, test) {
     }
   });
 
-  test('getValidations returns an array', () => {
+  test('getValidation returns an array', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      const arr = wb.getValidations(0);
+      const arr = readAll(
+        () => wb.getValidationCount(0),
+        (i) => wb.getValidation(0, i),
+      );
       assert.ok(Array.isArray(arr) || typeof arr.length === 'number');
       assert.equal(arr.length, 0);
     } finally {
@@ -168,7 +172,7 @@ export function registerMetadataLayout(Module, test) {
     }
   });
 
-  test('addValidation / getValidations / removeValidationAt / clearValidations round-trip', () => {
+  test('addValidation / getValidation / removeValidationAt / clearValidations round-trip', () => {
     const wb = Module.Workbook.createDefault();
     try {
       // List-type validation at A1:B3 with prompts and an error message.
@@ -202,7 +206,10 @@ export function registerMetadataLayout(Module, test) {
       };
       assert.ok(wb.addValidation(0, decimalRule).status.ok);
 
-      const list = wb.getValidations(0);
+      const list = readAll(
+        () => wb.getValidationCount(0),
+        (i) => wb.getValidation(0, i),
+      );
       assert.equal(list.length, 2);
 
       const a = list[0];
@@ -235,7 +242,10 @@ export function registerMetadataLayout(Module, test) {
 
       // removeValidationAt drops the first rule.
       assert.ok(wb.removeValidation(0, 0).ok);
-      const after = wb.getValidations(0);
+      const after = readAll(
+        () => wb.getValidationCount(0),
+        (i) => wb.getValidation(0, i),
+      );
       assert.equal(after.length, 1);
       assert.equal(after[0].type, 2);
 
@@ -244,7 +254,13 @@ export function registerMetadataLayout(Module, test) {
 
       // clearValidations drops everything; safe to call again.
       assert.ok(wb.clearValidations(0).ok);
-      assert.equal(wb.getValidations(0).length, 0);
+      assert.equal(
+        readAll(
+          () => wb.getValidationCount(0),
+          (i) => wb.getValidation(0, i),
+        ).length,
+        0,
+      );
       assert.ok(wb.clearValidations(0).ok);
 
       // Sheet-out-of-range is rejected on every entry.
@@ -528,7 +544,10 @@ export function registerMetadataLayout(Module, test) {
           formula1: '"a,b"',
         }).status.ok,
       );
-      const list = wb.getValidations(0);
+      const list = readAll(
+        () => wb.getValidationCount(0),
+        (i) => wb.getValidation(0, i),
+      );
       assert.equal(list.length, 1);
       assert.equal(list[0].allowBlank, false);
     } finally {

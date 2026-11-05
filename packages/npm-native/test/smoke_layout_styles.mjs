@@ -1,5 +1,5 @@
 import test from 'node:test';
-import { assert, getModule } from './smoke_support.mjs';
+import { assert, getModule, readAll } from './smoke_support.mjs';
 
 test('addMerge + getMerges round-trip a single range', async () => {
   const mod = await getModule();
@@ -547,7 +547,13 @@ test('phonetic runs keep their spans through a save/load round trip', async () =
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   wb.setText(0, 0, 0, '東京都');
-  assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, []);
+  assert.deepEqual(
+    readAll(
+      () => wb.getCellPhoneticRunCount(0, 0, 0),
+      (i) => wb.getCellPhoneticRun(0, 0, 0, i),
+    ),
+    [],
+  );
 
   const runs = [
     { sb: 0, eb: 2, text: 'トウキョウ' },
@@ -555,18 +561,36 @@ test('phonetic runs keep their spans through a save/load round trip', async () =
   ];
   const stored = wb.setCellPhoneticRuns(0, 0, 0, runs);
   assert.ok(stored.ok, `setCellPhoneticRuns: ${JSON.stringify(stored)}`);
-  assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, runs);
+  assert.deepEqual(
+    readAll(
+      () => wb.getCellPhoneticRunCount(0, 0, 0),
+      (i) => wb.getCellPhoneticRun(0, 0, 0, i),
+    ),
+    runs,
+  );
   // The flattening getter still reports the concatenation.
   assert.equal(wb.getCellPhonetic(0, 0, 0).value, 'トウキョウト');
 
   const saved = wb.save();
   assert.ok(saved.status.ok, `save: ${JSON.stringify(saved.status)}`);
   const loaded = mod.Workbook.load(saved.bytes);
-  assert.deepEqual(loaded.getCellPhoneticRuns(0, 0, 0).runs, runs);
+  assert.deepEqual(
+    readAll(
+      () => loaded.getCellPhoneticRunCount(0, 0, 0),
+      (i) => loaded.getCellPhoneticRun(0, 0, 0, i),
+    ),
+    runs,
+  );
 
   // Writing the flattened reading back is the collapse the run API avoids.
   wb.setCellPhonetic(0, 0, 0, 'トウキョウト');
-  assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, [{ sb: 0, eb: 3, text: 'トウキョウト' }]);
+  assert.deepEqual(
+    readAll(
+      () => wb.getCellPhoneticRunCount(0, 0, 0),
+      (i) => wb.getCellPhoneticRun(0, 0, 0, i),
+    ),
+    [{ sb: 0, eb: 3, text: 'トウキョウト' }],
+  );
 
   const rejected = wb.setCellPhoneticRuns(0, 0, 0, [
     { sb: 2, eb: 3, text: 'ト' },

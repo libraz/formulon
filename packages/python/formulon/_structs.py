@@ -1119,7 +1119,7 @@ def write_str_field(
     ``fm_phonetic_run_t.text``: a NULL run text is rejected
     (``kBindingNullPointer``), but Excel legitimately produces empty-reading
     runs (see ``src/io/xlsb/sst_reader.cpp``'s out-of-range kana slices), so
-    ``get_phonetic_runs()``'s own output could not always round-trip back
+    ``get_cell_phonetic_run()``'s output could not always round-trip back
     through ``set_cell_phonetic_runs()``.
     """
     ptr = scope.opt_cstr(value) if allow_empty else scope.nonempty_cstr(value)

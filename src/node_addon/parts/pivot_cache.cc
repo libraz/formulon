@@ -44,25 +44,22 @@ Napi::Value CacheCountResult(const Napi::CallbackInfo& info, const fm_workbook_t
 
 }  // namespace
 
-Napi::Value Workbook::PivotCacheCount(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::ListPivotCaches(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  Napi::Array arr = Napi::Array::New(env);
   if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+    return FinishListResult(env, arr, kBindingInvalidHandle);
   }
-  std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_get_pivot_cache_count(handle_, &count);
-  return MakeNumberResult(env, rc, static_cast<double>(count));
-}
-
-Napi::Value Workbook::PivotCacheIdAt(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeIndexResult(env, NullHandleError(env), 0);
+  std::size_t n = 0;
+  fm_status_t rc = fm_workbook_get_pivot_cache_count(handle_, &n);
+  for (std::size_t i = 0; rc == 0 && i < n; ++i) {
+    uint32_t cache_id = 0;
+    rc = fm_workbook_get_pivot_cache_id_at(handle_, i, &cache_id);
+    if (rc == 0) {
+      arr.Set(static_cast<uint32_t>(i), Napi::Number::New(env, cache_id));
+    }
   }
-  const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
-  uint32_t out = 0;
-  fm_status_t rc = fm_workbook_get_pivot_cache_id_at(handle_, idx, &out);
-  return MakeIndexResult(env, rc, out);
+  return FinishListResult(env, arr, rc);
 }
 
 Napi::Value Workbook::PivotCacheCreate(const Napi::CallbackInfo& info) {
@@ -184,7 +181,8 @@ Napi::Value Workbook::PivotCacheFieldSharedItemValue(const Napi::CallbackInfo& i
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t item_idx = static_cast<std::size_t>(ArgU32(info, 2));
   fm_value_t v{};
-  const fm_status_t rc = fm_workbook_get_pivot_cache_field_shared_item_value(handle_, cache_id, field_idx, item_idx, &v);
+  const fm_status_t rc =
+      fm_workbook_get_pivot_cache_field_shared_item_value(handle_, cache_id, field_idx, item_idx, &v);
   return MakeValueResult(env, rc, v);
 }
 

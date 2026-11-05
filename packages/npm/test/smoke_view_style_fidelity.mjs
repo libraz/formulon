@@ -1,5 +1,5 @@
 import test from 'node:test';
-import { assert, getModule } from './smoke_support.mjs';
+import { assert, getModule, readAll } from './smoke_support.mjs';
 
 // ---- Outline, view flags, font toggles, gradient fills, custom icons, ------
 // ---- calcPr accessors and defined-name attributes ---------------------------
@@ -152,7 +152,10 @@ test('custom icon sets round-trip through the conditional-format API', async () 
   const added = wb.addCfRule(0, rule(icons));
   assert.ok(added.status.ok, JSON.stringify(added.status));
   const loaded = roundTrip(mod, wb);
-  const back = loaded.getConditionalFormats(0).find((r) => r.iconSet);
+  const back = readAll(
+    () => loaded.getCfRuleCount(0),
+    (i) => loaded.getCfRule(0, i),
+  ).find((r) => r.iconSet);
   assert.deepEqual(back.iconSet.icons, icons);
   assert.equal(wb.addCfRule(0, rule(icons.slice(0, 2))).status.ok, false);
   assert.equal(wb.addCfRule(0, rule([icons[0], { iconSet: '7Dwarfs', iconId: 0 }, icons[2]])).status.ok, false);
@@ -204,17 +207,17 @@ test('defined-name comment and hidden read back, set and survive a replacement',
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   assert.ok(wb.setDefinedNameScoped('Rate', 'Sheet1!$A$1', -1).ok);
-  assert.equal(wb.definedNameAt(0).comment, '');
-  assert.equal(wb.definedNameAt(0).hidden, false);
+  assert.equal(wb.listDefinedNames()[0].comment, '');
+  assert.equal(wb.listDefinedNames()[0].hidden, false);
   assert.ok(wb.setDefinedNameAttrs('rate', -1, { comment: 'Tax rate', hidden: true }).ok);
   assert.ok(wb.setDefinedNameScoped('Rate', 'Sheet1!$B$2', -1).ok);
   assert.ok(wb.setDefinedNameAttrs('Rate', -1, {}).ok);
-  const entry = wb.definedNameAt(0);
+  const entry = wb.listDefinedNames()[0];
   assert.deepEqual([entry.formula, entry.comment, entry.hidden], ['Sheet1!$B$2', 'Tax rate', true]);
   assert.ok(wb.setDefinedNameAttrs('Rate', -1, { hidden: false }).ok);
   assert.equal(wb.setDefinedNameAttrs('Nope', -1, { comment: 'x' }).ok, false);
   const loaded = roundTrip(mod, wb);
-  assert.deepEqual([loaded.definedNameAt(0).comment, loaded.definedNameAt(0).hidden], ['Tax rate', false]);
+  assert.deepEqual([loaded.listDefinedNames()[0].comment, loaded.listDefinedNames()[0].hidden], ['Tax rate', false]);
   release(loaded);
   release(wb);
 });

@@ -173,7 +173,7 @@ class CustomIconTests(unittest.TestCase):
                 wb.add_cf_rule(0, self._rule([CfIcon("3Arrows", 0), CfIcon("3Arrows", 1)]))
             with self.assertRaises(FormulonError):
                 wb.add_cf_rule(0, self._rule([CfIcon("3Arrows", 0), CfIcon("7Dwarfs", 1), CfIcon("3Arrows", 2)]))
-            self.assertEqual(wb.get_conditional_formats(0), [])
+            self.assertEqual([wb.get_cf_rule(0, i) for i in range(wb.get_cf_rule_count(0))], [])
 
 
 class CalcOptionTests(unittest.TestCase):
@@ -208,7 +208,7 @@ class FileNameTests(unittest.TestCase):
             self.assertEqual(wb.get_file_name(), "M5.xlsx")
             wb.set_formula(0, 0, 0, "=M5.xlsx!LN+1")
             self.assertEqual(wb.get_formula(0, 0, 0), "=M5.xlsx!LN+1")
-            self.assertEqual(list(wb.iter_cells(0))[0].formula, "=M5.xlsx!LN+1")
+            self.assertEqual([wb.get_cell_at(0, i) for i in range(wb.get_cell_count(0))][0].formula, "=M5.xlsx!LN+1")
             wb.set_file_name("1M5.xlsx")
             self.assertEqual(wb.get_formula(0, 0, 0), "='1M5.xlsx'!LN+1")
             with self.assertRaises(FormulonError):
@@ -253,18 +253,18 @@ class DefinedNameAttrTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.set_defined_name("Rate", "Sheet1!$A$1")
             wb.set_defined_name_attrs("rate", comment="Tax rate", hidden=True)
-            entry = next(wb.list_defined_names())
+            entry = wb.list_defined_names()[0]
             self.assertEqual((entry.comment, entry.hidden), ("Tax rate", True))
 
             # A replacement keeps both; an omitted argument leaves one alone.
             wb.set_defined_name_scoped("Rate", "Sheet1!$B$2", -1)
             wb.set_defined_name_attrs("Rate", hidden=False)
-            entry = next(wb.list_defined_names())
+            entry = wb.list_defined_names()[0]
             self.assertEqual((entry.comment, entry.hidden), ("Tax rate", False))
 
             wb.set_defined_name_attrs("Rate", comment="", hidden=True)
             with Workbook.load(wb.save()) as reloaded:
-                entry = next(reloaded.list_defined_names())
+                entry = reloaded.list_defined_names()[0]
                 self.assertEqual((entry.formula, entry.comment, entry.hidden), ("Sheet1!$B$2", "", True))
 
     def test_missing_name_is_rejected(self) -> None:

@@ -87,7 +87,7 @@ class NaturalKeyLookupTests(unittest.TestCase):
             wb.set_theme_script_font(False, "Zzzz", "Test Face")
             self.assertEqual(wb.get_theme_script_font(False, "Zzzz"), ThemeScriptFont("Zzzz", "Test Face"))
             self.assertIsNone(wb.get_theme_script_font(True, "Zzzz"))
-            path = next(wb.list_passthroughs()).path
+            path = wb.list_passthroughs()[0].path
             self.assertEqual(wb.get_passthrough(path), path)
             self.assertIsNone(wb.get_passthrough("/" + path))
 

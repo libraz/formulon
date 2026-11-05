@@ -115,6 +115,11 @@ Napi::Object MakeStatus(Napi::Env env, fm_status_t code);
 /// way and the parity claim in `packages/npm-native/README.md` rests on it.
 Napi::Array FinishListResult(Napi::Env env, Napi::Array items, fm_status_t code);
 
+/// Stamps an index getter's `status` onto the record it read, giving the
+/// `<Record> & {status}` result shape. A failed read passes the zero record,
+/// so every declared key is present on the failure path too.
+Napi::Object FinishItemResult(Napi::Env env, Napi::Object item, fm_status_t code);
+
 /// Translates an `fm_value_t` into the JS Value shape.
 Napi::Object TranslateValue(Napi::Env env, const fm_value_t& v);
 

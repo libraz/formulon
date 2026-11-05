@@ -3,7 +3,7 @@
 // `setNumber` / `setBool` / `setText` / `setBlank` / `setFormula` /
 // `getValue` / `getLambdaText`, plus the `cellCount` / `cellAt` /
 // `definedName*` / `table*` / `passthrough*` / `pivotCount` /
-// `pivotLayout` / `getExternalLinks` iteration surface.
+// `pivotLayout` / `getExternalLink` iteration surface.
 
 #include <emscripten/val.h>
 
@@ -137,38 +137,27 @@ emscripten::val JsWorkbook::getCellPhonetic(uint32_t sheet, uint32_t row, uint32
   return js_text_result(rc, "value", text);
 }
 
-emscripten::val JsWorkbook::getCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col) const {
-  emscripten::val o = emscripten::val::object();
-  emscripten::val out = emscripten::val::array();
-  if (handle_ == nullptr) {
-    o.set("status", invalid_handle_status());
-    o.set("runs", out);
-    return o;
-  }
+JsNumberResult JsWorkbook::getCellPhoneticRunCount(uint32_t sheet, uint32_t row, uint32_t col) const {
   std::size_t count = 0;
-  fm_status_t rc = fm_sheet_get_cell_phonetic_run_count(handle_, sheet, row, col, &count);
-  for (std::size_t i = 0; rc == 0 && i < count; ++i) {
-    fm_phonetic_run_t run{};
-    rc = fm_sheet_get_cell_phonetic_run(handle_, sheet, row, col, i, &run);
-    if (rc != 0) {
-      break;
-    }
-    emscripten::val entry = emscripten::val::object();
-    entry.set("sb", run.sb);
-    entry.set("eb", run.eb);
-    // Copied immediately: each read refreshes the handle's scratch, so the
-    // previous run's pointer is dead by the time the next one lands.
-    js_set_cstr(entry, "text", run.text);
-    out.call<void>("push", entry);
-  }
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_cell_phonetic_run_count(handle_, sheet, row, col, &count)
+                                            : kBindingInvalidHandle;
+  return number_result(rc, static_cast<double>(count));
+}
+
+emscripten::val JsWorkbook::getCellPhoneticRun(uint32_t sheet, uint32_t row, uint32_t col,
+                                               uint32_t phoneticRunIndex) const {
+  fm_phonetic_run_t run{};
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_sheet_get_cell_phonetic_run(handle_, sheet, row, col, phoneticRunIndex, &run)
+                             : kBindingInvalidHandle;
   if (rc != 0) {
-    o.set("status", error_status(rc));
-    o.set("runs", emscripten::val::array());
-    return o;
+    run = fm_phonetic_run_t{};
   }
-  o.set("status", ok_status());
-  o.set("runs", out);
-  return o;
+  emscripten::val o = emscripten::val::object();
+  o.set("sb", run.sb);
+  o.set("eb", run.eb);
+  js_set_cstr(o, "text", run.text);
+  return record_result(rc, o);
 }
 
 emscripten::val JsWorkbook::getCellPhoneticProperties(uint32_t sheet, uint32_t row, uint32_t col) const {
@@ -288,8 +277,8 @@ emscripten::val JsWorkbook::getLambdaText(uint32_t sheet, uint32_t row, uint32_t
 
 // ---- Iteration / metadata accessors -------------------------------------
 //
-// `cellCount` / `definedNameCount` / `tableCount` / `passthroughCount`
-// / `pivotCount` are now emitted by the binding codegen (see
+// `cellCount` / `tableCount` / `pivotCount` are now emitted by the
+// binding codegen (see
 // `src/wasm/generated/workbook_counts.cpp` and
 // `src/wasm/generated/sheet_counts.cpp`).
 
@@ -316,31 +305,56 @@ emscripten::val JsWorkbook::cellAt(uint32_t sheet, uint32_t idx) const {
   return o;
 }
 
-emscripten::val JsWorkbook::definedNameAt(uint32_t idx) const {
-  emscripten::val o = emscripten::val::object();
-  if (handle_ == nullptr) {
-    o.set("status", invalid_handle_status());
-    return o;
-  }
+namespace {
+
+emscripten::val defined_name_to_val(const char* name, const char* formula, int32_t local_sheet_id, const char* comment,
+                                    int32_t hidden) {
+  emscripten::val item = emscripten::val::object();
+  js_set_cstr_fields(item, {{"name", name}, {"formula", formula}, {"comment", comment}});
+  item.set("localSheetId", local_sheet_id);
+  item.set("hidden", hidden != 0);
+  return item;
+}
+
+fm_status_t count_defined_names(const fm_workbook_t* handle, size_t, size_t* out) {
+  return fm_workbook_get_defined_name_count(handle, out);
+}
+
+fm_status_t defined_name_item(const fm_workbook_t* handle, size_t, size_t index, emscripten::val* out) {
   const char* name = nullptr;
   const char* formula = nullptr;
   int32_t local_sheet_id = -1;
-  fm_status_t rc = fm_workbook_get_defined_name_at(handle_, idx, &name, &formula, &local_sheet_id);
-  if (rc != 0) {
-    o.set("status", error_status(rc));
-    return o;
-  }
-  o.set("status", ok_status());
-  js_set_cstr(o, "name", name);
-  js_set_cstr(o, "formula", formula);
-  o.set("localSheetId", local_sheet_id);
   const char* comment = nullptr;
   int32_t hidden = 0;
-  if (fm_workbook_get_defined_name_attrs_at(handle_, idx, &comment, &hidden) == 0) {
-    js_set_cstr(o, "comment", comment);
-    o.set("hidden", hidden != 0);
+  fm_status_t rc = fm_workbook_get_defined_name_at(handle, index, &name, &formula, &local_sheet_id);
+  if (rc == 0) {
+    rc = fm_workbook_get_defined_name_attrs_at(handle, index, &comment, &hidden);
   }
-  return o;
+  if (rc == 0) {
+    *out = defined_name_to_val(name, formula, local_sheet_id, comment, hidden);
+  }
+  return rc;
+}
+
+fm_status_t count_passthroughs(const fm_workbook_t* handle, size_t, size_t* out) {
+  return fm_workbook_get_passthrough_count(handle, out);
+}
+
+fm_status_t passthrough_item(const fm_workbook_t* handle, size_t, size_t index, emscripten::val* out) {
+  const char* path = nullptr;
+  const fm_status_t rc = fm_workbook_get_passthrough_at(handle, index, &path);
+  if (rc == 0) {
+    *out = emscripten::val(string_from_cstr(path));
+  }
+  return rc;
+}
+
+}  // namespace
+
+emscripten::val JsWorkbook::listDefinedNames() const {
+  emscripten::val arr = emscripten::val::array();
+  arr.set("status", status_from_rc(js_collect_list(handle_, 0U, &count_defined_names, &defined_name_item, arr)));
+  return arr;
 }
 
 emscripten::val JsWorkbook::tableAt(uint32_t idx) const {
@@ -626,14 +640,9 @@ emscripten::val JsWorkbook::getDefinedName(const std::string& name, int32_t loca
                              ? fm_workbook_get_defined_name(handle_, name.c_str(), localSheetId, &present, &stored,
                                                             &formula, &comment, &hidden)
                              : kBindingInvalidHandle;
-  emscripten::val item = emscripten::val::null();
-  if (rc == 0 && present != 0) {
-    item = emscripten::val::object();
-    js_set_cstr_fields(item, {{"name", stored}, {"formula", formula}, {"comment", comment}});
-    item.set("localSheetId", localSheetId);
-    item.set("hidden", hidden != 0);
-  }
-  return optional_result(rc, present, item);
+  return optional_result(rc, present,
+                         rc == 0 && present != 0 ? defined_name_to_val(stored, formula, localSheetId, comment, hidden)
+                                                 : emscripten::val::null());
 }
 
 JsStatus JsWorkbook::removeDefinedName(const std::string& name, int32_t localSheetId) {
@@ -648,21 +657,10 @@ emscripten::val JsWorkbook::getPassthrough(const std::string& path) const {
   return optional_result(rc, present, emscripten::val(path));
 }
 
-emscripten::val JsWorkbook::passthroughAt(uint32_t idx) const {
-  emscripten::val o = emscripten::val::object();
-  if (handle_ == nullptr) {
-    o.set("status", invalid_handle_status());
-    return o;
-  }
-  const char* path = nullptr;
-  fm_status_t rc = fm_workbook_get_passthrough_at(handle_, idx, &path);
-  if (rc != 0) {
-    o.set("status", error_status(rc));
-    return o;
-  }
-  o.set("status", ok_status());
-  js_set_cstr(o, "path", path);
-  return o;
+emscripten::val JsWorkbook::listPassthroughs() const {
+  emscripten::val arr = emscripten::val::array();
+  arr.set("status", status_from_rc(js_collect_list(handle_, 0U, &count_passthroughs, &passthrough_item, arr)));
+  return arr;
 }
 
 emscripten::val JsWorkbook::pivotLayout(uint32_t sheet, uint32_t pivotIndex) const {
@@ -709,38 +707,34 @@ emscripten::val JsWorkbook::pivotLayout(uint32_t sheet, uint32_t pivotIndex) con
   return o;
 }
 
-emscripten::val JsWorkbook::getExternalLinks() const {
-  emscripten::val arr = emscripten::val::array();
-  if (handle_ == nullptr) {
-    arr.set("status", invalid_handle_status());
-    return arr;
-  }
-  std::size_t count = 0;
-  fm_status_t rc = fm_workbook_get_external_link_count(handle_, &count);
-  if (rc != 0) {
-    arr.set("status", status_from_rc(rc));
-    return arr;
-  }
-  uint32_t emitted = 0;
-  for (std::size_t i = 0; i < count; ++i) {
-    fm_external_link_record_t rec{};
-    rc = fm_workbook_get_external_link(handle_, i, &rec);
-    if (rc != 0) {
-      arr.set("status", status_from_rc(rc));
-      return arr;
-    }
-    emscripten::val item = emscripten::val::object();
-    item.set("index", rec.index);
-    js_set_cstr(item, "relId", rec.rel_id);
-    js_set_cstr(item, "partPath", rec.part_path);
-    js_set_cstr(item, "target", rec.target);
-    item.set("targetExternal", rec.target_external != 0);
-    item.set("kind", rec.kind);
-    arr.set(emitted, item);
-    ++emitted;
-  }
-  arr.set("status", ok_status());
-  return arr;
+namespace {
+
+fm_status_t count_external_links(const fm_workbook_t* handle, size_t, size_t* out) {
+  return fm_workbook_get_external_link_count(handle, out);
+}
+
+emscripten::val external_link_to_val(const fm_external_link_record_t& rec) {
+  emscripten::val item = emscripten::val::object();
+  item.set("index", rec.index);
+  js_set_cstr(item, "relId", rec.rel_id);
+  js_set_cstr(item, "partPath", rec.part_path);
+  js_set_cstr(item, "target", rec.target);
+  item.set("targetExternal", rec.target_external != 0);
+  item.set("kind", rec.kind);
+  return item;
+}
+
+}  // namespace
+
+JsNumberResult JsWorkbook::getExternalLinkCount() const {
+  return js_count_result(handle_, 0U, &count_external_links);
+}
+
+emscripten::val JsWorkbook::getExternalLink(uint32_t externalLinkIndex) const {
+  fm_external_link_record_t rec{};
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_get_external_link(handle_, externalLinkIndex, &rec) : kBindingInvalidHandle;
+  return record_result(rc, external_link_to_val(rc == 0 ? rec : fm_external_link_record_t{}));
 }
 
 // ---- Formula text / range enumeration / display text -------------------

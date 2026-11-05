@@ -882,10 +882,10 @@ def _plural_name(ctx: Context, entry: dict) -> Optional[str]:
 
 @_owned("R5.list")
 def _rule_list(ctx: Context) -> Iterable[Violation]:
-    """A `kind: list` entry is `list<Plural>` / `list_<plural>` of its collection and exists on each binding
-    surface it lists; dropped count / at names are gone from the binding surfaces.
+    """A `kind: list` entry is `list<Plural>` / `list_<plural>` of its collection and is callable on each binding
+    surface it lists (a `Workbook` method or an exported function); dropped count / at names are gone from the
+    binding surfaces.
     """
-    found = surfaces(ctx)
     for key, entry in sorted(ctx.ledger.entries.items()):
         if not isinstance(entry, dict) or entry.get("kind") != "list":
             continue
@@ -902,9 +902,8 @@ def _rule_list(ctx: Context) -> Iterable[Violation]:
                 want = f"list_{plural}" if field == "py" else "list" + _pascal(plural)
                 if name != want:
                     yield _violation(ctx, "R5.list", surface, key, "name", f"`{name}` should be `{want}`")
-            pool = found.py.workbook if surface == "py" else found.js[surface].workbook
-            if name not in pool:
-                yield _violation(ctx, "R5.list", surface, key, "missing", f"`{name}` is not on the {surface} Workbook")
+            if name not in _callables(ctx, surface):
+                yield _violation(ctx, "R5.list", surface, key, "missing", f"`{name}` is not on the {surface} surface")
 
 
 # ---------------------------------------------------------------------------

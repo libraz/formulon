@@ -1,24 +1,6 @@
 R12	auto_filter_xml.get	method	`getSheetAutoFilterXml` is on wasm but not on native
 R12	auto_filter_xml.set	method	`setSheetAutoFilterXml` is on wasm but not on native
 R12	cell_style_xf.add	method	`addCellStyleXf` is on wasm but not on native
-R5.list	cell_phonetic_run.list.get_cell_phonetic_runs	getCellPhoneticRuns	`getCellPhoneticRuns` is dropped from the native surface
-R5.list	cf_rule.list.get_conditional_formats	getConditionalFormats	`getConditionalFormats` is dropped from the native surface
-R5.list	defined_name.get_at	definedNameAt	`definedNameAt` is dropped from the native surface
-R5.list	defined_name.get_count	definedNameCount	`definedNameCount` is dropped from the native surface
-R5.list	defined_names.list	missing	`listDefinedNames` is not on the native Workbook
-R5.list	external_link.list.get_external_links	getExternalLinks	`getExternalLinks` is dropped from the native surface
-R5.list	function_names.list	name	`listFunctionNames` should be `listFunctions`
-R5.list	locale_error_names.list	missing	`listLocaleErrorNames` is not on the native Workbook
-R5.list	passthrough.get_at	passthroughAt	`passthroughAt` is dropped from the native surface
-R5.list	passthrough.get_count	passthroughCount	`passthroughCount` is dropped from the native surface
-R5.list	passthroughs.list	missing	`listPassthroughs` is not on the native Workbook
-R5.list	pivot_cache.get_count	pivotCacheCount	`pivotCacheCount` is dropped from the native surface
-R5.list	pivot_cache.get_id_at	pivotCacheIdAt	`pivotCacheIdAt` is dropped from the native surface
-R5.list	pivot_cache_ids.list	missing	`listPivotCacheIds` is not on the native Workbook
-R5.list	pivot_cache_ids.list	name	`listPivotCacheIds` should be `listPivotCaches`
-R5.list	protected_range.list.get_protected_ranges	getProtectedRanges	`getProtectedRanges` is dropped from the native surface
-R5.list	sparkline_group.list.list_sparkline_groups	listSparklineGroups	`listSparklineGroups` is dropped from the native surface
-R5.list	validation.list.get_validations	getValidations	`getValidations` is dropped from the native surface
 R6.js	calc_on_save.get	return	`calcOnSave`: returns `NumberResult`; a boolean result is `BoolResult`
 R6.js	cell_show_phonetic.get	return	`getCellShowPhonetic`: returns `CellShowPhoneticResult`; a boolean result is `BoolResult`
 R6.js	cf_formula.evaluate	return	`evaluateConditionalFormula`: returns `EvalResult`; a boolean result is `BoolResult`
@@ -115,7 +97,6 @@ R7.js	record.person	readonly	`Person` is a result; `id` is not `readonly`
 R7.js	record.persons_result	readonly	`PersonsResult` is a result; `status` is not `readonly`
 R7.js	record.phonetic_properties_result	readonly	`PhoneticPropertiesResult` is a result; `status` is not `readonly`
 R7.js	record.phonetic_run	readonly	`PhoneticRun` is a result; `sb` is not `readonly`
-R7.js	record.phonetic_runs_result	readonly	`PhoneticRunsResult` is a result; `status` is not `readonly`
 R7.js	record.pinned_now_result	readonly	`PinnedNowResult` is a result; `status` is not `readonly`
 R7.js	record.pivot_cache_options	readonly	`PivotCacheOptions` is a result; `saveData` is not `readonly`
 R7.js	record.pivot_cache_options_result	readonly	`PivotCacheOptionsResult` is a result; `status` is not `readonly`

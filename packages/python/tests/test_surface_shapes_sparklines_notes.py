@@ -127,11 +127,11 @@ def _group(**overrides) -> SparklineGroup:
 class SparklineGroupTests(unittest.TestCase):
     def test_add_list_update_replace_remove_and_row_edit_shift(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertEqual(wb.list_sparkline_groups(0), [])
+            self.assertEqual([wb.get_sparkline_group(0, i) for i in range(wb.get_sparkline_group_count(0))], [])
             wb.add_sparkline_group(0, _group())
             wb.add_sparkline_group(0, SparklineGroup(sparklines=[Sparkline("Sheet1!A9:D9", "G9")]))
             with Workbook.load(wb.save()) as loaded:
-                groups = loaded.list_sparkline_groups(0)
+                groups = [loaded.get_sparkline_group(0, i) for i in range(loaded.get_sparkline_group_count(0))]
                 self.assertEqual(len(groups), 2)
                 first, second = groups
                 self.assertEqual(first.type, SparklineType.COLUMN)
@@ -148,23 +148,33 @@ class SparklineGroupTests(unittest.TestCase):
                 self.assertEqual((second.type, second.line_weight), (SparklineType.LINE, 0.75))
 
                 loaded.insert_rows(0, 0, 2)
-                self.assertEqual(loaded.list_sparkline_groups(0)[0].sparklines[1], Sparkline("Sheet1!A4:D4", "F4"))
+                self.assertEqual(
+                    [loaded.get_sparkline_group(0, i) for i in range(loaded.get_sparkline_group_count(0))][
+                        0
+                    ].sparklines[1],
+                    Sparkline("Sheet1!A4:D4", "F4"),
+                )
 
-                first = loaded.list_sparkline_groups(0)[0]
+                first = [loaded.get_sparkline_group(0, i) for i in range(loaded.get_sparkline_group_count(0))][0]
                 first.type = SparklineType.STACKED
                 first.high = True
                 first.date_axis = True
                 first.date_axis_ref = "Sheet1!A4:D4"
                 loaded.update_sparkline_group(0, 0, first)
-                updated = loaded.list_sparkline_groups(0)[0]
+                updated = [loaded.get_sparkline_group(0, i) for i in range(loaded.get_sparkline_group_count(0))][0]
                 self.assertEqual((updated.type, updated.high, updated.date_axis), (SparklineType.STACKED, True, True))
                 self.assertEqual(updated.date_axis_ref, "Sheet1!A4:D4")
                 self.assertEqual(len(updated.sparklines), 2)
 
                 loaded.set_sparkline_group_sparklines(0, 0, [Sparkline("Sheet1!B1:B5", "H1")])
-                self.assertEqual(loaded.list_sparkline_groups(0)[0].sparklines, [Sparkline("Sheet1!B1:B5", "H1")])
+                self.assertEqual(
+                    [loaded.get_sparkline_group(0, i) for i in range(loaded.get_sparkline_group_count(0))][
+                        0
+                    ].sparklines,
+                    [Sparkline("Sheet1!B1:B5", "H1")],
+                )
                 loaded.remove_sparkline_group(0, 0)
-                remaining = loaded.list_sparkline_groups(0)
+                remaining = [loaded.get_sparkline_group(0, i) for i in range(loaded.get_sparkline_group_count(0))]
                 self.assertEqual(len(remaining), 1)
                 self.assertEqual(remaining[0].sparklines[0].location, "G11")
 
@@ -182,7 +192,7 @@ class SparklineGroupTests(unittest.TestCase):
                     wb.add_sparkline_group(0, bad)
             with self.assertRaises(FormulonError):
                 wb.add_sparkline_group(4, SparklineGroup(sparklines=good))
-            self.assertEqual(wb.list_sparkline_groups(0), [])
+            self.assertEqual([wb.get_sparkline_group(0, i) for i in range(wb.get_sparkline_group_count(0))], [])
             with self.assertRaises(FormulonError):
                 wb.update_sparkline_group(0, 0, SparklineGroup())
             with self.assertRaises(FormulonError):

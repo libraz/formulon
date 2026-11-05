@@ -1,5 +1,5 @@
 import test from 'node:test';
-import { assert, getModule } from './smoke_support.mjs';
+import { assert, getModule, readAll } from './smoke_support.mjs';
 
 // ---- Workbook protection, protected ranges and note visibility ---------------
 
@@ -70,8 +70,10 @@ test('protected ranges add, list, update, remove and follow row edits', async ()
     }).status.ok,
   );
   const loaded = roundTrip(mod, wb);
-  const ranges = loaded.getProtectedRanges(0);
-  assert.ok(ranges.status.ok);
+  const ranges = readAll(
+    () => loaded.getProtectedRangeCount(0),
+    (i) => loaded.getProtectedRange(0, i),
+  );
   assert.equal(ranges.length, 2);
   assert.equal(ranges[0].name, 'Inputs');
   assert.deepEqual(ranges[0].ranges, [
@@ -83,20 +85,35 @@ test('protected ranges add, list, update, remove and follow row edits', async ()
   assert.equal(ranges[1].securityDescriptor, 'O:WDG:WD');
 
   assert.ok(loaded.insertRows(0, 0, 2).ok);
-  assert.deepEqual(loaded.getProtectedRanges(0)[0].ranges, [
-    { firstRow: 3, firstCol: 1, lastRow: 4, lastCol: 2 },
-    { firstRow: 6, firstCol: 4, lastRow: 6, lastCol: 4 },
-  ]);
+  assert.deepEqual(
+    readAll(
+      () => loaded.getProtectedRangeCount(0),
+      (i) => loaded.getProtectedRange(0, i),
+    )[0].ranges,
+    [
+      { firstRow: 3, firstCol: 1, lastRow: 4, lastCol: 2 },
+      { firstRow: 6, firstCol: 4, lastRow: 6, lastCol: 4 },
+    ],
+  );
   assert.ok(
     loaded.updateProtectedRange(0, 0, {
       name: 'Renamed',
       ranges: [{ firstRow: 3, firstCol: 3, lastRow: 3, lastCol: 3 }],
     }).ok,
   );
-  assert.equal(loaded.getProtectedRanges(0)[0].password, '');
+  assert.equal(
+    readAll(
+      () => loaded.getProtectedRangeCount(0),
+      (i) => loaded.getProtectedRange(0, i),
+    )[0].password,
+    '',
+  );
   assert.ok(loaded.removeProtectedRange(0, 0).ok);
   assert.deepEqual(
-    loaded.getProtectedRanges(0).map((r) => r.name),
+    readAll(
+      () => loaded.getProtectedRangeCount(0),
+      (i) => loaded.getProtectedRange(0, i),
+    ).map((r) => r.name),
     ['Totals'],
   );
   release(loaded);
@@ -130,7 +147,13 @@ test('protected range arguments are validated', async () => {
     false,
   );
   assert.equal(wb.removeProtectedRange(0, 5).ok, false);
-  assert.equal(wb.getProtectedRanges(0).length, 1);
+  assert.equal(
+    readAll(
+      () => wb.getProtectedRangeCount(0),
+      (i) => wb.getProtectedRange(0, i),
+    ).length,
+    1,
+  );
   release(wb);
 });
 
@@ -158,8 +181,20 @@ test('range-list inputs need at least one rectangle', async () => {
   assert.throws(() => wb.addProtectedRange(0, { name: 'Inputs' }), TypeError);
   assert.throws(() => wb.addValidation(0, { type: 3, formula1: '"A,B"' }), TypeError);
   assert.throws(() => wb.addCfRule(0, { type: 0, formula1: 'TRUE' }), TypeError);
-  assert.equal(wb.getConditionalFormats(0).length, 0);
+  assert.equal(
+    readAll(
+      () => wb.getCfRuleCount(0),
+      (i) => wb.getCfRule(0, i),
+    ).length,
+    0,
+  );
   assert.equal(wb.addValidation(0, { ranges: [], type: 3, formula1: '"A,B"' }).status.status, 2);
-  assert.equal(wb.getValidations(0).length, 0);
+  assert.equal(
+    readAll(
+      () => wb.getValidationCount(0),
+      (i) => wb.getValidation(0, i),
+    ).length,
+    0,
+  );
   release(wb);
 });

@@ -305,4 +305,16 @@ function findPivotCell(layout, row, col) {
   return layout.cells.find((cell) => cell.row === row && cell.col === col);
 }
 
-export { appendEmptyZipEntry, buildPivotWorkbookBytes, findPivotCell, PIVOT, readZipEntryText, VAL, zipStore };
+// Reads every element of an index-keyed collection through its count / index
+// getter pair, each element without its status.
+function readAll(count, get) {
+  const n = count();
+  assert.ok(n.status.ok, JSON.stringify(n.status));
+  return Array.from({ length: n.value }, (_, i) => {
+    const { status, ...item } = get(i);
+    assert.ok(status.ok, JSON.stringify(status));
+    return item;
+  });
+}
+
+export { appendEmptyZipEntry, buildPivotWorkbookBytes, findPivotCell, PIVOT, readAll, readZipEntryText, VAL, zipStore };

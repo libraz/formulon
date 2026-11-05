@@ -8,6 +8,7 @@ import {
   SortMethod,
   ValidationErrorStyle,
 } from '../../packages/npm/common.mjs';
+import { readAll } from './smoke_support.mjs';
 
 const ALICE = '{0A1B2C3D-0000-4000-8000-000000000001}';
 const BOB = '{0A1B2C3D-0000-4000-8000-000000000002}';
@@ -208,7 +209,10 @@ export function registerFilterValidationComments(Module, test) {
         formula2: '10',
       };
       assert.ok(wb.addValidation(0, base).status.ok);
-      const before = wb.getValidations(0);
+      const before = readAll(
+        () => wb.getValidationCount(0),
+        (i) => wb.getValidation(0, i),
+      );
       assert.equal(before.length, 1);
 
       for (const value of [256, Number.NaN, Number.POSITIVE_INFINITY, 1.5, -1, Symbol('type')]) {
@@ -217,7 +221,13 @@ export function registerFilterValidationComments(Module, test) {
           typeof value === 'symbol' ? TypeError : RangeError,
           `type=${String(value)}`,
         );
-        assert.equal(wb.getValidations(0).length, before.length);
+        assert.equal(
+          readAll(
+            () => wb.getValidationCount(0),
+            (i) => wb.getValidation(0, i),
+          ).length,
+          before.length,
+        );
       }
 
       assert.throws(
@@ -228,11 +238,23 @@ export function registerFilterValidationComments(Module, test) {
           }),
         RangeError,
       );
-      assert.deepEqual(wb.getValidations(0), before);
+      assert.deepEqual(
+        readAll(
+          () => wb.getValidationCount(0),
+          (i) => wb.getValidation(0, i),
+        ),
+        before,
+      );
 
       // Nullish enum fields keep their documented zero defaults.
       assert.ok(wb.addValidation(0, { ranges: [range(3, 0, 3, 0)] }).status.ok);
-      assert.equal(wb.getValidations(0)[1].type, 0);
+      assert.equal(
+        readAll(
+          () => wb.getValidationCount(0),
+          (i) => wb.getValidation(0, i),
+        )[1].type,
+        0,
+      );
     });
   });
 
@@ -342,7 +364,10 @@ export function registerFilterValidationComments(Module, test) {
 
   test('nested readers rethrow getter failures and reject hostile string conversions', () => {
     withWorkbook(Module, (wb) => {
-      const beforeValidationCount = wb.getValidations(0).length;
+      const beforeValidationCount = readAll(
+        () => wb.getValidationCount(0),
+        (i) => wb.getValidation(0, i),
+      ).length;
       const largeText = 'x'.repeat(1024 * 1024);
       for (let i = 0; i < 20; i += 1) {
         const input = { ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }], formula1: largeText };
@@ -358,7 +383,13 @@ export function registerFilterValidationComments(Module, test) {
           /formula2 getter should stay inside the JS reader boundary/,
           `throwing getter unexpectedly succeeded at iteration ${i}`,
         );
-        assert.equal(wb.getValidations(0).length, beforeValidationCount);
+        assert.equal(
+          readAll(
+            () => wb.getValidationCount(0),
+            (i) => wb.getValidation(0, i),
+          ).length,
+          beforeValidationCount,
+        );
       }
 
       const proxyFilter = {
@@ -380,7 +411,13 @@ export function registerFilterValidationComments(Module, test) {
         },
       };
       assert.throws(() => wb.addValidation(0, badString), TypeError);
-      assert.equal(wb.getValidations(0).length, beforeValidationCount);
+      assert.equal(
+        readAll(
+          () => wb.getValidationCount(0),
+          (i) => wb.getValidation(0, i),
+        ).length,
+        beforeValidationCount,
+      );
 
       const bytesProxy = new Proxy(new Uint8Array([1, 2, 3]), {
         get() {

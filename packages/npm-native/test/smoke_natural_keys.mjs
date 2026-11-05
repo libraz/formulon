@@ -86,7 +86,7 @@ test('theme script fonts and passthrough parts are read by key', async () => {
   assert.ok(wb.setThemeScriptFont(false, 'Zzzz', 'Test Face').ok);
   assert.deepEqual(found(wb.getThemeScriptFont(false, 'Zzzz')), { script: 'Zzzz', typeface: 'Test Face' });
   missing(wb.getThemeScriptFont(true, 'Zzzz'));
-  const path = wb.passthroughAt(0).path;
+  const path = wb.listPassthroughs()[0];
   assert.equal(found(wb.getPassthrough(path)), path);
   missing(wb.getPassthrough(`/${path}`));
   release(wb);

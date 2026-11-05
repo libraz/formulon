@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { appendEmptyZipEntry, readZipEntryText, VAL } from './smoke_support.mjs';
+import { appendEmptyZipEntry, readAll, readZipEntryText, VAL } from './smoke_support.mjs';
 
 const nestedErrorClass = (value) => (typeof value === 'symbol' ? TypeError : RangeError);
 
@@ -47,28 +47,52 @@ export function registerCellsIo(Module, test) {
     }
   });
 
-  test('setCellPhoneticRuns / getCellPhoneticRuns keep the spans apart', () => {
+  test('setCellPhoneticRuns / getCellPhoneticRun keep the spans apart', () => {
     const wb = Module.Workbook.createDefault();
     try {
       assert.ok(wb.setText(0, 0, 0, '東京都').ok);
-      assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, []);
+      assert.deepEqual(
+        readAll(
+          () => wb.getCellPhoneticRunCount(0, 0, 0),
+          (i) => wb.getCellPhoneticRun(0, 0, 0, i),
+        ),
+        [],
+      );
 
       const runs = [
         { sb: 0, eb: 2, text: 'トウキョウ' },
         { sb: 2, eb: 3, text: 'ト' },
       ];
       assert.ok(wb.setCellPhoneticRuns(0, 0, 0, runs).ok);
-      assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, runs);
+      assert.deepEqual(
+        readAll(
+          () => wb.getCellPhoneticRunCount(0, 0, 0),
+          (i) => wb.getCellPhoneticRun(0, 0, 0, i),
+        ),
+        runs,
+      );
       // The flattening getter still reports the concatenation.
       assert.equal(wb.getCellPhonetic(0, 0, 0).value, 'トウキョウト');
 
       // Writing that back through the whole-cell setter is the collapse the
       // run API exists to avoid.
       assert.ok(wb.setCellPhonetic(0, 0, 0, 'トウキョウト').ok);
-      assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, [{ sb: 0, eb: 3, text: 'トウキョウト' }]);
+      assert.deepEqual(
+        readAll(
+          () => wb.getCellPhoneticRunCount(0, 0, 0),
+          (i) => wb.getCellPhoneticRun(0, 0, 0, i),
+        ),
+        [{ sb: 0, eb: 3, text: 'トウキョウト' }],
+      );
 
       assert.ok(wb.setCellPhoneticRuns(0, 0, 0, []).ok);
-      assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, []);
+      assert.deepEqual(
+        readAll(
+          () => wb.getCellPhoneticRunCount(0, 0, 0),
+          (i) => wb.getCellPhoneticRun(0, 0, 0, i),
+        ),
+        [],
+      );
 
       assert.equal(
         wb.setCellPhoneticRuns(0, 0, 0, [
@@ -134,13 +158,22 @@ export function registerCellsIo(Module, test) {
           { sb: 2, eb: 3, text: 'ト' },
         ];
         assert.ok(wb.setCellPhoneticRuns(0, 0, 0, runs).ok);
-        const beforeRuns = wb.getCellPhoneticRuns(0, 0, 0).runs;
+        const beforeRuns = readAll(
+          () => wb.getCellPhoneticRunCount(0, 0, 0),
+          (i) => wb.getCellPhoneticRun(0, 0, 0, i),
+        );
         assert.throws(
           () => wb.setCellPhoneticRuns(0, 0, 0, [{ sb: value, eb: 2, text: '壊' }]),
           nestedErrorClass(value),
           `setCellPhoneticRuns sb=${String(value)} accepted`,
         );
-        assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, beforeRuns);
+        assert.deepEqual(
+          readAll(
+            () => wb.getCellPhoneticRunCount(0, 0, 0),
+            (i) => wb.getCellPhoneticRun(0, 0, 0, i),
+          ),
+          beforeRuns,
+        );
 
         assert.ok(wb.setCellPhoneticProperties(0, 0, 0, { fontId: 3, type: 2, alignment: 2 }).ok);
         const beforeProps = wb.getCellPhoneticProperties(0, 0, 0);
@@ -421,7 +454,10 @@ export function registerCellsIo(Module, test) {
       const loaded = Module.Workbook.load(saved.bytes);
       try {
         assert.ok(loaded.isValid(), `load failed: ${Module.getLastErrorMessage()}`);
-        const bar = loaded.getConditionalFormats(0)[0].dataBar;
+        const bar = readAll(
+          () => loaded.getCfRuleCount(0),
+          (i) => loaded.getCfRule(0, i),
+        )[0].dataBar;
         assert.equal(bar.gradient, false);
         assert.equal(bar.axisPosition, 1);
         assert.equal(bar.negativeFill.r, 255);
@@ -437,7 +473,10 @@ export function registerCellsIo(Module, test) {
             dataBar: bar,
           }).status.ok,
         );
-        const reread = loaded.getConditionalFormats(0)[1].dataBar;
+        const reread = readAll(
+          () => loaded.getCfRuleCount(0),
+          (i) => loaded.getCfRule(0, i),
+        )[1].dataBar;
         assert.equal(reread.gradient, false);
         assert.equal(reread.axisPosition, 1);
         assert.equal(reread.axisColor.b, 3);
@@ -461,7 +500,10 @@ export function registerCellsIo(Module, test) {
       );
       // The getter engages all six, so they read back as the defaults
       // rather than as absent keys.
-      const bar = wb.getConditionalFormats(0)[0].dataBar;
+      const bar = readAll(
+        () => wb.getCfRuleCount(0),
+        (i) => wb.getCfRule(0, i),
+      )[0].dataBar;
       assert.equal(bar.gradient, true);
       assert.equal(bar.axisPosition, 0);
       assert.equal(bar.negativeFill.b, 255);

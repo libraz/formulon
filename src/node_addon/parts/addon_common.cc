@@ -496,6 +496,11 @@ Napi::Array FinishListResult(Napi::Env env, Napi::Array items, fm_status_t code)
   return items;
 }
 
+Napi::Object FinishItemResult(Napi::Env env, Napi::Object item, fm_status_t code) {
+  item.Set("status", MakeStatus(env, code));
+  return item;
+}
+
 Napi::Object TranslateValue(Napi::Env env, const fm_value_t& v) {
   Napi::Object o = Napi::Object::New(env);
   o.Set("kind", Napi::Number::New(env, static_cast<int32_t>(v.kind)));

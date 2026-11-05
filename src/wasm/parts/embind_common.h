@@ -379,6 +379,15 @@ using JsListItem = fm_status_t (*)(const fm_workbook_t*, size_t, size_t, emscrip
 fm_status_t js_collect_list(const fm_workbook_t* handle, size_t sheet, JsListCount count, JsListItem item,
                             emscripten::val& list);
 
+/// Reads the element count of a count-then-`at` collection scoped to `sheet`
+/// into a `JsNumberResult`; `kBindingInvalidHandle` for a NULL `handle`.
+JsNumberResult js_count_result(const fm_workbook_t* handle, size_t sheet, JsListCount count);
+
+/// Stamps an index getter's status onto `record`, giving the `<Record> &
+/// {status}` result shape. A failed read passes the zero record, so every
+/// declared key is present on the failure path too.
+emscripten::val record_result(fm_status_t rc, emscripten::val record);
+
 /// Builds a `JsNumberResult` from `rc`, carrying `value` only on success.
 JsNumberResult number_result(fm_status_t rc, double value);
 

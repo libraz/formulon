@@ -1,23 +1,3 @@
-R5.list	cell.list.iter_cells	iter_cells	`iter_cells` is dropped from the py surface
-R5.list	cell_phonetic_run.list.get_cell_phonetic_runs	get_phonetic_runs	`get_phonetic_runs` is dropped from the py surface
-R5.list	cf_rule.list.get_conditional_formats	get_conditional_formats	`get_conditional_formats` is dropped from the py surface
-R5.list	comment.get_count	comment_count	`comment_count` is dropped from the py surface
-R5.list	external_link.list.get_external_links	get_external_links	`get_external_links` is dropped from the py surface
-R5.list	function.get_count	Workbook.function_count	`Workbook.function_count` is dropped from the py surface
-R5.list	function.get_name_at	Workbook.function_name_at	`Workbook.function_name_at` is dropped from the py surface
-R5.list	function_names.list	missing	`list_function_names` is not on the py Workbook
-R5.list	function_names.list	name	`list_function_names` should be `list_functions`
-R5.list	hyperlink.get_count	hyperlink_count	`hyperlink_count` is dropped from the py surface
-R5.list	locale_error_names.list	missing	`list_locale_error_names` is not on the py Workbook
-R5.list	merge.get_count	merge_count	`merge_count` is dropped from the py surface
-R5.list	pivot_cache.get_count	pivot_cache_count	`pivot_cache_count` is dropped from the py surface
-R5.list	pivot_cache.get_id_at	pivot_cache_id_at	`pivot_cache_id_at` is dropped from the py surface
-R5.list	pivot_cache_ids.list	missing	`list_pivot_cache_ids` is not on the py Workbook
-R5.list	pivot_cache_ids.list	name	`list_pivot_cache_ids` should be `list_pivot_caches`
-R5.list	protected_range.list.get_protected_ranges	get_protected_ranges	`get_protected_ranges` is dropped from the py surface
-R5.list	sparkline_group.list.list_sparkline_groups	list_sparkline_groups	`list_sparkline_groups` is dropped from the py surface
-R5.list	table.list.iter_tables	iter_tables	`iter_tables` is dropped from the py surface
-R5.list	validation.list.get_validations	get_validations	`get_validations` is dropped from the py surface
 R6.py	chart.add	header_column	`insert_chart`: parameter `header_column: Optional[bool]` is a boolean
 R6.py	chart.add	header_row	`insert_chart`: parameter `header_row: Optional[bool]` is a boolean
 R6.py	chart_source.set	header_column	`set_chart_source`: parameter `header_column: Optional[bool]` is a boolean

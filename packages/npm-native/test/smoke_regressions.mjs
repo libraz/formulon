@@ -1,5 +1,5 @@
 import test from 'node:test';
-import { assert, getModule } from './smoke_support.mjs';
+import { assert, getModule, readAll } from './smoke_support.mjs';
 
 test('a nested recalc from the iterative progress callback throws on serial and parallel passes', async () => {
   const mod = await getModule();
@@ -148,7 +148,7 @@ function cfvoValues(rules) {
   ];
 }
 
-test('CFVO value strings survive getConditionalFormats and a save/load cycle', async () => {
+test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
   // Each CFVO `value` crosses the C ABI as a borrowed `const char*`. A
   // store that relocates while the later thresholds are pulled publishes
   // a pointer into freed bytes, so the strings come back wrong or empty
@@ -164,8 +164,10 @@ test('CFVO value strings survive getConditionalFormats and a save/load cycle', a
       assert.ok(added.status.ok, `addConditionalFormat type=${rule.type}: ${JSON.stringify(added.status)}`);
     }
 
-    const inSession = wb.getConditionalFormats(0);
-    assert.ok(inSession.status.ok, JSON.stringify(inSession.status));
+    const inSession = readAll(
+      () => wb.getCfRuleCount(0),
+      (i) => wb.getCfRule(0, i),
+    );
     assert.equal(inSession.length, 3);
     assert.deepEqual(cfvoValues(inSession), EXPECTED_CFVO_VALUES);
     const byType = new Map(inSession.map((rule) => [rule.type, rule]));
@@ -192,7 +194,10 @@ test('CFVO value strings survive getConditionalFormats and a save/load cycle', a
 
   const reloaded = mod.Workbook.load(bytes);
   try {
-    const rules = reloaded.getConditionalFormats(0);
+    const rules = readAll(
+      () => reloaded.getCfRuleCount(0),
+      (i) => reloaded.getCfRule(0, i),
+    );
     assert.equal(rules.length, 3);
     assert.deepEqual(cfvoValues(rules), EXPECTED_CFVO_VALUES);
   } finally {
@@ -241,7 +246,10 @@ test('addValidation defaults allowBlank to false', async () => {
         formula1: '"a,b"',
       }).status.ok,
     );
-    const list = wb.getValidations(0);
+    const list = readAll(
+      () => wb.getValidationCount(0),
+      (i) => wb.getValidation(0, i),
+    );
     assert.equal(list.length, 1);
     assert.equal(list[0].allowBlank, false);
   } finally {

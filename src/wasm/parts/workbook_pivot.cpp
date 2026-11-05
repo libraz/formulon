@@ -48,24 +48,27 @@ bool build_data_field_spec_checked(JsNarrowNumericReader& reader, const emscript
 
 // ---- PivotCache --------------------------------------------------------
 
-JsNumberResult JsWorkbook::pivotCacheCount() const {
-  if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
-  }
-  std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_get_pivot_cache_count(handle_, &count);
-  return number_result(rc, static_cast<double>(count));
+namespace {
+
+fm_status_t count_pivot_caches(const fm_workbook_t* handle, size_t, size_t* out) {
+  return fm_workbook_get_pivot_cache_count(handle, out);
 }
 
-JsAddStyleResult JsWorkbook::pivotCacheIdAt(uint32_t idx) const {
-  JsAddStyleResult r;
-  if (handle_ == nullptr) {
-    r.status = invalid_handle_status();
-    return r;
+fm_status_t pivot_cache_item(const fm_workbook_t* handle, size_t, size_t index, emscripten::val* out) {
+  uint32_t cache_id = 0;
+  const fm_status_t rc = fm_workbook_get_pivot_cache_id_at(handle, index, &cache_id);
+  if (rc == 0) {
+    *out = emscripten::val(cache_id);
   }
-  uint32_t out = 0;
-  const fm_status_t rc = fm_workbook_get_pivot_cache_id_at(handle_, idx, &out);
-  return index_result(rc, out);
+  return rc;
+}
+
+}  // namespace
+
+emscripten::val JsWorkbook::listPivotCaches() const {
+  emscripten::val arr = emscripten::val::array();
+  arr.set("status", status_from_rc(js_collect_list(handle_, 0U, &count_pivot_caches, &pivot_cache_item, arr)));
+  return arr;
 }
 
 JsAddStyleResult JsWorkbook::pivotCacheCreate(uint32_t requestedId) {

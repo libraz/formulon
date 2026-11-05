@@ -299,7 +299,7 @@ TEST(FormulonCApiStyles, NullInputRecordRejected) {
   std::size_t idx = 0;
   uint32_t argb = 0;
   int32_t resolution = 0;
-  uint32_t merge_count = 0;
+  uint32_t merges_found = 0;
   EXPECT_EQ(fm_workbook_add_font(wb.handle, nullptr, &idx), kNull);
   EXPECT_EQ(fm_workbook_set_font(wb.handle, 0, nullptr), kNull);
   EXPECT_EQ(fm_workbook_set_default_font(wb.handle, nullptr), kNull);
@@ -313,7 +313,7 @@ TEST(FormulonCApiStyles, NullInputRecordRejected) {
   EXPECT_EQ(fm_sheet_add_hyperlink(wb.handle, 0, nullptr), kNull);
   EXPECT_EQ(fm_sheet_add_merge(wb.handle, 0, nullptr), kNull);
   EXPECT_EQ(fm_sheet_remove_merge(wb.handle, 0, nullptr), kNull);
-  EXPECT_EQ(fm_sheet_get_merges_in_range(wb.handle, 0, nullptr, nullptr, 0, &merge_count), kNull);
+  EXPECT_EQ(fm_sheet_get_merges_in_range(wb.handle, 0, nullptr, nullptr, 0, &merges_found), kNull);
   EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, nullptr, ignored_index()), kNull);
 }
 

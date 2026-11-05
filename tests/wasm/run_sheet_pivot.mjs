@@ -90,23 +90,24 @@ export function registerSheetPivot(Module, test) {
   test('setDefinedName adds, updates, and removes', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      assert.equal(wb.definedNameCount().value, 0);
+      assert.equal(wb.listDefinedNames().length, 0);
       assert.ok(wb.setDefinedName('Pi', '=3.14').ok);
-      assert.equal(wb.definedNameCount().value, 1);
-      const a = wb.definedNameAt(0);
-      assert.ok(a.status.ok);
+      const listed = wb.listDefinedNames();
+      assert.ok(listed.status.ok);
+      assert.equal(listed.length, 1);
+      const a = listed[0];
       assert.equal(a.name, 'Pi');
       // The setter drops the leading '=', as the file form carries none.
       assert.equal(a.formula, '3.14');
 
       assert.ok(wb.setDefinedName('PI', '=3.14159').ok);
-      assert.equal(wb.definedNameCount().value, 1);
-      const b = wb.definedNameAt(0);
+      assert.equal(wb.listDefinedNames().length, 1);
+      const b = wb.listDefinedNames()[0];
       assert.equal(b.name, 'Pi'); // authored case preserved
       assert.equal(b.formula, '3.14159');
 
       assert.ok(wb.setDefinedName('Pi', '').ok);
-      assert.equal(wb.definedNameCount().value, 0);
+      assert.equal(wb.listDefinedNames().length, 0);
     } finally {
       wb.delete();
     }
@@ -139,13 +140,11 @@ export function registerSheetPivot(Module, test) {
   test('failed entry lookups omit optional payload fields', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      for (const entry of [wb.getCellAt(99, 0), wb.definedNameAt(0), wb.getTable(0), wb.passthroughAt(0)]) {
+      for (const entry of [wb.getCellAt(99, 0), wb.getTable(0)]) {
         assert.equal(entry.status.ok, false);
       }
       assert.ok(!('value' in wb.getCellAt(99, 0)));
-      assert.ok(!('name' in wb.definedNameAt(0)));
       assert.ok(!('name' in wb.getTable(0)));
-      assert.ok(!('path' in wb.passthroughAt(0)));
     } finally {
       wb.delete();
     }

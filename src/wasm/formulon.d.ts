@@ -442,7 +442,7 @@ export interface CellEntry {
   value?: Value;
 }
 
-/** A defined name, as `Workbook.getDefinedName` returns it. */
+/** A defined name, as `Workbook.getDefinedName` and `Workbook.listDefinedNames` return it. */
 export interface DefinedName {
   name: string;
   /** Formula text spelled as `getFormula` spells formulas. */
@@ -453,20 +453,6 @@ export interface DefinedName {
   comment: string;
   /** Whether the name is hidden from the Name Manager. */
   hidden: boolean;
-}
-
-/** Return type of `Workbook.definedNameAt(idx)`. */
-export interface DefinedNameEntry {
-  status: Status;
-  name?: string;
-  /** Formula text spelled as `getFormula` spells formulas. */
-  formula?: string;
-  /** -1 for workbook scope; otherwise a 0-based sheet index. */
-  localSheetId?: number;
-  /** The note Excel shows in the Name Manager; empty when none. */
-  comment?: string;
-  /** Whether the name is hidden from the Name Manager. */
-  hidden?: boolean;
 }
 
 /** A table column's totals-row function (`ST_TotalsRowFunction`). */
@@ -621,12 +607,6 @@ export interface TableStyleDefaultsResult {
   status: Status;
   tableStyle: string;
   pivotStyle: string;
-}
-
-/** Return type of `Workbook.passthroughAt(idx)`. */
-export interface PassthroughEntry {
-  status: Status;
-  path?: string;
 }
 
 /** PivotTable layout cell kind. Mirrors `fm_pivot_cell_kind_t`. */
@@ -1761,7 +1741,7 @@ export interface SheetCommentEntry extends Comment {
 }
 
 /** One sheet `<dataValidation>` block as returned by
- *  `getValidations(sheet)`.
+ *  `getValidation(sheet, validationIndex)`.
  *
  *  Field semantics (matches OOXML `dataValidations.xsd`):
  *    * `type`        — 0 none, 1 whole, 2 decimal, 3 list, 4 date,
@@ -2020,7 +2000,7 @@ export interface FormatReferenceOptions {
   absolute?: boolean;
 }
 
-/** One CF rule as returned by `getConditionalFormats(sheet)`.
+/** One CF rule as returned by `getCfRule(sheet, cfRuleIndex)`.
  *
  *  `type` ordinal mirrors `formulon::cf::RuleType`:
  *    0 expression, 1 cellIs, 2 colorScale, 3 dataBar, 4 iconSet,
@@ -2443,10 +2423,34 @@ export interface PhoneticRun {
   text: string;
 }
 
-/** Return type of `Workbook.getCellPhoneticRuns(sheet, row, col)`. */
-export interface PhoneticRunsResult {
-  status: Status;
-  runs: PhoneticRun[];
+/** Return type of `Workbook.getCellPhoneticRun(sheet, row, col, phoneticRunIndex)`. When `!status.ok` the run fields are unspecified. */
+export interface PhoneticRunResult extends PhoneticRun {
+  readonly status: Status;
+}
+
+/** Return type of `Workbook.getCfRule(sheet, cfRuleIndex)`. When `!status.ok` the rule fields are unspecified. */
+export interface ConditionalFormatResult extends ConditionalFormatEntry {
+  readonly status: Status;
+}
+
+/** Return type of `Workbook.getValidation(sheet, validationIndex)`. When `!status.ok` the rule fields are unspecified. */
+export interface DataValidationResult extends DataValidation {
+  readonly status: Status;
+}
+
+/** Return type of `Workbook.getProtectedRange(sheet, protectedRangeIndex)`. When `!status.ok` the range fields are unspecified. */
+export interface ProtectedRangeResult extends ProtectedRange {
+  readonly status: Status;
+}
+
+/** Return type of `Workbook.getSparklineGroup(sheet, sparklineGroupIndex)`. When `!status.ok` the group fields are unspecified. */
+export interface SparklineGroupResult extends SparklineGroup {
+  readonly status: Status;
+}
+
+/** Return type of `Workbook.getExternalLink(externalLinkIndex)`. When `!status.ok` the record fields are unspecified. */
+export interface ExternalLinkResult extends ExternalLinkRecord {
+  readonly status: Status;
 }
 
 /** How a cell's phonetic guide renders (OOXML `<phoneticPr>`). `fontId`
@@ -2551,7 +2555,7 @@ export enum ExternalLinkKind {
   Dde = 3,
 }
 
-/** Element type returned by `Workbook.getExternalLinks()`. Mirrors
+/** Record returned by `Workbook.getExternalLink(externalLinkIndex)`. Mirrors
  *  `formulon::io::ExternalLinkRecord`. The body part itself is not
  *  exposed (it round-trips through the OOXML passthrough mechanism);
  *  this surface only enumerates the cross-workbook references and
@@ -3145,7 +3149,7 @@ export interface AutoFilterEvalResult {
 
 /** Result of `Workbook.validateValue`. `hasRule` is false when no rule covers
  *  the cell, and `valid` is then true. Otherwise `ruleIndex` indexes
- *  `getValidations` and `errorStyle` is a `ValidationErrorStyle`. A failed
+ *  `getValidation` and `errorStyle` is a `ValidationErrorStyle`. A failed
  *  call reports `hasRule` and `valid` false and the numbers 0. */
 export interface ValidationOutcomeResult {
   status: Status;
@@ -4130,9 +4134,11 @@ export interface Workbook {
   getLambdaText(sheet: number, row: number, col: number): LambdaTextResult;
   /** Returns the cell's OOXML phonetic guide (`<rPh>`), or an empty string. */
   getCellPhonetic(sheet: number, row: number, col: number): StringResult;
-  /** Returns the cell's `<rPh>` blocks with their spans. `getCellPhonetic`
-   *  returns the same readings concatenated, without the spans. */
-  getCellPhoneticRuns(sheet: number, row: number, col: number): PhoneticRunsResult;
+  /** Number of `<rPh>` blocks on the cell; 0 for an unannotated cell. */
+  getCellPhoneticRunCount(sheet: number, row: number, col: number): NumberResult;
+  /** Reads the cell's `phoneticRunIndex`-th `<rPh>` block with its span. `getCellPhonetic`
+   *  returns the readings concatenated, without the spans. */
+  getCellPhoneticRun(sheet: number, row: number, col: number, phoneticRunIndex: number): PhoneticRunResult;
   /** Returns how the cell's guide renders. A cell with no annotation
    *  reports the all-zero triple. */
   getCellPhoneticProperties(sheet: number, row: number, col: number): PhoneticPropertiesResult;
@@ -4310,10 +4316,8 @@ export interface Workbook {
   /** Reads the `idx`-th counted coordinate, `idx` in `[0, cellCount)`, ordered by `(row, col)` ascending. */
   getCellAt(sheet: number, idx: number): CellEntry;
 
-  /** Number of defined names, workbook- and sheet-scoped alike. */
-  definedNameCount(): NumberResult;
-  /** Reads the `idx`-th defined name with its scope; `kInvalidArgument` when `idx` is out of range. */
-  definedNameAt(idx: number): DefinedNameEntry;
+  /** Lists the defined names, workbook- and sheet-scoped alike, in file order. */
+  listDefinedNames(): ListResult<DefinedName>;
   /** Reads the defined name `name` (ASCII case-insensitive) in scope `localSheetId` (-1 for workbook scope, else a
    *  0-based sheet index); `value` is `null` when the scope has no such name. */
   getDefinedName(name: string, localSheetId: number): OptionalResult<DefinedName>;
@@ -4395,7 +4399,7 @@ export interface Workbook {
   evaluateTableAutoFilter(table: number): AutoFilterEvalResult;
 
   /** Checks `value` against the validation rule covering `(row, col)` without
-   *  storing it. The first rule in `getValidations` order wins on overlap. */
+   *  storing it. The first rule in `getValidation` index order wins on overlap. */
   validateValue(sheet: number, row: number, col: number, value: Value): ValidationOutcomeResult;
   /** Enumerates populated cells whose value fails their validation rule, in
    *  row-major order, one page at a time; paging as `getCellsInRange`. */
@@ -4481,9 +4485,11 @@ export interface Workbook {
   /** Recomputes every data table now, whatever the calc mode. `recalc()` does the same after a pass that had a dirty cell or a volatile formula, except under `CalcMode.AutoNoTable`, which leaves it to this call; `recalcViewport()` never computes tables. */
   recalcDataTables(): Status;
 
-  // Sparkline groups. A group is addressed by its position in `listSparklineGroups`; adding or removing one shifts later indices.
-  /** Lists the sheet's sparkline groups in document order with their sparklines. */
-  listSparklineGroups(sheet: number): ListResult<SparklineGroup>;
+  // Sparkline groups. A group is addressed by its position in document order; adding or removing one shifts later indices.
+  /** Number of sparkline groups on the sheet. */
+  getSparklineGroupCount(sheet: number): NumberResult;
+  /** Reads the `sparklineGroupIndex`-th sparkline group in document order with its sparklines. */
+  getSparklineGroup(sheet: number, sparklineGroupIndex: number): SparklineGroupResult;
   /** Appends a group; `spec.sparklines` must hold at least one sparkline. */
   addSparklineGroup(sheet: number, spec: SparklineGroupInput): IndexResult;
   /** Rewrites the modelled attributes, colours and date range of group `index`; its sparklines and unmodelled XML are kept. */
@@ -4551,10 +4557,8 @@ export interface Workbook {
     headerColumn?: boolean,
   ): Status;
 
-  /** Number of OOXML parts the reader carried through unchanged. */
-  passthroughCount(): NumberResult;
-  /** Reads the path of the `idx`-th passthrough part; `kInvalidArgument` when `idx` is out of range. */
-  passthroughAt(idx: number): PassthroughEntry;
+  /** Lists the paths of the OOXML parts the reader carried through unchanged. */
+  listPassthroughs(): ListResult<string>;
   /** Reports whether a passthrough part sits at `path` (no leading `/`); `value` is the path, or `null`. */
   getPassthrough(path: string): OptionalResult<string>;
 
@@ -4564,11 +4568,8 @@ export interface Workbook {
   getPivotLayout(sheet: number, pivotIndex: number): PivotLayoutResult;
 
   // ---- PivotCache mutation -----------------------------------------------
-  /** Returns the number of pivot caches owned by the workbook. */
-  pivotCacheCount(): NumberResult;
-  /** Returns `{ status, index: cacheId }` for the cache at flat
-   *  index `idx`. */
-  pivotCacheIdAt(idx: number): IndexResult;
+  /** Lists the cache ids of the pivot caches the workbook owns. */
+  listPivotCaches(): ListResult<number>;
   /** Creates a new empty pivot cache. Pass `0` for `requestedId` to
    *  auto-assign. Returns `{ status, index: cacheId }`. */
   addPivotCache(requestedId: number): IndexResult;
@@ -5258,13 +5259,14 @@ export interface Workbook {
    *  applied. */
   getEffectiveStyle(sheet: number, row: number, col: number): EffectiveStyleResult;
 
-  /** Returns every external-link record carried by the workbook in
-   *  `<externalReferences>` document order. Empty for fresh workbooks
+  /** Number of external-link records carried by the workbook. 0 for fresh workbooks
    *  and any package whose source archive had no `<externalReferences>`
    *  block. A formula, name, conditional-format rule or data validation that names an unregistered
    *  book (bracket or path spelling) appends a record without renumbering; a book already present,
    *  in any letter case, adds none. */
-  getExternalLinks(): ListResult<ExternalLinkRecord>;
+  getExternalLinkCount(): NumberResult;
+  /** Reads the `externalLinkIndex`-th external-link record in `<externalReferences>` document order. */
+  getExternalLink(externalLinkIndex: number): ExternalLinkResult;
 
   /** Adds a merge range to `sheet`. */
   addMerge(sheet: number, range: CellRect): Status;
@@ -5297,8 +5299,10 @@ export interface Workbook {
   getWorkbookProtection(): WorkbookProtectionResult;
   /** Replaces the modelled `<workbookProtection>` attributes. An all-empty record removes the element. */
   setWorkbookProtection(protection: WorkbookProtection): Status;
-  /** Returns the protected ranges of `sheet` in file order. */
-  getProtectedRanges(sheet: number): ListResult<ProtectedRange>;
+  /** Number of protected ranges on `sheet`. */
+  getProtectedRangeCount(sheet: number): NumberResult;
+  /** Reads the `protectedRangeIndex`-th protected range of `sheet` in file order. */
+  getProtectedRange(sheet: number, protectedRangeIndex: number): ProtectedRangeResult;
   /** Appends a protected range. `name` must be non-empty and unique on the sheet; `ranges` must hold at least one rectangle. */
   addProtectedRange(sheet: number, range: ProtectedRange): IndexResult;
   /** Replaces protected range `index`. */
@@ -5337,11 +5341,11 @@ export interface Workbook {
   /** Reads the hyperlink whose range starts at `(row, col)`; `value` is `null` when none does. */
   getHyperlink(sheet: number, row: number, col: number): OptionalResult<Hyperlink>;
 
-  /** Returns every data-validation rule on `sheet` in storage order.
-   *  Each rule's `ranges` mirrors the OOXML `<dataValidation sqref=...>`
-   *  cell-range list; the rule itself surfaces its raw OOXML payload
-   *  (the engine does not yet evaluate validation rules). */
-  getValidations(sheet: number): ListResult<DataValidation>;
+  /** Number of data-validation rules on `sheet`. */
+  getValidationCount(sheet: number): NumberResult;
+  /** Reads the `validationIndex`-th data-validation rule on `sheet` in storage order. Its
+   *  `ranges` mirrors the OOXML `<dataValidation sqref=...>` cell-range list. */
+  getValidation(sheet: number, validationIndex: number): DataValidationResult;
   /** Appends a data-validation rule to `sheet`. A non-empty `formula1` / `formula2`
    *  that does not parse is rejected with `kParserUnexpectedToken`. */
   addValidation(sheet: number, validation: DataValidationInput): IndexResult;
@@ -5351,14 +5355,14 @@ export interface Workbook {
   /** Drops every validation rule on `sheet`. */
   clearValidations(sheet: number): Status;
 
-  /** Returns every CF rule on `sheet` in flattened priority order. The
-   *  returned entries borrow rule ids from the engine's storage; treat
-   *  them as immutable view objects. */
-  getConditionalFormats(sheet: number): ListResult<ConditionalFormatEntry>;
+  /** Number of CF rules on `sheet`. */
+  getCfRuleCount(sheet: number): NumberResult;
+  /** Reads the `cfRuleIndex`-th CF rule on `sheet` in flattened priority order. */
+  getCfRule(sheet: number, cfRuleIndex: number): ConditionalFormatResult;
   /** Appends a new single-rule `<conditionalFormatting>` block to
    *  `sheet`, including visual rules when their payload object is supplied.
    *  `index` is the new rule's position in the sheet's flattened CF rule
-   *  sequence (the same indexing `getConditionalFormats` and
+   *  sequence (the same indexing `getCfRule` and
    *  `removeConditionalFormatAt` use); it stays valid until a subsequent
    *  add/remove/clear mutation on the same sheet renumbers the sequence.
    *  A non-empty `formula1` / `formula2` that does not parse is rejected
@@ -5417,6 +5421,8 @@ export interface Workbook {
   /** Returns the locale facts (separators, boolean names, date order,
    *  currency, error names) of `profileId`. */
   getLocaleFacts(profileId: ExcelProfileId): LocaleFactsResult;
+  /** Lists the error names of `profileId` in error-code order. */
+  listLocaleErrorNames(profileId: ExcelProfileId): ListResult<LocaleErrorName>;
   /** Compares two texts under `profileId` and returns the sign of the
    *  result in `order`. `strength` picks the fold (see
    *  {@link CollationStrength}); it is a text comparison, not Excel's `=`

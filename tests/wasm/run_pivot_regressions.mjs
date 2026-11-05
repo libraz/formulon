@@ -277,20 +277,46 @@ export function registerPivotRegressions(Module, test) {
   test('list getters expose failures through their array status', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      for (const list of [
-        wb.listMerges(99),
-        wb.listComments(99),
-        wb.listHyperlinks(99),
-        wb.getValidations(99),
-        wb.getConditionalFormats(99),
-      ]) {
+      for (const list of [wb.listMerges(99), wb.listComments(99), wb.listHyperlinks(99)]) {
         assert.ok(Array.isArray(list));
         assert.equal(list.length, 0);
         assert.equal(list.status.ok, false);
       }
-      const links = wb.getExternalLinks();
-      assert.ok(Array.isArray(links));
-      assert.equal(links.status.ok, true);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('index getters report a bad sheet or index through their status', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      for (const count of [
+        wb.getValidationCount(99),
+        wb.getCfRuleCount(99),
+        wb.getProtectedRangeCount(99),
+        wb.getSparklineGroupCount(99),
+        wb.getCellPhoneticRunCount(99, 0, 0),
+      ]) {
+        assert.equal(count.status.ok, false);
+      }
+      assert.deepEqual(
+        [wb.getValidationCount(0), wb.getCfRuleCount(0), wb.getExternalLinkCount()].map((r) => [r.status.ok, r.value]),
+        [
+          [true, 0],
+          [true, 0],
+          [true, 0],
+        ],
+      );
+      for (const entry of [
+        wb.getValidation(0, 0),
+        wb.getCfRule(0, 0),
+        wb.getProtectedRange(0, 0),
+        wb.getSparklineGroup(0, 0),
+        wb.getExternalLink(0),
+        wb.getCellPhoneticRun(0, 0, 0, 0),
+      ]) {
+        assert.equal(entry.status.ok, false);
+      }
     } finally {
       wb.delete();
     }

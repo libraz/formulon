@@ -32,7 +32,6 @@ from inspect import isgeneratorfunction
 from typing import (
     Any,
     Dict,
-    Iterator,
     List,
     Literal,
     Mapping,
@@ -449,8 +448,9 @@ class Value:
 # ---------------------------------------------------------------------------
 
 
-class Cell(NamedTuple):
-    """One row of ``Workbook.iter_cells()``."""
+@dataclass(frozen=True)
+class Cell:
+    """One written coordinate, as ``Workbook.get_cell_at()`` returns it."""
 
     row: int
     col: int
@@ -484,8 +484,9 @@ class TableColumn(NamedTuple):
     totals_row_formula: str = ""
 
 
-class Table(NamedTuple):
-    """One row of ``Workbook.iter_tables()``.
+@dataclass(frozen=True)
+class Table:
+    """One table, as ``Workbook.get_table()`` returns it.
 
     ``style_name`` may name a custom style (:meth:`Workbook.get_table_style`);
     ``has_style_info`` is false without ``<tableStyleInfo>``, when the four
@@ -5143,15 +5144,13 @@ class Workbook:
             )
             _check(status, "fm_sheet_set_cell_phonetic_runs")
 
-    def get_phonetic_runs(self, sheet: int, row: int, col: int) -> List[PhoneticRun]:
-        """Return the cell's ``<rPh>`` blocks, spans included.
+    def get_cell_phonetic_run_count(self, sheet: int, row: int, col: int) -> int:
+        """Return the number of ``<rPh>`` blocks on the cell; 0 for an unannotated cell.
 
-        ``sheet``, ``row`` and ``col`` are all 0-based. An unannotated cell
-        yields an empty list. :meth:`get_cell_phonetic` returns the same readings
-        concatenated, without the spans.
+        ``sheet``, ``row`` and ``col`` are all 0-based.
         """
         h = self._require()
-        count = _read_count(
+        return _read_count(
             LIB.fm_sheet_get_cell_phonetic_run_count,
             h,
             _uint(sheet, "sheet_index"),
@@ -5159,33 +5158,32 @@ class Workbook:
             _uint(col, "col"),
             default_op="fm_sheet_get_cell_phonetic_run_count",
         )
-        out: List[PhoneticRun] = []
+
+    def get_cell_phonetic_run(self, sheet: int, row: int, col: int, index: int) -> PhoneticRun:
+        """Return the cell's ``index``-th ``<rPh>`` block with its span.
+
+        :meth:`get_cell_phonetic` returns the readings concatenated, without the spans.
+        """
+        h = self._require()
         with _ArgScope() as scope:
             run_ptr = scope.struct(S.PHONETIC_RUN)
-            for i in range(count):
-                S.zero_struct(LIB, S.PHONETIC_RUN, run_ptr)
-                _check(
-                    LIB.fm_sheet_get_cell_phonetic_run(
-                        h,
-                        _uint(sheet, "sheet_index"),
-                        _uint(row, "row"),
-                        _uint(col, "col"),
-                        _uint(i, "run_index"),
-                        run_ptr,
-                    ),
-                    "fm_sheet_get_cell_phonetic_run",
-                )
-                fields = S.PHONETIC_RUN.unpack(LIB, run_ptr)
-                # Decoded before the next read: the text points into the
-                # handle's scratch, which every read refreshes.
-                out.append(
-                    PhoneticRun(
-                        sb=fields["sb"],
-                        eb=fields["eb"],
-                        text=LIB.read_cstr(fields["text"]) if fields["text"] else "",
-                    )
-                )
-        return out
+            _check(
+                LIB.fm_sheet_get_cell_phonetic_run(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(row, "row"),
+                    _uint(col, "col"),
+                    _uint(index, "run_index"),
+                    run_ptr,
+                ),
+                "fm_sheet_get_cell_phonetic_run",
+            )
+            fields = S.PHONETIC_RUN.unpack(LIB, run_ptr)
+            return PhoneticRun(
+                sb=fields["sb"],
+                eb=fields["eb"],
+                text=LIB.read_cstr(fields["text"]) if fields["text"] else "",
+            )
 
     def set_cell_phonetic_properties(self, sheet: int, row: int, col: int, properties: PhoneticProperties) -> None:
         """Set how the cell's phonetic guide renders.
@@ -5539,47 +5537,41 @@ class Workbook:
             )
 
     # -- Iteration ---------------------------------------------------------
-    def iter_cells(self, sheet: int) -> Iterator[Cell]:
-        """Iterate over every written coordinate on ``sheet``.
+    def get_cell_count(self, sheet: int) -> int:
+        """Return the number of written coordinates on ``sheet``.
 
-        Yields each cell set by a value, formula or format setter (clearing
-        keeps the slot) and each spill phantom, sorted by ``(row, col)``
-        ascending; columns that were never written are skipped. Borrowed
-        text pointers are decoded eagerly per yielded item. Do not mutate
-        the workbook while consuming this iterator: the C ABI invalidates
-        a cell enumeration after a workbook mutation.
+        Counts each cell set by a value, formula or format setter (clearing
+        keeps the slot) and each spill phantom. A workbook mutation
+        invalidates the enumeration :meth:`get_cell_at` walks.
         """
         h = self._require()
-        n = _read_count(LIB.fm_sheet_get_cell_count, h, _uint(sheet, "sheet_index"))
-        # Scratch: row(4) + col(4) + formula_ptr(4) + value(16) = 28 bytes.
-        # Allocate them as separate slots so the ABI's
-        # individual out-parameter contract is respected.
-        with _ArgScope() as scope:
-            row_ptr = scope.alloc(4)
-            col_ptr = scope.alloc(4)
-            formula_ptr = scope.alloc(4)
-            value_ptr = scope.alloc(fm_value_t_size)
-            LIB.write_bytes(row_ptr, b"\x00\x00\x00\x00")
-            LIB.write_bytes(col_ptr, b"\x00\x00\x00\x00")
-            LIB.write_bytes(formula_ptr, b"\x00\x00\x00\x00")
-            for i in range(n):
-                h = self._check_live()
-                status = LIB.fm_sheet_get_cell_at(
-                    h, _uint(sheet, "sheet_index"), _uint(i, "idx"), row_ptr, col_ptr, formula_ptr, value_ptr
-                )
-                _check(status, "fm_sheet_get_cell_at")
-                row = LIB.read_u32(row_ptr)
-                col = LIB.read_u32(col_ptr)
-                formula_addr = LIB.read_u32(formula_ptr)
-                formula = LIB.read_cstr(formula_addr) if formula_addr else None
-                value = Value._from_wasm(value_ptr)
-                yield Cell(row=row, col=col, formula=formula, value=value)
+        return _read_count(LIB.fm_sheet_get_cell_count, h, _uint(sheet, "sheet_index"))
 
-    def list_defined_names(self) -> Iterator[DefinedName]:
-        """Iterate over every defined name in declaration order."""
+    def get_cell_at(self, sheet: int, index: int) -> Cell:
+        """Return the ``index``-th written coordinate on ``sheet``, sorted by ``(row, col)`` ascending."""
+        h = self._require()
+        with _ArgScope() as scope:
+            row_ptr = scope.out_ptr()
+            col_ptr = scope.out_ptr()
+            formula_ptr = scope.out_ptr()
+            value_ptr = scope.alloc(fm_value_t_size)
+            status = LIB.fm_sheet_get_cell_at(
+                h, _uint(sheet, "sheet_index"), _uint(index, "idx"), row_ptr, col_ptr, formula_ptr, value_ptr
+            )
+            _check(status, "fm_sheet_get_cell_at")
+            formula_addr = LIB.read_u32(formula_ptr)
+            return Cell(
+                row=LIB.read_u32(row_ptr),
+                col=LIB.read_u32(col_ptr),
+                formula=LIB.read_cstr(formula_addr) if formula_addr else None,
+                value=Value._from_wasm(value_ptr),
+            )
+
+    def list_defined_names(self) -> List[DefinedName]:
+        """Return every defined name in declaration order."""
         h = self._require()
         n = _read_count(LIB.fm_workbook_get_defined_name_count, h)
-        # Scratch is hoisted out of the loop (as in iter_cells): each
+        # Scratch is hoisted out of the loop: each
         # LIB.alloc/free is a locked WASM call, so per-item slots would
         # make the walk cost O(n) allocator round-trips on top of the
         # unavoidable O(n) ABI reads.
@@ -5589,8 +5581,8 @@ class Workbook:
             local_sheet_ptr = scope.out_ptr()
             comment_ptr = scope.out_ptr()
             hidden_ptr = scope.out_ptr()
+            out: List[DefinedName] = []
             for i in range(n):
-                h = self._check_live()
                 status = LIB.fm_workbook_get_defined_name_at(h, _uint(i, "idx"), name_ptr, formula_ptr, local_sheet_ptr)
                 _check(status, "fm_workbook_get_defined_name_at")
                 _check(
@@ -5600,19 +5592,25 @@ class Workbook:
                 name = LIB.read_cstr(LIB.read_u32(name_ptr))
                 formula = LIB.read_cstr(LIB.read_u32(formula_ptr))
                 local_sheet_id = LIB.read_i32(local_sheet_ptr)
-                yield DefinedName(
-                    name=name,
-                    formula=formula,
-                    local_sheet_id=local_sheet_id,
-                    comment=LIB.read_cstr(LIB.read_u32(comment_ptr)) or "",
-                    hidden=bool(LIB.read_i32(hidden_ptr)),
+                out.append(
+                    DefinedName(
+                        name=name,
+                        formula=formula,
+                        local_sheet_id=local_sheet_id,
+                        comment=LIB.read_cstr(LIB.read_u32(comment_ptr)) or "",
+                        hidden=bool(LIB.read_i32(hidden_ptr)),
+                    )
                 )
+        return out
 
-    def iter_tables(self) -> Iterator[Table]:
-        """Iterate over every table in declaration order."""
+    def get_table_count(self) -> int:
+        """Return the number of tables in the workbook."""
         h = self._require()
-        n = _read_count(LIB.fm_workbook_get_table_count, h)
-        # Scratch hoisted out of the loop; see iter_defined_names.
+        return _read_count(LIB.fm_workbook_get_table_count, h)
+
+    def get_table(self, table_index: int) -> Table:
+        """Return the ``table_index``-th table in declaration order."""
+        h = self._require()
         with _ArgScope() as scope:
             name_ptr = scope.out_ptr()
             display_ptr = scope.out_ptr()
@@ -5620,47 +5618,52 @@ class Workbook:
             sheet_ptr = scope.out_ptr()
             info_ptr = scope.struct(S.TABLE_INFO)
             column_ptr = scope.struct(S.TABLE_COLUMN_INFO)
-            for i in range(n):
-                h = self._check_live()
-                status = LIB.fm_workbook_get_table(h, _uint(i, "idx"), name_ptr, display_ptr, rect_ptr, sheet_ptr)
-                _check(status, "fm_workbook_get_table")
-                name = LIB.read_cstr(LIB.read_u32(name_ptr))
-                display = LIB.read_cstr(LIB.read_u32(display_ptr))
-                rect = _decode_cell_rect_at(rect_ptr)
-                sheet = LIB.read_u32(sheet_ptr)
-                S.zero_struct(LIB, S.TABLE_INFO, info_ptr)
-                _check(LIB.fm_workbook_get_table_info(h, _uint(i, "index"), info_ptr), "fm_workbook_get_table_info")
-                info = S.TABLE_INFO.unpack(LIB, info_ptr)
-                columns = []
-                for c in range(info["column_count"]):
-                    S.zero_struct(LIB, S.TABLE_COLUMN_INFO, column_ptr)
-                    _check(
-                        LIB.fm_workbook_get_table_column(h, _uint(i, "index"), _uint(c, "column"), column_ptr),
-                        "fm_workbook_get_table_column",
-                    )
-                    col = S.TABLE_COLUMN_INFO.unpack(LIB, column_ptr)
-                    columns.append(
-                        TableColumn(
-                            name=LIB.read_cstr(col["name"]),
-                            totals_row_function=LIB.read_cstr(col["totals_row_function"]),
-                            totals_row_label=LIB.read_cstr(col["totals_row_label"]),
-                            totals_row_formula=LIB.read_cstr(col["totals_row_formula"]),
-                        )
-                    )
-                yield Table(
-                    name=name,
-                    display_name=display,
-                    range=SheetRect(sheet=sheet, rect=rect),
-                    style_name=LIB.read_cstr(info["style_name"]),
-                    has_style_info=info["style_present"] != 0,
-                    show_first_column=info["show_first_column"] != 0,
-                    show_last_column=info["show_last_column"] != 0,
-                    show_row_stripes=info["show_row_stripes"] != 0,
-                    show_column_stripes=info["show_column_stripes"] != 0,
-                    header_row_count=info["header_row_count"],
-                    totals_row_count=info["totals_row_count"],
-                    columns=tuple(columns),
+            status = LIB.fm_workbook_get_table(
+                h, _uint(table_index, "table_index"), name_ptr, display_ptr, rect_ptr, sheet_ptr
+            )
+            _check(status, "fm_workbook_get_table")
+            name = LIB.read_cstr(LIB.read_u32(name_ptr))
+            display = LIB.read_cstr(LIB.read_u32(display_ptr))
+            rect = _decode_cell_rect_at(rect_ptr)
+            sheet = LIB.read_u32(sheet_ptr)
+            S.zero_struct(LIB, S.TABLE_INFO, info_ptr)
+            _check(
+                LIB.fm_workbook_get_table_info(h, _uint(table_index, "table_index"), info_ptr),
+                "fm_workbook_get_table_info",
+            )
+            info = S.TABLE_INFO.unpack(LIB, info_ptr)
+            columns = []
+            for c in range(info["column_count"]):
+                S.zero_struct(LIB, S.TABLE_COLUMN_INFO, column_ptr)
+                _check(
+                    LIB.fm_workbook_get_table_column(
+                        h, _uint(table_index, "table_index"), _uint(c, "column"), column_ptr
+                    ),
+                    "fm_workbook_get_table_column",
                 )
+                col = S.TABLE_COLUMN_INFO.unpack(LIB, column_ptr)
+                columns.append(
+                    TableColumn(
+                        name=LIB.read_cstr(col["name"]),
+                        totals_row_function=LIB.read_cstr(col["totals_row_function"]),
+                        totals_row_label=LIB.read_cstr(col["totals_row_label"]),
+                        totals_row_formula=LIB.read_cstr(col["totals_row_formula"]),
+                    )
+                )
+            return Table(
+                name=name,
+                display_name=display,
+                range=SheetRect(sheet=sheet, rect=rect),
+                style_name=LIB.read_cstr(info["style_name"]),
+                has_style_info=info["style_present"] != 0,
+                show_first_column=info["show_first_column"] != 0,
+                show_last_column=info["show_last_column"] != 0,
+                show_row_stripes=info["show_row_stripes"] != 0,
+                show_column_stripes=info["show_column_stripes"] != 0,
+                header_row_count=info["header_row_count"],
+                totals_row_count=info["totals_row_count"],
+                columns=tuple(columns),
+            )
 
     def add_table(
         self,
@@ -5730,7 +5733,7 @@ class Workbook:
 
     def _table_apply_style_toggles(self, index: int, toggles: Sequence[Optional[bool]]) -> None:
         """Set the supplied ``show_*`` toggles over the table's current ones."""
-        current = next(t for i, t in enumerate(self.iter_tables()) if i == index)
+        current = self.get_table(index)
         existing = (
             current.show_first_column,
             current.show_last_column,
@@ -5868,7 +5871,7 @@ class Workbook:
         """
         renaming = name is not None or display_name is not None
         if renaming:
-            current = next(t for i, t in enumerate(self.iter_tables()) if i == index)
+            current = self.get_table(index)
             next_name = name if name is not None else current.name
             if display_name is not None:
                 next_display = display_name
@@ -5915,19 +5918,19 @@ class Workbook:
         h = self._require()
         _check(LIB.fm_workbook_remove_table(h, _uint(index, "index")), "fm_workbook_remove_table")
 
-    def list_passthroughs(self) -> Iterator[PassthroughPart]:
-        """Iterate over passthrough OOXML part paths."""
+    def list_passthroughs(self) -> List[PassthroughPart]:
+        """Return the passthrough OOXML part paths."""
         h = self._require()
         n = _read_count(LIB.fm_workbook_get_passthrough_count, h)
-        # Scratch hoisted out of the loop; see iter_defined_names.
+        # Scratch hoisted out of the loop; see list_defined_names.
         with _ArgScope() as scope:
             path_ptr = scope.out_ptr()
+            out: List[PassthroughPart] = []
             for i in range(n):
-                h = self._check_live()
                 status = LIB.fm_workbook_get_passthrough_at(h, _uint(i, "idx"), path_ptr)
                 _check(status, "fm_workbook_get_passthrough_at")
-                path = LIB.read_cstr(LIB.read_u32(path_ptr))
-                yield PassthroughPart(path=path)
+                out.append(PassthroughPart(path=LIB.read_cstr(LIB.read_u32(path_ptr))))
+        return out
 
     def get_passthrough(self, path: str) -> Optional[str]:
         """Return ``path`` when a passthrough part sits there (no leading ``/``), else ``None``."""
@@ -6448,17 +6451,12 @@ class Workbook:
         h = self._require()
         _check(LIB.fm_sheet_clear_merges(h, _uint(sheet, "sheet")), "fm_sheet_clear_merges")
 
-    def merge_count(self, sheet: int) -> int:
-        """Return the number of merge ranges on ``sheet``."""
-        h = self._require()
-        return _read_count(LIB.fm_sheet_get_merge_count, h, _uint(sheet, "sheet"))
-
     def list_merges(self, sheet: int) -> List[CellRect]:
         """Return every merge range on ``sheet``."""
         h = self._require()
-        n = self.merge_count(sheet)
+        n = _read_count(LIB.fm_sheet_get_merge_count, h, _uint(sheet, "sheet"))
         out: List[CellRect] = []
-        # One scratch block for the whole walk; see iter_defined_names.
+        # One scratch block for the whole walk; see list_defined_names.
         with _ArgScope() as scope:
             ptr = scope.struct(S.CELL_RECT)
             for i in range(n):
@@ -6537,17 +6535,12 @@ class Workbook:
         h = self._require()
         _check(LIB.fm_sheet_clear_hyperlinks(h, _uint(sheet, "sheet")), "fm_sheet_clear_hyperlinks")
 
-    def hyperlink_count(self, sheet: int) -> int:
-        """Return the number of hyperlinks on ``sheet``."""
-        h = self._require()
-        return _read_count(LIB.fm_sheet_get_hyperlink_count, h, _uint(sheet, "sheet"))
-
     def list_hyperlinks(self, sheet: int) -> List[Hyperlink]:
         """Return every hyperlink on ``sheet``."""
         h = self._require()
-        n = self.hyperlink_count(sheet)
+        n = _read_count(LIB.fm_sheet_get_hyperlink_count, h, _uint(sheet, "sheet"))
         out: List[Hyperlink] = []
-        # One scratch block for the whole walk; see iter_defined_names.
+        # One scratch block for the whole walk; see list_defined_names.
         with _ArgScope() as scope:
             ptr = scope.struct(S.HYPERLINK)
             for i in range(n):
@@ -6599,11 +6592,6 @@ class Workbook:
                 "fm_sheet_set_comment",
             )
 
-    def comment_count(self, sheet: int) -> int:
-        """Return the number of comments on ``sheet``."""
-        h = self._require()
-        return _read_count(LIB.fm_sheet_get_comment_count, h, _uint(sheet, "sheet"))
-
     def list_comments(self, sheet: int) -> List[CommentEntry]:
         """Return every comment on ``sheet`` in storage order.
 
@@ -6612,10 +6600,10 @@ class Workbook:
         """
         h = self._require()
         out: List[CommentEntry] = []
-        # One scratch block for the whole walk; see iter_defined_names.
+        # One scratch block for the whole walk; see list_defined_names.
         with _ArgScope() as scope:
             ptr = scope.struct(S.COMMENT)
-            for index in range(self.comment_count(sheet)):
+            for index in range(_read_count(LIB.fm_sheet_get_comment_count, h, _uint(sheet, "sheet"))):
                 S.zero_struct(LIB, S.COMMENT, ptr)
                 _check(
                     LIB.fm_sheet_get_comment_at(h, _uint(sheet, "sheet"), _uint(index, "index"), ptr),
@@ -6711,27 +6699,21 @@ class Workbook:
         h = self._require()
         return _read_count(LIB.fm_sheet_get_protected_range_count, h, _uint(sheet, "sheet"))
 
-    def get_protected_ranges(self, sheet: int) -> List[ProtectedRange]:
-        """Return the protected ranges of ``sheet`` in file order."""
+    def get_protected_range(self, sheet: int, index: int) -> ProtectedRange:
+        """Return the ``index``-th protected range of ``sheet`` in file order."""
         h = self._require()
-        out: List[ProtectedRange] = []
         with _ArgScope() as scope:
             ptr = scope.struct(S.PROTECTED_RANGE)
-            for index in range(self.get_protected_range_count(sheet)):
-                S.zero_struct(LIB, S.PROTECTED_RANGE, ptr)
-                _check(
-                    LIB.fm_sheet_get_protected_range(h, _uint(sheet, "sheet"), _uint(index, "index"), ptr),
-                    "fm_sheet_get_protected_range",
-                )
-                d = S.PROTECTED_RANGE.unpack(LIB, ptr)
-                out.append(
-                    ProtectedRange(
-                        spin_count=d["spin_count"],
-                        ranges=_decode_cell_rect_array(d["ranges"], d["range_count"]),
-                        **{fld: LIB.read_cstr(d[fld]) for fld in self._PROTECTED_RANGE_TEXT},
-                    )
-                )
-        return out
+            _check(
+                LIB.fm_sheet_get_protected_range(h, _uint(sheet, "sheet"), _uint(index, "index"), ptr),
+                "fm_sheet_get_protected_range",
+            )
+            d = S.PROTECTED_RANGE.unpack(LIB, ptr)
+            return ProtectedRange(
+                spin_count=d["spin_count"],
+                ranges=_decode_cell_rect_array(d["ranges"], d["range_count"]),
+                **{fld: LIB.read_cstr(d[fld]) for fld in self._PROTECTED_RANGE_TEXT},
+            )
 
     def _protected_range_call(
         self, fn, name: str, leading: tuple, protected: ProtectedRange, returns_index: bool = False
@@ -6802,11 +6784,6 @@ class Workbook:
                 "fm_sheet_get_validation",
             )
             return self._decode_validation(ptr)
-
-    def get_validations(self, sheet: int) -> List[DataValidation]:
-        """Return every data-validation rule on ``sheet``."""
-        n = self.get_validation_count(sheet)
-        return [self.get_validation(sheet, i) for i in range(n)]
 
     @staticmethod
     def _decode_validation(ptr: int) -> DataValidation:
@@ -7956,62 +7933,62 @@ class Workbook:
         """Recompute every data table now, whatever the calc mode (the explicit calculation of ``AUTO_NO_TABLE``)."""
         _check(LIB.fm_workbook_recalc_data_tables(self._require()), "fm_workbook_recalc_data_tables")
 
-    def list_sparkline_groups(self, sheet: int) -> List[SparklineGroup]:
-        """Return the sheet's sparkline groups in document order, each with its sparklines."""
+    def get_sparkline_group_count(self, sheet: int) -> int:
+        """Return the number of sparkline groups on ``sheet``."""
         h = self._require()
-        n = _read_count(LIB.fm_sheet_get_sparkline_group_count, h, _uint(sheet, "sheet_index"))
+        return _read_count(LIB.fm_sheet_get_sparkline_group_count, h, _uint(sheet, "sheet_index"))
+
+    def get_sparkline_group(self, sheet: int, index: int) -> SparklineGroup:
+        """Return the sheet's ``index``-th sparkline group in document order with its sparklines."""
+        h = self._require()
         with _ArgScope() as scope:
             group_ptr = scope.struct(S.SPARKLINE_GROUP)
             item_ptr = scope.struct(S.SPARKLINE)
-            out: List[SparklineGroup] = []
-            for i in range(n):
-                S.zero_struct(LIB, S.SPARKLINE_GROUP, group_ptr)
+            _check(
+                LIB.fm_sheet_get_sparkline_group(h, _uint(sheet, "sheet_index"), _uint(index, "idx"), group_ptr),
+                "fm_sheet_get_sparkline_group",
+            )
+            d = S.SPARKLINE_GROUP.unpack(LIB, group_ptr)
+            group = SparklineGroup(
+                type=d["type"],
+                color_series=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_series"][1]),
+                color_negative=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_negative"][1]),
+                color_axis=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_axis"][1]),
+                color_markers=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_markers"][1]),
+                color_first=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_first"][1]),
+                color_last=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_last"][1]),
+                color_high=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_high"][1]),
+                color_low=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_low"][1]),
+                markers=bool(d["markers"]),
+                high=bool(d["high"]),
+                low=bool(d["low"]),
+                first=bool(d["first"]),
+                last=bool(d["last"]),
+                negative=bool(d["negative"]),
+                display_x_axis=bool(d["display_x_axis"]),
+                display_hidden=bool(d["display_hidden"]),
+                min_axis_type=d["min_axis_type"],
+                max_axis_type=d["max_axis_type"],
+                manual_min=d["manual_min"] if d["has_manual_min"] else None,
+                manual_max=d["manual_max"] if d["has_manual_max"] else None,
+                date_axis=bool(d["date_axis"]),
+                date_axis_ref=LIB.read_cstr(d["date_axis_ref"]),
+                line_weight=d["line_weight"],
+                empty_cells_as=d["empty_cells_as"],
+            )
+            for k in range(d["sparkline_count"]):
+                S.zero_struct(LIB, S.SPARKLINE, item_ptr)
                 _check(
-                    LIB.fm_sheet_get_sparkline_group(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), group_ptr),
-                    "fm_sheet_get_sparkline_group",
+                    LIB.fm_sheet_get_sparkline(
+                        h, _uint(sheet, "sheet_index"), _uint(index, "idx"), _uint(k, "idx"), item_ptr
+                    ),
+                    "fm_sheet_get_sparkline",
                 )
-                d = S.SPARKLINE_GROUP.unpack(LIB, group_ptr)
-                group = SparklineGroup(
-                    type=d["type"],
-                    color_series=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_series"][1]),
-                    color_negative=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_negative"][1]),
-                    color_axis=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_axis"][1]),
-                    color_markers=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_markers"][1]),
-                    color_first=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_first"][1]),
-                    color_last=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_last"][1]),
-                    color_high=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_high"][1]),
-                    color_low=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_low"][1]),
-                    markers=bool(d["markers"]),
-                    high=bool(d["high"]),
-                    low=bool(d["low"]),
-                    first=bool(d["first"]),
-                    last=bool(d["last"]),
-                    negative=bool(d["negative"]),
-                    display_x_axis=bool(d["display_x_axis"]),
-                    display_hidden=bool(d["display_hidden"]),
-                    min_axis_type=d["min_axis_type"],
-                    max_axis_type=d["max_axis_type"],
-                    manual_min=d["manual_min"] if d["has_manual_min"] else None,
-                    manual_max=d["manual_max"] if d["has_manual_max"] else None,
-                    date_axis=bool(d["date_axis"]),
-                    date_axis_ref=LIB.read_cstr(d["date_axis_ref"]),
-                    line_weight=d["line_weight"],
-                    empty_cells_as=d["empty_cells_as"],
+                item = S.SPARKLINE.unpack(LIB, item_ptr)
+                group.sparklines.append(
+                    Sparkline(formula=LIB.read_cstr(item["formula"]), location=LIB.read_cstr(item["location"]))
                 )
-                for k in range(d["sparkline_count"]):
-                    S.zero_struct(LIB, S.SPARKLINE, item_ptr)
-                    _check(
-                        LIB.fm_sheet_get_sparkline(
-                            h, _uint(sheet, "sheet_index"), _uint(i, "idx"), _uint(k, "idx"), item_ptr
-                        ),
-                        "fm_sheet_get_sparkline",
-                    )
-                    item = S.SPARKLINE.unpack(LIB, item_ptr)
-                    group.sparklines.append(
-                        Sparkline(formula=LIB.read_cstr(item["formula"]), location=LIB.read_cstr(item["location"]))
-                    )
-                out.append(group)
-        return out
+            return group
 
     def add_sparkline_group(self, sheet: int, group: SparklineGroup) -> int:
         """Append ``group`` with its ``sparklines`` (at least one) to the sheet's worksheet extension list.
@@ -9330,7 +9307,7 @@ class Workbook:
         h = self._require()
         n = _read_count(LIB.fm_sheet_get_col_override_count, h, _uint(sheet, "sheet_index"))
         out: List[ColumnLayout] = []
-        # One scratch block for the whole walk; see iter_defined_names.
+        # One scratch block for the whole walk; see list_defined_names.
         with _ArgScope() as scope:
             ptr = scope.struct(S.COLUMN_LAYOUT)
             for i in range(n):
@@ -9426,7 +9403,7 @@ class Workbook:
         h = self._require()
         n = _read_count(LIB.fm_sheet_get_row_override_count, h, _uint(sheet, "sheet_index"))
         out: List[RowLayout] = []
-        # One scratch block for the whole walk; see iter_defined_names.
+        # One scratch block for the whole walk; see list_defined_names.
         with _ArgScope() as scope:
             ptr = scope.struct(S.ROW_LAYOUT)
             for i in range(n):
@@ -9910,11 +9887,6 @@ class Workbook:
                 data_bar=data_bar,
                 icon_set=icon_set,
             )
-
-    def get_conditional_formats(self, sheet: int) -> List[ConditionalFormat]:
-        """Return every CF rule on ``sheet`` in flattened priority order."""
-        n = self.get_cf_rule_count(sheet)
-        return [self.get_cf_rule(sheet, i) for i in range(n)]
 
     def add_cf_rule(self, sheet: int, rule: ConditionalFormatInput) -> int:
         """Append a CF rule to ``sheet``; return its index.
@@ -10836,7 +10808,7 @@ class Workbook:
                 rect = _decode_cell_rect_at(rect_p) if LIB.read_u32(present_p) else None
                 cells: List[PivotCell] = []
                 n = _read_count(LIB.fm_pivot_cells_get_cell_count, handle)
-                # One scratch block for the whole walk; see iter_defined_names.
+                # One scratch block for the whole walk; see list_defined_names.
                 cptr = scope.struct(S.PIVOT_CELL)
                 for i in range(n):
                     S.zero_struct(LIB, S.PIVOT_CELL, cptr)
@@ -10863,20 +10835,19 @@ class Workbook:
                     LIB.fm_pivot_cells_destroy(handle)
 
     # -- Pivot caches ------------------------------------------------------
-    def pivot_cache_count(self) -> int:
-        """Return the number of pivot caches owned by the workbook."""
+    def list_pivot_caches(self) -> List[int]:
+        """Return the cache ids of the pivot caches the workbook owns."""
         h = self._require()
-        return _read_count(LIB.fm_workbook_get_pivot_cache_count, h, default_op="fm_workbook_get_pivot_cache_count")
-
-    def pivot_cache_id_at(self, index: int) -> int:
-        """Return the cache id at flat ``index``."""
-        h = self._require()
-        return _read_count(
-            LIB.fm_workbook_get_pivot_cache_id_at,
-            h,
-            _uint(index, "idx"),
-            default_op="fm_workbook_get_pivot_cache_id_at",
-        )
+        count = _read_count(LIB.fm_workbook_get_pivot_cache_count, h, default_op="fm_workbook_get_pivot_cache_count")
+        return [
+            _read_count(
+                LIB.fm_workbook_get_pivot_cache_id_at,
+                h,
+                _uint(index, "idx"),
+                default_op="fm_workbook_get_pivot_cache_id_at",
+            )
+            for index in range(count)
+        ]
 
     def add_pivot_cache(self, requested_id: int = 0) -> int:
         """Create a new empty pivot cache; return its assigned id."""
@@ -12462,7 +12433,7 @@ class Workbook:
                 handle = LIB.read_u32(out)
                 nodes: List[CellNode] = []
                 n = _read_count(LIB.fm_cell_nodes_get_node_count, handle)
-                # One scratch block for the whole walk; see iter_defined_names.
+                # One scratch block for the whole walk; see list_defined_names.
                 nptr = scope.struct(S.CELL_NODE)
                 for i in range(n):
                     S.zero_struct(LIB, S.CELL_NODE, nptr)
@@ -12598,21 +12569,6 @@ class Workbook:
             status = LIB.fm_sheet_set_array_formula(h, _uint(sheet, "sheet"), rp, formula_ptr)
             _check(status, "fm_sheet_set_array_formula")
 
-    # -- Function catalog (workbook-independent) ---------------------------
-    @staticmethod
-    def function_count() -> int:
-        """Return the total number of registered Formulon functions."""
-        return _read_count(LIB.fm_get_function_count)
-
-    @staticmethod
-    def function_name_at(index: int) -> str:
-        """Return the canonical name of the ``index``-th function."""
-        return _read_cstr_out(
-            LIB.fm_get_function_name_at,
-            _uint(index, "idx"),
-            default_op="fm_get_function_name_at",
-        )
-
     # -- External links ----------------------------------------------------
     def get_external_link_count(self) -> int:
         """Return the number of external-link records on the workbook."""
@@ -12641,11 +12597,6 @@ class Workbook:
                 target_external=bool(d["target_external"]),
                 kind=ExternalLinkKind(d["kind"]),
             )
-
-    def get_external_links(self) -> List[ExternalLinkRecord]:
-        """Return every external-link record in document order."""
-        n = self.get_external_link_count()
-        return [self.get_external_link(i) for i in range(n)]
 
 
 def _lock_workbook_method(method):
@@ -12776,6 +12727,15 @@ def _map_profile_text(fn_name: str, text: str, profile_id: str) -> str:
 
 
 @_lock_workbook_method
+def list_function_names() -> List[str]:
+    """Return the canonical names of every registered Formulon function, sorted."""
+    return [
+        _read_cstr_out(LIB.fm_get_function_name_at, _uint(index, "idx"), default_op="fm_get_function_name_at")
+        for index in range(_read_count(LIB.fm_get_function_count))
+    ]
+
+
+@_lock_workbook_method
 def localize_function_name(canonical_name: str, profile_id: ExcelProfileId) -> str:
     """Return the display name of ``canonical_name`` under ``profile_id``."""
     return _map_profile_text("fm_localize_function_name", canonical_name, profile_id)
@@ -12805,6 +12765,39 @@ def canonicalize_formula(formula: str, profile_id: ExcelProfileId) -> str:
     return _map_profile_text("fm_canonicalize_formula", formula, profile_id)
 
 
+def _read_locale_error_names(scope: _ArgScope, pid_ptr: int) -> List[ErrorName]:
+    canonical_out = scope.out_ptr()
+    localized_out = scope.out_ptr()
+    measured_out = scope.out_ptr()
+    errors = []
+    for index in range(_read_count(LIB.fm_get_locale_error_name_count)):
+        _check(
+            LIB.fm_get_locale_error_name_at(
+                pid_ptr, _uint(index, "error_index"), canonical_out, localized_out, measured_out
+            ),
+            "fm_get_locale_error_name_at",
+        )
+        errors.append(
+            ErrorName(
+                canonical=LIB.read_cstr(LIB.read_u32(canonical_out)),
+                localized=LIB.read_cstr(LIB.read_u32(localized_out)),
+                measured=LIB.read_u32(measured_out) != 0,
+            )
+        )
+    return errors
+
+
+@_lock_workbook_method
+def list_locale_error_names(profile_id: ExcelProfileId) -> List[ErrorName]:
+    """Return the error names of ``profile_id`` in error-code order.
+
+    Raises:
+      FormulonError: when ``profile_id`` is not a documented profile.
+    """
+    with _ArgScope() as scope:
+        return _read_locale_error_names(scope, scope.cstr(profile_id))
+
+
 @_lock_workbook_method
 def get_locale_facts(profile_id: ExcelProfileId) -> LocaleFacts:
     """Return the locale facts (separators, names, currency, error names) of ``profile_id``.
@@ -12815,26 +12808,9 @@ def get_locale_facts(profile_id: ExcelProfileId) -> LocaleFacts:
     with _ArgScope() as scope:
         pid_ptr = scope.cstr(profile_id)
         ptr = scope.struct(S.LOCALE_FACTS)
-        canonical_out = scope.out_ptr()
-        localized_out = scope.out_ptr()
-        measured_out = scope.out_ptr()
         _check(LIB.fm_get_locale_facts(pid_ptr, ptr), "fm_get_locale_facts")
         d = S.LOCALE_FACTS.unpack(LIB, ptr)
-        errors = []
-        for index in range(_read_count(LIB.fm_get_locale_error_name_count)):
-            _check(
-                LIB.fm_get_locale_error_name_at(
-                    pid_ptr, _uint(index, "error_index"), canonical_out, localized_out, measured_out
-                ),
-                "fm_get_locale_error_name_at",
-            )
-            errors.append(
-                ErrorName(
-                    canonical=LIB.read_cstr(LIB.read_u32(canonical_out)),
-                    localized=LIB.read_cstr(LIB.read_u32(localized_out)),
-                    measured=LIB.read_u32(measured_out) != 0,
-                )
-            )
+        errors = _read_locale_error_names(scope, pid_ptr)
         return LocaleFacts(
             decimal_separator=LIB.read_cstr(d["decimal_separator"]),
             group_separator=LIB.read_cstr(d["group_separator"]),

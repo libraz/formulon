@@ -1,6 +1,6 @@
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
-import { assert, getModule } from './smoke_support.mjs';
+import { assert, getModule, readAll } from './smoke_support.mjs';
 
 const RANGE = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
 
@@ -71,9 +71,21 @@ test('nested conditional-format integers reject narrowing before addConditionalF
     assert.throws(() => wb.addDxf({ numFmt: { numFmtId: 65536 } }), RangeError);
     assert.equal(wb.getDxfCount().value, beforeDxfs);
 
-    assert.equal(wb.getConditionalFormats(0).length, 0);
+    assert.equal(
+      readAll(
+        () => wb.getCfRuleCount(0),
+        (i) => wb.getCfRule(0, i),
+      ).length,
+      0,
+    );
     assert.throws(() => wb.addCfRule(0, dataBarRule({ minLengthPct: 256 })), RangeError);
-    assert.equal(wb.getConditionalFormats(0).length, 0);
+    assert.equal(
+      readAll(
+        () => wb.getCfRuleCount(0),
+        (i) => wb.getCfRule(0, i),
+      ).length,
+      0,
+    );
 
     for (const value of [Number.NaN, Number.POSITIVE_INFINITY, 1.5, -1]) {
       assert.throws(
@@ -81,12 +93,21 @@ test('nested conditional-format integers reject narrowing before addConditionalF
         RangeError,
         `minLengthPct=${String(value)}`,
       );
-      assert.equal(wb.getConditionalFormats(0).length, 0);
+      assert.equal(
+        readAll(
+          () => wb.getCfRuleCount(0),
+          (i) => wb.getCfRule(0, i),
+        ).length,
+        0,
+      );
     }
 
     const omitted = wb.addCfRule(0, dataBarRule({ minLengthPct: null, maxLengthPct: undefined }));
     assert.ok(omitted.status.ok, JSON.stringify(omitted));
-    const stored = wb.getConditionalFormats(0);
+    const stored = readAll(
+      () => wb.getCfRuleCount(0),
+      (i) => wb.getCfRule(0, i),
+    );
     assert.equal(stored.length, 1);
     assert.equal(stored[0].dataBar.minLengthPct, 10);
     assert.equal(stored[0].dataBar.maxLengthPct, 90);
@@ -107,10 +128,22 @@ test('nested style and conditional-format fields require primitive numeric value
     assert.equal(wb.getCellXfCount().value, beforeXfs);
 
     assert.throws(() => wb.addCfRule(0, dataBarRule({ minLengthPct: '10' })), TypeError);
-    assert.equal(wb.getConditionalFormats(0).length, 0);
+    assert.equal(
+      readAll(
+        () => wb.getCfRuleCount(0),
+        (i) => wb.getCfRule(0, i),
+      ).length,
+      0,
+    );
 
     assert.throws(() => wb.addCfRule(0, dataBarRule({ minLengthPct: Symbol('numeric') })), TypeError);
-    assert.equal(wb.getConditionalFormats(0).length, 0);
+    assert.equal(
+      readAll(
+        () => wb.getCfRuleCount(0),
+        (i) => wb.getCfRule(0, i),
+      ).length,
+      0,
+    );
   } finally {
     wb.dispose();
   }
@@ -139,7 +172,13 @@ test('nested readers preserve the original getter error and abort the whole muta
       },
     });
     assert.throws(() => wb.addCfRule(0, rule), /conditional-format getter/);
-    assert.equal(wb.getConditionalFormats(0).length, 0);
+    assert.equal(
+      readAll(
+        () => wb.getCfRuleCount(0),
+        (i) => wb.getCfRule(0, i),
+      ).length,
+      0,
+    );
   } finally {
     wb.dispose();
   }
@@ -179,7 +218,13 @@ test('style and conditional-format readers snapshot stateful fields once', async
     const cf = wb.addCfRule(0, rule);
     assert.ok(cf.status.ok, JSON.stringify(cf.status));
     assert.equal(dxfReads, 1);
-    assert.equal(wb.getConditionalFormats(0)[0].dxfId, secondDxf.index);
+    assert.equal(
+      readAll(
+        () => wb.getCfRuleCount(0),
+        (i) => wb.getCfRule(0, i),
+      )[0].dxfId,
+      secondDxf.index,
+    );
 
     const beforeMemory = wb.getMemoryUsage();
     const lateFont = { name: 'late font '.repeat(1024), bold: true };
@@ -211,7 +256,10 @@ test('conditional-format arrays skip nullish entries and keep later records', as
       dataBar: { min: { type: 3 }, max: { type: 4 } },
     });
     assert.ok(added.status.ok, JSON.stringify(added.status));
-    const stored = wb.getConditionalFormats(0);
+    const stored = readAll(
+      () => wb.getCfRuleCount(0),
+      (i) => wb.getCfRule(0, i),
+    );
     assert.equal(stored.length, 1);
     assert.equal(stored[0].ranges.length, 1);
     assert.deepEqual(stored[0].ranges[0], RANGE);
@@ -263,7 +311,10 @@ test('style and CF reader defaults survive nullish fields and valid u8 boundarie
       }),
     );
     assert.ok(cf.status.ok, JSON.stringify(cf));
-    const stored = wb.getConditionalFormats(0)[0].dataBar;
+    const stored = readAll(
+      () => wb.getCfRuleCount(0),
+      (i) => wb.getCfRule(0, i),
+    )[0].dataBar;
     assert.equal(stored.fill.r, 255);
     assert.equal(stored.fill.a, 255);
     assert.equal(stored.minLengthPct, 0);

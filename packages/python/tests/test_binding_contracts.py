@@ -59,9 +59,44 @@ from formulon import (
     canonicalize_function_name,
     get_function_metadata,
     get_locale_facts,
+    list_locale_error_names,
     localize_formula,
     localize_function_name,
 )
+
+
+class IndexGetterTests(unittest.TestCase):
+    def test_an_out_of_range_index_raises(self) -> None:
+        with Workbook.create_default() as wb:
+            for name, call in (
+                ("get_cf_rule", lambda: wb.get_cf_rule(0, 0)),
+                ("get_validation", lambda: wb.get_validation(0, 0)),
+                ("get_protected_range", lambda: wb.get_protected_range(0, 0)),
+                ("get_sparkline_group", lambda: wb.get_sparkline_group(0, 0)),
+                ("get_external_link", lambda: wb.get_external_link(0)),
+                ("get_cell_phonetic_run", lambda: wb.get_cell_phonetic_run(0, 0, 0, 0)),
+                ("get_table", lambda: wb.get_table(0)),
+                ("get_cell_at", lambda: wb.get_cell_at(0, 0)),
+            ):
+                with self.subTest(getter=name):
+                    with self.assertRaises(FormulonError):
+                        call()
+
+    def test_counts_start_at_zero(self) -> None:
+        with Workbook.create_default() as wb:
+            self.assertEqual(
+                [
+                    wb.get_cf_rule_count(0),
+                    wb.get_validation_count(0),
+                    wb.get_protected_range_count(0),
+                    wb.get_sparkline_group_count(0),
+                    wb.get_external_link_count(),
+                    wb.get_cell_phonetic_run_count(0, 0, 0),
+                    wb.get_table_count(),
+                    wb.get_cell_count(0),
+                ],
+                [0] * 8,
+            )
 
 
 class FormulonErrorStatusTests(unittest.TestCase):
@@ -89,7 +124,7 @@ class ErrorOperationNameTests(unittest.TestCase):
         """`op` must name the ABI symbol, never a binding-internal helper."""
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError) as caught:
-                wb.merge_count(99)
+                wb.list_merges(99)
         message = str(caught.exception)
         self.assertIn("fm_sheet_get_merge_count", message)
         self.assertNotIn("_wrapped", message)
@@ -141,6 +176,7 @@ class CatalogProfileTests(unittest.TestCase):
             lambda: localize_formula("=SUM(1)", "nope"),
             lambda: canonicalize_formula("=SUM(1)", "nope"),
             lambda: get_locale_facts("nope"),
+            lambda: list_locale_error_names("nope"),
         ):
             with self.assertRaises(FormulonError):
                 call()
@@ -163,6 +199,7 @@ class CatalogProfileTests(unittest.TestCase):
         self.assertTrue(mac.measured)
         na = next(e for e in mac.error_names if e.canonical == "#N/A")
         self.assertEqual(na.localized, "#NV")
+        self.assertEqual(list_locale_error_names("mac-365-de_DE"), list(mac.error_names))
         self.assertFalse(get_locale_facts("win-365-de_DE").measured)
         self.assertEqual(get_locale_facts("win-365-en_US").decimal_separator, ".")
 
@@ -498,14 +535,24 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
         runs = [PhoneticRun(0, 2, "トウキョウ"), PhoneticRun(2, 3, "ト")]
         with Workbook.create_default() as wb:
             wb.set_text(0, 0, 0, "東京都")
-            self.assertEqual(wb.get_phonetic_runs(0, 0, 0), [])
+            self.assertEqual(
+                [wb.get_cell_phonetic_run(0, 0, 0, i) for i in range(wb.get_cell_phonetic_run_count(0, 0, 0))], []
+            )
             wb.set_cell_phonetic_runs(0, 0, 0, runs)
-            self.assertEqual(wb.get_phonetic_runs(0, 0, 0), runs)
+            self.assertEqual(
+                [wb.get_cell_phonetic_run(0, 0, 0, i) for i in range(wb.get_cell_phonetic_run_count(0, 0, 0))], runs
+            )
             # The flattening getter still reports the concatenation.
             self.assertEqual(wb.get_cell_phonetic(0, 0, 0), "トウキョウト")
             data = wb.save()
         with Workbook.load(data) as reloaded:
-            self.assertEqual(reloaded.get_phonetic_runs(0, 0, 0), runs)
+            self.assertEqual(
+                [
+                    reloaded.get_cell_phonetic_run(0, 0, 0, i)
+                    for i in range(reloaded.get_cell_phonetic_run_count(0, 0, 0))
+                ],
+                runs,
+            )
 
     def test_phonetic_run_with_empty_text_round_trips(self) -> None:
         # Excel itself produces a run with `text == ""` for an out-of-range
@@ -515,21 +562,28 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.set_text(0, 0, 0, "東京都")
             wb.set_cell_phonetic_runs(0, 0, 0, runs)
-            self.assertEqual(wb.get_phonetic_runs(0, 0, 0), runs)
+            self.assertEqual(
+                [wb.get_cell_phonetic_run(0, 0, 0, i) for i in range(wb.get_cell_phonetic_run_count(0, 0, 0))], runs
+            )
 
     def test_whole_cell_setter_collapses_the_spans(self) -> None:
         with Workbook.create_default() as wb:
             wb.set_text(0, 0, 0, "東京都")
             wb.set_cell_phonetic_runs(0, 0, 0, [PhoneticRun(0, 2, "トウキョウ"), PhoneticRun(2, 3, "ト")])
             wb.set_cell_phonetic(0, 0, 0, wb.get_cell_phonetic(0, 0, 0))
-            self.assertEqual(wb.get_phonetic_runs(0, 0, 0), [PhoneticRun(0, 3, "トウキョウト")])
+            self.assertEqual(
+                [wb.get_cell_phonetic_run(0, 0, 0, i) for i in range(wb.get_cell_phonetic_run_count(0, 0, 0))],
+                [PhoneticRun(0, 3, "トウキョウト")],
+            )
 
     def test_empty_run_list_clears_the_guide(self) -> None:
         with Workbook.create_default() as wb:
             wb.set_text(0, 0, 0, "東京都")
             wb.set_cell_phonetic_runs(0, 0, 0, [PhoneticRun(0, 3, "トウキョウト")])
             wb.set_cell_phonetic_runs(0, 0, 0, [])
-            self.assertEqual(wb.get_phonetic_runs(0, 0, 0), [])
+            self.assertEqual(
+                [wb.get_cell_phonetic_run(0, 0, 0, i) for i in range(wb.get_cell_phonetic_run_count(0, 0, 0))], []
+            )
             self.assertEqual(wb.get_cell_phonetic(0, 0, 0), "")
 
     def test_out_of_order_runs_are_rejected(self) -> None:
@@ -573,7 +627,9 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             wb.set_cell_phonetic_runs(0, 0, 0, [PhoneticRun(0, 2, "おおさか")])
             wb.set_cell_phonetic_properties(0, 0, 0, PhoneticProperties(3, 2, 2))
             wb.set_text(0, 0, 0, "京都")
-            self.assertEqual(wb.get_phonetic_runs(0, 0, 0), [])
+            self.assertEqual(
+                [wb.get_cell_phonetic_run(0, 0, 0, i) for i in range(wb.get_cell_phonetic_run_count(0, 0, 0))], []
+            )
             self.assertEqual(wb.get_cell_phonetic_properties(0, 0, 0), PhoneticProperties(0, 0, 0))
 
     def test_default_font_replaces_what_an_unstyled_cell_saves_as(self) -> None:
@@ -604,19 +660,25 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             wb.set_text(0, 0, 0, "A")
             wb.set_text(0, 0, 1, "B")
             index = wb.add_table(0, CellRect(0, 0, 2, 1), "Table1", "Table1", ["A", "B"])
-            self.assertEqual([t.range for t in wb.iter_tables()], [SheetRect(0, CellRect(0, 0, 2, 1))])
-            self.assertEqual([t.name for t in wb.iter_tables()], ["Table1"])
+            self.assertEqual(
+                [t.range for t in [wb.get_table(i) for i in range(wb.get_table_count())]],
+                [SheetRect(0, CellRect(0, 0, 2, 1))],
+            )
+            self.assertEqual([t.name for t in [wb.get_table(i) for i in range(wb.get_table_count())]], ["Table1"])
 
             wb.update_table(index, CellRect(0, 0, 4, 1))
-            self.assertEqual([t.range for t in wb.iter_tables()], [SheetRect(0, CellRect(0, 0, 4, 1))])
+            self.assertEqual(
+                [t.range for t in [wb.get_table(i) for i in range(wb.get_table_count())]],
+                [SheetRect(0, CellRect(0, 0, 4, 1))],
+            )
 
             wb.remove_table(index)
-            self.assertEqual(list(wb.iter_tables()), [])
+            self.assertEqual([wb.get_table(i) for i in range(wb.get_table_count())], [])
 
     def test_table_style_toggles_survive_a_style_name_change(self) -> None:
         with Workbook.create_default() as wb:
             index = wb.add_table(0, CellRect(0, 0, 2, 1), "Sales", "Sales", ["A", "B"], "TableStyleLight9")
-            table = list(wb.iter_tables())[0]
+            table = [wb.get_table(i) for i in range(wb.get_table_count())][0]
             self.assertEqual(table.style_name, "TableStyleLight9")
             self.assertTrue(table.has_style_info)
             self.assertTrue(table.show_row_stripes)
@@ -627,7 +689,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             wb.update_table(index, CellRect(0, 0, 2, 1), show_first_column=True, show_row_stripes=False)
             wb.update_table(index, CellRect(0, 0, 2, 1), "TableStyleMedium4")
             with Workbook.load(wb.save()) as reloaded:
-                table = list(reloaded.iter_tables())[0]
+                table = [reloaded.get_table(i) for i in range(reloaded.get_table_count())][0]
                 self.assertEqual(table.style_name, "TableStyleMedium4")
                 self.assertTrue(table.show_first_column)
                 self.assertFalse(table.show_row_stripes)
@@ -647,7 +709,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.set_table_column_totals(index, 1, "median")
             with Workbook.load(wb.save()) as reloaded:
-                columns = list(reloaded.iter_tables())[0].columns
+                columns = [reloaded.get_table(i) for i in range(reloaded.get_table_count())][0].columns
                 self.assertEqual(columns[0].totals_row_label, "Total")
                 self.assertEqual(columns[1].totals_row_function, "sum")
 
@@ -659,7 +721,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             wb.set_formula(0, 0, 3, "=SUM(Sales[Amount])")
             wb.update_table(index, CellRect(0, 0, 1, 0), name="Revenue")
             self.assertEqual(wb.get_formula(0, 0, 3), "=SUM(Revenue[Amount])")
-            self.assertEqual(list(wb.iter_tables())[0].display_name, "Revenue")
+            self.assertEqual([wb.get_table(i) for i in range(wb.get_table_count())][0].display_name, "Revenue")
             other = wb.add_table(0, CellRect(0, 2, 1, 2), "Other", "Other", ["X"])
             with self.assertRaises(FormulonError):
                 wb.rename_table(other, "revenue")
@@ -686,7 +748,9 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                 self.assertEqual(reloaded.list_table_styles(), [style])
                 self.assertEqual(reloaded.get_table_style("corporate"), style)
                 self.assertIsNone(reloaded.get_table_style("Other"))
-                self.assertEqual(list(reloaded.iter_tables())[index].style_name, "Corporate")
+                self.assertEqual(
+                    [reloaded.get_table(i) for i in range(reloaded.get_table_count())][index].style_name, "Corporate"
+                )
                 reloaded.set_table_style_defaults(table_style="Corporate")
                 self.assertEqual(reloaded.get_table_style_defaults()[0], "Corporate")
                 reloaded.remove_table_style("corporate")
@@ -699,10 +763,10 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             wb.set_text(0, 0, 1, "B")
             index = wb.add_table(0, CellRect(0, 0, 2, 1), "Sales", "Sales", ["A", "B"], "TableStyleMedium2")
             wb.update_table(index, CellRect(0, 0, 2, 1), style_name=None)
-            self.assertEqual(list(wb.iter_tables())[0].style_name, "TableStyleMedium2")
+            self.assertEqual([wb.get_table(i) for i in range(wb.get_table_count())][0].style_name, "TableStyleMedium2")
 
             wb.update_table(index, CellRect(0, 0, 2, 1), style_name="")
-            table = list(wb.iter_tables())[0]
+            table = [wb.get_table(i) for i in range(wb.get_table_count())][0]
             self.assertEqual((table.style_name, table.has_style_info), ("", False))
             data = wb.save()
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
@@ -710,7 +774,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             self.assertEqual(len(parts), 1)
             self.assertNotIn(b"tableStyleInfo", archive.read(parts[0]))
         with Workbook.load(data) as reloaded:
-            self.assertFalse(list(reloaded.iter_tables())[0].has_style_info)
+            self.assertFalse([reloaded.get_table(i) for i in range(reloaded.get_table_count())][0].has_style_info)
 
     def test_table_create_rejects_a_column_count_that_does_not_match_ref(self) -> None:
         with Workbook.create_default() as wb:
@@ -1073,10 +1137,10 @@ class CollectionReaderAllocationTests(unittest.TestCase):
             lambda wb: wb.list_comments(0),
         )
 
-    def test_iter_defined_names_allocation_count_is_flat(self) -> None:
+    def test_list_defined_names_allocation_count_is_flat(self) -> None:
         self._assert_flat_in_item_count(
             lambda wb, n: [wb.set_defined_name(f"Name{r}", "=1") for r in range(n)],
-            lambda wb: list(wb.list_defined_names()),
+            lambda wb: wb.list_defined_names(),
         )
 
     def test_get_sheet_row_overrides_allocation_count_is_flat(self) -> None:

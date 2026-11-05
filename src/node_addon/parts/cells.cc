@@ -187,33 +187,30 @@ Napi::Value Workbook::GetCellPhonetic(const Napi::CallbackInfo& info) {
   return MakeStringResult(env, rc, text);
 }
 
-Napi::Value Workbook::GetCellPhoneticRuns(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeFieldResult(env, NullHandleError(env), "runs", Napi::Array::New(env, 0));
-  }
+Napi::Value Workbook::GetCellPhoneticRunCount(const Napi::CallbackInfo& info) {
   const CellAddressArgs address = ReadCellAddress(info);
   std::size_t count = 0;
-  fm_status_t rc = fm_sheet_get_cell_phonetic_run_count(handle_, address.sheet, address.row, address.col, &count);
-  Napi::Array out = Napi::Array::New(env, rc == 0 ? count : 0);
-  for (std::size_t i = 0; rc == 0 && i < count; ++i) {
-    fm_phonetic_run_t run{};
-    rc = fm_sheet_get_cell_phonetic_run(handle_, address.sheet, address.row, address.col, i, &run);
-    if (rc != 0) {
-      break;
-    }
-    Napi::Object entry = Napi::Object::New(env);
-    entry.Set("sb", Napi::Number::New(env, run.sb));
-    entry.Set("eb", Napi::Number::New(env, run.eb));
-    // Copied immediately: each read refreshes the handle's scratch, so the
-    // previous run's pointer is dead by the time the next one lands.
-    entry.Set("text", JsString(env, run.text));
-    out.Set(i, entry);
-  }
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_cell_phonetic_run_count(handle_, address.sheet, address.row,
+                                                                                   address.col, &count)
+                                            : kBindingInvalidHandle;
+  return MakeNumberResult(info.Env(), rc, static_cast<double>(count));
+}
+
+Napi::Value Workbook::GetCellPhoneticRun(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const CellAddressArgs address = ReadCellAddress(info);
+  fm_phonetic_run_t run{};
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_cell_phonetic_run(handle_, address.sheet, address.row,
+                                                                             address.col, ArgU32(info, 3), &run)
+                                            : kBindingInvalidHandle;
   if (rc != 0) {
-    return MakeFieldResult(env, MakeErrorStatus(env, rc), "runs", Napi::Array::New(env, 0));
+    run = fm_phonetic_run_t{};
   }
-  return MakeFieldResult(env, MakeOkStatus(env), "runs", out);
+  Napi::Object item = Napi::Object::New(env);
+  item.Set("sb", Napi::Number::New(env, run.sb));
+  item.Set("eb", Napi::Number::New(env, run.eb));
+  item.Set("text", JsString(env, run.text));
+  return FinishItemResult(env, item, rc);
 }
 
 Napi::Value Workbook::GetCellPhoneticProperties(const Napi::CallbackInfo& info) {

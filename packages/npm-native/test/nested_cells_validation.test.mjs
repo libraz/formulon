@@ -1,5 +1,5 @@
 import test from 'node:test';
-import { assert, getModule } from './smoke_support.mjs';
+import { assert, getModule, readAll } from './smoke_support.mjs';
 
 function withWorkbook(Workbook, fn) {
   const wb = Workbook.createDefault();
@@ -28,14 +28,23 @@ test('cell phonetic run integers reject narrowing before replacing existing runs
     withWorkbook(mod.Workbook, (wb) => {
       assert.ok(wb.setText(0, 0, 0, '東京都').ok);
       assert.ok(wb.setCellPhoneticRuns(0, 0, 0, validRuns()).ok);
-      const before = wb.getCellPhoneticRuns(0, 0, 0).runs;
+      const before = readAll(
+        () => wb.getCellPhoneticRunCount(0, 0, 0),
+        (i) => wb.getCellPhoneticRun(0, 0, 0, i),
+      );
       for (const key of ['sb', 'eb']) {
         assert.throws(
           () => wb.setCellPhoneticRuns(0, 0, 0, [{ ...validRuns()[0], [key]: value }, validRuns()[1]]),
           RangeError,
           `setCellPhoneticRuns ${key}=${String(value)}`,
         );
-        assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, before);
+        assert.deepEqual(
+          readAll(
+            () => wb.getCellPhoneticRunCount(0, 0, 0),
+            (i) => wb.getCellPhoneticRun(0, 0, 0, i),
+          ),
+          before,
+        );
       }
     });
   }
@@ -46,18 +55,33 @@ test('cell phonetic run text rejects coercible non-strings like the WASM surface
   withWorkbook(mod.Workbook, (wb) => {
     assert.ok(wb.setText(0, 0, 0, '東京都').ok);
     assert.ok(wb.setCellPhoneticRuns(0, 0, 0, validRuns()).ok);
-    const before = wb.getCellPhoneticRuns(0, 0, 0).runs;
+    const before = readAll(
+      () => wb.getCellPhoneticRunCount(0, 0, 0),
+      (i) => wb.getCellPhoneticRun(0, 0, 0, i),
+    );
     for (const value of [42, true, { toString: () => 'ト' }]) {
       assert.throws(
         () => wb.setCellPhoneticRuns(0, 0, 0, [{ ...validRuns()[0], text: value }, validRuns()[1]]),
         TypeError,
         `setCellPhoneticRuns text=${String(value)}`,
       );
-      assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, before);
+      assert.deepEqual(
+        readAll(
+          () => wb.getCellPhoneticRunCount(0, 0, 0),
+          (i) => wb.getCellPhoneticRun(0, 0, 0, i),
+        ),
+        before,
+      );
     }
     const bytes = new TextEncoder().encode('トウキョウ');
     assert.ok(wb.setCellPhoneticRuns(0, 0, 0, [{ ...validRuns()[0], text: bytes }, validRuns()[1]]).ok);
-    assert.deepEqual(wb.getCellPhoneticRuns(0, 0, 0).runs, before);
+    assert.deepEqual(
+      readAll(
+        () => wb.getCellPhoneticRunCount(0, 0, 0),
+        (i) => wb.getCellPhoneticRun(0, 0, 0, i),
+      ),
+      before,
+    );
   });
 });
 

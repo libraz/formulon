@@ -290,12 +290,7 @@ JsStatus JsWorkbook::setWorkbookProtection(emscripten::val protection) {
 
 namespace {
 
-fm_status_t protected_range_item(const fm_workbook_t* wb, uint32_t sheet, std::size_t index, emscripten::val* out) {
-  fm_protected_range_t r{};
-  const fm_status_t rc = fm_sheet_get_protected_range(wb, sheet, index, &r);
-  if (rc != 0) {
-    return rc;
-  }
+emscripten::val protected_range_to_val(const fm_protected_range_t& r) {
   emscripten::val o = emscripten::val::object();
   o.set("spinCount", r.spin_count);
   emscripten::val ranges = emscripten::val::array();
@@ -309,14 +304,20 @@ fm_status_t protected_range_item(const fm_workbook_t* wb, uint32_t sheet, std::s
                          {"hashValue", r.hash_value},
                          {"saltValue", r.salt_value},
                          {"securityDescriptor", r.security_descriptor}});
-  *out = o;
-  return 0;
+  return o;
 }
 
 }  // namespace
 
-emscripten::val JsWorkbook::getProtectedRanges(uint32_t sheet) const {
-  return sheet_list(handle_, sheet, &fm_sheet_get_protected_range_count, &protected_range_item);
+JsNumberResult JsWorkbook::getProtectedRangeCount(uint32_t sheet) const {
+  return js_count_result(handle_, sheet, &fm_sheet_get_protected_range_count);
+}
+
+emscripten::val JsWorkbook::getProtectedRange(uint32_t sheet, uint32_t protectedRangeIndex) const {
+  fm_protected_range_t r{};
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_protected_range(handle_, sheet, protectedRangeIndex, &r)
+                                            : kBindingInvalidHandle;
+  return record_result(rc, protected_range_to_val(rc == 0 ? r : fm_protected_range_t{}));
 }
 
 namespace {
@@ -465,12 +466,7 @@ emscripten::val JsWorkbook::getHyperlink(uint32_t sheet, uint32_t row, uint32_t 
 
 namespace {
 
-fm_status_t validation_item(const fm_workbook_t* wb, uint32_t sheet, std::size_t index, emscripten::val* out) {
-  fm_data_validation_t v{};
-  const fm_status_t rc = fm_sheet_get_validation(wb, sheet, index, &v);
-  if (rc != 0) {
-    return rc;
-  }
+emscripten::val validation_to_val(const fm_data_validation_t& v) {
   emscripten::val item = emscripten::val::object();
   emscripten::val ranges = emscripten::val::array();
   for (std::size_t r = 0; r < v.range_count; ++r) {
@@ -490,14 +486,20 @@ fm_status_t validation_item(const fm_workbook_t* wb, uint32_t sheet, std::size_t
                             {"errorMessage", v.error_message},
                             {"promptTitle", v.prompt_title},
                             {"promptMessage", v.prompt_message}});
-  *out = item;
-  return 0;
+  return item;
 }
 
 }  // namespace
 
-emscripten::val JsWorkbook::getValidations(uint32_t sheet) const {
-  return sheet_list(handle_, sheet, &fm_sheet_get_validation_count, &validation_item);
+JsNumberResult JsWorkbook::getValidationCount(uint32_t sheet) const {
+  return js_count_result(handle_, sheet, &fm_sheet_get_validation_count);
+}
+
+emscripten::val JsWorkbook::getValidation(uint32_t sheet, uint32_t validationIndex) const {
+  fm_data_validation_t v{};
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_validation(handle_, sheet, validationIndex, &v) : kBindingInvalidHandle;
+  return record_result(rc, validation_to_val(rc == 0 ? v : fm_data_validation_t{}));
 }
 
 JsAddStyleResult JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {

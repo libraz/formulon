@@ -251,7 +251,7 @@ class WorkbookRoundtripTests(unittest.TestCase):
     def test_comment_enumeration_and_cf_formula_evaluation(self) -> None:
         with Workbook.create_default() as wb:
             wb.set_comment(0, 2, 3, "Ada", "review")
-            self.assertEqual(wb.comment_count(0), 1)
+            self.assertEqual(len(wb.list_comments(0)), 1)
             self.assertEqual(wb.list_comments(0), [(2, 3, "Ada", "review")])
             self.assertTrue(wb.evaluate_cf_formula(0, 0, 0, 0, 0, "=A1=0"))
 
@@ -361,13 +361,13 @@ class WorkbookSaveLoadTests(unittest.TestCase):
 
 
 class IterationTests(unittest.TestCase):
-    def test_iter_cells_yields_set_cells(self) -> None:
+    def test_get_cell_at_reads_set_cells(self) -> None:
         with Workbook.create_default() as wb:
             wb.set_number(0, 0, 0, 1.0)
             wb.set_number(0, 1, 1, 2.0)
             wb.set_formula(0, 2, 0, "=A1+B2")
             wb.recalc()
-            cells = list(wb.iter_cells(0))
+            cells = [wb.get_cell_at(0, i) for i in range(wb.get_cell_count(0))]
             # We expect at least the three cells we set.
             self.assertGreaterEqual(len(cells), 3)
             row_col = {(c.row, c.col): c for c in cells}
@@ -378,51 +378,48 @@ class IterationTests(unittest.TestCase):
             self.assertIsNotNone(row_col[(2, 0)].formula)
             self.assertIn("A1", row_col[(2, 0)].formula or "")
 
-    def test_iter_defined_names_empty_workbook(self) -> None:
+    def test_list_defined_names_empty_workbook(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertEqual(list(wb.list_defined_names()), [])
+            self.assertEqual(wb.list_defined_names(), [])
 
-    def test_iter_passthrough_empty_workbook(self) -> None:
+    def test_list_passthroughs_empty_workbook(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertEqual(list(wb.list_passthroughs()), [])
+            self.assertEqual(wb.list_passthroughs(), [])
 
 
 class IteratorHandleLivenessTests(unittest.TestCase):
-    """`close()` between two `next()` calls on a live iterator must raise
-    `FormulonError` on resume, not read the now-freed workbook handle."""
+    """A read after `close()` must raise `FormulonError`, not read the
+    now-freed workbook handle."""
 
-    def test_iter_cells_after_close_mid_iteration_raises(self) -> None:
+    def test_get_cell_at_after_close_raises(self) -> None:
         wb = Workbook.create_default()
         wb.set_number(0, 0, 0, 1.0)
         wb.set_number(0, 1, 0, 2.0)
-        it = wb.iter_cells(0)
-        next(it)
+        wb.get_cell_at(0, 0)
         wb.close()
         with self.assertRaises(FormulonError):
-            next(it)
+            wb.get_cell_at(0, 1)
 
-    def test_iter_defined_names_after_close_mid_iteration_raises(self) -> None:
+    def test_list_defined_names_after_close_raises(self) -> None:
         wb = Workbook.create_default()
         wb.set_defined_name("NameOne", "=1")
         wb.set_defined_name("NameTwo", "=2")
-        it = wb.list_defined_names()
-        next(it)
+        self.assertEqual(len(wb.list_defined_names()), 2)
         wb.close()
         with self.assertRaises(FormulonError):
-            next(it)
+            wb.list_defined_names()
 
-    def test_iter_tables_after_close_mid_iteration_raises(self) -> None:
+    def test_get_table_after_close_raises(self) -> None:
         wb = Workbook.create_default()
         wb.add_sheet("Sheet2")
         wb.set_text(0, 0, 0, "A")
         wb.set_text(1, 0, 0, "A")
         wb.add_table(0, CellRect(0, 0, 0, 0), "TableOne", "TableOne", ["A"])
         wb.add_table(1, CellRect(0, 0, 0, 0), "TableTwo", "TableTwo", ["A"])
-        it = wb.iter_tables()
-        next(it)
+        wb.get_table(0)
         wb.close()
         with self.assertRaises(FormulonError):
-            next(it)
+            wb.get_table(1)
 
     def test_table_rename_column_rewrites_structured_references(self) -> None:
         with Workbook.create_default() as wb:
