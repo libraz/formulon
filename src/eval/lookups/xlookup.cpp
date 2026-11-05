@@ -184,10 +184,25 @@ std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_va
       if (wildcards && lookup_value.is_text()) {
         prepared = prepare_text_query(lookup_value.as_text(), profile, CollationStrength::kDynamic);
       }
+      // An exact text lookup keys its operand once for the whole scan; `*` and `?` are literal here.
+      std::optional<CollateQuery> exact_text;
+      if (!prepared.has_value() && lookup_value.is_text()) {
+        exact_text.emplace(lookup_value.as_text(), profile, CollationStrength::kDynamic);
+        if (!exact_text->keyed()) {
+          exact_text.reset();
+        }
+      }
       for (std::size_t k = 0; k < n; ++k) {
         const std::size_t i = idx_at(k);
-        if (prepared.has_value() ? prepared_text_query_matches(cells[i], prepared.value(), profile)
-                                 : xlookup_exact_eq(cells[i], lookup_value, profile)) {
+        bool hit = false;
+        if (prepared.has_value()) {
+          hit = prepared_text_query_matches(cells[i], prepared.value(), profile);
+        } else if (exact_text.has_value()) {
+          hit = cells[i].is_text() && exact_text->compare(cells[i].as_text()) == 0;
+        } else {
+          hit = xlookup_exact_eq(cells[i], lookup_value, profile);
+        }
+        if (hit) {
           return i;
         }
       }

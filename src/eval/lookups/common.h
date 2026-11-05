@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -50,11 +51,14 @@ std::string lookup_wildcard_key(std::string_view text, ExcelProfile profile);
 
 // A text lookup_value prepared once for a linear scan: either a folded
 // wildcard pattern or an unescaped literal compared through the collator at
-// `strength`. Non-text cells never match.
+// `strength`. Non-text cells never match. `prepared_text_query_matches` must get the profile the query was
+// prepared with.
 struct PreparedTextQuery {
   bool has_pattern = false;
   std::string prepared;
   CollationStrength strength = CollationStrength::kDynamic;
+  // The literal's collation operand; set exactly when `has_pattern` is false.
+  std::optional<CollateQuery> literal;
 };
 
 PreparedTextQuery prepare_text_query(std::string_view raw, ExcelProfile profile, CollationStrength strength);

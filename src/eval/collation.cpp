@@ -1227,6 +1227,20 @@ int collate(std::string_view a, std::string_view b, ExcelProfile profile, Collat
   return collate_key_compare(collation_key(a, profile, strength), collation_key(b, profile, strength));
 }
 
+CollateQuery::CollateQuery(std::string_view query, ExcelProfile profile, CollationStrength strength)
+    : query_(query), profile_(profile), strength_(strength), ascii_(ascii_fast(locale_data(profile), query)) {
+  if (!ascii_) {
+    key_ = collation_key(query_, profile, strength);
+  }
+}
+
+int CollateQuery::compare(std::string_view cell) const {
+  if (ascii_) {
+    return collate(cell, query_, profile_, strength_);
+  }
+  return collate_key_compare(collation_key(cell, profile_, strength_), key_);
+}
+
 int collate_key_compare(std::string_view key_a, std::string_view key_b) noexcept {
   const std::size_t n = std::min(key_a.size(), key_b.size());
   const int c = n == 0 ? 0 : std::memcmp(key_a.data(), key_b.data(), n);

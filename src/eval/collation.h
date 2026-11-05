@@ -37,6 +37,26 @@ int collate(std::string_view a, std::string_view b, ExcelProfile profile, Collat
 /// Compares two keys from `collation_key` (same profile and strength); -1, 0 or 1.
 int collate_key_compare(std::string_view key_a, std::string_view key_b) noexcept;
 
+/// One fixed operand of repeated `collate(cell, query, ...)` calls. The query's key is built once, so `compare(cell)`
+/// returns exactly what `collate(cell, query, profile, strength)` does while keying only the cell.
+class CollateQuery {
+ public:
+  CollateQuery(std::string_view query, ExcelProfile profile, CollationStrength strength);
+
+  int compare(std::string_view cell) const;
+
+  /// False when the query takes the ASCII fast path, where `collate` itself is as cheap as `compare`.
+  bool keyed() const noexcept { return !ascii_; }
+
+ private:
+  std::string query_;
+  // Empty when the query takes the ASCII fast path, whose comparison needs no key.
+  std::string key_;
+  ExcelProfile profile_;
+  CollationStrength strength_;
+  bool ascii_;
+};
+
 /// D-function prefix rule: truncate `cell` to the code-point count of `criterion`,
 /// then compare at `kCompare` for equality.
 bool collate_prefix_equal(std::string_view cell, std::string_view criterion, ExcelProfile profile);

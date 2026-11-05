@@ -138,9 +138,11 @@ std::string lookup_wildcard_key(std::string_view text, ExcelProfile profile) {
 
 PreparedTextQuery prepare_text_query(std::string_view raw, ExcelProfile profile, CollationStrength strength) {
   if (scan_has_wildcard(raw)) {
-    return PreparedTextQuery{true, lookup_wildcard_key(raw, profile), strength};
+    return PreparedTextQuery{true, lookup_wildcard_key(raw, profile), strength, std::nullopt};
   }
-  return PreparedTextQuery{false, unescape_wildcard_literal(raw), strength};
+  PreparedTextQuery query{false, unescape_wildcard_literal(raw), strength, std::nullopt};
+  query.literal.emplace(query.prepared, profile, strength);
+  return query;
 }
 
 bool prepared_text_query_matches(const Value& cell, const PreparedTextQuery& query, ExcelProfile profile) {
@@ -149,6 +151,9 @@ bool prepared_text_query_matches(const Value& cell, const PreparedTextQuery& que
   }
   if (query.has_pattern) {
     return wildcard_match(query.prepared, lookup_wildcard_key(cell.as_text(), profile));
+  }
+  if (query.literal->keyed()) {
+    return query.literal->compare(cell.as_text()) == 0;
   }
   return collate(cell.as_text(), query.prepared, profile, query.strength) == 0;
 }

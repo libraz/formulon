@@ -905,6 +905,46 @@ TEST(CollationWin, WindowsKanaFoldingGoldens) {
   EXPECT_TRUE(collate_prefix_equal("Smithfield", "sm", profile));
 }
 
+TEST(CollateQuery, MatchesCollateOnMixedText) {
+  const std::vector<std::string> texts = {
+      "",
+      "a",
+      "A",
+      "abc",
+      "Abc",
+      "ABD",
+      "x-y",
+      "123",
+      "\xE3\x81\x8B\xE3\x83\xBC",  // かー
+      "\xE3\x82\xAB",              // カ
+      "\xEF\xBD\xB6\xEF\xBE\x9E",  // ｶﾞ
+      "\xE3\x82\xAC",              // ガ
+      "\xE6\xBC\xA2\xE5\xAD\x97",  // 漢字
+      "\xEF\xBC\xA1",              // Ａ (fullwidth)
+      "\xEF\xBC\x91\xEF\xBC\x92",  // １２
+      "\xC3\x9F",                  // ß
+      "abc\xE3\x82\xAB",           // abcカ
+      "\xE3\x81\x8B\xE3\x81\x82",  // かあ
+  };
+  const ExcelProfile profiles[] = {
+      {ExcelHost::kMac365, ExcelLocale::kJaJP}, {ExcelHost::kWin365, ExcelLocale::kJaJP},
+      {ExcelHost::kMac365, ExcelLocale::kZhCN}, {ExcelHost::kMac365, ExcelLocale::kEnUS},
+      {ExcelHost::kWin365, ExcelLocale::kDeDE},
+  };
+  const CollationStrength strengths[] = {CollationStrength::kCompare, CollationStrength::kDynamic,
+                                         CollationStrength::kClassicExact};
+  for (const ExcelProfile profile : profiles) {
+    for (const CollationStrength strength : strengths) {
+      for (const std::string& query : texts) {
+        const CollateQuery prepared(query, profile, strength);
+        for (const std::string& cell : texts) {
+          EXPECT_EQ(prepared.compare(cell), collate(cell, query, profile, strength)) << cell << " vs " << query;
+        }
+      }
+    }
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
