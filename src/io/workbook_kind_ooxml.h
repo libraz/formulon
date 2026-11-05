@@ -23,9 +23,11 @@ namespace io {
 /// [ECMA-376]; any other content type the reader encounters is treated
 /// as `kXlsx` and surfaces a structured-log warning rather than failing.
 inline const char* workbook_kind_content_type(WorkbookKind kind) {
+  static constexpr const char* kXlsxContentType =
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
   switch (kind) {
     case WorkbookKind::kXlsx:
-      return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
+      return kXlsxContentType;
     case WorkbookKind::kXlsm:
       return "application/vnd.ms-excel.sheet.macroEnabled.main+xml";
     case WorkbookKind::kXltx:
@@ -36,7 +38,7 @@ inline const char* workbook_kind_content_type(WorkbookKind kind) {
   // Fallback: should be unreachable, but the engine builds with
   // -fno-exceptions and warnings-as-errors, so we return the safe
   // default rather than UB.
-  return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
+  return kXlsxContentType;
 }
 
 /// Returns the canonical file extension associated with `kind` (no
