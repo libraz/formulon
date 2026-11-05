@@ -11,6 +11,7 @@
 #include "parser/parse_error.h"
 #include "parser/parser.h"
 #include "parser/parser_detail.h"
+#include "parser/reference.h"
 #include "parser/token.h"
 #include "utils/strings.h"
 
@@ -50,34 +51,9 @@ bool IsLetNameShape(std::string_view name) noexcept {
   return true;
 }
 
-// Returns true iff `name` has the shape of an A1-style cell reference
-// (`[A-Za-z]{1,3}[1-9][0-9]*`). Excel rejects such identifiers as LET
-// binding names because they would be indistinguishable from cell refs when
-// used in the body.
-bool LooksLikeCellRef(std::string_view name) noexcept {
-  std::size_t i = 0;
-  while (i < name.size() && IsAsciiLetter(name[i])) {
-    ++i;
-  }
-  const std::size_t letters = i;
-  if (letters == 0 || letters > detail::kMaxColumnLetters) {
-    return false;
-  }
-  // First digit must not be zero so names like `A0` (not a valid ref) still
-  // go through the LET path.
-  if (i >= name.size() || name[i] < '1' || name[i] > '9') {
-    return false;
-  }
-  ++i;
-  while (i < name.size() && IsAsciiDigit(name[i])) {
-    ++i;
-  }
-  return i == name.size();
-}
-
-// A valid LET / LAMBDA binding name: identifier-shaped and not a cell reference.
+// A valid LET / LAMBDA binding name: identifier-shaped and not a cell inside the grid.
 bool IsBindingName(std::string_view name) noexcept {
-  return IsLetNameShape(name) && !LooksLikeCellRef(name);
+  return IsLetNameShape(name) && !is_a1_cell_shaped(name);
 }
 
 }  // namespace

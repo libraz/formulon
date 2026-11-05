@@ -44,25 +44,6 @@ std::size_t SkipDigits(std::string_view name, std::size_t* i) noexcept {
   return *i - start;
 }
 
-// A cell inside the A1 grid (`A1`..`XFD1048576`, any letter case): the
-// tokenizer reads such a run as a cell reference. Zero padding counts
-// (`A01` is row 1); `XFE1` and `A0` lie off the grid and are ordinary names.
-bool IsA1CellShaped(std::string_view name) noexcept {
-  std::size_t i = 0;
-  while (i < name.size() && detail::IsAsciiLetter(name[i]) && i < detail::kMaxColumnLetters) {
-    ++i;
-  }
-  if (i == 0 || detail::DecodeColumnLetters(name.substr(0, i)) == 0) {
-    return false;
-  }
-  const std::size_t digits_begin = i;
-  if (SkipDigits(name, &i) == 0 || i != name.size()) {
-    return false;
-  }
-  const std::uint64_t row = detail::DecodeDigitRunClamped(name.substr(digits_begin), detail::kMaxRow);
-  return row >= 1U && row <= detail::kMaxRow;
-}
-
 // `<row>`, `<col>`, `<row><n>`, `<col><n>`, `<row><n><col><n>`, `<row><col><n>`,
 // `<row><n><col>`, `<row><col>` for the given R1C1 letters, ASCII
 // case-insensitively: the absolute R1C1 shapes a sheet name could be read as.
@@ -134,13 +115,32 @@ bool LocalSheetNeedsQuotingInEitherNotation(std::string_view name) noexcept {
 
 }  // namespace
 
+// A cell inside the A1 grid (`A1`..`XFD1048576`, any letter case): the
+// tokenizer reads such a run as a cell reference. Zero padding counts
+// (`A01` is row 1); `XFE1` and `A0` lie off the grid and are ordinary names.
+bool is_a1_cell_shaped(std::string_view name) noexcept {
+  std::size_t i = 0;
+  while (i < name.size() && detail::IsAsciiLetter(name[i]) && i < detail::kMaxColumnLetters) {
+    ++i;
+  }
+  if (i == 0 || detail::DecodeColumnLetters(name.substr(0, i)) == 0) {
+    return false;
+  }
+  const std::size_t digits_begin = i;
+  if (SkipDigits(name, &i) == 0 || i != name.size()) {
+    return false;
+  }
+  const std::uint64_t row = detail::DecodeDigitRunClamped(name.substr(digits_begin), detail::kMaxRow);
+  return row >= 1U && row <= detail::kMaxRow;
+}
+
 bool local_sheet_needs_quoting_a1(std::string_view name) noexcept {
-  return LocalSheetNeedsQuotingInEitherNotation(name) || IsA1CellShaped(name);
+  return LocalSheetNeedsQuotingInEitherNotation(name) || is_a1_cell_shaped(name);
 }
 
 bool local_sheet_needs_quoting_display(std::string_view name, const LocaleFacts& facts) noexcept {
   if (name.empty() || !IsBareRunIn(name, facts.dbcs_codepage != DbcsCodepage::kNone) || OpensLikeNumber(name) ||
-      IsA1CellShaped(name) || IsRowKColShaped(name)) {
+      is_a1_cell_shaped(name) || IsRowKColShaped(name)) {
     return true;
   }
   const bool english_bool = strings::case_insensitive_eq(facts.true_name, "TRUE");

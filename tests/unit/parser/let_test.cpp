@@ -142,6 +142,55 @@ TEST(ParserLet, InvalidNameMultiLetterCellRefIsRejected) {
   EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::LetInvalidName));
 }
 
+TEST(ParserLet, ZeroPaddedRowCellRefIsRejected) {
+  // The tokenizer reads `A01` as a cell reference, so it is not a legal name.
+  Arena a;
+  Parser p("=LET(A01, 1, A01)", a);
+  (void)p.parse();
+  EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::LetInvalidName));
+}
+
+TEST(ParserLet, OutOfGridColumnIsAcceptedAsName) {
+  // XFE and ZZZ lie past the last column (XFD), so the tokenizer reads these as names.
+  EXPECT_EQ(ParseToSexpr("=LET(XFE1, 1, XFE1)"), "(let ((XFE1 (num 1))) (name XFE1))");
+  EXPECT_EQ(ParseToSexpr("=LET(ZZZ1, 1, ZZZ1)"), "(let ((ZZZ1 (num 1))) (name ZZZ1))");
+}
+
+TEST(ParserLet, OutOfGridRowIsAcceptedAsName) {
+  EXPECT_EQ(ParseToSexpr("=LET(A1048577, 1, A1048577)"), "(let ((A1048577 (num 1))) (name A1048577))");
+}
+
+TEST(ParserLet, LastGridCellIsRejected) {
+  Arena a;
+  Parser p("=LET(XFD1048576, 1, XFD1048576)", a);
+  (void)p.parse();
+  EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::LetInvalidName));
+}
+
+// ---------------------------------------------------------------------------
+// LAMBDA parameter-name validation (same grid bound as LET binding names)
+// ---------------------------------------------------------------------------
+
+TEST(ParserLet, LambdaOutOfGridParamIsAcceptedAsName) {
+  EXPECT_EQ(ParseToSexpr("=LAMBDA(XFE1, XFE1)"), "(lambda (XFE1) (name XFE1))");
+  EXPECT_EQ(ParseToSexpr("=LAMBDA(ZZZ1, ZZZ1)"), "(lambda (ZZZ1) (name ZZZ1))");
+  EXPECT_EQ(ParseToSexpr("=LAMBDA(A1048577, A1048577)"), "(lambda (A1048577) (name A1048577))");
+}
+
+TEST(ParserLet, LambdaZeroPaddedRowParamIsRejected) {
+  Arena a;
+  Parser p("=LAMBDA(A01, A01)", a);
+  (void)p.parse();
+  EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::LambdaInvalidParam));
+}
+
+TEST(ParserLet, LambdaLastGridCellParamIsRejected) {
+  Arena a;
+  Parser p("=LAMBDA(XFD1048576, 1)", a);
+  (void)p.parse();
+  EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::LambdaInvalidParam));
+}
+
 // ---------------------------------------------------------------------------
 // Arity errors
 // ---------------------------------------------------------------------------

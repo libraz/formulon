@@ -72,6 +72,11 @@ std::string format_a1(const Reference& r);
 /// keeps both halves: each endpoint moves on its own under a relative copy.
 bool whole_axis_pair_is_single(const Reference& lhs, const Reference& rhs) noexcept;
 
+/// True iff `name` is a cell inside the A1 grid (`A1`..`XFD1048576`, any
+/// letter case, no `$`): the tokenizer reads such a run as a cell reference.
+/// Zero padding counts (`A01` is row 1); `XFE1` and `A0` are ordinary names.
+bool is_a1_cell_shaped(std::string_view name) noexcept;
+
 /// Returns true iff the local sheet `name` must be wrapped in single quotes
 /// when written into an A1 reference: names leaving the bare qualifier run
 /// (ASCII letters, digits, `.`, `_` and non-ASCII characters other than
