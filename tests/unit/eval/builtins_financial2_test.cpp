@@ -201,7 +201,7 @@ TEST(FinancialFvSchedule, BasicRangeOfRates) {
 
 TEST(FinancialFvSchedule, ScalarRatesWork) {
   // All scalar tail args: 100 * 1.1 * 1.2 = 132.
-  const Value v = EvalSource("=FVSCHEDULE(100, 0.1, 0.2)");
+  const Value v = EvalSource("=FVSCHEDULE(100, {0.1,0.2})");
   ASSERT_TRUE(v.is_number());
   EXPECT_NEAR(v.as_number(), 132.0, 1e-10);
 }

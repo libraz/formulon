@@ -103,15 +103,14 @@ void register_service_stub_builtins(FunctionRegistry& registry) {
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
       // IMAGE(source, [alt_text], [sizing], [height], [width]) -- arity 1..5.
       {"IMAGE", 1u, 5u, &Image},
-      // RTD(progID, server, topic1, [topic2], ...) -- Excel caps total args
-      // at 255 after the two required scalars.
-      {"RTD", 3u, 255u, &Rtd},
-      // TRANSLATE(text, source_lang, target_lang) -- Mac Excel 365 accepts
-      // the source language as optional (auto-detect), so min_arity = 2.
-      {"TRANSLATE", 2u, 3u, &Translate},
+      // RTD(progID, server, topic1, [topic2], ...).
+      {"RTD", 3u, kVariadic, &Rtd},
+      // TRANSLATE(text, [source_lang], [target_lang]) -- both languages are
+      // optional at entry in Excel 365.
+      {"TRANSLATE", 1u, 3u, &Translate},
       {"DETECTLANGUAGE", 1u, 1u, &DetectLanguage},
       // COPILOT(prompt, [context...]) -- variadic context cells.
-      {"COPILOT", 1u, 255u, &Copilot},
+      {"COPILOT", 1u, kVariadic, &Copilot},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
   // GETPIVOTDATA(data_field, pivot_anchor, [field, item, ...]) is

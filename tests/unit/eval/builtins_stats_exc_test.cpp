@@ -120,13 +120,13 @@ TEST(BuiltinsPercentileExc, KAboveUpperBoundaryIsNum) {
 }
 
 TEST(BuiltinsPercentileExc, EmptyNumericSliceIsNum) {
-  const Value v = EvalSource("=PERCENTILE.EXC(\"a\", \"b\", 0.5)");
+  const Value v = EvalSource("=PERCENTILE.EXC({\"a\",\"b\"}, 0.5)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(BuiltinsPercentileExc, DirectErrorPropagates) {
-  const Value v = EvalSource("=PERCENTILE.EXC(1, 2, 3, #DIV/0!, 0.5)");
+  const Value v = EvalSource("=PERCENTILE.EXC(#DIV/0!, 0.5)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
@@ -186,7 +186,7 @@ TEST(BuiltinsQuartileExc, QFractionalTruncatesTowardZero) {
 }
 
 TEST(BuiltinsQuartileExc, EmptyNumericSliceIsNum) {
-  const Value v = EvalSource("=QUARTILE.EXC(\"a\", \"b\", 2)");
+  const Value v = EvalSource("=QUARTILE.EXC({\"a\",\"b\"}, 2)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }

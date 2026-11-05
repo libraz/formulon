@@ -566,7 +566,7 @@ void register_financial_builtins(FunctionRegistry& registry) {
       {"PDURATION", 3u, 3u, &financial_detail::PDuration},
       {"RRI", 3u, 3u, &financial_detail::Rri},
       {"ISPMT", 4u, 4u, &financial_detail::IsPmt},
-      builtins_detail::analysis_toolpak({"FVSCHEDULE", 2u, kVariadic, &financial_detail::FvSchedule, true, true, true}),
+      builtins_detail::analysis_toolpak({"FVSCHEDULE", 2u, 2u, &financial_detail::FvSchedule, true, true, true}),
       {"STOCKHISTORY", 2u, kVariadic, &financial_detail::StockHistory},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));

@@ -354,42 +354,42 @@ TEST(BuiltinsModeMult, ZeroArgRejected) {
 // ---------------------------------------------------------------------------
 
 TEST(BuiltinsLarge, K1IsMax) {
-  const Value v = EvalSource("=LARGE(3, 1, 4, 1, 5, 9, 2, 6, 1)");
+  const Value v = EvalSource("=LARGE({3,1,4,1,5,9,2,6}, 1)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 9.0);
 }
 
 TEST(BuiltinsLarge, K2SecondLargest) {
   // Sorted desc: 9, 6, 5, 4, 3, 2, 1, 1, 1 -> 2nd is 6.
-  const Value v = EvalSource("=LARGE(3, 1, 4, 1, 5, 9, 2, 6, 1)");
+  const Value v = EvalSource("=LARGE({3,1,4,1,5,9,2,6}, 1)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 9.0);
-  const Value v2 = EvalSource("=LARGE(3, 1, 4, 1, 5, 9, 2, 6, 2)");
+  const Value v2 = EvalSource("=LARGE({3,1,4,1,5,9,2,6}, 2)");
   ASSERT_TRUE(v2.is_number());
   EXPECT_DOUBLE_EQ(v2.as_number(), 6.0);
 }
 
 TEST(BuiltinsLarge, KEqualsNIsMin) {
   // 5 numerics: 1, 2, 3, 4, 5. k=5 -> smallest.
-  const Value v = EvalSource("=LARGE(1, 2, 3, 4, 5, 5)");
+  const Value v = EvalSource("=LARGE({1,2,3,4,5}, 5)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
 TEST(BuiltinsLarge, KTooLargeIsNum) {
-  const Value v = EvalSource("=LARGE(1, 2, 3, 5)");
+  const Value v = EvalSource("=LARGE({1,2,3}, 5)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(BuiltinsLarge, KZeroIsNum) {
-  const Value v = EvalSource("=LARGE(1, 2, 3, 0)");
+  const Value v = EvalSource("=LARGE({1,2,3}, 0)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(BuiltinsLarge, KNegativeIsNum) {
-  const Value v = EvalSource("=LARGE(1, 2, 3, -1)");
+  const Value v = EvalSource("=LARGE({1,2,3}, -1)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
@@ -403,29 +403,28 @@ TEST(BuiltinsLarge, KFractionalTruncates) {
   // `large_k_fractional_truncates` and `large_k_fractional_at_half` in
   // `tests/oracle/cases/comparison_rank_probes.yaml` for the Mac
   // ground truth.)
-  const Value v = EvalSource("=LARGE(1, 2, 3, 4, 5, 2.7)");
+  const Value v = EvalSource("=LARGE({1,2,3,4,5}, 2.7)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
 }
 
 TEST(BuiltinsLarge, DirectScalarTextUnparseableIsValue) {
-  // Direct scalar Text arguments go through strict numeric coercion, so an
+  // A direct scalar Text argument goes through strict numeric coercion, so an
   // unparseable `"a"` surfaces #VALUE! rather than being silently skipped.
   // Matches Mac Excel 365 and IronCalc's SMALL_LARGE fixture (see J4
   // `=SMALL("Hello", 1)` -> #VALUE!). This replaces the previous lenient
   // behaviour where non-numeric scalars were dropped.
-  const Value v = EvalSource("=LARGE(10, \"a\", 20, TRUE, 30, 1)");
+  const Value v = EvalSource("=LARGE(\"a\", 1)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsLarge, DirectScalarBoolCoerces) {
-  // Direct scalar Bool arguments coerce to 1 / 0 (TRUE -> 1, FALSE -> 0)
+  // A direct scalar Bool argument coerces to 1 / 0 (TRUE -> 1, FALSE -> 0)
   // for SMALL / LARGE, matching the Mac Excel 365 oracle.
-  //   data = [10, 1, 20, 30] after coercion; k=1 -> max = 30.
-  const Value v = EvalSource("=LARGE(10, TRUE, 20, 30, 1)");
+  const Value v = EvalSource("=LARGE(TRUE, 1)");
   ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 30.0);
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
 TEST(BuiltinsLarge, DirectScalarNumericTextCoerces) {
@@ -493,26 +492,26 @@ TEST(BuiltinsLarge, CrossSheetRange) {
 }
 
 TEST(BuiltinsSmall, K1IsMin) {
-  const Value v = EvalSource("=SMALL(3, 1, 4, 1, 5, 9, 2, 6, 1)");
+  const Value v = EvalSource("=SMALL({3,1,4,1,5,9,2,6}, 1)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
 TEST(BuiltinsSmall, K2SecondSmallest) {
   // Sorted asc: 1, 2, 3, 4, 5 -> 2nd is 2.
-  const Value v = EvalSource("=SMALL(5, 4, 3, 2, 1, 2)");
+  const Value v = EvalSource("=SMALL({5,4,3,2,1}, 2)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
 TEST(BuiltinsSmall, KEqualsNIsMax) {
-  const Value v = EvalSource("=SMALL(1, 2, 3, 4, 5, 5)");
+  const Value v = EvalSource("=SMALL({1,2,3,4,5}, 5)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 5.0);
 }
 
 TEST(BuiltinsSmall, KOutOfRangeIsNum) {
-  const Value v = EvalSource("=SMALL(1, 2, 3, 5)");
+  const Value v = EvalSource("=SMALL({1,2,3}, 5)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
@@ -532,27 +531,27 @@ TEST(BuiltinsSmall, Range) {
 // ---------------------------------------------------------------------------
 
 TEST(BuiltinsPercentileInc, K0IsMin) {
-  const Value v = EvalSource("=PERCENTILE.INC(10, 20, 30, 40, 50, 0)");
+  const Value v = EvalSource("=PERCENTILE.INC({10,20,30,40,50}, 0)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 10.0);
 }
 
 TEST(BuiltinsPercentileInc, K1IsMax) {
-  const Value v = EvalSource("=PERCENTILE.INC(10, 20, 30, 40, 50, 1)");
+  const Value v = EvalSource("=PERCENTILE.INC({10,20,30,40,50}, 1)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 50.0);
 }
 
 TEST(BuiltinsPercentileInc, KHalfIsMedian) {
   // 5 values, k=0.5 -> pos = 0.5 * 4 = 2 -> exact index -> 30.
-  const Value v = EvalSource("=PERCENTILE.INC(10, 20, 30, 40, 50, 0.5)");
+  const Value v = EvalSource("=PERCENTILE.INC({10,20,30,40,50}, 0.5)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 30.0);
 }
 
 TEST(BuiltinsPercentileInc, KQuarterInterpolates) {
   // 5 values, k=0.25 -> pos = 0.25 * 4 = 1 -> exact -> 20.
-  const Value v = EvalSource("=PERCENTILE.INC(10, 20, 30, 40, 50, 0.25)");
+  const Value v = EvalSource("=PERCENTILE.INC({10,20,30,40,50}, 0.25)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 20.0);
 }
@@ -560,38 +559,38 @@ TEST(BuiltinsPercentileInc, KQuarterInterpolates) {
 TEST(BuiltinsPercentileInc, FractionalInterpolation) {
   // 4 values, k=0.5 -> pos = 0.5 * 3 = 1.5 -> blend of idx 1 (20) and 2 (30).
   // r = 20 + 0.5 * (30 - 20) = 25.
-  const Value v = EvalSource("=PERCENTILE.INC(10, 20, 30, 40, 0.5)");
+  const Value v = EvalSource("=PERCENTILE.INC({10,20,30,40}, 0.5)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 25.0);
 }
 
 TEST(BuiltinsPercentileInc, OppositeExtremeFiniteEndpointsOverflowIsNum) {
-  const Value v = EvalSource("=PERCENTILE.INC(-9.99999999999999E307,9.99999999999999E307,0.5)");
+  const Value v = EvalSource("=PERCENTILE.INC({-9.99999999999999E307,9.99999999999999E307}, 0.5)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(BuiltinsPercentileInc, KAbove1IsNum) {
-  const Value v = EvalSource("=PERCENTILE.INC(10, 20, 30, 1.5)");
+  const Value v = EvalSource("=PERCENTILE.INC({10,20,30}, 1.5)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(BuiltinsPercentileInc, KBelow0IsNum) {
-  const Value v = EvalSource("=PERCENTILE.INC(10, 20, 30, -0.5)");
+  const Value v = EvalSource("=PERCENTILE.INC({10,20,30}, -0.5)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(BuiltinsPercentileInc, EmptyNumericSliceIsNum) {
-  const Value v = EvalSource("=PERCENTILE.INC(\"a\", \"b\", 0.5)");
+  const Value v = EvalSource("=PERCENTILE.INC({\"a\",\"b\"}, 0.5)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(BuiltinsPercentileInc, AliasMatchesCanonical) {
-  const Value a = EvalSource("=PERCENTILE.INC(1, 2, 3, 4, 0.3)");
-  const Value b = EvalSource("=PERCENTILE(1, 2, 3, 4, 0.3)");
+  const Value a = EvalSource("=PERCENTILE.INC({1,2,3,4}, 0.3)");
+  const Value b = EvalSource("=PERCENTILE({1,2,3,4}, 0.3)");
   ASSERT_TRUE(a.is_number());
   ASSERT_TRUE(b.is_number());
   EXPECT_DOUBLE_EQ(a.as_number(), b.as_number());
@@ -618,11 +617,11 @@ TEST(BuiltinsQuartileInc, KnownDataset) {
   //   q=2 -> median=7
   //   q=1 -> pos = 0.25 * 6 = 1.5 -> blend(2, 4) = 3.0
   //   q=3 -> pos = 0.75 * 6 = 4.5 -> blend(8, 9) = 8.5
-  const Value q0 = EvalSource("=QUARTILE.INC(1, 2, 4, 7, 8, 9, 10, 0)");
-  const Value q1 = EvalSource("=QUARTILE.INC(1, 2, 4, 7, 8, 9, 10, 1)");
-  const Value q2 = EvalSource("=QUARTILE.INC(1, 2, 4, 7, 8, 9, 10, 2)");
-  const Value q3 = EvalSource("=QUARTILE.INC(1, 2, 4, 7, 8, 9, 10, 3)");
-  const Value q4 = EvalSource("=QUARTILE.INC(1, 2, 4, 7, 8, 9, 10, 4)");
+  const Value q0 = EvalSource("=QUARTILE.INC({1,2,4,7,8,9,10}, 0)");
+  const Value q1 = EvalSource("=QUARTILE.INC({1,2,4,7,8,9,10}, 1)");
+  const Value q2 = EvalSource("=QUARTILE.INC({1,2,4,7,8,9,10}, 2)");
+  const Value q3 = EvalSource("=QUARTILE.INC({1,2,4,7,8,9,10}, 3)");
+  const Value q4 = EvalSource("=QUARTILE.INC({1,2,4,7,8,9,10}, 4)");
   ASSERT_TRUE(q0.is_number());
   ASSERT_TRUE(q1.is_number());
   ASSERT_TRUE(q2.is_number());
@@ -636,29 +635,29 @@ TEST(BuiltinsQuartileInc, KnownDataset) {
 }
 
 TEST(BuiltinsQuartileInc, QAbove4IsNum) {
-  const Value v = EvalSource("=QUARTILE.INC(1, 2, 3, 5)");
+  const Value v = EvalSource("=QUARTILE.INC({1,2,3}, 5)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(BuiltinsQuartileInc, QNegativeIsNum) {
-  const Value v = EvalSource("=QUARTILE.INC(1, 2, 3, -1)");
+  const Value v = EvalSource("=QUARTILE.INC({1,2,3}, -1)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(BuiltinsQuartileInc, QFractionalTruncatesTowardZero) {
   // Excel truncates a fractional quart toward zero: 1.5 -> Q1 -> P25 of {1,2,3,4}.
-  const Value q15 = EvalSource("=QUARTILE.INC(1, 2, 3, 4, 1.5)");
-  const Value q1 = EvalSource("=QUARTILE.INC(1, 2, 3, 4, 1)");
+  const Value q15 = EvalSource("=QUARTILE.INC({1,2,3,4}, 1.5)");
+  const Value q1 = EvalSource("=QUARTILE.INC({1,2,3,4}, 1)");
   ASSERT_TRUE(q15.is_number());
   ASSERT_TRUE(q1.is_number());
   EXPECT_DOUBLE_EQ(q15.as_number(), q1.as_number());
 }
 
 TEST(BuiltinsQuartileInc, AliasMatchesCanonical) {
-  const Value a = EvalSource("=QUARTILE.INC(1, 2, 4, 7, 8, 9, 10, 1)");
-  const Value b = EvalSource("=QUARTILE(1, 2, 4, 7, 8, 9, 10, 1)");
+  const Value a = EvalSource("=QUARTILE.INC({1,2,4,7,8,9,10}, 1)");
+  const Value b = EvalSource("=QUARTILE({1,2,4,7,8,9,10}, 1)");
   ASSERT_TRUE(a.is_number());
   ASSERT_TRUE(b.is_number());
   EXPECT_DOUBLE_EQ(a.as_number(), b.as_number());
