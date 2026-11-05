@@ -277,6 +277,12 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
   if (target == nullptr) {
     return short_circuit;
   }
+  return resolve_cell(*target, ref, arena, registry);
+}
+
+Value EvalContext::resolve_cell(const Sheet& sheet, const parser::Reference& ref, Arena& arena,
+                                const FunctionRegistry& registry) const {
+  const Sheet* const target = &sheet;
   if (cell_value_overlay_ != nullptr) {
     if (const Value* replacement = cell_value_overlay_->lookup(*target, ref.row, ref.col); replacement != nullptr) {
       return adopt_text_into(arena, *replacement);
@@ -514,7 +520,6 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
     return std::vector<Value>{};
   }
   const Sheet* target_sheet = walked.value().sheet;
-  const std::string_view effective_sheet_name = walked.value().sheet_name;
   const std::uint32_t r_min = walked.value().rect->row_first;
   const std::uint32_t r_max = walked.value().rect->row_last;
   const std::uint32_t c_min = walked.value().rect->col_first;
@@ -558,19 +563,16 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
     if (overlay_index.has_value() && index == *overlay_index) {
       continue;
     }
+    // The walked sheet is the one the qualifier resolves to, so the cycle key and memo see the same target
+    // `resolve_ref` would have found, without a second name lookup per cell.
     parser::Reference cell_ref{};
-    // Propagate the effective sheet qualifier so `resolve_ref` routes
-    // through the same `resolve_target_sheet` logic — this keeps the
-    // `(sheet, row, col)` cycle key for the correct target sheet even
-    // for ranges where only LHS was qualified in the source.
-    cell_ref.sheet = effective_sheet_name;
     cell_ref.row = r_min + static_cast<std::uint32_t>(index / width);
     cell_ref.col = c_min + static_cast<std::uint32_t>(index % width);
     // Per-cell error Values (e.g. #DIV/0! from a formula cell, #REF!
     // from a cycle caught by EvalState) are pushed through unchanged so
     // the dispatcher can honour `propagate_errors`. The shared resolver
     // scalarizes ordinary formula references, including 3-D callers.
-    out[index] = resolve_ref(cell_ref, arena, registry);
+    out[index] = resolve_cell(*target_sheet, cell_ref, arena, registry);
   }
   // Mark only the copied range values. The source sheet/cache remains plain
   // Blank; range-aware consumers still observe the Blank kind, while the

@@ -672,6 +672,11 @@ class EvalContext {
   // on first use.
   WholeAxisExtent shared_whole_axis_extent() const;
 
+  // `resolve_ref` after the target sheet is known: overlay, formula recursion, memo and cycle handling for the
+  // in-bounds cell `ref` on `sheet`.
+  Value resolve_cell(const Sheet& sheet, const parser::Reference& ref, Arena& arena,
+                     const FunctionRegistry& registry) const;
+
   const Sheet* current_sheet_ = nullptr;
   EvalState* state_ = nullptr;
   const Workbook* workbook_ = nullptr;
