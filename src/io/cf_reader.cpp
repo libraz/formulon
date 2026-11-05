@@ -581,6 +581,10 @@ class OwnSheetQualifierStripper final : public parser::RefTransform {
     return std::make_pair(*apply(lhs), *apply(rhs));
   }
 
+  std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const override {
+    return Ref3DSheetSpan{begin, end, sheet_names::equal(begin, own_sheet_) && sheet_names::equal(end, own_sheet_)};
+  }
+
  private:
   std::string_view own_sheet_;
 };
@@ -705,11 +709,6 @@ void ingest_feature_formulas(Workbook& wb, Workbook::FormulaSource source) {
       formula = wb.ingest_stored_formula(formula, source);
     }
   };
-  const auto ingest_cfvo = [&ingest](cf::CfValueObject& cfvo) {
-    if (cfvo.type == cf::CfvoType::Formula) {
-      ingest(cfvo.value);
-    }
-  };
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     Sheet& sheet = wb.sheet(i);
     const OwnSheetQualifierStripper strip_own_sheet(sheet.name());
@@ -718,8 +717,15 @@ void ingest_feature_formulas(Workbook& wb, Workbook::FormulaSource source) {
       if (!formula.empty()) {
         parser::FormulaRewriteResult stripped = parser::rewrite_formula(formula, strip_own_sheet);
         if (stripped.changed && !stripped.error) {
-          formula = std::move(stripped.text);
+          // A collapsed own-sheet 3-D span leaves `Sheet3!ref`; strip that too.
+          parser::FormulaRewriteResult again = parser::rewrite_formula(stripped.text, strip_own_sheet);
+          formula = (again.changed && !again.error) ? std::move(again.text) : std::move(stripped.text);
         }
+      }
+    };
+    const auto ingest_cfvo = [&ingest_rule_formula](cf::CfValueObject& cfvo) {
+      if (cfvo.type == cf::CfvoType::Formula) {
+        ingest_rule_formula(cfvo.value);
       }
     };
     for (cf::ConditionalFormat& format : sheet.mutable_conditional_formats()) {
@@ -748,8 +754,8 @@ void ingest_feature_formulas(Workbook& wb, Workbook::FormulaSource source) {
       }
     }
     for (DataValidation& validation : sheet.mutable_validations()) {
-      ingest(validation.formula1);
-      ingest(validation.formula2);
+      ingest_rule_formula(validation.formula1);
+      ingest_rule_formula(validation.formula2);
     }
   }
 }

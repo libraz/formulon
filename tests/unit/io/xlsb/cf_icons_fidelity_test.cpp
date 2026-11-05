@@ -125,7 +125,8 @@ void ExpectIconRule(const Workbook& wb) {
   EXPECT_EQ(spec.thresholds[0].value, "33");
   EXPECT_FALSE(spec.thresholds[0].gte);
   EXPECT_EQ(spec.thresholds[1].type, cf::CfvoType::Formula);
-  EXPECT_EQ(spec.thresholds[1].value, "Sheet1!$C$1");
+  // A self-sheet qualifier is dropped on load, as Excel does for CF formulas.
+  EXPECT_EQ(spec.thresholds[1].value, "$C$1");
   ASSERT_EQ(spec.custom_icons.size(), 3U);
   EXPECT_EQ(spec.custom_icons[0].icon_set, "3Flags");
   EXPECT_EQ(spec.custom_icons[0].icon_id, 2);

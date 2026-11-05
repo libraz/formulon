@@ -871,5 +871,127 @@ TEST(OoxmlCF, SelfSheetQualifierIsDroppedOnLoad) {
       << xml;
 }
 
+// Loads a three-sheet package whose third sheet carries `sheet3_body` after
+// `<sheetData/>`.
+Workbook LoadWithSheet3Body(const std::string& sheet3_body) {
+  const std::string_view content_types =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\n"
+      "  <Default Extension=\"rels\" "
+      "ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\n"
+      "  <Default Extension=\"xml\" ContentType=\"application/xml\"/>\n"
+      "  <Override PartName=\"/xl/workbook.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>\n"
+      "  <Override PartName=\"/xl/worksheets/sheet1.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\n"
+      "  <Override PartName=\"/xl/worksheets/sheet2.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\n"
+      "  <Override PartName=\"/xl/worksheets/sheet3.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\n"
+      "</Types>\n";
+  const std::string_view package_rels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n"
+      "  <Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" "
+      "Target=\"xl/workbook.xml\"/>\n"
+      "</Relationships>\n";
+  const std::string_view workbook_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\n"
+      "  <sheets>\n"
+      "    <sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/>\n"
+      "    <sheet name=\"Sheet2\" sheetId=\"2\" r:id=\"rId2\"/>\n"
+      "    <sheet name=\"Sheet3\" sheetId=\"3\" r:id=\"rId3\"/>\n"
+      "  </sheets>\n"
+      "  <definedNames><definedName name=\"LS\" localSheetId=\"2\">Sheet3!$B$1</definedName></definedNames>\n"
+      "</workbook>\n";
+  const std::string_view workbook_rels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n"
+      "  <Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
+      "Target=\"worksheets/sheet1.xml\"/>\n"
+      "  <Relationship Id=\"rId2\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
+      "Target=\"worksheets/sheet2.xml\"/>\n"
+      "  <Relationship Id=\"rId3\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
+      "Target=\"worksheets/sheet3.xml\"/>\n"
+      "</Relationships>\n";
+  const std::string_view empty_sheet =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n"
+      "  <sheetData/>\n"
+      "</worksheet>\n";
+  const std::string sheet3_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n"
+      "  <sheetData/>\n" +
+      sheet3_body + "</worksheet>\n";
+  const std::vector<std::uint8_t> bytes = BuildZip({
+      {"[Content_Types].xml", content_types},
+      {"_rels/.rels", package_rels},
+      {"xl/workbook.xml", workbook_xml},
+      {"xl/_rels/workbook.xml.rels", workbook_rels},
+      {"xl/worksheets/sheet1.xml", empty_sheet},
+      {"xl/worksheets/sheet2.xml", empty_sheet},
+      {"xl/worksheets/sheet3.xml", sheet3_xml},
+  });
+  auto read_or = io::read_ooxml(SpanOf(bytes));
+  EXPECT_TRUE(static_cast<bool>(read_or)) << "read_ooxml: " << read_or.error().message;
+  return std::move(read_or.value().workbook);
+}
+
+TEST(OoxmlCF, SelfSheetQualifierIsDroppedFromCfvoFormula) {
+  Workbook wb = LoadWithSheet3Body(
+      "  <conditionalFormatting sqref=\"C1:C5\">\n"
+      "    <cfRule type=\"colorScale\" priority=\"1\"><colorScale>\n"
+      "      <cfvo type=\"formula\" val=\"Sheet3!$A$1\"/><cfvo type=\"formula\" val=\"Sheet3!$A$10+1\"/>\n"
+      "      <color rgb=\"FF000000\"/><color rgb=\"FFFFFFFF\"/>\n"
+      "    </colorScale></cfRule>\n"
+      "  </conditionalFormatting>\n");
+  ASSERT_EQ(wb.sheet_count(), 3U);
+  const auto& rule = wb.sheet(2).conditional_formats().at(0).rules.at(0);
+  ASSERT_TRUE(rule.color_scale.has_value());
+  ASSERT_EQ(rule.color_scale->thresholds.size(), 2U);
+  EXPECT_EQ(rule.color_scale->thresholds[0].value, "$A$1");
+  EXPECT_EQ(rule.color_scale->thresholds[1].value, "$A$10+1");
+}
+
+TEST(OoxmlCF, SelfSheetQualifierIsDroppedFromDataValidationFormulas) {
+  Workbook wb = LoadWithSheet3Body(
+      "  <dataValidations count=\"3\">\n"
+      "    <dataValidation type=\"list\" sqref=\"D1\"><formula1>Sheet3!$A$1:$A$3</formula1></dataValidation>\n"
+      "    <dataValidation type=\"custom\" sqref=\"D2\"><formula1>Sheet3!$A$1&gt;0</formula1></dataValidation>\n"
+      "    <dataValidation type=\"whole\" operator=\"between\" sqref=\"D3\">"
+      "<formula1>Sheet3!$A$1</formula1><formula2>Sheet3!$A$2</formula2></dataValidation>\n"
+      "  </dataValidations>\n");
+  ASSERT_EQ(wb.sheet_count(), 3U);
+  const auto& dvs = wb.sheet(2).validations();
+  ASSERT_EQ(dvs.size(), 3U);
+  EXPECT_EQ(dvs[0].formula1, "$A$1:$A$3");
+  EXPECT_EQ(dvs[1].formula1, "$A$1>0");
+  EXPECT_EQ(dvs[2].formula1, "$A$1");
+  EXPECT_EQ(dvs[2].formula2, "$A$2");
+}
+
+TEST(OoxmlCF, SelfSheetQualifierIsDroppedFromOwnSheetSpan) {
+  Workbook wb = LoadWithSheet3Body(
+      "  <conditionalFormatting sqref=\"C1\">\n"
+      "    <cfRule type=\"expression\" priority=\"1\"><formula>Sheet3:Sheet3!$A$1&gt;0</formula></cfRule>\n"
+      "  </conditionalFormatting>\n");
+  EXPECT_EQ(wb.sheet(2).conditional_formats().at(0).rules.at(0).formula1.value(), "$A$1>0");
+}
+
+TEST(OoxmlCF, SelfSheetQualifierOfSheetLocalNameStays) {
+  Workbook wb = LoadWithSheet3Body(
+      "  <conditionalFormatting sqref=\"C1\">\n"
+      "    <cfRule type=\"expression\" priority=\"1\"><formula>Sheet3!LS&gt;0</formula></cfRule>\n"
+      "  </conditionalFormatting>\n");
+  EXPECT_EQ(wb.sheet(2).conditional_formats().at(0).rules.at(0).formula1.value(), "Sheet3!LS>0");
+}
+
 }  // namespace
 }  // namespace formulon
