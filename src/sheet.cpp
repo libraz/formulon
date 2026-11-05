@@ -143,9 +143,9 @@ Sheet::~Sheet() = default;
 
 namespace sheet_copy {
 
-SpillTablePtr::SpillTablePtr(const SpillTablePtr&) noexcept {}
+SpillTablePtr::SpillTablePtr(const SpillTablePtr&) noexcept : std::unique_ptr<SpillTable>() {}
 
-RowStore::RowStore(const RowStore& other) {
+RowStore::RowStore(const RowStore& other) : std::unordered_map<std::uint32_t, RowCells>() {
   reserve(other.size());
   for (const auto& [row, cells] : other) {
     RowCells& dst = (*this)[row];
@@ -155,7 +155,7 @@ RowStore::RowStore(const RowStore& other) {
   }
 }
 
-PivotList::PivotList(const PivotList& other) {
+PivotList::PivotList(const PivotList& other) : std::vector<std::unique_ptr<pivot::PivotTable>>() {
   reserve(other.size());
   for (const std::unique_ptr<pivot::PivotTable>& table : other) {
     push_back(table->clone());

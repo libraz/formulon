@@ -2281,18 +2281,20 @@ TEST_P(PivotTableWriterLocation, DerivedOffsetsMatchTheOnesExcelSaved) {
   EXPECT_GT(tables, 0U);
 }
 
+std::string LocationFixtureName(const ::testing::TestParamInfo<const char*>& info) {
+  std::string name;
+  for (const char* p = info.param; *p != '\0' && *p != '.'; ++p) {
+    name.push_back(*p);
+  }
+  return name;
+}
+
 INSTANTIATE_TEST_SUITE_P(ExcelSaved, PivotTableWriterLocation,
                          ::testing::Values("op_headers_off.xlsx", "op_griddz.xlsx", "op_pagewrap2_down_over.xlsx",
                                            "op_pagewrap2_over_down.xlsx", "op_merge_tabular.xlsx",
                                            "op_merge_outline.xlsx", "op_emptyrow_show_all.xlsx",
                                            "op_emptycol_show_all.xlsx", "op_indent3.xlsx", "op_missing_caption.xlsx"),
-                         [](const ::testing::TestParamInfo<const char*>& info) {
-                           std::string name;
-                           for (const char* p = info.param; *p != '\0' && *p != '.'; ++p) {
-                             name.push_back(*p);
-                           }
-                           return name;
-                         });
+                         LocationFixtureName);
 
 TEST(PivotTableWriter, HiddenFieldCaptionsDropTheColumnLabelsRow) {
   // Two data fields beside a column field: without captions the
