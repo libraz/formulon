@@ -9,6 +9,7 @@
 #define FORMULON_CHART_CHART_REF_H_
 
 #include <cstddef>
+#include <string>
 #include <vector>
 
 #include "parser/ast_shift.h"
@@ -31,6 +32,10 @@ std::vector<pugi::xml_node> enumerate_sites(const pugi::xml_document& doc);
 /// with a deleted area moves into `c15:filteredSeriesTitle` /
 /// `c15:filteredCategoryTitle`. Returns the number of sites changed.
 std::size_t rewrite_sites(pugi::xml_document& doc, const parser::RefTransform& transform);
+
+/// The text of every site except `c15:sqref` in every chart part not on the
+/// sheet at `exclude_sheet`.
+Expected<std::vector<std::string>, Error> collect_formula_texts(const Workbook& wb, std::size_t exclude_sheet);
 
 /// Runs `rewrite_sites` over every chart of every sheet (chartsheets included)
 /// and stores each part whose text changed.

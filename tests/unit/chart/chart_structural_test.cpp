@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <string>
@@ -223,6 +224,22 @@ TEST(ChartStructural, FixtureRefsFollowEditAndSurviveReload) {
 
   const Workbook reloaded = Reload(wb);
   EXPECT_TRUE(Has(PartText(reloaded, "xl/charts/chart1.xml"), "<c:f>Sheet1!$B$4:$B$7</c:f>"));
+}
+
+// Sheet2-local LG is named only by a series on Sheet1, LH also by a cell; both survive.
+TEST(ChartStructural, RemovingASheetPromotesALocalNameOnlyInSeries) {
+  Workbook wb = LoadFixture("structural_ref_m3.xlsx");
+  ASSERT_TRUE(Has(PartText(wb, "xl/charts/chart1.xml"), "<c:f>Sheet2!LG</c:f>"));
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(1)));
+  for (const char* name : {"LG", "LH"}) {
+    const auto& names = wb.defined_names();
+    EXPECT_TRUE(std::any_of(names.begin(), names.end(), [name](const DefinedName& entry) {
+      return entry.name == name && entry.local_sheet_id < 0;
+    })) << name;
+  }
+  const std::string chart = PartText(wb, "xl/charts/chart1.xml");
+  EXPECT_TRUE(Has(chart, "<c:f>[0]!LG</c:f>")) << chart;
+  EXPECT_TRUE(Has(chart, "<c:f>[0]!LH</c:f>")) << chart;
 }
 
 TEST(ChartStructural, XlsbLoadedChartRefsFollow) {

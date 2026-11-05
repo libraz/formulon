@@ -696,6 +696,11 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
 }
 
 Expected<void, Error> Workbook::remove_sheet_locked(std::uint32_t index) {
+  // Read before anything changes: a surviving chart series counts toward the promoted names.
+  auto chart_formulas = chart_ref::collect_formula_texts(*this, index);
+  if (!chart_formulas) {
+    return chart_formulas.error();
+  }
   const std::string removed_name = sheets_[index].name();
   erase_slicer_cache_names(defined_names_, remove_sheet_slicers(*this, index));
 
@@ -725,7 +730,7 @@ Expected<void, Error> Workbook::remove_sheet_locked(std::uint32_t index) {
 
   // Decided before any formula is rewritten: the removed sheet's own cells would otherwise count.
   std::vector<std::string> rebound_names =
-      referenced_local_names_of_removed_sheet(sheets_, defined_names_, tables_, index);
+      referenced_local_names_of_removed_sheet(sheets_, defined_names_, tables_, index, chart_formulas.value());
   const auto has_book_namesake = [this](std::string_view name) {
     return std::any_of(defined_names_.begin(), defined_names_.end(), [name](const DefinedName& entry) {
       return entry.local_sheet_id < 0 && strings::case_insensitive_eq(entry.name, name);

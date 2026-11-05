@@ -346,8 +346,9 @@ TEST(DefinedNameResolve, LocalNameBodyScopeDrivesRecalc) {
 
   ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(1U, "Data 2")));
   EXPECT_EQ(wb.sheet(0).cell_at(1U, 0U)->formula_text, "='Data 2'!AddCell(10)");
+  // A called sheet-local LAMBDA is promoted and the call kept, as Excel does.
   ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(1U)));
-  EXPECT_EQ(wb.sheet(0).cell_at(1U, 0U)->formula_text, "=#REF!");
+  EXPECT_EQ(wb.sheet(0).cell_at(1U, 0U)->formula_text, "=[0]!AddCell(10)");
 }
 
 // (c') The same sheet-scoped name resolves on its owning sheet.

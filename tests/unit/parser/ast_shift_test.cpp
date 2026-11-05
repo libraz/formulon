@@ -599,6 +599,18 @@ TEST(ShiftRefsWithSheetRemoval, SheetQualifiedNameCallOnRemovedSheetBecomesRef) 
   EXPECT_EQ(ParseSheetRemovalFormula("=Sheet2!Fn(3)+Sheet1!Fn(A1)", {"Sheet1", "Sheet2"}, 1U), "#REF!+Sheet1!Fn(A1)");
 }
 
+// A callee rebound to the workbook-scoped name keeps the call; a dropped one still collapses.
+TEST(ShiftRefsWithSheetRemoval, ReboundLambdaCallCalleeKeepsTheCall) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=Sheet2!Fn(3)+Sheet2!Gn(4)", arena);
+  ASSERT_NE(root, nullptr);
+  const std::vector<std::string_view> order{"Sheet1", "Sheet2"};
+  SheetRemovalTransform transform(order, 1U, {"Fn"});
+  const AstNode* shifted = shift_refs(*root, arena, transform);
+  ASSERT_NE(shifted, nullptr);
+  EXPECT_EQ(format_formula(*shifted), "[0]!Fn(3)+#REF!");
+}
+
 TEST(ShiftRefsWithRowColShift, SheetQualifiedNameIsUntouched) {
   EXPECT_EQ(ParseRowColShiftFormula("=Sheet1!Rate+A2", RowColAxis::kRow, RowColEdit::kInsert, 0U, 1U),
             "Sheet1!Rate+A3");

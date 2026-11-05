@@ -587,15 +587,9 @@ const AstNode* TransformLambdaCall(const AstNode& node, Arena& arena, const RefT
     return nullptr;
   }
   // `Sheet2!Fn(3)` whose sheet is removed collapses whole to `#REF!`: an
-  // error literal is no callee `(` can follow, and a rebound callee is not
-  // carried over either.
-  if (node.as_lambda_call_callee().kind() == NodeKind::NameRef) {
-    if (callee->kind() == NodeKind::ErrorLiteral) {
-      return callee;
-    }
-    if (callee->kind() == NodeKind::ExternalRef) {
-      return MakeRefError(arena);
-    }
+  // error literal is no callee `(` can follow. A rebound callee stays `[0]!Fn(3)`.
+  if (node.as_lambda_call_callee().kind() == NodeKind::NameRef && callee->kind() == NodeKind::ErrorLiteral) {
+    return callee;
   }
   const std::uint32_t n = node.as_lambda_call_arity();
   std::vector<const AstNode*> args;

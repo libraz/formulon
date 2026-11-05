@@ -466,6 +466,31 @@ std::size_t rewrite_sites(pugi::xml_document& doc, const parser::RefTransform& t
   return changed;
 }
 
+Expected<std::vector<std::string>, Error> collect_formula_texts(const Workbook& wb, std::size_t exclude_sheet) {
+  auto parts = all_chart_parts(wb);
+  if (!parts) {
+    return parts.error();
+  }
+  std::vector<std::string> texts;
+  std::set<std::string> seen;
+  for (const SheetChartPartRef& entry : parts.value()) {
+    const std::string& path = entry.ref.part_path;
+    if (entry.sheet == exclude_sheet || path.empty() || !seen.insert(path).second) {
+      continue;
+    }
+    pugi::xml_document doc;
+    if (!io::ooxml::load_part_dom(wb, path, "chart_ref", doc)) {
+      continue;
+    }
+    for (const pugi::xml_node& site : enumerate_sites(doc)) {
+      if (!is_element(site, kNsC15, "sqref")) {
+        texts.emplace_back(site.child_value());
+      }
+    }
+  }
+  return texts;
+}
+
 Expected<void, Error> rewrite_all(Workbook& wb, const parser::RefTransform& transform) {
   auto parts = all_chart_parts(wb);
   if (!parts) {

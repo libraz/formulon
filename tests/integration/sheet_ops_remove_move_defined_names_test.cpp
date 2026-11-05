@@ -1,5 +1,8 @@
 // Structural workbook mutation tests grouped by public surface.
 #include "io/ooxml_reader.h"
+#include "io/xlsb/reader.h"
+#include "io/xlsb/writer.h"
+#include "io/zip_reader.h"
 #include "pugixml.hpp"
 #include "sheet_ops_test_support.h"
 
@@ -423,6 +426,120 @@ TEST(WorkbookSheetOps, RemovePromotedNameLeavesAnotherSheetsLocalNamesakeAlone) 
   const Value local = wb.sheet(1).resolve_cell_value(0, 3);
   ASSERT_TRUE(local.is_number());
   EXPECT_DOUBLE_EQ(local.as_number(), 30.0);
+}
+
+std::string SavedPart(const std::vector<std::uint8_t>& package, std::string_view part) {
+  io::ZipReader zip;
+  if (!zip.open(io::ByteSpan{package.data(), package.size()})) {
+    return {};
+  }
+  auto entry = zip.read_entry(part);
+  if (!entry) {
+    return {};
+  }
+  return std::string(entry.value().begin(), entry.value().end());
+}
+
+// Promotion closes over the qualified `Sheet2!N` references in promoted bodies
+// only: an unqualified `MB` and an unreferenced chain (JA -> JB) are dropped.
+TEST(WorkbookSheetOps, RemovePromotionClosureCountsOnlyQualifiedReferences) {
+  Workbook wb = Workbook::create_empty();
+  for (const char* name : {"Sheet1", "Sheet2", "Sheet3"}) {
+    wb.add_sheet(name);
+  }
+  for (std::uint32_t row = 0; row < 10U; ++row) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(2, row, 0, Value::number((row + 1.0) * 10.0))));
+  }
+  wb.set_defined_names({DefinedName{"PA", "Sheet2!PB", 1, false, ""}, DefinedName{"PB", "Sheet2!PC", 1, false, ""},
+                        DefinedName{"PC", "Sheet3!$A$4", 1, false, ""}, DefinedName{"KB", "Sheet2!KA+1", 1, false, ""},
+                        DefinedName{"KA", "Sheet3!$A$3", 1, false, ""}, DefinedName{"QA", "Sheet2!QB+1", 1, false, ""},
+                        DefinedName{"QB", "Sheet2!$A$1", 1, false, ""}, DefinedName{"JA", "Sheet2!JB", 1, false, ""},
+                        DefinedName{"JB", "Sheet3!$A$5", 1, false, ""}, DefinedName{"MA", "MB+1", 1, false, ""},
+                        DefinedName{"MB", "Sheet3!$A$6", 1, false, ""}});
+  const char* const cells[] = {"=Sheet2!PA", "=Sheet2!KB", "=Sheet2!QA", "=Sheet2!MA"};
+  for (std::uint32_t row = 0; row < 4U; ++row) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, row, 3, cells[row])));
+  }
+
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(1)));
+
+  const std::pair<const char*, const char*> kept[] = {{"KA", "Sheet3!$A$3"}, {"KB", "[0]!KA+1"}, {"MA", "MB+1"},
+                                                      {"PA", "[0]!PB"},      {"PB", "[0]!PC"},   {"PC", "Sheet3!$A$4"},
+                                                      {"QA", "[0]!QB+1"},    {"QB", "#REF!$A$1"}};
+  EXPECT_EQ(wb.defined_names().size(), std::size(kept));
+  for (const auto& [name, body] : kept) {
+    const DefinedName* entry = FindName(wb, name, -1);
+    ASSERT_NE(entry, nullptr) << name;
+    EXPECT_EQ(entry->formula, body) << name;
+  }
+  for (const char* dropped : {"MB", "JA", "JB"}) {
+    EXPECT_EQ(FindName(wb, dropped, -1), nullptr) << dropped;
+  }
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Value pa = wb.sheet(0).resolve_cell_value(0, 3);
+  ASSERT_TRUE(pa.is_number());
+  EXPECT_DOUBLE_EQ(pa.as_number(), 40.0);
+  const Value kb = wb.sheet(0).resolve_cell_value(1, 3);
+  ASSERT_TRUE(kb.is_number());
+  EXPECT_DOUBLE_EQ(kb.as_number(), 31.0);
+  EXPECT_TRUE(wb.sheet(0).resolve_cell_value(2, 3).is_error());
+  EXPECT_TRUE(wb.sheet(0).resolve_cell_value(3, 3).is_error());
+
+  auto saved = wb.save();
+  ASSERT_TRUE(static_cast<bool>(saved));
+  pugi::xml_document workbook_xml;
+  ASSERT_TRUE(workbook_xml.load_string(SavedPart(saved.value(), "xl/workbook.xml").c_str()));
+  const pugi::xml_node qb =
+      workbook_xml.child("workbook").child("definedNames").find_child_by_attribute("definedName", "name", "QB");
+  ASSERT_TRUE(qb);
+  EXPECT_STREQ(qb.child_value(), "#REF!");
+}
+
+// A lambda call's `Sheet2!Fn` callee keeps Fn: the call survives as `[0]!Fn(3)`
+// with its dynamic-array mark from entry.
+TEST(WorkbookSheetOps, RemovePromotesALambdaCalleeAndKeepsTheCall) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  wb.set_defined_names(
+      {DefinedName{"Fn", "LAMBDA(x,x*2)", 1, false, ""}, DefinedName{"Gn", "LAMBDA(x,x*3)", 1, false, ""}});
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 3, "=Sheet2!Fn(3)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 1, 3, "=ISREF(Sheet2!Gn)")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(1)));
+
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 3)->formula_text, "=[0]!Fn(3)");
+  EXPECT_EQ(wb.sheet(0).cell_at(1, 3)->formula_text, "=ISREF([0]!Gn)");
+  ASSERT_NE(FindName(wb, "Fn", -1), nullptr);
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Value value = wb.sheet(0).resolve_cell_value(0, 3);
+  ASSERT_TRUE(value.is_number());
+  EXPECT_DOUBLE_EQ(value.as_number(), 6.0);
+
+  auto saved = wb.save();
+  ASSERT_TRUE(static_cast<bool>(saved));
+  pugi::xml_document sheet_xml;
+  ASSERT_TRUE(sheet_xml.load_string(SavedPart(saved.value(), "xl/worksheets/sheet1.xml").c_str()));
+  const pugi::xml_node d1 = sheet_xml.child("worksheet").child("sheetData").find_node([](const pugi::xml_node& node) {
+    return std::string_view(node.name()) == "c" && std::string_view(node.attribute("r").value()) == "D1";
+  });
+  ASSERT_TRUE(d1);
+  EXPECT_TRUE(d1.attribute("cm"));
+  EXPECT_STREQ(d1.child("f").attribute("t").value(), "array");
+  EXPECT_STREQ(d1.child("f").child_value(), "[0]!Fn(3)");
+
+  auto xlsb = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsb)) << xlsb.error().message;
+  auto xlsb_read = io::xlsb::read_xlsb(io::ByteSpan{xlsb.value().data(), xlsb.value().size()});
+  ASSERT_TRUE(static_cast<bool>(xlsb_read)) << xlsb_read.error().message;
+  Workbook& reloaded = xlsb_read.value().workbook;
+  ASSERT_NE(reloaded.sheet(0).cell_at(0, 3), nullptr);
+  EXPECT_EQ(reloaded.sheet(0).cell_at(0, 3)->formula_text, "=[0]!Fn(3)");
+  ASSERT_TRUE(static_cast<bool>(reloaded.recalc(eval::default_registry())));
+  const Value reloaded_value = reloaded.sheet(0).resolve_cell_value(0, 3);
+  ASSERT_TRUE(reloaded_value.is_number());
+  EXPECT_DOUBLE_EQ(reloaded_value.as_number(), 6.0);
 }
 
 TEST(WorkbookSheetOps, MoveForwardRearrangesSheets) {
