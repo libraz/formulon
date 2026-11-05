@@ -22,9 +22,8 @@
 // or the parser's special forms (`eval::parser_special_form_names()` —
 // LET / LAMBDA). All three are enumerated and de-duplicated so the
 // catalog matches what the evaluator actually accepts; a single name
-// resolves through `eval::resolve_builtin_function_name`. Lazy and
-// special forms carry no `FunctionDef`, so they have no arity data;
-// they report `min_arity = 0` and the unbounded `max_arity` sentinel.
+// resolves through `eval::resolve_builtin_function_name`, and its arity
+// through `eval::builtin_arity`, the bounds formula entry enforces.
 //
 // The sorted name list is computed on first use and cached for the
 // process lifetime - order matters for UIs that expect deterministic
@@ -122,34 +121,15 @@ extern "C" fm_status_t fm_function_metadata(const char* name, fm_function_metada
   if (auto rc = check_utf8("fm_function_metadata", {name}); rc != 0) {
     return rc;
   }
-  const auto& reg = formulon::eval::default_registry();
-  const auto* def = reg.lookup(std::string_view(name));
-  if (def == nullptr) {
-    // Not in the eager registry: it may still be a lazy-dispatch form
-    // (XLOOKUP / SUMIFS / VLOOKUP / ...) or a parser special form (LET /
-    // LAMBDA). Those have no `FunctionDef`, so arity is unknown and is
-    // reported as `min_arity = 0` with the unbounded `max_arity` sentinel.
-    const char* canonical = formulon::eval::resolve_builtin_function_name(std::string_view(name));
-    if (canonical == nullptr) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_metadata: unknown function",
-                               std::string("name=") + name);
-    }
-    *out = fm_function_metadata_t{};
-    out->canonical_name = canonical;
-    out->min_arity = 0;
-    out->max_arity = formulon::eval::kVariadic;
-    out->availability = function_availability(std::string_view(canonical));
-    out->signature_template = nullptr;
-    out->description = nullptr;
-    return 0;
+  const char* canonical = formulon::eval::resolve_builtin_function_name(std::string_view(name));
+  if (canonical == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_metadata: unknown function",
+                             std::string("name=") + name);
   }
-  *out = fm_function_metadata_t{};
-  // `canonical_name` is held in static storage by the registry; surface
-  // a borrowed pointer so callers can hold the result indefinitely.
-  out->canonical_name = def->canonical_name.data();
-  out->min_arity = def->min_arity;
-  out->max_arity = def->max_arity;
-  out->availability = function_availability(def->canonical_name);
+  // `canonical_name` is static storage; callers may hold the result indefinitely.
+  out->canonical_name = canonical;
+  formulon::eval::builtin_arity(canonical, &out->min_arity, &out->max_arity);
+  out->availability = function_availability(std::string_view(canonical));
   // Display text is host-supplied, never engine-owned: see the file header.
   out->signature_template = nullptr;
   out->description = nullptr;

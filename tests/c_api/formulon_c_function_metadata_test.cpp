@@ -183,15 +183,22 @@ TEST(FormulonCApiFunctionMetadata, EnumerationIncludesLazyAndSpecialForms) {
 }
 
 TEST(FormulonCApiFunctionMetadata, LazyAndSpecialFormsResolveMetadata) {
-  for (const char* fn : {"XLOOKUP", "SUMIFS", "IFERROR", "INDEX", "OFFSET", "INDIRECT", "SORT", "UNIQUE", "FILTER",
-                         "LET", "LAMBDA", "VLOOKUP"}) {
+  struct Expected {
+    const char* name;
+    std::uint32_t min_arity;
+    std::uint32_t max_arity;
+  };
+  for (const Expected& fn :
+       {Expected{"XLOOKUP", 3U, 6U}, Expected{"SUMIFS", 3U, 0xFFFFFFFFU}, Expected{"IFERROR", 2U, 2U},
+        Expected{"INDEX", 2U, 4U}, Expected{"OFFSET", 3U, 5U}, Expected{"INDIRECT", 1U, 2U}, Expected{"SORT", 1U, 4U},
+        Expected{"UNIQUE", 1U, 3U}, Expected{"FILTER", 2U, 3U}, Expected{"IF", 2U, 3U}, Expected{"LET", 3U, 253U},
+        Expected{"LAMBDA", 1U, 254U}, Expected{"VLOOKUP", 3U, 4U}}) {
     fm_function_metadata_t md{};
-    ASSERT_EQ(fm_function_metadata(fn, &md), 0) << fn << " did not resolve";
+    ASSERT_EQ(fm_function_metadata(fn.name, &md), 0) << fn.name << " did not resolve";
     ASSERT_NE(md.canonical_name, nullptr);
-    EXPECT_STREQ(md.canonical_name, fn);
-    // No FunctionDef -> arity is unknown: min 0, max unbounded sentinel.
-    EXPECT_EQ(md.min_arity, 0U);
-    EXPECT_EQ(md.max_arity, 0xFFFFFFFFU);
+    EXPECT_STREQ(md.canonical_name, fn.name);
+    EXPECT_EQ(md.min_arity, fn.min_arity) << fn.name;
+    EXPECT_EQ(md.max_arity, fn.max_arity) << fn.name;
     EXPECT_EQ(md.availability, FM_FUNCTION_IMPLEMENTED);
   }
 }

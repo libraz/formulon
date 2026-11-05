@@ -734,8 +734,10 @@ fm_status_t check_entered_formula_parses(const char* api, std::string_view formu
   formulon::Arena arena;
   if (!formulon::parser::has_refused_whitespace(formula, &is_builtin_function_name)) {
     const formulon::parser::AstNode* root = formulon::eval::parse_formula_entry(body, arena);
-    // Excel also refuses a non-reference argument to a reference-only parameter (`SUBTOTAL(9,)`).
-    if (root != nullptr && formulon::eval::find_non_reference_argument(*root) == nullptr) {
+    // Excel also refuses a non-reference argument to a reference-only parameter (`SUBTOTAL(9,)`)
+    // and an argument count the callee does not take (`ROWS()`).
+    if (root != nullptr && formulon::eval::find_non_reference_argument(*root) == nullptr &&
+        formulon::eval::find_wrong_arity_call(*root) == nullptr) {
       return 0;
     }
   }

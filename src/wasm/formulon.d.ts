@@ -1666,8 +1666,7 @@ export interface FunctionMetadataResult {
   readonly ok: boolean;
   readonly name?: string;
   readonly minArity?: number;
-  /** `null` denotes an unbounded variadic or a lazy / special form whose
-   *  upper arity is unknown. */
+  /** `null` denotes an unbounded variadic. */
   readonly maxArity?: number | null;
   /** Availability class: 0 implemented, 1 implemented_unverified,
    *  2 environment_bound, 3 unavailable_stub. */

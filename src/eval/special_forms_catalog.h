@@ -15,6 +15,9 @@
 #ifndef FORMULON_EVAL_SPECIAL_FORMS_CATALOG_H_
 #define FORMULON_EVAL_SPECIAL_FORMS_CATALOG_H_
 
+#include <cstdint>
+#include <string_view>
+
 namespace formulon {
 namespace eval {
 
@@ -25,6 +28,11 @@ namespace eval {
 ///
 /// The returned array has program lifetime and must not be freed.
 const char* const* parser_special_form_names();
+
+/// Stores the inclusive argument-count bounds of the special form `name`
+/// (ASCII case-insensitive) and returns true, or returns false when `name`
+/// is not a special form.
+bool find_special_form_arity(std::string_view name, std::uint32_t* min_arity, std::uint32_t* max_arity);
 
 }  // namespace eval
 }  // namespace formulon

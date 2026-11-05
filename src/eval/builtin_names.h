@@ -13,6 +13,7 @@
 #ifndef FORMULON_EVAL_BUILTIN_NAMES_H_
 #define FORMULON_EVAL_BUILTIN_NAMES_H_
 
+#include <cstdint>
 #include <string_view>
 
 #include "parser/ast.h"
@@ -26,6 +27,13 @@ namespace eval {
 /// (ASCII case-insensitive, no storage prefix), or nullptr when `name` is
 /// not a built-in. The returned pointer has program lifetime.
 const char* resolve_builtin_function_name(std::string_view name);
+
+/// Stores the inclusive bounds of the written argument count Excel accepts
+/// for the built-in `name` (ASCII case-insensitive, no storage prefix;
+/// `kVariadic` for an open list) and returns true, or returns false when
+/// `name` is not a built-in. Lazy forms are consulted first, as the
+/// evaluator dispatches them first.
+bool builtin_arity(std::string_view name, std::uint32_t* min_arity, std::uint32_t* max_arity);
 
 /// Returns the first callee in `root` that qualifies a built-in function
 /// name with a sheet (`Sheet1!SUM`) or with the formula's own workbook
@@ -46,6 +54,14 @@ const parser::AstNode* find_qualified_builtin_call(const parser::AstNode& root);
 /// `SWITCH`, `LET`, `TRIMRANGE`, `SINGLE`, `TAKE`, `DROP`) whatever their
 /// arguments. nullptr when there is none.
 const parser::AstNode* find_non_reference_argument(const parser::AstNode& root);
+
+/// Returns the first call in `root` that Excel refuses at entry for its
+/// argument count: more than 255 arguments for any callee, or, for a
+/// built-in, a count outside its arity or one that breaks its argument
+/// pairs (`COUNTIFS` takes range/criteria pairs, `SUMIFS` a range then
+/// pairs). An omitted argument counts as written. nullptr when there is
+/// none.
+const parser::AstNode* find_wrong_arity_call(const parser::AstNode& root);
 
 /// Parses a formula body at a public formula-entry boundary. The parser
 /// accepts qualified names syntactically because they may denote defined

@@ -49,13 +49,12 @@ FUNCTION_DEF_RE = re.compile(r'\{\s*"([A-Z][A-Z0-9_.]*)"\s*,\s*\d+u\s*,')
 # catching arbitrary strings in code comments.
 LAZY_ENTRY_RE = re.compile(r'\{\s*"([A-Z_][A-Z0-9_.]*)"\s*,\s*&eval_')
 
-# Inside `special_forms_catalog.cpp` the sole source of truth is a static
-# array initialiser of the form
-# `static constexpr const char* kNames[] = {"LET", nullptr};`. We scan the
-# file for every string literal inside a `kNames[] = { ... }` block so
-# future additions (LAMBDA, ...) are picked up without edits here.
-SPECIAL_FORMS_BLOCK_RE = re.compile(r"kNames\s*\[\s*\]\s*=\s*\{([^}]*)\}", re.DOTALL)
-SPECIAL_FORMS_NAME_RE = re.compile(r'"([A-Z][A-Z0-9_.]*)"')
+# Inside `special_forms_catalog.cpp` the sole source of truth is the
+# `constexpr SpecialForm kSpecialForms[] = { {"LET", 3U, 253U}, ... };`
+# initialiser. We take the leading name of every row inside that block so
+# future additions are picked up without edits here.
+SPECIAL_FORMS_BLOCK_RE = re.compile(r"kSpecialForms\s*\[\s*\]\s*=\s*\{(.*?)\n\s*\};", re.DOTALL)
+SPECIAL_FORMS_NAME_RE = re.compile(r'\{\s*"([A-Z][A-Z0-9_.]*)"\s*,')
 C_API_AVAILABILITY_RE = re.compile(r'\{\s*"([A-Z][A-Z0-9_.]*)"\s*,\s*FM_FUNCTION_([A-Z_]+)\s*\}')
 
 

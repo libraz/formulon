@@ -690,6 +690,34 @@ TEST(GroupBy, TwoArgumentAggregatorsReceiveTheWholeColumn) {
   EXPECT_DOUBLE_EQ(Cell(percent, 3, 1).as_number(), 1.0);
 }
 
+// A built-in whose minimum is two arguments is called with two even when it
+// takes more (XIRR, FORECAST.ETS.SEASONALITY); IF is called with one.
+TEST(GroupBy, BuiltinWithMinimumTwoArgumentsReceivesTheWholeColumn) {
+  const std::string keys = "{\"a\";\"a\";\"b\";\"b\"},{1;2;3;4},";
+  const Value xirr = EvalSrc("=GROUPBY(" + keys + "XIRR)");
+  ASSERT_TRUE(xirr.is_array()) << xirr.debug_to_string();
+  ASSERT_EQ(xirr.as_array_rows(), 3U);
+  for (std::uint32_t r = 0; r < 3U; ++r) {
+    ASSERT_TRUE(Cell(xirr, r, 1).is_error()) << r;
+    EXPECT_EQ(Cell(xirr, r, 1).as_error(), ErrorCode::Num) << r;
+  }
+
+  const Value seasonality = EvalSrc("=GROUPBY(" + keys + "FORECAST.ETS.SEASONALITY)");
+  ASSERT_TRUE(seasonality.is_array()) << seasonality.debug_to_string();
+  ASSERT_EQ(seasonality.as_array_rows(), 3U);
+  EXPECT_EQ(Cell(seasonality, 0, 1).as_error(), ErrorCode::NA);
+  EXPECT_EQ(Cell(seasonality, 1, 1).as_error(), ErrorCode::NA);
+  EXPECT_DOUBLE_EQ(Cell(seasonality, 2, 1).as_number(), 0.0);
+
+  const Value if_rows = EvalSrc("=GROUPBY(" + keys + "IF)");
+  ASSERT_TRUE(if_rows.is_array()) << if_rows.debug_to_string();
+  ASSERT_EQ(if_rows.as_array_rows(), 3U);
+  for (std::uint32_t r = 0; r < 3U; ++r) {
+    ASSERT_TRUE(Cell(if_rows, r, 1).is_error()) << r;
+    EXPECT_EQ(Cell(if_rows, r, 1).as_error(), ErrorCode::Value) << r;
+  }
+}
+
 TEST(GroupBy, PercentofSubtotalsAndFilterUseTheFilteredColumn) {
   const Value sub = EvalSrc("=GROUPBY({\"x\",\"b\";\"y\",\"a\";\"x\",\"a\";\"y\",\"b\"},{1;2;3;4},PERCENTOF,0,2)");
   ASSERT_TRUE(sub.is_array()) << sub.debug_to_string();

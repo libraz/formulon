@@ -6,6 +6,7 @@
 #include "eval/function_registry.h"
 #include "eval/special_forms_catalog.h"
 #include "eval/tree_walker.h"
+#include "eval/tree_walker_lazy_table.h"
 #include "parser/formula_prefix.h"
 #include "parser/parser.h"
 #include "utils/arena.h"
@@ -124,6 +125,41 @@ bool takes_only_reference(std::string_view name, std::uint32_t index) {
   return false;
 }
 
+// Most arguments a call may be written with, whatever the callee.
+constexpr std::uint32_t kMaxCallArguments = 255U;
+
+// Built-ins whose arguments come in pairs: a count within the arity range is
+// accepted when it equals `also`, or when the count after the first
+// `pairs_from` arguments is even. Measured in Excel 365 by entering each
+// built-in with every count up to 21.
+struct ArgumentPairEntry {
+  const char* name;
+  std::uint32_t pairs_from;
+  std::uint32_t also;
+};
+
+constexpr ArgumentPairEntry kArgumentPairs[] = {
+    {"AVERAGEIFS", 1U, 0U}, {"COUNTIFS", 0U, 0U}, {"GETPIVOTDATA", 0U, 3U}, {"IFS", 0U, 0U},
+    {"MAXIFS", 1U, 0U},     {"MINIFS", 1U, 0U},   {"SORTBY", 1U, 2U},       {"SUMIFS", 1U, 0U},
+};
+
+bool takes_argument_count(std::string_view name, std::uint32_t count) {
+  std::uint32_t min_arity = 0U;
+  std::uint32_t max_arity = 0U;
+  if (!builtin_arity(name, &min_arity, &max_arity)) {
+    return true;
+  }
+  if (count < min_arity || count > max_arity) {
+    return false;
+  }
+  for (const ArgumentPairEntry& entry : kArgumentPairs) {
+    if (strings::case_insensitive_eq(name, entry.name)) {
+      return count == entry.also || (count - entry.pairs_from) % 2U == 0U;
+    }
+  }
+  return true;
+}
+
 bool is_reference_expression(const AstNode& node) {
   switch (node.kind()) {
     case NodeKind::Ref:
@@ -176,6 +212,18 @@ const char* resolve_builtin_function_name(std::string_view name) {
   return find_in(parser_special_form_names(), name);
 }
 
+bool builtin_arity(std::string_view name, std::uint32_t* min_arity, std::uint32_t* max_arity) {
+  if (find_lazy_arity(name, min_arity, max_arity)) {
+    return true;
+  }
+  if (const FunctionDef* def = default_registry().lookup(name); def != nullptr) {
+    *min_arity = def->min_arity;
+    *max_arity = def->max_arity;
+    return true;
+  }
+  return find_special_form_arity(name, min_arity, max_arity);
+}
+
 const AstNode* find_qualified_builtin_call(const AstNode& root) {
   switch (root.kind()) {
     case NodeKind::Literal:
@@ -219,6 +267,22 @@ const AstNode* find_non_reference_argument(const AstNode& root) {
   const AstNode* hit = nullptr;
   parser::any_child_node(root, [&](const AstNode& child) {
     hit = find_non_reference_argument(child);
+    return hit != nullptr;
+  });
+  return hit;
+}
+
+const AstNode* find_wrong_arity_call(const AstNode& root) {
+  if (root.kind() == NodeKind::Call) {
+    const std::uint32_t count = root.as_call_arity();
+    if (count > kMaxCallArguments ||
+        !takes_argument_count(parser::strip_storage_prefixes(root.as_call_name()), count)) {
+      return &root;
+    }
+  }
+  const AstNode* hit = nullptr;
+  parser::any_child_node(root, [&](const AstNode& child) {
+    hit = find_wrong_arity_call(child);
     return hit != nullptr;
   });
   return hit;

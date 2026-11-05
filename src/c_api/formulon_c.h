@@ -6142,12 +6142,9 @@ typedef enum {
  * @brief Result shape for `fm_function_metadata`.
  *
  * `canonical_name` is always populated when the function is known.
- * `min_arity` / `max_arity` are pulled from `FunctionDef`; the latter
- * is `0xFFFFFFFFu` (i.e. `eval::kVariadic`) for unbounded variadics.
- * Lazy-dispatch forms (e.g. `XLOOKUP`, `SUMIFS`) and parser special
- * forms (`LET`, `LAMBDA`) carry no `FunctionDef`, so their arity is
- * reported as `min_arity = 0` with the `0xFFFFFFFFu` `max_arity`
- * sentinel (unknown / unbounded).
+ * `min_arity` / `max_arity` bound the written argument count Excel
+ * accepts at entry, the bounds formula entry enforces; `max_arity` is
+ * `0xFFFFFFFFu` (i.e. `eval::kVariadic`) for an open argument list.
  * `availability` reports whether the function is a real implementation,
  * host/environment-bound, or an intentionally unavailable fixed-error
  * stub (see `fm_function_availability_t`).

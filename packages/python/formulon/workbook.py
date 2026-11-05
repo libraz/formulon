@@ -2637,8 +2637,7 @@ class FunctionMetadata:
 
     name: str
     min_arity: int
-    #: ``None`` denotes an unbounded variadic or a lazy / special form
-    #: whose upper arity is unknown.
+    #: ``None`` denotes an unbounded variadic.
     max_arity: Optional[int]
     availability: int
     signature_template: Optional[str]

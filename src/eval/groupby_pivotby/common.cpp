@@ -34,6 +34,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/index_sort.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -42,13 +43,15 @@ namespace eval {
 namespace {
 
 // Arguments an aggregator receives per group: two, `(group_values,
-// all_values)`, for a LAMBDA or built-in that requires exactly two; else one.
+// all_values)`, for a LAMBDA that requires exactly two or a built-in whose
+// minimum is two; else one. Excel calls IF with the group values alone.
 std::uint32_t aggregator_arity(const LambdaValue& lv, const FunctionRegistry& registry) {
   std::uint32_t required = lv.param_count - lv.optional_count;
   if (!lv.builtin.empty()) {
-    if (find_lazy_impl(lv.builtin) != nullptr) {
-      required = find_lazy_min_arity(lv.builtin);
-    } else {
+    std::uint32_t max_arity = 0U;
+    if (strings::case_insensitive_eq(lv.builtin, "IF")) {
+      required = 1U;
+    } else if (!find_lazy_arity(lv.builtin, &required, &max_arity)) {
       const FunctionDef* def = registry.lookup(lv.builtin);
       required = def != nullptr ? def->min_arity : 0U;
     }

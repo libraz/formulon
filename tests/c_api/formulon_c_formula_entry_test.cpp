@@ -37,9 +37,11 @@ void MakeWorkbook(WorkbookGuard* wb) {
 
 const std::vector<std::string>& RejectedFormulas() {
   static const std::vector<std::string> formulas = {
-      "=TRUE!A1",      "=SUM(",      "=1+",           "=Data!SUM(A1:A2)",  "=SUM(Data:Sheet1!A1",
-      "=(1+2",         "SUM(",       "=1\t+2",        "=SUM(1,\r\n2)",     "=SUM (1)",
-      "=SUBTOTAL(9,)", "=SUMIF(,1)", "=COUNTIF(1,1)", "=OFFSET(A1+0,0,0)",
+      "=TRUE!A1",        "=SUM(",      "=1+",           "=Data!SUM(A1:A2)",   "=SUM(Data:Sheet1!A1",
+      "=(1+2",           "SUM(",       "=1\t+2",        "=SUM(1,\r\n2)",      "=SUM (1)",
+      "=SUBTOTAL(9,)",   "=SUMIF(,1)", "=COUNTIF(1,1)", "=OFFSET(A1+0,0,0)",  "=ROWS()",
+      "=ABS(1,2)",       "=SUM()",     "=IF(1)",        "=COUNTIFS(A1,1,A1)", "=1+ROWS()",
+      "=LARGE(A1,A1,1)",
   };
   return formulas;
 }
@@ -54,6 +56,11 @@ const std::vector<std::string>& AcceptedFormulas() {
       "=Data!A1",
       "=Gone!A1",
       "=SUM(1,2)",
+      "=ROW()",
+      "=COUNTIFS(A1,1,A1,1)",
+      "=SORTBY(A1,A1)",
+      "=TRANSLATE(\"a\")",
+      "=FOO(1,2,3)",
       "=A1B!A1",
       "=1+2",
       "=SUM(Data:Other!A1)",
@@ -386,6 +393,28 @@ TEST(FormulonCApiFormulaEntry, LoadedUnparseableFormulaIsKeptVerbatim) {
     const char* r1c1 = nullptr;
     EXPECT_EQ(fm_workbook_get_formula_r1c1(loaded.handle, 0, row, 1, &r1c1), kParserUnexpectedToken);
   }
+}
+
+TEST(FormulonCApiFormulaEntry, LoadedWrongArityFormulaKeepsEvaluatingButIsRefusedOnEntry) {
+  WorkbookGuard source;
+  MakeWorkbook(&source);
+  ASSERT_TRUE(source.handle->workbook().set_cell_formula(0, 0, 1, "=ROWS()"));
+
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  ASSERT_EQ(fm_workbook_save(source.handle, &bytes, &len), 0) << fm_last_error_message();
+  WorkbookGuard loaded;
+  const fm_status_t rc = fm_workbook_load(bytes, len, &loaded.handle);
+  fm_buffer_free(bytes);
+  ASSERT_EQ(rc, 0) << fm_last_error_message();
+
+  ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
+  EXPECT_EQ(GetFormula(loaded.handle, 0, 1), "=ROWS()");
+  fm_value_t value{};
+  ASSERT_EQ(fm_workbook_get_value(loaded.handle, 0, 0, 1, &value), 0);
+  EXPECT_EQ(value.kind, FM_VAL_ERROR);
+  EXPECT_EQ(fm_workbook_set_formula(loaded.handle, 0, 0, 1, "=ROWS()"), kParserUnexpectedToken);
+  EXPECT_EQ(GetFormula(loaded.handle, 0, 1), "=ROWS()");
 }
 
 }  // namespace
