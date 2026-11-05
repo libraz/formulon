@@ -28,6 +28,7 @@
 #include "io/xlsb/ptg_whitespace.h"
 #include "io/xlsb/record_writer.h"
 #include "parser/ast_format.h"
+#include "parser/formula_prefix.h"
 #include "parser/reference.h"
 #include "parser/token.h"
 #include "parser/tokenizer.h"
@@ -41,6 +42,22 @@ namespace formulon {
 namespace io {
 namespace xlsb {
 namespace {
+
+/// The record name a reference spelled `name` resolves to: a cell-shaped name
+/// held as `_xlnm.<cell>` is the plain `<cell>` record.
+std::string_view RecordName(std::string_view name) {
+  return parser::formula_prefix_ci_eq(parser::cell_shaped_name_prefix(name), "_xlnm.")
+             ? parser::cell_shaped_name_bare(name)
+             : name;
+}
+
+/// The spelling a reference `name` is matched against a scope's bare
+/// parameter names with; a `_xlnm.` name is never a parameter.
+std::string_view ScopeName(std::string_view name) {
+  return parser::formula_prefix_ci_eq(parser::cell_shaped_name_prefix(name), "_xlnm.")
+             ? std::string_view()
+             : parser::cell_shaped_name_bare(name);
+}
 
 using detail::ArrayScope;
 using detail::kPtgArrayClass;
@@ -566,8 +583,9 @@ class Encoder {
   /// (`write_xlsb`) builds it from `collect_ptg_names` before encoding
   /// any cell, so a live `NameRef` always resolves.
   bool in_let_scope(std::string_view name) const {
-    return std::any_of(let_scope_.begin(), let_scope_.end(),
-                       [name](const auto& binding) { return strings::case_insensitive_eq(binding.first, name); });
+    return std::any_of(let_scope_.begin(), let_scope_.end(), [name = ScopeName(name)](const auto& binding) {
+      return !name.empty() && strings::case_insensitive_eq(binding.first, name);
+    });
   }
 
   /// `cls`: the class a defined name takes where it sits (see `SlotClass`);
@@ -577,13 +595,13 @@ class Encoder {
     // (Excel folds ASCII case on name resolution), so a NameRef spelled in a
     // different case than its binding is still that parameter.
     for (auto it = let_scope_.rbegin(); it != let_scope_.rend(); ++it) {
-      if (strings::case_insensitive_eq(it->first, name)) {
+      if (!ScopeName(name).empty() && strings::case_insensitive_eq(it->first, ScopeName(name))) {
         emit_u8(out_, measured_calls_ ? ClassedPtg(kPtgName, cls) : kPtgName);  // PtgName
         emit_u32(out_, it->second);
         return Expected<void, Error>::Ok();
       }
     }
-    const auto it = name_table_.find(std::string(name));
+    const auto it = name_table_.find(std::string(RecordName(name)));
     if (it == name_table_.end()) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
                         std::string("context=xlsb_ptg_writer name=") + std::string(name));
@@ -605,6 +623,7 @@ class Encoder {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: sheet-qualified name names no sheet",
                         std::string("context=xlsb_ptg_writer sheet=") + std::string(sheet));
     }
+    name = RecordName(name);
     auto it = name_table_.find(sheet_scoped_name_key(itab, name));
     if (it == name_table_.end()) {
       it = name_table_.find(sheet_scoped_name_key(-1, name));
@@ -689,7 +708,7 @@ class Encoder {
     emit_u32(out_, it_lambda->second);
     const std::uint32_t n = node.as_lambda_param_count();
     for (std::uint32_t i = 0; i < n; ++i) {
-      const std::string_view raw_name = node.as_lambda_param(i);
+      const std::string_view raw_name = parser::cell_shaped_name_bare(node.as_lambda_param(i));
       const auto it_param = name_table_.find(std::string("_xlpm.") + std::string(raw_name));
       if (it_param == name_table_.end()) {
         return unsupported_node("Lambda(param name not registered)");
@@ -697,7 +716,7 @@ class Encoder {
       emit_u8(out_, kPtgName);  // PtgName (reference-class): the parameter name-ref
       emit_u32(out_, it_param->second);
       let_scope_.emplace_back(raw_name, it_param->second);
-      shapes_.bind(raw_name, Shape::kArray);  // bound to whatever a call passes
+      shapes_.bind(node.as_lambda_param(i), Shape::kArray);  // bound to whatever a call passes
     }
     if (measured_calls_) {
       next_slot_ = Slot{'S', false};
@@ -740,7 +759,7 @@ class Encoder {
     const Slot slot = measured_calls_ ? Slot{'S', false} : Slot{};
     const std::uint32_t n = node.as_let_binding_count();
     for (std::uint32_t i = 0; i < n; ++i) {
-      const std::string_view raw_name = node.as_let_binding_name(i);
+      const std::string_view raw_name = parser::cell_shaped_name_bare(node.as_let_binding_name(i));
       const std::string param_name = std::string("_xlpm.") + std::string(raw_name);
       const auto it_param = name_table_.find(param_name);
       if (it_param == name_table_.end()) {
@@ -754,7 +773,7 @@ class Encoder {
       // binding; push it onto scope only after its own value expression
       // has been emitted (a binding cannot reference itself).
       let_scope_.emplace_back(raw_name, it_param->second);
-      shapes_.bind(raw_name, shapes_.of(node.as_let_binding_expr(i)));
+      shapes_.bind(node.as_let_binding_name(i), shapes_.of(node.as_let_binding_expr(i)));
     }
     next_slot_ = slot;
     auto status = emit(node.as_let_body());
@@ -1302,7 +1321,7 @@ class Encoder {
                                                          : kPtgValueClass);
     }
     const XlsbFuncEntry* entry = lookup_func_by_name(name);
-    if (entry == nullptr && name_table_.count(std::string(node.as_call_name())) != 0) {
+    if (entry == nullptr && name_table_.count(std::string(RecordName(node.as_call_name()))) != 0) {
       return emit_name_call(node, name_call_class);
     }
     if (entry == nullptr) {

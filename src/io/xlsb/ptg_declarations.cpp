@@ -18,6 +18,7 @@
 #include "io/xlsb/ptg_targets.h"
 #include "io/xlsb/ptg_writer.h"
 #include "parser/ast.h"
+#include "parser/formula_prefix.h"
 #include "parser/reference.h"
 #include "utils/strings.h"
 
@@ -88,8 +89,24 @@ void AddExternalRef(const parser::AstNode& node, SheetRangeTable& ranges, std::u
 
 enum class NameCollectMode : std::uint8_t { kPtg, kScopeResolved, kSheetQualified };
 
-/// True when `name` matches an in-scope LET / LAMBDA parameter.
+/// True for a cell-shaped name held as `_xlnm.<cell>`, which is the plain
+/// `<cell>` record and never a parameter.
+bool IsNameModePrefixed(std::string_view name) {
+  return parser::formula_prefix_ci_eq(parser::cell_shaped_name_prefix(name), "_xlnm.");
+}
+
+/// The record name a reference spelled `name` resolves to.
+std::string_view RecordName(std::string_view name) {
+  return IsNameModePrefixed(name) ? parser::cell_shaped_name_bare(name) : name;
+}
+
+/// True when `name` matches an in-scope LET / LAMBDA parameter (`scope` holds
+/// the parameters' bare names).
 bool InParamScope(const std::vector<std::string_view>& scope, std::string_view name) {
+  if (IsNameModePrefixed(name)) {
+    return false;
+  }
+  name = parser::cell_shaped_name_bare(name);
   // Case-insensitive: see `Encoder::emit_name_ref`.
   return std::any_of(scope.begin(), scope.end(),
                      [name](std::string_view param) { return strings::case_insensitive_eq(param, name); });
@@ -117,7 +134,7 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
   };
   switch (node.kind()) {
     case parser::NodeKind::NameRef: {
-      const std::string_view name = node.as_name();
+      const std::string_view name = RecordName(node.as_name());
       if (!node.as_name_sheet().empty()) {
         // Resolves through a scoped key (a definition or its sheet's stub),
         // never a LET / LAMBDA parameter or a workbook placeholder.
@@ -126,7 +143,7 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
         }
         return;
       }
-      if (InParamScope(scope, name)) {
+      if (InParamScope(scope, node.as_name())) {
         return;  // LET / LAMBDA parameter: encoded via its _xlpm. placeholder.
       }
       if (values != nullptr && std::find(values->begin(), values->end(), &node) != values->end()) {
@@ -141,7 +158,7 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       if (UsesHiddenNameRoute(name)) {
         add(xlsb_hidden_function_name(name));
       } else if (lookup_func_by_name(name) == nullptr && !InParamScope(scope, node.as_call_name())) {
-        add(node.as_call_name());
+        add(RecordName(node.as_call_name()));
       }
       const std::uint32_t arity = node.as_call_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
@@ -217,11 +234,12 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       const std::uint32_t n = node.as_let_binding_count();
       const std::size_t scope_base = scope.size();
       for (std::uint32_t i = 0; i < n; ++i) {
-        add(std::string("_xlpm.") + std::string(node.as_let_binding_name(i)));
+        const std::string_view bare = parser::cell_shaped_name_bare(node.as_let_binding_name(i));
+        add(std::string("_xlpm.") + std::string(bare));
         // Excel LET binds sequentially: a value expression sees only the
         // earlier bindings, so collect it before pushing this parameter.
         CollectNamesScoped(node.as_let_binding_expr(i), names, seen, scope, mode, values);
-        scope.push_back(node.as_let_binding_name(i));
+        scope.push_back(bare);
       }
       CollectNamesScoped(node.as_let_body(), names, seen, scope, mode, values);
       scope.resize(scope_base);
@@ -232,8 +250,9 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       const std::uint32_t n = node.as_lambda_param_count();
       const std::size_t scope_base = scope.size();
       for (std::uint32_t i = 0; i < n; ++i) {
-        add(std::string("_xlpm.") + std::string(node.as_lambda_param(i)));
-        scope.push_back(node.as_lambda_param(i));
+        const std::string_view bare = parser::cell_shaped_name_bare(node.as_lambda_param(i));
+        add(std::string("_xlpm.") + std::string(bare));
+        scope.push_back(bare);
       }
       CollectNamesScoped(node.as_lambda_body(), names, seen, scope, mode, values);
       scope.resize(scope_base);
