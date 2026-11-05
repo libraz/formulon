@@ -30,11 +30,11 @@ int main(void) {
   fm_status_t (*get_cell_xf)(const fm_workbook_t*, size_t, fm_cell_xf_t*) = fm_workbook_get_cell_xf;
   fm_status_t (*add_cell_xf)(fm_workbook_t*, const fm_cell_xf_t*, size_t*) = fm_workbook_add_cell_xf;
   fm_status_t (*get_cell_style_xf)(const fm_workbook_t*, size_t, fm_cell_xf_t*) = fm_workbook_get_cell_style_xf;
-  fm_status_t (*add_cell_style_xf)(fm_workbook_t*, const fm_cell_xf_t*, uint32_t*) = fm_workbook_add_cell_style_xf;
+  fm_status_t (*add_cell_style_xf)(fm_workbook_t*, const fm_cell_xf_t*, size_t*) = fm_workbook_add_cell_style_xf;
   fm_status_t (*get_view)(const fm_workbook_t*, size_t, fm_sheet_view_t*) = fm_sheet_get_view;
   fm_status_t (*defined_name_at)(const fm_workbook_t*, size_t, const char**, const char**, int32_t*) =
       fm_workbook_get_defined_name_at;
-  fm_status_t (*pivot_add_item_at)(fm_workbook_t*, size_t, size_t, size_t, size_t, int32_t) =
+  fm_status_t (*pivot_add_item_at)(fm_workbook_t*, size_t, size_t, size_t, size_t, int32_t, size_t*) =
       fm_sheet_add_pivot_field_shared_item;
   // The two entry points whose records no binding marshals, written out in
   // full so a parameter added to either is a compile error here rather than a

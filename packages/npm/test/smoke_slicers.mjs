@@ -101,7 +101,12 @@ test('slicers add, list, update, remove and round-trip', async () => {
   assert.deepEqual([s.fromRow, s.fromCol, s.toRow, s.toCol], [4, 3, 14, 5]);
 
   // An update changes the named fields only; the frame follows row edits.
-  assert.ok(loaded.updateSlicer(0, 0, { caption: 'Renamed', style: '', columnCount: 1, fromRow: 0, toRow: 8 }).ok);
+  assert.ok(
+    loaded.updateSlicer(0, added.objectId, { caption: 'Renamed', style: '', columnCount: 1, fromRow: 0, toRow: 8 }).ok,
+  );
+  const found = loaded.getSlicer(0, added.objectId);
+  assert.ok(found.status.ok);
+  assert.equal(found.value.caption, 'Renamed');
   assert.ok(loaded.insertRows(0, 0, 3).ok);
   const moved = loaded.listSlicers(0)[0];
   assert.equal(moved.caption, 'Renamed');
@@ -110,8 +115,11 @@ test('slicers add, list, update, remove and round-trip', async () => {
   assert.equal(moved.sortOrder, mod.SlicerSortOrder.Descending);
   assert.deepEqual([moved.fromRow, moved.toRow], [3, 11]);
 
-  assert.ok(loaded.removeSlicer(0, 0).ok);
+  assert.ok(loaded.removeSlicer(0, added.objectId).ok);
   assert.equal(loaded.listSlicers(0).length, 0);
+  const gone = loaded.getSlicer(0, added.objectId);
+  assert.ok(gone.status.ok);
+  assert.equal(gone.value, null);
   const emptied = saveBytes(loaded);
   assert.equal(readZipEntry(emptied, 'xl/slicers/slicer1.xml'), null);
   assert.equal(readZipEntry(emptied, 'xl/slicerCaches/slicerCache1.xml'), null);
@@ -151,10 +159,12 @@ test('slicer arguments are validated', async () => {
   assert.equal(wb.addSlicer(0, 0, 0, { ...anchor, columnCount: 0 }).status.ok, false);
   assert.equal(wb.addSlicer(0, 0, 0, { ...anchor, sortOrder: 5 }).status.ok, false);
   assert.equal(wb.listSlicers(0).length, 0);
-  assert.ok(wb.addSlicer(0, 0, 0, anchor).status.ok);
-  assert.equal(wb.updateSlicer(0, 3, { caption: 'x' }).ok, false);
-  assert.equal(wb.updateSlicer(0, 0, { name: 'x' }).ok, false);
-  assert.equal(wb.removeSlicer(0, 3).ok, false);
+  const added = wb.addSlicer(0, 0, 0, anchor);
+  assert.ok(added.status.ok);
+  assert.equal(wb.updateSlicer(0, added.objectId + 1, { caption: 'x' }).ok, false);
+  assert.equal(wb.updateSlicer(0, added.objectId, { name: 'x' }).ok, false);
+  assert.equal(wb.removeSlicer(0, added.objectId + 1).ok, false);
+  assert.equal(wb.getSlicer(5, added.objectId).status.ok, false);
   assert.throws(() => wb.addSlicer(0, 0, 0, { ...anchor, fromRow: -1 }), RangeError);
   release(wb);
 });

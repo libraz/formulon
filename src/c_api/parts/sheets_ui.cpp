@@ -166,6 +166,27 @@ extern "C" fm_status_t fm_sheet_get_hyperlink_at(const fm_workbook_t* wb, std::s
   return 0;
 }
 
+extern "C" fm_status_t fm_sheet_get_hyperlink(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
+                                              std::uint32_t col, std::int32_t* out_present, fm_hyperlink_t* out) {
+  clear_last_error();
+  if (out_present == nullptr || out == nullptr) {
+    return null_argument("fm_sheet_get_hyperlink", "out");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_hyperlink"); rc != 0) {
+    return rc;
+  }
+  *out_present = 0;
+  *out = fm_hyperlink_t{};
+  const auto& hls = wb->workbook().sheet(sheet_index).hyperlinks();
+  for (std::size_t i = 0; i < hls.size(); ++i) {
+    if (hls[i].row == row && hls[i].col == col) {
+      *out_present = 1;
+      return fm_sheet_get_hyperlink_at(wb, sheet_index, i, out);
+    }
+  }
+  return 0;
+}
+
 extern "C" fm_status_t fm_sheet_get_hyperlink_count(const fm_workbook_t* wb, std::size_t sheet_index,
                                                     std::size_t* out_count) {
   clear_last_error();
@@ -499,10 +520,10 @@ extern "C" fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, std::siz
 }
 
 extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::size_t sheet_index,
-                                               const fm_data_validation_t* v) {
+                                               const fm_data_validation_t* v, std::size_t* out_index) {
   clear_last_error();
-  if (v == nullptr) {
-    return null_argument("fm_sheet_add_validation", "v");
+  if (v == nullptr || out_index == nullptr) {
+    return null_argument("fm_sheet_add_validation", v == nullptr ? "v" : "out_index");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_validation"); rc != 0) {
     return rc;
@@ -547,7 +568,9 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::size_t sh
       *formula_slots[i] = ingest_entered_formula(wb, formula_fields[i]);
     }
   }
-  wb->workbook().sheet(sheet_index).mutable_validations().push_back(std::move(out));
+  auto& validations = wb->workbook().sheet(sheet_index).mutable_validations();
+  validations.push_back(std::move(out));
+  *out_index = validations.size() - 1U;
   return 0;
 }
 

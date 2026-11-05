@@ -677,18 +677,20 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                 ),
             )
             wb.set_table_style(style)
-            self.assertEqual(wb.table_style_count(), 1)
+            self.assertEqual(len(wb.list_table_styles()), 1)
             self.assertEqual(wb.get_table_style_defaults(), ("TableStyleMedium2", "PivotStyleLight16"))
             index = wb.add_table(0, CellRect(0, 0, 1, 0), "T", "T", ["X"], "Corporate")
             with self.assertRaises(FormulonError):
                 wb.set_table_style(TableStyle(name="TableStyleMedium2"))
             with Workbook.load(wb.save()) as reloaded:
-                self.assertEqual(reloaded.get_table_style(0), style)
+                self.assertEqual(reloaded.list_table_styles(), [style])
+                self.assertEqual(reloaded.get_table_style("corporate"), style)
+                self.assertIsNone(reloaded.get_table_style("Other"))
                 self.assertEqual(list(reloaded.iter_tables())[index].style_name, "Corporate")
                 reloaded.set_table_style_defaults(table_style="Corporate")
                 self.assertEqual(reloaded.get_table_style_defaults()[0], "Corporate")
                 reloaded.remove_table_style("corporate")
-                self.assertEqual(reloaded.table_style_count(), 0)
+                self.assertEqual(reloaded.list_table_styles(), [])
                 self.assertEqual(reloaded.get_table_style_defaults()[0], "TableStyleMedium2")
 
     def test_table_update_empty_style_name_removes_the_style(self) -> None:
@@ -727,9 +729,9 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
     def test_named_cell_style_registration_reaches_the_reader(self) -> None:
         with Workbook.create_default() as wb:
             xf_id = wb.add_cell_style_xf(StyleAndCalcAccessorTests._xf())
-            before = wb.cell_style_count()
+            before = len(wb.list_cell_styles())
             wb.set_cell_style(CellStyleRecord("MyStyle", xf_id))
-            names = [wb.get_cell_style(i).name for i in range(wb.cell_style_count())]
+            names = [style.name for style in wb.list_cell_styles()]
         self.assertGreater(len(names), before)
         self.assertIn("MyStyle", names)
 
@@ -779,12 +781,10 @@ class OneShotEvaluationTests(unittest.TestCase):
         self.assertEqual(formulon.eval_formula("=SEQUENCE(2,3)").number, 1.0)
 
     def test_one_shot_reads_one_cell_whatever_the_result_size(self) -> None:
-        real = _c.LIB.fm_workbook_evaluate_formula_array_cell
+        real = _c.LIB.fm_value_array_get_value_at
         for formula, expected in (("=1+2", 3.0), ("=SEQUENCE(1000)", 1.0), ("=SEQUENCE(100,100,7)", 7.0)):
             with self.subTest(formula=formula):
-                with mock.patch.object(
-                    _c.LIB, "fm_workbook_evaluate_formula_array_cell", wraps=real, create=True
-                ) as cell:
+                with mock.patch.object(_c.LIB, "fm_value_array_get_value_at", wraps=real, create=True) as cell:
                     value = formulon.eval_formula(formula)
                 self.assertEqual(cell.call_count, 1)
                 self.assertEqual((value.kind, value.number), (ValueKind.NUMBER, expected))

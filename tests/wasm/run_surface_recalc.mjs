@@ -115,7 +115,7 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
       assert.equal(b1.value.number, 84);
 
       // addSheet should grow sheetCount.
-      assert.ok(wb.addSheet('Second').ok);
+      assert.ok(wb.addSheet('Second').status.ok);
       assert.equal(wb.getSheetCount().value, 2);
     } finally {
       wb.delete();

@@ -157,6 +157,26 @@ extern "C" fm_status_t fm_workbook_get_table_style_at(const fm_workbook_t* wb, s
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_get_table_style(const fm_workbook_t* wb, const char* name, int32_t* out_present,
+                                                   fm_table_style_t* out) {
+  clear_last_error();
+  if (wb == nullptr || name == nullptr || out_present == nullptr || out == nullptr) {
+    return null_argument("fm_workbook_get_table_style");
+  }
+  if (auto rc = check_utf8("fm_workbook_get_table_style", {name}); rc != 0) {
+    return rc;
+  }
+  *out_present = 0;
+  *out = fm_table_style_t{};
+  const formulon::TableStylesSection& section = wb->workbook().styles().table_styles;
+  const std::size_t index = find_style(section, name);
+  if (index >= section.styles.size()) {
+    return 0;
+  }
+  *out_present = 1;
+  return fm_workbook_get_table_style_at(wb, index, out);
+}
+
 extern "C" fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_table_style_t* style) {
   clear_last_error();
   if (wb == nullptr || style == nullptr || style->name == nullptr ||

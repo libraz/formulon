@@ -389,6 +389,10 @@ JsStringResult string_result(fm_status_t rc, const char* value);
 /// Builds a `JsAddStyleResult` from `rc`, carrying `index` only on success.
 JsAddStyleResult index_result(fm_status_t rc, std::size_t index);
 
+/// Builds an `OptionalResult` `{status, value}` for a lookup by key: `value` is
+/// `item` when `rc` is 0 and the key was `present`, else `null`.
+emscripten::val optional_result(fm_status_t rc, int32_t present, const emscripten::val& item);
+
 // ---- Guarded JS callback invocation -------------------------------------
 //
 // Every path that calls back into caller-supplied JavaScript from inside

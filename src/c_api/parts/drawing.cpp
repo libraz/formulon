@@ -107,6 +107,31 @@ extern "C" fm_status_t fm_sheet_get_drawing_object_at(const fm_workbook_t* wb, s
   return 0;
 }
 
+extern "C" fm_status_t fm_sheet_get_drawing_object(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                                   int32_t* out_present, fm_drawing_object_t* out) {
+  clear_last_error();
+  if (out_present == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_drawing_object: NULL out");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_drawing_object"); rc != 0) {
+    return rc;
+  }
+  *out_present = 0;
+  *out = fm_drawing_object_t{};
+  auto objects = formulon::list_drawing_objects(wb->workbook(), sheet_index);
+  if (!objects) {
+    return set_last_error(objects.error());
+  }
+  const std::vector<formulon::DrawingObject>& list = objects.value();
+  for (size_t i = 0; i < list.size(); ++i) {
+    if (list[i].object_id == object_id) {
+      *out_present = 1;
+      return fm_sheet_get_drawing_object_at(wb, sheet_index, i, out);
+    }
+  }
+  return 0;
+}
+
 extern "C" fm_status_t fm_sheet_get_image(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                           const uint8_t** out_bytes, size_t* out_len, fm_image_info_t* out_info) {
   clear_last_error();

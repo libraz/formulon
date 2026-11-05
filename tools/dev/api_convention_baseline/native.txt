@@ -2,9 +2,6 @@ R12	auto_filter_xml.get	method	`getSheetAutoFilterXml` is on wasm but not on nat
 R12	auto_filter_xml.set	method	`setSheetAutoFilterXml` is on wasm but not on native
 R12	cell_style_xf.add	method	`addCellStyleXf` is on wasm but not on native
 R5.list	cell_phonetic_run.list.get_cell_phonetic_runs	getCellPhoneticRuns	`getCellPhoneticRuns` is dropped from the native surface
-R5.list	cell_style.get_at	getCellStyle	`getCellStyle` is dropped from the native surface
-R5.list	cell_style.get_count	cellStyleCount	`cellStyleCount` is dropped from the native surface
-R5.list	cell_styles.list	missing	`listCellStyles` is not on the native Workbook
 R5.list	cf_rule.list.get_conditional_formats	getConditionalFormats	`getConditionalFormats` is dropped from the native surface
 R5.list	defined_name.get_at	definedNameAt	`definedNameAt` is dropped from the native surface
 R5.list	defined_name.get_count	definedNameCount	`definedNameCount` is dropped from the native surface
@@ -21,9 +18,6 @@ R5.list	pivot_cache_ids.list	missing	`listPivotCacheIds` is not on the native Wo
 R5.list	pivot_cache_ids.list	name	`listPivotCacheIds` should be `listPivotCaches`
 R5.list	protected_range.list.get_protected_ranges	getProtectedRanges	`getProtectedRanges` is dropped from the native surface
 R5.list	sparkline_group.list.list_sparkline_groups	listSparklineGroups	`listSparklineGroups` is dropped from the native surface
-R5.list	table_style.get_at	getTableStyle	`getTableStyle` is dropped from the native surface
-R5.list	table_style.get_count	tableStyleCount	`tableStyleCount` is dropped from the native surface
-R5.list	table_styles.list	missing	`listTableStyles` is not on the native Workbook
 R5.list	validation.list.get_validations	getValidations	`getValidations` is dropped from the native surface
 R6.js	calc_on_save.get	return	`calcOnSave`: returns `NumberResult`; a boolean result is `BoolResult`
 R6.js	cell_show_phonetic.get	return	`getCellShowPhonetic`: returns `CellShowPhoneticResult`; a boolean result is `BoolResult`
@@ -51,7 +45,6 @@ R7.js	record.cell_rect_result	readonly	`CellRectResult` is a result; `status` is
 R7.js	record.cell_result	readonly	`CellResult` is a result; `status` is not `readonly`
 R7.js	record.cell_show_phonetic_result	readonly	`CellShowPhoneticResult` is a result; `status` is not `readonly`
 R7.js	record.cell_style_record	readonly	`CellStyleRecord` is a result; `name` is not `readonly`
-R7.js	record.cell_style_result	readonly	`CellStyleResult` is a result; `status` is not `readonly`
 R7.js	record.cell_xf	readonly	`CellXf` is a result; `fontIndex` is not `readonly`
 R7.js	record.cell_xf_index_result	readonly	`CellXfIndexResult` is a result; `status` is not `readonly`
 R7.js	record.cell_xf_result	readonly	`CellXfResult` is a result; `status` is not `readonly`
@@ -177,7 +170,6 @@ R7.js	record.string_result	readonly	`StringResult` is a result; `status` is not 
 R7.js	record.table_style	readonly	`TableStyle` is a result; `name` is not `readonly`
 R7.js	record.table_style_defaults_result	readonly	`TableStyleDefaultsResult` is a result; `status` is not `readonly`
 R7.js	record.table_style_element	readonly	`TableStyleElement` is a result; `type` is not `readonly`
-R7.js	record.table_style_result	readonly	`TableStyleResult` is a result; `status` is not `readonly`
 R7.js	record.theme_fonts	readonly	`ThemeFonts` is a result; `majorLatin` is not `readonly`
 R7.js	record.theme_result	readonly	`ThemeResult` is a result; `status` is not `readonly`
 R7.js	record.threaded_comment	readonly	`ThreadedComment` is a result; `id` is not `readonly`
@@ -187,32 +179,22 @@ R7.js	record.value	readonly	`Value` is a result; `kind` is not `readonly`
 R7.js	record.width_model_result	readonly	`WidthModelResult` is a result; `status` is not `readonly`
 R7.js	record.workbook_protection	readonly	`WorkbookProtection` is a result; `lockStructure` is not `readonly`
 R7.js	record.workbook_protection_result	readonly	`WorkbookProtectionResult` is a result; `status` is not `readonly`
-R8.js	border.add	result	`addBorder` returns `AddStyleResult`, not `IndexResult`
-R8.js	cell_xf.add	result	`addXf` returns `AddStyleResult`, not `IndexResult`
-R8.js	cf_rule.add	result	`addConditionalFormat` returns `AddStyleResult`, not `IndexResult`
 R8.js	chart.add	result	`insertChart` returns `InsertChartResult`, not `ObjectIdResult`
 R8.js	chart.get	result	`getChart` returns `ChartResult`, not `OptionalResult`
 R8.js	comment.get	null	`getComment` returns `CommentEntry | null`; wrap it
 R8.js	comment.get	result	`getComment` returns `CommentEntry | null`, not `OptionalResult`
 R8.js	comment.get.get_comment_result	getCommentResult	`getCommentResult` is dropped from the native surface
 R8.js	data_table.get	result	`getDataTable` returns `DataTableResult`, not `OptionalResult`
-R8.js	dxf.add	result	`addDxf` returns `AddStyleResult`, not `IndexResult`
 R8.js	error_display_name.get	result	`errorDisplayName` returns `string`, not `OptionalResult`
 R8.js	field.status_code	code	`Status` should carry `code`, not `status`
-R8.js	fill.add	result	`addFill` returns `AddStyleResult`, not `IndexResult`
-R8.js	font.add	result	`addFont` returns `AddStyleResult`, not `IndexResult`
 R8.js	function_metadata.get	result	`functionMetadata` returns `FunctionMetadataResult`, not `OptionalResult`
 R8.js	image.add	result	`insertImage` returns `InsertImageResult`, not `ObjectIdResult`
 R8.js	image.get	result	`getImage` returns `ImageResult`, not `OptionalResult`
 R8.js	lambda_text.get	result	`getLambdaText` returns `LambdaTextResult`, not `OptionalResult`
 R8.js	num_fmt_string.get	result	`getNumFmt` returns `NumFmtResult`, not `OptionalResult`
-R8.js	pivot.create	result	`pivotCreate` returns `AddStyleResult`, not `IndexResult`
-R8.js	pivot_cache.get_id	result	`pivotCacheId` returns `AddStyleResult`, not `OptionalResult`
-R8.js	pivot_cache_calculated_field.add	result	`pivotCacheCalculatedFieldAdd` returns `AddStyleResult`, not `IndexResult`
 R8.js	reference.parse	null	`parseReference` returns `ParsedReference | null`; wrap it
 R8.js	shape.add	result	`insertShape` returns `InsertImageResult`, not `ObjectIdResult`
 R8.js	slicer.add	result	`addSlicer` returns `InsertImageResult`, not `ObjectIdResult`
-R8.js	table.create	result	`createTable` returns `AddStyleResult`, not `IndexResult`
 R8.js	value.get	result	`getValue` returns `CellResult`, not `OptionalResult`
 R8.js	workbook.create	result	`Workbook.createDefault` returns `Workbook`, not `OptionalResult`
 R8.js	workbook.create_empty	result	`Workbook.createEmpty` returns `Workbook`, not `OptionalResult`

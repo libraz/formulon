@@ -124,15 +124,19 @@ TEST(FormulonCli, EvalMalformedSyntaxMatchesTheAdHocCApiEntryPoint) {
   // pre-parse gate on either side would break this comparison.
   fm_workbook_t* wb = nullptr;
   ASSERT_EQ(fm_workbook_create_empty(&wb), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb, "Sheet1"), 0);
+  std::size_t sheet = 0;
+  ASSERT_EQ(fm_workbook_add_sheet(wb, "Sheet1", &sheet), 0);
+  fm_value_array_t* result = nullptr;
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb, sheet, 0, 0, "=1+", &result), 0);
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
-  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb, 0, 0, 0, "=1+", &rows, &cols), 0);
+  ASSERT_EQ(fm_value_array_get_dimensions(result, &rows, &cols), 0);
   EXPECT_EQ(rows, 1U);
   EXPECT_EQ(cols, 1U);
   fm_value_t value{};
-  ASSERT_EQ(fm_workbook_evaluate_formula_array_cell(wb, 0, &value), 0);
+  ASSERT_EQ(fm_value_array_get_value_at(result, 0, &value), 0);
   EXPECT_EQ(value.kind, FM_VAL_ERROR);
+  fm_value_array_destroy(result);
   fm_workbook_destroy(wb);
 
   CliRun r = run_cli({"eval", "=1+"});

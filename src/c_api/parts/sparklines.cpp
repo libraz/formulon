@@ -217,9 +217,9 @@ extern "C" fm_status_t fm_sheet_get_sparkline(const fm_workbook_t* wb, size_t sh
 
 extern "C" fm_status_t fm_sheet_add_sparkline_group(fm_workbook_t* wb, size_t sheet_index,
                                                     const fm_sparkline_group_t* group, const fm_sparkline_t* items,
-                                                    size_t count) {
+                                                    size_t count, size_t* out_index) {
   clear_last_error();
-  if (group == nullptr || items == nullptr) {
+  if (group == nullptr || items == nullptr || out_index == nullptr) {
     return null_argument("fm_sheet_add_sparkline_group");
   }
   if (auto rc = check_utf8("fm_sheet_add_sparkline_group", {group->date_axis_ref}); rc != 0) {
@@ -230,8 +230,13 @@ extern "C" fm_status_t fm_sheet_add_sparkline_group(fm_workbook_t* wb, size_t sh
   }
   io::SparklineGroup model = group_from_c(*group);
   model.items = items_from_c(items, count);
-  return edit_ext_lst(wb, sheet_index, "fm_sheet_add_sparkline_group",
-                      [&model](std::string& xml) { return io::add_sparkline_group(xml, model); });
+  return edit_ext_lst(wb, sheet_index, "fm_sheet_add_sparkline_group", [&model, out_index](std::string& xml) {
+    auto added = io::add_sparkline_group(xml, model);
+    if (added) {
+      *out_index = io::read_sparkline_groups(xml).size() - 1U;
+    }
+    return added;
+  });
 }
 
 extern "C" fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t sheet_index, size_t idx,

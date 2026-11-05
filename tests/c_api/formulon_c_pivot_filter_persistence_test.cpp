@@ -9,6 +9,7 @@
 #include <tuple>
 #include <vector>
 
+#include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
 
 namespace {
@@ -197,7 +198,7 @@ TEST(FormulonCApiPivotFilterPersistence, EachFilterTypeSurvivesSaveAndReload) {
     SCOPED_TRACE(c.label);
     WorkbookGuard wb;
     ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &wb.handle), 0) << fm_get_last_error_message();
-    ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, 0, &c.spec), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, 0, &c.spec, ignored_index()), 0) << fm_get_last_error_message();
     EXPECT_EQ(RowLabels(wb.handle), c.kept);
 
     const std::vector<std::uint8_t> saved = Save(wb.handle);
@@ -238,7 +239,8 @@ TEST(FormulonCApiPivotFilterPersistence, ScratchPivotFilterSurvivesSaveAndReload
   std::size_t pivot_idx = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
   const fm_pivot_filter_spec_t spec = TextSpec(FM_PIVOT_FILTER_LABEL_BEGINS_WITH, "Region", "N");
-  ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_idx, &spec), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_idx, &spec, ignored_index()), 0)
+      << fm_get_last_error_message();
   const std::vector<std::uint8_t> saved = Save(wb.handle);
 
   WorkbookGuard back;

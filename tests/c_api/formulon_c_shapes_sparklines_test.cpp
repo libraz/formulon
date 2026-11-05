@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_out_index.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
@@ -193,13 +194,16 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
 
   const fm_sparkline_t items[] = {{"Sheet1!A1:D1", "F1"}, {"Sheet1!A2:D2", "F2"}};
   fm_sparkline_group_t g = ColumnGroup();
-  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 2), 0) << fm_get_last_error_message();
+  std::size_t group_index = 99;
+  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 2, &group_index), 0) << fm_get_last_error_message();
+  EXPECT_EQ(group_index, 0U);
   g.type = FM_SPARKLINE_LINE;
   g.markers = 0;
   g.has_manual_min = 0;
   g.color_series = fm_color_spec_t{};
   const fm_sparkline_t more[] = {{"Sheet1!A9:D9", "G9"}};
-  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, more, 1), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, more, 1, &group_index), 0) << fm_get_last_error_message();
+  EXPECT_EQ(group_index, 1U);
 
   WorkbookGuard again;
   SaveAndReload(wb.handle, &again);
@@ -268,20 +272,21 @@ TEST(FormulonCApiSparklines, Validation) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const fm_sparkline_t good[] = {{"Sheet1!A1:D1", "F1"}};
   fm_sparkline_group_t g = ColumnGroup();
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, nullptr, good, 1), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, nullptr, 1), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, good, 0), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 3, &g, good, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, nullptr, good, 1, ignored_index()), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, nullptr, 1, ignored_index()), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, good, 0, ignored_index()), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 3, &g, good, 1, ignored_index()),
+            FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   const fm_sparkline_t range_location[] = {{"Sheet1!A1:D1", "F1:F2"}};
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, range_location, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, range_location, 1, ignored_index()), kInvalidArgument);
   const fm_sparkline_t no_formula[] = {{"", "F1"}};
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, no_formula, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, no_formula, 1, ignored_index()), kInvalidArgument);
   fm_sparkline_group_t bad = g;
   bad.type = 7;
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &bad, good, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &bad, good, 1, ignored_index()), kInvalidArgument);
   bad = g;
   bad.line_weight = -1.0;
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &bad, good, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &bad, good, 1, ignored_index()), kInvalidArgument);
   size_t count = 5;
   ASSERT_EQ(fm_sheet_get_sparkline_group_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 0U);

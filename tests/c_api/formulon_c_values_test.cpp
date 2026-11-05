@@ -12,6 +12,7 @@
 #include <thread>
 #include <vector>
 
+#include "formulon_c_out_index.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
@@ -34,8 +35,8 @@ TEST(FormulonCApi, CreateEmptyAndAddSheet) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_empty(&wb.handle), 0);
   EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 0U);
-  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "Data"), 0);
-  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "Stats"), 0);
+  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "Data", ignored_index()), 0);
+  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "Stats", ignored_index()), 0);
   EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 2U);
 
   const char* n0 = nullptr;
@@ -48,16 +49,16 @@ TEST(FormulonCApi, CreateEmptyAndAddSheet) {
 TEST(FormulonCApi, AddSheetValidatesNameAndRejectsDuplicate) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_empty(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Data"), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Data", ignored_index()), 0);
   // Duplicate (case-insensitive), forbidden character, and empty name are
   // all rejected now that the public add surface shares the rename
   // validator instead of silently accepting anything.
-  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "data"), 0);
-  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "a/b"), 0);
-  EXPECT_NE(fm_workbook_add_sheet(wb.handle, ""), 0);
+  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "data", ignored_index()), 0);
+  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "a/b", ignored_index()), 0);
+  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "", ignored_index()), 0);
   EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 1U);
   // A valid, distinct name still succeeds.
-  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "Stats"), 0);
+  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "Stats", ignored_index()), 0);
   EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 2U);
 }
 TEST(FormulonCApi, NumberLiteralRoundTrip) {

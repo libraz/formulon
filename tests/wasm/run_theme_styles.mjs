@@ -284,14 +284,14 @@ export function registerThemeStyles(Module, test) {
 
   test('setCellStyle takes a record and removeCellStyle repoints formats', () => {
     withWorkbook(Module, (wb) => {
-      const before = wb.cellStyleCount().value;
+      const before = wb.listCellStyles().length;
       const styleXf = wb.addCellStyleXf({ numFmtId: 14 });
       assert.ok(styleXf.status.ok);
       assert.ok(wb.setCellStyle({ name: 'Dated', xfId: styleXf.index }).ok);
-      assert.equal(wb.cellStyleCount().value, before + 1);
+      assert.equal(wb.listCellStyles().length, before + 1);
       let found = null;
-      for (let i = 0; i < wb.cellStyleCount().value; i += 1) {
-        const cs = wb.getCellStyle(i);
+      for (let i = 0; i < wb.listCellStyles().length; i += 1) {
+        const cs = wb.listCellStyles()[i];
         if (cs.name === 'Dated') found = cs;
       }
       assert.ok(found, 'Dated is listed');
@@ -301,19 +301,19 @@ export function registerThemeStyles(Module, test) {
 
       // Replacing by name keeps one entry and takes the new flags.
       assert.ok(wb.setCellStyle({ name: 'Dated', xfId: styleXf.index, hidden: true, customBuiltin: true }).ok);
-      assert.equal(wb.cellStyleCount().value, before + 1);
+      assert.equal(wb.listCellStyles().length, before + 1);
 
       // A built-in ordinal beyond the old 0..47 range round-trips.
       assert.ok(wb.setCellStyle({ name: 'Normal 2', xfId: 0, builtinId: 53 }).ok);
       let builtin = null;
-      for (let i = 0; i < wb.cellStyleCount().value; i += 1) {
-        const cs = wb.getCellStyle(i);
+      for (let i = 0; i < wb.listCellStyles().length; i += 1) {
+        const cs = wb.listCellStyles()[i];
         if (cs.name === 'Normal 2') builtin = cs;
       }
       assert.equal(builtin.builtinId, 53);
 
       assert.ok(wb.removeCellStyle('Dated').ok);
-      assert.equal(wb.cellStyleCount().value, before + 1);
+      assert.equal(wb.listCellStyles().length, before + 1);
       assert.equal(wb.removeCellStyle('Dated').ok, false);
     });
   });

@@ -219,6 +219,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value FormatValue(const Napi::CallbackInfo& info);
   Napi::Value DefinedNameCount(const Napi::CallbackInfo& info);
   Napi::Value DefinedNameAt(const Napi::CallbackInfo& info);
+  Napi::Value GetDefinedName(const Napi::CallbackInfo& info);
+  Napi::Value RemoveDefinedName(const Napi::CallbackInfo& info);
   Napi::Value TableCount(const Napi::CallbackInfo& info);
   Napi::Value TableAt(const Napi::CallbackInfo& info);
   Napi::Value CreateTable(const Napi::CallbackInfo& info);
@@ -228,6 +230,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value RenameTableColumn(const Napi::CallbackInfo& info);
   Napi::Value PassthroughCount(const Napi::CallbackInfo& info);
   Napi::Value PassthroughAt(const Napi::CallbackInfo& info);
+  Napi::Value GetPassthrough(const Napi::CallbackInfo& info);
   Napi::Value PivotCount(const Napi::CallbackInfo& info);
   Napi::Value PivotLayout(const Napi::CallbackInfo& info);
 
@@ -443,13 +446,13 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value DxfCount(const Napi::CallbackInfo& info);
 
   // Named cell styles.
-  Napi::Value CellStyleCount(const Napi::CallbackInfo& info);
+  Napi::Value ListCellStyles(const Napi::CallbackInfo& info);
   Napi::Value CellStyleXfCount(const Napi::CallbackInfo& info);
   Napi::Value GetCellStyle(const Napi::CallbackInfo& info);
   Napi::Value GetCellStyleXf(const Napi::CallbackInfo& info);
   Napi::Value SetCellStyle(const Napi::CallbackInfo& info);
   Napi::Value RemoveCellStyle(const Napi::CallbackInfo& info);
-  Napi::Value TableStyleCount(const Napi::CallbackInfo& info);
+  Napi::Value ListTableStyles(const Napi::CallbackInfo& info);
   Napi::Value GetTableStyle(const Napi::CallbackInfo& info);
   Napi::Value SetTableStyle(const Napi::CallbackInfo& info);
   Napi::Value RemoveTableStyle(const Napi::CallbackInfo& info);
@@ -461,6 +464,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetThemeColors(const Napi::CallbackInfo& info);
   Napi::Value SetThemeFonts(const Napi::CallbackInfo& info);
   Napi::Value SetThemeScriptFont(const Napi::CallbackInfo& info);
+  Napi::Value GetThemeScriptFont(const Napi::CallbackInfo& info);
   Napi::Value ResetTheme(const Napi::CallbackInfo& info);
   Napi::Value ResolveColor(const Napi::CallbackInfo& info);
   Napi::Value GetEffectiveStyle(const Napi::CallbackInfo& info);
@@ -487,6 +491,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value AddHyperlink(const Napi::CallbackInfo& info);
   Napi::Value AddHyperlinkRange(const Napi::CallbackInfo& info);
   Napi::Value GetHyperlinks(const Napi::CallbackInfo& info);
+  Napi::Value GetHyperlink(const Napi::CallbackInfo& info);
   Napi::Value RemoveHyperlink(const Napi::CallbackInfo& info);
   Napi::Value RemoveHyperlinkAt(const Napi::CallbackInfo& info);
   Napi::Value ClearHyperlinks(const Napi::CallbackInfo& info);
@@ -519,13 +524,16 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value EditThreadedComment(const Napi::CallbackInfo& info);
   Napi::Value SetThreadResolved(const Napi::CallbackInfo& info);
   Napi::Value RemoveThreadedComment(const Napi::CallbackInfo& info);
+  Napi::Value GetThreadedComment(const Napi::CallbackInfo& info);
   Napi::Value GetPersons(const Napi::CallbackInfo& info);
   Napi::Value AddPerson(const Napi::CallbackInfo& info);
   Napi::Value RemovePerson(const Napi::CallbackInfo& info);
+  Napi::Value GetPerson(const Napi::CallbackInfo& info);
 
   // Drawing images and the object operations shared with charts.
   Napi::Value ProbeImage(const Napi::CallbackInfo& info);
   Napi::Value ListDrawingObjects(const Napi::CallbackInfo& info);
+  Napi::Value GetDrawingObject(const Napi::CallbackInfo& info);
   Napi::Value GetImage(const Napi::CallbackInfo& info);
   Napi::Value InsertImage(const Napi::CallbackInfo& info);
   Napi::Value RemoveDrawing(const Napi::CallbackInfo& info);
@@ -540,7 +548,9 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value InsertShape(const Napi::CallbackInfo& info);
   Napi::Value UpdateShape(const Napi::CallbackInfo& info);
   Napi::Value RemoveShape(const Napi::CallbackInfo& info);
+  Napi::Value GetShape(const Napi::CallbackInfo& info);
   Napi::Value ListSlicers(const Napi::CallbackInfo& info);
+  Napi::Value GetSlicer(const Napi::CallbackInfo& info);
   Napi::Value AddSlicer(const Napi::CallbackInfo& info);
   Napi::Value UpdateSlicer(const Napi::CallbackInfo& info);
   Napi::Value RemoveSlicer(const Napi::CallbackInfo& info);
@@ -635,6 +645,18 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
       return NullHandleError(info.Env());
     }
     return MakeStatus(info.Env(), call(handle_));
+  }
+
+  /// `StatusCall` for an add that returns the allocated index: `call(handle, out)`
+  /// writes it, and the result is an `{ status, index }` object.
+  template <typename Call>
+  Napi::Value IndexCall(const Napi::CallbackInfo& info, Call&& call) {
+    if (handle_ == nullptr) {
+      return MakeIndexResult(info.Env(), NullHandleError(info.Env()), 0);
+    }
+    std::size_t out = 0;
+    const fm_status_t rc = call(handle_, &out);
+    return MakeIndexResult(info.Env(), rc, static_cast<uint32_t>(out));
   }
 
   /// Status entry for a C function `(wb, lead, args...)`: `info[0]` is the

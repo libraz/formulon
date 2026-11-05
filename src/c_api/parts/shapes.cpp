@@ -131,6 +131,31 @@ extern "C" fm_status_t fm_sheet_get_shape_at(const fm_workbook_t* wb, size_t she
   return 0;
 }
 
+extern "C" fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                          int32_t* out_present, fm_shape_t* out) {
+  clear_last_error();
+  if (out_present == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_shape: NULL out");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_shape"); rc != 0) {
+    return rc;
+  }
+  *out_present = 0;
+  *out = fm_shape_t{};
+  auto shapes = formulon::list_shapes(wb->workbook(), sheet_index);
+  if (!shapes) {
+    return set_last_error(shapes.error());
+  }
+  const std::vector<formulon::ShapeInfo>& list = shapes.value();
+  for (size_t i = 0; i < list.size(); ++i) {
+    if (list[i].object.object_id == object_id) {
+      *out_present = 1;
+      return fm_sheet_get_shape_at(wb, sheet_index, i, out);
+    }
+  }
+  return 0;
+}
+
 extern "C" fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index, const fm_shape_t* spec,
                                           uint32_t* out_object_id) {
   clear_last_error();

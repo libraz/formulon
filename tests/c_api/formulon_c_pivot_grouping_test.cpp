@@ -3,6 +3,7 @@
 #include <limits>
 #include <utility>
 
+#include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
 
 namespace {
@@ -364,8 +365,10 @@ TEST(FormulonCApiPivot, AddItemAtBindsTheBlankItemByCacheIndex) {
 
   // The blank shared item is at cache index 1, so the index-addressed adder is
   // the only way to name it: an empty label carries no binding of its own.
-  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_idx, 0, "North", 1), 0);
-  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_idx, 0, /*cache_index=*/1U, /*visible=*/0), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_idx, 0, "North", 1, ignored_index()), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_idx, 0, /*cache_index=*/1U, /*visible=*/0,
+                                                 ignored_index()),
+            0);
   {
     PivotCellsGuard projected;
     ASSERT_EQ(fm_sheet_get_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_get_last_error_message();
@@ -384,8 +387,8 @@ TEST(FormulonCApiPivot, AddItemWithEmptyNameCannotHideTheBlankRow) {
   // "North". The item is unlabelled, so it takes its label from that binding
   // and hides North, never the blank row. This is the gap
   // `fm_sheet_add_pivot_field_shared_item` closes.
-  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_idx, 0, "North", 1), 0);
-  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_idx, 0, "", 0), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_idx, 0, "North", 1, ignored_index()), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_idx, 0, "", 0, ignored_index()), 0);
   PivotCellsGuard projected;
   ASSERT_EQ(fm_sheet_get_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_get_last_error_message();
   EXPECT_DOUBLE_EQ(SumDataCells(projected.handle), 200.0);
@@ -398,7 +401,9 @@ TEST(FormulonCApiPivot, AddItemAtHidesANonBlankItemBeforeAnyReload) {
   std::size_t pivot_idx = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_clear_pivot_field_items(wb.handle, 0, pivot_idx, 0), 0);
-  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_idx, 0, /*cache_index=*/1U, /*visible=*/0), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_idx, 0, /*cache_index=*/1U, /*visible=*/0,
+                                                 ignored_index()),
+            0);
   {
     PivotCellsGuard projected;
     ASSERT_EQ(fm_sheet_get_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_get_last_error_message();
@@ -425,7 +430,11 @@ TEST(FormulonCApiPivot, SoleVisiblePageItemAddedByCacheIndexNamesItsValue) {
   ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb.handle, 0, pivot_idx, nullptr, 0U), 0);
   ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, pivot_idx, 0, FM_PIVOT_AXIS_PAGE), 0);
   ASSERT_EQ(fm_sheet_clear_pivot_field_items(wb.handle, 0, pivot_idx, 0), 0);
-  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_idx, 0, /*cache_index=*/0U, /*visible=*/0), 0);
-  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_idx, 0, /*cache_index=*/1U, /*visible=*/1), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_idx, 0, /*cache_index=*/0U, /*visible=*/0,
+                                                 ignored_index()),
+            0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_idx, 0, /*cache_index=*/1U, /*visible=*/1,
+                                                 ignored_index()),
+            0);
   EXPECT_TRUE(LayoutHasText(wb.handle, pivot_idx, "South"));
 }

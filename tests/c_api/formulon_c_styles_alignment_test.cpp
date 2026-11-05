@@ -61,7 +61,7 @@ TEST(FormulonCApiStyles, CellXfAlignmentEnumsValidateRangesBeforeMutation) {
     fm_cell_xf_t record{};
     record.vertical_align = 5;
     record.has_vertical_align = 1;
-    uint32_t index = 0xAABBCCDDU;
+    std::size_t index = 0xAABBCCDDU;
     const std::size_t before = wb.handle->workbook().styles().cell_style_xfs.size();
     expect_invalid(fm_workbook_add_cell_style_xf(wb.handle, &record, &index), "fm_workbook_add_cell_style_xf:");
     EXPECT_EQ(index, 0xAABBCCDDU);
@@ -236,7 +236,7 @@ TEST(FormulonCApiStyles, ZeroInitializedCellStyleXfUsesDefaultAlignment) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   fm_cell_xf_t record{};
-  uint32_t index = 0xFFFFFFFFU;
+  std::size_t index = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_cell_style_xf(wb.handle, &record, &index), 0);
 
   fm_cell_xf_t got{};
@@ -426,7 +426,7 @@ TEST(FormulonCApiStyles, CellStyleXfRoundTripsOptionalAlignment) {
   style.relative_indent = -2;
   style.has_shrink_to_fit = 1;
   style.shrink_to_fit = false;
-  uint32_t style_index = 0;
+  std::size_t style_index = 0;
   ASSERT_EQ(fm_workbook_add_cell_style_xf(wb.handle, &style, &style_index), 0);
 
   fm_cell_xf_t reread{};

@@ -427,6 +427,19 @@ export interface CellEntry {
   value?: Value;
 }
 
+/** A defined name, as `Workbook.getDefinedName` returns it. */
+export interface DefinedName {
+  name: string;
+  /** Formula text spelled as `getFormula` spells formulas. */
+  formula: string;
+  /** -1 for workbook scope; otherwise a 0-based sheet index. */
+  localSheetId: number;
+  /** The note Excel shows in the Name Manager; empty when none. */
+  comment: string;
+  /** Whether the name is hidden from the Name Manager. */
+  hidden: boolean;
+}
+
 /** Return type of `Workbook.definedNameAt(idx)`. */
 export interface DefinedNameEntry {
   status: Status;
@@ -586,15 +599,6 @@ export interface TableStyle {
   pivot?: boolean;
   table?: boolean;
   elements?: TableStyleElement[];
-}
-
-/** Return type of `Workbook.getTableStyle(index)`; empty on failure. */
-export interface TableStyleResult {
-  status: Status;
-  name: string;
-  pivot: boolean;
-  table: boolean;
-  elements: TableStyleElement[];
 }
 
 /** Return type of `Workbook.getTableStyleDefaults()`; empty when unset. */
@@ -3607,25 +3611,7 @@ export interface LambdaTextResult {
   text: string;
 }
 
-/** Return type of `Workbook.getCellStyle(index)`. Mirrors
- *  `formulon::io::CellStyleRecord`. `xfId` indexes into the named-style
- *  xf table reachable via `Workbook.getCellStyleXf(...)`. */
-export interface CellStyleResult {
-  status: Status;
-  /** Display name (e.g. "Normal", "Heading 1", or a user-defined label). */
-  name: string;
-  /** Index into the `<cellStyleXfs>` table. */
-  xfId: number;
-  /** OOXML built-in style ordinal (`0..47`), or `0xFFFFFFFF` for custom
-   *  entries that did not carry a `builtinId` attribute. */
-  builtinId: number;
-  /** Outline level for built-in heading styles (0 otherwise). */
-  iLevel: number;
-  hidden: boolean;
-  customBuiltin: boolean;
-}
-
-/** Argument of `Workbook.setCellStyle`. Mirrors `CellStyleResult` without the status. */
+/** Argument of `Workbook.setCellStyle`. Also the record `listCellStyles` and `getCellStyle` return. */
 export interface CellStyleRecord {
   /** Display name of the style. */
   name: string;
@@ -4080,7 +4066,7 @@ export interface FormatReferenceOptions {
  *  add-functions deduplicate against existing entries via linear
  *  search; `index` is either the matched index or the freshly-appended
  *  index. */
-export interface AddStyleResult {
+export interface IndexResult {
   status: Status;
   index: number;
 }
@@ -4140,6 +4126,13 @@ export interface ParallelRecalcResult {
 
 /** A JS array with the status of the list enumeration that produced it. */
 export type ListResult<T> = ReadonlyArray<T> & { readonly status: Status };
+
+/** Result of a lookup by key: `value` is `null` when `status.ok` and nothing has that key.
+ *  When `!status.ok`, `value` is unspecified; do not rely on it. */
+export interface OptionalResult<T> {
+  readonly status: Status;
+  readonly value: T | null;
+}
 
 /** Iterative-solver progress callback. Receives the current
  *  iteration number, the maximum residual seen, and the configured
@@ -4385,7 +4378,7 @@ export interface Workbook {
   /** Appends a sheet. Fails with `kInvalidSheetName` when the name is empty, longer than 31 UTF-16 units,
    *  contains one of `: \ / ? * [ ]`, or collides case-insensitively (Unicode simple case folding) with an
    *  existing sheet, and with `kSheetCountLimitExceeded` at the maximum sheet count. */
-  addSheet(name: string): Status;
+  addSheet(name: string): IndexResult;
   /** Removes the sheet at `index`. References to it are rewritten to `#REF!` at the affected subexpression
    *  (cell formulas, defined names, conditional-format, validation and table formulas); sheet-scoped names and
    *  tables owned by the sheet are dropped, as are pivot caches sourced from it and their pivot tables.
@@ -4405,7 +4398,7 @@ export interface Workbook {
    *  `kSheetIndexOutOfRange`, `kInvalidSheetName`, `kSheetCountLimitExceeded`, `kPreconditionFailed` (very
    *  hidden source) or `kNotImplemented` (slicers, shapes, pivot charts and other content the copy cannot
    *  model); the workbook is unchanged on failure. */
-  copySheet(sourceIndex: number, insertBefore: number, newName?: string): AddStyleResult;
+  copySheet(sourceIndex: number, insertBefore: number, newName?: string): IndexResult;
   /** Number of sheets. */
   getSheetCount(): NumberResult;
   /** Display name of the sheet at `idx`; `kSheetIndexOutOfRange` when `idx` is out of range. */
@@ -4414,7 +4407,7 @@ export interface Workbook {
    *  active (`activeTab`); without workbook views (an XLSB load) the first
    *  tab-selected sheet; `0` when neither is recorded. Removing or hiding the
    *  active sheet activates the next visible sheet, else the previous one. */
-  getActiveSheet(): AddStyleResult;
+  getActiveSheet(): IndexResult;
   /** Marks sheet `sheet` active so a save records it, creating a minimal
    *  `<bookViews>` when the workbook has none. Other `<workbookView>`
    *  attributes survive; `firstSheet` is lowered to `sheet` when larger. The
@@ -4488,13 +4481,18 @@ export interface Workbook {
   definedNameCount(): NumberResult;
   /** Reads the `idx`-th defined name with its scope; `kInvalidArgument` when `idx` is out of range. */
   definedNameAt(idx: number): DefinedNameEntry;
+  /** Reads the defined name `name` (ASCII case-insensitive) in scope `localSheetId` (-1 for workbook scope, else a
+   *  0-based sheet index); `value` is `null` when the scope has no such name. */
+  getDefinedName(name: string, localSheetId: number): OptionalResult<DefinedName>;
+  /** Removes the defined name `name` in scope `localSheetId`; `kInvalidArgument` when the scope has no such name. */
+  removeDefinedName(name: string, localSheetId: number): Status;
   /** Number of worksheet tables in the workbook. */
   getTableCount(): NumberResult;
   /** Reads the `idx`-th table's identifying metadata; `kInvalidArgument` when `idx` is out of range. */
   getTable(idx: number): TableEntry;
   /** Creates a worksheet table; `index` of the result is its workbook-wide table index (see `tableAt`).
    *  `input.columns` must hold one unique, non-empty header per column of `input.ref`. */
-  addTable(input: TableInput): AddStyleResult;
+  addTable(input: TableInput): IndexResult;
   /** Partially updates a table. Omitted fields preserve their current
    *  values. A supplied `ref` must keep the table's existing column count;
    *  an empty `styleName` clears the style. */
@@ -4520,6 +4518,8 @@ export interface Workbook {
   passthroughCount(): NumberResult;
   /** Reads the path of the `idx`-th passthrough part; `kInvalidArgument` when `idx` is out of range. */
   passthroughAt(idx: number): PassthroughEntry;
+  /** Reports whether a passthrough part sits at `path` (no leading `/`); `value` is the path, or `null`. */
+  getPassthrough(path: string): OptionalResult<string>;
   /** Returns the number of PivotTables anchored on `sheet`. */
   getPivotCount(sheet: number): NumberResult;
   /** Evaluates and projects a PivotTable into concrete grid cells. */
@@ -4530,10 +4530,10 @@ export interface Workbook {
   pivotCacheCount(): NumberResult;
   /** Returns `{ status, index: cacheId }` for the cache at flat
    *  index `idx`. */
-  pivotCacheIdAt(idx: number): AddStyleResult;
+  pivotCacheIdAt(idx: number): IndexResult;
   /** Creates a new empty pivot cache. Pass `0` for `requestedId` to
    *  auto-assign. Returns `{ status, index: cacheId }`. */
-  addPivotCache(requestedId: number): AddStyleResult;
+  addPivotCache(requestedId: number): IndexResult;
   /** Removes the pivot cache with id `cacheId`. Fails if any pivot
    *  table still references it. */
   removePivotCache(cacheId: number): Status;
@@ -4548,7 +4548,7 @@ export interface Workbook {
   getPivotCacheFieldName(cacheId: number, fieldIdx: number): StringResult;
   /** Appends a new field with the given UTF-8 name to the cache.
    *  `index` carries the new field's index. */
-  addPivotCacheField(cacheId: number, name: string): AddStyleResult;
+  addPivotCacheField(cacheId: number, name: string): IndexResult;
   /** Drops every field (and every record) from the cache. */
   clearPivotCacheFields(cacheId: number): Status;
 
@@ -4580,7 +4580,7 @@ export interface Workbook {
   /** Returns the number of records on the cache. */
   getPivotCacheRecordCount(cacheId: number): NumberResult;
   /** Appends a new empty record. `index` carries the new record's index. */
-  addPivotCacheRecord(cacheId: number): AddStyleResult;
+  addPivotCacheRecord(cacheId: number): IndexResult;
   /** Drops every record from the cache. */
   clearPivotCacheRecords(cacheId: number): Status;
   /** Sets cell `(recordIdx, fieldIdx)` to a numeric value. */
@@ -4599,7 +4599,7 @@ export interface Workbook {
 
   // ---- PivotTable mutation -----------------------------------------------
   /** Creates a new empty pivot table. Returns `{ status, index: pivotIdx }`. */
-  addPivot(sheet: number, name: string, cacheId: number, anchorRow: number, anchorCol: number): AddStyleResult;
+  addPivot(sheet: number, name: string, cacheId: number, anchorRow: number, anchorCol: number): IndexResult;
   /** Removes the pivot table at `pivotIdx`. */
   removePivot(sheet: number, pivotIdx: number): Status;
   /** Renames the pivot table. */
@@ -4620,7 +4620,7 @@ export interface Workbook {
   /** Returns `{ status, index: cacheId }`: the cache the pivot draws from.
    *  The definition read-backs here work for pivots created in-session and
    *  loaded from a package alike. */
-  getPivotCacheId(sheet: number, pivotIdx: number): AddStyleResult;
+  getPivotCacheId(sheet: number, pivotIdx: number): IndexResult;
   /** Reads the pivot's name. */
   getPivotName(sheet: number, pivotIdx: number): StringResult;
   /** Reads the row / column grand total flags `pivotSetGrandTotals` writes. */
@@ -4643,7 +4643,7 @@ export interface Workbook {
   setPivotCacheOptions(cacheId: number, options: Partial<PivotCacheOptions>): Status;
   /** Adds calculated field `name` with `formula` (English, naming cache fields
    *  only) as the cache's last field. `index` carries its field index. */
-  addPivotCacheCalculatedField(cacheId: number, name: string, formula: string): AddStyleResult;
+  addPivotCacheCalculatedField(cacheId: number, name: string, formula: string): IndexResult;
   /** Replaces the formula of calculated field `fieldIdx`. */
   setPivotCacheCalculatedFieldFormula(cacheId: number, fieldIdx: number, formula: string): Status;
   /** Removes calculated field `fieldIdx` and its data fields. */
@@ -4651,8 +4651,8 @@ export interface Workbook {
   /** Reads the formula of cache field `fieldIdx` without a leading `=`; empty
    *  when the field is not calculated. */
   getPivotCacheFieldFormula(cacheId: number, fieldIdx: number): StringResult;
-  /** Adds calculated item `name` with `formula` to cache field `fieldIdx`. */
-  addPivotCacheCalculatedItem(cacheId: number, fieldIdx: number, name: string, formula: string): Status;
+  /** Adds calculated item `name` with `formula` to cache field `fieldIdx`; `index` is its position in solve order. */
+  addPivotCacheCalculatedItem(cacheId: number, fieldIdx: number, name: string, formula: string): IndexResult;
   /** Number of calculated items in the cache, in solve order. */
   getPivotCacheCalculatedItemCount(cacheId: number): NumberResult;
   /** Reads calculated item `idx` (in solve order). */
@@ -4686,7 +4686,7 @@ export interface Workbook {
    *  onto a new sheet inserted before the pivot's sheet, as Show Details
    *  does. Returns `{ status, index: newSheetIndex }`; sheets at and after
    *  the pivot's sheet shift by one. */
-  showPivotDetails(sheet: number, pivotIdx: number, row: number, col: number): AddStyleResult;
+  showPivotDetails(sheet: number, pivotIdx: number, row: number, col: number): IndexResult;
 
   /** Number of fields configured on the pivot. */
   getPivotFieldCount(sheet: number, pivotIdx: number): NumberResult;
@@ -4698,7 +4698,7 @@ export interface Workbook {
    *  adding it again updates it. A name the cache lacks appends a field.
    *  A field added on the row or column axis is appended to that axis's
    *  order. */
-  addPivotField(sheet: number, pivotIdx: number, spec: PivotFieldSpecInput): AddStyleResult;
+  addPivotField(sheet: number, pivotIdx: number, spec: PivotFieldSpecInput): IndexResult;
   /** Reads the definition of field `fieldIdx`. */
   getPivotField(sheet: number, pivotIdx: number, fieldIdx: number): PivotFieldResult;
   /** Number of items in the field's item list (what `pivotFieldAddItem` /
@@ -4745,7 +4745,7 @@ export interface Workbook {
    *  matches source records by comparing their rendered label against
    *  `name`. An empty `name` therefore cannot express the blank item,
    *  which has no label of its own; use `pivotFieldAddItemAt`. */
-  addPivotFieldItem(sheet: number, pivotIdx: number, fieldIdx: number, name: string, visible: boolean): Status;
+  addPivotFieldItem(sheet: number, pivotIdx: number, fieldIdx: number, name: string, visible: boolean): IndexResult;
   /** Appends a manual-filter item to pivot field `fieldIdx`, addressed by
    *  its position in the bound cache field's shared items -- the same
    *  index space as OOXML `<item x="N">`. The label is resolved from that
@@ -4759,7 +4759,7 @@ export interface Workbook {
     fieldIdx: number,
     cacheIndex: number,
     visible: boolean,
-  ): Status;
+  ): IndexResult;
   /** Drops every manual-filter item from pivot field `fieldIdx`. */
   clearPivotFieldItems(sheet: number, pivotIdx: number, fieldIdx: number): Status;
   /** Toggles the visibility of item `itemIdx` on field `fieldIdx`. */
@@ -4820,7 +4820,7 @@ export interface Workbook {
   getPivotDataFieldCount(sheet: number, pivotIdx: number): NumberResult;
   /** Appends a new data-field entry. An omitted or empty `spec.name` is
    *  derived from the workbook profile; see {@link PivotDataFieldSpec}. */
-  addPivotDataField(sheet: number, pivotIdx: number, spec: PivotDataFieldSpec): AddStyleResult;
+  addPivotDataField(sheet: number, pivotIdx: number, spec: PivotDataFieldSpec): IndexResult;
   /** Reads data field `dataFieldIdx`. */
   getPivotDataField(sheet: number, pivotIdx: number, dataFieldIdx: number): PivotDataFieldResult;
   /** Drops every data-field entry from the pivot. */
@@ -4832,7 +4832,7 @@ export interface Workbook {
   /** Number of filters on the pivot -- see {@link PivotFilterResult}. */
   getPivotFilterCount(sheet: number, pivotIdx: number): NumberResult;
   /** Appends a filter, saved with the pivot; see {@link PivotFilterResult}. */
-  addPivotFilter(sheet: number, pivotIdx: number, spec: PivotFilterSpec): Status;
+  addPivotFilter(sheet: number, pivotIdx: number, spec: PivotFilterSpec): IndexResult;
   /** Reads the filter at `filterIdx`; see {@link PivotFilterResult}. */
   getPivotFilter(sheet: number, pivotIdx: number, filterIdx: number): PivotFilterResult;
   /** Drops every listed filter from the pivot. */
@@ -5126,7 +5126,7 @@ export interface Workbook {
 
   /** Adds a font (deduplicating against existing entries) and returns
    *  the resolved index. */
-  addFont(record: FontRecord): AddStyleResult;
+  addFont(record: FontRecord): IndexResult;
   /** Overwrites the font at `fontIndex` in place. Every `<xf>` naming that
    *  index restyles at once, so this is a bulk change rather than a local
    *  edit; `addFont` is the way to introduce a new appearance. The index
@@ -5138,9 +5138,9 @@ export interface Workbook {
    *  a never-styled cell is saved as. Read it back with `getFont(0)`. */
   setDefaultFont(record: FontRecord): Status;
   /** Adds a fill (deduplicating against existing entries). */
-  addFill(record: FillRecord): AddStyleResult;
+  addFill(record: FillRecord): IndexResult;
   /** Adds a border (deduplicating against existing entries). */
-  addBorder(record: BorderRecord): AddStyleResult;
+  addBorder(record: BorderRecord): IndexResult;
   /** Adds a number-format code. An existing effective mapping is reused,
    *  including an existing custom record; a built-in id is reused without
    *  modifying the table only when its current effective mapping matches the
@@ -5153,10 +5153,10 @@ export interface Workbook {
    *  Out-of-range font/fill/border indices or unregistered `numFmtId`
    *  surface `kInvalidArgument` rather than auto-growing the parallel
    *  tables. */
-  addCellXf(record: CellXf): AddStyleResult;
+  addCellXf(record: CellXf): IndexResult;
   /** Adds a differential format (`<dxf>`) record (deduplicating against
    *  existing entries). */
-  addDxf(record: DxfRecord): AddStyleResult;
+  addDxf(record: DxfRecord): IndexResult;
 
   /** Returns the number of font records currently registered. */
   getFontCount(): NumberResult;
@@ -5170,14 +5170,13 @@ export interface Workbook {
   getDxfCount(): NumberResult;
 
   // Named cell styles.
-  /** Returns the number of named cell styles (`<cellStyle>` entries). */
-  cellStyleCount(): NumberResult;
+  /** Lists the named cell styles (`<cellStyle>` entries) in file order. */
+  listCellStyles(): ListResult<CellStyleRecord>;
   /** Returns the number of `<cellStyleXfs>` records — the named-style xf
-   *  table referenced by `CellStyleResult.xfId`. */
+   *  table referenced by `CellStyleRecord.xfId`. */
   getCellStyleXfCount(): NumberResult;
-  /** Returns the named cell style at `index`. Out-of-range indices
-   *  surface `kInvalidArgument` via `status`. */
-  getCellStyle(index: number): CellStyleResult;
+  /** Reads the named cell style `name` (matched exactly); `value` is `null` when there is none. */
+  getCellStyle(name: string): OptionalResult<CellStyleRecord>;
   /** Returns the named-style xf record at `index`. Output shape mirrors
    *  `getCellXf`. */
   getCellStyleXf(index: number): CellXfResult;
@@ -5187,10 +5186,10 @@ export interface Workbook {
   setCellStyle(record: CellStyleRecord): Status;
   /** Removes the named cell style; cell formats that used it fall back to Normal. */
   removeCellStyle(name: string): Status;
-  /** Number of custom table / PivotTable styles (`<tableStyles>`). */
-  tableStyleCount(): NumberResult;
-  /** Reads the custom table style at `index`. */
-  getTableStyle(index: number): TableStyleResult;
+  /** Lists the custom table / PivotTable styles (`<tableStyles>`) in file order. */
+  listTableStyles(): ListResult<TableStyle>;
+  /** Reads the custom table style `name` (case-insensitive); `value` is `null` when there is none. */
+  getTableStyle(name: string): OptionalResult<TableStyle>;
   /** Adds a custom table style, or replaces the one with the same name
    *  (case-insensitive). The name may not be a built-in style name; each
    *  element type may appear once, `size` must be at least 1 and `dxfId`
@@ -5219,6 +5218,9 @@ export interface Workbook {
    *  one with the full default set. `script` must be four ASCII letters and
    *  `typeface` non-empty, else the status is not ok. */
   setThemeScriptFont(major: boolean, script: string, typeface: string): Status;
+  /** Reads the typeface of `script` in the major (`major` true) or minor font set; `value` is `null` when the set
+   *  does not list the script. */
+  getThemeScriptFont(major: boolean, script: string): OptionalResult<ThemeScriptFont>;
   /** Removes the theme part so the workbook reports the default theme (`source` is `Default`). Excel adds a theme part again when it saves the file. */
   clearTheme(): Status;
   /** Resolves a colour specification to the colour Excel renders. */
@@ -5260,7 +5262,7 @@ export interface Workbook {
   /** Returns the protected ranges of `sheet` in file order. */
   getProtectedRanges(sheet: number): ListResult<ProtectedRange>;
   /** Appends a protected range. `name` must be non-empty and unique on the sheet; `ranges` must hold at least one rectangle. */
-  addProtectedRange(sheet: number, range: ProtectedRange): Status;
+  addProtectedRange(sheet: number, range: ProtectedRange): IndexResult;
   /** Replaces protected range `index`. */
   updateProtectedRange(sheet: number, index: number, range: ProtectedRange): Status;
   /** Removes protected range `index`. */
@@ -5293,11 +5295,13 @@ export interface Workbook {
   clearHyperlinks(sheet: number): Status;
   /** Returns every hyperlink on `sheet` as a JS array. */
   listHyperlinks(sheet: number): ListResult<Hyperlink>;
+  /** Reads the hyperlink whose range starts at `(row, col)`; `value` is `null` when none does. */
+  getHyperlink(sheet: number, row: number, col: number): OptionalResult<Hyperlink>;
   /** Returns every data-validation rule on `sheet` in storage order. */
   getValidations(sheet: number): ListResult<DataValidation>;
   /** Appends a data-validation rule to `sheet`. A non-empty `formula1` / `formula2`
    *  that does not parse is rejected with `kParserUnexpectedToken`. */
-  addValidation(sheet: number, validation: DataValidationInput): Status;
+  addValidation(sheet: number, validation: DataValidationInput): IndexResult;
   /** Removes the validation rule at `index`. Returns `kInvalidArgument`
    *  if `index` is out of range. */
   removeValidation(sheet: number, index: number): Status;
@@ -5343,6 +5347,8 @@ export interface Workbook {
   setThreadResolved(sheet: number, threadId: string, done: boolean): Status;
   /** Removes the comment with `id`; removing an opening comment removes its whole thread. */
   removeThreadedComment(sheet: number, id: string): Status;
+  /** Reads the threaded comment with `id`; `value` is `null` when the sheet has none. */
+  getThreadedComment(sheet: number, id: string): OptionalResult<ThreadedComment>;
   /** Returns the workbook's person list in file order. */
   listPeople(): PersonsResult;
   /** Appends a person to the workbook's person list. Fails with `kThreadedCommentInvalid` when the id is
@@ -5350,11 +5356,15 @@ export interface Workbook {
   addPerson(person: Person): Status;
   /** Removes the person with `id`; rejected while a comment or mention still names them. */
   removePerson(id: string): Status;
+  /** Reads the person with `id`; `value` is `null` when the list has none. */
+  getPerson(id: string): OptionalResult<Person>;
 
   /** Sniffs the format and pixel size of PNG, JPEG, GIF or BMP bytes from the header alone. */
   getImageInfo(bytes: Uint8Array): ImageInfoResult;
   /** Lists the anchored objects of the sheet's drawing in document order. */
   listDrawingObjects(sheet: number): ListResult<DrawingObject>;
+  /** Reads the drawing object `objectId`; `value` is `null` when the sheet's drawing has none. */
+  getDrawingObject(sheet: number, objectId: number): OptionalResult<DrawingObject>;
   /** Returns a copy of the media bytes of the picture `objectId`. */
   getImage(sheet: number, objectId: number): ImageResult;
   /** Inserts an image as a new anchored picture and returns its object id. */
@@ -5382,16 +5392,20 @@ export interface Workbook {
   updateShape(sheet: number, objectId: number, spec: ShapeInput): Status;
   /** Removes the shape, connector or group `objectId` with its children. */
   removeShape(sheet: number, objectId: number): Status;
+  /** Reads the shape `objectId`; `value` is `null` when the sheet's drawing has none. */
+  getShape(sheet: number, objectId: number): OptionalResult<Shape>;
 
-  // Table slicers. A slicer is addressed by its position in `listSlicers`; adding or removing one shifts later indices.
+  // Table slicers. A slicer is addressed as `(sheet, objectId)`, the id `addSlicer` returns and `listSlicers` reports.
   /** Lists the table slicers the sheet hosts; slicers over a pivot cache are not listed. */
   listSlicers(sheet: number): ListResult<Slicer>;
+  /** Reads the slicer `objectId`; `value` is `null` when the sheet hosts none (a slicer without a frame has no id). */
+  getSlicer(sheet: number, objectId: number): OptionalResult<Slicer>;
   /** Adds a slicer over column `column` (0-based) of table `table` and returns its frame's id. It creates the slicer and cache parts, the `Slicer_*` defined name and the drawing frame; the table may live on another sheet. */
   addSlicer(sheet: number, table: number, column: number, spec: SlicerInput): InsertImageResult;
-  /** Applies the fields `spec` names to slicer `index`; every other part of its XML is kept. */
-  updateSlicer(sheet: number, index: number, spec: SlicerInput): Status;
-  /** Removes slicer `index` with its drawing frame, and its cache when no other slicer uses it. Removing a table or sheet removes the slicers bound to it. */
-  removeSlicer(sheet: number, index: number): Status;
+  /** Applies the fields `spec` names to the slicer `objectId`; every other part of its XML is kept. */
+  updateSlicer(sheet: number, objectId: number, spec: SlicerInput): Status;
+  /** Removes the slicer `objectId` with its drawing frame, and its cache when no other slicer uses it. Removing a table or sheet removes the slicers bound to it. */
+  removeSlicer(sheet: number, objectId: number): Status;
 
   // What-If data tables. The formulas sit in the row above the result range and the substitution values in the column left of it (or the other way round); each result cell is found by substituting into the input cell(s), recalculating the cells that read them and restoring the inputs.
   /** Creates a data table over `spec`'s result range. The result cells read 0 until the next recalc and refuse writes ("cannot change part of a data table") until the table is removed. `kDataTableInvalid` (8005) when no input is given, the range has no row above or column left of it, an input lies inside the range, or the range overlaps another data table. */
@@ -5407,7 +5421,7 @@ export interface Workbook {
   /** Lists the sheet's sparkline groups in document order with their sparklines. */
   listSparklineGroups(sheet: number): ListResult<SparklineGroup>;
   /** Appends a group; `spec.sparklines` must hold at least one sparkline. */
-  addSparklineGroup(sheet: number, spec: SparklineGroupInput): Status;
+  addSparklineGroup(sheet: number, spec: SparklineGroupInput): IndexResult;
   /** Rewrites the modelled attributes, colours and date range of group `index`; its sparklines and unmodelled XML are kept. */
   updateSparklineGroup(sheet: number, index: number, spec: SparklineGroupInput): Status;
   /** Replaces the sparklines of group `index`. */
@@ -5486,7 +5500,7 @@ export interface Workbook {
    *  add/remove/clear mutation on the same sheet renumbers the sequence.
    *  A non-empty `formula1` / `formula2` that does not parse is rejected
    *  with `kParserUnexpectedToken`. */
-  addCfRule(sheet: number, rule: ConditionalFormatInput): AddStyleResult;
+  addCfRule(sheet: number, rule: ConditionalFormatInput): IndexResult;
   /** Removes the CF rule at `index` (flattened order). When the
    *  containing block becomes empty it is removed too. */
   removeCfRule(sheet: number, index: number): Status;

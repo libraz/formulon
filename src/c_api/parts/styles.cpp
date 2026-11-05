@@ -26,6 +26,7 @@ using formulon::c_api::parts::check_cell_xf_index;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::null_argument;
@@ -414,6 +415,27 @@ extern "C" fm_status_t fm_workbook_get_cell_style_at(const fm_workbook_t* wb, si
   out->i_level = cs.i_level;
   out->hidden = cs.hidden ? 1 : 0;
   out->custom_builtin = cs.custom_builtin ? 1 : 0;
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_get_cell_style(const fm_workbook_t* wb, const char* name, int32_t* out_present,
+                                                  fm_cell_style_record_t* out) {
+  clear_last_error();
+  if (wb == nullptr || name == nullptr || out_present == nullptr || out == nullptr) {
+    return null_argument("fm_workbook_get_cell_style");
+  }
+  if (auto rc = check_utf8("fm_workbook_get_cell_style", {name}); rc != 0) {
+    return rc;
+  }
+  *out_present = 0;
+  *out = fm_cell_style_record_t{};
+  const auto& styles = wb->workbook().styles().cell_styles;
+  for (std::size_t i = 0; i < styles.size(); ++i) {
+    if (styles[i].name == name) {
+      *out_present = 1;
+      return fm_workbook_get_cell_style_at(wb, i, out);
+    }
+  }
   return 0;
 }
 

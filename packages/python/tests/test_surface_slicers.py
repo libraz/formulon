@@ -67,15 +67,20 @@ class SlicerTests(unittest.TestCase):
                 self.assertEqual(s.anchor_kind, AnchorKind.TWO_CELL)
                 self.assertEqual((s.from_row, s.from_col, s.to_row, s.to_col), ANCHOR)
 
-                loaded.update_slicer(0, 0, caption="Renamed", style="", column_count=1, anchor=(0, 3, 8, 5))
+                loaded.update_slicer(0, object_id, caption="Renamed", style="", column_count=1, anchor=(0, 3, 8, 5))
+                found = loaded.get_slicer(0, object_id)
+                self.assertIsNotNone(found)
+                assert found is not None
+                self.assertEqual(found.caption, "Renamed")
                 loaded.insert_rows(0, 0, 3)
                 moved = loaded.list_slicers(0)[0]
                 self.assertEqual((moved.caption, moved.style, moved.column_count), ("Renamed", "", 1))
                 self.assertEqual(moved.sort_order, SlicerSortOrder.DESCENDING)
                 self.assertEqual((moved.from_row, moved.to_row), (3, 11))
 
-                loaded.remove_slicer(0, 0)
+                loaded.remove_slicer(0, object_id)
                 self.assertEqual(loaded.list_slicers(0), [])
+                self.assertIsNone(loaded.get_slicer(0, object_id))
                 emptied = _parts(loaded.save())
                 self.assertNotIn("xl/slicers/slicer1.xml", emptied)
                 self.assertNotIn("xl/slicerCaches/slicerCache1.xml", emptied)
@@ -107,11 +112,11 @@ class SlicerTests(unittest.TestCase):
             with self.assertRaises(TypeError):
                 wb.add_slicer(0, 0, 0, anchor=(1, 2, 3))
             self.assertEqual(wb.list_slicers(0), [])
-            wb.add_slicer(0, 0, 0, anchor=ANCHOR)
+            object_id = wb.add_slicer(0, 0, 0, anchor=ANCHOR)
             with self.assertRaises(FormulonError):
-                wb.update_slicer(0, 3, caption="x")
+                wb.update_slicer(0, object_id + 1, caption="x")
             with self.assertRaises(FormulonError):
-                wb.remove_slicer(0, 3)
+                wb.remove_slicer(0, object_id + 1)
 
 
 if __name__ == "__main__":

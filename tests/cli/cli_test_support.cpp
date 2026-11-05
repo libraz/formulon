@@ -337,7 +337,8 @@ bool write_lossy_xlsx_fixture(const std::string& path) {
   validation.range_count = 1;
   validation.type = 3;
   validation.formula1 = "$A$1:$A$2";
-  if (fm_sheet_add_validation(wb, 0, &validation) != 0 ||
+  std::size_t validation_index = 0;
+  if (fm_sheet_add_validation(wb, 0, &validation, &validation_index) != 0 ||
       fm_sheet_set_auto_filter_xml(wb, 0, "<autoFilter ref=\"A1:B2\"/>") != 0) {
     fm_workbook_destroy(wb);
     return false;

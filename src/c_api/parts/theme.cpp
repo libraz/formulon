@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -147,6 +148,34 @@ extern "C" fm_status_t fm_workbook_get_theme_script_font_at(const fm_workbook_t*
   *out_script = store.back().c_str();
   store.emplace_back(from_part ? scripts[idx].typeface : formulon::office_script_face(idx, major != 0));
   *out_typeface = store.back().c_str();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_get_theme_script_font(const fm_workbook_t* wb, int32_t major, const char* script,
+                                                         int32_t* out_present, const char** out_typeface) {
+  clear_last_error();
+  if (wb == nullptr || script == nullptr || out_present == nullptr || out_typeface == nullptr) {
+    return null_argument("fm_workbook_get_theme_script_font");
+  }
+  if (auto rc = check_utf8("fm_workbook_get_theme_script_font", {script}); rc != 0) {
+    return rc;
+  }
+  *out_present = 0;
+  *out_typeface = nullptr;
+  const formulon::LoadedTheme loaded = wb->workbook().load_theme();
+  const bool from_part = loaded.source == formulon::ThemeSource::kPart;
+  const std::vector<formulon::ThemeScriptFont>& scripts =
+      major != 0 ? loaded.theme.major_scripts : loaded.theme.minor_scripts;
+  const std::size_t count = from_part ? scripts.size() : formulon::kOfficeScriptCount;
+  for (std::size_t i = 0; i < count; ++i) {
+    if ((from_part ? std::string_view(scripts[i].script) : formulon::office_script(i)) == script) {
+      TextStore& store = fresh_read_scratch(wb);
+      store.emplace_back(from_part ? scripts[i].typeface : formulon::office_script_face(i, major != 0));
+      *out_typeface = store.back().c_str();
+      *out_present = 1;
+      return 0;
+    }
+  }
   return 0;
 }
 

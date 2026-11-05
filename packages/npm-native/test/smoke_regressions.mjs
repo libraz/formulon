@@ -239,7 +239,7 @@ test('addValidation defaults allowBlank to false', async () => {
         ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
         type: 3,
         formula1: '"a,b"',
-      }).ok,
+      }).status.ok,
     );
     const list = wb.getValidations(0);
     assert.equal(list.length, 1);
@@ -321,8 +321,8 @@ test('pivotFieldAddItemAt hides the blank item an empty label cannot name', asyn
     };
     assert.equal(sumDataCells(), 300);
 
-    assert.ok(wb.addPivotFieldItem(0, pivot.index, regionField.index, 'North', true).ok);
-    assert.ok(wb.addPivotFieldSharedItem(0, pivot.index, regionField.index, 1, false).ok);
+    assert.ok(wb.addPivotFieldItem(0, pivot.index, regionField.index, 'North', true).status.ok);
+    assert.ok(wb.addPivotFieldSharedItem(0, pivot.index, regionField.index, 1, false).status.ok);
     assert.equal(sumDataCells(), 100);
   } finally {
     wb.dispose();
@@ -456,7 +456,7 @@ test('setSheetVisibility states veryHidden, which the bool setter cannot', async
     assert.equal(wb.getSheetCount().value, 1);
     // A second sheet lets the first one change state, but removing the first
     // while the second is hidden would leave no visible sheet.
-    assert.ok(wb.addSheet('Second').ok);
+    assert.ok(wb.addSheet('Second').status.ok);
     assert.ok(wb.setTabHidden(1, true).ok);
     const lastVisible = wb.removeSheet(0);
     assert.equal(lastVisible.ok, false);

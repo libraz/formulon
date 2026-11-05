@@ -854,7 +854,7 @@ const PIVOT_MUTATORS = [
 
 test('the pivot mutator table covers every declared pivot mutator', async () => {
   const dts = await readFile(path.join(pkgRoot, 'dist', 'index.d.ts'), 'utf8');
-  const declared = [...dts.matchAll(/^ {2}((?:[a-z]+Pivot|pivot)\w*)\([^)]*\): (?:Status|AddStyleResult);/gm)].map(
+  const declared = [...dts.matchAll(/^ {2}((?:[a-z]+Pivot|pivot)\w*)\([^)]*\): (?:Status|IndexResult);/gm)].map(
     (m) => m[1],
   );
   assert.ok(declared.length > 40, `expected the pivot mutator family, found ${declared.length}`);
@@ -920,7 +920,7 @@ test('pivot filters and subtotal functions survive save and reload', async () =>
   const mod = await getModule();
   const b = buildPivot(mod);
   try {
-    assert.ok(b.wb.addPivotFilter(0, b.pivot, GREATER_THAN_20).ok);
+    assert.ok(b.wb.addPivotFilter(0, b.pivot, GREATER_THAN_20).status.ok);
     assert.ok(b.wb.addPivotFieldSubtotalFn(0, b.pivot, b.region, 2).ok);
     assert.ok(b.wb.addPivotFieldSubtotalFn(0, b.pivot, b.region, 0).ok);
     const region = b.wb.getPivotField(0, b.pivot, b.region);
@@ -988,8 +988,8 @@ const STATUS_ACCESSORS = [
   ['getBorderCount', [], null],
   ['getCellXfCount', [], null],
   ['getDxfCount', [], null],
-  ['cellStyleCount', [], null],
-  ['tableStyleCount', [], null],
+  ['listCellStyles', [], null],
+  ['listTableStyles', [], null],
   ['getCellStyleXfCount', [], null],
   ['getCalcMode', [], null],
   ['getFullPrecision', [], null],
@@ -1336,11 +1336,11 @@ test('calculated fields and items reject bad arguments and change nothing', asyn
     assert.equal(b.wb.getPivotCacheFieldCount(b.cacheId).value, fields + 2);
 
     // Items: unplaced fields, duplicates, and out-of-range indices.
-    assert.equal(b.wb.addPivotCacheCalculatedItem(b.cacheId, b.date, 'N', 'Amount').ok, false);
-    assert.equal(b.wb.addPivotCacheCalculatedItem(b.cacheId, 99, 'N', 'East').ok, false);
-    assert.equal(b.wb.addPivotCacheCalculatedItem(b.cacheId, b.region, 'East', 'West').ok, false);
-    assert.equal(b.wb.addPivotCacheCalculatedItem(b.cacheId, b.region, 'N', 'Nope').ok, false);
-    assert.equal(b.wb.addPivotCacheCalculatedItem(9999, b.region, 'N', 'East').ok, false);
+    assert.equal(b.wb.addPivotCacheCalculatedItem(b.cacheId, b.date, 'N', 'Amount').status.ok, false);
+    assert.equal(b.wb.addPivotCacheCalculatedItem(b.cacheId, 99, 'N', 'East').status.ok, false);
+    assert.equal(b.wb.addPivotCacheCalculatedItem(b.cacheId, b.region, 'East', 'West').status.ok, false);
+    assert.equal(b.wb.addPivotCacheCalculatedItem(b.cacheId, b.region, 'N', 'Nope').status.ok, false);
+    assert.equal(b.wb.addPivotCacheCalculatedItem(9999, b.region, 'N', 'East').status.ok, false);
     assert.equal(b.wb.getPivotCacheCalculatedItemCount(b.cacheId).value, 0);
     assert.equal(b.wb.getPivotCacheCalculatedItem(b.cacheId, 0).status.ok, false);
     assert.equal(b.wb.setPivotCacheCalculatedItemFormula(b.cacheId, 0, 'East').ok, false);
@@ -1407,15 +1407,15 @@ test('label-between filters carry valueHighText', async () => {
       valueHighKind: 2,
     };
     // The upper bound is required for the between types.
-    assert.equal(b.wb.addPivotFilter(0, b.pivot, spec).ok, false);
-    assert.ok(b.wb.addPivotFilter(0, b.pivot, { ...spec, valueHighText: 'F' }).ok);
+    assert.equal(b.wb.addPivotFilter(0, b.pivot, spec).status.ok, false);
+    assert.ok(b.wb.addPivotFilter(0, b.pivot, { ...spec, valueHighText: 'F' }).status.ok);
     const at = b.wb.getPivotFilter(0, b.pivot, 0);
     assert.equal(at.type, 22);
     assert.equal(at.valueText, 'A');
     assert.equal(at.valueHighText, 'F');
     // And rejected for every other type.
     assert.equal(
-      b.wb.addPivotFilter(0, b.pivot, { ...spec, type: mod.PivotFilterType.LabelEqual, valueHighText: 'F' }).ok,
+      b.wb.addPivotFilter(0, b.pivot, { ...spec, type: mod.PivotFilterType.LabelEqual, valueHighText: 'F' }).status.ok,
       false,
     );
     assert.throws(() => b.wb.addPivotFilter(0, b.pivot, { ...spec, valueHighText: 5 }), TypeError);

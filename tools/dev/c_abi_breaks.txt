@@ -81,7 +81,7 @@ removed fm_pivot_cells_bounds :: renamed to fm_pivot_cells_get_bounds
 removed fm_pivot_cells_count :: renamed to fm_pivot_cells_get_cell_count
 signature fm_sheet_add_hyperlink :: parameter type renamed (fm_hyperlink -> fm_hyperlink_t); sheet index widened to size_t sheet_index; record passed as const pointer
 retyped fm_sheet_add_threaded_comment :: parameter type renamed (fm_threaded_comment -> fm_threaded_comment_t)
-signature fm_sheet_add_validation :: parameter type renamed (fm_data_validation -> fm_data_validation_t); sheet index widened to size_t sheet_index; record passed as const pointer
+signature fm_sheet_add_validation :: parameter type renamed (fm_data_validation -> fm_data_validation_t); sheet index widened to size_t sheet_index; record passed as const pointer; returns the new rule's index through size_t* out_index
 removed fm_sheet_cell_rect_pt :: renamed to fm_sheet_get_cell_rect_pt
 removed fm_sheet_cells_in_range :: renamed to fm_sheet_get_cells_in_range
 removed fm_sheet_cf_add_rule :: renamed to fm_sheet_add_cf_rule
@@ -312,3 +312,5 @@ signature fm_sheet_remap_range_style :: rectangle passed as const fm_cell_rect_t
 signature fm_sheet_snapshot_range_style :: rectangle passed as const fm_cell_rect_t* instead of four coordinates
 signature fm_sheet_get_print_area :: reports the print area as a read-scratch-backed fm_cell_rect_t array and its count instead of A1 text
 signature fm_sheet_set_print_area :: takes the print area as const fm_cell_rect_t* ranges, size_t range_count instead of A1 text
+signature fm_workbook_add_sheet :: returns the new sheet's index through size_t* out_index
+removed fm_workbook_evaluate_formula_array_cell :: fm_sheet_evaluate_formula_array returns an owned fm_value_array_t read with fm_value_array_get_value_at

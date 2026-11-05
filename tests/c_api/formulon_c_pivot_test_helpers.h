@@ -10,6 +10,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "formulon_c_count_of.h"
+#include "formulon_c_out_index.h"
 #include "gtest/gtest.h"
 #include "miniz.h"
 #include "pivot/pivot_table.h"
@@ -231,11 +232,11 @@ template <typename Enum>
   if (st != 0) {
     return st;
   }
-  st = fm_sheet_add_pivot_field_item(wb, 0, pivot_idx, region_field, "North", 1);
+  st = fm_sheet_add_pivot_field_item(wb, 0, pivot_idx, region_field, "North", 1, ignored_index());
   if (st != 0) {
     return st;
   }
-  st = fm_sheet_add_pivot_field_item(wb, 0, pivot_idx, region_field, "South", 1);
+  st = fm_sheet_add_pivot_field_item(wb, 0, pivot_idx, region_field, "South", 1, ignored_index());
   if (st != 0) {
     return st;
   }

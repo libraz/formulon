@@ -207,7 +207,7 @@ export function registerFilterValidationComments(Module, test) {
         formula1: '1',
         formula2: '10',
       };
-      assert.ok(wb.addValidation(0, base).ok);
+      assert.ok(wb.addValidation(0, base).status.ok);
       const before = wb.getValidations(0);
       assert.equal(before.length, 1);
 
@@ -231,7 +231,7 @@ export function registerFilterValidationComments(Module, test) {
       assert.deepEqual(wb.getValidations(0), before);
 
       // Nullish enum fields keep their documented zero defaults.
-      assert.ok(wb.addValidation(0, { ranges: [range(3, 0, 3, 0)] }).ok);
+      assert.ok(wb.addValidation(0, { ranges: [range(3, 0, 3, 0)] }).status.ok);
       assert.equal(wb.getValidations(0)[1].type, 0);
     });
   });
@@ -345,7 +345,7 @@ export function registerFilterValidationComments(Module, test) {
       const beforeValidationCount = wb.getValidations(0).length;
       const largeText = 'x'.repeat(1024 * 1024);
       for (let i = 0; i < 20; i += 1) {
-        const input = { formula1: largeText };
+        const input = { ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }], formula1: largeText };
         Object.defineProperty(input, 'formula2', {
           configurable: true,
           enumerable: true,
@@ -372,6 +372,7 @@ export function registerFilterValidationComments(Module, test) {
       assert.throws(() => wb.setAutoFilter(0, proxyFilter), /columns getter should stay inside the JS reader boundary/);
 
       const badString = {
+        ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
         formula1: {
           toString() {
             throw new Error('toString must not run');
@@ -403,7 +404,7 @@ export function registerFilterValidationComments(Module, test) {
         formula2: '10',
         errorStyle: ValidationErrorStyle.Warning,
       };
-      assert.ok(wb.addValidation(0, rule).ok);
+      assert.ok(wb.addValidation(0, rule).status.ok);
 
       const none = wb.validateValue(0, 0, 3, { kind: 1, number: 99 });
       assert.ok(none.status.ok);

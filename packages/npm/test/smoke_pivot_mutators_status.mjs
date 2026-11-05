@@ -88,7 +88,7 @@ const TWO_LEVEL_GRID = [
 const DATE_SERIAL_GRID = ['行ラベル|Sum of Amount', '45292|10', '45323|30', '45658|5', '45689|7', '総計|52'];
 const wrongKind = (err) => err instanceof TypeError || err instanceof RangeError;
 const addNet = (b) => assert.ok(b.wb.addPivotCacheCalculatedField(b.cacheId, 'Net', 'Amount*2').status.ok);
-const addEw = (b) => assert.ok(b.wb.addPivotCacheCalculatedItem(b.cacheId, b.region, 'EW', 'East+West').ok);
+const addEw = (b) => assert.ok(b.wb.addPivotCacheCalculatedItem(b.cacheId, b.region, 'EW', 'East+West').status.ok);
 const twoLevels = (b) => b.wb.setPivotRowFieldOrder(0, b.pivot, [b.region, b.product]);
 const dateRows = (b) => b.wb.setPivotRowFieldOrder(0, b.pivot, [b.date]);
 const hideEast = (b) => b.wb.setPivotFieldItemVisible(0, b.pivot, b.region, 0, false);
@@ -645,7 +645,7 @@ const PIVOT_MUTATORS = [
     {
       setup: (b) => {
         addEw(b);
-        assert.ok(b.wb.addPivotCacheCalculatedItem(b.cacheId, b.region, 'WE', 'West+East').ok);
+        assert.ok(b.wb.addPivotCacheCalculatedItem(b.cacheId, b.region, 'WE', 'West+East').status.ok);
       },
       act: (b) => b.wb.movePivotCacheCalculatedItem(b.cacheId, 0, 1),
       expect: (b) => {
@@ -887,7 +887,7 @@ const PIVOT_MUTATORS = [
 
 test('the pivot mutator table covers every declared pivot mutator', async () => {
   const dts = await readFile(path.join(pkgRoot, 'dist', 'formulon.d.ts'), 'utf8');
-  const declared = [...dts.matchAll(/^ {2}((?:[a-z]+Pivot|pivot)\w*)\([^)]*\): (?:Status|AddStyleResult);/gm)].map(
+  const declared = [...dts.matchAll(/^ {2}((?:[a-z]+Pivot|pivot)\w*)\([^)]*\): (?:Status|IndexResult);/gm)].map(
     (m) => m[1],
   );
   assert.ok(declared.length > 40, `expected the pivot mutator family, found ${declared.length}`);
@@ -954,7 +954,7 @@ test('pivot filters and subtotal functions survive save and reload', async () =>
   const mod = await getModule();
   const b = buildPivot(mod);
   try {
-    assert.ok(b.wb.addPivotFilter(0, b.pivot, GREATER_THAN_20).ok);
+    assert.ok(b.wb.addPivotFilter(0, b.pivot, GREATER_THAN_20).status.ok);
     assert.ok(b.wb.addPivotFieldSubtotalFn(0, b.pivot, b.region, 2).ok);
     assert.ok(b.wb.addPivotFieldSubtotalFn(0, b.pivot, b.region, 0).ok);
     const region = b.wb.getPivotField(0, b.pivot, b.region);
@@ -1022,8 +1022,8 @@ const STATUS_ACCESSORS = [
   ['getBorderCount', [], null],
   ['getCellXfCount', [], null],
   ['getDxfCount', [], null],
-  ['cellStyleCount', [], null],
-  ['tableStyleCount', [], null],
+  ['listCellStyles', [], null],
+  ['listTableStyles', [], null],
   ['getCellStyleXfCount', [], null],
   ['getCalcMode', [], null],
   ['getFullPrecision', [], null],
@@ -1471,7 +1471,7 @@ test('calculated fields and items reject bad names and formulas and change nothi
       [4096, 'EW', 'East+West'],
     ]) {
       assert.equal(
-        wb.addPivotCacheCalculatedItem(cacheId, field, name, formula).ok,
+        wb.addPivotCacheCalculatedItem(cacheId, field, name, formula).status.ok,
         false,
         `${field} ${name} = ${formula}`,
       );
@@ -1531,12 +1531,12 @@ test('pivot filters take the full type range and an upper text bound', async () 
       { ...between, type: PivotFilterType.ValueEqual, valueKind: 1, valueDouble: 15 },
       { ...between, type: 68 },
     ]) {
-      assert.equal(wb.addPivotFilter(0, pivot, bad).ok, false, JSON.stringify(bad));
+      assert.equal(wb.addPivotFilter(0, pivot, bad).status.ok, false, JSON.stringify(bad));
     }
     assert.equal(wb.getPivotFilterCount(0, pivot).value, 0);
     assert.deepEqual(pivotGrid(wb), BASE_GRID);
 
-    assert.ok(wb.addPivotFilter(0, pivot, between).ok);
+    assert.ok(wb.addPivotFilter(0, pivot, between).status.ok);
     const at = wb.getPivotFilter(0, pivot, 0);
     assert.ok(at.status.ok, JSON.stringify(at.status));
     assert.equal(at.type, PivotFilterType.LabelBetween);
@@ -1552,7 +1552,7 @@ test('pivot filters take the full type range and an upper text bound', async () 
         type: PivotFilterType.ValueEqual,
         valueKind: 1,
         valueDouble: 15,
-      }).ok,
+      }).status.ok,
     );
     assert.equal(wb.getPivotFilter(0, pivot, 0).valueHighText, '');
     assert.deepEqual(pivotGrid(wb), ['\u884c\u30e9\u30d9\u30eb|Sum of Amount', 'East|15', '\u7dcf\u8a08|15']);

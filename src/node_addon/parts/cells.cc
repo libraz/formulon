@@ -129,8 +129,8 @@ Napi::Value Workbook::SetCellPhoneticRuns(const Napi::CallbackInfo& info) {
     // call commits a default value for it.
     return env.Undefined();
   }
-  fm_status_t rc = fm_sheet_set_cell_phonetic_runs(handle_, address.sheet, address.row, address.col, records.data(),
-                                                      records.size());
+  fm_status_t rc =
+      fm_sheet_set_cell_phonetic_runs(handle_, address.sheet, address.row, address.col, records.data(), records.size());
   return MakeStatus(env, rc);
 }
 
@@ -150,8 +150,8 @@ Napi::Value Workbook::SetCellPhoneticProperties(const Napi::CallbackInfo& info) 
     // call commits a default value for it.
     return env.Undefined();
   }
-  fm_status_t rc = fm_sheet_set_cell_phonetic_properties(handle_, address.sheet, address.row, address.col, font_id,
-                                                            type, alignment);
+  fm_status_t rc =
+      fm_sheet_set_cell_phonetic_properties(handle_, address.sheet, address.row, address.col, font_id, type, alignment);
   return MakeStatus(env, rc);
 }
 
@@ -224,8 +224,8 @@ Napi::Value Workbook::GetCellPhoneticProperties(const Napi::CallbackInfo& info) 
   uint32_t alignment = 0;
   int32_t present = 0;
   const fm_status_t rc = handle_ != nullptr
-                             ? fm_sheet_get_cell_phonetic_properties(handle_, address.sheet, address.row,
-                                                                        address.col, &font_id, &type, &alignment)
+                             ? fm_sheet_get_cell_phonetic_properties(handle_, address.sheet, address.row, address.col,
+                                                                     &font_id, &type, &alignment)
                              : kBindingInvalidHandle;
   if (rc == 0) {
     (void)fm_sheet_has_cell_phonetic_properties(handle_, address.sheet, address.row, address.col, &present);
@@ -250,9 +250,9 @@ Napi::Value Workbook::GetCellShowPhonetic(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const CellAddressArgs address = ReadCellAddress(info);
   int32_t show = 0;
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_sheet_get_cell_show_phonetic(handle_, address.sheet, address.row, address.col, &show)
-                         : kBindingInvalidHandle;
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_sheet_get_cell_show_phonetic(handle_, address.sheet, address.row, address.col, &show)
+                             : kBindingInvalidHandle;
   Napi::Object out = Napi::Object::New(env);
   out.Set("status", MakeStatus(env, rc));
   out.Set("show", Napi::Boolean::New(env, rc == 0 && show != 0));
@@ -286,30 +286,29 @@ Napi::Value Workbook::EvaluateFormulaArray(const Napi::CallbackInfo& info) {
   const CellAddressArgs address = ReadCellAddress(info);
   const std::string formula = ArgString(info, 3);
 
-  uint32_t rows = 0;
-  uint32_t cols = 0;
-  fm_status_t rc = fm_sheet_evaluate_formula_array(handle_, address.sheet, address.row, address.col, formula.c_str(),
-                                                      &rows, &cols);
+  fm_value_array_t* array = nullptr;
+  fm_status_t rc =
+      fm_sheet_evaluate_formula_array(handle_, address.sheet, address.row, address.col, formula.c_str(), &array);
   if (rc != 0) {
     return EmptyFormulaArrayResult(env, MakeErrorStatus(env, rc));
   }
 
-  // Build a rows x cols nested array of Value objects, reading each stashed
-  // cell by its row-major index (r * cols + c).
+  // Build a rows x cols nested array of Value objects, reading each cell by
+  // its row-major index (r * cols + c).
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  fm_value_array_get_dimensions(array, &rows, &cols);
   Napi::Array cells = Napi::Array::New(env, rows);
   for (uint32_t r = 0; r < rows; ++r) {
     Napi::Array js_row = Napi::Array::New(env, cols);
     for (uint32_t c = 0; c < cols; ++c) {
-      const std::size_t index = static_cast<std::size_t>(r) * cols + c;
       fm_value_t v{};
-      fm_status_t cell_rc = fm_workbook_evaluate_formula_array_cell(handle_, index, &v);
-      if (cell_rc != 0) {
-        return EmptyFormulaArrayResult(env, MakeErrorStatus(env, cell_rc));
-      }
+      fm_value_array_get_value_at(array, static_cast<std::size_t>(r) * cols + c, &v);
       js_row.Set(c, TranslateValue(env, v));
     }
     cells.Set(r, js_row);
   }
+  fm_value_array_destroy(array);
 
   Napi::Object out = Napi::Object::New(env);
   out.Set("status", MakeOkStatus(env));
@@ -330,7 +329,7 @@ Napi::Value Workbook::EvaluateConditionalFormula(const Napi::CallbackInfo& info)
   const std::string formula = ArgString(info, 5);
   fm_value_t v{};
   fm_status_t rc = fm_sheet_evaluate_cf_formula(handle_, address.sheet, address.row, address.col, anchor_row,
-                                                   anchor_col, formula.c_str(), &v);
+                                                anchor_col, formula.c_str(), &v);
   return MakeValueResult(env, rc, v);
 }
 

@@ -62,7 +62,7 @@ class JsWorkbook {
 
   // ---- Sheet management ---------------------------------------------------
 
-  JsStatus addSheet(const std::string& name);
+  JsAddStyleResult addSheet(const std::string& name);
   JsStatus moveSheet(uint32_t fromIdx, uint32_t toIdx);
   JsAddStyleResult copySheet(uint32_t sourceIndex, uint32_t insertBefore, emscripten::val newName);
   JsStatus removeSheet(uint32_t index);
@@ -209,6 +209,8 @@ class JsWorkbook {
 
   JsNumberResult definedNameCount() const;
   emscripten::val definedNameAt(uint32_t idx) const;
+  emscripten::val getDefinedName(const std::string& name, int32_t localSheetId) const;
+  JsStatus removeDefinedName(const std::string& name, int32_t localSheetId);
 
   JsNumberResult tableCount() const;
   emscripten::val tableAt(uint32_t idx) const;
@@ -223,6 +225,7 @@ class JsWorkbook {
 
   JsNumberResult passthroughCount() const;
   emscripten::val passthroughAt(uint32_t idx) const;
+  emscripten::val getPassthrough(const std::string& path) const;
 
   JsNumberResult pivotCount(uint32_t sheet) const;
   emscripten::val pivotLayout(uint32_t sheet, uint32_t pivotIndex) const;
@@ -394,9 +397,9 @@ class JsWorkbook {
   JsNumberResult borderCount() const;
   JsNumberResult xfCount() const;
   JsNumberResult dxfCount() const;
-  JsNumberResult cellStyleCount() const;
+  emscripten::val listCellStyles() const;
   JsNumberResult cellStyleXfCount() const;
-  emscripten::val getCellStyle(uint32_t index) const;
+  emscripten::val getCellStyle(const std::string& name) const;
   emscripten::val getCellStyleXf(uint32_t index) const;
   JsAddStyleResult addCellStyleXf(emscripten::val record);
   /// Adds or replaces a `<cellStyle>` from `{ name, xfId, builtinId, iLevel, hidden, customBuiltin }`.
@@ -405,8 +408,8 @@ class JsWorkbook {
   JsStatus removeCellStyle(const std::string& name);
   /// Custom table / PivotTable styles (`<tableStyles>`) and the default
   /// style names.
-  JsNumberResult tableStyleCount() const;
-  emscripten::val getTableStyle(uint32_t index) const;
+  emscripten::val listTableStyles() const;
+  emscripten::val getTableStyle(const std::string& name) const;
   JsStatus setTableStyle(emscripten::val style);
   JsStatus removeTableStyle(const std::string& name);
   emscripten::val getTableStyleDefaults() const;
@@ -416,6 +419,7 @@ class JsWorkbook {
 
   /// `{ status, source, colors, fonts }`: the 12 scheme colours in `a:clrScheme` order and the theme typefaces.
   emscripten::val getTheme() const;
+  emscripten::val getThemeScriptFont(bool major, const std::string& script) const;
   JsStatus setThemeColors(emscripten::val colors);
   JsStatus setThemeFonts(emscripten::val fonts);
   JsStatus setThemeScriptFont(bool major, const std::string& script, const std::string& typeface);
@@ -447,7 +451,7 @@ class JsWorkbook {
   JsStatus setWorkbookProtection(emscripten::val protection);
   /// The sheet's `<protectedRange>` entries, in file order.
   emscripten::val getProtectedRanges(uint32_t sheet) const;
-  JsStatus addProtectedRange(uint32_t sheet, emscripten::val range);
+  JsAddStyleResult addProtectedRange(uint32_t sheet, emscripten::val range);
   JsStatus updateProtectedRange(uint32_t sheet, uint32_t index, emscripten::val range);
   JsStatus removeProtectedRange(uint32_t sheet, uint32_t index);
 
@@ -459,6 +463,7 @@ class JsWorkbook {
   JsStatus removeHyperlinkAt(uint32_t sheet, uint32_t index);
   JsStatus clearHyperlinks(uint32_t sheet);
   emscripten::val getHyperlinks(uint32_t sheet) const;
+  emscripten::val getHyperlink(uint32_t sheet, uint32_t row, uint32_t col) const;
   emscripten::val getMerges(uint32_t sheet) const;
   /// The merges intersecting `range`, in storage order.
   emscripten::val getMergesInRange(uint32_t sheet, emscripten::val range) const;
@@ -481,6 +486,7 @@ class JsWorkbook {
   emscripten::val listInvalidCells(uint32_t sheet, emscripten::val cursor, emscripten::val limit) const;
 
   emscripten::val getThreadedComments(uint32_t sheet) const;
+  emscripten::val getThreadedComment(uint32_t sheet, const std::string& id) const;
   JsStatus addThreadedComment(uint32_t sheet, emscripten::val comment);
   JsStatus editThreadedComment(uint32_t sheet, const std::string& id, const std::string& text,
                                emscripten::val mentions);
@@ -489,9 +495,11 @@ class JsWorkbook {
   emscripten::val getPersons() const;
   JsStatus addPerson(emscripten::val person);
   JsStatus removePerson(const std::string& id);
+  emscripten::val getPerson(const std::string& id) const;
 
   emscripten::val probeImage(emscripten::val bytes) const;
   emscripten::val listDrawingObjects(uint32_t sheet) const;
+  emscripten::val getDrawingObject(uint32_t sheet, uint32_t objectId) const;
   emscripten::val getImage(uint32_t sheet, uint32_t objectId) const;
   emscripten::val insertImage(uint32_t sheet, emscripten::val bytes, emscripten::val opts);
   JsStatus removeDrawing(uint32_t sheet, uint32_t objectId);
@@ -505,18 +513,20 @@ class JsWorkbook {
   emscripten::val insertShape(uint32_t sheet, emscripten::val spec);
   JsStatus updateShape(uint32_t sheet, uint32_t objectId, emscripten::val spec);
   JsStatus removeShape(uint32_t sheet, uint32_t objectId);
+  emscripten::val getShape(uint32_t sheet, uint32_t objectId) const;
 
   emscripten::val listSlicers(uint32_t sheet) const;
+  emscripten::val getSlicer(uint32_t sheet, uint32_t objectId) const;
   emscripten::val addSlicer(uint32_t sheet, uint32_t table, uint32_t column, emscripten::val spec);
-  JsStatus updateSlicer(uint32_t sheet, uint32_t index, emscripten::val spec);
-  JsStatus removeSlicer(uint32_t sheet, uint32_t index);
+  JsStatus updateSlicer(uint32_t sheet, uint32_t objectId, emscripten::val spec);
+  JsStatus removeSlicer(uint32_t sheet, uint32_t objectId);
   JsStatus addDataTable(uint32_t sheet, emscripten::val spec);
   emscripten::val getDataTable(uint32_t sheet, uint32_t row, uint32_t col) const;
   JsStatus removeDataTable(uint32_t sheet, uint32_t row, uint32_t col);
   JsStatus recalcDataTables();
 
   emscripten::val listSparklineGroups(uint32_t sheet) const;
-  JsStatus addSparklineGroup(uint32_t sheet, emscripten::val spec);
+  JsAddStyleResult addSparklineGroup(uint32_t sheet, emscripten::val spec);
   JsStatus updateSparklineGroup(uint32_t sheet, uint32_t index, emscripten::val spec);
   JsStatus setSparklineGroupSparklines(uint32_t sheet, uint32_t index, emscripten::val sparklines);
   JsStatus removeSparklineGroup(uint32_t sheet, uint32_t index);
@@ -543,7 +553,7 @@ class JsWorkbook {
                           emscripten::val headerRow, emscripten::val headerColumn);
 
   emscripten::val getValidations(uint32_t sheet) const;
-  JsStatus addValidation(uint32_t sheet, emscripten::val v);
+  JsAddStyleResult addValidation(uint32_t sheet, emscripten::val v);
   JsStatus removeValidationAt(uint32_t sheet, uint32_t index);
   JsStatus clearValidations(uint32_t sheet);
 
@@ -657,8 +667,8 @@ class JsWorkbook {
   JsStatus pivotCacheCalculatedFieldSetFormula(uint32_t cacheId, uint32_t fieldIdx, const std::string& formula);
   JsStatus pivotCacheCalculatedFieldRemove(uint32_t cacheId, uint32_t fieldIdx);
   JsStringResult pivotCacheFieldFormula(uint32_t cacheId, uint32_t fieldIdx) const;
-  JsStatus pivotCacheCalculatedItemAdd(uint32_t cacheId, uint32_t fieldIdx, const std::string& name,
-                                       const std::string& formula);
+  JsAddStyleResult pivotCacheCalculatedItemAdd(uint32_t cacheId, uint32_t fieldIdx, const std::string& name,
+                                               const std::string& formula);
   JsNumberResult pivotCacheCalculatedItemCount(uint32_t cacheId) const;
   emscripten::val pivotCacheCalculatedItemAt(uint32_t cacheId, uint32_t idx) const;
   JsStatus pivotCacheCalculatedItemSetFormula(uint32_t cacheId, uint32_t idx, const std::string& formula);
@@ -670,12 +680,13 @@ class JsWorkbook {
   JsStatus pivotProject(uint32_t sheet, uint32_t pivotIdx);
   emscripten::val pivotProjectionPending(uint32_t sheet, uint32_t pivotIdx) const;
   JsAddStyleResult pivotShowDetails(uint32_t sheet, uint32_t pivotIdx, uint32_t row, uint32_t col);
-  JsStatus pivotFieldAddItem(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, const std::string& name,
-                             bool visible);
+  JsAddStyleResult pivotFieldAddItem(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, const std::string& name,
+                                     bool visible);
   /// Appends a manual-filter item addressed by its position in the bound
   /// cache field's shared items. The only form that can express the blank
   /// item, which has no label of its own and is matched by its binding.
-  JsStatus pivotFieldAddItemAt(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t cacheIndex, bool visible);
+  JsAddStyleResult pivotFieldAddItemAt(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t cacheIndex,
+                                       bool visible);
   JsStatus pivotFieldClearItems(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx);
   JsStatus pivotFieldSetItemVisible(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t itemIdx,
                                     bool visible);
@@ -707,7 +718,7 @@ class JsWorkbook {
   /// `pivotFilterCount` reports only what this session added. The filter
   /// surface that does persist is pivot field item visibility.
   emscripten::val pivotFilterAt(uint32_t sheet, uint32_t pivotIdx, uint32_t filterIdx) const;
-  JsStatus pivotFilterAdd(uint32_t sheet, uint32_t pivotIdx, emscripten::val spec);
+  JsAddStyleResult pivotFilterAdd(uint32_t sheet, uint32_t pivotIdx, emscripten::val spec);
   JsStatus pivotFilterClear(uint32_t sheet, uint32_t pivotIdx);
   JsStatus pivotFilterRemoveAt(uint32_t sheet, uint32_t pivotIdx, uint32_t filterIdx);
 

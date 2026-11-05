@@ -7,6 +7,7 @@
 #include "color_resolve.h"
 #include "formulon_c_cf_test_helpers.h"
 #include "formulon_c_count_of.h"
+#include "formulon_c_out_index.h"
 #include "formulon_c_record_arg.h"
 
 TEST(FormulonCApiCf, EvaluateRangeOnEmptyCfWorkbookReturnsZero) {
@@ -255,7 +256,7 @@ TEST(FormulonCApiCf, ExpressionRuleEvaluatesFunctionsAndQualifiedRefs) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   SeedDxfs(wb.handle, 4);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2"), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2", ignored_index()), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 11.0), 0);  // Sheet1!A1
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 1, 0, 0, 5.0), 0);   // Sheet2!A1
 
@@ -289,7 +290,7 @@ TEST(FormulonCApiCf, ExpressionRuleRecursivelyEvaluatesFormulaCells) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   SeedDxfs(wb.handle, 5);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2"), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2", ignored_index()), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 1, 0, 0, 7.0), 0);                   // Sheet2!A1
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SUM(Sheet2!A1,5)"), 0);  // Sheet1!A1
 

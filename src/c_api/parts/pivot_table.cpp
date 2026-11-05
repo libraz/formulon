@@ -528,9 +528,9 @@ fm_status_t fill_data_field(const formulon::Workbook& workbook, const formulon::
 
 extern "C" fm_status_t fm_sheet_add_pivot_data_field(fm_workbook_t* wb, std::size_t sheet_index,
                                                      std::size_t pivot_index, const fm_pivot_data_field_spec_t* spec,
-                                                     std::size_t* out_idx) {
+                                                     std::size_t* out_index) {
   clear_last_error();
-  if (wb == nullptr || spec == nullptr || out_idx == nullptr) {
+  if (wb == nullptr || spec == nullptr || out_index == nullptr) {
     return null_argument("fm_sheet_add_pivot_data_field");
   }
   if (auto rc = validate(*spec, "fm_sheet_add_pivot_data_field"); rc != 0) {
@@ -553,7 +553,7 @@ extern "C" fm_status_t fm_sheet_add_pivot_data_field(fm_workbook_t* wb, std::siz
   const std::size_t added = table->data_fields().size() - 1U;
   const fm_status_t status = edit.commit();
   if (status == 0) {
-    *out_idx = added;
+    *out_index = added;
   }
   return status;
 }

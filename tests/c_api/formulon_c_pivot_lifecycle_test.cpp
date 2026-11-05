@@ -2,6 +2,7 @@
 
 #include <limits>
 
+#include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
 
 TEST(FormulonCApiPivot, RemovePivotAndCache) {
@@ -142,7 +143,7 @@ TEST(FormulonCApiPivot, NullPointerArgumentsRejected) {
   bad_filter.value_kind = FM_PIVOT_FILTER_VALUE_TEXT;
   bad_filter.value_text = "X";
   bad_filter.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
-  EXPECT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, 0, &bad_filter),
+  EXPECT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, 0, &bad_filter, ignored_index()),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 
@@ -295,7 +296,7 @@ TEST(FormulonCApiPivot, MutationAndClearExportsCompleteTheirLifecycles) {
   filter.value_kind = FM_PIVOT_FILTER_VALUE_TEXT;
   filter.value_text = "N";
   filter.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
-  ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_idx, &filter), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_idx, &filter, ignored_index()), 0);
   ASSERT_EQ(fm_sheet_clear_pivot_filters(wb.handle, 0, pivot_idx), 0);
 
   ASSERT_EQ(fm_sheet_clear_pivot_fields(wb.handle, 0, pivot_idx), 0);

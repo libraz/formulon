@@ -132,7 +132,15 @@ emscripten::val JsWorkbook::addSlicer(uint32_t sheet, uint32_t table, uint32_t c
   return o;
 }
 
-JsStatus JsWorkbook::updateSlicer(uint32_t sheet, uint32_t index, emscripten::val spec) {
+emscripten::val JsWorkbook::getSlicer(uint32_t sheet, uint32_t objectId) const {
+  fm_slicer_t s{};
+  int32_t present = 0;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_slicer(handle_, sheet, objectId, &present, &s) : kBindingInvalidHandle;
+  return optional_result(rc, present, rc == 0 && present != 0 ? slicer_to_val(s) : emscripten::val::null());
+}
+
+JsStatus JsWorkbook::updateSlicer(uint32_t sheet, uint32_t objectId, emscripten::val spec) {
   if (handle_ == nullptr) {
     return invalid_handle_status();
   }
@@ -142,11 +150,11 @@ JsStatus JsWorkbook::updateSlicer(uint32_t sheet, uint32_t index, emscripten::va
   if (!reader.ok()) {
     return reader.failure();
   }
-  return status_from_rc(fm_sheet_update_slicer(handle_, sheet, index, &slicer));
+  return status_from_rc(fm_sheet_update_slicer(handle_, sheet, objectId, &slicer));
 }
 
-JsStatus JsWorkbook::removeSlicer(uint32_t sheet, uint32_t index) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_slicer(handle_, sheet, index) : kBindingInvalidHandle);
+JsStatus JsWorkbook::removeSlicer(uint32_t sheet, uint32_t objectId) {
+  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_slicer(handle_, sheet, objectId) : kBindingInvalidHandle);
 }
 
 }  // namespace parts

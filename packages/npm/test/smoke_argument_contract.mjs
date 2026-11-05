@@ -207,7 +207,7 @@ test('every method called from the iterative progress callback throws and change
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    assert.ok(wb.addSheet('Second').ok);
+    assert.ok(wb.addSheet('Second').status.ok);
     assert.ok(wb.setNumber(1, 5, 5, 42).ok);
     assert.ok(wb.setIterative(true, 10, 0.001).ok);
     assert.ok(wb.setFormula(0, 0, 0, '=(A1+10)/2').ok);

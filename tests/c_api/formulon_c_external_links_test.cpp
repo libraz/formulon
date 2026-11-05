@@ -10,6 +10,7 @@
 #include <string>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_out_index.h"
 #include "formulon_c_record_arg.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
@@ -150,15 +151,15 @@ TEST(FormulonCApiExternalLinks, ValidationNamingANewBookBindsIt) {
   v.range_count = 1;
   v.type = 3;  // list
   v.formula1 = "[Book.xlsx]Sheet1!$A$1:$A$5";
-  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 1U);
   v.formula1 = "[book.XLSX]Sheet1!$B$1:$B$5";
-  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 1U);
   v.type = 1;
   v.formula1 = "0";
   v.formula2 = "[Other.xlsx]Sheet1!$A$1";
-  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 2U);
 }
 
@@ -357,7 +358,7 @@ TEST(FormulonCApiExternalLinks, FileNameValidationsStoreAndSpellTheName) {
   v.type = 2;  // decimal, between
   v.formula1 = "M5.xlsx!LN";
   v.formula2 = "=M5.xlsx!LN*2";
-  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 0U);
   for (const bool named : {true, false}) {
     ASSERT_EQ(fm_workbook_set_file_name(wb.handle, named ? "M5.xlsx" : ""), 0);

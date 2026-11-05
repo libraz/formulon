@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
@@ -1113,7 +1114,7 @@ TEST(FormulonCApiPivotOptions, ShowAllListsItemsWithoutData) {
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, nullptr), 0) << fm_get_last_error_message();
   // East is an item of the field with no records.
   ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache_id, 0U, "East"), 0);
-  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0U, kPivot, kRegionField, "East", 1), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0U, kPivot, kRegionField, "East", 1, ignored_index()), 0);
   fm_pivot_field_info_t info{};
   ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0U, kPivot, kRegionField, &info), 0);
   EXPECT_EQ(info.show_all, 0);

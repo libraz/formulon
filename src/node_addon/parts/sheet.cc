@@ -15,10 +15,14 @@ namespace formulon_node {
 // ---- Sheet operations -----------------------------------------------
 
 Napi::Value Workbook::AddSheet(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
-    const std::string name = ArgString(info, 0);
-    return fm_workbook_add_sheet(handle, name.c_str());
-  });
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeIndexResult(env, NullHandleError(env), 0);
+  }
+  const std::string name = ArgString(info, 0);
+  std::size_t out = 0;
+  const fm_status_t rc = fm_workbook_add_sheet(handle_, name.c_str(), &out);
+  return MakeIndexResult(env, rc, static_cast<uint32_t>(out));
 }
 
 Napi::Value Workbook::RemoveSheet(const Napi::CallbackInfo& info) {
@@ -156,6 +160,39 @@ Napi::Value Workbook::DefinedNameAt(const Napi::CallbackInfo& info) {
         out.Set("comment", JsString(env, comment));
         out.Set("hidden", Napi::Boolean::New(env, hidden != 0));
       });
+}
+
+Napi::Value Workbook::GetDefinedName(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+  }
+  const std::string name = ArgString(info, 0);
+  const int32_t local_sheet_id = ArgI32(info, 1);
+  const char* stored = nullptr;
+  const char* formula = nullptr;
+  const char* comment = nullptr;
+  int32_t hidden = 0;
+  int32_t present = 0;
+  const fm_status_t rc = fm_workbook_get_defined_name(handle_, name.c_str(), local_sheet_id, &present, &stored,
+                                                      &formula, &comment, &hidden);
+  if (rc != 0 || present == 0) {
+    return MakeOptionalResult(env, rc, present, env.Null());
+  }
+  Napi::Object item = Napi::Object::New(env);
+  item.Set("name", JsString(env, stored));
+  item.Set("formula", JsString(env, formula));
+  item.Set("localSheetId", Napi::Number::New(env, local_sheet_id));
+  item.Set("comment", JsString(env, comment));
+  item.Set("hidden", Napi::Boolean::New(env, hidden != 0));
+  return MakeOptionalResult(env, rc, present, item);
+}
+
+Napi::Value Workbook::RemoveDefinedName(const Napi::CallbackInfo& info) {
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::string name = ArgString(info, 0);
+    return fm_workbook_remove_defined_name(handle, name.c_str(), ArgI32(info, 1));
+  });
 }
 
 Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
@@ -443,6 +480,17 @@ Napi::Value Workbook::PassthroughAt(const Napi::CallbackInfo& info) {
         return fm_workbook_get_passthrough_at(handle, idx, &path);
       },
       [&](Napi::Object& out) { out.Set("path", JsString(info.Env(), path)); });
+}
+
+Napi::Value Workbook::GetPassthrough(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+  }
+  const std::string path = ArgString(info, 0);
+  int32_t present = 0;
+  const fm_status_t rc = fm_workbook_get_passthrough(handle_, path.c_str(), &present);
+  return MakeOptionalResult(env, rc, present, JsString(env, path.c_str()));
 }
 
 Napi::Value Workbook::PivotLayout(const Napi::CallbackInfo& info) {

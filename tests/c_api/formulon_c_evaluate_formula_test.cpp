@@ -9,6 +9,7 @@
 #include <string>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_out_index.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
 #include "utils/error.h"
@@ -22,6 +23,14 @@ struct WorkbookGuard {
   WorkbookGuard() = default;
   WorkbookGuard(const WorkbookGuard&) = delete;
   WorkbookGuard& operator=(const WorkbookGuard&) = delete;
+};
+
+struct ValueArrayGuard {
+  fm_value_array_t* handle = nullptr;
+  ~ValueArrayGuard() { fm_value_array_destroy(handle); }
+  ValueArrayGuard() = default;
+  ValueArrayGuard(const ValueArrayGuard&) = delete;
+  ValueArrayGuard& operator=(const ValueArrayGuard&) = delete;
 };
 
 // Builds a single-sheet workbook with A1=10, B1=20 (recalculated).
@@ -75,7 +84,7 @@ TEST(EvaluateFormula, RowColumnAnchoredAtTarget) {
 TEST(EvaluateFormula, CrossSheetReference) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Data"), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Data", ignored_index()), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 1, 0, 0, 99.0), 0);  // Data!A1
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
@@ -193,7 +202,7 @@ TEST(EvaluateFormula, TargetOutsideSheetIsRejected) {
 }
 
 // ---------------------------------------------------------------------------
-// Ad-hoc array evaluation (two-step: evaluate + per-cell readback).
+// Ad-hoc array evaluation (an owned handle holding every cell).
 // ---------------------------------------------------------------------------
 
 // A column vector: =SEQUENCE(3) is 3 rows x 1 col, values 1,2,3 row-major.
@@ -201,15 +210,17 @@ TEST(EvaluateFormulaArray, ColumnVectorPreservesAllCells) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
+  ValueArrayGuard array;
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &array.handle), 0);
   uint32_t rows = 0;
   uint32_t cols = 0;
-  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &rows, &cols), 0);
+  ASSERT_EQ(fm_value_array_get_dimensions(array.handle, &rows, &cols), 0);
   EXPECT_EQ(rows, 3U);
   EXPECT_EQ(cols, 1U);
 
   for (uint32_t i = 0; i < 3U; ++i) {
     fm_value_t v{};
-    ASSERT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, i, &v), 0);
+    ASSERT_EQ(fm_value_array_get_value_at(array.handle, i, &v), 0);
     EXPECT_EQ(v.kind, FM_VAL_NUMBER);
     EXPECT_DOUBLE_EQ(v.u.number, static_cast<double>(i + 1U));
   }
@@ -220,15 +231,17 @@ TEST(EvaluateFormulaArray, MatrixDimensionsAndRowMajorOrder) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
+  ValueArrayGuard array;
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(2,3)", &array.handle), 0);
   uint32_t rows = 0;
   uint32_t cols = 0;
-  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(2,3)", &rows, &cols), 0);
+  ASSERT_EQ(fm_value_array_get_dimensions(array.handle, &rows, &cols), 0);
   EXPECT_EQ(rows, 2U);
   EXPECT_EQ(cols, 3U);
 
   for (uint32_t i = 0; i < 6U; ++i) {
     fm_value_t v{};
-    ASSERT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, i, &v), 0);
+    ASSERT_EQ(fm_value_array_get_value_at(array.handle, i, &v), 0);
     EXPECT_EQ(v.kind, FM_VAL_NUMBER);
     EXPECT_DOUBLE_EQ(v.u.number, static_cast<double>(i + 1U));
   }
@@ -238,9 +251,11 @@ TEST(EvaluateFormulaArray, ExpandBlankPadProjectsToZeroAndNestedCountSkipsIt) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
+  ValueArrayGuard array;
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=EXPAND({1,2;3,4},3,4,)", &array.handle), 0);
   uint32_t rows = 0;
   uint32_t cols = 0;
-  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=EXPAND({1,2;3,4},3,4,)", &rows, &cols), 0);
+  ASSERT_EQ(fm_value_array_get_dimensions(array.handle, &rows, &cols), 0);
   EXPECT_EQ(rows, 3U);
   EXPECT_EQ(cols, 4U);
 
@@ -249,7 +264,7 @@ TEST(EvaluateFormulaArray, ExpandBlankPadProjectsToZeroAndNestedCountSkipsIt) {
   const uint32_t generated[] = {2U, 3U, 6U, 7U, 8U, 9U, 10U, 11U};
   for (uint32_t index : generated) {
     fm_value_t cell{};
-    ASSERT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, index, &cell), 0);
+    ASSERT_EQ(fm_value_array_get_value_at(array.handle, index, &cell), 0);
     ASSERT_EQ(cell.kind, FM_VAL_NUMBER) << "index=" << index;
     EXPECT_DOUBLE_EQ(cell.u.number, 0.0) << "index=" << index;
   }
@@ -270,14 +285,16 @@ TEST(EvaluateFormulaArray, ForeignSpillPhantomSurfacesSpill) {
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(2,1)"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
+  ValueArrayGuard array;
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 1, 0, "=SEQUENCE(2,1)", &array.handle), 0);
   uint32_t rows = 0;
   uint32_t cols = 0;
-  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 1, 0, "=SEQUENCE(2,1)", &rows, &cols), 0);
+  ASSERT_EQ(fm_value_array_get_dimensions(array.handle, &rows, &cols), 0);
   EXPECT_EQ(rows, 1U);
   EXPECT_EQ(cols, 1U);
 
   fm_value_t result{};
-  ASSERT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, 0, &result), 0);
+  ASSERT_EQ(fm_value_array_get_value_at(array.handle, 0, &result), 0);
   ASSERT_EQ(result.kind, FM_VAL_ERROR);
   EXPECT_EQ(result.u.error_code, static_cast<fm_error_code_t>(formulon::ErrorCode::Spill));
 
@@ -297,14 +314,16 @@ TEST(EvaluateFormulaArray, MergeAtAnchorBlocksVerticalSpill) {
   const fm_cell_rect_t merge{0U, 0U, 0U, 1U};
   ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, &merge), 0);
 
+  ValueArrayGuard array;
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0U, 0U, 0U, "=SEQUENCE(2,1)", &array.handle), 0);
   uint32_t rows = 0;
   uint32_t cols = 0;
-  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0U, 0U, 0U, "=SEQUENCE(2,1)", &rows, &cols), 0);
+  ASSERT_EQ(fm_value_array_get_dimensions(array.handle, &rows, &cols), 0);
   EXPECT_EQ(rows, 1U);
   EXPECT_EQ(cols, 1U);
 
   fm_value_t result{};
-  ASSERT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, 0U, &result), 0);
+  ASSERT_EQ(fm_value_array_get_value_at(array.handle, 0U, &result), 0);
   ASSERT_EQ(result.kind, FM_VAL_ERROR);
   EXPECT_EQ(result.u.error_code, static_cast<fm_error_code_t>(formulon::ErrorCode::Spill));
 
@@ -322,37 +341,41 @@ TEST(EvaluateFormulaArray, ScalarReportedAsOneByOne) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
+  ValueArrayGuard array;
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=1+2", &array.handle), 0);
   uint32_t rows = 0;
   uint32_t cols = 0;
-  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=1+2", &rows, &cols), 0);
+  ASSERT_EQ(fm_value_array_get_dimensions(array.handle, &rows, &cols), 0);
   EXPECT_EQ(rows, 1U);
   EXPECT_EQ(cols, 1U);
 
   fm_value_t v{};
-  ASSERT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, 0, &v), 0);
+  ASSERT_EQ(fm_value_array_get_value_at(array.handle, 0, &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 3.0);
 }
 
-// Text cells survive the arena teardown: the stash owns its own bytes, so
+// Text cells survive the arena teardown: the handle owns its own bytes, so
 // reading them back after the producing call (whose arena is gone) returns
 // is safe. Broadcasting concat over a 1x2 SEQUENCE yields {"1x","2x"}.
 TEST(EvaluateFormulaArray, TextCellsStayValidAfterEvaluation) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
+  ValueArrayGuard array;
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)&\"x\"", &array.handle), 0);
   uint32_t rows = 0;
   uint32_t cols = 0;
-  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)&\"x\"", &rows, &cols), 0);
+  ASSERT_EQ(fm_value_array_get_dimensions(array.handle, &rows, &cols), 0);
   EXPECT_EQ(rows, 1U);
   EXPECT_EQ(cols, 2U);
 
   fm_value_t a{};
-  ASSERT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, 0, &a), 0);
+  ASSERT_EQ(fm_value_array_get_value_at(array.handle, 0, &a), 0);
   ASSERT_EQ(a.kind, FM_VAL_TEXT);
   EXPECT_EQ(std::string(a.u.text), "1x");
   fm_value_t b{};
-  ASSERT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, 1, &b), 0);
+  ASSERT_EQ(fm_value_array_get_value_at(array.handle, 1, &b), 0);
   ASSERT_EQ(b.kind, FM_VAL_TEXT);
   EXPECT_EQ(std::string(b.u.text), "2x");
 }
@@ -373,12 +396,14 @@ TEST(EvaluateFormulaArray, IndexOutOfRangeRejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  uint32_t rows = 0;
-  uint32_t cols = 0;
-  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &rows, &cols), 0);
+  ValueArrayGuard array;
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &array.handle), 0);
+  size_t count = 0;
+  ASSERT_EQ(fm_value_array_get_value_count(array.handle, &count), 0);
+  EXPECT_EQ(count, 3U);
 
   fm_value_t v{};
-  EXPECT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, 3, &v),
+  EXPECT_EQ(fm_value_array_get_value_at(array.handle, 3, &v),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 
@@ -386,27 +411,34 @@ TEST(EvaluateFormulaArray, NullArgumentsRejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  uint32_t rows = 0;
-  uint32_t cols = 0;
-  EXPECT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, nullptr, &rows, &cols),
+  ValueArrayGuard array;
+  EXPECT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, nullptr, &array.handle),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=1", nullptr, &cols),
+  EXPECT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=1", nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(array.handle, nullptr);
 
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=1", &array.handle), 0);
   fm_value_t v{};
-  EXPECT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, 0, nullptr),
+  uint32_t rows = 0;
+  size_t count = 0;
+  EXPECT_EQ(fm_value_array_get_value_at(array.handle, 0, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_workbook_evaluate_formula_array_cell(nullptr, 0, &v),
+  EXPECT_EQ(fm_value_array_get_value_at(nullptr, 0, &v),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(fm_value_array_get_dimensions(array.handle, &rows, nullptr),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(fm_value_array_get_value_count(nullptr, &count),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  fm_value_array_destroy(nullptr);
 }
 
 TEST(EvaluateFormulaArray, SheetIndexOutOfRange) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  uint32_t rows = 0;
-  uint32_t cols = 0;
-  EXPECT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 99, 0, 0, "=1", &rows, &cols),
+  ValueArrayGuard array;
+  EXPECT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 99, 0, 0, "=1", &array.handle),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
 }
 
@@ -414,11 +446,10 @@ TEST(EvaluateFormulaArray, TargetOutsideSheetIsRejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  uint32_t rows = 0;
-  uint32_t cols = 0;
-  EXPECT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, formulon::Sheet::kMaxRows, 0, "=1", &rows, &cols),
+  ValueArrayGuard array;
+  EXPECT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, formulon::Sheet::kMaxRows, 0, "=1", &array.handle),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  EXPECT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, formulon::Sheet::kMaxCols, "=1", &rows, &cols),
+  EXPECT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, formulon::Sheet::kMaxCols, "=1", &array.handle),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 

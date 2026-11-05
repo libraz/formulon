@@ -46,6 +46,30 @@ bool ReadBytesWithOpts(const Napi::CallbackInfo& info, const char* usage, Napi::
   return true;
 }
 
+// The JS `DrawingObject` record of `o`.
+Napi::Object DrawingObjectToJs(Napi::Env env, const fm_drawing_object_t& o) {
+  Napi::Object item = Napi::Object::New(env);
+  item.Set("objectId", JsNumber(env, o.object_id));
+  item.Set("kind", JsNumber(env, o.kind));
+  item.Set("anchorKind", JsNumber(env, o.anchor_kind));
+  item.Set("editAs", JsNumber(env, o.edit_as));
+  item.Set("fromRow", JsNumber(env, o.from_row));
+  item.Set("fromCol", JsNumber(env, o.from_col));
+  item.Set("fromRowOff", JsNumber(env, static_cast<double>(o.from_row_off)));
+  item.Set("fromColOff", JsNumber(env, static_cast<double>(o.from_col_off)));
+  item.Set("toRow", JsNumber(env, o.to_row));
+  item.Set("toCol", JsNumber(env, o.to_col));
+  item.Set("toRowOff", JsNumber(env, static_cast<double>(o.to_row_off)));
+  item.Set("toColOff", JsNumber(env, static_cast<double>(o.to_col_off)));
+  item.Set("cx", JsNumber(env, static_cast<double>(o.cx)));
+  item.Set("cy", JsNumber(env, static_cast<double>(o.cy)));
+  item.Set("imageFormat", JsNumber(env, o.image_format));
+  item.Set("name", JsString(env, o.name));
+  item.Set("descr", JsString(env, o.descr));
+  item.Set("mediaPath", JsString(env, o.media_path));
+  return item;
+}
+
 }  // namespace
 
 Napi::Value Workbook::ProbeImage(const Napi::CallbackInfo& info) {
@@ -90,28 +114,21 @@ Napi::Value Workbook::ListDrawingObjects(const Napi::CallbackInfo& info) {
     if (rc != 0) {
       break;
     }
-    Napi::Object item = Napi::Object::New(env);
-    item.Set("objectId", JsNumber(env, o.object_id));
-    item.Set("kind", JsNumber(env, o.kind));
-    item.Set("anchorKind", JsNumber(env, o.anchor_kind));
-    item.Set("editAs", JsNumber(env, o.edit_as));
-    item.Set("fromRow", JsNumber(env, o.from_row));
-    item.Set("fromCol", JsNumber(env, o.from_col));
-    item.Set("fromRowOff", JsNumber(env, static_cast<double>(o.from_row_off)));
-    item.Set("fromColOff", JsNumber(env, static_cast<double>(o.from_col_off)));
-    item.Set("toRow", JsNumber(env, o.to_row));
-    item.Set("toCol", JsNumber(env, o.to_col));
-    item.Set("toRowOff", JsNumber(env, static_cast<double>(o.to_row_off)));
-    item.Set("toColOff", JsNumber(env, static_cast<double>(o.to_col_off)));
-    item.Set("cx", JsNumber(env, static_cast<double>(o.cx)));
-    item.Set("cy", JsNumber(env, static_cast<double>(o.cy)));
-    item.Set("imageFormat", JsNumber(env, o.image_format));
-    item.Set("name", JsString(env, o.name));
-    item.Set("descr", JsString(env, o.descr));
-    item.Set("mediaPath", JsString(env, o.media_path));
-    arr.Set(static_cast<uint32_t>(i), item);
+    arr.Set(static_cast<uint32_t>(i), DrawingObjectToJs(env, o));
   }
   return FinishListResult(env, arr, rc);
+}
+
+Napi::Value Workbook::GetDrawingObject(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+  }
+  fm_drawing_object_t o{};
+  int32_t present = 0;
+  const fm_status_t rc = fm_sheet_get_drawing_object(handle_, ArgU32(info, 0), ArgU32(info, 1), &present, &o);
+  return MakeOptionalResult(env, rc, present,
+                            rc == 0 && present != 0 ? Napi::Value(DrawingObjectToJs(env, o)) : env.Null());
 }
 
 Napi::Value Workbook::GetImage(const Napi::CallbackInfo& info) {

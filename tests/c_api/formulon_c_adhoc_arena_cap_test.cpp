@@ -56,11 +56,14 @@ TEST(AdhocEvalArenaCap, EvaluationStillSucceedsUnderTheCap) {
   EXPECT_EQ(scalar.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(scalar.u.number, 20.0);
 
+  fm_value_array_t* array = nullptr;
+  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 1, "=SEQUENCE(3,2)", &array), 0);
   uint32_t rows = 0;
   uint32_t cols = 0;
-  ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 1, "=SEQUENCE(3,2)", &rows, &cols), 0);
+  ASSERT_EQ(fm_value_array_get_dimensions(array, &rows, &cols), 0);
   EXPECT_EQ(rows, 3U);
   EXPECT_EQ(cols, 2U);
+  fm_value_array_destroy(array);
 
   fm_value_t fired{};
   ASSERT_EQ(fm_sheet_evaluate_cf_formula(wb.handle, 0, 0, 1, 0, 1, "=A1>5", &fired), 0);

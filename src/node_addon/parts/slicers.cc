@@ -55,6 +55,32 @@ fm_slicer_t PullSlicer(CheckedSpecReader& reader, const Napi::Object& spec, Slic
   return s;
 }
 
+// The JS `Slicer` record of `s`.
+Napi::Object SlicerToJs(Napi::Env env, const fm_slicer_t& s) {
+  Napi::Object item = Napi::Object::New(env);
+  item.Set("objectId", JsNumber(env, s.object_id));
+  item.Set("columnCount", JsNumber(env, s.column_count));
+  item.Set("sortOrder", JsNumber(env, s.sort_order));
+  item.Set("crossFilter", JsNumber(env, s.cross_filter));
+  item.Set("anchorKind", JsNumber(env, s.anchor_kind));
+  item.Set("fromRow", JsNumber(env, s.from_row));
+  item.Set("fromCol", JsNumber(env, s.from_col));
+  item.Set("fromRowOff", JsNumber(env, static_cast<double>(s.from_row_off)));
+  item.Set("fromColOff", JsNumber(env, static_cast<double>(s.from_col_off)));
+  item.Set("toRow", JsNumber(env, s.to_row));
+  item.Set("toCol", JsNumber(env, s.to_col));
+  item.Set("toRowOff", JsNumber(env, static_cast<double>(s.to_row_off)));
+  item.Set("toColOff", JsNumber(env, static_cast<double>(s.to_col_off)));
+  item.Set("rowHeight", JsNumber(env, static_cast<double>(s.row_height)));
+  item.Set("name", JsString(env, s.name));
+  item.Set("caption", JsString(env, s.caption));
+  item.Set("cacheName", JsString(env, s.cache_name));
+  item.Set("tableName", JsString(env, s.table_name));
+  item.Set("columnName", JsString(env, s.column_name));
+  item.Set("style", JsString(env, s.style));
+  return item;
+}
+
 }  // namespace
 
 Napi::Value Workbook::ListSlicers(const Napi::CallbackInfo& info) {
@@ -72,30 +98,20 @@ Napi::Value Workbook::ListSlicers(const Napi::CallbackInfo& info) {
     if (rc != 0) {
       break;
     }
-    Napi::Object item = Napi::Object::New(env);
-    item.Set("objectId", JsNumber(env, s.object_id));
-    item.Set("columnCount", JsNumber(env, s.column_count));
-    item.Set("sortOrder", JsNumber(env, s.sort_order));
-    item.Set("crossFilter", JsNumber(env, s.cross_filter));
-    item.Set("anchorKind", JsNumber(env, s.anchor_kind));
-    item.Set("fromRow", JsNumber(env, s.from_row));
-    item.Set("fromCol", JsNumber(env, s.from_col));
-    item.Set("fromRowOff", JsNumber(env, static_cast<double>(s.from_row_off)));
-    item.Set("fromColOff", JsNumber(env, static_cast<double>(s.from_col_off)));
-    item.Set("toRow", JsNumber(env, s.to_row));
-    item.Set("toCol", JsNumber(env, s.to_col));
-    item.Set("toRowOff", JsNumber(env, static_cast<double>(s.to_row_off)));
-    item.Set("toColOff", JsNumber(env, static_cast<double>(s.to_col_off)));
-    item.Set("rowHeight", JsNumber(env, static_cast<double>(s.row_height)));
-    item.Set("name", JsString(env, s.name));
-    item.Set("caption", JsString(env, s.caption));
-    item.Set("cacheName", JsString(env, s.cache_name));
-    item.Set("tableName", JsString(env, s.table_name));
-    item.Set("columnName", JsString(env, s.column_name));
-    item.Set("style", JsString(env, s.style));
-    arr.Set(static_cast<uint32_t>(i), item);
+    arr.Set(static_cast<uint32_t>(i), SlicerToJs(env, s));
   }
   return FinishListResult(env, arr, rc);
+}
+
+Napi::Value Workbook::GetSlicer(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+  }
+  fm_slicer_t s{};
+  int32_t present = 0;
+  const fm_status_t rc = fm_sheet_get_slicer(handle_, ArgU32(info, 0), ArgU32(info, 1), &present, &s);
+  return MakeOptionalResult(env, rc, present, rc == 0 && present != 0 ? Napi::Value(SlicerToJs(env, s)) : env.Null());
 }
 
 Napi::Value Workbook::AddSlicer(const Napi::CallbackInfo& info) {

@@ -103,8 +103,8 @@ export function registerPivotRegressions(Module, test) {
       };
       assert.equal(sumDataCells(), 300);
 
-      assert.ok(wb.addPivotFieldItem(0, pivot.index, regionField.index, 'North', true).ok);
-      assert.ok(wb.addPivotFieldSharedItem(0, pivot.index, regionField.index, 1, false).ok);
+      assert.ok(wb.addPivotFieldItem(0, pivot.index, regionField.index, 'North', true).status.ok);
+      assert.ok(wb.addPivotFieldSharedItem(0, pivot.index, regionField.index, 1, false).status.ok);
       assert.equal(sumDataCells(), 100);
     } finally {
       wb.delete();
@@ -218,7 +218,7 @@ export function registerPivotRegressions(Module, test) {
         valueKind: 1,
         valueDouble: 15,
       });
-      assert.ok(filter.ok, JSON.stringify(filter));
+      assert.ok(filter.status.ok, JSON.stringify(filter));
       assert.ok(wb.setPivotRowFieldOrder(0, pivot, [0]).ok);
     } finally {
       wb.delete();

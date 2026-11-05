@@ -11,6 +11,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "formulon_c_count_of.h"
+#include "formulon_c_out_index.h"
 #include "formulon_c_record_arg.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
@@ -33,7 +34,7 @@ struct WorkbookGuard {
 void MakeWorkbook(WorkbookGuard* wb) {
   ASSERT_EQ(fm_workbook_create_default(&wb->handle), 0);
   for (const char* name : {"Data", "S2"}) {
-    ASSERT_EQ(fm_workbook_add_sheet(wb->handle, name), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_workbook_add_sheet(wb->handle, name, ignored_index()), 0) << fm_get_last_error_message();
   }
 }
 
@@ -262,15 +263,18 @@ TEST(FormulonCApiFormulaEntry, AddValidationRejectsUnparseableFormulasAndKeepsSt
   WorkbookGuard wb;
   MakeWorkbook(&wb);
   const fm_cell_rect_t range{0, 0, 9, 0};
-  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 1, "0", "10"))), 0);
+  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 1, "0", "10")), ignored_index()),
+            0);
   for (const std::string& formula : RejectedFormulas()) {
     SCOPED_TRACE(formula);
-    EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 1, formula.c_str(), "10"))),
+    EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 1, formula.c_str(), "10")),
+                                      ignored_index()),
               kParserUnexpectedToken);
     EXPECT_NE(std::string(fm_get_last_error_message()).find("fm_sheet_add_validation: formula does not parse"),
               std::string::npos);
     EXPECT_NE(std::string(fm_get_last_error_context()).find("formula1"), std::string::npos);
-    EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 1, "0", formula.c_str()))),
+    EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 1, "0", formula.c_str())),
+                                      ignored_index()),
               kParserUnexpectedToken);
     EXPECT_NE(std::string(fm_get_last_error_context()).find("formula2"), std::string::npos);
   }
@@ -284,15 +288,27 @@ TEST(FormulonCApiFormulaEntry, AddValidationAcceptsEveryListAndScalarShape) {
   MakeWorkbook(&wb);
   const fm_cell_rect_t range{0, 0, 9, 0};
   constexpr std::uint8_t kList = 3;
-  EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "\"a,b,c\"", nullptr))), 0);
-  EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "'S2'!$A$1:$A$5", nullptr))),
+  EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "\"a,b,c\"", nullptr)),
+                                    ignored_index()),
             0);
-  EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "Gone!$A$1:$A$5", nullptr))),
+  EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "'S2'!$A$1:$A$5", nullptr)),
+                                    ignored_index()),
             0);
-  EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "ListName", nullptr))), 0);
-  EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 1, "-3.5", "TODAY()"))), 0);
-  EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 7, "ISNUMBER(A1)", ""))), 0);
-  EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 0, nullptr, nullptr))), 0);
+  EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "Gone!$A$1:$A$5", nullptr)),
+                                    ignored_index()),
+            0);
+  EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "ListName", nullptr)),
+                                    ignored_index()),
+            0);
+  EXPECT_EQ(
+      fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 1, "-3.5", "TODAY()")), ignored_index()),
+      0);
+  EXPECT_EQ(
+      fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 7, "ISNUMBER(A1)", "")), ignored_index()),
+      0);
+  EXPECT_EQ(
+      fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 0, nullptr, nullptr)), ignored_index()),
+      0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_validation_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 7U);
@@ -326,15 +342,20 @@ TEST(FormulonCApiFormulaEntry, EveryFormulaSetterStoresTheEnteredSpelling) {
   const fm_cell_rect_t range{0, 0, 9, 0};
   constexpr std::uint8_t kList = 3;
   constexpr std::uint8_t kCustom = 7;
-  ASSERT_EQ(
-      fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "\"1.50,1E3,+5\"", nullptr))), 0);
-  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "+$A$1:$A$3", nullptr))), 0);
+  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "\"1.50,1E3,+5\"", nullptr)),
+                                    ignored_index()),
+            0);
+  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, kList, "+$A$1:$A$3", nullptr)),
+                                    ignored_index()),
+            0);
   ASSERT_EQ(fm_sheet_add_validation(
-                wb.handle, 0, record_arg(MakeValidation(&range, kList, "OFFSET($A$1,+0,-0,1E3/1E3+2,1)", nullptr))),
+                wb.handle, 0, record_arg(MakeValidation(&range, kList, "OFFSET($A$1,+0,-0,1E3/1E3+2,1)", nullptr)),
+                ignored_index()),
             0);
-  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0,
-                                    record_arg(MakeValidation(&range, kCustom, "SUM(A1 : A2)>-1E-309", nullptr))),
-            0);
+  ASSERT_EQ(
+      fm_sheet_add_validation(
+          wb.handle, 0, record_arg(MakeValidation(&range, kCustom, "SUM(A1 : A2)>-1E-309", nullptr)), ignored_index()),
+      0);
   const char* const expected[] = {"\"1.50,1E3,+5\"", "+$A$1:$A$3", "OFFSET($A$1,0,0,1000/1000+2,1)", "SUM(A1:A2)>0"};
   for (std::uint32_t i = 0; i < 4U; ++i) {
     fm_data_validation_t v{};

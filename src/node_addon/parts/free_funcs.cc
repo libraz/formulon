@@ -108,7 +108,8 @@ Napi::Value EvalFormula(const Napi::CallbackInfo& info) {
   if (rc != 0) {
     return MakeEmptyValueResult(env, MakeErrorStatus(env, rc));
   }
-  rc = fm_workbook_add_sheet(wb, "Sheet1");
+  std::size_t sheet_index = 0;
+  rc = fm_workbook_add_sheet(wb, "Sheet1", &sheet_index);
   if (rc != 0) {
     Napi::Object out = MakeEmptyValueResult(env, MakeErrorStatus(env, rc));
     fm_workbook_destroy(wb);

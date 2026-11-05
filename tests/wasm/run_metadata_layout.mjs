@@ -186,7 +186,7 @@ export function registerMetadataLayout(Module, test) {
         errorTitle: 'Bad value',
         errorMessage: 'Pick from the list',
       };
-      assert.ok(wb.addValidation(0, listRule).ok);
+      assert.ok(wb.addValidation(0, listRule).status.ok);
 
       // Decimal between [0, 100] across two rectangles.
       const decimalRule = {
@@ -200,7 +200,7 @@ export function registerMetadataLayout(Module, test) {
         formula2: '100',
         allowBlank: false,
       };
-      assert.ok(wb.addValidation(0, decimalRule).ok);
+      assert.ok(wb.addValidation(0, decimalRule).status.ok);
 
       const list = wb.getValidations(0);
       assert.equal(list.length, 2);
@@ -248,7 +248,7 @@ export function registerMetadataLayout(Module, test) {
       assert.ok(wb.clearValidations(0).ok);
 
       // Sheet-out-of-range is rejected on every entry.
-      assert.ok(!wb.addValidation(999, listRule).ok);
+      assert.ok(!wb.addValidation(999, listRule).status.ok);
       assert.ok(!wb.removeValidation(999, 0).ok);
       assert.ok(!wb.clearValidations(999).ok);
     } finally {
@@ -452,7 +452,7 @@ export function registerMetadataLayout(Module, test) {
       assert.equal(wb.getSheetCount().value, 1);
       // A second sheet lets the first one change state, but removing the first
       // while the second is hidden would leave no visible sheet.
-      assert.ok(wb.addSheet('Second').ok);
+      assert.ok(wb.addSheet('Second').status.ok);
       assert.ok(wb.setTabHidden(1, true).ok);
       const lastVisible = wb.removeSheet(0);
       assert.equal(lastVisible.ok, false);
@@ -526,7 +526,7 @@ export function registerMetadataLayout(Module, test) {
           ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
           type: 3,
           formula1: '"a,b"',
-        }).ok,
+        }).status.ok,
       );
       const list = wb.getValidations(0);
       assert.equal(list.length, 1);

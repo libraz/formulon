@@ -118,6 +118,14 @@ emscripten::val JsWorkbook::listDrawingObjects(uint32_t sheet) const {
   return arr;
 }
 
+emscripten::val JsWorkbook::getDrawingObject(uint32_t sheet, uint32_t objectId) const {
+  fm_drawing_object_t d{};
+  int32_t present = 0;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_drawing_object(handle_, sheet, objectId, &present, &d) : kBindingInvalidHandle;
+  return optional_result(rc, present, rc == 0 && present != 0 ? drawing_object_to_val(d) : emscripten::val::null());
+}
+
 emscripten::val JsWorkbook::getImage(uint32_t sheet, uint32_t objectId) const {
   emscripten::val o;
   if (handle_ == nullptr) {

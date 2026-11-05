@@ -11,6 +11,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "cell.h"
+#include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
 #include "formulon_c_record_arg.h"
 #include "formulon_c_test_helpers.h"
@@ -46,7 +47,7 @@ void BuildSales(WorkbookGuard& wb, const char* profile = nullptr) {
   } else {
     ASSERT_EQ(fm_workbook_create_for_profile(profile, &wb.handle), 0) << fm_get_last_error_message();
   }
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2"), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2", ignored_index()), 0);
   const char* columns[] = {"Qty", "Unit Cost", "a#b", "Price", "Calc"};
   for (std::uint32_t c = 0; c < 5U; ++c) {
     ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, c, columns[c]), 0);

@@ -276,6 +276,14 @@ JsStatus JsWorkbook::updateShape(uint32_t sheet, uint32_t objectId, emscripten::
   return status_from_rc(fm_sheet_update_shape(handle_, sheet, objectId, &shape));
 }
 
+emscripten::val JsWorkbook::getShape(uint32_t sheet, uint32_t objectId) const {
+  fm_shape_t s{};
+  int32_t present = 0;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_shape(handle_, sheet, objectId, &present, &s) : kBindingInvalidHandle;
+  return optional_result(rc, present, rc == 0 && present != 0 ? shape_to_val(s) : emscripten::val::null());
+}
+
 JsStatus JsWorkbook::removeShape(uint32_t sheet, uint32_t objectId) {
   return status_from_rc(handle_ != nullptr ? fm_sheet_remove_shape(handle_, sheet, objectId) : kBindingInvalidHandle);
 }
@@ -287,9 +295,9 @@ emscripten::val JsWorkbook::listSparklineGroups(uint32_t sheet) const {
   return arr;
 }
 
-JsStatus JsWorkbook::addSparklineGroup(uint32_t sheet, emscripten::val spec) {
+JsAddStyleResult JsWorkbook::addSparklineGroup(uint32_t sheet, emscripten::val spec) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    return {invalid_handle_status()};
   }
   JsNarrowNumericReader reader("addSparklineGroup");
   std::string ref_store;
@@ -300,12 +308,14 @@ JsStatus JsWorkbook::addSparklineGroup(uint32_t sheet, emscripten::val spec) {
     pull_sparklines(reader, reader.value(spec, "sparklines", "group.sparklines"), texts, items);
   }
   if (!reader.ok()) {
-    return reader.failure();
+    return {reader.failure()};
   }
   // An empty array reaches the core, which rejects it; keep a valid pointer to pass.
   fm_sparkline_t none{};
-  return status_from_rc(
-      fm_sheet_add_sparkline_group(handle_, sheet, &group, items.empty() ? &none : items.data(), items.size()));
+  std::size_t out = 0;
+  const fm_status_t rc =
+      fm_sheet_add_sparkline_group(handle_, sheet, &group, items.empty() ? &none : items.data(), items.size(), &out);
+  return index_result(rc, out);
 }
 
 JsStatus JsWorkbook::updateSparklineGroup(uint32_t sheet, uint32_t index, emscripten::val spec) {

@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_out_index.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 
@@ -72,7 +73,7 @@ void AddWholeBetween(fm_workbook_t* wb, fm_cell_rect_t range, const char* low, c
   v.show_error_message = 1;
   v.formula1 = low;
   v.formula2 = high;
-  ASSERT_EQ(fm_sheet_add_validation(wb, 0, &v), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_validation(wb, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
 }
 
 fm_validation_outcome_t Validate(const fm_workbook_t* wb, std::uint32_t row, std::uint32_t col, fm_value_t value) {

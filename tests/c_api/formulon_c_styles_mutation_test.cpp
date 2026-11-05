@@ -148,11 +148,11 @@ TEST(FormulonCApiStyles, NamedCellStyleRoundTripsThroughSaveLoad) {
   style_xf.has_alignment = 1;
   style_xf.horizontal_align = 2;
   style_xf.has_horizontal_align = 1;
-  uint32_t xf_id = 0;
+  std::size_t xf_id = 0;
   ASSERT_EQ(fm_workbook_add_cell_style_xf(wb.handle, &style_xf, &xf_id), 0);
   fm_cell_style_record_t highlight{};
   highlight.name = "Highlight";
-  highlight.xf_id = xf_id;
+  highlight.xf_id = static_cast<uint32_t>(xf_id);
   highlight.builtin_id = FM_CELL_STYLE_BUILTIN_ID_NONE;
   ASSERT_EQ(fm_workbook_set_cell_style(wb.handle, &highlight), 0);
 
@@ -160,7 +160,7 @@ TEST(FormulonCApiStyles, NamedCellStyleRoundTripsThroughSaveLoad) {
   cell_xf.has_alignment = 1;
   cell_xf.horizontal_align = 2;
   cell_xf.has_horizontal_align = 1;
-  cell_xf.xf_id = xf_id;
+  cell_xf.xf_id = static_cast<uint32_t>(xf_id);
   std::size_t cell_xf_id = 0;
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &cell_xf, &cell_xf_id), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "styled"), 0);
@@ -198,7 +198,7 @@ TEST(FormulonCApiStyles, NamedStyleXfRejectsDanglingReferences) {
   // references exactly like the cell-xf table does.
   fm_cell_xf_t style_xf{};
   style_xf.font_index = 9;
-  uint32_t xf_id = 0;
+  std::size_t xf_id = 0;
   EXPECT_NE(fm_workbook_add_cell_style_xf(wb.handle, &style_xf, &xf_id), 0);
 
   style_xf.font_index = 0;
@@ -213,12 +213,12 @@ TEST(FormulonCApiStyles, NamedStyleXfRejectsDanglingReferences) {
   // 0..53 is the whole OOXML ordinal space; anything else needs the sentinel.
   fm_cell_style_record_t custom{};
   custom.name = "Custom";
-  custom.xf_id = xf_id;
+  custom.xf_id = static_cast<uint32_t>(xf_id);
   custom.builtin_id = 54;
   EXPECT_NE(fm_workbook_set_cell_style(wb.handle, &custom), 0);
   custom.builtin_id = FM_CELL_STYLE_BUILTIN_ID_NONE;
   EXPECT_EQ(fm_workbook_set_cell_style(wb.handle, &custom), 0);
-  custom.xf_id = xf_id + 1U;
+  custom.xf_id = static_cast<uint32_t>(xf_id) + 1U;
   EXPECT_NE(fm_workbook_set_cell_style(wb.handle, &custom), 0);
 }
 

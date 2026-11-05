@@ -175,11 +175,11 @@ extern "C" fm_status_t fm_sheet_get_protected_range(const fm_workbook_t* wb, siz
 }
 
 extern "C" fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sheet_index,
-                                                    const fm_protected_range_t* range) {
+                                                    const fm_protected_range_t* range, size_t* out_index) {
   clear_last_error();
-  if (range == nullptr) {
+  if (range == nullptr || out_index == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_add_protected_range: NULL range");
+                             "fm_sheet_add_protected_range: NULL argument");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_protected_range"); rc != 0) {
     return rc;
@@ -195,6 +195,7 @@ extern "C" fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sh
   }
   ranges.push_back(std::move(added));
   formulon::io::write_protected_ranges(raw, ranges);
+  *out_index = ranges.size() - 1U;
   return 0;
 }
 

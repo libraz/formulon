@@ -160,6 +160,14 @@ Napi::Object MakeIndexResult(Napi::Env env, Napi::Object status, uint32_t index)
 /// success and reads 0 otherwise.
 Napi::Object MakeIndexResult(Napi::Env env, fm_status_t code, uint32_t index);
 
+/// Builds the `{ status, value }` OptionalResult of a lookup that failed
+/// before it ran; `value` is `null`.
+Napi::Object MakeOptionalResult(Napi::Env env, Napi::Object status, Napi::Value value);
+
+/// Builds the `{ status, value }` OptionalResult of a lookup by key: `value`
+/// is `item` when `code` is 0 and the key was `present`, else `null`.
+Napi::Object MakeOptionalResult(Napi::Env env, fm_status_t code, int32_t present, Napi::Value item);
+
 /// Builds the `{ status, rect: null, cells: [] }` placeholder for
 /// failure paths in `PivotLayout`.
 Napi::Object EmptyPivotLayoutResult(Napi::Env env, Napi::Object status);

@@ -12,4 +12,5 @@ import './smoke_protection_fidelity.mjs';
 import './smoke_shapes_sparklines_notes.mjs';
 import './smoke_data_tables.mjs';
 import './smoke_slicers.mjs';
+import './smoke_natural_keys.mjs';
 import './smoke_argument_contract.mjs';

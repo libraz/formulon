@@ -633,6 +633,13 @@ JsStringResult string_result(fm_status_t rc, const char* value) {
   return out;
 }
 
+emscripten::val optional_result(fm_status_t rc, int32_t present, const emscripten::val& item) {
+  emscripten::val out = emscripten::val::object();
+  out.set("status", status_from_rc(rc));
+  out.set("value", rc == 0 && present != 0 ? item : emscripten::val::null());
+  return out;
+}
+
 JsAddStyleResult index_result(fm_status_t rc, std::size_t index) {
   JsAddStyleResult out;
   out.status = status_from_rc(rc);

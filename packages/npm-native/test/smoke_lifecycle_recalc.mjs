@@ -115,7 +115,7 @@ test("evaluateFormulaArray('=1+2') reports a 1x1 scalar array", async () => {
 test('Workbook.createEmpty + addSheet -> sheetCount/sheetName work', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createEmpty();
-  assert.ok(wb.addSheet('Sheet1').ok);
+  assert.ok(wb.addSheet('Sheet1').status.ok);
   assert.equal(wb.getSheetCount().value, 1);
   const sn = wb.getSheetName(0);
   assert.ok(sn.status.ok);
@@ -125,9 +125,9 @@ test('Workbook.createEmpty + addSheet -> sheetCount/sheetName work', async () =>
 test('Unicode sheet identity rejects folded duplicate and permits casing rename', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createEmpty();
-  assert.ok(wb.addSheet('Ä').ok);
-  assert.ok(wb.addSheet('Ö').ok);
-  assert.equal(wb.addSheet('ä').ok, false);
+  assert.ok(wb.addSheet('Ä').status.ok);
+  assert.ok(wb.addSheet('Ö').status.ok);
+  assert.equal(wb.addSheet('ä').status.ok, false);
   const collision = wb.renameSheet(1, 'ä');
   assert.equal(collision.ok, false);
   assert.notEqual(collision.status, 0);

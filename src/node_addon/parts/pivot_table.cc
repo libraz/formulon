@@ -419,21 +419,22 @@ Napi::Value Workbook::PivotFieldSetSubtotalTop(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::PivotFieldAddItem(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
     const PivotFieldArgs field = ReadPivotField(info);
     const std::string name = ArgString(info, 3);
     const int32_t visible = ArgFlag(info, 4);
-    return fm_sheet_add_pivot_field_item(handle, field.sheet, field.pivot_idx, field.field_idx, name.c_str(), visible);
+    return fm_sheet_add_pivot_field_item(handle, field.sheet, field.pivot_idx, field.field_idx, name.c_str(), visible,
+                                         out);
   });
 }
 
 Napi::Value Workbook::PivotFieldAddItemAt(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
     const PivotFieldArgs field = ReadPivotField(info);
     const uint32_t cache_index = ArgU32(info, 3);
     const int32_t visible = ArgFlag(info, 4);
     return fm_sheet_add_pivot_field_shared_item(handle, field.sheet, field.pivot_idx, field.field_idx, cache_index,
-                                                visible);
+                                                visible, out);
   });
 }
 
@@ -621,11 +622,11 @@ Napi::Value Workbook::PivotCacheFieldFormula(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::PivotCacheCalculatedItemAdd(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
     const std::string name = ArgString(info, 2);
     const std::string formula = ArgString(info, 3);
     return fm_workbook_add_pivot_cache_calculated_item(
-        handle, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), name.c_str(), formula.c_str());
+        handle, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), name.c_str(), formula.c_str(), out);
   });
 }
 
@@ -978,7 +979,7 @@ Napi::Value Workbook::PivotFilterAt(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return MakeIndexResult(env, NullHandleError(env), 0);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
@@ -1014,8 +1015,9 @@ Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
     // the C ABI call commits a default value for it.
     return env.Undefined();
   }
-  fm_status_t rc = fm_sheet_add_pivot_filter(handle_, sheet, pivot_idx, &c_spec);
-  return MakeStatus(env, rc);
+  std::size_t out = 0;
+  fm_status_t rc = fm_sheet_add_pivot_filter(handle_, sheet, pivot_idx, &c_spec, &out);
+  return MakeIndexResult(env, rc, static_cast<uint32_t>(out));
 }
 
 Napi::Value Workbook::PivotFilterClear(const Napi::CallbackInfo& info) {

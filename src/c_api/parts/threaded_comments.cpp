@@ -112,6 +112,29 @@ extern "C" fm_status_t fm_sheet_get_threaded_comment_at(const fm_workbook_t* wb,
   return 0;
 }
 
+extern "C" fm_status_t fm_sheet_get_threaded_comment(const fm_workbook_t* wb, size_t sheet_index, const char* id,
+                                                     int32_t* out_present, fm_threaded_comment_t* out) {
+  clear_last_error();
+  if (id == nullptr || out_present == nullptr || out == nullptr) {
+    return null_argument("fm_sheet_get_threaded_comment");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_threaded_comment"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8("fm_sheet_get_threaded_comment", {id}); rc != 0) {
+    return rc;
+  }
+  *out_present = 0;
+  *out = fm_threaded_comment_t{};
+  const auto& list = wb->workbook().sheet(sheet_index).threaded_comments();
+  const std::size_t idx = formulon::find_threaded_comment(list, id);
+  if (idx == list.size()) {
+    return 0;
+  }
+  *out_present = 1;
+  return fm_sheet_get_threaded_comment_at(wb, sheet_index, idx, out);
+}
+
 extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t sheet_index,
                                                      const fm_threaded_comment_t* comment) {
   clear_last_error();
@@ -220,6 +243,27 @@ extern "C" fm_status_t fm_workbook_get_person_at(const fm_workbook_t* wb, size_t
   out->display_name = store_cstr(scratch->read_scratch, p.display_name);
   out->user_id = store_cstr(scratch->read_scratch, p.user_id);
   out->provider_id = store_cstr(scratch->read_scratch, p.provider_id);
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_get_person(const fm_workbook_t* wb, const char* id, int32_t* out_present,
+                                              fm_person_t* out) {
+  clear_last_error();
+  if (wb == nullptr || id == nullptr || out_present == nullptr || out == nullptr) {
+    return null_argument("fm_workbook_get_person");
+  }
+  if (auto rc = check_utf8("fm_workbook_get_person", {id}); rc != 0) {
+    return rc;
+  }
+  *out_present = 0;
+  *out = fm_person_t{};
+  const auto& persons = wb->workbook().persons();
+  for (std::size_t i = 0; i < persons.size(); ++i) {
+    if (persons[i].id == id) {
+      *out_present = 1;
+      return fm_workbook_get_person_at(wb, i, out);
+    }
+  }
   return 0;
 }
 

@@ -171,9 +171,9 @@ extern "C" fm_status_t fm_sheet_get_pivot_field_count(const fm_workbook_t* wb, s
 }
 
 extern "C" fm_status_t fm_sheet_add_pivot_field(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                                                const fm_pivot_field_spec_t* spec, std::size_t* out_field_idx) {
+                                                const fm_pivot_field_spec_t* spec, std::size_t* out_field_index) {
   clear_last_error();
-  if (wb == nullptr || spec == nullptr || out_field_idx == nullptr) {
+  if (wb == nullptr || spec == nullptr || out_field_index == nullptr) {
     return null_argument("fm_sheet_add_pivot_field");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_pivot_field"); rc != 0) {
@@ -225,7 +225,7 @@ extern "C" fm_status_t fm_sheet_add_pivot_field(fm_workbook_t* wb, std::size_t s
   sync_field_order(*table, static_cast<std::uint32_t>(index));
   const fm_status_t status = edit.commit();
   if (status == 0) {
-    *out_field_idx = index;
+    *out_field_index = index;
   }
   return status;
 }
@@ -538,10 +538,11 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_item_caption(fm_workbook_t* wb, 
 
 extern "C" fm_status_t fm_sheet_add_pivot_field_item(fm_workbook_t* wb, std::size_t sheet_index,
                                                      std::size_t pivot_index, std::size_t field_idx,
-                                                     const char* utf8_name, std::int32_t visible) {
+                                                     const char* utf8_name, std::int32_t visible,
+                                                     std::size_t* out_index) {
   clear_last_error();
-  if (utf8_name == nullptr) {
-    return null_argument("fm_sheet_add_pivot_field_item", "utf8_name");
+  if (utf8_name == nullptr || out_index == nullptr) {
+    return null_argument("fm_sheet_add_pivot_field_item", utf8_name == nullptr ? "utf8_name" : "out_index");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_pivot_field_item"); rc != 0) {
     return rc;
@@ -578,21 +579,31 @@ extern "C" fm_status_t fm_sheet_add_pivot_field_item(fm_workbook_t* wb, std::siz
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
   field->items.push_back(std::move(item));
-  return edit.commit();
+  const std::size_t added = field->items.size() - 1U;
+  const fm_status_t status = edit.commit();
+  if (status == 0) {
+    *out_index = added;
+  }
+  return status;
 }
 
 extern "C" fm_status_t fm_sheet_add_pivot_field_shared_item(fm_workbook_t* wb, std::size_t sheet_index,
                                                             std::size_t pivot_index, std::size_t field_idx,
-                                                            std::size_t cache_index, std::int32_t visible) {
+                                                            std::size_t cache_index, std::int32_t visible,
+                                                            std::size_t* out_index) {
   clear_last_error();
+  if (out_index == nullptr) {
+    return null_argument("fm_sheet_add_pivot_field_shared_item", "out_index");
+  }
   // A shared item is stored as a 32-bit cache index; a wider one names no item.
   if (cache_index > std::numeric_limits<std::uint32_t>::max()) {
     return check_index(cache_index, std::numeric_limits<std::uint32_t>::max(), "fm_sheet_add_pivot_field_shared_item",
                        "cache_index");
   }
-  return mutate_pivot_field(
+  std::size_t added = 0;
+  const fm_status_t status = mutate_pivot_field(
       wb, sheet_index, pivot_index, field_idx, "fm_sheet_add_pivot_field_shared_item",
-      [cache_index = static_cast<std::uint32_t>(cache_index), visible](formulon::pivot::PivotField& field) {
+      [cache_index = static_cast<std::uint32_t>(cache_index), visible, &added](formulon::pivot::PivotField& field) {
         // The label is left empty: evaluation derives it from the bound shared item
         // (`pivot_item_label`). A binding that resolves to a blank value has no
         // label, which is what makes this the constructor for the blank item.
@@ -601,7 +612,12 @@ extern "C" fm_status_t fm_sheet_add_pivot_field_shared_item(fm_workbook_t* wb, s
         item.has_cache_index = true;
         item.cache_index = cache_index;
         field.items.push_back(std::move(item));
+        added = field.items.size() - 1U;
       });
+  if (status == 0) {
+    *out_index = added;
+  }
+  return status;
 }
 
 extern "C" fm_status_t fm_sheet_clear_pivot_field_items(fm_workbook_t* wb, std::size_t sheet_index,

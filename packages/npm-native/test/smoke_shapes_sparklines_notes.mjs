@@ -153,8 +153,8 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   assert.equal(wb.listSparklineGroups(0).length, 0);
-  assert.ok(wb.addSparklineGroup(0, sparklineGroup(mod)).ok);
-  assert.ok(wb.addSparklineGroup(0, { sparklines: [{ formula: 'Sheet1!A9:D9', location: 'G9' }] }).ok);
+  assert.ok(wb.addSparklineGroup(0, sparklineGroup(mod)).status.ok);
+  assert.ok(wb.addSparklineGroup(0, { sparklines: [{ formula: 'Sheet1!A9:D9', location: 'G9' }] }).status.ok);
 
   const loaded = roundTrip(mod, wb);
   const groups = loaded.listSparklineGroups(0);
@@ -215,13 +215,16 @@ test('sparkline group arguments are validated', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   const good = [{ formula: 'Sheet1!A1:D1', location: 'F1' }];
-  assert.equal(wb.addSparklineGroup(0, {}).ok, false);
-  assert.equal(wb.addSparklineGroup(0, { sparklines: [] }).ok, false);
-  assert.equal(wb.addSparklineGroup(0, { sparklines: [{ formula: 'Sheet1!A1:D1', location: 'F1:F2' }] }).ok, false);
-  assert.equal(wb.addSparklineGroup(0, { sparklines: [{ formula: '', location: 'F1' }] }).ok, false);
-  assert.equal(wb.addSparklineGroup(0, { type: 7, sparklines: good }).ok, false);
-  assert.equal(wb.addSparklineGroup(0, { lineWeight: -1, sparklines: good }).ok, false);
-  assert.equal(wb.addSparklineGroup(4, { sparklines: good }).ok, false);
+  assert.equal(wb.addSparklineGroup(0, {}).status.ok, false);
+  assert.equal(wb.addSparklineGroup(0, { sparklines: [] }).status.ok, false);
+  assert.equal(
+    wb.addSparklineGroup(0, { sparklines: [{ formula: 'Sheet1!A1:D1', location: 'F1:F2' }] }).status.ok,
+    false,
+  );
+  assert.equal(wb.addSparklineGroup(0, { sparklines: [{ formula: '', location: 'F1' }] }).status.ok, false);
+  assert.equal(wb.addSparklineGroup(0, { type: 7, sparklines: good }).status.ok, false);
+  assert.equal(wb.addSparklineGroup(0, { lineWeight: -1, sparklines: good }).status.ok, false);
+  assert.equal(wb.addSparklineGroup(4, { sparklines: good }).status.ok, false);
   assert.equal(wb.listSparklineGroups(0).length, 0);
   assert.equal(wb.updateSparklineGroup(0, 0, {}).ok, false);
   assert.equal(wb.setSparklineGroupSparklines(0, 0, good).ok, false);

@@ -161,7 +161,7 @@ test('custom table styles round-trip and a table can use one', async () => {
     assert.ok(wb.setTableStyle(style).ok);
     assert.equal(wb.setTableStyle({ name: 'TableStyleMedium2' }).ok, false);
     assert.equal(wb.setTableStyle({ name: 'Bad', elements: [{ type: 'bodyRow' }] }).ok, false);
-    assert.equal(wb.tableStyleCount().value, 1);
+    assert.equal(wb.listTableStyles().length, 1);
     assert.ok(wb.updateTable(0, { styleName: 'Corporate' }).ok);
     const defaults = wb.getTableStyleDefaults();
     assert.equal(defaults.tableStyle, 'TableStyleMedium2');
@@ -174,8 +174,13 @@ test('custom table styles round-trip and a table can use one', async () => {
   }
   const reloaded = mod.Workbook.load(bytes);
   try {
-    const got = reloaded.getTableStyle(0);
-    assert.ok(got.status.ok, JSON.stringify(got.status));
+    const styles = reloaded.listTableStyles();
+    assert.ok(styles.status.ok, JSON.stringify(styles.status));
+    const got = styles[0];
+    const byName = reloaded.getTableStyle('corporate');
+    assert.ok(byName.status.ok);
+    assert.equal(byName.value.name, 'Corporate');
+    assert.equal(reloaded.getTableStyle('Other').value, null);
     assert.equal(got.name, 'Corporate');
     assert.equal(got.pivot, false);
     assert.equal(got.table, true);
@@ -191,7 +196,7 @@ test('custom table styles round-trip and a table can use one', async () => {
     assert.ok(reloaded.setTableStyleDefaults({ tableStyle: 'Corporate' }).ok);
     assert.equal(reloaded.getTableStyleDefaults().tableStyle, 'Corporate');
     assert.ok(reloaded.removeTableStyle('corporate').ok);
-    assert.equal(reloaded.tableStyleCount().value, 0);
+    assert.equal(reloaded.listTableStyles().length, 0);
     assert.equal(reloaded.getTableStyleDefaults().tableStyle, 'TableStyleMedium2');
   } finally {
     release(reloaded);

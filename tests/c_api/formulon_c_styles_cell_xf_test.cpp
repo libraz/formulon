@@ -1,5 +1,6 @@
 // Stable C ABI cell XF index and mutation tests.
 
+#include "formulon_c_out_index.h"
 #include "formulon_c_record_arg.h"
 #include "formulon_c_styles_test_helpers.h"
 
@@ -296,7 +297,6 @@ TEST(FormulonCApiStyles, NullInputRecordRejected) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const fm_status_t kNull = FM_STATUS_BINDING_NULL_POINTER;
   std::size_t idx = 0;
-  uint32_t id = 0;
   uint32_t argb = 0;
   int32_t resolution = 0;
   uint32_t merge_count = 0;
@@ -306,7 +306,7 @@ TEST(FormulonCApiStyles, NullInputRecordRejected) {
   EXPECT_EQ(fm_workbook_add_fill(wb.handle, nullptr, &idx), kNull);
   EXPECT_EQ(fm_workbook_add_border(wb.handle, nullptr, &idx), kNull);
   EXPECT_EQ(fm_workbook_add_cell_xf(wb.handle, nullptr, &idx), kNull);
-  EXPECT_EQ(fm_workbook_add_cell_style_xf(wb.handle, nullptr, &id), kNull);
+  EXPECT_EQ(fm_workbook_add_cell_style_xf(wb.handle, nullptr, &idx), kNull);
   EXPECT_EQ(fm_workbook_add_dxf(wb.handle, nullptr, &idx), kNull);
   EXPECT_EQ(fm_workbook_resolve_color(wb.handle, nullptr, 0, &argb, &resolution), kNull);
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, nullptr, &idx), kNull);
@@ -314,7 +314,7 @@ TEST(FormulonCApiStyles, NullInputRecordRejected) {
   EXPECT_EQ(fm_sheet_add_merge(wb.handle, 0, nullptr), kNull);
   EXPECT_EQ(fm_sheet_remove_merge(wb.handle, 0, nullptr), kNull);
   EXPECT_EQ(fm_sheet_get_merges_in_range(wb.handle, 0, nullptr, nullptr, 0, &merge_count), kNull);
-  EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, nullptr), kNull);
+  EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, nullptr, ignored_index()), kNull);
 }
 
 namespace {
@@ -357,7 +357,7 @@ TEST(FormulonCApiStyles, XfApplyFlagsRoundTrip) {
   std::size_t xf_index = 0;
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, record_arg(MakeFlaggedXf()), &xf_index), 0);
   ASSERT_NE(xf_index, 0U);
-  uint32_t style_xf_id = 0;
+  std::size_t style_xf_id = 0;
   ASSERT_EQ(fm_workbook_add_cell_style_xf(wb.handle, record_arg(MakeFlaggedXf()), &style_xf_id), 0);
 
   fm_cell_xf_t got{};

@@ -11,6 +11,7 @@
 
 #include "c_api/formulon_c.h"
 #include "formulon_c_count_of.h"
+#include "formulon_c_out_index.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 #include "value.h"
@@ -32,9 +33,9 @@ struct WorkbookGuard {
 // Builds a workbook with three sheets — `Alpha`, `Beta`, `Gamma`.
 void MakeThreeSheets(WorkbookGuard& wb) {
   ASSERT_EQ(fm_workbook_create_empty(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Alpha"), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Beta"), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Gamma"), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Alpha", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Beta", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Gamma", ignored_index()), 0);
 }
 
 const char* SheetName(fm_workbook_t* wb, std::size_t idx) {
@@ -68,9 +69,9 @@ TEST(WorkbookSheetOpsCApi, RenameRejectsBadName) {
 TEST(WorkbookSheetOpsCApi, UnicodeSimpleFoldAddRejectsDuplicateAndRenameWorks) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_empty(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "\xC3\x84"), 0);                         // Ä
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "\xC3\x96"), 0);                         // Ö
-  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "\xC3\xA4"), 0);                         // ä
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "\xC3\x84", ignored_index()), 0);        // Ä
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "\xC3\x96", ignored_index()), 0);        // Ö
+  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "\xC3\xA4", ignored_index()), 0);        // ä
   const fm_status_t collision = fm_workbook_rename_sheet(wb.handle, 1U, "\xC3\xA4");  // ä
   EXPECT_NE(collision, 0);
   EXPECT_STREQ(fm_get_status_name(collision), "INVALID_SHEET_NAME");
@@ -84,25 +85,25 @@ TEST(WorkbookSheetOpsCApi, UnicodeSimpleFoldAddRejectsDuplicateAndRenameWorks) {
 TEST(WorkbookSheetOpsCApi, UnicodeMalformedUtf8Rejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_empty(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Valid"), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Valid", ignored_index()), 0);
   const char malformed[] = {'\xC3', '\0'};
-  EXPECT_NE(fm_workbook_add_sheet(wb.handle, malformed), 0);
+  EXPECT_NE(fm_workbook_add_sheet(wb.handle, malformed, ignored_index()), 0);
   EXPECT_NE(fm_workbook_rename_sheet(wb.handle, 0U, malformed), 0);
 }
 
 TEST(WorkbookSheetOpsCApi, AddRejectsNamesExcelsUiRefusesAsRenameDoes) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_empty(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Valid"), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Valid", ignored_index()), 0);
   for (const char* name : {"History", "HISTORY", "'a", "a'"}) {
-    const fm_status_t added = fm_workbook_add_sheet(wb.handle, name);
+    const fm_status_t added = fm_workbook_add_sheet(wb.handle, name, ignored_index());
     EXPECT_STREQ(fm_get_status_name(added), "INVALID_SHEET_NAME") << name;
     EXPECT_EQ(added, fm_workbook_rename_sheet(wb.handle, 0U, name)) << name;
   }
   EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 1U);
   EXPECT_STREQ(SheetName(wb.handle, 0U), "Valid");
   // An inner apostrophe is an ordinary character.
-  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "a'b"), 0);
+  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "a'b", ignored_index()), 0);
 }
 
 TEST(WorkbookSheetOpsCApi, RenameRejectsOutOfRange) {
@@ -379,7 +380,7 @@ TEST(WorkbookSheetOpsCApi, RenameAndRemoveRewriteFormulaThroughPublicPath) {
   ASSERT_EQ(fm_sheet_get_cell_at(wb.handle, 0, 0, &row, &col, &formula, &cached), 0);
   ASSERT_NE(formula, nullptr);
   EXPECT_STREQ(formula, "=#REF!A1");
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Delta"), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Delta", ignored_index()), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 2, 0, 0, 99.0), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &cached), 0);

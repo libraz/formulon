@@ -224,10 +224,10 @@ test('named-style and theme integer fields reject before their C mutations', asy
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const styleCount = wb.cellStyleCount().value;
+    const styleCount = wb.listCellStyles().length;
     for (const value of [2 ** 32, Number.NaN, 1.5, -1]) {
       assert.throws(() => wb.setCellStyle({ name: 'invalid', xfId: value }), RangeError);
-      assert.equal(wb.cellStyleCount().value, styleCount);
+      assert.equal(wb.listCellStyles().length, styleCount);
     }
 
     const before = wb.getThemeFonts().colors;

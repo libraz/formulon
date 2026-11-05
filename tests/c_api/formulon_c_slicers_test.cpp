@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
 #include "formulon_c_record_arg.h"
 #include "gtest/gtest.h"
@@ -130,8 +131,11 @@ TEST(FormulonCApiSlicers, AddListUpdateRemoveAndReload) {
   update.column_count = 1;
   update.from_row = 0;
   update.to_row = 8;
-  ASSERT_EQ(fm_sheet_update_slicer(again.handle, 0, 0, &update), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_get_slicer_at(again.handle, 0, 0, &out), 0);
+  ASSERT_EQ(fm_sheet_update_slicer(again.handle, 0, id, &update), 0) << fm_get_last_error_message();
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_slicer(again.handle, 0, id, &present, &out), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(out.object_id, id);
   EXPECT_STREQ(out.caption, "Renamed");
   EXPECT_STREQ(out.style, "");
   EXPECT_EQ(out.column_count, 1U);
@@ -143,9 +147,11 @@ TEST(FormulonCApiSlicers, AddListUpdateRemoveAndReload) {
   EXPECT_TRUE(Has(ExtractZipEntry(saved, "xl/slicers/slicer1.xml"), "caption=\"Renamed\""));
   EXPECT_TRUE(Has(ExtractZipEntry(saved, "[Content_Types].xml"), "/xl/slicerCaches/slicerCache1.xml"));
 
-  ASSERT_EQ(fm_sheet_remove_slicer(again.handle, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_remove_slicer(again.handle, 0, id), 0);
   ASSERT_EQ(fm_sheet_get_slicer_count(again.handle, 0, &count), 0);
   EXPECT_EQ(count, 0U);
+  ASSERT_EQ(fm_sheet_get_slicer(again.handle, 0, id, &present, &out), 0);
+  EXPECT_EQ(present, 0);
   const std::vector<std::uint8_t> emptied = Save(again.handle);
   EXPECT_FALSE(HasEntry(emptied, "xl/slicers/slicer1.xml"));
   EXPECT_FALSE(HasEntry(emptied, "xl/slicerCaches/slicerCache1.xml"));
@@ -180,7 +186,7 @@ TEST(FormulonCApiSlicers, RemovingTheTableRemovesItsSlicers) {
 TEST(FormulonCApiSlicers, RemovingTheSheetRemovesTheSlicersItHostsAndTheirCaches) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Dash"), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Dash", ignored_index()), 0);
   const size_t sheet = 1;
   fm_slicer_t spec = Anchored(0);
   uint32_t id = 0;
@@ -198,7 +204,7 @@ TEST(FormulonCApiSlicers, RemovingTheSheetRemovesTheSlicersItHostsAndTheirCaches
   // Removing the table's own sheet takes the slicers bound to its table.
   WorkbookGuard other;
   CreateSalesTable(other);
-  ASSERT_EQ(fm_workbook_add_sheet(other.handle, "Dash"), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(other.handle, "Dash", ignored_index()), 0);
   ASSERT_EQ(fm_sheet_add_slicer(other.handle, sheet, 0, 0, &spec, &id), 0);
   ASSERT_EQ(fm_workbook_remove_sheet(other.handle, 0), 0);
   const std::vector<std::uint8_t> after = Save(other.handle);
@@ -241,13 +247,19 @@ TEST(FormulonCApiSlicers, RejectsBadArguments) {
   EXPECT_EQ(count, 0U);
 
   ASSERT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, &spec, &id), 0);
-  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, 0, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, 1, &spec), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id + 1U, &spec), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, 0U, &spec), kInvalidArgument);
   fm_slicer_t rename = Anchored(FM_SLICER_FIELD_NAME);
   rename.name = "Other";
-  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, 0, &rename), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_remove_slicer(wb.handle, 0, 1), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_remove_slicer(wb.handle, 7, 0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, &rename), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_remove_slicer(wb.handle, 0, id + 1U), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_remove_slicer(wb.handle, 7, id), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  int32_t present = 1;
+  EXPECT_EQ(fm_sheet_get_slicer(wb.handle, 0, id, nullptr, &out), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_slicer(wb.handle, 7, id, &present, &out), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  ASSERT_EQ(fm_sheet_get_slicer(wb.handle, 0, id + 1U, &present, &out), 0);
+  EXPECT_EQ(present, 0);
 }
 
 }  // namespace

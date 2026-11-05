@@ -10,6 +10,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "formulon_c_out_index.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
 #include "threaded_comment.h"
@@ -455,7 +456,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationAddSingleRangeAndIterate) {
   v.error_message = "Pick from the list";
   v.prompt_title = "Choose";
   v.prompt_message = "Select a value";
-  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &v), 0);
+  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &v, ignored_index()), 0);
 
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
@@ -495,7 +496,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationAddMultiRangeRoundTrip) {
   v.allow_blank = 0;
   v.formula1 = "0";
   v.formula2 = "100";
-  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &v), 0);
+  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &v, ignored_index()), 0);
 
   fm_data_validation_t got{};
   ASSERT_EQ(fm_sheet_get_validation(wb_, 0, 0, &got), 0);
@@ -521,7 +522,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationCoversEveryTypeAndOpEnum) {
       v.op = op;
       v.error_style = static_cast<std::uint8_t>(op % 3);
       v.allow_blank = (type & 1U) != 0U ? 1 : 0;
-      ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &v), 0);
+      ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &v, ignored_index()), 0);
     }
   }
   std::size_t count = 0;
@@ -542,7 +543,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationRejectsEnumOrdinalsPastTheirDomain) 
   // recognise, so a mistyped `type` would save as "no validation at all"
   // and the author would only notice on opening the file in Excel.
   const auto expect_rejected = [this](fm_data_validation_t v, const char* what) {
-    EXPECT_EQ(fm_sheet_add_validation(wb_, 0, &v),
+    EXPECT_EQ(fm_sheet_add_validation(wb_, 0, &v, ignored_index()),
               static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument))
         << what;
   };
@@ -580,8 +581,8 @@ TEST_F(FormulonCApiSheetFeatures, ValidationRemoveAtValid) {
   b.ranges = &kA1;
   b.range_count = 1;
   b.type = 2;
-  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &a), 0);
-  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &b), 0);
+  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &a, ignored_index()), 0);
+  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &b, ignored_index()), 0);
   ASSERT_EQ(fm_sheet_remove_validation(wb_, 0, 0), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
@@ -595,7 +596,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationRemoveAtOutOfRange) {
   fm_data_validation_t a{};
   a.ranges = &kA1;
   a.range_count = 1;
-  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &a), 0);
+  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &a, ignored_index()), 0);
   EXPECT_NE(fm_sheet_remove_validation(wb_, 0, 99), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
@@ -609,8 +610,8 @@ TEST_F(FormulonCApiSheetFeatures, ValidationClear) {
   fm_data_validation_t b{};
   b.ranges = &kA1;
   b.range_count = 1;
-  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &a), 0);
-  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &b), 0);
+  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &a, ignored_index()), 0);
+  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &b, ignored_index()), 0);
   ASSERT_EQ(fm_sheet_clear_validations(wb_, 0), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
@@ -625,7 +626,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationSheetIndexOutOfRange) {
   EXPECT_NE(fm_sheet_get_validation_count(wb_, 999, &count), 0);
   fm_data_validation_t got{};
   EXPECT_NE(fm_sheet_get_validation(wb_, 999, 0, &got), 0);
-  EXPECT_NE(fm_sheet_add_validation(wb_, 999, &v), 0);
+  EXPECT_NE(fm_sheet_add_validation(wb_, 999, &v, ignored_index()), 0);
   EXPECT_NE(fm_sheet_remove_validation(wb_, 999, 0), 0);
   EXPECT_NE(fm_sheet_clear_validations(wb_, 999), 0);
 }
@@ -637,7 +638,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationBorrowedPointersStableAcrossReads) {
   v.range_count = 1;
   v.type = 7;
   v.formula1 = "=A1>0";
-  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &v), 0);
+  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &v, ignored_index()), 0);
   fm_data_validation_t got_a{};
   ASSERT_EQ(fm_sheet_get_validation(wb_, 0, 0, &got_a), 0);
   // Repeated reads with no intervening mutation must surface the same
@@ -655,7 +656,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationAddNullStringFieldsBecomeEmpty) {
   v.range_count = 1;
   v.type = 1;
   // Every string left as nullptr; getter must surface "" not nullptr.
-  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &v), 0);
+  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &v, ignored_index()), 0);
   fm_data_validation_t got{};
   ASSERT_EQ(fm_sheet_get_validation(wb_, 0, 0, &got), 0);
   ASSERT_NE(got.formula1, nullptr);
@@ -670,7 +671,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationAddRejectsAnEmptyRangeList) {
   // A rule applies to cells, so it needs at least one range, as a CF rule does.
   fm_data_validation_t v{};
   v.type = 1;
-  EXPECT_EQ(fm_sheet_add_validation(wb_, 0, &v), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_sheet_add_validation(wb_, 0, &v, ignored_index()), FM_STATUS_INVALID_ARGUMENT);
   std::size_t count = 9;
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 0U);
@@ -680,7 +681,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationAddRejectsNullRangesWithCount) {
   fm_data_validation_t v{};
   v.range_count = 3;
   v.ranges = nullptr;  // contradicts range_count.
-  EXPECT_NE(fm_sheet_add_validation(wb_, 0, &v), 0);
+  EXPECT_NE(fm_sheet_add_validation(wb_, 0, &v, ignored_index()), 0);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 0U);
@@ -715,7 +716,7 @@ TEST_F(FormulonCApiSheetFeatures, MutatorsRejectOutOfGridCoordinatesBeforeMutati
   fm_data_validation_t validation{};
   validation.ranges = validation_ranges;
   validation.range_count = 2U;
-  EXPECT_EQ(fm_sheet_add_validation(wb_, 0U, &validation), invalid);
+  EXPECT_EQ(fm_sheet_add_validation(wb_, 0U, &validation, ignored_index()), invalid);
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0U, &count), 0);
   EXPECT_EQ(count, 0U);
 
@@ -740,14 +741,14 @@ TEST_F(FormulonCApiSheetFeatures, ValidationStoresFormulasWithoutTheLeadingEqual
   v.op = 0;    // between
   v.formula1 = "=$B$1";
   v.formula2 = "=$B$1+10";
-  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &v), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
   fm_data_validation_t got{};
   ASSERT_EQ(fm_sheet_get_validation(wb_, 0, 0, &got), 0);
   EXPECT_STREQ(got.formula1, "$B$1");
   EXPECT_STREQ(got.formula2, "$B$1+10");
 
   v.formula1 = "==$B$1";
-  EXPECT_EQ(fm_sheet_add_validation(wb_, 0, &v),
+  EXPECT_EQ(fm_sheet_add_validation(wb_, 0, &v, ignored_index()),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kParserUnexpectedToken));
 
   std::uint8_t* saved = nullptr;

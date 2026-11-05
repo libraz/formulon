@@ -236,19 +236,19 @@ test('setCellStyle round-trips a record and validates its fields', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const before = wb.cellStyleCount().value;
+    const before = wb.listCellStyles().length;
     const rec = { name: 'Probe Style', xfId: 0, builtinId: 53, iLevel: 0, hidden: true, customBuiltin: true };
     assert.ok(wb.setCellStyle(rec).ok);
-    assert.equal(wb.cellStyleCount().value, before + 1);
-    const read = wb.getCellStyle(before);
+    assert.equal(wb.listCellStyles().length, before + 1);
+    const read = wb.listCellStyles()[before];
     assert.equal(read.name, 'Probe Style');
     assert.equal(read.builtinId, 53);
     assert.equal(read.hidden, true);
     assert.equal(read.customBuiltin, true);
 
     assert.ok(wb.setCellStyle({ name: 'Probe Style' }).ok);
-    assert.equal(wb.cellStyleCount().value, before + 1);
-    assert.equal(wb.getCellStyle(before).builtinId, 0xffffffff);
+    assert.equal(wb.listCellStyles().length, before + 1);
+    assert.equal(wb.listCellStyles()[before].builtinId, 0xffffffff);
 
     assert.equal(wb.setCellStyle({ name: 'Bad Level', iLevel: 3 }).ok, false);
     assert.equal(wb.setCellStyle({ name: '' }).ok, false);
@@ -261,15 +261,16 @@ test('removeCellStyle rejects the Normal style and an unknown name', async () =>
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const normal = wb.getCellStyle(0);
-    assert.ok(normal.status.ok);
+    const styles = wb.listCellStyles();
+    assert.ok(styles.status.ok);
+    const normal = styles[0];
     assert.equal(wb.removeCellStyle(normal.name).ok, false);
     assert.equal(wb.removeCellStyle('No Such Style').ok, false);
-    if (wb.cellStyleCount().value > 1) {
-      const other = wb.getCellStyle(1);
-      const before = wb.cellStyleCount().value;
+    if (wb.listCellStyles().length > 1) {
+      const other = wb.listCellStyles()[1];
+      const before = wb.listCellStyles().length;
       assert.ok(wb.removeCellStyle(other.name).ok);
-      assert.equal(wb.cellStyleCount().value, before - 1);
+      assert.equal(wb.listCellStyles().length, before - 1);
     }
   } finally {
     wb.dispose();

@@ -350,7 +350,8 @@ export function registerCellsIo(Module, test) {
               name: 'BadTable',
               columns: ['Product', 'Amount'],
             }),
-          nestedErrorClass(value),
+          // A non-integer sheet (fraction, NaN, infinity) is a type error; 2^32 is a range error.
+          typeof value === 'number' && !Number.isInteger(value) ? TypeError : nestedErrorClass(value),
           `createTable range.sheet=${String(value)} accepted`,
         );
         assert.equal(wb.getTableCount().value, 0);
@@ -478,7 +479,7 @@ export function registerCellsIo(Module, test) {
           ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
           type: 3,
           formula1: '"Yes,No"',
-        }).ok,
+        }).status.ok,
       );
       // `dxfId` is a real index into `<dxfs>`, not a sentinel: every binding
       // signals "no differential format" by omitting the field, which leaves

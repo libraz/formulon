@@ -543,9 +543,9 @@ extern "C" fm_status_t fm_workbook_add_cell_xf(fm_workbook_t* wb, const fm_cell_
 }
 
 extern "C" fm_status_t fm_workbook_add_cell_style_xf(fm_workbook_t* wb, const fm_cell_xf_t* record,
-                                                     uint32_t* out_xf_id) {
+                                                     size_t* out_xf_index) {
   clear_last_error();
-  if (wb == nullptr || record == nullptr || out_xf_id == nullptr) {
+  if (wb == nullptr || record == nullptr || out_xf_index == nullptr) {
     return null_argument("fm_workbook_add_cell_style_xf");
   }
   if (fm_status_t rc = validate_xf_alignment(*record, "fm_workbook_add_cell_style_xf"); rc != 0) {
@@ -557,7 +557,7 @@ extern "C" fm_status_t fm_workbook_add_cell_style_xf(fm_workbook_t* wb, const fm
     return rc;
   }
   formulon::CellXf candidate = cell_xf_from_c(*record, 0U);
-  *out_xf_id = find_or_append_record(styles.cell_style_xfs, std::move(candidate), &formulon::cell_xf_key);
+  *out_xf_index = find_or_append_record(styles.cell_style_xfs, std::move(candidate), &formulon::cell_xf_key);
   return 0;
 }
 

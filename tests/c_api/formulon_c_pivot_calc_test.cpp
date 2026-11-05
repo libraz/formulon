@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
 #include "value.h"
 
@@ -104,8 +105,12 @@ void BuildSales(WorkbookGuard& wb, std::uint32_t* out_cache, bool product_on_col
   // As Excel creates the field: manual order, its items listed sorted.
   ASSERT_EQ(fm_sheet_set_pivot_field_sort(wb.handle, 0U, kPivot, kRegion, FM_PIVOT_SORT_MANUAL, nullptr), 0)
       << fm_get_last_error_message();
+  std::size_t expected_item = 0;
   for (const char* item : {"East", "North", "South"}) {
-    ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0U, kPivot, kRegion, item, 1), 0) << fm_get_last_error_message();
+    std::size_t item_index = 99;
+    ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0U, kPivot, kRegion, item, 1, &item_index), 0)
+        << fm_get_last_error_message();
+    EXPECT_EQ(item_index, expected_item++);
   }
   const std::uint32_t rows[] = {static_cast<std::uint32_t>(kRegion)};
   ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb.handle, 0U, kPivot, rows, 1U), 0) << fm_get_last_error_message();
@@ -113,7 +118,7 @@ void BuildSales(WorkbookGuard& wb, std::uint32_t* out_cache, bool product_on_col
     AddField(wb.handle, "Product", FM_PIVOT_AXIS_COL);
     ASSERT_EQ(fm_sheet_set_pivot_field_sort(wb.handle, 0U, kPivot, kProduct, FM_PIVOT_SORT_MANUAL, nullptr), 0);
     for (const char* item : {"A", "B"}) {
-      ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0U, kPivot, kProduct, item, 1), 0);
+      ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0U, kPivot, kProduct, item, 1, ignored_index()), 0);
     }
     const std::uint32_t cols[] = {static_cast<std::uint32_t>(kProduct)};
     ASSERT_EQ(fm_sheet_set_pivot_col_field_order(wb.handle, 0U, kPivot, cols, 1U), 0) << fm_get_last_error_message();
@@ -507,8 +512,10 @@ TEST(FormulonCApiPivotCalc, CalculatedItemGridAndSavedStringsMatchExcel) {
   std::uint32_t cache = 0;
   BuildSales(wb, &cache);
   // Typed as `=North+South`; Excel stores the item names qualified.
-  ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, "X", "=North+South"), 0)
+  std::size_t item_index = 99;
+  ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, "X", "=North+South", &item_index), 0)
       << fm_get_last_error_message();
+  EXPECT_EQ(item_index, 0U);
   EXPECT_EQ(Pending(wb.handle), 1);
   ASSERT_EQ(fm_sheet_project_pivot(wb.handle, 0U, kPivot), 0) << fm_get_last_error_message();
   EXPECT_EQ(Pending(wb.handle), 0);
@@ -559,7 +566,8 @@ TEST(FormulonCApiPivotCalc, AveragingFunctionsExcludeCalculatedItems) {
   WorkbookGuard wb;
   std::uint32_t cache = 0;
   BuildSales(wb, &cache);
-  ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, "X", "North+South"), 0)
+  ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, "X", "North+South", ignored_index()),
+            0)
       << fm_get_last_error_message();
   // CI2: Average is refused; Max is not.
   for (const fm_pivot_aggregation_t aggregation :
@@ -592,7 +600,7 @@ TEST(FormulonCApiPivotCalc, AveragingDataFieldBlocksAddingACalculatedItem) {
   BuildSales(wb, &cache);
   fm_pivot_data_field_spec_t average = DataSpec(kAmt, FM_PIVOT_AGG_AVERAGE);
   ASSERT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0U, kPivot, 0U, &average), 0) << fm_get_last_error_message();
-  EXPECT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, "X", "North+South"),
+  EXPECT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, "X", "North+South", ignored_index()),
             kPreconditionFailed);
   std::size_t count = 99;
   ASSERT_EQ(fm_workbook_get_pivot_cache_calculated_item_count(wb.handle, cache, &count), 0);
@@ -604,7 +612,8 @@ TEST(FormulonCApiPivotCalc, PositionalReferences) {
   std::uint32_t cache = 0;
   BuildSales(wb, &cache);
   // CI3: the previous item's value, then out-of-range positions.
-  ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, "Prev", "=Region[-1]"), 0)
+  ASSERT_EQ(
+      fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, "Prev", "=Region[-1]", ignored_index()), 0)
       << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_project_pivot(wb.handle, 0U, kPivot), 0) << fm_get_last_error_message();
   ExpectNumber(wb.handle, "Prev", SumOf("Amt"), 350.0);
@@ -612,9 +621,11 @@ TEST(FormulonCApiPivotCalc, PositionalReferences) {
   ExpectNumber(wb.handle, kGrandTotal, SumOf("Amt"), 980.0);
   ExpectNumber(wb.handle, kGrandTotal, SumOf("Qty"), 27.0);
 
-  ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, "Next", "=Region[+1]"), 0)
+  ASSERT_EQ(
+      fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, "Next", "=Region[+1]", ignored_index()), 0)
       << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, "Far", "=Region[-9]"), 0)
+  ASSERT_EQ(
+      fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, "Far", "=Region[-9]", ignored_index()), 0)
       << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_project_pivot(wb.handle, 0U, kPivot), 0) << fm_get_last_error_message();
   ExpectNumber(wb.handle, "Prev", SumOf("Amt"), 350.0);
@@ -627,10 +638,13 @@ TEST(FormulonCApiPivotCalc, LaterItemWinsAtAnIntersectionAndMoveSwapsIt) {
   WorkbookGuard wb;
   std::uint32_t cache = 0;
   BuildSales(wb, &cache, /*product_on_cols=*/true);
-  ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, "RX", "Region[North]+Region[South]"),
+  ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, "RX", "Region[North]+Region[South]",
+                                                        ignored_index()),
             0)
       << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kProduct, "PY", "Product[A]+100"), 0)
+  ASSERT_EQ(
+      fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kProduct, "PY", "Product[A]+100", ignored_index()),
+      0)
       << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_project_pivot(wb.handle, 0U, kPivot), 0) << fm_get_last_error_message();
   // CI4b: RX first, PY last: PY's formula over RX's A.
@@ -653,8 +667,9 @@ TEST(FormulonCApiPivotCalc, CalculatedItemFormulaAndRemoval) {
   WorkbookGuard wb;
   std::uint32_t cache = 0;
   BuildSales(wb, &cache);
-  ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, "X", "North+South"), 0);
-  ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, "Y", "X*2"), 0)
+  ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, "X", "North+South", ignored_index()),
+            0);
+  ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, "Y", "X*2", ignored_index()), 0)
       << fm_get_last_error_message();
   // X cannot go while Y names it, nor name itself through Y.
   EXPECT_EQ(fm_workbook_remove_pivot_cache_calculated_item(wb.handle, cache, 0U), kPreconditionFailed);
@@ -686,8 +701,9 @@ TEST(FormulonCApiPivotCalc, CalculatedItemPlacementPreconditions) {
   BuildSales(wb, &cache);
   const std::size_t price = AddPrice(wb.handle, cache);
   // A calculated field, and a field on no axis.
-  EXPECT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, price, "X", "1"), kPreconditionFailed);
-  EXPECT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kProduct, "X", "Product[A]"),
+  EXPECT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, price, "X", "1", ignored_index()),
+            kPreconditionFailed);
+  EXPECT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kProduct, "X", "Product[A]", ignored_index()),
             kPreconditionFailed);
 
   // A grouped field.
@@ -713,7 +729,8 @@ TEST(FormulonCApiPivotCalc, CalculatedItemPlacementPreconditions) {
                                                 FM_PIVOT_CALENDAR_GREGORIAN, 1U, std::nan(""), std::nan("")),
             0)
       << fm_get_last_error_message();
-  EXPECT_EQ(fm_workbook_add_pivot_cache_calculated_item(dated.handle, dated_cache, 0U, "X", "1"), kPreconditionFailed);
+  EXPECT_EQ(fm_workbook_add_pivot_cache_calculated_item(dated.handle, dated_cache, 0U, "X", "1", ignored_index()),
+            kPreconditionFailed);
 }
 
 TEST(FormulonCApiPivotCalc, CalculatedItemArgumentBoundaries) {
@@ -721,18 +738,21 @@ TEST(FormulonCApiPivotCalc, CalculatedItemArgumentBoundaries) {
   std::uint32_t cache = 0;
   BuildSales(wb, &cache);
   const auto add = [&](const char* name, const char* formula) {
-    return fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, name, formula);
+    return fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, kRegion, name, formula, ignored_index());
   };
-  EXPECT_EQ(fm_workbook_add_pivot_cache_calculated_item(nullptr, cache, kRegion, "X", "North"), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_add_pivot_cache_calculated_item(nullptr, cache, kRegion, "X", "North", ignored_index()),
+            kBindingNullPointer);
   EXPECT_EQ(add(nullptr, "North"), kBindingNullPointer);
   EXPECT_EQ(add("X", nullptr), kBindingNullPointer);
   EXPECT_EQ(add("", "North"), kInvalidArgument);
   EXPECT_EQ(add("X", ""), kInvalidArgument);
   EXPECT_EQ(add("\xC3", "North"), kBindingUtf8EncodingError);
   EXPECT_EQ(add("X", "\xC3"), kBindingUtf8EncodingError);
-  EXPECT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache + 100U, kRegion, "X", "North"),
+  EXPECT_EQ(
+      fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache + 100U, kRegion, "X", "North", ignored_index()),
+      kInvalidArgument);
+  EXPECT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, 99U, "X", "North", ignored_index()),
             kInvalidArgument);
-  EXPECT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, 99U, "X", "North"), kInvalidArgument);
   // Reserved, bracketed and existing item names.
   for (const char* name : {"All", "Blank", "X[1]", "north", "South"}) {
     EXPECT_EQ(add(name, "North"), kInvalidArgument) << name;

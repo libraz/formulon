@@ -58,8 +58,8 @@ fm_status_t numeric_payload(std::int32_t kind, std::int32_t as_int, double as_do
 }
 
 fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                                  const fm_pivot_filter_spec_t* spec, const char* api) {
-  if (wb == nullptr || spec == nullptr) {
+                                  const fm_pivot_filter_spec_t* spec, std::size_t* out_index, const char* api) {
+  if (wb == nullptr || spec == nullptr || out_index == nullptr) {
     return null_argument(api);
   }
   if (auto rc = check_sheet_index(wb, sheet_index, api); rc != 0) {
@@ -168,7 +168,12 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
   table->mutable_active_filters().push_back(std::move(filter));
-  return edit.commit();
+  const std::size_t added = table->active_filters().size() - 1U;
+  const fm_status_t status = edit.commit();
+  if (status == 0) {
+    *out_index = added;
+  }
+  return status;
 }
 
 }  // namespace
@@ -239,9 +244,9 @@ extern "C" fm_status_t fm_sheet_get_pivot_filter(const fm_workbook_t* wb, std::s
 }
 
 extern "C" fm_status_t fm_sheet_add_pivot_filter(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                                                 const fm_pivot_filter_spec_t* spec) {
+                                                 const fm_pivot_filter_spec_t* spec, std::size_t* out_index) {
   clear_last_error();
-  return add_pivot_filter_impl(wb, sheet_index, pivot_index, spec, "fm_sheet_add_pivot_filter");
+  return add_pivot_filter_impl(wb, sheet_index, pivot_index, spec, out_index, "fm_sheet_add_pivot_filter");
 }
 
 extern "C" fm_status_t fm_sheet_clear_pivot_filters(fm_workbook_t* wb, std::size_t sheet_index,

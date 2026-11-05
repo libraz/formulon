@@ -18,7 +18,7 @@ constexpr const char* kSparklineColorKeys[] = {"colorSeries", "colorNegative", "
 
 fm_color_spec_t* GroupColor(fm_sparkline_group_t& g, size_t i) {
   fm_color_spec_t* const colors[] = {&g.color_series, &g.color_negative, &g.color_axis, &g.color_markers,
-                                   &g.color_first,  &g.color_last,     &g.color_high, &g.color_low};
+                                     &g.color_first,  &g.color_last,     &g.color_high, &g.color_low};
   return colors[i];
 }
 
@@ -166,6 +166,37 @@ bool PullSparklines(CheckedSpecReader& reader, const Napi::Array& array, std::ve
   return reader.ok();
 }
 
+// The JS `Shape` record of `s`.
+Napi::Object ShapeToJs(Napi::Env env, const fm_shape_t& s) {
+  Napi::Object item = Napi::Object::New(env);
+  item.Set("objectId", JsNumber(env, s.object_id));
+  item.Set("kind", JsNumber(env, s.kind));
+  item.Set("anchorKind", JsNumber(env, s.anchor_kind));
+  item.Set("editAs", JsNumber(env, s.edit_as));
+  item.Set("fromRow", JsNumber(env, s.from_row));
+  item.Set("fromCol", JsNumber(env, s.from_col));
+  item.Set("fromRowOff", JsNumber(env, static_cast<double>(s.from_row_off)));
+  item.Set("fromColOff", JsNumber(env, static_cast<double>(s.from_col_off)));
+  item.Set("toRow", JsNumber(env, s.to_row));
+  item.Set("toCol", JsNumber(env, s.to_col));
+  item.Set("toRowOff", JsNumber(env, static_cast<double>(s.to_row_off)));
+  item.Set("toColOff", JsNumber(env, static_cast<double>(s.to_col_off)));
+  item.Set("cx", JsNumber(env, static_cast<double>(s.cx)));
+  item.Set("cy", JsNumber(env, static_cast<double>(s.cy)));
+  item.Set("name", JsString(env, s.name));
+  item.Set("prst", JsString(env, s.prst));
+  item.Set("text", JsString(env, s.text));
+  item.Set("textBox", Napi::Boolean::New(env, s.text_box != 0));
+  item.Set("fillKind", JsNumber(env, s.fill_kind));
+  item.Set("fillRgb", JsNumber(env, s.fill_rgb));
+  item.Set("lineKind", JsNumber(env, s.line_kind));
+  item.Set("lineRgb", JsNumber(env, s.line_rgb));
+  item.Set("lineWidthEmu", JsNumber(env, static_cast<double>(s.line_width_emu)));
+  item.Set("rotation", JsNumber(env, s.rotation));
+  item.Set("hidden", Napi::Boolean::New(env, s.hidden != 0));
+  return item;
+}
+
 }  // namespace
 
 Napi::Value Workbook::ListShapes(const Napi::CallbackInfo& info) {
@@ -183,35 +214,20 @@ Napi::Value Workbook::ListShapes(const Napi::CallbackInfo& info) {
     if (rc != 0) {
       break;
     }
-    Napi::Object item = Napi::Object::New(env);
-    item.Set("objectId", JsNumber(env, s.object_id));
-    item.Set("kind", JsNumber(env, s.kind));
-    item.Set("anchorKind", JsNumber(env, s.anchor_kind));
-    item.Set("editAs", JsNumber(env, s.edit_as));
-    item.Set("fromRow", JsNumber(env, s.from_row));
-    item.Set("fromCol", JsNumber(env, s.from_col));
-    item.Set("fromRowOff", JsNumber(env, static_cast<double>(s.from_row_off)));
-    item.Set("fromColOff", JsNumber(env, static_cast<double>(s.from_col_off)));
-    item.Set("toRow", JsNumber(env, s.to_row));
-    item.Set("toCol", JsNumber(env, s.to_col));
-    item.Set("toRowOff", JsNumber(env, static_cast<double>(s.to_row_off)));
-    item.Set("toColOff", JsNumber(env, static_cast<double>(s.to_col_off)));
-    item.Set("cx", JsNumber(env, static_cast<double>(s.cx)));
-    item.Set("cy", JsNumber(env, static_cast<double>(s.cy)));
-    item.Set("name", JsString(env, s.name));
-    item.Set("prst", JsString(env, s.prst));
-    item.Set("text", JsString(env, s.text));
-    item.Set("textBox", Napi::Boolean::New(env, s.text_box != 0));
-    item.Set("fillKind", JsNumber(env, s.fill_kind));
-    item.Set("fillRgb", JsNumber(env, s.fill_rgb));
-    item.Set("lineKind", JsNumber(env, s.line_kind));
-    item.Set("lineRgb", JsNumber(env, s.line_rgb));
-    item.Set("lineWidthEmu", JsNumber(env, static_cast<double>(s.line_width_emu)));
-    item.Set("rotation", JsNumber(env, s.rotation));
-    item.Set("hidden", Napi::Boolean::New(env, s.hidden != 0));
-    arr.Set(static_cast<uint32_t>(i), item);
+    arr.Set(static_cast<uint32_t>(i), ShapeToJs(env, s));
   }
   return FinishListResult(env, arr, rc);
+}
+
+Napi::Value Workbook::GetShape(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+  }
+  fm_shape_t s{};
+  int32_t present = 0;
+  const fm_status_t rc = fm_sheet_get_shape(handle_, ArgU32(info, 0), ArgU32(info, 1), &present, &s);
+  return MakeOptionalResult(env, rc, present, rc == 0 && present != 0 ? Napi::Value(ShapeToJs(env, s)) : env.Null());
 }
 
 Napi::Value Workbook::InsertShape(const Napi::CallbackInfo& info) {
@@ -310,7 +326,7 @@ Napi::Value Workbook::ListSparklineGroups(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::AddSparklineGroup(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return MakeIndexResult(env, NullHandleError(env), 0);
   }
   CheckedSpecReader reader(env);
   const Napi::Object spec = ArgObject(info, 1);
@@ -327,8 +343,10 @@ Napi::Value Workbook::AddSparklineGroup(const Napi::CallbackInfo& info) {
   }
   // No array, or an empty one, reaches the core as zero sparklines and is rejected there.
   fm_sparkline_t none{};
-  return MakeStatus(env, fm_sheet_add_sparkline_group(handle_, ArgU32(info, 0), &group,
-                                                      items.empty() ? &none : items.data(), items.size()));
+  std::size_t out = 0;
+  const fm_status_t rc = fm_sheet_add_sparkline_group(handle_, ArgU32(info, 0), &group,
+                                                      items.empty() ? &none : items.data(), items.size(), &out);
+  return MakeIndexResult(env, rc, static_cast<uint32_t>(out));
 }
 
 Napi::Value Workbook::UpdateSparklineGroup(const Napi::CallbackInfo& info) {

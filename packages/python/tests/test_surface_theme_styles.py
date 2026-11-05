@@ -167,12 +167,14 @@ class NamedStyleTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             xf_id = wb.add_cell_style_xf(_xf(0))
             wb.set_cell_style(CellStyleRecord("Mine", xf_id, hidden=True))
-            names = {wb.get_cell_style(i).name: wb.get_cell_style(i) for i in range(wb.cell_style_count())}
+            names = {style.name: style for style in wb.list_cell_styles()}
+            self.assertEqual(wb.get_cell_style("Mine"), names["Mine"])
             self.assertIn("Mine", names)
             self.assertEqual(names["Mine"].xf_id, xf_id)
             self.assertTrue(names["Mine"].hidden)
             wb.remove_cell_style("Mine")
-            after = [wb.get_cell_style(i).name for i in range(wb.cell_style_count())]
+            after = [style.name for style in wb.list_cell_styles()]
+            self.assertIsNone(wb.get_cell_style("Mine"))
             self.assertNotIn("Mine", after)
             with self.assertRaises(FormulonError):
                 wb.remove_cell_style("Mine")

@@ -28,6 +28,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_locale_test.cpp
   formulon_c_logging_test.cpp
   formulon_c_named_styles_test.cpp
+  formulon_c_natural_key_test.cpp
   formulon_c_pivot_authoring_test.cpp
   formulon_c_pivot_options_test.cpp
   formulon_c_pivot_calc_test.cpp

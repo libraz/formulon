@@ -290,8 +290,8 @@ Napi::Object ProtectedRangeToJs(Napi::Env env, const fm_protected_range_t& r) {
   return item;
 }
 
-// Reads the range spec at `info[idx]` and hands it to `edit`. `handle`
-// aliases the wrapper's member, as in `InvokeMergeEdit`.
+// Reads the range spec at `info[idx]` and returns what `edit` makes of it.
+// `handle` aliases the wrapper's member, as in `InvokeMergeEdit`.
 template <typename Edit>
 Napi::Value EditProtectedRange(fm_workbook_t* const& handle, const Napi::CallbackInfo& info, size_t idx, Edit edit) {
   Napi::Env env = info.Env();
@@ -325,7 +325,7 @@ Napi::Value EditProtectedRange(fm_workbook_t* const& handle, const Napi::Callbac
   r.hash_value = text[3].c_str();
   r.salt_value = text[4].c_str();
   r.security_descriptor = text[5].c_str();
-  return MakeStatus(env, edit(handle, r));
+  return edit(handle, r);
 }
 
 }  // namespace
@@ -336,14 +336,19 @@ Napi::Value Workbook::GetProtectedRanges(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::AddProtectedRange(const Napi::CallbackInfo& info) {
+  if (handle_ == nullptr) {
+    return MakeIndexResult(info.Env(), NullHandleError(info.Env()), 0);
+  }
   return EditProtectedRange(handle_, info, 1, [&](fm_workbook_t* handle, const fm_protected_range_t& r) {
-    return fm_sheet_add_protected_range(handle, ArgU32(info, 0), &r);
+    std::size_t out = 0;
+    const fm_status_t rc = fm_sheet_add_protected_range(handle, ArgU32(info, 0), &r, &out);
+    return MakeIndexResult(info.Env(), rc, static_cast<uint32_t>(out));
   });
 }
 
 Napi::Value Workbook::UpdateProtectedRange(const Napi::CallbackInfo& info) {
   return EditProtectedRange(handle_, info, 2, [&](fm_workbook_t* handle, const fm_protected_range_t& r) {
-    return fm_sheet_update_protected_range(handle, ArgU32(info, 0), ArgU32(info, 1), &r);
+    return MakeStatus(info.Env(), fm_sheet_update_protected_range(handle, ArgU32(info, 0), ArgU32(info, 1), &r));
   });
 }
 
@@ -435,6 +440,19 @@ Napi::Value Workbook::GetHyperlinks(const Napi::CallbackInfo& info) {
   return SheetListResult(info, handle_, &fm_sheet_get_hyperlink_count, &fm_sheet_get_hyperlink_at, &HyperlinkToJs);
 }
 
+Napi::Value Workbook::GetHyperlink(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+  }
+  fm_hyperlink_t h{};
+  int32_t present = 0;
+  const fm_status_t rc =
+      fm_sheet_get_hyperlink(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &present, &h);
+  return MakeOptionalResult(env, rc, present,
+                            rc == 0 && present != 0 ? Napi::Value(HyperlinkToJs(env, h)) : env.Null());
+}
+
 Napi::Value Workbook::RemoveHyperlink(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_sheet_remove_hyperlink);
 }
@@ -483,7 +501,7 @@ Napi::Value Workbook::GetValidations(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return MakeIndexResult(env, NullHandleError(env), 0);
   }
   const uint32_t sheet = ArgU32(info, 0);
   Napi::Object v = ArgObject(info, 1);
@@ -545,8 +563,9 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  fm_status_t rc = fm_sheet_add_validation(handle_, sheet, &dv);
-  return MakeStatus(env, rc);
+  std::size_t out = 0;
+  fm_status_t rc = fm_sheet_add_validation(handle_, sheet, &dv, &out);
+  return MakeIndexResult(env, rc, static_cast<uint32_t>(out));
 }
 
 Napi::Value Workbook::RemoveValidationAt(const Napi::CallbackInfo& info) {
@@ -598,6 +617,40 @@ bool ReadMentions(CheckedSpecReader& reader, const Napi::Value& arr, std::vector
   return reader.ok();
 }
 
+// The JS `ThreadedComment` record of `c`.
+Napi::Object ThreadedCommentToJs(Napi::Env env, const fm_threaded_comment_t& c) {
+  Napi::Object item = Napi::Object::New(env);
+  item.Set("id", JsString(env, c.id));
+  item.Set("row", JsNumber(env, c.row));
+  item.Set("col", JsNumber(env, c.col));
+  item.Set("personId", JsString(env, c.person_id));
+  item.Set("created", JsString(env, c.created));
+  item.Set("text", JsString(env, c.text));
+  item.Set("parentId", JsString(env, c.parent_id));
+  item.Set("done", JsBool(env, c.done));
+  Napi::Array mentions = Napi::Array::New(env, c.mention_count);
+  for (uint32_t m = 0; m < c.mention_count; ++m) {
+    Napi::Object mention = Napi::Object::New(env);
+    mention.Set("personId", JsString(env, c.mentions[m].person_id));
+    mention.Set("mentionId", JsString(env, c.mentions[m].mention_id));
+    mention.Set("start", JsNumber(env, c.mentions[m].start));
+    mention.Set("length", JsNumber(env, c.mentions[m].length));
+    mentions.Set(m, mention);
+  }
+  item.Set("mentions", mentions);
+  return item;
+}
+
+// The JS `Person` record of `p`.
+Napi::Object PersonToJs(Napi::Env env, const fm_person_t& p) {
+  Napi::Object item = Napi::Object::New(env);
+  item.Set("id", JsString(env, p.id));
+  item.Set("displayName", JsString(env, p.display_name));
+  item.Set("userId", JsString(env, p.user_id));
+  item.Set("providerId", JsString(env, p.provider_id));
+  return item;
+}
+
 }  // namespace
 
 Napi::Value Workbook::GetThreadedComments(const Napi::CallbackInfo& info) {
@@ -615,26 +668,7 @@ Napi::Value Workbook::GetThreadedComments(const Napi::CallbackInfo& info) {
     if (rc != 0) {
       break;
     }
-    Napi::Object item = Napi::Object::New(env);
-    item.Set("id", JsString(env, c.id));
-    item.Set("row", JsNumber(env, c.row));
-    item.Set("col", JsNumber(env, c.col));
-    item.Set("personId", JsString(env, c.person_id));
-    item.Set("created", JsString(env, c.created));
-    item.Set("text", JsString(env, c.text));
-    item.Set("parentId", JsString(env, c.parent_id));
-    item.Set("done", JsBool(env, c.done));
-    Napi::Array mentions = Napi::Array::New(env, c.mention_count);
-    for (uint32_t m = 0; m < c.mention_count; ++m) {
-      Napi::Object mention = Napi::Object::New(env);
-      mention.Set("personId", JsString(env, c.mentions[m].person_id));
-      mention.Set("mentionId", JsString(env, c.mentions[m].mention_id));
-      mention.Set("start", JsNumber(env, c.mentions[m].start));
-      mention.Set("length", JsNumber(env, c.mentions[m].length));
-      mentions.Set(m, mention);
-    }
-    item.Set("mentions", mentions);
-    arr.Set(static_cast<uint32_t>(i), item);
+    arr.Set(static_cast<uint32_t>(i), ThreadedCommentToJs(env, c));
   }
   return MakeFieldResult(env, MakeStatus(env, rc), "comments", arr);
 }
@@ -707,6 +741,19 @@ Napi::Value Workbook::SetThreadResolved(const Napi::CallbackInfo& info) {
   });
 }
 
+Napi::Value Workbook::GetThreadedComment(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+  }
+  const std::string id = ArgString(info, 1);
+  fm_threaded_comment_t c{};
+  int32_t present = 0;
+  const fm_status_t rc = fm_sheet_get_threaded_comment(handle_, ArgU32(info, 0), id.c_str(), &present, &c);
+  return MakeOptionalResult(env, rc, present,
+                            rc == 0 && present != 0 ? Napi::Value(ThreadedCommentToJs(env, c)) : env.Null());
+}
+
 Napi::Value Workbook::RemoveThreadedComment(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const std::string id = ArgString(info, 1);
@@ -728,14 +775,21 @@ Napi::Value Workbook::GetPersons(const Napi::CallbackInfo& info) {
     if (rc != 0) {
       break;
     }
-    Napi::Object item = Napi::Object::New(env);
-    item.Set("id", JsString(env, p.id));
-    item.Set("displayName", JsString(env, p.display_name));
-    item.Set("userId", JsString(env, p.user_id));
-    item.Set("providerId", JsString(env, p.provider_id));
-    arr.Set(static_cast<uint32_t>(i), item);
+    arr.Set(static_cast<uint32_t>(i), PersonToJs(env, p));
   }
   return MakeFieldResult(env, MakeStatus(env, rc), "persons", arr);
+}
+
+Napi::Value Workbook::GetPerson(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+  }
+  const std::string id = ArgString(info, 0);
+  fm_person_t p{};
+  int32_t present = 0;
+  const fm_status_t rc = fm_workbook_get_person(handle_, id.c_str(), &present, &p);
+  return MakeOptionalResult(env, rc, present, rc == 0 && present != 0 ? Napi::Value(PersonToJs(env, p)) : env.Null());
 }
 
 Napi::Value Workbook::AddPerson(const Napi::CallbackInfo& info) {

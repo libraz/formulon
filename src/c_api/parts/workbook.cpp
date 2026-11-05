@@ -26,6 +26,7 @@
 #include "io/xlsb/writer.h"
 #include "sheet.h"
 #include "utils/error.h"
+#include "utils/strings.h"
 #include "value.h"
 
 using formulon::c_api::parts::check_index;
@@ -290,9 +291,9 @@ extern "C" fm_status_t fm_workbook_get_sheet_name(const fm_workbook_t* wb, size_
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* utf8_name) {
+extern "C" fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* utf8_name, size_t* out_index) {
   clear_last_error();
-  if (wb == nullptr || utf8_name == nullptr) {
+  if (wb == nullptr || utf8_name == nullptr || out_index == nullptr) {
     return null_argument("fm_workbook_add_sheet");
   }
   if (auto rc = check_utf8("fm_workbook_add_sheet", {utf8_name}); rc != 0) {
@@ -302,6 +303,7 @@ extern "C" fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* utf8
   if (!r) {
     return set_last_error(r.error());
   }
+  *out_index = wb->workbook().sheet_count() - 1U;
   return 0;
 }
 
@@ -553,6 +555,65 @@ extern "C" fm_status_t fm_workbook_get_defined_name_attrs_at(const fm_workbook_t
   return 0;
 }
 
+namespace {
+
+// Position of the defined name `name` (ASCII case-insensitive) in scope `local_sheet_id`, or the list size.
+std::size_t find_defined_name_index(const fm_workbook_t* wb, const char* name, int32_t local_sheet_id) {
+  const auto& names = wb->workbook().defined_names();
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    if (names[i].local_sheet_id == local_sheet_id && formulon::strings::case_insensitive_eq(names[i].name, name)) {
+      return i;
+    }
+  }
+  return names.size();
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_workbook_get_defined_name(const fm_workbook_t* wb, const char* name, int32_t local_sheet_id,
+                                                    int32_t* out_present, const char** out_name,
+                                                    const char** out_formula, const char** out_comment,
+                                                    int32_t* out_hidden) {
+  clear_last_error();
+  if (wb == nullptr || name == nullptr || out_present == nullptr || out_name == nullptr || out_formula == nullptr ||
+      out_comment == nullptr || out_hidden == nullptr) {
+    return null_argument("fm_workbook_get_defined_name");
+  }
+  if (auto rc = check_utf8("fm_workbook_get_defined_name", {name}); rc != 0) {
+    return rc;
+  }
+  *out_present = 0;
+  *out_name = nullptr;
+  *out_formula = nullptr;
+  *out_comment = nullptr;
+  *out_hidden = 0;
+  const std::size_t idx = find_defined_name_index(wb, name, local_sheet_id);
+  if (idx == wb->workbook().defined_names().size()) {
+    return 0;
+  }
+  if (auto rc = fm_workbook_get_defined_name_at(wb, idx, out_name, out_formula, nullptr); rc != 0) {
+    return rc;
+  }
+  *out_present = 1;
+  return fm_workbook_get_defined_name_attrs_at(wb, idx, out_comment, out_hidden);
+}
+
+extern "C" fm_status_t fm_workbook_remove_defined_name(fm_workbook_t* wb, const char* name, int32_t local_sheet_id) {
+  clear_last_error();
+  if (wb == nullptr || name == nullptr) {
+    return null_argument("fm_workbook_remove_defined_name");
+  }
+  if (auto rc = check_utf8("fm_workbook_remove_defined_name", {name}); rc != 0) {
+    return rc;
+  }
+  if (find_defined_name_index(wb, name, local_sheet_id) == wb->workbook().defined_names().size()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_remove_defined_name: no such name in that scope",
+                             "name=" + std::string(name) + " local_sheet_id=" + std::to_string(local_sheet_id));
+  }
+  return finish_status(wb->workbook().set_defined_name_scoped(std::string(name), std::string(), local_sheet_id));
+}
+
 extern "C" fm_status_t fm_workbook_get_passthrough_at(const fm_workbook_t* wb, size_t idx, const char** out_path) {
   clear_last_error();
   if (wb == nullptr || out_path == nullptr) {
@@ -563,5 +624,23 @@ extern "C" fm_status_t fm_workbook_get_passthrough_at(const fm_workbook_t* wb, s
     return rc;
   }
   *out_path = parts[idx].path.c_str();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_get_passthrough(const fm_workbook_t* wb, const char* path, int32_t* out_present) {
+  clear_last_error();
+  if (wb == nullptr || path == nullptr || out_present == nullptr) {
+    return null_argument("fm_workbook_get_passthrough");
+  }
+  if (auto rc = check_utf8("fm_workbook_get_passthrough", {path}); rc != 0) {
+    return rc;
+  }
+  *out_present = 0;
+  for (const auto& part : wb->workbook().passthrough_parts()) {
+    if (part.path == path) {
+      *out_present = 1;
+      break;
+    }
+  }
   return 0;
 }

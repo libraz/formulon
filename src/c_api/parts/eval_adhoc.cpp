@@ -1,14 +1,17 @@
 //
 // C ABI - ad-hoc, side-effect-free formula evaluation. Bridges the
 // engine-side `eval::evaluate_formula_text` / `eval::evaluate_cf_formula`
-// drivers into the stable C ABI. Both entry points observe the workbook
-// read-only (the `const fm_workbook_t*` is the purity contract) and return
-// a scalar `fm_value_t`; text payloads borrow the handle's read scratch.
+// drivers into the stable C ABI. Every entry point observes the workbook
+// read-only (the `const fm_workbook_t*` is the purity contract). Scalar
+// results borrow the handle's read scratch for text; an array result is an
+// owned `fm_value_array_t`.
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
@@ -20,7 +23,6 @@
 #include "value.h"
 #include "workbook.h"
 
-using formulon::c_api::parts::AdhocArrayStash;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
@@ -31,6 +33,17 @@ using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::value_to_fm;
+
+// Owned result of `fm_sheet_evaluate_formula_array`. Every `Text` cell is
+// re-pointed at `text_owner`, so the cells outlive the evaluation arena; the
+// C ABI reports Array / Ref / Lambda cells by kind only and never
+// dereferences their arena pointers.
+struct fm_value_array {
+  std::vector<formulon::Value> cells;  // row-major; size == rows * cols
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  TextStore text_owner;
+};
 
 namespace {
 
@@ -96,10 +109,9 @@ extern "C" fm_status_t fm_sheet_evaluate_formula(const fm_workbook_t* wb, size_t
 }
 
 extern "C" fm_status_t fm_sheet_evaluate_formula_array(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
-                                                       uint32_t col, const char* formula, uint32_t* out_rows,
-                                                       uint32_t* out_cols) {
+                                                       uint32_t col, const char* formula, fm_value_array_t** out) {
   clear_last_error();
-  if (out_rows == nullptr || out_cols == nullptr || formula == nullptr) {
+  if (out == nullptr || formula == nullptr) {
     return null_argument("fm_sheet_evaluate_formula_array");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_evaluate_formula_array"); rc != 0) {
@@ -112,7 +124,7 @@ extern "C" fm_status_t fm_sheet_evaluate_formula_array(const fm_workbook_t* wb, 
     return rc;
   }
   // The arena backs any text payload in the result until it is deep-copied
-  // into the per-handle stash below.
+  // into the returned handle below.
   formulon::Arena arena = make_eval_arena();
   const std::string text =
       wb->workbook().bind_self_book_names(wb->workbook().bind_entered_structured_refs(formula, sheet_index, row, col));
@@ -122,56 +134,69 @@ extern "C" fm_status_t fm_sheet_evaluate_formula_array(const fm_workbook_t* wb, 
     return arena_exhausted_error("fm_sheet_evaluate_formula_array");
   }
 
-  // Stash the whole result on the handle. Cast away const for the same reason
-  // as the read scratch: the stash is internal handle state, never part of
-  // the workbook's observable value graph, so the purity contract holds.
-  AdhocArrayStash& stash = const_cast<AdhocArrayStash&>(wb->adhoc_array);
-  stash.clear();
-
-  if (v.is_array()) {
-    const uint32_t rows = v.as_array_rows();
-    const uint32_t cols = v.as_array_cols();
-    if (rows == 0 || cols == 0) {
-      // Degenerate empty array: surface as a single #VALUE! cell, matching
-      // the scalar reduction's empty-array handling.
-      stash.rows = 1;
-      stash.cols = 1;
-      stash.cells.push_back(formulon::Value::error(formulon::ErrorCode::Value));
-    } else {
-      stash.rows = rows;
-      stash.cols = cols;
-      const formulon::Value* cells = v.as_array_cells();
-      const size_t count = static_cast<size_t>(rows) * static_cast<size_t>(cols);
-      stash.cells.reserve(count);
-      for (size_t i = 0; i < count; ++i) {
-        stash.cells.push_back(own_cell_text(cells[i], stash.text_owner));
-      }
+  auto result = std::unique_ptr<fm_value_array_t>(new fm_value_array_t{});
+  if (v.is_array() && v.as_array_rows() != 0 && v.as_array_cols() != 0) {
+    result->rows = v.as_array_rows();
+    result->cols = v.as_array_cols();
+    const formulon::Value* cells = v.as_array_cells();
+    const size_t count = static_cast<size_t>(result->rows) * static_cast<size_t>(result->cols);
+    result->cells.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      result->cells.push_back(own_cell_text(cells[i], result->text_owner));
     }
   } else {
-    // Scalar result: a 1x1 array.
-    stash.rows = 1;
-    stash.cols = 1;
-    stash.cells.push_back(own_cell_text(v, stash.text_owner));
+    // A scalar is a 1x1 array; a degenerate empty array is a single #VALUE!,
+    // matching the scalar reduction's empty-array handling.
+    result->rows = 1;
+    result->cols = 1;
+    result->cells.push_back(v.is_array() ? formulon::Value::error(formulon::ErrorCode::Value)
+                                         : own_cell_text(v, result->text_owner));
   }
-
-  *out_rows = stash.rows;
-  *out_cols = stash.cols;
+  *out = result.release();
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_evaluate_formula_array_cell(const fm_workbook_t* wb, size_t index, fm_value_t* out) {
+extern "C" void fm_value_array_destroy(fm_value_array_t* array) {
+  delete array;
+}
+
+extern "C" fm_status_t fm_value_array_get_dimensions(const fm_value_array_t* array, uint32_t* out_rows,
+                                                     uint32_t* out_cols) {
   clear_last_error();
-  if (wb == nullptr || out == nullptr) {
-    return null_argument("fm_workbook_evaluate_formula_array_cell");
+  if (array == nullptr || out_rows == nullptr || out_cols == nullptr) {
+    return null_argument("fm_value_array_get_dimensions");
   }
-  const AdhocArrayStash& stash = wb->adhoc_array;
-  if (auto rc = check_index(index, stash.cells.size(), "fm_workbook_evaluate_formula_array_cell", "index"); rc != 0) {
+  *out_rows = array->rows;
+  *out_cols = array->cols;
+  return 0;
+}
+
+extern "C" fm_status_t fm_value_array_get_value_count(const fm_value_array_t* array, size_t* out_count) {
+  clear_last_error();
+  if (array == nullptr || out_count == nullptr) {
+    return null_argument("fm_value_array_get_value_count");
+  }
+  *out_count = array->cells.size();
+  return 0;
+}
+
+extern "C" fm_status_t fm_value_array_get_value_at(const fm_value_array_t* array, size_t index, fm_value_t* out) {
+  clear_last_error();
+  if (array == nullptr || out == nullptr) {
+    return null_argument("fm_value_array_get_value_at");
+  }
+  if (auto rc = check_index(index, array->cells.size(), "fm_value_array_get_value_at", "index"); rc != 0) {
     return rc;
   }
-  // Text pointers stay valid only until the next read (see
-  // `fm_workbook_evaluate_formula_array_cell` in `formulon_c.h`).
-  TextStore& scratch = fresh_read_scratch(wb);
-  value_to_fm(stash.cells[index], scratch, out);
+  const formulon::Value& cell = array->cells[index];
+  if (cell.kind() == formulon::ValueKind::Text) {
+    // The handle owns the NUL-terminated bytes behind every text cell.
+    out->kind = FM_VAL_TEXT;
+    out->u.text = cell.as_text().data();
+    return 0;
+  }
+  TextStore unused;
+  value_to_fm(cell, unused, out);
   return 0;
 }
 

@@ -458,8 +458,9 @@ class Cell(NamedTuple):
     value: Value
 
 
-class DefinedName(NamedTuple):
-    """One row of ``Workbook.list_defined_names()``."""
+@dataclass(frozen=True)
+class DefinedName:
+    """One defined name, as ``Workbook.list_defined_names()`` and ``Workbook.get_defined_name()`` return it."""
 
     name: str
     formula: str
@@ -4447,6 +4448,147 @@ def _cell_rect_from(d: Dict[str, int]) -> CellRect:
     return CellRect(d["first_row"], d["first_col"], d["last_row"], d["last_col"])
 
 
+def _hyperlink_from(d: Dict[str, Any]) -> Hyperlink:
+    return Hyperlink(
+        rect=_cell_rect_from(d["rect"]),
+        target=LIB.read_cstr(d["target"]),
+        location=LIB.read_cstr(d["location"]),
+        display=LIB.read_cstr(d["display"]),
+        tooltip=LIB.read_cstr(d["tooltip"]),
+    )
+
+
+def _threaded_comment_from(d: Dict[str, Any]) -> ThreadedComment:
+    return ThreadedComment(
+        id=LIB.read_cstr(d["id"]),
+        row=d["row"],
+        col=d["col"],
+        person_id=LIB.read_cstr(d["person_id"]),
+        created=LIB.read_cstr(d["created"]),
+        text=LIB.read_cstr(d["text"]),
+        parent_id=LIB.read_cstr(d["parent_id"]),
+        done=bool(d["done"]),
+        mentions=_decode_mentions(d["mentions"], d["mention_count"]),
+    )
+
+
+def _drawing_object_from(d: Dict[str, Any]) -> DrawingObject:
+    return DrawingObject(
+        object_id=d["object_id"],
+        kind=d["kind"],
+        anchor_kind=d["anchor_kind"],
+        edit_as=d["edit_as"],
+        from_row=d["from_row"],
+        from_col=d["from_col"],
+        from_row_off=d["from_row_off"],
+        from_col_off=d["from_col_off"],
+        to_row=d["to_row"],
+        to_col=d["to_col"],
+        to_row_off=d["to_row_off"],
+        to_col_off=d["to_col_off"],
+        cx=d["cx"],
+        cy=d["cy"],
+        image_format=d["image_format"],
+        name=LIB.read_cstr(d["name"]),
+        descr=LIB.read_cstr(d["descr"]),
+        media_path=LIB.read_cstr(d["media_path"]),
+    )
+
+
+def _shape_from(d: Dict[str, Any]) -> Shape:
+    return Shape(
+        object_id=d["object_id"],
+        kind=d["kind"],
+        anchor_kind=d["anchor_kind"],
+        edit_as=d["edit_as"],
+        from_row=d["from_row"],
+        from_col=d["from_col"],
+        from_row_off=d["from_row_off"],
+        from_col_off=d["from_col_off"],
+        to_row=d["to_row"],
+        to_col=d["to_col"],
+        to_row_off=d["to_row_off"],
+        to_col_off=d["to_col_off"],
+        cx=d["cx"],
+        cy=d["cy"],
+        name=LIB.read_cstr(d["name"]),
+        prst=LIB.read_cstr(d["prst"]),
+        text=LIB.read_cstr(d["text"]),
+        text_box=bool(d["text_box"]),
+        fill_kind=d["fill_kind"],
+        fill_rgb=d["fill_rgb"],
+        line_kind=d["line_kind"],
+        line_rgb=d["line_rgb"],
+        line_width_emu=d["line_width_emu"],
+        rotation=d["rotation"],
+        hidden=bool(d["hidden"]),
+    )
+
+
+def _slicer_from(d: Dict[str, Any]) -> Slicer:
+    return Slicer(
+        object_id=d["object_id"],
+        name=LIB.read_cstr(d["name"]),
+        caption=LIB.read_cstr(d["caption"]),
+        cache_name=LIB.read_cstr(d["cache_name"]),
+        table_name=LIB.read_cstr(d["table_name"]),
+        column_name=LIB.read_cstr(d["column_name"]),
+        style=LIB.read_cstr(d["style"]),
+        column_count=d["column_count"],
+        row_height=d["row_height"],
+        sort_order=d["sort_order"],
+        cross_filter=d["cross_filter"],
+        anchor_kind=d["anchor_kind"],
+        from_row=d["from_row"],
+        from_col=d["from_col"],
+        from_row_off=d["from_row_off"],
+        from_col_off=d["from_col_off"],
+        to_row=d["to_row"],
+        to_col=d["to_col"],
+        to_row_off=d["to_row_off"],
+        to_col_off=d["to_col_off"],
+    )
+
+
+def _person_from(d: Dict[str, Any]) -> Person:
+    return Person(
+        id=LIB.read_cstr(d["id"]),
+        display_name=LIB.read_cstr(d["display_name"]),
+        user_id=LIB.read_cstr(d["user_id"]),
+        provider_id=LIB.read_cstr(d["provider_id"]),
+    )
+
+
+def _cell_style_from(d: Dict[str, Any]) -> CellStyleRecord:
+    return CellStyleRecord(
+        name=LIB.read_cstr(d["name"]),
+        xf_id=d["xf_id"],
+        builtin_id=d["builtin_id"],
+        i_level=d["i_level"],
+        hidden=bool(d["hidden"]),
+        custom_builtin=bool(d["custom_builtin"]),
+    )
+
+
+def _table_style_from(d: Dict[str, Any]) -> TableStyle:
+    elements = []
+    for i in range(d["element_count"]):
+        e = S.TABLE_STYLE_ELEMENT.unpack(LIB, d["elements"] + i * S.TABLE_STYLE_ELEMENT.size)
+        elements.append(
+            TableStyleElement(
+                type=LIB.read_cstr(e["type"]),
+                size=e["size"],
+                dxf_id=e["dxf_id"] if e["has_dxf_id"] else None,
+            )
+        )
+    return TableStyle(
+        name=LIB.read_cstr(d["name"]),
+        pivot=d["pivot"] != 0,
+        table=d["table"] != 0,
+        elements=tuple(elements),
+    )
+
+
 def _pack_cell_rect_at(ptr: int, r: CellRect) -> None:
     r = _require_cell_rect(r)
     S.CELL_RECT.pack(
@@ -4874,13 +5016,15 @@ class Workbook:
             default_op="fm_workbook_get_sheet_name",
         )
 
-    def add_sheet(self, name: str) -> None:
-        """Append a new sheet with the given UTF-8 display name."""
+    def add_sheet(self, name: str) -> int:
+        """Append a new sheet with the given UTF-8 display name; return its index."""
         h = self._require()
         with _ArgScope() as scope:
             name_ptr = scope.cstr(name)
-            status = LIB.fm_workbook_add_sheet(h, name_ptr)
+            out = scope.out_ptr()
+            status = LIB.fm_workbook_add_sheet(h, name_ptr, out)
             _check(status, "fm_workbook_add_sheet")
+            return LIB.read_u32(out)
 
     # -- Cell mutation -----------------------------------------------------
     def set_number(self, sheet: int, row: int, col: int, value: float) -> None:
@@ -5222,49 +5366,51 @@ class Workbook:
         Returns:
           A ``rows x cols`` nested list of :class:`Value`.
         """
-        h = self._require()
-        rows, cols = self._stash_formula_array(sheet, row, col, formula)
-
-        # Second step: read each stashed cell back by its row-major index.
-        # The stash on the handle stays valid until the next array
-        # evaluation or mutation, so it survives the loop below.
-        grid: List[List[Value]] = []
-        with _ArgScope() as scope:
-            value_ptr = scope.alloc(fm_value_t_size)
-            for r in range(rows):
-                out_row: List[Value] = []
-                for c in range(cols):
-                    index = r * cols + c
-                    status = LIB.fm_workbook_evaluate_formula_array_cell(h, _uint(index, "index"), value_ptr)
-                    _check(status, "fm_workbook_evaluate_formula_array_cell")
-                    out_row.append(Value._from_wasm(value_ptr))
-                grid.append(out_row)
-        return grid
+        return self._evaluate_formula_cells(sheet, row, col, formula, top_left_only=False)
 
     def _evaluate_formula_top_left(self, sheet: int, row: int, col: int, formula: str) -> Value:
         """Evaluate as :meth:`evaluate_formula_array` and read back only the top-left cell."""
-        h = self._require()
-        self._stash_formula_array(sheet, row, col, formula)
-        with _ArgScope() as scope:
-            value_ptr = scope.alloc(fm_value_t_size)
-            _check(
-                LIB.fm_workbook_evaluate_formula_array_cell(h, 0, value_ptr),
-                "fm_workbook_evaluate_formula_array_cell",
-            )
-            return Value._from_wasm(value_ptr)
+        return self._evaluate_formula_cells(sheet, row, col, formula, top_left_only=True)[0][0]
 
-    def _stash_formula_array(self, sheet: int, row: int, col: int, formula: str) -> Tuple[int, int]:
-        """Evaluate ``formula`` into the handle's array stash; return its ``(rows, cols)``."""
+    def _evaluate_formula_cells(
+        self, sheet: int, row: int, col: int, formula: str, top_left_only: bool
+    ) -> List[List[Value]]:
+        """Evaluate ``formula`` into an owned value array and read its cells (only the first when asked)."""
         h = self._require()
         with _ArgScope() as scope:
             formula_ptr = scope.cstr(formula)
-            rows_ptr = scope.out_ptr()
-            cols_ptr = scope.out_ptr()
-            status = LIB.fm_sheet_evaluate_formula_array(
-                h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), formula_ptr, rows_ptr, cols_ptr
+            out = scope.out_ptr()
+            _check(
+                LIB.fm_sheet_evaluate_formula_array(
+                    h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), formula_ptr, out
+                ),
+                "fm_sheet_evaluate_formula_array",
             )
-            _check(status, "fm_sheet_evaluate_formula_array")
-            return LIB.read_u32(rows_ptr), LIB.read_u32(cols_ptr)
+            array = LIB.read_u32(out)
+            try:
+                rows_ptr = scope.out_ptr()
+                cols_ptr = scope.out_ptr()
+                _check(
+                    LIB.fm_value_array_get_dimensions(array, rows_ptr, cols_ptr),
+                    "fm_value_array_get_dimensions",
+                )
+                rows = 1 if top_left_only else LIB.read_u32(rows_ptr)
+                cols = 1 if top_left_only else LIB.read_u32(cols_ptr)
+                stride = LIB.read_u32(cols_ptr)
+                value_ptr = scope.alloc(fm_value_t_size)
+                grid: List[List[Value]] = []
+                for r in range(rows):
+                    out_row: List[Value] = []
+                    for c in range(cols):
+                        _check(
+                            LIB.fm_value_array_get_value_at(array, _uint(r * stride + c, "index"), value_ptr),
+                            "fm_value_array_get_value_at",
+                        )
+                        out_row.append(Value._from_wasm(value_ptr))
+                    grid.append(out_row)
+                return grid
+            finally:
+                LIB.fm_value_array_destroy(array)
 
     # -- Recalc ------------------------------------------------------------
     def recalc(self) -> None:
@@ -5783,6 +5929,15 @@ class Workbook:
                 path = LIB.read_cstr(LIB.read_u32(path_ptr))
                 yield PassthroughPart(path=path)
 
+    def get_passthrough(self, path: str) -> Optional[str]:
+        """Return ``path`` when a passthrough part sits there (no leading ``/``), else ``None``."""
+        h = self._require()
+        with _ArgScope() as scope:
+            path_ptr = scope.cstr(path)
+            present = scope.out_ptr()
+            _check(LIB.fm_workbook_get_passthrough(h, path_ptr, present), "fm_workbook_get_passthrough")
+            return path if LIB.read_u32(present) else None
+
     # -- Sheet structure ---------------------------------------------------
     def move_sheet(self, from_index: int, to_index: int) -> None:
         """Move the sheet at ``from_index`` to ``to_index`` (post-removal)."""
@@ -5914,6 +6069,55 @@ class Workbook:
     # also kept verbatim: it keeps its pre-edit cell, and nothing reports it.
     # An insert also does not copy the formatting of the row or column before
     # it onto the new one, which Excel does -- a sparkline included.
+    def get_defined_name(self, name: str, local_sheet_id: int = -1) -> Optional[DefinedName]:
+        """Return the defined name ``name`` (ASCII case-insensitive) in scope ``local_sheet_id``, or ``None``.
+
+        ``local_sheet_id`` is -1 for workbook scope, else a 0-based sheet index.
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            name_ptr = scope.cstr(name)
+            present = scope.out_ptr()
+            stored_ptr = scope.out_ptr()
+            formula_ptr = scope.out_ptr()
+            comment_ptr = scope.out_ptr()
+            hidden_ptr = scope.out_ptr()
+            _check(
+                LIB.fm_workbook_get_defined_name(
+                    h,
+                    name_ptr,
+                    _sint(local_sheet_id, "local_sheet_id"),
+                    present,
+                    stored_ptr,
+                    formula_ptr,
+                    comment_ptr,
+                    hidden_ptr,
+                ),
+                "fm_workbook_get_defined_name",
+            )
+            if not LIB.read_u32(present):
+                return None
+            return DefinedName(
+                name=LIB.read_cstr(LIB.read_u32(stored_ptr)),
+                formula=LIB.read_cstr(LIB.read_u32(formula_ptr)),
+                local_sheet_id=local_sheet_id,
+                comment=LIB.read_cstr(LIB.read_u32(comment_ptr)) or "",
+                hidden=bool(LIB.read_i32(hidden_ptr)),
+            )
+
+    def remove_defined_name(self, name: str, local_sheet_id: int = -1) -> None:
+        """Remove the defined name ``name`` in scope ``local_sheet_id`` (-1 for workbook scope).
+
+        Raises ``FormulonError`` when the scope has no such name.
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            name_ptr = scope.cstr(name)
+            _check(
+                LIB.fm_workbook_remove_defined_name(h, name_ptr, _sint(local_sheet_id, "local_sheet_id")),
+                "fm_workbook_remove_defined_name",
+            )
+
     def insert_rows(self, sheet: int, row: int, count: int) -> None:
         """Insert ``count`` rows at ``row`` on ``sheet``.
 
@@ -6353,16 +6557,18 @@ class Workbook:
                     "fm_sheet_get_hyperlink_at",
                 )
                 d = S.HYPERLINK.unpack(LIB, ptr)
-                out.append(
-                    Hyperlink(
-                        rect=_cell_rect_from(d["rect"]),
-                        target=LIB.read_cstr(d["target"]),
-                        location=LIB.read_cstr(d["location"]),
-                        display=LIB.read_cstr(d["display"]),
-                        tooltip=LIB.read_cstr(d["tooltip"]),
-                    )
-                )
+                out.append(_hyperlink_from(d))
         return out
+
+    def get_hyperlink(self, sheet: int, row: int, col: int) -> Optional[Hyperlink]:
+        """Return the hyperlink whose range starts at ``(row, col)``, or ``None``."""
+        return self._lookup(
+            LIB.fm_sheet_get_hyperlink,
+            "fm_sheet_get_hyperlink",
+            (_uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col")),
+            S.HYPERLINK,
+            _hyperlink_from,
+        )
 
     # -- Comments ----------------------------------------------------------
     def get_comment(self, sheet: int, row: int, col: int) -> Optional[Comment]:
@@ -6527,7 +6733,9 @@ class Workbook:
                 )
         return out
 
-    def _protected_range_call(self, fn, name: str, leading: tuple, protected: ProtectedRange) -> None:
+    def _protected_range_call(
+        self, fn, name: str, leading: tuple, protected: ProtectedRange, returns_index: bool = False
+    ) -> Optional[int]:
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PROTECTED_RANGE)
@@ -6542,13 +6750,24 @@ class Workbook:
             )
             for fld in self._PROTECTED_RANGE_TEXT:
                 S.write_str_field(LIB, ptr, S.PROTECTED_RANGE, fld, getattr(protected, fld), scope)
-            _check(fn(h, *leading, ptr), name)
+            if not returns_index:
+                _check(fn(h, *leading, ptr), name)
+                return None
+            out = scope.out_ptr()
+            _check(fn(h, *leading, ptr, out), name)
+            return LIB.read_u32(out)
 
-    def add_protected_range(self, sheet: int, protected: ProtectedRange) -> None:
-        """Append a protected range; ``name`` must be non-empty and unique on the sheet."""
-        self._protected_range_call(
-            LIB.fm_sheet_add_protected_range, "fm_sheet_add_protected_range", (_uint(sheet, "sheet"),), protected
+    def add_protected_range(self, sheet: int, protected: ProtectedRange) -> int:
+        """Append a protected range and return its index; ``name`` must be non-empty and unique on the sheet."""
+        index = self._protected_range_call(
+            LIB.fm_sheet_add_protected_range,
+            "fm_sheet_add_protected_range",
+            (_uint(sheet, "sheet"),),
+            protected,
+            returns_index=True,
         )
+        assert index is not None
+        return index
 
     def update_protected_range(self, sheet: int, index: int, protected: ProtectedRange) -> None:
         """Replace the ``index``-th protected range of ``sheet``."""
@@ -6614,8 +6833,8 @@ class Workbook:
             prompt_message=LIB.read_cstr(d["prompt_message"]),
         )
 
-    def add_validation(self, sheet: int, validation: DataValidationInput) -> None:
-        """Append a data-validation rule to ``sheet``."""
+    def add_validation(self, sheet: int, validation: DataValidationInput) -> int:
+        """Append a data-validation rule to ``sheet``; return its index."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.DATA_VALIDATION)
@@ -6648,10 +6867,12 @@ class Workbook:
                 "prompt_message",
             ):
                 S.write_str_field(LIB, ptr, S.DATA_VALIDATION, fld, getattr(validation, fld), scope)
+            out = scope.out_ptr()
             _check(
-                LIB.fm_sheet_add_validation(h, _uint(sheet, "sheet"), ptr),
+                LIB.fm_sheet_add_validation(h, _uint(sheet, "sheet"), ptr, out),
                 "fm_sheet_add_validation",
             )
+            return LIB.read_u32(out)
 
     def remove_validation(self, sheet: int, index: int) -> None:
         """Remove the validation rule at ``index`` on ``sheet``."""
@@ -7135,19 +7356,7 @@ class Workbook:
                     "fm_sheet_get_threaded_comment_at",
                 )
                 d = S.THREADED_COMMENT.unpack(LIB, ptr)
-                out.append(
-                    ThreadedComment(
-                        id=LIB.read_cstr(d["id"]),
-                        row=d["row"],
-                        col=d["col"],
-                        person_id=LIB.read_cstr(d["person_id"]),
-                        created=LIB.read_cstr(d["created"]),
-                        text=LIB.read_cstr(d["text"]),
-                        parent_id=LIB.read_cstr(d["parent_id"]),
-                        done=bool(d["done"]),
-                        mentions=_decode_mentions(d["mentions"], d["mention_count"]),
-                    )
-                )
+                out.append(_threaded_comment_from(d))
         return out
 
     def add_threaded_comment(self, sheet: int, comment: ThreadedComment) -> None:
@@ -7196,6 +7405,16 @@ class Workbook:
                 "fm_sheet_set_thread_resolved",
             )
 
+    def get_threaded_comment(self, sheet: int, comment_id: str) -> Optional[ThreadedComment]:
+        """Return the threaded comment ``comment_id``, or ``None`` when the sheet has none."""
+        return self._lookup(
+            LIB.fm_sheet_get_threaded_comment,
+            "fm_sheet_get_threaded_comment",
+            (_uint(sheet, "sheet_index"), comment_id),
+            S.THREADED_COMMENT,
+            _threaded_comment_from,
+        )
+
     def remove_threaded_comment(self, sheet: int, comment_id: str) -> None:
         """Remove the comment ``comment_id``; removing a thread opener removes its whole thread."""
         h = self._require()
@@ -7231,29 +7450,18 @@ class Workbook:
                     "fm_sheet_get_drawing_object_at",
                 )
                 d = S.DRAWING_OBJECT.unpack(LIB, ptr)
-                out.append(
-                    DrawingObject(
-                        object_id=d["object_id"],
-                        kind=d["kind"],
-                        anchor_kind=d["anchor_kind"],
-                        edit_as=d["edit_as"],
-                        from_row=d["from_row"],
-                        from_col=d["from_col"],
-                        from_row_off=d["from_row_off"],
-                        from_col_off=d["from_col_off"],
-                        to_row=d["to_row"],
-                        to_col=d["to_col"],
-                        to_row_off=d["to_row_off"],
-                        to_col_off=d["to_col_off"],
-                        cx=d["cx"],
-                        cy=d["cy"],
-                        image_format=d["image_format"],
-                        name=LIB.read_cstr(d["name"]),
-                        descr=LIB.read_cstr(d["descr"]),
-                        media_path=LIB.read_cstr(d["media_path"]),
-                    )
-                )
+                out.append(_drawing_object_from(d))
         return out
+
+    def get_drawing_object(self, sheet: int, object_id: int) -> Optional[DrawingObject]:
+        """Return the drawing object ``object_id``, or ``None`` when the sheet's drawing has none."""
+        return self._lookup(
+            LIB.fm_sheet_get_drawing_object,
+            "fm_sheet_get_drawing_object",
+            (_uint(sheet, "sheet_index"), _uint(object_id, "object_id")),
+            S.DRAWING_OBJECT,
+            _drawing_object_from,
+        )
 
     def get_image(self, sheet: int, object_id: int) -> bytes:
         """Return the bytes of the picture ``object_id`` (copied out of WASM memory)."""
@@ -7451,35 +7659,7 @@ class Workbook:
                     "fm_sheet_get_shape_at",
                 )
                 d = S.SHAPE.unpack(LIB, ptr)
-                out.append(
-                    Shape(
-                        object_id=d["object_id"],
-                        kind=d["kind"],
-                        anchor_kind=d["anchor_kind"],
-                        edit_as=d["edit_as"],
-                        from_row=d["from_row"],
-                        from_col=d["from_col"],
-                        from_row_off=d["from_row_off"],
-                        from_col_off=d["from_col_off"],
-                        to_row=d["to_row"],
-                        to_col=d["to_col"],
-                        to_row_off=d["to_row_off"],
-                        to_col_off=d["to_col_off"],
-                        cx=d["cx"],
-                        cy=d["cy"],
-                        name=LIB.read_cstr(d["name"]),
-                        prst=LIB.read_cstr(d["prst"]),
-                        text=LIB.read_cstr(d["text"]),
-                        text_box=bool(d["text_box"]),
-                        fill_kind=d["fill_kind"],
-                        fill_rgb=d["fill_rgb"],
-                        line_kind=d["line_kind"],
-                        line_rgb=d["line_rgb"],
-                        line_width_emu=d["line_width_emu"],
-                        rotation=d["rotation"],
-                        hidden=bool(d["hidden"]),
-                    )
-                )
+                out.append(_shape_from(d))
         return out
 
     def add_shape(
@@ -7577,6 +7757,16 @@ class Workbook:
                 "fm_sheet_update_shape",
             )
 
+    def get_shape(self, sheet: int, object_id: int) -> Optional[Shape]:
+        """Return the shape ``object_id``, or ``None`` when the sheet's drawing has none."""
+        return self._lookup(
+            LIB.fm_sheet_get_shape,
+            "fm_sheet_get_shape",
+            (_uint(sheet, "sheet_index"), _uint(object_id, "object_id")),
+            S.SHAPE,
+            _shape_from,
+        )
+
     def remove_shape(self, sheet: int, object_id: int) -> None:
         """Remove the shape, connector or group ``object_id`` with its children."""
         h = self._require()
@@ -7599,30 +7789,7 @@ class Workbook:
                     "fm_sheet_get_slicer_at",
                 )
                 d = S.SLICER.unpack(LIB, ptr)
-                out.append(
-                    Slicer(
-                        object_id=d["object_id"],
-                        name=LIB.read_cstr(d["name"]),
-                        caption=LIB.read_cstr(d["caption"]),
-                        cache_name=LIB.read_cstr(d["cache_name"]),
-                        table_name=LIB.read_cstr(d["table_name"]),
-                        column_name=LIB.read_cstr(d["column_name"]),
-                        style=LIB.read_cstr(d["style"]),
-                        column_count=d["column_count"],
-                        row_height=d["row_height"],
-                        sort_order=d["sort_order"],
-                        cross_filter=d["cross_filter"],
-                        anchor_kind=d["anchor_kind"],
-                        from_row=d["from_row"],
-                        from_col=d["from_col"],
-                        from_row_off=d["from_row_off"],
-                        from_col_off=d["from_col_off"],
-                        to_row=d["to_row"],
-                        to_col=d["to_col"],
-                        to_row_off=d["to_row_off"],
-                        to_col_off=d["to_col_off"],
-                    )
-                )
+                out.append(_slicer_from(d))
         return out
 
     def add_slicer(
@@ -7659,10 +7826,23 @@ class Workbook:
             )
             return LIB.read_u32(out)
 
+    def get_slicer(self, sheet: int, object_id: int) -> Optional[Slicer]:
+        """Return the slicer ``object_id`` (the id :meth:`add_slicer` returns), or ``None``.
+
+        A slicer without a drawing frame has no id and is not found.
+        """
+        return self._lookup(
+            LIB.fm_sheet_get_slicer,
+            "fm_sheet_get_slicer",
+            (_uint(sheet, "sheet_index"), _uint(object_id, "object_id")),
+            S.SLICER,
+            _slicer_from,
+        )
+
     def update_slicer(
         self,
         sheet: int,
-        index: int,
+        object_id: int,
         *,
         anchor: Optional[Sequence[int]] = None,
         caption: Optional[str] = None,
@@ -7672,7 +7852,7 @@ class Workbook:
         sort_order: Optional[Union[SlicerSortOrder, int]] = None,
         cross_filter: Optional[Union[SlicerCrossFilter, int]] = None,
     ) -> None:
-        """Apply the arguments that are not ``None`` to slicer ``index``; the rest of its XML is kept.
+        """Apply the arguments that are not ``None`` to slicer ``object_id``; the rest of its XML is kept.
 
         An empty ``style`` removes the style. ``anchor`` moves the slicer's two-cell frame (see :meth:`add_slicer`).
         """
@@ -7680,15 +7860,15 @@ class Workbook:
         with _ArgScope() as scope:
             ptr = _pack_slicer(scope, None, caption, style, column_count, row_height, anchor, sort_order, cross_filter)
             _check(
-                LIB.fm_sheet_update_slicer(h, _uint(sheet, "sheet_index"), _uint(index, "idx"), ptr),
+                LIB.fm_sheet_update_slicer(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), ptr),
                 "fm_sheet_update_slicer",
             )
 
-    def remove_slicer(self, sheet: int, index: int) -> None:
-        """Remove slicer ``index`` with its drawing frame, and its cache when no other slicer uses it."""
+    def remove_slicer(self, sheet: int, object_id: int) -> None:
+        """Remove slicer ``object_id`` with its drawing frame, and its cache when no other slicer uses it."""
         h = self._require()
         _check(
-            LIB.fm_sheet_remove_slicer(h, _uint(sheet, "sheet_index"), _uint(index, "idx")),
+            LIB.fm_sheet_remove_slicer(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id")),
             "fm_sheet_remove_slicer",
         )
 
@@ -7719,6 +7899,21 @@ class Workbook:
                     values[prefix + "_col"] = _uint(cell[1], prefix + "_col")
             S.DATA_TABLE.pack(LIB, ptr, values)
             _check(LIB.fm_sheet_add_data_table(h, _uint(sheet, "sheet_index"), ptr), "fm_sheet_add_data_table")
+
+    def _lookup(self, fn, name: str, leading: tuple, layout, decode):
+        """Run the by-key getter ``fn(h, *leading, out_present, out)``; ``None`` when the key is absent.
+
+        A ``str`` in ``leading`` is passed as a C string.
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            args = [scope.cstr(a) if isinstance(a, str) else a for a in leading]
+            present = scope.out_ptr()
+            ptr = scope.struct(layout)
+            _check(fn(h, *args, present, ptr), name)
+            if not LIB.read_u32(present):
+                return None
+            return decode(layout.unpack(LIB, ptr))
 
     def get_data_table(self, sheet: int, row: int, col: int) -> Optional[DataTable]:
         """Return the data table whose result range contains ``(row, col)``, or ``None``."""
@@ -7818,18 +8013,23 @@ class Workbook:
                 out.append(group)
         return out
 
-    def add_sparkline_group(self, sheet: int, group: SparklineGroup) -> None:
-        """Append ``group`` with its ``sparklines`` (at least one) to the sheet's worksheet extension list."""
+    def add_sparkline_group(self, sheet: int, group: SparklineGroup) -> int:
+        """Append ``group`` with its ``sparklines`` (at least one) to the sheet's worksheet extension list.
+
+        Returns the new group's index.
+        """
         h = self._require()
         with _ArgScope() as scope:
             ptr = _pack_sparkline_group(scope, group)
             items = _pack_sparklines(scope, group.sparklines)
+            out = scope.out_ptr()
             _check(
                 LIB.fm_sheet_add_sparkline_group(
-                    h, _uint(sheet, "sheet_index"), ptr, items, _uint(len(group.sparklines), "count")
+                    h, _uint(sheet, "sheet_index"), ptr, items, _uint(len(group.sparklines), "count"), out
                 ),
                 "fm_sheet_add_sparkline_group",
             )
+            return LIB.read_u32(out)
 
     def update_sparkline_group(self, sheet: int, index: int, group: SparklineGroup) -> None:
         """Rewrite the modelled attributes, colours and date range of group ``index`` from ``group``.
@@ -8235,14 +8435,7 @@ class Workbook:
                 S.zero_struct(LIB, S.PERSON, ptr)
                 _check(LIB.fm_workbook_get_person_at(h, _uint(i, "idx"), ptr), "fm_workbook_get_person_at")
                 d = S.PERSON.unpack(LIB, ptr)
-                out.append(
-                    Person(
-                        id=LIB.read_cstr(d["id"]),
-                        display_name=LIB.read_cstr(d["display_name"]),
-                        user_id=LIB.read_cstr(d["user_id"]),
-                        provider_id=LIB.read_cstr(d["provider_id"]),
-                    )
-                )
+                out.append(_person_from(d))
         return out
 
     def add_person(self, person: Person) -> None:
@@ -8253,6 +8446,10 @@ class Workbook:
             for fld in ("id", "display_name", "user_id", "provider_id"):
                 S.write_str_field(LIB, ptr, S.PERSON, fld, getattr(person, fld), scope)
             _check(LIB.fm_workbook_add_person(h, ptr), "fm_workbook_add_person")
+
+    def get_person(self, person_id: str) -> Optional[Person]:
+        """Return the person ``person_id``, or ``None`` when the list has none."""
+        return self._lookup(LIB.fm_workbook_get_person, "fm_workbook_get_person", (person_id,), S.PERSON, _person_from)
 
     def remove_person(self, person_id: str) -> None:
         """Remove the person ``person_id`` (refused while a comment or mention still names them)."""
@@ -10042,9 +10239,18 @@ class Workbook:
         """Return the number of ``<xf>`` records registered."""
         return self._style_count(LIB.fm_workbook_get_cell_xf_count)
 
-    def cell_style_count(self) -> int:
-        """Return the number of named cell styles."""
-        return self._style_count(LIB.fm_workbook_get_cell_style_count)
+    def list_cell_styles(self) -> List[CellStyleRecord]:
+        """Return the named cell styles in file order."""
+        h = self._require()
+        n = _read_count(LIB.fm_workbook_get_cell_style_count, h)
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.CELL_STYLE_RECORD)
+            out: List[CellStyleRecord] = []
+            for i in range(n):
+                S.zero_struct(LIB, S.CELL_STYLE_RECORD, ptr)
+                _check(LIB.fm_workbook_get_cell_style_at(h, _uint(i, "index"), ptr), "fm_workbook_get_cell_style_at")
+                out.append(_cell_style_from(S.CELL_STYLE_RECORD.unpack(LIB, ptr)))
+        return out
 
     def get_cell_style_xf_count(self) -> int:
         """Return the number of ``<cellStyleXfs>`` records."""
@@ -10323,33 +10529,24 @@ class Workbook:
             name_ptr = scope.cstr(name)
             _check(LIB.fm_workbook_remove_cell_style(h, name_ptr), "fm_workbook_remove_cell_style")
 
-    def table_style_count(self) -> int:
-        """Return the number of custom table / PivotTable styles."""
-        return self._style_count(LIB.fm_workbook_get_table_style_count)
-
-    def get_table_style(self, index: int) -> TableStyle:
-        """Return the custom table style at ``index``."""
+    def list_table_styles(self) -> List[TableStyle]:
+        """Return the custom table / PivotTable styles in file order."""
         h = self._require()
+        n = _read_count(LIB.fm_workbook_get_table_style_count, h)
         with _ArgScope() as scope:
             ptr = scope.struct(S.TABLE_STYLE)
-            _check(LIB.fm_workbook_get_table_style_at(h, _uint(index, "index"), ptr), "fm_workbook_get_table_style_at")
-            d = S.TABLE_STYLE.unpack(LIB, ptr)
-            elements = []
-            for i in range(d["element_count"]):
-                e = S.TABLE_STYLE_ELEMENT.unpack(LIB, d["elements"] + i * S.TABLE_STYLE_ELEMENT.size)
-                elements.append(
-                    TableStyleElement(
-                        type=LIB.read_cstr(e["type"]),
-                        size=e["size"],
-                        dxf_id=e["dxf_id"] if e["has_dxf_id"] else None,
-                    )
-                )
-            return TableStyle(
-                name=LIB.read_cstr(d["name"]),
-                pivot=d["pivot"] != 0,
-                table=d["table"] != 0,
-                elements=tuple(elements),
-            )
+            out: List[TableStyle] = []
+            for i in range(n):
+                S.zero_struct(LIB, S.TABLE_STYLE, ptr)
+                _check(LIB.fm_workbook_get_table_style_at(h, _uint(i, "index"), ptr), "fm_workbook_get_table_style_at")
+                out.append(_table_style_from(S.TABLE_STYLE.unpack(LIB, ptr)))
+        return out
+
+    def get_table_style(self, name: str) -> Optional[TableStyle]:
+        """Return the custom table style ``name`` (case-insensitive), or ``None``."""
+        return self._lookup(
+            LIB.fm_workbook_get_table_style, "fm_workbook_get_table_style", (name,), S.TABLE_STYLE, _table_style_from
+        )
 
     def set_table_style(self, style: TableStyle) -> None:
         """Add a custom table style, or replace the one with the same name.
@@ -10497,6 +10694,21 @@ class Workbook:
                 S.write_str_field(LIB, ptr, S.THEME_FONTS, fname, getattr(fonts, fname), scope, allow_empty=True)
             _check(LIB.fm_workbook_set_theme_fonts(h, ptr), "fm_workbook_set_theme_fonts")
 
+    def get_theme_script_font(self, major: bool, script: str) -> Optional[ThemeScriptFont]:
+        """Return the entry for ``script`` in the major (heading) or minor (body) font set, or ``None``."""
+        h = self._require()
+        with _ArgScope() as scope:
+            script_ptr = scope.cstr(script)
+            present = scope.out_ptr()
+            face_ptr = scope.out_ptr()
+            _check(
+                LIB.fm_workbook_get_theme_script_font(h, 1 if major else 0, script_ptr, present, face_ptr),
+                "fm_workbook_get_theme_script_font",
+            )
+            if not LIB.read_u32(present):
+                return None
+            return ThemeScriptFont(script=script, typeface=LIB.read_cstr(LIB.read_u32(face_ptr)))
+
     def set_theme_script_font(self, major: bool, script: str, typeface: str) -> None:
         """Set the typeface of one script in the major (heading) or minor (body) font set.
 
@@ -10573,24 +10785,11 @@ class Workbook:
                 num_fmt_code=LIB.read_cstr(d["num_fmt_code"]),
             )
 
-    def get_cell_style(self, index: int) -> CellStyleRecord:
-        """Return the named cell style at ``index``."""
-        h = self._require()
-        with _ArgScope() as scope:
-            ptr = scope.struct(S.CELL_STYLE_RECORD)
-            _check(
-                LIB.fm_workbook_get_cell_style_at(h, _uint(index, "index"), ptr),
-                "fm_workbook_get_cell_style_at",
-            )
-            d = S.CELL_STYLE_RECORD.unpack(LIB, ptr)
-            return CellStyleRecord(
-                name=LIB.read_cstr(d["name"]),
-                xf_id=d["xf_id"],
-                builtin_id=d["builtin_id"],
-                i_level=d["i_level"],
-                hidden=bool(d["hidden"]),
-                custom_builtin=bool(d["custom_builtin"]),
-            )
+    def get_cell_style(self, name: str) -> Optional[CellStyleRecord]:
+        """Return the named cell style ``name`` (matched exactly), or ``None``."""
+        return self._lookup(
+            LIB.fm_workbook_get_cell_style, "fm_workbook_get_cell_style", (name,), S.CELL_STYLE_RECORD, _cell_style_from
+        )
 
     def get_cell_style_xf(self, index: int) -> CellXf:
         """Return the named-style xf record at ``index``."""
@@ -10813,8 +11012,8 @@ class Workbook:
             default_op="fm_workbook_get_pivot_cache_field_formula",
         )
 
-    def add_pivot_cache_calculated_item(self, cache_id: int, field_index: int, name: str, formula: str) -> None:
-        """Add calculated item ``name`` to cache field ``field_index``; it is last in solve order.
+    def add_pivot_cache_calculated_item(self, cache_id: int, field_index: int, name: str, formula: str) -> int:
+        """Add calculated item ``name`` to cache field ``field_index``; return its position, last in solve order.
 
         The formula names items of the same field, as ``North``, ``'North East'``,
         ``Region[North]``, ``Region[2]`` or ``Region[-1]``.
@@ -10823,12 +11022,14 @@ class Workbook:
         with _ArgScope() as scope:
             name_ptr = scope.cstr(name)
             formula_ptr = scope.cstr(formula)
+            out = scope.out_ptr()
             _check(
                 LIB.fm_workbook_add_pivot_cache_calculated_item(
-                    h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), name_ptr, formula_ptr
+                    h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), name_ptr, formula_ptr, out
                 ),
                 "fm_workbook_add_pivot_cache_calculated_item",
             )
+            return LIB.read_u32(out)
 
     def get_pivot_cache_calculated_item_count(self, cache_id: int) -> int:
         """Return the number of calculated items in the cache, in solve order."""
@@ -11825,7 +12026,7 @@ class Workbook:
             )
             return LIB.read_u32(out)
 
-    def add_pivot_field_item(self, sheet: int, pivot_index: int, field_idx: int, name: str, visible: bool) -> None:
+    def add_pivot_field_item(self, sheet: int, pivot_index: int, field_idx: int, name: str, visible: bool) -> int:
         """Append a manual-filter item addressed by its label.
 
         The item carries no cache binding, so records are matched by
@@ -11836,6 +12037,7 @@ class Workbook:
         h = self._require()
         with _ArgScope() as scope:
             name_ptr = scope.cstr(name)
+            out = scope.out_ptr()
             _check(
                 LIB.fm_sheet_add_pivot_field_item(
                     h,
@@ -11844,13 +12046,15 @@ class Workbook:
                     _uint(field_idx, "field_idx"),
                     name_ptr,
                     1 if visible else 0,
+                    out,
                 ),
                 "fm_sheet_add_pivot_field_item",
             )
+            return LIB.read_u32(out)
 
     def add_pivot_field_shared_item(
         self, sheet: int, pivot_index: int, field_idx: int, cache_index: int, visible: bool
-    ) -> None:
+    ) -> int:
         """Append a manual-filter item addressed by its cache shared-item index.
 
         ``cache_index`` selects ``shared_items[cache_index]`` of the bound
@@ -11859,17 +12063,21 @@ class Workbook:
         renders to nothing produces the blank item.
         """
         h = self._require()
-        _check(
-            LIB.fm_sheet_add_pivot_field_shared_item(
-                h,
-                _uint(sheet, "sheet_index"),
-                _uint(pivot_index, "pivot_index"),
-                _uint(field_idx, "field_idx"),
-                _uint(cache_index, "cache_index"),
-                1 if visible else 0,
-            ),
-            "fm_sheet_add_pivot_field_shared_item",
-        )
+        with _ArgScope() as scope:
+            out = scope.out_ptr()
+            _check(
+                LIB.fm_sheet_add_pivot_field_shared_item(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(pivot_index, "pivot_index"),
+                    _uint(field_idx, "field_idx"),
+                    _uint(cache_index, "cache_index"),
+                    1 if visible else 0,
+                    out,
+                ),
+                "fm_sheet_add_pivot_field_shared_item",
+            )
+            return LIB.read_u32(out)
 
     def clear_pivot_field_items(self, sheet: int, pivot_index: int, field_idx: int) -> None:
         """Drop every manual-filter item from pivot field ``field_idx``."""
@@ -12170,8 +12378,8 @@ class Workbook:
                 value_high_text=LIB.read_cstr(d["value_high_text"]),
             )
 
-    def add_pivot_filter(self, sheet: int, pivot_index: int, spec: PivotFilterSpec) -> None:
-        """Append a filter to the pivot; it is saved with it. See :meth:`get_pivot_filter`."""
+    def add_pivot_filter(self, sheet: int, pivot_index: int, spec: PivotFilterSpec) -> int:
+        """Append a filter to the pivot and return its index; it is saved with it. See :meth:`get_pivot_filter`."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_FILTER_SPEC)
@@ -12193,10 +12401,14 @@ class Workbook:
             S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC, "field_name", spec.field_name, scope)
             S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC, "value_text", spec.value_text, scope)
             S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC, "value_high_text", spec.value_high_text, scope)
+            out = scope.out_ptr()
             _check(
-                LIB.fm_sheet_add_pivot_filter(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr),
+                LIB.fm_sheet_add_pivot_filter(
+                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr, out
+                ),
                 "fm_sheet_add_pivot_filter",
             )
+            return LIB.read_u32(out)
 
     def clear_pivot_filters(self, sheet: int, pivot_index: int) -> None:
         """Drop every listed filter from the pivot."""

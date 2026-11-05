@@ -49,9 +49,9 @@ export function registerSheetPivot(Module, test) {
   test('removeSheet drops a sheet but rejects the last one', () => {
     const wb = Module.Workbook.createEmpty();
     try {
-      assert.ok(wb.addSheet('A').ok);
-      assert.ok(wb.addSheet('B').ok);
-      assert.ok(wb.addSheet('C').ok);
+      assert.ok(wb.addSheet('A').status.ok);
+      assert.ok(wb.addSheet('B').status.ok);
+      assert.ok(wb.addSheet('C').status.ok);
       assert.equal(wb.getSheetCount().value, 3);
       assert.ok(wb.removeSheet(1).ok);
       assert.equal(wb.getSheetCount().value, 2);
@@ -74,9 +74,9 @@ export function registerSheetPivot(Module, test) {
   test('moveSheet rearranges sheets (Excel UI semantics)', () => {
     const wb = Module.Workbook.createEmpty();
     try {
-      assert.ok(wb.addSheet('Alpha').ok);
-      assert.ok(wb.addSheet('Beta').ok);
-      assert.ok(wb.addSheet('Gamma').ok);
+      assert.ok(wb.addSheet('Alpha').status.ok);
+      assert.ok(wb.addSheet('Beta').status.ok);
+      assert.ok(wb.addSheet('Gamma').status.ok);
       // Move Alpha (0) to the end. Excel semantics: to=2 (post-removal).
       assert.ok(wb.moveSheet(0, 2).ok);
       assert.equal(wb.getSheetName(0).value, 'Beta');

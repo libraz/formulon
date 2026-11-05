@@ -19,6 +19,14 @@ struct WorkbookGuard {
   ~WorkbookGuard() { fm_workbook_destroy(handle); }
 };
 
+struct ValueArrayGuard {
+  fm_value_array_t* handle = nullptr;
+  ValueArrayGuard() = default;
+  ValueArrayGuard(const ValueArrayGuard&) = delete;
+  ValueArrayGuard& operator=(const ValueArrayGuard&) = delete;
+  ~ValueArrayGuard() { fm_value_array_destroy(handle); }
+};
+
 struct SaveBuffer {
   std::uint8_t* data = nullptr;
   std::size_t len = 0;

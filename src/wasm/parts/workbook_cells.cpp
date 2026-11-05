@@ -252,27 +252,26 @@ emscripten::val JsWorkbook::evaluateFormulaArray(uint32_t sheet, uint32_t row, u
   if (handle_ == nullptr) {
     return fail(kBindingInvalidHandle);
   }
-  uint32_t rows = 0;
-  uint32_t cols = 0;
-  fm_status_t rc = fm_sheet_evaluate_formula_array(handle_, sheet, row, col, formula.c_str(), &rows, &cols);
+  fm_value_array_t* array = nullptr;
+  fm_status_t rc = fm_sheet_evaluate_formula_array(handle_, sheet, row, col, formula.c_str(), &array);
   if (rc != 0) {
     return fail(rc);
   }
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  fm_value_array_get_dimensions(array, &rows, &cols);
   // Build a rows x cols nested array of Value objects (row-major).
   emscripten::val cells = emscripten::val::array();
   for (uint32_t r = 0; r < rows; ++r) {
     emscripten::val js_row = emscripten::val::array();
     for (uint32_t c = 0; c < cols; ++c) {
-      const uint32_t index = r * cols + c;
       fm_value_t v{};
-      fm_status_t cell_rc = fm_workbook_evaluate_formula_array_cell(handle_, index, &v);
-      if (cell_rc != 0) {
-        return fail(cell_rc);
-      }
+      fm_value_array_get_value_at(array, static_cast<std::size_t>(r) * cols + c, &v);
       js_row.set(c, emscripten::val(translate_value(v)));
     }
     cells.set(r, js_row);
   }
+  fm_value_array_destroy(array);
   o.set("status", ok_status());
   o.set("rows", rows);
   o.set("cols", cols);
@@ -615,6 +614,38 @@ JsStringResult JsWorkbook::renameTableColumn(uint32_t idx, uint32_t column, cons
                              ? fm_workbook_rename_table_column(handle_, idx, column, name.c_str(), &final_name)
                              : kBindingInvalidHandle;
   return string_result(rc, final_name);
+}
+
+emscripten::val JsWorkbook::getDefinedName(const std::string& name, int32_t localSheetId) const {
+  const char* stored = nullptr;
+  const char* formula = nullptr;
+  const char* comment = nullptr;
+  int32_t hidden = 0;
+  int32_t present = 0;
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_workbook_get_defined_name(handle_, name.c_str(), localSheetId, &present, &stored,
+                                                            &formula, &comment, &hidden)
+                             : kBindingInvalidHandle;
+  emscripten::val item = emscripten::val::null();
+  if (rc == 0 && present != 0) {
+    item = emscripten::val::object();
+    js_set_cstr_fields(item, {{"name", stored}, {"formula", formula}, {"comment", comment}});
+    item.set("localSheetId", localSheetId);
+    item.set("hidden", hidden != 0);
+  }
+  return optional_result(rc, present, item);
+}
+
+JsStatus JsWorkbook::removeDefinedName(const std::string& name, int32_t localSheetId) {
+  return status_from_rc(handle_ != nullptr ? fm_workbook_remove_defined_name(handle_, name.c_str(), localSheetId)
+                                           : kBindingInvalidHandle);
+}
+
+emscripten::val JsWorkbook::getPassthrough(const std::string& path) const {
+  int32_t present = 0;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_get_passthrough(handle_, path.c_str(), &present) : kBindingInvalidHandle;
+  return optional_result(rc, present, emscripten::val(path));
 }
 
 emscripten::val JsWorkbook::passthroughAt(uint32_t idx) const {

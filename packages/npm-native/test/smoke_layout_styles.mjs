@@ -678,8 +678,8 @@ test('addXf rejects out-of-range font_index', async () => {
 test('active sheet is recorded in bookViews and survives a round trip', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.ok(wb.addSheet('B').ok);
-  assert.ok(wb.addSheet('C').ok);
+  assert.ok(wb.addSheet('B').status.ok);
+  assert.ok(wb.addSheet('C').status.ok);
   assert.equal(wb.getActiveSheet().index, 0);
   assert.ok(wb.setActiveSheet(2).ok);
   const active = wb.getActiveSheet();

@@ -8,6 +8,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "formulon_c_out_index.h"
 #include "gtest/gtest.h"
 #include "io/protection_xml.h"
 #include "sheet.h"
@@ -165,8 +166,8 @@ TEST(FormulonCApiProtectedRanges, AddListUpdateRemove) {
   totals.salt_value = "cw==";
   totals.spin_count = 100000;
   totals.security_descriptor = "O:WDG:WD";
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &inputs), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &totals), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &inputs, ignored_index()), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &totals, ignored_index()), 0) << fm_get_last_error_message();
   EXPECT_EQ(RangeCount(wb), 2U);
 
   WorkbookGuard loaded;
@@ -204,7 +205,7 @@ TEST(FormulonCApiProtectedRanges, SqrefFollowsRowAndColumnEdits) {
   WorkbookGuard wb;
   Create(&wb);
   const fm_protected_range_t r = Range("Inputs", kInputsRanges, 2);
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &r), 0);
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &r, ignored_index()), 0);
   ASSERT_EQ(fm_sheet_insert_rows(wb.handle, 0, 0, 2), 0);
   ASSERT_EQ(fm_sheet_insert_cols(wb.handle, 0, 0, 1), 0);
   fm_protected_range_t out{};
@@ -231,7 +232,7 @@ TEST(FormulonCApiProtectedRanges, AnUnparsedTokenIsKeptForSave) {
   // Adding another range rewrites the list from the stored entries.
   const fm_cell_rect_t d4{3, 3, 3, 3};
   const fm_protected_range_t other = Range("Other", &d4, 1);
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &other), 0);
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &other, ignored_index()), 0);
   WorkbookGuard loaded;
   RoundTrip(wb, &loaded);
   const auto ranges = formulon::io::read_protected_ranges(loaded.handle->workbook().sheet(0).raw_extensions());
@@ -248,21 +249,21 @@ TEST(FormulonCApiProtectedRanges, ArgumentsAreValidated) {
   const fm_cell_rect_t inverted{2, 0, 1, 0};
   const fm_cell_rect_t off_grid{0, 0, 0, 16384};
   const fm_protected_range_t good = Range("Inputs", &a1, 1);
-  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &good), 0);
+  ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &good, ignored_index()), 0);
   const fm_protected_range_t duplicate = Range("Inputs", &b1, 1);
   const fm_protected_range_t unnamed = Range("", &b1, 1);
   const fm_protected_range_t inverted_range = Range("Other", &inverted, 1);
   const fm_protected_range_t off_grid_range = Range("Other", &off_grid, 1);
   const fm_protected_range_t no_ranges = Range("Other", nullptr, 0);
   const fm_protected_range_t null_ranges = Range("Other", nullptr, 1);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &duplicate), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &unnamed), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &inverted_range), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &off_grid_range), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &no_ranges), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &null_ranges), FM_STATUS_BINDING_NULL_POINTER);
-  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 9, &good), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_NE(fm_sheet_add_protected_range(wb.handle, 0, nullptr), 0);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &duplicate, ignored_index()), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &unnamed, ignored_index()), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &inverted_range, ignored_index()), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &off_grid_range, ignored_index()), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &no_ranges, ignored_index()), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &null_ranges, ignored_index()), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_sheet_add_protected_range(wb.handle, 9, &good, ignored_index()), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_NE(fm_sheet_add_protected_range(wb.handle, 0, nullptr, ignored_index()), 0);
   // Updating an entry to its own name is not a duplicate.
   EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 0, &good), 0);
   EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 5, &good), kInvalidArgument);

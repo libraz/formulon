@@ -210,9 +210,9 @@ test('Unicode sheet identity rejects folded duplicate and permits casing rename'
   const Module = await getModule();
   const wb = Module.Workbook.createEmpty();
   try {
-    assert.ok(wb.addSheet('Ä').ok);
-    assert.ok(wb.addSheet('Ö').ok);
-    assert.equal(wb.addSheet('ä').ok, false);
+    assert.ok(wb.addSheet('Ä').status.ok);
+    assert.ok(wb.addSheet('Ö').status.ok);
+    assert.equal(wb.addSheet('ä').status.ok, false);
     const collision = wb.renameSheet(1, 'ä');
     assert.equal(collision.ok, false);
     assert.notEqual(collision.status, 0);

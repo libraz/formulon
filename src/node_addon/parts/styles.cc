@@ -682,8 +682,66 @@ Napi::Value Workbook::DxfCount(const Napi::CallbackInfo& info) {
 
 // ---- Named cell styles ----------------------------------------------
 
-Napi::Value Workbook::CellStyleCount(const Napi::CallbackInfo& info) {
-  return StyleCountResult(info, handle_, &fm_workbook_get_cell_style_count);
+namespace {
+
+// The JS `CellStyleRecord` record of `cs`.
+Napi::Object CellStyleToJs(Napi::Env env, const fm_cell_style_record_t& cs) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("name", JsString(env, cs.name));
+  out.Set("xfId", Napi::Number::New(env, cs.xf_id));
+  out.Set("builtinId", Napi::Number::New(env, cs.builtin_id));
+  out.Set("iLevel", Napi::Number::New(env, cs.i_level));
+  out.Set("hidden", Napi::Boolean::New(env, cs.hidden != 0));
+  out.Set("customBuiltin", Napi::Boolean::New(env, cs.custom_builtin != 0));
+  return out;
+}
+
+// The JS `TableStyle` record of `style`.
+Napi::Object TableStyleToJs(Napi::Env env, const fm_table_style_t& style) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("name", JsString(env, style.name));
+  out.Set("pivot", JsBool(env, style.pivot));
+  out.Set("table", JsBool(env, style.table));
+  Napi::Array elements = Napi::Array::New(env, style.element_count);
+  for (uint32_t i = 0; i < style.element_count; ++i) {
+    const fm_table_style_element_t& element = style.elements[i];
+    Napi::Object e = Napi::Object::New(env);
+    e.Set("type", JsString(env, element.type));
+    e.Set("size", Napi::Number::New(env, element.size));
+    if (element.has_dxf_id != 0) {
+      e.Set("dxfId", Napi::Number::New(env, element.dxf_id));
+    }
+    elements.Set(i, e);
+  }
+  out.Set("elements", elements);
+  return out;
+}
+
+// Lists a workbook-scoped style table through its count and `_at` getters.
+template <typename Record, typename Convert>
+Napi::Value StyleList(Napi::Env env, const fm_workbook_t* handle, fm_status_t (*count)(const fm_workbook_t*, size_t*),
+                      fm_status_t (*at)(const fm_workbook_t*, size_t, Record*), Convert convert) {
+  Napi::Array arr = Napi::Array::New(env);
+  if (handle == nullptr) {
+    return FinishListResult(env, arr, kBindingInvalidHandle);
+  }
+  size_t n = 0;
+  fm_status_t rc = count(handle, &n);
+  for (size_t i = 0; rc == 0 && i < n; ++i) {
+    Record record{};
+    rc = at(handle, i, &record);
+    if (rc == 0) {
+      arr.Set(static_cast<uint32_t>(i), convert(env, record));
+    }
+  }
+  return FinishListResult(env, arr, rc);
+}
+
+}  // namespace
+
+Napi::Value Workbook::ListCellStyles(const Napi::CallbackInfo& info) {
+  return StyleList(info.Env(), handle_, &fm_workbook_get_cell_style_count, &fm_workbook_get_cell_style_at,
+                   &CellStyleToJs);
 }
 
 Napi::Value Workbook::CellStyleXfCount(const Napi::CallbackInfo& info) {
@@ -692,22 +750,15 @@ Napi::Value Workbook::CellStyleXfCount(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::GetCellStyle(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  const uint32_t index = ArgU32(info, 0);
-  fm_cell_style_record_t cs{};
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_get_cell_style_at(handle_, index, &cs) : kBindingInvalidHandle;
-  if (rc != 0) {
-    cs = fm_cell_style_record_t{};
+  if (handle_ == nullptr) {
+    return MakeOptionalResult(env, NullHandleError(env), env.Null());
   }
-  out.Set("status", MakeStatus(env, rc));
-  out.Set("name", JsString(env, cs.name));
-  out.Set("xfId", Napi::Number::New(env, cs.xf_id));
-  out.Set("builtinId", Napi::Number::New(env, cs.builtin_id));
-  out.Set("iLevel", Napi::Number::New(env, cs.i_level));
-  out.Set("hidden", Napi::Boolean::New(env, cs.hidden != 0));
-  out.Set("customBuiltin", Napi::Boolean::New(env, cs.custom_builtin != 0));
-  return out;
+  const std::string name = ArgString(info, 0);
+  fm_cell_style_record_t cs{};
+  int32_t present = 0;
+  const fm_status_t rc = fm_workbook_get_cell_style(handle_, name.c_str(), &present, &cs);
+  return MakeOptionalResult(env, rc, present,
+                            rc == 0 && present != 0 ? Napi::Value(CellStyleToJs(env, cs)) : env.Null());
 }
 
 Napi::Value Workbook::GetCellStyleXf(const Napi::CallbackInfo& info) {
@@ -752,37 +803,22 @@ Napi::Value Workbook::RemoveCellStyle(const Napi::CallbackInfo& info) {
 
 // ---- Custom table / PivotTable styles --------------------------------
 
-Napi::Value Workbook::TableStyleCount(const Napi::CallbackInfo& info) {
-  return StyleCountResult(info, handle_, &fm_workbook_get_table_style_count);
+Napi::Value Workbook::ListTableStyles(const Napi::CallbackInfo& info) {
+  return StyleList(info.Env(), handle_, &fm_workbook_get_table_style_count, &fm_workbook_get_table_style_at,
+                   &TableStyleToJs);
 }
 
 Napi::Value Workbook::GetTableStyle(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  const uint32_t index = ArgU32(info, 0);
+  if (handle_ == nullptr) {
+    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+  }
+  const std::string name = ArgString(info, 0);
   fm_table_style_t style{};
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_get_table_style_at(handle_, index, &style) : kBindingInvalidHandle;
-  if (rc != 0) {
-    style = fm_table_style_t{};
-  }
-  out.Set("status", MakeStatus(env, rc));
-  out.Set("name", JsString(env, style.name));
-  out.Set("pivot", JsBool(env, style.pivot));
-  out.Set("table", JsBool(env, style.table));
-  Napi::Array elements = Napi::Array::New(env, style.element_count);
-  for (uint32_t i = 0; i < style.element_count; ++i) {
-    const fm_table_style_element_t& element = style.elements[i];
-    Napi::Object e = Napi::Object::New(env);
-    e.Set("type", JsString(env, element.type));
-    e.Set("size", Napi::Number::New(env, element.size));
-    if (element.has_dxf_id != 0) {
-      e.Set("dxfId", Napi::Number::New(env, element.dxf_id));
-    }
-    elements.Set(i, e);
-  }
-  out.Set("elements", elements);
-  return out;
+  int32_t present = 0;
+  const fm_status_t rc = fm_workbook_get_table_style(handle_, name.c_str(), &present, &style);
+  return MakeOptionalResult(env, rc, present,
+                            rc == 0 && present != 0 ? Napi::Value(TableStyleToJs(env, style)) : env.Null());
 }
 
 Napi::Value Workbook::SetTableStyle(const Napi::CallbackInfo& info) {
@@ -956,6 +992,25 @@ Napi::Value Workbook::SetThemeFonts(const Napi::CallbackInfo& info) {
   fonts.minor_latin = minor_latin.c_str();
   fonts.minor_east_asian = minor_ea.c_str();
   return MakeStatus(env, fm_workbook_set_theme_fonts(handle_, &fonts));
+}
+
+Napi::Value Workbook::GetThemeScriptFont(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+  }
+  const std::string script = ArgString(info, 1);
+  const char* typeface = nullptr;
+  int32_t present = 0;
+  const fm_status_t rc =
+      fm_workbook_get_theme_script_font(handle_, ArgBool(info, 0) ? 1 : 0, script.c_str(), &present, &typeface);
+  if (rc != 0 || present == 0) {
+    return MakeOptionalResult(env, rc, present, env.Null());
+  }
+  Napi::Object item = Napi::Object::New(env);
+  item.Set("script", JsString(env, script.c_str()));
+  item.Set("typeface", JsString(env, typeface));
+  return MakeOptionalResult(env, rc, present, item);
 }
 
 Napi::Value Workbook::SetThemeScriptFont(const Napi::CallbackInfo& info) {

@@ -12,7 +12,7 @@ collections:
   cell_style_xf: { key: index, ops: [cell_style_xf.add, cell_style_xf.get, cell_style_xf.get_count] }
   dxf: { key: index, ops: [dxf.add, dxf.get, dxf.get_count] }
   table: { key: index, ops: [table.create, table.get, table.get_count, table.remove, table.rename, table.update] }
-  pivot: { key: index, ops: [pivot.create, pivot.get_count, pivot.remove] }
+  pivot: { key: index, ops: [pivot.create, pivot.get_count, pivot.remove, pivot_cache.get_id] }
   pivot_field: { key: index, ops: [pivot_field.add, pivot_field.clear, pivot_field.get, pivot_field.get_count] }
   pivot_data_field: { key: index, ops: [pivot_data_field.add, pivot_data_field.clear, pivot_data_field.get, pivot_data_field.get_count, pivot_data_field.set] }
   pivot_filter: { key: index, ops: [pivot_filter.add, pivot_filter.clear, pivot_filter.get, pivot_filter.get_count, pivot_filter.remove] }
@@ -29,31 +29,31 @@ collections:
   external_link: { key: index, ops: [external_link.get, external_link.get_count] }
   cell_phonetic_run: { key: index, ops: [cell_phonetic_run.get, cell_phonetic_run.get_count] }
   comment: { key: natural, by: cell, plural: comments, ops: [comment.get, comment.get_at, comment.get_count, comment.set] }
-  threaded_comment: { key: natural, by: id, plural: threaded_comments, ops: [threaded_comment.add, threaded_comment.get_at, threaded_comment.get_count, threaded_comment.remove, threaded_comment.update] }
-  person: { key: natural, by: id, plural: people, ops: [person.add, person.get_at, person.get_count, person.remove] }
-  hyperlink: { key: natural, by: cell, plural: hyperlinks, ops: [hyperlink.add, hyperlink.get_at, hyperlink.get_count, hyperlink.remove, hyperlink.remove_at] }
+  threaded_comment: { key: natural, by: id, plural: threaded_comments, ops: [threaded_comment.add, threaded_comment.get, threaded_comment.get_at, threaded_comment.get_count, threaded_comment.remove, threaded_comment.update] }
+  person: { key: natural, by: id, plural: people, ops: [person.add, person.get, person.get_at, person.get_count, person.remove] }
+  hyperlink: { key: natural, by: cell, plural: hyperlinks, ops: [hyperlink.add, hyperlink.get, hyperlink.get_at, hyperlink.get_count, hyperlink.remove, hyperlink.remove_at] }
   merge: { key: natural, by: rect, plural: merges, ops: [merge.add, merge.get_at, merge.get_count, merge.remove, merge.remove_at], no_getter: "the element is its rectangle; a lookup by key returns nothing more" }
   defined_name: { key: natural, by: name, plural: defined_names, ops: [defined_name.get, defined_name.get_at, defined_name.get_count, defined_name.remove, defined_name.set, defined_name_attrs.get_at] }
   data_table: { key: natural, by: cell, plural: data_tables, ops: [data_table.add, data_table.get, data_table.remove] }
   lambda_text: { key: natural, by: cell, plural: lambda_texts, ops: [lambda_text.get] }
-  pivot_cache: { key: natural, by: cache_id, plural: pivot_caches, ops: [pivot_cache.create, pivot_cache.get_count, pivot_cache.get_id, pivot_cache.get_id_at, pivot_cache.remove] }
+  pivot_cache: { key: natural, by: cache_id, plural: pivot_caches, ops: [pivot_cache.create, pivot_cache.get_count, pivot_cache.get_id_at, pivot_cache.remove], no_getter: "addressed by cache_id through the per-property cache getters" }
   num_fmt: { key: natural, by: num_fmt_id, plural: num_fmts, ops: [num_fmt.add, num_fmt_string.get] }
   function: { key: natural, by: name, plural: functions, ops: [function.canonicalize_name, function.get_count, function.get_name_at, function.localize_name, function_metadata.get] }
   locale_error_name: { key: natural, by: "error code", plural: locale_error_names, ops: [locale_error_name.get_at, locale_error_name.get_count, error_display_name.get] }
   row_break: { key: natural, by: row, plural: row_breaks, ops: [row_break.add, row_break.get_at, row_break.get_count, row_break.remove], no_getter: "the element is its row number; a lookup by key returns nothing more" }
   col_break: { key: natural, by: col, plural: col_breaks, ops: [col_break.add, col_break.get_at, col_break.get_count, col_break.remove], no_getter: "the element is its column number; a lookup by key returns nothing more" }
   row_override: { key: natural, by: row, plural: row_overrides, ops: [row_override.get_at, row_override.get_count], no_getter: "read by row through the per-property row getters" }
-  theme_script_font: { key: natural, by: script, plural: theme_script_fonts, ops: [theme_script_font.get_at, theme_script_font.get_count, theme_script_font.set] }
-  shape: { key: natural, by: object_id, plural: shapes, ops: [shape.add, shape.get_at, shape.get_count, shape.remove, shape.update] }
+  theme_script_font: { key: natural, by: script, plural: theme_script_fonts, ops: [theme_script_font.get, theme_script_font.get_at, theme_script_font.get_count, theme_script_font.set] }
+  shape: { key: natural, by: object_id, plural: shapes, ops: [shape.add, shape.get, shape.get_at, shape.get_count, shape.remove, shape.update] }
   image: { key: natural, by: object_id, plural: images, ops: [image.add, image.get] }
   chart: { key: natural, by: object_id, plural: charts, ops: [chart.add, chart.get] }
-  slicer: { key: natural, by: object_id, plural: slicers, ops: [slicer.add, slicer.get_at, slicer.get_count, slicer.remove, slicer.update] }
-  drawing_object: { key: natural, by: object_id, plural: drawing_objects, ops: [drawing_object.get_at, drawing_object.get_count] }
-  passthrough: { key: natural, by: "part name", plural: passthroughs, ops: [passthrough.get_at, passthrough.get_count] }
+  slicer: { key: natural, by: object_id, plural: slicers, ops: [slicer.add, slicer.get, slicer.get_at, slicer.get_count, slicer.remove, slicer.update] }
+  drawing_object: { key: natural, by: object_id, plural: drawing_objects, ops: [drawing_object.get, drawing_object.get_at, drawing_object.get_count] }
+  passthrough: { key: natural, by: "part name", plural: passthroughs, ops: [passthrough.get, passthrough.get_at, passthrough.get_count] }
   cell: { key: natural, by: cell, ops: [cell.get_at, cell.get_count, value.get] }
   col_override: { key: natural, by: col, plural: col_overrides, ops: [col_override.get_at, col_override.get_count], no_getter: "read by column through the per-property column getters" }
-  table_style: { key: natural, by: name, plural: table_styles, ops: [table_style.get_at, table_style.get_count, table_style.remove, table_style.set] }
-  cell_style: { key: natural, by: name, plural: cell_styles, ops: [cell_style.get_at, cell_style.get_count, cell_style.remove, cell_style.set] }
+  table_style: { key: natural, by: name, plural: table_styles, ops: [table_style.get, table_style.get_at, table_style.get_count, table_style.remove, table_style.set] }
+  cell_style: { key: natural, by: name, plural: cell_styles, ops: [cell_style.get, cell_style.get_at, cell_style.get_count, cell_style.remove, cell_style.set] }
 entries:
   type.status:
     kind: typedef
@@ -1422,7 +1422,7 @@ entries:
   record.add_style_result:
     kind: record
     role: result
-    js: AddStyleResult
+    js: IndexResult
     surfaces: [wasm, native]
     was: { js: AddStyleResult }
   record.array_formula_result:
@@ -1496,12 +1496,6 @@ entries:
     js: CellShowPhoneticResult
     surfaces: [wasm, native]
     was: { js: CellShowPhoneticResult }
-  record.cell_style_result:
-    kind: record
-    role: result
-    js: CellStyleResult
-    surfaces: [wasm, native]
-    was: { js: CellStyleResult }
   record.cell_xf_index_result:
     kind: record
     role: result
@@ -1850,6 +1844,11 @@ entries:
     js: ListResult
     surfaces: [wasm, native]
     was: { js: ListResult }
+  record.optional_result:
+    kind: record
+    role: result
+    js: OptionalResult
+    surfaces: [wasm, native]
   record.locale_date_order:
     kind: record
     js: LocaleDateOrder
@@ -2277,12 +2276,6 @@ entries:
     js: TableStyleElementType
     surfaces: [wasm, native]
     was: { js: TableStyleElementType }
-  record.table_style_result:
-    kind: record
-    role: result
-    js: TableStyleResult
-    surfaces: [wasm, native]
-    was: { js: TableStyleResult }
   record.table_totals_row_function:
     kind: record
     js: TableTotalsRowFunction
@@ -2397,8 +2390,9 @@ entries:
     was: { py: DataBar }
   record.defined_name:
     kind: record
+    js: DefinedName
     py: DefinedName
-    surfaces: [py]
+    surfaces: [wasm, native, py]
     was: { py: DefinedName }
   record.differential_format:
     kind: record
@@ -2894,13 +2888,35 @@ entries:
     py: evaluate_formula_array
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_evaluate_formula_array, js: evaluateFormulaArray, py: evaluate_formula_array }
-  formula_array_cell.evaluate:
-    kind: op
-    scope: workbook
-    noun: formula_array_cell
-    c: fm_workbook_evaluate_formula_array_cell
+  type.value_array:
+    kind: typedef
+    c: fm_value_array_t
     surfaces: [c]
-    was: { c: fm_workbook_evaluate_formula_array_cell }
+  value_array.destroy:
+    kind: op
+    scope: value_array
+    noun: value_array
+    c: fm_value_array_destroy
+    surfaces: [c]
+  value_array.get_dimensions:
+    kind: op
+    scope: value_array
+    noun: dimensions
+    c: fm_value_array_get_dimensions
+    surfaces: [c]
+  value_array.get_value_count:
+    kind: op
+    scope: value_array
+    noun: value
+    qualifies: "result-handle view of the values the sheet scope evaluates"
+    c: fm_value_array_get_value_count
+    surfaces: [c]
+  value_array.get_value_at:
+    kind: op
+    scope: value_array
+    noun: value
+    c: fm_value_array_get_value_at
+    surfaces: [c]
   reference.parse:
     kind: op
     scope: workbook
@@ -6144,8 +6160,7 @@ entries:
     noun: table_style
     c: fm_workbook_get_table_style_at
     surfaces: [c]
-    was: { c: fm_styles_get_table_style, js: getTableStyle, py: get_table_style }
-    drop: { js: getTableStyle, py: get_table_style, closes: R5.list }
+    was: { c: fm_styles_get_table_style }
   table_style.set:
     kind: op
     scope: workbook
@@ -6238,8 +6253,7 @@ entries:
     noun: cell_style
     c: fm_workbook_get_cell_style_at
     surfaces: [c]
-    was: { c: fm_styles_get_cell_style, js: getCellStyle, py: get_cell_style }
-    drop: { js: getCellStyle, py: get_cell_style, closes: R5.list }
+    was: { c: fm_styles_get_cell_style }
   cell_style_xf.get_count:
     kind: op
     scope: workbook
@@ -7068,6 +7082,87 @@ entries:
     c: fm_workbook_remove_defined_name
     js: removeDefinedName
     py: remove_defined_name
+    surfaces: [c, wasm, native, py]
+  table_style.get:
+    kind: op
+    scope: workbook
+    noun: table_style
+    c: fm_workbook_get_table_style
+    js: getTableStyle
+    py: get_table_style
+    surfaces: [c, wasm, native, py]
+  cell_style.get:
+    kind: op
+    scope: workbook
+    noun: cell_style
+    c: fm_workbook_get_cell_style
+    js: getCellStyle
+    py: get_cell_style
+    surfaces: [c, wasm, native, py]
+  hyperlink.get:
+    kind: op
+    scope: sheet
+    noun: hyperlink
+    c: fm_sheet_get_hyperlink
+    js: getHyperlink
+    py: get_hyperlink
+    surfaces: [c, wasm, native, py]
+  person.get:
+    kind: op
+    scope: workbook
+    noun: person
+    c: fm_workbook_get_person
+    js: getPerson
+    py: get_person
+    surfaces: [c, wasm, native, py]
+  threaded_comment.get:
+    kind: op
+    scope: sheet
+    noun: threaded_comment
+    c: fm_sheet_get_threaded_comment
+    js: getThreadedComment
+    py: get_threaded_comment
+    surfaces: [c, wasm, native, py]
+  shape.get:
+    kind: op
+    scope: sheet
+    noun: shape
+    c: fm_sheet_get_shape
+    js: getShape
+    py: get_shape
+    surfaces: [c, wasm, native, py]
+  slicer.get:
+    kind: op
+    scope: sheet
+    noun: slicer
+    c: fm_sheet_get_slicer
+    js: getSlicer
+    py: get_slicer
+    surfaces: [c, wasm, native, py]
+  drawing_object.get:
+    kind: op
+    scope: sheet
+    noun: drawing_object
+    c: fm_sheet_get_drawing_object
+    js: getDrawingObject
+    py: get_drawing_object
+    surfaces: [c, wasm, native, py]
+  passthrough.get:
+    kind: op
+    scope: workbook
+    noun: passthrough
+    c: fm_workbook_get_passthrough
+    js: getPassthrough
+    py: get_passthrough
+    surfaces: [c, wasm, native, py]
+  theme_script_font.get:
+    kind: op
+    scope: workbook
+    noun: theme_script_font
+    c: fm_workbook_get_theme_script_font
+    js: getThemeScriptFont
+    py: get_theme_script_font
+    params: { major: bool }
     surfaces: [c, wasm, native, py]
   function_names.list:
     kind: list

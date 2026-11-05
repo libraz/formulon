@@ -1,5 +1,6 @@
 // Stable C ABI PivotTable definition read-back and data-field naming tests.
 
+#include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
 #include "pivot/pivot_cache.h"
 
@@ -92,7 +93,7 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   EXPECT_STREQ(item.name, "South");
   EXPECT_EQ(item.cache_index, 1);
   EXPECT_EQ(item.visible, 0);
-  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_idx, 0, 1U, 1), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_idx, 0, 1U, 1, ignored_index()), 0);
   ASSERT_EQ(fm_sheet_get_pivot_field_item(wb.handle, 0, pivot_idx, 0, 2, &item), 0);
   EXPECT_STREQ(item.name, "");
   EXPECT_EQ(item.cache_index, 1);
@@ -407,7 +408,9 @@ TEST(FormulonCApiPivot, FieldAxisNoneTakesTheFieldOffTheReport) {
   filter.value_kind = FM_PIVOT_FILTER_VALUE_DOUBLE;
   filter.value_double = 0.0;
   filter.data_field_index = 1;
-  ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot, &filter), 0) << fm_get_last_error_message();
+  std::size_t filter_index = 99;
+  ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot, &filter, &filter_index), 0) << fm_get_last_error_message();
+  EXPECT_EQ(filter_index, 0U);
 
   // Taking Sales off removes its data field; Qty's data field and filter move down one.
   ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, pivot, 2, -1), 0) << fm_get_last_error_message();

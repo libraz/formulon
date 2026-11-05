@@ -56,7 +56,7 @@ test('protected ranges add, list, update, remove and follow row edits', async ()
         { firstRow: 4, firstCol: 4, lastRow: 4, lastCol: 4 },
       ],
       password: 'CC1A',
-    }).ok,
+    }).status.ok,
   );
   assert.ok(
     wb.addProtectedRange(0, {
@@ -67,7 +67,7 @@ test('protected ranges add, list, update, remove and follow row edits', async ()
       saltValue: 'cw==',
       spinCount: 100000,
       securityDescriptor: 'O:WDG:WD',
-    }).ok,
+    }).status.ok,
   );
   const loaded = roundTrip(mod, wb);
   const ranges = loaded.getProtectedRanges(0);
@@ -107,19 +107,22 @@ test('protected range arguments are validated', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   assert.ok(
-    wb.addProtectedRange(0, { name: 'Inputs', ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }] }).ok,
+    wb.addProtectedRange(0, { name: 'Inputs', ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }] }).status
+      .ok,
   );
   assert.equal(
-    wb.addProtectedRange(0, { name: 'Inputs', ranges: [{ firstRow: 0, firstCol: 1, lastRow: 0, lastCol: 1 }] }).ok,
+    wb.addProtectedRange(0, { name: 'Inputs', ranges: [{ firstRow: 0, firstCol: 1, lastRow: 0, lastCol: 1 }] }).status
+      .ok,
     false,
   );
   assert.equal(
-    wb.addProtectedRange(0, { name: '', ranges: [{ firstRow: 0, firstCol: 1, lastRow: 0, lastCol: 1 }] }).ok,
+    wb.addProtectedRange(0, { name: '', ranges: [{ firstRow: 0, firstCol: 1, lastRow: 0, lastCol: 1 }] }).status.ok,
     false,
   );
-  assert.equal(wb.addProtectedRange(0, { name: 'Other', ranges: [] }).ok, false);
+  assert.equal(wb.addProtectedRange(0, { name: 'Other', ranges: [] }).status.ok, false);
   assert.equal(
-    wb.addProtectedRange(9, { name: 'Other', ranges: [{ firstRow: 0, firstCol: 1, lastRow: 0, lastCol: 1 }] }).ok,
+    wb.addProtectedRange(9, { name: 'Other', ranges: [{ firstRow: 0, firstCol: 1, lastRow: 0, lastCol: 1 }] }).status
+      .ok,
     false,
   );
   assert.equal(
@@ -156,7 +159,7 @@ test('range-list inputs need at least one rectangle', async () => {
   assert.throws(() => wb.addValidation(0, { type: 3, formula1: '"A,B"' }), TypeError);
   assert.throws(() => wb.addCfRule(0, { type: 0, formula1: 'TRUE' }), TypeError);
   assert.equal(wb.getConditionalFormats(0).length, 0);
-  assert.equal(wb.addValidation(0, { ranges: [], type: 3, formula1: '"A,B"' }).status, 2);
+  assert.equal(wb.addValidation(0, { ranges: [], type: 3, formula1: '"A,B"' }).status.status, 2);
   assert.equal(wb.getValidations(0).length, 0);
   release(wb);
 });

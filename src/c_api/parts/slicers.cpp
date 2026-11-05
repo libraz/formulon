@@ -57,6 +57,40 @@ fm_status_t to_spec(const fm_slicer_t& slicer, const char* api, formulon::Slicer
   return 0;
 }
 
+// Finds the position of the slicer whose frame id is `object_id` in `list_slicers`. A non-zero
+// return is the status to report; `*found` is false when no slicer carries the id.
+fm_status_t find_slicer(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t* index, bool* found) {
+  auto slicers = formulon::list_slicers(wb->workbook(), sheet_index);
+  if (!slicers) {
+    return set_last_error(slicers.error());
+  }
+  const std::vector<formulon::SlicerInfo>& list = slicers.value();
+  *found = false;
+  for (size_t i = 0; object_id != 0U && i < list.size(); ++i) {
+    if (list[i].object.object_id == object_id) {
+      *index = i;
+      *found = true;
+      break;
+    }
+  }
+  return 0;
+}
+
+// Resolves `object_id` for a mutator, reporting an unknown id as an invalid argument.
+fm_status_t require_slicer(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, const char* api,
+                           size_t* index) {
+  bool found = false;
+  if (auto rc = find_slicer(wb, sheet_index, object_id, index, &found); rc != 0) {
+    return rc;
+  }
+  if (!found) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             (std::string(api) + ": no slicer has that object_id").c_str(),
+                             "object_id=" + std::to_string(object_id));
+  }
+  return 0;
+}
+
 }  // namespace
 
 extern "C" fm_status_t fm_sheet_get_slicer_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
@@ -112,6 +146,26 @@ extern "C" fm_status_t fm_sheet_get_slicer_at(const fm_workbook_t* wb, size_t sh
   return 0;
 }
 
+extern "C" fm_status_t fm_sheet_get_slicer(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                           int32_t* out_present, fm_slicer_t* out) {
+  clear_last_error();
+  if (out_present == nullptr || out == nullptr) {
+    return null_argument("fm_sheet_get_slicer");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_slicer"); rc != 0) {
+    return rc;
+  }
+  *out_present = 0;
+  *out = fm_slicer_t{};
+  size_t index = 0;
+  bool found = false;
+  if (auto rc = find_slicer(wb, sheet_index, object_id, &index, &found); rc != 0 || !found) {
+    return rc;
+  }
+  *out_present = 1;
+  return fm_sheet_get_slicer_at(wb, sheet_index, index, out);
+}
+
 extern "C" fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
                                            size_t column_index, const fm_slicer_t* spec, uint32_t* out_object_id) {
   clear_last_error();
@@ -134,7 +188,7 @@ extern "C" fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_update_slicer(fm_workbook_t* wb, size_t sheet_index, size_t idx,
+extern "C" fm_status_t fm_sheet_update_slicer(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                               const fm_slicer_t* spec) {
   clear_last_error();
   constexpr const char* kApi = "fm_sheet_update_slicer";
@@ -148,12 +202,21 @@ extern "C" fm_status_t fm_sheet_update_slicer(fm_workbook_t* wb, size_t sheet_in
   if (auto rc = to_spec(*spec, kApi, model); rc != 0) {
     return rc;
   }
+  size_t idx = 0;
+  if (auto rc = require_slicer(wb, sheet_index, object_id, kApi, &idx); rc != 0) {
+    return rc;
+  }
   return finish_status(formulon::update_slicer(wb->workbook(), sheet_index, idx, model));
 }
 
-extern "C" fm_status_t fm_sheet_remove_slicer(fm_workbook_t* wb, size_t sheet_index, size_t idx) {
+extern "C" fm_status_t fm_sheet_remove_slicer(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_remove_slicer"); rc != 0) {
+  constexpr const char* kApi = "fm_sheet_remove_slicer";
+  if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
+    return rc;
+  }
+  size_t idx = 0;
+  if (auto rc = require_slicer(wb, sheet_index, object_id, kApi, &idx); rc != 0) {
     return rc;
   }
   return finish_status(formulon::remove_slicer(wb->workbook(), sheet_index, idx));

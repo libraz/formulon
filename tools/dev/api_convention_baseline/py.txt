@@ -1,8 +1,5 @@
 R5.list	cell.list.iter_cells	iter_cells	`iter_cells` is dropped from the py surface
 R5.list	cell_phonetic_run.list.get_cell_phonetic_runs	get_phonetic_runs	`get_phonetic_runs` is dropped from the py surface
-R5.list	cell_style.get_at	get_cell_style	`get_cell_style` is dropped from the py surface
-R5.list	cell_style.get_count	cell_style_count	`cell_style_count` is dropped from the py surface
-R5.list	cell_styles.list	missing	`list_cell_styles` is not on the py Workbook
 R5.list	cf_rule.list.get_conditional_formats	get_conditional_formats	`get_conditional_formats` is dropped from the py surface
 R5.list	comment.get_count	comment_count	`comment_count` is dropped from the py surface
 R5.list	external_link.list.get_external_links	get_external_links	`get_external_links` is dropped from the py surface
@@ -20,9 +17,6 @@ R5.list	pivot_cache_ids.list	name	`list_pivot_cache_ids` should be `list_pivot_c
 R5.list	protected_range.list.get_protected_ranges	get_protected_ranges	`get_protected_ranges` is dropped from the py surface
 R5.list	sparkline_group.list.list_sparkline_groups	list_sparkline_groups	`list_sparkline_groups` is dropped from the py surface
 R5.list	table.list.iter_tables	iter_tables	`iter_tables` is dropped from the py surface
-R5.list	table_style.get_at	get_table_style	`get_table_style` is dropped from the py surface
-R5.list	table_style.get_count	table_style_count	`table_style_count` is dropped from the py surface
-R5.list	table_styles.list	missing	`list_table_styles` is not on the py Workbook
 R5.list	validation.list.get_validations	get_validations	`get_validations` is dropped from the py surface
 R6.py	chart.add	header_column	`insert_chart`: parameter `header_column: Optional[bool]` is a boolean
 R6.py	chart.add	header_row	`insert_chart`: parameter `header_row: Optional[bool]` is a boolean
@@ -122,7 +116,6 @@ R8.py	image.get	optional	`get_image` returns `bytes`, not `Optional[...]`
 R8.py	iterative.get	tuple	`get_iterative` returns `IterativeSettings`
 R8.py	lambda_text.get	optional	`lambda_text_at` returns `str`, not `Optional[...]`
 R8.py	num_fmt_string.get	optional	`get_num_fmt` returns `str`, not `Optional[...]`
-R8.py	pivot_cache.get_id	optional	`pivot_cache_id` returns `int`, not `Optional[...]`
 R8.py	pivot_grand_totals.get	tuple	`pivot_grand_totals` returns `Tuple[bool, bool]`
 R8.py	print_titles.get	tuple	`get_print_titles` returns `tuple[str, str]`
 R8.py	selection.get	tuple	`get_sheet_selection` returns `Tuple[Tuple[int, int], List[MergeRange]]`

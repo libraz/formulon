@@ -2,6 +2,7 @@
 
 #include <limits>
 
+#include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
 
 namespace {
@@ -84,8 +85,8 @@ std::uint32_t ActiveSheet(const fm_workbook_t* wb) {
 TEST(FormulonCApiWorkbookView, ActiveSheetDefaultsToFirstAndSynthesizesBookViews) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second"), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Third"), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Third", ignored_index()), 0);
   EXPECT_EQ(ActiveSheet(wb.handle), 0U);
 
   ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 2), 0) << fm_get_last_error_message();
@@ -129,8 +130,8 @@ TEST(FormulonCApiWorkbookView, ActiveSheetRejectsBadArguments) {
 TEST(FormulonCApiWorkbookView, SetActiveSheetMovesTabSelectionAndSurvivesXlsb) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second"), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Third"), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Third", ignored_index()), 0);
   ASSERT_EQ(fm_sheet_set_tab_selected(wb.handle, 0, 1), 0);
   ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 2), 0) << fm_get_last_error_message();
   for (std::size_t i = 0; i < 3; ++i) {
@@ -147,8 +148,8 @@ TEST(FormulonCApiWorkbookView, SetActiveSheetMovesTabSelectionAndSurvivesXlsb) {
 TEST(FormulonCApiWorkbookView, SetActiveSheetRejectsHiddenSheets) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Hidden"), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "VeryHidden"), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Hidden", ignored_index()), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "VeryHidden", ignored_index()), 0);
   ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_HIDDEN), 0);
   ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 2, FM_SHEET_VERY_HIDDEN), 0);
   EXPECT_EQ(fm_workbook_set_active_sheet(wb.handle, 1), kInvalidArgument);
@@ -162,7 +163,7 @@ TEST(FormulonCApiWorkbookView, HidingOrRemovingTheActiveSheetActivatesTheNextVis
   const auto five_sheets = [](WorkbookGuard& wb) {
     ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
     for (const char* name : {"S1", "S2", "S3", "S4"}) {
-      ASSERT_EQ(fm_workbook_add_sheet(wb.handle, name), 0);
+      ASSERT_EQ(fm_workbook_add_sheet(wb.handle, name, ignored_index()), 0);
     }
   };
   const auto tab_selected = [](const WorkbookGuard& wb, std::size_t sheet) {

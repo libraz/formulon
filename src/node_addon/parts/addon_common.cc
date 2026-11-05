@@ -585,6 +585,17 @@ Napi::Object MakeIndexResult(Napi::Env env, fm_status_t code, uint32_t index) {
   return MakeNumberFieldResult(env, code, "index", index);
 }
 
+Napi::Object MakeOptionalResult(Napi::Env env, Napi::Object status, Napi::Value value) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", status);
+  out.Set("value", value);
+  return out;
+}
+
+Napi::Object MakeOptionalResult(Napi::Env env, fm_status_t code, int32_t present, Napi::Value item) {
+  return MakeOptionalResult(env, MakeStatus(env, code), code == 0 && present != 0 ? item : env.Null());
+}
+
 Napi::Object EmptyPivotLayoutResult(Napi::Env env, Napi::Object status) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("status", status);

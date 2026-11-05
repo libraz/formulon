@@ -4,6 +4,7 @@
 
 #include <utility>
 
+#include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
 #include "formulon_c_record_arg.h"
 #include "sheet.h"
@@ -170,7 +171,7 @@ TEST(FormulonCApiArgumentRange, PivotDataFieldIndicesAreCheckedWithAnExplicitNam
 TEST(FormulonCApiArgumentRange, TheOnlyVisibleSheetCannotBeHidden) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Hidden"), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Hidden", ignored_index()), 0);
   ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_HIDDEN), 0);
 
   EXPECT_EQ(fm_sheet_set_tab_hidden(wb.handle, 0, 1), kInvalidArgument);
@@ -187,7 +188,7 @@ TEST(FormulonCApiArgumentRange, TheOnlyVisibleSheetCannotBeHidden) {
 TEST(FormulonCApiArgumentRange, TheOnlyVisibleSheetCannotBeRemoved) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Hidden"), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Hidden", ignored_index()), 0);
   ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_HIDDEN), 0);
 
   EXPECT_EQ(fm_workbook_remove_sheet(wb.handle, 0), kInvalidArgument);

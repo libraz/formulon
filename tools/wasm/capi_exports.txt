@@ -74,10 +74,13 @@ fm_workbook_format_value
 fm_workbook_parse_reference
 fm_workbook_format_reference
 
-# -- Ad-hoc array evaluation (two-step: evaluate + per-cell readback) -------------
+# -- Ad-hoc array evaluation (an owned value array) ----------------------------
 fm_sheet_evaluate_cf_formula
 fm_sheet_evaluate_formula_array
-fm_workbook_evaluate_formula_array_cell
+fm_value_array_destroy
+fm_value_array_get_dimensions
+fm_value_array_get_value_count
+fm_value_array_get_value_at
 
 # -- Iteration / dump ------------------------------------------------------------
 fm_sheet_get_cell_count
@@ -90,6 +93,8 @@ fm_cell_range_destroy
 fm_workbook_get_defined_name_count
 fm_workbook_get_defined_name_at
 fm_workbook_get_defined_name_attrs_at
+fm_workbook_get_defined_name
+fm_workbook_remove_defined_name
 fm_workbook_get_table_count
 fm_workbook_get_table
 fm_workbook_add_table
@@ -103,6 +108,7 @@ fm_workbook_rename_table_column
 fm_workbook_set_table_column_totals
 fm_workbook_get_passthrough_count
 fm_workbook_get_passthrough_at
+fm_workbook_get_passthrough
 
 # -- Recalc / calc policy / profile ----------------------------------------------
 fm_workbook_recalc
@@ -143,6 +149,7 @@ fm_sheet_remove_hyperlink
 fm_sheet_remove_hyperlink_at
 fm_sheet_clear_hyperlinks
 fm_sheet_get_hyperlink_at
+fm_sheet_get_hyperlink
 fm_sheet_get_hyperlink_count
 fm_sheet_get_comment
 fm_sheet_get_comment_count
@@ -154,12 +161,14 @@ fm_sheet_set_comment_visible
 # -- Threaded comments / persons -------------------------------------------------
 fm_sheet_get_threaded_comment_count
 fm_sheet_get_threaded_comment_at
+fm_sheet_get_threaded_comment
 fm_sheet_add_threaded_comment
 fm_sheet_update_threaded_comment
 fm_sheet_set_thread_resolved
 fm_sheet_remove_threaded_comment
 fm_workbook_get_person_count
 fm_workbook_get_person_at
+fm_workbook_get_person
 fm_workbook_add_person
 fm_workbook_remove_person
 
@@ -292,6 +301,7 @@ fm_workbook_get_border_count
 fm_workbook_get_cell_xf_count
 fm_workbook_get_cell_style_count
 fm_workbook_get_cell_style_at
+fm_workbook_get_cell_style
 fm_workbook_get_cell_style_xf_count
 fm_workbook_get_cell_style_xf
 fm_workbook_add_font
@@ -306,6 +316,7 @@ fm_workbook_set_cell_style
 fm_workbook_remove_cell_style
 fm_workbook_get_table_style_count
 fm_workbook_get_table_style_at
+fm_workbook_get_table_style
 fm_workbook_set_table_style
 fm_workbook_remove_table_style
 fm_workbook_get_table_style_defaults
@@ -318,6 +329,7 @@ fm_workbook_get_theme_fonts
 fm_workbook_set_theme_fonts
 fm_workbook_get_theme_script_font_count
 fm_workbook_get_theme_script_font_at
+fm_workbook_get_theme_script_font
 fm_workbook_set_theme_script_font
 fm_workbook_clear_theme
 fm_workbook_resolve_color
@@ -518,6 +530,7 @@ fm_sheet_set_range_xf_index
 fm_workbook_get_image_info
 fm_sheet_get_drawing_object_count
 fm_sheet_get_drawing_object_at
+fm_sheet_get_drawing_object
 fm_sheet_get_image
 fm_sheet_add_image
 fm_sheet_remove_drawing
@@ -568,11 +581,13 @@ fm_sheet_set_chart_source
 # -- Drawing shapes, table slicers and sparkline groups ---------------------------
 fm_sheet_get_shape_count
 fm_sheet_get_shape_at
+fm_sheet_get_shape
 fm_sheet_add_shape
 fm_sheet_update_shape
 fm_sheet_remove_shape
 fm_sheet_get_slicer_count
 fm_sheet_get_slicer_at
+fm_sheet_get_slicer
 fm_sheet_add_slicer
 fm_sheet_update_slicer
 fm_sheet_remove_slicer

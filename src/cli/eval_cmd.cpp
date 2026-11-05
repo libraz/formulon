@@ -16,6 +16,7 @@
 
 #include <cerrno>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <optional>
@@ -68,11 +69,16 @@ long parse_repeat(const ArgList& args, std::size_t& idx) {
   return n;
 }
 
-int render_eval_result(const fm_workbook_t* wb, uint32_t rows, uint32_t cols, bool want_json, std::ostream& out,
-                       std::ostream& err) {
+int render_eval_result(const fm_value_array_t* result, bool want_json, std::ostream& out, std::ostream& err) {
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  if (auto rc = fm_value_array_get_dimensions(result, &rows, &cols); rc != 0) {
+    emit_last_error(err, "eval");
+    return rc;
+  }
   if (want_json && rows == 1 && cols == 1) {
     fm_value_t value{};
-    if (auto rc = fm_workbook_evaluate_formula_array_cell(wb, 0, &value); rc != 0) {
+    if (auto rc = fm_value_array_get_value_at(result, 0, &value); rc != 0) {
       emit_last_error(err, "eval");
       return rc;
     }
@@ -92,7 +98,7 @@ int render_eval_result(const fm_workbook_t* wb, uint32_t rows, uint32_t cols, bo
     for (uint32_t col = 0; col < cols; ++col) {
       fm_value_t value{};
       const size_t index = static_cast<size_t>(row) * cols + col;
-      if (auto rc = fm_workbook_evaluate_formula_array_cell(wb, index, &value); rc != 0) {
+      if (auto rc = fm_value_array_get_value_at(result, index, &value); rc != 0) {
         emit_last_error(err, "eval");
         return rc;
       }
@@ -190,7 +196,8 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
     emit_last_error(err, "eval");
     return rc;
   }
-  if (auto rc = fm_workbook_add_sheet(wb.handle, "Sheet1"); rc != 0) {
+  std::size_t sheet_index = 0;
+  if (auto rc = fm_workbook_add_sheet(wb.handle, "Sheet1", &sheet_index); rc != 0) {
     emit_last_error(err, "eval");
     return rc;
   }
@@ -202,19 +209,19 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
   // without the flag the formula is still evaluated exactly once.
   using Clock = std::chrono::steady_clock;
   const long passes = repeat.value_or(1);
-  uint32_t result_rows = 0;
-  uint32_t result_cols = 0;
+  ValueArrayGuard result;
   const auto t0 = Clock::now();
   for (long i = 0; i < passes; ++i) {
-    if (auto rc = fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, formula_str.c_str(), &result_rows, &result_cols);
-        rc != 0) {
+    fm_value_array_destroy(result.handle);
+    result.handle = nullptr;
+    if (auto rc = fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, formula_str.c_str(), &result.handle); rc != 0) {
       emit_last_error(err, "eval");
       return rc;
     }
   }
   const auto elapsed = Clock::now() - t0;
 
-  if (auto rc = render_eval_result(wb.handle, result_rows, result_cols, want_json, out, err); rc != 0) {
+  if (auto rc = render_eval_result(result.handle, want_json, out, err); rc != 0) {
     return rc;
   }
 

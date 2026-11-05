@@ -118,7 +118,7 @@ test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable 
       ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
       type: 3,
       formula1: '"Yes,No"',
-    }).ok,
+    }).status.ok,
   );
   // A CF rule's dxfId must resolve against a registered dxf.
   const dxf = wb.addDxf({ font: { bold: true } });
@@ -210,7 +210,7 @@ test('addValidation / getValidations / removeValidationAt / clearValidations rou
     errorTitle: 'Bad value',
     errorMessage: 'Pick from the list',
   };
-  assert.ok(wb.addValidation(0, listRule).ok);
+  assert.ok(wb.addValidation(0, listRule).status.ok);
 
   // Decimal between [0, 100] across two rectangles.
   const decimalRule = {
@@ -224,7 +224,7 @@ test('addValidation / getValidations / removeValidationAt / clearValidations rou
     formula2: '100',
     allowBlank: false,
   };
-  assert.ok(wb.addValidation(0, decimalRule).ok);
+  assert.ok(wb.addValidation(0, decimalRule).status.ok);
 
   const list = wb.getValidations(0);
   assert.equal(list.length, 2);
@@ -250,7 +250,7 @@ test('addValidation / getValidations / removeValidationAt / clearValidations rou
   // Out-of-range index is rejected.
   assert.ok(!wb.removeValidation(0, 99).ok);
   // Sheet-out-of-range is rejected on every entry.
-  assert.ok(!wb.addValidation(999, listRule).ok);
+  assert.ok(!wb.addValidation(999, listRule).status.ok);
   assert.ok(!wb.removeValidation(999, 0).ok);
   assert.ok(!wb.clearValidations(999).ok);
 
@@ -398,25 +398,25 @@ test('omitted data bar x14 fields keep the model defaults', async () => {
   wb.dispose();
 });
 
-test('named cell styles: cellStyleCount / getCellStyle / cellStyleXfCount', async () => {
+test('named cell styles: listCellStyles / getCellStyle / getCellStyleXfCount', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   // A fresh workbook may carry zero named styles; the accessors must
   // still return well-formed values rather than throwing.
-  const count = wb.cellStyleCount().value;
+  const count = wb.listCellStyles().length;
   assert.equal(typeof count, 'number');
   assert.ok(count >= 0);
   assert.equal(typeof wb.getCellStyleXfCount().value, 'number');
   if (count > 0) {
-    const cs = wb.getCellStyle(0);
-    assert.ok(cs.status.ok, `getCellStyle: ${JSON.stringify(cs.status)}`);
+    const cs = wb.listCellStyles()[0];
     assert.equal(typeof cs.name, 'string');
     assert.equal(typeof cs.xfId, 'number');
-  } else {
-    // Out-of-range index surfaces an error status, not a throw.
-    const cs = wb.getCellStyle(0);
-    assert.equal(cs.status.ok, false);
+    assert.deepEqual(wb.getCellStyle(cs.name).value, cs);
   }
+  // An unknown name is ok with a null value, not a throw.
+  const none = wb.getCellStyle('No Such Style');
+  assert.ok(none.status.ok);
+  assert.equal(none.value, null);
 });
 
 test('setCalcMode / calcMode round-trip the calc policy', async () => {

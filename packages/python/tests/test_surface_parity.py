@@ -109,7 +109,7 @@ class SurfaceParityTests(unittest.TestCase):
         "get_fill_count",
         "get_border_count",
         "get_cell_xf_count",
-        "cell_style_count",
+        "list_cell_styles",
         "get_cell_style_xf_count",
         "add_font",
         "add_fill",

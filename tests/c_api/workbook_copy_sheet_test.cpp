@@ -8,6 +8,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
 #include "formulon_c_record_arg.h"
 #include "gtest/gtest.h"
@@ -85,7 +86,7 @@ TEST(CApiCopySheet, ExplicitNameAndInsertBeforeFirst) {
 TEST(CApiCopySheet, AppendAtSheetCountAfterReindex) {
   WorkbookGuard wb;
   MakeSingleSheet(wb);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other"), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Other", ignored_index()), 0);
   std::size_t out = kSentinel;
   ASSERT_EQ(fm_workbook_copy_sheet(wb.handle, 0, 2, "Tail", &out), 0) << fm_get_last_error_message();
   EXPECT_EQ(out, 2U);
@@ -161,7 +162,7 @@ TEST(CApiCopySheet, SheetCountLimit) {
 TEST(CApiCopySheet, VeryHiddenSourceRefused) {
   WorkbookGuard wb;
   MakeSingleSheet(wb);
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible"), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible", ignored_index()), 0);
   ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VERY_HIDDEN), 0) << fm_get_last_error_message();
   ExpectCopyStatus(wb.handle, 0, 2, nullptr, Code(FormulonErrorCode::kPreconditionFailed));
 }

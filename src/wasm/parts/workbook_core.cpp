@@ -284,8 +284,10 @@ JsReadDiagnosticsResult JsWorkbook::readDiagnostics() const {
 
 // ---- Sheet management ----------------------------------------------------
 
-JsStatus JsWorkbook::addSheet(const std::string& name) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_add_sheet(handle_, name.c_str()) : kBindingInvalidHandle);
+JsAddStyleResult JsWorkbook::addSheet(const std::string& name) {
+  std::size_t out = 0;
+  return index_result(handle_ != nullptr ? fm_workbook_add_sheet(handle_, name.c_str(), &out) : kBindingInvalidHandle,
+                      out);
 }
 
 JsStatus JsWorkbook::moveSheet(uint32_t fromIdx, uint32_t toIdx) {
@@ -739,7 +741,8 @@ JsEvalResult eval_formula(const std::string& formula) {
     r.status = error_status(rc);
     return r;
   }
-  rc = fm_workbook_add_sheet(wb, "Sheet1");
+  std::size_t sheet_index = 0;
+  rc = fm_workbook_add_sheet(wb, "Sheet1", &sheet_index);
   if (rc != 0) {
     r.status = error_status(rc);
     fm_workbook_destroy(wb);

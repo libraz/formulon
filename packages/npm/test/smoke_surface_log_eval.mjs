@@ -240,7 +240,7 @@ test('pivotFilterAt reads back an added filter field for field', async () => {
   const Module = await getModule();
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
-    assert.ok(wb.addPivotFilter(0, pivot, PIVOT_FILTER).ok);
+    assert.ok(wb.addPivotFilter(0, pivot, PIVOT_FILTER).status.ok);
     assert.equal(wb.getPivotFilterCount(0, pivot).value, 1);
     const got = wb.getPivotFilter(0, pivot, 0);
     assert.ok(got.status.ok, JSON.stringify(got.status));
@@ -259,7 +259,7 @@ test('pivotFilterCount counts the filters on the pivot', async () => {
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
     assert.equal(wb.getPivotFilterCount(0, pivot).value, 0);
-    assert.ok(wb.addPivotFilter(0, pivot, PIVOT_FILTER).ok);
+    assert.ok(wb.addPivotFilter(0, pivot, PIVOT_FILTER).status.ok);
     assert.equal(wb.getPivotFilterCount(0, pivot).value, 1);
   } finally {
     wb.delete();
@@ -271,7 +271,7 @@ test('pivot filters survive save/load', async () => {
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   let bytes;
   try {
-    assert.ok(wb.addPivotFilter(0, pivot, PIVOT_FILTER).ok);
+    assert.ok(wb.addPivotFilter(0, pivot, PIVOT_FILTER).status.ok);
     assert.equal(wb.getPivotFilterCount(0, pivot).value, 1);
     const saved = wb.save();
     assert.ok(saved.status.ok, JSON.stringify(saved.status));
@@ -325,8 +325,8 @@ test('a required pivot spec string field left out of the object is rejected, not
 
     const filterCountBefore = wb.getPivotFilterCount(0, pivot).value;
     const filter = wb.addPivotFilter(0, pivot, { axis: 0, type: 1, valueKind: 1, valueDouble: 15 }); // no `fieldName`
-    assert.equal(filter.ok, false);
-    assert.equal(filter.status, 7001);
+    assert.equal(filter.status.ok, false);
+    assert.equal(filter.status.status, 7001);
     assert.equal(wb.getPivotFilterCount(0, pivot).value, filterCountBefore, 'no filter must have been added');
   } finally {
     wb.delete();
@@ -494,8 +494,8 @@ test('pivot definition read-backs report what the setters wrote', async () => {
     assert.equal(region.groupBaseIndex, -1);
     assert.equal(wb.getPivotField(0, pivot, 1).axis, 2);
 
-    assert.ok(wb.addPivotFieldItem(0, pivot, 0, 'East', true).ok);
-    assert.ok(wb.addPivotFieldItem(0, pivot, 0, 'West', true).ok);
+    assert.ok(wb.addPivotFieldItem(0, pivot, 0, 'East', true).status.ok);
+    assert.ok(wb.addPivotFieldItem(0, pivot, 0, 'West', true).status.ok);
     assert.ok(wb.setPivotFieldItemVisible(0, pivot, 0, 1, false).ok);
     assert.equal(wb.getPivotFieldItemCount(0, pivot, 0).value, 2);
     const east = wb.getPivotFieldItem(0, pivot, 0, 0);
@@ -504,7 +504,7 @@ test('pivot definition read-backs report what the setters wrote', async () => {
     assert.equal(east.cacheIndex, -1);
     assert.equal(east.visible, true);
     assert.equal(wb.getPivotFieldItem(0, pivot, 0, 1).visible, false);
-    assert.ok(wb.addPivotFieldSharedItem(0, pivot, 0, 5, true).ok);
+    assert.ok(wb.addPivotFieldSharedItem(0, pivot, 0, 5, true).status.ok);
     const bound = wb.getPivotFieldItem(0, pivot, 0, 2);
     assert.equal(bound.cacheIndex, 5);
     assert.equal(bound.name, '');
@@ -622,8 +622,8 @@ test('an empty or omitted data field name is derived from the workbook profile',
 test('active sheet is recorded in bookViews and survives a round trip', async () => {
   const Module = await getModule();
   const wb = Module.Workbook.createDefault();
-  assert.ok(wb.addSheet('B').ok);
-  assert.ok(wb.addSheet('C').ok);
+  assert.ok(wb.addSheet('B').status.ok);
+  assert.ok(wb.addSheet('C').status.ok);
   assert.equal(wb.getActiveSheet().index, 0);
   assert.ok(wb.setActiveSheet(2).ok);
   const active = wb.getActiveSheet();

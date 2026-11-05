@@ -61,9 +61,9 @@ uint32_t AddBoldDateStyleXf(fm_workbook_t* wb, std::size_t* out_font) {
   fm_cell_xf_t xf{};
   xf.font_index = static_cast<uint32_t>(*out_font);
   xf.num_fmt_id = 14;
-  uint32_t xf_id = 0;
+  std::size_t xf_id = 0;
   EXPECT_EQ(fm_workbook_add_cell_style_xf(wb, &xf, &xf_id), 0);
-  return xf_id;
+  return static_cast<uint32_t>(xf_id);
 }
 
 }  // namespace

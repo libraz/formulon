@@ -813,11 +813,13 @@ JsStringResult JsWorkbook::pivotCacheFieldFormula(uint32_t cacheId, uint32_t fie
   return string_result(rc, rc == 0 ? formula : nullptr);
 }
 
-JsStatus JsWorkbook::pivotCacheCalculatedItemAdd(uint32_t cacheId, uint32_t fieldIdx, const std::string& name,
-                                                 const std::string& formula) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_add_pivot_cache_calculated_item(handle_, cacheId, fieldIdx,
-                                                                                         name.c_str(), formula.c_str())
-                                           : kBindingInvalidHandle);
+JsAddStyleResult JsWorkbook::pivotCacheCalculatedItemAdd(uint32_t cacheId, uint32_t fieldIdx, const std::string& name,
+                                                         const std::string& formula) {
+  std::size_t out = 0;
+  return index_result(handle_ != nullptr ? fm_workbook_add_pivot_cache_calculated_item(
+                                               handle_, cacheId, fieldIdx, name.c_str(), formula.c_str(), &out)
+                                         : kBindingInvalidHandle,
+                      out);
 }
 
 JsNumberResult JsWorkbook::pivotCacheCalculatedItemCount(uint32_t cacheId) const {
@@ -892,22 +894,22 @@ JsAddStyleResult JsWorkbook::pivotShowDetails(uint32_t sheet, uint32_t pivotIdx,
   return index_result(rc, newSheet);
 }
 
-JsStatus JsWorkbook::pivotFieldAddItem(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, const std::string& name,
-                                       bool visible) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(
-      fm_sheet_add_pivot_field_item(handle_, sheet, pivotIdx, fieldIdx, name.c_str(), visible ? 1 : 0));
+JsAddStyleResult JsWorkbook::pivotFieldAddItem(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx,
+                                               const std::string& name, bool visible) {
+  std::size_t out = 0;
+  return index_result(handle_ != nullptr ? fm_sheet_add_pivot_field_item(handle_, sheet, pivotIdx, fieldIdx,
+                                                                         name.c_str(), visible ? 1 : 0, &out)
+                                         : kBindingInvalidHandle,
+                      out);
 }
 
-JsStatus JsWorkbook::pivotFieldAddItemAt(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t cacheIndex,
-                                         bool visible) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(
-      fm_sheet_add_pivot_field_shared_item(handle_, sheet, pivotIdx, fieldIdx, cacheIndex, visible ? 1 : 0));
+JsAddStyleResult JsWorkbook::pivotFieldAddItemAt(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx,
+                                                 uint32_t cacheIndex, bool visible) {
+  std::size_t out = 0;
+  return index_result(handle_ != nullptr ? fm_sheet_add_pivot_field_shared_item(handle_, sheet, pivotIdx, fieldIdx,
+                                                                                cacheIndex, visible ? 1 : 0, &out)
+                                         : kBindingInvalidHandle,
+                      out);
 }
 
 JsStatus JsWorkbook::pivotFieldClearItems(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx) {
@@ -1124,9 +1126,9 @@ JsNumberResult JsWorkbook::pivotFilterCount(uint32_t sheet, uint32_t pivotIdx) c
   return number_result(rc, static_cast<double>(count));
 }
 
-JsStatus JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIdx, emscripten::val spec) {
+JsAddStyleResult JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIdx, emscripten::val spec) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    return {invalid_handle_status()};
   }
   // `fieldName` is required; an omitted key passes NULL through rather
   // than `js_pull_string`'s empty-string default, which the C ABI's own
@@ -1161,11 +1163,12 @@ JsStatus JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIdx, emscripte
   c_spec.data_field_index = reader.u32(spec, "dataFieldIndex", 0U, "pivotFilter.dataFieldIndex");
 
   if (!reader.ok()) {
-    return reader.failure();
+    return {reader.failure()};
   }
 
-  fm_status_t rc = fm_sheet_add_pivot_filter(handle_, sheet, pivotIdx, &c_spec);
-  return status_from_rc(rc);
+  std::size_t out = 0;
+  fm_status_t rc = fm_sheet_add_pivot_filter(handle_, sheet, pivotIdx, &c_spec, &out);
+  return index_result(rc, out);
 }
 
 emscripten::val JsWorkbook::pivotFilterAt(uint32_t sheet, uint32_t pivotIdx, uint32_t filterIdx) const {

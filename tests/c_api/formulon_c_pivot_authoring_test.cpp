@@ -3,6 +3,7 @@
 #include <iterator>
 #include <limits>
 
+#include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
 #include "utils/date_time.h"
 
@@ -517,8 +518,8 @@ TEST(FormulonCApiPivot, ManualSortKeepsItemOrderThroughSaveAndReload) {
 
   // Shared items are North, South; the items are added in the opposite order.
   ASSERT_EQ(fm_sheet_clear_pivot_field_items(wb.handle, 0, pivot_idx, 0), 0);
-  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_idx, 0, "South", 1), 0);
-  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_idx, 0, "North", 1), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_idx, 0, "South", 1, ignored_index()), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0, pivot_idx, 0, "North", 1, ignored_index()), 0);
   ASSERT_EQ(fm_sheet_set_pivot_field_sort(wb.handle, 0, pivot_idx, 0, FM_PIVOT_SORT_ASCENDING, nullptr), 0);
   EXPECT_EQ(RowLabels(wb.handle, pivot_idx), (std::vector<std::string>{"North", "South"}));
 

@@ -131,7 +131,7 @@ test('addValidation defaults every omitted boolean to false', async () => {
         ranges: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
         type: 3,
         formula1: '"Yes,No"',
-      }).ok,
+      }).status.ok,
     );
     const rules = wb.getValidations(0);
     assert.ok(rules.status.ok, JSON.stringify(rules.status));
@@ -159,7 +159,7 @@ test('addValidation defaults every omitted boolean to false', async () => {
         type: 3,
         allowBlank: true,
         formula1: '"A,B"',
-      }).ok,
+      }).status.ok,
     );
     assert.equal(wb.getValidations(0)[1].allowBlank, true);
   } finally {

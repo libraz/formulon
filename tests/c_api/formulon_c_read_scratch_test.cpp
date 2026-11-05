@@ -215,13 +215,11 @@ TEST(FormulonCApiReadScratch, AllScratchProducersStayBoundedWhenAlternated) {
     fm_value_t adhoc_value{};
     ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=\"adhoc\"", &adhoc_value), 0);
 
-    uint32_t rows = 0;
-    uint32_t cols = 0;
-    ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=\"array\"", &rows, &cols), 0);
-    ASSERT_EQ(rows, 1U);
-    ASSERT_EQ(cols, 1U);
+    fm_value_array_t* array = nullptr;
+    ASSERT_EQ(fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, "=\"array\"", &array), 0);
     fm_value_t array_value{};
-    ASSERT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, 0, &array_value), 0);
+    ASSERT_EQ(fm_value_array_get_value_at(array, 0, &array_value), 0);
+    fm_value_array_destroy(array);
 
     const char* auto_filter = nullptr;
     ASSERT_EQ(fm_sheet_get_auto_filter_xml(wb.handle, 0, &auto_filter), 0);
