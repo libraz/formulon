@@ -110,6 +110,18 @@ struct RowDecision {
 };
 using RowDecide = RowDecision (*)(void* ctx, std::uint32_t row, RowDecision current);
 
+// Applies the decided style to one row and keeps the entry unless it became
+// an erasable override.
+void finish_row(RowLayout& entry, RowDecide decide, void* ctx, bool default_hidden, bool existed_before,
+                std::vector<RowLayout>& out) {
+  const RowDecision decision = decide(ctx, entry.row, {entry.has_style, entry.style_xf});
+  entry.has_style = decision.styled;
+  entry.style_xf = decision.styled ? decision.xf : 0U;
+  if (!should_erase_row_override(entry, default_hidden, existed_before)) {
+    out.push_back(entry);
+  }
+}
+
 // Rewrites every row of `[first, last]`; use for operations that really do
 // materialize a style on every row. New entries inherit the sheet's default
 // visibility, and pre-existing visible exceptions survive a style clear.
@@ -130,12 +142,7 @@ void rewrite_row_styles(SheetLayout& layout, std::uint32_t first, std::uint32_t 
     } else {
       entry.hidden = default_hidden;
     }
-    const RowDecision decision = decide(ctx, entry.row, {entry.has_style, entry.style_xf});
-    entry.has_style = decision.styled;
-    entry.style_xf = decision.styled ? decision.xf : 0U;
-    if (!should_erase_row_override(entry, default_hidden, existed_before)) {
-      out.push_back(entry);
-    }
+    finish_row(entry, decide, ctx, default_hidden, existed_before, out);
   }
   out.insert(out.end(), rows.begin() + static_cast<std::ptrdiff_t>(next), rows.end());
   rows = std::move(out);
@@ -181,12 +188,7 @@ void rewrite_sparse_row_styles(SheetLayout& layout, std::uint32_t first, std::ui
     if (has_additional && (*additional_rows)[extra].row == row) {
       ++extra;
     }
-    const RowDecision decision = decide(ctx, row, {entry.has_style, entry.style_xf});
-    entry.has_style = decision.styled;
-    entry.style_xf = decision.styled ? decision.xf : 0U;
-    if (!should_erase_row_override(entry, default_hidden, existed_before)) {
-      out.push_back(entry);
-    }
+    finish_row(entry, decide, ctx, default_hidden, existed_before, out);
   }
   out.insert(out.end(), rows.begin() + static_cast<std::ptrdiff_t>(next), rows.end());
   rows = std::move(out);
