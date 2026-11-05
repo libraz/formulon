@@ -151,6 +151,11 @@ Utf8Step next_utf8_step(std::string_view src, std::size_t i, DbcsCodepage codepa
   return {cp, bytes, text_detail::dbcs_char_bytes(cp, codepage)};
 }
 
+// True when a character of `cost` bytes would straddle a budget with exactly one byte left.
+inline bool straddles_last_byte(std::uint64_t used, std::uint64_t budget, std::uint64_t cost) noexcept {
+  return used + 1 == budget && cost >= 2;
+}
+
 // Reads the `text, [num_bytes=1]` prologue LEFTB and RIGHTB share.
 // Returns `false` when the caller must return `*out_early` instead of
 // slicing: a coercion error, a negative budget (`#VALUE!`), or a zero
@@ -247,7 +252,7 @@ Value Leftb(const Value* args, std::uint32_t arity, Arena& arena) {
       // Character would overflow the budget. If we have exactly 1 byte
       // remaining and the character is a multi-byte (cost >= 2) char, pad
       // with a single ASCII space. Otherwise stop cleanly.
-      if (used + 1 == budget && cost >= 2) {
+      if (straddles_last_byte(used, budget, cost)) {
         out.push_back(' ');
       }
       break;
@@ -288,7 +293,7 @@ Value Rightb(const Value* args, std::uint32_t arity, Arena& arena) {
         break;
       }
     } else {
-      if (used + 1 == budget && cost >= 2) {
+      if (straddles_last_byte(used, budget, cost)) {
         pad_space = true;
       }
       break;
@@ -381,7 +386,7 @@ Value Midb(const Value* args, std::uint32_t arity, Arena& arena) {
         break;
       }
     } else {
-      if (used + 1 == budget && cost >= 2) {
+      if (straddles_last_byte(used, budget, cost)) {
         out.push_back(' ');
       }
       break;
