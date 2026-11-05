@@ -434,6 +434,14 @@ class RecalcEngine {
   /// graph mutation happens after those snapshots have been released.
   DepGraph::DependencyDelta reconcile_spill_dependencies_locked(const Workbook& workbook);
 
+  /// Marks the dependent end of each edge dirty. The caller holds `mutex_`.
+  void mark_edges_dirty_locked(const std::vector<DepGraph::Edge>& edges);
+
+  /// Marks every volatile cell dirty (counting them into `*volatile_cells`
+  /// when non-null), then propagates dirtiness through reverse edges. The
+  /// caller holds `mutex_`.
+  void seed_dirty_locked(std::uint32_t* volatile_cells);
+
   /// Replaces the learned dynamic-reference edges of every reader `log`
   /// saw (once per recalc call, tracked in `refreshed`) with edges to the
   /// formula cells and spill anchors its reads covered, and returns the

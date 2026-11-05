@@ -106,11 +106,7 @@ Value SpillCommitter::commit(Value v) const {
   // so the spill region's lifetime is independent of the producing arena.
   const Value* src = v.as_array_cells();
   const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-  std::vector<Value> cells_vec;
-  cells_vec.reserve(total);
-  for (std::size_t i = 0; i < total; ++i) {
-    cells_vec.push_back(src[i]);
-  }
+  std::vector<Value> cells_vec(src, src + total);
   return commit_cells(rows, cols, std::move(cells_vec));
 }
 

@@ -47,6 +47,8 @@
 namespace formulon::eval {
 namespace {
 
+const char* const kArenaExhaustedParallel = "evaluation arena exhausted during parallel recalc";
+
 // Per-thread re-entrancy flag and guard live in `recalc_reentry.h` so the
 // serial `RecalcEngine::recalc` and the parallel scheduler share the same
 // flag. A nested invocation on the same thread (typically a UDF or a
@@ -658,34 +660,12 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
     // dirtying its watcher before Tarjan avoids a stale cycle. Added and
     // removed source ownership both wake the watcher at this boundary.
     const DepGraph::DependencyDelta pre_dependency_delta = engine.reconcile_spill_dependencies_locked(wb);
-    for (const DepGraph::Edge& edge : pre_dependency_delta.added) {
-      engine.dirty_.mark(edge.first);
-    }
-    for (const DepGraph::Edge& edge : pre_dependency_delta.removed) {
-      engine.dirty_.mark(edge.first);
-    }
+    engine.mark_edges_dirty_locked(pre_dependency_delta.added);
+    engine.mark_edges_dirty_locked(pre_dependency_delta.removed);
 
     // Phase 1 + 2: seed the dirty set with volatile cells, BFS-propagate
     // dirtiness through reverse edges. Mirrors `RecalcEngine::recalc`.
-    engine.volatiles_.for_each([&](CellNodeId cell) {
-      if (!engine.dirty_.contains(cell)) {
-        engine.dirty_.mark(cell);
-      }
-    });
-
-    std::vector<CellNodeId> bfs_queue;
-    bfs_queue.reserve(engine.dirty_.size());
-    engine.dirty_.for_each([&](CellNodeId c) { bfs_queue.push_back(c); });
-    std::size_t bfs_head = 0;
-    while (bfs_head < bfs_queue.size()) {
-      const CellNodeId current = bfs_queue[bfs_head++];
-      for (CellNodeId dependent : engine.graph_.dependents_of_ref(current)) {
-        if (!engine.dirty_.contains(dependent)) {
-          engine.dirty_.mark(dependent);
-          bfs_queue.push_back(dependent);
-        }
-      }
-    }
+    engine.seed_dirty_locked(nullptr);
 
     // Phase 3: Tarjan SCC over the dirty induced subgraph, exactly the node
     // set the serial engine passes to `tarjan_scc_subset`. Running it over
@@ -808,7 +788,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
         // Tiny layer or single-worker mode: process serially on this thread.
         ++serial_fallback_steps;
         if (!run_on_caller(layer)) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during parallel recalc");
+          return make_error(FormulonErrorCode::kOutOfMemory, kArenaExhaustedParallel);
         }
         continue;
       }
@@ -835,7 +815,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
 
       for (const SccOutcome& o : outcomes) {
         if (o.arena_exhausted) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during parallel recalc");
+          return make_error(FormulonErrorCode::kOutOfMemory, kArenaExhaustedParallel);
         }
         cells_evaluated += o.cells_evaluated;
         cycle_recoveries += o.cycle_recoveries;
@@ -853,7 +833,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
       if (!isolated.empty()) {
         ++serial_fallback_steps;
         if (!run_on_caller(isolated)) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during parallel recalc");
+          return make_error(FormulonErrorCode::kOutOfMemory, kArenaExhaustedParallel);
         }
       }
 
@@ -889,7 +869,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
         }
         ++serial_fallback_steps;
         if (!run_on_caller(rerun_sccs)) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during parallel recalc");
+          return make_error(FormulonErrorCode::kOutOfMemory, kArenaExhaustedParallel);
         }
       }
     }
@@ -925,7 +905,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
         Value result = evaluate_cell_for_recalc(wb, sheet, staged, c.row, c.col, registry, arena, opts);
         dynamic.log().end();
         if (arena.exhausted()) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during parallel recalc");
+          return make_error(FormulonErrorCode::kOutOfMemory, kArenaExhaustedParallel);
         }
         sheet.set_cell_cached_value(c.row, c.col, result);
         obs.note_commit(c);
@@ -942,9 +922,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
     const bool dependency_retry = !dependency_delta.added.empty() || dynamic_retry;
     if (dependency_retry) {
       wave_budget.count_dependency_wave();
-      for (const DepGraph::Edge& edge : dependency_delta.added) {
-        engine.dirty_.mark(edge.first);
-      }
+      engine.mark_edges_dirty_locked(dependency_delta.added);
     }
 
     const std::vector<CellNodeId> released = release_queue.take();
@@ -961,9 +939,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
       }
       engine.dirty_.clear();
       engine.mark_spill_release_wave_locked(released);
-      for (const DepGraph::Edge& edge : dependency_delta.added) {
-        engine.dirty_.mark(edge.first);
-      }
+      engine.mark_edges_dirty_locked(dependency_delta.added);
       dynamic.mark_stale_dirty();
       continue;
     }

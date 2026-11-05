@@ -24,10 +24,6 @@ void erase_first(std::vector<CellNodeId>& vec, CellNodeId target) {
   }
 }
 
-}  // namespace
-
-namespace {
-
 constexpr std::uint8_t source_bit(DepGraph::DependencySource source) noexcept {
   return static_cast<std::uint8_t>(source);
 }

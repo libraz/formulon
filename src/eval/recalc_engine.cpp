@@ -48,12 +48,9 @@ std::optional<Error> reentry_error(const char* what) {
                     "the engine does not support nested recalc; the inner call is rejected");
 }
 
-// Marks the dependent end of each edge dirty.
-void mark_edges_dirty(DirtySet& dirty, const std::vector<DepGraph::Edge>& edges) {
-  for (const DepGraph::Edge& edge : edges) {
-    dirty.mark(edge.first);
-  }
-}
+const char* const kArenaExhaustedRecalc = "evaluation arena exhausted during recalc";
+const char* const kArenaExhaustedIterative = "evaluation arena exhausted during iterative recalc";
+const char* const kArenaExhaustedPartial = "evaluation arena exhausted during partial recalc";
 
 // The spill-release queue, the progress snapshot and the wave ceilings are
 // shared with the parallel scheduler; see `spill_release.h`.
@@ -249,6 +246,39 @@ void RecalcEngine::forget_referenced_cells_locked(CellNodeId cell) {
   for (const CellNodeId dep : graph_.dependencies_of_ref(cell)) {
     if (!is_range_node(dep) && graph_.has_dependency_source(cell, dep, DepGraph::DependencySource::kAuthored)) {
       referenced_cells_.remove(dep);
+    }
+  }
+}
+
+void RecalcEngine::mark_edges_dirty_locked(const std::vector<DepGraph::Edge>& edges) {
+  for (const DepGraph::Edge& edge : edges) {
+    dirty_.mark(edge.first);
+  }
+}
+
+void RecalcEngine::seed_dirty_locked(std::uint32_t* volatile_cells) {
+  volatiles_.for_each([&](CellNodeId cell) {
+    if (!dirty_.contains(cell)) {
+      dirty_.mark(cell);
+    }
+    if (volatile_cells != nullptr) {
+      ++*volatile_cells;
+    }
+  });
+
+  // Snapshot the seed list because `dirty_.mark` mutations during BFS
+  // would otherwise shift the iteration target.
+  std::vector<CellNodeId> bfs_queue;
+  bfs_queue.reserve(dirty_.size());
+  dirty_.for_each([&](CellNodeId c) { bfs_queue.push_back(c); });
+  std::size_t bfs_head = 0;
+  while (bfs_head < bfs_queue.size()) {
+    const CellNodeId current = bfs_queue[bfs_head++];
+    for (CellNodeId dependent : graph_.dependents_of_ref(current)) {
+      if (!dirty_.contains(dependent)) {
+        dirty_.mark(dependent);
+        bfs_queue.push_back(dependent);
+      }
     }
   }
 }
@@ -705,7 +735,7 @@ Expected<RecalcStats, Error> RecalcEngine::recalc_locked(Workbook& workbook, con
   SpillWaveBudget wave_budget;
   DynamicReadPass dynamic(*this, workbook);
   const SerialEvalPass pass{
-      workbook, registry, dynamic, release_callback, &release_queue, stats, "evaluation arena exhausted during recalc"};
+      workbook, registry, dynamic, release_callback, &release_queue, stats, kArenaExhaustedRecalc};
 
   // Per-wave locals begin after this label and are destroyed on the backward
   // jump, while the counters, queue, and accumulated stats above persist.
@@ -715,36 +745,14 @@ recalc_next_wave:
   // derived edge here prevents a stale phantom-only cycle, while additions
   // wake the watcher before topology is built.
   const DepGraph::DependencyDelta pre_dependency_delta = reconcile_spill_dependencies_locked(workbook);
-  mark_edges_dirty(dirty_, pre_dependency_delta.added);
-  mark_edges_dirty(dirty_, pre_dependency_delta.removed);
+  mark_edges_dirty_locked(pre_dependency_delta.added);
+  mark_edges_dirty_locked(pre_dependency_delta.removed);
 
-  // ---- Phase 1: seed the dirty set with every volatile cell. ----
+  // ---- Phases 1-2: seed volatile cells, then BFS through reverse edges. ----
   // Volatile formulas re-execute every pass even if their inputs are
   // unchanged. Counting them here also reports how many of the eventually-
   // evaluated cells were forced by volatility.
-  volatiles_.for_each([&](CellNodeId cell) {
-    if (!dirty_.contains(cell)) {
-      dirty_.mark(cell);
-    }
-    ++stats.volatile_cells;
-  });
-
-  // ---- Phase 2: BFS-propagate dirtiness through reverse edges. ----
-  // Snapshot the seed list because `dirty_.mark` mutations during BFS
-  // would otherwise shift the iteration target.
-  std::vector<CellNodeId> bfs_queue;
-  bfs_queue.reserve(dirty_.size());
-  dirty_.for_each([&](CellNodeId c) { bfs_queue.push_back(c); });
-  std::size_t bfs_head = 0;
-  while (bfs_head < bfs_queue.size()) {
-    const CellNodeId current = bfs_queue[bfs_head++];
-    for (CellNodeId dependent : graph_.dependents_of_ref(current)) {
-      if (!dirty_.contains(dependent)) {
-        dirty_.mark(dependent);
-        bfs_queue.push_back(dependent);
-      }
-    }
-  }
+  seed_dirty_locked(&stats.volatile_cells);
 
   // ---- Phase 3: Tarjan SCC over the dirty induced subgraph. ----
   // Tarjan emits SCCs in reverse-topological order (leaves first), so the
@@ -767,8 +775,7 @@ recalc_next_wave:
   // appear in the forward / reverse adjacency maps; isolated formula
   // cells are absent from both.
   std::unordered_set<CellNodeId, CellNodeIdHash> visited_in_sccs;
-  RETURN_IF_ERROR(evaluate_dirty_components_locked(
-      pass, sccs, nullptr, "evaluation arena exhausted during iterative recalc", visited_in_sccs));
+  RETURN_IF_ERROR(evaluate_dirty_components_locked(pass, sccs, nullptr, kArenaExhaustedIterative, visited_in_sccs));
 
   // ---- Phase 4b: defensive pickup for dirty cells not visited by Tarjan. ----
   // `tarjan_scc_subset` emits isolated selected nodes, so this normally
@@ -795,7 +802,7 @@ recalc_next_wave:
   const bool dependency_retry = !dependency_delta.added.empty() || dynamic_retry;
   if (dependency_retry) {
     wave_budget.count_dependency_wave();
-    mark_edges_dirty(dirty_, dependency_delta.added);
+    mark_edges_dirty_locked(dependency_delta.added);
   }
 
   // A spill shape change can release cells that blocked a different pending
@@ -815,7 +822,7 @@ recalc_next_wave:
     }
     dirty_.clear();
     mark_spill_release_wave_locked(released);
-    mark_edges_dirty(dirty_, dependency_delta.added);
+    mark_edges_dirty_locked(dependency_delta.added);
     dynamic.mark_stale_dirty();
     goto recalc_next_wave;
   }
@@ -843,13 +850,8 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
   const SpillReleaseCallback release_callback = &queue_spill_release;
   SpillWaveBudget wave_budget;
   DynamicReadPass dynamic(*this, workbook);
-  const SerialEvalPass pass{workbook,
-                            registry,
-                            dynamic,
-                            release_callback,
-                            &release_queue,
-                            stats,
-                            "evaluation arena exhausted during partial recalc"};
+  const SerialEvalPass pass{
+      workbook, registry, dynamic, release_callback, &release_queue, stats, kArenaExhaustedPartial};
 
   // ---- Phase 0: validate the viewport. ----
   // Empty viewport — collapsed row / column range, or unknown sheet —
@@ -884,8 +886,8 @@ partial_recalc_next_wave:
   // watcher; this is essential when a producer rewrite has just invalidated
   // its committed footprint.
   const DepGraph::DependencyDelta pre_dependency_delta = reconcile_spill_dependencies_locked(workbook);
-  mark_edges_dirty(dirty_, pre_dependency_delta.added);
-  mark_edges_dirty(dirty_, pre_dependency_delta.removed);
+  mark_edges_dirty_locked(pre_dependency_delta.added);
+  mark_edges_dirty_locked(pre_dependency_delta.removed);
 
   // ---- Phase 1: enumerate the viewport's seed cells. ----
   // Walk the requested rectangle and pull every populated cell into the
@@ -1065,8 +1067,7 @@ partial_recalc_next_wave:
     fuse_cyclic_components(&sccs, graph_);
   }
   std::unordered_set<CellNodeId, CellNodeIdHash> visited_in_sccs;
-  RETURN_IF_ERROR(evaluate_dirty_components_locked(
-      pass, sccs, &closure, "evaluation arena exhausted during partial recalc", visited_in_sccs));
+  RETURN_IF_ERROR(evaluate_dirty_components_locked(pass, sccs, &closure, kArenaExhaustedPartial, visited_in_sccs));
 
   // ---- Phase 4b: standalone dirty cells inside the closure. ----
   // Isolated formula cells with no dep-graph entries do not appear in

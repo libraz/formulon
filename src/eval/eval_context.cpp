@@ -305,16 +305,17 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
   // owner; this preserves the existing no-cross-sheet-spill contract.
   const bool mutable_target = mutable_sheet_ != nullptr && target == mutable_sheet_;
   const bool scalarize_result = mutable_sheet_ == nullptr || mutable_target;
+  const auto finish = [scalarize_result](const Value& v) { return scalarize_result ? implicit_intersect_value(v) : v; };
 
   // Formula cell. If no recursive state is bound, fall back to the
   // non-recursive behaviour so the two overloads agree.
   if (state_ == nullptr || state_->observing_reads()) {
     const Value cached = adopt_text_into(arena, read.value());
-    return scalarize_result ? implicit_intersect_value(cached) : cached;
+    return finish(cached);
   }
 
   if (const Value* memo = state_->lookup_memo(target, ref.row, ref.col); memo != nullptr) {
-    return scalarize_result ? implicit_intersect_value(*memo) : *memo;
+    return finish(*memo);
   }
 
   if (!state_->push_cell(target, ref.row, ref.col)) {
@@ -328,7 +329,7 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
     // no surface for yet.
     if (workbook_ != nullptr && workbook_->iterative_options().enabled) {
       const Value cached = adopt_text_into(arena, read.value());
-      return scalarize_result ? implicit_intersect_value(cached) : cached;
+      return finish(cached);
     }
     // A cell reading itself is the only member of its cycle, and Excel
     // leaves such a cell at 0 unevaluated.
@@ -374,11 +375,9 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
     if (mutable_target) {
       result = child_ctx.dispatch_array_result(result);
     }
-    if (scalarize_result) {
-      // A read-only recursive context cannot commit a dynamic-array result,
-      // so an ordinary cell reference still exposes one scalar coordinate.
-      result = implicit_intersect_value(result);
-    }
+    // A read-only recursive context cannot commit a dynamic-array result,
+    // so an ordinary cell reference still exposes one scalar coordinate.
+    result = finish(result);
   }
 
   state_->pop_cell(target, ref.row, ref.col);

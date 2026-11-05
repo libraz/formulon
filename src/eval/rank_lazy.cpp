@@ -281,9 +281,8 @@ Value percentrank_cell(const std::vector<double>& sorted, const Value& x_v, cons
   // An exact match reports the lowest rank of a duplicate run; an
   // interpolated x keeps the run's last index as its anchor.
   if (exact) {
-    while (k > 0U && sorted[k - 1U] == sorted[k]) {
-      --k;
-    }
+    k = static_cast<std::size_t>(std::lower_bound(sorted.begin(), sorted.begin() + static_cast<std::ptrdiff_t>(k), x) -
+                                 sorted.begin());
   }
   const std::size_t pos = exclusive ? k + 1U : k;
   const double denom = static_cast<double>(exclusive ? n + 1U : n - 1U);
