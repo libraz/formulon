@@ -39,11 +39,8 @@ unsigned eom_code(double serial, bool date1904) noexcept {
 // `serial` moved by `months` calendar months under an end-of-month code.
 double step_months(double serial, int months, unsigned code, bool date1904) noexcept {
   const date_time::YMD d = date_time::ymd_from_serial(serial, date1904);
-  int y = d.y;
-  unsigned m = d.m;
-  date_time::shift_year_month(y, m, months);
   const unsigned day = code == 1u ? 31u : (code >= 29u ? code : d.d);
-  return date_time::serial_from_ymd_clamped(y, m, day, date1904);
+  return date_time::serial_from_shifted_ymd(d, months, day, date1904);
 }
 
 // Day count of [a, b] for the basis (0 when `a >= b`); `mode` selects the 30/360 variant.

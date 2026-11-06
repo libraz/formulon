@@ -34,7 +34,7 @@ constexpr std::int64_t kExcelBaseAfterGhost = 25569;
 // base suffices with no ghost handling. 1904-01-01 is serial 1462 in the
 // 1900 system, hence this base is exactly `kExcelBaseAfterGhost - 1462`;
 // every 1904 serial is 1462 less than the 1900 serial for the same day.
-constexpr std::int64_t kExcel1904Base = kExcelBaseAfterGhost - 1462;
+constexpr std::int64_t kExcel1904Base = kExcelBaseAfterGhost - static_cast<std::int64_t>(kDate1904EpochGap);
 
 // days_from_civil(1900, 2, 28) in the 1970 epoch. Any serial mapped through
 // `kExcelBaseBeforeGhost` must produce a civil day <= this value; anything
@@ -138,6 +138,14 @@ double serial_from_ymd_clamped(int y, unsigned m, unsigned anchor_day, bool date
   const unsigned last = days_in_month(y, m);
   const unsigned day = anchor_day > last ? last : anchor_day;
   return serial_from_ymd(y, m, day, date1904);
+}
+
+double serial_from_shifted_ymd(const YMD& base, std::int64_t delta_months, unsigned anchor_day,
+                               bool date1904) noexcept {
+  int y = base.y;
+  unsigned m = base.m;
+  shift_year_month(y, m, delta_months);
+  return serial_from_ymd_clamped(y, m, anchor_day, date1904);
 }
 
 int weekday_sun0(double serial_floor, bool date1904) noexcept {

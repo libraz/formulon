@@ -53,10 +53,8 @@ using date_time::basis_days_between;
 // Quasi-coupon serial `k` periods after `last_interest`, keeping its day
 // of month (clamped to shorter months).
 double quasi_after(const date_time::YMD& anchor, int k, int frequency, bool date1904) noexcept {
-  int y = anchor.y;
-  unsigned m = anchor.m;
-  date_time::shift_year_month(y, m, static_cast<std::int64_t>(k) * (12 / frequency));
-  return date_time::serial_from_ymd_clamped(y, m, anchor.d, date1904);
+  const std::int64_t months = static_cast<std::int64_t>(k) * (12 / frequency);
+  return date_time::serial_from_shifted_ymd(anchor, months, anchor.d, date1904);
 }
 
 }  // namespace

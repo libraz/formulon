@@ -44,10 +44,7 @@ Expected<bool, ErrorCode> read_calc_method(const Value* args, std::uint32_t arit
 // date on its month's end, otherwise the day clamps to the shorter month.
 double add_months(double serial, int months, bool month_end, bool date1904) noexcept {
   const date_time::YMD d = date_time::ymd_from_serial(serial, date1904);
-  int y = d.y;
-  unsigned m = d.m;
-  date_time::shift_year_month(y, m, months);
-  return date_time::serial_from_ymd_clamped(y, m, month_end ? 31u : d.d, date1904);
+  return date_time::serial_from_shifted_ymd(d, months, month_end ? 31u : d.d, date1904);
 }
 
 // Day count of `[start, end]` for the basis: actual for basis 1, basis 2 when

@@ -152,6 +152,12 @@ double serial_from_ymd(int y, unsigned m, unsigned d, bool date1904 = false) noe
 /// Aug-31 anchor three months back is May-31, six months back Feb-28/29).
 double serial_from_ymd_clamped(int y, unsigned m, unsigned anchor_day, bool date1904 = false) noexcept;
 
+/// Serial of `base` moved by `delta_months` calendar months, with `anchor_day`
+/// clamped to the target month's length (`shift_year_month` then
+/// `serial_from_ymd_clamped`).
+double serial_from_shifted_ymd(const YMD& base, std::int64_t delta_months, unsigned anchor_day,
+                               bool date1904 = false) noexcept;
+
 /// Excel's weekday for a serial, Sunday = 0 .. Saturday = 6.
 ///
 /// Excel counts weekdays off the serial, not the calendar: in the 1900

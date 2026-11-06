@@ -334,6 +334,9 @@ Value Date_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool d
   return Value::number(serial);
 }
 
+// TIME's hour, minute and second arguments are each limited to this value.
+constexpr double kTimeComponentMax = 32767.0;
+
 /// TIME(hour, minute, second). Each component is truncated; positive values
 /// above Excel's documented 32767-component limit yield `#NUM!`. Accepted
 /// inputs are normalised modulo 24/60/60. A negative result (e.g.
@@ -346,7 +349,7 @@ Value Time_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const double hours = hms[0];
   const double minutes = hms[1];
   const double seconds = hms[2];
-  if (hours > 32767.0 || minutes > 32767.0 || seconds > 32767.0) {
+  if (hours > kTimeComponentMax || minutes > kTimeComponentMax || seconds > kTimeComponentMax) {
     return Value::error(ErrorCode::Num);
   }
   const double total = hours * 3600.0 + minutes * 60.0 + seconds;
@@ -424,6 +427,23 @@ Expected<DateAndReturnType, ErrorCode> read_date_and_return_type(const Value* ar
   return DateAndReturnType{serial.value(), return_type.value()};
 }
 
+// Weekday index with Monday = 0 from one with Sunday = 0.
+int monday_zero_from_sun0(int sun0) noexcept {
+  return (sun0 + 6) % 7;
+}
+
+// Week-start weekday (Sun=0..Sat=6) of a WEEKDAY / WEEKNUM return type 1, 2 or
+// 11..17; -1 for any other type.
+int week_start_sun0(int return_type) noexcept {
+  if (return_type == 1 || return_type == 2) {
+    return return_type - 1;
+  }
+  if (return_type >= 11 && return_type <= 17) {
+    return (return_type - 10) % 7;
+  }
+  return -1;
+}
+
 /// WEEKDAY(serial, [return_type]). `return_type` selects between Excel's
 /// three original encodings (1, 2, 3) and the 2010+ additions (11..17),
 /// which simply rotate the week start. Anything else is `#NUM!`.
@@ -439,24 +459,15 @@ Value Weekday_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
   const CoercedDateArg& serial = rounded.value();
   const int return_type = in.value().return_type;
   const int sun0 = date_time::weekday_sun0(normal_date_serial(serial, date1904));  // 0..6, Sun=0
-  const int mon0 = (sun0 + 6) % 7;                                                 // 0..6, Mon=0
-  // Excel types 11..17 start the week on Mon..Sun respectively and always
-  // return 1..7.
-  if (return_type >= 11 && return_type <= 17) {
-    const int start_offset = return_type - 11;  // 0 = Mon, ..., 6 = Sun
-    const int shifted = (mon0 - start_offset + 7) % 7;
-    return Value::number(static_cast<double>(shifted + 1));
+  if (return_type == 3) {
+    return Value::number(static_cast<double>(monday_zero_from_sun0(sun0)));  // Mon=0..Sun=6
   }
-  switch (return_type) {
-    case 1:
-      return Value::number(static_cast<double>(sun0 + 1));  // Sun=1..Sat=7
-    case 2:
-      return Value::number(static_cast<double>(mon0 + 1));  // Mon=1..Sun=7
-    case 3:
-      return Value::number(static_cast<double>(mon0));  // Mon=0..Sun=6
-    default:
-      return Value::error(ErrorCode::Num);
+  // Types 1, 2 and 11..17 number the days 1..7 from the week start.
+  const int week_start = week_start_sun0(return_type);
+  if (week_start < 0) {
+    return Value::error(ErrorCode::Num);
   }
+  return Value::number(static_cast<double>((sun0 - week_start + 7) % 7 + 1));
 }
 
 // EDATE / EOMONTH share the same month-shift preamble: parse the base
@@ -607,7 +618,7 @@ int floor_div7(int n) noexcept {
 // Thursday of the serial's Monday-start week, counted in that Thursday's
 // year. Worked in serial space so Excel's serial weekday governs.
 int iso_week_number(double serial_floor) noexcept {
-  const int mon0 = (date_time::weekday_sun0(serial_floor) + 6) % 7;
+  const int mon0 = monday_zero_from_sun0(date_time::weekday_sun0(serial_floor));
   const double thursday = serial_floor + static_cast<double>(3 - mon0);
   const double jan1 = date_time::serial_from_ymd(serial_year(thursday), 1, 1);
   return static_cast<int>(thursday - jan1) / 7 + 1;
@@ -644,37 +655,13 @@ Value Weeknum_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
   }
   const CoercedDateArg& serial = in.value().serial;
   const int return_type = in.value().return_type;
-  // Map return_type -> week-start weekday (Sun=0..Sat=6). -1 means invalid.
-  int ws = -1;
-  switch (return_type) {
-    case 1:
-    case 17:
-      ws = 0;  // Sun
-      break;
-    case 2:
-    case 11:
-      ws = 1;  // Mon
-      break;
-    case 12:
-      ws = 2;  // Tue
-      break;
-    case 13:
-      ws = 3;  // Wed
-      break;
-    case 14:
-      ws = 4;  // Thu
-      break;
-    case 15:
-      ws = 5;  // Fri
-      break;
-    case 16:
-      ws = 6;  // Sat
-      break;
-    case 21:
-      // ISO 8601.
-      return Value::number(static_cast<double>(iso_week_number(std::floor(normal_date_serial(serial, date1904)))));
-    default:
-      return Value::error(ErrorCode::Num);
+  if (return_type == 21) {
+    // ISO 8601.
+    return Value::number(static_cast<double>(iso_week_number(std::floor(normal_date_serial(serial, date1904)))));
+  }
+  const int ws = week_start_sun0(return_type);  // Sun=0..Sat=6
+  if (ws < 0) {
+    return Value::error(ErrorCode::Num);
   }
   const double day_serial = std::floor(normal_date_serial(serial, date1904));
   const double jan1 = date_time::serial_from_ymd(serial_year(day_serial), 1, 1);
@@ -916,8 +903,7 @@ Value Days360_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
     // A start date on the last day of February is treated the same as day
     // 31: it becomes day 30 before the day-31 rule below runs, so the
     // "end day 31" check below sees the adjusted start day.
-    // The 1900 calendar's February has 29 days (the fictitious leap day included).
-    const int feb_length = sy == 1900 ? 29 : static_cast<int>(days_in_month(sy, 2u));
+    const int feb_length = static_cast<int>(workbook_days_in_month(sy, 2u));
     if (sm == 2 && sd == feb_length) {
       sd = 30;
     }
