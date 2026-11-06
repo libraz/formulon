@@ -328,22 +328,27 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
   // Calculated items, and the items of a `showAll` field no surviving record
   // carries, are drawn without records. A `showAll` item still obeys its own
   // field's filters: it is shown iff a surviving record would pass with it.
-  const auto passes_own_filters = [&](std::size_t field_index, std::size_t shared_index) {
+  // `probe` is the caller's per-field scratch record: each call rewrites the same
+  // three slots, so it is copied from the first surviving record only once.
+  const auto passes_own_filters = [&](std::size_t field_index, std::size_t shared_index,
+                                      std::optional<PivotCacheRecord>& probe) {
     if (surviving.empty()) {
       return true;
     }
-    PivotCacheRecord probe = cache.records()[surviving.front()];
-    if (field_index >= probe.cells.size()) {
+    if (!probe.has_value()) {
+      probe = cache.records()[surviving.front()];
+    }
+    if (field_index >= probe->cells.size()) {
       return true;
     }
-    probe.cells[field_index] = Value::number(static_cast<double>(shared_index));
-    if (field_index < probe.cell_is_index.size()) {
-      probe.cell_is_index[field_index] = true;
+    probe->cells[field_index] = Value::number(static_cast<double>(shared_index));
+    if (field_index < probe->cell_is_index.size()) {
+      probe->cell_is_index[field_index] = true;
     }
-    if (field_index < probe.cell_is_date.size()) {
-      probe.cell_is_date[field_index] = false;
+    if (field_index < probe->cell_is_date.size()) {
+      probe->cell_is_date[field_index] = false;
     }
-    return record_filter.passes(probe);
+    return record_filter.passes(*probe);
   };
   const auto recordless_items = [&](const std::vector<HierLevel>& levels) {
     std::vector<std::vector<RecordlessItem>> items(levels.size());
@@ -362,11 +367,13 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
           }
         }
       }
+      std::optional<PivotCacheRecord> probe;
       for (std::size_t k = 0; k < cache_field.shared_items.size(); ++k) {
         const bool calculated =
             k < cache_field.shared_item_is_calculated.size() && cache_field.shared_item_is_calculated[k];
         const Value& key = cache_field.shared_items[k];
-        if ((!calculated && !field.show_all) || hidden.count(key) != 0 || (!calculated && !passes_own_filters(fi, k))) {
+        if ((!calculated && !field.show_all) || hidden.count(key) != 0 ||
+            (!calculated && !passes_own_filters(fi, k, probe))) {
           continue;
         }
         items[depth].push_back(RecordlessItem{key, calculated});

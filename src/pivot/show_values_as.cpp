@@ -17,6 +17,7 @@
 #include "pivot/pivot_types.h"
 #include "pivot/value_order.h"
 #include "utils/error.h"
+#include "utils/index_sort.h"
 #include "value.h"
 
 namespace formulon::pivot {
@@ -410,7 +411,7 @@ Cell base_mode_cell(const Grid& g, const BaseSpec& s, std::size_t ri, std::size_
         distinct.push_back(x.n);
       }
     }
-    std::sort(distinct.begin(), distinct.end());
+    sort_by_index(distinct, [](double a, double b) { return a < b; });
     distinct.erase(std::unique(distinct.begin(), distinct.end()), distinct.end());
     std::size_t rank = 1;
     if (!std::isnan(c.n)) {

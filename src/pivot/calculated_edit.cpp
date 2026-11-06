@@ -160,6 +160,13 @@ bool item_refs_reach(PivotFormulaHost& host, const PivotCache& cache, std::size_
   return false;
 }
 
+template <class T>
+void erase_at(std::vector<T>& values, std::size_t index) {
+  if (index < values.size()) {
+    values.erase(values.begin() + static_cast<std::ptrdiff_t>(index));
+  }
+}
+
 bool on_axis(const PivotField& field) {
   return field.axis == PivotAxis::Row || field.axis == PivotAxis::Col || field.axis == PivotAxis::Page;
 }
@@ -236,16 +243,7 @@ void erase_field_from_table(PivotTable& table, std::size_t field) {
   }
   table.mutable_page_fields() = std::move(pages);
 
-  if (field < table.fields().size()) {
-    table.mutable_fields().erase(table.mutable_fields().begin() + static_cast<std::ptrdiff_t>(field));
-  }
-}
-
-template <class T>
-void erase_at(std::vector<T>& values, std::size_t index) {
-  if (index < values.size()) {
-    values.erase(values.begin() + static_cast<std::ptrdiff_t>(index));
-  }
+  erase_at(table.mutable_fields(), field);
 }
 
 }  // namespace
@@ -338,7 +336,7 @@ Expected<void, Error> remove_calculated_field(PivotCache& cache, const std::vect
     erase_field_from_table(*table, field_index);
   }
   std::vector<PivotCacheField>& fields = cache.mutable_fields();
-  fields.erase(fields.begin() + static_cast<std::ptrdiff_t>(field_index));
+  erase_at(fields, field_index);
   for (PivotCacheField& field : fields) {
     if (field.field_group.has_value()) {
       for (std::optional<std::uint32_t>* link : {&field.field_group->par, &field.field_group->base}) {
@@ -530,7 +528,7 @@ Expected<void, Error> remove_calculated_item(PivotCache& cache, const std::vecto
   }
 
   std::vector<PivotCalculatedItem>& entries = cache.mutable_calculated_items();
-  entries.erase(entries.begin() + static_cast<std::ptrdiff_t>(index));
+  erase_at(entries, index);
   if (!item.has_value() || field >= cache.fields().size()) {
     return Expected<void, Error>::Ok();
   }
@@ -580,7 +578,7 @@ Expected<void, Error> remove_calculated_item(PivotCache& cache, const std::vecto
     if (!position.has_value()) {
       continue;
     }
-    items.erase(items.begin() + static_cast<std::ptrdiff_t>(*position));
+    erase_at(items, *position);
     for (PivotPageField& page : table->mutable_page_fields()) {
       if (page.field_index != field || !page.item_index.has_value()) {
         continue;
