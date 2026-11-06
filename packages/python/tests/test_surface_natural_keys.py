@@ -29,12 +29,12 @@ class NaturalKeyLookupTests(unittest.TestCase):
             wb.set_defined_name(DefinedNameInput("Rate", "Sheet1!$B$1", 0))
             self.assertEqual(
                 wb.get_defined_name("rate"),
-                DefinedName(name="Rate", formula="Sheet1!$A$1", local_sheet_id=None, comment=None, hidden=False),
+                DefinedName(name="Rate", formula="=Sheet1!$A$1", local_sheet_id=None, comment=None, hidden=False),
             )
             scoped = wb.get_defined_name("Rate", 0)
             self.assertIsNotNone(scoped)
             assert scoped is not None
-            self.assertEqual(scoped.formula, "Sheet1!$B$1")
+            self.assertEqual(scoped.formula, "=Sheet1!$B$1")
             self.assertIsNone(wb.get_defined_name("Missing"))
             wb.remove_defined_name("Rate")
             self.assertIsNone(wb.get_defined_name("Rate"))
@@ -88,7 +88,10 @@ class NaturalKeyLookupTests(unittest.TestCase):
             assert jpan is not None
             self.assertTrue(jpan.typeface)
             wb.set_theme_script_font(ThemeScriptFontInput(False, "Zzzz", "Test Face"))
-            self.assertEqual(wb.get_theme_script_font(major=False, script="Zzzz"), ThemeScriptFont("Zzzz", "Test Face"))
+            self.assertEqual(
+                wb.get_theme_script_font(major=False, script="Zzzz"),
+                ThemeScriptFont(major=False, script="Zzzz", typeface="Test Face"),
+            )
             self.assertIsNone(wb.get_theme_script_font(major=True, script="Zzzz"))
             path = wb.list_passthroughs()[0].path
             self.assertEqual(wb.get_passthrough(path), path)

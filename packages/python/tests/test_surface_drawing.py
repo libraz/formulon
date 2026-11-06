@@ -15,6 +15,7 @@ from formulon import (
     ImageInfo,
     IndexOutOfRangeError,
     Workbook,
+    get_image_info,
 )
 
 
@@ -43,13 +44,9 @@ class DrawingEnumTests(unittest.TestCase):
 
 class DrawingImageTests(unittest.TestCase):
     def test_probe_image(self) -> None:
-        wb = Workbook.create_default()
-        try:
-            self.assertEqual(wb.get_image_info(_png(3, 2)), ImageInfo(ImageFormat.PNG, 3, 2))
-            with self.assertRaises(FormulonError):
-                wb.get_image_info(b"not an image")
-        finally:
-            wb.close()
+        self.assertEqual(get_image_info(_png(3, 2)), ImageInfo(ImageFormat.PNG, 3, 2))
+        with self.assertRaises(FormulonError):
+            get_image_info(b"not an image")
 
     def test_insert_list_get_save_load_remove(self) -> None:
         png = _png(4, 3)

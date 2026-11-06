@@ -205,7 +205,7 @@ TEST(FormulonCApiDataTable, ResultCellsReportTheTableFormula) {
   ASSERT_EQ(fm_sheet_get_formula(wb.handle, 0, 3, 1, &formula), 0);
   EXPECT_STREQ(formula, "=TABLE(,B1)");
   ASSERT_EQ(fm_sheet_get_formula_r1c1(wb.handle, 0, 3, 1, &formula), 0);
-  EXPECT_STREQ(formula, "TABLE(,R[-3]C)");
+  EXPECT_STREQ(formula, "=TABLE(,R[-3]C)");
   ASSERT_EQ(fm_sheet_get_formula(wb.handle, 0, 3, 0, &formula), 0);
   EXPECT_STREQ(formula, "");  // A header value.
 

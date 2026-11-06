@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 
+#include "node_addon/parts/free_funcs.h"
 #include "node_addon/parts/workbook_class.h"
 
 namespace formulon_node {
@@ -81,11 +82,8 @@ Napi::Value SnapshotBytesOrThrow(Napi::Env env, fm_status_t rc, uint8_t* bytes, 
 
 }  // namespace
 
-Napi::Value Workbook::ProbeImage(const Napi::CallbackInfo& info) {
+Napi::Value ProbeImage(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
   const uint8_t* data = nullptr;
   size_t len = 0;
   if (!ReadImageBytes(info, 0, data, len)) {
@@ -93,7 +91,7 @@ Napi::Value Workbook::ProbeImage(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   fm_image_info_t img{};
-  const fm_status_t rc = fm_workbook_get_image_info(handle_, data, len, &img);
+  const fm_status_t rc = fm_get_image_info(data, len, &img);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }

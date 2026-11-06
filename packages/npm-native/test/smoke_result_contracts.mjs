@@ -10,11 +10,11 @@ import { assert, getModule, isFormulonError, path, pkgRoot, readFile } from './s
 
 // `fails: false` marks a call whose only failure path is a disposed
 // handle, which is not usable to probe.
-function failureProbes(wb) {
+function failureProbes(wb, mod) {
   return [
     [true, () => wb.recalcParallel(9)],
     [true, () => wb.sheet(99).getValue(0, 0)],
-    [true, () => wb.getPivotCacheFieldSharedItemValue(9999, 0, 0)],
+    [true, () => wb.listPivotCacheFieldSharedItems(9999, 0)],
     [true, () => wb.sheet(99).evaluateFormula(0, 0, '=1')],
     [true, () => wb.sheet(99).evaluateFormulaArray(0, 0, '=1')],
     [true, () => wb.sheet(99).getShape(1)],
@@ -32,7 +32,7 @@ function failureProbes(wb) {
     [true, () => wb.getPivotCacheOptions(9999)],
     [true, () => wb.listPivotCacheCalculatedItems(9999)],
     [true, () => wb.sheet(99).isPivotProjectionPending(0)],
-    [true, () => wb.isPivotCacheFieldSharedItemDate(9999, 0, 0)],
+    [true, () => wb.listPivotCacheFields(9999)],
     [true, () => wb.sheet(99).getPivotRowFieldOrder(0)],
     [true, () => wb.sheet(99).listPivotFields(0)],
     [true, () => wb.sheet(99).getPivotFieldItem(0, 0, 0)],
@@ -78,12 +78,12 @@ function failureProbes(wb) {
     [false, () => wb.sheet(99).listRowBreaks()],
     [true, () => wb.sheet(99).getPageSetup()],
     [true, () => wb.sheet(99).getPageMargins()],
-    [true, () => wb.sheet(99).getCellCount()],
+    [true, () => wb.sheet(99).listCells().length],
     // A released handle is the only failure path, which is not usable here.
     [false, () => wb.getPinnedNow()],
-    [true, () => wb.getLocaleFacts('nope')],
-    [true, () => wb.compareText('a', 'b', 0, 'nope')],
-    [true, () => wb.getCollationClasses([{ kind: 1, number: 1 }], 0, 'nope')],
+    [true, () => mod.getLocaleFacts('nope')],
+    [true, () => mod.compareText('a', 'b', 0, 'nope')],
+    [true, () => mod.getCollationClasses([{ kind: 1, number: 1 }], 0, 'nope')],
     [true, () => wb.sheet(99).getSpillInfo(0, 0)],
     [true, () => wb.sheet(99).getArrayFormula(0, 0)],
     [true, () => wb.sheet(99).getFormatDefaults()],
@@ -102,7 +102,7 @@ function failureProbes(wb) {
     [true, () => wb.sheet(99).evaluateAutoFilter()],
     [true, () => wb.sheet(99).listThreadedComments()],
     [false, () => wb.listPeople()],
-    [true, () => wb.getImageInfo(new Uint8Array(0))],
+    [true, () => mod.getImageInfo(new Uint8Array(0))],
     [true, () => wb.sheet(99).getImage(1)],
     [true, () => wb.sheet(99).addImage(new Uint8Array(0), {})],
     [true, () => wb.sheet(99).snapshotDrawing(1)],
@@ -133,7 +133,7 @@ test('failure paths throw FormulonError carrying a message and a context', async
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    for (const [expectFailure, call] of failureProbes(wb)) {
+    for (const [expectFailure, call] of failureProbes(wb, mod)) {
       if (!expectFailure) continue;
       assert.throws(
         () => call(),

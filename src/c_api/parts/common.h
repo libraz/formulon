@@ -129,8 +129,9 @@ std::string ingest_entered_formula(fm_workbook_t* wb, std::string_view formula);
 // `eval::translate_r1c1_entry` at the cell when that passes the same checks.
 // Typed `_xlpm.` before a cell-shaped name is refused everywhere. Returns 0,
 // or sets `kParserUnexpectedToken` ("formula does not parse") with
-// `context`. `*bound` receives the bound (or translated) text, not yet
-// normalized, for `Workbook::set_cell_formula`.
+// `context`. `*bound` receives the bound (or translated) text with one
+// leading '=', the spelling the readers store, not yet normalized, for
+// `Workbook::set_cell_formula`.
 fm_status_t check_entered_cell_formula(const fm_workbook_t* wb, std::size_t sheet, std::uint32_t row, std::uint32_t col,
                                        std::string_view formula, std::string_view context, std::string* bound);
 
@@ -150,6 +151,20 @@ inline bool may_respell_formula(std::string_view model) noexcept {
 // (empty outside every table): `parser::display_structured_refs`, then
 // `Workbook::spell_self_book_names`, then `parser::display_cell_shaped_names`.
 std::string display_formula_text(const formulon::Workbook& book, std::string_view model, std::string_view own_table);
+
+// Formula text as every getter hands it out: `text` with one leading '=',
+// which the stored spelling outside a cell omits. Empty text (no formula)
+// stays empty, and text that already starts with '=' is kept as it is.
+inline std::string with_formula_prefix(std::string_view text) {
+  if (text.empty() || text.front() == '=') {
+    return std::string(text);
+  }
+  std::string out;
+  out.reserve(text.size() + 1U);
+  out += '=';
+  out.append(text);
+  return out;
+}
 
 // Model formula text as a getter hands it out: `model`'s own bytes when
 // `display_formula_text` leaves it unchanged, else that spelling appended to

@@ -22,18 +22,19 @@ using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
-using formulon::c_api::parts::display_formula;
+using formulon::c_api::parts::display_formula_text;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::ingest_entered_formula;
-using formulon::c_api::parts::may_respell_formula;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::to_cell_rect;
 using formulon::c_api::parts::to_merge_range;
 using formulon::c_api::parts::validate;
+using formulon::c_api::parts::with_formula_prefix;
 
 namespace {
 
@@ -514,13 +515,13 @@ extern "C" fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, std::siz
   out->show_error_message = v.show_error_message ? 1 : 0;
   out->show_dropdown = v.show_dropdown ? 1 : 0;
   const formulon::Workbook& book = wb->workbook();
-  if (may_respell_formula(v.formula1) || may_respell_formula(v.formula2)) {
-    formulon::c_api::parts::TextStore& store = fresh_read_scratch(wb);
-    out->formula1 = display_formula(book, v.formula1, store, {});
-    out->formula2 = display_formula(book, v.formula2, store, {});
-  } else {
+  if (v.formula1.empty() && v.formula2.empty()) {
     out->formula1 = v.formula1.c_str();
     out->formula2 = v.formula2.c_str();
+  } else {
+    formulon::c_api::parts::TextStore& store = fresh_read_scratch(wb);
+    out->formula1 = store_cstr(store, with_formula_prefix(display_formula_text(book, v.formula1, {})));
+    out->formula2 = store_cstr(store, with_formula_prefix(display_formula_text(book, v.formula2, {})));
   }
   out->error_title = v.error_title.c_str();
   out->error_message = v.error_message.c_str();

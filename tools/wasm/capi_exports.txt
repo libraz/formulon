@@ -110,6 +110,7 @@ fm_workbook_get_passthrough
 
 # -- Recalc / calc policy / profile ----------------------------------------------
 fm_workbook_recalc
+fm_workbook_has_dirty_cells
 fm_workbook_set_iterative
 fm_workbook_get_iterative
 fm_sheet_recalc_viewport
@@ -524,7 +525,7 @@ fm_sheet_get_page_margins
 fm_sheet_set_range_xf_index
 
 # -- Drawing objects -------------------------------------------------------------
-fm_workbook_get_image_info
+fm_get_image_info
 fm_sheet_get_drawing_object_count
 fm_sheet_get_drawing_object_at
 fm_sheet_get_drawing_object

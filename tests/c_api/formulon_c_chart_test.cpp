@@ -1006,7 +1006,7 @@ TEST(FormulonCApiChart, OpenAndAccessorsRejectBadArguments) {
   EXPECT_EQ(fm_sheet_get_chart(wb.handle, 0, id, nullptr, &chart), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_get_chart(nullptr, 0, id, &present, &chart), kBindingNullPointer);
   fm_chart_data_t* data = nullptr;
-  EXPECT_EQ(fm_sheet_get_chart_data(wb.handle, 0, 99, &data), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_chart_data(wb.handle, 0, 99, &data), FM_STATUS_NOT_FOUND);
   EXPECT_EQ(data, nullptr);
   EXPECT_EQ(fm_sheet_get_chart_data(wb.handle, 0, id, nullptr), kBindingNullPointer);
   fm_chart_destroy(nullptr);

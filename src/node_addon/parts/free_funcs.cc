@@ -139,16 +139,6 @@ Napi::Value StatusString(const Napi::CallbackInfo& info) {
   return JsString(env, s);
 }
 
-Napi::Value ErrorDisplayName(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  int32_t code = 0;
-  if (!ReadInt32(info, "getErrorDisplayName", &code)) {
-    return env.Undefined();
-  }
-  const char* s = fm_get_error_display_name(static_cast<fm_error_code_t>(code));
-  return JsString(env, s);
-}
-
 Napi::Value SetLogMinLevel(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   int32_t level = 0;

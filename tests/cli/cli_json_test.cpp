@@ -103,9 +103,9 @@ TEST(FormulonCli, JsonEnvelopeDumpMetadataListsNamesTablesAndParts) {
   ASSERT_EQ(r.exit_code, 0) << r.stderr_text;
   EXPECT_EQ(r.stdout_text,
             "{\"format\":1,\"defined_names\":["
-            "{\"name\":\"Before\",\"formula\":\"1\",\"scope\":null},"
-            "{\"name\":\"Bad\",\"formula\":\"Sheet1!$A$1\",\"scope\":\"#99\"},"
-            "{\"name\":\"After\",\"formula\":\"2\",\"scope\":null}],"
+            "{\"name\":\"Before\",\"formula\":\"=1\",\"scope\":null},"
+            "{\"name\":\"Bad\",\"formula\":\"=Sheet1!$A$1\",\"scope\":\"#99\"},"
+            "{\"name\":\"After\",\"formula\":\"=2\",\"scope\":null}],"
             "\"tables\":[],\"passthrough_parts\":[]}\n");
 }
 

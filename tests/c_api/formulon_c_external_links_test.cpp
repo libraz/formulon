@@ -301,7 +301,7 @@ TEST(FormulonCApiExternalLinks, FileNameCellGettersSpellTheName) {
 
     const char* r1c1 = nullptr;
     ASSERT_EQ(fm_sheet_get_formula_r1c1(wb.handle, 0, 0, 0, &r1c1), 0) << fm_get_last_error_message();
-    EXPECT_EQ(Str(r1c1), book + "LN+1");
+    EXPECT_EQ(Str(r1c1), "=" + book + "LN+1");
 
     uint32_t row = 99;
     uint32_t col = 99;
@@ -339,11 +339,11 @@ TEST(FormulonCApiExternalLinks, FileNameDefinedNamesStoreAndSpellTheName) {
     dn.local_sheet_id = -2;
     ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 1, &dn), 0) << fm_get_last_error_message();
     EXPECT_EQ(Str(dn.name), "LP");
-    EXPECT_EQ(Str(dn.formula), book + "LN*2");
+    EXPECT_EQ(Str(dn.formula), "=" + book + "LN*2");
     ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 2, &dn), 0) << fm_get_last_error_message();
     EXPECT_EQ(Str(dn.name), "LQ");
     EXPECT_EQ(dn.local_sheet_id, 0);
-    EXPECT_EQ(Str(dn.formula), book + "LN*3");
+    EXPECT_EQ(Str(dn.formula), "=" + book + "LN*3");
   }
 }
 
@@ -365,8 +365,8 @@ TEST(FormulonCApiExternalLinks, FileNameValidationsStoreAndSpellTheName) {
     const std::string book = named ? "M5.xlsx!" : "[0]!";
     fm_data_validation_t out{};
     ASSERT_EQ(fm_sheet_get_validation(wb.handle, 0, 0, &out), 0) << fm_get_last_error_message();
-    EXPECT_EQ(Str(out.formula1), book + "LN");
-    EXPECT_EQ(Str(out.formula2), book + "LN*2");
+    EXPECT_EQ(Str(out.formula1), "=" + book + "LN");
+    EXPECT_EQ(Str(out.formula2), "=" + book + "LN*2");
   }
 }
 
@@ -403,7 +403,7 @@ TEST(FormulonCApiExternalLinks, FileNameConditionalFormatsStoreAndSpellTheName) 
     const std::string book = named ? "M5.xlsx!" : "[0]!";
     fm_cf_rule_t out{};
     ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0) << fm_get_last_error_message();
-    EXPECT_EQ(Str(out.formula1), book + "LN>0");
+    EXPECT_EQ(Str(out.formula1), "=" + book + "LN>0");
     ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 1, &out), 0) << fm_get_last_error_message();
     ASSERT_EQ(out.color_scale_count, 2U);
     EXPECT_EQ(Str(out.color_scale_thresholds[0].value), book + "LN");
@@ -428,7 +428,7 @@ TEST(FormulonCApiExternalLinks, FileNameTableTotalsStoreAndSpellTheName) {
     const std::string book = named ? "M5.xlsx!" : "[0]!";
     fm_table_column_info_t column{};
     ASSERT_EQ(fm_workbook_get_table_column(wb.handle, table, 0, &column), 0) << fm_get_last_error_message();
-    EXPECT_EQ(Str(column.totals_row_formula), book + "LN+1");
+    EXPECT_EQ(Str(column.totals_row_formula), "=" + book + "LN+1");
     EXPECT_EQ(Formula(wb.handle, 3, 3), "=" + book + "LN+1");
   }
 }

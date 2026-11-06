@@ -378,7 +378,7 @@ TEST(FormulonCApiCellRange, FormulaGettersReadA1AndR1C1) {
   ASSERT_EQ(fm_sheet_get_formula(wb.handle, 0, 4, 2, &text), 0);
   EXPECT_STREQ(text, "=SUM($A$1:B4)+A5");
   ASSERT_EQ(fm_sheet_get_formula_r1c1(wb.handle, 0, 4, 2, &text), 0);
-  EXPECT_STREQ(text, "SUM(R1C1:R[-1]C[-1])+RC[-2]");
+  EXPECT_STREQ(text, "=SUM(R1C1:R[-1]C[-1])+RC[-2]");
 
   ASSERT_EQ(fm_sheet_get_formula(wb.handle, 0, 0, 0, &text), 0);
   EXPECT_STREQ(text, "");

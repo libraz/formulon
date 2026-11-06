@@ -87,7 +87,7 @@ test('setTableColumnTotals writes the totals-row cells', async () => {
     assert.equal(columns[0].totalsRowLabel, 'Total');
     assert.equal(columns[1].totalsRowFunction, 'sum');
     wb.setTableColumnTotals(0, 1, { function: 'custom', formula: '=MAX(Sales[Amount])' });
-    assert.equal(wb.listTables()[0].columns[1].totalsRowFormula, 'MAX([Amount])');
+    assert.equal(wb.listTables()[0].columns[1].totalsRowFormula, '=MAX([Amount])');
   } finally {
     release(wb);
   }

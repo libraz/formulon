@@ -31,20 +31,18 @@ test('getComment distinguishes absence from an invalid sheet', async () => {
   assert.equal(found.text, 'hello');
 });
 
-test('cellCount + cellAt enumerate stored cells', async () => {
+test('listCells enumerates stored cells', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   wb.sheet(0).setNumber(0, 0, 1);
   wb.sheet(0).setNumber(0, 1, 2);
   wb.sheet(0).setFormula(1, 0, '=A1+B1');
   wb.recalc();
-  const n = wb.sheet(0).getCellCount();
-  assert.equal(typeof n, 'number');
-  assert.ok(n >= 3, `expected >= 3 stored cells, got ${n}`);
-  // Iterate; one of the entries should carry our formula.
+  const cells = wb.sheet(0).listCells();
+  assert.ok(cells.length >= 3, `expected >= 3 stored cells, got ${cells.length}`);
+  // One of the entries should carry our formula.
   let foundFormula = false;
-  for (let i = 0; i < n; ++i) {
-    const e = wb.sheet(0).getCellAt(i);
+  for (const e of cells) {
     assert.equal(typeof e.row, 'number');
     assert.equal(typeof e.col, 'number');
     if (e.formula === '=A1+B1') {
@@ -209,9 +207,9 @@ test('addValidation / getValidation / removeValidationAt / clearValidations roun
   assert.equal(list[0].showInputMessage, true);
   assert.equal(typeof list[1].allowBlank, 'boolean');
   assert.equal(list[1].allowBlank, false);
-  assert.equal(list[0].formula1, '"Yes,No,Maybe"');
-  assert.equal(list[1].formula1, '0');
-  assert.equal(list[1].formula2, '100');
+  assert.equal(list[0].formula1, '="Yes,No,Maybe"');
+  assert.equal(list[1].formula1, '=0');
+  assert.equal(list[1].formula2, '=100');
   assert.equal(list[1].ranges.length, 2);
   assert.equal(list[1].ranges[1].firstRow, 6);
 
@@ -261,7 +259,7 @@ test('addConditionalFormat + getCfRule + clearConditionalFormats round-trip', as
   assert.equal(typeof list[0].id, 'string');
   assert.equal(list[0].ranges.length, 1);
   assert.equal(list[0].ranges[0].lastRow, 4);
-  assert.equal(list[0].formula1, '10');
+  assert.equal(list[0].formula1, '=10');
   // removeConditionalFormatAt drops the only rule.
   wb.sheet(0).removeCfRule(0);
   assert.equal(wb.sheet(0).listCfRules().length, 0);
@@ -364,7 +362,7 @@ test('omitted data bar x14 fields keep the model defaults', async () => {
   wb.dispose();
 });
 
-test('named cell styles: listCellStyles / getCellStyle / getCellStyleXfCount', async () => {
+test('named cell styles: listCellStyles / getCellStyle / listCellStyleXfs', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   // A fresh workbook may carry zero named styles; the accessors must
@@ -372,7 +370,7 @@ test('named cell styles: listCellStyles / getCellStyle / getCellStyleXfCount', a
   const count = wb.listCellStyles().length;
   assert.equal(typeof count, 'number');
   assert.ok(count >= 0);
-  assert.equal(typeof wb.getCellStyleXfCount(), 'number');
+  assert.equal(typeof wb.listCellStyleXfs().length, 'number');
   if (count > 0) {
     const cs = wb.listCellStyles()[0];
     assert.equal(typeof cs.name, 'string');
@@ -493,23 +491,22 @@ test('setExcelProfileId switches a live workbook through every profile id', asyn
 
 test('listFunctionNames + getFunctionMetadata expose the catalog', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
-  const names = wb.listFunctionNames();
+  const names = mod.listFunctionNames();
   assert.ok(Array.isArray(names));
   assert.ok(names.length > 0, 'expected a non-empty function catalog');
   assert.ok(names.includes('SUM'), 'expected SUM in the catalog');
-  const md = wb.getFunctionMetadata('SUM');
+  const md = mod.getFunctionMetadata('SUM');
   assert.equal(md.name, 'SUM');
   assert.equal(typeof md.minArity, 'number');
   // An unknown function reads as null.
-  const miss = wb.getFunctionMetadata('NOT_A_REAL_FUNCTION_XYZ');
+  const miss = mod.getFunctionMetadata('NOT_A_REAL_FUNCTION_XYZ');
   assert.equal(miss, null);
 });
 
 test('mergeFunctionMetadata overlays provider metadata; is identity without a provider', async () => {
   const mod = await getModule();
   assert.equal(typeof mod.mergeFunctionMetadata, 'function');
-  const base = mod.Workbook.createDefault().getFunctionMetadata('XLOOKUP');
+  const base = mod.getFunctionMetadata('XLOOKUP');
   assert.equal(base.name, 'XLOOKUP');
   // The engine leaves display metadata empty.
   assert.equal(base.signatureTemplate, undefined);
@@ -549,167 +546,141 @@ test('mergeFunctionMetadata overlays provider metadata; is identity without a pr
 
 test('localizeFunctionName / canonicalizeFunctionName round-trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
   // en-US profile: the localized name is the canonical name itself.
-  assert.equal(wb.localizeFunctionName('SUM', 'win-365-en_US'), 'SUM');
-  assert.equal(wb.canonicalizeFunctionName('SUM', 'win-365-en_US'), 'SUM');
+  assert.equal(mod.localizeFunctionName('SUM', 'win-365-en_US'), 'SUM');
+  assert.equal(mod.canonicalizeFunctionName('SUM', 'win-365-en_US'), 'SUM');
   // An unknown name is refused.
   assert.throws(
-    () => wb.canonicalizeFunctionName('NOPE_XYZ', 'win-365-en_US'),
+    () => mod.canonicalizeFunctionName('NOPE_XYZ', 'win-365-en_US'),
     (e) => isFormulonError(e, mod.StatusCode.InvalidArgument),
   );
 });
 
 test('formula and function-name localization is keyed by profile id', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
-  try {
-    assert.equal(wb.localizeFormula('=SUM(1.5,2)', 'mac-365-de_DE'), '=SUMME(1,5;2)');
-    assert.equal(wb.canonicalizeFormula('=SUMME(1,5;2)', 'mac-365-de_DE'), '=SUM(1.5,2)');
-    assert.equal(wb.localizeFormula('=IF(TRUE,1,2)', 'mac-365-fr_FR'), '=SI(VRAI;1;2)');
-    assert.equal(wb.localizeFormula('=#N/A', 'mac-365-de_DE'), '=#NV');
-    assert.equal(wb.canonicalizeFormula('=#NV', 'mac-365-de_DE'), '=#N/A');
-    assert.equal(wb.localizeFormula('=A1&";"', 'mac-365-de_DE'), '=A1&";"');
-    assert.equal(wb.localizeFunctionName('SUM', 'mac-365-de_DE'), 'SUMME');
-    assert.equal(wb.canonicalizeFunctionName('SUMME', 'win-365-de_DE'), 'SUM');
-    assert.throws(() => wb.localizeFormula('=SUM(1)', 'nope'), isFormulonError);
-    assert.throws(() => wb.canonicalizeFormula('=SUM(1)', 'nope'), isFormulonError);
-    assert.throws(() => wb.canonicalizeFunctionName('SUM', 'nope'), isFormulonError);
-  } finally {
-    wb.dispose();
-  }
+  assert.equal(mod.localizeFormula('=SUM(1.5,2)', 'mac-365-de_DE'), '=SUMME(1,5;2)');
+  assert.equal(mod.canonicalizeFormula('=SUMME(1,5;2)', 'mac-365-de_DE'), '=SUM(1.5,2)');
+  assert.equal(mod.localizeFormula('=IF(TRUE,1,2)', 'mac-365-fr_FR'), '=SI(VRAI;1;2)');
+  assert.equal(mod.localizeFormula('=#N/A', 'mac-365-de_DE'), '=#NV');
+  assert.equal(mod.canonicalizeFormula('=#NV', 'mac-365-de_DE'), '=#N/A');
+  assert.equal(mod.localizeFormula('=A1&";"', 'mac-365-de_DE'), '=A1&";"');
+  assert.equal(mod.localizeFunctionName('SUM', 'mac-365-de_DE'), 'SUMME');
+  assert.equal(mod.canonicalizeFunctionName('SUMME', 'win-365-de_DE'), 'SUM');
+  assert.throws(() => mod.localizeFormula('=SUM(1)', 'nope'), isFormulonError);
+  assert.throws(() => mod.canonicalizeFormula('=SUM(1)', 'nope'), isFormulonError);
+  assert.throws(() => mod.canonicalizeFunctionName('SUM', 'nope'), isFormulonError);
 });
 
 test('getLocaleFacts reports separators, names, error spellings and measurement', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
-  try {
-    const mac = wb.getLocaleFacts('mac-365-de_DE');
-    assert.equal(mac.decimalSeparator, ',');
-    assert.equal(mac.listSeparator, ';');
-    assert.equal(mac.dateOrder, mod.LocaleDateOrder.Dmy);
-    assert.equal(mac.measured, true);
-    assert.equal(mac.collationMeasured, true);
-    const na = mac.errorNames.find((e) => e.canonical === '#N/A');
-    assert.equal(na.localized, '#NV');
-    const listed = wb.listLocaleErrorNames('mac-365-de_DE');
-    assert.deepEqual([...listed], mac.errorNames);
-    assert.throws(() => wb.listLocaleErrorNames('nope'), isFormulonError);
-    assert.equal(wb.getLocaleFacts('win-365-de_DE').measured, false);
-    assert.equal(wb.getLocaleFacts('win-365-ja_JP').collationMeasured, false);
-    assert.equal(wb.getLocaleFacts('win-365-en_US').decimalSeparator, '.');
-    assert.throws(() => wb.getLocaleFacts('nope'), isFormulonError);
-  } finally {
-    wb.dispose();
-  }
+  const mac = mod.getLocaleFacts('mac-365-de_DE');
+  assert.equal(mac.decimalSeparator, ',');
+  assert.equal(mac.listSeparator, ';');
+  assert.equal(mac.dateOrder, mod.LocaleDateOrder.Dmy);
+  assert.equal(mac.measured, true);
+  assert.equal(mac.collationMeasured, true);
+  const na = mac.errorNames.find((e) => e.canonical === '#N/A');
+  assert.equal(na.localized, '#NV');
+  const listed = mod.listLocaleErrorNames('mac-365-de_DE');
+  assert.deepEqual([...listed], mac.errorNames);
+  assert.throws(() => mod.listLocaleErrorNames('nope'), isFormulonError);
+  assert.equal(mod.getLocaleFacts('win-365-de_DE').measured, false);
+  assert.equal(mod.getLocaleFacts('win-365-ja_JP').collationMeasured, false);
+  assert.equal(mod.getLocaleFacts('win-365-en_US').decimalSeparator, '.');
+  assert.throws(() => mod.getLocaleFacts('nope'), isFormulonError);
 });
 
 test('compareText folds by strength and rejects bad arguments', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
-  try {
-    const profile = 'mac-365-zh_CN';
-    const strict = wb.compareText('A', '\uFF21', 0, profile);
-    assert.notEqual(strict, 0);
-    const dynamic = wb.compareText('A', '\uFF21', 1, profile);
-    assert.equal(dynamic, 0);
-    const ab = wb.compareText('a', 'b', 0, 'mac-365-en_US');
-    const ba = wb.compareText('b', 'a', 0, 'mac-365-en_US');
-    assert.equal(ab, -1);
-    assert.equal(ba, 1);
-    assert.throws(() => wb.compareText('a', 'b', 0, 'nope'), isFormulonError);
-    assert.throws(() => wb.compareText('a', 'b', -1, profile), RangeError);
-  } finally {
-    wb.dispose();
-  }
+  const profile = 'mac-365-zh_CN';
+  const strict = mod.compareText('A', '\uFF21', 0, profile);
+  assert.notEqual(strict, 0);
+  const dynamic = mod.compareText('A', '\uFF21', 1, profile);
+  assert.equal(dynamic, 0);
+  const ab = mod.compareText('a', 'b', 0, 'mac-365-en_US');
+  const ba = mod.compareText('b', 'a', 0, 'mac-365-en_US');
+  assert.equal(ab, -1);
+  assert.equal(ba, 1);
+  assert.throws(() => mod.compareText('a', 'b', 0, 'nope'), isFormulonError);
+  assert.throws(() => mod.compareText('a', 'b', -1, profile), RangeError);
 });
 
 test('getCollationClasses orders by kind, folds text by strength, and copies its output', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
-  try {
-    const values = [
-      { kind: 1, number: 1 },
-      { kind: 3, text: '1' },
-      { kind: 2, boolean: true },
-      { kind: 3, text: 'TRUE' },
-      { kind: 0 },
-      { kind: 3, text: '' },
-      { kind: 1, number: 0 },
-      { kind: 2, boolean: false },
-    ];
-    const r = wb.getCollationClasses(values, 1, 'mac-365-en_US');
-    assert.ok(r.classIds instanceof Uint32Array);
-    assert.equal(r.classIds.length, 8);
-    assert.equal(r.classCount, 8);
-    assert.equal(new Set(r.classIds).size, 8);
-    const [num1, str1, boolTrue, strTrue, blank, strEmpty, num0, boolFalse] = r.classIds;
-    assert.ok(Math.max(num0, num1) < Math.min(str1, strTrue, strEmpty));
-    assert.ok(Math.max(str1, strTrue, strEmpty) < Math.min(boolFalse, boolTrue));
-    assert.ok(Math.max(boolFalse, boolTrue) < blank);
-    assert.ok(num0 < num1 && boolFalse < boolTrue);
+  const values = [
+    { kind: 1, number: 1 },
+    { kind: 3, text: '1' },
+    { kind: 2, boolean: true },
+    { kind: 3, text: 'TRUE' },
+    { kind: 0 },
+    { kind: 3, text: '' },
+    { kind: 1, number: 0 },
+    { kind: 2, boolean: false },
+  ];
+  const r = mod.getCollationClasses(values, 1, 'mac-365-en_US');
+  assert.ok(r.classIds instanceof Uint32Array);
+  assert.equal(r.classIds.length, 8);
+  assert.equal(r.classCount, 8);
+  assert.equal(new Set(r.classIds).size, 8);
+  const [num1, str1, boolTrue, strTrue, blank, strEmpty, num0, boolFalse] = r.classIds;
+  assert.ok(Math.max(num0, num1) < Math.min(str1, strTrue, strEmpty));
+  assert.ok(Math.max(str1, strTrue, strEmpty) < Math.min(boolFalse, boolTrue));
+  assert.ok(Math.max(boolFalse, boolTrue) < blank);
+  assert.ok(num0 < num1 && boolFalse < boolTrue);
 
-    const snapshot = Array.from(r.classIds);
-    wb.getCollationClasses(
-      [
-        { kind: 3, text: 'z' },
-        { kind: 3, text: 'y' },
-      ],
-      1,
-      'mac-365-en_US',
-    );
-    assert.deepEqual(Array.from(r.classIds), snapshot);
+  const snapshot = Array.from(r.classIds);
+  mod.getCollationClasses(
+    [
+      { kind: 3, text: 'z' },
+      { kind: 3, text: 'y' },
+    ],
+    1,
+    'mac-365-en_US',
+  );
+  assert.deepEqual(Array.from(r.classIds), snapshot);
 
-    const folded = wb.getCollationClasses(
-      [
-        { kind: 3, text: 'a' },
-        { kind: 3, text: 'A' },
-      ],
-      1,
-      'mac-365-en_US',
-    );
-    assert.equal(folded.classIds[0], folded.classIds[1]);
-    assert.equal(folded.classCount, 1);
+  const folded = mod.getCollationClasses(
+    [
+      { kind: 3, text: 'a' },
+      { kind: 3, text: 'A' },
+    ],
+    1,
+    'mac-365-en_US',
+  );
+  assert.equal(folded.classIds[0], folded.classIds[1]);
+  assert.equal(folded.classCount, 1);
 
-    const empty = wb.getCollationClasses([], 1, 'mac-365-en_US');
-    assert.equal(empty.classIds.length, 0);
-    assert.equal(empty.classCount, 0);
+  const empty = mod.getCollationClasses([], 1, 'mac-365-en_US');
+  assert.equal(empty.classIds.length, 0);
+  assert.equal(empty.classCount, 0);
 
-    // A value without `kind` is rejected, not read as blank.
-    assert.throws(() => wb.getCollationClasses([{ number: 1 }], 1, 'mac-365-en_US'), TypeError);
-    assert.throws(() => wb.getCollationClasses({}, 1, 'mac-365-en_US'), TypeError);
-    assert.throws(() => wb.getCollationClasses([{ kind: 1, number: 1 }], 1, 'nope'), isFormulonError);
-    assert.throws(() => wb.getCollationClasses(values, -1, 'mac-365-en_US'), RangeError);
-  } finally {
-    wb.dispose();
-  }
+  // A value without `kind` is rejected, not read as blank.
+  assert.throws(() => mod.getCollationClasses([{ number: 1 }], 1, 'mac-365-en_US'), TypeError);
+  assert.throws(() => mod.getCollationClasses({}, 1, 'mac-365-en_US'), TypeError);
+  assert.throws(() => mod.getCollationClasses([{ kind: 1, number: 1 }], 1, 'nope'), isFormulonError);
+  assert.throws(() => mod.getCollationClasses(values, -1, 'mac-365-en_US'), RangeError);
 });
 
 test('getCollationClasses timing on 100k mixed CJK/ASCII texts', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
-  try {
-    const cjk = [
-      '\u6771\u4EAC',
-      '\u5927\u962A',
-      '\u3055\u304F\u3089',
-      '\u30B5\u30AF\u30E9',
-      '\u4E2D\u6587',
-      '\uD55C\uAE00',
-    ];
-    const values = [];
-    for (let i = 0; i < 100000; i += 1) {
-      const text = i % 2 === 0 ? `${cjk[i % cjk.length]}${i % 5000}` : `item${i % 7000}`;
-      values.push({ kind: 3, text });
-    }
-    const t0 = process.hrtime.bigint();
-    const r = wb.getCollationClasses(values, 1, 'mac-365-ja_JP');
-    const ms = Number(process.hrtime.bigint() - t0) / 1e6;
-    assert.equal(r.classIds.length, 100000);
-    console.log(`getCollationClasses 100k mixed CJK/ASCII texts: ${ms.toFixed(0)} ms (${r.classCount} classes)`);
-  } finally {
-    wb.dispose();
+  const cjk = [
+    '\u6771\u4EAC',
+    '\u5927\u962A',
+    '\u3055\u304F\u3089',
+    '\u30B5\u30AF\u30E9',
+    '\u4E2D\u6587',
+    '\uD55C\uAE00',
+  ];
+  const values = [];
+  for (let i = 0; i < 100000; i += 1) {
+    const text = i % 2 === 0 ? `${cjk[i % cjk.length]}${i % 5000}` : `item${i % 7000}`;
+    values.push({ kind: 3, text });
   }
+  const t0 = process.hrtime.bigint();
+  const r = mod.getCollationClasses(values, 1, 'mac-365-ja_JP');
+  const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+  assert.equal(r.classIds.length, 100000);
+  console.log(`getCollationClasses 100k mixed CJK/ASCII texts: ${ms.toFixed(0)} ms (${r.classCount} classes)`);
 });
 
 test('precedents / dependents return arrays for a small formula graph', async () => {

@@ -35,6 +35,7 @@
 #include "io/cf_overlay.h"
 #include "parser/formula_prefix.h"
 #include "utils/error.h"
+#include "utils/strings.h"
 #include "workbook.h"
 
 using formulon::c_api::BorrowedArrayArena;
@@ -51,6 +52,7 @@ using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::to_c;
 using formulon::c_api::parts::validate;
+using formulon::c_api::parts::with_formula_prefix;
 
 // `fm_cell_rect_t` mirrors `cf::CFCellRange`, so the model's range
 // vector copies into the getter's arena as one memcpy and the wire type
@@ -150,14 +152,14 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
     out->ranges = range_arena.adopt(std::vector<fm_cell_rect_t>(first, first + block.sqref.size()));
   }
   out->range_count = static_cast<std::uint32_t>(block.sqref.size());
-  out->formula1 =
-      rule.formula1.has_value()
-          ? text_arena.emplace(formulon::parser::display_cell_shaped_names(wb.spell_self_book_names(*rule.formula1)))
-          : nullptr;
-  out->formula2 =
-      rule.formula2.has_value()
-          ? text_arena.emplace(formulon::parser::display_cell_shaped_names(wb.spell_self_book_names(*rule.formula2)))
-          : nullptr;
+  out->formula1 = rule.formula1.has_value()
+                      ? text_arena.emplace(with_formula_prefix(
+                            formulon::parser::display_cell_shaped_names(wb.spell_self_book_names(*rule.formula1))))
+                      : nullptr;
+  out->formula2 = rule.formula2.has_value()
+                      ? text_arena.emplace(with_formula_prefix(
+                            formulon::parser::display_cell_shaped_names(wb.spell_self_book_names(*rule.formula2))))
+                      : nullptr;
   if (rule.op.has_value()) {
     out->op_engaged = 1;
     out->op = static_cast<std::uint8_t>(*rule.op);
@@ -499,7 +501,14 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
     out_rule.dxf_id = rule->dxf_id;
   }
   if (rule->id != nullptr && rule->id[0] != '\0') {
-    // Already checked against the `ST_Guid` shape by `validate` above.
+    // Already checked against the `ST_Guid` shape by `validate` above; a GUID's hex digits match in either case.
+    for (const auto& block : wb->workbook().sheet(sheet_index).conditional_formats()) {
+      for (const auto& existing : block.rules) {
+        if (formulon::strings::case_insensitive_eq(existing.id, rule->id)) {
+          return invalid_argument("CF rule id is already on the sheet", "id=" + std::string(rule->id));
+        }
+      }
+    }
     out_rule.id = rule->id;
   } else {
     // Derived from the priority so add-then-list is deterministic; skips ids

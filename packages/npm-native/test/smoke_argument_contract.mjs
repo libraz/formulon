@@ -159,13 +159,13 @@ test('a primitive or null where an object is declared throws TypeError and chang
     assert.throws(() => wb.sheet(0).setSheetProtection(5), TypeError);
     assert.deepEqual(wb.sheet(0).getSheetProtection(), protectionBefore);
 
-    const fonts = wb.getFontCount();
+    const fonts = wb.listFonts().length;
     assert.throws(() => wb.addFont(null), TypeError);
     assert.throws(() => wb.addFont(1), TypeError);
     assert.throws(() => wb.setDefaultFont(null), TypeError);
-    assert.equal(wb.getFontCount(), fonts);
+    assert.equal(wb.listFonts().length, fonts);
 
-    assert.throws(() => wb.sheet(0).recalcViewport('x'), TypeError);
+    assert.throws(() => wb.sheet(0).recalcViewport(5), TypeError);
     assert.throws(() => wb.sheet(0).getCellRectPt(null, 0), TypeError);
     assert.throws(() => wb.sheet(0).setCellPhoneticProperties(0, 0, 'x'), TypeError);
     assert.throws(() => wb.sheet(0).restoreRangeStyle(null), TypeError);
@@ -185,7 +185,7 @@ test('an argument the binding cannot represent throws TypeError and changes noth
         'remapRangeStyle mismatched lengths',
         () => wb.sheet(0).remapRangeStyle({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, [1], []),
       ],
-      ['probeImage({})', () => wb.getImageInfo({})],
+      ['probeImage({})', () => mod.getImageInfo({})],
     ]) {
       assert.throws(call, TypeError, label);
     }

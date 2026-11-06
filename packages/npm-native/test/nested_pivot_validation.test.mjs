@@ -13,10 +13,10 @@ function makePivot(Workbook) {
     ['West', 30],
   ]) {
     const record = wb.addPivotCacheRecord(cache);
-    wb.setPivotCacheRecordText(cache, record, 0, region);
-    wb.setPivotCacheRecordNumber(cache, record, 1, amount);
+    wb.setPivotCacheRecordValue(cache, record, 0, region);
+    wb.setPivotCacheRecordValue(cache, record, 1, amount);
   }
-  const pivot = wb.sheet(0).addPivot('Pivot1', cache, 0, 4);
+  const pivot = wb.sheet(0).addPivot({ name: 'Pivot1', cacheId: cache, anchorRow: 0, anchorCol: 4 });
   const region = wb.sheet(0).addPivotField(pivot, { sourceName: 'Region', axis: 0 });
   const amount = wb.sheet(0).addPivotField(pivot, { sourceName: 'Amount', axis: 2 });
   wb.sheet(0).setPivotRowFieldOrder(pivot, [region]);

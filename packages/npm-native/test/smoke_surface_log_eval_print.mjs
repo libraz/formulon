@@ -46,7 +46,8 @@ test('the Formulon interface and the runtime object declare the same keys', asyn
   assert.deepEqual(missingFromType, [], 'runtime keys absent from the Formulon interface');
   assert.deepEqual(missingFromRuntime, [], 'Formulon interface keys absent from the runtime object');
   assert.equal(mod.PivotAxis.Row, 0);
-  assert.equal(typeof mod.getErrorDisplayName, 'function');
+  assert.equal(mod.getErrorDisplayName, undefined);
+  assert.equal(typeof mod.ErrorDisplayName, 'object');
 });
 
 test('every table exported by name is reachable through the Formulon object', async () => {
@@ -229,10 +230,12 @@ test('getVersion() returns a non-empty string', async () => {
   assert.ok(v.length > 0, `expected non-empty version, got ${JSON.stringify(v)}`);
 });
 
-test('getErrorDisplayName returns Excel literals', async () => {
+test('ErrorDisplayName holds the Excel literals', async () => {
   const mod = await getModule();
-  assert.equal(mod.getErrorDisplayName(1), '#DIV/0!');
-  assert.equal(mod.getErrorDisplayName(999), '#UNKNOWN!');
+  assert.equal(mod.ErrorDisplayName[mod.ErrorCode.Div0], '#DIV/0!');
+  assert.equal(mod.ErrorDisplayName[999], undefined);
+  assert.equal(Object.isFrozen(mod.ErrorDisplayName), true);
+  assert.deepEqual(Object.keys(mod.ErrorDisplayName).sort(), Object.values(mod.ErrorCode).map(String).sort());
 });
 
 // One-shot evaluation is anchored at Sheet1!A1 and read-only on every
@@ -380,12 +383,14 @@ test('print settings: header/footer sections take decoded text', async () => {
     '<headerFooter><oddHeader>&amp;C\u5e33\u7968</oddHeader><oddFooter>&amp;R&amp;P / &amp;N</oddFooter></headerFooter>',
   );
 
-  // Omitting a key leaves that section alone; an empty string clears it.
+  // Omitting a key leaves that section alone; an empty string or null clears it.
   wb.sheet(0).setHeaderFooter({ oddFooter: '' });
   assert.equal(
     wb.sheet(0).getHeaderFooterXml(),
     '<headerFooter><oddHeader>&amp;C\u5e33\u7968</oddHeader></headerFooter>',
   );
+  wb.sheet(0).setHeaderFooter({ oddHeader: null });
+  assert.doesNotMatch(wb.sheet(0).getHeaderFooterXml() ?? '', /oddHeader|oddFooter/);
 });
 
 test('print settings: print area, titles and manual breaks', async () => {
@@ -398,9 +403,10 @@ test('print settings: print area, titles and manual breaks', async () => {
     isFormulonError,
   );
   assert.deepEqual(wb.sheet(0).getPrintArea(), [{ firstRow: 0, firstCol: 0, lastRow: 7, lastCol: 5 }]);
-  assert.throws(() => wb.sheet(0).setPrintArea('A1:F8'), TypeError);
+  wb.sheet(0).setPrintArea(['A1:F8']);
+  assert.deepEqual(wb.sheet(0).getPrintArea(), [{ firstRow: 0, firstCol: 0, lastRow: 7, lastCol: 5 }]);
   wb.sheet(0).setPrintArea([]);
-  assert.deepEqual(wb.sheet(0).getPrintArea(), []);
+  assert.equal(wb.sheet(0).getPrintArea(), null);
 
   assert.equal(wb.sheet(0).getPrintTitles(), null);
   wb.sheet(0).setPrintTitles({ rows: { first: 0, last: 1 }, columns: { first: 0, last: 0 } });
@@ -468,7 +474,7 @@ test('setRangeXfIndex applies one xf across a rectangle', async () => {
 test('pivotCount + pivotLayout expose the PivotTable projection', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.equal(wb.sheet(0).getPivotCount(), 0);
+  assert.equal(wb.sheet(0).listPivots().length, 0);
 
   assert.throws(
     () => wb.sheet(0).getPivotLayout(0),

@@ -175,6 +175,9 @@ class JsWorkbook {
   /// fractional, non-finite, and out-of-range values before embind's normal
   /// integer coercion would silently change them.
   JsParallelRecalcStats recalcParallel(emscripten::val threadCount);
+  /// True when a change has not been applied by a full recalc yet. See
+  /// `fm_workbook_has_dirty_cells`.
+  bool hasDirtyCells() const;
   /// Applies `patch` (`{ enabled?, maxIterations?, maxChange? }`); an omitted
   /// key keeps the stored setting.
   void setIterative(emscripten::val patch);
@@ -511,7 +514,6 @@ class JsWorkbook {
   void removePerson(const std::string& id);
   emscripten::val getPerson(const std::string& id) const;
 
-  emscripten::val probeImage(emscripten::val bytes) const;
   emscripten::val listDrawingObjects(uint32_t sheet) const;
   emscripten::val getDrawingObject(uint32_t sheet, uint32_t objectId) const;
   emscripten::val getImage(uint32_t sheet, uint32_t objectId) const;
@@ -584,16 +586,6 @@ class JsWorkbook {
 
   emscripten::val precedents(uint32_t sheet, uint32_t row, uint32_t col, uint32_t depth) const;
   emscripten::val dependents(uint32_t sheet, uint32_t row, uint32_t col, uint32_t depth) const;
-  emscripten::val functionMetadata(const std::string& name) const;
-  emscripten::val functionNames() const;
-  std::string localizeFunctionName(const std::string& canonical_name, const std::string& profile_id) const;
-  std::string canonicalizeFunctionName(const std::string& localized_name, const std::string& profile_id) const;
-  std::string localizeFormula(const std::string& formula, const std::string& profile_id) const;
-  std::string canonicalizeFormula(const std::string& formula, const std::string& profile_id) const;
-  emscripten::val localeFacts(const std::string& profile_id) const;
-  emscripten::val listLocaleErrorNames(const std::string& profile_id) const;
-  double compareText(const std::string& a, const std::string& b, int32_t strength, const std::string& profile_id) const;
-  emscripten::val collationClasses(emscripten::val values, int32_t strength, const std::string& profile_id) const;
   emscripten::val spillInfo(uint32_t sheet, uint32_t row, uint32_t col) const;
   emscripten::val parseReference(const std::string& text, emscripten::val options) const;
   std::string formatReference(emscripten::val range, emscripten::val options) const;
@@ -803,8 +795,32 @@ std::string version_string();
 /// Returns the static C string for `status`.
 std::string status_string(int32_t status);
 
-/// Returns an Excel literal such as `#DIV/0!` for a cell error code.
-std::string error_display_name(int32_t error_code);
+/// The catalog record of a built-in, or `null`. See `fm_get_function_metadata`.
+emscripten::val function_metadata(const std::string& name);
+
+/// Every built-in's canonical name.
+emscripten::val function_names();
+
+std::string localize_function_name(const std::string& canonical_name, const std::string& profile_id);
+std::string canonicalize_function_name(const std::string& localized_name, const std::string& profile_id);
+std::string localize_formula(const std::string& formula, const std::string& profile_id);
+std::string canonicalize_formula(const std::string& formula, const std::string& profile_id);
+
+/// Separators, boolean names, date order, currency placement and localized
+/// error names of a profile. See `fm_get_locale_facts`.
+emscripten::val locale_facts(const std::string& profile_id);
+
+/// The profile's localized error names in error-code order.
+emscripten::val list_locale_error_names(const std::string& profile_id);
+
+/// The profile's collation order of `a` and `b`. See `fm_compare_text`.
+double compare_text(const std::string& a, const std::string& b, int32_t strength, const std::string& profile_id);
+
+/// Equal-under-collation class ids of `values`. See `fm_get_collation_classes`.
+emscripten::val collation_classes(emscripten::val values, int32_t strength, const std::string& profile_id);
+
+/// Format and pixel size sniffed from an image header. See `fm_get_image_info`.
+emscripten::val probe_image(emscripten::val bytes);
 
 /// Sets the engine's minimum structured-log severity. Process-wide, not
 /// per workbook handle; the default is `FM_LOG_LEVEL_OFF` (4), under which

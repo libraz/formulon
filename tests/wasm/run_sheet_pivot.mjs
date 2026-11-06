@@ -92,14 +92,14 @@ export function registerSheetPivot(Module, test) {
       assert.equal(listed.length, 1);
       const a = listed[0];
       assert.equal(a.name, 'Pi');
-      // The setter drops the leading '=', as the file form carries none.
-      assert.equal(a.formula, '3.14');
+      // The formula reads back with one leading '=', whether or not the input had it.
+      assert.equal(a.formula, '=3.14');
 
-      wb.setDefinedName({ name: 'PI', formula: '=3.14159' });
+      wb.setDefinedName({ name: 'PI', formula: '3.14159' });
       assert.equal(wb.listDefinedNames().length, 1);
       const b = wb.listDefinedNames()[0];
       assert.equal(b.name, 'Pi'); // authored case preserved
-      assert.equal(b.formula, '3.14159');
+      assert.equal(b.formula, '=3.14159');
 
       // An empty formula is refused; removal has its own call.
       expectFailure(() => wb.setDefinedName({ name: 'Pi', formula: '' }), StatusCode.InvalidArgument);

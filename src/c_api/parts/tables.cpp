@@ -30,17 +30,16 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
-using formulon::c_api::parts::display_formula;
+using formulon::c_api::parts::display_formula_text;
 using formulon::c_api::parts::finish_status;
-using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
-using formulon::c_api::parts::may_respell_formula;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::to_cell_rect;
 using formulon::c_api::parts::to_merge_range;
+using formulon::c_api::parts::with_formula_prefix;
 
 namespace {
 
@@ -499,12 +498,12 @@ extern "C" fm_status_t fm_workbook_get_table_column(const fm_workbook_t* wb, siz
   out->name = col.name.c_str();
   out->totals_row_function = col.totals_function.empty() ? "none" : col.totals_function.c_str();
   out->totals_row_label = col.totals_label.c_str();
-  // Read scratch holds a respelled formula; any other one is the model's.
   // The formula sits in the table's totals row, so it is shown from inside the table.
   out->totals_row_formula =
-      may_respell_formula(col.totals_row_formula)
-          ? display_formula(wb->workbook(), col.totals_row_formula, fresh_read_scratch(wb), tables[index].display_name)
-          : col.totals_row_formula.c_str();
+      col.totals_row_formula.empty()
+          ? col.totals_row_formula.c_str()
+          : publish_scratch(wb, with_formula_prefix(display_formula_text(wb->workbook(), col.totals_row_formula,
+                                                                         tables[index].display_name)));
   return 0;
 }
 

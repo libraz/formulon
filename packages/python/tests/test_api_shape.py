@@ -68,7 +68,7 @@ class ExceptionClassTests(unittest.TestCase):
     def test_collection_index_out_of_range_is_index_error(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(IndexOutOfRangeError) as cm:
-                wb.get_font(wb.get_font_count())
+                wb.get_font(len(wb.list_fonts()))
             self.assertEqual(cm.exception.code, StatusCode.INDEX_OUT_OF_RANGE)
 
     def test_missing_natural_key_remove_is_key_error(self) -> None:
@@ -419,9 +419,9 @@ class SheetViewTests(unittest.TestCase):
         self.ws = self.wb.sheet(0)
 
     def test_get_and_set(self) -> None:
-        self.ws.set("B3", 5)
+        self.ws.set_value("B3", 5)
         self.assertEqual(self.wb.sheet(0).get_value(2, 1), Value(kind=ValueKind.NUMBER, number=5.0))
-        self.assertEqual(self.ws.get("B3"), Value(kind=ValueKind.NUMBER, number=5.0))
+        self.assertEqual(self.ws.get_value("B3"), Value(kind=ValueKind.NUMBER, number=5.0))
 
     def test_formula(self) -> None:
         self.ws.set_formula("C1", "=1+2")
@@ -445,33 +445,33 @@ class SheetViewTests(unittest.TestCase):
         self.assertEqual(self.ws.name, "Renamed")
 
     def test_equivalent_spellings(self) -> None:
-        self.ws.set("B3", 1)
+        self.ws.set_value("B3", 1)
         for a1 in ("b3", "$B$3", "B$3", "$b3"):
             with self.subTest(a1=a1):
-                self.assertEqual(self.ws.get(a1).number, 1.0)
-        self.ws.set("A1", 2)
+                self.assertEqual(self.ws.get_value(a1).number, 1.0)
+        self.ws.set_value("A1", 2)
         for a1 in ("A01", "a0000001"):
             with self.subTest(a1=a1):
-                self.assertEqual(self.ws.get(a1).number, 2.0)
+                self.assertEqual(self.ws.get_value(a1).number, 2.0)
 
     def test_grid_edge(self) -> None:
-        self.ws.set("XFD1048576", 9)
+        self.ws.set_value("XFD1048576", 9)
         self.assertEqual(self.wb.sheet(0).get_value(1048575, 16383).number, 9.0)
         with self.assertRaises(InvalidArgumentError):
-            self.ws.get("XFE1")
+            self.ws.get_value("XFE1")
 
     def test_rejected_addresses(self) -> None:
         for a1 in ("", "   ", "A1:B2", "Sheet2!A1", "Sheet1!A1", "R1C1", "Ａ１", "Aé1", "\ud800A1"):
             with self.subTest(a1=a1):
                 with self.assertRaises(InvalidArgumentError) as cm:
-                    self.ws.get(a1)
+                    self.ws.get_value(a1)
                 self.assertEqual(cm.exception.code, StatusCode.INVALID_ARGUMENT)
                 with self.assertRaises(InvalidArgumentError):
-                    self.ws.set(a1, 1)
+                    self.ws.set_value(a1, 1)
 
     def test_non_string_address_is_type_error(self) -> None:
         with self.assertRaises(TypeError):
-            self.ws.get(None)  # type: ignore[arg-type]
+            self.ws.get_value(None)  # type: ignore[arg-type]
 
     def test_after_close(self) -> None:
         self.wb.close()
@@ -479,9 +479,9 @@ class SheetViewTests(unittest.TestCase):
         with self.assertRaises(WorkbookClosedError):
             self.ws.index
         with self.assertRaises(WorkbookClosedError):
-            self.ws.get("A1")
+            self.ws.get_value("A1")
         with self.assertRaises(WorkbookClosedError):
-            self.ws.set("A1", 1)
+            self.ws.set_value("A1", 1)
         with self.assertRaises(WorkbookClosedError):
             self.ws.name
         with self.assertRaises(WorkbookClosedError):
@@ -541,15 +541,15 @@ class SheetA1PairwiseTests(unittest.TestCase):
             with self.subTest(case=case_id, a1=a1):
                 if expected is None:
                     with self.assertRaises(InvalidArgumentError):
-                        self.ws.get(a1)
+                        self.ws.get_value(a1)
                     with self.assertRaises(InvalidArgumentError):
-                        self.ws.set(a1, 1)
+                        self.ws.set_value(a1, 1)
                     continue
                 row, col = expected
-                self.ws.set(a1, float(row * 100000 + col))
+                self.ws.set_value(a1, float(row * 100000 + col))
                 self.assertEqual(self.wb.sheet(0).get_value(row, col).number, float(row * 100000 + col))
                 self.wb.sheet(0).set_number(row, col, -1.0)
-                self.assertEqual(self.ws.get(a1).number, -1.0)
+                self.assertEqual(self.ws.get_value(a1).number, -1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -562,7 +562,7 @@ _LEDGER = _REPO_ROOT / "tools" / "api" / "names.yaml"
 # Hand-written members that are not ledger ops.
 _FACADE_EXTRA = {
     "Workbook": {"sheet", "list_sheets", "close", "closed", "get_active_sheet", "set_active_sheet"},
-    "Sheet": {"workbook", "index", "name", "get", "set"},
+    "Sheet": {"workbook", "index", "name"},
 }
 
 
@@ -650,7 +650,7 @@ class SheetHandleTests(unittest.TestCase):
     def test_copy_before_keeps_handle(self) -> None:
         # H2
         ws = self.wb.sheet("Data")
-        ws.set("A1", 7)
+        ws.set_value("A1", 7)
         copy = self.wb.copy_sheet(ws, 0)
         self.assertIsInstance(copy, Sheet)
         self.assertEqual(copy.index, 0)
@@ -689,7 +689,7 @@ class SheetHandleTests(unittest.TestCase):
         ws = self.wb.sheet("Data")
         other = self.wb.sheet("Tail")
         self.wb.remove_sheet(ws)
-        for read in (lambda: ws.index, lambda: ws.name, lambda: ws.get("A1"), lambda: ws.set_number(0, 0, 1.0)):
+        for read in (lambda: ws.index, lambda: ws.name, lambda: ws.get_value("A1"), lambda: ws.set_number(0, 0, 1.0)):
             with self.assertRaises(NotFoundError) as cm:
                 read()
             self.assertEqual(cm.exception.code, StatusCode.NOT_FOUND)
@@ -710,7 +710,7 @@ class SheetHandleTests(unittest.TestCase):
         # H7, H13
         ws = self.wb.sheet(0)
         self.wb.close()
-        for read in (lambda: ws.index, lambda: ws.name, lambda: ws.get("A1"), lambda: ws.set_number(0, 0, 1.0)):
+        for read in (lambda: ws.index, lambda: ws.name, lambda: ws.get_value("A1"), lambda: ws.set_number(0, 0, 1.0)):
             with self.assertRaises(WorkbookClosedError):
                 read()
         self.assertIs(ws.workbook, self.wb)
@@ -840,10 +840,10 @@ def _workbook_with_pivot() -> "tuple[Workbook, int, int]":
     wb.add_pivot_cache_field(cache_id, "Amount")
     for region, amount in (("East", 10.0), ("West", 30.0)):
         record = wb.add_pivot_cache_record(cache_id)
-        wb.set_pivot_cache_record_text(cache_id, record, 0, region)
-        wb.set_pivot_cache_record_number(cache_id, record, 1, amount)
+        wb.set_pivot_cache_record_value(cache_id, record, 0, region)
+        wb.set_pivot_cache_record_value(cache_id, record, 1, amount)
     ws = wb.sheet(0)
-    pivot = ws.add_pivot("Pivot1", cache_id, 0, 4)
+    pivot = ws.add_pivot(name="Pivot1", cache_id=cache_id, anchor_row=0, anchor_col=4)
     ws.add_pivot_field(pivot, formulon.PivotFieldInput(source_name="Region", axis=formulon.PivotAxis.ROW))
     amount = ws.add_pivot_field(pivot, formulon.PivotFieldInput(source_name="Amount", axis=formulon.PivotAxis.VALUE))
     ws.add_pivot_data_field(pivot, formulon.PivotDataFieldInput(name="Sum of Amount", field_index=amount))
@@ -961,11 +961,13 @@ class SetterRoundTripTests(unittest.TestCase):
         self.assertEqual(self.wb.get_theme_colors().colors, colors.colors)
 
         script = self.wb.get_theme_script_font(major=True, script="Jpan")
-        self.wb.set_theme_script_font(formulon.ThemeScriptFontInput(major=True, **dataclasses.asdict(script)))
+        self.wb.set_theme_script_font(
+            formulon.ThemeScriptFontInput(major=True, script=script.script, typeface=script.typeface)
+        )
         self.assertEqual(self.wb.get_theme_script_font(major=True, script="Jpan"), script)
 
         style = self.ws.get_pivot_style_info(self.pivot)
-        self.ws.set_pivot_style_info(self.pivot, _input_of(formulon.PivotStyleInput, style))
+        self.ws.set_pivot_style_info(self.pivot, **dataclasses.asdict(style))
         self.assertEqual(self.ws.get_pivot_style_info(self.pivot), style)
 
 
@@ -1012,7 +1014,7 @@ class AbsentValueTests(unittest.TestCase):
                 self.assertIsNone(getter())
         self.assertIsNone(ws.get_print_titles())
         self.assertIsNone(ws.get_print_area())
-        self.assertIsNone(wb.get_pivot_cache_field_formula(self.cache, 0))
+        self.assertIsNone(wb.list_pivot_cache_fields(self.cache)[0].formula)
         self.assertIsNone(wb.get_defined_name("Rate").comment)
         self.assertIsNone(wb.list_tables()[self.table].style_name)
         self.assertEqual(wb.get_table_style_defaults(), formulon.TableStyleDefaults(None, None))
@@ -1051,7 +1053,7 @@ class AbsentValueTests(unittest.TestCase):
             wb.set_defined_name(formulon.DefinedNameInput("Rate", "Sheet1!$B$1"))
             self.assertEqual(
                 wb.get_defined_name("Rate"),
-                formulon.DefinedName("Rate", "Sheet1!$B$1", None, comment=None, hidden=False),
+                formulon.DefinedName("Rate", "=Sheet1!$B$1", None, comment=None, hidden=False),
             )
 
     def test_print_area_none_and_empty_clear(self) -> None:
@@ -1221,12 +1223,12 @@ class EnumBoundaryTests(unittest.TestCase):
             ws = wb.sheet(0)
             for bad in (99, -1):
                 with self.subTest(bad=bad), self.assertRaises(InvalidArgumentError):
-                    ws.set_view_mode(bad)  # type: ignore[arg-type]
+                    ws.set_view(view_mode=bad)  # type: ignore[arg-type]
             for bad in (1.5, math.nan):
                 with self.subTest(bad=bad), self.assertRaises(ValueError):
-                    ws.set_view_mode(bad)  # type: ignore[arg-type]
+                    ws.set_view(view_mode=bad)  # type: ignore[arg-type]
             with self.assertRaises(TypeError):
-                ws.set_view_mode("0")  # type: ignore[arg-type]
+                ws.set_view(view_mode="0")  # type: ignore[arg-type]
 
     def test_absent_members_are_gone(self) -> None:
         for enum, member in (

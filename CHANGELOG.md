@@ -84,7 +84,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **JavaScript:** `Workbook.sheet(key)` returns the `Sheet` handle of a sheet
   given by index, name (compared without regard to case) or another `Sheet`,
   and every sheet-scoped method moves onto it (see [Sheet handles](#sheet-handles)).
-  `Sheet.get(a1)` and `Sheet.set(a1, value)` address a cell in A1 notation,
   and `setValue` stores a number, string, boolean, `null` or a `Value`
   through the matching typed setter. Result types lose their `Result` suffix
   and update inputs take `Patch<T>`. Enums are const objects with matching
@@ -191,8 +190,8 @@ the handle of a removed sheet throws `FormulonError` with
 | `getActiveSheet()` returning an index | returns a `Sheet`; `setActiveSheet`, `moveSheet`, `removeSheet` and `renameSheet` take a `Sheet`, an index or a name |
 | `showPivotDetails(sheet, pivot, row, col)` returning an index | `ws.showPivotDetails(pivot, row, col)` returns a `Sheet` |
 
-In JavaScript, `Sheet.getFormula` and `Sheet.setFormula` also take an A1
-address in place of `row, col`. Positional guard messages read
+Every sheet method that takes a cell accepts an A1 address in place of
+`row, col` (see [A1 addresses](#a1-addresses-and-block-access)). Positional guard messages read
 `Sheet.setNumber argument 1 must be ...` and `Workbook.<name> argument N ...`
 in `@libraz/formulon` and `@libraz/formulon-native` alike.
 
@@ -344,6 +343,91 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 - Options take `--opt value` and `--opt=value`, `--opt=` is an empty value, a
   flag that takes no value rejects `=value` with status 64, and everything
   after `--` is a positional argument.
+
+### A1 addresses and block access
+
+- **JavaScript, Python:** every method with a cell argument takes either
+  `(row, col)` or an A1 string (`ws.setValue('A1', 42)`, `ws.getValue('A2')`;
+  Python `ws.set_value("A1", 42)`), and every method with a rectangle argument
+  takes `'A1:B2'` as well as a `CellRect`. A string with a sheet prefix, a
+  range where a single cell is expected, or text that is not an address throws
+  `InvalidArgument`. `Sheet.get` and `Sheet.set` are removed; Python
+  `ws["A1"]` and `ws[row, col]` read and write native values. Python
+  coordinates are positional only (`row=` and `col=` are no longer accepted).
+- **JavaScript, Python:** `getValues(range)` returns the rows of a block as a
+  dense array with `Blank` for empty cells, and `setValues(a1, values)` writes
+  one with the `setValue` rules (`=` text stays text). Input is validated
+  before any cell is written; a write the engine refuses part-way leaves the
+  earlier cells in place.
+- **JavaScript, Python:** `hasDirtyCells()` / `has_dirty_cells()` reports edits
+  made since the last full `recalc`. Reads return the value as of that
+  recalculation.
+- **JavaScript, Python:** every collection is listed by `list*`, and the
+  `get...Count` / `get...At` pairs are removed (`listCells`, `listPivots`,
+  `listPivotCacheFields`, `listPivotCacheFieldSharedItems`, `listFonts`,
+  `listFills`, `listBorders`, `listCellXfs`, `listCellStyleXfs`, `listDxfs`,
+  `listPivotFieldItems`). Only `getPivotCacheRecordCount` remains.
+- **JavaScript, Python:** a partial update is one patch record whose omitted
+  keys keep their value: `setView`, `updatePivotField`, `updatePivotItem`,
+  `setPivotStyleInfo`, `setPrintOptions`, `setHeaderFooter` and
+  `setChartLegend` replace the per-property setters. `null` clears a nullable
+  key. Python takes keyword-only arguments defaulting to `UNCHANGED`.
+- **JavaScript, Python:** tables, pivots, conditional-format rules and
+  protected ranges are addressed by number or by name (`removeTable('Sales')`,
+  `removePivot('Pivot1')`). Tables match on `displayName`, and the first match
+  wins.
+- **JavaScript:** the state-free functions (`getFunctionMetadata`,
+  `listFunctionNames`, `localizeFunctionName`, `canonicalizeFunctionName`,
+  `localizeFormula`, `canonicalizeFormula`, `getLocaleFacts`,
+  `listLocaleErrorNames`, `compareText`, `getCollationClasses`,
+  `getImageInfo`) are members of `Formulon`, not of `Workbook`.
+  `fm_workbook_get_image_info` is `fm_get_image_info` in C, and Python has
+  `get_image_info` at module level.
+- **JavaScript, Python:** `getErrorDisplayName` is replaced by the
+  `ErrorDisplayName` table (`ErrorDisplayName[ErrorCode.Div0]`) and Python
+  `ErrorCode.display_name`.
+- **JavaScript, Python:** `addPivotCacheFieldSharedItem(cacheId, field, value,
+  { date })` and `setPivotCacheRecordValue(...)` replace the twelve typed
+  writers and dispatch on the type of `value`.
+- **Python:** `save(path)` picks XLSB for a `.xlsb` extension and XLSX
+  otherwise; an explicit `format` that contradicts the extension raises
+  `InvalidArgumentError`. `save_with_diagnostics` takes `dest`. `add_batch`,
+  `rename_table`, `set_table_style_info` and `has_cell_phonetic_properties`
+  are removed (`PhoneticProperties.present` replaces the last).
+- **JavaScript, Python:** `removeMergeAt` and `removeHyperlinkAt` are removed
+  in favour of `removeMerge` and `removeHyperlink`. `getDefinedName` and
+  `removeDefinedName` take an optional `scope`, `getThemeScriptFont` and
+  `setThemeScriptFont` take `{ major, script }`, `setChartType` defaults
+  `grouping`, and `setPivotFieldSort` and `addPivotFieldItem` take an
+  `options` object.
+
+### Behaviour changes under an unchanged name
+
+- Formula text read back carries a leading `=` where Excel shows one:
+  `getFormulaR1C1`, `PivotCacheField.formula`, table totals-row formulas,
+  calculated-item formulas, conditional-format and validation `formula1` /
+  `formula2`, array-formula text and `getLambdaText`. Ranges (sparklines,
+  chart titles and series, print areas) stay without it. Input accepts text
+  with or without the `=`.
+- `removeDrawingObject`, `getChartData` and `getChartPreview` report
+  `NotFound` for a missing id instead of `InvalidArgument`.
+- `addCfRule` rejects a caller-supplied id that the sheet already uses with
+  `InvalidArgument`.
+- `getPrintArea` returns `null` (Python `None`) when no print area is set,
+  where JavaScript returned `[]`.
+- `convertColumnCharsToPt`, `convertColumnPtToChars` and `getColumnWidthPt`
+  take `mode` as the last argument. A call with the old order throws
+  `RangeError`, except that a `mode` of 0 or 1 in the first position can be
+  misread.
+- Python `save` infers the container format from the file extension.
+- Python pivot options read an unset string as `None` instead of `""`.
+- Python no longer accepts `row=` / `col=` keyword arguments for cell
+  coordinates.
+- An unknown error code has no display name: `ErrorDisplayName[code]` is
+  `undefined` in JavaScript and `ErrorCode(code)` raises `ValueError` in
+  Python, where the old function returned `#UNKNOWN!`.
+- `setHeaderFooter` clears a text field for `null` as well as `""`.
+- CLI `dump --metadata` prints defined-name formulas with a leading `=`.
 
 ### Name migration
 
@@ -736,7 +820,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `fm_workbook_pivot_set_style_info` | `fm_sheet_set_pivot_style_info` |
 | `fm_workbook_pivot_show_details` | `fm_sheet_show_pivot_details` |
 | `fm_workbook_precedents` | `fm_sheet_get_precedents` |
-| `fm_workbook_probe_image` | `fm_workbook_get_image_info` |
+| `fm_workbook_probe_image` | `fm_get_image_info` |
 | `fm_workbook_read_diagnostics` | `fm_workbook_get_diagnostics` |
 | `fm_workbook_ref_mode` | `fm_workbook_get_ref_mode` |
 | `fm_workbook_reset_theme` | `fm_workbook_clear_theme` |
@@ -789,13 +873,13 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `AutoFilterEvalResult` | `AutoFilterEval` |
 | `AutoFilterResult` | removed |
 | `BoolResult` | removed |
-| `borderCount()` | `getBorderCount()` |
+| `borderCount()` | removed; use `listBorders()` |
 | `BorderRecord` | `Border` |
 | `BorderResult` | removed |
 | `calcMode()` | `getCalcMode()` |
 | `calcOnSave()` | `getCalcOnSave()` |
-| `cellAt()` | `getCellAt()` |
-| `cellCount()` | `getCellCount()` |
+| `cellAt()` | removed |
+| `cellCount()` | removed |
 | `CellEntry` | `Cell` |
 | `CellRectResult` | removed |
 | `CellResult` | removed |
@@ -803,7 +887,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `CellsInRangeResult` | `CellsInRange` |
 | `cellStyleCount()` | removed; use `listCellStyles()` |
 | `CellStyleRecord` | `CellStyle` |
-| `cellStyleXfCount()` | `getCellStyleXfCount()` |
+| `cellStyleXfCount()` | removed; use `listCellStyleXfs()` |
 | `CellXfIndexResult` | folded into `NumberResult` |
 | `CellXfResult` | folded into `CellXf` |
 | `CfCellResult` | `CfCell` |
@@ -854,12 +938,12 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `deleteCols()` | `deleteColumns()` |
 | `dependents()` | `getDependents()` |
 | `DisplayTextResult` | `DisplayText` |
-| `dxfCount()` | `getDxfCount()` |
+| `dxfCount()` | removed; use `listDxfs()` |
 | `DxfRecord` | `Dxf` |
 | `DxfResult` | removed |
 | `editThreadedComment()` | `updateThreadedComment()` |
 | `EffectiveStyleResult` | `EffectiveStyle` |
-| `errorDisplayName()` | `getErrorDisplayName()` |
+| `errorDisplayName()` | removed |
 | `EvalArrayResult` | `EvalArray` |
 | `EvalResult` | removed |
 | `evaluateConditionalFormula()` | `evaluateCfFormula()` |
@@ -868,10 +952,10 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `ExternalLinkRecord` | `ExternalLink` |
 | `ExternalLinkResult` | removed |
 | `fileName()` | `getFileName()` |
-| `fillCount()` | `getFillCount()` |
+| `fillCount()` | removed; use `listFills()` |
 | `FillRecord` | `Fill` |
 | `FillResult` | removed |
-| `fontCount()` | `getFontCount()` |
+| `fontCount()` | removed; use `listFonts()` |
 | `FontRecord` | `Font` |
 | `FontResult` | removed |
 | `formula` | `value` |
@@ -924,6 +1008,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `getValidation()` | removed; use `listValidations()` |
 | `getValidationCount()` | removed; use `listValidations()` |
 | `getValidations()` | removed |
+| `HeaderFooterInput` | `HeaderFooterPatch` |
 | `HyperlinkEntry` | `Hyperlink` |
 | `ImageInfoResult` | folded into `ImageInfo` |
 | `ImageInsertOptions` | `ImageInsertInput` |
@@ -983,20 +1068,20 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `pivotCacheCount()` | removed; use `listPivotCaches()` |
 | `pivotCacheCreate()` | `addPivotCache()` |
 | `pivotCacheFieldAdd()` | `addPivotCacheField()` |
-| `pivotCacheFieldAddSharedItemBlank()` | `addPivotCacheFieldSharedItemBlank()` |
-| `pivotCacheFieldAddSharedItemBool()` | `addPivotCacheFieldSharedItemBool()` |
-| `pivotCacheFieldAddSharedItemDate()` | `addPivotCacheFieldSharedItemDate()` |
-| `pivotCacheFieldAddSharedItemError()` | `addPivotCacheFieldSharedItemError()` |
-| `pivotCacheFieldAddSharedItemNumber()` | `addPivotCacheFieldSharedItemNumber()` |
-| `pivotCacheFieldAddSharedItemText()` | `addPivotCacheFieldSharedItemText()` |
+| `pivotCacheFieldAddSharedItemBlank()` | removed |
+| `pivotCacheFieldAddSharedItemBool()` | removed |
+| `pivotCacheFieldAddSharedItemDate()` | removed |
+| `pivotCacheFieldAddSharedItemError()` | removed |
+| `pivotCacheFieldAddSharedItemNumber()` | removed |
+| `pivotCacheFieldAddSharedItemText()` | removed |
 | `pivotCacheFieldClear()` | `clearPivotCacheFields()` |
 | `pivotCacheFieldClearSharedItems()` | `clearPivotCacheFieldSharedItems()` |
-| `pivotCacheFieldCount()` | `getPivotCacheFieldCount()` |
-| `pivotCacheFieldFormula()` | `getPivotCacheFieldFormula()` |
-| `pivotCacheFieldName()` | `getPivotCacheFieldName()` |
-| `pivotCacheFieldSharedItemCount()` | `getPivotCacheFieldSharedItemCount()` |
-| `pivotCacheFieldSharedItemIsDate()` | `isPivotCacheFieldSharedItemDate()` |
-| `pivotCacheFieldSharedItemValue()` | `getPivotCacheFieldSharedItemValue()` |
+| `pivotCacheFieldCount()` | removed |
+| `pivotCacheFieldFormula()` | removed |
+| `pivotCacheFieldName()` | removed |
+| `pivotCacheFieldSharedItemCount()` | removed |
+| `pivotCacheFieldSharedItemIsDate()` | removed |
+| `pivotCacheFieldSharedItemValue()` | removed |
 | `pivotCacheGetOptions()` | `getPivotCacheOptions()` |
 | `pivotCacheGetWorksheetSource()` | `getPivotCacheWorksheetSource()` |
 | `pivotCacheId()` | `getPivotCacheId()` |
@@ -1005,19 +1090,19 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `pivotCacheRecordAdd()` | `addPivotCacheRecord()` |
 | `pivotCacheRecordClear()` | `clearPivotCacheRecords()` |
 | `pivotCacheRecordCount()` | `getPivotCacheRecordCount()` |
-| `pivotCacheRecordSetBlank()` | `setPivotCacheRecordBlank()` |
-| `pivotCacheRecordSetBool()` | `setPivotCacheRecordBool()` |
-| `pivotCacheRecordSetDate()` | `setPivotCacheRecordDate()` |
-| `pivotCacheRecordSetError()` | `setPivotCacheRecordError()` |
-| `pivotCacheRecordSetNumber()` | `setPivotCacheRecordNumber()` |
-| `pivotCacheRecordSetText()` | `setPivotCacheRecordText()` |
+| `pivotCacheRecordSetBlank()` | removed |
+| `pivotCacheRecordSetBool()` | removed |
+| `pivotCacheRecordSetDate()` | removed |
+| `pivotCacheRecordSetError()` | removed |
+| `pivotCacheRecordSetNumber()` | removed |
+| `pivotCacheRecordSetText()` | removed |
 | `pivotCacheRemove()` | `removePivotCache()` |
 | `pivotCacheSetOptions()` | `setPivotCacheOptions()` |
 | `pivotCacheSetWorksheetSource()` | `setPivotCacheWorksheetSource()` |
 | `PivotCacheSharedItemIsDateResult` | folded into `BoolResult` |
 | `PivotCalculatedItemResult` | `PivotCalculatedItem` |
 | `pivotColFieldOrder()` | `getPivotColumnFieldOrder()` |
-| `pivotCount()` | `getPivotCount()` |
+| `pivotCount()` | removed |
 | `pivotCreate()` | `addPivot()` |
 | `pivotDataFieldAdd()` | `addPivotDataField()` |
 | `pivotDataFieldAt()` | removed; use `listPivotDataFields()` |
@@ -1038,23 +1123,23 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `pivotFieldClearSubtotalFns()` | `clearPivotFieldSubtotalFns()` |
 | `pivotFieldCount()` | removed; use `listPivotFields()` |
 | `pivotFieldItemAt()` | `getPivotFieldItem()` |
-| `pivotFieldItemCount()` | `getPivotFieldItemCount()` |
+| `pivotFieldItemCount()` | removed; use `listPivotFieldItems()` |
 | `PivotFieldOrderResult` | removed |
 | `PivotFieldResult` | folded into `PivotField` |
 | `pivotFieldSetAxis()` | `setPivotFieldAxis()` |
-| `pivotFieldSetCustomName()` | `setPivotFieldCustomName()` |
+| `pivotFieldSetCustomName()` | removed |
 | `pivotFieldSetDateGroup()` | `setPivotFieldDateGroup()` |
-| `pivotFieldSetDefaultSubtotal()` | `setPivotFieldDefaultSubtotal()` |
-| `pivotFieldSetFillDownLabels()` | `setPivotFieldFillDownLabels()` |
-| `pivotFieldSetInsertBlankRow()` | `setPivotFieldInsertBlankRow()` |
-| `pivotFieldSetItemCaption()` | `setPivotFieldItemCaption()` |
-| `pivotFieldSetItemShowDetail()` | `setPivotFieldItemShowDetail()` |
-| `pivotFieldSetItemVisible()` | `setPivotFieldItemVisible()` |
-| `pivotFieldSetNumberFormat()` | `setPivotFieldNumberFormat()` |
-| `pivotFieldSetShowAll()` | `setPivotFieldShowAll()` |
+| `pivotFieldSetDefaultSubtotal()` | removed |
+| `pivotFieldSetFillDownLabels()` | removed |
+| `pivotFieldSetInsertBlankRow()` | removed |
+| `pivotFieldSetItemCaption()` | removed |
+| `pivotFieldSetItemShowDetail()` | removed |
+| `pivotFieldSetItemVisible()` | removed |
+| `pivotFieldSetNumberFormat()` | removed |
+| `pivotFieldSetShowAll()` | removed |
 | `pivotFieldSetShowDetail()` | `setPivotFieldShowDetail()` |
 | `pivotFieldSetSort()` | `setPivotFieldSort()` |
-| `pivotFieldSetSubtotalTop()` | `setPivotFieldSubtotalTop()` |
+| `pivotFieldSetSubtotalTop()` | removed |
 | `PivotFieldSpecInput` | `PivotFieldInput` |
 | `pivotFilterAdd()` | `addPivotFilter()` |
 | `pivotFilterAt()` | removed; use `listPivotFilters()` |
@@ -1090,11 +1175,12 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `pivotSetStyleInfo()` | `setPivotStyleInfo()` |
 | `pivotShowDetails()` | `showPivotDetails()` |
 | `PivotStyleInfo` | `PivotStyle` |
-| `PivotStyleInfoInput` | `PivotStyleInput` |
+| `PivotStyleInfoInput` | `PivotStylePatch` |
 | `PivotStyleInfoResult` | folded into `PivotStyle` |
 | `PivotWorksheetSourceResult` | folded into `PivotWorksheetSource` |
 | `precedents()` | `getPrecedents()` |
 | `previewChartData()` | `getChartPreview()` |
+| `PrintOptionsInput` | `PrintOptionsPatch` |
 | `probeImage()` | `getImageInfo()` |
 | `ProtectedRangeResult` | removed |
 | `rangeStyleBases()` | `getRangeStyleBases()` |
@@ -1109,11 +1195,14 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `refMode()` | `getRefMode()` |
 | `removeConditionalFormatAt()` | `removeCfRule()` |
 | `removeDrawing()` | `removeDrawingObject()` |
+| `removeHyperlinkAt()` | removed |
+| `removeMergeAt()` | removed |
 | `removeSheetColBreak()` | `removeColumnBreak()` |
 | `removeSheetRowBreak()` | `removeRowBreak()` |
 | `removeValidationAt()` | `removeValidation()` |
 | `resetTheme()` | `clearTheme()` |
 | `ResolvedColorResult` | removed |
+| `RestoreImageOptions` | `RestoreDrawingOptions` |
 | `RowsResult` | removed |
 | `saveAs()` | folded into `save` |
 | `SaveDiagnosticsResult` | `SaveDiagnostics` |
@@ -1123,33 +1212,33 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `setSheetAutoFilterXml()` | `setAutoFilterXml()` |
 | `setSheetFitToPage()` | `setFitToPage()` |
 | `setSheetFormatDefaults()` | `setFormatDefaults()` |
-| `setSheetFreeze()` | `setFreeze()` |
+| `setSheetFreeze()` | removed |
 | `setSheetHeaderFooter()` | `setHeaderFooter()` |
 | `setSheetHeaderFooterXml()` | `setHeaderFooterXml()` |
 | `setSheetPageMargins()` | `setPageMargins()` |
 | `setSheetPageMarginsXml()` | `setPageMarginsXml()` |
 | `setSheetPageSetup()` | `setPageSetup()` |
 | `setSheetPageSetupXml()` | `setPageSetupXml()` |
-| `setSheetPaneTopLeft()` | `setPaneTopLeft()` |
+| `setSheetPaneTopLeft()` | removed |
 | `setSheetPrintArea()` | `setPrintArea()` |
 | `setSheetPrintOptions()` | `setPrintOptions()` |
 | `setSheetPrintOptionsXml()` | `setPrintOptionsXml()` |
 | `setSheetPrintTitles()` | `setPrintTitles()` |
-| `setSheetRightToLeft()` | `setRightToLeft()` |
+| `setSheetRightToLeft()` | removed |
 | `setSheetSelection()` | `setSelection()` |
 | `setSheetSheetPrXml()` | `setSheetPrXml()` |
-| `setSheetShowFormulas()` | `setShowFormulas()` |
-| `setSheetShowGridLines()` | `setShowGridLines()` |
-| `setSheetShowOutlineSymbols()` | `setShowOutlineSymbols()` |
-| `setSheetShowRowColHeaders()` | `setShowRowColHeaders()` |
-| `setSheetShowZeros()` | `setShowZeros()` |
-| `setSheetSplit()` | `setSplit()` |
+| `setSheetShowFormulas()` | removed |
+| `setSheetShowGridLines()` | removed |
+| `setSheetShowOutlineSymbols()` | removed |
+| `setSheetShowRowColHeaders()` | removed |
+| `setSheetShowZeros()` | removed |
+| `setSheetSplit()` | removed |
 | `setSheetTabHidden()` | removed |
-| `setSheetTabSelected()` | `setTabSelected()` |
-| `setSheetTopLeft()` | `setTopLeft()` |
-| `setSheetViewMode()` | `setViewMode()` |
-| `setSheetVisibility()` | `setVisibility()` |
-| `setSheetZoom()` | `setZoom()` |
+| `setSheetTabSelected()` | removed |
+| `setSheetTopLeft()` | removed |
+| `setSheetViewMode()` | removed |
+| `setSheetVisibility()` | removed |
+| `setSheetZoom()` | removed |
 | `SheetAutoFilterXmlResult` | folded into `StringResult` |
 | `SheetCommentEntry` | `SheetComment` |
 | `sheetCount()` | removed |
@@ -1188,7 +1277,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `WidthModelResult` | `WidthModel` |
 | `Workbook.loadBytes()` | `Workbook.load()` |
 | `WorkbookProtectionResult` | removed |
-| `xfCount()` | `getCellXfCount()` |
+| `xfCount()` | removed; use `listCellXfs()` |
 | `xfIndex` | `value` |
 | `xml` | `value` |
 
@@ -1197,14 +1286,15 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | Before | After |
 |---|---|
 | `active_sheet()` | `get_active_sheet()` |
+| `add_batch()` | removed |
 | `add_col_break()` | `add_column_break()` |
 | `add_conditional_format()` | `add_cf_rule()` |
-| `border_count()` | `get_border_count()` |
+| `border_count()` | removed; use `list_borders()` |
 | `calc_mode()` | `get_calc_mode()` |
 | `calc_on_save()` | `get_calc_on_save()` |
 | `cell_style_count()` | removed; use `list_cell_styles()` |
-| `cell_style_xf_count()` | `get_cell_style_xf_count()` |
-| `cell_xf_count()` | `get_cell_xf_count()` |
+| `cell_style_xf_count()` | removed; use `list_cell_style_xfs()` |
+| `cell_xf_count()` | removed; use `list_cell_xfs()` |
 | `CellStyleRecord` | `CellStyle` |
 | `cf_count()` | removed; use `list_cf_rules()` |
 | `CfCellResult` | `CfCell` |
@@ -1234,18 +1324,20 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `date1904()` | `get_date1904()` |
 | `delete_cols()` | `delete_columns()` |
 | `dependents()` | `get_dependents()` |
-| `dxf_count()` | `get_dxf_count()` |
+| `dxf_count()` | removed; use `list_dxfs()` |
 | `edit_threaded_comment()` | `update_threaded_comment()` |
-| `error_display_name()` | `get_error_display_name()` |
+| `error_display_name()` | removed |
 | `excel_profile_id()` | `get_excel_profile_id()` |
 | `external_link_count()` | removed; use `list_external_links()` |
 | `ExternalLinkRecord` | `ExternalLink` |
 | `file_name()` | `get_file_name()` |
-| `fill_count()` | `get_fill_count()` |
+| `fill_count()` | removed; use `list_fills()` |
 | `FillRecord` | `Fill` |
-| `font_count()` | `get_font_count()` |
+| `font_count()` | removed; use `list_fonts()` |
 | `FontRecord` | `Font` |
 | `full_precision()` | `get_full_precision()` |
+| `get_cell_at()` | removed |
+| `get_cell_count()` | removed |
 | `get_cell_phonetic_run()` | removed |
 | `get_cell_phonetic_run_count()` | removed |
 | `get_col_breaks()` | `list_column_breaks()` |
@@ -1279,7 +1371,7 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `get_threaded_comments()` | `list_threaded_comments()` |
 | `get_validation_at()` | removed; use `list_validations()` |
 | `get_validations()` | removed |
-| `has_phonetic_properties()` | `has_cell_phonetic_properties()` |
+| `has_phonetic_properties()` | removed |
 | `hyperlink_count()` | removed; use `list_hyperlinks()` |
 | `insert_chart()` | `add_chart()` |
 | `insert_cols()` | `insert_columns()` |
@@ -1317,36 +1409,36 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `pivot_cache_count()` | removed; use `list_pivot_caches()` |
 | `pivot_cache_create()` | `add_pivot_cache()` |
 | `pivot_cache_field_add()` | `add_pivot_cache_field()` |
-| `pivot_cache_field_add_shared_item_blank()` | `add_pivot_cache_field_shared_item_blank()` |
-| `pivot_cache_field_add_shared_item_bool()` | `add_pivot_cache_field_shared_item_bool()` |
-| `pivot_cache_field_add_shared_item_date()` | `add_pivot_cache_field_shared_item_date()` |
-| `pivot_cache_field_add_shared_item_error()` | `add_pivot_cache_field_shared_item_error()` |
-| `pivot_cache_field_add_shared_item_number()` | `add_pivot_cache_field_shared_item_number()` |
-| `pivot_cache_field_add_shared_item_text()` | `add_pivot_cache_field_shared_item_text()` |
+| `pivot_cache_field_add_shared_item_blank()` | removed |
+| `pivot_cache_field_add_shared_item_bool()` | removed |
+| `pivot_cache_field_add_shared_item_date()` | removed |
+| `pivot_cache_field_add_shared_item_error()` | removed |
+| `pivot_cache_field_add_shared_item_number()` | removed |
+| `pivot_cache_field_add_shared_item_text()` | removed |
 | `pivot_cache_field_clear()` | `clear_pivot_cache_fields()` |
 | `pivot_cache_field_clear_shared_items()` | `clear_pivot_cache_field_shared_items()` |
-| `pivot_cache_field_count()` | `get_pivot_cache_field_count()` |
-| `pivot_cache_field_formula()` | `get_pivot_cache_field_formula()` |
-| `pivot_cache_field_name()` | `get_pivot_cache_field_name()` |
-| `pivot_cache_field_shared_item_count()` | `get_pivot_cache_field_shared_item_count()` |
-| `pivot_cache_field_shared_item_is_date()` | `is_pivot_cache_field_shared_item_date()` |
-| `pivot_cache_field_shared_item_value()` | `get_pivot_cache_field_shared_item_value()` |
+| `pivot_cache_field_count()` | removed |
+| `pivot_cache_field_formula()` | removed |
+| `pivot_cache_field_name()` | removed |
+| `pivot_cache_field_shared_item_count()` | removed |
+| `pivot_cache_field_shared_item_is_date()` | removed |
+| `pivot_cache_field_shared_item_value()` | removed |
 | `pivot_cache_get_options()` | `get_pivot_cache_options()` |
 | `pivot_cache_id()` | `get_pivot_cache_id()` |
 | `pivot_cache_id_at()` | removed; use `list_pivot_caches()` |
 | `pivot_cache_record_add()` | `add_pivot_cache_record()` |
 | `pivot_cache_record_clear()` | `clear_pivot_cache_records()` |
 | `pivot_cache_record_count()` | `get_pivot_cache_record_count()` |
-| `pivot_cache_record_set_blank()` | `set_pivot_cache_record_blank()` |
-| `pivot_cache_record_set_bool()` | `set_pivot_cache_record_bool()` |
-| `pivot_cache_record_set_date()` | `set_pivot_cache_record_date()` |
-| `pivot_cache_record_set_error()` | `set_pivot_cache_record_error()` |
-| `pivot_cache_record_set_number()` | `set_pivot_cache_record_number()` |
-| `pivot_cache_record_set_text()` | `set_pivot_cache_record_text()` |
+| `pivot_cache_record_set_blank()` | removed |
+| `pivot_cache_record_set_bool()` | removed |
+| `pivot_cache_record_set_date()` | removed |
+| `pivot_cache_record_set_error()` | removed |
+| `pivot_cache_record_set_number()` | removed |
+| `pivot_cache_record_set_text()` | removed |
 | `pivot_cache_remove()` | `remove_pivot_cache()` |
 | `pivot_cache_set_options()` | `set_pivot_cache_options()` |
 | `pivot_col_field_order()` | `get_pivot_column_field_order()` |
-| `pivot_count()` | `get_pivot_count()` |
+| `pivot_count()` | removed |
 | `pivot_create()` | `add_pivot()` |
 | `pivot_data_field_add()` | `add_pivot_data_field()` |
 | `pivot_data_field_at()` | removed; use `list_pivot_data_fields()` |
@@ -1365,21 +1457,21 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `pivot_field_clear_subtotal_fns()` | `clear_pivot_field_subtotal_fns()` |
 | `pivot_field_count()` | removed; use `list_pivot_fields()` |
 | `pivot_field_item_at()` | `get_pivot_field_item()` |
-| `pivot_field_item_count()` | `get_pivot_field_item_count()` |
+| `pivot_field_item_count()` | removed; use `list_pivot_field_items()` |
 | `pivot_field_set_axis()` | `set_pivot_field_axis()` |
-| `pivot_field_set_custom_name()` | `set_pivot_field_custom_name()` |
+| `pivot_field_set_custom_name()` | removed |
 | `pivot_field_set_date_group()` | `set_pivot_field_date_group()` |
-| `pivot_field_set_default_subtotal()` | `set_pivot_field_default_subtotal()` |
-| `pivot_field_set_fill_down_labels()` | `set_pivot_field_fill_down_labels()` |
-| `pivot_field_set_insert_blank_row()` | `set_pivot_field_insert_blank_row()` |
-| `pivot_field_set_item_caption()` | `set_pivot_field_item_caption()` |
-| `pivot_field_set_item_show_detail()` | `set_pivot_field_item_show_detail()` |
-| `pivot_field_set_item_visible()` | `set_pivot_field_item_visible()` |
-| `pivot_field_set_number_format()` | `set_pivot_field_number_format()` |
-| `pivot_field_set_show_all()` | `set_pivot_field_show_all()` |
+| `pivot_field_set_default_subtotal()` | removed |
+| `pivot_field_set_fill_down_labels()` | removed |
+| `pivot_field_set_insert_blank_row()` | removed |
+| `pivot_field_set_item_caption()` | removed |
+| `pivot_field_set_item_show_detail()` | removed |
+| `pivot_field_set_item_visible()` | removed |
+| `pivot_field_set_number_format()` | removed |
+| `pivot_field_set_show_all()` | removed |
 | `pivot_field_set_show_detail()` | `set_pivot_field_show_detail()` |
 | `pivot_field_set_sort()` | `set_pivot_field_sort()` |
-| `pivot_field_set_subtotal_top()` | `set_pivot_field_subtotal_top()` |
+| `pivot_field_set_subtotal_top()` | removed |
 | `pivot_filter_add()` | `add_pivot_filter()` |
 | `pivot_filter_at()` | removed; use `list_pivot_filters()` |
 | `pivot_filter_clear()` | `clear_pivot_filters()` |
@@ -1420,6 +1512,8 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `remove_col_break()` | `remove_column_break()` |
 | `remove_conditional_format_at()` | `remove_cf_rule()` |
 | `remove_drawing()` | `remove_drawing_object()` |
+| `remove_hyperlink_at()` | removed |
+| `remove_merge_at()` | removed |
 | `remove_validation_at()` | `remove_validation()` |
 | `reset_theme()` | `clear_theme()` |
 | `save_as()` | folded into `save` |
@@ -1430,34 +1524,35 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
 | `set_phonetic_properties()` | `set_cell_phonetic_properties()` |
 | `set_phonetic_runs()` | `set_cell_phonetic_runs()` |
 | `set_sheet_format_defaults()` | `set_format_defaults()` |
-| `set_sheet_freeze()` | `set_freeze()` |
-| `set_sheet_pane_top_left()` | `set_pane_top_left()` |
-| `set_sheet_right_to_left()` | `set_right_to_left()` |
+| `set_sheet_freeze()` | removed |
+| `set_sheet_pane_top_left()` | removed |
+| `set_sheet_right_to_left()` | removed |
 | `set_sheet_selection()` | `set_selection()` |
-| `set_sheet_show_formulas()` | `set_show_formulas()` |
-| `set_sheet_show_grid_lines()` | `set_show_grid_lines()` |
-| `set_sheet_show_outline_symbols()` | `set_show_outline_symbols()` |
-| `set_sheet_show_row_col_headers()` | `set_show_row_col_headers()` |
-| `set_sheet_show_zeros()` | `set_show_zeros()` |
-| `set_sheet_split()` | `set_split()` |
+| `set_sheet_show_formulas()` | removed |
+| `set_sheet_show_grid_lines()` | removed |
+| `set_sheet_show_outline_symbols()` | removed |
+| `set_sheet_show_row_col_headers()` | removed |
+| `set_sheet_show_zeros()` | removed |
+| `set_sheet_split()` | removed |
 | `set_sheet_tab_hidden()` | removed |
-| `set_sheet_tab_selected()` | `set_tab_selected()` |
-| `set_sheet_top_left()` | `set_top_left()` |
-| `set_sheet_view_mode()` | `set_view_mode()` |
-| `set_sheet_visibility()` | `set_visibility()` |
-| `set_sheet_zoom()` | `set_zoom()` |
+| `set_sheet_tab_selected()` | removed |
+| `set_sheet_top_left()` | removed |
+| `set_sheet_view_mode()` | removed |
+| `set_sheet_visibility()` | removed |
+| `set_sheet_zoom()` | removed |
 | `set_show_phonetic()` | `set_cell_show_phonetic()` |
 | `sheet_count()` | removed |
 | `sheet_name()` | removed |
 | `SheetPrintTitles` | removed |
 | `spill_info()` | `get_spill_info()` |
 | `SpillInfo` | `Spill` |
+| `StyleBatchIndices` | removed |
 | `table_create()` | `add_table()` |
 | `table_remove()` | `remove_table()` |
-| `table_rename()` | `rename_table()` |
+| `table_rename()` | removed |
 | `table_rename_column()` | `rename_table_column()` |
 | `table_set_column_totals()` | `set_table_column_totals()` |
-| `table_set_style_info()` | `set_table_style_info()` |
+| `table_set_style_info()` | removed |
 | `table_style_count()` | removed; use `list_table_styles()` |
 | `table_style_defaults()` | `get_table_style_defaults()` |
 | `table_update()` | `update_table()` |

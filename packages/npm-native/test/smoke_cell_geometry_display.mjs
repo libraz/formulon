@@ -154,12 +154,20 @@ test('geometry accessors agree with each other', async () => {
   assert.throws(() => wb.sheet(0).getCellRectPt(A1_B2, 7), isFormulonError);
   wb.sheet(0).getColumnWidthPt(0, 1);
 
-  const pt = wb.sheet(0).convertColumnCharsToPt(0, 2340 / 256);
+  const pt = wb.sheet(0).convertColumnCharsToPt(2340 / 256, 0);
   assert.equal(pt, 48);
-  const chars = wb.sheet(0).convertColumnPtToChars(0, pt);
+  const chars = wb.sheet(0).convertColumnPtToChars(pt, 0);
   assert.equal(chars, 2340 / 256);
+  // The mode is last and defaults to Display.
+  assert.equal(wb.sheet(0).convertColumnCharsToPt(2340 / 256), pt);
+  assert.equal(wb.sheet(0).convertColumnPtToChars(pt), chars);
+  assert.equal(wb.sheet(0).getColumnWidthPt(0), c0);
   assert.equal(wb.sheet(0).convertColumnCharsToPt(0, 0), 0);
-  assert.throws(() => wb.sheet(0).convertColumnCharsToPt(0, -1), isFormulonError);
+  assert.throws(() => wb.sheet(0).convertColumnCharsToPt(-1, 0), isFormulonError);
+  // A mode that is not a GeometryMode value (an argument left in its old place) is refused.
+  assert.throws(() => wb.sheet(0).convertColumnCharsToPt(10, 7), RangeError);
+  assert.throws(() => wb.sheet(0).convertColumnPtToChars(10, 7), RangeError);
+  assert.throws(() => wb.sheet(0).getColumnWidthPt(0, 7), RangeError);
   assert.throws(() => wb.sheet(99).getRowHeightPt(0), isFormulonError);
 });
 
@@ -170,7 +178,7 @@ test('getFormula / getFormulaR1C1 return null for non-formula cells', async () =
   wb.sheet(0).setFormula(1, 1, '=A1+1');
   const a1 = wb.sheet(0).getFormula(1, 1);
   assert.equal(a1, '=A1+1');
-  assert.equal(wb.sheet(0).getFormulaR1C1(1, 1), 'R[-1]C[-1]+1');
+  assert.equal(wb.sheet(0).getFormulaR1C1(1, 1), '=R[-1]C[-1]+1');
   assert.equal(wb.sheet(0).getFormula(0, 0), null);
   assert.equal(wb.sheet(0).getFormulaR1C1(5, 5), null);
   assert.throws(() => wb.sheet(99).getFormula(0, 0), isFormulonError);

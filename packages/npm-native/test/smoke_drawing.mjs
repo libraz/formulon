@@ -56,11 +56,11 @@ test('images probe, insert, list, read back, survive save and load, and remove',
   const wb = mod.Workbook.createDefault();
   try {
     const png = makePng(4);
-    const probe = wb.getImageInfo(png);
+    const probe = mod.getImageInfo(png);
     assert.equal(probe.format, mod.ImageFormat.Png);
     assert.equal(probe.pxWidth, 4);
     assert.equal(probe.pxHeight, 1);
-    assert.throws(() => wb.getImageInfo(new Uint8Array([1, 2, 3])), isFormulonError);
+    assert.throws(() => mod.getImageInfo(new Uint8Array([1, 2, 3])), isFormulonError);
 
     const empty = wb.sheet(0).listDrawingObjects();
     assert.equal(empty.length, 0);

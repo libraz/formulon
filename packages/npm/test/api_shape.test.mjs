@@ -38,7 +38,17 @@ const NON_TABLE_MEMBERS = new Set([
   'evalFormula',
   'getVersion',
   'getStatusName',
-  'getErrorDisplayName',
+  'getFunctionMetadata',
+  'listFunctionNames',
+  'localizeFunctionName',
+  'canonicalizeFunctionName',
+  'localizeFormula',
+  'canonicalizeFormula',
+  'getLocaleFacts',
+  'listLocaleErrorNames',
+  'compareText',
+  'getCollationClasses',
+  'getImageInfo',
   'setLogMinLevel',
   'setLogSink',
 ]);
@@ -144,8 +154,8 @@ test('calls after dispose throw BindingInvalidHandle; disposed answers', async (
   expectFormulonError(() => wb.listSheets().length, code);
   expectFormulonError(() => wb.sheet(0).getValue(0, 0), code);
   expectFormulonError(() => wb.sheet(0).setNumber(0, 0, 1), code);
-  expectFormulonError(() => view.get('A1'), code);
-  expectFormulonError(() => view.set('A1', 1), code);
+  expectFormulonError(() => view.getValue('A1'), code);
+  expectFormulonError(() => view.setValue('A1', 1), code);
   expectFormulonError(() => view.getFormula('A1'), code);
   expectFormulonError(() => view.setFormula('A1', '=1'), code);
 });
@@ -154,7 +164,7 @@ test('out-of-range indices and missing natural keys throw by code', async () => 
   await withWorkbook((wb, formulon) => {
     const { StatusCode } = formulon;
     expectFormulonError(() => wb.sheet(1).name, StatusCode.SheetIndexOutOfRange);
-    expectFormulonError(() => wb.getFont(wb.getFontCount()), StatusCode.IndexOutOfRange);
+    expectFormulonError(() => wb.getFont(wb.listFonts().length), StatusCode.IndexOutOfRange);
     expectFormulonError(() => wb.removeDefinedName('nope', null), StatusCode.NotFound);
     assert.equal(wb.getDefinedName('nope', null), null);
   });
@@ -396,21 +406,21 @@ test('a Sheet keeps its index and reads its name live', async () => {
   });
 });
 
-test('Sheet get / set / getFormula / setFormula address one cell', async () => {
+test('Sheet getValue / setValue / getFormula / setFormula address one cell by A1', async () => {
   await withWorkbook((wb, { ValueKind }) => {
     const view = wb.sheet(0);
-    view.set('B3', 5);
+    view.setValue('B3', 5);
     assert.deepStrictEqual({ ...wb.sheet(0).getValue(2, 1) }, { kind: ValueKind.Number, number: 5 });
-    assert.deepStrictEqual({ ...view.get('B3') }, { kind: ValueKind.Number, number: 5 });
-    view.set('C1', '=B3');
+    assert.deepStrictEqual({ ...view.getValue('B3') }, { kind: ValueKind.Number, number: 5 });
+    view.setValue('C1', '=B3');
     assert.equal(view.getFormula('C1'), null);
     view.setFormula('D1', '=B3*2');
     assert.equal(wb.sheet(0).getFormula(0, 3), '=B3*2');
     assert.equal(view.getFormula('D1'), '=B3*2');
     wb.recalc();
-    assert.deepStrictEqual({ ...view.get('D1') }, { kind: ValueKind.Number, number: 10 });
-    view.set('B3', null);
-    assert.deepStrictEqual({ ...view.get('B3') }, { kind: ValueKind.Blank });
+    assert.deepStrictEqual({ ...view.getValue('D1') }, { kind: ValueKind.Number, number: 10 });
+    view.setValue('B3', null);
+    assert.deepStrictEqual({ ...view.getValue('B3') }, { kind: ValueKind.Blank });
   });
 });
 
@@ -419,14 +429,14 @@ test('Sheet addresses equivalent spellings of one cell alike', async () => {
     const view = wb.sheet(0);
     wb.sheet(0).setNumber(2, 1, 7);
     for (const a1 of ['B3', 'b3', '$B$3', '$b3', 'B$3']) {
-      assert.deepStrictEqual({ ...view.get(a1) }, { kind: ValueKind.Number, number: 7 }, a1);
+      assert.deepStrictEqual({ ...view.getValue(a1) }, { kind: ValueKind.Number, number: 7 }, a1);
     }
     wb.sheet(0).setNumber(0, 0, 1);
     for (const a1 of ['A01', 'a0000001']) {
-      assert.deepStrictEqual({ ...view.get(a1) }, { kind: ValueKind.Number, number: 1 }, a1);
+      assert.deepStrictEqual({ ...view.getValue(a1) }, { kind: ValueKind.Number, number: 1 }, a1);
     }
     wb.sheet(0).setNumber(1048575, 16383, 3);
-    assert.deepStrictEqual({ ...view.get('XFD1048576') }, { kind: ValueKind.Number, number: 3 });
+    assert.deepStrictEqual({ ...view.getValue('XFD1048576') }, { kind: ValueKind.Number, number: 3 });
   });
 });
 
@@ -436,10 +446,10 @@ test('Sheet rejects addresses that are not one unqualified cell', async () => {
     const rejected = ['', '   ', 'A1:B2', 'Sheet2!A1', 'Sheet1!A1', 'R1C1', 'XFE1', 'A0', 'A1048577', 'B:B', '3:3'];
     rejected.push('Ａ１', 'Ａ1', '😀', 'A\uD800', ' A1', 'A1 ', 'A1\n');
     for (const a1 of rejected) {
-      expectFormulonError(() => view.get(a1), StatusCode.InvalidArgument);
-      expectFormulonError(() => view.set(a1, 1), StatusCode.InvalidArgument);
+      expectFormulonError(() => view.getValue(a1), StatusCode.InvalidArgument);
+      expectFormulonError(() => view.setValue(a1, 1), StatusCode.InvalidArgument);
     }
-    assert.throws(() => view.get(1), TypeError);
+    assert.throws(() => view.getValue(1), TypeError);
   });
 });
 
@@ -484,14 +494,14 @@ for (const [id, a1, cell] of PAIRWISE) {
     await withWorkbook((wb, { StatusCode, ValueKind }) => {
       const view = wb.sheet(0);
       if (cell === null) {
-        expectFormulonError(() => view.get(a1), StatusCode.InvalidArgument);
-        expectFormulonError(() => view.set(a1, 1), StatusCode.InvalidArgument);
+        expectFormulonError(() => view.getValue(a1), StatusCode.InvalidArgument);
+        expectFormulonError(() => view.setValue(a1, 1), StatusCode.InvalidArgument);
         return;
       }
       const [row, col] = cell;
-      view.set(a1, 7);
+      view.setValue(a1, 7);
       assert.deepStrictEqual({ ...wb.sheet(0).getValue(row, col) }, { kind: ValueKind.Number, number: 7 });
-      assert.deepStrictEqual({ ...view.get(a1) }, { kind: ValueKind.Number, number: 7 });
+      assert.deepStrictEqual({ ...view.getValue(a1) }, { kind: ValueKind.Number, number: 7 });
     });
   });
 }
@@ -651,7 +661,7 @@ test('H9: showPivotDetails returns the new sheet and the existing handles follow
     assert.equal(details.index, 0);
     assert.equal(wb.sheet(0), details);
     assert.equal(ws.index, 1);
-    assert.equal(ws.getPivotCount(), 1);
+    assert.equal(ws.listPivots().length, 1);
     assertSheetsInSync(formulon, wb);
   } finally {
     wb.dispose();
@@ -698,7 +708,7 @@ test('H12: a SheetRef is a Sheet, an index or a name; a Sheet of another workboo
 test('E1: a positional guard names the facade method and counts its arguments', async () => {
   await withWorkbook((wb) => {
     const ws = wb.sheet(0);
-    assert.throws(() => ws.setNumber('a', 0, 1), {
+    assert.throws(() => ws.setNumber(true, 0, 1), {
       name: 'TypeError',
       message: 'Sheet.setNumber argument 1 must be a primitive number',
     });
@@ -782,7 +792,7 @@ test('round trip: every reshaped setter takes what its getter returns', async ()
     );
     wb.setThemeScriptFont({ major: true, script: 'Zzzz', typeface: 'Face' });
     same(
-      () => wb.getThemeScriptFont(true, 'Zzzz'),
+      () => wb.getThemeScriptFont({ major: true, script: 'Zzzz' }),
       (v) => wb.setThemeScriptFont(v),
     );
     const colors = wb.getThemeColors();
@@ -818,10 +828,10 @@ test('round trip: every reshaped setter takes what its getter returns', async ()
       () => ws.getPrintArea(),
       (v) => ws.setPrintArea(v),
     );
-    ws.setViewMode(formulon.SheetViewMode.PageLayout);
+    ws.setView({ viewMode: formulon.SheetViewMode.PageLayout });
     same(
       () => ws.getView().viewMode,
-      (v) => ws.setViewMode(v),
+      (v) => ws.setView({ viewMode: v }),
     );
     assert.equal(ws.getView().viewMode, formulon.SheetViewMode.PageLayout);
   } finally {
@@ -871,7 +881,7 @@ test('A1: a value the workbook does not hold reads as null', async () => {
     assert.deepEqual([options.errorCaption, options.altText, options.grandTotalCaption], [null, null, null]);
     const cacheId = ws.getPivotCacheId(pivot);
     assert.equal(wb.getPivotCacheOptions(cacheId).missingItemsLimit, null);
-    assert.equal(wb.getPivotCacheFieldFormula(cacheId, 0), null);
+    assert.equal(wb.listPivotCacheFields(cacheId)[0].formula, null);
     assert.equal(wb.getPivotCacheWorksheetSource(wb.addPivotCache()), null);
 
     ws.addSparklineGroup({ sparklines: [{ formula: 'Sheet1!A1:D1', location: 'F1' }] });
@@ -908,7 +918,7 @@ test('A3 / A9: setDefinedName with a null scope is workbook-wide and replaces th
     assert.deepEqual([name.localSheetId, name.comment, name.hidden], [null, 'c', true]);
     wb.setDefinedName({ name: 'Rate', formula: 'Sheet1!$B$1' });
     name = wb.getDefinedName('Rate', null);
-    assert.deepEqual([name.formula, name.comment, name.hidden], ['Sheet1!$B$1', null, false]);
+    assert.deepEqual([name.formula, name.comment, name.hidden], ['=Sheet1!$B$1', null, false]);
     wb.removeDefinedName('Rate', null);
     assert.equal(wb.getDefinedName('Rate', null), null);
   });
@@ -922,7 +932,7 @@ test('A4: setPrintArea(null) and setPrintArea([]) both clear the print area', as
       ws.setPrintArea(area);
       assert.deepEqual(ws.getPrintArea(), area);
       ws.setPrintArea(cleared);
-      assert.deepEqual(ws.getPrintArea(), []);
+      assert.equal(ws.getPrintArea(), null);
     }
   });
 });
@@ -1025,9 +1035,9 @@ test('A11: an absent chart title or legend is null, and null in a patch removes 
     assert.equal(ws.getChart(id).title.text, 'T');
     ws.setChartTitle(id, null);
     assert.equal(ws.getChart(id).title, null);
-    ws.setChartLegend(id, formulon.ChartLegendPosition.Top, false);
+    ws.setChartLegend(id, { position: formulon.ChartLegendPosition.Top, overlay: false });
     assert.equal(ws.getChart(id).legend.position, formulon.ChartLegendPosition.Top);
-    ws.setChartLegend(id, null, false);
+    ws.setChartLegend(id, null);
     assert.equal(ws.getChart(id).legend, null);
     const axis = ws.getChart(id).axes[0];
     ws.setChartAxis(id, axis.id, { title: 'Axis' });
@@ -1061,6 +1071,7 @@ test('P3: a fractional or NaN iteration cap is a TypeError; a non-finite thresho
     for (const maxChange of [Number.POSITIVE_INFINITY, Number.NaN]) {
       expectFormulonError(() => wb.setIterative({ maxChange }), StatusCode.InvalidArgument);
     }
+    assert.throws(() => wb.setIterative({ maxChange: -1 }), RangeError);
     assert.deepEqual(wb.getIterative(), before);
   });
 });
@@ -1126,11 +1137,11 @@ test('N1: enums of one family share their values', async () => {
 test('N2: an enum argument outside its set is refused by type, range or the engine', async () => {
   await withWorkbook((wb, { StatusCode, SheetViewMode }) => {
     const ws = wb.sheet(0);
-    expectFormulonError(() => ws.setViewMode(99), StatusCode.InvalidArgument);
+    expectFormulonError(() => ws.setView({ viewMode: 99 }), StatusCode.InvalidArgument);
     for (const bad of [-1, 1.5, Number.NaN]) {
-      assert.throws(() => ws.setViewMode(bad), RangeError, String(bad));
+      assert.throws(() => ws.setView({ viewMode: bad }), RangeError, String(bad));
     }
-    assert.throws(() => ws.setViewMode('0'), TypeError);
+    assert.throws(() => ws.setView({ viewMode: '0' }), TypeError);
     assert.equal(ws.getView().viewMode, SheetViewMode.Normal);
   });
 });
@@ -1205,10 +1216,10 @@ function pivotWorkbook(formulon) {
     ws.setText(wb.getPivotCacheRecordCount(cacheId) + 1, 0, region);
     ws.setNumber(wb.getPivotCacheRecordCount(cacheId) + 1, 1, amount);
     const rec = wb.addPivotCacheRecord(cacheId);
-    wb.setPivotCacheRecordText(cacheId, rec, 0, region);
-    wb.setPivotCacheRecordNumber(cacheId, rec, 1, amount);
+    wb.setPivotCacheRecordValue(cacheId, rec, 0, region);
+    wb.setPivotCacheRecordValue(cacheId, rec, 1, amount);
   }
-  const pivot = ws.addPivot('Pivot1', cacheId, 0, 4);
+  const pivot = ws.addPivot({ name: 'Pivot1', cacheId, anchorRow: 0, anchorCol: 4 });
   ws.addPivotField(pivot, { sourceName: 'Region', axis: 0 });
   const amount = ws.addPivotField(pivot, { sourceName: 'Amount', axis: 2 });
   ws.addPivotDataField(pivot, { name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });

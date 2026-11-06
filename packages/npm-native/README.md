@@ -44,8 +44,8 @@ Why prefer the native build:
 This package exposes the shared `Workbook` surface of the WASM-backed
 `@libraz/formulon` package, all marshalling to the identical C-ABI
 functions. Its TypeScript declarations and its native class table
-register 434 instance methods plus the four static factories. Of those
-instance methods, 433 are shared with WASM; zero remain WASM-only, while
+register 424 instance methods plus the four static factories. Of those
+instance methods, 423 are shared with WASM; zero remain WASM-only, while
 `getMemoryUsage()` is a native-only helper.
 The shared `Workbook` methods take the same arguments, return the same values
 and throw the same `FormulonError`; switching packages still requires updating
@@ -61,14 +61,6 @@ packages without waiting for finalization. `recalcParallel(threadCount)` is
 available on both the native and WASM packages and returns the parallel SCC
 telemetry described in the API declarations. See
 [Memory accounting](#memory-accounting).
-
-One C ABI function bound in the Python package has no JS method of its own;
-what it does is reachable from both JS packages:
-
-- `fm_workbook_add_batch` registers fonts, fills, borders and cell xfs in one
-  all-or-nothing call. JS registers the same records one call each
-  (`addFont`, `addFill`, `addBorder`, `addCellXf`), so a failure part-way leaves
-  the records added before it in place.
 
 The TypeScript declarations in `dist/index.d.ts` are the authoritative
 method list. The methods are the WASM package's, documented one by one in
@@ -105,26 +97,27 @@ node -e "import('./packages/npm-native/dist/index.mjs').then(async m => console.
 
 Like the WASM package, it is ES modules only (no `require`).
 
-```js
+```js run
 import createFormulon from '@libraz/formulon-native';
 
 const formulon = await createFormulon();
-console.log(formulon.evalFormula('=SUM(1,2,3)'));
-// { kind: 1, number: 6 }
+console.log(formulon.evalFormula('=SUM(1,2,3)').number); // 6
 
 const wb = formulon.Workbook.createDefault();
 try {
   const ws = wb.sheet(0);
-  ws.setFormula(0, 0, '=1+2');
+  ws.setFormula('A1', '=1+2');
+  ws.setValues('B1', [[10, 20], [30, 40]]);
+  console.log(wb.hasDirtyCells()); // true
   wb.recalc();
-  const v = ws.getValue(0, 0);
-  if (v.kind === formulon.ValueKind.Number) {
-    console.log(v.number);  // 3
-  }
+  console.log(ws.getValue('A1').number); // 3
+  console.log(ws.getValues('B1:C2').map((row) => row.map((v) => v.number))); // [ [ 10, 20 ], [ 30, 40 ] ]
 } finally {
   wb.dispose(); // wb.disposed is now true
 }
 ```
+
+Cell methods take `(row, col)` or an A1 string, and rectangle arguments take `'A1:B2'`. Reads return the value as of the last full `recalc()`; `wb.hasDirtyCells()` reports edits that are still waiting for one.
 
 On Node 24+, `using wb = formulon.Workbook.createDefault()` releases the workbook at the end of the scope instead.
 

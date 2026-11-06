@@ -59,8 +59,8 @@ test('showFormulas and showOutlineSymbols read back and round-trip', async () =>
   const initial = wb.sheet(0).getView();
   assert.equal(initial.showFormulas, false);
   assert.equal(initial.showOutlineSymbols, true);
-  wb.sheet(0).setShowFormulas(true);
-  wb.sheet(0).setShowOutlineSymbols(false);
+  wb.sheet(0).setView({ showFormulas: true });
+  wb.sheet(0).setView({ showOutlineSymbols: false });
   const loaded = roundTrip(mod, wb);
   const view = loaded.sheet(0).getView();
   assert.equal(view.showFormulas, true);
@@ -193,7 +193,7 @@ test("the file name spells and binds the workbook's own names", async () => {
   assert.equal(wb.getFileName(), 'M5.xlsx');
   wb.sheet(0).setFormula(0, 0, '=M5.xlsx!LN+1');
   assert.equal(wb.sheet(0).getFormula(0, 0), '=M5.xlsx!LN+1');
-  assert.equal(wb.sheet(0).getCellAt(0).formula, '=M5.xlsx!LN+1');
+  assert.equal(wb.sheet(0).listCells()[0].formula, '=M5.xlsx!LN+1');
   wb.setFileName('M5 b-1.xlsx');
   assert.equal(wb.sheet(0).getFormula(0, 0), "='M5 b-1.xlsx'!LN+1");
   assert.throws(() => wb.setFileName('Book1'), isFormulonError);
@@ -212,11 +212,11 @@ test('defined-name comment and hidden read back, and a set replaces the whole na
   assert.equal(wb.listDefinedNames()[0].hidden, false);
   wb.setDefinedName({ name: 'Rate', formula: 'Sheet1!$A$1', comment: 'Tax rate', hidden: true });
   let entry = wb.listDefinedNames()[0];
-  assert.deepEqual([entry.formula, entry.comment, entry.hidden], ['Sheet1!$A$1', 'Tax rate', true]);
+  assert.deepEqual([entry.formula, entry.comment, entry.hidden], ['=Sheet1!$A$1', 'Tax rate', true]);
   // Omitted comment / hidden return to their defaults.
   wb.setDefinedName({ name: 'Rate', formula: 'Sheet1!$B$2' });
   entry = wb.listDefinedNames()[0];
-  assert.deepEqual([entry.formula, entry.comment, entry.hidden], ['Sheet1!$B$2', null, false]);
+  assert.deepEqual([entry.formula, entry.comment, entry.hidden], ['=Sheet1!$B$2', null, false]);
   wb.setDefinedName({ name: 'Rate', formula: 'Sheet1!$B$2', comment: 'Tax rate' });
   const loaded = roundTrip(mod, wb);
   assert.deepEqual([loaded.listDefinedNames()[0].comment, loaded.listDefinedNames()[0].hidden], ['Tax rate', false]);

@@ -1724,7 +1724,9 @@ def _is_constant(decl: TsDecl) -> bool:
         return True
     if decl.kind != "const":
         return False
-    return decl.text.startswith("Readonly<{") or _SCALAR_CONSTANT_RE.fullmatch(decl.text) is not None
+    return (
+        decl.text.startswith(("Readonly<{", "Readonly<Record<")) or _SCALAR_CONSTANT_RE.fullmatch(decl.text) is not None
+    )
 
 
 def _formulon_members(ctx: Context) -> Optional[Set[str]]:

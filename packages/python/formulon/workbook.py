@@ -54,7 +54,8 @@ from typing import (
 )
 
 from . import _structs as S
-from ._c import LIB, FormulonError, ValueKind, _sint, _uint, decode_cstr, fm_value_t_size
+from ._c import LIB, FormulonError, ValueKind, _sint, _uint, fm_value_t_size
+from ._refs import resolve_ref
 from ._status import StatusCode
 
 if TYPE_CHECKING:
@@ -176,6 +177,7 @@ __all__ = [
     "FunctionMetadata",
     "GeometryMode",
     "get_collation_classes",
+    "get_image_info",
     "get_function_metadata",
     "get_locale_facts",
     "GradientFill",
@@ -212,7 +214,9 @@ __all__ = [
     "PIVOT_VALUES_FIELD",
     "PivotAggregation",
     "PivotAxis",
+    "PivotCacheField",
     "PivotCacheOptions",
+    "PivotCacheSharedItem",
     "PivotCalculatedItem",
     "PivotCalendar",
     "PivotCell",
@@ -227,6 +231,7 @@ __all__ = [
     "PivotFilterType",
     "PivotFilterValueKind",
     "PivotGrandTotals",
+    "PivotInput",
     "PivotItem",
     "PivotLayout",
     "PivotOptions",
@@ -234,7 +239,7 @@ __all__ = [
     "PivotShowValuesAs",
     "PivotSortOrder",
     "PivotStyle",
-    "PivotStyleInput",
+    "PivotSummary",
     "PivotWorksheetSource",
     "PrintTitles",
     "ProtectedRange",
@@ -267,7 +272,6 @@ __all__ = [
     "SparklineGroup",
     "SparklineType",
     "Spill",
-    "StyleBatchIndices",
     "Table",
     "TableColumn",
     "TableStyle",
@@ -461,7 +465,7 @@ class ExcelError:
         object.__setattr__(self, "code", ErrorCode(_sint(self.code, "code")))
 
     def __str__(self) -> str:
-        return decode_cstr(LIB.fm_get_error_display_name(_sint(self.code, "code")))
+        return self.code.display_name
 
 
 @dataclass(frozen=True)
@@ -580,7 +584,7 @@ class Value:
 
 @dataclass(frozen=True)
 class Cell:
-    """One written coordinate, as ``Sheet.get_cell_at()`` returns it."""
+    """One written coordinate, as :meth:`Sheet.list_cells` returns it."""
 
     row: int
     col: int
@@ -593,6 +597,7 @@ class DefinedName:
     """One defined name, as ``Workbook.list_defined_names()`` and ``Workbook.get_defined_name()`` return it."""
 
     name: str
+    #: The formula text, with a leading ``=``.
     formula: str
     #: The 0-based index of the scope sheet; ``None`` for workbook scope.
     local_sheet_id: Optional[int]
@@ -1035,6 +1040,35 @@ class ErrorCode(IntEnum):
     BUSY = 14
     PYTHON = 15
     UNKNOWN = 16
+
+    @property
+    def display_name(self) -> str:
+        """The error as Excel spells it in a cell (``#DIV/0!``)."""
+        return _ERROR_DISPLAY_NAMES[self.name]
+
+
+# Display literal per `ErrorCode` member name, generated from `kErrorTable` in src/value.h.
+# <error-display-names:begin>
+_ERROR_DISPLAY_NAMES = {
+    "NULL": "#NULL!",
+    "DIV0": "#DIV/0!",
+    "VALUE": "#VALUE!",
+    "REF": "#REF!",
+    "NAME": "#NAME?",
+    "NUM": "#NUM!",
+    "NA": "#N/A",
+    "GETTING_DATA": "#GETTING_DATA",
+    "SPILL": "#SPILL!",
+    "CALC": "#CALC!",
+    "FIELD": "#FIELD!",
+    "BLOCKED": "#BLOCKED!",
+    "CONNECT": "#CONNECT!",
+    "EXTERNAL": "#EXTERNAL!",
+    "BUSY": "#BUSY!",
+    "PYTHON": "#PYTHON!",
+    "UNKNOWN": "#UNKNOWN!",
+}
+# <error-display-names:end>
 
 
 class LocaleDateOrder(IntEnum):
@@ -2059,7 +2093,7 @@ class ChartAxis:
     title: Optional[ChartTitle]
     major_gridlines: bool
     minor_gridlines: bool
-    tick_label_position: Optional[str]
+    tick_label_position: Optional[Literal["nextTo", "low", "high", "none"]]
 
 
 @dataclass(frozen=True)
@@ -2291,7 +2325,7 @@ class ChartAxisPatch(TypedDict, total=False):
     log_base: Optional[float]
     crosses: Optional[ChartAxisCrosses]
     crosses_at: Optional[float]
-    tick_label_position: Optional[str]
+    tick_label_position: Optional[Literal["nextTo", "low", "high", "none"]]
 
 
 @dataclass
@@ -2469,21 +2503,6 @@ class TableStyleDefaults:
 
 
 @dataclass(frozen=True)
-class PivotStyleInput:
-    """The table style and toggles :meth:`Sheet.set_pivot_style_info` writes.
-
-    A ``None`` ``name`` writes the style element without a style name.
-    """
-
-    name: Optional[str] = None
-    show_row_headers: bool = False
-    show_col_headers: bool = False
-    show_row_stripes: bool = False
-    show_col_stripes: bool = False
-    show_last_column: bool = False
-
-
-@dataclass(frozen=True)
 class PivotGrandTotals:
     """Grand-total flags read back by ``get_pivot_grand_totals``."""
 
@@ -2590,8 +2609,9 @@ class SheetFormatDefaults:
 
     ``default_col_width`` is a stored width (characters with the column
     padding included) and ``default_row_height`` in points; each is ``None``
-    when the sheet stores none. When setting, ``None`` clears the stored value
-    and :data:`UNCHANGED` keeps it.
+    when the sheet stores none. ``Sheet.set_format_defaults`` takes these
+    fields as keyword arguments: ``None`` clears the stored value and
+    :data:`UNCHANGED` (the default) keeps it.
     ``effective_default_col_width`` / ``effective_default_row_height`` are
     read-only values the sheet lays out with: the stated default, else the
     column Excel derives from ``base_col_width`` and the Normal font
@@ -3073,11 +3093,17 @@ class PhoneticPropertiesInput:
 
 @dataclass(frozen=True)
 class PhoneticProperties:
-    """Result of :meth:`Sheet.get_cell_phonetic_properties`; fields as in :class:`PhoneticPropertiesInput`."""
+    """Result of :meth:`Sheet.get_cell_phonetic_properties`; fields as in :class:`PhoneticPropertiesInput`.
+
+    ``present`` is true when the properties are explicit (a ``<phoneticPr>``
+    element or :meth:`Sheet.set_cell_phonetic_properties`, an all-zero triple
+    included), false for the state an absent element resolves to.
+    """
 
     font_id: int = 0
     type: int = 0
     alignment: int = 0
+    present: bool = False
 
 
 @dataclass(frozen=True)
@@ -3379,21 +3405,6 @@ def _pack_border_record(ptr: int, border: Border) -> None:
 
 
 @dataclass(frozen=True)
-class StyleBatchIndices:
-    """Indices assigned by :meth:`Workbook.add_batch`, per style table.
-
-    Each list is positionally aligned with the request list it came from
-    and is empty when that list was omitted.
-    """
-
-    fonts: List[int]
-    fills: List[int]
-    borders: List[int]
-    cell_xfs: List[int]
-    num_fmts: List[int]
-
-
-@dataclass(frozen=True)
 class CellStyle:
     """A named cell style (``<cellStyle>`` entry)."""
 
@@ -3417,8 +3428,12 @@ class ThemeFonts:
 
 @dataclass(frozen=True)
 class ThemeScriptFont:
-    """One ``a:font`` entry of a theme font set: an ISO 15924 ``script`` code (``Jpan``) and its ``typeface``."""
+    """One ``a:font`` entry of the major (``major`` true, heading) or minor (body) theme font set.
 
+    ``script`` is an ISO 15924 code (``Jpan``) and ``typeface`` its font.
+    """
+
+    major: bool
     script: str
     typeface: str
 
@@ -3523,6 +3538,40 @@ class PivotWorksheetSource:
     name: Optional[str] = None
 
 
+@dataclass(frozen=True)
+class PivotInput:
+    """A pivot table :meth:`Sheet.add_pivot` creates: its name, its cache and its 0-based top-left cell."""
+
+    name: str
+    cache_id: int
+    anchor_row: int
+    anchor_col: int
+
+
+@dataclass(frozen=True)
+class PivotSummary:
+    """One pivot table, as :meth:`Sheet.list_pivots` returns it."""
+
+    name: str
+    cache_id: int
+
+
+@dataclass(frozen=True)
+class PivotCacheField:
+    """One pivot-cache field; ``formula`` (with a leading ``=``) is ``None`` unless the field is calculated."""
+
+    name: str
+    formula: Optional[str]
+
+
+@dataclass(frozen=True)
+class PivotCacheSharedItem:
+    """One shared item of a pivot-cache field; a date item holds its serial number and has ``is_date`` set."""
+
+    value: Value
+    is_date: bool
+
+
 @dataclass
 class PivotFieldInput:
     """Argument shape for :meth:`Sheet.add_pivot_field`.
@@ -3610,10 +3659,8 @@ class PivotStyle:
 class PivotOptions:
     """The PivotTable Options of one pivot table, as read by :meth:`Sheet.get_pivot_options`.
 
-    :meth:`Sheet.set_pivot_options` changes only the members that are not
-    ``None``; a read always fills every member. A string option reads ``""``
-    when unset and is cleared by setting ``""``. A ``missing_caption`` of
-    exactly ``-`` is written as the number 0.
+    A read fills every member; a string option reads ``None`` when unset.
+    A ``missing_caption`` of exactly ``-`` is written as the number 0.
     ``indent`` runs 0-126 and ``page_wrap`` 0-255 (0 does not wrap).
     """
 
@@ -3661,7 +3708,7 @@ class PivotCacheOptions:
 class PivotCalculatedItem:
     """One calculated item, as read by :meth:`Workbook.list_pivot_cache_calculated_items`.
 
-    ``formula`` has no leading ``=``; ``scoped`` is true for an entry read from
+    ``formula`` has a leading ``=``; ``scoped`` is true for an entry read from
     a file that applies the formula only where the item meets items of other fields.
     """
 
@@ -5171,6 +5218,67 @@ def _pack_phonetic_run_array(runs: Sequence[PhoneticRun], scope: _ArgScope) -> i
     return ptr
 
 
+# The container each recognised save-path extension names.
+_SAVE_EXTENSIONS = {".xlsx": WorkbookFormat.XLSX, ".xlsb": WorkbookFormat.XLSB}
+
+
+def _save_format(dest: object, format: Optional[WorkbookFormat]) -> WorkbookFormat:
+    """The container a save writes: ``format``, else the one ``dest``'s extension names, else XLSX."""
+    if not (dest is None or isinstance(dest, (str, os.PathLike)) or callable(getattr(dest, "write", None))):
+        raise TypeError(f"Workbook.save: expected a path or a binary stream, got {type(dest).__name__}")
+    implied = None
+    if isinstance(dest, (str, os.PathLike)):
+        implied = _SAVE_EXTENSIONS.get(os.path.splitext(os.fspath(dest))[1].lower())
+    if format is None:
+        return WorkbookFormat.XLSX if implied is None else implied
+    fmt = WorkbookFormat(format)
+    if implied is not None and fmt != implied:
+        raise FormulonError(
+            StatusCode.INVALID_ARGUMENT,
+            _diagnostic_override=(f"format {fmt.name} contradicts the extension of {os.fspath(dest)!r}", ""),
+        )
+    return fmt
+
+
+def _write_dest(dest: object, data: bytes) -> None:
+    """Write ``data`` to a path or a binary stream; nothing for ``None``."""
+    if dest is None:
+        return
+    if isinstance(dest, (str, os.PathLike)):
+        with open(dest, "wb") as f:
+            f.write(data)
+    else:
+        cast(BinaryIO, dest).write(data)
+
+
+#: A pivot-cache value: a number, text, a boolean, a blank (``None``) or an Excel error.
+_PivotCacheValue = Union[None, float, str, bool, ExcelError]
+
+
+def _pivot_cache_value_kind(value: object, date: object) -> str:
+    """Which typed C writer stores ``value``: ``number``, ``date``, ``text``, ``bool``, ``blank`` or ``error``."""
+    if not isinstance(date, bool):
+        raise TypeError(f"formulon: date must be a bool, got {type(date).__name__}")
+    if value is None:
+        kind = "blank"
+    elif isinstance(value, bool):
+        kind = "bool"
+    elif isinstance(value, numbers.Real):
+        kind = "date" if date else "number"
+    elif isinstance(value, str):
+        kind = "text"
+    elif isinstance(value, ExcelError):
+        kind = "error"
+    else:
+        raise TypeError(
+            f"formulon: a pivot cache value must be a number, a str, a bool, None or an ExcelError, "
+            f"got {type(value).__name__}"
+        )
+    if date and kind != "date":
+        raise TypeError(f"formulon: date=True needs a number, got {type(value).__name__}")
+    return kind
+
+
 class Workbook:
     """An Excel workbook held by the engine.
 
@@ -5185,6 +5293,11 @@ class Workbook:
       and ``wb[key]`` take a sheet name, a 0-based index or a handle;
       ``len(wb)`` is the sheet count and iterating yields the handles in
       sheet order.
+
+    Recalculation:
+      Recalculation is explicit. A read returns the value as of the last
+      :meth:`recalc`; :meth:`has_dirty_cells` reports whether a change has
+      happened since.
 
     Lifetime:
       Always release via :meth:`close`, ideally through ``with`` syntax::
@@ -5603,6 +5716,22 @@ class Workbook:
         status = LIB.fm_workbook_recalc(h)
         _check(status)
 
+    def has_dirty_cells(self) -> bool:
+        """Whether a change since the last :meth:`recalc` is not yet reflected in the computed values.
+
+        Edits to cells, defined names or the profile, row / column inserts and
+        deletes, and sheet removal make the workbook dirty; volatile functions
+        do not. A loaded workbook with formulas is dirty until the first
+        :meth:`recalc`; :meth:`Sheet.recalc_viewport` does not clean it, and a
+        failed recalc leaves it dirty. Reads (:meth:`Sheet.get_value` and friends) return the values of the
+        last recalc.
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            out = scope.out_ptr()
+            _check(LIB.fm_workbook_has_dirty_cells(h, out))
+            return LIB.read_i32(out) != 0
+
     def set_iterative(
         self,
         *,
@@ -5671,18 +5800,18 @@ class Workbook:
 
     # -- Save --------------------------------------------------------------
     @overload
-    def save(self, dest: None = None, *, format: WorkbookFormat = WorkbookFormat.XLSX) -> bytes: ...
+    def save(self, dest: None = None, *, format: Optional[WorkbookFormat] = None) -> bytes: ...
 
     @overload
     def save(
-        self, dest: Union[str, "os.PathLike[str]", BinaryIO], *, format: WorkbookFormat = WorkbookFormat.XLSX
+        self, dest: Union[str, "os.PathLike[str]", BinaryIO], *, format: Optional[WorkbookFormat] = None
     ) -> None: ...
 
     def save(
         self,
         dest: Union[None, str, "os.PathLike[str]", BinaryIO] = None,
         *,
-        format: WorkbookFormat = WorkbookFormat.XLSX,
+        format: Optional[WorkbookFormat] = None,
     ) -> Optional[bytes]:
         """Serialise the workbook as ``.xlsx`` or ``.xlsb``.
 
@@ -5691,40 +5820,45 @@ class Workbook:
             as ``bytes``. A ``str`` or :class:`os.PathLike` names a file to
             create or overwrite; an object with a ``write`` method (a file
             opened in ``"wb"`` mode, :class:`io.BytesIO`) receives the bytes.
-          format: the container; ``WorkbookFormat.XLSB`` writes an MS-XLSB
-            package.
+          format: the container. Omitted, a path ending in ``.xlsb`` (any
+            case) writes XLSB and anything else XLSX. The extension decides
+            only the container: ``.xlsm`` writes a plain XLSX package.
 
         Returns:
           The archive bytes when ``dest`` is omitted, otherwise ``None``.
 
         Raises:
           ValueError: when ``format`` is not a :class:`WorkbookFormat` value.
-          InvalidArgumentError: for ``WorkbookFormat.UNKNOWN``.
+          InvalidArgumentError: for ``WorkbookFormat.UNKNOWN``, or a ``format``
+            that contradicts a ``.xlsx`` / ``.xlsb`` extension of ``dest``.
           TypeError: when ``dest`` is none of the above.
           OSError: when writing ``dest`` fails.
         """
-        fmt = WorkbookFormat(format)
-        if not (dest is None or isinstance(dest, (str, os.PathLike)) or callable(getattr(dest, "write", None))):
-            raise TypeError(f"Workbook.save: expected a path or a binary stream, got {type(dest).__name__}")
+        fmt = _save_format(dest, format)
         h = self._require()
         data = _read_owned_buffer(LIB.fm_workbook_save_as, h, _sint(fmt, "format"))
-        if dest is None:
-            return data
-        if isinstance(dest, (str, os.PathLike)):
-            with open(dest, "wb") as f:
-                f.write(data)
-        else:
-            cast(BinaryIO, dest).write(data)
-        return None
+        _write_dest(dest, data)
+        return data if dest is None else None
 
-    def save_with_diagnostics(self, *, format: WorkbookFormat = WorkbookFormat.XLSX) -> SaveDiagnostics:
+    def save_with_diagnostics(
+        self,
+        dest: Union[None, str, "os.PathLike[str]", BinaryIO] = None,
+        *,
+        format: Optional[WorkbookFormat] = None,
+    ) -> SaveDiagnostics:
         """Serialise the workbook as :meth:`save` does and return what the save cost.
+
+        ``dest`` and ``format`` follow :meth:`save`; ``SaveDiagnostics.bytes``
+        holds the archive whether or not it was also written to ``dest``.
 
         Raises:
           ValueError: when ``format`` is not a :class:`WorkbookFormat` value.
-          InvalidArgumentError: for ``WorkbookFormat.UNKNOWN``.
+          InvalidArgumentError: for ``WorkbookFormat.UNKNOWN``, or a ``format``
+            that contradicts a ``.xlsx`` / ``.xlsb`` extension of ``dest``.
+          TypeError: when ``dest`` is none of the accepted kinds.
+          OSError: when writing ``dest`` fails.
         """
-        fmt = WorkbookFormat(format)
+        fmt = _save_format(dest, format)
         h = self._require()
         with _ArgScope() as scope:
             out_ptr_ptr = scope.out_ptr()
@@ -5740,14 +5874,15 @@ class Workbook:
                 if data_ptr:
                     LIB.fm_buffer_destroy(data_ptr)
             d = S.SAVE_DIAGNOSTICS.unpack(LIB, diag_ptr)
-            return SaveDiagnostics(
-                bytes=data,
-                downgraded_formula_count=d["downgraded_formula_count"],
-                deferred_feature_count=d["deferred_feature_count"],
-                dropped_part_count=d["dropped_part_count"],
-                dropped_relationship_count=d["dropped_relationship_count"],
-                renumbered_part_count=d["renumbered_part_count"],
-            )
+        _write_dest(dest, data)
+        return SaveDiagnostics(
+            bytes=data,
+            downgraded_formula_count=d["downgraded_formula_count"],
+            deferred_feature_count=d["deferred_feature_count"],
+            dropped_part_count=d["dropped_part_count"],
+            dropped_relationship_count=d["dropped_relationship_count"],
+            renumbered_part_count=d["renumbered_part_count"],
+        )
 
     def get_diagnostics(self) -> ReadDiagnostics:
         """Return the loss counters captured when this workbook was loaded."""
@@ -5852,6 +5987,27 @@ class Workbook:
                 columns=columns,
             )
 
+    def _table_index(self, table: Union[int, str]) -> int:
+        """The index ``table`` addresses: an index, or a table's display name."""
+        return resolve_ref(table, self._table_display_names, "table")
+
+    def _table_display_names(self) -> Iterator[str]:
+        h = self._require()
+        with _ArgScope() as scope:
+            name_ptr = scope.out_ptr()
+            display_ptr = scope.out_ptr()
+            rect_ptr = scope.struct(S.CELL_RECT)
+            sheet_ptr = scope.out_ptr()
+            names = []
+            for index in range(self._table_count()):
+                _check(
+                    LIB.fm_workbook_get_table(
+                        h, _uint(index, "table_index"), name_ptr, display_ptr, rect_ptr, sheet_ptr
+                    )
+                )
+                names.append(LIB.read_cstr(LIB.read_u32(display_ptr)))
+        return iter(names)
+
     def add_table(
         self,
         *,
@@ -5929,14 +6085,20 @@ class Workbook:
             current.show_column_stripes,
         )
         first, last, rows, columns = (existing[i] if t is None else t for i, t in enumerate(toggles))
-        self.set_table_style_info(
-            index,
-            current.style_name,
-            show_first_column=first,
-            show_last_column=last,
-            show_row_stripes=rows,
-            show_column_stripes=columns,
-        )
+        h = self._require()
+        with _ArgScope() as scope:
+            # Writes the style element, keeping its name (none when absent).
+            _check(
+                LIB.fm_workbook_set_table_style_info(
+                    h,
+                    _uint(index, "table_index"),
+                    scope.nonempty_cstr(current.style_name),
+                    1 if first else 0,
+                    1 if last else 0,
+                    1 if rows else 0,
+                    1 if columns else 0,
+                )
+            )
 
     def _table_style_present(self, table_index: int) -> bool:
         """Whether the table has a ``<tableStyleInfo>`` element."""
@@ -5946,51 +6108,15 @@ class Workbook:
             _check(LIB.fm_workbook_get_table_info(h, _uint(table_index, "table_index"), info_ptr))
             return S.TABLE_INFO.unpack(LIB, info_ptr)["style_present"] != 0
 
-    def set_table_style_info(
-        self,
-        table_index: int,
-        style_name: Optional[str],
-        *,
-        show_first_column: bool = False,
-        show_last_column: bool = False,
-        show_row_stripes: bool = True,
-        show_column_stripes: bool = False,
-    ) -> None:
-        """Set the table's style name and toggles, making the style element present.
-
-        ``None`` or an empty ``style_name`` writes the element without a
-        style name, keeping the toggles.
-        """
+    def _rename_table(self, index: int, name: str, display_name: str) -> None:
         h = self._require()
         with _ArgScope() as scope:
             _check(
-                LIB.fm_workbook_set_table_style_info(
-                    h,
-                    _uint(table_index, "table_index"),
-                    scope.nonempty_cstr(style_name),
-                    1 if show_first_column else 0,
-                    1 if show_last_column else 0,
-                    1 if show_row_stripes else 0,
-                    1 if show_column_stripes else 0,
-                )
+                LIB.fm_workbook_rename_table(h, _uint(index, "table_index"), scope.cstr(name), scope.cstr(display_name))
             )
 
-    def rename_table(self, table_index: int, name: str, display_name: Optional[str] = None) -> None:
-        """Rename table ``table_index``; ``display_name=None`` uses ``name`` for both.
-
-        Names must be non-empty and unique case-insensitively across tables.
-        Structured references to the old name are rewritten in cell,
-        defined-name, conditional-format, validation and chart formulas; a
-        bare table name used as a reference is not rewritten.
-        """
-        h = self._require()
-        with _ArgScope() as scope:
-            name_ptr = scope.cstr(name)
-            display_ptr = scope.opt_cstr(display_name)
-            _check(LIB.fm_workbook_rename_table(h, _uint(table_index, "table_index"), name_ptr, display_ptr))
-
-    def rename_table_column(self, table_index: int, column: int, name: str) -> str:
-        """Rename column ``column`` (0-based) of table ``table_index`` and return the final name.
+    def rename_table_column(self, table: Union[int, str], column: int, name: str) -> str:
+        """Rename column ``column`` (0-based) of ``table`` and return the final name.
 
         As typing over the header cell does: an empty ``name`` takes the
         profile's ``Column<N>`` (``列<N>``) with the lowest unused N, a name
@@ -6001,20 +6127,21 @@ class Workbook:
         value to a header cell (``set_text``, ``set_number``, ...) renames the
         same way.
         """
+        index = self._table_index(table)
         h = self._require()
         with _ArgScope() as scope:
             name_ptr = scope.cstr(name)
             out = scope.out_ptr()
             _check(
                 LIB.fm_workbook_rename_table_column(
-                    h, _uint(table_index, "table_index"), _uint(column, "column"), name_ptr, out
+                    h, _uint(index, "table_index"), _uint(column, "column"), name_ptr, out
                 )
             )
             return LIB.read_cstr(LIB.read_u32(out))
 
     def set_table_column_totals(
         self,
-        table_index: int,
+        table: Union[int, str],
         column: int,
         *,
         function: Optional[str] = None,
@@ -6029,12 +6156,13 @@ class Workbook:
         and the other 1xx codes for a built-in function, the formula for
         ``"custom"``, else the label as text, else nothing.
         """
+        index = self._table_index(table)
         h = self._require()
         with _ArgScope() as scope:
             _check(
                 LIB.fm_workbook_set_table_column_totals(
                     h,
-                    _uint(table_index, "table_index"),
+                    _uint(index, "table_index"),
                     _uint(column, "column"),
                     scope.nonempty_cstr(function),
                     scope.nonempty_cstr(label),
@@ -6044,52 +6172,63 @@ class Workbook:
 
     def update_table(
         self,
-        table_index: int,
+        table: Union[int, str],
         *,
-        rect: Optional[CellRect] = None,
-        style_name: Optional[str] = None,
-        header_row: Optional[bool] = None,
-        totals_row: Optional[bool] = None,
-        name: Optional[str] = None,
-        display_name: Optional[str] = None,
-        show_first_column: Optional[bool] = None,
-        show_last_column: Optional[bool] = None,
-        show_row_stripes: Optional[bool] = None,
-        show_column_stripes: Optional[bool] = None,
+        rect: CellRect = UNCHANGED,
+        style_name: Optional[str] = UNCHANGED,
+        header_row: bool = UNCHANGED,
+        totals_row: bool = UNCHANGED,
+        name: str = UNCHANGED,
+        display_name: str = UNCHANGED,
+        show_first_column: bool = UNCHANGED,
+        show_last_column: bool = UNCHANGED,
+        show_row_stripes: bool = UNCHANGED,
+        show_column_stripes: bool = UNCHANGED,
     ) -> None:
-        """Replace a table's range and optional visual style; a ``None`` argument keeps its setting.
+        """Update a table's range, flags, names and style; an omitted argument keeps its setting.
 
         A new ``rect`` must keep the width the table's column list already
-        describes. ``style_name=None`` preserves the existing
-        style; a new name keeps the four toggles, and an empty string removes
-        ``<tableStyleInfo>`` -- unless a ``show_*`` toggle is also given, which
-        writes the element back without a style name, as
-        :meth:`set_table_style_info` does. ``header_row=None`` / ``totals_row=None``
-        preserve those flags; turning the totals row on writes each column's
-        totals cell. ``name`` / ``display_name`` rename the table as
-        :meth:`rename_table` does (``display_name`` follows ``name`` unless
-        given). The update is all-or-nothing.
+        describes. A new ``style_name`` keeps the four toggles, and ``None``
+        (or ``""``) removes ``<tableStyleInfo>`` -- unless a ``show_*`` toggle
+        is also given, which writes the element back without a style name.
+        Turning the totals row on writes each column's totals cell. Names
+        must be non-empty and unique case-insensitively across tables;
+        ``display_name`` follows a new ``name`` unless given, and structured
+        references to the old name are rewritten in cell, defined-name,
+        conditional-format, validation and chart formulas (a bare table name
+        used as a reference is not). The update is all-or-nothing.
+
+        Raises:
+          TypeError: when a flag is not a ``bool``.
         """
-        index = table_index
-        renaming = name is not None or display_name is not None
-        if rect is None:
-            rect = self._table_at(index).range.rect
+        index = self._table_index(table)
+        flags = (header_row, totals_row, show_first_column, show_last_column, show_row_stripes, show_column_stripes)
+        for flag in flags:
+            if flag is not UNCHANGED and not isinstance(flag, bool):
+                raise TypeError(f"formulon: a table flag must be a bool, got {type(flag).__name__}")
+        current = self._table_at(index)
+        renaming = name is not UNCHANGED or display_name is not UNCHANGED
         if renaming:
-            current = self._table_at(index)
-            next_name = name if name is not None else current.name
-            if display_name is not None:
+            next_name = current.name if name is UNCHANGED else name
+            if display_name is not UNCHANGED:
                 next_display = display_name
             else:
-                next_display = name if name is not None else current.display_name
-            self.rename_table(index, next_name, next_display)
+                next_display = current.display_name if name is UNCHANGED else name
+            self._rename_table(index, next_name, next_display)
         try:
-            self._table_update(index, rect, style_name, header_row=header_row, totals_row=totals_row)
-            toggles = (show_first_column, show_last_column, show_row_stripes, show_column_stripes)
+            self._table_update(
+                index,
+                current.range.rect if rect is UNCHANGED else rect,
+                None if style_name is UNCHANGED else (style_name or ""),
+                header_row=None if header_row is UNCHANGED else header_row,
+                totals_row=None if totals_row is UNCHANGED else totals_row,
+            )
+            toggles = tuple(None if t is UNCHANGED else t for t in flags[2:])
             if any(t is not None for t in toggles):
                 self._table_apply_style_toggles(index, toggles)
         except BaseException:
             if renaming:
-                self.rename_table(index, current.name, current.display_name)
+                self._rename_table(index, current.name, current.display_name)
             raise
 
     def _table_update(
@@ -6105,6 +6244,7 @@ class Workbook:
         with _ArgScope() as scope:
             rect_ptr = scope.struct(S.CELL_RECT)
             _pack_cell_rect_at(rect_ptr, rect)
+            # NULL keeps the style; an empty name removes the element.
             style_ptr = scope.opt_cstr(style_name)
             _check(
                 LIB.fm_workbook_update_table(
@@ -6117,10 +6257,16 @@ class Workbook:
                 )
             )
 
-    def remove_table(self, table_index: int) -> None:
-        """Remove the table at ``table_index``."""
+    def remove_table(self, table: Union[int, str]) -> None:
+        """Remove ``table``.
+
+        Raises:
+          NotFoundError: when no table has the display name ``table``.
+          IndexOutOfRangeError: when ``table`` is an index past the last table.
+        """
+        index = self._table_index(table)
         h = self._require()
-        _check(LIB.fm_workbook_remove_table(h, _uint(table_index, "table_index")))
+        _check(LIB.fm_workbook_remove_table(h, _uint(index, "table_index")))
 
     def list_passthroughs(self) -> List[PassthroughPart]:
         """Return the passthrough OOXML part paths."""
@@ -6256,11 +6402,12 @@ class Workbook:
     # also kept verbatim: it keeps its pre-edit cell, and nothing reports it.
     # An insert also does not copy the formatting of the row or column before
     # it onto the new one, which Excel does -- a sparkline included.
-    def get_defined_name(self, name: str, local_sheet_id: Optional[int] = None) -> Optional[DefinedName]:
-        """Return the defined name ``name`` (ASCII case-insensitive) in scope ``local_sheet_id``, or ``None``.
+    def get_defined_name(self, name: str, scope: Optional[SheetRef] = None) -> Optional[DefinedName]:
+        """Return the defined name ``name`` (ASCII case-insensitive) in ``scope``, or ``None``.
 
-        ``local_sheet_id`` is ``None`` for workbook scope, else a 0-based sheet index.
+        ``scope`` is ``None`` for workbook scope, else the sheet the name is local to.
         """
+        sheet = None if scope is None else self.sheet(scope).index
         h = self._require()
         with _ArgScope() as scope:
             name_ptr = scope.cstr(name)
@@ -6273,7 +6420,7 @@ class Workbook:
                 LIB.fm_workbook_get_defined_name(
                     h,
                     name_ptr,
-                    _sint(_local_sheet_id(local_sheet_id), "local_sheet_id"),
+                    _sint(_local_sheet_id(sheet), "local_sheet_id"),
                     present,
                     stored_ptr,
                     formula_ptr,
@@ -6286,25 +6433,22 @@ class Workbook:
             return DefinedName(
                 name=LIB.read_cstr(LIB.read_u32(stored_ptr)),
                 formula=LIB.read_cstr(LIB.read_u32(formula_ptr)),
-                local_sheet_id=local_sheet_id,
+                local_sheet_id=sheet,
                 comment=LIB.read_cstr(LIB.read_u32(comment_ptr)) or None,
                 hidden=bool(LIB.read_i32(hidden_ptr)),
             )
 
-    def remove_defined_name(self, name: str, local_sheet_id: Optional[int] = None) -> None:
-        """Remove the defined name ``name`` in scope ``local_sheet_id`` (``None`` for workbook scope).
+    def remove_defined_name(self, name: str, scope: Optional[SheetRef] = None) -> None:
+        """Remove the defined name ``name`` in ``scope`` (``None`` for workbook scope, else a sheet).
 
         Raises:
           NotFoundError: when the scope has no such name.
         """
+        sheet = None if scope is None else self.sheet(scope).index
         h = self._require()
         with _ArgScope() as scope:
             name_ptr = scope.cstr(name)
-            _check(
-                LIB.fm_workbook_remove_defined_name(
-                    h, name_ptr, _sint(_local_sheet_id(local_sheet_id), "local_sheet_id")
-                )
-            )
+            _check(LIB.fm_workbook_remove_defined_name(h, name_ptr, _sint(_local_sheet_id(sheet), "local_sheet_id")))
 
     # -- Calc policy / behaviour profile -----------------------------------
     def get_calc_mode(self) -> CalcMode:
@@ -6569,54 +6713,46 @@ class Workbook:
             flags = LIB.read_bytes(buf, total)
             return LIB.read_u32(first_ptr), [b != 0 for b in flags]
 
-    def get_table_auto_filter(self, table_index: int) -> Optional[AutoFilter]:
-        """Return the AutoFilter of table ``table_index``, or ``None`` when it has none."""
-        return self._read_auto_filter(LIB.fm_workbook_get_table_auto_filter, table_index, "table_index")
+    def get_table_auto_filter(self, table: Union[int, str]) -> Optional[AutoFilter]:
+        """Return the AutoFilter of ``table``, or ``None`` when it has none."""
+        return self._read_auto_filter(LIB.fm_workbook_get_table_auto_filter, self._table_index(table), "table_index")
 
-    def set_table_auto_filter(self, table_index: int, auto_filter: AutoFilter) -> None:
-        """Replace the AutoFilter of table ``table_index``."""
+    def set_table_auto_filter(self, table: Union[int, str], auto_filter: AutoFilter) -> None:
+        """Replace the AutoFilter of ``table``."""
         self._write_auto_filter(
             LIB.fm_workbook_set_table_auto_filter,
-            table_index,
+            self._table_index(table),
             auto_filter,
             "table_index",
         )
 
-    def remove_table_auto_filter(self, table_index: int) -> None:
-        """Remove the AutoFilter of table ``table_index`` (no-op when absent)."""
+    def remove_table_auto_filter(self, table: Union[int, str]) -> None:
+        """Remove the AutoFilter of ``table`` (no-op when absent)."""
+        index = self._table_index(table)
         h = self._require()
-        _check(LIB.fm_workbook_remove_table_auto_filter(h, _uint(table_index, "table_index")))
+        _check(LIB.fm_workbook_remove_table_auto_filter(h, _uint(index, "table_index")))
 
-    def apply_table_auto_filter(self, table_index: int) -> None:
+    def apply_table_auto_filter(self, table: Union[int, str]) -> None:
         """Hide the body rows the table AutoFilter excludes and show the rest."""
+        index = self._table_index(table)
         h = self._require()
-        _check(LIB.fm_workbook_apply_table_auto_filter(h, _uint(table_index, "table_index")))
+        _check(LIB.fm_workbook_apply_table_auto_filter(h, _uint(index, "table_index")))
 
-    def clear_table_auto_filter(self, table_index: int) -> None:
+    def clear_table_auto_filter(self, table: Union[int, str]) -> None:
         """Drop every column criterion of the table AutoFilter and show all its body rows."""
+        index = self._table_index(table)
         h = self._require()
-        _check(LIB.fm_workbook_clear_table_auto_filter(h, _uint(table_index, "table_index")))
+        _check(LIB.fm_workbook_clear_table_auto_filter(h, _uint(index, "table_index")))
 
-    def evaluate_table_auto_filter(self, table_index: int) -> AutoFilterEval:
+    def evaluate_table_auto_filter(self, table: Union[int, str]) -> AutoFilterEval:
         """Evaluate the table AutoFilter as :meth:`Sheet.evaluate_auto_filter`."""
         return AutoFilterEval(
             *self._evaluate_auto_filter(
                 LIB.fm_workbook_evaluate_table_auto_filter,
-                table_index,
+                self._table_index(table),
                 "table_index",
             )
         )
-
-    # -- Drawing images ------------------------------------------------------
-    def get_image_info(self, data: Union[bytes, bytearray, memoryview]) -> ImageInfo:
-        """Sniff the format and pixel size of PNG, JPEG, GIF or BMP bytes without touching the workbook."""
-        h = self._require()
-        raw = bytes(data)
-        with _ArgScope() as scope:
-            buf = scope.buffer(raw)
-            info = scope.struct(S.IMAGE_INFO)
-            _check(LIB.fm_workbook_get_image_info(h, buf, _uint(len(raw), "len"), info))
-            return _read_image_info(info)
 
     def _lookup(self, fn, leading: tuple, layout, decode):
         """Run the by-key getter ``fn(h, *leading, out_present, out)``; ``None`` when the key is absent.
@@ -6799,21 +6935,21 @@ class Workbook:
             _uint(num_fmt_id, "num_fmt_id", 16),
         )
 
-    def get_font_count(self) -> int:
-        """Return the number of font records registered."""
-        return self._style_count(LIB.fm_workbook_get_font_count)
+    def list_fonts(self) -> List[Font]:
+        """Every font record, in index order."""
+        return [self.get_font(i) for i in range(self._style_count(LIB.fm_workbook_get_font_count))]
 
-    def get_fill_count(self) -> int:
-        """Return the number of fill records registered."""
-        return self._style_count(LIB.fm_workbook_get_fill_count)
+    def list_fills(self) -> List[Fill]:
+        """Every fill record, in index order."""
+        return [self.get_fill(i) for i in range(self._style_count(LIB.fm_workbook_get_fill_count))]
 
-    def get_border_count(self) -> int:
-        """Return the number of border records registered."""
-        return self._style_count(LIB.fm_workbook_get_border_count)
+    def list_borders(self) -> List[Border]:
+        """Every border record, in index order."""
+        return [self.get_border(i) for i in range(self._style_count(LIB.fm_workbook_get_border_count))]
 
-    def get_cell_xf_count(self) -> int:
-        """Return the number of ``<xf>`` records registered."""
-        return self._style_count(LIB.fm_workbook_get_cell_xf_count)
+    def list_cell_xfs(self) -> List[CellXf]:
+        """Every ``<xf>`` record of ``<cellXfs>``, in index order."""
+        return [self.get_cell_xf(i) for i in range(self._style_count(LIB.fm_workbook_get_cell_xf_count))]
 
     def list_cell_styles(self) -> List[CellStyle]:
         """Return the named cell styles in file order."""
@@ -6828,13 +6964,14 @@ class Workbook:
                 out.append(_cell_style_from(S.CELL_STYLE_RECORD.unpack(LIB, ptr)))
         return out
 
-    def get_cell_style_xf_count(self) -> int:
-        """Return the number of ``<cellStyleXfs>`` records."""
-        return self._style_count(LIB.fm_workbook_get_cell_style_xf_count)
+    def list_cell_style_xfs(self) -> List[CellXf]:
+        """Every ``<cellStyleXfs>`` record, in index order."""
+        count = self._style_count(LIB.fm_workbook_get_cell_style_xf_count)
+        return [self.get_cell_style_xf(i) for i in range(count)]
 
-    def get_dxf_count(self) -> int:
-        """Return the number of differential formats available to CF rules."""
-        return self._style_count(LIB.fm_workbook_get_dxf_count)
+    def list_dxfs(self) -> List[DifferentialFormat]:
+        """Every differential format available to CF rules, in ``dxfId`` order."""
+        return [self.get_dxf(i) for i in range(self._style_count(LIB.fm_workbook_get_dxf_count))]
 
     def _style_count(self, fn) -> int:
         h = self._require()
@@ -6928,106 +7065,6 @@ class Workbook:
             S.CELL_XF.pack(LIB, ptr, _cell_xf_fields(record))
             _check(fn(h, ptr, out))
             return LIB.read_u32(out)
-
-    def add_batch(
-        self,
-        *,
-        fonts: Optional[Sequence[Font]] = None,
-        fills: Optional[Sequence[Fill]] = None,
-        borders: Optional[Sequence[Border]] = None,
-        num_fmts: Optional[Sequence[str]] = None,
-        cell_xfs: Optional[Sequence[CellXf]] = None,
-    ) -> StyleBatchIndices:
-        """Add (dedup) whole style tables in one call.
-
-        The per-record :meth:`add_font` / :meth:`add_fill` / :meth:`add_border`
-        / :meth:`add_num_fmt` / :meth:`add_cell_xf` methods each rescan their
-        table, so building thousands of formats one at a time is quadratic.
-        This routes the same work through a single ABI call that dedups every
-        table in linear time.
-
-        Fonts, fills, borders and number formats are installed before the
-        xfs, so a ``cell_xfs`` entry may reference an index this same call
-        assigns.
-
-        The call is one transaction: on failure the workbook is unchanged
-        and :class:`FormulonError` is raised.
-        """
-        h = self._require()
-        font_list = list(fonts or ())
-        fill_list = list(fills or ())
-        border_list = list(borders or ())
-        num_fmt_list = list(num_fmts or ())
-        xf_list = list(cell_xfs or ())
-
-        with _ArgScope() as scope:
-            batch = scope.struct(S.STYLES_BATCH)
-            fields: Dict[str, object] = {}
-
-            font_indices = 0
-            if font_list:
-                records = scope.alloc(S.FONT_RECORD.size * len(font_list))
-                font_indices = scope.alloc(4 * len(font_list))
-                for i, record in enumerate(font_list):
-                    _pack_font(records + i * S.FONT_RECORD.size, record, scope)
-                fields.update(fonts=records, font_count=len(font_list), font_indices=font_indices)
-
-            fill_indices = 0
-            if fill_list:
-                records = scope.alloc(S.FILL_RECORD.size * len(fill_list))
-                fill_indices = scope.alloc(4 * len(fill_list))
-                for i, record in enumerate(fill_list):
-                    _pack_fill(records + i * S.FILL_RECORD.size, record, scope)
-                fields.update(fills=records, fill_count=len(fill_list), fill_indices=fill_indices)
-
-            border_indices = 0
-            if border_list:
-                records = scope.alloc(S.BORDER_RECORD.size * len(border_list))
-                border_indices = scope.alloc(4 * len(border_list))
-                for i, sides in enumerate(border_list):
-                    _pack_border_record(records + i * S.BORDER_RECORD.size, sides)
-                fields.update(borders=records, border_count=len(border_list), border_indices=border_indices)
-
-            xf_indices = 0
-            if xf_list:
-                records = scope.alloc(S.CELL_XF.size * len(xf_list))
-                xf_indices = scope.alloc(4 * len(xf_list))
-                for i, record in enumerate(xf_list):
-                    S.CELL_XF.pack(LIB, records + i * S.CELL_XF.size, _cell_xf_fields(record))
-                fields.update(cell_xfs=records, cell_xf_count=len(xf_list), cell_xf_indices=xf_indices)
-
-            num_fmt_ids = 0
-            if num_fmt_list:
-                # An array of `const char*`: one 4-byte pointer slot per code.
-                codes = scope.alloc(4 * len(num_fmt_list))
-                num_fmt_ids = scope.alloc(2 * len(num_fmt_list))
-                for i, code in enumerate(num_fmt_list):
-                    code_ptr = scope.cstr(code)
-                    LIB.write_bytes(codes + i * 4, struct.pack("<I", code_ptr))
-                fields.update(num_fmt_codes=codes, num_fmt_count=len(num_fmt_list), num_fmt_ids=num_fmt_ids)
-
-            S.STYLES_BATCH.pack(LIB, batch, fields)
-            _check(LIB.fm_workbook_add_batch(h, batch))
-
-            def read_u32_array(ptr: int, count: int) -> List[int]:
-                if count == 0:
-                    return []
-                raw = LIB.read_bytes(ptr, 4 * count)
-                return [struct.unpack_from("<I", raw, 4 * i)[0] for i in range(count)]
-
-            def read_u16_array(ptr: int, count: int) -> List[int]:
-                if count == 0:
-                    return []
-                raw = LIB.read_bytes(ptr, 2 * count)
-                return [struct.unpack_from("<H", raw, 2 * i)[0] for i in range(count)]
-
-            return StyleBatchIndices(
-                fonts=read_u32_array(font_indices, len(font_list)),
-                fills=read_u32_array(fill_indices, len(fill_list)),
-                borders=read_u32_array(border_indices, len(border_list)),
-                cell_xfs=read_u32_array(xf_indices, len(xf_list)),
-                num_fmts=read_u16_array(num_fmt_ids, len(num_fmt_list)),
-            )
 
     def add_dxf(self, record: DifferentialFormat) -> int:
         """Add (dedup) a differential format and return its ``dxfId``."""
@@ -7251,7 +7288,7 @@ class Workbook:
             _check(LIB.fm_workbook_get_theme_script_font(h, 1 if major else 0, script_ptr, present, face_ptr))
             if not LIB.read_u32(present):
                 return None
-            return ThemeScriptFont(script=script, typeface=LIB.read_cstr(LIB.read_u32(face_ptr)))
+            return ThemeScriptFont(major=major, script=script, typeface=LIB.read_cstr(LIB.read_u32(face_ptr)))
 
     def set_theme_script_font(self, font: ThemeScriptFontInput) -> None:
         """Set the typeface of one script in the major (heading) or minor (body) font set.
@@ -7374,20 +7411,40 @@ class Workbook:
                 refresh_on_load=d["refresh_on_load"] != 0,
             )
 
-    def set_pivot_cache_options(self, cache_id: int, options: PivotCacheOptions) -> None:
-        """Write every member of ``options`` to the pivot cache; see :class:`PivotCacheOptions`."""
+    def set_pivot_cache_options(
+        self,
+        cache_id: int,
+        *,
+        save_data: bool = UNCHANGED,
+        missing_items_limit: int = UNCHANGED,
+        refresh_on_load: bool = UNCHANGED,
+    ) -> None:
+        """Update the options of the pivot cache; an omitted argument keeps its setting.
+
+        See :class:`PivotCacheOptions` for the members.
+
+        Raises:
+          TypeError: when ``save_data`` or ``refresh_on_load`` is not a ``bool``.
+        """
+        for flag in (save_data, refresh_on_load):
+            if flag is not UNCHANGED and not isinstance(flag, bool):
+                raise TypeError(f"formulon: a pivot cache flag must be a bool, got {type(flag).__name__}")
+        current = self.get_pivot_cache_options(cache_id)
         h = self._require()
-        if not isinstance(options, PivotCacheOptions):
-            raise TypeError(f"expected PivotCacheOptions, got {type(options).__name__}")
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_CACHE_OPTIONS)
             S.PIVOT_CACHE_OPTIONS.pack(
                 LIB,
                 ptr,
                 {
-                    "save_data": 1 if options.save_data else 0,
-                    "missing_items_limit": _sint(options.missing_items_limit, "missing_items_limit"),
-                    "refresh_on_load": 1 if options.refresh_on_load else 0,
+                    "save_data": 1 if (current.save_data if save_data is UNCHANGED else save_data) else 0,
+                    "missing_items_limit": _sint(
+                        current.missing_items_limit if missing_items_limit is UNCHANGED else missing_items_limit,
+                        "missing_items_limit",
+                    ),
+                    "refresh_on_load": 1
+                    if (current.refresh_on_load if refresh_on_load is UNCHANGED else refresh_on_load)
+                    else 0,
                 },
             )
             _check(LIB.fm_workbook_set_pivot_cache_options(h, _uint(cache_id, "cache_id"), ptr))
@@ -7428,19 +7485,6 @@ class Workbook:
             LIB.fm_workbook_remove_pivot_cache_calculated_field(
                 h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index")
             )
-        )
-
-    def get_pivot_cache_field_formula(self, cache_id: int, field_index: int) -> Optional[str]:
-        """Return the formula of cache field ``field_index`` without a leading ``=``; ``None`` when not calculated."""
-        h = self._require()
-        return (
-            _read_cstr_out(
-                LIB.fm_workbook_get_pivot_cache_field_formula,
-                h,
-                _uint(cache_id, "cache_id"),
-                _uint(field_index, "field_index"),
-            )
-            or None
         )
 
     def add_pivot_cache_calculated_item(self, cache_id: int, field_index: int, name: str, formula: str) -> int:
@@ -7525,20 +7569,29 @@ class Workbook:
         h = self._require()
         _check(LIB.fm_workbook_remove_pivot_cache(h, _uint(cache_id, "cache_id")))
 
-    def get_pivot_cache_field_count(self, cache_id: int) -> int:
-        """Return the number of fields on the cache."""
+    def list_pivot_cache_fields(self, cache_id: int) -> List[PivotCacheField]:
+        """Every field of the cache, in field order."""
         h = self._require()
-        return _read_count(LIB.fm_workbook_get_pivot_cache_field_count, h, _uint(cache_id, "cache_id"))
-
-    def get_pivot_cache_field_name(self, cache_id: int, field_index: int) -> str:
-        """Read the name of cache field ``field_index``."""
-        h = self._require()
-        return _read_cstr_out(
-            LIB.fm_workbook_get_pivot_cache_field_name,
-            h,
-            _uint(cache_id, "cache_id"),
-            _uint(field_index, "field_index"),
-        )
+        fields: List[PivotCacheField] = []
+        for i in range(_read_count(LIB.fm_workbook_get_pivot_cache_field_count, h, _uint(cache_id, "cache_id"))):
+            fields.append(
+                PivotCacheField(
+                    name=_read_cstr_out(
+                        LIB.fm_workbook_get_pivot_cache_field_name,
+                        h,
+                        _uint(cache_id, "cache_id"),
+                        _uint(i, "field_index"),
+                    ),
+                    formula=_read_cstr_out(
+                        LIB.fm_workbook_get_pivot_cache_field_formula,
+                        h,
+                        _uint(cache_id, "cache_id"),
+                        _uint(i, "field_index"),
+                    )
+                    or None,
+                )
+            )
+        return fields
 
     def add_pivot_cache_field(self, cache_id: int, name: str) -> int:
         """Append a field to the cache; return its index."""
@@ -7554,110 +7607,98 @@ class Workbook:
         h = self._require()
         _check(LIB.fm_workbook_clear_pivot_cache_fields(h, _uint(cache_id, "cache_id")))
 
-    def get_pivot_cache_field_shared_item_count(self, cache_id: int, field_index: int) -> int:
-        """Return the shared-item count on cache field ``field_index``."""
+    def list_pivot_cache_field_shared_items(self, cache_id: int, field_index: int) -> List[PivotCacheSharedItem]:
+        """Every shared item of cache field ``field_index``, in item order.
+
+        A date item holds its serial number as a number and has ``is_date`` set.
+        """
         h = self._require()
-        return _read_count(
+        count = _read_count(
             LIB.fm_workbook_get_pivot_cache_field_shared_item_count,
             h,
             _uint(cache_id, "cache_id"),
             _uint(field_index, "field_index"),
         )
-
-    def get_pivot_cache_field_shared_item_value(self, cache_id: int, field_index: int, item_index: int) -> Value:
-        """Return shared item ``item_index`` of cache field ``field_index``.
-
-        Date items are stored as serial numbers and read back as numbers; use
-        :meth:`is_pivot_cache_field_shared_item_date` to tell them from plain numbers.
-        """
-        h = self._require()
+        items: List[PivotCacheSharedItem] = []
         with _ArgScope() as scope:
             value_ptr = scope.alloc(fm_value_t_size)
-            status = LIB.fm_workbook_get_pivot_cache_field_shared_item_value(
-                h,
-                _uint(cache_id, "cache_id"),
-                _uint(field_index, "field_index"),
-                _uint(item_index, "item_index"),
-                value_ptr,
-            )
-            _check(status)
-            return Value._from_wasm(value_ptr)
-
-    def is_pivot_cache_field_shared_item_date(self, cache_id: int, field_index: int, item_index: int) -> bool:
-        """Return whether shared item ``item_index`` of cache field ``field_index`` is a date item."""
-        h = self._require()
-        with _ArgScope() as scope:
-            out = scope.out_ptr()
-            _check(
-                LIB.fm_workbook_is_pivot_cache_field_shared_item_date(
-                    h,
-                    _uint(cache_id, "cache_id"),
-                    _uint(field_index, "field_index"),
-                    _uint(item_index, "item_index"),
-                    out,
+            date_ptr = scope.out_ptr()
+            for i in range(count):
+                _check(
+                    LIB.fm_workbook_get_pivot_cache_field_shared_item_value(
+                        h,
+                        _uint(cache_id, "cache_id"),
+                        _uint(field_index, "field_index"),
+                        _uint(i, "item_index"),
+                        value_ptr,
+                    )
                 )
-            )
-            return LIB.read_i32(out) != 0
+                value = Value._from_wasm(value_ptr)
+                _check(
+                    LIB.fm_workbook_is_pivot_cache_field_shared_item_date(
+                        h,
+                        _uint(cache_id, "cache_id"),
+                        _uint(field_index, "field_index"),
+                        _uint(i, "item_index"),
+                        date_ptr,
+                    )
+                )
+                items.append(PivotCacheSharedItem(value=value, is_date=LIB.read_i32(date_ptr) != 0))
+        return items
 
-    def add_pivot_cache_field_shared_item_date(self, cache_id: int, field_index: int, serial: float) -> None:
-        """Append a date shared item to a cache field.
+    def add_pivot_cache_field_shared_item(
+        self, cache_id: int, field_index: int, value: _PivotCacheValue, *, date: bool = False
+    ) -> None:
+        """Append a shared item to cache field ``field_index``.
 
-        ``serial`` is a date serial in the workbook's date system, as a cell holds
-        it; it is saved to the second.
+        ``value`` is a number, a ``str``, a ``bool``, ``None`` (blank) or an
+        :class:`ExcelError`. ``date=True`` stores a number as a date serial in
+        the workbook's date system, saved to the second.
+
+        Raises:
+          TypeError: when ``value`` is none of the above, or ``date`` is set
+            for a value that is not a number.
         """
+        kind = _pivot_cache_value_kind(value, date)
         h = self._require()
-        _check(
-            LIB.fm_workbook_add_pivot_cache_field_shared_item_date(
-                h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), float(serial)
-            )
-        )
-
-    def add_pivot_cache_field_shared_item_number(self, cache_id: int, field_index: int, value: float) -> None:
-        """Append a numeric shared item to a cache field."""
-        h = self._require()
-        _check(
-            LIB.fm_workbook_add_pivot_cache_field_shared_item_number(
-                h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), float(value)
-            )
-        )
-
-    def add_pivot_cache_field_shared_item_text(self, cache_id: int, field_index: int, value: str) -> None:
-        """Append a text shared item to a cache field."""
-        h = self._require()
-        with _ArgScope() as scope:
-            vp = scope.cstr(value)
+        if kind == "date":
             _check(
-                LIB.fm_workbook_add_pivot_cache_field_shared_item_text(
-                    h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), vp
+                LIB.fm_workbook_add_pivot_cache_field_shared_item_date(
+                    h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), float(value)
                 )
             )
-
-    def add_pivot_cache_field_shared_item_bool(self, cache_id: int, field_index: int, *, value: bool) -> None:
-        """Append a boolean shared item to a cache field."""
-        h = self._require()
-        _check(
-            LIB.fm_workbook_add_pivot_cache_field_shared_item_bool(
-                h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), 1 if value else 0
+        elif kind == "number":
+            _check(
+                LIB.fm_workbook_add_pivot_cache_field_shared_item_number(
+                    h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), float(value)
+                )
             )
-        )
-
-    def add_pivot_cache_field_shared_item_blank(self, cache_id: int, field_index: int) -> None:
-        """Append a blank shared item to a cache field."""
-        h = self._require()
-        _check(
-            LIB.fm_workbook_add_pivot_cache_field_shared_item_blank(
-                h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index")
+        elif kind == "bool":
+            _check(
+                LIB.fm_workbook_add_pivot_cache_field_shared_item_bool(
+                    h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), 1 if value else 0
+                )
             )
-        )
-
-    def add_pivot_cache_field_shared_item_error(self, cache_id: int, field_index: int, error_code: ErrorCode) -> None:
-        """Append an Excel error shared item to a cache field."""
-        h = self._require()
-        _check(
-            LIB.fm_workbook_add_pivot_cache_field_shared_item_error(
-                h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), _sint(error_code, "error")
+        elif kind == "blank":
+            _check(
+                LIB.fm_workbook_add_pivot_cache_field_shared_item_blank(
+                    h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index")
+                )
             )
-        )
+        elif kind == "error":
+            _check(
+                LIB.fm_workbook_add_pivot_cache_field_shared_item_error(
+                    h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), _sint(value.code, "error")
+                )
+            )
+        else:
+            with _ArgScope() as scope:
+                text = scope.cstr(value)
+                _check(
+                    LIB.fm_workbook_add_pivot_cache_field_shared_item_text(
+                        h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), text
+                    )
+                )
 
     def clear_pivot_cache_field_shared_items(self, cache_id: int, field_index: int) -> None:
         """Drop every shared item from a cache field."""
@@ -7686,93 +7727,77 @@ class Workbook:
         h = self._require()
         _check(LIB.fm_workbook_clear_pivot_cache_records(h, _uint(cache_id, "cache_id")))
 
-    def set_pivot_cache_record_number(self, cache_id: int, record_index: int, field_index: int, value: float) -> None:
-        """Set cache cell ``(record_index, field_index)`` to a number."""
-        h = self._require()
-        _check(
-            LIB.fm_workbook_set_pivot_cache_record_number(
-                h,
-                _uint(cache_id, "cache_id"),
-                _uint(record_index, "record_index"),
-                _uint(field_index, "field_index"),
-                float(value),
-            )
-        )
+    def set_pivot_cache_record_value(
+        self, cache_id: int, record_index: int, field_index: int, value: _PivotCacheValue, *, date: bool = False
+    ) -> None:
+        """Set cache cell ``(record_index, field_index)``; ``value`` and ``date`` as in :meth:`add_pivot_cache_field_shared_item`.
 
-    def set_pivot_cache_record_date(self, cache_id: int, record_index: int, field_index: int, serial: float) -> None:
-        """Set cache cell ``(record_index, field_index)`` to a date.
-
-        ``serial`` is a date serial in the workbook's date system, as a cell holds
-        it; it is saved to the second.
+        Raises:
+          TypeError: when ``value`` is not an accepted kind, or ``date`` is set
+            for a value that is not a number.
         """
+        kind = _pivot_cache_value_kind(value, date)
         h = self._require()
-        _check(
-            LIB.fm_workbook_set_pivot_cache_record_date(
-                h,
-                _uint(cache_id, "cache_id"),
-                _uint(record_index, "record_index"),
-                _uint(field_index, "field_index"),
-                float(serial),
-            )
-        )
-
-    def set_pivot_cache_record_text(self, cache_id: int, record_index: int, field_index: int, value: str) -> None:
-        """Set cache cell ``(record_index, field_index)`` to text."""
-        h = self._require()
-        with _ArgScope() as scope:
-            vp = scope.cstr(value)
+        if kind == "date":
             _check(
-                LIB.fm_workbook_set_pivot_cache_record_text(
+                LIB.fm_workbook_set_pivot_cache_record_date(
                     h,
                     _uint(cache_id, "cache_id"),
                     _uint(record_index, "record_index"),
                     _uint(field_index, "field_index"),
-                    vp,
+                    float(value),
                 )
             )
-
-    def set_pivot_cache_record_bool(
-        self,
-        cache_id: int,
-        record_index: int,
-        field_index: int,
-        value: bool,  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
-    ) -> None:
-        """Set cache cell ``(record_index, field_index)`` to a boolean."""
-        h = self._require()
-        _check(
-            LIB.fm_workbook_set_pivot_cache_record_bool(
-                h,
-                _uint(cache_id, "cache_id"),
-                _uint(record_index, "record_index"),
-                _uint(field_index, "field_index"),
-                1 if value else 0,
+        elif kind == "number":
+            _check(
+                LIB.fm_workbook_set_pivot_cache_record_number(
+                    h,
+                    _uint(cache_id, "cache_id"),
+                    _uint(record_index, "record_index"),
+                    _uint(field_index, "field_index"),
+                    float(value),
+                )
             )
-        )
-
-    def set_pivot_cache_record_blank(self, cache_id: int, record_index: int, field_index: int) -> None:
-        """Set cache cell ``(record_index, field_index)`` to blank."""
-        h = self._require()
-        _check(
-            LIB.fm_workbook_set_pivot_cache_record_blank(
-                h, _uint(cache_id, "cache_id"), _uint(record_index, "record_index"), _uint(field_index, "field_index")
+        elif kind == "bool":
+            _check(
+                LIB.fm_workbook_set_pivot_cache_record_bool(
+                    h,
+                    _uint(cache_id, "cache_id"),
+                    _uint(record_index, "record_index"),
+                    _uint(field_index, "field_index"),
+                    1 if value else 0,
+                )
             )
-        )
-
-    def set_pivot_cache_record_error(
-        self, cache_id: int, record_index: int, field_index: int, error_code: ErrorCode
-    ) -> None:
-        """Set cache cell ``(record_index, field_index)`` to an Excel error."""
-        h = self._require()
-        _check(
-            LIB.fm_workbook_set_pivot_cache_record_error(
-                h,
-                _uint(cache_id, "cache_id"),
-                _uint(record_index, "record_index"),
-                _uint(field_index, "field_index"),
-                _sint(error_code, "error"),
+        elif kind == "blank":
+            _check(
+                LIB.fm_workbook_set_pivot_cache_record_blank(
+                    h,
+                    _uint(cache_id, "cache_id"),
+                    _uint(record_index, "record_index"),
+                    _uint(field_index, "field_index"),
+                )
             )
-        )
+        elif kind == "error":
+            _check(
+                LIB.fm_workbook_set_pivot_cache_record_error(
+                    h,
+                    _uint(cache_id, "cache_id"),
+                    _uint(record_index, "record_index"),
+                    _uint(field_index, "field_index"),
+                    _sint(value.code, "error"),
+                )
+            )
+        else:
+            with _ArgScope() as scope:
+                _check(
+                    LIB.fm_workbook_set_pivot_cache_record_text(
+                        h,
+                        _uint(cache_id, "cache_id"),
+                        _uint(record_index, "record_index"),
+                        _uint(field_index, "field_index"),
+                        scope.cstr(value),
+                    )
+                )
 
     # -- Reference text ----------------------------------------------------
     def parse_reference(
@@ -7949,6 +7974,23 @@ def _install_workbook_locks(cls: type) -> None:
 
 
 _install_workbook_locks(Workbook)
+
+
+# -- Images (process-wide) ---------------------------------------------------
+@_lock_workbook_method
+def get_image_info(data: Union[bytes, bytearray, memoryview]) -> ImageInfo:
+    """Sniff the format and pixel size of PNG, JPEG, GIF or BMP bytes from the header alone.
+
+    Raises:
+      FormulonError: with ``StatusCode.IO_IMAGE_UNSUPPORTED`` when the bytes are
+        not a recognised image, the header is truncated, or a dimension is zero.
+    """
+    raw = bytes(data)
+    with _ArgScope() as scope:
+        buf = scope.buffer(raw)
+        info = scope.struct(S.IMAGE_INFO)
+        _check(LIB.fm_get_image_info(buf, _uint(len(raw), "len"), info))
+        return _read_image_info(info)
 
 
 # -- Function catalog and locale (process-wide) -----------------------------

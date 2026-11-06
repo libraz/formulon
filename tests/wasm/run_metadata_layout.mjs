@@ -220,7 +220,7 @@ export function registerMetadataLayout(Module, test) {
       assert.equal(a.showInputMessage, true);
       assert.equal(typeof a.showErrorMessage, 'boolean');
       assert.equal(a.showErrorMessage, true);
-      assert.equal(a.formula1, '"Yes,No,Maybe"');
+      assert.equal(a.formula1, '="Yes,No,Maybe"');
       assert.equal(a.promptTitle, 'Choose');
       assert.equal(a.errorTitle, 'Bad value');
       assert.equal(a.errorMessage, 'Pick from the list');
@@ -230,8 +230,8 @@ export function registerMetadataLayout(Module, test) {
 
       const b = list[1];
       assert.equal(b.type, 2);
-      assert.equal(b.formula1, '0');
-      assert.equal(b.formula2, '100');
+      assert.equal(b.formula1, '=0');
+      assert.equal(b.formula2, '=100');
       assert.equal(b.allowBlank, false);
       assert.equal(b.ranges.length, 2);
       assert.equal(b.ranges[1].firstRow, 6);

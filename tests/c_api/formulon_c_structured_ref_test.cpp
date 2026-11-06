@@ -188,8 +188,8 @@ TEST(FormulonCApiStructuredRef, GettersReturnTheDisplayFormForTheCell) {
     EXPECT_EQ(Formula(wb, 0, kOutsideRow, kOutsideCol), c.outside);
     EXPECT_EQ(Formula(wb, kOtherSheet, 1, 1), c.outside);
 
-    EXPECT_EQ(FormulaR1C1(wb, 0, kInsideRow, kInsideCol), c.inside + 1);
-    EXPECT_EQ(FormulaR1C1(wb, 0, kOutsideRow, kOutsideCol), c.outside + 1);
+    EXPECT_EQ(FormulaR1C1(wb, 0, kInsideRow, kInsideCol), c.inside);
+    EXPECT_EQ(FormulaR1C1(wb, 0, kOutsideRow, kOutsideCol), c.outside);
 
     EXPECT_EQ(CellAtFormula(wb, 0, kInsideRow, kInsideCol), c.inside);
     EXPECT_EQ(CellAtFormula(wb, kOtherSheet, 1, 1), c.outside);
@@ -233,7 +233,7 @@ TEST(FormulonCApiStructuredRef, TotalsRowShowsTheInsideForm) {
       << fm_get_last_error_message();
   fm_table_column_info_t column{};
   ASSERT_EQ(fm_workbook_get_table_column(wb.handle, 0, 3, &column), 0);
-  EXPECT_STREQ(column.totals_row_formula, "SUM([Price])*2");
+  EXPECT_STREQ(column.totals_row_formula, "=SUM([Price])*2");
   EXPECT_EQ(wb.handle->workbook().tables()[0].columns[3].totals_row_formula, "SUM(tblSales[Price])*2");
   EXPECT_EQ(Stored(wb, 0, 4, 3), "=SUM(tblSales[Price])*2");
 }
@@ -243,8 +243,8 @@ TEST(FormulonCApiStructuredRef, DefinedNamesShowTheOutsideForm) {
   BuildSales(wb);
   ASSERT_EQ(SetDefinedName(wb.handle, "NmR", "=tblSales[[#This Row],[Qty]]"), 0) << fm_get_last_error_message();
   ASSERT_EQ(SetDefinedName(wb.handle, "NmH", "=tblSales[[#Headers],[Qty]]"), 0);
-  EXPECT_EQ(DefinedName(wb, "NmR"), "tblSales[@Qty]");
-  EXPECT_EQ(DefinedName(wb, "NmH"), "tblSales[[#Headers],[Qty]]");
+  EXPECT_EQ(DefinedName(wb, "NmR"), "=tblSales[@Qty]");
+  EXPECT_EQ(DefinedName(wb, "NmH"), "=tblSales[[#Headers],[Qty]]");
 }
 
 TEST(FormulonCApiStructuredRef, DisplayFormSetsBackToTheStoredForm) {
@@ -322,7 +322,7 @@ TEST(FormulonCApiStructuredRef, RenameColumnRewritesEveryReference) {
   EXPECT_EQ(Stored(wb, 0, kInsideRow, kInsideCol), "=tblSales[[#This Row],[Amount]]");
   EXPECT_EQ(Formula(wb, 0, 2, kInsideCol), "=SUM(tblSales[@[Amount]:[Price]])");
   EXPECT_EQ(Formula(wb, kOtherSheet, 1, 1), "=SUM(tblSales[Amount])");
-  EXPECT_EQ(DefinedName(wb, "NmQ"), "tblSales[Amount]");
+  EXPECT_EQ(DefinedName(wb, "NmQ"), "=tblSales[Amount]");
   EXPECT_EQ(Formula(wb, 0, 4, 0), "=SUBTOTAL(109,[Amount])");
 
   EXPECT_EQ(Rename(wb, 1, "Unit-Cost"), "Unit-Cost");

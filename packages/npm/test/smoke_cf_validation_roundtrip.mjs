@@ -141,7 +141,7 @@ test('addValidation defaults every omitted boolean to false', async () => {
     assert.equal(rule.type, 3);
     assert.equal(rule.op, 0);
     assert.equal(rule.errorStyle, 0);
-    assert.equal(rule.formula1, '"Yes,No"');
+    assert.equal(rule.formula1, '="Yes,No"');
     assert.equal(rule.formula2, '');
     assert.equal(rule.ranges.length, 1);
     assert.equal(rule.ranges[0].lastRow, 2);

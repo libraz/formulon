@@ -269,7 +269,7 @@ TEST(FormulonCApiTable, CustomTotalsFormulaRoundTrips) {
   fm_table_column_info_t column{};
   ASSERT_EQ(fm_workbook_get_table_column(wb.handle, 0, 1, &column), 0);
   EXPECT_STREQ(column.totals_row_function, "custom");
-  EXPECT_STREQ(column.totals_row_formula, "SUM([Amount])*2");
+  EXPECT_STREQ(column.totals_row_formula, "=SUM([Amount])*2");
   EXPECT_EQ(Formula(wb.handle, 3, 1), "=SUM([Amount])*2");
 
   const std::vector<std::uint8_t> saved = Save(wb.handle);
@@ -282,7 +282,7 @@ TEST(FormulonCApiTable, CustomTotalsFormulaRoundTrips) {
   Load(saved, reloaded);
   ASSERT_EQ(fm_workbook_get_table_column(reloaded.handle, 0, 1, &column), 0);
   EXPECT_STREQ(column.totals_row_function, "custom");
-  EXPECT_STREQ(column.totals_row_formula, "SUM([Amount])*2");
+  EXPECT_STREQ(column.totals_row_formula, "=SUM([Amount])*2");
   ASSERT_EQ(fm_workbook_recalc(reloaded.handle), 0);
   const fm_value_t v = Value(reloaded.handle, 3, 1);
   ASSERT_EQ(v.kind, FM_VAL_NUMBER);
@@ -383,7 +383,7 @@ TEST(FormulonCApiTable, RenameRewritesStructuredReferences) {
   EXPECT_EQ(Formula(wb.handle, 1, 3), "=Revenue") << "an entered bare table name binds to the whole table";
   fm_defined_name_t dn{};
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
-  EXPECT_STREQ(dn.formula, "SUM(Revenue[Amount])*2");
+  EXPECT_STREQ(dn.formula, "=SUM(Revenue[Amount])*2");
 
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   fm_value_t v = Value(wb.handle, 0, 3);

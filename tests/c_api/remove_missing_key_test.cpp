@@ -48,6 +48,18 @@ TEST_F(FormulonCApiRemoveMissingKey, SheetScopedKeys) {
   ExpectNotFound(fm_sheet_remove_shape(wb(), 0, 42U), "shape");
   ExpectNotFound(fm_sheet_remove_slicer(wb(), 0, 42U), "slicer");
   ExpectNotFound(fm_sheet_remove_data_table(wb(), 0, 0, 0), "data table");
+  ExpectNotFound(fm_sheet_remove_drawing(wb(), 0, 42U), "drawing");
+}
+
+// The chart readers address a chart by its object id as well: an absent id is
+// FM_STATUS_NOT_FOUND and hands out no snapshot.
+TEST_F(FormulonCApiRemoveMissingKey, ChartReadersOfAnAbsentId) {
+  fm_chart_data_t* data = nullptr;
+  ExpectNotFound(fm_sheet_get_chart_data(wb(), 0, 42U, &data), "chart data");
+  EXPECT_EQ(data, nullptr);
+  const fm_chart_preview_overrides_t overrides{};
+  ExpectNotFound(fm_sheet_get_chart_preview(wb(), 0, 42U, &overrides, &data), "chart preview");
+  EXPECT_EQ(data, nullptr);
 }
 
 TEST_F(FormulonCApiRemoveMissingKey, AnAbsentSheetIsStillASheetIndexError) {

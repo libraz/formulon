@@ -513,7 +513,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationAddSingleRangeAndIterate) {
   EXPECT_EQ(got.show_input_message, 1);
   EXPECT_EQ(got.show_error_message, 0);
   ASSERT_NE(got.formula1, nullptr);
-  EXPECT_STREQ(got.formula1, "$A$1:$A$10");
+  EXPECT_STREQ(got.formula1, "=$A$1:$A$10");
   ASSERT_NE(got.formula2, nullptr);
   EXPECT_STREQ(got.formula2, "");  // NULL on input surfaces as empty string.
   EXPECT_STREQ(got.error_title, "Bad");
@@ -542,8 +542,8 @@ TEST_F(FormulonCApiSheetFeatures, ValidationAddMultiRangeRoundTrip) {
   EXPECT_EQ(got.ranges[1].last_col, 4U);
   EXPECT_EQ(got.ranges[2].first_row, 7U);
   EXPECT_EQ(got.ranges[2].last_row, 9U);
-  EXPECT_STREQ(got.formula1, "0");
-  EXPECT_STREQ(got.formula2, "100");
+  EXPECT_STREQ(got.formula1, "=0");
+  EXPECT_STREQ(got.formula2, "=100");
   EXPECT_EQ(got.allow_blank, 0);
 }
 
@@ -678,12 +678,14 @@ TEST_F(FormulonCApiSheetFeatures, ValidationBorrowedPointersStableAcrossReads) {
   fm_data_validation_t got_a{};
   ASSERT_EQ(fm_sheet_get_validation(wb_, 0, 0, &got_a), 0);
   // Repeated reads with no intervening mutation must surface the same
-  // borrowed pointers (the engine-side `std::string::c_str()` and
-  // `std::vector::data()` are stable until the next mutation).
+  // model-backed pointers (the engine-side `std::string::c_str()` and
+  // `std::vector::data()` are stable until the next mutation). The formulas
+  // are read-scratch-backed, so only their text repeats.
   fm_data_validation_t got_b{};
   ASSERT_EQ(fm_sheet_get_validation(wb_, 0, 0, &got_b), 0);
-  EXPECT_EQ(got_a.formula1, got_b.formula1);
   EXPECT_EQ(got_a.ranges, got_b.ranges);
+  EXPECT_EQ(got_a.error_title, got_b.error_title);
+  EXPECT_STREQ(got_b.formula1, "=A1>0");
 }
 
 TEST_F(FormulonCApiSheetFeatures, ValidationAddNullStringFieldsBecomeEmpty) {
@@ -780,8 +782,8 @@ TEST_F(FormulonCApiSheetFeatures, ValidationStoresFormulasWithoutTheLeadingEqual
   ASSERT_EQ(fm_sheet_add_validation(wb_, 0, &v, ignored_index()), 0) << fm_get_last_error_message();
   fm_data_validation_t got{};
   ASSERT_EQ(fm_sheet_get_validation(wb_, 0, 0, &got), 0);
-  EXPECT_STREQ(got.formula1, "$B$1");
-  EXPECT_STREQ(got.formula2, "$B$1+10");
+  EXPECT_STREQ(got.formula1, "=$B$1");
+  EXPECT_STREQ(got.formula2, "=$B$1+10");
 
   v.formula1 = "==$B$1";
   EXPECT_EQ(fm_sheet_add_validation(wb_, 0, &v, ignored_index()),
@@ -795,8 +797,8 @@ TEST_F(FormulonCApiSheetFeatures, ValidationStoresFormulasWithoutTheLeadingEqual
   fm_buffer_destroy(saved);
   ASSERT_EQ(loaded, 0);
   ASSERT_EQ(fm_sheet_get_validation(reloaded, 0, 0, &got), 0);
-  EXPECT_STREQ(got.formula1, "$B$1");
-  EXPECT_STREQ(got.formula2, "$B$1+10");
+  EXPECT_STREQ(got.formula1, "=$B$1");
+  EXPECT_STREQ(got.formula2, "=$B$1+10");
   fm_workbook_destroy(reloaded);
 }
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { deflateSync } from 'node:zlib';
-import { AnchorEditAs, AnchorKind, DrawingObjectKind, ImageFormat } from '../../packages/npm/common.mjs';
+import { AnchorEditAs, AnchorKind, DrawingObjectKind, ImageFormat, StatusCode } from '../../packages/npm/common.mjs';
 import { expectFailure } from './smoke_support.mjs';
 
 const EMU_PER_PX = 9525;
@@ -62,13 +62,11 @@ export function registerDrawing(Module, test) {
   });
 
   test('probeImage reports the format and pixel size, and rejects non-images', () => {
-    withWorkbook(Module, (wb) => {
-      const info = wb.getImageInfo(makePng(3, 2));
-      assert.equal(info.format, ImageFormat.Png);
-      assert.equal(info.pxWidth, 3);
-      assert.equal(info.pxHeight, 2);
-      expectFailure(() => wb.getImageInfo(new Uint8Array([1, 2, 3, 4])));
-    });
+    const info = Module.getImageInfo(makePng(3, 2));
+    assert.equal(info.format, ImageFormat.Png);
+    assert.equal(info.pxWidth, 3);
+    assert.equal(info.pxHeight, 2);
+    expectFailure(() => Module.getImageInfo(new Uint8Array([1, 2, 3, 4])));
   });
 
   test('insertImage, listDrawingObjects, getImage and removeDrawing round-trip through save and load', () => {
@@ -117,7 +115,7 @@ export function registerDrawing(Module, test) {
         loaded.removeDrawingObject(0, ins);
         assert.equal(loaded.listDrawingObjects(0).length, 0);
         assert.equal(loaded.getImage(0, ins), null);
-        expectFailure(() => loaded.removeDrawingObject(0, ins));
+        expectFailure(() => loaded.removeDrawingObject(0, ins), StatusCode.NotFound);
       } finally {
         loaded.dispose();
       }

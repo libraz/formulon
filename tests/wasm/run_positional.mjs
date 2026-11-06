@@ -69,10 +69,9 @@ export function registerPositional(Module, test, hookProbe) {
 
       expectFailure(() => wb.setError(1, 0, 0, -1), StatusCode.SheetIndexOutOfRange);
       assert.equal(typeof Module.getStatusName(-1), 'string');
-      assert.equal(typeof Module.getErrorDisplayName(-1), 'string');
+      assert.equal(Module.getErrorDisplayName, undefined);
       expectFailure(() => Module.setLogMinLevel(-1), StatusCode.InvalidArgument);
       expectTypeError(() => Module.getStatusName(Symbol('status')));
-      expectTypeError(() => Module.getErrorDisplayName(Symbol('error')));
       expectTypeError(() => Module.setLogMinLevel(Symbol('level')));
     } finally {
       wb.delete();

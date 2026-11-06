@@ -259,7 +259,7 @@ removed fm_workbook_pivot_set_layout :: renamed to fm_sheet_set_pivot_report_lay
 removed fm_workbook_pivot_set_name :: renamed to fm_sheet_set_pivot_name
 removed fm_workbook_pivot_set_row_field_order :: renamed to fm_sheet_set_pivot_row_field_order
 removed fm_workbook_precedents :: renamed to fm_sheet_get_precedents
-removed fm_workbook_probe_image :: renamed to fm_workbook_get_image_info
+removed fm_workbook_probe_image :: replaced by the process-scope fm_get_image_info, which takes no workbook
 removed fm_workbook_read_diagnostics :: renamed to fm_workbook_get_diagnostics
 retyped fm_workbook_recalc_parallel :: parameter type renamed (fm_parallel_recalc_stats -> fm_parallel_recalc_stats_t)
 removed fm_workbook_reset_theme :: renamed to fm_workbook_clear_theme

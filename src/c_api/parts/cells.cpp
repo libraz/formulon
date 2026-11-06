@@ -58,6 +58,7 @@ using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::table_display_name_at;
 using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::value_to_fm;
+using formulon::c_api::parts::with_formula_prefix;
 
 // ---------------------------------------------------------------------------
 // Cell mutation
@@ -503,7 +504,8 @@ extern "C" fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t 
   if (lv == nullptr) {
     return invalid_argument("lambda payload is NULL");
   }
-  std::string formatted = wb->workbook().spell_self_book_names(formulon::eval::format_lambda_value(*lv));
+  std::string formatted =
+      with_formula_prefix(wb->workbook().spell_self_book_names(formulon::eval::format_lambda_value(*lv)));
   // Read-path scratch: cleared per call so the lambda text does not
   // accumulate across repeated reads. The returned pointer is valid until
   // the next read on this handle (see `formulon_c.h`).
@@ -804,8 +806,8 @@ extern "C" fm_status_t fm_sheet_get_formula_r1c1(const fm_workbook_t* wb, size_t
                              "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
   const formulon::parser::StructuredRefDisplay display{table_display_name_at(wb->workbook(), sheet_index, row, col)};
-  *out_formula = publish_scratch(
-      wb, wb->workbook().spell_self_book_names(formulon::parser::format_formula_r1c1(*root, row, col, &display)));
+  *out_formula = publish_scratch(wb, with_formula_prefix(wb->workbook().spell_self_book_names(
+                                         formulon::parser::format_formula_r1c1(*root, row, col, &display))));
   return 0;
 }
 

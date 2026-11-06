@@ -12,37 +12,30 @@ from formulon.workbook import (
     DisplayText,
     EffectiveStyleSource,
     GeometryMode,
-    SheetFormatDefaults,
 )
 
 
 class GeometryTests(unittest.TestCase):
     def test_format_defaults_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).set_format_defaults(
-                SheetFormatDefaults(
-                    default_col_width=12.5,
-                    default_row_height=18.0,
-                    base_col_width=9.0,
-                ),
-            )
+            wb.sheet(0).set_format_defaults(default_col_width=12.5, default_row_height=18.0, base_col_width=9.0)
             d = wb.sheet(0).get_format_defaults()
             self.assertEqual(d.default_col_width, 12.5)
             self.assertEqual(d.default_row_height, 18.0)
             self.assertEqual(d.base_col_width, 9.0)
-            wb.sheet(0).set_format_defaults(SheetFormatDefaults(default_col_width=None, default_row_height=None))
+            wb.sheet(0).set_format_defaults(default_col_width=None, default_row_height=None)
             d = wb.sheet(0).get_format_defaults()
             self.assertIsNone(d.default_col_width)
             self.assertIsNone(d.default_row_height)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_format_defaults(SheetFormatDefaults(default_col_width=-1.0))
+                wb.sheet(0).set_format_defaults(default_col_width=-1.0)
 
     def test_clear_column_width_follows_default_and_keeps_state(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).set_format_defaults(SheetFormatDefaults(default_col_width=10.0, base_col_width=8.0))
+            wb.sheet(0).set_format_defaults(default_col_width=10.0, base_col_width=8.0)
             wb.sheet(0).set_column_width(0, 0, 10.0)
             wb.sheet(0).clear_column_width(0, 0)
-            wb.sheet(0).set_format_defaults(SheetFormatDefaults(default_col_width=20.0, base_col_width=8.0))
+            wb.sheet(0).set_format_defaults(default_col_width=20.0, base_col_width=8.0)
             self.assertEqual(wb.sheet(0).get_column_width_pt(0), wb.sheet(0).get_column_width_pt(1))
             self.assertEqual(wb.sheet(0).list_column_overrides(), [])
 
@@ -128,13 +121,7 @@ class GeometryTests(unittest.TestCase):
             # Stored width of the base-8 Calibri 11 default (64 px, shown as 8.43).
             self.assertEqual(d.effective_default_col_width, 2340 / 256)
             self.assertEqual(d.effective_default_row_height, 102 / 7)
-            wb.sheet(0).set_format_defaults(
-                SheetFormatDefaults(
-                    default_col_width=12.5,
-                    default_row_height=20.25,
-                    base_col_width=8.0,
-                ),
-            )
+            wb.sheet(0).set_format_defaults(default_col_width=12.5, default_row_height=20.25, base_col_width=8.0)
             d = wb.sheet(0).get_format_defaults()
             self.assertEqual(d.effective_default_col_width, 12.5)
             self.assertEqual(d.effective_default_row_height, 20.25)
@@ -179,7 +166,7 @@ class GeometryTests(unittest.TestCase):
             self.assertEqual(below.y, 50.0)
             with self.assertRaises(FormulonError):
                 wb.sheet(0).get_cell_rect_pt(CellRect(3, 0, 1, 0))
-            with self.assertRaises(FormulonError):
+            with self.assertRaises(ValueError):
                 wb.sheet(0).get_column_width_pt(0, 9)
 
     def test_width_model_and_conversions(self) -> None:
@@ -204,7 +191,7 @@ class FormulaAndRangeTests(unittest.TestCase):
             wb.sheet(0).set_formula(1, 1, "=A1+1")
             wb.recalc()
             self.assertEqual(wb.sheet(0).get_formula(1, 1), "=A1+1")
-            self.assertEqual(wb.sheet(0).get_formula_r1c1(1, 1), "R[-1]C[-1]+1")
+            self.assertEqual(wb.sheet(0).get_formula_r1c1(1, 1), "=R[-1]C[-1]+1")
             self.assertIsNone(wb.sheet(0).get_formula(0, 0))
             self.assertIsNone(wb.sheet(0).get_formula_r1c1(5, 5))
             with self.assertRaises(FormulonError):

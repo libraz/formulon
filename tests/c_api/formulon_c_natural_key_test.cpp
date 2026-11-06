@@ -41,12 +41,12 @@ TEST(FormulonCApiNaturalKey, DefinedNameByNameAndScope) {
   ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "rate", -1, &present, &stored, &formula, &comment, &hidden), 0);
   ASSERT_EQ(present, 1);
   EXPECT_STREQ(stored, "Rate");
-  EXPECT_STREQ(formula, "Sheet1!$A$1");
+  EXPECT_STREQ(formula, "=Sheet1!$A$1");
   EXPECT_STREQ(comment, "the rate");
   EXPECT_EQ(hidden, 1);
   ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", 0, &present, &stored, &formula, &comment, &hidden), 0);
   ASSERT_EQ(present, 1);
-  EXPECT_STREQ(formula, "Sheet1!$B$1");
+  EXPECT_STREQ(formula, "=Sheet1!$B$1");
   EXPECT_EQ(hidden, 0);
 
   ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Missing", -1, &present, &stored, &formula, &comment, &hidden), 0);

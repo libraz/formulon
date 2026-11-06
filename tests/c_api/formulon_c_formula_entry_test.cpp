@@ -145,7 +145,7 @@ TEST(FormulonCApiFormulaEntry, BracketNameWithoutBangIsAcceptedAsAName) {
     EXPECT_EQ(GetFormula(wb.handle, row, 0), kFormulas[row]);
     const char* r1c1 = nullptr;
     ASSERT_EQ(fm_sheet_get_formula_r1c1(wb.handle, 0, row, 0, &r1c1), 0) << fm_get_last_error_message();
-    EXPECT_STREQ(r1c1, kFormulas[row] + 1);  // the R1C1 text carries no `=`
+    EXPECT_STREQ(r1c1, kFormulas[row]);  // these formulas read the same in R1C1
     fm_value_t value{};
     ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, row, 0, &value), 0);
     if (row < 2U) {
@@ -179,9 +179,9 @@ TEST(FormulonCApiFormulaEntry, DefinedNameRejectsUnparseableTextAndKeepsState) {
   ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 2U);
   fm_defined_name_t entry{};
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &entry), 0);
-  EXPECT_STREQ(entry.formula, "Sheet1!$A$1");
+  EXPECT_STREQ(entry.formula, "=Sheet1!$A$1");
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 1, &entry), 0);
-  EXPECT_STREQ(entry.formula, "Sheet1!$B$1");
+  EXPECT_STREQ(entry.formula, "=Sheet1!$B$1");
 }
 
 TEST(FormulonCApiFormulaEntry, DefinedNameAcceptsParseableText) {
@@ -314,17 +314,17 @@ TEST(FormulonCApiFormulaEntry, EveryFormulaSetterStoresTheEnteredSpelling) {
   ASSERT_EQ(SetDefinedName(wb.handle, "Local", " 1+ +5", 0), 0);
   fm_defined_name_t entry{};
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &entry), 0);
-  EXPECT_STREQ(entry.formula, "Sheet1!$A$1+0");
+  EXPECT_STREQ(entry.formula, "=Sheet1!$A$1+0");
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 1, &entry), 0);
-  EXPECT_STREQ(entry.formula, " 1+ 5");
+  EXPECT_STREQ(entry.formula, "= 1+ 5");
 
   const fm_cell_rect_t sqref{0, 0, 9, 0};
   std::size_t index = 0;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "=$A$1>+1.50", "{1, 2}")), &index), 0);
   fm_cf_rule_t rule{};
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, index, &rule), 0);
-  EXPECT_STREQ(rule.formula1, "$A$1>1.5");
-  EXPECT_STREQ(rule.formula2, "{1,2}");
+  EXPECT_STREQ(rule.formula1, "=$A$1>1.5");
+  EXPECT_STREQ(rule.formula2, "={1,2}");
 
   const fm_cell_rect_t range{0, 0, 9, 0};
   constexpr std::uint8_t kList = 3;
@@ -343,7 +343,8 @@ TEST(FormulonCApiFormulaEntry, EveryFormulaSetterStoresTheEnteredSpelling) {
       fm_sheet_add_validation(
           wb.handle, 0, record_arg(MakeValidation(&range, kCustom, "SUM(A1 : A2)>-1E-309", nullptr)), ignored_index()),
       0);
-  const char* const expected[] = {"\"1.50,1E3,+5\"", "+$A$1:$A$3", "OFFSET($A$1,0,0,1000/1000+2,1)", "SUM(A1:A2)>0"};
+  const char* const expected[] = {"=\"1.50,1E3,+5\"", "=+$A$1:$A$3", "=OFFSET($A$1,0,0,1000/1000+2,1)",
+                                  "=SUM(A1:A2)>0"};
   for (std::uint32_t i = 0; i < 4U; ++i) {
     fm_data_validation_t v{};
     ASSERT_EQ(fm_sheet_get_validation(wb.handle, 0, i, &v), 0);

@@ -70,7 +70,7 @@ export function registerCellGeometryDisplay(Module, test) {
       assert.equal(a1, '=A1*2');
       assert.equal(wb.getFormula(0, 0, 0), null);
       const r1c1 = wb.getFormulaR1C1(0, 0, 1);
-      assert.equal(r1c1, 'RC[-1]*2');
+      assert.equal(r1c1, '=RC[-1]*2');
       assert.equal(wb.getFormulaR1C1(0, 0, 0), null);
       expectFailure(() => wb.getFormula(9, 0, 0), StatusCode.SheetIndexOutOfRange);
     });
@@ -198,7 +198,7 @@ export function registerCellGeometryDisplay(Module, test) {
       assert.equal(wb.getValue(0, 3, 0).number, 6);
       assert.equal(wb.getValue(0, 4, 0).number, 6);
       assert.equal(wb.getFormula(0, 4, 0), '=SUBTOTAL(9,A1:A4)');
-      assert.equal(wb.getFormulaR1C1(0, 4, 0), 'SUBTOTAL(9,R[-4]C:R[-1]C)');
+      assert.equal(wb.getFormulaR1C1(0, 4, 0), '=SUBTOTAL(9,R[-4]C:R[-1]C)');
       assert.equal(wb.getDisplayText(0, 4, 0).text, '6');
       const page = wb.getCellsInRange(0, { firstRow: 3, firstCol: 0, lastRow: 4, lastCol: 0 });
       assert.deepEqual(

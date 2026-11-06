@@ -958,28 +958,6 @@ DXF_RECORD = Struct(
     ],
 )
 
-# ``size_t`` is 4 bytes on wasm32, so the count fields share PTR's layout.
-STYLES_BATCH = Struct(
-    "fm_styles_batch_t",
-    [
-        ("fonts", PTR),
-        ("font_count", PTR),
-        ("font_indices", PTR),
-        ("fills", PTR),
-        ("fill_count", PTR),
-        ("fill_indices", PTR),
-        ("borders", PTR),
-        ("border_count", PTR),
-        ("border_indices", PTR),
-        ("cell_xfs", PTR),
-        ("cell_xf_count", PTR),
-        ("cell_xf_indices", PTR),
-        ("num_fmt_codes", PTR),
-        ("num_fmt_count", PTR),
-        ("num_fmt_ids", PTR),
-    ],
-)
-
 CELL_STYLE_RECORD = Struct(
     "fm_cell_style_record_t",
     [

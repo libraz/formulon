@@ -89,17 +89,13 @@ fm_image_insert_t pull_image_insert(JsNarrowNumericReader& reader, const emscrip
   return ins;
 }
 
-emscripten::val JsWorkbook::probeImage(emscripten::val bytes) const {
-  if (handle_ == nullptr) {
-    record_invalid_handle();
-    return emscripten::val::undefined();
-  }
+emscripten::val probe_image(emscripten::val bytes) {
   std::vector<uint8_t> data;
   if (!val_to_bytes_checked(bytes, &data)) {
     return emscripten::val::undefined();
   }
   fm_image_info_t info{};
-  if (!succeeded(fm_workbook_get_image_info(handle_, data.data(), data.size(), &info))) {
+  if (!succeeded(fm_get_image_info(data.data(), data.size(), &info))) {
     return emscripten::val::undefined();
   }
   return image_info_to_val(info);

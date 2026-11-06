@@ -207,8 +207,8 @@ class ThemeScriptFontTests(unittest.TestCase):
             jpan = wb.get_theme_script_font(major=False, script="Jpan")
             hang = wb.get_theme_script_font(major=False, script="Hang")
             missing = wb.get_theme_script_font(major=True, script="Zzzz")
-        self.assertEqual(jpan, ThemeScriptFont("Jpan", "游ゴシック"))
-        self.assertEqual(hang, ThemeScriptFont("Hang", "맑은 고딕"))
+        self.assertEqual(jpan, ThemeScriptFont(major=False, script="Jpan", typeface="游ゴシック"))
+        self.assertEqual(hang, ThemeScriptFont(major=False, script="Hang", typeface="맑은 고딕"))
         self.assertIsNone(missing)
 
     def test_set_script_font_roundtrip(self) -> None:
@@ -218,7 +218,8 @@ class ThemeScriptFontTests(unittest.TestCase):
             data = wb.save()
         with Workbook.load(data) as wb2:
             self.assertEqual(
-                wb2.get_theme_script_font(major=False, script="Hang"), ThemeScriptFont("Hang", "Test Face")
+                wb2.get_theme_script_font(major=False, script="Hang"),
+                ThemeScriptFont(major=False, script="Hang", typeface="Test Face"),
             )
             self.assertEqual(wb2.get_theme_script_font(major=False, script="Jpan"), jpan)
 

@@ -482,6 +482,12 @@ JsParallelRecalcStats JsWorkbook::recalcParallel(emscripten::val threadCount) {
   return r;
 }
 
+bool JsWorkbook::hasDirtyCells() const {
+  std::int32_t value = 0;
+  return succeeded(handle_ != nullptr ? fm_workbook_has_dirty_cells(handle_, &value) : kBindingInvalidHandle) &&
+         value != 0;
+}
+
 void JsWorkbook::setIterative(emscripten::val patch) {
   if (handle_ == nullptr) {
     record_invalid_handle();
@@ -770,10 +776,6 @@ std::string version_string() {
 
 std::string status_string(int32_t status) {
   return string_from_cstr(fm_get_status_name(static_cast<fm_status_t>(status)));
-}
-
-std::string error_display_name(int32_t error_code) {
-  return string_from_cstr(fm_get_error_display_name(static_cast<fm_error_code_t>(error_code)));
 }
 
 // ---- Structured logging (process-wide, not per handle) --------------------

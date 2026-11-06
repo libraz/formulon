@@ -28,7 +28,8 @@ prerequisites are missing (no Emscripten, no Node, no build artifact).
 `node:assert/strict` so contributors do not need an `npm install`. It
 exercises every embind export at least once:
 
-- `getVersion`, `getStatusName`, `getErrorDisplayName`
+- `getVersion`, `getStatusName`, and the workbook-independent locale,
+  function and image helpers
 - `evalFormula` for `SUM`, `IF`, `CONCAT`, `1/0`, and a malformed input
 - `Workbook.createDefault`, `createEmpty`, `loadBytes`
 - `setNumber`, `setBool`, `setText`, `setBlank`, `setFormula`, `recalc`,

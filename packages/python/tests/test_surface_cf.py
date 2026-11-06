@@ -36,7 +36,7 @@ class ConditionalFormatTests(unittest.TestCase):
             rules = wb.sheet(0).list_cf_rules()
             self.assertEqual(len(rules), 1)
             self.assertEqual(rules[0].type, 1)
-            self.assertEqual(rules[0].formula1, "4")
+            self.assertEqual(rules[0].formula1, "=4")
 
             wb.recalc()
             cells = wb.sheet(0).evaluate_cf_range(CellRect(0, 0, 2, 0))

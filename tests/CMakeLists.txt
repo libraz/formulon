@@ -659,6 +659,13 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/codegen/gen_facade_tables.py --check
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  # The error display-name tables (formulon.d.ts, common.mjs, workbook.py) are
+  # the output of gen_error_display_names.py over kErrorTable in src/value.h.
+  add_test(
+    NAME ErrorDisplayNamesCodegenDrift
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/codegen/gen_error_display_names.py --check
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
   # Unit tests of the drift checks themselves, so a check that stops
   # detecting anything fails here instead of reporting "no drift".
   add_test(

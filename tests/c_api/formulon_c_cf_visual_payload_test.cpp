@@ -176,7 +176,7 @@ TEST(FormulonCApiCfMutate, GetAtRecordStaysReadableUntilTheNextGet) {
   ASSERT_EQ(fm_sheet_get_cf_rule_count(wb.handle, 0, &remaining), 0);
   ASSERT_EQ(remaining, 0U);
   EXPECT_STREQ(held.id, "{AB000000-0000-0000-0000-000000000001}");
-  EXPECT_STREQ(held.formula1, "SEEDFORMULA");
+  EXPECT_STREQ(held.formula1, "=SEEDFORMULA");
   EXPECT_EQ(held.ranges[1].first_col, 3U);
   EXPECT_EQ(held.ranges[1].last_row, 14U);
   EXPECT_STREQ(held.color_scale_thresholds[1].value, "33");

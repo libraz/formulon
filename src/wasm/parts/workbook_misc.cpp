@@ -1,10 +1,10 @@
 //
-// JsWorkbook trace / function-catalog / spill surfaces:
-// `precedents` / `dependents` and their shared `trace_to_val` bridge,
-// `functionMetadata` / `functionNames` / `localizeFunctionName` /
-// `canonicalizeFunctionName` / `localizeFormula` / `canonicalizeFormula` /
-// `localeFacts` / `listLocaleErrorNames`, `compareText` / `collationClasses`,
-// `spillInfo`, and the legacy array formula accessors.
+// JsWorkbook trace / spill surfaces and the workbook-free catalog module
+// functions: `precedents` / `dependents` and their shared `trace_to_val`
+// bridge, `function_metadata` / `function_names` / `localize_function_name` /
+// `canonicalize_function_name` / `localize_formula` / `canonicalize_formula` /
+// `locale_facts` / `list_locale_error_names`, `compare_text` /
+// `collation_classes`, `spillInfo`, and the legacy array formula accessors.
 
 #include <emscripten/val.h>
 
@@ -82,7 +82,7 @@ emscripten::val JsWorkbook::dependents(uint32_t sheet, uint32_t row, uint32_t co
 
 // ---- Function catalog --------------------------------------------------
 
-emscripten::val JsWorkbook::functionMetadata(const std::string& name) const {
+emscripten::val function_metadata(const std::string& name) {
   int32_t present = 0;
   fm_function_metadata_t md{};
   const fm_status_t rc = fm_get_function_metadata(name.c_str(), &present, &md);
@@ -109,7 +109,7 @@ emscripten::val JsWorkbook::functionMetadata(const std::string& name) const {
   return optional_or_null(rc, present, o);
 }
 
-emscripten::val JsWorkbook::functionNames() const {
+emscripten::val function_names() {
   emscripten::val arr = emscripten::val::array();
   std::size_t n = 0;
   fm_status_t rc = fm_get_function_count(&n);
@@ -127,20 +127,19 @@ emscripten::val JsWorkbook::functionNames() const {
   return arr;
 }
 
-std::string JsWorkbook::localizeFunctionName(const std::string& canonical_name, const std::string& profile_id) const {
+std::string localize_function_name(const std::string& canonical_name, const std::string& profile_id) {
   return map_profile_text(fm_localize_function_name, canonical_name, profile_id);
 }
 
-std::string JsWorkbook::canonicalizeFunctionName(const std::string& localized_name,
-                                                 const std::string& profile_id) const {
+std::string canonicalize_function_name(const std::string& localized_name, const std::string& profile_id) {
   return map_profile_text(fm_canonicalize_function_name, localized_name, profile_id);
 }
 
-std::string JsWorkbook::localizeFormula(const std::string& formula, const std::string& profile_id) const {
+std::string localize_formula(const std::string& formula, const std::string& profile_id) {
   return map_profile_text(fm_localize_formula, formula, profile_id);
 }
 
-std::string JsWorkbook::canonicalizeFormula(const std::string& formula, const std::string& profile_id) const {
+std::string canonicalize_formula(const std::string& formula, const std::string& profile_id) {
   return map_profile_text(fm_canonicalize_formula, formula, profile_id);
 }
 
@@ -169,7 +168,7 @@ fm_status_t collect_locale_error_names(const std::string& profile_id, emscripten
 
 }  // namespace
 
-emscripten::val JsWorkbook::localeFacts(const std::string& profile_id) const {
+emscripten::val locale_facts(const std::string& profile_id) {
   fm_locale_facts_t f{};
   if (!succeeded(fm_get_locale_facts(profile_id.c_str(), &f))) {
     return emscripten::val::undefined();
@@ -197,7 +196,7 @@ emscripten::val JsWorkbook::localeFacts(const std::string& profile_id) const {
   return facts;
 }
 
-emscripten::val JsWorkbook::listLocaleErrorNames(const std::string& profile_id) const {
+emscripten::val list_locale_error_names(const std::string& profile_id) {
   emscripten::val arr = emscripten::val::array();
   if (!succeeded(collect_locale_error_names(profile_id, arr))) {
     return emscripten::val::undefined();
@@ -250,8 +249,7 @@ void JsWorkbook::setArrayFormula(uint32_t sheet, emscripten::val range, const st
   succeeded(fm_sheet_set_array_formula(handle_, sheet, &rect, formula.c_str()));
 }
 
-double JsWorkbook::compareText(const std::string& a, const std::string& b, int32_t strength,
-                               const std::string& profile_id) const {
+double compare_text(const std::string& a, const std::string& b, int32_t strength, const std::string& profile_id) {
   int32_t order = 0;
   if (!succeeded(fm_compare_text(a.c_str(), b.c_str(), profile_id.c_str(), strength, &order))) {
     return 0.0;
@@ -259,8 +257,7 @@ double JsWorkbook::compareText(const std::string& a, const std::string& b, int32
   return order;
 }
 
-emscripten::val JsWorkbook::collationClasses(emscripten::val values, int32_t strength,
-                                             const std::string& profile_id) const {
+emscripten::val collation_classes(emscripten::val values, int32_t strength, const std::string& profile_id) {
   JsNarrowNumericReader reader("getCollationClasses");
   if (!reader.is_array(values, "values")) {
     if (reader.ok()) {

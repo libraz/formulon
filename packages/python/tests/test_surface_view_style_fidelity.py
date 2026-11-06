@@ -19,7 +19,6 @@ from formulon import (
     IconSet,
     InvalidArgumentError,
     RefMode,
-    SheetFormatDefaults,
     Workbook,
 )
 from formulon.workbook import Color
@@ -64,8 +63,8 @@ class SheetViewFlagTests(unittest.TestCase):
             view = wb.sheet(0).get_view()
             self.assertFalse(view.show_formulas)
             self.assertTrue(view.show_outline_symbols)
-            wb.sheet(0).set_show_formulas(True)
-            wb.sheet(0).set_show_outline_symbols(False)
+            wb.sheet(0).set_view(show_formulas=True)
+            wb.sheet(0).set_view(show_outline_symbols=False)
             with Workbook.load(wb.save()) as reloaded:
                 view = reloaded.sheet(0).get_view()
                 self.assertTrue(view.show_formulas)
@@ -207,9 +206,7 @@ class FileNameTests(unittest.TestCase):
             self.assertEqual(wb.get_file_name(), "M5.xlsx")
             wb.sheet(0).set_formula(0, 0, "=M5.xlsx!LN+1")
             self.assertEqual(wb.sheet(0).get_formula(0, 0), "=M5.xlsx!LN+1")
-            self.assertEqual(
-                [wb.sheet(0).get_cell_at(i) for i in range(wb.sheet(0).get_cell_count())][0].formula, "=M5.xlsx!LN+1"
-            )
+            self.assertEqual(wb.sheet(0).list_cells()[0].formula, "=M5.xlsx!LN+1")
             wb.set_file_name("1M5.xlsx")
             self.assertEqual(wb.sheet(0).get_formula(0, 0), "='1M5.xlsx'!LN+1")
             with self.assertRaises(FormulonError):
@@ -225,20 +222,18 @@ class FormatDefaultFlagTests(unittest.TestCase):
             defaults = wb.sheet(0).get_format_defaults()
             self.assertFalse(defaults.custom_height)
             self.assertFalse(defaults.zero_height)
-            wb.sheet(0).set_format_defaults(
-                SheetFormatDefaults(default_row_height=18.0, custom_height=True, zero_height=True),
-            )
+            wb.sheet(0).set_format_defaults(default_row_height=18.0, custom_height=True, zero_height=True)
             with Workbook.load(wb.save()) as reloaded:
                 back = reloaded.sheet(0).get_format_defaults()
                 self.assertTrue(back.custom_height)
                 self.assertTrue(back.zero_height)
                 self.assertEqual(back.default_row_height, 18.0)
-                reloaded.sheet(0).set_format_defaults(SheetFormatDefaults(default_row_height=20.0))
+                reloaded.sheet(0).set_format_defaults(default_row_height=20.0)
                 kept = reloaded.sheet(0).get_format_defaults()
                 self.assertTrue(kept.custom_height)
                 self.assertTrue(kept.zero_height)
                 self.assertEqual(kept.default_row_height, 20.0)
-                reloaded.sheet(0).set_format_defaults(SheetFormatDefaults(custom_height=False, zero_height=False))
+                reloaded.sheet(0).set_format_defaults(custom_height=False, zero_height=False)
                 cleared = reloaded.sheet(0).get_format_defaults()
                 self.assertFalse(cleared.custom_height)
                 self.assertFalse(cleared.zero_height)
@@ -259,7 +254,7 @@ class DefinedNameAttrTests(unittest.TestCase):
             wb.set_defined_name(DefinedNameInput("Rate", "Sheet1!$B$2", hidden=True))
             with Workbook.load(wb.save()) as reloaded:
                 entry = reloaded.list_defined_names()[0]
-                self.assertEqual((entry.formula, entry.comment, entry.hidden), ("Sheet1!$B$2", None, True))
+                self.assertEqual((entry.formula, entry.comment, entry.hidden), ("=Sheet1!$B$2", None, True))
 
     def test_empty_formula_is_rejected(self) -> None:
         with Workbook.create_default() as wb:

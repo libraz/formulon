@@ -128,6 +128,19 @@ def _apply_layout(wb: Any, case: Dict[str, Any]) -> None:
 # The `page_setup` / `page_margins` fields a case may state; each maps to the keyword argument of the same name.
 _PAGE_SETUP_FIELDS = ("orientation", "paper_size", "scale", "fit_to_width", "fit_to_height", "fit_to_page")
 _PAGE_MARGIN_FIELDS = ("left", "right", "top", "bottom", "header", "footer")
+_PRINT_OPTION_FIELDS = ("grid_lines", "headings", "horizontal_centered", "vertical_centered")
+_HEADER_FOOTER_FIELDS = (
+    "odd_header",
+    "odd_footer",
+    "even_header",
+    "even_footer",
+    "first_header",
+    "first_footer",
+    "different_odd_even",
+    "different_first",
+    "scale_with_doc",
+    "align_with_margins",
+)
 
 
 def _stated(block: Dict[str, Any], fields: Tuple[str, ...]) -> Dict[str, Any]:
@@ -174,27 +187,11 @@ def _apply_print_settings(wb: Any, sheet: int, spec: Dict[str, Any], module: Any
 
     options = spec.get("print_options")
     if isinstance(options, dict):
-        wb.sheet(sheet).set_print_options(
-            grid_lines=options.get("grid_lines"),
-            headings=options.get("headings"),
-            horizontal_centered=options.get("horizontal_centered"),
-            vertical_centered=options.get("vertical_centered"),
-        )
+        wb.sheet(sheet).set_print_options(**_stated(options, _PRINT_OPTION_FIELDS))
 
     header_footer = spec.get("header_footer")
     if isinstance(header_footer, dict):
-        wb.sheet(sheet).set_header_footer(
-            odd_header=header_footer.get("odd_header"),
-            odd_footer=header_footer.get("odd_footer"),
-            even_header=header_footer.get("even_header"),
-            even_footer=header_footer.get("even_footer"),
-            first_header=header_footer.get("first_header"),
-            first_footer=header_footer.get("first_footer"),
-            different_odd_even=header_footer.get("different_odd_even"),
-            different_first=header_footer.get("different_first"),
-            scale_with_doc=header_footer.get("scale_with_doc"),
-            align_with_margins=header_footer.get("align_with_margins"),
-        )
+        wb.sheet(sheet).set_header_footer(**_stated(header_footer, _HEADER_FOOTER_FIELDS))
 
     print_area = spec.get("print_area")
     if isinstance(print_area, str) and print_area:

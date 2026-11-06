@@ -69,7 +69,7 @@ test('addHyperlink + getHyperlinks round-trip', async () => {
   assert.equal(wb.sheet(0).listHyperlinks().length, 0);
 });
 
-test('removeHyperlink / removeHyperlinkAt / clearHyperlinks surface on an empty sheet', async () => {
+test('removeHyperlink / clearHyperlinks surface on an empty sheet', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   // Removing by cell reports NotFound when no hyperlink sits there; clearing is a no-op.
@@ -78,21 +78,15 @@ test('removeHyperlink / removeHyperlinkAt / clearHyperlinks surface on an empty 
     (e) => isFormulonError(e, mod.StatusCode.NotFound),
   );
   wb.sheet(0).clearHyperlinks();
-  // Out-of-range index is rejected.
-  assert.throws(
-    () => wb.sheet(0).removeHyperlinkAt(0),
-    (e) => isFormulonError(e, mod.StatusCode.IndexOutOfRange),
-  );
   // Sheet-index-out-of-range is rejected on every variant.
   const sheetRange = (e) => isFormulonError(e, mod.StatusCode.SheetIndexOutOfRange);
   assert.throws(() => wb.sheet(999).removeHyperlink(0, 0), sheetRange);
-  assert.throws(() => wb.sheet(999).removeHyperlinkAt(0), sheetRange);
   assert.throws(() => wb.sheet(999).clearHyperlinks(), sheetRange);
   // The hyperlink list is still empty afterwards.
   assert.equal(wb.sheet(0).listHyperlinks().length, 0);
 });
 
-test('removeMerge + removeMergeAt + clearMerges step-wise prune the merge list', async () => {
+test('removeMerge + clearMerges step-wise prune the merge list', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   const a = { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 };
@@ -105,8 +99,12 @@ test('removeMerge + removeMergeAt + clearMerges step-wise prune the merge list',
   let list = wb.sheet(0).listMerges();
   assert.equal(list.length, 1);
   assert.equal(list[0].firstRow, 4);
-  // removeMergeAt drops the survivor by index.
-  wb.sheet(0).removeMergeAt(0);
+  // A rect covering the survivor drops it; a rect with no overlap is NotFound.
+  assert.throws(
+    () => wb.sheet(0).removeMerge({ firstRow: 9, firstCol: 9, lastRow: 9, lastCol: 9 }),
+    (e) => isFormulonError(e, mod.StatusCode.NotFound),
+  );
+  wb.sheet(0).removeMerge(b);
   list = wb.sheet(0).listMerges();
   assert.equal(list.length, 0);
   // clearMerges is a no-op on an empty list.
@@ -120,7 +118,7 @@ test('removeMerge + removeMergeAt + clearMerges step-wise prune the merge list',
 test('setSheetZoom + getSheetView surface the new zoom', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.sheet(0).setZoom(175);
+  wb.sheet(0).setView({ zoomScale: 175 });
   const v = wb.sheet(0).getView();
   assert.equal(v.zoomScale, 175);
   // Default freeze / visibility state survives a zoom change.
@@ -169,12 +167,12 @@ test('getSheetView surfaces display / orientation defaults', async () => {
 test('setSheetShowGridLines / setSheetRightToLeft / setSheetTabSelected / setSheetViewMode round-trip', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.sheet(0).setShowGridLines(false);
-  wb.sheet(0).setShowRowColHeaders(false);
-  wb.sheet(0).setShowZeros(false);
-  wb.sheet(0).setRightToLeft(true);
-  wb.sheet(0).setTabSelected(true);
-  wb.sheet(0).setViewMode(mod.SheetViewMode.PageBreakPreview);
+  wb.sheet(0).setView({ showGridLines: false });
+  wb.sheet(0).setView({ showRowColHeaders: false });
+  wb.sheet(0).setView({ showZeros: false });
+  wb.sheet(0).setView({ rightToLeft: true });
+  wb.sheet(0).setView({ tabSelected: true });
+  wb.sheet(0).setView({ viewMode: mod.SheetViewMode.PageBreakPreview });
   const v = wb.sheet(0).getView();
   assert.equal(v.showGridLines, false);
   assert.equal(v.showRowColHeaders, false);
@@ -217,10 +215,10 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
   // one empty border, one default xf, and the two fills Excel reserves at
   // the front of every file (`none`, `gray125`). A caller's first record
   // therefore lands after them instead of displacing `none`.
-  assert.equal(wb.getFontCount(), 1);
-  assert.equal(wb.getFillCount(), 2);
-  assert.equal(wb.getBorderCount(), 1);
-  assert.equal(wb.getCellXfCount(), 1);
+  assert.equal(wb.listFonts().length, 1);
+  assert.equal(wb.listFills().length, 2);
+  assert.equal(wb.listBorders().length, 1);
+  assert.equal(wb.listCellXfs().length, 1);
 
   const fontResult = wb.addFont({
     name: 'Arial',
@@ -242,7 +240,7 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
     colorArgb: 0xff112233,
   });
   assert.equal(fontDup, fontResult);
-  assert.equal(wb.getFontCount(), 2);
+  assert.equal(wb.listFonts().length, 2);
 
   const fill = wb.addFill({ pattern: 1, fgArgb: 0xffff0000, bgArgb: 0xff000000 });
   const border = wb.addBorder({
@@ -459,10 +457,10 @@ test('addFont / getFont preserve superscript and round-trip to the same index', 
   const superscript = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1, colorArgb: 0xff112233 });
   assert.equal(wb.getFont(superscript).vertAlign, 1);
 
-  const before = wb.getFontCount();
+  const before = wb.listFonts().length;
   const again = wb.addFont(wb.getFont(superscript));
   assert.equal(again, superscript);
-  assert.equal(wb.getFontCount(), before);
+  assert.equal(wb.listFonts().length, before);
 
   const edited = wb.getFont(superscript);
   edited.colorArgb = 0xff00ff00;
@@ -477,9 +475,9 @@ test('addFont/setFont with a non-numeric field throws and does not commit a coer
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
 
-  const before = wb.getFontCount();
+  const before = wb.listFonts().length;
   assert.throws(() => wb.addFont({ name: 'Arial', size: 'not a number' }), TypeError);
-  assert.equal(wb.getFontCount(), before, 'no font must have been added for the rejected call');
+  assert.equal(wb.listFonts().length, before, 'no font must have been added for the rejected call');
 
   const font = wb.addFont({ name: 'Arial', size: 12 });
   assert.throws(() => wb.setFont(font, { name: 'Arial', size: 'not a number' }), TypeError);
@@ -579,9 +577,9 @@ test('setFont overwrites an existing slot and refuses an absent index', async ()
   wb.setFont(added, { name: 'MS Gothic', size: 9 });
   assert.equal(wb.getFont(added).name, 'MS Gothic');
 
-  const before = wb.getFontCount();
+  const before = wb.listFonts().length;
   assert.throws(() => wb.setFont(before, { name: 'MS Gothic', size: 9 }), isFormulonError);
-  assert.equal(wb.getFontCount(), before);
+  assert.equal(wb.listFonts().length, before);
 
   wb.dispose();
 });
@@ -593,10 +591,10 @@ test('addDxf / getDxf round-trip a superscript differential font', async () => {
   const readBack = wb.getDxf(added);
   assert.equal(readBack.font.vertAlign, 1);
 
-  const before = wb.getDxfCount();
+  const before = wb.listDxfs().length;
   const again = wb.addDxf(readBack);
   assert.equal(again, added);
-  assert.equal(wb.getDxfCount(), before);
+  assert.equal(wb.listDxfs().length, before);
 });
 
 test('addXf rejects out-of-range font_index', async () => {
@@ -683,13 +681,13 @@ test('an explicit all-zero phoneticPr is reported as present and survives a roun
 test('scroll origin, pane origin and selection round-trip through save', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.sheet(0).setFreeze(2, 1);
+  wb.sheet(0).setView({ freezeRows: 2, freezeCols: 1 });
   const view = wb.sheet(0).getView();
   assert.equal(view.paneTopLeftRow, 2);
   assert.equal(view.paneTopLeftCol, 1);
-  wb.sheet(0).setTopLeft(5, 0);
-  wb.sheet(0).setPaneTopLeft(40, 6);
-  assert.throws(() => wb.sheet(0).setPaneTopLeft(1, 6), isFormulonError);
+  wb.sheet(0).setView({ topLeftRow: 5, topLeftCol: 0 });
+  wb.sheet(0).setView({ paneTopLeftRow: 40, paneTopLeftCol: 6 });
+  assert.throws(() => wb.sheet(0).setView({ paneTopLeftRow: 1, paneTopLeftCol: 6 }), isFormulonError);
   const ranges = [
     { firstRow: 41, firstCol: 7, lastRow: 43, lastCol: 8 },
     { firstRow: 50, firstCol: 9, lastRow: 50, lastCol: 9 },
@@ -731,7 +729,7 @@ test('sheet split reads back, round-trips and exchanges with the freeze', async 
   const wb = mod.Workbook.createDefault();
   try {
     assert.deepEqual([wb.sheet(0).getView().splitX, wb.sheet(0).getView().splitY], [0, 0]);
-    wb.sheet(0).setSplit(2000, 1500);
+    wb.sheet(0).setView({ splitX: 2000, splitY: 1500 });
     const view = wb.sheet(0).getView();
     assert.deepEqual([view.splitX, view.splitY, view.freezeRows, view.freezeCols], [2000, 1500, 0, 0]);
     const saved = wb.save();
@@ -742,16 +740,16 @@ test('sheet split reads back, round-trips and exchanges with the freeze', async 
     } finally {
       loaded.dispose();
     }
-    wb.sheet(0).setFreeze(2, 1);
+    wb.sheet(0).setView({ freezeRows: 2, freezeCols: 1 });
     assert.deepEqual([wb.sheet(0).getView().splitX, wb.sheet(0).getView().splitY], [0, 0]);
-    wb.sheet(0).setSplit(0, 900);
+    wb.sheet(0).setView({ splitX: 0, splitY: 900 });
     const split = wb.sheet(0).getView();
     assert.deepEqual([split.splitX, split.splitY, split.freezeRows, split.freezeCols], [0, 900, 0, 0]);
-    assert.throws(() => wb.sheet(0).setSplit(-1, 0), isFormulonError);
-    assert.throws(() => wb.sheet(0).setSplit(0, Number.NaN), isFormulonError);
-    assert.throws(() => wb.sheet(0).setSplit(Number.POSITIVE_INFINITY, 0), isFormulonError);
+    assert.throws(() => wb.sheet(0).setView({ splitX: -1, splitY: 0 }), isFormulonError);
+    assert.throws(() => wb.sheet(0).setView({ splitX: 0, splitY: Number.NaN }), isFormulonError);
+    assert.throws(() => wb.sheet(0).setView({ splitX: Number.POSITIVE_INFINITY, splitY: 0 }), isFormulonError);
     assert.equal(wb.sheet(0).getView().splitY, 900);
-    wb.sheet(0).setSplit(0, 0);
+    wb.sheet(0).setView({ splitX: 0, splitY: 0 });
     assert.equal(wb.sheet(0).getView().splitY, 0);
   } finally {
     wb.dispose();

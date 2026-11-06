@@ -9,6 +9,7 @@
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
+#include "eval/recalc_reentry.h"
 #include "eval/scheduler.h"
 #include "utils/date_time.h"
 #include "utils/error.h"
@@ -59,6 +60,20 @@ extern "C" fm_status_t fm_workbook_recalc(fm_workbook_t* wb) {
   if (!r) {
     return set_last_error(r.error());
   }
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_has_dirty_cells(const fm_workbook_t* wb, int32_t* out_has_dirty) {
+  clear_last_error();
+  if (wb == nullptr || out_has_dirty == nullptr) {
+    return null_argument();
+  }
+  // A recalc on this thread holds the engine and is mid-way through the dirty set.
+  if (formulon::eval::detail::g_in_recalc) {
+    return set_binding_error(formulon::FormulonErrorCode::kGraphRecalcReentrant,
+                             "fm_workbook_has_dirty_cells called from inside a recalc");
+  }
+  *out_has_dirty = wb->workbook().recalc_engine().dirty().size() != 0U ? 1 : 0;
   return 0;
 }
 

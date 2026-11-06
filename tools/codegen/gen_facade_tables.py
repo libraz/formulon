@@ -80,6 +80,14 @@ def _py_positions(value: list) -> str:
     return "(" + ", ".join(items) + ("," if len(items) == 1 else "") + ")"
 
 
+def _js_positions(value: object) -> str:
+    """A position entry as the formatter lays it out: nested pairs one per line when there are several."""
+    if isinstance(value, list) and len(value) > 1 and all(isinstance(v, list) for v in value):
+        rows = "".join(f"{_INDENT * 2}{json.dumps(v)},\n" for v in value)
+        return f"[\n{rows}{_INDENT}]"
+    return json.dumps(value)
+
+
 def address_tables(language: str, ledger: Optional[facade_scope.Ledger] = None) -> str:
     """The `CELL_ARGS` and `RECT_ARGS` tables of `language`'s facade region."""
     ledger = ledger or facade_scope.load()
@@ -90,7 +98,7 @@ def address_tables(language: str, ledger: Optional[facade_scope.Ledger] = None) 
     out = []
     for table, entries in tables.items():
         if language == "js":
-            body = "".join(f"{_INDENT}{name}: {json.dumps(value)},\n" for name, value in entries.items())
+            body = "".join(f"{_INDENT}{name}: {_js_positions(value)},\n" for name, value in entries.items())
             out.append(f"const {table} = Object.freeze({{\n{body}}});\n")
         else:
             body = "".join(f'    "{name}": {_py_positions(value)},\n' for name, value in entries.items())

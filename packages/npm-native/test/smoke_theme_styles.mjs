@@ -141,9 +141,9 @@ test('clearCellXfIndex restores row / column inheritance', async () => {
     assert.equal(e.source, 0);
     assert.equal(e.xfIndex, 0);
 
-    const before = wb.sheet(0).getCellCount();
+    const before = wb.sheet(0).listCells().length;
     wb.sheet(0).clearCellXfIndex(7, 7);
-    assert.equal(wb.sheet(0).getCellCount(), before);
+    assert.equal(wb.sheet(0).listCells().length, before);
     assert.throws(() => wb.sheet(99).clearCellXfIndex(0, 0), isFormulonError);
   } finally {
     wb.dispose();
@@ -280,7 +280,7 @@ test('getThemeScriptFont reads the default script faces and setThemeScriptFont r
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const face = (book, major, script) => book.getThemeScriptFont(major, script)?.typeface;
+    const face = (book, major, script) => book.getThemeScriptFont({ major, script })?.typeface;
     assert.equal(face(wb, false, 'Jpan'), '游ゴシック');
     assert.equal(face(wb, false, 'Hang'), '맑은 고딕');
     const majorJpan = face(wb, true, 'Jpan');

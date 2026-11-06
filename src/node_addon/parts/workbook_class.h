@@ -113,6 +113,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value Recalc(const Napi::CallbackInfo& info);
   Napi::Value RecalcParallel(const Napi::CallbackInfo& info);
   Napi::Value PartialRecalc(const Napi::CallbackInfo& info);
+  /// `hasDirtyCells()`: true when a change has not been applied by a full recalc yet.
+  Napi::Value HasDirtyCells(const Napi::CallbackInfo& info);
   Napi::Value SetIterative(const Napi::CallbackInfo& info);
   /// The stored iterative-calculation settings as `{enabled,
   /// maxIterations, maxChange}`. The cap and threshold are the stored
@@ -167,18 +169,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // External links.
   Napi::Value GetExternalLinkCount(const Napi::CallbackInfo& info);
   Napi::Value GetExternalLink(const Napi::CallbackInfo& info);
-
-  // Function catalog.
-  Napi::Value FunctionMetadata(const Napi::CallbackInfo& info);
-  Napi::Value FunctionNames(const Napi::CallbackInfo& info);
-  Napi::Value LocalizeFunctionName(const Napi::CallbackInfo& info);
-  Napi::Value CanonicalizeFunctionName(const Napi::CallbackInfo& info);
-  Napi::Value LocalizeFormula(const Napi::CallbackInfo& info);
-  Napi::Value CanonicalizeFormula(const Napi::CallbackInfo& info);
-  Napi::Value LocaleFacts(const Napi::CallbackInfo& info);
-  Napi::Value ListLocaleErrorNames(const Napi::CallbackInfo& info);
-  Napi::Value CompareText(const Napi::CallbackInfo& info);
-  Napi::Value CollationClasses(const Napi::CallbackInfo& info);
 
   // Sheet operations.
   Napi::Value AddSheet(const Napi::CallbackInfo& info);
@@ -557,7 +547,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetPerson(const Napi::CallbackInfo& info);
 
   // Drawing images and the object operations shared with charts.
-  Napi::Value ProbeImage(const Napi::CallbackInfo& info);
   Napi::Value ListDrawingObjects(const Napi::CallbackInfo& info);
   Napi::Value GetDrawingObject(const Napi::CallbackInfo& info);
   Napi::Value GetImage(const Napi::CallbackInfo& info);
@@ -863,6 +852,11 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   /// against.
   int64_t reported_external_bytes_ = 0;
 };
+
+/// Attaches the module functions that need no workbook (function catalog,
+/// locale text, collation, image probe) to `exports`. Their positional
+/// arguments are checked as a `Workbook` method's are.
+void RegisterModuleFunctions(Napi::Env env, Napi::Object exports);
 
 }  // namespace formulon_node
 

@@ -12,6 +12,8 @@ from typing import Any, Dict, List, Tuple
 from formulon import (
     PIVOT_VALUES_FIELD,
     CellRect,
+    ErrorCode,
+    ExcelError,
     FormulonError,
     PivotAggregation,
     PivotAxis,
@@ -22,10 +24,8 @@ from formulon import (
     PivotFilterInput,
     PivotFilterType,
     PivotGrandTotals,
-    PivotOptions,
     PivotReportLayout,
     PivotSortOrder,
-    PivotStyleInput,
     PivotWorksheetSource,
     Sheet,
     StatusCode,
@@ -42,11 +42,11 @@ class PivotTests(unittest.TestCase):
             wb.add_pivot_cache_field(cache_id, "Amount")
             for region, amount in [("East", 10.0), ("East", 20.0), ("West", 30.0)]:
                 rec = wb.add_pivot_cache_record(cache_id)
-                wb.set_pivot_cache_record_text(cache_id, rec, 0, region)
-                wb.set_pivot_cache_record_number(cache_id, rec, 1, amount)
+                wb.set_pivot_cache_record_value(cache_id, rec, 0, region)
+                wb.set_pivot_cache_record_value(cache_id, rec, 1, amount)
             self.assertEqual(wb.get_pivot_cache_record_count(cache_id), 3)
 
-            pivot = wb.sheet(0).add_pivot("Pivot1", cache_id, 0, 4)
+            pivot = wb.sheet(0).add_pivot(name="Pivot1", cache_id=cache_id, anchor_row=0, anchor_col=4)
             region_field = wb.sheet(0).add_pivot_field(pivot, PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
             amount_field = wb.sheet(0).add_pivot_field(
                 pivot, PivotFieldInput(source_name="Amount", axis=PivotAxis.VALUE)
@@ -71,52 +71,50 @@ class PivotTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             cache_id = wb.add_pivot_cache()
             wb.add_pivot_cache_field(cache_id, "Region")
-            wb.add_pivot_cache_field_shared_item_text(cache_id, 0, "East")
-            wb.add_pivot_cache_field_shared_item_number(cache_id, 0, 45292.0)
-            wb.add_pivot_cache_field_shared_item_bool(cache_id, 0, value=True)
-            wb.add_pivot_cache_field_shared_item_blank(cache_id, 0)
-            wb.add_pivot_cache_field_shared_item_error(cache_id, 0, 1)
-            kinds = [wb.get_pivot_cache_field_shared_item_value(cache_id, 0, i).kind for i in range(5)]
+            wb.add_pivot_cache_field_shared_item(cache_id, 0, "East")
+            wb.add_pivot_cache_field_shared_item(cache_id, 0, 45292.0)
+            wb.add_pivot_cache_field_shared_item(cache_id, 0, True)
+            wb.add_pivot_cache_field_shared_item(cache_id, 0, None)
+            wb.add_pivot_cache_field_shared_item(cache_id, 0, ExcelError(ErrorCode(1)))
+            items = wb.list_pivot_cache_field_shared_items(cache_id, 0)
             self.assertEqual(
-                kinds, [ValueKind.TEXT, ValueKind.NUMBER, ValueKind.BOOL, ValueKind.BLANK, ValueKind.ERROR]
+                [item.value.kind for item in items],
+                [ValueKind.TEXT, ValueKind.NUMBER, ValueKind.BOOL, ValueKind.BLANK, ValueKind.ERROR],
             )
-            self.assertEqual(wb.get_pivot_cache_field_shared_item_value(cache_id, 0, 0).text, "East")
-            self.assertEqual(wb.get_pivot_cache_field_shared_item_value(cache_id, 0, 1).number, 45292.0)
-            self.assertIs(wb.get_pivot_cache_field_shared_item_value(cache_id, 0, 2).boolean, True)
-            self.assertEqual(wb.get_pivot_cache_field_shared_item_value(cache_id, 0, 4).error_code, 1)
+            self.assertEqual(items[0].value.text, "East")
+            self.assertEqual(items[1].value.number, 45292.0)
+            self.assertIs(items[2].value.boolean, True)
+            self.assertEqual(items[4].value.error_code, 1)
+            self.assertFalse(any(item.is_date for item in items))
             with self.assertRaises(FormulonError):
-                wb.get_pivot_cache_field_shared_item_value(cache_id, 0, 5)
+                wb.list_pivot_cache_field_shared_items(cache_id, 1)
 
     def test_cache_date_shared_items(self) -> None:
         with Workbook.create_default() as wb:
             cache_id = wb.add_pivot_cache()
             wb.add_pivot_cache_field(cache_id, "When")
-            wb.add_pivot_cache_field_shared_item_date(cache_id, 0, 45292.0)
-            wb.add_pivot_cache_field_shared_item_number(cache_id, 0, 45292.0)
-            wb.add_pivot_cache_field_shared_item_date(cache_id, 0, 45292.5)
-            self.assertIs(wb.is_pivot_cache_field_shared_item_date(cache_id, 0, 0), True)
-            self.assertIs(wb.is_pivot_cache_field_shared_item_date(cache_id, 0, 1), False)
-            self.assertIs(wb.is_pivot_cache_field_shared_item_date(cache_id, 0, 2), True)
-            value = wb.get_pivot_cache_field_shared_item_value(cache_id, 0, 0)
-            self.assertEqual(value.kind, ValueKind.NUMBER)
-            self.assertEqual(value.number, 45292.0)
-            with self.assertRaises(FormulonError):
-                wb.is_pivot_cache_field_shared_item_date(cache_id, 0, 3)
+            wb.add_pivot_cache_field_shared_item(cache_id, 0, 45292.0, date=True)
+            wb.add_pivot_cache_field_shared_item(cache_id, 0, 45292.0)
+            wb.add_pivot_cache_field_shared_item(cache_id, 0, 45292.5, date=True)
+            items = wb.list_pivot_cache_field_shared_items(cache_id, 0)
+            self.assertEqual([item.is_date for item in items], [True, False, True])
+            self.assertEqual(items[0].value.kind, ValueKind.NUMBER)
+            self.assertEqual(items[0].value.number, 45292.0)
             for bad in (-1.0, float("nan")):
                 with self.assertRaises(FormulonError) as caught:
-                    wb.add_pivot_cache_field_shared_item_date(cache_id, 0, bad)
+                    wb.add_pivot_cache_field_shared_item(cache_id, 0, bad, date=True)
                 self.assertEqual(caught.exception.code, 2)
             wb.add_pivot_cache_record(cache_id)
-            wb.set_pivot_cache_record_date(cache_id, 0, 0, 45292.0)
+            wb.set_pivot_cache_record_value(cache_id, 0, 0, 45292.0, date=True)
             with self.assertRaises(FormulonError):
-                wb.set_pivot_cache_record_date(cache_id, 0, 0, float("nan"))
+                wb.set_pivot_cache_record_value(cache_id, 0, 0, float("nan"), date=True)
 
     def test_cache_source_and_report_layout_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
             cache = wb.add_pivot_cache()
             wb.set_pivot_cache_worksheet_source(cache, PivotWorksheetSource(ref="A1:B9", sheet="Sheet1"))
             self.assertEqual(wb.get_pivot_cache_worksheet_source(cache).sheet, "Sheet1")
-            pivot = wb.sheet(0).add_pivot("Layout", cache, 0, 0)
+            pivot = wb.sheet(0).add_pivot(name="Layout", cache_id=cache, anchor_row=0, anchor_col=0)
             wb.sheet(0).set_pivot_report_layout(pivot, PivotReportLayout.TABULAR)
             self.assertEqual(wb.sheet(0).get_pivot_report_layout(pivot), PivotReportLayout.TABULAR)
             wb.set_pivot_cache_worksheet_source(cache, None)
@@ -135,14 +133,14 @@ class _PivotFixture:
         for name in ("Region", "Product", "Amount", "Date"):
             wb.add_pivot_cache_field(self.cache, name)
         for item in ("East", "West"):
-            wb.add_pivot_cache_field_shared_item_text(self.cache, 0, item)
+            wb.add_pivot_cache_field_shared_item(self.cache, 0, item)
         for item in ("Apple", "Pear"):
-            wb.add_pivot_cache_field_shared_item_text(self.cache, 1, item)
+            wb.add_pivot_cache_field_shared_item(self.cache, 1, item)
         for values in ((0, 0, 10, 45292), (1, 0, 30, 45323), (0, 1, 5, 45658), (1, 1, 7, 45689)):
             rec = wb.add_pivot_cache_record(self.cache)
             for field, value in enumerate(values):
-                wb.set_pivot_cache_record_number(self.cache, rec, field, value)
-        self.pivot = wb.sheet(0).add_pivot("Pivot1", self.cache, 0, 6)
+                wb.set_pivot_cache_record_value(self.cache, rec, field, value)
+        self.pivot = wb.sheet(0).add_pivot(name="Pivot1", cache_id=self.cache, anchor_row=0, anchor_col=6)
         self.region = wb.sheet(0).add_pivot_field(self.pivot, PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
         wb.sheet(0).add_pivot_field_item(self.pivot, self.region, "East", visible=True)
         wb.sheet(0).add_pivot_field_item(self.pivot, self.region, "West", visible=True)
@@ -221,13 +219,11 @@ _BETWEEN_10_20 = PivotFilterInput(
 
 
 _PIVOT_READERS = {
-    "get_pivot_count",
     "get_pivot_layout",
-    "get_pivot_cache_field_count",
-    "get_pivot_cache_field_name",
-    "get_pivot_cache_field_shared_item_count",
-    "get_pivot_cache_field_shared_item_value",
-    "is_pivot_cache_field_shared_item_date",
+    "list_pivots",
+    "list_pivot_cache_fields",
+    "list_pivot_cache_field_shared_items",
+    "list_pivot_field_items",
     "get_pivot_cache_record_count",
     "get_pivot_field_count",
     "get_pivot_data_field_count",
@@ -240,13 +236,11 @@ _PIVOT_READERS = {
     "get_pivot_row_field_order",
     "get_pivot_column_field_order",
     "get_pivot_field",
-    "get_pivot_field_item_count",
     "get_pivot_field_item",
     "get_pivot_options",
     "is_pivot_projection_pending",
     "get_pivot_data_field_default_name",
     "get_pivot_cache_options",
-    "get_pivot_cache_field_formula",
     "get_pivot_cache_calculated_item_count",
     "get_pivot_cache_calculated_item",
     "get_pivot_data_field",
@@ -276,11 +270,11 @@ def _date_rows(f: _PivotFixture) -> None:
 
 
 def _hide_east(f: _PivotFixture) -> None:
-    f.wb.sheet(0).set_pivot_field_item_visible(f.pivot, f.region, 0, False)
+    f.wb.sheet(0).update_pivot_item(f.pivot, f.region, 0, visible=False)
 
 
 def _point_at_new_item(f: _PivotFixture) -> None:
-    f.wb.set_pivot_cache_record_number(f.cache, 0, 0, 2)
+    f.wb.set_pivot_cache_record_value(f.cache, 0, 0, 2)
 
 
 def _package_part(data: bytes, name: str) -> str:
@@ -320,10 +314,10 @@ class PivotMutatorTableTests(unittest.TestCase):
 
         def cache_field_add(t: Any, f: _PivotFixture, r: int) -> None:
             eq(r, 4)
-            eq(f.wb.get_pivot_cache_field_name(f.cache, 4), "Extra")
+            eq(f.wb.list_pivot_cache_fields(f.cache)[4].name, "Extra")
 
         def cache_field_clear(t: Any, f: _PivotFixture, r: None) -> None:
-            eq(f.wb.get_pivot_cache_field_count(f.cache), 0)
+            eq(len(f.wb.list_pivot_cache_fields(f.cache)), 0)
             # The data field now names a cache field that no longer exists.
             with self.assertRaises(FormulonError):
                 f.wb.sheet(0).get_pivot_layout(f.pivot)
@@ -339,7 +333,7 @@ class PivotMutatorTableTests(unittest.TestCase):
             eq(f.grid(0), _BASE_GRID)
 
         def pivot_remove(t: Any, f: _PivotFixture, r: None) -> None:
-            eq(f.wb.sheet(0).get_pivot_count(), 0)
+            eq(len(f.wb.sheet(0).list_pivots()), 0)
             with self.assertRaises(FormulonError):
                 f.wb.sheet(0).get_pivot_layout(0)
 
@@ -379,8 +373,8 @@ class PivotMutatorTableTests(unittest.TestCase):
 
         def add_item_at_setup(f: _PivotFixture) -> None:
             # Only the index-addressed form can name the blank item.
-            f.wb.add_pivot_cache_field_shared_item_blank(f.cache, 0)
-            f.wb.set_pivot_cache_record_blank(f.cache, 0, 0)
+            f.wb.add_pivot_cache_field_shared_item(f.cache, 0, None)
+            f.wb.set_pivot_cache_record_value(f.cache, 0, 0, None)
 
         def clear_subtotal_setup(f: _PivotFixture) -> None:
             _two_levels(f)
@@ -391,8 +385,8 @@ class PivotMutatorTableTests(unittest.TestCase):
             f.wb.sheet(0).set_pivot_field_date_group(f.pivot, f.date, PivotDatePeriod.YEARS, PivotCalendar.GREGORIAN)
 
         def number_format(t: Any, f: _PivotFixture, r: None) -> None:
-            rejects(lambda: f.wb.sheet(0).set_pivot_field_number_format(f.pivot, 99, "4"), IDX)
-            rejects(lambda: f.wb.sheet(0).set_pivot_field_number_format(f.pivot, f.amount, "0.00"))
+            rejects(lambda: f.wb.sheet(0).update_pivot_field(f.pivot, 99, number_format="4"), IDX)
+            rejects(lambda: f.wb.sheet(0).update_pivot_field(f.pivot, f.amount, number_format="0.00"))
             # A field's numFmtId is only observable in the part the writer emits.
             part = _package_part(f.wb.save(), "xl/pivotTables/pivotTable1.xml")
             self.assertRegex(part, r'<pivotField [^>]*numFmtId="4"')
@@ -435,60 +429,60 @@ class PivotMutatorTableTests(unittest.TestCase):
             f.wb.add_pivot_cache_calculated_item(f.cache, f.region, "Diff", "East-West")
 
         def pending_setup(f: _PivotFixture) -> None:
-            f.wb.add_pivot_cache_field_shared_item_text(f.cache, 0, "North")
+            f.wb.add_pivot_cache_field_shared_item(f.cache, 0, "North")
 
         def options_set(t: Any, f: _PivotFixture, r: None) -> None:
             o = f.wb.sheet(0).get_pivot_options(f.pivot)
             eq((o.show_error, o.error_caption), (True, "N/A"))
             eq((o.show_missing, o.missing_caption, o.indent, o.page_wrap), (True, "-", 3, 2))
-            eq((o.alt_text, o.alt_text_summary, o.grand_total_caption), ("Title", "", "Sum"))
-            rejects(lambda: f.wb.sheet(0).set_pivot_options(9, o), IDX)
-            rejects(lambda: f.wb.sheet(0).set_pivot_options(f.pivot, replace(o, indent=127)))
-            rejects(lambda: f.wb.sheet(0).set_pivot_options(f.pivot, replace(o, page_wrap=256)))
-            rejects(lambda: f.wb.sheet(0).set_pivot_options(f.pivot, replace(o, error_caption="x" * 256)))
-            type_rejected(lambda: f.wb.sheet(0).set_pivot_options(f.pivot, replace(o, indent="3")))
-            type_rejected(lambda: f.wb.sheet(0).set_pivot_options(f.pivot, replace(o, error_caption=5)))
-            type_rejected(lambda: f.wb.sheet(0).set_pivot_options(f.pivot, {}))
+            eq((o.alt_text, o.alt_text_summary, o.grand_total_caption), ("Title", None, "Sum"))
+            rejects(lambda: f.wb.sheet(0).set_pivot_options(9, indent=3), IDX)
+            rejects(lambda: f.wb.sheet(0).set_pivot_options(f.pivot, indent=127))
+            rejects(lambda: f.wb.sheet(0).set_pivot_options(f.pivot, page_wrap=256))
+            rejects(lambda: f.wb.sheet(0).set_pivot_options(f.pivot, error_caption="x" * 256))
+            type_rejected(lambda: f.wb.sheet(0).set_pivot_options(f.pivot, indent="3"))
+            type_rejected(lambda: f.wb.sheet(0).set_pivot_options(f.pivot, error_caption=5))
+            type_rejected(lambda: f.wb.sheet(0).set_pivot_options(f.pivot, {}))  # a record is no longer accepted
             eq(f.wb.sheet(0).get_pivot_options(f.pivot), o)
 
         def cache_options_set(t: Any, f: _PivotFixture, r: None) -> None:
             o = f.wb.get_pivot_cache_options(f.cache)
             eq((o.save_data, o.missing_items_limit, o.refresh_on_load), (False, 32500, True))
-            rejects(lambda: f.wb.set_pivot_cache_options(9999, o))
-            rejects(lambda: f.wb.set_pivot_cache_options(f.cache, replace(o, missing_items_limit=-2)))
-            rejects(lambda: f.wb.set_pivot_cache_options(f.cache, replace(o, missing_items_limit=1048577)))
-            type_rejected(lambda: f.wb.set_pivot_cache_options(f.cache, replace(o, missing_items_limit="1")))
+            rejects(lambda: f.wb.set_pivot_cache_options(9999, save_data=False))
+            rejects(lambda: f.wb.set_pivot_cache_options(f.cache, missing_items_limit=-2))
+            rejects(lambda: f.wb.set_pivot_cache_options(f.cache, missing_items_limit=1048577))
+            type_rejected(lambda: f.wb.set_pivot_cache_options(f.cache, missing_items_limit="1"))
             eq(f.wb.get_pivot_cache_options(f.cache), o)
 
         def calc_field_add(t: Any, f: _PivotFixture, r: int) -> None:
             eq(r, 4)
-            eq(f.wb.get_pivot_cache_field_name(f.cache, 4), "Double")
-            eq(f.wb.get_pivot_cache_field_formula(f.cache, 4), "Amount*2")
-            eq(f.wb.get_pivot_cache_field_formula(f.cache, 0), None)
+            eq(f.wb.list_pivot_cache_fields(f.cache)[4].name, "Double")
+            eq(f.wb.list_pivot_cache_fields(f.cache)[4].formula, "=Amount*2")
+            eq(f.wb.list_pivot_cache_fields(f.cache)[0].formula, None)
             rejects(lambda: f.wb.add_pivot_cache_calculated_field(f.cache, "Amount", "Amount*2"))
             rejects(lambda: f.wb.add_pivot_cache_calculated_field(f.cache, "Other", ""))
             rejects(lambda: f.wb.add_pivot_cache_calculated_field(f.cache, "Other", "NoSuchField+1"))
             rejects(lambda: f.wb.add_pivot_cache_calculated_field(9999, "Other", "Amount*2"))
             type_rejected(lambda: f.wb.add_pivot_cache_calculated_field(f.cache, 5, "Amount*2"))
             type_rejected(lambda: f.wb.add_pivot_cache_calculated_field(f.cache, "Other", None))
-            eq(f.wb.get_pivot_cache_field_count(f.cache), 5)
+            eq(len(f.wb.list_pivot_cache_fields(f.cache)), 5)
 
         def calc_field_set_formula(t: Any, f: _PivotFixture, r: None) -> None:
-            eq(f.wb.get_pivot_cache_field_formula(f.cache, 4), "Amount*3")
+            eq(f.wb.list_pivot_cache_fields(f.cache)[4].formula, "=Amount*3")
             rejects(lambda: f.wb.set_pivot_cache_calculated_field_formula(f.cache, 0, "Amount*3"))
             rejects(lambda: f.wb.set_pivot_cache_calculated_field_formula(f.cache, 4, ""))
             type_rejected(lambda: f.wb.set_pivot_cache_calculated_field_formula(f.cache, 4, 3))
-            eq(f.wb.get_pivot_cache_field_formula(f.cache, 4), "Amount*3")
+            eq(f.wb.list_pivot_cache_fields(f.cache)[4].formula, "=Amount*3")
 
         def calc_field_remove(t: Any, f: _PivotFixture, r: None) -> None:
-            eq(f.wb.get_pivot_cache_field_count(f.cache), 4)
+            eq(len(f.wb.list_pivot_cache_fields(f.cache)), 4)
             rejects(lambda: f.wb.remove_pivot_cache_calculated_field(f.cache, 0))
 
         def calc_item_add(t: Any, f: _PivotFixture, r: None) -> None:
             eq(len(f.wb.list_pivot_cache_calculated_items(f.cache)), 1)
             item = f.wb.list_pivot_cache_calculated_items(f.cache)[0]
             eq((item.field_index, item.name, item.scoped), (f.region, "Both", False))
-            eq(item.formula, "Region[East]+Region[West]")
+            eq(item.formula, "=Region[East]+Region[West]")
             with self.assertRaises(IndexError):
                 f.wb.list_pivot_cache_calculated_items(f.cache)[5]
             rejects(lambda: f.wb.add_pivot_cache_calculated_item(f.cache, f.region, "East", "East+West"))
@@ -498,7 +492,7 @@ class PivotMutatorTableTests(unittest.TestCase):
             eq(len(f.wb.list_pivot_cache_calculated_items(f.cache)), 1)
 
         def calc_item_set_formula(t: Any, f: _PivotFixture, r: None) -> None:
-            eq(f.wb.list_pivot_cache_calculated_items(f.cache)[0].formula, "Region[East]*2")
+            eq(f.wb.list_pivot_cache_calculated_items(f.cache)[0].formula, "=Region[East]*2")
             rejects(lambda: f.wb.set_pivot_cache_calculated_item_formula(f.cache, 5, "East*2"), IDX)
             type_rejected(lambda: f.wb.set_pivot_cache_calculated_item_formula(f.cache, 0, 2))
 
@@ -513,15 +507,15 @@ class PivotMutatorTableTests(unittest.TestCase):
 
         def custom_name(t: Any, f: _PivotFixture, r: None) -> None:
             eq(f.wb.sheet(0).list_pivot_fields(f.pivot)[f.region].custom_name, "Area")
-            rejects(lambda: f.wb.sheet(0).set_pivot_field_custom_name(f.pivot, 99, "x"), IDX)
-            rejects(lambda: f.wb.sheet(0).set_pivot_field_custom_name(f.pivot, f.region, "Product"))
-            rejects(lambda: f.wb.sheet(0).set_pivot_field_custom_name(f.pivot, f.region, "x" * 256))
-            type_rejected(lambda: f.wb.sheet(0).set_pivot_field_custom_name(f.pivot, f.region, 5))
+            rejects(lambda: f.wb.sheet(0).update_pivot_field(f.pivot, 99, custom_name="x"), IDX)
+            rejects(lambda: f.wb.sheet(0).update_pivot_field(f.pivot, f.region, custom_name="Product"))
+            rejects(lambda: f.wb.sheet(0).update_pivot_field(f.pivot, f.region, custom_name="x" * 256))
+            type_rejected(lambda: f.wb.sheet(0).update_pivot_field(f.pivot, f.region, custom_name=5))
             eq(f.wb.sheet(0).list_pivot_fields(f.pivot)[f.region].custom_name, "Area")
-            f.wb.sheet(0).set_pivot_field_custom_name(f.pivot, f.region, None)
+            f.wb.sheet(0).update_pivot_field(f.pivot, f.region, custom_name=None)
             eq(f.wb.sheet(0).list_pivot_fields(f.pivot)[f.region].custom_name, None)
-            f.wb.sheet(0).set_pivot_field_custom_name(f.pivot, f.region, "Region")
-            f.wb.sheet(0).set_pivot_field_custom_name(f.pivot, f.region, "")
+            f.wb.sheet(0).update_pivot_field(f.pivot, f.region, custom_name="Region")
+            f.wb.sheet(0).update_pivot_field(f.pivot, f.region, custom_name="")
             eq(f.wb.sheet(0).list_pivot_fields(f.pivot)[f.region].custom_name, None)
 
         def project(t: Any, f: _PivotFixture, r: None) -> None:
@@ -535,18 +529,15 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 lambda f: f.wb.sheet(0).set_pivot_options(
                     f.pivot,
-                    replace(
-                        f.wb.sheet(0).get_pivot_options(f.pivot),
-                        show_error=True,
-                        error_caption="N/A",
-                        show_missing=True,
-                        missing_caption="-",
-                        indent=3,
-                        page_wrap=2,
-                        alt_text="Title",
-                        alt_text_summary="",
-                        grand_total_caption="Sum",
-                    ),
+                    show_error=True,
+                    error_caption="N/A",
+                    show_missing=True,
+                    missing_caption="-",
+                    indent=3,
+                    page_wrap=2,
+                    alt_text="Title",
+                    alt_text_summary="",
+                    grand_total_caption="Sum",
                 ),
                 None,
                 options_set,
@@ -555,12 +546,9 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 lambda f: f.wb.set_pivot_cache_options(
                     f.cache,
-                    replace(
-                        f.wb.get_pivot_cache_options(f.cache),
-                        save_data=False,
-                        missing_items_limit=32500,
-                        refresh_on_load=True,
-                    ),
+                    save_data=False,
+                    missing_items_limit=32500,
+                    refresh_on_load=True,
                 ),
                 None,
                 cache_options_set,
@@ -607,21 +595,21 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 calc_item_remove,
             ),
-            "set_pivot_field_custom_name": (
+            "update_pivot_field#custom_name": (
                 None,
-                lambda f: f.wb.sheet(0).set_pivot_field_custom_name(f.pivot, f.region, "Area"),
+                lambda f: f.wb.sheet(0).update_pivot_field(f.pivot, f.region, custom_name="Area"),
                 None,
                 custom_name,
             ),
-            "set_pivot_field_show_all": (
+            "update_pivot_field#show_all": (
                 None,
-                lambda f: f.wb.sheet(0).set_pivot_field_show_all(f.pivot, f.region, True),
+                lambda f: f.wb.sheet(0).update_pivot_field(f.pivot, f.region, show_all=True),
                 None,
                 lambda t, f, r: (
                     eq(f.wb.sheet(0).list_pivot_fields(f.pivot)[f.region].show_all, True),
                     eq(f.wb.sheet(0).list_pivot_fields(f.pivot)[f.product].show_all, False),
-                    rejects(lambda: f.wb.sheet(0).set_pivot_field_show_all(f.pivot, 99, True), IDX),
-                    type_rejected(lambda: f.wb.sheet(0).set_pivot_field_show_all(f.pivot, "0", False)),
+                    rejects(lambda: f.wb.sheet(0).update_pivot_field(f.pivot, 99, show_all=True), IDX),
+                    type_rejected(lambda: f.wb.sheet(0).update_pivot_field(f.pivot, "0", show_all=False)),
                     eq(f.wb.sheet(0).list_pivot_fields(f.pivot)[f.region].show_all, True),
                 ),
             ),
@@ -654,39 +642,39 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 cache_field_clear,
             ),
-            "add_pivot_cache_field_shared_item_number": (
+            "add_pivot_cache_field_shared_item#number": (
                 None,
-                lambda f: f.wb.add_pivot_cache_field_shared_item_number(f.cache, 0, 42.5),
+                lambda f: f.wb.add_pivot_cache_field_shared_item(f.cache, 0, 42.5),
                 _point_at_new_item,
                 grid_is(["行ラベル|Sum of Amount", "42.5|10", "East|5", "West|37", "総計|52"]),
             ),
-            "add_pivot_cache_field_shared_item_date": (
+            "add_pivot_cache_field_shared_item#date": (
                 None,
-                lambda f: f.wb.add_pivot_cache_field_shared_item_date(f.cache, 0, 45292.0),
+                lambda f: f.wb.add_pivot_cache_field_shared_item(f.cache, 0, 45292.0, date=True),
                 None,
-                lambda t, f, r: eq(f.wb.is_pivot_cache_field_shared_item_date(f.cache, 0, 2), True),
+                lambda t, f, r: eq(f.wb.list_pivot_cache_field_shared_items(f.cache, 0)[2].is_date, True),
             ),
-            "add_pivot_cache_field_shared_item_text": (
+            "add_pivot_cache_field_shared_item#text": (
                 None,
-                lambda f: f.wb.add_pivot_cache_field_shared_item_text(f.cache, 0, "North"),
+                lambda f: f.wb.add_pivot_cache_field_shared_item(f.cache, 0, "North"),
                 _point_at_new_item,
                 grid_is(["行ラベル|Sum of Amount", "East|5", "North|10", "West|37", "総計|52"]),
             ),
-            "add_pivot_cache_field_shared_item_bool": (
+            "add_pivot_cache_field_shared_item#bool": (
                 None,
-                lambda f: f.wb.add_pivot_cache_field_shared_item_bool(f.cache, 0, value=True),
+                lambda f: f.wb.add_pivot_cache_field_shared_item(f.cache, 0, True),
                 _point_at_new_item,
                 grid_is(["行ラベル|Sum of Amount", "East|5", "West|37", "TRUE|10", "総計|52"]),
             ),
-            "add_pivot_cache_field_shared_item_blank": (
+            "add_pivot_cache_field_shared_item#blank": (
                 None,
-                lambda f: f.wb.add_pivot_cache_field_shared_item_blank(f.cache, 0),
+                lambda f: f.wb.add_pivot_cache_field_shared_item(f.cache, 0, None),
                 _point_at_new_item,
                 grid_is(["行ラベル|Sum of Amount", "East|5", "West|37", "(空白)|10", "総計|52"]),
             ),
-            "add_pivot_cache_field_shared_item_error": (
+            "add_pivot_cache_field_shared_item#error": (
                 None,
-                lambda f: f.wb.add_pivot_cache_field_shared_item_error(f.cache, 0, 6),
+                lambda f: f.wb.add_pivot_cache_field_shared_item(f.cache, 0, ExcelError(ErrorCode(6))),
                 _point_at_new_item,
                 grid_is(["行ラベル|Sum of Amount", "East|5", "West|37", "#N/A|10", "総計|52"]),
             ),
@@ -704,43 +692,48 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 grid_is(["行ラベル|Sum of Amount", "総計|"]),
             ),
-            "set_pivot_cache_record_number": (
+            "set_pivot_cache_record_value#number": (
                 None,
-                lambda f: f.wb.set_pivot_cache_record_number(f.cache, 0, 2, 1000),
+                lambda f: f.wb.set_pivot_cache_record_value(f.cache, 0, 2, 1000),
                 None,
                 grid_is(["行ラベル|Sum of Amount", "East|1005", "West|37", "総計|1042"]),
             ),
-            "set_pivot_cache_record_date": (
+            "set_pivot_cache_record_value#date": (
                 None,
-                lambda f: f.wb.set_pivot_cache_record_date(f.cache, 0, 2, 45292.0),
+                lambda f: f.wb.set_pivot_cache_record_value(f.cache, 0, 2, 45292.0, date=True),
                 None,
                 lambda t, f, r: eq(r, None),
             ),
-            "set_pivot_cache_record_text": (
+            "set_pivot_cache_record_value#text": (
                 None,
-                lambda f: f.wb.set_pivot_cache_record_text(f.cache, 0, 0, "West"),
+                lambda f: f.wb.set_pivot_cache_record_value(f.cache, 0, 0, "West"),
                 None,
                 grid_is(["行ラベル|Sum of Amount", "East|5", "West|47", "総計|52"]),
             ),
-            "set_pivot_cache_record_bool": (
+            "set_pivot_cache_record_value#bool": (
                 None,
-                lambda f: f.wb.set_pivot_cache_record_bool(f.cache, 0, 2, True),
-                None,
-                grid_is(["行ラベル|Sum of Amount", "East|5", "West|37", "総計|42"]),
-            ),
-            "set_pivot_cache_record_blank": (
-                None,
-                lambda f: f.wb.set_pivot_cache_record_blank(f.cache, 0, 2),
+                lambda f: f.wb.set_pivot_cache_record_value(f.cache, 0, 2, True),
                 None,
                 grid_is(["行ラベル|Sum of Amount", "East|5", "West|37", "総計|42"]),
             ),
-            "set_pivot_cache_record_error": (
+            "set_pivot_cache_record_value#blank": (
                 None,
-                lambda f: f.wb.set_pivot_cache_record_error(f.cache, 0, 2, 1),
+                lambda f: f.wb.set_pivot_cache_record_value(f.cache, 0, 2, None),
+                None,
+                grid_is(["行ラベル|Sum of Amount", "East|5", "West|37", "総計|42"]),
+            ),
+            "set_pivot_cache_record_value#error": (
+                None,
+                lambda f: f.wb.set_pivot_cache_record_value(f.cache, 0, 2, ExcelError(ErrorCode(1))),
                 None,
                 grid_is(["行ラベル|Sum of Amount", "East|#1", "West|37", "総計|#1"]),
             ),
-            "add_pivot": (None, lambda f: f.wb.sheet(0).add_pivot("Pivot2", f.cache, 20, 1), None, pivot_create),
+            "add_pivot": (
+                None,
+                lambda f: f.wb.sheet(0).add_pivot(name="Pivot2", cache_id=f.cache, anchor_row=20, anchor_col=1),
+                None,
+                pivot_create,
+            ),
             "remove_pivot": (None, lambda f: f.wb.sheet(0).remove_pivot(f.pivot), None, pivot_remove),
             "set_pivot_name": (None, lambda f: f.wb.sheet(0).set_pivot_name(f.pivot, "Renamed"), None, set_name),
             "set_pivot_anchor": (
@@ -761,12 +754,12 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 lambda f: f.wb.sheet(0).set_pivot_style_info(
                     f.pivot,
-                    PivotStyleInput(
-                        "PivotStyleMedium9",
-                        show_col_headers=True,
-                        show_row_stripes=True,
-                        show_last_column=True,
-                    ),
+                    name="PivotStyleMedium9",
+                    show_row_headers=False,
+                    show_col_headers=True,
+                    show_row_stripes=True,
+                    show_col_stripes=False,
+                    show_last_column=True,
                 ),
                 None,
                 set_style_info,
@@ -795,16 +788,16 @@ class PivotMutatorTableTests(unittest.TestCase):
             "set_pivot_field_sort": (
                 # East now outsums West, so sorting ascending by the data
                 # field differs from both label orders.
-                lambda f: f.wb.set_pivot_cache_record_number(f.cache, 0, 2, 40),
+                lambda f: f.wb.set_pivot_cache_record_value(f.cache, 0, 2, 40),
                 lambda f: f.wb.sheet(0).set_pivot_field_sort(
-                    f.pivot, f.region, PivotSortOrder.ASCENDING, "Sum of Amount"
+                    f.pivot, f.region, PivotSortOrder.ASCENDING, by_field="Sum of Amount"
                 ),
                 None,
                 grid_is(["行ラベル|Sum of Amount", "West|37", "East|45", "総計|82"]),
             ),
-            "set_pivot_field_subtotal_top": (
+            "update_pivot_field#subtotal_top": (
                 _two_levels,
-                lambda f: f.wb.sheet(0).set_pivot_field_subtotal_top(f.pivot, f.region, False),
+                lambda f: f.wb.sheet(0).update_pivot_field(f.pivot, f.region, subtotal_top=False),
                 None,
                 grid_is(
                     [
@@ -839,9 +832,9 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 grid_is(_BASE_GRID),
             ),
-            "set_pivot_field_item_visible": (
+            "update_pivot_item#visible": (
                 None,
-                lambda f: f.wb.sheet(0).set_pivot_field_item_visible(f.pivot, f.region, 1, False),
+                lambda f: f.wb.sheet(0).update_pivot_item(f.pivot, f.region, 1, visible=False),
                 None,
                 grid_is(["行ラベル|Sum of Amount", "East|15", "総計|15"]),
             ),
@@ -882,9 +875,9 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 grid_is(["行ラベル|Sum of Amount", "45292|10", "45323|30", "45658|5", "45689|7", "総計|52"]),
             ),
-            "set_pivot_field_number_format": (
+            "update_pivot_field#number_format": (
                 None,
-                lambda f: f.wb.sheet(0).set_pivot_field_number_format(f.pivot, f.amount, "4"),
+                lambda f: f.wb.sheet(0).update_pivot_field(f.pivot, f.amount, number_format="4"),
                 None,
                 number_format,
             ),
@@ -952,68 +945,68 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 grid_is(_WEST_ONLY),
             ),
-            "set_pivot_field_default_subtotal": (
+            "update_pivot_field#default_subtotal": (
                 None,
-                lambda f: f.wb.sheet(0).set_pivot_field_default_subtotal(f.pivot, f.region, False),
+                lambda f: f.wb.sheet(0).update_pivot_field(f.pivot, f.region, default_subtotal=False),
                 None,
                 lambda t, f, r: (
                     eq(f.wb.sheet(0).list_pivot_fields(f.pivot)[f.region].default_subtotal, False),
-                    rejects(lambda: f.wb.sheet(0).set_pivot_field_default_subtotal(f.pivot, 99, True), IDX),
+                    rejects(lambda: f.wb.sheet(0).update_pivot_field(f.pivot, 99, default_subtotal=True), IDX),
                 ),
             ),
-            "set_pivot_field_insert_blank_row": (
+            "update_pivot_field#insert_blank_row": (
                 None,
-                lambda f: f.wb.sheet(0).set_pivot_field_insert_blank_row(f.pivot, f.region, True),
+                lambda f: f.wb.sheet(0).update_pivot_field(f.pivot, f.region, insert_blank_row=True),
                 None,
                 lambda t, f, r: (
                     eq(f.wb.sheet(0).list_pivot_fields(f.pivot)[f.region].insert_blank_row, True),
-                    rejects(lambda: f.wb.sheet(0).set_pivot_field_insert_blank_row(f.pivot, 99, True), IDX),
+                    rejects(lambda: f.wb.sheet(0).update_pivot_field(f.pivot, 99, insert_blank_row=True), IDX),
                 ),
             ),
-            "set_pivot_field_fill_down_labels": (
+            "update_pivot_field#fill_down_labels": (
                 None,
-                lambda f: f.wb.sheet(0).set_pivot_field_fill_down_labels(f.pivot, f.region, True),
+                lambda f: f.wb.sheet(0).update_pivot_field(f.pivot, f.region, fill_down_labels=True),
                 None,
                 lambda t, f, r: (
                     eq(f.wb.sheet(0).list_pivot_fields(f.pivot)[f.region].fill_down_labels, True),
-                    rejects(lambda: f.wb.sheet(0).set_pivot_field_fill_down_labels(f.pivot, 99, True), IDX),
+                    rejects(lambda: f.wb.sheet(0).update_pivot_field(f.pivot, 99, fill_down_labels=True), IDX),
                 ),
             ),
             "set_pivot_field_show_detail": (
                 None,
-                lambda f: f.wb.sheet(0).set_pivot_field_show_detail(f.pivot, f.region, False),
+                lambda f: f.wb.sheet(0).set_pivot_field_show_detail(f.pivot, f.region, on=False),
                 None,
                 lambda t, f, r: (
                     eq(
                         [f.wb.sheet(0).get_pivot_field_item(f.pivot, f.region, i).show_detail for i in (0, 1)],
                         [False, False],
                     ),
-                    rejects(lambda: f.wb.sheet(0).set_pivot_field_show_detail(f.pivot, 99, False), IDX),
+                    rejects(lambda: f.wb.sheet(0).set_pivot_field_show_detail(f.pivot, 99, on=False), IDX),
                 ),
             ),
-            "set_pivot_field_item_show_detail": (
+            "update_pivot_item#show_detail": (
                 None,
-                lambda f: f.wb.sheet(0).set_pivot_field_item_show_detail(f.pivot, f.region, 1, False),
+                lambda f: f.wb.sheet(0).update_pivot_item(f.pivot, f.region, 1, show_detail=False),
                 None,
                 lambda t, f, r: (
                     eq(
                         [f.wb.sheet(0).get_pivot_field_item(f.pivot, f.region, i).show_detail for i in (0, 1)],
                         [True, False],
                     ),
-                    rejects(lambda: f.wb.sheet(0).set_pivot_field_item_show_detail(f.pivot, f.region, 9, False), IDX),
+                    rejects(lambda: f.wb.sheet(0).update_pivot_item(f.pivot, f.region, 9, show_detail=False), IDX),
                 ),
             ),
-            "set_pivot_field_item_caption": (
+            "update_pivot_item#caption": (
                 None,
-                lambda f: f.wb.sheet(0).set_pivot_field_item_caption(f.pivot, f.region, 0, "Eastern"),
+                lambda f: f.wb.sheet(0).update_pivot_item(f.pivot, f.region, 0, caption="Eastern"),
                 None,
                 lambda t, f, r: (
                     eq(f.wb.sheet(0).get_pivot_field_item(f.pivot, f.region, 0).caption, "Eastern"),
                     eq(f.wb.sheet(0).get_pivot_field_item(f.pivot, f.region, 1).caption, None),
-                    f.wb.sheet(0).set_pivot_field_item_caption(f.pivot, f.region, 0, None),
+                    f.wb.sheet(0).update_pivot_item(f.pivot, f.region, 0, caption=None),
                     eq(f.wb.sheet(0).get_pivot_field_item(f.pivot, f.region, 0).caption, None),
-                    rejects(lambda: f.wb.sheet(0).set_pivot_field_item_caption(f.pivot, f.region, 9, "x"), IDX),
-                    rejects(lambda: f.wb.sheet(0).set_pivot_field_item_caption(f.pivot, f.region, 0, "West")),
+                    rejects(lambda: f.wb.sheet(0).update_pivot_item(f.pivot, f.region, 9, caption="x"), IDX),
+                    rejects(lambda: f.wb.sheet(0).update_pivot_item(f.pivot, f.region, 0, caption="West")),
                 ),
             ),
             "show_pivot_details": (
@@ -1036,8 +1029,9 @@ class PivotMutatorTableTests(unittest.TestCase):
             if "pivot" in name and not name.startswith("_") and name not in _PIVOT_READERS
         }
         self.assertGreater(len(declared), 40)
-        self.assertEqual(sorted(declared - set(self._rows())), [], "pivot mutators without a row")
-        self.assertEqual(sorted(set(self._rows()) - declared), [], "rows for undeclared pivot mutators")
+        rows = {name.split("#")[0] for name in self._rows()}
+        self.assertEqual(sorted(declared - rows), [], "pivot mutators without a row")
+        self.assertEqual(sorted(rows - declared), [], "rows for undeclared pivot mutators")
 
     def test_manual_sort_order_keeps_item_order(self) -> None:
         with Workbook.create_default() as wb:
@@ -1052,7 +1046,7 @@ class PivotMutatorTableTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.sheet(0).set_pivot_field_sort(f.pivot, f.region, 3)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_pivot_field_sort(f.pivot, f.region, PivotSortOrder.MANUAL, "Sum of Amount")
+                wb.sheet(0).set_pivot_field_sort(f.pivot, f.region, PivotSortOrder.MANUAL, by_field="Sum of Amount")
 
     def test_pivot_mutators_forward_their_arguments(self) -> None:
         with Workbook.create_default() as wb:
@@ -1085,7 +1079,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
         eq(region.group_base_index, None)
         eq((region.insert_blank_row, region.fill_down_labels), (False, False))
 
-        eq(wb.sheet(0).get_pivot_field_item_count(pivot, f.region), 2)
+        eq(len(wb.sheet(0).list_pivot_field_items(pivot, f.region)), 2)
         for index, label in enumerate(("East", "West")):
             item = wb.sheet(0).get_pivot_field_item(pivot, f.region, index)
             eq((item.name, item.cache_index, item.visible), (label, index, True))
@@ -1104,8 +1098,8 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             self._assert_fixture_definition(wb, f, f.pivot)
 
             wb.sheet(0).set_pivot_grand_totals(f.pivot, rows=False, columns=True)
-            wb.sheet(0).set_pivot_field_sort(f.pivot, f.region, PivotSortOrder.DESCENDING, "Sum of Amount")
-            wb.sheet(0).set_pivot_field_item_visible(f.pivot, f.region, 1, False)
+            wb.sheet(0).set_pivot_field_sort(f.pivot, f.region, PivotSortOrder.DESCENDING, by_field="Sum of Amount")
+            wb.sheet(0).update_pivot_item(f.pivot, f.region, 1, visible=False)
             wb.sheet(0).set_pivot_field_date_group(f.pivot, f.date, PivotDatePeriod.YEARS, PivotCalendar.GREGORIAN)
             self.assertEqual(wb.sheet(0).get_pivot_grand_totals(f.pivot), PivotGrandTotals(rows=False, columns=True))
             region = wb.sheet(0).list_pivot_fields(f.pivot)[f.region]
@@ -1151,10 +1145,10 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
                 ),
                 (True, True, False, False, True),
             )
-            wb.sheet(0).set_pivot_style_info(f.pivot, PivotStyleInput("PivotStyleDark3", show_row_stripes=True))
+            wb.sheet(0).set_pivot_style_info(f.pivot, name="PivotStyleDark3", show_row_stripes=True)
             data = wb.save()
-            # An omitted name keeps the element without a style name.
-            wb.sheet(0).set_pivot_style_info(f.pivot, PivotStyleInput())
+            # A None name keeps the element without a style name.
+            wb.sheet(0).set_pivot_style_info(f.pivot, name=None)
             bare = wb.sheet(0).get_pivot_style_info(f.pivot)
             self.assertIsNotNone(bare)
             self.assertIsNone(bare.name)
@@ -1163,21 +1157,21 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             self.assertEqual(style.name, "PivotStyleDark3")
             self.assertEqual(
                 (style.show_row_headers, style.show_row_stripes, style.show_last_column),
-                (False, True, False),
+                (True, True, True),
             )
         with Workbook.create_default() as wb:
             f = _PivotFixture(wb)
             with self.assertRaises(FormulonError):
                 wb.sheet(0).get_pivot_style_info(9)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_pivot_style_info(9, PivotStyleInput("X"))
+                wb.sheet(0).set_pivot_style_info(9, name="X")
 
     def test_reads_back_a_saved_and_reloaded_pivot(self) -> None:
         with Workbook.create_default() as wb:
             f = _PivotFixture(wb)
             data = wb.save()
         with Workbook.load(data) as loaded:
-            self.assertEqual(loaded.sheet(0).get_pivot_count(), 1)
+            self.assertEqual(len(loaded.sheet(0).list_pivots()), 1)
             self.assertEqual(loaded.sheet(0).get_pivot_cache_id(0), f.cache)
             self._assert_fixture_definition(loaded, f, 0)
 
@@ -1219,7 +1213,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
                 (lambda: wb.sheet(9).get_pivot_grand_totals(f.pivot), bad_sheet),
                 (lambda: wb.sheet(0).get_pivot_row_field_order(9), invalid),
                 (lambda: wb.sheet(0).get_pivot_column_field_order(9), invalid),
-                (lambda: wb.sheet(0).get_pivot_field_item_count(f.pivot, 99), invalid),
+                (lambda: len(wb.sheet(0).list_pivot_field_items(f.pivot, 99)), invalid),
                 (lambda: wb.sheet(0).get_pivot_field_item(f.pivot, f.region, 99), invalid),
             ):
                 with self.assertRaises(FormulonError) as caught:
@@ -1280,7 +1274,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             f = _PivotFixture(wb)
             self.assertFalse(wb.sheet(0).is_pivot_projection_pending(f.pivot))
-            wb.add_pivot_cache_field_shared_item_text(f.cache, 0, "North")
+            wb.add_pivot_cache_field_shared_item(f.cache, 0, "North")
             self.assertTrue(wb.sheet(0).is_pivot_projection_pending(f.pivot))
             wb.sheet(0).project_pivot(f.pivot)
             self.assertFalse(wb.sheet(0).is_pivot_projection_pending(f.pivot))
@@ -1288,21 +1282,21 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
     def test_options_round_trip_through_save(self) -> None:
         with Workbook.create_default() as wb:
             f = _PivotFixture(wb)
-            options = replace(
-                wb.sheet(0).get_pivot_options(f.pivot),
-                show_error=True,
-                error_caption="N/A",
-                grid_drop_zones=True,
-                indent=2,
-                alt_text="Sales",
-                grand_total_caption="All",
-            )
-            wb.sheet(0).set_pivot_options(f.pivot, options)
+            changes = {
+                "show_error": True,
+                "error_caption": "N/A",
+                "grid_drop_zones": True,
+                "indent": 2,
+                "alt_text": "Sales",
+                "grand_total_caption": "All",
+            }
+            options = replace(wb.sheet(0).get_pivot_options(f.pivot), **changes)
+            wb.sheet(0).set_pivot_options(f.pivot, **changes)
             self.assertEqual(wb.sheet(0).get_pivot_options(f.pivot), options)
-            # Members left out keep their value; "" clears a string option.
-            wb.sheet(0).set_pivot_options(f.pivot, PivotOptions(indent=5, error_caption=""))
+            # Members left out keep their value; "" clears a string option, which then reads None.
+            wb.sheet(0).set_pivot_options(f.pivot, indent=5, error_caption="")
             kept = wb.sheet(0).get_pivot_options(f.pivot)
-            self.assertEqual((kept.indent, kept.error_caption, kept.alt_text), (5, "", "Sales"))
+            self.assertEqual((kept.indent, kept.error_caption, kept.alt_text), (5, None, "Sales"))
             self.assertEqual((kept.show_error, kept.grid_drop_zones, kept.grand_total_caption), (True, True, "All"))
             options = kept
             data = wb.save()
@@ -1348,8 +1342,8 @@ class PivotFieldBindingTests(unittest.TestCase):
         for sales in (100, 200):
             rec = wb.add_pivot_cache_record(cache)
             for col, value in enumerate((0, 0, sales, 1)):
-                wb.set_pivot_cache_record_number(cache, rec, col, value)
-        return wb.sheet(0).add_pivot("PT", cache, 0, 6)
+                wb.set_pivot_cache_record_value(cache, rec, col, value)
+        return wb.sheet(0).add_pivot(name="PT", cache_id=cache, anchor_row=0, anchor_col=6)
 
     def test_field_add_binds_to_the_cache_column_by_name(self) -> None:
         with Workbook.create_default() as wb:

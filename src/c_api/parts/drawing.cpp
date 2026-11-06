@@ -3,6 +3,7 @@
 // objects, reading and inserting pictures, and moving, reordering,
 // capturing, restoring and removing pictures and charts.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -30,6 +31,7 @@ using formulon::c_api::parts::edit_as_from_c;
 using formulon::c_api::parts::fill_anchor;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -45,10 +47,9 @@ fm_image_info_t to_fm(const formulon::ImageInfo& info) {
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_get_image_info(const fm_workbook_t* wb, const uint8_t* bytes, size_t len,
-                                                  fm_image_info_t* out) {
+extern "C" fm_status_t fm_get_image_info(const uint8_t* bytes, size_t len, fm_image_info_t* out) {
   clear_last_error();
-  if (wb == nullptr || bytes == nullptr || out == nullptr) {
+  if (bytes == nullptr || out == nullptr) {
     return null_argument();
   }
   auto info = formulon::probe_image(bytes, len);
@@ -212,6 +213,22 @@ extern "C" fm_status_t fm_sheet_remove_drawing(fm_workbook_t* wb, size_t sheet_i
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
+  }
+  // A drawing that cannot be edited keeps its own status ahead of the lookup.
+  if (auto path = formulon::editable_drawing_path(wb->workbook(), sheet_index); !path) {
+    return set_last_error(path.error());
+  }
+  auto objects = formulon::list_drawing_objects(wb->workbook(), sheet_index);
+  if (!objects) {
+    return set_last_error(objects.error());
+  }
+  const std::vector<formulon::DrawingObject>& list = objects.value();
+  const bool present = std::any_of(list.begin(), list.end(), [object_id](const formulon::DrawingObject& obj) {
+    return obj.object_id == object_id &&
+           (obj.kind == formulon::DrawingObjectKind::kPicture || obj.kind == formulon::DrawingObjectKind::kChart);
+  });
+  if (!present) {
+    return not_found("no picture or chart with that id", "object_id=" + std::to_string(object_id));
   }
   return finish_status(formulon::remove_drawing(wb->workbook(), sheet_index, object_id));
 }

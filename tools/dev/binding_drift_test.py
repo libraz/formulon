@@ -1092,6 +1092,34 @@ class DeclarationEntryShapeTest(unittest.TestCase):
         )
         self.assertIn("getZoom", "\n".join(problems))
 
+    def test_facade_built_ops_need_no_registration(self) -> None:
+        ledger = (
+            self.LEDGER
+            + "  binding.get_values: { kind: op, scope: sheet, js: getValues, surfaces: [wasm], facade: handwritten }\n"
+            "  fonts.list: { kind: list, scope: workbook, from: [table.get_count, table.get], js: listFonts,"
+            " surfaces: [wasm] }\n"
+            "  sheet.add: { kind: op, scope: workbook, c: fm_workbook_add_sheet, js: addSheet, surfaces: [c, wasm],"
+            " facade: handwritten }\n"
+        )
+        sheet = "export interface Sheet {\n  getValues(): Value[][];\n}\n"
+        members = "  listFonts(): readonly Font[];\n  addSheet(name: string): Sheet;\n"
+        wasm_dts = self.WORKBOOK % members + sheet + self.ENTRY % ""
+        text = "\n".join(self.run_check(declaration_checks.check_dts_wasm, wasm_dts=wasm_dts, ledger=ledger))
+        self.assertNotIn("getValues", text)
+        self.assertNotIn("listFonts", text)
+        self.assertIn("addSheet", text)
+
+    def test_guarded_module_functions_count_as_free_functions(self) -> None:
+        node_class = (
+            self.NODE_CLASS + 'SetGuardedModuleFunction<&CompareText, 0x4ULL, 0x0ULL>(env, exports, "compareText");\n'
+        )
+        node_dts = self.WORKBOOK % "  getMemoryUsage(): number;\n"
+        node_dts += self.ENTRY % "  compareText(a: string, b: string): number;\n"
+        problems = self.run_check(declaration_checks.check_dts_node, node_class=node_class, node_dts=node_dts)
+        self.assertEqual(problems, [])
+        problems = self.run_check(declaration_checks.check_dts_node, node_dts=node_dts)
+        self.assertIn("compareText", "\n".join(problems))
+
     FACADE_COMMON = (
         "export const FORMULON_MEMBERS = Object.freeze(['Workbook', 'mergeFunctionMetadata']);\n"
         "const RUNTIME_MEMBERS = new Set(['evalFormula']);\n"
@@ -1164,6 +1192,7 @@ class DeclarationEntryShapeTest(unittest.TestCase):
                 patch.object(declaration_checks, "REPO_ROOT", dts.parent),
                 patch.object(declaration_checks, "_DTS_ENUM_SOURCES", {}),
                 patch.object(declaration_checks, "_check_js_constant_tables", lambda _text: []),
+                patch.object(declaration_checks, "check_string_tables", lambda *_args: []),
             ):
                 return declaration_checks.check_dts_enums()
 
@@ -1517,7 +1546,8 @@ class FacadeAddressTablesTest(unittest.TestCase):
     def test_regions_carry_the_tables(self) -> None:
         js = self.gen.address_tables("js", self.ledger)
         self.assertIn(
-            "const CELL_ARGS = Object.freeze({\n  evaluateCf: [[0, 1], [2, 3]],\n  setValue: [[0, 1]],\n});\n", js
+            "const CELL_ARGS = Object.freeze({\n  evaluateCf: [\n    [0, 1],\n    [2, 3],\n  ],\n  setValue: [[0, 1]],\n});\n",
+            js,
         )
         self.assertIn("const RECT_ARGS = Object.freeze({\n  addMerge: [0],\n});\n", js)
         py = self.gen.address_tables("py", self.ledger)

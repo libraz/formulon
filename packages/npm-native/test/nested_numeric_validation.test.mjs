@@ -19,35 +19,35 @@ test('nested style integers reject narrowing before addXf mutates the workbook',
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const before = wb.getCellXfCount();
+    const before = wb.listCellXfs().length;
     assert.throws(() => wb.addCellXf({ horizontalAlign: 256 }), RangeError);
-    assert.equal(wb.getCellXfCount(), before);
+    assert.equal(wb.listCellXfs().length, before);
 
     assert.throws(() => wb.addCellXf({ numFmtId: 65536 }), RangeError);
-    assert.equal(wb.getCellXfCount(), before);
+    assert.equal(wb.listCellXfs().length, before);
 
     assert.throws(() => wb.addCellXf({ fontIndex: 2 ** 32 }), RangeError);
-    assert.equal(wb.getCellXfCount(), before);
+    assert.equal(wb.listCellXfs().length, before);
 
-    const beforeFonts = wb.getFontCount();
+    const beforeFonts = wb.listFonts().length;
     assert.throws(() => wb.addFont({ underline: 256 }), RangeError);
-    assert.equal(wb.getFontCount(), beforeFonts);
+    assert.equal(wb.listFonts().length, beforeFonts);
 
-    const beforeFills = wb.getFillCount();
+    const beforeFills = wb.listFills().length;
     assert.throws(() => wb.addFill({ pattern: 256 }), RangeError);
-    assert.equal(wb.getFillCount(), beforeFills);
+    assert.equal(wb.listFills().length, beforeFills);
 
-    const beforeBorders = wb.getBorderCount();
+    const beforeBorders = wb.listBorders().length;
     assert.throws(() => wb.addBorder({ left: { style: 256 } }), RangeError);
-    assert.equal(wb.getBorderCount(), beforeBorders);
+    assert.equal(wb.listBorders().length, beforeBorders);
 
     for (const value of [Number.NaN, Number.POSITIVE_INFINITY, 1.5, -1]) {
       assert.throws(() => wb.addCellXf({ horizontalAlign: value }), RangeError, `horizontalAlign=${String(value)}`);
-      assert.equal(wb.getCellXfCount(), before);
+      assert.equal(wb.listCellXfs().length, before);
     }
 
     wb.addCellXf({ horizontalAlign: null, verticalAlign: undefined });
-    assert.equal(wb.getCellXfCount(), before);
+    assert.equal(wb.listCellXfs().length, before);
   } finally {
     wb.dispose();
   }
@@ -57,9 +57,9 @@ test('nested conditional-format integers reject narrowing before addConditionalF
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const beforeDxfs = wb.getDxfCount();
+    const beforeDxfs = wb.listDxfs().length;
     assert.throws(() => wb.addDxf({ numFmt: { numFmtId: 65536 } }), RangeError);
-    assert.equal(wb.getDxfCount(), beforeDxfs);
+    assert.equal(wb.listDxfs().length, beforeDxfs);
 
     assert.equal(wb.sheet(0).listCfRules().length, 0);
     assert.throws(() => wb.sheet(0).addCfRule(dataBarRule({ minLengthPct: 256 })), RangeError);
@@ -88,12 +88,12 @@ test('nested style and conditional-format fields require primitive numeric value
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const beforeXfs = wb.getCellXfCount();
+    const beforeXfs = wb.listCellXfs().length;
     assert.throws(() => wb.addCellXf({ horizontalAlign: '1' }), TypeError);
-    assert.equal(wb.getCellXfCount(), beforeXfs);
+    assert.equal(wb.listCellXfs().length, beforeXfs);
 
     assert.throws(() => wb.addCellXf({ horizontalAlign: Symbol('numeric') }), TypeError);
-    assert.equal(wb.getCellXfCount(), beforeXfs);
+    assert.equal(wb.listCellXfs().length, beforeXfs);
 
     assert.throws(() => wb.sheet(0).addCfRule(dataBarRule({ minLengthPct: '10' })), TypeError);
     assert.equal(wb.sheet(0).listCfRules().length, 0);
@@ -109,7 +109,7 @@ test('nested readers preserve the original getter error and abort the whole muta
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const beforeXfs = wb.getCellXfCount();
+    const beforeXfs = wb.listCellXfs().length;
     const style = {};
     Object.defineProperty(style, 'horizontalAlign', {
       enumerable: true,
@@ -118,7 +118,7 @@ test('nested readers preserve the original getter error and abort the whole muta
       },
     });
     assert.throws(() => wb.addCellXf(style), /style getter/);
-    assert.equal(wb.getCellXfCount(), beforeXfs);
+    assert.equal(wb.listCellXfs().length, beforeXfs);
 
     const rule = dataBarRule();
     Object.defineProperty(rule.dataBar, 'minLengthPct', {
@@ -172,11 +172,11 @@ test('style and conditional-format readers snapshot stateful fields once', async
         throw new Error('late font getter');
       },
     });
-    const beforeFonts = wb.getFontCount();
+    const beforeFonts = wb.listFonts().length;
     for (let i = 0; i < 8; i += 1) {
       assert.throws(() => wb.addFont(lateFont), /late font getter/);
     }
-    assert.equal(wb.getFontCount(), beforeFonts);
+    assert.equal(wb.listFonts().length, beforeFonts);
     assert.equal(wb.getMemoryUsage(), beforeMemory);
   } finally {
     wb.dispose();

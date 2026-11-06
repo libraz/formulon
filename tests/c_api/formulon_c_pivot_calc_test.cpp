@@ -294,7 +294,7 @@ TEST(FormulonCApiPivotCalc, CalculatedFieldGridMatchesExcel) {
 
   const char* formula = nullptr;
   ASSERT_EQ(fm_workbook_get_pivot_cache_field_formula(wb.handle, cache, price, &formula), 0);
-  EXPECT_STREQ(formula, "Amt/Qty");
+  EXPECT_STREQ(formula, "=Amt/Qty");
   ASSERT_EQ(fm_workbook_get_pivot_cache_field_formula(wb.handle, cache, kAmt, &formula), 0);
   EXPECT_STREQ(formula, "");
 }
@@ -447,7 +447,7 @@ TEST(FormulonCApiPivotCalc, CalculatedFieldSetFormulaReevaluates) {
       << fm_get_last_error_message();
   const char* formula = nullptr;
   ASSERT_EQ(fm_workbook_get_pivot_cache_field_formula(wb.handle, cache, price, &formula), 0);
-  EXPECT_STREQ(formula, "Amt*2");
+  EXPECT_STREQ(formula, "=Amt*2");
   ASSERT_EQ(fm_sheet_project_pivot(wb.handle, 0U, kPivot), 0) << fm_get_last_error_message();
   ExpectNumber(wb.handle, kGrandTotal, SumOf("Price"), 1260.0);
 }
@@ -533,7 +533,7 @@ TEST(FormulonCApiPivotCalc, CalculatedItemGridAndSavedStringsMatchExcel) {
   ASSERT_EQ(fm_workbook_get_pivot_cache_calculated_item(wb.handle, cache, 0U, &item), 0);
   EXPECT_EQ(item.field_index, kRegion);
   EXPECT_STREQ(item.name, "X");
-  EXPECT_STREQ(item.formula, "Region[North]+Region[South]");
+  EXPECT_STREQ(item.formula, "=Region[North]+Region[South]");
   EXPECT_EQ(item.scoped, 0);
 
   const std::string cache_xml = SavedPart(wb.handle, "xl/pivotCache/pivotCacheDefinition1.xml");
@@ -559,7 +559,7 @@ TEST(FormulonCApiPivotCalc, ExcelSavedCalculatedItemLoadsWithTheSameGrid) {
   fm_pivot_calculated_item_t item{};
   ASSERT_EQ(fm_workbook_get_pivot_cache_calculated_item(wb.handle, cache, 0U, &item), 0);
   EXPECT_STREQ(item.name, "X");
-  EXPECT_STREQ(item.formula, "Region[North]+Region[South]");
+  EXPECT_STREQ(item.formula, "=Region[North]+Region[South]");
 }
 
 TEST(FormulonCApiPivotCalc, AveragingFunctionsExcludeCalculatedItems) {
@@ -680,7 +680,7 @@ TEST(FormulonCApiPivotCalc, CalculatedItemFormulaAndRemoval) {
   fm_pivot_calculated_item_t item{};
   ASSERT_EQ(fm_workbook_get_pivot_cache_calculated_item(wb.handle, cache, 1U, &item), 0);
   // Stored as Excel stores it: a bare item name is qualified with its field.
-  EXPECT_STREQ(item.formula, "Region[X]*3");
+  EXPECT_STREQ(item.formula, "=Region[X]*3");
   ASSERT_EQ(fm_sheet_project_pivot(wb.handle, 0U, kPivot), 0) << fm_get_last_error_message();
   ExpectNumber(wb.handle, "Y", SumOf("Amt"), 1680.0);
 

@@ -167,8 +167,6 @@ TEST(FormulonCApiDrawing, EnumOrdinals) {
 }
 
 TEST(FormulonCApiDrawing, ProbeEachFormat) {
-  WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   struct Case {
     Bytes bytes;
     int32_t format;
@@ -180,8 +178,7 @@ TEST(FormulonCApiDrawing, ProbeEachFormat) {
                         {Bmp(9, 4), FM_IMAGE_FORMAT_BMP, 9, 4}};
   for (const Case& c : cases) {
     fm_image_info_t info{};
-    ASSERT_EQ(fm_workbook_get_image_info(wb.handle, c.bytes.data(), c.bytes.size(), &info), 0)
-        << fm_get_last_error_message();
+    ASSERT_EQ(fm_get_image_info(c.bytes.data(), c.bytes.size(), &info), 0) << fm_get_last_error_message();
     EXPECT_EQ(info.format, c.format);
     EXPECT_EQ(info.px_width, c.w);
     EXPECT_EQ(info.px_height, c.h);
@@ -189,14 +186,12 @@ TEST(FormulonCApiDrawing, ProbeEachFormat) {
 }
 
 TEST(FormulonCApiDrawing, ProbeRejectsUnknownBytesAndNulls) {
-  WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const Bytes junk = {'n', 'o', 't', ' ', 'a', 'n', ' ', 'i', 'm', 'a', 'g', 'e'};
   fm_image_info_t info{};
-  EXPECT_EQ(fm_workbook_get_image_info(wb.handle, junk.data(), junk.size(), &info), kIoImageUnsupported);
-  EXPECT_EQ(fm_workbook_get_image_info(wb.handle, junk.data(), 0, &info), kIoImageUnsupported);
-  EXPECT_EQ(fm_workbook_get_image_info(wb.handle, nullptr, 0, &info), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_get_image_info(wb.handle, junk.data(), junk.size(), nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_get_image_info(junk.data(), junk.size(), &info), kIoImageUnsupported);
+  EXPECT_EQ(fm_get_image_info(junk.data(), 0, &info), kIoImageUnsupported);
+  EXPECT_EQ(fm_get_image_info(nullptr, 0, &info), kBindingNullPointer);
+  EXPECT_EQ(fm_get_image_info(junk.data(), junk.size(), nullptr), kBindingNullPointer);
 }
 
 TEST(FormulonCApiDrawing, InsertListGetRemoveNextToChart) {
@@ -276,7 +271,7 @@ TEST(FormulonCApiDrawing, InsertListGetRemoveNextToChart) {
   ASSERT_EQ(fm_sheet_get_drawing_object_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 0U);
   EXPECT_EQ(formulon::io::ooxml::find_passthrough_part(wb.handle->workbook(), "xl/charts/chart1.xml"), nullptr);
-  EXPECT_EQ(fm_sheet_remove_drawing(wb.handle, 0, 2), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_remove_drawing(wb.handle, 0, 2), FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_sheet_get_drawing_object_at(wb.handle, 0, 1, &pic), FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 

@@ -125,7 +125,9 @@ TEST(FormulonCApiCfMutate, GetAtDisengagesADxfIdTheStylesTableCannotResolve) {
   EXPECT_EQ(out.dxf_id_engaged, 0);
 
   // The record still feeds straight back in, which is what the disengage
-  // buys: with the raw index it would be rejected.
+  // buys: with the raw index it would be rejected. It goes in under a fresh
+  // id beside the original, whose id it would otherwise repeat.
+  out.id = nullptr;
   std::size_t reinserted = 0;
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &out, &reinserted), 0) << fm_get_last_error_message();
 
@@ -303,7 +305,7 @@ TEST(FormulonCApiCfMutate, PreLoadedRulesEnumerableViaFlatIndex) {
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(out.type, 1U);
   ASSERT_NE(out.formula1, nullptr);
-  EXPECT_STREQ(out.formula1, "50");
+  EXPECT_STREQ(out.formula1, "=50");
 }
 
 TEST(FormulonCApiCfMutate, DuplicatePredicateRulesGetDistinctStableIndices) {

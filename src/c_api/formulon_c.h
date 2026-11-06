@@ -830,7 +830,8 @@ typedef struct {
  * resets that attribute. A formula that does not parse is rejected and
  * leaves the name list unchanged. One leading `=` is accepted and dropped:
  * the name stores the formula as files carry it, spelled as
- * `fm_sheet_set_formula` stores a cell formula. `fm_workbook_remove_defined_name`
+ * `fm_sheet_set_formula` stores a cell formula, and the getters read it back
+ * with the `=`. `fm_workbook_remove_defined_name`
  * removes a name.
  *
  * @return `FM_STATUS_OK` (0) on success;
@@ -1310,8 +1311,9 @@ FM_API fm_status_t fm_sheet_get_cell_show_phonetic(const fm_workbook_t* wb, size
  * source is otherwise opaque — for example, a cell whose formula
  * evaluates to a lambda via `=LET(...) -> LAMBDA(...)` rather than
  * carrying a literal `LAMBDA(...)` in the formula text. The rendering
- * is the full surface form `LAMBDA(p1,p2,body)` (no leading `=`),
- * suitable for re-parsing through `fm_sheet_set_formula`.
+ * is the full surface form `=LAMBDA(p1,p2,body)`, with the leading `=` every
+ * formula getter carries, suitable for re-parsing through
+ * `fm_sheet_set_formula`.
  * `*out_present` is `0` and `*out_text` `NULL` (still `FM_STATUS_OK` (0))
  * when the cell is absent or its cached value is not a lambda.
  *
@@ -1633,8 +1635,8 @@ FM_API fm_status_t fm_sheet_get_formula(const fm_workbook_t* wb, size_t sheet_in
  * @brief Reads the formula of the cell at `(row, col)` in R1C1 notation,
  *        relative to that cell.
  *
- * The text carries no leading `=`, and follows the A1 formatter's spacing
- * and case rules. Structured references take the display form
+ * The text carries the leading `=`, as `fm_sheet_get_formula` does, and
+ * follows the A1 formatter's spacing and case rules. Structured references take the display form
  * `fm_sheet_get_formula` gives them at this cell. Sheet and external qualifiers are quoted as a whole
  * (`'[Book.xlsx]My Sheet'!R1C1`) only when the path, book or sheet name needs
  * it; a 3-D external reference with no path stays unquoted. A cell that holds no formula yields `""`. `*out_formula` is
@@ -1786,7 +1788,7 @@ FM_API fm_status_t fm_workbook_get_defined_name_count(const fm_workbook_t* wb, s
 /** @brief One defined name as `fm_workbook_get_defined_name_at` reads it. */
 typedef struct {
   const char* name;       /* stored spelling; model-backed view */
-  const char* formula;    /* spelled as `fm_sheet_get_formula` spells formulas; see the getter for its lifetime */
+  const char* formula;    /* as `fm_sheet_get_formula` spells it, `=` included; see the getter for its lifetime */
   int32_t local_sheet_id; /* -1 = workbook scope, else the 0-based sheet index of the scope */
   const char* comment;    /* Name Manager comment, "" when none; model-backed view */
   int32_t hidden;         /* 0/1 */
@@ -1818,8 +1820,8 @@ FM_API fm_status_t fm_workbook_get_defined_name_at(const fm_workbook_t* wb, size
  *        `FM_STATUS_OK` (0)).
  *
  * `*out_name` is the stored spelling, a model-backed view.
- * `*out_formula` is a read-scratch-backed view when the formula is respelled
- * and a model-backed view otherwise, as for `fm_workbook_get_defined_name_at`'s `formula`;
+ * `*out_formula` is a read-scratch-backed view with the leading `=`, as for
+ * `fm_workbook_get_defined_name_at`'s `formula`;
  * `*out_comment` is a model-backed view, `""` when the name has no comment.
  * `*out_hidden` is 0/1.
  *
@@ -1932,16 +1934,15 @@ typedef struct {
  *                             `min`, `max`, `average`, `count`, `countNums`,
  *                             `stdDev`, `var` or `custom`.
  *   * `totals_row_label`    — the totals-row label, empty when absent.
- *   * `totals_row_formula`  — the `custom` function's formula without a
+ *   * `totals_row_formula`  — the `custom` function's formula with its
  *                             leading `=`, empty otherwise, spelled as
  *                             `fm_sheet_get_formula` spells formulas.
  *
  * `totals_row_formula` is spelled as at the column's totals cell, inside
- * the table (`SUBTOTAL(109,[Qty])`).
+ * the table (`=SUBTOTAL(109,[Qty])`).
  *
  * Views share the lifetime of `fm_workbook_get_table`'s; none is `NULL`. A
- * `totals_row_formula` respelled from the model's (see
- * `fm_workbook_get_file_name`) is read-scratch-backed instead.
+ * non-empty `totals_row_formula` is read-scratch-backed instead.
  */
 typedef struct {
   const char* name;
@@ -2033,7 +2034,8 @@ FM_API fm_status_t fm_workbook_rename_table_column(fm_workbook_t* wb, size_t tab
  *
  * `function` is an `ST_TotalsRowFunction` token (see `fm_table_column_info_t`);
  * `NULL` means `none`. `formula` is required for `custom` and ignored
- * otherwise; it is stored without a leading `=`, its structured references
+ * otherwise; it is taken with or without one leading `=` and stored without
+ * it (`fm_workbook_get_table_column` reads it back with it), its structured references
  * bound as `fm_sheet_set_formula` binds them at the column's totals cell
  * (`SUBTOTAL(109,[Qty])` stores `SUBTOTAL(109,Table[Qty])`). `label` may be
  * `NULL` or empty for none.
@@ -2514,11 +2516,13 @@ typedef enum {
  *     OOXML `showDropDown` XML attribute, which the reader/writer already
  *     translate.
  *   * `formula1` / `formula2` / `error_title` / `error_message` /
- *     `prompt_title` / `prompt_message` — model-backed views on getter
- *     results, and caller-owned input strings on the add path. On the input
- *     path (`fm_sheet_add_validation`) `NULL`
- *     means "absent" and is treated as the empty string. Getters always
- *     return non-NULL pointers (possibly pointing at an empty string).
+ *     `prompt_title` / `prompt_message` — views on getter results (see
+ *     `fm_sheet_get_validation` for their lifetime), and caller-owned input
+ *     strings on the add path. On the input path (`fm_sheet_add_validation`)
+ *     `NULL` means "absent" and is treated as the empty string. Getters
+ *     always return non-NULL pointers (possibly pointing at an empty string).
+ *     A non-empty formula reads back with a leading `=`; input takes it with
+ *     or without one.
  */
 typedef struct {
   const fm_cell_rect_t* ranges;
@@ -2550,16 +2554,16 @@ FM_API fm_status_t fm_sheet_get_validation_count(const fm_workbook_t* wb, size_t
 /**
  * @brief Reads the `validation_index`-th data-validation rule on `sheet_index` into `out`.
  *
- * Every pointer in `*out` (`ranges` and the six string fields) is a
- * model-backed view owned by the workbook handle. It remains valid until the
- * next mutation that touches the sheet's validation list (any of
+ * `ranges` and the four message strings in `*out` are model-backed views
+ * owned by the workbook handle. They remain valid until the next mutation
+ * that touches the sheet's validation list (any of
  * `fm_sheet_add_validation`, `fm_sheet_remove_validation`,
  * `fm_sheet_clear_validations`, or any reader / writer round-trip), or
  * until the handle is destroyed. Callers that need to retain the
  * payload across mutations must copy it. `formula1` / `formula2` are
- * spelled as `fm_sheet_get_formula` spells formulas; when that spelling
- * differs from the model's (see `fm_workbook_get_file_name`), both are
- * read-scratch-backed instead, valid until the next scratch-backed read.
+ * spelled as `fm_sheet_get_formula` spells formulas, leading `=` included
+ * (an absent formula is `""`); unless both are empty they are
+ * read-scratch-backed, valid until the next scratch-backed read.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -2882,6 +2886,30 @@ FM_API fm_status_t fm_workbook_remove_person(fm_workbook_t* wb, const char* id);
  *         a `kEval*` / `kGraph*` code on engine failure.
  */
 FM_API fm_status_t fm_workbook_recalc(fm_workbook_t* wb);
+
+/**
+ * @brief Writes `1` to `*out_has_dirty` when the workbook holds a change that
+ *        no full recalc (`fm_workbook_recalc` / `fm_workbook_recalc_parallel`)
+ *        has applied yet, else `0`.
+ *
+ * Cell reads report the values of the last full recalc, so a `1` means some
+ * of them may be stale. A change is a cell write, a defined-name edit that a
+ * formula reads, a row / column insert or delete, a sheet removal, or a
+ * profile change on a workbook with formulas; setting the current profile
+ * again is not. Volatile cells (`NOW()`, `RAND()`) do not count: they
+ * re-evaluate on every recalc, and a workbook holding only them reads `0`
+ * after a recalc. A freshly created workbook reads `0`. A loaded workbook
+ * that holds formulas reads `1` until its first full recalc: its cells carry
+ * the file's cached results, and that recalc re-evaluates every formula.
+ * `fm_sheet_recalc_viewport` leaves the cells it skipped pending, so the
+ * answer stays `1` after it; a failed full recalc keeps every pending change.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_GRAPH_RECALC_REENTRANT` (4005) when called from inside a recalc on
+ *         the same thread (an iterative-progress callback).
+ */
+FM_API fm_status_t fm_workbook_has_dirty_cells(const fm_workbook_t* wb, int32_t* out_has_dirty);
 
 /** @brief Per-call telemetry returned by `fm_workbook_recalc_parallel`. */
 typedef struct {
@@ -4211,7 +4239,8 @@ typedef struct {
    * block that carries whatever settings the legacy OOXML schema cannot
    * express. On input, pass `NULL` or `""` to auto-generate one; a
    * supplied id must be GUID-shaped, since that is the schema type of
-   * the attribute it becomes. On output, always a non-NULL view into
+   * the attribute it becomes, and must not match (ignoring the case of
+   * its hex digits) the id of a rule already on the sheet. On output, always a non-NULL view into
    * `fm_sheet_get_cf_rule`'s handle-owned storage (see that function's doc).
    *
    * Only rules that need such a block put their id in the saved file, so
@@ -4232,7 +4261,9 @@ typedef struct {
   const fm_cell_rect_t* ranges;
   uint32_t range_count;
 
-  /* Formula sources (Expression / CellIs / containsText-derived). */
+  /* Formula sources (Expression / CellIs / containsText-derived). On
+   * output each non-empty one carries a leading `=`; input takes it with or
+   * without one. */
   const char* formula1;
   const char* formula2;
   int32_t op_engaged; /* 0/1 (CellIs) */
@@ -4417,7 +4448,8 @@ FM_API fm_status_t fm_sheet_get_cf_rule(const fm_workbook_t* wb, size_t sheet_in
  * `rule.formula1` / `rule.formula2` and formula-typed `fm_cfvo_t` values
  * may carry one leading `=`, which is dropped: the rule stores them as
  * files carry them, spelled as `fm_sheet_set_formula` stores a cell
- * formula. For the text (7-10), blanks / errors (11-14) and
+ * formula. `fm_sheet_get_cf_rule` reads `formula1` / `formula2` back with
+ * the `=`, so a read record re-adds the same formulas. For the text (7-10), blanks / errors (11-14) and
  * `TimePeriod` (15) types, a `NULL` or empty `rule.formula1` is filled
  * with the formula Excel stores for the rule, relative to the top-left
  * corner of the bounding box of `rule.ranges` (e.g. `NOT(ISERROR(SEARCH("ab",B1)))`).
@@ -4430,7 +4462,8 @@ FM_API fm_status_t fm_sheet_get_cf_rule(const fm_workbook_t* wb, size_t sheet_in
  *           when any `rule.ranges` entry is inverted (`first` past
  *           `last`) or reaches outside the grid (`row >= 1048576`,
  *           `col >= 16384`) and therefore has no A1 spelling, when
- *           `rule.id` is non-empty but not GUID-shaped, when `rule.type`
+ *           `rule.id` is non-empty but not GUID-shaped or already names a
+ *           rule on the sheet, when `rule.type`
  *           / `rule.op` / `rule.time_period` / `rule.icon_set_name` /
  *           `rule.data_bar_axis_position` or any engaged `fm_cfvo_t`
  *           `type` names no declared enumerator, when `rule.dxf_id` is
@@ -5165,7 +5198,7 @@ typedef struct {
  *
  *   * `field_index` — the cache field the item belongs to.
  *   * `name`        — the item's name, a read-scratch-backed view.
- *   * `formula`     — its formula without a leading `=`, a
+ *   * `formula`     — its formula with its leading `=`, a
  *                     read-scratch-backed view.
  *   * `scoped`      — non-zero for an entry read from a file that applies the
  *                     formula only where the item meets items of other
@@ -5467,11 +5500,10 @@ FM_API fm_status_t fm_workbook_remove_pivot_cache_calculated_field(fm_workbook_t
                                                                    size_t field_index);
 
 /**
- * @brief Reads the formula of cache field `field_index`, without a leading `=`,
+ * @brief Reads the formula of cache field `field_index`, with its leading `=`,
  *        into `*out_formula`: an empty string when the field is not calculated.
- *        A model-backed view valid until the field's formula or the cache
- *        field list changes; a formula respelled from the model's (see
- *        `fm_workbook_get_file_name`) is read-scratch-backed instead.
+ *        A non-empty formula is a read-scratch-backed view, spelled as
+ *        `fm_sheet_get_formula` spells formulas (see `fm_workbook_get_file_name`).
  */
 FM_API fm_status_t fm_workbook_get_pivot_cache_field_formula(const fm_workbook_t* wb, uint32_t cache_id,
                                                              size_t field_index, const char** out_formula);
@@ -5483,7 +5515,8 @@ FM_API fm_status_t fm_workbook_get_pivot_cache_field_formula(const fm_workbook_t
  *        the item later in that order wins.
  *
  * The formula names items of the same field, as `North`, `'North East'`,
- * `Region[North]`, `Region[2]` (position) or `Region[-1]` (offset). A cell
+ * `Region[North]`, `Region[2]` (position) or `Region[-1]` (offset); a
+ * leading `=` is optional. A cell
  * shows the formula applied to the named items' values in the same context,
  * and the field's totals include the item. `*out_item_index` receives the new
  * item's position in solve order (`fm_workbook_get_pivot_cache_calculated_item`).
@@ -9439,15 +9472,14 @@ typedef struct {
 
 /**
  * @brief Sniffs the format and pixel size of PNG, JPEG, GIF or BMP bytes
- *        from the header alone, without touching the workbook.
+ *        from the header alone. Needs no workbook.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_IO_IMAGE_UNSUPPORTED` (5023) when the bytes are not a recognised
  *         image, the header is truncated, or a dimension is zero.
  */
-FM_API fm_status_t fm_workbook_get_image_info(const fm_workbook_t* wb, const uint8_t* bytes, size_t len,
-                                              fm_image_info_t* out);
+FM_API fm_status_t fm_get_image_info(const uint8_t* bytes, size_t len, fm_image_info_t* out);
 
 /**
  * @brief Number of anchored objects in the sheet's drawing; `0` for a sheet
@@ -9545,8 +9577,10 @@ FM_API fm_status_t fm_sheet_add_image(fm_workbook_t* wb, size_t sheet_index, con
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the sheet
- *         has no picture or chart with that id;
+ *         `FM_STATUS_NOT_FOUND` (6) when the sheet has no picture or chart with
+ *         that id;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the sheet is a chartsheet, whose
+ *         drawing is not editable;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or was retained from an `.xlsb` package.
  */
@@ -10798,8 +10832,7 @@ typedef struct {
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `out` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the sheet
- *         has no chart with that id;
+ *         `FM_STATUS_NOT_FOUND` (6) when the sheet has no chart with that id;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse;
  *         `FM_STATUS_IO_CHART_UNPARSEABLE` (5025) when the chart part does not parse.
  */
@@ -10815,7 +10848,8 @@ FM_API fm_status_t fm_sheet_get_chart_data(const fm_workbook_t* wb, size_t sheet
  * direction or header is auto), else over the chart's derived range (unset
  * ones as derived).
  *
- * @return as `fm_sheet_get_chart_data`, and
+ * @return as `fm_sheet_get_chart_data` (an absent id is
+ *         `FM_STATUS_NOT_FOUND` (6) whatever `overrides` holds), and
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `overrides` is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) for a `CLEAR` op or an out-of-domain value;
  *         `FM_STATUS_IO_CHART_INVALID_REFERENCE` (5026) when `source` does not resolve;

@@ -33,7 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 FACADE_SCOPE_INC = REPO_ROOT / "src/node_addon/generated/facade_scope.inc"
 DEFAULT_NODE_SOURCE = REPO_ROOT / "src/node_addon/parts/workbook_class.cc"
 DEFAULT_WASM_SOURCE = REPO_ROOT / "src/wasm/parts/bindings_register.cpp"
-EXPECTED_NODE_REGISTRATIONS = 434
+EXPECTED_NODE_REGISTRATIONS = 424
 
 MASK_NAMES = (
     "u32",
@@ -64,8 +64,17 @@ NODE_ONLY_METHODS = frozenset(("getMemoryUsage",))
 FREE_FUNCTION_GUARDS = {
     "evalFormula": {"string": 0x1},
     "getStatusName": {"i32": 0x1},
-    "getErrorDisplayName": {"i32": 0x1},
     "setLogMinLevel": {"i32": 0x1},
+    "canonicalizeFormula": {"string": 0x3},
+    "canonicalizeFunctionName": {"string": 0x3},
+    "compareText": {"u32": 0x4, "string": 0xB},
+    "getCollationClasses": {"u32": 0x2, "string": 0x4, "object": 0x1},
+    "getFunctionMetadata": {"string": 0x1},
+    "getImageInfo": {"object": 0x1},
+    "getLocaleFacts": {"string": 0x1},
+    "listLocaleErrorNames": {"string": 0x1},
+    "localizeFormula": {"string": 0x3},
+    "localizeFunctionName": {"string": 0x3},
 }
 
 # Positional specs of the Workbook static functions. The set must equal the

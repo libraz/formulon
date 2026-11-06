@@ -150,8 +150,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("addCellXf", &JsWorkbook::addXf)
       .function("getBorderCount", &JsWorkbook::borderCount)
       .function("getCalcMode", &JsWorkbook::calcMode)
-      .function("canonicalizeFormula", &JsWorkbook::canonicalizeFormula)
-      .function("canonicalizeFunctionName", &JsWorkbook::canonicalizeFunctionName)
       .function("getCellAt", &JsWorkbook::cellAt)
       .function("getCellCount", &JsWorkbook::cellCount)
       .function("listCellStyles", &JsWorkbook::listCellStyles)
@@ -163,8 +161,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("clearPinnedNow", &JsWorkbook::clearPinnedNow)
       .function("clearRowStyle", &JsWorkbook::clearRowStyle)
       .function("clearValidations", &JsWorkbook::clearValidations)
-      .function("getCollationClasses", &JsWorkbook::collationClasses)
-      .function("compareText", &JsWorkbook::compareText)
       .function("addTable", &JsWorkbook::createTable)
       .function("listDefinedNames", &JsWorkbook::listDefinedNames)
       .function("getDefinedName", &JsWorkbook::getDefinedName)
@@ -184,8 +180,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getFileName", &JsWorkbook::fileName)
       .function("getFillCount", &JsWorkbook::fillCount)
       .function("getFontCount", &JsWorkbook::fontCount)
-      .function("getFunctionMetadata", &JsWorkbook::functionMetadata)
-      .function("listFunctionNames", &JsWorkbook::functionNames)
       .function("getBorder", &JsWorkbook::getBorder)
       .function("getCellStyle", &JsWorkbook::getCellStyle)
       .function("getCellStyleXf", &JsWorkbook::getCellStyleXf)
@@ -230,7 +224,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("addPerson", &JsWorkbook::addPerson)
       .function("removePerson", &JsWorkbook::removePerson)
       .function("getPerson", &JsWorkbook::getPerson)
-      .function("getImageInfo", &JsWorkbook::probeImage)
       .function("listDrawingObjects", &JsWorkbook::listDrawingObjects)
       .function("getDrawingObject", &JsWorkbook::getDrawingObject)
       .function("getImage", &JsWorkbook::getImage)
@@ -364,10 +357,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getValue", &JsWorkbook::getValue)
       .function("insertColumns", &JsWorkbook::insertColumns)
       .function("insertRows", &JsWorkbook::insertRows)
-      .function("getLocaleFacts", &JsWorkbook::localeFacts)
-      .function("listLocaleErrorNames", &JsWorkbook::listLocaleErrorNames)
-      .function("localizeFormula", &JsWorkbook::localizeFormula)
-      .function("localizeFunctionName", &JsWorkbook::localizeFunctionName)
       .function("moveSheet", &JsWorkbook::moveSheet)
       .function("copySheet", &JsWorkbook::copySheet)
       .function("recalcViewport", &JsWorkbook::partialRecalc)
@@ -513,6 +502,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getPrecedents", &JsWorkbook::precedents)
       .function("recalc", &JsWorkbook::recalc)
       .function("recalcParallel", &JsWorkbook::recalcParallel)
+      .function("hasDirtyCells", &JsWorkbook::hasDirtyCells)
       .function("removeComment", &JsWorkbook::removeComment)
       .function("removeCfRule", &JsWorkbook::removeConditionalFormatAt)
       .function("removeHyperlink", &JsWorkbook::removeHyperlink)
@@ -660,9 +650,19 @@ EMSCRIPTEN_BINDINGS(formulon) {
   function("evalFormula", &eval_formula);
   function("getVersion", &version_string);
   function("getStatusName", &status_string);
-  function("getErrorDisplayName", &error_display_name);
   function("setLogMinLevel", &set_log_min_level);
   function("setLogSink", &set_log_sink);
+  function("canonicalizeFormula", &canonicalize_formula);
+  function("canonicalizeFunctionName", &canonicalize_function_name);
+  function("compareText", &compare_text);
+  function("getCollationClasses", &collation_classes);
+  function("getFunctionMetadata", &function_metadata);
+  function("getImageInfo", &probe_image);
+  function("getLocaleFacts", &locale_facts);
+  function("listFunctionNames", &function_names);
+  function("listLocaleErrorNames", &list_locale_error_names);
+  function("localizeFormula", &localize_formula);
+  function("localizeFunctionName", &localize_function_name);
 }
 
 }  // namespace parts

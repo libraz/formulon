@@ -1,7 +1,8 @@
 // `Workbook` ObjectWrap lifecycle and class registration. Holds the
 // ctor / dtor, the shared argument extraction helpers, and the
 // `DefineClass` table that wires every per-area method into the JS
-// class. The per-area method bodies live in `parts/*.cc`.
+// class, and the module functions that share its argument guard. The
+// per-area method bodies live in `parts/*.cc`.
 
 #include "node_addon/parts/workbook_class.h"
 
@@ -12,6 +13,8 @@
 #include <iterator>
 #include <limits>
 #include <string>
+
+#include "node_addon/parts/free_funcs.h"
 
 namespace formulon_node {
 namespace {
@@ -37,10 +40,12 @@ struct PositionalArgSpec {
   std::uint64_t required_mask;
 };
 
-/// One registered method: its masks and the name its errors carry.
+/// One registered method or module function: its masks and the name its errors carry.
 struct GuardedMethodData {
   PositionalArgSpec spec;
   const char* name;
+  /// `"Workbook"` for a method; null for a module function, whose errors carry the bare name.
+  const char* owner;
   /// The `Sheet` facade supplies the first argument (the sheet index).
   bool sheet_scoped;
 };
@@ -66,7 +71,8 @@ std::string ArgumentLabel(const GuardedMethodData& method, std::size_t idx) {
     return idx == 0 ? std::string("Sheet.") + method.name + " sheet index"
                     : std::string("Sheet.") + method.name + " argument " + std::to_string(idx);
   }
-  return std::string("Workbook.") + method.name + " argument " + std::to_string(idx + 1);
+  const std::string qualified = method.owner == nullptr ? method.name : std::string(method.owner) + "." + method.name;
+  return qualified + " argument " + std::to_string(idx + 1);
 }
 
 bool RejectArgumentType(const Napi::CallbackInfo& info, const std::string& label, const char* expected) {
@@ -186,6 +192,7 @@ Napi::ClassPropertyDescriptor<Workbook> GuardedInstanceMethod(const char* name) 
   static const GuardedMethodData data{{u32_mask, i32_mask, u64_mask, double_mask, string_mask, optional_u32_mask,
                                        optional_u64_mask, optional_null_mask, object_mask, required_mask},
                                       name,
+                                      "Workbook",
                                       IsSheetMethod(name)};
   napi_property_descriptor descriptor{};
   descriptor.utf8name = name;
@@ -193,6 +200,29 @@ Napi::ClassPropertyDescriptor<Workbook> GuardedInstanceMethod(const char* name) 
   descriptor.data = const_cast<void*>(static_cast<const void*>(&data));
   descriptor.attributes = napi_default;
   return descriptor;
+}
+
+using ModuleFunctionCallback = Napi::Value (*)(const Napi::CallbackInfo&);
+
+// The module-function counterpart of `GuardedInstanceMethod`, with the same
+// mask order. A module function holds no workbook, so no active-call count
+// is kept.
+template <ModuleFunctionCallback function, std::uint64_t u32_mask = 0, std::uint64_t i32_mask = 0,
+          std::uint64_t u64_mask = 0, std::uint64_t double_mask = 0, std::uint64_t string_mask = 0,
+          std::uint64_t optional_u32_mask = 0, std::uint64_t optional_u64_mask = 0,
+          std::uint64_t optional_null_mask = 0, std::uint64_t object_mask = 0, std::uint64_t required_mask = 0>
+void SetGuardedModuleFunction(Napi::Env env, Napi::Object exports, const char* name) {
+  static const GuardedMethodData data{{u32_mask, i32_mask, u64_mask, double_mask, string_mask, optional_u32_mask,
+                                       optional_u64_mask, optional_null_mask, object_mask, required_mask},
+                                      name,
+                                      nullptr,
+                                      false};
+  exports.Set(name, Napi::Function::New(
+                        env,
+                        [](const Napi::CallbackInfo& info) -> Napi::Value {
+                          return ValidatePositionalArgs(info, data) ? function(info) : info.Env().Undefined();
+                        },
+                        name));
 }
 
 }  // namespace
@@ -404,7 +434,6 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::SetTableAutoFilter, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setTableAutoFilter"),
           GuardedInstanceMethod<&Workbook::SetThreadResolved, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setThreadResolved"),
           GuardedInstanceMethod<&Workbook::ValidateValue, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("validateValue"),
-          GuardedInstanceMethod<&Workbook::ProbeImage, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("getImageInfo"),
           GuardedInstanceMethod<&Workbook::ListDrawingObjects, 0x1ULL>("listDrawingObjects"),
           GuardedInstanceMethod<&Workbook::GetDrawingObject, 0x3ULL>("getDrawingObject"),
           GuardedInstanceMethod<&Workbook::GetImage, 0x3ULL>("getImage"),
@@ -477,8 +506,6 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::GetWidthModel, 0x1ULL, 0x2ULL>("getWidthModel"),
           GuardedInstanceMethod<&Workbook::PinnedNow>("getPinnedNow"),
           GuardedInstanceMethod<&Workbook::ClearPinnedNow>("clearPinnedNow"),
-          GuardedInstanceMethod<&Workbook::CanonicalizeFormula, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>("canonicalizeFormula"),
-          GuardedInstanceMethod<&Workbook::CanonicalizeFunctionName, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>("canonicalizeFunctionName"),
           GuardedInstanceMethod<&Workbook::CellAt, 0x3ULL>("getCellAt"),
           GuardedInstanceMethod<&Workbook::CellCount, 0x1ULL>("getCellCount"),
           GuardedInstanceMethod<&Workbook::ListCellStyles>("listCellStyles"),
@@ -504,8 +531,6 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::FileName>("getFileName"),
           GuardedInstanceMethod<&Workbook::FillCount>("getFillCount"),
           GuardedInstanceMethod<&Workbook::FontCount>("getFontCount"),
-          GuardedInstanceMethod<&Workbook::FunctionMetadata, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("getFunctionMetadata"),
-          GuardedInstanceMethod<&Workbook::FunctionNames>("listFunctionNames"),
           GuardedInstanceMethod<&Workbook::GetBorder, 0x1ULL>("getBorder"),
           GuardedInstanceMethod<&Workbook::GetCellStyle, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("getCellStyle"),
           GuardedInstanceMethod<&Workbook::GetCellStyleXf, 0x1ULL>("getCellStyleXf"),
@@ -562,12 +587,6 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::GetValue, 0x7ULL>("getValue"),
           GuardedInstanceMethod<&Workbook::InsertCols, 0x7ULL>("insertColumns"),
           GuardedInstanceMethod<&Workbook::InsertRows, 0x7ULL>("insertRows"),
-          GuardedInstanceMethod<&Workbook::CollationClasses, 0x2ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("getCollationClasses"),
-          GuardedInstanceMethod<&Workbook::CompareText, 0x4ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0xBULL>("compareText"),
-          GuardedInstanceMethod<&Workbook::LocaleFacts, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("getLocaleFacts"),
-          GuardedInstanceMethod<&Workbook::ListLocaleErrorNames, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("listLocaleErrorNames"),
-          GuardedInstanceMethod<&Workbook::LocalizeFormula, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>("localizeFormula"),
-          GuardedInstanceMethod<&Workbook::LocalizeFunctionName, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>("localizeFunctionName"),
           GuardedInstanceMethod<&Workbook::MemoryUsage>("getMemoryUsage"),
           GuardedInstanceMethod<&Workbook::MoveSheet, 0x3ULL>("moveSheet"),
           GuardedInstanceMethod<&Workbook::CopySheet, 0x3ULL>("copySheet"),
@@ -708,6 +727,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::Precedents, 0xFULL>("getPrecedents"),
           GuardedInstanceMethod<&Workbook::Recalc>("recalc"),
           GuardedInstanceMethod<&Workbook::RecalcParallel>("recalcParallel"),
+          GuardedInstanceMethod<&Workbook::HasDirtyCells>("hasDirtyCells"),
           GuardedInstanceMethod<&Workbook::RemoveConditionalFormatAt, 0x3ULL>("removeCfRule"),
           GuardedInstanceMethod<&Workbook::RemoveHyperlink, 0x7ULL>("removeHyperlink"),
           GuardedInstanceMethod<&Workbook::RemoveHyperlinkAt, 0x3ULL>("removeHyperlinkAt"),
@@ -812,6 +832,22 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
   }
   data.workbook_class = Napi::Persistent(constructor);
   return constructor;
+}
+
+void RegisterModuleFunctions(Napi::Env env, Napi::Object exports) {
+  // clang-format off
+  SetGuardedModuleFunction<&CanonicalizeFormula, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>(env, exports, "canonicalizeFormula");
+  SetGuardedModuleFunction<&CanonicalizeFunctionName, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>(env, exports, "canonicalizeFunctionName");
+  SetGuardedModuleFunction<&CompareText, 0x4ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0xBULL>(env, exports, "compareText");
+  SetGuardedModuleFunction<&CollationClasses, 0x2ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>(env, exports, "getCollationClasses");
+  SetGuardedModuleFunction<&FunctionMetadata, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>(env, exports, "getFunctionMetadata");
+  SetGuardedModuleFunction<&ProbeImage, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>(env, exports, "getImageInfo");
+  SetGuardedModuleFunction<&LocaleFacts, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>(env, exports, "getLocaleFacts");
+  SetGuardedModuleFunction<&FunctionNames>(env, exports, "listFunctionNames");
+  SetGuardedModuleFunction<&ListLocaleErrorNames, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>(env, exports, "listLocaleErrorNames");
+  SetGuardedModuleFunction<&LocalizeFormula, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>(env, exports, "localizeFormula");
+  SetGuardedModuleFunction<&LocalizeFunctionName, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>(env, exports, "localizeFunctionName");
+  // clang-format on
 }
 
 }  // namespace formulon_node

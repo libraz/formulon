@@ -58,8 +58,9 @@ class VersionTests(unittest.TestCase):
         self.assertGreater(len(v), 0, f"expected non-empty version, got {v!r}")
 
     def test_error_display_name_returns_excel_literal(self) -> None:
-        self.assertEqual(formulon.get_error_display_name(1), "#DIV/0!")
-        self.assertEqual(formulon.get_error_display_name(999), "#UNKNOWN!")
+        self.assertEqual(formulon.ErrorCode(1).display_name, "#DIV/0!")
+        with self.assertRaises(ValueError):
+            formulon.ErrorCode(999)
 
 
 class EvalFormulaTests(unittest.TestCase):
@@ -374,13 +375,13 @@ class WorkbookSaveLoadTests(unittest.TestCase):
 
 
 class IterationTests(unittest.TestCase):
-    def test_get_cell_at_reads_set_cells(self) -> None:
+    def test_list_cells_reads_set_cells(self) -> None:
         with Workbook.create_default() as wb:
             wb.sheet(0).set_number(0, 0, 1.0)
             wb.sheet(0).set_number(1, 1, 2.0)
             wb.sheet(0).set_formula(2, 0, "=A1+B2")
             wb.recalc()
-            cells = [wb.sheet(0).get_cell_at(i) for i in range(wb.sheet(0).get_cell_count())]
+            cells = wb.sheet(0).list_cells()
             # We expect at least the three cells we set.
             self.assertGreaterEqual(len(cells), 3)
             row_col = {(c.row, c.col): c for c in cells}
@@ -404,14 +405,14 @@ class IteratorHandleLivenessTests(unittest.TestCase):
     """A read after `close()` must raise `FormulonError`, not read the
     now-freed workbook handle."""
 
-    def test_get_cell_at_after_close_raises(self) -> None:
+    def test_list_cells_after_close_raises(self) -> None:
         wb = Workbook.create_default()
         wb.sheet(0).set_number(0, 0, 1.0)
         wb.sheet(0).set_number(1, 0, 2.0)
-        wb.sheet(0).get_cell_at(0)
+        self.assertEqual(len(wb.sheet(0).list_cells()), 2)
         wb.close()
         with self.assertRaises(FormulonError):
-            wb.sheet(0).get_cell_at(1)
+            wb.sheet(0).list_cells()
 
     def test_list_defined_names_after_close_raises(self) -> None:
         wb = Workbook.create_default()

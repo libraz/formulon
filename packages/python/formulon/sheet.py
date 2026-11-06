@@ -7,9 +7,12 @@ see :class:`Sheet`.
 
 from __future__ import annotations
 
+import dataclasses
+import inspect
+import math
 import numbers
 import struct
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union, cast, overload
+from typing import Any, Callable, Dict, List, Literal, Optional, Sequence, Tuple, TypeVar, Union, cast, overload
 
 from . import (
     _structs as S,
@@ -22,6 +25,7 @@ from ._c import (
     _uint,
     fm_value_t_size,
 )
+from ._refs import resolve_ref
 from ._status import (
     StatusCode,
 )
@@ -54,12 +58,18 @@ from .workbook import (
     CfMatchKind,
     Cfvo,
     Chart,
+    ChartAxisCrosses,
     ChartAxisPatch,
+    ChartBlanksAs,
     ChartData,
     ChartDisplayPatch,
+    ChartFillPatch,
     ChartGrouping,
     ChartInsertKind,
+    ChartLabelsPatch,
     ChartLegendPosition,
+    ChartLinePatch,
+    ChartMarkerPatch,
     ChartPlotPatch,
     ChartPointPatch,
     ChartPreviewOverridesInput,
@@ -121,7 +131,7 @@ from .workbook import (
     PivotShowValuesAs,
     PivotSortOrder,
     PivotStyle,
-    PivotStyleInput,
+    PivotSummary,
     PrintTitles,
     ProtectedRange,
     RectPt,
@@ -196,7 +206,6 @@ __all__ = ["Sheet"]
 
 # <facade-tables>
 WORKBOOK_METHODS = (
-    "add_batch",
     "add_border",
     "add_cell_style_xf",
     "add_cell_xf",
@@ -209,12 +218,7 @@ WORKBOOK_METHODS = (
     "add_pivot_cache_calculated_field",
     "add_pivot_cache_calculated_item",
     "add_pivot_cache_field",
-    "add_pivot_cache_field_shared_item_blank",
-    "add_pivot_cache_field_shared_item_bool",
-    "add_pivot_cache_field_shared_item_date",
-    "add_pivot_cache_field_shared_item_error",
-    "add_pivot_cache_field_shared_item_number",
-    "add_pivot_cache_field_shared_item_text",
+    "add_pivot_cache_field_shared_item",
     "add_pivot_cache_record",
     "add_sheet",
     "add_table",
@@ -232,38 +236,26 @@ WORKBOOK_METHODS = (
     "format_value",
     "get_active_sheet",
     "get_border",
-    "get_border_count",
     "get_calc_mode",
     "get_calc_on_save",
     "get_cell_style",
     "get_cell_style_xf",
-    "get_cell_style_xf_count",
     "get_cell_xf",
-    "get_cell_xf_count",
     "get_date1904",
     "get_defined_name",
     "get_diagnostics",
     "get_dxf",
-    "get_dxf_count",
     "get_excel_profile_id",
     "get_file_name",
     "get_fill",
-    "get_fill_count",
     "get_font",
-    "get_font_count",
     "get_full_precision",
-    "get_image_info",
     "get_iterative",
     "get_memory_usage",
     "get_num_fmt_string",
     "get_passthrough",
     "get_person",
     "get_pinned_now",
-    "get_pivot_cache_field_count",
-    "get_pivot_cache_field_formula",
-    "get_pivot_cache_field_name",
-    "get_pivot_cache_field_shared_item_count",
-    "get_pivot_cache_field_shared_item_value",
     "get_pivot_cache_options",
     "get_pivot_cache_record_count",
     "get_pivot_cache_worksheet_source",
@@ -275,13 +267,21 @@ WORKBOOK_METHODS = (
     "get_theme_fonts",
     "get_theme_script_font",
     "get_workbook_protection",
-    "is_pivot_cache_field_shared_item_date",
+    "has_dirty_cells",
+    "list_borders",
+    "list_cell_style_xfs",
     "list_cell_styles",
+    "list_cell_xfs",
     "list_defined_names",
+    "list_dxfs",
     "list_external_links",
+    "list_fills",
+    "list_fonts",
     "list_passthroughs",
     "list_people",
     "list_pivot_cache_calculated_items",
+    "list_pivot_cache_field_shared_items",
+    "list_pivot_cache_fields",
     "list_pivot_caches",
     "list_sheets",
     "list_table_styles",
@@ -302,7 +302,6 @@ WORKBOOK_METHODS = (
     "remove_table_auto_filter",
     "remove_table_style",
     "rename_sheet",
-    "rename_table",
     "rename_table_column",
     "resolve_color",
     "save",
@@ -323,19 +322,13 @@ WORKBOOK_METHODS = (
     "set_pivot_cache_calculated_field_formula",
     "set_pivot_cache_calculated_item_formula",
     "set_pivot_cache_options",
-    "set_pivot_cache_record_blank",
-    "set_pivot_cache_record_bool",
-    "set_pivot_cache_record_date",
-    "set_pivot_cache_record_error",
-    "set_pivot_cache_record_number",
-    "set_pivot_cache_record_text",
+    "set_pivot_cache_record_value",
     "set_pivot_cache_worksheet_source",
     "set_ref_mode",
     "set_table_auto_filter",
     "set_table_column_totals",
     "set_table_style",
     "set_table_style_defaults",
-    "set_table_style_info",
     "set_theme_colors",
     "set_theme_fonts",
     "set_theme_script_font",
@@ -392,12 +385,11 @@ SHEET_METHODS = (
     "evaluate_auto_filter",
     "evaluate_cf_formula",
     "evaluate_cf_range",
+    "evaluate_formula",
     "evaluate_formula_array",
     "get_array_formula",
     "get_auto_filter",
     "get_auto_filter_xml",
-    "get_cell_at",
-    "get_cell_count",
     "get_cell_phonetic",
     "get_cell_phonetic_properties",
     "get_cell_phonetic_runs",
@@ -432,10 +424,8 @@ SHEET_METHODS = (
     "get_pagination",
     "get_pivot_cache_id",
     "get_pivot_column_field_order",
-    "get_pivot_count",
     "get_pivot_data_field_default_name",
     "get_pivot_field_item",
-    "get_pivot_field_item_count",
     "get_pivot_grand_totals",
     "get_pivot_layout",
     "get_pivot_name",
@@ -458,12 +448,13 @@ SHEET_METHODS = (
     "get_spill_info",
     "get_threaded_comment",
     "get_value",
+    "get_values",
     "get_view",
     "get_width_model",
-    "has_cell_phonetic_properties",
     "insert_columns",
     "insert_rows",
     "is_pivot_projection_pending",
+    "list_cells",
     "list_cf_rules",
     "list_column_breaks",
     "list_column_overrides",
@@ -472,8 +463,10 @@ SHEET_METHODS = (
     "list_hyperlinks",
     "list_merges",
     "list_pivot_data_fields",
+    "list_pivot_field_items",
     "list_pivot_fields",
     "list_pivot_filters",
+    "list_pivots",
     "list_protected_ranges",
     "list_row_breaks",
     "list_row_overrides",
@@ -493,9 +486,7 @@ SHEET_METHODS = (
     "remove_data_table",
     "remove_drawing_object",
     "remove_hyperlink",
-    "remove_hyperlink_at",
     "remove_merge",
-    "remove_merge_at",
     "remove_pivot",
     "remove_pivot_filter",
     "remove_protected_range",
@@ -541,7 +532,6 @@ SHEET_METHODS = (
     "set_fit_to_page",
     "set_format_defaults",
     "set_formula",
-    "set_freeze",
     "set_header_footer",
     "set_header_footer_xml",
     "set_number",
@@ -549,24 +539,13 @@ SHEET_METHODS = (
     "set_page_margins_xml",
     "set_page_setup",
     "set_page_setup_xml",
-    "set_pane_top_left",
     "set_pivot_anchor",
     "set_pivot_column_field_order",
     "set_pivot_data_field",
     "set_pivot_field_axis",
-    "set_pivot_field_custom_name",
     "set_pivot_field_date_group",
-    "set_pivot_field_default_subtotal",
-    "set_pivot_field_fill_down_labels",
-    "set_pivot_field_insert_blank_row",
-    "set_pivot_field_item_caption",
-    "set_pivot_field_item_show_detail",
-    "set_pivot_field_item_visible",
-    "set_pivot_field_number_format",
-    "set_pivot_field_show_all",
     "set_pivot_field_show_detail",
     "set_pivot_field_sort",
-    "set_pivot_field_subtotal_top",
     "set_pivot_grand_totals",
     "set_pivot_name",
     "set_pivot_options",
@@ -578,7 +557,6 @@ SHEET_METHODS = (
     "set_print_options_xml",
     "set_print_titles",
     "set_range_xf_index",
-    "set_right_to_left",
     "set_row_auto_height",
     "set_row_collapsed",
     "set_row_height",
@@ -588,24 +566,17 @@ SHEET_METHODS = (
     "set_selection",
     "set_sheet_pr_xml",
     "set_sheet_protection",
-    "set_show_formulas",
-    "set_show_grid_lines",
-    "set_show_outline_symbols",
-    "set_show_row_col_headers",
-    "set_show_zeros",
     "set_sparkline_group_sparklines",
-    "set_split",
-    "set_tab_selected",
     "set_text",
     "set_thread_resolved",
-    "set_top_left",
     "set_value",
-    "set_view_mode",
-    "set_visibility",
-    "set_zoom",
+    "set_values",
+    "set_view",
     "show_pivot_details",
     "snapshot_drawing",
     "snapshot_range_style",
+    "update_pivot_field",
+    "update_pivot_item",
     "update_protected_range",
     "update_shape",
     "update_slicer",
@@ -622,10 +593,17 @@ SHEET_STRUCTURE_OPS = (
     "show_pivot_details",
 )
 LIST_FAMILIES = {
+    "list_borders": ("get_border_count", "get_border"),
+    "list_cell_style_xfs": ("get_cell_style_xf_count", "get_cell_style_xf"),
+    "list_cell_xfs": ("get_cell_xf_count", "get_cell_xf"),
     "list_cf_rules": ("get_cf_rule_count", "get_cf_rule"),
+    "list_dxfs": ("get_dxf_count", "get_dxf"),
     "list_external_links": ("get_external_link_count", "get_external_link"),
+    "list_fills": ("get_fill_count", "get_fill"),
+    "list_fonts": ("get_font_count", "get_font"),
     "list_pivot_cache_calculated_items": ("get_pivot_cache_calculated_item_count", "get_pivot_cache_calculated_item"),
     "list_pivot_data_fields": ("get_pivot_data_field_count", "get_pivot_data_field"),
+    "list_pivot_field_items": ("get_pivot_field_item_count", "get_pivot_field_item"),
     "list_pivot_fields": ("get_pivot_field_count", "get_pivot_field"),
     "list_pivot_filters": ("get_pivot_filter_count", "get_pivot_filter"),
     "list_protected_ranges": ("get_protected_range_count", "get_protected_range"),
@@ -636,6 +614,7 @@ LIST_FAMILIES = {
 HANDWRITTEN = (
     "add_hyperlink",
     "add_hyperlink_range",
+    "add_pivot_cache_field_shared_item",
     "add_sheet",
     "copy_sheet",
     "get_active_sheet",
@@ -643,6 +622,11 @@ HANDWRITTEN = (
     "get_formula",
     "get_theme_colors",
     "get_theme_fonts",
+    "get_values",
+    "list_cells",
+    "list_pivot_cache_field_shared_items",
+    "list_pivot_cache_fields",
+    "list_pivots",
     "list_sheets",
     "move_sheet",
     "remove_sheet",
@@ -653,19 +637,24 @@ HANDWRITTEN = (
     "set_comment",
     "set_formula",
     "set_pinned_now",
+    "set_pivot_cache_record_value",
     "set_pivot_field_date_group",
     "set_pivot_grand_totals",
     "set_theme_colors",
     "set_theme_script_font",
     "set_value",
+    "set_values",
+    "set_view",
     "show_pivot_details",
+    "update_pivot_field",
+    "update_pivot_item",
     "update_threaded_comment",
 )
 CELL_ARGS = {
     "add_hyperlink": ((0, 1),),
-    "add_pivot": ((2, 3),),
     "clear_cell_xf_index": ((0, 1),),
     "evaluate_cf_formula": ((0, 1), (2, 3)),
+    "evaluate_formula": ((0, 1),),
     "evaluate_formula_array": ((0, 1),),
     "get_array_formula": ((0, 1),),
     "get_cell_phonetic": ((0, 1),),
@@ -701,10 +690,9 @@ CELL_ARGS = {
     "set_error": ((0, 1),),
     "set_formula": ((0, 1),),
     "set_number": ((0, 1),),
-    "set_pane_top_left": ((0, 1),),
     "set_text": ((0, 1),),
-    "set_top_left": ((0, 1),),
     "set_value": ((0, 1),),
+    "set_values": ((0, 1),),
     "show_pivot_details": ((1, 2),),
     "validate_value": ((0, 1),),
 }
@@ -717,6 +705,8 @@ RECT_ARGS = {
     "get_merges_in_range": (0,),
     "get_range_style_bases": (0,),
     "get_range_style_bases_excluding": (0,),
+    "get_values": (0,),
+    "list_cells": (0,),
     "recalc_viewport": (0,),
     "remap_range_style": (0,),
     "remove_merge": (0,),
@@ -726,6 +716,189 @@ RECT_ARGS = {
     "snapshot_range_style": (0,),
 }
 # </facade-tables>
+
+_LAST_ROW = 1048575
+_LAST_COL = 16383
+# Largest rectangle :meth:`Sheet.get_values` reads.
+_GET_VALUES_CELL_CAP = 1 << 22
+_BLANK = Value(ValueKind.BLANK)
+
+# An argument slot the caller left empty; ``None`` is a real argument value.
+_MISSING: Any = object()
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+_COORDINATE_FORMS: Dict[str, inspect.Signature] = {}
+
+
+def _coordinate_form(stub: _F) -> _F:
+    """Record ``stub``, a method's coordinate-form overload, as that method's ``inspect`` signature."""
+    _COORDINATE_FORMS[stub.__name__] = inspect.signature(stub)
+    return stub
+
+
+def _split_cell_args(
+    args: Tuple[Any, ...],
+    kwargs: Dict[str, Any],
+    pairs: Tuple[Tuple[int, int], ...],
+    rest_names: Sequence[Union[str, Tuple[str, Any]]],
+) -> Tuple[List[Union[Tuple[Any, Any], str]], List[Any]]:
+    """Split a cell method's arguments into its cells and its other arguments.
+
+    ``pairs`` holds the ``(row, col)`` positions of the coordinate form, as
+    ``CELL_ARGS`` lists them. ``rest_names`` names the other parameters in
+    order; ``(name, default)`` marks an optional one. Cells are positional:
+    either every pair is two indexes or every pair is one A1 string, chosen
+    by the type at the first pair's position. The other parameters are
+    positional or keyword.
+
+    Returns:
+      Each cell, as a ``(row, col)`` tuple or an unresolved A1 string, and
+      the other arguments in ``rest_names`` order.
+
+    Raises:
+      TypeError: for a missing, surplus, repeated or unknown argument, or
+        for cells given in both forms.
+    """
+    names = [spec if isinstance(spec, str) else spec[0] for spec in rest_names]
+    a1 = len(args) > pairs[0][0] and isinstance(args[pairs[0][0]], str)
+    row_at = {i: n for n, (i, _) in enumerate(pairs)}
+    col_at = {j: n for n, (_, j) in enumerate(pairs)}
+    # Each positional slot of the chosen form: ("row" | "col" | "rest", index).
+    layout: List[Tuple[str, int]] = []
+    rest_count = 0
+    for position in range(2 * len(pairs) + len(names)):
+        if position in row_at:
+            layout.append(("row", row_at[position]))
+        elif position in col_at:
+            if not a1:
+                layout.append(("col", col_at[position]))
+        else:
+            layout.append(("rest", rest_count))
+            rest_count += 1
+    if len(args) > len(layout):
+        form = "A1 strings" if a1 else "(row, col) pairs"
+        raise TypeError(f"formulon: takes at most {len(layout)} positional arguments with cells as {form}")
+    rows: List[Any] = [_MISSING] * len(pairs)
+    cols: List[Any] = [_MISSING] * len(pairs)
+    rest: List[Any] = [_MISSING] * len(names)
+    for (kind, index), arg in zip(layout, args):
+        target = rows if kind == "row" else cols if kind == "col" else rest
+        target[index] = arg
+    if any(v is _MISSING for v in rows) or (not a1 and any(v is _MISSING for v in cols)):
+        raise TypeError("formulon: each cell is positional, a (row, col) pair or one A1 string")
+    if any(isinstance(v, str) != a1 for v in rows) or any(isinstance(v, str) for v in cols):
+        raise TypeError("formulon: give every cell as a (row, col) pair or every cell as one A1 string")
+    for key, value in kwargs.items():
+        if key not in names:
+            raise TypeError(f"formulon: unexpected keyword argument {key!r}")
+        index = names.index(key)
+        if rest[index] is not _MISSING:
+            raise TypeError(f"formulon: got multiple values for argument {key!r}")
+        rest[index] = value
+    for index, spec in enumerate(rest_names):
+        if rest[index] is _MISSING:
+            if isinstance(spec, str):
+                raise TypeError(f"formulon: missing argument {spec!r}")
+            rest[index] = spec[1]
+    cells: List[Union[Tuple[Any, Any], str]] = list(rows) if a1 else list(zip(rows, cols))
+    return cells, rest
+
+
+def _geometry_mode(mode: Any) -> int:
+    """The C ordinal of ``mode``, checked to be a :class:`GeometryMode` member.
+
+    Raises:
+      TypeError: when ``mode`` is not an integer.
+      ValueError: when ``mode`` is not a :class:`GeometryMode` member.
+    """
+    if isinstance(mode, bool) or not isinstance(mode, numbers.Integral):
+        raise TypeError(f"formulon: mode must be a GeometryMode, got {type(mode).__name__}")
+    try:
+        return int(GeometryMode(mode))
+    except ValueError:
+        raise ValueError(f"formulon: mode must be a GeometryMode, got {mode!r}") from None
+
+
+# The PivotTable Options :meth:`Sheet.set_pivot_options` writes, by C field kind.
+_PIVOT_OPTION_FLAGS = (
+    "show_error",
+    "show_missing",
+    "show_headers",
+    "show_drill",
+    "show_data_tips",
+    "grid_drop_zones",
+    "show_empty_row",
+    "show_empty_col",
+    "show_data_drop_down",
+    "print_drill",
+    "field_print_titles",
+    "item_print_titles",
+    "merge_item",
+    "page_over_then_down",
+    "multiple_field_filters",
+    "preserve_formatting",
+    "custom_list_sort",
+    "auto_formatting",
+    "enable_drill",
+)
+_PIVOT_OPTION_TEXTS = ("error_caption", "missing_caption", "alt_text", "alt_text_summary", "grand_total_caption")
+_PIVOT_OPTION_NAMES = frozenset((*_PIVOT_OPTION_FLAGS, *_PIVOT_OPTION_TEXTS, "indent", "page_wrap"))
+
+
+def _given(arguments: Dict[str, Any], patch: type) -> Dict[str, Any]:
+    """The keyword arguments among the keys of the patch ``TypedDict`` that are not :data:`UNCHANGED`."""
+    return {key: arguments[key] for key in patch.__annotations__ if arguments[key] is not UNCHANGED}
+
+
+def _flag(value: Any, name: str) -> int:
+    """``value`` as a C 0/1 flag; ``TypeError`` unless it is a ``bool``."""
+    if not isinstance(value, bool):
+        raise TypeError(f"formulon: {name} must be a bool, got {type(value).__name__}")
+    return 1 if value else 0
+
+
+def _cell_input(value: Any) -> Tuple[str, Tuple[Any, ...]]:
+    """The setter :meth:`Sheet.set_value` calls for ``value`` and the arguments after the cell.
+
+    Raises:
+      TypeError: for a type no cell holds, or a :class:`Value` of kind
+        ``ARRAY``, ``REF`` or ``LAMBDA``.
+      ValueError: for an integer too large to convert to a float.
+      InvalidArgumentError: for a NaN or infinite number.
+    """
+    if isinstance(value, Value):
+        kind = value.kind
+        if kind is ValueKind.BLANK:
+            return "set_blank", ()
+        if kind is ValueKind.NUMBER:
+            value = value.number
+        elif kind is ValueKind.BOOL:
+            return "set_bool", (value.boolean,)
+        elif kind is ValueKind.TEXT:
+            return "set_text", (value.text,)
+        elif kind is ValueKind.ERROR:
+            return "set_error", (value.error_code,)
+        else:
+            raise TypeError(f"formulon: a Value of kind {kind.name} cannot be stored in a cell")
+    if value is None:
+        return "set_blank", ()
+    if isinstance(value, bool):
+        return "set_bool", (value,)
+    if isinstance(value, numbers.Real):
+        try:
+            number = float(value)
+        except OverflowError as exc:
+            raise ValueError("formulon: the integer is too large for a float") from exc
+        if not math.isfinite(number):
+            raise FormulonError(
+                StatusCode.INVALID_ARGUMENT, _diagnostic_override=(f"{number!r} cannot be stored in a cell", "")
+            )
+        return "set_number", (number,)
+    if isinstance(value, str):
+        return "set_text", (value,)
+    if isinstance(value, ExcelError):
+        return "set_error", (value.code,)
+    raise TypeError(f"formulon: cannot store a {type(value).__name__} in a cell")
 
 
 class Sheet:
@@ -741,14 +914,23 @@ class Sheet:
     :class:`NotFoundError`; once the workbook is closed, every operation
     except reading :attr:`workbook` raises :class:`WorkbookClosedError`.
 
-    Rows and columns are 0-based. :meth:`get`, :meth:`set`,
-    :meth:`get_formula` and :meth:`set_formula` also take one unqualified A1
-    cell (``"B3"``, ``"$B$3"``, ``"b3"``); a range, a sheet-qualified
-    reference, R1C1 text, surrounding whitespace or anything else
-    :meth:`Workbook.parse_reference` does not read as one cell raises
-    :class:`InvalidArgumentError`. ``sheet["A1"]`` returns
-    ``sheet.get("A1").to_python()``, and ``sheet["A1"] = v`` is
-    ``sheet.set("A1", v)``.
+    Rows and columns are 0-based. Every method taking a ``(row, col)`` pair
+    also takes the cell as one unqualified A1 string in its place
+    (``set_value("B3", 1)`` is ``set_value(2, 1, 1)``); a method taking two
+    cells takes both pairs or both strings. The pair is positional only;
+    the arguments after it may be passed by keyword. A range, a
+    sheet-qualified reference, R1C1 text, surrounding whitespace or anything
+    else :meth:`Workbook.parse_reference` does not read as one cell raises
+    :class:`InvalidArgumentError`. A method taking a :class:`CellRect` also
+    takes an unqualified A1 range (``"A1:B2"``; one cell is a 1x1 range).
+
+    ``sheet["A1"]`` and ``sheet[row, col]`` return the cell's value as
+    :meth:`Value.to_python` converts it; ``sheet["A1"] = v`` and
+    ``sheet[row, col] = v`` store ``v`` as :meth:`set_value` does. A range
+    key raises :class:`InvalidArgumentError`; an ``int`` or a slice raises
+    ``TypeError``.
+
+    Reads return the values of the last full :meth:`Workbook.recalc`.
     """
 
     __slots__ = ("_workbook", "_position", "_name")
@@ -797,15 +979,36 @@ class Sheet:
         return f"Sheet(index={self._position}, name={self._name!r})"
 
     # -- A1 access ---------------------------------------------------------
-    def _address(self, row_or_a1: Union[int, str], col: Optional[int]) -> Tuple[int, int]:
-        """``(row, col)`` from an A1 address or a 0-based pair."""
-        if isinstance(row_or_a1, str):
-            if col is not None:
-                raise TypeError("formulon: an A1 address takes no column argument")
-            return self._cell(row_or_a1)
-        if col is None:
-            raise TypeError("formulon: a row index needs a column index")
-        return row_or_a1, col
+    def _cell_args(
+        self,
+        name: str,
+        args: Tuple[Any, ...],
+        kwargs: Dict[str, Any],
+        rest_names: Sequence[Union[str, Tuple[str, Any]]],
+    ) -> List[Any]:
+        """The arguments of method ``name`` in coordinate-form order, each A1 cell resolved to its row and column."""
+        pairs = CELL_ARGS[name]
+        cells, rest = _split_cell_args(args, kwargs, pairs, rest_names)
+        resolved = [self._cell(cell) if isinstance(cell, str) else cell for cell in cells]
+        row_at = {i: n for n, (i, _) in enumerate(pairs)}
+        col_at = {j: n for n, (_, j) in enumerate(pairs)}
+        others = iter(rest)
+        return [
+            resolved[row_at[p]][0] if p in row_at else resolved[col_at[p]][1] if p in col_at else next(others)
+            for p in range(2 * len(pairs) + len(rest))
+        ]
+
+    def _rect(self, rect: Union[CellRect, str]) -> CellRect:
+        """``rect`` itself, or the rectangle an unqualified A1 range or cell names."""
+        if not isinstance(rect, str):
+            return rect
+        ref = self._workbook.parse_reference(rect)
+        if ref is None or ref.sheet_name is not None:
+            raise FormulonError(
+                StatusCode.INVALID_ARGUMENT,
+                _diagnostic_override=(f"{rect!r} is not an unqualified A1 range", ""),
+            )
+        return ref.rect
 
     def _cell(self, a1: str) -> Tuple[int, int]:
         ref = self._workbook.parse_reference(a1)
@@ -818,30 +1021,38 @@ class Sheet:
             _diagnostic_override=(f"{a1!r} is not a single-cell A1 reference", ""),
         )
 
-    def get(self, a1: str) -> Value:
-        """The value at ``a1``, as :meth:`get_value` returns it."""
-        self._index()
-        row, col = self._cell(a1)
-        return self.get_value(row, col)
+    def _key(self, key: Union[str, Tuple[int, int]]) -> Tuple[int, int]:
+        """``(row, col)`` from a ``sheet[...]`` key: one A1 cell or a ``(row, col)`` pair."""
+        if isinstance(key, str):
+            return self._cell(key)
+        if isinstance(key, tuple) and len(key) == 2 and all(isinstance(k, numbers.Integral) for k in key):
+            return key[0], key[1]
+        raise TypeError(f"formulon: a sheet key is an A1 string or a (row, col) pair, got {key!r}")
 
-    def set(self, a1: str, value: Union[None, bool, int, float, str, ExcelError, Value]) -> None:  # noqa: FBT001 -- the value is any cell type; a bool is one of them
-        """Store ``value`` at ``a1``, as :meth:`set_value` does."""
-        self._index()
-        row, col = self._cell(a1)
+    def __getitem__(self, key: Union[str, Tuple[int, int]]) -> Union[None, float, bool, str, ExcelError, Value]:
+        row, col = self._key(key)
+        return self.get_value(row, col).to_python()
+
+    def __setitem__(
+        self, key: Union[str, Tuple[int, int]], value: Union[None, bool, int, float, str, ExcelError, Value]
+    ) -> None:
+        row, col = self._key(key)
         self.set_value(row, col, value)
 
-    def __getitem__(self, a1: str) -> Union[None, float, bool, str, ExcelError, Value]:
-        return self.get(a1).to_python()
-
-    def __setitem__(self, a1: str, value: Union[None, bool, int, float, str, ExcelError, Value]) -> None:
-        self.set(a1, value)
-
     # -- Cell mutation -----------------------------------------------------
-    def set_number(self, row: int, col: int, value: float) -> None:
+    @overload
+    @_coordinate_form
+    def set_number(self, row: int, col: int, value: float) -> None: ...
+
+    @overload
+    def set_number(self, a1: str, value: float) -> None: ...
+
+    def set_number(self, *args: Any, **kwargs: Any) -> None:
         """Store the number ``value`` at ``(row, col)``.
 
         ``row`` and ``col`` are 0-based.
         """
+        row, col, value = self._cell_args("set_number", args, kwargs, ("value",))
         sheet = self._index()
         h = self._workbook._require()
         status = LIB.fm_sheet_set_number(
@@ -849,11 +1060,19 @@ class Sheet:
         )
         _check(status)
 
-    def set_bool(self, row: int, col: int, value: bool) -> None:  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
+    @overload
+    @_coordinate_form
+    def set_bool(self, row: int, col: int, value: bool) -> None: ...  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
+
+    @overload
+    def set_bool(self, a1: str, value: bool) -> None: ...  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
+
+    def set_bool(self, *args: Any, **kwargs: Any) -> None:
         """Store the boolean ``value`` at ``(row, col)``.
 
         ``row`` and ``col`` are 0-based.
         """
+        row, col, value = self._cell_args("set_bool", args, kwargs, ("value",))
         sheet = self._index()
         h = self._workbook._require()
         status = LIB.fm_sheet_set_bool(
@@ -861,13 +1080,21 @@ class Sheet:
         )
         _check(status)
 
-    def set_error(self, row: int, col: int, error_code: ErrorCode) -> None:
+    @overload
+    @_coordinate_form
+    def set_error(self, row: int, col: int, error_code: ErrorCode) -> None: ...
+
+    @overload
+    def set_error(self, a1: str, error_code: ErrorCode) -> None: ...
+
+    def set_error(self, *args: Any, **kwargs: Any) -> None:
         """Store an Excel cell error at ``(row, col)``.
 
         ``row`` and ``col`` are 0-based. ``error_code`` is an
         :class:`ErrorCode` member, not a display literal; the same member
         comes back out through :attr:`Value.error_code`.
         """
+        row, col, error_code = self._cell_args("set_error", args, kwargs, ("error_code",))
         sheet = self._index()
         h = self._workbook._require()
         status = LIB.fm_sheet_set_error(
@@ -875,13 +1102,21 @@ class Sheet:
         )
         _check(status)
 
-    def set_text(self, row: int, col: int, value: str) -> None:
+    @overload
+    @_coordinate_form
+    def set_text(self, row: int, col: int, value: str) -> None: ...
+
+    @overload
+    def set_text(self, a1: str, value: str) -> None: ...
+
+    def set_text(self, *args: Any, **kwargs: Any) -> None:
         """Store the string ``value`` at ``(row, col)``.
 
         ``row`` and ``col`` are 0-based. The text is stored
         verbatim; a leading ``=`` does not make it a formula (use
         :meth:`set_formula`).
         """
+        row, col, value = self._cell_args("set_text", args, kwargs, ("value",))
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -891,41 +1126,40 @@ class Sheet:
             )
             _check(status)
 
-    def set_blank(self, row: int, col: int) -> None:
+    @overload
+    @_coordinate_form
+    def set_blank(self, row: int, col: int) -> None: ...
+
+    @overload
+    def set_blank(self, a1: str) -> None: ...
+
+    def set_blank(self, *args: Any, **kwargs: Any) -> None:
         """Clear the cell at ``(row, col)``.
 
         ``row`` and ``col`` are 0-based. Clearing drops the
         stored value or formula; cell formatting is unaffected.
         """
+        row, col = self._cell_args("set_blank", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         status = LIB.fm_sheet_set_blank(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"))
         _check(status)
 
     @overload
-    def set_formula(self, row_or_a1: str, col: str) -> None: ...
+    @_coordinate_form
+    def set_formula(self, row: int, col: int, formula: str) -> None: ...
 
     @overload
-    def set_formula(self, row_or_a1: int, col: int, formula: str) -> None: ...
+    def set_formula(self, a1: str, formula: str) -> None: ...
 
-    def set_formula(self, row_or_a1: Union[int, str], col: Union[int, str], formula: Optional[str] = None) -> None:
-        """Store a formula at one cell.
+    def set_formula(self, *args: Any, **kwargs: Any) -> None:
+        """Store a formula at ``(row, col)``.
 
-        The cell is either one A1 address (``set_formula("B3", "=1+2")``) or a
-        0-based ``(row, col)`` pair (``set_formula(2, 1, "=1+2")``). The
-        leading ``=`` is optional. The cell keeps its previous cached value
-        until the next :meth:`Workbook.recalc`.
+        ``row`` and ``col`` are 0-based. The leading ``=`` is optional. The cell keeps its previous cached
+        value until the next :meth:`Workbook.recalc`.
         """
+        row, col, formula = self._cell_args("set_formula", args, kwargs, ("formula",))
         sheet = self._index()
-        if isinstance(row_or_a1, str):
-            if formula is not None:
-                raise TypeError("formulon: set_formula takes (a1, formula) or (row, col, formula)")
-            formula = cast(str, col)
-            row, col = self._address(row_or_a1, None)
-        else:
-            if formula is None:
-                raise TypeError("formulon: set_formula(row, col, formula) is missing formula")
-            row, col = self._address(row_or_a1, cast(int, col))
         h = self._workbook._require()
         with _ArgScope() as scope:
             formula_ptr = scope.cstr(formula)
@@ -934,12 +1168,23 @@ class Sheet:
             )
             _check(status)
 
+    @overload
+    @_coordinate_form
     def set_value(
         self,
         row: int,
         col: int,
-        value: Union[None, bool, int, float, str, "ExcelError", Value],  # noqa: FBT001 -- the value is any cell type; a bool is one of them
-    ) -> None:
+        value: Union[None, bool, int, float, str, ExcelError, Value],  # noqa: FBT001 -- the value is any cell type; a bool is one of them
+    ) -> None: ...
+
+    @overload
+    def set_value(
+        self,
+        a1: str,
+        value: Union[None, bool, int, float, str, ExcelError, Value],  # noqa: FBT001 -- the value is any cell type; a bool is one of them
+    ) -> None: ...
+
+    def set_value(self, *args: Any, **kwargs: Any) -> None:
         """Store ``value`` at ``(row, col)``, choosing the setter by its type.
 
         ``None`` clears the cell (:meth:`set_blank`); a ``bool`` is a boolean
@@ -954,44 +1199,25 @@ class Sheet:
           ValueError: for an integer too large to convert to a float.
           InvalidArgumentError: for a NaN or infinite number.
         """
-        if isinstance(value, Value):
-            kind = value.kind
-            if kind is ValueKind.BLANK:
-                self.set_blank(row, col)
-            elif kind is ValueKind.NUMBER:
-                self.set_number(row, col, cast(float, value.number))
-            elif kind is ValueKind.BOOL:
-                self.set_bool(row, col, cast(bool, value.boolean))
-            elif kind is ValueKind.TEXT:
-                self.set_text(row, col, cast(str, value.text))
-            elif kind is ValueKind.ERROR:
-                self.set_error(row, col, cast(ErrorCode, value.error_code))
-            else:
-                raise TypeError(f"formulon: a Value of kind {kind.name} cannot be stored in a cell")
-        elif value is None:
-            self.set_blank(row, col)
-        elif isinstance(value, bool):
-            self.set_bool(row, col, value)
-        elif isinstance(value, numbers.Real):
-            try:
-                number = float(value)
-            except OverflowError as exc:
-                raise ValueError("formulon: the integer is too large for a float") from exc
-            self.set_number(row, col, number)
-        elif isinstance(value, str):
-            self.set_text(row, col, value)
-        elif isinstance(value, ExcelError):
-            self.set_error(row, col, value.code)
-        else:
-            raise TypeError(f"formulon: cannot store a {type(value).__name__} in a cell")
+        row, col, value = self._cell_args("set_value", args, kwargs, ("value",))
+        setter, payload = _cell_input(value)
+        getattr(self, setter)(row, col, *payload)
 
-    def set_cell_phonetic(self, row: int, col: int, text: Optional[str]) -> None:
+    @overload
+    @_coordinate_form
+    def set_cell_phonetic(self, row: int, col: int, text: Optional[str]) -> None: ...
+
+    @overload
+    def set_cell_phonetic(self, a1: str, text: Optional[str]) -> None: ...
+
+    def set_cell_phonetic(self, *args: Any, **kwargs: Any) -> None:
         """Set the cell's phonetic guide (OOXML ``<rPh>``, furigana).
 
         ``row`` and ``col`` are 0-based. ``None`` (or ``""``) removes the
         guide. The guide is display metadata attached to the
         cell's string; it does not affect evaluation.
         """
+        row, col, text = self._cell_args("set_cell_phonetic", args, kwargs, ("text",))
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -1001,7 +1227,14 @@ class Sheet:
             )
             _check(status)
 
-    def set_cell_phonetic_runs(self, row: int, col: int, runs: Optional[Sequence[PhoneticRun]]) -> None:
+    @overload
+    @_coordinate_form
+    def set_cell_phonetic_runs(self, row: int, col: int, runs: Optional[Sequence[PhoneticRun]]) -> None: ...
+
+    @overload
+    def set_cell_phonetic_runs(self, a1: str, runs: Optional[Sequence[PhoneticRun]]) -> None: ...
+
+    def set_cell_phonetic_runs(self, *args: Any, **kwargs: Any) -> None:
         """Set the cell's phonetic guide as one ``<rPh>`` block per run.
 
         ``row`` and ``col`` are 0-based. ``None`` or an empty ``runs`` removes
@@ -1012,6 +1245,7 @@ class Sheet:
         The runs must be an ordered partition: each needs ``sb <= eb`` and
         must start at or after the previous run's ``eb``.
         """
+        row, col, runs = self._cell_args("set_cell_phonetic_runs", args, kwargs, ("runs",))
         sheet = self._index()
         h = self._workbook._require()
         runs = [] if runs is None else runs
@@ -1027,12 +1261,20 @@ class Sheet:
             )
             _check(status)
 
-    def get_cell_phonetic_runs(self, row: int, col: int) -> List[PhoneticRun]:
+    @overload
+    @_coordinate_form
+    def get_cell_phonetic_runs(self, row: int, col: int) -> List[PhoneticRun]: ...
+
+    @overload
+    def get_cell_phonetic_runs(self, a1: str) -> List[PhoneticRun]: ...
+
+    def get_cell_phonetic_runs(self, *args: Any, **kwargs: Any) -> List[PhoneticRun]:
         """Return the cell's ``<rPh>`` blocks with their spans; ``[]`` for an unannotated cell.
 
         ``row`` and ``col`` are 0-based. :meth:`get_cell_phonetic` returns the
         readings concatenated, without the spans.
         """
+        row, col = self._cell_args("get_cell_phonetic_runs", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         count = _read_count(
@@ -1067,7 +1309,14 @@ class Sheet:
                 )
         return runs
 
-    def set_cell_phonetic_properties(self, row: int, col: int, properties: PhoneticPropertiesInput) -> None:
+    @overload
+    @_coordinate_form
+    def set_cell_phonetic_properties(self, row: int, col: int, properties: PhoneticPropertiesInput) -> None: ...
+
+    @overload
+    def set_cell_phonetic_properties(self, a1: str, properties: PhoneticPropertiesInput) -> None: ...
+
+    def set_cell_phonetic_properties(self, *args: Any, **kwargs: Any) -> None:
         """Set how the cell's phonetic guide renders.
 
         ``row`` and ``col`` are 0-based. Independent of
@@ -1076,6 +1325,7 @@ class Sheet:
         Only observable on a cell that has runs, and every value-setting
         method clears both, so call it after the cell's text.
         """
+        row, col, properties = self._cell_args("set_cell_phonetic_properties", args, kwargs, ("properties",))
         sheet = self._index()
         h = self._workbook._require()
         _check(
@@ -1090,12 +1340,22 @@ class Sheet:
             )
         )
 
-    def get_cell_phonetic_properties(self, row: int, col: int) -> PhoneticProperties:
+    @overload
+    @_coordinate_form
+    def get_cell_phonetic_properties(self, row: int, col: int) -> PhoneticProperties: ...
+
+    @overload
+    def get_cell_phonetic_properties(self, a1: str) -> PhoneticProperties: ...
+
+    def get_cell_phonetic_properties(self, *args: Any, **kwargs: Any) -> PhoneticProperties:
         """Return how the cell's phonetic guide renders.
 
         ``row`` and ``col`` are 0-based. A cell with no
-        annotation reports the all-zero default.
+        annotation reports the all-zero default. ``present`` is true when the
+        properties are explicit: a ``<phoneticPr>`` element or
+        :meth:`set_cell_phonetic_properties`, an all-zero triple included.
         """
+        row, col = self._cell_args("get_cell_phonetic_properties", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -1117,30 +1377,27 @@ class Sheet:
                 font_id=LIB.read_u32(font_ptr),
                 type=LIB.read_u32(type_ptr),
                 alignment=LIB.read_u32(alignment_ptr),
+                present=bool(
+                    _read_count(
+                        LIB.fm_sheet_has_cell_phonetic_properties,
+                        h,
+                        _uint(sheet, "sheet_index"),
+                        _uint(row, "row"),
+                        _uint(col, "col"),
+                    )
+                ),
             )
 
-    def has_cell_phonetic_properties(self, row: int, col: int) -> bool:
-        """Whether the cell's phonetic properties are explicit.
+    @overload
+    @_coordinate_form
+    def get_cell_show_phonetic(self, row: int, col: int) -> bool: ...
 
-        True when they came from a ``<phoneticPr>`` element or
-        :meth:`set_cell_phonetic_properties` (an all-zero triple included), false
-        for the state an absent element resolves to. The JS bindings report
-        it as ``present`` on the phonetic-properties result.
-        """
-        sheet = self._index()
-        h = self._workbook._require()
-        return bool(
-            _read_count(
-                LIB.fm_sheet_has_cell_phonetic_properties,
-                h,
-                _uint(sheet, "sheet_index"),
-                _uint(row, "row"),
-                _uint(col, "col"),
-            )
-        )
+    @overload
+    def get_cell_show_phonetic(self, a1: str) -> bool: ...
 
-    def get_cell_show_phonetic(self, row: int, col: int) -> bool:
+    def get_cell_show_phonetic(self, *args: Any, **kwargs: Any) -> bool:
         """Whether the cell shows its phonetic guide (``<c ph="1">``)."""
+        row, col = self._cell_args("get_cell_show_phonetic", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         return bool(
@@ -1153,12 +1410,20 @@ class Sheet:
             )
         )
 
-    def set_cell_show_phonetic(self, row: int, col: int, show: bool) -> None:  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
+    @overload
+    @_coordinate_form
+    def set_cell_show_phonetic(self, row: int, col: int, show: bool) -> None: ...  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
+
+    @overload
+    def set_cell_show_phonetic(self, a1: str, show: bool) -> None: ...  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
+
+    def set_cell_show_phonetic(self, *args: Any, **kwargs: Any) -> None:
         """Set the cell's "Show Phonetic" display flag.
 
         Independent of the readings: value writes clear the readings but keep
         this flag. A formula cell's flag is neither saved nor read from a file.
         """
+        row, col, show = self._cell_args("set_cell_show_phonetic", args, kwargs, ("show",))
         sheet = self._index()
         h = self._workbook._require()
         _check(
@@ -1167,11 +1432,19 @@ class Sheet:
             )
         )
 
-    def get_cell_phonetic(self, row: int, col: int) -> Optional[str]:
+    @overload
+    @_coordinate_form
+    def get_cell_phonetic(self, row: int, col: int) -> Optional[str]: ...
+
+    @overload
+    def get_cell_phonetic(self, a1: str) -> Optional[str]: ...
+
+    def get_cell_phonetic(self, *args: Any, **kwargs: Any) -> Optional[str]:
         """Return the cell's phonetic guide, or ``None`` when it has none.
 
         ``row`` and ``col`` are 0-based.
         """
+        row, col = self._cell_args("get_cell_phonetic", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         return (
@@ -1186,13 +1459,21 @@ class Sheet:
         )
 
     # -- Cell read ---------------------------------------------------------
-    def get_value(self, row: int, col: int) -> Value:
+    @overload
+    @_coordinate_form
+    def get_value(self, row: int, col: int) -> Value: ...
+
+    @overload
+    def get_value(self, a1: str) -> Value: ...
+
+    def get_value(self, *args: Any, **kwargs: Any) -> Value:
         """Read the cached value at ``(row, col)``.
 
         Reflects the most recent recalc; mutations made after the last
         :meth:`Workbook.recalc` are not visible to dependents until you call
         :meth:`Workbook.recalc` again.
         """
+        row, col = self._cell_args("get_value", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -1203,8 +1484,90 @@ class Sheet:
             _check(status)
             return Value._from_wasm(value_ptr)
 
+    def get_values(self, cell_range: Union[CellRect, str]) -> List[List[Value]]:
+        """Read the cached values of ``cell_range`` as a dense row-major grid.
+
+        ``result[r][c]`` is the cell ``r`` rows and ``c`` columns from the
+        top-left corner; an empty cell is a ``BLANK`` :class:`Value`, and a
+        spilled cell holds its spill value. Values are those of the last full
+        :meth:`Workbook.recalc`.
+
+        Raises:
+          InvalidArgumentError: when the range holds more than 4,194,304
+            (2**22) cells.
+        """
+        rect = self._rect(cell_range)
+        rows = rect.last_row - rect.first_row + 1
+        cols = rect.last_col - rect.first_col + 1
+        if rows <= 0 or cols <= 0 or rows * cols > _GET_VALUES_CELL_CAP:
+            raise FormulonError(
+                StatusCode.INVALID_ARGUMENT,
+                _diagnostic_override=(f"get_values reads at most {_GET_VALUES_CELL_CAP} cells, got {rows}x{cols}", ""),
+            )
+        grid = [[_BLANK] * cols for _ in range(rows)]
+        for cell in self.list_cells(rect):
+            grid[cell.row - rect.first_row][cell.col - rect.first_col] = cell.value
+        return grid
+
+    @overload
+    @_coordinate_form
+    def set_values(
+        self, row: int, col: int, values: Sequence[Sequence[Union[None, bool, int, float, str, ExcelError, Value]]]
+    ) -> None: ...
+
+    @overload
+    def set_values(
+        self, a1: str, values: Sequence[Sequence[Union[None, bool, int, float, str, ExcelError, Value]]]
+    ) -> None: ...
+
+    def set_values(self, *args: Any, **kwargs: Any) -> None:
+        """Store a row-major grid of values with ``(row, col)`` as its top-left cell.
+
+        Each element is stored as :meth:`set_value` stores it, so a string
+        starting with ``=`` is text. Element types, finiteness, equal row
+        lengths and the grid's fit on the sheet are all checked before any
+        cell is written; an empty grid writes nothing. The write is not
+        atomic: when the engine refuses a cell (one inside an array formula
+        or a data table, say), the cells before it stay written.
+
+        Raises:
+          TypeError: for a non-grid argument or an element :meth:`set_value`
+            rejects by type.
+          ValueError: for an integer too large to convert to a float.
+          InvalidArgumentError: for a NaN or infinite number, or a grid
+            reaching past the last row or column.
+        """
+        row, col, values = self._cell_args("set_values", args, kwargs, ("values",))
+        if isinstance(values, (str, bytes)):
+            raise TypeError("formulon: values is a sequence of rows")
+        grid = []
+        for line in values:
+            if isinstance(line, (str, bytes)):
+                raise TypeError("formulon: each row of values is a sequence of cell values")
+            grid.append([_cell_input(value) for value in line])
+        width = len(grid[0]) if grid else 0
+        if any(len(line) != width for line in grid):
+            raise TypeError("formulon: every row of values must have the same length")
+        if width == 0:
+            return
+        if row + len(grid) - 1 > _LAST_ROW or col + width - 1 > _LAST_COL:
+            raise FormulonError(
+                StatusCode.INVALID_ARGUMENT,
+                _diagnostic_override=(f"a {len(grid)}x{width} grid at ({row}, {col}) runs past the sheet", ""),
+            )
+        for r, line in enumerate(grid):
+            for c, (setter, payload) in enumerate(line):
+                getattr(self, setter)(row + r, col + c, *payload)
+
     # -- Ad-hoc array evaluation ------------------------------------------
-    def evaluate_cf_formula(self, row: int, col: int, anchor_row: int, anchor_col: int, formula: str) -> bool:
+    @overload
+    @_coordinate_form
+    def evaluate_cf_formula(self, row: int, col: int, anchor_row: int, anchor_col: int, formula: str) -> bool: ...
+
+    @overload
+    def evaluate_cf_formula(self, a1: str, anchor: str, formula: str) -> bool: ...
+
+    def evaluate_cf_formula(self, *args: Any, **kwargs: Any) -> bool:
         """Evaluate a conditional-format formula at one cell without mutation.
 
         The result is coerced with Excel's conditional-format rules: an error,
@@ -1212,6 +1575,7 @@ class Sheet:
         fire), any non-zero number is ``True``. An evaluation error is not
         raised.
         """
+        row, col, anchor_row, anchor_col, formula = self._cell_args("evaluate_cf_formula", args, kwargs, ("formula",))
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -1231,7 +1595,33 @@ class Sheet:
             )
             return Value._from_wasm(value_ptr).boolean is True
 
-    def evaluate_formula_array(self, row: int, col: int, formula: str) -> List[List[Value]]:
+    @overload
+    @_coordinate_form
+    def evaluate_formula(self, row: int, col: int, formula: str) -> Value: ...
+
+    @overload
+    def evaluate_formula(self, a1: str, formula: str) -> Value: ...
+
+    def evaluate_formula(self, *args: Any, **kwargs: Any) -> Value:
+        """Evaluate ``formula`` as if entered at ``(row, col)``, without mutating the workbook.
+
+        An array result is reduced to its top-left element; use
+        :meth:`evaluate_formula_array` for the whole grid. A cell-level Excel
+        error is returned as a :class:`Value` of kind ``ERROR``. A reference
+        to the anchor cell itself reads its cached value.
+        """
+        row, col, formula = self._cell_args("evaluate_formula", args, kwargs, ("formula",))
+        sheet = self._index()
+        return self._workbook._evaluate_formula_top_left(sheet, row, col, formula)
+
+    @overload
+    @_coordinate_form
+    def evaluate_formula_array(self, row: int, col: int, formula: str) -> List[List[Value]]: ...
+
+    @overload
+    def evaluate_formula_array(self, a1: str, formula: str) -> List[List[Value]]: ...
+
+    def evaluate_formula_array(self, *args: Any, **kwargs: Any) -> List[List[Value]]:
         """Evaluate ``formula`` as if entered at ``(row, col)`` and
         return the whole multi-cell result, without mutating the workbook.
 
@@ -1255,41 +1645,30 @@ class Sheet:
         Returns:
           A ``rows x cols`` nested list of :class:`Value`.
         """
+        row, col, formula = self._cell_args("evaluate_formula_array", args, kwargs, ("formula",))
         sheet = self._index()
         return self._workbook._evaluate_formula_cells(sheet, row, col, formula, top_left_only=False)
 
     # -- Iteration ---------------------------------------------------------
-    def get_cell_count(self) -> int:
-        """Return the number of written coordinates on the sheet.
+    def list_cells(self, cell_range: Union[CellRect, str, None] = None) -> List[Cell]:
+        """Return every populated cell in ``cell_range``, or on the whole sheet when it is ``None``.
 
-        Counts each cell set by a value, formula or format setter (clearing
-        keeps the slot) and each spill phantom. A workbook mutation
-        invalidates the enumeration :meth:`get_cell_at` walks.
+        Cells come in row-major order; each carries its stored formula and
+        cached value, as :meth:`get_cells_in_range` pages them.
         """
-        sheet = self._index()
-        h = self._workbook._require()
-        return _read_count(LIB.fm_sheet_get_cell_count, h, _uint(sheet, "sheet_index"))
-
-    def get_cell_at(self, index: int) -> Cell:
-        """Return the ``index``-th written coordinate on the sheet, sorted by ``(row, col)`` ascending."""
-        sheet = self._index()
-        h = self._workbook._require()
-        with _ArgScope() as scope:
-            row_ptr = scope.out_ptr()
-            col_ptr = scope.out_ptr()
-            formula_ptr = scope.out_ptr()
-            value_ptr = scope.alloc(fm_value_t_size)
-            status = LIB.fm_sheet_get_cell_at(
-                h, _uint(sheet, "sheet_index"), _uint(index, "idx"), row_ptr, col_ptr, formula_ptr, value_ptr
-            )
-            _check(status)
-            formula_addr = LIB.read_u32(formula_ptr)
-            return Cell(
-                row=LIB.read_u32(row_ptr),
-                col=LIB.read_u32(col_ptr),
-                formula=LIB.read_cstr(formula_addr) if formula_addr else None,
-                value=Value._from_wasm(value_ptr),
-            )
+        rect = (
+            CellRect(first_row=0, first_col=0, last_row=_LAST_ROW, last_col=_LAST_COL)
+            if cell_range is None
+            else self._rect(cell_range)
+        )
+        cells: List[Cell] = []
+        cursor: Optional[int] = None
+        while True:
+            page = self.get_cells_in_range(rect, cursor)
+            cells.extend(page.cells)
+            if page.next_cursor is None:
+                return cells
+            cursor = page.next_cursor
 
     def insert_rows(self, row: int, count: int) -> None:
         """Insert ``count`` rows at ``row`` on the sheet.
@@ -1356,8 +1735,9 @@ class Sheet:
     # Note: ``fm_workbook_set_iterative_progress`` (the per-sweep callback)
     # is intentionally NOT bound -- it takes a C function pointer that the
     # wasmtime-py host cannot synthesise into the module's function table.
-    def recalc_viewport(self, rect: CellRect) -> int:
+    def recalc_viewport(self, rect: Union[CellRect, str]) -> int:
         """Recalc the dependency closure for the viewport ``rect``; return cell count."""
+        rect = self._rect(rect)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -1368,8 +1748,16 @@ class Sheet:
             return LIB.read_u32(out)
 
     # -- Lambda text -------------------------------------------------------
-    def get_lambda_text(self, row: int, col: int) -> Optional[str]:
+    @overload
+    @_coordinate_form
+    def get_lambda_text(self, row: int, col: int) -> Optional[str]: ...
+
+    @overload
+    def get_lambda_text(self, a1: str) -> Optional[str]: ...
+
+    def get_lambda_text(self, *args: Any, **kwargs: Any) -> Optional[str]:
         """Render the lambda cached at ``(row, col)`` as text; ``None`` when the cell holds no lambda."""
+        row, col = self._cell_args("get_lambda_text", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         return _read_optional_cstr_out(
@@ -1381,27 +1769,23 @@ class Sheet:
         )
 
     # -- Merges ------------------------------------------------------------
-    def add_merge(self, merge: CellRect) -> None:
+    def add_merge(self, merge: Union[CellRect, str]) -> None:
         """Append a merge range to the sheet."""
+        merge = self._rect(merge)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = _pack_cell_rect_array([merge], scope)
             _check(LIB.fm_sheet_add_merge(h, _uint(sheet, "sheet"), ptr))
 
-    def remove_merge(self, merge: CellRect) -> None:
+    def remove_merge(self, merge: Union[CellRect, str]) -> None:
         """Remove every merge on the sheet overlapping ``merge``."""
+        merge = self._rect(merge)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = _pack_cell_rect_array([merge], scope)
             _check(LIB.fm_sheet_remove_merge(h, _uint(sheet, "sheet"), ptr))
-
-    def remove_merge_at(self, index: int) -> None:
-        """Remove the merge at ``index`` on the sheet."""
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(LIB.fm_sheet_remove_merge_at(h, _uint(sheet, "sheet"), _uint(index, "index")))
 
     def clear_merges(self) -> None:
         """Drop every merge range on the sheet."""
@@ -1425,6 +1809,8 @@ class Sheet:
         return out
 
     # -- Hyperlinks --------------------------------------------------------
+    @overload
+    @_coordinate_form
     def add_hyperlink(
         self,
         row: int,
@@ -1434,6 +1820,27 @@ class Sheet:
         location: Optional[str] = None,
         display: Optional[str] = None,
         tooltip: Optional[str] = None,
+    ) -> None: ...
+
+    @overload
+    def add_hyperlink(
+        self,
+        a1: str,
+        *,
+        target: Optional[str],
+        location: Optional[str] = None,
+        display: Optional[str] = None,
+        tooltip: Optional[str] = None,
+    ) -> None: ...
+
+    def add_hyperlink(
+        self,
+        *args: Any,
+        target: Optional[str],
+        location: Optional[str] = None,
+        display: Optional[str] = None,
+        tooltip: Optional[str] = None,
+        **kwargs: Any,
     ) -> None:
         """Append a hyperlink on the cell ``(row, col)``.
 
@@ -1445,11 +1852,12 @@ class Sheet:
         Raises:
           TypeError: when ``target`` and ``location`` are both ``None``.
         """
+        row, col = self._cell_args("add_hyperlink", args, kwargs, ())
         self._add_hyperlink(CellRect(row, col, row, col), target, location, display, tooltip)
 
     def add_hyperlink_range(
         self,
-        rect: CellRect,
+        rect: Union[CellRect, str],
         *,
         target: Optional[str],
         location: Optional[str] = None,
@@ -1457,6 +1865,7 @@ class Sheet:
         tooltip: Optional[str] = None,
     ) -> None:
         """Append a hyperlink covering the cells of ``rect``; the arguments read as in :meth:`add_hyperlink`."""
+        rect = self._rect(rect)
         self._add_hyperlink(rect, target, location, display, tooltip)
 
     def _add_hyperlink(
@@ -1480,17 +1889,19 @@ class Sheet:
             S.write_str_field(LIB, ptr, S.HYPERLINK, "tooltip", tooltip, scope)
             _check(LIB.fm_sheet_add_hyperlink(h, _uint(sheet, "sheet"), ptr))
 
-    def remove_hyperlink(self, row: int, col: int) -> None:
+    @overload
+    @_coordinate_form
+    def remove_hyperlink(self, row: int, col: int) -> None: ...
+
+    @overload
+    def remove_hyperlink(self, a1: str) -> None: ...
+
+    def remove_hyperlink(self, *args: Any, **kwargs: Any) -> None:
         """Remove every hyperlink anchored at ``(row, col)`` on the sheet."""
+        row, col = self._cell_args("remove_hyperlink", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         _check(LIB.fm_sheet_remove_hyperlink(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col")))
-
-    def remove_hyperlink_at(self, index: int) -> None:
-        """Remove the hyperlink at ``index`` on the sheet."""
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(LIB.fm_sheet_remove_hyperlink_at(h, _uint(sheet, "sheet"), _uint(index, "index")))
 
     def clear_hyperlinks(self) -> None:
         """Drop every hyperlink on the sheet."""
@@ -1514,8 +1925,16 @@ class Sheet:
                 out.append(_hyperlink_from(d))
         return out
 
-    def get_hyperlink(self, row: int, col: int) -> Optional[Hyperlink]:
+    @overload
+    @_coordinate_form
+    def get_hyperlink(self, row: int, col: int) -> Optional[Hyperlink]: ...
+
+    @overload
+    def get_hyperlink(self, a1: str) -> Optional[Hyperlink]: ...
+
+    def get_hyperlink(self, *args: Any, **kwargs: Any) -> Optional[Hyperlink]:
         """Return the hyperlink whose range starts at ``(row, col)``, or ``None``."""
+        row, col = self._cell_args("get_hyperlink", args, kwargs, ())
         sheet = self._index()
         return self._workbook._lookup(
             LIB.fm_sheet_get_hyperlink,
@@ -1525,8 +1944,16 @@ class Sheet:
         )
 
     # -- Comments ----------------------------------------------------------
-    def get_comment(self, row: int, col: int) -> Optional[Comment]:
+    @overload
+    @_coordinate_form
+    def get_comment(self, row: int, col: int) -> Optional[Comment]: ...
+
+    @overload
+    def get_comment(self, a1: str) -> Optional[Comment]: ...
+
+    def get_comment(self, *args: Any, **kwargs: Any) -> Optional[Comment]:
         """Return the comment at ``(row, col)`` or ``None`` if absent."""
+        row, col = self._cell_args("get_comment", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -1543,12 +1970,20 @@ class Sheet:
                 text=LIB.read_cstr(d["text"]),
             )
 
-    def set_comment(self, row: int, col: int, comment: Comment) -> None:
+    @overload
+    @_coordinate_form
+    def set_comment(self, row: int, col: int, comment: Comment) -> None: ...
+
+    @overload
+    def set_comment(self, a1: str, comment: Comment) -> None: ...
+
+    def set_comment(self, *args: Any, **kwargs: Any) -> None:
         """Insert or replace the comment (note) at ``(row, col)``.
 
         An empty ``comment.text`` writes an empty note, as Excel keeps one;
         :meth:`remove_comment` removes a note.
         """
+        row, col, comment = self._cell_args("set_comment", args, kwargs, ("comment",))
         if not isinstance(comment, Comment):
             raise TypeError(f"formulon: comment must be a Comment, got {type(comment).__name__}")
         sheet = self._index()
@@ -1562,12 +1997,20 @@ class Sheet:
                 )
             )
 
-    def remove_comment(self, row: int, col: int) -> None:
+    @overload
+    @_coordinate_form
+    def remove_comment(self, row: int, col: int) -> None: ...
+
+    @overload
+    def remove_comment(self, a1: str) -> None: ...
+
+    def remove_comment(self, *args: Any, **kwargs: Any) -> None:
         """Remove the comment (note) at ``(row, col)``.
 
         Raises:
           NotFoundError: when the cell has no comment.
         """
+        row, col = self._cell_args("remove_comment", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         _check(LIB.fm_sheet_remove_comment(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col")))
@@ -1595,8 +2038,16 @@ class Sheet:
                 )
         return out
 
-    def get_comment_visible(self, row: int, col: int) -> Optional[bool]:
+    @overload
+    @_coordinate_form
+    def get_comment_visible(self, row: int, col: int) -> Optional[bool]: ...
+
+    @overload
+    def get_comment_visible(self, a1: str) -> Optional[bool]: ...
+
+    def get_comment_visible(self, *args: Any, **kwargs: Any) -> Optional[bool]:
         """Return whether the note at the cell is shown without hovering, or ``None`` if absent."""
+        row, col = self._cell_args("get_comment_visible", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -1609,8 +2060,16 @@ class Sheet:
             _check(status)
             return LIB.read_u32(out) != 0
 
-    def set_comment_visible(self, row: int, col: int, visible: bool) -> None:  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
+    @overload
+    @_coordinate_form
+    def set_comment_visible(self, row: int, col: int, visible: bool) -> None: ...  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
+
+    @overload
+    def set_comment_visible(self, a1: str, visible: bool) -> None: ...  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
+
+    def set_comment_visible(self, *args: Any, **kwargs: Any) -> None:
         """Show or hide the note at the cell; its box geometry is kept."""
+        row, col, visible = self._cell_args("set_comment_visible", args, kwargs, ("visible",))
         sheet = self._index()
         h = self._workbook._require()
         _check(
@@ -1692,24 +2151,40 @@ class Sheet:
         assert index is not None
         return index
 
-    def update_protected_range(self, protected_range_index: int, protected: ProtectedRange) -> None:
-        """Replace the ``protected_range_index``-th protected range of the sheet."""
+    def _protected_range_index(self, protected_range: Union[int, str]) -> int:
+        """The index ``protected_range`` addresses: an index, or a protected range's name."""
+        return resolve_ref(
+            protected_range,
+            lambda: [self._protected_range_at(i).name for i in range(self._protected_range_count())],
+            "protected range",
+        )
+
+    def update_protected_range(self, protected_range: Union[int, str], protected: ProtectedRange) -> None:
+        """Replace ``protected_range``, an index or a protected range's name.
+
+        Raises:
+          NotFoundError: when no protected range has the name ``protected_range``.
+          IndexOutOfRangeError: when ``protected_range`` is an index past the last one.
+        """
+        index = self._protected_range_index(protected_range)
         sheet = self._index()
         self._protected_range_call(
             LIB.fm_sheet_update_protected_range,
-            (_uint(sheet, "sheet"), _uint(protected_range_index, "protected_range_index")),
+            (_uint(sheet, "sheet"), _uint(index, "protected_range_index")),
             protected,
         )
 
-    def remove_protected_range(self, protected_range_index: int) -> None:
-        """Remove the ``protected_range_index``-th protected range of the sheet."""
+    def remove_protected_range(self, protected_range: Union[int, str]) -> None:
+        """Remove ``protected_range``, an index or a protected range's name.
+
+        Raises:
+          NotFoundError: when no protected range has the name ``protected_range``.
+          IndexOutOfRangeError: when ``protected_range`` is an index past the last one.
+        """
+        index = self._protected_range_index(protected_range)
         sheet = self._index()
         h = self._workbook._require()
-        _check(
-            LIB.fm_sheet_remove_protected_range(
-                h, _uint(sheet, "sheet"), _uint(protected_range_index, "protected_range_index")
-            )
-        )
+        _check(LIB.fm_sheet_remove_protected_range(h, _uint(sheet, "sheet"), _uint(index, "protected_range_index")))
 
     # -- Data validations --------------------------------------------------
     def list_validations(self) -> List[DataValidation]:
@@ -1901,36 +2376,55 @@ class Sheet:
                 effective_default_row_height=d["effective_default_row_height"],
             )
 
-    def set_format_defaults(self, defaults: SheetFormatDefaults) -> None:
-        """Replace the sheet's default column / row metrics.
+    def set_format_defaults(
+        self,
+        *,
+        default_col_width: Optional[float] = UNCHANGED,
+        default_row_height: Optional[float] = UNCHANGED,
+        base_col_width: float = UNCHANGED,
+        custom_height: bool = UNCHANGED,
+        zero_height: bool = UNCHANGED,
+    ) -> None:
+        """Update the sheet's default column / row metrics; an omitted argument keeps its value.
 
-        ``None`` for ``default_col_width`` / ``default_row_height`` clears the stored value;
-        :data:`UNCHANGED` keeps it. A ``None`` ``custom_height`` / ``zero_height`` keeps the stored flag.
+        Arguments are the :class:`SheetFormatDefaults` fields.
+        ``default_col_width`` / ``default_row_height`` given as ``None`` clear
+        the stored value; the other arguments cannot be cleared.
+
+        Raises:
+          TypeError: when ``base_col_width`` is ``None`` or a flag is not a ``bool``.
         """
+        if base_col_width is None:
+            raise TypeError("formulon: base_col_width cannot be None")
+        for name, value in (("custom_height", custom_height), ("zero_height", zero_height)):
+            if value is not UNCHANGED:
+                _flag(value, name)
+        given = (default_col_width, default_row_height, base_col_width, custom_height, zero_height)
+        if any(value is UNCHANGED for value in given):
+            stored = self.get_format_defaults()
+            if default_col_width is UNCHANGED:
+                default_col_width = stored.default_col_width
+            if default_row_height is UNCHANGED:
+                default_row_height = stored.default_row_height
+            if base_col_width is UNCHANGED:
+                base_col_width = stored.base_col_width
+            if custom_height is UNCHANGED:
+                custom_height = stored.custom_height
+            if zero_height is UNCHANGED:
+                zero_height = stored.zero_height
         sheet = self._index()
         h = self._workbook._require()
-        col_width, row_height = defaults.default_col_width, defaults.default_row_height
-        if col_width is UNCHANGED or row_height is UNCHANGED:
-            stored = self.get_format_defaults()
-            col_width = stored.default_col_width if col_width is UNCHANGED else col_width
-            row_height = stored.default_row_height if row_height is UNCHANGED else row_height
-        if defaults.custom_height is None or defaults.zero_height is None:
-            stored = self.get_format_defaults()
-            custom_height = stored.custom_height if defaults.custom_height is None else defaults.custom_height
-            zero_height = stored.zero_height if defaults.zero_height is None else defaults.zero_height
-        else:
-            custom_height, zero_height = defaults.custom_height, defaults.zero_height
         with _ArgScope() as scope:
             ptr = scope.struct(S.SHEET_FORMAT_DEFAULTS)
             S.SHEET_FORMAT_DEFAULTS.pack(
                 LIB,
                 ptr,
                 {
-                    "default_col_width": 0.0 if col_width is None else float(col_width),
-                    "default_row_height": 0.0 if row_height is None else float(row_height),
-                    "base_col_width": float(defaults.base_col_width),
-                    "has_default_col_width": 0 if col_width is None else 1,
-                    "has_default_row_height": 0 if row_height is None else 1,
+                    "default_col_width": 0.0 if default_col_width is None else float(default_col_width),
+                    "default_row_height": 0.0 if default_row_height is None else float(default_row_height),
+                    "base_col_width": float(base_col_width),
+                    "has_default_col_width": 0 if default_col_width is None else 1,
+                    "has_default_row_height": 0 if default_row_height is None else 1,
                     "custom_height": 1 if custom_height else 0,
                     "zero_height": 1 if zero_height else 0,
                 },
@@ -1944,8 +2438,9 @@ class Sheet:
             _check(fn(*args, out))
             return LIB.read_f64(out)
 
-    def get_cell_rect_pt(self, cell_range: CellRect, mode: GeometryMode = GeometryMode.DISPLAY) -> RectPt:
+    def get_cell_rect_pt(self, cell_range: Union[CellRect, str], mode: GeometryMode = GeometryMode.DISPLAY) -> RectPt:
         """Return the rectangle covering ``cell_range`` in points from the top-left of A1."""
+        cell_range = self._rect(cell_range)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -1956,11 +2451,16 @@ class Sheet:
             return RectPt(**S.RECT_PT.unpack(LIB, ptr))
 
     def get_column_width_pt(self, col: int, mode: GeometryMode = GeometryMode.DISPLAY) -> float:
-        """Return the effective width of ``col`` in points (0 when hidden)."""
+        """Return the effective width of ``col`` in points (0 when hidden).
+
+        Raises:
+          ValueError: when ``mode`` is not a :class:`GeometryMode` member.
+        """
+        mode_c = _geometry_mode(mode)
         sheet = self._index()
         h = self._workbook._require()
         return self._read_f64_out(
-            LIB.fm_sheet_get_column_width_pt, h, _uint(sheet, "sheet_index"), _uint(col, "col"), _sint(mode, "mode")
+            LIB.fm_sheet_get_column_width_pt, h, _uint(sheet, "sheet_index"), _uint(col, "col"), mode_c
         )
 
     def get_row_height_pt(self, row: int) -> float:
@@ -1987,19 +2487,29 @@ class Sheet:
             )
 
     def convert_column_chars_to_pt(self, chars: float, mode: GeometryMode = GeometryMode.DISPLAY) -> float:
-        """Convert a stored column width (padding included) to points, snapped to whole screen pixels."""
+        """Convert a stored column width (padding included) to points, snapped to whole screen pixels.
+
+        Raises:
+          ValueError: when ``mode`` is not a :class:`GeometryMode` member.
+        """
+        mode_c = _geometry_mode(mode)
         sheet = self._index()
         h = self._workbook._require()
         return self._read_f64_out(
-            LIB.fm_sheet_convert_column_chars_to_pt, h, _uint(sheet, "sheet_index"), _sint(mode, "mode"), float(chars)
+            LIB.fm_sheet_convert_column_chars_to_pt, h, _uint(sheet, "sheet_index"), mode_c, float(chars)
         )
 
     def convert_column_pt_to_chars(self, pt: float, mode: GeometryMode = GeometryMode.DISPLAY) -> float:
-        """Convert points to the stored column width Excel writes for that column."""
+        """Convert points to the stored column width Excel writes for that column.
+
+        Raises:
+          ValueError: when ``mode`` is not a :class:`GeometryMode` member.
+        """
+        mode_c = _geometry_mode(mode)
         sheet = self._index()
         h = self._workbook._require()
         return self._read_f64_out(
-            LIB.fm_sheet_convert_column_pt_to_chars, h, _uint(sheet, "sheet_index"), _sint(mode, "mode"), float(pt)
+            LIB.fm_sheet_convert_column_pt_to_chars, h, _uint(sheet, "sheet_index"), mode_c, float(pt)
         )
 
     def _read_formula_text(self, fn, sheet: int, row: int, col: int) -> Optional[str]:
@@ -2014,29 +2524,34 @@ class Sheet:
         return text or None
 
     @overload
-    def get_formula(self, row_or_a1: str) -> Optional[str]: ...
+    @_coordinate_form
+    def get_formula(self, row: int, col: int) -> Optional[str]: ...
 
     @overload
-    def get_formula(self, row_or_a1: int, col: int) -> Optional[str]: ...
+    def get_formula(self, a1: str) -> Optional[str]: ...
 
-    def get_formula(self, row_or_a1: Union[int, str], col: Optional[int] = None) -> Optional[str]:
-        """Return the stored A1 formula (leading ``=`` included), or ``None`` for a non-formula cell.
-
-        The cell is either one A1 address (``get_formula("B3")``) or a 0-based
-        ``(row, col)`` pair.
-        """
+    def get_formula(self, *args: Any, **kwargs: Any) -> Optional[str]:
+        """Return the stored A1 formula (leading ``=`` included), or ``None`` for a non-formula cell."""
+        row, col = self._cell_args("get_formula", args, kwargs, ())
         sheet = self._index()
-        row, col = self._address(row_or_a1, col)
         return self._read_formula_text(LIB.fm_sheet_get_formula, sheet, row, col)
 
-    def get_formula_r1c1(self, row: int, col: int) -> Optional[str]:
-        """Return the formula in R1C1 notation relative to the cell, or ``None`` for a non-formula cell."""
+    @overload
+    @_coordinate_form
+    def get_formula_r1c1(self, row: int, col: int) -> Optional[str]: ...
+
+    @overload
+    def get_formula_r1c1(self, a1: str) -> Optional[str]: ...
+
+    def get_formula_r1c1(self, *args: Any, **kwargs: Any) -> Optional[str]:
+        """Return the formula in R1C1 notation relative to the cell (leading ``=`` included), or ``None`` for a non-formula cell."""
+        row, col = self._cell_args("get_formula_r1c1", args, kwargs, ())
         sheet = self._index()
         return self._read_formula_text(LIB.fm_sheet_get_formula_r1c1, sheet, row, col)
 
     def get_cells_in_range(
         self,
-        cell_range: CellRect,
+        cell_range: Union[CellRect, str],
         cursor: Optional[int] = None,
         limit: Optional[int] = None,
     ) -> CellsInRange:
@@ -2046,6 +2561,7 @@ class Sheet:
         when the rectangle holds no further populated cell. ``limit`` of
         ``None`` or ``0`` means the engine maximum.
         """
+        cell_range = self._rect(cell_range)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -2142,8 +2658,16 @@ class Sheet:
         )
 
     # -- Validation checks -----------------------------------------------------
-    def validate_value(self, row: int, col: int, value: Value) -> ValidationOutcome:
+    @overload
+    @_coordinate_form
+    def validate_value(self, row: int, col: int, value: Value) -> ValidationOutcome: ...
+
+    @overload
+    def validate_value(self, a1: str, value: Value) -> ValidationOutcome: ...
+
+    def validate_value(self, *args: Any, **kwargs: Any) -> ValidationOutcome:
         """Check ``value`` against the data-validation rule covering ``(row, col)`` without storing it."""
+        row, col, value = self._cell_args("validate_value", args, kwargs, ("value",))
         sheet = self._index()
         h = self._workbook._require()
         _check_value(value)
@@ -2620,7 +3144,7 @@ class Sheet:
 
     def add_slicer(
         self,
-        table: int,
+        table: Union[int, str],
         column: int,
         *,
         from_row: int,
@@ -2639,7 +3163,7 @@ class Sheet:
         sort_order: Optional[SlicerSortOrder] = None,
         cross_filter: Optional[SlicerCrossFilter] = None,
     ) -> int:
-        """Add a slicer over column ``column`` of table ``table`` and return its frame's object id.
+        """Add a slicer over column ``column`` of ``table`` (an index or a display name); return its frame's object id.
 
         The frame is the two-cell anchor ``from_*`` .. ``to_*`` (0-based cells
         plus EMU offsets), named as in :meth:`add_shape`. The name and caption
@@ -2647,6 +3171,7 @@ class Sheet:
         ``row_height_emu`` to 241300 and ``column_count`` to 1. The table may
         live on another sheet.
         """
+        table_index = self._workbook._table_index(table)
         sheet = self._index()
         h = self._workbook._require()
         anchor = (
@@ -2660,7 +3185,12 @@ class Sheet:
             )
             _check(
                 LIB.fm_sheet_add_slicer(
-                    h, _uint(sheet, "sheet_index"), _uint(table, "table_index"), _uint(column, "column_index"), ptr, out
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(table_index, "table_index"),
+                    _uint(column, "column_index"),
+                    ptr,
+                    out,
                 )
             )
             return LIB.read_u32(out)
@@ -2754,8 +3284,16 @@ class Sheet:
             S.DATA_TABLE.pack(LIB, ptr, values)
             _check(LIB.fm_sheet_add_data_table(h, _uint(sheet, "sheet_index"), ptr))
 
-    def get_data_table(self, row: int, col: int) -> Optional[DataTable]:
+    @overload
+    @_coordinate_form
+    def get_data_table(self, row: int, col: int) -> Optional[DataTable]: ...
+
+    @overload
+    def get_data_table(self, a1: str) -> Optional[DataTable]: ...
+
+    def get_data_table(self, *args: Any, **kwargs: Any) -> Optional[DataTable]:
         """Return the data table whose result range contains ``(row, col)``, or ``None``."""
+        row, col = self._cell_args("get_data_table", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -2783,8 +3321,16 @@ class Sheet:
             col_input=_input("col_input"),
         )
 
-    def remove_data_table(self, row: int, col: int) -> None:
+    @overload
+    @_coordinate_form
+    def remove_data_table(self, row: int, col: int) -> None: ...
+
+    @overload
+    def remove_data_table(self, a1: str) -> None: ...
+
+    def remove_data_table(self, *args: Any, **kwargs: Any) -> None:
         """Remove the data table containing ``(row, col)`` and blank its result cells."""
+        row, col = self._cell_args("remove_data_table", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         _check(LIB.fm_sheet_remove_data_table(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col")))
@@ -3065,33 +3611,95 @@ class Sheet:
     def set_chart_legend(
         self,
         object_id: int,
-        position: Optional[ChartLegendPosition],
+        legend: None = UNCHANGED,
+        /,
         *,
-        overlay: bool = False,
-        hidden_series: Optional[Sequence[int]] = None,
+        position: ChartLegendPosition = UNCHANGED,
+        overlay: bool = UNCHANGED,
+        hidden_series: Sequence[int] = UNCHANGED,
     ) -> None:
-        """Set the legend position (``None`` removes the legend) and overlay.
+        """Update the chart legend; an omitted argument keeps its value.
 
+        ``set_chart_legend(object_id, None)`` removes the legend. Without a
+        legend, one is created and an omitted argument takes Excel's default
+        (:attr:`ChartLegendPosition.RIGHT`, no overlay, no hidden entries).
         ``hidden_series`` replaces the hidden legend entries (series ``c:idx``
-        values); ``None`` leaves them alone.
+        values); ``[]`` shows them all.
+
+        Raises:
+          TypeError: when ``position``, ``overlay`` or ``hidden_series`` is
+            ``None``, when the second argument is not ``None``, or when it is
+            ``None`` together with a keyword argument.
         """
+        given = {
+            key: value
+            for key, value in (("position", position), ("overlay", overlay), ("hidden_series", hidden_series))
+            if value is not UNCHANGED
+        }
+        if legend is not UNCHANGED:
+            if legend is not None:
+                raise TypeError(f"formulon: the legend argument removes the legend and must be None, got {legend!r}")
+            if given:
+                raise TypeError("formulon: removing the legend takes no keyword arguments")
+        for key, value in given.items():
+            if value is None:
+                raise TypeError(f"formulon: {key} cannot be None")
+        if overlay is not UNCHANGED and not isinstance(overlay, bool):
+            raise TypeError(f"formulon: overlay must be a bool, got {type(overlay).__name__}")
+        if legend is UNCHANGED and not given:
+            return
         sheet = self._index()
         h = self._workbook._require()
-        with _ArgScope() as scope:
-            ptr = scope.struct_array(S.CHART_LEGEND_PATCH, 1)
-            fields: Dict[str, object] = {
+        fields: Dict[str, object]
+        if legend is None:
+            fields = {"position": _sint(_nullable_enum(None, "position"), "position"), "overlay": 0}
+        else:
+            chart = self.get_chart(object_id)
+            current = chart.legend if chart is not None else None
+            if position is UNCHANGED:
+                position = current.position if current is not None else ChartLegendPosition.RIGHT
+            if overlay is UNCHANGED:
+                overlay = current.overlay if current is not None else False
+            fields = {
                 "position": _sint(_nullable_enum(position, "position"), "position"),
                 "overlay": 1 if overlay else 0,
             }
-            if hidden_series is not None:
+        with _ArgScope() as scope:
+            ptr = scope.struct_array(S.CHART_LEGEND_PATCH, 1)
+            if hidden_series is not UNCHANGED:
                 fields["hidden_series_op"] = 2
                 fields["hidden_series"] = _id_array(hidden_series, "hidden_series", scope)
                 fields["hidden_series_count"] = _uint(len(hidden_series), "hidden_series_count")
             S.CHART_LEGEND_PATCH.pack(LIB, ptr, fields)
             _check(LIB.fm_sheet_set_chart_legend(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), ptr))
 
-    def set_chart_axis(self, object_id: int, axis_id: int, patch: ChartAxisPatch) -> None:
-        """Patch axis ``axis_id``: an omitted key is kept, ``None`` removes the element."""
+    def set_chart_axis(
+        self,
+        object_id: int,
+        axis_id: int,
+        *,
+        visible: Optional[bool] = UNCHANGED,
+        title: Union[str, ChartTitle, None] = UNCHANGED,
+        min: Optional[float] = UNCHANGED,
+        max: Optional[float] = UNCHANGED,
+        major_unit: Optional[float] = UNCHANGED,
+        number_format: Optional[str] = UNCHANGED,
+        major_gridlines: Optional[bool] = UNCHANGED,
+        reversed: Optional[bool] = UNCHANGED,
+        log_base: Optional[float] = UNCHANGED,
+        crosses: Optional[ChartAxisCrosses] = UNCHANGED,
+        crosses_at: Optional[float] = UNCHANGED,
+        tick_label_position: Optional[Literal["nextTo", "low", "high", "none"]] = UNCHANGED,
+    ) -> None:
+        """Update axis ``axis_id``; an omitted argument keeps its value, ``None`` removes the element.
+
+        ``title`` takes the forms of :meth:`set_chart_title`. ``None`` on
+        ``title`` removes the axis title, on ``log_base`` makes the axis linear
+        and on ``tick_label_position`` (``nextTo``, ``low``, ``high``,
+        ``none``) restores the default. ``crosses_at`` is read when
+        ``crosses`` is ``AT``.
+        """
+        patch = _given(dict(locals()), ChartAxisPatch)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -3104,11 +3712,19 @@ class Sheet:
                 )
             )
 
-    def set_chart_display(self, object_id: int, patch: ChartDisplayPatch) -> None:
-        """Patch how blanks plot, whether hidden cells are skipped and whether ``#N/A`` plots as blank.
+    def set_chart_display(
+        self,
+        object_id: int,
+        *,
+        blanks_as: Optional[ChartBlanksAs] = UNCHANGED,
+        plot_visible_only: Optional[bool] = UNCHANGED,
+        na_as_blank: Optional[bool] = UNCHANGED,
+    ) -> None:
+        """Update how blanks plot, whether hidden cells are skipped and whether ``#N/A`` plots as blank.
 
-        An omitted key is kept, ``None`` removes the element.
+        An omitted argument keeps its value, ``None`` removes the element.
         """
+        patch = _given(dict(locals()), ChartDisplayPatch)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -3117,8 +3733,31 @@ class Sheet:
             S.CHART_DISPLAY_PATCH.pack(LIB, ptr, fields)
             _check(LIB.fm_sheet_set_chart_display(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), ptr))
 
-    def set_chart_series(self, object_id: int, plot: int, series_index: int, patch: ChartSeriesPatch) -> None:
-        """Patch the series with ``c:idx`` ``series_index`` of plot group ``plot``; a changed reference refreshes its cache."""
+    def set_chart_series(
+        self,
+        object_id: int,
+        plot: int,
+        series_index: int,
+        *,
+        name: Optional[str] = UNCHANGED,
+        categories: Optional[str] = UNCHANGED,
+        values: Optional[str] = UNCHANGED,
+        x: Optional[str] = UNCHANGED,
+        y: Optional[str] = UNCHANGED,
+        size: Optional[str] = UNCHANGED,
+        fill: Optional[ChartFillPatch] = UNCHANGED,
+        line: Optional[ChartLinePatch] = UNCHANGED,
+        marker: Optional[ChartMarkerPatch] = UNCHANGED,
+        smooth: Optional[bool] = UNCHANGED,
+        labels: Optional[ChartLabelsPatch] = UNCHANGED,
+    ) -> None:
+        """Update the series with ``c:idx`` ``series_index`` of plot group ``plot``; an omitted argument keeps its value.
+
+        A reference is its new text; ``""`` removes ``name``, ``categories`` or
+        ``x`` (an empty ``values``, ``y`` or ``size`` is rejected). ``None`` on
+        ``marker`` or ``labels`` removes it. A changed reference refreshes its cache.
+        """
+        patch = _given(dict(locals()), ChartSeriesPatch)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -3142,9 +3781,16 @@ class Sheet:
         plot: int,
         series_index: int,
         point_index: int,
-        patch: Optional[ChartPointPatch],
+        *,
+        fill: Optional[ChartFillPatch] = UNCHANGED,
+        line: Optional[ChartLinePatch] = UNCHANGED,
+        marker: Optional[ChartMarkerPatch] = UNCHANGED,
     ) -> None:
-        """Patch point ``point_index`` of a series; ``None`` (or an empty patch) removes the point's formatting."""
+        """Update point ``point_index`` of a series; an omitted argument keeps its value.
+
+        A call with no keyword argument removes the point's formatting.
+        """
+        patch = _given(dict(locals()), ChartPointPatch)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -3163,8 +3809,23 @@ class Sheet:
                 )
             )
 
-    def set_chart_plot(self, object_id: int, plot: int, patch: ChartPlotPatch) -> None:
-        """Patch plot group ``plot``; a field the plot type does not have is rejected."""
+    def set_chart_plot(
+        self,
+        object_id: int,
+        plot: int,
+        *,
+        gap_width: Optional[int] = UNCHANGED,
+        overlap: Optional[int] = UNCHANGED,
+        first_slice_angle: Optional[int] = UNCHANGED,
+        vary_colors: Optional[bool] = UNCHANGED,
+        hole_size: Optional[int] = UNCHANGED,
+    ) -> None:
+        """Update plot group ``plot``; an omitted argument keeps its value, ``None`` removes the element.
+
+        An argument the plot type does not have is rejected. ``hole_size`` is
+        10..90 (doughnut only).
+        """
+        patch = _given(dict(locals()), ChartPlotPatch)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -3199,11 +3860,29 @@ class Sheet:
                 )
             )
 
-    def add_chart_series(self, object_id: int, plot: int, patch: ChartSeriesPatch) -> int:
+    def add_chart_series(
+        self,
+        object_id: int,
+        plot: int,
+        *,
+        name: Optional[str] = UNCHANGED,
+        categories: Optional[str] = UNCHANGED,
+        values: Optional[str] = UNCHANGED,
+        x: Optional[str] = UNCHANGED,
+        y: Optional[str] = UNCHANGED,
+        size: Optional[str] = UNCHANGED,
+        fill: Optional[ChartFillPatch] = UNCHANGED,
+        line: Optional[ChartLinePatch] = UNCHANGED,
+        marker: Optional[ChartMarkerPatch] = UNCHANGED,
+        smooth: Optional[bool] = UNCHANGED,
+        labels: Optional[ChartLabelsPatch] = UNCHANGED,
+    ) -> int:
         """Append a series to plot group ``plot`` and return its ``c:idx``.
 
-        ``patch`` must set ``values`` (``y`` for a scatter plot).
+        ``values`` is required (``y`` for a scatter plot); the arguments read
+        as in :meth:`set_chart_series`.
         """
+        patch = _given(dict(locals()), ChartSeriesPatch)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -3267,8 +3946,9 @@ class Sheet:
                 )
             )
 
-    def get_merges_in_range(self, cell_range: CellRect) -> List[CellRect]:
+    def get_merges_in_range(self, cell_range: Union[CellRect, str]) -> List[CellRect]:
         """Return every merge range on the sheet that intersects ``cell_range``."""
+        cell_range = self._rect(cell_range)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -3291,8 +3971,16 @@ class Sheet:
                 out.append(_decode_cell_rect_at(buf + i * size))
             return out
 
-    def get_display_text(self, row: int, col: int) -> DisplayText:
+    @overload
+    @_coordinate_form
+    def get_display_text(self, row: int, col: int) -> DisplayText: ...
+
+    @overload
+    def get_display_text(self, a1: str) -> DisplayText: ...
+
+    def get_display_text(self, *args: Any, **kwargs: Any) -> DisplayText:
         """Return the text Excel displays for the cell and the rendering outcome."""
+        row, col = self._cell_args("get_display_text", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -3424,99 +4112,165 @@ class Sheet:
                 show_outline_symbols=bool(d["show_outline_symbols"]),
             )
 
-    def set_zoom(self, zoom_scale: int) -> None:
-        """Set the sheet zoom percentage (clamped to ``[10, 400]``)."""
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(LIB.fm_sheet_set_zoom(h, _uint(sheet, "sheet_index"), _uint(zoom_scale, "zoom_scale")))
+    def set_view(
+        self,
+        *,
+        zoom_scale: int = UNCHANGED,
+        freeze_rows: int = UNCHANGED,
+        freeze_cols: int = UNCHANGED,
+        split_x: float = UNCHANGED,
+        split_y: float = UNCHANGED,
+        top_left_row: int = UNCHANGED,
+        top_left_col: int = UNCHANGED,
+        pane_top_left_row: int = UNCHANGED,
+        pane_top_left_col: int = UNCHANGED,
+        visibility: SheetVisibility = UNCHANGED,
+        show_grid_lines: bool = UNCHANGED,
+        show_row_col_headers: bool = UNCHANGED,
+        show_zeros: bool = UNCHANGED,
+        show_formulas: bool = UNCHANGED,
+        show_outline_symbols: bool = UNCHANGED,
+        right_to_left: bool = UNCHANGED,
+        tab_selected: bool = UNCHANGED,
+        view_mode: SheetViewMode = UNCHANGED,
+    ) -> None:
+        """Update the sheet view; an omitted argument keeps its value.
 
-    def set_freeze(self, freeze_rows: int, freeze_cols: int) -> None:
-        """Set the frozen pane in ``(rows, cols)``."""
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(
-            LIB.fm_sheet_set_freeze(
-                h, _uint(sheet, "sheet_index"), _uint(freeze_rows, "freeze_rows"), _uint(freeze_cols, "freeze_cols")
-            )
-        )
+        Arguments are the :class:`SheetView` fields. ``zoom_scale`` is clamped
+        to ``[10, 400]``. ``split_x`` / ``split_y`` are in twips; a split
+        replaces any freeze and a freeze any split, and changing either resets
+        the pane origin unless ``pane_top_left_*`` is given. One half of a
+        pair (``freeze_rows`` without ``freeze_cols``, ``top_left_row``
+        without ``top_left_col``...) keeps the other half.
+        :attr:`SheetVisibility.VERY_HIDDEN` hides the tab from Excel's Unhide
+        dialog as well.
 
-    def set_visibility(self, visibility: SheetVisibility) -> None:
-        """Set the sheet tab's visibility to one of the three states.
-
-        :attr:`SheetVisibility.VERY_HIDDEN` hides the tab from Excel's
-        Unhide dialog as well.
+        Fields apply in this order: freeze or split, pane origin, scroll
+        origin, display flags, zoom, view mode, direction, tab selection,
+        visibility. Hiding the only visible sheet and a pane origin on a view
+        left without panes are refused before anything changes; any other
+        failure leaves the fields before it applied.
 
         Raises:
-          FormulonError: with ``StatusCode.INVALID_ARGUMENT`` for an unknown state or
-            when hiding the only visible sheet.
+          TypeError: when an argument is ``None`` or a flag is not a ``bool``,
+            or when a non-zero freeze and a non-zero split are both given.
+          InvalidArgumentError: when hiding the only visible sheet, for a pane
+            origin on a view without panes, or for a value the sheet rejects.
         """
+        flags = (
+            ("show_grid_lines", show_grid_lines, LIB.fm_sheet_set_show_grid_lines),
+            ("show_row_col_headers", show_row_col_headers, LIB.fm_sheet_set_show_row_col_headers),
+            ("show_zeros", show_zeros, LIB.fm_sheet_set_show_zeros),
+            ("show_formulas", show_formulas, LIB.fm_sheet_set_show_formulas),
+            ("show_outline_symbols", show_outline_symbols, LIB.fm_sheet_set_show_outline_symbols),
+        )
+        given = {
+            key: value
+            for key, value in (
+                ("zoom_scale", zoom_scale),
+                ("freeze_rows", freeze_rows),
+                ("freeze_cols", freeze_cols),
+                ("split_x", split_x),
+                ("split_y", split_y),
+                ("top_left_row", top_left_row),
+                ("top_left_col", top_left_col),
+                ("pane_top_left_row", pane_top_left_row),
+                ("pane_top_left_col", pane_top_left_col),
+                ("visibility", visibility),
+                ("right_to_left", right_to_left),
+                ("tab_selected", tab_selected),
+                ("view_mode", view_mode),
+                *((key, value) for key, value, _ in flags),
+            )
+            if value is not UNCHANGED
+        }
+        for key, value in given.items():
+            if value is None:
+                raise TypeError(f"formulon: {key} cannot be None")
+        for key in ("right_to_left", "tab_selected", *(key for key, _, _ in flags)):
+            if key in given and not isinstance(given[key], bool):
+                raise TypeError(f"formulon: {key} must be a bool, got {type(given[key]).__name__}")
+
+        def non_zero(*keys: str) -> bool:
+            return any(key in given and given[key] != 0 for key in keys)
+
+        if non_zero("freeze_rows", "freeze_cols") and non_zero("split_x", "split_y"):
+            raise TypeError("formulon: cannot freeze and split the view at once")
+        if not given:
+            return
+        view = self.get_view()
+        merged = {**{f.name: getattr(view, f.name) for f in dataclasses.fields(view)}, **given}
+        freeze = merged["freeze_rows"] != view.freeze_rows or merged["freeze_cols"] != view.freeze_cols
+        split = merged["split_x"] != view.split_x or merged["split_y"] != view.split_y
+        # The panes once applied: a freeze replaces a split and a split a freeze.
+        panes = [view.freeze_rows, view.freeze_cols, view.split_x, view.split_y]
+        if freeze:
+            panes = [merged["freeze_rows"], merged["freeze_cols"], 0, 0]
+        if split:
+            cleared = merged["split_x"] == 0 and merged["split_y"] == 0
+            panes = [panes[0], panes[1], 0, 0] if cleared else [0, 0, merged["split_x"], merged["split_y"]]
         sheet = self._index()
+        pane_origin = "pane_top_left_row" in given or "pane_top_left_col" in given
+        if pane_origin and all(n == 0 for n in panes):
+            raise FormulonError(
+                StatusCode.INVALID_ARGUMENT,
+                _diagnostic_override=("the view has no panes to set an origin on", f"sheet_index={sheet}"),
+            )
+        if merged["visibility"] != SheetVisibility.VISIBLE and view.visibility == SheetVisibility.VISIBLE:
+            if not any(
+                other is not self and other.get_view().visibility == SheetVisibility.VISIBLE for other in self._workbook
+            ):
+                raise FormulonError(
+                    StatusCode.INVALID_ARGUMENT,
+                    _diagnostic_override=("cannot hide the only visible sheet", f"sheet_index={sheet}"),
+                )
         h = self._workbook._require()
-        _check(LIB.fm_sheet_set_visibility(h, _uint(sheet, "sheet_index"), _sint(visibility, "visibility")))
-
-    def set_show_grid_lines(self, show: bool) -> None:  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
-        """Set the sheet's ``showGridLines`` flag."""
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(LIB.fm_sheet_set_show_grid_lines(h, _uint(sheet, "sheet_index"), 1 if show else 0))
-
-    def set_show_row_col_headers(self, show: bool) -> None:  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
-        """Set the sheet's ``showRowColHeaders`` flag."""
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(LIB.fm_sheet_set_show_row_col_headers(h, _uint(sheet, "sheet_index"), 1 if show else 0))
-
-    def set_show_zeros(self, show: bool) -> None:  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
-        """Set the sheet's ``showZeros`` flag."""
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(LIB.fm_sheet_set_show_zeros(h, _uint(sheet, "sheet_index"), 1 if show else 0))
-
-    def set_show_formulas(self, show: bool) -> None:  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
-        """Set the sheet's ``showFormulas`` flag."""
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(LIB.fm_sheet_set_show_formulas(h, _uint(sheet, "sheet_index"), 1 if show else 0))
-
-    def set_show_outline_symbols(self, show: bool) -> None:  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
-        """Set the sheet's ``showOutlineSymbols`` flag."""
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(LIB.fm_sheet_set_show_outline_symbols(h, _uint(sheet, "sheet_index"), 1 if show else 0))
-
-    def set_right_to_left(self, right_to_left: bool) -> None:  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
-        """Set the sheet's ``rightToLeft`` flag."""
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(LIB.fm_sheet_set_right_to_left(h, _uint(sheet, "sheet_index"), 1 if right_to_left else 0))
-
-    def set_top_left(self, row: int, col: int) -> None:
-        """Set the sheet view's scroll origin (``topLeftCell``)."""
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(LIB.fm_sheet_set_top_left(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col")))
-
-    def set_pane_top_left(self, row: int, col: int) -> None:
-        """Set the first visible cell of a frozen or split view's lower-right pane.
-
-        The cell must lie past any frozen rows and columns, and the sheet must
-        be frozen or split. Changing the freeze resets it to the first unfrozen
-        cell.
-        """
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(LIB.fm_sheet_set_pane_top_left(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col")))
-
-    def set_split(self, x_twips: float, y_twips: float) -> None:
-        """Split the view at ``x_twips`` / ``y_twips`` (0 for none on that axis).
-
-        ``(0, 0)`` removes the split. A split replaces any freeze, as
-        :meth:`set_freeze` replaces a split. Negative or non-finite
-        values raise and leave the view unchanged.
-        """
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(LIB.fm_sheet_set_split(h, _uint(sheet, "sheet_index"), float(x_twips), float(y_twips)))
+        if freeze:
+            _check(
+                LIB.fm_sheet_set_freeze(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(merged["freeze_rows"], "freeze_rows"),
+                    _uint(merged["freeze_cols"], "freeze_cols"),
+                )
+            )
+        if split:
+            _check(
+                LIB.fm_sheet_set_split(
+                    h, _uint(sheet, "sheet_index"), float(merged["split_x"]), float(merged["split_y"])
+                )
+            )
+        # Changing the panes resets their origin, so a missing partner is read afresh.
+        current = self.get_view() if freeze or split else view
+        if pane_origin:
+            row = given.get("pane_top_left_row", current.pane_top_left_row)
+            col = given.get("pane_top_left_col", current.pane_top_left_col)
+            _check(
+                LIB.fm_sheet_set_pane_top_left(
+                    h, _uint(sheet, "sheet_index"), _uint(row, "pane_top_left_row"), _uint(col, "pane_top_left_col")
+                )
+            )
+        if "top_left_row" in given or "top_left_col" in given:
+            row = given.get("top_left_row", current.top_left_row)
+            col = given.get("top_left_col", current.top_left_col)
+            _check(
+                LIB.fm_sheet_set_top_left(
+                    h, _uint(sheet, "sheet_index"), _uint(row, "top_left_row"), _uint(col, "top_left_col")
+                )
+            )
+        for key, value, setter in flags:
+            if key in given:
+                _check(setter(h, _uint(sheet, "sheet_index"), 1 if value else 0))
+        if "zoom_scale" in given:
+            _check(LIB.fm_sheet_set_zoom(h, _uint(sheet, "sheet_index"), _uint(zoom_scale, "zoom_scale")))
+        if "view_mode" in given:
+            _check(LIB.fm_sheet_set_view_mode(h, _uint(sheet, "sheet_index"), _sint(view_mode, "view_mode")))
+        if "right_to_left" in given:
+            _check(LIB.fm_sheet_set_right_to_left(h, _uint(sheet, "sheet_index"), 1 if right_to_left else 0))
+        if "tab_selected" in given:
+            _check(LIB.fm_sheet_set_tab_selected(h, _uint(sheet, "sheet_index"), 1 if tab_selected else 0))
+        if "visibility" in given:
+            _check(LIB.fm_sheet_set_visibility(h, _uint(sheet, "sheet_index"), _sint(visibility, "visibility")))
 
     def get_selection(self) -> SheetSelection:
         """Return the active cell and ranges of the active pane's selection.
@@ -3563,18 +4317,6 @@ class Sheet:
                     _uint(len(ranges), "count"),
                 )
             )
-
-    def set_tab_selected(self, selected: bool) -> None:  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
-        """Set the sheet's ``tabSelected`` flag."""
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(LIB.fm_sheet_set_tab_selected(h, _uint(sheet, "sheet_index"), 1 if selected else 0))
-
-    def set_view_mode(self, mode: SheetViewMode) -> None:
-        """Set the sheet's ``<sheetView view="...">`` mode."""
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(LIB.fm_sheet_set_view_mode(h, _uint(sheet, "sheet_index"), _sint(mode, "mode")))
 
     def get_auto_filter_xml(self) -> Optional[str]:
         """Return the sheet's ``<autoFilter>`` XML fragment, or ``None`` without one.
@@ -3702,20 +4444,25 @@ class Sheet:
             _check(LIB.fm_sheet_get_print_area(h, _uint(sheet, "sheet_index"), ranges_out, count_out))
             return _decode_cell_rect_array(LIB.read_u32(ranges_out), LIB.read_u32(count_out)) or None
 
-    def set_print_area(self, ranges: Optional[Sequence[CellRect]]) -> None:
+    def set_print_area(self, ranges: Optional[Sequence[Union[CellRect, str]]]) -> None:
         """Write ``_xlnm.Print_Area`` from one or more rectangles, printed in order.
 
         A rectangle spanning every row or column is stored as whole columns
         or rows. ``None`` or an empty list removes the name.
+
+        Raises:
+          TypeError: when ``ranges`` is a single ``str`` rather than a sequence.
         """
+        if isinstance(ranges, str):
+            raise TypeError("formulon: ranges must be a sequence of CellRect or A1 ranges, got str")
+        rects = [] if ranges is None else [self._rect(r) for r in ranges]
         sheet = self._index()
         h = self._workbook._require()
-        ranges = [] if ranges is None else ranges
         with _ArgScope() as scope:
-            ranges_ptr = _pack_cell_rect_array(ranges, scope)
+            ranges_ptr = _pack_cell_rect_array(rects, scope)
             _check(
                 LIB.fm_sheet_set_print_area(
-                    h, _uint(sheet, "sheet_index"), ranges_ptr, _uint(len(ranges), "range_count")
+                    h, _uint(sheet, "sheet_index"), ranges_ptr, _uint(len(rects), "range_count")
                 )
             )
 
@@ -3905,79 +4652,96 @@ class Sheet:
     def set_print_options(
         self,
         *,
-        grid_lines: Optional[bool] = None,
-        headings: Optional[bool] = None,
-        horizontal_centered: Optional[bool] = None,
-        vertical_centered: Optional[bool] = None,
+        grid_lines: bool = UNCHANGED,
+        headings: bool = UNCHANGED,
+        horizontal_centered: bool = UNCHANGED,
+        vertical_centered: bool = UNCHANGED,
     ) -> None:
-        """Apply a partial ``<printOptions>`` update."""
+        """Update ``<printOptions>``; an omitted argument keeps its attribute.
+
+        Raises:
+          TypeError: when an argument is not a ``bool`` (``None`` included).
+        """
+        values: Dict[str, object] = {}
+        for name, value in (
+            ("grid_lines", grid_lines),
+            ("headings", headings),
+            ("horizontal_centered", horizontal_centered),
+            ("vertical_centered", vertical_centered),
+        ):
+            if value is UNCHANGED:
+                continue
+            _flag(value, name)
+            values[f"{name}_engaged"] = 1
+            values[name] = 1 if value else 0
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PRINT_OPTIONS)
-            values: Dict[str, object] = {}
-            for name, value in (
-                ("grid_lines", grid_lines),
-                ("headings", headings),
-                ("horizontal_centered", horizontal_centered),
-                ("vertical_centered", vertical_centered),
-            ):
-                values[f"{name}_engaged"] = 0 if value is None else 1
-                values[name] = 1 if value else 0
             S.PRINT_OPTIONS.pack(LIB, ptr, values)
             _check(LIB.fm_sheet_set_print_options(h, _uint(sheet, "sheet_index"), ptr))
 
     def set_header_footer(
         self,
         *,
-        odd_header: Optional[str] = None,
-        odd_footer: Optional[str] = None,
-        even_header: Optional[str] = None,
-        even_footer: Optional[str] = None,
-        first_header: Optional[str] = None,
-        first_footer: Optional[str] = None,
-        different_odd_even: Optional[bool] = None,
-        different_first: Optional[bool] = None,
-        scale_with_doc: Optional[bool] = None,
-        align_with_margins: Optional[bool] = None,
+        odd_header: Optional[str] = UNCHANGED,
+        odd_footer: Optional[str] = UNCHANGED,
+        even_header: Optional[str] = UNCHANGED,
+        even_footer: Optional[str] = UNCHANGED,
+        first_header: Optional[str] = UNCHANGED,
+        first_footer: Optional[str] = UNCHANGED,
+        different_odd_even: bool = UNCHANGED,
+        different_first: bool = UNCHANGED,
+        scale_with_doc: bool = UNCHANGED,
+        align_with_margins: bool = UNCHANGED,
     ) -> None:
-        """Apply a partial ``<headerFooter>`` update.
+        """Update ``<headerFooter>``; an omitted argument keeps its value.
 
-        Each section is tri-state: ``None`` leaves it untouched, ``""``
-        clears it, anything else replaces it. Pass decoded text -- Excel's
-        formatting codes go in plainly (``"&C&\\"MS Gothic\\"Report &P/&N"``)
-        and the engine applies the XML escaping.
+        A section given as ``None`` or ``""`` is cleared. Pass decoded text --
+        Excel's formatting codes go in plainly
+        (``"&C&\\"MS Gothic\\"Report &P/&N"``) and the engine applies the XML
+        escaping.
+
+        Raises:
+          TypeError: when a flag is not a ``bool`` (``None`` included) or a
+            section is neither a ``str`` nor ``None``.
         """
+        values: Dict[str, object] = {}
+        for name, value in (
+            ("different_odd_even", different_odd_even),
+            ("different_first", different_first),
+            ("scale_with_doc", scale_with_doc),
+            ("align_with_margins", align_with_margins),
+        ):
+            if value is UNCHANGED:
+                continue
+            _flag(value, name)
+            values[f"{name}_engaged"] = 1
+            values[name] = 1 if value else 0
+        sections: List[Tuple[str, str]] = []
+        for name, text in (
+            ("odd_header", odd_header),
+            ("odd_footer", odd_footer),
+            ("even_header", even_header),
+            ("even_footer", even_footer),
+            ("first_header", first_header),
+            ("first_footer", first_footer),
+        ):
+            if text is UNCHANGED:
+                continue
+            if text is not None and not isinstance(text, str):
+                raise TypeError(f"formulon: {name} must be a str or None, got {type(text).__name__}")
+            sections.append((name, text or ""))
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.HEADER_FOOTER)
-            values: Dict[str, object] = {}
-            for name, value in (
-                ("different_odd_even", different_odd_even),
-                ("different_first", different_first),
-                ("scale_with_doc", scale_with_doc),
-                ("align_with_margins", align_with_margins),
-            ):
-                values[f"{name}_engaged"] = 0 if value is None else 1
-                values[name] = 1 if value else 0
             S.HEADER_FOOTER.pack(LIB, ptr, values)
-            # Written after `pack`, which zeroes the whole block: a NULL
-            # pointer is the "leave this section alone" signal, and an
-            # empty string still needs a real (empty) buffer to mean
-            # "clear it".
-            for field, value in (
-                ("odd_header", odd_header),
-                ("odd_footer", odd_footer),
-                ("even_header", even_header),
-                ("even_footer", even_footer),
-                ("first_header", first_header),
-                ("first_footer", first_footer),
-            ):
-                text_ptr = scope.opt_cstr(value)
-                if text_ptr:
-                    _, off = S.HEADER_FOOTER.offsets[field]
-                    LIB.write_bytes(ptr + off, struct.pack("<I", text_ptr))
+            # Written after `pack`, which zeroes the block: a NULL pointer keeps
+            # the section, an empty string clears it.
+            for name, text in sections:
+                _, off = S.HEADER_FOOTER.offsets[name]
+                LIB.write_bytes(ptr + off, struct.pack("<I", scope.cstr(text)))
             _check(LIB.fm_sheet_set_header_footer(h, _uint(sheet, "sheet_index"), ptr))
 
     def get_page_setup(self) -> PageSetup:
@@ -4222,7 +4986,7 @@ class Sheet:
         h = self._workbook._require()
         _check(LIB.fm_sheet_clear_row_style(h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last")))
 
-    def get_range_style_bases(self, rect: CellRect) -> List[int]:
+    def get_range_style_bases(self, rect: Union[CellRect, str]) -> List[int]:
         """List, ascending, every cell XF some cell of the selection resolves to.
 
         ``rect`` is a selection: full height is a column selection, full
@@ -4231,11 +4995,12 @@ class Sheet:
         bases, build a patched XF for each with :meth:`Workbook.add_font` /
         :meth:`Workbook.add_cell_xf`, then apply them with :meth:`remap_range_style`.
         """
+        rect = self._rect(rect)
         return self.get_range_style_bases_excluding(rect, ())
 
     def get_range_style_bases_excluding(
         self,
-        rect: CellRect,
+        rect: Union[CellRect, str],
         excluded: Sequence[Tuple[int, int]],
     ) -> List[int]:
         """:meth:`get_range_style_bases` over the selection less the ``(row, col)`` cells in ``excluded``.
@@ -4244,6 +5009,7 @@ class Sheet:
         or default style beneath it. Cells outside the selection and repeats are
         ignored; excluding every cell yields an empty list.
         """
+        rect = self._rect(rect)
         sheet = self._index()
         h = self._workbook._require()
         cells = list(excluded)
@@ -4290,7 +5056,7 @@ class Sheet:
             n = min(total, LIB.read_u32(len_ptr))
             return list(struct.unpack("<%dI" % n, LIB.read_bytes(buf, 4 * n)))
 
-    def remap_range_style(self, rect: CellRect, mapping: Dict[int, int]) -> None:
+    def remap_range_style(self, rect: Union[CellRect, str], mapping: Dict[int, int]) -> None:
         """Remap the XFs of a selection: a cell resolving to key ``k`` ends at ``mapping[k]``.
 
         An XF absent from ``mapping`` is kept. Each target must be a valid cell
@@ -4299,6 +5065,7 @@ class Sheet:
         and passing ``{base: patched}``. Undo with :meth:`snapshot_range_style`
         taken beforehand and :meth:`restore_range_style`.
         """
+        rect = self._rect(rect)
         sheet = self._index()
         h = self._workbook._require()
         pairs = list(mapping.items())
@@ -4321,13 +5088,14 @@ class Sheet:
                 )
             )
 
-    def snapshot_range_style(self, rect: CellRect) -> bytes:
+    def snapshot_range_style(self, rect: Union[CellRect, str]) -> bytes:
         """Capture the style state of a selection as opaque bytes for :meth:`restore_range_style`.
 
         The capture holds the covered column styles (column selection), row
         styles (row selection) and every stored cell's XF and explicit mark.
         Take it before :meth:`remap_range_style` to be able to undo the edit.
         """
+        rect = self._rect(rect)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -4379,7 +5147,7 @@ class Sheet:
 
     def evaluate_cf_range(
         self,
-        rect: CellRect,
+        rect: Union[CellRect, str],
         today_serial: float = float("nan"),
     ) -> List[CfCell]:
         """Evaluate every CF block on the sheet against the cells of ``rect``.
@@ -4394,6 +5162,7 @@ class Sheet:
             serial for 1899-12-30 and would evaluate those rules against
             that date.
         """
+        rect = self._rect(rect)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -4721,11 +5490,17 @@ class Sheet:
             _check(LIB.fm_sheet_add_cf_rule(h, _uint(sheet, "sheet_index"), ptr, out))
             return LIB.read_u32(out)
 
-    def remove_cf_rule(self, cf_rule_index: int) -> None:
-        """Remove the CF rule at ``cf_rule_index`` on the sheet (flattened order)."""
+    def remove_cf_rule(self, cf_rule: Union[int, str]) -> None:
+        """Remove ``cf_rule``, an index in :meth:`list_cf_rules` order or a rule's ``id``.
+
+        Raises:
+          NotFoundError: when no rule has the id ``cf_rule``.
+          IndexOutOfRangeError: when ``cf_rule`` is an index past the last rule.
+        """
+        index = resolve_ref(cf_rule, lambda: [rule.id for rule in self.list_cf_rules()], "CF rule")
         sheet = self._index()
         h = self._workbook._require()
-        _check(LIB.fm_sheet_remove_cf_rule(h, _uint(sheet, "sheet_index"), _uint(cf_rule_index, "idx")))
+        _check(LIB.fm_sheet_remove_cf_rule(h, _uint(sheet, "sheet_index"), _uint(index, "idx")))
 
     def clear_cf_rules(self) -> None:
         """Drop every CF block on the sheet."""
@@ -4734,8 +5509,16 @@ class Sheet:
         _check(LIB.fm_sheet_clear_cf_rules(h, _uint(sheet, "sheet_index")))
 
     # -- Styles ------------------------------------------------------------
-    def get_cell_xf_index(self, row: int, col: int) -> int:
+    @overload
+    @_coordinate_form
+    def get_cell_xf_index(self, row: int, col: int) -> int: ...
+
+    @overload
+    def get_cell_xf_index(self, a1: str) -> int: ...
+
+    def get_cell_xf_index(self, *args: Any, **kwargs: Any) -> int:
         """Return the xf (style record) index attached to a cell."""
+        row, col = self._cell_args("get_cell_xf_index", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -4743,13 +5526,21 @@ class Sheet:
             _check(LIB.fm_sheet_get_cell_xf_index(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), out))
             return LIB.read_u32(out)
 
-    def set_cell_xf_index(self, row: int, col: int, xf_index: int) -> None:
+    @overload
+    @_coordinate_form
+    def set_cell_xf_index(self, row: int, col: int, xf_index: int) -> None: ...
+
+    @overload
+    def set_cell_xf_index(self, a1: str, xf_index: int) -> None: ...
+
+    def set_cell_xf_index(self, *args: Any, **kwargs: Any) -> None:
         """Store ``xf_index`` on the cell at ``(row, col)``.
 
         Raises:
           FormulonError: with ``StatusCode.INVALID_ARGUMENT`` when ``xf_index`` is not
             below the workbook's cell-XF count.
         """
+        row, col, xf_index = self._cell_args("set_cell_xf_index", args, kwargs, ("xf_index",))
         sheet = self._index()
         h = self._workbook._require()
         _check(
@@ -4758,7 +5549,14 @@ class Sheet:
             )
         )
 
-    def clear_cell_xf_index(self, row: int, col: int) -> None:
+    @overload
+    @_coordinate_form
+    def clear_cell_xf_index(self, row: int, col: int) -> None: ...
+
+    @overload
+    def clear_cell_xf_index(self, a1: str) -> None: ...
+
+    def clear_cell_xf_index(self, *args: Any, **kwargs: Any) -> None:
         """Remove the direct style assignment from the cell at ``(row, col)``.
 
         A blank cell inherits the row / column style again; value, formula and
@@ -4766,17 +5564,19 @@ class Sheet:
         owning the default xf. Use the ``source`` of :meth:`get_effective_style`
         to tell an unassigned cell from one directly assigned the Normal xf.
         """
+        row, col = self._cell_args("clear_cell_xf_index", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         _check(LIB.fm_sheet_clear_cell_xf_index(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col")))
 
-    def set_range_xf_index(self, rect: CellRect, xf_index: int) -> None:
+    def set_range_xf_index(self, rect: Union[CellRect, str], xf_index: int) -> None:
         """Store ``xf_index`` on every cell of ``rect``.
 
         Cells that do not exist yet are materialised as blanks carrying only
         the style, so an empty ruled box renders. Ruling a report this way
         costs one call instead of one per cell.
         """
+        rect = self._rect(rect)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -4784,8 +5584,16 @@ class Sheet:
             _pack_cell_rect_at(rp, rect)
             _check(LIB.fm_sheet_set_range_xf_index(h, _uint(sheet, "sheet"), rp, _uint(xf_index, "xf_index")))
 
-    def get_effective_style(self, row: int, col: int) -> EffectiveStyle:
+    @overload
+    @_coordinate_form
+    def get_effective_style(self, row: int, col: int) -> EffectiveStyle: ...
+
+    @overload
+    def get_effective_style(self, a1: str) -> EffectiveStyle: ...
+
+    def get_effective_style(self, *args: Any, **kwargs: Any) -> EffectiveStyle:
         """Read the effective style of the cell at ``(row, col)``; the cell need not exist."""
+        row, col = self._cell_args("get_effective_style", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -4815,18 +5623,25 @@ class Sheet:
             )
 
     # -- Pivot layout projection -------------------------------------------
-    def get_pivot_count(self) -> int:
-        """Return the number of PivotTables anchored on the sheet."""
+    def _pivot_count(self) -> int:
         sheet = self._index()
         h = self._workbook._require()
-        return _read_count(
-            LIB.fm_sheet_get_pivot_count,
-            h,
-            _uint(sheet, "sheet_index"),
-        )
+        return _read_count(LIB.fm_sheet_get_pivot_count, h, _uint(sheet, "sheet_index"))
 
-    def get_pivot_layout(self, pivot_index: int) -> PivotLayout:
+    def _pivot_index(self, pivot: Union[int, str]) -> int:
+        """The index ``pivot`` addresses: an index, or a pivot table's name."""
+        return resolve_ref(pivot, lambda: [self.get_pivot_name(i) for i in range(self._pivot_count())], "pivot")
+
+    def list_pivots(self) -> List[PivotSummary]:
+        """Every pivot table anchored on the sheet, in index order."""
+        return [
+            PivotSummary(name=self.get_pivot_name(i), cache_id=self.get_pivot_cache_id(i))
+            for i in range(self._pivot_count())
+        ]
+
+    def get_pivot_layout(self, pivot: Union[int, str]) -> PivotLayout:
         """Evaluate and project a PivotTable into concrete grid cells."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -4869,8 +5684,9 @@ class Sheet:
                     LIB.fm_pivot_cells_destroy(handle)
 
     # -- Pivot tables ------------------------------------------------------
-    def add_pivot(self, name: str, cache_id: int, anchor_row: int, anchor_col: int) -> int:
-        """Create a new empty pivot table; return its flat index."""
+    def add_pivot(self, *, name: str, cache_id: int, anchor_row: int, anchor_col: int) -> int:
+        """Create an empty pivot table over cache ``cache_id`` with its top-left cell at
+        ``(anchor_row, anchor_col)``; return its index."""
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -4889,8 +5705,9 @@ class Sheet:
             )
             return LIB.read_u32(out)
 
-    def get_pivot_report_layout(self, pivot_index: int) -> PivotReportLayout:
+    def get_pivot_report_layout(self, pivot: Union[int, str]) -> PivotReportLayout:
         """Return the pivot's compact, tabular, or outline report layout."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -4902,8 +5719,9 @@ class Sheet:
             )
             return PivotReportLayout(LIB.read_i32(out))
 
-    def set_pivot_report_layout(self, pivot_index: int, layout: PivotReportLayout) -> None:
+    def set_pivot_report_layout(self, pivot: Union[int, str], layout: PivotReportLayout) -> None:
         """Set the pivot's compact, tabular, or outline report layout."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         _check(
@@ -4912,14 +5730,16 @@ class Sheet:
             )
         )
 
-    def remove_pivot(self, pivot_index: int) -> None:
-        """Remove the pivot table at ``pivot_index``."""
+    def remove_pivot(self, pivot: Union[int, str]) -> None:
+        """Remove the pivot table at ``pivot``."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         _check(LIB.fm_sheet_remove_pivot(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")))
 
-    def set_pivot_name(self, pivot_index: int, name: str) -> None:
+    def set_pivot_name(self, pivot: Union[int, str], name: str) -> None:
         """Rename the pivot table."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -4930,10 +5750,12 @@ class Sheet:
 
     def set_pivot_anchor(
         self,
-        pivot_index: int,
-        rect: CellRect,
+        pivot: Union[int, str],
+        rect: Union[CellRect, str],
     ) -> None:
         """Set the rectangle the pivot reserves (``<location ref>``); its top-left cell is the anchor."""
+        pivot_index = self._pivot_index(pivot)
+        rect = self._rect(rect)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -4943,12 +5765,13 @@ class Sheet:
 
     def set_pivot_grand_totals(
         self,
-        pivot_index: int,
+        pivot: Union[int, str],
         *,
         rows: bool = UNCHANGED,
         columns: bool = UNCHANGED,
     ) -> None:
         """Toggle the row / column grand-total bands; an omitted argument keeps its band."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         if rows is UNCHANGED or columns is UNCHANGED:
             current = self.get_pivot_grand_totals(pivot_index)
@@ -4968,52 +5791,85 @@ class Sheet:
             )
         )
 
-    def set_pivot_style_info(self, pivot_index: int, style: PivotStyleInput) -> None:
-        """Set the pivot's table style and toggles, making the style element present.
+    def set_pivot_style_info(
+        self,
+        pivot: Union[int, str],
+        *,
+        name: Optional[str] = UNCHANGED,
+        show_row_headers: bool = UNCHANGED,
+        show_col_headers: bool = UNCHANGED,
+        show_row_stripes: bool = UNCHANGED,
+        show_col_stripes: bool = UNCHANGED,
+        show_last_column: bool = UNCHANGED,
+    ) -> None:
+        """Update the pivot's table style, making the style element present; an omitted argument keeps its value.
 
-        A ``None`` or empty ``style.name`` writes the element without a style name.
+        ``name=None`` (or ``""``) writes the element without a style name. A
+        pivot without a style element starts from no name and every toggle off.
+
+        Raises:
+          TypeError: when a toggle is not a ``bool`` (``None`` included) or
+            ``name`` is neither a ``str`` nor ``None``.
         """
+        pivot_index = self._pivot_index(pivot)
+        toggles = {
+            "show_row_headers": show_row_headers,
+            "show_col_headers": show_col_headers,
+            "show_row_stripes": show_row_stripes,
+            "show_col_stripes": show_col_stripes,
+            "show_last_column": show_last_column,
+        }
+        for key, value in toggles.items():
+            if value is not UNCHANGED:
+                _flag(value, key)
+        if name is not UNCHANGED and name is not None and not isinstance(name, str):
+            raise TypeError(f"formulon: name must be a str or None, got {type(name).__name__}")
+        current = self.get_pivot_style_info(pivot_index)
+        if name is UNCHANGED:
+            name = current.name if current is not None else None
+        flags = {
+            key: (getattr(current, key) if current is not None else False) if value is UNCHANGED else value
+            for key, value in toggles.items()
+        }
         sheet = self._index()
         h = self._workbook._require()
-        show_row_headers = style.show_row_headers
-        show_col_headers = style.show_col_headers
-        show_row_stripes = style.show_row_stripes
-        show_col_stripes = style.show_col_stripes
-        show_last_column = style.show_last_column
         with _ArgScope() as scope:
-            name_ptr = scope.nonempty_cstr(style.name)
+            name_ptr = scope.nonempty_cstr(name)
             _check(
                 LIB.fm_sheet_set_pivot_style_info(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(pivot_index, "pivot_index"),
                     name_ptr,
-                    1 if show_row_headers else 0,
-                    1 if show_col_headers else 0,
-                    1 if show_row_stripes else 0,
-                    1 if show_col_stripes else 0,
-                    1 if show_last_column else 0,
+                    1 if flags["show_row_headers"] else 0,
+                    1 if flags["show_col_headers"] else 0,
+                    1 if flags["show_row_stripes"] else 0,
+                    1 if flags["show_col_stripes"] else 0,
+                    1 if flags["show_last_column"] else 0,
                 )
             )
 
-    def get_pivot_cache_id(self, pivot_index: int) -> int:
+    def get_pivot_cache_id(self, pivot: Union[int, str]) -> int:
         """Return the ``cache_id`` of the pivot cache the pivot draws from."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         return _read_count(
             LIB.fm_sheet_get_pivot_cache_id, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
         )
 
-    def get_pivot_name(self, pivot_index: int) -> str:
+    def get_pivot_name(self, pivot: Union[int, str]) -> str:
         """Return the pivot's name."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         return _read_cstr_out(
             LIB.fm_sheet_get_pivot_name, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
         )
 
-    def get_pivot_grand_totals(self, pivot_index: int) -> PivotGrandTotals:
+    def get_pivot_grand_totals(self, pivot: Union[int, str]) -> PivotGrandTotals:
         """Return the row and column flags :meth:`set_pivot_grand_totals` writes."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -5026,8 +5882,9 @@ class Sheet:
             )
             return PivotGrandTotals(rows=LIB.read_i32(rows) != 0, columns=LIB.read_i32(cols) != 0)
 
-    def get_pivot_style_info(self, pivot_index: int) -> Optional[PivotStyle]:
+    def get_pivot_style_info(self, pivot: Union[int, str]) -> Optional[PivotStyle]:
         """Return the table style :meth:`set_pivot_style_info` writes, or ``None`` without a style element."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -5061,13 +5918,15 @@ class Sheet:
             raw = LIB.read_bytes(LIB.read_u32(out_ptr), 4 * count)
             return [PIVOT_VALUES_FIELD if v == _PIVOT_VALUES_FIELD_C else v for v in struct.unpack("<%dI" % count, raw)]
 
-    def get_pivot_row_field_order(self, pivot_index: int) -> List[int]:
+    def get_pivot_row_field_order(self, pivot: Union[int, str]) -> List[int]:
         """Return the row-axis field order (the list :meth:`set_pivot_row_field_order` takes)."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         return self._pivot_get_field_order(LIB.fm_sheet_get_pivot_row_field_order, sheet, pivot_index)
 
-    def get_pivot_column_field_order(self, pivot_index: int) -> List[int]:
+    def get_pivot_column_field_order(self, pivot: Union[int, str]) -> List[int]:
         """Return the column-axis field order. Same contract as rows."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         return self._pivot_get_field_order(LIB.fm_sheet_get_pivot_column_field_order, sheet, pivot_index)
 
@@ -5106,8 +5965,15 @@ class Sheet:
                 show_all=d["show_all"] != 0,
             )
 
-    def get_pivot_field_item_count(self, pivot_index: int, field_index: int) -> int:
-        """Return the number of items in pivot field ``field_index``'s item list."""
+    def list_pivot_field_items(self, pivot: Union[int, str], field_index: int) -> List[PivotItem]:
+        """Every item of pivot field ``field_index``, in item order."""
+        pivot_index = self._pivot_index(pivot)
+        return [
+            self.get_pivot_field_item(pivot_index, field_index, i)
+            for i in range(self._pivot_field_item_count(pivot_index, field_index))
+        ]
+
+    def _pivot_field_item_count(self, pivot_index: int, field_index: int) -> int:
         sheet = self._index()
         h = self._workbook._require()
         return _read_count(
@@ -5118,8 +5984,9 @@ class Sheet:
             _uint(field_index, "field_index"),
         )
 
-    def get_pivot_field_item(self, pivot_index: int, field_index: int, item_index: int) -> PivotItem:
+    def get_pivot_field_item(self, pivot: Union[int, str], field_index: int, item_index: int) -> PivotItem:
         """Read item ``item_index`` of pivot field ``field_index``."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -5169,8 +6036,9 @@ class Sheet:
                 show_as_base_item=None if d["show_as_base_item"] < 0 else d["show_as_base_item"],
             )
 
-    def list_pivot_fields(self, pivot_index: int) -> List[PivotField]:
+    def list_pivot_fields(self, pivot: Union[int, str]) -> List[PivotField]:
         """Every field of the pivot, in cache-field order."""
+        pivot_index = self._pivot_index(pivot)
         return [self._pivot_field_at(pivot_index, i) for i in range(self._pivot_field_count(pivot_index))]
 
     def _pivot_field_count(self, pivot_index: int) -> int:
@@ -5181,7 +6049,7 @@ class Sheet:
             LIB.fm_sheet_get_pivot_field_count, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
         )
 
-    def add_pivot_field(self, pivot_index: int, spec: PivotFieldInput) -> int:
+    def add_pivot_field(self, pivot: Union[int, str], spec: PivotFieldInput) -> int:
         """Place a field on the pivot; return its index.
 
         A pivot's fields are positional over its cache's fields (field ``i``
@@ -5192,6 +6060,7 @@ class Sheet:
         appends a field. A field added on the row or column axis is appended
         to that axis's field order.
         """
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -5222,13 +6091,14 @@ class Sheet:
             )
             return LIB.read_u32(out)
 
-    def clear_pivot_fields(self, pivot_index: int) -> None:
+    def clear_pivot_fields(self, pivot: Union[int, str]) -> None:
         """Drop every field from the pivot."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         _check(LIB.fm_sheet_clear_pivot_fields(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")))
 
-    def set_pivot_field_axis(self, pivot_index: int, field_index: int, axis: Optional[PivotAxis]) -> None:
+    def set_pivot_field_axis(self, pivot: Union[int, str], field_index: int, axis: Optional[PivotAxis]) -> None:
         """Set the axis of pivot field ``field_index``.
 
         Moving onto the row or column axis appends the field to that axis's
@@ -5237,6 +6107,7 @@ class Sheet:
         data-field indices shift down), as are filters naming it and
         value filters scoring a removed data field.
         """
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         _check(
@@ -5251,15 +6122,18 @@ class Sheet:
 
     def set_pivot_field_sort(
         self,
-        pivot_index: int,
+        pivot: Union[int, str],
         field_index: int,
         order: PivotSortOrder,
-        by_field: str = "",
+        *,
+        by_field: Optional[str] = None,
     ) -> None:
         """Set the sibling order of pivot field ``field_index``.
 
-        ``PivotSortOrder.MANUAL`` rejects a non-empty ``by_field``.
+        ``by_field`` names the data field the items sort by; ``None`` sorts by
+        the item labels. ``PivotSortOrder.MANUAL`` rejects a ``by_field``.
         """
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -5275,20 +6149,6 @@ class Sheet:
                 )
             )
 
-    def set_pivot_field_subtotal_top(self, pivot_index: int, field_index: int, top: bool) -> None:  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
-        """Set the ``subtotal_top`` flag on pivot field ``field_index``."""
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(
-            LIB.fm_sheet_set_pivot_field_subtotal_top(
-                h,
-                _uint(sheet, "sheet_index"),
-                _uint(pivot_index, "pivot_index"),
-                _uint(field_index, "field_index"),
-                1 if top else 0,
-            )
-        )
-
     def _pivot_field_set_flag(self, fn, sheet: int, pivot_index: int, field_index: int, on: bool) -> None:  # noqa: FBT001 -- shared body of the flag setters
         h = self._workbook._require()
         _check(
@@ -5301,75 +6161,129 @@ class Sheet:
             )
         )
 
-    def set_pivot_field_default_subtotal(self, pivot_index: int, field_index: int, on: bool) -> None:  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
-        """Turn the automatic subtotal of pivot field ``field_index`` on or off.
-
-        Custom subtotal functions replace the automatic subtotal whatever this flag says.
-        """
-        sheet = self._index()
-        self._pivot_field_set_flag(LIB.fm_sheet_set_pivot_field_default_subtotal, sheet, pivot_index, field_index, on)
-
-    def set_pivot_field_insert_blank_row(self, pivot_index: int, field_index: int, on: bool) -> None:  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
-        """Set whether a blank row follows each item block of pivot field ``field_index``."""
-        sheet = self._index()
-        self._pivot_field_set_flag(LIB.fm_sheet_set_pivot_field_insert_blank_row, sheet, pivot_index, field_index, on)
-
-    def set_pivot_field_fill_down_labels(self, pivot_index: int, field_index: int, on: bool) -> None:  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
-        """Set whether pivot field ``field_index`` repeats its item labels on every row of a block."""
-        sheet = self._index()
-        self._pivot_field_set_flag(LIB.fm_sheet_set_pivot_field_fill_down_labels, sheet, pivot_index, field_index, on)
-
-    def set_pivot_field_show_detail(self, pivot_index: int, field_index: int, on: bool) -> None:  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
-        """Expand (``True``) or collapse (``False``) every item of pivot field ``field_index`` and its subtotal row."""
+    def set_pivot_field_show_detail(self, pivot: Union[int, str], field_index: int, *, on: bool) -> None:
+        """Expand (``on=True``) or collapse (``on=False``) every item of pivot field ``field_index`` and its subtotal row."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         self._pivot_field_set_flag(LIB.fm_sheet_set_pivot_field_show_detail, sheet, pivot_index, field_index, on)
 
-    def set_pivot_field_item_show_detail(
+    def update_pivot_field(
         self,
-        pivot_index: int,
+        pivot: Union[int, str],
+        field_index: int,
+        *,
+        custom_name: Optional[str] = UNCHANGED,
+        number_format: Optional[str] = UNCHANGED,
+        default_subtotal: bool = UNCHANGED,
+        insert_blank_row: bool = UNCHANGED,
+        fill_down_labels: bool = UNCHANGED,
+        show_all: bool = UNCHANGED,
+        subtotal_top: bool = UNCHANGED,
+    ) -> None:
+        """Update pivot field ``field_index``; an omitted argument keeps its value.
+
+        ``custom_name`` renames the field in the report; ``None`` restores its
+        source name. ``number_format`` is a decimal ``numFmtId`` string naming
+        a built-in format or one returned by :meth:`Workbook.add_num_fmt`;
+        ``None`` clears it. ``default_subtotal`` turns the automatic subtotal
+        on or off (custom subtotal functions replace it either way);
+        ``insert_blank_row`` adds a blank row after each item block;
+        ``fill_down_labels`` repeats item labels on every row of a block;
+        ``show_all`` lists items without data. Fields apply in signature order,
+        so a failure leaves the fields before it applied.
+
+        Raises:
+          TypeError: when a flag is not a ``bool`` (``None`` included) or a
+            string argument is neither a ``str`` nor ``None``.
+        """
+        pivot_index = self._pivot_index(pivot)
+        texts = (
+            ("custom_name", custom_name, LIB.fm_sheet_set_pivot_field_custom_name),
+            ("number_format", number_format, LIB.fm_sheet_set_pivot_field_number_format),
+        )
+        flags = (
+            ("default_subtotal", default_subtotal, LIB.fm_sheet_set_pivot_field_default_subtotal),
+            ("insert_blank_row", insert_blank_row, LIB.fm_sheet_set_pivot_field_insert_blank_row),
+            ("fill_down_labels", fill_down_labels, LIB.fm_sheet_set_pivot_field_fill_down_labels),
+            ("show_all", show_all, LIB.fm_sheet_set_pivot_field_show_all),
+            ("subtotal_top", subtotal_top, LIB.fm_sheet_set_pivot_field_subtotal_top),
+        )
+        for key, value, _ in texts:
+            if value is not UNCHANGED and value is not None and not isinstance(value, str):
+                raise TypeError(f"formulon: {key} must be a str or None, got {type(value).__name__}")
+        for key, value, _ in flags:
+            if value is not UNCHANGED:
+                _flag(value, key)
+        sheet = self._index()
+        h = self._workbook._require()
+        lead = (_uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _uint(field_index, "field_index"))
+        for _, value, setter in texts:
+            if value is not UNCHANGED:
+                with _ArgScope() as scope:
+                    _check(setter(h, *lead, scope.cstr(value or "")))
+        for key, value, setter in flags:
+            if value is not UNCHANGED:
+                _check(setter(h, *lead, _flag(value, key)))
+
+    def update_pivot_item(
+        self,
+        pivot: Union[int, str],
         field_index: int,
         item_index: int,
-        on: bool,  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
+        *,
+        visible: bool = UNCHANGED,
+        show_detail: bool = UNCHANGED,
+        caption: Optional[str] = UNCHANGED,
     ) -> None:
-        """Expand (``True``) or collapse (``False``) item ``item_index`` of pivot field ``field_index``."""
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(
-            LIB.fm_sheet_set_pivot_field_item_show_detail(
-                h,
-                _uint(sheet, "sheet_index"),
-                _uint(pivot_index, "pivot_index"),
-                _uint(field_index, "field_index"),
-                _uint(item_index, "item_index"),
-                1 if on else 0,
-            )
-        )
+        """Update item ``item_index`` of pivot field ``field_index``; an omitted argument keeps its value.
 
-    def set_pivot_field_item_caption(
-        self, pivot_index: int, field_index: int, item_index: int, caption: Optional[str]
-    ) -> None:
-        """Show ``caption`` instead of the value of item ``item_index``; ``None`` or ``""`` clears it.
+        ``show_detail`` expands (``True``) or collapses (``False``) the item.
+        ``caption`` is shown instead of the item's value; ``None`` clears it.
+        A caption longer than 255 UTF-16 code units, or one matching the label
+        another item of the field shows, is rejected. Fields apply in
+        signature order, so a failure leaves the fields before it applied.
 
-        A caption longer than 255 UTF-16 code units, or one matching the label another item of
-        the field shows, is rejected.
+        Raises:
+          TypeError: when a flag is not a ``bool`` (``None`` included) or
+            ``caption`` is neither a ``str`` nor ``None``.
         """
+        pivot_index = self._pivot_index(pivot)
+        flags = (
+            ("visible", visible, LIB.fm_sheet_set_pivot_field_item_visible),
+            ("show_detail", show_detail, LIB.fm_sheet_set_pivot_field_item_show_detail),
+        )
+        for key, value, _ in flags:
+            if value is not UNCHANGED:
+                _flag(value, key)
+        if caption is not UNCHANGED and caption is not None and not isinstance(caption, str):
+            raise TypeError(f"formulon: caption must be a str or None, got {type(caption).__name__}")
         sheet = self._index()
         h = self._workbook._require()
-        with _ArgScope() as scope:
-            cap_ptr = scope.nonempty_cstr(caption)
-            _check(
-                LIB.fm_sheet_set_pivot_field_item_caption(
-                    h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(pivot_index, "pivot_index"),
-                    _uint(field_index, "field_index"),
-                    _uint(item_index, "item_index"),
-                    cap_ptr,
+        lead = (
+            _uint(sheet, "sheet_index"),
+            _uint(pivot_index, "pivot_index"),
+            _uint(field_index, "field_index"),
+            _uint(item_index, "item_index"),
+        )
+        for key, value, setter in flags:
+            if value is not UNCHANGED:
+                _check(setter(h, *lead, _flag(value, key)))
+        if caption is not UNCHANGED:
+            with _ArgScope() as scope:
+                _check(
+                    LIB.fm_sheet_set_pivot_field_item_caption(
+                        h,
+                        _uint(sheet, "sheet_index"),
+                        _uint(pivot_index, "pivot_index"),
+                        _uint(field_index, "field_index"),
+                        _uint(item_index, "item_index"),
+                        scope.nonempty_cstr(caption),
+                    )
                 )
-            )
 
-    def get_pivot_options(self, pivot_index: int) -> PivotOptions:
+    def get_pivot_options(self, pivot: Union[int, str]) -> PivotOptions:
         """Read the PivotTable Options of the pivot; see :class:`PivotOptions`."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -5381,9 +6295,9 @@ class Sheet:
 
             return PivotOptions(
                 show_error=d["show_error"] != 0,
-                error_caption=LIB.read_cstr(d["error_caption"]),
+                error_caption=LIB.read_cstr(d["error_caption"]) or None,
                 show_missing=d["show_missing"] != 0,
-                missing_caption=LIB.read_cstr(d["missing_caption"]),
+                missing_caption=LIB.read_cstr(d["missing_caption"]) or None,
                 show_headers=d["show_headers"] != 0,
                 show_drill=d["show_drill"] != 0,
                 show_data_tips=d["show_data_tips"] != 0,
@@ -5401,72 +6315,97 @@ class Sheet:
                 multiple_field_filters=d["multiple_field_filters"] != 0,
                 preserve_formatting=d["preserve_formatting"] != 0,
                 custom_list_sort=d["custom_list_sort"] != 0,
-                alt_text=LIB.read_cstr(d["alt_text"]),
-                alt_text_summary=LIB.read_cstr(d["alt_text_summary"]),
-                grand_total_caption=LIB.read_cstr(d["grand_total_caption"]),
+                alt_text=LIB.read_cstr(d["alt_text"]) or None,
+                alt_text_summary=LIB.read_cstr(d["alt_text_summary"]) or None,
+                grand_total_caption=LIB.read_cstr(d["grand_total_caption"]) or None,
                 auto_formatting=d["auto_formatting"] != 0,
                 enable_drill=d["enable_drill"] != 0,
             )
 
-    def set_pivot_options(self, pivot_index: int, options: PivotOptions) -> None:
-        """Change the PivotTable Options named by ``options``; members left ``None`` keep their value.
+    def set_pivot_options(
+        self,
+        pivot: Union[int, str],
+        *,
+        show_error: bool = UNCHANGED,
+        error_caption: Optional[str] = UNCHANGED,
+        show_missing: bool = UNCHANGED,
+        missing_caption: Optional[str] = UNCHANGED,
+        show_headers: bool = UNCHANGED,
+        show_drill: bool = UNCHANGED,
+        show_data_tips: bool = UNCHANGED,
+        grid_drop_zones: bool = UNCHANGED,
+        show_empty_row: bool = UNCHANGED,
+        show_empty_col: bool = UNCHANGED,
+        show_data_drop_down: bool = UNCHANGED,
+        print_drill: bool = UNCHANGED,
+        field_print_titles: bool = UNCHANGED,
+        item_print_titles: bool = UNCHANGED,
+        merge_item: bool = UNCHANGED,
+        indent: int = UNCHANGED,
+        page_over_then_down: bool = UNCHANGED,
+        page_wrap: int = UNCHANGED,
+        multiple_field_filters: bool = UNCHANGED,
+        preserve_formatting: bool = UNCHANGED,
+        custom_list_sort: bool = UNCHANGED,
+        alt_text: Optional[str] = UNCHANGED,
+        alt_text_summary: Optional[str] = UNCHANGED,
+        grand_total_caption: Optional[str] = UNCHANGED,
+        auto_formatting: bool = UNCHANGED,
+        enable_drill: bool = UNCHANGED,
+    ) -> None:
+        """Update the PivotTable Options; an omitted argument keeps its value.
 
-        See :class:`PivotOptions`.
+        Arguments are the :class:`PivotOptions` fields. A caption or alt text
+        given as ``None`` (or ``""``) is cleared; a flag or a number cannot be.
+
+        Raises:
+          TypeError: when a flag is not a ``bool``, ``indent`` or
+            ``page_wrap`` is not an integer, or a string argument is neither a
+            ``str`` nor ``None``.
         """
-        sheet = self._index()
-        h = self._workbook._require()
-        if not isinstance(options, PivotOptions):
-            raise TypeError(f"expected PivotOptions, got {type(options).__name__}")
+        pivot_index = self._pivot_index(pivot)
+        arguments = dict(locals())
+        given = {name: arguments[name] for name in _PIVOT_OPTION_NAMES if arguments[name] is not UNCHANGED}
+        for name, value in given.items():
+            if name in _PIVOT_OPTION_TEXTS:
+                if value is not None and not isinstance(value, str):
+                    raise TypeError(f"formulon: {name} must be a str or None, got {type(value).__name__}")
+            elif name in _PIVOT_OPTION_FLAGS:
+                _flag(value, name)
+            elif value is None:
+                raise TypeError(f"formulon: {name} cannot be None")
         current = self.get_pivot_options(pivot_index)
 
         def pick(name: str) -> Any:
-            value = getattr(options, name)
-            return getattr(current, name) if value is None else value
+            return given[name] if name in given else getattr(current, name)
 
-        flags = (
-            "show_error",
-            "show_missing",
-            "show_headers",
-            "show_drill",
-            "show_data_tips",
-            "grid_drop_zones",
-            "show_empty_row",
-            "show_empty_col",
-            "show_data_drop_down",
-            "print_drill",
-            "field_print_titles",
-            "item_print_titles",
-            "merge_item",
-            "page_over_then_down",
-            "multiple_field_filters",
-            "preserve_formatting",
-            "custom_list_sort",
-            "auto_formatting",
-            "enable_drill",
-        )
+        sheet = self._index()
+        h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.PIVOT_OPTIONS)
-            values: Dict[str, object] = {name: 1 if pick(name) else 0 for name in flags}
+            values: Dict[str, object] = {name: 1 if pick(name) else 0 for name in _PIVOT_OPTION_FLAGS}
             values["indent"] = _uint(pick("indent"), "indent")
             values["page_wrap"] = _uint(pick("page_wrap"), "page_wrap")
             S.PIVOT_OPTIONS.pack(LIB, ptr, values)
-            for name in ("error_caption", "missing_caption", "alt_text", "alt_text_summary", "grand_total_caption"):
+            for name in _PIVOT_OPTION_TEXTS:
                 S.write_str_field(LIB, ptr, S.PIVOT_OPTIONS, name, pick(name), scope)
             _check(
                 LIB.fm_sheet_set_pivot_options(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr)
             )
 
-    def project_pivot(self, pivot_index: int) -> None:
+    def project_pivot(self, pivot: Union[int, str]) -> None:
         """Write the pivot's report into its sheet cells now and clear its pending flag.
 
         Raises when the report would overlap another structure; the pivot stays pending.
         """
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         _check(LIB.fm_sheet_project_pivot(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")))
 
-    def is_pivot_projection_pending(self, pivot_index: int) -> bool:
+    def is_pivot_projection_pending(self, pivot: Union[int, str]) -> bool:
         """Return whether a cache change left the pivot's sheet cells stale."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -5478,30 +6417,9 @@ class Sheet:
             )
             return LIB.read_i32(out) != 0
 
-    def set_pivot_field_custom_name(self, pivot_index: int, field_index: int, name: Optional[str]) -> None:
-        """Rename pivot field ``field_index`` in the report; ``None`` or ``""`` restores its source name."""
-        sheet = self._index()
-        h = self._workbook._require()
-        with _ArgScope() as scope:
-            name_ptr = scope.nonempty_cstr(name)
-            _check(
-                LIB.fm_sheet_set_pivot_field_custom_name(
-                    h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(pivot_index, "pivot_index"),
-                    _uint(field_index, "field_index"),
-                    name_ptr,
-                )
-            )
-
-    def set_pivot_field_show_all(self, pivot_index: int, field_index: int, on: bool) -> None:  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
-        """Set whether pivot field ``field_index`` lists items without data."""
-        sheet = self._index()
-        self._pivot_field_set_flag(LIB.fm_sheet_set_pivot_field_show_all, sheet, pivot_index, field_index, on)
-
     def get_pivot_data_field_default_name(
         self,
-        pivot_index: int,
+        pivot: Union[int, str],
         field_index: int,
         aggregation: PivotAggregation,
         exclude_data_field: Optional[int] = None,
@@ -5511,6 +6429,7 @@ class Sheet:
         Nothing changes. ``exclude_data_field`` is the entry :meth:`set_pivot_data_field`
         would replace, whose name is not counted as taken; ``None`` for the add case.
         """
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         exclude = (
@@ -5526,13 +6445,22 @@ class Sheet:
             exclude,
         )
 
-    def show_pivot_details(self, pivot_index: int, row: int, col: int) -> Sheet:
+    @overload
+    @_coordinate_form
+    def show_pivot_details(self, pivot: Union[int, str], row: int, col: int) -> Sheet: ...
+
+    @overload
+    def show_pivot_details(self, pivot: Union[int, str], a1: str) -> Sheet: ...
+
+    def show_pivot_details(self, *args: Any, **kwargs: Any) -> Sheet:
         """Write the source records behind pivot cell (``row``, ``col``) onto a new sheet and return its handle.
 
         The sheet is inserted immediately before the pivot's sheet and becomes
         the active sheet; every existing :class:`Sheet` handle keeps pointing
         at its sheet.
         """
+        pivot, row, col = self._cell_args("show_pivot_details", args, kwargs, ("pivot",))
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         handles = self._workbook._sheet_handles()
@@ -5551,7 +6479,7 @@ class Sheet:
             index = LIB.read_u32(out)
         return self._workbook._insert_sheet_handle(handles, index)
 
-    def add_pivot_field_item(self, pivot_index: int, field_index: int, name: str, *, visible: bool) -> int:
+    def add_pivot_field_item(self, pivot: Union[int, str], field_index: int, name: str, *, visible: bool = True) -> int:
         """Append a manual-filter item addressed by its label.
 
         The item carries no cache binding, so records are matched by
@@ -5559,6 +6487,7 @@ class Sheet:
         no label of its own; build it with
         :meth:`add_pivot_field_shared_item` instead.
         """
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -5578,7 +6507,7 @@ class Sheet:
             return LIB.read_u32(out)
 
     def add_pivot_field_shared_item(
-        self, pivot_index: int, field_index: int, cache_index: int, *, visible: bool
+        self, pivot: Union[int, str], field_index: int, cache_index: int, *, visible: bool
     ) -> int:
         """Append a manual-filter item addressed by its cache shared-item index.
 
@@ -5587,6 +6516,7 @@ class Sheet:
         label is resolved from that shared item, so a shared item that
         renders to nothing produces the blank item.
         """
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -5604,8 +6534,9 @@ class Sheet:
             )
             return LIB.read_u32(out)
 
-    def clear_pivot_field_items(self, pivot_index: int, field_index: int) -> None:
+    def clear_pivot_field_items(self, pivot: Union[int, str], field_index: int) -> None:
         """Drop every manual-filter item from pivot field ``field_index``."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         _check(
@@ -5614,29 +6545,9 @@ class Sheet:
             )
         )
 
-    def set_pivot_field_item_visible(
-        self,
-        pivot_index: int,
-        field_index: int,
-        item_index: int,
-        visible: bool,  # noqa: FBT001 -- a single-boolean setter takes its flag positionally
-    ) -> None:
-        """Toggle the visibility of item ``item_index`` on field ``field_index``."""
-        sheet = self._index()
-        h = self._workbook._require()
-        _check(
-            LIB.fm_sheet_set_pivot_field_item_visible(
-                h,
-                _uint(sheet, "sheet_index"),
-                _uint(pivot_index, "pivot_index"),
-                _uint(field_index, "field_index"),
-                _uint(item_index, "item_index"),
-                1 if visible else 0,
-            )
-        )
-
-    def add_pivot_field_subtotal_fn(self, pivot_index: int, field_index: int, agg: PivotAggregation) -> None:
+    def add_pivot_field_subtotal_fn(self, pivot: Union[int, str], field_index: int, agg: PivotAggregation) -> None:
         """Append a subtotal-fn entry to pivot field ``field_index``."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         _check(
@@ -5649,8 +6560,9 @@ class Sheet:
             )
         )
 
-    def clear_pivot_field_subtotal_fns(self, pivot_index: int, field_index: int) -> None:
+    def clear_pivot_field_subtotal_fns(self, pivot: Union[int, str], field_index: int) -> None:
         """Drop every subtotal-fn entry from pivot field ``field_index``."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         _check(
@@ -5661,7 +6573,7 @@ class Sheet:
 
     def set_pivot_field_date_group(
         self,
-        pivot_index: int,
+        pivot: Union[int, str],
         field_index: int,
         periods: PivotDatePeriod,
         calendar: PivotCalendar = PivotCalendar.GREGORIAN,
@@ -5684,6 +6596,7 @@ class Sheet:
         interval, an invalid bound, a start after the end, or a field holding
         anything but dates raises ``FormulonError``.
         """
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         _check(
@@ -5700,13 +6613,14 @@ class Sheet:
             )
         )
 
-    def clear_pivot_field_date_group(self, pivot_index: int, field_index: int) -> None:
+    def clear_pivot_field_date_group(self, pivot: Union[int, str], field_index: int) -> None:
         """Remove the date grouping of pivot field ``field_index``.
 
         ``field_index`` is a source field or one of its group fields. The group
         fields leave every pivot on the cache and the field returns to the axis
         position they held; a field that is not grouped is left as it is.
         """
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         _check(
@@ -5715,33 +6629,14 @@ class Sheet:
             )
         )
 
-    def set_pivot_field_number_format(self, pivot_index: int, field_index: int, fmt: str) -> None:
-        """Set the ``numFmtId`` of pivot field ``field_index``.
-
-        ``fmt`` is a decimal id string naming a built-in format or one returned
-        by :meth:`Workbook.add_num_fmt`; the empty string clears it.
-        """
-        sheet = self._index()
-        h = self._workbook._require()
-        with _ArgScope() as scope:
-            fmt_ptr = scope.cstr(fmt)
-            _check(
-                LIB.fm_sheet_set_pivot_field_number_format(
-                    h,
-                    _uint(sheet, "sheet_index"),
-                    _uint(pivot_index, "pivot_index"),
-                    _uint(field_index, "field_index"),
-                    fmt_ptr,
-                )
-            )
-
-    def set_pivot_row_field_order(self, pivot_index: int, indices: Sequence[int]) -> None:
+    def set_pivot_row_field_order(self, pivot: Union[int, str], indices: Sequence[int]) -> None:
         """Replace the row-axis field order with ``indices``.
 
         The list is the axis's whole membership: listed fields move onto the
         row axis, and fields left out come off it. Each index may appear once.
         ``PIVOT_VALUES_FIELD`` (``-2``) places the Σ Values level.
         """
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         self._pivot_set_field_order(
             LIB.fm_sheet_set_pivot_row_field_order,
@@ -5750,11 +6645,12 @@ class Sheet:
             indices,
         )
 
-    def set_pivot_column_field_order(self, pivot_index: int, indices: Sequence[int]) -> None:
+    def set_pivot_column_field_order(self, pivot: Union[int, str], indices: Sequence[int]) -> None:
         """Replace the column-axis field order with ``indices``.
 
         Same contract as :meth:`set_pivot_row_field_order`.
         """
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         self._pivot_set_field_order(
             LIB.fm_sheet_set_pivot_column_field_order,
@@ -5776,8 +6672,9 @@ class Sheet:
                 LIB.write_bytes(arr_ptr, buf)
             _check(fn(h, sheet, pivot_index, arr_ptr, _uint(len(indices), "count")))
 
-    def list_pivot_data_fields(self, pivot_index: int) -> List[PivotDataField]:
+    def list_pivot_data_fields(self, pivot: Union[int, str]) -> List[PivotDataField]:
         """Every data field of the pivot, in order."""
+        pivot_index = self._pivot_index(pivot)
         return [self._pivot_data_field_at(pivot_index, i) for i in range(self._pivot_data_field_count(pivot_index))]
 
     def _pivot_data_field_count(self, pivot_index: int) -> int:
@@ -5788,8 +6685,9 @@ class Sheet:
             LIB.fm_sheet_get_pivot_data_field_count, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
         )
 
-    def add_pivot_data_field(self, pivot_index: int, spec: PivotDataFieldInput) -> int:
+    def add_pivot_data_field(self, pivot: Union[int, str], spec: PivotDataFieldInput) -> int:
         """Append a data-field entry; return its index."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -5804,11 +6702,12 @@ class Sheet:
 
     def set_pivot_data_field(
         self,
-        pivot_index: int,
+        pivot: Union[int, str],
         data_field_index: int,
         spec: PivotDataFieldInput,
     ) -> None:
         """Replace the data-field entry at ``data_field_index`` in place."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -5852,13 +6751,14 @@ class Sheet:
         )
         return ptr
 
-    def clear_pivot_data_fields(self, pivot_index: int) -> None:
+    def clear_pivot_data_fields(self, pivot: Union[int, str]) -> None:
         """Drop every data-field entry from the pivot."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         _check(LIB.fm_sheet_clear_pivot_data_fields(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")))
 
-    def list_pivot_filters(self, pivot_index: int) -> List[PivotFilter]:
+    def list_pivot_filters(self, pivot: Union[int, str]) -> List[PivotFilter]:
         """Every listed filter of the pivot, in order.
 
         The filter list is saved as the definition's ``<filters>`` block. A
@@ -5868,6 +6768,7 @@ class Sheet:
         filter, survive :meth:`clear_pivot_filters` /
         :meth:`remove_pivot_filter`, and are saved verbatim.
         """
+        pivot_index = self._pivot_index(pivot)
         return [self._pivot_filter_at(pivot_index, i) for i in range(self._pivot_filter_count(pivot_index))]
 
     def _pivot_filter_count(self, pivot_index: int) -> int:
@@ -5909,8 +6810,9 @@ class Sheet:
                 value_high_text=LIB.read_cstr(d["value_high_text"]),
             )
 
-    def add_pivot_filter(self, pivot_index: int, spec: PivotFilterInput) -> int:
+    def add_pivot_filter(self, pivot: Union[int, str], spec: PivotFilterInput) -> int:
         """Append a filter to the pivot and return its index; it is saved with it. See :meth:`list_pivot_filters`."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -5943,14 +6845,16 @@ class Sheet:
             )
             return LIB.read_u32(out)
 
-    def clear_pivot_filters(self, pivot_index: int) -> None:
+    def clear_pivot_filters(self, pivot: Union[int, str]) -> None:
         """Drop every listed filter from the pivot."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         _check(LIB.fm_sheet_clear_pivot_filters(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")))
 
-    def remove_pivot_filter(self, pivot_index: int, filter_index: int) -> None:
+    def remove_pivot_filter(self, pivot: Union[int, str], filter_index: int) -> None:
         """Remove the filter at ``filter_index``."""
+        pivot_index = self._pivot_index(pivot)
         sheet = self._index()
         h = self._workbook._require()
         _check(
@@ -5960,8 +6864,16 @@ class Sheet:
         )
 
     # -- Dependency-graph trace --------------------------------------------
-    def get_precedents(self, row: int, col: int, depth: int = 1) -> List[CellNode]:
+    @overload
+    @_coordinate_form
+    def get_precedents(self, row: int, col: int, depth: int = 1) -> List[CellNode]: ...
+
+    @overload
+    def get_precedents(self, a1: str, depth: int = 1) -> List[CellNode]: ...
+
+    def get_precedents(self, *args: Any, **kwargs: Any) -> List[CellNode]:
         """Return the cells ``(row, col)`` reads (up to ``depth``)."""
+        row, col, depth = self._cell_args("get_precedents", args, kwargs, (("depth", 1),))
         sheet = self._index()
         return self._trace(
             LIB.fm_sheet_get_precedents,
@@ -5971,8 +6883,16 @@ class Sheet:
             _uint(depth, "depth"),
         )
 
-    def get_dependents(self, row: int, col: int, depth: int = 1) -> List[CellNode]:
+    @overload
+    @_coordinate_form
+    def get_dependents(self, row: int, col: int, depth: int = 1) -> List[CellNode]: ...
+
+    @overload
+    def get_dependents(self, a1: str, depth: int = 1) -> List[CellNode]: ...
+
+    def get_dependents(self, *args: Any, **kwargs: Any) -> List[CellNode]:
         """Return the cells that read ``(row, col)`` (up to ``depth``)."""
+        row, col, depth = self._cell_args("get_dependents", args, kwargs, (("depth", 1),))
         sheet = self._index()
         return self._trace(
             LIB.fm_sheet_get_dependents,
@@ -6005,8 +6925,16 @@ class Sheet:
                     LIB.fm_cell_nodes_destroy(handle)
 
     # -- Dynamic-array spill -----------------------------------------------
-    def get_spill_info(self, row: int, col: int) -> Spill:
+    @overload
+    @_coordinate_form
+    def get_spill_info(self, row: int, col: int) -> Spill: ...
+
+    @overload
+    def get_spill_info(self, a1: str) -> Spill: ...
+
+    def get_spill_info(self, *args: Any, **kwargs: Any) -> Spill:
         """Return dynamic-array spill info for ``(row, col)``."""
+        row, col = self._cell_args("get_spill_info", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -6022,11 +6950,19 @@ class Sheet:
             )
 
     # -- Legacy array (CSE) formulas ---------------------------------------
-    def get_array_formula(self, row: int, col: int) -> Optional[ArrayFormula]:
+    @overload
+    @_coordinate_form
+    def get_array_formula(self, row: int, col: int) -> Optional[ArrayFormula]: ...
+
+    @overload
+    def get_array_formula(self, a1: str) -> Optional[ArrayFormula]: ...
+
+    def get_array_formula(self, *args: Any, **kwargs: Any) -> Optional[ArrayFormula]:
         """Return the legacy array formula covering ``(row, col)``, or ``None``.
 
         Every cell of the block reports the same :class:`ArrayFormula`.
         """
+        row, col = self._cell_args("get_array_formula", args, kwargs, ())
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -6058,5 +6994,9 @@ class Sheet:
             status = LIB.fm_sheet_set_array_formula(h, _uint(sheet, "sheet"), rp, formula_ptr)
             _check(status)
 
+
+for _name, _signature in _COORDINATE_FORMS.items():
+    getattr(Sheet, _name).__signature__ = _signature
+del _name, _signature
 
 _install_workbook_locks(Sheet)

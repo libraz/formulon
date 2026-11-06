@@ -59,11 +59,11 @@ function typesWithStatus(dts) {
 // One failing (or, where no failure is reachable, succeeding) call per
 // payload shape. `fails: false` marks a call whose only failure path is a
 // destroyed handle, which `delete()` makes unusable to probe.
-function failureProbes(wb) {
+function failureProbes(wb, Module) {
   return [
     [true, () => wb.recalcParallel(9)],
     [true, () => wb.sheet(99).getValue(0, 0)],
-    [true, () => wb.getPivotCacheFieldSharedItemValue(9999, 0, 0)],
+    [true, () => wb.listPivotCacheFieldSharedItems(9999, 0)],
     [true, () => wb.sheet(99).evaluateFormula(0, 0, '=1')],
     [true, () => wb.sheet(99).evaluateFormulaArray(0, 0, '=1')],
     [true, () => wb.sheet(99).getShape(1)],
@@ -79,7 +79,7 @@ function failureProbes(wb) {
     [true, () => wb.getPivotCacheOptions(9999)],
     [true, () => wb.listPivotCacheCalculatedItems(9999)],
     [true, () => wb.sheet(99).isPivotProjectionPending(0)],
-    [true, () => wb.isPivotCacheFieldSharedItemDate(9999, 0, 0)],
+    [true, () => wb.listPivotCacheFields(9999)],
     [true, () => wb.sheet(99).getPivotStyleInfo(0)],
     [true, () => wb.sheet(99).getPivotRowFieldOrder(0)],
     [true, () => wb.sheet(0).listPivotFields(99)],
@@ -123,12 +123,12 @@ function failureProbes(wb) {
     [true, () => wb.sheet(99).listRowBreaks()],
     [true, () => wb.sheet(99).getPageSetup()],
     [true, () => wb.sheet(99).getPageMargins()],
-    [true, () => wb.sheet(99).getCellCount()],
+    [true, () => wb.sheet(99).listCells()],
     // A released handle is the only failure path, which is not usable here.
     [false, () => wb.getPinnedNow()],
-    [true, () => wb.getLocaleFacts('nope')],
-    [true, () => wb.compareText('a', 'b', 0, 'nope')],
-    [true, () => wb.getCollationClasses([{ kind: 1, number: 1 }], 0, 'nope')],
+    [true, () => Module.getLocaleFacts('nope')],
+    [true, () => Module.compareText('a', 'b', 0, 'nope')],
+    [true, () => Module.getCollationClasses([{ kind: 1, number: 1 }], 0, 'nope')],
     [true, () => wb.sheet(99).getSpillInfo(0, 0)],
     [true, () => wb.sheet(99).getArrayFormula(0, 0)],
     [true, () => wb.sheet(99).getFormatDefaults()],
@@ -143,7 +143,7 @@ function failureProbes(wb) {
     [true, () => wb.sheet(99).listThreadedComments()],
     // A released handle is the only failure path, which is not usable here.
     [false, () => wb.listPeople()],
-    [true, () => wb.getImageInfo(new Uint8Array(4))],
+    [true, () => Module.getImageInfo(new Uint8Array(4))],
     [true, () => wb.sheet(99).getImage(1)],
     [true, () => wb.sheet(99).addImage(new Uint8Array(4))],
     [true, () => wb.sheet(99).snapshotDrawing(1)],
@@ -171,7 +171,7 @@ test('failing calls throw a FormulonError and succeeding ones return a payload w
   const Module = await getModule();
   const wb = Module.Workbook.createDefault();
   try {
-    for (const [fails, call] of failureProbes(wb)) {
+    for (const [fails, call] of failureProbes(wb, Module)) {
       if (fails) {
         expectFailure(call);
       } else {

@@ -74,10 +74,10 @@ const formulon = await createFormulon();
 const wb = formulon.Workbook.createDefault();
 try {
   const ws = wb.sheet(0);
-  ws.setFormula(0, 0, '=LENB("日本")');
+  ws.setFormula('A1', '=LENB("日本")');
   wb.setExcelProfileId('mac-365-ja_JP'); // Python: set_excel_profile_id
   wb.recalc(); // プロファイルを変えると数式が再計算の対象になる
-  console.log(ws.getDisplayText(0, 0).text); // 4
+  console.log(ws.getDisplayText('A1').text); // 4
 } finally {
   wb.dispose();
 }

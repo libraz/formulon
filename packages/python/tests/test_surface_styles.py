@@ -91,9 +91,9 @@ class StyleTests(unittest.TestCase):
             index = wb.add_font(Font(name="Arial", size=12.0, vert_align=1, color_argb=0xFF112233))
             self.assertEqual(wb.get_font(index).vert_align, 1)
 
-            before = wb.get_font_count()
+            before = len(wb.list_fonts())
             self.assertEqual(wb.add_font(wb.get_font(index)), index)
-            self.assertEqual(wb.get_font_count(), before)
+            self.assertEqual(len(wb.list_fonts()), before)
 
     def test_font_one_field_rewrite_preserves_the_superscript(self) -> None:
         with Workbook.create_default() as wb:
@@ -113,9 +113,9 @@ class StyleTests(unittest.TestCase):
             self.assertIsNotNone(got.font)
             self.assertEqual(got.font.vert_align, 1)
 
-            before = wb.get_dxf_count()
+            before = len(wb.list_dxfs())
             self.assertEqual(wb.add_dxf(got), index)
-            self.assertEqual(wb.get_dxf_count(), before)
+            self.assertEqual(len(wb.list_dxfs()), before)
 
     def test_dxf_font_without_size_reads_back_without_size(self) -> None:
         with Workbook.create_default() as wb:
@@ -136,7 +136,7 @@ class StyleTests(unittest.TestCase):
             )
             index = wb.add_dxf(record)
             self.assertEqual(wb.add_dxf(record), index)
-            self.assertEqual(wb.get_dxf_count(), 1)
+            self.assertEqual(len(wb.list_dxfs()), 1)
             got = wb.get_dxf(index)
             self.assertIsNotNone(got.font)
             self.assertEqual(got.font.name, "Arial")

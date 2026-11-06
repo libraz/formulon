@@ -16,10 +16,10 @@ function makePivotWorkbook(Workbook) {
     ['West', 30],
   ]) {
     const rec = wb.addPivotCacheRecord(cacheId);
-    wb.setPivotCacheRecordText(cacheId, rec, 0, region);
-    wb.setPivotCacheRecordNumber(cacheId, rec, 1, amount);
+    wb.setPivotCacheRecordValue(cacheId, rec, 0, region);
+    wb.setPivotCacheRecordValue(cacheId, rec, 1, amount);
   }
-  const pivot = wb.sheet(0).addPivot('Pivot1', cacheId, 0, 4);
+  const pivot = wb.sheet(0).addPivot({ name: 'Pivot1', cacheId, anchorRow: 0, anchorCol: 4 });
   wb.sheet(0).addPivotField(pivot, { sourceName: 'Region', axis: 0 });
   const amountField = wb.sheet(0).addPivotField(pivot, { sourceName: 'Amount', axis: 2 });
   wb.sheet(0).addPivotDataField(pivot, {
@@ -82,7 +82,7 @@ test('pivot filters survive save/load', async () => {
   }
   const reloaded = mod.Workbook.load(bytes);
   try {
-    assert.equal(reloaded.sheet(0).getPivotCount(), 1);
+    assert.equal(reloaded.sheet(0).listPivots().length, 1);
     // The filter is written as `<filters>` and decodes back into the list.
     assert.equal(reloaded.sheet(0).listPivotFilters(0).length, 1);
     const got = reloaded.sheet(0).listPivotFilters(0)[0];
@@ -152,7 +152,7 @@ test('pivot definition read-backs report what the setters wrote', async () => {
     assert.deepEqual(wb.sheet(0).getPivotRowFieldOrder(pivot), [0]);
     assert.deepEqual(wb.sheet(0).getPivotColumnFieldOrder(pivot), []);
 
-    wb.sheet(0).setPivotFieldSort(pivot, 0, 0, 'Sum of Amount');
+    wb.sheet(0).setPivotFieldSort(pivot, 0, 0, { byField: 'Sum of Amount' });
     const region = wb.sheet(0).listPivotFields(pivot)[0];
     assert.equal(region.sourceName, 'Region');
     assert.equal(region.axis, 0);
@@ -163,10 +163,10 @@ test('pivot definition read-backs report what the setters wrote', async () => {
     assert.equal(region.groupBaseIndex, null);
     assert.equal(wb.sheet(0).listPivotFields(pivot)[1].axis, 2);
 
-    wb.sheet(0).addPivotFieldItem(pivot, 0, 'East', true);
-    wb.sheet(0).addPivotFieldItem(pivot, 0, 'West', true);
-    wb.sheet(0).setPivotFieldItemVisible(pivot, 0, 1, false);
-    assert.equal(wb.sheet(0).getPivotFieldItemCount(pivot, 0), 2);
+    wb.sheet(0).addPivotFieldItem(pivot, 0, 'East');
+    wb.sheet(0).addPivotFieldItem(pivot, 0, 'West');
+    wb.sheet(0).updatePivotItem(pivot, 0, 1, { visible: false });
+    assert.equal(wb.sheet(0).listPivotFieldItems(pivot, 0).length, 2);
     const east = wb.sheet(0).getPivotFieldItem(pivot, 0, 0);
     assert.equal(east.name, 'East');
     // The scratch cache holds no shared items, so a label binds to nothing.
@@ -202,12 +202,13 @@ test('pivot style info defaults on create, reads back what the setter wrote and 
     );
     assert.equal(initial.showLastColumn, true);
 
+    // A patch: the omitted flags keep their values.
     wb.sheet(0).setPivotStyleInfo(pivot, { name: 'PivotStyleDark3', showRowStripes: true });
     const set = wb.sheet(0).getPivotStyleInfo(pivot);
     assert.equal(set.name, 'PivotStyleDark3');
     assert.deepEqual(
       [set.showRowHeaders, set.showColHeaders, set.showRowStripes, set.showColStripes, set.showLastColumn],
-      [false, false, true, false, false],
+      [true, true, true, false, true],
     );
 
     // Survives a save/load.
@@ -220,8 +221,10 @@ test('pivot style info defaults on create, reads back what the setter wrote and 
       reloaded.dispose();
     }
 
-    // An omitted name keeps the element without a style name.
+    // An empty patch changes nothing; an empty name leaves the element without a style name.
     wb.sheet(0).setPivotStyleInfo(pivot, {});
+    assert.equal(wb.sheet(0).getPivotStyleInfo(pivot).name, 'PivotStyleDark3');
+    wb.sheet(0).setPivotStyleInfo(pivot, { name: '' });
     const bare = wb.sheet(0).getPivotStyleInfo(pivot);
     assert.notEqual(bare, null);
     assert.equal(bare.name, '');
@@ -244,7 +247,7 @@ test('pivot definition read-backs reject out-of-range indices', async () => {
       () => wb.sheet(0).getPivotRowFieldOrder(9),
       () => wb.sheet(0).getPivotColumnFieldOrder(9),
       () => wb.sheet(0).listPivotFields(99),
-      () => wb.sheet(0).getPivotFieldItemCount(pivot, 99),
+      () => wb.sheet(0).listPivotFieldItems(pivot, 99).length,
       () => wb.sheet(0).getPivotFieldItem(pivot, 0, 99),
       () => wb.sheet(0).listPivotDataFields(99),
     ]) {
@@ -290,9 +293,9 @@ test('pivotFieldAdd binds by cache column name and a null axis takes a field off
     for (const name of ['Region', 'Product', 'Sales', 'Qty']) wb.addPivotCacheField(cacheId, name);
     for (const sales of [100, 200]) {
       const rec = wb.addPivotCacheRecord(cacheId);
-      for (const [col, value] of [0, 0, sales, 1].entries()) wb.setPivotCacheRecordNumber(cacheId, rec, col, value);
+      for (const [col, value] of [0, 0, sales, 1].entries()) wb.setPivotCacheRecordValue(cacheId, rec, col, value);
     }
-    const pivot = wb.sheet(0).addPivot('PT', cacheId, 0, 6);
+    const pivot = wb.sheet(0).addPivot({ name: 'PT', cacheId, anchorRow: 0, anchorCol: 6 });
     const region = wb.sheet(0).addPivotField(pivot, { sourceName: 'Region', axis: 0 });
     const sales = wb.sheet(0).addPivotField(pivot, { sourceName: 'Sales', axis: 2 });
     assert.equal(region, 0);

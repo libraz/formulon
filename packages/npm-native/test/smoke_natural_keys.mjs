@@ -25,13 +25,15 @@ test('defined names are read and removed by name and scope', async () => {
   const name = found(wb.getDefinedName('rate', null));
   assert.deepEqual(
     [name.name, name.formula, name.localSheetId, name.comment, name.hidden],
-    ['Rate', 'Sheet1!$A$1', null, null, false],
+    ['Rate', '=Sheet1!$A$1', null, null, false],
   );
-  assert.equal(found(wb.getDefinedName('Rate', 0)).formula, 'Sheet1!$B$1');
+  assert.equal(found(wb.getDefinedName('Rate', 0)).formula, '=Sheet1!$B$1');
+  assert.equal(found(wb.getDefinedName('Rate', 'Sheet1')).formula, '=Sheet1!$B$1');
+  assert.equal(found(wb.getDefinedName('Rate')).formula, '=Sheet1!$A$1');
   missing(wb.getDefinedName('Missing', null));
-  wb.removeDefinedName('Rate', null);
-  missing(wb.getDefinedName('Rate', null));
-  assert.equal(found(wb.getDefinedName('Rate', 0)).formula, 'Sheet1!$B$1');
+  wb.removeDefinedName('Rate');
+  missing(wb.getDefinedName('Rate'));
+  assert.equal(found(wb.getDefinedName('Rate', 0)).formula, '=Sheet1!$B$1');
   assert.throws(
     () => wb.removeDefinedName('Rate', null),
     (e) => isFormulonError(e, mod.StatusCode.NotFound),
@@ -86,14 +88,14 @@ test('shapes and drawing objects are read by object id', async () => {
 test('theme script fonts and passthrough parts are read by key', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.ok(found(wb.getThemeScriptFont(true, 'Jpan')).typeface.length > 0);
+  assert.ok(found(wb.getThemeScriptFont({ major: true, script: 'Jpan' })).typeface.length > 0);
   wb.setThemeScriptFont({ major: false, script: 'Zzzz', typeface: 'Test Face' });
-  assert.deepEqual(found(wb.getThemeScriptFont(false, 'Zzzz')), {
+  assert.deepEqual(found(wb.getThemeScriptFont({ major: false, script: 'Zzzz' })), {
     major: false,
     script: 'Zzzz',
     typeface: 'Test Face',
   });
-  missing(wb.getThemeScriptFont(true, 'Zzzz'));
+  missing(wb.getThemeScriptFont({ major: true, script: 'Zzzz' }));
   const path = wb.listPassthroughs()[0];
   assert.equal(found(wb.getPassthrough(path)), path);
   missing(wb.getPassthrough(`/${path}`));

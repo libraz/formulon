@@ -34,7 +34,7 @@ using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
-using formulon::c_api::parts::display_formula;
+using formulon::c_api::parts::display_formula_text;
 using formulon::c_api::parts::find_cache;
 using formulon::c_api::parts::find_cache_mut;
 using formulon::c_api::parts::fresh_read_scratch;
@@ -45,15 +45,16 @@ using formulon::c_api::parts::invalid_error_code;
 using formulon::c_api::parts::invalidate_pivot_results_for_cache;
 using formulon::c_api::parts::is_valid_error_code;
 using formulon::c_api::parts::mark_cache_pivots_pending;
-using formulon::c_api::parts::may_respell_formula;
 using formulon::c_api::parts::mutable_pivot_caches;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::resolve_cache;
 using formulon::c_api::parts::resolve_cache_mut;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::value_to_fm;
+using formulon::c_api::parts::with_formula_prefix;
 
 namespace {
 
@@ -867,12 +868,10 @@ extern "C" fm_status_t fm_workbook_get_pivot_cache_field_formula(const fm_workbo
   if (field == nullptr) {
     return status;
   }
-  if (!field->formula.has_value()) {
+  if (!field->formula.has_value() || field->formula->empty()) {
     *out_utf8 = "";
-  } else if (may_respell_formula(*field->formula)) {
-    *out_utf8 = display_formula(wb->workbook(), *field->formula, fresh_read_scratch(wb), {});
   } else {
-    *out_utf8 = field->formula->c_str();
+    *out_utf8 = publish_scratch(wb, with_formula_prefix(display_formula_text(wb->workbook(), *field->formula, {})));
   }
   return 0;
 }
@@ -960,7 +959,7 @@ extern "C" fm_status_t fm_workbook_get_pivot_cache_calculated_item(const fm_work
   fm_pivot_calculated_item_t result{};
   result.field_index = entry.cache_field_index;
   result.name = store_cstr(store, name);
-  result.formula = store_cstr(store, entry.formula);
+  result.formula = store_cstr(store, with_formula_prefix(entry.formula));
   result.scoped = entry.has_area && scoped ? 1 : 0;
   *out = result;
   return 0;

@@ -592,118 +592,98 @@ export function registerCellsIo(Module, test) {
   });
 
   test('compareText folds by strength and rejects bad arguments', () => {
-    const wb = Module.Workbook.createDefault();
-    try {
-      const profile = 'mac-365-zh_CN';
-      const strict = wb.compareText('A', '\uFF21', 0, profile);
-      assert.notEqual(strict, 0);
-      const dynamic = wb.compareText('A', '\uFF21', 1, profile);
-      assert.equal(dynamic, 0);
-      const ab = wb.compareText('a', 'b', 0, 'mac-365-en_US');
-      const ba = wb.compareText('b', 'a', 0, 'mac-365-en_US');
-      assert.equal(ab, -1);
-      assert.equal(ba, 1);
-      expectFailure(() => wb.compareText('a', 'b', 0, 'nope'), StatusCode.InvalidArgument);
-      assert.throws(() => wb.compareText('a', 'b', -1, profile), RangeError);
-      expectFailure(() => wb.compareText('a', 'b', 3, profile));
-    } finally {
-      wb.delete();
-    }
+    const profile = 'mac-365-zh_CN';
+    const strict = Module.compareText('A', '\uFF21', 0, profile);
+    assert.notEqual(strict, 0);
+    const dynamic = Module.compareText('A', '\uFF21', 1, profile);
+    assert.equal(dynamic, 0);
+    const ab = Module.compareText('a', 'b', 0, 'mac-365-en_US');
+    const ba = Module.compareText('b', 'a', 0, 'mac-365-en_US');
+    assert.equal(ab, -1);
+    assert.equal(ba, 1);
+    expectFailure(() => Module.compareText('a', 'b', 0, 'nope'), StatusCode.InvalidArgument);
+    assert.throws(() => Module.compareText('a', 'b', -1, profile), RangeError);
+    expectFailure(() => Module.compareText('a', 'b', 3, profile));
   });
 
   test('getCollationClasses orders by kind, folds text by strength, and copies its output', () => {
-    const wb = Module.Workbook.createDefault();
-    try {
-      const values = [
-        { kind: 1, number: 1 },
-        { kind: 3, text: '1' },
-        { kind: 2, boolean: true },
-        { kind: 3, text: 'TRUE' },
-        { kind: 0 },
-        { kind: 3, text: '' },
-        { kind: 1, number: 0 },
-        { kind: 2, boolean: false },
-      ];
-      const r = wb.getCollationClasses(values, 1, 'mac-365-en_US');
-      assert.ok(r.classIds instanceof Uint32Array);
-      assert.equal(r.classIds.length, 8);
-      assert.equal(r.classCount, 8);
-      assert.equal(new Set(r.classIds).size, 8);
-      const [num1, str1, boolTrue, strTrue, blank, strEmpty, num0, boolFalse] = r.classIds;
-      assert.ok(Math.max(num0, num1) < Math.min(str1, strTrue, strEmpty));
-      assert.ok(Math.max(str1, strTrue, strEmpty) < Math.min(boolFalse, boolTrue));
-      assert.ok(Math.max(boolFalse, boolTrue) < blank);
-      assert.ok(num0 < num1 && boolFalse < boolTrue);
+    const values = [
+      { kind: 1, number: 1 },
+      { kind: 3, text: '1' },
+      { kind: 2, boolean: true },
+      { kind: 3, text: 'TRUE' },
+      { kind: 0 },
+      { kind: 3, text: '' },
+      { kind: 1, number: 0 },
+      { kind: 2, boolean: false },
+    ];
+    const r = Module.getCollationClasses(values, 1, 'mac-365-en_US');
+    assert.ok(r.classIds instanceof Uint32Array);
+    assert.equal(r.classIds.length, 8);
+    assert.equal(r.classCount, 8);
+    assert.equal(new Set(r.classIds).size, 8);
+    const [num1, str1, boolTrue, strTrue, blank, strEmpty, num0, boolFalse] = r.classIds;
+    assert.ok(Math.max(num0, num1) < Math.min(str1, strTrue, strEmpty));
+    assert.ok(Math.max(str1, strTrue, strEmpty) < Math.min(boolFalse, boolTrue));
+    assert.ok(Math.max(boolFalse, boolTrue) < blank);
+    assert.ok(num0 < num1 && boolFalse < boolTrue);
 
-      const snapshot = Array.from(r.classIds);
-      wb.getCollationClasses(
-        [
-          { kind: 3, text: 'z' },
-          { kind: 3, text: 'y' },
-        ],
-        1,
-        'mac-365-en_US',
-      );
-      assert.deepEqual(Array.from(r.classIds), snapshot);
+    const snapshot = Array.from(r.classIds);
+    Module.getCollationClasses(
+      [
+        { kind: 3, text: 'z' },
+        { kind: 3, text: 'y' },
+      ],
+      1,
+      'mac-365-en_US',
+    );
+    assert.deepEqual(Array.from(r.classIds), snapshot);
 
-      const folded = wb.getCollationClasses(
-        [
-          { kind: 3, text: 'a' },
-          { kind: 3, text: 'A' },
-        ],
-        1,
-        'mac-365-en_US',
-      );
-      assert.equal(folded.classIds[0], folded.classIds[1]);
-      assert.equal(folded.classCount, 1);
+    const folded = Module.getCollationClasses(
+      [
+        { kind: 3, text: 'a' },
+        { kind: 3, text: 'A' },
+      ],
+      1,
+      'mac-365-en_US',
+    );
+    assert.equal(folded.classIds[0], folded.classIds[1]);
+    assert.equal(folded.classCount, 1);
 
-      const empty = wb.getCollationClasses([], 1, 'mac-365-en_US');
-      assert.equal(empty.classIds.length, 0);
-      assert.equal(empty.classCount, 0);
+    const empty = Module.getCollationClasses([], 1, 'mac-365-en_US');
+    assert.equal(empty.classIds.length, 0);
+    assert.equal(empty.classCount, 0);
 
-      assert.throws(() => wb.getCollationClasses([{ number: 1 }], 1, 'mac-365-en_US'), TypeError);
-      assert.throws(() => wb.getCollationClasses({}, 1, 'mac-365-en_US'), TypeError);
-      expectFailure(() => wb.getCollationClasses([{ kind: 1, number: 1 }], 1, 'nope'));
-      assert.throws(() => wb.getCollationClasses(values, -1, 'mac-365-en_US'), RangeError);
-    } finally {
-      wb.delete();
-    }
+    assert.throws(() => Module.getCollationClasses([{ number: 1 }], 1, 'mac-365-en_US'), TypeError);
+    assert.throws(() => Module.getCollationClasses({}, 1, 'mac-365-en_US'), TypeError);
+    expectFailure(() => Module.getCollationClasses([{ kind: 1, number: 1 }], 1, 'nope'));
+    assert.throws(() => Module.getCollationClasses(values, -1, 'mac-365-en_US'), RangeError);
   });
 
   test('getCollationClasses timing on 100k mixed CJK/ASCII texts', () => {
-    const wb = Module.Workbook.createDefault();
-    try {
-      const cjk = [
-        '\u6771\u4EAC',
-        '\u5927\u962A',
-        '\u3055\u304F\u3089',
-        '\u30B5\u30AF\u30E9',
-        '\u4E2D\u6587',
-        '\uD55C\uAE00',
-      ];
-      const values = [];
-      for (let i = 0; i < 100000; i += 1) {
-        const text = i % 2 === 0 ? `${cjk[i % cjk.length]}${i % 5000}` : `item${i % 7000}`;
-        values.push({ kind: 3, text });
-      }
-      const t0 = process.hrtime.bigint();
-      const r = wb.getCollationClasses(values, 1, 'mac-365-ja_JP');
-      const ms = Number(process.hrtime.bigint() - t0) / 1e6;
-      assert.equal(r.classIds.length, 100000);
-      console.log(`getCollationClasses 100k mixed CJK/ASCII texts: ${ms.toFixed(0)} ms (${r.classCount} classes)`);
-    } finally {
-      wb.delete();
+    const cjk = [
+      '\u6771\u4EAC',
+      '\u5927\u962A',
+      '\u3055\u304F\u3089',
+      '\u30B5\u30AF\u30E9',
+      '\u4E2D\u6587',
+      '\uD55C\uAE00',
+    ];
+    const values = [];
+    for (let i = 0; i < 100000; i += 1) {
+      const text = i % 2 === 0 ? `${cjk[i % cjk.length]}${i % 5000}` : `item${i % 7000}`;
+      values.push({ kind: 3, text });
     }
+    const t0 = process.hrtime.bigint();
+    const r = Module.getCollationClasses(values, 1, 'mac-365-ja_JP');
+    const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+    assert.equal(r.classIds.length, 100000);
+    console.log(`getCollationClasses 100k mixed CJK/ASCII texts: ${ms.toFixed(0)} ms (${r.classCount} classes)`);
   });
 
   test('getLocaleFacts reports collationMeasured per host', () => {
-    const wb = Module.Workbook.createDefault();
-    try {
-      assert.equal(wb.getLocaleFacts('mac-365-de_DE').collationMeasured, true);
-      assert.equal(wb.getLocaleFacts('win-365-ja_JP').collationMeasured, false);
-      assert.equal(wb.getLocaleFacts('win-365-en_US').collationMeasured, false);
-    } finally {
-      wb.delete();
-    }
+    assert.equal(Module.getLocaleFacts('mac-365-de_DE').collationMeasured, true);
+    assert.equal(Module.getLocaleFacts('win-365-ja_JP').collationMeasured, false);
+    assert.equal(Module.getLocaleFacts('win-365-en_US').collationMeasured, false);
   });
 }

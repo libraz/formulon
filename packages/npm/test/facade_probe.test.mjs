@@ -188,7 +188,17 @@ function buildFacade(surface = 'wasm') {
     evalFormula: () => null,
     getVersion: () => 'stub',
     getStatusName: () => 'OK',
-    getErrorDisplayName: () => '#N/A',
+    getFunctionMetadata: () => null,
+    listFunctionNames: () => [],
+    localizeFunctionName: (n) => n,
+    canonicalizeFunctionName: (n) => n,
+    localizeFormula: (f) => f,
+    canonicalizeFormula: (f) => f,
+    getLocaleFacts: () => null,
+    listLocaleErrorNames: () => [],
+    compareText: () => 0,
+    getCollationClasses: () => null,
+    getImageInfo: () => null,
     setLogMinLevel: () => {},
     setLogSink: () => {},
   };
@@ -388,5 +398,13 @@ for (const surface of ['wasm', 'native']) {
     assert.deepEqual(prototypeKeys(Object.getPrototypeOf(wb.sheet(0))), declared('Sheet'));
     const statics = Object.getOwnPropertyNames(Workbook).filter((k) => !['length', 'name', 'prototype'].includes(k));
     assert.deepEqual(statics.sort(), declared('WorkbookCtor'));
+  });
+}
+
+for (const surface of ['wasm', 'native']) {
+  test(`S2 (${surface}): the Formulon object's keys are the declared Formulon members`, () => {
+    const { formulon } = buildFacade(surface);
+    const declared = [...memberNames(DTS[surface], 'Formulon')].sort();
+    assert.deepEqual(Object.keys(formulon).sort(), declared);
   });
 }

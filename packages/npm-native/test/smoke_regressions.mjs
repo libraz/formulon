@@ -257,17 +257,17 @@ test('pivotFieldAddItemAt hides the blank item an empty label cannot name', asyn
     const amount = wb.addPivotCacheField(cache, 'Amount');
     // Shared item 0 renders as "North"; shared item 1 is the blank, which
     // carries no label of its own and can only be named by its index.
-    wb.addPivotCacheFieldSharedItemText(cache, region, 'North');
-    wb.addPivotCacheFieldSharedItemBlank(cache, region);
+    wb.addPivotCacheFieldSharedItem(cache, region, 'North');
+    wb.addPivotCacheFieldSharedItem(cache, region, null);
 
     const first = wb.addPivotCacheRecord(cache);
-    wb.setPivotCacheRecordNumber(cache, first, region, 0);
-    wb.setPivotCacheRecordNumber(cache, first, amount, 100);
+    wb.setPivotCacheRecordValue(cache, first, region, 0);
+    wb.setPivotCacheRecordValue(cache, first, amount, 100);
     const second = wb.addPivotCacheRecord(cache);
-    wb.setPivotCacheRecordBlank(cache, second, region);
-    wb.setPivotCacheRecordNumber(cache, second, amount, 200);
+    wb.setPivotCacheRecordValue(cache, second, region, null);
+    wb.setPivotCacheRecordValue(cache, second, amount, 200);
 
-    const pivot = wb.sheet(0).addPivot('PT', cache, 0, 0);
+    const pivot = wb.sheet(0).addPivot({ name: 'PT', cacheId: cache, anchorRow: 0, anchorCol: 0 });
     const regionField = wb.sheet(0).addPivotField(pivot, { sourceName: 'Region', axis: 0 });
     const amountField = wb.sheet(0).addPivotField(pivot, { sourceName: 'Amount', axis: 2 });
     wb.sheet(0).setPivotRowFieldOrder(pivot, [regionField]);
@@ -289,7 +289,7 @@ test('pivotFieldAddItemAt hides the blank item an empty label cannot name', asyn
     };
     assert.equal(sumDataCells(), 300);
 
-    wb.sheet(0).addPivotFieldItem(pivot, regionField, 'North', true);
+    wb.sheet(0).addPivotFieldItem(pivot, regionField, 'North');
     wb.sheet(0).addPivotFieldSharedItem(pivot, regionField, 1, false);
     assert.equal(sumDataCells(), 100);
   } finally {
@@ -418,7 +418,7 @@ test('setVisibility states every tab visibility, veryHidden included', async () 
     assert.equal(read().visibility, mod.SheetVisibility.Visible);
     // The only visible sheet cannot be hidden: kInvalidArgument, sheet left alone.
     assert.throws(
-      () => wb.sheet(0).setVisibility(mod.SheetVisibility.Hidden),
+      () => wb.sheet(0).setView({ visibility: mod.SheetVisibility.Hidden }),
       (e) => isFormulonError(e, 2),
     );
     assert.equal(read().visibility, mod.SheetVisibility.Visible);
@@ -431,26 +431,26 @@ test('setVisibility states every tab visibility, veryHidden included', async () 
     // A second sheet lets the first one change state, but removing the first
     // while the second is hidden would leave no visible sheet.
     wb.addSheet('Second');
-    wb.sheet(1).setVisibility(mod.SheetVisibility.Hidden);
+    wb.sheet(1).setView({ visibility: mod.SheetVisibility.Hidden });
     assert.throws(
       () => wb.removeSheet(0),
       (e) => isFormulonError(e, 2),
     );
     assert.equal(wb.listSheets().length, 2);
-    wb.sheet(1).setVisibility(mod.SheetVisibility.Visible);
+    wb.sheet(1).setView({ visibility: mod.SheetVisibility.Visible });
 
-    wb.sheet(0).setVisibility(mod.SheetVisibility.VeryHidden);
+    wb.sheet(0).setView({ visibility: mod.SheetVisibility.VeryHidden });
     assert.equal(read().visibility, mod.SheetVisibility.VeryHidden);
 
     // Demotion and showing are explicit states too.
-    wb.sheet(0).setVisibility(mod.SheetVisibility.Hidden);
+    wb.sheet(0).setView({ visibility: mod.SheetVisibility.Hidden });
     assert.equal(read().visibility, mod.SheetVisibility.Hidden);
-    wb.sheet(0).setVisibility(mod.SheetVisibility.Visible);
+    wb.sheet(0).setView({ visibility: mod.SheetVisibility.Visible });
     assert.equal(read().visibility, mod.SheetVisibility.Visible);
 
     // An unknown ordinal is refused and leaves the sheet alone.
-    wb.sheet(0).setVisibility(mod.SheetVisibility.VeryHidden);
-    assert.throws(() => wb.sheet(0).setVisibility(3), isFormulonError);
+    wb.sheet(0).setView({ visibility: mod.SheetVisibility.VeryHidden });
+    assert.throws(() => wb.sheet(0).setView({ visibility: 3 }), isFormulonError);
     assert.equal(read().visibility, mod.SheetVisibility.VeryHidden);
   } finally {
     wb.dispose();

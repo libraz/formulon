@@ -144,7 +144,7 @@ class ValidationTests(unittest.TestCase):
             dv = wb.sheet(0).list_validations()[0]
             self.assertEqual(dv.type, 3)
             self.assertTrue(dv.allow_blank)
-            self.assertEqual(dv.formula1, '"a,b,c"')
+            self.assertEqual(dv.formula1, '="a,b,c"')
             self.assertEqual(len(dv.ranges), 1)
             wb.sheet(0).clear_validations()
             self.assertEqual(len(wb.sheet(0).list_validations()), 0)
@@ -153,8 +153,8 @@ class ValidationTests(unittest.TestCase):
 class SheetViewProtectionTests(unittest.TestCase):
     def test_view_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).set_zoom(150)
-            wb.sheet(0).set_freeze(1, 2)
+            wb.sheet(0).set_view(zoom_scale=150)
+            wb.sheet(0).set_view(freeze_rows=1, freeze_cols=2)
             view = wb.sheet(0).get_view()
             self.assertEqual(view.zoom_scale, 150)
             self.assertEqual((view.freeze_rows, view.freeze_cols), (1, 2))
@@ -171,12 +171,12 @@ class SheetViewProtectionTests(unittest.TestCase):
 
     def test_view_display_setters_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).set_show_grid_lines(False)
-            wb.sheet(0).set_show_row_col_headers(False)
-            wb.sheet(0).set_show_zeros(False)
-            wb.sheet(0).set_right_to_left(True)
-            wb.sheet(0).set_tab_selected(True)
-            wb.sheet(0).set_view_mode(SheetViewMode.PAGE_BREAK_PREVIEW)
+            wb.sheet(0).set_view(show_grid_lines=False)
+            wb.sheet(0).set_view(show_row_col_headers=False)
+            wb.sheet(0).set_view(show_zeros=False)
+            wb.sheet(0).set_view(right_to_left=True)
+            wb.sheet(0).set_view(tab_selected=True)
+            wb.sheet(0).set_view(view_mode=SheetViewMode.PAGE_BREAK_PREVIEW)
             view = wb.sheet(0).get_view()
             self.assertFalse(view.show_grid_lines)
             self.assertFalse(view.show_row_col_headers)
@@ -184,7 +184,7 @@ class SheetViewProtectionTests(unittest.TestCase):
             self.assertTrue(view.right_to_left)
             self.assertTrue(view.tab_selected)
             self.assertEqual(view.view_mode, SheetViewMode.PAGE_BREAK_PREVIEW)
-            wb.sheet(0).set_view_mode(SheetViewMode.NORMAL)
+            wb.sheet(0).set_view(view_mode=SheetViewMode.NORMAL)
             self.assertEqual(wb.sheet(0).get_view().view_mode, SheetViewMode.NORMAL)
 
     def test_visibility_states_very_hidden(self) -> None:
@@ -193,20 +193,20 @@ class SheetViewProtectionTests(unittest.TestCase):
             wb.add_sheet("Shown")
             self.assertEqual(wb.sheet(0).get_view().visibility, SheetVisibility.VISIBLE)
 
-            wb.sheet(0).set_visibility(SheetVisibility.VERY_HIDDEN)
+            wb.sheet(0).set_view(visibility=SheetVisibility.VERY_HIDDEN)
             self.assertEqual(wb.sheet(0).get_view().visibility, SheetVisibility.VERY_HIDDEN)
 
-            wb.sheet(0).set_visibility(SheetVisibility.HIDDEN)
+            wb.sheet(0).set_view(visibility=SheetVisibility.HIDDEN)
             self.assertEqual(wb.sheet(0).get_view().visibility, SheetVisibility.HIDDEN)
 
-            wb.sheet(0).set_visibility(SheetVisibility.VISIBLE)
+            wb.sheet(0).set_view(visibility=SheetVisibility.VISIBLE)
             self.assertEqual(wb.sheet(0).get_view().visibility, SheetVisibility.VISIBLE)
 
     def test_visibility_rejects_hiding_the_only_visible_sheet(self) -> None:
         with Workbook.create_default() as wb:
             for hide in (
-                lambda: wb.sheet(0).set_visibility(SheetVisibility.HIDDEN),
-                lambda: wb.sheet(0).set_visibility(SheetVisibility.VERY_HIDDEN),
+                lambda: wb.sheet(0).set_view(visibility=SheetVisibility.HIDDEN),
+                lambda: wb.sheet(0).set_view(visibility=SheetVisibility.VERY_HIDDEN),
             ):
                 with self.assertRaises(FormulonError):
                     hide()
@@ -215,9 +215,9 @@ class SheetViewProtectionTests(unittest.TestCase):
     def test_visibility_rejects_unknown_state(self) -> None:
         with Workbook.create_default() as wb:
             wb.add_sheet("Shown")
-            wb.sheet(0).set_visibility(SheetVisibility.VERY_HIDDEN)
+            wb.sheet(0).set_view(visibility=SheetVisibility.VERY_HIDDEN)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).set_visibility(3)
+                wb.sheet(0).set_view(visibility=3)
             # A refused call leaves the sheet as it was.
             self.assertEqual(wb.sheet(0).get_view().visibility, SheetVisibility.VERY_HIDDEN)
 

@@ -196,16 +196,30 @@ test('typed chart edits are visible through getChart', async () => {
     wb.sheet(0).setChartTitle(id, { kind: mod.ChartTitleKind.Auto });
     assert.equal(chartOf(wb, id).title.kind, mod.ChartTitleKind.Auto);
 
-    wb.sheet(0).setChartLegend(id, mod.ChartLegendPosition.Bottom, true);
+    wb.sheet(0).setChartLegend(id, { position: mod.ChartLegendPosition.Bottom, overlay: true });
     let legend = chartOf(wb, id).legend;
     assert.equal(legend.position, mod.ChartLegendPosition.Bottom);
     assert.equal(legend.overlay, true);
-    wb.sheet(0).setChartLegend(id, mod.ChartLegendPosition.Bottom, false, [1]);
+    // An omitted key keeps its value.
+    wb.sheet(0).setChartLegend(id, { position: mod.ChartLegendPosition.Top });
     legend = chartOf(wb, id).legend;
+    assert.equal(legend.position, mod.ChartLegendPosition.Top);
+    assert.equal(legend.overlay, true);
+    wb.sheet(0).setChartLegend(id, { overlay: false, hiddenSeries: [1] });
+    legend = chartOf(wb, id).legend;
+    assert.equal(legend.position, mod.ChartLegendPosition.Top);
     assert.equal(legend.overlay, false);
     assert.deepEqual(legend.hiddenSeries, [1]);
-    wb.sheet(0).setChartLegend(id, null, false);
+    assert.throws(() => wb.sheet(0).setChartLegend(id, { position: null }), TypeError);
+    assert.throws(() => wb.sheet(0).setChartLegend(id, { hiddenSeries: null }), TypeError);
+    wb.sheet(0).setChartLegend(id, { hiddenSeries: [] });
+    assert.deepEqual(chartOf(wb, id).legend.hiddenSeries, []);
+    wb.sheet(0).setChartLegend(id, null);
     assert.equal(chartOf(wb, id).legend, null);
+    // A missing legend is created with the Excel defaults for the omitted keys.
+    wb.sheet(0).setChartLegend(id, { overlay: true });
+    legend = chartOf(wb, id).legend;
+    assert.deepEqual([legend.position, legend.overlay, legend.hiddenSeries], [mod.ChartLegendPosition.Right, true, []]);
 
     // A new chart carries `dispNaAsBlank`.
     assert.equal(chartOf(wb, id).naAsBlank, true);
@@ -403,7 +417,10 @@ test('previewChartData resolves a draft without changing the chart', async () =>
     // No overrides is the chart as it stands.
     assert.equal(wb.sheet(0).getChartPreview(id, {}).series.length, 3);
     assert.throws(() => wb.sheet(0).getChartPreview(id, { source: 'NoSuchSheet!A1:B2' }), isFormulonError);
-    assert.throws(() => wb.sheet(0).getChartPreview(9999, {}), isFormulonError);
+    assert.throws(
+      () => wb.sheet(0).getChartPreview(9999, {}),
+      (e) => isFormulonError(e, mod.StatusCode.NotFound),
+    );
   } finally {
     wb.dispose();
   }
@@ -484,7 +501,10 @@ test('chart calls throw on failures and reject malformed arguments', async () =>
     const missing = wb.sheet(0).getChart(9999);
     assert.equal(missing, null);
     assert.throws(() => wb.sheet(99).getChart(id), isFormulonError);
-    assert.throws(() => wb.sheet(0).getChartData(9999), isFormulonError);
+    assert.throws(
+      () => wb.sheet(0).getChartData(9999),
+      (e) => isFormulonError(e, mod.StatusCode.NotFound),
+    );
 
     // An unresolvable source writes nothing.
     assert.throws(
@@ -516,7 +536,10 @@ test('chart calls throw on failures and reject malformed arguments', async () =>
     assert.throws(() => wb.sheet(0).removeChartSeries(id, 0, 99), isFormulonError);
     assert.throws(() => wb.sheet(0).addChartSeries(id, 0, { name: 'Sheet1!$B$1' }), isFormulonError);
     assert.throws(() => wb.sheet(0).setChartTitle(9999, 'x'), isFormulonError);
-    assert.throws(() => wb.sheet(0).removeDrawingObject(9999), isFormulonError);
+    assert.throws(
+      () => wb.sheet(0).removeDrawingObject(9999),
+      (e) => isFormulonError(e, mod.StatusCode.NotFound),
+    );
     assert.throws(() => wb.sheet(0).snapshotDrawing(9999), isFormulonError);
 
     // Wrong types raise before the engine is called.

@@ -17,9 +17,8 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
     assert.ok(unknown.length > 0);
   });
 
-  test('getErrorDisplayName returns Excel literals', () => {
-    assert.equal(Module.getErrorDisplayName(1), '#DIV/0!');
-    assert.equal(Module.getErrorDisplayName(999), '#UNKNOWN!');
+  test('the display name of an error is no longer a module function', () => {
+    assert.equal(Module.getErrorDisplayName, undefined);
   });
 
   test('evalFormula(=SUM(1,2,3)) returns NUMBER 6', () => {
@@ -108,6 +107,38 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
       // addSheet should grow sheetCount.
       wb.addSheet('Second');
       assert.equal(wb.getSheetCount(), 2);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('hasDirtyCells tracks changes since the last full recalculation', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.equal(wb.hasDirtyCells(), false);
+      wb.setNumber(0, 0, 0, 1);
+      wb.setFormula(0, 1, 0, '=A1+1');
+      // Z100 depends on A1 but lies outside the viewport recalculated below.
+      wb.setFormula(0, 99, 25, '=A1*2');
+      assert.equal(wb.hasDirtyCells(), true);
+      wb.recalc();
+      assert.equal(wb.hasDirtyCells(), false);
+      wb.setNumber(0, 0, 0, 2);
+      assert.equal(wb.hasDirtyCells(), true);
+      // A viewport recalculation leaves dirty the cells outside what it computes.
+      wb.recalcViewport(0, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 });
+      assert.equal(wb.hasDirtyCells(), true);
+      wb.recalc();
+      assert.equal(wb.hasDirtyCells(), false);
+      // A loaded formula is dirty until the first full recalculation.
+      const loaded = Module.Workbook.load(wb.save());
+      try {
+        assert.equal(loaded.hasDirtyCells(), true);
+        loaded.recalc();
+        assert.equal(loaded.hasDirtyCells(), false);
+      } finally {
+        loaded.delete();
+      }
     } finally {
       wb.delete();
     }

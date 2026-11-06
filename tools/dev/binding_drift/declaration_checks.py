@@ -108,8 +108,9 @@ def facade_split(ledger: Ledger) -> Tuple[Set[str], Set[str]]:
 
     Raw-only names stay registered while the published declarations drop them: the count and element getter
     of a `list` / `handles` / `property` collection, and every `drop:` JS name. Facade-only names are declared
-    but built in JS: `FACADE_EXTRA`, the `list<Plural>()` of a `list` / `handles` collection and the
-    `get<Plural>()` of a `property` collection.
+    but built in JS: `FACADE_EXTRA`, the `list<Plural>()` of a `list` / `handles` collection, the
+    `get<Plural>()` of a `property` collection, every `kind: list` entry and every `facade: handwritten` op
+    without a C target.
     """
     raw_only: Set[str] = set()
     facade_only: Set[str] = set(PURE_JS_WORKBOOK_METHODS)
@@ -133,7 +134,18 @@ def facade_split(ledger: Ledger) -> Tuple[Set[str], Set[str]]:
         drop = entry.get("drop") if isinstance(entry, dict) else None
         if isinstance(drop, dict) and isinstance(drop.get("js"), str):
             raw_only.add(drop["js"])
+        if _facade_built(entry) and isinstance(entry.get("js"), str):
+            facade_only.add(entry["js"])
     return raw_only, facade_only
+
+
+def _facade_built(entry) -> bool:
+    """A `kind: list` entry, or a `facade: handwritten` op with no C target: no raw class registers it."""
+    if not isinstance(entry, dict):
+        return False
+    if entry.get("kind") == "list":
+        return True
+    return entry.get("kind") == "op" and entry.get("facade") == "handwritten" and not isinstance(entry.get("c"), str)
 
 
 def _declared_instance_methods(dts_text: str, source: Path) -> Set[str]:
@@ -218,6 +230,7 @@ def check_dts_node() -> List[str]:
 
     addon_text = _read(NODE_ADDON_CC)
     exported_cc = set(re.findall(r'exports\.Set\("([^"]+)"', addon_text)) - {"Workbook"}
+    exported_cc |= set(re.findall(r'SetGuardedModuleFunction<[^>]*>\(\s*env,\s*exports,\s*"([^"]+)"\)', cc_text))
     free_cc = exported_cc - NODE_ADDON_INTERNAL_EXPORTS
     accessor_cc = set(re.findall(r'InstanceAccessor(?:<[^>]*>)?\(\s*"([^"]+)"', cc_text))
 

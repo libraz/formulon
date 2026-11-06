@@ -189,14 +189,14 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameAddsAndUpdates) {
   fm_defined_name_t dn{};
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
   EXPECT_STREQ(dn.name, "MyName");
-  EXPECT_STREQ(dn.formula, "42");
+  EXPECT_STREQ(dn.formula, "=42");
 
   // Update the formula text via case-insensitive match.
   ASSERT_EQ(SetDefinedName(wb.handle, "MYNAME", "=99"), 0);
   EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 1U);
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
   EXPECT_STREQ(dn.name, "MyName");  // authored case preserved
-  EXPECT_STREQ(dn.formula, "99");
+  EXPECT_STREQ(dn.formula, "=99");
 }
 
 TEST(WorkbookSheetOpsCApi, SetDefinedNameScopedAllowsWorkbookAndSheetNames) {
@@ -211,18 +211,18 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameScopedAllowsWorkbookAndSheetNames) {
   dn.local_sheet_id = -99;
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
   EXPECT_STREQ(dn.name, "Rate");
-  EXPECT_STREQ(dn.formula, "1");
+  EXPECT_STREQ(dn.formula, "=1");
   EXPECT_EQ(dn.local_sheet_id, -1);
 
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 1, &dn), 0);
   EXPECT_STREQ(dn.name, "Rate");
-  EXPECT_STREQ(dn.formula, "2");
+  EXPECT_STREQ(dn.formula, "=2");
   EXPECT_EQ(dn.local_sheet_id, 1);
 
   ASSERT_EQ(SetDefinedName(wb.handle, "RATE", "=3", 1), 0);
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 1, &dn), 0);
   EXPECT_STREQ(dn.name, "Rate");
-  EXPECT_STREQ(dn.formula, "3");
+  EXPECT_STREQ(dn.formula, "=3");
   EXPECT_EQ(dn.local_sheet_id, 1);
 
   ASSERT_EQ(fm_workbook_remove_defined_name(wb.handle, "Rate", 1), 0);
@@ -242,7 +242,7 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameDropsTheLeadingEquals) {
   EXPECT_EQ(SetDefinedName(wb.handle, "Bad", "==1"),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kParserUnexpectedToken));
 
-  const char* expected[] = {"Sheet1!$A$1", "Sheet1!$B$2", "Sheet1!$C$3"};
+  const char* expected[] = {"=Sheet1!$A$1", "=Sheet1!$B$2", "=Sheet1!$C$3"};
   fm_defined_name_t dn{};
   ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 3U);
   for (std::size_t i = 0; i < 3U; ++i) {
@@ -291,7 +291,7 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameRejectsEmptyFormulaAndKeepsTheName) {
   ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 1U);
   fm_defined_name_t dn{};
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
-  EXPECT_STREQ(dn.formula, "1");
+  EXPECT_STREQ(dn.formula, "=1");
 }
 
 // The record replaces the whole entry: attributes it leaves at their
@@ -309,7 +309,7 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameReplacesCommentAndHidden) {
   ASSERT_EQ(SetDefinedName(wb.handle, "Rate", "=0.2"), 0);
   ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 1U);
   ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
-  EXPECT_STREQ(dn.formula, "0.2");
+  EXPECT_STREQ(dn.formula, "=0.2");
   EXPECT_EQ(dn.local_sheet_id, -1);
   EXPECT_STREQ(dn.comment, "");
   EXPECT_EQ(dn.hidden, 0);

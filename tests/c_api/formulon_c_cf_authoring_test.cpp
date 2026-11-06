@@ -43,7 +43,7 @@ TEST(FormulonCApiCfMutate, AddCellIsRuleRoundTrips) {
   EXPECT_EQ(out.dxf_id_engaged, 1);
   EXPECT_EQ(out.dxf_id, 0U);
   ASSERT_NE(out.formula1, nullptr);
-  EXPECT_STREQ(out.formula1, "50");
+  EXPECT_STREQ(out.formula1, "=50");
   ASSERT_NE(out.ranges, nullptr);
   EXPECT_EQ(out.range_count, 1U);
   EXPECT_EQ(out.ranges[0].first_row, 0U);
@@ -239,10 +239,10 @@ TEST(FormulonCApiCfMutate, RemoveAtFlattensIndices) {
   // back, so each rule is read before the following one is fetched.
   fm_cf_rule_t out0{};
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out0), 0);
-  EXPECT_STREQ(out0.formula1, "A1");
+  EXPECT_STREQ(out0.formula1, "=A1");
   fm_cf_rule_t out1{};
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 1, &out1), 0);
-  EXPECT_STREQ(out1.formula1, "A3");
+  EXPECT_STREQ(out1.formula1, "=A3");
 }
 
 TEST(FormulonCApiCfMutate, ClearRemovesAllBlocks) {
@@ -417,8 +417,8 @@ TEST(FormulonCApiCfMutate, AddRuleStoresFormulasWithoutTheLeadingEquals) {
 
   fm_cf_rule_t out{};
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 0, &out), 0);
-  EXPECT_STREQ(out.formula1, "$B1>100");
-  EXPECT_STREQ(out.formula2, "SUM($C$1:$C$2)");
+  EXPECT_STREQ(out.formula1, "=$B1>100");
+  EXPECT_STREQ(out.formula2, "=SUM($C$1:$C$2)");
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, 1, &out), 0);
   ASSERT_EQ(out.color_scale_count, 2U);
   EXPECT_STREQ(out.color_scale_thresholds[0].value, "$D$1");
@@ -428,8 +428,8 @@ TEST(FormulonCApiCfMutate, AddRuleStoresFormulasWithoutTheLeadingEquals) {
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
   ASSERT_EQ(fm_sheet_get_cf_rule(reloaded.handle, 0, 0, &out), 0);
-  EXPECT_STREQ(out.formula1, "$B1>100");
-  EXPECT_STREQ(out.formula2, "SUM($C$1:$C$2)");
+  EXPECT_STREQ(out.formula1, "=$B1>100");
+  EXPECT_STREQ(out.formula2, "=SUM($C$1:$C$2)");
 
   // Only one '=' is the entry marker; a formula that still starts with one
   // after it does not parse.
@@ -524,7 +524,7 @@ TEST(FormulonCApiCfMutate, AddRuleDerivesExcelsFormulaForSideFieldRules) {
     fm_cf_rule_t out{};
     ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, index, &out), 0);
     ASSERT_NE(out.formula1, nullptr) << "type=" << static_cast<int>(c.type);
-    EXPECT_STREQ(out.formula1, c.expected);
+    EXPECT_EQ(std::string(out.formula1), std::string("=") + c.expected);
   }
 
   // Both writers carry the derived formulas, and readers return them unchanged.
@@ -542,7 +542,8 @@ TEST(FormulonCApiCfMutate, AddRuleDerivesExcelsFormulaForSideFieldRules) {
       fm_cf_rule_t out{};
       ASSERT_EQ(fm_sheet_get_cf_rule(reloaded.handle, 0, i, &out), 0);
       ASSERT_NE(out.formula1, nullptr) << "format=" << format << " rule=" << i;
-      EXPECT_STREQ(out.formula1, cases[i].expected) << "format=" << format << " rule=" << i;
+      EXPECT_EQ(std::string(out.formula1), std::string("=") + cases[i].expected)
+          << "format=" << format << " rule=" << i;
     }
   }
 }
@@ -564,6 +565,6 @@ TEST(FormulonCApiCfMutate, DerivedFormulaAnchorsAtSqrefBoundingBox) {
     fm_cf_rule_t out{};
     ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, index, &out), 0);
     ASSERT_NE(out.formula1, nullptr);
-    EXPECT_STREQ(out.formula1, "NOT(ISERROR(SEARCH(\"x\",B2)))");
+    EXPECT_STREQ(out.formula1, "=NOT(ISERROR(SEARCH(\"x\",B2)))");
   }
 }

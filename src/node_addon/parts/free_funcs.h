@@ -1,8 +1,9 @@
 // Free (non-method) bindings exposed on the module exports object:
-// `evalFormula`, `getVersion`, `getStatusName`, `getErrorDisplayName`,
-// `setLogMinLevel`, `setLogSink`, and the loader-only `__setErrorClass`.
-// Declared here so `addon.cc::Init` can attach them without leaking the
-// per-area TU layout.
+// `evalFormula`, `getVersion`, `getStatusName`, `setLogMinLevel`,
+// `setLogSink`, the loader-only `__setErrorClass`, and the workbook-free
+// catalog, locale, collation and image-probe functions that
+// `RegisterModuleFunctions` attaches. Declared here so `addon.cc::Init` can
+// attach them without leaking the per-area TU layout.
 
 #ifndef FORMULON_NODE_ADDON_PARTS_FREE_FUNCS_H_
 #define FORMULON_NODE_ADDON_PARTS_FREE_FUNCS_H_
@@ -25,9 +26,6 @@ Napi::Value Version(const Napi::CallbackInfo& info);
 /// Returns the human-readable description of a numeric status code.
 Napi::Value StatusString(const Napi::CallbackInfo& info);
 
-/// Returns an Excel literal such as `#DIV/0!` for a numeric cell error code.
-Napi::Value ErrorDisplayName(const Napi::CallbackInfo& info);
-
 /// `setLogMinLevel(level)`: sets the engine's minimum structured-log
 /// severity. Process-wide, not per workbook handle. The default is
 /// `FM_LOG_LEVEL_OFF` (4), under which the engine writes nothing.
@@ -37,6 +35,41 @@ Napi::Value SetLogMinLevel(const Napi::CallbackInfo& info);
 /// restores the (silent at the default threshold) stderr fallback.
 /// Process-wide, not per workbook handle.
 Napi::Value SetLogSink(const Napi::CallbackInfo& info);
+
+/// `getFunctionMetadata(name)`: the catalog record of a built-in, or `null`.
+Napi::Value FunctionMetadata(const Napi::CallbackInfo& info);
+
+/// `listFunctionNames()`: every built-in's canonical name.
+Napi::Value FunctionNames(const Napi::CallbackInfo& info);
+
+/// `localizeFunctionName(name, profileId)`.
+Napi::Value LocalizeFunctionName(const Napi::CallbackInfo& info);
+
+/// `canonicalizeFunctionName(name, profileId)`.
+Napi::Value CanonicalizeFunctionName(const Napi::CallbackInfo& info);
+
+/// `localizeFormula(formula, profileId)`.
+Napi::Value LocalizeFormula(const Napi::CallbackInfo& info);
+
+/// `canonicalizeFormula(formula, profileId)`.
+Napi::Value CanonicalizeFormula(const Napi::CallbackInfo& info);
+
+/// `getLocaleFacts(profileId)`: separators, boolean names, date order,
+/// currency placement and localized error names of a profile.
+Napi::Value LocaleFacts(const Napi::CallbackInfo& info);
+
+/// `listLocaleErrorNames(profileId)`: the profile's error names in code order.
+Napi::Value ListLocaleErrorNames(const Napi::CallbackInfo& info);
+
+/// `compareText(a, b, strength, profileId)`: the profile's collation order.
+Napi::Value CompareText(const Napi::CallbackInfo& info);
+
+/// `getCollationClasses(values, strength, profileId)`: equal-under-collation
+/// class ids of `values`.
+Napi::Value CollationClasses(const Napi::CallbackInfo& info);
+
+/// `getImageInfo(bytes)`: format and pixel size sniffed from an image header.
+Napi::Value ProbeImage(const Napi::CallbackInfo& info);
 
 /// `__setErrorClass(FormulonError)`: records the constructor every failure
 /// is thrown as. The package loader calls it once, before any other call;

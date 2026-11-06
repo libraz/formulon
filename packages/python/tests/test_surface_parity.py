@@ -2,13 +2,139 @@
 
 from __future__ import annotations
 
+import inspect
+import json
+import re
 import unittest
+from pathlib import Path
+from typing import Dict, Iterable, Set
 
 import formulon
 from formulon import (
     Sheet,
     Workbook,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+DTS = REPO_ROOT / "src" / "wasm" / "formulon.d.ts"
+PLATFORM_DIFF = REPO_ROOT / "tools" / "api" / "platform_diff.json"
+
+
+def _snake(name: str) -> str:
+    split = re.compile(r"(?<=[a-z])([A-Z])|(?<=[A-Z])([A-Z][a-z])")
+    return split.sub(lambda m: "_" + (m.group(1) or m.group(2)), name).lower()
+
+
+def _interface_members(name: str) -> Set[str]:
+    """Member names of one exported interface in ``formulon.d.ts`` (methods, properties, ``[Symbol.dispose]``)."""
+    text = DTS.read_text(encoding="utf-8")
+    text = re.sub(r"/\*[\s\S]*?\*/", "", text)
+    text = re.sub(r"//[^\n]*", "", text)
+    match = re.search(rf"export interface {name}\s*\{{", text)
+    if match is None:
+        raise AssertionError(f"no interface {name} in {DTS}")
+    start = match.end()
+    depth = 1
+    pos = start
+    while depth:
+        ch = text[pos]
+        depth += ch == "{"
+        depth -= ch == "}"
+        pos += 1
+    body = text[start : pos - 1]
+    names: Set[str] = set()
+    current = ""
+    depth = 0
+    for ch in body:
+        if ch == ";" and depth == 0:
+            found = re.match(r"^(?:readonly\s+)?(\[Symbol\.dispose\]|[A-Za-z_$][\w$]*)\??\s*[(<:]", current.strip())
+            if found:
+                names.add(found.group(1))
+            current = ""
+            continue
+        depth += ch in "({"
+        depth -= ch in ")}"
+        current += ch
+    return names
+
+
+def _platform_diff() -> Dict[str, Dict[str, Set[str]]]:
+    raw = json.loads(PLATFORM_DIFF.read_text(encoding="utf-8"))
+    return {
+        key: {scope: set(names) for scope, names in raw[key].items()} for key in ("js_only", "native_only", "py_only")
+    }
+
+
+def _public(owner: object) -> Set[str]:
+    return {n for n in dir(owner) if not n.startswith("_")}
+
+
+def _dunders(owner: object) -> Set[str]:
+    return {n for n in dir(owner) if n.startswith("__") and n.endswith("__") and n in _DUNDER_SURFACE}
+
+
+# The dunders the platform diff may name; every other dunder is Python plumbing.
+_DUNDER_SURFACE = {"__getitem__", "__setitem__", "__len__", "__iter__", "__contains__", "__enter__", "__exit__"}
+
+
+class SurfaceSetParityTests(unittest.TestCase):
+    """Criterion 15: the JS and Python member sets match apart from the entries in ``platform_diff.json``."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.diff = _platform_diff()
+
+    def _compare(self, js: Iterable[str], py: Iterable[str], js_only: Set[str], py_only: Set[str]) -> None:
+        js_names = {_snake(n) for n in js if not n.startswith("[")} - {_snake(n) for n in js_only}
+        py_names = set(py) - py_only
+        self.assertEqual(sorted(js_names - py_names), [], "on the JS surface, missing from Python")
+        self.assertEqual(sorted(py_names - js_names), [], "on the Python surface, missing from JS")
+
+    def _surface(self, scope: str, js: Set[str], py_owner: object) -> None:
+        # A native-only member is on the native npm package, so it counts as JS surface.
+        js = js | self.diff["native_only"].get(scope, set())
+        js_only = self.diff["js_only"].get(scope, set())
+        py_only = self.diff["py_only"].get(scope, set())
+        py_names = _public(py_owner) | (_dunders(py_owner) & py_only)
+        self._compare(js, py_names, js_only, py_only)
+
+    def test_workbook(self) -> None:
+        # The static factories are declared on `WorkbookCtor`; Python has them as class methods.
+        js = _interface_members("Workbook") | _interface_members("WorkbookCtor")
+        self._surface("Workbook", js, formulon.Workbook)
+
+    def test_sheet(self) -> None:
+        self._surface("Sheet", _interface_members("Sheet"), formulon.Sheet)
+
+    def test_module_functions_match_formulon(self) -> None:
+        js_members = _interface_members("Formulon")
+        js_functions = {n for n in js_members if n[:1].islower()}
+        js_only = {n for n in self.diff["js_only"].get("Formulon", set()) if n[:1].islower()}
+        py_only = self.diff["py_only"].get("module", set())
+        py_functions = {
+            n
+            for n in _public(formulon)
+            if inspect.isfunction(getattr(formulon, n)) and getattr(formulon, n).__module__.startswith("formulon")
+        }
+        self._compare(js_functions, py_functions, js_only, py_only)
+
+    def test_value_tables_exist_on_the_module(self) -> None:
+        js_tables = {n for n in _interface_members("Formulon") if n[:1].isupper() and n != "Workbook"}
+        js_only = self.diff["js_only"].get("Formulon", set())
+        missing = sorted(n for n in js_tables - js_only if not hasattr(formulon, n))
+        self.assertEqual(missing, [], "value tables without a module counterpart")
+
+    def test_error_display_name_is_an_enum_property(self) -> None:
+        self.assertIn("ErrorDisplayName", self.diff["js_only"]["Formulon"])
+        self.assertIsInstance(formulon.ErrorCode.NA.display_name, str)
+
+    def test_platform_diff_names_exist(self) -> None:
+        for name in self.diff["py_only"]["Workbook"]:
+            self.assertTrue(hasattr(formulon.Workbook, name), f"Workbook.{name}")
+        for name in self.diff["py_only"]["Sheet"]:
+            self.assertTrue(hasattr(formulon.Sheet, name), f"Sheet.{name}")
+        for name in self.diff["py_only"]["module"]:
+            self.assertTrue(hasattr(formulon, name), name)
 
 
 class SurfaceParityTests(unittest.TestCase):
@@ -40,12 +166,10 @@ class SurfaceParityTests(unittest.TestCase):
         "evaluate_formula_array",
         "add_merge",
         "remove_merge",
-        "remove_merge_at",
         "clear_merges",
         "list_merges",
         "add_hyperlink",
         "remove_hyperlink",
-        "remove_hyperlink_at",
         "clear_hyperlinks",
         "list_hyperlinks",
         "get_comment",
@@ -55,23 +179,31 @@ class SurfaceParityTests(unittest.TestCase):
         "list_sparkline_groups",
         "get_cell_phonetic_runs",
         "list_tables",
-        "get_cell_count",
-        "get_cell_at",
         "add_validation",
         "remove_validation",
         "clear_validations",
         "get_sheet_protection",
         "set_sheet_protection",
         "get_view",
-        "set_zoom",
-        "set_freeze",
-        "set_visibility",
-        "set_show_grid_lines",
-        "set_show_row_col_headers",
-        "set_show_zeros",
-        "set_right_to_left",
-        "set_tab_selected",
-        "set_view_mode",
+        "set_view",
+        "get_values",
+        "set_values",
+        "list_cells",
+        "list_pivots",
+        "list_pivot_field_items",
+        "update_pivot_field",
+        "update_pivot_item",
+        "has_dirty_cells",
+        "list_fonts",
+        "list_fills",
+        "list_borders",
+        "list_cell_xfs",
+        "list_cell_style_xfs",
+        "list_dxfs",
+        "list_pivot_cache_fields",
+        "list_pivot_cache_field_shared_items",
+        "add_pivot_cache_field_shared_item",
+        "set_pivot_cache_record_value",
         "list_column_overrides",
         "set_column_width",
         "set_column_hidden",
@@ -103,12 +235,7 @@ class SurfaceParityTests(unittest.TestCase):
         "get_fill",
         "get_border",
         "get_num_fmt_string",
-        "get_font_count",
-        "get_fill_count",
-        "get_border_count",
-        "get_cell_xf_count",
         "list_cell_styles",
-        "get_cell_style_xf_count",
         "add_font",
         "add_fill",
         "add_border",
@@ -116,18 +243,13 @@ class SurfaceParityTests(unittest.TestCase):
         "add_cell_xf",
         "get_cell_style",
         "get_cell_style_xf",
-        "get_pivot_count",
         "get_pivot_layout",
         "list_pivot_caches",
         "add_pivot_cache",
         "remove_pivot_cache",
-        "get_pivot_cache_field_count",
-        "get_pivot_cache_field_name",
         "add_pivot_cache_field",
         "clear_pivot_cache_fields",
         "add_pivot_cache_record",
-        "set_pivot_cache_record_number",
-        "set_pivot_cache_record_text",
         "add_pivot",
         "remove_pivot",
         "set_pivot_name",

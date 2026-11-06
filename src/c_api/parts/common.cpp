@@ -839,6 +839,7 @@ fm_status_t check_entered_cell_formula(const fm_workbook_t* wb, std::size_t shee
     formulon::Arena arena;
     const formulon::parser::AstNode* root = parse_entered_formula(*bound, arena, &stored);
     if (root != nullptr && !formulon::eval::needs_r1c1_entry(*root, *bound, wb->workbook())) {
+      *bound = with_formula_prefix(*bound);
       return 0;
     }
   }
@@ -848,7 +849,7 @@ fm_status_t check_entered_cell_formula(const fm_workbook_t* wb, std::size_t shee
   if (!translated || parse_entered_formula(*translated, arena, &stored) == nullptr) {
     return formula_does_not_parse(context);
   }
-  *bound = std::move(*translated);
+  *bound = with_formula_prefix(*translated);
   return 0;
 }
 

@@ -85,8 +85,6 @@ test('module-level numeric and string positions reject coercion and overflow', (
     probe('status-symbol', TypeError, () => addon.getStatusName(Symbol('status')));
     probe('status-fraction', RangeError, () => addon.getStatusName(1.5));
     probe('status-overflow', RangeError, () => addon.getStatusName(2 ** 31));
-    probe('error-symbol', TypeError, () => addon.getErrorDisplayName(Symbol('error')));
-    probe('error-nan', RangeError, () => addon.getErrorDisplayName(Number.NaN));
     probe('log-symbol', TypeError, () => addon.setLogMinLevel(Symbol('log')));
     probe('log-underflow', RangeError, () => addon.setLogMinLevel(-(2 ** 31) - 1));
     probe('formula-symbol', TypeError, () => addon.evalFormula(Symbol('formula')));
@@ -146,7 +144,7 @@ test('sheet, structural, enum, and read positions reject non-number primitives',
     assert.throws(() => wb.insertRows(0, 0, 1.5), RangeError);
     assert.throws(() => wb.setCalcMode(1.5), RangeError);
     assert.throws(() => wb.getValue(Symbol('sheet'), 0, 0), TypeError);
-    assert.throws(() => wb.localizeFunctionName('SUM', 1), TypeError);
+    assert.throws(() => addon.localizeFunctionName('SUM', 1), TypeError);
     assert.throws(() => wb.resolveColor({ kind: 1, rgb: 0 }, 2 ** 31), RangeError);
     assert.throws(
       () => wb.getCellsInRange(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, Symbol('cursor')),
@@ -183,7 +181,7 @@ test('missing required positional arguments are rejected; optional ones keep the
     assert.throws(() => wb.setIterative(), TypeError);
     assert.throws(() => wb.setVisibility(0), TypeError);
     assert.equal(wb.getIterative().maxIterations, 100, 'the rejected setIterative must not store a cap');
-    wb.getFunctionMetadata('SUM');
+    addon.getFunctionMetadata('SUM');
     const range = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
     assert.doesNotThrow(() => wb.getCellsInRange(0, range, undefined, undefined));
     assert.doesNotThrow(() => wb.getInvalidCells(0, undefined, undefined));

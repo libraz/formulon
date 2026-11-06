@@ -6,7 +6,8 @@ Public API:
   * :class:`Workbook` -- full workbook lifecycle.
   * :class:`Sheet` -- every operation on one sheet of a workbook.
   * :class:`Value`, :class:`ValueKind` -- cell value.
-  * :class:`ExcelError` -- an Excel cell error as a Python value.
+  * :class:`ExcelError` -- an Excel cell error as a Python value;
+    :attr:`ErrorCode.display_name` spells a code as Excel does (``#DIV/0!``).
   * :class:`FormulonError` and its subclasses -- host-side failures.
 
 Cell-level Excel errors (``#DIV/0!`` and friends) surface as ``Value``
@@ -29,8 +30,8 @@ from ._c import (
     NotFoundError,
     ValueKind,
     WorkbookClosedError,
-    decode_cstr,
 )
+from ._c import decode_cstr as _decode_cstr
 from ._status import StatusCode
 from .metadata import (
     FunctionMetadataEntry,
@@ -41,6 +42,8 @@ from .metadata import (
 )
 from .sheet import Sheet
 from .workbook import (
+    PIVOT_SHOW_AS_BASE_NEXT,
+    PIVOT_SHOW_AS_BASE_PREVIOUS,
     PIVOT_VALUES_FIELD,
     UNCHANGED,
     AnchorEditAs,
@@ -181,7 +184,9 @@ from .workbook import (
     PhoneticRun,
     PivotAggregation,
     PivotAxis,
+    PivotCacheField,
     PivotCacheOptions,
+    PivotCacheSharedItem,
     PivotCalculatedItem,
     PivotCalendar,
     PivotCell,
@@ -196,6 +201,7 @@ from .workbook import (
     PivotFilterType,
     PivotFilterValueKind,
     PivotGrandTotals,
+    PivotInput,
     PivotItem,
     PivotLayout,
     PivotOptions,
@@ -203,7 +209,7 @@ from .workbook import (
     PivotShowValuesAs,
     PivotSortOrder,
     PivotStyle,
-    PivotStyleInput,
+    PivotSummary,
     PivotWorksheetSource,
     PrintTitles,
     ProtectedRange,
@@ -236,7 +242,6 @@ from .workbook import (
     SparklineGroup,
     SparklineType,
     Spill,
-    StyleBatchIndices,
     Table,
     TableColumn,
     TableStyle,
@@ -262,6 +267,7 @@ from .workbook import (
     compare_text,
     get_collation_classes,
     get_function_metadata,
+    get_image_info,
     get_locale_facts,
     list_function_names,
     list_locale_error_names,
@@ -313,7 +319,7 @@ def _resolve_version() -> str:
                     break
 
     # Last resort: the version baked into the loaded WASM module.
-    return decode_cstr(LIB.fm_get_version())
+    return _decode_cstr(LIB.fm_get_version())
 
 
 __version__ = _resolve_version()
@@ -439,9 +445,10 @@ __all__ = [
     "FunctionMetadataProvider",
     "GeometryMode",
     "get_collation_classes",
-    "get_error_display_name",
     "get_function_metadata",
+    "get_image_info",
     "get_locale_facts",
+    "get_status_name",
     "get_version",
     "GradientFill",
     "GradientStop",
@@ -477,10 +484,14 @@ __all__ = [
     "PhoneticProperties",
     "PhoneticPropertiesInput",
     "PhoneticRun",
+    "PIVOT_SHOW_AS_BASE_NEXT",
+    "PIVOT_SHOW_AS_BASE_PREVIOUS",
     "PIVOT_VALUES_FIELD",
     "PivotAggregation",
     "PivotAxis",
+    "PivotCacheField",
     "PivotCacheOptions",
+    "PivotCacheSharedItem",
     "PivotCalculatedItem",
     "PivotCalendar",
     "PivotCell",
@@ -495,6 +506,7 @@ __all__ = [
     "PivotFilterType",
     "PivotFilterValueKind",
     "PivotGrandTotals",
+    "PivotInput",
     "PivotItem",
     "PivotLayout",
     "PivotOptions",
@@ -502,7 +514,7 @@ __all__ = [
     "PivotShowValuesAs",
     "PivotSortOrder",
     "PivotStyle",
-    "PivotStyleInput",
+    "PivotSummary",
     "PivotWorksheetSource",
     "PrintTitles",
     "ProtectedRange",
@@ -538,7 +550,6 @@ __all__ = [
     "SparklineType",
     "Spill",
     "StatusCode",
-    "StyleBatchIndices",
     "Table",
     "TableColumn",
     "TableStyle",
@@ -570,17 +581,17 @@ def get_version() -> str:
 
     Always non-empty.
     """
-    return decode_cstr(LIB.fm_get_version())
+    return _decode_cstr(LIB.fm_get_version())
 
 
-def get_error_display_name(error_code: ErrorCode) -> str:
-    """Return an Excel literal such as ``"#DIV/0!"`` for an error code.
+def get_status_name(status: StatusCode) -> str:
+    """Return the name of a status code without the ``FM_STATUS_`` prefix (``"INVALID_ARGUMENT"``).
 
-    Unknown numeric values return ``"#UNKNOWN!"``.
+    An unknown code returns ``"UNRECOGNIZED_STATUS"``.
     """
     from ._c import _sint
 
-    return decode_cstr(LIB.fm_get_error_display_name(_sint(error_code, "error")))
+    return _decode_cstr(LIB.fm_get_status_name(_sint(status, "status")))
 
 
 def set_log_min_level(level: LogLevel) -> None:

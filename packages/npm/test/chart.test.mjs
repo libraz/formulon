@@ -202,15 +202,19 @@ test('typed chart edits are visible through getChart', async () => {
     wb.sheet(0).setChartTitle(id, { kind: mod.ChartTitleKind.Auto });
     assert.equal(chartOf(wb, id).title.kind, mod.ChartTitleKind.Auto);
 
-    wb.sheet(0).setChartLegend(id, mod.ChartLegendPosition.Bottom, true);
+    wb.sheet(0).setChartLegend(id, { position: mod.ChartLegendPosition.Bottom, overlay: true });
     let legend = chartOf(wb, id).legend;
     assert.equal(legend.position, mod.ChartLegendPosition.Bottom);
     assert.equal(legend.overlay, true);
-    wb.sheet(0).setChartLegend(id, mod.ChartLegendPosition.Bottom, false, [1]);
+    wb.sheet(0).setChartLegend(id, {
+      position: mod.ChartLegendPosition.Bottom,
+      overlay: false,
+      hiddenSeries: [1],
+    });
     legend = chartOf(wb, id).legend;
     assert.equal(legend.overlay, false);
     assert.deepEqual(legend.hiddenSeries, [1]);
-    wb.sheet(0).setChartLegend(id, null, false);
+    wb.sheet(0).setChartLegend(id, null);
     assert.equal(chartOf(wb, id).legend, null);
 
     // A new chart carries `dispNaAsBlank`.
@@ -490,7 +494,7 @@ test('chart calls throw on failure and reject malformed arguments', async () => 
     const missing = wb.sheet(0).getChart(9999);
     assert.equal(missing, null);
     expectFailure(() => wb.sheet(99).getChart(id));
-    expectFailure(() => wb.sheet(0).getChartData(9999));
+    expectFailure(() => wb.sheet(0).getChartData(9999), mod.StatusCode.NotFound);
 
     // An unresolvable source writes nothing.
     expectFailure(
@@ -519,7 +523,7 @@ test('chart calls throw on failure and reject malformed arguments', async () => 
     expectFailure(() => wb.sheet(0).removeChartSeries(id, 0, 99));
     expectFailure(() => wb.sheet(0).addChartSeries(id, 0, { name: 'Sheet1!$B$1' }));
     expectFailure(() => wb.sheet(0).setChartTitle(9999, 'x'));
-    expectFailure(() => wb.sheet(0).removeDrawingObject(9999));
+    expectFailure(() => wb.sheet(0).removeDrawingObject(9999), mod.StatusCode.NotFound);
     expectFailure(() => wb.sheet(0).snapshotDrawing(9999));
 
     // Wrong types raise before the engine is called.

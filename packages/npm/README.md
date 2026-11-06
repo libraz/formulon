@@ -49,10 +49,12 @@ const formulon = await createFormulon();
 const wb = formulon.Workbook.load(await readFile('input.xlsx'));
 try {
   const ws = wb.sheet(0);          // or wb.sheet('Sheet1')
-  ws.setNumber(0, 0, 42);          // A1
-  ws.setFormula(1, 0, '=A1*2');    // A2
+  ws.setValue('A1', 42);
+  ws.setFormula('A2', '=A1*2');
+  console.log(wb.hasDirtyCells()); // true
   wb.recalc();
-  console.log(ws.getValue(1, 0).number); // 84
+  console.log(wb.hasDirtyCells()); // false
+  console.log(ws.getValue('A2').number); // 84
 
   await writeFile('output.xlsx', wb.save());
 } finally {
@@ -62,7 +64,9 @@ try {
 
 On Node 24+ and in bundlers that support explicit resource management, `using wb = formulon.Workbook.load(...)` releases the workbook at the end of the scope instead.
 
-A `Sheet` handle stays on the same sheet when sheets are added, moved or removed around it. `wb.sheet('Sheet1')` finds a sheet by name (it throws `FormulonError` with `StatusCode.NotFound` when there is none), `wb.listSheets()` lists them all, and `ws.name` and `ws.index` read its current name and position. A1 notation works through `ws.set('A1', 42)` and `ws.get('A2')`.
+A `Sheet` handle stays on the same sheet when sheets are added, moved or removed around it. `wb.sheet('Sheet1')` finds a sheet by name (it throws `FormulonError` with `StatusCode.NotFound` when there is none), `wb.listSheets()` lists them all, and `ws.name` and `ws.index` read its current name and position. Every method that takes a cell accepts either `(row, col)` or an A1 string (`ws.setValue('A1', 42)`, `ws.getValue('A2')`), and a rectangle argument accepts `'A1:B2'`. `ws.getValues('A1:B2')` reads a block as rows of values and `ws.setValues('A1', [[1, 'x'], [true, null]])` writes one.
+
+Reads return the value as of the last full `recalc()`; `wb.hasDirtyCells()` tells whether edits are still waiting for one. `ErrorDisplayName[ErrorCode.Div0]` gives `'#DIV/0!'` without a workbook.
 
 ## Switching locale profiles
 
@@ -75,14 +79,14 @@ const formulon = await createFormulon();
 const wb = formulon.Workbook.createDefault();
 try {
   const ws = wb.sheet(0);
-  ws.setFormula(0, 0, '=LENB("日本")');  // A1
-  ws.setFormula(1, 0, '=VALUE("1,5")');  // A2
-  ws.setFormula(2, 0, '=ISEVEN(2)');     // A3
+  ws.setFormula('A1', '=LENB("日本")');
+  ws.setFormula('A2', '=VALUE("1,5")');
+  ws.setFormula('A3', '=ISEVEN(2)');
 
   for (const id of ['mac-365-en_US', 'mac-365-ja_JP', 'mac-365-de_DE']) {
     wb.setExcelProfileId(id);
     wb.recalc(); // a profile change marks formulas dirty
-    console.log(id, [0, 1, 2].map((row) => ws.getDisplayText(row, 0).text));
+    console.log(id, [1, 2, 3].map((row) => ws.getDisplayText(`A${row}`).text));
   }
 } finally {
   wb.dispose();

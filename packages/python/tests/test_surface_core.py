@@ -80,7 +80,6 @@ class StructLayoutTests(unittest.TestCase):
         "DXF_RECORD": 456,
         # Fifteen pointer-or-`size_t` fields; both are four bytes on
         # wasm32, so the whole record is 15 x 4.
-        "STYLES_BATCH": 60,
         "CELL_STYLE_RECORD": 24,
         "EXTERNAL_LINK_RECORD": 24,
         "PAGE_BREAK": 16,
@@ -235,12 +234,12 @@ class DefinedNameTests(unittest.TestCase):
             wb.set_defined_name(DefinedNameInput("MyRef", "Sheet1!$A$1"))
             names = {dn.name: dn.formula for dn in wb.list_defined_names()}
             self.assertIn("MyRef", names)
-            self.assertEqual(names["MyRef"], "Sheet1!$A$1")
+            self.assertEqual(names["MyRef"], "=Sheet1!$A$1")
 
             # Updating in place replaces the formula text.
             wb.set_defined_name(DefinedNameInput("MyRef", "Sheet1!$B$2"))
             names = {dn.name: dn.formula for dn in wb.list_defined_names()}
-            self.assertEqual(names["MyRef"], "Sheet1!$B$2")
+            self.assertEqual(names["MyRef"], "=Sheet1!$B$2")
 
             # An empty formula is rejected; removal has its own call.
             with self.assertRaises(InvalidArgumentError):
@@ -255,9 +254,9 @@ class DefinedNameTests(unittest.TestCase):
             wb.set_defined_name(DefinedNameInput("Rate", "=1"))
             wb.set_defined_name(DefinedNameInput("Rate", "=2", 1))
             names = {(dn.name, dn.local_sheet_id): dn.formula for dn in wb.list_defined_names()}
-            # The setter drops the leading "=", as the file form carries none.
-            self.assertEqual(names[("Rate", None)], "1")
-            self.assertEqual(names[("Rate", 1)], "2")
+            # The reader returns the formula with one leading "=", whatever the input had.
+            self.assertEqual(names[("Rate", None)], "=1")
+            self.assertEqual(names[("Rate", 1)], "=2")
 
             wb.remove_defined_name("Rate", 1)
             self.assertNotIn(

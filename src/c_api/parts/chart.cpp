@@ -6,6 +6,7 @@
 // that copy, so every string and array stays valid until the handle is
 // destroyed.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -21,6 +22,7 @@
 #include "c_api/parts/enum_map.h"
 #include "chart/chart_edit.h"
 #include "chart/chart_model.h"
+#include "drawing/drawing_xml.h"
 #include "utils/error.h"
 #include "workbook.h"
 
@@ -31,6 +33,7 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fill_anchor;
+using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::PatchReader;
 using formulon::c_api::parts::set_last_error;
@@ -494,6 +497,25 @@ extern "C" fm_status_t fm_chart_get_axis_at(const fm_chart_t* chart, size_t idx,
 // Resolved chart data
 // ---------------------------------------------------------------------------
 
+namespace {
+
+// 0 when the sheet's drawing has a chart frame `object_id`; NotFound when it
+// has none, or the drawing's own status when it does not parse.
+fm_status_t check_chart_present(const fm_workbook_t* wb, size_t sheet_index, std::uint32_t object_id) {
+  auto parts = formulon::list_chart_parts(wb->workbook(), sheet_index);
+  if (!parts) {
+    return set_last_error(parts.error());
+  }
+  const std::vector<formulon::ChartPartRef>& list = parts.value();
+  if (std::none_of(list.begin(), list.end(),
+                   [object_id](const formulon::ChartPartRef& p) { return p.object_id == object_id; })) {
+    return not_found("no chart with that id", "object_id=" + std::to_string(object_id));
+  }
+  return 0;
+}
+
+}  // namespace
+
 extern "C" fm_status_t fm_sheet_get_chart_data(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                fm_chart_data_t** out) {
   clear_last_error();
@@ -502,6 +524,9 @@ extern "C" fm_status_t fm_sheet_get_chart_data(const fm_workbook_t* wb, size_t s
   }
   *out = nullptr;
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_chart_present(wb, sheet_index, object_id); rc != 0) {
     return rc;
   }
   auto data = formulon::get_chart_data(wb->workbook(), sheet_index, object_id);
@@ -526,6 +551,9 @@ extern "C" fm_status_t fm_sheet_get_chart_preview(const fm_workbook_t* wb, size_
     return rc;
   }
   if (auto rc = check_utf8({overrides->source}); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_chart_present(wb, sheet_index, object_id); rc != 0) {
     return rc;
   }
   PatchReader r;

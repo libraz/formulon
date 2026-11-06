@@ -276,6 +276,10 @@ Napi::Value Workbook::PartialRecalc(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, rc, Napi::Number::New(env, recomputed));
 }
 
+Napi::Value Workbook::HasDirtyCells(const Napi::CallbackInfo& info) {
+  return FlagResult(info.Env(), handle_, &fm_workbook_has_dirty_cells);
+}
+
 Napi::Value Workbook::SetIterative(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

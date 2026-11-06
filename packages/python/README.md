@@ -52,18 +52,22 @@ with open("input.xlsx", "rb") as f:
 
 with Workbook.load(data) as wb:
     ws = wb.sheet(0)  # or wb["Sheet1"]
-    ws.set_number(0, 0, 42.0)  # A1
-    ws.set_formula(1, 0, "=A1*2")  # A2
+    ws["A1"] = 42
+    ws.set_formula("A2", "=A1*2")
+    print(wb.has_dirty_cells())  # True
     wb.recalc()
-    print(ws.get_value(1, 0).to_python())  # 84.0
+    print(wb.has_dirty_cells())  # False
+    print(ws["A2"])  # 84.0
 
     with open("output.xlsx", "wb") as f:
         f.write(wb.save())
 
     print(ws.name, ws.index)  # Sheet1 0
-    ws.set("A1", 43)  # A1 notation
-    print(wb["Sheet1"].get("A1").to_python())  # 43.0
+    ws.set_values("A1", [[1, "x"], [True, None]])
+    print(ws.get_values("A1:B2")[0][0].to_python())  # 1.0
 ```
+
+Every method that takes a cell accepts either `(row, col)` or an A1 string, and a rectangle argument accepts `"A1:B2"`. `ws["A1"]` and `ws[row, col]` read and write native values; `get_values` and `set_values` move a block of cells. Reads return the value as of the last full `recalc()`, and `wb.has_dirty_cells()` tells whether edits are still waiting for one. `ErrorCode.DIV0.display_name` is `"#DIV/0!"`.
 
 A `Sheet` handle stays on the same sheet when sheets are added, moved or removed around it. `wb.sheet(key)` and `wb[key]` take an index or a name and raise `NotFoundError` or `IndexOutOfRangeError` when nothing matches; `wb.list_sheets()` lists every sheet.
 
@@ -78,14 +82,14 @@ import formulon
 
 with formulon.Workbook.create_default() as wb:
     ws = wb.sheet(0)
-    ws.set_formula(0, 0, '=LENB("日本")')
-    ws.set_formula(1, 0, '=VALUE("1,5")')
-    ws.set_formula(2, 0, "=ISEVEN(2)")
+    ws.set_formula("A1", '=LENB("日本")')
+    ws.set_formula("A2", '=VALUE("1,5")')
+    ws.set_formula("A3", "=ISEVEN(2)")
 
     for profile in ("mac-365-en_US", "mac-365-ja_JP", "mac-365-de_DE"):
         wb.set_excel_profile_id(profile)
         wb.recalc()
-        print(profile, [ws.get_display_text(row, 0).text for row in range(3)])
+        print(profile, [ws.get_display_text(f"A{row}").text for row in (1, 2, 3)])
 # mac-365-en_US ['2', '#VALUE!', 'TRUE']
 # mac-365-ja_JP ['4', '#VALUE!', 'TRUE']
 # mac-365-de_DE ['2', '1,5', 'WAHR']

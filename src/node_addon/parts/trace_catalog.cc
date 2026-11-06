@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "node_addon/parts/free_funcs.h"
 #include "node_addon/parts/workbook_class.h"
 
 namespace formulon_node {
@@ -170,9 +171,9 @@ Napi::Value Workbook::GetExternalLink(const Napi::CallbackInfo& info) {
 
 // ---- Function catalog -----------------------------------------------
 
-Napi::Value Workbook::FunctionMetadata(const Napi::CallbackInfo& info) {
+Napi::Value FunctionMetadata(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const std::string name = ArgString(info, 0);
+  const std::string name = Workbook::ArgString(info, 0);
   int32_t present = 0;
   fm_function_metadata_t md{};
   fm_status_t rc = fm_get_function_metadata(name.c_str(), &present, &md);
@@ -199,7 +200,7 @@ Napi::Value Workbook::FunctionMetadata(const Napi::CallbackInfo& info) {
   return OptionalOrNull(env, rc, present, out);
 }
 
-Napi::Value Workbook::FunctionNames(const Napi::CallbackInfo& info) {
+Napi::Value FunctionNames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
   const fm_status_t rc = CollectList<const char*>(
@@ -209,19 +210,19 @@ Napi::Value Workbook::FunctionNames(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, rc, arr);
 }
 
-Napi::Value Workbook::LocalizeFunctionName(const Napi::CallbackInfo& info) {
+Napi::Value LocalizeFunctionName(const Napi::CallbackInfo& info) {
   return MapProfileText(info, &fm_localize_function_name);
 }
 
-Napi::Value Workbook::CanonicalizeFunctionName(const Napi::CallbackInfo& info) {
+Napi::Value CanonicalizeFunctionName(const Napi::CallbackInfo& info) {
   return MapProfileText(info, &fm_canonicalize_function_name);
 }
 
-Napi::Value Workbook::LocalizeFormula(const Napi::CallbackInfo& info) {
+Napi::Value LocalizeFormula(const Napi::CallbackInfo& info) {
   return MapProfileText(info, &fm_localize_formula);
 }
 
-Napi::Value Workbook::CanonicalizeFormula(const Napi::CallbackInfo& info) {
+Napi::Value CanonicalizeFormula(const Napi::CallbackInfo& info) {
   return MapProfileText(info, &fm_canonicalize_formula);
 }
 
@@ -250,9 +251,9 @@ fm_status_t CollectLocaleErrorNames(Napi::Env env, const std::string& profile_id
 
 }  // namespace
 
-Napi::Value Workbook::LocaleFacts(const Napi::CallbackInfo& info) {
+Napi::Value LocaleFacts(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const std::string profile_id = ArgString(info, 0);
+  const std::string profile_id = Workbook::ArgString(info, 0);
   fm_locale_facts_t f{};
   fm_status_t rc = fm_get_locale_facts(profile_id.c_str(), &f);
   if (rc != 0) {
@@ -280,25 +281,25 @@ Napi::Value Workbook::LocaleFacts(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, rc, facts);
 }
 
-Napi::Value Workbook::ListLocaleErrorNames(const Napi::CallbackInfo& info) {
+Napi::Value ListLocaleErrorNames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
-  const fm_status_t rc = CollectLocaleErrorNames(env, ArgString(info, 0), arr);
+  const fm_status_t rc = CollectLocaleErrorNames(env, Workbook::ArgString(info, 0), arr);
   return ValueOrThrow(env, rc, arr);
 }
 
-Napi::Value Workbook::CompareText(const Napi::CallbackInfo& info) {
+Napi::Value CompareText(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const std::string a = ArgString(info, 0);
-  const std::string b = ArgString(info, 1);
-  const auto strength = static_cast<fm_collation_strength_t>(ArgU32(info, 2));
-  const std::string profile_id = ArgString(info, 3);
+  const std::string a = Workbook::ArgString(info, 0);
+  const std::string b = Workbook::ArgString(info, 1);
+  const auto strength = static_cast<fm_collation_strength_t>(Workbook::ArgU32(info, 2));
+  const std::string profile_id = Workbook::ArgString(info, 3);
   int32_t order = 0;
   const fm_status_t rc = fm_compare_text(a.c_str(), b.c_str(), profile_id.c_str(), strength, &order);
   return ValueOrThrow(env, rc, Napi::Number::New(env, order));
 }
 
-Napi::Value Workbook::CollationClasses(const Napi::CallbackInfo& info) {
+Napi::Value CollationClasses(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array array;
   if (!ArrayArg(info, 0, &array)) {
@@ -307,8 +308,8 @@ Napi::Value Workbook::CollationClasses(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const uint32_t n = array.Length();
-  const auto strength = static_cast<fm_collation_strength_t>(ArgU32(info, 1));
-  const std::string profile_id = ArgString(info, 2);
+  const auto strength = static_cast<fm_collation_strength_t>(Workbook::ArgU32(info, 1));
+  const std::string profile_id = Workbook::ArgString(info, 2);
 
   // Text payloads must keep their addresses until the C call returns.
   std::vector<std::string> texts(n);

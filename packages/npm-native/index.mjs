@@ -85,6 +85,7 @@ export {
   DynamicFilterType,
   EffectiveStyleSource,
   ErrorCode,
+  ErrorDisplayName,
   ExternalLinkKind,
   FilterKind,
   FilterOperator,
