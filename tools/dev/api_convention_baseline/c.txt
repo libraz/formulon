@@ -6,6 +6,10 @@ R19.c	enum.anchor_kind	onecell	family `anchor`: `onecell` is 1 in `enum.anchor_e
 R19.c	enum.anchor_kind	twocell	family `anchor`: `twocell` is 0 in `enum.anchor_edit_as` but 1 in `enum.anchor_kind`
 R19.c	enum.chart_axis_crosses	absent:Absent	`Absent` means absent; its C value is -1, not 0
 R19.c	enum.chart_blanks_as	absent:Absent	`Absent` means absent; its C value is -1, not 0
+R19.c	enum.chart_legend_position	bottom	family `side`: `bottom` is 0 in `enum.chart_axis_position` but 1 in `enum.chart_legend_position`
+R19.c	enum.chart_legend_position	left	family `side`: `left` is 2 in `enum.chart_axis_position` but 3 in `enum.chart_legend_position`
+R19.c	enum.chart_legend_position	right	family `side`: `right` is 3 in `enum.chart_axis_position` but 4 in `enum.chart_legend_position`
+R19.c	enum.chart_legend_position	top	family `side`: `top` is 1 in `enum.chart_axis_position` but 2 in `enum.chart_legend_position`
 R19.c	enum.shape_paint	absent:Unset	`Unset` means absent; its C value is -1, not 0
 R19.c	enum.slicer_sort	ascending	family `sort_order`: `ascending` is 1 in `enum.pivot_sort_order` but 0 in `enum.slicer_sort`
 R19.c	enum.slicer_sort	descending	family `sort_order`: `descending` is 0 in `enum.pivot_sort_order` but 1 in `enum.slicer_sort`

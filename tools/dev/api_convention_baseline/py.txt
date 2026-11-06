@@ -1,3 +1,5 @@
+R0.coverage	drawing.remove	remove_drawing	`remove_drawing` is a former name; the ledger has `remove_drawing_object`
+R0.coverage	record.cell_style_record	CellStyleRecord	`CellStyleRecord` is a former name; the ledger has `CellStyle`
 R0.coverage	record.chart_axis_info	ChartAxisInfo	`ChartAxisInfo` is a former name; the ledger has `ChartAxis`
 R0.coverage	record.chart_fill_info	ChartFillInfo	`ChartFillInfo` is a former name; the ledger has `ChartFill`
 R0.coverage	record.chart_info	ChartInfo	`ChartInfo` is a former name; the ledger has `Chart`
@@ -10,9 +12,16 @@ R0.coverage	record.chart_point_info	ChartPointInfo	`ChartPointInfo` is a former 
 R0.coverage	record.chart_series_info	ChartSeriesInfo	`ChartSeriesInfo` is a former name; the ledger has `ChartSeries`
 R0.coverage	record.chart_source_info	ChartSourceInfo	`ChartSourceInfo` is a former name; the ledger has `ChartSource`
 R0.coverage	record.color_spec	ColorSpec	`ColorSpec` is a former name; the ledger has `Color`
+R0.coverage	record.data_table_input	DataTableInput	`DataTableInput` is a former name; the ledger has `DataTableInputCell`
+R0.coverage	record.external_link_record	ExternalLinkRecord	`ExternalLinkRecord` is a former name; the ledger has `ExternalLink`
 R0.coverage	record.fill_record	FillRecord	`FillRecord` is a former name; the ledger has `Fill`
 R0.coverage	record.font_record	FontRecord	`FontRecord` is a former name; the ledger has `Font`
 R0.coverage	record.paper_info	PaperInfo	`PaperInfo` is a former name; the ledger has `Paper`
+R0.coverage	record.pivot_data_field_spec	PivotDataFieldSpec	`PivotDataFieldSpec` is a former name; the ledger has `PivotDataFieldInput`
+R0.coverage	record.pivot_field_info	PivotFieldInfo	`PivotFieldInfo` is a former name; the ledger has `PivotField`
+R0.coverage	record.pivot_field_spec	PivotFieldSpecInput	`PivotFieldSpecInput` is a former name; the ledger has `PivotFieldInput`
+R0.coverage	record.pivot_filter_spec	PivotFilterSpec	`PivotFilterSpec` is a former name; the ledger has `PivotFilterInput`
+R0.coverage	record.pivot_item_info	PivotItemInfo	`PivotItemInfo` is a former name; the ledger has `PivotItem`
 R0.coverage	record.pivot_style_info	PivotStyleInfo	`PivotStyleInfo` is a former name; the ledger has `PivotStyle`
 R0.coverage	record.spill_info	SpillInfo	`SpillInfo` is a former name; the ledger has `Spill`
 R18.py	array_formula.set	shape	`get_array_formula` returns `ArrayFormula` but `set_array_formula` takes (formula)
@@ -25,6 +34,7 @@ R18.py	pinned_now.set	shape	`get_pinned_now` returns `CivilTime` but `set_pinned
 R18.py	pivot_grand_totals.set	shape	`get_pivot_grand_totals` returns `PivotGrandTotals` but `set_pivot_grand_totals` takes (rows_enabled, cols_enabled)
 R18.py	pivot_style_info.set	shape	`get_pivot_style_info` returns `PivotStyleInfo` but `set_pivot_style_info` takes (name, show_row_headers, show_col_headers, show_row_stripes, show_col_stripes, show_last_column)
 R18.py	print_titles.set	shape	`get_print_titles` returns `SheetPrintTitles` but `set_print_titles` takes (repeat_rows, repeat_cols)
+R18.py	record.theme	Theme	`Theme` is dropped from the py surface
 R18.py	selection.set	shape	`get_selection` returns `SheetSelection` but `set_selection` takes (active_row, active_col, ranges)
 R18.py	table_style_defaults.set	shape	`get_table_style_defaults` returns `TableStyleDefaults` but `set_table_style_defaults` takes (table_style, pivot_style)
 R18.py	theme_fonts.set	shape	`get_theme_fonts` returns `Theme` but `set_theme_fonts` takes (fonts)
@@ -61,12 +71,9 @@ R21.name	record.chart_point_info	suffix	`ChartPointInfo` ends with one of ['Entr
 R21.name	record.chart_series_info	suffix	`ChartSeriesInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartSeries`
 R21.name	record.chart_source_info	suffix	`ChartSourceInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartSource`
 R21.name	record.color_spec	suffix	`ColorSpec` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Color`
-R21.name	record.comment_entry	suffix	`CommentEntry` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Comment`
 R21.name	record.external_link_record	suffix	`ExternalLinkRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ExternalLink`
 R21.name	record.fill_record	suffix	`FillRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Fill`
 R21.name	record.font_record	suffix	`FontRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Font`
-R21.name	record.function_metadata_entry	suffix	`FunctionMetadataEntry` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `FunctionMetadata`
-R21.name	record.image_info	suffix	`ImageInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Image`
 R21.name	record.paper_info	suffix	`PaperInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Paper`
 R21.name	record.pivot_data_field_spec	suffix	`PivotDataFieldSpec` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotDataField`
 R21.name	record.pivot_field_info	suffix	`PivotFieldInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotField`
@@ -75,15 +82,12 @@ R21.name	record.pivot_filter_spec	suffix	`PivotFilterSpec` ends with one of ['En
 R21.name	record.pivot_item_info	suffix	`PivotItemInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotItem`
 R21.name	record.pivot_style_info	suffix	`PivotStyleInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotStyle`
 R21.name	record.spill_info	suffix	`SpillInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Spill`
-R21.role	record.cell	role	`record.cell` has no `role:`
 R21.role	record.chart_categories	role	`record.chart_categories` has no `role:`
 R21.role	record.chart_legend_info	role	`record.chart_legend_info` has no `role:`
 R21.role	record.chart_series_ranges	role	`record.chart_series_ranges` has no `role:`
 R21.role	record.chart_source_info	role	`record.chart_source_info` has no `role:`
 R21.role	record.collation_classes	role	`record.collation_classes` has no `role:`
 R21.role	record.color_scale	role	`record.color_scale` has no `role:`
-R21.role	record.comment_entry	role	`record.comment_entry` has no `role:`
-R21.role	record.conditional_format	role	`record.conditional_format` has no `role:`
 R21.role	record.data_bar	role	`record.data_bar` has no `role:`
 R21.role	record.differential_format	role	`record.differential_format` has no `role:`
 R21.role	record.error_name	role	`record.error_name` has no `role:`
@@ -93,8 +97,6 @@ R21.role	record.index_out_of_range_error	role	`record.index_out_of_range_error` 
 R21.role	record.invalid_argument_error	role	`record.invalid_argument_error` has no `role:`
 R21.role	record.not_found_error	role	`record.not_found_error` has no `role:`
 R21.role	record.passthrough_part	role	`record.passthrough_part` has no `role:`
-R21.role	record.table	role	`record.table` has no `role:`
-R21.role	record.table_column	role	`record.table_column` has no `role:`
 R21.role	record.theme	role	`record.theme` has no `role:`
 R21.role	record.workbook_closed_error	role	`record.workbook_closed_error` has no `role:`
 R22.py	active_sheet.set	index	`set_active_sheet(index)`: use `<thing>_index`
@@ -126,10 +128,10 @@ R22.py	table_column_totals.set	index	`set_table_column_totals(index)`: use `<thi
 R22.py	table_style_info.set	index	`set_table_style_info(index)`: use `<thing>_index`
 R22.py	validation.get	index	`get_validation(index)`: use `<thing>_index`
 R22.py	validation.remove	index	`remove_validation(index)`: use `<thing>_index`
-R23.list	cell_phonetic_run.get	get_cell_phonetic_run	`cell_phonetic_run` is `access: property`; `get_cell_phonetic_run` leaves the py surface
-R23.list	cell_phonetic_run.get_count	get_cell_phonetic_run_count	`cell_phonetic_run` is `access: property`; `get_cell_phonetic_run_count` leaves the py surface
-R23.list	cf_rule.get	get_cf_rule	`cf_rule` is `access: list`; `get_cf_rule` leaves the py surface
-R23.list	cf_rule.get_count	get_cf_rule_count	`cf_rule` is `access: list`; `get_cf_rule_count` leaves the py surface
+R23.list	cell_phonetic_run.get	get_cell_phonetic_run	`get_cell_phonetic_run` is dropped from the py surface
+R23.list	cell_phonetic_run.get_count	get_cell_phonetic_run_count	`get_cell_phonetic_run_count` is dropped from the py surface
+R23.list	cf_rule.get	get_cf_rule	`get_cf_rule` is dropped from the py surface
+R23.list	cf_rule.get_count	get_cf_rule_count	`get_cf_rule_count` is dropped from the py surface
 R23.list	collection.cell_phonetic_run	get_cell_phonetic_runs	`cell_phonetic_run` is `access: property`; `get_cell_phonetic_runs` is missing
 R23.list	collection.cf_rule	list_cf_rules	`cf_rule` is `access: list`; `list_cf_rules` is missing
 R23.list	collection.external_link	list_external_links	`external_link` is `access: list`; `list_external_links` is missing
@@ -142,27 +144,27 @@ R23.list	collection.sheet	list_sheets	`sheet` is `access: handles`; `list_sheets
 R23.list	collection.sparkline_group	list_sparkline_groups	`sparkline_group` is `access: list`; `list_sparkline_groups` is missing
 R23.list	collection.table	list_tables	`table` is `access: list`; `list_tables` is missing
 R23.list	collection.validation	list_validations	`validation` is `access: list`; `list_validations` is missing
-R23.list	external_link.get	get_external_link	`external_link` is `access: list`; `get_external_link` leaves the py surface
-R23.list	external_link.get_count	get_external_link_count	`external_link` is `access: list`; `get_external_link_count` leaves the py surface
-R23.list	pivot_cache_calculated_item.get	get_pivot_cache_calculated_item	`pivot_cache_calculated_item` is `access: list`; `get_pivot_cache_calculated_item` leaves the py surface
-R23.list	pivot_cache_calculated_item.get_count	get_pivot_cache_calculated_item_count	`pivot_cache_calculated_item` is `access: list`; `get_pivot_cache_calculated_item_count` leaves the py surface
-R23.list	pivot_data_field.get	get_pivot_data_field	`pivot_data_field` is `access: list`; `get_pivot_data_field` leaves the py surface
-R23.list	pivot_data_field.get_count	get_pivot_data_field_count	`pivot_data_field` is `access: list`; `get_pivot_data_field_count` leaves the py surface
-R23.list	pivot_field.get	get_pivot_field	`pivot_field` is `access: list`; `get_pivot_field` leaves the py surface
-R23.list	pivot_field.get_count	get_pivot_field_count	`pivot_field` is `access: list`; `get_pivot_field_count` leaves the py surface
-R23.list	pivot_filter.get	get_pivot_filter	`pivot_filter` is `access: list`; `get_pivot_filter` leaves the py surface
-R23.list	pivot_filter.get_count	get_pivot_filter_count	`pivot_filter` is `access: list`; `get_pivot_filter_count` leaves the py surface
-R23.list	protected_range.get	get_protected_range	`protected_range` is `access: list`; `get_protected_range` leaves the py surface
-R23.list	protected_range.get_count	get_protected_range_count	`protected_range` is `access: list`; `get_protected_range_count` leaves the py surface
-R23.list	sheet.get_count	get_sheet_count	`sheet` is `access: handles`; `get_sheet_count` leaves the py surface
-R23.list	sheet_index.get	get_sheet_index	`sheet` is `access: handles`; `get_sheet_index` leaves the py surface
-R23.list	sheet_name.get	get_sheet_name	`sheet` is `access: handles`; `get_sheet_name` leaves the py surface
-R23.list	sparkline_group.get	get_sparkline_group	`sparkline_group` is `access: list`; `get_sparkline_group` leaves the py surface
-R23.list	sparkline_group.get_count	get_sparkline_group_count	`sparkline_group` is `access: list`; `get_sparkline_group_count` leaves the py surface
-R23.list	table.get	get_table	`table` is `access: list`; `get_table` leaves the py surface
-R23.list	table.get_count	get_table_count	`table` is `access: list`; `get_table_count` leaves the py surface
-R23.list	validation.get	get_validation	`validation` is `access: list`; `get_validation` leaves the py surface
-R23.list	validation.get_count	get_validation_count	`validation` is `access: list`; `get_validation_count` leaves the py surface
+R23.list	external_link.get	get_external_link	`get_external_link` is dropped from the py surface
+R23.list	external_link.get_count	get_external_link_count	`get_external_link_count` is dropped from the py surface
+R23.list	pivot_cache_calculated_item.get	get_pivot_cache_calculated_item	`get_pivot_cache_calculated_item` is dropped from the py surface
+R23.list	pivot_cache_calculated_item.get_count	get_pivot_cache_calculated_item_count	`get_pivot_cache_calculated_item_count` is dropped from the py surface
+R23.list	pivot_data_field.get	get_pivot_data_field	`get_pivot_data_field` is dropped from the py surface
+R23.list	pivot_data_field.get_count	get_pivot_data_field_count	`get_pivot_data_field_count` is dropped from the py surface
+R23.list	pivot_field.get	get_pivot_field	`get_pivot_field` is dropped from the py surface
+R23.list	pivot_field.get_count	get_pivot_field_count	`get_pivot_field_count` is dropped from the py surface
+R23.list	pivot_filter.get	get_pivot_filter	`get_pivot_filter` is dropped from the py surface
+R23.list	pivot_filter.get_count	get_pivot_filter_count	`get_pivot_filter_count` is dropped from the py surface
+R23.list	protected_range.get	get_protected_range	`get_protected_range` is dropped from the py surface
+R23.list	protected_range.get_count	get_protected_range_count	`get_protected_range_count` is dropped from the py surface
+R23.list	sheet.get_count	get_sheet_count	`get_sheet_count` is dropped from the py surface
+R23.list	sheet_index.get	get_sheet_index	`get_sheet_index` is dropped from the py surface
+R23.list	sheet_name.get	get_sheet_name	`get_sheet_name` is dropped from the py surface
+R23.list	sparkline_group.get	get_sparkline_group	`get_sparkline_group` is dropped from the py surface
+R23.list	sparkline_group.get_count	get_sparkline_group_count	`get_sparkline_group_count` is dropped from the py surface
+R23.list	table.get	get_table	`get_table` is dropped from the py surface
+R23.list	table.get_count	get_table_count	`get_table_count` is dropped from the py surface
+R23.list	validation.get	get_validation	`get_validation` is dropped from the py surface
+R23.list	validation.get_count	get_validation_count	`get_validation_count` is dropped from the py surface
 R23.py	array_formula.get	Workbook	`get_array_formula` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	array_formula.set	Workbook	`set_array_formula` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	auto_filter.apply	Workbook	`apply_auto_filter` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
@@ -184,8 +186,6 @@ R23.py	cell_phonetic.set	Workbook	`set_cell_phonetic` is a sheet-scope op; it be
 R23.py	cell_phonetic_properties.get	Workbook	`get_cell_phonetic_properties` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	cell_phonetic_properties.has	Workbook	`has_cell_phonetic_properties` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	cell_phonetic_properties.set	Workbook	`set_cell_phonetic_properties` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.py	cell_phonetic_run.get	Workbook	`get_cell_phonetic_run` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.py	cell_phonetic_run.get_count	Workbook	`get_cell_phonetic_run_count` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	cell_phonetic_runs.set	Workbook	`set_cell_phonetic_runs` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	cell_rect_pt.get	Workbook	`get_cell_rect_pt` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	cell_show_phonetic.get	Workbook	`get_cell_show_phonetic` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
@@ -198,8 +198,6 @@ R23.py	cf_formula.evaluate	Workbook	`evaluate_cf_formula` is a sheet-scope op; i
 R23.py	cf_range.evaluate	Workbook	`evaluate_cf_range` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	cf_rule.add	Workbook	`add_cf_rule` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	cf_rule.clear	Workbook	`clear_cf_rules` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.py	cf_rule.get	Workbook	`get_cf_rule` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.py	cf_rule.get_count	Workbook	`get_cf_rule_count` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	cf_rule.remove	Workbook	`remove_cf_rule` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	chart.add	Workbook	`add_chart` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	chart.get	Workbook	`get_chart` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
@@ -302,14 +300,10 @@ R23.py	pivot_column_field_order.get	Workbook	`get_pivot_column_field_order` is a
 R23.py	pivot_column_field_order.set	Workbook	`set_pivot_column_field_order` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	pivot_data_field.add	Workbook	`add_pivot_data_field` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	pivot_data_field.clear	Workbook	`clear_pivot_data_fields` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.py	pivot_data_field.get	Workbook	`get_pivot_data_field` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.py	pivot_data_field.get_count	Workbook	`get_pivot_data_field_count` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	pivot_data_field.set	Workbook	`set_pivot_data_field` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	pivot_data_field_default_name.get	Workbook	`get_pivot_data_field_default_name` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	pivot_field.add	Workbook	`add_pivot_field` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	pivot_field.clear	Workbook	`clear_pivot_fields` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.py	pivot_field.get	Workbook	`get_pivot_field` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.py	pivot_field.get_count	Workbook	`get_pivot_field_count` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	pivot_field_axis.set	Workbook	`set_pivot_field_axis` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	pivot_field_custom_name.set	Workbook	`set_pivot_field_custom_name` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	pivot_field_date_group.clear	Workbook	`clear_pivot_field_date_group` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
@@ -334,8 +328,6 @@ R23.py	pivot_field_subtotal_fns.clear	Workbook	`clear_pivot_field_subtotal_fns` 
 R23.py	pivot_field_subtotal_top.set	Workbook	`set_pivot_field_subtotal_top` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	pivot_filter.add	Workbook	`add_pivot_filter` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	pivot_filter.clear	Workbook	`clear_pivot_filters` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.py	pivot_filter.get	Workbook	`get_pivot_filter` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.py	pivot_filter.get_count	Workbook	`get_pivot_filter_count` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	pivot_filter.remove	Workbook	`remove_pivot_filter` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	pivot_grand_totals.get	Workbook	`get_pivot_grand_totals` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	pivot_grand_totals.set	Workbook	`set_pivot_grand_totals` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
@@ -362,8 +354,6 @@ R23.py	print_options_xml.set	Workbook	`set_print_options_xml` is a sheet-scope o
 R23.py	print_titles.get	Workbook	`get_print_titles` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	print_titles.set	Workbook	`set_print_titles` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	protected_range.add	Workbook	`add_protected_range` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.py	protected_range.get	Workbook	`get_protected_range` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.py	protected_range.get_count	Workbook	`get_protected_range_count` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	protected_range.remove	Workbook	`remove_protected_range` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	protected_range.update	Workbook	`update_protected_range` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	range_style.remap	Workbook	`remap_range_style` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
@@ -410,8 +400,6 @@ R23.py	slicer.remove	Workbook	`remove_slicer` is a sheet-scope op; it belongs on
 R23.py	slicer.update	Workbook	`update_slicer` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	slicers.list	Workbook	`list_slicers` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	sparkline_group.add	Workbook	`add_sparkline_group` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.py	sparkline_group.get	Workbook	`get_sparkline_group` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.py	sparkline_group.get_count	Workbook	`get_sparkline_group_count` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	sparkline_group.remove	Workbook	`remove_sparkline_group` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	sparkline_group.update	Workbook	`update_sparkline_group` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	sparkline_group_sparklines.set	Workbook	`set_sparkline_group_sparklines` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
@@ -428,8 +416,6 @@ R23.py	threaded_comment.update	Workbook	`update_threaded_comment` is a sheet-sco
 R23.py	threaded_comments.list	Workbook	`list_threaded_comments` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	top_left.set	Workbook	`set_top_left` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	validation.add	Workbook	`add_validation` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.py	validation.get	Workbook	`get_validation` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.py	validation.get_count	Workbook	`get_validation_count` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	validation.remove	Workbook	`remove_validation` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	validations.clear	Workbook	`clear_validations` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	value.get	Workbook	`get_value` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
@@ -447,6 +433,18 @@ R23.track	sheet.remove	SHEET_STRUCTURE_OPS	`remove_sheet` changes the sheet list
 R23.track	sheet.rename	SHEET_STRUCTURE_OPS	`rename_sheet` changes the sheet list but `sheet.py` does not track it in `SHEET_STRUCTURE_OPS`
 R24.missing.py	chart_data.get	throw	`get_chart_data` does not document `Raises: NotFoundError`
 R24.missing.py	chart_preview.get	throw	`get_chart_preview` does not document `Raises: NotFoundError`
+R5.derive	record.pivot_data_field_spec	-	`PivotDataFieldSpec` does not derive from `fm_pivot_data_field_spec_t` (`PivotDataFieldInput or PivotDataFieldSpecInput`)
+R5.derive	record.pivot_filter_spec	-	`PivotFilterSpec` does not derive from `fm_pivot_filter_spec_t` (`PivotFilterInput or PivotFilterSpecInput`)
+R5.list	cf_rule.list.get_conditional_formats	missing	`list_cf_rules` is not on the py surface
+R5.list	external_link.list.get_external_links	missing	`list_external_links` is not on the py surface
+R5.list	pivot_cache_calculated_items.list	missing	`list_pivot_cache_calculated_items` is not on the py surface
+R5.list	pivot_data_fields.list	missing	`list_pivot_data_fields` is not on the py surface
+R5.list	pivot_fields.list	missing	`list_pivot_fields` is not on the py surface
+R5.list	pivot_filters.list	missing	`list_pivot_filters` is not on the py surface
+R5.list	protected_range.list.get_protected_ranges	missing	`list_protected_ranges` is not on the py surface
+R5.list	sparkline_group.list.list_sparkline_groups	missing	`list_sparkline_groups` is not on the py surface
+R5.list	table.list.iter_tables	missing	`list_tables` is not on the py surface
+R5.list	validation.list.get_validations	missing	`list_validations` is not on the py surface
 R6.closed.py	calc_mode.set	set_calc_mode(mode)	`set_calc_mode(mode: 'CalcMode | int')` admits ['int']
 R6.closed.py	cell_rect_pt.get	get_cell_rect_pt(mode)	`get_cell_rect_pt(mode: Union[GeometryMode, int])` admits ['int']
 R6.closed.py	chart.add	add_chart(anchor_kind)	`add_chart(anchor_kind: Union[AnchorKind, int])` admits ['int']
@@ -574,3 +572,10 @@ R7.opts.py	table_style_info.set	bool:show_row_stripes	`set_table_style_info(show
 R7.opts.py	table_style_info.set	run	`set_table_style_info` takes three or more adjacent positional arguments of one type; make them keyword-only
 R7.opts.py	theme_script_font.get	bool:major	`get_theme_script_font(major)` is a boolean; make it keyword-only
 R7.opts.py	theme_script_font.set	bool:major	`set_theme_script_font(major)` is a boolean; make it keyword-only
+R7.py	record.pivot_data_field_spec	name	`PivotDataFieldSpec` is an input record; name it `<Name>Input`
+R7.py	record.pivot_filter_spec	name	`PivotFilterSpec` is an input record; name it `<Name>Input`
+R8.py	field.pagination_column_break_manual_py	column_break_manual	`Pagination` should carry `column_break_manual`, not `vertical_break_manual`
+R8.py	field.pagination_column_breaks_py	column_breaks	`Pagination` should carry `column_breaks`, not `vertical_breaks`
+R8.py	field.pagination_row_break_manual_py	row_break_manual	`Pagination` should carry `row_break_manual`, not `horizontal_break_manual`
+R8.py	field.pagination_row_breaks_py	row_breaks	`Pagination` should carry `row_breaks`, not `horizontal_breaks`
+R8.py	field.pivot_grand_totals_columns_py	columns	`PivotGrandTotals` should carry `columns`, not `cols`

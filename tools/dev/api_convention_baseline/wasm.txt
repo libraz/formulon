@@ -1,4 +1,6 @@
+R0.coverage	drawing.remove	removeDrawing	`removeDrawing` is a former name; the ledger has `removeDrawingObject`
 R0.coverage	record.border_record	BorderRecord	`BorderRecord` is a former name; the ledger has `Border`
+R0.coverage	record.cell_style_record	CellStyleRecord	`CellStyleRecord` is a former name; the ledger has `CellStyle`
 R0.coverage	record.chart_axis_info	ChartAxisInfo	`ChartAxisInfo` is a former name; the ledger has `ChartAxis`
 R0.coverage	record.chart_fill_info	ChartFillInfo	`ChartFillInfo` is a former name; the ledger has `ChartFill`
 R0.coverage	record.chart_info	ChartInfo	`ChartInfo` is a former name; the ledger has `Chart`
@@ -9,10 +11,16 @@ R0.coverage	record.chart_plot_info	ChartPlotInfo	`ChartPlotInfo` is a former nam
 R0.coverage	record.chart_point_info	ChartPointInfo	`ChartPointInfo` is a former name; the ledger has `ChartPoint`
 R0.coverage	record.chart_series_info	ChartSeriesInfo	`ChartSeriesInfo` is a former name; the ledger has `ChartSeries`
 R0.coverage	record.color_spec	ColorSpec	`ColorSpec` is a former name; the ledger has `Color`
+R0.coverage	record.data_table_input	DataTableInput	`DataTableInput` is a former name; the ledger has `DataTableInputCell`
 R0.coverage	record.dxf_record	DxfRecord	`DxfRecord` is a former name; the ledger has `Dxf`
+R0.coverage	record.external_link_record	ExternalLinkRecord	`ExternalLinkRecord` is a former name; the ledger has `ExternalLink`
 R0.coverage	record.fill_record	FillRecord	`FillRecord` is a former name; the ledger has `Fill`
 R0.coverage	record.font_record	FontRecord	`FontRecord` is a former name; the ledger has `Font`
+R0.coverage	record.pivot_data_field_spec	PivotDataFieldSpec	`PivotDataFieldSpec` is a former name; the ledger has `PivotDataFieldInput`
+R0.coverage	record.pivot_field_spec	PivotFieldSpecInput	`PivotFieldSpecInput` is a former name; the ledger has `PivotFieldInput`
+R0.coverage	record.pivot_filter_spec	PivotFilterSpec	`PivotFilterSpec` is a former name; the ledger has `PivotFilterInput`
 R0.coverage	record.pivot_style_info	PivotStyleInfo	`PivotStyleInfo` is a former name; the ledger has `PivotStyle`
+R0.coverage	record.pivot_style_info_input	PivotStyleInfoInput	`PivotStyleInfoInput` is a former name; the ledger has `PivotStyleInput`
 R0.coverage	record.sheet_comment_entry	SheetCommentEntry	`SheetCommentEntry` is a former name; the ledger has `SheetComment`
 R0.coverage	record.spill_info	SpillInfo	`SpillInfo` is a former name; the ledger has `Spill`
 R0.coverage	record.validation_entry	ValidationEntry	`ValidationEntry` is a former name; the ledger has `Validation`
@@ -33,6 +41,7 @@ R18.js	pivot_options.set	Partial:options	`setPivotOptions(options)` is `Partial<
 R18.js	pivot_options.set	shape	`getPivotOptions` returns `PivotOptions` but `setPivotOptions` takes (options: Partial<PivotOptions>)
 R18.js	print_titles.set	shape	`getPrintTitles` returns `SheetPrintTitles` but `setPrintTitles` takes (repeatRows: string, repeatCols: string)
 R18.js	record.sparkline_group_input	Partial	`SparklineGroupInput` is `Partial<...>`
+R18.js	record.theme_result	Theme	`Theme` is dropped from the wasm surface
 R18.js	table_style_defaults.set	shape	`getTableStyleDefaults` returns `TableStyleDefaults` but `setTableStyleDefaults` takes (defaults: { tableStyle?: string; pivotStyle?: string })
 R18.js	theme_fonts.set	shape	`getThemeFonts` returns `Theme` but `setThemeFonts` takes (fonts: ThemeFonts)
 R18.js	theme_script_font.set	shape	`getThemeScriptFont` returns `ThemeScriptFont` but `setThemeScriptFont` takes (typeface: string)
@@ -92,7 +101,7 @@ R20.js	record.pagination_result	field:pages	`Pagination.pages: PaginationPage[]`
 R20.js	record.pagination_result	field:printArea	`Pagination.printArea: CellRect[]` is a result array; make it `readonly T[]`
 R20.js	record.pagination_result	field:verticalBreakManual	`Pagination.verticalBreakManual: boolean[]` is a result array; make it `readonly T[]`
 R20.js	record.pagination_result	field:verticalBreaks	`Pagination.verticalBreaks: number[]` is a result array; make it `readonly T[]`
-R20.js	record.pivot_field_result	field:subtotalFns	`PivotField.subtotalFns: PivotAggregation[]` is a result array; make it `readonly T[]`
+R20.js	record.pivot_field_info	field:subtotalFns	`PivotField.subtotalFns: PivotAggregation[]` is a result array; make it `readonly T[]`
 R20.js	record.pivot_layout_result	ReadonlyArray:PivotLayout.cells	`PivotLayout.cells` spells `ReadonlyArray<T>`; write `readonly T[]`
 R20.js	record.protected_range	ReadonlyArray:ProtectedRange.ranges	`ProtectedRange.ranges` spells `ReadonlyArray<T>`; write `readonly T[]`
 R20.js	record.sheet_selection	field:ranges	`SheetSelection.ranges: CellRect[]` is a result array; make it `readonly T[]`
@@ -109,7 +118,6 @@ R20.js	row_breaks.list	return	`listRowBreaks` returns `PageBreak[]`
 R20.js	row_overrides.list	ReadonlyArray:Workbook.listRowOverrides	`Workbook.listRowOverrides` spells `ReadonlyArray<T>`; write `readonly T[]`
 R20.js	threaded_comments.list	return	`listThreadedComments` returns `ThreadedComment[]`
 R21.name	record.border_record	suffix	`BorderRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Border`
-R21.name	record.cell_entry	suffix	`CellEntry` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Cell`
 R21.name	record.cell_style_record	suffix	`CellStyleRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `CellStyle`
 R21.name	record.chart_axis_info	suffix	`ChartAxisInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartAxis`
 R21.name	record.chart_fill_info	suffix	`ChartFillInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartFill`
@@ -120,16 +128,12 @@ R21.name	record.chart_marker_info	suffix	`ChartMarkerInfo` ends with one of ['En
 R21.name	record.chart_plot_info	suffix	`ChartPlotInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartPlot`
 R21.name	record.chart_point_info	suffix	`ChartPointInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartPoint`
 R21.name	record.chart_series_info	suffix	`ChartSeriesInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartSeries`
-R21.name	record.chart_title_info	suffix	`ChartTitleInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartTitle`
 R21.name	record.color_spec	suffix	`ColorSpec` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Color`
-R21.name	record.conditional_format_entry	suffix	`ConditionalFormatEntry` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ConditionalFormat`
 R21.name	record.data_table_spec	suffix	`DataTableSpec` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `DataTable`
 R21.name	record.dxf_record	suffix	`DxfRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Dxf`
 R21.name	record.external_link_record	suffix	`ExternalLinkRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ExternalLink`
 R21.name	record.fill_record	suffix	`FillRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Fill`
 R21.name	record.font_record	suffix	`FontRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Font`
-R21.name	record.function_metadata_entry	suffix	`FunctionMetadataEntry` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `FunctionMetadata`
-R21.name	record.image_info_result	suffix	`ImageInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Image`
 R21.name	record.pivot_data_field_spec	suffix	`PivotDataFieldSpec` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotDataField`
 R21.name	record.pivot_field_spec	suffix	`PivotFieldSpecInput` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotFieldInput`
 R21.name	record.pivot_filter_spec	suffix	`PivotFilterSpec` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotFilter`
@@ -137,8 +141,6 @@ R21.name	record.pivot_style_info	suffix	`PivotStyleInfo` ends with one of ['Entr
 R21.name	record.pivot_style_info_input	suffix	`PivotStyleInfoInput` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotStyleInput`
 R21.name	record.sheet_comment_entry	suffix	`SheetCommentEntry` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `SheetComment`
 R21.name	record.spill_info	suffix	`SpillInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Spill`
-R21.name	record.table_column_entry	suffix	`TableColumnEntry` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `TableColumn`
-R21.name	record.table_entry	suffix	`TableEntry` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Table`
 R21.name	record.validation_entry	suffix	`ValidationEntry` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Validation`
 R21.role	record.array_value	role	`record.array_value` has no `role:`
 R21.role	record.auto_filter_column	role	`record.auto_filter_column` has no `role:`
@@ -147,7 +149,7 @@ R21.role	record.auto_filter_sort_condition	role	`record.auto_filter_sort_conditi
 R21.role	record.auto_filter_sort_state	role	`record.auto_filter_sort_state` has no `role:`
 R21.role	record.blank_value	role	`record.blank_value` has no `role:`
 R21.role	record.bool_value	role	`record.bool_value` has no `role:`
-R21.role	record.cell_entry	role	`record.cell_entry` has no `role:`
+R21.role	record.cell	role	`record.cell` has no `role:`
 R21.role	record.cf_icon_input	role	`record.cf_icon_input` has no `role:`
 R21.role	record.cf_value_object_input	role	`record.cf_value_object_input` has no `role:`
 R21.role	record.chart_axis_info	role	`record.chart_axis_info` has no `role:`
@@ -158,11 +160,8 @@ R21.role	record.chart_marker_info	role	`record.chart_marker_info` has no `role:`
 R21.role	record.chart_plot_info	role	`record.chart_plot_info` has no `role:`
 R21.role	record.chart_point_info	role	`record.chart_point_info` has no `role:`
 R21.role	record.chart_series_info	role	`record.chart_series_info` has no `role:`
-R21.role	record.chart_title_info	role	`record.chart_title_info` has no `role:`
-R21.role	record.conditional_format_entry	role	`record.conditional_format_entry` has no `role:`
+R21.role	record.conditional_format	role	`record.conditional_format` has no `role:`
 R21.role	record.conditional_format_input	role	`record.conditional_format_input` has no `role:`
-R21.role	record.data_table_input	role	`record.data_table_input` has no `role:`
-R21.role	record.data_table_spec	role	`record.data_table_spec` has no `role:`
 R21.role	record.data_validation_input	role	`record.data_validation_input` has no `role:`
 R21.role	record.defined_name	role	`record.defined_name` has no `role:`
 R21.role	record.error_value	role	`record.error_value` has no `role:`
@@ -201,9 +200,9 @@ R21.role	record.sheet_comment_entry	role	`record.sheet_comment_entry` has no `ro
 R21.role	record.slicer_input	role	`record.slicer_input` has no `role:`
 R21.role	record.sparkline_group_input	role	`record.sparkline_group_input` has no `role:`
 R21.role	record.status	role	`record.status` has no `role:`
-R21.role	record.table_column_entry	role	`record.table_column_entry` has no `role:`
+R21.role	record.table	role	`record.table` has no `role:`
+R21.role	record.table_column	role	`record.table_column` has no `role:`
 R21.role	record.table_column_totals_input	role	`record.table_column_totals_input` has no `role:`
-R21.role	record.table_entry	role	`record.table_entry` has no `role:`
 R21.role	record.table_input	role	`record.table_input` has no `role:`
 R21.role	record.table_style_element_type	role	`record.table_style_element_type` has no `role:`
 R21.role	record.table_totals_row_function	role	`record.table_totals_row_function` has no `role:`
@@ -255,8 +254,6 @@ R23.js	cell_phonetic.get	Workbook	`getCellPhonetic` is a sheet-scope op; it belo
 R23.js	cell_phonetic.set	Workbook	`setCellPhonetic` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	cell_phonetic_properties.get	Workbook	`getCellPhoneticProperties` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	cell_phonetic_properties.set	Workbook	`setCellPhoneticProperties` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.js	cell_phonetic_run.get	Workbook	`getCellPhoneticRun` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.js	cell_phonetic_run.get_count	Workbook	`getCellPhoneticRunCount` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	cell_phonetic_runs.set	Workbook	`setCellPhoneticRuns` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	cell_rect_pt.get	Workbook	`getCellRectPt` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	cell_show_phonetic.get	Workbook	`getCellShowPhonetic` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
@@ -269,8 +266,6 @@ R23.js	cf_formula.evaluate	Workbook	`evaluateCfFormula` is a sheet-scope op; it 
 R23.js	cf_range.evaluate	Workbook	`evaluateCfRange` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	cf_rule.add	Workbook	`addCfRule` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	cf_rule.clear	Workbook	`clearCfRules` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.js	cf_rule.get	Workbook	`getCfRule` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.js	cf_rule.get_count	Workbook	`getCfRuleCount` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	cf_rule.remove	Workbook	`removeCfRule` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	chart.add	Workbook	`addChart` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	chart.get	Workbook	`getChart` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
@@ -374,14 +369,10 @@ R23.js	pivot_column_field_order.get	Workbook	`getPivotColumnFieldOrder` is a she
 R23.js	pivot_column_field_order.set	Workbook	`setPivotColumnFieldOrder` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	pivot_data_field.add	Workbook	`addPivotDataField` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	pivot_data_field.clear	Workbook	`clearPivotDataFields` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.js	pivot_data_field.get	Workbook	`getPivotDataField` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.js	pivot_data_field.get_count	Workbook	`getPivotDataFieldCount` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	pivot_data_field.set	Workbook	`setPivotDataField` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	pivot_data_field_default_name.get	Workbook	`getPivotDataFieldDefaultName` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	pivot_field.add	Workbook	`addPivotField` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	pivot_field.clear	Workbook	`clearPivotFields` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.js	pivot_field.get	Workbook	`getPivotField` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.js	pivot_field.get_count	Workbook	`getPivotFieldCount` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	pivot_field_axis.set	Workbook	`setPivotFieldAxis` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	pivot_field_custom_name.set	Workbook	`setPivotFieldCustomName` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	pivot_field_date_group.clear	Workbook	`clearPivotFieldDateGroup` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
@@ -406,8 +397,6 @@ R23.js	pivot_field_subtotal_fns.clear	Workbook	`clearPivotFieldSubtotalFns` is a
 R23.js	pivot_field_subtotal_top.set	Workbook	`setPivotFieldSubtotalTop` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	pivot_filter.add	Workbook	`addPivotFilter` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	pivot_filter.clear	Workbook	`clearPivotFilters` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.js	pivot_filter.get	Workbook	`getPivotFilter` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.js	pivot_filter.get_count	Workbook	`getPivotFilterCount` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	pivot_filter.remove	Workbook	`removePivotFilter` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	pivot_grand_totals.get	Workbook	`getPivotGrandTotals` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	pivot_grand_totals.set	Workbook	`setPivotGrandTotals` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
@@ -434,8 +423,6 @@ R23.js	print_options_xml.set	Workbook	`setPrintOptionsXml` is a sheet-scope op; 
 R23.js	print_titles.get	Workbook	`getPrintTitles` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	print_titles.set	Workbook	`setPrintTitles` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	protected_range.add	Workbook	`addProtectedRange` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.js	protected_range.get	Workbook	`getProtectedRange` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.js	protected_range.get_count	Workbook	`getProtectedRangeCount` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	protected_range.remove	Workbook	`removeProtectedRange` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	protected_range.update	Workbook	`updateProtectedRange` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	range_style.remap	Workbook	`remapRangeStyle` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
@@ -482,8 +469,6 @@ R23.js	slicer.remove	Workbook	`removeSlicer` is a sheet-scope op; it belongs on 
 R23.js	slicer.update	Workbook	`updateSlicer` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	slicers.list	Workbook	`listSlicers` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	sparkline_group.add	Workbook	`addSparklineGroup` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.js	sparkline_group.get	Workbook	`getSparklineGroup` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.js	sparkline_group.get_count	Workbook	`getSparklineGroupCount` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	sparkline_group.remove	Workbook	`removeSparklineGroup` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	sparkline_group.update	Workbook	`updateSparklineGroup` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	sparkline_group_sparklines.set	Workbook	`setSparklineGroupSparklines` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
@@ -500,8 +485,6 @@ R23.js	threaded_comment.update	Workbook	`updateThreadedComment` is a sheet-scope
 R23.js	threaded_comments.list	Workbook	`listThreadedComments` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	top_left.set	Workbook	`setTopLeft` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	validation.add	Workbook	`addValidation` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.js	validation.get	Workbook	`getValidation` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.js	validation.get_count	Workbook	`getValidationCount` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	validation.remove	Workbook	`removeValidation` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	validations.clear	Workbook	`clearValidations` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	value.get	Workbook	`getValue` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
@@ -511,10 +494,10 @@ R23.js	view_mode.set	Workbook	`setViewMode` is a sheet-scope op; it belongs on `
 R23.js	visibility.set	Workbook	`setVisibility` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	width_model.get	Workbook	`getWidthModel` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	zoom.set	Workbook	`setZoom` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.list	cell_phonetic_run.get	getCellPhoneticRun	`cell_phonetic_run` is `access: property`; `getCellPhoneticRun` leaves the wasm surface
-R23.list	cell_phonetic_run.get_count	getCellPhoneticRunCount	`cell_phonetic_run` is `access: property`; `getCellPhoneticRunCount` leaves the wasm surface
-R23.list	cf_rule.get	getCfRule	`cf_rule` is `access: list`; `getCfRule` leaves the wasm surface
-R23.list	cf_rule.get_count	getCfRuleCount	`cf_rule` is `access: list`; `getCfRuleCount` leaves the wasm surface
+R23.list	cell_phonetic_run.get	getCellPhoneticRun	`getCellPhoneticRun` is dropped from the wasm surface
+R23.list	cell_phonetic_run.get_count	getCellPhoneticRunCount	`getCellPhoneticRunCount` is dropped from the wasm surface
+R23.list	cf_rule.get	getCfRule	`getCfRule` is dropped from the wasm surface
+R23.list	cf_rule.get_count	getCfRuleCount	`getCfRuleCount` is dropped from the wasm surface
 R23.list	collection.cell_phonetic_run	getCellPhoneticRuns	`cell_phonetic_run` is `access: property`; `getCellPhoneticRuns` is missing
 R23.list	collection.cf_rule	listCfRules	`cf_rule` is `access: list`; `listCfRules` is missing
 R23.list	collection.external_link	listExternalLinks	`external_link` is `access: list`; `listExternalLinks` is missing
@@ -527,27 +510,27 @@ R23.list	collection.sheet	listSheets	`sheet` is `access: handles`; `listSheets` 
 R23.list	collection.sparkline_group	listSparklineGroups	`sparkline_group` is `access: list`; `listSparklineGroups` is missing
 R23.list	collection.table	listTables	`table` is `access: list`; `listTables` is missing
 R23.list	collection.validation	listValidations	`validation` is `access: list`; `listValidations` is missing
-R23.list	external_link.get	getExternalLink	`external_link` is `access: list`; `getExternalLink` leaves the wasm surface
-R23.list	external_link.get_count	getExternalLinkCount	`external_link` is `access: list`; `getExternalLinkCount` leaves the wasm surface
-R23.list	pivot_cache_calculated_item.get	getPivotCacheCalculatedItem	`pivot_cache_calculated_item` is `access: list`; `getPivotCacheCalculatedItem` leaves the wasm surface
-R23.list	pivot_cache_calculated_item.get_count	getPivotCacheCalculatedItemCount	`pivot_cache_calculated_item` is `access: list`; `getPivotCacheCalculatedItemCount` leaves the wasm surface
-R23.list	pivot_data_field.get	getPivotDataField	`pivot_data_field` is `access: list`; `getPivotDataField` leaves the wasm surface
-R23.list	pivot_data_field.get_count	getPivotDataFieldCount	`pivot_data_field` is `access: list`; `getPivotDataFieldCount` leaves the wasm surface
-R23.list	pivot_field.get	getPivotField	`pivot_field` is `access: list`; `getPivotField` leaves the wasm surface
-R23.list	pivot_field.get_count	getPivotFieldCount	`pivot_field` is `access: list`; `getPivotFieldCount` leaves the wasm surface
-R23.list	pivot_filter.get	getPivotFilter	`pivot_filter` is `access: list`; `getPivotFilter` leaves the wasm surface
-R23.list	pivot_filter.get_count	getPivotFilterCount	`pivot_filter` is `access: list`; `getPivotFilterCount` leaves the wasm surface
-R23.list	protected_range.get	getProtectedRange	`protected_range` is `access: list`; `getProtectedRange` leaves the wasm surface
-R23.list	protected_range.get_count	getProtectedRangeCount	`protected_range` is `access: list`; `getProtectedRangeCount` leaves the wasm surface
-R23.list	sheet.get_count	getSheetCount	`sheet` is `access: handles`; `getSheetCount` leaves the wasm surface
-R23.list	sheet_index.get	getSheetIndex	`sheet` is `access: handles`; `getSheetIndex` leaves the wasm surface
-R23.list	sheet_name.get	getSheetName	`sheet` is `access: handles`; `getSheetName` leaves the wasm surface
-R23.list	sparkline_group.get	getSparklineGroup	`sparkline_group` is `access: list`; `getSparklineGroup` leaves the wasm surface
-R23.list	sparkline_group.get_count	getSparklineGroupCount	`sparkline_group` is `access: list`; `getSparklineGroupCount` leaves the wasm surface
-R23.list	table.get	getTable	`table` is `access: list`; `getTable` leaves the wasm surface
-R23.list	table.get_count	getTableCount	`table` is `access: list`; `getTableCount` leaves the wasm surface
-R23.list	validation.get	getValidation	`validation` is `access: list`; `getValidation` leaves the wasm surface
-R23.list	validation.get_count	getValidationCount	`validation` is `access: list`; `getValidationCount` leaves the wasm surface
+R23.list	external_link.get	getExternalLink	`getExternalLink` is dropped from the wasm surface
+R23.list	external_link.get_count	getExternalLinkCount	`getExternalLinkCount` is dropped from the wasm surface
+R23.list	pivot_cache_calculated_item.get	getPivotCacheCalculatedItem	`getPivotCacheCalculatedItem` is dropped from the wasm surface
+R23.list	pivot_cache_calculated_item.get_count	getPivotCacheCalculatedItemCount	`getPivotCacheCalculatedItemCount` is dropped from the wasm surface
+R23.list	pivot_data_field.get	getPivotDataField	`getPivotDataField` is dropped from the wasm surface
+R23.list	pivot_data_field.get_count	getPivotDataFieldCount	`getPivotDataFieldCount` is dropped from the wasm surface
+R23.list	pivot_field.get	getPivotField	`getPivotField` is dropped from the wasm surface
+R23.list	pivot_field.get_count	getPivotFieldCount	`getPivotFieldCount` is dropped from the wasm surface
+R23.list	pivot_filter.get	getPivotFilter	`getPivotFilter` is dropped from the wasm surface
+R23.list	pivot_filter.get_count	getPivotFilterCount	`getPivotFilterCount` is dropped from the wasm surface
+R23.list	protected_range.get	getProtectedRange	`getProtectedRange` is dropped from the wasm surface
+R23.list	protected_range.get_count	getProtectedRangeCount	`getProtectedRangeCount` is dropped from the wasm surface
+R23.list	sheet.get_count	getSheetCount	`getSheetCount` is dropped from the wasm surface
+R23.list	sheet_index.get	getSheetIndex	`getSheetIndex` is dropped from the wasm surface
+R23.list	sheet_name.get	getSheetName	`getSheetName` is dropped from the wasm surface
+R23.list	sparkline_group.get	getSparklineGroup	`getSparklineGroup` is dropped from the wasm surface
+R23.list	sparkline_group.get_count	getSparklineGroupCount	`getSparklineGroupCount` is dropped from the wasm surface
+R23.list	table.get	getTable	`getTable` is dropped from the wasm surface
+R23.list	table.get_count	getTableCount	`getTableCount` is dropped from the wasm surface
+R23.list	validation.get	getValidation	`getValidation` is dropped from the wasm surface
+R23.list	validation.get_count	getValidationCount	`getValidationCount` is dropped from the wasm surface
 R23.track	pivot_show_details.get	SHEET_STRUCTURE_OPS	`showPivotDetails` changes the sheet list but `common.mjs` does not track it in `SHEET_STRUCTURE_OPS`
 R23.track	sheet.add	SHEET_STRUCTURE_OPS	`addSheet` changes the sheet list but `common.mjs` does not track it in `SHEET_STRUCTURE_OPS`
 R23.track	sheet.copy	SHEET_STRUCTURE_OPS	`copySheet` changes the sheet list but `common.mjs` does not track it in `SHEET_STRUCTURE_OPS`
@@ -555,6 +538,18 @@ R23.track	sheet.move	SHEET_STRUCTURE_OPS	`moveSheet` changes the sheet list but 
 R23.track	sheet.remove	SHEET_STRUCTURE_OPS	`removeSheet` changes the sheet list but `common.mjs` does not track it in `SHEET_STRUCTURE_OPS`
 R23.track	sheet.rename	SHEET_STRUCTURE_OPS	`renameSheet` changes the sheet list but `common.mjs` does not track it in `SHEET_STRUCTURE_OPS`
 R24.missing.js	pivot_cache_worksheet_source.get	null	`getPivotCacheWorksheetSource` returns `PivotWorksheetSource`; it returns `... | null`
+R5.derive	record.pivot_data_field_spec	-	`PivotDataFieldSpec` does not derive from `fm_pivot_data_field_spec_t` (`PivotDataFieldInput or PivotDataFieldSpecInput`)
+R5.derive	record.pivot_filter_spec	-	`PivotFilterSpec` does not derive from `fm_pivot_filter_spec_t` (`PivotFilterInput or PivotFilterSpecInput`)
+R5.list	cf_rule.list.get_conditional_formats	missing	`listCfRules` is not on the wasm surface
+R5.list	external_link.list.get_external_links	missing	`listExternalLinks` is not on the wasm surface
+R5.list	pivot_cache_calculated_items.list	missing	`listPivotCacheCalculatedItems` is not on the wasm surface
+R5.list	pivot_data_fields.list	missing	`listPivotDataFields` is not on the wasm surface
+R5.list	pivot_fields.list	missing	`listPivotFields` is not on the wasm surface
+R5.list	pivot_filters.list	missing	`listPivotFilters` is not on the wasm surface
+R5.list	protected_range.list.get_protected_ranges	missing	`listProtectedRanges` is not on the wasm surface
+R5.list	sparkline_group.list.list_sparkline_groups	missing	`listSparklineGroups` is not on the wasm surface
+R5.list	table.list.iter_tables	missing	`listTables` is not on the wasm surface
+R5.list	validation.list.get_validations	missing	`listValidations` is not on the wasm surface
 R6.closed.js	record.chart_axis_info	ChartAxisInfo.tickLabelPosition	`ChartAxisInfo.tickLabelPosition: string | null` is closed; type it `a string-literal union`
 R6.closed.js	record.color_spec	ColorSpec.kind	`ColorSpec.kind: number` carries `fm_color_kind_t`; type it by its table
 R6.closed.js	record.function_metadata	FunctionMetadata.availability	`FunctionMetadata.availability: number` carries `fm_function_availability_t`; type it by its table
@@ -562,6 +557,7 @@ R6.closed.js	record.locale_facts	LocaleFacts.dateOrder	`LocaleFacts.dateOrder: L
 R6.closed.js	record.page_setup	PageSetup.orientation	`PageSetup.orientation: Orientation` carries `FM_ORIENTATION_*`; type it by its table
 R6.closed.js	record.sheet_view	SheetView.visibility	`SheetView.visibility: number` carries `fm_sheet_visibility_t`; type it by its table
 R6.closed.js	workbook.create_for_profile	Workbook.createForProfile(profileId)	`Workbook.createForProfile(profileId: string)` is closed; type it `ExcelProfileId`
+R6.js	chart_title.set	title	`setChartTitle`: parameter `title: string | null | { kind: ChartTitleKind; text?: string; formula?: string }`; the ledger types it `ChartTitle`
 R7.absent.js	auto_filter_xml.get	doc:Workbook.getAutoFilterXml	`Workbook.getAutoFilterXml` documents an absent value as `""` / `-1`
 R7.absent.js	comment.set	clear:Workbook.setComment	`Workbook.setComment` clears with an empty value; accept `null`
 R7.absent.js	file_name.get	doc:Workbook.getFileName	`Workbook.getFileName` documents an absent value as `""` / `-1`
@@ -611,12 +607,12 @@ R7.absent.js	record.pivot_cache_options	doc:PivotCacheOptions.missingItemsLimit	
 R7.absent.js	record.pivot_cell	doc:PivotCell.numberFormat	`PivotCell.numberFormat` documents an absent value as `""` / `-1`
 R7.absent.js	record.pivot_data_field_result	doc:PivotDataField	`PivotDataField` documents an absent value as `""` / `-1`
 R7.absent.js	record.pivot_data_field_spec	doc:PivotDataFieldSpec	`PivotDataFieldSpec` documents an absent value as `""` / `-1`
-R7.absent.js	record.pivot_field_result	-1:PivotField.axis	`PivotField.axis` has a `-1` alternative
-R7.absent.js	record.pivot_field_result	doc:PivotField	`PivotField` documents an absent value as `""` / `-1`
-R7.absent.js	record.pivot_field_result	doc:PivotField.cacheFieldIndex	`PivotField.cacheFieldIndex` documents an absent value as `""` / `-1`
-R7.absent.js	record.pivot_field_result	doc:PivotField.groupBaseIndex	`PivotField.groupBaseIndex` documents an absent value as `""` / `-1`
+R7.absent.js	record.pivot_field_info	-1:PivotField.axis	`PivotField.axis` has a `-1` alternative
+R7.absent.js	record.pivot_field_info	doc:PivotField	`PivotField` documents an absent value as `""` / `-1`
+R7.absent.js	record.pivot_field_info	doc:PivotField.cacheFieldIndex	`PivotField.cacheFieldIndex` documents an absent value as `""` / `-1`
+R7.absent.js	record.pivot_field_info	doc:PivotField.groupBaseIndex	`PivotField.groupBaseIndex` documents an absent value as `""` / `-1`
 R7.absent.js	record.pivot_filter_result	doc:PivotFilter.valueHighText	`PivotFilter.valueHighText` documents an absent value as `""` / `-1`
-R7.absent.js	record.pivot_item_result	doc:PivotItem.cacheIndex	`PivotItem.cacheIndex` documents an absent value as `""` / `-1`
+R7.absent.js	record.pivot_item_info	doc:PivotItem.cacheIndex	`PivotItem.cacheIndex` documents an absent value as `""` / `-1`
 R7.absent.js	record.pivot_options	doc:PivotOptions	`PivotOptions` documents an absent value as `""` / `-1`
 R7.absent.js	record.row_layout	has:hasHeight	`RowLayout.hasHeight` is a presence flag; make the value field nullable
 R7.absent.js	record.row_layout	has:hasStyle	`RowLayout.hasStyle` is a presence flag; make the value field nullable
@@ -626,9 +622,17 @@ R7.absent.js	record.table_entry	has:hasStyleInfo	`TableEntry.hasStyleInfo` is a 
 R7.absent.js	record.table_style_defaults_result	doc:TableStyleDefaults	`TableStyleDefaults` documents an absent value as `""` / `-1`
 R7.absent.js	record.validation_outcome_result	has:hasRule	`ValidationOutcome.hasRule` is a presence flag; make the value field nullable
 R7.absent.js	sheet_pr_xml.get	doc:Workbook.getSheetPrXml	`Workbook.getSheetPrXml` documents an absent value as `""` / `-1`
+R7.js	record.data_table_spec	name	`DataTableSpec` is an input record; name it `<Name>Input`
+R7.js	record.pivot_data_field_spec	name	`PivotDataFieldSpec` is an input record; name it `<Name>Input`
+R7.js	record.pivot_filter_spec	name	`PivotFilterSpec` is an input record; name it `<Name>Input`
 R7.opts.js	chart_source.set	bool	`setChartSource` takes two booleans
 R7.opts.js	hyperlink.add	run	`addHyperlink` takes 4 adjacent `string` arguments; take an options object
 R7.opts.js	hyperlink.add_range	run	`addHyperlinkRange` takes 4 adjacent `string` arguments; take an options object
 R7.opts.js	pinned_now.set	run	`setPinnedNow` takes 6 adjacent `number` arguments; take an options object
 R7.opts.js	pivot_field_date_group.set	run	`setPivotFieldDateGroup` takes 3 adjacent `number` arguments; take an options object
 R7.opts.js	pivot_grand_totals.set	bool	`setPivotGrandTotals` takes two booleans
+R8.js	field.pagination_column_break_manual	columnBreakManual	`Pagination` should carry `columnBreakManual`, not `verticalBreakManual`
+R8.js	field.pagination_column_breaks	columnBreaks	`Pagination` should carry `columnBreaks`, not `verticalBreaks`
+R8.js	field.pagination_row_break_manual	rowBreakManual	`Pagination` should carry `rowBreakManual`, not `horizontalBreakManual`
+R8.js	field.pagination_row_breaks	rowBreaks	`Pagination` should carry `rowBreaks`, not `horizontalBreaks`
+R8.js	field.pivot_grand_totals_columns	columns	`PivotGrandTotals` should carry `columns`, not `cols`
