@@ -5,6 +5,7 @@
 #include <string>
 
 #include "parser/ast_format.h"
+#include "parser/formula_prefix.h"
 #include "parser/parser_detail.h"
 #include "parser/reference.h"
 #include "utils/strings.h"
@@ -15,15 +16,8 @@ namespace {
 
 constexpr std::size_t kMaxIndexDigits = 9;
 
-// A byte of a book or sheet run: letters, digits, `.`, `_` and non-ASCII.
-bool IsRunByte(char c) noexcept {
-  const auto u = static_cast<unsigned char>(c);
-  return u >= 0x80 || detail::IsAsciiDigit(c) || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '.' ||
-         c == '_';
-}
-
 int HexValue(char c) noexcept {
-  if (detail::IsAsciiDigit(c)) {
+  if (strings::is_ascii_digit(c)) {
     return c - '0';
   }
   if (c >= 'A' && c <= 'F') {
@@ -112,7 +106,7 @@ std::size_t ParseBracketIndex(std::string_view s, std::size_t pos, std::uint32_t
   }
   std::size_t i = pos + 1;
   std::uint32_t value = 0;
-  while (i < s.size() && detail::IsAsciiDigit(s[i])) {
+  while (i < s.size() && strings::is_ascii_digit(s[i])) {
     value = value * 10 + static_cast<std::uint32_t>(s[i] - '0');
     ++i;
   }
@@ -124,7 +118,7 @@ std::size_t ParseBracketIndex(std::string_view s, std::size_t pos, std::uint32_t
 }
 
 std::size_t ScanRun(std::string_view s, std::size_t pos) noexcept {
-  while (pos < s.size() && IsRunByte(s[pos])) {
+  while (pos < s.size() && formula_prefix_is_ident_byte(s[pos])) {
     ++pos;
   }
   return pos;
@@ -235,7 +229,7 @@ bool NameStartsAt(std::string_view s, std::size_t pos) noexcept {
 // True when `c` before a `[` or a bare run makes it a continuation rather
 // than the start of an operand.
 bool ContinuesOperand(char c) noexcept {
-  return IsRunByte(c) || c == ']' || c == ')' || c == '\'';
+  return formula_prefix_is_ident_byte(c) || c == ']' || c == ')' || c == '\'';
 }
 
 // Appends the local spelling of the sheet part `sheets` (`S` or `S1:S2`)
@@ -425,7 +419,7 @@ std::string bind_self_book_names(std::string_view text, std::string_view file_na
         }
       }
     }
-    if (depth == 0 && IsRunByte(c)) {
+    if (depth == 0 && formula_prefix_is_ident_byte(c)) {
       const std::size_t end = ScanRun(text, i);
       if (end < text.size() && text[end] == '!' && strings::case_insensitive_eq(text.substr(i, end - i), file_name) &&
           NameStartsAt(text, end + 1)) {
@@ -454,9 +448,7 @@ std::string display_path_for_link_target(std::string_view target) {
     if (!rest.empty() && rest.front() == '/') {
       // file:///<path>: a drive path or a POSIX absolute path.
       const std::string path = percent_decode(rest.substr(1));
-      const bool drive = path.size() >= 3 &&
-                         ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':' &&
-                         IsSeparator(path[2]);
+      const bool drive = path.size() >= 3 && strings::is_ascii_alpha(path[0]) && path[1] == ':' && IsSeparator(path[2]);
       if (drive) {
         return WithBackslashes(DirectoryPrefix(path));
       }

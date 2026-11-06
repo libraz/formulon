@@ -15,8 +15,6 @@ namespace parser {
 using detail::DecodeColumnLetters;
 using detail::DecodeDigitRunClamped;
 using detail::HasWorkbookExtension;
-using detail::IsAsciiDigit;
-using detail::IsAsciiLetter;
 using detail::kMaxColumnLetters;
 using detail::kMaxRow;
 using detail::kMaxRowDigits;
@@ -45,7 +43,7 @@ bool Parser::decode_cellref_lexeme(std::string_view lex, Reference* out) noexcep
     ++i;
   }
   const std::size_t letters_begin = i;
-  while (i < lex.size() && IsAsciiLetter(lex[i])) {
+  while (i < lex.size() && strings::is_ascii_alpha(lex[i])) {
     ++i;
   }
   const std::size_t letters_len = i - letters_begin;
@@ -57,7 +55,7 @@ bool Parser::decode_cellref_lexeme(std::string_view lex, Reference* out) noexcep
     ++i;
   }
   const std::size_t digits_begin = i;
-  while (i < lex.size() && IsAsciiDigit(lex[i])) {
+  while (i < lex.size() && strings::is_ascii_digit(lex[i])) {
     ++i;
   }
   const std::size_t digits_len = i - digits_begin;
@@ -91,7 +89,7 @@ std::uint32_t Parser::decode_column_letters(std::string_view lex, bool* col_abs)
     ++i;
   }
   const std::size_t letters_begin = i;
-  while (i < lex.size() && IsAsciiLetter(lex[i])) {
+  while (i < lex.size() && strings::is_ascii_alpha(lex[i])) {
     ++i;
   }
   if (i != lex.size() || (i - letters_begin) == 0 || (i - letters_begin) > kMaxColumnLetters) {
@@ -123,7 +121,7 @@ bool Parser::decode_full_row_endpoint(const Token& tok, Reference* out) noexcept
     return false;
   }
   for (char c : lex) {
-    if (!IsAsciiDigit(c)) {
+    if (!strings::is_ascii_digit(c)) {
       return false;
     }
   }
@@ -188,7 +186,7 @@ bool Parser::sheet_span_end_at(std::size_t offset) const noexcept {
     return false;
   }
   const std::string_view name = SheetTokenText(tok);
-  return !name.empty() && !IsAsciiDigit(name.front());
+  return !name.empty() && !strings::is_ascii_digit(name.front());
 }
 
 AstNode* Parser::parse_quoted_qualifier_ref(SyncContext ctx) {

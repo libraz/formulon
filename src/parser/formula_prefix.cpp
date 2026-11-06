@@ -116,7 +116,7 @@ class OperatorRespeller {
       std::string out;
       for (std::uint32_t i = 0; i < n; ++i) {
         if (i > 0U) {
-          out.append(i + 1U == n ? std::string(trim_ref_operator(mode)) : std::string(":"));
+          out.append(i + 1U == n ? std::string_view(trim_ref_operator(mode)) : std::string_view(":"));
         }
         out.append(text(arg.as_range_operand(i), true));
       }
@@ -165,7 +165,7 @@ std::string spell_storage_operators(std::string_view formula) {
 std::string_view cell_shaped_name_prefix(std::string_view name) noexcept {
   static constexpr std::array<std::string_view, 2> kPrefixes = {kParamPrefix, kNamePrefix};
   for (const std::string_view prefix : kPrefixes) {
-    if (name.size() > prefix.size() && formula_prefix_ci_eq(name.substr(0, prefix.size()), prefix) &&
+    if (name.size() > prefix.size() && strings::case_insensitive_starts_with(name, prefix) &&
         is_a1_cell_shaped(name.substr(prefix.size()))) {
       return prefix;
     }

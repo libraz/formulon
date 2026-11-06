@@ -24,6 +24,7 @@
 #include <string_view>
 
 #include "excel_locale.h"
+#include "parser/formula_prefix.h"
 #include "parser/parser_detail.h"
 #include "utils/double_parse.h"
 #include "utils/strings.h"
@@ -35,7 +36,6 @@ namespace parser {
 namespace {
 
 // UTF-8 BOM and UTF-16 LE BOM (as 2 bytes) for the source-prefix check.
-constexpr std::string_view kUtf8Bom = "\xEF\xBB\xBF";
 constexpr std::string_view kUtf16LeBom = "\xFF\xFE";
 
 // Lookup for the 17 canonical Excel error literals. Kept sorted by the
@@ -101,13 +101,8 @@ bool Tokenizer::is_ident_start_byte(unsigned char c) noexcept {
   // `\` is Excel's third legal name-manager start character (alongside a
   // letter and `_`) for a defined name -- `scan_ident_or_cellref_or_bool`
   // consumes it explicitly before the continuation loop, since it is not
-  // itself an `is_ident_cont_byte`.
-  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' || c == '\\' || c >= 0xC0;
-}
-
-bool Tokenizer::is_ident_cont_byte(unsigned char c) noexcept {
-  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.' ||
-         c >= 0x80;
+  // itself a `formula_prefix_is_ident_byte`.
+  return strings::is_ascii_alpha(static_cast<char>(c)) || c == '_' || c == '\\' || c >= 0xC0;
 }
 
 bool Tokenizer::is_formula_whitespace(char c) noexcept {
@@ -182,7 +177,8 @@ bool Tokenizer::scan_locale_char(unsigned char c) {
     emit_single_char(TokenKind::Comma);
     return true;
   }
-  if (ch == decimal_ && ch != '.' && byte_pos_ + 1 < source_.size() && detail::IsAsciiDigit(source_[byte_pos_ + 1])) {
+  if (ch == decimal_ && ch != '.' && byte_pos_ + 1 < source_.size() &&
+      strings::is_ascii_digit(source_[byte_pos_ + 1])) {
     scan_number();
     return true;
   }
@@ -213,7 +209,7 @@ bool Tokenizer::looks_like_cellref(std::string_view run, bool* letters_only) noe
     ++i;
   }
   const std::size_t letters_begin = i;
-  while (i < run.size() && detail::IsAsciiLetter(run[i])) {
+  while (i < run.size() && strings::is_ascii_alpha(run[i])) {
     ++i;
   }
   const std::size_t letters_len = i - letters_begin;
@@ -224,7 +220,7 @@ bool Tokenizer::looks_like_cellref(std::string_view run, bool* letters_only) noe
     ++i;
   }
   const std::size_t digits_begin = i;
-  while (i < run.size() && detail::IsAsciiDigit(run[i])) {
+  while (i < run.size() && strings::is_ascii_digit(run[i])) {
     ++i;
   }
   const std::size_t digits_len = i - digits_begin;
@@ -269,8 +265,9 @@ const std::vector<Token>& Tokenizer::tokens() {
   done_ = true;
 
   // BOM handling: strip a leading UTF-8 or UTF-16-LE BOM silently.
-  if (source_.size() >= kUtf8Bom.size() && std::memcmp(source_.data(), kUtf8Bom.data(), kUtf8Bom.size()) == 0) {
-    byte_pos_ = kUtf8Bom.size();
+  if (source_.size() >= detail::kUtf8Bom.size() &&
+      std::memcmp(source_.data(), detail::kUtf8Bom.data(), detail::kUtf8Bom.size()) == 0) {
+    byte_pos_ = detail::kUtf8Bom.size();
   } else if (source_.size() >= kUtf16LeBom.size() &&
              std::memcmp(source_.data(), kUtf16LeBom.data(), kUtf16LeBom.size()) == 0) {
     byte_pos_ = kUtf16LeBom.size();
@@ -471,7 +468,8 @@ const std::vector<Token>& Tokenizer::tokens() {
     }
 
     // A sheet qualifier, whatever the run would otherwise tokenize as.
-    if (bracket_depth_ == 0 && (detail::IsAsciiDigit(static_cast<char>(c)) || (c != '\\' && is_ident_start_byte(c))) &&
+    if (bracket_depth_ == 0 &&
+        (strings::is_ascii_digit(static_cast<char>(c)) || (c != '\\' && is_ident_start_byte(c))) &&
         try_scan_local_sheet_qualifier()) {
       continue;
     }
@@ -483,9 +481,9 @@ const std::vector<Token>& Tokenizer::tokens() {
     }
 
     // Digits: number literal.
-    if (detail::IsAsciiDigit(static_cast<char>(c)) ||
+    if (strings::is_ascii_digit(static_cast<char>(c)) ||
         (c == static_cast<unsigned char>(decimal_) && byte_pos_ + 1 < source_.size() &&
-         detail::IsAsciiDigit(source_[byte_pos_ + 1]))) {
+         strings::is_ascii_digit(source_[byte_pos_ + 1]))) {
       scan_number();
       continue;
     }
@@ -496,16 +494,16 @@ const std::vector<Token>& Tokenizer::tokens() {
     // here as a Number token whose lexeme retains the `$` so the parser's
     // whole-row path can carry the row_abs flag. Anything else is invalid.
     if (c == '$') {
-      if (byte_pos_ + 1 < source_.size() && detail::IsAsciiLetter(static_cast<char>(source_[byte_pos_ + 1]))) {
+      if (byte_pos_ + 1 < source_.size() && strings::is_ascii_alpha(static_cast<char>(source_[byte_pos_ + 1]))) {
         scan_ident_or_cellref_or_bool();
         continue;
       }
-      if (byte_pos_ + 1 < source_.size() && detail::IsAsciiDigit(source_[byte_pos_ + 1])) {
+      if (byte_pos_ + 1 < source_.size() && strings::is_ascii_digit(source_[byte_pos_ + 1])) {
         const std::size_t num_start = byte_pos_;
         mark_start();
         advance_one();  // consume '$'
         double value = 0.0;
-        while (byte_pos_ < source_.size() && detail::IsAsciiDigit(source_[byte_pos_])) {
+        while (byte_pos_ < source_.size() && strings::is_ascii_digit(source_[byte_pos_])) {
           value = value * 10.0 + static_cast<double>(source_[byte_pos_] - '0');
           advance_one();
         }
@@ -745,7 +743,7 @@ void Tokenizer::scan_number() {
   // Integer / fractional parts.
   while (byte_pos_ < source_.size()) {
     const char ch = source_[byte_pos_];
-    if (detail::IsAsciiDigit(ch)) {
+    if (strings::is_ascii_digit(ch)) {
       advance_one();
       continue;
     }
@@ -768,7 +766,7 @@ void Tokenizer::scan_number() {
       }
       // Require at least one exponent digit.
       bool have_exp_digit = false;
-      while (byte_pos_ < source_.size() && detail::IsAsciiDigit(source_[byte_pos_])) {
+      while (byte_pos_ < source_.size() && strings::is_ascii_digit(source_[byte_pos_])) {
         have_exp_digit = true;
         advance_one();
       }
@@ -791,7 +789,8 @@ void Tokenizer::scan_number() {
       !(decimal_ == '.' && byte_pos_ + 1 < source_.size() && source_[byte_pos_ + 1] == ':')) {
     // Absorb the offending run up to the next whitespace / operator so the
     // diagnostic lexeme covers the whole malformed literal.
-    while (byte_pos_ < source_.size() && (detail::IsAsciiDigit(source_[byte_pos_]) || source_[byte_pos_] == decimal_)) {
+    while (byte_pos_ < source_.size() &&
+           (strings::is_ascii_digit(source_[byte_pos_]) || source_[byte_pos_] == decimal_)) {
       advance_one();
     }
     emit(TokenKind::Invalid, start);
@@ -850,8 +849,8 @@ void Tokenizer::scan_error_literal() {
     // Accept letters, digits, `/`, `_`, `?`, `!`, `.` and non-ASCII bytes:
     // enough to cover every error-literal spelling, localized ones
     // (`#Н/Д`, `#DELING.DOOR.0!`) included. Stop before whitespace / operators.
-    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '/' || c == '_' ||
-        c == '?' || c == '!' || c == '.' || c >= 0x80) {
+    if (strings::is_ascii_alpha(static_cast<char>(c)) || strings::is_ascii_digit(static_cast<char>(c)) || c == '/' ||
+        c == '_' || c == '?' || c == '!' || c == '.' || c >= 0x80) {
       ++probe;
       continue;
     }
@@ -896,7 +895,7 @@ void Tokenizer::scan_ident_or_cellref_or_bool() {
   mark_start();
 
   // Optional leading `\` (defined-name start character; see
-  // `is_ident_start_byte`). It is not an `is_ident_cont_byte`, so it has to
+  // `is_ident_start_byte`). It is not a `formula_prefix_is_ident_byte`, so it has to
   // be consumed here rather than falling into the loop below; a CellRef
   // never carries one, so `looks_like_cellref` rejects the run unchanged.
   if (byte_pos_ < source_.size() && source_[byte_pos_] == '\\') {
@@ -933,7 +932,7 @@ void Tokenizer::scan_ident_or_cellref_or_bool() {
       if (c == '.' && brace_depth_ > 0 && opts_.locale != nullptr && opts_.locale->array_column_separator == '.') {
         break;
       }
-      if (is_ident_cont_byte(c)) {
+      if (formula_prefix_is_ident_byte(static_cast<char>(c))) {
         advance_one();
         continue;
       }
@@ -1034,7 +1033,7 @@ bool Tokenizer::try_scan_local_sheet_qualifier() {
     const std::size_t second_end = end + 1 + second_len;
     bool letters_only = false;
     if (second_len == 0 || second_end >= source_.size() || source_[second_end] != '!' ||
-        detail::IsAsciiDigit(source_[end + 1]) || looks_like_cellref(run, &letters_only)) {
+        strings::is_ascii_digit(source_[end + 1]) || looks_like_cellref(run, &letters_only)) {
       return false;
     }
   }
@@ -1141,7 +1140,7 @@ void Tokenizer::scan_colon() {
   bool trailing = false;
   if (byte_pos_ + 1 < source_.size() && source_[byte_pos_] == '.') {
     const char next = source_[byte_pos_ + 1];
-    if (detail::IsAsciiLetter(next) || detail::IsAsciiDigit(next) || next == '$') {
+    if (strings::is_ascii_alpha(next) || strings::is_ascii_digit(next) || next == '$') {
       trailing = true;
       advance_one();
     }

@@ -721,7 +721,7 @@ struct StorageEmitter {
         } else if (!param && function_values != nullptr &&
                    std::find(function_values->begin(), function_values->end(), &node) != function_values->end()) {
           // Excel upper-cases a built-in it stores as a value.
-          out.append("_xleta.");
+          out.append(kEtaPrefix);
           out.append(strings::to_ascii_upper(name));
           return;
         }

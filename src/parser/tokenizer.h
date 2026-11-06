@@ -194,7 +194,6 @@ class Tokenizer {
 
   // Internal helpers ------------------------------------------------------
   static bool is_ident_start_byte(unsigned char c) noexcept;
-  static bool is_ident_cont_byte(unsigned char c) noexcept;
   static bool is_formula_whitespace(char c) noexcept;
 
   // Source + position state.

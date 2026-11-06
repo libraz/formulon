@@ -340,7 +340,7 @@ std::size_t param_prefix_site(std::string_view body, const AstNode& node) {
     at = skip_spaces(span, bang == std::string_view::npos ? 0U : bang + 1U);
   }
   if (span.size() - at < kParamPrefix.size() ||
-      !parser::formula_prefix_ci_eq(span.substr(at, kParamPrefix.size()), kParamPrefix)) {
+      !strings::case_insensitive_eq(span.substr(at, kParamPrefix.size()), kParamPrefix)) {
     return std::string_view::npos;
   }
   return from + at;

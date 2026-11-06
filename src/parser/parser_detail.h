@@ -67,20 +67,14 @@ inline constexpr std::size_t kMaxColumnLetters = a1::kMaxColumnLetters;
 inline constexpr std::size_t kMaxRowDigits = 7;
 inline constexpr std::size_t kMaxDefinedNameBytes = 255;
 
-// ASCII helpers. Re-implemented locally to avoid depending on the tokenizer's
-// privates and to keep the parser self-contained.
-inline bool IsAsciiLetter(char c) noexcept {
-  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
-}
-
-inline bool IsAsciiDigit(char c) noexcept {
-  return c >= '0' && c <= '9';
-}
+// UTF-8 spellings of U+3000 (ideographic space) and U+FEFF (byte-order mark).
+inline constexpr std::string_view kIdeographicSpace = "\xE3\x80\x80";
+inline constexpr std::string_view kUtf8Bom = "\xEF\xBB\xBF";
 
 // True when every byte of `text` is an ASCII digit (vacuously for empty text).
 inline bool IsAllAsciiDigits(std::string_view text) noexcept {
   for (const char c : text) {
-    if (!IsAsciiDigit(c)) {
+    if (!strings::is_ascii_digit(c)) {
       return false;
     }
   }
@@ -92,7 +86,7 @@ inline bool IsAllAsciiDigits(std::string_view text) noexcept {
 inline std::uint32_t DecodeColumnLetters(std::string_view letters) noexcept {
   std::uint32_t v = 0;
   for (const char c : letters) {
-    if (!IsAsciiLetter(c)) {
+    if (!strings::is_ascii_alpha(c)) {
       return 0;
     }
     v = v * 26U + static_cast<std::uint32_t>(strings::ascii_to_upper(c) - 'A') + 1U;
@@ -112,14 +106,15 @@ inline std::size_t BareQualifierRunLength(std::string_view text, std::size_t pos
   while (i < text.size()) {
     const unsigned char c = static_cast<unsigned char>(text[i]);
     if (c < 0x80) {
-      if (!IsAsciiLetter(static_cast<char>(c)) && !IsAsciiDigit(static_cast<char>(c)) && c != '.' && c != '_') {
+      if (!strings::is_ascii_alpha(static_cast<char>(c)) && !strings::is_ascii_digit(static_cast<char>(c)) &&
+          c != '.' && c != '_') {
         break;
       }
       ++i;
       continue;
     }
     const std::string_view rest = text.substr(i);
-    if (rest.substr(0, 3) == "\xE3\x80\x80" || rest.substr(0, 3) == "\xEF\xBB\xBF") {
+    if (rest.substr(0, kIdeographicSpace.size()) == kIdeographicSpace || rest.substr(0, kUtf8Bom.size()) == kUtf8Bom) {
       break;
     }
     ++i;

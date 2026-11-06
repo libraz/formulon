@@ -66,7 +66,7 @@ bool InScope(const NameScope& scope, std::string_view bare) {
 }
 
 bool HasParamPrefix(std::string_view name) noexcept {
-  return name.size() >= kParamPrefix.size() && formula_prefix_ci_eq(name.substr(0, kParamPrefix.size()), kParamPrefix);
+  return strings::case_insensitive_starts_with(name, kParamPrefix);
 }
 
 // Appends `raw` carrying the parameter prefix, once.

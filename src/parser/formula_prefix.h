@@ -29,6 +29,7 @@
 #include <string_view>
 
 #include "parser/reference.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace parser {
@@ -37,31 +38,17 @@ namespace parser {
 inline constexpr std::string_view kParamPrefix = "_xlpm.";
 /// Storage prefix of a cell-shaped defined name.
 inline constexpr std::string_view kNamePrefix = "_xlnm.";
+/// Storage prefix of a post-2007 function name.
+inline constexpr std::string_view kFnPrefix = "_xlfn.";
+/// Storage prefix of a built-in function named as a value.
+inline constexpr std::string_view kEtaPrefix = "_xleta.";
 
 /// True when `c` can continue an identifier (letters, digits, `_`, `.`,
 /// plus any non-ASCII UTF-8 byte, matching the tokenizer's identifier
 /// rule closely enough for boundary detection).
 inline bool formula_prefix_is_ident_byte(char c) noexcept {
-  const auto u = static_cast<unsigned char>(c);
-  return (u >= 'A' && u <= 'Z') || (u >= 'a' && u <= 'z') || (u >= '0' && u <= '9') || u == '_' || u == '.' ||
-         u >= 0x80;
-}
-
-/// Case-insensitive ASCII compare of `s` against the lowercase `lit`.
-inline bool formula_prefix_ci_eq(std::string_view s, std::string_view lit) noexcept {
-  if (s.size() != lit.size()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < s.size(); ++i) {
-    char c = s[i];
-    if (c >= 'A' && c <= 'Z') {
-      c = static_cast<char>(c - 'A' + 'a');
-    }
-    if (c != lit[i]) {
-      return false;
-    }
-  }
-  return true;
+  return strings::is_ascii_alpha(c) || strings::is_ascii_digit(c) || c == '_' || c == '.' ||
+         static_cast<unsigned char>(c) >= 0x80;
 }
 
 /// Removes Excel's `_xlfn._xlws.` / `_xlfn.` / `_xlws.` / `_xlpm.` / `_xleta.`
@@ -83,8 +70,8 @@ inline bool formula_prefix_ci_eq(std::string_view s, std::string_view lit) noexc
 /// A1 cell-shaped (`_xlpm.B1`), which keeps it so it cannot read as a cell.
 inline std::string strip_storage_prefixes(std::string_view formula, bool (*known)(std::string_view) = nullptr) {
   // Longest first so `_xlfn._xlws.` is consumed as a unit before `_xlfn.`.
-  static constexpr std::array<std::string_view, 5> kPrefixes = {"_xlfn._xlws.", "_xlfn.", "_xlws.", kParamPrefix,
-                                                                "_xleta."};
+  static constexpr std::array<std::string_view, 5> kPrefixes = {"_xlfn._xlws.", kFnPrefix, "_xlws.", kParamPrefix,
+                                                                kEtaPrefix};
   std::string out;
   out.reserve(formula.size());
   bool in_string = false;
@@ -115,7 +102,7 @@ inline std::string strip_storage_prefixes(std::string_view formula, bool (*known
       if (at_boundary) {
         bool matched = false;
         for (const std::string_view prefix : kPrefixes) {
-          if (i + prefix.size() <= formula.size() && formula_prefix_ci_eq(formula.substr(i, prefix.size()), prefix)) {
+          if (strings::case_insensitive_starts_with(formula.substr(i), prefix)) {
             std::size_t end = i + prefix.size();
             while (end < formula.size() && formula_prefix_is_ident_byte(formula[end])) {
               ++end;
@@ -124,7 +111,7 @@ inline std::string strip_storage_prefixes(std::string_view formula, bool (*known
             if (prefix == kParamPrefix && is_a1_cell_shaped(name)) {
               break;
             }
-            if (prefix != kParamPrefix && prefix != "_xleta." && known != nullptr && !known(name)) {
+            if (prefix != kParamPrefix && prefix != kEtaPrefix && known != nullptr && !known(name)) {
               break;
             }
             i += prefix.size();

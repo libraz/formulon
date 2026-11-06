@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "parser/ast.h"
+#include "parser/formula_prefix.h"
 #include "parser/parse_error.h"
 #include "parser/parser.h"
 #include "parser/parser_detail.h"
@@ -33,9 +34,8 @@ namespace {
 // binding-name grammar instead of being parsed (incorrectly) as an
 // ordinary function call.
 bool is_special_form(std::string_view lexeme, std::string_view form) noexcept {
-  constexpr std::string_view kXlfn = "_xlfn.";
-  if (lexeme.size() > kXlfn.size() && strings::case_insensitive_eq(lexeme.substr(0, kXlfn.size()), kXlfn)) {
-    lexeme.remove_prefix(kXlfn.size());
+  if (lexeme.size() > kFnPrefix.size() && strings::case_insensitive_starts_with(lexeme, kFnPrefix)) {
+    lexeme.remove_prefix(kFnPrefix.size());
   }
   return strings::case_insensitive_eq(lexeme, form);
 }

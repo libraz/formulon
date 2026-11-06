@@ -176,7 +176,8 @@ void AppendItemList(const StructuredRefPayload& p, bool display, std::string& ou
 // needs no brackets.
 bool BareAfterAt(std::string_view name) noexcept {
   for (const char c : name) {
-    if (!detail::IsAsciiLetter(c) && !detail::IsAsciiDigit(c) && c != '|' && static_cast<unsigned char>(c) < 0x80U) {
+    if (!strings::is_ascii_alpha(c) && !strings::is_ascii_digit(c) && c != '|' &&
+        static_cast<unsigned char>(c) < 0x80U) {
       return false;
     }
   }

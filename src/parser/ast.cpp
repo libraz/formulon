@@ -912,11 +912,6 @@ TrimRefMode trim_ref_call_mode(const AstNode& node) noexcept {
   if (node.kind() != NodeKind::Call || node.as_call_arity() != 1U) {
     return TrimRefMode::None;
   }
-  // The candidates run from `_TRO_ALL` (8 bytes) to `_TRO_TRAILING` (13 bytes).
-  const std::size_t name_size = node.as_call_name().size();
-  if (name_size < 8U || name_size > 13U) {
-    return TrimRefMode::None;
-  }
   for (const TrimRefMode mode : {TrimRefMode::Leading, TrimRefMode::Trailing, TrimRefMode::Both}) {
     if (strings::case_insensitive_eq(node.as_call_name(), trim_ref_function_name(mode))) {
       return mode;

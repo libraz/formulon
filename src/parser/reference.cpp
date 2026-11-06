@@ -32,13 +32,13 @@ bool IsBareRun(std::string_view name) noexcept {
 
 // A leading digit or `.` would read as the start of a number (`1abc`, `.ab`).
 bool OpensLikeNumber(std::string_view name) noexcept {
-  return !name.empty() && (detail::IsAsciiDigit(name.front()) || name.front() == '.');
+  return !name.empty() && (strings::is_ascii_digit(name.front()) || name.front() == '.');
 }
 
 // Advances `*i` over a run of ASCII digits and returns how many it skipped.
 std::size_t SkipDigits(std::string_view name, std::size_t* i) noexcept {
   const std::size_t start = *i;
-  while (*i < name.size() && detail::IsAsciiDigit(name[*i])) {
+  while (*i < name.size() && strings::is_ascii_digit(name[*i])) {
     ++*i;
   }
   return *i - start;
@@ -91,17 +91,16 @@ bool IsBareRunIn(std::string_view name, bool dbcs) noexcept {
   if (dbcs) {
     return IsBareRun(name);
   }
-  constexpr std::string_view kIdeographicSpace = "\xE3\x80\x80";
   std::size_t begin = 0;
   while (true) {
-    const std::size_t end = name.find(kIdeographicSpace, begin);
+    const std::size_t end = name.find(detail::kIdeographicSpace, begin);
     if (!IsBareRun(name.substr(begin, end == std::string_view::npos ? end : end - begin))) {
       return false;
     }
     if (end == std::string_view::npos) {
       return true;
     }
-    begin = end + kIdeographicSpace.size();
+    begin = end + detail::kIdeographicSpace.size();
   }
 }
 
@@ -120,7 +119,7 @@ bool LocalSheetNeedsQuotingInEitherNotation(std::string_view name) noexcept {
 // (`A01` is row 1); `XFE1` and `A0` lie off the grid and are ordinary names.
 bool is_a1_cell_shaped(std::string_view name) noexcept {
   std::size_t i = 0;
-  while (i < name.size() && detail::IsAsciiLetter(name[i]) && i < detail::kMaxColumnLetters) {
+  while (i < name.size() && strings::is_ascii_alpha(name[i]) && i < detail::kMaxColumnLetters) {
     ++i;
   }
   if (i == 0 || detail::DecodeColumnLetters(name.substr(0, i)) == 0) {

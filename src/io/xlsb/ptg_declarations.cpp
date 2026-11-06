@@ -92,7 +92,7 @@ enum class NameCollectMode : std::uint8_t { kPtg, kScopeResolved, kSheetQualifie
 /// True for a cell-shaped name held as `_xlnm.<cell>`, which is the plain
 /// `<cell>` record and never a parameter.
 bool IsNameModePrefixed(std::string_view name) {
-  return parser::formula_prefix_ci_eq(parser::cell_shaped_name_prefix(name), "_xlnm.");
+  return strings::case_insensitive_eq(parser::cell_shaped_name_prefix(name), "_xlnm.");
 }
 
 /// The record name a reference spelled `name` resolves to.

@@ -46,7 +46,7 @@ namespace {
 /// The record name a reference spelled `name` resolves to: a cell-shaped name
 /// held as `_xlnm.<cell>` is the plain `<cell>` record.
 std::string_view RecordName(std::string_view name) {
-  return parser::formula_prefix_ci_eq(parser::cell_shaped_name_prefix(name), "_xlnm.")
+  return strings::case_insensitive_eq(parser::cell_shaped_name_prefix(name), "_xlnm.")
              ? parser::cell_shaped_name_bare(name)
              : name;
 }
@@ -54,7 +54,7 @@ std::string_view RecordName(std::string_view name) {
 /// The spelling a reference `name` is matched against a scope's bare
 /// parameter names with; a `_xlnm.` name is never a parameter.
 std::string_view ScopeName(std::string_view name) {
-  return parser::formula_prefix_ci_eq(parser::cell_shaped_name_prefix(name), "_xlnm.")
+  return strings::case_insensitive_eq(parser::cell_shaped_name_prefix(name), "_xlnm.")
              ? std::string_view()
              : parser::cell_shaped_name_bare(name);
 }

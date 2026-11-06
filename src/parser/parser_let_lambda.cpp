@@ -18,8 +18,6 @@
 namespace formulon {
 namespace parser {
 
-using detail::IsAsciiDigit;
-using detail::IsAsciiLetter;
 using detail::SpanRange;
 
 namespace {
@@ -28,7 +26,7 @@ namespace {
 // continuation) byte, and continues with `[A-Za-z0-9_.?]` plus non-ASCII
 // bytes. Length must be non-zero and within kMaxDefinedNameBytes. This mirrors the
 // tokenizer's identifier rule (`Tokenizer::is_ident_start_byte` /
-// `is_ident_cont_byte`) and matches the identifier shape Excel accepts for
+// `formula_prefix_is_ident_byte`) and matches the identifier shape Excel accepts for
 // LET bindings and defined names, including hiragana / katakana / kanji and
 // other locale-specific scripts. The shape is still stricter than the
 // tokenizer's Ident rule because it forbids a leading ASCII digit.
@@ -37,13 +35,14 @@ bool IsLetNameShape(std::string_view name) noexcept {
     return false;
   }
   const auto first = static_cast<unsigned char>(name[0]);
-  if (!IsAsciiLetter(static_cast<char>(first)) && first != '_' && first != '\\' && first < 0x80) {
+  if (!strings::is_ascii_alpha(static_cast<char>(first)) && first != '_' && first != '\\' && first < 0x80) {
     return false;
   }
   for (std::size_t i = 1; i < name.size(); ++i) {
     const auto byte = static_cast<unsigned char>(name[i]);
     const char c = static_cast<char>(byte);
-    const bool ok = IsAsciiLetter(c) || IsAsciiDigit(c) || c == '_' || c == '.' || c == '?' || byte >= 0x80;
+    const bool ok =
+        strings::is_ascii_alpha(c) || strings::is_ascii_digit(c) || c == '_' || c == '.' || c == '?' || byte >= 0x80;
     if (!ok) {
       return false;
     }
