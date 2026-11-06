@@ -171,17 +171,10 @@ Value broadcast_unary(parser::UnaryOp op, const Value& operand, Arena& arena) {
     return apply_unary(op, operand);
   }
   const ArrayValue* in = operand.as_array();
-  Value* buf = nullptr;
-  ArrayValue* out = allocate_derived_array_value(in->rows, in->cols, arena, buf);
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  const std::size_t n = static_cast<std::size_t>(in->rows) * static_cast<std::size_t>(in->cols);
-  for (std::size_t i = 0; i < n; ++i) {
-    const Value& cell = in->cells[i];
-    buf[i] = cell.is_error() ? cell : apply_unary(op, cell);
-  }
-  return Value::array(out);
+  return build_dense_result(in->rows, in->cols, arena, [&](std::uint32_t r, std::uint32_t c) {
+    const Value& cell = in->cells[static_cast<std::size_t>(r) * in->cols + c];
+    return cell.is_error() ? cell : apply_unary(op, cell);
+  });
 }
 
 namespace {
@@ -318,6 +311,19 @@ Value broadcast_element(const BroadcastArg& arg, std::uint32_t r, std::uint32_t 
   return cell != nullptr ? *cell : Value::error(ErrorCode::NA);
 }
 
+// `def` applied to the arguments at output position (r, c); with `propagate_errors`
+// the first error argument short-circuits the cell before the impl runs.
+Value eval_broadcast_cell(const FunctionDef& def, const std::vector<BroadcastArg>& views, std::vector<Value>& cell_args,
+                          std::uint32_t r, std::uint32_t c, Arena& arena) {
+  for (std::size_t a = 0; a < views.size(); ++a) {
+    cell_args[a] = broadcast_element(views[a], r, c);
+    if (def.propagate_errors && cell_args[a].is_error()) {
+      return cell_args[a];
+    }
+  }
+  return def.impl(cell_args.data(), static_cast<std::uint32_t>(cell_args.size()), arena);
+}
+
 }  // namespace
 
 // Evaluates a scalar (non-range-aware) function element-wise across the
@@ -335,35 +341,14 @@ Value broadcast_scalar_call(const FunctionDef& def, const std::vector<Value>& ar
   for (const Value& v : args) {
     views.push_back(v.is_array() ? array_broadcast_arg(*v.as_array()) : scalar_broadcast_arg(v));
   }
-  Value* cells = nullptr;
-  ArrayValue* out = allocate_derived_array_value(out_rows, out_cols, arena, cells);
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
   std::vector<Value> cell_args(views.size(), Value::blank());
-  std::size_t idx = 0;
-  for (std::uint32_t r = 0; r < out_rows; ++r) {
-    for (std::uint32_t c = 0; c < out_cols; ++c, ++idx) {
-      Value result = Value::blank();
-      bool short_circuited = false;
-      for (std::size_t a = 0; a < views.size(); ++a) {
-        cell_args[a] = broadcast_element(views[a], r, c);
-        if (def.propagate_errors && cell_args[a].is_error()) {
-          result = cell_args[a];
-          short_circuited = true;
-          break;
-        }
-      }
-      if (!short_circuited) {
-        result = def.impl(cell_args.data(), static_cast<std::uint32_t>(cell_args.size()), arena);
-      }
-      cells[idx] = result;
-    }
+  const Value result = build_dense_result(out_rows, out_cols, arena, [&](std::uint32_t r, std::uint32_t c) {
+    return eval_broadcast_cell(def, views, cell_args, r, c, arena);
+  });
+  if (out_rows == 1U && out_cols == 1U && result.is_array()) {
+    return result.as_array()->cells[0];
   }
-  if (out_rows == 1U && out_cols == 1U) {
-    return cells[0];
-  }
-  return Value::array(out);
+  return result;
 }
 
 // Evaluates a `last_arg_scalar` function once per element of `last`, the
@@ -428,29 +413,14 @@ Shaped broadcast_scalar_call_shaped(const FunctionDef& def, const std::vector<Va
       out_cols = std::max(out_cols, views.back().view.cols);
     }
   }
-  const auto eval_cell = [&](std::vector<Value>& cell_args, std::uint32_t r, std::uint32_t c) {
-    for (std::size_t a = 0; a < views.size(); ++a) {
-      cell_args[a] = broadcast_element(views[a], r, c);
-      if (def.propagate_errors && cell_args[a].is_error()) {
-        return cell_args[a];
-      }
-    }
-    return def.impl(cell_args.data(), static_cast<std::uint32_t>(cell_args.size()), arena);
-  };
   std::vector<Value> cell_args(views.size(), Value::blank());
+  const auto eval_cell = [&](std::vector<Value>& args_buf, std::uint32_t r, std::uint32_t c) {
+    return eval_broadcast_cell(def, views, args_buf, r, c, arena);
+  };
   if (mixed) {
-    Value* cells = nullptr;
-    ArrayValue* out = allocate_derived_array_value(out_rows, out_cols, arena, cells);
-    if (out == nullptr) {
-      return Shaped{Value::error(ErrorCode::Num), nullptr};
-    }
-    std::size_t idx = 0;
-    for (std::uint32_t r = 0; r < out_rows; ++r) {
-      for (std::uint32_t c = 0; c < out_cols; ++c, ++idx) {
-        cells[idx] = eval_cell(cell_args, r, c);
-      }
-    }
-    return Shaped{Value::array(out), nullptr};
+    return Shaped{build_dense_result(out_rows, out_cols, arena,
+                                     [&](std::uint32_t r, std::uint32_t c) { return eval_cell(cell_args, r, c); }),
+                  nullptr};
   }
 
   // Positions past `head` read a constant from every argument: a tail, a
@@ -463,7 +433,7 @@ Shaped broadcast_scalar_call_shaped(const FunctionDef& def, const std::vector<Va
     if (v.view.tail != nullptr) {
       head = std::max(head, v.view.head);
     } else if (!v.scalar) {
-      const std::uint32_t ext = along_rows ? v.view.rows : v.view.cols;
+      const std::uint32_t ext = axis_extent(v.view, axis);
       if (ext > 1U) {
         head = std::max(head, ext);
       }

@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -131,16 +132,16 @@ class ApproxComparer {
  public:
   ApproxComparer(const Value& lookup, ExcelProfile profile)
       : lookup_(lookup),
-        profile_(profile),
-        key_(lookup.is_text() ? collation_key(lookup.as_text(), profile, CollationStrength::kCompare) : std::string()) {
-  }
+        text_query_(lookup.is_text() ? std::optional<CollateQuery>(std::in_place, lookup.as_text(), profile,
+                                                                   CollationStrength::kCompare)
+                                     : std::nullopt) {}
 
   int operator()(const Value& cell) const {
     if (lookup_.is_text()) {
       if (!cell.is_text()) {
         return kForeignType;
       }
-      return collate_key_compare(collation_key(cell.as_text(), profile_, CollationStrength::kCompare), key_);
+      return text_query_->compare(cell.as_text());
     }
     if (lookup_.is_number() || lookup_.is_blank()) {
       if (!cell.is_number()) {
@@ -159,8 +160,7 @@ class ApproxComparer {
 
  private:
   const Value& lookup_;
-  ExcelProfile profile_;
-  std::string key_;
+  std::optional<CollateQuery> text_query_;
 };
 
 // Lookup scan for VLOOKUP / HLOOKUP / LOOKUP. Walks the first column (axis=Column) or

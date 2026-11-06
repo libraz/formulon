@@ -348,20 +348,12 @@ void order_groups(const GroupSort& plan, const ArrayValue& keys, const std::vect
     return dynamic_array::cmp_value_keyed(key_cell(a, c), key_cell(b, c), &key_text[a * keys.cols + c],
                                           &key_text[b * keys.cols + c]);
   };
-  const auto cmp_keys_asc_of = [&](std::size_t a, std::size_t b) {
+  // First differing key column's order; `directional` applies each column's descending flag.
+  const auto cmp_keys = [&](std::size_t a, std::size_t b, bool directional) {
     for (std::uint32_t c = 0; c < keys.cols; ++c) {
       const int r = cmp_key_cell(a, b, c);
       if (r != 0) {
-        return r;
-      }
-    }
-    return 0;
-  };
-  const auto cmp_keys = [&](std::size_t a, std::size_t b) {
-    for (std::uint32_t c = 0; c < keys.cols; ++c) {
-      const int r = cmp_key_cell(a, b, c);
-      if (r != 0) {
-        return plan.key_descending[c] ? -r : r;
+        return directional && plan.key_descending[c] ? -r : r;
       }
     }
     return 0;
@@ -377,9 +369,9 @@ void order_groups(const GroupSort& plan, const ArrayValue& keys, const std::vect
       if (c != 0) {
         return plan.value_descending ? (c > 0) : (c < 0);
       }
-      return cmp_keys_asc_of(a, b) < 0;
+      return cmp_keys(a, b, false) < 0;
     }
-    return cmp_keys(a, b) < 0;
+    return cmp_keys(a, b, true) < 0;
   };
   std::vector<std::uint32_t> sorted;
   sorted_index_order(sorted, static_cast<std::uint32_t>(repr.size()), make_index_less(group_less));

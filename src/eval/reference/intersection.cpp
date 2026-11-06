@@ -112,42 +112,7 @@ bool resolve_offset_call(const parser::AstNode& node, Arena& arena, const Functi
   return true;
 }
 
-bool resolve_if_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
-                     std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
-                     bool* out_is_range, ErrorCode* out_err) {
-  // `IF(cond, then, [else])` preserves reference-shape: when both
-  // branches are range references Excel routes the picked branch
-  // through verbatim, so `ROWS(IF(TRUE, A1:B3, A1:B3))` reports 3
-  // rather than degrading to the scalar-fallback 1x1. We short-circuit
-  // on `cond` exactly like `eval_if_lazy`.
-  const SelectedBranch picked = select_if_branch(node, arena, registry, ctx);
-  if (picked.kind == SelectedBranch::Kind::kArgument) {
-    return resolve_picked_reference(node.as_call_arg(picked.arg), arena, registry, ctx, out_sheet, out_top_row,
-                                    out_left_col, out_bottom_row, out_right_col, out_is_range, out_err);
-  }
-  // `IF(FALSE, then)` returns boolean FALSE in Excel's scalar path, which is
-  // not a reference; surface `#VALUE!` so the caller falls back to the scalar
-  // branch. An array condition is not a reference either.
-  *out_err = picked.kind == SelectedBranch::Kind::kResult && picked.value.is_error() ? picked.value.as_error()
-                                                                                     : ErrorCode::Value;
-  return false;
-}
-
-bool resolve_choose_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
-                         std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
-                         bool* out_is_range, ErrorCode* out_err) {
-  const SelectedBranch picked = select_choose_branch(node, arena, registry, ctx);
-  if (picked.kind == SelectedBranch::Kind::kArgument) {
-    return resolve_picked_reference(node.as_call_arg(picked.arg), arena, registry, ctx, out_sheet, out_top_row,
-                                    out_left_col, out_bottom_row, out_right_col, out_is_range, out_err);
-  }
-  *out_err = picked.kind == SelectedBranch::Kind::kResult ? picked.value.as_error() : ErrorCode::Value;
-  return false;
-}
-
-// IFS / SWITCH pick through the same selector their value path uses; an
+// IF / CHOOSE / IFS / SWITCH pick through the same selector their value path uses; an
 // array subject selects per cell and so names no single reference.
 bool resolve_selected_branch(const parser::AstNode& node, const SelectedBranch& picked, Arena& arena,
                              const FunctionRegistry& registry, const EvalContext& ctx, std::string_view* out_sheet,
@@ -165,6 +130,29 @@ bool resolve_selected_branch(const parser::AstNode& node, const SelectedBranch& 
   }
   *out_err = ErrorCode::Value;
   return false;
+}
+
+bool resolve_if_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                     std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                     bool* out_is_range, ErrorCode* out_err) {
+  // `IF(cond, then, [else])` preserves reference-shape: when both
+  // branches are range references Excel routes the picked branch
+  // through verbatim, so `ROWS(IF(TRUE, A1:B3, A1:B3))` reports 3
+  // rather than degrading to the scalar-fallback 1x1. We short-circuit
+  // on `cond` exactly like `eval_if_lazy`.
+  // A missing else branch (`IF(FALSE, then)`) or an array condition names no reference: `#VALUE!` for the scalar path.
+  return resolve_selected_branch(node, select_if_branch(node, arena, registry, ctx), arena, registry, ctx, out_sheet,
+                                 out_top_row, out_left_col, out_bottom_row, out_right_col, out_is_range, out_err);
+}
+
+bool resolve_choose_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                         std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                         bool* out_is_range, ErrorCode* out_err) {
+  return resolve_selected_branch(node, select_choose_branch(node, arena, registry, ctx), arena, registry, ctx,
+                                 out_sheet, out_top_row, out_left_col, out_bottom_row, out_right_col, out_is_range,
+                                 out_err);
 }
 
 bool resolve_ifs_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
