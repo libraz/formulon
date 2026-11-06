@@ -930,7 +930,7 @@ test('criterion 7: setPrintOptions rejects null', async () => {
   });
 });
 
-test('criterion 7: updatePivotField clears customName with null and rejects keys outside the patch', async () => {
+test('criterion 7: updatePivotField clears customName with null and ignores record fields it cannot set', async () => {
   await withWorkbook((wb, f) => {
     const { pivot } = pivotWorkbook(wb, f);
     const ws = wb.sheet(0);
@@ -940,7 +940,45 @@ test('criterion 7: updatePivotField clears customName with null and rejects keys
     assert.equal(ws.listPivotFields(pivot)[0].customName, 'Area');
     ws.updatePivotField(pivot, 0, { customName: null });
     assert.equal(ws.listPivotFields(pivot)[0].customName, null);
-    assert.throws(() => ws.updatePivotField(pivot, 0, { axis: f.PivotAxis.Row }), TYPE_ERROR);
+    // `axis` is a field of the getter's record the patch cannot set: ignored, not applied.
+    const axis = ws.listPivotFields(pivot)[0].axis;
+    ws.updatePivotField(pivot, 0, { axis: axis === f.PivotAxis.Row ? f.PivotAxis.Column : f.PivotAxis.Row });
+    assert.equal(ws.listPivotFields(pivot)[0].axis, axis);
+  });
+});
+
+test('criterion 7: every patch setter rejects a key that is neither in its patch nor in its getter record', async () => {
+  await withWorkbook((wb, f) => {
+    const { cacheId, pivot } = pivotWorkbook(wb, f);
+    const ws = wb.sheet(0);
+    const bogus = { bogus: 1 };
+    const calls = {
+      setIterative: () => wb.setIterative(bogus),
+      setPivotCacheOptions: () => wb.setPivotCacheOptions(cacheId, bogus),
+      setTableStyleDefaults: () => wb.setTableStyleDefaults(bogus),
+      setPageSetup: () => ws.setPageSetup(bogus),
+      setPageMargins: () => ws.setPageMargins(bogus),
+      setPrintOptions: () => ws.setPrintOptions(bogus),
+      setHeaderFooter: () => ws.setHeaderFooter(bogus),
+      setFormatDefaults: () => ws.setFormatDefaults(bogus),
+      setView: () => ws.setView(bogus),
+      setPivotGrandTotals: () => ws.setPivotGrandTotals(pivot, bogus),
+      setPivotStyleInfo: () => ws.setPivotStyleInfo(pivot, bogus),
+      setPivotOptions: () => ws.setPivotOptions(pivot, bogus),
+      updatePivotField: () => ws.updatePivotField(pivot, 0, bogus),
+      updatePivotItem: () => ws.updatePivotItem(pivot, 0, 0, bogus),
+      setChartLegend: () => ws.setChartLegend(1, bogus),
+      updateThreadedComment: () => ws.updateThreadedComment('{00000000-0000-4000-8000-000000000001}', bogus),
+    };
+    for (const [name, call] of Object.entries(calls)) {
+      assert.throws(call, (e) => TYPE_ERROR(e) && /has no field bogus/.test(e.message), name);
+    }
+    // An `undefined` value is an omitted key; a getter record passes back whole.
+    ws.setPageMargins({ bogus: undefined, left: 1 });
+    assert.equal(ws.getPageMargins().left, 1);
+    const fieldBefore = ws.listPivotFields(pivot)[0];
+    ws.updatePivotField(pivot, 0, fieldBefore);
+    assert.deepEqual(ws.listPivotFields(pivot)[0], fieldBefore);
   });
 });
 

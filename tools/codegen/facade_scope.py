@@ -28,7 +28,10 @@ from tools.dev.binding_drift.api_conventions import (  # noqa: E402
     load_ledger,
     parse_header,
 )
-from tools.dev.binding_drift.surface_files import CAPI_HEADER  # noqa: E402
+from tools.dev.binding_drift.api_conventions_arguments import _js_fields, _patch_keys  # noqa: E402
+from tools.dev.binding_drift.api_conventions_bindings import JsSurface  # noqa: E402
+from tools.dev.binding_drift.api_conventions_shapes import _strip_null  # noqa: E402
+from tools.dev.binding_drift.surface_files import CAPI_HEADER, WASM_DTS  # noqa: E402
 
 LANGUAGES = ("js", "py")
 SURFACES = {"js": ("wasm", "native"), "py": ("py",)}
@@ -165,6 +168,30 @@ def ref_args(ledger: Ledger, language: str) -> Dict[str, list]:
         name = public_name(entry, language)
         if name is not None and entry.get("ref_args"):
             out[name] = list(entry["ref_args"])
+    return dict(sorted(out.items()))
+
+
+def patch_keys(ledger: Ledger, dts: Optional[str] = None) -> Dict[str, list]:
+    """`{jsName: [position, [key, ...]]}` of the `patch: true` ops: the position of the patch argument (the
+    last one of the member's first signature in src/wasm/formulon.d.ts) and, sorted, the keys the patch
+    accepts: those its type declares (`| null` aside) and the fields of its `patch_record`, so a record a
+    getter returned passes back whole. An op whose patch type the declaration reader cannot resolve is an
+    error."""
+    surface = JsSurface(WASM_DTS.read_text(encoding="utf-8") if dts is None else dts)
+    pool = surface.callables()
+    out: Dict[str, list] = {}
+    for key, entry in _ops(ledger, ("op",)):
+        name = public_name(entry, "js")
+        if entry.get("patch") is not True or name is None or name not in pool:
+            continue
+        params = pool[name].params
+        kinds = _strip_null(params[-1][1], True) if params else []
+        keys = _patch_keys(surface.decls, surface.raw, kinds[0]) if len(kinds) == 1 else None
+        if not keys:
+            raise ValueError(f"{key}: the patch type of `{name}` declares no keys the reader can resolve")
+        record = entry.get("patch_record")
+        fields = _js_fields(surface.decls, surface.raw, record) if record and record != "none" else None
+        out[name] = [len(params) - 1, sorted(set(keys) | set(fields or {}))]
     return dict(sorted(out.items()))
 
 

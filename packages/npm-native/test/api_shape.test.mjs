@@ -1157,15 +1157,16 @@ test('N3: the old ordinal of a removed member reads with its new meaning', async
 
 // ---- Options objects (O1-O3) -----------------------------------------------
 
-test('O1 / O2: an options object ignores unknown keys and treats undefined as omitted', async () => {
+test('O1 / O2: an input object ignores unknown keys and undefined is omitted; a patch refuses unknown keys', async () => {
   await withWorkbook((wb) => {
-    wb.setIterative({ enabled: true, maxIterations: 9, extra: 'ignored' });
+    wb.setIterative({ enabled: true, maxIterations: 9 });
     assert.deepEqual([wb.getIterative().enabled, wb.getIterative().maxIterations], [true, 9]);
     wb.setIterative({ maxIterations: undefined, maxChange: undefined });
     assert.equal(wb.getIterative().maxIterations, 9);
     const ws = wb.sheet(0);
     ws.addHyperlink(0, 0, { target: 'https://example.com/', display: undefined, unknown: 1 });
     assert.equal(ws.getHyperlink(0, 0).display, null);
+    assert.throws(() => wb.setIterative({ extra: 1 }), TypeError);
   });
 });
 

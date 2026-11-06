@@ -1567,6 +1567,35 @@ class FacadeAddressTablesTest(unittest.TestCase):
         )
         self.assertNotIn("REF_ARGS", py)
 
+    def test_patch_keys_are_the_patch_type_and_the_getter_record(self) -> None:
+        dts = (
+            "export type Patch<T> = { [K in keyof T]?: T[K] | null };\n"
+            "export interface Margins { left: number; right: number; readonly leftStated: boolean; }\n"
+            "export type MarginsPatch = Patch<Pick<Margins, 'left' | 'right'>>;\n"
+            "export interface Sheet {\n"
+            "  setMargins(table: TableRef, patch: MarginsPatch | null): void;\n"
+            "  setWide(patch: Patch<{ " + " ".join(f"k{i:02}: number;" for i in range(30)) + " }>): void;\n"
+            "}\n"
+        )
+        ledger = api_conventions.Ledger(
+            {
+                "schema": 1,
+                "collections": {},
+                "entries": {
+                    "margins.set": {"kind": "op", "scope": "sheet", "js": "setMargins", "surfaces": ["wasm"],
+                                    "patch": True, "patch_record": "Margins"},
+                    "wide.set": {"kind": "op", "scope": "sheet", "js": "setWide", "surfaces": ["wasm"],
+                                 "patch": True, "patch_record": "none", "patch_reason": "x"},
+                },
+            }
+        )  # fmt: skip
+        keys = self.gen.facade_scope.patch_keys(ledger, dts)
+        self.assertEqual(keys["setMargins"], [1, ["left", "leftStated", "right"]])
+        table = self.gen.patch_table(ledger, dts)
+        self.assertIn("  setMargins: [1, ['left', 'leftStated', 'right']],\n", table)
+        self.assertIn("  setWide: [\n    0,\n    [\n      'k00',\n", table)
+        self.assertTrue(all(len(line) <= 120 for line in table.splitlines()))
+
     def test_the_json_is_sorted_and_per_language(self) -> None:
         import json
 

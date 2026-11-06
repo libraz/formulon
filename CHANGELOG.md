@@ -427,6 +427,11 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
   `undefined` in JavaScript and `ErrorCode(code)` raises `ValueError` in
   Python, where the old function returned `#UNKNOWN!`.
 - `setHeaderFooter` clears a text field for `null` as well as `""`.
+- Every JavaScript patch setter (`setPageSetup`, `setPageMargins`,
+  `setIterative`, `setView`, `updatePivotField` and the rest) takes the record
+  its getter returns, ignoring the fields it cannot set, and throws
+  `TypeError` for any other key. Several ignored every unknown key, and
+  `updatePivotField` refused `axis`.
 - CLI `dump --metadata` prints defined-name formulas with a leading `=`.
 
 ### Name migration

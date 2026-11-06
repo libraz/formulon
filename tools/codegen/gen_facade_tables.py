@@ -14,7 +14,9 @@ Outputs (read through ``facade_scope.py``, never edited by hand):
   excluded) and ``RECT_ARGS`` (``{method: [position, ...]}``, the ``CellRect``
   arguments), both from the ledger's ``cell_args`` / ``rect_args``, and
   ``REF_ARGS`` (``{method: [position, kind]}``, the ``*Ref`` argument) from its
-  ``ref_args``.
+  ``ref_args``; and ``PATCH_KEYS`` (``{method: [position, [key, ...]]}``) of
+  the ``patch: true`` ops: the keys of the patch type and of the getter's
+  record in src/wasm/formulon.d.ts.
 * ``packages/python/formulon/sheet.py``: the same tables but ``REF_ARGS`` in its
   ``# <facade-tables>`` region, with the Python names. ``--check`` skips the
   file while it has no region or an empty one; ``--write`` fills an empty one.
@@ -113,6 +115,30 @@ def address_tables(language: str, ledger: Optional[facade_scope.Ledger] = None) 
     return "".join(out)
 
 
+_LINE_WIDTH = 120
+
+
+def _js_patch_entry(name: str, position: int, keys: Sequence[str]) -> str:
+    """One `PATCH_KEYS` entry as the formatter lays it out at its line width."""
+    quoted = [f"'{k}'" for k in keys]
+    inline = f"[{', '.join(quoted)}]"
+    one_line = f"{_INDENT}{name}: [{position}, {inline}],"
+    if len(one_line) <= _LINE_WIDTH:
+        return one_line + "\n"
+    inner = f"{_INDENT * 2}{inline},"
+    if len(inner) > _LINE_WIDTH:
+        rows = "".join(f"{_INDENT * 3}{q},\n" for q in quoted)
+        inner = f"{_INDENT * 2}[\n{rows}{_INDENT * 2}],"
+    return f"{_INDENT}{name}: [\n{_INDENT * 2}{position},\n{inner}\n{_INDENT}],\n"
+
+
+def patch_table(ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None) -> str:
+    """The JS `PATCH_KEYS` table: each patch op's patch position and the keys it accepts."""
+    entries = facade_scope.patch_keys(ledger or facade_scope.load(), dts)
+    body = "".join(_js_patch_entry(name, position, keys) for name, (position, keys) in entries.items())
+    return f"const PATCH_KEYS = Object.freeze({{\n{body}}});\n"
+
+
 def address_args_json(ledger: Optional[facade_scope.Ledger] = None) -> str:
     """`tools/api/address_args.json`: both tables per language, keys sorted, one method per line."""
     ledger = ledger or facade_scope.load()
@@ -138,6 +164,7 @@ def js_region() -> str:
     out.append(f"const LIST_FAMILIES = Object.freeze({{\n{body}}});\n")
     out.append(_js_list("HANDWRITTEN", names["HANDWRITTEN"]))
     out.append(address_tables("js"))
+    out.append(patch_table())
     return "".join(out)
 
 

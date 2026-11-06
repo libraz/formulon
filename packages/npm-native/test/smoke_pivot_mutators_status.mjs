@@ -1367,7 +1367,7 @@ test('pivot field custom names, show-all and default data field names report bad
     assert.throws(() => b.wb.sheet(0).updatePivotField(b.pivot, b.region), TypeError);
     assert.throws(() => b.wb.sheet(0).updatePivotField(b.pivot, -1, { customName: 'x' }), RangeError);
     assert.throws(() => b.wb.sheet(0).updatePivotField(b.pivot, b.region, { showAll: null }), TypeError);
-    assert.throws(() => b.wb.sheet(0).updatePivotField(b.pivot, b.region, { axis: 0 }), TypeError);
+    assert.throws(() => b.wb.sheet(0).updatePivotField(b.pivot, b.region, { bogus: 0 }), TypeError);
     assert.throws(() => b.wb.sheet(0).updatePivotField(b.pivot, 99, { customName: 'x' }), isFormulonError);
     assert.throws(
       () => b.wb.sheet(0).updatePivotField(b.pivot, b.region, { customName: 'x'.repeat(256) }),

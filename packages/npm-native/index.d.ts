@@ -291,7 +291,8 @@ export interface ParallelRecalcStats {
 }
 
 /** A partial update. An omitted key leaves the field unchanged, `null` clears it and a value sets it;
- *  a field with no cleared form rejects `null` with a `TypeError`. */
+ *  a field with no cleared form rejects `null` with a `TypeError`. A setter also takes the record its getter
+ *  returns, ignoring the fields it cannot set, and rejects any other key with a `TypeError`. */
 export type Patch<T> = { [K in keyof T]?: T[K] | null };
 
 /** A blank cell or argument. */

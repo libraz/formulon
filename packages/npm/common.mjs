@@ -1262,6 +1262,156 @@ const REF_ARGS = Object.freeze({
   updateProtectedRange: [0, 'protectedRange'],
   updateTable: [0, 'table'],
 });
+const PATCH_KEYS = Object.freeze({
+  setChartLegend: [1, ['hiddenSeries', 'overlay', 'position']],
+  setFormatDefaults: [
+    0,
+    [
+      'baseColWidth',
+      'customHeight',
+      'defaultColWidth',
+      'defaultRowHeight',
+      'effectiveDefaultColWidth',
+      'effectiveDefaultRowHeight',
+      'zeroHeight',
+    ],
+  ],
+  setHeaderFooter: [
+    0,
+    [
+      'alignWithMargins',
+      'differentFirst',
+      'differentOddEven',
+      'evenFooter',
+      'evenHeader',
+      'firstFooter',
+      'firstHeader',
+      'oddFooter',
+      'oddHeader',
+      'scaleWithDoc',
+    ],
+  ],
+  setIterative: [0, ['enabled', 'maxChange', 'maxIterations']],
+  setPageMargins: [
+    0,
+    [
+      'bottom',
+      'bottomStated',
+      'footer',
+      'footerStated',
+      'header',
+      'headerStated',
+      'left',
+      'leftStated',
+      'right',
+      'rightStated',
+      'top',
+      'topStated',
+    ],
+  ],
+  setPageSetup: [
+    0,
+    [
+      'fitToHeight',
+      'fitToHeightStated',
+      'fitToPage',
+      'fitToPageStated',
+      'fitToWidth',
+      'fitToWidthStated',
+      'orientation',
+      'orientationStated',
+      'paperSize',
+      'paperSizeStated',
+      'scale',
+      'scaleStated',
+    ],
+  ],
+  setPivotCacheOptions: [1, ['missingItemsLimit', 'refreshOnLoad', 'saveData']],
+  setPivotGrandTotals: [1, ['columns', 'rows']],
+  setPivotOptions: [
+    1,
+    [
+      'altText',
+      'altTextSummary',
+      'autoFormatting',
+      'customListSort',
+      'enableDrill',
+      'errorCaption',
+      'fieldPrintTitles',
+      'grandTotalCaption',
+      'gridDropZones',
+      'indent',
+      'itemPrintTitles',
+      'mergeItem',
+      'missingCaption',
+      'multipleFieldFilters',
+      'pageOverThenDown',
+      'pageWrap',
+      'preserveFormatting',
+      'printDrill',
+      'showDataDropDown',
+      'showDataTips',
+      'showDrill',
+      'showEmptyCol',
+      'showEmptyRow',
+      'showError',
+      'showHeaders',
+      'showMissing',
+    ],
+  ],
+  setPivotStyleInfo: [
+    1,
+    ['name', 'showColHeaders', 'showColStripes', 'showLastColumn', 'showRowHeaders', 'showRowStripes'],
+  ],
+  setPrintOptions: [0, ['gridLines', 'headings', 'horizontalCentered', 'verticalCentered']],
+  setTableStyleDefaults: [0, ['pivotStyle', 'tableStyle']],
+  setView: [
+    0,
+    [
+      'freezeCols',
+      'freezeRows',
+      'paneTopLeftCol',
+      'paneTopLeftRow',
+      'rightToLeft',
+      'showFormulas',
+      'showGridLines',
+      'showOutlineSymbols',
+      'showRowColHeaders',
+      'showZeros',
+      'splitX',
+      'splitY',
+      'tabSelected',
+      'topLeftCol',
+      'topLeftRow',
+      'viewMode',
+      'visibility',
+      'zoomScale',
+    ],
+  ],
+  updatePivotField: [
+    2,
+    [
+      'axis',
+      'cacheFieldIndex',
+      'customName',
+      'dateCalendar',
+      'datePeriods',
+      'defaultSubtotal',
+      'fillDownLabels',
+      'groupBaseIndex',
+      'insertBlankRow',
+      'numberFormat',
+      'showAll',
+      'sortByField',
+      'sortOrder',
+      'sourceName',
+      'subtotalFns',
+      'subtotalTop',
+    ],
+  ],
+  updatePivotItem: [3, ['cacheIndex', 'caption', 'name', 'showDetail', 'visible']],
+  updateThreadedComment: [1, ['col', 'created', 'done', 'id', 'mentions', 'parentId', 'personId', 'row', 'text']],
+});
 // </facade-tables>
 
 // Arguments the declarations type `T | null` (or optional) where the raw method
@@ -1286,82 +1436,74 @@ const SHEET_ABSENT_ARGS = Object.freeze({
   setSheetProtection: [0, {}],
 });
 
-// Patch setters and the non-nullable fields of their patch: method -> [position
-// of the patch in the public call, { field: expected type }]. `null` on one of
-// these fields is a TypeError; an omitted or `undefined` key keeps the value.
+// Patch setters and the non-nullable fields of their patch: method -> { field:
+// expected type }. `null` on one of these fields is a TypeError; an omitted or
+// `undefined` key keeps the value. The patch's position and its keys are
+// `PATCH_KEYS`.
 const bools = (...fields) => Object.fromEntries(fields.map((f) => [f, 'boolean']));
 const numbers = (...fields) => Object.fromEntries(fields.map((f) => [f, 'number']));
 const WORKBOOK_PATCHES = Object.freeze({
-  setIterative: [0, { ...bools('enabled'), ...numbers('maxIterations', 'maxChange') }],
-  setPivotCacheOptions: [1, bools('saveData', 'refreshOnLoad')],
+  setIterative: { ...bools('enabled'), ...numbers('maxIterations', 'maxChange') },
+  setPivotCacheOptions: bools('saveData', 'refreshOnLoad'),
 });
 const SHEET_PATCHES = Object.freeze({
-  setView: [
-    0,
-    {
-      ...numbers(
-        'zoomScale',
-        'freezeRows',
-        'freezeCols',
-        'splitX',
-        'splitY',
-        'topLeftRow',
-        'topLeftCol',
-        'paneTopLeftRow',
-        'paneTopLeftCol',
-        'visibility',
-        'viewMode',
-      ),
-      ...bools(
-        'showGridLines',
-        'showRowColHeaders',
-        'showZeros',
-        'showFormulas',
-        'showOutlineSymbols',
-        'rightToLeft',
-        'tabSelected',
-      ),
-    },
-  ],
-  updatePivotField: [2, bools('defaultSubtotal', 'insertBlankRow', 'fillDownLabels', 'showAll', 'subtotalTop')],
-  updatePivotItem: [3, bools('visible', 'showDetail')],
-  setChartLegend: [1, { position: 'number', overlay: 'boolean', hiddenSeries: 'array' }],
-  setPrintOptions: [0, bools('gridLines', 'headings', 'horizontalCentered', 'verticalCentered')],
-  setHeaderFooter: [0, bools('differentOddEven', 'differentFirst', 'scaleWithDoc', 'alignWithMargins')],
-  setPivotStyleInfo: [
-    1,
-    bools('showRowHeaders', 'showColHeaders', 'showRowStripes', 'showColStripes', 'showLastColumn'),
-  ],
-  setPageSetup: [0, { ...numbers('paperSize', 'scale', 'fitToWidth', 'fitToHeight'), ...bools('fitToPage') }],
-  setPageMargins: [0, numbers('left', 'right', 'top', 'bottom', 'header', 'footer')],
-  setFormatDefaults: [0, { ...numbers('baseColWidth'), ...bools('customHeight', 'zeroHeight') }],
-  setPivotOptions: [
-    1,
-    {
-      ...bools(
-        'showError',
-        'showMissing',
-        'showHeaders',
-        'showDrill',
-        'showDataTips',
-        'gridDropZones',
-        'showEmptyRow',
-        'showEmptyCol',
-        'showDataDropDown',
-        'printDrill',
-        'fieldPrintTitles',
-        'itemPrintTitles',
-        'mergeItem',
-        'pageOverThenDown',
-        'multipleFieldFilters',
-        'preserveFormatting',
-        'customListSort',
-        'autoFormatting',
-        'enableDrill',
-      ),
-      ...numbers('indent', 'pageWrap'),
-    },
-  ],
+  setView: {
+    ...numbers(
+      'zoomScale',
+      'freezeRows',
+      'freezeCols',
+      'splitX',
+      'splitY',
+      'topLeftRow',
+      'topLeftCol',
+      'paneTopLeftRow',
+      'paneTopLeftCol',
+      'visibility',
+      'viewMode',
+    ),
+    ...bools(
+      'showGridLines',
+      'showRowColHeaders',
+      'showZeros',
+      'showFormulas',
+      'showOutlineSymbols',
+      'rightToLeft',
+      'tabSelected',
+    ),
+  },
+  updatePivotField: bools('defaultSubtotal', 'insertBlankRow', 'fillDownLabels', 'showAll', 'subtotalTop'),
+  updatePivotItem: bools('visible', 'showDetail'),
+  setChartLegend: { position: 'number', overlay: 'boolean', hiddenSeries: 'array' },
+  setPrintOptions: bools('gridLines', 'headings', 'horizontalCentered', 'verticalCentered'),
+  setHeaderFooter: bools('differentOddEven', 'differentFirst', 'scaleWithDoc', 'alignWithMargins'),
+  setPivotStyleInfo: bools('showRowHeaders', 'showColHeaders', 'showRowStripes', 'showColStripes', 'showLastColumn'),
+  setPageSetup: { ...numbers('paperSize', 'scale', 'fitToWidth', 'fitToHeight'), ...bools('fitToPage') },
+  setPageMargins: numbers('left', 'right', 'top', 'bottom', 'header', 'footer'),
+  setFormatDefaults: { ...numbers('baseColWidth'), ...bools('customHeight', 'zeroHeight') },
+  setPivotOptions: {
+    ...bools(
+      'showError',
+      'showMissing',
+      'showHeaders',
+      'showDrill',
+      'showDataTips',
+      'gridDropZones',
+      'showEmptyRow',
+      'showEmptyCol',
+      'showDataDropDown',
+      'printDrill',
+      'fieldPrintTitles',
+      'itemPrintTitles',
+      'mergeItem',
+      'pageOverThenDown',
+      'multipleFieldFilters',
+      'preserveFormatting',
+      'customListSort',
+      'autoFormatting',
+      'enableDrill',
+    ),
+    ...numbers('indent', 'pageWrap'),
+  },
 });
 
 // How a string key of each `*Ref` kind is matched: the element count, the key
@@ -1559,15 +1701,31 @@ function resolveRef(raw, sheet, where, [at, kind], args) {
 }
 
 /**
- * Checks a hand-written patch: every key is a field of `fields` (`null`
- * refused) or of `nullable` (`null` clears), and each value has its type.
+ * Throws `TypeError: <where> argument <n> has no field <key>` for a key that
+ * neither the patch type of `name` nor its getter's record declares
+ * (`PATCH_KEYS`); `undefined` is ignored.
  */
-function checkPatch(where, position, patch, fields, nullable = {}) {
-  requireObject(patch, `${where} argument ${position}`);
+function refuseUnknownKeys(where, name, patch) {
+  const [position, keys] = PATCH_KEYS[name];
   for (const [key, value] of Object.entries(patch)) {
-    if (value === undefined) continue;
+    if (value !== undefined && !keys.includes(key)) {
+      throw new TypeError(`${where} argument ${position + 1} has no field ${key}`);
+    }
+  }
+}
+
+/**
+ * Checks a hand-written patch of `<owner>.<name>`: an object whose keys are in
+ * `PATCH_KEYS`, where a field of `fields` refuses `null`, one of
+ * `nullable` takes `null` to clear, and each typed value has its type.
+ */
+function checkPatch(where, patch, fields, nullable = {}) {
+  const name = where.slice(where.indexOf('.') + 1);
+  requireObject(patch, `${where} argument ${PATCH_KEYS[name][0] + 1}`);
+  refuseUnknownKeys(where, name, patch);
+  for (const [key, value] of Object.entries(patch)) {
     const type = fields[key] ?? nullable[key];
-    if (type === undefined) throw new TypeError(`${where} argument ${position} has no field ${key}`);
+    if (value === undefined || type === undefined) continue;
     if (value === null && Object.hasOwn(nullable, key)) continue;
     if (type === 'array' ? !Array.isArray(value) : typeof value !== type) {
       throw new TypeError(`${where} ${key} must be ${type === 'array' ? 'an array' : `a ${type}`}`);
@@ -1832,18 +1990,18 @@ function makeFacade(Raw) {
     // checked up front leave the view untouched.
     setView(patch) {
       const where = 'Sheet.setView';
-      checkPatch(where, 1, patch, SHEET_PATCHES.setView[1]);
+      checkPatch(where, patch, SHEET_PATCHES.setView);
       const given = (key) => patch[key] !== undefined;
       const nonZero = (...keys) => keys.some((key) => given(key) && patch[key] !== 0);
       if (nonZero('freezeRows', 'freezeCols') && nonZero('splitX', 'splitY')) {
         throw new TypeError(`${where} cannot freeze and split the view at once`);
       }
-      if (!Object.keys(SHEET_PATCHES.setView[1]).some(given)) return;
+      if (!Object.keys(SHEET_PATCHES.setView).some(given)) return;
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       const view = raw.getView(sheet);
       const merged = { ...view };
-      for (const key of Object.keys(SHEET_PATCHES.setView[1])) if (given(key)) merged[key] = patch[key];
+      for (const key of Object.keys(SHEET_PATCHES.setView)) if (given(key)) merged[key] = patch[key];
       const freeze = merged.freezeRows !== view.freezeRows || merged.freezeCols !== view.freezeCols;
       const split = merged.splitX !== view.splitX || merged.splitY !== view.splitY;
       // The panes once applied: a freeze replaces a split and a split a freeze.
@@ -1905,7 +2063,7 @@ function makeFacade(Raw) {
 
     updatePivotField(pivot, field, patch) {
       const where = 'Sheet.updatePivotField';
-      checkPatch(where, 3, patch, SHEET_PATCHES.updatePivotField[1], { customName: 'string', numberFormat: 'string' });
+      checkPatch(where, patch, SHEET_PATCHES.updatePivotField, { customName: 'string', numberFormat: 'string' });
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       const setters = [
@@ -1924,7 +2082,7 @@ function makeFacade(Raw) {
 
     updatePivotItem(pivot, field, item, patch) {
       const where = 'Sheet.updatePivotItem';
-      checkPatch(where, 4, patch, SHEET_PATCHES.updatePivotItem[1], { caption: 'string' });
+      checkPatch(where, patch, SHEET_PATCHES.updatePivotItem, { caption: 'string' });
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       const setters = [
@@ -1939,8 +2097,8 @@ function makeFacade(Raw) {
 
     setPivotStyleInfo(pivot, patch) {
       const where = 'Sheet.setPivotStyleInfo';
-      const fields = SHEET_PATCHES.setPivotStyleInfo[1];
-      checkPatch(where, 2, patch, fields, { name: 'string' });
+      const fields = SHEET_PATCHES.setPivotStyleInfo;
+      checkPatch(where, patch, fields, { name: 'string' });
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       const current = raw.getPivotStyleInfo(sheet, pivot) ?? {};
@@ -1975,7 +2133,7 @@ function makeFacade(Raw) {
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       if (patch === null) return raw.setChartLegend(sheet, objectId, -1, false);
-      checkPatch('Sheet.setChartLegend', 2, patch, SHEET_PATCHES.setChartLegend[1]);
+      checkPatch('Sheet.setChartLegend', patch, SHEET_PATCHES.setChartLegend);
       const current = raw.getChart(sheet, objectId)?.legend ?? DEFAULT_LEGEND;
       raw.setChartLegend(
         sheet,
@@ -1987,7 +2145,7 @@ function makeFacade(Raw) {
     }
 
     setPrintOptions(patch) {
-      checkPatch('Sheet.setPrintOptions', 1, patch, SHEET_PATCHES.setPrintOptions[1]);
+      checkPatch('Sheet.setPrintOptions', patch, SHEET_PATCHES.setPrintOptions);
       rawOf(this.#workbook).setPrintOptions(this.#current(), patch);
     }
 
@@ -1995,7 +2153,7 @@ function makeFacade(Raw) {
     setHeaderFooter(patch) {
       const sections = ['oddHeader', 'oddFooter', 'evenHeader', 'evenFooter', 'firstHeader', 'firstFooter'];
       const nullable = Object.fromEntries(sections.map((key) => [key, 'string']));
-      checkPatch('Sheet.setHeaderFooter', 1, patch, SHEET_PATCHES.setHeaderFooter[1], nullable);
+      checkPatch('Sheet.setHeaderFooter', patch, SHEET_PATCHES.setHeaderFooter, nullable);
       const input = { ...patch };
       for (const key of sections) if (input[key] === null) input[key] = '';
       rawOf(this.#workbook).setHeaderFooter(this.#current(), input);
@@ -2078,6 +2236,7 @@ function makeFacade(Raw) {
     updateThreadedComment(id, patch) {
       const where = 'Sheet.updateThreadedComment';
       requireObject(patch, `${where} argument 2`);
+      refuseUnknownKeys(where, 'updateThreadedComment', patch);
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       const current =
@@ -2090,6 +2249,7 @@ function makeFacade(Raw) {
     setPivotGrandTotals(pivotIndex, patch) {
       const where = 'Sheet.setPivotGrandTotals';
       requireObject(patch, `${where} argument 2`);
+      refuseUnknownKeys(where, 'setPivotGrandTotals', patch);
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
       const current =
@@ -2141,7 +2301,7 @@ function makeFacade(Raw) {
     setPageSetup(setup) {
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
-      refuseNullFields('Sheet', 'setPageSetup', setup, SHEET_PATCHES.setPageSetup[1]);
+      checkForwardedPatch('Sheet', 'setPageSetup', setup, SHEET_PATCHES.setPageSetup);
       // A stated orientation cannot be removed; `null` keeps an unstated one.
       if (isObject(setup) && setup.orientation === null) {
         if (raw.getPageSetup(sheet).orientationStated) {
@@ -2382,7 +2542,7 @@ function makeFacade(Raw) {
 
     setIterative(patch) {
       const where = 'Workbook.setIterative';
-      refuseNullFields('Workbook', 'setIterative', patch, WORKBOOK_PATCHES.setIterative[1]);
+      checkForwardedPatch('Workbook', 'setIterative', patch, WORKBOOK_PATCHES.setIterative);
       if (isObject(patch)) {
         const { maxIterations, maxChange } = patch;
         if (maxIterations !== undefined && !Number.isInteger(maxIterations)) {
@@ -2480,9 +2640,14 @@ function installArgumentForms(proto, owner, rawOf, sheetOf) {
   }
 }
 
-/** Throws `TypeError: <owner>.<name> <field> must be a <type>` for a `null` on a non-nullable patch field. */
-function refuseNullFields(owner, name, patch, fields) {
+/**
+ * Refuses a key outside `PATCH_KEYS` for `<owner>.<name>`, and
+ * `null` on a field of `fields` (`TypeError: <owner>.<name> <field> must be a
+ * <type>`). A non-object patch is left to the raw method.
+ */
+function checkForwardedPatch(owner, name, patch, fields = {}) {
   if (!isObject(patch)) return;
+  refuseUnknownKeys(`${owner}.${name}`, name, patch);
   for (const [field, type] of Object.entries(fields)) {
     if (patch[field] === null) throw new TypeError(`${owner}.${name} ${field} must be a ${type}`);
   }
@@ -2495,8 +2660,8 @@ function refuseNullFields(owner, name, patch, fields) {
  * defined by hand. A list family loops over the raw count and element getter.
  * An `*_ABSENT_ARGS` entry maps `null` (and, for an optional argument,
  * `undefined`) at its position to the raw sentinel, and refuses a negative
- * number where that sentinel is negative; a `*_PATCHES` entry refuses `null`
- * on a non-nullable patch field. `owner` words the errors. A method
+ * number where that sentinel is negative; a patch op (`PATCH_KEYS`) refuses a
+ * key outside its table and, per `*_PATCHES`, `null` on a non-nullable field. `owner` words the errors. A method
  * the raw class does not register (a member only the other package has) is
  * skipped.
  */
@@ -2522,14 +2687,14 @@ function installForwarders(proto, owner, names, absentArgs, patches, Raw, call) 
       continue;
     }
     if (typeof Raw.prototype[name] !== 'function') continue;
-    const patched = patches[name];
-    if (patched !== undefined) {
-      const [position, fields] = patched;
+    if (PATCH_KEYS[name] !== undefined) {
+      const [position] = PATCH_KEYS[name];
+      const fields = patches[name];
       defineMethod(
         proto,
         name,
         namedFunction(name, function (args) {
-          refuseNullFields(owner, name, args[position], fields);
+          checkForwardedPatch(owner, name, args[position], fields);
           return call(this, name, args);
         }),
       );
