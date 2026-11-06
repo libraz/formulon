@@ -44,7 +44,6 @@ namespace parts {
 
 using formulon::c_api::kBindingCallbackException;
 using formulon::c_api::kBindingInvalidHandle;
-using formulon::c_api::kInvalidArgument;
 
 /// Largest integer a JS number holds exactly (`Number.MAX_SAFE_INTEGER`).
 constexpr double kMaxSafeInteger = 9007199254740991.0;

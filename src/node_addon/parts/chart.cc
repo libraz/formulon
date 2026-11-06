@@ -454,36 +454,30 @@ Field Probe(CheckedSpecReader& reader, const Napi::Object& owner, const char* ke
   return f;
 }
 
-void ReadU32Op(CheckedSpecReader& r, const Napi::Object& owner, const char* key, int32_t& op, uint32_t& out) {
+/// Probes `key` and, when it is set, stores `read(f.value)` into `out`.
+template <typename T, typename Read>
+void ReadOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, int32_t& op, T& out, Read&& read) {
   const Field f = Probe(r, owner, key);
   op = f.op;
   if (f.op == FM_CHART_PATCH_SET) {
-    out = r.U32(f.value, key, 0U);
+    out = read(f.value);
   }
+}
+
+void ReadU32Op(CheckedSpecReader& r, const Napi::Object& owner, const char* key, int32_t& op, uint32_t& out) {
+  ReadOp(r, owner, key, op, out, [&](const Napi::Value& v) { return r.U32(v, key, 0U); });
 }
 
 void ReadI32Op(CheckedSpecReader& r, const Napi::Object& owner, const char* key, int32_t& op, int32_t& out) {
-  const Field f = Probe(r, owner, key);
-  op = f.op;
-  if (f.op == FM_CHART_PATCH_SET) {
-    out = r.I32(f.value, key, 0);
-  }
+  ReadOp(r, owner, key, op, out, [&](const Napi::Value& v) { return r.I32(v, key, 0); });
 }
 
 void ReadDoubleOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, int32_t& op, double& out) {
-  const Field f = Probe(r, owner, key);
-  op = f.op;
-  if (f.op == FM_CHART_PATCH_SET) {
-    out = r.Double(f.value, key, 0.0);
-  }
+  ReadOp(r, owner, key, op, out, [&](const Napi::Value& v) { return r.Double(v, key, 0.0); });
 }
 
 void ReadBoolOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, int32_t& op, int32_t& out) {
-  const Field f = Probe(r, owner, key);
-  op = f.op;
-  if (f.op == FM_CHART_PATCH_SET) {
-    out = r.Bool(f.value, key, false) ? 1 : 0;
-  }
+  ReadOp(r, owner, key, op, out, [&](const Napi::Value& v) { return r.Bool(v, key, false) ? 1 : 0; });
 }
 
 /// Keeps the std::string bytes behind the `const char*` fields of a patch alive.

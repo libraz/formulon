@@ -736,6 +736,16 @@ class JsWorkbook {
   using TraceFn = fm_status_t (*)(const fm_workbook_t*, std::size_t, uint32_t, uint32_t, uint32_t, fm_cell_nodes_t**);
   emscripten::val trace_to_val(TraceFn fn, uint32_t sheet, uint32_t row, uint32_t col, uint32_t depth) const;
 
+  /// Style-pool add: `pull(reader, record)` fills the caller's record, and
+  /// `add(handle_, &index)` stores it. Returns the new index, or 0 after a
+  /// recorded failure.
+  template <typename Pull, typename Add>
+  uint32_t add_style_record(const char* op, const emscripten::val& record, Pull&& pull, Add&& add);
+
+  /// Style-pool replace: as `add_style_record` without an index.
+  template <typename Pull, typename Apply>
+  void set_style_record(const char* op, const emscripten::val& record, Pull&& pull, Apply&& apply);
+
   // Re-points the engine's `user_data` at this wrapper. Called after a
   // move, which leaves the C ABI holding the address of the object the
   // callback was registered from.

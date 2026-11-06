@@ -375,16 +375,12 @@ void PullCellXf(CheckedSpecReader& reader, const Napi::Object& record, fm_cell_x
 // ---- Cell-XF index --------------------------------------------------
 
 Napi::Value Workbook::GetCellXfIndex(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t row = ArgU32(info, 1);
-  const uint32_t col = ArgU32(info, 2);
-  std::size_t xf = 0;
-  fm_status_t rc = fm_sheet_get_cell_xf_index(handle_, sheet, row, col, &xf);
-  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(xf)));
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* xf) {
+    const uint32_t sheet = ArgU32(info, 0);
+    const uint32_t row = ArgU32(info, 1);
+    const uint32_t col = ArgU32(info, 2);
+    return fm_sheet_get_cell_xf_index(handle, sheet, row, col, xf);
+  });
 }
 
 Napi::Value Workbook::SetCellXfIndex(const Napi::CallbackInfo& info) {
@@ -410,47 +406,31 @@ Napi::Value Workbook::SetRangeXfIndex(const Napi::CallbackInfo& info) {
 // ---- Style getters --------------------------------------------------
 
 Napi::Value Workbook::GetCellXf(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const uint32_t xf_index = ArgU32(info, 0);
-  fm_cell_xf_t xf{};
-  const fm_status_t rc = fm_workbook_get_cell_xf(handle_, xf_index, &xf);
-  return rc == 0 ? Napi::Value(CellXfResultToJs(env, xf)) : ThrowStatus(env, rc);
+  return RecordGetter<fm_cell_xf_t>(
+      info,
+      [&](fm_workbook_t* handle, fm_cell_xf_t* xf) { return fm_workbook_get_cell_xf(handle, ArgU32(info, 0), xf); },
+      CellXfResultToJs);
 }
 
 Napi::Value Workbook::GetFont(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const uint32_t font_index = ArgU32(info, 0);
-  fm_font_record_t f{};
-  const fm_status_t rc = fm_workbook_get_font(handle_, font_index, &f);
-  return rc == 0 ? Napi::Value(FontRecordToJs(env, f)) : ThrowStatus(env, rc);
+  return RecordGetter<fm_font_record_t>(
+      info,
+      [&](fm_workbook_t* handle, fm_font_record_t* f) { return fm_workbook_get_font(handle, ArgU32(info, 0), f); },
+      FontRecordToJs);
 }
 
 Napi::Value Workbook::GetFill(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const uint32_t fill_index = ArgU32(info, 0);
-  fm_fill_record_t f{};
-  const fm_status_t rc = fm_workbook_get_fill(handle_, fill_index, &f);
-  return rc == 0 ? Napi::Value(FillRecordToJs(env, f)) : ThrowStatus(env, rc);
+  return RecordGetter<fm_fill_record_t>(
+      info,
+      [&](fm_workbook_t* handle, fm_fill_record_t* f) { return fm_workbook_get_fill(handle, ArgU32(info, 0), f); },
+      FillRecordToJs);
 }
 
 Napi::Value Workbook::GetBorder(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const uint32_t border_index = ArgU32(info, 0);
-  fm_border_record_t b{};
-  const fm_status_t rc = fm_workbook_get_border(handle_, border_index, &b);
-  return rc == 0 ? Napi::Value(BorderRecordToJs(env, b)) : ThrowStatus(env, rc);
+  return RecordGetter<fm_border_record_t>(
+      info,
+      [&](fm_workbook_t* handle, fm_border_record_t* b) { return fm_workbook_get_border(handle, ArgU32(info, 0), b); },
+      BorderRecordToJs);
 }
 
 Napi::Value Workbook::GetNumFmt(const Napi::CallbackInfo& info) {
@@ -511,38 +491,21 @@ Napi::Value Workbook::AddFont(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::SetFont(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const uint32_t font_index = ArgU32(info, 0);
-  Napi::Object record = ArgObject(info, 1);
-  CheckedSpecReader reader(env);
   std::string name;
   fm_font_record_t fr{};
-  PullFontRecord(reader, record, &name, &fr);
-  if (!reader.ok()) {
-    // See the matching guard in AddFont.
-    return env.Undefined();
-  }
-  return ValueOrThrow(env, fm_workbook_set_font(handle_, font_index, &fr), env.Undefined());
+  return SetStyleRecord(
+      info, 1,
+      [&](CheckedSpecReader& reader, const Napi::Object& record) { PullFontRecord(reader, record, &name, &fr); },
+      [&](fm_workbook_t* handle) { return fm_workbook_set_font(handle, ArgU32(info, 0), &fr); });
 }
 
 Napi::Value Workbook::SetDefaultFont(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  Napi::Object record = ArgObject(info, 0);
-  CheckedSpecReader reader(env);
   std::string name;
   fm_font_record_t fr{};
-  PullFontRecord(reader, record, &name, &fr);
-  if (!reader.ok()) {
-    // See the matching guard in AddFont.
-    return env.Undefined();
-  }
-  return ValueOrThrow(env, fm_workbook_set_default_font(handle_, &fr), env.Undefined());
+  return SetStyleRecord(
+      info, 0,
+      [&](CheckedSpecReader& reader, const Napi::Object& record) { PullFontRecord(reader, record, &name, &fr); },
+      [&](fm_workbook_t* handle) { return fm_workbook_set_default_font(handle, &fr); });
 }
 
 Napi::Value Workbook::AddFill(const Napi::CallbackInfo& info) {

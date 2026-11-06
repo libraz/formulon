@@ -55,7 +55,6 @@ Napi::Uint8Array CopyBytes(Napi::Env env, const uint8_t* bytes, std::size_t len)
 Napi::Uint8Array TakeSavedBytes(Napi::Env env, uint8_t* bytes, std::size_t len);
 
 using formulon::c_api::kBindingInvalidHandle;
-using formulon::c_api::kInvalidArgument;
 
 /// Per-environment addon state, held as the environment's instance data.
 struct AddonData {

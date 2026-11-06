@@ -724,6 +724,39 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
     return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(index)));
   }
 
+  /// Entry replacing a style-pool record: `pull(reader, record)` fills the
+  /// caller's record from the `info[record_arg]` object, and `apply(handle_)`
+  /// stores it.
+  template <typename Pull, typename Apply>
+  Napi::Value SetStyleRecord(const Napi::CallbackInfo& info, size_t record_arg, Pull&& pull, Apply&& apply) {
+    Napi::Env env = info.Env();
+    if (handle_ == nullptr) {
+      return ThrowInvalidHandle(env);
+    }
+    const Napi::Object record = ArgObject(info, record_arg);
+    CheckedSpecReader reader(env);
+    pull(reader, record);
+    if (!reader.ok()) {
+      // A malformed field left a pending JS exception: stop before the C ABI
+      // call commits a default value for it.
+      return env.Undefined();
+    }
+    return ValueOrThrow(env, apply(handle_), env.Undefined());
+  }
+
+  /// Record getter: `call(handle_, &record)` fills a value-initialised `Rec`,
+  /// and `to_js(env, record)` converts it once the call succeeded.
+  template <typename Rec, typename Call, typename ToJs>
+  Napi::Value RecordGetter(const Napi::CallbackInfo& info, Call&& call, ToJs&& to_js) {
+    Napi::Env env = info.Env();
+    if (handle_ == nullptr) {
+      return ThrowInvalidHandle(env);
+    }
+    Rec record{};
+    const fm_status_t rc = call(handle_, &record);
+    return rc == 0 ? Napi::Value(to_js(env, record)) : ThrowStatus(env, rc);
+  }
+
   /// Record result of a getter: `call(handle_)` fills the captured
   /// out-params, and `fill(out)` adds the record's fields once it succeeded.
   template <typename Call, typename Fill>
