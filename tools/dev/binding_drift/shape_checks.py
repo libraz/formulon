@@ -9,6 +9,7 @@ from .c_header import _c_struct_fields
 from .surface_files import (
     CAPI_HEADER,
     NODE_DTS,
+    PYTHON_SHEET,
     PYTHON_WORKBOOK,
     REPO_ROOT,
     WASM_DTS,
@@ -103,7 +104,11 @@ def check_dts_shared_shapes() -> List[str]:
     wasm_label = str(WASM_DTS.relative_to(REPO_ROOT))
     node_label = str(NODE_DTS.relative_to(REPO_ROOT))
 
-    for interface in ("Workbook", "WorkbookCtor"):
+    # `Sheet` joins the method interfaces once both files declare it.
+    method_interfaces = ["Workbook", "WorkbookCtor"]
+    if all(re.search(r"^export interface Sheet\b", text, re.MULTILINE) for text in (wasm_dts, node_dts)):
+        method_interfaces.append("Sheet")
+    for interface in method_interfaces:
         wasm_body = _find_interface_body(wasm_dts, interface, WASM_DTS)
         node_body = _find_interface_body(node_dts, interface, NODE_DTS)
         # Parameter lists, optional markers and enum-typed parameters, which
@@ -142,7 +147,7 @@ def check_dts_shared_shapes() -> List[str]:
         problems.append(f"dts-shared-shapes: stale _DTS_SURFACE_ONLY_TYPES entries: {sorted(stale)}")
 
     for name in sorted(wasm_types & node_types):
-        if name in ("Workbook", "WorkbookCtor"):
+        if name in method_interfaces:
             continue
         wasm_extends, wasm_body = _ts_interface_declaration(wasm_dts, name, WASM_DTS)
         node_extends, node_body = _ts_interface_declaration(node_dts, name, NODE_DTS)
@@ -241,7 +246,8 @@ def check_style_record_fields() -> List[str]:
     header = re.sub(r"/\*.*?\*/", "", _read(CAPI_HEADER), flags=re.S)
     wasm_dts = _read(WASM_DTS)
     node_dts = _read(NODE_DTS)
-    python_text = _read(PYTHON_WORKBOOK)
+    # Records stay in workbook.py or move next to `Sheet` in sheet.py; either module counts.
+    python_text = "\n".join(_read(path) for path in (PYTHON_WORKBOOK, PYTHON_SHEET) if path.is_file())
 
     for type_name, struct_name in sorted(_STYLE_RECORD_STRUCTS.items()):
         c_fields = _c_struct_fields(header, struct_name, CAPI_HEADER)

@@ -6,10 +6,14 @@ and no name is claimed twice; every new C function name passes R1 / R2;
 every binding name of a C-backed op equals its R5 derivation; every record
 and enum name equals `derive_type` of its C typedef; and every op whose C
 signature carries an enum or a predicate verb states it in `returns` /
-`params`. An `exception:` exempts an entry from the derivation checks.
+`params`. An `exception:` exempts an entry from the derivation checks, and so
+does `review: true`, which marks a proposal still to be decided. Every op, list,
+factory and free function on a binding surface carries a `scope`; index-keyed
+collections carry `access` (and `plural`, or `exempt` with a reason);
+`enum_families` and `enum_distinct` name existing enum entries.
 
 `--coverage` additionally requires every symbol the current tree exports
-to be named by some entry's current or `was` name. Entries carrying `flag:` are listed in
+to be named by some entry's current or `was` name. Entries carrying `flag:` or `review: true` are listed in
 either mode; they do not fail validation.
 """
 
@@ -33,6 +37,7 @@ from binding_drift.api_conventions import (  # noqa: E402
     check_c_name,
     derive_js,
     derive_py,
+    derive_record_type,
     derive_type,
     split_c_name,
 )
@@ -42,9 +47,15 @@ FIELDS = frozenset(
     {
         "kind", "scope", "noun", "qualifies", "record", "role", "from", "c", "js", "py", "enum", "returns",
         "params", "surfaces", "exception", "replaced_by", "closes", "was", "drop", "flag", "sheet_arg", "total",
+        "missing", "facade", "review", "note",
     }
 )  # fmt: skip
-ROLES = frozenset({"result", "input", "patch"})
+ROLES = frozenset({"result", "input", "patch", "both"})
+SCOPED_KINDS = frozenset({"op", "list", "factory", "free"})
+BINDING_SURFACES = frozenset({"wasm", "native", "py"})
+ACCESS_MODES = frozenset({"handles", "list", "indexed", "property", "exempt"})
+MISSING_MODES = (None, "throw")  # YAML reads `missing: null` as None
+FACADE_MODES = frozenset({"handwritten"})
 NAME_FIELDS = ("c", "js", "py")
 FUNCTION_KINDS = frozenset({"op", "factory"})
 TYPE_KINDS = frozenset({"record", "enum", "typedef"})
@@ -120,6 +131,16 @@ def check_schema(data) -> List[str]:
             problems.append(f"{where}: role {entry['role']!r} is not one of {sorted(ROLES)}")
         if "scope" in entry and entry["scope"] not in (*SCOPES, "process"):
             problems.append(f"{where}: scope {entry['scope']!r} is unknown")
+        if kind in SCOPED_KINDS and set(surfaces) & BINDING_SURFACES and "scope" not in entry:
+            problems.append(f"{where}: a {kind} on a binding surface needs `scope`")
+        if "missing" in entry and entry["missing"] not in MISSING_MODES:
+            problems.append(f"{where}: missing must be `null` or `throw`")
+        if "facade" in entry and entry["facade"] not in FACADE_MODES:
+            problems.append(f"{where}: facade must be one of {sorted(FACADE_MODES)}")
+        if "review" in entry and entry["review"] is not True:
+            problems.append(f"{where}: review is `true` or absent")
+        if "note" in entry and (not isinstance(entry["note"], str) or not entry["note"].strip()):
+            problems.append(f"{where}: note must be a non-empty string")
         slots = dict(entry.get("params") or {})
         if "returns" in entry:
             slots["<return>"] = entry["returns"]
@@ -150,6 +171,52 @@ def check_schema(data) -> List[str]:
             or not collection["no_getter"]
         ):
             problems.append(f"{where}: `no_getter` is a reason string on a natural-key collection")
+        access = collection.get("access")
+        if collection["key"] == "index" and access not in ACCESS_MODES:
+            problems.append(f"{where}: an index-keyed collection needs `access` in {sorted(ACCESS_MODES)}")
+        elif collection["key"] == "natural" and "access" in collection:
+            problems.append(f"{where}: `access` belongs to index-keyed collections")
+        if access is not None and not isinstance(collection.get("plural"), str):
+            problems.append(f"{where}: `access` needs `plural`")
+        if (access == "exempt") != isinstance(collection.get("exempt"), str):
+            problems.append(f"{where}: `exempt` is the reason string of an `access: exempt` collection")
+    problems += check_enum_groups(data, entries)
+    return problems
+
+
+def check_enum_groups(data: dict, entries: Dict[str, dict]) -> List[str]:
+    """`enum_families` lists enum entries; each `enum_distinct` item is a pair with a reason or a review note."""
+    problems: List[str] = []
+
+    def enum_keys(where: str, keys) -> None:
+        if not isinstance(keys, list) or len(keys) < 2:
+            problems.append(f"{where}: lists two or more enum entry keys")
+            return
+        for key in keys:
+            if (entries.get(key) or {}).get("kind") != "enum":
+                problems.append(f"{where}: {key!r} is not an enum entry")
+
+    families = data.get("enum_families") or {}
+    if not isinstance(families, dict):
+        return ["enum_families: must map a family name to enum entry keys"]
+    for name, keys in families.items():
+        enum_keys(f"enum_families.{name}", keys)
+    distinct = data.get("enum_distinct") or []
+    if not isinstance(distinct, list):
+        return problems + ["enum_distinct: must be a list"]
+    for i, item in enumerate(distinct):
+        where = f"enum_distinct[{i}]"
+        if not isinstance(item, dict) or not set(item) <= {"enums", "reason", "review", "note"}:
+            problems.append(f"{where}: takes `enums`, `reason`, `review`, `note`")
+            continue
+        enum_keys(where, item.get("enums"))
+        if isinstance(item.get("enums"), list) and len(item["enums"]) != 2:
+            problems.append(f"{where}: names exactly two enums")
+        if item.get("review") is True:
+            if not isinstance(item.get("note"), str) or not item["note"].strip():
+                problems.append(f"{where}: a review item carries a `note`")
+        elif not isinstance(item.get("reason"), str) or not item["reason"].strip():
+            problems.append(f"{where}: needs a `reason`")
     return problems
 
 
@@ -228,7 +295,7 @@ def check_rules(entries: Dict[str, dict]) -> List[str]:
     for key, entry in entries.items():
         kind = entry.get("kind")
         c_name = entry.get("c")
-        exempt = "exception" in entry
+        exempt = "exception" in entry or entry.get("review") is True
         if kind in FUNCTION_KINDS and isinstance(c_name, str):
             for rule_id, message in check_c_name(c_name):
                 problems.append(f"{key}: {rule_id}: {message}")
@@ -245,9 +312,12 @@ def check_rules(entries: Dict[str, dict]) -> List[str]:
             if not c_name.endswith("_t"):
                 problems.append(f"{key}: R7.c.typedef: {c_name} is not named fm_<name>_t")
             if not exempt:
-                want = derive_type(c_name, entry.get("role"))
+                wants = {derive_type(c_name, entry.get("role"))}
+                if kind == "record":
+                    wants.add(derive_record_type(c_name, entry.get("role")))
                 for name_field in ("js", "py"):
-                    if name_field in entry and entry[name_field] != want:
+                    if name_field in entry and entry[name_field] not in wants:
+                        want = " or ".join(sorted(wants))
                         problems.append(f"{key}: R5.derive: {name_field} {entry[name_field]} should be {want}")
         elif kind == "list" and "js" in entry and "py" in entry and entry["js"] != _list_js(entry["py"]):
             problems.append(f"{key}: R5.derive: list names {entry['js']} / {entry['py']} disagree")
@@ -341,6 +411,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.coverage:
             problems += check_coverage(entries, surfaces)
         flagged = [(f"entries.{k}", e["flag"]) for k, e in entries.items() if isinstance(e, dict) and "flag" in e]
+        flagged += [
+            (f"entries.{k}", f"review: {e.get('note', '')}")
+            for k, e in entries.items()
+            if isinstance(e, dict) and e.get("review") is True
+        ]
+        flagged += [
+            (f"enum_distinct[{i}]", f"review: {item.get('note', '')}")
+            for i, item in enumerate(data.get("enum_distinct") or [])
+            if isinstance(item, dict) and item.get("review") is True
+        ]
         flagged += [(f"collections.{k}", c["flag"]) for k, c in data["collections"].items() if "flag" in c]
         for where, reason in flagged:
             print(f"flag: {where}: {reason}")

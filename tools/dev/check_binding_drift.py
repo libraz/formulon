@@ -32,14 +32,20 @@ Checks:
                   `fm_value_t`, `fm_cell_rect_t` -- have their size
                   literals and their decoders' offsets and field widths
                   measured against the header.
-  dts-wasm        src/wasm/formulon.d.ts (Workbook / WorkbookCtor /
-                  Formulon method surface, and the Workbook accessors)
-                  matches what is registered in
-                  src/wasm/parts/bindings_register.cpp. The pure-JS
-                  `Workbook` methods and `Formulon` helpers are excluded.
-  dts-node        packages/npm-native/index.d.ts (Workbook /
-                  WorkbookCtor / Formulon surface, and the Workbook
+  dts-wasm        src/wasm/formulon.d.ts (Workbook and Sheet /
+                  WorkbookCtor / Formulon method surface, and the Workbook
                   accessors) matches what is registered in
+                  src/wasm/parts/bindings_register.cpp. A Sheet method
+                  matches the registration that takes the sheet first. The
+                  pure-JS facade members and `Formulon` helpers may lack a
+                  registration, and a registration the ledger keeps raw-only
+                  (the count and element getter of a `list` / `handles` /
+                  `property` collection, a `drop:` name) may lack a
+                  declaration.
+  dts-node        packages/npm-native/index.d.ts (Workbook and Sheet /
+                  WorkbookCtor / Formulon surface, and the Workbook
+                  accessors, with the same allowances as dts-wasm) matches
+                  what is registered in
                   src/node_addon/parts/workbook_class.cc and
                   src/node_addon/addon.cc, apart from the addon's
                   internal `__setErrorClass`. It also enforces the exact
@@ -53,14 +59,21 @@ Checks:
                   optionality counted as part of the field. A type declared
                   on one surface only needs an entry in
                   `_DTS_SURFACE_ONLY_TYPES`; a deliberately divergent return
-                  type needs one in `_DTS_RETURN_TYPE_EXEMPT_METHODS`.
+                  type needs one in `_DTS_RETURN_TYPE_EXEMPT_METHODS`. The
+                  `Sheet` interface is compared like `Workbook` once both
+                  files declare it.
   pure-js-helpers Helpers with no native entry point behind them
                   (`NODE_PURE_JS_FREE_FUNCTIONS`) are implemented in
                   packages/npm/common.mjs, imported by
                   packages/npm-native/index.mjs and declared as `Formulon`
-                  members in both declaration files; the `Workbook` methods
-                  `installWorkbookExtensions` adds are present in that
-                  function, and the native entry point imports it.
+                  members in both declaration files. Once common.mjs defines
+                  `makeFacade`, `buildFormulon` builds the classes with it,
+                  `RUNTIME_MEMBERS` no longer copies the raw `Workbook`,
+                  `installWorkbookExtensions` is gone and the native entry
+                  point hands its runtime to `buildFormulon`; before that,
+                  the `Workbook` methods `installWorkbookExtensions` adds are
+                  present in that function and the native entry point imports
+                  it.
   readme-counts   The instance-method count quoted in
                   packages/npm-native/README.md matches the actual count
                   registered in workbook_class.cc and its shared/WASM-only
@@ -74,9 +87,9 @@ Checks:
                   out of the check silently.
   readme-identifiers
                   Every `fm_*` name, `import` name and bound `Workbook` /
-                  module member in a README code block, every `{@link}` in
-                  the two `.d.ts` files and every `:meth:` / `:func:` /
-                  `:class:` role in the Python docstrings exists on its
+                  `Sheet` / module member in a README code block, every
+                  `{@link}` in the two `.d.ts` files and every `:meth:` /
+                  `:func:` / `:class:` role in the Python docstrings exists on its
                   surface; so does every backticked `ident()`, `Type.member`
                   and camelCase token in a `.d.ts` comment and every
                   ``ident()`` in a docstring; neither carries an `fm_` or
@@ -88,7 +101,10 @@ Checks:
                   plain numbers rather than registering a real
                   `enum_<T>`, so the `.d.ts` copy is the only place the
                   ordinal values live on the JS side) matches its
-                  source enum's ordinal sequence. The frozen ordinal
+                  source enum's ordinal sequence. Beside a hand-kept list,
+                  every table whose ledger enum names a header `typedef
+                  enum` is checked; a `-1` "absent" member is left out on
+                  both sides. The frozen ordinal
                   tables the two published ESM entry points export
                   (packages/npm/common.mjs via index.mjs / threads.mjs, and
                   packages/npm-native/index.mjs) must then carry the same

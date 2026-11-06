@@ -1,0 +1,110 @@
+R15.header	fm_sheet_cf_*	unresolved	a header comment names `fm_sheet_cf_*`, which is not declared
+R15.header	fm_styles_add_*	unresolved	a header comment names `fm_styles_add_*`, which is not declared
+R15.header	fm_workbook_pivot_*	unresolved	a header comment names `fm_workbook_pivot_*`, which is not declared
+R15.header	fm_workbook_pivot_cache_record_set_*	unresolved	a header comment names `fm_workbook_pivot_cache_record_set_*`, which is not declared
+R19.c	enum.anchor_kind	onecell	family `anchor`: `onecell` is 1 in `enum.anchor_edit_as` but 0 in `enum.anchor_kind`
+R19.c	enum.anchor_kind	twocell	family `anchor`: `twocell` is 0 in `enum.anchor_edit_as` but 1 in `enum.anchor_kind`
+R19.c	enum.chart_axis_crosses	absent:Absent	`Absent` means absent; its C value is -1, not 0
+R19.c	enum.chart_blanks_as	absent:Absent	`Absent` means absent; its C value is -1, not 0
+R19.c	enum.shape_paint	absent:Unset	`Unset` means absent; its C value is -1, not 0
+R19.c	enum.slicer_sort	ascending	family `sort_order`: `ascending` is 1 in `enum.pivot_sort_order` but 0 in `enum.slicer_sort`
+R19.c	enum.slicer_sort	descending	family `sort_order`: `descending` is 0 in `enum.pivot_sort_order` but 1 in `enum.slicer_sort`
+R19.c	enum.sparkline_empty_cells	gap	family `blanks`: `gap` is 1 in `enum.chart_blanks_as` but 0 in `enum.sparkline_empty_cells`
+R19.c	enum.sparkline_empty_cells	span	family `blanks`: `span` is 3 in `enum.chart_blanks_as` but 2 in `enum.sparkline_empty_cells`
+R19.c	enum.sparkline_empty_cells	zero	family `blanks`: `zero` is 2 in `enum.chart_blanks_as` but 1 in `enum.sparkline_empty_cells`
+R22.c	active_sheet.get	out_index	fm_workbook_get_active_sheet: `out_index` names no collection; use `<thing>_index`
+R22.c	active_sheet.set	index	fm_workbook_set_active_sheet: `index` names no collection; use `<thing>_index`
+R22.c	border.add	out_index	fm_workbook_add_border: `out_index` names no collection; use `<thing>_index`
+R22.c	cell_phonetic.set	utf8	fm_sheet_set_cell_phonetic: `utf8` is named after its C type
+R22.c	cell_style_xf.get	index	fm_workbook_get_cell_style_xf: `index` names no collection; use `<thing>_index`
+R22.c	cf_rule.add	out_index	fm_sheet_add_cf_rule: `out_index` names no collection; use `<thing>_index`
+R22.c	cf_rule.get	index	fm_sheet_get_cf_rule: `index` names no collection; use `<thing>_index`
+R22.c	cf_rule.remove	index	fm_sheet_remove_cf_rule: `index` names no collection; use `<thing>_index`
+R22.c	drawing_z_order.set	index	fm_sheet_set_drawing_z_order: `index` names no collection; use `<thing>_index`
+R22.c	external_link.get	index	fm_workbook_get_external_link: `index` names no collection; use `<thing>_index`
+R22.c	fill.add	out_index	fm_workbook_add_fill: `out_index` names no collection; use `<thing>_index`
+R22.c	font.add	out_index	fm_workbook_add_font: `out_index` names no collection; use `<thing>_index`
+R22.c	pivot.create	utf8_name	fm_sheet_add_pivot: `utf8_name` is named after its C type
+R22.c	pivot_cache_calculated_item.add	out_index	fm_workbook_add_pivot_cache_calculated_item: `out_index` names no collection; use `<thing>_index`
+R22.c	pivot_cache_calculated_item.get	index	fm_workbook_get_pivot_cache_calculated_item: `index` names no collection; use `<thing>_index`
+R22.c	pivot_cache_calculated_item.move	index	fm_workbook_move_pivot_cache_calculated_item: `index` names no collection; use `<thing>_index`
+R22.c	pivot_cache_calculated_item.remove	index	fm_workbook_remove_pivot_cache_calculated_item: `index` names no collection; use `<thing>_index`
+R22.c	pivot_cache_calculated_item_formula.set	index	fm_workbook_set_pivot_cache_calculated_item_formula: `index` names no collection; use `<thing>_index`
+R22.c	pivot_cache_field.add	utf8_name	fm_workbook_add_pivot_cache_field: `utf8_name` is named after its C type
+R22.c	pivot_cache_field_formula.get	out_utf8	fm_workbook_get_pivot_cache_field_formula: `out_utf8` is named after its C type
+R22.c	pivot_cache_field_name.get	out_utf8	fm_workbook_get_pivot_cache_field_name: `out_utf8` is named after its C type
+R22.c	pivot_cache_field_shared_item_text.add	utf8	fm_workbook_add_pivot_cache_field_shared_item_text: `utf8` is named after its C type
+R22.c	pivot_cache_record_text.set	utf8	fm_workbook_set_pivot_cache_record_text: `utf8` is named after its C type
+R22.c	pivot_data_field.add	out_index	fm_sheet_add_pivot_data_field: `out_index` names no collection; use `<thing>_index`
+R22.c	pivot_field_item.add	out_index	fm_sheet_add_pivot_field_item: `out_index` names no collection; use `<thing>_index`
+R22.c	pivot_field_item.add	utf8_name	fm_sheet_add_pivot_field_item: `utf8_name` is named after its C type
+R22.c	pivot_field_item.add_at	out_index	fm_sheet_add_pivot_field_shared_item: `out_index` names no collection; use `<thing>_index`
+R22.c	pivot_field_number_format.set	utf8	fm_sheet_set_pivot_field_number_format: `utf8` is named after its C type
+R22.c	pivot_filter.add	out_index	fm_sheet_add_pivot_filter: `out_index` names no collection; use `<thing>_index`
+R22.c	pivot_name.set	utf8_name	fm_sheet_set_pivot_name: `utf8_name` is named after its C type
+R22.c	pivot_style_info.set	utf8_style_name	fm_sheet_set_pivot_style_info: `utf8_style_name` is named after its C type
+R22.c	protected_range.add	out_index	fm_sheet_add_protected_range: `out_index` names no collection; use `<thing>_index`
+R22.c	protected_range.get	index	fm_sheet_get_protected_range: `index` names no collection; use `<thing>_index`
+R22.c	protected_range.remove	index	fm_sheet_remove_protected_range: `index` names no collection; use `<thing>_index`
+R22.c	protected_range.update	index	fm_sheet_update_protected_range: `index` names no collection; use `<thing>_index`
+R22.c	sheet.add	out_index	fm_workbook_add_sheet: `out_index` names no collection; use `<thing>_index`
+R22.c	sheet.add	utf8_name	fm_workbook_add_sheet: `utf8_name` is named after its C type
+R22.c	sheet.copy	out_index	fm_workbook_copy_sheet: `out_index` names no collection; use `<thing>_index`
+R22.c	sheet.remove	index	fm_workbook_remove_sheet: `index` names no collection; use `<thing>_index`
+R22.c	sheet.rename	index	fm_workbook_rename_sheet: `index` names no collection; use `<thing>_index`
+R22.c	sheet_index.get	out_index	fm_workbook_get_sheet_index: `out_index` names no collection; use `<thing>_index`
+R22.c	sheet_name.get	index	fm_workbook_get_sheet_name: `index` names no collection; use `<thing>_index`
+R22.c	sheet_name.get	out_utf8	fm_workbook_get_sheet_name: `out_utf8` is named after its C type
+R22.c	sparkline.get	index	fm_sheet_get_sparkline: `index` names no collection; use `<thing>_index`
+R22.c	sparkline_group.add	out_index	fm_sheet_add_sparkline_group: `out_index` names no collection; use `<thing>_index`
+R22.c	sparkline_group.get	index	fm_sheet_get_sparkline_group: `index` names no collection; use `<thing>_index`
+R22.c	sparkline_group.remove	index	fm_sheet_remove_sparkline_group: `index` names no collection; use `<thing>_index`
+R22.c	sparkline_group.update	index	fm_sheet_update_sparkline_group: `index` names no collection; use `<thing>_index`
+R22.c	sparkline_group_sparklines.set	index	fm_sheet_set_sparkline_group_sparklines: `index` names no collection; use `<thing>_index`
+R22.c	table.create	out_index	fm_workbook_add_table: `out_index` names no collection; use `<thing>_index`
+R22.c	table.get	index	fm_workbook_get_table: `index` names no collection; use `<thing>_index`
+R22.c	table.remove	index	fm_workbook_remove_table: `index` names no collection; use `<thing>_index`
+R22.c	table.rename	index	fm_workbook_rename_table: `index` names no collection; use `<thing>_index`
+R22.c	table.update	index	fm_workbook_update_table: `index` names no collection; use `<thing>_index`
+R22.c	table_column.get	index	fm_workbook_get_table_column: `index` names no collection; use `<thing>_index`
+R22.c	table_column.rename	index	fm_workbook_rename_table_column: `index` names no collection; use `<thing>_index`
+R22.c	table_column_totals.set	index	fm_workbook_set_table_column_totals: `index` names no collection; use `<thing>_index`
+R22.c	table_info.get	index	fm_workbook_get_table_info: `index` names no collection; use `<thing>_index`
+R22.c	table_style_info.set	index	fm_workbook_set_table_style_info: `index` names no collection; use `<thing>_index`
+R22.c	text.set	utf8	fm_sheet_set_text: `utf8` is named after its C type
+R22.c	validation.add	out_index	fm_sheet_add_validation: `out_index` names no collection; use `<thing>_index`
+R22.c	validation.get	index	fm_sheet_get_validation: `index` names no collection; use `<thing>_index`
+R22.c	validation.remove	index	fm_sheet_remove_validation: `index` names no collection; use `<thing>_index`
+R6.c.field	record.cf_rule	range_count	fm_cf_rule_t.range_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_data_info	axis_title_count	fm_chart_data_info_t.axis_title_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_data_info	category_label_count	fm_chart_data_info_t.category_label_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_data_info	category_level_count	fm_chart_data_info_t.category_level_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_data_info	category_value_count	fm_chart_data_info_t.category_value_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_data_info	point_count	fm_chart_data_info_t.point_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_data_info	series_count	fm_chart_data_info_t.series_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_data_info	unresolved_count	fm_chart_data_info_t.unresolved_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_data_points	count	fm_chart_data_points_t.count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_data_series	plot_index	fm_chart_data_series_t.plot_index is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_data_series	point_count	fm_chart_data_series_t.point_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_data_series	range_count	fm_chart_data_series_t.range_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_data_source	literal_count	fm_chart_data_source_t.literal_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_info	axis_count	fm_chart_info_t.axis_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_info	hidden_category_count	fm_chart_info_t.hidden_category_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_info	legend_hidden_count	fm_chart_info_t.legend_hidden_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_info	plot_count	fm_chart_info_t.plot_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_legend_patch	hidden_series_count	fm_chart_legend_patch_t.hidden_series_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_plot	axis_id_count	fm_chart_plot_t.axis_id_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_plot	series_count	fm_chart_plot_t.series_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.chart_series	point_count	fm_chart_series_t.point_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.data_validation	range_count	fm_data_validation_t.range_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.external_link_record	kind	fm_external_link_record_t.kind carries `FM_EXTERNAL_LINK_KIND_*` as `uint32_t`; an enum field is `int32_t`
+R6.c.field	record.fill_record	gradient_stop_count	fm_fill_record_t.gradient_stop_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.page_setup	orientation	fm_page_setup_t.orientation carries `FM_ORIENTATION_*` as `uint32_t`; an enum field is `int32_t`
+R6.c.field	record.protected_range	range_count	fm_protected_range_t.range_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.sheet_rect	sheet_index	fm_sheet_rect_t.sheet_index is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.sparkline_group	sparkline_count	fm_sparkline_group_t.sparkline_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.styles_batch	border_count	fm_styles_batch_t.border_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.styles_batch	cell_xf_count	fm_styles_batch_t.cell_xf_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.styles_batch	fill_count	fm_styles_batch_t.fill_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.styles_batch	font_count	fm_styles_batch_t.font_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`
+R6.c.field	record.styles_batch	num_fmt_count	fm_styles_batch_t.num_fmt_count is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`

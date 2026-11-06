@@ -4,30 +4,30 @@
 # leave a surface when the `closes` rule closes; `replaced_by` folds a type into another.
 schema: 1
 collections:
-  sheet: { key: index, ops: [sheet.add, sheet.copy, sheet.get_count, sheet.move, sheet.remove, sheet.rename, sheet_name.get] }
-  font: { key: index, ops: [font.add, font.get, font.get_count, font.set] }
-  fill: { key: index, ops: [fill.add, fill.get, fill.get_count] }
-  border: { key: index, ops: [border.add, border.get, border.get_count] }
-  cell_xf: { key: index, ops: [cell_xf.add, cell_xf.get, cell_xf.get_count] }
-  cell_style_xf: { key: index, ops: [cell_style_xf.add, cell_style_xf.get, cell_style_xf.get_count] }
-  dxf: { key: index, ops: [dxf.add, dxf.get, dxf.get_count] }
-  table: { key: index, ops: [table.create, table.get, table.get_count, table.remove, table.rename, table.update] }
-  pivot: { key: index, ops: [pivot.create, pivot.get_count, pivot.remove, pivot_cache.get_id] }
-  pivot_field: { key: index, ops: [pivot_field.add, pivot_field.clear, pivot_field.get, pivot_field.get_count] }
-  pivot_data_field: { key: index, ops: [pivot_data_field.add, pivot_data_field.clear, pivot_data_field.get, pivot_data_field.get_count, pivot_data_field.set] }
-  pivot_filter: { key: index, ops: [pivot_filter.add, pivot_filter.clear, pivot_filter.get, pivot_filter.get_count, pivot_filter.remove] }
-  pivot_field_item: { key: index, ops: [pivot_field_item.add, pivot_field_item.add_at, pivot_field_item.get, pivot_field_item.get_count] }
-  pivot_cache_field: { key: index, ops: [pivot_cache_field.add, pivot_cache_field.clear, pivot_cache_field.get_count] }
-  pivot_cache_record: { key: index, ops: [pivot_cache_record.add, pivot_cache_record.clear, pivot_cache_record.get_count] }
-  pivot_cache_field_shared_item: { key: index, ops: [pivot_cache_field_shared_item.get_count] }
-  pivot_cache_calculated_item: { key: index, ops: [pivot_cache_calculated_item.add, pivot_cache_calculated_item.get, pivot_cache_calculated_item.get_count, pivot_cache_calculated_item.move, pivot_cache_calculated_item.remove] }
-  cf_rule: { key: index, ops: [cf_rule.add, cf_rule.clear, cf_rule.get, cf_rule.get_count, cf_rule.remove] }
-  validation: { key: index, ops: [validation.add, validation.get, validation.get_count, validation.remove] }
-  protected_range: { key: index, ops: [protected_range.add, protected_range.get, protected_range.get_count, protected_range.remove, protected_range.update] }
-  sparkline_group: { key: index, ops: [sparkline_group.add, sparkline_group.get, sparkline_group.get_count, sparkline_group.remove, sparkline_group.update] }
-  sparkline: { key: index, ops: [sparkline.get] }
-  external_link: { key: index, ops: [external_link.get, external_link.get_count] }
-  cell_phonetic_run: { key: index, ops: [cell_phonetic_run.get, cell_phonetic_run.get_count] }
+  sheet: { key: index, access: handles, plural: sheets, ops: [sheet.add, sheet.copy, sheet.get_count, sheet.move, sheet.remove, sheet.rename, sheet_index.get, sheet_name.get] }
+  font: { key: index, access: indexed, plural: fonts, ops: [font.add, font.get, font.get_count, font.set] }
+  fill: { key: index, access: indexed, plural: fills, ops: [fill.add, fill.get, fill.get_count] }
+  border: { key: index, access: indexed, plural: borders, ops: [border.add, border.get, border.get_count] }
+  cell_xf: { key: index, access: indexed, plural: cell_xfs, ops: [cell_xf.add, cell_xf.get, cell_xf.get_count] }
+  cell_style_xf: { key: index, access: indexed, plural: cell_style_xfs, ops: [cell_style_xf.add, cell_style_xf.get, cell_style_xf.get_count] }
+  dxf: { key: index, access: indexed, plural: dxfs, ops: [dxf.add, dxf.get, dxf.get_count] }
+  table: { key: index, access: list, plural: tables, ops: [table.create, table.get, table.get_count, table.remove, table.rename, table.update] }
+  pivot: { key: index, access: exempt, plural: pivots, exempt: "no getter returns a pivot; its properties have typed getters and setters", ops: [pivot.create, pivot.get_count, pivot.remove, pivot_cache.get_id] }
+  pivot_field: { key: index, access: list, plural: pivot_fields, ops: [pivot_field.add, pivot_field.clear, pivot_field.get, pivot_field.get_count] }
+  pivot_data_field: { key: index, access: list, plural: pivot_data_fields, ops: [pivot_data_field.add, pivot_data_field.clear, pivot_data_field.get, pivot_data_field.get_count, pivot_data_field.set] }
+  pivot_filter: { key: index, access: list, plural: pivot_filters, ops: [pivot_filter.add, pivot_filter.clear, pivot_filter.get, pivot_filter.get_count, pivot_filter.remove] }
+  pivot_field_item: { key: index, access: indexed, plural: pivot_field_items, ops: [pivot_field_item.add, pivot_field_item.add_at, pivot_field_item.get, pivot_field_item.get_count] }
+  pivot_cache_field: { key: index, access: exempt, plural: pivot_cache_fields, exempt: "no getter returns a cache field; its properties have typed getters", ops: [pivot_cache_field.add, pivot_cache_field.clear, pivot_cache_field.get_count] }
+  pivot_cache_record: { key: index, access: exempt, plural: pivot_cache_records, exempt: "no getter returns a record; its values have typed getters and setters", ops: [pivot_cache_record.add, pivot_cache_record.clear, pivot_cache_record.get_count] }
+  pivot_cache_field_shared_item: { key: index, access: exempt, plural: pivot_cache_field_shared_items, exempt: "no getter returns a shared item; its values have typed getters", ops: [pivot_cache_field_shared_item.get_count] }
+  pivot_cache_calculated_item: { key: index, access: list, plural: pivot_cache_calculated_items, ops: [pivot_cache_calculated_item.add, pivot_cache_calculated_item.get, pivot_cache_calculated_item.get_count, pivot_cache_calculated_item.move, pivot_cache_calculated_item.remove] }
+  cf_rule: { key: index, access: list, plural: cf_rules, ops: [cf_rule.add, cf_rule.clear, cf_rule.get, cf_rule.get_count, cf_rule.remove] }
+  validation: { key: index, access: list, plural: validations, ops: [validation.add, validation.get, validation.get_count, validation.remove] }
+  protected_range: { key: index, access: list, plural: protected_ranges, ops: [protected_range.add, protected_range.get, protected_range.get_count, protected_range.remove, protected_range.update] }
+  sparkline_group: { key: index, access: list, plural: sparkline_groups, ops: [sparkline_group.add, sparkline_group.get, sparkline_group.get_count, sparkline_group.remove, sparkline_group.update] }
+  sparkline: { key: index, access: exempt, plural: sparklines, exempt: "C-only getter; the bindings read sparklines as a SparklineGroup field", ops: [sparkline.get] }
+  external_link: { key: index, access: list, plural: external_links, ops: [external_link.get, external_link.get_count] }
+  cell_phonetic_run: { key: index, access: property, plural: cell_phonetic_runs, ops: [cell_phonetic_run.get, cell_phonetic_run.get_count] }
   comment: { key: natural, by: cell, plural: comments, ops: [comment.get, comment.get_at, comment.get_count, comment.set, comment_visible.get] }
   threaded_comment: { key: natural, by: id, plural: threaded_comments, ops: [threaded_comment.add, threaded_comment.get, threaded_comment.get_at, threaded_comment.get_count, threaded_comment.remove, threaded_comment.update] }
   person: { key: natural, by: id, plural: people, ops: [person.add, person.get, person.get_at, person.get_count, person.remove] }
@@ -54,6 +54,23 @@ collections:
   column_override: { key: natural, by: col, plural: column_overrides, ops: [column_override.get_at, column_override.get_count], no_getter: "read by column through the per-property column getters" }
   table_style: { key: natural, by: name, plural: table_styles, ops: [table_style.get, table_style.get_at, table_style.get_count, table_style.remove, table_style.set] }
   cell_style: { key: natural, by: name, plural: cell_styles, ops: [cell_style.get, cell_style.get_at, cell_style.get_count, cell_style.remove, cell_style.set] }
+enum_families:
+  sort_order: [enum.pivot_sort_order, enum.slicer_sort]
+  anchor: [enum.anchor_kind, enum.anchor_edit_as]
+  blanks: [enum.chart_blanks_as, enum.sparkline_empty_cells]
+enum_distinct:
+  - { enums: [enum.chart_axis_crosses, enum.pivot_aggregation], review: true, note: "share Min / Max only: axis crossing point vs aggregation function; distinct" }
+  - { enums: [enum.chart_axis_position, enum.chart_label_position], review: true, note: "share Left / Right: axis side vs data-label placement; distinct" }
+  - { enums: [enum.chart_axis_position, enum.chart_legend_position], review: true, note: "share Bottom / Left / Right / Top: axis side vs legend placement (legend adds TopRight, None); candidate family" }
+  - { enums: [enum.chart_label_position, enum.chart_legend_position], review: true, note: "share Left / Right: data-label placement vs legend placement; distinct" }
+  - { enums: [enum.chart_insert_kind, enum.chart_plot_type], review: true, note: "share six chart kinds: insert-time kind vs read-back plot type; candidate family" }
+  - { enums: [enum.chart_insert_kind, enum.sparkline_type], review: true, note: "share Column / Line: chart kind vs sparkline kind; distinct" }
+  - { enums: [enum.chart_line_dash, enum.chart_marker_symbol], review: true, note: "share Dash / Dot: line dash vs marker shape; distinct" }
+  - { enums: [enum.chart_line_dash, enum.shape_paint], review: true, note: "share Solid / Other: line dash vs fill paint; distinct" }
+  - { enums: [enum.chart_marker_symbol, enum.chart_title_kind], review: true, note: "share Auto / None: marker shape vs title source; distinct" }
+  - { enums: [enum.chart_source_kind, enum.chart_title_kind], review: true, note: "share None / Ref: series source vs title source; candidate family" }
+  - { enums: [enum.chart_title_kind, enum.pivot_filter_value_kind], review: true, note: "share None / Text: title source vs filter operand kind; distinct" }
+  - { enums: [enum.chart_title_kind, enum.value_kind], review: true, note: "share Ref / Text: title source vs cell value kind; distinct" }
 entries:
   type.status:
     kind: typedef
@@ -332,7 +349,7 @@ entries:
     kind: record
     role: result
     c: fm_paper_info_t
-    py: PaperInfo
+    py: Paper
     surfaces: [c, py]
     was: { c: fm_paper_info, py: PaperInfo }
   record.margins_pt:
@@ -523,6 +540,8 @@ entries:
     py: PivotFieldSpecInput
     surfaces: [c, wasm, native, py]
     was: { c: fm_pivot_field_spec_t, js: PivotFieldSpec, py: PivotFieldSpec }
+    review: true
+    note: "R21.name: js PivotFieldSpecInput -> PivotFieldInput collides with was.js PivotFieldSpec (a rename is already pending); py PivotFieldSpecInput -> PivotFieldInput collides with was.py PivotFieldSpec (a rename is already pending)"
   record.pivot_data_field_spec:
     kind: record
     role: result
@@ -531,6 +550,8 @@ entries:
     py: PivotDataFieldSpec
     surfaces: [c, wasm, native, py]
     was: { c: fm_pivot_data_field_spec_t, js: PivotDataFieldSpec, py: PivotDataFieldSpec }
+    review: true
+    note: "R21.name: js PivotDataFieldSpec -> PivotDataField collides with record.pivot_data_field_result; py PivotDataFieldSpec -> PivotDataField collides with record.pivot_data_field_result"
   record.pivot_field_info:
     kind: record
     role: result
@@ -538,6 +559,8 @@ entries:
     py: PivotFieldInfo
     surfaces: [c, py]
     was: { c: fm_pivot_field_info_t, py: PivotFieldInfo }
+    review: true
+    note: "R21.name: py PivotFieldInfo -> PivotField collides with record.pivot_field_result"
   record.pivot_item_info:
     kind: record
     role: result
@@ -545,12 +568,14 @@ entries:
     py: PivotItemInfo
     surfaces: [c, py]
     was: { c: fm_pivot_item_info_t, py: PivotItemInfo }
+    review: true
+    note: "R21.name: py PivotItemInfo -> PivotItem collides with record.pivot_item_result"
   record.pivot_style_info:
     kind: record
     role: result
     c: fm_pivot_style_info_t
-    js: PivotStyleInfo
-    py: PivotStyleInfo
+    js: PivotStyle
+    py: PivotStyle
     surfaces: [c, wasm, native, py]
     was: { c: fm_pivot_style_info_t, js: PivotStyleInfo, py: PivotStyleInfo }
   record.pivot_filter_spec:
@@ -561,6 +586,8 @@ entries:
     py: PivotFilterSpec
     surfaces: [c, wasm, native, py]
     was: { c: fm_pivot_filter_spec_t, js: PivotFilterSpec, py: PivotFilterSpec }
+    review: true
+    note: "R21.name: js PivotFilterSpec -> PivotFilter collides with record.pivot_filter_result; py PivotFilterSpec -> PivotFilter collides with record.pivot_filter_result"
   record.pivot_options:
     kind: record
     role: result
@@ -588,8 +615,8 @@ entries:
     kind: record
     role: result
     c: fm_spill_info_t
-    js: SpillInfo
-    py: SpillInfo
+    js: Spill
+    py: Spill
     surfaces: [c, wasm, native, py]
     was: { c: fm_spill_info_t, js: SpillInfo, py: SpillInfo }
   record.array_formula:
@@ -778,16 +805,16 @@ entries:
     kind: record
     role: result
     c: fm_color_spec_t
-    js: ColorSpec
-    py: ColorSpec
+    js: Color
+    py: Color
     surfaces: [c, wasm, native, py]
     was: { c: fm_color_spec, js: ColorSpec, py: ColorSpec }
   record.font_record:
     kind: record
     role: result
     c: fm_font_record_t
-    js: FontRecord
-    py: FontRecord
+    js: Font
+    py: Font
     surfaces: [c, wasm, native, py]
     was: { c: fm_font_record, js: FontRecord, py: FontRecord }
   record.gradient_stop:
@@ -802,8 +829,8 @@ entries:
     kind: record
     role: result
     c: fm_fill_record_t
-    js: FillRecord
-    py: FillRecord
+    js: Fill
+    py: Fill
     surfaces: [c, wasm, native, py]
     was: { c: fm_fill_record, js: FillRecord, py: FillRecord }
   record.border_side:
@@ -817,7 +844,7 @@ entries:
     kind: record
     role: result
     c: fm_border_record_t
-    js: BorderRecord
+    js: Border
     surfaces: [c, wasm, native]
     was: { c: fm_border_record, js: BorderRecord }
   record.styles_batch:
@@ -837,7 +864,7 @@ entries:
     kind: record
     role: result
     c: fm_dxf_record_t
-    js: DxfRecord
+    js: Dxf
     surfaces: [c, wasm, native]
     was: { c: fm_dxf_record, js: DxfRecord }
   record.cell_style_record:
@@ -848,6 +875,8 @@ entries:
     py: CellStyleRecord
     surfaces: [c, wasm, native, py]
     was: { c: fm_cell_style_record_t, js: CellStyleRecord, py: CellStyle }
+    review: true
+    note: "R21.name: py CellStyleRecord -> CellStyle collides with was.py CellStyle (a rename is already pending)"
   record.table_style_element:
     kind: record
     role: result
@@ -907,6 +936,8 @@ entries:
     py: ExternalLinkRecord
     surfaces: [c, wasm, native, py]
     was: { c: fm_external_link_record_t, js: ExternalLinkRecord, py: ExternalLink }
+    review: true
+    note: "R21.name: py ExternalLinkRecord -> ExternalLink collides with was.py ExternalLink (a rename is already pending)"
   enum.image_format:
     kind: enum
     c: fm_image_format_t
@@ -947,6 +978,8 @@ entries:
     py: ImageInfo
     surfaces: [c, py]
     was: { c: fm_image_info, py: ImageInfo }
+    review: true
+    note: "R21.name: py ImageInfo -> Image collides with record.image"
   record.drawing_object:
     kind: record
     role: result
@@ -1203,8 +1236,8 @@ entries:
     kind: record
     role: result
     c: fm_chart_info_t
-    js: ChartInfo
-    py: ChartInfo
+    js: Chart
+    py: Chart
     surfaces: [c, wasm, native, py]
     was: { c: fm_chart_info_t, js: ChartInfo, py: ChartInfo }
   record.chart_plot:
@@ -1490,6 +1523,8 @@ entries:
     js: CellEntry
     surfaces: [wasm, native]
     was: { js: CellEntry }
+    review: true
+    note: "R21.name: js CellEntry -> Cell collides with record.cell"
   record.cell_rect_result:
     kind: record
     role: result
@@ -1559,8 +1594,8 @@ entries:
     was: { js: CfValueObjectInput }
   record.chart_axis_info:
     kind: record
-    js: ChartAxisInfo
-    py: ChartAxisInfo
+    js: ChartAxis
+    py: ChartAxis
     surfaces: [wasm, native, py]
     was: { js: ChartAxisInfo, py: ChartAxisInfo }
   record.chart_data_result:
@@ -1572,38 +1607,38 @@ entries:
     drop: { js: ChartDataResult, closes: R8.js }
   record.chart_fill_info:
     kind: record
-    js: ChartFillInfo
-    py: ChartFillInfo
+    js: ChartFill
+    py: ChartFill
     surfaces: [wasm, native, py]
     was: { js: ChartFillInfo, py: ChartFillInfo }
   record.chart_labels_info:
     kind: record
-    js: ChartLabelsInfo
-    py: ChartLabelsInfo
+    js: ChartLabels
+    py: ChartLabels
     surfaces: [wasm, native, py]
     was: { js: ChartLabelsInfo, py: ChartLabelsInfo }
   record.chart_line_info:
     kind: record
-    js: ChartLineInfo
-    py: ChartLineInfo
+    js: ChartLine
+    py: ChartLine
     surfaces: [wasm, native, py]
     was: { js: ChartLineInfo, py: ChartLineInfo }
   record.chart_marker_info:
     kind: record
-    js: ChartMarkerInfo
-    py: ChartMarkerInfo
+    js: ChartMarker
+    py: ChartMarker
     surfaces: [wasm, native, py]
     was: { js: ChartMarkerInfo, py: ChartMarkerInfo }
   record.chart_plot_info:
     kind: record
-    js: ChartPlotInfo
-    py: ChartPlotInfo
+    js: ChartPlot
+    py: ChartPlot
     surfaces: [wasm, native, py]
     was: { js: ChartPlotInfo, py: ChartPlotInfo }
   record.chart_point_info:
     kind: record
-    js: ChartPointInfo
-    py: ChartPointInfo
+    js: ChartPoint
+    py: ChartPoint
     surfaces: [wasm, native, py]
     was: { js: ChartPointInfo, py: ChartPointInfo }
   record.chart_result:
@@ -1615,8 +1650,8 @@ entries:
     was: { js: ChartResult }
   record.chart_series_info:
     kind: record
-    js: ChartSeriesInfo
-    py: ChartSeriesInfo
+    js: ChartSeries
+    py: ChartSeries
     surfaces: [wasm, native, py]
     was: { js: ChartSeriesInfo, py: ChartSeriesInfo }
   record.chart_title_info:
@@ -1624,6 +1659,8 @@ entries:
     js: ChartTitleInfo
     surfaces: [wasm, native]
     was: { js: ChartTitleInfo }
+    review: true
+    note: "R21.name: js ChartTitleInfo -> ChartTitle collides with record.chart_title"
   record.collation_classes_result:
     kind: record
     role: result
@@ -1656,6 +1693,8 @@ entries:
     js: ConditionalFormatEntry
     surfaces: [wasm, native]
     was: { js: ConditionalFormatEntry }
+    review: true
+    note: "R21.name: js ConditionalFormatEntry -> ConditionalFormat collides with record.conditional_format"
   record.conditional_format_input:
     kind: record
     js: ConditionalFormatInput
@@ -1686,6 +1725,8 @@ entries:
     js: DataTableSpec
     surfaces: [wasm, native]
     was: { js: DataTableSpec }
+    review: true
+    note: "R21.name: js DataTableSpec -> DataTable collides with record.data_table"
   record.data_validation_input:
     kind: record
     js: DataValidationInput
@@ -1790,6 +1831,8 @@ entries:
     py: FunctionMetadataEntry
     surfaces: [wasm, native, py]
     was: { js: FunctionMetadataEntry, py: FunctionMetadataEntry }
+    review: true
+    note: "R21.name: js FunctionMetadataEntry -> FunctionMetadata collides with record.function_metadata; py FunctionMetadataEntry -> FunctionMetadata collides with record.function_metadata"
   record.function_metadata_localized:
     kind: record
     js: FunctionMetadataLocalized
@@ -1819,6 +1862,8 @@ entries:
     js: ImageInfo
     surfaces: [wasm, native]
     was: { js: ImageInfoResult }
+    review: true
+    note: "R21.name: js ImageInfo -> Image collides with record.image"
   record.image_placement:
     kind: record
     js: ImagePlacement
@@ -2246,7 +2291,7 @@ entries:
     was: { js: SheetAutoFilterXmlResult }
   record.sheet_comment_entry:
     kind: record
-    js: SheetCommentEntry
+    js: SheetComment
     surfaces: [wasm, native]
     was: { js: SheetCommentEntry }
   record.sheet_format_defaults_result:
@@ -2359,6 +2404,8 @@ entries:
     js: TableColumnEntry
     surfaces: [wasm, native]
     was: { js: TableColumnEntry }
+    review: true
+    note: "R21.name: js TableColumnEntry -> TableColumn collides with record.table_column"
   record.table_column_totals_input:
     kind: record
     js: TableColumnTotalsInput
@@ -2369,6 +2416,8 @@ entries:
     js: TableEntry
     surfaces: [wasm, native]
     was: { js: TableEntry }
+    review: true
+    note: "R21.name: js TableEntry -> Table collides with record.table"
   record.table_input:
     kind: record
     js: TableInput
@@ -2422,7 +2471,7 @@ entries:
     drop: { js: ThreadedCommentsResult, closes: R8.js }
   record.validation_entry:
     kind: record
-    js: ValidationEntry
+    js: Validation
     surfaces: [wasm, native]
     was: { js: ValidationEntry }
   record.validation_outcome_result:
@@ -2461,7 +2510,7 @@ entries:
     was: { py: ChartCategories }
   record.chart_legend_info:
     kind: record
-    py: ChartLegendInfo
+    py: ChartLegend
     surfaces: [py]
     was: { py: ChartLegendInfo }
   record.chart_series_ranges:
@@ -2471,7 +2520,7 @@ entries:
     was: { py: ChartSeriesRanges }
   record.chart_source_info:
     kind: record
-    py: ChartSourceInfo
+    py: ChartSource
     surfaces: [py]
     was: { py: ChartSourceInfo }
   record.collation_classes:
@@ -2489,6 +2538,8 @@ entries:
     py: CommentEntry
     surfaces: [py]
     was: { py: CommentEntry }
+    review: true
+    note: "R21.name: py CommentEntry -> Comment collides with record.comment"
   record.conditional_format:
     kind: record
     py: ConditionalFormat
@@ -2585,6 +2636,7 @@ entries:
     was: { py: Theme }
   workbook.create:
     kind: factory
+    scope: workbook
     c: fm_workbook_create_default
     js: Workbook.createDefault
     py: Workbook.create_default
@@ -2592,6 +2644,7 @@ entries:
     was: { c: fm_workbook_create, js: Workbook.createDefault, py: Workbook.create_default }
   formula.eval:
     kind: free
+    scope: process
     js: evalFormula
     py: eval_formula
     surfaces: [wasm, native, py]
@@ -2599,6 +2652,7 @@ entries:
     was: { py: eval_formula, js: evalFormula }
   workbook.create_for_profile:
     kind: factory
+    scope: workbook
     c: fm_workbook_create_for_profile
     js: Workbook.createForProfile
     py: Workbook.create_for_profile
@@ -2606,6 +2660,7 @@ entries:
     was: { c: fm_workbook_create_for_profile, js: Workbook.createForProfile, py: Workbook.create_for_profile }
   workbook.create_empty:
     kind: factory
+    scope: workbook
     c: fm_workbook_create_empty
     js: Workbook.createEmpty
     py: Workbook.create_empty
@@ -2613,6 +2668,7 @@ entries:
     was: { c: fm_workbook_create_empty, js: Workbook.createEmpty, py: Workbook.create_empty }
   workbook.load:
     kind: factory
+    scope: workbook
     c: fm_workbook_load
     js: Workbook.load
     py: Workbook.load
@@ -2713,6 +2769,7 @@ entries:
     py: get_sheet_index
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_sheet_index }
+    missing: null
   sheet.add:
     kind: op
     scope: workbook
@@ -2722,6 +2779,7 @@ entries:
     py: add_sheet
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_add_sheet, js: addSheet, py: add_sheet }
+    facade: handwritten
   sheet.move:
     kind: op
     scope: workbook
@@ -2731,6 +2789,7 @@ entries:
     py: move_sheet
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_move_sheet, js: moveSheet, py: move_sheet }
+    facade: handwritten
   sheet.copy:
     kind: op
     scope: workbook
@@ -2740,6 +2799,7 @@ entries:
     py: copy_sheet
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_copy_sheet, js: copySheet, py: copy_sheet }
+    facade: handwritten
   active_sheet.get:
     kind: op
     scope: workbook
@@ -2749,6 +2809,7 @@ entries:
     py: get_active_sheet
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_active_sheet, js: activeSheet, py: active_sheet }
+    facade: handwritten
   active_sheet.set:
     kind: op
     scope: workbook
@@ -2758,6 +2819,7 @@ entries:
     py: set_active_sheet
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_active_sheet, js: setActiveSheet, py: set_active_sheet }
+    facade: handwritten
   sheet.remove:
     kind: op
     scope: workbook
@@ -2767,6 +2829,7 @@ entries:
     py: remove_sheet
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_remove_sheet, js: removeSheet, py: remove_sheet }
+    facade: handwritten
   sheet.rename:
     kind: op
     scope: workbook
@@ -2776,6 +2839,7 @@ entries:
     py: rename_sheet
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_rename_sheet, js: renameSheet, py: rename_sheet }
+    facade: handwritten
   defined_name.set:
     kind: op
     scope: workbook
@@ -2932,6 +2996,7 @@ entries:
     py: set_formula
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_formula, js: setFormula, py: set_formula }
+    facade: handwritten
   value.get:
     kind: op
     total: "an unwritten cell reads as a blank value"
@@ -3007,6 +3072,7 @@ entries:
     py: get_lambda_text
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_lambda_text_at, js: getLambdaText, py: lambda_text_at }
+    missing: null
   formula.evaluate:
     kind: op
     scope: sheet
@@ -3109,6 +3175,7 @@ entries:
     py: get_formula
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_formula, js: getFormula, py: get_formula }
+    facade: handwritten
   formula_r1c1.get:
     kind: op
     scope: sheet
@@ -3319,6 +3386,7 @@ entries:
     py: add_hyperlink
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_add_hyperlink, js: addHyperlink, py: add_hyperlink }
+    facade: handwritten
   hyperlink.add_range:
     kind: op
     scope: sheet
@@ -3328,6 +3396,7 @@ entries:
     surfaces: [wasm, native, py]
     exception: "binding form taking a CellRect (R7)"
     was: { js: addHyperlinkRange, py: add_hyperlink_range }
+    facade: handwritten
   hyperlink.remove:
     kind: op
     scope: sheet
@@ -3400,8 +3469,10 @@ entries:
     py: get_comment
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_get_comment_at, js: getComment, py: get_comment }
+    missing: null
   comment.get.get_comment_result:
     kind: op
+    scope: sheet
     surfaces: [wasm, native]
     was: { js: getCommentResult }
     drop: { js: getCommentResult, closes: R8.js }
@@ -3468,6 +3539,7 @@ entries:
     py: set_comment
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_comment, js: setComment, py: set_comment }
+    facade: handwritten
   comment_visible.get:
     kind: op
     scope: sheet
@@ -3478,6 +3550,7 @@ entries:
     returns: bool
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_get_comment_visible, js: getCommentVisible, py: get_comment_visible }
+    missing: null
   comment_visible.set:
     kind: op
     scope: sheet
@@ -3497,6 +3570,7 @@ entries:
     py: get_workbook_protection
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_protection, js: getWorkbookProtection, py: get_workbook_protection }
+    total: "an unprotected workbook reads as the all-off record"
   workbook_protection.set:
     kind: op
     scope: workbook
@@ -3646,6 +3720,7 @@ entries:
     py: update_threaded_comment
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_edit_threaded_comment, js: editThreadedComment, py: edit_threaded_comment }
+    facade: handwritten
   thread_resolved.set:
     kind: op
     scope: sheet
@@ -3860,6 +3935,7 @@ entries:
     py: set_pinned_now
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_pinned_now, js: setPinnedNow, py: set_pinned_now }
+    facade: handwritten
   pinned_now.clear:
     kind: op
     scope: workbook
@@ -3914,6 +3990,7 @@ entries:
     py: get_sheet_protection
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_get_protection, js: getSheetProtection, py: get_sheet_protection }
+    total: "an unprotected sheet reads as the all-off record"
   sheet_protection.set:
     kind: op
     scope: sheet
@@ -4553,6 +4630,7 @@ entries:
     py: get_pivot_cache_worksheet_source
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_get_worksheet_source, js: pivotCacheGetWorksheetSource, py: get_pivot_cache_worksheet_source }
+    missing: null
   pivot_cache_worksheet_source.set:
     kind: op
     scope: workbook
@@ -4926,6 +5004,7 @@ entries:
     params: { rows_enabled: bool, cols_enabled: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_grand_totals, js: pivotSetGrandTotals, py: pivot_set_grand_totals }
+    facade: handwritten
   pivot_style_info.set:
     kind: op
     scope: sheet
@@ -5306,6 +5385,7 @@ entries:
     py: show_pivot_details
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_show_details, js: pivotShowDetails, py: pivot_show_details }
+    facade: handwritten
   pivot_grand_totals.get:
     kind: op
     scope: sheet
@@ -5459,6 +5539,7 @@ entries:
     py: get_function_metadata
     surfaces: [c, wasm, native, py]
     was: { c: fm_function_metadata, js: functionMetadata, py: Workbook.function_metadata }
+    missing: null
   function.get_count:
     kind: op
     scope: process
@@ -5521,6 +5602,7 @@ entries:
     py: get_locale_facts
     surfaces: [c, wasm, native, py]
     was: { c: fm_locale_facts, js: localeFacts, py: Workbook.locale_facts }
+    total: "every profile has locale facts"
   text.compare:
     kind: op
     scope: process
@@ -5602,6 +5684,8 @@ entries:
     py: set_top_left
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_top_left, js: setSheetTopLeft, py: set_sheet_top_left }
+    review: true
+    note: "R7.opts: (row, col) are coordinate words; confirm positional"
   pane_top_left.set:
     kind: op
     scope: sheet
@@ -5611,6 +5695,8 @@ entries:
     py: set_pane_top_left
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_pane_top_left, js: setSheetPaneTopLeft, py: set_sheet_pane_top_left }
+    review: true
+    note: "R7.opts: (row, col) are coordinate words; confirm positional"
   split.set:
     kind: op
     scope: sheet
@@ -5620,6 +5706,8 @@ entries:
     py: set_split
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_split, js: setSheetSplit, py: set_sheet_split }
+    review: true
+    note: "R7.opts: (xTwips, yTwips) are two adjacent offsets, not coordinate words; decide positional or options"
   selection.get:
     kind: op
     scope: sheet
@@ -5665,6 +5753,7 @@ entries:
     py: get_auto_filter
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_get_auto_filter, js: getAutoFilter, py: get_auto_filter }
+    missing: null
   auto_filter.set:
     kind: op
     scope: sheet
@@ -5719,6 +5808,7 @@ entries:
     py: get_table_auto_filter
     surfaces: [c, wasm, native, py]
     was: { c: fm_table_get_auto_filter, js: getTableAutoFilter, py: get_table_auto_filter }
+    missing: null
   table_auto_filter.set:
     kind: op
     scope: workbook
@@ -6043,6 +6133,8 @@ entries:
     py: set_freeze
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_freeze, js: setSheetFreeze, py: set_sheet_freeze }
+    review: true
+    note: "R7.opts: (freezeRows, freezeCols) are two adjacent counts, not coordinate words; decide positional or options"
   tab_hidden.set:
     kind: op
     scope: sheet
@@ -6258,6 +6350,7 @@ entries:
     py: get_num_fmt_string
     surfaces: [c, wasm, native, py]
     was: { c: fm_styles_get_num_fmt_string, js: getNumFmt, py: get_num_fmt }
+    missing: null
   fill.get:
     kind: op
     scope: workbook
@@ -6338,6 +6431,7 @@ entries:
     was: { c: fm_styles_remove_table_style, js: removeTableStyle, py: remove_table_style }
   table_styles.list:
     kind: list
+    scope: workbook
     from: [table_style.get_count, table_style.get_at]
     js: listTableStyles
     py: list_table_styles
@@ -6521,6 +6615,7 @@ entries:
     was: { c: fm_styles_remove_cell_style, js: removeCellStyle, py: remove_cell_style }
   cell_styles.list:
     kind: list
+    scope: workbook
     from: [cell_style.get_count, cell_style.get_at]
     js: listCellStyles
     py: list_cell_styles
@@ -6558,6 +6653,7 @@ entries:
     py: get_theme_fonts
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_theme_fonts, js: getTheme, py: get_theme }
+    facade: handwritten
   theme_fonts.set:
     kind: op
     scope: workbook
@@ -6591,6 +6687,7 @@ entries:
     params: { major: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_theme_script_font, js: setThemeScriptFont, py: set_theme_script_font }
+    facade: handwritten
   theme.clear:
     kind: op
     scope: workbook
@@ -6669,6 +6766,7 @@ entries:
     py: get_image
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_get_image, js: getImage, py: get_image }
+    missing: null
   image.add:
     kind: op
     scope: sheet
@@ -6891,6 +6989,7 @@ entries:
     py: get_chart
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_chart_open, js: getChart, py: get_chart }
+    missing: null
   chart.destroy:
     kind: op
     scope: chart
@@ -6973,6 +7072,8 @@ entries:
     py: get_chart_data
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_chart_data_open, js: getChartData, py: get_chart_data }
+    total: "returns the chart's data handle; a missing chart throws"
+    missing: throw
   chart_preview.get:
     kind: op
     scope: sheet
@@ -6982,6 +7083,8 @@ entries:
     py: get_chart_preview
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_chart_preview_open, js: previewChartData, py: preview_chart_data }
+    total: "returns the preview handle; a missing chart throws"
+    missing: throw
   chart_data.destroy:
     kind: op
     scope: chart_data
@@ -7193,6 +7296,7 @@ entries:
     py: get_data_table
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_data_table_at, js: getDataTable, py: get_data_table }
+    missing: null
   data_table.remove:
     kind: op
     scope: sheet
@@ -7229,11 +7333,13 @@ entries:
     was: { c: fm_get_version_number }
   version.get.version_string:
     kind: op
+    scope: process
     surfaces: [py]
     was: { py: version_string }
     drop: { py: version_string, closes: R0.coverage }
   version.get.version:
     kind: op
+    scope: process
     surfaces: [wasm, native]
     was: { js: version }
     drop: { js: version, closes: R0.coverage }
@@ -7245,6 +7351,7 @@ entries:
     js: getDefinedName
     py: get_defined_name
     surfaces: [c, wasm, native, py]
+    missing: null
   defined_name.remove:
     kind: op
     scope: workbook
@@ -7261,6 +7368,7 @@ entries:
     js: getTableStyle
     py: get_table_style
     surfaces: [c, wasm, native, py]
+    missing: null
   cell_style.get:
     kind: op
     scope: workbook
@@ -7269,6 +7377,7 @@ entries:
     js: getCellStyle
     py: get_cell_style
     surfaces: [c, wasm, native, py]
+    missing: null
   hyperlink.get:
     kind: op
     scope: sheet
@@ -7277,6 +7386,7 @@ entries:
     js: getHyperlink
     py: get_hyperlink
     surfaces: [c, wasm, native, py]
+    missing: null
   person.get:
     kind: op
     scope: workbook
@@ -7285,6 +7395,7 @@ entries:
     js: getPerson
     py: get_person
     surfaces: [c, wasm, native, py]
+    missing: null
   threaded_comment.get:
     kind: op
     scope: sheet
@@ -7293,6 +7404,7 @@ entries:
     js: getThreadedComment
     py: get_threaded_comment
     surfaces: [c, wasm, native, py]
+    missing: null
   shape.get:
     kind: op
     scope: sheet
@@ -7301,6 +7413,7 @@ entries:
     js: getShape
     py: get_shape
     surfaces: [c, wasm, native, py]
+    missing: null
   slicer.get:
     kind: op
     scope: sheet
@@ -7309,6 +7422,7 @@ entries:
     js: getSlicer
     py: get_slicer
     surfaces: [c, wasm, native, py]
+    missing: null
   drawing_object.get:
     kind: op
     scope: sheet
@@ -7317,6 +7431,7 @@ entries:
     js: getDrawingObject
     py: get_drawing_object
     surfaces: [c, wasm, native, py]
+    missing: null
   passthrough.get:
     kind: op
     scope: workbook
@@ -7325,6 +7440,7 @@ entries:
     js: getPassthrough
     py: get_passthrough
     surfaces: [c, wasm, native, py]
+    missing: null
   theme_script_font.get:
     kind: op
     scope: workbook
@@ -7334,8 +7450,10 @@ entries:
     py: get_theme_script_font
     params: { major: bool }
     surfaces: [c, wasm, native, py]
+    missing: null
   function_names.list:
     kind: list
+    scope: process
     from: [function.get_count, function.get_name_at]
     js: listFunctionNames
     py: list_function_names
@@ -7343,18 +7461,21 @@ entries:
     was: { js: functionNames }
   locale_error_names.list:
     kind: list
+    scope: process
     from: [locale_error_name.get_count, locale_error_name.get_at]
     js: listLocaleErrorNames
     py: list_locale_error_names
     surfaces: [wasm, native, py]
   cf_rule.list.get_conditional_formats:
     kind: list
+    scope: sheet
     from: [cf_rule.get_count, cf_rule.get]
     surfaces: [wasm, native, py]
     was: { js: getConditionalFormats, py: get_conditional_formats }
     drop: { js: getConditionalFormats, py: get_conditional_formats, closes: R5.list }
   column_breaks.list:
     kind: list
+    scope: sheet
     from: [column_break.get_count, column_break.get_at]
     js: listColumnBreaks
     py: list_column_breaks
@@ -7362,6 +7483,7 @@ entries:
     was: { js: getSheetColBreaks, py: get_col_breaks }
   drawing_objects.list:
     kind: list
+    scope: sheet
     from: [drawing_object.get_count, drawing_object.get_at]
     js: listDrawingObjects
     py: list_drawing_objects
@@ -7369,6 +7491,7 @@ entries:
     was: { js: listDrawingObjects, py: list_drawing_objects }
   column_overrides.list:
     kind: list
+    scope: sheet
     from: [column_override.get_count, column_override.get_at]
     js: listColumnOverrides
     py: list_column_overrides
@@ -7376,6 +7499,7 @@ entries:
     was: { js: getSheetColumns, py: get_sheet_columns }
   comments.list:
     kind: list
+    scope: sheet
     from: [comment.get_count, comment.get_at]
     js: listComments
     py: list_comments
@@ -7383,6 +7507,7 @@ entries:
     was: { js: getComments, py: get_comments }
   hyperlinks.list:
     kind: list
+    scope: sheet
     from: [hyperlink.get_count, hyperlink.get_at]
     js: listHyperlinks
     py: list_hyperlinks
@@ -7390,6 +7515,7 @@ entries:
     was: { js: getHyperlinks, py: get_hyperlinks }
   merges.list:
     kind: list
+    scope: sheet
     from: [merge.get_count, merge.get_at]
     js: listMerges
     py: list_merges
@@ -7397,6 +7523,7 @@ entries:
     was: { js: getMerges, py: get_merges }
   row_overrides.list:
     kind: list
+    scope: sheet
     from: [row_override.get_count, row_override.get_at]
     js: listRowOverrides
     py: list_row_overrides
@@ -7404,18 +7531,21 @@ entries:
     was: { js: getSheetRowOverrides, py: get_sheet_row_overrides }
   validation.list.get_validations:
     kind: list
+    scope: sheet
     from: [validation.get_count, validation.get]
     surfaces: [wasm, native, py]
     was: { js: getValidations, py: get_validations }
     drop: { js: getValidations, py: get_validations, closes: R5.list }
   protected_range.list.get_protected_ranges:
     kind: list
+    scope: sheet
     from: [protected_range.get_count, protected_range.get]
     surfaces: [wasm, native, py]
     was: { js: getProtectedRanges, py: get_protected_ranges }
     drop: { js: getProtectedRanges, py: get_protected_ranges, closes: R5.list }
   row_breaks.list:
     kind: list
+    scope: sheet
     from: [row_break.get_count, row_break.get_at]
     js: listRowBreaks
     py: list_row_breaks
@@ -7423,6 +7553,7 @@ entries:
     was: { js: getSheetRowBreaks, py: get_row_breaks }
   shapes.list:
     kind: list
+    scope: sheet
     from: [shape.get_count, shape.get_at]
     js: listShapes
     py: list_shapes
@@ -7430,6 +7561,7 @@ entries:
     was: { js: listShapes, py: list_shapes }
   slicers.list:
     kind: list
+    scope: sheet
     from: [slicer.get_count, slicer.get_at]
     js: listSlicers
     py: list_slicers
@@ -7437,12 +7569,14 @@ entries:
     was: { js: listSlicers, py: list_slicers }
   sparkline_group.list.list_sparkline_groups:
     kind: list
+    scope: sheet
     from: [sparkline_group.get_count, sparkline_group.get]
     surfaces: [wasm, native, py]
     was: { js: listSparklineGroups, py: list_sparkline_groups }
     drop: { js: listSparklineGroups, py: list_sparkline_groups, closes: R5.list }
   threaded_comments.list:
     kind: list
+    scope: sheet
     from: [threaded_comment.get_count, threaded_comment.get_at]
     js: listThreadedComments
     py: list_threaded_comments
@@ -7450,12 +7584,14 @@ entries:
     was: { js: getThreadedComments, py: get_threaded_comments }
   cell.list.iter_cells:
     kind: list
+    scope: sheet
     from: [cell.get_count, cell.get_at]
     surfaces: [py]
     was: { py: iter_cells }
     drop: { py: iter_cells, closes: R5.list }
   defined_names.list:
     kind: list
+    scope: workbook
     from: [defined_name.get_count, defined_name.get_at]
     js: listDefinedNames
     py: list_defined_names
@@ -7463,18 +7599,21 @@ entries:
     was: { py: iter_defined_names }
   external_link.list.get_external_links:
     kind: list
+    scope: workbook
     from: [external_link.get_count, external_link.get]
     surfaces: [wasm, native, py]
     was: { js: getExternalLinks, py: get_external_links }
     drop: { js: getExternalLinks, py: get_external_links, closes: R5.list }
   cell_phonetic_run.list.get_cell_phonetic_runs:
     kind: list
+    scope: sheet
     from: [cell_phonetic_run.get_count, cell_phonetic_run.get]
     surfaces: [wasm, native, py]
     was: { js: getCellPhoneticRuns, py: get_phonetic_runs }
     drop: { js: getCellPhoneticRuns, py: get_phonetic_runs, closes: R5.list }
   passthroughs.list:
     kind: list
+    scope: workbook
     from: [passthrough.get_count, passthrough.get_at]
     js: listPassthroughs
     py: list_passthroughs
@@ -7482,6 +7621,7 @@ entries:
     was: { py: iter_passthrough }
   people.list:
     kind: list
+    scope: workbook
     from: [person.get_count, person.get_at]
     js: listPeople
     py: list_people
@@ -7489,12 +7629,14 @@ entries:
     was: { js: getPersons, py: get_persons }
   pivot_cache_ids.list:
     kind: list
+    scope: workbook
     from: [pivot_cache.get_count, pivot_cache.get_id_at]
     js: listPivotCaches
     py: list_pivot_caches
     surfaces: [wasm, native, py]
   table.list.iter_tables:
     kind: list
+    scope: workbook
     from: [table.get_count, table.get]
     surfaces: [py]
     was: { py: iter_tables }
@@ -10721,6 +10863,7 @@ entries:
     surfaces: [c]
   binding.disposed:
     kind: op
+    scope: workbook
     js: disposed
     py: closed
     surfaces: [wasm, native, py]
@@ -10728,6 +10871,7 @@ entries:
     exception: "binding-only read-only property of the wrapped handle; the predicate follows each language's release verb (dispose / close)"
   workbook.delete:
     kind: op
+    scope: workbook
     surfaces: [wasm]
     was: { js: delete }
     drop: { js: delete, closes: R10.js }
@@ -10743,6 +10887,7 @@ entries:
     was: { js: PIVOT_SHOW_AS_BASE_NEXT }
   binding.merge_function_metadata:
     kind: free
+    scope: process
     js: mergeFunctionMetadata
     py: merge_function_metadata
     surfaces: [wasm, native, py]
@@ -10750,16 +10895,20 @@ entries:
     exception: "binding-only helper that merges function metadata documents"
   binding.set_value:
     kind: op
+    scope: sheet
     js: setValue
     py: set_value
     surfaces: [wasm, native, py]
     exception: "binding convenience: dispatches on the type of the value to the typed setters"
+    facade: handwritten
   binding.sheet:
     kind: op
+    scope: workbook
     js: sheet
     py: sheet
     surfaces: [wasm, native, py]
     exception: "binding convenience: the A1 view of one sheet"
+    missing: throw
   record.sheet:
     kind: record
     js: Sheet
@@ -10825,6 +10974,8 @@ entries:
     role: input
     js: PivotStyleInfoInput
     surfaces: [wasm, native]
+    review: true
+    note: "R21.name: js PivotStyleInfoInput -> PivotStyleInput collides with was.js None (a rename is already pending)"
   record.pivot_worksheet_source_input:
     kind: record
     role: input
@@ -10842,6 +10993,7 @@ entries:
     surfaces: [wasm, native]
   module.create:
     kind: free
+    scope: process
     js: createFormulon
     surfaces: [wasm, native]
     exception: "entry point of both npm packages (default and named export)"

@@ -89,12 +89,15 @@ def _members(text: str, interface: str, source: Path) -> Set[str]:
 
 
 class _JsSurface:
-    """What one JS package exports: top-level names, `Formulon` members, `Workbook` members, factory members."""
+    """What one JS package exports: top-level names, `Formulon` members, `Workbook` and `Sheet` members,
+    factory members."""
 
     def __init__(self, dts: Path) -> None:
         text = _read(dts)
         self.exports = set(_TS_EXPORT_RE.findall(text))
         self.workbook = _members(text, "Workbook", dts) | {"dispose"}
+        has_sheet = re.search(r"^export (?:interface|class) Sheet\b", text, re.M) is not None
+        self.sheet = _members(text, "Sheet", dts) if has_sheet else set()
         self.ctor = _members(text, "WorkbookCtor", dts)
         self.module = _members(text, ENTRY_INTERFACE, dts)
         self.interfaces = {
@@ -209,6 +212,31 @@ def _check_js_block(label: str, line: int, block: str, surfaces: Dict[str, _JsSu
         for m in re.finditer(r"(?<![\w.])%s\.(\w+)\(" % re.escape(wb), block):
             if m.group(1) not in surface.workbook:
                 problems.append(f"readme-identifiers: {where}: `{wb}.{m.group(1)}` is not a Workbook method")
+    _check_js_sheets(where, block, workbooks, surface, problems)
+
+
+def _js_sheet_variables(block: str, workbooks: Set[str]) -> Set[str]:
+    """Names bound to a `Sheet`: `wb.sheet(...)`, an element of `wb.listSheets()`, or a loop over it."""
+    names: Set[str] = set()
+    for wb in workbooks:
+        w = re.escape(wb)
+        names |= set(re.findall(r"(?:const|let)\s+(\w+)\s*=\s*%s\.sheet\(" % w, block))
+        names |= set(re.findall(r"(?:const|let)\s+(\w+)\s*=\s*%s\.listSheets\(\)\s*\[" % w, block))
+        names |= set(re.findall(r"for\s*\(\s*(?:const|let)\s+(\w+)\s+of\s+%s\.listSheets\(\)" % w, block))
+        for group in re.findall(r"(?:const|let)\s+\[([^\]]*)\]\s*=\s*%s\.listSheets\(\)" % w, block):
+            names |= {n.strip() for n in group.split(",") if re.fullmatch(r"\w+", n.strip())}
+    return names
+
+
+def _check_js_sheets(where: str, block: str, workbooks: Set[str], surface: _JsSurface, problems: List[str]) -> None:
+    for ws in _js_sheet_variables(block, workbooks):
+        for m in re.finditer(r"(?<![\w.])%s\.(\w+)\(" % re.escape(ws), block):
+            if m.group(1) not in surface.sheet:
+                problems.append(f"readme-identifiers: {where}: `{ws}.{m.group(1)}` is not a Sheet method")
+    for wb in workbooks:
+        for m in re.finditer(r"(?<![\w.])%s\.sheet\([^()]*\)\.(\w+)\(" % re.escape(wb), block):
+            if m.group(1) not in surface.sheet:
+                problems.append(f"readme-identifiers: {where}: `{wb}.sheet(...).{m.group(1)}` is not a Sheet method")
 
 
 def _check_py_block(label: str, line: int, block: str, py: _PySurface, problems: List[str]) -> None:
@@ -240,6 +268,26 @@ def _check_py_block(label: str, line: int, block: str, py: _PySurface, problems:
         for m in re.finditer(r"(?<![\w.])%s\.(\w+)" % re.escape(wb), block):
             if m.group(1) not in workbook:
                 problems.append(f"readme-identifiers: {where}: `{wb}.{m.group(1)}` is not a Workbook member")
+    sheet = py.classes.get("Sheet", set())
+    for ws in _py_sheet_variables(block, names):
+        for m in re.finditer(r"(?<![\w.])%s\.(\w+)" % re.escape(ws), block):
+            if m.group(1) not in sheet:
+                problems.append(f"readme-identifiers: {where}: `{ws}.{m.group(1)}` is not a Sheet member")
+    for wb in names:
+        for m in re.finditer(r"(?<![\w.])%s(?:\.sheet\([^()]*\)|\[[^\]]*\])\.(\w+)" % re.escape(wb), block):
+            if m.group(1) not in sheet:
+                problems.append(f"readme-identifiers: {where}: `{m.group(0)}` is not a Sheet member")
+
+
+def _py_sheet_variables(block: str, workbooks: Set[str]) -> Set[str]:
+    """Names bound to a `Sheet`: `wb.sheet(...)`, `wb[...]`, an element of `wb.list_sheets()`, or a loop over the
+    workbook or that list."""
+    names: Set[str] = set()
+    for wb in workbooks:
+        w = re.escape(wb)
+        names |= set(re.findall(r"^\s*(\w+)\s*=\s*%s(?:\.sheet\(|\[|\.list_sheets\(\)\s*\[)" % w, block, re.M))
+        names |= set(re.findall(r"^\s*for\s+(\w+)\s+in\s+%s(?:\.list_sheets\(\))?\s*:" % w, block, re.M))
+    return names
 
 
 def _check_links(path: Path, text: str, problems: List[str]) -> None:

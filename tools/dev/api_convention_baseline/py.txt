@@ -1,0 +1,576 @@
+R0.coverage	record.chart_axis_info	ChartAxisInfo	`ChartAxisInfo` is a former name; the ledger has `ChartAxis`
+R0.coverage	record.chart_fill_info	ChartFillInfo	`ChartFillInfo` is a former name; the ledger has `ChartFill`
+R0.coverage	record.chart_info	ChartInfo	`ChartInfo` is a former name; the ledger has `Chart`
+R0.coverage	record.chart_labels_info	ChartLabelsInfo	`ChartLabelsInfo` is a former name; the ledger has `ChartLabels`
+R0.coverage	record.chart_legend_info	ChartLegendInfo	`ChartLegendInfo` is a former name; the ledger has `ChartLegend`
+R0.coverage	record.chart_line_info	ChartLineInfo	`ChartLineInfo` is a former name; the ledger has `ChartLine`
+R0.coverage	record.chart_marker_info	ChartMarkerInfo	`ChartMarkerInfo` is a former name; the ledger has `ChartMarker`
+R0.coverage	record.chart_plot_info	ChartPlotInfo	`ChartPlotInfo` is a former name; the ledger has `ChartPlot`
+R0.coverage	record.chart_point_info	ChartPointInfo	`ChartPointInfo` is a former name; the ledger has `ChartPoint`
+R0.coverage	record.chart_series_info	ChartSeriesInfo	`ChartSeriesInfo` is a former name; the ledger has `ChartSeries`
+R0.coverage	record.chart_source_info	ChartSourceInfo	`ChartSourceInfo` is a former name; the ledger has `ChartSource`
+R0.coverage	record.color_spec	ColorSpec	`ColorSpec` is a former name; the ledger has `Color`
+R0.coverage	record.fill_record	FillRecord	`FillRecord` is a former name; the ledger has `Fill`
+R0.coverage	record.font_record	FontRecord	`FontRecord` is a former name; the ledger has `Font`
+R0.coverage	record.paper_info	PaperInfo	`PaperInfo` is a former name; the ledger has `Paper`
+R0.coverage	record.pivot_style_info	PivotStyleInfo	`PivotStyleInfo` is a former name; the ledger has `PivotStyle`
+R0.coverage	record.spill_info	SpillInfo	`SpillInfo` is a former name; the ledger has `Spill`
+R18.py	array_formula.set	shape	`get_array_formula` returns `ArrayFormula` but `set_array_formula` takes (formula)
+R18.py	comment.set	shape	`get_comment` returns `Comment` but `set_comment` takes (author, text)
+R18.py	defined_name.set	shape	`get_defined_name` returns `DefinedName` but `set_defined_name` takes (formula)
+R18.py	iterative.set	shape	`get_iterative` returns `IterativeSettings` but `set_iterative` takes (enabled, max_iterations, max_change)
+R18.py	page_margins.set	shape	`get_page_margins` returns `PageMargins` but `set_page_margins` takes (left, right, top, bottom, header, footer)
+R18.py	page_setup.set	shape	`get_page_setup` returns `PageSetup` but `set_page_setup` takes (orientation, paper_size, scale, fit_to_width, fit_to_height, fit_to_page)
+R18.py	pinned_now.set	shape	`get_pinned_now` returns `CivilTime` but `set_pinned_now` takes (year, month, day, hour, minute, second)
+R18.py	pivot_grand_totals.set	shape	`get_pivot_grand_totals` returns `PivotGrandTotals` but `set_pivot_grand_totals` takes (rows_enabled, cols_enabled)
+R18.py	pivot_style_info.set	shape	`get_pivot_style_info` returns `PivotStyleInfo` but `set_pivot_style_info` takes (name, show_row_headers, show_col_headers, show_row_stripes, show_col_stripes, show_last_column)
+R18.py	print_titles.set	shape	`get_print_titles` returns `SheetPrintTitles` but `set_print_titles` takes (repeat_rows, repeat_cols)
+R18.py	selection.set	shape	`get_selection` returns `SheetSelection` but `set_selection` takes (active_row, active_col, ranges)
+R18.py	table_style_defaults.set	shape	`get_table_style_defaults` returns `TableStyleDefaults` but `set_table_style_defaults` takes (table_style, pivot_style)
+R18.py	theme_fonts.set	shape	`get_theme_fonts` returns `Theme` but `set_theme_fonts` takes (fonts)
+R18.py	theme_script_font.set	shape	`get_theme_script_font` returns `ThemeScriptFont` but `set_theme_script_font` takes (typeface)
+R19.py	enum.anchor_kind	onecell	family `anchor`: `onecell` is 1 in `enum.anchor_edit_as` but 0 in `enum.anchor_kind`
+R19.py	enum.anchor_kind	twocell	family `anchor`: `twocell` is 0 in `enum.anchor_edit_as` but 1 in `enum.anchor_kind`
+R19.py	enum.chart_axis_crosses	absent:Absent	`ChartAxisCrosses` lists `Absent`; absent reads as null / None
+R19.py	enum.chart_blanks_as	absent:Absent	`ChartBlanksAs` lists `Absent`; absent reads as null / None
+R19.py	enum.chart_legend_position	absent:None	`ChartLegendPosition` lists `None`; absent reads as null / None
+R19.py	enum.chart_title_kind	absent:None	`ChartTitleKind` lists `None`; absent reads as null / None
+R19.py	enum.pivot_filter_value_kind	absent:None	`PivotFilterValueKind` lists `None`; absent reads as null / None
+R19.py	enum.shape_paint	absent:Unset	`ShapePaint` lists `Unset`; absent reads as null / None
+R19.py	enum.slicer_sort	ascending	family `sort_order`: `ascending` is 1 in `enum.pivot_sort_order` but 0 in `enum.slicer_sort`
+R19.py	enum.slicer_sort	descending	family `sort_order`: `descending` is 0 in `enum.pivot_sort_order` but 1 in `enum.slicer_sort`
+R19.py	enum.sparkline_empty_cells	gap	family `blanks`: `gap` is 1 in `enum.chart_blanks_as` but 0 in `enum.sparkline_empty_cells`
+R19.py	enum.sparkline_empty_cells	span	family `blanks`: `span` is 3 in `enum.chart_blanks_as` but 2 in `enum.sparkline_empty_cells`
+R19.py	enum.sparkline_empty_cells	zero	family `blanks`: `zero` is 2 in `enum.chart_blanks_as` but 1 in `enum.sparkline_empty_cells`
+R20.py	record.locale_facts	field:error_names	`LocaleFacts.error_names: Tuple[ErrorName, ...]` is a result array; make it `List[...]`
+R20.py	record.pivot_field_info	field:subtotal_fns	`PivotFieldInfo.subtotal_fns: Tuple[PivotAggregation, ...]` is a result array; make it `List[...]`
+R20.py	record.table	field:columns	`Table.columns: Tuple[TableColumn, ...]` is a result array; make it `List[...]`
+R20.py	record.table_style	field:elements	`TableStyle.elements: Tuple[TableStyleElement, ...]` is a result array; make it `List[...]`
+R20.py	record.theme	field:major_scripts	`Theme.major_scripts: Tuple[ThemeScriptFont, ...]` is a result array; make it `List[...]`
+R20.py	record.theme	field:minor_scripts	`Theme.minor_scripts: Tuple[ThemeScriptFont, ...]` is a result array; make it `List[...]`
+R21.name	record.cell_style_record	suffix	`CellStyleRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `CellStyle`
+R21.name	record.chart_axis_info	suffix	`ChartAxisInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartAxis`
+R21.name	record.chart_fill_info	suffix	`ChartFillInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartFill`
+R21.name	record.chart_info	suffix	`ChartInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Chart`
+R21.name	record.chart_labels_info	suffix	`ChartLabelsInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartLabels`
+R21.name	record.chart_legend_info	suffix	`ChartLegendInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartLegend`
+R21.name	record.chart_line_info	suffix	`ChartLineInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartLine`
+R21.name	record.chart_marker_info	suffix	`ChartMarkerInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartMarker`
+R21.name	record.chart_plot_info	suffix	`ChartPlotInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartPlot`
+R21.name	record.chart_point_info	suffix	`ChartPointInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartPoint`
+R21.name	record.chart_series_info	suffix	`ChartSeriesInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartSeries`
+R21.name	record.chart_source_info	suffix	`ChartSourceInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartSource`
+R21.name	record.color_spec	suffix	`ColorSpec` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Color`
+R21.name	record.comment_entry	suffix	`CommentEntry` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Comment`
+R21.name	record.external_link_record	suffix	`ExternalLinkRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ExternalLink`
+R21.name	record.fill_record	suffix	`FillRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Fill`
+R21.name	record.font_record	suffix	`FontRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Font`
+R21.name	record.function_metadata_entry	suffix	`FunctionMetadataEntry` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `FunctionMetadata`
+R21.name	record.image_info	suffix	`ImageInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Image`
+R21.name	record.paper_info	suffix	`PaperInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Paper`
+R21.name	record.pivot_data_field_spec	suffix	`PivotDataFieldSpec` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotDataField`
+R21.name	record.pivot_field_info	suffix	`PivotFieldInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotField`
+R21.name	record.pivot_field_spec	suffix	`PivotFieldSpecInput` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotFieldInput`
+R21.name	record.pivot_filter_spec	suffix	`PivotFilterSpec` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotFilter`
+R21.name	record.pivot_item_info	suffix	`PivotItemInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotItem`
+R21.name	record.pivot_style_info	suffix	`PivotStyleInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotStyle`
+R21.name	record.spill_info	suffix	`SpillInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Spill`
+R21.role	record.cell	role	`record.cell` has no `role:`
+R21.role	record.chart_categories	role	`record.chart_categories` has no `role:`
+R21.role	record.chart_legend_info	role	`record.chart_legend_info` has no `role:`
+R21.role	record.chart_series_ranges	role	`record.chart_series_ranges` has no `role:`
+R21.role	record.chart_source_info	role	`record.chart_source_info` has no `role:`
+R21.role	record.collation_classes	role	`record.collation_classes` has no `role:`
+R21.role	record.color_scale	role	`record.color_scale` has no `role:`
+R21.role	record.comment_entry	role	`record.comment_entry` has no `role:`
+R21.role	record.conditional_format	role	`record.conditional_format` has no `role:`
+R21.role	record.data_bar	role	`record.data_bar` has no `role:`
+R21.role	record.differential_format	role	`record.differential_format` has no `role:`
+R21.role	record.error_name	role	`record.error_name` has no `role:`
+R21.role	record.excel_error	role	`record.excel_error` has no `role:`
+R21.role	record.icon_set	role	`record.icon_set` has no `role:`
+R21.role	record.index_out_of_range_error	role	`record.index_out_of_range_error` has no `role:`
+R21.role	record.invalid_argument_error	role	`record.invalid_argument_error` has no `role:`
+R21.role	record.not_found_error	role	`record.not_found_error` has no `role:`
+R21.role	record.passthrough_part	role	`record.passthrough_part` has no `role:`
+R21.role	record.table	role	`record.table` has no `role:`
+R21.role	record.table_column	role	`record.table_column` has no `role:`
+R21.role	record.theme	role	`record.theme` has no `role:`
+R21.role	record.workbook_closed_error	role	`record.workbook_closed_error` has no `role:`
+R22.py	active_sheet.set	index	`set_active_sheet(index)`: use `<thing>_index`
+R22.py	cell_phonetic_run.get	index	`get_cell_phonetic_run(index)`: use `<thing>_index`
+R22.py	cell_style_xf.get	index	`get_cell_style_xf(index)`: use `<thing>_index`
+R22.py	cf_rule.get	index	`get_cf_rule(index)`: use `<thing>_index`
+R22.py	cf_rule.remove	index	`remove_cf_rule(index)`: use `<thing>_index`
+R22.py	drawing_z_order.set	index	`set_drawing_z_order(index)`: use `<thing>_index`
+R22.py	external_link.get	index	`get_external_link(index)`: use `<thing>_index`
+R22.py	pivot_cache_calculated_item.get	index	`get_pivot_cache_calculated_item(index)`: use `<thing>_index`
+R22.py	pivot_cache_calculated_item.move	index	`move_pivot_cache_calculated_item(index)`: use `<thing>_index`
+R22.py	pivot_cache_calculated_item.remove	index	`remove_pivot_cache_calculated_item(index)`: use `<thing>_index`
+R22.py	pivot_cache_calculated_item_formula.set	index	`set_pivot_cache_calculated_item_formula(index)`: use `<thing>_index`
+R22.py	protected_range.get	index	`get_protected_range(index)`: use `<thing>_index`
+R22.py	protected_range.remove	index	`remove_protected_range(index)`: use `<thing>_index`
+R22.py	protected_range.update	index	`update_protected_range(index)`: use `<thing>_index`
+R22.py	sheet.remove	index	`remove_sheet(index)`: use `<thing>_index`
+R22.py	sheet.rename	index	`rename_sheet(index)`: use `<thing>_index`
+R22.py	sheet_name.get	index	`get_sheet_name(index)`: use `<thing>_index`
+R22.py	sparkline_group.get	index	`get_sparkline_group(index)`: use `<thing>_index`
+R22.py	sparkline_group.remove	index	`remove_sparkline_group(index)`: use `<thing>_index`
+R22.py	sparkline_group.update	index	`update_sparkline_group(index)`: use `<thing>_index`
+R22.py	sparkline_group_sparklines.set	index	`set_sparkline_group_sparklines(index)`: use `<thing>_index`
+R22.py	table.remove	index	`remove_table(index)`: use `<thing>_index`
+R22.py	table.rename	index	`rename_table(index)`: use `<thing>_index`
+R22.py	table.update	index	`update_table(index)`: use `<thing>_index`
+R22.py	table_column.rename	index	`rename_table_column(index)`: use `<thing>_index`
+R22.py	table_column_totals.set	index	`set_table_column_totals(index)`: use `<thing>_index`
+R22.py	table_style_info.set	index	`set_table_style_info(index)`: use `<thing>_index`
+R22.py	validation.get	index	`get_validation(index)`: use `<thing>_index`
+R22.py	validation.remove	index	`remove_validation(index)`: use `<thing>_index`
+R23.list	cell_phonetic_run.get	get_cell_phonetic_run	`cell_phonetic_run` is `access: property`; `get_cell_phonetic_run` leaves the py surface
+R23.list	cell_phonetic_run.get_count	get_cell_phonetic_run_count	`cell_phonetic_run` is `access: property`; `get_cell_phonetic_run_count` leaves the py surface
+R23.list	cf_rule.get	get_cf_rule	`cf_rule` is `access: list`; `get_cf_rule` leaves the py surface
+R23.list	cf_rule.get_count	get_cf_rule_count	`cf_rule` is `access: list`; `get_cf_rule_count` leaves the py surface
+R23.list	collection.cell_phonetic_run	get_cell_phonetic_runs	`cell_phonetic_run` is `access: property`; `get_cell_phonetic_runs` is missing
+R23.list	collection.cf_rule	list_cf_rules	`cf_rule` is `access: list`; `list_cf_rules` is missing
+R23.list	collection.external_link	list_external_links	`external_link` is `access: list`; `list_external_links` is missing
+R23.list	collection.pivot_cache_calculated_item	list_pivot_cache_calculated_items	`pivot_cache_calculated_item` is `access: list`; `list_pivot_cache_calculated_items` is missing
+R23.list	collection.pivot_data_field	list_pivot_data_fields	`pivot_data_field` is `access: list`; `list_pivot_data_fields` is missing
+R23.list	collection.pivot_field	list_pivot_fields	`pivot_field` is `access: list`; `list_pivot_fields` is missing
+R23.list	collection.pivot_filter	list_pivot_filters	`pivot_filter` is `access: list`; `list_pivot_filters` is missing
+R23.list	collection.protected_range	list_protected_ranges	`protected_range` is `access: list`; `list_protected_ranges` is missing
+R23.list	collection.sheet	list_sheets	`sheet` is `access: handles`; `list_sheets` is missing
+R23.list	collection.sparkline_group	list_sparkline_groups	`sparkline_group` is `access: list`; `list_sparkline_groups` is missing
+R23.list	collection.table	list_tables	`table` is `access: list`; `list_tables` is missing
+R23.list	collection.validation	list_validations	`validation` is `access: list`; `list_validations` is missing
+R23.list	external_link.get	get_external_link	`external_link` is `access: list`; `get_external_link` leaves the py surface
+R23.list	external_link.get_count	get_external_link_count	`external_link` is `access: list`; `get_external_link_count` leaves the py surface
+R23.list	pivot_cache_calculated_item.get	get_pivot_cache_calculated_item	`pivot_cache_calculated_item` is `access: list`; `get_pivot_cache_calculated_item` leaves the py surface
+R23.list	pivot_cache_calculated_item.get_count	get_pivot_cache_calculated_item_count	`pivot_cache_calculated_item` is `access: list`; `get_pivot_cache_calculated_item_count` leaves the py surface
+R23.list	pivot_data_field.get	get_pivot_data_field	`pivot_data_field` is `access: list`; `get_pivot_data_field` leaves the py surface
+R23.list	pivot_data_field.get_count	get_pivot_data_field_count	`pivot_data_field` is `access: list`; `get_pivot_data_field_count` leaves the py surface
+R23.list	pivot_field.get	get_pivot_field	`pivot_field` is `access: list`; `get_pivot_field` leaves the py surface
+R23.list	pivot_field.get_count	get_pivot_field_count	`pivot_field` is `access: list`; `get_pivot_field_count` leaves the py surface
+R23.list	pivot_filter.get	get_pivot_filter	`pivot_filter` is `access: list`; `get_pivot_filter` leaves the py surface
+R23.list	pivot_filter.get_count	get_pivot_filter_count	`pivot_filter` is `access: list`; `get_pivot_filter_count` leaves the py surface
+R23.list	protected_range.get	get_protected_range	`protected_range` is `access: list`; `get_protected_range` leaves the py surface
+R23.list	protected_range.get_count	get_protected_range_count	`protected_range` is `access: list`; `get_protected_range_count` leaves the py surface
+R23.list	sheet.get_count	get_sheet_count	`sheet` is `access: handles`; `get_sheet_count` leaves the py surface
+R23.list	sheet_index.get	get_sheet_index	`sheet` is `access: handles`; `get_sheet_index` leaves the py surface
+R23.list	sheet_name.get	get_sheet_name	`sheet` is `access: handles`; `get_sheet_name` leaves the py surface
+R23.list	sparkline_group.get	get_sparkline_group	`sparkline_group` is `access: list`; `get_sparkline_group` leaves the py surface
+R23.list	sparkline_group.get_count	get_sparkline_group_count	`sparkline_group` is `access: list`; `get_sparkline_group_count` leaves the py surface
+R23.list	table.get	get_table	`table` is `access: list`; `get_table` leaves the py surface
+R23.list	table.get_count	get_table_count	`table` is `access: list`; `get_table_count` leaves the py surface
+R23.list	validation.get	get_validation	`validation` is `access: list`; `get_validation` leaves the py surface
+R23.list	validation.get_count	get_validation_count	`validation` is `access: list`; `get_validation_count` leaves the py surface
+R23.py	array_formula.get	Workbook	`get_array_formula` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	array_formula.set	Workbook	`set_array_formula` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	auto_filter.apply	Workbook	`apply_auto_filter` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	auto_filter.clear	Workbook	`clear_auto_filter` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	auto_filter.evaluate	Workbook	`evaluate_auto_filter` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	auto_filter.get	Workbook	`get_auto_filter` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	auto_filter.remove	Workbook	`remove_auto_filter` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	auto_filter.set	Workbook	`set_auto_filter` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	auto_filter_xml.get	Workbook	`get_auto_filter_xml` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	auto_filter_xml.set	Workbook	`set_auto_filter_xml` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	binding.set_value	Workbook	`set_value` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	blank.set	Workbook	`set_blank` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	bool.set	Workbook	`set_bool` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	breaks.clear	Workbook	`clear_breaks` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cell.get_at	Workbook	`get_cell_at` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cell.get_count	Workbook	`get_cell_count` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cell_phonetic.get	Workbook	`get_cell_phonetic` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cell_phonetic.set	Workbook	`set_cell_phonetic` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cell_phonetic_properties.get	Workbook	`get_cell_phonetic_properties` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cell_phonetic_properties.has	Workbook	`has_cell_phonetic_properties` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cell_phonetic_properties.set	Workbook	`set_cell_phonetic_properties` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cell_phonetic_run.get	Workbook	`get_cell_phonetic_run` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cell_phonetic_run.get_count	Workbook	`get_cell_phonetic_run_count` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cell_phonetic_runs.set	Workbook	`set_cell_phonetic_runs` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cell_rect_pt.get	Workbook	`get_cell_rect_pt` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cell_show_phonetic.get	Workbook	`get_cell_show_phonetic` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cell_show_phonetic.set	Workbook	`set_cell_show_phonetic` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cell_xf_index.clear	Workbook	`clear_cell_xf_index` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cell_xf_index.get	Workbook	`get_cell_xf_index` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cell_xf_index.set	Workbook	`set_cell_xf_index` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cells_in_range.get	Workbook	`get_cells_in_range` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cf_formula.evaluate	Workbook	`evaluate_cf_formula` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cf_range.evaluate	Workbook	`evaluate_cf_range` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cf_rule.add	Workbook	`add_cf_rule` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cf_rule.clear	Workbook	`clear_cf_rules` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cf_rule.get	Workbook	`get_cf_rule` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cf_rule.get_count	Workbook	`get_cf_rule_count` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cf_rule.remove	Workbook	`remove_cf_rule` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	chart.add	Workbook	`add_chart` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	chart.get	Workbook	`get_chart` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	chart_axis.set	Workbook	`set_chart_axis` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	chart_data.get	Workbook	`get_chart_data` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	chart_display.set	Workbook	`set_chart_display` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	chart_filter.set	Workbook	`set_chart_filter` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	chart_legend.set	Workbook	`set_chart_legend` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	chart_plot.set	Workbook	`set_chart_plot` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	chart_point.set	Workbook	`set_chart_point` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	chart_preview.get	Workbook	`get_chart_preview` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	chart_series.add	Workbook	`add_chart_series` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	chart_series.remove	Workbook	`remove_chart_series` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	chart_series.set	Workbook	`set_chart_series` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	chart_source.set	Workbook	`set_chart_source` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	chart_title.set	Workbook	`set_chart_title` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	chart_type.set	Workbook	`set_chart_type` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cols.delete	Workbook	`delete_columns` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	cols.insert	Workbook	`insert_columns` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	column_break.add	Workbook	`add_column_break` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	column_break.remove	Workbook	`remove_column_break` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	column_breaks.list	Workbook	`list_column_breaks` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	column_chars_to_pt.convert	Workbook	`convert_column_chars_to_pt` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	column_collapsed.set	Workbook	`set_column_collapsed` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	column_hidden.set	Workbook	`set_column_hidden` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	column_outline.set	Workbook	`set_column_outline` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	column_overrides.list	Workbook	`list_column_overrides` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	column_pt_to_chars.convert	Workbook	`convert_column_pt_to_chars` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	column_style.clear	Workbook	`clear_column_style` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	column_style.set	Workbook	`set_column_style` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	column_width.clear	Workbook	`clear_column_width` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	column_width.set	Workbook	`set_column_width` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	column_width_pt.get	Workbook	`get_column_width_pt` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	comment.get	Workbook	`get_comment` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	comment.set	Workbook	`set_comment` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	comment_visible.get	Workbook	`get_comment_visible` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	comment_visible.set	Workbook	`set_comment_visible` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	comments.list	Workbook	`list_comments` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	data_table.add	Workbook	`add_data_table` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	data_table.get	Workbook	`get_data_table` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	data_table.remove	Workbook	`remove_data_table` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	dependents.get	Workbook	`get_dependents` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	display_text.get	Workbook	`get_display_text` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	drawing.remove	Workbook	`remove_drawing` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	drawing.restore	Workbook	`restore_drawing` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	drawing.snapshot	Workbook	`snapshot_drawing` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	drawing_anchor.set	Workbook	`set_drawing_anchor` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	drawing_name.set	Workbook	`set_drawing_name` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	drawing_object.get	Workbook	`get_drawing_object` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	drawing_objects.list	Workbook	`list_drawing_objects` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	drawing_z_order.set	Workbook	`set_drawing_z_order` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	effective_style.get	Workbook	`get_effective_style` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	error.set	Workbook	`set_error` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	fit_to_page.set	Workbook	`set_fit_to_page` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	format_defaults.get	Workbook	`get_format_defaults` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	format_defaults.set	Workbook	`set_format_defaults` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	formula.get	Workbook	`get_formula` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	formula.set	Workbook	`set_formula` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	formula_array.evaluate	Workbook	`evaluate_formula_array` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	formula_r1c1.get	Workbook	`get_formula_r1c1` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	freeze.set	Workbook	`set_freeze` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	header_footer.set	Workbook	`set_header_footer` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	header_footer_xml.get	Workbook	`get_header_footer_xml` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	header_footer_xml.set	Workbook	`set_header_footer_xml` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	hyperlink.add	Workbook	`add_hyperlink` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	hyperlink.add_range	Workbook	`add_hyperlink_range` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	hyperlink.get	Workbook	`get_hyperlink` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	hyperlink.remove	Workbook	`remove_hyperlink` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	hyperlink.remove_at	Workbook	`remove_hyperlink_at` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	hyperlinks.clear	Workbook	`clear_hyperlinks` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	hyperlinks.list	Workbook	`list_hyperlinks` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	image.add	Workbook	`add_image` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	image.get	Workbook	`get_image` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	invalid_cells.get	Workbook	`get_invalid_cells` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	lambda_text.get	Workbook	`get_lambda_text` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	merge.add	Workbook	`add_merge` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	merge.remove	Workbook	`remove_merge` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	merge.remove_at	Workbook	`remove_merge_at` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	merges.clear	Workbook	`clear_merges` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	merges.list	Workbook	`list_merges` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	merges_in_range.get	Workbook	`get_merges_in_range` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	number.set	Workbook	`set_number` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	page_margins.get	Workbook	`get_page_margins` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	page_margins.set	Workbook	`set_page_margins` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	page_margins_xml.get	Workbook	`get_page_margins_xml` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	page_margins_xml.set	Workbook	`set_page_margins_xml` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	page_setup.get	Workbook	`get_page_setup` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	page_setup.set	Workbook	`set_page_setup` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	page_setup_xml.get	Workbook	`get_page_setup_xml` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	page_setup_xml.set	Workbook	`set_page_setup_xml` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pagination.get	Workbook	`get_pagination` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pane_top_left.set	Workbook	`set_pane_top_left` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	partial.recalc	Workbook	`recalc_viewport` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot.create	Workbook	`add_pivot` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot.get_count	Workbook	`get_pivot_count` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot.remove	Workbook	`remove_pivot` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_anchor.set	Workbook	`set_pivot_anchor` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_cache.get_id	Workbook	`get_pivot_cache_id` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_column_field_order.get	Workbook	`get_pivot_column_field_order` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_column_field_order.set	Workbook	`set_pivot_column_field_order` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_data_field.add	Workbook	`add_pivot_data_field` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_data_field.clear	Workbook	`clear_pivot_data_fields` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_data_field.get	Workbook	`get_pivot_data_field` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_data_field.get_count	Workbook	`get_pivot_data_field_count` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_data_field.set	Workbook	`set_pivot_data_field` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_data_field_default_name.get	Workbook	`get_pivot_data_field_default_name` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field.add	Workbook	`add_pivot_field` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field.clear	Workbook	`clear_pivot_fields` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field.get	Workbook	`get_pivot_field` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field.get_count	Workbook	`get_pivot_field_count` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_axis.set	Workbook	`set_pivot_field_axis` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_custom_name.set	Workbook	`set_pivot_field_custom_name` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_date_group.clear	Workbook	`clear_pivot_field_date_group` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_date_group.set	Workbook	`set_pivot_field_date_group` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_default_subtotal.set	Workbook	`set_pivot_field_default_subtotal` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_fill_down_labels.set	Workbook	`set_pivot_field_fill_down_labels` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_insert_blank_row.set	Workbook	`set_pivot_field_insert_blank_row` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_item.add	Workbook	`add_pivot_field_item` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_item.add_at	Workbook	`add_pivot_field_shared_item` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_item.get	Workbook	`get_pivot_field_item` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_item.get_count	Workbook	`get_pivot_field_item_count` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_item_caption.set	Workbook	`set_pivot_field_item_caption` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_item_show_detail.set	Workbook	`set_pivot_field_item_show_detail` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_item_visible.set	Workbook	`set_pivot_field_item_visible` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_items.clear	Workbook	`clear_pivot_field_items` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_number_format.set	Workbook	`set_pivot_field_number_format` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_show_all.set	Workbook	`set_pivot_field_show_all` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_show_detail.set	Workbook	`set_pivot_field_show_detail` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_sort.set	Workbook	`set_pivot_field_sort` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_subtotal_fn.add	Workbook	`add_pivot_field_subtotal_fn` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_subtotal_fns.clear	Workbook	`clear_pivot_field_subtotal_fns` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_field_subtotal_top.set	Workbook	`set_pivot_field_subtotal_top` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_filter.add	Workbook	`add_pivot_filter` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_filter.clear	Workbook	`clear_pivot_filters` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_filter.get	Workbook	`get_pivot_filter` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_filter.get_count	Workbook	`get_pivot_filter_count` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_filter.remove	Workbook	`remove_pivot_filter` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_grand_totals.get	Workbook	`get_pivot_grand_totals` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_grand_totals.set	Workbook	`set_pivot_grand_totals` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_layout.get	Workbook	`get_pivot_layout` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_name.get	Workbook	`get_pivot_name` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_name.set	Workbook	`set_pivot_name` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_options.get	Workbook	`get_pivot_options` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_options.set	Workbook	`set_pivot_options` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_project.get	Workbook	`project_pivot` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_projection_pending.get	Workbook	`is_pivot_projection_pending` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_report_layout.get	Workbook	`get_pivot_report_layout` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_report_layout.set	Workbook	`set_pivot_report_layout` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_row_field_order.get	Workbook	`get_pivot_row_field_order` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_row_field_order.set	Workbook	`set_pivot_row_field_order` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_show_details.get	Workbook	`show_pivot_details` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_style_info.get	Workbook	`get_pivot_style_info` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	pivot_style_info.set	Workbook	`set_pivot_style_info` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	precedents.get	Workbook	`get_precedents` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	print_area.get	Workbook	`get_print_area` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	print_area.set	Workbook	`set_print_area` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	print_options.set	Workbook	`set_print_options` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	print_options_xml.get	Workbook	`get_print_options_xml` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	print_options_xml.set	Workbook	`set_print_options_xml` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	print_titles.get	Workbook	`get_print_titles` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	print_titles.set	Workbook	`set_print_titles` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	protected_range.add	Workbook	`add_protected_range` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	protected_range.get	Workbook	`get_protected_range` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	protected_range.get_count	Workbook	`get_protected_range_count` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	protected_range.remove	Workbook	`remove_protected_range` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	protected_range.update	Workbook	`update_protected_range` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	range_style.remap	Workbook	`remap_range_style` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	range_style.restore	Workbook	`restore_range_style` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	range_style.snapshot	Workbook	`snapshot_range_style` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	range_style_bases.get	Workbook	`get_range_style_bases` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	range_style_bases_excluding.get	Workbook	`get_range_style_bases_excluding` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	range_xf_index.set	Workbook	`set_range_xf_index` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	right_to_left.set	Workbook	`set_right_to_left` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	row_auto_height.set	Workbook	`set_row_auto_height` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	row_break.add	Workbook	`add_row_break` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	row_break.remove	Workbook	`remove_row_break` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	row_breaks.list	Workbook	`list_row_breaks` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	row_collapsed.set	Workbook	`set_row_collapsed` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	row_height.clear	Workbook	`clear_row_height` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	row_height.set	Workbook	`set_row_height` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	row_height_pt.get	Workbook	`get_row_height_pt` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	row_hidden.set	Workbook	`set_row_hidden` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	row_outline.set	Workbook	`set_row_outline` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	row_overrides.list	Workbook	`list_row_overrides` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	row_style.clear	Workbook	`clear_row_style` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	row_style.set	Workbook	`set_row_style` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	rows.delete	Workbook	`delete_rows` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	rows.insert	Workbook	`insert_rows` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	selection.get	Workbook	`get_selection` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	selection.set	Workbook	`set_selection` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	shape.add	Workbook	`add_shape` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	shape.get	Workbook	`get_shape` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	shape.remove	Workbook	`remove_shape` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	shape.update	Workbook	`update_shape` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	shapes.list	Workbook	`list_shapes` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	sheet_pr_xml.get	Workbook	`get_sheet_pr_xml` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	sheet_pr_xml.set	Workbook	`set_sheet_pr_xml` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	sheet_protection.get	Workbook	`get_sheet_protection` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	sheet_protection.set	Workbook	`set_sheet_protection` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	show_formulas.set	Workbook	`set_show_formulas` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	show_grid_lines.set	Workbook	`set_show_grid_lines` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	show_outline_symbols.set	Workbook	`set_show_outline_symbols` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	show_row_col_headers.set	Workbook	`set_show_row_col_headers` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	show_zeros.set	Workbook	`set_show_zeros` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	slicer.add	Workbook	`add_slicer` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	slicer.get	Workbook	`get_slicer` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	slicer.remove	Workbook	`remove_slicer` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	slicer.update	Workbook	`update_slicer` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	slicers.list	Workbook	`list_slicers` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	sparkline_group.add	Workbook	`add_sparkline_group` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	sparkline_group.get	Workbook	`get_sparkline_group` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	sparkline_group.get_count	Workbook	`get_sparkline_group_count` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	sparkline_group.remove	Workbook	`remove_sparkline_group` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	sparkline_group.update	Workbook	`update_sparkline_group` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	sparkline_group_sparklines.set	Workbook	`set_sparkline_group_sparklines` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	spill_info.get	Workbook	`get_spill_info` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	split.set	Workbook	`set_split` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	tab_hidden.set	Workbook	`set_tab_hidden` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	tab_selected.set	Workbook	`set_tab_selected` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	text.set	Workbook	`set_text` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	thread_resolved.set	Workbook	`set_thread_resolved` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	threaded_comment.add	Workbook	`add_threaded_comment` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	threaded_comment.get	Workbook	`get_threaded_comment` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	threaded_comment.remove	Workbook	`remove_threaded_comment` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	threaded_comment.update	Workbook	`update_threaded_comment` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	threaded_comments.list	Workbook	`list_threaded_comments` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	top_left.set	Workbook	`set_top_left` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	validation.add	Workbook	`add_validation` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	validation.get	Workbook	`get_validation` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	validation.get_count	Workbook	`get_validation_count` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	validation.remove	Workbook	`remove_validation` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	validations.clear	Workbook	`clear_validations` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	value.get	Workbook	`get_value` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	value.validate	Workbook	`validate_value` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	view.get	Workbook	`get_view` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	view_mode.set	Workbook	`set_view_mode` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	visibility.set	Workbook	`set_visibility` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	width_model.get	Workbook	`get_width_model` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	zoom.set	Workbook	`set_zoom` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.track	pivot_show_details.get	SHEET_STRUCTURE_OPS	`show_pivot_details` changes the sheet list but `sheet.py` does not track it in `SHEET_STRUCTURE_OPS`
+R23.track	sheet.add	SHEET_STRUCTURE_OPS	`add_sheet` changes the sheet list but `sheet.py` does not track it in `SHEET_STRUCTURE_OPS`
+R23.track	sheet.copy	SHEET_STRUCTURE_OPS	`copy_sheet` changes the sheet list but `sheet.py` does not track it in `SHEET_STRUCTURE_OPS`
+R23.track	sheet.move	SHEET_STRUCTURE_OPS	`move_sheet` changes the sheet list but `sheet.py` does not track it in `SHEET_STRUCTURE_OPS`
+R23.track	sheet.remove	SHEET_STRUCTURE_OPS	`remove_sheet` changes the sheet list but `sheet.py` does not track it in `SHEET_STRUCTURE_OPS`
+R23.track	sheet.rename	SHEET_STRUCTURE_OPS	`rename_sheet` changes the sheet list but `sheet.py` does not track it in `SHEET_STRUCTURE_OPS`
+R24.missing.py	chart_data.get	throw	`get_chart_data` does not document `Raises: NotFoundError`
+R24.missing.py	chart_preview.get	throw	`get_chart_preview` does not document `Raises: NotFoundError`
+R6.closed.py	calc_mode.set	set_calc_mode(mode)	`set_calc_mode(mode: 'CalcMode | int')` admits ['int']
+R6.closed.py	cell_rect_pt.get	get_cell_rect_pt(mode)	`get_cell_rect_pt(mode: Union[GeometryMode, int])` admits ['int']
+R6.closed.py	chart.add	add_chart(anchor_kind)	`add_chart(anchor_kind: Union[AnchorKind, int])` admits ['int']
+R6.closed.py	chart.add	add_chart(direction)	`add_chart(direction: Union[ChartSeriesDirection, int])` admits ['int']
+R6.closed.py	chart.add	add_chart(edit_as)	`add_chart(edit_as: Union[AnchorEditAs, int])` admits ['int']
+R6.closed.py	chart.add	add_chart(grouping)	`add_chart(grouping: Union[ChartGrouping, int])` admits ['int']
+R6.closed.py	chart.add	add_chart(kind)	`add_chart(kind: Union[ChartInsertKind, int])` admits ['int']
+R6.closed.py	chart.add	add_chart(legend)	`add_chart(legend: Union[ChartLegendPosition, int])` admits ['int']
+R6.closed.py	chart_legend.set	set_chart_legend(position)	`set_chart_legend(position: Union[ChartLegendPosition, int])` admits ['int']
+R6.closed.py	chart_source.set	set_chart_source(direction)	`set_chart_source(direction: Union[ChartSeriesDirection, int])` admits ['int']
+R6.closed.py	chart_type.set	set_chart_type(grouping)	`set_chart_type(grouping: Union[ChartGrouping, int])` admits ['int']
+R6.closed.py	chart_type.set	set_chart_type(kind)	`set_chart_type(kind: Union[ChartInsertKind, int])` admits ['int']
+R6.closed.py	color.resolve	resolve_color(context)	`resolve_color(context: Union[ColorContext, int])` admits ['int']
+R6.closed.py	column_chars_to_pt.convert	convert_column_chars_to_pt(mode)	`convert_column_chars_to_pt(mode: Union[GeometryMode, int])` admits ['int']
+R6.closed.py	column_pt_to_chars.convert	convert_column_pt_to_chars(mode)	`convert_column_pt_to_chars(mode: Union[GeometryMode, int])` admits ['int']
+R6.closed.py	column_width_pt.get	get_column_width_pt(mode)	`get_column_width_pt(mode: Union[GeometryMode, int])` admits ['int']
+R6.closed.py	drawing_anchor.set	set_drawing_anchor(anchor_kind)	`set_drawing_anchor(anchor_kind: Union[AnchorKind, int])` admits ['int']
+R6.closed.py	drawing_anchor.set	set_drawing_anchor(edit_as)	`set_drawing_anchor(edit_as: Union[AnchorEditAs, int])` admits ['int']
+R6.closed.py	image.add	add_image(anchor_kind)	`add_image(anchor_kind: Union[AnchorKind, int])` admits ['int']
+R6.closed.py	image.add	add_image(edit_as)	`add_image(edit_as: Union[AnchorEditAs, int])` admits ['int']
+R6.closed.py	pivot_data_field_default_name.get	get_pivot_data_field_default_name(aggregation)	`get_pivot_data_field_default_name(aggregation: 'PivotAggregation | int')` admits ['int']
+R6.closed.py	pivot_field_axis.set	set_pivot_field_axis(axis)	`set_pivot_field_axis(axis: 'PivotAxis | int')` admits ['int']
+R6.closed.py	pivot_field_date_group.set	set_pivot_field_date_group(calendar)	`set_pivot_field_date_group(calendar: 'PivotCalendar | int')` admits ['int']
+R6.closed.py	pivot_field_sort.set	set_pivot_field_sort(order)	`set_pivot_field_sort(order: 'PivotSortOrder | int')` admits ['int']
+R6.closed.py	pivot_field_subtotal_fn.add	add_pivot_field_subtotal_fn(agg)	`add_pivot_field_subtotal_fn(agg: 'PivotAggregation | int')` admits ['int']
+R6.closed.py	pivot_report_layout.set	set_pivot_report_layout(layout)	`set_pivot_report_layout(layout: 'PivotReportLayout | int')` admits ['int']
+R6.closed.py	record.cf_match	CfMatch.kind	`CfMatch.kind: int` carries `fm_cf_match_kind_t`; type it by its table
+R6.closed.py	record.color_spec	ColorSpec.kind	`ColorSpec.kind: Union[FilterKind, int]` carries `fm_color_kind_t`; type it by its table
+R6.closed.py	record.function_metadata	FunctionMetadata.availability	`FunctionMetadata.availability: int` carries `fm_function_availability_t`; type it by its table
+R6.closed.py	record.locale_facts	LocaleFacts.date_order	`LocaleFacts.date_order: str` carries `fm_date_order_t`; type it by its table
+R6.closed.py	record.page_setup	PageSetup.orientation	`PageSetup.orientation: int` carries `FM_ORIENTATION_*`; type it by its table
+R6.closed.py	record.pivot_data_field_spec	PivotDataFieldSpec.aggregation	`PivotDataFieldSpec.aggregation: 'PivotAggregation | int'` carries `fm_pivot_aggregation_t`; type it by its table
+R6.closed.py	record.pivot_data_field_spec	PivotDataFieldSpec.show_as	`PivotDataFieldSpec.show_as: 'PivotShowValuesAs | int'` carries `fm_pivot_show_values_as_t`; type it by its table
+R6.closed.py	record.pivot_field_spec	PivotFieldSpecInput.axis	`PivotFieldSpecInput.axis: 'PivotAxis | int'` carries `fm_pivot_axis_t`; type it by its table
+R6.closed.py	record.pivot_filter_spec	PivotFilterSpec.axis	`PivotFilterSpec.axis: 'PivotAxis | int'` carries `fm_pivot_axis_t`; type it by its table
+R6.closed.py	record.pivot_filter_spec	PivotFilterSpec.type	`PivotFilterSpec.type: 'PivotFilterType | int'` carries `fm_pivot_filter_type_t`; type it by its table
+R6.closed.py	record.pivot_filter_spec	PivotFilterSpec.value_high_kind	`PivotFilterSpec.value_high_kind: 'PivotFilterValueKind | int'` carries `fm_pivot_filter_value_kind_t`; type it by its table
+R6.closed.py	record.pivot_filter_spec	PivotFilterSpec.value_kind	`PivotFilterSpec.value_kind: 'PivotFilterValueKind | int'` carries `fm_pivot_filter_value_kind_t`; type it by its table
+R6.closed.py	ref_mode.set	set_ref_mode(mode)	`set_ref_mode(mode: 'RefMode | int')` admits ['int']
+R6.closed.py	shape.add	add_shape(anchor_kind)	`add_shape(anchor_kind: Union[AnchorKind, int])` admits ['int']
+R6.closed.py	shape.add	add_shape(edit_as)	`add_shape(edit_as: Union[AnchorEditAs, int])` admits ['int']
+R6.closed.py	shape.add	add_shape(fill_kind)	`add_shape(fill_kind: Optional[Union[ShapePaint, int]])` admits ['int']
+R6.closed.py	shape.add	add_shape(line_kind)	`add_shape(line_kind: Optional[Union[ShapePaint, int]])` admits ['int']
+R6.closed.py	shape.update	update_shape(anchor_kind)	`update_shape(anchor_kind: Optional[Union[AnchorKind, int]])` admits ['int']
+R6.closed.py	shape.update	update_shape(edit_as)	`update_shape(edit_as: Union[AnchorEditAs, int])` admits ['int']
+R6.closed.py	shape.update	update_shape(fill_kind)	`update_shape(fill_kind: Optional[Union[ShapePaint, int]])` admits ['int']
+R6.closed.py	shape.update	update_shape(line_kind)	`update_shape(line_kind: Optional[Union[ShapePaint, int]])` admits ['int']
+R6.closed.py	slicer.add	add_slicer(cross_filter)	`add_slicer(cross_filter: Optional[Union[SlicerCrossFilter, int]])` admits ['int']
+R6.closed.py	slicer.add	add_slicer(sort_order)	`add_slicer(sort_order: Optional[Union[SlicerSortOrder, int]])` admits ['int']
+R6.closed.py	slicer.update	update_slicer(cross_filter)	`update_slicer(cross_filter: Optional[Union[SlicerCrossFilter, int]])` admits ['int']
+R6.closed.py	slicer.update	update_slicer(sort_order)	`update_slicer(sort_order: Optional[Union[SlicerSortOrder, int]])` admits ['int']
+R6.closed.py	visibility.set	set_visibility(visibility)	`set_visibility(visibility: 'SheetVisibility | int')` admits ['int']
+R6.closed.py	width_model.get	get_width_model(mode)	`get_width_model(mode: Union[GeometryMode, int])` admits ['int']
+R6.closed.py	workbook.create_for_profile	Workbook.create_for_profile(profile_id)	`Workbook.create_for_profile(profile_id: str)` is closed; type it `ExcelProfileId`
+R7.absent.py	auto_filter_xml.set	clear	`set_auto_filter_xml` clears with an empty value; accept `None`
+R7.absent.py	cell_phonetic.get	doc	`get_cell_phonetic` documents an absent value as `""` / `-1`
+R7.absent.py	chart.add	doc	`add_chart` documents an absent value as `""` / `-1`
+R7.absent.py	defined_name.get	-1:local_sheet_id	`get_defined_name(local_sheet_id)` defaults to `-1`; use `None`
+R7.absent.py	defined_name.remove	-1:local_sheet_id	`remove_defined_name(local_sheet_id)` defaults to `-1`; use `None`
+R7.absent.py	defined_name.set	clear	`set_defined_name` clears with an empty value; accept `None`
+R7.absent.py	defined_name_attrs.set	-1:local_sheet_id	`set_defined_name_attrs(local_sheet_id)` defaults to `-1`; use `None`
+R7.absent.py	defined_name_scoped.set	clear	`set_defined_name_scoped` clears with an empty value; accept `None`
+R7.absent.py	file_name.get	doc	`get_file_name` documents an absent value as `""` / `-1`
+R7.absent.py	file_name.set	clear	`set_file_name` clears with an empty value; accept `None`
+R7.absent.py	pivot_cache_field_formula.get	doc	`get_pivot_cache_field_formula` documents an absent value as `""` / `-1`
+R7.absent.py	pivot_field_axis.set	doc	`set_pivot_field_axis` documents an absent value as `""` / `-1`
+R7.absent.py	print_area.get	doc	`get_print_area` documents an absent value as `""` / `-1`
+R7.absent.py	print_titles.get	doc	`get_print_titles` documents an absent value as `""` / `-1`
+R7.absent.py	record.auto_filter_column	has:has_dyn_max_val	`AutoFilterColumn.has_dyn_max_val` is a presence flag; make the value field `Optional`
+R7.absent.py	record.auto_filter_column	has:has_dyn_val	`AutoFilterColumn.has_dyn_val` is a presence flag; make the value field `Optional`
+R7.absent.py	record.auto_filter_column	has:has_filter_val	`AutoFilterColumn.has_filter_val` is a presence flag; make the value field `Optional`
+R7.absent.py	record.auto_filter_column	has:has_icon_id	`AutoFilterColumn.has_icon_id` is a presence flag; make the value field `Optional`
+R7.absent.py	record.auto_filter_sort_condition	has:has_dxf_id	`AutoFilterSortCondition.has_dxf_id` is a presence flag; make the value field `Optional`
+R7.absent.py	record.auto_filter_sort_condition	has:has_icon_id	`AutoFilterSortCondition.has_icon_id` is a presence flag; make the value field `Optional`
+R7.absent.py	record.cell_xf	has:has_alignment	`CellXf.has_alignment` is a presence flag; make the value field `Optional`
+R7.absent.py	record.cell_xf	has:has_horizontal_align	`CellXf.has_horizontal_align` is a presence flag; make the value field `Optional`
+R7.absent.py	record.cell_xf	has:has_justify_last_line	`CellXf.has_justify_last_line` is a presence flag; make the value field `Optional`
+R7.absent.py	record.cell_xf	has:has_protection	`CellXf.has_protection` is a presence flag; make the value field `Optional`
+R7.absent.py	record.cell_xf	has:has_vertical_align	`CellXf.has_vertical_align` is a presence flag; make the value field `Optional`
+R7.absent.py	record.cell_xf	has:has_wrap_text	`CellXf.has_wrap_text` is a presence flag; make the value field `Optional`
+R7.absent.py	record.column_layout	has:has_style	`ColumnLayout.has_style` is a presence flag; make the value field `Optional`
+R7.absent.py	record.column_layout	has:has_width	`ColumnLayout.has_width` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_bold	`FontRecord.has_bold` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_charset	`FontRecord.has_charset` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_condense	`FontRecord.has_condense` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_extend	`FontRecord.has_extend` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_family	`FontRecord.has_family` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_italic	`FontRecord.has_italic` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_outline	`FontRecord.has_outline` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_shadow	`FontRecord.has_shadow` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_size	`FontRecord.has_size` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_strike	`FontRecord.has_strike` is a presence flag; make the value field `Optional`
+R7.absent.py	record.print_titles	has:has_cols	`PrintTitles.has_cols` is a presence flag; make the value field `Optional`
+R7.absent.py	record.print_titles	has:has_rows	`PrintTitles.has_rows` is a presence flag; make the value field `Optional`
+R7.absent.py	record.row_layout	has:has_height	`RowLayout.has_height` is a presence flag; make the value field `Optional`
+R7.absent.py	record.row_layout	has:has_style	`RowLayout.has_style` is a presence flag; make the value field `Optional`
+R7.absent.py	record.sheet_format_defaults	has:has_default_col_width	`SheetFormatDefaults.has_default_col_width` is a presence flag; make the value field `Optional`
+R7.absent.py	record.sheet_format_defaults	has:has_default_row_height	`SheetFormatDefaults.has_default_row_height` is a presence flag; make the value field `Optional`
+R7.absent.py	record.table	has:has_style_info	`Table.has_style_info` is a presence flag; make the value field `Optional`
+R7.absent.py	record.validation_outcome	has:has_rule	`ValidationOutcome.has_rule` is a presence flag; make the value field `Optional`
+R7.absent.py	table_style_defaults.get	doc	`get_table_style_defaults` documents an absent value as `""` / `-1`
+R7.opts.py	chart_legend.set	bool:overlay	`set_chart_legend(overlay)` is a boolean; make it keyword-only
+R7.opts.py	chart_source.set	bool:header_column	`set_chart_source(header_column)` is a boolean; make it keyword-only
+R7.opts.py	chart_source.set	bool:header_row	`set_chart_source(header_row)` is a boolean; make it keyword-only
+R7.opts.py	column_break.add	bool:manual	`add_column_break(manual)` is a boolean; make it keyword-only
+R7.opts.py	hyperlink.add	run	`add_hyperlink` takes three or more adjacent positional arguments of one type; make them keyword-only
+R7.opts.py	hyperlink.add_range	run	`add_hyperlink_range` takes three or more adjacent positional arguments of one type; make them keyword-only
+R7.opts.py	iterative.set	bool:enabled	`set_iterative(enabled)` is a boolean; make it keyword-only
+R7.opts.py	pinned_now.set	run	`set_pinned_now` takes three or more adjacent positional arguments of one type; make them keyword-only
+R7.opts.py	pivot_cache_field_shared_item_bool.add	bool:value	`add_pivot_cache_field_shared_item_bool(value)` is a boolean; make it keyword-only
+R7.opts.py	pivot_field_item.add	bool:visible	`add_pivot_field_item(visible)` is a boolean; make it keyword-only
+R7.opts.py	pivot_field_item.add_at	bool:visible	`add_pivot_field_shared_item(visible)` is a boolean; make it keyword-only
+R7.opts.py	pivot_grand_totals.set	bool:cols_enabled	`set_pivot_grand_totals(cols_enabled)` is a boolean; make it keyword-only
+R7.opts.py	pivot_grand_totals.set	bool:rows_enabled	`set_pivot_grand_totals(rows_enabled)` is a boolean; make it keyword-only
+R7.opts.py	row_break.add	bool:manual	`add_row_break(manual)` is a boolean; make it keyword-only
+R7.opts.py	table.create	bool:header_row	`add_table(header_row)` is a boolean; make it keyword-only
+R7.opts.py	table.create	bool:totals_row	`add_table(totals_row)` is a boolean; make it keyword-only
+R7.opts.py	table.update	bool:header_row	`update_table(header_row)` is a boolean; make it keyword-only
+R7.opts.py	table.update	bool:totals_row	`update_table(totals_row)` is a boolean; make it keyword-only
+R7.opts.py	table_column_totals.set	run	`set_table_column_totals` takes three or more adjacent positional arguments of one type; make them keyword-only
+R7.opts.py	table_style_info.set	bool:show_column_stripes	`set_table_style_info(show_column_stripes)` is a boolean; make it keyword-only
+R7.opts.py	table_style_info.set	bool:show_first_column	`set_table_style_info(show_first_column)` is a boolean; make it keyword-only
+R7.opts.py	table_style_info.set	bool:show_last_column	`set_table_style_info(show_last_column)` is a boolean; make it keyword-only
+R7.opts.py	table_style_info.set	bool:show_row_stripes	`set_table_style_info(show_row_stripes)` is a boolean; make it keyword-only
+R7.opts.py	table_style_info.set	run	`set_table_style_info` takes three or more adjacent positional arguments of one type; make them keyword-only
+R7.opts.py	theme_script_font.get	bool:major	`get_theme_script_font(major)` is a boolean; make it keyword-only
+R7.opts.py	theme_script_font.set	bool:major	`set_theme_script_font(major)` is a boolean; make it keyword-only

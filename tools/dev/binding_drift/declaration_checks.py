@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Set, Tuple
 
+from .api_conventions import LEDGER_PATH, Ledger, c_verb, load_ledger
+from .api_conventions_bindings import FACADE_EXTRA, SHEET_CLASS, WORKBOOK_CLASS
 from .enum_decl import (
     _extract_c_typedef_enum,
     _extract_cpp_enum_class,
@@ -36,6 +38,7 @@ from .surface_files import (
     _read_bytes,
 )
 from .ts_decl import (
+    _extract_braced_block,
     _extract_ts_callable_members,
     _extract_ts_methods,
     _find_interface_body,
@@ -59,8 +62,8 @@ NODE_ONLY_METHODS = {"getMemoryUsage"}
 # d.ts free-function surface against the registrations.
 NODE_PURE_JS_FREE_FUNCTIONS = {"mergeFunctionMetadata"}
 
-# `Workbook` methods that `installWorkbookExtensions` adds in pure JS; no
-# registration stands behind them in either runtime.
+# `Workbook` methods the pure-JS layer adds (`installWorkbookExtensions`, or the
+# `makeFacade` classes); no registration stands behind them in either runtime.
 PURE_JS_WORKBOOK_METHODS = {"setValue", "sheet"}
 
 # Read-only `Workbook` properties, registered as an accessor rather than a method.
@@ -73,6 +76,85 @@ NODE_ADDON_INTERNAL_EXPORTS = {"__setErrorClass"}
 ENTRY_INTERFACE = "Formulon"
 
 _READONLY_FIELD_RE = re.compile(r"^\s*readonly\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*:", re.MULTILINE)
+
+
+def _optional_interface_body(text: str, name: str) -> str:
+    """The body of `export interface <name>`, or "" when the file does not declare it."""
+    match = re.search(r"export interface %s\s*\{" % re.escape(name), text)
+    return _find_interface_body(text, name, Path(name)) if match else ""
+
+
+def _ledger() -> Ledger:
+    ledger = load_ledger(LEDGER_PATH)
+    return ledger if not ledger.problems else Ledger()
+
+
+def _js_names(ledger: Ledger, keys) -> Set[str]:
+    out: Set[str] = set()
+    for key in keys:
+        entry = ledger.entry(key)
+        was = entry.get("was") if isinstance(entry.get("was"), dict) else {}
+        out.update(n for n in (entry.get("js"), was.get("js")) if isinstance(n, str))
+    return out
+
+
+def _pascal(snake: str) -> str:
+    return "".join(w[:1].upper() + w[1:] for w in snake.split("_") if w)
+
+
+def facade_split(ledger: Ledger) -> Tuple[Set[str], Set[str]]:
+    """`(raw_only, facade_only)` JS method names the ledger implies.
+
+    Raw-only names stay registered while the published declarations drop them: the count and element getter
+    of a `list` / `handles` / `property` collection, and every `drop:` JS name. Facade-only names are declared
+    but built in JS: `FACADE_EXTRA`, the `list<Plural>()` of a `list` / `handles` collection and the
+    `get<Plural>()` of a `property` collection.
+    """
+    raw_only: Set[str] = set()
+    facade_only: Set[str] = set(PURE_JS_WORKBOOK_METHODS)
+    for members in FACADE_EXTRA["js"].values():
+        facade_only |= members
+    for coll in ledger.collections.values():
+        access = coll.get("access") if isinstance(coll, dict) else None
+        if access not in ("list", "handles", "property") or not isinstance(coll.get("plural"), str):
+            continue
+        getters = [
+            op
+            for op in coll.get("ops") or []
+            if isinstance(ledger.entry(op).get("c"), str)
+            and c_verb(ledger.entry(op)["c"]) == "get"
+            and not ledger.entry(op)["c"].endswith("_at")
+        ]
+        raw_only |= _js_names(ledger, getters)
+        prefix = "get" if access == "property" else "list"
+        facade_only.add(prefix + _pascal(coll["plural"]))
+    for entry in ledger.entries.values():
+        drop = entry.get("drop") if isinstance(entry, dict) else None
+        if isinstance(drop, dict) and isinstance(drop.get("js"), str):
+            raw_only.add(drop["js"])
+    return raw_only, facade_only
+
+
+def _declared_instance_methods(dts_text: str, source: Path) -> Set[str]:
+    """Methods of the `Workbook` and `Sheet` interfaces; the `Sheet` ones omit the raw sheet argument."""
+    methods = _extract_ts_methods(_find_interface_body(dts_text, WORKBOOK_CLASS, source))
+    return methods | _extract_ts_methods(_optional_interface_body(dts_text, SHEET_CLASS))
+
+
+def _registration_problems(
+    check: str,
+    label: str,
+    registered: Set[str],
+    declared: Set[str],
+    allowed: Tuple[Set[str], Set[str]],
+    reg_label: str,
+    dts_label: str,
+) -> List[str]:
+    """A registration missing from the declarations, or a declaration nothing registers, outside `allowed`
+    (`(raw_only, facade_only)`)."""
+    raw_only, facade_only = allowed
+    diff = _format_diff(reg_label, registered - declared - raw_only, dts_label, declared - registered - facade_only)
+    return [f"{check}: {label} mismatch:\n" + "\n".join(diff)] if diff else []
 
 
 # ---------------------------------------------------------------------------
@@ -89,28 +171,29 @@ def check_dts_wasm() -> List[str]:
     free_cpp = set(re.findall(r'(?<!\.)\bfunction\("([^"]+)"', cpp_text))
 
     dts_text = _read(WASM_DTS)
-    instance_dts = _extract_ts_methods(_find_interface_body(dts_text, "Workbook", WASM_DTS))
+    split = facade_split(_ledger())
+    instance_dts = _declared_instance_methods(dts_text, WASM_DTS)
     static_dts = _extract_ts_methods(_find_interface_body(dts_text, "WorkbookCtor", WASM_DTS))
     free_dts = _extract_ts_methods(_find_interface_body(dts_text, ENTRY_INTERFACE, WASM_DTS))
     free_dts -= NODE_PURE_JS_FREE_FUNCTIONS
-    instance_dts -= PURE_JS_WORKBOOK_METHODS
     accessor_cpp = set(re.findall(r'\.property\("([^"]+)"', cpp_text))
     accessor_dts = set(_READONLY_FIELD_RE.findall(_find_interface_body(dts_text, "Workbook", WASM_DTS)))
 
-    for label, cpp_set, dts_set in (
-        ("Workbook instance methods", instance_cpp, instance_dts),
-        ("Workbook static factories", static_cpp, static_dts),
-        ("free functions", free_cpp, free_dts),
-        ("Workbook accessors", accessor_cpp & WORKBOOK_ACCESSORS, accessor_dts),
+    for label, cpp_set, dts_set, allowed in (
+        ("Workbook / Sheet instance methods", instance_cpp, instance_dts, split),
+        ("Workbook static factories", static_cpp, static_dts, (set(), set())),
+        ("free functions", free_cpp, free_dts, (set(), set())),
+        ("Workbook accessors", accessor_cpp & WORKBOOK_ACCESSORS, accessor_dts, (set(), set())),
     ):
-        diff = _format_diff(
+        problems += _registration_problems(
+            "dts-wasm",
+            label,
+            cpp_set,
+            dts_set,
+            allowed,
             f"{WASM_BINDINGS_CPP.relative_to(REPO_ROOT)}",
-            cpp_set - dts_set,
             f"{WASM_DTS.relative_to(REPO_ROOT)}",
-            dts_set - cpp_set,
         )
-        if diff:
-            problems.append(f"dts-wasm: {label} mismatch:\n" + "\n".join(diff))
     if accessor_cpp & WORKBOOK_ACCESSORS != WORKBOOK_ACCESSORS:
         problems.append(
             f"dts-wasm: Workbook accessors {sorted(WORKBOOK_ACCESSORS - accessor_cpp)} are not registered "
@@ -138,8 +221,8 @@ def check_dts_node() -> List[str]:
     accessor_cc = set(re.findall(r'InstanceAccessor(?:<[^>]*>)?\(\s*"([^"]+)"', cc_text))
 
     dts_text = _read(NODE_DTS)
-    instance_dts = _extract_ts_methods(_find_interface_body(dts_text, "Workbook", NODE_DTS))
-    instance_dts -= PURE_JS_WORKBOOK_METHODS
+    split = facade_split(_ledger())
+    instance_dts = _declared_instance_methods(dts_text, NODE_DTS)
     static_dts = _extract_ts_methods(_find_interface_body(dts_text, "WorkbookCtor", NODE_DTS))
     free_dts = _extract_ts_methods(_find_interface_body(dts_text, ENTRY_INTERFACE, NODE_DTS))
     free_dts -= NODE_PURE_JS_FREE_FUNCTIONS
@@ -172,20 +255,21 @@ def check_dts_node() -> List[str]:
     if stale_node_only:
         problems.append(f"dts-node: stale Node-only allowlist entries: {sorted(stale_node_only)}")
 
-    for label, cc_set, dts_set in (
-        ("Workbook instance methods", instance_cc, instance_dts),
-        ("Workbook static factories", static_cc, static_dts),
-        ("free functions", free_cc, free_dts),
-        ("Workbook accessors", accessor_cc & WORKBOOK_ACCESSORS, accessor_dts),
+    for label, cc_set, dts_set, allowed in (
+        ("Workbook / Sheet instance methods", instance_cc, instance_dts, split),
+        ("Workbook static factories", static_cc, static_dts, (set(), set())),
+        ("free functions", free_cc, free_dts, (set(), set())),
+        ("Workbook accessors", accessor_cc & WORKBOOK_ACCESSORS, accessor_dts, (set(), set())),
     ):
-        diff = _format_diff(
+        problems += _registration_problems(
+            "dts-node",
+            label,
+            cc_set,
+            dts_set,
+            allowed,
             f"{NODE_WORKBOOK_CLASS_CC.relative_to(REPO_ROOT)} / {NODE_ADDON_CC.relative_to(REPO_ROOT)}",
-            cc_set - dts_set,
             f"{NODE_DTS.relative_to(REPO_ROOT)}",
-            dts_set - cc_set,
         )
-        if diff:
-            problems.append(f"dts-node: {label} mismatch:\n" + "\n".join(diff))
     if accessor_cc & WORKBOOK_ACCESSORS != WORKBOOK_ACCESSORS:
         problems.append(
             f"dts-node: Workbook accessors {sorted(WORKBOOK_ACCESSORS - accessor_cc)} are not registered "
@@ -251,6 +335,8 @@ def check_pure_js_helpers() -> List[str]:
                 "packages/npm/common.mjs so both packages stay tied to one implementation."
             )
 
+    if _MAKE_FACADE_RE.search(common_text):
+        return problems + _facade_wiring_problems(common_text, _read(NODE_INDEX_MJS))
     extensions = _js_exported_function_source(common_text, "installWorkbookExtensions")
     if extensions is None:
         problems.append(
@@ -271,6 +357,49 @@ def check_pure_js_helpers() -> List[str]:
             "`installWorkbookExtensions` from ../npm/common.mjs"
         )
 
+    return problems
+
+
+_MAKE_FACADE_RE = re.compile(r"^(?:export\s+)?function\s+makeFacade\s*\(", re.MULTILINE)
+_RUNTIME_MEMBERS_RE = re.compile(r"\bRUNTIME_MEMBERS\s*=\s*new Set\(\[(.*?)\]\)", re.DOTALL)
+
+
+def _function_body(text: str, name: str) -> str:
+    match = re.search(r"^(?:export\s+)?function\s+%s\s*\(" % re.escape(name), text, re.MULTILINE)
+    if not match:
+        return ""
+    return _extract_braced_block(text, text.index("{", match.end()) + 1)
+
+
+def _facade_wiring_problems(common_text: str, native_text: str) -> List[str]:
+    """The facade wiring: `buildFormulon` hands the raw `Workbook` to `makeFacade`, `RUNTIME_MEMBERS` no longer
+    copies the raw class onto the module object, `installWorkbookExtensions` is gone, and the native entry
+    passes its raw runtime to `buildFormulon` / `loadFormulon` without installing extensions.
+    """
+    common_label = NPM_COMMON_MJS.relative_to(REPO_ROOT)
+    native_label = NODE_INDEX_MJS.relative_to(REPO_ROOT)
+    problems: List[str] = []
+    if re.search(r"\bfunction\s+installWorkbookExtensions\b", common_text):
+        problems.append(f"pure-js-helpers: {common_label} defines `makeFacade` and still `installWorkbookExtensions`")
+    if "makeFacade(" not in _function_body(common_text, "buildFormulon"):
+        problems.append(f"pure-js-helpers: `buildFormulon` in {common_label} does not call `makeFacade`")
+    runtime = _RUNTIME_MEMBERS_RE.search(common_text)
+    if runtime is not None and re.search(r"['\"]Workbook['\"]", runtime.group(1)):
+        problems.append(f"pure-js-helpers: `RUNTIME_MEMBERS` in {common_label} still copies the raw `Workbook`")
+    body = _function_body(common_text, "makeFacade")
+    for method in sorted(PURE_JS_WORKBOOK_METHODS):
+        if not re.search(r"\b%s\b" % re.escape(method), body):
+            problems.append(f"pure-js-helpers: `makeFacade` does not build `{method}`")
+    if "installWorkbookExtensions" in native_text:
+        problems.append(f"pure-js-helpers: {native_label} still calls `installWorkbookExtensions`")
+    wired = any(
+        re.search(r"\b%s\.(?:buildFormulon|loadFormulon)\s*\(" % re.escape(ns), native_text)
+        for ns in _js_common_namespaces(native_text)
+    )
+    if not wired:
+        problems.append(
+            f"pure-js-helpers: {native_label} must pass its runtime to `buildFormulon` from ../npm/common.mjs"
+        )
     return problems
 
 
@@ -382,11 +511,34 @@ _DTS_ENUM_SOURCES = {
 }
 
 
+def _enum_sources(dts_text: str) -> Dict[str, tuple]:
+    """`_DTS_ENUM_SOURCES`, plus every `.d.ts` table whose ledger enum names a C typedef enum of the header.
+
+    A table added for a new C enum is therefore checked without a hand-kept entry.
+    """
+    sources = dict(_DTS_ENUM_SOURCES)
+    declared = set(re.findall(r"^export const (\w+): Readonly<\{", dts_text, re.MULTILINE))
+    header = _read(CAPI_HEADER)
+    for entry in _ledger().entries.values():
+        if not isinstance(entry, dict) or entry.get("kind") != "enum":
+            continue
+        name, c_name = entry.get("js"), entry.get("c")
+        if name in declared and name not in sources and isinstance(c_name, str):
+            if _extract_c_typedef_enum(header, c_name) is not None:
+                sources[name] = (CAPI_HEADER, c_name, _extract_c_typedef_enum)
+    return sources
+
+
+def _present(values: List[int]) -> List[int]:
+    """Ordinals without `-1`: an "absent" member is `-1` in C and `null` in the binding, never a table member."""
+    return [v for v in values if v != -1]
+
+
 def check_dts_enums() -> List[str]:
     problems: List[str] = []
     dts_text = _read(WASM_DTS)
 
-    for ts_name, (source_path, source_enum, extractor) in sorted(_DTS_ENUM_SOURCES.items()):
+    for ts_name, (source_path, source_enum, extractor) in sorted(_enum_sources(dts_text).items()):
         ts_values = _extract_ts_enum(dts_text, ts_name)
         if ts_values is None:
             problems.append(
@@ -403,7 +555,7 @@ def check_dts_enums() -> List[str]:
             )
             continue
 
-        if ts_values != source_values:
+        if _present(ts_values) != _present(source_values):
             problems.append(
                 f"dts-enums: {ts_name} in {WASM_DTS.relative_to(REPO_ROOT)} has ordinals {ts_values}, "
                 f"but its source {source_enum} in {source_path.relative_to(REPO_ROOT)} has {source_values}"

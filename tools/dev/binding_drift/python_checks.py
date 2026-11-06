@@ -15,6 +15,7 @@ from .surface_files import (
     CAPI_HEADER,
     PYTHON_C_BINDING,
     PYTHON_PKG_DIR,
+    PYTHON_SHEET,
     PYTHON_STRUCTS,
     PYTHON_WORKBOOK,
     REPO_ROOT,
@@ -639,12 +640,13 @@ def check_python_call_signatures() -> List[str]:
 # compares them to the header.
 # ---------------------------------------------------------------------------
 
-# (source file, decoder qualname, C struct). Each decoder is expected to
-# consume the whole struct, so its `struct` calls are read as a description
-# of the C layout and compared field for field.
+# (decoder qualnames, C struct). Each decoder is expected to consume the
+# whole struct, so its `struct` calls are read as a description of the C
+# layout and compared field for field. A sheet-scope decoder lives on
+# `Workbook` (workbook.py) or `Sheet` (sheet.py); the first one found counts.
 _PYTHON_INLINE_DECODERS = (
-    ("Value._from_wasm", "fm_value_t"),
-    ("Workbook.get_pagination", "fm_cell_rect_t"),
+    (("Value._from_wasm",), "fm_value_t"),
+    (("Workbook.get_pagination", "Sheet.get_pagination"), "fm_cell_rect_t"),
 )
 
 # Python-side size literals for a struct with no `_structs.Struct` entry, as
@@ -687,6 +689,10 @@ def _find_qualified_function(tree: ast.AST, qualname: str) -> Optional[ast.AST]:
             if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)) and member.name == function_name:
                 return member
     return None
+
+
+def _relative(path: Path) -> object:
+    return path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path
 
 
 def check_python_inline_structs() -> List[str]:
@@ -774,16 +780,24 @@ def check_python_inline_structs() -> List[str]:
                 f"which is where the binding's {struct_name} size lives"
             )
 
-    tree = ast.parse(_read(PYTHON_WORKBOOK), filename=str(PYTHON_WORKBOOK))
-    label = PYTHON_WORKBOOK.relative_to(REPO_ROOT)
-    for qualname, struct_name in _PYTHON_INLINE_DECODERS:
-        function = _find_qualified_function(tree, qualname)
-        if function is None:
+    modules = [path for path in (PYTHON_WORKBOOK, PYTHON_SHEET) if path.is_file()]
+    trees = [(path, ast.parse(_read(path), filename=str(path))) for path in modules]
+    for qualnames, struct_name in _PYTHON_INLINE_DECODERS:
+        found = [
+            (path, qualname, function)
+            for path, tree in trees
+            for qualname in qualnames
+            for function in [_find_qualified_function(tree, qualname)]
+            if function is not None
+        ]
+        if not found:
             problems.append(
-                f"python-inline-structs: {label} no longer defines {qualname}, "
-                f"which is where the inline {struct_name} decoding lives"
+                f"python-inline-structs: {_relative(PYTHON_WORKBOOK)} no longer defines "
+                f"{' / '.join(qualnames)}, which is where the inline {struct_name} decoding lives"
             )
             continue
+        path, qualname, function = found[0]
+        label = _relative(path)
         measured = measure(struct_name)
         if measured is None:
             continue

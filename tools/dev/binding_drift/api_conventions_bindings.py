@@ -31,6 +31,7 @@ from .api_conventions import (
     c_verb,
     derive_js,
     derive_py,
+    derive_record_type,
     derive_type,
     rule,
 )
@@ -43,6 +44,23 @@ SHEET_RECT = "fm_sheet_rect_t"
 WORKBOOK_HANDLE = "fm_workbook_t"
 DEFAULT_DROP_RULE = "R5.list"
 ENTRY_INTERFACE = "Formulon"
+WORKBOOK_CLASS = "Workbook"
+SHEET_CLASS = "Sheet"
+
+# Hand-written facade members that no ledger op stands behind (or that the facade adds around one); the
+# `Workbook` statics are the ledger factories and are not repeated here.
+FACADE_EXTRA = {
+    "js": {
+        WORKBOOK_CLASS: frozenset(
+            {"sheet", "listSheets", "dispose", "disposed", "[Symbol.dispose]", "getActiveSheet", "setActiveSheet"}
+        ),
+        SHEET_CLASS: frozenset({"workbook", "index", "name", "get", "set"}),
+    },
+    "py": {
+        WORKBOOK_CLASS: frozenset({"sheet", "list_sheets", "close", "closed", "get_active_sheet", "set_active_sheet"}),
+        SHEET_CLASS: frozenset({"workbook", "index", "name", "get", "set"}),
+    },
+}
 
 # Synonyms whose left side must not appear in a name (R4); a pair is two adjacent words.
 SYNONYMS = {("horizontal", "break"): "row_break", ("vertical", "break"): "column_break", ("idx",): "index"}
@@ -176,6 +194,7 @@ class JsSurface:
     """The exported declarations of one TypeScript declaration file."""
 
     def __init__(self, text: str) -> None:
+        self.raw = text
         text = _TS_COMMENT_RE.sub(" ", text)
         self.decls: Dict[str, TsDecl] = {}
         for match in _TS_DECL_RE.finditer(text):
@@ -206,7 +225,15 @@ class JsSurface:
 
     @property
     def workbook(self) -> Dict[str, TsMember]:
-        return {n: m for n, m in self.interface_members("Workbook").items() if m.is_method}
+        return {n: m for n, m in self.interface_members(WORKBOOK_CLASS).items() if m.is_method}
+
+    @property
+    def sheet(self) -> Dict[str, TsMember]:
+        """Methods of the `Sheet` facade; they omit the leading sheet argument of the raw registration."""
+        return {n: m for n, m in self.interface_members(SHEET_CLASS).items() if m.is_method}
+
+    def classes(self) -> Dict[str, Dict[str, TsMember]]:
+        return {WORKBOOK_CLASS: self.workbook, SHEET_CLASS: self.sheet}
 
     @property
     def statics(self) -> Dict[str, TsMember]:
@@ -227,14 +254,19 @@ class JsSurface:
     def callables(self) -> Dict[str, TsMember]:
         """Instance methods, free functions and `Workbook.<static>` factories by tree name."""
         out = dict(self.functions)
+        out.update(self.sheet)
         out.update(self.workbook)
         out.update({f"Workbook.{n}": m for n, m in self.statics.items()})
         return out
 
     def symbols(self) -> Dict[str, str]:
-        """Every exported symbol of the file, by the name the ledger's `js` field uses."""
+        """Every exported symbol of the file, by the name the ledger's `js` field uses.
+
+        The hand-written facade members of `Sheet` (`FACADE_EXTRA`) have no ledger entry and are left out.
+        """
         out = {name: "type" for name in self.decls}
         out.update({name: "function" for name in self.functions})
+        out.update({name: "method" for name in self.sheet if name not in FACADE_EXTRA["js"][SHEET_CLASS]})
         out.update({name: "method" for name in self.workbook})
         out.update({f"Workbook.{name}": "static" for name in self.statics})
         return out
@@ -251,6 +283,8 @@ class PyFunc(NamedTuple):
     returns: str
     decorators: Tuple[str, ...]
     defaults: Tuple[Tuple[str, str], ...] = ()
+    kwonly: Tuple[str, ...] = ()
+    doc: str = ""
 
 
 class PyClass(NamedTuple):
@@ -260,6 +294,8 @@ class PyClass(NamedTuple):
     keywords: Dict[str, str]
     fields: Dict[str, str]
     methods: Dict[str, PyFunc]
+    constants: Dict[str, int] = {}
+    doc: str = ""
 
 
 def _py_func(node: ast.AST, method: bool) -> PyFunc:
@@ -274,15 +310,24 @@ def _py_func(node: ast.AST, method: bool) -> PyFunc:
     decorators = tuple(ast.unparse(d) for d in node.decorator_list)  # type: ignore[attr-defined]
     defaults = [(a.arg, ast.unparse(d)) for a, d in zip(reversed(positional), reversed(args.defaults))]
     defaults += [(a.arg, ast.unparse(d)) for a, d in zip(args.kwonlyargs, args.kw_defaults) if d is not None]
-    return PyFunc(node.name, params, returns, decorators, tuple(defaults))  # type: ignore[attr-defined]
+    kwonly = tuple(a.arg for a in args.kwonlyargs)
+    doc = ast.get_docstring(node) or ""  # type: ignore[arg-type]
+    return PyFunc(node.name, params, returns, decorators, tuple(defaults), kwonly, doc)  # type: ignore[attr-defined]
 
 
 def _py_class(node: ast.ClassDef) -> PyClass:
     fields: Dict[str, str] = {}
     methods: Dict[str, PyFunc] = {}
+    constants: Dict[str, int] = {}
     for item in node.body:
         if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
             fields[item.target.id] = ast.unparse(item.annotation)
+        elif isinstance(item, ast.Assign) and len(item.targets) == 1 and isinstance(item.targets[0], ast.Name):
+            value = item.value
+            if isinstance(value, ast.UnaryOp) and isinstance(value.op, ast.USub):
+                value = ast.Constant(-value.operand.value) if isinstance(value.operand, ast.Constant) else value
+            if isinstance(value, ast.Constant) and isinstance(value.value, int) and not isinstance(value.value, bool):
+                constants[item.targets[0].id] = value.value
         elif isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
             methods[item.name] = _py_func(item, method=True)
             if item.name == "__init__":
@@ -302,6 +347,8 @@ def _py_class(node: ast.ClassDef) -> PyClass:
         {kw.arg: ast.unparse(kw.value) for kw in node.keywords if kw.arg},
         fields,
         methods,
+        constants,
+        ast.get_docstring(node) or "",
     )
 
 
@@ -346,7 +393,7 @@ class PySurface:
     @property
     def workbook(self) -> Dict[str, PyFunc]:
         """Public `Workbook` methods; class and static methods as `Workbook.<name>`."""
-        cls = self.classes.get("Workbook")
+        cls = self.classes.get(WORKBOOK_CLASS)
         out: Dict[str, PyFunc] = {}
         for name, fn in cls.methods.items() if cls else ():
             if name.startswith("_"):
@@ -355,13 +402,29 @@ class PySurface:
             out[f"Workbook.{name}" if static else name] = fn
         return out
 
+    @property
+    def sheet(self) -> Dict[str, PyFunc]:
+        """Public `Sheet` methods other than properties; they omit the leading sheet argument."""
+        cls = self.classes.get(SHEET_CLASS)
+        return {
+            name: fn
+            for name, fn in (cls.methods.items() if cls else ())
+            if not name.startswith("_")
+            and not any(d.endswith("property") or d.endswith(".setter") for d in fn.decorators)
+        }
+
+    def class_methods(self) -> Dict[str, Dict[str, PyFunc]]:
+        return {WORKBOOK_CLASS: self.workbook, SHEET_CLASS: self.sheet}
+
     def callables(self) -> Dict[str, PyFunc]:
         out = {name: fn for name, fn in self.functions.items() if name in self.exports}
+        out.update(self.sheet)
         out.update(self.workbook)
         return out
 
     def symbols(self) -> Dict[str, str]:
         out = {name: "export" for name in self.exports}
+        out.update({name: "method" for name in self.sheet if name not in FACADE_EXTRA["py"][SHEET_CLASS]})
         out.update({name: "method" for name in self.workbook})
         return out
 
@@ -639,13 +702,14 @@ _SCOPE_HANDLE_TYPES = {"buffer": "uint8_t"}
 def _rule_scope(ctx: Context) -> Iterable[Violation]:
     """A `sheet`-scope function takes `(fm_workbook_t*, size_t sheet_index, ...)`; a `workbook`-scope function
     takes the workbook handle and no sheet index unless its noun is `sheet` or the entry carries `sheet_arg:`;
-    a result-handle scope takes `fm_<scope>_t*` (or its `_SCOPE_HANDLE_TYPES` type) first.
+    a result-handle scope takes `fm_<scope>_t*` (or its `_SCOPE_HANDLE_TYPES` type) first. A factory creates
+    the handle, so it takes none.
     """
     for fn in ctx.functions:
         key = ctx.op_key(fn.name)
         entry = ctx.ledger.entry(ctx.ledger.key_for("c", fn.name))
         scope = entry.get("scope")
-        if scope not in SCOPES:
+        if scope not in SCOPES or entry.get("kind") == "factory":
             continue
         handle = fn.params[0] if fn.params else None
         want = _SCOPE_HANDLE_TYPES.get(scope) or f"fm_{'workbook' if scope in ('workbook', 'sheet') else scope}_t"
@@ -845,13 +909,14 @@ def _rule_nouns(ctx: Context) -> Iterable[Violation]:
 @_owned("R5.derive")
 def _rule_derive(ctx: Context) -> Iterable[Violation]:
     """A binding name in the tree derives from the tree's C name of the same entry: functions by
-    `derive_js` / `derive_py`, factories as `Workbook.<derived>`, records and enums by `derive_type`.
-    Entries with `exception:` are exempt.
+    `derive_js` / `derive_py`, factories as `Workbook.<derived>`, enums by `derive_type`, records by
+    `derive_type` with or without a meaningless suffix (R21.name judges the suffix). Entries with
+    `exception:` or `review: true` are exempt.
     """
     found = surfaces(ctx)
     typedefs = {t.name for t in ctx.typedefs}
     for key, entry in sorted(ctx.ledger.entries.items()):
-        if not isinstance(entry, dict) or "exception" in entry:
+        if not isinstance(entry, dict) or "exception" in entry or entry.get("review") is True:
             continue
         kind = entry.get("kind")
         if kind in ("op", "factory"):
@@ -859,13 +924,15 @@ def _rule_derive(ctx: Context) -> Iterable[Violation]:
             if fn is None:
                 continue
             prefix = "Workbook." if kind == "factory" else ""
-            wants = {"js": prefix + derive_js(fn.name), "py": prefix + derive_py(fn.name)}
+            wants = {"js": {prefix + derive_js(fn.name)}, "py": {prefix + derive_py(fn.name)}}
             tree_c = fn.name
         elif kind in ("record", "enum"):
             tree_c = next((n for n in _names(entry, "c") if n in typedefs), None)
             if tree_c is None or "replaced_by" in entry:
                 continue
-            typed = derive_type(tree_c, entry.get("role"))
+            typed = {derive_type(tree_c, entry.get("role"))}
+            if kind == "record":
+                typed.add(derive_record_type(tree_c, entry.get("role")))
             wants = {"js": typed, "py": typed}
         else:
             continue
@@ -877,14 +944,14 @@ def _rule_derive(ctx: Context) -> Iterable[Violation]:
                 else (found.py.classes if surface == "py" else found.js[surface].decls)
             )
             name = _in_tree(pool, entry, field)
-            if name is not None and name != wants[field]:
+            if name is not None and name not in wants[field]:
                 yield _violation(
                     ctx,
                     "R5.derive",
                     surface,
                     key,
                     NO_DISCRIMINATOR,
-                    f"`{name}` does not derive from `{tree_c}` (`{wants[field]}`)",
+                    f"`{name}` does not derive from `{tree_c}` (`{' or '.join(sorted(wants[field]))}`)",
                 )
 
 
@@ -1456,7 +1523,7 @@ def _edge_quad(names: Set[str], quads: Sequence[Sequence[str]]) -> bool:
 
 @_owned("R11.sheet")
 def _rule_sheet_ranges(ctx: Context) -> Iterable[Violation]:
-    """A range on another sheet is `fm_sheet_rect_t { size_t sheet_index; fm_cell_rect_t rect; }` in C and
+    """A range on another sheet is `fm_sheet_rect_t { sheet_index; fm_cell_rect_t rect; }` in C and
     `SheetRect { sheet, rect }` in the bindings; no other record pairs a sheet index with a rectangle. A
     record keyed by a sheet name (`ParsedReference`) carries its rectangle as `rect`, not loose corners.
     """
@@ -1466,12 +1533,15 @@ def _rule_sheet_ranges(ctx: Context) -> Iterable[Violation]:
         fields = {m.name: m for m in typedef.fields}
         if typedef.name == SHEET_RECT:
             shape = tuple((m.ctype, m.name) for m in typedef.fields)
-            if shape != (("size_t", "sheet_index"), (CELL_RECT, "rect")):
+            if shape[1:] != ((CELL_RECT, "rect"),) or shape[:1] not in (
+                (("size_t", "sheet_index"),),
+                (("uint32_t", "sheet_index"),),
+            ):
                 yield ctx.c_violation(
                     "R11.sheet",
                     typedef.name,
                     NO_DISCRIMINATOR,
-                    f"{SHEET_RECT} must be exactly `size_t sheet_index; {CELL_RECT} rect;`",
+                    f"{SHEET_RECT} must be exactly `<index> sheet_index; {CELL_RECT} rect;` (R6.c.field types the index)",
                     typedef.line,
                 )
             continue
@@ -1589,6 +1659,7 @@ def _rule_entry_points(ctx: Context) -> Iterable[Violation]:
                     ctx, "R12", surface, _key(ctx, surface, table), "module", f"`{table}` is not on the module object"
                 )
     yield from _one_sided(ctx, {s: set(js[s].workbook) for s in JS_SURFACES}, "method")
+    yield from _one_sided(ctx, {s: set(js[s].sheet) for s in JS_SURFACES}, "sheet-method")
     yield from _one_sided(ctx, {s: {f"Workbook.{n}" for n in js[s].statics} for s in JS_SURFACES}, "static")
     yield from _one_sided(ctx, {s: set(js[s].functions) - {"createFormulon"} for s in JS_SURFACES}, "function")
 
@@ -1740,7 +1811,7 @@ def _members_of(ctx: Context, surface: str) -> Iterator[_Member]:
                 yield _Member(decl.name, m.name, m.is_method, m.params, m.type, True)
         return
     py = found.py
-    public = set(py.exports) | {"Workbook"}
+    public = set(py.exports) | {WORKBOOK_CLASS, SHEET_CLASS}
     for cls in sorted(py.classes.values()):
         if cls.name not in public:
             continue

@@ -15,6 +15,7 @@ from tools.dev.binding_drift import (
     api_conventions,
     declaration_checks,
     enum_decl,
+    python_checks,
     readme_checks,
     readme_identifiers,
     shape_checks,
@@ -572,6 +573,38 @@ class ApiConventionRuleTest(unittest.TestCase):
             with self.subTest(case=name):
                 self.assert_rule("R6.c", bad, good, expected)
 
+    def test_r6_c_field(self) -> None:
+        enum = "typedef enum { FM_MODE_A = 0, FM_MODE_B = 1 } fm_mode_t;\n#define FM_ORIENTATION_PORTRAIT 1u\n"
+        self.assert_rule(
+            "R6.c.field",
+            enum + "typedef struct {\n  size_t range_count;\n  uint32_t orientation; /* FM_ORIENTATION_* */\n"
+            "  uint32_t mode; /* fm_mode_t */\n  uint8_t kind; /* fm_mode_t ordinal */\n} fm_page_t;\n",
+            enum + "typedef struct {\n  uint32_t range_count;\n  int32_t orientation; /* FM_ORIENTATION_* */\n"
+            "  int32_t mode; /* fm_mode_t */\n  uint8_t kind; /* fm_mode_t ordinal */\n  uint64_t byte_length;\n"
+            "} fm_page_t;\n",
+            [("fm_page_t", "mode"), ("fm_page_t", "orientation"), ("fm_page_t", "range_count")],
+        )
+
+    def test_r15_header(self) -> None:
+        decl = (
+            "typedef struct fm_workbook fm_workbook_t;\n"
+            "FM_API fm_status_t fm_workbook_add_font(fm_workbook_t* wb, size_t* out_font_index);\n"
+        )
+        self.assert_rule(
+            "R15.header",
+            "/* See fm_styles_add_* and fm_workbook_gone. */\ntypedef struct fm_workbook fm_workbook_t;\n"
+            "/* TODO: for now only fonts. */\n"
+            "FM_API fm_status_t fm_workbook_add_font(fm_workbook_t* wb, size_t* out_font_index);\n",
+            "/* See fm_workbook_add_* and fm_workbook_add_font on an fm_workbook_t*; a later call adds more. */\n"
+            + decl,
+            [
+                ("fm_styles_add_*", "unresolved"),
+                ("fm_workbook_add_font", "TODO"),
+                ("fm_workbook_add_font", "for now"),
+                ("fm_workbook_gone", "unresolved"),
+            ],
+        )
+
     def test_r7_c_byptr(self) -> None:
         record = "typedef struct {\n  uint32_t row;\n} fm_anchor_t;\n"
         self.assert_rule(
@@ -831,6 +864,8 @@ class ApiConventionBaselineTest(unittest.TestCase):
             "R10.c.doc",
             "R11.axis",
             "R11.rect",
+            "R6.c.field",
+            "R15.header",
         }
         self.assertLessEqual(expected, set(api_conventions.all_rules()))
 
@@ -930,11 +965,12 @@ class DeclarationEntryShapeTest(unittest.TestCase):
         return path
 
     def tree(self, *, wasm_cpp=None, node_class=None, node_addon=None, wasm_dts=None, node_dts=None,
-             common=None, native_index=None, entry=None) -> dict:  # fmt: skip
+             common=None, native_index=None, entry=None, ledger=None) -> dict:  # fmt: skip
         entry_text = entry if entry is not None else "export { FormulonError } from './common.js';\n"
         native_dts = node_dts if node_dts is not None else self.WORKBOOK % "  getMemoryUsage(): number;\n"
         return {
             "REPO_ROOT": self.root,
+            "LEDGER_PATH": self.write("names.yaml", ledger) if ledger is not None else self.root / "absent.yaml",
             "WASM_BINDINGS_CPP": self.write("wasm.cpp", wasm_cpp if wasm_cpp is not None else self.WASM_CPP),
             "WASM_DTS": self.write(
                 "wasm.d.ts", wasm_dts if wasm_dts is not None else self.WORKBOOK % "" + self.ENTRY % ""
@@ -979,7 +1015,7 @@ class DeclarationEntryShapeTest(unittest.TestCase):
             wasm_dts=self.WORKBOOK.replace("readonly disposed: boolean;", "isValid(): boolean;") % "" + self.ENTRY % "",
         )  # fmt: skip
         text = "\n".join(problems)
-        self.assertIn("Workbook instance methods mismatch", text)
+        self.assertIn("Workbook / Sheet instance methods mismatch", text)
         self.assertIn("free functions mismatch", text)
         self.assertIn("getBuild", text)
         self.assertIn("Workbook accessors", text)
@@ -1016,6 +1052,91 @@ class DeclarationEntryShapeTest(unittest.TestCase):
         self.assertIn("does not add `Workbook.sheet`", text)
         self.assertIn("must take `installWorkbookExtensions` from ../npm/common.mjs", text)
         self.assertIn("does not re-export from './common.js'", text)
+
+    LEDGER = (
+        "schema: 1\ncollections:\n"
+        "  table: { key: index, access: list, plural: tables, ops: [table.get, table.get_count] }\n"
+        "entries:\n"
+        "  table.get: { kind: op, scope: workbook, c: fm_workbook_get_table, js: getTable, surfaces: [c, wasm] }\n"
+        "  table.get_count: { kind: op, scope: workbook, c: fm_workbook_get_table_count, js: getTableCount,"
+        " surfaces: [c, wasm] }\n"
+        "  zoom.get: { kind: op, scope: sheet, c: fm_sheet_get_zoom, js: getZoom, surfaces: [c, wasm],"
+        " drop: { js: getZoomLevel, closes: R23.js } }\n"
+    )
+
+    def test_raw_only_registrations_and_sheet_methods_are_matched(self) -> None:
+        cpp = self.WASM_CPP.replace(
+            '.function("save", &W::b)\n',
+            '.function("save", &W::b)\n  .function("getTableCount", &W::t)\n  .function("getTable", &W::u)\n'
+            '  .function("getZoomLevel", &W::v)\n  .function("getZoom", &W::z)\n',
+        )
+        sheet = (
+            "export interface Sheet {\n  readonly name: string;\n  getZoom(): number;\n  get(a1: string): Value;\n}\n"
+        )
+        wasm_dts = self.WORKBOOK % "  listTables(): readonly TableEntry[];\n" + sheet + self.ENTRY % ""
+        self.assertEqual(self.run_check(declaration_checks.check_dts_wasm, wasm_cpp=cpp, wasm_dts=wasm_dts,
+                                        ledger=self.LEDGER), [])  # fmt: skip
+        problems = self.run_check(declaration_checks.check_dts_wasm, wasm_cpp=cpp, wasm_dts=wasm_dts)
+        text = "\n".join(problems)
+        self.assertIn("getTableCount", text)
+        self.assertIn("listTables", text)
+        problems = self.run_check(
+            declaration_checks.check_dts_wasm,
+            wasm_cpp=cpp,
+            wasm_dts=wasm_dts.replace("  getZoom(): number;\n", ""),
+            ledger=self.LEDGER,
+        )
+        self.assertIn("getZoom", "\n".join(problems))
+
+    FACADE_COMMON = (
+        "export const FORMULON_MEMBERS = Object.freeze(['Workbook', 'mergeFunctionMetadata']);\n"
+        "const RUNTIME_MEMBERS = new Set(['evalFormula']);\n"
+        "export function mergeFunctionMetadata(base) { return base; }\n"
+        "function makeFacade(raw) {\n  class Sheet { setValue() {} }\n  class Workbook { sheet() {} }\n"
+        "  return Workbook;\n}\n"
+        "export function buildFormulon(runtime, shared) {\n  const Workbook = makeFacade(runtime.Workbook);\n}\n"
+    )
+
+    def test_facade_wiring_replaces_the_extension_installer(self) -> None:
+        native = (
+            "import * as common from '../npm/common.mjs';\nconst formulon = common.buildFormulon(native, common);\n"
+        )
+        clean = self.run_check(declaration_checks.check_pure_js_helpers, common=self.FACADE_COMMON, native_index=native)
+        self.assertEqual(clean, [])
+        problems = self.run_check(
+            declaration_checks.check_pure_js_helpers,
+            common=self.FACADE_COMMON.replace("['evalFormula']", "['Workbook', 'evalFormula']").replace(
+                "makeFacade(runtime.Workbook)", "runtime.Workbook"
+            )
+            + "export function installWorkbookExtensions(W) {}\n",
+            native_index="import * as common from '../npm/common.mjs';\n"
+            "common.installWorkbookExtensions(native.Workbook);\nconst formulon = common.buildFormulon(native, common);\n",
+        )
+        text = "\n".join(problems)
+        self.assertIn("still `installWorkbookExtensions`", text)
+        self.assertIn("does not call `makeFacade`", text)
+        self.assertIn("still copies the raw `Workbook`", text)
+        self.assertIn("index.mjs still calls `installWorkbookExtensions`", text)
+
+    def test_enum_tables_follow_the_ledger_and_skip_absent_members(self) -> None:
+        header = self.write(
+            "h.h", "typedef enum { FM_BLANKS_ABSENT = -1, FM_BLANKS_GAP = 0, FM_BLANKS_ZERO = 1 } fm_blanks_t;\n"
+        )
+        ledger = self.write(
+            "names.yaml",
+            "schema: 1\ncollections: {}\nentries:\n"
+            "  enum.blanks: { kind: enum, c: fm_blanks_t, js: Blanks, surfaces: [c, wasm] }\n",
+        )
+        dts = "export const Blanks: Readonly<{\n  Gap: 0;\n  Zero: 1;\n}>;\n"
+        with (
+            patch.object(declaration_checks, "CAPI_HEADER", header),
+            patch.object(declaration_checks, "LEDGER_PATH", ledger),
+        ):
+            sources = declaration_checks._enum_sources(dts)
+        self.assertEqual(sources["Blanks"][1], "fm_blanks_t")
+        c_values = enum_decl._extract_c_typedef_enum(header.read_text(), "fm_blanks_t")
+        self.assertEqual(declaration_checks._present(c_values), enum_decl._extract_ts_enum(dts, "Blanks"))
+        self.assertNotEqual(c_values, enum_decl._extract_ts_enum(dts, "Blanks"))
 
     def test_a_member_missing_from_common_members_or_the_interface_is_reported(self) -> None:
         problems = self.run_check(
@@ -1123,6 +1244,90 @@ class DocTokenTest(unittest.TestCase):
         self.assertIn("`fm_workbook_save`", problems)
         self.assertIn("`kOk`", problems)
         self.assertEqual(self.py_problems("Plain prose in 10 kB."), [])
+
+
+class SheetSurfaceMigrationTest(unittest.TestCase):
+    """The non-ledger checks read the `Sheet` class next to `Workbook`."""
+
+    def setUp(self) -> None:
+        self._tmp = TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def write(self, name: str, text: str) -> Path:
+        path = self.root / name
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def test_readme_js_sheet_variables_are_checked_against_sheet(self) -> None:
+        dts = self.write(
+            "f.d.ts",
+            "export interface Workbook {\n  sheet(key: string): Sheet;\n  listSheets(): readonly Sheet[];\n}\n"
+            "export interface Sheet {\n  getValue(row: number, col: number): Value;\n}\n"
+            "export interface WorkbookCtor {\n  createDefault(): Workbook;\n}\n"
+            "export interface Formulon {\n  Workbook: WorkbookCtor;\n}\n"
+            "export declare function createFormulon(): Promise<Formulon>;\n",
+        )
+        surface = readme_identifiers._JsSurface(dts)
+        surfaces = {"@libraz/formulon": surface, "@libraz/formulon-native": surface}
+        block = (
+            "import createFormulon from '@libraz/formulon';\nconst f = await createFormulon();\n"
+            "const wb = f.Workbook.createDefault();\nconst ws = wb.sheet('A');\nws.getValue(0, 0);\nws.setZoom(2);\n"
+            "for (const s of wb.listSheets()) { s.getValue(0, 0); s.getZoom(); }\nwb.sheet('A').getFormula(0, 0);\n"
+        )
+        problems: list[str] = []
+        readme_identifiers._check_js_block("R.md", 1, block, surfaces, problems)
+        self.assertEqual(len(problems), 3, problems)
+        self.assertTrue(all("is not a Sheet method" in p for p in problems), problems)
+
+    def test_readme_python_sheet_variables_are_checked_against_sheet(self) -> None:
+        py = SimpleNamespace(
+            module={"Workbook"},
+            classes={"Workbook": {"create_default", "sheet", "list_sheets"}, "Sheet": {"get_value", "name"}},
+        )
+        block = (
+            "from formulon import Workbook\nwb = Workbook.create_default()\nws = wb[0]\nws.get_value(0, 0)\n"
+            "ws.set_zoom(2)\nfor s in wb:\n    print(s.name, s.get_zoom())\nwb.sheet('A').get_formula(0, 0)\n"
+        )
+        problems: list[str] = []
+        readme_identifiers._check_py_block("R.md", 1, block, py, problems)
+        self.assertEqual(len(problems), 3, problems)
+        self.assertTrue(all("is not a Sheet member" in p for p in problems), problems)
+
+    def test_shared_shapes_compare_the_sheet_interface(self) -> None:
+        sheet = "export interface Sheet {\n  getZoom(): number;\n}\n"
+        base = "export interface Workbook {\n  save(): Uint8Array;\n}\nexport interface WorkbookCtor {\n}\n"
+        wasm = self.write("w.d.ts", base + sheet)
+        node = self.write("n.d.ts", base + sheet.replace("number", "string"))
+        with (
+            patch.object(shape_checks, "WASM_DTS", wasm),
+            patch.object(shape_checks, "NODE_DTS", node),
+            patch.object(shape_checks, "REPO_ROOT", self.root),
+        ):
+            problems = shape_checks.check_dts_shared_shapes()
+        self.assertTrue(any("Sheet.getZoom" in p for p in problems), problems)
+
+    def test_inline_decoder_may_live_on_sheet(self) -> None:
+        import ast
+
+        source = python_checks.PYTHON_WORKBOOK.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        workbook = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "Workbook")
+        method = next(n for n in workbook.body if getattr(n, "name", "") == "get_pagination")
+        moved = ast.get_source_segment(source, method)
+        stripped = source.replace(moved, "def get_pagination_moved(self):\n        pass")
+        workbook_py = self.write("workbook.py", stripped)
+        sheet_py = self.write("sheet.py", "class Sheet:\n    " + moved + "\n")
+        with (
+            patch.object(python_checks, "PYTHON_WORKBOOK", workbook_py),
+            patch.object(python_checks, "PYTHON_SHEET", sheet_py),
+        ):
+            self.assertEqual(python_checks.check_python_inline_structs(), [])
+            sheet_py.unlink()
+            problems = python_checks.check_python_inline_structs()
+        self.assertTrue(any("Sheet.get_pagination" in p for p in problems), problems)
 
 
 class NativeDtsGeneratorTest(unittest.TestCase):

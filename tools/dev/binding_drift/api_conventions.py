@@ -17,8 +17,9 @@ lines; without a ledger entry it is the symbol itself. Rules that classify a
 function by its name (verb, `_count`, `_destroy`) read the ledger's target
 name, while the naming rules read the name in the tree.
 
-Further rule modules register into the same registry: a sibling module
-`api_conventions_bindings.py`, if present, is imported before rules run.
+Further rule modules register into the same registry: the sibling modules
+`api_conventions_bindings.py` and `api_conventions_shapes.py`, if present,
+are imported before rules run.
 """
 
 from __future__ import annotations
@@ -197,6 +198,25 @@ def derive_type(c_typedef: str, role: Optional[str] = None) -> str:
     name = "".join(_cap(word) for word in body.split("_") if word)
     suffix = _ROLE_SUFFIX.get(role or "", "")
     return name if name.endswith(suffix) else name + suffix
+
+
+# Record-name suffixes that add no meaning (R21.name); a role suffix after them is kept.
+MEANINGLESS_SUFFIXES = ("Entry", "Record", "Info", "Spec")
+
+
+def strip_record_suffix(name: str) -> str:
+    """`name` without a trailing `Entry` / `Record` / `Info` / `Spec`, keeping an `Input` / `Patch` after it."""
+    role = next((r for r in _ROLE_SUFFIX.values() if name.endswith(r) and name != r), "")
+    base = name[: len(name) - len(role)]
+    for suffix in MEANINGLESS_SUFFIXES:
+        if base.endswith(suffix) and base != suffix:
+            return base[: -len(suffix)] + role
+    return name
+
+
+def derive_record_type(c_typedef: str, role: Optional[str] = None) -> str:
+    """R21 record name of a C typedef: `derive_type` without a meaningless suffix."""
+    return strip_record_suffix(derive_type(c_typedef, role))
 
 
 # ---------------------------------------------------------------------------
@@ -465,7 +485,7 @@ class Context:
 
 RuleFn = Callable[[Context], Iterable[Violation]]
 _RULES: Dict[str, RuleFn] = {}
-_EXTENSIONS = ("api_conventions_bindings",)
+_EXTENSIONS = ("api_conventions_bindings", "api_conventions_shapes")
 
 
 def rule(rule_id: str) -> Callable[[RuleFn], RuleFn]:
@@ -889,3 +909,117 @@ def _rule_single_rect(ctx: Context) -> Iterable[Violation]:
                 f"{fn.name} takes a rectangle as four coordinates from `{first}`; take `const {CELL_RECT}*`",
                 fn.line,
             )
+
+
+# Comment markers that describe a struct field's value set: an enum typedef or a `FM_<FAMILY>_*` macro family.
+_FIELD_LINE_RE = re.compile(r"^\s*([A-Za-z_][\w ]*?[\w*])\s*\b([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s*;(.*)$")
+_ENUM_TYPEDEF_REF_RE = re.compile(r"\bfm_[a-z0-9_]+_t\b")
+_MACRO_FAMILY_RE = re.compile(r"\b(FM_[A-Z0-9_]+?)_?\*")
+
+
+def _struct_field_comments(header: str) -> Dict[str, List[Tuple[str, str, str]]]:
+    """Struct name -> `(ctype, field, trailing comment)` for every field declared on one line."""
+    out: Dict[str, List[Tuple[str, str, str]]] = {}
+    for match in _C_STRUCT_RE.finditer(header):
+        fields = []
+        for line in match.group(1).splitlines():
+            code, _, comment = line.partition("/*")
+            found = _FIELD_LINE_RE.match(code + ";" if ";" not in code else code)
+            if found is None or found.group(1).strip() in ("union", "struct", "}"):
+                continue
+            ctype = " ".join(found.group(1).replace("*", " * ").split()).replace(" *", "*")
+            fields.append((ctype, found.group(2), comment.split("*/")[0] if comment else found.group(3)))
+        out[match.group(2)] = fields
+    return out
+
+
+def _enum_family(comment: str, enums: set, macros: set) -> Optional[str]:
+    """The value set a field comment names: an enum typedef, or a `FM_<FAMILY>_*` family with a `#define`."""
+    for name in _ENUM_TYPEDEF_REF_RE.findall(comment):
+        if name in enums:
+            return name
+    for prefix in _MACRO_FAMILY_RE.findall(comment):
+        if any(m.startswith(prefix.rstrip("_") + "_") for m in macros):
+            return prefix.rstrip("_") + "_*"
+    return None
+
+
+_HEADER_DEFINE_RE = re.compile(r"^#define\s+(FM_[A-Z0-9_]+)", re.M)
+
+
+@rule("R6.c.field")
+def _rule_c_field_types(ctx: Context) -> Iterable[Violation]:
+    """A public struct field is fixed-width: no `size_t` (an index or count is `uint32_t`, a byte length
+    `uint64_t`), and a field whose comment names its value set (an enum typedef or a `FM_<FAMILY>_*` macro
+    family) is `int32_t`, or a `uint8_t` whose comment names an `fm_*_t` enum. A field declared with the enum
+    typedef itself is judged by `R6.c`.
+    """
+    macros = set(_HEADER_DEFINE_RE.findall(ctx.header))
+    lines = {t.name: t.line for t in ctx.typedefs}
+    for struct, fields in _struct_field_comments(ctx.header).items():
+        for ctype, name, comment in fields:
+            line = lines.get(struct, 0)
+            if ctype == "size_t":
+                yield ctx.c_violation(
+                    "R6.c.field",
+                    struct,
+                    name,
+                    f"{struct}.{name} is `size_t`; an index or count field is `uint32_t`, a byte length `uint64_t`",
+                    line,
+                )
+                continue
+            family = _enum_family(comment, ctx.enum_names, macros)
+            if family is None or ctype in ctx.enum_names or ctype == "int32_t":
+                continue
+            if ctype == "uint8_t" and family in ctx.enum_names:
+                continue
+            yield ctx.c_violation(
+                "R6.c.field",
+                struct,
+                name,
+                f"{struct}.{name} carries `{family}` as `{ctype}`; an enum field is `int32_t`",
+                line,
+            )
+
+
+# Work-process phrases a header comment must not carry; `later` alone has legitimate uses.
+_PROCESS_PHRASES = (
+    ("a later bundle", re.compile(r"\ba later bundle\b", re.I)),
+    ("for now", re.compile(r"\bfor now\b", re.I)),
+    ("TODO", re.compile(r"\bTODO\b")),
+    ("FIXME", re.compile(r"\bFIXME\b")),
+    ("temporar", re.compile(r"\btemporar", re.I)),
+)
+_HEADER_COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
+_HEADER_REF_RE = re.compile(r"(?<![\w])(fm_[a-z0-9_]*[a-z0-9_])(\*?)")
+_STRUCT_TAG_RE = re.compile(r"\b(?:struct|enum|union)\s+(fm_[a-z0-9_]+)")
+
+
+@rule("R15.header")
+def _rule_header_references(ctx: Context) -> Iterable[Violation]:
+    """Every `fm_*` token in a header comment names a declared function, type or struct tag; a wildcard
+    `fm_x_*` matches at least one. No header comment carries a work-process phrase (`a later bundle`,
+    `for now`, `TODO`, `FIXME`, `temporar...`).
+    """
+    known = {fn.name for fn in ctx.functions} | {t.name for t in ctx.typedefs}
+    known |= set(_STRUCT_TAG_RE.findall(ctx.header))
+    declarations = sorted((fn.line, fn.name) for fn in ctx.functions)
+    declarations += sorted((t.line, t.name) for t in ctx.typedefs)
+    declarations.sort()
+    for match in _HEADER_COMMENT_RE.finditer(ctx.header):
+        text = match.group(0)
+        line = _line_of(ctx.header, match.start())
+        for token, star in _HEADER_REF_RE.findall(text):
+            wildcard = star and token.endswith("_")
+            resolved = any(n.startswith(token) for n in known) if wildcard else token in known
+            if not resolved:
+                shown = token + ("*" if wildcard else "")
+                yield ctx.c_violation(
+                    "R15.header", shown, "unresolved", f"a header comment names `{shown}`, which is not declared", line
+                )
+        for phrase, pattern in _PROCESS_PHRASES:
+            if pattern.search(text):
+                after = next((name for at, name in declarations if at >= line), "header")
+                yield ctx.c_violation(
+                    "R15.header", after, phrase, f"a header comment says `{phrase}`; describe the current state", line
+                )

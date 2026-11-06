@@ -11,13 +11,14 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from tools.dev.binding_drift import api_conventions, api_conventions_bindings
+from tools.dev.binding_drift import api_conventions, api_conventions_bindings, api_conventions_shapes
 from tools.dev.binding_drift.surface_files import _SKIPPED
 
 WASM = "src/wasm/formulon.d.ts"
 NATIVE = "packages/npm-native/index.d.ts"
 PY_INIT = "packages/python/formulon/__init__.py"
 PY_WORKBOOK = "packages/python/formulon/workbook.py"
+PY_SHEET = "packages/python/formulon/sheet.py"
 COMMON = "packages/npm/common.mjs"
 
 RECT = (
@@ -31,6 +32,10 @@ STATIC_RULE_IDS = {
     "R5.list", "R6.c", "R6.js", "R6.py", "R7.c.byptr", "R7.c.typedef", "R7.js", "R7.py", "R8.c", "R8.js",
     "R8.py", "R10.c.doc", "R11.axis", "R11.rect", "R11.multi", "R11.sheet", "R12", "R13.enum", "R14.abbrev",
     "R16.js", "R17.entry",
+    "R6.c.field", "R6.closed.js", "R6.closed.py", "R7.opts.js", "R7.opts.py", "R7.absent.js", "R7.absent.py",
+    "R15.header", "R18.js", "R18.py", "R19.c", "R19.js", "R19.py", "R20.js", "R20.py", "R21.role", "R21.name",
+    "R22.c", "R22.js", "R22.py", "R23.js", "R23.py", "R23.track", "R23.list", "R24.missing.js",
+    "R24.missing.py",
 }  # fmt: skip
 
 
@@ -54,6 +59,8 @@ class Fixture:
         root = self.tmp / str(self.count)
         paths = {"wasm": WASM, "native": NATIVE, "py_init": PY_INIT, "py_workbook": PY_WORKBOOK, "common": COMMON}
         defaults = {"py_init": "__all__ = []\n"}
+        if "py_sheet" in files:
+            paths["py_sheet"] = PY_SHEET
         for name, rel in paths.items():
             path = root / rel
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -90,7 +97,7 @@ class RegistryTest(unittest.TestCase):
     def test_without_a_ledger_the_bound_rules_are_skipped_visibly(self) -> None:
         ctx = api_conventions.Context("FM_API fm_status_t fm_workbook_sheet_name(const fm_workbook_t* wb);\n")
         bound = {r: fn for r, fn in api_conventions.all_rules().items() if fn.__module__.endswith("_bindings")}
-        self.assertEqual(len(bound), 20)
+        self.assertEqual(len(bound), 44)
         self.assertEqual(api_conventions.collect(ctx, bound), [])
         self.assertTrue(any("no name ledger" in note for note in _SKIPPED))
 
@@ -1411,6 +1418,630 @@ class AbbreviationTest(BindingRuleTestBase):
                 ("c", "fm_pagination_get_vertical_break_count", "vertical_break"),
                 ("wasm", "getVerticalBreaks", "vertical_break"),
             ],
+        )
+
+
+def _sheet(members: str) -> str:
+    return "export interface Sheet {\n" + members + "}\n"
+
+
+def _py_sheet(methods: str) -> str:
+    return "class Sheet:\n" + (methods or "    pass\n")
+
+
+FACADE = "function makeFacade(raw) { return raw; }\n"
+
+
+class SheetSurfaceTest(BindingRuleTestBase):
+    """The ledger rules read `Workbook` and `Sheet` together."""
+
+    LEDGER = {
+        "entries": {
+            "type.sheet": {"kind": "record", "js": "Sheet", "py": "Sheet", "surfaces": ["wasm", "native", "py"]},
+            "zoom.get": {
+                "kind": "op", "scope": "sheet", "c": "fm_sheet_get_zoom", "js": "getZoom", "py": "get_zoom",
+                "returns": "int", "params": {"visible": "bool"}, "surfaces": ["c", "wasm", "native", "py"],
+            },
+        }
+    }  # fmt: skip
+
+    def test_r0_coverage_reads_sheet_and_skips_its_facade_members(self) -> None:
+        body = _sheet("  readonly name: string;\n  getZoom(): number;\n  get(a1: string): Value;\n")
+        good = self.fixture.context("", self.LEDGER, wasm=body, native=body,
+                                    py_sheet=_py_sheet("    def get_zoom(self) -> int: ...\n"
+                                                       "    def get(self, a1: str) -> int: ...\n"))  # fmt: skip
+        self.assertEqual(hits(good, "R0.coverage"), [])
+        bad = self.fixture.context("", self.LEDGER, wasm=_sheet("  getZoomLevel(): number;\n"),
+                                   py_sheet=_py_sheet("    def get_zoom_level(self) -> int: ...\n"))  # fmt: skip
+        self.assertEqual(
+            hits(bad, "R0.coverage"),
+            [("py", "get_zoom_level", "get_zoom_level"), ("wasm", "getZoomLevel", "getZoomLevel")],
+        )
+
+    def test_r6_js_judges_a_sheet_method(self) -> None:
+        bad = self.fixture.context("", self.LEDGER, wasm=_sheet("  getZoom(visible: number): number;\n"))
+        good = self.fixture.context("", self.LEDGER, wasm=_sheet("  getZoom(visible: boolean): number;\n"))
+        self.assert_rule("R6.js", bad, good, [("wasm", "zoom.get", "visible")])
+
+
+class ClassScopeTest(BindingRuleTestBase):
+    LEDGER = {
+        "entries": {
+            "zoom.get": {"kind": "op", "scope": "sheet", "js": "getZoom", "py": "get_zoom",
+                         "surfaces": ["wasm", "native", "py"]},
+            "sheet.add": {"kind": "op", "scope": "workbook", "js": "addSheet", "py": "add_sheet",
+                          "surfaces": ["wasm", "native", "py"]},
+        }
+    }  # fmt: skip
+
+    def test_r23_js(self) -> None:
+        bad = _wb("  getZoom(sheet: number): number;\n") + _sheet("  addSheet(name: string): Sheet;\n")
+        good = _wb("  addSheet(name: string): Sheet;\n") + _sheet("  getZoom(): number;\n")
+        self.assert_rule(
+            "R23.js",
+            self.fixture.context("", self.LEDGER, wasm=bad, native=_sheet("  getZoom(sheet: number): number;\n")),
+            self.fixture.context("", self.LEDGER, wasm=good, native=good, common=FACADE),
+            [
+                ("native", "zoom.get", "sheet-arg"),
+                ("wasm", "Workbook", "makeFacade"),
+                ("wasm", "sheet.add", "Sheet"),
+                ("wasm", "zoom.get", "Workbook"),
+            ],
+        )
+
+    def test_r23_py(self) -> None:
+        self.assert_rule(
+            "R23.py",
+            self.fixture.context(
+                "", self.LEDGER, py_workbook=_py_wb("    def get_zoom(self, sheet: int) -> int: ...\n"),
+                py_sheet=_py_sheet("    def add_sheet(self, name: str) -> 'Sheet': ...\n"),
+            ),
+            self.fixture.context(
+                "", self.LEDGER, py_workbook=_py_wb("    def add_sheet(self, name: str) -> 'Sheet': ...\n"),
+                py_sheet=_py_sheet("    def get_zoom(self) -> int: ...\n"),
+            ),
+            [("py", "sheet.add", "Sheet"), ("py", "zoom.get", "Workbook")],
+        )  # fmt: skip
+
+    def test_r23_py_flags_a_leading_sheet_argument(self) -> None:
+        ctx = self.fixture.context(
+            "", self.LEDGER, py_sheet=_py_sheet("    def get_zoom(self, sheet: int) -> int: ...\n")
+        )
+        self.assertEqual(hits(ctx, "R23.py"), [("py", "zoom.get", "sheet-arg")])
+
+    def test_r23_track(self) -> None:
+        header = (
+            "FM_API fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* name, size_t* out_sheet_index);\n"
+            "FM_API fm_status_t fm_sheet_show_pivot_details(fm_workbook_t* wb, size_t sheet_index,"
+            " size_t* out_sheet_index);\n"
+            "FM_API fm_status_t fm_workbook_get_table(const fm_workbook_t* wb, size_t table_index,"
+            " size_t* out_sheet_index);\n"
+        )
+        ledger = {
+            "collections": {"sheet": {"key": "index", "ops": ["sheet.add"]}},
+            "entries": {
+                key: {"kind": "op", "c": c, "js": js, "py": py, "surfaces": ["c", "wasm", "native", "py"]}
+                for key, c, js, py in (
+                    ("sheet.add", "fm_workbook_add_sheet", "addSheet", "add_sheet"),
+                    ("pivot_details.show", "fm_sheet_show_pivot_details", "showPivotDetails", "show_pivot_details"),
+                    ("table.get", "fm_workbook_get_table", "getTable", "get_table"),
+                )
+            },
+        }
+        common = (
+            "// <facade-tables>\nconst SHEET_STRUCTURE_OPS = Object.freeze(['addSheet', 'showPivotDetails']);\n"
+            "// </facade-tables>\n"
+        )
+        sheet_py = '# <facade-tables>\nSHEET_STRUCTURE_OPS = frozenset({"add_sheet", "show_pivot_details"})\n# </facade-tables>\n'
+        self.assert_rule(
+            "R23.track",
+            self.fixture.context(header, ledger, common=common.replace(", 'showPivotDetails'", "")),
+            self.fixture.context(header, ledger, common=common, py_sheet=sheet_py),
+            [
+                ("py", "pivot_details.show", "SHEET_STRUCTURE_OPS"),
+                ("py", "sheet.add", "SHEET_STRUCTURE_OPS"),
+                ("wasm", "pivot_details.show", "SHEET_STRUCTURE_OPS"),
+            ],
+        )
+
+
+class CollectionAccessTest(BindingRuleTestBase):
+    def ledger(self) -> dict:
+        def op(c: str, js: str) -> dict:
+            return {"kind": "op", "scope": "workbook", "c": c, "js": js, "surfaces": ["c", "wasm"]}
+
+        return {
+            "collections": {
+                "table": {"key": "index", "access": "list", "plural": "tables", "ops": ["table.get", "table.get_count"]},
+                "font": {"key": "index", "access": "indexed", "plural": "fonts", "ops": ["font.get", "font.get_count"]},
+                "run": {"key": "index", "access": "property", "plural": "cell_phonetic_runs",
+                        "ops": ["run.get", "run.get_count"]},
+                "pivot": {"key": "index", "access": "exempt", "plural": "pivots", "exempt": "x",
+                          "ops": ["pivot.get_count"]},
+            },
+            "entries": {
+                "table.get": op("fm_workbook_get_table", "getTable"),
+                "table.get_count": op("fm_workbook_get_table_count", "getTableCount"),
+                "font.get": op("fm_workbook_get_font", "getFont"),
+                "font.get_count": op("fm_workbook_get_font_count", "getFontCount"),
+                "run.get": op("fm_sheet_get_cell_phonetic_run", "getCellPhoneticRun"),
+                "run.get_count": op("fm_sheet_get_cell_phonetic_run_count", "getCellPhoneticRunCount"),
+                "pivot.get_count": op("fm_sheet_get_pivot_count", "getPivotCount"),
+            },
+        }  # fmt: skip
+
+    def test_r23_list(self) -> None:
+        bad = _wb(
+            "  getTable(i: number): Table;\n  getTableCount(): number;\n  getFont(i: number): Font;\n"
+            "  listFonts(): readonly Font[];\n  getCellPhoneticRun(i: number): Run;\n  getCellPhoneticRunCount(): number;\n"
+            "  getPivotCount(): number;\n"
+        )
+        good = _wb(
+            "  listTables(): readonly Table[];\n  getFont(i: number): Font;\n  getFontCount(): number;\n"
+            "  getCellPhoneticRuns(): readonly Run[];\n  setCellPhoneticRuns(runs: readonly Run[] | null): void;\n"
+            "  getPivotCount(): number;\n"
+        )
+        self.assert_rule(
+            "R23.list",
+            self.fixture.context("", self.ledger(), wasm=bad),
+            self.fixture.context("", self.ledger(), wasm=good),
+            [
+                ("wasm", "collection.font", "indexed"),
+                ("wasm", "collection.font", "listFonts"),
+                ("wasm", "collection.run", "getCellPhoneticRuns"),
+                ("wasm", "collection.run", "setCellPhoneticRuns"),
+                ("wasm", "collection.table", "listTables"),
+                ("wasm", "run.get", "getCellPhoneticRun"),
+                ("wasm", "run.get_count", "getCellPhoneticRunCount"),
+                ("wasm", "table.get", "getTable"),
+                ("wasm", "table.get_count", "getTableCount"),
+            ],
+        )
+
+
+class OptionsObjectTest(BindingRuleTestBase):
+    def test_r7_opts_js(self) -> None:
+        bad = _wb(
+            "  addLink(sheet: number, row: number, col: number, target: string, display: string, tip: string): void;\n"
+            "  setTotals(sheet: number, rows: boolean, cols: boolean): void;\n  setShowZeros(sheet: number, s: boolean): void;\n"
+        )
+        good = _wb(
+            "  addLink(sheet: number, row: number, col: number, link: HyperlinkInput): void;\n"
+            "  setTotals(sheet: number, totals: GrandTotalsPatch): void;\n  setShowZeros(sheet: number, s: boolean): void;\n"
+        )
+        self.assert_rule(
+            "R7.opts.js",
+            self.fixture.context("", None, wasm=bad),
+            self.fixture.context("", None, wasm=good),
+            [("wasm", "addLink", "run"), ("wasm", "setTotals", "bool")],
+        )
+
+    def test_r7_opts_py(self) -> None:
+        bad = _py_wb(
+            "    def add_link(self, sheet: int, row: int, col: int, target: str, display: str, tip: str) -> None: ...\n"
+            "    def set_totals(self, sheet: int, rows: bool, cols: bool) -> None: ...\n"
+            "    def set_show_zeros(self, sheet: int, show: bool) -> None: ...\n"
+        )
+        good = _py_wb(
+            "    def add_link(self, sheet: int, row: int, col: int, target: str, *, display: str = '', tip: str = '')"
+            " -> None: ...\n"
+            "    def set_totals(self, sheet: int, *, rows: bool, cols: bool) -> None: ...\n"
+            "    def set_show_zeros(self, sheet: int, show: bool) -> None: ...\n"
+        )
+        self.assert_rule(
+            "R7.opts.py",
+            self.fixture.context("", None, py_workbook=bad),
+            self.fixture.context("", None, py_workbook=good),
+            [("py", "add_link", "run"), ("py", "set_totals", "bool:cols"), ("py", "set_totals", "bool:rows")],
+        )
+
+    def test_single_boolean_setters_are_counted_by_shape(self) -> None:
+        self.assertTrue(
+            api_conventions_shapes.single_boolean_setter("setShowZeros", (("sheet", "number"), ("s", "boolean")), True)
+        )
+        self.assertFalse(
+            api_conventions_shapes.single_boolean_setter("addBreak", (("row", "number"), ("m", "boolean")), True)
+        )
+        self.assertTrue(
+            api_conventions_shapes.single_boolean_setter("set_hidden", (("sheet", "int"), ("h", "bool")), False)
+        )
+
+
+class SetterSymmetryTest(BindingRuleTestBase):
+    RECORDS = (
+        "export interface IterativeSettings {\n  readonly enabled: boolean;\n  readonly maxIterations: number;\n}\n"
+        "export interface Thing {\n  readonly a: number;\n}\nexport interface ThingInput {\n  a: number;\n  b?: number;\n}\n"
+        "export type IterativeSettingsPatch = Patch<IterativeSettings>;\n"
+    )
+
+    def test_r18_js(self) -> None:
+        bad = self.RECORDS + _wb(
+            "  getIterative(): IterativeSettings;\n  setIterative(enabled: boolean, maxIterations: number): void;\n"
+            "  getThing(sheet: number): Thing | null;\n  setThing(sheet: number, t: ThingInput): void;\n"
+            "  setOptions(o: Partial<Thing>): void;\n"
+        )
+        good = self.RECORDS.replace("  b?: number;\n", "") + _wb(
+            "  getIterative(): IterativeSettings;\n  setIterative(patch: IterativeSettingsPatch): void;\n"
+            "  getThing(sheet: number): Thing | null;\n  setThing(sheet: number, t: ThingInput | null): void;\n"
+        )
+        self.assert_rule(
+            "R18.js",
+            self.fixture.context("", None, wasm=bad),
+            self.fixture.context("", None, wasm=good),
+            [("wasm", "setIterative", "shape"), ("wasm", "setOptions", "Partial:o"), ("wasm", "setThing", "fields")],
+        )
+
+    def test_r18_py(self) -> None:
+        records = "@dataclass(frozen=True)\nclass IterativeSettings:\n    enabled: bool\n    max_iterations: int\n\n"
+        bad = records + _py_wb(
+            "    def get_iterative(self) -> IterativeSettings: ...\n"
+            "    def set_iterative(self, enabled: bool, max_iterations: int) -> None: ...\n"
+        )
+        good = records + _py_wb(
+            "    def get_iterative(self) -> IterativeSettings: ...\n"
+            "    def set_iterative(self, *, enabled: bool = UNCHANGED, max_iterations: int = UNCHANGED) -> None: ...\n"
+        )
+        self.assert_rule(
+            "R18.py",
+            self.fixture.context("", None, py_workbook=bad),
+            self.fixture.context("", None, py_workbook=good),
+            [("py", "set_iterative", "shape")],
+        )
+
+
+class AbsentValueTest(BindingRuleTestBase):
+    LEDGER = {
+        "entries": {
+            "record.font": {"kind": "record", "role": "result", "js": "Font", "py": "Font",
+                            "surfaces": ["wasm", "native", "py"]},
+            "protection.get": {"kind": "op", "scope": "sheet", "js": "getProtection", "py": "get_protection",
+                               "total": "reads as the all-off record", "surfaces": ["wasm", "native", "py"]},
+        }
+    }  # fmt: skip
+
+    def test_r7_absent_js(self) -> None:
+        bad = "export interface Font {\n  readonly hasBold: boolean;\n  readonly bold: boolean;\n}\n" + _wb(
+            '  /** Reads the file name; `""` when unset. */\n  getFileName(): string;\n'
+            '  /** Sets the file name; `""` clears it. */\n  setFileName(name: string): void;\n'
+            "  setAxis(sheet: number, axis: PivotAxis | -1): void;\n"
+            "  /** Every field is zero or empty when absent. */\n  getProtection(sheet: number): Protection;\n"
+        )
+        good = "export interface Font {\n  readonly bold: boolean | null;\n}\n" + _wb(
+            "  /** Reads the file name; `null` when unset. */\n  getFileName(): string | null;\n"
+            '  /** Sets the file name; `null` or `""` clears it. */\n  setFileName(name: string | null): void;\n'
+            "  setAxis(sheet: number, axis: PivotAxis | null): void;\n"
+        )
+        self.assert_rule(
+            "R7.absent.js",
+            self.fixture.context("", self.LEDGER, wasm=bad),
+            self.fixture.context("", self.LEDGER, wasm=good),
+            [
+                ("wasm", "record.font", "has:hasBold"),
+                ("wasm", "getFileName", "doc:Workbook.getFileName"),
+                ("wasm", "setAxis", "-1:Workbook.setAxis(axis)"),
+                ("wasm", "setFileName", "clear:Workbook.setFileName"),
+            ],
+        )
+
+    def test_r7_absent_py(self) -> None:
+        bad = "@dataclass(frozen=True)\nclass Font:\n    has_bold: bool\n    bold: bool\n\n" + _py_wb(
+            '    def get_file_name(self) -> str:\n        """Returns ``""`` when unset."""\n'
+            '    def set_file_name(self, name: str) -> None:\n        """Pass ``""`` to clear the name."""\n'
+            "    def get_name(self, name: str, local_sheet_id: int = -1) -> str: ...\n"
+        )
+        good = "@dataclass(frozen=True)\nclass Font:\n    bold: Optional[bool]\n\n" + _py_wb(
+            '    def get_file_name(self) -> Optional[str]:\n        """Returns None when unset."""\n'
+            '    def set_file_name(self, name: Optional[str]) -> None:\n        """Pass None or ``""`` to clear it."""\n'
+            "    def get_name(self, name: str, local_sheet_id: Optional[int] = None) -> str: ...\n"
+        )
+        self.assert_rule(
+            "R7.absent.py",
+            self.fixture.context("", self.LEDGER, py_workbook=bad),
+            self.fixture.context("", self.LEDGER, py_workbook=good),
+            [
+                ("py", "record.font", "has:has_bold"),
+                ("py", "get_file_name", "doc"),
+                ("py", "get_name", "-1:local_sheet_id"),
+                ("py", "set_file_name", "clear"),
+            ],
+        )
+
+
+class ClosedSetTest(BindingRuleTestBase):
+    HEADER = (
+        "typedef enum { FM_MODE_A = 0, FM_MODE_B = 1 } fm_mode_t;\n"
+        "typedef struct {\n  int32_t mode; /* fm_mode_t */\n  int32_t count;\n} fm_thing_t;\n"
+    )
+    LEDGER = {
+        "entries": {
+            "enum.mode": {"kind": "enum", "c": "fm_mode_t", "js": "Mode", "py": "Mode", "surfaces": ["c", "wasm", "py"]},
+            "record.thing": {"kind": "record", "role": "result", "c": "fm_thing_t", "js": "Thing", "py": "Thing",
+                             "surfaces": ["c", "wasm", "py"]},
+            "mode.set": {"kind": "op", "scope": "workbook", "js": "setMode", "py": "set_mode",
+                         "params": {"mode": "enum:mode"}, "surfaces": ["wasm", "py"]},
+        }
+    }  # fmt: skip
+    TABLE = "export const Mode: Readonly<{\n  A: 0;\n  B: 1;\n}>;\nexport type Mode = 0 | 1;\n"
+
+    def test_r6_closed_js(self) -> None:
+        bad = (
+            self.TABLE
+            + "export interface Thing {\n  readonly mode: number;\n  readonly count: number;\n}\n"
+            + _wb("  setMode(mode: Mode | number): void;\n")
+            + "export interface WorkbookCtor {\n  createForProfile(profileId: string): Workbook;\n}\n"
+        )
+        good = (
+            self.TABLE
+            + "export interface Thing {\n  readonly mode: Mode;\n  readonly count: number;\n}\n"
+            + _wb("  setMode(mode: Mode): void;\n")
+            + "export interface WorkbookCtor {\n  createForProfile(profileId: ExcelProfileId): Workbook;\n}\n"
+        )
+        self.assert_rule(
+            "R6.closed.js",
+            self.fixture.context(self.HEADER, self.LEDGER, wasm=bad),
+            self.fixture.context(self.HEADER, self.LEDGER, wasm=good),
+            [
+                ("wasm", "Workbook.createForProfile", "Workbook.createForProfile(profileId)"),
+                ("wasm", "mode.set", "setMode(mode)"),
+                ("wasm", "record.thing", "Thing.mode"),
+            ],
+        )
+
+    def test_r6_closed_py(self) -> None:
+        prelude = "class Mode(IntEnum):\n    A = 0\n    B = 1\n\n"
+        bad = (
+            prelude
+            + "@dataclass(frozen=True)\nclass Thing:\n    mode: int\n    count: int\n\n"
+            + _py_wb("    def set_mode(self, mode: 'Mode | int') -> None: ...\n")
+        )
+        good = (
+            prelude
+            + "@dataclass(frozen=True)\nclass Thing:\n    mode: Mode\n    count: int\n\n"
+            + _py_wb("    def set_mode(self, mode: Mode) -> None: ...\n")
+        )
+        self.assert_rule(
+            "R6.closed.py",
+            self.fixture.context(self.HEADER, self.LEDGER, py_workbook=bad),
+            self.fixture.context(self.HEADER, self.LEDGER, py_workbook=good),
+            [("py", "mode.set", "set_mode(mode)"), ("py", "record.thing", "Thing.mode")],
+        )
+
+
+class EnumFamilyTest(BindingRuleTestBase):
+    HEADER = (
+        "typedef enum { FM_PIVOT_SORT_DESCENDING = 0, FM_PIVOT_SORT_ASCENDING = 1 } fm_pivot_sort_t;\n"
+        "typedef enum { FM_SLICER_SORT_ASCENDING = 0, FM_SLICER_SORT_DESCENDING = 1 } fm_slicer_sort_t;\n"
+        "typedef enum { FM_BLANKS_ABSENT = 0, FM_BLANKS_GAP = 1, FM_BLANKS_ZERO = 2 } fm_chart_blanks_as_t;\n"
+        "typedef enum { FM_EMPTY_GAP = 0, FM_EMPTY_ZERO = 1 } fm_empty_cells_t;\n"
+    )
+
+    def ledger(self, distinct: bool = False) -> dict:
+        def enum(c: str, name: str) -> dict:
+            return {"kind": "enum", "c": c, "js": name, "py": name, "surfaces": ["c", "wasm", "py"]}
+
+        data = {
+            "enum_families": {"sort_order": ["enum.pivot_sort", "enum.slicer_sort"]},
+            "entries": {
+                "enum.pivot_sort": enum("fm_pivot_sort_t", "PivotSort"),
+                "enum.slicer_sort": enum("fm_slicer_sort_t", "SlicerSort"),
+                "enum.chart_blanks_as": enum("fm_chart_blanks_as_t", "ChartBlanksAs"),
+                "enum.empty_cells": enum("fm_empty_cells_t", "EmptyCells"),
+            },
+        }
+        if distinct:
+            data["enum_distinct"] = [{"enums": ["enum.chart_blanks_as", "enum.empty_cells"], "reason": "fixture"}]
+        return data
+
+    def test_r19_c(self) -> None:
+        good = self.HEADER.replace("FM_SLICER_SORT_ASCENDING = 0, FM_SLICER_SORT_DESCENDING = 1",
+                                   "FM_SLICER_SORT_DESCENDING = 0, FM_SLICER_SORT_ASCENDING = 1")  # fmt: skip
+        good = good.replace("FM_BLANKS_ABSENT = 0, FM_BLANKS_GAP = 1, FM_BLANKS_ZERO = 2",
+                            "FM_BLANKS_ABSENT = -1, FM_BLANKS_GAP = 0, FM_BLANKS_ZERO = 1")  # fmt: skip
+        self.assert_rule(
+            "R19.c",
+            self.fixture.context(self.HEADER, self.ledger()),
+            self.fixture.context(good, self.ledger(distinct=True)),
+            [
+                ("c", "enum.chart_blanks_as", "absent:Absent"),
+                ("c", "enum.empty_cells", "pair:enum.chart_blanks_as"),
+                ("c", "enum.slicer_sort", "ascending"),
+                ("c", "enum.slicer_sort", "descending"),
+            ],
+        )
+
+    def test_r19_js(self) -> None:
+        def table(name: str, members: str) -> str:
+            return f"export const {name}: Readonly<{{\n{members}}}>;\n"
+
+        bad = (
+            table("PivotSort", "  Descending: 0;\n  Ascending: 1;\n")
+            + table("SlicerSort", "  Ascending: 0;\n  Descending: 1;\n")
+            + table("ChartBlanksAs", "  Absent: 0;\n  Gap: 1;\n")
+        )
+        good = (
+            table("PivotSort", "  Descending: 0;\n  Ascending: 1;\n")
+            + table("SlicerSort", "  Descending: 0;\n  Ascending: 1;\n")
+            + table("ChartBlanksAs", "  Gap: 0;\n")
+        )
+        self.assert_rule(
+            "R19.js",
+            self.fixture.context(self.HEADER, self.ledger(), wasm=bad),
+            self.fixture.context(self.HEADER, self.ledger(), wasm=good),
+            [
+                ("wasm", "enum.chart_blanks_as", "absent:Absent"),
+                ("wasm", "enum.slicer_sort", "ascending"),
+                ("wasm", "enum.slicer_sort", "descending"),
+            ],
+        )
+
+    def test_r19_py(self) -> None:
+        bad = (
+            "class PivotSort(IntEnum):\n    DESCENDING = 0\n    ASCENDING = 1\n\n"
+            "class SlicerSort(IntEnum):\n    ASCENDING = 0\n    DESCENDING = 1\n\n"
+            "class ChartBlanksAs(IntEnum):\n    ABSENT = 0\n    GAP = 1\n"
+        )
+        good = bad.replace("ASCENDING = 0\n    DESCENDING = 1", "DESCENDING = 0\n    ASCENDING = 1").replace(
+            "    ABSENT = 0\n    GAP = 1\n", "    GAP = 0\n"
+        )
+        self.assert_rule(
+            "R19.py",
+            self.fixture.context(self.HEADER, self.ledger(), py_workbook=bad),
+            self.fixture.context(self.HEADER, self.ledger(), py_workbook=good),
+            [
+                ("py", "enum.chart_blanks_as", "absent:Absent"),
+                ("py", "enum.slicer_sort", "ascending"),
+                ("py", "enum.slicer_sort", "descending"),
+            ],
+        )
+
+
+class ReadonlyResultTest(BindingRuleTestBase):
+    LEDGER = {
+        "entries": {
+            "record.thing": {"kind": "record", "role": "result", "js": "Thing", "py": "Thing",
+                             "surfaces": ["wasm", "native", "py"]},
+        }
+    }  # fmt: skip
+
+    def test_r20_js(self) -> None:
+        bad = "export interface Thing {\n  readonly items: Item[];\n}\n" + _wb(
+            "  listPeople(): Person[];\n  getCells(): ReadonlyArray<Cell>;\n"
+        )
+        good = "export interface Thing {\n  readonly items: readonly Item[];\n}\n" + _wb(
+            "  listPeople(): readonly Person[];\n  getCells(): readonly Cell[];\n"
+        )
+        self.assert_rule(
+            "R20.js",
+            self.fixture.context("", self.LEDGER, wasm=bad),
+            self.fixture.context("", self.LEDGER, wasm=good),
+            [
+                ("wasm", "record.thing", "field:items"),
+                ("wasm", "getCells", "ReadonlyArray:Workbook.getCells"),
+                ("wasm", "listPeople", "return"),
+            ],
+        )
+
+    def test_r20_py(self) -> None:
+        bad = (
+            "@dataclass(frozen=True)\nclass Thing:\n    items: Tuple[Item, ...]\n    rgba: Tuple[int, int, int, int]\n"
+        )
+        good = "@dataclass(frozen=True)\nclass Thing:\n    items: List[Item]\n    rgba: Tuple[int, int, int, int]\n"
+        self.assert_rule(
+            "R20.py",
+            self.fixture.context("", self.LEDGER, py_workbook=bad),
+            self.fixture.context("", self.LEDGER, py_workbook=good),
+            [("py", "record.thing", "field:items")],
+        )
+
+
+class RecordNameTest(BindingRuleTestBase):
+    def test_r21_role(self) -> None:
+        record = {"kind": "record", "js": "Font", "surfaces": ["c", "wasm"]}
+        self.assert_rule(
+            "R21.role",
+            self.fixture.context("", {"entries": {"record.font": record}}),
+            self.fixture.context("", {"entries": {"record.font": {**record, "role": "both"}}}),
+            [("wasm", "record.font", "role")],
+        )
+
+    def test_r21_name(self) -> None:
+        def ledger(js: str, py: str) -> dict:
+            entry = {"kind": "record", "role": "result", "js": js, "py": py, "surfaces": ["wasm", "native", "py"]}
+            return {"entries": {"record.font": entry}}
+
+        self.assert_rule(
+            "R21.name",
+            self.fixture.context("", ledger("FontRecord", "FontEntry"), wasm="export interface FontRecord {\n}\n",
+                                 py_workbook="class FontEntry:\n    pass\n"),
+            self.fixture.context("", ledger("Font", "Font"), wasm="export interface Font {\n}\n",
+                                 py_workbook="class Font:\n    pass\n"),
+            [("py", "record.font", "py-name"), ("py", "record.font", "suffix"), ("wasm", "record.font", "suffix")],
+        )  # fmt: skip
+
+
+class IndexNameTest(BindingRuleTestBase):
+    def test_r22_c(self) -> None:
+        bad = (
+            "FM_API fm_status_t fm_sheet_remove_validation(fm_workbook_t* wb, size_t sheet_index, size_t index);\n"
+            "FM_API fm_status_t fm_sheet_get_comment_at(const fm_workbook_t* wb, size_t sheet_index, size_t index);\n"
+            "FM_API fm_status_t fm_sheet_set_cell_phonetic(fm_workbook_t* wb, size_t sheet_index, const char* utf8);\n"
+            "FM_API fm_status_t fm_workbook_add_font(fm_workbook_t* wb, size_t* out_index);\n"
+        )
+        good = (
+            bad.replace("size_t index);\nFM_API fm_status_t fm_sheet_get", "size_t validation_index);\nFM_API fm_status_t fm_sheet_get")
+            .replace("utf8", "text")
+            .replace("out_index", "out_font_index")
+        )  # fmt: skip
+        self.assert_rule(
+            "R22.c",
+            self.fixture.context(bad, None),
+            self.fixture.context(good, None),
+            [
+                ("c", "fm_sheet_remove_validation", "index"),
+                ("c", "fm_sheet_set_cell_phonetic", "utf8"),
+                ("c", "fm_workbook_add_font", "out_index"),
+            ],
+        )
+
+    def test_r22_js_and_py(self) -> None:
+        bad_js = _wb(
+            "  removeValidation(sheet: number, index: number): void;\n  getCommentAt(sheet: number, index: number): Comment;\n"
+            "  setNumberFormat(sheet: number, utf8: string): void;\n"
+        )
+        good_js = bad_js.replace(
+            "removeValidation(sheet: number, index", "removeValidation(sheet: number, validationIndex"
+        )
+        good_js = good_js.replace("utf8", "formatCode")
+        self.assert_rule(
+            "R22.js",
+            self.fixture.context("", None, wasm=bad_js),
+            self.fixture.context("", None, wasm=good_js),
+            [("wasm", "removeValidation", "index"), ("wasm", "setNumberFormat", "utf8")],
+        )
+        bad_py = _py_wb("    def remove_validation(self, sheet: int, index: int) -> None: ...\n"
+                        "    def get_comment_at(self, sheet: int, index: int) -> None: ...\n")  # fmt: skip
+        self.assert_rule(
+            "R22.py",
+            self.fixture.context("", None, py_workbook=bad_py),
+            self.fixture.context("", None, py_workbook=bad_py.replace("int, index: int) -> None: ...\n    def get",
+                                                                     "int, validation_index: int) -> None: ...\n    def get")),
+            [("py", "remove_validation", "index")],
+        )  # fmt: skip
+
+
+class MissingLookupTest(BindingRuleTestBase):
+    LEDGER = {
+        "entries": {
+            "chart_data.get": {"kind": "op", "scope": "sheet", "js": "getChartData", "py": "get_chart_data",
+                               "missing": "throw", "surfaces": ["wasm", "native", "py"]},
+            "image_info.get": {"kind": "op", "scope": "sheet", "js": "getImageInfo", "py": "get_image_info",
+                               "missing": None, "surfaces": ["wasm", "native", "py"]},
+        }
+    }  # fmt: skip
+
+    def test_r24_missing_js(self) -> None:
+        self.assert_rule(
+            "R24.missing.js",
+            self.fixture.context("", self.LEDGER, wasm=_sheet("  getChartData(id: number): ChartData | null;\n"
+                                                              "  getImageInfo(id: number): ImageInfo;\n")),
+            self.fixture.context("", self.LEDGER, wasm=_sheet("  getChartData(id: number): ChartData;\n"
+                                                              "  getImageInfo(id: number): ImageInfo | null;\n")),
+            [("wasm", "chart_data.get", "throw"), ("wasm", "image_info.get", "null")],
+        )  # fmt: skip
+
+    def test_r24_missing_py(self) -> None:
+        bad = _py_sheet('    def get_chart_data(self, object_id: int) -> "ChartData":\n        """Opens the data."""\n'
+                        "    def get_image_info(self, object_id: int) -> ImageInfo: ...\n")  # fmt: skip
+        good = _py_sheet(
+            '    def get_chart_data(self, object_id: int) -> "ChartData":\n'
+            '        """Opens the data.\n\n        Raises:\n            NotFoundError: no chart has the id.\n        """\n'
+            "    def get_image_info(self, object_id: int) -> Optional[ImageInfo]: ...\n"
+        )
+        self.assert_rule(
+            "R24.missing.py",
+            self.fixture.context("", self.LEDGER, py_sheet=bad),
+            self.fixture.context("", self.LEDGER, py_sheet=good),
+            [("py", "chart_data.get", "throw"), ("py", "image_info.get", "null")],
         )
 
 

@@ -83,3 +83,5 @@ def _format_diff(label_a: str, only_a: Set[str], label_b: str, only_b: Set[str])
 # ---------------------------------------------------------------------------
 
 PYTHON_WORKBOOK = PYTHON_PKG_DIR / "workbook.py"
+# The `Sheet` class of the Python binding; absent until the sheet-scope methods move out of workbook.py.
+PYTHON_SHEET = PYTHON_PKG_DIR / "sheet.py"
