@@ -7,7 +7,6 @@
 
 #include <cmath>
 #include <cstdint>
-#include <cstring>
 #include <limits>
 
 #include "eval/excel_math.h"
@@ -119,12 +118,6 @@ double neg_nz(double v) noexcept {
 // Saturating truncation to int.
 int to_int(double v) noexcept {
   return std::fabs(v) < 2147483648.0 ? static_cast<int>(v) : std::numeric_limits<int>::min();
-}
-
-std::int64_t bits_of(double v) noexcept {
-  std::int64_t b;
-  std::memcpy(&b, &v, sizeof b);
-  return b;
 }
 
 // (n + 0.5) * log1p(1/n) - 1.
@@ -438,7 +431,7 @@ double lgamma_excel(double x) noexcept {
     }
     return mul(div(horner(kLgNum23, x), horner(kLgDen23, x)), x - 2.0);
   }
-  const std::int64_t bits = bits_of(x);
+  const auto bits = static_cast<std::int64_t>(flushed::bits_of(x));
   if (bits < 0x3cb0000000000000LL) {
     return x > 0.0 ? -std::log(x) : kNaN;
   }

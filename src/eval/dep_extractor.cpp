@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <limits>
 #include <optional>
 #include <string_view>
 #include <unordered_set>
@@ -157,9 +158,6 @@ bool resolve_sheet_id(const parser::Reference& ref, const WalkState& state, std:
     *out_sheet_id = state.current_sheet_id;
     return true;
   }
-  // Linear scan over the workbook's sheets to find the index. The workbook
-  // typically owns O(1)-O(10) sheets so a hash is premature; mirroring the
-  // strategy used by `Workbook::sheet_by_name`.
   std::size_t idx = 0;
   if (!find_sheet_index(*state.workbook, ref.sheet, &idx)) {
     return false;
@@ -184,8 +182,10 @@ void add_range_dep(WalkState& state, CellRangeDependency range) {
   }
 }
 
+constexpr std::size_t kMaxSheetId = std::numeric_limits<std::uint16_t>::max();
+
 void add_three_d_span_dep(WalkState& state, std::size_t sheet_first, std::size_t sheet_last) {
-  if (sheet_first > 0xFFFFU || sheet_last > 0xFFFFU) {
+  if (sheet_first > kMaxSheetId || sheet_last > kMaxSheetId) {
     return;
   }
   const ThreeDSheetSpanDependency span{static_cast<std::uint16_t>(sheet_first), static_cast<std::uint16_t>(sheet_last)};
@@ -714,23 +714,31 @@ const parser::AstNode* deferrable_reference(const parser::AstNode& node, WalkSta
 }
 
 // The lambda helpers whose last argument is a callback fed element by element
-// from source arguments.
-bool is_callback_helper(std::string_view call_name) {
+// from source arguments, grouped by how their sources map to callback parameters.
+enum class CallbackHelper { None, Map, ByRowOrCol, Fold };
+
+CallbackHelper callback_helper_kind(std::string_view call_name) {
   const std::string_view bare = strip_future_prefix(call_name);
-  return strings::case_insensitive_eq(bare, "MAP") || strings::case_insensitive_eq(bare, "BYROW") ||
-         strings::case_insensitive_eq(bare, "BYCOL") || strings::case_insensitive_eq(bare, "REDUCE") ||
-         strings::case_insensitive_eq(bare, "SCAN");
+  if (strings::case_insensitive_eq(bare, "MAP")) {
+    return CallbackHelper::Map;
+  }
+  if (strings::case_insensitive_eq(bare, "BYROW") || strings::case_insensitive_eq(bare, "BYCOL")) {
+    return CallbackHelper::ByRowOrCol;
+  }
+  if (strings::case_insensitive_eq(bare, "REDUCE") || strings::case_insensitive_eq(bare, "SCAN")) {
+    return CallbackHelper::Fold;
+  }
+  return CallbackHelper::None;
 }
 
 // The source argument whose cells callback parameter `param` of helper
-// `call_name` receives: MAP's arrays in order, BYROW / BYCOL's array, REDUCE /
+// `kind` receives: MAP's arrays in order, BYROW / BYCOL's array, REDUCE /
 // SCAN's array (their accumulator is a result, not a source). -1 for none.
-int callback_source_arg(std::string_view call_name, std::uint32_t arity, std::uint32_t param) {
-  const std::string_view bare = strip_future_prefix(call_name);
-  if (strings::case_insensitive_eq(bare, "MAP")) {
+int callback_source_arg(CallbackHelper kind, std::uint32_t arity, std::uint32_t param) {
+  if (kind == CallbackHelper::Map) {
     return param + 1U < arity ? static_cast<int>(param) : -1;
   }
-  if (strings::case_insensitive_eq(bare, "BYROW") || strings::case_insensitive_eq(bare, "BYCOL")) {
+  if (kind == CallbackHelper::ByRowOrCol) {
     return (arity == 2U && param == 0U) ? 0 : -1;
   }
   return (arity == 3U && param == 1U) ? 1 : -1;
@@ -863,14 +871,16 @@ void walk_call(const parser::AstNode& node, WalkState& state) {
   // source feeding its callback -- is walked only where it is read as a value.
   DeferredArgs deferred(arity, nullptr);
   DeferredArgs callback_args;
-  const bool helper = builtin && arity > 0U && is_callback_helper(node.as_call_name());
+  const CallbackHelper helper_kind =
+      builtin && arity > 0U ? callback_helper_kind(node.as_call_name()) : CallbackHelper::None;
+  const bool helper = helper_kind != CallbackHelper::None;
   if (lexical_lambda != nullptr || defined != nullptr) {
     for (std::uint32_t i = 0; i < arity; ++i) {
       deferred[i] = deferrable_reference(node.as_call_arg(i), state);
     }
   } else if (helper) {
     for (std::uint32_t param = 0; param + 1U < arity; ++param) {
-      const int source = callback_source_arg(node.as_call_name(), arity, param);
+      const int source = callback_source_arg(helper_kind, arity, param);
       const parser::AstNode* ref =
           source >= 0 ? deferrable_reference(node.as_call_arg(static_cast<std::uint32_t>(source)), state) : nullptr;
       callback_args.push_back(ref);

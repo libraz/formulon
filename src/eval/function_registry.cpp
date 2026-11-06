@@ -14,6 +14,7 @@
 #include "eval/builtins.h"
 #include "eval/eval_profile_scope.h"
 #include "excel_profile.h"
+#include "utils/fnv1a.h"
 #include "utils/strings.h"
 
 namespace formulon {
@@ -24,10 +25,10 @@ namespace {
 // registry stores the hash separately from its owned display key so lookup
 // never needs a temporary normalized string.
 std::size_t folded_hash(std::string_view value) noexcept {
-  std::uint64_t hash = 14695981039346656037ULL;
+  std::uint64_t hash = kFnv1a64OffsetBasis;
   for (const char byte : value) {
     hash ^= static_cast<unsigned char>(strings::ascii_to_lower(byte));
-    hash *= 1099511628211ULL;
+    hash *= kFnv1a64Prime;
   }
   return static_cast<std::size_t>(hash);
 }
