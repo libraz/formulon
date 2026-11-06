@@ -17,6 +17,10 @@ set(PUGIXML_NO_EXCEPTIONS ON CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF)
 set(PUGIXML_BUILD_SHARED_AND_STATIC_LIBS OFF CACHE BOOL "" FORCE)
 
+# Dependencies are linked privately into the shared library; none of their
+# artifacts belong in `cmake --install`.
+set(PUGIXML_INSTALL OFF CACHE BOOL "" FORCE)
+
 FetchContent_Declare(
   pugixml
   GIT_REPOSITORY https://github.com/zeux/pugixml.git

@@ -76,6 +76,10 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(pcre2)
 
+# Upstream installs unconditionally; excluding its directory keeps its
+# artifacts out of `cmake --install`.
+set_property(DIRECTORY "${pcre2_SOURCE_DIR}" PROPERTY EXCLUDE_FROM_ALL TRUE)
+
 # The WASM matcher is not a load-path hot spot; -Oz trades regex speed for size.
 if(EMSCRIPTEN AND TARGET pcre2-8-static)
   target_compile_options(pcre2-8-static PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-Oz>")

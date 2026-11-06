@@ -32,3 +32,31 @@ function(formulon_apply_common_deps target)
       Threads::Threads
   )
 endfunction()
+
+# formulon_apply_shared_deps(target)
+#
+# Variant for the installable shared C-ABI library. The third-party archives
+# are linked PRIVATE so they stay inside the shared object and never appear in
+# the exported link interface; only the engine's own include directory is
+# usage-visible, as the build-tree `src/` or the installed `include/`.
+function(formulon_apply_shared_deps target)
+  if(NOT TARGET ${target})
+    message(FATAL_ERROR
+      "formulon_apply_shared_deps: target '${target}' does not exist")
+  endif()
+
+  target_include_directories(${target}
+    PUBLIC
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+      $<INSTALL_INTERFACE:include>
+  )
+
+  target_link_libraries(${target}
+    PRIVATE
+      formulon::miniz
+      formulon::pugixml
+      formulon::pcre2
+      formulon::double_conversion
+      Threads::Threads
+  )
+endfunction()

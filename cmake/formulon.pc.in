@@ -1,0 +1,9 @@
+prefix=${pcfiledir}/@FORMULON_PC_PREFIX_REL@
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: formulon
+Description: Excel 365 calculation engine (C ABI)
+Version: @FORMULON_PC_VERSION@
+Libs: -L${libdir} -lformulon
+Cflags: -I${includedir}

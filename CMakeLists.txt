@@ -594,8 +594,9 @@ formulon_apply_common_deps(formulon_static)
 # ---------------------------------------------------------------------------
 if(FM_BUILD_C_API_SHARED)
   add_library(formulon SHARED $<TARGET_OBJECTS:formulon_core>)
-  formulon_apply_common_deps(formulon)
+  formulon_apply_shared_deps(formulon)
 endif()
+include(cmake/FormulonInstall.cmake)
 
 # ---------------------------------------------------------------------------
 # CLI target

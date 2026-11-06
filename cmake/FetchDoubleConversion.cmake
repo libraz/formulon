@@ -38,6 +38,10 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(double_conversion)
 
+# Upstream installs unconditionally; excluding its directory keeps its
+# artifacts out of `cmake --install`.
+set_property(DIRECTORY "${double_conversion_SOURCE_DIR}" PROPERTY EXCLUDE_FROM_ALL TRUE)
+
 # Upstream target name is `double-conversion` (a hyphen, not an
 # underscore). Alias under the `formulon::` namespace so downstream
 # targets do not have to know whether we vendored or located a system
