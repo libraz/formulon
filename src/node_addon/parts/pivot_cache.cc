@@ -277,4 +277,138 @@ Napi::Value Workbook::PivotCacheRecordSetError(const Napi::CallbackInfo& info) {
   });
 }
 
+Napi::Value Workbook::PivotCacheGetOptions(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  fm_pivot_cache_options_t o{};
+  const fm_status_t rc = fm_workbook_get_pivot_cache_options(handle_, ArgU32(info, 0), &o);
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("saveData", Napi::Boolean::New(env, o.save_data != 0));
+  out.Set("missingItemsLimit", Napi::Number::New(env, o.missing_items_limit));
+  out.Set("refreshOnLoad", Napi::Boolean::New(env, o.refresh_on_load != 0));
+  return out;
+}
+
+// Every member is optional; an omitted key keeps the cache's current value.
+Napi::Value Workbook::PivotCacheSetOptions(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  const Napi::Object spec = ArgObject(info, 1);
+  fm_pivot_cache_options_t o{};
+  const fm_status_t read_rc = fm_workbook_get_pivot_cache_options(handle_, cache_id, &o);
+  if (read_rc != 0) {
+    return ThrowStatus(env, read_rc);
+  }
+  CheckedSpecReader reader(env);
+  o.save_data = reader.Bool(spec, "saveData", o.save_data != 0) ? 1 : 0;
+  o.missing_items_limit = reader.I32(spec, "missingItemsLimit", o.missing_items_limit);
+  o.refresh_on_load = reader.Bool(spec, "refreshOnLoad", o.refresh_on_load != 0) ? 1 : 0;
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  return ValueOrThrow(env, fm_workbook_set_pivot_cache_options(handle_, cache_id, &o), env.Undefined());
+}
+
+Napi::Value Workbook::PivotCacheCalculatedFieldAdd(const Napi::CallbackInfo& info) {
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    const std::string name = ArgString(info, 1);
+    const std::string formula = ArgString(info, 2);
+    return fm_workbook_add_pivot_cache_calculated_field(handle, ArgU32(info, 0), name.c_str(), formula.c_str(), out);
+  });
+}
+
+Napi::Value Workbook::PivotCacheCalculatedFieldSetFormula(const Napi::CallbackInfo& info) {
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::string formula = ArgString(info, 2);
+    return fm_workbook_set_pivot_cache_calculated_field_formula(
+        handle, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), formula.c_str());
+  });
+}
+
+Napi::Value Workbook::PivotCacheCalculatedFieldRemove(const Napi::CallbackInfo& info) {
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    return fm_workbook_remove_pivot_cache_calculated_field(handle, ArgU32(info, 0),
+                                                           static_cast<std::size_t>(ArgU32(info, 1)));
+  });
+}
+
+Napi::Value Workbook::PivotCacheFieldFormula(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const char* formula = nullptr;
+  const fm_status_t rc = fm_workbook_get_pivot_cache_field_formula(handle_, ArgU32(info, 0),
+                                                                   static_cast<std::size_t>(ArgU32(info, 1)), &formula);
+  return ValueOrThrow(env, rc, JsString(env, formula));
+}
+
+Napi::Value Workbook::PivotCacheCalculatedItemAdd(const Napi::CallbackInfo& info) {
+  return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
+    const std::string name = ArgString(info, 2);
+    const std::string formula = ArgString(info, 3);
+    return fm_workbook_add_pivot_cache_calculated_item(
+        handle, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), name.c_str(), formula.c_str(), out);
+  });
+}
+
+Napi::Value Workbook::PivotCacheCalculatedItemCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  std::size_t count = 0;
+  const fm_status_t rc = fm_workbook_get_pivot_cache_calculated_item_count(handle_, ArgU32(info, 0), &count);
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
+}
+
+Napi::Value Workbook::PivotCacheCalculatedItemAt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  fm_pivot_calculated_item_t item{};
+  const fm_status_t rc = fm_workbook_get_pivot_cache_calculated_item(handle_, ArgU32(info, 0),
+                                                                     static_cast<std::size_t>(ArgU32(info, 1)), &item);
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("fieldIndex", Napi::Number::New(env, item.field_index));
+  out.Set("name", JsString(env, item.name));
+  out.Set("formula", JsString(env, item.formula));
+  out.Set("scoped", Napi::Boolean::New(env, item.scoped != 0));
+  return out;
+}
+
+Napi::Value Workbook::PivotCacheCalculatedItemSetFormula(const Napi::CallbackInfo& info) {
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::string formula = ArgString(info, 2);
+    return fm_workbook_set_pivot_cache_calculated_item_formula(
+        handle, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), formula.c_str());
+  });
+}
+
+Napi::Value Workbook::PivotCacheCalculatedItemMove(const Napi::CallbackInfo& info) {
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    return fm_workbook_move_pivot_cache_calculated_item(
+        handle, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), static_cast<std::size_t>(ArgU32(info, 2)));
+  });
+}
+
+Napi::Value Workbook::PivotCacheCalculatedItemRemove(const Napi::CallbackInfo& info) {
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    return fm_workbook_remove_pivot_cache_calculated_item(handle, ArgU32(info, 0),
+                                                          static_cast<std::size_t>(ArgU32(info, 1)));
+  });
+}
+
 }  // namespace formulon_node
