@@ -304,8 +304,7 @@ Expected<void, Error> Workbook::add_data_table(std::size_t sheet_index, MergeRan
     }
   }
   for (const DataTable& other : sheets_[sheet_index].data_tables()) {
-    if (other.ref.first_row <= ref.last_row && ref.first_row <= other.ref.last_row &&
-        other.ref.first_col <= ref.last_col && ref.first_col <= other.ref.last_col) {
+    if (intersects(other.ref, ref)) {
       return make_error(FormulonErrorCode::kDataTableInvalid, "add_data_table: ref overlaps another data table");
     }
   }

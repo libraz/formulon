@@ -57,7 +57,7 @@ class Geometry {
   // Moves the marker (`index`, `off`) `extent` EMU further along the axis.
   // Returns false when the result lies past the sheet's last line.
   bool advance(bool row_axis, std::uint32_t& index, std::int64_t& off, std::int64_t extent) const {
-    const std::uint32_t limit = row_axis ? Sheet::kMaxRows : Sheet::kMaxCols;
+    const std::uint32_t limit = a1::axis_extent(row_axis);
     std::int64_t rem = off + extent;
     for (std::int64_t s = size(row_axis, index); rem >= s; s = size(row_axis, index)) {
       if (index + 1 >= limit) {

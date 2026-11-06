@@ -59,7 +59,7 @@ struct SparklineClone {
   std::optional<MergeRange> host_at(MergeRange host, std::uint32_t step) const {
     (row_axis ? host.first_row : host.first_col) += step;
     (row_axis ? host.last_row : host.last_col) += step;
-    if ((row_axis ? host.last_row : host.last_col) >= (row_axis ? Sheet::kMaxRows : Sheet::kMaxCols)) {
+    if ((row_axis ? host.last_row : host.last_col) >= a1::axis_extent(row_axis)) {
       return std::nullopt;
     }
     return host;
@@ -79,7 +79,7 @@ class TranslateTransform final : public parser::RefTransform {
     const bool spans_axis = row_axis_ ? ref.is_full_col : ref.is_full_row;
     if (!spans_axis) {
       coord += steps_;
-      if (coord >= (row_axis_ ? Sheet::kMaxRows : Sheet::kMaxCols)) {
+      if (coord >= a1::axis_extent(row_axis_)) {
         return std::nullopt;
       }
     }

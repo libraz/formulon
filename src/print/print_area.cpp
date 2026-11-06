@@ -216,7 +216,7 @@ bool ParseTitleToken(std::string_view token, PrintTitles* out_titles) {
   }
 
   // Whole-row span: both endpoints are pure decimal row indices.
-  if (lhs.front() >= '0' && lhs.front() <= '9') {
+  if (strings::is_ascii_digit(lhs.front())) {
     std::size_t pi = 0;
     std::size_t pj = 0;
     std::uint32_t r1 = 0;

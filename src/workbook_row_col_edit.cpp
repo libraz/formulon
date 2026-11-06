@@ -68,7 +68,7 @@ CellShift shift_cell_coords_for_row_col_edit(parser::RowColAxis axis, parser::Ro
   r.new_col = col;
   std::uint32_t& target = (axis == parser::RowColAxis::kRow) ? r.new_row : r.new_col;
   const std::uint32_t coord = target;
-  const std::uint32_t bound = (axis == parser::RowColAxis::kRow) ? Sheet::kMaxRows : Sheet::kMaxCols;
+  const std::uint32_t bound = a1::axis_extent(axis == parser::RowColAxis::kRow);
 
   if (edit == parser::RowColEdit::kInsert) {
     if (coord >= index) {
@@ -502,7 +502,7 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   if (count == 0U) {
     return make_error(FormulonErrorCode::kInvalidArgument, std::string(op_name) + ": count must be >= 1");
   }
-  const std::uint32_t bound = (axis == parser::RowColAxis::kRow) ? Sheet::kMaxRows : Sheet::kMaxCols;
+  const std::uint32_t bound = a1::axis_extent(axis == parser::RowColAxis::kRow);
   if (origin >= bound) {
     return make_error(FormulonErrorCode::kInvalidArgument, std::string(op_name) + ": origin out of bounds",
                       "origin=" + std::to_string(origin));

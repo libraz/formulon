@@ -210,7 +210,7 @@ Expected<DrawingSnapshot, Error> decode_snapshot(const std::uint8_t* bytes, std:
 std::string unused_copy_path(const Workbook& wb, const std::string& path, const std::vector<std::string>& reserved) {
   const std::string ext = io::ooxml::extension_of_part(path);
   std::string stem = ext.empty() ? path : path.substr(0, path.size() - ext.size() - 1);
-  while (!stem.empty() && stem.back() >= '0' && stem.back() <= '9') {
+  while (!stem.empty() && strings::is_ascii_digit(stem.back())) {
     stem.pop_back();
   }
   return unused_part_path(wb, stem, ext.empty() ? "bin" : ext.c_str(), reserved);

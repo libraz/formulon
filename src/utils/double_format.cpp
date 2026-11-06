@@ -12,6 +12,7 @@
 
 #include "utils/double_parse.h"
 #include "utils/number_text.h"
+#include "utils/strings.h"
 
 namespace formulon {
 
@@ -68,7 +69,7 @@ double excel_decimal_view(double v, int significant_digits) noexcept {
   int count = 0;
   int cursor = 0;
   for (; cursor < written && text[cursor] != 'e'; ++cursor) {
-    if (text[cursor] >= '0' && text[cursor] <= '9' && count < 15) {
+    if (strings::is_ascii_digit(text[cursor]) && count < 15) {
       digits[count++] = text[cursor];
     }
   }

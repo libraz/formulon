@@ -24,6 +24,11 @@ namespace formulon::a1 {
 inline constexpr std::uint32_t kMaxRows = 1048576U;
 inline constexpr std::uint32_t kMaxCols = kMaxColumns;
 
+/// Grid extent along an axis: `kMaxRows` for the row axis, `kMaxCols` otherwise.
+constexpr std::uint32_t axis_extent(bool row_axis) noexcept {
+  return row_axis ? kMaxRows : kMaxCols;
+}
+
 /// Excel's column-letter ceiling. The largest valid Excel column is XFD
 /// (3 letters); references with 4 or more leading letters are rejected.
 constexpr std::size_t kMaxColumnLetters = 3U;

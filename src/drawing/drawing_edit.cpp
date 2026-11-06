@@ -85,11 +85,11 @@ std::string default_drawing_name(const Workbook& wb, DrawingObjectKind kind, std
 bool is_default_drawing_name(const Workbook& wb, DrawingObjectKind kind, std::string_view name) {
   const auto matches = [&](const char* word) {
     const std::string_view w = word == nullptr ? std::string_view() : std::string_view(word);
-    if (w.empty() || name.size() <= w.size() + 1U || name.substr(0, w.size()) != w || name[w.size()] != ' ') {
+    if (w.empty() || name.size() <= w.size() + 1U || !strings::starts_with(name, w) || name[w.size()] != ' ') {
       return false;
     }
     const std::string_view digits = name.substr(w.size() + 1U);
-    return std::all_of(digits.begin(), digits.end(), [](char c) { return c >= '0' && c <= '9'; });
+    return std::all_of(digits.begin(), digits.end(), strings::is_ascii_digit);
   };
   return matches(kind_word(new_workbook_defaults(wb.excel_profile().locale), kind)) ||
          matches(kind_word(new_workbook_defaults(ExcelLocale::kEnUS), kind));
@@ -112,15 +112,13 @@ std::vector<std::string> relationship_refs(const pugi::xml_node& node) {
 
 std::string unused_part_path(const Workbook& wb, const std::string& stem, const char* suffix,
                              const std::vector<std::string>& reserved) {
-  const auto prefixed = [](const std::string& path, const std::string& base) {
-    return strings::starts_with(path, base);
-  };
   for (std::uint32_t n = 1;; ++n) {
     const std::string base = stem + std::to_string(n) + ".";
     const bool taken =
         std::any_of(wb.passthrough_parts().begin(), wb.passthrough_parts().end(),
-                    [&](const PassthroughPart& part) { return prefixed(part.path, base); }) ||
-        std::any_of(reserved.begin(), reserved.end(), [&](const std::string& path) { return prefixed(path, base); });
+                    [&](const PassthroughPart& part) { return strings::starts_with(part.path, base); }) ||
+        std::any_of(reserved.begin(), reserved.end(),
+                    [&](const std::string& path) { return strings::starts_with(path, base); });
     if (!taken) {
       return base + suffix;
     }
@@ -219,7 +217,7 @@ AnchorPoint shift_point(AnchorPoint p, std::uint32_t index, std::uint32_t count,
     return p;
   }
   if (!is_delete) {
-    const std::uint32_t limit = row_axis ? Sheet::kMaxRows : Sheet::kMaxCols;
+    const std::uint32_t limit = a1::axis_extent(row_axis);
     const std::uint64_t shifted = static_cast<std::uint64_t>(line) + count;
     line = static_cast<std::uint32_t>(std::min<std::uint64_t>(shifted, limit - 1U));
   } else if (line >= index + count) {

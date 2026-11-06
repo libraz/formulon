@@ -386,11 +386,12 @@ DuplicateValuePopulation gather_duplicate_population(const std::vector<CFCellRan
                                                      ExcelProfile profile) {
   DuplicateValuePopulation population;
   population.profile = profile;
+  std::string key;
   for_each_sqref_value(sqref, sheet, [&](const Value& cell) {
     if (!duplicate_eligible(cell)) {
       return;
     }
-    std::string key;
+    key.clear();
     if (eval::append_value_identity_key(cell, profile, eval::CollationStrength::kCompare, &key)) {
       ++population.keys[key];
     }

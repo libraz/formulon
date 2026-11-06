@@ -83,8 +83,7 @@ bool SamePath(std::string_view a, std::string_view b) noexcept {
 // a POSIX path as written, and a Windows drive or UNC path as a `file:` URL.
 std::string TargetForNewLink(std::string_view path, std::string_view book) {
   std::string out;
-  const bool drive =
-      path.size() >= 2 && ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':';
+  const bool drive = path.size() >= 2 && strings::is_ascii_alpha(path[0]) && path[1] == ':';
   const bool unc = path.size() >= 2 && path[0] == '\\' && path[1] == '\\';
   if (drive) {
     out = "file:///";

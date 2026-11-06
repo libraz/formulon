@@ -44,8 +44,7 @@ Error unsupported(const char* what) {
 /// A worksheet's `.xlsb` binary index: optional, rebuilt by Excel, so a copy goes without it.
 bool is_binary_index(const UnknownRelationship& rel) {
   constexpr std::string_view kPrefix = "xl/worksheets/binaryIndex";
-  return !rel.target_external && rel.target.size() > kPrefix.size() &&
-         rel.target.compare(0, kPrefix.size(), kPrefix) == 0;
+  return !rel.target_external && rel.target.size() > kPrefix.size() && strings::starts_with(rel.target, kPrefix);
 }
 
 std::string rewritten(const std::string& formula, const parser::RefTransform& transform) {

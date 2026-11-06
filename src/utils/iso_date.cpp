@@ -8,6 +8,7 @@
 #include <string_view>
 
 #include "utils/date_time.h"
+#include "utils/strings.h"
 
 namespace formulon::date_time {
 namespace {
@@ -119,7 +120,7 @@ bool parse_iso_date_serial(std::string_view text, double* out_serial) noexcept {
       double scale = 1.0;
       int kept = 0;
       bool any = false;
-      while (pos < text.size() && text[pos] >= '0' && text[pos] <= '9') {
+      while (pos < text.size() && strings::is_ascii_digit(text[pos])) {
         if (kept < kMaxFractionDigits) {
           digits = digits * 10U + static_cast<std::uint64_t>(text[pos] - '0');
           scale *= 10.0;

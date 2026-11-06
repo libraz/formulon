@@ -530,7 +530,7 @@ void Sheet::shift_blocked_spills_locked(const StructuralEdit& edit) {
   }
   std::unordered_map<CellAddress, BlockedSpillFootprint, CellAddressHash> shifted;
   shifted.reserve(spill_table_->blocked_by_anchor.size());
-  const std::uint32_t bound = edit.row_axis ? kMaxRows : kMaxCols;
+  const std::uint32_t bound = a1::axis_extent(edit.row_axis);
   const std::uint64_t delete_end = static_cast<std::uint64_t>(edit.index) + edit.count;
   for (const auto& [address, footprint] : spill_table_->blocked_by_anchor) {
     std::uint32_t coordinate = edit.row_axis ? address.row : address.col;

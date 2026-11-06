@@ -36,6 +36,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/index_sort.h"
+#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -48,7 +49,7 @@ constexpr std::string_view kDetailTableStyle = "TableStyleMedium9";
 
 /// The locale's first sheet name without its trailing number.
 std::string_view sheet_word(std::string_view first_sheet_name) {
-  while (!first_sheet_name.empty() && first_sheet_name.back() >= '0' && first_sheet_name.back() <= '9') {
+  while (!first_sheet_name.empty() && strings::is_ascii_digit(first_sheet_name.back())) {
     first_sheet_name.remove_suffix(1);
   }
   return first_sheet_name;

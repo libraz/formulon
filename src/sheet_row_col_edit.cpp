@@ -171,7 +171,7 @@ void ShiftDataTableInput(DataTableInput& input, std::uint32_t index, std::uint32
     return;
   }
   std::uint32_t& pos = row_axis ? input.row : input.col;
-  const std::uint32_t bound = row_axis ? Sheet::kMaxRows : Sheet::kMaxCols;
+  const std::uint32_t bound = a1::axis_extent(row_axis);
   if (pos < index) {
     return;
   }
@@ -365,7 +365,7 @@ StructureEditCut structure_edit_cut(std::uint32_t first, std::uint32_t last, con
     if (edit.index > last) {
       return StructureEditCut::kMisses;
     }
-    const std::uint32_t bound = edit.row_axis ? Sheet::kMaxRows : Sheet::kMaxCols;
+    const std::uint32_t bound = a1::axis_extent(edit.row_axis);
     if (static_cast<std::uint64_t>(last) + edit.count >= bound) {
       return StructureEditCut::kPushesOff;
     }
@@ -563,7 +563,7 @@ void Sheet::finalize_structural_edit_locked(const StructuralEdit& edit) {
 }
 
 void Sheet::inherit_inserted_formatting_locked(const StructuralEdit& edit) {
-  const std::uint32_t bound = edit.row_axis ? kMaxRows : kMaxCols;
+  const std::uint32_t bound = a1::axis_extent(edit.row_axis);
   if (edit.index == 0U || edit.index >= bound) {
     return;
   }
