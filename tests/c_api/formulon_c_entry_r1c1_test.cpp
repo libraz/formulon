@@ -8,13 +8,17 @@
 #include <cstdint>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "c_api/parts/common.h"
 #include "formulon_c_out_index.h"
 #include "formulon_c_setters.h"
 #include "gtest/gtest.h"
+#include "table.h"
 #include "utils/error.h"
+#include "workbook.h"
 
 namespace {
 
@@ -266,7 +270,8 @@ TEST(FormulonCApiEntryR1C1, Out7LetWithTypedXlnmNameShowsQuoted) {
   ExpectOut7Row(32U, "=LET(B1,5,B1+'B2')");
 }
 
-// A table named `RC` keeps `RC[Qty]` a structured reference.
+// A table named `RC` keeps `RC[Qty]` a structured reference. Excel refuses
+// that display name, so only a loaded file carries one.
 TEST(FormulonCApiEntryR1C1, BracketedEndpointNamingATableStaysStructured) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
@@ -274,8 +279,12 @@ TEST(FormulonCApiEntryR1C1, BracketedEndpointNamingATableStaysStructured) {
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 1, "X"), 0);
   const fm_cell_rect_t rect{0, 0, 2, 1};
   const char* const columns[] = {"Qty", "X"};
-  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, &rect, "RC", "RC", columns, 2, nullptr, 1, 0, ignored_index()), 0)
+  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, &rect, "Tbl", "Tbl", columns, 2, nullptr, 1, 0, ignored_index()), 0)
       << fm_get_last_error_message();
+  std::vector<formulon::TableMetadata> tables = wb.handle->workbook().tables();
+  tables[0].name = "RC";
+  tables[0].display_name = "RC";
+  wb.handle->workbook().set_tables(std::move(tables));
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 4, 6, "=SUM(RC[Qty])"), 0) << fm_get_last_error_message();
   EXPECT_EQ(FormulaAt(wb.handle, 4, 6), "=SUM(RC[Qty])");
 }

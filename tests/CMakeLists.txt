@@ -49,6 +49,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/num_fmt_locale_test.cpp
   unit/utils/checked_mul_test.cpp
   unit/utils/a1_column_test.cpp
+  unit/utils/name_syntax_test.cpp
   unit/utils/budget_charge_test.cpp
   unit/utils/case_map_test.cpp
   unit/utils/date_time_test.cpp

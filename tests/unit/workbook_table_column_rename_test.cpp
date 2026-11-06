@@ -268,9 +268,19 @@ TEST(WorkbookTableColumnRename, IngestBindsThisRowAndBareTableName) {
   EXPECT_EQ(bare, "=ROWS(tblSales[])");
 }
 
+// A defined name spelled like a table: Excel refuses to create one, so only a
+// loaded file carries it.
+void LoadNameLikeTable(Workbook& wb, std::int32_t local_sheet_id) {
+  DefinedName name;
+  name.name = "tblSales";
+  name.formula = "Sheet1!$A$1";
+  name.local_sheet_id = local_sheet_id;
+  wb.set_defined_names({name});
+}
+
 TEST(WorkbookTableColumnRename, IngestKeepsDefinedNameNamedLikeTable) {
   SalesBook book = MakeSalesBook("mac-365-ja_JP");
-  ASSERT_TRUE(static_cast<bool>(book.wb.set_defined_name("tblSales", "Sheet1!$A$1")));
+  LoadNameLikeTable(book.wb, -1);
   std::string text = "=ROWS(tblSales)";
   book.wb.ingest_entered_formula(text);
   EXPECT_EQ(text, "=ROWS(tblSales)");
@@ -278,7 +288,7 @@ TEST(WorkbookTableColumnRename, IngestKeepsDefinedNameNamedLikeTable) {
 
 TEST(WorkbookTableColumnRename, IngestIgnoresSheetLocalNames) {
   SalesBook book = MakeSalesBook("mac-365-ja_JP");
-  ASSERT_TRUE(static_cast<bool>(book.wb.set_defined_name_scoped("tblSales", "Sheet1!$A$1", 0)));
+  LoadNameLikeTable(book.wb, 0);
   std::string text = "=ROWS(tblSales)";
   book.wb.ingest_entered_formula(text);
   EXPECT_EQ(text, "=ROWS(tblSales[])");
@@ -293,7 +303,7 @@ TEST(WorkbookTableColumnRename, EnteredBindInsideTableQualifiesBareReference) {
 
 TEST(WorkbookTableColumnRename, EnteredBindHonoursSheetLocalNames) {
   SalesBook book = MakeSalesBook("mac-365-ja_JP");
-  ASSERT_TRUE(static_cast<bool>(book.wb.set_defined_name_scoped("tblSales", "Sheet1!$A$1", 0)));
+  LoadNameLikeTable(book.wb, 0);
   EXPECT_EQ(book.wb.bind_entered_structured_refs("=ROWS(tblSales)", 0, 1, 7), "=ROWS(tblSales)");
   EXPECT_EQ(book.wb.bind_entered_structured_refs("=ROWS(tblSales)", book.sheet2, 5, 5), "=ROWS(tblSales[])");
 }

@@ -204,7 +204,7 @@ class AutoFilterTests(unittest.TestCase):
                 wb.sheet(0).set_number(i, 0, float(i))
                 wb.sheet(0).set_number(i, 1, 0.0)
             idx = wb.add_table(
-                range=SheetRect(0, CellRect(0, 0, 3, 1)), name="T1", display_name="T1", columns=["n", "m"]
+                range=SheetRect(0, CellRect(0, 0, 3, 1)), name="Tbl", display_name="Tbl", columns=["n", "m"]
             )
             wb.remove_table_auto_filter(idx)
             self.assertIsNone(wb.get_table_auto_filter(idx))

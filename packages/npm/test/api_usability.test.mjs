@@ -1027,7 +1027,7 @@ function tableWorkbook(wb, name, displayName) {
   });
 }
 
-test('criterion 8: removeTable resolves a displayName, even one that reads as a number, and a number', async () => {
+test('criterion 8: removeTable resolves a displayName, a string that reads as a number included, and a number', async () => {
   await withWorkbook((wb, f) => {
     tableWorkbook(wb, 'Sales', 'Sales');
     expectCode(() => wb.removeTable('Missing'), f.StatusCode.NotFound);
@@ -1037,11 +1037,10 @@ test('criterion 8: removeTable resolves a displayName, even one that reads as a 
     wb.removeTable('Sales');
     assert.equal(wb.listTables().length, 0);
   });
-  await withWorkbook((wb) => {
-    wb.sheet(0).setText(0, 0, 'A');
-    wb.addTable({ range: { sheet: 0, rect: rect(0, 0, 1, 0) }, name: 'T0', displayName: '3', columns: ['A'] });
-    wb.removeTable('3');
-    assert.equal(wb.listTables().length, 0);
+  await withWorkbook((wb, f) => {
+    tableWorkbook(wb, 'Sales', 'Sales');
+    expectCode(() => wb.removeTable('0'), f.StatusCode.NotFound);
+    assert.equal(wb.listTables().length, 1);
   });
   await withWorkbook((wb) => {
     tableWorkbook(wb, 'Sales', 'Sales');

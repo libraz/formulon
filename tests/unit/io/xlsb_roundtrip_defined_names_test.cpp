@@ -413,9 +413,9 @@ struct RefErrorSiteName {
 
 constexpr RefErrorSiteName kRefErrorSiteNames[] = {
     {"Nm", "Sheet3!#REF!", "Sheet3!#REF!"},
-    {"Nm2", "#REF!$A$1", "#REF!"},
-    {"Nm3", "#REF!$A$1:$B$2", "#REF!"},
-    {"Nm4", "#REF!#REF!", "#REF!"},
+    {"Nm_2", "#REF!$A$1", "#REF!"},
+    {"Nm_3", "#REF!$A$1:$B$2", "#REF!"},
+    {"Nm_4", "#REF!#REF!", "#REF!"},
 };
 
 void ExpectRefErrorSites(const Workbook& wb, bool storage, const char* label) {

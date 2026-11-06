@@ -15,10 +15,12 @@
 
 #include "defined_name.h"
 #include "eval/recalc_engine.h"
+#include "io/xlsb/table_records.h"
 #include "parser/ast.h"
 #include "parser/external_book_spelling.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/name_syntax.h"
 #include "utils/strings.h"
 #include "workbook.h"
 #include "workbook_formula_index.h"
@@ -153,6 +155,14 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
   // a successful no-op.
   if (formula.empty()) {
     return Expected<void, Error>::Ok();
+  }
+  const std::vector<io::xlsb::XlsbRetainedTable> retained = io::xlsb::xlsb_retained_tables(*this);
+  const bool retained_table = std::any_of(retained.begin(), retained.end(), [&name](const auto& table) {
+    return strings::case_insensitive_eq(table.name, name) || strings::case_insensitive_eq(table.display_name, name);
+  });
+  if (!is_valid_defined_name(name) || is_table_name(name) || retained_table) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "set_defined_name_scoped: invalid or taken name",
+                      "name=" + name);
   }
   DefinedName entry;
   entry.name = std::move(name);

@@ -416,7 +416,7 @@ TEST(FormulonCApiExternalLinks, FileNameTableTotalsStoreAndSpellTheName) {
   ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
   const char* names[] = {"a", "b"};
   std::size_t table = 99;
-  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 3, 3, 4}), "T1", "T1", names, 2, nullptr,
+  ASSERT_EQ(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 3, 3, 4}), "Tbl", "Tbl", names, 2, nullptr,
                                   1, 1, &table),
             0)
       << fm_get_last_error_message();

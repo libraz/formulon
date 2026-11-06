@@ -11,11 +11,13 @@
 
 #include "auto_filter.h"
 #include "chart/chart_ref.h"
+#include "defined_name.h"
 #include "eval/dep_graph.h"
 #include "eval/recalc_engine.h"
 #include "io/auto_filter_xml.h"
 #include "io/xlsb/table_records.h"
 #include "io/xml_escape.h"
+#include "merge_range.h"
 #include "new_workbook_defaults.h"
 #include "parser/ref_transforms.h"
 #include "parser/reference.h"
@@ -26,6 +28,7 @@
 #include "table.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/name_syntax.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "workbook.h"
@@ -52,9 +55,10 @@ bool names_collide(const Existing& existing, std::string_view name, std::string_
 }
 
 bool name_in_use(const std::vector<TableMetadata>& tables, const std::vector<io::xlsb::XlsbRetainedTable>& retained,
-                 std::string_view name, std::string_view display_name) {
-  for (const TableMetadata& existing : tables) {
-    if (names_collide(existing, name, display_name)) {
+                 const std::vector<DefinedName>& defined_names, std::string_view name, std::string_view display_name,
+                 std::optional<std::size_t> self) {
+  for (std::size_t i = 0; i < tables.size(); ++i) {
+    if (i != self && names_collide(tables[i], name, display_name)) {
       return true;
     }
   }
@@ -63,7 +67,25 @@ bool name_in_use(const std::vector<TableMetadata>& tables, const std::vector<io:
       return true;
     }
   }
+  // A defined name of any scope owns its name against tables.
+  for (const DefinedName& defined : defined_names) {
+    if (strings::case_insensitive_eq(defined.name, name) || strings::case_insensitive_eq(defined.name, display_name)) {
+      return true;
+    }
+  }
   return false;
+}
+
+Expected<void, Error> check_table_identity(const Workbook& wb, std::string_view name, std::string_view display_name,
+                                           std::optional<std::size_t> self) {
+  if (name.empty() || !is_valid_table_name(display_name)) {
+    return invalid_table("invalid table name",
+                         "name=" + std::string(name) + " display_name=" + std::string(display_name));
+  }
+  if (name_in_use(wb.tables(), io::xlsb::xlsb_retained_tables(wb), wb.defined_names(), name, display_name, self)) {
+    return invalid_table("table name already exists", "reason=table name already exists name=" + std::string(name));
+  }
+  return Expected<void, Error>::Ok();
 }
 
 }  // namespace
@@ -79,10 +101,14 @@ Expected<std::size_t, Error> Workbook::add_table(TableMetadata table) {
     return invalid_table("column_count does not match the range width",
                          "ref=" + table.ref + " column_count=" + std::to_string(table.columns.size()));
   }
-  const std::vector<io::xlsb::XlsbRetainedTable> retained = io::xlsb::xlsb_retained_tables(*this);
-  if (name_in_use(tables_, retained, table.name, table.display_name)) {
-    return invalid_table("table name already exists", "reason=table name already exists name=" + table.name);
+  RETURN_IF_ERROR(check_table_identity(*this, table.name, table.display_name, std::nullopt));
+  for (const TableMetadata& other : tables_) {
+    const std::optional<MergeRange> other_rect = parse_a1_rectangle(other.ref);
+    if (other.sheet_index == table.sheet_index && other_rect && intersects(*rect, *other_rect)) {
+      return invalid_table("table range overlaps another table", "ref=" + table.ref + " table=" + other.name);
+    }
   }
+  const std::vector<io::xlsb::XlsbRetainedTable> retained = io::xlsb::xlsb_retained_tables(*this);
   std::uint32_t next_id = 1;
   for (const TableMetadata& existing : tables_) {
     next_id = next_id > existing.id + 1U ? next_id : existing.id + 1U;
@@ -137,7 +163,7 @@ std::string Workbook::next_default_table_name(std::string_view word) const {
   const std::vector<io::xlsb::XlsbRetainedTable> retained = io::xlsb::xlsb_retained_tables(*this);
   for (std::size_t n = 1;; ++n) {
     const std::string candidate = std::string(word) + std::to_string(n);
-    if (!name_in_use(tables_, retained, candidate, candidate)) {
+    if (!name_in_use(tables_, retained, defined_names_, candidate, candidate, std::nullopt)) {
       return candidate;
     }
   }
@@ -208,6 +234,7 @@ Expected<void, Error> Workbook::rename_table(std::size_t index, std::string name
     return make_error(FormulonErrorCode::kInvalidArgument, "rename_table: index out of range",
                       "index=" + std::to_string(index) + " table_count=" + std::to_string(tables_.size()));
   }
+  RETURN_IF_ERROR(check_table_identity(*this, name, display_name, index));
   const std::string old_name = tables_[index].name;
   const std::string old_display_name = tables_[index].display_name;
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();

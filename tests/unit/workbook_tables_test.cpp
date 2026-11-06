@@ -3,6 +3,7 @@
 #include <utility>
 #include <vector>
 
+#include "defined_name.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
@@ -91,6 +92,72 @@ TEST(WorkbookTables, NextDefaultTableNameIsCaseInsensitive) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(wb.add_table(make_table("TABLE1", "A1:A3", 1)).has_value());
   EXPECT_EQ(wb.next_default_table_name("table"), "table2");
+}
+
+TEST(WorkbookTables, AddTableRejectsADisplayNameExcelRefuses) {
+  Workbook wb = Workbook::create();
+  for (const char* name : {"T1", "R1C1", "R2D2", "TRUE", "a b", "1a"}) {
+    auto bad = wb.add_table(make_table(name, "A1:B5", 2));
+    ASSERT_FALSE(bad.has_value()) << name;
+    EXPECT_EQ(bad.error().code, FormulonErrorCode::kInvalidArgument);
+    EXPECT_EQ(bad.error().message, "invalid table name");
+  }
+  // Excel keeps an off-grid `name` and repairs only the display name.
+  TableMetadata table = make_table("T1", "A1:B5", 2);
+  table.display_name = "T1_";
+  EXPECT_TRUE(wb.add_table(std::move(table)).has_value());
+}
+
+TEST(WorkbookTables, AddTableRejectsTheNameOfADefinedName) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(wb.set_defined_name_scoped("Local", "Sheet1!$D$1", 0).has_value());
+  ASSERT_TRUE(wb.set_defined_name("Global", "Sheet1!$D$1").has_value());
+  EXPECT_FALSE(wb.add_table(make_table("local", "A1:B5", 2)).has_value());
+  EXPECT_FALSE(wb.add_table(make_table("GLOBAL", "A1:B5", 2)).has_value());
+  EXPECT_EQ(wb.next_default_table_name("Glob"), "Glob1");
+  ASSERT_TRUE(wb.set_defined_name("Table1", "Sheet1!$D$1").has_value());
+  EXPECT_EQ(wb.next_default_table_name("Table"), "Table2");
+}
+
+TEST(WorkbookTables, AddTableRejectsAnOverlappingRange) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(wb.add_table(make_table("One", "A1:B4", 2)).has_value());
+  auto overlap = wb.add_table(make_table("Two", "B3:C6", 2));
+  ASSERT_FALSE(overlap.has_value());
+  EXPECT_EQ(overlap.error().message, "table range overlaps another table");
+  EXPECT_TRUE(wb.add_table(make_table("Two", "C1:D4", 2)).has_value());
+  wb.add_sheet("Sheet2");
+  EXPECT_TRUE(wb.add_table(make_table("Three", "A1:B4", 2, 1)).has_value());
+}
+
+TEST(WorkbookTables, RenameTableChecksTheNewNames) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(wb.add_table(make_table("One", "A1:B4", 2)).has_value());
+  ASSERT_TRUE(wb.add_table(make_table("Two", "D1:E4", 2)).has_value());
+  ASSERT_TRUE(wb.set_defined_name("Taken", "Sheet1!$D$1").has_value());
+  EXPECT_FALSE(wb.rename_table(0, "A1", "A1").has_value());
+  EXPECT_FALSE(wb.rename_table(0, "two", "two").has_value());
+  EXPECT_FALSE(wb.rename_table(0, "Fresh", "taken").has_value());
+  EXPECT_FALSE(wb.rename_table(0, "", "Fresh").has_value());
+  EXPECT_TRUE(wb.rename_table(0, "ONE", "ONE").has_value());
+  EXPECT_EQ(wb.tables()[0].display_name, "ONE");
+}
+
+TEST(WorkbookTables, NewDefinedNameFollowsNameSyntaxAndAvoidsTables) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(wb.add_table(make_table("Sales", "A1:B4", 2)).has_value());
+  for (const char* name : {"A1", "R1C1", "\\a", "sales"}) {
+    auto bad = wb.set_defined_name(name, "Sheet1!$D$1");
+    ASSERT_FALSE(bad.has_value()) << name;
+    EXPECT_EQ(bad.error().code, FormulonErrorCode::kInvalidArgument);
+  }
+  EXPECT_TRUE(wb.defined_names().empty());
+  // A loaded entry Excel would refuse to create still updates and removes.
+  wb.set_defined_names({DefinedName("A1", "Sheet1!$D$1", -1, false, "")});
+  EXPECT_TRUE(wb.set_defined_name("A1", "Sheet1!$D$2").has_value());
+  EXPECT_EQ(wb.defined_names()[0].formula, "Sheet1!$D$2");
+  EXPECT_TRUE(wb.set_defined_name("A1", "").has_value());
+  EXPECT_TRUE(wb.defined_names().empty());
 }
 
 void Recalc(Workbook& wb) {

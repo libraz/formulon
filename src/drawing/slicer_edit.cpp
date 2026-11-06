@@ -18,6 +18,7 @@
 #include "passthrough_part.h"
 #include "sheet.h"
 #include "unknown_relationship.h"
+#include "utils/name_syntax.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "workbook.h"
@@ -504,6 +505,9 @@ Expected<std::uint32_t, Error> add_slicer(Workbook& wb, std::size_t sheet, std::
     cache_base.push_back(std::isalnum(byte) != 0 || c == '_' || c == '.' || byte >= 0x80U ? c : '_');
   }
   const std::string cache_name = unique_name(cache_base, "", cache_names);
+  if (!is_valid_defined_name(cache_name)) {
+    return invalid("slicer: the column name yields no valid cache name");
+  }
   if ((spec.fields & kCaption) == 0U) {
     spec.caption = col.name;
   }

@@ -439,6 +439,14 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
   `copySheet` copies it, and row and column inserts move its anchors. A
   drawing the reader cannot lift stays read-only. Its relationship id may
   change on save.
+- Creating, resizing or renaming a table refuses what Excel refuses with
+  `InvalidArgument`: a display name outside Excel's name syntax (a cell
+  address such as `T1`, a name opening with an R1C1 reference such as
+  `R2D2`, `TRUE`, a leading digit, a space), a name a defined name of any
+  scope already uses, and a range overlapping another table on the sheet.
+  Setting a new defined name refuses a name outside that syntax or one a
+  table uses. Such workbooks were written without complaint and Excel
+  refused to open them.
 
 ### Name migration
 
