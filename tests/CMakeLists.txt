@@ -174,6 +174,9 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/table_fidelity_test.cpp
   unit/io/xlsb/pivot_fidelity_test.cpp
   unit/io/xlsb/slicer_fidelity_test.cpp
+  unit/io/xlsb/drawing_record_test.cpp
+  unit/io/xlsb/drawing_write_test.cpp
+  unit/io/xlsb/drawing_roundtrip_test.cpp
   unit/io/xlsb_fidelity_test.cpp
   unit/io/xlsb_phonetic_test.cpp
   unit/io/external_link_fixture_test.cpp

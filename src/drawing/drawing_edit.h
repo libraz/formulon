@@ -11,8 +11,8 @@
 // restore and remove.
 //
 // Refusals: a drawing part (or its rels part) that does not parse fails with
-// `kIoDrawingUnparseable`, as does a sheet whose drawing was retained from an
-// `.xlsb` package (reachable only through `Sheet::unknown_relationships()`);
+// `kIoDrawingUnparseable`, as does a sheet whose `.xlsb` drawing the reader
+// could not lift (still a drawing relationship in `Sheet::unknown_relationships()`);
 // bytes that are not a recognised image fail with `kIoImageUnsupported`.
 // Edits target worksheets; a chartsheet's drawing is listed but not edited.
 // Shapes, groups, connectors and other frames are refused with

@@ -153,7 +153,8 @@ Expected<void, Error> load_drawing_part(const Workbook& wb, std::string_view pat
 
 /// Path of sheet `sheet`'s typed-editable drawing, or empty when it has none.
 /// Fails with `kInvalidArgument` for a bad sheet or a non-worksheet, and with
-/// `kIoDrawingUnparseable` for a drawing retained from an `.xlsb` package.
+/// `kIoDrawingUnparseable` for an `.xlsb` drawing the reader could not lift
+/// (still a drawing relationship in `Sheet::unknown_relationships()`).
 Expected<std::string, Error> editable_drawing_path(const Workbook& wb, std::size_t sheet);
 
 /// The relationships of the part at `part_path`; none when it has no rels

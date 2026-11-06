@@ -722,7 +722,7 @@ FM_API fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, size_t from_index, 
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when the source is very hidden;
  *         `FM_STATUS_NOT_IMPLEMENTED` (3) when the source is not a worksheet or carries
  *         content the copy cannot model (unrecognised relationships, slicers,
- *         shapes, pivot charts, or a drawing retained from an `.xlsb`).
+ *         shapes, pivot charts, or an `.xlsb` drawing the reader could not lift).
  */
 FM_API fm_status_t fm_workbook_copy_sheet(fm_workbook_t* wb, size_t source_index, size_t insert_before,
                                           const char* new_name, size_t* out_sheet_index);
@@ -9563,7 +9563,7 @@ FM_API fm_status_t fm_sheet_get_image(const fm_workbook_t* wb, size_t sheet_inde
  *         exceed the reader's limits;
  *         `FM_STATUS_IO_IMAGE_UNSUPPORTED` (5023) when `bytes` is not a recognised image;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
- *         or was retained from an `.xlsb` package. The workbook is then
+ *         or is an `.xlsb` drawing the reader could not lift. The workbook is then
  *         unchanged.
  */
 FM_API fm_status_t fm_sheet_add_image(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes, size_t len,
@@ -9582,7 +9582,7 @@ FM_API fm_status_t fm_sheet_add_image(fm_workbook_t* wb, size_t sheet_index, con
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the sheet is a chartsheet, whose
  *         drawing is not editable;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
- *         or was retained from an `.xlsb` package.
+ *         or is an `.xlsb` drawing the reader could not lift.
  */
 FM_API fm_status_t fm_sheet_remove_drawing(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id);
 
@@ -9607,7 +9607,7 @@ FM_API fm_status_t fm_sheet_remove_drawing(fm_workbook_t* wb, size_t sheet_index
  *         id;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `anchor == NULL`;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
- *         or was retained from an `.xlsb` package.
+ *         or is an `.xlsb` drawing the reader could not lift.
  */
 FM_API fm_status_t fm_sheet_set_drawing_anchor(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                const fm_drawing_anchor_t* anchor);
@@ -9623,7 +9623,7 @@ FM_API fm_status_t fm_sheet_set_drawing_anchor(fm_workbook_t* wb, size_t sheet_i
  *         empty or not valid UTF-8, or the sheet has no picture or chart with
  *         that id;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
- *         or was retained from an `.xlsb` package.
+ *         or is an `.xlsb` drawing the reader could not lift.
  */
 FM_API fm_status_t fm_sheet_set_drawing_name(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                              const char* name);
@@ -9643,7 +9643,7 @@ FM_API fm_status_t fm_sheet_set_drawing_name(fm_workbook_t* wb, size_t sheet_ind
  *         has no picture or chart with that id, or `z_order_index` is not less than
  *         the object count;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
- *         or was retained from an `.xlsb` package.
+ *         or is an `.xlsb` drawing the reader could not lift.
  */
 FM_API fm_status_t fm_sheet_set_drawing_z_order(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                 size_t z_order_index);
@@ -9665,7 +9665,7 @@ FM_API fm_status_t fm_sheet_set_drawing_z_order(fm_workbook_t* wb, size_t sheet_
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the sheet
  *         has no picture or chart with that id;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
- *         or was retained from an `.xlsb` package.
+ *         or is an `.xlsb` drawing the reader could not lift.
  */
 FM_API fm_status_t fm_sheet_snapshot_drawing(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                              uint8_t** out_bytes, size_t* out_len);
@@ -9692,7 +9692,7 @@ FM_API fm_status_t fm_sheet_snapshot_drawing(const fm_workbook_t* wb, size_t she
  *         held by another kind of object, or the package would exceed the
  *         reader's limits;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
- *         or was retained from an `.xlsb` package. The workbook is then
+ *         or is an `.xlsb` drawing the reader could not lift. The workbook is then
  *         unchanged.
  */
 FM_API fm_status_t fm_sheet_restore_drawing(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes, size_t len,
@@ -9832,7 +9832,7 @@ FM_API fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_inde
  *         before `from`, a fill or outline that is neither solid nor none,
  *         or text with control characters;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
- *         or was retained from an `.xlsb` package.
+ *         or is an `.xlsb` drawing the reader could not lift.
  */
 FM_API fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index, const fm_shape_t* spec,
                                       uint32_t* out_object_id);
@@ -9977,7 +9977,7 @@ FM_API fm_status_t fm_sheet_get_slicer(const fm_workbook_t* wb, size_t sheet_ind
  *         `FM_STATUS_INVALID_ARGUMENT` (2) for a bad table, column, field bit,
  *         anchor, column count, row height or text with control characters;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
- *         or was retained from an `.xlsb` package.
+ *         or is an `.xlsb` drawing the reader could not lift.
  */
 FM_API fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index, size_t table_index, size_t column_index,
                                        const fm_slicer_t* spec, uint32_t* out_object_id);
@@ -10196,7 +10196,7 @@ FM_API fm_status_t fm_sheet_remove_sparkline_group(fm_workbook_t* wb, size_t she
  * axis, or an enum value outside its domain; `FM_STATUS_IO_CHART_UNPARSEABLE` (5025)
  * when the chart part does not parse; `FM_STATUS_IO_CHART_UNSUPPORTED_KIND` (5027) for
  * an edit to a chartex chart; `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) for an edit to
- * a chart on a drawing retained from an `.xlsb` package. A failed edit
+ * a chart on an `.xlsb` drawing the reader could not lift. A failed edit
  * leaves the workbook unchanged.
  */
 
@@ -11176,7 +11176,7 @@ typedef struct {
  *         `FM_STATUS_IO_CHART_INVALID_REFERENCE` (5026) when `source` does not resolve to
  *         one rectangle;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
- *         or was retained from an `.xlsb` package. The workbook is then
+ *         or is an `.xlsb` drawing the reader could not lift. The workbook is then
  *         unchanged.
  */
 FM_API fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index, const fm_chart_insert_t* opts,

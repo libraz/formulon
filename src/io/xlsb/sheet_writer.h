@@ -30,6 +30,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "io/xlsb/ptg_writer.h"
@@ -75,12 +76,15 @@ std::size_t unwritten_protected_range_count(const Sheet& sheet);
 /// encoded are left out and added to `*deferred_sparkline_groups`.
 /// `hyperlink_ids` is `hyperlink_relationship_ids(sheet)`, which the caller
 /// also needs for the sheet's relationships part.
+/// `owns_drawing` drops every retained BrtDrawing record; a non-empty
+/// `drawing_rel_id` then writes the one record naming the sheet's drawing.
 Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const Sheet& sheet, SstBuilder& sst, const std::vector<std::string>& sheet_names,
     const SheetRangeTable& sheet_ranges, const NameTable& name_table, const std::vector<std::string>& hyperlink_ids,
     std::uint32_t* downgraded_formula_count = nullptr, std::uint32_t dynamic_array_ifmd = 0,
     const NameShapes& name_shapes = NameShapes(), const std::vector<std::string>& table_part_rel_ids = {},
-    std::uint32_t workbook_views = 1U, std::uint32_t* deferred_sparkline_groups = nullptr);
+    std::uint32_t workbook_views = 1U, std::uint32_t* deferred_sparkline_groups = nullptr,
+    std::string_view drawing_rel_id = {}, bool owns_drawing = false);
 
 }  // namespace xlsb
 }  // namespace io

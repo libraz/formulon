@@ -35,6 +35,7 @@
 #include "io/ooxml/relationship_xml.h"
 #include "io/ooxml/rels_walker.h"
 #include "io/ooxml_defs.h"
+#include "io/xlsb/drawing_record.h"
 #include "io/xlsb/external_link_reader.h"
 #include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/package_loader.h"
@@ -374,6 +375,85 @@ Expected<void, Error> ResolveSheetHyperlinks(Sheet& sheet, std::vector<UnknownRe
   return Expected<void, Error>::Ok();
 }
 
+/// Why `LiftSheetDrawing` left a sheet's drawing retained, or empty when it
+/// lifted it (or the sheet has no drawing at all).
+std::string_view DrawingLiftRefusal(const Sheet& sheet, const DrawingRecordScan& scan, const ContentTypesView& ct_view,
+                                    const ZipReader& zip, const UnknownRelationship** lifted) {
+  if (scan.count != 1U || !scan.parsed) {
+    return "record_count";
+  }
+  if (!scan.rel_id) {
+    return "payload";
+  }
+  std::size_t drawing_rels = 0;
+  std::size_t same_id = 0;
+  const UnknownRelationship* matched = nullptr;
+  for (const UnknownRelationship& rel : sheet.unknown_relationships()) {
+    if (rel.id == *scan.rel_id) {
+      ++same_id;
+    }
+    if (rel.type == kRelDrawing) {
+      ++drawing_rels;
+      if (rel.id == *scan.rel_id) {
+        matched = &rel;
+      }
+    }
+  }
+  if (same_id > 1U || drawing_rels > 1U) {
+    return "rel_count";
+  }
+  if (matched == nullptr) {
+    return "rel_missing";
+  }
+  if (matched->target_external) {
+    return "rel_external";
+  }
+  if (!ooxml::is_safe_part_name(matched->target) || !zip.has_entry(matched->target)) {
+    return "part_absent";
+  }
+  // The first Override naming the part is the one passthrough capture keeps.
+  const auto it = std::find_if(ct_view.overrides.begin(), ct_view.overrides.end(),
+                               [matched](const auto& entry) { return entry.first == matched->target; });
+  if (it == ct_view.overrides.end() || it->second != kCtDrawing) {
+    return "content_type";
+  }
+  *lifted = matched;
+  return {};
+}
+
+/// Moves a sheet's drawing from the retained tail record and its unknown
+/// relationship onto `Sheet::drawing_rel_target`, which makes it editable as
+/// an OOXML drawing is. A drawing that does not meet every condition stays
+/// retained as before and is logged; the drawing part and everything it
+/// reaches stay passthrough either way.
+void LiftSheetDrawing(Sheet& sheet, std::size_t sheet_index, const ContentTypesView& ct_view, const ZipReader& zip) {
+  const DrawingRecordScan scan = scan_drawing_records(sheet.xlsb_tail().after_hyperlinks);
+  const bool has_drawing_rel = std::any_of(sheet.unknown_relationships().begin(), sheet.unknown_relationships().end(),
+                                           [](const UnknownRelationship& rel) { return rel.type == kRelDrawing; });
+  if (scan.count == 0U && !has_drawing_rel) {
+    return;
+  }
+  const UnknownRelationship* lifted = nullptr;
+  const std::string_view refusal = DrawingLiftRefusal(sheet, scan, ct_view, zip, &lifted);
+  if (lifted == nullptr) {
+    StructuredLog("xlsb.reader.drawing_retained")
+        .field("sheet_index", static_cast<std::int64_t>(sheet_index))
+        .field("reason", refusal)
+        .warn();
+    return;
+  }
+  XlsbSheetTail tail = sheet.xlsb_tail();
+  strip_drawing_records(tail.after_hyperlinks);
+  sheet.set_xlsb_tail(std::move(tail));
+  sheet.set_drawing_rel_target(lifted->target);
+  const std::string rel_id = lifted->id;
+  std::vector<UnknownRelationship> rels = sheet.unknown_relationships();
+  rels.erase(
+      std::remove_if(rels.begin(), rels.end(), [&rel_id](const UnknownRelationship& rel) { return rel.id == rel_id; }),
+      rels.end());
+  sheet.set_unknown_relationships(std::move(rels));
+}
+
 }  // namespace
 
 Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
@@ -654,6 +734,11 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
 
   // Table parts the sheets relate to, through the relationships stored above.
   load_xlsb_tables(wb, std::move(table_parts), sheet_names, name_table, sheet_ranges, external_books, consumed_parts);
+
+  // Drawings the sheets link through one BrtDrawing record and its relationship.
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    LiftSheetDrawing(wb.sheet(i), i, ct_view, zip);
+  }
 
   // Pivot caches and tables, reached through the sheet relationships the
   // loop above stored. Runs after every sheet is decoded because a table

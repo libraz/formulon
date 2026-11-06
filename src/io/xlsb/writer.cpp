@@ -29,11 +29,13 @@
 #include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
 #include "io/ooxml/package_validator.h"
+#include "io/ooxml/part_dom.h"
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml/workbook_xml_builder.h"
 #include "io/ooxml/zip_part_writer.h"
 #include "io/ooxml_defs.h"
 #include "io/passthrough_part_index.h"
+#include "io/xlsb/drawing_record.h"
 #include "io/xlsb/external_link_writer.h"
 #include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/protection_records.h"
@@ -120,6 +122,10 @@ struct EmissionPlan {
   std::size_t external_link_count = 0;
   /// Table parts generated from the model, per sheet.
   std::vector<std::vector<XlsbTablePart>> sheet_tables;
+  /// Relationship id of each sheet's linked drawing; empty when not linked.
+  std::vector<std::string> sheet_drawing_rids;
+  /// Sheets whose model drawing replaces retained drawing relationships.
+  std::vector<bool> sheet_owns_drawing;
 };
 
 void ReportDeferred(std::uint32_t* count, std::string_view kind, std::size_t items, std::size_t sheet_index) {
@@ -189,9 +195,6 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
     ReportDeferred(&count, "auto_filter", sheet.has_auto_filter() ? 1U : 0U, i);
     ReportDeferred(&count, "comments", sheet.comments().size(), i);
     ReportDeferred(&count, "threaded_comments", sheet.threaded_comments().size(), i);
-    // A drawing read from (or inserted into) an OOXML package has no
-    // binary relationship here; only `.xlsb`-retained drawings survive.
-    ReportDeferred(&count, "drawings", sheet.drawing_rel_target().empty() ? 0U : 1U, i);
     ReportDeferred(&count, "pivot_tables", pivots_survive_via_passthrough ? 0U : sheet.pivot_tables().size(), i);
     const SheetPrintSettings& print = sheet.print_settings();
     const bool has_print = !print.sheet_pr_xml.empty() || !print.page_margins_xml.empty() ||
@@ -262,6 +265,41 @@ bool IsXlsxOnlyMetadataPart(const std::string& path) {
 bool IsExternalLinkPart(const std::string& path) {
   constexpr std::string_view kPrefix = "xl/externalLinks/";
   return strings::starts_with(path, kPrefix);
+}
+
+/// Whether the model drawing of `sheet` (which has a target) can be linked
+/// from the sheet. A missing part is a dropped relationship; a part the XLSB
+/// package cannot carry, or a tail the record cannot be spliced into, is a
+/// deferred drawing.
+bool DrawingIsLinkable(const Workbook& wb, const Sheet& sheet, std::size_t sheet_index, WriteDiagnostics* diagnostics) {
+  const std::string& target = sheet.drawing_rel_target();
+  const PassthroughPart* part = ooxml::is_safe_part_name(target) ? ooxml::find_passthrough_part(wb, target) : nullptr;
+  if (part == nullptr) {
+    StructuredLog("xlsb.writer.sheet_rel_skipped")
+        .field("reason", std::string_view("target_part_absent"))
+        .field("type", kRelDrawing)
+        .field("target", target)
+        .warn();
+    ++diagnostics->dropped_relationship_count;
+    return false;
+  }
+  const std::string_view xml(reinterpret_cast<const char*>(part->bytes.data()), part->bytes.size());
+  if (part->content_type != kCtDrawing || !drawing_frames_are_writable(xml) ||
+      !scan_drawing_records(sheet.xlsb_tail().after_hyperlinks).parsed) {
+    ReportDeferred(&diagnostics->deferred_feature_count, "drawings", 1U, sheet_index);
+    return false;
+  }
+  return true;
+}
+
+/// Smallest `rId<N>` not in `taken`.
+std::string FreshRelId(const std::unordered_set<std::string>& taken) {
+  for (std::size_t n = 1U;; ++n) {
+    std::string id = "rId" + std::to_string(n);
+    if (taken.count(id) == 0U) {
+      return id;
+    }
+  }
 }
 
 /// Package paths of the 1-based `position`-th worksheet part and its rels.
@@ -538,9 +576,13 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     }
     for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
       bool has_emitted_sheet_rels = (i < plan.sheet_tables.size() && !plan.sheet_tables[i].empty()) ||
+                                    !plan.sheet_drawing_rids[i].empty() ||
                                     std::any_of(wb.sheet(i).hyperlinks().begin(), wb.sheet(i).hyperlinks().end(),
                                                 [](const Hyperlink& hyperlink) { return !hyperlink.target.empty(); });
       for (const UnknownRelationship& rel : wb.sheet(i).unknown_relationships()) {
+        if (plan.sheet_owns_drawing[i] && rel.type == kRelDrawing) {
+          continue;
+        }
         if (rel.target_external) {
           has_emitted_sheet_rels = true;
           break;
@@ -596,11 +638,16 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
 // (drawings, tables, and similar features) continue to resolve. Model-owned
 // BrtHLink records are emitted separately and get ids from the same collision
 // set; a relationship whose target part is not in the package is dropped so
-// the emitted rels never dangle.
+// the emitted rels never dangle. A sheet owning a model drawing writes only
+// the drawing relationship named by `drawing_rid`, if any.
 std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, const std::vector<XlsbTablePart>& tables,
-                           const std::vector<std::string>& hyperlink_rids, WriteDiagnostics* diagnostics) {
+                           const std::vector<std::string>& hyperlink_rids, bool owns_drawing,
+                           const std::string& drawing_rid, WriteDiagnostics* diagnostics) {
   std::string entries;
   for (const UnknownRelationship& rel : sheet.unknown_relationships()) {
+    if (owns_drawing && rel.type == kRelDrawing) {
+      continue;
+    }
     if (!rel.target_external && !plan.passthrough_path_index.contains(plan.passthrough_kept, rel.target)) {
       StructuredLog("xlsb.writer.sheet_rel_skipped")
           .field("reason", std::string_view("target_part_absent"))
@@ -633,6 +680,10 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, const s
   }
   for (const XlsbTablePart& table : tables) {
     AppendRelationship(entries, table.rel_id, kRelTable, TargetRelativeToWorksheet(table.path),
+                       /*target_external=*/false, /*escape_target=*/true);
+  }
+  if (!drawing_rid.empty()) {
+    AppendRelationship(entries, drawing_rid, kRelDrawing, TargetRelativeToWorksheet(sheet.drawing_rel_target()),
                        /*target_external=*/false, /*escape_target=*/true);
   }
   if (entries.empty()) {
@@ -793,6 +844,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   std::vector<std::vector<XlsbTablePart>> sheet_tables(sheet_count);
   std::vector<std::vector<std::string>> sheet_hyperlink_rids;
   sheet_hyperlink_rids.reserve(sheet_count);
+  std::vector<std::string> sheet_drawing_rids(sheet_count);
+  std::vector<bool> sheet_owns_drawing(sheet_count, false);
   const std::uint32_t views = workbook_view_count(workbook.book_views_xml());
   for (std::size_t i = 0; i < sheet_count; ++i) {
     const NameTable sheet_name_table = BuildNameTableForScope(workbook, ordered_names, static_cast<std::int32_t>(i));
@@ -812,11 +865,18 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     std::vector<std::string> table_rel_ids;
     for (const XlsbTablePart& table : sheet_tables[i]) {
       table_rel_ids.push_back(table.rel_id);
+      taken_rel_ids.insert(table.rel_id);
+    }
+    // The drawing id avoids retained ids, a suppressed drawing's included.
+    sheet_owns_drawing[i] = !workbook.sheet(i).drawing_rel_target().empty();
+    if (sheet_owns_drawing[i] && DrawingIsLinkable(workbook, workbook.sheet(i), i, &diagnostics)) {
+      sheet_drawing_rids[i] = FreshRelId(taken_rel_ids);
     }
     std::uint32_t sparklines_lost = 0;
-    auto sheet_body_or = emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table,
-                                    sheet_hyperlink_rids[i], &downgraded_formula_count, dynamic_array.ifmd,
-                                    name_shapes(workbook, i), table_rel_ids, views, &sparklines_lost);
+    auto sheet_body_or =
+        emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],
+                   &downgraded_formula_count, dynamic_array.ifmd, name_shapes(workbook, i), table_rel_ids, views,
+                   &sparklines_lost, sheet_drawing_rids[i], sheet_owns_drawing[i]);
     ReportDeferred(&diagnostics.deferred_feature_count, "sparklines", sparklines_lost, i);
     if (!sheet_body_or) {
       return std::move(sheet_body_or.error());
@@ -832,6 +892,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   }
   EmissionPlan plan = plan_or.take();
   plan.sheet_tables = std::move(sheet_tables);
+  plan.sheet_drawing_rids = std::move(sheet_drawing_rids);
+  plan.sheet_owns_drawing = std::move(sheet_owns_drawing);
   const std::vector<const ExternalLinkRecord*> links = written_external_links(workbook);
   std::vector<std::string> link_rel_ids;
   link_rel_ids.reserve(links.size());
@@ -903,7 +965,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
       }
     }
     const std::string sheet_rels =
-        BuildSheetRels(workbook.sheet(i), plan, plan.sheet_tables[i], sheet_hyperlink_rids[i], &diagnostics);
+        BuildSheetRels(workbook.sheet(i), plan, plan.sheet_tables[i], sheet_hyperlink_rids[i],
+                       plan.sheet_owns_drawing[i], plan.sheet_drawing_rids[i], &diagnostics);
     if (!sheet_rels.empty()) {
       if (auto r = AddPart(writer.get(), sheet_rels_part_path(i + 1U), sheet_rels); !r) {
         return std::move(r.error());

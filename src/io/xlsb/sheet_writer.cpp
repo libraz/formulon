@@ -22,6 +22,7 @@
 #include "io/protection_xml.h"
 #include "io/xlsb/cell_writer.h"
 #include "io/xlsb/cf_records.h"
+#include "io/xlsb/drawing_record.h"
 #include "io/xlsb/dv_records.h"
 #include "io/xlsb/feature_formula.h"
 #include "io/xlsb/hyperlink_records.h"
@@ -326,7 +327,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const SheetRangeTable& sheet_ranges, const NameTable& name_table, const std::vector<std::string>& hyperlink_ids,
     std::uint32_t* downgraded_formula_count, std::uint32_t dynamic_array_ifmd, const NameShapes& name_shapes,
     const std::vector<std::string>& table_part_rel_ids, std::uint32_t workbook_views,
-    std::uint32_t* deferred_sparkline_groups) {
+    std::uint32_t* deferred_sparkline_groups, std::string_view drawing_rel_id, bool owns_drawing) {
   std::vector<std::uint8_t> body;
 
   // Frame: BrtBeginSheet | BrtBeginSheetData | ... | BrtEndSheetData |
@@ -589,6 +590,13 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
                                              deferred_sparkline_groups);
       !sparklines) {
     return std::move(sparklines.error());
+  }
+  // A model-owned drawing replaces any retained BrtDrawing record.
+  if (owns_drawing) {
+    strip_drawing_records(tail.after_hyperlinks);
+  }
+  if (!drawing_rel_id.empty()) {
+    splice_drawing(tail.after_hyperlinks, drawing_rel_id);
   }
   // Table parts are model-owned; their BrtListPart records join the tail.
   splice_list_parts(tail.after_hyperlinks, table_part_rel_ids);

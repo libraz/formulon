@@ -293,7 +293,7 @@ class Workbook {
   ///   * `kNotImplemented` when the source is not a worksheet or carries
   ///     content the copy cannot model: unrecognised relationships, slicers,
   ///     drawing objects other than pictures and charts, pivot charts, or a
-  ///     drawing retained from an `.xlsb` package.
+  ///     `.xlsb` drawing the reader could not lift.
   ///   * `kInvalidSheetName` when `new_name` fails validation or collides.
   Expected<std::size_t, Error> copy_sheet(std::size_t source, std::size_t insert_before,
                                           std::optional<std::string> new_name);

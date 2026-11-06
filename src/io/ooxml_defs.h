@@ -104,6 +104,9 @@ inline bool is_xlsb_workbook_content_type(std::string_view content_type) {
   return content_type == kCtWorkbookXlsb || content_type == kCtWorkbookXlsbAlt;
 }
 
+// Worksheet drawing part content type; an XML part in both package formats.
+inline constexpr std::string_view kCtDrawing = "application/vnd.openxmlformats-officedocument.drawing+xml";
+
 }  // namespace io
 }  // namespace formulon
 

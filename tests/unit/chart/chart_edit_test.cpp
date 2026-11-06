@@ -18,6 +18,7 @@
 #include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/ooxml/part_dom.h"
+#include "io/ooxml_defs.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "io/xlsb/reader.h"
@@ -25,6 +26,7 @@
 #include "passthrough_part.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "unknown_relationship.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -343,8 +345,25 @@ TEST(ChartEdit, InsertTitleLegendAndRefusals) {
   const Located x = Find(xlsb);
   EXPECT_TRUE(static_cast<bool>(get_chart(xlsb, x.sheet, x.id)));
   o.source = "Sheet1!$A$1:$C$5";
-  ExpectCode(insert_chart(xlsb, x.sheet, o), Code::kIoDrawingUnparseable);
-  ExpectCode(set_chart_title(xlsb, x.sheet, x.id, ChartTitle{}), Code::kIoDrawingUnparseable);
+  EXPECT_NE(Must(insert_chart(xlsb, x.sheet, o)), x.id);
+  ChartTitle title;
+  title.kind = ChartTitleKind::kText;
+  title.text = "Lifted";
+  MustOk(set_chart_title(xlsb, x.sheet, x.id, title));
+  EXPECT_EQ(Must(get_chart(xlsb, x.sheet, x.id)).title.text, "Lifted");
+
+  // A drawing reachable only through an unknown drawing relationship is the
+  // state an unliftable `.xlsb` drawing is left in.
+  Workbook retained = LoadFixture("chart_xlsb.xlsb");
+  Sheet& sheet = retained.sheet(x.sheet);
+  ASSERT_FALSE(sheet.drawing_rel_target().empty());
+  std::vector<UnknownRelationship> rels = sheet.unknown_relationships();
+  rels.push_back(UnknownRelationship{"rId9", std::string(io::kRelDrawing), sheet.drawing_rel_target(), false});
+  sheet.set_unknown_relationships(std::move(rels));
+  sheet.set_drawing_rel_target(std::string());
+  EXPECT_TRUE(static_cast<bool>(get_chart(retained, x.sheet, x.id)));
+  ExpectCode(insert_chart(retained, x.sheet, o), Code::kIoDrawingUnparseable);
+  ExpectCode(set_chart_title(retained, x.sheet, x.id, title), Code::kIoDrawingUnparseable);
 }
 
 TEST(ChartEdit, ChartexAndPivotRefusals) {
