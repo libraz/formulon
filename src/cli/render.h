@@ -65,6 +65,9 @@ inline std::string_view view_or_empty(const char* text) {
 /// Strings are JSON-escaped; numbers use `format_double`.
 std::string render_value_json(const fm_value_t& v);
 
+/// Returns `text` as a double-quoted, JSON-escaped string literal.
+std::string render_json_string(std::string_view text);
+
 }  // namespace cli
 }  // namespace formulon
 

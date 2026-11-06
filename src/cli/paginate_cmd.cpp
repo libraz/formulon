@@ -18,11 +18,12 @@ namespace formulon::cli {
 namespace {
 
 void print_paginate_usage(std::ostream& out) {
-  out << "Usage: formulon paginate [--sheet INDEX] [--] <in>\n"
+  out << "Usage: formulon paginate [--sheet INDEX] [--json] [--] <in>\n"
       << "\n"
       << "Resolve a worksheet's print area, automatic page breaks, and physical page count.\n"
       << "INDEX is zero-based and defaults to 0. print_area lists A1 ranges (e.g. B2:D5);\n"
       << "break positions are zero-based. <in> is an xlsx or xlsb file.\n"
+      << "  --json       print the sheet's name and one A1 range per physical page as JSON\n"
       << "  --           end options; the next token is the input path\n";
   print_shared_options(out);
 }
@@ -44,6 +45,7 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
   std::size_t sheet_index = 0;
   bool input_seen = false;
   bool options_ended = false;
+  bool want_json = false;
   SharedOptions shared;
   int exit_code = 0;
   for (std::size_t i = 0; i < args.size(); ++i) {
@@ -56,6 +58,10 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
         return exit_code;
       case CommonOption::kNotCommon:
         break;
+    }
+    if (!options_ended && arg == "--json") {
+      want_json = true;
+      continue;
     }
     if (!options_ended && arg == "--sheet") {
       if (i + 1 == args.size() || !parse_sheet_index(args[i + 1], sheet_index)) {
@@ -89,6 +95,30 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
   if (const auto status = fm_pagination_get_page_count(pagination.handle, &page_count); status != 0) {
     emit_last_error(err, "paginate");
     return status;
+  }
+  if (want_json) {
+    const char* sheet_name = nullptr;
+    if (const auto status = fm_workbook_get_sheet_name(workbook.handle, sheet_index, &sheet_name); status != 0) {
+      emit_last_error(err, "paginate");
+      return status;
+    }
+    std::string doc =
+        "{\"format\":1,\"sheets\":[{\"name\":" + render_json_string(view_or_empty(sheet_name)) + ",\"pages\":[";
+    for (std::size_t i = 0; i < page_count; ++i) {
+      fm_page_layout_t page{};
+      if (const auto status = fm_pagination_get_page_at(pagination.handle, i, &page); status != 0) {
+        emit_last_error(err, "paginate");
+        return status;
+      }
+      if (i != 0) {
+        doc.push_back(',');
+      }
+      doc += "{\"range\":\"" + format_a1(page.rect.first_row, page.rect.first_col) + ':' +
+             format_a1(page.rect.last_row, page.rect.last_col) + "\"}";
+    }
+    doc += "]}]}\n";
+    out << doc;
+    return flush_output(out, err, "paginate");
   }
   std::size_t print_area_count = 0;
   if (const auto status = fm_pagination_get_print_area_count(pagination.handle, &print_area_count); status != 0) {

@@ -41,6 +41,7 @@ void print_eval_usage(std::ostream& out) {
       << "Evaluate <formula> on a fresh empty workbook and print the result.\n"
       << "Cell-level Excel errors (#NAME?, #DIV/0!, ...) print to stdout and\n"
       << "do NOT cause a non-zero exit code; only structural failures do.\n"
+      << "Malformed input is not an error: a formula that does not parse evaluates to #NAME?.\n"
       << "  --json       print each value as {\"kind\":...,\"value\":...} JSON\n"
       << "  --repeat N   evaluate N times and report the elapsed time on stderr\n"
       << "  --           end options; the next token is the formula\n"
@@ -74,13 +75,13 @@ int render_eval_result(const fm_value_array_t* result, bool want_json, std::ostr
   uint32_t cols = 0;
   if (auto rc = fm_value_array_get_dimensions(result, &rows, &cols); rc != 0) {
     emit_last_error(err, "eval");
-    return rc;
+    return kExitFailure;
   }
   if (want_json && rows == 1 && cols == 1) {
     fm_value_t value{};
     if (auto rc = fm_value_array_get_value_at(result, 0, &value); rc != 0) {
       emit_last_error(err, "eval");
-      return rc;
+      return kExitFailure;
     }
     out << render_value_json(value) << '\n';
     return 0;
@@ -183,16 +184,16 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
   WorkbookGuard wb;
   if (auto rc = fm_workbook_create_empty(&wb.handle); rc != 0) {
     emit_last_error(err, "eval");
-    return rc;
+    return kExitFailure;
   }
   if (auto rc = apply_shared_options(wb.handle, shared); rc != 0) {
     emit_last_error(err, "eval");
-    return rc;
+    return kExitFailure;
   }
   std::size_t sheet_index = 0;
   if (auto rc = fm_workbook_add_sheet(wb.handle, "Sheet1", &sheet_index); rc != 0) {
     emit_last_error(err, "eval");
-    return rc;
+    return kExitFailure;
   }
   // Evaluate ad hoc at A1. This keeps evaluation side-effect free: `=A1+1`
   // sees the empty cell instead of creating a circular A1 formula.
@@ -209,13 +210,13 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
     result.handle = nullptr;
     if (auto rc = fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, formula_str.c_str(), &result.handle); rc != 0) {
       emit_last_error(err, "eval");
-      return rc;
+      return kExitFailure;
     }
   }
   const auto elapsed = Clock::now() - t0;
 
-  if (auto rc = render_eval_result(result.handle, want_json, out, err); rc != 0) {
-    return rc;
+  if (render_eval_result(result.handle, want_json, out, err) != 0) {
+    return kExitFailure;
   }
 
   if (const auto rc = flush_output(out, err, "eval"); rc != 0) {

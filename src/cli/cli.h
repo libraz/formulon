@@ -62,9 +62,7 @@ inline void print_profile_ids(std::ostream& out) {
 inline void print_shared_options(std::ostream& out) {
   out << "  --profile <id>        Select the Excel formula profile (default: "
       << excel_profile_id(default_excel_profile()) << ").\n"
-      << "                        Supported ids: ";
-  print_profile_ids(out);
-  out << ".\n"
+      << "                        Profiles: see 'formulon profiles'\n"
       << "  --now <date[Thh:mm:ss]>\n"
       << "                        Pin the clock NOW, TODAY and relative date filters\n"
       << "                        read, as local wall time (e.g. 2026-10-09T09:30:00;\n"
@@ -128,6 +126,9 @@ inline fm_status_t apply_shared_options(fm_workbook_t* workbook, const SharedOpt
   return 0;
 }
 
+/// Generic failure exit code for engine, I/O and output errors.
+inline constexpr int kExitFailure = 1;
+
 /// Generic usage exit code. Mirrors sysexits(3) `EX_USAGE = 64`.
 inline constexpr int kExitUsage = 64;
 
@@ -139,7 +140,7 @@ constexpr int exit_code_for_status(int status) {
   if (status == 0) {
     return 0;
   }
-  return status == kExitUsage ? kExitUsage : 1;
+  return status == kExitUsage ? kExitUsage : kExitFailure;
 }
 
 /// Flushes a command's primary output and turns a stream failure into the
@@ -306,14 +307,21 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err);
 ///
 /// Supported flags: the common options above and (mutually exclusive): `--formulas` (default),
 /// `--values`, `--sheets`, `--metadata`, `-h | --help`, and `--` to end
-/// option parsing before an input path.
+/// option parsing before an input path. `--json` prints the cells of every
+/// sheet as one JSON object and cannot be combined with `--sheets` or
+/// `--metadata`.
 int run_dump(const ArgList& args, std::ostream& out, std::ostream& err);
 
 /// `paginate` handler: resolve the print geometry of one worksheet.
 ///
 /// Supported flags: the common options above, `--sheet INDEX` (0-based,
-/// default 0), and `--` to end option parsing before an input path.
+/// default 0), `--json` (one JSON object with the sheet's page ranges),
+/// and `--` to end option parsing before an input path.
 int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err);
+
+/// `profiles` handler: print every supported Excel profile id, one per line
+/// (or as one JSON object with `--json`).
+int run_profiles(const ArgList& args, std::ostream& out, std::ostream& err);
 
 /// Prints the top-level usage banner to `out`. Requested help is a
 /// primary output too, so the banner is flushed through `flush_output`

@@ -11,6 +11,8 @@ set(FORMULON_CLI_TEST_SOURCES
   cli_recalc_semantics_test.cpp
   cli_atomic_paths_test.cpp
   cli_dump_paginate_test.cpp
+  cli_json_test.cpp
+  cli_profiles_test.cpp
   cli_plain_escape_test.cpp
   cli_test_support.cpp
   # `cli/file_io.cpp`: the atomic-write helper ships only in the CLI

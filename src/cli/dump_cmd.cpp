@@ -42,13 +42,15 @@ std::string escape_c_string(const char* text) {
 }
 
 void print_dump_usage(std::ostream& out) {
-  out << "Usage: formulon dump [--formulas|--values|--sheets|--metadata] [--] <in>\n"
+  out << "Usage: formulon dump [--formulas|--values|--sheets|--metadata] [--json] [--] <in>\n"
       << "\n"
       << "Print a diff-friendly snapshot of <in>, an xlsx or xlsb file:\n"
       << "  --formulas  list every formula cell (default)\n"
       << "  --values    recalculate, then list every non-blank cell with its rendered value\n"
       << "  --sheets    list sheet names in document order\n"
       << "  --metadata  list defined names, tables and passthrough parts\n"
+      << "  --json      print every non-blank or formula cell of every sheet as one JSON object\n"
+      << "              (with --formulas or --values; not with --sheets or --metadata)\n"
       << "  --           end options; the next token is the input path\n"
       << "Plain output escapes only \\n, \\r, \\t and \\\\.\n";
   print_shared_options(out);
@@ -87,6 +89,61 @@ fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, std::ostream& out
           << (formulas ? escape_single_line(formula) : escape_single_line(render_value(v))) << '\n';
     }
   }
+  return 0;
+}
+
+// Emits `{"format":1,"sheets":[{"name":...,"cells":[...]}]}` as one document.
+// A cell is listed when it holds a formula or a non-blank value; `kind` and
+// `value` are the `eval --json` rendering, and `formula` appears on formula
+// cells only. The document is assembled before anything is written so a
+// failure leaves `out` untouched.
+fm_status_t dump_cells_json(const fm_workbook_t* wb, std::ostream& out) {
+  std::size_t n_sheets = 0;
+  if (auto rc = fm_workbook_get_sheet_count(wb, &n_sheets); rc != 0) {
+    return rc;
+  }
+  std::string doc = "{\"format\":1,\"sheets\":[";
+  for (std::size_t s = 0; s < n_sheets; ++s) {
+    const char* sheet_name = nullptr;
+    if (auto rc = fm_workbook_get_sheet_name(wb, s, &sheet_name); rc != 0) {
+      return rc;
+    }
+    std::size_t cell_count = 0;
+    if (auto rc = fm_sheet_get_cell_count(wb, s, &cell_count); rc != 0) {
+      return rc;
+    }
+    if (s != 0) {
+      doc.push_back(',');
+    }
+    doc += "{\"name\":" + render_json_string(view_or_empty(sheet_name)) + ",\"cells\":[";
+    bool first_cell = true;
+    for (std::size_t i = 0; i < cell_count; ++i) {
+      std::uint32_t row = 0;
+      std::uint32_t col = 0;
+      const char* formula = nullptr;
+      fm_value_t v{};
+      if (auto rc = fm_sheet_get_cell_at(wb, s, i, &row, &col, &formula, &v); rc != 0) {
+        return rc;
+      }
+      if (formula == nullptr && v.kind == FM_VAL_BLANK) {
+        continue;
+      }
+      if (!first_cell) {
+        doc.push_back(',');
+      }
+      first_cell = false;
+      // `render_value_json` yields `{"kind":...,"value":...}`; splice its members.
+      const std::string value_json = render_value_json(v);
+      doc += "{\"ref\":\"" + format_a1(row, col) + "\"," + value_json.substr(1, value_json.size() - 2);
+      if (formula != nullptr) {
+        doc += ",\"formula\":" + render_json_string(formula);
+      }
+      doc.push_back('}');
+    }
+    doc += "]}";
+  }
+  doc += "]}\n";
+  out << doc;
   return 0;
 }
 
@@ -194,6 +251,7 @@ constexpr DumpModeFlag kDumpModeFlags[] = {
 int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
   DumpMode mode = DumpMode::kFormulas;
   bool mode_set = false;
+  bool want_json = false;
   std::string input_path;
   bool input_seen = false;
   bool options_ended = false;
@@ -220,6 +278,10 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
       case CommonOption::kNotCommon:
         break;
     }
+    if (!options_ended && a == "--json") {
+      want_json = true;
+      continue;
+    }
     const DumpModeFlag* mode_flag = nullptr;
     for (const DumpModeFlag& candidate : kDumpModeFlags) {
       if (!options_ended && a == candidate.flag) {
@@ -242,6 +304,10 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
   if (!input_seen) {
     return missing_positional("dump", "input path", print_dump_usage, err);
   }
+  if (want_json && (mode == DumpMode::kSheets || mode == DumpMode::kMetadata)) {
+    err << "formulon: dump: --json cannot be combined with --sheets or --metadata\n";
+    return kExitUsage;
+  }
 
   WorkbookGuard wb;
   if (auto rc = load_workbook_file(input_path, shared, wb, err, "dump"); rc != 0) {
@@ -262,7 +328,7 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
   switch (mode) {
     case DumpMode::kFormulas:
     case DumpMode::kValues:
-      rc = dump_cells(wb.handle, mode, out);
+      rc = want_json ? dump_cells_json(wb.handle, out) : dump_cells(wb.handle, mode, out);
       break;
     case DumpMode::kSheets:
       rc = dump_sheets(wb.handle, out);

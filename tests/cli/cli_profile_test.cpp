@@ -144,24 +144,17 @@ TEST(FormulonCli, LastProfileFlagWins) {
 
 TEST(FormulonCli, ProfileFlagAppearsInTopAndSubcommandHelp) {
   const std::array<const char*, 4> commands = {"eval", "recalc", "dump", "paginate"};
-  const std::array<std::string_view, 4> ids = {"win-365-ja_JP", "mac-365-ja_JP", "win-365-en_US", "mac-365-en_US"};
 
   const CliRun top = run_cli({"--help"});
   ASSERT_EQ(top.exit_code, 0) << top.stderr_text;
-  for (const std::string_view id : ids) {
-    EXPECT_NE(top.stdout_text.find(id), std::string::npos) << id;
-  }
   EXPECT_NE(top.stdout_text.find("--profile <id>"), std::string::npos);
-  EXPECT_NE(top.stdout_text.find("win-365-en_US"), std::string::npos);
+  EXPECT_NE(top.stdout_text.find("Profiles: see 'formulon profiles'"), std::string::npos);
 
   for (const char* command : commands) {
     const CliRun help = run_cli({command, "--help"});
     ASSERT_EQ(help.exit_code, 0) << command << " stderr=" << help.stderr_text;
     EXPECT_NE(help.stdout_text.find("--profile <id>"), std::string::npos) << command;
-    for (const std::string_view id : ids) {
-      EXPECT_NE(help.stdout_text.find(id), std::string::npos) << command << " " << id;
-    }
-    EXPECT_NE(help.stdout_text.find("win-365-en_US"), std::string::npos) << command;
+    EXPECT_NE(help.stdout_text.find("Profiles: see 'formulon profiles'"), std::string::npos) << command;
   }
 }
 

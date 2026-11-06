@@ -199,5 +199,13 @@ std::string render_value_json(const fm_value_t& v) {
   return out;
 }
 
+std::string render_json_string(std::string_view text) {
+  std::string out;
+  out.push_back('"');
+  append_json_escaped(out, text);
+  out.push_back('"');
+  return out;
+}
+
 }  // namespace cli
 }  // namespace formulon

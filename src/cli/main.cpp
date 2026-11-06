@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "cli/cli.h"
+#include "cli/render.h"
 
 namespace {
 
@@ -30,8 +31,10 @@ void print_top_usage(std::ostream& out) {
       << "                          --values recalculates first; the others do not.\n"
       << "  paginate [--sheet N] <in>\n"
       << "                          Resolve print area (A1 ranges), page breaks, and page count.\n"
+      << "  profiles [--json]       List the supported Excel profile ids, one per line.\n"
       << "\n"
       << "<in> and <out> are xlsx or xlsb files. eval accepts --json and --repeat N;\n"
+      << "dump, paginate and profiles accept --json;\n"
       << "recalc accepts -o/--output, --iterative, --threads N and --quiet; every\n"
       << "subcommand accepts -- to end options.\n"
       << "Plain output escapes only \\n, \\r, \\t and \\\\.\n"
@@ -55,6 +58,51 @@ namespace cli {
 int print_usage(std::ostream& out, std::ostream& err) {
   print_top_usage(out);
   return flush_output(out, err, "help");
+}
+
+namespace {
+
+void print_profiles_usage(std::ostream& out) {
+  out << "Usage: formulon profiles [--json] [--]\n"
+      << "\n"
+      << "Print every supported Excel profile id, one per line.\n"
+      << "  --json       print {\"format\":1,\"profiles\":[...]} instead\n";
+}
+
+}  // namespace
+
+int run_profiles(const ArgList& args, std::ostream& out, std::ostream& err) {
+  bool want_json = false;
+  bool options_ended = false;
+  for (const std::string_view arg : args) {
+    if (!options_ended && arg == "--") {
+      options_ended = true;
+    } else if (!options_ended && (arg == "-h" || arg == "--help")) {
+      print_profiles_usage(out);
+      return flush_output(out, err, "profiles");
+    } else if (!options_ended && arg == "--version") {
+      return print_version(out, err);
+    } else if (!options_ended && arg == "--json") {
+      want_json = true;
+    } else {
+      err << "formulon: profiles: unexpected argument '" << arg << "'\n";
+      return kExitUsage;
+    }
+  }
+  if (want_json) {
+    out << "{\"format\":1,\"profiles\":[";
+    const char* separator = "";
+    for (const detail::ExcelProfileIdEntry& entry : detail::kExcelProfileIds) {
+      out << separator << render_json_string(entry.id);
+      separator = ",";
+    }
+    out << "]}\n";
+  } else {
+    for (const detail::ExcelProfileIdEntry& entry : detail::kExcelProfileIds) {
+      out << entry.id << '\n';
+    }
+  }
+  return flush_output(out, err, "profiles");
 }
 
 }  // namespace cli
@@ -92,6 +140,8 @@ int main(int argc, char** argv) {
     rc = formulon::cli::run_dump(args, std::cout, std::cerr);
   } else if (cmd == "paginate") {
     rc = formulon::cli::run_paginate(args, std::cout, std::cerr);
+  } else if (cmd == "profiles") {
+    rc = formulon::cli::run_profiles(args, std::cout, std::cerr);
   } else {
     std::cerr << "formulon: unknown command '" << cmd << "'\n";
     print_top_usage(std::cerr);
