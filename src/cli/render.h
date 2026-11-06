@@ -36,12 +36,6 @@
 namespace formulon {
 namespace cli {
 
-/// Appends the bijective base-26 column letters for `col` (0-based) to
-/// `out`. `col == 0` yields `"A"`, `col == 25` yields `"Z"`,
-/// `col == 26` yields `"AA"`, and so on through Excel's `XFD` cap at
-/// `col == 16383`.
-void append_column_letters(std::string& out, std::uint32_t col);
-
 /// Returns the A1-style cell address (e.g. `"A1"`) for `(row, col)`,
 /// both 0-based.
 std::string format_a1(std::uint32_t row, std::uint32_t col);
@@ -60,6 +54,10 @@ std::string escape_single_line(std::string_view text);
 inline std::string_view view_or_empty(const char* text) {
   return text != nullptr ? std::string_view(text) : std::string_view{};
 }
+
+/// Appends the members `"kind":"...","value":...` of the `v` JSON object,
+/// without the surrounding braces.
+void append_value_json_members(std::string& out, const fm_value_t& v);
 
 /// Renders `v` as a JSON object: `{"kind": "...", "value": ...}`.
 /// Strings are JSON-escaped; numbers use `format_double`.

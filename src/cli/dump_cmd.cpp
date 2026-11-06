@@ -56,10 +56,10 @@ void print_dump_usage(std::ostream& out) {
   print_shared_options(out);
 }
 
-// Emits every formula cell (`Sheet!A1 =formula`) or, for `kValues`, every
-// non-blank cell (`Sheet!A1 <rendered>`) on every sheet.
-fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, std::ostream& out) {
-  const bool formulas = mode == DumpMode::kFormulas;
+// Calls `visit(sheet_index, sheet_name)` for every sheet in document order,
+// stopping at the first non-zero status from a C call or from `visit`.
+template <typename SheetVisitor>
+fm_status_t for_each_sheet(const fm_workbook_t* wb, SheetVisitor&& visit) {
   std::size_t n_sheets = 0;
   if (auto rc = fm_workbook_get_sheet_count(wb, &n_sheets); rc != 0) {
     return rc;
@@ -69,27 +69,48 @@ fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, std::ostream& out
     if (auto rc = fm_workbook_get_sheet_name(wb, s, &sheet_name); rc != 0) {
       return rc;
     }
-    const std::string escaped_sheet_name = escape_c_string(sheet_name);
-    std::size_t cell_count = 0;
-    if (auto rc = fm_sheet_get_cell_count(wb, s, &cell_count); rc != 0) {
+    if (auto rc = visit(s, sheet_name); rc != 0) {
       return rc;
-    }
-    for (std::size_t i = 0; i < cell_count; ++i) {
-      std::uint32_t row = 0;
-      std::uint32_t col = 0;
-      const char* formula = nullptr;
-      fm_value_t v{};
-      if (auto rc = fm_sheet_get_cell_at(wb, s, i, &row, &col, &formula, &v); rc != 0) {
-        return rc;
-      }
-      if (formulas ? formula == nullptr : v.kind == FM_VAL_BLANK) {
-        continue;
-      }
-      out << escaped_sheet_name << '!' << format_a1(row, col) << ' '
-          << (formulas ? escape_single_line(formula) : escape_single_line(render_value(v))) << '\n';
     }
   }
   return 0;
+}
+
+// Calls `visit(row, col, formula, value)` for every cell of sheet `s` in the
+// order `fm_sheet_get_cell_at` enumerates them.
+template <typename CellVisitor>
+fm_status_t for_each_cell(const fm_workbook_t* wb, std::size_t s, CellVisitor&& visit) {
+  std::size_t cell_count = 0;
+  if (auto rc = fm_sheet_get_cell_count(wb, s, &cell_count); rc != 0) {
+    return rc;
+  }
+  for (std::size_t i = 0; i < cell_count; ++i) {
+    std::uint32_t row = 0;
+    std::uint32_t col = 0;
+    const char* formula = nullptr;
+    fm_value_t v{};
+    if (auto rc = fm_sheet_get_cell_at(wb, s, i, &row, &col, &formula, &v); rc != 0) {
+      return rc;
+    }
+    visit(row, col, formula, v);
+  }
+  return 0;
+}
+
+// Emits every formula cell (`Sheet!A1 =formula`) or, for `kValues`, every
+// non-blank cell (`Sheet!A1 <rendered>`) on every sheet.
+fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, std::ostream& out) {
+  const bool formulas = mode == DumpMode::kFormulas;
+  return for_each_sheet(wb, [&](std::size_t s, const char* sheet_name) -> fm_status_t {
+    const std::string escaped_sheet_name = escape_c_string(sheet_name);
+    return for_each_cell(wb, s, [&](std::uint32_t row, std::uint32_t col, const char* formula, const fm_value_t& v) {
+      if (formulas ? formula == nullptr : v.kind == FM_VAL_BLANK) {
+        return;
+      }
+      out << escaped_sheet_name << '!' << format_a1(row, col) << ' '
+          << (formulas ? escape_single_line(formula) : escape_single_line(render_value(v))) << '\n';
+    });
+  });
 }
 
 // Emits `{"format":1,"sheets":[{"name":...,"cells":[...]}]}` as one document.
@@ -98,49 +119,37 @@ fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, std::ostream& out
 // cells only. The document is assembled before anything is written so a
 // failure leaves `out` untouched.
 fm_status_t dump_cells_json(const fm_workbook_t* wb, std::ostream& out) {
-  std::size_t n_sheets = 0;
-  if (auto rc = fm_workbook_get_sheet_count(wb, &n_sheets); rc != 0) {
-    return rc;
-  }
   std::string doc = "{\"format\":1,\"sheets\":[";
-  for (std::size_t s = 0; s < n_sheets; ++s) {
-    const char* sheet_name = nullptr;
-    if (auto rc = fm_workbook_get_sheet_name(wb, s, &sheet_name); rc != 0) {
-      return rc;
-    }
-    std::size_t cell_count = 0;
-    if (auto rc = fm_sheet_get_cell_count(wb, s, &cell_count); rc != 0) {
-      return rc;
-    }
+  const fm_status_t rc = for_each_sheet(wb, [&](std::size_t s, const char* sheet_name) -> fm_status_t {
     if (s != 0) {
       doc.push_back(',');
     }
     doc += "{\"name\":" + render_json_string(view_or_empty(sheet_name)) + ",\"cells\":[";
     bool first_cell = true;
-    for (std::size_t i = 0; i < cell_count; ++i) {
-      std::uint32_t row = 0;
-      std::uint32_t col = 0;
-      const char* formula = nullptr;
-      fm_value_t v{};
-      if (auto rc = fm_sheet_get_cell_at(wb, s, i, &row, &col, &formula, &v); rc != 0) {
-        return rc;
-      }
-      if (formula == nullptr && v.kind == FM_VAL_BLANK) {
-        continue;
-      }
-      if (!first_cell) {
-        doc.push_back(',');
-      }
-      first_cell = false;
-      // `render_value_json` yields `{"kind":...,"value":...}`; splice its members.
-      const std::string value_json = render_value_json(v);
-      doc += "{\"ref\":\"" + format_a1(row, col) + "\"," + value_json.substr(1, value_json.size() - 2);
-      if (formula != nullptr) {
-        doc += ",\"formula\":" + render_json_string(formula);
-      }
-      doc.push_back('}');
+    const fm_status_t cells_rc =
+        for_each_cell(wb, s, [&](std::uint32_t row, std::uint32_t col, const char* formula, const fm_value_t& v) {
+          if (formula == nullptr && v.kind == FM_VAL_BLANK) {
+            return;
+          }
+          if (!first_cell) {
+            doc.push_back(',');
+          }
+          first_cell = false;
+          doc += "{\"ref\":\"" + format_a1(row, col) + "\",";
+          append_value_json_members(doc, v);
+          if (formula != nullptr) {
+            doc += ",\"formula\":" + render_json_string(formula);
+          }
+          doc.push_back('}');
+        });
+    if (cells_rc != 0) {
+      return cells_rc;
     }
     doc += "]}";
+    return 0;
+  });
+  if (rc != 0) {
+    return rc;
   }
   doc += "]}\n";
   out << doc;
@@ -149,18 +158,10 @@ fm_status_t dump_cells_json(const fm_workbook_t* wb, std::ostream& out) {
 
 // Emits one sheet name per line in document order.
 fm_status_t dump_sheets(const fm_workbook_t* wb, std::ostream& out) {
-  std::size_t n_sheets = 0;
-  if (auto rc = fm_workbook_get_sheet_count(wb, &n_sheets); rc != 0) {
-    return rc;
-  }
-  for (std::size_t s = 0; s < n_sheets; ++s) {
-    const char* sheet_name = nullptr;
-    if (auto rc = fm_workbook_get_sheet_name(wb, s, &sheet_name); rc != 0) {
-      return rc;
-    }
+  return for_each_sheet(wb, [&](std::size_t, const char* sheet_name) -> fm_status_t {
     out << escape_c_string(sheet_name) << '\n';
-  }
-  return 0;
+    return 0;
+  });
 }
 
 // Emits defined names, tables, and passthrough parts under

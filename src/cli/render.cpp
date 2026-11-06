@@ -8,7 +8,7 @@
 #include <string>
 
 #include "c_api/formulon_c.h"
-#include "utils/a1_column.h"
+#include "utils/a1_ref.h"
 #include "utils/double_format.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -16,14 +16,9 @@
 namespace formulon {
 namespace cli {
 
-void append_column_letters(std::string& out, std::uint32_t col) {
-  FM_CHECK(a1::append_column_letters(out, col), "column is outside Excel's grid");
-}
-
 std::string format_a1(std::uint32_t row, std::uint32_t col) {
-  std::string out;
-  append_column_letters(out, col);
-  out.append(std::to_string(row + 1));
+  std::string out = a1::encode_a1(row, col);
+  FM_CHECK(!out.empty(), "column is outside Excel's grid");
   return out;
 }
 
@@ -138,9 +133,7 @@ std::string escape_single_line(std::string_view text) {
   return out;
 }
 
-std::string render_value_json(const fm_value_t& v) {
-  std::string out;
-  out.push_back('{');
+void append_value_json_members(std::string& out, const fm_value_t& v) {
   out.append("\"kind\":\"");
   switch (v.kind) {
     case FM_VAL_BLANK:
@@ -195,6 +188,12 @@ std::string render_value_json(const fm_value_t& v) {
       out.append("null");
       break;
   }
+}
+
+std::string render_value_json(const fm_value_t& v) {
+  std::string out;
+  out.push_back('{');
+  append_value_json_members(out, v);
   out.push_back('}');
   return out;
 }

@@ -208,7 +208,8 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
   for (long i = 0; i < passes; ++i) {
     fm_value_array_destroy(result.handle);
     result.handle = nullptr;
-    if (auto rc = fm_sheet_evaluate_formula_array(wb.handle, 0, 0, 0, formula_str.c_str(), &result.handle); rc != 0) {
+    if (auto rc = fm_sheet_evaluate_formula_array(wb.handle, sheet_index, 0, 0, formula_str.c_str(), &result.handle);
+        rc != 0) {
       emit_last_error(err, "eval");
       return kExitFailure;
     }
