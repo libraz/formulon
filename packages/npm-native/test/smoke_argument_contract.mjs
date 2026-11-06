@@ -32,7 +32,11 @@ test('dispose() from a spec getter during a call is refused and the call does no
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const refused = { name: 'TypeError', message: /cannot dispose Workbook during an active method call/ };
+    const refused = {
+      name: 'FormulonError',
+      code: 4005,
+      message: /cannot dispose Workbook during an active method call/,
+    };
     const spec = () => closingSpec(() => wb.dispose());
     assert.throws(() => wb.sheet(0).addProtectedRange(spec()), refused);
     assert.throws(() => wb.sheet(0).updateProtectedRange(0, spec()), refused);
@@ -64,7 +68,8 @@ test('dispose() from the iterative progress callback is refused the same way', a
       return false;
     });
     wb.recalc();
-    assert.ok(caught instanceof TypeError, String(caught));
+    assert.equal(caught.name, 'FormulonError', String(caught));
+    assert.equal(caught.code, 4005);
     assert.match(caught.message, /cannot dispose Workbook during an active method call/);
     assert.equal(wb.disposed, false);
   } finally {
@@ -250,7 +255,8 @@ test('every method called from the iterative progress callback throws and change
     wb.recalc();
     assert.equal(calls, 1);
     for (const name of Object.keys(attempts)) {
-      assert.ok(thrown[name] instanceof TypeError, `${name} must throw`);
+      assert.equal(thrown[name]?.name, 'FormulonError', `${name} must throw FormulonError`);
+      assert.equal(thrown[name].code, 4005, name);
       assert.match(thrown[name].message, /kGraphRecalcReentrant, 4005/, name);
     }
     assert.equal(wb.listSheets().length, 2);

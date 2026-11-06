@@ -527,6 +527,13 @@ Napi::Value ThrowInvalidHandle(Napi::Env env) {
   return ThrowFormulonError(env, kBindingInvalidHandle, "the workbook is disposed", "");
 }
 
+Napi::Value ThrowReentrant(Napi::Env env, const char* message) {
+  if (env.IsExceptionPending()) {
+    return env.Undefined();
+  }
+  return ThrowFormulonError(env, FM_STATUS_GRAPH_RECALC_REENTRANT, message, "");
+}
+
 Napi::Value ValueOrThrow(Napi::Env env, fm_status_t rc, Napi::Value ok_value) {
   return rc == 0 ? ok_value : ThrowStatus(env, rc);
 }

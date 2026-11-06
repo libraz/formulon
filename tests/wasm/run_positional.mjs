@@ -222,7 +222,8 @@ export function registerPositional(Module, test, hookProbe) {
         lastCol: { value: 0 },
       });
       assert.throws(() => getCellsLeaf.call(wb, 0, nestedRange, 0, 1), {
-        name: 'TypeError',
+        name: 'FormulonError',
+        code: 4005,
         message: /cannot dispose Workbook during an active method call/,
       });
       assert.equal(wb.isDeleted(), false);
@@ -315,7 +316,7 @@ export function registerPositional(Module, test, hookProbe) {
         },
       });
       proxy.addCellXf(originalDeleteSpec);
-      assert.ok(originalDeleteError instanceof TypeError);
+      assert.equal(originalDeleteError?.code, 4005);
       assert.equal(proxy.isDeleted(), false);
 
       let proxyDeleteError;
@@ -331,7 +332,7 @@ export function registerPositional(Module, test, hookProbe) {
         },
       });
       proxy.addCellXf(proxyDeleteSpec);
-      assert.ok(proxyDeleteError instanceof TypeError);
+      assert.equal(proxyDeleteError?.code, 4005);
       assert.equal(wb.isDeleted(), false);
     } finally {
       if (!wb.isDeleted()) wb.delete();
@@ -354,7 +355,7 @@ export function registerPositional(Module, test, hookProbe) {
         },
       });
       wb.addCellXf(spec);
-      assert.ok(caught instanceof TypeError);
+      assert.equal(caught?.code, 4005);
       assert.equal(wb.isDeleted(), false);
     } finally {
       if (!wb.isDeleted()) wb.delete();

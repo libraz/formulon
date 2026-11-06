@@ -72,7 +72,9 @@ EM_JS_DEPS(fm_wasm_js_callback, "$Emval");
 // can be raised from a binary built with -fno-exceptions.
 // clang-format off
 EM_JS(void, fm_wasm_throw_dispose_during_callback, (), {
-  throw new TypeError('cannot dispose Workbook during an active method call');
+  var message = 'cannot dispose Workbook during an active method call (kGraphRecalcReentrant, 4005)';
+  if (typeof Module.FormulonError !== 'function') throw new TypeError(message);
+  throw new Module.FormulonError(4005, message, '');
 });
 // clang-format on
 

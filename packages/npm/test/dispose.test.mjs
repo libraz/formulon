@@ -37,7 +37,8 @@ test('dispose() and [Symbol.dispose]() are refused inside the iterative progress
       return false;
     });
     wb.recalc();
-    assert.ok(caught instanceof TypeError, 'release inside the callback must throw');
+    assert.equal(caught?.name, 'FormulonError', 'release inside the callback must throw');
+    assert.equal(caught.code, 4005);
     assert.match(String(caught.message), /cannot dispose Workbook during an active method call/);
     assert.equal(wb.disposed, false);
     wb.setIterativeProgress(null);

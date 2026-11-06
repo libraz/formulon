@@ -398,7 +398,10 @@ test('an uncaught delete() inside the progress callback aborts the solve like an
 
   assert.throws(
     () => wb.recalc(),
-    (e) => e instanceof TypeError && /cannot dispose Workbook during an active method call/.test(e.message),
+    (e) =>
+      e.name === 'FormulonError' &&
+      e.code === 4005 &&
+      /cannot dispose Workbook during an active method call/.test(e.message),
   );
   assert.equal(calls, 1);
   assert.equal(wb.disposed, false);

@@ -402,8 +402,7 @@ Napi::Value Workbook::Dispose(const Napi::CallbackInfo& info) {
   // workbook is still on the stack, reached here through a getter or a
   // callback, and is about to use the handle again.
   if (active_calls_ > 1) {
-    Napi::TypeError::New(env, "cannot dispose Workbook during an active method call").ThrowAsJavaScriptException();
-    return env.Undefined();
+    return ThrowReentrant(env, "cannot dispose Workbook during an active method call (kGraphRecalcReentrant, 4005)");
   }
   (void)Value().Delete(IterativeProgressKey(env));
   DestroyHandle(env);

@@ -83,6 +83,11 @@ Napi::Value ThrowStatus(Napi::Env env, fm_status_t rc);
 /// `env.Undefined()`. No C-ABI call ran, so no last-error state is read.
 Napi::Value ThrowInvalidHandle(Napi::Env env);
 
+/// Throws the `FormulonError` of a refused re-entrant call
+/// (`GraphRecalcReentrant`, carrying `message`) and returns `env.Undefined()`.
+/// No C-ABI call ran, so no last-error state is read.
+Napi::Value ThrowReentrant(Napi::Env env, const char* message);
+
 /// Returns `ok_value` when `rc` is 0, else `ThrowStatus(env, rc)`.
 Napi::Value ValueOrThrow(Napi::Env env, fm_status_t rc, Napi::Value ok_value);
 

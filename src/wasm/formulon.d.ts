@@ -1677,7 +1677,7 @@ export interface SheetRect {
   readonly rect: CellRect;
 }
 
-/** Sheet hyperlink entry as returned by `listHyperlinks(sheet)`. */
+/** Sheet hyperlink entry as returned by `Sheet.listHyperlinks()`. */
 export interface Hyperlink {
   /** The cells the hyperlink covers. */
   readonly rect: CellRect;
@@ -3786,7 +3786,7 @@ export interface ChartPreviewOverridesInput {
 
 /** Options of `Sheet.restoreDrawing`. With `newId` the capture is added on top as a
  *  copy with a fresh id; otherwise a picture with the same id is replaced. */
-export interface RestoreImageOptions {
+export interface RestoreDrawingOptions {
   newId?: boolean;
 }
 
@@ -3934,8 +3934,8 @@ export interface HeaderFooterInput {
  *
  *  The callback runs inside the solver, which holds the workbook mid-sweep:
  *  it must not call any method on the workbook. Such calls, reads included,
- *  throw `TypeError` naming `StatusCode.GraphRecalcReentrant` (4005) and change
- *  nothing; `dispose()` throws `TypeError` as during any other active call. */
+ *  throw `FormulonError` with `code === StatusCode.GraphRecalcReentrant` (4005) and
+ *  change nothing; `dispose()` throws the same error, as during any other active call. */
 export type IterativeProgressCallback = (
   iteration: number,
   maxResidual: number,
@@ -4058,7 +4058,7 @@ export interface Workbook {
    *  registration alone.
    *
    *  A value that is neither a function nor `null` is rejected here with
-   *  `StatusCode.InvalidArgument` (2) and leaves the installed callback in place. */
+   *  `TypeError` and leaves the installed callback in place. */
   setIterativeProgress(callback: IterativeProgressCallback | null): void;
 
   /**
@@ -4228,7 +4228,7 @@ export interface Workbook {
   /** Reads the name of the cache field at `fieldIndex`. */
   getPivotCacheFieldName(cacheId: number, fieldIndex: number): string;
   /** Appends a new field with the given UTF-8 name to the cache.
-   *  `index` carries the new field's index. */
+   *  Returns the new field's index. */
   addPivotCacheField(cacheId: number, name: string): number;
   /** Drops every field (and every record) from the cache. */
   clearPivotCacheFields(cacheId: number): void;
@@ -4284,7 +4284,7 @@ export interface Workbook {
 
   /** Returns the number of records on the cache. */
   getPivotCacheRecordCount(cacheId: number): number;
-  /** Appends a new empty record. `index` carries the new record's index. */
+  /** Appends a new empty record and returns its index. */
   addPivotCacheRecord(cacheId: number): number;
   /** Drops every record from the cache. */
   clearPivotCacheRecords(cacheId: number): void;
@@ -4614,7 +4614,8 @@ export interface Sheet {
    *  `(row, col)`, with relative references written relative to
    *  `(anchorRow, anchorCol)` (the CF-applied range's top-left). The result
    *  is coerced with Excel's CF rules: error / blank / text / numeric-zero
-   *  yield `false`, any non-zero number yields `true`. Read-only. */
+   *  yield `false` (an evaluation error is not thrown), any non-zero number
+   *  yields `true`. Read-only. */
   evaluateCfFormula(row: number, col: number, anchorRow: number, anchorCol: number, formula: string): Value;
 
   /** Renders the lambda value cached at `(row, col)` as Excel formula text in `LAMBDA(p1,p2,body)`
@@ -4748,7 +4749,7 @@ export interface Sheet {
   /** Captures the picture or chart `objectId` with its list position, element and dependent parts as opaque bytes for `restoreDrawing`. */
   snapshotDrawing(objectId: number): Uint8Array;
   /** Puts a `snapshotDrawing` capture back and returns the object's id: in place of an object with the same id at its recorded position, or as a copy on top with `newId`. */
-  restoreDrawing(bytes: Uint8Array, opts?: RestoreImageOptions): number;
+  restoreDrawing(bytes: Uint8Array, opts?: RestoreDrawingOptions): number;
 
   // Drawing shapes. A shape is addressed by `objectId`, the id `listShapes` reports.
   /** Lists the shapes, connectors and groups of the sheet's drawing in z-order (back first); children of a group are not listed. */
@@ -4991,7 +4992,7 @@ export interface Sheet {
   /** Sets the `numFmtId` of pivot field `fieldIndex`, as a decimal string
    *  naming a built-in id or one returned by `addNumFmt`; `null` (or `""`) clears it. Any other unknown id is
    *  rejected. */
-  setPivotFieldNumberFormat(pivotIndex: number, fieldIndex: number, formatCode: string | null): void;
+  setPivotFieldNumberFormat(pivotIndex: number, fieldIndex: number, numFmtId: string | null): void;
 
   /** Replaces the row-axis field order with `indices`. Each entry must
    *  be `< pivotFieldCount` and appear once. The list is the axis's whole
@@ -5365,7 +5366,7 @@ export interface Sheet {
    *  column throws `FormulonError`. */
   getPrecedents(row: number, col: number, depth: number): readonly CellNode[];
   /** Returns the cells that read `(row, col)` directly
-   *  (1-step dependents). Same depth semantics as `precedents`. */
+   *  (1-step dependents). Same depth semantics as `getPrecedents`. */
   getDependents(row: number, col: number, depth: number): readonly CellNode[];
 
   /** Returns dynamic-array spill info for `(row, col)`.
@@ -5551,7 +5552,7 @@ export interface Formulon {
    *  Delivery is synchronous in the WASM package. In the native package a
    *  record raised on an engine thread reaches `sink` asynchronously, after
    *  the native call that produced it returns. A value that is neither a
-   *  function nor `null` fails with `StatusCode.InvalidArgument` and leaves
+   *  function nor `null` throws `TypeError` and leaves
    *  the installed sink in place. */
   setLogSink(sink: ((record: Uint8Array) => void) | null): void;
 }

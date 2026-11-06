@@ -637,8 +637,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
     if (in_iterative_progress_callback_ && method != static_cast<Method>(&Workbook::Dispose)) {
       // The solver holds this workbook mid-sweep: a write would deadlock or
       // change state under it, and a read would see half-computed values.
-      Napi::TypeError::New(info.Env(), kProgressCallbackReentryMessage).ThrowAsJavaScriptException();
-      return info.Env().Undefined();
+      return ThrowReentrant(info.Env(), kProgressCallbackReentryMessage);
     }
     ++active_calls_;
     Napi::Value result = (this->*method)(info);

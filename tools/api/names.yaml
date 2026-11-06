@@ -2353,7 +2353,7 @@ entries:
     drop: { js: ResolvedColorResult, closes: R8.js }
   type.restore_image_options:
     kind: typedef
-    js: RestoreImageOptions
+    js: RestoreDrawingOptions
     surfaces: [wasm, native]
     was: { js: RestoreImageOptions }
   record.rows_result:

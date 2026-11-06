@@ -22,7 +22,8 @@ test('a nested recalc from the iterative progress callback throws on serial and 
 
       recalcOuter(wb);
       assert.equal(calls, 1);
-      assert.ok(nested instanceof TypeError, `the nested recalc must throw: ${String(nested)}`);
+      assert.equal(nested?.name, 'FormulonError', `the nested recalc must throw: ${String(nested)}`);
+      assert.equal(nested.code, 4005);
       assert.match(nested.message, /kGraphRecalcReentrant, 4005/);
 
       return nested.message;

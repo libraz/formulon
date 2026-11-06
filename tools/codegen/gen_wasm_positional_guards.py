@@ -428,8 +428,9 @@ def _render(metadata: dict[str, object]) -> str:
       const receiverKey = trackWorkbookCall ? receiverStateKey(this) : null;
       const busy = module[progressCallbackKey];
       if (busy !== undefined && busy.size > 0 && receiverKey !== null && busy.has(receiverKey.ptr)) {{
-        throw new TypeError('cannot call a Workbook method from its iterative progress callback ' +
-                            '(kGraphRecalcReentrant, 4005)');
+        throw pendingError({{ kind: 3, code: 4005, context: '',
+          message: 'cannot call a Workbook method from its iterative progress callback ' +
+                   '(kGraphRecalcReentrant, 4005)' }});
       }}
       const receiverTracked = receiverKey !== null;
       if (receiverTracked) activeWorkbookCalls.set(receiverKey, (activeWorkbookCalls.get(receiverKey) ?? 0) + 1);
@@ -549,7 +550,8 @@ def _render(metadata: dict[str, object]) -> str:
       const guarded = function (...args) {{
         const receiverKey = receiverStateKey(this);
         if (receiverKey !== null && activeWorkbookCalls.get(receiverKey) > 0) {{
-          throw new TypeError('cannot dispose Workbook during an active method call');
+          throw pendingError({{ kind: 3, code: 4005, context: '',
+            message: 'cannot dispose Workbook during an active method call (kGraphRecalcReentrant, 4005)' }});
         }}
         return Reflect.apply(original, this, args);
       }};

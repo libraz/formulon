@@ -79,6 +79,12 @@ def generate(wasm_text: str, delta_text: str) -> str:
     wb_body = shared[wb_start:wb_stop].rstrip("\n")
     shared = shared[:wb_start] + wb_body + "\n\n" + delta_members + "\n" + shared[wb_stop:]
 
+    # The usage example imports the package being declared.
+    example = "import createFormulon from '@libraz/formulon';"
+    if shared.count(example) != 1:
+        raise GenError("createFormulon usage example import not found")
+    shared = shared.replace(example, "import createFormulon from '@libraz/formulon-native';")
+
     return HEADER + "\n" + shared.rstrip("\n") + "\n"
 
 
