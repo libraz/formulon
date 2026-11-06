@@ -23,6 +23,10 @@
 #include "utils/strings.h"
 
 namespace formulon {
+namespace pivot {
+class PivotTable;
+}  // namespace pivot
+
 namespace detail {
 
 // Hidden sheet-scoped name Excel keeps over a sheet AutoFilter's range.
@@ -75,6 +79,10 @@ inline bool has_book_namesake(const std::vector<DefinedName>& names, std::string
 inline std::optional<MergeRange> table_rect_on_sheet(const TableMetadata& table, std::size_t sheet_index) {
   return table.sheet_index == sheet_index ? parse_a1_rectangle(table.ref) : std::nullopt;
 }
+
+/// The rectangle a pivot occupies: its last projection, else its location
+/// with the page fields and their gap row above it.
+MergeRange pivot_occupied_extent(const pivot::PivotTable& table);
 
 }  // namespace detail
 }  // namespace formulon

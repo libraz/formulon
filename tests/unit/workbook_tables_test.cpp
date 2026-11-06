@@ -1,12 +1,16 @@
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "data_table.h"
 #include "defined_name.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
+#include "merge_range.h"
+#include "pivot/pivot_table.h"
 #include "table.h"
 #include "utils/error.h"
 #include "value.h"
@@ -128,6 +132,35 @@ TEST(WorkbookTables, AddTableRejectsAnOverlappingRange) {
   EXPECT_TRUE(wb.add_table(make_table("Two", "C1:D4", 2)).has_value());
   wb.add_sheet("Sheet2");
   EXPECT_TRUE(wb.add_table(make_table("Three", "A1:B4", 2, 1)).has_value());
+}
+
+TEST(WorkbookTables, AddTableRefusesWhatExcelKeepsATableOffAndUnmergesTheRest) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(wb.set_array_formula(0, 9U, 1U, 1U, 2U, "=1").has_value());   // B10:C10
+  ASSERT_TRUE(wb.set_array_formula(0, 12U, 1U, 1U, 1U, "=1").has_value());  // B13
+  ASSERT_TRUE(wb.add_merge(0, MergeRange{20U, 1U, 20U, 2U}).has_value());   // B21:C21
+  ASSERT_TRUE(wb.add_merge(0, MergeRange{30U, 0U, 30U, 1U}).has_value());   // A31:B31
+  DataTableInput input;
+  input.present = true;
+  ASSERT_TRUE(wb.add_data_table(0, MergeRange{41U, 1U, 43U, 1U}, DataTableInput{}, input).has_value());  // B42:B44
+  auto pivot = std::make_unique<pivot::PivotTable>();
+  pivot->set_anchor(/*row=*/50U, /*col=*/0U, /*rows=*/3U, /*cols=*/2U);  // A51:B53
+  wb.sheet(0).add_pivot_table(std::move(pivot));
+
+  const auto refused = [&](const char* ref) {
+    auto r = wb.add_table(make_table("T_x", ref, 2));
+    return r.has_value() ? std::string("accepted") : r.error().message;
+  };
+  EXPECT_EQ(refused("A9:B11"), "multi-cell array formulas are not valid in a table");
+  EXPECT_EQ(refused("A20:B22"), "table range cuts through merged cells");
+  EXPECT_EQ(refused("B43:C44"), "table range overlaps a data table");
+  EXPECT_EQ(refused("B52:C53"), "table range overlaps a PivotTable");
+  EXPECT_EQ(wb.sheet(0).merges().size(), 2U);
+
+  EXPECT_TRUE(wb.add_table(make_table("Single", "A12:B14", 2)).has_value());
+  EXPECT_TRUE(wb.add_table(make_table("Merged", "A30:B32", 2)).has_value());
+  ASSERT_EQ(wb.sheet(0).merges().size(), 1U);
+  EXPECT_EQ(wb.sheet(0).merges()[0].first_row, 20U);
 }
 
 TEST(WorkbookTables, RenameTableChecksTheNewNames) {

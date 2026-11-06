@@ -93,6 +93,8 @@ struct XlsbRetainedTable {
   std::uint32_t id = 0;
   std::string name;
   std::string display_name;
+  /// A1 range of the table; empty when the range is unprintable.
+  std::string ref;
   /// 0-based sheet whose relationships name the part; unset when none does.
   std::optional<std::size_t> sheet_index;
   /// Column captions in table order.

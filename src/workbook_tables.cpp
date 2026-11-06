@@ -11,6 +11,7 @@
 
 #include "auto_filter.h"
 #include "chart/chart_ref.h"
+#include "data_table.h"
 #include "defined_name.h"
 #include "eval/dep_graph.h"
 #include "eval/recalc_engine.h"
@@ -24,6 +25,7 @@
 #include "parser/structured_ref_payload.h"
 #include "parser/structured_ref_spelling.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_table.h"
 #include "sheet.h"
 #include "table.h"
 #include "utils/error.h"
@@ -33,6 +35,7 @@
 #include "utils/strings.h"
 #include "workbook.h"
 #include "workbook_formula_index.h"
+#include "workbook_internal.h"
 #include "workbook_ref_rewrite.h"
 
 namespace formulon {
@@ -88,6 +91,56 @@ Expected<void, Error> check_table_identity(const Workbook& wb, std::string_view 
   return Expected<void, Error>::Ok();
 }
 
+// Refusal of `rect` on `sheet_index` as a new table's range, on the first
+// structure Excel keeps a table from overlapping. A merge wholly inside is not
+// one: the table unmerges it.
+Expected<void, Error> check_table_range_free(const Workbook& wb, std::size_t sheet_index, const MergeRange& rect,
+                                             const std::string& ref) {
+  const auto refuse = [&](const char* what) { return invalid_table(what, "ref=" + ref); };
+  for (const TableMetadata& other : wb.tables()) {
+    const std::optional<MergeRange> other_rect = detail::table_rect_on_sheet(other, sheet_index);
+    if (other_rect && intersects(rect, *other_rect)) {
+      return refuse("table range overlaps another table");
+    }
+  }
+  for (const io::xlsb::XlsbRetainedTable& kept : io::xlsb::xlsb_retained_tables(wb)) {
+    const std::optional<MergeRange> kept_rect = parse_a1_rectangle(kept.ref);
+    if (kept.sheet_index == sheet_index && kept_rect && intersects(rect, *kept_rect)) {
+      return refuse("table range overlaps another table");
+    }
+  }
+  const Sheet& sheet = wb.sheet(sheet_index);
+  for (const std::unique_ptr<pivot::PivotTable>& pivot : sheet.pivot_tables()) {
+    if (pivot != nullptr && intersects(detail::pivot_occupied_extent(*pivot), rect)) {
+      return refuse("table range overlaps a PivotTable");
+    }
+  }
+  for (const DataTable& data_table : sheet.data_tables()) {
+    if (intersects(normalized(data_table.ref), rect)) {
+      return refuse("table range overlaps a data table");
+    }
+  }
+  for (const CellAddress address : sheet.formula_cells_in(0U, 0U, rect.last_row, rect.last_col)) {
+    const Cell* cell = sheet.cell_at(address.row, address.col);
+    if (cell == nullptr || cell->array_block_rows == 0U ||
+        (cell->array_block_rows == 1U && cell->array_block_cols == 1U)) {
+      continue;
+    }
+    const MergeRange block{address.row, address.col, address.row + cell->array_block_rows - 1U,
+                           address.col + cell->array_block_cols - 1U};
+    if (intersects(block, rect)) {
+      return refuse("multi-cell array formulas are not valid in a table");
+    }
+  }
+  for (const MergeRange& merge : sheet.merges()) {
+    const MergeRange m = normalized(merge);
+    if (intersects(m, rect) && !contains(rect, m)) {
+      return refuse("table range cuts through merged cells");
+    }
+  }
+  return Expected<void, Error>::Ok();
+}
+
 }  // namespace
 
 Expected<std::size_t, Error> Workbook::add_table(TableMetadata table) {
@@ -102,12 +155,7 @@ Expected<std::size_t, Error> Workbook::add_table(TableMetadata table) {
                          "ref=" + table.ref + " column_count=" + std::to_string(table.columns.size()));
   }
   RETURN_IF_ERROR(check_table_identity(*this, table.name, table.display_name, std::nullopt));
-  for (const TableMetadata& other : tables_) {
-    const std::optional<MergeRange> other_rect = parse_a1_rectangle(other.ref);
-    if (other.sheet_index == table.sheet_index && other_rect && intersects(*rect, *other_rect)) {
-      return invalid_table("table range overlaps another table", "ref=" + table.ref + " table=" + other.name);
-    }
-  }
+  RETURN_IF_ERROR(check_table_range_free(*this, table.sheet_index, *rect, table.ref));
   const std::vector<io::xlsb::XlsbRetainedTable> retained = io::xlsb::xlsb_retained_tables(*this);
   std::uint32_t next_id = 1;
   for (const TableMetadata& existing : tables_) {
@@ -136,6 +184,8 @@ Expected<std::size_t, Error> Workbook::add_table(TableMetadata table) {
     }
     column.id = column_id++;
   }
+  // Excel unmerges the merges a new table covers.
+  RETURN_IF_ERROR(remove_merges_intersecting(table.sheet_index, *rect));
   std::string escaped_ref;
   io::AppendXmlAttrEscaped(escaped_ref, table.ref);
   table.auto_filter_xml.set(io::auto_filter_from_xml("<autoFilter ref=\"" + escaped_ref + "\"/>"));

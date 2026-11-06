@@ -446,6 +446,25 @@ TEST(XlsbTableFidelity, ModelTableAvoidsTheIdOfAVerbatimPart) {
   EXPECT_NE(back.tables()[0].id, 3U);
 }
 
+TEST(XlsbTableFidelity, NewTableAvoidsTheRangeOfAVerbatimPart) {
+  const std::vector<std::uint8_t> package = SaveXlsb(AuthoredBook());
+  const std::vector<std::uint8_t> patched = WithUnknownFutureRecord(Entry(package, "xl/tables/table3.bin"));
+  Workbook wb = LoadXlsb(RepackWithEntries(package, {{"xl/tables/table3.bin", patched}}));
+  ASSERT_TRUE(wb.tables().empty());
+  TableMetadata added;
+  added.name = "Added";
+  added.display_name = "Added";
+  added.ref = "D7:E8";
+  added.columns = {TableColumn{}, TableColumn{}};
+  added.columns[0].name = "a";
+  added.columns[1].name = "b";
+  auto overlap = wb.add_table(added);
+  ASSERT_FALSE(overlap.has_value());
+  EXPECT_EQ(overlap.error().message, "table range overlaps another table");
+  added.ref = "E7:F8";
+  EXPECT_TRUE(wb.add_table(added).has_value());
+}
+
 /// Sales B2:D7 with a header row, four data rows and a totals row, plus
 /// formulas that reach it through structured references.
 Workbook StructuredRefBook() {

@@ -78,9 +78,13 @@ MergeRange location_extent(const pivot::PivotTable& table) {
   return r;
 }
 
-MergeRange occupied_extent(const pivot::PivotTable& table) {
+}  // namespace
+
+MergeRange detail::pivot_occupied_extent(const pivot::PivotTable& table) {
   return table.projected_extent().has_value() ? to_merge(*table.projected_extent()) : location_extent(table);
 }
+
+namespace {
 
 bool is_value_role(PivotCellRole role) {
   return role == PivotCellRole::DataValue || role == PivotCellRole::SubtotalValue ||
@@ -274,7 +278,7 @@ Expected<void, Error> check_projection_target(const Workbook& wb, std::size_t sh
   };
   for (std::size_t i = 0; i < sheet.pivot_tables().size(); ++i) {
     const std::unique_ptr<pivot::PivotTable>& other = sheet.pivot_tables()[i];
-    if (i != pivot_index && other != nullptr && intersects(occupied_extent(*other), target)) {
+    if (i != pivot_index && other != nullptr && intersects(detail::pivot_occupied_extent(*other), target)) {
       return refuse("the report would overlap another PivotTable");
     }
   }
@@ -345,7 +349,7 @@ Expected<void, Error> Workbook::project_pivot(std::size_t sheet_index, std::size
   }
   const pivot::PivotCells& cells = cells_or.value();
 
-  const MergeRange old_extent = occupied_extent(table);
+  const MergeRange old_extent = detail::pivot_occupied_extent(table);
   std::optional<MergeRange> new_extent;
   if (cells.rows > 0U && cells.cols > 0U) {
     new_extent = MergeRange{cells.top, cells.left, cells.top + cells.rows - 1U, cells.left + cells.cols - 1U};

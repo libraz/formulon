@@ -282,6 +282,9 @@ Expected<void, Error> ReadBeginList(ByteSpan payload, TableMetadata* table, bool
     style = std::move(value);
   }
   if (identity_only) {
+    if (!append_a1_rectangle(table->ref, rfx)) {
+      table->ref.clear();
+    }
     table->id = id;
     table->name = name.empty() ? display_name : std::move(name);
     table->display_name = std::move(display_name);
@@ -896,6 +899,7 @@ std::vector<XlsbRetainedTable> xlsb_retained_tables(const Workbook& wb) {
     table.id = head->id;
     table.name = std::move(head->name);
     table.display_name = std::move(head->display_name);
+    table.ref = std::move(head->ref);
     for (TableColumn& column : head->columns) {
       table.columns.push_back(std::move(column.name));
     }

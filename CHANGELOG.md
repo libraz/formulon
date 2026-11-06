@@ -444,6 +444,11 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
   address such as `T1`, a name opening with an R1C1 reference such as
   `R2D2`, `TRUE`, a leading digit, a space), a name a defined name of any
   scope already uses, and a range overlapping another table on the sheet.
+  Creating a table also refuses a range overlapping a PivotTable, a data
+  table or a multi-cell array formula, or one that cuts through merged
+  cells, and unmerges the merges the range covers, as Excel does. Where
+  Excel widens the range to take in a merge it cuts through, the table is
+  refused instead, because its columns are given by the caller.
   Setting a new defined name refuses a name outside that syntax or one a
   table uses. Such workbooks were written without complaint and Excel
   refused to open them.
