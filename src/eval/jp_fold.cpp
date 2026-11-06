@@ -108,7 +108,7 @@ std::string fold_jp_text_impl(std::string_view input, bool fold_fullwidth_digits
     // Full-width ASCII U+FF01..U+FF5E -> half-width ASCII (-0xFEE0).
     // `fold_fullwidth_digits = false` keeps U+FF10..U+FF19 unfolded.
     if (cp >= 0xFF01u && cp <= 0xFF5Eu) {
-      const bool is_fullwidth_digit = cp >= 0xFF10u && cp <= 0xFF19u;
+      const bool is_fullwidth_digit = fullwidth_digit_to_ascii(cp) != '\0';
       if (is_fullwidth_digit && !fold_fullwidth_digits) {
         encode_utf8(cp, &out);
       } else {
@@ -195,10 +195,6 @@ std::string compose_jp_halfwidth_voicing(std::string_view input) {
     i += n;
   }
   return out;
-}
-
-std::string fold_and_lower(std::string_view input, bool fold_fullwidth_digits) {
-  return strings::to_ascii_lower_owned(fold_jp_text(input, fold_fullwidth_digits, /*fold_halfwidth_kana=*/true));
 }
 
 std::string fold_and_lower_per_code_point(std::string_view input) {

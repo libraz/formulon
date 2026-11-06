@@ -11,6 +11,7 @@
 #include <string>
 
 #include "eval/eval_profile_scope.h"
+#include "eval/jp_fold.h"
 #include "excel_locale.h"
 #include "utils/double_parse.h"
 #include "utils/number_text.h"
@@ -287,8 +288,8 @@ std::string normalize_locale_numeric(std::string_view raw, int* percent_count) {
     const std::uint32_t cp = decode_utf8(raw, i, &len);
     char ascii = cp >= 0x80u ? fold_script_digit(cp) : '\0';
     if (ascii == '\0' && fold_fullwidth) {
-      if (cp >= 0xFF10u && cp <= 0xFF19u) {
-        ascii = static_cast<char>('0' + (cp - 0xFF10u));
+      if (const char digit = fullwidth_digit_to_ascii(cp); digit != '\0') {
+        ascii = digit;
       } else if (cp >= 0xFF21u && cp <= 0xFF3Au) {
         ascii = static_cast<char>('A' + (cp - 0xFF21u));
       } else if (cp >= 0xFF41u && cp <= 0xFF5Au) {

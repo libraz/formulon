@@ -329,26 +329,9 @@ constexpr LazyEntry kLazyDispatch[] = {
 
 constexpr std::size_t kLazyDispatchCount = sizeof(kLazyDispatch) / sizeof(kLazyDispatch[0]);
 
-// The order `find_lazy_entry` searches in: bytes compared ASCII-lower-cased.
-constexpr int compare_canonical_names(const char* lhs, const char* rhs) {
-  for (std::size_t i = 0;; ++i) {
-    const char l = (lhs[i] >= 'A' && lhs[i] <= 'Z') ? static_cast<char>(lhs[i] - 'A' + 'a') : lhs[i];
-    const char r = (rhs[i] >= 'A' && rhs[i] <= 'Z') ? static_cast<char>(rhs[i] - 'A' + 'a') : rhs[i];
-    if (l < r) {
-      return -1;
-    }
-    if (l > r) {
-      return 1;
-    }
-    if (l == '\0') {
-      return 0;
-    }
-  }
-}
-
 constexpr bool lazy_dispatch_is_strictly_sorted() {
   for (std::size_t i = 1; i < kLazyDispatchCount; ++i) {
-    if (compare_canonical_names(kLazyDispatch[i - 1].name, kLazyDispatch[i].name) >= 0) {
+    if (strings::case_insensitive_compare(kLazyDispatch[i - 1].name, kLazyDispatch[i].name) >= 0) {
       return false;
     }
   }

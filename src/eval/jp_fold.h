@@ -33,11 +33,18 @@
 #ifndef FORMULON_EVAL_JP_FOLD_H_
 #define FORMULON_EVAL_JP_FOLD_H_
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 
 namespace formulon {
 namespace eval {
+
+/// Returns the ASCII digit for a full-width digit U+FF10..U+FF19, or '\0' for
+/// any other code point.
+inline char fullwidth_digit_to_ascii(std::uint32_t cp) noexcept {
+  return (cp >= 0xFF10u && cp <= 0xFF19u) ? static_cast<char>('0' + (cp - 0xFF10u)) : '\0';
+}
 
 /// Returns `input` rewritten to its Mac Excel ja-JP canonical form for
 /// criterion-equality comparison. See header comment for the full mapping.
@@ -62,19 +69,8 @@ namespace eval {
 /// two-codepoint sequence rather than composing to ガ.
 std::string fold_jp_text(std::string_view input, bool fold_fullwidth_digits = true, bool fold_halfwidth_kana = true);
 
-/// Convenience wrapper that composes `fold_jp_text` with
-/// `strings::to_ascii_lower` in a single pass-allocation. Used by every
-/// case-insensitive lookup-family text comparison (VLOOKUP / HLOOKUP /
-/// MATCH / XLOOKUP / XMATCH) so the kana-fold + ASCII-lowercase pair
-/// stays in lockstep across `lookups/classic.cpp` and `lookups/xlookup.cpp`.
-///
-/// `fold_fullwidth_digits` matches the underlying `fold_jp_text` flag —
-/// pass `false` for lookup-family parity with Mac Excel 365 (full-width
-/// digits stay unfolded), pass `true` for COUNTIF / SUMIF parity.
-std::string fold_and_lower(std::string_view input, bool fold_fullwidth_digits = false);
-
-/// `fold_and_lower` with full-width digits folded and no voicing-mark
-/// composition: every code point folds on its own, so `ｶﾞ` becomes `カ゛`
+/// `fold_jp_text` followed by an ASCII lowercase pass, with full-width digits
+/// folded and no voicing-mark composition: every code point folds on its own, so `ｶﾞ` becomes `カ゛`
 /// (two characters), not `ガ`. Mac Excel's lookup-family wildcard match.
 std::string fold_and_lower_per_code_point(std::string_view input);
 

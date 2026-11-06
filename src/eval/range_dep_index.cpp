@@ -11,6 +11,18 @@
 
 namespace formulon::eval {
 
+namespace {
+
+std::uint32_t band_of(std::uint32_t row) noexcept {
+  return row / RangeDepIndex::kBandRows;
+}
+
+std::uint64_t band_bucket_key(std::uint32_t sheet_id, std::uint32_t band) noexcept {
+  return (static_cast<std::uint64_t>(sheet_id) << 32U) | band;
+}
+
+}  // namespace
+
 RangeDepIndex::AddResult RangeDepIndex::intern_range(const CellRangeDependency& range) {
   const auto existing = range_ids_.find(range);
   if (existing != range_ids_.end()) {
@@ -31,14 +43,14 @@ RangeDepIndex::AddResult RangeDepIndex::intern_range(const CellRangeDependency& 
     ranges_.push_back(std::move(entry));
   }
   range_ids_.emplace(range, range_id);
-  const std::uint32_t first_band = range.row_first / kBandRows;
-  const std::uint32_t last_band = range.row_last / kBandRows;
+  const std::uint32_t first_band = band_of(range.row_first);
+  const std::uint32_t last_band = band_of(range.row_last);
   RangeEntry& entry = ranges_[range_id];
   if (first_band <= last_band) {
     entry.band_positions.reserve(static_cast<std::size_t>(last_band - first_band) + 1U);
   }
   for (std::uint32_t band = first_band; band <= last_band; ++band) {
-    std::vector<std::uint32_t>& ids = bands_[(static_cast<std::uint64_t>(range.sheet_id) << 32U) | band];
+    std::vector<std::uint32_t>& ids = bands_[band_bucket_key(range.sheet_id, band)];
     entry.band_positions.push_back(ids.size());
     ids.push_back(range_id);
   }
@@ -48,11 +60,11 @@ RangeDepIndex::AddResult RangeDepIndex::intern_range(const CellRangeDependency& 
 
 void RangeDepIndex::release_range(std::uint32_t range_id) {
   RangeEntry& entry = ranges_[range_id];
-  const std::uint32_t first_band = entry.range.row_first / kBandRows;
-  const std::uint32_t last_band = entry.range.row_last / kBandRows;
+  const std::uint32_t first_band = band_of(entry.range.row_first);
+  const std::uint32_t last_band = band_of(entry.range.row_last);
   std::size_t position_index = 0U;
   for (std::uint32_t band = first_band; band <= last_band; ++band) {
-    const std::uint64_t key = (static_cast<std::uint64_t>(entry.range.sheet_id) << 32U) | band;
+    const std::uint64_t key = band_bucket_key(entry.range.sheet_id, band);
     const auto bucket = bands_.find(key);
     assert(bucket != bands_.end());
     auto& ids = bucket->second;
@@ -65,7 +77,7 @@ void RangeDepIndex::release_range(std::uint32_t range_id) {
       const std::uint32_t moved_range_id = ids[last_position];
       ids[position] = moved_range_id;
       RangeEntry& moved = ranges_[moved_range_id];
-      const std::uint32_t moved_first_band = moved.range.row_first / kBandRows;
+      const std::uint32_t moved_first_band = band_of(moved.range.row_first);
       assert(band >= moved_first_band);
       const std::size_t moved_band_position = static_cast<std::size_t>(band - moved_first_band);
       assert(moved_band_position < moved.band_positions.size());

@@ -133,8 +133,8 @@ std::string fold_fullwidth_digits_only(std::string_view input) {
   for (std::size_t i = 0; i < input.size();) {
     std::size_t bytes = 0;
     const std::uint32_t cp = decode_utf8_step(input, i, &bytes);
-    if (cp >= 0xFF10u && cp <= 0xFF19u) {
-      out.push_back(static_cast<char>('0' + (cp - 0xFF10u)));
+    if (const char digit = fullwidth_digit_to_ascii(cp); digit != '\0') {
+      out.push_back(digit);
       i += bytes;
       continue;
     }

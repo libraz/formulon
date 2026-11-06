@@ -219,8 +219,15 @@ void append_visibility(const parser::AstNode& node, const EvalContext& ctx, Hidd
 // formula cell inside a reference argument, so a range without subtotal text
 // costs one substring scan per formula cell and no parsing.
 
+constexpr std::string_view kNestedCallNames[] = {"SUBTOTAL", "AGGREGATE"};
+
 bool is_nested_call_name(std::string_view name) noexcept {
-  return strings::case_insensitive_eq(name, "SUBTOTAL") || strings::case_insensitive_eq(name, "AGGREGATE");
+  for (const std::string_view nested : kNestedCallNames) {
+    if (strings::case_insensitive_eq(name, nested)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool ast_has_nested_call(const parser::AstNode& node) {
@@ -231,12 +238,9 @@ bool ast_has_nested_call(const parser::AstNode& node) {
 }
 
 bool text_may_hold_nested_call(std::string_view text) noexcept {
-  static constexpr std::string_view kNeedles[] = {"SUBTOTAL", "AGGREGATE"};
-  for (const std::string_view needle : kNeedles) {
-    for (std::size_t i = 0; i + needle.size() <= text.size(); ++i) {
-      if (strings::case_insensitive_eq(text.substr(i, needle.size()), needle)) {
-        return true;
-      }
+  for (const std::string_view needle : kNestedCallNames) {
+    if (strings::case_insensitive_contains(text, needle)) {
+      return true;
     }
   }
   return false;

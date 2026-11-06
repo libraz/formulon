@@ -14,6 +14,7 @@
 #include <string_view>
 
 #include "eval/eval_profile_scope.h"
+#include "eval/jp_fold.h"
 #include "eval/text_format/number_format_types.h"
 #include "excel_locale.h"
 #include "utils/double_parse.h"
@@ -165,8 +166,8 @@ bool match_dbnum(std::string_view fmt, std::size_t start, std::size_t* end, std:
 }
 
 char syntax_ascii(std::uint32_t cp) noexcept {
-  if (cp >= 0xFF10U && cp <= 0xFF19U) {
-    return static_cast<char>('0' + (cp - 0xFF10U));
+  if (const char digit = eval::fullwidth_digit_to_ascii(cp); digit != '\0') {
+    return digit;
   }
   if (!is_fullwidth_ascii(cp)) {
     return '\0';
