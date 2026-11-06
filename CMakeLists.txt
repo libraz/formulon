@@ -203,6 +203,7 @@ set(FORMULON_CORE_SOURCES
   src/io/pivot_cache_writer.cpp
   src/io/pivot_table_reader.cpp
   src/io/pivot_table_writer.cpp
+  src/io/pivot_field_writer.cpp
   src/io/pivot_filter_writer.cpp
   src/io/format_detect.cpp
   src/io/sax_xml_reader.cpp
