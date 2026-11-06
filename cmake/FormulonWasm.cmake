@@ -113,6 +113,7 @@ if(FM_WASM_VARIANT STREQUAL "embind")
     src/wasm/parts/workbook_cell_table_styles.cpp
     src/wasm/parts/workbook_cf.cpp
     src/wasm/parts/workbook_chart.cpp
+    src/wasm/parts/workbook_chart_read.cpp
     src/wasm/parts/workbook_core.cpp
     src/wasm/parts/workbook_data_tables.cpp
     src/wasm/parts/workbook_drawing.cpp
