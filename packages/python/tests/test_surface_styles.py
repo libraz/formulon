@@ -6,10 +6,10 @@ import unittest
 from dataclasses import replace
 
 from formulon import (
-    ColorSpec,
+    Color,
     DifferentialFormat,
-    FillRecord,
-    FontRecord,
+    Fill,
+    Font,
     Workbook,
 )
 
@@ -17,13 +17,13 @@ from formulon import (
 class StyleTests(unittest.TestCase):
     def test_font_numfmt_xf_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
-            fi = wb.add_font(FontRecord(name="Calibri", size=12.0, bold=True))
+            fi = wb.add_font(Font(name="Calibri", size=12.0, bold=True))
             self.assertGreaterEqual(fi, 0)
             font = wb.get_font(fi)
             self.assertEqual(font.name, "Calibri")
             self.assertTrue(font.bold)
 
-            fill = wb.add_fill(FillRecord(pattern=1, fg_argb=0xFFFF0000))
+            fill = wb.add_fill(Fill(pattern=1, fg_argb=0xFFFF0000))
             nf = wb.add_num_fmt("0.00")
             self.assertGreater(nf, 0)
             self.assertEqual(wb.get_num_fmt_string(nf), "0.00")
@@ -99,7 +99,7 @@ class StyleTests(unittest.TestCase):
 
     def test_font_vert_align_roundtrip_is_the_identity(self) -> None:
         with Workbook.create_default() as wb:
-            index = wb.add_font(FontRecord(name="Arial", size=12.0, vert_align=1, color_argb=0xFF112233))
+            index = wb.add_font(Font(name="Arial", size=12.0, vert_align=1, color_argb=0xFF112233))
             self.assertEqual(wb.get_font(index).vert_align, 1)
 
             before = wb.get_font_count()
@@ -108,7 +108,7 @@ class StyleTests(unittest.TestCase):
 
     def test_font_one_field_rewrite_preserves_the_superscript(self) -> None:
         with Workbook.create_default() as wb:
-            index = wb.add_font(FontRecord(name="Arial", size=12.0, vert_align=1, color_argb=0xFF112233))
+            index = wb.add_font(Font(name="Arial", size=12.0, vert_align=1, color_argb=0xFF112233))
             edited = wb.get_font(index)
             edited = replace(edited, color_argb=0xFF00FF00)
             recolored = wb.add_font(edited)
@@ -119,7 +119,7 @@ class StyleTests(unittest.TestCase):
 
     def test_dxf_font_vert_align_roundtrip_is_the_identity(self) -> None:
         with Workbook.create_default() as wb:
-            index = wb.add_dxf(DifferentialFormat(font=FontRecord(name="Calibri", size=9.0, vert_align=1)))
+            index = wb.add_dxf(DifferentialFormat(font=Font(name="Calibri", size=9.0, vert_align=1)))
             got = wb.get_dxf(index)
             self.assertIsNotNone(got.font)
             self.assertEqual(got.font.vert_align, 1)
@@ -130,18 +130,18 @@ class StyleTests(unittest.TestCase):
 
     def test_dxf_font_without_size_reads_back_without_size(self) -> None:
         with Workbook.create_default() as wb:
-            bare = wb.add_dxf(DifferentialFormat(font=FontRecord(has_bold=True, bold=True, has_size=False)))
-            sized = wb.add_dxf(DifferentialFormat(font=FontRecord(has_bold=True, bold=True, size=13.0)))
+            bare = wb.add_dxf(DifferentialFormat(font=Font(has_bold=True, bold=True, has_size=False)))
+            sized = wb.add_dxf(DifferentialFormat(font=Font(has_bold=True, bold=True, size=13.0)))
             self.assertNotEqual(bare, sized)
             self.assertFalse(wb.get_dxf(bare).font.has_size)
             self.assertTrue(wb.get_dxf(sized).font.has_size)
-            self.assertTrue(wb.get_font(wb.add_font(FontRecord(name="Arial", size=14.0))).has_size)
+            self.assertTrue(wb.get_font(wb.add_font(Font(name="Arial", size=14.0))).has_size)
 
     def test_dxf_roundtrip_and_dedup(self) -> None:
         with Workbook.create_default() as wb:
             record = DifferentialFormat(
-                font=FontRecord(name="Arial", size=12.0, bold=True, color_argb=0xFFFF0000),
-                fill=FillRecord(pattern=1, fg_argb=0xFFFFFF00),
+                font=Font(name="Arial", size=12.0, bold=True, color_argb=0xFFFF0000),
+                fill=Fill(pattern=1, fg_argb=0xFFFFFF00),
                 num_fmt_id=164,
                 num_fmt_code="0.00",
             )
@@ -185,18 +185,18 @@ class StyleTests(unittest.TestCase):
                 self.assertEqual(reloaded.add_dxf(reloaded_protection), protection_index)
 
     def test_selector_colours_survive_get_add_identity_and_save_load(self) -> None:
-        theme = ColorSpec(kind=2, theme=3, tint=0.5)
-        indexed = ColorSpec(kind=3, indexed=9)
-        automatic = ColorSpec(kind=4)
+        theme = Color(kind=2, theme=3, tint=0.5)
+        indexed = Color(kind=3, indexed=9)
+        automatic = Color(kind=4)
         with Workbook.create_default() as wb:
-            font_index = wb.add_font(FontRecord(name="SelectorFont", size=11.0, color_argb=0x01020304, color=theme))
+            font_index = wb.add_font(Font(name="SelectorFont", size=11.0, color_argb=0x01020304, color=theme))
             got_font = wb.get_font(font_index)
             self.assertEqual(got_font.color, theme)
             self.assertEqual(got_font.color_argb, 0x01020304)
             self.assertEqual(wb.add_font(got_font), font_index)
 
             fill_index = wb.add_fill(
-                FillRecord(
+                Fill(
                     pattern=1,
                     fg_argb=0x05060708,
                     bg_argb=0x090A0B0C,
@@ -223,8 +223,8 @@ class StyleTests(unittest.TestCase):
 
             dxf_index = wb.add_dxf(
                 DifferentialFormat(
-                    font=FontRecord(name="DxfSelector", size=9.0, color_argb=0x11121314, color=automatic),
-                    fill=FillRecord(pattern=1, fg_argb=0x15161718, fg=indexed),
+                    font=Font(name="DxfSelector", size=9.0, color_argb=0x11121314, color=automatic),
+                    fill=Fill(pattern=1, fg_argb=0x15161718, fg=indexed),
                     border={"left": {"style": 1, "color_argb": 0x191A1B1C, "color": theme}},
                 )
             )

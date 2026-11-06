@@ -388,7 +388,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::GetDrawingObject, 0x3ULL>("getDrawingObject"),
           GuardedInstanceMethod<&Workbook::GetImage, 0x3ULL>("getImage"),
           GuardedInstanceMethod<&Workbook::InsertImage, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("addImage"),
-          GuardedInstanceMethod<&Workbook::RemoveDrawing, 0x3ULL>("removeDrawing"),
+          GuardedInstanceMethod<&Workbook::RemoveDrawing, 0x3ULL>("removeDrawingObject"),
           GuardedInstanceMethod<&Workbook::SetDrawingAnchor, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setDrawingAnchor"),
           GuardedInstanceMethod<&Workbook::SetDrawingZOrder, 0x7ULL>("setDrawingZOrder"),
           GuardedInstanceMethod<&Workbook::SnapshotDrawing, 0x3ULL>("snapshotDrawing"),

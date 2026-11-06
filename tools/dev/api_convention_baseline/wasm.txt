@@ -1,29 +1,3 @@
-R0.coverage	drawing.remove	removeDrawing	`removeDrawing` is a former name; the ledger has `removeDrawingObject`
-R0.coverage	record.border_record	BorderRecord	`BorderRecord` is a former name; the ledger has `Border`
-R0.coverage	record.cell_style_record	CellStyleRecord	`CellStyleRecord` is a former name; the ledger has `CellStyle`
-R0.coverage	record.chart_axis_info	ChartAxisInfo	`ChartAxisInfo` is a former name; the ledger has `ChartAxis`
-R0.coverage	record.chart_fill_info	ChartFillInfo	`ChartFillInfo` is a former name; the ledger has `ChartFill`
-R0.coverage	record.chart_info	ChartInfo	`ChartInfo` is a former name; the ledger has `Chart`
-R0.coverage	record.chart_labels_info	ChartLabelsInfo	`ChartLabelsInfo` is a former name; the ledger has `ChartLabels`
-R0.coverage	record.chart_line_info	ChartLineInfo	`ChartLineInfo` is a former name; the ledger has `ChartLine`
-R0.coverage	record.chart_marker_info	ChartMarkerInfo	`ChartMarkerInfo` is a former name; the ledger has `ChartMarker`
-R0.coverage	record.chart_plot_info	ChartPlotInfo	`ChartPlotInfo` is a former name; the ledger has `ChartPlot`
-R0.coverage	record.chart_point_info	ChartPointInfo	`ChartPointInfo` is a former name; the ledger has `ChartPoint`
-R0.coverage	record.chart_series_info	ChartSeriesInfo	`ChartSeriesInfo` is a former name; the ledger has `ChartSeries`
-R0.coverage	record.color_spec	ColorSpec	`ColorSpec` is a former name; the ledger has `Color`
-R0.coverage	record.data_table_input	DataTableInput	`DataTableInput` is a former name; the ledger has `DataTableInputCell`
-R0.coverage	record.dxf_record	DxfRecord	`DxfRecord` is a former name; the ledger has `Dxf`
-R0.coverage	record.external_link_record	ExternalLinkRecord	`ExternalLinkRecord` is a former name; the ledger has `ExternalLink`
-R0.coverage	record.fill_record	FillRecord	`FillRecord` is a former name; the ledger has `Fill`
-R0.coverage	record.font_record	FontRecord	`FontRecord` is a former name; the ledger has `Font`
-R0.coverage	record.pivot_data_field_spec	PivotDataFieldSpec	`PivotDataFieldSpec` is a former name; the ledger has `PivotDataFieldInput`
-R0.coverage	record.pivot_field_spec	PivotFieldSpecInput	`PivotFieldSpecInput` is a former name; the ledger has `PivotFieldInput`
-R0.coverage	record.pivot_filter_spec	PivotFilterSpec	`PivotFilterSpec` is a former name; the ledger has `PivotFilterInput`
-R0.coverage	record.pivot_style_info	PivotStyleInfo	`PivotStyleInfo` is a former name; the ledger has `PivotStyle`
-R0.coverage	record.pivot_style_info_input	PivotStyleInfoInput	`PivotStyleInfoInput` is a former name; the ledger has `PivotStyleInput`
-R0.coverage	record.sheet_comment_entry	SheetCommentEntry	`SheetCommentEntry` is a former name; the ledger has `SheetComment`
-R0.coverage	record.spill_info	SpillInfo	`SpillInfo` is a former name; the ledger has `Spill`
-R0.coverage	record.validation_entry	ValidationEntry	`ValidationEntry` is a former name; the ledger has `Validation`
 R18.js	array_formula.set	shape	`getArrayFormula` returns `ArrayFormula` but `setArrayFormula` takes (range: CellRect, formula: string)
 R18.js	comment.set	shape	`getComment` returns `Comment` but `setComment` takes (author: string, text: string)
 R18.js	defined_name.set	shape	`getDefinedName` returns `DefinedName` but `setDefinedName` takes (formula: string)
@@ -35,7 +9,6 @@ R18.js	page_setup.set	shape	`getPageSetup` returns `SheetPageSetup` but `setPage
 R18.js	pinned_now.set	shape	`getPinnedNow` returns `CivilTime` but `setPinnedNow` takes (year: number, month: number, day: number, hour: number, minute: number, second: number)
 R18.js	pivot_cache_options.set	Partial:options	`setPivotCacheOptions(options)` is `Partial<...>`; name a `<Record>Patch`
 R18.js	pivot_cache_options.set	shape	`getPivotCacheOptions` returns `PivotCacheOptions` but `setPivotCacheOptions` takes (options: Partial<PivotCacheOptions>)
-R18.js	pivot_data_field.set	shape	`getPivotDataField` returns `PivotDataField` but `setPivotDataField` takes (spec: PivotDataFieldSpec)
 R18.js	pivot_grand_totals.set	shape	`getPivotGrandTotals` returns `PivotGrandTotals` but `setPivotGrandTotals` takes (rowsEnabled: boolean, colsEnabled: boolean)
 R18.js	pivot_options.set	Partial:options	`setPivotOptions(options)` is `Partial<...>`; name a `<Record>Patch`
 R18.js	pivot_options.set	shape	`getPivotOptions` returns `PivotOptions` but `setPivotOptions` takes (options: Partial<PivotOptions>)
@@ -79,15 +52,15 @@ R20.js	record.auto_filter_sort_state	field:conditions	`AutoFilterSortState.condi
 R20.js	record.cells_in_range_result	field:cells	`CellsInRange.cells: RangeCell[]` is a result array; make it `readonly T[]`
 R20.js	record.cf_cell_result	ReadonlyArray:CfCell.matches	`CfCell.matches` spells `ReadonlyArray<T>`; write `readonly T[]`
 R20.js	record.chart_data_source	field:literal	`ChartDataSource.literal: (number | string)[]` is a result array; make it `readonly T[]`
-R20.js	record.chart_info	field:axes	`ChartInfo.axes: ChartAxisInfo[]` is a result array; make it `readonly T[]`
-R20.js	record.chart_info	field:hiddenCategories	`ChartInfo.hiddenCategories: number[]` is a result array; make it `readonly T[]`
-R20.js	record.chart_info	field:plots	`ChartInfo.plots: ChartPlotInfo[]` is a result array; make it `readonly T[]`
-R20.js	record.chart_plot_info	field:axisIds	`ChartPlotInfo.axisIds: number[]` is a result array; make it `readonly T[]`
-R20.js	record.chart_plot_info	field:series	`ChartPlotInfo.series: ChartSeriesInfo[]` is a result array; make it `readonly T[]`
-R20.js	record.chart_series_info	field:points	`ChartSeriesInfo.points: ChartPointInfo[]` is a result array; make it `readonly T[]`
-R20.js	record.conditional_format_entry	ReadonlyArray:ConditionalFormatEntry.colorScale	`ConditionalFormatEntry.colorScale` spells `ReadonlyArray<T>`; write `readonly T[]`
-R20.js	record.conditional_format_entry	ReadonlyArray:ConditionalFormatEntry.iconSet	`ConditionalFormatEntry.iconSet` spells `ReadonlyArray<T>`; write `readonly T[]`
-R20.js	record.conditional_format_entry	ReadonlyArray:ConditionalFormatEntry.ranges	`ConditionalFormatEntry.ranges` spells `ReadonlyArray<T>`; write `readonly T[]`
+R20.js	record.chart_info	field:axes	`Chart.axes: ChartAxis[]` is a result array; make it `readonly T[]`
+R20.js	record.chart_info	field:hiddenCategories	`Chart.hiddenCategories: number[]` is a result array; make it `readonly T[]`
+R20.js	record.chart_info	field:plots	`Chart.plots: ChartPlot[]` is a result array; make it `readonly T[]`
+R20.js	record.chart_plot_info	field:axisIds	`ChartPlot.axisIds: number[]` is a result array; make it `readonly T[]`
+R20.js	record.chart_plot_info	field:series	`ChartPlot.series: ChartSeries[]` is a result array; make it `readonly T[]`
+R20.js	record.chart_series_info	field:points	`ChartSeries.points: ChartPoint[]` is a result array; make it `readonly T[]`
+R20.js	record.conditional_format	ReadonlyArray:ConditionalFormat.colorScale	`ConditionalFormat.colorScale` spells `ReadonlyArray<T>`; write `readonly T[]`
+R20.js	record.conditional_format	ReadonlyArray:ConditionalFormat.iconSet	`ConditionalFormat.iconSet` spells `ReadonlyArray<T>`; write `readonly T[]`
+R20.js	record.conditional_format	ReadonlyArray:ConditionalFormat.ranges	`ConditionalFormat.ranges` spells `ReadonlyArray<T>`; write `readonly T[]`
 R20.js	record.conditional_format_input	ReadonlyArray:ConditionalFormatInput.colorScale	`ConditionalFormatInput.colorScale` spells `ReadonlyArray<T>`; write `readonly T[]`
 R20.js	record.conditional_format_input	ReadonlyArray:ConditionalFormatInput.iconSet	`ConditionalFormatInput.iconSet` spells `ReadonlyArray<T>`; write `readonly T[]`
 R20.js	record.conditional_format_input	ReadonlyArray:ConditionalFormatInput.ranges	`ConditionalFormatInput.ranges` spells `ReadonlyArray<T>`; write `readonly T[]`
@@ -107,7 +80,7 @@ R20.js	record.protected_range	ReadonlyArray:ProtectedRange.ranges	`ProtectedRang
 R20.js	record.sheet_selection	field:ranges	`SheetSelection.ranges: CellRect[]` is a result array; make it `readonly T[]`
 R20.js	record.sheet_selection_input	ReadonlyArray:SheetSelectionInput.ranges	`SheetSelectionInput.ranges` spells `ReadonlyArray<T>`; write `readonly T[]`
 R20.js	record.sparkline_group	field:sparklines	`SparklineGroup.sparklines: Sparkline[]` is a result array; make it `readonly T[]`
-R20.js	record.table_entry	field:columns	`TableEntry.columns: TableColumnEntry[]` is a result array; make it `readonly T[]`
+R20.js	record.table	field:columns	`Table.columns: TableColumn[]` is a result array; make it `readonly T[]`
 R20.js	record.table_input	field:columns	`TableInput.columns: string[]` is a result array; make it `readonly T[]`
 R20.js	record.table_style	field:elements	`TableStyle.elements: TableStyleElement[]` is a result array; make it `readonly T[]`
 R20.js	record.theme_result	field:colors	`Theme.colors: number[]` is a result array; make it `readonly T[]`
@@ -117,31 +90,7 @@ R20.js	record.threaded_comment	field:mentions	`ThreadedComment.mentions: Mention
 R20.js	row_breaks.list	return	`listRowBreaks` returns `PageBreak[]`
 R20.js	row_overrides.list	ReadonlyArray:Workbook.listRowOverrides	`Workbook.listRowOverrides` spells `ReadonlyArray<T>`; write `readonly T[]`
 R20.js	threaded_comments.list	return	`listThreadedComments` returns `ThreadedComment[]`
-R21.name	record.border_record	suffix	`BorderRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Border`
-R21.name	record.cell_style_record	suffix	`CellStyleRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `CellStyle`
-R21.name	record.chart_axis_info	suffix	`ChartAxisInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartAxis`
-R21.name	record.chart_fill_info	suffix	`ChartFillInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartFill`
-R21.name	record.chart_info	suffix	`ChartInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Chart`
-R21.name	record.chart_labels_info	suffix	`ChartLabelsInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartLabels`
-R21.name	record.chart_line_info	suffix	`ChartLineInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartLine`
-R21.name	record.chart_marker_info	suffix	`ChartMarkerInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartMarker`
-R21.name	record.chart_plot_info	suffix	`ChartPlotInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartPlot`
-R21.name	record.chart_point_info	suffix	`ChartPointInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartPoint`
-R21.name	record.chart_series_info	suffix	`ChartSeriesInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartSeries`
-R21.name	record.color_spec	suffix	`ColorSpec` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Color`
 R21.name	record.data_table_spec	suffix	`DataTableSpec` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `DataTable`
-R21.name	record.dxf_record	suffix	`DxfRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Dxf`
-R21.name	record.external_link_record	suffix	`ExternalLinkRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ExternalLink`
-R21.name	record.fill_record	suffix	`FillRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Fill`
-R21.name	record.font_record	suffix	`FontRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Font`
-R21.name	record.pivot_data_field_spec	suffix	`PivotDataFieldSpec` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotDataField`
-R21.name	record.pivot_field_spec	suffix	`PivotFieldSpecInput` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotFieldInput`
-R21.name	record.pivot_filter_spec	suffix	`PivotFilterSpec` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotFilter`
-R21.name	record.pivot_style_info	suffix	`PivotStyleInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotStyle`
-R21.name	record.pivot_style_info_input	suffix	`PivotStyleInfoInput` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotStyleInput`
-R21.name	record.sheet_comment_entry	suffix	`SheetCommentEntry` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `SheetComment`
-R21.name	record.spill_info	suffix	`SpillInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Spill`
-R21.name	record.validation_entry	suffix	`ValidationEntry` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Validation`
 R21.role	record.array_value	role	`record.array_value` has no `role:`
 R21.role	record.auto_filter_column	role	`record.auto_filter_column` has no `role:`
 R21.role	record.auto_filter_date_group	role	`record.auto_filter_date_group` has no `role:`
@@ -309,7 +258,7 @@ R23.js	data_table.get	Workbook	`getDataTable` is a sheet-scope op; it belongs on
 R23.js	data_table.remove	Workbook	`removeDataTable` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	dependents.get	Workbook	`getDependents` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	display_text.get	Workbook	`getDisplayText` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.js	drawing.remove	Workbook	`removeDrawing` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.js	drawing.remove	Workbook	`removeDrawingObject` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	drawing.restore	Workbook	`restoreDrawing` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	drawing.snapshot	Workbook	`snapshotDrawing` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.js	drawing_anchor.set	Workbook	`setDrawingAnchor` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
@@ -538,8 +487,6 @@ R23.track	sheet.move	SHEET_STRUCTURE_OPS	`moveSheet` changes the sheet list but 
 R23.track	sheet.remove	SHEET_STRUCTURE_OPS	`removeSheet` changes the sheet list but `common.mjs` does not track it in `SHEET_STRUCTURE_OPS`
 R23.track	sheet.rename	SHEET_STRUCTURE_OPS	`renameSheet` changes the sheet list but `common.mjs` does not track it in `SHEET_STRUCTURE_OPS`
 R24.missing.js	pivot_cache_worksheet_source.get	null	`getPivotCacheWorksheetSource` returns `PivotWorksheetSource`; it returns `... | null`
-R5.derive	record.pivot_data_field_spec	-	`PivotDataFieldSpec` does not derive from `fm_pivot_data_field_spec_t` (`PivotDataFieldInput or PivotDataFieldSpecInput`)
-R5.derive	record.pivot_filter_spec	-	`PivotFilterSpec` does not derive from `fm_pivot_filter_spec_t` (`PivotFilterInput or PivotFilterSpecInput`)
 R5.list	cf_rule.list.get_conditional_formats	missing	`listCfRules` is not on the wasm surface
 R5.list	external_link.list.get_external_links	missing	`listExternalLinks` is not on the wasm surface
 R5.list	pivot_cache_calculated_items.list	missing	`listPivotCacheCalculatedItems` is not on the wasm surface
@@ -550,8 +497,8 @@ R5.list	protected_range.list.get_protected_ranges	missing	`listProtectedRanges` 
 R5.list	sparkline_group.list.list_sparkline_groups	missing	`listSparklineGroups` is not on the wasm surface
 R5.list	table.list.iter_tables	missing	`listTables` is not on the wasm surface
 R5.list	validation.list.get_validations	missing	`listValidations` is not on the wasm surface
-R6.closed.js	record.chart_axis_info	ChartAxisInfo.tickLabelPosition	`ChartAxisInfo.tickLabelPosition: string | null` is closed; type it `a string-literal union`
-R6.closed.js	record.color_spec	ColorSpec.kind	`ColorSpec.kind: number` carries `fm_color_kind_t`; type it by its table
+R6.closed.js	record.chart_axis_info	ChartAxis.tickLabelPosition	`ChartAxis.tickLabelPosition: string | null` is closed; type it `a string-literal union`
+R6.closed.js	record.color_spec	Color.kind	`Color.kind: number` carries `fm_color_kind_t`; type it by its table
 R6.closed.js	record.function_metadata	FunctionMetadata.availability	`FunctionMetadata.availability: number` carries `fm_function_availability_t`; type it by its table
 R6.closed.js	record.locale_facts	LocaleFacts.dateOrder	`LocaleFacts.dateOrder: LocaleDateOrder` carries `fm_date_order_t`; type it by its table
 R6.closed.js	record.page_setup	PageSetup.orientation	`PageSetup.orientation: Orientation` carries `FM_ORIENTATION_*`; type it by its table
@@ -587,17 +534,17 @@ R7.absent.js	record.cell_xf	has:hasWrapText	`CellXf.hasWrapText` is a presence f
 R7.absent.js	record.column_layout	has:hasStyle	`ColumnLayout.hasStyle` is a presence flag; make the value field nullable
 R7.absent.js	record.column_layout	has:hasWidth	`ColumnLayout.hasWidth` is a presence flag; make the value field nullable
 R7.absent.js	record.defined_name	doc:DefinedName.comment	`DefinedName.comment` documents an absent value as `""` / `-1`
-R7.absent.js	record.external_link_record	doc:ExternalLinkRecord.target	`ExternalLinkRecord.target` documents an absent value as `""` / `-1`
-R7.absent.js	record.font_record	has:hasBold	`FontRecord.hasBold` is a presence flag; make the value field nullable
-R7.absent.js	record.font_record	has:hasCharset	`FontRecord.hasCharset` is a presence flag; make the value field nullable
-R7.absent.js	record.font_record	has:hasCondense	`FontRecord.hasCondense` is a presence flag; make the value field nullable
-R7.absent.js	record.font_record	has:hasExtend	`FontRecord.hasExtend` is a presence flag; make the value field nullable
-R7.absent.js	record.font_record	has:hasFamily	`FontRecord.hasFamily` is a presence flag; make the value field nullable
-R7.absent.js	record.font_record	has:hasItalic	`FontRecord.hasItalic` is a presence flag; make the value field nullable
-R7.absent.js	record.font_record	has:hasOutline	`FontRecord.hasOutline` is a presence flag; make the value field nullable
-R7.absent.js	record.font_record	has:hasShadow	`FontRecord.hasShadow` is a presence flag; make the value field nullable
-R7.absent.js	record.font_record	has:hasSize	`FontRecord.hasSize` is a presence flag; make the value field nullable
-R7.absent.js	record.font_record	has:hasStrike	`FontRecord.hasStrike` is a presence flag; make the value field nullable
+R7.absent.js	record.external_link_record	doc:ExternalLink.target	`ExternalLink.target` documents an absent value as `""` / `-1`
+R7.absent.js	record.font_record	has:hasBold	`Font.hasBold` is a presence flag; make the value field nullable
+R7.absent.js	record.font_record	has:hasCharset	`Font.hasCharset` is a presence flag; make the value field nullable
+R7.absent.js	record.font_record	has:hasCondense	`Font.hasCondense` is a presence flag; make the value field nullable
+R7.absent.js	record.font_record	has:hasExtend	`Font.hasExtend` is a presence flag; make the value field nullable
+R7.absent.js	record.font_record	has:hasFamily	`Font.hasFamily` is a presence flag; make the value field nullable
+R7.absent.js	record.font_record	has:hasItalic	`Font.hasItalic` is a presence flag; make the value field nullable
+R7.absent.js	record.font_record	has:hasOutline	`Font.hasOutline` is a presence flag; make the value field nullable
+R7.absent.js	record.font_record	has:hasShadow	`Font.hasShadow` is a presence flag; make the value field nullable
+R7.absent.js	record.font_record	has:hasSize	`Font.hasSize` is a presence flag; make the value field nullable
+R7.absent.js	record.font_record	has:hasStrike	`Font.hasStrike` is a presence flag; make the value field nullable
 R7.absent.js	record.hyperlink	doc:Hyperlink.display	`Hyperlink.display` documents an absent value as `""` / `-1`
 R7.absent.js	record.hyperlink	doc:Hyperlink.tooltip	`Hyperlink.tooltip` documents an absent value as `""` / `-1`
 R7.absent.js	record.pagination_print_titles	has:hasCols	`PaginationPrintTitles.hasCols` is a presence flag; make the value field nullable
@@ -606,7 +553,7 @@ R7.absent.js	record.pagination_result	doc:Pagination.printArea	`Pagination.print
 R7.absent.js	record.pivot_cache_options	doc:PivotCacheOptions.missingItemsLimit	`PivotCacheOptions.missingItemsLimit` documents an absent value as `""` / `-1`
 R7.absent.js	record.pivot_cell	doc:PivotCell.numberFormat	`PivotCell.numberFormat` documents an absent value as `""` / `-1`
 R7.absent.js	record.pivot_data_field_result	doc:PivotDataField	`PivotDataField` documents an absent value as `""` / `-1`
-R7.absent.js	record.pivot_data_field_spec	doc:PivotDataFieldSpec	`PivotDataFieldSpec` documents an absent value as `""` / `-1`
+R7.absent.js	record.pivot_data_field_spec	doc:PivotDataFieldInput	`PivotDataFieldInput` documents an absent value as `""` / `-1`
 R7.absent.js	record.pivot_field_info	-1:PivotField.axis	`PivotField.axis` has a `-1` alternative
 R7.absent.js	record.pivot_field_info	doc:PivotField	`PivotField` documents an absent value as `""` / `-1`
 R7.absent.js	record.pivot_field_info	doc:PivotField.cacheFieldIndex	`PivotField.cacheFieldIndex` documents an absent value as `""` / `-1`
@@ -618,13 +565,12 @@ R7.absent.js	record.row_layout	has:hasHeight	`RowLayout.hasHeight` is a presence
 R7.absent.js	record.row_layout	has:hasStyle	`RowLayout.hasStyle` is a presence flag; make the value field nullable
 R7.absent.js	record.sheet_print_titles_result	doc:SheetPrintTitles	`SheetPrintTitles` documents an absent value as `""` / `-1`
 R7.absent.js	record.sparkline_group	doc:SparklineGroup	`SparklineGroup` documents an absent value as `""` / `-1`
-R7.absent.js	record.table_entry	has:hasStyleInfo	`TableEntry.hasStyleInfo` is a presence flag; make the value field nullable
+R7.absent.js	record.table	has:hasStyleInfo	`Table.hasStyleInfo` is a presence flag; make the value field nullable
 R7.absent.js	record.table_style_defaults_result	doc:TableStyleDefaults	`TableStyleDefaults` documents an absent value as `""` / `-1`
 R7.absent.js	record.validation_outcome_result	has:hasRule	`ValidationOutcome.hasRule` is a presence flag; make the value field nullable
 R7.absent.js	sheet_pr_xml.get	doc:Workbook.getSheetPrXml	`Workbook.getSheetPrXml` documents an absent value as `""` / `-1`
+R7.js	record.chart_title	readonly	`ChartTitle` is a result; `kind` is not `readonly`
 R7.js	record.data_table_spec	name	`DataTableSpec` is an input record; name it `<Name>Input`
-R7.js	record.pivot_data_field_spec	name	`PivotDataFieldSpec` is an input record; name it `<Name>Input`
-R7.js	record.pivot_filter_spec	name	`PivotFilterSpec` is an input record; name it `<Name>Input`
 R7.opts.js	chart_source.set	bool	`setChartSource` takes two booleans
 R7.opts.js	hyperlink.add	run	`addHyperlink` takes 4 adjacent `string` arguments; take an options object
 R7.opts.js	hyperlink.add_range	run	`addHyperlinkRange` takes 4 adjacent `string` arguments; take an options object

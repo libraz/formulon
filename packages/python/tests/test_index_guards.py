@@ -566,7 +566,7 @@ class IndexRangeTests(unittest.TestCase):
         # ``struct.pack`` is the only thing that used to notice.
         with Workbook.create_default() as wb:
             with self.assertRaises(ValueError) as ctx:
-                wb.add_font(formulon.FontRecord(name="Calibri", size=11.0, underline=256))
+                wb.add_font(formulon.Font(name="Calibri", size=11.0, underline=256))
             self.assertIn("underline", str(ctx.exception))
 
     def test_in_range_extremes_still_reach_the_engine(self) -> None:

@@ -438,7 +438,7 @@ test('a chart survives save and load and goes through the drawing operations', a
     const snap = wb.snapshotDrawing(0, id);
     assert.ok(snap instanceof Uint8Array);
     assert.ok(snap.length > 0);
-    wb.removeDrawing(0, id);
+    wb.removeDrawingObject(0, id);
     assert.equal(wb.getChart(0, id), null);
     assert.deepEqual(
       Array.from(wb.listDrawingObjects(0), (o) => o.objectId),
@@ -500,7 +500,7 @@ test('chart calls throw on failure and reject malformed arguments', async () => 
     expectFailure(() => wb.removeChartSeries(0, id, 0, 99));
     expectFailure(() => wb.addChartSeries(0, id, 0, { name: 'Sheet1!$B$1' }));
     expectFailure(() => wb.setChartTitle(0, 9999, 'x'));
-    expectFailure(() => wb.removeDrawing(0, 9999));
+    expectFailure(() => wb.removeDrawingObject(0, 9999));
     expectFailure(() => wb.snapshotDrawing(0, 9999));
 
     // Wrong types raise before the engine is called.

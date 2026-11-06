@@ -10,7 +10,7 @@ from formulon import (
     CalcMode,
     CellRect,
     DataTable,
-    DataTableInput,
+    DataTableInputCell,
     FormulonError,
     ValueKind,
     Workbook,
@@ -54,7 +54,7 @@ class DataTableTests(unittest.TestCase):
                     two_dimensional=False,
                     row_oriented=False,
                     row_input=None,
-                    col_input=DataTableInput(0, 1, False),
+                    col_input=DataTableInputCell(0, 1, False),
                 ),
             )
             self.assertIsNone(wb.get_data_table(0, 1, 1))
@@ -83,8 +83,8 @@ class DataTableTests(unittest.TestCase):
             self.assertEqual([_number(wb, 3 + k, 3 + k) for k in range(3)], [10.0, 40.0, 90.0])
             table = wb.get_data_table(0, 4, 4)
             self.assertTrue(table.two_dimensional)
-            self.assertEqual(table.row_input, DataTableInput(0, 5, False))
-            self.assertEqual(table.col_input, DataTableInput(1, 5, False))
+            self.assertEqual(table.row_input, DataTableInputCell(0, 5, False))
+            self.assertEqual(table.col_input, DataTableInputCell(1, 5, False))
 
             wb.delete_rows(0, 0, 1)  # the row input's row
             table = wb.get_data_table(0, 4, 3)
@@ -102,7 +102,7 @@ class DataTableTests(unittest.TestCase):
             self.assertIn('t="dataTable" ref="B3:B5"', _sheet_xml(data))
             with Workbook.load(data) as loaded:
                 table = loaded.get_data_table(0, 4, 1)
-                self.assertEqual(table.col_input, DataTableInput(0, 1, False))
+                self.assertEqual(table.col_input, DataTableInputCell(0, 1, False))
                 with self.assertRaises(FormulonError):
                     loaded.set_number(0, 4, 1, 1.0)
 

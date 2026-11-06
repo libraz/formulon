@@ -41,7 +41,7 @@ test('all declared enum and constant exports resolve at runtime', async () => {
   assert.equal(mod.PivotAxis.Row, 0);
   assert.equal(mod.ExternalLinkKind.Dde, 3);
   // Named constants a consumer needs in order to interpret shared record
-  // fields (`Value.errorCode`, `ExternalLinkRecord.kind`) or to drive the
+  // fields (`Value.errorCode`, `ExternalLink.kind`) or to drive the
   // calc policy. The native package exports the same names and ordinals;
   // `check_binding_drift dts-enums` holds the two in step.
   assert.equal(mod.ErrorCode.Div0, 1);

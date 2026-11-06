@@ -1197,7 +1197,7 @@ entries:
     js: ChartTitle
     py: ChartTitle
     surfaces: [c, wasm, native, py]
-    was: { c: fm_chart_title_t, py: ChartTitleInfo }
+    was: { c: fm_chart_title_t, js: ChartTitleInfo, py: ChartTitleInfo }
   record.chart_fill:
     kind: record
     role: result
@@ -1508,13 +1508,6 @@ entries:
     surfaces: [wasm, native]
     was: { js: BorderResult }
     drop: { js: BorderResult, closes: R8.js }
-  record.cell_entry:
-    kind: record
-    js: CellEntry
-    surfaces: [wasm, native]
-    was: { js: CellEntry }
-    replaced_by: record.cell
-    closes: R21.name
   record.cell_rect_result:
     kind: record
     role: result
@@ -1644,13 +1637,6 @@ entries:
     py: ChartSeries
     surfaces: [wasm, native, py]
     was: { js: ChartSeriesInfo, py: ChartSeriesInfo }
-  record.chart_title_info:
-    kind: record
-    js: ChartTitleInfo
-    surfaces: [wasm, native]
-    was: { js: ChartTitleInfo }
-    replaced_by: record.chart_title
-    closes: R21.name
   record.collation_classes_result:
     kind: record
     role: result
@@ -1678,13 +1664,6 @@ entries:
     replaced_by: record.number_result
     closes: R8.js
     was: { js: CompareTextResult }
-  record.conditional_format_entry:
-    kind: record
-    js: ConditionalFormatEntry
-    surfaces: [wasm, native]
-    was: { js: ConditionalFormatEntry }
-    replaced_by: record.conditional_format
-    closes: R21.name
   record.conditional_format_input:
     kind: record
     js: ConditionalFormatInput
@@ -2287,7 +2266,7 @@ entries:
     js: SheetComment
     py: SheetComment
     surfaces: [wasm, native, py]
-    was: { js: SheetCommentEntry }
+    was: { js: SheetCommentEntry, py: CommentEntry }
   record.sheet_format_defaults_result:
     kind: record
     role: result
@@ -2393,25 +2372,11 @@ entries:
     surfaces: [wasm, native]
     was: { js: StringResult }
     drop: { js: StringResult, closes: R8.js }
-  record.table_column_entry:
-    kind: record
-    js: TableColumnEntry
-    surfaces: [wasm, native]
-    was: { js: TableColumnEntry }
-    replaced_by: record.table_column
-    closes: R21.name
   record.table_column_totals_input:
     kind: record
     js: TableColumnTotalsInput
     surfaces: [wasm, native]
     was: { js: TableColumnTotalsInput }
-  record.table_entry:
-    kind: record
-    js: TableEntry
-    surfaces: [wasm, native]
-    was: { js: TableEntry }
-    replaced_by: record.table
-    closes: R21.name
   record.table_input:
     kind: record
     js: TableInput
@@ -2498,7 +2463,7 @@ entries:
     js: Cell
     py: Cell
     surfaces: [wasm, native, py]
-    was: { py: Cell }
+    was: { js: CellEntry, py: Cell }
   record.chart_categories:
     kind: record
     py: ChartCategories
@@ -2529,19 +2494,12 @@ entries:
     py: ColorScale
     surfaces: [py]
     was: { py: ColorScale }
-  record.comment_entry:
-    kind: record
-    py: CommentEntry
-    surfaces: [py]
-    was: { py: CommentEntry }
-    replaced_by: record.sheet_comment_entry
-    closes: R21.name
   record.conditional_format:
     kind: record
     js: ConditionalFormat
     py: ConditionalFormat
     surfaces: [wasm, native, py]
-    was: { py: ConditionalFormat }
+    was: { js: ConditionalFormatEntry, py: ConditionalFormat }
   record.data_bar:
     kind: record
     py: DataBar
@@ -2621,13 +2579,13 @@ entries:
     js: Table
     py: Table
     surfaces: [wasm, native, py]
-    was: { py: Table }
+    was: { js: TableEntry, py: Table }
   record.table_column:
     kind: record
     js: TableColumn
     py: TableColumn
     surfaces: [wasm, native, py]
-    was: { py: TableColumn }
+    was: { js: TableColumnEntry, py: TableColumn }
   record.theme:
     kind: record
     py: Theme

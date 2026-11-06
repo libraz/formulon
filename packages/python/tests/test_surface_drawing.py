@@ -79,10 +79,10 @@ class DrawingImageTests(unittest.TestCase):
             finally:
                 loaded.close()
 
-            wb.remove_drawing(0, oid)
+            wb.remove_drawing_object(0, oid)
             self.assertEqual(wb.list_drawing_objects(0), [])
             with self.assertRaises(FormulonError):
-                wb.remove_drawing(0, oid)
+                wb.remove_drawing_object(0, oid)
         finally:
             wb.close()
 
@@ -173,7 +173,7 @@ class DrawingImageTests(unittest.TestCase):
             self.assertIsInstance(snap, bytes)
             self.assertGreater(len(snap), 0)
 
-            wb.remove_drawing(0, a)
+            wb.remove_drawing_object(0, a)
             self.assertEqual(wb.restore_drawing(0, snap), a)
             self.assertEqual([o.object_id for o in wb.list_drawing_objects(0)], [a, b])
             self.assertEqual(wb.get_image(0, a), png)

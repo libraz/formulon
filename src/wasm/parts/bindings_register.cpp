@@ -239,7 +239,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("addImage", emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, emscripten::val bytes) {
                   return self.insertImage(sheet, bytes, emscripten::val::object());
                 }))
-      .function("removeDrawing", &JsWorkbook::removeDrawing)
+      .function("removeDrawingObject", &JsWorkbook::removeDrawing)
       .function("setDrawingAnchor", &JsWorkbook::setDrawingAnchor)
       .function("setDrawingName", &JsWorkbook::setDrawingName)
       .function("setDrawingZOrder", &JsWorkbook::setDrawingZOrder)

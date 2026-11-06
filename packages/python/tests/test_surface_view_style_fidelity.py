@@ -10,8 +10,8 @@ from formulon import (
     Cfvo,
     ConditionalFormatInput,
     DifferentialFormat,
-    FillRecord,
-    FontRecord,
+    Fill,
+    Font,
     FormulonError,
     GradientFill,
     GradientStop,
@@ -20,7 +20,7 @@ from formulon import (
     SheetFormatDefaults,
     Workbook,
 )
-from formulon.workbook import ColorSpec
+from formulon.workbook import Color
 
 
 class OutlineTests(unittest.TestCase):
@@ -72,7 +72,7 @@ class SheetViewFlagTests(unittest.TestCase):
 
 class FontToggleTests(unittest.TestCase):
     def test_toggles_round_trip_and_dedup(self) -> None:
-        record = FontRecord(
+        record = Font(
             name="Arial",
             size=12.0,
             color_argb=0xFF000000,
@@ -96,8 +96,8 @@ class FontToggleTests(unittest.TestCase):
 
 class GradientFillTests(unittest.TestCase):
     @staticmethod
-    def _fill() -> FillRecord:
-        return FillRecord(
+    def _fill() -> Fill:
+        return Fill(
             gradient=GradientFill(
                 type=1,
                 left=0.5,
@@ -105,8 +105,8 @@ class GradientFillTests(unittest.TestCase):
                 top=0.25,
                 bottom=0.75,
                 stops=[
-                    GradientStop(0.0, 0xFFFF0000, ColorSpec(kind=1, rgb=0xFFFF0000)),
-                    GradientStop(1.0, 0, ColorSpec(kind=2, theme=4, tint=0.5)),
+                    GradientStop(0.0, 0xFFFF0000, Color(kind=1, rgb=0xFFFF0000)),
+                    GradientStop(1.0, 0, Color(kind=2, theme=4, tint=0.5)),
                 ],
             )
         )

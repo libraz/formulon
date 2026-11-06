@@ -9,11 +9,11 @@ from formulon import (
     AnchorEditAs,
     AnchorKind,
     CellRect,
+    Chart,
     ChartAxisCrosses,
     ChartAxisKind,
     ChartBlanksAs,
     ChartGrouping,
-    ChartInfo,
     ChartInsertKind,
     ChartLabelPosition,
     ChartLegendPosition,
@@ -54,7 +54,7 @@ def _chart(kind: int = ChartInsertKind.COLUMN, source: str = SOURCE, **options) 
     return wb, wb.add_chart(0, kind, source, row=6, **options)
 
 
-def _axis_id(info: ChartInfo, kind: ChartAxisKind) -> int:
+def _axis_id(info: Chart, kind: ChartAxisKind) -> int:
     return next(a.id for a in info.axes if a.kind == kind)
 
 
@@ -561,11 +561,11 @@ class ChartDrawingTests(unittest.TestCase):
             self.assertIsInstance(snap, bytes)
             self.assertGreater(len(snap), 0)
 
-            wb.remove_drawing(0, a)
+            wb.remove_drawing_object(0, a)
             self.assertEqual([o.object_id for o in wb.list_drawing_objects(0)], [b])
             self.assertIsNone(wb.get_chart(0, a))
             with self.assertRaises(FormulonError):
-                wb.remove_drawing(0, a)
+                wb.remove_drawing_object(0, a)
 
             self.assertEqual(wb.restore_drawing(0, snap), a)
             self.assertEqual([o.object_id for o in wb.list_drawing_objects(0)], [a, b])

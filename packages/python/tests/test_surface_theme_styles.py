@@ -5,13 +5,13 @@ from __future__ import annotations
 import unittest
 
 from formulon import (
-    CellStyleRecord,
+    CellStyle,
     CellXf,
+    Color,
     ColorContext,
     ColorResolution,
-    ColorSpec,
     EffectiveStyleSource,
-    FontRecord,
+    Font,
     FormulonError,
     ThemeFonts,
     ThemeScriptFont,
@@ -75,25 +75,25 @@ class ThemeTests(unittest.TestCase):
 
     def test_resolve_color(self) -> None:
         with Workbook.create_default() as wb:
-            rgb = wb.resolve_color(ColorSpec(kind=_RGB_KIND, rgb=0xFF123456))
+            rgb = wb.resolve_color(Color(kind=_RGB_KIND, rgb=0xFF123456))
             self.assertEqual(rgb.argb, 0xFF123456)
             self.assertEqual(rgb.resolution, ColorResolution.EXACT)
 
             colors = [0xFF000000 + i * 0x010101 for i in range(12)]
             wb.set_theme_colors(colors)
             # Theme index 1 is dk1, which is clrScheme slot 0.
-            theme = wb.resolve_color(ColorSpec(kind=_THEME_KIND, theme=1))
+            theme = wb.resolve_color(Color(kind=_THEME_KIND, theme=1))
             self.assertEqual(theme.argb, colors[0])
             self.assertEqual(theme.resolution, ColorResolution.EXACT)
 
-            auto_font = wb.resolve_color(ColorSpec(kind=_AUTO_KIND), ColorContext.FONT)
-            auto_fill = wb.resolve_color(ColorSpec(kind=_AUTO_KIND), ColorContext.FILL_FOREGROUND)
+            auto_font = wb.resolve_color(Color(kind=_AUTO_KIND), ColorContext.FONT)
+            auto_fill = wb.resolve_color(Color(kind=_AUTO_KIND), ColorContext.FILL_FOREGROUND)
             self.assertEqual(auto_font.argb, 0xFF000000)
             self.assertEqual(auto_fill.argb, 0xFFFFFFFF)
             self.assertEqual(auto_font.resolution, ColorResolution.AUTO_CONTEXT)
 
             with self.assertRaises(FormulonError):
-                wb.resolve_color(ColorSpec(kind=_RGB_KIND), 99)
+                wb.resolve_color(Color(kind=_RGB_KIND), 99)
 
 
 class EffectiveStyleTests(unittest.TestCase):
@@ -108,7 +108,7 @@ class EffectiveStyleTests(unittest.TestCase):
 
     def test_cell_xf_is_reported(self) -> None:
         with Workbook.create_default() as wb:
-            font = wb.add_font(FontRecord(name="Calibri", size=11.0, bold=True, color_argb=0xFFFF0000))
+            font = wb.add_font(Font(name="Calibri", size=11.0, bold=True, color_argb=0xFFFF0000))
             xf = wb.add_cell_xf(_xf(font))
             wb.set_cell_xf_index(0, 1, 1, xf)
             style = wb.get_effective_style(0, 1, 1)
@@ -122,7 +122,7 @@ class EffectiveStyleTests(unittest.TestCase):
 class ClearCellXfIndexTests(unittest.TestCase):
     def test_clear_restores_inheritance(self) -> None:
         with Workbook.create_default() as wb:
-            font = wb.add_font(FontRecord(name="Calibri", size=11.0, bold=True, color_argb=0xFFFF0000))
+            font = wb.add_font(Font(name="Calibri", size=11.0, bold=True, color_argb=0xFFFF0000))
             col_xf = wb.add_cell_xf(_xf(font))
             cell_xf = wb.add_cell_xf(_xf(font))
             wb.set_column_style(0, 0, 0, col_xf)
@@ -141,7 +141,7 @@ class ClearCellXfIndexTests(unittest.TestCase):
 
     def test_absent_cell_is_noop(self) -> None:
         with Workbook.create_default() as wb:
-            font = wb.add_font(FontRecord(name="Calibri", size=11.0, bold=True, color_argb=0xFFFF0000))
+            font = wb.add_font(Font(name="Calibri", size=11.0, bold=True, color_argb=0xFFFF0000))
             col_xf = wb.add_cell_xf(_xf(font))
             wb.set_column_style(0, 0, 0, col_xf)
             wb.clear_cell_xf_index(0, 5, 0)
@@ -153,7 +153,7 @@ class ClearCellXfIndexTests(unittest.TestCase):
 
     def test_value_is_kept(self) -> None:
         with Workbook.create_default() as wb:
-            font = wb.add_font(FontRecord(name="Calibri", size=11.0, bold=True, color_argb=0xFFFF0000))
+            font = wb.add_font(Font(name="Calibri", size=11.0, bold=True, color_argb=0xFFFF0000))
             xf = wb.add_cell_xf(_xf(font))
             wb.set_number(0, 0, 0, 7.0)
             wb.set_cell_xf_index(0, 0, 0, xf)
@@ -166,7 +166,7 @@ class NamedStyleTests(unittest.TestCase):
     def test_set_and_remove_cell_style(self) -> None:
         with Workbook.create_default() as wb:
             xf_id = wb.add_cell_style_xf(_xf(0))
-            wb.set_cell_style(CellStyleRecord("Mine", xf_id, hidden=True))
+            wb.set_cell_style(CellStyle("Mine", xf_id, hidden=True))
             names = {style.name: style for style in wb.list_cell_styles()}
             self.assertEqual(wb.get_cell_style("Mine"), names["Mine"])
             self.assertIn("Mine", names)
@@ -179,7 +179,7 @@ class NamedStyleTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.remove_cell_style("Mine")
             with self.assertRaises(FormulonError):
-                wb.set_cell_style(CellStyleRecord("", xf_id))
+                wb.set_cell_style(CellStyle("", xf_id))
 
 
 class CreateForProfileTests(unittest.TestCase):

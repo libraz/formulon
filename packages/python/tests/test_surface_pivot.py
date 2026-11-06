@@ -16,10 +16,10 @@ from formulon import (
     PivotAggregation,
     PivotAxis,
     PivotCalendar,
-    PivotDataFieldSpec,
+    PivotDataFieldInput,
     PivotDatePeriod,
-    PivotFieldSpecInput,
-    PivotFilterSpec,
+    PivotFieldInput,
+    PivotFilterInput,
     PivotFilterType,
     PivotGrandTotals,
     PivotOptions,
@@ -45,13 +45,13 @@ class PivotTests(unittest.TestCase):
             self.assertEqual(wb.get_pivot_cache_record_count(cache_id), 3)
 
             pivot = wb.add_pivot(0, "Pivot1", cache_id, 0, 4)
-            region_field = wb.add_pivot_field(0, pivot, PivotFieldSpecInput(source_name="Region", axis=PivotAxis.ROW))
-            amount_field = wb.add_pivot_field(0, pivot, PivotFieldSpecInput(source_name="Amount", axis=PivotAxis.VALUE))
+            region_field = wb.add_pivot_field(0, pivot, PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
+            amount_field = wb.add_pivot_field(0, pivot, PivotFieldInput(source_name="Amount", axis=PivotAxis.VALUE))
             self.assertEqual(region_field, 0)
             wb.add_pivot_data_field(
                 0,
                 pivot,
-                PivotDataFieldSpec(
+                PivotDataFieldInput(
                     name="Sum of Amount",
                     field_index=amount_field,
                     aggregation=PivotAggregation.SUM,
@@ -140,19 +140,17 @@ class _PivotFixture:
             for field, value in enumerate(values):
                 wb.set_pivot_cache_record_number(self.cache, rec, field, value)
         self.pivot = wb.add_pivot(0, "Pivot1", self.cache, 0, 6)
-        self.region = wb.add_pivot_field(0, self.pivot, PivotFieldSpecInput(source_name="Region", axis=PivotAxis.ROW))
+        self.region = wb.add_pivot_field(0, self.pivot, PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
         wb.add_pivot_field_item(0, self.pivot, self.region, "East", True)
         wb.add_pivot_field_item(0, self.pivot, self.region, "West", True)
-        self.product = wb.add_pivot_field(
-            0, self.pivot, PivotFieldSpecInput(source_name="Product", axis=PivotAxis.VALUE)
-        )
+        self.product = wb.add_pivot_field(0, self.pivot, PivotFieldInput(source_name="Product", axis=PivotAxis.VALUE))
         wb.add_pivot_field_item(0, self.pivot, self.product, "Apple", True)
         wb.add_pivot_field_item(0, self.pivot, self.product, "Pear", True)
-        self.amount = wb.add_pivot_field(0, self.pivot, PivotFieldSpecInput(source_name="Amount", axis=PivotAxis.VALUE))
-        self.date = wb.add_pivot_field(0, self.pivot, PivotFieldSpecInput(source_name="Date", axis=PivotAxis.VALUE))
+        self.amount = wb.add_pivot_field(0, self.pivot, PivotFieldInput(source_name="Amount", axis=PivotAxis.VALUE))
+        self.date = wb.add_pivot_field(0, self.pivot, PivotFieldInput(source_name="Date", axis=PivotAxis.VALUE))
         wb.set_pivot_row_field_order(0, self.pivot, [self.region])
         wb.add_pivot_data_field(
-            0, self.pivot, PivotDataFieldSpec(name="Sum of Amount", field_index=self.amount, aggregation=0)
+            0, self.pivot, PivotDataFieldInput(name="Sum of Amount", field_index=self.amount, aggregation=0)
         )
 
     def grid(self, pivot: int = 0) -> List[str]:
@@ -199,12 +197,12 @@ _TWO_LEVEL_GRID = [
 _WEST_ONLY = ["行ラベル|Sum of Amount", "West|37", "総計|37"]
 
 
-_GREATER_THAN_20 = PivotFilterSpec(
+_GREATER_THAN_20 = PivotFilterInput(
     axis=PivotAxis.ROW, field_name="Region", type=PivotFilterType.VALUE_GREATER_THAN, value_kind=1, value_double=20.0
 )
 
 
-_BETWEEN_10_20 = PivotFilterSpec(
+_BETWEEN_10_20 = PivotFilterInput(
     axis=PivotAxis.ROW,
     field_name="Region",
     type=PivotFilterType.VALUE_BETWEEN,
@@ -768,7 +766,7 @@ class PivotMutatorTableTests(unittest.TestCase):
             "add_pivot_field": (
                 None,
                 lambda f: f.wb.add_pivot_field(
-                    0, f.pivot, PivotFieldSpecInput(source_name="Product", custom_name="Fruit", axis=PivotAxis.PAGE)
+                    0, f.pivot, PivotFieldInput(source_name="Product", custom_name="Fruit", axis=PivotAxis.PAGE)
                 ),
                 None,
                 field_add,
@@ -897,7 +895,7 @@ class PivotMutatorTableTests(unittest.TestCase):
             "add_pivot_data_field": (
                 None,
                 lambda f: f.wb.add_pivot_data_field(
-                    0, f.pivot, PivotDataFieldSpec(name="Max of Amount", field_index=f.amount, aggregation=W.MAX)
+                    0, f.pivot, PivotDataFieldInput(name="Max of Amount", field_index=f.amount, aggregation=W.MAX)
                 ),
                 None,
                 data_field_add,
@@ -914,7 +912,7 @@ class PivotMutatorTableTests(unittest.TestCase):
                     0,
                     f.pivot,
                     0,
-                    PivotDataFieldSpec(
+                    PivotDataFieldInput(
                         name="Count of Amount", field_index=f.amount, aggregation=W.COUNT, number_format="2"
                     ),
                 ),
@@ -1054,7 +1052,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
     def _assert_fixture_definition(self, wb: Workbook, f: _PivotFixture, pivot: int) -> None:
         eq = self.assertEqual
         eq(wb.get_pivot_name(0, pivot), "Pivot1")
-        eq(wb.get_pivot_grand_totals(0, pivot), PivotGrandTotals(rows=True, cols=True))
+        eq(wb.get_pivot_grand_totals(0, pivot), PivotGrandTotals(rows=True, columns=True))
         eq(wb.get_pivot_row_field_order(0, pivot), [f.region])
         eq(wb.get_pivot_column_field_order(0, pivot), [])
 
@@ -1089,7 +1087,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             wb.set_pivot_field_sort(0, f.pivot, f.region, PivotSortOrder.DESCENDING, "Sum of Amount")
             wb.set_pivot_field_item_visible(0, f.pivot, f.region, 1, False)
             wb.set_pivot_field_date_group(0, f.pivot, f.date, PivotDatePeriod.YEARS, PivotCalendar.GREGORIAN)
-            self.assertEqual(wb.get_pivot_grand_totals(0, f.pivot), PivotGrandTotals(rows=False, cols=True))
+            self.assertEqual(wb.get_pivot_grand_totals(0, f.pivot), PivotGrandTotals(rows=False, columns=True))
             region = wb.get_pivot_field(0, f.pivot, f.region)
             self.assertEqual((region.sort_order, region.sort_by_field), (PivotSortOrder.DESCENDING, "Sum of Amount"))
             self.assertFalse(wb.get_pivot_field_item(0, f.pivot, f.region, 1).visible)
@@ -1111,7 +1109,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             wb.add_pivot_data_field(
                 0,
                 f.pivot,
-                PivotDataFieldSpec(name="Count of Amount", field_index=f.amount, aggregation=PivotAggregation.COUNT),
+                PivotDataFieldInput(name="Count of Amount", field_index=f.amount, aggregation=PivotAggregation.COUNT),
             )
             wb.set_pivot_column_field_order(0, f.pivot, [PIVOT_VALUES_FIELD])
             self.assertEqual(wb.get_pivot_column_field_order(0, f.pivot), [PIVOT_VALUES_FIELD])
@@ -1220,13 +1218,13 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
                     self.assertEqual(
                         wb.get_pivot_data_field_default_name(0, f.pivot, f.amount, PivotAggregation.SUM), expected
                     )
-                    idx = wb.add_pivot_data_field(0, f.pivot, PivotDataFieldSpec(name=name, field_index=f.amount))
+                    idx = wb.add_pivot_data_field(0, f.pivot, PivotDataFieldInput(name=name, field_index=f.amount))
                     self.assertEqual(wb.get_pivot_data_field(0, f.pivot, idx).name, expected)
                     # The same source twice: the second name is numbered.
                     self.assertEqual(
                         wb.get_pivot_data_field_default_name(0, f.pivot, f.amount, PivotAggregation.SUM), expected + "2"
                     )
-                    idx = wb.add_pivot_data_field(0, f.pivot, PivotDataFieldSpec(name=name, field_index=f.amount))
+                    idx = wb.add_pivot_data_field(0, f.pivot, PivotDataFieldInput(name=name, field_index=f.amount))
                     self.assertEqual(wb.get_pivot_data_field(0, f.pivot, idx).name, expected + "2")
                     # Replacing an entry does not count its own name as taken.
                     self.assertEqual(
@@ -1236,7 +1234,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
                         0,
                         f.pivot,
                         0,
-                        PivotDataFieldSpec(name=name, field_index=f.amount, aggregation=PivotAggregation.COUNT),
+                        PivotDataFieldInput(name=name, field_index=f.amount, aggregation=PivotAggregation.COUNT),
                     )
                     self.assertTrue(wb.get_pivot_data_field(0, f.pivot, 0).name.endswith(" Amount"))
 
@@ -1296,7 +1294,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             wb.add_pivot_filter(
                 0,
                 f.pivot,
-                PivotFilterSpec(
+                PivotFilterInput(
                     axis=PivotAxis.ROW,
                     field_name="Region",
                     type=PivotFilterType.LABEL_BETWEEN,
@@ -1315,7 +1313,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             f = _PivotFixture(wb)
             with self.assertRaises(FormulonError):
-                wb.add_pivot_data_field(0, f.pivot, PivotDataFieldSpec(name="", field_index=99))
+                wb.add_pivot_data_field(0, f.pivot, PivotDataFieldInput(name="", field_index=99))
             self.assertEqual(wb.get_pivot_data_field_count(0, f.pivot), 1)
 
 
@@ -1334,25 +1332,23 @@ class PivotFieldBindingTests(unittest.TestCase):
     def test_field_add_binds_to_the_cache_column_by_name(self) -> None:
         with Workbook.create_default() as wb:
             pivot = self._wide_pivot(wb)
-            self.assertEqual(
-                wb.add_pivot_field(0, pivot, PivotFieldSpecInput(source_name="Region", axis=PivotAxis.ROW)), 0
-            )
-            sales = wb.add_pivot_field(0, pivot, PivotFieldSpecInput(source_name="Sales", axis=PivotAxis.VALUE))
+            self.assertEqual(wb.add_pivot_field(0, pivot, PivotFieldInput(source_name="Region", axis=PivotAxis.ROW)), 0)
+            sales = wb.add_pivot_field(0, pivot, PivotFieldInput(source_name="Sales", axis=PivotAxis.VALUE))
             self.assertEqual(sales, 2)
             self.assertEqual(wb.get_pivot_field_count(0, pivot), 4)
             self.assertIsNone(wb.get_pivot_field(0, pivot, 1).axis)
             # Adding a field again updates it instead of appending another.
             self.assertEqual(
-                wb.add_pivot_field(0, pivot, PivotFieldSpecInput(source_name="Sales", axis=PivotAxis.VALUE)), 2
+                wb.add_pivot_field(0, pivot, PivotFieldInput(source_name="Sales", axis=PivotAxis.VALUE)), 2
             )
             self.assertEqual(wb.get_pivot_field_count(0, pivot), 4)
 
     def test_axis_none_takes_a_field_off_the_report(self) -> None:
         with Workbook.create_default() as wb:
             pivot = self._wide_pivot(wb)
-            wb.add_pivot_field(0, pivot, PivotFieldSpecInput(source_name="Region", axis=PivotAxis.ROW))
-            sales = wb.add_pivot_field(0, pivot, PivotFieldSpecInput(source_name="Sales", axis=PivotAxis.VALUE))
-            wb.add_pivot_data_field(0, pivot, PivotDataFieldSpec(name="Total", field_index=sales))
+            wb.add_pivot_field(0, pivot, PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
+            sales = wb.add_pivot_field(0, pivot, PivotFieldInput(source_name="Sales", axis=PivotAxis.VALUE))
+            wb.add_pivot_data_field(0, pivot, PivotDataFieldInput(name="Total", field_index=sales))
             wb.set_pivot_field_axis(0, pivot, sales, -1)
             self.assertIsNone(wb.get_pivot_field(0, pivot, sales).axis)
             self.assertEqual(wb.get_pivot_data_field_count(0, pivot), 0)

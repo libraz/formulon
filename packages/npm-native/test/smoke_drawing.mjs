@@ -94,10 +94,10 @@ test('images probe, insert, list, read back, survive save and load, and remove',
     const wb2 = mod.Workbook.load(saved ?? saved);
     try {
       const id = check(wb2);
-      wb2.removeDrawing(0, id);
+      wb2.removeDrawingObject(0, id);
       assert.equal(wb2.listDrawingObjects(0).length, 0);
       assert.equal(wb2.getImage(0, id), null);
-      assert.throws(() => wb2.removeDrawing(0, id), isFormulonError);
+      assert.throws(() => wb2.removeDrawingObject(0, id), isFormulonError);
     } finally {
       wb2.dispose();
     }
@@ -177,7 +177,7 @@ test('snapshotDrawing and restoreDrawing bring back a removed, moved or copied p
     assert.ok(snap.length > 0);
     const ids = () => Array.from(wb.listDrawingObjects(0), (o) => o.objectId);
 
-    wb.removeDrawing(0, a);
+    wb.removeDrawingObject(0, a);
     const restored = wb.restoreDrawing(0, snap);
     assert.equal(restored, a);
     assert.deepEqual(ids(), [a, b]);

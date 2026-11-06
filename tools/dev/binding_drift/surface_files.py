@@ -75,7 +75,7 @@ def _format_diff(label_a: str, only_a: Set[str], label_b: str, only_b: Set[str])
 # ---------------------------------------------------------------------------
 # Check 6: public style-record field sets <-> their C ABI struct.
 #
-# `FontRecord` and friends are declared independently in three public
+# `Font` and friends are declared independently in three public
 # surfaces and each one claims to mirror the C struct. Method-level drift
 # checking cannot see a field that one surface forgot, which is how a font's
 # `vertAlign` reached the WASM `.d.ts` alone: reading a superscript font and

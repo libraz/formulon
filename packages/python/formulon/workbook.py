@@ -60,7 +60,7 @@ __all__ = [
     "Cell",
     "CellsInRange",
     "CellNode",
-    "CellStyleRecord",
+    "CellStyle",
     "CellXf",
     "CfCell",
     "CfColor",
@@ -77,7 +77,7 @@ __all__ = [
     "ImageInfo",
     "DrawingObject",
     "ChartAxisCrosses",
-    "ChartAxisInfo",
+    "ChartAxis",
     "ChartAxisKind",
     "ChartAxisPatch",
     "ChartAxisTitleText",
@@ -86,35 +86,35 @@ __all__ = [
     "ChartData",
     "ChartDataSeries",
     "ChartDataSource",
-    "ChartFillInfo",
+    "ChartFill",
     "ChartFillPatch",
     "ChartGrouping",
-    "ChartInfo",
+    "Chart",
     "ChartInsertKind",
     "ChartLabelPosition",
-    "ChartLabelsInfo",
+    "ChartLabels",
     "ChartLabelsPatch",
-    "ChartLegendInfo",
+    "ChartLegend",
     "ChartLegendPosition",
     "ChartLineDash",
-    "ChartLineInfo",
+    "ChartLine",
     "ChartLinePatch",
-    "ChartMarkerInfo",
+    "ChartMarker",
     "ChartMarkerPatch",
     "ChartMarkerSymbol",
-    "ChartPlotInfo",
+    "ChartPlot",
     "ChartPlotPatch",
     "ChartPlotType",
-    "ChartPointInfo",
+    "ChartPoint",
     "ChartPointPatch",
     "ChartPointState",
     "ChartDisplayPatch",
     "ChartPreviewOverridesInput",
     "ChartSeriesDirection",
-    "ChartSeriesInfo",
+    "ChartSeries",
     "ChartSeriesPatch",
     "ChartSeriesRanges",
-    "ChartSourceInfo",
+    "ChartSource",
     "ChartTitle",
     "ChartTitleKind",
     "ChartUnresolved",
@@ -127,7 +127,7 @@ __all__ = [
     "DateTimeGrouping",
     "ValidationErrorStyle",
     "ColorResolution",
-    "ColorSpec",
+    "Color",
     "ColumnLayout",
     "Comment",
     "ConditionalFormat",
@@ -143,10 +143,10 @@ __all__ = [
     "EffectiveStyle",
     "ErrorCode",
     "ExcelError",
-    "ExternalLinkRecord",
+    "ExternalLink",
     "ExternalLinkKind",
-    "FillRecord",
-    "FontRecord",
+    "Fill",
+    "Font",
     "FormulonError",
     "FunctionMetadata",
     "GeometryMode",
@@ -162,7 +162,7 @@ __all__ = [
     "CellRect",
     "SheetRect",
     "PageLayout",
-    "PaperInfo",
+    "Paper",
     "PassthroughPart",
     "PivotAggregation",
     "PivotAxis",
@@ -171,16 +171,16 @@ __all__ = [
     "PivotCalendar",
     "PivotCell",
     "PivotCellKind",
-    "PivotDataFieldSpec",
+    "PivotDataFieldInput",
     "PivotDatePeriod",
-    "PivotFieldInfo",
-    "PivotFieldSpecInput",
-    "PivotFilterSpec",
+    "PivotField",
+    "PivotFieldInput",
+    "PivotFilterInput",
     "PivotFilterType",
     "PivotFilterValueKind",
     "PIVOT_VALUES_FIELD",
-    "PivotItemInfo",
-    "PivotStyleInfo",
+    "PivotItem",
+    "PivotStyle",
     "PivotLayout",
     "PivotOptions",
     "PivotReportLayout",
@@ -201,7 +201,7 @@ __all__ = [
     "Shape",
     "ShapePaint",
     "DataTable",
-    "DataTableInput",
+    "DataTableInputCell",
     "Slicer",
     "SlicerCrossFilter",
     "SlicerSortOrder",
@@ -211,7 +211,7 @@ __all__ = [
     "SparklineEmptyCells",
     "SparklineGroup",
     "SparklineType",
-    "SpillInfo",
+    "Spill",
     "ParsedReference",
     "ArrayFormula",
     "EffectiveStyleSource",
@@ -916,7 +916,7 @@ class ErrorCode(IntEnum):
 
 
 class ExternalLinkKind(IntEnum):
-    """External-link kind carried by :attr:`ExternalLinkRecord.kind`."""
+    """External-link kind carried by :attr:`ExternalLink.kind`."""
 
     UNKNOWN = 0
     EXTERNAL_BOOK = 1
@@ -1119,7 +1119,7 @@ class PivotSortOrder(IntEnum):
     MANUAL = 2
 
 
-# Sentinel value for ``PivotDataFieldSpec.show_as_base_item`` meaning
+# Sentinel value for ``PivotDataFieldInput.show_as_base_item`` meaning
 # "(previous)" / "(next)" (mirrors the C ABI constants).
 PIVOT_SHOW_AS_BASE_PREVIOUS = 1048828
 PIVOT_SHOW_AS_BASE_NEXT = 1048829
@@ -1131,7 +1131,7 @@ PIVOT_VALUES_FIELD = -2
 _PIVOT_VALUES_FIELD_C = 0xFFFFFFFE
 _PIVOT_NO_DATA_FIELD = 0xFFFFFFFF
 
-# Sentinel for ``CellStyleRecord.builtin_id`` meaning "custom (no builtinId)".
+# Sentinel for ``CellStyle.builtin_id`` meaning "custom (no builtinId)".
 CELL_STYLE_BUILTIN_ID_NONE = S.CELL_STYLE_BUILTIN_ID_NONE
 
 
@@ -1177,7 +1177,7 @@ class Comment:
     text: str
 
 
-class CommentEntry(NamedTuple):
+class SheetComment(NamedTuple):
     """One enumerated sheet comment, including its zero-based anchor."""
 
     row: int
@@ -1500,7 +1500,7 @@ class Slicer:
 
 
 @dataclass
-class DataTableInput:
+class DataTableInputCell:
     """An input cell of a data table; ``deleted`` marks one removed by a row or column delete."""
 
     row: int
@@ -1521,8 +1521,8 @@ class DataTable:
     rect: CellRect
     two_dimensional: bool
     row_oriented: bool
-    row_input: Optional[DataTableInput]
-    col_input: Optional[DataTableInput]
+    row_input: Optional[DataTableInputCell]
+    col_input: Optional[DataTableInputCell]
 
 
 @dataclass(frozen=True)
@@ -1543,14 +1543,14 @@ class SparklineGroup:
     """
 
     type: Union[SparklineType, int] = SparklineType.LINE
-    color_series: ColorSpec = field(default_factory=lambda: ColorSpec())
-    color_negative: ColorSpec = field(default_factory=lambda: ColorSpec())
-    color_axis: ColorSpec = field(default_factory=lambda: ColorSpec())
-    color_markers: ColorSpec = field(default_factory=lambda: ColorSpec())
-    color_first: ColorSpec = field(default_factory=lambda: ColorSpec())
-    color_last: ColorSpec = field(default_factory=lambda: ColorSpec())
-    color_high: ColorSpec = field(default_factory=lambda: ColorSpec())
-    color_low: ColorSpec = field(default_factory=lambda: ColorSpec())
+    color_series: Color = field(default_factory=lambda: Color())
+    color_negative: Color = field(default_factory=lambda: Color())
+    color_axis: Color = field(default_factory=lambda: Color())
+    color_markers: Color = field(default_factory=lambda: Color())
+    color_first: Color = field(default_factory=lambda: Color())
+    color_last: Color = field(default_factory=lambda: Color())
+    color_high: Color = field(default_factory=lambda: Color())
+    color_low: Color = field(default_factory=lambda: Color())
     markers: bool = False
     high: bool = False
     low: bool = False
@@ -1737,7 +1737,7 @@ class ChartTitle:
 
 
 @dataclass
-class ChartFillInfo:
+class ChartFill:
     """Solid fill; ``color`` is ``0xAARRGGBB`` and ``transparency`` a percentage, each ``None`` when absent."""
 
     color: Optional[int] = None
@@ -1745,7 +1745,7 @@ class ChartFillInfo:
 
 
 @dataclass
-class ChartLineInfo:
+class ChartLine:
     """Outline; ``none`` is an explicit no-line."""
 
     color: Optional[int] = None
@@ -1756,17 +1756,17 @@ class ChartLineInfo:
 
 
 @dataclass
-class ChartMarkerInfo:
+class ChartMarker:
     """Series or point marker."""
 
     symbol: Union[ChartMarkerSymbol, int]
     size: Optional[int]
-    fill: ChartFillInfo
-    line: ChartLineInfo
+    fill: ChartFill
+    line: ChartLine
 
 
 @dataclass
-class ChartLabelsInfo:
+class ChartLabels:
     """Data labels of a series."""
 
     show_value: bool
@@ -1784,17 +1784,17 @@ class ChartLabelsInfo:
 
 
 @dataclass
-class ChartPointInfo:
+class ChartPoint:
     """One formatted data point (``c:dPt``)."""
 
     index: int
-    fill: ChartFillInfo
-    line: ChartLineInfo
-    marker: Optional[ChartMarkerInfo]
+    fill: ChartFill
+    line: ChartLine
+    marker: Optional[ChartMarker]
 
 
 @dataclass
-class ChartSeriesInfo:
+class ChartSeries:
     """One series of a plot group; ``index`` is its ``c:idx``."""
 
     index: int
@@ -1806,16 +1806,16 @@ class ChartSeriesInfo:
     x: ChartDataSource
     y: ChartDataSource
     size: ChartDataSource
-    fill: ChartFillInfo
-    line: ChartLineInfo
-    marker: Optional[ChartMarkerInfo]
+    fill: ChartFill
+    line: ChartLine
+    marker: Optional[ChartMarker]
     smooth: Optional[bool]
-    points: List[ChartPointInfo]
-    labels: Optional[ChartLabelsInfo]
+    points: List[ChartPoint]
+    labels: Optional[ChartLabels]
 
 
 @dataclass
-class ChartPlotInfo:
+class ChartPlot:
     """One plot group; ``bar_direction`` is ``"col"``, ``"bar"`` or ``None``."""
 
     type: Union[ChartPlotType, int]
@@ -1828,11 +1828,11 @@ class ChartPlotInfo:
     hole_size: Optional[int]
     first_slice_angle: Optional[int]
     axis_ids: List[int]
-    series: List[ChartSeriesInfo]
+    series: List[ChartSeries]
 
 
 @dataclass
-class ChartAxisInfo:
+class ChartAxis:
     """One axis; ``position`` is ``"b"``, ``"t"``, ``"l"`` or ``"r"``. ``crosses_at`` is ``None`` unless ``crosses`` is ``AT``."""
 
     id: int
@@ -1857,7 +1857,7 @@ class ChartAxisInfo:
 
 
 @dataclass
-class ChartLegendInfo:
+class ChartLegend:
     """Legend state; ``hidden_series`` lists the ``c:idx`` of series whose legend entry is hidden."""
 
     position: Union[ChartLegendPosition, int]
@@ -1866,7 +1866,7 @@ class ChartLegendInfo:
 
 
 @dataclass
-class ChartSourceInfo:
+class ChartSource:
     """The rectangle every series was split from and how it was split."""
 
     range: str
@@ -1876,7 +1876,7 @@ class ChartSourceInfo:
 
 
 @dataclass(frozen=True)
-class ChartInfo:
+class Chart:
     """The typed view of a chart (:meth:`Workbook.get_chart`); ``source`` is ``None`` when series share no rectangle."""
 
     object_id: int
@@ -1887,15 +1887,15 @@ class ChartInfo:
     on_chartsheet: bool
     title: ChartTitle
     auto_title_deleted: Optional[bool]
-    legend: ChartLegendInfo
+    legend: ChartLegend
     blanks_as: Union[ChartBlanksAs, int]
     plot_visible_only: Optional[bool]
     date1904: bool
     style: Optional[int]
-    plots: List[ChartPlotInfo]
-    axes: List[ChartAxisInfo]
+    plots: List[ChartPlot]
+    axes: List[ChartAxis]
     hidden_categories: List[int]
-    source: Optional[ChartSourceInfo]
+    source: Optional[ChartSource]
     #: ``c16r3:dataDisplayOptions16/dispNaAsBlank``; ``None`` when the element is absent.
     na_as_blank: Optional[bool]
 
@@ -2292,7 +2292,7 @@ class PivotGrandTotals:
     """Grand-total flags read back by ``get_pivot_grand_totals``."""
 
     rows: bool
-    cols: bool
+    columns: bool
 
 
 @dataclass(frozen=True)
@@ -2311,7 +2311,7 @@ class Pagination:
     print_area: List[CellRect]
     horizontal_breaks: List[int]
     vertical_breaks: List[int]
-    paper: "PaperInfo"
+    paper: "Paper"
     margins: "MarginsPt"
     printable: "RectPt"
     #: Effective scale as a factor (1.0 is 100%).
@@ -2337,7 +2337,7 @@ class RectPt:
 
 
 @dataclass(frozen=True)
-class PaperInfo:
+class Paper:
     """The paper a sheet prints on, after the orientation swap."""
 
     width_pt: float
@@ -2682,7 +2682,7 @@ class CellNode:
 
 
 @dataclass(frozen=True)
-class SpillInfo:
+class Spill:
     """Dynamic-array spill region info for a cell."""
 
     engaged: bool
@@ -2827,7 +2827,7 @@ class CellXf:
 
 
 @dataclass(frozen=True)
-class ColorSpec:
+class Color:
     """How an OOXML ``<color>`` element expressed its value.
 
     Records read from a file carry the original specification here. When
@@ -2887,7 +2887,7 @@ class PhoneticProperties:
 
 
 @dataclass(frozen=True)
-class FontRecord:
+class Font:
     """A font record (``add_font`` input / ``get_font`` result).
 
     The ``has_*`` flags distinguish an absent OOXML element from an
@@ -2929,7 +2929,7 @@ class FontRecord:
     has_size: bool = True
     #: ``<scheme>`` theme link: 0=absent, 1=major, 2=minor.
     scheme: int = 0
-    color: ColorSpec = field(default_factory=ColorSpec)
+    color: Color = field(default_factory=Color)
 
 
 @dataclass(frozen=True)
@@ -2938,7 +2938,7 @@ class GradientStop:
 
     position: float = 0.0
     color_argb: int = 0
-    color: ColorSpec = field(default_factory=ColorSpec)
+    color: Color = field(default_factory=Color)
 
 
 @dataclass
@@ -2960,7 +2960,7 @@ class GradientFill:
 
 
 @dataclass(frozen=True)
-class FillRecord:
+class Fill:
     """A fill record.
 
     ``fg`` and ``bg`` carry the authoritative OOXML colour selectors. Their
@@ -2973,8 +2973,8 @@ class FillRecord:
     pattern: int = 0
     fg_argb: int = 0
     bg_argb: int = 0
-    fg: ColorSpec = field(default_factory=ColorSpec)
-    bg: ColorSpec = field(default_factory=ColorSpec)
+    fg: Color = field(default_factory=Color)
+    bg: Color = field(default_factory=Color)
     gradient: Optional[GradientFill] = None
 
 
@@ -2989,8 +2989,8 @@ class DifferentialFormat:
     round-tripping, while XML lexical formatting may normalize on load.
     """
 
-    font: Optional[FontRecord] = None
-    fill: Optional[FillRecord] = None
+    font: Optional[Font] = None
+    fill: Optional[Fill] = None
     border: Optional[Dict[str, object]] = None
     num_fmt_id: Optional[int] = None
     num_fmt_code: str = ""
@@ -2998,12 +2998,12 @@ class DifferentialFormat:
     protection_xml: str = ""
 
 
-def _decode_color(ptr: int) -> ColorSpec:
+def _decode_color(ptr: int) -> Color:
     d = S.COLOR_SPEC.unpack(LIB, ptr)
-    return ColorSpec(kind=d["kind"], rgb=d["rgb"], theme=d["theme"], tint=d["tint"], indexed=d["indexed"])
+    return Color(kind=d["kind"], rgb=d["rgb"], theme=d["theme"], tint=d["tint"], indexed=d["indexed"])
 
 
-def _pack_color(ptr: int, spec: ColorSpec) -> None:
+def _pack_color(ptr: int, spec: Color) -> None:
     S.COLOR_SPEC.pack(
         LIB,
         ptr,
@@ -3017,9 +3017,9 @@ def _pack_color(ptr: int, spec: ColorSpec) -> None:
     )
 
 
-def _decode_font(ptr: int) -> FontRecord:
+def _decode_font(ptr: int) -> Font:
     d = S.FONT_RECORD.unpack(LIB, ptr)
-    return FontRecord(
+    return Font(
         name=LIB.read_cstr(d["name"]),
         size=d["size"],
         color_argb=d["color_argb"],
@@ -3049,7 +3049,7 @@ def _decode_font(ptr: int) -> FontRecord:
     )
 
 
-def _pack_font(ptr: int, record: FontRecord, scope: _ArgScope) -> None:
+def _pack_font(ptr: int, record: Font, scope: _ArgScope) -> None:
     S.FONT_RECORD.pack(
         LIB,
         ptr,
@@ -3084,7 +3084,7 @@ def _pack_font(ptr: int, record: FontRecord, scope: _ArgScope) -> None:
     S.write_str_field(LIB, ptr, S.FONT_RECORD, "name", record.name, scope)
 
 
-def _decode_fill(ptr: int) -> FillRecord:
+def _decode_fill(ptr: int) -> Fill:
     d = S.FILL_RECORD.unpack(LIB, ptr)
     gradient = None
     if d["has_gradient"]:
@@ -3109,7 +3109,7 @@ def _decode_fill(ptr: int) -> FillRecord:
             bottom=d["gradient_bottom"],
             stops=stops,
         )
-    return FillRecord(
+    return Fill(
         pattern=d["pattern"],
         fg_argb=d["fg_argb"],
         bg_argb=d["bg_argb"],
@@ -3119,7 +3119,7 @@ def _decode_fill(ptr: int) -> FillRecord:
     )
 
 
-def _pack_fill(ptr: int, record: FillRecord, scope: _ArgScope) -> None:
+def _pack_fill(ptr: int, record: Fill, scope: _ArgScope) -> None:
     """Write ``record`` into the fill record struct at ``ptr``; the gradient
     stops are allocated through ``scope``."""
     values: Dict[str, object] = {
@@ -3194,7 +3194,7 @@ def _pack_border_record(ptr: int, sides: Dict[str, object]) -> None:
                 "color_argb": _uint(spec.get("color_argb", 0), "color_argb"),
             },
         )
-        _pack_color(side_ptr + S.BORDER_SIDE.offsets["color"][1], spec.get("color") or ColorSpec())
+        _pack_color(side_ptr + S.BORDER_SIDE.offsets["color"][1], spec.get("color") or Color())
 
 
 @dataclass(frozen=True)
@@ -3213,7 +3213,7 @@ class StyleBatchIndices:
 
 
 @dataclass(frozen=True)
-class CellStyleRecord:
+class CellStyle:
     """A named cell style (``<cellStyle>`` entry)."""
 
     name: str
@@ -3291,7 +3291,7 @@ class EffectiveStyle:
 
 
 @dataclass(frozen=True)
-class ExternalLinkRecord:
+class ExternalLink:
     """An external-link record (``<externalReferences>`` entry)."""
 
     index: int
@@ -3334,7 +3334,7 @@ class PivotWorksheetSource:
 
 
 @dataclass
-class PivotFieldSpecInput:
+class PivotFieldInput:
     """Argument shape for :meth:`Workbook.add_pivot_field`.
 
     ``subtotal_top`` defaults to ``True``, Excel's default: a group's subtotal
@@ -3350,7 +3350,7 @@ class PivotFieldSpecInput:
 
 
 @dataclass(frozen=True)
-class PivotFieldInfo:
+class PivotField:
     """A pivot field's definition, as read by :meth:`Workbook.get_pivot_field`.
 
     ``axis`` is ``None`` for a field that sits on no axis. ``cache_field_index``
@@ -3383,7 +3383,7 @@ class PivotFieldInfo:
 
 
 @dataclass(frozen=True)
-class PivotItemInfo:
+class PivotItem:
     """One pivot-field item, as read by :meth:`Workbook.get_pivot_field_item`.
 
     ``name`` is the item's own label (empty for an item bound only by cache
@@ -3401,7 +3401,7 @@ class PivotItemInfo:
 
 
 @dataclass(frozen=True)
-class PivotStyleInfo:
+class PivotStyle:
     """A pivot table's style, as read by :meth:`Workbook.get_pivot_style_info`.
 
     ``present`` is false when the definition has no style element; ``name``
@@ -3483,7 +3483,7 @@ class PivotCalculatedItem:
 
 
 @dataclass(frozen=True)
-class PivotDataFieldSpec:
+class PivotDataFieldInput:
     """Argument shape for ``pivot_data_field_add`` / ``pivot_data_field_set``.
 
     An empty or ``None`` ``name`` asks the engine to name the data field from
@@ -3502,7 +3502,7 @@ class PivotDataFieldSpec:
 
 
 @dataclass(frozen=True)
-class PivotFilterSpec:
+class PivotFilterInput:
     """Argument shape for :meth:`Workbook.add_pivot_filter`."""
 
     axis: "PivotAxis | int"
@@ -4054,12 +4054,12 @@ def _read_chart_title(d: Dict[str, object]) -> ChartTitle:
     )
 
 
-def _read_chart_fill(d: Dict[str, object]) -> ChartFillInfo:
-    return ChartFillInfo(color=d["color"] if d["has_color"] else None, transparency=_nan_none(d["transparency_pct"]))
+def _read_chart_fill(d: Dict[str, object]) -> ChartFill:
+    return ChartFill(color=d["color"] if d["has_color"] else None, transparency=_nan_none(d["transparency_pct"]))
 
 
-def _read_chart_line(d: Dict[str, object]) -> ChartLineInfo:
-    return ChartLineInfo(
+def _read_chart_line(d: Dict[str, object]) -> ChartLine:
+    return ChartLine(
         color=d["color"] if d["has_color"] else None,
         transparency=_nan_none(d["transparency_pct"]),
         width_pt=_nan_none(d["width_pt"]),
@@ -4068,8 +4068,8 @@ def _read_chart_line(d: Dict[str, object]) -> ChartLineInfo:
     )
 
 
-def _read_chart_marker(d: Dict[str, object]) -> ChartMarkerInfo:
-    return ChartMarkerInfo(
+def _read_chart_marker(d: Dict[str, object]) -> ChartMarker:
+    return ChartMarker(
         symbol=_enum(ChartMarkerSymbol, d["symbol"]),
         size=d["size"] if d["has_size"] else None,
         fill=_read_chart_fill(d["fill"]),
@@ -4077,8 +4077,8 @@ def _read_chart_marker(d: Dict[str, object]) -> ChartMarkerInfo:
     )
 
 
-def _read_chart_labels(d: Dict[str, object]) -> ChartLabelsInfo:
-    return ChartLabelsInfo(
+def _read_chart_labels(d: Dict[str, object]) -> ChartLabels:
+    return ChartLabels(
         show_value=bool(d["show_value"]),
         show_category=bool(d["show_category"]),
         show_series=bool(d["show_series"]),
@@ -4104,21 +4104,21 @@ def _read_chart_data_source(chart: int, plot: int, series: int, role: int, d: Di
     return ChartDataSource(kind=kind, formula=LIB.read_cstr(d["formula"]), literal=literal)
 
 
-def _read_chart_series(chart: int, plot: int, series: int) -> ChartSeriesInfo:
+def _read_chart_series(chart: int, plot: int, series: int) -> ChartSeries:
     d = _read_struct(LIB.fm_chart_get_series_at, S.CHART_SERIES, chart, plot, series)
     sources = {key: _read_chart_data_source(chart, plot, series, role, d[key]) for role, key in enumerate(_CHART_ROLES)}
-    points: List[ChartPointInfo] = []
+    points: List[ChartPoint] = []
     for i in range(d["point_count"]):
         p = _read_struct(LIB.fm_chart_get_series_point_at, S.CHART_POINT, chart, plot, series, i)
         points.append(
-            ChartPointInfo(
+            ChartPoint(
                 index=p["idx"],
                 fill=_read_chart_fill(p["fill"]),
                 line=_read_chart_line(p["line"]),
                 marker=_read_chart_marker(p["marker"]) if p["has_marker"] else None,
             )
         )
-    return ChartSeriesInfo(
+    return ChartSeries(
         index=d["idx"],
         order=d["order"],
         filtered=bool(d["filtered"]),
@@ -4132,9 +4132,9 @@ def _read_chart_series(chart: int, plot: int, series: int) -> ChartSeriesInfo:
     )
 
 
-def _read_chart_plot(chart: int, plot: int) -> ChartPlotInfo:
+def _read_chart_plot(chart: int, plot: int) -> ChartPlot:
     d = _read_struct(LIB.fm_chart_get_plot_at, S.CHART_PLOT, chart, plot)
-    return ChartPlotInfo(
+    return ChartPlot(
         type=_enum(ChartPlotType, d["type"]),
         chartex_layout=LIB.read_cstr(d["chartex_layout"]) or None,
         bar_direction=_CHART_BAR_DIRECTIONS.get(d["bar_dir"]),
@@ -4152,9 +4152,9 @@ def _read_chart_plot(chart: int, plot: int) -> ChartPlotInfo:
     )
 
 
-def _read_chart_axis(chart: int, idx: int) -> ChartAxisInfo:
+def _read_chart_axis(chart: int, idx: int) -> ChartAxis:
     d = _read_struct(LIB.fm_chart_get_axis_at, S.CHART_AXIS, chart, idx)
-    return ChartAxisInfo(
+    return ChartAxis(
         id=d["id"],
         kind=_enum(ChartAxisKind, d["kind"]),
         position=_CHART_AXIS_POSITIONS.get(d["position"], "b"),
@@ -4177,18 +4177,18 @@ def _read_chart_axis(chart: int, idx: int) -> ChartAxisInfo:
     )
 
 
-def _read_chart(chart: int) -> ChartInfo:
+def _read_chart(chart: int) -> Chart:
     """Decode an open chart handle."""
     d = _read_struct(LIB.fm_chart_get_info, S.CHART_INFO, chart)
     source = None
     if d["source_range"]:
-        source = ChartSourceInfo(
+        source = ChartSource(
             range=LIB.read_cstr(d["source_range"]),
             direction=_enum(ChartSeriesDirection, d["source_direction"]),
             header_row=bool(d["source_header_row"]),
             header_column=bool(d["source_header_column"]),
         )
-    return ChartInfo(
+    return Chart(
         object_id=d["object_id"],
         name=LIB.read_cstr(d["name"]),
         description=LIB.read_cstr(d["descr"]),
@@ -4197,7 +4197,7 @@ def _read_chart(chart: int) -> ChartInfo:
         on_chartsheet=bool(d["on_chartsheet"]),
         title=_read_chart_title(d["title"]),
         auto_title_deleted=_tri(d["auto_title_deleted"]),
-        legend=ChartLegendInfo(
+        legend=ChartLegend(
             position=_enum(ChartLegendPosition, d["legend_position"]),
             overlay=bool(d["legend_overlay"]),
             hidden_series=[
@@ -4666,8 +4666,8 @@ def _person_from(d: Dict[str, Any]) -> Person:
     )
 
 
-def _cell_style_from(d: Dict[str, Any]) -> CellStyleRecord:
-    return CellStyleRecord(
+def _cell_style_from(d: Dict[str, Any]) -> CellStyle:
+    return CellStyle(
         name=LIB.read_cstr(d["name"]),
         xf_id=d["xf_id"],
         builtin_id=d["builtin_id"],
@@ -6776,14 +6776,14 @@ class Workbook:
                 )
             )
 
-    def list_comments(self, sheet: int) -> List[CommentEntry]:
+    def list_comments(self, sheet: int) -> List[SheetComment]:
         """Return every comment on ``sheet`` in storage order.
 
         Unlike :meth:`get_comment`, this discovers comments on otherwise
         empty cells without requiring callers to scan worksheet coordinates.
         """
         h = self._require()
-        out: List[CommentEntry] = []
+        out: List[SheetComment] = []
         # One scratch block for the whole walk; see list_defined_names.
         with _ArgScope() as scope:
             ptr = scope.struct(S.COMMENT)
@@ -6791,7 +6791,7 @@ class Workbook:
                 S.zero_struct(LIB, S.COMMENT, ptr)
                 _check(LIB.fm_sheet_get_comment_at(h, _uint(sheet, "sheet"), _uint(index, "index"), ptr))
                 d = S.COMMENT.unpack(LIB, ptr)
-                out.append(CommentEntry(d["row"], d["col"], LIB.read_cstr(d["author"]), LIB.read_cstr(d["text"])))
+                out.append(SheetComment(d["row"], d["col"], LIB.read_cstr(d["author"]), LIB.read_cstr(d["text"])))
         return out
 
     def get_comment_visible(self, sheet: int, row: int, col: int) -> Optional[bool]:
@@ -7602,7 +7602,7 @@ class Workbook:
             _check(LIB.fm_sheet_add_image(h, _uint(sheet, "sheet_index"), buf, _uint(len(raw), "len"), ptr, out))
             return LIB.read_u32(out)
 
-    def remove_drawing(self, sheet: int, object_id: int) -> None:
+    def remove_drawing_object(self, sheet: int, object_id: int) -> None:
         """Remove the picture or chart ``object_id`` and the parts only it reaches; other drawing content is kept."""
         h = self._require()
         _check(LIB.fm_sheet_remove_drawing(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id")))
@@ -7974,10 +7974,10 @@ class Workbook:
                 return None
             d = S.DATA_TABLE.unpack(LIB, ptr)
 
-        def _input(prefix: str) -> Optional[DataTableInput]:
+        def _input(prefix: str) -> Optional[DataTableInputCell]:
             if not d["has_" + prefix]:
                 return None
-            return DataTableInput(d[prefix + "_row"], d[prefix + "_col"], bool(d[prefix + "_deleted"]))
+            return DataTableInputCell(d[prefix + "_row"], d[prefix + "_col"], bool(d[prefix + "_deleted"]))
 
         return DataTable(
             rect=_cell_rect_from(d["rect"]),
@@ -8093,7 +8093,7 @@ class Workbook:
         h = self._require()
         _check(LIB.fm_sheet_remove_sparkline_group(h, _uint(sheet, "sheet_index"), _uint(index, "idx")))
 
-    def get_chart(self, sheet: int, object_id: int) -> Optional[ChartInfo]:
+    def get_chart(self, sheet: int, object_id: int) -> Optional[Chart]:
         """Return the typed view of the chart ``object_id``: plots, series, axes, legend and source.
 
         Returns ``None`` when the sheet has no chart with that id; raises
@@ -8583,7 +8583,7 @@ class Workbook:
                     return layout.unpack(LIB, struct_ptr)
 
                 d = read_struct(S.PAPER_INFO, LIB.fm_pagination_get_paper)
-                paper = PaperInfo(d["width_pt"], d["height_pt"], bool(d["landscape"]), bool(d["known"]))
+                paper = Paper(d["width_pt"], d["height_pt"], bool(d["landscape"]), bool(d["known"]))
                 margins = MarginsPt(**read_struct(S.MARGINS_PT, LIB.fm_pagination_get_margins))
                 printable = RectPt(**read_struct(S.RECT_PT, LIB.fm_pagination_get_printable))
                 d = read_struct(S.PRINT_TITLES, LIB.fm_pagination_get_print_titles)
@@ -10019,11 +10019,11 @@ class Workbook:
             self._decode_cell_xf,
         )
 
-    def get_font(self, font_index: int) -> FontRecord:
+    def get_font(self, font_index: int) -> Font:
         """Return the font record at ``font_index``."""
         return self._get_style_record(LIB.fm_workbook_get_font, S.FONT_RECORD, font_index, "font_index", _decode_font)
 
-    def get_fill(self, fill_index: int) -> FillRecord:
+    def get_fill(self, fill_index: int) -> Fill:
         """Return the fill record at ``fill_index``."""
         return self._get_style_record(LIB.fm_workbook_get_fill, S.FILL_RECORD, fill_index, "fill_index", _decode_fill)
 
@@ -10031,7 +10031,7 @@ class Workbook:
         """Return the border record at ``border_index``.
 
         Each side is a ``{"style", "color_argb", "color"}`` dict, where
-        ``color`` is the round-trip :class:`ColorSpec`; the result also
+        ``color`` is the round-trip :class:`Color`; the result also
         carries ``diagonal_up`` / ``diagonal_down`` booleans.
         """
         return self._get_style_record(
@@ -10087,13 +10087,13 @@ class Workbook:
         """Return the number of ``<xf>`` records registered."""
         return self._style_count(LIB.fm_workbook_get_cell_xf_count)
 
-    def list_cell_styles(self) -> List[CellStyleRecord]:
+    def list_cell_styles(self) -> List[CellStyle]:
         """Return the named cell styles in file order."""
         h = self._require()
         n = _read_count(LIB.fm_workbook_get_cell_style_count, h)
         with _ArgScope() as scope:
             ptr = scope.struct(S.CELL_STYLE_RECORD)
-            out: List[CellStyleRecord] = []
+            out: List[CellStyle] = []
             for i in range(n):
                 S.zero_struct(LIB, S.CELL_STYLE_RECORD, ptr)
                 _check(LIB.fm_workbook_get_cell_style_at(h, _uint(i, "index"), ptr))
@@ -10112,7 +10112,7 @@ class Workbook:
         h = self._require()
         return _read_count(fn, h)
 
-    def add_font(self, record: FontRecord) -> int:
+    def add_font(self, record: Font) -> int:
         """Add (dedup) a font record; return its index."""
         h = self._require()
         with _ArgScope() as scope:
@@ -10122,7 +10122,7 @@ class Workbook:
             _check(LIB.fm_workbook_add_font(h, ptr, out))
             return LIB.read_u32(out)
 
-    def set_font(self, font_index: int, record: FontRecord) -> None:
+    def set_font(self, font_index: int, record: Font) -> None:
         """Overwrite an existing font slot in place.
 
         Every ``<xf>`` naming ``font_index`` restyles at once, so this is a
@@ -10135,7 +10135,7 @@ class Workbook:
             _pack_font(ptr, record, scope)
             _check(LIB.fm_workbook_set_font(h, _uint(font_index, "font_index"), ptr))
 
-    def set_default_font(self, record: FontRecord) -> None:
+    def set_default_font(self, record: Font) -> None:
         """Declare the workbook's default font (font 0).
 
         Font 0 is what an unstyled cell resolves to. A new workbook seeds it
@@ -10150,7 +10150,7 @@ class Workbook:
             _pack_font(ptr, record, scope)
             _check(LIB.fm_workbook_set_default_font(h, ptr))
 
-    def add_fill(self, record: FillRecord) -> int:
+    def add_fill(self, record: Fill) -> int:
         """Add (dedup) a fill record; return its index."""
         h = self._require()
         with _ArgScope() as scope:
@@ -10166,7 +10166,7 @@ class Workbook:
         ``sides`` mirrors :meth:`get_border`'s shape: a dict with
         ``left`` / ``right`` / ``top`` / ``bottom`` / ``diagonal`` entries
         (each ``{"style", "color_argb"}`` plus an optional ``color``
-        :class:`ColorSpec`) plus optional ``diagonal_up`` /
+        :class:`Color`) plus optional ``diagonal_up`` /
         ``diagonal_down`` booleans.
         """
         h = self._require()
@@ -10211,8 +10211,8 @@ class Workbook:
     def add_batch(
         self,
         *,
-        fonts: Optional[Sequence[FontRecord]] = None,
-        fills: Optional[Sequence[FillRecord]] = None,
+        fonts: Optional[Sequence[Font]] = None,
+        fills: Optional[Sequence[Fill]] = None,
         borders: Optional[Sequence[Dict[str, object]]] = None,
         num_fmts: Optional[Sequence[str]] = None,
         cell_xfs: Optional[Sequence[CellXf]] = None,
@@ -10338,7 +10338,7 @@ class Workbook:
             _check(LIB.fm_workbook_add_dxf(h, ptr, out))
             return LIB.read_u32(out)
 
-    def set_cell_style(self, record: CellStyleRecord) -> None:
+    def set_cell_style(self, record: CellStyle) -> None:
         """Add or replace the named ``<cellStyle>`` record ``record.name``.
 
         ``record.xf_id`` must reference an existing named-style xf -- register
@@ -10570,7 +10570,7 @@ class Workbook:
         h = self._require()
         _check(LIB.fm_workbook_clear_theme(h))
 
-    def resolve_color(self, spec: ColorSpec, context: Union[ColorContext, int] = ColorContext.FONT) -> ResolvedColor:
+    def resolve_color(self, spec: Color, context: Union[ColorContext, int] = ColorContext.FONT) -> ResolvedColor:
         """Resolve ``spec`` to the ``0xAARRGGBB`` Excel renders.
 
         ``context`` decides what an automatic or absent colour means (black
@@ -10614,7 +10614,7 @@ class Workbook:
                 num_fmt_code=LIB.read_cstr(d["num_fmt_code"]),
             )
 
-    def get_cell_style(self, name: str) -> Optional[CellStyleRecord]:
+    def get_cell_style(self, name: str) -> Optional[CellStyle]:
         """Return the named cell style ``name`` (matched exactly), or ``None``."""
         return self._lookup(LIB.fm_workbook_get_cell_style, (name,), S.CELL_STYLE_RECORD, _cell_style_from)
 
@@ -11268,9 +11268,9 @@ class Workbook:
                     h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), rows, cols
                 )
             )
-            return PivotGrandTotals(rows=LIB.read_i32(rows) != 0, cols=LIB.read_i32(cols) != 0)
+            return PivotGrandTotals(rows=LIB.read_i32(rows) != 0, columns=LIB.read_i32(cols) != 0)
 
-    def get_pivot_style_info(self, sheet: int, pivot_index: int) -> PivotStyleInfo:
+    def get_pivot_style_info(self, sheet: int, pivot_index: int) -> PivotStyle:
         """Return the table style :meth:`set_pivot_style_info` writes."""
         h = self._require()
         with _ArgScope() as scope:
@@ -11281,7 +11281,7 @@ class Workbook:
                 )
             )
             d = S.PIVOT_STYLE_INFO.unpack(LIB, ptr)
-            return PivotStyleInfo(
+            return PivotStyle(
                 present=d["present"] != 0,
                 name=LIB.read_cstr(d["name"]),
                 show_row_headers=d["show_row_headers"] != 0,
@@ -11311,7 +11311,7 @@ class Workbook:
         """Return the column-axis field order. Same contract as rows."""
         return self._pivot_get_field_order(LIB.fm_sheet_get_pivot_column_field_order, sheet, pivot_index)
 
-    def get_pivot_field(self, sheet: int, pivot_index: int, field_index: int) -> PivotFieldInfo:
+    def get_pivot_field(self, sheet: int, pivot_index: int, field_index: int) -> PivotField:
         """Read the definition of pivot field ``field_index``."""
         h = self._require()
         with _ArgScope() as scope:
@@ -11326,7 +11326,7 @@ class Workbook:
                 )
             )
             d = S.PIVOT_FIELD_INFO.unpack(LIB, ptr)
-            return PivotFieldInfo(
+            return PivotField(
                 source_name=LIB.read_cstr(d["source_name"]),
                 custom_name=LIB.read_cstr(d["custom_name"]),
                 axis=PivotAxis(d["axis"]) if d["axis"] >= 0 else None,
@@ -11356,7 +11356,7 @@ class Workbook:
             _uint(field_index, "field_index"),
         )
 
-    def get_pivot_field_item(self, sheet: int, pivot_index: int, field_index: int, item_index: int) -> PivotItemInfo:
+    def get_pivot_field_item(self, sheet: int, pivot_index: int, field_index: int, item_index: int) -> PivotItem:
         """Read item ``item_index`` of pivot field ``field_index``."""
         h = self._require()
         with _ArgScope() as scope:
@@ -11372,7 +11372,7 @@ class Workbook:
                 )
             )
             d = S.PIVOT_ITEM_INFO.unpack(LIB, ptr)
-            return PivotItemInfo(
+            return PivotItem(
                 name=LIB.read_cstr(d["name"]),
                 cache_index=d["cache_index"],
                 visible=d["visible"] != 0,
@@ -11380,7 +11380,7 @@ class Workbook:
                 show_detail=d["show_detail"] != 0,
             )
 
-    def get_pivot_data_field(self, sheet: int, pivot_index: int, data_field_index: int) -> PivotDataFieldSpec:
+    def get_pivot_data_field(self, sheet: int, pivot_index: int, data_field_index: int) -> PivotDataFieldInput:
         """Read data field ``data_field_index`` in the shape ``pivot_data_field_add`` accepts."""
         h = self._require()
         with _ArgScope() as scope:
@@ -11395,7 +11395,7 @@ class Workbook:
                 )
             )
             d = S.PIVOT_DATA_FIELD_SPEC.unpack(LIB, ptr)
-            return PivotDataFieldSpec(
+            return PivotDataFieldInput(
                 name=LIB.read_cstr(d["name"]),
                 field_index=d["field_index"],
                 aggregation=PivotAggregation(d["aggregation"]),
@@ -11412,7 +11412,7 @@ class Workbook:
             LIB.fm_sheet_get_pivot_field_count, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
         )
 
-    def add_pivot_field(self, sheet: int, pivot_index: int, spec: PivotFieldSpecInput) -> int:
+    def add_pivot_field(self, sheet: int, pivot_index: int, spec: PivotFieldInput) -> int:
         """Place a field on the pivot; return its index.
 
         A pivot's fields are positional over its cache's fields (field ``i``
@@ -11984,7 +11984,7 @@ class Workbook:
             LIB.fm_sheet_get_pivot_data_field_count, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
         )
 
-    def add_pivot_data_field(self, sheet: int, pivot_index: int, spec: PivotDataFieldSpec) -> int:
+    def add_pivot_data_field(self, sheet: int, pivot_index: int, spec: PivotDataFieldInput) -> int:
         """Append a data-field entry; return its index."""
         h = self._require()
         with _ArgScope() as scope:
@@ -12002,7 +12002,7 @@ class Workbook:
         sheet: int,
         pivot_index: int,
         data_field_index: int,
-        spec: PivotDataFieldSpec,
+        spec: PivotDataFieldInput,
     ) -> None:
         """Replace the data-field entry at ``data_field_index`` in place."""
         h = self._require()
@@ -12019,7 +12019,7 @@ class Workbook:
             )
 
     @staticmethod
-    def _pack_data_field_spec(spec: PivotDataFieldSpec, scope: _ArgScope) -> int:
+    def _pack_data_field_spec(spec: PivotDataFieldInput, scope: _ArgScope) -> int:
         ptr = scope.struct(S.PIVOT_DATA_FIELD_SPEC)
         S.PIVOT_DATA_FIELD_SPEC.pack(
             LIB,
@@ -12055,7 +12055,7 @@ class Workbook:
             LIB.fm_sheet_get_pivot_filter_count, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
         )
 
-    def get_pivot_filter(self, sheet: int, pivot_index: int, filter_index: int) -> PivotFilterSpec:
+    def get_pivot_filter(self, sheet: int, pivot_index: int, filter_index: int) -> PivotFilterInput:
         """Read the filter at ``filter_index`` without mutating it.
 
         The filter list is saved as the definition's ``<filters>`` block. A
@@ -12078,7 +12078,7 @@ class Workbook:
                 )
             )
             d = S.PIVOT_FILTER_SPEC.unpack(LIB, ptr)
-            return PivotFilterSpec(
+            return PivotFilterInput(
                 axis=PivotAxis(d["axis"]),
                 field_name=LIB.read_cstr(d["field_name"]),
                 type=PivotFilterType(d["type"]),
@@ -12093,7 +12093,7 @@ class Workbook:
                 value_high_text=LIB.read_cstr(d["value_high_text"]),
             )
 
-    def add_pivot_filter(self, sheet: int, pivot_index: int, spec: PivotFilterSpec) -> int:
+    def add_pivot_filter(self, sheet: int, pivot_index: int, spec: PivotFilterInput) -> int:
         """Append a filter to the pivot and return its index; it is saved with it. See :meth:`get_pivot_filter`."""
         h = self._require()
         with _ArgScope() as scope:
@@ -12182,7 +12182,7 @@ class Workbook:
                     LIB.fm_cell_nodes_destroy(handle)
 
     # -- Dynamic-array spill -----------------------------------------------
-    def get_spill_info(self, sheet: int, row: int, col: int) -> SpillInfo:
+    def get_spill_info(self, sheet: int, row: int, col: int) -> Spill:
         """Return dynamic-array spill info for ``(sheet, row, col)``."""
         h = self._require()
         with _ArgScope() as scope:
@@ -12191,7 +12191,7 @@ class Workbook:
             d = S.SPILL_INFO.unpack(LIB, ptr)
             engaged = bool(d["engaged"])
             blocked = bool(d["blocked"])
-            return SpillInfo(
+            return Spill(
                 engaged=engaged,
                 blocked=blocked,
                 rect=_cell_rect_from(d["rect"]) if engaged or blocked else None,
@@ -12306,14 +12306,14 @@ class Workbook:
             h,
         )
 
-    def get_external_link(self, index: int) -> ExternalLinkRecord:
+    def get_external_link(self, index: int) -> ExternalLink:
         """Read the ``index``-th external-link record."""
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.EXTERNAL_LINK_RECORD)
             _check(LIB.fm_workbook_get_external_link(h, _uint(index, "index"), ptr))
             d = S.EXTERNAL_LINK_RECORD.unpack(LIB, ptr)
-            return ExternalLinkRecord(
+            return ExternalLink(
                 index=d["index"],
                 rel_id=LIB.read_cstr(d["rel_id"]),
                 part_path=LIB.read_cstr(d["part_path"]),

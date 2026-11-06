@@ -10,7 +10,7 @@ from dataclasses import replace
 
 from formulon import (
     AnchorKind,
-    ColorSpec,
+    Color,
     DrawingObjectKind,
     FormulonError,
     Shape,
@@ -108,9 +108,9 @@ class ShapeTests(unittest.TestCase):
 def _group(**overrides) -> SparklineGroup:
     group = SparklineGroup(
         type=SparklineType.COLUMN,
-        color_series=ColorSpec(kind=1, rgb=0xFF336699),
-        color_negative=ColorSpec(kind=2, theme=5, tint=-0.25),
-        color_low=ColorSpec(kind=3, indexed=12),
+        color_series=Color(kind=1, rgb=0xFF336699),
+        color_negative=Color(kind=2, theme=5, tint=-0.25),
+        color_low=Color(kind=3, indexed=12),
         markers=True,
         negative=True,
         display_x_axis=True,

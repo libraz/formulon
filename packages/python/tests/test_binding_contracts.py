@@ -25,7 +25,7 @@ from formulon import (
     AnchorKind,
     CalcMode,
     CellRect,
-    CellStyleRecord,
+    CellStyle,
     CellXf,
     CfColor,
     Cfvo,
@@ -34,8 +34,8 @@ from formulon import (
     DifferentialFormat,
     ErrorCode,
     ExternalLinkKind,
-    FillRecord,
-    FontRecord,
+    Fill,
+    Font,
     FormulonError,
     LogLevel,
     PhoneticProperties,
@@ -43,9 +43,9 @@ from formulon import (
     PhoneticRun,
     PivotAggregation,
     PivotAxis,
-    PivotDataFieldSpec,
-    PivotFieldSpecInput,
-    PivotFilterSpec,
+    PivotDataFieldInput,
+    PivotFieldInput,
+    PivotFilterInput,
     PivotFilterType,
     PivotFilterValueKind,
     PivotGrandTotals,
@@ -317,9 +317,9 @@ class StyleSeedingTests(unittest.TestCase):
     def test_empty_workbook_style_records_append_after_the_reserved_slots(self) -> None:
         with Workbook.create_empty() as wb:
             wb.add_sheet("Sheet1")
-            font_index = wb.add_font(FontRecord(name="Arial", size=12.0))
+            font_index = wb.add_font(Font(name="Arial", size=12.0))
             # Excel reserves fill 0 for `none` and fill 1 for `gray125`.
-            fill_index = wb.add_fill(FillRecord(pattern=1, fg_argb=0xFFFF0000))
+            fill_index = wb.add_fill(Fill(pattern=1, fg_argb=0xFFFF0000))
             border_index = wb.add_border({"left": {"style": 1, "color_argb": 0xFF000000}})
             xf_index = wb.add_cell_xf(
                 CellXf(
@@ -350,8 +350,8 @@ class StyleBatchTests(unittest.TestCase):
         with Workbook.create_empty() as wb:
             wb.add_sheet("Sheet1")
             indices = wb.add_batch(
-                fonts=[FontRecord(name="Arial", size=10.0), FontRecord(name="Arial", size=12.0)],
-                fills=[FillRecord(pattern=1, fg_argb=0xFF00FF00)],
+                fonts=[Font(name="Arial", size=10.0), Font(name="Arial", size=12.0)],
+                fills=[Fill(pattern=1, fg_argb=0xFF00FF00)],
                 borders=[{"left": {"style": 1, "color_argb": 0xFF000000}}],
                 num_fmts=["0.000"],
             )
@@ -381,7 +381,7 @@ class StyleBatchTests(unittest.TestCase):
         self.assertEqual(font_count, 3)
 
     def test_batch_matches_the_per_record_path(self) -> None:
-        fonts = [FontRecord(name="Arial", size=float(size)) for size in (8, 9, 10)]
+        fonts = [Font(name="Arial", size=float(size)) for size in (8, 9, 10)]
         with Workbook.create_empty() as wb:
             wb.add_sheet("Sheet1")
             batched = wb.add_batch(fonts=fonts).fonts
@@ -391,7 +391,7 @@ class StyleBatchTests(unittest.TestCase):
         self.assertEqual(batched, per_record)
 
     def test_batch_deduplicates_against_existing_records(self) -> None:
-        record = FontRecord(name="Arial", size=12.0)
+        record = Font(name="Arial", size=12.0)
         with Workbook.create_empty() as wb:
             wb.add_sheet("Sheet1")
             first = wb.add_font(record)
@@ -413,7 +413,7 @@ class StyleBatchTests(unittest.TestCase):
             before = wb.get_font_count()
             with self.assertRaises(FormulonError):
                 wb.add_batch(
-                    fonts=[FontRecord(name="Arial", size=12.0)],
+                    fonts=[Font(name="Arial", size=12.0)],
                     cell_xfs=[
                         CellXf(
                             font_index=9999,
@@ -643,10 +643,10 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             self.assertEqual(wb.get_font(0).name, "Calibri")
             # add_font can only ever append beside the seeded default.
-            self.assertGreater(wb.add_font(FontRecord(name="游ゴシック", size=11.0)), 0)
+            self.assertGreater(wb.add_font(Font(name="游ゴシック", size=11.0)), 0)
             self.assertEqual(wb.get_font(0).name, "Calibri")
 
-            wb.set_default_font(FontRecord(name="游ゴシック", size=11.0, has_charset=True, charset=128))
+            wb.set_default_font(Font(name="游ゴシック", size=11.0, has_charset=True, charset=128))
             self.assertEqual(wb.get_font(0).name, "游ゴシック")
             self.assertEqual(wb.get_font(0).charset, 128)
             data = wb.save()
@@ -655,12 +655,12 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
 
     def test_set_font_overwrites_an_existing_slot(self) -> None:
         with Workbook.create_default() as wb:
-            index = wb.add_font(FontRecord(name="Meiryo", size=12.0))
-            wb.set_font(index, FontRecord(name="MS Gothic", size=9.0))
+            index = wb.add_font(Font(name="Meiryo", size=12.0))
+            wb.set_font(index, Font(name="MS Gothic", size=9.0))
             self.assertEqual(wb.get_font(index).name, "MS Gothic")
             self.assertEqual(wb.get_font_count(), index + 1)
             with self.assertRaises(FormulonError):
-                wb.set_font(wb.get_font_count(), FontRecord(name="MS Gothic"))
+                wb.set_font(wb.get_font_count(), Font(name="MS Gothic"))
 
     def test_table_create_update_remove(self) -> None:
         with Workbook.create_default() as wb:
@@ -804,7 +804,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             xf_id = wb.add_cell_style_xf(StyleAndCalcAccessorTests._xf())
             before = len(wb.list_cell_styles())
-            wb.set_cell_style(CellStyleRecord("MyStyle", xf_id))
+            wb.set_cell_style(CellStyle("MyStyle", xf_id))
             names = [style.name for style in wb.list_cell_styles()]
         self.assertGreater(len(names), before)
         self.assertIn("MyStyle", names)
@@ -812,7 +812,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
     def test_named_cell_style_rejects_an_unregistered_xf_id(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.set_cell_style(CellStyleRecord("Bogus", 9999))
+                wb.set_cell_style(CellStyle("Bogus", 9999))
 
 
 class OneShotEvaluationTests(unittest.TestCase):
@@ -886,18 +886,18 @@ class PivotFilterPersistenceTests(unittest.TestCase):
             wb.set_pivot_cache_record_text(cache_id, rec, 0, region)
             wb.set_pivot_cache_record_number(cache_id, rec, 1, amount)
         pivot = wb.add_pivot(0, "Pivot1", cache_id, 0, 4)
-        wb.add_pivot_field(0, pivot, PivotFieldSpecInput(source_name="Region", axis=PivotAxis.ROW))
-        amount_field = wb.add_pivot_field(0, pivot, PivotFieldSpecInput(source_name="Amount", axis=PivotAxis.VALUE))
+        wb.add_pivot_field(0, pivot, PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
+        amount_field = wb.add_pivot_field(0, pivot, PivotFieldInput(source_name="Amount", axis=PivotAxis.VALUE))
         wb.add_pivot_data_field(
             0,
             pivot,
-            PivotDataFieldSpec(name="Sum of Amount", field_index=amount_field, aggregation=PivotAggregation.SUM),
+            PivotDataFieldInput(name="Sum of Amount", field_index=amount_field, aggregation=PivotAggregation.SUM),
         )
         return wb, pivot
 
     @staticmethod
-    def _filter() -> PivotFilterSpec:
-        return PivotFilterSpec(
+    def _filter() -> PivotFilterInput:
+        return PivotFilterInput(
             axis=PivotAxis.ROW,
             field_name="Region",
             type=PivotFilterType.VALUE_GREATER_THAN,
@@ -967,7 +967,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
         with Workbook.load(data) as reloaded:
             self.assertEqual(reloaded.get_pivot_cache_id(0, 0), cache_id)
             self.assertEqual(reloaded.get_pivot_name(0, 0), "Pivot1")
-            self.assertEqual(reloaded.get_pivot_grand_totals(0, 0), PivotGrandTotals(rows=True, cols=False))
+            self.assertEqual(reloaded.get_pivot_grand_totals(0, 0), PivotGrandTotals(rows=True, columns=False))
             self.assertEqual(reloaded.get_pivot_row_field_order(0, 0), [0])
             self.assertEqual(reloaded.get_pivot_field(0, 0, 0).axis, PivotAxis.ROW)
             self.assertEqual(reloaded.get_pivot_data_field(0, 0, 0).name, "Sum of Amount")
@@ -1376,7 +1376,7 @@ class ArgumentScopeTests(unittest.TestCase):
     def test_a_packer_that_raises_after_allocating_frees_everything(self) -> None:
         runs = [PhoneticRun(i, i + 1, "\u30a2") for i in range(200)] + [PhoneticRun(-1, 1, "\u30a4")]
         ranges = [CellRect(0, 0, 0, 0)] * 200 + [CellRect(-1, 0, 0, 0)]
-        bad_spec = PivotDataFieldSpec(name="Sum", field_index=-1)
+        bad_spec = PivotDataFieldInput(name="Sum", field_index=-1)
         with Workbook.create_default() as wb:
             for name, call in (
                 ("set_cell_phonetic_runs", lambda: wb.set_cell_phonetic_runs(0, 0, 0, runs)),

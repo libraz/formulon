@@ -174,9 +174,9 @@ def check_dts_shared_shapes() -> List[str]:
 # Public type name -> the C struct it projects.
 _STYLE_RECORD_STRUCTS = {
     "CellXf": "fm_cell_xf_t",
-    "ColorSpec": "fm_color_spec_t",
-    "FontRecord": "fm_font_record_t",
-    "FillRecord": "fm_fill_record_t",
+    "Color": "fm_color_spec_t",
+    "Font": "fm_font_record_t",
+    "Fill": "fm_fill_record_t",
     "BorderSide": "fm_border_side_t",
 }
 

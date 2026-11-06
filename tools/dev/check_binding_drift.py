@@ -115,7 +115,7 @@ Checks:
                   both.
   style-record-fields
                   Every public type that projects a style record
-                  (`ColorSpec` / `FontRecord` / `FillRecord` /
+                  (`Color` / `Font` / `Fill` /
                   `BorderSide`) carries the same field set as its C ABI
                   struct, across the WASM `.d.ts`, the Node `.d.ts` and
                   the Python dataclasses. Deliberate omissions live in

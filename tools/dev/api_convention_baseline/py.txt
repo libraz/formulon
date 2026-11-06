@@ -1,29 +1,3 @@
-R0.coverage	drawing.remove	remove_drawing	`remove_drawing` is a former name; the ledger has `remove_drawing_object`
-R0.coverage	record.cell_style_record	CellStyleRecord	`CellStyleRecord` is a former name; the ledger has `CellStyle`
-R0.coverage	record.chart_axis_info	ChartAxisInfo	`ChartAxisInfo` is a former name; the ledger has `ChartAxis`
-R0.coverage	record.chart_fill_info	ChartFillInfo	`ChartFillInfo` is a former name; the ledger has `ChartFill`
-R0.coverage	record.chart_info	ChartInfo	`ChartInfo` is a former name; the ledger has `Chart`
-R0.coverage	record.chart_labels_info	ChartLabelsInfo	`ChartLabelsInfo` is a former name; the ledger has `ChartLabels`
-R0.coverage	record.chart_legend_info	ChartLegendInfo	`ChartLegendInfo` is a former name; the ledger has `ChartLegend`
-R0.coverage	record.chart_line_info	ChartLineInfo	`ChartLineInfo` is a former name; the ledger has `ChartLine`
-R0.coverage	record.chart_marker_info	ChartMarkerInfo	`ChartMarkerInfo` is a former name; the ledger has `ChartMarker`
-R0.coverage	record.chart_plot_info	ChartPlotInfo	`ChartPlotInfo` is a former name; the ledger has `ChartPlot`
-R0.coverage	record.chart_point_info	ChartPointInfo	`ChartPointInfo` is a former name; the ledger has `ChartPoint`
-R0.coverage	record.chart_series_info	ChartSeriesInfo	`ChartSeriesInfo` is a former name; the ledger has `ChartSeries`
-R0.coverage	record.chart_source_info	ChartSourceInfo	`ChartSourceInfo` is a former name; the ledger has `ChartSource`
-R0.coverage	record.color_spec	ColorSpec	`ColorSpec` is a former name; the ledger has `Color`
-R0.coverage	record.data_table_input	DataTableInput	`DataTableInput` is a former name; the ledger has `DataTableInputCell`
-R0.coverage	record.external_link_record	ExternalLinkRecord	`ExternalLinkRecord` is a former name; the ledger has `ExternalLink`
-R0.coverage	record.fill_record	FillRecord	`FillRecord` is a former name; the ledger has `Fill`
-R0.coverage	record.font_record	FontRecord	`FontRecord` is a former name; the ledger has `Font`
-R0.coverage	record.paper_info	PaperInfo	`PaperInfo` is a former name; the ledger has `Paper`
-R0.coverage	record.pivot_data_field_spec	PivotDataFieldSpec	`PivotDataFieldSpec` is a former name; the ledger has `PivotDataFieldInput`
-R0.coverage	record.pivot_field_info	PivotFieldInfo	`PivotFieldInfo` is a former name; the ledger has `PivotField`
-R0.coverage	record.pivot_field_spec	PivotFieldSpecInput	`PivotFieldSpecInput` is a former name; the ledger has `PivotFieldInput`
-R0.coverage	record.pivot_filter_spec	PivotFilterSpec	`PivotFilterSpec` is a former name; the ledger has `PivotFilterInput`
-R0.coverage	record.pivot_item_info	PivotItemInfo	`PivotItemInfo` is a former name; the ledger has `PivotItem`
-R0.coverage	record.pivot_style_info	PivotStyleInfo	`PivotStyleInfo` is a former name; the ledger has `PivotStyle`
-R0.coverage	record.spill_info	SpillInfo	`SpillInfo` is a former name; the ledger has `Spill`
 R18.py	array_formula.set	shape	`get_array_formula` returns `ArrayFormula` but `set_array_formula` takes (formula)
 R18.py	comment.set	shape	`get_comment` returns `Comment` but `set_comment` takes (author, text)
 R18.py	defined_name.set	shape	`get_defined_name` returns `DefinedName` but `set_defined_name` takes (formula)
@@ -32,7 +6,7 @@ R18.py	page_margins.set	shape	`get_page_margins` returns `PageMargins` but `set_
 R18.py	page_setup.set	shape	`get_page_setup` returns `PageSetup` but `set_page_setup` takes (orientation, paper_size, scale, fit_to_width, fit_to_height, fit_to_page)
 R18.py	pinned_now.set	shape	`get_pinned_now` returns `CivilTime` but `set_pinned_now` takes (year, month, day, hour, minute, second)
 R18.py	pivot_grand_totals.set	shape	`get_pivot_grand_totals` returns `PivotGrandTotals` but `set_pivot_grand_totals` takes (rows_enabled, cols_enabled)
-R18.py	pivot_style_info.set	shape	`get_pivot_style_info` returns `PivotStyleInfo` but `set_pivot_style_info` takes (name, show_row_headers, show_col_headers, show_row_stripes, show_col_stripes, show_last_column)
+R18.py	pivot_style_info.set	shape	`get_pivot_style_info` returns `PivotStyle` but `set_pivot_style_info` takes (name, show_row_headers, show_col_headers, show_row_stripes, show_col_stripes, show_last_column)
 R18.py	print_titles.set	shape	`get_print_titles` returns `SheetPrintTitles` but `set_print_titles` takes (repeat_rows, repeat_cols)
 R18.py	record.theme	Theme	`Theme` is dropped from the py surface
 R18.py	selection.set	shape	`get_selection` returns `SheetSelection` but `set_selection` takes (active_row, active_col, ranges)
@@ -53,35 +27,11 @@ R19.py	enum.sparkline_empty_cells	gap	family `blanks`: `gap` is 1 in `enum.chart
 R19.py	enum.sparkline_empty_cells	span	family `blanks`: `span` is 3 in `enum.chart_blanks_as` but 2 in `enum.sparkline_empty_cells`
 R19.py	enum.sparkline_empty_cells	zero	family `blanks`: `zero` is 2 in `enum.chart_blanks_as` but 1 in `enum.sparkline_empty_cells`
 R20.py	record.locale_facts	field:error_names	`LocaleFacts.error_names: Tuple[ErrorName, ...]` is a result array; make it `List[...]`
-R20.py	record.pivot_field_info	field:subtotal_fns	`PivotFieldInfo.subtotal_fns: Tuple[PivotAggregation, ...]` is a result array; make it `List[...]`
+R20.py	record.pivot_field_info	field:subtotal_fns	`PivotField.subtotal_fns: Tuple[PivotAggregation, ...]` is a result array; make it `List[...]`
 R20.py	record.table	field:columns	`Table.columns: Tuple[TableColumn, ...]` is a result array; make it `List[...]`
 R20.py	record.table_style	field:elements	`TableStyle.elements: Tuple[TableStyleElement, ...]` is a result array; make it `List[...]`
 R20.py	record.theme	field:major_scripts	`Theme.major_scripts: Tuple[ThemeScriptFont, ...]` is a result array; make it `List[...]`
 R20.py	record.theme	field:minor_scripts	`Theme.minor_scripts: Tuple[ThemeScriptFont, ...]` is a result array; make it `List[...]`
-R21.name	record.cell_style_record	suffix	`CellStyleRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `CellStyle`
-R21.name	record.chart_axis_info	suffix	`ChartAxisInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartAxis`
-R21.name	record.chart_fill_info	suffix	`ChartFillInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartFill`
-R21.name	record.chart_info	suffix	`ChartInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Chart`
-R21.name	record.chart_labels_info	suffix	`ChartLabelsInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartLabels`
-R21.name	record.chart_legend_info	suffix	`ChartLegendInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartLegend`
-R21.name	record.chart_line_info	suffix	`ChartLineInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartLine`
-R21.name	record.chart_marker_info	suffix	`ChartMarkerInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartMarker`
-R21.name	record.chart_plot_info	suffix	`ChartPlotInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartPlot`
-R21.name	record.chart_point_info	suffix	`ChartPointInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartPoint`
-R21.name	record.chart_series_info	suffix	`ChartSeriesInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartSeries`
-R21.name	record.chart_source_info	suffix	`ChartSourceInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ChartSource`
-R21.name	record.color_spec	suffix	`ColorSpec` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Color`
-R21.name	record.external_link_record	suffix	`ExternalLinkRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `ExternalLink`
-R21.name	record.fill_record	suffix	`FillRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Fill`
-R21.name	record.font_record	suffix	`FontRecord` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Font`
-R21.name	record.paper_info	suffix	`PaperInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Paper`
-R21.name	record.pivot_data_field_spec	suffix	`PivotDataFieldSpec` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotDataField`
-R21.name	record.pivot_field_info	suffix	`PivotFieldInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotField`
-R21.name	record.pivot_field_spec	suffix	`PivotFieldSpecInput` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotFieldInput`
-R21.name	record.pivot_filter_spec	suffix	`PivotFilterSpec` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotFilter`
-R21.name	record.pivot_item_info	suffix	`PivotItemInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotItem`
-R21.name	record.pivot_style_info	suffix	`PivotStyleInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `PivotStyle`
-R21.name	record.spill_info	suffix	`SpillInfo` ends with one of ['Entry', 'Record', 'Info', 'Spec']; name it `Spill`
 R21.role	record.chart_categories	role	`record.chart_categories` has no `role:`
 R21.role	record.chart_legend_info	role	`record.chart_legend_info` has no `role:`
 R21.role	record.chart_series_ranges	role	`record.chart_series_ranges` has no `role:`
@@ -241,7 +191,7 @@ R23.py	data_table.get	Workbook	`get_data_table` is a sheet-scope op; it belongs 
 R23.py	data_table.remove	Workbook	`remove_data_table` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	dependents.get	Workbook	`get_dependents` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	display_text.get	Workbook	`get_display_text` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
-R23.py	drawing.remove	Workbook	`remove_drawing` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
+R23.py	drawing.remove	Workbook	`remove_drawing_object` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	drawing.restore	Workbook	`restore_drawing` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	drawing.snapshot	Workbook	`snapshot_drawing` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
 R23.py	drawing_anchor.set	Workbook	`set_drawing_anchor` is a sheet-scope op; it belongs on `Sheet`, not `Workbook`
@@ -433,8 +383,6 @@ R23.track	sheet.remove	SHEET_STRUCTURE_OPS	`remove_sheet` changes the sheet list
 R23.track	sheet.rename	SHEET_STRUCTURE_OPS	`rename_sheet` changes the sheet list but `sheet.py` does not track it in `SHEET_STRUCTURE_OPS`
 R24.missing.py	chart_data.get	throw	`get_chart_data` does not document `Raises: NotFoundError`
 R24.missing.py	chart_preview.get	throw	`get_chart_preview` does not document `Raises: NotFoundError`
-R5.derive	record.pivot_data_field_spec	-	`PivotDataFieldSpec` does not derive from `fm_pivot_data_field_spec_t` (`PivotDataFieldInput or PivotDataFieldSpecInput`)
-R5.derive	record.pivot_filter_spec	-	`PivotFilterSpec` does not derive from `fm_pivot_filter_spec_t` (`PivotFilterInput or PivotFilterSpecInput`)
 R5.list	cf_rule.list.get_conditional_formats	missing	`list_cf_rules` is not on the py surface
 R5.list	external_link.list.get_external_links	missing	`list_external_links` is not on the py surface
 R5.list	pivot_cache_calculated_items.list	missing	`list_pivot_cache_calculated_items` is not on the py surface
@@ -472,17 +420,17 @@ R6.closed.py	pivot_field_sort.set	set_pivot_field_sort(order)	`set_pivot_field_s
 R6.closed.py	pivot_field_subtotal_fn.add	add_pivot_field_subtotal_fn(agg)	`add_pivot_field_subtotal_fn(agg: 'PivotAggregation | int')` admits ['int']
 R6.closed.py	pivot_report_layout.set	set_pivot_report_layout(layout)	`set_pivot_report_layout(layout: 'PivotReportLayout | int')` admits ['int']
 R6.closed.py	record.cf_match	CfMatch.kind	`CfMatch.kind: int` carries `fm_cf_match_kind_t`; type it by its table
-R6.closed.py	record.color_spec	ColorSpec.kind	`ColorSpec.kind: Union[FilterKind, int]` carries `fm_color_kind_t`; type it by its table
+R6.closed.py	record.color_spec	Color.kind	`Color.kind: Union[FilterKind, int]` carries `fm_color_kind_t`; type it by its table
 R6.closed.py	record.function_metadata	FunctionMetadata.availability	`FunctionMetadata.availability: int` carries `fm_function_availability_t`; type it by its table
 R6.closed.py	record.locale_facts	LocaleFacts.date_order	`LocaleFacts.date_order: str` carries `fm_date_order_t`; type it by its table
 R6.closed.py	record.page_setup	PageSetup.orientation	`PageSetup.orientation: int` carries `FM_ORIENTATION_*`; type it by its table
-R6.closed.py	record.pivot_data_field_spec	PivotDataFieldSpec.aggregation	`PivotDataFieldSpec.aggregation: 'PivotAggregation | int'` carries `fm_pivot_aggregation_t`; type it by its table
-R6.closed.py	record.pivot_data_field_spec	PivotDataFieldSpec.show_as	`PivotDataFieldSpec.show_as: 'PivotShowValuesAs | int'` carries `fm_pivot_show_values_as_t`; type it by its table
-R6.closed.py	record.pivot_field_spec	PivotFieldSpecInput.axis	`PivotFieldSpecInput.axis: 'PivotAxis | int'` carries `fm_pivot_axis_t`; type it by its table
-R6.closed.py	record.pivot_filter_spec	PivotFilterSpec.axis	`PivotFilterSpec.axis: 'PivotAxis | int'` carries `fm_pivot_axis_t`; type it by its table
-R6.closed.py	record.pivot_filter_spec	PivotFilterSpec.type	`PivotFilterSpec.type: 'PivotFilterType | int'` carries `fm_pivot_filter_type_t`; type it by its table
-R6.closed.py	record.pivot_filter_spec	PivotFilterSpec.value_high_kind	`PivotFilterSpec.value_high_kind: 'PivotFilterValueKind | int'` carries `fm_pivot_filter_value_kind_t`; type it by its table
-R6.closed.py	record.pivot_filter_spec	PivotFilterSpec.value_kind	`PivotFilterSpec.value_kind: 'PivotFilterValueKind | int'` carries `fm_pivot_filter_value_kind_t`; type it by its table
+R6.closed.py	record.pivot_data_field_spec	PivotDataFieldInput.aggregation	`PivotDataFieldInput.aggregation: 'PivotAggregation | int'` carries `fm_pivot_aggregation_t`; type it by its table
+R6.closed.py	record.pivot_data_field_spec	PivotDataFieldInput.show_as	`PivotDataFieldInput.show_as: 'PivotShowValuesAs | int'` carries `fm_pivot_show_values_as_t`; type it by its table
+R6.closed.py	record.pivot_field_spec	PivotFieldInput.axis	`PivotFieldInput.axis: 'PivotAxis | int'` carries `fm_pivot_axis_t`; type it by its table
+R6.closed.py	record.pivot_filter_spec	PivotFilterInput.axis	`PivotFilterInput.axis: 'PivotAxis | int'` carries `fm_pivot_axis_t`; type it by its table
+R6.closed.py	record.pivot_filter_spec	PivotFilterInput.type	`PivotFilterInput.type: 'PivotFilterType | int'` carries `fm_pivot_filter_type_t`; type it by its table
+R6.closed.py	record.pivot_filter_spec	PivotFilterInput.value_high_kind	`PivotFilterInput.value_high_kind: 'PivotFilterValueKind | int'` carries `fm_pivot_filter_value_kind_t`; type it by its table
+R6.closed.py	record.pivot_filter_spec	PivotFilterInput.value_kind	`PivotFilterInput.value_kind: 'PivotFilterValueKind | int'` carries `fm_pivot_filter_value_kind_t`; type it by its table
 R6.closed.py	ref_mode.set	set_ref_mode(mode)	`set_ref_mode(mode: 'RefMode | int')` admits ['int']
 R6.closed.py	shape.add	add_shape(anchor_kind)	`add_shape(anchor_kind: Union[AnchorKind, int])` admits ['int']
 R6.closed.py	shape.add	add_shape(edit_as)	`add_shape(edit_as: Union[AnchorEditAs, int])` admits ['int']
@@ -527,16 +475,16 @@ R7.absent.py	record.cell_xf	has:has_vertical_align	`CellXf.has_vertical_align` i
 R7.absent.py	record.cell_xf	has:has_wrap_text	`CellXf.has_wrap_text` is a presence flag; make the value field `Optional`
 R7.absent.py	record.column_layout	has:has_style	`ColumnLayout.has_style` is a presence flag; make the value field `Optional`
 R7.absent.py	record.column_layout	has:has_width	`ColumnLayout.has_width` is a presence flag; make the value field `Optional`
-R7.absent.py	record.font_record	has:has_bold	`FontRecord.has_bold` is a presence flag; make the value field `Optional`
-R7.absent.py	record.font_record	has:has_charset	`FontRecord.has_charset` is a presence flag; make the value field `Optional`
-R7.absent.py	record.font_record	has:has_condense	`FontRecord.has_condense` is a presence flag; make the value field `Optional`
-R7.absent.py	record.font_record	has:has_extend	`FontRecord.has_extend` is a presence flag; make the value field `Optional`
-R7.absent.py	record.font_record	has:has_family	`FontRecord.has_family` is a presence flag; make the value field `Optional`
-R7.absent.py	record.font_record	has:has_italic	`FontRecord.has_italic` is a presence flag; make the value field `Optional`
-R7.absent.py	record.font_record	has:has_outline	`FontRecord.has_outline` is a presence flag; make the value field `Optional`
-R7.absent.py	record.font_record	has:has_shadow	`FontRecord.has_shadow` is a presence flag; make the value field `Optional`
-R7.absent.py	record.font_record	has:has_size	`FontRecord.has_size` is a presence flag; make the value field `Optional`
-R7.absent.py	record.font_record	has:has_strike	`FontRecord.has_strike` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_bold	`Font.has_bold` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_charset	`Font.has_charset` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_condense	`Font.has_condense` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_extend	`Font.has_extend` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_family	`Font.has_family` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_italic	`Font.has_italic` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_outline	`Font.has_outline` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_shadow	`Font.has_shadow` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_size	`Font.has_size` is a presence flag; make the value field `Optional`
+R7.absent.py	record.font_record	has:has_strike	`Font.has_strike` is a presence flag; make the value field `Optional`
 R7.absent.py	record.print_titles	has:has_cols	`PrintTitles.has_cols` is a presence flag; make the value field `Optional`
 R7.absent.py	record.print_titles	has:has_rows	`PrintTitles.has_rows` is a presence flag; make the value field `Optional`
 R7.absent.py	record.row_layout	has:has_height	`RowLayout.has_height` is a presence flag; make the value field `Optional`
@@ -572,10 +520,7 @@ R7.opts.py	table_style_info.set	bool:show_row_stripes	`set_table_style_info(show
 R7.opts.py	table_style_info.set	run	`set_table_style_info` takes three or more adjacent positional arguments of one type; make them keyword-only
 R7.opts.py	theme_script_font.get	bool:major	`get_theme_script_font(major)` is a boolean; make it keyword-only
 R7.opts.py	theme_script_font.set	bool:major	`set_theme_script_font(major)` is a boolean; make it keyword-only
-R7.py	record.pivot_data_field_spec	name	`PivotDataFieldSpec` is an input record; name it `<Name>Input`
-R7.py	record.pivot_filter_spec	name	`PivotFilterSpec` is an input record; name it `<Name>Input`
 R8.py	field.pagination_column_break_manual_py	column_break_manual	`Pagination` should carry `column_break_manual`, not `vertical_break_manual`
 R8.py	field.pagination_column_breaks_py	column_breaks	`Pagination` should carry `column_breaks`, not `vertical_breaks`
 R8.py	field.pagination_row_break_manual_py	row_break_manual	`Pagination` should carry `row_break_manual`, not `horizontal_break_manual`
 R8.py	field.pagination_row_breaks_py	row_breaks	`Pagination` should carry `row_breaks`, not `horizontal_breaks`
-R8.py	field.pivot_grand_totals_columns_py	columns	`PivotGrandTotals` should carry `columns`, not `cols`

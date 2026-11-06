@@ -532,7 +532,7 @@ test('setExcelProfileId switches a live workbook through every profile id', asyn
   assert.throws(() => wb.setExcelProfileId('mac-365-xx_XX'), isFormulonError);
 });
 
-test('functionNames + getFunctionMetadata expose the catalog', async () => {
+test('listFunctionNames + getFunctionMetadata expose the catalog', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   const names = wb.listFunctionNames();

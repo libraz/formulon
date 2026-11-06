@@ -109,10 +109,10 @@ export function registerDrawing(Module, test) {
       const loaded = Module.Workbook.load(saved);
       try {
         check(loaded);
-        loaded.removeDrawing(0, ins);
+        loaded.removeDrawingObject(0, ins);
         assert.equal(loaded.listDrawingObjects(0).length, 0);
         assert.equal(loaded.getImage(0, ins), null);
-        expectFailure(() => loaded.removeDrawing(0, ins));
+        expectFailure(() => loaded.removeDrawingObject(0, ins));
       } finally {
         loaded.delete();
       }
@@ -201,7 +201,7 @@ export function registerDrawing(Module, test) {
       assert.ok(snap.length > 0);
       const ids = () => Array.from(wb.listDrawingObjects(0), (o) => o.objectId);
 
-      wb.removeDrawing(0, a);
+      wb.removeDrawingObject(0, a);
       const restored = wb.restoreDrawing(0, snap);
       assert.equal(restored, a);
       assert.deepEqual(ids(), [a, b]);

@@ -22,7 +22,7 @@ test('all declared runtime constants resolve from the staged ESM entry point', a
   assert.equal(mod.PivotAxis.Row, 0);
   assert.equal(mod.PIVOT_SHOW_AS_BASE_PREVIOUS, 1048828);
   // Named constants a consumer needs in order to interpret shared record
-  // fields (`Value.errorCode`, `ExternalLinkRecord.kind`) or to drive the
+  // fields (`Value.errorCode`, `ExternalLink.kind`) or to drive the
   // calc policy. The WASM package exports the same names and ordinals;
   // `check_binding_drift dts-enums` holds the two in step.
   assert.equal(mod.ErrorCode.Div0, 1);

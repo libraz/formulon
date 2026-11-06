@@ -72,8 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   both packages expose it the same way. `@libraz/formulon-native` no longer
   exports `Workbook` and `evalFormula` at the top level; use
   `const formulon = await createFormulon()` and `formulon.Workbook`. Name the
-  object `formulon`, not `Module`. `Workbook.loadBytes` is `Workbook.load`,
-  `saveAs(format)` is `save(format)`, and `getLastErrorMessage()` is the
+  object `formulon`, not `Module`. `saveAs(format)` is `save(format)`, and
+  `getLastErrorMessage()` is the
   `message` of the caught error.
 - **JavaScript:** a value is a union discriminated by `kind`. Compare with
   `ValueKind` (`v.kind === ValueKind.Error`), not with a number. A value has

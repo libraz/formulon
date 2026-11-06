@@ -412,7 +412,7 @@ export const WorkbookFormat: Readonly<{
 export type WorkbookFormat = 0 | 1 | 2;
 
 /** Return type of `Workbook.getCellAt(sheet, index)`. */
-export interface CellEntry {
+export interface Cell {
   row: number;
   col: number;
   /** Formula text spelled as `getFormula` returns it, or `null` for pure literals. */
@@ -446,9 +446,9 @@ export type TableTotalsRowFunction =
   | 'var'
   | 'custom';
 
-/** One column of `TableEntry.columns`. `totalsRowFormula` is the `custom`
+/** One column of `Table.columns`. `totalsRowFormula` is the `custom`
  *  function's formula (no leading `=`), empty otherwise. */
-export interface TableColumnEntry {
+export interface TableColumn {
   name: string;
   totalsRowFunction: TableTotalsRowFunction;
   totalsRowLabel: string;
@@ -459,7 +459,7 @@ export interface TableColumnEntry {
  *  style and may name a custom style (`getTableStyle`); `hasStyleInfo` is
  *  false when the table has no `<tableStyleInfo>` (the toggles then read
  *  false). The row counts are 0 or 1. */
-export interface TableEntry {
+export interface Table {
   name: string;
   displayName: string;
   /** The table's sheet and range. */
@@ -472,7 +472,7 @@ export interface TableEntry {
   showColumnStripes: boolean;
   headerRowCount: number;
   totalsRowCount: number;
-  columns: TableColumnEntry[];
+  columns: TableColumn[];
 }
 
 /** Authoring input for a worksheet table over `range`. `columns` must have
@@ -672,11 +672,11 @@ export const PivotShowValuesAs: Readonly<{
 /** Union of the {@link PivotShowValuesAs} ordinals. */
 export type PivotShowValuesAs = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
 
-/** Sentinel value for `PivotDataFieldSpec.showAsBaseItem` meaning
+/** Sentinel value for `PivotDataFieldInput.showAsBaseItem` meaning
  *  "(previous)". Mirrors the magic value used by Excel's OOXML
  *  `<dataField>` element. */
 export const PIVOT_SHOW_AS_BASE_PREVIOUS = 1048828;
-/** Sentinel value for `PivotDataFieldSpec.showAsBaseItem` meaning
+/** Sentinel value for `PivotDataFieldInput.showAsBaseItem` meaning
  *  "(next)". */
 export const PIVOT_SHOW_AS_BASE_NEXT = 1048829;
 /** The Σ Values level in the lists `getPivotRowFieldOrder` / `getPivotColumnFieldOrder`
@@ -894,7 +894,7 @@ export const PivotFilterValueKind: Readonly<{
 export type PivotFilterValueKind = -1 | 0 | 1 | 2;
 
 /** Plain-data spec for `Workbook.addPivotField`. */
-export interface PivotFieldSpecInput {
+export interface PivotFieldInput {
   sourceName: string;
   customName?: string;
   axis: PivotAxis;
@@ -909,7 +909,7 @@ export interface PivotFieldSpecInput {
 /** Plain-data spec for `Workbook.addPivotDataField` /
  *  `setPivotDataField`. Pass
  *  `-1` for `showAsBaseField` / `showAsBaseItem` to mean "unset". */
-export interface PivotDataFieldSpec {
+export interface PivotDataFieldInput {
   /** Display name (key for GETPIVOTDATA). Omit or pass `""` to let the
    *  engine name the data field from the workbook profile's pivot wording,
    *  e.g. `"Sum of Sales"` (en-US) or `"合計 / Sales"` (ja-JP). That needs
@@ -927,7 +927,7 @@ export interface PivotDataFieldSpec {
 /** Table style and toggles of a PivotTable (`setPivotStyleInfo`). An omitted
     `name` writes the style element without a style name; flags default to
     false. */
-export interface PivotStyleInfoInput {
+export interface PivotStyleInput {
   readonly name?: string;
   readonly showRowHeaders?: boolean;
   readonly showColHeaders?: boolean;
@@ -938,7 +938,7 @@ export interface PivotStyleInfoInput {
 
 /** Return type of `Workbook.getPivotStyleInfo(...)`, which returns `null` when
  *  the definition has no style element. */
-export interface PivotStyleInfo {
+export interface PivotStyle {
   readonly name: string;
   readonly showRowHeaders: boolean;
   readonly showColHeaders: boolean;
@@ -1019,7 +1019,7 @@ export interface PivotCalculatedItem {
 }
 
 /** Return type of `Workbook.getPivotField(...)`. `sourceName`, `customName`,
- *  `axis`, `subtotalTop` and `numberFormat` match `PivotFieldSpecInput`, except
+ *  `axis`, `subtotalTop` and `numberFormat` match `PivotFieldInput`, except
  *  that `axis` is `-1` for a field that sits on no axis. */
 export interface PivotField {
   readonly sourceName: string;
@@ -1069,7 +1069,7 @@ export interface PivotItem {
 }
 
 /** Return type of `Workbook.getPivotDataField(...)`. Same shape as
- *  `PivotDataFieldSpec` with every member present; `showAsBaseField` /
+ *  `PivotDataFieldInput` with every member present; `showAsBaseField` /
  *  `showAsBaseItem` are `-1` when unset and `numberFormat` is `""` for none. */
 export interface PivotDataField {
   readonly name: string;
@@ -1086,7 +1086,7 @@ export interface PivotDataField {
  *  only for range filter types (`ValueBetween`, `ValueNotBetween`,
  *  `LabelDate`, `DateNotBetween`); `LabelBetween` / `LabelNotBetween` take
  *  their upper bound in `valueHighText`, and no other type may set it. */
-export interface PivotFilterSpec {
+export interface PivotFilterInput {
   readonly axis: PivotAxis;
   readonly fieldName: string;
   readonly type: PivotFilterType;
@@ -1102,7 +1102,7 @@ export interface PivotFilterSpec {
   readonly valueHighText?: string;
 }
 
-/** Return type of `Workbook.getPivotFilter(...)`: the stored filter. Field names and semantics match `PivotFilterSpec`.
+/** Return type of `Workbook.getPivotFilter(...)`: the stored filter. Field names and semantics match `PivotFilterInput`.
  *
  *  The filter list is saved as the definition's `<filters>` block. Loaded
  *  filters of every type appear here, naming their field by source name;
@@ -1693,7 +1693,7 @@ export interface ProtectedRange {
 /** Sheet-wide comment entry returned by `listComments(sheet)`. Extends
  *  `Comment` with the anchor cell so comments on otherwise-empty
  *  cells can be discovered without already knowing their `(row, col)`. */
-export interface SheetCommentEntry extends Comment {
+export interface SheetComment extends Comment {
   row: number;
   col: number;
 }
@@ -1752,7 +1752,7 @@ export interface DataValidationInput {
 }
 
 /** @deprecated Use {@link DataValidation} instead. */
-export type ValidationEntry = DataValidation;
+export type Validation = DataValidation;
 
 /** Workbook-wide cell coordinate used by trace results. `sheet` is the
  *  0-based sheet index. */
@@ -1897,7 +1897,7 @@ export interface ArrayFormula {
 }
 
 /** Spill region info returned by `getSpillInfo(sheet, row, col)`. */
-export interface SpillInfo {
+export interface Spill {
   readonly engaged: boolean;
   /** `true` when the cell is the anchor of a spill that failed with `#SPILL!`; then `rect` is the rectangle
    *  it attempted. `engaged` is `false` then. */
@@ -1947,7 +1947,7 @@ export interface FormatReferenceOptions {
  *  full sub-spec, so an entry read back here can be handed straight to
  *  `addCfRule`.
  */
-export interface ConditionalFormatEntry {
+export interface ConditionalFormat {
   readonly id: string;
   readonly type: number;
   readonly priority: number;
@@ -2154,7 +2154,7 @@ export interface CellXf {
 }
 
 /** How an OOXML `<color>` element expressed its value.
- *  Mirrors `formulon::io::ColorSpec`.
+ *  Mirrors `formulon::io::Color`.
  *
  *  A record read from a workbook carries the original specification here.
  *  When `kind` is non-zero, this selector is authoritative; the sibling
@@ -2162,7 +2162,7 @@ export interface CellXf {
  *  selectors. It is literal RGB for `kind === 1`, or a compatibility
  *  fallback otherwise. Leave `kind` at 0 on a record built from scratch and
  *  the writer emits the sibling `*Argb` as `rgb`. */
-export interface ColorSpec {
+export interface Color {
   /** 0=none, 1=rgb, 2=theme, 3=indexed, 4=auto. */
   readonly kind: number;
   /** AARRGGBB; meaningful when `kind` is 1. */
@@ -2175,8 +2175,8 @@ export interface ColorSpec {
   readonly indexed: number;
 }
 
-/** Plain-data shape of a font record. Mirrors `formulon::io::FontRecord`. */
-export interface FontRecord {
+/** Plain-data shape of a font record. Mirrors `formulon::io::Font`. */
+export interface Font {
   readonly name: string;
   readonly size: number;
   readonly bold: boolean;
@@ -2222,11 +2222,11 @@ export interface FontRecord {
    *  theme/indexed/auto render colour. */
   readonly colorArgb: number;
   /** Original `<color>` specification, preserved for round-tripping. */
-  readonly color: ColorSpec;
+  readonly color: Color;
 }
 
-/** Plain-data shape of a fill record. Mirrors `formulon::io::FillRecord`. */
-export interface FillRecord {
+/** Plain-data shape of a fill record. Mirrors `formulon::io::Fill`. */
+export interface Fill {
   /** OOXML pattern ordinal: 0=none, 1=solid, 2..18=standard pattern set. */
   readonly pattern: number;
   /** Foreground literal RGB or compatibility fallback. */
@@ -2234,9 +2234,9 @@ export interface FillRecord {
   /** Background literal RGB or compatibility fallback. */
   readonly bgArgb: number;
   /** Original `<fgColor>` specification, preserved for round-tripping. */
-  readonly fg: ColorSpec;
+  readonly fg: Color;
   /** Original `<bgColor>` specification, preserved for round-tripping. */
-  readonly bg: ColorSpec;
+  readonly bg: Color;
   /** A `<gradientFill>`; when present the pattern fields are ignored. */
   readonly gradient?: GradientFill;
 }
@@ -2261,10 +2261,10 @@ export interface GradientStop {
   /** AARRGGBB literal RGB or compatibility fallback. */
   readonly colorArgb: number;
   /** Original `<color>` specification, preserved for round-tripping. */
-  readonly color: ColorSpec;
+  readonly color: Color;
 }
 
-/** One side of a `BorderRecord`. */
+/** One side of a `Border`. */
 export interface BorderSide {
   /** OOXML border-style ordinal: 0=none, 1=thin, ..., 13=slantDashDot. */
   readonly style: number;
@@ -2272,11 +2272,11 @@ export interface BorderSide {
    *  theme/indexed/auto render colour. */
   readonly colorArgb: number;
   /** Original `<color>` specification, preserved for round-tripping. */
-  readonly color: ColorSpec;
+  readonly color: Color;
 }
 
-/** Plain-data shape of a border record. Mirrors `formulon::io::BorderRecord`. */
-export interface BorderRecord {
+/** Plain-data shape of a border record. Mirrors `formulon::io::Border`. */
+export interface Border {
   readonly left: BorderSide;
   readonly right: BorderSide;
   readonly top: BorderSide;
@@ -2371,10 +2371,10 @@ export interface PhoneticProperties extends PhoneticPropertiesInput {
 
 /** Return type of `Workbook.getDxf(dxfIndex)`.
  *  Optional properties are present only when that `<dxf>` child exists. */
-export interface DxfRecord {
-  readonly font?: FontRecord;
-  readonly fill?: FillRecord;
-  readonly border?: BorderRecord;
+export interface Dxf {
+  readonly font?: Font;
+  readonly fill?: Fill;
+  readonly border?: Border;
   readonly numFmt?: {
     numFmtId: number;
     formatCode: string;
@@ -2398,7 +2398,7 @@ export const LogLevel: Readonly<{
 export type LogLevel = 0 | 1 | 2 | 3 | 4;
 
 /** External-link kinds. Mirrors
- *  `formulon::io::ExternalLinkRecord::Kind`. */
+ *  `formulon::io::ExternalLink::Kind`. */
 export const ExternalLinkKind: Readonly<{
   Unknown: 0;
   ExternalBook: 1;
@@ -2409,11 +2409,11 @@ export const ExternalLinkKind: Readonly<{
 export type ExternalLinkKind = 0 | 1 | 2 | 3;
 
 /** Record returned by `Workbook.getExternalLink(externalLinkIndex)`. Mirrors
- *  `formulon::io::ExternalLinkRecord`. The body part itself is not
+ *  `formulon::io::ExternalLink`. The body part itself is not
  *  exposed (it round-trips through the OOXML passthrough mechanism);
  *  this surface only enumerates the cross-workbook references and
  *  their resolved target URLs. */
-export interface ExternalLinkRecord {
+export interface ExternalLink {
   /** 1-based document order matching `<externalReferences>` in
    *  `xl/workbook.xml`. */
   readonly index: number;
@@ -2434,7 +2434,7 @@ export interface ExternalLinkRecord {
 }
 
 /** Argument of `Workbook.setCellStyle`. Also the record `listCellStyles` and `getCellStyle` return. */
-export interface CellStyleRecord {
+export interface CellStyle {
   /** Display name of the style. */
   readonly name: string;
   /** Index into the `<cellStyleXfs>` table; defaults to 0. */
@@ -3291,7 +3291,7 @@ export interface SlicerInput {
 }
 
 /** An input cell of a {@link DataTable}. `deleted` is set once a row or column delete removed the cell. */
-export interface DataTableInput {
+export interface DataTableInputCell {
   row: number;
   col: number;
   deleted: boolean;
@@ -3305,8 +3305,8 @@ export interface DataTable {
   readonly rect: CellRect;
   readonly twoDimensional: boolean;
   readonly rowOriented: boolean;
-  readonly rowInput: DataTableInput | null;
-  readonly colInput: DataTableInput | null;
+  readonly rowInput: DataTableInputCell | null;
+  readonly colInput: DataTableInputCell | null;
 }
 
 /** Argument of `addDataTable`: the result range plus the input cells (`{ row, col }`). Give `rowInput`
@@ -3329,14 +3329,14 @@ export interface Sparkline {
  *  `dateAxisRef` is the group's date range, empty when absent. */
 export interface SparklineGroup {
   readonly type: SparklineType;
-  readonly colorSeries: ColorSpec;
-  readonly colorNegative: ColorSpec;
-  readonly colorAxis: ColorSpec;
-  readonly colorMarkers: ColorSpec;
-  readonly colorFirst: ColorSpec;
-  readonly colorLast: ColorSpec;
-  readonly colorHigh: ColorSpec;
-  readonly colorLow: ColorSpec;
+  readonly colorSeries: Color;
+  readonly colorNegative: Color;
+  readonly colorAxis: Color;
+  readonly colorMarkers: Color;
+  readonly colorFirst: Color;
+  readonly colorLast: Color;
+  readonly colorHigh: Color;
+  readonly colorLow: Color;
   readonly markers: boolean;
   readonly high: boolean;
   readonly low: boolean;
@@ -3369,12 +3369,12 @@ export interface ChartDataSource {
 }
 
 /** Solid fill; `color` is ARGB (`0xAARRGGBB`), `transparency` a percentage (0..100). */
-export interface ChartFillInfo {
+export interface ChartFill {
   color: number | null;
   transparency: number | null;
 }
 
-export interface ChartLineInfo {
+export interface ChartLine {
   color: number | null;
   transparency: number | null;
   widthPt: number | null;
@@ -3382,14 +3382,14 @@ export interface ChartLineInfo {
   none: boolean;
 }
 
-export interface ChartMarkerInfo {
+export interface ChartMarker {
   symbol: ChartMarkerSymbol;
   size: number | null;
-  fill: ChartFillInfo;
-  line: ChartLineInfo;
+  fill: ChartFill;
+  line: ChartLine;
 }
 
-export interface ChartLabelsInfo {
+export interface ChartLabels {
   showValue: boolean;
   showCategory: boolean;
   showSeries: boolean;
@@ -3405,14 +3405,14 @@ export interface ChartLabelsInfo {
 }
 
 /** A formatted data point (`c:dPt`). */
-export interface ChartPointInfo {
+export interface ChartPoint {
   index: number;
-  fill: ChartFillInfo;
-  line: ChartLineInfo;
-  marker: ChartMarkerInfo | null;
+  fill: ChartFill;
+  line: ChartLine;
+  marker: ChartMarker | null;
 }
 
-export interface ChartSeriesInfo {
+export interface ChartSeries {
   index: number;
   order: number;
   filtered: boolean;
@@ -3422,15 +3422,15 @@ export interface ChartSeriesInfo {
   x: ChartDataSource;
   y: ChartDataSource;
   size: ChartDataSource;
-  fill: ChartFillInfo;
-  line: ChartLineInfo;
-  marker: ChartMarkerInfo | null;
+  fill: ChartFill;
+  line: ChartLine;
+  marker: ChartMarker | null;
   smooth: boolean | null;
-  points: ChartPointInfo[];
-  labels: ChartLabelsInfo | null;
+  points: ChartPoint[];
+  labels: ChartLabels | null;
 }
 
-export interface ChartPlotInfo {
+export interface ChartPlot {
   type: ChartPlotType;
   chartexLayout: string | null;
   barDirection: 'col' | 'bar' | null;
@@ -3441,17 +3441,17 @@ export interface ChartPlotInfo {
   holeSize: number | null;
   firstSliceAngle: number | null;
   axisIds: number[];
-  series: ChartSeriesInfo[];
+  series: ChartSeries[];
 }
 
 /** A chart or axis title: `text` for `Text`, `formula` for `Ref`, each empty otherwise. */
-export interface ChartTitleInfo {
+export interface ChartTitle {
   kind: ChartTitleKind;
   text: string;
   formula: string;
 }
 
-export interface ChartAxisInfo {
+export interface ChartAxis {
   id: number;
   kind: ChartAxisKind;
   position: 'b' | 't' | 'l' | 'r';
@@ -3467,21 +3467,21 @@ export interface ChartAxisInfo {
   reversed: boolean;
   numberFormat: string | null;
   sourceLinked: boolean;
-  title: ChartTitleInfo;
+  title: ChartTitle;
   majorGridlines: boolean;
   minorGridlines: boolean;
   tickLabelPosition: string | null;
 }
 
 /** The typed view of a chart. `source` is the rectangle every series was split from, `null` when they share none. */
-export interface ChartInfo {
+export interface Chart {
   readonly objectId: number;
   readonly name: string;
   readonly description: string;
   readonly isChartex: boolean;
   readonly isPivotChart: boolean;
   readonly onChartsheet: boolean;
-  readonly title: ChartTitleInfo;
+  readonly title: ChartTitle;
   readonly autoTitleDeleted: boolean | null;
   readonly legend: { position: ChartLegendPosition; overlay: boolean; hiddenSeries: number[] };
   readonly blanksAs: ChartBlanksAs;
@@ -3490,8 +3490,8 @@ export interface ChartInfo {
   readonly naAsBlank: boolean | null;
   readonly date1904: boolean;
   readonly style: number | null;
-  readonly plots: ChartPlotInfo[];
-  readonly axes: ChartAxisInfo[];
+  readonly plots: ChartPlot[];
+  readonly axes: ChartAxis[];
   readonly hiddenCategories: number[];
   readonly source: { range: string; direction: ChartSeriesDirection; headerRow: boolean; headerColumn: boolean } | null;
 }
@@ -4148,7 +4148,7 @@ export interface Workbook {
    *  plus spill phantoms that have no stored slot. Unwritten columns are not counted. */
   getCellCount(sheet: number): number;
   /** Reads the `index`-th counted coordinate, `index` in `[0, cellCount)`, ordered by `(row, col)` ascending. */
-  getCellAt(sheet: number, index: number): CellEntry;
+  getCellAt(sheet: number, index: number): Cell;
 
   /** Lists the defined names, workbook- and sheet-scoped alike, in file order. */
   listDefinedNames(): readonly DefinedName[];
@@ -4172,7 +4172,7 @@ export interface Workbook {
   /** Number of worksheet tables in the workbook. */
   getTableCount(): number;
   /** Reads the `index`-th table's identifying metadata; `StatusCode.IndexOutOfRange` when `index` is out of range. */
-  getTable(index: number): TableEntry;
+  getTable(index: number): Table;
   /** Creates a worksheet table and returns its workbook-wide table index (see `getTable`).
    *  `input.columns` must hold one unique, non-empty header per column of `input.range`. */
   addTable(input: TableInput): number;
@@ -4275,7 +4275,7 @@ export interface Workbook {
   /** Inserts `bytes` as a picture; existing drawing content is kept. */
   addImage(sheet: number, bytes: Uint8Array, opts?: ImageInsertInput): number;
   /** Removes the picture or chart `objectId` and the parts only it reaches; other drawing content is kept. */
-  removeDrawing(sheet: number, objectId: number): void;
+  removeDrawingObject(sheet: number, objectId: number): void;
   /** Renames the picture or chart `objectId`; duplicate names are allowed. */
   setDrawingName(sheet: number, objectId: number, name: string): void;
   /** Moves and resizes the picture or chart `objectId`, keeping its id, crop, rotation and every other element. */
@@ -4337,7 +4337,7 @@ export interface Workbook {
 
   // Charts. A chart is addressed as `(sheet, objectId)`, the id `listDrawingObjects` reports for a `DrawingObjectKind.Chart`.
   /** Reads the typed view of the chart `objectId`; `null` when the sheet has no such chart. */
-  getChart(sheet: number, objectId: number): ChartInfo | null;
+  getChart(sheet: number, objectId: number): Chart | null;
   /** Resolves the chart's series against the current cell values. Throws when the sheet has no chart
    *  `objectId`; use `getChart` to test for one. */
   getChartData(sheet: number, objectId: number): ChartData;
@@ -4348,7 +4348,7 @@ export interface Workbook {
   addChart(sheet: number, options: ChartInsertInput): number;
   /** Replaces plot group `plot` with `kind`; `grouping` applies to column, bar, line and area. */
   setChartType(sheet: number, objectId: number, plot: number, kind: ChartInsertKind, grouping?: ChartGrouping): void;
-  /** Sets the chart title text, or removes the title with `null`. A {@link ChartTitleInfo} sets that kind, so `{ kind: ChartTitleKind.Auto }` returns the title to Excel's automatic one. */
+  /** Sets the chart title text, or removes the title with `null`. A {@link ChartTitle} sets that kind, so `{ kind: ChartTitleKind.Auto }` returns the title to Excel's automatic one. */
   setChartTitle(
     sheet: number,
     objectId: number,
@@ -4514,7 +4514,7 @@ export interface Workbook {
   /** Sets the pivot's table style and toggles, making the style element
    *  present. New pivots start as `PivotStyleLight16` with row / column
    *  headers and last column on. */
-  setPivotStyleInfo(sheet: number, pivotIndex: number, info: PivotStyleInfoInput): void;
+  setPivotStyleInfo(sheet: number, pivotIndex: number, info: PivotStyleInput): void;
   /** Reads the pivot's compact / tabular / outline report layout. */
   getPivotReportLayout(sheet: number, pivotIndex: number): PivotReportLayout;
   /** Sets the pivot's compact / tabular / outline report layout. */
@@ -4532,7 +4532,7 @@ export interface Workbook {
   /** Reads whether a cache change left the pivot's sheet cells stale; see `projectPivot`. */
   isPivotProjectionPending(sheet: number, pivotIndex: number): boolean;
   /** Reads the table style `setPivotStyleInfo` writes. */
-  getPivotStyleInfo(sheet: number, pivotIndex: number): PivotStyleInfo | null;
+  getPivotStyleInfo(sheet: number, pivotIndex: number): PivotStyle | null;
   /** Reads the row-axis field order (the list `setPivotRowFieldOrder` takes). */
   getPivotRowFieldOrder(sheet: number, pivotIndex: number): number[];
   /** Reads the column-axis field order. */
@@ -4548,7 +4548,7 @@ export interface Workbook {
    *  adding it again updates it. A name the cache lacks appends a field.
    *  A field added on the row or column axis is appended to that axis's
    *  order. */
-  addPivotField(sheet: number, pivotIndex: number, spec: PivotFieldSpecInput): number;
+  addPivotField(sheet: number, pivotIndex: number, spec: PivotFieldInput): number;
   /** Reads the definition of field `fieldIndex`. */
   getPivotField(sheet: number, pivotIndex: number, fieldIndex: number): PivotField;
   /** Number of items in the field's item list (what `addPivotFieldItem` appends to). */
@@ -4694,8 +4694,8 @@ export interface Workbook {
   /** Number of `<dataField>` entries on the pivot. */
   getPivotDataFieldCount(sheet: number, pivotIndex: number): number;
   /** Appends a new data-field entry. An omitted or empty `spec.name` is
-   *  derived from the workbook profile; see {@link PivotDataFieldSpec}. */
-  addPivotDataField(sheet: number, pivotIndex: number, spec: PivotDataFieldSpec): number;
+   *  derived from the workbook profile; see {@link PivotDataFieldInput}. */
+  addPivotDataField(sheet: number, pivotIndex: number, spec: PivotDataFieldInput): number;
   /** Reads data field `dataFieldIndex`. */
   getPivotDataField(sheet: number, pivotIndex: number, dataFieldIndex: number): PivotDataField;
   /** Reads the name a new data field would get for `fieldIndex` and `aggregation`, without adding one.
@@ -4712,12 +4712,12 @@ export interface Workbook {
   clearPivotDataFields(sheet: number, pivotIndex: number): void;
   /** Replaces the data-field entry at `dataFieldIndex` in place. An omitted
    *  or empty `spec.name` is derived as in `addPivotDataField`. */
-  setPivotDataField(sheet: number, pivotIndex: number, dataFieldIndex: number, spec: PivotDataFieldSpec): void;
+  setPivotDataField(sheet: number, pivotIndex: number, dataFieldIndex: number, spec: PivotDataFieldInput): void;
 
   /** Number of filters on the pivot -- see {@link PivotFilter}. */
   getPivotFilterCount(sheet: number, pivotIndex: number): number;
   /** Appends a filter, saved with the pivot; see {@link PivotFilter}. */
-  addPivotFilter(sheet: number, pivotIndex: number, spec: PivotFilterSpec): number;
+  addPivotFilter(sheet: number, pivotIndex: number, spec: PivotFilterInput): number;
   /** Reads the filter at `filterIndex`; see {@link PivotFilter}. */
   getPivotFilter(sheet: number, pivotIndex: number, filterIndex: number): PivotFilter;
   /** Drops every listed filter from the pivot. */
@@ -4985,34 +4985,34 @@ export interface Workbook {
   setRangeXfIndex(sheet: number, range: CellRect, xfIndex: number): void;
   /** Returns the resolved XF record at `xfIndex`. */
   getCellXf(xfIndex: number): CellXf;
-  /** Returns the font record at `fontIndex`, including its ColorSpec selector. */
-  getFont(fontIndex: number): FontRecord;
-  /** Returns the fill record at `fillIndex`, including its ColorSpec selectors. */
-  getFill(fillIndex: number): FillRecord;
-  /** Returns the border record at `borderIndex`, including its ColorSpec selectors. */
-  getBorder(borderIndex: number): BorderRecord;
+  /** Returns the font record at `fontIndex`, including its Color selector. */
+  getFont(fontIndex: number): Font;
+  /** Returns the fill record at `fillIndex`, including its Color selectors. */
+  getFill(fillIndex: number): Fill;
+  /** Returns the border record at `borderIndex`, including its Color selectors. */
+  getBorder(borderIndex: number): Border;
   /** Returns the effective format string for `numFmtId`; `null` when no format maps to it. */
   getNumFmtString(numFmtId: number): string | null;
   /** Returns the differential-format record referenced by CF `dxfId`. */
-  getDxf(dxfIndex: number): DxfRecord;
+  getDxf(dxfIndex: number): Dxf;
 
   /** Adds a font (deduplicating against existing entries) and returns
    *  the resolved index. */
-  addFont(record: FontRecord): number;
+  addFont(record: Font): number;
   /** Overwrites the font at `fontIndex` in place. Every `<xf>` naming that
    *  index restyles at once, so this is a bulk change rather than a local
    *  edit; `addFont` is the way to introduce a new appearance. The index
    *  must already exist -- the table does not auto-grow. */
-  setFont(fontIndex: number, record: FontRecord): void;
+  setFont(fontIndex: number, record: Font): void;
   /** Declares the workbook's default font: font 0, the record an unstyled
    *  cell resolves to. A new workbook seeds it with Excel's Calibri 11 and
    *  `addFont` can only append beside it, so this is the way to change what
    *  a never-styled cell is saved as. Read it back with `getFont(0)`. */
-  setDefaultFont(record: FontRecord): void;
+  setDefaultFont(record: Font): void;
   /** Adds a fill (deduplicating against existing entries). */
-  addFill(record: FillRecord): number;
+  addFill(record: Fill): number;
   /** Adds a border (deduplicating against existing entries). */
-  addBorder(record: BorderRecord): number;
+  addBorder(record: Border): number;
   /** Adds a number-format code. An existing effective mapping is reused,
    *  including an existing custom record; a built-in id is reused without
    *  modifying the table only when its current effective mapping matches the
@@ -5027,7 +5027,7 @@ export interface Workbook {
    *  tables. */
   addCellXf(record: CellXfInput): number;
   /** Adds a `<dxf>` differential-format record for conditional formats. */
-  addDxf(record: DxfRecord): number;
+  addDxf(record: Dxf): number;
 
   /** Returns the number of font records currently registered. */
   getFontCount(): number;
@@ -5041,13 +5041,13 @@ export interface Workbook {
   getDxfCount(): number;
 
   /** Lists the named cell styles (`<cellStyle>` entries) in file order. */
-  listCellStyles(): readonly CellStyleRecord[];
+  listCellStyles(): readonly CellStyle[];
   /** Returns the number of `<cellStyleXfs>` records — the named-style
-   *  xf table referenced by `CellStyleRecord.xfId`. Independent of the
+   *  xf table referenced by `CellStyle.xfId`. Independent of the
    *  per-cell `cellXfs` table. */
   getCellStyleXfCount(): number;
   /** Reads the named cell style `name` (matched exactly); `null` when there is none. */
-  getCellStyle(name: string): CellStyleRecord | null;
+  getCellStyle(name: string): CellStyle | null;
   /** Returns the named-style xf record at `index`. Output shape mirrors
    *  `getCellXf`. */
   getCellStyleXf(index: number): CellXf;
@@ -5058,7 +5058,7 @@ export interface Workbook {
   /** Adds or replaces the `<cellStyle>` entry named `record.name`. Absent
    *  fields default to `xfId` 0, a custom style (`0xFFFFFFFF`), level 0 and
    *  both flags false. */
-  setCellStyle(record: CellStyleRecord): void;
+  setCellStyle(record: CellStyle): void;
   /** Removes the `<cellStyle>` named `name`; cell formats that used it are
    *  repointed at the Normal style. */
   removeCellStyle(name: string): void;
@@ -5104,7 +5104,7 @@ export interface Workbook {
   clearTheme(): void;
   /** Resolves a colour specification to ARGB against the theme and the
    *  indexed palette; `context` decides what an automatic colour means. */
-  resolveColor(spec: ColorSpec, context: ColorContext): ResolvedColor;
+  resolveColor(spec: Color, context: ColorContext): ResolvedColor;
   /** The formatting a cell shows: the xf chosen from cell, row, column or
    *  the default, with its colours resolved. Conditional formatting is not
    *  applied. */
@@ -5117,7 +5117,7 @@ export interface Workbook {
    *  in any letter case, adds none. */
   getExternalLinkCount(): number;
   /** Reads the `externalLinkIndex`-th external-link record in `<externalReferences>` document order. */
-  getExternalLink(externalLinkIndex: number): ExternalLinkRecord;
+  getExternalLink(externalLinkIndex: number): ExternalLink;
 
   /** Adds a merge range to `sheet`. */
   addMerge(sheet: number, range: CellRect): void;
@@ -5136,7 +5136,7 @@ export interface Workbook {
   getComment(sheet: number, row: number, col: number): Comment | null;
   /** Returns every comment on `sheet`, including comments anchored on
    *  cells that carry no value. */
-  listComments(sheet: number): readonly SheetCommentEntry[];
+  listComments(sheet: number): readonly SheetComment[];
   /** Sets / replaces the cell comment. Pass an empty `text` to remove. */
   setComment(sheet: number, row: number, col: number, author: string, text: string): void;
   /** Whether the note at `(sheet, row, col)` is shown without hovering; `null` when no note is anchored there. */
@@ -5207,7 +5207,7 @@ export interface Workbook {
   /** Number of CF rules on `sheet`. */
   getCfRuleCount(sheet: number): number;
   /** Reads the `cfRuleIndex`-th CF rule on `sheet` in flattened priority order. */
-  getCfRule(sheet: number, cfRuleIndex: number): ConditionalFormatEntry;
+  getCfRule(sheet: number, cfRuleIndex: number): ConditionalFormat;
   /** Appends a new single-rule `<conditionalFormatting>` block to
    *  `sheet`, including visual rules when their payload object is supplied.
    *  `index` is the new rule's position in the sheet's flattened CF rule
@@ -5304,7 +5304,7 @@ export interface Workbook {
    *  are read via `getValue`, which is already spill-aware. When the cell
    *  is not part of any region, `engaged` is `false` and `rect` is `null`
    *  unless the cell is a blocked anchor. */
-  getSpillInfo(sheet: number, row: number, col: number): SpillInfo;
+  getSpillInfo(sheet: number, row: number, col: number): Spill;
 
   /** Parses `text` as `INDIRECT` reads a reference under the workbook's profile: A1, or R1C1 with the
    *  profile's letters when `options.r1c1` is set. Accepts an optional local sheet qualifier, `$` markers, a
