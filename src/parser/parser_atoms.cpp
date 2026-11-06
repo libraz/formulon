@@ -505,26 +505,8 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
     // slice the raw bracket payload (including any whitespace runs the
     // tokenizer dropped) from the source buffer.
     const Token& lbracket = peek_at(1);
-    std::size_t depth = 1;
-    std::size_t close_offset = 0;  // 0-based offset (in tokens) from `lbracket`
-    bool found_close = false;
-    for (std::size_t i = 2;; ++i) {
-      const TokenKind k = peek_kind_at(i);
-      if (k == TokenKind::Eof) {
-        break;
-      }
-      if (k == TokenKind::LBracket) {
-        ++depth;
-      } else if (k == TokenKind::RBracket) {
-        --depth;
-        if (depth == 0) {
-          close_offset = i;
-          found_close = true;
-          break;
-        }
-      }
-    }
-    if (!found_close) {
+    const std::size_t close_offset = matching_rbracket_offset(1);
+    if (close_offset == 0) {
       record_error_with_token(ParseErrorCode::UnbalancedBrackets, lbracket.range, lbracket.lexeme);
       return make_recovery_placeholder(lbracket.range);
     }

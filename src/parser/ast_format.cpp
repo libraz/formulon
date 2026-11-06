@@ -162,7 +162,15 @@ bool InScope(const NameScope& scope, std::string_view bare) {
 }
 
 bool HasParamPrefix(std::string_view name) noexcept {
-  return name.size() >= 6U && formula_prefix_ci_eq(name.substr(0, 6U), "_xlpm.");
+  return name.size() >= kParamPrefix.size() && formula_prefix_ci_eq(name.substr(0, kParamPrefix.size()), kParamPrefix);
+}
+
+// Appends `raw` carrying the parameter prefix, once.
+void AppendParamName(std::string_view raw, std::string& out) {
+  if (!HasParamPrefix(raw)) {
+    out.append(kParamPrefix);
+  }
+  out.append(raw);
 }
 
 // A cell-shaped binding name keeps `_xlpm.` so it cannot read back as a cell;
@@ -170,12 +178,13 @@ bool HasParamPrefix(std::string_view name) noexcept {
 void AppendBindingName(std::string_view raw, bool storage, std::string& out) {
   const std::string_view bare = cell_shaped_name_bare(raw);
   if (is_a1_cell_shaped(bare)) {
-    out.append("_xlpm.");
+    out.append(kParamPrefix);
     out.append(bare);
     return;
   }
-  if (storage && !HasParamPrefix(raw)) {
-    out.append("_xlpm.");
+  if (storage) {
+    AppendParamName(raw, out);
+    return;
   }
   out.append(raw);
 }
@@ -188,8 +197,8 @@ bool AppendCellShapedName(std::string_view raw, const NameScope& scope, std::str
   if (!is_a1_cell_shaped(bare)) {
     return false;
   }
-  const bool bound = cell_shaped_name_prefix(raw) != "_xlnm." && InScope(scope, bare);
-  out.append(bound ? "_xlpm." : "_xlnm.");
+  const bool bound = cell_shaped_name_prefix(raw) != kNamePrefix && InScope(scope, bare);
+  out.append(bound ? kParamPrefix : kNamePrefix);
   out.append(bare);
   return true;
 }
@@ -210,13 +219,9 @@ void AppendNameRef(const AstNode& node, const NameScope& scope, std::string& out
     return;
   }
   AppendNameSheetQualifier(node, out);
-  const std::string_view bare = cell_shaped_name_bare(name);
-  if (is_a1_cell_shaped(bare)) {
-    out.append("_xlnm.");
-    out.append(bare);
-    return;
+  if (!AppendCellShapedName(name, NameScope{}, out)) {
+    out.append(name);
   }
-  out.append(name);
 }
 
 // Appends the sheet-less cell part of a reference tail in A1 notation: a
@@ -266,15 +271,7 @@ void FormatErrorLiteral(const AstNode& node, bool storage, std::string& out) {
 }
 
 bool IsDecimal(std::string_view text) noexcept {
-  if (text.empty()) {
-    return false;
-  }
-  for (char c : text) {
-    if (!detail::IsAsciiDigit(c)) {
-      return false;
-    }
-  }
-  return true;
+  return !text.empty() && detail::IsAllAsciiDigits(text);
 }
 
 // The qualifier of a cross-workbook reference through its `!`. With an
@@ -553,14 +550,34 @@ void FormatIntersect(const AstNode& node, std::string& out, const Layout& layout
   FormatNode(node.as_intersect_rhs(), out, layout);
 }
 
-void FormatUnion(const AstNode& node, std::string& out, const Layout& layout) {
-  const std::uint32_t n = node.as_union_arity();
-  for (std::uint32_t i = 0; i < n; ++i) {
+// Emits `count` items separated by commas; `emit_at(i)` writes item `i`.
+template <typename EmitAt>
+void EmitCommaList(std::uint32_t count, std::string& out, EmitAt&& emit_at) {
+  for (std::uint32_t i = 0; i < count; ++i) {
     if (i > 0) {
       out.push_back(',');
     }
-    FormatNode(node.as_union_child(i), out, layout);
+    emit_at(i);
   }
+}
+
+// Emits an array constant; `emit_element` writes one element.
+template <typename EmitElement>
+void EmitArrayConstant(const AstNode& node, std::string& out, EmitElement&& emit_element) {
+  out.push_back('{');
+  const std::uint32_t rows = node.as_array_rows();
+  const std::uint32_t cols = node.as_array_cols();
+  for (std::uint32_t r = 0; r < rows; ++r) {
+    if (r > 0) {
+      out.push_back(';');
+    }
+    EmitCommaList(cols, out, [&](std::uint32_t c) { emit_element(node.as_array_element(r, c)); });
+  }
+  out.push_back('}');
+}
+
+void FormatUnion(const AstNode& node, std::string& out, const Layout& layout) {
+  EmitCommaList(node.as_union_arity(), out, [&](std::uint32_t i) { FormatNode(node.as_union_child(i), out, layout); });
 }
 
 // Prints a `_TRO_*` call over a range as its operator (`A1:.A10`, `A.:A`) by
@@ -597,13 +614,7 @@ void FormatCall(const AstNode& node, std::string& out, const Layout& layout) {
     out.append(node.as_call_name());
   }
   out.push_back('(');
-  const std::uint32_t n = node.as_call_arity();
-  for (std::uint32_t i = 0; i < n; ++i) {
-    if (i > 0) {
-      out.push_back(',');
-    }
-    FormatNode(node.as_call_arg(i), out, layout);
-  }
+  EmitCommaList(node.as_call_arity(), out, [&](std::uint32_t i) { FormatNode(node.as_call_arg(i), out, layout); });
   AppendWhitespace(layout, node, WhitespaceSlot::kBeforeClose, 0, out);
   out.push_back(')');
 }
@@ -620,21 +631,7 @@ void FormatArrayElement(const AstNode& node, std::string& out, const Layout& lay
 }
 
 void FormatArrayLiteral(const AstNode& node, std::string& out, const Layout& layout) {
-  out.push_back('{');
-  const std::uint32_t rows = node.as_array_rows();
-  const std::uint32_t cols = node.as_array_cols();
-  for (std::uint32_t r = 0; r < rows; ++r) {
-    if (r > 0) {
-      out.push_back(';');
-    }
-    for (std::uint32_t c = 0; c < cols; ++c) {
-      if (c > 0) {
-        out.push_back(',');
-      }
-      FormatArrayElement(node.as_array_element(r, c), out, layout);
-    }
-  }
-  out.push_back('}');
+  EmitArrayConstant(node, out, [&](const AstNode& element) { FormatArrayElement(element, out, layout); });
 }
 
 void FormatLambda(const AstNode& node, std::string& out, const Layout& layout) {
@@ -704,13 +701,8 @@ bool CalleePrintsBare(const AstNode& callee) {
 void FormatLambdaCall(const AstNode& node, std::string& out, const Layout& layout) {
   FormatNode(node.as_lambda_call_callee(), out, layout);
   out.push_back('(');
-  const std::uint32_t n = node.as_lambda_call_arity();
-  for (std::uint32_t i = 0; i < n; ++i) {
-    if (i > 0) {
-      out.push_back(',');
-    }
-    FormatNode(node.as_lambda_call_arg(i), out, layout);
-  }
+  EmitCommaList(node.as_lambda_call_arity(), out,
+                [&](std::uint32_t i) { FormatNode(node.as_lambda_call_arg(i), out, layout); });
   out.push_back(')');
 }
 
@@ -932,19 +924,9 @@ struct StorageEmitter {
   const std::vector<const AstNode*>* function_values = nullptr;
   ParenCounts parens;
 
-  bool in_scope(std::string_view name) const {
-    // Case-insensitive: LET/LAMBDA parameter names resolve case-insensitively
-    // (Excel folds ASCII case on name resolution -- see
-    // `lookup_lexical_binding` in eval/compiler.cpp), so a NameRef spelled
-    // in a different case than its binding is still the same parameter and
-    // must carry the `_xlpm.` prefix, not be written as a free name.
-    for (const std::string_view s : scope) {
-      if (strings::case_insensitive_eq(s, name)) {
-        return true;
-      }
-    }
-    return false;
-  }
+  // A NameRef spelled in a different case than its binding is still that
+  // parameter and must carry the `_xlpm.` prefix.
+  bool in_scope(std::string_view name) const { return InScope(scope, name); }
 
   void append_function_name(std::string& out, std::string_view canonical) const { out.append(spell(canonical)); }
 
@@ -1007,7 +989,7 @@ struct StorageEmitter {
         const std::string_view bare = cell_shaped_name_bare(name);
         const bool param = sheet.empty() && in_scope(bare);
         if (param && !is_a1_cell_shaped(bare) && !HasParamPrefix(name)) {
-          out.append("_xlpm.");
+          out.append(kParamPrefix);
         } else if (!param && function_values != nullptr &&
                    std::find(function_values->begin(), function_values->end(), &node) != function_values->end()) {
           // Excel upper-cases a built-in it stores as a value.
@@ -1038,12 +1020,7 @@ struct StorageEmitter {
         EmitRangeChain(node, out, [this](const AstNode& operand, std::string& dst) { emit(operand, dst); });
         return;
       case NodeKind::UnionOp:
-        for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
-          if (i > 0) {
-            out.push_back(',');
-          }
-          emit(node.as_union_child(i), out);
-        }
+        EmitCommaList(node.as_union_arity(), out, [&](std::uint32_t i) { emit(node.as_union_child(i), out); });
         return;
       case NodeKind::IntersectOp:
         emit(node.as_intersect_lhs(), out);
@@ -1091,44 +1068,23 @@ struct StorageEmitter {
     if (AppendCellShapedCallName(name, scope, out)) {
       // Spelled with its prefix already.
     } else if (in_scope(name)) {
-      if (!HasParamPrefix(name)) {
-        out.append("_xlpm.");
-      }
-      out.append(name);
+      AppendParamName(name, out);
     } else {
       append_function_name(out, name);
     }
     out.push_back('(');
-    const std::uint32_t n = node.as_call_arity();
-    for (std::uint32_t i = 0; i < n; ++i) {
-      if (i > 0) {
-        out.push_back(',');
-      }
-      emit(node.as_call_arg(i), out);
-    }
+    EmitCommaList(node.as_call_arity(), out, [&](std::uint32_t i) { emit(node.as_call_arg(i), out); });
     out.push_back(')');
   }
 
   void emit_array(const AstNode& node, std::string& out) {
-    out.push_back('{');
-    const std::uint32_t rows = node.as_array_rows();
-    const std::uint32_t cols = node.as_array_cols();
-    for (std::uint32_t r = 0; r < rows; ++r) {
-      if (r > 0) {
-        out.push_back(';');
+    EmitArrayConstant(node, out, [&](const AstNode& element) {
+      if (element.kind() == NodeKind::Literal) {
+        FormatLiteral(element.as_literal(), out, /*parenthesise_negative=*/false);
+      } else {
+        emit(element, out);
       }
-      for (std::uint32_t c = 0; c < cols; ++c) {
-        if (c > 0) {
-          out.push_back(',');
-        }
-        if (node.as_array_element(r, c).kind() == NodeKind::Literal) {
-          FormatLiteral(node.as_array_element(r, c).as_literal(), out, /*parenthesise_negative=*/false);
-        } else {
-          emit(node.as_array_element(r, c), out);
-        }
-      }
-    }
-    out.push_back('}');
+    });
   }
 
   void emit_lambda(const AstNode& node, std::string& out) {
@@ -1183,13 +1139,7 @@ struct StorageEmitter {
   void emit_lambda_call(const AstNode& node, std::string& out) {
     emit(node.as_lambda_call_callee(), out);
     out.push_back('(');
-    const std::uint32_t n = node.as_lambda_call_arity();
-    for (std::uint32_t i = 0; i < n; ++i) {
-      if (i > 0) {
-        out.push_back(',');
-      }
-      emit(node.as_lambda_call_arg(i), out);
-    }
+    EmitCommaList(node.as_lambda_call_arity(), out, [&](std::uint32_t i) { emit(node.as_lambda_call_arg(i), out); });
     out.push_back(')');
   }
 };
@@ -1350,8 +1300,11 @@ bool formula_needs_storage_requote(const AstNode& root) {
       default:
         break;
     }
-    for (const AstNode* child : child_nodes(node)) {
-      pending.push_back(child);
+    if (node.kind() != NodeKind::ArrayLiteral) {
+      any_child_node(node, [&](const AstNode& child) {
+        pending.push_back(&child);
+        return false;
+      });
     }
   }
   return false;

@@ -25,9 +25,6 @@ namespace parser {
 
 namespace {
 
-constexpr std::string_view kParamPrefix = "_xlpm.";
-constexpr std::string_view kNamePrefix = "_xlnm.";
-
 bool IsOperatorCall(const AstNode& node, std::string_view name) {
   return node.kind() == NodeKind::Call && node.as_call_arity() == 1U &&
          strings::case_insensitive_eq(node.as_call_name(), name);
@@ -42,12 +39,10 @@ bool HasStorageOperatorCall(const AstNode& node) {
   if (IsStorageOperatorCall(node)) {
     return true;
   }
-  for (const AstNode* child : child_nodes(node)) {
-    if (HasStorageOperatorCall(*child)) {
-      return true;
-    }
+  if (node.kind() == NodeKind::ArrayLiteral) {
+    return false;
   }
-  return false;
+  return any_child_node(node, [](const AstNode& child) { return HasStorageOperatorCall(child); });
 }
 
 /// Rewrites `node`'s source text, copying every part without an operator call

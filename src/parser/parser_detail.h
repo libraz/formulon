@@ -77,6 +77,16 @@ inline bool IsAsciiDigit(char c) noexcept {
   return c >= '0' && c <= '9';
 }
 
+// True when every byte of `text` is an ASCII digit (vacuously for empty text).
+inline bool IsAllAsciiDigits(std::string_view text) noexcept {
+  for (const char c : text) {
+    if (!IsAsciiDigit(c)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // Decodes a column-letter run (ASCII letters, either case) to a 1-based column
 // index. Returns 0 for an empty run, a non-letter, or a column past kMaxColumn.
 inline std::uint32_t DecodeColumnLetters(std::string_view letters) noexcept {

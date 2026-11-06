@@ -128,6 +128,22 @@ bool is_range_endpoint_kind(NodeKind kind) noexcept {
          kind == NodeKind::IntersectOp || kind == NodeKind::UnionOp;
 }
 
+// Decrements the parse depth counter when it leaves scope.
+struct DepthScope {
+  explicit DepthScope(std::uint32_t& depth) noexcept : depth_(depth) {}
+  ~DepthScope() { --depth_; }
+  DepthScope(const DepthScope&) = delete;
+  DepthScope& operator=(const DepthScope&) = delete;
+
+ private:
+  std::uint32_t& depth_;
+};
+
+// A node that can stand on either side of a `:`.
+bool IsRangeOperand(const AstNode& node) noexcept {
+  return is_range_endpoint_kind(node.kind()) || is_self_book_name_ref(node);
+}
+
 // Maps a binary token kind to its `BinOp` enum value.
 BinOp TokenToBinOp(TokenKind kind) noexcept {
   switch (kind) {
@@ -307,6 +323,21 @@ TokenKind Parser::peek_kind() const noexcept {
 
 TokenKind Parser::peek_kind_at(std::size_t offset) const noexcept {
   return peek_at(offset).kind;
+}
+
+std::size_t Parser::matching_rbracket_offset(std::size_t lbracket_offset) const noexcept {
+  std::size_t depth = 1;
+  for (std::size_t i = lbracket_offset + 1;; ++i) {
+    const TokenKind k = peek_kind_at(i);
+    if (k == TokenKind::Eof) {
+      return 0;
+    }
+    if (k == TokenKind::LBracket) {
+      ++depth;
+    } else if (k == TokenKind::RBracket && --depth == 0) {
+      return i;
+    }
+  }
 }
 
 const Token& Parser::peek() const noexcept {
@@ -589,20 +620,17 @@ AstNode* parse_strict(std::string_view src, Arena& arena, ParserOptions opts) {
 // ---------------------------------------------------------------------------
 
 AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
-  // Depth guard. We use a manual increment / decrement around every return
-  // path because we have no exceptions and forgetting `--depth_` would be
-  // easy to introduce on a future edit.
+  // Depth guard: the scope exit undoes the increment on every return path.
   ++depth_;
+  const DepthScope depth_scope(depth_);
   if (depth_ > opts_.max_parse_depth) {
     record_error(ParseErrorCode::NestedFormulaTooDeep, peek().range);
     skip_to_sync(ctx);
     AstNode* placeholder = make_recovery_placeholder(peek().range);
-    --depth_;
     return placeholder;
   }
   if (bailed_) {
     AstNode* placeholder = make_recovery_placeholder(peek().range);
-    --depth_;
     return placeholder;
   }
 
@@ -612,7 +640,6 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
     // parse_atom only returns nullptr on arena exhaustion; treat as a hard
     // bail by latching and returning nullptr up the stack.
     bailed_ = true;
-    --depth_;
     return nullptr;
   }
   // A range the atom folded itself (`A1:.A10`, `A:.A`, `Sheet2!1.:1`).
@@ -631,7 +658,6 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       lhs = wrap_trim_ref(lhs, trim);
       if (lhs == nullptr) {
         bailed_ = true;
-        --depth_;
         return nullptr;
       }
     }
@@ -650,21 +676,18 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       close_chain(lhs, mark);
     }
     if (bailed_) {
-      --depth_;
       return lhs;
     }
 
     // Postfix operators first (currently only `%`).
     if (kind == TokenKind::Percent) {
       if (kBpPostfixPercent < min_bp) {
-        --depth_;
         return lhs;
       }
       const Token& tok = advance();
       AstNode* node = make_unary_op(arena_, UnaryOp::Percent, lhs);
       if (node == nullptr) {
         bailed_ = true;
-        --depth_;
         return lhs;
       }
       node->set_range(SpanRange(lhs->range(), tok.range));
@@ -726,27 +749,22 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
         // literal" convention still holds.
         if (lk == NodeKind::Literal && lhs->as_literal().is_boolean() && peek_kind_at(1) == TokenKind::RParen) {
           if (kBpPostfixCall < min_bp) {
-            --depth_;
             return lhs;
           }
-          const Token& lparen_tok = advance();
+          advance();
           const Token& rparen_tok = advance();
           lhs->set_range(SpanRange(lhs->range(), rparen_tok.range));
-          (void)lparen_tok;
           continue;
         }
-        --depth_;
         return lhs;
       }
       if (kBpPostfixCall < min_bp) {
-        --depth_;
         return lhs;
       }
       const Token& lparen = advance();
       std::vector<const AstNode*> args;
       if (!parse_call_args(&args, lparen.range, lparen.lexeme)) {
         bailed_ = true;
-        --depth_;
         return lhs;
       }
       TextRange end_range = lparen.range;
@@ -760,7 +778,6 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
           make_lambda_call(arena_, lhs, args.empty() ? nullptr : args.data(), static_cast<std::uint32_t>(args.size()));
       if (node == nullptr) {
         bailed_ = true;
-        --depth_;
         return lhs;
       }
       node->set_range(SpanRange(lhs->range(), end_range));
@@ -785,7 +802,6 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
     // `SpillRef(A1)+SpillRef(B1)`.
     if (kind == TokenKind::Hash) {
       if (kBpPostfixHash < min_bp) {
-        --depth_;
         return lhs;
       }
       // Always consume `#` so we never re-enter the loop on the same token,
@@ -803,7 +819,6 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       AstNode* node = computed_anchor ? make_spill_ref_expr(arena_, lhs) : make_spill_ref(arena_, lhs->as_ref());
       if (node == nullptr) {
         bailed_ = true;
-        --depth_;
         return lhs;
       }
       node->set_range(SpanRange(lhs->range(), hash_tok.range));
@@ -831,7 +846,6 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       }
     }
     if (bp == 0 || bp < min_bp) {
-      --depth_;
       return lhs;
     }
 
@@ -842,7 +856,6 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // hard failure (arena exhaustion). Surface the existing LHS to the
       // caller so they can salvage a partial tree.
       close_chain(lhs, mark);
-      --depth_;
       return lhs;
     }
 
@@ -863,8 +876,7 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       const NodeKind rk = rhs->kind();
       if (lk == NodeKind::SpillRef || rk == NodeKind::SpillRef) {
         record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
-      } else if (!(is_range_endpoint_kind(lk) || is_self_book_name_ref(*lhs)) ||
-                 !(is_range_endpoint_kind(rk) || is_self_book_name_ref(*rhs))) {
+      } else if (!(chain_open || IsRangeOperand(*lhs)) || !IsRangeOperand(*rhs)) {
         record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
       }
       if (!chain_open) {
@@ -878,7 +890,6 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // A trim operator applies to the whole chain written before it.
       close_chain(lhs, mark);
       if (bailed_) {
-        --depth_;
         return lhs;
       }
       node = wrap_trim_ref(lhs, op_tok.trim);
@@ -906,7 +917,6 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
     }
     if (node == nullptr) {
       bailed_ = true;
-      --depth_;
       return lhs;
     }
     node->set_range(SpanRange(lhs->range(), rhs->range()));
@@ -1011,25 +1021,8 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
         return make_recovery_placeholder(open.range);
       }
       const Token& lbracket = peek();
-      bool found_close = false;
-      std::uint32_t depth = 1;
-      std::size_t close_offset = 0;
-      for (std::size_t i = 1;; ++i) {
-        const TokenKind k = peek_kind_at(i);
-        if (k == TokenKind::Eof) {
-          break;
-        }
-        if (k == TokenKind::LBracket) {
-          ++depth;
-        } else if (k == TokenKind::RBracket) {
-          --depth;
-          if (depth == 0) {
-            found_close = true;
-            close_offset = i;
-            break;
-          }
-        }
-      }
+      const std::size_t close_offset = matching_rbracket_offset(0);
+      const bool found_close = close_offset != 0;
       if (found_close && !opts_.bare_structured_ref_table.empty()) {
         // Inside a table, `[...]` names that table.
         const Token& rbracket = peek_at(close_offset);

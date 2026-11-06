@@ -129,7 +129,8 @@ class Tokenizer {
   TextRange make_range() const noexcept;
 
   // Emits a token of `kind`, with `lexeme` covering [lex_start, byte_pos_).
-  void emit(TokenKind kind, std::size_t lex_start);
+  // Returns the pushed token, valid until the next emit.
+  Token& emit(TokenKind kind, std::size_t lex_start);
   // Emits a single-codepoint token at the current cursor.
   void emit_single_char(TokenKind kind);
 

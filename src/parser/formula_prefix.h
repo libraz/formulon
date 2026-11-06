@@ -33,6 +33,11 @@
 namespace formulon {
 namespace parser {
 
+/// Storage prefix of a LET / LAMBDA parameter name.
+inline constexpr std::string_view kParamPrefix = "_xlpm.";
+/// Storage prefix of a cell-shaped defined name.
+inline constexpr std::string_view kNamePrefix = "_xlnm.";
+
 /// True when `c` can continue an identifier (letters, digits, `_`, `.`,
 /// plus any non-ASCII UTF-8 byte, matching the tokenizer's identifier
 /// rule closely enough for boundary detection).
@@ -78,7 +83,7 @@ inline bool formula_prefix_ci_eq(std::string_view s, std::string_view lit) noexc
 /// A1 cell-shaped (`_xlpm.B1`), which keeps it so it cannot read as a cell.
 inline std::string strip_storage_prefixes(std::string_view formula, bool (*known)(std::string_view) = nullptr) {
   // Longest first so `_xlfn._xlws.` is consumed as a unit before `_xlfn.`.
-  static constexpr std::array<std::string_view, 5> kPrefixes = {"_xlfn._xlws.", "_xlfn.", "_xlws.", "_xlpm.",
+  static constexpr std::array<std::string_view, 5> kPrefixes = {"_xlfn._xlws.", "_xlfn.", "_xlws.", kParamPrefix,
                                                                 "_xleta."};
   std::string out;
   out.reserve(formula.size());
@@ -116,10 +121,10 @@ inline std::string strip_storage_prefixes(std::string_view formula, bool (*known
               ++end;
             }
             const std::string_view name = formula.substr(i + prefix.size(), end - i - prefix.size());
-            if (prefix == "_xlpm." && is_a1_cell_shaped(name)) {
+            if (prefix == kParamPrefix && is_a1_cell_shaped(name)) {
               break;
             }
-            if (prefix != "_xlpm." && prefix != "_xleta." && known != nullptr && !known(name)) {
+            if (prefix != kParamPrefix && prefix != "_xleta." && known != nullptr && !known(name)) {
               break;
             }
             i += prefix.size();

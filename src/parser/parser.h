@@ -146,6 +146,9 @@ class Parser {
   // Returns the kind of the token at `pos_ + offset` (still ignoring
   // whitespace because `tokens_` is the pre-filtered stream).
   TokenKind peek_kind_at(std::size_t offset) const noexcept;
+  // Token offset of the `]` closing the `[` at `lbracket_offset`, or 0 when
+  // the brackets never balance.
+  std::size_t matching_rbracket_offset(std::size_t lbracket_offset) const noexcept;
   // Returns a const reference to the current token (or the synthesised Eof).
   const Token& peek() const noexcept;
   // Returns a const reference to a future token.

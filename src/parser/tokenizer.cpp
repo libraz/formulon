@@ -75,10 +75,7 @@ std::size_t BracketNameLength(std::string_view source, std::size_t pos) noexcept
   if (book_len == 0 || end >= source.size() || source[end] != ']') {
     return 0;
   }
-  bool decimal = true;
-  for (std::size_t i = pos + 1; i < end; ++i) {
-    decimal = decimal && detail::IsAsciiDigit(source[i]);
-  }
+  const bool decimal = detail::IsAllAsciiDigits(source.substr(pos + 1, end - pos - 1));
   const std::size_t name_len = detail::BareQualifierRunLength(source, end + 1);
   end += 1 + name_len;
   if (decimal || name_len == 0) {
@@ -512,13 +509,9 @@ const std::vector<Token>& Tokenizer::tokens() {
           value = value * 10.0 + static_cast<double>(source_[byte_pos_] - '0');
           advance_one();
         }
-        Token t;
-        t.kind = TokenKind::Number;
-        t.range = make_range();
-        t.lexeme = std::string_view(source_.data() + num_start, byte_pos_ - num_start);
+        Token& t = emit(TokenKind::Number, num_start);
         t.number = value;
         t.is_integer = true;
-        tokens_.push_back(t);
         continue;
       }
       const std::size_t err_start = byte_pos_;
@@ -652,12 +645,13 @@ TextRange Tokenizer::make_range() const noexcept {
   return r;
 }
 
-void Tokenizer::emit(TokenKind kind, std::size_t lex_start) {
+Token& Tokenizer::emit(TokenKind kind, std::size_t lex_start) {
   Token t;
   t.kind = kind;
   t.range = make_range();
   t.lexeme = std::string_view(source_.data() + lex_start, byte_pos_ - lex_start);
   tokens_.push_back(t);
+  return tokens_.back();
 }
 
 void Tokenizer::emit_single_char(TokenKind kind) {
@@ -721,13 +715,9 @@ void Tokenizer::scan_quoted(char quote, TokenKind kind, LexerErrorCode untermina
     advance_one();
   }
 
-  Token t;
-  t.kind = kind;
-  t.range = make_range();
-  t.lexeme = std::string_view(source_.data() + start, byte_pos_ - start);
+  Token& t = emit(kind, start);
   // Intern the resolved payload into the arena so the view outlives `buf`.
   t.text = arena_.intern(std::string_view(buf.data(), buf.size()));
-  tokens_.push_back(t);
 
   if (!terminated) {
     record_error(unterminated, start);
@@ -794,40 +784,6 @@ void Tokenizer::scan_number() {
 
   std::string_view lex(source_.data() + start, byte_pos_ - start);
 
-  // Reject a bare '.' with no digit on either side. `.5` and `1.` both keep
-  // a digit (before or after the dot respectively) and are valid Excel
-  // literals -- `1.` parses to 1, matching Excel's own acceptance of a
-  // trailing decimal point with an empty fractional part.
-  if (lex.size() == 1 && lex[0] == decimal_) {
-    emit(TokenKind::Invalid, start);
-    record_error(LexerErrorCode::InvalidNumberLiteral, start);
-    return;
-  }
-  if (saw_dot && !saw_exp) {
-    // Ensure there's at least one digit either before or after the dot.
-    bool has_digit_before = false;
-    bool has_digit_after = false;
-    bool seen_dot = false;
-    for (char ch : lex) {
-      if (ch == decimal_) {
-        seen_dot = true;
-        continue;
-      }
-      if (detail::IsAsciiDigit(ch)) {
-        if (seen_dot) {
-          has_digit_after = true;
-        } else {
-          has_digit_before = true;
-        }
-      }
-    }
-    if (!has_digit_before && !has_digit_after) {
-      emit(TokenKind::Invalid, start);
-      record_error(LexerErrorCode::InvalidNumberLiteral, start);
-      return;
-    }
-  }
-
   // Reject an immediately-following second '.' as in `1.2.3`. Without this
   // check the main loop would produce Number("1.2"), Invalid or similar;
   // flagging it here yields the more actionable diagnostic.
@@ -865,13 +821,9 @@ void Tokenizer::scan_number() {
     return;
   }
 
-  Token t;
-  t.kind = TokenKind::Number;
-  t.range = make_range();
-  t.lexeme = lex;
+  Token& t = emit(TokenKind::Number, start);
   t.number = value;
   t.is_integer = is_integer;
-  tokens_.push_back(t);
 }
 
 void Tokenizer::scan_error_literal() {
@@ -915,12 +867,7 @@ void Tokenizer::scan_error_literal() {
     while (byte_pos_ < match_end) {
       advance_one();
     }
-    Token t;
-    t.kind = TokenKind::ErrorLiteral;
-    t.range = make_range();
-    t.lexeme = std::string_view(source_.data() + start, byte_pos_ - start);
-    t.error_code = code;
-    tokens_.push_back(t);
+    emit(TokenKind::ErrorLiteral, start).error_code = code;
     return;
   }
 
@@ -1031,12 +978,7 @@ void Tokenizer::scan_ident_or_cellref_or_bool() {
 
   bool b = false;
   if (is_bool_name(run, &b)) {
-    Token t;
-    t.kind = TokenKind::Bool;
-    t.range = make_range();
-    t.lexeme = run;
-    t.boolean = b;
-    tokens_.push_back(t);
+    emit(TokenKind::Bool, start).boolean = b;
     return;
   }
 
