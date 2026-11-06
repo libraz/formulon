@@ -640,6 +640,7 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
       wb.mutable_tables(), target, sheet_index, table_refs_before, mutator,
       StructuralEdit{origin, count, edit == parser::RowColEdit::kDelete, axis == parser::RowColAxis::kRow},
       new_workbook_defaults(wb.excel_profile().locale).column_word);
+  sync_table_spill_barriers_locked(sheets, mutator, wb.tables());
   std::vector<std::string> filters_after;
   filters_after.push_back(io::auto_filter_xml(target.auto_filter()));
   for (TableMetadata& table : wb.mutable_tables()) {

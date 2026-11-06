@@ -8,15 +8,18 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include "auto_filter.h"
 #include "cf/cf_types.h"
 #include "defined_name.h"
 #include "eval/builtin_names.h"
 #include "eval/recalc_engine.h"
+#include "merge_range.h"
 #include "parser/ast.h"
 #include "sheet.h"
 #include "sheet_metadata.h"
@@ -430,6 +433,36 @@ void mark_all_formulas_dirty_locked(const std::vector<Sheet>& sheets,
           continue;
         }
         mutator.mark_dirty(eval::CellNodeId{static_cast<std::uint16_t>(sheet_idx), row, col});
+      }
+    }
+  }
+}
+
+void sync_table_spill_barriers_locked(std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator,
+                                      const std::vector<TableMetadata>& tables) {
+  std::vector<std::vector<MergeRange>> per_sheet(sheets.size());
+  for (const TableMetadata& table : tables) {
+    const std::optional<MergeRange> rect = parse_a1_rectangle(table.ref);
+    if (rect && table.sheet_index < sheets.size()) {
+      per_sheet[table.sheet_index].push_back(normalized(*rect));
+    }
+  }
+  for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
+    Sheet& sheet = sheets[sheet_idx];
+    std::vector<MergeRange> touched = per_sheet[sheet_idx];
+    const std::vector<MergeRange> before = sheet.set_table_spill_barriers(std::move(per_sheet[sheet_idx]));
+    if (before == touched) {
+      continue;
+    }
+    touched.insert(touched.end(), before.begin(), before.end());
+    for (const MergeRange& rect : touched) {
+      const std::uint32_t rows = rect.last_row - rect.first_row + 1U;
+      const std::uint32_t cols = rect.last_col - rect.first_col + 1U;
+      for (const auto query :
+           {&Sheet::blocked_spill_anchors_intersecting, &Sheet::committed_spill_anchors_intersecting}) {
+        for (const CellAddress anchor : (sheet.*query)(rect.first_row, rect.first_col, rows, cols)) {
+          mutator.mark_dirty(make_node(sheet_idx, anchor.row, anchor.col));
+        }
       }
     }
   }

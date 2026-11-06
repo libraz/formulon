@@ -19,6 +19,7 @@
 #include "defined_name.h"
 #include "eval/dep_graph.h"
 #include "eval/recalc_engine.h"
+#include "merge_range.h"
 #include "parser/ast.h"
 #include "sheet.h"
 #include "table.h"
@@ -99,6 +100,11 @@ void mark_row_visibility_dependents_dirty_locked(const std::vector<Sheet>& sheet
                                                  const eval::RecalcEngine::LockedMutator& mutator,
                                                  const std::vector<DefinedName>& defined_names);
 void mark_all_formulas_dirty_locked(const std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator);
+/// Hands each sheet the rectangles of its tables for spill admission, and
+/// marks dirty every spill anchor whose footprint meets a rectangle that came
+/// or went.
+void sync_table_spill_barriers_locked(std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator,
+                                      const std::vector<TableMetadata>& tables);
 
 }  // namespace formulon
 

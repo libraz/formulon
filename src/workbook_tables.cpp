@@ -249,6 +249,7 @@ void Workbook::reindex_formulas_for_table_change(const std::vector<std::string>&
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   reindex_formulas_referencing_table(sheets_, mutator, *this, table_names);
+  sync_table_spill_barriers_locked(sheets_, mutator, tables_);
 }
 
 namespace {

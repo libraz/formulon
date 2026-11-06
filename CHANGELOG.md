@@ -452,6 +452,10 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
   Setting a new defined name refuses a name outside that syntax or one a
   table uses. Such workbooks were written without complaint and Excel
   refused to open them.
+- A dynamic-array result of more than one cell whose spill range touches a
+  table, its anchor cell included, is `#SPILL!`, as in Excel. Adding,
+  resizing or removing a table, and row or column edits that move one,
+  recalculate the spills it blocks or releases.
 
 ### Name migration
 

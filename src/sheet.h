@@ -717,6 +717,11 @@ class Sheet {
   std::vector<CellAddress> committed_spill_anchors_intersecting(std::uint32_t first_row, std::uint32_t first_col,
                                                                 std::uint32_t rows, std::uint32_t cols) const;
 
+  /// Replaces the rectangles of the worksheet tables on this sheet. A spill of
+  /// more than one cell that touches one is refused, as Excel refuses a spill
+  /// range in a table. Returns the rectangles it replaced.
+  std::vector<MergeRange> set_table_spill_barriers(std::vector<MergeRange> rects);
+
   /// Returns all currently blocked spill anchors.  Structural workbook edits
   /// use this after remapping the sheet-local table to mark surviving formula
   /// anchors dirty.  The returned coordinates are copies.
@@ -1373,6 +1378,9 @@ class Sheet {
   // Merge ranges from `<mergeCells>`. Empty by default; populated by the
   // OOXML reader and round-tripped through the writer.
   std::vector<MergeRange> merges_;
+  // Rectangles of the workbook's tables on this sheet, kept by the workbook
+  // for spill admission. Guarded by `spill_mutex_`.
+  std::vector<MergeRange> table_spill_barriers_;
   // What-If data tables (`<f t="dataTable">`), shifted with row/column edits.
   std::vector<DataTable> data_tables_;
   // Hyperlinks from `<hyperlinks>` plus the sheet's rels file. Empty by default.

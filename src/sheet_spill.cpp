@@ -394,10 +394,26 @@ Sheet::SpillAdmission Sheet::probe_spill_footprint_locked(std::uint32_t anchor_r
       return SpillAdmission::kBlocked;
     }
   }
+  // A table refuses any spill of more than one cell, its anchor included.
+  if (static_cast<std::uint64_t>(rows) * cols > 1U) {
+    for (const MergeRange& table : table_spill_barriers_) {
+      if (RectsIntersect(anchor_row, row_end, anchor_col, col_end, table.first_row,
+                         static_cast<std::uint64_t>(table.last_row) + 1U, table.first_col,
+                         static_cast<std::uint64_t>(table.last_col) + 1U)) {
+        return SpillAdmission::kBlocked;
+      }
+    }
+  }
   if (footprint_holds_occupied_cell_locked(anchor_row, anchor_col, row_end, col_end, scan_steps)) {
     return SpillAdmission::kBlocked;
   }
   return SpillAdmission::kAdmissible;
+}
+
+std::vector<MergeRange> Sheet::set_table_spill_barriers(std::vector<MergeRange> rects) {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  table_spill_barriers_.swap(rects);
+  return rects;
 }
 
 void Sheet::reject_spill_footprint(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,

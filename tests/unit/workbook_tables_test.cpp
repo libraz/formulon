@@ -260,5 +260,43 @@ TEST(WorkbookTables, ThisRowReferenceFollowsItsOwnRow) {
   EXPECT_EQ(At(wb, 2, 2), Value::number(80.0));
 }
 
+// Excel refuses a spill of more than one cell that touches a table, anchor
+// included, and lets it through again once the table is gone.
+TEST(WorkbookTables, ASpillTouchingATableIsRefused) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(wb.set_cell_formula(0, 9U, 0U, "=SEQUENCE(3)").has_value());     // A10:A12
+  ASSERT_TRUE(wb.set_cell_formula(0, 1U, 0U, "=SEQUENCE(1,4)").has_value());   // A2:D2
+  ASSERT_TRUE(wb.set_cell_formula(0, 1U, 6U, "=SEQUENCE(1)").has_value());     // G2
+  ASSERT_TRUE(wb.set_cell_formula(0, 2U, 6U, "=SEQUENCE(2)").has_value());     // G3:G4
+  ASSERT_TRUE(wb.set_cell_formula(0, 20U, 0U, "=SEQUENCE(1,2)").has_value());  // A21:B21
+  Recalc(wb);
+  EXPECT_EQ(At(wb, 10U, 0U), Value::number(2.0));
+
+  ASSERT_TRUE(wb.add_table(make_table("Below", "A11:B13", 2)).has_value());
+  ASSERT_TRUE(wb.add_table(make_table("Right", "C1:D4", 2)).has_value());
+  ASSERT_TRUE(wb.add_table(make_table("Inner", "G1:G5", 1)).has_value());
+  ASSERT_TRUE(wb.add_table(make_table("Next", "A23:B24", 2)).has_value());
+  Recalc(wb);
+  EXPECT_EQ(At(wb, 9U, 0U), Value::error(ErrorCode::Spill));
+  EXPECT_EQ(At(wb, 1U, 0U), Value::error(ErrorCode::Spill));
+  EXPECT_EQ(At(wb, 1U, 6U), Value::number(1.0));
+  EXPECT_EQ(At(wb, 2U, 6U), Value::error(ErrorCode::Spill));
+  EXPECT_EQ(At(wb, 20U, 0U), Value::number(1.0));
+
+  // Rows inserted above both move them together: the table's old rectangle
+  // must not stay behind on the spill's new rows.
+  ASSERT_TRUE(wb.insert_rows(0, 14U, 3U).has_value());
+  Recalc(wb);
+  EXPECT_EQ(At(wb, 23U, 0U), Value::number(1.0));
+  EXPECT_EQ(At(wb, 23U, 1U), Value::number(2.0));
+
+  std::vector<TableMetadata> kept(wb.tables().begin() + 1, wb.tables().end());
+  wb.set_tables(std::move(kept));
+  Recalc(wb);
+  EXPECT_EQ(At(wb, 9U, 0U), Value::number(1.0));
+  EXPECT_EQ(At(wb, 11U, 0U), Value::number(3.0));
+  EXPECT_EQ(At(wb, 1U, 0U), Value::error(ErrorCode::Spill));
+}
+
 }  // namespace
 }  // namespace formulon
