@@ -28,6 +28,7 @@
 
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_limit;
 using formulon::c_api::parts::check_num_fmt_id_text;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
@@ -583,7 +584,8 @@ extern "C" fm_status_t fm_sheet_add_pivot_field_shared_item(fm_workbook_t* wb, s
   }
   // A shared item is stored as a 32-bit cache index; a wider one names no item.
   if (cache_index > std::numeric_limits<std::uint32_t>::max()) {
-    return check_index(cache_index, std::numeric_limits<std::uint32_t>::max(), "cache_index");
+    return check_limit(cache_index, static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max()) + 1U,
+                       "cache_index");
   }
   std::size_t added = 0;
   const fm_status_t status = mutate_pivot_field(
