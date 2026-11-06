@@ -131,7 +131,7 @@ std::vector<CellNodeId> RecalcEngine::LockedMutator::three_d_span_owners_coverin
       owners.push_back(entry.owner);
     }
   }
-  std::sort(owners.begin(), owners.end(), CellNodeIdOrder{});
+  sort_cell_ids(owners);
   return owners;
 }
 

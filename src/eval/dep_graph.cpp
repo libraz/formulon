@@ -359,6 +359,15 @@ const std::vector<CellNodeId>& DepGraph::dependents_of_ref(CellNodeId node) cons
   return adjacency_or_empty(reverse_, node);
 }
 
+void sort_cell_ids(std::vector<CellNodeId>& cells) {
+  sort_by_index(cells, CellNodeIdOrder{});
+}
+
+void sort_unique_cell_ids(std::vector<CellNodeId>& cells) {
+  sort_cell_ids(cells);
+  cells.erase(std::unique(cells.begin(), cells.end()), cells.end());
+}
+
 bool is_cyclic_component(const std::vector<CellNodeId>& component, const DepGraph& graph) noexcept {
   if (component.size() != 1U) {
     return component.size() > 1U;
@@ -528,7 +537,7 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_subset(
           // `B1=A1-1`) settles on a different pair depending on which
           // member goes first, so the order has to be pinned. Address order
           // also matches Excel's top-left-first calculation chain.
-          std::sort(component.begin(), component.end(), CellNodeIdOrder{});
+          sort_cell_ids(component);
           sccs.push_back(std::move(component));
         }
 

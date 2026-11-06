@@ -330,6 +330,12 @@ class DepGraph {
   std::size_t node_count_ = 0;
 };
 
+/// Sorts `cells` into `CellNodeIdOrder` through the shared index sort.
+void sort_cell_ids(std::vector<CellNodeId>& cells);
+
+/// `sort_cell_ids`, then drops repeated cells.
+void sort_unique_cell_ids(std::vector<CellNodeId>& cells);
+
 /// Returns whether an SCC is a real cycle: two or more nodes, or a
 /// singleton whose sole cell has a self-dependency.
 bool is_cyclic_component(const std::vector<CellNodeId>& component, const DepGraph& graph) noexcept;

@@ -316,7 +316,7 @@ void fuse_cyclic_components(std::vector<std::vector<CellNodeId>>* components, co
       fused_cells.insert(fused_cells.end(), comps[i].begin(), comps[i].end());
     }
   }
-  std::sort(fused_cells.begin(), fused_cells.end(), CellNodeIdOrder{});
+  sort_cell_ids(fused_cells);
   for (std::size_t i = 0; i < comps.size(); ++i) {
     if (fused.count(i) != 0U) {
       if (i == fused_position) {

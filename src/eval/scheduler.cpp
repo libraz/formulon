@@ -264,6 +264,42 @@ struct ReadObservation {
   }
 };
 
+enum class CellEvalStatus { kSkipped, kArenaExhausted, kCommitted };
+
+// Stages, evaluates and commits one formula cell. The commit takes
+// `commit_mutex` when given; a pure-input cell is `kSkipped` and nothing is written.
+CellEvalStatus evaluate_formula_cell(Workbook& wb, Sheet& sheet, CellNodeId cell, const FunctionRegistry& registry,
+                                     Arena& arena, SpillReleaseCallback release_callback, void* release_user_data,
+                                     const ReadObservation& obs, std::mutex* commit_mutex) {
+  // `staged` must outlive the commit below: a formula whose result is a
+  // string literal returns a view into its own source text, and
+  // `set_cell_cached_value` is what deep-copies those bytes into the cell.
+  Cell staged;
+  if (!stage_formula_cell(sheet, cell.row, cell.col, staged)) {
+    return CellEvalStatus::kSkipped;
+  }
+  arena.reset();
+  EvaluateCellOptions opts;
+  opts.spill_release_callback = release_callback;
+  opts.spill_release_user_data = release_user_data;
+  obs.observe(cell, opts, &sheet);
+  Value result = evaluate_cell_for_recalc(wb, sheet, staged, cell.row, cell.col, registry, arena, opts);
+  if (obs.log != nullptr) {
+    obs.log->end();
+  }
+  if (arena.exhausted()) {
+    return CellEvalStatus::kArenaExhausted;
+  }
+  if (commit_mutex != nullptr) {
+    const std::lock_guard<std::mutex> guard(*commit_mutex);
+    sheet.set_cell_cached_value(cell.row, cell.col, result);
+  } else {
+    sheet.set_cell_cached_value(cell.row, cell.col, result);
+  }
+  obs.note_commit(cell);
+  return CellEvalStatus::kCommitted;
+}
+
 SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, const DepGraph& graph,
                        const FunctionRegistry& registry, const IterativeOptions& iter_opts, Arena& arena,
                        IterativeProgressCb progress_cb, void* progress_user_data, std::mutex& write_mutex,
@@ -346,32 +382,13 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
     return out;
   }
   Sheet& sheet = wb.sheet(only.sheet_id);
-  // `staged` must outlive the commit below: a formula whose result is a
-  // string literal returns a view into its own source text, and
-  // `set_cell_cached_value` is what deep-copies those bytes into the cell.
-  Cell staged;
-  if (!stage_formula_cell(sheet, only.row, only.col, staged)) {
-    return out;
-  }
-  arena.reset();
-  EvaluateCellOptions opts;
-  opts.spill_release_callback = release_callback;
-  opts.spill_release_user_data = release_user_data;
-  obs.observe(only, opts, &sheet);
-  Value result = evaluate_cell_for_recalc(wb, sheet, staged, only.row, only.col, registry, arena, opts);
-  if (obs.log != nullptr) {
-    obs.log->end();
-  }
-  if (arena.exhausted()) {
+  const CellEvalStatus status =
+      evaluate_formula_cell(wb, sheet, only, registry, arena, release_callback, release_user_data, obs, &write_mutex);
+  if (status == CellEvalStatus::kArenaExhausted) {
     out.arena_exhausted = true;
-    return out;
+  } else if (status == CellEvalStatus::kCommitted) {
+    ++out.cells_evaluated;
   }
-  {
-    std::lock_guard<std::mutex> guard(write_mutex);
-    sheet.set_cell_cached_value(only.row, only.col, result);
-  }
-  obs.note_commit(only);
-  ++out.cells_evaluated;
   return out;
 }
 
@@ -888,23 +905,15 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
           continue;
         }
         Sheet& sheet = wb.sheet(c.sheet_id);
-        Cell staged;
-        if (!stage_formula_cell(sheet, c.row, c.col, staged)) {
+        const CellEvalStatus status =
+            evaluate_formula_cell(wb, sheet, c, registry, arena, release_callback, &release_queue,
+                                  observation(layers.size(), position + 1U), /*commit_mutex=*/nullptr);
+        if (status == CellEvalStatus::kSkipped) {
           continue;
         }
-        arena.reset();
-        EvaluateCellOptions opts;
-        opts.spill_release_callback = release_callback;
-        opts.spill_release_user_data = &release_queue;
-        const ReadObservation obs = observation(layers.size(), position + 1U);
-        obs.observe(c, opts, &sheet);
-        Value result = evaluate_cell_for_recalc(wb, sheet, staged, c.row, c.col, registry, arena, opts);
-        dynamic.log().end();
-        if (arena.exhausted()) {
+        if (status == CellEvalStatus::kArenaExhausted) {
           return make_error(FormulonErrorCode::kOutOfMemory, kArenaExhaustedParallel);
         }
-        sheet.set_cell_cached_value(c.row, c.col, result);
-        obs.note_commit(c);
         ++cells_evaluated;
         ++sccs_processed;  // Treat a standalone formula as its own component.
       }

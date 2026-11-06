@@ -48,8 +48,7 @@ const std::vector<CellNodeId>& RecalcEngine::DynamicReadPass::end_wave(
   }
   log_.clear_wave();
   first_wave_ = false;
-  std::sort(stale_.begin(), stale_.end(), CellNodeIdOrder{});
-  stale_.erase(std::unique(stale_.begin(), stale_.end()), stale_.end());
+  sort_unique_cell_ids(stale_);
   return stale_;
 }
 

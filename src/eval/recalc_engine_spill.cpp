@@ -100,8 +100,7 @@ std::vector<CellNodeId> RecalcEngine::compact_range_precedents_of(CellNodeId cel
   });
   // A cell can be reached through two overlapping rectangles of the same
   // formula; the trace surface reports each precedent once.
-  std::sort(precedents.begin(), precedents.end(), CellNodeIdOrder{});
-  precedents.erase(std::unique(precedents.begin(), precedents.end()), precedents.end());
+  sort_unique_cell_ids(precedents);
   return precedents;
 }
 
@@ -246,7 +245,7 @@ std::vector<CellNodeId> RecalcEngine::reconcile_dynamic_reads_locked(
       }
     }
   }
-  std::sort(stale.begin(), stale.end(), CellNodeIdOrder{});
+  sort_cell_ids(stale);
   return stale;
 }
 

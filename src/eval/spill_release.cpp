@@ -71,7 +71,7 @@ std::vector<BlockedSpillState> snapshot_blocked_spills(const Workbook& workbook)
 
 std::vector<CellNodeId> canonical_release_targets(const std::vector<CellNodeId>& targets) {
   std::vector<CellNodeId> sorted = targets;
-  std::sort(sorted.begin(), sorted.end(), CellNodeIdOrder{});
+  sort_cell_ids(sorted);
   return sorted;
 }
 

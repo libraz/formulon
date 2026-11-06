@@ -7,7 +7,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
-#include <limits>
 #include <optional>
 #include <string_view>
 #include <unordered_set>
@@ -182,10 +181,8 @@ void add_range_dep(WalkState& state, CellRangeDependency range) {
   }
 }
 
-constexpr std::size_t kMaxSheetId = std::numeric_limits<std::uint16_t>::max();
-
 void add_three_d_span_dep(WalkState& state, std::size_t sheet_first, std::size_t sheet_last) {
-  if (sheet_first > kMaxSheetId || sheet_last > kMaxSheetId) {
+  if (sheet_first >= kRangeNodeSheetId || sheet_last >= kRangeNodeSheetId) {
     return;
   }
   const ThreeDSheetSpanDependency span{static_cast<std::uint16_t>(sheet_first), static_cast<std::uint16_t>(sheet_last)};
@@ -452,7 +449,7 @@ bool structured_ref_rect(const parser::AstNode& node, const WalkState& state, st
   // `CellNodeId::sheet_id`. `rect` arrives from a resolved defined name, so
   // the bound is re-checked rather than assumed: a rectangle that cannot be
   // addressed contributes no edges instead of aliasing another sheet.
-  if (rect.sheet_index > 0xFFFFu) {
+  if (rect.sheet_index >= kRangeNodeSheetId) {
     return false;
   }
   if (rect.row_first >= Sheet::kMaxRows || rect.row_last >= Sheet::kMaxRows ||  //
@@ -492,6 +489,12 @@ std::optional<Footprint> union_footprints(const Footprint& a, const Footprint& b
   return out;
 }
 
+// Folds `part` into the running union `acc`; false when the two cannot be joined.
+bool fold_footprint(std::optional<Footprint>& acc, const Footprint& part) {
+  acc = acc ? union_footprints(*acc, part) : std::optional<Footprint>(part);
+  return acc.has_value();
+}
+
 std::optional<Footprint> reference_footprint(const parser::AstNode& node, WalkState& state);
 
 // The footprint of a reference-returning call: the union over every argument
@@ -516,8 +519,7 @@ std::optional<Footprint> call_footprint(const parser::AstNode& node, WalkState& 
     if (!part) {
       return std::nullopt;
     }
-    acc = acc ? union_footprints(*acc, *part) : part;
-    if (!acc) {
+    if (!fold_footprint(acc, *part)) {
       return std::nullopt;
     }
   }
@@ -553,8 +555,7 @@ std::optional<Footprint> reference_footprint(const parser::AstNode& node, WalkSt
         if (!part) {
           return std::nullopt;
         }
-        acc = acc ? union_footprints(*acc, *part) : part;
-        if (!acc) {
+        if (!fold_footprint(acc, *part)) {
           return std::nullopt;
         }
       }
