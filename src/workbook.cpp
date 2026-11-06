@@ -385,7 +385,7 @@ Expected<std::vector<std::uint8_t>, Error> Workbook::save_as(WorkbookFormat form
     case WorkbookFormat::Unknown:
       break;
   }
-  return make_error(FormulonErrorCode::kInvalidArgument, "Workbook::save_as: unsupported format",
+  return make_error(FormulonErrorCode::kInvalidArgument, "the requested save format is not supported",
                     "context=workbook_save_as");
 }
 

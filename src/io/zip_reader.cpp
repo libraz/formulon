@@ -114,7 +114,7 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes, std::size_t max_total_extr
   impl_->total_extracted_bytes = ResourceBudget(ceiling, FormulonErrorCode::kIoFileTooLarge);
 
   if (bytes.data == nullptr || bytes.size == 0) {
-    return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::open: empty buffer",
+    return make_error(FormulonErrorCode::kIoZipCorrupt, "the archive buffer is empty",
                       "context=zip_reader bytes_size=0");
   }
 
@@ -125,7 +125,7 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes, std::size_t max_total_extr
     const mz_zip_error err = mz_zip_get_last_error(&impl_->archive);
     std::string ctx("context=zip_reader miniz_error=");
     ctx.append(std::to_string(static_cast<int>(err)));
-    return make_error(ErrorCodeForMiniz(err), "ZipReader::open: mz_zip_reader_init_mem failed", std::move(ctx));
+    return make_error(ErrorCodeForMiniz(err), "the data is not a valid ZIP archive", std::move(ctx));
   }
 
   // Reject archives whose central directory advertises an unreasonable
@@ -140,7 +140,7 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes, std::size_t max_total_extr
     ctx.append(std::to_string(static_cast<std::uint64_t>(num_files)));
     ctx.append(" cap=");
     ctx.append(std::to_string(static_cast<std::uint64_t>(kMaxParts)));
-    return make_error(FormulonErrorCode::kIoZipBomb, "ZipReader::open: archive entry count exceeds cap",
+    return make_error(FormulonErrorCode::kIoZipBomb, "the archive holds more entries than the limit allows",
                       std::move(ctx));
   }
 
@@ -160,24 +160,23 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes, std::size_t max_total_extr
       mz_zip_reader_end(&impl_->archive);
       std::string ctx("context=zip_reader preflight miniz_error=");
       ctx.append(std::to_string(static_cast<int>(err)));
-      return make_error(ErrorCodeForMiniz(err), "ZipReader::open: central-directory preflight failed", std::move(ctx));
+      return make_error(ErrorCodeForMiniz(err), "the ZIP central directory could not be read", std::move(ctx));
     }
     std::size_t name_len = 0;
     const Impl::NameStatus name_status = impl_->load_name(i, &name_len);
     if (name_status == Impl::NameStatus::kNoName) {
       mz_zip_reader_end(&impl_->archive);
-      return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::open: central-directory entry has no filename",
+      return make_error(FormulonErrorCode::kIoZipCorrupt, "a ZIP central-directory entry has no filename",
                         "context=zip_reader preflight");
     }
     if (name_status == Impl::NameStatus::kLookupFailed) {
       mz_zip_reader_end(&impl_->archive);
-      return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::open: central-directory filename lookup failed",
+      return make_error(FormulonErrorCode::kIoZipCorrupt, "a ZIP central-directory filename could not be read",
                         "context=zip_reader preflight");
     }
     if (std::memchr(impl_->name_buf.data(), '\0', name_len) != nullptr) {
       mz_zip_reader_end(&impl_->archive);
-      return make_error(FormulonErrorCode::kIoZipCorrupt,
-                        "ZipReader::open: central-directory filename has embedded NUL",
+      return make_error(FormulonErrorCode::kIoZipCorrupt, "a ZIP entry name contains an embedded NUL byte",
                         "context=zip_reader preflight embedded_nul");
     }
     if (stat.m_is_directory) {
@@ -187,8 +186,7 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes, std::size_t max_total_extr
       std::string ctx("context=zip_reader duplicate_entry=");
       ctx.append(impl_->name_buf.data(), name_len);
       mz_zip_reader_end(&impl_->archive);
-      return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::open: duplicate non-directory entry name",
-                        std::move(ctx));
+      return make_error(FormulonErrorCode::kIoZipCorrupt, "the archive contains duplicate entry names", std::move(ctx));
     }
   }
 
@@ -237,12 +235,12 @@ bool ZipReader::has_entry(std::string_view name) const noexcept {
 
 Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_view name) const {
   if (!impl_->open) {
-    return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::read_entry: archive not open",
+    return make_error(FormulonErrorCode::kIoZipCorrupt, "the archive is not open",
                       "context=zip_reader entry=" + std::string(name));
   }
 
   if (name.find('\0') != std::string_view::npos) {
-    return make_error(FormulonErrorCode::kIoFileNotFound, "ZipReader::read_entry: entry not found",
+    return make_error(FormulonErrorCode::kIoFileNotFound, "the requested entry is not in the archive",
                       "context=zip_reader entry=embedded_nul");
   }
 
@@ -250,7 +248,7 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
   const int located = mz_zip_reader_locate_file(&impl_->archive, c_name.c_str(), nullptr,
                                                 /*flags=*/MZ_ZIP_FLAG_CASE_SENSITIVE);
   if (located < 0) {
-    return make_error(FormulonErrorCode::kIoFileNotFound, "ZipReader::read_entry: entry not found",
+    return make_error(FormulonErrorCode::kIoFileNotFound, "the requested entry is not in the archive",
                       "context=zip_reader entry=" + c_name);
   }
 
@@ -266,12 +264,12 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
     ctx.append(c_name);
     ctx.append(" miniz_error=");
     ctx.append(std::to_string(static_cast<int>(err)));
-    return make_error(ErrorCodeForMiniz(err), "ZipReader::read_entry: stat failed", std::move(ctx));
+    return make_error(ErrorCodeForMiniz(err), "the entry metadata could not be read", std::move(ctx));
   }
   if (stat.m_is_encrypted) {
     std::string ctx("context=zip_reader entry=");
     ctx.append(c_name);
-    return make_error(FormulonErrorCode::kIoZipEncrypted, "ZipReader::read_entry: encrypted entry is unsupported",
+    return make_error(FormulonErrorCode::kIoZipEncrypted, "the entry is encrypted, which is not supported",
                       std::move(ctx));
   }
   if (stat.m_uncomp_size > static_cast<mz_uint64>(kMaxExtractedBytesPerEntry)) {
@@ -281,7 +279,7 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
     ctx.append(std::to_string(static_cast<std::uint64_t>(stat.m_uncomp_size)));
     ctx.append(" cap=");
     ctx.append(std::to_string(static_cast<std::uint64_t>(kMaxExtractedBytesPerEntry)));
-    return make_error(FormulonErrorCode::kIoZipBomb, "ZipReader::read_entry: uncompressed size exceeds per-entry cap",
+    return make_error(FormulonErrorCode::kIoZipBomb, "the entry uncompressed size exceeds the per-entry limit",
                       std::move(ctx));
   }
 
@@ -303,8 +301,7 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
       ctx.append(std::to_string(ratio));
       ctx.append(" cap=");
       ctx.append(std::to_string(static_cast<std::uint64_t>(kMaxRatio)));
-      return make_error(FormulonErrorCode::kIoZipBomb, "ZipReader::read_entry: compression ratio exceeds cap",
-                        std::move(ctx));
+      return make_error(FormulonErrorCode::kIoZipBomb, "the entry compression ratio exceeds the limit", std::move(ctx));
     }
   }
 
@@ -323,7 +320,7 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
       context.append(budget_context);
     }
     Error error = std::move(charged.error());
-    error.message = "ZipReader::read_entry: cumulative extracted bytes exceed cap";
+    error.message = "the cumulative extracted size exceeds the limit";
     error.context = std::move(context);
     return error;
   }
@@ -346,7 +343,7 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
       ctx.append(c_name);
       ctx.append(" miniz_error=");
       ctx.append(std::to_string(static_cast<int>(err)));
-      return make_error(ErrorCodeForMiniz(err), "ZipReader::read_entry: extraction failed", std::move(ctx));
+      return make_error(ErrorCodeForMiniz(err), "the entry could not be extracted", std::move(ctx));
     }
   }
   return bytes;
