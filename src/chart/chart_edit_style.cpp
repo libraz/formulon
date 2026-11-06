@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <iterator>
 #include <optional>
 #include <string>
 
@@ -29,6 +30,23 @@ constexpr const char* kSymbols[] = {"none", "auto", "circle", "square", "diamond
 
 namespace {
 
+/// Removes every fill child of `node`.
+void drop_fills(xml_node node) {
+  for (Order f = kFills; *f != nullptr; ++f) {
+    drop(node, *f);
+  }
+}
+
+/// The `c:spPr` of `owner`, created with the `a:effectLst` Excel writes in every shape-properties element.
+xml_node ensure_shape_properties(xml_node owner, Order order) {
+  const bool fresh = !child_local(owner, "spPr");
+  xml_node sp = ensure(owner, "c:spPr", order);
+  if (fresh) {
+    sp.append_child("a:effectLst");
+  }
+  return sp;
+}
+
 /// Colour and transparency of `holder`'s solid fill (`a:spPr`, `a:ln` or `a:defRPr`).
 Expected<void, Error> apply_paint(xml_node holder, Order order, const ChartPatchField<std::uint32_t>& color,
                                   const ChartPatchField<double>& transparency) {
@@ -37,9 +55,7 @@ Expected<void, Error> apply_paint(xml_node holder, Order order, const ChartPatch
   } else if (color.is_set()) {
     const std::string alpha =
         child_local(io::first_element_child(child_local(holder, "solidFill")), "alpha").attribute("val").value();
-    for (Order f = kFills; *f != nullptr; ++f) {
-      drop(holder, *f);
-    }
+    drop_fills(holder);
     xml_node clr = ensure(holder, "a:solidFill", order).append_child("a:srgbClr");
     io::set_attr(clr, "val", hex6(color.value));
     if (!alpha.empty()) {
@@ -72,11 +88,7 @@ Expected<void, Error> apply_shape(xml_node owner, Order owner_order, const Chart
   if (fill_empty(fill) && line_empty(line)) {
     return ok();
   }
-  const bool fresh = !child_local(owner, "spPr");
-  xml_node sp = ensure(owner, "c:spPr", owner_order);
-  if (fresh) {
-    sp.append_child("a:effectLst");  // Excel writes one in every shape-properties element.
-  }
+  xml_node sp = ensure_shape_properties(owner, owner_order);
   RETURN_IF_ERROR(apply_paint(sp, kShapeOrder, fill.color, fill.transparency_pct));
   if (line_empty(line)) {
     return ok();
@@ -87,9 +99,7 @@ Expected<void, Error> apply_shape(xml_node owner, Order owner_order, const Chart
       return bad_arg("chart: a hidden line takes no colour");
     }
     if (*line.none) {
-      for (Order f = kFills; *f != nullptr; ++f) {
-        drop(ln, *f);
-      }
+      drop_fills(ln);
       ensure(ln, "a:noFill", kLineOrder);
     } else {
       drop(ln, "noFill");
@@ -174,7 +184,7 @@ void settle_marker(xml_node ser, xml_node owner, const Palette& p) {
   if (symbol.empty() || symbol == "auto") {
     symbol = owner == ser ? "" : child_local(child_local(ser, "marker"), "symbol").attribute("val").value();
     if (symbol.empty() || symbol == "auto") {
-      symbol = kSymbols[static_cast<int>(kAutoSymbols[idx % 9U])];
+      symbol = kSymbols[static_cast<int>(kAutoSymbols[idx % std::size(kAutoSymbols)])];
     }
     put_val(m, "c:symbol", kMarkerOrder, symbol);
   }
@@ -195,11 +205,7 @@ void settle_marker(xml_node ser, xml_node owner, const Palette& p) {
     return;
   }
   // A styled chart keeps its style part only while every shown marker has both a fill and an outline.
-  const bool fresh = !child_local(m, "spPr");
-  xml_node sp = ensure(m, "c:spPr", kMarkerOrder);
-  if (fresh) {
-    sp.append_child("a:effectLst");
-  }
+  xml_node sp = ensure_shape_properties(m, kMarkerOrder);
   const auto filled = [](const xml_node& n) {
     return std::any_of(std::begin(kFills), std::end(kFills) - 1,
                        [&](const char* f) { return static_cast<bool>(child_local(n, f)); });

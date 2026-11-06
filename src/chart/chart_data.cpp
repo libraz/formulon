@@ -146,7 +146,10 @@ class Reader {
     bool has_first = false;
     bool has_second = false;
     for (const SheetRect& r : trimmed) {
+      const Sheet& sheet = wb_.sheet(r.sheet);
       for (std::uint32_t col = r.left; col <= r.right && r.top <= r.bottom; ++col) {
+        // Hidden rows and columns drop out of a visible-only plot; a hidden sheet's cells do not.
+        const bool col_dropped = plot_vis_only_ && col_hidden(sheet, col);
         for (std::uint32_t row = r.top; row <= r.bottom; ++row) {
           const Pos p{r.sheet, row, col};
           if (!has_first) {
@@ -157,7 +160,7 @@ class Reader {
             has_second = true;
             out.format_code = cell_format_code(second);
           }
-          if (!hidden(p.sheet, p.row, p.col)) {
+          if (!col_dropped && !(plot_vis_only_ && row_hidden(sheet, row))) {
             out.cells.push_back(read(p, want_display));
           }
         }
@@ -175,16 +178,6 @@ class Reader {
     std::uint32_t row;
     std::uint32_t col;
   };
-
-  /// Hidden rows and columns drop out when only visible cells are plotted;
-  /// a hidden sheet's cells do not.
-  bool hidden(std::size_t sheet_index, std::uint32_t row, std::uint32_t col) const {
-    if (!plot_vis_only_) {
-      return false;
-    }
-    const Sheet& sheet = wb_.sheet(sheet_index);
-    return row_hidden(sheet, row) || col_hidden(sheet, col);
-  }
 
   std::string cell_format_code(const Pos& p) const {
     const std::vector<CellXf>& xfs = wb_.styles().cell_xfs;

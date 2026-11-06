@@ -4,11 +4,13 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include "chart/chart_edit_internal.h"
 #include "chart/chart_model.h"
 #include "chart/chart_ns.h"
 #include "chart/chart_source.h"
@@ -50,7 +52,7 @@ struct Cache {
 enum class RefKind : std::uint8_t { kNum, kStr, kMultiLvl };
 
 bool is_role(std::string_view n) {
-  return n == "tx" || n == "cat" || n == "val" || n == "xVal" || n == "yVal" || n == "bubbleSize";
+  return std::find(std::begin(chart_edit::kRoles), std::end(chart_edit::kRoles), n) != std::end(chart_edit::kRoles);
 }
 
 bool ref_kind_of(std::string_view n, RefKind& kind) {
@@ -433,8 +435,10 @@ std::string number_or_text(const CachePt& pt) {
 }
 
 void write_points(pugi::xml_node parent, const std::string& prefix, const std::vector<CachePt>& pts) {
+  const std::string pt_name = prefix + "pt";
+  const std::string v_name = prefix + "v";
   for (const CachePt& pt : pts) {
-    pugi::xml_node node = parent.append_child((prefix + "pt").c_str());
+    pugi::xml_node node = parent.append_child(pt_name.c_str());
     node.append_attribute("idx") = count_text(pt.idx).c_str();
     if (!pt.format_code.empty()) {
       node.append_attribute("formatCode") = pt.format_code.c_str();
@@ -445,7 +449,7 @@ void write_points(pugi::xml_node parent, const std::string& prefix, const std::v
       io::AppendOoxmlTextEscaped(encoded, value);
       value = std::move(encoded);
     }
-    node.append_child((prefix + "v").c_str()).append_child(pugi::node_pcdata).set_value(value.c_str());
+    node.append_child(v_name.c_str()).append_child(pugi::node_pcdata).set_value(value.c_str());
   }
 }
 
@@ -522,9 +526,7 @@ bool refresh_chart_caches(const Workbook& wb, std::size_t host_sheet, pugi::xml_
     if (kind == original && same_cache(fresh, old, kind)) {
       continue;
     }
-    const std::string name = ref.name();
-    const std::size_t colon = name.rfind(':');
-    const std::string prefix = colon == std::string::npos ? std::string() : name.substr(0, colon + 1);
+    const std::string prefix(io::qname_prefix_colon(ref.name()));
     if (kind != original) {
       ref.set_name((prefix + "strRef").c_str());
     }

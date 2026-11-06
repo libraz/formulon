@@ -40,15 +40,17 @@ bool is_chart_element(const pugi::xml_node& node, std::string_view local) {
 }
 
 std::string qualified_name_like(const pugi::xml_node& node, std::string_view local) {
-  const std::string_view name = node.name();
-  const std::size_t colon = name.find(':');
-  if (colon == std::string_view::npos) {
-    return std::string(local);
-  }
-  std::string out(name.substr(0, colon));
-  out.push_back(':');
+  std::string out(io::qname_prefix_colon(node.name()));
   out.append(local);
   return out;
+}
+
+bool is_xmlns_declaration(std::string_view name) {
+  return name == "xmlns" || name.rfind("xmlns:", 0) == 0;
+}
+
+bool is_reference_kind(std::string_view kind) {
+  return kind == "strRef" || kind == "numRef" || kind == "multiLvlStrRef";
 }
 
 std::string qualified_name_with_prefix(std::string_view prefix, std::string_view local) {
@@ -99,7 +101,7 @@ pugi::xml_node child_element(const pugi::xml_node& parent, std::string_view uri,
 void preserve_local_namespace_declarations(const pugi::xml_node& source, pugi::xml_node destination) {
   for (pugi::xml_attribute attr = source.first_attribute(); attr; attr = attr.next_attribute()) {
     const std::string_view name = attr.name();
-    if (name != "xmlns" && name.rfind("xmlns:", 0) != 0) {
+    if (!is_xmlns_declaration(name)) {
       continue;
     }
     if (destination.attribute(attr.name())) {
@@ -113,7 +115,7 @@ void preserve_bindings_shadowed_by(const pugi::xml_node& source_scope, const pug
                                    pugi::xml_node moved_root) {
   for (pugi::xml_attribute attr = new_ancestor.first_attribute(); attr; attr = attr.next_attribute()) {
     const std::string_view name = attr.name();
-    if (name != "xmlns" && name.rfind("xmlns:", 0) != 0) {
+    if (!is_xmlns_declaration(name)) {
       continue;
     }
     const std::string_view prefix = name == "xmlns" ? std::string_view() : name.substr(6);
@@ -266,8 +268,7 @@ std::optional<SiteRewrite> rewrite_site(std::string_view text, const parser::Ref
 void reset_cache(const pugi::xml_node& site) {
   pugi::xml_node ref = site.parent();
   const std::string_view kind = local_name(ref);
-  if (!is_chart_element(site, "f") || namespace_uri(ref) != kNsC ||
-      (kind != "strRef" && kind != "numRef" && kind != "multiLvlStrRef")) {
+  if (!is_chart_element(site, "f") || namespace_uri(ref) != kNsC || !is_reference_kind(kind)) {
     return;
   }
   const pugi::xml_node holder = ref.parent();
@@ -309,7 +310,7 @@ void file_as_filtered_title(const pugi::xml_node& site) {
   const std::string_view role = local_name(holder);
   pugi::xml_node ser = holder.parent();
   if (namespace_uri(ref) != kNsC || namespace_uri(holder) != kNsC || !is_chart_element(ser, "ser") ||
-      (kind != "strRef" && kind != "numRef" && kind != "multiLvlStrRef") || (role != "tx" && role != "cat")) {
+      !is_reference_kind(kind) || (role != "tx" && role != "cat")) {
     return;
   }
   const bool is_name = role == "tx";
