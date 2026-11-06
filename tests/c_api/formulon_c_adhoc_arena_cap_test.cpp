@@ -39,7 +39,7 @@ TEST(AdhocEvalArenaCap, ArenaBuiltLikeTheAdhocEntryPointsRefusesRequestPastCeili
   // Same construction the ad-hoc entry points use. The oversized request is
   // rejected from the ceiling check, so no allocation of that size is ever
   // attempted.
-  formulon::Arena arena(/*initial_chunk_bytes=*/4096, formulon::kMaxEvalArenaBytes);
+  formulon::Arena arena(formulon::kDefaultArenaChunkBytes, formulon::kMaxEvalArenaBytes);
   EXPECT_EQ(arena.allocate(formulon::kMaxEvalArenaBytes + 1U, alignof(double)), nullptr);
   EXPECT_TRUE(arena.exhausted());
   EXPECT_EQ(arena.bytes_allocated(), 0U);

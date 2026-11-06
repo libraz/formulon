@@ -64,7 +64,7 @@ formulon::Value own_cell_text(const formulon::Value& v, TextStore& owner) {
 // hostile formula to a recoverable error instead of an allocation failure
 // that takes the host down.
 formulon::Arena make_eval_arena() {
-  return formulon::Arena(/*initial_chunk_bytes=*/4096, formulon::kMaxEvalArenaBytes);
+  return formulon::Arena(formulon::kDefaultArenaChunkBytes, formulon::kMaxEvalArenaBytes);
 }
 
 fm_status_t arena_exhausted_error() {

@@ -527,7 +527,7 @@ Expected<std::vector<bool>, Error> evaluate_auto_filter(const Workbook& wb, cons
   std::optional<eval::EvalContext> own_ctx;
   Arena* arena = deps.arena;
   if (arena == nullptr) {
-    own_arena.emplace(/*initial_chunk_bytes=*/4096, kMaxEvalArenaBytes);
+    own_arena.emplace(kDefaultArenaChunkBytes, kMaxEvalArenaBytes);
     arena = &*own_arena;
   }
   const eval::EvalContext* ctx = deps.eval_ctx;

@@ -109,7 +109,7 @@ Expected<std::string, Error> read_feature_formula(ByteSpan& cursor, std::uint32_
   if (rgce.empty()) {
     return std::string();
   }
-  Arena arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
+  Arena arena(kDefaultArenaChunkBytes, kMaxLoadArenaBytes);
   auto ast =
       decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, rgcb, arena, ctx.sheet_names, ctx.name_table, ctx.sheet_ranges,
                   ctx.external_books, static_cast<std::int32_t>(ctx.sheet_index), PtgBaseCell{base_row, base_col});

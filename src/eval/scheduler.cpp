@@ -222,7 +222,7 @@ ThreadArenas make_thread_arenas(std::size_t count, std::size_t max_arena_bytes) 
   ThreadArenas arenas;
   arenas.reserve(count);
   for (std::size_t i = 0; i < count; ++i) {
-    arenas.emplace_back(std::make_unique<Arena>(/*initial_chunk_bytes=*/4096, max_arena_bytes));
+    arenas.emplace_back(std::make_unique<Arena>(kDefaultArenaChunkBytes, max_arena_bytes));
   }
   return arenas;
 }

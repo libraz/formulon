@@ -73,7 +73,7 @@ struct Evaluator {
   const Sheet& sheet;
   CellAddress anchor;
   CellAddress target;
-  Arena arena{/*initial_chunk_bytes=*/4096, kMaxEvalArenaBytes};
+  Arena arena{kDefaultArenaChunkBytes, kMaxEvalArenaBytes};
   eval::EvalState state;
   eval::EvalContext eval_ctx;
   const eval::FunctionRegistry* registry;

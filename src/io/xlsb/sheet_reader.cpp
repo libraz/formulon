@@ -83,7 +83,7 @@ std::string DecodeFormulaText(ByteSpan ptg_bytes, ByteSpan rgcb, const std::vect
   if (IsAnchorShellFormula(ptg_bytes)) {
     return {};
   }
-  Arena arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
+  Arena arena(kDefaultArenaChunkBytes, kMaxLoadArenaBytes);
   parser::FormulaWhitespace whitespace;
   auto ast_or = decode_ptgs(ptg_bytes, rgcb, arena, sheet_names, name_table, sheet_ranges, external_books,
                             static_cast<std::int32_t>(sheet_index), std::nullopt, &whitespace, tables);

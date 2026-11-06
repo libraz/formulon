@@ -38,13 +38,16 @@ namespace formulon {
 /// `Arena` is not thread-safe: concurrent writers must synchronise externally.
 /// Allocation failures surface as `nullptr`; the arena never terminates the
 /// process on its own.
+/// Size of an arena's first chunk unless the caller asks for another.
+inline constexpr std::size_t kDefaultArenaChunkBytes = 4096;
+
 class Arena {
  public:
   /// Builds an empty arena. The first chunk is allocated lazily on the first
   /// `allocate()` request, sized to `initial_chunk_bytes`.
-  explicit Arena(std::size_t initial_chunk_bytes = 4096, std::size_t max_bytes = SIZE_MAX) noexcept
-      : initial_chunk_bytes_(initial_chunk_bytes == 0 ? 4096 : initial_chunk_bytes),
-        next_chunk_bytes_(initial_chunk_bytes == 0 ? 4096 : initial_chunk_bytes),
+  explicit Arena(std::size_t initial_chunk_bytes = kDefaultArenaChunkBytes, std::size_t max_bytes = SIZE_MAX) noexcept
+      : initial_chunk_bytes_(initial_chunk_bytes == 0 ? kDefaultArenaChunkBytes : initial_chunk_bytes),
+        next_chunk_bytes_(initial_chunk_bytes == 0 ? kDefaultArenaChunkBytes : initial_chunk_bytes),
         max_bytes_(max_bytes) {}
 
   /// Releases every owned chunk.

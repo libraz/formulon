@@ -403,7 +403,7 @@ Expected<std::string, Error> DecodeListFormula(const std::vector<std::uint8_t>& 
     return Corrupt("xlsb table formula rgcb is truncated");
   }
   const ByteSpan rgcb{cursor.data, cb};
-  Arena arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
+  Arena arena(kDefaultArenaChunkBytes, kMaxLoadArenaBytes);
   ASSIGN_OR_RETURN(parser::AstNode * ast,
                    decode_ptgs(rgce, rgcb, arena, ctx.sheet_names, ctx.name_table, ctx.sheet_ranges, ctx.external_books,
                                static_cast<std::int32_t>(ctx.sheet_index), std::nullopt, nullptr, tables));

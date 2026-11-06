@@ -423,7 +423,7 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
     ByteSpan rgcb{p.data, cb};
     p.data += cb;
     p.size -= cb;
-    Arena arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
+    Arena arena(kDefaultArenaChunkBytes, kMaxLoadArenaBytes);
     auto ast_or = decode_ptgs(rgce, rgcb, arena, sheet_names, name_table, sheet_ranges, external_books,
                               /*host_itab=*/-1, std::nullopt, nullptr, &wb.tables());
     if (!ast_or) {

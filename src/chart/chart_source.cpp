@@ -35,7 +35,7 @@ struct Resolver {
   std::size_t host_sheet;
   const eval::FunctionRegistry& registry;
   std::string_view formula;
-  Arena arena{/*initial_chunk_bytes=*/4096, kMaxEvalArenaBytes};
+  Arena arena{kDefaultArenaChunkBytes, kMaxEvalArenaBytes};
   std::vector<SheetRect> areas;
 
   /// Maps a resolver sheet qualifier (empty = bound sheet) to a sheet index.

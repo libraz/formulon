@@ -137,7 +137,7 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_range(const fm_workbook_t* wb, size_
   // The arena carries the same explicit ceiling every other evaluation
   // arena does, so a hostile rule formula surfaces as a failed
   // evaluation instead of exhausting the host's memory.
-  formulon::Arena arena(/*initial_chunk_bytes=*/4096, formulon::kMaxEvalArenaBytes);
+  formulon::Arena arena(formulon::kDefaultArenaChunkBytes, formulon::kMaxEvalArenaBytes);
   formulon::eval::EvalState eval_state;
   formulon::eval::EvalContext eval_ctx(wb->workbook(), wb->workbook().sheet(sheet_index), eval_state);
   formulon::cf::CFHost host;

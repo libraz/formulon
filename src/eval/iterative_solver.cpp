@@ -157,8 +157,8 @@ IterativeOutcome run_iterative_solve_impl(const std::vector<CellNodeId>& scc, co
   std::vector<ConvergenceSnapshot> previous_snapshots(scc.size());
   std::vector<ConvergenceSnapshot> current_snapshots;
   current_snapshots.reserve(scc.size());
-  Arena previous_arena(/*initial_chunk_bytes=*/4096, kMaxEvalArenaBytes);
-  Arena current_arena(/*initial_chunk_bytes=*/4096, kMaxEvalArenaBytes);
+  Arena previous_arena(kDefaultArenaChunkBytes, kMaxEvalArenaBytes);
+  Arena current_arena(kDefaultArenaChunkBytes, kMaxEvalArenaBytes);
 
   for (std::uint32_t iter = 0U; iter < max_iters; ++iter) {
     // At this point current_arena/current_snapshots belong to the sweep that

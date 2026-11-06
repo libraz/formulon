@@ -71,7 +71,7 @@ struct SharedFormulaMaster {
   /// heap so the parser's views into `source` stay valid when the record moves.
   struct Parsed {
     std::string source;
-    Arena arena{/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes};
+    Arena arena{kDefaultArenaChunkBytes, kMaxLoadArenaBytes};
     std::unique_ptr<parser::Parser> parser;
     parser::AstNode* root = nullptr;
   };
@@ -195,7 +195,7 @@ std::string ShiftSharedFormulaText(SharedFormulaMaster& master, std::uint32_t ta
     master.parsed = std::move(parsed);
   }
   // Shifted nodes go to a per-follower arena so the master's stays bounded.
-  Arena shift_arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
+  Arena shift_arena(kDefaultArenaChunkBytes, kMaxLoadArenaBytes);
   const parser::AstNode* shifted = parser::shift_relative_refs(*master.parsed->root, shift_arena, row_delta, col_delta);
   if (shifted == nullptr) {
     return master.text;

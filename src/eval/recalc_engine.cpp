@@ -70,7 +70,7 @@ void remove_range_nodes(DepGraph& graph, const std::vector<std::uint32_t>& relea
 // RecalcEngine
 // ----------------------------------------------------------------------------
 
-RecalcEngine::RecalcEngine() : arena_(std::make_unique<Arena>(/*initial_chunk_bytes=*/4096, kMaxEvalArenaBytes)) {}
+RecalcEngine::RecalcEngine() : arena_(std::make_unique<Arena>(kDefaultArenaChunkBytes, kMaxEvalArenaBytes)) {}
 RecalcEngine::~RecalcEngine() = default;
 
 // ---------------------------------------------------------------------------
