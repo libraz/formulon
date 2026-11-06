@@ -280,6 +280,8 @@ set(FORMULON_CORE_SOURCES
   src/parser/reference.cpp
   src/parser/ast_dump.cpp
   src/parser/ast_format.cpp
+  src/parser/ast_format_names.cpp
+  src/parser/ast_format_parens.cpp
   src/parser/external_book_spelling.cpp
   src/parser/ast_format_r1c1.cpp
   src/parser/formula_prefix.cpp

@@ -2,7 +2,7 @@
 // R1C1 entry fallback declared in `eval/formula_entry_r1c1.h`: the triggers
 // that send A1-parsed entry to R1C1, and the lexical R1C1 -> A1 rewrite.
 //
-// @size-budget: 15 KB (with the cell-shaped name spelling in parser/ast_format.cpp and parser/formula_prefix.cpp)
+// @size-budget: 15 KB (with the cell-shaped name spelling in parser/ast_format_names.cpp and parser/formula_prefix.cpp)
 
 #include "eval/formula_entry_r1c1.h"
 

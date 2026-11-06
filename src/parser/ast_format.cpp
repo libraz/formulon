@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "parser/ast.h"
+#include "parser/ast_format_internal.h"
 #include "parser/formula_prefix.h"
 #include "parser/parser_detail.h"
 #include "parser/reference.h"
@@ -29,12 +30,21 @@ namespace formulon {
 namespace parser {
 namespace {
 
+using detail::AppendBindingName;
+using detail::AppendCellShapedCallName;
+using detail::AppendNameRef;
+using detail::AppendParamName;
+using detail::CollectParens;
+using detail::HasParamPrefix;
+using detail::InScope;
 using detail::kBpAtPrefix;
 using detail::kBpIntersect;
 using detail::kBpPostfixHash;
 using detail::kBpPostfixPercent;
 using detail::kBpRange;
 using detail::kBpUnaryPrefix;
+using detail::NameScope;
+using detail::PrintsSpliced;
 
 // `ParenCounts` is decided once by `CollectParens` for the formatters and the
 // XLSB encoder alike.
@@ -42,10 +52,6 @@ std::uint16_t ParenCount(const ParenCounts& parens, const AstNode& node) {
   const auto it = parens.find(&node);
   return it == parens.end() ? 0U : it->second;
 }
-
-// The LET binding / LAMBDA parameter names in scope, each as its
-// `cell_shaped_name_bare`.
-using NameScope = std::vector<std::string_view>;
 
 // What the canonical formatter prints around each node besides its text.
 struct Layout {
@@ -138,90 +144,6 @@ void FormatLiteral(const Value& v, std::string& out, bool parenthesise_negative 
 void FormatRef(const Reference& r, std::string& out) {
   // format_a1 already handles sheet-quoted vs bare and full-col / full-row.
   out.append(format_a1(r));
-}
-
-// Appends the `Sheet1!` / `'My Sheet'!` qualifier of a sheet-scoped NameRef;
-// nothing for an unqualified one.
-void AppendNameSheetQualifier(const AstNode& node, std::string& out) {
-  const std::string_view sheet = node.as_name_sheet();
-  if (sheet.empty()) {
-    return;
-  }
-  append_sheet_name(sheet, node.as_name_sheet_quoted(), out);
-  out.push_back('!');
-}
-
-// Case-insensitive: Excel folds ASCII case on name resolution.
-bool InScope(const NameScope& scope, std::string_view bare) {
-  for (const std::string_view s : scope) {
-    if (strings::case_insensitive_eq(s, bare)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool HasParamPrefix(std::string_view name) noexcept {
-  return name.size() >= kParamPrefix.size() && formula_prefix_ci_eq(name.substr(0, kParamPrefix.size()), kParamPrefix);
-}
-
-// Appends `raw` carrying the parameter prefix, once.
-void AppendParamName(std::string_view raw, std::string& out) {
-  if (!HasParamPrefix(raw)) {
-    out.append(kParamPrefix);
-  }
-  out.append(raw);
-}
-
-// A cell-shaped binding name keeps `_xlpm.` so it cannot read back as a cell;
-// `storage` gives every other one the prefix too, once.
-void AppendBindingName(std::string_view raw, bool storage, std::string& out) {
-  const std::string_view bare = cell_shaped_name_bare(raw);
-  if (is_a1_cell_shaped(bare)) {
-    out.append(kParamPrefix);
-    out.append(bare);
-    return;
-  }
-  if (storage) {
-    AppendParamName(raw, out);
-    return;
-  }
-  out.append(raw);
-}
-
-// Appends the unqualified name `raw` when it is cell-shaped: `_xlpm.` for a
-// binding in scope unless it is spelled `_xlnm.`, `_xlnm.` otherwise. False,
-// appending nothing, for any other name.
-bool AppendCellShapedName(std::string_view raw, const NameScope& scope, std::string& out) {
-  const std::string_view bare = cell_shaped_name_bare(raw);
-  if (!is_a1_cell_shaped(bare)) {
-    return false;
-  }
-  const bool bound = cell_shaped_name_prefix(raw) != kNamePrefix && InScope(scope, bare);
-  out.append(bound ? kParamPrefix : kNamePrefix);
-  out.append(bare);
-  return true;
-}
-
-// `AppendCellShapedName` for a call name; the built-in `LOG10` is no name.
-bool AppendCellShapedCallName(std::string_view raw, const NameScope& scope, std::string& out) {
-  return !is_cellref_shaped_function_name(raw) && AppendCellShapedName(raw, scope, out);
-}
-
-// A NameRef with its qualifier. A sheet-qualified name is never a binding,
-// so a cell-shaped one is always `Sheet1!_xlnm.B1`.
-void AppendNameRef(const AstNode& node, const NameScope& scope, std::string& out) {
-  const std::string_view name = node.as_name();
-  if (node.as_name_sheet().empty()) {
-    if (!AppendCellShapedName(name, scope, out)) {
-      out.append(name);
-    }
-    return;
-  }
-  AppendNameSheetQualifier(node, out);
-  if (!AppendCellShapedName(name, NameScope{}, out)) {
-    out.append(name);
-  }
 }
 
 // Appends the sheet-less cell part of a reference tail in A1 notation: a
@@ -454,65 +376,6 @@ void FormatBinary(const AstNode& node, std::string& out, const Layout& layout) {
   }
 }
 
-// The identifier a `:` endpoint opens with, when the endpoint is written as a
-// bare identifier rather than as a reference. A call contributes its name
-// because the parser sees the name before the argument list.
-std::string_view LeadingIdentifier(const AstNode& node) noexcept {
-  switch (node.kind()) {
-    case NodeKind::NameRef:
-      // `Sheet1!Name` opens with its sheet; a quoted qualifier is no identifier.
-      if (!node.as_name_sheet().empty()) {
-        return node.as_name_sheet_quoted() || local_sheet_needs_quoting_a1(node.as_name_sheet()) ? std::string_view{}
-                                                                                                 : node.as_name_sheet();
-      }
-      return node.as_name();
-    case NodeKind::Call:
-      return node.as_call_name();
-    default:
-      return {};
-  }
-}
-
-// `A:C` is written as two bare column identifiers, so the parser folds
-// `<Ident>:<Ident>` into a single whole-column range whenever both sides name
-// a column. A defined name or a LAMBDA parameter spelled like a column takes
-// part in that fold as well: `RangeOp(NameRef RO, NameRef r)` emitted as
-// `RO:r` reads back as the whole-column range RO:R, and `RangeOp(NameRef LE,
-// Call NA())` emitted as `LE:NA()` reads back as a range with a stray `()`.
-// Parenthesising the left endpoint keeps the two operands apart.
-bool ColonEndpointsWouldFold(const AstNode& lhs, const AstNode& rhs) noexcept {
-  return lhs.kind() == NodeKind::NameRef && is_a1_column_shaped(lhs.as_name()) &&
-         is_a1_column_shaped(LeadingIdentifier(rhs));
-}
-
-// Excel holds a column-shaped name apart from a name on its left by
-// parenthesising the right endpoint instead: `A:(B)`, `_xlnm.A1:(A)`.
-bool RightEndpointTakesParens(const AstNode& lhs, const AstNode& rhs) noexcept {
-  return lhs.kind() == NodeKind::NameRef && rhs.kind() == NodeKind::NameRef && rhs.as_name_sheet().empty() &&
-         is_a1_column_shaped(rhs.as_name());
-}
-
-// True when operands `i` and `i + 1` of `range` print as one whole-axis
-// token (`A:C`, `1:3`): a spliced pair of whole-column or whole-row Refs.
-//
-// A pair that is one whole-axis Ref (`whole_axis_pair_is_single`) never
-// prints spliced: `A:A` reads back as the single Ref rather than as a pair,
-// so such a pair prints in full (`A:A:A:A`), which reads back as itself.
-bool PrintsSpliced(const AstNode& range, std::uint32_t i) noexcept {
-  if (!range.as_range_spliced(i)) {
-    return false;
-  }
-  const AstNode& lhs = range.as_range_operand(i);
-  const AstNode& rhs = range.as_range_operand(i + 1U);
-  if (lhs.kind() != NodeKind::Ref || rhs.kind() != NodeKind::Ref) {
-    return false;
-  }
-  const Reference& lr = lhs.as_ref();
-  const Reference& rr = rhs.as_ref();
-  const bool same_axis = (lr.is_full_col && rr.is_full_col) || (lr.is_full_row && rr.is_full_row);
-  return same_axis && !whole_axis_pair_is_single(lr, rr);
-}
-
 // Prints a `:` chain with `emit` printing each operand. The two halves of a
 // whole-axis token print as one (`A:C`, each half cut at its own `:`);
 // every other operand prints in full, so `H:H:E:E` keeps both of its
@@ -678,26 +541,6 @@ void FormatLet(const AstNode& node, std::string& out, const Layout& layout) {
   layout.scope->resize(base);
 }
 
-// A callee that re-parses as the same callee without parentheses. An
-// unqualified cell spelled like a function (`LOG10`) would re-parse as that
-// function's call, so it keeps them.
-bool CalleePrintsBare(const AstNode& callee) {
-  switch (callee.kind()) {
-    case NodeKind::Lambda:
-    case NodeKind::NameRef:
-    case NodeKind::LambdaCall:
-    case NodeKind::UnionOp:  // prints its own parentheses
-      return true;
-    case NodeKind::Call:
-      // `CHOOSE(1,SUM,ABS)(5)`; a trim reference prints as a range.
-      return trim_ref_call_mode(callee) == TrimRefMode::None;
-    case NodeKind::Ref:
-      return !callee.as_ref().sheet.empty() || !is_cellref_shaped_function_name(format_a1(callee.as_ref()));
-    default:
-      return is_self_book_name_ref(callee);
-  }
-}
-
 void FormatLambdaCall(const AstNode& node, std::string& out, const Layout& layout) {
   FormatNode(node.as_lambda_call_callee(), out, layout);
   out.push_back('(');
@@ -791,121 +634,6 @@ void FormatNode(const AstNode& node, std::string& out, const Layout& layout) {
   for (unsigned i = 1; i <= n; ++i) {
     AppendWhitespace(layout, node, WhitespaceSlot::kBeforeClose, static_cast<std::uint16_t>(i), out);
     out.push_back(')');
-  }
-}
-
-// The one place that decides how many parenthesis pairs each node prints
-// with: the pairs written around it, or one where its slot's binding power
-// demands it. The formatters and the XLSB `PtgParen`s both read the result.
-void Parenthesize(const AstNode& node, bool needed, ParenCounts& out) {
-  const std::uint16_t count = std::max<std::uint16_t>(node.paren_depth(), needed ? 1U : 0U);
-  if (count != 0U) {
-    std::uint16_t& slot = out[&node];
-    slot = std::max(slot, count);
-  }
-}
-
-void CollectParens(const AstNode& node, int min_bp, ParenCounts& out) {
-  auto wrap_if = [&](int bp) { Parenthesize(node, bp < min_bp, out); };
-  switch (node.kind()) {
-    case NodeKind::Literal:
-      Parenthesize(node, node.as_literal().is_number() && node.as_literal().as_number() < 0.0, out);
-      return;
-    case NodeKind::SpillRef:
-      wrap_if(kBpPostfixHash);
-      if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
-        CollectParens(*anchor, kBpPostfixHash, out);
-      }
-      return;
-    case NodeKind::UnaryOp: {
-      const int bp = node.as_unary_op() == UnaryOp::Percent ? kBpPostfixPercent : kBpUnaryPrefix;
-      wrap_if(bp);
-      // A prefix `@` under a prefix sign can only parse as its operand: `-@{1,2}`.
-      const AstNode& operand = node.as_unary_operand();
-      const bool prefix_at = node.as_unary_op() != UnaryOp::Percent && operand.kind() == NodeKind::ImplicitIntersection;
-      CollectParens(operand, prefix_at ? kBpAtPrefix : bp, out);
-      return;
-    }
-    case NodeKind::BinaryOp: {
-      const int bp = binop_binding_power(node.as_binary_op(0));
-      wrap_if(bp);
-      // Left-associative: only the leading operand may be a bare same-power chain.
-      for (std::uint32_t i = 0; i < node.as_binary_arity(); ++i) {
-        CollectParens(node.as_binary_operand(i), i == 0U ? bp : bp + 1, out);
-      }
-      return;
-    }
-    case NodeKind::RangeOp: {
-      wrap_if(kBpRange);
-      const std::uint32_t n = node.as_range_arity();
-      for (std::uint32_t i = 0; i < n; ++i) {
-        const AstNode& operand = node.as_range_operand(i);
-        if (i + 1U < n && !PrintsSpliced(node, i) &&
-            !RightEndpointTakesParens(operand, node.as_range_operand(i + 1U))) {
-          Parenthesize(operand, ColonEndpointsWouldFold(operand, node.as_range_operand(i + 1U)), out);
-        }
-        if (i > 0U && RightEndpointTakesParens(node.as_range_operand(i - 1U), operand)) {
-          Parenthesize(operand, true, out);
-        }
-        CollectParens(operand, i == 0U ? kBpRange : kBpRange + 1, out);
-      }
-      return;
-    }
-    case NodeKind::UnionOp:
-      // A union only parses inside parentheses.
-      Parenthesize(node, true, out);
-      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
-        CollectParens(node.as_union_child(i), 0, out);
-      }
-      return;
-    case NodeKind::IntersectOp:
-      wrap_if(kBpIntersect);
-      CollectParens(node.as_intersect_lhs(), kBpIntersect, out);
-      CollectParens(node.as_intersect_rhs(), kBpIntersect + 1, out);
-      return;
-    case NodeKind::ImplicitIntersection:
-      wrap_if(kBpAtPrefix);
-      CollectParens(node.as_implicit_intersection_operand(), kBpAtPrefix, out);
-      return;
-    case NodeKind::Call:
-      // A trim reference prints as a range operator.
-      Parenthesize(node, trim_ref_call_mode(node) != TrimRefMode::None && kBpRange < min_bp, out);
-      for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
-        CollectParens(node.as_call_arg(i), 0, out);
-      }
-      return;
-    case NodeKind::Lambda:
-      Parenthesize(node, false, out);
-      CollectParens(node.as_lambda_body(), 0, out);
-      return;
-    case NodeKind::LetBinding:
-      Parenthesize(node, false, out);
-      for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
-        CollectParens(node.as_let_binding_expr(i), 0, out);
-      }
-      CollectParens(node.as_let_body(), 0, out);
-      return;
-    case NodeKind::LambdaCall: {
-      Parenthesize(node, false, out);
-      const AstNode& callee = node.as_lambda_call_callee();
-      Parenthesize(callee, !CalleePrintsBare(callee), out);
-      CollectParens(callee, 0, out);
-      for (std::uint32_t i = 0; i < node.as_lambda_call_arity(); ++i) {
-        CollectParens(node.as_lambda_call_arg(i), 0, out);
-      }
-      return;
-    }
-    // Leaves, and array constants, whose elements never take parentheses.
-    case NodeKind::Ref:
-    case NodeKind::Ref3D:
-    case NodeKind::ExternalRef:
-    case NodeKind::StructuredRef:
-    case NodeKind::NameRef:
-    case NodeKind::ArrayLiteral:
-    case NodeKind::ErrorLiteral:
-    case NodeKind::ErrorPlaceholder:
-      Parenthesize(node, false, out);
-      return;
   }
 }
 
@@ -1174,29 +902,6 @@ const char* binop_token(BinOp op) noexcept {
       return ">=";
   }
   return "+";
-}
-
-void append_sheet_name(std::string_view sheet, bool force_quote, std::string& out) {
-  append_sheet_name_quoted_if(sheet, force_quote || local_sheet_needs_quoting_a1(sheet), out);
-}
-
-void append_quote_escaped(std::string_view s, std::string& out) {
-  for (char c : s) {
-    if (c == '\'') {
-      out.push_back('\'');
-    }
-    out.push_back(c);
-  }
-}
-
-void append_sheet_name_quoted_if(std::string_view sheet, bool quote, std::string& out) {
-  if (quote) {
-    out.push_back('\'');
-    append_quote_escaped(sheet, out);
-    out.push_back('\'');
-  } else {
-    out.append(sheet);
-  }
 }
 
 void append_external_qualifier(const AstNode& node, bool r1c1, std::string& out) {
