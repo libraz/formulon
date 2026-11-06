@@ -21,6 +21,7 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
@@ -33,8 +34,7 @@ namespace {
 // Copies `count` caller mentions into the model shape.
 fm_status_t mentions_from_fm(const fm_mention_t* mentions, uint32_t count, std::vector<formulon::Mention>* out) {
   if (mentions == nullptr && count != 0U) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "NULL mentions with a non-zero count",
-                             "mention_count=" + std::to_string(count));
+    return invalid_argument("NULL mentions with a non-zero count", "mention_count=" + std::to_string(count));
   }
   for (uint32_t i = 0; i < count; ++i) {
     if (auto rc = check_utf8({mentions[i].person_id, mentions[i].mention_id}); rc != 0) {

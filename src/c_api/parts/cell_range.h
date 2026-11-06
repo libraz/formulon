@@ -34,8 +34,7 @@ inline std::uint32_t cell_range_page_size(std::uint32_t limit) noexcept {
 // Rejects a cursor past the last cell of the grid.
 inline fm_status_t check_cell_cursor(std::uint64_t cursor) {
   if (cursor >= kCellCursorLimit) {
-    return set_binding_error(FormulonErrorCode::kInvalidArgument, "cursor out of range",
-                             "cursor=" + std::to_string(cursor));
+    return invalid_argument("cursor out of range", "cursor=" + std::to_string(cursor));
   }
   return 0;
 }

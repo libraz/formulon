@@ -34,8 +34,8 @@
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 
 // Opaque results handle. Owns the engine-produced match list verbatim so
@@ -127,9 +127,9 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_range(const fm_workbook_t* wb, size_
   const std::uint32_t last_row = range->last_row;
   const std::uint32_t last_col = range->last_col;
   if (!formulon::Sheet::rect_in_grid(first_row, first_col, last_row, last_col)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "rect out of grid",
-                             "first=(" + std::to_string(first_row) + "," + std::to_string(first_col) + ") last=(" +
-                                 std::to_string(last_row) + "," + std::to_string(last_col) + ")");
+    return invalid_argument("rect out of grid", "first=(" + std::to_string(first_row) + "," +
+                                                    std::to_string(first_col) + ") last=(" + std::to_string(last_row) +
+                                                    "," + std::to_string(last_col) + ")");
   }
   // Stack-allocated arena and eval context: the CF walker is purely
   // synchronous and the engine consumes both before returning. Binding

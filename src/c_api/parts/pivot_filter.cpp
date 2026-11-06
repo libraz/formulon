@@ -49,8 +49,7 @@ fm_status_t numeric_payload(std::int32_t kind, std::int32_t as_int, double as_do
     return 0;
   }
   if (!std::isfinite(as_double)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             (std::string(field) + " is not finite").c_str());
+    return invalid_argument((std::string(field) + " is not finite").c_str());
   }
   out = as_double;
   return 0;
@@ -104,8 +103,7 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
   // The engine skips a filter whose field does not resolve, so an unresolvable
   // name would leave any filter kind a silent no-op.
   if (!formulon::pivot::resolve_field_by_any_name(*table, spec->field_name).has_value()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "field_name does not name a pivot field",
-                             std::string("field_name=") + spec->field_name);
+    return invalid_argument("field_name does not name a pivot field", std::string("field_name=") + spec->field_name);
   }
   formulon::pivot::PivotFilter filter;
   filter.axis = pivot_axis_from_fm(static_cast<fm_pivot_axis_t>(spec->axis));
@@ -147,8 +145,8 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
       // Leave default monostate.
       break;
     default:
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "spec->value_high_kind not supported",
-                               "value_high_kind=" + std::to_string(static_cast<int>(spec->value_high_kind)));
+      return invalid_argument("spec->value_high_kind not supported",
+                              "value_high_kind=" + std::to_string(static_cast<int>(spec->value_high_kind)));
   }
   // The top / bottom amounts: a percent within 0..100, a count or sum above 0.
   if (formulon::pivot::is_value_filter_type(type)) {
@@ -197,10 +195,10 @@ extern "C" fm_status_t fm_sheet_get_pivot_filter(const fm_workbook_t* wb, std::s
   const auto& filter = filters[filter_index];
   const auto axis = pivot_axis_to_fm(filter.axis);
   if (!axis.has_value()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "model axis is not representable");
+    return invalid_argument("model axis is not representable");
   }
   if (filter.type > formulon::pivot::FilterType::DateM12) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "model filter type is not representable");
+    return invalid_argument("model filter type is not representable");
   }
 
   fm_pivot_filter_spec_t result{};

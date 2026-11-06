@@ -43,8 +43,8 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::ingest_entered_formula;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::validate;
 
@@ -475,8 +475,8 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
       }
     }
     if (max_priority == std::numeric_limits<std::int32_t>::max()) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "auto-assignment would overflow",
-                               "max_existing_priority=" + std::to_string(max_priority));
+      return invalid_argument("auto-assignment would overflow",
+                              "max_existing_priority=" + std::to_string(max_priority));
     }
     out_rule.priority = max_priority + 1;
   }
@@ -489,8 +489,8 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
     // time which index was wrong instead of silently losing the format.
     const std::size_t dxf_count = wb->workbook().styles().dxfs.size();
     if (static_cast<std::size_t>(rule->dxf_id) >= dxf_count) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "dxf_id out of range",
-                               "dxf_id=" + std::to_string(rule->dxf_id) + " dxfs_count=" + std::to_string(dxf_count));
+      return invalid_argument("dxf_id out of range",
+                              "dxf_id=" + std::to_string(rule->dxf_id) + " dxfs_count=" + std::to_string(dxf_count));
     }
     out_rule.dxf_id = rule->dxf_id;
   }
@@ -544,13 +544,13 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
     }
   }
   if (out_rule.type == formulon::cf::RuleType::ColorScale && !copy_color_scale_payload(*rule, &out_rule)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "invalid colorScale payload");
+    return invalid_argument("invalid colorScale payload");
   }
   if (out_rule.type == formulon::cf::RuleType::DataBar && !copy_data_bar_payload(*rule, &out_rule)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "invalid dataBar payload");
+    return invalid_argument("invalid dataBar payload");
   }
   if (out_rule.type == formulon::cf::RuleType::IconSet && !copy_icon_set_payload(*rule, &out_rule)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "invalid iconSet payload");
+    return invalid_argument("invalid iconSet payload");
   }
   if (auto rc = store_cfvo_formulas(wb, &out_rule); rc != 0) {
     return rc;

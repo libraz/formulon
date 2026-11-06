@@ -21,9 +21,9 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fill_anchor;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::TextStore;
@@ -36,7 +36,7 @@ fm_status_t to_spec(const fm_shape_t& shape, formulon::ShapeSpec& spec) {
   using formulon::EditAs;
   spec.fields = shape.fields;
   if ((shape.fields & ~formulon::shape_field::kAll) != 0U) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "unknown field bit");
+    return invalid_argument("unknown field bit");
   }
   if (auto rc = check_utf8({shape.name, shape.prst, shape.text}); rc != 0) {
     return rc;

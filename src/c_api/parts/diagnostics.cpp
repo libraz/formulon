@@ -77,8 +77,7 @@ void c_log_sink_adapter(std::string_view record, void* /*user_data*/) {
 extern "C" fm_status_t fm_set_log_min_level(int32_t level) {
   formulon::c_api::parts::clear_last_error();
   if (level < static_cast<int32_t>(FM_LOG_LEVEL_DEBUG) || level > static_cast<int32_t>(FM_LOG_LEVEL_OFF)) {
-    return formulon::c_api::parts::set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "unknown level",
-                                                     "level=" + std::to_string(level));
+    return formulon::c_api::parts::invalid_argument("unknown level", "level=" + std::to_string(level));
   }
   formulon::set_structured_log_min_level(static_cast<formulon::StructuredLogLevel>(level));
   return 0;

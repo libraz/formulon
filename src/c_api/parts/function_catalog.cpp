@@ -51,8 +51,8 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::set_binding_error;
 
 namespace {
 
@@ -183,8 +183,7 @@ fm_status_t resolve_function_name(const char* name_field, const char* name, cons
   }
   const char* canonical = formulon::eval::resolve_builtin_function_name(lookup);
   if (canonical == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "unknown function",
-                             std::string(name_field) + "=" + name);
+    return invalid_argument("unknown function", std::string(name_field) + "=" + name);
   }
   const char* localized = localize ? formulon::eval::localized_function_name(locale, canonical) : nullptr;
   *out = localized != nullptr ? localized : canonical;

@@ -36,6 +36,7 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::find_cache;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::pivot_agg_from_fm;
 using formulon::c_api::parts::pivot_count;
@@ -45,7 +46,6 @@ using formulon::c_api::parts::project_pivot;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::resolve_pivot_checked;
 using formulon::c_api::parts::resolve_pivot_mut;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::validate;
@@ -107,8 +107,7 @@ extern "C" fm_status_t fm_sheet_add_pivot(fm_workbook_t* wb, std::size_t sheet_i
     return rc;
   }
   if (find_cache(wb->workbook(), cache_id) == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "cache_id not found",
-                             "cache_id=" + std::to_string(cache_id));
+    return invalid_argument("cache_id not found", "cache_id=" + std::to_string(cache_id));
   }
   if (auto rc = check_cell_coord(anchor_row, anchor_col); rc != 0) {
     return rc;
@@ -288,8 +287,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_report_layout(fm_workbook_t* wb, std::
   }
   if (layout != FM_PIVOT_REPORT_LAYOUT_COMPACT && layout != FM_PIVOT_REPORT_LAYOUT_TABULAR &&
       layout != FM_PIVOT_REPORT_LAYOUT_OUTLINE) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "layout out of range",
-                             "layout=" + std::to_string(static_cast<int>(layout)));
+    return invalid_argument("layout out of range", "layout=" + std::to_string(static_cast<int>(layout)));
   }
   formulon::pivot::PivotTable* table = nullptr;
   if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, &table); rc != 0) {
@@ -342,8 +340,7 @@ fm_status_t set_field_order(fm_workbook_t* wb, std::size_t sheet_index, std::siz
   for (std::size_t i = 0; i < count; ++i) {
     if (indices[i] == FM_PIVOT_VALUES_FIELD) {
       if (values_slot.has_value()) {
-        return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "indices lists the Values field twice",
-                                 "i=" + std::to_string(i));
+        return invalid_argument("indices lists the Values field twice", "i=" + std::to_string(i));
       }
       values_slot = requested_order.size();
       continue;
@@ -352,21 +349,19 @@ fm_status_t set_field_order(fm_workbook_t* wb, std::size_t sheet_index, std::siz
       return rc;
     }
     if (requested_field[indices[i]] != kNotRequested) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "indices lists a field twice",
-                               "i=" + std::to_string(i) + " value=" + std::to_string(indices[i]));
+      return invalid_argument("indices lists a field twice",
+                              "i=" + std::to_string(i) + " value=" + std::to_string(indices[i]));
     }
     requested_field[indices[i]] = kRequested;
     requested_order.push_back(indices[i]);
   }
   const bool holds_values = has_values_level(*table) && values_on_rows(*table) == row;
   if (values_slot.has_value() && !has_values_level(*table)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "the Values field needs at least two data fields",
-                             "data_fields=" + std::to_string(table->data_fields().size()));
+    return invalid_argument("the Values field needs at least two data fields",
+                            "data_fields=" + std::to_string(table->data_fields().size()));
   }
   if (holds_values && !values_slot.has_value()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "the Values field is on this axis and must stay listed");
+    return invalid_argument("the Values field is on this axis and must stay listed");
   }
   // The list is the axis's whole membership: a field left out comes off the
   // axis, and a listed field moves onto it from wherever it was.
@@ -758,9 +753,8 @@ fm_status_t check_option_range(std::uint32_t value, std::uint32_t current, std::
   if (value <= max || value == current) {
     return 0;
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                           (std::string(field) + " out of range").c_str(),
-                           std::string(field) + "=" + std::to_string(value));
+  return invalid_argument((std::string(field) + " out of range").c_str(),
+                          std::string(field) + "=" + std::to_string(value));
 }
 
 }  // namespace
@@ -831,8 +825,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_options(fm_workbook_t* wb, std::size_t
                 {o.grand_total_caption, "grand_total_caption"}};
   for (const auto& entry : capped) {
     if (entry.text != nullptr && formulon::utf16_units_in(entry.text) > kMaxCaptionUnits) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               (std::string(entry.field) + " longer than 255 UTF-16 code units").c_str());
+      return invalid_argument((std::string(entry.field) + " longer than 255 UTF-16 code units").c_str());
     }
   }
   if (auto rc = check_option_range(o.indent, table->indent(), kMaxIndent, "indent"); rc != 0) {

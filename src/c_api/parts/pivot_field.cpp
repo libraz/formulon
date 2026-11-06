@@ -34,6 +34,7 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::find_cache;
 using formulon::c_api::parts::finish_status;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::mark_cache_pivots_pending;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::pivot_axis_from_fm;
@@ -45,7 +46,6 @@ using formulon::c_api::parts::PivotEdit;
 using formulon::c_api::parts::resolve_pivot;
 using formulon::c_api::parts::resolve_pivot_checked;
 using formulon::c_api::parts::resolve_pivot_mut;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::validate;
 
 namespace {
@@ -353,7 +353,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_sort(fm_workbook_t* wb, std::siz
   }
   const bool manual = order == FM_PIVOT_SORT_MANUAL;
   if (manual && by_field != nullptr && by_field[0] != '\0') {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "manual order takes no by_field key");
+    return invalid_argument("manual order takes no by_field key");
   }
   return mutate_pivot_field(wb, sheet_index, pivot_index, field_index,
                             [order, manual, by_field](formulon::pivot::PivotField& field) {
@@ -414,7 +414,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_custom_name(fm_workbook_t* wb, s
   }
   const std::string_view text = name != nullptr ? std::string_view(name) : std::string_view();
   if (formulon::utf16_units_in(text) > kMaxItemCaptionUnits) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "name longer than 255 UTF-16 code units");
+    return invalid_argument("name longer than 255 UTF-16 code units");
   }
   // A name may repeat the field's own source name, but no other field's names
   // or any data field's.
@@ -425,14 +425,12 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_custom_name(fm_workbook_t* wb, s
     for (std::size_t i = 0; i < table->fields().size(); ++i) {
       const formulon::pivot::PivotField& other = table->fields()[i];
       if (i != field_index && (taken(other.source_name) || taken(other.custom_name))) {
-        return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "name matches another field",
-                                 "field_index=" + std::to_string(i));
+        return invalid_argument("name matches another field", "field_index=" + std::to_string(i));
       }
     }
     for (std::size_t i = 0; i < table->data_fields().size(); ++i) {
       if (taken(table->data_fields()[i].name)) {
-        return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "name matches a data field",
-                                 "data_field_index=" + std::to_string(i));
+        return invalid_argument("name matches a data field", "data_field_index=" + std::to_string(i));
       }
     }
   }
@@ -502,8 +500,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_item_caption(fm_workbook_t* wb, 
   }
   const std::string_view text = caption != nullptr ? std::string_view(caption) : std::string_view();
   if (formulon::utf16_units_in(text) > kMaxItemCaptionUnits) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "caption longer than 255 UTF-16 code units");
+    return invalid_argument("caption longer than 255 UTF-16 code units");
   }
   formulon::pivot::PivotItem& item = field->items[item_index];
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
@@ -516,8 +513,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_item_caption(fm_workbook_t* wb, 
       const std::string shown =
           !other.caption.empty() ? other.caption : item_value_label(wb->workbook(), *table, field_index, other);
       if (i != item_index && same_item_label(wb->workbook(), text, shown)) {
-        return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                                 "caption matches another item of the field", "item_index=" + std::to_string(i));
+        return invalid_argument("caption matches another item of the field", "item_index=" + std::to_string(i));
       }
     }
     item.caption = std::string(text);

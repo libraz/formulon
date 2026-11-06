@@ -48,6 +48,7 @@ using formulon::c_api::parts::display_formula;
 using formulon::c_api::parts::display_formula_text;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
@@ -150,8 +151,7 @@ extern "C" fm_status_t fm_sheet_set_error(fm_workbook_t* wb, size_t sheet_index,
     return rc;
   }
   if (error < 0 || error > static_cast<fm_error_code_t>(formulon::ErrorCode::Unknown)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "error code out of range",
-                             "error=" + std::to_string(error));
+    return invalid_argument("error code out of range", "error=" + std::to_string(error));
   }
   if (const auto header = table_header_cell(wb->workbook(), sheet_index, row, col)) {
     return rename_from_header(wb, *header, formulon::display_name(static_cast<formulon::ErrorCode>(error)));
@@ -244,14 +244,14 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic_runs(fm_workbook_t* wb, size_t
       return rc;
     }
     if (run.eb < run.sb) {
-      return set_binding_error(
-          formulon::FormulonErrorCode::kInvalidArgument, "run ends before it starts",
+      return invalid_argument(
+          "run ends before it starts",
           "run_index=" + std::to_string(i) + " sb=" + std::to_string(run.sb) + " eb=" + std::to_string(run.eb));
     }
     if (i != 0U && run.sb < previous_end) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "runs overlap or are out of order",
-                               "run_index=" + std::to_string(i) + " sb=" + std::to_string(run.sb) +
-                                   " previous_eb=" + std::to_string(previous_end));
+      return invalid_argument("runs overlap or are out of order", "run_index=" + std::to_string(i) +
+                                                                      " sb=" + std::to_string(run.sb) +
+                                                                      " previous_eb=" + std::to_string(previous_end));
     }
     previous_end = run.eb;
     parsed.push_back(formulon::PhoneticRun{run.sb, run.eb, std::string(run.text)});
@@ -277,17 +277,14 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic_properties(fm_workbook_t* wb, 
   // it here rather than truncate it into a different, valid-looking form.
   constexpr uint32_t kMaxOrdinal = 3U;
   if (type > kMaxOrdinal) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "type out of range",
-                             "type=" + std::to_string(type));
+    return invalid_argument("type out of range", "type=" + std::to_string(type));
   }
   if (alignment > kMaxOrdinal) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "alignment out of range",
-                             "alignment=" + std::to_string(alignment));
+    return invalid_argument("alignment out of range", "alignment=" + std::to_string(alignment));
   }
   constexpr uint32_t kMaxFontId = 0xFFFFU;
   if (font_id > kMaxFontId) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "font_id out of range",
-                             "font_id=" + std::to_string(font_id));
+    return invalid_argument("font_id out of range", "font_id=" + std::to_string(font_id));
   }
 
   wb->workbook()
@@ -502,7 +499,7 @@ extern "C" fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t 
   }
   const formulon::eval::LambdaValue* lv = cell->cached_value.as_lambda();
   if (lv == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "lambda payload is NULL");
+    return invalid_argument("lambda payload is NULL");
   }
   std::string formatted = wb->workbook().spell_self_book_names(formulon::eval::format_lambda_value(*lv));
   // Read-path scratch: cleared per call so the lambda text does not

@@ -51,6 +51,7 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fragment_within_size_limit;
 using formulon::c_api::parts::FragmentValidation;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
@@ -135,8 +136,8 @@ fm_status_t set_fragment(fm_workbook_t* wb, std::size_t sheet_index, const Fragm
     }
     const FragmentValidation validation = validate_single_element_fragment(fragment, slot.element);
     if (!validation.valid) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "invalid XML fragment",
-                               "element=" + std::string(slot.element) + " " + validation.context);
+      return invalid_argument("invalid XML fragment",
+                              "element=" + std::string(slot.element) + " " + validation.context);
     }
   }
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
@@ -293,9 +294,8 @@ fm_status_t add_break(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t 
     return rc;
   }
   if (index >= (rows ? Sheet::kMaxRows : Sheet::kMaxCols)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             rows ? "row is outside the sheet grid" : "column is outside the sheet grid",
-                             std::string(rows ? "row=" : "col=") + std::to_string(index));
+    return invalid_argument(rows ? "row is outside the sheet grid" : "column is outside the sheet grid",
+                            std::string(rows ? "row=" : "col=") + std::to_string(index));
   }
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
   return rows ? upsert_break(print.manual_row_breaks, index, kWholeSheetColSpanMax, manual)
@@ -370,8 +370,7 @@ extern "C" fm_status_t fm_sheet_set_page_setup_xml(fm_workbook_t* wb, size_t she
   const std::string_view fragment(xml);
   if (fragment.find("r:id") != std::string_view::npos &&
       wb->workbook().sheet(sheet_index).print_settings().printer_settings_path.empty()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "printer settings relationship has no part");
+    return invalid_argument("printer settings relationship has no part");
   }
   return set_fragment(wb, sheet_index, kPageSetupSlot, xml);
 }
@@ -514,12 +513,10 @@ extern "C" fm_status_t fm_sheet_set_page_setup(fm_workbook_t* wb, size_t sheet_i
     return rc;
   }
   if (setup->orientation_engaged != 0 && setup->orientation > FM_ORIENTATION_LANDSCAPE) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "orientation is not a known value",
-                             "orientation=" + std::to_string(setup->orientation));
+    return invalid_argument("orientation is not a known value", "orientation=" + std::to_string(setup->orientation));
   }
   if (setup->scale_engaged != 0 && (setup->scale < kMinPrintScalePercent || setup->scale > kMaxPrintScalePercent)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "scale is out of range",
-                             "scale=" + std::to_string(setup->scale));
+    return invalid_argument("scale is out of range", "scale=" + std::to_string(setup->scale));
   }
 
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
@@ -586,8 +583,7 @@ extern "C" fm_status_t fm_sheet_set_page_margins(fm_workbook_t* wb, size_t sheet
     // The paginator subtracts these from the paper; a negative, infinite or
     // NaN one produces a printable body that is not a rectangle.
     if (!std::isfinite(field.value) || field.value < 0.0) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "margin must be finite and non-negative",
-                               std::string(field.attr) + "=invalid");
+      return invalid_argument("margin must be finite and non-negative", std::string(field.attr) + "=invalid");
     }
   }
 

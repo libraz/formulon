@@ -21,6 +21,7 @@ using formulon::c_api::parts::check_limit;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 
@@ -105,8 +106,7 @@ extern "C" fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_i
     return rc;
   }
   if (visibility < static_cast<int32_t>(FM_SHEET_VISIBLE) || visibility > static_cast<int32_t>(FM_SHEET_VERY_HIDDEN)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "unknown visibility",
-                             "visibility=" + std::to_string(visibility));
+    return invalid_argument("unknown visibility", "visibility=" + std::to_string(visibility));
   }
   if (visibility != static_cast<int32_t>(FM_SHEET_VISIBLE)) {
     if (auto rc = check_keeps_visible_sheet(wb->workbook(), static_cast<std::uint32_t>(sheet_index)); rc != 0) {
@@ -159,7 +159,7 @@ extern "C" fm_status_t fm_sheet_set_top_left(fm_workbook_t* wb, size_t sheet_ind
     return rc;
   }
   if (!formulon::Sheet::coord_in_grid(row, col)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "cell out of grid");
+    return invalid_argument("cell out of grid");
   }
   wb->workbook().sheet(sheet_index).mutable_view().top_left_cell =
       row == 0U && col == 0U ? std::string() : formulon::a1::encode_a1(row, col);
@@ -174,7 +174,7 @@ extern "C" fm_status_t fm_sheet_set_pane_top_left(fm_workbook_t* wb, size_t shee
   formulon::SheetView& view = wb->workbook().sheet(sheet_index).mutable_view();
   if ((!view.divides_rows() && !view.divides_cols()) || row < view.freeze_rows || col < view.freeze_cols ||
       !formulon::Sheet::coord_in_grid(row, col)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "cell is not in the unfrozen area");
+    return invalid_argument("cell is not in the unfrozen area");
   }
   view.pane_top_left_cell =
       row == view.freeze_rows && col == view.freeze_cols ? std::string() : formulon::a1::encode_a1(row, col);
@@ -187,7 +187,7 @@ extern "C" fm_status_t fm_sheet_set_split(fm_workbook_t* wb, size_t sheet_index,
     return rc;
   }
   if (!wb->workbook().sheet(sheet_index).mutable_view().set_split(x_twips, y_twips)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "split must be finite and non-negative");
+    return invalid_argument("split must be finite and non-negative");
   }
   return 0;
 }
@@ -233,7 +233,7 @@ extern "C" fm_status_t fm_sheet_set_selection(fm_workbook_t* wb, size_t sheet_in
     return rc;
   }
   if (!formulon::Sheet::coord_in_grid(active_row, active_col)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "active cell out of grid");
+    return invalid_argument("active cell out of grid");
   }
   std::vector<formulon::MergeRange> selected;
   for (std::size_t i = 0; i < range_count; ++i) {
@@ -241,7 +241,7 @@ extern "C" fm_status_t fm_sheet_set_selection(fm_workbook_t* wb, size_t sheet_in
     if (!formulon::Sheet::coord_in_grid(r.first_row, r.first_col) ||
         !formulon::Sheet::coord_in_grid(r.last_row, r.last_col) || r.first_row > r.last_row ||
         r.first_col > r.last_col) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "range out of grid or inverted");
+      return invalid_argument("range out of grid or inverted");
     }
     selected.push_back({r.first_row, r.first_col, r.last_row, r.last_col});
   }

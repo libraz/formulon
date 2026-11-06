@@ -104,7 +104,7 @@ class PatchReader {
 
   void fail(const char* name, const char* why) {
     if (rc_ == 0) {
-      rc_ = set_binding_error(FormulonErrorCode::kInvalidArgument, (std::string(name) + " " + why).c_str());
+      rc_ = invalid_argument((std::string(name) + " " + why).c_str());
     }
   }
 

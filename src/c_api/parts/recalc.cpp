@@ -19,6 +19,7 @@ using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
@@ -71,9 +72,8 @@ extern "C" fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t t
     return null_argument("wb");
   }
   if (thread_count > formulon::eval::kMaxSchedulerThreads) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "thread_count must be 0..8",
-                             "thread_count=" + std::to_string(thread_count) +
-                                 " max=" + std::to_string(formulon::eval::kMaxSchedulerThreads));
+    return invalid_argument("thread_count must be 0..8", "thread_count=" + std::to_string(thread_count) + " max=" +
+                                                             std::to_string(formulon::eval::kMaxSchedulerThreads));
   }
 
   formulon::eval::SchedulerConfig config;
@@ -183,7 +183,7 @@ extern "C" fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, std::int32_t
       resolved = formulon::Workbook::CalcMode::kAutoNoTable;
       break;
     default:
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "unknown mode");
+      return invalid_argument("unknown mode");
   }
   wb->workbook().set_calc_mode(resolved);
   return 0;
@@ -247,7 +247,7 @@ extern "C" fm_status_t fm_workbook_set_ref_mode(fm_workbook_t* wb, std::int32_t 
     return null_argument("wb");
   }
   if (mode != FM_REF_MODE_A1 && mode != FM_REF_MODE_R1C1) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "unknown mode");
+    return invalid_argument("unknown mode");
   }
   wb->workbook().mutable_calc_options().ref_mode =
       mode == FM_REF_MODE_R1C1 ? formulon::RefMode::kR1C1 : formulon::RefMode::kA1;
@@ -297,7 +297,7 @@ extern "C" fm_status_t fm_workbook_set_pinned_now(fm_workbook_t* wb, const fm_ci
       now->hour >= 0 && now->hour <= 23 && now->minute >= 0 && now->minute <= 59 && now->second >= 0 &&
       now->second <= 59;
   if (!in_range) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "field out of range");
+    return invalid_argument("field out of range");
   }
   wb->workbook().set_pinned_now(formulon::date_time::CivilTime{
       {now->year, static_cast<unsigned>(now->month), static_cast<unsigned>(now->day)},
@@ -390,8 +390,7 @@ extern "C" fm_status_t fm_sheet_recalc_viewport(fm_workbook_t* wb, size_t sheet_
   // `SheetCellRange::sheet_id` is 16-bit; refuse an index it cannot hold
   // rather than recalculating a different sheet.
   if (sheet_index > 0xFFFFU) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "sheet_index exceeds 16-bit sheet id range",
-                             "sheet_index=" + std::to_string(sheet_index));
+    return invalid_argument("sheet_index exceeds 16-bit sheet id range", "sheet_index=" + std::to_string(sheet_index));
   }
   formulon::eval::SheetCellRange range;
   range.sheet_id = static_cast<std::uint16_t>(sheet_index);

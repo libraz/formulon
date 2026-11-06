@@ -24,15 +24,15 @@
 using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::value_from_fm;
 
 namespace {
 
 fm_status_t check_strength(std::int32_t strength, formulon::eval::CollationStrength* out) {
   if (strength != FM_COLLATION_COMPARE && strength != FM_COLLATION_DYNAMIC && strength != FM_COLLATION_CLASSIC_EXACT) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "strength out of range");
+    return invalid_argument("strength out of range");
   }
   *out = static_cast<formulon::eval::CollationStrength>(strength);
   return 0;
@@ -78,7 +78,7 @@ extern "C" fm_status_t fm_get_collation_classes(const fm_value_t* values, size_t
     return rc;
   }
   if (count > std::numeric_limits<std::uint32_t>::max()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "count too large");
+    return invalid_argument("count too large");
   }
   std::vector<formulon::Value> converted;
   converted.reserve(count);

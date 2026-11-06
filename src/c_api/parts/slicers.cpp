@@ -21,6 +21,7 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fill_anchor;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
@@ -84,8 +85,7 @@ fm_status_t require_slicer(const fm_workbook_t* wb, size_t sheet_index, uint32_t
     return rc;
   }
   if (!found) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "no slicer has that object_id",
-                             "object_id=" + std::to_string(object_id));
+    return invalid_argument("no slicer has that object_id", "object_id=" + std::to_string(object_id));
   }
   return 0;
 }

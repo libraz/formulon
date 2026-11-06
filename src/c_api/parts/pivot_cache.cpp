@@ -40,13 +40,13 @@ using formulon::c_api::parts::find_cache_mut;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::grow_record_cells;
 using formulon::c_api::parts::intern_cache_text;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::invalidate_pivot_results_for_cache;
 using formulon::c_api::parts::mark_cache_pivots_pending;
 using formulon::c_api::parts::may_respell_formula;
 using formulon::c_api::parts::mutable_pivot_caches;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::value_to_fm;
@@ -58,13 +58,11 @@ bool is_valid_error_code(fm_error_code_t error) {
 }
 
 fm_status_t set_invalid_error_code(fm_error_code_t error) {
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "error code out of range",
-                           "error=" + std::to_string(error));
+  return invalid_argument("error code out of range", "error=" + std::to_string(error));
 }
 
 fm_status_t cache_not_found(std::uint32_t cache_id) {
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "cache_id not found",
-                           "cache_id=" + std::to_string(cache_id));
+  return invalid_argument("cache_id not found", "cache_id=" + std::to_string(cache_id));
 }
 
 // Resolves `cache_id` to its cache, writing the binding error and returning
@@ -153,14 +151,12 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache(fm_workbook_t* wb, std::uint3
       }
     }
     if (any && max_id == std::numeric_limits<std::uint32_t>::max()) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "auto-assignment would overflow",
-                               "max_existing_id=" + std::to_string(max_id));
+      return invalid_argument("auto-assignment would overflow", "max_existing_id=" + std::to_string(max_id));
     }
     assigned = any ? (max_id + 1U) : 1U;
   } else {
     if (find_cache(wb->workbook(), requested_id) != nullptr) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "requested_id already in use",
-                               "requested_id=" + std::to_string(requested_id));
+      return invalid_argument("requested_id already in use", "requested_id=" + std::to_string(requested_id));
     }
   }
   auto cache = std::make_unique<formulon::pivot::PivotCache>();
@@ -181,9 +177,8 @@ extern "C" fm_status_t fm_workbook_remove_pivot_cache(fm_workbook_t* wb, std::ui
     const formulon::Sheet& sheet = book.sheet(s);
     for (const auto& pt : sheet.pivot_tables()) {
       if (pt != nullptr && pt->pivot_cache_id() == cache_id) {
-        return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                                 "cache still referenced by a pivot table",
-                                 "cache_id=" + std::to_string(cache_id) + " sheet_index=" + std::to_string(s));
+        return invalid_argument("cache still referenced by a pivot table",
+                                "cache_id=" + std::to_string(cache_id) + " sheet_index=" + std::to_string(s));
       }
     }
   }
@@ -373,6 +368,17 @@ extern "C" fm_status_t fm_workbook_is_pivot_cache_field_shared_item_date(const f
 
 namespace {
 
+// NULL guard for `wb` and the valid-date check for `serial`.
+fm_status_t check_date_serial(const fm_workbook_t* wb, double serial) {
+  if (wb == nullptr) {
+    return null_argument("wb");
+  }
+  if (!formulon::pivot::is_valid_date_serial(serial, wb->workbook().date1904())) {
+    return invalid_argument("serial is not a valid date");
+  }
+  return 0;
+}
+
 // Common front-half for the four `add_shared_item_*` entry points: NULL
 // guard, lookup, and field-bounds check. Returns the cache field on
 // success, or NULL after writing the binding error and reporting the
@@ -416,11 +422,8 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_date(fm_wor
   if (const fm_status_t st = check_finite(serial, "serial")) {
     return st;
   }
-  if (wb == nullptr) {
-    return null_argument("wb");
-  }
-  if (!formulon::pivot::is_valid_date_serial(serial, wb->workbook().date1904())) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "serial is not a valid date");
+  if (const fm_status_t st = check_date_serial(wb, serial)) {
+    return st;
   }
   fm_status_t status = 0;
   auto* field = lookup_cache_field_mut(wb, cache_id, field_index, &status);
@@ -635,11 +638,8 @@ extern "C" fm_status_t fm_workbook_set_pivot_cache_record_date(fm_workbook_t* wb
   if (const fm_status_t st = check_finite(serial, "serial")) {
     return st;
   }
-  if (wb == nullptr) {
-    return null_argument("wb");
-  }
-  if (!formulon::pivot::is_valid_date_serial(serial, wb->workbook().date1904())) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "serial is not a valid date");
+  if (const fm_status_t st = check_date_serial(wb, serial)) {
+    return st;
   }
   fm_status_t status = 0;
   auto* rec = lookup_record_mut(wb, cache_id, record_index, field_index, nullptr, &status);
@@ -758,8 +758,7 @@ extern "C" fm_status_t fm_workbook_set_pivot_cache_options(fm_workbook_t* wb, st
   const std::int32_t limit = options->missing_items_limit;
   if (limit != kAutomaticMissingItemsLimit && (limit < 0 || limit > kMaxMissingItemsLimit) &&
       limit != missing_items_limit_to_fm(cache->missing_items_limit())) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "missing_items_limit out of range",
-                             "missing_items_limit=" + std::to_string(limit));
+    return invalid_argument("missing_items_limit out of range", "missing_items_limit=" + std::to_string(limit));
   }
   cache->set_save_data(options->save_data != 0);
   if (limit != missing_items_limit_to_fm(cache->missing_items_limit())) {
@@ -793,11 +792,10 @@ fm_status_t check_calculated_text(const char* text, const char* what, std::uint3
     return rc;
   }
   if (text[0] == '\0') {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, (std::string(what) + " is empty").c_str());
+    return invalid_argument((std::string(what) + " is empty").c_str());
   }
   if (formulon::utf16_units_in(text) > max_units) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             (std::string(what) + " is too long").c_str());
+    return invalid_argument((std::string(what) + " is too long").c_str());
   }
   return 0;
 }

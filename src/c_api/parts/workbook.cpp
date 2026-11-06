@@ -111,8 +111,7 @@ fm_status_t save_with_diagnostics_impl(const fm_workbook_t* wb, std::int32_t for
     }
     case FM_WORKBOOK_FORMAT_UNKNOWN:
     default:
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "unsupported format",
-                               "format=" + std::to_string(static_cast<int>(format)));
+      return invalid_argument("unsupported format", "format=" + std::to_string(static_cast<int>(format)));
   }
 
   copy_owned_bytes(bytes, out_bytes, out_len);
@@ -383,8 +382,7 @@ extern "C" fm_status_t fm_workbook_set_active_sheet(fm_workbook_t* wb, size_t in
     return rc;
   }
   if (wb->workbook().sheet(index).view().visibility() != formulon::SheetVisibility::kVisible) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "sheet is hidden",
-                             "index=" + std::to_string(index));
+    return invalid_argument("sheet is hidden", "index=" + std::to_string(index));
   }
   wb->workbook().set_active_sheet(static_cast<std::uint32_t>(index));
   return 0;

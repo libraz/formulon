@@ -19,9 +19,9 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::set_binding_error;
 
 namespace {
 
@@ -189,8 +189,7 @@ extern "C" fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_t
   }
   const std::string_view name = style->name;
   if (name.empty() || is_builtin_style_name(name)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "name is empty or a built-in style name",
-                             "name=" + std::string(name));
+    return invalid_argument("name is empty or a built-in style name", "name=" + std::string(name));
   }
   formulon::StylesTable& styles = wb->workbook().mutable_styles();
   formulon::CustomTableStyle next;
@@ -203,20 +202,18 @@ extern "C" fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_t
     const std::string_view type = in.type != nullptr ? in.type : "";
     const std::string context = "element=" + std::to_string(i) + " type=" + std::string(type);
     if (!is_table_style_type(type)) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "unknown element type", context);
+      return invalid_argument("unknown element type", context);
     }
     for (const formulon::TableStyleElement& earlier : next.elements) {
       if (earlier.type == type) {
-        return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "element type repeated", context);
+        return invalid_argument("element type repeated", context);
       }
     }
     if (in.size == 0U) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "element size must be at least 1",
-                               context);
+      return invalid_argument("element size must be at least 1", context);
     }
     if (in.has_dxf_id != 0 && in.dxf_id >= styles.dxfs.size()) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "dxf_id out of range",
-                               context + " dxf_id=" + std::to_string(in.dxf_id));
+      return invalid_argument("dxf_id out of range", context + " dxf_id=" + std::to_string(in.dxf_id));
     }
     formulon::TableStyleElement element;
     element.type = std::string(type);

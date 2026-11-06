@@ -27,9 +27,9 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::format_rect_a1;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::store_cstr;
 
 extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, const char* text, int32_t r1c1,
@@ -105,7 +105,7 @@ extern "C" fm_status_t fm_workbook_format_reference(const fm_workbook_t* wb, con
     return rc;
   }
   if (row0 > row1 || col0 > col1) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "inverted rectangle");
+    return invalid_argument("inverted rectangle");
   }
   if (auto rc = check_enum_domain(absolute, 1, "absolute"); rc != 0) {
     return rc;

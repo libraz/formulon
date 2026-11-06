@@ -132,8 +132,8 @@ const char* last_error_context() {
 
 bool check_range_count(std::size_t n) {
   if (n > kMaxRangesPerCApiCall) {
-    set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "range_count exceeds per-call cap",
-                      "range_count=" + std::to_string(n) + " cap=" + std::to_string(kMaxRangesPerCApiCall));
+    invalid_argument("range_count exceeds per-call cap",
+                     "range_count=" + std::to_string(n) + " cap=" + std::to_string(kMaxRangesPerCApiCall));
     return false;
   }
   return true;
@@ -147,8 +147,7 @@ fm_status_t check_profile_id(const char* profile_id, formulon::ExcelProfile* out
   if (formulon::parse_excel_profile_id(profile_id, out)) {
     return 0;
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "unknown profile",
-                           std::string("profile_id=") + profile_id);
+  return invalid_argument("unknown profile", std::string("profile_id=") + profile_id);
 }
 
 fm_status_t check_sheet_rect(std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
@@ -156,9 +155,9 @@ fm_status_t check_sheet_rect(std::uint32_t first_row, std::uint32_t first_col, s
   if (formulon::Sheet::rect_in_grid(first_row, first_col, last_row, last_col)) {
     return 0;
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "cell rectangle out of range",
-                           "first_row=" + std::to_string(first_row) + " first_col=" + std::to_string(first_col) +
-                               " last_row=" + std::to_string(last_row) + " last_col=" + std::to_string(last_col));
+  return invalid_argument("cell rectangle out of range",
+                          "first_row=" + std::to_string(first_row) + " first_col=" + std::to_string(first_col) +
+                              " last_row=" + std::to_string(last_row) + " last_col=" + std::to_string(last_col));
 }
 
 fm_status_t check_sheet_rect(const fm_cell_rect_t& rect) {
@@ -167,8 +166,7 @@ fm_status_t check_sheet_rect(const fm_cell_rect_t& rect) {
 
 fm_status_t check_rect_list(const fm_cell_rect_t* ranges, std::size_t range_count) {
   if (range_count == 0U) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "range_count must be >= 1",
-                             "range_count=0");
+    return invalid_argument("range_count must be >= 1", "range_count=0");
   }
   if (ranges == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "ranges is NULL while range_count > 0");
@@ -238,43 +236,40 @@ fm_status_t check_column_span(std::uint32_t first, std::uint32_t last) {
   if (first <= last && last < formulon::Sheet::kMaxCols) {
     return 0;
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "column span out of range",
-                           "first=" + std::to_string(first) + " last=" + std::to_string(last) +
-                               " last_col=" + std::to_string(formulon::Sheet::kMaxCols - 1U));
+  return invalid_argument("column span out of range",
+                          "first=" + std::to_string(first) + " last=" + std::to_string(last) +
+                              " last_col=" + std::to_string(formulon::Sheet::kMaxCols - 1U));
 }
 
 fm_status_t check_row_span(std::uint32_t first, std::uint32_t last) {
   if (first <= last && last < formulon::Sheet::kMaxRows) {
     return 0;
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "row span out of range",
-                           "first=" + std::to_string(first) + " last=" + std::to_string(last) +
-                               " last_row=" + std::to_string(formulon::Sheet::kMaxRows - 1U));
+  return invalid_argument("row span out of range", "first=" + std::to_string(first) + " last=" + std::to_string(last) +
+                                                       " last_row=" + std::to_string(formulon::Sheet::kMaxRows - 1U));
 }
 
 fm_status_t check_row_index(std::uint32_t row) {
   if (row < formulon::Sheet::kMaxRows) {
     return 0;
   }
-  return set_binding_error(
-      formulon::FormulonErrorCode::kInvalidArgument, "row index out of range",
-      "row=" + std::to_string(row) + " last_row=" + std::to_string(formulon::Sheet::kMaxRows - 1U));
+  return invalid_argument("row index out of range",
+                          "row=" + std::to_string(row) + " last_row=" + std::to_string(formulon::Sheet::kMaxRows - 1U));
 }
 
 fm_status_t check_finite_non_negative(double value, const char* field) {
   if (std::isfinite(value) && value >= 0.0) {
     return 0;
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "value must be finite and non-negative",
-                           std::string(field) + "=" + formulon::fixed_string(value, 6));
+  return invalid_argument("value must be finite and non-negative",
+                          std::string(field) + "=" + formulon::fixed_string(value, 6));
 }
 
 fm_status_t check_finite(double value, const char* field) {
   if (std::isfinite(value)) {
     return 0;
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "value must be finite",
-                           std::string(field) + "=" + formulon::fixed_string(value, 6));
+  return invalid_argument("value must be finite", std::string(field) + "=" + formulon::fixed_string(value, 6));
 }
 
 fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out) {
@@ -302,14 +297,12 @@ fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out) {
       return 0;
     case FM_VAL_ERROR:
       if (in.u.error_code < 0 || in.u.error_code > static_cast<int32_t>(formulon::ErrorCode::Unknown)) {
-        return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "error code out of range",
-                                 "error=" + std::to_string(in.u.error_code));
+        return invalid_argument("error code out of range", "error=" + std::to_string(in.u.error_code));
       }
       *out = formulon::Value::error(static_cast<formulon::ErrorCode>(in.u.error_code));
       return 0;
     default:
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "value kind not accepted",
-                               "kind=" + std::to_string(static_cast<int>(in.kind)));
+      return invalid_argument("value kind not accepted", "kind=" + std::to_string(static_cast<int>(in.kind)));
   }
 }
 
@@ -317,8 +310,8 @@ fm_status_t check_enum_domain(std::int64_t value, std::int64_t max, const char* 
   if (value >= 0 && value <= max) {
     return 0;
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "enum ordinal out of range",
-                           std::string(field) + "=" + std::to_string(value) + " max=" + std::to_string(max));
+  return invalid_argument("enum ordinal out of range",
+                          std::string(field) + "=" + std::to_string(value) + " max=" + std::to_string(max));
 }
 
 fm_status_t check_guid(const char* text, const char* field) {
@@ -343,8 +336,7 @@ fm_status_t check_guid(const char* text, const char* field) {
   if (shaped) {
     return 0;
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "value is not a GUID",
-                           std::string(field) + "=" + std::string(value));
+  return invalid_argument("value is not a GUID", std::string(field) + "=" + std::string(value));
 }
 
 namespace {
@@ -441,16 +433,15 @@ fm_status_t validate(const fm_cf_rule_t& rule) {
       // One icon per level, each naming an icon its source set has.
       const std::size_t levels = cf::icon_count(static_cast<cf::IconSetName>(rule.icon_set_name));
       if (rule.icon_set_icons == nullptr || rule.icon_set_icon_count != levels) {
-        return set_binding_error(
-            formulon::FormulonErrorCode::kInvalidArgument, "icon_set_icons must hold one icon per level",
+        return invalid_argument(
+            "icon_set_icons must hold one icon per level",
             "icon_set_icons count=" + std::to_string(rule.icon_set_icon_count) + " levels=" + std::to_string(levels));
       }
       for (std::uint32_t i = 0; i < rule.icon_set_icon_count; ++i) {
         const fm_cf_icon_t& icon = rule.icon_set_icons[i];
         const std::size_t available = icon.icon_set == nullptr ? 0U : cf::cf_icon_set_icon_count(icon.icon_set);
         if (available == 0U || icon.icon_id < 0 || static_cast<std::size_t>(icon.icon_id) >= available) {
-          return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "icon_set_icons entry names no icon",
-                                   "icon_set_icons[" + std::to_string(i) + "]");
+          return invalid_argument("icon_set_icons entry names no icon", "icon_set_icons[" + std::to_string(i) + "]");
         }
       }
     }
@@ -507,18 +498,15 @@ fm_status_t check_num_fmt_id_text(const formulon::Workbook& wb, const char* text
   std::uint32_t id = 0;
   for (const char* p = text; *p != '\0'; ++p) {
     if (*p < '0' || *p > '9') {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "number_format is not a numFmtId",
-                               "number_format=" + std::string(text));
+      return invalid_argument("number_format is not a numFmtId", "number_format=" + std::string(text));
     }
     id = id * 10U + static_cast<std::uint32_t>(*p - '0');
     if (id > std::numeric_limits<std::uint16_t>::max()) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "number_format is out of the numFmtId range", "number_format=" + std::string(text));
+      return invalid_argument("number_format is out of the numFmtId range", "number_format=" + std::string(text));
     }
   }
   if (!num_fmt_id_known(wb.styles(), static_cast<std::uint16_t>(id))) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "number_format names an unregistered numFmtId", "number_format=" + std::string(text));
+    return invalid_argument("number_format names an unregistered numFmtId", "number_format=" + std::string(text));
   }
   return 0;
 }
@@ -643,12 +631,7 @@ fm_status_t check_cell_coord(std::uint32_t row, std::uint32_t col) {
   if (formulon::Sheet::coord_in_grid(row, col)) {
     return 0;
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "cell coordinate out of range",
-                           "row=" + std::to_string(row) + " col=" + std::to_string(col));
-}
-
-fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet) {
-  return check_sheet(wb, sheet);
+  return invalid_argument("cell coordinate out of range", "row=" + std::to_string(row) + " col=" + std::to_string(col));
 }
 
 fm_status_t check_index(std::size_t index, std::size_t size, const char* field) {
@@ -666,11 +649,10 @@ fm_status_t check_limit(std::size_t value, std::size_t bound, const char* field)
   if (value < bound) {
     return 0;
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                           (std::string(field) + " " + std::to_string(value) + " is out of range (maximum " +
-                            std::to_string(bound - 1U) + ")")
-                               .c_str(),
-                           std::string(field) + "=" + std::to_string(value) + " max=" + std::to_string(bound - 1U));
+  return invalid_argument((std::string(field) + " " + std::to_string(value) + " is out of range (maximum " +
+                           std::to_string(bound - 1U) + ")")
+                              .c_str(),
+                          std::string(field) + "=" + std::to_string(value) + " max=" + std::to_string(bound - 1U));
 }
 
 fm_status_t null_argument() {
@@ -753,8 +735,7 @@ fm_status_t check_keeps_visible_sheet(const formulon::Workbook& workbook, std::u
       workbook.nearest_visible_sheet(index) != index) {
     return 0;
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "workbook needs a visible sheet",
-                           "index=" + std::to_string(index));
+  return invalid_argument("workbook needs a visible sheet", "index=" + std::to_string(index));
 }
 
 namespace {

@@ -74,7 +74,7 @@ fm_status_t null_argument();
 fm_status_t null_argument(const char* what);
 
 // kInvalidArgument binding error with the sentence `what`, carrying `context`.
-fm_status_t invalid_argument(const char* what, std::string context);
+fm_status_t invalid_argument(const char* what, std::string context = std::string());
 
 // kNotFound binding error with the sentence `what`, carrying `context`: a
 // natural key (name, id, cell) that names nothing.
@@ -342,12 +342,6 @@ void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out);
 // just propagate the returned code. `sheet_index` is the `size_t`-typed
 // API variant used by most pre-existing entry points.
 fm_status_t check_sheet_index(const fm_workbook_t* wb, std::size_t sheet_index);
-
-// Bounds-check for the uint32-typed sheet index used by the sheet UI
-// surface. Mirrors `check_sheet_index` but accepts the ABI's uint32.
-// Accepts `const` so read-only entry points (`fm_sheet_get_*`) can share
-// the same validator as the mutators.
-fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet);
 
 // Clears the handle's read scratch and returns it. The store is logically
 // internal (it never affects observable workbook state), so a const handle

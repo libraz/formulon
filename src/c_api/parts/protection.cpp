@@ -23,6 +23,7 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_rects;
 using formulon::c_api::parts::set_binding_error;
@@ -60,12 +61,11 @@ fm_status_t CheckRange(const std::vector<formulon::ProtectedRange>& ranges, cons
     return rc;
   }
   if (range.name.empty()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "empty name");
+    return invalid_argument("empty name");
   }
   for (std::size_t i = 0; i < ranges.size(); ++i) {
     if (i != skip && ranges[i].name == range.name) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "name already in use",
-                               "name=" + range.name);
+      return invalid_argument("name already in use", "name=" + range.name);
     }
   }
   return 0;

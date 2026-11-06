@@ -562,21 +562,19 @@ extern "C" fm_status_t fm_workbook_set_cell_style(fm_workbook_t* wb, const fm_ce
   }
   auto& styles = wb->workbook().mutable_styles();
   if (record->name[0] == '\0' || record->xf_id >= styles.cell_style_xfs.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "invalid name or xf_id");
+    return invalid_argument("invalid name or xf_id");
   }
   // Anything past the OOXML ordinal space must use the sentinel, which
   // suppresses the attribute instead of writing an unknown ordinal.
   const uint32_t builtin_id = record->builtin_id;
   if (builtin_id > formulon::CellStyleRecord::kBuiltinIdMax && builtin_id != FM_CELL_STYLE_BUILTIN_ID_NONE) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "builtin_id out of range",
-                             "builtin_id=" + std::to_string(builtin_id));
+    return invalid_argument("builtin_id out of range", "builtin_id=" + std::to_string(builtin_id));
   }
   // Only RowLevel_n / ColLevel_n carry an outline level.
   const uint32_t max_level = (builtin_id == 1U || builtin_id == 2U) ? 6U : 0U;
   if (record->i_level > max_level) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "i_level out of range",
-        "builtin_id=" + std::to_string(builtin_id) + " i_level=" + std::to_string(record->i_level));
+    return invalid_argument("i_level out of range",
+                            "builtin_id=" + std::to_string(builtin_id) + " i_level=" + std::to_string(record->i_level));
   }
   formulon::CellStyleRecord style;
   style.name = record->name;

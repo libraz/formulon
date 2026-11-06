@@ -30,6 +30,7 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::FragmentValidation;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
@@ -211,8 +212,8 @@ void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_aut
 
 fm_status_t check_array(const void* data, uint32_t count, const char* field) {
   if (data == nullptr && count != 0U) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "NULL array with a non-zero count",
-                             std::string("field=") + field + " count=" + std::to_string(count));
+    return invalid_argument("NULL array with a non-zero count",
+                            std::string("field=") + field + " count=" + std::to_string(count));
   }
   return 0;
 }
@@ -694,8 +695,7 @@ extern "C" fm_status_t fm_sheet_set_auto_filter_xml(fm_workbook_t* wb, size_t sh
     }
     const FragmentValidation validation = validate_single_element_fragment(fragment, "autoFilter");
     if (!validation.valid) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "invalid autoFilter XML fragment",
-                               validation.context);
+      return invalid_argument("invalid autoFilter XML fragment", validation.context);
     }
   }
   // Routed through the workbook so `_FilterDatabase` and SUBTOTAL/AGGREGATE

@@ -33,6 +33,7 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::display_formula;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::may_respell_formula;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
@@ -135,7 +136,7 @@ fm_status_t write_totals_cell(formulon::Workbook& book, const formulon::TableMet
 fm_status_t check_table_names(const formulon::Workbook& book, std::string_view name, std::string_view display_name,
                               std::size_t self) {
   if (name.empty() || display_name.empty()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "table name is empty");
+    return invalid_argument("table name is empty");
   }
   const auto collides = [name, display_name](const auto& existing) {
     return formulon::strings::case_insensitive_eq(existing.name, name) ||
@@ -149,14 +150,12 @@ fm_status_t check_table_names(const formulon::Workbook& book, std::string_view n
       continue;
     }
     if (collides(tables[i])) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "table name already exists",
-                               "name=" + std::string(name));
+      return invalid_argument("table name already exists", "name=" + std::string(name));
     }
   }
   for (const formulon::io::xlsb::XlsbRetainedTable& retained : formulon::io::xlsb::xlsb_retained_tables(book)) {
     if (collides(retained)) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "table name already exists",
-                               "name=" + std::string(name));
+      return invalid_argument("table name already exists", "name=" + std::string(name));
     }
   }
   return 0;
@@ -293,8 +292,7 @@ extern "C" fm_status_t fm_workbook_get_table(const fm_workbook_t* wb, size_t idx
   }
   const std::optional<formulon::MergeRange> rect = formulon::parse_a1_rectangle(tables[idx].ref);
   if (!rect) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "table ref is not a range",
-                             "ref=" + tables[idx].ref);
+    return invalid_argument("table ref is not a range", "ref=" + tables[idx].ref);
   }
   *out_name = tables[idx].name.c_str();
   *out_display_name = tables[idx].display_name.c_str();
@@ -375,9 +373,8 @@ extern "C" fm_status_t fm_workbook_update_table(fm_workbook_t* wb, size_t index,
   }
   formulon::TableMetadata& table = tables[index];
   if (!table.columns.empty() && table_ref_column_count(ref) != table.columns.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "ref width does not match the table's column count",
-                             "ref=" + std::string(ref) + " column_count=" + std::to_string(table.columns.size()));
+    return invalid_argument("ref width does not match the table's column count",
+                            "ref=" + std::string(ref) + " column_count=" + std::to_string(table.columns.size()));
   }
 
   // Compute every replacement before committing any metadata. In
@@ -600,19 +597,17 @@ extern "C" fm_status_t fm_workbook_set_table_column_totals(fm_workbook_t* wb, si
   }
   const std::string_view token = function != nullptr ? function : "none";
   if (find_totals_function(token) == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "unknown totals-row function",
-                             "function=" + std::string(token));
+    return invalid_argument("unknown totals-row function", "function=" + std::string(token));
   }
   std::string stored_formula;
   if (token == "custom") {
     if (formula == nullptr || formula[0] == '\0') {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "custom function needs a formula");
+      return invalid_argument("custom function needs a formula");
     }
     // Entered at the column's totals cell, so `[Qty]` and `[@Qty]` bind to this table.
     const std::optional<formulon::MergeRange> rect = formulon::parse_a1_rectangle(tables[index].ref);
     if (!rect) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "table ref is not a range",
-                               "ref=" + tables[index].ref);
+      return invalid_argument("table ref is not a range", "ref=" + tables[index].ref);
     }
     // The stored text drops one '=', so a second one would not survive.
     if (formula[0] == '=' && formula[1] == '=') {
