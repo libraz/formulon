@@ -268,11 +268,6 @@ void emit_row(std::vector<std::vector<Value>>* rows, std::vector<Value> row);
 /// Materialises a rectangular output buffer into a spilled `Value::array`.
 Value rows_to_array_value(const std::vector<std::vector<Value>>& rows, std::uint32_t out_cols, Arena& arena);
 
-/// Ascending three-way compare of two scalar Values in Excel's cross-kind
-/// order (`Number < Text < Bool < Error < Blank`); text compares with the
-/// active profile's collator at dynamic strength.
-int cmp_value_asc(const Value& a, const Value& b);
-
 }  // namespace eval
 }  // namespace formulon
 

@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/dynamic_array/common.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/groupby_pivotby/common.h"
 #include "excel_profile.h"
@@ -42,8 +43,8 @@ TEST(PivotComparatorParity, BoolVsTextMatchesGroupByOrder) {
   EXPECT_FALSE(value_less(bool_val, text_val));
 
   // GROUPBY / SORT: same ordering (negative => first argument sorts first).
-  EXPECT_LT(eval::cmp_value_asc(text_val, bool_val), 0);
-  EXPECT_GT(eval::cmp_value_asc(bool_val, text_val), 0);
+  EXPECT_LT(eval::dynamic_array::cmp_value_keyed(text_val, bool_val, nullptr, nullptr), 0);
+  EXPECT_GT(eval::dynamic_array::cmp_value_keyed(bool_val, text_val, nullptr, nullptr), 0);
 }
 
 TEST(PivotComparatorParity, NumberBeforeTextBeforeBool) {
@@ -55,8 +56,8 @@ TEST(PivotComparatorParity, NumberBeforeTextBeforeBool) {
   EXPECT_TRUE(value_less(num, text_val));
   EXPECT_TRUE(value_less(text_val, bool_val));
 
-  EXPECT_LT(eval::cmp_value_asc(num, text_val), 0);
-  EXPECT_LT(eval::cmp_value_asc(text_val, bool_val), 0);
+  EXPECT_LT(eval::dynamic_array::cmp_value_keyed(num, text_val, nullptr, nullptr), 0);
+  EXPECT_LT(eval::dynamic_array::cmp_value_keyed(text_val, bool_val, nullptr, nullptr), 0);
 }
 
 TEST(PivotComparatorParity, OrdersNonFiniteNumbersAfterFiniteValues) {
@@ -398,7 +399,7 @@ TEST(PivotComparatorParity, MergesWhatGroupByMerges) {
   const Value half = Value::text("\xEF\xBD\xB1");
   EXPECT_FALSE(value_less(full, half));
   EXPECT_FALSE(value_less(half, full));
-  EXPECT_EQ(eval::cmp_value_asc(full, half), 0);
+  EXPECT_EQ(eval::dynamic_array::cmp_value_keyed(full, half, nullptr, nullptr), 0);
 }
 
 // One row field over `labels`, one record per label with amount 10 * (i + 1).

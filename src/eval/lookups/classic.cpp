@@ -51,26 +51,9 @@ std::size_t scan_exact_text_lookup(std::string_view raw, ExcelProfile profile, s
 template <typename CellAt>
 std::size_t scan_exact_typed(const Value& lookup_value, std::size_t count, bool blank_cells_match_zero,
                              CellAt&& cell_at) {
-  if (lookup_value.is_number() || lookup_value.is_blank()) {
-    const double target = lookup_value.is_blank() ? 0.0 : lookup_value.as_number();
-    for (std::size_t i = 0; i < count; ++i) {
-      const Value& cell = cell_at(i);
-      if (cell.is_number() && cell.as_number() == target) {
-        return i;
-      }
-      if (blank_cells_match_zero && cell.is_blank() && target == 0.0) {
-        return i;
-      }
-    }
-    return SIZE_MAX;
-  }
-  if (lookup_value.is_boolean()) {
-    const bool target = lookup_value.as_boolean();
-    for (std::size_t i = 0; i < count; ++i) {
-      const Value& cell = cell_at(i);
-      if (cell.is_boolean() && cell.as_boolean() == target) {
-        return i;
-      }
+  for (std::size_t i = 0; i < count; ++i) {
+    if (literal_equals(cell_at(i), lookup_value, blank_cells_match_zero)) {
+      return i;
     }
   }
   return SIZE_MAX;
@@ -163,20 +146,18 @@ class ApproxComparer {
       if (!cell.is_number()) {
         return kForeignType;
       }
-      return sign(cell.as_number(), lookup_.is_blank() ? 0.0 : lookup_.as_number());
+      return compare_numbers(cell.as_number(), lookup_.is_blank() ? 0.0 : lookup_.as_number());
     }
     if (lookup_.is_boolean()) {
       if (!cell.is_boolean()) {
         return kForeignType;
       }
-      return sign(cell.as_boolean() ? 1.0 : 0.0, lookup_.as_boolean() ? 1.0 : 0.0);
+      return compare_numbers(cell.as_boolean() ? 1.0 : 0.0, lookup_.as_boolean() ? 1.0 : 0.0);
     }
     return kForeignType;
   }
 
  private:
-  static int sign(double x, double y) { return x < y ? -1 : (x > y ? 1 : 0); }
-
   const Value& lookup_;
   ExcelProfile profile_;
   std::string key_;

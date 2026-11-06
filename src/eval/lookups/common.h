@@ -43,6 +43,28 @@ class FunctionRegistry;
 // paths continue to return the original reference blank unchanged.
 Value promote_array_result_cell(const Value& value);
 
+// Three-way numeric compare: -1, 0 or 1 (0 whenever either side is NaN).
+inline int compare_numbers(double x, double y) {
+  return x < y ? -1 : (x > y ? 1 : 0);
+}
+
+// Literal equality of a cell against a number / blank / boolean lookup value
+// (a blank lookup value acts as 0; any other lookup kind never matches). A
+// blank cell matches a zero target only when `blank_cells_match_zero`.
+inline bool literal_equals(const Value& cell, const Value& lookup, bool blank_cells_match_zero) {
+  if (lookup.is_number() || lookup.is_blank()) {
+    const double target = lookup.is_blank() ? 0.0 : lookup.as_number();
+    if (cell.is_number()) {
+      return cell.as_number() == target;
+    }
+    return blank_cells_match_zero && cell.is_blank() && target == 0.0;
+  }
+  if (lookup.is_boolean()) {
+    return cell.is_boolean() && cell.as_boolean() == lookup.as_boolean();
+  }
+  return false;
+}
+
 // Lower-cased key a wildcard pattern and a cell's text are matched on, the
 // same for VLOOKUP / HLOOKUP / MATCH / XLOOKUP / XMATCH. Mac folds each code
 // point on its own (no voicing-mark composition); zh and Windows fold ASCII

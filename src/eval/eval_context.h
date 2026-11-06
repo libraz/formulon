@@ -313,6 +313,13 @@ class EvalContext {
   Expected<DeclaredRect, ErrorCode> declared_range_rect(const parser::Reference& lhs,
                                                         const parser::Reference& rhs) const;
 
+  /// `declared_range_rect`, except that a context without a current sheet
+  /// derives the bare `declared_rect` instead of answering `#NAME?`.
+  Expected<DeclaredRect, ErrorCode> declared_range_rect_or_bare(const parser::Reference& lhs,
+                                                                const parser::Reference& rhs) const {
+    return current_sheet_ != nullptr ? declared_range_rect(lhs, rhs) : declared_rect(lhs, rhs);
+  }
+
   /// Resolves the rectangle `expand_range` walks for `[lhs : rhs]`, without
   /// reading a cell: the declared rectangle, with a whole-axis span narrowed
   /// to the populated extent and widened to the call's shared extent.

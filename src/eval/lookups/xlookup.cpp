@@ -69,15 +69,6 @@ int error_order(ErrorCode code) {
 // function returns `false` so callers can decide how to handle it. On success
 // writes the sign to `*out_cmp` and returns `true`.
 bool xlookup_cmp(const Value& cell, const Value& lookup, ExcelProfile profile, int* out_cmp) {
-  auto cmp_numeric = [](double x, double y) -> int {
-    if (x < y) {
-      return -1;
-    }
-    if (x > y) {
-      return 1;
-    }
-    return 0;
-  };
   auto rank_of = [](const Value& v, int* rank) -> bool {
     if (v.is_number() || v.is_blank()) {
       *rank = 0;
@@ -103,7 +94,7 @@ bool xlookup_cmp(const Value& cell, const Value& lookup, ExcelProfile profile, i
     return false;
   }
   if (cell_rank != lookup_rank) {
-    *out_cmp = cmp_numeric(static_cast<double>(cell_rank), static_cast<double>(lookup_rank));
+    *out_cmp = compare_numbers(static_cast<double>(cell_rank), static_cast<double>(lookup_rank));
     return true;
   }
   // Same kind — compare values directly.
@@ -112,19 +103,19 @@ bool xlookup_cmp(const Value& cell, const Value& lookup, ExcelProfile profile, i
     return true;
   }
   if (cell_rank == 3) {
-    *out_cmp = cmp_numeric(error_order(cell.as_error()), error_order(lookup.as_error()));
+    *out_cmp = compare_numbers(error_order(cell.as_error()), error_order(lookup.as_error()));
     return true;
   }
   if (cell_rank == 2) {
     const int lb = lookup.as_boolean() ? 1 : 0;
     const int cb = cell.as_boolean() ? 1 : 0;
-    *out_cmp = cmp_numeric(cb, lb);
+    *out_cmp = compare_numbers(cb, lb);
     return true;
   }
   // Rank 0: Number or Blank.
   const double lv = lookup.is_blank() ? 0.0 : lookup.as_number();
   const double cv = cell.is_blank() ? 0.0 : cell.as_number();
-  *out_cmp = cmp_numeric(cv, lv);
+  *out_cmp = compare_numbers(cv, lv);
   return true;
 }
 
@@ -137,20 +128,7 @@ bool xlookup_exact_eq(const Value& cell, const Value& lookup, ExcelProfile profi
   if (lookup.is_text()) {
     return cell.is_text() && collate(cell.as_text(), lookup.as_text(), profile, CollationStrength::kDynamic) == 0;
   }
-  if (lookup.is_number() || lookup.is_blank()) {
-    const double target = lookup.is_blank() ? 0.0 : lookup.as_number();
-    if (cell.is_number()) {
-      return cell.as_number() == target;
-    }
-    if (cell.is_blank()) {
-      return target == 0.0;
-    }
-    return false;
-  }
-  if (lookup.is_boolean()) {
-    return cell.is_boolean() && cell.as_boolean() == lookup.as_boolean();
-  }
-  return false;
+  return literal_equals(cell, lookup, /*blank_cells_match_zero=*/true);
 }
 
 // Scan `cells` (already flattened to a 1-D axis of the lookup_array) for

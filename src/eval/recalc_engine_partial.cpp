@@ -219,9 +219,7 @@ partial_recalc_next_wave:
     if (closure.count(cell) == 0U) {
       return;
     }
-    if (!dirty_.contains(cell)) {
-      dirty_.mark(cell);
-    }
+    dirty_.mark(cell);
     ++stats.volatile_cells;
   });
 
@@ -247,8 +245,7 @@ partial_recalc_next_wave:
       if (closure.count(dependent) == 0U) {
         continue;
       }
-      if (!dirty_.contains(dependent)) {
-        dirty_.mark(dependent);
+      if (dirty_.mark(dependent)) {
         propagation_queue.push_back(dependent);
       }
     }

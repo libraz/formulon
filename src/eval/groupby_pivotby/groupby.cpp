@@ -139,13 +139,10 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     }
     // Value columns: invoke the aggregator per column with the group's
     // slice. Errors land in the cell; they do NOT short-circuit the result.
+    const std::vector<Value> cells =
+        aggregate_value_columns(*values, val_cols, group_rows[g], agg, arena, registry, ctx, ErrorCode::Calc);
     for (std::uint32_t vc = 0; vc < val_cols; ++vc) {
-      const ArrayValue* slice = build_group_slice(*values, vc, group_rows[g], arena);
-      if (slice == nullptr) {
-        row[key_cols + vc] = Value::error(ErrorCode::Num);
-        continue;
-      }
-      row[key_cols + vc] = invoke_aggregator_for_group(agg, vc, slice, arena, registry, ctx);
+      row[key_cols + vc] = cells[vc];
     }
     agg_rows.push_back(std::move(row));
   }

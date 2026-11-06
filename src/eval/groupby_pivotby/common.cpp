@@ -595,10 +595,5 @@ Value rows_to_array_value(const std::vector<std::vector<Value>>& rows, std::uint
   return Value::array(arr);
 }
 
-int cmp_value_asc(const Value& a, const Value& b) {
-  assert(!(a.is_text() && b.is_text()) || eval_profile_scope_active());
-  return dynamic_array::cmp_value_keyed(a, b, nullptr, nullptr);
-}
-
 }  // namespace eval
 }  // namespace formulon

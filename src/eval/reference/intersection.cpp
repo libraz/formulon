@@ -405,8 +405,7 @@ bool resolve_range_endpoint(const parser::AstNode& endpoint, Arena& arena, const
       *out_err = ErrorCode::Value;
       return false;
     }
-    const Expected<DeclaredRect, ErrorCode> rect =
-        ctx.current_sheet() != nullptr ? ctx.declared_range_rect(r, r) : declared_rect(r, r);
+    const Expected<DeclaredRect, ErrorCode> rect = ctx.declared_range_rect_or_bare(r, r);
     if (!rect) {
       *out_err = rect.error();
       return false;

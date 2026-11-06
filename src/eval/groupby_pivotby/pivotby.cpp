@@ -279,14 +279,8 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
         // groups in the pivot body. Already initialized to Blank.
         continue;
       }
-      for (std::uint32_t v = 0; v < val_cols; ++v) {
-        const ArrayValue* slice = build_group_slice(*values, v, intersection, arena);
-        if (slice == nullptr) {
-          body[rg][cg][v] = Value::error(ErrorCode::Num);
-          continue;
-        }
-        body[rg][cg][v] = invoke_aggregator_for_group(col_agg[cg], v, slice, arena, registry, ctx);
-      }
+      body[rg][cg] =
+          aggregate_value_columns(*values, val_cols, intersection, col_agg[cg], arena, registry, ctx, ErrorCode::Calc);
     }
   }
 
@@ -713,13 +707,13 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (emit_row_subtotals) {
     for (std::size_t o : outer_row_order) {
       if (row_total_depth < 0) {
-        emit_row(&out_rows, row_subtotal_rows[o]);
+        emit_row(&out_rows, std::move(row_subtotal_rows[o]));
       }
       for (std::size_t rg : row_groups_of_outer[o]) {
         emit_row(&out_rows, render_body_row(rg));
       }
       if (row_total_depth > 0) {
-        emit_row(&out_rows, row_subtotal_rows[o]);
+        emit_row(&out_rows, std::move(row_subtotal_rows[o]));
       }
     }
   } else {

@@ -36,8 +36,8 @@ class DirtySet {
   DirtySet& operator=(DirtySet&&) noexcept = default;
   ~DirtySet() = default;
 
-  /// Inserts `cell` into the set. No-op when `cell` is already present.
-  void mark(CellNodeId cell) { cells_.insert(cell); }
+  /// Inserts `cell` into the set. Returns whether it was newly added.
+  bool mark(CellNodeId cell) { return cells_.insert(cell).second; }
 
   /// Whether `cell` has been marked dirty.
   bool contains(CellNodeId cell) const { return cells_.find(cell) != cells_.end(); }

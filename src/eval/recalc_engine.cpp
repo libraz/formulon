@@ -183,9 +183,7 @@ std::vector<std::vector<CellNodeId>> RecalcEngine::condense_dirty_locked(
 
 void RecalcEngine::seed_dirty_locked(std::uint32_t* volatile_cells) {
   volatiles_.for_each([&](CellNodeId cell) {
-    if (!dirty_.contains(cell)) {
-      dirty_.mark(cell);
-    }
+    dirty_.mark(cell);
     if (volatile_cells != nullptr) {
       ++*volatile_cells;
     }
@@ -200,8 +198,7 @@ void RecalcEngine::seed_dirty_locked(std::uint32_t* volatile_cells) {
   while (bfs_head < bfs_queue.size()) {
     const CellNodeId current = bfs_queue[bfs_head++];
     for (CellNodeId dependent : graph_.dependents_of_ref(current)) {
-      if (!dirty_.contains(dependent)) {
-        dirty_.mark(dependent);
+      if (dirty_.mark(dependent)) {
         bfs_queue.push_back(dependent);
       }
     }
