@@ -60,6 +60,32 @@ const formulon::pivot::PivotCache* find_cache(const formulon::Workbook& wb, std:
   return wb.find_pivot_cache(cache_id);
 }
 
+fm_status_t cache_not_found(std::uint32_t cache_id) {
+  return invalid_argument("cache_id not found", "cache_id=" + std::to_string(cache_id));
+}
+
+// Resolves `cache_id` to its cache, writing the binding error and returning
+// its status on a miss.
+fm_status_t resolve_cache(const fm_workbook_t* wb, std::uint32_t cache_id, const formulon::pivot::PivotCache** out) {
+  *out = find_cache(wb->workbook(), cache_id);
+  if (*out == nullptr) {
+    return cache_not_found(cache_id);
+  }
+  return 0;
+}
+
+// Mutable variant of `resolve_cache` that also rejects a NULL workbook.
+fm_status_t resolve_cache_mut(fm_workbook_t* wb, std::uint32_t cache_id, formulon::pivot::PivotCache** out) {
+  if (wb == nullptr) {
+    return null_argument("wb");
+  }
+  *out = find_cache_mut(wb->workbook(), cache_id);
+  if (*out == nullptr) {
+    return cache_not_found(cache_id);
+  }
+  return 0;
+}
+
 fm_status_t resolve_pivot(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                           const formulon::pivot::PivotTable** out) {
   *out = nullptr;

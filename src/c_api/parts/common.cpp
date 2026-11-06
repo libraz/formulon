@@ -296,8 +296,8 @@ fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out) {
       *out = formulon::Value::text(in.u.text);
       return 0;
     case FM_VAL_ERROR:
-      if (in.u.error_code < 0 || in.u.error_code > static_cast<int32_t>(formulon::ErrorCode::Unknown)) {
-        return invalid_argument("error code out of range", "error=" + std::to_string(in.u.error_code));
+      if (!is_valid_error_code(in.u.error_code)) {
+        return invalid_error_code(in.u.error_code);
       }
       *out = formulon::Value::error(static_cast<formulon::ErrorCode>(in.u.error_code));
       return 0;
@@ -665,6 +665,14 @@ fm_status_t null_argument(const char* what) {
 
 fm_status_t invalid_argument(const char* what, std::string context) {
   return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, what, std::move(context));
+}
+
+bool is_valid_error_code(fm_error_code_t error) {
+  return error >= 0 && error <= static_cast<fm_error_code_t>(formulon::ErrorCode::Unknown);
+}
+
+fm_status_t invalid_error_code(fm_error_code_t error) {
+  return invalid_argument("error code out of range", "error=" + std::to_string(error));
 }
 
 fm_status_t not_found(const char* what, std::string context) {

@@ -76,6 +76,12 @@ fm_status_t null_argument(const char* what);
 // kInvalidArgument binding error with the sentence `what`, carrying `context`.
 fm_status_t invalid_argument(const char* what, std::string context = std::string());
 
+// True when `error` is an `ErrorCode` ordinal (0 through `ErrorCode::Unknown`).
+bool is_valid_error_code(fm_error_code_t error);
+
+// kInvalidArgument binding error "error code out of range" for `error`.
+fm_status_t invalid_error_code(fm_error_code_t error);
+
 // kNotFound binding error with the sentence `what`, carrying `context`: a
 // natural key (name, id, cell) that names nothing.
 fm_status_t not_found(const char* what, std::string context = std::string());

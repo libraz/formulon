@@ -41,51 +41,21 @@ using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::grow_record_cells;
 using formulon::c_api::parts::intern_cache_text;
 using formulon::c_api::parts::invalid_argument;
+using formulon::c_api::parts::invalid_error_code;
 using formulon::c_api::parts::invalidate_pivot_results_for_cache;
+using formulon::c_api::parts::is_valid_error_code;
 using formulon::c_api::parts::mark_cache_pivots_pending;
 using formulon::c_api::parts::may_respell_formula;
 using formulon::c_api::parts::mutable_pivot_caches;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
+using formulon::c_api::parts::resolve_cache;
+using formulon::c_api::parts::resolve_cache_mut;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::value_to_fm;
 
 namespace {
-
-bool is_valid_error_code(fm_error_code_t error) {
-  return error >= 0 && error <= static_cast<fm_error_code_t>(formulon::ErrorCode::Unknown);
-}
-
-fm_status_t set_invalid_error_code(fm_error_code_t error) {
-  return invalid_argument("error code out of range", "error=" + std::to_string(error));
-}
-
-fm_status_t cache_not_found(std::uint32_t cache_id) {
-  return invalid_argument("cache_id not found", "cache_id=" + std::to_string(cache_id));
-}
-
-// Resolves `cache_id` to its cache, writing the binding error and returning
-// its status on a miss.
-fm_status_t resolve_cache(const fm_workbook_t* wb, std::uint32_t cache_id, const formulon::pivot::PivotCache** out) {
-  *out = find_cache(wb->workbook(), cache_id);
-  if (*out == nullptr) {
-    return cache_not_found(cache_id);
-  }
-  return 0;
-}
-
-// Mutable variant of `resolve_cache` that also rejects a NULL workbook.
-fm_status_t resolve_cache_mut(fm_workbook_t* wb, std::uint32_t cache_id, formulon::pivot::PivotCache** out) {
-  if (wb == nullptr) {
-    return null_argument("wb");
-  }
-  *out = find_cache_mut(wb->workbook(), cache_id);
-  if (*out == nullptr) {
-    return cache_not_found(cache_id);
-  }
-  return 0;
-}
 
 // Read-only lookup and field-bounds check shared by the cache-field getters.
 // Returns NULL after writing the binding error and reporting its status
@@ -385,7 +355,8 @@ fm_status_t check_date_serial(const fm_workbook_t* wb, double serial) {
 // matching status through `out_status`, so the caller returns the same
 // code `fm_last_error_code` records.
 formulon::pivot::PivotCacheField* lookup_cache_field_mut(fm_workbook_t* wb, std::uint32_t cache_id,
-                                                         std::size_t field_index, fm_status_t* out_status) {
+                                                         std::size_t field_index, fm_status_t* out_status,
+                                                         formulon::pivot::PivotCache** out_cache = nullptr) {
   formulon::pivot::PivotCache* cache = nullptr;
   if (*out_status = resolve_cache_mut(wb, cache_id, &cache); *out_status != 0) {
     return nullptr;
@@ -396,6 +367,9 @@ formulon::pivot::PivotCacheField* lookup_cache_field_mut(fm_workbook_t* wb, std:
   // The shared-item mutators all resolve their field through here, so
   // invalidate dependent layout caches once at the shared choke point.
   invalidate_pivot_results_for_cache(wb->workbook(), cache_id);
+  if (out_cache != nullptr) {
+    *out_cache = cache;
+  }
   return &cache->mutable_fields()[field_index];
 }
 
@@ -446,14 +420,12 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_text(fm_wor
     return rc;
   }
   formulon::pivot::PivotCache* cache = nullptr;
-  if (fm_status_t rc = resolve_cache_mut(wb, cache_id, &cache); rc != 0) {
-    return rc;
+  fm_status_t status = 0;
+  auto* field = lookup_cache_field_mut(wb, cache_id, field_index, &status, &cache);
+  if (field == nullptr) {
+    return status;
   }
-  if (auto rc = check_index(field_index, cache->fields().size(), "field_index"); rc != 0) {
-    return rc;
-  }
-  cache->mutable_fields()[field_index].shared_items.push_back(intern_cache_text(*cache, std::string_view(utf8)));
-  invalidate_pivot_results_for_cache(wb->workbook(), cache_id);
+  field->shared_items.push_back(intern_cache_text(*cache, std::string_view(utf8)));
   return 0;
 }
 
@@ -486,7 +458,7 @@ extern "C" fm_status_t fm_workbook_add_pivot_cache_field_shared_item_error(fm_wo
                                                                            fm_error_code_t error) {
   clear_last_error();
   if (!is_valid_error_code(error)) {
-    return set_invalid_error_code(error);
+    return invalid_error_code(error);
   }
   fm_status_t status = 0;
   auto* field = lookup_cache_field_mut(wb, cache_id, field_index, &status);
@@ -673,9 +645,9 @@ extern "C" fm_status_t fm_workbook_set_pivot_cache_record_text(fm_workbook_t* wb
   }
   // Overwrite-aware: the cache reuses this coordinate's existing storage
   // slot, so repeated writes to one cell do not grow the text store.
-  if (!cache->set_record_text(record_index, field_index, std::string_view(utf8))) {
-    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-  }
+  // `lookup_record_mut` has bounded both indices and grown the record's cells.
+  FM_CHECK(cache->set_record_text(record_index, field_index, std::string_view(utf8)),
+           "record text coordinate out of range");
   reset_cell_encoding(*rec, cache->fields()[field_index], field_index, rec->cells[field_index]);
   return 0;
 }
@@ -698,7 +670,7 @@ extern "C" fm_status_t fm_workbook_set_pivot_cache_record_error(fm_workbook_t* w
                                                                 fm_error_code_t error) {
   clear_last_error();
   if (!is_valid_error_code(error)) {
-    return set_invalid_error_code(error);
+    return invalid_error_code(error);
   }
   return set_record_cell(wb, cache_id, record_index, field_index,
                          formulon::Value::error(static_cast<formulon::ErrorCode>(error)));

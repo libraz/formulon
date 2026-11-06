@@ -32,8 +32,7 @@ extern "C" const char* fm_get_status_name(fm_status_t status) {
 }
 
 extern "C" const char* fm_get_error_display_name(fm_error_code_t error) {
-  constexpr auto kLastError = static_cast<fm_error_code_t>(formulon::ErrorCode::Unknown);
-  if (error < 0 || error > kLastError) {
+  if (!formulon::c_api::parts::is_valid_error_code(error)) {
     return formulon::display_name(formulon::ErrorCode::Unknown);
   }
   return formulon::display_name(static_cast<formulon::ErrorCode>(error));

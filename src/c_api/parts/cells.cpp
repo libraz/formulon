@@ -49,6 +49,8 @@ using formulon::c_api::parts::display_formula_text;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
+using formulon::c_api::parts::invalid_error_code;
+using formulon::c_api::parts::is_valid_error_code;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
@@ -150,8 +152,8 @@ extern "C" fm_status_t fm_sheet_set_error(fm_workbook_t* wb, size_t sheet_index,
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (error < 0 || error > static_cast<fm_error_code_t>(formulon::ErrorCode::Unknown)) {
-    return invalid_argument("error code out of range", "error=" + std::to_string(error));
+  if (!is_valid_error_code(error)) {
+    return invalid_error_code(error);
   }
   if (const auto header = table_header_cell(wb->workbook(), sheet_index, row, col)) {
     return rename_from_header(wb, *header, formulon::display_name(static_cast<formulon::ErrorCode>(error)));

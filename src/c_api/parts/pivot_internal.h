@@ -40,6 +40,16 @@ std::vector<std::unique_ptr<formulon::pivot::PivotCache>>& mutable_pivot_caches(
 formulon::pivot::PivotCache* find_cache_mut(formulon::Workbook& wb, std::uint32_t cache_id);
 const formulon::pivot::PivotCache* find_cache(const formulon::Workbook& wb, std::uint32_t cache_id);
 
+// kInvalidArgument binding error "cache_id not found" for `cache_id`.
+fm_status_t cache_not_found(std::uint32_t cache_id);
+
+// Resolves `cache_id` to its cache, writing the binding error and returning
+// its status on a miss.
+fm_status_t resolve_cache(const fm_workbook_t* wb, std::uint32_t cache_id, const formulon::pivot::PivotCache** out);
+
+// Mutable variant of `resolve_cache` that also rejects a NULL workbook.
+fm_status_t resolve_cache_mut(fm_workbook_t* wb, std::uint32_t cache_id, formulon::pivot::PivotCache** out);
+
 // Sheet+pivot resolution. Returns 0 with `*out` set, or the error status with
 // the binding error populated (a bad sheet is kSheetIndexOutOfRange, a bad
 // pivot kIndexOutOfRange).

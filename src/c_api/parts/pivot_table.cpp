@@ -44,6 +44,7 @@ using formulon::c_api::parts::pivot_show_as_from_fm;
 using formulon::c_api::parts::PivotEdit;
 using formulon::c_api::parts::project_pivot;
 using formulon::c_api::parts::publish_scratch;
+using formulon::c_api::parts::resolve_cache;
 using formulon::c_api::parts::resolve_pivot_checked;
 using formulon::c_api::parts::resolve_pivot_mut;
 using formulon::c_api::parts::set_last_error;
@@ -106,8 +107,9 @@ extern "C" fm_status_t fm_sheet_add_pivot(fm_workbook_t* wb, std::size_t sheet_i
   if (auto rc = check_utf8({utf8_name}); rc != 0) {
     return rc;
   }
-  if (find_cache(wb->workbook(), cache_id) == nullptr) {
-    return invalid_argument("cache_id not found", "cache_id=" + std::to_string(cache_id));
+  const formulon::pivot::PivotCache* cache = nullptr;
+  if (auto rc = resolve_cache(wb, cache_id, &cache); rc != 0) {
+    return rc;
   }
   if (auto rc = check_cell_coord(anchor_row, anchor_col); rc != 0) {
     return rc;
