@@ -224,6 +224,18 @@ cases:
     formula: =SUMPRODUCT(IF(TRUE,"5",1))
   - id: sumproduct_if_bool
     formula: =SUMPRODUCT(IF(TRUE,TRUE,1),2)
+  - id: sumproduct_whole_rows_error_row_major
+    formula_cell: D5
+    setup:
+      A1: 1
+      A2: x
+    formula: =SUMPRODUCT(1/1:2)
+  - id: sumproduct_bounded_rows_error_row_major
+    formula_cell: D5
+    setup:
+      A1: 1
+      A2: x
+    formula: =SUMPRODUCT(1/A1:B2)
   - id: maxa_text
     formula: =MAXA("abc",2)
   - id: maxa_text_err_a_family

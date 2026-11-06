@@ -2,11 +2,11 @@
   "suite": "aggregate_argument_order",
   "description": "Which failure an aggregate reports when a non-numeric text literal comes before or after an error argument, and how an IF argument that picks a plain value is read, across the numeric and A-family aggregates.\n",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.4",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T01:50:48Z"
+    "generated_at": "2026-11-06T09:45:00Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -943,6 +943,44 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      }
+    },
+    {
+      "id": "sumproduct_whole_rows_error_row_major",
+      "formula": "=SUMPRODUCT(1/1:2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        }
+      },
+      "formula_cell": "D5",
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "sumproduct_bounded_rows_error_row_major",
+      "formula": "=SUMPRODUCT(1/A1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        }
+      },
+      "formula_cell": "D5",
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
       }
     },
     {
