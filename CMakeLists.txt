@@ -433,6 +433,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/wildcard.cpp
   src/eval/collated_wildcard.cpp
   src/eval/collation.cpp
+  src/eval/collation_kana.cpp
   src/eval/collation_table.cpp
   src/eval/jp_fold.cpp
   src/eval/jp_kana_table.cpp
