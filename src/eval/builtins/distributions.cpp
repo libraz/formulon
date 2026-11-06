@@ -20,9 +20,8 @@
 //     NaN vs. Inf convention.
 //   * GAMMA.INV follows the chi-squared inverse identity
 //       GAMMA.INV(p, alpha, beta) == beta * chisq_inv(p, 2*alpha) / 2,
-//     but runs its own Wilson-Hilferty seed + Newton driver: the
-//     chi-squared solver (`ChisqInvCore` in
-//     `eval/builtins/stats/stats_distributions.cpp`) is TU-local. The
+//     but runs its own Wilson-Hilferty seed + Newton driver rather than
+//     `stats::chisq_inv_excel`. The
 //     inverse standard-normal seed is NOT replicated — it comes from
 //     `stats_detail::InverseStandardNormal`, the single definition all
 //     quantile callers share.
@@ -69,6 +68,7 @@ using builtins_detail::to_finite_value;
 // Shared helpers
 // ---------------------------------------------------------------------------
 
+using stats_detail::GammaPdf;
 using stats_detail::read_triple_cumulative;
 using stats_detail::TripleCumulative;
 
@@ -270,7 +270,7 @@ double gamma_kernel(double x) noexcept {
     }
     return result;
   }
-  if (ax <= 2.220446049250313e-16) {
+  if (ax <= stats::kEps) {
     return 1.0 / x - kEulerGamma;
   }
   if (ax <= 10.0) {
@@ -336,13 +336,6 @@ Value Gammaln(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   return to_finite_value(stats::lgamma_excel(x));
-}
-
-// Gamma PDF at x > 0 with shape `alpha` and scale `beta`:
-// `dpois_raw(x / beta, alpha) * (alpha / x)`. Callers reject x < 0,
-// alpha <= 0, beta <= 0 up front.
-double GammaPdf(double x, double alpha, double beta_scale) noexcept {
-  return flush_subnormal(stats::dpois_raw(flush_subnormal(x / beta_scale), alpha) * flush_subnormal(alpha / x));
 }
 
 // GAMMA.DIST(x, alpha, beta, cumulative). #NUM! on x < 0, alpha <= 0,

@@ -239,16 +239,7 @@ Expected<double, ErrorCode> percentile_sorted_inc(const std::vector<double>& xs_
   const double pos = k * static_cast<double>(n - 1) + 1.0;
   const double floor_pos = std::trunc(pos);
   const auto lo_index = static_cast<std::size_t>(floor_pos) - 1U;
-  const double frac = pos - floor_pos;
-  if (frac == 0.0 || lo_index + 1U >= n) {
-    return xs_sorted[lo_index];
-  }
-  const double a = xs_sorted[lo_index];
-  const double interpolated = a + frac * (xs_sorted[lo_index + 1U] - a);
-  if (!std::isfinite(interpolated)) {
-    return ErrorCode::Num;
-  }
-  return interpolated;
+  return interpolate_sorted(xs_sorted, lo_index, pos - floor_pos);
 }
 
 Expected<double, ErrorCode> percentile_sorted_exc(const std::vector<double>& xs_sorted, double k) {

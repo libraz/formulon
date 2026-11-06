@@ -25,30 +25,20 @@
 
 namespace formulon {
 namespace eval {
-namespace {
-
-// Single shared impl: every CUBE* function resolves to `#N/A` once its
-// arguments have all evaluated cleanly. Using one function pointer keeps
-// the catalog footprint minimal and makes the "stub" contract literal in
-// the source.
-Value CubeNoConnectionStub(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return Value::error(ErrorCode::NA);
-}
-
-}  // namespace
-
 void register_cube_builtins(FunctionRegistry& registry) {
+  // Every CUBE* function resolves to `#N/A` once its arguments have all
+  // evaluated cleanly.
   // Arities as documented by Microsoft for Excel 365. Enforced by the
   // dispatcher's min/max arity check before the stub body runs.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
-      {"CUBEKPIMEMBER", 3u, 4u, &CubeNoConnectionStub},
-      {"CUBEMEMBER", 2u, 3u, &CubeNoConnectionStub},
-      {"CUBEMEMBERPROPERTY", 3u, 3u, &CubeNoConnectionStub},
-      {"CUBERANKEDMEMBER", 3u, 4u, &CubeNoConnectionStub},
-      {"CUBESET", 2u, 5u, &CubeNoConnectionStub},
-      {"CUBESETCOUNT", 1u, 1u, &CubeNoConnectionStub},
+      {"CUBEKPIMEMBER", 3u, 4u, &builtins_detail::fixed_error_stub<ErrorCode::NA>},
+      {"CUBEMEMBER", 2u, 3u, &builtins_detail::fixed_error_stub<ErrorCode::NA>},
+      {"CUBEMEMBERPROPERTY", 3u, 3u, &builtins_detail::fixed_error_stub<ErrorCode::NA>},
+      {"CUBERANKEDMEMBER", 3u, 4u, &builtins_detail::fixed_error_stub<ErrorCode::NA>},
+      {"CUBESET", 2u, 5u, &builtins_detail::fixed_error_stub<ErrorCode::NA>},
+      {"CUBESETCOUNT", 1u, 1u, &builtins_detail::fixed_error_stub<ErrorCode::NA>},
       // CUBEVALUE is variadic: connection plus 0..N member_expression tuples.
-      {"CUBEVALUE", 1u, kVariadic, &CubeNoConnectionStub},
+      {"CUBEVALUE", 1u, kVariadic, &builtins_detail::fixed_error_stub<ErrorCode::NA>},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }

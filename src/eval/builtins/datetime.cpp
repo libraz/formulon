@@ -4,9 +4,9 @@
 // WEEKNUM, ISOWEEKNUM, YEARFRAC, DATEDIF, DATEVALUE, TIMEVALUE, NOW, TODAY.
 //
 // Most entries are eager, scalar-only (no range expansion). NOW / TODAY read
-// the host's local wall clock via `std::chrono::system_clock` +
-// `localtime_r` / `localtime_s` and return an Excel serial directly; volatile
-// recalc semantics are the scheduler's responsibility, not this file's.
+// the evaluation clock (`current_eval_now`) and return an Excel serial
+// directly; volatile recalc semantics are the scheduler's responsibility, not
+// this file's.
 // DATEVALUE / TIMEVALUE parse profile-aware date/time strings (ISO, slash,
 // and locale-gated kanji forms — see the parser helpers below). Wareki
 // (Reiwa/Heisei/Showa/...) era dates are parsed by `parse_era_text` in
@@ -17,13 +17,12 @@
 #include "eval/builtins/datetime.h"
 
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <cstdint>
-#include <ctime>
 #include <limits>
 #include <string_view>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/builtins/text_format.h"
 #include "eval/coerce.h"
@@ -41,16 +40,11 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// All of the calendar builtins below share two helpers:
-//
-//   * `coerce_serial` reads a single scalar argument, coerces it to a
-//     number, and rejects negative values as `#NUM!`. The returned value
-//     is the raw serial (fractional part intact); callers floor it
-//     themselves when only the date component is relevant.
-//   * `days_in_month` (from `eval/date_time.h`) returns the last valid
-//     day-of-month for a given (year, month) pair, respecting the Gregorian
-//     leap rule. Used by EDATE / EOMONTH when clamping the day field after
-//     a month shift.
+// The calendar builtins below read their date arguments through
+// `coerce_bounded_date_arg`, which rejects serials outside the workbook's
+// date range as `#NUM!`. `days_in_month` (from `utils/date_time.h`) returns
+// the last valid day-of-month for a (year, month) pair under the Gregorian
+// leap rule; EDATE / EOMONTH use it to clamp the day after a month shift.
 using date_time::days_in_month;
 using date_time::kSecondsPerDay;
 
@@ -534,9 +528,12 @@ Expected<ShiftedMonth, ErrorCode> shift_months(const Value* args, bool date1904)
   return out;
 }
 
+MonthFields legacy_month_target(const ShiftedMonth& shifted) noexcept {
+  return shift_month_fields(date_time::legacy_1900_ymd(shifted.legacy_input_1900), shifted.months);
+}
+
 double legacy_edate_result(const ShiftedMonth& shifted) noexcept {
-  const date_time::YMD legacy_base = date_time::legacy_1900_ymd(shifted.legacy_input_1900);
-  const MonthFields legacy_target = shift_month_fields(legacy_base, shifted.months);
+  const MonthFields legacy_target = legacy_month_target(shifted);
   // The 1900-01-00 alias is one day before the first of its target month.
   const double serial_1900 = legacy_target.d == 0u
                                  ? date_time::serial_from_ymd(legacy_target.y, legacy_target.m, 1u, false) - 1.0
@@ -545,8 +542,7 @@ double legacy_edate_result(const ShiftedMonth& shifted) noexcept {
 }
 
 double legacy_eomonth_result(const ShiftedMonth& shifted) noexcept {
-  const date_time::YMD legacy_base = date_time::legacy_1900_ymd(shifted.legacy_input_1900);
-  const MonthFields legacy_target = shift_month_fields(legacy_base, shifted.months);
+  const MonthFields legacy_target = legacy_month_target(shifted);
   return date_time::serial_from_ymd(legacy_target.y, legacy_target.m, legacy_target.eom_d, false) - kDate1904EpochGap;
 }
 
@@ -873,14 +869,11 @@ Value Days360_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
   }
   const CoercedDateArg& start_n = dates.value().first;
   const CoercedDateArg& end_n = dates.value().second;
-  bool european = false;
-  if (arity >= 3) {
-    auto m = coerce_to_bool(args[2]);
-    if (!m) {
-      return Value::error(m.error());
-    }
-    european = m.value();
+  auto european_e = builtins_detail::read_optional_bool(args, arity, 2, false);
+  if (!european_e) {
+    return Value::error(european_e.error());
   }
+  const bool european = european_e.value();
   // The date component is taken after rounding to the nearest second, and serial 0 reads as 1900-01-00.
   const double start_f = std::floor(round_to_second(normal_date_serial(start_n, date1904)));
   const double end_f = std::floor(round_to_second(normal_date_serial(end_n, date1904)));

@@ -89,14 +89,6 @@ Value IsNa(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return Value::boolean(v.as_error() == ErrorCode::NA);
 }
 
-// NA() - zero-argument constant that returns the #N/A error. Used as the
-// explicit way to inject #N/A into a formula; typically paired with
-// IFNA / ISNA. Distinct from lookup-style #N/A which surfaces from
-// MATCH / VLOOKUP miss paths.
-Value Na(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return Value::error(ErrorCode::NA);
-}
-
 // --- Parity predicates --------------------------------------------------
 //
 // ISEVEN / ISODD reject Bool inputs with `#VALUE!` (Mac Excel 365 does
@@ -110,9 +102,9 @@ Value Na(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // Example: `ISEVEN(-2.9)` truncates to `-2` -> TRUE. `ISEVEN(TRUE)` ->
 // `#VALUE!`. `ISEVEN("3")` -> text "3" parses as number 3 -> FALSE.
 
-// Shared helper: coerces, truncates, and returns the low bit as a bool
-// under the caller-supplied predicate. Returns Expected so the caller can
-// propagate `#VALUE!` from a failed coercion or a rejected Bool argument.
+// Shared helper: coerces and truncates, and returns whether the result is
+// even. Returns Expected so the caller can propagate `#VALUE!` from a failed
+// coercion or a rejected Bool argument, and `#NUM!` for a non-finite input.
 Expected<bool, ErrorCode> truncated_is_even(const Value& v) {
   // Excel rejects Bool inputs to ISEVEN/ISODD outright, without the usual
   // TRUE->1 / FALSE->0 coercion.
@@ -223,20 +215,20 @@ Value Info(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   if (!text) {
     return Value::error(text.error());
   }
-  const std::string key = strings::to_ascii_lower(text.value());
+  const std::string_view key = text.value();
   std::string_view result;
-  if (key == "directory") {
+  if (strings::case_insensitive_eq(key, "directory")) {
     result = "/";
-  } else if (key == "numfile") {
+  } else if (strings::case_insensitive_eq(key, "numfile")) {
     // The single bound workbook counts as one open file.
     return Value::number(1.0);
-  } else if (key == "osversion") {
+  } else if (strings::case_insensitive_eq(key, "osversion")) {
     result = "Formulon";
-  } else if (key == "recalc") {
+  } else if (strings::case_insensitive_eq(key, "recalc")) {
     result = "Automatic";
-  } else if (key == "release") {
+  } else if (strings::case_insensitive_eq(key, "release")) {
     result = "Formulon 0.1";
-  } else if (key == "system") {
+  } else if (strings::case_insensitive_eq(key, "system")) {
     // Excel's conventional fallback on hosts without OS introspection.
     // Mac Excel ja-JP returns "mac"; we diverge intentionally (see note
     // above).
@@ -262,7 +254,8 @@ void register_info_builtins(FunctionRegistry& registry) {
       {"ISERROR", 1u, 1u, &IsError, false},
       {"ISERR", 1u, 1u, &IsErr, false},
       {"ISNA", 1u, 1u, &IsNa, false},
-      {"NA", 0u, 0u, &Na},
+      // NA() injects #N/A explicitly; typically paired with IFNA / ISNA.
+      {"NA", 0u, 0u, &builtins_detail::fixed_error_stub<ErrorCode::NA>},
       builtins_detail::analysis_toolpak({"ISEVEN", 1u, 1u, &IsEven}),
       builtins_detail::analysis_toolpak({"ISODD", 1u, 1u, &IsOdd}),
       {"ISNONTEXT", 1u, 1u, &IsNonText, false},

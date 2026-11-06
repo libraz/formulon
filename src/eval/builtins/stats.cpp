@@ -42,9 +42,7 @@
 #include "eval/stats/special_functions.h"
 #include "numeric_aggregate_kernels.h"
 #include "utils/arena.h"
-#include "utils/cancellation_snap.h"
 #include "utils/index_sort.h"
-#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {
@@ -142,12 +140,9 @@ double mean_of(const std::vector<double>& xs) noexcept {
 // `square_root = true` selects the stdev branch. Empty / single-element
 // inputs collapse to `#DIV/0!` per the relevant Excel rule.
 static Value variance_or_stdev(const std::vector<double>& xs, bool sample, bool square_root) {
-  if (sample ? xs.size() < 2u : xs.empty()) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const double variance = numeric_aggregate_kernels::dispersion_variance(xs, sample);
-  const double r = square_root ? std::sqrt(variance) : variance;
-  return to_finite_value(r);
+  return numeric_aggregate_kernels::value_from_kernel_result(square_root
+                                                                 ? numeric_aggregate_kernels::run_stdev(xs, sample)
+                                                                 : numeric_aggregate_kernels::run_variance(xs, sample));
 }
 
 Value percentile_inc_sorted(const std::vector<double>& xs, double k) {
@@ -257,16 +252,7 @@ static Value AverageA(const Value* args, std::uint32_t arity, Arena& /*arena*/) 
   if (!collected) {
     return Value::error(collected.error());
   }
-  const std::vector<double>& xs = collected.value();
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Div0);
-  }
-  FinalStepSnapSum sum;
-  for (double x : xs) {
-    sum.add(x);
-  }
-  const double r = flush_subnormal(sum.result() / static_cast<double>(xs.size()));
-  return to_finite_value(r);
+  return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::run_average(collected.value()));
 }
 
 static Value extreme_a(const Value* args, std::uint32_t arity, bool want_max) {
@@ -274,17 +260,9 @@ static Value extreme_a(const Value* args, std::uint32_t arity, bool want_max) {
   if (!collected) {
     return Value::error(collected.error());
   }
-  const std::vector<double>& xs = collected.value();
-  if (xs.empty()) {
-    return Value::number(0.0);
-  }
-  double best = xs[0];
-  for (std::size_t i = 1; i < xs.size(); ++i) {
-    if (want_max ? xs[i] > best : xs[i] < best) {
-      best = xs[i];
-    }
-  }
-  return to_finite_value(best);
+  return numeric_aggregate_kernels::value_from_kernel_result(
+      want_max ? numeric_aggregate_kernels::run_max(collected.value())
+               : numeric_aggregate_kernels::run_min(collected.value()));
 }
 
 static Value MaxA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {

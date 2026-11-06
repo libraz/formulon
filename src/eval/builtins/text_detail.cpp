@@ -183,6 +183,27 @@ Expected<TextWindowArgs, ErrorCode> read_text_window_args(const Value* args, std
   return TextWindowArgs{std::move(text.value()), start.value(), count.value(), std::move(new_text)};
 }
 
+bool uses_dbcs_profile() noexcept {
+  return locale_facts(current_eval_profile()).dbcs_codepage != DbcsCodepage::kNone;
+}
+
+Value left_in(const std::string& text, int n, TextIndexUnit unit, Arena& arena) {
+  if (n == 0) {
+    return Value::text({});
+  }
+  return Value::text(arena.intern(text_index_substring(text, 0u, static_cast<std::uint32_t>(n), unit)));
+}
+
+Value right_in(const std::string& text, int n, TextIndexUnit unit, Arena& arena) {
+  if (n == 0) {
+    return Value::text({});
+  }
+  const std::uint32_t total = text_index_length(text, unit);
+  const auto take = static_cast<std::uint32_t>(n);
+  const std::uint32_t start = take >= total ? 0u : total - take;
+  return Value::text(arena.intern(text_index_substring(text, start, take, unit)));
+}
+
 }  // namespace text_detail
 }  // namespace eval
 }  // namespace formulon

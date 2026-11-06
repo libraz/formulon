@@ -225,14 +225,11 @@ Value BinomDistRange(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const double n = std::floor(input.value().first);
   const double p = input.value().second;
   const double s1 = std::floor(input.value().third);
-  double s2 = s1;
-  if (arity >= 4) {
-    auto s2_arg = read_required_number(args, 3);
-    if (!s2_arg) {
-      return Value::error(s2_arg.error());
-    }
-    s2 = std::floor(s2_arg.value());
+  auto s2_arg = builtins_detail::read_optional_number(args, arity, 3, s1);
+  if (!s2_arg) {
+    return Value::error(s2_arg.error());
   }
+  const double s2 = std::floor(s2_arg.value());
   if (n < 0.0 || p < 0.0 || p > 1.0 || s1 < 0.0 || s1 > n || s2 < s1 || s2 > n) {
     return Value::error(ErrorCode::Num);
   }

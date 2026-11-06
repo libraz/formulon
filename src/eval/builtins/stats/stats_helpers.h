@@ -18,8 +18,10 @@
 
 #include "eval/builtins/numeric_helpers.h"
 #include "eval/coerce.h"
+#include "eval/stats/incomplete_gamma.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {
@@ -105,6 +107,13 @@ inline Expected<TripleCumulative, ErrorCode> read_triple_cumulative(const Value*
     return std::move(cum.error());
   }
   return TripleCumulative{input.value().first, input.value().second, input.value().third, cum.value()};
+}
+
+// Gamma PDF at x > 0 with shape `alpha` and scale `beta_scale`:
+// `dpois_raw(x / beta_scale, alpha) * (alpha / x)`. Callers reject x < 0,
+// alpha <= 0, beta_scale <= 0 up front.
+inline double GammaPdf(double x, double alpha, double beta_scale) noexcept {
+  return flush_subnormal(stats::dpois_raw(flush_subnormal(x / beta_scale), alpha) * flush_subnormal(alpha / x));
 }
 
 // Helper: compute `(mean, sum_of_squared_deviations)` over a numeric slice.

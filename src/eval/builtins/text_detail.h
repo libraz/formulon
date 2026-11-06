@@ -99,6 +99,13 @@ struct TextWindowArgs {
 // reads `start` through `read_snapped_int_arg`.
 Expected<TextWindowArgs, ErrorCode> read_text_window_args(const Value* args, std::uint32_t arity, bool snap_start);
 
+// True when the active profile's locale uses a double-byte code page.
+bool uses_dbcs_profile() noexcept;
+
+// LEFT / RIGHT of the first / last `n` positions of `text` counted in `unit`; `n == 0` is the empty string.
+Value left_in(const std::string& text, int n, TextIndexUnit unit, Arena& arena);
+Value right_in(const std::string& text, int n, TextIndexUnit unit, Arena& arena);
+
 // DBCS byte cost of one code point: 1 for ASCII, the per-code-point
 // width of the code page's locale for the BMP (`dbcs_width_toggles`), and 2
 // for everything else (including characters the code page cannot encode,

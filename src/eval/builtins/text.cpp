@@ -92,7 +92,7 @@ Value Trim(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
     return Value::error(text.error());
   }
   const std::string& src = text.value();
-  const bool dbcs = locale_facts(current_eval_profile()).dbcs_codepage != DbcsCodepage::kNone;
+  const bool dbcs = text_detail::uses_dbcs_profile();
   // Detects U+3000 (UTF-8: 0xE3 0x80 0x80) starting at byte index `i` in
   // src. The bound is written `i + 3 <= src.size()` rather than the
   // equivalent `i + 2 < src.size()` so the "we need to read three bytes
@@ -160,12 +160,7 @@ Value Left(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!in) {
     return Value::error(in.error());
   }
-  const std::string& text = in.value().text;
-  const int n = in.value().count;
-  if (n == 0) {
-    return Value::text({});
-  }
-  return Value::text(arena.intern(text_index_substring(text, 0u, static_cast<std::uint32_t>(n), text_index_unit())));
+  return text_detail::left_in(in.value().text, in.value().count, text_index_unit(), arena);
 }
 
 // RIGHT(text, [n]) - last `n` positions (`text_index_unit`). Default n=1. n<0 -> `#VALUE!`.
@@ -174,16 +169,7 @@ Value Right(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!in) {
     return Value::error(in.error());
   }
-  const std::string& text = in.value().text;
-  const int n = in.value().count;
-  if (n == 0) {
-    return Value::text({});
-  }
-  const TextIndexUnit unit = text_index_unit();
-  const std::uint32_t total = text_index_length(text, unit);
-  const auto take = static_cast<std::uint32_t>(n);
-  const std::uint32_t start = take >= total ? 0u : total - take;
-  return Value::text(arena.intern(text_index_substring(text, start, take, unit)));
+  return text_detail::right_in(in.value().text, in.value().count, text_index_unit(), arena);
 }
 
 // REPT(text, n) - repeat. n<0 -> `#VALUE!`. Excel caps the result length at

@@ -186,8 +186,7 @@ Value PoissonDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
 // scale 2, `dpois_raw(x / 2, df / 2) * (df / 2) / x`. Callers pre-reject
 // `df < 1` and `x < 0` and handle the `x == 0` boundary.
 static double ChisqPdf(double x, double df) noexcept {
-  const double a = 0.5 * df;
-  return flush_subnormal(stats::dpois_raw(flush_subnormal(x / 2.0), a) * flush_subnormal(a / x));
+  return GammaPdf(x, 0.5 * df, 2.0);
 }
 
 // Reads `(x, df)` with `df` floored toward -inf; a floored `df` outside

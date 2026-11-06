@@ -396,10 +396,8 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
         const std::size_t digits = tk.width;
         if (digits > 0) {
           out.push_back(facts.decimal_separator);
-          std::string fraction = std::to_string(fraction_ticks);
-          if (fraction.size() < meaningful_fraction_digits) {
-            fraction.insert(0, meaningful_fraction_digits - fraction.size(), '0');
-          }
+          const std::string fraction = std::to_string(fraction_ticks);
+          append_zero_pad_dbnum(out, dbnum, fraction.size(), meaningful_fraction_digits);
           append_chars_dbnum(out, dbnum, fraction);
           for (std::size_t k = meaningful_fraction_digits; k < digits; ++k) {
             append_digit_dbnum(out, dbnum, '0');

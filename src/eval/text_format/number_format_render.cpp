@@ -25,6 +25,7 @@
 #include "eval/eval_profile_scope.h"
 #include "eval/text_format/number_format_types.h"
 #include "eval/text_format/render_common.h"
+#include "eval/text_format/rounding.h"
 #include "excel_locale.h"
 
 namespace formulon {
@@ -183,7 +184,7 @@ bool decimal_digits_all_zero(std::string_view digits) noexcept {
 }
 
 void cap_integer_significant_digits(std::string* digits) {
-  constexpr std::size_t kSignificantDigits = 15u;
+  constexpr auto kSignificantDigits = static_cast<std::size_t>(kExcelSignificantDigits);
   if (digits->size() <= kSignificantDigits) {
     return;
   }

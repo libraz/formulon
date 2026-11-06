@@ -16,6 +16,12 @@ namespace builtins_detail {
 
 using BuiltinImpl = Value (*)(const Value*, std::uint32_t, Arena&);
 
+/// Impl of a host-service stub: ignores its arguments and returns the fixed error `E`.
+template <ErrorCode E>
+Value fixed_error_stub(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  return Value::error(E);
+}
+
 struct BuiltinRegistration {
   std::string_view name;
   std::uint32_t min_arity;

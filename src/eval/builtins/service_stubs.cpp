@@ -60,74 +60,20 @@
 
 namespace formulon {
 namespace eval {
-namespace {
-
-// Inline image embedding requires a rendering host; Formulon is a pure
-// calculation engine, so we always return #VALUE!. Same pattern as
-// WEBSERVICE in `src/eval/builtins/web.cpp`.
-Value Image(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return Value::error(ErrorCode::Value);
-}
-
-// RTD dispatches to an external Real-Time-Data COM server; Formulon has
-// no provider runtime, so the stub returns #N/A. Excel itself emits
-// #N/A when the RTD server is unreachable, so this matches the offline
-// surface for formulas that gracefully handle a missing feed.
-Value Rtd(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return Value::error(ErrorCode::NA);
-}
-
-// Cloud translation service; Formulon does no network I/O, so the stub
-// returns #NAME? to mirror Excel's own behaviour when the translate
-// service is unavailable (function-unknown surface). Same pattern as PY
-// in `src/eval/builtins/web.cpp`.
-Value Translate(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return Value::error(ErrorCode::Name);
-}
-
-// Language-detection service shares Translate's transport, so the stub
-// surfaces #NAME? for the same reason.
-Value DetectLanguage(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return Value::error(ErrorCode::Name);
-}
-
-// Copilot dispatches prompts to an external LLM backend; Formulon does
-// not embed one. #NAME? matches Excel's offline-service behaviour.
-Value Copilot(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return Value::error(ErrorCode::Name);
-}
-
-}  // namespace
-
 void register_service_stub_builtins(FunctionRegistry& registry) {
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
       // IMAGE(source, [alt_text], [sizing], [height], [width]) -- arity 1..5.
-      {"IMAGE", 1u, 5u, &Image},
+      {"IMAGE", 1u, 5u, &builtins_detail::fixed_error_stub<ErrorCode::Value>},
       // RTD(progID, server, topic1, [topic2], ...).
-      {"RTD", 3u, kVariadic, &Rtd},
+      {"RTD", 3u, kVariadic, &builtins_detail::fixed_error_stub<ErrorCode::NA>},
       // TRANSLATE(text, [source_lang], [target_lang]) -- both languages are
       // optional at entry in Excel 365.
-      {"TRANSLATE", 1u, 3u, &Translate},
-      {"DETECTLANGUAGE", 1u, 1u, &DetectLanguage},
+      {"TRANSLATE", 1u, 3u, &builtins_detail::fixed_error_stub<ErrorCode::Name>},
+      {"DETECTLANGUAGE", 1u, 1u, &builtins_detail::fixed_error_stub<ErrorCode::Name>},
       // COPILOT(prompt, [context...]) -- variadic context cells.
-      {"COPILOT", 1u, kVariadic, &Copilot},
+      {"COPILOT", 1u, kVariadic, &builtins_detail::fixed_error_stub<ErrorCode::Name>},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
-  // GETPIVOTDATA(data_field, pivot_anchor, [field, item, ...]) is
-  // registered through the lazy dispatch table in `tree_walker.cpp`
-  // (entry: GETPIVOTDATA -> eval_getpivotdata_lazy). The lazy path
-  // recovers the anchor cell's (sheet, row, col) coordinates from the
-  // un-evaluated Reference AST; the eager registry would flatten the
-  // argument to a Value before the impl could resolve the pivot table.
-  // PHONETIC(reference) is registered through the lazy dispatch table in
-  // `tree_walker.cpp` (entry: PHONETIC -> eval_phonetic_lazy). The lazy
-  // path reads the referenced cell's `<rPh>` annotation off the
-  // un-evaluated Reference AST; the eager registry would flatten the
-  // argument to a Value before the impl could consult phonetic metadata.
-  // ISOMITTED(argument) is registered through the lazy dispatch table in
-  // `tree_walker.cpp` (entry: ISOMITTED -> eval_isomitted_lazy). The lazy
-  // path inspects the argument's AST shape and the active `NameEnv`'s
-  // omitted flag, which the eager registry cannot see.
 }
 
 }  // namespace eval

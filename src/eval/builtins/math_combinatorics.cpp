@@ -28,6 +28,7 @@
 #include "eval/function_registry.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/strings.h"
 #include "utils/utf8_length.h"
 #include "value.h"
 
@@ -98,6 +99,9 @@ Expected<std::uint64_t, ErrorCode> read_nonneg_uint_arg(const Value* args, std::
 // Largest `n` the combinatorial functions accept; `n` at or above 2^31 - 1 is #NUM!.
 constexpr std::uint64_t kMaxCombinatorialN = 2147483646U;
 
+// 2^53: the exclusive bound of the integers a double holds exactly.
+constexpr std::uint64_t kTwoPow53 = static_cast<std::uint64_t>(1) << 53u;
+
 struct UIntPair {
   std::uint64_t first;
   std::uint64_t second;
@@ -105,12 +109,11 @@ struct UIntPair {
 
 // Reads the (n, k) pair of COMBIN / COMBINA / PERMUT / PERMUTATIONA.
 Expected<UIntPair, ErrorCode> read_nonneg_uint_pair(const Value* args) {
-  constexpr std::uint64_t max = static_cast<std::uint64_t>(1) << 53u;
-  auto first = read_nonneg_uint_arg(args, 0, max);
+  auto first = read_nonneg_uint_arg(args, 0, kTwoPow53);
   if (!first) {
     return std::move(first.error());
   }
-  auto second = read_nonneg_uint_arg(args, 1, max);
+  auto second = read_nonneg_uint_arg(args, 1, kTwoPow53);
   if (!second) {
     return std::move(second.error());
   }
@@ -436,18 +439,6 @@ inline int roman_char_value(char c) {
   }
 }
 
-// Strips surrounding spaces and tabs only (not the wider set `strings::trim`
-// accepts), the padding ARABIC and DECIMAL tolerate.
-inline std::string_view trim_space_tab(std::string_view s) {
-  while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) {
-    s.remove_prefix(1);
-  }
-  while (!s.empty() && (s.back() == ' ' || s.back() == '\t')) {
-    s.remove_suffix(1);
-  }
-  return s;
-}
-
 // ARABIC(text) - Roman numeral string -> integer. Accepts modern
 // subtractive forms (MCMXCIX = 1999) as well as additive forms (MDCCCCLXXXXVIIII).
 // Optional leading '-' produces a negative result. Empty / whitespace-only
@@ -458,7 +449,7 @@ Value Arabic(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(text.error());
   }
   // Excel is tolerant of surrounding padding.
-  const std::string_view s = trim_space_tab(text.value());
+  const std::string_view s = strings::trim_blanks(text.value());
   std::size_t lo = 0;
   const std::size_t hi = s.size();
   if (lo == hi) {
@@ -594,7 +585,7 @@ constexpr double kMaxBaseMinLength = 255.0;
 // DECIMAL accepts text of at most this many UTF-16 units.
 constexpr std::uint32_t kMaxDecimalTextUnits = 255U;
 // Largest integer BASE renders (2^53 - 1).
-constexpr double kMaxBaseNumber = static_cast<double>((static_cast<std::uint64_t>(1) << 53u) - 1);
+constexpr double kMaxBaseNumber = static_cast<double>(kTwoPow53 - 1);
 
 // BASE(num, radix, [min_len]) - non-negative integer -> string in `radix`
 // (2..36). Pads with leading '0' to `min_len`. num must fit in 2^53-1;

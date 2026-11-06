@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/date_text_parse.h"
@@ -210,14 +211,11 @@ Value Fixed_(const Value* args, std::uint32_t arity, Arena& arena) {
     return Value::error(decimals_e.error());
   }
   const int decimals = decimals_e.value();
-  bool no_commas = false;
-  if (arity >= 3) {
-    auto parsed = coerce_to_bool(args[2]);
-    if (!parsed) {
-      return Value::error(parsed.error());
-    }
-    no_commas = parsed.value();
+  auto no_commas_e = builtins_detail::read_optional_bool(args, arity, 2, false);
+  if (!no_commas_e) {
+    return Value::error(no_commas_e.error());
   }
+  const bool no_commas = no_commas_e.value();
   const double value = ::formulon::text_format::round_display_decimal(num.value(), decimals);
   const std::string fmt = build_decimal_body(decimals, no_commas);
   return apply_text_number_format(value, fmt, arena);

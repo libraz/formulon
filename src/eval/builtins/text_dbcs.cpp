@@ -24,10 +24,6 @@ namespace eval {
 
 namespace {
 
-bool uses_dbcs_profile() noexcept {
-  return locale_facts(current_eval_profile()).dbcs_codepage != DbcsCodepage::kNone;
-}
-
 DbcsCodepage dbcs_codepage() noexcept {
   return locale_facts(current_eval_profile()).dbcs_codepage;
 }
@@ -189,7 +185,7 @@ Value leftb_utf16(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!read_byte_budget_args(args, arity, &src, &budget, &early)) {
     return early;
   }
-  return Value::text(arena.intern(utf16_substring(src, 0u, static_cast<std::uint32_t>(budget))));
+  return text_detail::left_in(src, static_cast<int>(budget), TextIndexUnit::kUtf16Units, arena);
 }
 
 Value rightb_utf16(const Value* args, std::uint32_t arity, Arena& arena) {
@@ -199,9 +195,7 @@ Value rightb_utf16(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!read_byte_budget_args(args, arity, &src, &budget, &early)) {
     return early;
   }
-  const std::uint32_t total = utf16_units_in(src);
-  const std::uint32_t take = budget >= total ? total : static_cast<std::uint32_t>(budget);
-  return Value::text(arena.intern(utf16_substring(src, total - take, take)));
+  return text_detail::right_in(src, static_cast<int>(budget), TextIndexUnit::kUtf16Units, arena);
 }
 
 }  // namespace
@@ -342,7 +336,6 @@ Value Midb(const Value* args, std::uint32_t arity, Arena& arena) {
   out.reserve(src.size());
   std::uint64_t used = 0;
   bool started = false;
-  bool head_pad = false;
 
   while (i < src.size()) {
     const Utf8Step step = next_utf8_step(src, i, codepage);
@@ -364,7 +357,6 @@ Value Midb(const Value* args, std::uint32_t arity, Arena& arena) {
         // Start falls strictly inside a multi-byte character. Emit a head
         // space pad consuming 1 byte of budget, skip the remainder of this
         // character, and continue.
-        head_pad = true;
         out.push_back(' ');
         used += 1;
         cursor += cost;
@@ -393,7 +385,7 @@ Value Midb(const Value* args, std::uint32_t arity, Arena& arena) {
     }
   }
   // If the start was past the end of the text we emit nothing.
-  if (!started && !head_pad) {
+  if (!started) {
     return Value::text({});
   }
   return Value::text(arena.intern(out));

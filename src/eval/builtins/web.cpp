@@ -295,41 +295,18 @@ Value FilterXml(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return Value::array(arr);
 }
 
-// ---------------------------------------------------------------------------
-// WEBSERVICE(url)
-// ---------------------------------------------------------------------------
-//
-// Returns #VALUE!. Formulon is a pure calculation engine and does not
-// perform network I/O under any circumstances; there is no HTTP client in
-// the dependency set (see the strict dependency policy in CLAUDE.md). The
-// argument is still evaluated by the dispatcher so an error there
-// propagates normally.
-Value WebService(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return Value::error(ErrorCode::Value);
-}
-
-// ---------------------------------------------------------------------------
-// PY(expression)
-// ---------------------------------------------------------------------------
-//
-// Always returns #NAME?. Excel's PY function dispatches the expression to
-// a hosted Python runtime; Formulon does not embed one. Returning #NAME?
-// matches Excel's own behaviour when the cloud Python service is
-// unavailable (function-unknown surface).
-Value Py(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return Value::error(ErrorCode::Name);
-}
-
 }  // namespace
 
 void register_web_builtins(FunctionRegistry& registry) {
   // Stubs: eager dispatch still propagates argument errors (default
-  // propagate_errors = true) before the fixed return fires.
+  // propagate_errors = true) before the fixed return fires. Formulon does no
+  // network I/O and embeds no Python runtime, so WEBSERVICE is `#VALUE!` and
+  // PY is `#NAME?` (Excel's offline-service surface).
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
       {"ENCODEURL", 1u, 1u, &EncodeUrl},
       builtins_detail::absent_on_mac(builtins_detail::array_result({"FILTERXML", 2u, 2u, &FilterXml})),
-      builtins_detail::absent_on_mac({"WEBSERVICE", 1u, 1u, &WebService}),
-      {"PY", 1u, 1u, &Py},
+      builtins_detail::absent_on_mac({"WEBSERVICE", 1u, 1u, &builtins_detail::fixed_error_stub<ErrorCode::Value>}),
+      {"PY", 1u, 1u, &builtins_detail::fixed_error_stub<ErrorCode::Name>},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }

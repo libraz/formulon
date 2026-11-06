@@ -106,12 +106,6 @@ Value Address(const Value* args, std::uint32_t arity, Arena& arena) {
   }
   const int row = row_exp.value();
   const int col = col_exp.value();
-  if (row < 1 || static_cast<std::uint32_t>(row) > Sheet::kMaxRows) {
-    return Value::error(ErrorCode::Value);
-  }
-  if (col < 1 || static_cast<std::uint32_t>(col) > Sheet::kMaxCols) {
-    return Value::error(ErrorCode::Value);
-  }
 
   auto abs_exp = read_optional_int(args, arity, 2, 1);
   if (!abs_exp) {
@@ -170,12 +164,9 @@ Value Address(const Value* args, std::uint32_t arity, Arena& arena) {
     }
     out.append(std::to_string(row));
   } else {
-    // R1C1 style. Absolute axes are written with the absolute index;
-    // relative axes are written with `[offset]` brackets. ADDRESS has no
-    // context to compute a real offset, so a relative axis emits `R[0]`
-    // / `C[0]` when the numeric value is read as an absolute coordinate
-    // and the caller still asked for the relative form — this matches
-    // Excel's "R[0]C[0] relative to the current cell" semantics.
+    // R1C1 style. Absolute axes are written with the index; relative axes
+    // write the same index in brackets, since ADDRESS has no current cell to
+    // offset from.
     const LocaleFacts& facts = locale_facts(current_eval_profile());
     append_r1c1_axis(out, facts, facts.r1c1_row, row, row_abs);
     append_r1c1_axis(out, facts, facts.r1c1_col, col, col_abs);
