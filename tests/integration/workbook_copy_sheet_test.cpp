@@ -19,6 +19,7 @@
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "io/auto_filter_xml.h"
+#include "io/ooxml_defs.h"
 #include "io/ooxml_reader.h"
 #include "io/xlsb/reader.h"
 #include "passthrough_part.h"
@@ -511,9 +512,16 @@ TEST(WorkbookCopySheet, UnsupportedRefusedWithoutChange) {
     ExpectRefused(wb, 0, "slicer");
   }
   {
-    // An .xlsb sheet with a drawing keeps the drawing relationship unmodelled.
+    // An .xlsb drawing the reader could not lift stays an unmodelled
+    // drawing relationship.
     Workbook wb = Load("excel", "chart_xlsb.xlsb");
-    ExpectRefused(wb, 0, "xlsb sheet with a drawing");
+    Sheet& sheet = wb.sheet(0);
+    ASSERT_FALSE(sheet.drawing_rel_target().empty());
+    std::vector<UnknownRelationship> rels = sheet.unknown_relationships();
+    rels.push_back(UnknownRelationship{"rId9", std::string(io::kRelDrawing), sheet.drawing_rel_target(), false});
+    sheet.set_unknown_relationships(std::move(rels));
+    sheet.set_drawing_rel_target(std::string());
+    ExpectRefused(wb, 0, "xlsb sheet with an unlifted drawing");
   }
 }
 
