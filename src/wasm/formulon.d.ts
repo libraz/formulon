@@ -3083,7 +3083,7 @@ export interface AutoFilterColumn {
   dynamicType: DynamicFilterType;
   /** The dynamic filter's `val`; `null` when absent. */
   dynVal: number | null;
-  /** The dynamic filter's `maxVal`; `null` when absent. */
+  /** The dynamic filter's `<dynamicFilter maxVal>`; `null` when absent. */
   dynMaxVal: number | null;
   valIso: string;
   maxValIso: string;
@@ -3094,8 +3094,7 @@ export interface AutoFilterColumn {
   iconId: number | null;
 }
 
-/** One `<sortCondition>`. `sortBy` is a `SortBy`. `dxfId` is read only when `hasDxfId`, `iconId` only when
- *  `hasIconId`. */
+/** One `<sortCondition>`. `sortBy` is a `SortBy`. */
 export interface AutoFilterSortCondition {
   ref: CellRect;
   descending: boolean;

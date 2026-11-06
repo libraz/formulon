@@ -566,7 +566,7 @@ class Value:
 
 @dataclass(frozen=True)
 class Cell:
-    """One written coordinate, as ``Workbook.get_cell_at()`` returns it."""
+    """One written coordinate, as ``Sheet.get_cell_at()`` returns it."""
 
     row: int
     col: int
@@ -3645,7 +3645,7 @@ class PivotCacheOptions:
 
 @dataclass(frozen=True)
 class PivotCalculatedItem:
-    """One calculated item, as read by :meth:`Workbook.get_pivot_cache_calculated_item`.
+    """One calculated item, as read by :meth:`Workbook.list_pivot_cache_calculated_items`.
 
     ``formula`` has no leading ``=``; ``scoped`` is true for an entry read from
     a file that applies the formula only where the item meets items of other fields.
@@ -3721,7 +3721,7 @@ def _local_sheet_id(value: Optional[int]) -> int:
 
 
 def _print_titles_from(d: Dict[str, int]) -> PrintTitles:
-    """Decode an ``fm_print_titles_t``; an axis whose flag is clear reads ``None``."""
+    """Decode the C print-titles record; an axis whose flag is clear reads ``None``."""
     return PrintTitles(
         rows=Span(d["first_row"], d["last_row"]) if d["has_rows"] else None,
         columns=Span(d["first_col"], d["last_col"]) if d["has_cols"] else None,
