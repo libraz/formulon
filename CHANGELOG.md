@@ -433,6 +433,12 @@ still raises `ValueError`. `formulon.UNCHANGED` is a public name, and
   `TypeError` for any other key. Several ignored every unknown key, and
   `updatePivotField` refused `axis`.
 - CLI `dump --metadata` prints defined-name formulas with a leading `=`.
+- A drawing loaded from `.xlsb` (pictures and charts linked by one drawing
+  record) is editable like one loaded from `.xlsx`: `addImage`, `addChart`
+  and the chart setters succeed instead of failing with `IoDrawingUnparseable`,
+  `copySheet` copies it, and row and column inserts move its anchors. A
+  drawing the reader cannot lift stays read-only. Its relationship id may
+  change on save.
 
 ### Name migration
 
@@ -1662,6 +1668,10 @@ through its operation instead.
 
 ### Added
 
+- Pictures and charts are written to `.xlsb` and read back as model drawings,
+  so `listDrawingObjects` and `getChart` work after an XLSB round trip. A
+  drawing holding other graphic frames (slicers, SmartArt) is not written and
+  counts in `deferredFeatureCount`.
 - `FM_VERSION_MAJOR`, `FM_VERSION_MINOR` and `FM_VERSION_PATCH` in
   `formulon_c.h` give the library version at compile time. The header opens
   with a quick start, the five pointer lifetime classes, the last-error
