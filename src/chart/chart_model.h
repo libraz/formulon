@@ -47,6 +47,14 @@ struct SheetRect {
   std::uint32_t right = 0;
 };
 
+/// Number of cells in `r`; 0 when the rectangle is empty (top > bottom or left > right).
+inline std::uint64_t cell_count(const SheetRect& r) {
+  if (r.top > r.bottom || r.left > r.right) {
+    return 0;
+  }
+  return (static_cast<std::uint64_t>(r.bottom) - r.top + 1U) * (static_cast<std::uint64_t>(r.right) - r.left + 1U);
+}
+
 // ---------------------------------------------------------------------------
 // Enumerations (numeric values are part of the binding surface)
 // ---------------------------------------------------------------------------

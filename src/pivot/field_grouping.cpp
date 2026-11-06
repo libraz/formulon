@@ -706,16 +706,24 @@ void remove_group_pivot_fields(PivotTable& table, std::size_t base, std::size_t 
   fields.resize(first);
 }
 
-void invalidate_tables(Workbook& wb, std::uint32_t cache_id) {
+// Calls `fn(PivotTable&)` for every pivot table on cache `cache_id`.
+template <class Fn>
+void for_each_cache_table(Workbook& wb, std::uint32_t cache_id, Fn&& fn) {
   for (std::size_t si = 0; si < wb.sheet_count(); ++si) {
     for (std::unique_ptr<PivotTable>& table : wb.sheet(si).mutable_pivot_tables()) {
       if (table != nullptr && table->pivot_cache_id() == cache_id) {
-        table->clear_last_result();
-        table->clear_span_authored();
-        table->mark_layout_dirty();
+        fn(*table);
       }
     }
   }
+}
+
+void invalidate_tables(Workbook& wb, std::uint32_t cache_id) {
+  for_each_cache_table(wb, cache_id, [](PivotTable& table) {
+    table.clear_last_result();
+    table.clear_span_authored();
+    table.mark_layout_dirty();
+  });
   wb.mark_all_formulas_dirty();
 }
 
@@ -751,13 +759,8 @@ Expected<GroupTarget, Error> resolve_group_target(Workbook& wb, std::size_t shee
 // Takes the group fields over `base` off every pivot on `cache` and out of
 // the cache; `run` is their checked position.
 void remove_date_group(Workbook& wb, PivotCache& cache, std::size_t base, const GroupRun& run) {
-  for (std::size_t si = 0; si < wb.sheet_count(); ++si) {
-    for (std::unique_ptr<PivotTable>& table : wb.sheet(si).mutable_pivot_tables()) {
-      if (table != nullptr && table->pivot_cache_id() == cache.cache_id()) {
-        remove_group_pivot_fields(*table, base, run.first);
-      }
-    }
-  }
+  for_each_cache_table(wb, cache.cache_id(),
+                       [&](PivotTable& table) { remove_group_pivot_fields(table, base, run.first); });
   (void)ungroup_cache_field(cache, base);
 }
 
@@ -917,14 +920,10 @@ Expected<void, Error> set_date_group(Workbook& wb, std::size_t sheet, std::size_
   if (!first) {
     return first.error();
   }
-  for (std::size_t si = 0; si < wb.sheet_count(); ++si) {
-    for (std::unique_ptr<PivotTable>& table : wb.sheet(si).mutable_pivot_tables()) {
-      if (table != nullptr && table->pivot_cache_id() == cache.cache_id()) {
-        add_group_pivot_fields(*table, cache, base, first.value(), table.get() == target.value().table);
-        resolve_pivot_names(*table, cache);
-      }
-    }
-  }
+  for_each_cache_table(wb, cache.cache_id(), [&](PivotTable& table) {
+    add_group_pivot_fields(table, cache, base, first.value(), &table == target.value().table);
+    resolve_pivot_names(table, cache);
+  });
   invalidate_tables(wb, cache.cache_id());
   return Expected<void, Error>::Ok();
 }

@@ -117,8 +117,7 @@ class Reader {
     if (multi_level && areas.size() == 1 && areas[0].top != areas[0].bottom && areas[0].left != areas[0].right) {
       const SheetRect r = trim_to_populated(wb_, areas[0]);
       if (r.top <= r.bottom && r.left <= r.right) {
-        const std::uint64_t cells =
-            (static_cast<std::uint64_t>(r.bottom) - r.top + 1U) * (static_cast<std::uint64_t>(r.right) - r.left + 1U);
+        const std::uint64_t cells = cell_count(r);
         if (cells > kMaxRangeExpansionCells) {
           return chart_cell_budget_error(cells);
         }
@@ -134,8 +133,7 @@ class Reader {
       if (r.top > r.bottom || r.left > r.right) {
         continue;
       }
-      const std::uint64_t area_cells =
-          (static_cast<std::uint64_t>(r.bottom) - r.top + 1U) * (static_cast<std::uint64_t>(r.right) - r.left + 1U);
+      const std::uint64_t area_cells = cell_count(r);
       if (area_cells > kMaxRangeExpansionCells - std::min(cells, kMaxRangeExpansionCells)) {
         return chart_cell_budget_error(cells + area_cells);
       }

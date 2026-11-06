@@ -109,13 +109,6 @@ struct Pos {
   std::uint32_t col;
 };
 
-std::uint64_t rect_cells(const SheetRect& r) {
-  if (r.top > r.bottom || r.left > r.right) {
-    return 0;
-  }
-  return (static_cast<std::uint64_t>(r.bottom) - r.top + 1U) * (static_cast<std::uint64_t>(r.right) - r.left + 1U);
-}
-
 class Gatherer {
  public:
   Gatherer(const Workbook& wb, bool vis_only) : wb_(wb), vis_only_(vis_only) {}
@@ -231,7 +224,7 @@ class Gatherer {
   bool build_levels(const SheetRect& r, bool hide, Cache& cache) const {
     const SheetRect t = trim_to_populated(wb_, r);
     ResourceBudget cells(kMaxRangeExpansionCells);
-    if (!cells.consume(rect_cells(t))) {
+    if (!cells.consume(cell_count(t))) {
       return false;
     }
     const CategoryAxis axis = category_axis(r);
@@ -279,7 +272,7 @@ class Gatherer {
     ResourceBudget cells(kMaxRangeExpansionCells);
     for (const SheetRect& area : areas) {
       trimmed.push_back(trim_to_populated(wb_, area));
-      if (!cells.consume(rect_cells(trimmed.back()))) {
+      if (!cells.consume(cell_count(trimmed.back()))) {
         return false;
       }
     }
@@ -299,10 +292,8 @@ class Gatherer {
           }
         }
       }
-      const std::uint64_t full =
-          static_cast<std::uint64_t>(area.bottom - area.top + 1U) * (area.right - area.left + 1U);
-      const std::uint64_t seen =
-          r.top > r.bottom ? 0U : static_cast<std::uint64_t>(r.bottom - r.top + 1U) * (r.right - r.left + 1U);
+      const std::uint64_t full = cell_count(area);
+      const std::uint64_t seen = cell_count(r);
       had_cells = had_cells || seen > 0;
       next += kept + (full - seen);
     }

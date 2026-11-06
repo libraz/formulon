@@ -115,6 +115,13 @@ void append_empty_value_cell(PivotCells& cells, std::uint32_t row, std::uint32_t
   append_cell(cells, row, col, Value::blank(), PivotCellKind::Blank, PivotCellRole::DataValue, 0);
 }
 
+// `count` empty value cells in `row`, starting at `first_col`.
+void append_empty_value_cells(PivotCells& cells, std::uint32_t row, std::uint32_t first_col, std::size_t count) {
+  for (std::size_t i = 0; i < count; ++i) {
+    append_empty_value_cell(cells, row, first_col + static_cast<std::uint32_t>(i));
+  }
+}
+
 std::string plan_subtotal_label(const LayoutPlan& plan, const std::string& group) {
   return plan.options.subtotal_prefix + group + plan.subtotal_suffix;
 }
@@ -589,9 +596,7 @@ void emit_body_rows(const LayoutPlan& plan, PivotCells& cells) {
           set_compact_indent(plan, cells, 0);
         }
       }
-      for (std::size_t c_entry = 0; c_entry < col_entries.size(); ++c_entry) {
-        append_empty_value_cell(cells, row, data_left + static_cast<std::uint32_t>(c_entry));
-      }
+      append_empty_value_cells(cells, row, data_left, col_entries.size());
       continue;
     }
     const std::vector<std::string>& labels = entry.labels;
@@ -694,9 +699,7 @@ void emit_body_rows(const LayoutPlan& plan, PivotCells& cells) {
     }
     if (entry.kind == EntryKind::Group || plan.valueless) {
       // A heading row without its subtotal, or a report without data fields, spans the data area as blanks.
-      for (std::size_t c_entry = 0; c_entry < col_entries.size(); ++c_entry) {
-        append_empty_value_cell(cells, row, data_left + static_cast<std::uint32_t>(c_entry));
-      }
+      append_empty_value_cells(cells, row, data_left, col_entries.size());
       continue;
     }
     for (std::size_t c_entry = 0; c_entry < col_entries.size(); ++c_entry) {
@@ -750,9 +753,7 @@ void emit_row_totals_strip(const LayoutPlan& plan, PivotCells& cells) {
     const AxisEntry& entry = row_entries[r_entry];
     const std::uint32_t row = data_top + static_cast<std::uint32_t>(r_entry);
     if (entry.kind == EntryKind::Group || entry.kind == EntryKind::Blank || plan.valueless) {
-      for (std::size_t s = 0; s < total_strip_cols; ++s) {
-        append_empty_value_cell(cells, row, total_left + static_cast<std::uint32_t>(s));
-      }
+      append_empty_value_cells(cells, row, total_left, total_strip_cols);
       continue;
     }
     for (std::size_t s = 0; s < total_strip_cols; ++s) {
@@ -830,9 +831,7 @@ void emit_col_totals_strip(const LayoutPlan& plan, PivotCells& cells) {
       }
     }
     if (plan.valueless) {
-      for (std::size_t c = 0; c < col_entries.size() + total_strip_cols; ++c) {
-        append_empty_value_cell(cells, total_row, data_left + static_cast<std::uint32_t>(c));
-      }
+      append_empty_value_cells(cells, total_row, data_left, col_entries.size() + total_strip_cols);
       continue;
     }
     for (std::size_t c_entry = 0; c_entry < col_entries.size(); ++c_entry) {
