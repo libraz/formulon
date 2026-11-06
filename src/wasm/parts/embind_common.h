@@ -376,6 +376,9 @@ JsCfMatch translate_cf_match(const fm_cf_match_t& m);
 /// Builds a `CellRect` `{firstRow, firstCol, lastRow, lastCol}` JS object.
 emscripten::val cell_rect_to_val(const fm_cell_rect_t& m);
 
+/// Builds a JS array of `CellRect` objects from `count` rectangles.
+emscripten::val cell_rects_to_val(const fm_cell_rect_t* rects, std::size_t count);
+
 /// Translates one `fm_pivot_cell_t` into a JS object suitable for
 /// inclusion in the pivotLayout `cells` array.
 emscripten::val pivot_cell_to_val(const fm_pivot_cell_t& cell);

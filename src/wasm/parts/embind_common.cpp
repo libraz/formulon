@@ -710,6 +710,14 @@ emscripten::val cell_rect_to_val(const fm_cell_rect_t& m) {
   return item;
 }
 
+emscripten::val cell_rects_to_val(const fm_cell_rect_t* rects, std::size_t count) {
+  emscripten::val arr = emscripten::val::array();
+  for (std::size_t i = 0; i < count; ++i) {
+    arr.call<void>("push", cell_rect_to_val(rects[i]));
+  }
+  return arr;
+}
+
 emscripten::val pivot_cell_to_val(const fm_pivot_cell_t& cell) {
   emscripten::val item = emscripten::val::object();
   item.set("row", cell.row);

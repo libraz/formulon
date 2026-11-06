@@ -133,11 +133,7 @@ emscripten::val JsWorkbook::getSheetPrintArea(uint32_t sheet) const {
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
-  emscripten::val ranges = emscripten::val::array();
-  for (size_t i = 0; i < count; ++i) {
-    ranges.call<void>("push", cell_rect_to_val(found[i]));
-  }
-  return ranges;
+  return cell_rects_to_val(found, count);
 }
 
 void JsWorkbook::setSheetPrintArea(uint32_t sheet, emscripten::val ranges) {

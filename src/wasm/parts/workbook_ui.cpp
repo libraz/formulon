@@ -124,11 +124,7 @@ emscripten::val JsWorkbook::getMergesInRange(uint32_t sheet, emscripten::val ran
   if (!succeeded(rc)) {
     return emscripten::val::undefined();
   }
-  emscripten::val arr = emscripten::val::array();
-  for (uint32_t i = 0; i < found.size(); ++i) {
-    arr.set(i, cell_rect_to_val(found[i]));
-  }
-  return arr;
+  return cell_rects_to_val(found.data(), found.size());
 }
 
 // ---- Comments ----------------------------------------------------------
@@ -257,11 +253,7 @@ namespace {
 emscripten::val protected_range_to_val(const fm_protected_range_t& r) {
   emscripten::val o = emscripten::val::object();
   o.set("spinCount", r.spin_count);
-  emscripten::val ranges = emscripten::val::array();
-  for (std::size_t i = 0; i < r.range_count; ++i) {
-    ranges.call<void>("push", cell_rect_to_val(r.ranges[i]));
-  }
-  o.set("ranges", ranges);
+  o.set("ranges", cell_rects_to_val(r.ranges, r.range_count));
   js_set_cstr_fields(o, {{"name", r.name},
                          {"password", r.password},
                          {"algorithmName", r.algorithm_name},
@@ -440,11 +432,7 @@ namespace {
 
 emscripten::val validation_to_val(const fm_data_validation_t& v) {
   emscripten::val item = emscripten::val::object();
-  emscripten::val ranges = emscripten::val::array();
-  for (std::size_t r = 0; r < v.range_count; ++r) {
-    ranges.set(r, cell_rect_to_val(v.ranges[r]));
-  }
-  item.set("ranges", ranges);
+  item.set("ranges", cell_rects_to_val(v.ranges, v.range_count));
   item.set("type", v.type);
   item.set("op", v.op);
   item.set("errorStyle", v.error_style);

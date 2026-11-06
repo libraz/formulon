@@ -118,11 +118,7 @@ emscripten::val cf_rule_to_val(const fm_cf_rule_t& rule) {
   item.set("type", static_cast<uint32_t>(rule.type));
   item.set("priority", rule.priority);
   item.set("stopIfTrue", rule.stop_if_true != 0);
-  emscripten::val ranges = emscripten::val::array();
-  for (std::size_t r = 0; r < rule.range_count; ++r) {
-    ranges.set(r, cell_rect_to_val(rule.ranges[r]));
-  }
-  item.set("ranges", ranges);
+  item.set("ranges", cell_rects_to_val(rule.ranges, rule.range_count));
   if (rule.dxf_id_engaged != 0) {
     item.set("dxfId", rule.dxf_id);
   }

@@ -48,10 +48,6 @@ void store(void* base, size_t off, T v) {
   std::memcpy(static_cast<char*>(base) + off, &v, sizeof(T));
 }
 
-void put(val& o, const char* key, const val& v) {
-  o.set(key, v);
-}
-
 void push(val& a, const val& v) {
   a.call<void>("push", v);
 }
@@ -254,7 +250,7 @@ val fields_to_val(const void* base, const RdField* f) {
         }
         break;
     }
-    put(o, f->key, v);
+    o.set(f->key, v);
   }
   return o;
 }
@@ -269,8 +265,8 @@ constexpr const char* kAxisPositions[] = {"b", "t", "l", "r"};
 val source_to_val(const fm_chart_t* chart, size_t plot, size_t series, int32_t role, const fm_chart_data_source_t& src,
                   fm_status_t& rc) {
   val o = val::object();
-  put(o, "kind", val(std::string(kSourceKinds[src.kind])));
-  put(o, "formula", val(string_from_cstr(src.formula)));
+  o.set("kind", val(std::string(kSourceKinds[src.kind])));
+  o.set("formula", val(string_from_cstr(src.formula)));
   val literal = val::array();
   for (size_t i = 0; i < src.literal_count; ++i) {
     fm_chart_literal_t lit{};
@@ -279,7 +275,7 @@ val source_to_val(const fm_chart_t* chart, size_t plot, size_t series, int32_t r
     }
     push(literal, lit.is_text != 0 ? val(string_from_cstr(lit.text)) : val(lit.number));
   }
-  put(o, "literal", literal);
+  o.set("literal", literal);
   return o;
 }
 
@@ -291,7 +287,7 @@ val series_to_val(const fm_chart_t* chart, size_t plot, size_t index, fm_status_
   val o = fields_to_val(&s, kSeriesRd);
   const fm_chart_data_source_t* const sources[] = {&s.name, &s.categories, &s.values, &s.x, &s.y, &s.size};
   for (int32_t role = 0; role < kRoleCount; ++role) {
-    put(o, kRoleKeys[role], source_to_val(chart, plot, index, role, *sources[role], rc));
+    o.set(kRoleKeys[role], source_to_val(chart, plot, index, role, *sources[role], rc));
   }
   val points = val::array();
   for (size_t i = 0; i < s.point_count; ++i) {
@@ -301,7 +297,7 @@ val series_to_val(const fm_chart_t* chart, size_t plot, size_t index, fm_status_
     }
     push(points, fields_to_val(&p, kPointRd));
   }
-  put(o, "points", points);
+  o.set("points", points);
   return o;
 }
 
@@ -312,12 +308,11 @@ val plot_to_val(const fm_chart_t* chart, size_t index, fm_status_t& rc) {
   }
   val o = fields_to_val(&p, kPlotRd);
   const bool has_layout = p.chartex_layout != nullptr && p.chartex_layout[0] != '\0';
-  put(o, "chartexLayout", has_layout ? val(std::string(p.chartex_layout)) : val::null());
-  put(o, "barDirection",
-      p.bar_dir == FM_CHART_BAR_DIR_COL   ? val(std::string("col"))
-      : p.bar_dir == FM_CHART_BAR_DIR_BAR ? val(std::string("bar"))
-                                          : val::null());
-  put(o, "varyColors", val(p.vary_colors == FM_CHART_TRI_TRUE));
+  o.set("chartexLayout", has_layout ? val(std::string(p.chartex_layout)) : val::null());
+  o.set("barDirection", p.bar_dir == FM_CHART_BAR_DIR_COL   ? val(std::string("col"))
+                        : p.bar_dir == FM_CHART_BAR_DIR_BAR ? val(std::string("bar"))
+                                                            : val::null());
+  o.set("varyColors", val(p.vary_colors == FM_CHART_TRI_TRUE));
   val axis_ids = val::array();
   for (size_t i = 0; i < p.axis_id_count; ++i) {
     uint32_t id = 0;
@@ -326,12 +321,12 @@ val plot_to_val(const fm_chart_t* chart, size_t index, fm_status_t& rc) {
     }
     push(axis_ids, val(id));
   }
-  put(o, "axisIds", axis_ids);
+  o.set("axisIds", axis_ids);
   val series = val::array();
   for (size_t i = 0; i < p.series_count && rc == 0; ++i) {
     push(series, series_to_val(chart, index, i, rc));
   }
-  put(o, "series", series);
+  o.set("series", series);
   return o;
 }
 
@@ -357,18 +352,18 @@ val chart_to_val(const fm_chart_t* chart, fm_status_t& rc) {
   val o = fields_to_val(&info, kInfoRd);
 
   val legend = val::object();
-  put(legend, "position", val(info.legend_position));
-  put(legend, "overlay", val(info.legend_overlay != 0));
-  put(legend, "hiddenSeries", indices_to_val(info.legend_hidden_count, rc, [&](size_t i, uint32_t* out) {
-        return fm_chart_get_legend_hidden_at(chart, i, out);
-      }));
-  put(o, "legend", legend);
+  legend.set("position", val(info.legend_position));
+  legend.set("overlay", val(info.legend_overlay != 0));
+  legend.set("hiddenSeries", indices_to_val(info.legend_hidden_count, rc, [&](size_t i, uint32_t* out) {
+               return fm_chart_get_legend_hidden_at(chart, i, out);
+             }));
+  o.set("legend", legend);
 
   val plots = val::array();
   for (size_t i = 0; i < info.plot_count && rc == 0; ++i) {
     push(plots, plot_to_val(chart, i, rc));
   }
-  put(o, "plots", plots);
+  o.set("plots", plots);
   val axes = val::array();
   for (size_t i = 0; i < info.axis_count; ++i) {
     fm_chart_axis_t axis{};
@@ -376,23 +371,23 @@ val chart_to_val(const fm_chart_t* chart, fm_status_t& rc) {
       break;
     }
     val a = fields_to_val(&axis, kAxisRd);
-    put(a, "position", val(std::string(kAxisPositions[axis.position])));
+    a.set("position", val(std::string(kAxisPositions[axis.position])));
     push(axes, a);
   }
-  put(o, "axes", axes);
-  put(o, "hiddenCategories", indices_to_val(info.hidden_category_count, rc, [&](size_t i, uint32_t* out) {
-        return fm_chart_get_hidden_category_at(chart, i, out);
-      }));
+  o.set("axes", axes);
+  o.set("hiddenCategories", indices_to_val(info.hidden_category_count, rc, [&](size_t i, uint32_t* out) {
+          return fm_chart_get_hidden_category_at(chart, i, out);
+        }));
 
   val source = val::null();
   if (info.source_range != nullptr) {
     source = val::object();
-    put(source, "range", val(std::string(info.source_range)));
-    put(source, "direction", val(info.source_direction));
-    put(source, "headerRow", val(info.source_header_row != 0));
-    put(source, "headerColumn", val(info.source_header_column != 0));
+    source.set("range", val(std::string(info.source_range)));
+    source.set("direction", val(info.source_direction));
+    source.set("headerRow", val(info.source_header_row != 0));
+    source.set("headerColumn", val(info.source_header_column != 0));
   }
-  put(o, "source", source);
+  o.set("source", source);
   return o;
 }
 
@@ -407,8 +402,8 @@ val copy_doubles(const double* data, size_t n) {
 
 val range_to_val(const fm_sheet_rect_t& r) {
   val o = val::object();
-  put(o, "sheet", val(r.sheet_index));
-  put(o, "rect", cell_rect_to_val(r.rect));
+  o.set("sheet", val(r.sheet_index));
+  o.set("rect", cell_rect_to_val(r.rect));
   return o;
 }
 
@@ -420,16 +415,16 @@ val data_series_to_val(const fm_chart_data_t* data, size_t index, fm_status_t& r
     return val::object();
   }
   val o = val::object();
-  put(o, "plotIndex", val(s.plot_index));
-  put(o, "index", val(s.idx));
-  put(o, "name", s.name != nullptr ? val(std::string(s.name)) : val::null());
-  put(o, "formatCode", val(string_from_cstr(s.format_code)));
-  put(o, "xFormatCode", val(string_from_cstr(s.x_format_code)));
-  put(o, "filtered", val(s.filtered != 0));
-  put(o, "values", copy_doubles(pts.values, pts.count));
-  put(o, "states", bytes_to_val(pts.states, pts.count));
-  put(o, "x", pts.x != nullptr ? copy_doubles(pts.x, pts.count) : val::null());
-  put(o, "sizes", pts.sizes != nullptr ? copy_doubles(pts.sizes, pts.count) : val::null());
+  o.set("plotIndex", val(s.plot_index));
+  o.set("index", val(s.idx));
+  o.set("name", s.name != nullptr ? val(std::string(s.name)) : val::null());
+  o.set("formatCode", val(string_from_cstr(s.format_code)));
+  o.set("xFormatCode", val(string_from_cstr(s.x_format_code)));
+  o.set("filtered", val(s.filtered != 0));
+  o.set("values", copy_doubles(pts.values, pts.count));
+  o.set("states", bytes_to_val(pts.states, pts.count));
+  o.set("x", pts.x != nullptr ? copy_doubles(pts.x, pts.count) : val::null());
+  o.set("sizes", pts.sizes != nullptr ? copy_doubles(pts.sizes, pts.count) : val::null());
   val ranges = val::object();
   for (int32_t role = 0; role < kRoleCount; ++role) {
     val list = val::array();
@@ -440,9 +435,9 @@ val data_series_to_val(const fm_chart_data_t* data, size_t index, fm_status_t& r
       }
       push(list, range_to_val(r));
     }
-    put(ranges, kRoleKeys[role], list);
+    ranges.set(kRoleKeys[role], list);
   }
-  put(o, "ranges", ranges);
+  o.set("ranges", ranges);
   return o;
 }
 
@@ -452,8 +447,8 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
     return val::object();
   }
   val o = val::object();
-  put(o, "domain", val(std::string(info.is_xy != 0 ? "xy" : "category")));
-  put(o, "pointCount", val(info.point_count));
+  o.set("domain", val(std::string(info.is_xy != 0 ? "xy" : "category")));
+  o.set("pointCount", val(info.point_count));
 
   const bool numeric = info.category_value_count != 0;
   std::vector<double> numbers;
@@ -482,19 +477,19 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
     push(levels, row);
   }
   val categories = val::object();
-  put(categories, "labels", labels);
-  put(categories, "levels", levels);
-  put(categories, "values", numeric ? copy_doubles(numbers.data(), numbers.size()) : val::null());
-  put(categories, "formatCode", val(string_from_cstr(info.category_format_code)));
-  put(categories, "generated", val(info.categories_generated != 0));
-  put(o, "categories", categories);
+  categories.set("labels", labels);
+  categories.set("levels", levels);
+  categories.set("values", numeric ? copy_doubles(numbers.data(), numbers.size()) : val::null());
+  categories.set("formatCode", val(string_from_cstr(info.category_format_code)));
+  categories.set("generated", val(info.categories_generated != 0));
+  o.set("categories", categories);
 
   val series = val::array();
   for (size_t i = 0; i < info.series_count && rc == 0; ++i) {
     push(series, data_series_to_val(data, i, rc));
   }
-  put(o, "series", series);
-  put(o, "titleText", info.title_text != nullptr ? val(std::string(info.title_text)) : val::null());
+  o.set("series", series);
+  o.set("titleText", info.title_text != nullptr ? val(std::string(info.title_text)) : val::null());
 
   val axis_titles = val::array();
   for (size_t i = 0; i < info.axis_title_count; ++i) {
@@ -503,11 +498,11 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
       break;
     }
     val item = val::object();
-    put(item, "axisId", val(t.axis_id));
-    put(item, "text", val(string_from_cstr(t.text)));
+    item.set("axisId", val(t.axis_id));
+    item.set("text", val(string_from_cstr(t.text)));
     push(axis_titles, item);
   }
-  put(o, "axisTitleTexts", axis_titles);
+  o.set("axisTitleTexts", axis_titles);
   val unresolved = val::array();
   for (size_t i = 0; i < info.unresolved_count; ++i) {
     fm_chart_unresolved_t u{};
@@ -515,12 +510,12 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
       break;
     }
     val item = val::object();
-    put(item, "seriesIndex", val(u.series_index));
-    put(item, "source", val(string_from_cstr(u.source)));
-    put(item, "axisId", val(u.axis_id));
+    item.set("seriesIndex", val(u.series_index));
+    item.set("source", val(string_from_cstr(u.source)));
+    item.set("axisId", val(u.axis_id));
     push(unresolved, item);
   }
-  put(o, "unresolved", unresolved);
+  o.set("unresolved", unresolved);
   return o;
 }
 

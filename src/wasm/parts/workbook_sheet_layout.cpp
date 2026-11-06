@@ -387,14 +387,10 @@ emscripten::val JsWorkbook::getSheetSelection(uint32_t sheet) const {
   if (!succeeded(fm_sheet_get_selection(handle_, sheet, &row, &col, found.data(), found.size(), &total))) {
     return emscripten::val::undefined();
   }
-  emscripten::val ranges = emscripten::val::array();
-  for (size_t i = 0; i < found.size(); ++i) {
-    ranges.call<void>("push", cell_rect_to_val(found[i]));
-  }
   emscripten::val o = emscripten::val::object();
   o.set("activeRow", row);
   o.set("activeCol", col);
-  o.set("ranges", ranges);
+  o.set("ranges", cell_rects_to_val(found.data(), found.size()));
   return o;
 }
 
