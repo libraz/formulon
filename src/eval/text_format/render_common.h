@@ -35,6 +35,9 @@ std::string_view dbnum_digit_subst(const DbnumStyle* style, char c) noexcept;
 // Non-digit characters fall through verbatim.
 void append_digit_dbnum(std::string& out, const DbnumStyle* style, char c);
 
+// Append zeros through `style` until `digit_count` digits reach `width`.
+void append_zero_pad_dbnum(std::string& out, const DbnumStyle* style, std::size_t digit_count, std::size_t width);
+
 // Append every character of `chars`, substituting digits via `style`.
 void append_chars_dbnum(std::string& out, const DbnumStyle* style, std::string_view chars);
 

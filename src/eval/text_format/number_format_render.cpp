@@ -115,6 +115,12 @@ void append_digit_dbnum(std::string& out, const DbnumStyle* style, char c) {
   }
 }
 
+void append_zero_pad_dbnum(std::string& out, const DbnumStyle* style, std::size_t digit_count, std::size_t width) {
+  for (std::size_t i = digit_count; i < width; ++i) {
+    append_digit_dbnum(out, style, '0');
+  }
+}
+
 void append_chars_dbnum(std::string& out, const DbnumStyle* style, std::string_view chars) {
   for (char c : chars) {
     append_digit_dbnum(out, style, c);
@@ -140,9 +146,7 @@ void append_dbnum_positional(std::string& out, const DbnumStyle* style, std::str
 
 void append_dbnum_date_field(std::string& out, const DbnumStyle* style, unsigned value, std::size_t width) {
   const std::string digits = std::to_string(value);
-  for (std::size_t i = digits.size(); i < width; ++i) {
-    append_digit_dbnum(out, style, '0');
-  }
+  append_zero_pad_dbnum(out, style, digits.size(), width);
   if (style == nullptr || !style->date_positional || value == 0U) {
     append_chars_dbnum(out, style, digits);
     return;

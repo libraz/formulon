@@ -133,9 +133,7 @@ DateNames date_names(const FormatTag& tag, const LocaleFacts& facts, ExcelProfil
 // Elapsed time is zero-padded to the token width and written like General.
 void append_elapsed_int_dbnum(std::string& out, long long value, std::size_t width, const DbnumStyle* style) {
   const std::string digits = std::to_string(value);
-  for (std::size_t i = digits.size(); i < width; ++i) {
-    append_digit_dbnum(out, style, '0');
-  }
+  append_zero_pad_dbnum(out, style, digits.size(), width);
   append_dbnum_positional(out, style, digits);
 }
 
