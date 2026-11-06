@@ -373,11 +373,14 @@ npm-check-dts:
 	fi
 	$(NODE) $(NPM_PKG_DIR)/scripts/check-dts.mjs
 
-npm-test: npm-package npm-check-dts
+# The d.ts check runs inside the recipe, after npm-package has staged dist/: as a
+# prerequisite it could run before staging under -j.
+npm-test: npm-package
 	@if ! command -v $(NODE) >/dev/null 2>&1; then \
 	  echo "npm-test: '$(NODE)' not found"; \
 	  exit 1; \
 	fi
+	$(NODE) $(NPM_PKG_DIR)/scripts/check-dts.mjs
 	(cd $(NPM_PKG_DIR) && $(NODE) --test 'test/*.test.mjs')
 	(cd $(NPM_PKG_DIR) && FORMULON_NPM_ENTRY=./threads $(NODE) --test 'test/*.test.mjs')
 
