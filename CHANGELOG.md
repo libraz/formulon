@@ -1845,6 +1845,8 @@ through its operation instead.
 
 ### Fixed
 
+- Saving a new workbook with an inserted image or chart as `.xlsb` no longer
+  fails with `IoContentTypeInvalid`.
 - A reference deleted by a structural edit is spelled as Excel spells it. A
   row or column deletion keeps the qualifier the reference was written with
   (`=Sheet3!#REF!*2`, `='Data 1'!#REF!`, a defined name `Sheet3!#REF!`), and

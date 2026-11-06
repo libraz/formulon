@@ -10,6 +10,8 @@
 #include "io/ooxml/part_graph.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
+#include "io/xlsb/reader.h"
+#include "io/xlsb/writer.h"
 #include "passthrough_part.h"
 #include "pugixml.hpp"
 #include "sheet.h"
@@ -683,6 +685,24 @@ TEST(DrawingEdit, InsertSaveReloadKeepsBytes) {
   EXPECT_EQ(objects[0].cx, 16 * 9525);
   EXPECT_EQ(objects[0].cy, 8 * 9525);
   EXPECT_EQ(objects[0].descr, "alt");
+}
+
+// A new workbook carries no source Default registry; the XLSB writer still emits the canonical `rels` Default.
+TEST(DrawingEdit, InsertSaveAsXlsbReloadKeepsBytes) {
+  Workbook wb = Workbook::create();
+  const Bytes png = Png(16, 8);
+  ASSERT_TRUE(static_cast<bool>(insert_image(wb, 0, png.data(), png.size(), ImageInsertOptions{})));
+  const Bytes rels = Part(wb, kRelsPath)->bytes;
+
+  auto bytes = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes)) << bytes.error().message;
+  auto read = io::xlsb::read_xlsb(io::ByteSpan{bytes.value().data(), bytes.value().size()});
+  ASSERT_TRUE(static_cast<bool>(read)) << read.error().message;
+  const Workbook& reloaded = read.value().workbook;
+  ASSERT_NE(Part(reloaded, kRelsPath), nullptr);
+  EXPECT_EQ(Part(reloaded, kRelsPath)->bytes, rels);
+  ASSERT_NE(Part(reloaded, "xl/media/image1.png"), nullptr);
+  EXPECT_EQ(Part(reloaded, "xl/media/image1.png")->bytes, png);
 }
 
 TEST(DrawingEdit, TwoCellInsertDerivesToFromSize) {

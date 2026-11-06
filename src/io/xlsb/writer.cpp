@@ -455,8 +455,9 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
     }
     if (part.content_type.empty()) {
       const std::string extension = ooxml::extension_of_part(part.path);
-      const auto default_it = source_defaults.find(extension);
-      if (extension.empty() || default_it == source_defaults.end()) {
+      // `rels` and `xml` are always registered, with the canonical type when the source has none.
+      const bool always_registered = extension == "rels" || extension == "xml";
+      if (extension.empty() || (!always_registered && source_defaults.count(extension) == 0U)) {
         return make_error(FormulonErrorCode::kIoContentTypeInvalid,
                           "Default-typed passthrough part has no matching Default registration",
                           "context=write_xlsb part=" + part.path + " extension=" + extension);
