@@ -1141,7 +1141,13 @@ class Sheet:
 
     # -- Ad-hoc array evaluation ------------------------------------------
     def evaluate_cf_formula(self, row: int, col: int, anchor_row: int, anchor_col: int, formula: str) -> bool:
-        """Evaluate a conditional-format formula at one cell without mutation."""
+        """Evaluate a conditional-format formula at one cell without mutation.
+
+        The result is coerced with Excel's conditional-format rules: an error,
+        blank, text or numeric-zero result is ``False`` (the rule does not
+        fire), any non-zero number is ``True``. An evaluation error is not
+        raised.
+        """
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -1178,7 +1184,6 @@ class Sheet:
         :class:`FormulonError`.
 
         Args:
-          sheet: 0-based sheet index the formula is anchored on.
           row: 0-based anchor row (drives ``ROW()`` and relative refs).
           col: 0-based anchor column (drives ``COLUMN()``).
           formula: the formula text, with or without a leading ``=``.

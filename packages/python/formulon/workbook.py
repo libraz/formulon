@@ -508,6 +508,20 @@ class Value:
         else:
             object.__setattr__(self, "error_code", ErrorCode(_sint(payload, "error_code")))
 
+    def __repr__(self) -> str:
+        kind = self.kind
+        field = _VALUE_PAYLOAD_FIELD.get(kind)
+        if field is None:
+            return f"Value({kind.name})"
+        payload = getattr(self, field)
+        if kind == ValueKind.ERROR:
+            shown = payload.name
+        elif kind == ValueKind.TEXT:
+            shown = repr(payload if len(payload) <= 32 else payload[:32] + "...")
+        else:
+            shown = repr(payload)
+        return f"Value({kind.name}, {shown})"
+
     @classmethod
     def _from_wasm(cls, ptr: int) -> "Value":
         """Decode the value struct at engine-memory offset ``ptr``.

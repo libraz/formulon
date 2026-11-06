@@ -816,6 +816,15 @@ class SheetHandleTests(unittest.TestCase):
         self.wb.close()
         self.assertEqual(repr(self.wb), "Workbook(closed)")
 
+    def test_value_repr_is_compact(self) -> None:
+        self.assertEqual(repr(Value(kind=ValueKind.NUMBER, number=3)), "Value(NUMBER, 3.0)")
+        self.assertEqual(repr(Value(kind=ValueKind.ERROR, error_code=ErrorCode.DIV0)), "Value(ERROR, DIV0)")
+        self.assertEqual(repr(Value(kind=ValueKind.BOOL, boolean=True)), "Value(BOOL, True)")
+        self.assertEqual(repr(Value(kind=ValueKind.TEXT, text="hi")), "Value(TEXT, 'hi')")
+        self.assertEqual(repr(Value(kind=ValueKind.BLANK)), "Value(BLANK)")
+        self.assertEqual(repr(Value(kind=ValueKind.ARRAY)), "Value(ARRAY)")
+        self.assertEqual(repr(Value(kind=ValueKind.TEXT, text="x" * 40)), "Value(TEXT, '" + "x" * 32 + "...')")
+
 
 # ---------------------------------------------------------------------------
 # Fixtures shared by the shape sections below.
