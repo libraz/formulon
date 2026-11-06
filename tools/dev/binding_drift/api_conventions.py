@@ -18,8 +18,8 @@ function by its name (verb, `_count`, `_destroy`) read the ledger's target
 name, while the naming rules read the name in the tree.
 
 Further rule modules register into the same registry: the sibling modules
-`api_conventions_bindings.py` and `api_conventions_shapes.py`, if present,
-are imported before rules run.
+`api_conventions_bindings.py`, `api_conventions_shapes.py` and
+`api_conventions_arguments.py`, if present, are imported before rules run.
 """
 
 from __future__ import annotations
@@ -485,7 +485,7 @@ class Context:
 
 RuleFn = Callable[[Context], Iterable[Violation]]
 _RULES: Dict[str, RuleFn] = {}
-_EXTENSIONS = ("api_conventions_bindings", "api_conventions_shapes")
+_EXTENSIONS = ("api_conventions_bindings", "api_conventions_shapes", "api_conventions_arguments")
 
 
 def rule(rule_id: str) -> Callable[[RuleFn], RuleFn]:

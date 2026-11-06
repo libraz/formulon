@@ -1,0 +1,193 @@
+R18.all	chart_legend.set	default:hidden_series	`set_chart_legend(hidden_series)` defaults to `None`, not `UNCHANGED`
+R18.all	chart_legend.set	default:overlay	`set_chart_legend(overlay)` defaults to `False`, not `UNCHANGED`
+R18.all	chart_legend.set	positional:position	`set_chart_legend(position)` is a patch key; make it keyword-only
+R18.all	format_defaults.set	patch	`set_format_defaults` takes no keyword-only patch arguments
+R18.all	header_footer.set	default:align_with_margins	`set_header_footer(align_with_margins)` defaults to `None`, not `UNCHANGED`
+R18.all	header_footer.set	default:different_first	`set_header_footer(different_first)` defaults to `None`, not `UNCHANGED`
+R18.all	header_footer.set	default:different_odd_even	`set_header_footer(different_odd_even)` defaults to `None`, not `UNCHANGED`
+R18.all	header_footer.set	default:even_footer	`set_header_footer(even_footer)` defaults to `None`, not `UNCHANGED`
+R18.all	header_footer.set	default:even_header	`set_header_footer(even_header)` defaults to `None`, not `UNCHANGED`
+R18.all	header_footer.set	default:first_footer	`set_header_footer(first_footer)` defaults to `None`, not `UNCHANGED`
+R18.all	header_footer.set	default:first_header	`set_header_footer(first_header)` defaults to `None`, not `UNCHANGED`
+R18.all	header_footer.set	default:odd_footer	`set_header_footer(odd_footer)` defaults to `None`, not `UNCHANGED`
+R18.all	header_footer.set	default:odd_header	`set_header_footer(odd_header)` defaults to `None`, not `UNCHANGED`
+R18.all	header_footer.set	default:scale_with_doc	`set_header_footer(scale_with_doc)` defaults to `None`, not `UNCHANGED`
+R18.all	pivot_cache_options.set	patch	`set_pivot_cache_options` takes no keyword-only patch arguments
+R18.all	pivot_options.set	patch	`set_pivot_options` takes no keyword-only patch arguments
+R18.all	pivot_style_info.set	patch	`set_pivot_style_info` takes no keyword-only patch arguments
+R18.all	print_options.set	default:grid_lines	`set_print_options(grid_lines)` defaults to `None`, not `UNCHANGED`
+R18.all	print_options.set	default:headings	`set_print_options(headings)` defaults to `None`, not `UNCHANGED`
+R18.all	print_options.set	default:horizontal_centered	`set_print_options(horizontal_centered)` defaults to `None`, not `UNCHANGED`
+R18.all	print_options.set	default:vertical_centered	`set_print_options(vertical_centered)` defaults to `None`, not `UNCHANGED`
+R23.list	border.get_count	get_border_count	`border` is `access: indexed`; `get_border_count` leaves the py surface
+R23.list	cell_style_xf.get_count	get_cell_style_xf_count	`cell_style_xf` is `access: indexed`; `get_cell_style_xf_count` leaves the py surface
+R23.list	cell_xf.get_count	get_cell_xf_count	`cell_xf` is `access: indexed`; `get_cell_xf_count` leaves the py surface
+R23.list	collection.border	list_borders	`border` is `access: indexed`; `list_borders` is missing
+R23.list	collection.cell_style_xf	list_cell_style_xfs	`cell_style_xf` is `access: indexed`; `list_cell_style_xfs` is missing
+R23.list	collection.cell_xf	list_cell_xfs	`cell_xf` is `access: indexed`; `list_cell_xfs` is missing
+R23.list	collection.dxf	list_dxfs	`dxf` is `access: indexed`; `list_dxfs` is missing
+R23.list	collection.fill	list_fills	`fill` is `access: indexed`; `list_fills` is missing
+R23.list	collection.font	list_fonts	`font` is `access: indexed`; `list_fonts` is missing
+R23.list	collection.pivot	list_pivots	`pivot` is `access: list`; `list_pivots` is missing
+R23.list	collection.pivot_cache_field	list_pivot_cache_fields	`pivot_cache_field` is `access: list`; `list_pivot_cache_fields` is missing
+R23.list	collection.pivot_cache_field_shared_item	list_pivot_cache_field_shared_items	`pivot_cache_field_shared_item` is `access: list`; `list_pivot_cache_field_shared_items` is missing
+R23.list	collection.pivot_field_item	list_pivot_field_items	`pivot_field_item` is `access: indexed`; `list_pivot_field_items` is missing
+R23.list	dxf.get_count	get_dxf_count	`dxf` is `access: indexed`; `get_dxf_count` leaves the py surface
+R23.list	fill.get_count	get_fill_count	`fill` is `access: indexed`; `get_fill_count` leaves the py surface
+R23.list	font.get_count	get_font_count	`font` is `access: indexed`; `get_font_count` leaves the py surface
+R23.list	pivot.get_count	get_pivot_count	`pivot` is `access: list`; `get_pivot_count` leaves the py surface
+R23.list	pivot_cache.get_id	get_pivot_cache_id	`pivot` is `access: list`; `get_pivot_cache_id` leaves the py surface
+R23.list	pivot_cache_field.get_count	get_pivot_cache_field_count	`pivot_cache_field` is `access: list`; `get_pivot_cache_field_count` leaves the py surface
+R23.list	pivot_cache_field_shared_item.get_count	get_pivot_cache_field_shared_item_count	`pivot_cache_field_shared_item` is `access: list`; `get_pivot_cache_field_shared_item_count` leaves the py surface
+R23.list	pivot_field_item.get_count	get_pivot_field_item_count	`pivot_field_item` is `access: indexed`; `get_pivot_field_item_count` leaves the py surface
+R25.a1	array_formula.get	stubs	`get_array_formula` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	binding.set_value	stubs	`set_value` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	blank.set	stubs	`set_blank` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	bool.set	stubs	`set_bool` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	cell_phonetic.get	stubs	`get_cell_phonetic` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	cell_phonetic.set	stubs	`set_cell_phonetic` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	cell_phonetic_properties.get	stubs	`get_cell_phonetic_properties` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	cell_phonetic_properties.set	stubs	`set_cell_phonetic_properties` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	cell_phonetic_run.list.get_cell_phonetic_runs	stubs	`get_cell_phonetic_runs` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	cell_phonetic_runs.set	stubs	`set_cell_phonetic_runs` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	cell_show_phonetic.get	stubs	`get_cell_show_phonetic` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	cell_show_phonetic.set	stubs	`set_cell_show_phonetic` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	cell_xf_index.clear	stubs	`clear_cell_xf_index` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	cell_xf_index.get	stubs	`get_cell_xf_index` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	cell_xf_index.set	stubs	`set_cell_xf_index` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	cf_formula.evaluate	stubs	`evaluate_cf_formula` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	comment.get	stubs	`get_comment` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	comment.remove	stubs	`remove_comment` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	comment.set	stubs	`set_comment` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	comment_visible.get	stubs	`get_comment_visible` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	comment_visible.set	stubs	`set_comment_visible` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	data_table.get	stubs	`get_data_table` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	data_table.remove	stubs	`remove_data_table` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	dependents.get	stubs	`get_dependents` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	display_text.get	stubs	`get_display_text` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	effective_style.get	stubs	`get_effective_style` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	error.set	stubs	`set_error` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	formula.get	coordinate	`get_formula`: the first stub is the coordinate form, with `int` at the `cell_args` positions
+R25.a1	formula.set	coordinate	`set_formula`: the first stub is the coordinate form, with `int` at the `cell_args` positions
+R25.a1	formula_array.evaluate	stubs	`evaluate_formula_array` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	formula_r1c1.get	stubs	`get_formula_r1c1` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	hyperlink.add	stubs	`add_hyperlink` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	hyperlink.get	stubs	`get_hyperlink` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	hyperlink.remove	stubs	`remove_hyperlink` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	lambda_text.get	stubs	`get_lambda_text` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	number.set	stubs	`set_number` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	pane_top_left.set	stubs	`set_pane_top_left` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	pivot.create	stubs	`add_pivot` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	pivot_show_details.get	stubs	`show_pivot_details` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	precedents.get	stubs	`get_precedents` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	spill_info.get	stubs	`get_spill_info` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	text.set	stubs	`set_text` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	top_left.set	stubs	`set_top_left` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	value.get	stubs	`get_value` has no `@overload` stubs for the coordinate and the A1 form
+R25.a1	value.validate	stubs	`validate_value` has no `@overload` stubs for the coordinate and the A1 form
+R25.count	border.get_count	get_border_count	`get_border_count` counts or positions; read the collection as a list
+R25.count	cell.get_at	get_cell_at	`get_cell_at` counts or positions; read the collection as a list
+R25.count	cell.get_count	get_cell_count	`get_cell_count` counts or positions; read the collection as a list
+R25.count	cell_style_xf.get_count	get_cell_style_xf_count	`get_cell_style_xf_count` counts or positions; read the collection as a list
+R25.count	cell_xf.get_count	get_cell_xf_count	`get_cell_xf_count` counts or positions; read the collection as a list
+R25.count	dxf.get_count	get_dxf_count	`get_dxf_count` counts or positions; read the collection as a list
+R25.count	fill.get_count	get_fill_count	`get_fill_count` counts or positions; read the collection as a list
+R25.count	font.get_count	get_font_count	`get_font_count` counts or positions; read the collection as a list
+R25.count	pivot.get_count	get_pivot_count	`get_pivot_count` counts or positions; read the collection as a list
+R25.count	pivot_cache_field.get_count	get_pivot_cache_field_count	`get_pivot_cache_field_count` counts or positions; read the collection as a list
+R25.count	pivot_cache_field_shared_item.get_count	get_pivot_cache_field_shared_item_count	`get_pivot_cache_field_shared_item_count` counts or positions; read the collection as a list
+R25.count	pivot_field_item.get_count	get_pivot_field_item_count	`get_pivot_field_item_count` counts or positions; read the collection as a list
+R25.rect	cell_rect_pt.get	arg0	`get_cell_rect_pt` argument 0 is `CellRect`, not `Union[CellRect, str]`
+R25.rect	cells_in_range.get	arg0	`get_cells_in_range` argument 0 is `CellRect`, not `Union[CellRect, str]`
+R25.rect	cf_range.evaluate	arg0	`evaluate_cf_range` argument 0 is `CellRect`, not `Union[CellRect, str]`
+R25.rect	hyperlink.add_range	arg0	`add_hyperlink_range` argument 0 is `CellRect`, not `Union[CellRect, str]`
+R25.rect	merge.add	arg0	`add_merge` argument 0 is `CellRect`, not `Union[CellRect, str]`
+R25.rect	merge.remove	arg0	`remove_merge` argument 0 is `CellRect`, not `Union[CellRect, str]`
+R25.rect	merges_in_range.get	arg0	`get_merges_in_range` argument 0 is `CellRect`, not `Union[CellRect, str]`
+R25.rect	partial.recalc	arg0	`recalc_viewport` argument 0 is `CellRect`, not `Union[CellRect, str]`
+R25.rect	pivot_anchor.set	arg1	`set_pivot_anchor` argument 1 is `CellRect`, not `Union[CellRect, str]`
+R25.rect	print_area.set	arg0	`set_print_area` argument 0 is `Optional[Sequence[CellRect]]`, not `Union[CellRect, str]`
+R25.rect	range_style.remap	arg0	`remap_range_style` argument 0 is `CellRect`, not `Union[CellRect, str]`
+R25.rect	range_style.snapshot	arg0	`snapshot_range_style` argument 0 is `CellRect`, not `Union[CellRect, str]`
+R25.rect	range_style_bases.get	arg0	`get_range_style_bases` argument 0 is `CellRect`, not `Union[CellRect, str]`
+R25.rect	range_style_bases_excluding.get	arg0	`get_range_style_bases_excluding` argument 0 is `CellRect`, not `Union[CellRect, str]`
+R25.rect	range_xf_index.set	arg0	`set_range_xf_index` argument 0 is `CellRect`, not `Union[CellRect, str]`
+R26.ref	cf_rule.remove	cf_rule_index	`remove_cf_rule(cf_rule_index)` addresses by position; take `cf_rule: Union[int, str]`
+R26.ref	pivot.remove	pivot_index	`remove_pivot(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_anchor.set	pivot_index	`set_pivot_anchor(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_cache.get_id	pivot_index	`get_pivot_cache_id(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_column_field_order.get	pivot_index	`get_pivot_column_field_order(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_column_field_order.set	pivot_index	`set_pivot_column_field_order(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_data_field.add	pivot_index	`add_pivot_data_field(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_data_field.clear	pivot_index	`clear_pivot_data_fields(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_data_field.set	pivot_index	`set_pivot_data_field(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_data_field_default_name.get	pivot_index	`get_pivot_data_field_default_name(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_data_fields.list	pivot_index	`list_pivot_data_fields(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field.add	pivot_index	`add_pivot_field(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field.clear	pivot_index	`clear_pivot_fields(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_axis.set	pivot_index	`set_pivot_field_axis(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_custom_name.set	pivot_index	`set_pivot_field_custom_name(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_date_group.clear	pivot_index	`clear_pivot_field_date_group(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_date_group.set	pivot_index	`set_pivot_field_date_group(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_default_subtotal.set	pivot_index	`set_pivot_field_default_subtotal(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_fill_down_labels.set	pivot_index	`set_pivot_field_fill_down_labels(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_insert_blank_row.set	pivot_index	`set_pivot_field_insert_blank_row(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_item.add	pivot_index	`add_pivot_field_item(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_item.add_at	pivot_index	`add_pivot_field_shared_item(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_item.get	pivot_index	`get_pivot_field_item(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_item.get_count	pivot_index	`get_pivot_field_item_count(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_item_caption.set	pivot_index	`set_pivot_field_item_caption(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_item_show_detail.set	pivot_index	`set_pivot_field_item_show_detail(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_item_visible.set	pivot_index	`set_pivot_field_item_visible(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_items.clear	pivot_index	`clear_pivot_field_items(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_number_format.set	pivot_index	`set_pivot_field_number_format(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_show_all.set	pivot_index	`set_pivot_field_show_all(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_show_detail.set	pivot_index	`set_pivot_field_show_detail(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_sort.set	pivot_index	`set_pivot_field_sort(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_subtotal_fn.add	pivot_index	`add_pivot_field_subtotal_fn(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_subtotal_fns.clear	pivot_index	`clear_pivot_field_subtotal_fns(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_field_subtotal_top.set	pivot_index	`set_pivot_field_subtotal_top(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_fields.list	pivot_index	`list_pivot_fields(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_filter.add	pivot_index	`add_pivot_filter(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_filter.clear	pivot_index	`clear_pivot_filters(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_filter.remove	pivot_index	`remove_pivot_filter(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_filters.list	pivot_index	`list_pivot_filters(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_grand_totals.get	pivot_index	`get_pivot_grand_totals(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_grand_totals.set	pivot_index	`set_pivot_grand_totals(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_layout.get	pivot_index	`get_pivot_layout(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_name.get	pivot_index	`get_pivot_name(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_name.set	pivot_index	`set_pivot_name(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_options.get	pivot_index	`get_pivot_options(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_options.set	pivot_index	`set_pivot_options(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_project.get	pivot_index	`project_pivot(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_projection_pending.get	pivot_index	`is_pivot_projection_pending(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_report_layout.get	pivot_index	`get_pivot_report_layout(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_report_layout.set	pivot_index	`set_pivot_report_layout(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_row_field_order.get	pivot_index	`get_pivot_row_field_order(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_row_field_order.set	pivot_index	`set_pivot_row_field_order(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_show_details.get	pivot_index	`show_pivot_details(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_style_info.get	pivot_index	`get_pivot_style_info(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	pivot_style_info.set	pivot_index	`set_pivot_style_info(pivot_index)` addresses by position; take `pivot: Union[int, str]`
+R26.ref	protected_range.remove	protected_range_index	`remove_protected_range(protected_range_index)` addresses by position; take `protected_range: Union[int, str]`
+R26.ref	protected_range.update	protected_range_index	`update_protected_range(protected_range_index)` addresses by position; take `protected_range: Union[int, str]`
+R26.ref	slicer.add	table	`add_slicer(table: int)` is not `Union[int, str]`
+R26.ref	table.remove	table_index	`remove_table(table_index)` addresses by position; take `table: Union[int, str]`
+R26.ref	table.rename	table_index	`rename_table(table_index)` addresses by position; take `table: Union[int, str]`
+R26.ref	table.update	table_index	`update_table(table_index)` addresses by position; take `table: Union[int, str]`
+R26.ref	table_auto_filter.apply	table_index	`apply_table_auto_filter(table_index)` addresses by position; take `table: Union[int, str]`
+R26.ref	table_auto_filter.clear	table_index	`clear_table_auto_filter(table_index)` addresses by position; take `table: Union[int, str]`
+R26.ref	table_auto_filter.evaluate	table_index	`evaluate_table_auto_filter(table_index)` addresses by position; take `table: Union[int, str]`
+R26.ref	table_auto_filter.get	table_index	`get_table_auto_filter(table_index)` addresses by position; take `table: Union[int, str]`
+R26.ref	table_auto_filter.remove	table_index	`remove_table_auto_filter(table_index)` addresses by position; take `table: Union[int, str]`
+R26.ref	table_auto_filter.set	table_index	`set_table_auto_filter(table_index)` addresses by position; take `table: Union[int, str]`
+R26.ref	table_column.rename	table_index	`rename_table_column(table_index)` addresses by position; take `table: Union[int, str]`
+R26.ref	table_column_totals.set	table_index	`set_table_column_totals(table_index)` addresses by position; take `table: Union[int, str]`
+R26.ref	table_style_info.set	table_index	`set_table_style_info(table_index)` addresses by position; take `table: Union[int, str]`
+R27.sheetparam	defined_name.get	local_sheet_id	`get_defined_name(local_sheet_id: Optional[int])` names a sheet; type it `SheetRef`
+R27.sheetparam	defined_name.remove	local_sheet_id	`remove_defined_name(local_sheet_id: Optional[int])` names a sheet; type it `SheetRef`
+R7.py	record.chart_axis_patch	set_chart_axis	`set_chart_axis` takes `ChartAxisPatch`; take its keys as keyword-only arguments defaulting to `UNCHANGED`
+R7.py	record.chart_display_patch	set_chart_display	`set_chart_display` takes `ChartDisplayPatch`; take its keys as keyword-only arguments defaulting to `UNCHANGED`
+R7.py	record.chart_plot_patch	set_chart_plot	`set_chart_plot` takes `ChartPlotPatch`; take its keys as keyword-only arguments defaulting to `UNCHANGED`
+R7.py	record.chart_point_patch	set_chart_point	`set_chart_point` takes `ChartPointPatch`; take its keys as keyword-only arguments defaulting to `UNCHANGED`
+R7.py	record.chart_series_patch	add_chart_series	`add_chart_series` takes `ChartSeriesPatch`; take its keys as keyword-only arguments defaulting to `UNCHANGED`
+R7.py	record.chart_series_patch	set_chart_series	`set_chart_series` takes `ChartSeriesPatch`; take its keys as keyword-only arguments defaulting to `UNCHANGED`

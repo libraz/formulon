@@ -4,6 +4,9 @@
 # leave a surface when the `closes` rule closes; `replaced_by` folds a type into another.
 # `kind: typedef` names a type that is neither a record nor an enum: a handle, an alias,
 # a callback, an error class, or a module or options object.
+# `cell_args` / `rect_args` list the argument positions (receiver excluded) of each one-cell
+# `(row, col)` pair and each `CellRect`. `patch: true` marks a partial update whose keys are fields
+# of `patch_record`, or `patch_record: none` with a `patch_reason` when no getter returns a record.
 schema: 1
 collections:
   sheet: { key: index, access: handles, plural: sheets, ops: [sheet.add, sheet.copy, sheet.get_count, sheet.move, sheet.remove, sheet.rename, sheet_index.get, sheet_name.get] }
@@ -14,14 +17,14 @@ collections:
   cell_style_xf: { key: index, access: indexed, plural: cell_style_xfs, ops: [cell_style_xf.add, cell_style_xf.get, cell_style_xf.get_count] }
   dxf: { key: index, access: indexed, plural: dxfs, ops: [dxf.add, dxf.get, dxf.get_count] }
   table: { key: index, access: list, plural: tables, ops: [table.create, table.get, table.get_count, table.remove, table.rename, table.update] }
-  pivot: { key: index, access: exempt, plural: pivots, exempt: "no getter returns a pivot; its properties have typed getters and setters", ops: [pivot.create, pivot.get_count, pivot.remove, pivot_cache.get_id] }
+  pivot: { key: index, access: list, plural: pivots, ops: [pivot.create, pivot.get_count, pivot.remove, pivot_cache.get_id] }
   pivot_field: { key: index, access: list, plural: pivot_fields, ops: [pivot_field.add, pivot_field.clear, pivot_field.get, pivot_field.get_count] }
   pivot_data_field: { key: index, access: list, plural: pivot_data_fields, ops: [pivot_data_field.add, pivot_data_field.clear, pivot_data_field.get, pivot_data_field.get_count, pivot_data_field.set] }
   pivot_filter: { key: index, access: list, plural: pivot_filters, ops: [pivot_filter.add, pivot_filter.clear, pivot_filter.get, pivot_filter.get_count, pivot_filter.remove] }
   pivot_field_item: { key: index, access: indexed, plural: pivot_field_items, ops: [pivot_field_item.add, pivot_field_item.add_at, pivot_field_item.get, pivot_field_item.get_count] }
-  pivot_cache_field: { key: index, access: exempt, plural: pivot_cache_fields, exempt: "no getter returns a cache field; its properties have typed getters", ops: [pivot_cache_field.add, pivot_cache_field.clear, pivot_cache_field.get_count] }
+  pivot_cache_field: { key: index, access: list, plural: pivot_cache_fields, ops: [pivot_cache_field.add, pivot_cache_field.clear, pivot_cache_field.get_count] }
   pivot_cache_record: { key: index, access: exempt, plural: pivot_cache_records, exempt: "no getter returns a record; its values have typed getters and setters", ops: [pivot_cache_record.add, pivot_cache_record.clear, pivot_cache_record.get_count] }
-  pivot_cache_field_shared_item: { key: index, access: exempt, plural: pivot_cache_field_shared_items, exempt: "no getter returns a shared item; its values have typed getters", ops: [pivot_cache_field_shared_item.get_count] }
+  pivot_cache_field_shared_item: { key: index, access: list, plural: pivot_cache_field_shared_items, ops: [pivot_cache_field_shared_item.get_count] }
   pivot_cache_calculated_item: { key: index, access: list, plural: pivot_cache_calculated_items, ops: [pivot_cache_calculated_item.add, pivot_cache_calculated_item.get, pivot_cache_calculated_item.get_count, pivot_cache_calculated_item.move, pivot_cache_calculated_item.remove] }
   cf_rule: { key: index, access: list, plural: cf_rules, ops: [cf_rule.add, cf_rule.clear, cf_rule.get, cf_rule.get_count, cf_rule.remove] }
   validation: { key: index, access: list, plural: validations, ops: [validation.add, validation.get, validation.get_count, validation.remove] }
@@ -3062,6 +3065,7 @@ entries:
     c: fm_sheet_set_number
     js: setNumber
     py: set_number
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_number, js: setNumber, py: set_number }
   bool.set:
@@ -3072,6 +3076,7 @@ entries:
     js: setBool
     py: set_bool
     params: { value: bool }
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_bool, js: setBool, py: set_bool }
   error.set:
@@ -3081,6 +3086,7 @@ entries:
     c: fm_sheet_set_error
     js: setError
     py: set_error
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_error, js: setError, py: set_error }
   text.set:
@@ -3090,6 +3096,7 @@ entries:
     c: fm_sheet_set_text
     js: setText
     py: set_text
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_text, js: setText, py: set_text }
   cell_phonetic.set:
@@ -3099,6 +3106,7 @@ entries:
     c: fm_sheet_set_cell_phonetic
     js: setCellPhonetic
     py: set_cell_phonetic
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_cell_phonetic, js: setCellPhonetic, py: set_phonetic }
   cell_phonetic_runs.set:
@@ -3108,6 +3116,7 @@ entries:
     c: fm_sheet_set_cell_phonetic_runs
     js: setCellPhoneticRuns
     py: set_cell_phonetic_runs
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_cell_phonetic_runs, js: setCellPhoneticRuns, py: set_phonetic_runs }
   cell_show_phonetic.set:
@@ -3118,6 +3127,7 @@ entries:
     js: setCellShowPhonetic
     py: set_cell_show_phonetic
     params: { show: bool }
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_cell_show_phonetic, js: setCellShowPhonetic, py: set_show_phonetic }
   cell_phonetic_properties.set:
@@ -3127,6 +3137,7 @@ entries:
     c: fm_sheet_set_cell_phonetic_properties
     js: setCellPhoneticProperties
     py: set_cell_phonetic_properties
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_cell_phonetic_properties, js: setCellPhoneticProperties, py: set_phonetic_properties }
   blank.set:
@@ -3136,6 +3147,7 @@ entries:
     c: fm_sheet_set_blank
     js: setBlank
     py: set_blank
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_blank, js: setBlank, py: set_blank }
   formula.set:
@@ -3145,6 +3157,7 @@ entries:
     c: fm_sheet_set_formula
     js: setFormula
     py: set_formula
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_formula, js: setFormula, py: set_formula }
     facade: handwritten
@@ -3157,6 +3170,7 @@ entries:
     c: fm_sheet_get_value
     js: getValue
     py: get_value
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_value, js: getValue, py: get_value }
   cell_phonetic.get:
@@ -3166,6 +3180,7 @@ entries:
     c: fm_sheet_get_cell_phonetic
     js: getCellPhonetic
     py: get_cell_phonetic
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_cell_phonetic, js: getCellPhonetic, py: get_phonetic }
   cell_phonetic_run.get_count:
@@ -3195,6 +3210,7 @@ entries:
     c: fm_sheet_get_cell_phonetic_properties
     js: getCellPhoneticProperties
     py: get_cell_phonetic_properties
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_cell_phonetic_properties, js: getCellPhoneticProperties, py: get_phonetic_properties }
   cell_phonetic_properties.has:
@@ -3214,6 +3230,7 @@ entries:
     js: getCellShowPhonetic
     py: get_cell_show_phonetic
     returns: bool
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_cell_show_phonetic, js: getCellShowPhonetic, py: get_show_phonetic }
   lambda_text.get:
@@ -3223,6 +3240,7 @@ entries:
     c: fm_sheet_get_lambda_text
     js: getLambdaText
     py: get_lambda_text
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_lambda_text_at, js: getLambdaText, py: lambda_text_at }
     missing: null
@@ -3232,6 +3250,7 @@ entries:
     noun: formula
     c: fm_sheet_evaluate_formula
     js: evaluateFormula
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native]
     was: { c: fm_workbook_evaluate_formula, js: evaluateFormulaText }
   cf_formula.evaluate:
@@ -3241,6 +3260,7 @@ entries:
     c: fm_sheet_evaluate_cf_formula
     js: evaluateCfFormula
     py: evaluate_cf_formula
+    cell_args: [[0, 1], [2, 3]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_evaluate_cf_formula, js: evaluateConditionalFormula, py: evaluate_cf_formula }
   formula_array.evaluate:
@@ -3250,6 +3270,7 @@ entries:
     c: fm_sheet_evaluate_formula_array
     js: evaluateFormulaArray
     py: evaluate_formula_array
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_evaluate_formula_array, js: evaluateFormulaArray, py: evaluate_formula_array }
   type.value_array:
@@ -3326,6 +3347,7 @@ entries:
     c: fm_sheet_get_formula
     js: getFormula
     py: get_formula
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_formula, js: getFormula, py: get_formula }
     facade: handwritten
@@ -3336,6 +3358,7 @@ entries:
     c: fm_sheet_get_formula_r1c1
     js: getFormulaR1C1
     py: get_formula_r1c1
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_formula_r1c1, js: getFormulaR1C1, py: get_formula_r1c1 }
   cells_in_range.get:
@@ -3345,6 +3368,7 @@ entries:
     c: fm_sheet_get_cells_in_range
     js: getCellsInRange
     py: get_cells_in_range
+    rect_args: [0]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_cells_in_range, js: getCellsInRange, py: get_cells_in_range }
   cell_range.get_cell_count:
@@ -3383,6 +3407,7 @@ entries:
     c: fm_sheet_get_display_text
     js: getDisplayText
     py: get_display_text
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_display_text, js: getDisplayText, py: get_display_text }
   value.format:
@@ -3539,6 +3564,7 @@ entries:
     c: fm_sheet_add_hyperlink
     js: addHyperlink
     py: add_hyperlink
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_add_hyperlink, js: addHyperlink, py: add_hyperlink }
     facade: handwritten
@@ -3548,6 +3574,7 @@ entries:
     noun: hyperlink
     js: addHyperlinkRange
     py: add_hyperlink_range
+    rect_args: [0]
     surfaces: [wasm, native, py]
     exception: "binding form taking a CellRect (R7)"
     was: { js: addHyperlinkRange, py: add_hyperlink_range }
@@ -3559,6 +3586,7 @@ entries:
     c: fm_sheet_remove_hyperlink
     js: removeHyperlink
     py: remove_hyperlink
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_remove_hyperlink, js: removeHyperlink, py: remove_hyperlink }
   hyperlink.remove_at:
@@ -3586,6 +3614,7 @@ entries:
     c: fm_sheet_add_merge
     js: addMerge
     py: add_merge
+    rect_args: [0]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_add_merge, js: addMerge, py: add_merge }
   merge.remove:
@@ -3595,6 +3624,7 @@ entries:
     c: fm_sheet_remove_merge
     js: removeMerge
     py: remove_merge
+    rect_args: [0]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_remove_merge, js: removeMerge, py: remove_merge }
   merge.remove_at:
@@ -3622,6 +3652,7 @@ entries:
     c: fm_sheet_get_comment
     js: getComment
     py: get_comment
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_get_comment_at, js: getComment, py: get_comment }
     missing: null
@@ -3683,6 +3714,7 @@ entries:
     c: fm_sheet_get_merges_in_range
     js: getMergesInRange
     py: get_merges_in_range
+    rect_args: [0]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_merges_in_range, js: getMergesInRange, py: get_merges_in_range }
   comment.set:
@@ -3692,6 +3724,7 @@ entries:
     c: fm_sheet_set_comment
     js: setComment
     py: set_comment
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_comment, js: setComment, py: set_comment }
     facade: handwritten
@@ -3702,6 +3735,7 @@ entries:
     c: fm_sheet_remove_comment
     js: removeComment
     py: remove_comment
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_remove_comment }
   comment_visible.get:
@@ -3712,6 +3746,7 @@ entries:
     js: getCommentVisible
     py: get_comment_visible
     returns: bool
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_get_comment_visible, js: getCommentVisible, py: get_comment_visible }
     missing: null
@@ -3723,6 +3758,7 @@ entries:
     js: setCommentVisible
     py: set_comment_visible
     params: { visible: bool }
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_comment_visible, js: setCommentVisible, py: set_comment_visible }
   workbook_protection.get:
@@ -3845,6 +3881,7 @@ entries:
     c: fm_sheet_validate_value
     js: validateValue
     py: validate_value
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_validate_value, js: validateValue, py: validate_value }
   invalid_cells.get:
@@ -3886,6 +3923,8 @@ entries:
     c: fm_sheet_update_threaded_comment
     js: updateThreadedComment
     py: update_threaded_comment
+    patch: true
+    patch_record: ThreadedComment
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_edit_threaded_comment, js: editThreadedComment, py: edit_threaded_comment }
     facade: handwritten
@@ -3965,6 +4004,8 @@ entries:
     js: setIterative
     py: set_iterative
     params: { enabled: bool }
+    patch: true
+    patch_record: IterativeSettings
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_iterative, js: setIterative, py: set_iterative }
   iterative_enabled.set:
@@ -4176,6 +4217,7 @@ entries:
     c: fm_sheet_recalc_viewport
     js: recalcViewport
     py: recalc_viewport
+    rect_args: [0]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_partial_recalc, js: partialRecalc, py: partial_recalc }
   iterative_progress.set:
@@ -4428,6 +4470,7 @@ entries:
     c: fm_sheet_set_print_area
     js: setPrintArea
     py: set_print_area
+    rect_args: [0]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_print_area, js: setSheetPrintArea, py: set_print_area }
   print_area.get:
@@ -4540,6 +4583,8 @@ entries:
     js: setPageSetup
     py: set_page_setup
     params: { fit_to_page: bool }
+    patch: true
+    patch_record: PageSetup
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_page_setup, js: setSheetPageSetup, py: set_page_setup }
   page_margins.set:
@@ -4549,6 +4594,8 @@ entries:
     c: fm_sheet_set_page_margins
     js: setPageMargins
     py: set_page_margins
+    patch: true
+    patch_record: PageMargins
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_page_margins, js: setSheetPageMargins, py: set_page_margins }
   print_options.set:
@@ -4559,6 +4606,9 @@ entries:
     js: setPrintOptions
     py: set_print_options
     params: { grid_lines: bool, headings: bool, horizontal_centered: bool, vertical_centered: bool }
+    patch: true
+    patch_record: none
+    patch_reason: "no record getter in the C ABI; the settings read back only as XML"
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_print_options, js: setSheetPrintOptions, py: set_print_options }
   header_footer.set:
@@ -4569,6 +4619,9 @@ entries:
     js: setHeaderFooter
     py: set_header_footer
     params: { different_odd_even: bool, different_first: bool, scale_with_doc: bool, align_with_margins: bool }
+    patch: true
+    patch_record: none
+    patch_reason: "no record getter in the C ABI; the settings read back only as XML"
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_header_footer, js: setSheetHeaderFooter, py: set_header_footer }
   page_setup.get:
@@ -4596,6 +4649,7 @@ entries:
     c: fm_sheet_evaluate_cf_range
     js: evaluateCfRange
     py: evaluate_cf_range
+    rect_args: [0]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_cf_evaluate_range, js: evaluateCfRange, py: evaluate_cf_range }
   cf_results.destroy:
@@ -4680,6 +4734,7 @@ entries:
     c: fm_sheet_get_precedents
     js: getPrecedents
     py: get_precedents
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_precedents, js: precedents, py: precedents }
   dependents.get:
@@ -4689,6 +4744,7 @@ entries:
     c: fm_sheet_get_dependents
     js: getDependents
     py: get_dependents
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_dependents, js: dependents, py: dependents }
   cell_nodes.destroy:
@@ -5037,6 +5093,8 @@ entries:
     c: fm_workbook_set_pivot_cache_options
     js: setPivotCacheOptions
     py: set_pivot_cache_options
+    patch: true
+    patch_record: PivotCacheOptions
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_cache_set_options, js: pivotCacheSetOptions, py: pivot_cache_set_options }
   pivot_cache_calculated_field.add:
@@ -5138,6 +5196,7 @@ entries:
     c: fm_sheet_add_pivot
     js: addPivot
     py: add_pivot
+    cell_args: [[2, 3]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_create, js: pivotCreate, py: pivot_create }
   pivot.remove:
@@ -5165,6 +5224,7 @@ entries:
     c: fm_sheet_set_pivot_anchor
     js: setPivotAnchor
     py: set_pivot_anchor
+    rect_args: [1]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_anchor, js: pivotSetAnchor, py: pivot_set_anchor }
   pivot_grand_totals.set:
@@ -5175,6 +5235,8 @@ entries:
     js: setPivotGrandTotals
     py: set_pivot_grand_totals
     params: { rows_enabled: bool, cols_enabled: bool }
+    patch: true
+    patch_record: PivotGrandTotals
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_grand_totals, js: pivotSetGrandTotals, py: pivot_set_grand_totals }
     facade: handwritten
@@ -5186,6 +5248,8 @@ entries:
     js: setPivotStyleInfo
     py: set_pivot_style_info
     params: { show_row_headers: bool, show_col_headers: bool, show_row_stripes: bool, show_col_stripes: bool, show_last_column: bool }
+    patch: true
+    patch_record: PivotStyle
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_style_info, js: pivotSetStyleInfo, py: pivot_set_style_info }
   pivot_report_layout.get:
@@ -5531,6 +5595,8 @@ entries:
     c: fm_sheet_set_pivot_options
     js: setPivotOptions
     py: set_pivot_options
+    patch: true
+    patch_record: PivotOptions
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_options, js: pivotSetOptions, py: pivot_set_options }
   pivot_project.get:
@@ -5560,6 +5626,7 @@ entries:
     js: showPivotDetails
     py: show_pivot_details
     returns: "union:Sheet"
+    cell_args: [[1, 2]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_show_details, js: pivotShowDetails, py: pivot_show_details }
     facade: handwritten
@@ -5691,6 +5758,7 @@ entries:
     c: fm_sheet_get_spill_info
     js: getSpillInfo
     py: get_spill_info
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_spill_info, js: spillInfo, py: spill_info }
   array_formula.get:
@@ -5700,6 +5768,7 @@ entries:
     c: fm_sheet_get_array_formula
     js: getArrayFormula
     py: get_array_formula
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_array_formula, js: getArrayFormula, py: get_array_formula }
   array_formula.set:
@@ -5864,6 +5933,7 @@ entries:
     c: fm_sheet_set_top_left
     js: setTopLeft
     py: set_top_left
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_top_left, js: setSheetTopLeft, py: set_sheet_top_left }
     exception: "a coordinate pair; after the Sheet move, two numbers"
@@ -5874,6 +5944,7 @@ entries:
     c: fm_sheet_set_pane_top_left
     js: setPaneTopLeft
     py: set_pane_top_left
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_pane_top_left, js: setSheetPaneTopLeft, py: set_sheet_pane_top_left }
     exception: "a coordinate pair; after the Sheet move, two numbers"
@@ -6170,6 +6241,7 @@ entries:
     c: fm_sheet_get_range_style_bases
     js: getRangeStyleBases
     py: get_range_style_bases
+    rect_args: [0]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_range_style_bases, js: rangeStyleBases, py: range_style_bases }
   range_style_bases_excluding.get:
@@ -6179,6 +6251,7 @@ entries:
     c: fm_sheet_get_range_style_bases_excluding
     js: getRangeStyleBasesExcluding
     py: get_range_style_bases_excluding
+    rect_args: [0]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_range_style_bases_excluding, js: rangeStyleBasesExcluding, py: range_style_bases_excluding }
   range_style.remap:
@@ -6188,6 +6261,7 @@ entries:
     c: fm_sheet_remap_range_style
     js: remapRangeStyle
     py: remap_range_style
+    rect_args: [0]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_remap_range_style, js: remapRangeStyle, py: remap_range_style }
   range_style.snapshot:
@@ -6197,6 +6271,7 @@ entries:
     c: fm_sheet_snapshot_range_style
     js: snapshotRangeStyle
     py: snapshot_range_style
+    rect_args: [0]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_snapshot_range_style, js: snapshotRangeStyle, py: snapshot_range_style }
   range_style.restore:
@@ -6233,6 +6308,8 @@ entries:
     c: fm_sheet_set_format_defaults
     js: setFormatDefaults
     py: set_format_defaults
+    patch: true
+    patch_record: SheetFormatDefaults
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_format_defaults, js: setSheetFormatDefaults, py: set_sheet_format_defaults }
   cell_rect_pt.get:
@@ -6243,6 +6320,7 @@ entries:
     js: getCellRectPt
     py: get_cell_rect_pt
     params: { mode: "enum:geometry_mode" }
+    rect_args: [0]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_cell_rect_pt, js: getCellRectPt, py: get_cell_rect_pt }
   column_width_pt.get:
@@ -6472,6 +6550,7 @@ entries:
     c: fm_sheet_get_cell_xf_index
     js: getCellXfIndex
     py: get_cell_xf_index
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_cell_get_xf_index, js: getCellXfIndex, py: get_cell_xf_index }
   cell_xf_index.set:
@@ -6481,6 +6560,7 @@ entries:
     c: fm_sheet_set_cell_xf_index
     js: setCellXfIndex
     py: set_cell_xf_index
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_cell_set_xf_index, js: setCellXfIndex, py: set_cell_xf_index }
   cell_xf_index.clear:
@@ -6490,6 +6570,7 @@ entries:
     c: fm_sheet_clear_cell_xf_index
     js: clearCellXfIndex
     py: clear_cell_xf_index
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_cell_clear_xf_index, js: clearCellXfIndex, py: clear_cell_xf_index }
   range_xf_index.set:
@@ -6499,6 +6580,7 @@ entries:
     c: fm_sheet_set_range_xf_index
     js: setRangeXfIndex
     py: set_range_xf_index
+    rect_args: [0]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_range_xf_index, js: setRangeXfIndex, py: set_range_xf_index }
   cell_xf.get:
@@ -6630,6 +6712,8 @@ entries:
     c: fm_workbook_set_table_style_defaults
     js: setTableStyleDefaults
     py: set_table_style_defaults
+    patch: true
+    patch_record: TableStyleDefaults
     surfaces: [c, wasm, native, py]
     was: { c: fm_styles_set_table_style_defaults, js: setTableStyleDefaults, py: set_table_style_defaults }
   font.get_count:
@@ -6896,6 +6980,7 @@ entries:
     c: fm_sheet_get_effective_style
     js: getEffectiveStyle
     py: get_effective_style
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_get_effective_style, js: getEffectiveStyle, py: get_effective_style }
   external_link.get_count:
@@ -7381,6 +7466,8 @@ entries:
     js: setChartLegend
     py: set_chart_legend
     params: { position: "enum:chart_legend_position", overlay: bool }
+    patch: true
+    patch_record: ChartLegend
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_chart_legend, js: setChartLegend, py: set_chart_legend }
   chart_axis.set:
@@ -7482,6 +7569,7 @@ entries:
     c: fm_sheet_get_data_table
     js: getDataTable
     py: get_data_table
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_data_table_at, js: getDataTable, py: get_data_table }
     missing: null
@@ -7492,6 +7580,7 @@ entries:
     c: fm_sheet_remove_data_table
     js: removeDataTable
     py: remove_data_table
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_remove_data_table, js: removeDataTable, py: remove_data_table }
   data_tables.recalc:
@@ -7573,6 +7662,7 @@ entries:
     c: fm_sheet_get_hyperlink
     js: getHyperlink
     py: get_hyperlink
+    cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     missing: null
   person.get:
@@ -7835,6 +7925,7 @@ entries:
     from: [cell_phonetic_run.get_count, cell_phonetic_run.get]
     js: getCellPhoneticRuns
     py: get_cell_phonetic_runs
+    cell_args: [[0, 1]]
     surfaces: [wasm, native, py]
     was: { js: getCellPhoneticRuns, py: get_phonetic_runs }
     exception: "composed by the facade from the run count and the element getter"
@@ -11113,6 +11204,7 @@ entries:
     scope: sheet
     js: setValue
     py: set_value
+    cell_args: [[0, 1]]
     surfaces: [wasm, native, py]
     exception: "binding convenience: dispatches on the type of the value to the typed setters"
     facade: handwritten

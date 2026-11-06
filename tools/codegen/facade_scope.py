@@ -139,6 +139,25 @@ def list_families(ledger: Ledger, language: str) -> Dict[str, Tuple[str, str]]:
     return dict(sorted(out.items()))
 
 
+def _positions(ledger: Ledger, language: str, field: str) -> Dict[str, list]:
+    out: Dict[str, list] = {}
+    for _key, entry in _ops(ledger, ("op",)):
+        name = public_name(entry, language)
+        if name is not None and entry.get(field):
+            out[name] = list(entry[field])
+    return dict(sorted(out.items()))
+
+
+def cell_args(ledger: Ledger, language: str) -> Dict[str, list]:
+    """`{publicName: [[row_position, col_position], ...]}` of the ops whose ledger entry carries `cell_args`."""
+    return _positions(ledger, language, "cell_args")
+
+
+def rect_args(ledger: Ledger, language: str) -> Dict[str, list]:
+    """`{publicName: [position, ...]}` of the ops whose ledger entry carries `rect_args`."""
+    return _positions(ledger, language, "rect_args")
+
+
 def structure_ops(ledger: Ledger, language: str, header: Optional[str] = None) -> List[str]:
     """Sorted public names of the ops that add, remove or reorder sheets: every non-`get` op of the sheet
     collection, and every op whose C function writes `out_sheet_index` without a `get` verb."""

@@ -10,7 +10,10 @@ signature carries an enum or a predicate verb states it in `returns` /
 does `review: true`, which marks a proposal still to be decided. Every op, list,
 factory and free function on a binding surface carries a `scope`; index-keyed
 collections carry `access` (and `plural`, or `exempt` with a reason);
-`enum_families` and `enum_distinct` name existing enum entries.
+`enum_families` and `enum_distinct` name existing enum entries. An op's
+`cell_args` / `rect_args` equal the `(row, col)` pairs and `CellRect` arguments
+of its first signature in src/wasm/formulon.d.ts; `patch: true` names its
+getter's record in `patch_record`, or `none` with a `patch_reason`.
 
 `--coverage` additionally requires every symbol the current tree exports
 to be named by some entry's current or `was` name. Entries carrying `flag:` or `review: true` are listed in
@@ -31,6 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import extract_names  # noqa: E402
 from binding_drift.api_conventions import (  # noqa: E402
     LEDGER_PATH,
+    REPO_ROOT,
     SCOPES,
     SURFACES,
     Ledger,
@@ -41,13 +45,14 @@ from binding_drift.api_conventions import (  # noqa: E402
     derive_type,
     split_c_name,
 )
+from binding_drift.api_conventions_bindings import JsSurface  # noqa: E402
 
 KINDS = frozenset({"op", "list", "free", "factory", "record", "field", "typedef", "enum", "constant"})
 FIELDS = frozenset(
     {
         "kind", "scope", "noun", "qualifies", "record", "role", "from", "c", "js", "py", "enum", "returns",
         "params", "surfaces", "exception", "replaced_by", "closes", "was", "drop", "flag", "sheet_arg", "total",
-        "missing", "facade", "review", "note",
+        "missing", "facade", "review", "note", "cell_args", "rect_args", "patch", "patch_record", "patch_reason",
     }
 )  # fmt: skip
 ROLES = frozenset({"result", "input", "patch", "both"})
@@ -61,6 +66,9 @@ FUNCTION_KINDS = frozenset({"op", "factory"})
 TYPE_KINDS = frozenset({"record", "enum", "typedef"})
 _RULE_ID_RE = re.compile(r"R\d+(\.[a-z0-9_]+)*")
 _SLOT_RE = re.compile(r"bool|string|number|int|double|enum:[a-z0-9_]+|union:[A-Za-z0-9_]+")
+WASM_DTS = REPO_ROOT / "src" / "wasm" / "formulon.d.ts"
+PATCH_RECORD_NONE = "none"
+_JS_CELL_PAIR_RE = re.compile(r"(\w*?)(?:row|Row)")
 
 
 def _load(path: Path):
@@ -156,6 +164,7 @@ def check_schema(data) -> List[str]:
                 problems.append(f"{where}: {text_field} must be a non-empty string")
         if "sheet_arg" in entry and entry.get("scope") != "workbook":
             problems.append(f"{where}: `sheet_arg` excuses a sheet index on a workbook-scope entry only")
+        problems += _address_and_patch_schema(where, entry)
         if not any(f in entry for f in (*NAME_FIELDS, "was", "replaced_by")):
             problems.append(f"{where}: names nothing")
     for name, collection in collections.items():
@@ -181,6 +190,44 @@ def check_schema(data) -> List[str]:
         if (access == "exempt") != isinstance(collection.get("exempt"), str):
             problems.append(f"{where}: `exempt` is the reason string of an `access: exempt` collection")
     problems += check_enum_groups(data, entries)
+    return problems
+
+
+def _index(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _address_and_patch_schema(where: str, entry: dict) -> List[str]:
+    """`cell_args` lists `[i, j]` pairs and `rect_args` positions; `patch: true` carries `patch_record`, and
+    `patch_record: none` a `patch_reason`."""
+    problems: List[str] = []
+    fields = [f for f in ("cell_args", "rect_args", "patch", "patch_record", "patch_reason") if f in entry]
+    if fields and entry.get("kind") != "op":
+        problems.append(f"{where}: {', '.join(fields)} belong to an op")
+    if "cell_args" in entry:
+        pairs = entry["cell_args"]
+        if (
+            not isinstance(pairs, list)
+            or not pairs
+            or not all(isinstance(p, list) and len(p) == 2 and all(_index(i) for i in p) for p in pairs)
+        ):
+            problems.append(f"{where}: cell_args lists `[row_position, col_position]` pairs")
+    if "rect_args" in entry:
+        positions = entry["rect_args"]
+        if not isinstance(positions, list) or not positions or not all(_index(i) for i in positions):
+            problems.append(f"{where}: rect_args lists argument positions")
+    if "patch" in entry and entry["patch"] is not True:
+        problems.append(f"{where}: patch is `true` or absent")
+    record = entry.get("patch_record")
+    if entry.get("patch") is True and (not isinstance(record, str) or not record):
+        problems.append(f"{where}: `patch: true` names its getter's record in `patch_record`")
+    if ("patch_record" in entry or "patch_reason" in entry) and entry.get("patch") is not True:
+        problems.append(f"{where}: patch_record / patch_reason belong to a `patch: true` op")
+    reason = entry.get("patch_reason")
+    if record == PATCH_RECORD_NONE and (not isinstance(reason, str) or not reason.strip()):
+        problems.append(f"{where}: `patch_record: none` needs a `patch_reason`")
+    if "patch_reason" in entry and record != PATCH_RECORD_NONE:
+        problems.append(f"{where}: patch_reason explains a `patch_record: none` only")
     return problems
 
 
@@ -354,6 +401,46 @@ def check_typed_slots(entries: Dict[str, dict], surfaces: Optional[extract_names
     return problems
 
 
+def _js_cell_pairs(params) -> List[List[int]]:
+    """Positions of adjacent `row` / `col` (or `<x>Row` / `<x>Col`) arguments."""
+    out = []
+    for i in range(len(params) - 1):
+        match = _JS_CELL_PAIR_RE.fullmatch(params[i][0])
+        if match and params[i + 1][0] in (f"{match.group(1)}col", f"{match.group(1)}Col"):
+            out.append([i, i + 1])
+    return out
+
+
+def _js_rect_positions(params) -> List[int]:
+    """Positions of arguments typed `CellRect`, a union holding it, or an array of either."""
+    return [i for i, (_, ptype) in enumerate(params) if re.search(r"(?<![\w$])CellRect(?![\w$])", ptype)]
+
+
+def check_address_args(entries: Dict[str, dict], dts_text: str) -> List[str]:
+    """Each op's `cell_args` / `rect_args` equal what the first signature of its JS member declares."""
+    pool = JsSurface(dts_text).callables()
+    problems: List[str] = []
+    for key, entry in sorted(entries.items()):
+        if not isinstance(entry, dict) or entry.get("kind") != "op":
+            continue
+        member = pool.get(entry.get("js")) if isinstance(entry.get("js"), str) else None
+        if member is None:
+            for field in ("cell_args", "rect_args"):
+                if field in entry:
+                    problems.append(f"{key}: {field} names no member of {WASM_DTS.name}")
+            continue
+        for field, want in (
+            ("cell_args", _js_cell_pairs(member.params)),
+            ("rect_args", _js_rect_positions(member.params)),
+        ):
+            have = entry.get(field) or []
+            if have != want:
+                problems.append(
+                    f"{key}: {field} is {have or 'absent'}, but `{member.name}` in {WASM_DTS.name} declares {want or 'none'}"
+                )
+    return problems
+
+
 def check_coverage(entries: Dict[str, dict], surfaces: extract_names.Surfaces) -> List[str]:
     """Each exported symbol is some entry's current or `was` name, on a surface that entry lists.
 
@@ -408,6 +495,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         problems += check_ledger_index(data, surfaces)
         problems += check_rules(entries)
         problems += check_typed_slots(entries, surfaces)
+        problems += check_address_args(entries, WASM_DTS.read_text(encoding="utf-8"))
         if args.coverage:
             problems += check_coverage(entries, surfaces)
         flagged = [(f"entries.{k}", e["flag"]) for k, e in entries.items() if isinstance(e, dict) and "flag" in e]

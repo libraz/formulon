@@ -1,0 +1,167 @@
+R18.all	chart_legend.set	patch	`setChartLegend` takes `readonly number[]` last, not a declared `<X>Patch`
+R18.all	header_footer.set	patch	`setHeaderFooter` takes `HeaderFooterInput` last, not a declared `<X>Patch`
+R18.all	pivot_style_info.set	patch	`setPivotStyleInfo` takes `PivotStyleInput` last, not a declared `<X>Patch`
+R18.all	print_options.set	patch	`setPrintOptions` takes `PrintOptionsInput` last, not a declared `<X>Patch`
+R23.list	border.get_count	getBorderCount	`border` is `access: indexed`; `getBorderCount` leaves the native surface
+R23.list	cell_style_xf.get_count	getCellStyleXfCount	`cell_style_xf` is `access: indexed`; `getCellStyleXfCount` leaves the native surface
+R23.list	cell_xf.get_count	getCellXfCount	`cell_xf` is `access: indexed`; `getCellXfCount` leaves the native surface
+R23.list	collection.border	listBorders	`border` is `access: indexed`; `listBorders` is missing
+R23.list	collection.cell_style_xf	listCellStyleXfs	`cell_style_xf` is `access: indexed`; `listCellStyleXfs` is missing
+R23.list	collection.cell_xf	listCellXfs	`cell_xf` is `access: indexed`; `listCellXfs` is missing
+R23.list	collection.dxf	listDxfs	`dxf` is `access: indexed`; `listDxfs` is missing
+R23.list	collection.fill	listFills	`fill` is `access: indexed`; `listFills` is missing
+R23.list	collection.font	listFonts	`font` is `access: indexed`; `listFonts` is missing
+R23.list	collection.pivot	listPivots	`pivot` is `access: list`; `listPivots` is missing
+R23.list	collection.pivot_cache_field	listPivotCacheFields	`pivot_cache_field` is `access: list`; `listPivotCacheFields` is missing
+R23.list	collection.pivot_cache_field_shared_item	listPivotCacheFieldSharedItems	`pivot_cache_field_shared_item` is `access: list`; `listPivotCacheFieldSharedItems` is missing
+R23.list	collection.pivot_field_item	listPivotFieldItems	`pivot_field_item` is `access: indexed`; `listPivotFieldItems` is missing
+R23.list	dxf.get_count	getDxfCount	`dxf` is `access: indexed`; `getDxfCount` leaves the native surface
+R23.list	fill.get_count	getFillCount	`fill` is `access: indexed`; `getFillCount` leaves the native surface
+R23.list	font.get_count	getFontCount	`font` is `access: indexed`; `getFontCount` leaves the native surface
+R23.list	pivot.get_count	getPivotCount	`pivot` is `access: list`; `getPivotCount` leaves the native surface
+R23.list	pivot_cache.get_id	getPivotCacheId	`pivot` is `access: list`; `getPivotCacheId` leaves the native surface
+R23.list	pivot_cache_field.get_count	getPivotCacheFieldCount	`pivot_cache_field` is `access: list`; `getPivotCacheFieldCount` leaves the native surface
+R23.list	pivot_cache_field_shared_item.get_count	getPivotCacheFieldSharedItemCount	`pivot_cache_field_shared_item` is `access: list`; `getPivotCacheFieldSharedItemCount` leaves the native surface
+R23.list	pivot_field_item.get_count	getPivotFieldItemCount	`pivot_field_item` is `access: indexed`; `getPivotFieldItemCount` leaves the native surface
+R25.a1	array_formula.get	a1	`getArrayFormula` lacks the overload taking each cell as one A1 string (string)
+R25.a1	binding.set_value	a1	`setValue` lacks the overload taking each cell as one A1 string (string, number | string | boolean | null | Value)
+R25.a1	blank.set	a1	`setBlank` lacks the overload taking each cell as one A1 string (string)
+R25.a1	bool.set	a1	`setBool` lacks the overload taking each cell as one A1 string (string, boolean)
+R25.a1	cell_phonetic.get	a1	`getCellPhonetic` lacks the overload taking each cell as one A1 string (string)
+R25.a1	cell_phonetic.set	a1	`setCellPhonetic` lacks the overload taking each cell as one A1 string (string, string | null)
+R25.a1	cell_phonetic_properties.get	a1	`getCellPhoneticProperties` lacks the overload taking each cell as one A1 string (string)
+R25.a1	cell_phonetic_properties.set	a1	`setCellPhoneticProperties` lacks the overload taking each cell as one A1 string (string, PhoneticPropertiesInput)
+R25.a1	cell_phonetic_run.list.get_cell_phonetic_runs	a1	`getCellPhoneticRuns` lacks the overload taking each cell as one A1 string (string)
+R25.a1	cell_phonetic_runs.set	a1	`setCellPhoneticRuns` lacks the overload taking each cell as one A1 string (string, readonly PhoneticRun[] | null)
+R25.a1	cell_show_phonetic.get	a1	`getCellShowPhonetic` lacks the overload taking each cell as one A1 string (string)
+R25.a1	cell_show_phonetic.set	a1	`setCellShowPhonetic` lacks the overload taking each cell as one A1 string (string, boolean)
+R25.a1	cell_xf_index.clear	a1	`clearCellXfIndex` lacks the overload taking each cell as one A1 string (string)
+R25.a1	cell_xf_index.get	a1	`getCellXfIndex` lacks the overload taking each cell as one A1 string (string)
+R25.a1	cell_xf_index.set	a1	`setCellXfIndex` lacks the overload taking each cell as one A1 string (string, number)
+R25.a1	cf_formula.evaluate	a1	`evaluateCfFormula` lacks the overload taking each cell as one A1 string (string, string, string)
+R25.a1	comment.get	a1	`getComment` lacks the overload taking each cell as one A1 string (string)
+R25.a1	comment.remove	a1	`removeComment` lacks the overload taking each cell as one A1 string (string)
+R25.a1	comment.set	a1	`setComment` lacks the overload taking each cell as one A1 string (string, Comment)
+R25.a1	comment_visible.get	a1	`getCommentVisible` lacks the overload taking each cell as one A1 string (string)
+R25.a1	comment_visible.set	a1	`setCommentVisible` lacks the overload taking each cell as one A1 string (string, boolean)
+R25.a1	data_table.get	a1	`getDataTable` lacks the overload taking each cell as one A1 string (string)
+R25.a1	data_table.remove	a1	`removeDataTable` lacks the overload taking each cell as one A1 string (string)
+R25.a1	dependents.get	a1	`getDependents` lacks the overload taking each cell as one A1 string (string, number)
+R25.a1	display_text.get	a1	`getDisplayText` lacks the overload taking each cell as one A1 string (string)
+R25.a1	effective_style.get	a1	`getEffectiveStyle` lacks the overload taking each cell as one A1 string (string)
+R25.a1	error.set	a1	`setError` lacks the overload taking each cell as one A1 string (string, ErrorCode)
+R25.a1	formula.evaluate	a1	`evaluateFormula` lacks the overload taking each cell as one A1 string (string, string)
+R25.a1	formula_array.evaluate	a1	`evaluateFormulaArray` lacks the overload taking each cell as one A1 string (string, string)
+R25.a1	formula_r1c1.get	a1	`getFormulaR1C1` lacks the overload taking each cell as one A1 string (string)
+R25.a1	hyperlink.add	a1	`addHyperlink` lacks the overload taking each cell as one A1 string (string, HyperlinkInput)
+R25.a1	hyperlink.get	a1	`getHyperlink` lacks the overload taking each cell as one A1 string (string)
+R25.a1	hyperlink.remove	a1	`removeHyperlink` lacks the overload taking each cell as one A1 string (string)
+R25.a1	lambda_text.get	a1	`getLambdaText` lacks the overload taking each cell as one A1 string (string)
+R25.a1	number.set	a1	`setNumber` lacks the overload taking each cell as one A1 string (string, number)
+R25.a1	pane_top_left.set	a1	`setPaneTopLeft` lacks the overload taking each cell as one A1 string (string)
+R25.a1	pivot.create	a1	`addPivot` lacks the overload taking each cell as one A1 string (string, number, string)
+R25.a1	pivot_show_details.get	a1	`showPivotDetails` lacks the overload taking each cell as one A1 string (number, string)
+R25.a1	precedents.get	a1	`getPrecedents` lacks the overload taking each cell as one A1 string (string, number)
+R25.a1	spill_info.get	a1	`getSpillInfo` lacks the overload taking each cell as one A1 string (string)
+R25.a1	text.set	a1	`setText` lacks the overload taking each cell as one A1 string (string, string)
+R25.a1	top_left.set	a1	`setTopLeft` lacks the overload taking each cell as one A1 string (string)
+R25.a1	value.get	a1	`getValue` lacks the overload taking each cell as one A1 string (string)
+R25.a1	value.validate	a1	`validateValue` lacks the overload taking each cell as one A1 string (string, Value)
+R25.count	border.get_count	getBorderCount	`getBorderCount` counts or positions; read the collection as a list
+R25.count	cell.get_at	getCellAt	`getCellAt` counts or positions; read the collection as a list
+R25.count	cell.get_count	getCellCount	`getCellCount` counts or positions; read the collection as a list
+R25.count	cell_style_xf.get_count	getCellStyleXfCount	`getCellStyleXfCount` counts or positions; read the collection as a list
+R25.count	cell_xf.get_count	getCellXfCount	`getCellXfCount` counts or positions; read the collection as a list
+R25.count	dxf.get_count	getDxfCount	`getDxfCount` counts or positions; read the collection as a list
+R25.count	fill.get_count	getFillCount	`getFillCount` counts or positions; read the collection as a list
+R25.count	font.get_count	getFontCount	`getFontCount` counts or positions; read the collection as a list
+R25.count	pivot.get_count	getPivotCount	`getPivotCount` counts or positions; read the collection as a list
+R25.count	pivot_cache_field.get_count	getPivotCacheFieldCount	`getPivotCacheFieldCount` counts or positions; read the collection as a list
+R25.count	pivot_cache_field_shared_item.get_count	getPivotCacheFieldSharedItemCount	`getPivotCacheFieldSharedItemCount` counts or positions; read the collection as a list
+R25.count	pivot_field_item.get_count	getPivotFieldItemCount	`getPivotFieldItemCount` counts or positions; read the collection as a list
+R25.rect	cell_rect_pt.get	arg0	`getCellRectPt` argument 0 is `CellRect`, not `CellRect | string`
+R25.rect	cells_in_range.get	arg0	`getCellsInRange` argument 0 is `CellRect`, not `CellRect | string`
+R25.rect	cf_range.evaluate	arg0	`evaluateCfRange` argument 0 is `CellRect`, not `CellRect | string`
+R25.rect	hyperlink.add_range	arg0	`addHyperlinkRange` argument 0 is `CellRect`, not `CellRect | string`
+R25.rect	merge.add	arg0	`addMerge` argument 0 is `CellRect`, not `CellRect | string`
+R25.rect	merge.remove	arg0	`removeMerge` argument 0 is `CellRect`, not `CellRect | string`
+R25.rect	merges_in_range.get	arg0	`getMergesInRange` argument 0 is `CellRect`, not `CellRect | string`
+R25.rect	partial.recalc	arg0	`recalcViewport` argument 0 is `CellRect`, not `CellRect | string`
+R25.rect	pivot_anchor.set	arg1	`setPivotAnchor` argument 1 is `CellRect`, not `CellRect | string`
+R25.rect	print_area.set	arg0	`setPrintArea` argument 0 is `readonly CellRect[] | null`, not `CellRect | string`
+R25.rect	range_style.remap	arg0	`remapRangeStyle` argument 0 is `CellRect`, not `CellRect | string`
+R25.rect	range_style.snapshot	arg0	`snapshotRangeStyle` argument 0 is `CellRect`, not `CellRect | string`
+R25.rect	range_style_bases.get	arg0	`getRangeStyleBases` argument 0 is `CellRect`, not `CellRect | string`
+R25.rect	range_style_bases_excluding.get	arg0	`getRangeStyleBasesExcluding` argument 0 is `CellRect`, not `CellRect | string`
+R25.rect	range_xf_index.set	arg0	`setRangeXfIndex` argument 0 is `CellRect`, not `CellRect | string`
+R26.ref	cf_rule.remove	cfRuleIndex	`removeCfRule(cfRuleIndex)` addresses by position; take `cfRule: CfRuleRef`
+R26.ref	pivot.remove	pivotIndex	`removePivot(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_anchor.set	pivotIndex	`setPivotAnchor(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_cache.get_id	pivotIndex	`getPivotCacheId(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_column_field_order.get	pivotIndex	`getPivotColumnFieldOrder(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_column_field_order.set	pivotIndex	`setPivotColumnFieldOrder(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_data_field.add	pivotIndex	`addPivotDataField(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_data_field.clear	pivotIndex	`clearPivotDataFields(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_data_field.set	pivotIndex	`setPivotDataField(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_data_field_default_name.get	pivotIndex	`getPivotDataFieldDefaultName(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_data_fields.list	pivotIndex	`listPivotDataFields(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field.add	pivotIndex	`addPivotField(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field.clear	pivotIndex	`clearPivotFields(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_axis.set	pivotIndex	`setPivotFieldAxis(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_custom_name.set	pivotIndex	`setPivotFieldCustomName(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_date_group.clear	pivotIndex	`clearPivotFieldDateGroup(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_date_group.set	pivotIndex	`setPivotFieldDateGroup(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_default_subtotal.set	pivotIndex	`setPivotFieldDefaultSubtotal(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_fill_down_labels.set	pivotIndex	`setPivotFieldFillDownLabels(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_insert_blank_row.set	pivotIndex	`setPivotFieldInsertBlankRow(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_item.add	pivotIndex	`addPivotFieldItem(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_item.add_at	pivotIndex	`addPivotFieldSharedItem(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_item.get	pivotIndex	`getPivotFieldItem(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_item.get_count	pivotIndex	`getPivotFieldItemCount(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_item_caption.set	pivotIndex	`setPivotFieldItemCaption(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_item_show_detail.set	pivotIndex	`setPivotFieldItemShowDetail(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_item_visible.set	pivotIndex	`setPivotFieldItemVisible(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_items.clear	pivotIndex	`clearPivotFieldItems(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_number_format.set	pivotIndex	`setPivotFieldNumberFormat(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_show_all.set	pivotIndex	`setPivotFieldShowAll(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_show_detail.set	pivotIndex	`setPivotFieldShowDetail(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_sort.set	pivotIndex	`setPivotFieldSort(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_subtotal_fn.add	pivotIndex	`addPivotFieldSubtotalFn(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_subtotal_fns.clear	pivotIndex	`clearPivotFieldSubtotalFns(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_field_subtotal_top.set	pivotIndex	`setPivotFieldSubtotalTop(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_fields.list	pivotIndex	`listPivotFields(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_filter.add	pivotIndex	`addPivotFilter(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_filter.clear	pivotIndex	`clearPivotFilters(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_filter.remove	pivotIndex	`removePivotFilter(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_filters.list	pivotIndex	`listPivotFilters(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_grand_totals.get	pivotIndex	`getPivotGrandTotals(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_grand_totals.set	pivotIndex	`setPivotGrandTotals(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_layout.get	pivotIndex	`getPivotLayout(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_name.get	pivotIndex	`getPivotName(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_name.set	pivotIndex	`setPivotName(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_options.get	pivotIndex	`getPivotOptions(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_options.set	pivotIndex	`setPivotOptions(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_project.get	pivotIndex	`projectPivot(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_projection_pending.get	pivotIndex	`isPivotProjectionPending(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_report_layout.get	pivotIndex	`getPivotReportLayout(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_report_layout.set	pivotIndex	`setPivotReportLayout(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_row_field_order.get	pivotIndex	`getPivotRowFieldOrder(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_row_field_order.set	pivotIndex	`setPivotRowFieldOrder(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_show_details.get	pivotIndex	`showPivotDetails(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_style_info.get	pivotIndex	`getPivotStyleInfo(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	pivot_style_info.set	pivotIndex	`setPivotStyleInfo(pivotIndex)` addresses by position; take `pivot: PivotRef`
+R26.ref	protected_range.remove	protectedRangeIndex	`removeProtectedRange(protectedRangeIndex)` addresses by position; take `protectedRange: ProtectedRangeRef`
+R26.ref	protected_range.update	protectedRangeIndex	`updateProtectedRange(protectedRangeIndex)` addresses by position; take `protectedRange: ProtectedRangeRef`
+R26.ref	slicer.add	table	`addSlicer(table: number)` is not `TableRef`
+R26.ref	table.remove	tableIndex	`removeTable(tableIndex)` addresses by position; take `table: TableRef`
+R26.ref	table.update	tableIndex	`updateTable(tableIndex)` addresses by position; take `table: TableRef`
+R26.ref	table_auto_filter.apply	table	`applyTableAutoFilter(table: number)` is not `TableRef`
+R26.ref	table_auto_filter.clear	table	`clearTableAutoFilter(table: number)` is not `TableRef`
+R26.ref	table_auto_filter.evaluate	table	`evaluateTableAutoFilter(table: number)` is not `TableRef`
+R26.ref	table_auto_filter.get	table	`getTableAutoFilter(table: number)` is not `TableRef`
+R26.ref	table_auto_filter.remove	table	`removeTableAutoFilter(table: number)` is not `TableRef`
+R26.ref	table_auto_filter.set	table	`setTableAutoFilter(table: number)` is not `TableRef`
+R26.ref	table_column.rename	tableIndex	`renameTableColumn(tableIndex)` addresses by position; take `table: TableRef`
+R26.ref	table_column_totals.set	tableIndex	`setTableColumnTotals(tableIndex)` addresses by position; take `table: TableRef`
+R27.sheetparam	defined_name.get	localSheetId	`getDefinedName(localSheetId: number | null)` names a sheet; type it `SheetRef`
+R27.sheetparam	defined_name.remove	localSheetId	`removeDefinedName(localSheetId: number | null)` names a sheet; type it `SheetRef`

@@ -273,9 +273,9 @@ def _tree_names(ctx: Context, keys: Sequence[str], field: str, pool: Dict[str, o
 @_owned("R23.list")
 def _rule_collection_access(ctx: Context) -> Iterable[Violation]:
     """An index-keyed collection's binding shape follows its ledger `access:`. `handles` and `list`: only
-    `list<Plural>()`, no count and no element getter; `indexed`: the count and the element getter, no list;
-    `property`: `get<Plural>()` and `set<Plural>()`, no count and no element getter; `exempt`: unchecked. A
-    surface none of the collection's ops lists is not judged.
+    `list<Plural>()`, no count and no element getter; `indexed`: the element getter and `list<Plural>()`, no
+    count; `property`: `get<Plural>()` and `set<Plural>()`, no count and no element getter; `exempt`: unchecked.
+    A surface none of the collection's ops lists is not judged.
     """
     for surface in BINDING_SURFACES:
         field = _field(surface)
@@ -299,21 +299,16 @@ def _rule_collection_access(ctx: Context) -> Iterable[Violation]:
                 want = [f"get_{plural}", f"set_{plural}"] if field == "py" else [f"get{pascal}", f"set{pascal}"]
                 forbidden = present
             else:
-                want = [name for _, name in present] if len(present) >= 2 else []
-                forbidden = []
-                listed = f"list_{plural}" if field == "py" else f"list{pascal}"
-                if listed in pool:
-                    yield _violation(
-                        ctx, "R23.list", surface, f"collection.{name}", listed, f"`{name}` is indexed; drop `{listed}`"
-                    )
-                if len(present) < 2:
+                want = [f"list_{plural}" if field == "py" else f"list{pascal}"]
+                forbidden = _tree_names(ctx, counts, field, pool)
+                if not _tree_names(ctx, getters, field, pool):
                     yield _violation(
                         ctx,
                         "R23.list",
                         surface,
                         f"collection.{name}",
-                        "indexed",
-                        f"`{name}` is indexed; it exposes the count and the element getter",
+                        "getter",
+                        f"`{name}` is indexed; it exposes the element getter by index",
                     )
             for wanted in want:
                 if wanted not in pool:

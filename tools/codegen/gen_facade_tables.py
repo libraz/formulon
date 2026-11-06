@@ -8,14 +8,20 @@ Outputs (read through ``facade_scope.py``, never edited by hand):
   the facade forwards or implements), ``SHEET_STRUCTURE_OPS`` (the ops after
   which the facade re-reads the sheet list), ``LIST_FAMILIES``
   (``{listName: [countName, getName]}``, the lists the facade assembles from a
-  raw count and element getter) and ``HANDWRITTEN`` (ops the ledger marks
-  ``facade: handwritten``).
+  raw count and element getter), ``HANDWRITTEN`` (ops the ledger marks
+  ``facade: handwritten``), ``CELL_ARGS`` (``{method: [[row, col], ...]}``, the
+  argument positions of each one-cell ``(row, col)`` pair, the receiver
+  excluded) and ``RECT_ARGS`` (``{method: [position, ...]}``, the ``CellRect``
+  arguments), both from the ledger's ``cell_args`` / ``rect_args``.
 * ``packages/python/formulon/sheet.py``: the same tables in its
   ``# <facade-tables>`` region, with the Python names. ``--check`` skips the
   file while it has no region or an empty one; ``--write`` fills an empty one.
 * ``src/node_addon/generated/facade_scope.inc``: the sorted raw names of the
   sheet-scope methods, as string literals for a C++ array initialiser; the
   addon words its argument guards for these as ``Sheet.<name>``.
+* ``tools/api/address_args.json``: ``CELL_ARGS`` and ``RECT_ARGS`` per language
+  (``{"js": {"cell_args": ..., "rect_args": ...}, "py": ...}``), sorted, for
+  the binding tests to read.
 
 Modes:
   --write   rewrite the outputs
@@ -25,6 +31,7 @@ Modes:
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -38,6 +45,7 @@ import facade_scope  # noqa: E402
 NPM_COMMON = REPO_ROOT / "packages/npm/common.mjs"
 PYTHON_SHEET = REPO_ROOT / "packages/python/formulon/sheet.py"
 NODE_SCOPE_INC = REPO_ROOT / "src/node_addon/generated/facade_scope.inc"
+ADDRESS_ARGS_JSON = REPO_ROOT / "tools/api/address_args.json"
 
 _REGION = {
     "js": re.compile(r"(// <facade-tables>[^\n]*\n)(.*?)(// </facade-tables>)", re.S),
@@ -67,6 +75,45 @@ def _js_list(name: str, values: Sequence[str]) -> str:
     return f"const {name} = Object.freeze([\n{body}]);\n"
 
 
+def _py_positions(value: list) -> str:
+    items = [f"({p[0]}, {p[1]})" if isinstance(p, list) else str(p) for p in value]
+    return "(" + ", ".join(items) + ("," if len(items) == 1 else "") + ")"
+
+
+def address_tables(language: str, ledger: Optional[facade_scope.Ledger] = None) -> str:
+    """The `CELL_ARGS` and `RECT_ARGS` tables of `language`'s facade region."""
+    ledger = ledger or facade_scope.load()
+    tables = {
+        "CELL_ARGS": facade_scope.cell_args(ledger, language),
+        "RECT_ARGS": facade_scope.rect_args(ledger, language),
+    }
+    out = []
+    for table, entries in tables.items():
+        if language == "js":
+            body = "".join(f"{_INDENT}{name}: {json.dumps(value)},\n" for name, value in entries.items())
+            out.append(f"const {table} = Object.freeze({{\n{body}}});\n")
+        else:
+            body = "".join(f'    "{name}": {_py_positions(value)},\n' for name, value in entries.items())
+            out.append(f"{table} = {{\n{body}}}\n")
+    return "".join(out)
+
+
+def address_args_json(ledger: Optional[facade_scope.Ledger] = None) -> str:
+    """`tools/api/address_args.json`: both tables per language, keys sorted, one method per line."""
+    ledger = ledger or facade_scope.load()
+    languages = []
+    for language in sorted(facade_scope.LANGUAGES):
+        tables = []
+        for table, entries in (
+            ("cell_args", facade_scope.cell_args(ledger, language)),
+            ("rect_args", facade_scope.rect_args(ledger, language)),
+        ):
+            rows = ",\n".join(f"      {json.dumps(name)}: {json.dumps(value)}" for name, value in entries.items())
+            tables.append(f'    "{table}": {{\n{rows}\n    }}' if rows else f'    "{table}": {{}}')
+        languages.append(f'  "{language}": {{\n' + ",\n".join(tables) + "\n  }")
+    return "{\n" + ",\n".join(languages) + "\n}\n"
+
+
 def js_region() -> str:
     names, families = _tables("js")
     out = [_js_list("WORKBOOK_METHODS", names["WORKBOOK_METHODS"])]
@@ -75,6 +122,7 @@ def js_region() -> str:
     body = "".join(f"{_INDENT}{k}: ['{c}', '{g}'],\n" for k, (c, g) in families.items())
     out.append(f"const LIST_FAMILIES = Object.freeze({{\n{body}}});\n")
     out.append(_js_list("HANDWRITTEN", names["HANDWRITTEN"]))
+    out.append(address_tables("js"))
     return "".join(out)
 
 
@@ -91,6 +139,7 @@ def py_region() -> str:
     body = "".join(f'    "{k}": ("{c}", "{g}"),\n' for k, (c, g) in families.items())
     out.append(f"LIST_FAMILIES = {{\n{body}}}\n")
     out.append(_py_tuple("HANDWRITTEN", names["HANDWRITTEN"]))
+    out.append(address_tables("py"))
     return "".join(out)
 
 
@@ -126,6 +175,7 @@ def outputs() -> List[Tuple[Path, Optional[str]]]:
     else:
         result.append((PYTHON_SHEET, None))
     result.append((NODE_SCOPE_INC, node_scope_inc()))
+    result.append((ADDRESS_ARGS_JSON, address_args_json()))
     return result
 
 

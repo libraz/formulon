@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from .api_conventions import LEDGER_PATH, Ledger, c_verb, load_ledger
 from .api_conventions_bindings import FACADE_EXTRA, SHEET_CLASS, WORKBOOK_CLASS
 from .enum_decl import (
+    _cpp_enum_class_values,
     _extract_c_typedef_enum,
     _extract_cpp_enum_class,
     _extract_ts_enum,
@@ -575,13 +576,86 @@ def check_dts_enums() -> List[str]:
             )
 
     problems.extend(_check_js_constant_tables(dts_text))
+    common_text, value_h_text = _read(NPM_COMMON_MJS), _read(VALUE_H)
+    problems.extend(check_string_tables(common_text, dts_text, value_h_text))
+    problems.extend(check_string_tables(common_text, _read(NODE_DTS), value_h_text, NODE_DTS.name))
+    return problems
+
+
+# String tables keyed by an enum's members: `export const X = Object.freeze({ [Enum.Member]: '...', ... })` at
+# runtime, `export const X: Readonly<Record<Enum, string>>;` in the declarations.
+_JS_STRING_TABLE_RE = re.compile(r"^export const (\w+) = Object\.freeze\(\{(.*?)\}\);", re.DOTALL | re.MULTILINE)
+_JS_STRING_MEMBER_RE = re.compile(r"\[(\w+)\.(\w+)\]\s*:\s*(?:'([^']*)'|\"([^\"]*)\")")
+_TS_STRING_TABLE_RE = re.compile(r"^export const (\w+)\s*:\s*Readonly<Record<(\w+),\s*string>>\s*;", re.MULTILINE)
+_ERROR_TABLE_RE = re.compile(r"kErrorTable\[\]\s*=\s*\{(.*?)\n\};", re.DOTALL)
+
+
+def _js_string_tables(text: str) -> Dict[str, Tuple[str, List[Tuple[str, str]]]]:
+    """`{name: (enum, [(member, text), ...])}` of the frozen tables whose every entry is `[Enum.Member]: '...'`."""
+    out: Dict[str, Tuple[str, List[Tuple[str, str]]]] = {}
+    for match in _JS_STRING_TABLE_RE.finditer(text):
+        entries = [e for e in match.group(2).split(",\n") if e.strip()]
+        members = _JS_STRING_MEMBER_RE.findall(match.group(2))
+        enums = {enum for enum, _, _, _ in members}
+        if members and len(members) == len(entries) and len(enums) == 1:
+            out[match.group(1)] = (enums.pop(), [(member, a or b) for _, member, a, b in members])
+    return out
+
+
+def string_table_names(text: str) -> Set[str]:
+    return set(_js_string_tables(text))
+
+
+def _error_display_names(value_h_text: str) -> Optional[List[Tuple[str, str]]]:
+    """`(ErrorCode member, display name)` in `kErrorTable` order, or None when either is unreadable."""
+    members = _cpp_enum_class_values(value_h_text, "ErrorCode")
+    table = _ERROR_TABLE_RE.search(value_h_text)
+    if members is None or table is None:
+        return None
+    names = re.findall(r'\{\s*"([^"]*)"\s*,', table.group(1))
+    return list(zip(members, names)) if len(names) == len(members) else None
+
+
+# The source of the texts of a string table, by the enum that keys it.
+_STRING_TABLE_SOURCES = {"ErrorCode": ("kErrorTable", _error_display_names)}
+
+
+def check_string_tables(common_text: str, dts_text: str, value_h_text: str, dts_name: str = WASM_DTS.name) -> List[str]:
+    """Each `Readonly<Record<Enum, string>>` the declarations type has a runtime table in `common.mjs` keyed by every
+    member of `Enum` in order, with the texts of its source table; and every runtime string table is declared."""
+    problems: List[str] = []
+    runtime = _js_string_tables(common_text)
+    declared = dict(_TS_STRING_TABLE_RE.findall(dts_text))
+    for name in sorted(set(runtime) - set(declared)):
+        problems.append(f"dts-enums: common.mjs exports the string table {name}, which {dts_name} does not declare")
+    for name, enum in sorted(declared.items()):
+        if name not in runtime:
+            problems.append(f"dts-enums: {dts_name} declares the string table {name}, which common.mjs does not export")
+            continue
+        keyed_by, rows = runtime[name]
+        members = _parse_ts_named_enum(dts_text, enum)
+        if keyed_by != enum or members is None or [m for m, _ in rows] != list(members):
+            problems.append(
+                f"dts-enums: {name} in common.mjs is keyed by {keyed_by} members {[m for m, _ in rows]}, "
+                f"not by every {enum} member in order {list(members or [])}"
+            )
+            continue
+        source = _STRING_TABLE_SOURCES.get(enum)
+        want = source[1](value_h_text) if source else None
+        if source and want is None:
+            problems.append(f"dts-enums: could not read {source[0]} to check {name}")
+        elif source and rows != want:
+            problems.append(
+                f"dts-enums: {name} in common.mjs is {[t for _, t in rows]}, but {source[0]} has {[t for _, t in want]}"
+            )
     return problems
 
 
 def _check_js_constant_tables(wasm_dts_text: str) -> List[str]:
     problems: List[str] = _npm_entries_reexport_common("dts-enums")
-    npm = _parse_js_constants(NPM_COMMON_MJS)
-    native = _parse_js_constants(NODE_INDEX_MJS)
+    strings = string_table_names(_read(NPM_COMMON_MJS))
+    npm = {k: v for k, v in _parse_js_constants(NPM_COMMON_MJS).items() if k not in strings}
+    native = {k: v for k, v in _parse_js_constants(NODE_INDEX_MJS).items() if k not in strings}
     npm_label = NPM_COMMON_MJS.relative_to(REPO_ROOT)
     native_label = NODE_INDEX_MJS.relative_to(REPO_ROOT)
 

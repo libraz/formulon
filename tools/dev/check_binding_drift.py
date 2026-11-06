@@ -112,7 +112,9 @@ Checks:
                   canonical `.d.ts`, and as the declaration file their own
                   package ships -- swapping one JS package for the other
                   is only safe if a named constant means the same thing in
-                  both.
+                  both. A string table declared `Readonly<Record<Enum,
+                  string>>` is keyed by every member of `Enum` in order and
+                  carries its source's texts (`ErrorCode`: `kErrorTable`).
   style-record-fields
                   Every public type that projects a style record
                   (`Color` / `Font` / `Fill` /

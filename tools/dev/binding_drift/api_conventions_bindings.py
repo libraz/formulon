@@ -220,8 +220,21 @@ class JsSurface:
             self.decls.setdefault(name, decl)
 
     def interface_members(self, name: str) -> Dict[str, TsMember]:
+        """Members of interface `name`; an overloaded method is its first signature (the coordinate form)."""
         decl = self.decls.get(name)
-        return {m.name: m for m in decl.members} if decl and decl.kind == "interface" else {}
+        out: Dict[str, TsMember] = {}
+        for member in decl.members if decl and decl.kind == "interface" else ():
+            out.setdefault(member.name, member)
+        return out
+
+    def overloads(self, name: str) -> Tuple[TsMember, ...]:
+        """Every signature of the `Workbook` or `Sheet` method `name`, in declaration order."""
+        for interface in (SHEET_CLASS, WORKBOOK_CLASS):
+            decl = self.decls.get(interface)
+            found = tuple(m for m in decl.members if m.name == name and m.is_method) if decl else ()
+            if found:
+                return found
+        return ()
 
     @property
     def workbook(self) -> Dict[str, TsMember]:
@@ -296,6 +309,10 @@ class PyClass(NamedTuple):
     methods: Dict[str, PyFunc]
     constants: Dict[str, int] = {}
     doc: str = ""
+    overloads: Dict[str, Tuple[PyFunc, ...]] = {}
+
+
+_OVERLOAD_DECORATORS = frozenset({"overload", "typing.overload"})
 
 
 def _py_func(node: ast.AST, method: bool) -> PyFunc:
@@ -319,6 +336,7 @@ def _py_class(node: ast.ClassDef) -> PyClass:
     fields: Dict[str, str] = {}
     methods: Dict[str, PyFunc] = {}
     constants: Dict[str, int] = {}
+    stubs: Dict[str, List[PyFunc]] = {}
     for item in node.body:
         if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
             fields[item.target.id] = ast.unparse(item.annotation)
@@ -329,7 +347,11 @@ def _py_class(node: ast.ClassDef) -> PyClass:
             if isinstance(value, ast.Constant) and isinstance(value.value, int) and not isinstance(value.value, bool):
                 constants[item.targets[0].id] = value.value
         elif isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            methods[item.name] = _py_func(item, method=True)
+            func = _py_func(item, method=True)
+            if _OVERLOAD_DECORATORS & set(func.decorators):
+                stubs.setdefault(item.name, []).append(func)
+            # A method with `@overload` stubs reads as its first stub (the coordinate form), else as its last `def`.
+            methods[item.name] = stubs[item.name][0] if item.name in stubs else func
             if item.name == "__init__":
                 for sub in ast.walk(item):
                     targets = sub.targets if isinstance(sub, ast.Assign) else [getattr(sub, "target", None)]
@@ -349,6 +371,7 @@ def _py_class(node: ast.ClassDef) -> PyClass:
         methods,
         constants,
         ast.get_docstring(node) or "",
+        {name: tuple(found) for name, found in stubs.items()},
     )
 
 
@@ -415,6 +438,14 @@ class PySurface:
 
     def class_methods(self) -> Dict[str, Dict[str, PyFunc]]:
         return {WORKBOOK_CLASS: self.workbook, SHEET_CLASS: self.sheet}
+
+    def overloads(self, name: str) -> Tuple[PyFunc, ...]:
+        """The `@overload` stubs of the `Sheet` or `Workbook` method `name`, in definition order."""
+        for class_name in (SHEET_CLASS, WORKBOOK_CLASS):
+            cls = self.classes.get(class_name)
+            if cls is not None and name in cls.overloads:
+                return cls.overloads[name]
+        return ()
 
     def callables(self) -> Dict[str, PyFunc]:
         out = {name: fn for name, fn in self.functions.items() if name in self.exports}
@@ -1205,10 +1236,16 @@ def _is_dataclass(cls: PyClass, frozen: bool) -> bool:
 @_owned("R7.py")
 def _rule_py_records(ctx: Context) -> Iterable[Violation]:
     """Python record shape by role: a result is `@dataclass(frozen=True)` (no `NamedTuple`), an input a
-    `@dataclass` named `<Name>Input`, a patch a `TypedDict(total=False)` named `<Name>Patch` with `Optional`
-    fields.
+    `@dataclass` named `<Name>Input`. A patch is a `TypedDict(total=False)` named `<Name>Patch` that only types a
+    nested field: a method takes the keys of its patch as keyword-only arguments defaulting to `UNCHANGED`
+    (R18.all), never the patch itself.
     """
-    classes = surfaces(ctx).py.classes
+    found = surfaces(ctx).py
+    classes = found.classes
+    # A nested patch field arrives as a keyword-only argument; only a positional one passes a whole patch.
+    params = [
+        (name, p, t) for name, fn in sorted(found.callables().items()) for p, t in fn.params if p not in fn.kwonly
+    ]
     for key, entry, role in _records(ctx):
         name = _in_tree(classes, entry, "py")
         if name is None:
@@ -1226,16 +1263,15 @@ def _rule_py_records(ctx: Context) -> Iterable[Violation]:
                 yield _violation(
                     ctx, "R7.py", "py", key, "typed-dict", f"`{name}` is a patch; make it `TypedDict, total=False`"
                 )
-            for field_name, annotation in sorted(cls.fields.items()):
-                if annotation and not re.match(r"(?:typing\.)?Optional\[|.*\|\s*None$", annotation):
-                    yield _violation(
-                        ctx,
-                        "R7.py",
-                        "py",
-                        key,
-                        field_name,
-                        f"`{name}.{field_name}: {annotation}` is not `Optional[...]`",
-                    )
+            for method in sorted({m for m, _, annotation in params if _mentions(annotation, name)}):
+                yield _violation(
+                    ctx,
+                    "R7.py",
+                    "py",
+                    key,
+                    method,
+                    f"`{method}` takes `{name}`; take its keys as keyword-only arguments defaulting to `UNCHANGED`",
+                )
 
 
 # ---------------------------------------------------------------------------

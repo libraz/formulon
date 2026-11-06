@@ -35,7 +35,7 @@ STATIC_RULE_IDS = {
     "R6.c.field", "R6.closed.js", "R6.closed.py", "R7.opts.js", "R7.opts.py", "R7.absent.js", "R7.absent.py",
     "R15.header", "R18.js", "R18.py", "R19.c", "R19.js", "R19.py", "R20.js", "R20.py", "R21.role", "R21.name",
     "R22.c", "R22.js", "R22.py", "R23.js", "R23.py", "R23.track", "R23.list", "R24.missing.js",
-    "R24.missing.py",
+    "R24.missing.py", "R18.all", "R25.a1", "R25.rect", "R25.count", "R26.ref", "R27.sheetparam",
 }  # fmt: skip
 
 
@@ -97,7 +97,7 @@ class RegistryTest(unittest.TestCase):
     def test_without_a_ledger_the_bound_rules_are_skipped_visibly(self) -> None:
         ctx = api_conventions.Context("FM_API fm_status_t fm_workbook_sheet_name(const fm_workbook_t* wb);\n")
         bound = {r: fn for r, fn in api_conventions.all_rules().items() if fn.__module__.endswith("_bindings")}
-        self.assertEqual(len(bound), 44)
+        self.assertEqual(len(bound), 50)
         self.assertEqual(api_conventions.collect(ctx, bound), [])
         self.assertTrue(any("no name ledger" in note for note in _SKIPPED))
 
@@ -842,14 +842,19 @@ class RecordRoleTest(BindingRuleTestBase):
             self.LEDGER,
             py_workbook="class Hyperlink(NamedTuple):\n    target: str\n\n"
             "class HyperlinkSpec:\n    target: str\n\n"
-            "class IterativePatch(TypedDict):\n    enabled: bool\n",
+            "class IterativePatch(TypedDict):\n    enabled: bool\n\n"
+            + _py_wb("    def set_iterative(self, patch: IterativePatch) -> None: ...\n"),
         )
         good = self.fixture.context(
             "",
             self.LEDGER,
             py_workbook="@dataclass(frozen=True)\nclass Hyperlink:\n    target: str\n\n"
             "@dataclass\nclass HyperlinkInput:\n    target: str\n\n"
-            "class IterativePatch(TypedDict, total=False):\n    enabled: Optional[bool]\n    limit: int | None\n",
+            "class IterativePatch(TypedDict, total=False):\n    enabled: bool\n    limit: int | None\n\n"
+            + _py_wb(
+                "    def set_iterative(self, *, enabled: bool = UNCHANGED, nested: IterativePatch = UNCHANGED)"
+                " -> None: ...\n"
+            ),
         )
         self.assert_rule(
             "R7.py",
@@ -859,7 +864,7 @@ class RecordRoleTest(BindingRuleTestBase):
                 ("py", "record.hyperlink", "dataclass"),
                 ("py", "record.hyperlink_input", "dataclass"),
                 ("py", "record.hyperlink_input", "name"),
-                ("py", "record.iterative_patch", "enabled"),
+                ("py", "record.iterative_patch", "set_iterative"),
                 ("py", "record.iterative_patch", "typed-dict"),
             ],
         )
@@ -1607,12 +1612,12 @@ class CollectionAccessTest(BindingRuleTestBase):
 
     def test_r23_list(self) -> None:
         bad = _wb(
-            "  getTable(i: number): Table;\n  getTableCount(): number;\n  getFont(i: number): Font;\n"
-            "  listFonts(): readonly Font[];\n  getCellPhoneticRun(i: number): Run;\n  getCellPhoneticRunCount(): number;\n"
+            "  getTable(i: number): Table;\n  getTableCount(): number;\n  getFontCount(): number;\n"
+            "  getCellPhoneticRun(i: number): Run;\n  getCellPhoneticRunCount(): number;\n"
             "  getPivotCount(): number;\n"
         )
         good = _wb(
-            "  listTables(): readonly Table[];\n  getFont(i: number): Font;\n  getFontCount(): number;\n"
+            "  listTables(): readonly Table[];\n  getFont(i: number): Font;\n  listFonts(): readonly Font[];\n"
             "  getCellPhoneticRuns(): readonly Run[];\n  setCellPhoneticRuns(runs: readonly Run[] | null): void;\n"
             "  getPivotCount(): number;\n"
         )
@@ -1621,8 +1626,9 @@ class CollectionAccessTest(BindingRuleTestBase):
             self.fixture.context("", self.ledger(), wasm=bad),
             self.fixture.context("", self.ledger(), wasm=good),
             [
-                ("wasm", "collection.font", "indexed"),
+                ("wasm", "collection.font", "getter"),
                 ("wasm", "collection.font", "listFonts"),
+                ("wasm", "font.get_count", "getFontCount"),
                 ("wasm", "collection.run", "getCellPhoneticRuns"),
                 ("wasm", "collection.run", "setCellPhoneticRuns"),
                 ("wasm", "collection.table", "listTables"),
@@ -2090,6 +2096,347 @@ class MissingLookupTest(BindingRuleTestBase):
             self.fixture.context("", self.LEDGER, py_sheet=bad),
             self.fixture.context("", self.LEDGER, py_sheet=good),
             [("py", "chart_data.get", "throw"), ("py", "image_info.get", "null")],
+        )
+
+
+class MemberModelTest(BindingRuleTestBase):
+    """The first overload (the coordinate form) is a member's signature; every overload stays readable."""
+
+    def test_typescript_first_overload_is_the_signature(self) -> None:
+        js = api_conventions_bindings.JsSurface(
+            _sheet("  setFormula(row: number, col: number, formula: string): void;\n"
+                   "  setFormula(a1: string, formula: string): void;\n")
+        )  # fmt: skip
+        self.assertEqual([p for p, _ in js.sheet["setFormula"].params], ["row", "col", "formula"])
+        self.assertEqual([p for p, _ in js.callables()["setFormula"].params], ["row", "col", "formula"])
+        self.assertEqual(
+            [[p for p, _ in m.params] for m in js.overloads("setFormula")],
+            [["row", "col", "formula"], ["a1", "formula"]],
+        )
+        self.assertEqual(len(js.overloads("missing")), 0)
+
+    def test_python_first_stub_is_the_signature(self) -> None:
+        py = api_conventions_bindings.PySurface(
+            {
+                "sheet.py": _py_sheet(
+                    "    @overload\n    def set_formula(self, row: int, col: int, formula: str) -> None: ...\n"
+                    "    @typing.overload\n    def set_formula(self, a1: str, formula: str) -> None: ...\n"
+                    "    def set_formula(self, *args: Any, **kwargs: Any) -> None: ...\n"
+                    "    def get_zoom(self) -> int: ...\n"
+                )
+            }
+        )
+        self.assertEqual([p for p, _ in py.sheet["set_formula"].params], ["row", "col", "formula"])
+        self.assertEqual(
+            [[p for p, _ in f.params] for f in py.overloads("set_formula")],
+            [["row", "col", "formula"], ["a1", "formula"]],
+        )
+        self.assertEqual(py.overloads("get_zoom"), ())
+        self.assertEqual(py.sheet["get_zoom"].returns, "int")
+
+    def test_without_stubs_the_last_definition_wins(self) -> None:
+        py = api_conventions_bindings.PySurface(
+            {"sheet.py": _py_sheet("    def f(self, a: int) -> None: ...\n    def f(self, b: str) -> None: ...\n")}
+        )
+        self.assertEqual(py.sheet["f"].params, (("b", "str"),))
+
+
+def _cell_ledger(**extra: object) -> dict:
+    def op(js: str, py: str, **fields: object) -> dict:
+        return {"kind": "op", "scope": "sheet", "js": js, "py": py, "surfaces": ["wasm", "native", "py"], **fields}
+
+    return {
+        "entries": {
+            "value.set": op("setValue", "set_value", cell_args=[[0, 1]]),
+            "cf_formula.evaluate": op("evaluateCfFormula", "evaluate_cf_formula", cell_args=[[0, 1], [2, 3]]),
+            "pivot_details.show": op("showPivotDetails", "show_pivot_details", cell_args=[[1, 2]]),
+            "merge.add": op("addMerge", "add_merge", rect_args=[0]),
+            "print_area.set": op("setPrintArea", "set_print_area", rect_args=[0]),
+            **extra,
+        }
+    }
+
+
+class AddressArgsTest(BindingRuleTestBase):
+    GOOD_JS = _sheet(
+        "  setValue(row: number, col: number, value: Value): void;\n"
+        "  setValue(a1: string, value: Value): void;\n"
+        "  evaluateCfFormula(row: number, col: number, anchorRow: number, anchorCol: number, f: string): Value;\n"
+        "  evaluateCfFormula(a1: string, anchor: string, f: string): Value;\n"
+        "  showPivotDetails(pivot: PivotRef, row: number, col: number): Sheet;\n"
+        "  showPivotDetails(pivot: PivotRef, a1: string): Sheet;\n"
+    )
+    GOOD_PY = _py_sheet(
+        "    @overload\n    def set_value(self, row: int, col: int, value: Any) -> None: ...\n"
+        "    @overload\n    def set_value(self, a1: str, value: Any) -> None: ...\n"
+        "    def set_value(self, *args: Any, **kwargs: Any) -> None: ...\n"
+        "    @overload\n    def evaluate_cf_formula(self, row: int, col: int, anchor_row: int, anchor_col: int,"
+        " formula: str) -> Value: ...\n"
+        "    @overload\n    def evaluate_cf_formula(self, a1: str, anchor: str, formula: str) -> Value: ...\n"
+        "    def evaluate_cf_formula(self, *args: Any, **kwargs: Any) -> Value: ...\n"
+        "    @overload\n    def show_pivot_details(self, pivot: Union[int, str], row: int, col: int) -> 'Sheet': ...\n"
+        "    @overload\n    def show_pivot_details(self, pivot: Union[int, str], a1: str) -> 'Sheet': ...\n"
+        "    def show_pivot_details(self, *args: Any, **kwargs: Any) -> 'Sheet': ...\n"
+    )
+
+    def test_r25_a1(self) -> None:
+        bad_js = _sheet(
+            "  setValue(row: number, col: number, value: Value): void;\n"
+            "  evaluateCfFormula(row: number, col: number, anchorRow: number, anchorCol: number, f: string): Value;\n"
+            "  evaluateCfFormula(a1: string, anchorRow: number, anchorCol: number, f: string): Value;\n"
+            "  showPivotDetails(pivot: PivotRef, row: number, col: number): Sheet;\n"
+            "  showPivotDetails(pivot: PivotRef, a1: string): Sheet;\n"
+        )
+        bad_py = _py_sheet(
+            "    def set_value(self, row: int, col: int, value: Any) -> None: ...\n"
+            "    @overload\n    def evaluate_cf_formula(self, a1: str, anchor: str, formula: str) -> Value: ...\n"
+            "    @overload\n    def evaluate_cf_formula(self, row: int, col: int, anchor_row: int, anchor_col: int,"
+            " formula: str) -> Value: ...\n"
+            "    def evaluate_cf_formula(self, *args: Any, **kwargs: Any) -> Value: ...\n"
+            "    @overload\n    def show_pivot_details(self, pivot: Union[int, str], row: int, col: int) -> 'Sheet': ...\n"
+            "    @overload\n    def show_pivot_details(self, pivot: Union[int, str], row_or_a1: str) -> 'Sheet': ...\n"
+            "    def show_pivot_details(self, *args: Any, **kwargs: Any) -> 'Sheet': ...\n"
+        )
+        self.assert_rule(
+            "R25.a1",
+            self.fixture.context("", _cell_ledger(), wasm=bad_js, native=self.GOOD_JS, py_sheet=bad_py),
+            self.fixture.context("", _cell_ledger(), wasm=self.GOOD_JS, native=self.GOOD_JS, py_sheet=self.GOOD_PY),
+            [
+                ("py", "cf_formula.evaluate", "coordinate"),
+                ("py", "pivot_details.show", "a1"),
+                ("py", "value.set", "stubs"),
+                ("wasm", "cf_formula.evaluate", "a1"),
+                ("wasm", "cf_formula.evaluate", "mixed"),
+                ("wasm", "value.set", "a1"),
+            ],
+        )
+
+    def test_r25_a1_skips_a_member_absent_from_the_tree(self) -> None:
+        ctx = self.fixture.context("", _cell_ledger(), wasm=_sheet("  getZoom(): number;\n"))
+        self.assertEqual(hits(ctx, "R25.a1"), [])
+
+    def test_r25_rect(self) -> None:
+        bad_js = _sheet(
+            "  addMerge(range: CellRect): void;\n  setPrintArea(ranges: readonly CellRect[] | null): void;\n"
+        )
+        good_js = _sheet(
+            "  addMerge(range: CellRect | string): void;\n"
+            "  setPrintArea(ranges: readonly (CellRect | string)[] | null): void;\n"
+        )
+        bad_py = _py_sheet(
+            "    def add_merge(self, cell_range: CellRect) -> None: ...\n"
+            "    def set_print_area(self, ranges: Optional[Sequence[CellRect]]) -> None: ...\n"
+        )
+        good_py = _py_sheet(
+            "    def add_merge(self, cell_range: Union[CellRect, str]) -> None: ...\n"
+            "    def set_print_area(self, ranges: Optional[Sequence[Union[CellRect, str]]]) -> None: ...\n"
+        )
+        self.assert_rule(
+            "R25.rect",
+            self.fixture.context("", _cell_ledger(), wasm=bad_js, native=good_js, py_sheet=bad_py),
+            self.fixture.context("", _cell_ledger(), wasm=good_js, native=good_js, py_sheet=good_py),
+            [
+                ("py", "merge.add", "arg0"),
+                ("py", "print_area.set", "arg0"),
+                ("wasm", "merge.add", "arg0"),
+                ("wasm", "print_area.set", "arg0"),
+            ],
+        )
+
+
+class CountAtTest(BindingRuleTestBase):
+    LEDGER = {
+        "collections": {
+            "record": {"key": "index", "access": "exempt", "plural": "records", "exempt": "x",
+                       "ops": ["record.get_count"]},
+            "font": {"key": "index", "access": "indexed", "plural": "fonts", "ops": ["font.get", "font.get_count"]},
+            "cell": {"key": "natural", "ops": ["cell.get_at", "cell.get_count"]},
+        },
+        "entries": {
+            key: {"kind": "op", "scope": "workbook", "js": js, "py": py, "surfaces": ["wasm", "native", "py"]}
+            for key, js, py in (
+                ("record.get_count", "getRecordCount", "get_record_count"),
+                ("font.get", "getFont", "get_font"),
+                ("font.get_count", "getFontCount", "get_font_count"),
+                ("cell.get_at", "getCellAt", "get_cell_at"),
+                ("cell.get_count", "getCellCount", "get_cell_count"),
+            )
+        },
+    }  # fmt: skip
+
+    def test_r25_count(self) -> None:
+        bad_js = _wb(
+            "  getRecordCount(): number;\n  getFont(i: number): Font;\n  getFontCount(): number;\n"
+            "  getCellAt(i: number): Cell;\n  getCellCount(): number;\n  getCellsInRange(r: CellRect): Cells;\n"
+        )
+        good_js = _wb("  getRecordCount(): number;\n  getFont(i: number): Font;\n  listFonts(): readonly Font[];\n")
+        bad_py = _py_wb("    def get_record_count(self) -> int: ...\n    def get_font_count(self) -> int: ...\n")
+        good_py = _py_wb("    def get_record_count(self) -> int: ...\n    def _get_font_count(self) -> int: ...\n")
+        self.assert_rule(
+            "R25.count",
+            self.fixture.context("", self.LEDGER, wasm=bad_js, native=good_js, py_workbook=bad_py),
+            self.fixture.context("", self.LEDGER, wasm=good_js, native=good_js, py_workbook=good_py),
+            [
+                ("py", "font.get_count", "get_font_count"),
+                ("wasm", "cell.get_at", "getCellAt"),
+                ("wasm", "cell.get_count", "getCellCount"),
+                ("wasm", "font.get_count", "getFontCount"),
+            ],
+        )
+
+
+class PatchShapeTest(BindingRuleTestBase):
+    RECORDS = (
+        "export type Patch<T> = { [K in keyof T]?: T[K] | null };\n"
+        "export interface ChartLegend {\n  readonly position: ChartLegendPosition;\n  readonly overlay: boolean;\n"
+        "  readonly hiddenSeries: readonly number[];\n}\n"
+        "export interface PivotStyle {\n  readonly name: string | null;\n  readonly showRowHeaders: boolean;\n}\n"
+        "export interface PivotStyleInput {\n  name?: string | null;\n  showRowHeaders?: boolean;\n}\n"
+        "export interface ChartLegendPatch {\n  position?: ChartLegendPosition;\n  overlay?: boolean;\n"
+        "  hiddenSeries?: readonly number[];\n}\n"
+        "export type PivotStylePatch = Patch<PivotStyle>;\n"
+        "export interface PrintOptionsPatch {\n  gridLines?: boolean;\n}\n"
+    )
+    PY_RECORDS = (
+        "@dataclass(frozen=True)\nclass ChartLegend:\n    position: int\n    overlay: bool\n"
+        "    hidden_series: Tuple[int, ...]\n\n"
+        "@dataclass(frozen=True)\nclass PivotStyle:\n    name: Optional[str]\n    show_row_headers: bool\n\n"
+    )
+
+    @staticmethod
+    def ledger() -> dict:
+        def op(js: str, py: str, **fields: object) -> dict:
+            return {"kind": "op", "scope": "sheet", "js": js, "py": py, "surfaces": ["wasm", "native", "py"],
+                    "patch": True, **fields}  # fmt: skip
+
+        return {
+            "entries": {
+                "chart_legend.set": op("setChartLegend", "set_chart_legend", patch_record="ChartLegend"),
+                "pivot_style_info.set": op("setPivotStyleInfo", "set_pivot_style_info", patch_record="PivotStyle"),
+                "print_options.set": op("setPrintOptions", "set_print_options", patch_record="none",
+                                        patch_reason="no record getter"),
+            }
+        }  # fmt: skip
+
+    def test_r18_all(self) -> None:
+        bad_js = self.RECORDS.replace("  overlay?: boolean;\n", "  overlay?: number;\n  extra?: string;\n") + _sheet(
+            "  setChartLegend(objectId: number, patch: ChartLegendPatch | null): void;\n"
+            "  setPivotStyleInfo(pivot: PivotRef, info: PivotStyleInput): void;\n"
+            "  setPrintOptions(options: PrintOptionsInput): void;\n"
+        )
+        good_js = self.RECORDS + _sheet(
+            "  setChartLegend(objectId: number, patch: ChartLegendPatch | null): void;\n"
+            "  setPivotStyleInfo(pivot: PivotRef, patch: PivotStylePatch): void;\n"
+            "  setPrintOptions(patch: PrintOptionsPatch): void;\n"
+        )
+        bad_py = self.PY_RECORDS + _py_sheet(
+            "    def set_chart_legend(self, object_id: int, position: int, *, overlay: bool = False,"
+            " colour: int = UNCHANGED) -> None: ...\n"
+            "    def set_pivot_style_info(self, pivot: Union[int, str], info: PivotStyle) -> None: ...\n"
+            "    def set_print_options(self, *, grid_lines: bool = UNCHANGED) -> None: ...\n"
+        )
+        good_py = self.PY_RECORDS + _py_sheet(
+            "    def set_chart_legend(self, object_id: int, *, position: int = UNCHANGED,"
+            " overlay: bool = UNCHANGED, hidden_series: Sequence[int] = UNCHANGED) -> None: ...\n"
+            "    def set_pivot_style_info(self, pivot: Union[int, str], *, name: Optional[str] = UNCHANGED)"
+            " -> None: ...\n"
+            "    def set_print_options(self, *, grid_lines: bool = UNCHANGED) -> None: ...\n"
+        )
+        self.assert_rule(
+            "R18.all",
+            self.fixture.context("", self.ledger(), wasm=bad_js, native=good_js, py_sheet=bad_py),
+            self.fixture.context("", self.ledger(), wasm=good_js, native=good_js, py_sheet=good_py),
+            [
+                ("py", "chart_legend.set", "default:overlay"),
+                ("py", "chart_legend.set", "key:colour"),
+                ("py", "chart_legend.set", "positional:position"),
+                ("py", "pivot_style_info.set", "patch"),
+                ("wasm", "chart_legend.set", "key:extra"),
+                ("wasm", "chart_legend.set", "type:overlay"),
+                ("wasm", "pivot_style_info.set", "patch"),
+                ("wasm", "print_options.set", "patch"),
+            ],
+        )
+
+    def test_r18_all_resolves_pick_literal_and_nested_patches(self) -> None:
+        records = (
+            "export interface Comment {\n  readonly text: string;\n  readonly fill: Fill;\n  readonly id: string;\n}\n"
+            "export type CommentPatch = Patch<Pick<Comment, 'text' | 'fill'>>;\n"
+            "export type FillPatch = Patch<{ color: number }>;\n"
+            "export type OtherPatch = Patch<{ text: string; fill: FillPatch; size: number }>;\n"
+        )
+        ledger = {
+            "entries": {
+                "comment.update": {"kind": "op", "scope": "sheet", "js": "updateComment", "surfaces": ["wasm"],
+                                   "patch": True, "patch_record": "Comment"},
+            }
+        }  # fmt: skip
+        good = records + _sheet("  updateComment(id: string, patch: CommentPatch): void;\n")
+        bad = records + _sheet("  updateComment(id: string, patch: OtherPatch): void;\n")
+        self.assert_rule(
+            "R18.all",
+            self.fixture.context("", ledger, wasm=bad),
+            self.fixture.context("", ledger, wasm=good),
+            [("wasm", "comment.update", "key:size")],
+        )
+
+
+class RefArgTest(BindingRuleTestBase):
+    def test_r26_ref(self) -> None:
+        bad_js = _wb(
+            "  removeTable(tableIndex: number): void;\n  getTableAutoFilter(table: number): Filter;\n"
+        ) + _sheet(
+            "  removePivot(pivot: number): void;\n  removeCfRule(cfRuleIndex: number): void;\n"
+            "  setTableStyleName(tableStyle: string): void;\n"
+        )
+        good_js = _wb(
+            "  removeTable(table: TableRef): void;\n  getTableAutoFilter(table: TableRef): Filter;\n"
+        ) + _sheet(
+            "  removePivot(pivot: PivotRef): void;\n  removeCfRule(cfRule: CfRuleRef): void;\n"
+            "  setTableStyleName(tableStyle: string): void;\n"
+        )
+        bad_py = _py_wb("    def remove_table(self, table_index: int) -> None: ...\n") + _py_sheet(
+            "    def remove_protected_range(self, protected_range: int) -> None: ...\n"
+        ).replace("class Sheet", "\nclass Sheet")
+        good_py = _py_wb("    def remove_table(self, table: Union[int, str]) -> None: ...\n") + _py_sheet(
+            "    def remove_protected_range(self, protected_range: Union[int, str]) -> None: ...\n"
+        ).replace("class Sheet", "\nclass Sheet")
+        self.assert_rule(
+            "R26.ref",
+            self.fixture.context("", None, wasm=bad_js, native=good_js, py_workbook=bad_py),
+            self.fixture.context("", None, wasm=good_js, native=good_js, py_workbook=good_py),
+            [
+                ("py", "remove_protected_range", "protected_range"),
+                ("py", "remove_table", "table_index"),
+                ("wasm", "getTableAutoFilter", "table"),
+                ("wasm", "removeCfRule", "cfRuleIndex"),
+                ("wasm", "removePivot", "pivot"),
+                ("wasm", "removeTable", "tableIndex"),
+            ],
+        )
+
+
+class SheetParamTest(BindingRuleTestBase):
+    def test_r27_sheetparam(self) -> None:
+        bad_js = _wb(
+            "  removeSheet(sheet: number): void;\n  getDefinedName(name: string, localSheetId: number | null): Dn;\n"
+            "  formatReference(sheetName: string | null): string;\n"
+        )
+        good_js = _wb(
+            "  removeSheet(sheet: SheetRef): void;\n  getDefinedName(name: string, scope?: SheetRef | null): Dn;\n"
+            "  formatReference(sheetName: string | null): string;\n"
+        )
+        bad_py = _py_wb("    def get_defined_name(self, name: str, local_sheet_id: Optional[int] = None) -> Dn: ...\n")
+        good_py = _py_wb("    def get_defined_name(self, name: str, scope: Optional[SheetRef] = None) -> Dn: ...\n")
+        self.assert_rule(
+            "R27.sheetparam",
+            self.fixture.context("", None, wasm=bad_js, native=good_js, py_workbook=bad_py),
+            self.fixture.context("", None, wasm=good_js, native=good_js, py_workbook=good_py),
+            [
+                ("py", "get_defined_name", "local_sheet_id"),
+                ("wasm", "getDefinedName", "localSheetId"),
+                ("wasm", "removeSheet", "sheet"),
+            ],
         )
 
 
