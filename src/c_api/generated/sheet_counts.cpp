@@ -17,19 +17,17 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
-using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::null_argument;
 
 extern "C" fm_status_t fm_sheet_get_cell_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_cell_count: NULL argument");
+    return null_argument();
   }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kSheetIndexOutOfRange, "fm_sheet_get_cell_count: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
   }
   *out_count = wb->workbook().sheet(sheet_index).cell_count();
   return 0;
@@ -38,13 +36,10 @@ extern "C" fm_status_t fm_sheet_get_cell_count(const fm_workbook_t* wb, size_t s
 extern "C" fm_status_t fm_sheet_get_pivot_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_pivot_count: NULL argument");
+    return null_argument();
   }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kSheetIndexOutOfRange, "fm_sheet_get_pivot_count: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
   }
   *out_count = wb->workbook().sheet(sheet_index).pivot_tables().size();
   return 0;

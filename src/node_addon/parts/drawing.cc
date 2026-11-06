@@ -32,12 +32,12 @@ struct BytesWithOpts {
 };
 
 // Reads the `(sheet, bytes, opts?)` tail shared by `insertImage` and `restoreDrawing`;
-// a rejected argument list sets `result.status` and returns false.
-bool ReadBytesWithOpts(const Napi::CallbackInfo& info, const char* usage, Napi::Object& result, BytesWithOpts& args) {
+// a rejected argument list throws a TypeError and returns false.
+bool ReadBytesWithOpts(const Napi::CallbackInfo& info, const char* usage, BytesWithOpts& args) {
   Napi::Env env = info.Env();
   const bool has_opts = ObjectArg(info, 2, &args.spec);
   if (!ReadImageBytes(info, 1, args.data, args.len) || (!info[2].IsUndefined() && !has_opts)) {
-    result.Set("status", MakeBindingArgumentError(env, usage));
+    Napi::TypeError::New(env, usage).ThrowAsJavaScriptException();
     return false;
   }
   if (!has_opts) {
@@ -70,65 +70,70 @@ Napi::Object DrawingObjectToJs(Napi::Env env, const fm_drawing_object_t& o) {
   return item;
 }
 
+// The snapshot bytes, or the snapshot's failure; the buffer is released either way.
+Napi::Value SnapshotBytesOrThrow(Napi::Env env, fm_status_t rc, uint8_t* bytes, std::size_t len) {
+  if (rc != 0) {
+    fm_buffer_destroy(bytes);
+    return ThrowStatus(env, rc);
+  }
+  return TakeSavedBytes(env, bytes, len);
+}
+
 }  // namespace
 
 Napi::Value Workbook::ProbeImage(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("format", JsNumber(env, 0));
-  out.Set("pxWidth", JsNumber(env, 0));
-  out.Set("pxHeight", JsNumber(env, 0));
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   const uint8_t* data = nullptr;
   size_t len = 0;
-  if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
-  }
   if (!ReadImageBytes(info, 0, data, len)) {
-    out.Set("status", MakeBindingArgumentError(env, "getImageInfo expects (bytes:Uint8Array)"));
-    return out;
+    Napi::TypeError::New(env, "getImageInfo expects (bytes:Uint8Array)").ThrowAsJavaScriptException();
+    return env.Undefined();
   }
   fm_image_info_t img{};
   const fm_status_t rc = fm_workbook_get_image_info(handle_, data, len, &img);
-  if (rc == 0) {
-    out.Set("format", JsNumber(env, img.format));
-    out.Set("pxWidth", JsNumber(env, img.px_width));
-    out.Set("pxHeight", JsNumber(env, img.px_height));
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
   }
-  out.Set("status", MakeStatus(env, rc));
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("format", JsNumber(env, img.format));
+  out.Set("pxWidth", JsNumber(env, img.px_width));
+  out.Set("pxHeight", JsNumber(env, img.px_height));
   return out;
 }
 
 Napi::Value Workbook::ListDrawingObjects(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Array arr = Napi::Array::New(env);
   if (handle_ == nullptr) {
-    return FinishListResult(env, arr, kBindingInvalidHandle);
+    return ThrowInvalidHandle(env);
   }
+  Napi::Array arr = Napi::Array::New(env);
   const uint32_t sheet = ArgU32(info, 0);
   const fm_status_t rc = CollectList<fm_drawing_object_t>(
       arr, [&](size_t* n) { return fm_sheet_get_drawing_object_count(handle_, sheet, n); },
       [&](size_t i, fm_drawing_object_t* o) { return fm_sheet_get_drawing_object_at(handle_, sheet, i, o); },
       [&](const fm_drawing_object_t& o) { return DrawingObjectToJs(env, o); });
-  return FinishListResult(env, arr, rc);
+  return ValueOrThrow(env, rc, arr);
 }
 
 Napi::Value Workbook::GetDrawingObject(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+    return ThrowInvalidHandle(env);
   }
   fm_drawing_object_t o{};
   int32_t present = 0;
   const fm_status_t rc = fm_sheet_get_drawing_object(handle_, ArgU32(info, 0), ArgU32(info, 1), &present, &o);
-  return MakeOptionalResult(env, rc, present,
-                            rc == 0 && present != 0 ? Napi::Value(DrawingObjectToJs(env, o)) : env.Null());
+  return OptionalOrNull(env, rc, present,
+                        rc == 0 && present != 0 ? Napi::Value(DrawingObjectToJs(env, o)) : env.Null());
 }
 
 Napi::Value Workbook::GetImage(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+    return ThrowInvalidHandle(env);
   }
   int32_t present = 0;
   const uint8_t* bytes = nullptr;
@@ -136,7 +141,7 @@ Napi::Value Workbook::GetImage(const Napi::CallbackInfo& info) {
   fm_image_info_t img{};
   const fm_status_t rc = fm_sheet_get_image(handle_, ArgU32(info, 0), ArgU32(info, 1), &present, &bytes, &len, &img);
   if (rc != 0 || present == 0) {
-    return MakeOptionalResult(env, rc, present, env.Null());
+    return OptionalOrNull(env, rc, present, env.Null());
   }
   Napi::Object image = Napi::Object::New(env);
   image.Set("format", JsNumber(env, img.format));
@@ -144,20 +149,17 @@ Napi::Value Workbook::GetImage(const Napi::CallbackInfo& info) {
   image.Set("pxHeight", JsNumber(env, img.px_height));
   // The C pointer dies on the next mutation, so the bytes are copied out.
   image.Set("bytes", CopyBytes(env, bytes, len));
-  return MakeOptionalResult(env, rc, present, image);
+  return OptionalOrNull(env, rc, present, image);
 }
 
 Napi::Value Workbook::InsertImage(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("objectId", JsNumber(env, 0));
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
+    return ThrowInvalidHandle(env);
   }
   BytesWithOpts args;
-  if (!ReadBytesWithOpts(info, "addImage expects (sheet:number, bytes:Uint8Array, opts?:object)", out, args)) {
-    return out;
+  if (!ReadBytesWithOpts(info, "addImage expects (sheet:number, bytes:Uint8Array, opts?:object)", args)) {
+    return env.Undefined();
   }
   CheckedSpecReader reader(env);
   std::string name;
@@ -173,9 +175,7 @@ Napi::Value Workbook::InsertImage(const Napi::CallbackInfo& info) {
   }
   uint32_t object_id = 0;
   const fm_status_t rc = fm_sheet_add_image(handle_, ArgU32(info, 0), args.data, args.len, &opts, &object_id);
-  out.Set("objectId", JsNumber(env, rc == 0 ? object_id : 0));
-  out.Set("status", MakeStatus(env, rc));
-  return out;
+  return ValueOrThrow(env, rc, JsNumber(env, object_id));
 }
 
 Napi::Value Workbook::RemoveDrawing(const Napi::CallbackInfo& info) {
@@ -185,7 +185,7 @@ Napi::Value Workbook::RemoveDrawing(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::SetDrawingAnchor(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
   const Napi::Object spec = ArgObject(info, 2);
@@ -194,7 +194,8 @@ Napi::Value Workbook::SetDrawingAnchor(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_sheet_set_drawing_anchor(handle_, ArgU32(info, 0), ArgU32(info, 1), &anchor));
+  return ValueOrThrow(env, fm_sheet_set_drawing_anchor(handle_, ArgU32(info, 0), ArgU32(info, 1), &anchor),
+                      env.Undefined());
 }
 
 Napi::Value Workbook::SetDrawingName(const Napi::CallbackInfo& info) {
@@ -211,25 +212,22 @@ Napi::Value Workbook::SetDrawingZOrder(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::SnapshotDrawing(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return SnapshotBytesResult(env, kBindingInvalidHandle, nullptr, 0);
+    return ThrowInvalidHandle(env);
   }
   uint8_t* bytes = nullptr;
   size_t len = 0;
   const fm_status_t rc = fm_sheet_snapshot_drawing(handle_, ArgU32(info, 0), ArgU32(info, 1), &bytes, &len);
-  return SnapshotBytesResult(env, rc, bytes, len);
+  return SnapshotBytesOrThrow(env, rc, bytes, len);
 }
 
 Napi::Value Workbook::RestoreDrawing(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("objectId", JsNumber(env, 0));
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
+    return ThrowInvalidHandle(env);
   }
   BytesWithOpts args;
-  if (!ReadBytesWithOpts(info, "restoreDrawing expects (sheet:number, bytes:Uint8Array, opts?:object)", out, args)) {
-    return out;
+  if (!ReadBytesWithOpts(info, "restoreDrawing expects (sheet:number, bytes:Uint8Array, opts?:object)", args)) {
+    return env.Undefined();
   }
   CheckedSpecReader reader(env);
   const uint32_t flags = reader.Bool(args.spec, "newId", false) ? FM_DRAWING_RESTORE_NEW_ID : 0U;
@@ -238,9 +236,7 @@ Napi::Value Workbook::RestoreDrawing(const Napi::CallbackInfo& info) {
   }
   uint32_t object_id = 0;
   const fm_status_t rc = fm_sheet_restore_drawing(handle_, ArgU32(info, 0), args.data, args.len, flags, &object_id);
-  out.Set("objectId", JsNumber(env, rc == 0 ? object_id : 0));
-  out.Set("status", MakeStatus(env, rc));
-  return out;
+  return ValueOrThrow(env, rc, JsNumber(env, object_id));
 }
 
 }  // namespace formulon_node

@@ -142,7 +142,7 @@ Napi::Object SeriesToJs(Napi::Env env, const fm_chart_t* chart, size_t plot, siz
   if (!Step(rc, fm_chart_get_series_at(chart, plot, index, &s))) {
     return o;
   }
-  o.Set("idx", JsNumber(env, s.idx));
+  o.Set("index", JsNumber(env, s.idx));
   o.Set("order", JsNumber(env, s.order));
   o.Set("filtered", JsBool(env, s.filtered));
   o.Set("name", DataSourceToJs(env, chart, plot, index, FM_CHART_ROLE_NAME, s.name, rc));
@@ -162,7 +162,7 @@ Napi::Object SeriesToJs(Napi::Env env, const fm_chart_t* chart, size_t plot, siz
       break;
     }
     Napi::Object po = Napi::Object::New(env);
-    po.Set("idx", JsNumber(env, p.idx));
+    po.Set("index", JsNumber(env, p.idx));
     po.Set("fill", FillToJs(env, p.fill));
     po.Set("line", LineToJs(env, p.line));
     po.Set("marker", p.has_marker != 0 ? Napi::Value(MarkerToJs(env, p.marker)) : env.Null());
@@ -327,7 +327,7 @@ Napi::Object DataSeriesToJs(Napi::Env env, const fm_chart_data_t* data, size_t i
     return o;
   }
   o.Set("plotIndex", JsNumber(env, static_cast<double>(s.plot_index)));
-  o.Set("idx", JsNumber(env, s.idx));
+  o.Set("index", JsNumber(env, s.idx));
   o.Set("name", StringOrNull(env, s.name));
   o.Set("formatCode", JsString(env, s.format_code));
   o.Set("xFormatCode", JsString(env, s.x_format_code));
@@ -426,14 +426,6 @@ Napi::Object ChartDataToJs(Napi::Env env, const fm_chart_data_t* data, fm_status
   }
   o.Set("unresolved", unresolved);
   return o;
-}
-
-/// `{ status, <field>: value | null }`; the value is dropped on failure.
-Napi::Object ReadResult(Napi::Env env, fm_status_t rc, const char* field, Napi::Value value) {
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("status", MakeStatus(env, rc));
-  out.Set(field, rc == 0 ? value : env.Null());
-  return out;
 }
 
 // ---- Patch input ----------------------------------------------------
@@ -683,7 +675,7 @@ bool ReadIndexList(CheckedSpecReader& r, const Napi::CallbackInfo& info, size_t 
 Napi::Value Workbook::GetChart(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+    return ThrowInvalidHandle(env);
   }
   int32_t present = 0;
   fm_chart_t* raw = nullptr;
@@ -693,23 +685,23 @@ Napi::Value Workbook::GetChart(const Napi::CallbackInfo& info) {
   if (rc == 0 && present != 0) {
     value = ChartToJs(env, chart.get(), rc);
   }
-  return MakeOptionalResult(env, rc, present, value);
+  return OptionalOrNull(env, rc, present, value);
 }
 
-// Takes ownership of an opened chart data handle and reads it into a `{ data, status }` result.
+// Takes ownership of an opened chart data handle and reads it into the resolved data.
 static Napi::Value ReadOpenedChartData(Napi::Env env, fm_chart_data_t* raw, fm_status_t rc) {
   const ChartDataHandle data(raw);
-  Napi::Value value = env.Null();
+  Napi::Value value = env.Undefined();
   if (rc == 0) {
     value = ChartDataToJs(env, data.get(), rc);
   }
-  return ReadResult(env, rc, "data", value);
+  return ValueOrThrow(env, rc, value);
 }
 
 Napi::Value Workbook::GetChartData(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return ReadResult(env, kBindingInvalidHandle, "data", env.Null());
+    return ThrowInvalidHandle(env);
   }
   fm_chart_data_t* raw = nullptr;
   const fm_status_t rc = fm_sheet_get_chart_data(handle_, ArgU32(info, 0), ArgU32(info, 1), &raw);
@@ -719,7 +711,7 @@ Napi::Value Workbook::GetChartData(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PreviewChartData(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return ReadResult(env, kBindingInvalidHandle, "data", env.Null());
+    return ThrowInvalidHandle(env);
   }
   Napi::Object spec;
   if (!PatchObjectArg(info, 2, "getChartPreview", &spec)) {
@@ -759,11 +751,8 @@ Napi::Value Workbook::PreviewChartData(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::InsertChart(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("objectId", JsNumber(env, 0));
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
+    return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
   const Napi::Object spec = ArgObject(info, 1);
@@ -805,25 +794,25 @@ Napi::Value Workbook::InsertChart(const Napi::CallbackInfo& info) {
   }
   uint32_t object_id = 0;
   const fm_status_t rc = fm_sheet_add_chart(handle_, ArgU32(info, 0), &opts, &object_id);
-  out.Set("objectId", JsNumber(env, rc == 0 ? object_id : 0));
-  out.Set("status", MakeStatus(env, rc));
-  return out;
+  return ValueOrThrow(env, rc, JsNumber(env, object_id));
 }
 
 Napi::Value Workbook::SetChartType(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   const int32_t grouping = info.Length() > 4 && !info[4].IsUndefined() ? ArgI32(info, 4) : FM_CHART_GROUPING_CLUSTERED;
-  return MakeStatus(env, fm_sheet_set_chart_type(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2),
-                                                 ArgI32(info, 3), grouping));
+  return ValueOrThrow(
+      env,
+      fm_sheet_set_chart_type(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), ArgI32(info, 3), grouping),
+      env.Undefined());
 }
 
 Napi::Value Workbook::SetChartTitle(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   // The registration guard requires `title`; a wrong type throws as the WASM
   // reader does.
@@ -842,13 +831,14 @@ Napi::Value Workbook::SetChartTitle(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_sheet_set_chart_title(handle_, ArgU32(info, 0), ArgU32(info, 1), &title));
+  return ValueOrThrow(env, fm_sheet_set_chart_title(handle_, ArgU32(info, 0), ArgU32(info, 1), &title),
+                      env.Undefined());
 }
 
 Napi::Value Workbook::SetChartLegend(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
   std::vector<uint32_t> hidden;
@@ -864,13 +854,14 @@ Napi::Value Workbook::SetChartLegend(const Napi::CallbackInfo& info) {
     legend.hidden_series = hidden.empty() ? nullptr : hidden.data();
     legend.hidden_series_count = hidden.size();
   }
-  return MakeStatus(env, fm_sheet_set_chart_legend(handle_, ArgU32(info, 0), ArgU32(info, 1), &legend));
+  return ValueOrThrow(env, fm_sheet_set_chart_legend(handle_, ArgU32(info, 0), ArgU32(info, 1), &legend),
+                      env.Undefined());
 }
 
 Napi::Value Workbook::SetChartAxis(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   Napi::Object spec;
   if (!PatchObjectArg(info, 3, "setChartAxis", &spec)) {
@@ -898,13 +889,14 @@ Napi::Value Workbook::SetChartAxis(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_sheet_set_chart_axis(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &patch));
+  return ValueOrThrow(env, fm_sheet_set_chart_axis(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &patch),
+                      env.Undefined());
 }
 
 Napi::Value Workbook::SetChartDisplay(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   Napi::Object spec;
   if (!PatchObjectArg(info, 2, "setChartDisplay", &spec)) {
@@ -918,13 +910,14 @@ Napi::Value Workbook::SetChartDisplay(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_sheet_set_chart_display(handle_, ArgU32(info, 0), ArgU32(info, 1), &patch));
+  return ValueOrThrow(env, fm_sheet_set_chart_display(handle_, ArgU32(info, 0), ArgU32(info, 1), &patch),
+                      env.Undefined());
 }
 
 Napi::Value Workbook::SetChartSeries(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   Napi::Object spec;
   if (!PatchObjectArg(info, 4, "setChartSeries", &spec)) {
@@ -937,14 +930,16 @@ Napi::Value Workbook::SetChartSeries(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_sheet_set_chart_series(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2),
-                                                   ArgU32(info, 3), &patch));
+  return ValueOrThrow(
+      env,
+      fm_sheet_set_chart_series(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), ArgU32(info, 3), &patch),
+      env.Undefined());
 }
 
 Napi::Value Workbook::SetChartPoint(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   // A null or empty patch removes the point's formatting.
   Napi::Object spec = Napi::Object::New(env);
@@ -957,14 +952,16 @@ Napi::Value Workbook::SetChartPoint(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_sheet_set_chart_point(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2),
-                                                  ArgU32(info, 3), ArgU32(info, 4), &patch));
+  return ValueOrThrow(env,
+                      fm_sheet_set_chart_point(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2),
+                                               ArgU32(info, 3), ArgU32(info, 4), &patch),
+                      env.Undefined());
 }
 
 Napi::Value Workbook::SetChartPlot(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   Napi::Object spec;
   if (!PatchObjectArg(info, 3, "setChartPlot", &spec)) {
@@ -980,13 +977,14 @@ Napi::Value Workbook::SetChartPlot(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_sheet_set_chart_plot(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &patch));
+  return ValueOrThrow(env, fm_sheet_set_chart_plot(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &patch),
+                      env.Undefined());
 }
 
 Napi::Value Workbook::SetChartFilter(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
   std::vector<uint32_t> series;
@@ -995,18 +993,17 @@ Napi::Value Workbook::SetChartFilter(const Napi::CallbackInfo& info) {
       !ReadIndexList(reader, info, 3, "hiddenCategories", &categories)) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_sheet_set_chart_filter(
-                             handle_, ArgU32(info, 0), ArgU32(info, 1), series.empty() ? nullptr : series.data(),
-                             series.size(), categories.empty() ? nullptr : categories.data(), categories.size()));
+  return ValueOrThrow(
+      env,
+      fm_sheet_set_chart_filter(handle_, ArgU32(info, 0), ArgU32(info, 1), series.empty() ? nullptr : series.data(),
+                                series.size(), categories.empty() ? nullptr : categories.data(), categories.size()),
+      env.Undefined());
 }
 
 Napi::Value Workbook::AddChartSeries(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("index", JsNumber(env, 0));
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
+    return ThrowInvalidHandle(env);
   }
   Napi::Object spec;
   if (!PatchObjectArg(info, 3, "addChartSeries", &spec)) {
@@ -1022,24 +1019,23 @@ Napi::Value Workbook::AddChartSeries(const Napi::CallbackInfo& info) {
   std::size_t series_index = 0;
   const fm_status_t rc =
       fm_sheet_add_chart_series(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &patch, &series_index);
-  out.Set("index", JsNumber(env, rc == 0 ? static_cast<double>(series_index) : 0));
-  out.Set("status", MakeStatus(env, rc));
-  return out;
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(series_index)));
 }
 
 Napi::Value Workbook::RemoveChartSeries(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
-  return MakeStatus(
-      env, fm_sheet_remove_chart_series(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), ArgU32(info, 3)));
+  return ValueOrThrow(
+      env, fm_sheet_remove_chart_series(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), ArgU32(info, 3)),
+      env.Undefined());
 }
 
 Napi::Value Workbook::SetChartSource(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
   const int32_t header_row = HeaderModeArg(reader, info, 4, "headerRow");
@@ -1048,8 +1044,10 @@ Napi::Value Workbook::SetChartSource(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const std::string source = ArgString(info, 2);
-  return MakeStatus(env, fm_sheet_set_chart_source(handle_, ArgU32(info, 0), ArgU32(info, 1), source.c_str(),
-                                                   ArgI32(info, 3), header_row, header_column));
+  return ValueOrThrow(env,
+                      fm_sheet_set_chart_source(handle_, ArgU32(info, 0), ArgU32(info, 1), source.c_str(),
+                                                ArgI32(info, 3), header_row, header_column),
+                      env.Undefined());
 }
 
 }  // namespace formulon_node

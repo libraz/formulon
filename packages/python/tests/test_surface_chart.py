@@ -103,7 +103,7 @@ class ChartReadTests(unittest.TestCase):
             self.assertEqual(len(plot.series), 3)
             self.assertEqual(len(plot.axis_ids), 2)
             s = plot.series[1]
-            self.assertEqual((s.idx, s.order, s.filtered), (1, 1, False))
+            self.assertEqual((s.index, s.order, s.filtered), (1, 1, False))
             self.assertEqual((s.name.kind, s.name.formula), ("ref", "Sheet1!$C$1"))
             self.assertEqual(s.categories.formula, "Sheet1!$A$2:$A$5")
             self.assertEqual(s.values.formula, "Sheet1!$C$2:$C$5")
@@ -138,7 +138,7 @@ class ChartReadTests(unittest.TestCase):
             self.assertFalse(data.categories.generated)
             self.assertEqual(data.unresolved, [])
             s0 = data.series[0]
-            self.assertEqual((s0.plot_index, s0.idx, s0.name, s0.filtered), (0, 0, "S1", False))
+            self.assertEqual((s0.plot_index, s0.index, s0.name, s0.filtered), (0, 0, "S1", False))
             self.assertEqual(s0.values, [2.0, 4.0, 6.0, 8.0])
             self.assertEqual(s0.states, [ChartPointState.VALUE] * 4)
             self.assertIsNone(s0.x)
@@ -427,7 +427,7 @@ class ChartEditTests(unittest.TestCase):
         with wb:
             wb.set_chart_point(0, oid, 0, 0, 2, {"fill": {"color": 0xFF0000FF}})
             points = wb.get_chart(0, oid).plots[0].series[0].points
-            self.assertEqual([(p.idx, p.fill.color) for p in points], [(2, 0xFF0000FF)])
+            self.assertEqual([(p.index, p.fill.color) for p in points], [(2, 0xFF0000FF)])
             self.assertIsNone(points[0].marker)
             wb.set_chart_point(0, oid, 0, 0, 2, None)
             self.assertEqual(wb.get_chart(0, oid).plots[0].series[0].points, [])
@@ -457,9 +457,9 @@ class ChartEditTests(unittest.TestCase):
             wb.set_chart_filter(0, oid, [1], [2])
             info = wb.get_chart(0, oid)
             self.assertEqual(info.hidden_categories, [2])
-            self.assertEqual([s.idx for s in info.plots[0].series if s.filtered], [1])
+            self.assertEqual([s.index for s in info.plots[0].series if s.filtered], [1])
             data = wb.get_chart_data(0, oid)
-            self.assertEqual([s.idx for s in data.series if s.filtered], [1])
+            self.assertEqual([s.index for s in data.series if s.filtered], [1])
             wb.set_chart_filter(0, oid, [], [])
             info = wb.get_chart(0, oid)
             self.assertEqual(info.hidden_categories, [])
@@ -473,10 +473,10 @@ class ChartEditTests(unittest.TestCase):
                 0, oid, 0, {"name": "Sheet1!$C$1", "values": "Sheet1!$C$2:$C$5", "categories": "Sheet1!$A$2:$A$5"}
             )
             series = wb.get_chart(0, oid).plots[0].series
-            self.assertEqual([s.idx for s in series], [0, idx])
+            self.assertEqual([s.index for s in series], [0, idx])
             self.assertEqual(wb.get_chart_data(0, oid).series[1].values, [3.0, 6.0, 9.0, 12.0])
             wb.remove_chart_series(0, oid, 0, 0)
-            self.assertEqual([s.idx for s in wb.get_chart(0, oid).plots[0].series], [idx])
+            self.assertEqual([s.index for s in wb.get_chart(0, oid).plots[0].series], [idx])
             with self.assertRaises(FormulonError):
                 wb.add_chart_series(0, oid, 0, {"name": "Sheet1!$C$1"})
             with self.assertRaises(FormulonError):

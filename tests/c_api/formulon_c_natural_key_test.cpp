@@ -17,7 +17,6 @@
 namespace {
 
 constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
-constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 
 constexpr const char* kAlice = "{0A1B2C3D-0000-4000-8000-000000000001}";
 constexpr const char* kThread = "{6F1E0D2C-1111-4111-8111-000000000001}";
@@ -60,7 +59,7 @@ TEST(FormulonCApiNaturalKey, DefinedNameByNameAndScope) {
   EXPECT_EQ(present, 0);
   ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "Rate", 0, &present, &stored, &formula, &comment, &hidden), 0);
   EXPECT_EQ(present, 1);
-  EXPECT_EQ(fm_workbook_remove_defined_name(wb.handle, "Rate", -1), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_remove_defined_name(wb.handle, "Rate", -1), FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_workbook_remove_defined_name(wb.handle, nullptr, -1), kBindingNullPointer);
 }
 

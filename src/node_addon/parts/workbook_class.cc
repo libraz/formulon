@@ -12,10 +12,6 @@
 namespace formulon_node {
 namespace {
 
-struct WorkbookClassState {
-  Napi::FunctionReference constructor;
-};
-
 // Positional arguments are checked by the registration wrapper before a
 // part-TU method reads them. The masks are indexed by the JavaScript argument
 // position. A typed, `object` or `required` position must be present; an
@@ -267,12 +263,12 @@ Napi::Object Workbook::ArgObject(const Napi::CallbackInfo& info, size_t idx) {
 Napi::Value Workbook::InvokeRowColEdit(const Napi::CallbackInfo& info, RowColEditFn fn) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = ArgU32(info, 0);
   const uint32_t index = ArgU32(info, 1);
   const uint32_t count = ArgU32(info, 2);
-  return MakeStatus(env, fn(handle_, sheet, index, count));
+  return ValueOrThrow(env, fn(handle_, sheet, index, count), env.Undefined());
 }
 
 // ---- Static factories -----------------------------------------------
@@ -280,10 +276,10 @@ Napi::Value Workbook::InvokeRowColEdit(const Napi::CallbackInfo& info, RowColEdi
 Napi::Value Workbook::FactoryResult(Napi::Env env, Napi::Object jsobj, Workbook* wb, fm_status_t rc) {
   if (rc != 0) {
     wb->handle_ = nullptr;
-    return MakeOptionalResult(env, rc, 0, env.Null());
+    return ThrowStatus(env, rc);
   }
   wb->SyncExternalMemory(env);
-  return MakeOptionalResult(env, rc, 1, jsobj);
+  return jsobj;
 }
 
 Napi::Value Workbook::CreateWith(const Napi::CallbackInfo& info, CreateFn create) {
@@ -303,6 +299,10 @@ Napi::Value Workbook::CreateEmpty(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::CreateForProfile(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (!info[0].IsString()) {
+    RejectArgumentType(info, "positional argument must be a string");
+    return env.Undefined();
+  }
   Napi::Object jsobj = GetClass(env).New({});
   Workbook* wb = Napi::ObjectWrap<Workbook>::Unwrap(jsobj);
   const std::string profile_id = ArgString(info, 0);
@@ -311,24 +311,31 @@ Napi::Value Workbook::CreateForProfile(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::LoadBytes(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (!info[0].IsObject()) {
+    RejectArgumentType(info, "positional argument must be an object");
+    return env.Undefined();
+  }
+  Napi::Uint8Array u8;
+  if (!BytesArg(info, 0, &u8)) {
+    RejectArgumentType(info, "bytes must be a Uint8Array");
+    return env.Undefined();
+  }
   Napi::Object jsobj = GetClass(env).New({});
   Workbook* wb = Napi::ObjectWrap<Workbook>::Unwrap(jsobj);
-  Napi::Uint8Array u8;
-  const bool bytes = BytesArg(info, 0, &u8);
-  const uint8_t* data = bytes ? u8.Data() : nullptr;
-  const std::size_t len = bytes ? u8.ElementLength() : 0;
-  if (data == nullptr || len == 0) {
-    // C reports the malformed input, refreshing the last-error diagnostics.
-    return FactoryResult(env, jsobj, wb, fm_workbook_load(nullptr, 0, &wb->handle_));
-  }
+  // An empty array may have no backing store; a non-NULL pointer lets the
+  // C ABI report the empty input rather than a NULL argument.
+  static const uint8_t kEmptyInput = 0;
+  const std::size_t len = u8.ElementLength();
+  const uint8_t* data = len == 0 ? &kEmptyInput : u8.Data();
   return FactoryResult(env, jsobj, wb, fm_workbook_load(data, len, &wb->handle_));
 }
 
 // ---- Class registration ---------------------------------------------
 
 Napi::Function Workbook::GetClass(Napi::Env env) {
-  if (WorkbookClassState* const state = env.GetInstanceData<WorkbookClassState>(); state != nullptr) {
-    return state->constructor.Value();
+  AddonData& data = GetAddonData(env);
+  if (!data.workbook_class.IsEmpty()) {
+    return data.workbook_class.Value();
   }
 
   // clang-format off
@@ -466,6 +473,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::DeleteRows, 0x7ULL>("deleteRows"),
           GuardedInstanceMethod<&Workbook::Dependents, 0xFULL>("getDependents"),
           GuardedInstanceMethod<&Workbook::Dispose>("dispose"),
+          InstanceAccessor<&Workbook::Disposed>("disposed"),
           GuardedInstanceMethod<&Workbook::DxfCount>("getDxfCount"),
           GuardedInstanceMethod<&Workbook::EvaluateCfRange, 0x1ULL, 0x0ULL, 0x0ULL, 0x4ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("evaluateCfRange"),
           GuardedInstanceMethod<&Workbook::EvaluateConditionalFormula, 0x1FULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x20ULL>("evaluateCfFormula"),
@@ -532,7 +540,6 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::GetValue, 0x7ULL>("getValue"),
           GuardedInstanceMethod<&Workbook::InsertCols, 0x7ULL>("insertColumns"),
           GuardedInstanceMethod<&Workbook::InsertRows, 0x7ULL>("insertRows"),
-          GuardedInstanceMethod<&Workbook::IsValid>("isValid"),
           GuardedInstanceMethod<&Workbook::CollationClasses, 0x2ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("getCollationClasses"),
           GuardedInstanceMethod<&Workbook::CompareText, 0x4ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0xBULL>("compareText"),
           GuardedInstanceMethod<&Workbook::LocaleFacts, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("getLocaleFacts"),
@@ -687,9 +694,8 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::RemoveSheet, 0x1ULL>("removeSheet"),
           GuardedInstanceMethod<&Workbook::RemoveValidationAt, 0x3ULL>("removeValidation"),
           GuardedInstanceMethod<&Workbook::RenameSheet, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("renameSheet"),
-          GuardedInstanceMethod<&Workbook::Save>("save"),
-          GuardedInstanceMethod<&Workbook::SaveAs, 0x0ULL, 0x1ULL>("saveAs"),
-          GuardedInstanceMethod<&Workbook::SaveWithDiagnostics, 0x0ULL, 0x1ULL>("saveWithDiagnostics"),
+          GuardedInstanceMethod<&Workbook::Save, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("save"),
+          GuardedInstanceMethod<&Workbook::SaveWithDiagnostics, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("saveWithDiagnostics"),
           GuardedInstanceMethod<&Workbook::ReadDiagnostics>("getDiagnostics"),
           GuardedInstanceMethod<&Workbook::SetBlank, 0x7ULL>("setBlank"),
           GuardedInstanceMethod<&Workbook::SetBool, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setBool"),
@@ -762,6 +768,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::ActiveSheet>("getActiveSheet"),
           GuardedInstanceMethod<&Workbook::SetActiveSheet, 0x1ULL>("setActiveSheet"),
           GuardedInstanceMethod<&Workbook::SheetName, 0x1ULL>("getSheetName"),
+          GuardedInstanceMethod<&Workbook::GetSheetIndex, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("getSheetIndex"),
           GuardedInstanceMethod<&Workbook::SpillInfo, 0x7ULL>("getSpillInfo"),
           GuardedInstanceMethod<&Workbook::ParseReference, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("parseReference"),
           GuardedInstanceMethod<&Workbook::FormatReference, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("formatReference"),
@@ -783,9 +790,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
     Napi::Object prototype = constructor.Get("prototype").As<Napi::Object>();
     prototype.Set(dispose_symbol, prototype.Get("dispose"));
   }
-  auto* const state = new WorkbookClassState{};
-  state->constructor = Napi::Persistent(constructor);
-  env.SetInstanceData(state);
+  data.workbook_class = Napi::Persistent(constructor);
   return constructor;
 }
 

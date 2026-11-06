@@ -19,6 +19,7 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 
@@ -119,7 +120,7 @@ constexpr std::string_view kDefaultPivotStyle = "PivotStyleLight16";
 extern "C" fm_status_t fm_workbook_get_table_style_count(const fm_workbook_t* wb, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return null_argument("fm_workbook_get_table_style_count");
+    return null_argument();
   }
   *out_count = wb->workbook().styles().table_styles.styles.size();
   return 0;
@@ -128,10 +129,10 @@ extern "C" fm_status_t fm_workbook_get_table_style_count(const fm_workbook_t* wb
 extern "C" fm_status_t fm_workbook_get_table_style_at(const fm_workbook_t* wb, size_t index, fm_table_style_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return null_argument("fm_workbook_get_table_style_at");
+    return null_argument();
   }
   const auto& styles = wb->workbook().styles().table_styles.styles;
-  if (auto rc = check_index(index, styles.size(), "fm_workbook_get_table_style_at", "index"); rc != 0) {
+  if (auto rc = check_index(index, styles.size(), "index"); rc != 0) {
     return rc;
   }
   const formulon::CustomTableStyle& style = styles[index];
@@ -161,9 +162,9 @@ extern "C" fm_status_t fm_workbook_get_table_style(const fm_workbook_t* wb, cons
                                                    fm_table_style_t* out) {
   clear_last_error();
   if (wb == nullptr || name == nullptr || out_present == nullptr || out == nullptr) {
-    return null_argument("fm_workbook_get_table_style");
+    return null_argument();
   }
-  if (auto rc = check_utf8("fm_workbook_get_table_style", {name}); rc != 0) {
+  if (auto rc = check_utf8({name}); rc != 0) {
     return rc;
   }
   *out_present = 0;
@@ -181,15 +182,14 @@ extern "C" fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_t
   clear_last_error();
   if (wb == nullptr || style == nullptr || style->name == nullptr ||
       (style->element_count != 0U && style->elements == nullptr)) {
-    return null_argument("fm_workbook_set_table_style");
+    return null_argument();
   }
-  if (auto rc = check_utf8("fm_workbook_set_table_style", {style->name}); rc != 0) {
+  if (auto rc = check_utf8({style->name}); rc != 0) {
     return rc;
   }
   const std::string_view name = style->name;
   if (name.empty() || is_builtin_style_name(name)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_set_table_style: name is empty or a built-in style name",
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "name is empty or a built-in style name",
                              "name=" + std::string(name));
   }
   formulon::StylesTable& styles = wb->workbook().mutable_styles();
@@ -203,22 +203,19 @@ extern "C" fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_t
     const std::string_view type = in.type != nullptr ? in.type : "";
     const std::string context = "element=" + std::to_string(i) + " type=" + std::string(type);
     if (!is_table_style_type(type)) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "fm_workbook_set_table_style: unknown element type", context);
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "unknown element type", context);
     }
     for (const formulon::TableStyleElement& earlier : next.elements) {
       if (earlier.type == type) {
-        return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                                 "fm_workbook_set_table_style: element type repeated", context);
+        return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "element type repeated", context);
       }
     }
     if (in.size == 0U) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "fm_workbook_set_table_style: element size must be at least 1", context);
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "element size must be at least 1",
+                               context);
     }
     if (in.has_dxf_id != 0 && in.dxf_id >= styles.dxfs.size()) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "fm_workbook_set_table_style: dxf_id out of range",
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "dxf_id out of range",
                                context + " dxf_id=" + std::to_string(in.dxf_id));
     }
     formulon::TableStyleElement element;
@@ -250,17 +247,15 @@ extern "C" fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_t
 extern "C" fm_status_t fm_workbook_remove_table_style(fm_workbook_t* wb, const char* name) {
   clear_last_error();
   if (wb == nullptr || name == nullptr) {
-    return null_argument("fm_workbook_remove_table_style");
+    return null_argument();
   }
-  if (auto rc = check_utf8("fm_workbook_remove_table_style", {name}); rc != 0) {
+  if (auto rc = check_utf8({name}); rc != 0) {
     return rc;
   }
   formulon::TableStylesSection& section = wb->workbook().mutable_styles().table_styles;
   const std::size_t index = find_style(section, name);
   if (index >= section.styles.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_remove_table_style: no custom table style has that name",
-                             "name=" + std::string(name));
+    return not_found("no custom table style has that name", "name=" + std::string(name));
   }
   section.styles.erase(section.styles.begin() + static_cast<std::ptrdiff_t>(index));
   if (formulon::strings::case_insensitive_eq(section.default_table_style, name)) {
@@ -276,7 +271,7 @@ extern "C" fm_status_t fm_workbook_get_table_style_defaults(const fm_workbook_t*
                                                             const char** out_pivot_style) {
   clear_last_error();
   if (wb == nullptr || out_table_style == nullptr || out_pivot_style == nullptr) {
-    return null_argument("fm_workbook_get_table_style_defaults");
+    return null_argument();
   }
   const formulon::TableStylesSection& section = wb->workbook().styles().table_styles;
   *out_table_style = section.default_table_style.c_str();
@@ -288,9 +283,9 @@ extern "C" fm_status_t fm_workbook_set_table_style_defaults(fm_workbook_t* wb, c
                                                             const char* pivot_style) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_set_table_style_defaults", "wb");
+    return null_argument("wb");
   }
-  if (auto rc = check_utf8("fm_workbook_set_table_style_defaults", {table_style, pivot_style}); rc != 0) {
+  if (auto rc = check_utf8({table_style, pivot_style}); rc != 0) {
     return rc;
   }
   formulon::TableStylesSection& section = wb->workbook().mutable_styles().table_styles;

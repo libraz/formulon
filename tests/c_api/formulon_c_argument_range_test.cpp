@@ -108,9 +108,9 @@ TEST(FormulonCApiArgumentRange, CellXfIndexPastTheTableIsRejectedBeforeAnyWrite)
   ASSERT_EQ(fm_workbook_get_cell_xf_count(wb.handle, &count), 0);
   ASSERT_EQ(count, 3U);
 
-  EXPECT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1U, 1U, count), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1U, 1U, count), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_range_xf_index(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 2U, 2U}), count),
-            kInvalidArgument);
+            FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(CellCount(wb), 0U);
 
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1U, 1U, count - 1U), 0) << fm_get_last_error_message();
@@ -152,8 +152,8 @@ TEST(FormulonCApiArgumentRange, PivotDataFieldIndicesAreCheckedWithAnExplicitNam
   negative_base.show_as_base_field = -2;
   for (const fm_pivot_data_field_spec_t* rejected : {&bad_field, &bad_base, &negative_base}) {
     std::size_t idx = 99U;
-    EXPECT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0, pivot, rejected, &idx), kInvalidArgument);
-    EXPECT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0, pivot, 0U, rejected), kInvalidArgument);
+    EXPECT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0, pivot, rejected, &idx), FM_STATUS_INDEX_OUT_OF_RANGE);
+    EXPECT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0, pivot, 0U, rejected), FM_STATUS_INDEX_OUT_OF_RANGE);
   }
   std::size_t data_fields = 0U;
   ASSERT_EQ(fm_sheet_get_pivot_data_field_count(wb.handle, 0, pivot, &data_fields), 0);

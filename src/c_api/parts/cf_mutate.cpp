@@ -56,17 +56,17 @@ static_assert(sizeof(fm_cell_rect_t) == sizeof(formulon::cf::CFCellRange),
 static_assert(alignof(fm_cell_rect_t) == alignof(formulon::cf::CFCellRange),
               "fm_cell_rect_t / cf::CFCellRange align mismatch");
 static_assert(offsetof(fm_cell_rect_t, first_row) == offsetof(formulon::cf::CFCellRange, first),
-              "fm_cell_rect_t::first_row layout mismatch");
+              "cell rect field first_row layout mismatch");
 static_assert(offsetof(fm_cell_rect_t, last_row) == offsetof(formulon::cf::CFCellRange, last),
-              "fm_cell_rect_t::last_row layout mismatch");
+              "cell rect field last_row layout mismatch");
 
 namespace {
 
 // Walks the sheet's `conditional_formats` vector and resolves the
 // `flat_index`-th rule into the (block_index, rule_index) pair. Returns
-// 0 on success; the `check_index` error for `fn` when `flat_index` is past the end.
+// 0 on success; the `check_index` error when `flat_index` is past the end.
 fm_status_t resolve_flat_index(const std::vector<formulon::cf::ConditionalFormat>& blocks, std::size_t flat_index,
-                               const char* fn, std::size_t* out_block, std::size_t* out_rule) {
+                               std::size_t* out_block, std::size_t* out_rule) {
   std::size_t cursor = 0;
   for (std::size_t b = 0; b < blocks.size(); ++b) {
     const auto& block = blocks[b];
@@ -77,7 +77,7 @@ fm_status_t resolve_flat_index(const std::vector<formulon::cf::ConditionalFormat
     }
     cursor += block.rules.size();
   }
-  return check_index(flat_index, cursor, fn, "idx");
+  return check_index(flat_index, cursor, "index");
 }
 
 // Materialises a `cf::CFRule` onto the wire-format `fm_cf_rule_t`.
@@ -372,7 +372,7 @@ fm_status_t store_cfvo_formulas(fm_workbook_t* wb, formulon::cf::CFRule* out_rul
       continue;
     }
     std::string stored;
-    if (auto rc = check_stored_formula("fm_sheet_add_cf_rule", v->value, "field=cfvo.value", &stored); rc != 0) {
+    if (auto rc = check_stored_formula(v->value, "field=cfvo.value", &stored); rc != 0) {
       return rc;
     }
   }
@@ -390,9 +390,9 @@ extern "C" fm_status_t fm_sheet_get_cf_rule_count(const fm_workbook_t* wb, std::
                                                   std::size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return null_argument("fm_sheet_get_cf_rule_count");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_cf_rule_count"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   std::size_t total = 0;
@@ -407,15 +407,15 @@ extern "C" fm_status_t fm_sheet_get_cf_rule(const fm_workbook_t* wb, std::size_t
                                             fm_cf_rule_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return null_argument("fm_sheet_get_cf_rule");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_cf_rule"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const auto& blocks = wb->workbook().sheet(sheet_index).conditional_formats();
   std::size_t b = 0;
   std::size_t r = 0;
-  if (auto rc = resolve_flat_index(blocks, idx, "fm_sheet_get_cf_rule", &b, &r); rc != 0) {
+  if (auto rc = resolve_flat_index(blocks, idx, &b, &r); rc != 0) {
     return rc;
   }
   // The CF arenas are refreshed here and nowhere else, so the record stays
@@ -438,15 +438,15 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
                                             std::size_t* out_index) {
   clear_last_error();
   if (rule == nullptr) {
-    return null_argument("fm_sheet_add_cf_rule", "rule");
+    return null_argument("rule");
   }
   if (out_index == nullptr) {
-    return null_argument("fm_sheet_add_cf_rule", "out_index");
+    return null_argument("out_index");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_cf_rule"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = validate(*rule, "fm_sheet_add_cf_rule"); rc != 0) {
+  if (auto rc = validate(*rule); rc != 0) {
     return rc;
   }
 
@@ -475,8 +475,7 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
       }
     }
     if (max_priority == std::numeric_limits<std::int32_t>::max()) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "fm_sheet_add_cf_rule: auto-assignment would overflow",
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "auto-assignment would overflow",
                                "max_existing_priority=" + std::to_string(max_priority));
     }
     out_rule.priority = max_priority + 1;
@@ -490,8 +489,7 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
     // time which index was wrong instead of silently losing the format.
     const std::size_t dxf_count = wb->workbook().styles().dxfs.size();
     if (static_cast<std::size_t>(rule->dxf_id) >= dxf_count) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "fm_sheet_add_cf_rule: dxf_id out of range",
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "dxf_id out of range",
                                "dxf_id=" + std::to_string(rule->dxf_id) + " dxfs_count=" + std::to_string(dxf_count));
     }
     out_rule.dxf_id = rule->dxf_id;
@@ -511,16 +509,12 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
     out_rule.id = formulon::cf::x14_rule_id(sheet_index, static_cast<std::uint32_t>(out_rule.priority), used_ids);
   }
   if (rule->formula1 != nullptr) {
-    if (auto rc = check_stored_formula("fm_sheet_add_cf_rule", rule->formula1, "field=formula1",
-                                       &out_rule.formula1.emplace());
-        rc != 0) {
+    if (auto rc = check_stored_formula(rule->formula1, "field=formula1", &out_rule.formula1.emplace()); rc != 0) {
       return rc;
     }
   }
   if (rule->formula2 != nullptr) {
-    if (auto rc = check_stored_formula("fm_sheet_add_cf_rule", rule->formula2, "field=formula2",
-                                       &out_rule.formula2.emplace());
-        rc != 0) {
+    if (auto rc = check_stored_formula(rule->formula2, "field=formula2", &out_rule.formula2.emplace()); rc != 0) {
       return rc;
     }
   }
@@ -550,16 +544,13 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
     }
   }
   if (out_rule.type == formulon::cf::RuleType::ColorScale && !copy_color_scale_payload(*rule, &out_rule)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_add_cf_rule: invalid colorScale payload");
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "invalid colorScale payload");
   }
   if (out_rule.type == formulon::cf::RuleType::DataBar && !copy_data_bar_payload(*rule, &out_rule)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_add_cf_rule: invalid dataBar payload");
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "invalid dataBar payload");
   }
   if (out_rule.type == formulon::cf::RuleType::IconSet && !copy_icon_set_payload(*rule, &out_rule)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_add_cf_rule: invalid iconSet payload");
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "invalid iconSet payload");
   }
   if (auto rc = store_cfvo_formulas(wb, &out_rule); rc != 0) {
     return rc;
@@ -588,14 +579,14 @@ extern "C" fm_status_t fm_sheet_add_cf_rule(fm_workbook_t* wb, std::size_t sheet
 
 extern "C" fm_status_t fm_sheet_remove_cf_rule(fm_workbook_t* wb, std::size_t sheet_index, std::size_t idx) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_remove_cf_rule"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   auto& sheet = wb->workbook().sheet(sheet_index);
   auto& blocks = sheet.mutable_conditional_formats();
   std::size_t b = 0;
   std::size_t r = 0;
-  if (auto rc = resolve_flat_index(blocks, idx, "fm_sheet_remove_cf_rule", &b, &r); rc != 0) {
+  if (auto rc = resolve_flat_index(blocks, idx, &b, &r); rc != 0) {
     return rc;
   }
   blocks[b].rules.erase(blocks[b].rules.begin() + static_cast<std::ptrdiff_t>(r));
@@ -610,7 +601,7 @@ extern "C" fm_status_t fm_sheet_remove_cf_rule(fm_workbook_t* wb, std::size_t sh
 
 extern "C" fm_status_t fm_sheet_clear_cf_rules(fm_workbook_t* wb, std::size_t sheet_index) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_clear_cf_rules"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   auto& sheet = wb->workbook().sheet(sheet_index);

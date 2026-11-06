@@ -33,13 +33,13 @@ using PivotCountFn = fm_status_t (*)(const fm_workbook_t*, size_t, size_t, size_
 Napi::Value PivotCountResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle, PivotCountFn fn) {
   Napi::Env env = info.Env();
   if (handle == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+    return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = static_cast<std::size_t>(Workbook::ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(Workbook::ArgU32(info, 1));
   std::size_t count = 0;
   const fm_status_t rc = fn(handle, sheet, pivot_index, &count);
-  return MakeNumberResult(env, rc, static_cast<double>(count));
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
 }
 
 // The pivot options with their strings copied out of the model, so the
@@ -119,14 +119,15 @@ Napi::Value Workbook::PivotSetName(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PivotSetAnchor(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
   fm_cell_rect_t rect{};
   if (!CellRectArg(reader, info, 2, &rect)) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_sheet_set_pivot_anchor(handle_, ArgU32(info, 0), ArgU32(info, 1), &rect));
+  return ValueOrThrow(env, fm_sheet_set_pivot_anchor(handle_, ArgU32(info, 0), ArgU32(info, 1), &rect),
+                      env.Undefined());
 }
 
 Napi::Value Workbook::PivotSetGrandTotals(const Napi::CallbackInfo& info) {
@@ -142,7 +143,7 @@ Napi::Value Workbook::PivotSetGrandTotals(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PivotSetStyleInfo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
@@ -158,21 +159,23 @@ Napi::Value Workbook::PivotSetStyleInfo(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_sheet_set_pivot_style_info(handle_, sheet, pivot_index, has_name ? name.c_str() : nullptr,
-                                                       row_headers ? 1 : 0, col_headers ? 1 : 0, row_stripes ? 1 : 0,
-                                                       col_stripes ? 1 : 0, last_column ? 1 : 0));
+  return ValueOrThrow(
+      env,
+      fm_sheet_set_pivot_style_info(handle_, sheet, pivot_index, has_name ? name.c_str() : nullptr, row_headers ? 1 : 0,
+                                    col_headers ? 1 : 0, row_stripes ? 1 : 0, col_stripes ? 1 : 0, last_column ? 1 : 0),
+      env.Undefined());
 }
 
 Napi::Value Workbook::PivotGetLayout(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+    return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
   std::int32_t layout = FM_PIVOT_REPORT_LAYOUT_COMPACT;
-  fm_status_t rc = fm_sheet_get_pivot_report_layout(handle_, sheet, pivot_index, &layout);
-  return MakeNumberResult(env, rc, layout);
+  const fm_status_t rc = fm_sheet_get_pivot_report_layout(handle_, sheet, pivot_index, &layout);
+  return ValueOrThrow(env, rc, Napi::Number::New(env, layout));
 }
 
 Napi::Value Workbook::PivotSetLayout(const Napi::CallbackInfo& info) {
@@ -182,39 +185,43 @@ Napi::Value Workbook::PivotSetLayout(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PivotCacheId(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeIndexResult(env, NullHandleError(env), 0);
+    return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
   uint32_t out = 0;
   const fm_status_t rc = fm_sheet_get_pivot_cache_id(handle_, sheet, pivot_index, &out);
-  return MakeIndexResult(env, rc, out);
+  return ValueOrThrow(env, rc, JsNumber(env, out));
 }
 
 Napi::Value Workbook::PivotName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeStringResult(env, kBindingInvalidHandle, nullptr);
+    return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
   const char* name = nullptr;
   const fm_status_t rc = fm_sheet_get_pivot_name(handle_, sheet, pivot_index, &name);
-  return MakeStringResult(env, rc, rc == 0 ? name : nullptr);
+  return ValueOrThrow(env, rc, JsString(env, name));
 }
 
 Napi::Value Workbook::PivotGetGrandTotals(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
   int32_t rows = 0;
   int32_t cols = 0;
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_pivot_grand_totals(handle_, sheet, pivot_index, &rows, &cols)
-                                            : kBindingInvalidHandle;
+  const fm_status_t rc = fm_sheet_get_pivot_grand_totals(handle_, sheet, pivot_index, &rows, &cols);
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("status", MakeStatus(env, rc));
-  out.Set("rows", Napi::Boolean::New(env, rc == 0 && rows != 0));
-  out.Set("cols", Napi::Boolean::New(env, rc == 0 && cols != 0));
+  out.Set("rows", Napi::Boolean::New(env, rows != 0));
+  out.Set("cols", Napi::Boolean::New(env, cols != 0));
   return out;
 }
 
@@ -224,20 +231,23 @@ using PivotFieldOrderGetter = fm_status_t (*)(const fm_workbook_t*, size_t, size
 
 Napi::Value GetPivotFieldOrder(const Napi::CallbackInfo& info, const fm_workbook_t* handle, PivotFieldOrderGetter fn) {
   Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   const std::size_t sheet = static_cast<std::size_t>(Workbook::ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(Workbook::ArgU32(info, 1));
   const uint32_t* data = nullptr;
   std::size_t count = 0;
-  const fm_status_t rc = handle != nullptr ? fn(handle, sheet, pivot_index, &data, &count) : kBindingInvalidHandle;
+  const fm_status_t rc = fn(handle, sheet, pivot_index, &data, &count);
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
   Napi::Array indices = Napi::Array::New(env);
-  for (std::size_t i = 0; rc == 0 && i < count; ++i) {
+  for (std::size_t i = 0; i < count; ++i) {
     const double index = data[i] == FM_PIVOT_VALUES_FIELD ? -2.0 : static_cast<double>(data[i]);
     indices.Set(static_cast<uint32_t>(i), Napi::Number::New(env, index));
   }
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("status", MakeStatus(env, rc));
-  out.Set("indices", indices);
-  return out;
+  return indices;
 }
 
 }  // namespace
@@ -248,17 +258,17 @@ Napi::Value Workbook::PivotRowFieldOrder(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::PivotGetStyleInfo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
   fm_pivot_style_info_t style{};
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_sheet_get_pivot_style_info(handle_, sheet, pivot_index, &style) : kBindingInvalidHandle;
-  if (rc != 0) {
-    style = fm_pivot_style_info_t{};
+  const fm_status_t rc = fm_sheet_get_pivot_style_info(handle_, sheet, pivot_index, &style);
+  if (rc != 0 || style.present == 0) {
+    return OptionalOrNull(env, rc, 0, env.Null());
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("status", MakeStatus(env, rc));
-  out.Set("present", Napi::Boolean::New(env, style.present != 0));
   out.Set("name", JsString(env, style.name));
   out.Set("showRowHeaders", Napi::Boolean::New(env, style.show_row_headers != 0));
   out.Set("showColHeaders", Napi::Boolean::New(env, style.show_col_headers != 0));
@@ -278,19 +288,16 @@ Napi::Value Workbook::PivotFieldCount(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::PivotFieldAt(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   const PivotFieldArgs args = ReadPivotField(info);
   fm_pivot_field_info_t field{};
-  const fm_status_t rc = handle_ != nullptr
-                             ? fm_sheet_get_pivot_field(handle_, args.sheet, args.pivot_index, args.field_index, &field)
-                             : kBindingInvalidHandle;
+  const fm_status_t rc = fm_sheet_get_pivot_field(handle_, args.sheet, args.pivot_index, args.field_index, &field);
   if (rc != 0) {
-    field = fm_pivot_field_info_t{};
-    field.axis = -1;
-    field.cache_field_index = -1;
-    field.group_base_index = -1;
+    return ThrowStatus(env, rc);
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("status", MakeStatus(env, rc));
   out.Set("sourceName", JsString(env, field.source_name));
   out.Set("customName", JsString(env, field.custom_name));
   out.Set("axis", Napi::Number::New(env, field.axis));
@@ -319,29 +326,29 @@ Napi::Value Workbook::PivotFieldAt(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PivotFieldItemCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+    return ThrowInvalidHandle(env);
   }
   const PivotFieldArgs args = ReadPivotField(info);
   std::size_t count = 0;
   const fm_status_t rc =
       fm_sheet_get_pivot_field_item_count(handle_, args.sheet, args.pivot_index, args.field_index, &count);
-  return MakeNumberResult(env, rc, static_cast<double>(count));
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
 }
 
 Napi::Value Workbook::PivotFieldItemAt(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   const PivotFieldArgs args = ReadPivotField(info);
   const std::size_t item_index = static_cast<std::size_t>(ArgU32(info, 3));
   fm_pivot_item_info_t item{};
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_pivot_field_item(handle_, args.sheet, args.pivot_index,
-                                                                            args.field_index, item_index, &item)
-                                            : kBindingInvalidHandle;
+  const fm_status_t rc =
+      fm_sheet_get_pivot_field_item(handle_, args.sheet, args.pivot_index, args.field_index, item_index, &item);
   if (rc != 0) {
-    item = fm_pivot_item_info_t{};
-    item.cache_index = -1;
+    return ThrowStatus(env, rc);
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("status", MakeStatus(env, rc));
   out.Set("name", JsString(env, item.name));
   out.Set("cacheIndex", Napi::Number::New(env, item.cache_index));
   out.Set("visible", Napi::Boolean::New(env, item.visible != 0));
@@ -353,7 +360,7 @@ Napi::Value Workbook::PivotFieldItemAt(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PivotFieldAdd(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeIndexResult(env, NullHandleError(env), 0);
+    return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
@@ -384,8 +391,8 @@ Napi::Value Workbook::PivotFieldAdd(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   std::size_t out = 0;
-  fm_status_t rc = fm_sheet_add_pivot_field(handle_, sheet, pivot_index, &c_spec, &out);
-  return MakeIndexResult(env, rc, static_cast<uint32_t>(out));
+  const fm_status_t rc = fm_sheet_add_pivot_field(handle_, sheet, pivot_index, &c_spec, &out);
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(out)));
 }
 
 Napi::Value Workbook::PivotFieldClear(const Napi::CallbackInfo& info) {
@@ -450,16 +457,17 @@ Napi::Value Workbook::PivotFieldSetItemVisible(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::PivotGetOptions(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
   fm_pivot_options_t o{};
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_sheet_get_pivot_options(handle_, sheet, pivot_index, &o) : kBindingInvalidHandle;
+  const fm_status_t rc = fm_sheet_get_pivot_options(handle_, sheet, pivot_index, &o);
   if (rc != 0) {
-    o = fm_pivot_options_t{};
+    return ThrowStatus(env, rc);
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("status", MakeStatus(env, rc));
   out.Set("showError", OptionsFlag(env, o.show_error));
   out.Set("errorCaption", JsString(env, o.error_caption));
   out.Set("showMissing", OptionsFlag(env, o.show_missing));
@@ -494,7 +502,7 @@ Napi::Value Workbook::PivotGetOptions(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PivotSetOptions(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
@@ -502,7 +510,7 @@ Napi::Value Workbook::PivotSetOptions(const Napi::CallbackInfo& info) {
   OptionsSnapshot cur;
   const fm_status_t read_rc = ReadOptions(handle_, sheet, pivot_index, &cur);
   if (read_rc != 0) {
-    return MakeStatus(env, read_rc);
+    return ThrowStatus(env, read_rc);
   }
   fm_pivot_options_t& o = cur.c;
   CheckedSpecReader reader(env);
@@ -536,20 +544,20 @@ Napi::Value Workbook::PivotSetOptions(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_sheet_set_pivot_options(handle_, sheet, pivot_index, &o));
+  return ValueOrThrow(env, fm_sheet_set_pivot_options(handle_, sheet, pivot_index, &o), env.Undefined());
 }
 
 Napi::Value Workbook::PivotCacheGetOptions(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   fm_pivot_cache_options_t o{};
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_get_pivot_cache_options(handle_, ArgU32(info, 0), &o) : kBindingInvalidHandle;
+  const fm_status_t rc = fm_workbook_get_pivot_cache_options(handle_, ArgU32(info, 0), &o);
   if (rc != 0) {
-    o = fm_pivot_cache_options_t{};
-    o.missing_items_limit = -1;
+    return ThrowStatus(env, rc);
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("status", MakeStatus(env, rc));
   out.Set("saveData", OptionsFlag(env, o.save_data));
   out.Set("missingItemsLimit", Napi::Number::New(env, o.missing_items_limit));
   out.Set("refreshOnLoad", OptionsFlag(env, o.refresh_on_load));
@@ -560,14 +568,14 @@ Napi::Value Workbook::PivotCacheGetOptions(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PivotCacheSetOptions(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   const uint32_t cache_id = ArgU32(info, 0);
   const Napi::Object spec = ArgObject(info, 1);
   fm_pivot_cache_options_t o{};
   const fm_status_t read_rc = fm_workbook_get_pivot_cache_options(handle_, cache_id, &o);
   if (read_rc != 0) {
-    return MakeStatus(env, read_rc);
+    return ThrowStatus(env, read_rc);
   }
   CheckedSpecReader reader(env);
   o.save_data = reader.Bool(spec, "saveData", o.save_data != 0) ? 1 : 0;
@@ -576,7 +584,7 @@ Napi::Value Workbook::PivotCacheSetOptions(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_workbook_set_pivot_cache_options(handle_, cache_id, &o));
+  return ValueOrThrow(env, fm_workbook_set_pivot_cache_options(handle_, cache_id, &o), env.Undefined());
 }
 
 Napi::Value Workbook::PivotCacheCalculatedFieldAdd(const Napi::CallbackInfo& info) {
@@ -604,12 +612,13 @@ Napi::Value Workbook::PivotCacheCalculatedFieldRemove(const Napi::CallbackInfo& 
 
 Napi::Value Workbook::PivotCacheFieldFormula(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   const char* formula = nullptr;
-  const fm_status_t rc = handle_ != nullptr
-                             ? fm_workbook_get_pivot_cache_field_formula(
-                                   handle_, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), &formula)
-                             : kBindingInvalidHandle;
-  return MakeStringResult(env, rc, rc == 0 ? formula : nullptr);
+  const fm_status_t rc = fm_workbook_get_pivot_cache_field_formula(handle_, ArgU32(info, 0),
+                                                                   static_cast<std::size_t>(ArgU32(info, 1)), &formula);
+  return ValueOrThrow(env, rc, JsString(env, formula));
 }
 
 Napi::Value Workbook::PivotCacheCalculatedItemAdd(const Napi::CallbackInfo& info) {
@@ -624,25 +633,25 @@ Napi::Value Workbook::PivotCacheCalculatedItemAdd(const Napi::CallbackInfo& info
 Napi::Value Workbook::PivotCacheCalculatedItemCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+    return ThrowInvalidHandle(env);
   }
   std::size_t count = 0;
   const fm_status_t rc = fm_workbook_get_pivot_cache_calculated_item_count(handle_, ArgU32(info, 0), &count);
-  return MakeNumberResult(env, rc, static_cast<double>(count));
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
 }
 
 Napi::Value Workbook::PivotCacheCalculatedItemAt(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   fm_pivot_calculated_item_t item{};
-  const fm_status_t rc = handle_ != nullptr
-                             ? fm_workbook_get_pivot_cache_calculated_item(
-                                   handle_, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), &item)
-                             : kBindingInvalidHandle;
+  const fm_status_t rc = fm_workbook_get_pivot_cache_calculated_item(handle_, ArgU32(info, 0),
+                                                                     static_cast<std::size_t>(ArgU32(info, 1)), &item);
   if (rc != 0) {
-    item = fm_pivot_calculated_item_t{};
+    return ThrowStatus(env, rc);
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("status", MakeStatus(env, rc));
   out.Set("fieldIndex", Napi::Number::New(env, item.field_index));
   out.Set("name", JsString(env, item.name));
   out.Set("formula", JsString(env, item.formula));
@@ -684,6 +693,9 @@ Napi::Value Workbook::PivotFieldSetCustomName(const Napi::CallbackInfo& info) {
 // `excludeDataField` is optional: omitted counts every data field's name as taken.
 Napi::Value Workbook::PivotDataFieldDefaultName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t field_index = static_cast<std::size_t>(ArgU32(info, 2));
@@ -691,10 +703,9 @@ Napi::Value Workbook::PivotDataFieldDefaultName(const Napi::CallbackInfo& info) 
   const std::size_t exclude = info.Length() > 4 && info[4].IsNumber() ? static_cast<std::size_t>(ArgU32(info, 4))
                                                                       : std::numeric_limits<std::size_t>::max();
   const char* name = nullptr;
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_pivot_data_field_default_name(
-                                                  handle_, sheet, pivot_index, field_index, aggregation, exclude, &name)
-                                            : kBindingInvalidHandle;
-  return MakeStringResult(env, rc, rc == 0 ? name : nullptr);
+  const fm_status_t rc =
+      fm_sheet_get_pivot_data_field_default_name(handle_, sheet, pivot_index, field_index, aggregation, exclude, &name);
+  return ValueOrThrow(env, rc, JsString(env, name));
 }
 
 Napi::Value Workbook::PivotProject(const Napi::CallbackInfo& info) {
@@ -703,12 +714,13 @@ Napi::Value Workbook::PivotProject(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::PivotProjectionPending(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   int32_t pending = 0;
-  const fm_status_t rc = handle_ != nullptr
-                             ? fm_sheet_is_pivot_projection_pending(handle_, static_cast<std::size_t>(ArgU32(info, 0)),
-                                                                    static_cast<std::size_t>(ArgU32(info, 1)), &pending)
-                             : kBindingInvalidHandle;
-  return MakeBoolResult(env, rc, pending);
+  const fm_status_t rc = fm_sheet_is_pivot_projection_pending(handle_, static_cast<std::size_t>(ArgU32(info, 0)),
+                                                              static_cast<std::size_t>(ArgU32(info, 1)), &pending);
+  return ValueOrThrow(env, rc, Napi::Boolean::New(env, pending != 0));
 }
 
 Napi::Value Workbook::PivotShowDetails(const Napi::CallbackInfo& info) {
@@ -725,11 +737,12 @@ using PivotFieldFlagFn = fm_status_t (*)(fm_workbook_t*, size_t, size_t, size_t,
 
 Napi::Value InvokePivotFieldFlag(const Napi::CallbackInfo& info, fm_workbook_t* handle, PivotFieldFlagFn fn) {
   if (handle == nullptr) {
-    return NullHandleError(info.Env());
+    return ThrowInvalidHandle(info.Env());
   }
   const PivotFieldArgs field = ReadPivotField(info);
-  return MakeStatus(info.Env(),
-                    fn(handle, field.sheet, field.pivot_index, field.field_index, Workbook::ArgFlag(info, 3)));
+  return ValueOrThrow(info.Env(),
+                      fn(handle, field.sheet, field.pivot_index, field.field_index, Workbook::ArgFlag(info, 3)),
+                      info.Env().Undefined());
 }
 
 }  // namespace
@@ -784,7 +797,7 @@ Napi::Value Workbook::PivotFieldClearSubtotalFns(const Napi::CallbackInfo& info)
 Napi::Value Workbook::PivotFieldSetDateGroup(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   // The trailing three are optional on both surfaces: one-day intervals and
   // the source data's own bounds (NaN).
@@ -797,9 +810,10 @@ Napi::Value Workbook::PivotFieldSetDateGroup(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const PivotFieldArgs field = ReadPivotField(info);
-  return MakeStatus(env,
-                    fm_sheet_set_pivot_field_date_group(handle_, field.sheet, field.pivot_index, field.field_index,
-                                                        ArgU32(info, 3), ArgI32(info, 4), interval_days, start, end));
+  return ValueOrThrow(env,
+                      fm_sheet_set_pivot_field_date_group(handle_, field.sheet, field.pivot_index, field.field_index,
+                                                          ArgU32(info, 3), ArgI32(info, 4), interval_days, start, end),
+                      env.Undefined());
 }
 
 Napi::Value Workbook::PivotFieldClearDateGroup(const Napi::CallbackInfo& info) {
@@ -818,13 +832,14 @@ Napi::Value Workbook::PivotFieldSetNumberFormat(const Napi::CallbackInfo& info) 
 Napi::Value Workbook::InvokePivotFieldOrder(const Napi::CallbackInfo& info, PivotFieldOrderFn fn) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
   Napi::Array array;
   if (!ArrayArg(info, 2, &array)) {
-    return MakeBindingArgumentError(env, "pivot field order must be an array");
+    Napi::TypeError::New(env, "pivot field order must be an array").ThrowAsJavaScriptException();
+    return env.Undefined();
   }
   CheckedSpecReader reader(env);
   std::vector<uint32_t> indices;
@@ -840,8 +855,8 @@ Napi::Value Workbook::InvokePivotFieldOrder(const Napi::CallbackInfo& info, Pivo
   if (!reader.ok()) {
     return env.Undefined();
   }
-  fm_status_t rc = fn(handle_, sheet, pivot_index, indices.empty() ? nullptr : indices.data(), indices.size());
-  return MakeStatus(env, rc);
+  const fm_status_t rc = fn(handle_, sheet, pivot_index, indices.empty() ? nullptr : indices.data(), indices.size());
+  return ValueOrThrow(env, rc, env.Undefined());
 }
 
 Napi::Value Workbook::PivotSetRowFieldOrder(const Napi::CallbackInfo& info) {
@@ -859,7 +874,7 @@ Napi::Value Workbook::PivotDataFieldCount(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PivotDataFieldAdd(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeIndexResult(env, NullHandleError(env), 0);
+    return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
@@ -875,24 +890,22 @@ Napi::Value Workbook::PivotDataFieldAdd(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   std::size_t out = 0;
-  fm_status_t rc = fm_sheet_add_pivot_data_field(handle_, sheet, pivot_index, &c_spec, &out);
-  return MakeIndexResult(env, rc, static_cast<uint32_t>(out));
+  const fm_status_t rc = fm_sheet_add_pivot_data_field(handle_, sheet, pivot_index, &c_spec, &out);
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(out)));
 }
 
 Napi::Value Workbook::PivotDataFieldAt(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   const PivotFieldArgs args = ReadPivotField(info);
   fm_pivot_data_field_spec_t spec{};
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_sheet_get_pivot_data_field(handle_, args.sheet, args.pivot_index, args.field_index, &spec)
-                         : kBindingInvalidHandle;
+  const fm_status_t rc = fm_sheet_get_pivot_data_field(handle_, args.sheet, args.pivot_index, args.field_index, &spec);
   if (rc != 0) {
-    spec = fm_pivot_data_field_spec_t{};
-    spec.show_as_base_field = -1;
-    spec.show_as_base_item = -1;
+    return ThrowStatus(env, rc);
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("status", MakeStatus(env, rc));
   out.Set("name", JsString(env, spec.name));
   out.Set("fieldIndex", Napi::Number::New(env, spec.field_index));
   out.Set("aggregation", Napi::Number::New(env, static_cast<int32_t>(spec.aggregation)));
@@ -910,7 +923,7 @@ Napi::Value Workbook::PivotDataFieldClear(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PivotDataFieldSet(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
@@ -925,8 +938,8 @@ Napi::Value Workbook::PivotDataFieldSet(const Napi::CallbackInfo& info) {
     // See the matching guard in PivotDataFieldAdd.
     return env.Undefined();
   }
-  fm_status_t rc = fm_sheet_set_pivot_data_field(handle_, sheet, pivot_index, data_field_index, &c_spec);
-  return MakeStatus(env, rc);
+  const fm_status_t rc = fm_sheet_set_pivot_data_field(handle_, sheet, pivot_index, data_field_index, &c_spec);
+  return ValueOrThrow(env, rc, env.Undefined());
 }
 
 Napi::Value Workbook::PivotFilterCount(const Napi::CallbackInfo& info) {
@@ -935,20 +948,18 @@ Napi::Value Workbook::PivotFilterCount(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::PivotFilterAt(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  // The payload is emitted on every exit path, matching the WASM binding;
-  // only `status.ok` and the values differ.
-  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t filter_index = static_cast<std::size_t>(ArgU32(info, 2));
   fm_pivot_filter_spec_t spec{};
-  const fm_status_t rc = handle_ != nullptr
-                             ? fm_sheet_get_pivot_filter(handle_, sheet, pivot_index, filter_index, &spec)
-                             : kBindingInvalidHandle;
+  const fm_status_t rc = fm_sheet_get_pivot_filter(handle_, sheet, pivot_index, filter_index, &spec);
   if (rc != 0) {
-    spec = fm_pivot_filter_spec_t{};
+    return ThrowStatus(env, rc);
   }
-  out.Set("status", MakeStatus(env, rc));
+  Napi::Object out = Napi::Object::New(env);
   out.Set("axis", Napi::Number::New(env, static_cast<int32_t>(spec.axis)));
   out.Set("fieldName", JsString(env, spec.field_name));
   out.Set("type", Napi::Number::New(env, static_cast<int32_t>(spec.type)));
@@ -967,7 +978,7 @@ Napi::Value Workbook::PivotFilterAt(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeIndexResult(env, NullHandleError(env), 0);
+    return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_index = static_cast<std::size_t>(ArgU32(info, 1));
@@ -1004,8 +1015,8 @@ Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   std::size_t out = 0;
-  fm_status_t rc = fm_sheet_add_pivot_filter(handle_, sheet, pivot_index, &c_spec, &out);
-  return MakeIndexResult(env, rc, static_cast<uint32_t>(out));
+  const fm_status_t rc = fm_sheet_add_pivot_filter(handle_, sheet, pivot_index, &c_spec, &out);
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(out)));
 }
 
 Napi::Value Workbook::PivotFilterClear(const Napi::CallbackInfo& info) {

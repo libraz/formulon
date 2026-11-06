@@ -3,10 +3,9 @@
 
 Inputs:
 
-* ``src/wasm/formulon.d.ts``: every declaration both npm packages share. The
-  region between the ``entry-point`` markers is WASM-specific (the module
-  factory); it is replaced by the native entry points derived from the
-  ``FormulonModule`` interface inside it.
+* ``src/wasm/formulon.d.ts``: every declaration both npm packages share,
+  the ``createFormulon`` entry point included; only its file header comment
+  is WASM-specific and is replaced.
 * ``packages/npm-native/dts-delta.d.ts``: the members only the native package
   has, as a ``Workbook`` interface whose members are appended to the shared one.
 
@@ -21,15 +20,12 @@ import argparse
 import re
 import sys
 from pathlib import Path
-from typing import List, NamedTuple, Tuple
+from typing import Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WASM_DTS = REPO_ROOT / "src/wasm/formulon.d.ts"
 DELTA_DTS = REPO_ROOT / "packages/npm-native/dts-delta.d.ts"
 NODE_DTS = REPO_ROOT / "packages/npm-native/index.d.ts"
-
-ENTRY_BEGIN = "// <entry-point:begin>"
-ENTRY_END = "// <entry-point:end>"
 
 HEADER = """// TypeScript declarations for @libraz/formulon-native, the N-API binding.
 //
@@ -38,20 +34,9 @@ HEADER = """// TypeScript declarations for @libraz/formulon-native, the N-API bi
 // (the members only this package has). Do not edit.
 """
 
-DEFAULT_DOC = """/** Key set of the default export. Must stay identical to the object
- *  literal `export default {...}` in `index.mjs`; a `readme-counts`
- *  CTest asserts the two agree. */"""
-
 
 class GenError(ValueError):
     """An input declaration file does not have the expected shape."""
-
-
-class Member(NamedTuple):
-    doc: List[str]
-    decl: str
-    name: str
-    is_method: bool
 
 
 def _block(text: str, open_index: int) -> int:
@@ -84,74 +69,9 @@ def _interface_body(text: str, name: str) -> Tuple[int, int]:
     return open_index + 1, _block(text, open_index)
 
 
-def _members(body: str) -> List[Member]:
-    """Doc-commented members of an interface body, one per top-level declaration."""
-    members: List[Member] = []
-    doc: List[str] = []
-    decl: List[str] = []
-    in_doc = False
-    depth = 0
-    for line in body.split("\n"):
-        stripped = line.strip()
-        if not decl:
-            if in_doc:
-                doc.append(line)
-                in_doc = not stripped.endswith("*/")
-                continue
-            if stripped.startswith("/**"):
-                doc = [line]
-                in_doc = not stripped.endswith("*/")
-                continue
-            if not stripped:
-                if not doc:
-                    continue
-                doc = []
-                continue
-        decl.append(line)
-        depth += line.count("(") - line.count(")")
-        if depth == 0 and stripped.endswith(";"):
-            text = "\n".join(decl)
-            name = re.match(r"\s*([A-Za-z_$][\w$]*)", text)
-            if name is None:
-                raise GenError(f"cannot read member name from: {text!r}")
-            members.append(Member(doc, text, name.group(1), "(" in text.split(":", 1)[0]))
-            doc, decl = [], []
-    if decl:
-        raise GenError("unterminated member declaration")
-    return members
-
-
-def _dedent(lines: List[str]) -> List[str]:
-    return [line[2:] if line.startswith("  ") else line for line in lines]
-
-
-def _entry_points(module_body: str) -> Tuple[List[str], List[str]]:
-    """``export`` declarations and default-object keys derived from ``FormulonModule``."""
-    exports: List[str] = []
-    keys: List[str] = []
-    for member in _members(module_body):
-        decl = "\n".join(_dedent(member.decl.split("\n")))
-        if member.is_method:
-            exports.append("\n".join(_dedent(member.doc) + ["export function " + decl.lstrip()]))
-            keys.append(f"  {member.name}: typeof {member.name};")
-        elif member.decl.strip() == f"{member.name}: typeof {member.name};":
-            keys.append("  " + member.decl.strip())
-        else:
-            exports.append("\n".join(_dedent(member.doc) + ["export const " + decl.lstrip()]))
-            keys.append("  " + member.decl.strip())
-    return exports, keys
-
-
 def generate(wasm_text: str, delta_text: str) -> str:
-    begin = wasm_text.find(ENTRY_BEGIN)
-    end = wasm_text.find(ENTRY_END)
-    if begin < 0 or end < begin:
-        raise GenError("entry-point markers not found")
-    entry = wasm_text[begin:end]
-    shared = wasm_text[:begin] + wasm_text[end + len(ENTRY_END) :]
-
     # Drop the WASM file header comment; the directives after it stay.
-    shared = re.sub(r"\A(?://(?!/)[^\n]*\n)+\n", "", shared)
+    shared = re.sub(r"\A(?://(?!/)[^\n]*\n)+\n", "", wasm_text)
 
     start, stop = _interface_body(delta_text, "Workbook")
     delta_members = delta_text[start:stop].strip("\n")
@@ -159,19 +79,7 @@ def generate(wasm_text: str, delta_text: str) -> str:
     wb_body = shared[wb_start:wb_stop].rstrip("\n")
     shared = shared[:wb_start] + wb_body + "\n\n" + delta_members + "\n" + shared[wb_stop:]
 
-    module_start, module_stop = _interface_body(entry, "FormulonModule")
-    exports, keys = _entry_points(entry[module_start:module_stop])
-
-    parts = [
-        HEADER.rstrip("\n"),
-        "",
-        shared.rstrip("\n"),
-        "",
-        "\n\n".join(exports),
-        "",
-        DEFAULT_DOC + "\ndeclare const _default: {\n" + "\n".join(keys) + "\n};\nexport default _default;",
-    ]
-    return "\n".join(parts) + "\n"
+    return HEADER + "\n" + shared.rstrip("\n") + "\n"
 
 
 def main() -> int:

@@ -634,7 +634,7 @@ TEST(FormulonCApiTheme, ScriptFontAtRejectsAnOutOfRangeIndexAndNulls) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* script = nullptr;
   const char* typeface = nullptr;
-  EXPECT_EQ(fm_workbook_get_theme_script_font_at(wb.handle, 1, 47U, &script, &typeface), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_get_theme_script_font_at(wb.handle, 1, 47U, &script, &typeface), FM_STATUS_INDEX_OUT_OF_RANGE);
   size_t count = 0;
   EXPECT_EQ(fm_workbook_get_theme_script_font_count(nullptr, 1, &count), kNullPointer);
   EXPECT_EQ(fm_workbook_get_theme_script_font_count(wb.handle, 1, nullptr), kNullPointer);

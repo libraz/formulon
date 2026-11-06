@@ -1,53 +1,50 @@
 import test from 'node:test';
-import { appendEmptyZipEntry, assert, getModule, readAll } from './smoke_support.mjs';
+import { appendEmptyZipEntry, assert, getModule, isFormulonError, readAll } from './smoke_support.mjs';
 
 test('comments round-trip: setComment + getComment', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   // Pre-existing cell so the comment attaches to a stored slot.
-  assert.ok(wb.setNumber(0, 1, 1, 7).ok);
-  const sc = wb.setComment(0, 1, 1, 'libraz', 'hello world');
-  assert.ok(sc.ok, `setComment: ${JSON.stringify(sc)}`);
-  const c = wb.getComment(0, 1, 1).value;
+  wb.setNumber(0, 1, 1, 7);
+  wb.setComment(0, 1, 1, 'libraz', 'hello world');
+  const c = wb.getComment(0, 1, 1);
   assert.ok(c !== null, 'expected non-null Comment');
   assert.equal(c.author, 'libraz');
   assert.equal(c.text, 'hello world');
   // Removing surfaces null on the next read.
-  assert.ok(wb.setComment(0, 1, 1, '', '').ok);
-  assert.equal(wb.getComment(0, 1, 1).value, null);
+  wb.setComment(0, 1, 1, '', '');
+  assert.equal(wb.getComment(0, 1, 1), null);
 });
 
 test('getComment distinguishes absence from an invalid sheet', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   const missing = wb.getComment(0, 1, 1);
-  assert.equal(missing.status.ok, true);
-  assert.equal(missing.value, null);
-  const invalid = wb.getComment(99, 1, 1);
-  assert.equal(invalid.status.code, mod.StatusCode.SheetIndexOutOfRange);
-  assert.equal(invalid.value, null);
-  assert.ok(wb.setComment(0, 1, 1, 'libraz', 'hello').ok);
+  assert.equal(missing, null);
+  assert.throws(
+    () => wb.getComment(99, 1, 1),
+    (e) => isFormulonError(e, mod.StatusCode.SheetIndexOutOfRange),
+  );
+  wb.setComment(0, 1, 1, 'libraz', 'hello');
   const found = wb.getComment(0, 1, 1);
-  assert.equal(found.status.ok, true);
-  assert.equal(found.value.author, 'libraz');
-  assert.equal(found.value.text, 'hello');
+  assert.equal(found.author, 'libraz');
+  assert.equal(found.text, 'hello');
 });
 
 test('cellCount + cellAt enumerate stored cells', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  assert.ok(wb.setNumber(0, 0, 0, 1).ok);
-  assert.ok(wb.setNumber(0, 0, 1, 2).ok);
-  assert.ok(wb.setFormula(0, 1, 0, '=A1+B1').ok);
-  assert.ok(wb.recalc().ok);
-  const n = wb.getCellCount(0).value;
+  const wb = mod.Workbook.createDefault();
+  wb.setNumber(0, 0, 0, 1);
+  wb.setNumber(0, 0, 1, 2);
+  wb.setFormula(0, 1, 0, '=A1+B1');
+  wb.recalc();
+  const n = wb.getCellCount(0);
   assert.equal(typeof n, 'number');
   assert.ok(n >= 3, `expected >= 3 stored cells, got ${n}`);
   // Iterate; one of the entries should carry our formula.
   let foundFormula = false;
   for (let i = 0; i < n; ++i) {
     const e = wb.getCellAt(0, i);
-    assert.ok(e.status.ok, `getCellAt(${i}): ${JSON.stringify(e.status)}`);
     assert.equal(typeof e.row, 'number');
     assert.equal(typeof e.col, 'number');
     if (e.formula === '=A1+B1') {
@@ -80,61 +77,52 @@ test('default export exposes ErrorCode ordinals and getVersion', async () => {
 
 test('setError() rejects a missing errorCode argument', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   assert.throws(() => wb.setError(0, 0, 0), TypeError);
 });
 
 test('setError() rejects a non-number errorCode before mutating the cell', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  assert.ok(wb.setNumber(0, 0, 0, 7).ok);
+  const wb = mod.Workbook.createDefault();
+  wb.setNumber(0, 0, 0, 7);
   assert.throws(() => wb.setError(0, 0, 0, 'not a number'), TypeError);
   // The rejected call must not have overwritten the cell.
   const got = wb.getValue(0, 0, 0);
-  assert.ok(got.status.ok, JSON.stringify(got.status));
-  assert.equal(got.value.number, 7);
+  assert.equal(got.number, 7);
 });
 
-test('saveAs() writes xlsx and xlsb bytes; rejects a missing format argument', async () => {
+test('save() writes xlsx and xlsb bytes; a missing format selects the default', async () => {
   const mod = await getModule();
   assert.equal(typeof mod.WorkbookFormat, 'object');
-  const wb = mod.Workbook.createDefault().value;
-  const xlsx = wb.saveAs(mod.WorkbookFormat.Xlsx);
-  assert.ok(xlsx.status.ok, JSON.stringify(xlsx.status));
-  assert.ok(xlsx.bytes.length > 0);
-  const xlsb = wb.saveAs(mod.WorkbookFormat.Xlsb);
-  assert.ok(xlsb.status.ok, JSON.stringify(xlsb.status));
-  assert.ok(xlsb.bytes.length > 0);
-  assert.throws(() => wb.saveAs(), TypeError);
+  const wb = mod.Workbook.createDefault();
+  const xlsx = wb.save(mod.WorkbookFormat.Xlsx);
+  assert.ok(xlsx.length > 0);
+  const xlsb = wb.save(mod.WorkbookFormat.Xlsb);
+  assert.ok(xlsb.length > 0);
+  assert.ok(wb.save().length > 0);
 });
 
 test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable shape', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  assert.ok(wb.setFormula(0, 0, 0, '=SUM(T[C])').ok);
-  assert.ok(
-    wb.addValidation(0, {
-      ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
-      type: 3,
-      formula1: '"Yes,No"',
-    }).status.ok,
-  );
+  const wb = mod.Workbook.createDefault();
+  wb.setFormula(0, 0, 0, '=SUM(T[C])');
+  wb.addValidation(0, {
+    ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+    type: 3,
+    formula1: '"Yes,No"',
+  });
   // A CF rule's dxfId must resolve against a registered dxf.
   const dxf = wb.addDxf({ font: { bold: true } });
-  assert.ok(dxf.status.ok, JSON.stringify(dxf.status));
-  assert.ok(
-    wb.addCfRule(0, {
-      ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
-      type: 1,
-      op: 5,
-      formula1: '10',
-      dxfId: dxf.index,
-      stopIfTrue: false,
-    }).status.ok,
-  );
+  wb.addCfRule(0, {
+    ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+    type: 1,
+    op: 5,
+    formula1: '10',
+    dxfId: dxf,
+    stopIfTrue: false,
+  });
 
   const xlsx = wb.saveWithDiagnostics(mod.WorkbookFormat.Xlsx);
-  assert.ok(xlsx.status.ok, JSON.stringify(xlsx.status));
   assert.ok(xlsx.bytes instanceof Uint8Array);
   assert.equal(xlsx.downgradedFormulaCount, 0);
   assert.equal(xlsx.deferredFeatureCount, 0);
@@ -143,7 +131,6 @@ test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable 
   assert.equal(xlsx.renumberedPartCount, 0);
 
   const xlsb = wb.saveWithDiagnostics(mod.WorkbookFormat.Xlsb);
-  assert.ok(xlsb.status.ok, JSON.stringify(xlsb.status));
   assert.ok(xlsb.bytes instanceof Uint8Array);
   assert.equal(xlsb.downgradedFormulaCount, 1);
   // The validation and the CF rule, with its dxf, are both written.
@@ -151,46 +138,34 @@ test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable 
   // The binary writer never reassigns a part id.
   assert.equal(xlsb.renumberedPartCount, 0);
 
-  const loaded = mod.Workbook.load(xlsb.bytes).value;
+  const loaded = mod.Workbook.load(xlsb.bytes);
   const read = loaded.getDiagnostics();
-  assert.ok(read.status.ok, JSON.stringify(read.status));
   assert.equal(read.undecodedFormulaCount, 0);
   assert.equal(read.undecodedDefinedNameCount, 0);
   assert.equal(read.undecodedPartCount, 0);
   assert.equal(read.skippedFeatureCount, 0);
   assert.equal(read.unknownContentTypeCount, 0);
-  const preservedLoaded = mod.Workbook.load(appendEmptyZipEntry(xlsb.bytes, 'xl/preserved.bin')).value;
+  const preservedLoaded = mod.Workbook.load(appendEmptyZipEntry(xlsb.bytes, 'xl/preserved.bin'));
   const preserved = preservedLoaded.getDiagnostics();
-  assert.ok(preserved.status.ok, JSON.stringify(preserved.status));
   assert.equal(preserved.undecodedPartCount, 0);
   preservedLoaded.dispose();
-  const invalidSave = wb.saveWithDiagnostics(0);
-  assert.ok(!invalidSave.status.ok, JSON.stringify(invalidSave));
-  assert.equal(invalidSave.bytes, null);
-  assert.equal(invalidSave.downgradedFormulaCount, 0);
-  assert.equal(invalidSave.deferredFeatureCount, 0);
-  assert.equal(invalidSave.droppedPartCount, 0);
-  assert.equal(invalidSave.droppedRelationshipCount, 0);
-  assert.equal(invalidSave.renumberedPartCount, 0);
-  assert.ok(wb.saveAs(mod.WorkbookFormat.Xlsb).bytes instanceof Uint8Array);
+  assert.throws(() => wb.saveWithDiagnostics(0), isFormulonError);
+  assert.ok(wb.save(mod.WorkbookFormat.Xlsb) instanceof Uint8Array);
 });
 
-test('invalid workbook read diagnostics return a zeroed failure envelope', async () => {
+test('read diagnostics of a disposed workbook throw', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   wb.dispose();
-  const read = wb.getDiagnostics();
-  assert.ok(!read.status.ok, JSON.stringify(read));
-  assert.equal(read.undecodedFormulaCount, 0);
-  assert.equal(read.undecodedDefinedNameCount, 0);
-  assert.equal(read.undecodedPartCount, 0);
-  assert.equal(read.skippedFeatureCount, 0);
-  assert.equal(read.unknownContentTypeCount, 0);
+  assert.throws(
+    () => wb.getDiagnostics(),
+    (e) => isFormulonError(e, mod.StatusCode.BindingInvalidHandle),
+  );
 });
 
 test('addValidation / getValidation / removeValidationAt / clearValidations round-trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   // Empty by default.
   assert.equal(
     readAll(
@@ -215,7 +190,7 @@ test('addValidation / getValidation / removeValidationAt / clearValidations roun
     errorTitle: 'Bad value',
     errorMessage: 'Pick from the list',
   };
-  assert.ok(wb.addValidation(0, listRule).status.ok);
+  wb.addValidation(0, listRule);
 
   // Decimal between [0, 100] across two rectangles.
   const decimalRule = {
@@ -229,7 +204,7 @@ test('addValidation / getValidation / removeValidationAt / clearValidations roun
     formula2: '100',
     allowBlank: false,
   };
-  assert.ok(wb.addValidation(0, decimalRule).status.ok);
+  wb.addValidation(0, decimalRule);
 
   const list = readAll(
     () => wb.getValidationCount(0),
@@ -250,7 +225,7 @@ test('addValidation / getValidation / removeValidationAt / clearValidations roun
   assert.equal(list[1].ranges[1].firstRow, 6);
 
   // removeValidationAt removes the first rule.
-  assert.ok(wb.removeValidation(0, 0).ok);
+  wb.removeValidation(0, 0);
   const after = readAll(
     () => wb.getValidationCount(0),
     (i) => wb.getValidation(0, i),
@@ -259,14 +234,14 @@ test('addValidation / getValidation / removeValidationAt / clearValidations roun
   assert.equal(after[0].type, 2);
 
   // Out-of-range index is rejected.
-  assert.ok(!wb.removeValidation(0, 99).ok);
+  assert.throws(() => wb.removeValidation(0, 99), isFormulonError);
   // Sheet-out-of-range is rejected on every entry.
-  assert.ok(!wb.addValidation(999, listRule).status.ok);
-  assert.ok(!wb.removeValidation(999, 0).ok);
-  assert.ok(!wb.clearValidations(999).ok);
+  assert.throws(() => wb.addValidation(999, listRule), isFormulonError);
+  assert.throws(() => wb.removeValidation(999, 0), isFormulonError);
+  assert.throws(() => wb.clearValidations(999), isFormulonError);
 
   // clearValidations drops everything; safe to call again.
-  assert.ok(wb.clearValidations(0).ok);
+  wb.clearValidations(0);
   assert.equal(
     readAll(
       () => wb.getValidationCount(0),
@@ -274,7 +249,7 @@ test('addValidation / getValidation / removeValidationAt / clearValidations roun
     ).length,
     0,
   );
-  assert.ok(wb.clearValidations(0).ok);
+  wb.clearValidations(0);
 });
 
 // -- Newly wired surface (audit parity with the WASM binding) ----------
@@ -284,7 +259,7 @@ test('addValidation / getValidation / removeValidationAt / clearValidations roun
 
 test('addConditionalFormat + getCfRule + clearConditionalFormats round-trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   assert.equal(
     readAll(
       () => wb.getCfRuleCount(0),
@@ -294,18 +269,16 @@ test('addConditionalFormat + getCfRule + clearConditionalFormats round-trip', as
   );
   // A CF rule's dxfId must resolve against a registered dxf.
   const dxf = wb.addDxf({ font: { bold: true } });
-  assert.ok(dxf.status.ok, JSON.stringify(dxf.status));
   // cellIs rule (type 1) comparing the cell to a literal.
   const add = wb.addCfRule(0, {
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 0 }],
     type: 1,
     op: 5,
     formula1: '10',
-    dxfId: dxf.index,
+    dxfId: dxf,
     stopIfTrue: false,
   });
-  assert.ok(add.status.ok, `addConditionalFormat: ${JSON.stringify(add)}`);
-  assert.equal(typeof add.index, 'number');
+  assert.equal(typeof add, 'number');
   const list = readAll(
     () => wb.getCfRuleCount(0),
     (i) => wb.getCfRule(0, i),
@@ -317,7 +290,7 @@ test('addConditionalFormat + getCfRule + clearConditionalFormats round-trip', as
   assert.equal(list[0].ranges[0].lastRow, 4);
   assert.equal(list[0].formula1, '10');
   // removeConditionalFormatAt drops the only rule.
-  assert.ok(wb.removeCfRule(0, 0).ok);
+  wb.removeCfRule(0, 0);
   assert.equal(
     readAll(
       () => wb.getCfRuleCount(0),
@@ -326,9 +299,9 @@ test('addConditionalFormat + getCfRule + clearConditionalFormats round-trip', as
     0,
   );
   // clearConditionalFormats is a safe no-op on an empty sheet.
-  assert.ok(wb.clearCfRules(0).ok);
+  wb.clearCfRules(0);
   // Sheet-out-of-range is rejected.
-  assert.ok(!wb.clearCfRules(999).ok);
+  assert.throws(() => wb.clearCfRules(999), isFormulonError);
 });
 
 test('data bar x14 fields survive save and load', async () => {
@@ -337,8 +310,8 @@ test('data bar x14 fields survive save and load', async () => {
   // that never emits the extension -- which is exactly how they used to be
   // lost. Only a save/load cycle pins them.
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  const add = wb.addCfRule(0, {
+  const wb = mod.Workbook.createDefault();
+  wb.addCfRule(0, {
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
     type: 3,
     dataBar: {
@@ -354,11 +327,9 @@ test('data bar x14 fields survive save and load', async () => {
       direction: 2,
     },
   });
-  assert.ok(add.status.ok, `addConditionalFormat: ${JSON.stringify(add)}`);
 
   const saved = wb.save();
-  assert.ok(saved.status.ok);
-  const loaded = mod.Workbook.load(saved.bytes).value;
+  const loaded = mod.Workbook.load(saved);
   const bar = readAll(
     () => loaded.getCfRuleCount(0),
     (i) => loaded.getCfRule(0, i),
@@ -372,12 +343,11 @@ test('data bar x14 fields survive save and load', async () => {
   assert.equal(bar.direction, 2);
 
   // The decoded bar fed straight back must reproduce the same rule.
-  const again = loaded.addCfRule(0, {
+  loaded.addCfRule(0, {
     ranges: [{ firstRow: 4, firstCol: 0, lastRow: 6, lastCol: 0 }],
     type: 3,
     dataBar: bar,
   });
-  assert.ok(again.status.ok, `re-add: ${JSON.stringify(again)}`);
   const reread = readAll(
     () => loaded.getCfRuleCount(0),
     (i) => loaded.getCfRule(0, i),
@@ -393,8 +363,8 @@ test('data bar x14 fields survive save and load', async () => {
 
 test('icon set floor survives save and load', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  const add = wb.addCfRule(0, {
+  const wb = mod.Workbook.createDefault();
+  wb.addCfRule(0, {
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 9, lastCol: 0 }],
     type: 4,
     iconSet: {
@@ -406,10 +376,8 @@ test('icon set floor survives save and load', async () => {
       floor: { type: 0, value: '5', gte: false },
     },
   });
-  assert.ok(add.status.ok, `addConditionalFormat: ${JSON.stringify(add)}`);
   const saved = wb.save();
-  assert.ok(saved.status.ok);
-  const loaded = mod.Workbook.load(saved.bytes).value;
+  const loaded = mod.Workbook.load(saved);
   const floor = readAll(
     () => loaded.getCfRuleCount(0),
     (i) => loaded.getCfRule(0, i),
@@ -423,13 +391,12 @@ test('icon set floor survives save and load', async () => {
 
 test('omitted data bar x14 fields keep the model defaults', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  const add = wb.addCfRule(0, {
+  const wb = mod.Workbook.createDefault();
+  wb.addCfRule(0, {
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
     type: 3,
     dataBar: { min: { type: 3 }, max: { type: 4 }, fill: { r: 0, g: 0, b: 255 } },
   });
-  assert.ok(add.status.ok, `addConditionalFormat: ${JSON.stringify(add)}`);
   const bar = readAll(
     () => wb.getCfRuleCount(0),
     (i) => wb.getCfRule(0, i),
@@ -444,44 +411,43 @@ test('omitted data bar x14 fields keep the model defaults', async () => {
 
 test('named cell styles: listCellStyles / getCellStyle / getCellStyleXfCount', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   // A fresh workbook may carry zero named styles; the accessors must
   // still return well-formed values rather than throwing.
   const count = wb.listCellStyles().length;
   assert.equal(typeof count, 'number');
   assert.ok(count >= 0);
-  assert.equal(typeof wb.getCellStyleXfCount().value, 'number');
+  assert.equal(typeof wb.getCellStyleXfCount(), 'number');
   if (count > 0) {
     const cs = wb.listCellStyles()[0];
     assert.equal(typeof cs.name, 'string');
     assert.equal(typeof cs.xfId, 'number');
-    assert.deepEqual(wb.getCellStyle(cs.name).value, cs);
+    assert.deepEqual(wb.getCellStyle(cs.name), cs);
   }
   // An unknown name is ok with a null value, not a throw.
   const none = wb.getCellStyle('No Such Style');
-  assert.ok(none.status.ok);
-  assert.equal(none.value, null);
+  assert.equal(none, null);
 });
 
 test('setCalcMode / calcMode round-trip the calc policy', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   // Default is automatic (0).
-  assert.equal(wb.getCalcMode().value, 0);
-  assert.ok(wb.setCalcMode(1).ok);
-  assert.equal(wb.getCalcMode().value, 1);
-  assert.ok(wb.setCalcMode(2).ok);
-  assert.equal(wb.getCalcMode().value, 2);
+  assert.equal(wb.getCalcMode(), 0);
+  wb.setCalcMode(1);
+  assert.equal(wb.getCalcMode(), 1);
+  wb.setCalcMode(2);
+  assert.equal(wb.getCalcMode(), 2);
 });
 
 test('setPinnedNow / pinnedNow / clearPinnedNow drive the clock seam', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   // Unpinned by default: the workbook follows the host clock.
-  assert.equal(wb.getPinnedNow().now, null);
+  assert.equal(wb.getPinnedNow(), null);
 
-  assert.ok(wb.setPinnedNow(2026, 4, 23, 15, 30, 45).ok);
-  assert.deepEqual(wb.getPinnedNow().now, {
+  wb.setPinnedNow(2026, 4, 23, 15, 30, 45);
+  assert.deepEqual(wb.getPinnedNow(), {
     year: 2026,
     month: 4,
     day: 23,
@@ -492,25 +458,24 @@ test('setPinnedNow / pinnedNow / clearPinnedNow drive the clock seam', async () 
 
   // 2026-04-23 is serial 46135 under the 1900 date system.
   const today = wb.evaluateFormula(0, 0, 0, '=TODAY()');
-  assert.ok(today.status.ok, `evaluateFormulaText: ${JSON.stringify(today.status)}`);
-  assert.equal(today.value.number, 46135);
+  assert.equal(today.number, 46135);
 
   // The pin is a calendar instant, not a normalising constructor.
-  assert.equal(wb.setPinnedNow(2026, 13, 1, 0, 0, 0).ok, false);
-  assert.equal(wb.setPinnedNow(2025, 2, 29, 0, 0, 0).ok, false);
+  assert.throws(() => wb.setPinnedNow(2026, 13, 1, 0, 0, 0), isFormulonError);
+  assert.throws(() => wb.setPinnedNow(2025, 2, 29, 0, 0, 0), isFormulonError);
 
-  assert.ok(wb.clearPinnedNow().ok);
-  assert.equal(wb.getPinnedNow().now, null);
+  wb.clearPinnedNow();
+  assert.equal(wb.getPinnedNow(), null);
 });
 
 test('excelProfileId / setExcelProfileId round-trip the profile id', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  const def = wb.getExcelProfileId().value;
+  const wb = mod.Workbook.createDefault();
+  const def = wb.getExcelProfileId();
   assert.equal(typeof def, 'string');
   assert.ok(def.length > 0);
-  assert.ok(wb.setExcelProfileId('mac-365-ja_JP').ok);
-  assert.equal(wb.getExcelProfileId().value, 'mac-365-ja_JP');
+  wb.setExcelProfileId('mac-365-ja_JP');
+  assert.equal(wb.getExcelProfileId(), 'mac-365-ja_JP');
 });
 
 // Values are the mac-365-* oracle captures of `DOLLAR(-1234.567)`; the
@@ -550,44 +515,42 @@ const PROFILE_LOCALES = [
 
 test('setExcelProfileId switches a live workbook through every profile id', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  assert.equal(wb.getExcelProfileId().value, 'win-365-en_US');
-  assert.ok(wb.setFormula(0, 0, 0, '=DOLLAR(-1234.567)').ok);
+  const wb = mod.Workbook.createDefault();
+  assert.equal(wb.getExcelProfileId(), 'win-365-en_US');
+  wb.setFormula(0, 0, 0, '=DOLLAR(-1234.567)');
   for (const host of ['mac', 'win']) {
     for (const locale of PROFILE_LOCALES) {
       const id = `${host}-365-${locale}`;
-      assert.ok(wb.setExcelProfileId(id).ok, id);
-      assert.equal(wb.getExcelProfileId().value, id);
-      assert.ok(wb.recalc().ok, id);
+      wb.setExcelProfileId(id);
+      assert.equal(wb.getExcelProfileId(), id);
+      wb.recalc();
       if (id in PROFILE_DOLLAR) {
-        assert.equal(wb.getValue(0, 0, 0).value.text, PROFILE_DOLLAR[id], id);
+        assert.equal(wb.getValue(0, 0, 0).text, PROFILE_DOLLAR[id], id);
       }
     }
   }
-  assert.equal(wb.setExcelProfileId('mac-365-xx_XX').ok, false);
+  assert.throws(() => wb.setExcelProfileId('mac-365-xx_XX'), isFormulonError);
 });
 
 test('functionNames + getFunctionMetadata expose the catalog', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   const names = wb.listFunctionNames();
   assert.ok(Array.isArray(names));
   assert.ok(names.length > 0, 'expected a non-empty function catalog');
   assert.ok(names.includes('SUM'), 'expected SUM in the catalog');
   const md = wb.getFunctionMetadata('SUM');
-  assert.equal(md.status.ok, true);
-  assert.equal(md.value.name, 'SUM');
-  assert.equal(typeof md.value.minArity, 'number');
-  // An unknown function is an ok status with a null value.
+  assert.equal(md.name, 'SUM');
+  assert.equal(typeof md.minArity, 'number');
+  // An unknown function reads as null.
   const miss = wb.getFunctionMetadata('NOT_A_REAL_FUNCTION_XYZ');
-  assert.equal(miss.status.ok, true);
-  assert.equal(miss.value, null);
+  assert.equal(miss, null);
 });
 
 test('mergeFunctionMetadata overlays provider metadata; is identity without a provider', async () => {
   const mod = await getModule();
   assert.equal(typeof mod.mergeFunctionMetadata, 'function');
-  const base = mod.Workbook.createDefault().value.getFunctionMetadata('XLOOKUP').value;
+  const base = mod.Workbook.createDefault().getFunctionMetadata('XLOOKUP');
   assert.equal(base.name, 'XLOOKUP');
   // The engine leaves display metadata empty.
   assert.equal(base.signatureTemplate, undefined);
@@ -627,29 +590,32 @@ test('mergeFunctionMetadata overlays provider metadata; is identity without a pr
 
 test('localizeFunctionName / canonicalizeFunctionName round-trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   // en-US profile: the localized name is the canonical name itself.
-  assert.equal(wb.localizeFunctionName('SUM', 'win-365-en_US').value, 'SUM');
-  assert.equal(wb.canonicalizeFunctionName('SUM', 'win-365-en_US').value, 'SUM');
-  // An unknown name returns the empty string.
-  assert.equal(wb.canonicalizeFunctionName('NOPE_XYZ', 'win-365-en_US').value, '');
+  assert.equal(wb.localizeFunctionName('SUM', 'win-365-en_US'), 'SUM');
+  assert.equal(wb.canonicalizeFunctionName('SUM', 'win-365-en_US'), 'SUM');
+  // An unknown name is refused.
+  assert.throws(
+    () => wb.canonicalizeFunctionName('NOPE_XYZ', 'win-365-en_US'),
+    (e) => isFormulonError(e, mod.StatusCode.InvalidArgument),
+  );
 });
 
 test('formula and function-name localization is keyed by profile id', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
-    assert.equal(wb.localizeFormula('=SUM(1.5,2)', 'mac-365-de_DE').value, '=SUMME(1,5;2)');
-    assert.equal(wb.canonicalizeFormula('=SUMME(1,5;2)', 'mac-365-de_DE').value, '=SUM(1.5,2)');
-    assert.equal(wb.localizeFormula('=IF(TRUE,1,2)', 'mac-365-fr_FR').value, '=SI(VRAI;1;2)');
-    assert.equal(wb.localizeFormula('=#N/A', 'mac-365-de_DE').value, '=#NV');
-    assert.equal(wb.canonicalizeFormula('=#NV', 'mac-365-de_DE').value, '=#N/A');
-    assert.equal(wb.localizeFormula('=A1&";"', 'mac-365-de_DE').value, '=A1&";"');
-    assert.equal(wb.localizeFunctionName('SUM', 'mac-365-de_DE').value, 'SUMME');
-    assert.equal(wb.canonicalizeFunctionName('SUMME', 'win-365-de_DE').value, 'SUM');
-    assert.equal(wb.localizeFormula('=SUM(1)', 'nope').status.ok, false);
-    assert.equal(wb.canonicalizeFormula('=SUM(1)', 'nope').status.ok, false);
-    assert.equal(wb.canonicalizeFunctionName('SUM', 'nope').status.ok, false);
+    assert.equal(wb.localizeFormula('=SUM(1.5,2)', 'mac-365-de_DE'), '=SUMME(1,5;2)');
+    assert.equal(wb.canonicalizeFormula('=SUMME(1,5;2)', 'mac-365-de_DE'), '=SUM(1.5,2)');
+    assert.equal(wb.localizeFormula('=IF(TRUE,1,2)', 'mac-365-fr_FR'), '=SI(VRAI;1;2)');
+    assert.equal(wb.localizeFormula('=#N/A', 'mac-365-de_DE'), '=#NV');
+    assert.equal(wb.canonicalizeFormula('=#NV', 'mac-365-de_DE'), '=#N/A');
+    assert.equal(wb.localizeFormula('=A1&";"', 'mac-365-de_DE'), '=A1&";"');
+    assert.equal(wb.localizeFunctionName('SUM', 'mac-365-de_DE'), 'SUMME');
+    assert.equal(wb.canonicalizeFunctionName('SUMME', 'win-365-de_DE'), 'SUM');
+    assert.throws(() => wb.localizeFormula('=SUM(1)', 'nope'), isFormulonError);
+    assert.throws(() => wb.canonicalizeFormula('=SUM(1)', 'nope'), isFormulonError);
+    assert.throws(() => wb.canonicalizeFunctionName('SUM', 'nope'), isFormulonError);
   } finally {
     wb.dispose();
   }
@@ -657,27 +623,23 @@ test('formula and function-name localization is keyed by profile id', async () =
 
 test('getLocaleFacts reports separators, names, error spellings and measurement', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
     const mac = wb.getLocaleFacts('mac-365-de_DE');
-    assert.ok(mac.status.ok);
-    assert.equal(mac.facts.decimalSeparator, ',');
-    assert.equal(mac.facts.listSeparator, ';');
-    assert.equal(mac.facts.dateOrder, 'dmy');
-    assert.equal(mac.facts.measured, true);
-    assert.equal(mac.facts.collationMeasured, true);
-    const na = mac.facts.errorNames.find((e) => e.canonical === '#N/A');
+    assert.equal(mac.decimalSeparator, ',');
+    assert.equal(mac.listSeparator, ';');
+    assert.equal(mac.dateOrder, 'dmy');
+    assert.equal(mac.measured, true);
+    assert.equal(mac.collationMeasured, true);
+    const na = mac.errorNames.find((e) => e.canonical === '#N/A');
     assert.equal(na.localized, '#NV');
     const listed = wb.listLocaleErrorNames('mac-365-de_DE');
-    assert.ok(listed.status.ok);
-    assert.deepEqual([...listed], mac.facts.errorNames);
-    assert.equal(wb.listLocaleErrorNames('nope').status.ok, false);
-    assert.equal(wb.getLocaleFacts('win-365-de_DE').facts.measured, false);
-    assert.equal(wb.getLocaleFacts('win-365-ja_JP').facts.collationMeasured, false);
-    assert.equal(wb.getLocaleFacts('win-365-en_US').facts.decimalSeparator, '.');
-    const bad = wb.getLocaleFacts('nope');
-    assert.equal(bad.status.ok, false);
-    assert.equal(bad.facts, null);
+    assert.deepEqual([...listed], mac.errorNames);
+    assert.throws(() => wb.listLocaleErrorNames('nope'), isFormulonError);
+    assert.equal(wb.getLocaleFacts('win-365-de_DE').measured, false);
+    assert.equal(wb.getLocaleFacts('win-365-ja_JP').collationMeasured, false);
+    assert.equal(wb.getLocaleFacts('win-365-en_US').decimalSeparator, '.');
+    assert.throws(() => wb.getLocaleFacts('nope'), isFormulonError);
   } finally {
     wb.dispose();
   }
@@ -685,22 +647,18 @@ test('getLocaleFacts reports separators, names, error spellings and measurement'
 
 test('compareText folds by strength and rejects bad arguments', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
     const profile = 'mac-365-zh_CN';
     const strict = wb.compareText('A', '\uFF21', 0, profile);
-    assert.ok(strict.status.ok);
-    assert.notEqual(strict.value, 0);
+    assert.notEqual(strict, 0);
     const dynamic = wb.compareText('A', '\uFF21', 1, profile);
-    assert.ok(dynamic.status.ok);
-    assert.equal(dynamic.value, 0);
+    assert.equal(dynamic, 0);
     const ab = wb.compareText('a', 'b', 0, 'mac-365-en_US');
     const ba = wb.compareText('b', 'a', 0, 'mac-365-en_US');
-    assert.equal(ab.value, -1);
-    assert.equal(ba.value, 1);
-    const bad = wb.compareText('a', 'b', 0, 'nope');
-    assert.equal(bad.status.ok, false);
-    assert.equal(bad.value, 0);
+    assert.equal(ab, -1);
+    assert.equal(ba, 1);
+    assert.throws(() => wb.compareText('a', 'b', 0, 'nope'), isFormulonError);
     assert.throws(() => wb.compareText('a', 'b', -1, profile), RangeError);
   } finally {
     wb.dispose();
@@ -709,20 +667,19 @@ test('compareText folds by strength and rejects bad arguments', async () => {
 
 test('getCollationClasses orders by kind, folds text by strength, and copies its output', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
     const values = [
       { kind: 1, number: 1 },
       { kind: 3, text: '1' },
-      { kind: 2, boolean: 1 },
+      { kind: 2, boolean: true },
       { kind: 3, text: 'TRUE' },
       { kind: 0 },
       { kind: 3, text: '' },
       { kind: 1, number: 0 },
-      { kind: 2, boolean: 0 },
+      { kind: 2, boolean: false },
     ];
     const r = wb.getCollationClasses(values, 1, 'mac-365-en_US');
-    assert.ok(r.status.ok);
     assert.ok(r.classIds instanceof Uint32Array);
     assert.equal(r.classIds.length, 8);
     assert.equal(r.classCount, 8);
@@ -734,7 +691,7 @@ test('getCollationClasses orders by kind, folds text by strength, and copies its
     assert.ok(num0 < num1 && boolFalse < boolTrue);
 
     const snapshot = Array.from(r.classIds);
-    const other = wb.getCollationClasses(
+    wb.getCollationClasses(
       [
         { kind: 3, text: 'z' },
         { kind: 3, text: 'y' },
@@ -742,7 +699,6 @@ test('getCollationClasses orders by kind, folds text by strength, and copies its
       1,
       'mac-365-en_US',
     );
-    assert.ok(other.status.ok);
     assert.deepEqual(Array.from(r.classIds), snapshot);
 
     const folded = wb.getCollationClasses(
@@ -757,16 +713,13 @@ test('getCollationClasses orders by kind, folds text by strength, and copies its
     assert.equal(folded.classCount, 1);
 
     const empty = wb.getCollationClasses([], 1, 'mac-365-en_US');
-    assert.ok(empty.status.ok);
     assert.equal(empty.classIds.length, 0);
     assert.equal(empty.classCount, 0);
 
-    const noKind = wb.getCollationClasses([{ number: 1 }], 1, 'mac-365-en_US');
-    assert.equal(noKind.status.ok, false);
-    assert.equal(noKind.classIds.length, 0);
-    assert.equal(noKind.classCount, 0);
-    assert.equal(wb.getCollationClasses({}, 1, 'mac-365-en_US').status.ok, false);
-    assert.equal(wb.getCollationClasses([{ kind: 1, number: 1 }], 1, 'nope').status.ok, false);
+    // A value without `kind` is rejected, not read as blank.
+    assert.throws(() => wb.getCollationClasses([{ number: 1 }], 1, 'mac-365-en_US'), TypeError);
+    assert.throws(() => wb.getCollationClasses({}, 1, 'mac-365-en_US'), TypeError);
+    assert.throws(() => wb.getCollationClasses([{ kind: 1, number: 1 }], 1, 'nope'), isFormulonError);
     assert.throws(() => wb.getCollationClasses(values, -1, 'mac-365-en_US'), RangeError);
   } finally {
     wb.dispose();
@@ -775,7 +728,7 @@ test('getCollationClasses orders by kind, folds text by strength, and copies its
 
 test('getCollationClasses timing on 100k mixed CJK/ASCII texts', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
     const cjk = [
       '\u6771\u4EAC',
@@ -793,7 +746,6 @@ test('getCollationClasses timing on 100k mixed CJK/ASCII texts', async () => {
     const t0 = process.hrtime.bigint();
     const r = wb.getCollationClasses(values, 1, 'mac-365-ja_JP');
     const ms = Number(process.hrtime.bigint() - t0) / 1e6;
-    assert.ok(r.status.ok);
     assert.equal(r.classIds.length, 100000);
     console.log(`getCollationClasses 100k mixed CJK/ASCII texts: ${ms.toFixed(0)} ms (${r.classCount} classes)`);
   } finally {
@@ -803,11 +755,11 @@ test('getCollationClasses timing on 100k mixed CJK/ASCII texts', async () => {
 
 test('precedents / dependents return arrays for a small formula graph', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  assert.ok(wb.setNumber(0, 0, 0, 1).ok); // A1
-  assert.ok(wb.setNumber(0, 0, 1, 2).ok); // B1
-  assert.ok(wb.setFormula(0, 1, 0, '=A1+B1').ok); // A2 = A1 + B1
-  assert.ok(wb.recalc().ok);
+  const wb = mod.Workbook.createDefault();
+  wb.setNumber(0, 0, 0, 1); // A1
+  wb.setNumber(0, 0, 1, 2); // B1
+  wb.setFormula(0, 1, 0, '=A1+B1'); // A2 = A1 + B1
+  wb.recalc();
   // A2 reads A1 and B1.
   const prec = wb.getPrecedents(0, 1, 0, 1);
   assert.ok(Array.isArray(prec));
@@ -827,14 +779,14 @@ test('precedents / dependents return arrays for a small formula graph', async ()
 
 test('spillInfo reports a dynamic-array region', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   // Non-spill cell: engaged is false, fields zeroed.
   const none = wb.getSpillInfo(0, 0, 0);
   assert.equal(typeof none.engaged, 'boolean');
   assert.equal(none.engaged, false);
   // A spilling dynamic array anchored at A1.
-  assert.ok(wb.setFormula(0, 0, 0, '=SEQUENCE(3,1)').ok);
-  assert.ok(wb.recalc().ok);
+  wb.setFormula(0, 0, 0, '=SEQUENCE(3,1)');
+  wb.recalc();
   const info = wb.getSpillInfo(0, 0, 0);
   assert.equal(info.engaged, true);
   assert.deepEqual(info.rect, { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 });
@@ -842,76 +794,76 @@ test('spillInfo reports a dynamic-array region', async () => {
 
 test('array formulas can be authored, read from every cell and cleared', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  for (let r = 0; r < 3; r += 1) assert.ok(wb.setNumber(0, r, 0, r + 1).ok);
+  const wb = mod.Workbook.createDefault();
+  for (let r = 0; r < 3; r += 1) wb.setNumber(0, r, 0, r + 1);
   const none = wb.getArrayFormula(0, 0, 2);
-  assert.ok(none.status.ok);
-  assert.equal(none.arrayFormula, null);
-  assert.ok(wb.setArrayFormula(0, { firstRow: 0, firstCol: 2, lastRow: 2, lastCol: 2 }, '=A1:A3*2').ok);
-  assert.ok(wb.recalc().ok);
+  assert.equal(none, null);
+  wb.setArrayFormula(0, { firstRow: 0, firstCol: 2, lastRow: 2, lastCol: 2 }, '=A1:A3*2');
+  wb.recalc();
   for (let r = 0; r < 3; r += 1) {
     const found = wb.getArrayFormula(0, r, 2);
-    assert.ok(found.status.ok);
-    assert.deepEqual(found.arrayFormula.rect, { firstRow: 0, firstCol: 2, lastRow: 2, lastCol: 2 });
-    assert.ok(found.arrayFormula.formula.includes('A1:A3'));
+    assert.deepEqual(found.rect, { firstRow: 0, firstCol: 2, lastRow: 2, lastCol: 2 });
+    assert.ok(found.formula.includes('A1:A3'));
   }
-  assert.equal(wb.getValue(0, 2, 2).value.number, 6);
+  assert.equal(wb.getValue(0, 2, 2).number, 6);
   // A partial overlap and a write into a non-anchor cell are refused.
-  assert.equal(wb.setArrayFormula(0, { firstRow: 1, firstCol: 2, lastRow: 2, lastCol: 2 }, '=1').ok, false);
-  assert.equal(wb.setNumber(0, 1, 2, 1).ok, false);
-  assert.ok(wb.setBlank(0, 0, 2).ok);
-  assert.ok(wb.recalc().ok);
-  assert.equal(wb.getArrayFormula(0, 1, 2).arrayFormula, null);
-  assert.equal(wb.getArrayFormula(99, 0, 0).status.ok, false);
+  assert.throws(
+    () => wb.setArrayFormula(0, { firstRow: 1, firstCol: 2, lastRow: 2, lastCol: 2 }, '=1'),
+    isFormulonError,
+  );
+  assert.throws(() => wb.setNumber(0, 1, 2, 1), isFormulonError);
+  wb.setBlank(0, 0, 2);
+  wb.recalc();
+  assert.equal(wb.getArrayFormula(0, 1, 2), null);
+  assert.throws(() => wb.getArrayFormula(99, 0, 0), isFormulonError);
 });
 
 test('getLambdaText is wired and reports the documented contract', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   // A bare top-level LAMBDA renders as #CALC! in Excel 365 and does not
   // retain a renderable closure; the engine mirrors that, so no lambda is
   // present. A plain number cell is likewise not a lambda, and a bad sheet
-  // is a failed status.
-  assert.ok(wb.setFormula(0, 0, 0, '=LAMBDA(x,x+1)').ok);
-  assert.ok(wb.recalc().ok);
+  // throws.
+  wb.setFormula(0, 0, 0, '=LAMBDA(x,x+1)');
+  wb.recalc();
   const bare = wb.getLambdaText(0, 0, 0);
-  assert.equal(bare.status.ok, true);
-  assert.equal(bare.value, null);
+  assert.equal(bare, null);
 
-  assert.ok(wb.setNumber(0, 1, 0, 5).ok);
+  wb.setNumber(0, 1, 0, 5);
   const num = wb.getLambdaText(0, 1, 0);
-  assert.equal(num.status.ok, true);
-  assert.equal(num.value, null);
-  assert.equal(wb.getLambdaText(99, 0, 0).status.code, mod.StatusCode.SheetIndexOutOfRange);
+  assert.equal(num, null);
+  assert.throws(
+    () => wb.getLambdaText(99, 0, 0),
+    (e) => isFormulonError(e, mod.StatusCode.SheetIndexOutOfRange),
+  );
 });
 
 test('a fresh workbook has no external links', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  assert.deepEqual([wb.getExternalLinkCount().status.ok, wb.getExternalLinkCount().value], [true, 0]);
-  assert.equal(wb.getExternalLink(0).status.ok, false);
+  const wb = mod.Workbook.createDefault();
+  assert.equal(wb.getExternalLinkCount(), 0);
+  assert.throws(() => wb.getExternalLink(0), isFormulonError);
 });
 
 test('getSheetProtection / setSheetProtection round-trip the protection flags', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   const before = wb.getSheetProtection(0);
-  assert.ok(before.status.ok, `getSheetProtection: ${JSON.stringify(before.status)}`);
-  assert.equal(before.protection.enabled, 0);
+  assert.equal(before.enabled, 0);
   // Enable protection and lock cell selection.
   const next = {
-    ...before.protection,
+    ...before,
     enabled: 1,
     selectLockedCells: 1,
     sort: 1,
   };
-  assert.ok(wb.setSheetProtection(0, next).ok);
+  wb.setSheetProtection(0, next);
   const after = wb.getSheetProtection(0);
-  assert.ok(after.status.ok);
-  assert.equal(after.protection.enabled, 1);
-  assert.equal(after.protection.selectLockedCells, 1);
-  assert.equal(after.protection.sort, 1);
+  assert.equal(after.enabled, 1);
+  assert.equal(after.selectLockedCells, 1);
+  assert.equal(after.sort, 1);
   // Sheet-out-of-range is rejected.
-  assert.ok(!wb.getSheetProtection(999).status.ok);
-  assert.ok(!wb.setSheetProtection(999, next).ok);
+  assert.throws(() => wb.getSheetProtection(999), isFormulonError);
+  assert.throws(() => wb.setSheetProtection(999, next), isFormulonError);
 });

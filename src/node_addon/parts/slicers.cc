@@ -85,36 +85,33 @@ Napi::Object SlicerToJs(Napi::Env env, const fm_slicer_t& s) {
 
 Napi::Value Workbook::ListSlicers(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Array arr = Napi::Array::New(env);
   if (handle_ == nullptr) {
-    return FinishListResult(env, arr, kBindingInvalidHandle);
+    return ThrowInvalidHandle(env);
   }
+  Napi::Array arr = Napi::Array::New(env);
   const uint32_t sheet = ArgU32(info, 0);
   const fm_status_t rc = CollectList<fm_slicer_t>(
       arr, [&](size_t* n) { return fm_sheet_get_slicer_count(handle_, sheet, n); },
       [&](size_t i, fm_slicer_t* s) { return fm_sheet_get_slicer_at(handle_, sheet, i, s); },
       [&](const fm_slicer_t& s) { return SlicerToJs(env, s); });
-  return FinishListResult(env, arr, rc);
+  return ValueOrThrow(env, rc, arr);
 }
 
 Napi::Value Workbook::GetSlicer(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+    return ThrowInvalidHandle(env);
   }
   fm_slicer_t s{};
   int32_t present = 0;
   const fm_status_t rc = fm_sheet_get_slicer(handle_, ArgU32(info, 0), ArgU32(info, 1), &present, &s);
-  return MakeOptionalResult(env, rc, present, rc == 0 && present != 0 ? Napi::Value(SlicerToJs(env, s)) : env.Null());
+  return OptionalOrNull(env, rc, present, rc == 0 && present != 0 ? Napi::Value(SlicerToJs(env, s)) : env.Null());
 }
 
 Napi::Value Workbook::AddSlicer(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("objectId", JsNumber(env, 0));
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
+    return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
   SlicerText store;
@@ -125,15 +122,13 @@ Napi::Value Workbook::AddSlicer(const Napi::CallbackInfo& info) {
   uint32_t object_id = 0;
   const fm_status_t rc =
       fm_sheet_add_slicer(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &slicer, &object_id);
-  out.Set("objectId", JsNumber(env, rc == 0 ? object_id : 0));
-  out.Set("status", MakeStatus(env, rc));
-  return out;
+  return ValueOrThrow(env, rc, JsNumber(env, object_id));
 }
 
 Napi::Value Workbook::UpdateSlicer(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
   SlicerText store;
@@ -141,7 +136,7 @@ Napi::Value Workbook::UpdateSlicer(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_sheet_update_slicer(handle_, ArgU32(info, 0), ArgU32(info, 1), &slicer));
+  return ValueOrThrow(env, fm_sheet_update_slicer(handle_, ArgU32(info, 0), ArgU32(info, 1), &slicer), env.Undefined());
 }
 
 Napi::Value Workbook::RemoveSlicer(const Napi::CallbackInfo& info) {

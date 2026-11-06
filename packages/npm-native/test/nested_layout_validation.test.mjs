@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { FormulonError } from '../dist/common.mjs';
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const addonPath =
@@ -15,17 +16,17 @@ const addonPath =
   ].find((candidate) => existsSync(candidate));
 assert.ok(addonPath, 'native addon not found; set FORMULON_NODE_ADDON or stage dist/formulon.node');
 const addon = createRequire(import.meta.url)(addonPath);
+addon.__setErrorClass(FormulonError);
 
 const RANGE = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
 
 function protectionSnapshot(wb) {
   const result = wb.getSheetProtection(0);
-  assert.equal(result.status.ok, true, JSON.stringify(result.status));
-  return structuredClone(result.protection);
+  return structuredClone(result);
 }
 
 test('sheet protection rejects every narrow nested integer before mutation', () => {
-  const wb = addon.Workbook.createDefault().value;
+  const wb = addon.Workbook.createDefault();
   try {
     const keys = [
       'enabled',
@@ -60,7 +61,7 @@ test('sheet protection rejects every narrow nested integer before mutation', () 
 });
 
 test('sheet protection stops at a throwing nested getter before native mutation', () => {
-  const wb = addon.Workbook.createDefault().value;
+  const wb = addon.Workbook.createDefault();
   try {
     const before = protectionSnapshot(wb);
     const spec = { enabled: 1, algorithmName: 'SHA-512' };
@@ -78,7 +79,7 @@ test('sheet protection stops at a throwing nested getter before native mutation'
 });
 
 test('sheet format defaults stops at a throwing nested getter before native mutation', () => {
-  const wb = addon.Workbook.createDefault().value;
+  const wb = addon.Workbook.createDefault();
   try {
     const before = wb.getFormatDefaults(0);
     const spec = { defaultColWidth: 12.5 };
@@ -96,7 +97,7 @@ test('sheet format defaults stops at a throwing nested getter before native muta
 });
 
 test('cell geometry rejects fractional nested range coordinates before the query', () => {
-  const wb = addon.Workbook.createDefault().value;
+  const wb = addon.Workbook.createDefault();
   try {
     assert.throws(() => wb.getCellRectPt(0, { ...RANGE, firstRow: 1.5 }, 0), TypeError);
     assert.throws(() => wb.getCellRectPt(0, { ...RANGE, lastCol: Number.NaN }, 0), TypeError);
@@ -114,10 +115,10 @@ test('cell geometry rejects fractional nested range coordinates before the query
 });
 
 test('partial recalc rejects fractional nested viewport coordinates before recalc', () => {
-  const wb = addon.Workbook.createDefault().value;
+  const wb = addon.Workbook.createDefault();
   try {
-    assert.ok(wb.setNumber(0, 0, 0, 1).ok);
-    assert.ok(wb.setFormula(0, 0, 1, '=A1+1').ok);
+    wb.setNumber(0, 0, 0, 1);
+    wb.setFormula(0, 0, 1, '=A1+1');
     assert.throws(() => wb.recalcViewport(0, { ...RANGE, firstRow: 1.5 }), TypeError);
     const viewport = { firstRow: 0, lastRow: 0, firstCol: 0, lastCol: 0 };
     Object.defineProperty(viewport, 'lastCol', {
@@ -128,9 +129,7 @@ test('partial recalc rejects fractional nested viewport coordinates before recal
     });
     assert.throws(() => wb.recalcViewport(0, viewport), /viewport getter/);
     const value = wb.getValue(0, 0, 1);
-    assert.equal(value.status.ok, true, JSON.stringify(value.status));
-    assert.equal(value.value.kind, 0);
-    assert.equal(value.value.number, 0);
+    assert.deepEqual(value, { kind: 0 });
   } finally {
     wb.dispose();
   }

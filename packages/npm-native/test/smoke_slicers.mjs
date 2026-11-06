@@ -1,6 +1,6 @@
 import test from 'node:test';
 import { inflateRawSync } from 'node:zlib';
-import { assert, getModule } from './smoke_support.mjs';
+import { assert, getModule, isFormulonError } from './smoke_support.mjs';
 
 // ---- Table slicers -------------------------------------------------------
 
@@ -32,21 +32,19 @@ const readZipEntry = (bytes, name) => {
 
 const saveBytes = (wb) => {
   const saved = wb.save();
-  assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  return saved.bytes;
+  return saved;
 };
 
 const salesWorkbook = (mod) => {
-  const wb = mod.Workbook.createDefault().value;
-  assert.ok(wb.setText(0, 0, 0, 'Product').ok);
-  assert.ok(wb.setText(0, 0, 1, 'Amount').ok);
-  assert.ok(wb.setNumber(0, 1, 1, 10).ok);
-  const created = wb.addTable({
+  const wb = mod.Workbook.createDefault();
+  wb.setText(0, 0, 0, 'Product');
+  wb.setText(0, 0, 1, 'Amount');
+  wb.setNumber(0, 1, 1, 10);
+  wb.addTable({
     range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 } },
     name: 'Sales',
     columns: ['Product', 'Amount'],
   });
-  assert.ok(created.status.ok, JSON.stringify(created.status));
   return wb;
 };
 
@@ -64,8 +62,7 @@ test('slicers add, list, update, remove and round-trip', async () => {
     sortOrder: mod.SlicerSortOrder.Descending,
     crossFilter: mod.SlicerCrossFilter.None,
   });
-  assert.ok(added.status.ok, JSON.stringify(added.status));
-  assert.equal(added.objectId, 2);
+  assert.equal(added, 2);
 
   const bytes = saveBytes(wb);
   const cache = readZipEntry(bytes, 'xl/slicerCaches/slicerCache1.xml');
@@ -75,12 +72,11 @@ test('slicers add, list, update, remove and round-trip', async () => {
   assert.match(readZipEntry(bytes, '[Content_Types].xml'), /application\/vnd\.ms-excel\.slicer\+xml/);
   assert.match(readZipEntry(bytes, 'xl/drawings/drawing1.xml'), /<mc:Fallback>/);
 
-  const loaded = mod.Workbook.load(bytes).value;
+  const loaded = mod.Workbook.load(bytes);
   const slicers = loaded.listSlicers(0);
-  assert.ok(slicers.status.ok);
   assert.equal(slicers.length, 1);
   const s = slicers[0];
-  assert.equal(s.objectId, added.objectId);
+  assert.equal(s.objectId, added);
   assert.equal(s.name, 'Product');
   assert.equal(s.caption, 'Pick a product');
   assert.equal(s.cacheName, 'Slicer_Product');
@@ -95,13 +91,10 @@ test('slicers add, list, update, remove and round-trip', async () => {
   assert.deepEqual([s.fromRow, s.fromCol, s.toRow, s.toCol], [4, 3, 14, 5]);
 
   // An update changes the named fields only; the frame follows row edits.
-  assert.ok(
-    loaded.updateSlicer(0, added.objectId, { caption: 'Renamed', style: '', columnCount: 1, fromRow: 0, toRow: 8 }).ok,
-  );
-  const found = loaded.getSlicer(0, added.objectId);
-  assert.ok(found.status.ok);
-  assert.equal(found.value.caption, 'Renamed');
-  assert.ok(loaded.insertRows(0, 0, 3).ok);
+  loaded.updateSlicer(0, added, { caption: 'Renamed', style: '', columnCount: 1, fromRow: 0, toRow: 8 });
+  const found = loaded.getSlicer(0, added);
+  assert.equal(found.caption, 'Renamed');
+  loaded.insertRows(0, 0, 3);
   const moved = loaded.listSlicers(0)[0];
   assert.equal(moved.caption, 'Renamed');
   assert.equal(moved.style, '');
@@ -109,11 +102,10 @@ test('slicers add, list, update, remove and round-trip', async () => {
   assert.equal(moved.sortOrder, mod.SlicerSortOrder.Descending);
   assert.deepEqual([moved.fromRow, moved.toRow], [3, 11]);
 
-  assert.ok(loaded.removeSlicer(0, added.objectId).ok);
+  loaded.removeSlicer(0, added);
   assert.equal(loaded.listSlicers(0).length, 0);
-  const gone = loaded.getSlicer(0, added.objectId);
-  assert.ok(gone.status.ok);
-  assert.equal(gone.value, null);
+  const gone = loaded.getSlicer(0, added);
+  assert.equal(gone, null);
   const emptied = saveBytes(loaded);
   assert.equal(readZipEntry(emptied, 'xl/slicers/slicer1.xml'), null);
   assert.equal(readZipEntry(emptied, 'xl/slicerCaches/slicerCache1.xml'), null);
@@ -125,10 +117,10 @@ test('slicers add, list, update, remove and round-trip', async () => {
 test('removing a table removes its slicers and caches', async () => {
   const mod = await getModule();
   const wb = salesWorkbook(mod);
-  assert.ok(wb.addSlicer(0, 0, 0, anchor).status.ok);
-  assert.ok(wb.addSlicer(0, 0, 1, anchor).status.ok);
+  wb.addSlicer(0, 0, 0, anchor);
+  wb.addSlicer(0, 0, 1, anchor);
   assert.equal(wb.listSlicers(0).length, 2);
-  assert.ok(wb.removeTable(0).ok);
+  wb.removeTable(0);
   assert.equal(wb.listSlicers(0).length, 0);
   const bytes = saveBytes(wb);
   for (const part of [
@@ -145,20 +137,19 @@ test('removing a table removes its slicers and caches', async () => {
 test('slicer arguments are validated', async () => {
   const mod = await getModule();
   const wb = salesWorkbook(mod);
-  assert.equal(wb.addSlicer(0, 0, 0, {}).status.ok, false);
-  assert.equal(wb.addSlicer(0, 1, 0, anchor).status.ok, false);
-  assert.equal(wb.addSlicer(0, 0, 2, anchor).status.ok, false);
-  assert.equal(wb.addSlicer(5, 0, 0, anchor).status.ok, false);
-  assert.equal(wb.addSlicer(0, 0, 0, { ...anchor, toRow: 1 }).status.ok, false);
-  assert.equal(wb.addSlicer(0, 0, 0, { ...anchor, columnCount: 0 }).status.ok, false);
-  assert.equal(wb.addSlicer(0, 0, 0, { ...anchor, sortOrder: 5 }).status.ok, false);
+  assert.throws(() => wb.addSlicer(0, 0, 0, {}), isFormulonError);
+  assert.throws(() => wb.addSlicer(0, 1, 0, anchor), isFormulonError);
+  assert.throws(() => wb.addSlicer(0, 0, 2, anchor), isFormulonError);
+  assert.throws(() => wb.addSlicer(5, 0, 0, anchor), isFormulonError);
+  assert.throws(() => wb.addSlicer(0, 0, 0, { ...anchor, toRow: 1 }), isFormulonError);
+  assert.throws(() => wb.addSlicer(0, 0, 0, { ...anchor, columnCount: 0 }), isFormulonError);
+  assert.throws(() => wb.addSlicer(0, 0, 0, { ...anchor, sortOrder: 5 }), isFormulonError);
   assert.equal(wb.listSlicers(0).length, 0);
   const added = wb.addSlicer(0, 0, 0, anchor);
-  assert.ok(added.status.ok);
-  assert.equal(wb.updateSlicer(0, added.objectId + 1, { caption: 'x' }).ok, false);
-  assert.equal(wb.updateSlicer(0, added.objectId, { name: 'x' }).ok, false);
-  assert.equal(wb.removeSlicer(0, added.objectId + 1).ok, false);
-  assert.equal(wb.getSlicer(5, added.objectId).status.ok, false);
+  assert.throws(() => wb.updateSlicer(0, added + 1, { caption: 'x' }), isFormulonError);
+  assert.throws(() => wb.updateSlicer(0, added, { name: 'x' }), isFormulonError);
+  assert.throws(() => wb.removeSlicer(0, added + 1), isFormulonError);
+  assert.throws(() => wb.getSlicer(5, added), isFormulonError);
   assert.throws(() => wb.addSlicer(0, 0, 0, { ...anchor, fromRow: -1 }), RangeError);
   release(wb);
 });

@@ -130,57 +130,54 @@ const char* last_error_context() {
   return g_last_error_context.c_str();
 }
 
-bool check_range_count(std::size_t n, const char* api) {
+bool check_range_count(std::size_t n) {
   if (n > kMaxRangesPerCApiCall) {
-    set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "range_count exceeds per-call cap",
-        std::string(api) + ": range_count=" + std::to_string(n) + " cap=" + std::to_string(kMaxRangesPerCApiCall));
+    set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "range_count exceeds per-call cap",
+                      "range_count=" + std::to_string(n) + " cap=" + std::to_string(kMaxRangesPerCApiCall));
     return false;
   }
   return true;
 }
 
-fm_status_t check_profile_id(const char* profile_id, const char* api, formulon::ExcelProfile* out) {
+fm_status_t check_profile_id(const char* profile_id, formulon::ExcelProfile* out) {
   // The id is echoed into the diagnostic context, which must stay UTF-8.
-  if (auto rc = check_utf8(profile_id, api, "field=profile_id"); rc != 0) {
+  if (auto rc = check_utf8(profile_id, "field=profile_id"); rc != 0) {
     return rc;
   }
   if (formulon::parse_excel_profile_id(profile_id, out)) {
     return 0;
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                           (std::string(api) + ": unknown profile").c_str(), std::string("profile_id=") + profile_id);
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "unknown profile",
+                           std::string("profile_id=") + profile_id);
 }
 
 fm_status_t check_sheet_rect(std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
-                             std::uint32_t last_col, const char* api) {
+                             std::uint32_t last_col) {
   if (formulon::Sheet::rect_in_grid(first_row, first_col, last_row, last_col)) {
     return 0;
   }
   return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "cell rectangle out of range",
-                           std::string(api) + ": first_row=" + std::to_string(first_row) +
-                               " first_col=" + std::to_string(first_col) + " last_row=" + std::to_string(last_row) +
-                               " last_col=" + std::to_string(last_col));
+                           "first_row=" + std::to_string(first_row) + " first_col=" + std::to_string(first_col) +
+                               " last_row=" + std::to_string(last_row) + " last_col=" + std::to_string(last_col));
 }
 
-fm_status_t check_sheet_rect(const fm_cell_rect_t& rect, const char* api) {
-  return check_sheet_rect(rect.first_row, rect.first_col, rect.last_row, rect.last_col, api);
+fm_status_t check_sheet_rect(const fm_cell_rect_t& rect) {
+  return check_sheet_rect(rect.first_row, rect.first_col, rect.last_row, rect.last_col);
 }
 
-fm_status_t check_rect_list(const fm_cell_rect_t* ranges, std::size_t range_count, const char* api) {
+fm_status_t check_rect_list(const fm_cell_rect_t* ranges, std::size_t range_count) {
   if (range_count == 0U) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "range_count must be >= 1",
-                             std::string(api) + ": range_count=0");
+                             "range_count=0");
   }
   if (ranges == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "ranges is NULL while range_count > 0",
-                             std::string(api));
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "ranges is NULL while range_count > 0");
   }
-  if (!check_range_count(range_count, api)) {
+  if (!check_range_count(range_count)) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
   for (std::size_t i = 0; i < range_count; ++i) {
-    if (auto rc = check_sheet_rect(ranges[i], api); rc != 0) {
+    if (auto rc = check_sheet_rect(ranges[i]); rc != 0) {
       return rc;
     }
   }
@@ -237,56 +234,56 @@ std::string format_rect_a1(std::string_view sheet_name, const fm_cell_rect_t& re
   return formulon::parser::format_a1(first) + ":" + formulon::parser::format_a1(second);
 }
 
-fm_status_t check_column_span(std::uint32_t first, std::uint32_t last, const char* api) {
+fm_status_t check_column_span(std::uint32_t first, std::uint32_t last) {
   if (first <= last && last < formulon::Sheet::kMaxCols) {
     return 0;
   }
   return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "column span out of range",
-                           std::string(api) + ": first=" + std::to_string(first) + " last=" + std::to_string(last) +
+                           "first=" + std::to_string(first) + " last=" + std::to_string(last) +
                                " last_col=" + std::to_string(formulon::Sheet::kMaxCols - 1U));
 }
 
-fm_status_t check_row_span(std::uint32_t first, std::uint32_t last, const char* api) {
+fm_status_t check_row_span(std::uint32_t first, std::uint32_t last) {
   if (first <= last && last < formulon::Sheet::kMaxRows) {
     return 0;
   }
   return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "row span out of range",
-                           std::string(api) + ": first=" + std::to_string(first) + " last=" + std::to_string(last) +
+                           "first=" + std::to_string(first) + " last=" + std::to_string(last) +
                                " last_row=" + std::to_string(formulon::Sheet::kMaxRows - 1U));
 }
 
-fm_status_t check_row_index(std::uint32_t row, const char* api) {
+fm_status_t check_row_index(std::uint32_t row) {
   if (row < formulon::Sheet::kMaxRows) {
     return 0;
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "row index out of range",
-                           std::string(api) + ": row=" + std::to_string(row) +
-                               " last_row=" + std::to_string(formulon::Sheet::kMaxRows - 1U));
+  return set_binding_error(
+      formulon::FormulonErrorCode::kInvalidArgument, "row index out of range",
+      "row=" + std::to_string(row) + " last_row=" + std::to_string(formulon::Sheet::kMaxRows - 1U));
 }
 
-fm_status_t check_finite_non_negative(double value, const char* api, const char* field) {
+fm_status_t check_finite_non_negative(double value, const char* field) {
   if (std::isfinite(value) && value >= 0.0) {
     return 0;
   }
   return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "value must be finite and non-negative",
-                           std::string(api) + ": " + field + "=" + formulon::fixed_string(value, 6));
+                           std::string(field) + "=" + formulon::fixed_string(value, 6));
 }
 
-fm_status_t check_finite(double value, const char* api, const char* field) {
+fm_status_t check_finite(double value, const char* field) {
   if (std::isfinite(value)) {
     return 0;
   }
   return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "value must be finite",
-                           std::string(api) + ": " + field + "=" + formulon::fixed_string(value, 6));
+                           std::string(field) + "=" + formulon::fixed_string(value, 6));
 }
 
-fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out, const char* api) {
+fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out) {
   switch (in.kind) {
     case FM_VAL_BLANK:
       *out = formulon::Value::blank();
       return 0;
     case FM_VAL_NUMBER:
-      if (auto rc = check_finite(in.u.number, api, "value"); rc != 0) {
+      if (auto rc = check_finite(in.u.number, "value"); rc != 0) {
         return rc;
       }
       *out = formulon::Value::number(in.u.number);
@@ -296,9 +293,9 @@ fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out, const char
       return 0;
     case FM_VAL_TEXT:
       if (in.u.text == nullptr) {
-        return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "value text is NULL", api);
+        return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "value text is NULL");
       }
-      if (auto rc = check_utf8(in.u.text, api, "field=value"); rc != 0) {
+      if (auto rc = check_utf8(in.u.text, "field=value"); rc != 0) {
         return rc;
       }
       *out = formulon::Value::text(in.u.text);
@@ -306,26 +303,25 @@ fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out, const char
     case FM_VAL_ERROR:
       if (in.u.error_code < 0 || in.u.error_code > static_cast<int32_t>(formulon::ErrorCode::Unknown)) {
         return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "error code out of range",
-                                 std::string(api) + ": error=" + std::to_string(in.u.error_code));
+                                 "error=" + std::to_string(in.u.error_code));
       }
       *out = formulon::Value::error(static_cast<formulon::ErrorCode>(in.u.error_code));
       return 0;
     default:
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "value kind not accepted",
-                               std::string(api) + ": kind=" + std::to_string(static_cast<int>(in.kind)));
+                               "kind=" + std::to_string(static_cast<int>(in.kind)));
   }
 }
 
-fm_status_t check_enum_domain(std::int64_t value, std::int64_t max, const char* api, const char* field) {
+fm_status_t check_enum_domain(std::int64_t value, std::int64_t max, const char* field) {
   if (value >= 0 && value <= max) {
     return 0;
   }
-  return set_binding_error(
-      formulon::FormulonErrorCode::kInvalidArgument, "enum ordinal out of range",
-      std::string(api) + ": " + field + "=" + std::to_string(value) + " max=" + std::to_string(max));
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "enum ordinal out of range",
+                           std::string(field) + "=" + std::to_string(value) + " max=" + std::to_string(max));
 }
 
-fm_status_t check_guid(const char* text, const char* api, const char* field) {
+fm_status_t check_guid(const char* text, const char* field) {
   if (text == nullptr || text[0] == '\0') {
     return 0;
   }
@@ -348,7 +344,7 @@ fm_status_t check_guid(const char* text, const char* api, const char* field) {
     return 0;
   }
   return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "value is not a GUID",
-                           std::string(api) + ": " + field + "=" + std::string(value));
+                           std::string(field) + "=" + std::string(value));
 }
 
 namespace {
@@ -356,9 +352,9 @@ namespace {
 // Runs `check_enum_domain` over every `fm_cfvo_t` in a threshold array.
 // The array bound is the caller's, so an entry point that has not yet
 // established `count` against its pointer must not reach here.
-fm_status_t check_cfvo_types(const fm_cfvo_t* thresholds, std::uint32_t count, const char* api, const char* field) {
+fm_status_t check_cfvo_types(const fm_cfvo_t* thresholds, std::uint32_t count, const char* field) {
   for (std::uint32_t i = 0; i < count; ++i) {
-    if (auto rc = check_enum_domain(thresholds[i].type, static_cast<std::int64_t>(cf::CfvoType::AutoMax), api, field);
+    if (auto rc = check_enum_domain(thresholds[i].type, static_cast<std::int64_t>(cf::CfvoType::AutoMax), field);
         rc != 0) {
       return rc;
     }
@@ -368,49 +364,47 @@ fm_status_t check_cfvo_types(const fm_cfvo_t* thresholds, std::uint32_t count, c
 
 }  // namespace
 
-fm_status_t validate(const fm_cf_rule_t& rule, const char* api) {
+fm_status_t validate(const fm_cf_rule_t& rule) {
   // A range the A1 encoder cannot spell reaches the writer as an empty
   // reference, which Excel reads as a broken conditional-formatting
   // block. Rejecting it here names the offending rectangle at set time
   // instead of losing the format at save time.
-  if (auto rc = check_rect_list(rule.ranges, rule.range_count, api); rc != 0) {
+  if (auto rc = check_rect_list(rule.ranges, rule.range_count); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(rule.type, static_cast<std::int64_t>(cf::RuleType::UniqueValues), api, "type");
-      rc != 0) {
+  if (auto rc = check_enum_domain(rule.type, static_cast<std::int64_t>(cf::RuleType::UniqueValues), "type"); rc != 0) {
     return rc;
   }
   if (rule.op_engaged != 0) {
-    if (auto rc = check_enum_domain(rule.op, static_cast<std::int64_t>(cf::CellIsOperator::NotBetween), api, "op");
+    if (auto rc = check_enum_domain(rule.op, static_cast<std::int64_t>(cf::CellIsOperator::NotBetween), "op");
         rc != 0) {
       return rc;
     }
   }
   if (rule.time_period_engaged != 0) {
-    if (auto rc = check_enum_domain(rule.time_period, static_cast<std::int64_t>(cf::TimePeriod::NextMonth), api,
-                                    "time_period");
+    if (auto rc =
+            check_enum_domain(rule.time_period, static_cast<std::int64_t>(cf::TimePeriod::NextMonth), "time_period");
         rc != 0) {
       return rc;
     }
   }
   if (rule.data_bar_engaged != 0) {
-    if (auto rc = check_cfvo_types(&rule.data_bar_min, 1U, api, "data_bar_min.type"); rc != 0) {
+    if (auto rc = check_cfvo_types(&rule.data_bar_min, 1U, "data_bar_min.type"); rc != 0) {
       return rc;
     }
-    if (auto rc = check_cfvo_types(&rule.data_bar_max, 1U, api, "data_bar_max.type"); rc != 0) {
+    if (auto rc = check_cfvo_types(&rule.data_bar_max, 1U, "data_bar_max.type"); rc != 0) {
       return rc;
     }
     if (rule.data_bar_axis_position_engaged != 0) {
       if (auto rc =
               check_enum_domain(rule.data_bar_axis_position, static_cast<std::int64_t>(cf::DataBarAxisPosition::None),
-                                api, "data_bar_axis_position");
+                                "data_bar_axis_position");
           rc != 0) {
         return rc;
       }
     }
-    if (auto rc =
-            check_enum_domain(rule.data_bar_direction, static_cast<std::int64_t>(cf::DataBarDirection::RightToLeft),
-                              api, "data_bar_direction");
+    if (auto rc = check_enum_domain(rule.data_bar_direction,
+                                    static_cast<std::int64_t>(cf::DataBarDirection::RightToLeft), "data_bar_direction");
         rc != 0) {
       return rc;
     }
@@ -420,26 +414,26 @@ fm_status_t validate(const fm_cf_rule_t& rule, const char* api) {
   // allows is rejected there rather than scanned here.
   if (rule.color_scale_thresholds != nullptr && rule.color_scale_count >= 2U && rule.color_scale_count <= 3U) {
     if (auto rc =
-            check_cfvo_types(rule.color_scale_thresholds, rule.color_scale_count, api, "color_scale_thresholds[].type");
+            check_cfvo_types(rule.color_scale_thresholds, rule.color_scale_count, "color_scale_thresholds[].type");
         rc != 0) {
       return rc;
     }
   }
   if (rule.icon_set_engaged != 0) {
-    if (auto rc = check_enum_domain(rule.icon_set_name, static_cast<std::int64_t>(cf::IconSetName::Five_Quarters), api,
+    if (auto rc = check_enum_domain(rule.icon_set_name, static_cast<std::int64_t>(cf::IconSetName::Five_Quarters),
                                     "icon_set_name");
         rc != 0) {
       return rc;
     }
     if (rule.icon_set_thresholds != nullptr) {
-      if (auto rc = check_cfvo_types(rule.icon_set_thresholds, rule.icon_set_threshold_count, api,
-                                     "icon_set_thresholds[].type");
+      if (auto rc =
+              check_cfvo_types(rule.icon_set_thresholds, rule.icon_set_threshold_count, "icon_set_thresholds[].type");
           rc != 0) {
         return rc;
       }
     }
     if (rule.icon_set_floor_engaged != 0) {
-      if (auto rc = check_cfvo_types(&rule.icon_set_floor, 1U, api, "icon_set_floor.type"); rc != 0) {
+      if (auto rc = check_cfvo_types(&rule.icon_set_floor, 1U, "icon_set_floor.type"); rc != 0) {
         return rc;
       }
     }
@@ -449,46 +443,45 @@ fm_status_t validate(const fm_cf_rule_t& rule, const char* api) {
       if (rule.icon_set_icons == nullptr || rule.icon_set_icon_count != levels) {
         return set_binding_error(
             formulon::FormulonErrorCode::kInvalidArgument, "icon_set_icons must hold one icon per level",
-            std::string(api) + ": icon_set_icons count=" + std::to_string(rule.icon_set_icon_count) +
-                " levels=" + std::to_string(levels));
+            "icon_set_icons count=" + std::to_string(rule.icon_set_icon_count) + " levels=" + std::to_string(levels));
       }
       for (std::uint32_t i = 0; i < rule.icon_set_icon_count; ++i) {
         const fm_cf_icon_t& icon = rule.icon_set_icons[i];
         const std::size_t available = icon.icon_set == nullptr ? 0U : cf::cf_icon_set_icon_count(icon.icon_set);
         if (available == 0U || icon.icon_id < 0 || static_cast<std::size_t>(icon.icon_id) >= available) {
           return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "icon_set_icons entry names no icon",
-                                   std::string(api) + ": icon_set_icons[" + std::to_string(i) + "]");
+                                   "icon_set_icons[" + std::to_string(i) + "]");
         }
       }
     }
   }
-  if (auto rc = check_utf8(api, {rule.text}); rc != 0) {
+  if (auto rc = check_utf8({rule.text}); rc != 0) {
     return rc;
   }
   // The id reaches the file as `<x14:cfRule id="...">` and `<x14:id>`,
   // both of schema type `ST_Guid`. Excel repairs a workbook whose
   // extension block holds anything else, and repairing means dropping
   // every conditional format in it.
-  return check_guid(rule.id, api, "id");
+  return check_guid(rule.id, "id");
 }
 
-fm_status_t validate(const fm_data_validation_t& v, const char* api) {
-  if (auto rc = check_rect_list(v.ranges, v.range_count, api); rc != 0) {
+fm_status_t validate(const fm_data_validation_t& v) {
+  if (auto rc = check_rect_list(v.ranges, v.range_count); rc != 0) {
     return rc;
   }
   // The three domains the writer's attribute tables spell out
   // (`sheet_xml_builder.cpp`): a value past them is emitted as an absent
   // attribute, so a mistyped `type` saves as "no validation at all".
-  if (auto rc = check_enum_domain(v.type, 7, api, "type"); rc != 0) {
+  if (auto rc = check_enum_domain(v.type, 7, "type"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(v.op, 7, api, "op"); rc != 0) {
+  if (auto rc = check_enum_domain(v.op, 7, "op"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(v.error_style, 2, api, "error_style"); rc != 0) {
+  if (auto rc = check_enum_domain(v.error_style, 2, "error_style"); rc != 0) {
     return rc;
   }
-  return check_utf8(api, {v.error_title, v.error_message, v.prompt_title, v.prompt_message});
+  return check_utf8({v.error_title, v.error_message, v.prompt_title, v.prompt_message});
 }
 
 bool num_fmt_id_known(const formulon::StylesTable& styles, std::uint16_t id) {
@@ -503,65 +496,61 @@ bool num_fmt_id_known(const formulon::StylesTable& styles, std::uint16_t id) {
   return false;
 }
 
-fm_status_t check_num_fmt_id_text(const formulon::Workbook& wb, const char* text, const char* api) {
+fm_status_t check_num_fmt_id_text(const formulon::Workbook& wb, const char* text) {
   if (text == nullptr || text[0] == '\0') {
     return 0;
   }
   // The text is echoed into the diagnostic context, which must stay UTF-8.
-  if (auto rc = check_utf8(text, api, "field=number_format"); rc != 0) {
+  if (auto rc = check_utf8(text, "field=number_format"); rc != 0) {
     return rc;
   }
   std::uint32_t id = 0;
   for (const char* p = text; *p != '\0'; ++p) {
     if (*p < '0' || *p > '9') {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               (std::string(api) + ": number_format is not a numFmtId").c_str(),
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "number_format is not a numFmtId",
                                "number_format=" + std::string(text));
     }
     id = id * 10U + static_cast<std::uint32_t>(*p - '0');
     if (id > std::numeric_limits<std::uint16_t>::max()) {
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               (std::string(api) + ": number_format is out of the numFmtId range").c_str(),
-                               "number_format=" + std::string(text));
+                               "number_format is out of the numFmtId range", "number_format=" + std::string(text));
     }
   }
   if (!num_fmt_id_known(wb.styles(), static_cast<std::uint16_t>(id))) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             (std::string(api) + ": number_format names an unregistered numFmtId").c_str(),
-                             "number_format=" + std::string(text));
+                             "number_format names an unregistered numFmtId", "number_format=" + std::string(text));
   }
   return 0;
 }
 
-fm_status_t validate(const fm_pivot_field_spec_t& spec, const char* api) {
+fm_status_t validate(const fm_pivot_field_spec_t& spec) {
   if (spec.source_name == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "spec->source_name is NULL",
-                             std::string(api));
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "spec->source_name is NULL");
   }
-  if (auto rc = check_utf8(api, {spec.source_name, spec.custom_name}); rc != 0) {
+  if (auto rc = check_utf8({spec.source_name, spec.custom_name}); rc != 0) {
     return rc;
   }
-  return check_enum_domain(spec.axis, FM_PIVOT_AXIS_PAGE, api, "axis");
+  return check_enum_domain(spec.axis, FM_PIVOT_AXIS_PAGE, "axis");
 }
 
-fm_status_t validate(const fm_pivot_data_field_spec_t& spec, const char* api) {
-  if (auto rc = check_utf8(api, {spec.name}); rc != 0) {
+fm_status_t validate(const fm_pivot_data_field_spec_t& spec) {
+  if (auto rc = check_utf8({spec.name}); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(spec.aggregation, FM_PIVOT_AGG_VARP, api, "aggregation"); rc != 0) {
+  if (auto rc = check_enum_domain(spec.aggregation, FM_PIVOT_AGG_VARP, "aggregation"); rc != 0) {
     return rc;
   }
-  return check_enum_domain(spec.show_as, FM_PIVOT_SHOW_VALUES_AS_RANK_DESCENDING, api, "show_as");
+  return check_enum_domain(spec.show_as, FM_PIVOT_SHOW_VALUES_AS_RANK_DESCENDING, "show_as");
 }
 
-fm_status_t validate(const fm_pivot_filter_spec_t& spec, const char* api) {
-  if (auto rc = check_utf8(api, {spec.field_name, spec.value_text, spec.value_high_text}); rc != 0) {
+fm_status_t validate(const fm_pivot_filter_spec_t& spec) {
+  if (auto rc = check_utf8({spec.field_name, spec.value_text, spec.value_high_text}); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(spec.axis, FM_PIVOT_AXIS_PAGE, api, "axis"); rc != 0) {
+  if (auto rc = check_enum_domain(spec.axis, FM_PIVOT_AXIS_PAGE, "axis"); rc != 0) {
     return rc;
   }
-  return check_enum_domain(spec.type, FM_PIVOT_FILTER_DATE_M12, api, "type");
+  return check_enum_domain(spec.type, FM_PIVOT_FILTER_DATE_M12, "type");
 }
 
 void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out) {
@@ -617,23 +606,25 @@ void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out) {
 
 namespace {
 
-fm_status_t check_sheet(const fm_workbook_t* wb, std::size_t sheet, const char* fn, const char* field) {
+fm_status_t check_sheet(const fm_workbook_t* wb, std::size_t sheet) {
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, fn);
+    return null_argument("wb");
   }
   const std::size_t count = wb->workbook().sheet_count();
   if (sheet >= count) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kSheetIndexOutOfRange, fn,
-        std::string(field) + "=" + std::to_string(sheet) + " sheet_count=" + std::to_string(count));
+    return set_binding_error(formulon::FormulonErrorCode::kSheetIndexOutOfRange,
+                             ("sheet index " + std::to_string(sheet) + " is out of range (" + std::to_string(count) +
+                              (count == 1U ? " sheet)" : " sheets)"))
+                                 .c_str(),
+                             "sheet_index=" + std::to_string(sheet) + " sheet_count=" + std::to_string(count));
   }
   return 0;
 }
 
 }  // namespace
 
-fm_status_t check_sheet_index(const fm_workbook_t* wb, std::size_t sheet_index, const char* fn) {
-  return check_sheet(wb, sheet_index, fn, "sheet_index");
+fm_status_t check_sheet_index(const fm_workbook_t* wb, std::size_t sheet_index) {
+  return check_sheet(wb, sheet_index);
 }
 
 TextStore& fresh_read_scratch(const fm_workbook_t* wb) {
@@ -648,89 +639,103 @@ const char* publish_scratch(const fm_workbook_t* wb, std::string text) {
   return store.back().c_str();
 }
 
-fm_status_t check_cell_coord(std::uint32_t row, std::uint32_t col, const char* api) {
+fm_status_t check_cell_coord(std::uint32_t row, std::uint32_t col) {
   if (formulon::Sheet::coord_in_grid(row, col)) {
     return 0;
   }
   return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "cell coordinate out of range",
-                           std::string(api) + ": row=" + std::to_string(row) + " col=" + std::to_string(col));
+                           "row=" + std::to_string(row) + " col=" + std::to_string(col));
 }
 
-fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet, const char* fn) {
-  return check_sheet(wb, sheet, fn, "sheet");
+fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet) {
+  return check_sheet(wb, sheet);
 }
 
-fm_status_t check_index(std::size_t index, std::size_t size, const char* fn, const char* field) {
+fm_status_t check_index(std::size_t index, std::size_t size, const char* field) {
   if (index < size) {
     return 0;
   }
+  return set_binding_error(
+      formulon::FormulonErrorCode::kIndexOutOfRange,
+      (std::string(field) + " " + std::to_string(index) + " is out of range (" + std::to_string(size) + " items)")
+          .c_str(),
+      std::string(field) + "=" + std::to_string(index) + " count=" + std::to_string(size));
+}
+
+fm_status_t check_limit(std::size_t value, std::size_t bound, const char* field) {
+  if (value < bound) {
+    return 0;
+  }
   return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                           (std::string(fn) + ": " + field + " out of range").c_str(),
-                           std::string(field) + "=" + std::to_string(index) + " count=" + std::to_string(size));
+                           (std::string(field) + " " + std::to_string(value) + " is out of range (maximum " +
+                            std::to_string(bound - 1U) + ")")
+                               .c_str(),
+                           std::string(field) + "=" + std::to_string(value) + " max=" + std::to_string(bound - 1U));
 }
 
-fm_status_t null_argument(const char* api) {
-  return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                           (std::string(api) + ": NULL argument").c_str());
+fm_status_t null_argument() {
+  return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "a required argument is NULL");
 }
 
-fm_status_t null_argument(const char* api, const char* what) {
-  return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                           (std::string(api) + ": " + what + " is NULL").c_str());
+fm_status_t null_argument(const char* what) {
+  return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, (std::string(what) + " is NULL").c_str());
 }
 
-fm_status_t invalid_argument(const char* api, const char* what, std::string context) {
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, (std::string(api) + ": " + what).c_str(),
-                           std::move(context));
+fm_status_t invalid_argument(const char* what, std::string context) {
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, what, std::move(context));
 }
 
-fm_status_t check_sheet_row(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row, const char* fn) {
-  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+fm_status_t not_found(const char* what, std::string context) {
+  return set_binding_error(formulon::FormulonErrorCode::kNotFound, what, std::move(context));
+}
+
+fm_status_t check_sheet_row(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  return check_row_index(row, fn);
+  return check_row_index(row);
 }
 
-fm_status_t check_anchor_enums(std::int64_t anchor_kind, std::int64_t edit_as, const char* api) {
-  if (auto rc = check_enum_domain(anchor_kind, static_cast<std::int64_t>(formulon::AnchorKind::kAbsolute), api,
-                                  "anchor_kind");
+fm_status_t check_anchor_enums(std::int64_t anchor_kind, std::int64_t edit_as) {
+  if (auto rc =
+          check_enum_domain(anchor_kind, static_cast<std::int64_t>(formulon::AnchorKind::kAbsolute), "anchor_kind");
       rc != 0) {
     return rc;
   }
-  return check_enum_domain(edit_as, static_cast<std::int64_t>(formulon::EditAs::kAbsolute), api, "edit_as");
+  return check_enum_domain(edit_as, static_cast<std::int64_t>(formulon::EditAs::kAbsolute), "edit_as");
 }
 
 namespace {
 
-fm_status_t utf8_error(const char* api, std::string context) {
-  return set_binding_error(formulon::FormulonErrorCode::kBindingUtf8EncodingError,
-                           (std::string(api) + ": text is not valid UTF-8").c_str(), std::move(context));
+fm_status_t utf8_error(std::string context) {
+  return set_binding_error(formulon::FormulonErrorCode::kBindingUtf8EncodingError, "text is not valid UTF-8",
+                           std::move(context));
 }
 
 }  // namespace
 
-fm_status_t check_utf8(std::string_view text, const char* api, std::string_view context) {
-  return formulon::sheet_names::valid_utf8(text) ? 0 : utf8_error(api, std::string(context));
+fm_status_t check_utf8(std::string_view text, std::string_view context) {
+  return formulon::sheet_names::valid_utf8(text) ? 0 : utf8_error(std::string(context));
 }
 
-fm_status_t check_utf8(std::string_view text, const char* api, std::string_view key, std::string_view value) {
+fm_status_t check_utf8(std::string_view text, std::string_view key, std::string_view value) {
   if (formulon::sheet_names::valid_utf8(text)) {
     return 0;
   }
   std::string context(key);
   context.append("=").append(value);
-  return utf8_error(api, std::move(context));
+  return utf8_error(std::move(context));
 }
 
-fm_status_t check_utf8(std::string_view text, const char* api, std::string_view key, std::size_t index) {
-  return formulon::sheet_names::valid_utf8(text) ? 0 : utf8_error(api, std::string(key) + "=" + std::to_string(index));
+fm_status_t check_utf8(std::string_view text, std::string_view key, std::size_t index) {
+  return formulon::sheet_names::valid_utf8(text) ? 0 : utf8_error(std::string(key) + "=" + std::to_string(index));
 }
 
-fm_status_t check_utf8(const char* api, std::initializer_list<const char*> texts) {
+fm_status_t check_utf8(std::initializer_list<const char*> texts) {
   std::size_t index = 0;
   for (const char* text : texts) {
     if (text != nullptr) {
-      if (auto rc = check_utf8(text, api, "text_index", index); rc != 0) {
+      if (auto rc = check_utf8(text, "text_index", index); rc != 0) {
         return rc;
       }
     }
@@ -739,17 +744,16 @@ fm_status_t check_utf8(const char* api, std::initializer_list<const char*> texts
   return 0;
 }
 
-fm_status_t check_cell_xf_index(const fm_workbook_t* wb, std::size_t xf_index, const char* fn) {
-  return check_index(xf_index, wb->workbook().styles().cell_xfs.size(), fn, "xf_index");
+fm_status_t check_cell_xf_index(const fm_workbook_t* wb, std::size_t xf_index) {
+  return check_index(xf_index, wb->workbook().styles().cell_xfs.size(), "xf_index");
 }
 
-fm_status_t check_keeps_visible_sheet(const formulon::Workbook& workbook, std::uint32_t index, const char* fn) {
+fm_status_t check_keeps_visible_sheet(const formulon::Workbook& workbook, std::uint32_t index) {
   if (workbook.sheet(index).view().visibility() != formulon::SheetVisibility::kVisible ||
       workbook.nearest_visible_sheet(index) != index) {
     return 0;
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                           (std::string(fn) + ": workbook needs a visible sheet").c_str(),
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "workbook needs a visible sheet",
                            "index=" + std::to_string(index));
 }
 
@@ -759,9 +763,9 @@ bool is_builtin_function_name(std::string_view name) {
   return formulon::eval::resolve_builtin_function_name(name) != nullptr;
 }
 
-fm_status_t formula_does_not_parse(const char* api, std::string_view context) {
-  return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken,
-                           (std::string(api) + ": formula does not parse").c_str(), std::string(context));
+fm_status_t formula_does_not_parse(std::string_view context) {
+  return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken, "formula does not parse",
+                           std::string(context));
 }
 
 // AST of entered `formula`'s stored spelling, written to `*stored`, or
@@ -787,34 +791,32 @@ const formulon::parser::AstNode* parse_entered_formula(std::string_view formula,
 // Parse check of entered text: typed `_xlpm.` before a cell-shaped name fails
 // it, and so does `parse_entered_formula`. `*stored` receives the stored
 // spelling.
-fm_status_t check_entered_formula_parses(const char* api, std::string_view formula, std::string_view context,
-                                         std::string* stored) {
-  if (auto rc = check_utf8(formula, api, context); rc != 0) {
+fm_status_t check_entered_formula_parses(std::string_view formula, std::string_view context, std::string* stored) {
+  if (auto rc = check_utf8(formula, context); rc != 0) {
     return rc;
   }
   formulon::Arena arena;
   if (formulon::eval::has_entered_cell_shaped_param(formula) ||
       parse_entered_formula(formula, arena, stored) == nullptr) {
-    return formula_does_not_parse(api, context);
+    return formula_does_not_parse(context);
   }
   return 0;
 }
 
 }  // namespace
 
-fm_status_t check_stored_formula(const char* api, std::string_view formula, std::string_view context,
-                                 std::string* out) {
+fm_status_t check_stored_formula(std::string_view formula, std::string_view context, std::string* out) {
   if (formula.empty()) {
     out->clear();
     return 0;
   }
   // The parser skips one '=' of its own, so a second one is refused here.
   if (formula.front() == '=' && formula.size() > 1U && formula[1] == '=') {
-    return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken,
-                             (std::string(api) + ": formula does not parse").c_str(), std::string(context));
+    return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken, "formula does not parse",
+                             std::string(context));
   }
   std::string stored;
-  if (auto rc = check_entered_formula_parses(api, formula, context, &stored); rc != 0) {
+  if (auto rc = check_entered_formula_parses(formula, context, &stored); rc != 0) {
     return rc;
   }
   if (!stored.empty() && stored.front() == '=') {
@@ -836,15 +838,14 @@ std::string ingest_entered_formula(fm_workbook_t* wb, std::string_view formula) 
   return text;
 }
 
-fm_status_t check_entered_cell_formula(const char* api, const fm_workbook_t* wb, std::size_t sheet, std::uint32_t row,
-                                       std::uint32_t col, std::string_view formula, std::string_view context,
-                                       std::string* bound) {
-  if (auto rc = check_utf8(formula, api, context); rc != 0) {
+fm_status_t check_entered_cell_formula(const fm_workbook_t* wb, std::size_t sheet, std::uint32_t row, std::uint32_t col,
+                                       std::string_view formula, std::string_view context, std::string* bound) {
+  if (auto rc = check_utf8(formula, context); rc != 0) {
     return rc;
   }
   *bound = wb->workbook().bind_entered_structured_refs(formula, sheet, row, col);
   if (formulon::eval::has_entered_cell_shaped_param(*bound)) {
-    return formula_does_not_parse(api, context);
+    return formula_does_not_parse(context);
   }
   std::string stored;
   {
@@ -858,7 +859,7 @@ fm_status_t check_entered_cell_formula(const char* api, const fm_workbook_t* wb,
   std::optional<std::string> translated = formulon::eval::translate_r1c1_entry(*bound, row, col);
   formulon::Arena arena;
   if (!translated || parse_entered_formula(*translated, arena, &stored) == nullptr) {
-    return formula_does_not_parse(api, context);
+    return formula_does_not_parse(context);
   }
   *bound = std::move(*translated);
   return 0;

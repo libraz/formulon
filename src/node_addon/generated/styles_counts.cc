@@ -15,41 +15,41 @@ namespace formulon_node {
 Napi::Value Workbook::BorderCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+    return ThrowInvalidHandle(env);
   }
   std::size_t count = 0;
   const fm_status_t rc = fm_workbook_get_border_count(handle_, &count);
-  return MakeNumberResult(env, rc, static_cast<double>(count));
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
 }
 
 Napi::Value Workbook::FillCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+    return ThrowInvalidHandle(env);
   }
   std::size_t count = 0;
   const fm_status_t rc = fm_workbook_get_fill_count(handle_, &count);
-  return MakeNumberResult(env, rc, static_cast<double>(count));
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
 }
 
 Napi::Value Workbook::FontCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+    return ThrowInvalidHandle(env);
   }
   std::size_t count = 0;
   const fm_status_t rc = fm_workbook_get_font_count(handle_, &count);
-  return MakeNumberResult(env, rc, static_cast<double>(count));
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
 }
 
 Napi::Value Workbook::XfCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+    return ThrowInvalidHandle(env);
   }
   std::size_t count = 0;
   const fm_status_t rc = fm_workbook_get_cell_xf_count(handle_, &count);
-  return MakeNumberResult(env, rc, static_cast<double>(count));
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
 }
 
 }  // namespace formulon_node

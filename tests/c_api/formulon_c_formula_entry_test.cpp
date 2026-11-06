@@ -109,8 +109,7 @@ TEST(FormulonCApiFormulaEntry, SetFormulaRejectsUnparseableTextAndKeepsState) {
   for (const std::string& formula : RejectedFormulas()) {
     SCOPED_TRACE(formula);
     EXPECT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, formula.c_str()), kParserUnexpectedToken);
-    EXPECT_NE(std::string(fm_get_last_error_message()).find("fm_sheet_set_formula: formula does not parse"),
-              std::string::npos);
+    EXPECT_NE(std::string(fm_get_last_error_message()).find("formula does not parse"), std::string::npos);
     EXPECT_NE(std::string(fm_get_last_error_context()).find("row=0 col=1"), std::string::npos);
     EXPECT_EQ(GetFormula(wb.handle, 0, 1), "=1+2");
 
@@ -170,13 +169,10 @@ TEST(FormulonCApiFormulaEntry, DefinedNameRejectsUnparseableTextAndKeepsState) {
   for (const std::string& formula : RejectedFormulas()) {
     SCOPED_TRACE(formula);
     EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, "Rate", formula.c_str()), kParserUnexpectedToken);
-    EXPECT_NE(std::string(fm_get_last_error_message()).find("fm_workbook_set_defined_name: formula does not parse"),
-              std::string::npos);
+    EXPECT_NE(std::string(fm_get_last_error_message()).find("formula does not parse"), std::string::npos);
     EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, "Fresh", formula.c_str()), kParserUnexpectedToken);
     EXPECT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Local", formula.c_str(), 0), kParserUnexpectedToken);
-    EXPECT_NE(
-        std::string(fm_get_last_error_message()).find("fm_workbook_set_defined_name_scoped: formula does not parse"),
-        std::string::npos);
+    EXPECT_NE(std::string(fm_get_last_error_message()).find("formula does not parse"), std::string::npos);
     EXPECT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Fresh", formula.c_str(), -1), kParserUnexpectedToken);
   }
   ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 2U);
@@ -223,8 +219,7 @@ TEST(FormulonCApiFormulaEntry, CfAddRuleRejectsUnparseableFormulasAndKeepsState)
     SCOPED_TRACE(formula);
     EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, formula.c_str(), nullptr)), &index),
               kParserUnexpectedToken);
-    EXPECT_NE(std::string(fm_get_last_error_message()).find("fm_sheet_add_cf_rule: formula does not parse"),
-              std::string::npos);
+    EXPECT_NE(std::string(fm_get_last_error_message()).find("formula does not parse"), std::string::npos);
     EXPECT_NE(std::string(fm_get_last_error_context()).find("formula1"), std::string::npos);
     EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "A1>0", formula.c_str())), &index),
               kParserUnexpectedToken);
@@ -270,8 +265,7 @@ TEST(FormulonCApiFormulaEntry, AddValidationRejectsUnparseableFormulasAndKeepsSt
     EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 1, formula.c_str(), "10")),
                                       ignored_index()),
               kParserUnexpectedToken);
-    EXPECT_NE(std::string(fm_get_last_error_message()).find("fm_sheet_add_validation: formula does not parse"),
-              std::string::npos);
+    EXPECT_NE(std::string(fm_get_last_error_message()).find("formula does not parse"), std::string::npos);
     EXPECT_NE(std::string(fm_get_last_error_context()).find("formula1"), std::string::npos);
     EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 1, "0", formula.c_str())),
                                       ignored_index()),

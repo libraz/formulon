@@ -21,22 +21,12 @@ namespace parts {
 
 namespace {
 
-/// Envelope for the image calls: `status` plus the header info, zeroed on failure.
-emscripten::val image_info_to_val(JsStatus status, const fm_image_info_t& info) {
-  const bool ok = status.ok;
+/// The header info of a probed image.
+emscripten::val image_info_to_val(const fm_image_info_t& info) {
   emscripten::val o = emscripten::val::object();
-  o.set("status", status);
-  o.set("format", ok ? info.format : 0);
-  o.set("pxWidth", ok ? info.px_width : 0U);
-  o.set("pxHeight", ok ? info.px_height : 0U);
-  return o;
-}
-
-/// Envelope for the calls that place a picture: `objectId`, zero unless the call succeeded.
-emscripten::val image_id_result(JsStatus status, uint32_t object_id) {
-  emscripten::val o = emscripten::val::object();
-  o.set("objectId", object_id);
-  o.set("status", status);
+  o.set("format", info.format);
+  o.set("pxWidth", info.px_width);
+  o.set("pxHeight", info.px_height);
   return o;
 }
 
@@ -99,22 +89,25 @@ void set_insert_placement(fm_image_insert_t& ins, const fm_drawing_anchor_t& anc
 
 emscripten::val JsWorkbook::probeImage(emscripten::val bytes) const {
   if (handle_ == nullptr) {
-    return image_info_to_val(invalid_handle_status(), fm_image_info_t{});
+    record_invalid_handle();
+    return emscripten::val::undefined();
   }
-  const JsBytesReadResult bytes_result = val_to_bytes_checked(bytes);
-  if (!bytes_result.ok) {
-    return image_info_to_val(binding_error_status(kInvalidArgument, bytes_result.message.c_str()), fm_image_info_t{});
+  std::vector<uint8_t> data;
+  if (!val_to_bytes_checked(bytes, &data)) {
+    return emscripten::val::undefined();
   }
-  const std::vector<uint8_t>& data = bytes_result.bytes;
   fm_image_info_t info{};
-  const fm_status_t rc = fm_workbook_get_image_info(handle_, data.data(), data.size(), &info);
-  return image_info_to_val(status_from_rc(rc), info);
+  if (!succeeded(fm_workbook_get_image_info(handle_, data.data(), data.size(), &info))) {
+    return emscripten::val::undefined();
+  }
+  return image_info_to_val(info);
 }
 
 emscripten::val JsWorkbook::listDrawingObjects(uint32_t sheet) const {
   emscripten::val arr = emscripten::val::array();
-  arr.set("status", status_from_rc(js_collect_list(handle_, sheet, &fm_sheet_get_drawing_object_count,
-                                                   &drawing_object_item, arr)));
+  if (!succeeded(js_collect_list(handle_, sheet, &fm_sheet_get_drawing_object_count, &drawing_object_item, arr))) {
+    return emscripten::val::undefined();
+  }
   return arr;
 }
 
@@ -123,7 +116,7 @@ emscripten::val JsWorkbook::getDrawingObject(uint32_t sheet, uint32_t objectId) 
   int32_t present = 0;
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_drawing_object(handle_, sheet, objectId, &present, &d) : kBindingInvalidHandle;
-  return optional_result(rc, present, rc == 0 && present != 0 ? drawing_object_to_val(d) : emscripten::val::null());
+  return optional_or_null(rc, present, rc == 0 && present != 0 ? drawing_object_to_val(d) : emscripten::val::null());
 }
 
 emscripten::val JsWorkbook::getImage(uint32_t sheet, uint32_t objectId) const {
@@ -134,96 +127,101 @@ emscripten::val JsWorkbook::getImage(uint32_t sheet, uint32_t objectId) const {
   const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_image(handle_, sheet, objectId, &present, &data, &len, &info)
                                             : kBindingInvalidHandle;
   if (rc != 0 || present == 0) {
-    return optional_result(rc, present, emscripten::val::null());
+    return optional_or_null(rc, present, emscripten::val::null());
   }
   emscripten::val image = emscripten::val::object();
   image.set("format", info.format);
   image.set("pxWidth", info.px_width);
   image.set("pxHeight", info.px_height);
   image.set("bytes", bytes_to_val(data, len));
-  return optional_result(rc, present, image);
+  return optional_or_null(rc, present, image);
 }
 
-emscripten::val JsWorkbook::insertImage(uint32_t sheet, emscripten::val bytes, emscripten::val opts) {
+uint32_t JsWorkbook::insertImage(uint32_t sheet, emscripten::val bytes, emscripten::val opts) {
   if (handle_ == nullptr) {
-    return image_id_result(invalid_handle_status(), 0U);
+    record_invalid_handle();
+    return 0U;
   }
   std::string name_store;
   std::string descr_store;
   JsNarrowNumericReader reader("addImage");
   const emscripten::val options = js_object_or_empty(opts);
-  const JsBytesReadResult bytes_result = val_to_bytes_checked(bytes);
-  if (!bytes_result.ok) {
-    return image_id_result(binding_error_status(kInvalidArgument, bytes_result.message.c_str()), 0U);
+  std::vector<uint8_t> data;
+  if (!val_to_bytes_checked(bytes, &data)) {
+    return 0U;
   }
-  const std::vector<uint8_t>& data = bytes_result.bytes;
   fm_image_insert_t ins{};
   ins.name = reader.optional_string(options, "name", name_store, "image.name");
   ins.descr = reader.optional_string(options, "descr", descr_store, "image.descr");
   set_insert_placement(ins, pull_drawing_anchor(reader, options, FM_ANCHOR_KIND_ONE_CELL));
   if (!reader.ok()) {
-    return image_id_result(reader.failure(), 0U);
+    return 0U;
   }
   uint32_t id = 0;
-  const fm_status_t rc = fm_sheet_add_image(handle_, sheet, data.data(), data.size(), &ins, &id);
-  return image_id_result(status_from_rc(rc), rc == 0 ? id : 0U);
+  if (!succeeded(fm_sheet_add_image(handle_, sheet, data.data(), data.size(), &ins, &id))) {
+    return 0U;
+  }
+  return id;
 }
 
-JsStatus JsWorkbook::removeDrawing(uint32_t sheet, uint32_t objectId) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_drawing(handle_, sheet, objectId) : kBindingInvalidHandle);
+void JsWorkbook::removeDrawing(uint32_t sheet, uint32_t objectId) {
+  succeeded(handle_ != nullptr ? fm_sheet_remove_drawing(handle_, sheet, objectId) : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::setDrawingName(uint32_t sheet, uint32_t objectId, const std::string& name) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_set_drawing_name(handle_, sheet, objectId, name.c_str())
-                                           : kBindingInvalidHandle);
+void JsWorkbook::setDrawingName(uint32_t sheet, uint32_t objectId, const std::string& name) {
+  succeeded(handle_ != nullptr ? fm_sheet_set_drawing_name(handle_, sheet, objectId, name.c_str())
+                               : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::setDrawingAnchor(uint32_t sheet, uint32_t objectId, emscripten::val placement) {
+void JsWorkbook::setDrawingAnchor(uint32_t sheet, uint32_t objectId, emscripten::val placement) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setDrawingAnchor");
   const emscripten::val options = js_object_or_empty(placement);
   const fm_drawing_anchor_t anchor = pull_drawing_anchor(reader, options, FM_ANCHOR_KIND_ONE_CELL);
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
-  return status_from_rc(fm_sheet_set_drawing_anchor(handle_, sheet, objectId, &anchor));
+  succeeded(fm_sheet_set_drawing_anchor(handle_, sheet, objectId, &anchor));
 }
 
-JsStatus JsWorkbook::setDrawingZOrder(uint32_t sheet, uint32_t objectId, uint32_t index) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_set_drawing_z_order(handle_, sheet, objectId, index)
-                                           : kBindingInvalidHandle);
+void JsWorkbook::setDrawingZOrder(uint32_t sheet, uint32_t objectId, uint32_t index) {
+  succeeded(handle_ != nullptr ? fm_sheet_set_drawing_z_order(handle_, sheet, objectId, index) : kBindingInvalidHandle);
 }
 
 emscripten::val JsWorkbook::snapshotDrawing(uint32_t sheet, uint32_t objectId) const {
   if (handle_ == nullptr) {
-    return snapshot_bytes_result(kBindingInvalidHandle, nullptr, 0);
+    record_invalid_handle();
+    return emscripten::val::undefined();
   }
   uint8_t* data = nullptr;
   size_t len = 0;
   const fm_status_t rc = fm_sheet_snapshot_drawing(handle_, sheet, objectId, &data, &len);
-  return snapshot_bytes_result(rc, data, len);
+  return snapshot_bytes(rc, data, len);
 }
 
-emscripten::val JsWorkbook::restoreDrawing(uint32_t sheet, emscripten::val bytes, emscripten::val opts) {
+uint32_t JsWorkbook::restoreDrawing(uint32_t sheet, emscripten::val bytes, emscripten::val opts) {
   if (handle_ == nullptr) {
-    return image_id_result(invalid_handle_status(), 0U);
+    record_invalid_handle();
+    return 0U;
   }
   JsNarrowNumericReader reader("restoreDrawing");
   const emscripten::val options = js_object_or_empty(opts);
-  const JsBytesReadResult bytes_result = val_to_bytes_checked(bytes);
-  if (!bytes_result.ok) {
-    return image_id_result(binding_error_status(kInvalidArgument, bytes_result.message.c_str()), 0U);
+  std::vector<uint8_t> data;
+  if (!val_to_bytes_checked(bytes, &data)) {
+    return 0U;
   }
-  const std::vector<uint8_t>& data = bytes_result.bytes;
   const uint32_t flags = reader.boolean(options, "newId", false, "options.newId") ? FM_DRAWING_RESTORE_NEW_ID : 0U;
   if (!reader.ok()) {
-    return image_id_result(reader.failure(), 0U);
+    return 0U;
   }
   uint32_t id = 0;
-  const fm_status_t rc = fm_sheet_restore_drawing(handle_, sheet, data.data(), data.size(), flags, &id);
-  return image_id_result(status_from_rc(rc), rc == 0 ? id : 0U);
+  if (!succeeded(fm_sheet_restore_drawing(handle_, sheet, data.data(), data.size(), flags, &id))) {
+    return 0U;
+  }
+  return id;
 }
 
 }  // namespace parts

@@ -512,7 +512,7 @@ TEST(FormulonCApiDefinedNameAttrs, SetReadBackAndKeepAcrossReplacement) {
   EXPECT_STREQ(comment, "Tax rate");
   EXPECT_EQ(hidden, 0);
 
-  EXPECT_EQ(fm_workbook_get_defined_name_attrs_at(wb.handle, 4, &comment, &hidden), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_get_defined_name_attrs_at(wb.handle, 4, &comment, &hidden), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_NE(fm_workbook_get_defined_name_attrs_at(wb.handle, 0, nullptr, &hidden), 0);
 
   ASSERT_EQ(fm_workbook_set_defined_name_attrs(wb.handle, "Rate", -1, "Tax rate", 1), 0);

@@ -23,6 +23,7 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::check_enum_domain;
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
@@ -52,8 +53,8 @@ struct Target {
   const formulon::AutoFilter* filter = nullptr;
 };
 
-fm_status_t resolve_sheet(const fm_workbook_t* wb, std::size_t sheet_index, const char* api, Target* out) {
-  if (auto rc = check_sheet_index(wb, sheet_index, api); rc != 0) {
+fm_status_t resolve_sheet(const fm_workbook_t* wb, std::size_t sheet_index, Target* out) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   out->sheet = sheet_index;
@@ -61,15 +62,13 @@ fm_status_t resolve_sheet(const fm_workbook_t* wb, std::size_t sheet_index, cons
   return 0;
 }
 
-fm_status_t resolve_table(const fm_workbook_t* wb, std::size_t table_index, const char* api, Target* out) {
+fm_status_t resolve_table(const fm_workbook_t* wb, std::size_t table_index, Target* out) {
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, api, "wb=NULL");
+    return null_argument("wb");
   }
   const auto& tables = wb->workbook().tables();
-  if (table_index >= tables.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             (std::string(api) + ": table index out of range").c_str(),
-                             "table_index=" + std::to_string(table_index) + " count=" + std::to_string(tables.size()));
+  if (auto rc = check_index(table_index, tables.size(), "table_index"); rc != 0) {
+    return rc;
   }
   out->sheet = tables[table_index].sheet_index;
   out->table = table_index;
@@ -79,13 +78,13 @@ fm_status_t resolve_table(const fm_workbook_t* wb, std::size_t table_index, cons
 
 // Rejects an AutoFilter the typed surface cannot operate on: absent, or kept
 // opaque because it did not parse into the model.
-fm_status_t require_typed(const Target& target, const char* api) {
+fm_status_t require_typed(const Target& target) {
   if (target.filter == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kNotFound, (std::string(api) + ": no AutoFilter").c_str());
+    return set_binding_error(formulon::FormulonErrorCode::kNotFound, "no AutoFilter");
   }
   if (target.filter->is_opaque()) {
     return set_binding_error(formulon::FormulonErrorCode::kAutoFilterInvalid,
-                             (std::string(api) + ": AutoFilter did not parse into the typed model").c_str());
+                             "AutoFilter did not parse into the typed model");
   }
   return 0;
 }
@@ -210,17 +209,16 @@ void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_aut
 
 // --- record -> model --------------------------------------------------------
 
-fm_status_t check_array(const void* data, uint32_t count, const char* api, const char* field) {
+fm_status_t check_array(const void* data, uint32_t count, const char* field) {
   if (data == nullptr && count != 0U) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             (std::string(api) + ": NULL array with a non-zero count").c_str(),
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "NULL array with a non-zero count",
                              std::string("field=") + field + " count=" + std::to_string(count));
   }
   return 0;
 }
 
-fm_status_t column_from_fm(const fm_filter_column_t& in, const char* api, formulon::FilterColumn* out) {
-  if (auto rc = check_enum_domain(in.kind, static_cast<int64_t>(formulon::FilterKind::kIcon), api, "kind"); rc != 0) {
+fm_status_t column_from_fm(const fm_filter_column_t& in, formulon::FilterColumn* out) {
+  if (auto rc = check_enum_domain(in.kind, static_cast<int64_t>(formulon::FilterKind::kIcon), "kind"); rc != 0) {
     return rc;
   }
   out->col_id = in.col_id;
@@ -229,10 +227,10 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, const char* api, formul
   out->kind = static_cast<formulon::FilterKind>(in.kind);
   switch (out->kind) {
     case formulon::FilterKind::kValues: {
-      if (auto rc = check_array(in.values, in.value_count, api, "values"); rc != 0) {
+      if (auto rc = check_array(in.values, in.value_count, "values"); rc != 0) {
         return rc;
       }
-      if (auto rc = check_array(in.date_groups, in.date_group_count, api, "date_groups"); rc != 0) {
+      if (auto rc = check_array(in.date_groups, in.date_group_count, "date_groups"); rc != 0) {
         return rc;
       }
       out->values.blank = in.filter_blank != 0;
@@ -241,7 +239,7 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, const char* api, formul
       }
       for (uint32_t i = 0; i < in.date_group_count; ++i) {
         const fm_date_group_item_t& g = in.date_groups[i];
-        if (auto rc = check_enum_domain(g.grouping, static_cast<int64_t>(formulon::DateTimeGrouping::kSecond), api,
+        if (auto rc = check_enum_domain(g.grouping, static_cast<int64_t>(formulon::DateTimeGrouping::kSecond),
                                         "date_groups.grouping");
             rc != 0) {
           return rc;
@@ -261,20 +259,20 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, const char* api, formul
     case formulon::FilterKind::kCustom: {
       if (in.custom_count < 0 || in.custom_count > 2) {
         return set_binding_error(formulon::FormulonErrorCode::kAutoFilterInvalid,
-                                 (std::string(api) + ": custom filter needs one or two conditions").c_str(),
+                                 "custom filter needs one or two conditions",
                                  "custom_count=" + std::to_string(in.custom_count));
       }
       constexpr auto kLastOp = static_cast<int64_t>(formulon::FilterOperator::kGreaterThan);
       out->custom.and_join = in.custom_and != 0;
       if (in.custom_count >= 1) {
-        if (auto rc = check_enum_domain(in.op1, kLastOp, api, "op1"); rc != 0) {
+        if (auto rc = check_enum_domain(in.op1, kLastOp, "op1"); rc != 0) {
           return rc;
         }
         out->custom.filters.push_back(
             formulon::CustomFilter{static_cast<formulon::FilterOperator>(in.op1), text_or_empty(in.val1)});
       }
       if (in.custom_count == 2) {
-        if (auto rc = check_enum_domain(in.op2, kLastOp, api, "op2"); rc != 0) {
+        if (auto rc = check_enum_domain(in.op2, kLastOp, "op2"); rc != 0) {
           return rc;
         }
         out->custom.filters.push_back(
@@ -291,7 +289,7 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, const char* api, formul
       }
       return 0;
     case formulon::FilterKind::kDynamic:
-      if (auto rc = check_enum_domain(in.dynamic_type, static_cast<int64_t>(formulon::DynamicFilterType::kM12), api,
+      if (auto rc = check_enum_domain(in.dynamic_type, static_cast<int64_t>(formulon::DynamicFilterType::kM12),
                                       "dynamic_type");
           rc != 0) {
         return rc;
@@ -313,14 +311,14 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, const char* api, formul
       out->color.cell_color = in.cell_color != 0;
       return 0;
     case formulon::FilterKind::kIcon:
-      if (auto rc = check_enum_domain(in.icon_set, static_cast<int64_t>(formulon::cf::IconSetName::Five_Quarters), api,
+      if (auto rc = check_enum_domain(in.icon_set, static_cast<int64_t>(formulon::cf::IconSetName::Five_Quarters),
                                       "icon_set");
           rc != 0) {
         return rc;
       }
       out->icon.icon_set = static_cast<formulon::cf::IconSetName>(in.icon_set);
       if (in.has_icon_id != 0) {
-        if (auto rc = check_enum_domain(in.icon_id, std::numeric_limits<int32_t>::max(), api, "icon_id"); rc != 0) {
+        if (auto rc = check_enum_domain(in.icon_id, std::numeric_limits<int32_t>::max(), "icon_id"); rc != 0) {
           return rc;
         }
         out->icon.icon_id = static_cast<uint32_t>(in.icon_id);
@@ -332,11 +330,11 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, const char* api, formul
   return 0;
 }
 
-fm_status_t sort_condition_from_fm(const fm_sort_condition_t& in, const char* api, formulon::SortCondition* out) {
-  if (auto rc = check_enum_domain(in.sort_by, static_cast<int64_t>(formulon::SortBy::kIcon), api, "sort_by"); rc != 0) {
+fm_status_t sort_condition_from_fm(const fm_sort_condition_t& in, formulon::SortCondition* out) {
+  if (auto rc = check_enum_domain(in.sort_by, static_cast<int64_t>(formulon::SortBy::kIcon), "sort_by"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(in.icon_set, static_cast<int64_t>(formulon::cf::IconSetName::Five_Quarters), api,
+  if (auto rc = check_enum_domain(in.icon_set, static_cast<int64_t>(formulon::cf::IconSetName::Five_Quarters),
                                   "conditions.icon_set");
       rc != 0) {
     return rc;
@@ -350,8 +348,7 @@ fm_status_t sort_condition_from_fm(const fm_sort_condition_t& in, const char* ap
   }
   out->icon_set = static_cast<formulon::cf::IconSetName>(in.icon_set);
   if (in.has_icon_id != 0) {
-    if (auto rc = check_enum_domain(in.icon_id, std::numeric_limits<int32_t>::max(), api, "conditions.icon_id");
-        rc != 0) {
+    if (auto rc = check_enum_domain(in.icon_id, std::numeric_limits<int32_t>::max(), "conditions.icon_id"); rc != 0) {
       return rc;
     }
     out->icon_id = static_cast<uint32_t>(in.icon_id);
@@ -359,14 +356,14 @@ fm_status_t sort_condition_from_fm(const fm_sort_condition_t& in, const char* ap
   return 0;
 }
 
-fm_status_t filter_from_fm(const fm_auto_filter_t& in, const char* api, formulon::AutoFilter* out) {
-  if (auto rc = check_array(in.columns, in.column_count, api, "columns"); rc != 0) {
+fm_status_t filter_from_fm(const fm_auto_filter_t& in, formulon::AutoFilter* out) {
+  if (auto rc = check_array(in.columns, in.column_count, "columns"); rc != 0) {
     return rc;
   }
   out->range = to_merge_range(in.range);
   for (uint32_t i = 0; i < in.column_count; ++i) {
     formulon::FilterColumn column;
-    if (auto rc = column_from_fm(in.columns[i], api, &column); rc != 0) {
+    if (auto rc = column_from_fm(in.columns[i], &column); rc != 0) {
       return rc;
     }
     out->columns.push_back(std::move(column));
@@ -374,11 +371,10 @@ fm_status_t filter_from_fm(const fm_auto_filter_t& in, const char* api, formulon
   if (in.has_sort == 0) {
     return 0;
   }
-  if (auto rc = check_array(in.conditions, in.condition_count, api, "conditions"); rc != 0) {
+  if (auto rc = check_array(in.conditions, in.condition_count, "conditions"); rc != 0) {
     return rc;
   }
-  if (auto rc =
-          check_enum_domain(in.sort_method, static_cast<int64_t>(formulon::SortMethod::kStroke), api, "sort_method");
+  if (auto rc = check_enum_domain(in.sort_method, static_cast<int64_t>(formulon::SortMethod::kStroke), "sort_method");
       rc != 0) {
     return rc;
   }
@@ -389,7 +385,7 @@ fm_status_t filter_from_fm(const fm_auto_filter_t& in, const char* api, formulon
   sort.sort_method = static_cast<formulon::SortMethod>(in.sort_method);
   for (uint32_t i = 0; i < in.condition_count; ++i) {
     formulon::SortCondition condition;
-    if (auto rc = sort_condition_from_fm(in.conditions[i], api, &condition); rc != 0) {
+    if (auto rc = sort_condition_from_fm(in.conditions[i], &condition); rc != 0) {
       return rc;
     }
     sort.conditions.push_back(std::move(condition));
@@ -444,14 +440,13 @@ void drop_criteria(formulon::AutoFilter& filter) {
 
 // --- shared bodies ----------------------------------------------------------
 
-fm_status_t get_body(const fm_workbook_t* wb, const Target& target, fm_auto_filter_t* out, int32_t* out_present,
-                     const char* api) {
+fm_status_t get_body(const fm_workbook_t* wb, const Target& target, fm_auto_filter_t* out, int32_t* out_present) {
   if (target.filter == nullptr) {
     *out = fm_auto_filter_t{};
     *out_present = 0;
     return 0;
   }
-  if (auto rc = require_typed(target, api); rc != 0) {
+  if (auto rc = require_typed(target); rc != 0) {
     return rc;
   }
   publish(wb, *target.filter, out);
@@ -466,14 +461,13 @@ fm_status_t store(fm_workbook_t* wb, const Target& target, formulon::AutoFilter 
   return finish_status(result);
 }
 
-fm_status_t null_filter(const char* api) {
-  return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                           (std::string(api) + ": NULL filter").c_str());
+fm_status_t null_filter() {
+  return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "NULL filter");
 }
 
-fm_status_t set_body(fm_workbook_t* wb, const Target& target, const fm_auto_filter_t* filter, const char* api) {
+fm_status_t set_body(fm_workbook_t* wb, const Target& target, const fm_auto_filter_t* filter) {
   formulon::AutoFilter model;
-  if (auto rc = filter_from_fm(*filter, api, &model); rc != 0) {
+  if (auto rc = filter_from_fm(*filter, &model); rc != 0) {
     return rc;
   }
   if (target.filter != nullptr && !target.filter->is_opaque()) {
@@ -489,8 +483,8 @@ fm_status_t remove_body(fm_workbook_t* wb, const Target& target) {
   return finish_status(result);
 }
 
-fm_status_t apply_body(fm_workbook_t* wb, const Target& target, const char* api) {
-  if (auto rc = require_typed(target, api); rc != 0) {
+fm_status_t apply_body(fm_workbook_t* wb, const Target& target) {
+  if (auto rc = require_typed(target); rc != 0) {
     return rc;
   }
   // Copied: the row edits must not read through storage the workbook owns.
@@ -499,8 +493,8 @@ fm_status_t apply_body(fm_workbook_t* wb, const Target& target, const char* api)
   return finish_status(result);
 }
 
-fm_status_t clear_body(fm_workbook_t* wb, const Target& target, const char* api) {
-  if (auto rc = require_typed(target, api); rc != 0) {
+fm_status_t clear_body(fm_workbook_t* wb, const Target& target) {
+  if (auto rc = require_typed(target); rc != 0) {
     return rc;
   }
   formulon::AutoFilter filter = *target.filter;
@@ -513,8 +507,8 @@ fm_status_t clear_body(fm_workbook_t* wb, const Target& target, const char* api)
 }
 
 fm_status_t evaluate_body(const fm_workbook_t* wb, const Target& target, uint8_t* buf, size_t cap, size_t* out_len,
-                          uint32_t* out_first_row, const char* api) {
-  if (auto rc = require_typed(target, api); rc != 0) {
+                          uint32_t* out_first_row) {
+  if (auto rc = require_typed(target); rc != 0) {
     return rc;
   }
   const formulon::Workbook& book = wb->workbook();
@@ -543,34 +537,32 @@ bool evaluate_args_missing(const uint8_t* buf, size_t cap, const size_t* out_len
 extern "C" fm_status_t fm_sheet_get_auto_filter(const fm_workbook_t* wb, size_t sheet_index, fm_auto_filter_t* out,
                                                 int32_t* out_present) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_get_auto_filter";
   if (out == nullptr || out_present == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_auto_filter: NULL out");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out is NULL");
   }
   Target target;
-  if (auto rc = resolve_sheet(wb, sheet_index, kApi, &target); rc != 0) {
+  if (auto rc = resolve_sheet(wb, sheet_index, &target); rc != 0) {
     return rc;
   }
-  return get_body(wb, target, out, out_present, kApi);
+  return get_body(wb, target, out, out_present);
 }
 
 extern "C" fm_status_t fm_sheet_set_auto_filter(fm_workbook_t* wb, size_t sheet_index, const fm_auto_filter_t* filter) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_set_auto_filter";
   if (filter == nullptr) {
-    return null_filter(kApi);
+    return null_filter();
   }
   Target target;
-  if (auto rc = resolve_sheet(wb, sheet_index, kApi, &target); rc != 0) {
+  if (auto rc = resolve_sheet(wb, sheet_index, &target); rc != 0) {
     return rc;
   }
-  return set_body(wb, target, filter, kApi);
+  return set_body(wb, target, filter);
 }
 
 extern "C" fm_status_t fm_sheet_remove_auto_filter(fm_workbook_t* wb, size_t sheet_index) {
   clear_last_error();
   Target target;
-  if (auto rc = resolve_sheet(wb, sheet_index, "fm_sheet_remove_auto_filter", &target); rc != 0) {
+  if (auto rc = resolve_sheet(wb, sheet_index, &target); rc != 0) {
     return rc;
   }
   return remove_body(wb, target);
@@ -578,36 +570,33 @@ extern "C" fm_status_t fm_sheet_remove_auto_filter(fm_workbook_t* wb, size_t she
 
 extern "C" fm_status_t fm_sheet_apply_auto_filter(fm_workbook_t* wb, size_t sheet_index) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_apply_auto_filter";
   Target target;
-  if (auto rc = resolve_sheet(wb, sheet_index, kApi, &target); rc != 0) {
+  if (auto rc = resolve_sheet(wb, sheet_index, &target); rc != 0) {
     return rc;
   }
-  return apply_body(wb, target, kApi);
+  return apply_body(wb, target);
 }
 
 extern "C" fm_status_t fm_sheet_clear_auto_filter(fm_workbook_t* wb, size_t sheet_index) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_clear_auto_filter";
   Target target;
-  if (auto rc = resolve_sheet(wb, sheet_index, kApi, &target); rc != 0) {
+  if (auto rc = resolve_sheet(wb, sheet_index, &target); rc != 0) {
     return rc;
   }
-  return clear_body(wb, target, kApi);
+  return clear_body(wb, target);
 }
 
 extern "C" fm_status_t fm_sheet_evaluate_auto_filter(const fm_workbook_t* wb, size_t sheet_index, uint8_t* buf,
                                                      size_t cap, size_t* out_len, uint32_t* out_first_row) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_evaluate_auto_filter";
   if (evaluate_args_missing(buf, cap, out_len, out_first_row)) {
-    return null_argument("fm_sheet_evaluate_auto_filter");
+    return null_argument();
   }
   Target target;
-  if (auto rc = resolve_sheet(wb, sheet_index, kApi, &target); rc != 0) {
+  if (auto rc = resolve_sheet(wb, sheet_index, &target); rc != 0) {
     return rc;
   }
-  return evaluate_body(wb, target, buf, cap, out_len, out_first_row, kApi);
+  return evaluate_body(wb, target, buf, cap, out_len, out_first_row);
 }
 
 // --- table ------------------------------------------------------------------
@@ -615,36 +604,33 @@ extern "C" fm_status_t fm_sheet_evaluate_auto_filter(const fm_workbook_t* wb, si
 extern "C" fm_status_t fm_workbook_get_table_auto_filter(const fm_workbook_t* wb, size_t table_index,
                                                          fm_auto_filter_t* out, int32_t* out_present) {
   clear_last_error();
-  constexpr const char* kApi = "fm_workbook_get_table_auto_filter";
   if (out == nullptr || out_present == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_get_table_auto_filter: NULL out");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out is NULL");
   }
   Target target;
-  if (auto rc = resolve_table(wb, table_index, kApi, &target); rc != 0) {
+  if (auto rc = resolve_table(wb, table_index, &target); rc != 0) {
     return rc;
   }
-  return get_body(wb, target, out, out_present, kApi);
+  return get_body(wb, target, out, out_present);
 }
 
 extern "C" fm_status_t fm_workbook_set_table_auto_filter(fm_workbook_t* wb, size_t table_index,
                                                          const fm_auto_filter_t* filter) {
   clear_last_error();
-  constexpr const char* kApi = "fm_workbook_set_table_auto_filter";
   if (filter == nullptr) {
-    return null_filter(kApi);
+    return null_filter();
   }
   Target target;
-  if (auto rc = resolve_table(wb, table_index, kApi, &target); rc != 0) {
+  if (auto rc = resolve_table(wb, table_index, &target); rc != 0) {
     return rc;
   }
-  return set_body(wb, target, filter, kApi);
+  return set_body(wb, target, filter);
 }
 
 extern "C" fm_status_t fm_workbook_remove_table_auto_filter(fm_workbook_t* wb, size_t table_index) {
   clear_last_error();
   Target target;
-  if (auto rc = resolve_table(wb, table_index, "fm_workbook_remove_table_auto_filter", &target); rc != 0) {
+  if (auto rc = resolve_table(wb, table_index, &target); rc != 0) {
     return rc;
   }
   return remove_body(wb, target);
@@ -652,45 +638,41 @@ extern "C" fm_status_t fm_workbook_remove_table_auto_filter(fm_workbook_t* wb, s
 
 extern "C" fm_status_t fm_workbook_apply_table_auto_filter(fm_workbook_t* wb, size_t table_index) {
   clear_last_error();
-  constexpr const char* kApi = "fm_workbook_apply_table_auto_filter";
   Target target;
-  if (auto rc = resolve_table(wb, table_index, kApi, &target); rc != 0) {
+  if (auto rc = resolve_table(wb, table_index, &target); rc != 0) {
     return rc;
   }
-  return apply_body(wb, target, kApi);
+  return apply_body(wb, target);
 }
 
 extern "C" fm_status_t fm_workbook_clear_table_auto_filter(fm_workbook_t* wb, size_t table_index) {
   clear_last_error();
-  constexpr const char* kApi = "fm_workbook_clear_table_auto_filter";
   Target target;
-  if (auto rc = resolve_table(wb, table_index, kApi, &target); rc != 0) {
+  if (auto rc = resolve_table(wb, table_index, &target); rc != 0) {
     return rc;
   }
-  return clear_body(wb, target, kApi);
+  return clear_body(wb, target);
 }
 
 extern "C" fm_status_t fm_workbook_evaluate_table_auto_filter(const fm_workbook_t* wb, size_t table_index, uint8_t* buf,
                                                               size_t cap, size_t* out_len, uint32_t* out_first_row) {
   clear_last_error();
-  constexpr const char* kApi = "fm_workbook_evaluate_table_auto_filter";
   if (evaluate_args_missing(buf, cap, out_len, out_first_row)) {
-    return null_argument("fm_workbook_evaluate_table_auto_filter");
+    return null_argument();
   }
   Target target;
-  if (auto rc = resolve_table(wb, table_index, kApi, &target); rc != 0) {
+  if (auto rc = resolve_table(wb, table_index, &target); rc != 0) {
     return rc;
   }
-  return evaluate_body(wb, target, buf, cap, out_len, out_first_row, kApi);
+  return evaluate_body(wb, target, buf, cap, out_len, out_first_row);
 }
 
 extern "C" fm_status_t fm_sheet_get_auto_filter_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml) {
   clear_last_error();
   if (out_xml == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_auto_filter_xml: NULL out_xml");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out_xml is NULL");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_auto_filter_xml"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   *out_xml = publish_scratch(wb, formulon::io::auto_filter_xml(wb->workbook().sheet(sheet_index).auto_filter()));
@@ -700,21 +682,20 @@ extern "C" fm_status_t fm_sheet_get_auto_filter_xml(const fm_workbook_t* wb, siz
 extern "C" fm_status_t fm_sheet_set_auto_filter_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml) {
   clear_last_error();
   if (xml == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_set_auto_filter_xml: NULL xml");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "xml is NULL");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_auto_filter_xml"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const std::string fragment(xml);
   if (!fragment.empty()) {
-    if (auto rc = check_utf8(fragment, "fm_sheet_set_auto_filter_xml", "element=autoFilter"); rc != 0) {
+    if (auto rc = check_utf8(fragment, "element=autoFilter"); rc != 0) {
       return rc;
     }
     const FragmentValidation validation = validate_single_element_fragment(fragment, "autoFilter");
     if (!validation.valid) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "fm_sheet_set_auto_filter_xml: invalid autoFilter XML fragment", validation.context);
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "invalid autoFilter XML fragment",
+                               validation.context);
     }
   }
   // Routed through the workbook so `_FilterDatabase` and SUBTOTAL/AGGREGATE

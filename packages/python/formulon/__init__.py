@@ -2,14 +2,17 @@
 
 Public API:
   * :func:`eval_formula` -- one-shot formula evaluation.
-  * :func:`get_version` -- query the underlying ``libformulon`` build.
+  * :func:`get_version` -- query the version of the bundled engine.
   * :class:`Workbook` -- full workbook lifecycle.
-  * :class:`Value`, :class:`ValueKind` -- cell value POD.
-  * :class:`FormulonError` -- host-side failure exception.
+  * :class:`Sheet` -- A1-addressed view of one sheet.
+  * :class:`Value`, :class:`ValueKind` -- cell value.
+  * :class:`ExcelError` -- an Excel cell error as a Python value.
+  * :class:`FormulonError` and its subclasses -- host-side failures.
 
 Cell-level Excel errors (``#DIV/0!`` and friends) surface as ``Value``
-instances with ``kind == ValueKind.ERROR``; only host-side failures
-(NULL handle, parse errors during ``Workbook.load``, OOM) raise
+instances with ``kind == ValueKind.ERROR`` (``ExcelError`` through
+:meth:`Value.to_python`); only host-side failures (a closed workbook, an
+unreadable archive in ``Workbook.load``, out of memory) raise
 :class:`FormulonError`.
 """
 
@@ -19,7 +22,15 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _dist_version
 from pathlib import Path
 
-from ._c import LIB, InvalidArgumentError, NotFoundError, ValueKind, decode_cstr
+from ._c import (
+    LIB,
+    IndexOutOfRangeError,
+    InvalidArgumentError,
+    NotFoundError,
+    ValueKind,
+    WorkbookClosedError,
+    decode_cstr,
+)
 from ._status import StatusCode
 from .metadata import (
     FunctionMetadataEntry,
@@ -122,6 +133,7 @@ from .workbook import (
     EffectiveStyleSource,
     ErrorCode,
     ErrorName,
+    ExcelError,
     ExternalLinkKind,
     ExternalLinkRecord,
     FillRecord,
@@ -152,6 +164,7 @@ from .workbook import (
     PassthroughPart,
     Person,
     PhoneticProperties,
+    PhoneticPropertiesInput,
     PhoneticRun,
     PivotAggregation,
     PivotAxis,
@@ -186,6 +199,7 @@ from .workbook import (
     SaveDiagnostics,
     Shape,
     ShapePaint,
+    Sheet,
     SheetFormatDefaults,
     SheetPrintTitles,
     SheetProtection,
@@ -325,6 +339,7 @@ __all__ = [
     "DifferentialFormat",
     "ErrorCode",
     "ErrorName",
+    "ExcelError",
     "ExternalLinkRecord",
     "ExternalLinkKind",
     "FillRecord",
@@ -333,8 +348,10 @@ __all__ = [
     "GradientFill",
     "GradientStop",
     "FormulonError",
+    "IndexOutOfRangeError",
     "InvalidArgumentError",
     "NotFoundError",
+    "WorkbookClosedError",
     "StatusCode",
     "FunctionMetadata",
     "FunctionMetadataEntry",
@@ -356,6 +373,7 @@ __all__ = [
     "Pagination",
     "PassthroughPart",
     "PhoneticProperties",
+    "PhoneticPropertiesInput",
     "PhoneticRun",
     "PivotAggregation",
     "PivotAxis",
@@ -386,6 +404,7 @@ __all__ = [
     "SaveDiagnostics",
     "SheetProtection",
     "SheetRect",
+    "Sheet",
     "SheetView",
     "Shape",
     "ShapePaint",
@@ -507,15 +526,14 @@ __all__ = [
 
 
 def get_version() -> str:
-    """Return the version string baked into the loaded WASM module.
+    """Return the version string of the bundled engine.
 
-    Returns:
-      The result of ``fm_get_version()``. Always non-empty.
+    Always non-empty.
     """
     return decode_cstr(LIB.fm_get_version())
 
 
-def get_error_display_name(error_code: int) -> str:
+def get_error_display_name(error_code: ErrorCode) -> str:
     """Return an Excel literal such as ``"#DIV/0!"`` for an error code.
 
     Unknown numeric values return ``"#UNKNOWN!"``.
@@ -523,7 +541,7 @@ def get_error_display_name(error_code: int) -> str:
     return decode_cstr(LIB.fm_get_error_display_name(_sint(error_code, "error")))
 
 
-def set_log_min_level(level: int) -> None:
+def set_log_min_level(level: LogLevel) -> None:
     """Set the engine's minimum structured-log severity.
 
     This is **process-wide** state, not per :class:`Workbook`, so it is a
@@ -536,12 +554,12 @@ def set_log_min_level(level: int) -> None:
     per line on stderr, including the per-cell XLSB downgrade diagnostics.
 
     Args:
-      level: a :class:`LogLevel` ordinal.
+      level: a :class:`LogLevel` member.
 
     Raises:
       FormulonError: when ``level`` is outside :class:`LogLevel`.
     """
-    _check(LIB.fm_set_log_min_level(_sint(level, "level")), "fm_set_log_min_level")
+    _check(LIB.fm_set_log_min_level(_sint(level, "level")))
 
 
 def eval_formula(formula: str) -> Value:
@@ -552,7 +570,7 @@ def eval_formula(formula: str) -> Value:
 
     Cell-level Excel errors (``#DIV/0!``, ``#VALUE!``, etc.) surface as a
     :class:`Value` with ``kind == ValueKind.ERROR``; only host-side
-    failures (parser crash, OOM, NULL handle) raise :class:`FormulonError`.
+    failures (a parser crash, out of memory) raise :class:`FormulonError`.
 
     Args:
       formula: the formula text, with or without a leading ``=``.

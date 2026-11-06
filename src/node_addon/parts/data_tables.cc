@@ -52,14 +52,14 @@ Napi::Value Workbook::AddDataTable(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::GetDataTable(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+    return ThrowInvalidHandle(env);
   }
   int32_t present = 0;
   fm_data_table_t t{};
   const fm_status_t rc =
       fm_sheet_get_data_table(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &present, &t);
   if (rc != 0 || present == 0) {
-    return MakeOptionalResult(env, rc, present, env.Null());
+    return OptionalOrNull(env, rc, present, env.Null());
   }
   Napi::Object table = Napi::Object::New(env);
   table.Set("rect", RangeToJs(env, t.rect));
@@ -67,7 +67,7 @@ Napi::Value Workbook::GetDataTable(const Napi::CallbackInfo& info) {
   table.Set("rowOriented", JsBool(env, t.row_oriented));
   table.Set("rowInput", InputToJs(env, t.has_row_input, t.row_input_row, t.row_input_col, t.row_input_deleted));
   table.Set("colInput", InputToJs(env, t.has_col_input, t.col_input_row, t.col_input_col, t.col_input_deleted));
-  return MakeOptionalResult(env, rc, present, table);
+  return OptionalOrNull(env, rc, present, table);
 }
 
 Napi::Value Workbook::RemoveDataTable(const Napi::CallbackInfo& info) {

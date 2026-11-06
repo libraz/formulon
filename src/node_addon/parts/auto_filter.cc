@@ -16,10 +16,12 @@ namespace formulon_node {
 
 Napi::Value Workbook::GetAutoFilterXml(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   const char* xml = nullptr;
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_sheet_get_auto_filter_xml(handle_, ArgU32(info, 0), &xml) : kBindingInvalidHandle;
-  return MakeStringResult(env, rc, xml);
+  const fm_status_t rc = fm_sheet_get_auto_filter_xml(handle_, ArgU32(info, 0), &xml);
+  return ValueOrThrow(env, rc, JsString(env, xml));
 }
 
 Napi::Value Workbook::SetAutoFilterXml(const Napi::CallbackInfo& info) {
@@ -313,21 +315,12 @@ bool ReadAutoFilter(CheckedSpecReader& reader, const Napi::CallbackInfo& info, s
   return reader.ok();
 }
 
-// Builds the `{ status, firstRow: 0, match: [] }` result for a dead handle.
-Napi::Object EmptyAutoFilterEvaluation(Napi::Env env, Napi::Object status) {
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("status", status);
-  out.Set("firstRow", JsNumber(env, 0));
-  out.Set("match", Napi::Array::New(env));
-  return out;
-}
-
 // Shared by the sheet and table entry points: `table` selects which C
 // function family a call goes to, `info[0]` being the sheet or table index.
 Napi::Value GetAutoFilterImpl(const Napi::CallbackInfo& info, const fm_workbook_t* wb, bool table) {
   Napi::Env env = info.Env();
   if (wb == nullptr) {
-    return MakeFieldResult(env, NullHandleError(env), "autoFilter", env.Null());
+    return ThrowInvalidHandle(env);
   }
   const size_t idx = Workbook::ArgU32(info, 0);
   fm_auto_filter_t af{};
@@ -335,19 +328,15 @@ Napi::Value GetAutoFilterImpl(const Napi::CallbackInfo& info, const fm_workbook_
   const fm_status_t rc = table ? fm_workbook_get_table_auto_filter(wb, idx, &af, &present)
                                : fm_sheet_get_auto_filter(wb, idx, &af, &present);
   const bool has = rc == 0 && present != 0;
-  return MakeFieldResult(env, MakeStatus(env, rc), "autoFilter",
-                         has ? static_cast<Napi::Value>(AutoFilterToJs(env, af)) : env.Null());
+  return OptionalOrNull(env, rc, present, has ? static_cast<Napi::Value>(AutoFilterToJs(env, af)) : env.Null());
 }
 
 Napi::Value EvaluateAutoFilterImpl(const Napi::CallbackInfo& info, const fm_workbook_t* wb, bool table) {
   Napi::Env env = info.Env();
   if (wb == nullptr) {
-    return EmptyAutoFilterEvaluation(env, NullHandleError(env));
+    return ThrowInvalidHandle(env);
   }
   const size_t idx = Workbook::ArgU32(info, 0);
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("firstRow", JsNumber(env, 0));
-  out.Set("match", Napi::Array::New(env));
   auto call = [&](uint8_t* buf, size_t cap, size_t* len, uint32_t* first) {
     return table ? fm_workbook_evaluate_table_auto_filter(wb, idx, buf, cap, len, first)
                  : fm_sheet_evaluate_auto_filter(wb, idx, buf, cap, len, first);
@@ -360,14 +349,13 @@ Napi::Value EvaluateAutoFilterImpl(const Napi::CallbackInfo& info, const fm_work
     rc = call(flags.data(), flags.size(), &len, &first);
   }
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    return out;
+    return ThrowStatus(env, rc);
   }
   Napi::Array match = Napi::Array::New(env, flags.size());
   for (size_t i = 0; i < flags.size(); ++i) {
     match.Set(static_cast<uint32_t>(i), Napi::Boolean::New(env, flags[i] != 0));
   }
-  out.Set("status", MakeOkStatus(env));
+  Napi::Object out = Napi::Object::New(env);
   out.Set("firstRow", JsNumber(env, first));
   out.Set("match", match);
   return out;
@@ -383,7 +371,7 @@ Napi::Value SetAutoFilterImpl(const Napi::CallbackInfo& info, fm_workbook_t* con
                               const char* usage) {
   Napi::Env env = info.Env();
   if (handle == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
   AutoFilterInput in;
@@ -391,17 +379,21 @@ Napi::Value SetAutoFilterImpl(const Napi::CallbackInfo& info, fm_workbook_t* con
     if (!reader.ok()) {
       return env.Undefined();
     }
-    return MakeBindingArgumentError(env, usage);
+    Napi::TypeError::New(env, usage).ThrowAsJavaScriptException();
+    return env.Undefined();
   }
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fn(handle, Workbook::ArgU32(info, 0), &in.filter));
+  return ValueOrThrow(env, fn(handle, Workbook::ArgU32(info, 0), &in.filter), env.Undefined());
 }
 
 Napi::Value InvokeAutoFilterOp(const Napi::CallbackInfo& info, fm_workbook_t* handle, AutoFilterOpFn fn) {
   Napi::Env env = info.Env();
-  return handle == nullptr ? NullHandleError(env) : MakeStatus(env, fn(handle, Workbook::ArgU32(info, 0)));
+  if (handle == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  return ValueOrThrow(env, fn(handle, Workbook::ArgU32(info, 0)), env.Undefined());
 }
 
 }  // namespace

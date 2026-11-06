@@ -306,15 +306,28 @@ function findPivotCell(layout, row, col) {
 }
 
 // Reads every element of an index-keyed collection through its count / index
-// getter pair, each element without its status.
+// getter pair.
 function readAll(count, get) {
-  const n = count();
-  assert.ok(n.status.ok, JSON.stringify(n.status));
-  return Array.from({ length: n.value }, (_, i) => {
-    const { status, ...item } = get(i);
-    assert.ok(status.ok, JSON.stringify(status));
-    return item;
+  return Array.from({ length: count() }, (_, i) => get(i));
+}
+
+// Asserts that `fn` fails with a FormulonError, optionally of the given code.
+function expectFailure(fn, code) {
+  assert.throws(fn, (e) => {
+    assert.equal(e.name, 'FormulonError', `expected a FormulonError, got ${e}`);
+    if (code !== undefined) assert.equal(e.code, code, `code ${e.code} (${e.message})`);
+    return true;
   });
 }
 
-export { appendEmptyZipEntry, buildPivotWorkbookBytes, findPivotCell, PIVOT, readAll, readZipEntryText, VAL, zipStore };
+export {
+  appendEmptyZipEntry,
+  buildPivotWorkbookBytes,
+  expectFailure,
+  findPivotCell,
+  PIVOT,
+  readAll,
+  readZipEntryText,
+  VAL,
+  zipStore,
+};

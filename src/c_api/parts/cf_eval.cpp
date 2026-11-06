@@ -31,6 +31,7 @@
 #include "value.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::null_argument;
@@ -115,10 +116,10 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_range(const fm_workbook_t* wb, size_
                                                   fm_cf_results_t** out) {
   clear_last_error();
   if (range == nullptr || out == nullptr) {
-    return null_argument("fm_sheet_evaluate_cf_range");
+    return null_argument();
   }
   *out = nullptr;
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_evaluate_cf_range"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const std::uint32_t first_row = range->first_row;
@@ -126,8 +127,7 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_range(const fm_workbook_t* wb, size_
   const std::uint32_t last_row = range->last_row;
   const std::uint32_t last_col = range->last_col;
   if (!formulon::Sheet::rect_in_grid(first_row, first_col, last_row, last_col)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_evaluate_cf_range: rect out of grid",
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "rect out of grid",
                              "first=(" + std::to_string(first_row) + "," + std::to_string(first_col) + ") last=(" +
                                  std::to_string(last_row) + "," + std::to_string(last_col) + ")");
   }
@@ -169,7 +169,7 @@ extern "C" void fm_cf_results_destroy(fm_cf_results_t* results) {
 extern "C" fm_status_t fm_cf_results_get_cell_count(const fm_cf_results_t* results, size_t* out_count) {
   clear_last_error();
   if (results == nullptr || out_count == nullptr) {
-    return null_argument("fm_cf_results_get_cell_count");
+    return null_argument();
   }
   *out_count = results->matches.size();
   return 0;
@@ -179,12 +179,10 @@ extern "C" fm_status_t fm_cf_results_get_cell_at(const fm_cf_results_t* results,
                                                  uint32_t* out_col, size_t* out_match_count) {
   clear_last_error();
   if (results == nullptr || out_row == nullptr || out_col == nullptr || out_match_count == nullptr) {
-    return null_argument("fm_cf_results_get_cell_at");
+    return null_argument();
   }
-  if (cell_index >= results->matches.size()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_cf_results_get_cell_at: cell_index out of range",
-        "cell_index=" + std::to_string(cell_index) + " cell_count=" + std::to_string(results->matches.size()));
+  if (auto rc = check_index(cell_index, results->matches.size(), "cell_index"); rc != 0) {
+    return rc;
   }
   const auto& entry = results->matches[cell_index];
   *out_row = entry.cell.row;
@@ -197,18 +195,14 @@ extern "C" fm_status_t fm_cf_results_get_match_at(const fm_cf_results_t* results
                                                   fm_cf_match_t* out) {
   clear_last_error();
   if (results == nullptr || out == nullptr) {
-    return null_argument("fm_cf_results_get_match_at");
+    return null_argument();
   }
-  if (cell_index >= results->matches.size()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_cf_results_get_match_at: cell_index out of range",
-        "cell_index=" + std::to_string(cell_index) + " cell_count=" + std::to_string(results->matches.size()));
+  if (auto rc = check_index(cell_index, results->matches.size(), "cell_index"); rc != 0) {
+    return rc;
   }
   const auto& entry = results->matches[cell_index];
-  if (match_index >= entry.matches.size()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_cf_results_get_match_at: match_index out of range",
-        "match_index=" + std::to_string(match_index) + " match_count=" + std::to_string(entry.matches.size()));
+  if (auto rc = check_index(match_index, entry.matches.size(), "match_index"); rc != 0) {
+    return rc;
   }
   fill_match(entry.matches[match_index], out);
   return 0;

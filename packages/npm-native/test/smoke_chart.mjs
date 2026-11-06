@@ -1,11 +1,5 @@
 import test from 'node:test';
-import { assert, getModule } from './smoke_support.mjs';
-
-function must(r, what) {
-  const status = typeof r.ok === 'boolean' ? r : r.status;
-  assert.ok(status.ok, `${what}: ${JSON.stringify(status)}`);
-  return r;
-}
+import { assert, getModule, isFormulonError } from './smoke_support.mjs';
 
 // Sheet1: B1:D1 names, A2:A5 text categories, B2:D5 numbers, F1:G5 scatter pairs.
 function fillGrid(wb) {
@@ -23,27 +17,24 @@ function fillGrid(wb) {
 }
 
 function newBook(mod) {
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   fillGrid(wb);
   return wb;
 }
 
 function insert(wb, mod, extra = {}) {
-  const r = must(
-    wb.addChart(0, {
-      kind: mod.ChartInsertKind.Column,
-      source: 'Sheet1!$A$1:$D$5',
-      legend: mod.ChartLegendPosition.Right,
-      ...extra,
-    }),
-    'addChart',
-  );
-  assert.ok(r.objectId > 0);
-  return r.objectId;
+  const r = wb.addChart(0, {
+    kind: mod.ChartInsertKind.Column,
+    source: 'Sheet1!$A$1:$D$5',
+    legend: mod.ChartLegendPosition.Right,
+    ...extra,
+  });
+  assert.ok(r > 0);
+  return r;
 }
 
-const chartOf = (wb, id) => must(wb.getChart(0, id), 'getChart').value;
-const dataOf = (wb, id) => must(wb.getChartData(0, id), 'getChartData').data;
+const chartOf = (wb, id) => wb.getChart(0, id);
+const dataOf = (wb, id) => wb.getChartData(0, id);
 
 test('chart enums keep their C ordinals', async () => {
   const mod = await getModule();
@@ -133,7 +124,7 @@ test('insertChart creates a two-cell chart that getChart and getChartData read b
     assert.deepEqual(data.unresolved, []);
 
     // Resolved data follows the cells.
-    must(wb.setNumber(0, 1, 1, 100), 'setNumber');
+    wb.setNumber(0, 1, 1, 100);
     assert.equal(dataOf(wb, id).series[0].values[0], 100);
   } finally {
     wb.dispose();
@@ -169,8 +160,7 @@ test('insertChart covers the creation kinds and omitted options', async () => {
     assert.equal(chartOf(wb, bar).title.kind, mod.ChartTitleKind.None);
 
     const xXf = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 2 });
-    assert.ok(xXf.status.ok, JSON.stringify(xXf.status));
-    assert.ok(wb.setRangeXfIndex(0, { firstRow: 1, firstCol: 5, lastRow: 4, lastCol: 5 }, xXf.index).ok);
+    wb.setRangeXfIndex(0, { firstRow: 1, firstCol: 5, lastRow: 4, lastCol: 5 }, xXf);
     const scatter = insert(wb, mod, { kind: mod.ChartInsertKind.Scatter, source: 'Sheet1!$F$1:$G$5' });
     const sdata = dataOf(wb, scatter);
     assert.equal(sdata.domain, 'xy');
@@ -194,73 +184,70 @@ test('typed chart edits are visible through getChart', async () => {
   try {
     const id = insert(wb, mod);
 
-    must(wb.setChartTitle(0, id, 'Quarterly'), 'setChartTitle');
+    wb.setChartTitle(0, id, 'Quarterly');
     assert.equal(chartOf(wb, id).title.text, 'Quarterly');
-    must(wb.setChartTitle(0, id, null), 'setChartTitle null');
+    wb.setChartTitle(0, id, null);
     assert.equal(chartOf(wb, id).title.kind, mod.ChartTitleKind.None);
-    must(wb.setChartTitle(0, id, { kind: mod.ChartTitleKind.Auto }), 'setChartTitle auto');
+    wb.setChartTitle(0, id, { kind: mod.ChartTitleKind.Auto });
     assert.equal(chartOf(wb, id).title.kind, mod.ChartTitleKind.Auto);
 
-    must(wb.setChartLegend(0, id, mod.ChartLegendPosition.Bottom, true), 'setChartLegend');
+    wb.setChartLegend(0, id, mod.ChartLegendPosition.Bottom, true);
     let legend = chartOf(wb, id).legend;
     assert.equal(legend.position, mod.ChartLegendPosition.Bottom);
     assert.equal(legend.overlay, true);
-    must(wb.setChartLegend(0, id, mod.ChartLegendPosition.Bottom, false, [1]), 'setChartLegend hidden');
+    wb.setChartLegend(0, id, mod.ChartLegendPosition.Bottom, false, [1]);
     legend = chartOf(wb, id).legend;
     assert.equal(legend.overlay, false);
     assert.deepEqual(legend.hiddenSeries, [1]);
-    must(wb.setChartLegend(0, id, mod.ChartLegendPosition.None, false), 'setChartLegend none');
+    wb.setChartLegend(0, id, mod.ChartLegendPosition.None, false);
     assert.equal(chartOf(wb, id).legend.position, mod.ChartLegendPosition.None);
 
     // A new chart carries `dispNaAsBlank`.
     assert.equal(chartOf(wb, id).naAsBlank, true);
-    must(wb.setChartDisplay(0, id, { blanksAs: mod.ChartBlanksAs.Zero, plotVisibleOnly: false }), 'setChartDisplay');
+    wb.setChartDisplay(0, id, { blanksAs: mod.ChartBlanksAs.Zero, plotVisibleOnly: false });
     let info = chartOf(wb, id);
     assert.equal(info.blanksAs, mod.ChartBlanksAs.Zero);
     assert.equal(info.plotVisibleOnly, false);
     // An omitted key keeps, including `naAsBlank`.
     assert.equal(info.naAsBlank, true);
-    must(wb.setChartDisplay(0, id, { blanksAs: null, plotVisibleOnly: null }), 'setChartDisplay clear');
+    wb.setChartDisplay(0, id, { blanksAs: null, plotVisibleOnly: null });
     info = chartOf(wb, id);
     assert.equal(info.blanksAs, mod.ChartBlanksAs.Absent);
     assert.equal(info.plotVisibleOnly, null);
     assert.equal(info.naAsBlank, true);
-    must(wb.setChartDisplay(0, id, { plotVisibleOnly: true }), 'setChartDisplay keep blanksAs');
+    wb.setChartDisplay(0, id, { plotVisibleOnly: true });
     assert.equal(chartOf(wb, id).blanksAs, mod.ChartBlanksAs.Absent);
     assert.equal(chartOf(wb, id).plotVisibleOnly, true);
     // `false` and `null` both remove the extension, which reads back as `null`.
-    must(wb.setChartDisplay(0, id, { naAsBlank: false }), 'setChartDisplay naAsBlank false');
+    wb.setChartDisplay(0, id, { naAsBlank: false });
     assert.equal(chartOf(wb, id).naAsBlank, null);
-    must(wb.setChartDisplay(0, id, { naAsBlank: true }), 'setChartDisplay naAsBlank true');
+    wb.setChartDisplay(0, id, { naAsBlank: true });
     assert.equal(chartOf(wb, id).naAsBlank, true);
-    must(wb.setChartDisplay(0, id, { naAsBlank: null }), 'setChartDisplay naAsBlank null');
+    wb.setChartDisplay(0, id, { naAsBlank: null });
     assert.equal(chartOf(wb, id).naAsBlank, null);
     assert.equal(chartOf(wb, id).plotVisibleOnly, true);
-    assert.equal(wb.setChartDisplay(0, id, { blanksAs: mod.ChartBlanksAs.Absent }).ok, false);
+    assert.throws(() => wb.setChartDisplay(0, id, { blanksAs: mod.ChartBlanksAs.Absent }), isFormulonError);
     assert.throws(() => wb.setChartDisplay(0, id, 5), TypeError);
-    must(wb.getChartPreview(0, id, { naAsBlank: true }), 'previewChartData naAsBlank');
-    must(wb.getChartPreview(0, id, { naAsBlank: false }), 'previewChartData naAsBlank false');
+    wb.getChartPreview(0, id, { naAsBlank: true });
+    wb.getChartPreview(0, id, { naAsBlank: false });
     assert.equal(chartOf(wb, id).naAsBlank, null);
 
-    must(wb.setChartPlot(0, id, 0, { gapWidth: 40, overlap: 10, varyColors: true }), 'setChartPlot');
+    wb.setChartPlot(0, id, 0, { gapWidth: 40, overlap: 10, varyColors: true });
     const plot = chartOf(wb, id).plots[0];
     assert.equal(plot.gapWidth, 40);
     assert.equal(plot.overlap, 10);
     assert.equal(plot.varyColors, true);
 
     const valueAxis = chartOf(wb, id).axes.find((a) => a.kind === mod.ChartAxisKind.Value);
-    must(
-      wb.setChartAxis(0, id, valueAxis.id, {
-        min: 0,
-        max: 20,
-        majorUnit: 5,
-        title: 'Units',
-        numberFormat: '0.0',
-        majorGridlines: false,
-        reversed: true,
-      }),
-      'setChartAxis',
-    );
+    wb.setChartAxis(0, id, valueAxis.id, {
+      min: 0,
+      max: 20,
+      majorUnit: 5,
+      title: 'Units',
+      numberFormat: '0.0',
+      majorGridlines: false,
+      reversed: true,
+    });
     const axis = chartOf(wb, id).axes.find((a) => a.id === valueAxis.id);
     assert.equal(axis.min, 0);
     assert.equal(axis.max, 20);
@@ -271,30 +258,24 @@ test('typed chart edits are visible through getChart', async () => {
     assert.equal(axis.majorGridlines, false);
     assert.equal(axis.reversed, true);
     // The axis title takes the setChartTitle forms; Auto leaves the text to the viewer.
-    must(wb.setChartAxis(0, id, valueAxis.id, { title: { kind: mod.ChartTitleKind.Auto } }), 'setChartAxis auto');
+    wb.setChartAxis(0, id, valueAxis.id, { title: { kind: mod.ChartTitleKind.Auto } });
     assert.equal(chartOf(wb, id).axes.find((a) => a.id === valueAxis.id).title.kind, mod.ChartTitleKind.Auto);
-    must(
-      wb.setChartAxis(0, id, valueAxis.id, { title: { kind: mod.ChartTitleKind.Ref, formula: 'Sheet1!$A$1' } }),
-      'setChartAxis ref',
-    );
+    wb.setChartAxis(0, id, valueAxis.id, { title: { kind: mod.ChartTitleKind.Ref, formula: 'Sheet1!$A$1' } });
     assert.equal(chartOf(wb, id).axes.find((a) => a.id === valueAxis.id).title.formula, 'Sheet1!$A$1');
     // null clears a bound.
-    must(wb.setChartAxis(0, id, valueAxis.id, { max: null }), 'setChartAxis clear');
+    wb.setChartAxis(0, id, valueAxis.id, { max: null });
     assert.equal(chartOf(wb, id).axes.find((a) => a.id === valueAxis.id).max, null);
 
     // Markers and smoothing exist on line plots only.
-    must(wb.setChartType(0, id, 0, mod.ChartInsertKind.Line), 'setChartType');
+    wb.setChartType(0, id, 0, mod.ChartInsertKind.Line);
     assert.equal(chartOf(wb, id).plots[0].type, mod.ChartPlotType.Line);
-    must(
-      wb.setChartSeries(0, id, 0, 1, {
-        fill: { color: 0xffff0000, transparency: 25 },
-        line: { color: 0xff0000ff, widthPt: 2, dash: mod.ChartLineDash.Dash },
-        marker: { symbol: mod.ChartMarkerSymbol.Circle, size: 7 },
-        smooth: true,
-        labels: { showValue: true, position: mod.ChartLabelPosition.OutsideEnd, numberFormat: '0.00' },
-      }),
-      'setChartSeries format',
-    );
+    wb.setChartSeries(0, id, 0, 1, {
+      fill: { color: 0xffff0000, transparency: 25 },
+      line: { color: 0xff0000ff, widthPt: 2, dash: mod.ChartLineDash.Dash },
+      marker: { symbol: mod.ChartMarkerSymbol.Circle, size: 7 },
+      smooth: true,
+      labels: { showValue: true, position: mod.ChartLabelPosition.OutsideEnd, numberFormat: '0.00' },
+    });
     let series = chartOf(wb, id).plots[0].series[1];
     // A line series takes no fill of its own; its colour is the line's.
     assert.equal(series.fill.color, null);
@@ -309,47 +290,47 @@ test('typed chart edits are visible through getChart', async () => {
     assert.equal(series.labels.position, mod.ChartLabelPosition.OutsideEnd);
     assert.equal(series.labels.numberFormat, '0.00');
     // null removes the marker and the labels; an omitted field is kept.
-    must(wb.setChartSeries(0, id, 0, 1, { marker: null, labels: null }), 'setChartSeries clear');
+    wb.setChartSeries(0, id, 0, 1, { marker: null, labels: null });
     series = chartOf(wb, id).plots[0].series[1];
     assert.equal(series.marker, null);
     assert.equal(series.labels, null);
     assert.equal(series.line.color, 0xff0000ff);
 
     // Reference edits refill the cache and resolved data follows.
-    must(wb.setChartSeries(0, id, 0, 0, { values: 'Sheet1!$D$2:$D$5', name: '' }), 'setChartSeries refs');
+    wb.setChartSeries(0, id, 0, 0, { values: 'Sheet1!$D$2:$D$5', name: '' });
     series = chartOf(wb, id).plots[0].series[0];
     assert.equal(series.values.formula, 'Sheet1!$D$2:$D$5');
     assert.equal(series.name.kind, 'none');
     assert.deepEqual([...dataOf(wb, id).series[0].values], [4, 8, 12, 16]);
 
     // A line point takes no fill; its line carries the colour.
-    const otherPoints = chartOf(wb, id).plots[0].series[1].points.filter((point) => point.idx !== 2);
-    must(wb.setChartPoint(0, id, 0, 1, 2, { line: { color: 0xff00ff00 } }), 'setChartPoint');
+    const otherPoints = chartOf(wb, id).plots[0].series[1].points.filter((point) => point.index !== 2);
+    wb.setChartPoint(0, id, 0, 1, 2, { line: { color: 0xff00ff00 } });
     const points = chartOf(wb, id).plots[0].series[1].points;
     assert.equal(points.length, otherPoints.length + 1);
-    assert.equal(points.find((point) => point.idx === 2).line.color, 0xff00ff00);
+    assert.equal(points.find((point) => point.index === 2).line.color, 0xff00ff00);
     assert.deepEqual(
-      points.filter((point) => point.idx !== 2),
+      points.filter((point) => point.index !== 2),
       otherPoints,
     );
-    must(wb.setChartPoint(0, id, 0, 1, 2, null), 'setChartPoint remove');
+    wb.setChartPoint(0, id, 0, 1, 2, null);
     assert.deepEqual(chartOf(wb, id).plots[0].series[1].points, otherPoints);
 
-    must(wb.setChartFilter(0, id, [2], [1]), 'setChartFilter');
+    wb.setChartFilter(0, id, [2], [1]);
     info = chartOf(wb, id);
-    assert.equal(info.plots[0].series.find((s) => s.idx === 2).filtered, true);
+    assert.equal(info.plots[0].series.find((s) => s.index === 2).filtered, true);
     assert.deepEqual(info.hiddenCategories, [1]);
     const filtered = dataOf(wb, id);
-    assert.ok(filtered.series.find((s) => s.idx === 2).filtered);
-    must(wb.setChartFilter(0, id, [], []), 'setChartFilter clear');
+    assert.ok(filtered.series.find((s) => s.index === 2).filtered);
+    wb.setChartFilter(0, id, [], []);
     assert.deepEqual(chartOf(wb, id).hiddenCategories, []);
 
-    must(wb.setChartType(0, id, 0, mod.ChartInsertKind.Column, mod.ChartGrouping.Stacked), 'setChartType column');
+    wb.setChartType(0, id, 0, mod.ChartInsertKind.Column, mod.ChartGrouping.Stacked);
     assert.equal(chartOf(wb, id).plots[0].type, mod.ChartPlotType.Bar);
     assert.equal(chartOf(wb, id).plots[0].grouping, mod.ChartGrouping.Stacked);
 
     const pie = insert(wb, mod, { kind: mod.ChartInsertKind.Doughnut, source: 'Sheet1!$A$1:$B$5' });
-    must(wb.setChartPlot(0, pie, 0, { holeSize: 60, firstSliceAngle: 90 }), 'setChartPlot hole');
+    wb.setChartPlot(0, pie, 0, { holeSize: 60, firstSliceAngle: 90 });
     assert.equal(chartOf(wb, pie).plots[0].holeSize, 60);
     assert.equal(chartOf(wb, pie).plots[0].firstSliceAngle, 90);
   } finally {
@@ -364,26 +345,27 @@ test('series can be added, removed and rebuilt from a new source', async () => {
     const id = insert(wb, mod, { source: 'Sheet1!$A$1:$C$5' });
     assert.equal(chartOf(wb, id).plots[0].series.length, 2);
 
-    const added = must(
-      wb.addChartSeries(0, id, 0, { values: 'Sheet1!$D$2:$D$5', name: 'Sheet1!$D$1', categories: 'Sheet1!$A$2:$A$5' }),
-      'addChartSeries',
-    );
+    const added = wb.addChartSeries(0, id, 0, {
+      values: 'Sheet1!$D$2:$D$5',
+      name: 'Sheet1!$D$1',
+      categories: 'Sheet1!$A$2:$A$5',
+    });
     assert.equal(chartOf(wb, id).plots[0].series.length, 3);
-    assert.ok(chartOf(wb, id).plots[0].series.some((s) => s.idx === added.index));
+    assert.ok(chartOf(wb, id).plots[0].series.some((s) => s.index === added));
     assert.equal(dataOf(wb, id).series.length, 3);
 
-    must(wb.removeChartSeries(0, id, 0, added.index), 'removeChartSeries');
+    wb.removeChartSeries(0, id, 0, added);
     assert.equal(chartOf(wb, id).plots[0].series.length, 2);
 
-    must(wb.setChartSeries(0, id, 0, 0, { fill: { color: 0xff112233 } }), 'setChartSeries');
-    must(wb.setChartSource(0, id, 'Sheet1!$A$1:$D$5', mod.ChartSeriesDirection.Columns, true, true), 'setChartSource');
+    wb.setChartSeries(0, id, 0, 0, { fill: { color: 0xff112233 } });
+    wb.setChartSource(0, id, 'Sheet1!$A$1:$D$5', mod.ChartSeriesDirection.Columns, true, true);
     let chart = chartOf(wb, id);
     assert.equal(chart.plots[0].series.length, 3);
     assert.equal(chart.plots[0].series[0].fill.color, 0xff112233);
     assert.equal(chart.source.range, 'Sheet1!$A$1:$D$5');
 
     // Rows direction swaps the split: four series of three points.
-    must(wb.setChartSource(0, id, 'Sheet1!$A$1:$D$5', mod.ChartSeriesDirection.Rows), 'setChartSource rows');
+    wb.setChartSource(0, id, 'Sheet1!$A$1:$D$5', mod.ChartSeriesDirection.Rows);
     chart = chartOf(wb, id);
     assert.equal(chart.plots[0].series.length, 4);
     assert.equal(chart.source.direction, mod.ChartSeriesDirection.Rows);
@@ -398,22 +380,20 @@ test('previewChartData resolves a draft without changing the chart', async () =>
   try {
     const id = insert(wb, mod);
     const before = JSON.stringify(chartOf(wb, id));
-    const preview = must(
-      wb.getChartPreview(0, id, { source: 'Sheet1!$A$1:$B$5', blanksAs: mod.ChartBlanksAs.Gap }),
-      'getChartPreview',
-    ).data;
+    const preview = wb.getChartPreview(0, id, { source: 'Sheet1!$A$1:$B$5', blanksAs: mod.ChartBlanksAs.Gap });
     assert.equal(preview.series.length, 1);
     assert.deepEqual([...preview.series[0].values], [2, 4, 6, 8]);
-    const rows = must(
-      wb.getChartPreview(0, id, { direction: mod.ChartSeriesDirection.Rows, headerRow: true, headerColumn: true }),
-      'previewChartData rows',
-    ).data;
+    const rows = wb.getChartPreview(0, id, {
+      direction: mod.ChartSeriesDirection.Rows,
+      headerRow: true,
+      headerColumn: true,
+    });
     assert.equal(rows.series.length, 4);
     assert.equal(JSON.stringify(chartOf(wb, id)), before);
     // No overrides is the chart as it stands.
-    assert.equal(must(wb.getChartPreview(0, id, {}), 'previewChartData {}').data.series.length, 3);
-    assert.equal(wb.getChartPreview(0, id, { source: 'NoSuchSheet!A1:B2' }).status.ok, false);
-    assert.equal(wb.getChartPreview(0, 9999, {}).data, null);
+    assert.equal(wb.getChartPreview(0, id, {}).series.length, 3);
+    assert.throws(() => wb.getChartPreview(0, id, { source: 'NoSuchSheet!A1:B2' }), isFormulonError);
+    assert.throws(() => wb.getChartPreview(0, 9999, {}), isFormulonError);
   } finally {
     wb.dispose();
   }
@@ -426,8 +406,8 @@ test('a chart survives save and load and goes through the drawing operations', a
     const id = insert(wb, mod, { title: 'Kept', placement: { row: 3, col: 3 } });
     const other = insert(wb, mod, { kind: mod.ChartInsertKind.Line, source: 'Sheet1!$A$1:$B$5' });
 
-    const saved = must(wb.save(), 'save');
-    const wb2 = mod.Workbook.load(saved.bytes ?? saved).value;
+    const saved = wb.save();
+    const wb2 = mod.Workbook.load(saved ?? saved);
     try {
       assert.equal(chartOf(wb2, id).title.text, 'Kept');
       assert.deepEqual([...dataOf(wb2, id).series[0].values], [2, 4, 6, 8]);
@@ -437,82 +417,88 @@ test('a chart survives save and load and goes through the drawing operations', a
     }
 
     // Move, reorder, snapshot, remove and restore keep the chart's id.
-    must(wb.setDrawingAnchor(0, id, { row: 10, col: 1, widthEmu: 3000000, heightEmu: 2000000 }), 'setDrawingAnchor');
+    wb.setDrawingAnchor(0, id, { row: 10, col: 1, widthEmu: 3000000, heightEmu: 2000000 });
     const moved = wb.listDrawingObjects(0).find((o) => o.objectId === id);
     assert.equal(moved.fromRow, 10);
     assert.equal(moved.fromCol, 1);
     assert.equal(moved.cx, 3000000);
     assert.equal(moved.cy, 2000000);
-    must(wb.setDrawingZOrder(0, id, 0), 'setDrawingZOrder');
+    wb.setDrawingZOrder(0, id, 0);
     assert.deepEqual(
       Array.from(wb.listDrawingObjects(0), (o) => o.objectId),
       [id, other],
     );
 
-    const snap = must(wb.snapshotDrawing(0, id), 'snapshotDrawing');
-    assert.ok(snap.bytes instanceof Uint8Array);
-    assert.ok(snap.bytes.length > 0);
-    must(wb.removeDrawing(0, id), 'removeDrawing');
-    assert.equal(wb.getChart(0, id).value, null);
+    const snap = wb.snapshotDrawing(0, id);
+    assert.ok(snap instanceof Uint8Array);
+    assert.ok(snap.length > 0);
+    wb.removeDrawing(0, id);
+    assert.equal(wb.getChart(0, id), null);
     assert.deepEqual(
       Array.from(wb.listDrawingObjects(0), (o) => o.objectId),
       [other],
     );
 
-    const restored = must(wb.restoreDrawing(0, snap.bytes), 'restoreDrawing');
-    assert.equal(restored.objectId, id);
+    const restored = wb.restoreDrawing(0, snap);
+    assert.equal(restored, id);
     assert.equal(chartOf(wb, id).title.text, 'Kept');
     assert.deepEqual(
       Array.from(wb.listDrawingObjects(0), (o) => o.objectId),
       [id, other],
     );
 
-    const copy = must(wb.restoreDrawing(0, snap.bytes, { newId: true }), 'restoreDrawing newId');
-    assert.notEqual(copy.objectId, id);
-    assert.equal(chartOf(wb, copy.objectId).title.text, 'Kept');
+    const copy = wb.restoreDrawing(0, snap, { newId: true });
+    assert.notEqual(copy, id);
+    assert.equal(chartOf(wb, copy).title.text, 'Kept');
     assert.equal(wb.listDrawingObjects(0).length, 3);
   } finally {
     wb.dispose();
   }
 });
 
-test('chart calls report failures in their status and reject malformed arguments', async () => {
+test('chart calls throw on failures and reject malformed arguments', async () => {
   const mod = await getModule();
   const wb = newBook(mod);
   try {
     const id = insert(wb, mod);
 
     const missing = wb.getChart(0, 9999);
-    assert.equal(missing.status.ok, true);
-    assert.equal(missing.value, null);
-    assert.equal(wb.getChart(99, id).status.ok, false);
-    const noData = wb.getChartData(0, 9999);
-    assert.equal(noData.status.ok, false);
-    assert.equal(noData.data, null);
+    assert.equal(missing, null);
+    assert.throws(() => wb.getChart(99, id), isFormulonError);
+    assert.throws(() => wb.getChartData(0, 9999), isFormulonError);
 
     // An unresolvable source writes nothing.
-    const bad = wb.addChart(0, { kind: mod.ChartInsertKind.Column, source: 'NoSuchSheet!A1:B2' });
-    assert.equal(bad.status.ok, false);
-    assert.equal(bad.status.code, 5026);
-    assert.equal(bad.objectId, 0);
+    assert.throws(
+      () => wb.addChart(0, { kind: mod.ChartInsertKind.Column, source: 'NoSuchSheet!A1:B2' }),
+      (e) => isFormulonError(e, 5026),
+    );
     assert.equal(wb.listDrawingObjects(0).length, 1);
-    assert.equal(wb.addChart(0, { kind: 99, source: 'A1:B2' }).status.ok, false);
+    assert.throws(() => wb.addChart(0, { kind: 99, source: 'A1:B2' }), isFormulonError);
     assert.throws(() => wb.addChart(0, 'A1:B2'), TypeError);
 
-    assert.equal(wb.setChartSeries(0, id, 0, 0, { values: '' }).ok, false);
-    assert.equal(wb.setChartSeries(0, id, 0, 0, { values: 'NoSuchSheet!A1:A2' }).code, 5026);
-    assert.equal(wb.setChartSeries(0, id, 5, 0, {}).ok, false);
-    assert.equal(wb.setChartSeries(0, id, 0, 99, {}).ok, false);
-    assert.equal(wb.setChartSeries(0, id, 0, 0, { fill: { color: 1 }, marker: { symbol: null } }).ok, false);
-    assert.equal(wb.setChartAxis(0, id, 12345, {}).ok, false);
-    assert.equal(wb.setChartPlot(0, id, 0, { holeSize: 50 }).ok, false);
-    assert.equal(wb.setChartType(0, id, 0, 99).ok, false);
-    assert.equal(wb.setChartSource(0, id, 'NoSuchSheet!A1:B2', mod.ChartSeriesDirection.Auto).code, 5026);
-    assert.equal(wb.removeChartSeries(0, id, 0, 99).ok, false);
-    assert.equal(wb.addChartSeries(0, id, 0, { name: 'Sheet1!$B$1' }).status.ok, false);
-    assert.equal(wb.setChartTitle(0, 9999, 'x').ok, false);
-    assert.equal(wb.removeDrawing(0, 9999).ok, false);
-    assert.equal(wb.snapshotDrawing(0, 9999).status.ok, false);
+    assert.throws(() => wb.setChartSeries(0, id, 0, 0, { values: '' }), isFormulonError);
+    assert.throws(
+      () => wb.setChartSeries(0, id, 0, 0, { values: 'NoSuchSheet!A1:A2' }),
+      (e) => isFormulonError(e, 5026),
+    );
+    assert.throws(() => wb.setChartSeries(0, id, 5, 0, {}), isFormulonError);
+    assert.throws(() => wb.setChartSeries(0, id, 0, 99, {}), isFormulonError);
+    assert.throws(
+      () => wb.setChartSeries(0, id, 0, 0, { fill: { color: 1 }, marker: { symbol: null } }),
+      isFormulonError,
+    );
+    assert.throws(() => wb.setChartAxis(0, id, 12345, {}), isFormulonError);
+    assert.throws(() => wb.setChartPlot(0, id, 0, { holeSize: 50 }), isFormulonError);
+    assert.throws(() => wb.setChartType(0, id, 0, 99), isFormulonError);
+    assert.throws(
+      () => wb.setChartSource(0, id, 'NoSuchSheet!A1:B2', mod.ChartSeriesDirection.Auto),
+      (e) => isFormulonError(e, 5026),
+    );
+    assert.throws(() => wb.removeChartSeries(0, id, 0, 99), isFormulonError);
+    assert.throws(() => wb.addChartSeries(0, id, 0, { name: 'Sheet1!$B$1' }), isFormulonError);
+    assert.throws(() => wb.setChartTitle(0, 9999, 'x'), isFormulonError);
+    assert.throws(() => wb.removeDrawing(0, 9999), isFormulonError);
+    assert.throws(() => wb.snapshotDrawing(0, 9999), isFormulonError);
 
     // Wrong types raise before the engine is called.
     assert.throws(() => wb.getChart('0', id), TypeError);
@@ -535,9 +521,9 @@ test('chart calls on a disposed workbook report an invalid handle', async () => 
   const wb = newBook(mod);
   const id = insert(wb, mod);
   wb.dispose();
-  assert.equal(wb.getChart(0, id).status.ok, false);
-  assert.equal(wb.getChartData(0, id).status.ok, false);
-  assert.equal(wb.addChart(0, { kind: 0, source: 'A1:B2' }).status.ok, false);
-  assert.equal(wb.setChartTitle(0, id, 'x').ok, false);
-  assert.equal(wb.addChartSeries(0, id, 0, { values: 'A1:A2' }).status.ok, false);
+  assert.throws(() => wb.getChart(0, id), isFormulonError);
+  assert.throws(() => wb.getChartData(0, id), isFormulonError);
+  assert.throws(() => wb.addChart(0, { kind: 0, source: 'A1:B2' }), isFormulonError);
+  assert.throws(() => wb.setChartTitle(0, id, 'x'), isFormulonError);
+  assert.throws(() => wb.addChartSeries(0, id, 0, { values: 'A1:A2' }), isFormulonError);
 });

@@ -40,7 +40,7 @@ v = formulon.eval_formula("=1/0")
 print(v.kind.name, v.error_code)  # ERROR 1
 ```
 
-Excel errors come back as values; `FormulonError` is raised only for host-side failures. See [Errors](https://formulon.libraz.net/compatibility/errors).
+Excel errors come back as values (`Value.to_python()` gives an `ExcelError`); a host-side failure raises `FormulonError`. Its subclasses are `IndexOutOfRangeError`, `NotFoundError`, `InvalidArgumentError` and `WorkbookClosedError`. See [Errors](https://formulon.libraz.net/compatibility/errors).
 
 ## Recalculate a workbook
 
@@ -58,7 +58,13 @@ with Workbook.load(data) as wb:
 
     with open("output.xlsx", "wb") as f:
         f.write(wb.save())
+
+    print(wb.get_sheet_index("Sheet1"))  # 0; None when there is no such sheet
+    wb.sheet("Sheet1").set("A1", 42)  # A1-addressed view of one sheet
+    print(wb["Sheet1"].get("A2").to_python())
 ```
+
+`wb.close()` or leaving the `with` block releases the workbook; `wb.closed` reports it, and any later call raises `WorkbookClosedError`.
 
 ## Switching locale profiles
 

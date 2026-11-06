@@ -106,32 +106,25 @@ Napi::Value EvalFormula(const Napi::CallbackInfo& info) {
   fm_workbook_t* wb = nullptr;
   fm_status_t rc = fm_workbook_create_empty(&wb);
   if (rc != 0) {
-    return MakeEmptyValueResult(env, MakeErrorStatus(env, rc));
+    return ThrowStatus(env, rc);
   }
   std::size_t sheet_index = 0;
   rc = fm_workbook_add_sheet(wb, "Sheet1", &sheet_index);
   if (rc != 0) {
-    Napi::Object out = MakeEmptyValueResult(env, MakeErrorStatus(env, rc));
+    const Napi::Value failed = ThrowStatus(env, rc);
     fm_workbook_destroy(wb);
-    return out;
+    return failed;
   }
   fm_value_t v{};
   rc = fm_sheet_evaluate_formula(wb, 0, 0, 0, formula.c_str(), &v);
-  Napi::Object out = MakeValueResult(env, rc, v);
+  // Translate before the destroy: a text result borrows the workbook's scratch.
+  const Napi::Value out = rc == 0 ? ValueToJs(env, v) : ThrowStatus(env, rc);
   fm_workbook_destroy(wb);
   return out;
 }
 
 Napi::Value Version(const Napi::CallbackInfo& info) {
   return JsString(info.Env(), fm_get_version());
-}
-
-Napi::Value LastErrorMessage(const Napi::CallbackInfo& info) {
-  return JsString(info.Env(), fm_get_last_error_message());
-}
-
-Napi::Value LastErrorContext(const Napi::CallbackInfo& info) {
-  return JsString(info.Env(), fm_get_last_error_context());
 }
 
 Napi::Value StatusString(const Napi::CallbackInfo& info) {
@@ -160,7 +153,7 @@ Napi::Value SetLogMinLevel(const Napi::CallbackInfo& info) {
   if (!ReadInt32(info, 0, &level)) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_set_log_min_level(level));
+  return ValueOrThrow(env, fm_set_log_min_level(level), env.Undefined());
 }
 
 Napi::Value SetLogSink(const Napi::CallbackInfo& info) {
@@ -168,14 +161,15 @@ Napi::Value SetLogSink(const Napi::CallbackInfo& info) {
   const bool clearing = info[0].IsNull() || info[0].IsUndefined();
   Napi::Function sink;
   if (!clearing && !FunctionArg(info, 0, &sink)) {
-    return MakeBindingArgumentError(env, "setLogSink: `sink` must be a function or null");
+    Napi::TypeError::New(env, "sink must be a function or null").ThrowAsJavaScriptException();
+    return env.Undefined();
   }
 
   if (clearing) {
     fm_status_t rc = fm_set_log_sink(nullptr, nullptr);
     const std::lock_guard<std::mutex> lock(log_sink_mutex());
     ReleaseLogSinkLocked();
-    return MakeStatus(env, rc);
+    return ValueOrThrow(env, rc, env.Undefined());
   }
 
   Napi::ThreadSafeFunction fresh = Napi::ThreadSafeFunction::New(env, sink, "formulon.logSink", 0, 1);
@@ -192,7 +186,18 @@ Napi::Value SetLogSink(const Napi::CallbackInfo& info) {
       fresh.Release();
     }
   }
-  return MakeStatus(env, rc);
+  return ValueOrThrow(env, rc, env.Undefined());
+}
+
+Napi::Value SetErrorClass(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Function error_class;
+  if (!FunctionArg(info, 0, &error_class)) {
+    Napi::TypeError::New(env, "the error class must be a constructor").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  GetAddonData(env).error_class = Napi::Persistent(error_class);
+  return env.Undefined();
 }
 
 }  // namespace formulon_node

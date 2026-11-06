@@ -3,8 +3,7 @@
 // src/wasm/formulon.d.ts when it generates index.d.ts.
 
 export interface Workbook {
-  /** Estimated heap bytes the native workbook occupies, or 0 once
-   *  disposed.
+  /** Estimated heap bytes the native workbook occupies.
    *
    *  The addon reports this figure to V8 as external memory when a
    *  workbook is created, loaded, recalculated or disposed, so a runtime

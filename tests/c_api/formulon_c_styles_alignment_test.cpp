@@ -3,11 +3,13 @@
 #include "formulon_c_styles_test_helpers.h"
 
 TEST(FormulonCApiStyles, CellXfAlignmentEnumsValidateRangesBeforeMutation) {
-  const auto expect_invalid = [](fm_status_t status, const char* api) {
-    EXPECT_EQ(status, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-    const char* message = fm_get_last_error_message();
-    ASSERT_NE(message, nullptr);
-    EXPECT_EQ(std::string(message).rfind(api, 0), 0U) << message;
+  const fm_status_t kInvalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  const auto expect_rejected = [](fm_status_t status, fm_status_t expected, const char* field) {
+    EXPECT_EQ(status, expected);
+    const std::string message = fm_get_last_error_message();
+    EXPECT_FALSE(message.empty());
+    EXPECT_EQ(message.find("fm_"), std::string::npos) << message;
+    EXPECT_NE(std::string(fm_get_last_error_context()).find(field), std::string::npos) << fm_get_last_error_context();
   };
 
   // The upper boundary of each ordinal is accepted.
@@ -51,7 +53,7 @@ TEST(FormulonCApiStyles, CellXfAlignmentEnumsValidateRangesBeforeMutation) {
     record.has_horizontal_align = 1;
     std::size_t index = 0xAABBCCDDU;
     const std::size_t before = wb.handle->workbook().styles().cell_xfs.size();
-    expect_invalid(fm_workbook_add_cell_xf(wb.handle, &record, &index), "fm_workbook_add_cell_xf:");
+    expect_rejected(fm_workbook_add_cell_xf(wb.handle, &record, &index), kInvalid, "horizontal_align");
     EXPECT_EQ(index, 0xAABBCCDDU);
     EXPECT_EQ(wb.handle->workbook().styles().cell_xfs.size(), before);
   }
@@ -63,7 +65,7 @@ TEST(FormulonCApiStyles, CellXfAlignmentEnumsValidateRangesBeforeMutation) {
     record.has_vertical_align = 1;
     std::size_t index = 0xAABBCCDDU;
     const std::size_t before = wb.handle->workbook().styles().cell_style_xfs.size();
-    expect_invalid(fm_workbook_add_cell_style_xf(wb.handle, &record, &index), "fm_workbook_add_cell_style_xf:");
+    expect_rejected(fm_workbook_add_cell_style_xf(wb.handle, &record, &index), kInvalid, "vertical_align");
     EXPECT_EQ(index, 0xAABBCCDDU);
     EXPECT_EQ(wb.handle->workbook().styles().cell_style_xfs.size(), before);
   }
@@ -77,7 +79,7 @@ TEST(FormulonCApiStyles, CellXfAlignmentEnumsValidateRangesBeforeMutation) {
     const fm_styles_batch_t batch{nullptr, 0U,      nullptr, nullptr, 0U,      nullptr, nullptr, 0U,
                                   nullptr, &record, 1U,      indices, nullptr, 0U,      nullptr};
     const std::size_t before = wb.handle->workbook().styles().cell_xfs.size();
-    expect_invalid(fm_workbook_add_batch(wb.handle, &batch), "fm_workbook_add_batch:");
+    expect_rejected(fm_workbook_add_batch(wb.handle, &batch), kInvalid, "horizontal_align");
     EXPECT_EQ(indices[0], 0xAABBCCDDU);
     EXPECT_EQ(wb.handle->workbook().styles().cell_xfs.size(), before);
   }
@@ -91,7 +93,7 @@ TEST(FormulonCApiStyles, CellXfAlignmentEnumsValidateRangesBeforeMutation) {
     uint32_t indices[] = {0xAABBCCDDU};
     const fm_styles_batch_t batch{nullptr, 0U,      nullptr, nullptr, 0U,      nullptr, nullptr, 0U,
                                   nullptr, &record, 1U,      indices, nullptr, 0U,      nullptr};
-    expect_invalid(fm_workbook_add_batch(wb.handle, &batch), "fm_workbook_add_batch:");
+    expect_rejected(fm_workbook_add_batch(wb.handle, &batch), FM_STATUS_INDEX_OUT_OF_RANGE, "xf_id");
     EXPECT_EQ(indices[0], 0xAABBCCDDU);
   }
 }

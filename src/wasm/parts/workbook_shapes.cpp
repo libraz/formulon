@@ -22,13 +22,6 @@ namespace {
 constexpr const char* kSparklineColorKeys[] = {"colorSeries", "colorNegative", "colorAxis", "colorMarkers",
                                                "colorFirst",  "colorLast",     "colorHigh", "colorLow"};
 
-emscripten::val object_id_result(JsStatus status, uint32_t object_id) {
-  emscripten::val o = emscripten::val::object();
-  o.set("objectId", object_id);
-  o.set("status", status);
-  return o;
-}
-
 /// True when `owner[key]` is neither undefined nor null.
 bool present(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key) {
   return reader.ok() && js_value_present(reader.value(owner, key, key));
@@ -247,36 +240,42 @@ fm_status_t sparkline_group_item(const fm_workbook_t* handle, size_t sheet, size
 
 emscripten::val JsWorkbook::listShapes(uint32_t sheet) const {
   emscripten::val arr = emscripten::val::array();
-  arr.set("status", status_from_rc(js_collect_list(handle_, sheet, &fm_sheet_get_shape_count, &shape_item, arr)));
+  if (!succeeded(js_collect_list(handle_, sheet, &fm_sheet_get_shape_count, &shape_item, arr))) {
+    return emscripten::val::undefined();
+  }
   return arr;
 }
 
-emscripten::val JsWorkbook::insertShape(uint32_t sheet, emscripten::val spec) {
+uint32_t JsWorkbook::insertShape(uint32_t sheet, emscripten::val spec) {
   if (handle_ == nullptr) {
-    return object_id_result(invalid_handle_status(), 0U);
+    record_invalid_handle();
+    return 0U;
   }
   JsNarrowNumericReader reader("addShape");
   ShapeText store;
   const fm_shape_t shape = pull_shape(reader, spec, store);
   if (!reader.ok()) {
-    return object_id_result(reader.failure(), 0U);
+    return 0U;
   }
   uint32_t id = 0;
-  const fm_status_t rc = fm_sheet_add_shape(handle_, sheet, &shape, &id);
-  return object_id_result(status_from_rc(rc), rc == 0 ? id : 0U);
+  if (!succeeded(fm_sheet_add_shape(handle_, sheet, &shape, &id))) {
+    return 0U;
+  }
+  return id;
 }
 
-JsStatus JsWorkbook::updateShape(uint32_t sheet, uint32_t objectId, emscripten::val spec) {
+void JsWorkbook::updateShape(uint32_t sheet, uint32_t objectId, emscripten::val spec) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("updateShape");
   ShapeText store;
   const fm_shape_t shape = pull_shape(reader, spec, store);
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
-  return status_from_rc(fm_sheet_update_shape(handle_, sheet, objectId, &shape));
+  succeeded(fm_sheet_update_shape(handle_, sheet, objectId, &shape));
 }
 
 emscripten::val JsWorkbook::getShape(uint32_t sheet, uint32_t objectId) const {
@@ -284,27 +283,31 @@ emscripten::val JsWorkbook::getShape(uint32_t sheet, uint32_t objectId) const {
   int32_t present = 0;
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_shape(handle_, sheet, objectId, &present, &s) : kBindingInvalidHandle;
-  return optional_result(rc, present, rc == 0 && present != 0 ? shape_to_val(s) : emscripten::val::null());
+  return optional_or_null(rc, present, rc == 0 && present != 0 ? shape_to_val(s) : emscripten::val::null());
 }
 
-JsStatus JsWorkbook::removeShape(uint32_t sheet, uint32_t objectId) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_shape(handle_, sheet, objectId) : kBindingInvalidHandle);
+void JsWorkbook::removeShape(uint32_t sheet, uint32_t objectId) {
+  succeeded(handle_ != nullptr ? fm_sheet_remove_shape(handle_, sheet, objectId) : kBindingInvalidHandle);
 }
 
-JsNumberResult JsWorkbook::getSparklineGroupCount(uint32_t sheet) const {
-  return js_count_result(handle_, sheet, &fm_sheet_get_sparkline_group_count);
+double JsWorkbook::getSparklineGroupCount(uint32_t sheet) const {
+  return js_count(handle_, sheet, &fm_sheet_get_sparkline_group_count);
 }
 
 emscripten::val JsWorkbook::getSparklineGroup(uint32_t sheet, uint32_t sparklineGroupIndex) const {
-  emscripten::val group = sparkline_group_to_val(fm_sparkline_group_t{}, emscripten::val::array());
+  emscripten::val group = emscripten::val::undefined();
   const fm_status_t rc =
       handle_ != nullptr ? sparkline_group_item(handle_, sheet, sparklineGroupIndex, &group) : kBindingInvalidHandle;
-  return record_result(rc, group);
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
+  }
+  return group;
 }
 
-JsAddStyleResult JsWorkbook::addSparklineGroup(uint32_t sheet, emscripten::val spec) {
+uint32_t JsWorkbook::addSparklineGroup(uint32_t sheet, emscripten::val spec) {
   if (handle_ == nullptr) {
-    return {invalid_handle_status()};
+    record_invalid_handle();
+    return 0U;
   }
   JsNarrowNumericReader reader("addSparklineGroup");
   std::string ref_store;
@@ -315,48 +318,51 @@ JsAddStyleResult JsWorkbook::addSparklineGroup(uint32_t sheet, emscripten::val s
     pull_sparklines(reader, reader.value(spec, "sparklines", "group.sparklines"), texts, items);
   }
   if (!reader.ok()) {
-    return {reader.failure()};
+    return 0U;
   }
   // An empty array reaches the core, which rejects it; keep a valid pointer to pass.
   fm_sparkline_t none{};
   std::size_t out = 0;
-  const fm_status_t rc =
-      fm_sheet_add_sparkline_group(handle_, sheet, &group, items.empty() ? &none : items.data(), items.size(), &out);
-  return index_result(rc, out);
+  if (!succeeded(fm_sheet_add_sparkline_group(handle_, sheet, &group, items.empty() ? &none : items.data(),
+                                              items.size(), &out))) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(out);
 }
 
-JsStatus JsWorkbook::updateSparklineGroup(uint32_t sheet, uint32_t index, emscripten::val spec) {
+void JsWorkbook::updateSparklineGroup(uint32_t sheet, uint32_t index, emscripten::val spec) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("updateSparklineGroup");
   std::string ref_store;
   const fm_sparkline_group_t group = pull_group(reader, spec, ref_store);
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
-  return status_from_rc(fm_sheet_update_sparkline_group(handle_, sheet, index, &group));
+  succeeded(fm_sheet_update_sparkline_group(handle_, sheet, index, &group));
 }
 
-JsStatus JsWorkbook::setSparklineGroupSparklines(uint32_t sheet, uint32_t index, emscripten::val sparklines) {
+void JsWorkbook::setSparklineGroupSparklines(uint32_t sheet, uint32_t index, emscripten::val sparklines) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setSparklineGroupSparklines");
   std::vector<std::string> texts;
   std::vector<fm_sparkline_t> items;
   pull_sparklines(reader, sparklines, texts, items);
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
   fm_sparkline_t none{};
-  return status_from_rc(fm_sheet_set_sparkline_group_sparklines(handle_, sheet, index,
-                                                                items.empty() ? &none : items.data(), items.size()));
+  succeeded(fm_sheet_set_sparkline_group_sparklines(handle_, sheet, index, items.empty() ? &none : items.data(),
+                                                    items.size()));
 }
 
-JsStatus JsWorkbook::removeSparklineGroup(uint32_t sheet, uint32_t index) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_sparkline_group(handle_, sheet, index)
-                                           : kBindingInvalidHandle);
+void JsWorkbook::removeSparklineGroup(uint32_t sheet, uint32_t index) {
+  succeeded(handle_ != nullptr ? fm_sheet_remove_sparkline_group(handle_, sheet, index) : kBindingInvalidHandle);
 }
 
 }  // namespace parts

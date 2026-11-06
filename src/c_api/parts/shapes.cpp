@@ -21,6 +21,7 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fill_anchor;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -30,15 +31,14 @@ using formulon::c_api::parts::TextStore;
 namespace {
 
 // Converts `shape` to the model spec; a non-zero return is the status to report.
-fm_status_t to_spec(const fm_shape_t& shape, const char* api, formulon::ShapeSpec& spec) {
+fm_status_t to_spec(const fm_shape_t& shape, formulon::ShapeSpec& spec) {
   using formulon::AnchorKind;
   using formulon::EditAs;
   spec.fields = shape.fields;
   if ((shape.fields & ~formulon::shape_field::kAll) != 0U) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             (std::string(api) + ": unknown field bit").c_str());
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "unknown field bit");
   }
-  if (auto rc = check_utf8(api, {shape.name, shape.prst, shape.text}); rc != 0) {
+  if (auto rc = check_utf8({shape.name, shape.prst, shape.text}); rc != 0) {
     return rc;
   }
   if (shape.name != nullptr) {
@@ -52,7 +52,7 @@ fm_status_t to_spec(const fm_shape_t& shape, const char* api, formulon::ShapeSpe
   }
   spec.text_box = shape.text_box != 0;
   if ((shape.fields & FM_SHAPE_FIELD_ANCHOR) != 0U) {
-    if (auto rc = check_anchor_enums(shape.anchor_kind, shape.edit_as, api); rc != 0) {
+    if (auto rc = check_anchor_enums(shape.anchor_kind, shape.edit_as); rc != 0) {
       return rc;
     }
   }
@@ -77,9 +77,9 @@ fm_status_t to_spec(const fm_shape_t& shape, const char* api, formulon::ShapeSpe
 extern "C" fm_status_t fm_sheet_get_shape_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return null_argument("fm_sheet_get_shape_count", "out_count");
+    return null_argument("out_count");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_shape_count"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   auto shapes = formulon::list_shapes(wb->workbook(), sheet_index);
@@ -93,9 +93,9 @@ extern "C" fm_status_t fm_sheet_get_shape_count(const fm_workbook_t* wb, size_t 
 extern "C" fm_status_t fm_sheet_get_shape_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx, fm_shape_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return null_argument("fm_sheet_get_shape_at", "out");
+    return null_argument("out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_shape_at"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   auto shapes = formulon::list_shapes(wb->workbook(), sheet_index);
@@ -103,7 +103,7 @@ extern "C" fm_status_t fm_sheet_get_shape_at(const fm_workbook_t* wb, size_t she
     return set_last_error(shapes.error());
   }
   const std::vector<formulon::ShapeInfo>& list = shapes.value();
-  if (auto rc = check_index(idx, list.size(), "fm_sheet_get_shape_at", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, list.size(), "index"); rc != 0) {
     return rc;
   }
   const formulon::ShapeInfo& info = list[idx];
@@ -134,9 +134,9 @@ extern "C" fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_
                                           int32_t* out_present, fm_shape_t* out) {
   clear_last_error();
   if (out_present == nullptr || out == nullptr) {
-    return null_argument("fm_sheet_get_shape", "out");
+    return null_argument("out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_shape"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   *out_present = 0;
@@ -158,15 +158,14 @@ extern "C" fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_
 extern "C" fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index, const fm_shape_t* spec,
                                           uint32_t* out_object_id) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_add_shape";
   if (spec == nullptr || out_object_id == nullptr) {
-    return null_argument("fm_sheet_add_shape");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   formulon::ShapeSpec model;
-  if (auto rc = to_spec(*spec, kApi, model); rc != 0) {
+  if (auto rc = to_spec(*spec, model); rc != 0) {
     return rc;
   }
   auto id = formulon::insert_shape(wb->workbook(), sheet_index, model);
@@ -180,15 +179,14 @@ extern "C" fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index,
 extern "C" fm_status_t fm_sheet_update_shape(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                              const fm_shape_t* spec) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_update_shape";
   if (spec == nullptr) {
-    return null_argument("fm_sheet_update_shape", "spec");
+    return null_argument("spec");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   formulon::ShapeSpec model;
-  if (auto rc = to_spec(*spec, kApi, model); rc != 0) {
+  if (auto rc = to_spec(*spec, model); rc != 0) {
     return rc;
   }
   return finish_status(formulon::update_shape(wb->workbook(), sheet_index, object_id, model));
@@ -196,8 +194,17 @@ extern "C" fm_status_t fm_sheet_update_shape(fm_workbook_t* wb, size_t sheet_ind
 
 extern "C" fm_status_t fm_sheet_remove_shape(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_remove_shape"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
+  }
+  auto shapes = formulon::list_shapes(wb->workbook(), sheet_index);
+  if (!shapes) {
+    return set_last_error(shapes.error());
+  }
+  const std::vector<formulon::ShapeInfo>& list = shapes.value();
+  if (std::none_of(list.begin(), list.end(),
+                   [&](const formulon::ShapeInfo& s) { return s.object.object_id == object_id; })) {
+    return not_found("no shape has that object_id", "object_id=" + std::to_string(object_id));
   }
   return finish_status(formulon::remove_shape(wb->workbook(), sheet_index, object_id));
 }

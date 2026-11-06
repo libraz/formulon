@@ -91,13 +91,14 @@ async function main() {
   if (!sourceOnly) await copyFile(nodeSrc, path.join(prebuildDir, 'formulon.node'));
   const mjs = await readFile(mjsSrc, 'utf8');
   const commonImport = "from '../npm/common.mjs'";
+  // The shim imports the module namespace and re-exports the value tables: both name the canonical path.
   const commonImportSites = mjs.split(commonImport).length - 1;
-  if (commonImportSites !== 1) {
-    console.error(`stage.mjs: expected exactly 1 canonical common import in ${mjsSrc}, found ${commonImportSites}`);
+  if (commonImportSites !== 2) {
+    console.error(`stage.mjs: expected exactly 2 canonical common imports in ${mjsSrc}, found ${commonImportSites}`);
     console.error(`  looked for: ${commonImport}`);
     process.exit(1);
   }
-  await writeFile(path.join(absOutDir, 'index.mjs'), mjs.replace(commonImport, "from './common.mjs'"));
+  await writeFile(path.join(absOutDir, 'index.mjs'), mjs.replaceAll(commonImport, "from './common.mjs'"));
   await copyFile(commonSrc, path.join(absOutDir, 'common.mjs'));
   await copyFile(dtsSrc, path.join(absOutDir, 'index.d.ts'));
 

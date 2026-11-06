@@ -272,14 +272,14 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsEnumOrdinalsPastTheirDomain) {
   EXPECT_EQ(count, 0U);
 }
 
-TEST(FormulonCApiCfMutate, OutOfRangeIndexReturnsInvalidArgument) {
+TEST(FormulonCApiCfMutate, OutOfRangeIndexReturnsIndexOutOfRange) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cf_rule_t out{};
   fm_status_t rc = fm_sheet_get_cf_rule(wb.handle, 0, 99, &out);
-  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(rc, FM_STATUS_INDEX_OUT_OF_RANGE);
   rc = fm_sheet_remove_cf_rule(wb.handle, 0, 99);
-  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(rc, FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiCfMutate, PreLoadedRulesEnumerableViaFlatIndex) {

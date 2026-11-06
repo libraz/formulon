@@ -1,9 +1,9 @@
 //
 // Out-of-line implementation of the shared embind helpers declared in
-// `parts/embind_common.h`. The status builders capture the thread-local
-// diagnostic surface that follows every C-ABI call, the translation
-// helpers project a `fm_*` POD into an embind-friendly mirror, and the
-// field readers pull caller-supplied JS records apart.
+// `parts/embind_common.h`. The failure builders record the thread-local
+// diagnostic surface that follows every C-ABI call for the pre-js wrapper
+// to throw, the translation helpers project a `fm_*` POD into a JS value,
+// and the field readers pull caller-supplied JS records apart.
 
 #include "wasm/parts/embind_common.h"
 
@@ -100,7 +100,8 @@ EM_JS(emscripten::EM_VAL, fm_wasm_safe_reader_operation,
         result = undefined;
       }
     } else if (operation === 4) {
-      if (owner instanceof Uint8Array) {
+      // `isView` is false for a Proxy, which the Node binding also rejects.
+      if (ArrayBuffer.isView(owner) && owner instanceof Uint8Array) {
         var bytesCopy = new Uint8Array(owner.length);
         bytesCopy.set(owner);
         result = bytesCopy;
@@ -127,12 +128,13 @@ EM_JS_DEPS(fm_wasm_safe_reader, "$Emval");
 
 // Hands a reader's first rejection to the pre-js method wrapper, which throws
 // it once the native method has returned: kind 0 is a TypeError, 1 a
-// RangeError, 2 rethrows the caller's getter exception. Outside a wrapped call
-// there is no wrapper to throw, so the envelope's status stays the report.
+// RangeError, 2 rethrows the caller's getter exception. It displaces a
+// recorded status failure (kind 3), so an argument error wins within a call.
+// Outside a wrapped call there is no wrapper to throw, and it is dropped.
 // clang-format off
 EM_JS(void, fm_wasm_record_argument_error, (int32_t kind, const char* message), {
   var errors = Module[Symbol.for('formulon.argumentErrors')];
-  if (!errors || errors.depth === 0 || errors.pending !== undefined) {
+  if (!errors || errors.depth === 0 || (errors.pending !== undefined && errors.pending.kind !== 3)) {
     return;
   }
   var thrown = kind === 2 ? errors.thrown : undefined;
@@ -142,6 +144,21 @@ EM_JS(void, fm_wasm_record_argument_error, (int32_t kind, const char* message), 
 // clang-format on
 
 EM_JS_DEPS(fm_wasm_argument_error, "$UTF8ToString");
+
+// Records a failed status for the pre-js method wrapper, which throws it as
+// `FormulonError(code, message, context)` once the native method has
+// returned. Any failure already recorded in the call is kept.
+// clang-format off
+EM_JS(void, fm_wasm_record_status_error, (int32_t code, const char* message, const char* context), {
+  var errors = Module[Symbol.for('formulon.argumentErrors')];
+  if (!errors || errors.depth === 0 || errors.pending !== undefined) {
+    return;
+  }
+  errors.pending = { kind: 3, code: code, message: UTF8ToString(message), context: UTF8ToString(context) };
+});
+// clang-format on
+
+EM_JS_DEPS(fm_wasm_status_error, "$UTF8ToString");
 
 // Copies a previously snapshotted plain Uint8Array into a C++ vector's
 // allocation. The source is produced by the trampoline above, and both the
@@ -170,10 +187,6 @@ EM_JS(int32_t, fm_wasm_copy_safe_bytes,
 
 EM_JS_DEPS(fm_wasm_safe_bytes, "$Emval");
 
-JsStatus ok_status() {
-  return JsStatus{true, 0, std::string(), std::string()};
-}
-
 bool js_value_present(const emscripten::val& value) {
   return !value.isUndefined() && !value.isNull();
 }
@@ -182,34 +195,47 @@ emscripten::val js_object_or_empty(const emscripten::val& value) {
   return js_value_present(value) ? value : emscripten::val::object();
 }
 
-JsStatus binding_error_status(int32_t code, const char* message) {
-  JsStatus s;
-  s.ok = false;
-  s.code = code;
-  s.message = string_from_cstr(message);
-  return s;
+void record_binding_failure(int32_t code, const char* message) {
+  fm_wasm_record_status_error(code, message != nullptr ? message : "", "");
 }
 
-JsStatus error_status(int32_t code) {
-  if (code == kBindingInvalidHandle) {
+void record_type_error(const char* message) {
+  fm_wasm_record_argument_error(kArgumentErrorType, message != nullptr ? message : "");
+}
+
+void record_range_error(const char* message) {
+  fm_wasm_record_argument_error(kArgumentErrorRange, message != nullptr ? message : "");
+}
+
+void record_invalid_handle() {
+  record_binding_failure(kBindingInvalidHandle, "the workbook is disposed");
+}
+
+void record_failure(fm_status_t rc) {
+  if (rc == kBindingInvalidHandle) {
     // No C-ABI call ran, so the thread-local diagnostics still describe
-    // whatever call came before. Synthesise the message here instead.
-    return binding_error_status(code, "the workbook handle was already destroyed");
+    // whatever call came before.
+    record_invalid_handle();
+    return;
   }
-  JsStatus s;
-  s.ok = false;
-  s.code = code;
-  s.message = string_from_cstr(fm_get_last_error_message());
-  s.context = string_from_cstr(fm_get_last_error_context());
-  return s;
+  const char* message = fm_get_last_error_message();
+  const char* context = fm_get_last_error_context();
+  fm_wasm_record_status_error(rc, message != nullptr ? message : "", context != nullptr ? context : "");
 }
 
-JsStatus invalid_handle_status() {
-  return error_status(kBindingInvalidHandle);
+bool succeeded(fm_status_t rc) {
+  if (rc == 0) {
+    return true;
+  }
+  record_failure(rc);
+  return false;
 }
 
-JsStatus status_from_rc(fm_status_t rc) {
-  return rc == 0 ? ok_status() : error_status(rc);
+emscripten::val optional_or_null(fm_status_t rc, int32_t present, emscripten::val item) {
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
+  }
+  return present != 0 ? item : emscripten::val::null();
 }
 
 JsNarrowNumericReader::JsNarrowNumericReader(const char* operation)
@@ -590,10 +616,6 @@ bool JsNarrowNumericReader::ok() const {
   return message_.empty();
 }
 
-JsStatus JsNarrowNumericReader::failure() const {
-  return binding_error_status(kInvalidArgument, message_.c_str());
-}
-
 const std::string& JsNarrowNumericReader::message() const {
   return message_;
 }
@@ -615,88 +637,36 @@ fm_status_t js_collect_list(const fm_workbook_t* handle, size_t sheet, JsListCou
   return rc;
 }
 
-JsNumberResult js_count_result(const fm_workbook_t* handle, size_t sheet, JsListCount count) {
+double js_count(const fm_workbook_t* handle, size_t sheet, JsListCount count) {
   size_t n = 0;
-  const fm_status_t rc = handle != nullptr ? count(handle, sheet, &n) : kBindingInvalidHandle;
-  return number_result(rc, static_cast<double>(n));
-}
-
-emscripten::val record_result(fm_status_t rc, emscripten::val record) {
-  record.set("status", status_from_rc(rc));
-  return record;
-}
-
-JsNumberResult number_result(fm_status_t rc, double value) {
-  JsNumberResult out;
-  out.status = status_from_rc(rc);
-  if (rc == 0) {
-    out.value = value;
+  if (!succeeded(handle != nullptr ? count(handle, sheet, &n) : kBindingInvalidHandle)) {
+    return 0.0;
   }
-  return out;
+  return static_cast<double>(n);
 }
 
-emscripten::val bool_result(fm_status_t rc, std::int32_t flag) {
+emscripten::val value_to_val(const fm_value_t& v) {
   emscripten::val out = emscripten::val::object();
-  out.set("value", rc == 0 && flag != 0);
-  return record_result(rc, out);
-}
-
-JsStringResult string_result(fm_status_t rc, const char* value) {
-  JsStringResult out;
-  out.status = status_from_rc(rc);
-  if (rc == 0 && value != nullptr) {
-    out.value = value;
-  }
-  return out;
-}
-
-emscripten::val optional_result(fm_status_t rc, int32_t present, const emscripten::val& item) {
-  emscripten::val out = emscripten::val::object();
-  out.set("status", status_from_rc(rc));
-  out.set("value", rc == 0 && present != 0 ? item : emscripten::val::null());
-  return out;
-}
-
-JsAddStyleResult index_result(fm_status_t rc, std::size_t index) {
-  JsAddStyleResult out;
-  out.status = status_from_rc(rc);
-  if (rc == 0) {
-    out.index = static_cast<uint32_t>(index);
-  }
-  return out;
-}
-
-void adopt_value(fm_status_t rc, const fm_value_t& v, JsStatus& status, JsValue& value) {
-  if (rc != 0) {
-    status = error_status(rc);
-    return;
-  }
-  value = translate_value(v);
-  status = ok_status();
-}
-
-JsValue translate_value(const fm_value_t& v) {
-  JsValue out;
-  out.kind = static_cast<int32_t>(v.kind);
+  out.set("kind", static_cast<int32_t>(v.kind));
   switch (v.kind) {
     case FM_VAL_NUMBER:
-      out.number = v.u.number;
+      out.set("number", v.u.number);
       break;
     case FM_VAL_BOOL:
-      out.boolean = v.u.boolean;
+      out.set("boolean", v.u.boolean != 0);
       break;
     case FM_VAL_TEXT:
-      out.text = string_from_cstr(v.u.text);
+      out.set("text", string_from_cstr(v.u.text));
       break;
     case FM_VAL_ERROR:
-      out.errorCode = v.u.error_code;
+      out.set("errorCode", v.u.error_code);
       break;
     case FM_VAL_BLANK:
     case FM_VAL_ARRAY:
     case FM_VAL_REF:
     case FM_VAL_LAMBDA:
     default:
-      // Other variants carry no scalar payload across this boundary.
+      // Other variants carry no payload across this boundary.
       break;
   }
   return out;
@@ -740,19 +710,11 @@ emscripten::val cell_rect_to_val(const fm_cell_rect_t& m) {
   return item;
 }
 
-emscripten::val empty_pivot_layout_result(JsStatus status) {
-  emscripten::val o = emscripten::val::object();
-  o.set("status", status);
-  o.set("rect", emscripten::val::null());
-  o.set("cells", emscripten::val::array());
-  return o;
-}
-
 emscripten::val pivot_cell_to_val(const fm_pivot_cell_t& cell) {
   emscripten::val item = emscripten::val::object();
   item.set("row", cell.row);
   item.set("col", cell.col);
-  item.set("value", translate_value(cell.value));
+  item.set("value", value_to_val(cell.value));
   item.set("kind", static_cast<int32_t>(cell.kind));
   item.set("depth", cell.depth);
   js_set_cstr(item, "fieldName", cell.field_name);
@@ -760,42 +722,41 @@ emscripten::val pivot_cell_to_val(const fm_pivot_cell_t& cell) {
   return item;
 }
 
-JsBytesReadResult val_to_bytes_checked(const emscripten::val& v) {
-  JsBytesReadResult result;
+bool val_to_bytes_checked(const emscripten::val& v, std::vector<uint8_t>* out) {
+  out->clear();
   int32_t completed = 0;
   const emscripten::val snapshot = emscripten::val::take_ownership(fm_wasm_safe_reader_operation(
       v.as_handle(), emscripten::val::undefined().as_handle(), kSafeBytesSnapshot, &completed));
   if (completed == 0) {
-    result.ok = false;
-    result.message = "bytes: field access threw";
-    return result;
+    fm_wasm_record_argument_error(kArgumentErrorAccess, "bytes: field access threw");
+    return false;
   }
   if (!js_value_present(snapshot)) {
-    result.ok = false;
-    result.message = "bytes must be a Uint8Array";
-    return result;
+    fm_wasm_record_argument_error(kArgumentErrorType, "bytes must be a Uint8Array");
+    return false;
   }
 
   JsNarrowNumericReader reader("bytes");
   const uint32_t length = reader.length(snapshot, "bytes.length");
   if (!reader.ok()) {
-    result.ok = false;
-    result.message = reader.message();
-    return result;
+    return false;
   }
-  result.bytes.resize(length);
+  out->resize(length);
   if (length == 0U) {
-    return result;
+    return true;
   }
   uint32_t written = 0;
   const int32_t copied =
-      fm_wasm_copy_safe_bytes(snapshot.as_handle(), reinterpret_cast<uintptr_t>(result.bytes.data()), length, &written);
+      fm_wasm_copy_safe_bytes(snapshot.as_handle(), reinterpret_cast<uintptr_t>(out->data()), length, &written);
   if (copied != 1 || written != length) {
-    result.ok = false;
-    result.bytes.clear();
-    result.message = copied < 0 ? "bytes: field access threw" : "bytes must be a Uint8Array";
+    out->clear();
+    // The copy trampoline reports a throw as -1 without capturing it, so
+    // both outcomes surface as a type error on the argument.
+    fm_wasm_record_argument_error(kArgumentErrorType,
+                                  copied < 0 ? "bytes: field access threw" : "bytes must be a Uint8Array");
+    return false;
   }
-  return result;
+  return true;
 }
 
 emscripten::val bytes_to_val(const uint8_t* data, std::size_t len) {
@@ -808,12 +769,10 @@ emscripten::val bytes_to_val(const uint8_t* data, std::size_t len) {
   return u8;
 }
 
-emscripten::val snapshot_bytes_result(fm_status_t rc, uint8_t* data, std::size_t len) {
-  emscripten::val o = emscripten::val::object();
-  o.set("status", status_from_rc(rc));
-  o.set("bytes", bytes_to_val(rc == 0 ? data : nullptr, rc == 0 ? len : 0));
+emscripten::val snapshot_bytes(fm_status_t rc, uint8_t* data, std::size_t len) {
+  emscripten::val bytes = succeeded(rc) ? bytes_to_val(data, len) : emscripten::val::undefined();
   fm_buffer_destroy(data);
-  return o;
+  return bytes;
 }
 
 fm_cell_rect_t js_pull_range(const emscripten::val& v, JsNarrowNumericReader* reader) {
@@ -911,13 +870,6 @@ void js_set_cstr(emscripten::val& o, const char* key, const char* s) {
   o.set(key, string_from_cstr(s));
 }
 
-emscripten::val js_text_result(fm_status_t rc, const char* key, const char* text) {
-  emscripten::val out = emscripten::val::object();
-  out.set("status", status_from_rc(rc));
-  js_set_cstr(out, key, rc == 0 ? text : nullptr);
-  return out;
-}
-
 void js_set_cstr_fields(emscripten::val& o, const JsStrField* fields, std::size_t n) {
   for (std::size_t i = 0; i < n; ++i) {
     js_set_cstr(o, fields[i].key, fields[i].value);
@@ -942,26 +894,88 @@ emscripten::val js_border_side(const fm_border_side_t& s) {
   return o;
 }
 
-bool pull_value(JsNarrowNumericReader& reader, const emscripten::val& value, std::string& text, fm_value_t* out) {
-  out->kind = reader.i32(value, "kind", 0, "value.kind");
-  text = reader.string(value, "text", "value.text");
-  switch (out->kind) {
-    case FM_VAL_NUMBER:
-      out->u.number = reader.number(value, "number", 0.0, "value.number");
-      break;
-    case FM_VAL_BOOL:
-      out->u.boolean = reader.i32(value, "boolean", 0, "value.boolean") != 0 ? 1 : 0;
-      break;
-    case FM_VAL_TEXT:
-      out->u.text = text.c_str();
-      break;
-    case FM_VAL_ERROR:
-      out->u.error_code = reader.i32(value, "errorCode", 0, "value.errorCode");
-      break;
-    default:
-      break;
+namespace {
+
+/// Records a `Value` type error and returns false.
+bool reject_value(const char* message) {
+  fm_wasm_record_argument_error(kArgumentErrorType, message);
+  return false;
+}
+
+}  // namespace
+
+bool val_to_value(const emscripten::val& in, fm_value_t* out, std::string& text) {
+  *out = fm_value_t{};
+  JsNarrowNumericReader reader("Value");
+  if (!reader.require_object(in, "value")) {
+    return false;
   }
-  return reader.ok();
+  const emscripten::val kind = reader.value(in, "kind", "value.kind");
+  if (!reader.ok()) {
+    return false;
+  }
+  if (!kind.isNumber()) {
+    return reject_value("Value: `value.kind` must be a ValueKind");
+  }
+  const double kind_number = kind.as<double>();
+  if (!(kind_number >= static_cast<double>(FM_VAL_BLANK) && kind_number <= static_cast<double>(FM_VAL_LAMBDA)) ||
+      std::floor(kind_number) != kind_number) {
+    return reject_value("Value: `value.kind` must be a ValueKind");
+  }
+  out->kind = static_cast<int32_t>(kind_number);
+  switch (out->kind) {
+    case FM_VAL_NUMBER: {
+      const emscripten::val number = reader.value(in, "number", "value.number");
+      if (!reader.ok()) {
+        return false;
+      }
+      if (!number.isNumber()) {
+        return reject_value("Value: `value.number` must be a Number");
+      }
+      out->u.number = number.as<double>();
+      return true;
+    }
+    case FM_VAL_BOOL: {
+      const emscripten::val flag = reader.value(in, "boolean", "value.boolean");
+      if (!reader.ok()) {
+        return false;
+      }
+      if (!flag.isTrue() && !flag.isFalse()) {
+        return reject_value("Value: `value.boolean` must be a boolean");
+      }
+      out->u.boolean = flag.isTrue() ? 1 : 0;
+      return true;
+    }
+    case FM_VAL_TEXT: {
+      const emscripten::val string = reader.value(in, "text", "value.text");
+      if (!reader.ok()) {
+        return false;
+      }
+      if (!string.isString()) {
+        return reject_value("Value: `value.text` must be a string");
+      }
+      text = reader.string_value(string, "value.text");
+      if (!reader.ok()) {
+        return false;
+      }
+      out->u.text = text.c_str();
+      return true;
+    }
+    case FM_VAL_ERROR: {
+      const emscripten::val code = reader.value(in, "errorCode", "value.errorCode");
+      if (!reader.ok()) {
+        return false;
+      }
+      if (!code.isNumber()) {
+        return reject_value("Value: `value.errorCode` must be an ErrorCode");
+      }
+      out->u.error_code = reader.i32_value(code, 0, "value.errorCode");
+      return reader.ok();
+    }
+    default:
+      // The remaining kinds carry no payload.
+      return true;
+  }
 }
 
 }  // namespace parts

@@ -1,13 +1,15 @@
 //
 // JsWorkbook reference-text surface: `parseReference` / `formatReference`,
 // the A1 / R1C1 grammar `INDIRECT` reads, over `fm_workbook_parse_reference`
-// and `fm_workbook_format_reference`. An argument JS cannot represent (a
-// wrong type, a non-integer) is raised as a TypeError / RangeError by the
-// pre-js method wrapper; an engine rejection is reported through the status.
+// and `fm_workbook_format_reference`, and the sheet lookup by name. An
+// argument JS cannot represent (a wrong type, a non-integer) is raised as a
+// TypeError / RangeError by the pre-js method wrapper; an engine rejection
+// is thrown there as a `FormulonError`.
 
 #include <emscripten/em_js.h>
 #include <emscripten/val.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -26,12 +28,13 @@ enum ReferenceErrorKind : int32_t {
 };
 
 // Hands an error to the pre-js method wrapper, which throws it after the
-// native method returns (the same channel the numeric readers use); outside a
-// wrapped call there is no wrapper and the call just returns `undefined`.
+// native method returns (the same channel the numeric readers use, so it
+// displaces a recorded status failure); outside a wrapped call there is no
+// wrapper and the call just returns `undefined`.
 // clang-format off
 EM_JS(void, fm_wasm_record_reference_error, (int32_t kind, const char* message), {
   var errors = Module[Symbol.for('formulon.argumentErrors')];
-  if (!errors || errors.depth === 0 || errors.pending !== undefined) {
+  if (!errors || errors.depth === 0 || (errors.pending !== undefined && errors.pending.kind !== 3)) {
     return;
   }
   errors.pending = { kind: kind, message: UTF8ToString(message), thrown: undefined };
@@ -60,7 +63,8 @@ bool options_object(const emscripten::val& options, const char* api, emscripten:
 emscripten::val JsWorkbook::parseReference(const std::string& text, emscripten::val options) const {
   using emscripten::val;
   if (handle_ == nullptr) {
-    return optional_result(kBindingInvalidHandle, 0, val::null());
+    record_invalid_handle();
+    return val::undefined();
   }
   val opts = val::undefined();
   if (!options_object(options, "parseReference", &opts)) {
@@ -84,38 +88,53 @@ emscripten::val JsWorkbook::parseReference(const std::string& text, emscripten::
   const fm_status_t rc =
       fm_workbook_parse_reference(handle_, text.c_str(), r1c1 ? 1 : 0, has_row ? 1 : 0, base_row, base_col, &ref);
   if (rc != 0 || ref.valid == 0) {
-    return optional_result(rc, 0, val::null());
+    return optional_or_null(rc, 0, val::null());
   }
   val out = val::object();
   out.set("sheetName", ref.has_sheet != 0 ? val(std::string(ref.sheet_name)) : val::null());
   out.set("rect", cell_rect_to_val(ref.rect));
-  return optional_result(rc, 1, out);
+  return optional_or_null(rc, 1, out);
 }
 
-emscripten::val JsWorkbook::formatReference(emscripten::val range, emscripten::val options) const {
+std::string JsWorkbook::formatReference(emscripten::val range, emscripten::val options) const {
   using emscripten::val;
   if (handle_ == nullptr) {
-    return val(string_result(kBindingInvalidHandle, nullptr));
+    record_invalid_handle();
+    return std::string();
   }
   val opts = val::undefined();
   if (!options_object(options, "formatReference", &opts)) {
-    return val::undefined();
+    return std::string();
   }
   JsNarrowNumericReader reader("formatReference");
   std::string sheet_store;
   const char* sheet_name = reader.optional_string(range, "sheetName", sheet_store, "sheetName");
   const val rect_value = reader.value(range, "rect", "rect");
   if (reader.ok() && !js_value_present(rect_value)) {
-    return reject(kReferenceTypeError, "formatReference: `rect` is required");
+    reject(kReferenceTypeError, "formatReference: `rect` is required");
+    return std::string();
   }
   const fm_cell_rect_t rect = js_pull_range(rect_value, &reader);
   const bool absolute = reader.boolean(opts, "absolute", false, "absolute");
   if (!reader.ok()) {
-    return val::undefined();
+    return std::string();
   }
   const char* text = nullptr;
-  const fm_status_t rc = fm_workbook_format_reference(handle_, sheet_name, &rect, absolute ? 1 : 0, &text);
-  return val(string_result(rc, text));
+  if (!succeeded(fm_workbook_format_reference(handle_, sheet_name, &rect, absolute ? 1 : 0, &text))) {
+    return std::string();
+  }
+  return string_from_cstr(text);
+}
+
+emscripten::val JsWorkbook::getSheetIndex(const std::string& name) const {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return emscripten::val::undefined();
+  }
+  std::size_t index = 0;
+  int32_t present = 0;
+  const fm_status_t rc = fm_workbook_get_sheet_index(handle_, name.c_str(), &index, &present);
+  return optional_or_null(rc, present, emscripten::val(static_cast<uint32_t>(index)));
 }
 
 }  // namespace parts

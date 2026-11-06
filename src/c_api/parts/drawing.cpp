@@ -45,7 +45,7 @@ extern "C" fm_status_t fm_workbook_get_image_info(const fm_workbook_t* wb, const
                                                   fm_image_info_t* out) {
   clear_last_error();
   if (wb == nullptr || bytes == nullptr || out == nullptr) {
-    return null_argument("fm_workbook_get_image_info");
+    return null_argument();
   }
   auto info = formulon::probe_image(bytes, len);
   if (!info) {
@@ -59,10 +59,9 @@ extern "C" fm_status_t fm_sheet_get_drawing_object_count(const fm_workbook_t* wb
                                                          size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_drawing_object_count: NULL out_count");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out_count is NULL");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_drawing_object_count"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   auto objects = formulon::list_drawing_objects(wb->workbook(), sheet_index);
@@ -77,10 +76,9 @@ extern "C" fm_status_t fm_sheet_get_drawing_object_at(const fm_workbook_t* wb, s
                                                       fm_drawing_object_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_drawing_object_at: NULL out");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out is NULL");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_drawing_object_at"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   auto objects = formulon::list_drawing_objects(wb->workbook(), sheet_index);
@@ -88,7 +86,7 @@ extern "C" fm_status_t fm_sheet_get_drawing_object_at(const fm_workbook_t* wb, s
     return set_last_error(objects.error());
   }
   const std::vector<formulon::DrawingObject>& list = objects.value();
-  if (auto rc = check_index(idx, list.size(), "fm_sheet_get_drawing_object_at", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, list.size(), "index"); rc != 0) {
     return rc;
   }
   const formulon::DrawingObject& obj = list[idx];
@@ -111,9 +109,9 @@ extern "C" fm_status_t fm_sheet_get_drawing_object(const fm_workbook_t* wb, size
                                                    int32_t* out_present, fm_drawing_object_t* out) {
   clear_last_error();
   if (out_present == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_drawing_object: NULL out");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out is NULL");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_drawing_object"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   *out_present = 0;
@@ -137,14 +135,13 @@ extern "C" fm_status_t fm_sheet_get_image(const fm_workbook_t* wb, size_t sheet_
                                           fm_image_info_t* out_info) {
   clear_last_error();
   if (out_present == nullptr || out_bytes == nullptr || out_len == nullptr || out_info == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_image: NULL output pointer");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "output pointer is NULL");
   }
   *out_present = 0;
   *out_bytes = nullptr;
   *out_len = 0;
   *out_info = fm_image_info_t{};
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_image"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   auto objects = formulon::list_drawing_objects(wb->workbook(), sheet_index);
@@ -175,17 +172,16 @@ extern "C" fm_status_t fm_sheet_get_image(const fm_workbook_t* wb, size_t sheet_
 extern "C" fm_status_t fm_sheet_add_image(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes, size_t len,
                                           const fm_image_insert_t* opts, uint32_t* out_object_id) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_add_image";
   if (bytes == nullptr || opts == nullptr || out_object_id == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_anchor_enums(opts->anchor_kind, opts->edit_as, kApi); rc != 0) {
+  if (auto rc = check_anchor_enums(opts->anchor_kind, opts->edit_as); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8(kApi, {opts->name, opts->descr}); rc != 0) {
+  if (auto rc = check_utf8({opts->name, opts->descr}); rc != 0) {
     return rc;
   }
   formulon::ImageInsertOptions model;
@@ -209,7 +205,7 @@ extern "C" fm_status_t fm_sheet_add_image(fm_workbook_t* wb, size_t sheet_index,
 
 extern "C" fm_status_t fm_sheet_remove_drawing(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_remove_drawing"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   return finish_status(formulon::remove_drawing(wb->workbook(), sheet_index, object_id));
@@ -218,14 +214,13 @@ extern "C" fm_status_t fm_sheet_remove_drawing(fm_workbook_t* wb, size_t sheet_i
 extern "C" fm_status_t fm_sheet_set_drawing_anchor(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                    const fm_drawing_anchor_t* anchor) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_set_drawing_anchor";
   if (anchor == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_anchor_enums(anchor->anchor_kind, anchor->edit_as, kApi); rc != 0) {
+  if (auto rc = check_anchor_enums(anchor->anchor_kind, anchor->edit_as); rc != 0) {
     return rc;
   }
   formulon::DrawingAnchor model;
@@ -243,14 +238,13 @@ extern "C" fm_status_t fm_sheet_set_drawing_anchor(fm_workbook_t* wb, size_t she
 extern "C" fm_status_t fm_sheet_set_drawing_name(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                  const char* name) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_set_drawing_name";
   if (name == nullptr) {
-    return null_argument(kApi, "name");
+    return null_argument("name");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8(kApi, {name}); rc != 0) {
+  if (auto rc = check_utf8({name}); rc != 0) {
     return rc;
   }
   return finish_status(formulon::set_drawing_name(wb->workbook(), sheet_index, object_id, name));
@@ -259,7 +253,7 @@ extern "C" fm_status_t fm_sheet_set_drawing_name(fm_workbook_t* wb, size_t sheet
 extern "C" fm_status_t fm_sheet_set_drawing_z_order(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                     size_t index) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_drawing_z_order"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   return finish_status(formulon::set_drawing_z_order(wb->workbook(), sheet_index, object_id,
@@ -269,7 +263,6 @@ extern "C" fm_status_t fm_sheet_set_drawing_z_order(fm_workbook_t* wb, size_t sh
 extern "C" fm_status_t fm_sheet_snapshot_drawing(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                  uint8_t** out_bytes, size_t* out_len) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_snapshot_drawing";
   if (out_bytes != nullptr) {
     *out_bytes = nullptr;
   }
@@ -277,9 +270,9 @@ extern "C" fm_status_t fm_sheet_snapshot_drawing(const fm_workbook_t* wb, size_t
     *out_len = 0;
   }
   if (out_bytes == nullptr || out_len == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   auto snapshot = formulon::snapshot_drawing(wb->workbook(), sheet_index, object_id);
@@ -294,11 +287,10 @@ extern "C" fm_status_t fm_sheet_snapshot_drawing(const fm_workbook_t* wb, size_t
 extern "C" fm_status_t fm_sheet_restore_drawing(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes, size_t len,
                                                 uint32_t flags, uint32_t* out_object_id) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_restore_drawing";
   if (bytes == nullptr || out_object_id == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   auto id = formulon::restore_drawing(wb->workbook(), sheet_index, bytes, len, flags);

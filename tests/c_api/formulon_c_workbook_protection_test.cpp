@@ -266,10 +266,10 @@ TEST(FormulonCApiProtectedRanges, ArgumentsAreValidated) {
   EXPECT_NE(fm_sheet_add_protected_range(wb.handle, 0, nullptr, ignored_index()), 0);
   // Updating an entry to its own name is not a duplicate.
   EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 0, &good), 0);
-  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 5, &good), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_remove_protected_range(wb.handle, 0, 5), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_update_protected_range(wb.handle, 0, 5, &good), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_remove_protected_range(wb.handle, 0, 5), FM_STATUS_INDEX_OUT_OF_RANGE);
   fm_protected_range_t out{};
-  EXPECT_EQ(fm_sheet_get_protected_range(wb.handle, 0, 5, &out), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_protected_range(wb.handle, 0, 5, &out), FM_STATUS_INDEX_OUT_OF_RANGE);
   std::size_t count = 0;
   EXPECT_EQ(fm_sheet_get_protected_range_count(wb.handle, 9, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(RangeCount(wb), 1U);

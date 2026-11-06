@@ -42,23 +42,23 @@ const formulon::pivot::PivotCache* find_cache(const formulon::Workbook& wb, std:
 
 // Sheet+pivot resolution. Returns 0 with `*out` set, or the error status with
 // the binding error populated (a bad sheet is kSheetIndexOutOfRange, a bad
-// pivot kInvalidArgument).
-fm_status_t resolve_pivot_mut(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index, const char* fn,
+// pivot kIndexOutOfRange).
+fm_status_t resolve_pivot_mut(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                               formulon::pivot::PivotTable** out);
-fm_status_t resolve_pivot(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index, const char* fn,
+fm_status_t resolve_pivot(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                           const formulon::pivot::PivotTable** out);
 
 // Mutable-handle variant for the table-level setters: rejects a NULL `wb`,
 // then resolves like `resolve_pivot_mut`. Returns 0 with `*out` set, or the
 // error status with the binding error populated.
-fm_status_t resolve_pivot_checked(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index, const char* fn,
+fm_status_t resolve_pivot_checked(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                                   formulon::pivot::PivotTable** out);
 
 // Read-path variant: rejects a NULL `wb` or any NULL entry of `out_args`
-// ("<fn>: NULL argument"), then resolves like `resolve_pivot`. Returns 0 with
+// (`null_argument`), then resolves like `resolve_pivot`. Returns 0 with
 // `*out` set, or the error status with the binding error populated.
 fm_status_t resolve_pivot_checked(const fm_workbook_t* wb, std::initializer_list<const void*> out_args,
-                                  std::size_t sheet_index, std::size_t pivot_index, const char* fn,
+                                  std::size_t sheet_index, std::size_t pivot_index,
                                   const formulon::pivot::PivotTable** out);
 
 // Invalidates the pivot's derived state so the next layout call
@@ -141,7 +141,7 @@ std::optional<fm_pivot_axis_t> pivot_axis_to_fm(formulon::pivot::PivotAxis axis)
 // arguments, resolves the table and stores `count(table)` in `*out_count`.
 using TableCount = std::size_t (*)(const formulon::pivot::PivotTable& table);
 fm_status_t pivot_count(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                        std::size_t* out_count, const char* fn, TableCount count);
+                        std::size_t* out_count, TableCount count);
 
 // Ensures the record's cell vector has at least `field_index + 1` slots.
 // Newly-added slots are initialised to Blank so existing semantics

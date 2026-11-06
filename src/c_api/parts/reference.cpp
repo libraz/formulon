@@ -35,22 +35,21 @@ using formulon::c_api::parts::store_cstr;
 extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, const char* text, int32_t r1c1,
                                                    int32_t has_base, uint32_t base_row, uint32_t base_col,
                                                    fm_parsed_reference_t* out) {
-  static constexpr const char* kApi = "fm_workbook_parse_reference";
   clear_last_error();
   if (wb == nullptr || text == nullptr || out == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
-  if (auto rc = check_utf8(kApi, {text}); rc != 0) {
+  if (auto rc = check_utf8({text}); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(r1c1, 1, kApi, "r1c1"); rc != 0) {
+  if (auto rc = check_enum_domain(r1c1, 1, "r1c1"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(has_base, 1, kApi, "has_base"); rc != 0) {
+  if (auto rc = check_enum_domain(has_base, 1, "has_base"); rc != 0) {
     return rc;
   }
   if (has_base == 1) {
-    if (auto rc = check_cell_coord(base_row, base_col, kApi); rc != 0) {
+    if (auto rc = check_cell_coord(base_row, base_col); rc != 0) {
       return rc;
     }
   }
@@ -88,29 +87,27 @@ extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, cons
 extern "C" fm_status_t fm_workbook_format_reference(const fm_workbook_t* wb, const char* sheet_name,
                                                     const fm_cell_rect_t* range, int32_t absolute,
                                                     const char** out_text) {
-  static constexpr const char* kApi = "fm_workbook_format_reference";
   clear_last_error();
   if (wb == nullptr || range == nullptr || out_text == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
   const std::uint32_t row0 = range->first_row;
   const std::uint32_t col0 = range->first_col;
   const std::uint32_t row1 = range->last_row;
   const std::uint32_t col1 = range->last_col;
-  if (auto rc = check_utf8(kApi, {sheet_name}); rc != 0) {
+  if (auto rc = check_utf8({sheet_name}); rc != 0) {
     return rc;
   }
-  if (auto rc = check_cell_coord(row0, col0, kApi); rc != 0) {
+  if (auto rc = check_cell_coord(row0, col0); rc != 0) {
     return rc;
   }
-  if (auto rc = check_cell_coord(row1, col1, kApi); rc != 0) {
+  if (auto rc = check_cell_coord(row1, col1); rc != 0) {
     return rc;
   }
   if (row0 > row1 || col0 > col1) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             (std::string(kApi) + ": inverted rectangle").c_str());
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "inverted rectangle");
   }
-  if (auto rc = check_enum_domain(absolute, 1, kApi, "absolute"); rc != 0) {
+  if (auto rc = check_enum_domain(absolute, 1, "absolute"); rc != 0) {
     return rc;
   }
   *out_text = publish_scratch(

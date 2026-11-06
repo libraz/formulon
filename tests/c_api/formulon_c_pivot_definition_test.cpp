@@ -211,20 +211,20 @@ TEST(FormulonCApiPivot, ReadBackRejectsBadArguments) {
   EXPECT_EQ(fm_sheet_get_pivot_cache_id(wb.handle, 0, pivot_index, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   EXPECT_EQ(fm_sheet_get_pivot_cache_id(wb.handle, 0, pivot_index + 1U, &out_cache),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
   EXPECT_EQ(out_cache, 7U);
 
   fm_pivot_field_info_t field{};
   EXPECT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 99, &field),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
   EXPECT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 0, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   fm_pivot_item_info_t item{};
   EXPECT_EQ(fm_sheet_get_pivot_field_item(wb.handle, 0, pivot_index, 0, 99, &item),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
   fm_pivot_data_field_spec_t data_field{};
   EXPECT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0, pivot_index, 99, &data_field),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
   const std::uint32_t* order = nullptr;
   std::size_t count = 0;
   EXPECT_EQ(fm_sheet_get_pivot_row_field_order(wb.handle, 0, pivot_index, nullptr, &count),
@@ -272,10 +272,10 @@ TEST(FormulonCApiPivot, DerivedDataFieldNameUsesTheFieldDisplayNameAndSetPath) {
   // A derived name needs a field to name it after.
   spec.field_index = 99;
   EXPECT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0, pivot_index, 0, &spec),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
   std::size_t added = 0;
   EXPECT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0, pivot_index, &spec, &added),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
   ASSERT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0, pivot_index, 0, &read), 0);
   EXPECT_STREQ(read.name, "Max of Sales");
 }
@@ -603,7 +603,7 @@ TEST(FormulonCApiPivot, StyleInfoRejectsBadArguments) {
   EXPECT_EQ(fm_sheet_get_pivot_style_info(wb.handle, 0, pivot_index, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   EXPECT_EQ(fm_sheet_get_pivot_style_info(wb.handle, 0, pivot_index + 1U, &style),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
   EXPECT_NE(fm_sheet_set_pivot_style_info(wb.handle, 0, pivot_index + 1U, "X", 1, 1, 0, 0, 0), 0);
   EXPECT_NE(fm_sheet_set_pivot_style_info(nullptr, 0, pivot_index, "X", 1, 1, 0, 0, 0), 0);
 }

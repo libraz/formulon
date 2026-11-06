@@ -19,16 +19,16 @@ namespace parts {
 
 // ---- AutoFilter --------------------------------------------------------
 
-emscripten::val JsWorkbook::getSheetAutoFilterXml(uint32_t sheet) const {
+std::string JsWorkbook::getSheetAutoFilterXml(uint32_t sheet) const {
   const char* xml = nullptr;
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_sheet_get_auto_filter_xml(handle_, sheet, &xml) : kBindingInvalidHandle;
-  return js_text_result(rc, "value", xml);
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_auto_filter_xml(handle_, sheet, &xml) : kBindingInvalidHandle)) {
+    return std::string();
+  }
+  return string_from_cstr(xml);
 }
 
-JsStatus JsWorkbook::setSheetAutoFilterXml(uint32_t sheet, const std::string& xml) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_set_auto_filter_xml(handle_, sheet, xml.c_str())
-                                           : kBindingInvalidHandle);
+void JsWorkbook::setSheetAutoFilterXml(uint32_t sheet, const std::string& xml) {
+  succeeded(handle_ != nullptr ? fm_sheet_set_auto_filter_xml(handle_, sheet, xml.c_str()) : kBindingInvalidHandle);
 }
 
 // ---- Typed AutoFilter --------------------------------------------------
@@ -321,36 +321,27 @@ void pull_sort_condition(const emscripten::val& v, std::string& custom_list, fm_
 }
 
 emscripten::val get_auto_filter(const fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t index) {
-  emscripten::val o = emscripten::val::object();
-  o.set("autoFilter", emscripten::val::null());
-  if (wb == nullptr) {
-    o.set("status", invalid_handle_status());
-    return o;
-  }
   fm_auto_filter_t f{};
   int32_t present = 0;
-  const fm_status_t rc = ops.get(wb, index, &f, &present);
-  o.set("status", status_from_rc(rc));
-  if (rc == 0 && present != 0) {
-    o.set("autoFilter", auto_filter_to_val(f));
-  }
-  return o;
+  const fm_status_t rc = wb != nullptr ? ops.get(wb, index, &f, &present) : kBindingInvalidHandle;
+  return optional_or_null(rc, present, rc == 0 && present != 0 ? auto_filter_to_val(f) : emscripten::val::null());
 }
 
-JsStatus set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t index, const emscripten::val& filter) {
+void set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t index, const emscripten::val& filter) {
   if (wb == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setAutoFilter");
   fm_auto_filter_t f{};
   f.range = js_pull_range(reader.value(filter, "range", "autoFilter.range"), &reader);
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
   const emscripten::val columns = js_pull_array(filter, "columns", reader);
   const uint32_t column_count = reader.length(columns, "autoFilter.columns.length");
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
   std::vector<FilterColumnStore> stores(column_count);
   std::vector<fm_filter_column_t> cols(column_count);
@@ -368,7 +359,7 @@ JsStatus set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t i
     pull_filter_column(column, stores[i], cols[i], reader);
   }
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
   f.columns = cols.empty() ? nullptr : cols.data();
   f.column_count = column_count;
@@ -379,18 +370,18 @@ JsStatus set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t i
     f.has_sort = 1;
     f.sort_ref = js_pull_range(reader.value(sort, "ref", "sort.ref"), &reader);
     if (!reader.ok()) {
-      return reader.failure();
+      return;
     }
     f.column_sort = pull_flag(sort, "columnSort", reader);
     f.case_sensitive = pull_flag(sort, "caseSensitive", reader);
     f.sort_method = reader.i32(sort, "sortMethod", 0, "sort.sortMethod");
     if (!reader.ok()) {
-      return reader.failure();
+      return;
     }
     const emscripten::val list = js_pull_array(sort, "conditions", reader);
     const uint32_t n = reader.length(list, "sort.conditions.length");
     if (!reader.ok()) {
-      return reader.failure();
+      return;
     }
     custom_lists.resize(n);
     conditions.resize(n);
@@ -408,28 +399,25 @@ JsStatus set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t i
       pull_sort_condition(condition, custom_lists[i], conditions[i], reader);
     }
     if (!reader.ok()) {
-      return reader.failure();
+      return;
     }
     f.conditions = conditions.empty() ? nullptr : conditions.data();
     f.condition_count = n;
   }
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
-  return status_from_rc(ops.set(wb, index, &f));
+  succeeded(ops.set(wb, index, &f));
 }
 
-JsStatus run_auto_filter(fm_workbook_t* wb, fm_status_t (*fn)(fm_workbook_t*, size_t), uint32_t index) {
-  return wb == nullptr ? invalid_handle_status() : status_from_rc(fn(wb, index));
+void run_auto_filter(fm_workbook_t* wb, fm_status_t (*fn)(fm_workbook_t*, size_t), uint32_t index) {
+  succeeded(wb != nullptr ? fn(wb, index) : kBindingInvalidHandle);
 }
 
 emscripten::val evaluate_auto_filter(const fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t index) {
-  emscripten::val o = emscripten::val::object();
-  o.set("firstRow", 0U);
-  o.set("match", emscripten::val::array());
   if (wb == nullptr) {
-    o.set("status", invalid_handle_status());
-    return o;
+    record_invalid_handle();
+    return emscripten::val::undefined();
   }
   size_t len = 0;
   uint32_t first_row = 0;
@@ -438,15 +426,14 @@ emscripten::val evaluate_auto_filter(const fm_workbook_t* wb, const AutoFilterOp
   if (rc == 0 && len > 0) {
     rc = ops.evaluate(wb, index, flags.data(), flags.size(), &len, &first_row);
   }
-  if (rc != 0) {
-    o.set("status", error_status(rc));
-    return o;
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
   }
   emscripten::val match = emscripten::val::array();
   for (size_t i = 0; i < flags.size(); ++i) {
     match.call<void>("push", flags[i] != 0);
   }
-  o.set("status", ok_status());
+  emscripten::val o = emscripten::val::object();
   o.set("firstRow", first_row);
   o.set("match", match);
   return o;
@@ -458,20 +445,20 @@ emscripten::val JsWorkbook::getAutoFilter(uint32_t sheet) const {
   return get_auto_filter(handle_, kSheetAutoFilter, sheet);
 }
 
-JsStatus JsWorkbook::setAutoFilter(uint32_t sheet, emscripten::val filter) {
-  return set_auto_filter(handle_, kSheetAutoFilter, sheet, filter);
+void JsWorkbook::setAutoFilter(uint32_t sheet, emscripten::val filter) {
+  set_auto_filter(handle_, kSheetAutoFilter, sheet, filter);
 }
 
-JsStatus JsWorkbook::removeAutoFilter(uint32_t sheet) {
-  return run_auto_filter(handle_, fm_sheet_remove_auto_filter, sheet);
+void JsWorkbook::removeAutoFilter(uint32_t sheet) {
+  run_auto_filter(handle_, fm_sheet_remove_auto_filter, sheet);
 }
 
-JsStatus JsWorkbook::applyAutoFilter(uint32_t sheet) {
-  return run_auto_filter(handle_, fm_sheet_apply_auto_filter, sheet);
+void JsWorkbook::applyAutoFilter(uint32_t sheet) {
+  run_auto_filter(handle_, fm_sheet_apply_auto_filter, sheet);
 }
 
-JsStatus JsWorkbook::clearAutoFilter(uint32_t sheet) {
-  return run_auto_filter(handle_, fm_sheet_clear_auto_filter, sheet);
+void JsWorkbook::clearAutoFilter(uint32_t sheet) {
+  run_auto_filter(handle_, fm_sheet_clear_auto_filter, sheet);
 }
 
 emscripten::val JsWorkbook::evaluateAutoFilter(uint32_t sheet) const {
@@ -482,20 +469,20 @@ emscripten::val JsWorkbook::getTableAutoFilter(uint32_t table) const {
   return get_auto_filter(handle_, kTableAutoFilter, table);
 }
 
-JsStatus JsWorkbook::setTableAutoFilter(uint32_t table, emscripten::val filter) {
-  return set_auto_filter(handle_, kTableAutoFilter, table, filter);
+void JsWorkbook::setTableAutoFilter(uint32_t table, emscripten::val filter) {
+  set_auto_filter(handle_, kTableAutoFilter, table, filter);
 }
 
-JsStatus JsWorkbook::removeTableAutoFilter(uint32_t table) {
-  return run_auto_filter(handle_, fm_workbook_remove_table_auto_filter, table);
+void JsWorkbook::removeTableAutoFilter(uint32_t table) {
+  run_auto_filter(handle_, fm_workbook_remove_table_auto_filter, table);
 }
 
-JsStatus JsWorkbook::applyTableAutoFilter(uint32_t table) {
-  return run_auto_filter(handle_, fm_workbook_apply_table_auto_filter, table);
+void JsWorkbook::applyTableAutoFilter(uint32_t table) {
+  run_auto_filter(handle_, fm_workbook_apply_table_auto_filter, table);
 }
 
-JsStatus JsWorkbook::clearTableAutoFilter(uint32_t table) {
-  return run_auto_filter(handle_, fm_workbook_clear_table_auto_filter, table);
+void JsWorkbook::clearTableAutoFilter(uint32_t table) {
+  run_auto_filter(handle_, fm_workbook_clear_table_auto_filter, table);
 }
 
 emscripten::val JsWorkbook::evaluateTableAutoFilter(uint32_t table) const {

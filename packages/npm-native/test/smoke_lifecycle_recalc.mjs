@@ -1,96 +1,80 @@
 import test from 'node:test';
-import { assert, getModule } from './smoke_support.mjs';
+import { assert, getModule, isFormulonError } from './smoke_support.mjs';
 
 test("Workbook.createDefault + setFormula '=1+2' + recalc -> 3", async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  assert.ok(wb.setFormula(0, 0, 0, '=1+2').ok);
-  assert.ok(wb.recalc().ok);
+  const wb = mod.Workbook.createDefault();
+  wb.setFormula(0, 0, 0, '=1+2');
+  wb.recalc();
   const r = wb.getValue(0, 0, 0);
-  assert.ok(r.status.ok);
-  assert.equal(r.value.kind, mod.ValueKind.Number);
-  assert.equal(r.value.number, 3);
+  assert.equal(r.kind, mod.ValueKind.Number);
+  assert.equal(r.number, 3);
 });
 
 test('recalcParallel evaluates a wide DAG and reports bounded telemetry', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   const width = 128;
   for (let row = 0; row < width; row += 1) {
-    assert.ok(wb.setNumber(0, row, 0, row + 1).ok);
-    assert.ok(wb.setFormula(0, row, 1, `=A${row + 1}*2`).ok);
+    wb.setNumber(0, row, 0, row + 1);
+    wb.setFormula(0, row, 1, `=A${row + 1}*2`);
   }
 
   const serial = wb.recalcParallel(1);
-  assert.ok(serial.status.ok, `recalcParallel(1): ${JSON.stringify(serial.status)}`);
-  assert.equal(serial.stats.workerThreadsStarted, 0);
-  assert.equal(serial.stats.workerThreadsUsed, 0);
-  assert.equal(serial.stats.cellsEvaluated, width);
+  assert.equal(serial.workerThreadsStarted, 0);
+  assert.equal(serial.workerThreadsUsed, 0);
+  assert.equal(serial.cellsEvaluated, width);
   for (let row = 0; row < width; row += 1) {
     const value = wb.getValue(0, row, 1);
-    assert.ok(value.status.ok, `serial value row ${row}: ${JSON.stringify(value.status)}`);
-    assert.equal(value.value.kind, mod.ValueKind.Number);
-    assert.equal(value.value.number, (row + 1) * 2);
+    assert.equal(value.kind, mod.ValueKind.Number);
+    assert.equal(value.number, (row + 1) * 2);
   }
 
   for (let row = 0; row < width; row += 1) {
-    assert.ok(wb.setNumber(0, row, 0, row + 2).ok);
+    wb.setNumber(0, row, 0, row + 2);
   }
   const parallel = wb.recalcParallel(8);
-  assert.ok(parallel.status.ok, `recalcParallel(8): ${JSON.stringify(parallel.status)}`);
-  if (parallel.stats.workerThreadsStarted <= 1) {
-    assert.equal(parallel.stats.workerThreadsUsed, 0);
-    assert.equal(parallel.stats.parallelSteps, 0);
-    assert.ok(parallel.stats.serialFallbackSteps > 0, `expected serial fallback: ${JSON.stringify(parallel)}`);
+  if (parallel.workerThreadsStarted <= 1) {
+    assert.equal(parallel.workerThreadsUsed, 0);
+    assert.equal(parallel.parallelSteps, 0);
+    assert.ok(parallel.serialFallbackSteps > 0, `expected serial fallback: ${JSON.stringify(parallel)}`);
   } else {
-    assert.ok(parallel.stats.parallelSteps > 0, `expected parallel steps: ${JSON.stringify(parallel)}`);
-    assert.ok(parallel.stats.workerThreadsUsed > 0, `expected an effective worker: ${JSON.stringify(parallel)}`);
-    assert.ok(parallel.stats.workerThreadsStarted <= 8);
-    assert.ok(parallel.stats.workerThreadsUsed <= parallel.stats.workerThreadsStarted);
+    assert.ok(parallel.parallelSteps > 0, `expected parallel steps: ${JSON.stringify(parallel)}`);
+    assert.ok(parallel.workerThreadsUsed > 0, `expected an effective worker: ${JSON.stringify(parallel)}`);
+    assert.ok(parallel.workerThreadsStarted <= 8);
+    assert.ok(parallel.workerThreadsUsed <= parallel.workerThreadsStarted);
   }
-  assert.equal(parallel.stats.cellsEvaluated, width);
+  assert.equal(parallel.cellsEvaluated, width);
   for (let row = 0; row < width; row += 1) {
     const value = wb.getValue(0, row, 1);
-    assert.ok(value.status.ok, `parallel value row ${row}: ${JSON.stringify(value.status)}`);
-    assert.equal(value.value.kind, mod.ValueKind.Number);
-    assert.equal(value.value.number, (row + 2) * 2);
+    assert.equal(value.kind, mod.ValueKind.Number);
+    assert.equal(value.number, (row + 2) * 2);
   }
 
-  const assertInvalid = (input, label) => {
-    const invalid = input === undefined ? wb.recalcParallel() : wb.recalcParallel(input);
-    assert.equal(invalid.status.ok, false, label);
-    assert.notEqual(invalid.status.code, 0, label);
-    assert.equal(invalid.stats.cellsEvaluated, 0, label);
-    assert.equal(invalid.stats.sccsProcessed, 0, label);
-    assert.equal(invalid.stats.parallelSteps, 0, label);
-    assert.equal(invalid.stats.serialFallbackSteps, 0, label);
-    assert.equal(invalid.stats.cycleRecoveries, 0, label);
-    assert.equal(invalid.stats.workerThreadsStarted, 0, label);
-    assert.equal(invalid.stats.workerThreadsUsed, 0, label);
-    return invalid;
+  // Shape errors are raised by the binding, before any C call.
+  const assertRejected = (errorClass, input, label) => {
+    assert.throws(() => (input === undefined ? wb.recalcParallel() : wb.recalcParallel(input)), errorClass, label);
   };
-  assertInvalid(undefined, 'missing threadCount');
-  assertInvalid(null, 'null threadCount');
-  assertInvalid(NaN, 'NaN threadCount');
-  assertInvalid(Infinity, 'Infinity threadCount');
-  assertInvalid(-Infinity, '-Infinity threadCount');
-  assertInvalid(1.5, 'fractional threadCount');
-  assertInvalid(-1, 'negative threadCount');
-  // Rejected by the binding itself, before any C ABI call: the message is
-  // binding-authored and the context is empty, never a value built from
-  // the threadCount the caller passed (the Status contract's promise for
-  // a binding-raised failure).
-  const invalid = assertInvalid(9, 'threadCount above cap');
-  assert.equal(invalid.status.message, 'recalcParallel: `threadCount` must be an integer in 0..8');
-  assert.equal(invalid.status.context, '');
+  assertRejected(TypeError, undefined, 'missing threadCount');
+  assertRejected(TypeError, null, 'null threadCount');
+  assertRejected(RangeError, NaN, 'NaN threadCount');
+  assertRejected(RangeError, Infinity, 'Infinity threadCount');
+  assertRejected(RangeError, -Infinity, '-Infinity threadCount');
+  assertRejected(RangeError, 1.5, 'fractional threadCount');
+  assertRejected(RangeError, -1, 'negative threadCount');
+  // An integer above the cap is refused by the engine.
+  assert.throws(
+    () => wb.recalcParallel(9),
+    (e) => isFormulonError(e, mod.StatusCode.InvalidArgument),
+    'threadCount above cap',
+  );
   wb.dispose();
 });
 
 test("evaluateFormulaArray('=SEQUENCE(2,3)') returns a 2x3 grid", async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   const r = wb.evaluateFormulaArray(0, 0, 0, '=SEQUENCE(2,3)');
-  assert.ok(r.status.ok);
   assert.equal(r.rows, 2);
   assert.equal(r.cols, 3);
   assert.equal(r.cells.length, 2);
@@ -103,9 +87,8 @@ test("evaluateFormulaArray('=SEQUENCE(2,3)') returns a 2x3 grid", async () => {
 
 test("evaluateFormulaArray('=1+2') reports a 1x1 scalar array", async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   const r = wb.evaluateFormulaArray(0, 0, 0, '=1+2');
-  assert.ok(r.status.ok);
   assert.equal(r.rows, 1);
   assert.equal(r.cols, 1);
   assert.equal(r.cells[0][0].kind, mod.ValueKind.Number);
@@ -114,56 +97,49 @@ test("evaluateFormulaArray('=1+2') reports a 1x1 scalar array", async () => {
 
 test('Workbook.createEmpty + addSheet -> sheetCount/sheetName work', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createEmpty().value;
-  assert.ok(wb.addSheet('Sheet1').status.ok);
-  assert.equal(wb.getSheetCount().value, 1);
+  const wb = mod.Workbook.createEmpty();
+  wb.addSheet('Sheet1');
+  assert.equal(wb.getSheetCount(), 1);
   const sn = wb.getSheetName(0);
-  assert.ok(sn.status.ok);
-  assert.equal(sn.value, 'Sheet1');
+  assert.equal(sn, 'Sheet1');
 });
 
 test('Unicode sheet identity rejects folded duplicate and permits casing rename', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createEmpty().value;
-  assert.ok(wb.addSheet('Ä').status.ok);
-  assert.ok(wb.addSheet('Ö').status.ok);
-  assert.equal(wb.addSheet('ä').status.ok, false);
-  const collision = wb.renameSheet(1, 'ä');
-  assert.equal(collision.ok, false);
-  assert.notEqual(collision.code, 0);
-  assert.equal(wb.getSheetName(0).value, 'Ä');
-  assert.equal(wb.getSheetName(1).value, 'Ö');
-  assert.ok(wb.renameSheet(0, 'ä').ok);
+  const wb = mod.Workbook.createEmpty();
+  wb.addSheet('Ä');
+  wb.addSheet('Ö');
+  assert.throws(() => wb.addSheet('ä'), isFormulonError);
+  assert.throws(
+    () => wb.renameSheet(1, 'ä'),
+    (e) => isFormulonError(e) && e.code !== 0,
+  );
+  assert.equal(wb.getSheetName(0), 'Ä');
+  assert.equal(wb.getSheetName(1), 'Ö');
+  wb.renameSheet(0, 'ä');
   const sn = wb.getSheetName(0);
-  assert.ok(sn.status.ok);
-  assert.equal(sn.value, 'ä');
-  assert.equal(wb.getSheetName(1).value, 'Ö');
+  assert.equal(sn, 'ä');
+  assert.equal(wb.getSheetName(1), 'Ö');
   wb.dispose();
 });
 
 test('save() returns Uint8Array; loadBytes round-trips the value', async () => {
   const mod = await getModule();
-  const wb1 = mod.Workbook.createDefault().value;
-  assert.ok(wb1.setNumber(0, 0, 0, 42).ok);
-  const sr = wb1.save();
-  assert.ok(sr.status.ok, `save: ${JSON.stringify(sr.status)}`);
-  assert.ok(sr.bytes instanceof Uint8Array, 'expected Uint8Array');
-  assert.ok(sr.bytes.length > 0, 'expected non-empty save buffer');
+  const wb1 = mod.Workbook.createDefault();
+  wb1.setNumber(0, 0, 0, 42);
+  const bytes = wb1.save();
+  assert.ok(bytes instanceof Uint8Array, 'expected Uint8Array');
+  assert.ok(bytes.length > 0, 'expected non-empty save buffer');
 
-  const wb2 = mod.Workbook.load(sr.bytes).value;
+  const wb2 = mod.Workbook.load(bytes);
   const r = wb2.getValue(0, 0, 0);
-  assert.ok(r.status.ok, `loaded getValue: ${JSON.stringify(r.status)}`);
-  assert.equal(r.value.kind, mod.ValueKind.Number);
-  assert.equal(r.value.number, 42);
+  assert.equal(r.kind, mod.ValueKind.Number);
+  assert.equal(r.number, 42);
 });
 
-test('loadBytes rejects invalid input with a fresh diagnostic', async () => {
+test('loadBytes rejects a non-byte view', async () => {
   const mod = await getModule();
-  const loaded = mod.Workbook.load(new Uint16Array([1]));
-  assert.equal(loaded.status.ok, false);
-  assert.equal(loaded.value, null);
-  assert.match(loaded.status.message, /NULL or empty input/);
-  assert.match(mod.getLastErrorMessage(), /NULL or empty input/);
+  assert.throws(() => mod.Workbook.load(new Uint16Array([1])), TypeError);
 });
 
 // -- Expanded surface coverage -----------------------------------------
@@ -171,25 +147,25 @@ test('loadBytes rejects invalid input with a fresh diagnostic', async () => {
 // binding. They are deliberately shallow: each call should round-trip
 // some observable state without crashing the Node process.
 
-test('isValid returns true for a live workbook', async () => {
+test('disposed is false for a live workbook', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  assert.equal(wb.isValid(), true);
+  const wb = mod.Workbook.createDefault();
+  assert.equal(wb.disposed, false);
 });
 
 test('dispose deterministically releases a workbook and is idempotent', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  assert.equal(wb.isValid(), true);
+  const wb = mod.Workbook.createDefault();
+  assert.equal(wb.disposed, false);
   assert.equal(wb.dispose(), undefined);
-  assert.equal(wb.isValid(), false);
-  assert.equal(wb.getValue(0, 0, 0).status.ok, false);
+  assert.equal(wb.disposed, true);
+  assert.throws(() => wb.getValue(0, 0, 0), isFormulonError);
   assert.equal(wb.dispose(), undefined);
 });
 
 test('memoryUsage grows with the workbook and reads zero after dispose', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
 
   const empty = wb.getMemoryUsage();
   assert.ok(empty > 0, `an empty workbook still owns storage, got ${empty}`);
@@ -212,7 +188,7 @@ test('memoryUsage is stable across repeated calls and survives a recalc', async 
   // a no-op rather than double-counting, and the operations that trigger
   // their own report must not disturb the estimate either.
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   for (let row = 0; row < 500; row += 1) {
     wb.setFormula(0, row, 0, `=${row}+1`);
   }
@@ -220,7 +196,7 @@ test('memoryUsage is stable across repeated calls and survives a recalc', async 
   const first = wb.getMemoryUsage();
   assert.equal(wb.getMemoryUsage(), first);
 
-  assert.equal(wb.recalc().ok, true);
+  wb.recalc();
   const afterRecalc = wb.getMemoryUsage();
   assert.ok(afterRecalc >= first, `recalc must not shrink the estimate: ${first} -> ${afterRecalc}`);
   assert.equal(wb.getMemoryUsage(), afterRecalc);
@@ -230,30 +206,37 @@ test('memoryUsage is stable across repeated calls and survives a recalc', async 
 
 test('Workbook factories return instances of the exported Workbook class', async () => {
   const mod = await getModule();
-  const defaultBook = mod.Workbook.createDefault().value;
-  const emptyBook = mod.Workbook.createEmpty().value;
+  const defaultBook = mod.Workbook.createDefault();
+  const emptyBook = mod.Workbook.createEmpty();
   assert.ok(defaultBook instanceof mod.Workbook);
   assert.ok(emptyBook instanceof mod.Workbook);
 });
 
 test('copySheet names the copy automatically or explicitly and reports bad arguments', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  assert.ok(wb.setNumber(0, 0, 0, 5).ok);
-  assert.ok(wb.setFormula(0, 0, 1, '=A1*2').ok);
+  const wb = mod.Workbook.createDefault();
+  wb.setNumber(0, 0, 0, 5);
+  wb.setFormula(0, 0, 1, '=A1*2');
   const auto = wb.copySheet(0, 1);
-  assert.ok(auto.status.ok, JSON.stringify(auto.status));
-  assert.equal(auto.index, 1);
-  assert.equal(wb.getSheetName(1).value, 'Sheet1 (2)');
+  assert.equal(auto, 1);
+  assert.equal(wb.getSheetName(1), 'Sheet1 (2)');
   const named = wb.copySheet(0, 0, 'Archive');
-  assert.ok(named.status.ok, JSON.stringify(named.status));
-  assert.equal(named.index, 0);
-  assert.equal(wb.getSheetName(0).value, 'Archive');
-  assert.ok(wb.recalc().ok);
-  assert.equal(wb.getValue(0, 0, 1).value.number, 10);
-  assert.equal(wb.copySheet(9, 0).status.code, 5050);
-  assert.equal(wb.copySheet(0, 9).status.code, 5050);
-  assert.equal(wb.copySheet(0, 0, '').status.code, 5051);
-  assert.equal(wb.getSheetCount().value, 3);
+  assert.equal(named, 0);
+  assert.equal(wb.getSheetName(0), 'Archive');
+  wb.recalc();
+  assert.equal(wb.getValue(0, 0, 1).number, 10);
+  assert.throws(
+    () => wb.copySheet(9, 0),
+    (e) => isFormulonError(e, 5050),
+  );
+  assert.throws(
+    () => wb.copySheet(0, 9),
+    (e) => isFormulonError(e, 5050),
+  );
+  assert.throws(
+    () => wb.copySheet(0, 0, ''),
+    (e) => isFormulonError(e, 5051),
+  );
+  assert.equal(wb.getSheetCount(), 3);
   wb.dispose();
 });

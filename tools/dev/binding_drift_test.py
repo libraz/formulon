@@ -21,6 +21,16 @@ from tools.dev.binding_drift import (
     ts_decl,
 )
 
+# The fixture tests of the ledger-bound rules (R4, R7.js, R8.js, R12, R13, R14, R16, R17) run here as well.
+from tools.dev.binding_drift.api_conventions_bindings_test import (  # noqa: F401
+    AbbreviationTest,
+    EntryPointTest,
+    EntryShapeTest,
+    EnumTypeTest,
+    ResultShapeTest,
+    ValueUnionTest,
+)
+
 
 def _load_gen_native_dts():
     path = Path(__file__).resolve().parents[1] / "codegen" / "gen_native_dts.py"
@@ -90,18 +100,59 @@ class JavaScriptSurfaceTest(unittest.TestCase):
         parsed = ts_decl._parse_js_constants(native)
         self.assertNotEqual(parsed, {"ValueKind": {"Blank": 0, "Number": 1}})
 
-    def test_helper_requires_canonical_import_and_explicit_reexport(self) -> None:
+    def test_helper_requires_the_canonical_import(self) -> None:
         _, _, native = self._fixture(
             "export function mergeFunctionMetadata(base) { return base; }\n",
             "export function mergeFunctionMetadata(base) { return base; }\n",
         )
-        self.assertIsNone(ts_decl._js_common_reexported_function_source(native, "mergeFunctionMetadata"))
+        self.assertIsNone(ts_decl._js_common_imported_function_source(native, "mergeFunctionMetadata"))
 
-        native.write_text(
-            "import { mergeFunctionMetadata } from '../npm/common.mjs';\n",
-            encoding="utf-8",
+        native.write_text("import { mergeFunctionMetadata } from './elsewhere.mjs';\n", encoding="utf-8")
+        self.assertIsNone(ts_decl._js_common_imported_function_source(native, "mergeFunctionMetadata"))
+
+        native.write_text("import { mergeFunctionMetadata } from '../npm/common.mjs';\n", encoding="utf-8")
+        self.assertEqual(ts_decl._js_common_imported_function_source(native, "mergeFunctionMetadata"), "return base;")
+
+        native.write_text("import { other } from '../npm/common.mjs';\n", encoding="utf-8")
+        self.assertIsNone(ts_decl._js_common_imported_function_source(native, "mergeFunctionMetadata"))
+
+    def test_export_from_common_is_a_reexport(self) -> None:
+        _, _, native = self._fixture(
+            "export const ValueKind = Object.freeze({ Blank: 0 });\n"
+            "export const Other = Object.freeze({ A: 1 });\n"
+            "export function buildFormulon() {}\n",
+            "export { ValueKind } from '../npm/common.mjs';\n",
         )
-        self.assertIsNone(ts_decl._js_common_reexported_function_source(native, "mergeFunctionMetadata"))
+        self.assertEqual(ts_decl._parse_js_constants(native), {"ValueKind": {"Blank": 0}})
+
+        native.write_text("export { ValueKind } from './elsewhere.mjs';\n", encoding="utf-8")
+        self.assertEqual(ts_decl._parse_js_constants(native), {})
+
+    def test_namespace_wiring_reaches_the_helper(self) -> None:
+        common = (
+            "export const FORMULON_MEMBERS = Object.freeze(['Workbook', 'mergeFunctionMetadata']);\n"
+            "export function mergeFunctionMetadata(base) { return base; }\n"
+        )
+        wired = "import * as common from '../npm/common.mjs';\nconst f = common.buildFormulon(native, common);\n"
+        _, common_path, native = self._fixture(common, wired)
+        self.assertEqual(ts_decl._js_common_wired_function_source(native, "mergeFunctionMetadata"), "return base;")
+
+        native.write_text("import * as common from '../npm/common.mjs';\n", encoding="utf-8")
+        self.assertIsNone(ts_decl._js_common_wired_function_source(native, "mergeFunctionMetadata"))
+
+        native.write_text("import * as common from './elsewhere.mjs';\ncommon.buildFormulon();\n", encoding="utf-8")
+        self.assertIsNone(ts_decl._js_common_wired_function_source(native, "mergeFunctionMetadata"))
+
+        native.write_text(wired, encoding="utf-8")
+        common_path.write_text(common.replace(", 'mergeFunctionMetadata'", ""), encoding="utf-8")
+        self.assertIsNone(ts_decl._js_common_wired_function_source(native, "mergeFunctionMetadata"))
+
+    def test_typeof_member_counts_as_declared(self) -> None:
+        body = "  mergeFunctionMetadata: typeof mergeFunctionMetadata;\n  other(): void;\n  plain: number;\n"
+        members = ts_decl._extract_ts_callable_members(body)
+        self.assertEqual(members, {"mergeFunctionMetadata", "other"})
+        self.assertNotIn("mergeFunctionMetadata", ts_decl._extract_ts_callable_members("  plain: number;\n"))
+        self.assertNotIn("x", ts_decl._extract_ts_callable_members("  x: typeof y;\n"))
 
 
 class StagedSurfaceTest(unittest.TestCase):
@@ -122,6 +173,7 @@ class StagedSurfaceTest(unittest.TestCase):
         staged_index.write_bytes(source_index.read_bytes().replace(b"from '../npm/common.mjs'", b"from './common.mjs'"))
         staged_common.write_bytes(source_common.read_bytes())
         staged_dts.write_bytes(source_dts.read_bytes())
+        (root / "stage.mjs").write_text("if (commonImportSites !== 1) { process.exit(1); }\n", encoding="utf-8")
         return root, source_index, staged_index, source_common, staged_common, source_dts, staged_dts
 
     def setUp(self) -> None:
@@ -140,6 +192,7 @@ class StagedSurfaceTest(unittest.TestCase):
         with (
             patch.object(declaration_checks, "REPO_ROOT", root),
             patch.object(declaration_checks, "NODE_INDEX_MJS", source_index),
+            patch.object(declaration_checks, "NODE_STAGE_MJS", root / "stage.mjs"),
             patch.object(declaration_checks, "_NODE_STAGED_COPIES", copies),
         ):
             self.assertEqual(declaration_checks.check_staged_dist(), [])
@@ -178,12 +231,40 @@ class StagedSurfaceTest(unittest.TestCase):
                 with (
                     patch.object(declaration_checks, "REPO_ROOT", root),
                     patch.object(declaration_checks, "NODE_INDEX_MJS", source_index),
+                    patch.object(declaration_checks, "NODE_STAGE_MJS", root / "stage.mjs"),
+                    patch.object(declaration_checks, "NODE_STAGE_MJS", root / "stage.mjs"),
                     patch.object(declaration_checks, "_NODE_STAGED_COPIES", copies),
                     patch.object(declaration_checks, "_SKIPPED", []),
                 ):
                     problems = declaration_checks.check_staged_dist()
                 self.assertEqual(len(problems), 1)
                 self.assertIn(missing.name, problems[0])
+
+    def test_import_site_count_follows_stage_script(self) -> None:
+        root, source_index, _, _, _, _, _ = self._fixture()
+        stage = root / "stage.mjs"
+        two_sites = (
+            "import * as common from '../npm/common.mjs';\nexport { ValueKind } from '../npm/common.mjs';\n"
+        ).encode()
+        with (
+            patch.object(declaration_checks, "REPO_ROOT", root),
+            patch.object(declaration_checks, "NODE_INDEX_MJS", source_index),
+            patch.object(declaration_checks, "NODE_STAGE_MJS", stage),
+        ):
+            stage.write_text("if (commonImportSites !== 2) {}\n", encoding="utf-8")
+            expected, error = declaration_checks._staged_bytes(source_index, two_sites)
+            self.assertIsNone(error)
+            self.assertEqual(expected.count(b"from './common.mjs'"), 2)
+
+            stage.write_text("if (commonImportSites !== 1) {}\n", encoding="utf-8")
+            expected, error = declaration_checks._staged_bytes(source_index, two_sites)
+            self.assertIsNone(expected)
+            self.assertIn("exactly 1", error)
+
+            stage.write_text("// no count\n", encoding="utf-8")
+            expected, error = declaration_checks._staged_bytes(source_index, two_sites)
+            self.assertIsNone(expected)
+            self.assertIn("cannot read", error)
 
     def test_entirely_unstaged_dist_is_skipped(self) -> None:
         (
@@ -205,6 +286,7 @@ class StagedSurfaceTest(unittest.TestCase):
         with (
             patch.object(declaration_checks, "REPO_ROOT", root),
             patch.object(declaration_checks, "NODE_INDEX_MJS", source_index),
+            patch.object(declaration_checks, "NODE_STAGE_MJS", root / "stage.mjs"),
             patch.object(declaration_checks, "_NODE_STAGED_COPIES", copies),
             patch.object(declaration_checks, "_SKIPPED", []),
         ):
@@ -264,7 +346,9 @@ class ReadmeIdentifiersTest(unittest.TestCase):
 
     def test_unknown_js_import_is_reported(self) -> None:
         problems = self._problems_after(
-            "packages/npm-native/README.md", "{ Workbook, evalFormula, ValueKind }", "{ Workbook, NoSuchExport }"
+            "packages/npm-native/README.md",
+            "import createFormulon from '@libraz/formulon-native';",
+            "import { NoSuchExport } from '@libraz/formulon-native';",
         )
         self.assertTrue(any("`NoSuchExport`" in p for p in problems), problems)
 
@@ -526,6 +610,14 @@ class ApiConventionRuleTest(unittest.TestCase):
             "FM_API void fm_buffer_destroy(uint8_t* bytes);\nFM_API const char* fm_get_version(void);\n"
             "FM_API fm_status_t fm_workbook_save(fm_workbook_t* wb);\n",
             [("fm_buffer_free", "-"), ("fm_version_string", "-")],
+        )
+
+    def test_r8_c_allows_the_process_version_number(self) -> None:
+        self.assert_rule(
+            "R8.c",
+            "FM_API uint32_t fm_get_build_number(void);\n",
+            "FM_API uint32_t fm_get_version_number(void);\nFM_API const char* fm_get_version(void);\n",
+            [("fm_get_build_number", "-")],
         )
 
     def test_r8_c_judges_the_ledger_target_name(self) -> None:
@@ -792,20 +884,257 @@ class DeclarationTableTest(unittest.TestCase):
         self.assertEqual(set(shape_checks._TS_FIELD_RE.findall(body)), {"alpha", "beta", "gamma"})
 
 
+class DeclarationEntryShapeTest(unittest.TestCase):
+    """The registration checks against a throwaway tree shaped like the published entry points."""
+
+    WASM_CPP = (
+        'class_<Workbook>("Workbook")\n'
+        '  .function("getSheetIndex", &W::a)\n  .function("save", &W::b)\n'
+        '  .property("disposed", &W::c)\n  .class_function("load", &W::d);\n'
+        'function("getVersion", &getVersion);\n'
+    )
+    NODE_CLASS = (
+        'InstanceMethod<&Workbook::A>("getSheetIndex"), InstanceMethod<&Workbook::B>("save"),\n'
+        'InstanceMethod<&Workbook::E>("getMemoryUsage"), InstanceAccessor<&Workbook::C>("disposed", nullptr),\n'
+        'StaticMethod<&Workbook::D>("load")\n'
+    )
+    NODE_ADDON = 'exports.Set("getVersion", f);\nexports.Set("Workbook", w);\nexports.Set("__setErrorClass", g);\n'
+    WORKBOOK = (
+        "export interface Workbook {\n  readonly disposed: boolean;\n"
+        "  getSheetIndex(name: string): number | null;\n  save(format?: WorkbookFormat): Uint8Array;\n"
+        "  setValue(sheet: number, row: number, col: number, value: number): void;\n"
+        "  sheet(nameOrIndex: string | number): Sheet;\n%s}\n"
+        "export interface WorkbookCtor {\n  load(bytes: Uint8Array): Workbook;\n}\n"
+    )
+    ENTRY = (
+        "export interface Formulon {\n  Workbook: WorkbookCtor;\n  getVersion(): string;\n"
+        "  mergeFunctionMetadata: typeof mergeFunctionMetadata;\n%s}\n"
+    )
+    COMMON = (
+        "export const FORMULON_MEMBERS = Object.freeze(['Workbook', 'mergeFunctionMetadata']);\n"
+        "export function mergeFunctionMetadata(base) { return base; }\n"
+        "export function installWorkbookExtensions(W) {\n  W.prototype.setValue = f;\n  W.prototype.sheet = g;\n}\n"
+    )
+
+    def setUp(self) -> None:
+        self._tmp = TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def write(self, rel: str, text: str) -> Path:
+        path = self.root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def tree(self, *, wasm_cpp=None, node_class=None, node_addon=None, wasm_dts=None, node_dts=None,
+             common=None, native_index=None, entry=None) -> dict:  # fmt: skip
+        entry_text = entry if entry is not None else "export { FormulonError } from './common.js';\n"
+        native_dts = node_dts if node_dts is not None else self.WORKBOOK % "  getMemoryUsage(): number;\n"
+        return {
+            "REPO_ROOT": self.root,
+            "WASM_BINDINGS_CPP": self.write("wasm.cpp", wasm_cpp if wasm_cpp is not None else self.WASM_CPP),
+            "WASM_DTS": self.write(
+                "wasm.d.ts", wasm_dts if wasm_dts is not None else self.WORKBOOK % "" + self.ENTRY % ""
+            ),
+            "NODE_WORKBOOK_CLASS_CC": self.write("class.cc", node_class if node_class is not None else self.NODE_CLASS),
+            "NODE_ADDON_CC": self.write("addon.cc", node_addon if node_addon is not None else self.NODE_ADDON),
+            "NODE_DTS": self.write("node.d.ts", native_dts + self.ENTRY % ""),
+            "NPM_COMMON_MJS": self.write("packages/npm/common.mjs", common if common is not None else self.COMMON),
+            "NODE_INDEX_MJS": self.write(
+                "packages/npm-native/index.mjs",
+                native_index
+                if native_index is not None
+                else "import * as common from '../npm/common.mjs';\n"
+                "common.installWorkbookExtensions(native.Workbook);\n"
+                "const formulon = common.buildFormulon(native, common);\n",
+            ),
+            "NPM_ENTRY_MJS": (
+                self.write("packages/npm/index.mjs", entry_text),
+                self.write("packages/npm/threads.mjs", entry_text),
+            ),
+        }  # fmt: skip
+
+    def run_check(self, check, **kwargs) -> list[str]:
+        patches = [patch.object(declaration_checks, name, value) for name, value in self.tree(**kwargs).items()]
+        for p in patches:
+            p.start()
+        try:
+            return check()
+        finally:
+            for p in reversed(patches):
+                p.stop()
+
+    def test_a_matching_wasm_tree_is_clean(self) -> None:
+        self.assertEqual(self.run_check(declaration_checks.check_dts_wasm), [])
+
+    def test_wasm_pure_js_members_and_accessor_are_checked(self) -> None:
+        problems = self.run_check(
+            declaration_checks.check_dts_wasm,
+            wasm_cpp=self.WASM_CPP.replace('  .property("disposed", &W::c)\n', "").replace(
+                'function("getVersion"', 'function("getBuild"'
+            ),
+            wasm_dts=self.WORKBOOK.replace("readonly disposed: boolean;", "isValid(): boolean;") % "" + self.ENTRY % "",
+        )  # fmt: skip
+        text = "\n".join(problems)
+        self.assertIn("Workbook instance methods mismatch", text)
+        self.assertIn("free functions mismatch", text)
+        self.assertIn("getBuild", text)
+        self.assertIn("Workbook accessors", text)
+
+    def test_a_matching_node_tree_is_clean(self) -> None:
+        self.assertEqual(self.run_check(declaration_checks.check_dts_node), [])
+
+    def test_node_requires_the_internal_export_and_the_formulon_surface(self) -> None:
+        problems = self.run_check(
+            declaration_checks.check_dts_node,
+            node_addon=self.NODE_ADDON.replace(
+                'exports.Set("__setErrorClass", g);\n', 'exports.Set("evalFormula", h);\n'
+            ),
+            node_class=self.NODE_CLASS.replace('InstanceAccessor<&Workbook::C>("disposed", nullptr),', ""),
+        )  # fmt: skip
+        text = "\n".join(problems)
+        self.assertIn("does not export the internal ['__setErrorClass']", text)
+        self.assertIn("free functions mismatch", text)
+        self.assertIn("evalFormula", text)
+        self.assertIn("Workbook accessors", text)
+
+    def test_a_matching_helper_tree_is_clean(self) -> None:
+        self.assertEqual(self.run_check(declaration_checks.check_pure_js_helpers), [])
+
+    def test_helpers_must_come_from_common_and_extensions_must_be_installed(self) -> None:
+        problems = self.run_check(
+            declaration_checks.check_pure_js_helpers,
+            common=self.COMMON.replace("W.prototype.sheet = g;\n", ""),
+            native_index="export function mergeFunctionMetadata(base) { return base; }\n",
+            entry="export const X = 1;\n",
+        )
+        text = "\n".join(problems)
+        self.assertIn("must import ../npm/common.mjs as a namespace", text)
+        self.assertIn("does not add `Workbook.sheet`", text)
+        self.assertIn("must take `installWorkbookExtensions` from ../npm/common.mjs", text)
+        self.assertIn("does not re-export from './common.js'", text)
+
+    def test_a_member_missing_from_common_members_or_the_interface_is_reported(self) -> None:
+        problems = self.run_check(
+            declaration_checks.check_pure_js_helpers,
+            common=self.COMMON.replace(", 'mergeFunctionMetadata'", ""),
+        )
+        self.assertTrue(any("in FORMULON_MEMBERS" in p for p in problems), problems)
+
+        problems = self.run_check(
+            declaration_checks.check_pure_js_helpers,
+            wasm_dts=self.WORKBOOK % "" + "export interface Formulon {\n  mergeFunctionMetadata: number;\n}\n",
+        )
+        self.assertTrue(any("does not declare `Formulon.mergeFunctionMetadata`" in p for p in problems), problems)
+
+    def test_a_helper_missing_from_the_formulon_interface_is_reported(self) -> None:
+        problems = self.run_check(
+            declaration_checks.check_pure_js_helpers,
+            wasm_dts=self.WORKBOOK % "" + "export interface Formulon {\n  getVersion(): string;\n}\n",
+        )
+        self.assertTrue(any("does not declare `Formulon.mergeFunctionMetadata`" in p for p in problems), problems)
+
+
+class DocTokenTest(unittest.TestCase):
+    """The doc-comment half of the identifier check, on throwaway declaration text and docstrings."""
+
+    DTS = (
+        "export interface CellRect { readonly firstRow: number }\n"
+        "export const ValueKind: Readonly<{ Error: 4 }>;\n"
+        "export interface WorkbookCtor { load(bytes: Uint8Array): Workbook }\n"
+        "export interface Workbook {\n"
+        "  /** Saves; see `save()`, `Workbook.getSheetIndex` and `Workbook.load`, `ValueKind.Error`, `firstRow`,\n"
+        "   *  `sheetIndex`, `Uint8Array.from` and the `TABLE()` function. */\n"
+        "  save(sheetIndex: number): Uint8Array;\n"
+        "  getSheetIndex(name: string): number | null;\n"
+        "}\n"
+    )
+
+    @staticmethod
+    def dts_problems(text: str) -> list[str]:
+        problems: list[str] = []
+        readme_identifiers.check_dts_doc_tokens("fixture.d.ts", text, problems)
+        return problems
+
+    def test_resolving_tokens_are_clean(self) -> None:
+        self.assertEqual(self.dts_problems(self.DTS), [])
+
+    def test_stale_tokens_are_reported(self) -> None:
+        text = self.DTS.replace(
+            "`TABLE()` function.",
+            "`isValid()`, `Workbook.delete`, `Range.Height`, `pivotSetColFieldOrder` and `ValueKind.Gone`.",
+        )
+        problems = "\n".join(self.dts_problems(text))
+        stale = ("`isValid()`", "`Workbook.delete`", "`Range.Height`", "`pivotSetColFieldOrder`", "`ValueKind.Gone`")
+        for token in stale:
+            self.assertIn(token, problems)
+
+    def test_listed_external_names_resolve_and_unlisted_ones_do_not(self) -> None:
+        listed = self.DTS.replace("`TABLE()` function.", "`cellIs`, `phoneticPr` and `Range.Width`.")
+        self.assertEqual(self.dts_problems(listed), [])
+        unlisted = self.DTS.replace("`TABLE()` function.", "`cellIsNot` and `Range.Height`.")
+        problems = "\n".join(self.dts_problems(unlisted))
+        self.assertIn("`cellIsNot`", problems)
+        self.assertIn("`Range.Height`", problems)
+
+    def test_enum_members_resolve_against_the_exported_table(self) -> None:
+        good = self.DTS.replace("`TABLE()` function.", "`ValueKind.Error`.")
+        self.assertEqual(self.dts_problems(good), [])
+        bad = self.DTS.replace("`TABLE()` function.", "`ValueKind.Missing`.")
+        self.assertIn("`ValueKind.Missing` has no member `Missing`", "\n".join(self.dts_problems(bad)))
+
+    def test_c_names_are_reported_unless_allowed(self) -> None:
+        text = self.DTS.replace("Saves;", "Saves through fm_workbook_save, which returns kOk;")
+        problems = "\n".join(self.dts_problems(text))
+        self.assertIn("`fm_workbook_save`", problems)
+        self.assertIn("`kOk`", problems)
+        with patch.object(readme_identifiers, "C_TOKEN_DOC_ALLOWLIST", frozenset({"fm_workbook_save", "kOk"})):
+            self.assertEqual(self.dts_problems(text), [])
+
+    def test_fenced_examples_are_not_judged(self) -> None:
+        text = self.DTS.replace("Saves;", "Saves.\n   * ```ts\n   * `oldName()` and `fm_x`\n   * ```\n   * ")
+        self.assertEqual(self.dts_problems(text), [])
+
+    PY = SimpleNamespace(
+        classes={"Workbook": {"save", "close"}},
+        module={"Workbook", "load_default"},
+    )
+
+    def py_problems(self, doc: str) -> list[str]:
+        py = SimpleNamespace(classes=self.PY.classes, module=self.PY.module, docstrings=[("workbook.py:1", doc)])
+        problems: list[str] = []
+        readme_identifiers.check_py_doc_tokens(py, problems)
+        return problems
+
+    def test_python_calls_resolve_to_public_names(self) -> None:
+        good = "Use ``save()``, ``Workbook.close()``, ``load_default()``, ``float()`` or ``NOW()``."
+        self.assertEqual(self.py_problems(good), [])
+        bad = "Use ``recalculate()``, ``Workbook.delete()`` and ``save(x)``."
+        problems = "\n".join(self.py_problems(bad))
+        self.assertIn("``recalculate()``", problems)
+        self.assertIn("``Workbook.delete()``", problems)
+        self.assertNotIn("save(x)", problems)
+
+    def test_python_docstrings_do_not_name_c_identifiers(self) -> None:
+        problems = "\n".join(self.py_problems("Wraps fm_workbook_save and returns kOk."))
+        self.assertIn("`fm_workbook_save`", problems)
+        self.assertIn("`kOk`", problems)
+        self.assertEqual(self.py_problems("Plain prose in 10 kB."), [])
+
+
 class NativeDtsGeneratorTest(unittest.TestCase):
     WASM = (
         '//\n// WASM header.\n//\n\n/// <reference lib="esnext.disposable" />\n\n'
         "export const Kind: Readonly<{\n  A: 0;\n}>;\n\n"
-        "export interface Workbook {\n  isValid(): boolean;\n}\n\n"
-        "// <entry-point:begin>\n"
-        "export interface FormulonModule {\n"
+        "export interface Workbook {\n  disposed: boolean;\n}\n\n"
+        "export interface Formulon {\n"
         "  /** Factory. */\n  Workbook: WorkbookCtor;\n\n"
-        "  Kind: typeof Kind;\n"
-        "  /** Library version.\n   *  Second line. */\n  getVersion(): string;\n"
-        "  setLevel(\n    level: number,\n  ): Status;\n"
+        "  /** Library version. */\n  getVersion(): string;\n"
         "}\n"
-        "export default function createFormulon(): Promise<FormulonModule>;\n"
-        "// <entry-point:end>\n"
+        "export default function createFormulon(): Promise<Formulon>;\n"
     )
     DELTA = "// delta\nexport interface Workbook {\n  /** Bytes. */\n  getMemoryUsage(): number;\n}\n"
 
@@ -813,31 +1142,23 @@ class NativeDtsGeneratorTest(unittest.TestCase):
         self.gen = _load_gen_native_dts()
         self.out = self.gen.generate(self.WASM, self.DELTA)
 
-    def test_wasm_header_and_entry_region_are_replaced(self) -> None:
+    def test_wasm_header_is_replaced_and_directives_stay(self) -> None:
         self.assertNotIn("WASM header", self.out)
-        self.assertNotIn("FormulonModule", self.out)
-        self.assertNotIn("createFormulon", self.out)
-        self.assertNotIn("entry-point", self.out)
         self.assertIn('/// <reference lib="esnext.disposable" />', self.out)
 
-    def test_module_members_become_exports_and_default_keys(self) -> None:
-        self.assertIn("/** Factory. */\nexport const Workbook: WorkbookCtor;", self.out)
-        self.assertIn("/** Library version.\n *  Second line. */\nexport function getVersion(): string;", self.out)
-        self.assertIn("export function setLevel(\n  level: number,\n): Status;", self.out)
-        self.assertNotIn("export const Kind: typeof", self.out)
-        keys = self.out[self.out.index("declare const _default: {") :]
-        for key in ("Workbook: WorkbookCtor;", "Kind: typeof Kind;", "getVersion: typeof getVersion;"):
-            self.assertIn(key, keys)
+    def test_the_entry_point_is_shared_with_the_wasm_declarations(self) -> None:
+        self.assertIn("export interface Formulon {", self.out)
+        self.assertIn("export default function createFormulon(): Promise<Formulon>;", self.out)
 
     def test_delta_members_are_spliced_into_the_workbook_interface(self) -> None:
         interface = self.out[self.out.index("export interface Workbook {") :]
         interface = interface[: interface.index("\n}\n")]
-        self.assertIn("isValid(): boolean;", interface)
+        self.assertIn("disposed: boolean;", interface)
         self.assertIn("/** Bytes. */\n  getMemoryUsage(): number;", interface)
 
-    def test_missing_entry_markers_are_an_error(self) -> None:
+    def test_a_missing_workbook_interface_is_an_error(self) -> None:
         with self.assertRaises(self.gen.GenError):
-            self.gen.generate("export interface Workbook {\n}\n", self.DELTA)
+            self.gen.generate("export interface Formulon {\n}\n", self.DELTA)
 
 
 if __name__ == "__main__":

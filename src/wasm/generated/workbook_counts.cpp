@@ -16,22 +16,28 @@ namespace formulon {
 namespace wasm {
 namespace parts {
 
-JsNumberResult JsWorkbook::sheetCount() const {
+double JsWorkbook::sheetCount() const {
   if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
+    record_invalid_handle();
+    return 0.0;
   }
   std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_get_sheet_count(handle_, &count);
-  return number_result(rc, static_cast<double>(count));
+  if (!succeeded(fm_workbook_get_sheet_count(handle_, &count))) {
+    return 0.0;
+  }
+  return static_cast<double>(count);
 }
 
-JsNumberResult JsWorkbook::tableCount() const {
+double JsWorkbook::tableCount() const {
   if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
+    record_invalid_handle();
+    return 0.0;
   }
   std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_get_table_count(handle_, &count);
-  return number_result(rc, static_cast<double>(count));
+  if (!succeeded(fm_workbook_get_table_count(handle_, &count))) {
+    return 0.0;
+  }
+  return static_cast<double>(count);
 }
 
 }  // namespace parts

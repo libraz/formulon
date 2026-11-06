@@ -165,9 +165,7 @@ def _select_body_template(body: str, templates: Dict[str, str]) -> str:
 #       extern "C" fm_status_t NAME(const fm_workbook_t* wb, size_t* out_count) {
 #         clear_last_error();
 #         if (wb == nullptr || out_count == nullptr) {
-#           return set_binding_error(
-#               formulon::FormulonErrorCode::kBindingNullPointer,
-#               "NAME: NULL argument");
+#           return null_argument();
 #         }
 #         *out_count = ACCESSOR;
 #         return 0;
@@ -178,12 +176,10 @@ def _select_body_template(body: str, templates: Dict[str, str]) -> str:
 #                                   size_t* out_count) {
 #         clear_last_error();
 #         if (wb == nullptr || out_count == nullptr) {
-#           return set_binding_error(...kBindingNullPointer, "NAME: NULL argument");
+#           return null_argument();
 #         }
-#         if (sheet_index >= wb->workbook().sheet_count()) {
-#           return set_binding_error(...kSheetIndexOutOfRange,
-#               "NAME: sheet_index out of range",
-#               "sheet_index=" + std::to_string(sheet_index) + ...);
+#         if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+#           return rc;
 #         }
 #         *out_count = ACCESSOR;
 #         return 0;
@@ -194,8 +190,7 @@ _CAPI_BODY_STATUS_SIZE_OUT = """\
 extern "C" fm_status_t {name}(const fm_workbook_t* wb, size_t* out_count) {{
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {{
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "{name}: NULL argument");
+    return null_argument();
   }}
   *out_count = {accessor};
   return 0;
@@ -206,13 +201,10 @@ _CAPI_BODY_STATUS_SIZE_WITH_SHEET = """\
 extern "C" fm_status_t {name}(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {{
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {{
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "{name}: NULL argument");
+    return null_argument();
   }}
-  if (sheet_index >= wb->workbook().sheet_count()) {{
-    return set_binding_error(
-        formulon::FormulonErrorCode::kSheetIndexOutOfRange, "{name}: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {{
+    return rc;
   }}
   *out_count = {accessor};
   return 0;
@@ -249,8 +241,9 @@ def _emit_capi(entries: List[dict]) -> Dict[str, str]:
         out += '#include "utils/error.h"\n'
         out += '#include "workbook.h"\n'
         out += "\n"
+        out += "using formulon::c_api::parts::check_sheet_index;\n"
         out += "using formulon::c_api::parts::clear_last_error;\n"
-        out += "using formulon::c_api::parts::set_binding_error;\n"
+        out += "using formulon::c_api::parts::null_argument;\n"
         out += "\n"
         for e in sorted(items, key=lambda x: x["name"]):
             out += _emit_capi_entry(e)
@@ -269,29 +262,35 @@ def _emit_capi_entry(e: dict) -> str:
 # ---------------------------------------------------------------------------
 #
 # Each entry becomes a JsWorkbook::<methodName>() body that delegates to
-# the corresponding C ABI function and returns a `{ status, value }`
-# NumberResult, so a destroyed handle or a rejected argument is visible
-# to the caller instead of reading as a zero count.
+# the corresponding C ABI function and returns the count, recording a
+# destroyed handle or a rejected argument for the pre-js wrapper to throw
+# instead of reading as a zero count.
 
 _EMBIND_BODY_STATUS_SIZE_OUT = """\
-JsNumberResult JsWorkbook::{embind_cpp}() const {{
+double JsWorkbook::{embind_cpp}() const {{
   if (handle_ == nullptr) {{
-    return number_result(kBindingInvalidHandle, 0.0);
+    record_invalid_handle();
+    return 0.0;
   }}
   std::size_t count = 0;
-  const fm_status_t rc = {capi}(handle_, &count);
-  return number_result(rc, static_cast<double>(count));
+  if (!succeeded({capi}(handle_, &count))) {{
+    return 0.0;
+  }}
+  return static_cast<double>(count);
 }}
 """
 
 _EMBIND_BODY_STATUS_SIZE_WITH_SHEET = """\
-JsNumberResult JsWorkbook::{embind_cpp}(uint32_t sheet) const {{
+double JsWorkbook::{embind_cpp}(uint32_t sheet) const {{
   if (handle_ == nullptr) {{
-    return number_result(kBindingInvalidHandle, 0.0);
+    record_invalid_handle();
+    return 0.0;
   }}
   std::size_t count = 0;
-  const fm_status_t rc = {capi}(handle_, sheet, &count);
-  return number_result(rc, static_cast<double>(count));
+  if (!succeeded({capi}(handle_, sheet, &count))) {{
+    return 0.0;
+  }}
+  return static_cast<double>(count);
 }}
 """
 
@@ -344,18 +343,18 @@ def _emit_embind_entry(e: dict) -> str:
 # ---------------------------------------------------------------------------
 #
 # N-API method bodies mirror the embind ones: every body returns the
-# `{ status, value }` NumberResult, with a destroyed handle reported as
-# `kBindingInvalidHandle`.
+# count, and a failure (a destroyed handle included) throws a
+# `FormulonError`.
 
 _NODE_BODY_STATUS_SIZE_OUT = """\
 Napi::Value Workbook::{node_cpp}(const Napi::CallbackInfo& info) {{
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {{
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+    return ThrowInvalidHandle(env);
   }}
   std::size_t count = 0;
   const fm_status_t rc = {capi}(handle_, &count);
-  return MakeNumberResult(env, rc, static_cast<double>(count));
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
 }}
 """
 
@@ -363,12 +362,12 @@ _NODE_BODY_STATUS_SIZE_WITH_SHEET = """\
 Napi::Value Workbook::{node_cpp}(const Napi::CallbackInfo& info) {{
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {{
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+    return ThrowInvalidHandle(env);
   }}
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   std::size_t count = 0;
   const fm_status_t rc = {capi}(handle_, sheet, &count);
-  return MakeNumberResult(env, rc, static_cast<double>(count));
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
 }}
 """
 

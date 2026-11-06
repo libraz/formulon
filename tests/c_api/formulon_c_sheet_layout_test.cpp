@@ -1116,8 +1116,8 @@ TEST(FormulonCApiSheetLayout, ColumnAndRowStyleRejectInvalidXfWithoutMutation) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  EXPECT_EQ(fm_sheet_set_column_style(wb.handle, 0, 0U, 0U, 1U), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_row_style(wb.handle, 0, 0U, 0U, 1U), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_column_style(wb.handle, 0, 0U, 0U, 1U), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_row_style(wb.handle, 0, 0U, 0U, 1U), FM_STATUS_INDEX_OUT_OF_RANGE);
 
   size_t column_count = 0;
   size_t row_count = 0;

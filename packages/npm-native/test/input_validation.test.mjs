@@ -4,7 +4,8 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { FormulonError } from '../dist/common.mjs';
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const addonPath =
@@ -17,18 +18,21 @@ const addonPath =
 assert.ok(addonPath, 'native addon not found; set FORMULON_NODE_ADDON or stage dist/formulon.node');
 const requireAddon = createRequire(import.meta.url);
 const addon = requireAddon(addonPath);
+addon.__setErrorClass(FormulonError);
+const commonUrl = pathToFileURL(path.resolve(testDir, '..', 'dist', 'common.mjs')).href;
 
 function cellNumber(wb, row = 0, col = 0) {
-  const result = wb.getValue(0, row, col);
-  assert.equal(result.status.ok, true, JSON.stringify(result.status));
-  assert.equal(result.value.kind, 1);
-  return result.value.number;
+  const value = wb.getValue(0, row, col);
+  assert.equal(value.kind, 1);
+  return value.number;
 }
 
 test('coercion objects and symbols are rejected before mutating a cell', () => {
   const source = `
+    (async () => {
     const addon = require(process.env.FORMULON_NODE_ADDON);
-    const wb = addon.Workbook.createDefault().value;
+    addon.__setErrorClass((await import(process.env.FORMULON_COMMON)).FormulonError);
+    const wb = addon.Workbook.createDefault();
     const failures = [];
     function probe(label, call) {
       try {
@@ -38,11 +42,11 @@ test('coercion objects and symbols are rejected before mutating a cell', () => {
         if (!(error instanceof TypeError)) failures.push(label + ':' + error.name);
       }
       const cell = wb.getValue(0, 0, 0);
-      if (!cell.status.ok || cell.value.kind !== 1 || cell.value.number !== 42) {
+      if (cell.kind !== 1 || cell.number !== 42) {
         failures.push(label + ':mutated');
       }
     }
-    if (!wb.setNumber(0, 0, 0, 42).ok) failures.push('setup');
+    wb.setNumber(0, 0, 0, 42);
     probe('valueOf', () => wb.setNumber(0, 0, 0, { valueOf() { throw new Error('valueOf'); } }));
     probe('symbol-number', () => wb.setNumber(0, 0, 0, Symbol('number')));
     probe('toString', () => wb.setText(0, 0, 0, { toString() { throw new Error('toString'); } }));
@@ -55,9 +59,10 @@ test('coercion objects and symbols are rejected before mutating a cell', () => {
       console.error(JSON.stringify(failures));
       process.exitCode = 1;
     }
+    })();
   `;
   const result = spawnSync(process.execPath, ['--input-type=commonjs', '-e', source], {
-    env: { ...process.env, FORMULON_NODE_ADDON: addonPath },
+    env: { ...process.env, FORMULON_NODE_ADDON: addonPath, FORMULON_COMMON: commonUrl },
     encoding: 'utf8',
   });
   assert.equal(result.status, 0, `subprocess exited ${result.status}: ${result.stderr}`);
@@ -65,7 +70,9 @@ test('coercion objects and symbols are rejected before mutating a cell', () => {
 
 test('module-level numeric and string positions reject coercion and overflow', () => {
   const source = `
+    (async () => {
     const addon = require(process.env.FORMULON_NODE_ADDON);
+    addon.__setErrorClass((await import(process.env.FORMULON_COMMON)).FormulonError);
     const failures = [];
     function probe(label, expected, call) {
       try {
@@ -88,18 +95,19 @@ test('module-level numeric and string positions reject coercion and overflow', (
       console.error(JSON.stringify(failures));
       process.exitCode = 1;
     }
+    })();
   `;
   const result = spawnSync(process.execPath, ['--input-type=commonjs', '-e', source], {
-    env: { ...process.env, FORMULON_NODE_ADDON: addonPath },
+    env: { ...process.env, FORMULON_NODE_ADDON: addonPath, FORMULON_COMMON: commonUrl },
     encoding: 'utf8',
   });
   assert.equal(result.status, 0, `subprocess exited ${result.status}: ${result.stderr}`);
 });
 
 test('integer positional arguments reject wrapping and non-finite values', () => {
-  const wb = addon.Workbook.createDefault().value;
+  const wb = addon.Workbook.createDefault();
   try {
-    assert.equal(wb.setNumber(0, 0, 0, 42).ok, true);
+    wb.setNumber(0, 0, 0, 42);
     for (const value of [2 ** 32, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       assert.throws(() => wb.setNumber(value, 0, 0, 7), RangeError, `sheet=${String(value)}`);
       assert.equal(cellNumber(wb), 42, `invalid sheet changed A1 for ${String(value)}`);
@@ -114,10 +122,10 @@ test('integer positional arguments reject wrapping and non-finite values', () =>
 });
 
 test('iterative caps use the signed int32 contract', () => {
-  const wb = addon.Workbook.createDefault().value;
+  const wb = addon.Workbook.createDefault();
   try {
-    assert.equal(wb.setIterative(true, 2 ** 31 - 1, 0.1).ok, true);
-    assert.equal(wb.setIterative(false, -1, 0.1).ok, true);
+    wb.setIterative(true, 2 ** 31 - 1, 0.1);
+    wb.setIterative(false, -1, 0.1);
     assert.equal(wb.getIterative().maxIterations, 1, 'negative caps retain the native clamp');
     for (const value of [2 ** 31, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       assert.throws(() => wb.setIterative(true, value, 0.1), RangeError, `maxIterations=${String(value)}`);
@@ -128,7 +136,7 @@ test('iterative caps use the signed int32 contract', () => {
 });
 
 test('sheet, structural, enum, and read positions reject non-number primitives', () => {
-  const wb = addon.Workbook.createDefault().value;
+  const wb = addon.Workbook.createDefault();
   try {
     assert.throws(() => wb.getSheetName(Symbol('sheet')), TypeError);
     assert.throws(() => wb.insertRows(0, 0, 1.5), RangeError);
@@ -146,7 +154,7 @@ test('sheet, structural, enum, and read positions reject non-number primitives',
 });
 
 test('paging cursor and limit reject values outside native integer ranges', () => {
-  const wb = addon.Workbook.createDefault().value;
+  const wb = addon.Workbook.createDefault();
   const range = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
   try {
     for (const value of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53, 2 ** 64]) {
@@ -157,20 +165,21 @@ test('paging cursor and limit reject values outside native integer ranges', () =
       assert.throws(() => wb.getCellsInRange(0, range, undefined, value), RangeError, `get limit=${String(value)}`);
       assert.throws(() => wb.getInvalidCells(0, undefined, value), RangeError, `invalid limit=${String(value)}`);
     }
-    assert.doesNotThrow(() => wb.getCellsInRange(0, range, Number.MAX_SAFE_INTEGER));
-    assert.doesNotThrow(() => wb.getInvalidCells(0, Number.MAX_SAFE_INTEGER));
+    const refusedByHost = (e) => e instanceof FormulonError && e.code === 2;
+    assert.throws(() => wb.getCellsInRange(0, range, Number.MAX_SAFE_INTEGER), refusedByHost);
+    assert.throws(() => wb.getInvalidCells(0, Number.MAX_SAFE_INTEGER), refusedByHost);
   } finally {
     wb.dispose();
   }
 });
 
 test('missing required positional arguments are rejected; optional ones keep their defaults', () => {
-  const wb = addon.Workbook.createDefault().value;
+  const wb = addon.Workbook.createDefault();
   try {
     assert.throws(() => wb.setIterative(true), TypeError);
     assert.throws(() => wb.setVisibility(0), TypeError);
     assert.equal(wb.getIterative().maxIterations, 100, 'the rejected setIterative must not store a cap');
-    assert.equal(wb.getFunctionMetadata('SUM').status.ok, true);
+    wb.getFunctionMetadata('SUM');
     const range = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
     assert.doesNotThrow(() => wb.getCellsInRange(0, range, undefined, undefined));
     assert.doesNotThrow(() => wb.getInvalidCells(0, undefined, undefined));
@@ -182,9 +191,9 @@ test('missing required positional arguments are rejected; optional ones keep the
 });
 
 test('getCellsInRange requires its range argument like the merge methods', () => {
-  const wb = addon.Workbook.createDefault().value;
+  const wb = addon.Workbook.createDefault();
   try {
-    assert.equal(wb.setNumber(0, 0, 0, 7).ok, true);
+    wb.setNumber(0, 0, 0, 7);
     assert.throws(() => wb.getCellsInRange(0, null), TypeError);
     assert.throws(() => wb.getMergesInRange(0, null), TypeError);
     assert.throws(() => wb.getCellsInRange(0), TypeError);

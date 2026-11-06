@@ -221,7 +221,7 @@ TEST(FormulonCApiSlicers, RejectsBadArguments) {
   fm_slicer_t out{};
   EXPECT_EQ(fm_sheet_get_slicer_count(wb.handle, 0, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_get_slicer_count(wb.handle, 7, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_get_slicer_at(wb.handle, 0, 0, &out), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_slicer_at(wb.handle, 0, 0, &out), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_slicer_at(wb.handle, 0, 0, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, nullptr, &id), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_add_slicer(wb.handle, 0, 0, 0, &spec, nullptr), kBindingNullPointer);
@@ -253,7 +253,7 @@ TEST(FormulonCApiSlicers, RejectsBadArguments) {
   fm_slicer_t rename = Anchored(FM_SLICER_FIELD_NAME);
   rename.name = "Other";
   EXPECT_EQ(fm_sheet_update_slicer(wb.handle, 0, id, &rename), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_remove_slicer(wb.handle, 0, id + 1U), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_remove_slicer(wb.handle, 0, id + 1U), FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_sheet_remove_slicer(wb.handle, 7, id), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   int32_t present = 1;
   EXPECT_EQ(fm_sheet_get_slicer(wb.handle, 0, id, nullptr, &out), kBindingNullPointer);

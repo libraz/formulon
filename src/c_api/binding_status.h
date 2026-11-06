@@ -258,6 +258,8 @@ inline const char* status_name(std::int32_t status) {
       return "CANNOT_REMOVE_LAST_SHEET";
     case FM_STATUS_SHEET_COUNT_LIMIT_EXCEEDED:
       return "SHEET_COUNT_LIMIT_EXCEEDED";
+    case FM_STATUS_INDEX_OUT_OF_RANGE:
+      return "INDEX_OUT_OF_RANGE";
     default:
       return nullptr;
   }

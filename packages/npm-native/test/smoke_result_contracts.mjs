@@ -1,214 +1,145 @@
 import test from 'node:test';
-import { assert, getModule, path, pkgRoot, readFile } from './smoke_support.mjs';
+import { assert, getModule, isFormulonError, path, pkgRoot, readFile } from './smoke_support.mjs';
 
-// ---- Result-envelope key sets ------------------------------------------
+// ---- Failure paths --------------------------------------------------------
 //
-// A result type whose payload key is declared non-optional must carry that
-// key on every exit path, or `r.name.toUpperCase()` type-checks and then
-// throws at runtime for a caller who skipped the status check. The probe
-// table is checked for completeness against the declaration file, so a new
-// result type cannot be added without a failure-path probe. The WASM
-// package runs the mirror image of this test.
-
-function interfaceBody(dts, name) {
-  const m = dts.match(new RegExp(`^export interface ${name}\\b[^{]*\\{`, 'm'));
-  if (!m) return null;
-  let depth = 0;
-  const open = dts.indexOf('{', m.index);
-  for (let i = open; i < dts.length; i += 1) {
-    if (dts[i] === '{') depth += 1;
-    else if (dts[i] === '}') {
-      depth -= 1;
-      if (depth === 0) return dts.slice(open + 1, i);
-    }
-  }
-  return null;
-}
-
-function interfaceBases(dts, name) {
-  const m = dts.match(new RegExp(`^export interface ${name}\\b([^{]*)\\{`, 'm'));
-  if (!m) return [];
-  const clause = m[1].trim();
-  if (!clause.startsWith('extends')) return [];
-  return clause
-    .slice('extends'.length)
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-function interfaceMembers(dts, name, seen = new Set()) {
-  if (seen.has(name)) return [];
-  seen.add(name);
-  const body = interfaceBody(dts, name);
-  if (body === null) return [];
-  const out = [];
-  for (const base of interfaceBases(dts, name)) out.push(...interfaceMembers(dts, base, seen));
-  for (const m of body.matchAll(/^ {2}(?:readonly\s+)?([A-Za-z_$][\w$]*)(\??)\s*:/gm)) {
-    out.push([m[1], m[2] === '']);
-  }
-  return out;
-}
-
-function resultTypesWithRequiredPayload(dts) {
-  const out = new Map();
-  for (const m of dts.matchAll(/^export interface ([A-Za-z0-9_]+)/gm)) {
-    const name = m[1];
-    if (name === 'Status') continue;
-    const members = interfaceMembers(dts, name);
-    if (!members.some(([key]) => key === 'status')) continue;
-    const required = members.filter(([key, req]) => req && key !== 'status').map(([key]) => key);
-    if (required.length > 0) out.set(name, required);
-  }
-  return out;
-}
+// The declaration file declares no result envelope: a failed call throws
+// `FormulonError` and every other call returns its payload directly. The
+// probe table below is the list of calls that fail for a reachable reason,
+// so each one is checked to throw with a string message and context.
 
 // `fails: false` marks a call whose only failure path is a disposed
 // handle, which is not usable to probe.
-function envelopeProbes(wb) {
+function failureProbes(wb) {
   return [
-    ['ParallelRecalcResult', true, () => wb.recalcParallel(9)],
-    ['CellResult', true, () => wb.getValue(99, 0, 0)],
-    ['CellResult', true, () => wb.getPivotCacheFieldSharedItemValue(9999, 0, 0)],
-    ['EvalResult', true, () => wb.evaluateFormula(99, 0, 0, '=1')],
-    ['EvalArrayResult', true, () => wb.evaluateFormulaArray(99, 0, 0, '=1')],
-    ['OptionalResult', true, () => wb.getShape(99, 1)],
-    ['SaveResult', true, () => wb.saveAs(99)],
-    ['SaveDiagnosticsResult', true, () => wb.saveWithDiagnostics(99)],
-    ['ReadDiagnosticsResult', false, () => wb.getDiagnostics()],
-    ['StringResult', true, () => wb.getSheetName(99)],
-    ['PivotLayoutResult', true, () => wb.getPivotLayout(99, 0)],
-    ['PivotWorksheetSourceResult', true, () => wb.getPivotCacheWorksheetSource(9999)],
-    ['NumberResult', true, () => wb.getPivotReportLayout(99, 0)],
-    ['PivotFilterResult', true, () => wb.getPivotFilter(99, 0, 0)],
-    ['PivotGrandTotalsResult', true, () => wb.getPivotGrandTotals(99, 0)],
-    ['PivotStyleInfoResult', true, () => wb.getPivotStyleInfo(99, 0)],
-    ['PivotOptionsResult', true, () => wb.getPivotOptions(99, 0)],
-    ['PivotCacheOptionsResult', true, () => wb.getPivotCacheOptions(9999)],
-    ['PivotCalculatedItemResult', true, () => wb.getPivotCacheCalculatedItem(9999, 0)],
-    ['BoolResult', true, () => wb.isPivotProjectionPending(99, 0)],
-    ['BoolResult', true, () => wb.isPivotCacheFieldSharedItemDate(9999, 0, 0)],
-    ['PivotFieldOrderResult', true, () => wb.getPivotRowFieldOrder(99, 0)],
-    ['PivotFieldResult', true, () => wb.getPivotField(99, 0, 0)],
-    ['PivotItemResult', true, () => wb.getPivotFieldItem(99, 0, 0, 0)],
-    ['PivotDataFieldResult', true, () => wb.getPivotDataField(99, 0, 0)],
-    [
-      'CfRangeResult',
-      true,
-      () => wb.evaluateCfRange(99, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 }, Number.NaN),
-    ],
-    ['PaginationResult', true, () => wb.getPagination(99)],
-    ['SheetViewResult', true, () => wb.getView(99)],
-    ['SheetProtectionResult', true, () => wb.getSheetProtection(99)],
+    [true, () => wb.recalcParallel(9)],
+    [true, () => wb.getValue(99, 0, 0)],
+    [true, () => wb.getPivotCacheFieldSharedItemValue(9999, 0, 0)],
+    [true, () => wb.evaluateFormula(99, 0, 0, '=1')],
+    [true, () => wb.evaluateFormulaArray(99, 0, 0, '=1')],
+    [true, () => wb.getShape(99, 1)],
+    [true, () => wb.save(99)],
+    [true, () => wb.saveWithDiagnostics(99)],
+    [false, () => wb.getDiagnostics()],
+    [true, () => wb.getSheetName(99)],
+    [true, () => wb.getPivotLayout(99, 0)],
+    [true, () => wb.getPivotCacheWorksheetSource(9999)],
+    [true, () => wb.getPivotReportLayout(99, 0)],
+    [true, () => wb.getPivotFilter(99, 0, 0)],
+    [true, () => wb.getPivotGrandTotals(99, 0)],
+    [true, () => wb.getPivotStyleInfo(99, 0)],
+    [true, () => wb.getPivotOptions(99, 0)],
+    [true, () => wb.getPivotCacheOptions(9999)],
+    [true, () => wb.getPivotCacheCalculatedItem(9999, 0)],
+    [true, () => wb.isPivotProjectionPending(99, 0)],
+    [true, () => wb.isPivotCacheFieldSharedItemDate(9999, 0, 0)],
+    [true, () => wb.getPivotRowFieldOrder(99, 0)],
+    [true, () => wb.getPivotField(99, 0, 0)],
+    [true, () => wb.getPivotFieldItem(99, 0, 0, 0)],
+    [true, () => wb.getPivotDataField(99, 0, 0)],
+    [true, () => wb.evaluateCfRange(99, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 }, Number.NaN)],
+    [true, () => wb.getPagination(99)],
+    [true, () => wb.getView(99)],
+    [true, () => wb.getSheetProtection(99)],
     // A released handle is the only failure path of the workbook-level getter.
-    ['WorkbookProtectionResult', false, () => wb.getWorkbookProtection()],
-    ['ColumnsResult', true, () => wb.listColumnOverrides(99)],
-    ['RowsResult', true, () => wb.listRowOverrides(99)],
-    ['OptionalResult', true, () => wb.getComment(99, 0, 0)],
-    ['NumberResult', true, () => wb.getCellXfIndex(99, 0, 0)],
-    ['CellXfResult', true, () => wb.getCellXf(9999)],
-    ['FontResult', true, () => wb.getFont(9999)],
-    ['FillResult', true, () => wb.getFill(9999)],
-    ['BorderResult', true, () => wb.getBorder(9999)],
-    ['OptionalResult', false, () => wb.getNumFmtString(59999)],
-    ['OptionalResult', true, () => wb.getLambdaText(99, 0, 0)],
-    ['PhoneticRunResult', true, () => wb.getCellPhoneticRun(99, 0, 0, 0)],
-    ['ConditionalFormatResult', true, () => wb.getCfRule(99, 0)],
-    ['DataValidationResult', true, () => wb.getValidation(99, 0)],
-    ['ProtectedRangeResult', true, () => wb.getProtectedRange(99, 0)],
-    ['SparklineGroupResult', true, () => wb.getSparklineGroup(99, 0)],
-    ['ExternalLinkResult', true, () => wb.getExternalLink(0)],
-    ['PhoneticPropertiesResult', true, () => wb.getCellPhoneticProperties(99, 0, 0)],
-    ['BoolResult', true, () => wb.getCellShowPhonetic(99, 0, 0)],
-    ['SheetSelectionResult', true, () => wb.getSelection(99)],
+    [false, () => wb.getWorkbookProtection()],
+    [true, () => wb.listColumnOverrides(99)],
+    [true, () => wb.listRowOverrides(99)],
+    [true, () => wb.getComment(99, 0, 0)],
+    [true, () => wb.getCellXfIndex(99, 0, 0)],
+    [true, () => wb.getCellXf(9999)],
+    [true, () => wb.getFont(9999)],
+    [true, () => wb.getFill(9999)],
+    [true, () => wb.getBorder(9999)],
+    [false, () => wb.getNumFmtString(59999)],
+    [true, () => wb.getLambdaText(99, 0, 0)],
+    [true, () => wb.getCellPhoneticRun(99, 0, 0, 0)],
+    [true, () => wb.getCfRule(99, 0)],
+    [true, () => wb.getValidation(99, 0)],
+    [true, () => wb.getProtectedRange(99, 0)],
+    [true, () => wb.getSparklineGroup(99, 0)],
+    [true, () => wb.getExternalLink(0)],
+    [true, () => wb.getCellPhoneticProperties(99, 0, 0)],
+    [true, () => wb.getCellShowPhonetic(99, 0, 0)],
+    [true, () => wb.getSelection(99)],
     // A released handle is the only failure path, which is not usable here.
-    ['TableStyleDefaultsResult', false, () => wb.getTableStyleDefaults()],
-    ['IndexResult', true, () => wb.addCellXf({ fontIndex: 9999 })],
-    ['AddNumFmtResult', false, () => wb.addNumFmt('0.00')],
-    ['IterativeSettingsResult', false, () => wb.getIterative()],
-    ['NumberResult', true, () => wb.recalcViewport(99, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 })],
-    ['StringResult', true, () => wb.getPageSetupXml(99)],
-    ['SheetPrintAreaResult', true, () => wb.getPrintArea(99)],
-    ['SheetPrintTitlesResult', true, () => wb.getPrintTitles(99)],
+    [false, () => wb.getTableStyleDefaults()],
+    [true, () => wb.addCellXf({ fontIndex: 9999 })],
+    [false, () => wb.addNumFmt('0.00')],
+    [false, () => wb.getIterative()],
+    [true, () => wb.recalcViewport(99, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 })],
+    [true, () => wb.getPageSetupXml(99)],
+    [true, () => wb.getPrintArea(99)],
+    [true, () => wb.getPrintTitles(99)],
     // `listRowBreaks` / `listColumnBreaks` answer an out-of-range
     // sheet with an empty list rather than an error, unlike every sibling
     // print getter, so no failure path is reachable from here.
-    ['SheetPageBreaksResult', false, () => wb.listRowBreaks(99)],
-    ['SheetPageSetupResult', true, () => wb.getPageSetup(99)],
-    ['SheetPageMarginsResult', true, () => wb.getPageMargins(99)],
-    ['NumberResult', true, () => wb.getCellCount(99)],
+    [false, () => wb.listRowBreaks(99)],
+    [true, () => wb.getPageSetup(99)],
+    [true, () => wb.getPageMargins(99)],
+    [true, () => wb.getCellCount(99)],
     // A released handle is the only failure path, which is not usable here.
-    ['PinnedNowResult', false, () => wb.getPinnedNow()],
-    ['LocaleFactsResult', true, () => wb.getLocaleFacts('nope')],
-    ['NumberResult', true, () => wb.compareText('a', 'b', 0, 'nope')],
-    ['CollationClassesResult', true, () => wb.getCollationClasses([{ kind: 1, number: 1 }], 0, 'nope')],
-    ['SpillInfo', true, () => wb.getSpillInfo(99, 0, 0)],
-    ['ArrayFormulaResult', true, () => wb.getArrayFormula(99, 0, 0)],
-    ['SheetFormatDefaultsResult', true, () => wb.getFormatDefaults(99)],
-    ['CellRectResult', true, () => wb.getCellRectPt(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, 0)],
-    ['WidthModelResult', true, () => wb.getWidthModel(99, 0)],
-    ['OptionalResult', true, () => wb.getFormula(99, 0, 0)],
-    ['CellsInRangeResult', true, () => wb.getCellsInRange(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 })],
-    ['DisplayTextResult', true, () => wb.getDisplayText(99, 0, 0)],
+    [false, () => wb.getPinnedNow()],
+    [true, () => wb.getLocaleFacts('nope')],
+    [true, () => wb.compareText('a', 'b', 0, 'nope')],
+    [true, () => wb.getCollationClasses([{ kind: 1, number: 1 }], 0, 'nope')],
+    [true, () => wb.getSpillInfo(99, 0, 0)],
+    [true, () => wb.getArrayFormula(99, 0, 0)],
+    [true, () => wb.getFormatDefaults(99)],
+    [true, () => wb.getCellRectPt(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, 0)],
+    [true, () => wb.getWidthModel(99, 0)],
+    [true, () => wb.getFormula(99, 0, 0)],
+    [true, () => wb.getCellsInRange(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 })],
+    [true, () => wb.getDisplayText(99, 0, 0)],
     // A released handle is the only failure path of `getThemeFonts`.
-    ['ThemeResult', false, () => wb.getThemeFonts()],
-    ['ResolvedColorResult', true, () => wb.resolveColor({ kind: 0 }, 99)],
-    ['EffectiveStyleResult', true, () => wb.getEffectiveStyle(99, 0, 0)],
-    ['AutoFilterResult', true, () => wb.getAutoFilter(99)],
-    ['OptionalResult', true, () => wb.getDataTable(99, 0, 0)],
-    ['AutoFilterEvalResult', true, () => wb.evaluateAutoFilter(99)],
-    ['ThreadedCommentsResult', true, () => wb.listThreadedComments(99)],
-    ['PersonsResult', false, () => wb.listPeople()],
-    ['ImageInfoResult', true, () => wb.getImageInfo(new Uint8Array(0))],
-    ['OptionalResult', true, () => wb.getImage(99, 1)],
-    ['ObjectIdResult', true, () => wb.addImage(99, new Uint8Array(0), {})],
-    ['ImageSnapshotResult', true, () => wb.snapshotDrawing(99, 1)],
-    ['OptionalResult', true, () => wb.getChart(99, 1)],
-    ['ChartDataResult', true, () => wb.getChartData(99, 1)],
-    ['ObjectIdResult', true, () => wb.addChart(99, { kind: 0, source: 'A1:B2' })],
-    ['IndexResult', true, () => wb.addChartSeries(99, 1, 0, { values: 'A1:A2' })],
-    [
-      'RangeStyleBasesResult',
-      true,
-      () => wb.getRangeStyleBases(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }),
-    ],
-    [
-      'RangeStyleBasesResult',
-      true,
-      () => wb.getRangeStyleBasesExcluding(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, [], []),
-    ],
-    [
-      'RangeStyleSnapshotResult',
-      true,
-      () => wb.snapshotRangeStyle(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }),
-    ],
-    ['ValidationOutcomeResult', true, () => wb.validateValue(99, 0, 0, { kind: 1, number: 1 })],
+    [false, () => wb.getThemeFonts()],
+    [true, () => wb.resolveColor({ kind: 0 }, 99)],
+    [true, () => wb.getEffectiveStyle(99, 0, 0)],
+    [true, () => wb.getAutoFilter(99)],
+    [true, () => wb.getDataTable(99, 0, 0)],
+    [true, () => wb.evaluateAutoFilter(99)],
+    [true, () => wb.listThreadedComments(99)],
+    [false, () => wb.listPeople()],
+    [true, () => wb.getImageInfo(new Uint8Array(0))],
+    [true, () => wb.getImage(99, 1)],
+    [true, () => wb.addImage(99, new Uint8Array(0), {})],
+    [true, () => wb.snapshotDrawing(99, 1)],
+    [true, () => wb.getChart(99, 1)],
+    [true, () => wb.getChartData(99, 1)],
+    [true, () => wb.addChart(99, { kind: 0, source: 'A1:B2' })],
+    [true, () => wb.addChartSeries(99, 1, 0, { values: 'A1:A2' })],
+    [true, () => wb.getRangeStyleBases(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 })],
+    [true, () => wb.getRangeStyleBasesExcluding(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, [], [])],
+    [true, () => wb.snapshotRangeStyle(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 })],
+    [true, () => wb.validateValue(99, 0, 0, { kind: 1, number: 1 })],
   ];
 }
 
-test('every declared result type is probed for its key set', async () => {
+test('the declaration file declares no result envelope', async () => {
   const dts = await readFile(path.join(pkgRoot, 'dist', 'index.d.ts'), 'utf8');
-  const declared = resultTypesWithRequiredPayload(dts);
-  const probed = new Set(envelopeProbes({}).map(([name]) => name));
-  const unprobed = [...declared.keys()].filter((name) => !probed.has(name));
-  assert.deepEqual(unprobed, [], 'result types with no failure-path probe');
-  const stale = [...probed].filter((name) => !declared.has(name));
-  assert.deepEqual(stale, [], 'probes for result types that no longer declare a required payload');
+  const envelopes = [...dts.matchAll(/^export interface (\w+) [^{]*\{([\s\S]*?)\n\}/gm)]
+    .filter(([, , body]) => /^ {2}(?:readonly )?status\??:/m.test(body))
+    .map(([, name]) => name);
+  assert.deepEqual(envelopes, [], 'interfaces that still carry a status member');
+  assert.doesNotMatch(dts, /^export (?:interface|type) \w*Result\b/m);
 });
 
-test('result envelopes keep their declared keys on failure paths', async () => {
+test('failure paths throw FormulonError carrying a message and a context', async () => {
   const mod = await getModule();
-  const dts = await readFile(path.join(pkgRoot, 'dist', 'index.d.ts'), 'utf8');
-  const declared = resultTypesWithRequiredPayload(dts);
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
-    for (const [typeName, expectFailure, call] of envelopeProbes(wb)) {
-      const r = call();
-      if (expectFailure) {
-        assert.equal(r.status.ok, false, `${typeName}: probe was expected to fail`);
-      }
-      const missing = declared.get(typeName).filter((key) => !(key in r));
-      assert.deepEqual(missing, [], `${typeName} dropped declared keys`);
+    for (const [expectFailure, call] of failureProbes(wb)) {
+      if (!expectFailure) continue;
+      assert.throws(
+        () => call(),
+        (e) => {
+          assert.ok(isFormulonError(e), `${call}: expected a FormulonError, got ${e}`);
+          assert.equal(typeof e.message, 'string');
+          assert.equal(typeof e.context, 'string');
+          return true;
+        },
+        `${call}: probe was expected to fail`,
+      );
     }
   } finally {
     wb.dispose();

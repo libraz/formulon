@@ -1,13 +1,14 @@
 // Shared translation helpers and module-global state for the Node.js
 // N-API addon. Per-area implementation TUs (`parts/*.cc`) include this
-// header to obtain the small kit of `Make*Status`, `TranslateValue`,
-// and JS-shape builders that the bindings collectively rely on.
+// header to obtain the result builders (`ThrowStatus`, `ValueOrThrow`,
+// `OptionalOrNull`, ...), the `Value` translation pair and the JS-shape
+// builders that the bindings collectively rely on.
 //
-// All helpers translate the C ABI types declared in
-// `c_api/formulon_c.h` (`fm_value_t`, `fm_cf_match_t`, `fm_pivot_*`,
-// etc.) into the JS object shapes documented in `addon.cc`. The shape
-// MUST stay byte-identical with the WASM/embind binding so JS callers
-// can swap packages transparently.
+// A method returns its payload directly on success. A failure throws: a
+// C-ABI status becomes the injected `FormulonError`, an argument the binding
+// cannot represent a `TypeError` / `RangeError`. All helpers translate the
+// C ABI types declared in `c_api/formulon_c.h` into the JS object shapes
+// the WASM binding also produces, so JS callers can swap packages.
 
 #ifndef FORMULON_NODE_ADDON_PARTS_ADDON_COMMON_H_
 #define FORMULON_NODE_ADDON_PARTS_ADDON_COMMON_H_
@@ -53,72 +54,58 @@ Napi::Uint8Array CopyBytes(Napi::Env env, const uint8_t* bytes, std::size_t len)
 /// Copies an engine-owned buffer onto the JS heap and releases the source.
 Napi::Uint8Array TakeSavedBytes(Napi::Env env, uint8_t* bytes, std::size_t len);
 
-/// Builds `{ bytes, status }` for a snapshot call; `bytes` is released and
-/// replaced by an empty array when `rc` is non-zero.
-Napi::Object SnapshotBytesResult(Napi::Env env, fm_status_t rc, uint8_t* bytes, std::size_t len);
-
-using formulon::c_api::kBindingCallbackException;
 using formulon::c_api::kBindingInvalidHandle;
 using formulon::c_api::kInvalidArgument;
 
+/// Per-environment addon state, held as the environment's instance data.
+struct AddonData {
+  /// The `Workbook` constructor, created once per environment.
+  Napi::FunctionReference workbook_class;
+  /// The `FormulonError` constructor injected through `__setErrorClass`.
+  Napi::FunctionReference error_class;
+};
+
+/// This environment's addon state, created on first use.
+AddonData& GetAddonData(Napi::Env env);
+
 // ---------------------------------------------------------------------
-// Status / Value envelope builders
+// Result builders
 // ---------------------------------------------------------------------
 
-/// Builds an `ok` Status envelope:
-///   { ok: true, code: 0, message: "", context: "" }
-Napi::Object MakeOkStatus(Napi::Env env);
+/// Throws a `FormulonError` carrying `rc` and the last-error message and
+/// context of the C-ABI call that failed, and returns `env.Undefined()`.
+/// Throws nothing when an exception is already pending (a callback's own
+/// exception, or a rejected argument), so that exception reaches JS as-is.
+/// Without an injected error class it throws a `TypeError` instead.
+Napi::Value ThrowStatus(Napi::Env env, fm_status_t rc);
 
-/// Builds an error Status envelope, copying the thread-local
-/// diagnostics surfaced by the most recent C-ABI call.
-/// `code == kBindingInvalidHandle` is special-cased: that failure is
-/// raised before any C-ABI call, so the envelope carries a synthesised
-/// message rather than the residue of an earlier, unrelated call.
-Napi::Object MakeErrorStatus(Napi::Env env, fm_status_t code);
+/// Throws the `FormulonError` of a call on a disposed workbook
+/// (`BindingInvalidHandle`, "the workbook is disposed") and returns
+/// `env.Undefined()`. No C-ABI call ran, so no last-error state is read.
+Napi::Value ThrowInvalidHandle(Napi::Env env);
 
-/// Error-Status envelope for a wrapper that was finalized / destroyed while
-/// JS still holds a reference.
-inline Napi::Object NullHandleError(Napi::Env env) {
-  return MakeErrorStatus(env, kBindingInvalidHandle);
-}
+/// Returns `ok_value` when `rc` is 0, else `ThrowStatus(env, rc)`.
+Napi::Value ValueOrThrow(Napi::Env env, fm_status_t rc, Napi::Value ok_value);
 
-/// Builds an error Status envelope for a failure the binding raised
-/// itself, carrying `message` and an empty context. Never reads the
-/// thread-local diagnostics, which at that point still belong to a
-/// previous call.
-Napi::Object MakeBindingError(Napi::Env env, fm_status_t code, const char* message);
+/// Result of a lookup by key: `ThrowStatus` when `rc` is non-zero, `null`
+/// when the key was not `present`, else `item`.
+Napi::Value OptionalOrNull(Napi::Env env, fm_status_t rc, int32_t present, Napi::Value item);
 
-/// `MakeBindingError` with `kInvalidArgument`, for an entry point that
-/// rejects a wrongly-shaped JS argument before calling the C ABI.
-/// `message` names the offending parameter.
-Napi::Object MakeBindingArgumentError(Napi::Env env, const char* message);
+/// Translates an `fm_value_t` into the JS `Value` union: `kind` plus only
+/// the field that kind carries (`number`, `boolean`, `text` or `errorCode`).
+Napi::Value ValueToJs(Napi::Env env, const fm_value_t& v);
 
-/// Builds the Status envelope for `rc == 0 && callback_threw`: the engine
-/// reported success (it only saw a cancellation), so there is no
-/// thread-local diagnostic for this failure to read -- `MakeErrorStatus`
-/// would otherwise carry whatever an earlier, unrelated call left behind.
-/// Matches the WASM binding's `progress_callback_threw_status()` message
-/// and context exactly.
-Napi::Object MakeCallbackThrewStatus(Napi::Env env);
-
-/// Converts a C-ABI status code into the shared JS Status envelope.
-Napi::Object MakeStatus(Napi::Env env, fm_status_t code);
-
-/// Stamps a list getter's `status` property onto the array it returns and
-/// hands the array back.
-///
-/// The list getters return `ListResult<T>` -- an array that also carries a
-/// `status`, which is legal because a JS array is an object. Without it a
-/// caller cannot tell an empty sheet from a sheet it could not read, and
-/// `merges.status.ok` is a `TypeError` rather than a check. Element reads
-/// stop at the first failure and report it, so a partially enumerated list
-/// always arrives with `status.ok === false`; both bindings behave this
-/// way and the parity claim in `packages/npm-native/README.md` rests on it.
-Napi::Array FinishListResult(Napi::Env env, Napi::Array items, fm_status_t code);
+/// Reads a JS `Value` into `out`. `kind` is required, and the field its kind
+/// carries must be present with its type (`boolean` must be a JS boolean);
+/// other fields are ignored. A text payload is copied into `text`, which
+/// must outlive the C call reading `out`. Throws a `TypeError` and returns
+/// false on a malformed value.
+bool JsToValue(Napi::Env env, Napi::Value in, fm_value_t* out, std::string* text);
 
 /// Fills `items` by asking `count_fn(size_t*)` for the element count and then
 /// `at_fn(size_t, Item*)` for each element, converting it with `to_js(item)`.
-/// Stops at the first failing status and returns it; returns 0 otherwise.
+/// Stops at the first failing status and returns it; returns 0 otherwise,
+/// including when a conversion left an exception pending.
 template <typename Item, typename CountFn, typename AtFn, typename ToJs>
 fm_status_t CollectList(Napi::Array& items, CountFn count_fn, AtFn at_fn, ToJs to_js) {
   std::size_t count = 0;
@@ -130,75 +117,12 @@ fm_status_t CollectList(Napi::Array& items, CountFn count_fn, AtFn at_fn, ToJs t
       break;
     }
     items.Set(static_cast<uint32_t>(i), to_js(item));
+    if (items.Env().IsExceptionPending()) {
+      break;
+    }
   }
   return rc;
 }
-
-/// Stamps an index getter's `status` onto the record it read, giving the
-/// `<Record> & {status}` result shape. A failed read passes the zero record,
-/// so every declared key is present on the failure path too.
-Napi::Object FinishItemResult(Napi::Env env, Napi::Object item, fm_status_t code);
-
-/// Translates an `fm_value_t` into the JS Value shape.
-Napi::Object TranslateValue(Napi::Env env, const fm_value_t& v);
-
-/// Builds `{ status, <field>: value }`.
-Napi::Object MakeFieldResult(Napi::Env env, Napi::Object status, const char* field, Napi::Value value);
-
-/// Builds `{ status, <field>: number }`.
-Napi::Object MakeNumberFieldResult(Napi::Env env, Napi::Object status, const char* field, double value);
-
-/// Builds `{ status, <field>: string }`. NULL `value` becomes "".
-Napi::Object MakeStringFieldResult(Napi::Env env, Napi::Object status, const char* field, const char* value);
-
-/// Builds `{ status, <field>: number }` from `code`; `value` is carried
-/// only on success and reads 0 otherwise.
-Napi::Object MakeNumberFieldResult(Napi::Env env, fm_status_t code, const char* field, double value);
-
-/// Builds `{ status, <field>: string }` from `code`; `value` is carried
-/// only on success and reads "" otherwise (as does a NULL `value`).
-Napi::Object MakeStringFieldResult(Napi::Env env, fm_status_t code, const char* field, const char* value);
-
-/// Builds the `{ status, value }` NumberResult from `code`; `value` is
-/// carried only on success and reads 0 otherwise.
-Napi::Object MakeNumberResult(Napi::Env env, fm_status_t code, double value);
-
-/// Builds the `{ status, value }` BoolResult from `code`; `value` is
-/// `flag != 0` on success and `false` otherwise.
-Napi::Object MakeBoolResult(Napi::Env env, fm_status_t code, int32_t flag);
-
-/// Builds the `{ status, value }` StringResult from `code`; `value` is
-/// carried only on success and reads "" otherwise (as does a NULL `value`).
-Napi::Object MakeStringResult(Napi::Env env, fm_status_t code, const char* value);
-
-/// Builds `{ status, value: TranslateValue(value) }`.
-Napi::Object MakeValueResult(Napi::Env env, Napi::Object status, const fm_value_t& value);
-
-/// Builds `{ status, value: TranslateValue(blank) }`.
-Napi::Object MakeEmptyValueResult(Napi::Env env, Napi::Object status);
-
-/// Builds the `{ status, value }` ValueResult from `code`; `value` is
-/// carried only on success and reads as blank otherwise.
-Napi::Object MakeValueResult(Napi::Env env, fm_status_t code, const fm_value_t& value);
-
-/// Builds `{ status, index }` (used by `*_create` / `*_add` style entries).
-Napi::Object MakeIndexResult(Napi::Env env, Napi::Object status, uint32_t index);
-
-/// Builds `{ status, index }` from `code`; `index` is carried only on
-/// success and reads 0 otherwise.
-Napi::Object MakeIndexResult(Napi::Env env, fm_status_t code, uint32_t index);
-
-/// Builds the `{ status, value }` OptionalResult of a lookup that failed
-/// before it ran; `value` is `null`.
-Napi::Object MakeOptionalResult(Napi::Env env, Napi::Object status, Napi::Value value);
-
-/// Builds the `{ status, value }` OptionalResult of a lookup by key: `value`
-/// is `item` when `code` is 0 and the key was `present`, else `null`.
-Napi::Object MakeOptionalResult(Napi::Env env, fm_status_t code, int32_t present, Napi::Value item);
-
-/// Builds the `{ status, rect: null, cells: [] }` placeholder for
-/// failure paths in `PivotLayout`.
-Napi::Object EmptyPivotLayoutResult(Napi::Env env, Napi::Object status);
 
 /// The largest uint32 value as a JS Number, the upper bound of uint32 checks.
 constexpr double kUint32MaxNumber = static_cast<double>(std::numeric_limits<std::uint32_t>::max());

@@ -10,6 +10,7 @@ import formulon
 from formulon import (
     LIB,
     FormulonError,
+    IndexOutOfRangeError,
     InvalidArgumentError,
     NotFoundError,
     StatusCode,
@@ -55,28 +56,37 @@ class ExceptionFamilyTest(unittest.TestCase):
         self.assertTrue(issubclass(InvalidArgumentError, FormulonError))
         self.assertTrue(issubclass(InvalidArgumentError, ValueError))
         self.assertTrue(issubclass(NotFoundError, FormulonError))
+        self.assertTrue(issubclass(NotFoundError, KeyError))
         self.assertTrue(issubclass(NotFoundError, LookupError))
         self.assertFalse(issubclass(NotFoundError, ValueError))
+        self.assertTrue(issubclass(IndexOutOfRangeError, FormulonError))
+        self.assertTrue(issubclass(IndexOutOfRangeError, IndexError))
+        self.assertTrue(issubclass(IndexOutOfRangeError, LookupError))
+        self.assertFalse(issubclass(IndexOutOfRangeError, NotFoundError))
+        self.assertTrue(issubclass(formulon.WorkbookClosedError, FormulonError))
+        self.assertTrue(issubclass(formulon.WorkbookClosedError, ValueError))
         self.assertIs(formulon.InvalidArgumentError, InvalidArgumentError)
 
     def test_code_is_the_enum_member(self) -> None:
-        err = FormulonError(StatusCode.PARSER_INVALID_R1C1, op="probe")
+        err = FormulonError(StatusCode.PARSER_INVALID_R1C1)
         self.assertIs(err.code, StatusCode.PARSER_INVALID_R1C1)
         self.assertEqual(err.code.name, "PARSER_INVALID_R1C1")
         self.assertFalse(hasattr(err, "status"))
         self.assertFalse(hasattr(err, "status_name"))
-        self.assertIn("PARSER_INVALID_R1C1 (1011)", str(err))
+        self.assertEqual(str(err), err.message)
 
     def test_dedicated_subclass_per_code(self) -> None:
         self.assertIs(type(FormulonError(StatusCode.INVALID_ARGUMENT)), InvalidArgumentError)
         for member in (
             StatusCode.NOT_FOUND,
-            StatusCode.SHEET_INDEX_OUT_OF_RANGE,
             StatusCode.PIVOT_FIELD_NOT_FOUND,
             StatusCode.EVAL_LAMBDA_NOT_FOUND,
         ):
             with self.subTest(member=member.name):
                 self.assertIs(type(FormulonError(member)), NotFoundError)
+        self.assertIs(type(FormulonError(StatusCode.SHEET_INDEX_OUT_OF_RANGE)), IndexOutOfRangeError)
+        self.assertIs(type(FormulonError(StatusCode.INDEX_OUT_OF_RANGE)), IndexOutOfRangeError)
+        self.assertIs(type(FormulonError(StatusCode.BINDING_INVALID_HANDLE)), formulon.WorkbookClosedError)
 
     def test_file_not_found_codes_stay_on_the_base(self) -> None:
         for member in (StatusCode.IO_FILE_NOT_FOUND, StatusCode.CLI_FILE_NOT_FOUND):
@@ -85,7 +95,7 @@ class ExceptionFamilyTest(unittest.TestCase):
 
     def test_every_not_found_suffix_maps_to_not_found_error(self) -> None:
         for member in StatusCode:
-            expected_not_found = member.name in ("NOT_FOUND", "SHEET_INDEX_OUT_OF_RANGE") or (
+            expected_not_found = member.name == "NOT_FOUND" or (
                 member.name.endswith("_NOT_FOUND") and member.name not in ("IO_FILE_NOT_FOUND", "CLI_FILE_NOT_FOUND")
             )
             with self.subTest(member=member.name):
@@ -95,14 +105,14 @@ class ExceptionFamilyTest(unittest.TestCase):
         err = FormulonError(123456)
         self.assertEqual(err.code, 123456)
         self.assertNotIsInstance(err.code, StatusCode)
-        self.assertIn("UNRECOGNIZED_STATUS (123456)", str(err))
+        self.assertEqual(str(err), err.message)
 
     def test_engine_failures_arrive_as_the_family(self) -> None:
         with self.assertRaises(FormulonError) as ctx:
             Workbook.load(b"not a real xlsx archive")
         self.assertNotEqual(ctx.exception.code, StatusCode.OK)
         with Workbook.create_default() as wb:
-            with self.assertRaises(NotFoundError) as missing:
+            with self.assertRaises(IndexOutOfRangeError) as missing:
                 wb.rename_sheet(wb.get_sheet_count(), "x")
             self.assertEqual(missing.exception.code, StatusCode.SHEET_INDEX_OUT_OF_RANGE)
             with self.assertRaises(FormulonError) as invalid:

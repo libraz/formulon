@@ -49,7 +49,7 @@ Napi::Object CfvoToJs(Napi::Env env, const fm_cfvo_t& cfvo) {
 Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeFieldResult(env, NullHandleError(env), "cells", Napi::Array::New(env));
+    return ThrowInvalidHandle(env);
   }
   const uint32_t sheet = ArgU32(info, 0);
   CheckedSpecReader reader(env);
@@ -63,13 +63,13 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
   fm_cf_results_t* results = nullptr;
   fm_status_t rc = fm_sheet_evaluate_cf_range(handle_, sheet, &rect, today_serial, &results);
   if (rc != 0) {
-    return MakeFieldResult(env, MakeErrorStatus(env, rc), "cells", Napi::Array::New(env));
+    return ThrowStatus(env, rc);
   }
   std::size_t cell_count = 0;
   rc = fm_cf_results_get_cell_count(results, &cell_count);
   if (rc != 0) {
     fm_cf_results_destroy(results);
-    return MakeFieldResult(env, MakeErrorStatus(env, rc), "cells", Napi::Array::New(env));
+    return ThrowStatus(env, rc);
   }
   Napi::Array cells = Napi::Array::New(env, cell_count);
   std::size_t emitted = 0;
@@ -99,7 +99,7 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
     ++emitted;
   }
   fm_cf_results_destroy(results);
-  return MakeFieldResult(env, MakeOkStatus(env), "cells", cells);
+  return cells;
 }
 
 // ---- Conditional formatting (read / mutate) -------------------------
@@ -228,24 +228,29 @@ Napi::Object CfRuleToJs(Napi::Env env, const fm_cf_rule_t& rule) {
 }  // namespace
 
 Napi::Value Workbook::GetCfRuleCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   std::size_t count = 0;
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_sheet_get_cf_rule_count(handle_, ArgU32(info, 0), &count) : kBindingInvalidHandle;
-  return MakeNumberResult(info.Env(), rc, static_cast<double>(count));
+  const fm_status_t rc = fm_sheet_get_cf_rule_count(handle_, ArgU32(info, 0), &count);
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
 }
 
 Napi::Value Workbook::GetCfRule(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   fm_cf_rule_t rule{};
-  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_cf_rule(handle_, ArgU32(info, 0), ArgU32(info, 1), &rule)
-                                            : kBindingInvalidHandle;
-  return FinishItemResult(env, CfRuleToJs(env, rc == 0 ? rule : fm_cf_rule_t{}), rc);
+  const fm_status_t rc = fm_sheet_get_cf_rule(handle_, ArgU32(info, 0), ArgU32(info, 1), &rule);
+  return ValueOrThrow(env, rc, rc == 0 ? Napi::Value(CfRuleToJs(env, rule)) : env.Undefined());
 }
 
 Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
+    return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   Napi::Object v = ArgObject(info, 1);
@@ -501,8 +506,8 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   std::size_t new_index = 0;
-  fm_status_t rc = fm_sheet_add_cf_rule(handle_, sheet, &rule, &new_index);
-  return MakeNumberFieldResult(env, rc, "index", static_cast<double>(new_index));
+  const fm_status_t rc = fm_sheet_add_cf_rule(handle_, sheet, &rule, &new_index);
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(new_index)));
 }
 
 Napi::Value Workbook::RemoveConditionalFormatAt(const Napi::CallbackInfo& info) {
@@ -512,10 +517,9 @@ Napi::Value Workbook::RemoveConditionalFormatAt(const Napi::CallbackInfo& info) 
 Napi::Value Workbook::ClearConditionalFormats(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  fm_status_t rc = fm_sheet_clear_cf_rules(handle_, sheet);
-  return MakeStatus(env, rc);
+  return ValueOrThrow(env, fm_sheet_clear_cf_rules(handle_, sheet), env.Undefined());
 }
 }  // namespace formulon_node

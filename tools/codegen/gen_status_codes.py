@@ -46,8 +46,8 @@ END = "// <status-codes:end>"
 
 # Codes whose "not found" meaning is not a lookup miss in the model.
 NOT_FOUND_EXCLUDED = ("IO_FILE_NOT_FOUND", "CLI_FILE_NOT_FOUND")
-# Codes outside the `_NOT_FOUND` suffix rule that still map to NotFoundError.
-NOT_FOUND_EXTRA = ("SHEET_INDEX_OUT_OF_RANGE",)
+# Codes raised as IndexOutOfRangeError: a sheet or other counted-collection index past its end.
+INDEX_OUT_OF_RANGE_NAMES = ("SHEET_INDEX_OUT_OF_RANGE", "INDEX_OUT_OF_RANGE")
 
 Code = Tuple[str, str, int]  # (enumerator without k, UPPER_SNAKE, value)
 
@@ -76,7 +76,7 @@ def not_found_names(codes: List[Code]) -> List[str]:
     for _, name, _ in codes:
         if name in NOT_FOUND_EXCLUDED:
             continue
-        if name == "NOT_FOUND" or name in NOT_FOUND_EXTRA or name.endswith("_NOT_FOUND"):
+        if name == "NOT_FOUND" or name.endswith("_NOT_FOUND"):
             out.append(name)
     return out
 
@@ -122,7 +122,7 @@ def render_js_region(codes: List[Code]) -> str:
 def render_dts_region(codes: List[Code]) -> str:
     lines = [
         BEGIN,
-        "/** Engine status codes. Mirrors `fm_status_t` (`FM_STATUS_<NAME>`); each key is the",
+        "/** Engine status codes, as carried by {@link FormulonError.code}; each key is the",
         " *  code name in PascalCase. */",
         "export const StatusCode: Readonly<{",
     ]
@@ -159,6 +159,16 @@ def render_py(codes: List[Code]) -> str:
         "    (",
     ]
     lines += [f"        StatusCode.{name}," for _, name, _ in codes if name in not_found]
+    lines += [
+        "    )",
+        ")",
+        "",
+        "",
+        "# Codes raised as `IndexOutOfRangeError`.",
+        "INDEX_OUT_OF_RANGE_CODES = frozenset(",
+        "    (",
+    ]
+    lines += [f"        StatusCode.{name}," for _, name, _ in codes if name in INDEX_OUT_OF_RANGE_NAMES]
     lines += ["    )", ")", ""]
     return "\n".join(lines)
 

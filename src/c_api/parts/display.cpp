@@ -48,12 +48,12 @@ extern "C" fm_status_t fm_sheet_get_display_text(const fm_workbook_t* wb, size_t
                                                  uint32_t col, const char** out_text, int32_t* out_status) {
   clear_last_error();
   if (out_text == nullptr || out_status == nullptr) {
-    return null_argument("fm_sheet_get_display_text");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_display_text"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_cell_coord(row, col, "fm_sheet_get_display_text"); rc != 0) {
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
   const formulon::Workbook& workbook = wb->workbook();
@@ -66,13 +66,13 @@ extern "C" fm_status_t fm_workbook_format_value(const fm_workbook_t* wb, const f
                                                 const char* format_code, const char** out_text, int32_t* out_status) {
   clear_last_error();
   if (wb == nullptr || value == nullptr || format_code == nullptr || out_text == nullptr || out_status == nullptr) {
-    return null_argument("fm_workbook_format_value");
+    return null_argument();
   }
-  if (auto rc = check_utf8("fm_workbook_format_value", {format_code}); rc != 0) {
+  if (auto rc = check_utf8({format_code}); rc != 0) {
     return rc;
   }
   formulon::Value v = formulon::Value::blank();
-  if (auto rc = value_from_fm(*value, &v, "fm_workbook_format_value"); rc != 0) {
+  if (auto rc = value_from_fm(*value, &v); rc != 0) {
     return rc;
   }
   publish(wb,

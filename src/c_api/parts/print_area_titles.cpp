@@ -30,6 +30,7 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
@@ -129,17 +130,16 @@ bool is_span(std::string_view token, SpanEndParser parse_end, std::uint32_t max)
 
 extern "C" fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* ranges,
                                                size_t range_count) {
-  static constexpr const char* kFn = "fm_sheet_set_print_area";
   clear_last_error();
   if (range_count != 0U && ranges == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn, "arg=ranges");
+    return null_argument("ranges");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   std::string formula;
   if (range_count != 0U) {
-    if (auto rc = formulon::c_api::parts::check_rect_list(ranges, range_count, kFn); rc != 0) {
+    if (auto rc = formulon::c_api::parts::check_rect_list(ranges, range_count); rc != 0) {
       return rc;
     }
     const std::string qualifier = sheet_qualifier(wb->workbook().sheet(sheet_index).name());
@@ -161,12 +161,11 @@ extern "C" fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_i
 
 extern "C" fm_status_t fm_sheet_get_print_area(const fm_workbook_t* wb, size_t sheet_index,
                                                const fm_cell_rect_t** out_ranges, size_t* out_range_count) {
-  static constexpr const char* kFn = "fm_sheet_get_print_area";
   clear_last_error();
   if (out_ranges == nullptr || out_range_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn, "arg=out_ranges");
+    return null_argument("out_ranges");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   auto areas = formulon::print::resolve_print_area(wb->workbook(), static_cast<std::uint32_t>(sheet_index));
@@ -186,12 +185,11 @@ extern "C" fm_status_t fm_sheet_get_print_area(const fm_workbook_t* wb, size_t s
 
 extern "C" fm_status_t fm_sheet_set_print_titles(fm_workbook_t* wb, size_t sheet_index, const char* repeat_rows,
                                                  const char* repeat_cols) {
-  static constexpr const char* kFn = "fm_sheet_set_print_titles";
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8(kFn, {repeat_rows, repeat_cols}); rc != 0) {
+  if (auto rc = check_utf8({repeat_rows, repeat_cols}); rc != 0) {
     return rc;
   }
   const std::string_view rows(repeat_rows == nullptr ? "" : repeat_rows);
@@ -203,7 +201,7 @@ extern "C" fm_status_t fm_sheet_set_print_titles(fm_workbook_t* wb, size_t sheet
     // but matching Excel keeps a diffed worksheet quiet.
     if (!rows.empty()) {
       if (!is_span(rows, &formulon::a1::parse_uint, Sheet::kMaxRows)) {
-        return set_binding_error(formulon::FormulonErrorCode::kPrintInvalidArea, kFn,
+        return set_binding_error(formulon::FormulonErrorCode::kPrintInvalidArea, "repeat_rows is not a row span",
                                  "repeat_rows=" + std::string(rows));
       }
       formula.append(qualifier);
@@ -211,7 +209,7 @@ extern "C" fm_status_t fm_sheet_set_print_titles(fm_workbook_t* wb, size_t sheet
     }
     if (!cols.empty()) {
       if (!is_span(cols, &formulon::a1::parse_column_letters, Sheet::kMaxCols)) {
-        return set_binding_error(formulon::FormulonErrorCode::kPrintInvalidArea, kFn,
+        return set_binding_error(formulon::FormulonErrorCode::kPrintInvalidArea, "repeat_cols is not a column span",
                                  "repeat_cols=" + std::string(cols));
       }
       if (!formula.empty()) {
@@ -231,13 +229,11 @@ extern "C" fm_status_t fm_sheet_set_print_titles(fm_workbook_t* wb, size_t sheet
 
 extern "C" fm_status_t fm_sheet_get_print_titles(const fm_workbook_t* wb, size_t sheet_index,
                                                  const char** out_repeat_rows, const char** out_repeat_cols) {
-  static constexpr const char* kFn = "fm_sheet_get_print_titles";
   clear_last_error();
   if (out_repeat_rows == nullptr || out_repeat_cols == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn,
-                             "arg=out_repeat_rows|out_repeat_cols");
+    return null_argument("out_repeat_rows or out_repeat_cols");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   auto titles = formulon::print::resolve_print_titles(wb->workbook(), static_cast<std::uint32_t>(sheet_index));

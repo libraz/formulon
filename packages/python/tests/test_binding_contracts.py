@@ -39,6 +39,7 @@ from formulon import (
     FormulonError,
     LogLevel,
     PhoneticProperties,
+    PhoneticPropertiesInput,
     PhoneticRun,
     PivotAggregation,
     PivotAxis,
@@ -119,25 +120,28 @@ class FormulonErrorStatusTests(unittest.TestCase):
                 with self.assertRaises(FormulonError) as caught:
                     wb.get_pagination(0)
         self.assertEqual(caught.exception.code, 7001)
-        self.assertIn("fm_sheet_get_pagination", str(caught.exception))
+        self.assertEqual(str(caught.exception), "returned OK with a null pagination handle")
+        self.assertNotIn("fm_", str(caught.exception))
 
 
 class ErrorOperationNameTests(unittest.TestCase):
-    def test_count_helper_failure_names_the_c_abi_entry_point(self) -> None:
-        """`op` must name the ABI symbol, never a binding-internal helper."""
+    def test_count_helper_failure_carries_no_c_abi_name(self) -> None:
+        """Messages are written for Python callers: no ABI symbol, no binding helper."""
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError) as caught:
                 wb.list_merges(99)
         message = str(caught.exception)
-        self.assertIn("fm_sheet_get_merge_count", message)
+        self.assertIsInstance(caught.exception, formulon.IndexOutOfRangeError)
+        self.assertNotIn("fm_", message)
         self.assertNotIn("_wrapped", message)
 
-    def test_trace_failure_names_the_c_abi_entry_point(self) -> None:
+    def test_trace_failure_carries_no_c_abi_name(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError) as caught:
                 wb.get_precedents(99, 0, 0)
         message = str(caught.exception)
-        self.assertIn("fm_sheet_get_precedents", message)
+        self.assertIsInstance(caught.exception, formulon.IndexOutOfRangeError)
+        self.assertNotIn("fm_", message)
         self.assertNotIn("_wrapped", message)
 
     def test_exports_expose_the_c_abi_symbol_as_their_name(self) -> None:
@@ -472,7 +476,7 @@ class StructuredLogTests(unittest.TestCase):
                     # warn record.
                     wb.set_formula(0, 0, 0, "=SUM(T[C])")
                     wb.recalc()
-                    wb.save_as(formulon.WorkbookFormat.XLSB)
+                    wb.save(format=formulon.WorkbookFormat.XLSB)
             finally:
                 os.dup2(saved, 2)
                 os.close(saved)
@@ -602,7 +606,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             # written with no <phoneticPr> element at all.
             self.assertEqual(wb.get_cell_phonetic_properties(0, 0, 0), PhoneticProperties(0, 0, 0))
 
-            wb.set_cell_phonetic_properties(0, 0, 0, PhoneticProperties(font_id=3, type=2, alignment=2))
+            wb.set_cell_phonetic_properties(0, 0, 0, PhoneticPropertiesInput(font_id=3, type=2, alignment=2))
             # Setting the readings must not reset the rendering.
             wb.set_cell_phonetic_runs(0, 0, 0, [PhoneticRun(0, 2, "おおさか")])
             self.assertEqual(wb.get_cell_phonetic_properties(0, 0, 0), PhoneticProperties(3, 2, 2))
@@ -613,22 +617,22 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
     def test_phonetic_properties_reject_values_the_container_cannot_hold(self) -> None:
         with Workbook.create_default() as wb:
             wb.set_text(0, 0, 0, "大阪")
-            wb.set_cell_phonetic_properties(0, 0, 0, PhoneticProperties(1, 3, 3))
+            wb.set_cell_phonetic_properties(0, 0, 0, PhoneticPropertiesInput(1, 3, 3))
             # Two bits each on the binary side, so a wider ordinal is
             # refused rather than truncated into a valid-looking one.
             with self.assertRaises(FormulonError):
-                wb.set_cell_phonetic_properties(0, 0, 0, PhoneticProperties(type=4))
+                wb.set_cell_phonetic_properties(0, 0, 0, PhoneticPropertiesInput(type=4))
             with self.assertRaises(FormulonError):
-                wb.set_cell_phonetic_properties(0, 0, 0, PhoneticProperties(alignment=4))
+                wb.set_cell_phonetic_properties(0, 0, 0, PhoneticPropertiesInput(alignment=4))
             with self.assertRaises(FormulonError):
-                wb.set_cell_phonetic_properties(0, 0, 0, PhoneticProperties(font_id=0x10000))
+                wb.set_cell_phonetic_properties(0, 0, 0, PhoneticPropertiesInput(font_id=0x10000))
             self.assertEqual(wb.get_cell_phonetic_properties(0, 0, 0), PhoneticProperties(1, 3, 3))
 
     def test_a_value_write_discards_the_guide_and_its_rendering(self) -> None:
         with Workbook.create_default() as wb:
             wb.set_text(0, 0, 0, "大阪")
             wb.set_cell_phonetic_runs(0, 0, 0, [PhoneticRun(0, 2, "おおさか")])
-            wb.set_cell_phonetic_properties(0, 0, 0, PhoneticProperties(3, 2, 2))
+            wb.set_cell_phonetic_properties(0, 0, 0, PhoneticPropertiesInput(3, 2, 2))
             wb.set_text(0, 0, 0, "京都")
             self.assertEqual(
                 [wb.get_cell_phonetic_run(0, 0, 0, i) for i in range(wb.get_cell_phonetic_run_count(0, 0, 0))], []
@@ -1016,7 +1020,7 @@ class WorkbookViewAndPhoneticFlagTests(unittest.TestCase):
             wb.set_text(0, 0, 0, "漢字")
             wb.set_cell_phonetic_runs(0, 0, 0, [PhoneticRun(0, 2, "かんじ")])
             self.assertFalse(wb.has_cell_phonetic_properties(0, 0, 0))
-            wb.set_cell_phonetic_properties(0, 0, 0, PhoneticProperties(0, 0, 0))
+            wb.set_cell_phonetic_properties(0, 0, 0, PhoneticPropertiesInput(0, 0, 0))
             self.assertTrue(wb.has_cell_phonetic_properties(0, 0, 0))
             data = wb.save()
         with Workbook.load(data) as reloaded:
@@ -1279,7 +1283,7 @@ class CellMutatorDocstringTests(unittest.TestCase):
     def test_set_error_documents_the_error_code_ordinal(self) -> None:
         doc = inspect.getdoc(Workbook.set_error)
         self.assertIn("ErrorCode", doc)
-        self.assertIn("#DIV/0!", doc)
+        self.assertIn("Value.error_code", doc)
 
     def test_every_public_workbook_method_has_a_docstring(self) -> None:
         undocumented = [

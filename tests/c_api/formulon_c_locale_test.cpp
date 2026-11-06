@@ -212,7 +212,7 @@ TEST(FormulonCApiLocale, ErrorNames) {
 
   EXPECT_EQ(fm_get_locale_error_name_at("mac-365-de_DE", count_of(fm_get_locale_error_name_count), &canonical,
                                         &localized, &measured),
-            kInvalid);
+            FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_get_locale_error_name_at("bogus", na, &canonical, &localized, &measured), kInvalid);
   EXPECT_EQ(fm_get_locale_error_name_at(nullptr, na, &canonical, &localized, &measured), kNullPtr);
   EXPECT_EQ(fm_get_locale_error_name_at("mac-365-de_DE", na, &canonical, &localized, nullptr), kNullPtr);

@@ -257,7 +257,7 @@ TEST(FormulonCApi, TableNamesAndDisplayNamesShareTheCaseInsensitiveNamespace) {
     EXPECT_NE(fm_workbook_add_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 2, 2, 2}), identity[0], identity[1],
                                     columns, 1, "", 1, 0, &index),
               0);
-    EXPECT_STREQ(fm_get_last_error_message(), "fm_workbook_add_table: table name already exists");
+    EXPECT_STREQ(fm_get_last_error_message(), "table name already exists");
     EXPECT_EQ(index, 99U);
     EXPECT_EQ(count_of(fm_workbook_get_table_count, wb.handle), 1U);
   }
@@ -272,7 +272,7 @@ TEST(FormulonCApi, TableDuplicateColumnAtEndRejectsAtomicallyAndUniqueNamesRound
   EXPECT_EQ(fm_workbook_add_table(wb.handle, 0U, record_arg(fm_cell_rect_t{0, 0, 2, 5}), "Invalid", "Invalid",
                                   duplicate_columns, 6U, "", 1, 0, &index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  EXPECT_STREQ(fm_get_last_error_message(), "fm_workbook_add_table: column name is duplicated");
+  EXPECT_STREQ(fm_get_last_error_message(), "column name is duplicated");
   EXPECT_EQ(index, 99U);
   EXPECT_EQ(count_of(fm_workbook_get_table_count, wb.handle), 0U);
 

@@ -16,7 +16,7 @@ namespace formulon_node {
 namespace {
 
 // Enumerates a per-sheet list through its count / at-index pair into a
-// `ListResult` array, stopping at the first failed element read.
+// array, stopping at the first failed element read.
 template <typename T>
 Napi::Value SheetListResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle,
                             fm_status_t (*count_fn)(const fm_workbook_t*, std::size_t, std::size_t*),
@@ -25,45 +25,53 @@ Napi::Value SheetListResult(const Napi::CallbackInfo& info, const fm_workbook_t*
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
   if (handle == nullptr) {
-    return FinishListResult(env, arr, kBindingInvalidHandle);
+    return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = Workbook::ArgU32(info, 0);
   std::size_t count = 0;
   fm_status_t rc = count_fn(handle, sheet, &count);
   if (rc != 0) {
-    return FinishListResult(env, arr, rc);
+    return ThrowStatus(env, rc);
   }
   for (std::size_t i = 0; i < count; ++i) {
     T entry{};
     rc = at_fn(handle, sheet, i, &entry);
     if (rc != 0) {
-      return FinishListResult(env, arr, rc);
+      return ThrowStatus(env, rc);
     }
     arr.Set(i, to_js(env, entry));
   }
-  return FinishListResult(env, arr, 0);
+  return arr;
 }
 
 // Reads element `(sheet, index)` of a per-sheet index-keyed collection into
-// its `<Record> & {status}` result.
+// its record.
 template <typename T>
 Napi::Value SheetItemResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle,
                             fm_status_t (*at_fn)(const fm_workbook_t*, std::size_t, std::size_t, T*),
                             Napi::Object (*to_js)(Napi::Env, const T&)) {
   Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   T entry{};
-  const fm_status_t rc = handle != nullptr ? at_fn(handle, Workbook::ArgU32(info, 0), Workbook::ArgU32(info, 1), &entry)
-                                           : kBindingInvalidHandle;
-  return FinishItemResult(env, to_js(env, rc == 0 ? entry : T{}), rc);
+  const fm_status_t rc = at_fn(handle, Workbook::ArgU32(info, 0), Workbook::ArgU32(info, 1), &entry);
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
+  return to_js(env, entry);
 }
 
-// Reads the element count of a per-sheet collection into a `NumberResult`.
+// Reads the element count of a per-sheet collection.
 Napi::Value SheetCountResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle,
                              fm_status_t (*count_fn)(const fm_workbook_t*, std::size_t, std::size_t*)) {
+  Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   std::size_t count = 0;
-  const fm_status_t rc =
-      handle != nullptr ? count_fn(handle, Workbook::ArgU32(info, 0), &count) : kBindingInvalidHandle;
-  return MakeNumberResult(info.Env(), rc, static_cast<double>(count));
+  const fm_status_t rc = count_fn(handle, Workbook::ArgU32(info, 0), &count);
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
 }
 
 // Shared body of the per-sheet merge add / remove entries taking `(sheet, range)`.
@@ -74,7 +82,7 @@ using MergeEditFn = fm_status_t (*)(fm_workbook_t*, std::size_t, const fm_cell_r
 Napi::Value InvokeMergeEdit(const Napi::CallbackInfo& info, fm_workbook_t* const& handle, MergeEditFn fn) {
   Napi::Env env = info.Env();
   if (handle == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
   fm_cell_rect_t range{};
@@ -83,7 +91,7 @@ Napi::Value InvokeMergeEdit(const Napi::CallbackInfo& info, fm_workbook_t* const
   }
   const uint32_t sheet = Workbook::ArgU32(info, 0);
   fm_status_t rc = fn(handle, sheet, &range);
-  return MakeStatus(env, rc);
+  return ValueOrThrow(env, rc, env.Undefined());
 }
 
 }  // namespace
@@ -112,7 +120,7 @@ Napi::Value Workbook::GetMergesInRange(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
   if (handle_ == nullptr) {
-    return FinishListResult(env, arr, kBindingInvalidHandle);
+    return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
   fm_cell_rect_t range{};
@@ -123,18 +131,18 @@ Napi::Value Workbook::GetMergesInRange(const Napi::CallbackInfo& info) {
   uint32_t total = 0;
   fm_status_t rc = fm_sheet_get_merges_in_range(handle_, sheet, &range, nullptr, 0, &total);
   if (rc != 0) {
-    return FinishListResult(env, arr, rc);
+    return ThrowStatus(env, rc);
   }
   std::vector<fm_cell_rect_t> merges(total);
   uint32_t again = 0;
   rc = fm_sheet_get_merges_in_range(handle_, sheet, &range, merges.data(), total, &again);
   if (rc != 0) {
-    return FinishListResult(env, arr, rc);
+    return ThrowStatus(env, rc);
   }
   for (uint32_t i = 0; i < total; ++i) {
     arr.Set(i, RangeToJs(env, merges[i]));
   }
-  return FinishListResult(env, arr, 0);
+  return arr;
 }
 
 // ---- Comments -------------------------------------------------------
@@ -142,7 +150,7 @@ Napi::Value Workbook::GetMergesInRange(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::GetComment(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+    return ThrowInvalidHandle(env);
   }
   const uint32_t sheet = ArgU32(info, 0);
   const uint32_t row = ArgU32(info, 1);
@@ -151,12 +159,12 @@ Napi::Value Workbook::GetComment(const Napi::CallbackInfo& info) {
   fm_comment_t c{};
   const fm_status_t rc = fm_sheet_get_comment(handle_, sheet, row, col, &present, &c);
   if (rc != 0 || present == 0) {
-    return MakeOptionalResult(env, rc, present, env.Null());
+    return OptionalOrNull(env, rc, present, env.Null());
   }
   Napi::Object comment = Napi::Object::New(env);
   comment.Set("author", JsString(env, c.author));
   comment.Set("text", JsString(env, c.text));
-  return MakeOptionalResult(env, rc, present, comment);
+  return OptionalOrNull(env, rc, present, comment);
 }
 
 namespace {
@@ -179,7 +187,7 @@ Napi::Value Workbook::GetComments(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::SetComment(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   const uint32_t sheet = ArgU32(info, 0);
   const uint32_t row = ArgU32(info, 1);
@@ -191,20 +199,19 @@ Napi::Value Workbook::SetComment(const Napi::CallbackInfo& info) {
   const char* author_c = author.empty() ? nullptr : author.c_str();
   const char* text_c = text.empty() ? nullptr : text.c_str();
   fm_status_t rc = fm_sheet_set_comment(handle_, sheet, row, col, author_c, text_c);
-  return MakeStatus(env, rc);
+  return ValueOrThrow(env, rc, env.Undefined());
 }
 
 Napi::Value Workbook::GetCommentVisible(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+    return ThrowInvalidHandle(env);
   }
   int32_t visible = 0;
   const fm_status_t rc =
       fm_sheet_get_comment_visible(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &visible);
   const bool absent = rc == FM_STATUS_NOT_FOUND;
-  return MakeOptionalResult(env, absent ? 0 : rc, absent ? 0 : 1,
-                            rc == 0 ? Napi::Value(Napi::Boolean::New(env, visible != 0)) : env.Null());
+  return OptionalOrNull(env, absent ? 0 : rc, absent ? 0 : 1, Napi::Boolean::New(env, visible != 0));
 }
 
 Napi::Value Workbook::SetCommentVisible(const Napi::CallbackInfo& info) {
@@ -218,12 +225,12 @@ Napi::Value Workbook::SetCommentVisible(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::GetWorkbookProtection(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeFieldResult(env, NullHandleError(env), "protection", env.Null());
+    return ThrowInvalidHandle(env);
   }
   fm_workbook_protection_t p{};
   const fm_status_t rc = fm_workbook_get_workbook_protection(handle_, &p);
   if (rc != 0) {
-    return MakeFieldResult(env, MakeErrorStatus(env, rc), "protection", env.Null());
+    return ThrowStatus(env, rc);
   }
   Napi::Object o = Napi::Object::New(env);
   o.Set("lockStructure", Napi::Number::New(env, p.lock_structure));
@@ -239,13 +246,13 @@ Napi::Value Workbook::GetWorkbookProtection(const Napi::CallbackInfo& info) {
   o.Set("revisionsAlgorithmName", JsString(env, p.revisions_algorithm_name));
   o.Set("revisionsHashValue", JsString(env, p.revisions_hash_value));
   o.Set("revisionsSaltValue", JsString(env, p.revisions_salt_value));
-  return MakeFieldResult(env, MakeOkStatus(env), "protection", o);
+  return o;
 }
 
 Napi::Value Workbook::SetWorkbookProtection(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   Napi::Object in = ArgObject(info, 0);
   CheckedSpecReader reader(env);
@@ -275,7 +282,7 @@ Napi::Value Workbook::SetWorkbookProtection(const Napi::CallbackInfo& info) {
   p.revisions_algorithm_name = text[5].c_str();
   p.revisions_hash_value = text[6].c_str();
   p.revisions_salt_value = text[7].c_str();
-  return MakeStatus(env, fm_workbook_set_workbook_protection(handle_, &p));
+  return ValueOrThrow(env, fm_workbook_set_workbook_protection(handle_, &p), env.Undefined());
 }
 
 namespace {
@@ -303,7 +310,7 @@ template <typename Edit>
 Napi::Value EditProtectedRange(fm_workbook_t* const& handle, const Napi::CallbackInfo& info, size_t idx, Edit edit) {
   Napi::Env env = info.Env();
   if (handle == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   Napi::Object in = Workbook::ArgObject(info, idx);
   CheckedSpecReader reader(env);
@@ -346,19 +353,17 @@ Napi::Value Workbook::GetProtectedRange(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::AddProtectedRange(const Napi::CallbackInfo& info) {
-  if (handle_ == nullptr) {
-    return MakeIndexResult(info.Env(), NullHandleError(info.Env()), 0);
-  }
   return EditProtectedRange(handle_, info, 1, [&](fm_workbook_t* handle, const fm_protected_range_t& r) {
     std::size_t out = 0;
     const fm_status_t rc = fm_sheet_add_protected_range(handle, ArgU32(info, 0), &r, &out);
-    return MakeIndexResult(info.Env(), rc, static_cast<uint32_t>(out));
+    return ValueOrThrow(info.Env(), rc, Napi::Number::New(info.Env(), static_cast<double>(out)));
   });
 }
 
 Napi::Value Workbook::UpdateProtectedRange(const Napi::CallbackInfo& info) {
   return EditProtectedRange(handle_, info, 2, [&](fm_workbook_t* handle, const fm_protected_range_t& r) {
-    return MakeStatus(info.Env(), fm_sheet_update_protected_range(handle, ArgU32(info, 0), ArgU32(info, 1), &r));
+    return ValueOrThrow(info.Env(), fm_sheet_update_protected_range(handle, ArgU32(info, 0), ArgU32(info, 1), &r),
+                        info.Env().Undefined());
   });
 }
 
@@ -396,7 +401,7 @@ fm_status_t AddHyperlinkFromArgs(fm_workbook_t* wb, const Napi::CallbackInfo& in
 Napi::Value Workbook::AddHyperlink(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   if (info.Length() < 7 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber() || !info[3].IsString() ||
       !info[4].IsString() || !info[5].IsString() || !info[6].IsString()) {
@@ -408,13 +413,13 @@ Napi::Value Workbook::AddHyperlink(const Napi::CallbackInfo& info) {
   }
   const uint32_t row = ArgU32(info, 1);
   const uint32_t col = ArgU32(info, 2);
-  return MakeStatus(env, AddHyperlinkFromArgs(handle_, info, fm_cell_rect_t{row, col, row, col}, 3));
+  return ValueOrThrow(env, AddHyperlinkFromArgs(handle_, info, fm_cell_rect_t{row, col, row, col}, 3), env.Undefined());
 }
 
 Napi::Value Workbook::AddHyperlinkRange(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   if (info.Length() < 6 || !info[0].IsNumber() || !info[1].IsObject() || !info[2].IsString() || !info[3].IsString() ||
       !info[4].IsString() || !info[5].IsString()) {
@@ -429,7 +434,7 @@ Napi::Value Workbook::AddHyperlinkRange(const Napi::CallbackInfo& info) {
   if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
     return env.Undefined();
   }
-  return MakeStatus(env, AddHyperlinkFromArgs(handle_, info, rect, 2));
+  return ValueOrThrow(env, AddHyperlinkFromArgs(handle_, info, rect, 2), env.Undefined());
 }
 
 namespace {
@@ -453,14 +458,13 @@ Napi::Value Workbook::GetHyperlinks(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::GetHyperlink(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+    return ThrowInvalidHandle(env);
   }
   fm_hyperlink_t h{};
   int32_t present = 0;
   const fm_status_t rc =
       fm_sheet_get_hyperlink(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &present, &h);
-  return MakeOptionalResult(env, rc, present,
-                            rc == 0 && present != 0 ? Napi::Value(HyperlinkToJs(env, h)) : env.Null());
+  return OptionalOrNull(env, rc, present, rc == 0 && present != 0 ? Napi::Value(HyperlinkToJs(env, h)) : env.Null());
 }
 
 Napi::Value Workbook::RemoveHyperlink(const Napi::CallbackInfo& info) {
@@ -515,7 +519,7 @@ Napi::Value Workbook::GetValidation(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeIndexResult(env, NullHandleError(env), 0);
+    return ThrowInvalidHandle(env);
   }
   const uint32_t sheet = ArgU32(info, 0);
   Napi::Object v = ArgObject(info, 1);
@@ -579,7 +583,7 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
   }
   std::size_t out = 0;
   fm_status_t rc = fm_sheet_add_validation(handle_, sheet, &dv, &out);
-  return MakeIndexResult(env, rc, static_cast<uint32_t>(out));
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<uint32_t>(out)));
 }
 
 Napi::Value Workbook::RemoveValidationAt(const Napi::CallbackInfo& info) {
@@ -671,20 +675,20 @@ Napi::Value Workbook::GetThreadedComments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
   if (handle_ == nullptr) {
-    return MakeFieldResult(env, NullHandleError(env), "comments", arr);
+    return ThrowInvalidHandle(env);
   }
   const uint32_t sheet = ArgU32(info, 0);
   const fm_status_t rc = CollectList<fm_threaded_comment_t>(
       arr, [&](size_t* n) { return fm_sheet_get_threaded_comment_count(handle_, sheet, n); },
       [&](size_t i, fm_threaded_comment_t* c) { return fm_sheet_get_threaded_comment_at(handle_, sheet, i, c); },
       [&](const fm_threaded_comment_t& c) { return ThreadedCommentToJs(env, c); });
-  return MakeFieldResult(env, MakeStatus(env, rc), "comments", arr);
+  return ValueOrThrow(env, rc, arr);
 }
 
 Napi::Value Workbook::AddThreadedComment(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
   const Napi::Object spec = ArgObject(info, 1);
@@ -718,13 +722,13 @@ Napi::Value Workbook::AddThreadedComment(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_sheet_add_threaded_comment(handle_, ArgU32(info, 0), &c));
+  return ValueOrThrow(env, fm_sheet_add_threaded_comment(handle_, ArgU32(info, 0), &c), env.Undefined());
 }
 
 Napi::Value Workbook::EditThreadedComment(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
   const std::string id = ArgString(info, 1);
@@ -737,9 +741,10 @@ Napi::Value Workbook::EditThreadedComment(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_sheet_update_threaded_comment(handle_, ArgU32(info, 0), id.c_str(), text.c_str(),
+  const fm_status_t rc = fm_sheet_update_threaded_comment(handle_, ArgU32(info, 0), id.c_str(), text.c_str(),
                                                           mentions.empty() ? nullptr : mentions.data(),
-                                                          static_cast<uint32_t>(mentions.size())));
+                                                          static_cast<uint32_t>(mentions.size()));
+  return ValueOrThrow(env, rc, env.Undefined());
 }
 
 Napi::Value Workbook::SetThreadResolved(const Napi::CallbackInfo& info) {
@@ -752,14 +757,14 @@ Napi::Value Workbook::SetThreadResolved(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::GetThreadedComment(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+    return ThrowInvalidHandle(env);
   }
   const std::string id = ArgString(info, 1);
   fm_threaded_comment_t c{};
   int32_t present = 0;
   const fm_status_t rc = fm_sheet_get_threaded_comment(handle_, ArgU32(info, 0), id.c_str(), &present, &c);
-  return MakeOptionalResult(env, rc, present,
-                            rc == 0 && present != 0 ? Napi::Value(ThreadedCommentToJs(env, c)) : env.Null());
+  return OptionalOrNull(env, rc, present,
+                        rc == 0 && present != 0 ? Napi::Value(ThreadedCommentToJs(env, c)) : env.Null());
 }
 
 Napi::Value Workbook::RemoveThreadedComment(const Napi::CallbackInfo& info) {
@@ -773,31 +778,31 @@ Napi::Value Workbook::GetPersons(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
   if (handle_ == nullptr) {
-    return MakeFieldResult(env, NullHandleError(env), "persons", arr);
+    return ThrowInvalidHandle(env);
   }
   const fm_status_t rc = CollectList<fm_person_t>(
       arr, [&](size_t* n) { return fm_workbook_get_person_count(handle_, n); },
       [&](size_t i, fm_person_t* p) { return fm_workbook_get_person_at(handle_, i, p); },
       [&](const fm_person_t& p) { return PersonToJs(env, p); });
-  return MakeFieldResult(env, MakeStatus(env, rc), "persons", arr);
+  return ValueOrThrow(env, rc, arr);
 }
 
 Napi::Value Workbook::GetPerson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+    return ThrowInvalidHandle(env);
   }
   const std::string id = ArgString(info, 0);
   fm_person_t p{};
   int32_t present = 0;
   const fm_status_t rc = fm_workbook_get_person(handle_, id.c_str(), &present, &p);
-  return MakeOptionalResult(env, rc, present, rc == 0 && present != 0 ? Napi::Value(PersonToJs(env, p)) : env.Null());
+  return OptionalOrNull(env, rc, present, rc == 0 && present != 0 ? Napi::Value(PersonToJs(env, p)) : env.Null());
 }
 
 Napi::Value Workbook::AddPerson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
   const Napi::Object spec = ArgObject(info, 0);
@@ -817,7 +822,7 @@ Napi::Value Workbook::AddPerson(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_workbook_add_person(handle_, &p));
+  return ValueOrThrow(env, fm_workbook_add_person(handle_, &p), env.Undefined());
 }
 
 Napi::Value Workbook::RemovePerson(const Napi::CallbackInfo& info) {

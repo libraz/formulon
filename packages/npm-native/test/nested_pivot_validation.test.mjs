@@ -1,42 +1,26 @@
 import test from 'node:test';
 import { assert, getModule } from './smoke_support.mjs';
 
-function statusOf(result) {
-  return typeof result?.ok === 'boolean' ? result : result?.status;
-}
-
-function must(result, what) {
-  const status = statusOf(result);
-  assert.ok(status?.ok, `${what}: ${JSON.stringify(status)}`);
-  return result;
-}
-
 function makePivot(Workbook) {
-  const wb = Workbook.createDefault().value;
-  must(wb.setExcelProfileId('win-365-ja_JP'), 'setExcelProfileId');
-  const cache = must(wb.addPivotCache(0), 'addPivotCache').index;
-  must(
-    wb.setPivotCacheWorksheetSource(cache, { present: true, ref: 'A1:B3', sheet: 'Sheet1' }),
-    'setPivotCacheWorksheetSource',
-  );
-  must(wb.addPivotCacheField(cache, 'Region'), 'pivotCacheFieldAdd Region');
-  must(wb.addPivotCacheField(cache, 'Amount'), 'pivotCacheFieldAdd Amount');
+  const wb = Workbook.createDefault();
+  wb.setExcelProfileId('win-365-ja_JP');
+  const cache = wb.addPivotCache(0);
+  wb.setPivotCacheWorksheetSource(cache, { present: true, ref: 'A1:B3', sheet: 'Sheet1' });
+  wb.addPivotCacheField(cache, 'Region');
+  wb.addPivotCacheField(cache, 'Amount');
   for (const [region, amount] of [
     ['East', 10],
     ['West', 30],
   ]) {
-    const record = must(wb.addPivotCacheRecord(cache), 'addPivotCacheRecord').index;
-    must(wb.setPivotCacheRecordText(cache, record, 0, region), 'setPivotCacheRecordText');
-    must(wb.setPivotCacheRecordNumber(cache, record, 1, amount), 'setPivotCacheRecordNumber');
+    const record = wb.addPivotCacheRecord(cache);
+    wb.setPivotCacheRecordText(cache, record, 0, region);
+    wb.setPivotCacheRecordNumber(cache, record, 1, amount);
   }
-  const pivot = must(wb.addPivot(0, 'Pivot1', cache, 0, 4), 'addPivot').index;
-  const region = must(wb.addPivotField(0, pivot, { sourceName: 'Region', axis: 0 }), 'region field').index;
-  const amount = must(wb.addPivotField(0, pivot, { sourceName: 'Amount', axis: 2 }), 'amount field').index;
-  must(wb.setPivotRowFieldOrder(0, pivot, [region]), 'setPivotRowFieldOrder');
-  must(
-    wb.addPivotDataField(0, pivot, { name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 }),
-    'addPivotDataField',
-  );
+  const pivot = wb.addPivot(0, 'Pivot1', cache, 0, 4);
+  const region = wb.addPivotField(0, pivot, { sourceName: 'Region', axis: 0 });
+  const amount = wb.addPivotField(0, pivot, { sourceName: 'Amount', axis: 2 });
+  wb.setPivotRowFieldOrder(0, pivot, [region]);
+  wb.addPivotDataField(0, pivot, { name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return { wb, pivot, region, amount };
 }
 
@@ -51,7 +35,6 @@ function withPivot(Workbook, fn) {
 
 function pivotGrid(wb, pivot) {
   const layout = wb.getPivotLayout(0, pivot);
-  assert.ok(layout.status.ok, JSON.stringify(layout.status));
   const rows = new Map();
   for (const cell of layout.cells) {
     const value = cell.value;
@@ -70,30 +53,30 @@ test('pivot nested integer fields reject narrowing before their C mutations', as
 
   for (const value of invalid) {
     withPivot(mod.Workbook, ({ wb, pivot }) => {
-      const before = wb.getPivotFieldCount(0, pivot).value;
+      const before = wb.getPivotFieldCount(0, pivot);
       assert.throws(
         () => wb.addPivotField(0, pivot, { sourceName: 'Region', axis: value }),
         RangeError,
         `pivotFieldAdd axis=${String(value)}`,
       );
-      assert.equal(wb.getPivotFieldCount(0, pivot).value, before);
+      assert.equal(wb.getPivotFieldCount(0, pivot), before);
     });
 
     withPivot(mod.Workbook, ({ wb, pivot, amount }) => {
-      const before = wb.getPivotDataFieldCount(0, pivot).value;
+      const before = wb.getPivotDataFieldCount(0, pivot);
       assert.throws(
         () => wb.addPivotDataField(0, pivot, { name: 'Bad', fieldIndex: value, aggregation: 0 }),
         RangeError,
         `pivotDataFieldAdd fieldIndex=${String(value)}`,
       );
-      assert.equal(wb.getPivotDataFieldCount(0, pivot).value, before);
+      assert.equal(wb.getPivotDataFieldCount(0, pivot), before);
 
       assert.throws(
         () => wb.setPivotDataField(0, pivot, 0, { name: 'Bad', fieldIndex: amount, aggregation: value }),
         RangeError,
         `pivotDataFieldSet aggregation=${String(value)}`,
       );
-      assert.equal(wb.getPivotDataFieldCount(0, pivot).value, before);
+      assert.equal(wb.getPivotDataFieldCount(0, pivot), before);
       assert.deepEqual(pivotGrid(wb, pivot), BASE_GRID);
 
       for (const key of ['showAs', 'showAsBaseField', 'showAsBaseItem']) {
@@ -108,7 +91,7 @@ test('pivot nested integer fields reject narrowing before their C mutations', as
           RangeError,
           `pivotDataFieldSet ${key}=${String(value)}`,
         );
-        assert.equal(wb.getPivotDataFieldCount(0, pivot).value, before);
+        assert.equal(wb.getPivotDataFieldCount(0, pivot), before);
         assert.deepEqual(pivotGrid(wb, pivot), BASE_GRID);
       }
     });
@@ -119,15 +102,15 @@ test('pivot nested integer fields reject wrong primitives without changing the p
   const mod = await getModule();
   const symbol = Symbol('pivot numeric');
   withPivot(mod.Workbook, ({ wb, pivot }) => {
-    const fieldCount = wb.getPivotFieldCount(0, pivot).value;
+    const fieldCount = wb.getPivotFieldCount(0, pivot);
     assert.throws(() => wb.addPivotField(0, pivot, { sourceName: 'Region', axis: symbol }), TypeError);
-    assert.equal(wb.getPivotFieldCount(0, pivot).value, fieldCount);
+    assert.equal(wb.getPivotFieldCount(0, pivot), fieldCount);
 
-    const dataFieldCount = wb.getPivotDataFieldCount(0, pivot).value;
+    const dataFieldCount = wb.getPivotDataFieldCount(0, pivot);
     assert.throws(() => wb.addPivotDataField(0, pivot, { name: 'Bad', fieldIndex: symbol, aggregation: 0 }), TypeError);
-    assert.equal(wb.getPivotDataFieldCount(0, pivot).value, dataFieldCount);
+    assert.equal(wb.getPivotDataFieldCount(0, pivot), dataFieldCount);
 
-    const filterCount = wb.getPivotFilterCount(0, pivot).value;
+    const filterCount = wb.getPivotFilterCount(0, pivot);
     assert.throws(
       () =>
         wb.addPivotFilter(0, pivot, {
@@ -139,7 +122,7 @@ test('pivot nested integer fields reject wrong primitives without changing the p
         }),
       TypeError,
     );
-    assert.equal(wb.getPivotFilterCount(0, pivot).value, filterCount);
+    assert.equal(wb.getPivotFilterCount(0, pivot), filterCount);
   });
 });
 
@@ -156,7 +139,7 @@ test('pivot filters validate axis, value kind, and data-field index before mutat
   ];
   for (const override of invalidSpecs) {
     withPivot(mod.Workbook, ({ wb, pivot }) => {
-      const before = wb.getPivotFilterCount(0, pivot).value;
+      const before = wb.getPivotFilterCount(0, pivot);
       assert.throws(
         () =>
           wb.addPivotFilter(0, pivot, {
@@ -170,7 +153,7 @@ test('pivot filters validate axis, value kind, and data-field index before mutat
         RangeError,
         `pivotFilterAdd ${JSON.stringify(override)}`,
       );
-      assert.equal(wb.getPivotFilterCount(0, pivot).value, before);
+      assert.equal(wb.getPivotFilterCount(0, pivot), before);
       assert.deepEqual(pivotGrid(wb, pivot), BASE_GRID);
     });
   }
@@ -192,7 +175,7 @@ test('pivot order arrays validate every element before replacing the order', asy
   }
 
   withPivot(mod.Workbook, ({ wb, pivot, region }) => {
-    assert.ok(wb.setPivotRowFieldOrder(0, pivot, [region]).ok);
+    wb.setPivotRowFieldOrder(0, pivot, [region]);
     assert.deepEqual(pivotGrid(wb, pivot), BASE_GRID);
   });
 });
@@ -215,7 +198,7 @@ test('pivot order stops at a throwing array getter before changing the report', 
 test('pivot nested string getters stop before changing the report', async () => {
   const mod = await getModule();
   withPivot(mod.Workbook, ({ wb, pivot }) => {
-    const fieldCount = wb.getPivotFieldCount(0, pivot).value;
+    const fieldCount = wb.getPivotFieldCount(0, pivot);
     const spec = { axis: 0 };
     Object.defineProperty(spec, 'sourceName', {
       enumerable: true,
@@ -224,16 +207,16 @@ test('pivot nested string getters stop before changing the report', async () => 
       },
     });
     assert.throws(() => wb.addPivotField(0, pivot, spec), /pivot field getter/);
-    assert.equal(wb.getPivotFieldCount(0, pivot).value, fieldCount);
+    assert.equal(wb.getPivotFieldCount(0, pivot), fieldCount);
     assert.deepEqual(pivotGrid(wb, pivot), BASE_GRID);
   });
 });
 
 test('pivot cache source snapshots each nested getter once before mutation', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
-    const cache = wb.addPivotCache(0).index;
+    const cache = wb.addPivotCache(0);
     let reads = 0;
     const source = { present: true, sheet: 'Sheet1' };
     Object.defineProperty(source, 'ref', {
@@ -244,8 +227,7 @@ test('pivot cache source snapshots each nested getter once before mutation', asy
         return 'A1:B3';
       },
     });
-    const result = wb.setPivotCacheWorksheetSource(cache, source);
-    assert.ok(result.ok, JSON.stringify(result));
+    wb.setPivotCacheWorksheetSource(cache, source);
     assert.equal(reads, 1);
     assert.equal(wb.getPivotCacheWorksheetSource(cache).ref, 'A1:B3');
   } finally {
@@ -256,7 +238,7 @@ test('pivot cache source snapshots each nested getter once before mutation', asy
 test('pivot optional strings and nullish numeric defaults keep the valid contract', async () => {
   const mod = await getModule();
   withPivot(mod.Workbook, ({ wb, pivot, amount }) => {
-    const result = wb.addPivotDataField(0, pivot, {
+    wb.addPivotDataField(0, pivot, {
       name: 'Count of Amount',
       fieldIndex: amount,
       aggregation: 1,
@@ -265,7 +247,6 @@ test('pivot optional strings and nullish numeric defaults keep the valid contrac
       showAsBaseField: null,
       showAsBaseItem: undefined,
     });
-    assert.ok(result.status.ok, JSON.stringify(result.status));
-    assert.equal(wb.getPivotDataFieldCount(0, pivot).value, 2);
+    assert.equal(wb.getPivotDataFieldCount(0, pivot), 2);
   });
 });

@@ -1,12 +1,11 @@
 import test from 'node:test';
-import { assert, getModule, readAll } from './smoke_support.mjs';
+import { assert, getModule, isFormulonError, readAll } from './smoke_support.mjs';
 
 test('addMerge + getMerges round-trip a single range', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   const range = { firstRow: 1, firstCol: 1, lastRow: 2, lastCol: 3 };
-  const ar = wb.addMerge(0, range);
-  assert.ok(ar.ok, `addMerge: ${JSON.stringify(ar)}`);
+  wb.addMerge(0, range);
   const list = wb.listMerges(0);
   assert.ok(Array.isArray(list), `expected Array, got ${typeof list}`);
   assert.equal(list.length, 1);
@@ -23,21 +22,19 @@ test('addMerge + getMerges round-trip a single range', async () => {
 
 test('addHyperlink + getHyperlinks round-trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   assert.equal(wb.listHyperlinks(0).length, 0);
   // Three entries with progressively more optional fields populated.
-  assert.ok(wb.addHyperlink(0, 1, 2, 'https://example.com/', '', '', '').ok);
-  assert.ok(wb.addHyperlink(0, 3, 4, 'mailto:hello@example.com', 'Hello', '', '').ok);
-  assert.ok(wb.addHyperlink(0, 5, 6, '', 'See X', 'Internal link', 'Sheet1!A1').ok);
-  assert.ok(
-    wb.addHyperlinkRange(
-      0,
-      { firstRow: 7, firstCol: 8, lastRow: 9, lastCol: 10 },
-      'https://example.com/range',
-      'Range',
-      'Range tip',
-      '',
-    ).ok,
+  wb.addHyperlink(0, 1, 2, 'https://example.com/', '', '', '');
+  wb.addHyperlink(0, 3, 4, 'mailto:hello@example.com', 'Hello', '', '');
+  wb.addHyperlink(0, 5, 6, '', 'See X', 'Internal link', 'Sheet1!A1');
+  wb.addHyperlinkRange(
+    0,
+    { firstRow: 7, firstCol: 8, lastRow: 9, lastCol: 10 },
+    'https://example.com/range',
+    'Range',
+    'Range tip',
+    '',
   );
   const list = wb.listHyperlinks(0);
   assert.equal(list.length, 4);
@@ -65,88 +62,92 @@ test('addHyperlink + getHyperlinks round-trip', async () => {
     },
   );
   // Sheet-out-of-range is rejected.
-  assert.ok(!wb.addHyperlink(999, 0, 0, 'https://x/', '', '', '').ok);
+  assert.throws(() => wb.addHyperlink(999, 0, 0, 'https://x/', '', '', ''), isFormulonError);
   // clearHyperlinks drops everything.
-  assert.ok(wb.clearHyperlinks(0).ok);
+  wb.clearHyperlinks(0);
   assert.equal(wb.listHyperlinks(0).length, 0);
 });
 
 test('removeHyperlink / removeHyperlinkAt / clearHyperlinks surface on an empty sheet', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  // No-op variants on an empty list still return kOk.
-  assert.ok(wb.removeHyperlink(0, 0, 0).ok);
-  assert.ok(wb.clearHyperlinks(0).ok);
+  const wb = mod.Workbook.createDefault();
+  // Removing by cell reports NotFound when no hyperlink sits there; clearing is a no-op.
+  assert.throws(
+    () => wb.removeHyperlink(0, 0, 0),
+    (e) => isFormulonError(e, mod.StatusCode.NotFound),
+  );
+  wb.clearHyperlinks(0);
   // Out-of-range index is rejected.
-  assert.ok(!wb.removeHyperlinkAt(0, 0).ok);
+  assert.throws(
+    () => wb.removeHyperlinkAt(0, 0),
+    (e) => isFormulonError(e, mod.StatusCode.IndexOutOfRange),
+  );
   // Sheet-index-out-of-range is rejected on every variant.
-  assert.ok(!wb.removeHyperlink(999, 0, 0).ok);
-  assert.ok(!wb.removeHyperlinkAt(999, 0).ok);
-  assert.ok(!wb.clearHyperlinks(999).ok);
+  const sheetRange = (e) => isFormulonError(e, mod.StatusCode.SheetIndexOutOfRange);
+  assert.throws(() => wb.removeHyperlink(999, 0, 0), sheetRange);
+  assert.throws(() => wb.removeHyperlinkAt(999, 0), sheetRange);
+  assert.throws(() => wb.clearHyperlinks(999), sheetRange);
   // The hyperlink list is still empty afterwards.
   assert.equal(wb.listHyperlinks(0).length, 0);
 });
 
 test('removeMerge + removeMergeAt + clearMerges step-wise prune the merge list', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   const a = { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 };
   const b = { firstRow: 4, firstCol: 4, lastRow: 5, lastCol: 5 };
-  assert.ok(wb.addMerge(0, a).ok);
-  assert.ok(wb.addMerge(0, b).ok);
+  wb.addMerge(0, a);
+  wb.addMerge(0, b);
   // removeMerge with an overlap that hits `a` only.
   const overlap = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
-  assert.ok(wb.removeMerge(0, overlap).ok);
+  wb.removeMerge(0, overlap);
   let list = wb.listMerges(0);
   assert.equal(list.length, 1);
   assert.equal(list[0].firstRow, 4);
   // removeMergeAt drops the survivor by index.
-  assert.ok(wb.removeMergeAt(0, 0).ok);
+  wb.removeMergeAt(0, 0);
   list = wb.listMerges(0);
   assert.equal(list.length, 0);
-  // clearMerges is a no-op on an empty list and stays kOk.
-  assert.ok(wb.addMerge(0, a).ok);
-  assert.ok(wb.addMerge(0, b).ok);
-  assert.ok(wb.clearMerges(0).ok);
+  // clearMerges is a no-op on an empty list.
+  wb.addMerge(0, a);
+  wb.addMerge(0, b);
+  wb.clearMerges(0);
   list = wb.listMerges(0);
   assert.equal(list.length, 0);
 });
 
 test('setSheetZoom + getSheetView surface the new zoom', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  assert.ok(wb.setZoom(0, 175).ok);
+  const wb = mod.Workbook.createDefault();
+  wb.setZoom(0, 175);
   const v = wb.getView(0);
-  assert.ok(v.status.ok, `getSheetView: ${JSON.stringify(v.status)}`);
-  assert.equal(v.view.zoomScale, 175);
+  assert.equal(v.zoomScale, 175);
   // Default freeze / tab-hidden state survives a zoom change.
-  assert.equal(v.view.freezeRows, 0);
-  assert.equal(v.view.freezeCols, 0);
-  assert.equal(v.view.tabHidden, 0);
+  assert.equal(v.freezeRows, 0);
+  assert.equal(v.freezeCols, 0);
+  assert.equal(v.tabHidden, 0);
 });
 
 test('sheet layout getters preserve explicit width presence flags', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  assert.ok(wb.setColumnWidth(0, 0, 0, 0).ok);
-  assert.ok(wb.setColumnHidden(0, 1, 1, true).ok);
-  assert.ok(wb.setRowHeight(0, 3, 3, 30).ok);
+  const wb = mod.Workbook.createDefault();
+  wb.setColumnWidth(0, 0, 0, 0);
+  wb.setColumnHidden(0, 1, 1, true);
+  wb.setRowHeight(0, 3, 3, 30);
 
   const columns = wb.listColumnOverrides(0);
-  assert.ok(columns.status.ok, `getSheetColumns: ${JSON.stringify(columns.status)}`);
-  const widthZero = columns.columns.find((column) => column.first === 0 && column.last === 0);
+  const widthZero = columns.find((column) => column.first === 0 && column.last === 0);
   assert.ok(widthZero);
   assert.equal(widthZero.width, 0);
   assert.equal(widthZero.hasWidth, 1);
   assert.equal(widthZero.hasStyle, 0);
-  const hidden = columns.columns.find((column) => column.first === 1 && column.last === 1);
+  const hidden = columns.find((column) => column.first === 1 && column.last === 1);
   assert.ok(hidden);
   assert.equal(hidden.hidden, 1);
   assert.equal(hidden.hasWidth, 0);
 
   const rows = wb.listRowOverrides(0);
-  assert.ok(rows.status.ok, `getSheetRowOverrides: ${JSON.stringify(rows.status)}`);
-  const row = rows.rows.find((entry) => entry.row === 3);
+  const row = rows.find((entry) => entry.row === 3);
   assert.ok(row);
   assert.equal(row.height, 30);
   assert.equal(row.hasStyle, 0);
@@ -155,76 +156,71 @@ test('sheet layout getters preserve explicit width presence flags', async () => 
 
 test('getSheetView surfaces display / orientation defaults', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   const v = wb.getView(0);
-  assert.ok(v.status.ok, `getSheetView: ${JSON.stringify(v.status)}`);
-  assert.equal(v.view.showGridLines, 1);
-  assert.equal(v.view.showRowColHeaders, 1);
-  assert.equal(v.view.showZeros, 1);
-  assert.equal(v.view.rightToLeft, 0);
-  assert.equal(v.view.tabSelected, 0);
-  assert.equal(v.view.viewMode, '');
+  assert.equal(v.showGridLines, 1);
+  assert.equal(v.showRowColHeaders, 1);
+  assert.equal(v.showZeros, 1);
+  assert.equal(v.rightToLeft, 0);
+  assert.equal(v.tabSelected, 0);
+  assert.equal(v.viewMode, '');
 });
 
 test('setSheetShowGridLines / setSheetRightToLeft / setSheetTabSelected / setSheetViewMode round-trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  assert.ok(wb.setShowGridLines(0, false).ok);
-  assert.ok(wb.setShowRowColHeaders(0, false).ok);
-  assert.ok(wb.setShowZeros(0, false).ok);
-  assert.ok(wb.setRightToLeft(0, true).ok);
-  assert.ok(wb.setTabSelected(0, true).ok);
-  assert.ok(wb.setViewMode(0, 'pageBreakPreview').ok);
+  const wb = mod.Workbook.createDefault();
+  wb.setShowGridLines(0, false);
+  wb.setShowRowColHeaders(0, false);
+  wb.setShowZeros(0, false);
+  wb.setRightToLeft(0, true);
+  wb.setTabSelected(0, true);
+  wb.setViewMode(0, 'pageBreakPreview');
   const v = wb.getView(0);
-  assert.ok(v.status.ok, `getSheetView: ${JSON.stringify(v.status)}`);
-  assert.equal(v.view.showGridLines, 0);
-  assert.equal(v.view.showRowColHeaders, 0);
-  assert.equal(v.view.showZeros, 0);
-  assert.equal(v.view.rightToLeft, 1);
-  assert.equal(v.view.tabSelected, 1);
-  assert.equal(v.view.viewMode, 'pageBreakPreview');
+  assert.equal(v.showGridLines, 0);
+  assert.equal(v.showRowColHeaders, 0);
+  assert.equal(v.showZeros, 0);
+  assert.equal(v.rightToLeft, 1);
+  assert.equal(v.tabSelected, 1);
+  assert.equal(v.viewMode, 'pageBreakPreview');
 });
 
 test('insertRows shifts an existing literal forward', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   // Populate row 0; insert one row at row 0; the literal is now at row 1.
-  assert.ok(wb.setNumber(0, 0, 0, 99).ok);
-  assert.ok(wb.insertRows(0, 0, 1).ok);
+  wb.setNumber(0, 0, 0, 99);
+  wb.insertRows(0, 0, 1);
   const r0 = wb.getValue(0, 0, 0);
-  assert.ok(r0.status.ok);
   // The freshly-inserted row 0 is blank.
-  assert.equal(r0.value.kind, mod.ValueKind.Blank);
+  assert.equal(r0.kind, mod.ValueKind.Blank);
   const r1 = wb.getValue(0, 1, 0);
-  assert.ok(r1.status.ok);
-  assert.equal(r1.value.kind, mod.ValueKind.Number);
-  assert.equal(r1.value.number, 99);
+  assert.equal(r1.kind, mod.ValueKind.Number);
+  assert.equal(r1.number, 99);
 });
 
 test('setCellXfIndex + getCellXfIndex round-trip the xf id', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   // Seed the cell so the xf attaches to a stored slot.
-  assert.ok(wb.setNumber(0, 0, 0, 1).ok);
+  wb.setNumber(0, 0, 0, 1);
   // xfIndex 0 is always the default xf and is guaranteed to be valid.
-  assert.ok(wb.setCellXfIndex(0, 0, 0, 0).ok);
+  wb.setCellXfIndex(0, 0, 0, 0);
   const r = wb.getCellXfIndex(0, 0, 0);
-  assert.ok(r.status.ok, `getCellXfIndex: ${JSON.stringify(r.status)}`);
-  assert.equal(typeof r.value, 'number');
-  assert.equal(r.value, 0);
+  assert.equal(typeof r, 'number');
+  assert.equal(r, 0);
 });
 
 test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   // A fresh workbook seeds Excel's minimum style table: one default font,
   // one empty border, one default xf, and the two fills Excel reserves at
   // the front of every file (`none`, `gray125`). A caller's first record
   // therefore lands after them instead of displacing `none`.
-  assert.equal(wb.getFontCount().value, 1);
-  assert.equal(wb.getFillCount().value, 2);
-  assert.equal(wb.getBorderCount().value, 1);
-  assert.equal(wb.getCellXfCount().value, 1);
+  assert.equal(wb.getFontCount(), 1);
+  assert.equal(wb.getFillCount(), 2);
+  assert.equal(wb.getBorderCount(), 1);
+  assert.equal(wb.getCellXfCount(), 1);
 
   const fontResult = wb.addFont({
     name: 'Arial',
@@ -235,7 +231,6 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
     underline: 0,
     colorArgb: 0xff112233,
   });
-  assert.ok(fontResult.status.ok, `addFont: ${JSON.stringify(fontResult.status)}`);
   // Linear-search dedup: the second call with the same payload returns the same index.
   const fontDup = wb.addFont({
     name: 'Arial',
@@ -246,11 +241,10 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
     underline: 0,
     colorArgb: 0xff112233,
   });
-  assert.equal(fontDup.index, fontResult.index);
-  assert.equal(wb.getFontCount().value, 2);
+  assert.equal(fontDup, fontResult);
+  assert.equal(wb.getFontCount(), 2);
 
   const fill = wb.addFill({ pattern: 1, fgArgb: 0xffff0000, bgArgb: 0xff000000 });
-  assert.ok(fill.status.ok);
   const border = wb.addBorder({
     left: { style: 1, colorArgb: 0xff000000 },
     right: { style: 1, colorArgb: 0xff000000 },
@@ -260,34 +254,29 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
     diagonalUp: false,
     diagonalDown: false,
   });
-  assert.ok(border.status.ok);
 
   const builtin = wb.addNumFmt('General');
-  assert.ok(builtin.status.ok);
-  assert.equal(builtin.numFmtId, 0);
+  assert.equal(builtin, 0);
 
   const custom = wb.addNumFmt('"USD" #,##0');
-  assert.ok(custom.status.ok);
-  assert.ok(custom.numFmtId >= 164, `expected custom id >= 164, got ${custom.numFmtId}`);
+  assert.ok(custom >= 164, `expected custom id >= 164, got ${custom}`);
 
   const xf = wb.addCellXf({
-    fontIndex: fontResult.index,
-    fillIndex: fill.index,
-    borderIndex: border.index,
-    numFmtId: custom.numFmtId,
+    fontIndex: fontResult,
+    fillIndex: fill,
+    borderIndex: border,
+    numFmtId: custom,
     horizontalAlign: 1,
     verticalAlign: 2,
     wrapText: true,
   });
-  assert.ok(xf.status.ok, `addXf: ${JSON.stringify(xf.status)}`);
 
-  assert.ok(wb.setNumber(0, 0, 0, 1).ok);
-  assert.ok(wb.setCellXfIndex(0, 0, 0, xf.index).ok);
+  wb.setNumber(0, 0, 0, 1);
+  wb.setCellXfIndex(0, 0, 0, xf);
 
-  const reread = wb.getCellXf(xf.index);
-  assert.ok(reread.status.ok);
-  assert.equal(reread.fontIndex, fontResult.index);
-  assert.equal(reread.numFmtId, custom.numFmtId);
+  const reread = wb.getCellXf(xf);
+  assert.equal(reread.fontIndex, fontResult);
+  assert.equal(reread.numFmtId, custom);
   assert.equal(reread.wrapText, true);
   assert.equal(reread.hasAlignment, true);
   assert.equal(reread.hasHorizontalAlign, true);
@@ -296,10 +285,10 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
   assert.equal(reread.hasJustifyLastLine, false);
 
   const optional = wb.addCellXf({
-    fontIndex: fontResult.index,
-    fillIndex: fill.index,
-    borderIndex: border.index,
-    numFmtId: custom.numFmtId,
+    fontIndex: fontResult,
+    fillIndex: fill,
+    borderIndex: border,
+    numFmtId: custom,
     textRotation: 255,
     indent: 0,
     relativeIndent: -3,
@@ -307,9 +296,7 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
     readingOrder: 0,
     justifyLastLine: true,
   });
-  assert.ok(optional.status.ok, `optional alignment: ${JSON.stringify(optional.status)}`);
-  const optionalRead = wb.getCellXf(optional.index);
-  assert.ok(optionalRead.status.ok);
+  const optionalRead = wb.getCellXf(optional);
   assert.equal(optionalRead.textRotation, 255);
   assert.equal(optionalRead.indent, 0);
   assert.equal(optionalRead.relativeIndent, -3);
@@ -318,69 +305,58 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
   assert.equal(optionalRead.justifyLastLine, true);
   assert.equal(optionalRead.hasAlignment, true);
   assert.equal(optionalRead.hasJustifyLastLine, true);
-  assert.equal(wb.addCellXf(optionalRead).index, optional.index);
+  assert.equal(wb.addCellXf(optionalRead), optional);
 
   const omitted = wb.addCellXf({
-    fontIndex: fontResult.index,
-    fillIndex: fill.index,
-    borderIndex: border.index,
-    numFmtId: custom.numFmtId,
+    fontIndex: fontResult,
+    fillIndex: fill,
+    borderIndex: border,
+    numFmtId: custom,
   });
-  assert.ok(omitted.status.ok);
-  const omittedRead = wb.getCellXf(omitted.index);
-  assert.ok(omittedRead.status.ok);
+  const omittedRead = wb.getCellXf(omitted);
   assert.equal(omittedRead.hasAlignment, false);
 
   const explicitEmpty = wb.addCellXf({
-    fontIndex: fontResult.index,
-    fillIndex: fill.index,
-    borderIndex: border.index,
-    numFmtId: custom.numFmtId,
+    fontIndex: fontResult,
+    fillIndex: fill,
+    borderIndex: border,
+    numFmtId: custom,
     hasAlignment: true,
   });
-  assert.ok(explicitEmpty.status.ok);
-  assert.notEqual(explicitEmpty.index, omitted.index);
-  const explicitEmptyRead = wb.getCellXf(explicitEmpty.index);
-  assert.ok(explicitEmptyRead.status.ok);
+  assert.notEqual(explicitEmpty, omitted);
+  const explicitEmptyRead = wb.getCellXf(explicitEmpty);
   assert.equal(explicitEmptyRead.hasAlignment, true);
 
-  const rfont = wb.getFont(fontResult.index);
-  assert.ok(rfont.status.ok);
+  const rfont = wb.getFont(fontResult);
   assert.equal(rfont.name, 'Arial');
   assert.equal(rfont.bold, true);
 
-  const rfill = wb.getFill(fill.index);
-  assert.ok(rfill.status.ok);
+  const rfill = wb.getFill(fill);
   assert.equal(rfill.pattern, 1);
 
-  const rborder = wb.getBorder(border.index);
-  assert.ok(rborder.status.ok);
+  const rborder = wb.getBorder(border);
   assert.equal(rborder.left.style, 1);
   assert.equal(rborder.diagonalUp, false);
 
-  const rfmt = wb.getNumFmtString(custom.numFmtId);
-  assert.ok(rfmt.status.ok);
-  assert.equal(rfmt.value, '"USD" #,##0');
+  const rfmt = wb.getNumFmtString(custom);
+  assert.equal(rfmt, '"USD" #,##0');
 });
 
 test('selector colours survive get/add identity and save/load', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   const theme = { kind: 2, rgb: 0, theme: 3, tint: 0.5, indexed: 0 };
   const indexed = { kind: 3, rgb: 0, theme: 0, tint: 0, indexed: 9 };
   const automatic = { kind: 4, rgb: 0, theme: 0, tint: 0, indexed: 0 };
 
   const font = wb.addFont({ name: 'SelectorFont', size: 11, colorArgb: 0x01020304, color: theme });
-  assert.ok(font.status.ok);
-  const gotFont = wb.getFont(font.index);
-  assert.ok(gotFont.status.ok);
+  const gotFont = wb.getFont(font);
   assert.equal(gotFont.color.kind, 2);
   assert.equal(gotFont.color.theme, 3);
   assert.equal(gotFont.color.tint, 0.5);
   assert.equal(gotFont.colorArgb, 0x01020304);
   const fontAgain = wb.addFont(gotFont);
-  assert.ok(fontAgain.status.ok);
-  assert.equal(fontAgain.index, font.index);
+  assert.equal(fontAgain, font);
 
   const fill = wb.addFill({
     pattern: 1,
@@ -389,15 +365,12 @@ test('selector colours survive get/add identity and save/load', async () => {
     fg: indexed,
     bg: automatic,
   });
-  assert.ok(fill.status.ok);
-  const gotFill = wb.getFill(fill.index);
-  assert.ok(gotFill.status.ok);
+  const gotFill = wb.getFill(fill);
   assert.equal(gotFill.fg.kind, 3);
   assert.equal(gotFill.fg.indexed, 9);
   assert.equal(gotFill.bg.kind, 4);
   const fillAgain = wb.addFill(gotFill);
-  assert.ok(fillAgain.status.ok);
-  assert.equal(fillAgain.index, fill.index);
+  assert.equal(fillAgain, fill);
 
   const border = wb.addBorder({
     left: { style: 1, colorArgb: 0x01020304, color: theme },
@@ -406,48 +379,36 @@ test('selector colours survive get/add identity and save/load', async () => {
     bottom: { style: 0, colorArgb: 0 },
     diagonal: { style: 0, colorArgb: 0 },
   });
-  assert.ok(border.status.ok);
-  const gotBorder = wb.getBorder(border.index);
-  assert.ok(gotBorder.status.ok);
+  const gotBorder = wb.getBorder(border);
   assert.equal(gotBorder.left.color.kind, 2);
   assert.equal(gotBorder.left.color.theme, 3);
   assert.equal(gotBorder.right.color.kind, 3);
   assert.equal(gotBorder.right.color.indexed, 9);
   assert.equal(gotBorder.top.color.kind, 4);
   const borderAgain = wb.addBorder(gotBorder);
-  assert.ok(borderAgain.status.ok);
-  assert.equal(borderAgain.index, border.index);
+  assert.equal(borderAgain, border);
 
   const dxf = wb.addDxf({
     font: { name: 'DxfSelector', size: 9, colorArgb: 0x11121314, color: automatic },
     fill: { pattern: 1, fgArgb: 0x15161718, fg: indexed },
     border: { left: { style: 1, colorArgb: 0x191a1b1c, color: theme } },
   });
-  assert.ok(dxf.status.ok);
-  const gotDxf = wb.getDxf(dxf.index);
-  assert.ok(gotDxf.status.ok);
+  const gotDxf = wb.getDxf(dxf);
   assert.equal(gotDxf.font.color.kind, 4);
   assert.equal(gotDxf.fill.fg.kind, 3);
   assert.equal(gotDxf.border.left.color.kind, 2);
   const dxfAgain = wb.addDxf(gotDxf);
   assert.equal(gotDxf.font.hasSize, true);
   const bareDxf = wb.addDxf({ font: { bold: true, hasBold: true } });
-  assert.ok(bareDxf.status.ok);
-  assert.equal(wb.getDxf(bareDxf.index).font.hasSize, false);
-  assert.ok(dxfAgain.status.ok);
-  assert.equal(dxfAgain.index, dxf.index);
+  assert.equal(wb.getDxf(bareDxf).font.hasSize, false);
+  assert.equal(dxfAgain, dxf);
 
   const saved = wb.save();
-  assert.ok(saved.status.ok);
-  const loaded = mod.Workbook.load(saved.bytes).value;
-  const loadedFont = loaded.getFont(font.index);
-  const loadedFill = loaded.getFill(fill.index);
-  const loadedBorder = loaded.getBorder(border.index);
-  const loadedDxf = loaded.getDxf(dxf.index);
-  assert.ok(loadedFont.status.ok);
-  assert.ok(loadedFill.status.ok);
-  assert.ok(loadedBorder.status.ok);
-  assert.ok(loadedDxf.status.ok);
+  const loaded = mod.Workbook.load(saved);
+  const loadedFont = loaded.getFont(font);
+  const loadedFill = loaded.getFill(fill);
+  const loadedBorder = loaded.getBorder(border);
+  const loadedDxf = loaded.getDxf(dxf);
   assert.equal(loadedFont.color.kind, 2);
   assert.equal(loadedFill.fg.kind, 3);
   assert.equal(loadedBorder.left.color.kind, 2);
@@ -458,94 +419,79 @@ test('selector colours survive get/add identity and save/load', async () => {
 
 test('dxf alignment and protection XML survive get/add identity and save/load', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   const alignmentXml = '<alignment horizontal="center" wrapText="1"/>';
   const protectionXml = '<protection locked="0" hidden="1"/>';
   const alignment = wb.addDxf({ alignmentXml });
-  assert.ok(alignment.status.ok);
   const protection = wb.addDxf({ protectionXml });
-  assert.ok(protection.status.ok);
-  assert.notEqual(alignment.index, protection.index);
+  assert.notEqual(alignment, protection);
 
-  const gotAlignment = wb.getDxf(alignment.index);
-  assert.ok(gotAlignment.status.ok);
+  const gotAlignment = wb.getDxf(alignment);
   assert.equal(gotAlignment.alignmentXml, alignmentXml);
   assert.equal(gotAlignment.protectionXml, undefined);
-  const gotProtection = wb.getDxf(protection.index);
-  assert.ok(gotProtection.status.ok);
+  const gotProtection = wb.getDxf(protection);
   assert.equal(gotProtection.alignmentXml, undefined);
   assert.equal(gotProtection.protectionXml, protectionXml);
 
   const alignmentAgain = wb.addDxf(gotAlignment);
-  assert.ok(alignmentAgain.status.ok);
-  assert.equal(alignmentAgain.index, alignment.index);
+  assert.equal(alignmentAgain, alignment);
   const protectionAgain = wb.addDxf(gotProtection);
-  assert.ok(protectionAgain.status.ok);
-  assert.equal(protectionAgain.index, protection.index);
+  assert.equal(protectionAgain, protection);
 
   const saved = wb.save();
-  assert.ok(saved.status.ok);
-  const loaded = mod.Workbook.load(saved.bytes).value;
-  assert.ok(loaded.isValid());
-  const loadedAlignment = loaded.getDxf(alignment.index);
-  assert.ok(loadedAlignment.status.ok);
+  const loaded = mod.Workbook.load(saved);
+  assert.equal(loaded.disposed, false);
+  const loadedAlignment = loaded.getDxf(alignment);
   assert.equal(loadedAlignment.alignmentXml, alignmentXml);
   assert.equal(loadedAlignment.protectionXml, undefined);
-  const loadedProtection = loaded.getDxf(protection.index);
-  assert.ok(loadedProtection.status.ok);
+  const loadedProtection = loaded.getDxf(protection);
   assert.equal(loadedProtection.alignmentXml, undefined);
   assert.equal(loadedProtection.protectionXml, protectionXml);
   const loadedAlignmentAgain = loaded.addDxf(loadedAlignment);
-  assert.ok(loadedAlignmentAgain.status.ok);
-  assert.equal(loadedAlignmentAgain.index, alignment.index);
+  assert.equal(loadedAlignmentAgain, alignment);
   const loadedProtectionAgain = loaded.addDxf(loadedProtection);
-  assert.ok(loadedProtectionAgain.status.ok);
-  assert.equal(loadedProtectionAgain.index, protection.index);
+  assert.equal(loadedProtectionAgain, protection);
   loaded.dispose();
   wb.dispose();
 });
 
 test('addFont / getFont preserve superscript and round-trip to the same index', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   const superscript = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1, colorArgb: 0xff112233 });
-  assert.ok(superscript.status.ok, `addFont: ${JSON.stringify(superscript.status)}`);
-  assert.equal(wb.getFont(superscript.index).vertAlign, 1);
+  assert.equal(wb.getFont(superscript).vertAlign, 1);
 
-  const before = wb.getFontCount().value;
-  const again = wb.addFont(wb.getFont(superscript.index));
-  assert.ok(again.status.ok);
-  assert.equal(again.index, superscript.index);
-  assert.equal(wb.getFontCount().value, before);
+  const before = wb.getFontCount();
+  const again = wb.addFont(wb.getFont(superscript));
+  assert.equal(again, superscript);
+  assert.equal(wb.getFontCount(), before);
 
-  const edited = wb.getFont(superscript.index);
+  const edited = wb.getFont(superscript);
   edited.colorArgb = 0xff00ff00;
   const recolored = wb.addFont(edited);
-  assert.ok(recolored.status.ok);
-  assert.notEqual(recolored.index, superscript.index);
-  const reread = wb.getFont(recolored.index);
+  assert.notEqual(recolored, superscript);
+  const reread = wb.getFont(recolored);
   assert.equal(reread.vertAlign, 1);
   assert.equal(reread.colorArgb, 0xff00ff00);
 });
 
 test('addFont/setFont with a non-numeric field throws and does not commit a coerced value', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
 
-  const before = wb.getFontCount().value;
+  const before = wb.getFontCount();
   assert.throws(() => wb.addFont({ name: 'Arial', size: 'not a number' }), TypeError);
-  assert.equal(wb.getFontCount().value, before, 'no font must have been added for the rejected call');
+  assert.equal(wb.getFontCount(), before, 'no font must have been added for the rejected call');
 
   const font = wb.addFont({ name: 'Arial', size: 12 });
-  assert.ok(font.status.ok);
-  assert.throws(() => wb.setFont(font.index, { name: 'Arial', size: 'not a number' }), TypeError);
+  assert.throws(() => wb.setFont(font, { name: 'Arial', size: 'not a number' }), TypeError);
   // The font slot must still hold its original size, not a coerced 0.
-  assert.equal(wb.getFont(font.index).size, 12);
+  assert.equal(wb.getFont(font).size, 12);
 });
 
 test('phonetic runs keep their spans through a save/load round trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   wb.setText(0, 0, 0, '東京都');
   assert.deepEqual(
     readAll(
@@ -559,8 +505,7 @@ test('phonetic runs keep their spans through a save/load round trip', async () =
     { sb: 0, eb: 2, text: 'トウキョウ' },
     { sb: 2, eb: 3, text: 'ト' },
   ];
-  const stored = wb.setCellPhoneticRuns(0, 0, 0, runs);
-  assert.ok(stored.ok, `setCellPhoneticRuns: ${JSON.stringify(stored)}`);
+  wb.setCellPhoneticRuns(0, 0, 0, runs);
   assert.deepEqual(
     readAll(
       () => wb.getCellPhoneticRunCount(0, 0, 0),
@@ -569,11 +514,10 @@ test('phonetic runs keep their spans through a save/load round trip', async () =
     runs,
   );
   // The flattening getter still reports the concatenation.
-  assert.equal(wb.getCellPhonetic(0, 0, 0).value, 'トウキョウト');
+  assert.equal(wb.getCellPhonetic(0, 0, 0), 'トウキョウト');
 
   const saved = wb.save();
-  assert.ok(saved.status.ok, `save: ${JSON.stringify(saved.status)}`);
-  const loaded = mod.Workbook.load(saved.bytes).value;
+  const loaded = mod.Workbook.load(saved);
   assert.deepEqual(
     readAll(
       () => loaded.getCellPhoneticRunCount(0, 0, 0),
@@ -592,11 +536,14 @@ test('phonetic runs keep their spans through a save/load round trip', async () =
     [{ sb: 0, eb: 3, text: 'トウキョウト' }],
   );
 
-  const rejected = wb.setCellPhoneticRuns(0, 0, 0, [
-    { sb: 2, eb: 3, text: 'ト' },
-    { sb: 0, eb: 2, text: 'トウ' },
-  ]);
-  assert.equal(rejected.ok, false);
+  assert.throws(
+    () =>
+      wb.setCellPhoneticRuns(0, 0, 0, [
+        { sb: 2, eb: 3, text: 'ト' },
+        { sb: 0, eb: 2, text: 'トウ' },
+      ]),
+    isFormulonError,
+  );
 
   loaded.dispose();
   wb.dispose();
@@ -604,28 +551,26 @@ test('phonetic runs keep their spans through a save/load round trip', async () =
 
 test('phonetic properties are independent of the runs and survive a round trip', async () => {
   const mod = await getModule();
-  // The result carries a `status` alongside the triple; compare the triple
-  // alone so a status-shape change does not read as a value change.
+  // Compare the triple alone: the record carries more fields than the ones under test.
   const props = (book) => {
     const { fontId, type, alignment } = book.getCellPhoneticProperties(0, 0, 0);
     return { fontId, type, alignment };
   };
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   wb.setText(0, 0, 0, '大阪');
   assert.deepEqual(props(wb), { fontId: 0, type: 0, alignment: 0 });
 
-  assert.ok(wb.setCellPhoneticProperties(0, 0, 0, { fontId: 3, type: 2, alignment: 2 }).ok);
+  wb.setCellPhoneticProperties(0, 0, 0, { fontId: 3, type: 2, alignment: 2 });
   // Setting the readings must not reset the rendering.
-  assert.ok(wb.setCellPhoneticRuns(0, 0, 0, [{ sb: 0, eb: 2, text: 'おおさか' }]).ok);
+  wb.setCellPhoneticRuns(0, 0, 0, [{ sb: 0, eb: 2, text: 'おおさか' }]);
   assert.deepEqual(props(wb), { fontId: 3, type: 2, alignment: 2 });
 
   const saved = wb.save();
-  assert.ok(saved.status.ok, `save: ${JSON.stringify(saved.status)}`);
-  const loaded = mod.Workbook.load(saved.bytes).value;
+  const loaded = mod.Workbook.load(saved);
   assert.deepEqual(props(loaded), { fontId: 3, type: 2, alignment: 2 });
 
   // Two bits each on the binary side, so a wider ordinal is refused.
-  assert.equal(wb.setCellPhoneticProperties(0, 0, 0, { fontId: 0, type: 4, alignment: 0 }).ok, false);
+  assert.throws(() => wb.setCellPhoneticProperties(0, 0, 0, { fontId: 0, type: 4, alignment: 0 }), isFormulonError);
   assert.deepEqual(props(wb), { fontId: 3, type: 2, alignment: 2 });
 
   loaded.dispose();
@@ -634,17 +579,15 @@ test('phonetic properties are independent of the runs and survive a round trip',
 
 test('setDefaultFont declares what an unstyled cell is saved as', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   assert.equal(wb.getFont(0).name, 'Calibri');
 
   // addFont can only ever append beside the seeded default.
   const appended = wb.addFont({ name: '游ゴシック', size: 11 });
-  assert.ok(appended.status.ok);
-  assert.ok(appended.index > 0);
+  assert.ok(appended > 0);
   assert.equal(wb.getFont(0).name, 'Calibri');
 
-  const declared = wb.setDefaultFont({ name: '游ゴシック', size: 11, hasCharset: true, charset: 128 });
-  assert.ok(declared.ok, `setDefaultFont: ${JSON.stringify(declared)}`);
+  wb.setDefaultFont({ name: '游ゴシック', size: 11, hasCharset: true, charset: 128 });
   assert.equal(wb.getFont(0).name, '游ゴシック');
   assert.equal(wb.getFont(0).charset, 128);
 
@@ -653,69 +596,65 @@ test('setDefaultFont declares what an unstyled cell is saved as', async () => {
 
 test('setFont overwrites an existing slot and refuses an absent index', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   const added = wb.addFont({ name: 'Meiryo', size: 12 });
-  assert.ok(added.status.ok);
 
-  const replaced = wb.setFont(added.index, { name: 'MS Gothic', size: 9 });
-  assert.ok(replaced.ok, `setFont: ${JSON.stringify(replaced)}`);
-  assert.equal(wb.getFont(added.index).name, 'MS Gothic');
+  wb.setFont(added, { name: 'MS Gothic', size: 9 });
+  assert.equal(wb.getFont(added).name, 'MS Gothic');
 
-  const before = wb.getFontCount().value;
-  assert.equal(wb.setFont(before, { name: 'MS Gothic', size: 9 }).ok, false);
-  assert.equal(wb.getFontCount().value, before);
+  const before = wb.getFontCount();
+  assert.throws(() => wb.setFont(before, { name: 'MS Gothic', size: 9 }), isFormulonError);
+  assert.equal(wb.getFontCount(), before);
 
   wb.dispose();
 });
 
 test('addDxf / getDxf round-trip a superscript differential font', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   const added = wb.addDxf({ font: { name: 'Calibri', size: 9, vertAlign: 1 } });
-  assert.ok(added.status.ok, `addDxf: ${JSON.stringify(added.status)}`);
-  const readBack = wb.getDxf(added.index);
-  assert.ok(readBack.status.ok);
+  const readBack = wb.getDxf(added);
   assert.equal(readBack.font.vertAlign, 1);
 
-  const before = wb.getDxfCount().value;
+  const before = wb.getDxfCount();
   const again = wb.addDxf(readBack);
-  assert.ok(again.status.ok);
-  assert.equal(again.index, added.index);
-  assert.equal(wb.getDxfCount().value, before);
+  assert.equal(again, added);
+  assert.equal(wb.getDxfCount(), before);
 });
 
 test('addXf rejects out-of-range font_index', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  const r = wb.addCellXf({
-    fontIndex: 99,
-    fillIndex: 0,
-    borderIndex: 0,
-    numFmtId: 0,
-    horizontalAlign: 0,
-    verticalAlign: 0,
-    wrapText: false,
-  });
-  assert.ok(!r.status.ok, 'expected addXf to reject out-of-range font_index');
+  const wb = mod.Workbook.createDefault();
+  assert.throws(
+    () =>
+      wb.addCellXf({
+        fontIndex: 99,
+        fillIndex: 0,
+        borderIndex: 0,
+        numFmtId: 0,
+        horizontalAlign: 0,
+        verticalAlign: 0,
+        wrapText: false,
+      }),
+    isFormulonError,
+  );
 });
 
 test('active sheet is recorded in bookViews and survives a round trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  assert.ok(wb.addSheet('B').status.ok);
-  assert.ok(wb.addSheet('C').status.ok);
-  assert.equal(wb.getActiveSheet().index, 0);
-  assert.ok(wb.setActiveSheet(2).ok);
+  const wb = mod.Workbook.createDefault();
+  wb.addSheet('B');
+  wb.addSheet('C');
+  assert.equal(wb.getActiveSheet(), 0);
+  wb.setActiveSheet(2);
   const active = wb.getActiveSheet();
-  assert.ok(active.status.ok, JSON.stringify(active.status));
-  assert.equal(active.index, 2);
-  assert.equal(wb.setActiveSheet(9).ok, false);
-  assert.equal(wb.getActiveSheet().index, 2);
+  assert.equal(active, 2);
+  assert.throws(() => wb.setActiveSheet(9), isFormulonError);
+  assert.equal(wb.getActiveSheet(), 2);
   const saved = wb.save();
-  assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  const loaded = mod.Workbook.load(saved.bytes).value;
+  const loaded = mod.Workbook.load(saved);
   try {
-    assert.equal(loaded.getActiveSheet().index, 2);
+    assert.equal(loaded.getActiveSheet(), 2);
   } finally {
     loaded.dispose();
     wb.dispose();
@@ -724,23 +663,19 @@ test('active sheet is recorded in bookViews and survives a round trip', async ()
 
 test('the show-phonetic flag survives value writes and a round trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  assert.equal(wb.getCellShowPhonetic(0, 0, 0).value, false);
-  assert.ok(wb.setText(0, 0, 0, '漢字').ok);
-  assert.ok(wb.setCellShowPhonetic(0, 0, 0, true).ok);
-  assert.ok(wb.setText(0, 0, 0, '漢字').ok);
-  assert.equal(wb.getCellShowPhonetic(0, 0, 0).value, true);
+  const wb = mod.Workbook.createDefault();
+  assert.equal(wb.getCellShowPhonetic(0, 0, 0), false);
+  wb.setText(0, 0, 0, '漢字');
+  wb.setCellShowPhonetic(0, 0, 0, true);
+  wb.setText(0, 0, 0, '漢字');
+  assert.equal(wb.getCellShowPhonetic(0, 0, 0), true);
   const saved = wb.save();
-  assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  const loaded = mod.Workbook.load(saved.bytes).value;
+  const loaded = mod.Workbook.load(saved);
   try {
-    assert.equal(loaded.getCellShowPhonetic(0, 0, 0).value, true);
-    assert.ok(loaded.setCellShowPhonetic(0, 0, 0, false).ok);
-    assert.equal(loaded.getCellShowPhonetic(0, 0, 0).value, false);
-    const rejected = loaded.getCellShowPhonetic(99, 0, 0);
-    assert.equal(rejected.status.ok, false);
-    assert.equal(rejected.value, false);
-    assert.equal(loaded.setCellShowPhonetic(99, 0, 0, true).ok, false);
+    assert.equal(loaded.getCellShowPhonetic(0, 0, 0), true);
+    loaded.setCellShowPhonetic(0, 0, 0, false);
+    assert.equal(loaded.getCellShowPhonetic(0, 0, 0), false);
+    assert.throws(() => loaded.setCellShowPhonetic(99, 0, 0, true), isFormulonError);
   } finally {
     loaded.dispose();
     wb.dispose();
@@ -749,15 +684,14 @@ test('the show-phonetic flag survives value writes and a round trip', async () =
 
 test('an explicit all-zero phoneticPr is reported as present and survives a round trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  assert.ok(wb.setText(0, 0, 0, '漢字').ok);
-  assert.ok(wb.setCellPhoneticRuns(0, 0, 0, [{ sb: 0, eb: 2, text: 'かんじ' }]).ok);
+  const wb = mod.Workbook.createDefault();
+  wb.setText(0, 0, 0, '漢字');
+  wb.setCellPhoneticRuns(0, 0, 0, [{ sb: 0, eb: 2, text: 'かんじ' }]);
   assert.equal(wb.getCellPhoneticProperties(0, 0, 0).present, false);
-  assert.ok(wb.setCellPhoneticProperties(0, 0, 0, { fontId: 0, type: 0, alignment: 0 }).ok);
+  wb.setCellPhoneticProperties(0, 0, 0, { fontId: 0, type: 0, alignment: 0 });
   assert.equal(wb.getCellPhoneticProperties(0, 0, 0).present, true);
   const saved = wb.save();
-  assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  const loaded = mod.Workbook.load(saved.bytes).value;
+  const loaded = mod.Workbook.load(saved);
   try {
     const got = loaded.getCellPhoneticProperties(0, 0, 0);
     assert.equal(got.present, true);
@@ -770,35 +704,34 @@ test('an explicit all-zero phoneticPr is reported as present and survives a roun
 
 test('scroll origin, pane origin and selection round-trip through save', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  assert.ok(wb.setFreeze(0, 2, 1).ok);
-  const view = wb.getView(0).view;
+  const wb = mod.Workbook.createDefault();
+  wb.setFreeze(0, 2, 1);
+  const view = wb.getView(0);
   assert.equal(view.paneTopLeftRow, 2);
   assert.equal(view.paneTopLeftCol, 1);
-  assert.ok(wb.setTopLeft(0, 5, 0).ok);
-  assert.ok(wb.setPaneTopLeft(0, 40, 6).ok);
-  assert.equal(wb.setPaneTopLeft(0, 1, 6).ok, false);
+  wb.setTopLeft(0, 5, 0);
+  wb.setPaneTopLeft(0, 40, 6);
+  assert.throws(() => wb.setPaneTopLeft(0, 1, 6), isFormulonError);
   const ranges = [
     { firstRow: 41, firstCol: 7, lastRow: 43, lastCol: 8 },
     { firstRow: 50, firstCol: 9, lastRow: 50, lastCol: 9 },
   ];
-  assert.ok(wb.setSelection(0, { activeRow: 41, activeCol: 7, ranges }).ok);
-  assert.equal(
-    wb.setSelection(0, {
-      activeRow: 0,
-      activeCol: 0,
-      ranges: [{ firstRow: 3, firstCol: 0, lastRow: 1, lastCol: 0 }],
-    }).ok,
-    false,
+  wb.setSelection(0, { activeRow: 41, activeCol: 7, ranges });
+  assert.throws(
+    () =>
+      wb.setSelection(0, {
+        activeRow: 0,
+        activeCol: 0,
+        ranges: [{ firstRow: 3, firstCol: 0, lastRow: 1, lastCol: 0 }],
+      }),
+    isFormulonError,
   );
   const saved = wb.save();
-  assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  const loaded = mod.Workbook.load(saved.bytes).value;
+  const loaded = mod.Workbook.load(saved);
   try {
-    const got = loaded.getView(0).view;
+    const got = loaded.getView(0);
     assert.deepEqual([got.topLeftRow, got.topLeftCol, got.paneTopLeftRow, got.paneTopLeftCol], [5, 0, 40, 6]);
     const selection = loaded.getSelection(0);
-    assert.ok(selection.status.ok, JSON.stringify(selection.status));
     assert.equal(selection.activeRow, 41);
     assert.equal(selection.activeCol, 7);
     assert.deepEqual(
@@ -808,9 +741,7 @@ test('scroll origin, pane origin and selection round-trip through save', async (
         [50, 9, 50, 9],
       ],
     );
-    const missing = loaded.getSelection(99);
-    assert.equal(missing.status.ok, false);
-    assert.deepEqual(missing.ranges, []);
+    assert.throws(() => loaded.getSelection(99), isFormulonError);
   } finally {
     loaded.dispose();
     wb.dispose();
@@ -819,32 +750,31 @@ test('scroll origin, pane origin and selection round-trip through save', async (
 
 test('sheet split reads back, round-trips and exchanges with the freeze', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
-    assert.deepEqual([wb.getView(0).view.splitX, wb.getView(0).view.splitY], [0, 0]);
-    assert.ok(wb.setSplit(0, 2000, 1500).ok);
-    const view = wb.getView(0).view;
+    assert.deepEqual([wb.getView(0).splitX, wb.getView(0).splitY], [0, 0]);
+    wb.setSplit(0, 2000, 1500);
+    const view = wb.getView(0);
     assert.deepEqual([view.splitX, view.splitY, view.freezeRows, view.freezeCols], [2000, 1500, 0, 0]);
     const saved = wb.save();
-    assert.ok(saved.status.ok, JSON.stringify(saved.status));
-    const loaded = mod.Workbook.load(saved.bytes).value;
+    const loaded = mod.Workbook.load(saved);
     try {
-      const got = loaded.getView(0).view;
+      const got = loaded.getView(0);
       assert.deepEqual([got.splitX, got.splitY, got.freezeRows, got.freezeCols], [2000, 1500, 0, 0]);
     } finally {
       loaded.dispose();
     }
-    assert.ok(wb.setFreeze(0, 2, 1).ok);
-    assert.deepEqual([wb.getView(0).view.splitX, wb.getView(0).view.splitY], [0, 0]);
-    assert.ok(wb.setSplit(0, 0, 900).ok);
-    const split = wb.getView(0).view;
+    wb.setFreeze(0, 2, 1);
+    assert.deepEqual([wb.getView(0).splitX, wb.getView(0).splitY], [0, 0]);
+    wb.setSplit(0, 0, 900);
+    const split = wb.getView(0);
     assert.deepEqual([split.splitX, split.splitY, split.freezeRows, split.freezeCols], [0, 900, 0, 0]);
-    assert.equal(wb.setSplit(0, -1, 0).ok, false);
-    assert.equal(wb.setSplit(0, 0, Number.NaN).ok, false);
-    assert.equal(wb.setSplit(0, Number.POSITIVE_INFINITY, 0).ok, false);
-    assert.equal(wb.getView(0).view.splitY, 900);
-    assert.ok(wb.setSplit(0, 0, 0).ok);
-    assert.equal(wb.getView(0).view.splitY, 0);
+    assert.throws(() => wb.setSplit(0, -1, 0), isFormulonError);
+    assert.throws(() => wb.setSplit(0, 0, Number.NaN), isFormulonError);
+    assert.throws(() => wb.setSplit(0, Number.POSITIVE_INFINITY, 0), isFormulonError);
+    assert.equal(wb.getView(0).splitY, 900);
+    wb.setSplit(0, 0, 0);
+    assert.equal(wb.getView(0).splitY, 0);
   } finally {
     wb.dispose();
   }

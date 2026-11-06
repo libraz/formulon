@@ -49,6 +49,15 @@ def _extract_ts_methods(body: str) -> Set[str]:
     return set(_TS_METHOD_RE.findall(body))
 
 
+# A member declared as `name: typeof name;` (a value re-exposed on an object).
+_TS_TYPEOF_MEMBER_RE = re.compile(r"^\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*:\s*typeof\s+\1\s*;", re.MULTILINE)
+
+
+def _extract_ts_callable_members(body: str) -> Set[str]:
+    """Methods plus `name: typeof name` members of an interface body."""
+    return _extract_ts_methods(body) | set(_TS_TYPEOF_MEMBER_RE.findall(body))
+
+
 # Top-level members of an exported interface are indented exactly two spaces;
 # anything deeper belongs to a nested object type and is compared as part of
 # its parent's field text, not on its own.
@@ -140,6 +149,13 @@ def _js_exported_function_source(text: str, name: str) -> Optional[str]:
 _COMMON_IMPORT = "../npm/common.mjs"
 _JS_IMPORT_RE = re.compile(r"\bimport\s*\{(.*?)\}\s*from\s*['\"]([^'\"]+)['\"]\s*;?", re.DOTALL)
 _JS_EXPORT_LIST_RE = re.compile(r"^export\s*\{(.*?)\}\s*;?", re.DOTALL | re.MULTILINE)
+_JS_EXPORT_FROM_RE = re.compile(r"^export\s*\{(.*?)\}\s*from\s*['\"]([^'\"]+)['\"]\s*;?", re.DOTALL | re.MULTILINE)
+_JS_NAMESPACE_IMPORT_RE = re.compile(
+    r"^import\s*\*\s*as\s+([A-Za-z_$][A-Za-z0-9_$]*)\s+from\s*['\"]([^'\"]+)['\"]\s*;?", re.MULTILINE
+)
+_JS_FORMULON_MEMBERS_RE = re.compile(
+    r"^export const FORMULON_MEMBERS = Object\.freeze\(\[(.*?)\]\)", re.DOTALL | re.MULTILINE
+)
 
 
 def _parse_js_binding_list(body: str) -> list[tuple[str, str]]:
@@ -157,22 +173,33 @@ def _parse_js_binding_list(body: str) -> list[tuple[str, str]]:
     return bindings
 
 
-def _js_common_reexports(text: str) -> dict[str, str]:
-    """Maps exported names to names explicitly imported from canonical common.mjs.
-
-    The map intentionally requires both halves of the seam: an import whose
-    source is exactly `../npm/common.mjs`, followed by an explicit `export {}`
-    list. This keeps an imported-but-private name out of the public surface and
-    rejects a broad `export *` or an unrelated module with the same values.
-    """
+def _js_common_imports(text: str) -> dict[str, str]:
+    """Maps local names to the names imported from canonical common.mjs (`../npm/common.mjs`)."""
     imported: dict[str, str] = {}
     for match in _JS_IMPORT_RE.finditer(text):
         if match.group(2) != _COMMON_IMPORT:
             continue
         for source_name, local_name in _parse_js_binding_list(match.group(1)):
             imported[local_name] = source_name
+    return imported
+
+
+def _js_common_reexports(text: str) -> dict[str, str]:
+    """Maps exported names to names explicitly imported from canonical common.mjs.
+
+    The map intentionally requires both halves of the seam: an import whose
+    source is exactly `../npm/common.mjs`, followed by an explicit `export {}`
+    list (or a direct `export { ... } from '../npm/common.mjs'`). This keeps an imported-but-private name out of the public surface and
+    rejects a broad `export *` or an unrelated module with the same values.
+    """
+    imported = _js_common_imports(text)
 
     exported: dict[str, str] = {}
+    for match in _JS_EXPORT_FROM_RE.finditer(text):
+        if match.group(2) != _COMMON_IMPORT:
+            continue
+        for source_name, exported_name in _parse_js_binding_list(match.group(1)):
+            exported[exported_name] = source_name
     for match in _JS_EXPORT_LIST_RE.finditer(text):
         for local_name, exported_name in _parse_js_binding_list(match.group(1)):
             source_name = imported.get(local_name)
@@ -181,16 +208,40 @@ def _js_common_reexports(text: str) -> dict[str, str]:
     return exported
 
 
-def _js_common_reexported_function_source(path: Path, name: str) -> Optional[str]:
-    """Returns a canonical helper body when `path` explicitly re-exports it."""
-    text = _read(path)
-    source_name = _js_common_reexports(text).get(name)
-    if source_name is None:
+def _js_common_imported_function_source(path: Path, name: str) -> Optional[str]:
+    """Returns a canonical helper body when `path` imports it from `../npm/common.mjs`."""
+    if name not in _js_common_imports(_read(path)).values():
         return None
     common_path = (path.parent / _COMMON_IMPORT).resolve()
     if not common_path.is_file():
         return None
-    return _js_exported_function_source(_read(common_path), source_name)
+    return _js_exported_function_source(_read(common_path), name)
+
+
+def _js_common_namespaces(text: str) -> set[str]:
+    """Local names bound by `import * as <name> from '../npm/common.mjs'`."""
+    return {m.group(1) for m in _JS_NAMESPACE_IMPORT_RE.finditer(text) if m.group(2) == _COMMON_IMPORT}
+
+
+def _js_common_wired_function_source(path: Path, name: str) -> Optional[str]:
+    """Returns a canonical helper body when the entry at `path` reaches it through common.mjs.
+
+    The entry must import common.mjs as a namespace and call
+    `<ns>.buildFormulon(`, and common.mjs must list `name` in `FORMULON_MEMBERS`
+    so `buildFormulon` puts it on the `Formulon` object.
+    """
+    text = _read(path)
+    wired = any(re.search(r"\b%s\.buildFormulon\s*\(" % re.escape(ns), text) for ns in _js_common_namespaces(text))
+    if not wired:
+        return None
+    common_path = (path.parent / _COMMON_IMPORT).resolve()
+    if not common_path.is_file():
+        return None
+    common_text = _read(common_path)
+    members = _JS_FORMULON_MEMBERS_RE.search(common_text)
+    if members is None or name not in re.findall(r"['\"]([^'\"]+)['\"]", members.group(1)):
+        return None
+    return _js_exported_function_source(common_text, name)
 
 
 # Frozen ordinal tables are the only way a JS consumer can name a value

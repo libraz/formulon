@@ -1,6 +1,8 @@
 // Reference text: `parseReference` / `formatReference`, the A1 / R1C1
-// reference grammar `INDIRECT` reads, exposed to hosts.
+// reference grammar `INDIRECT` reads, exposed to hosts, and the sheet lookup
+// by name, `getSheetIndex`.
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -29,7 +31,7 @@ bool OptionsArg(const Napi::CallbackInfo& info, size_t idx, const char* api, Nap
 Napi::Value Workbook::ParseReference(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+    return ThrowInvalidHandle(env);
   }
   Napi::Object options;
   if (!OptionsArg(info, 1, "parseReference", &options)) {
@@ -54,18 +56,18 @@ Napi::Value Workbook::ParseReference(const Napi::CallbackInfo& info) {
   const fm_status_t rc =
       fm_workbook_parse_reference(handle_, text.c_str(), r1c1 ? 1 : 0, has_row ? 1 : 0, base_row, base_col, &ref);
   if (rc != 0 || ref.valid == 0) {
-    return MakeOptionalResult(env, rc, 0, env.Null());
+    return OptionalOrNull(env, rc, 0, env.Null());
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("sheetName", ref.has_sheet != 0 ? JsString(env, ref.sheet_name) : env.Null());
   out.Set("rect", RangeToJs(env, ref.rect));
-  return MakeOptionalResult(env, rc, 1, out);
+  return out;
 }
 
 Napi::Value Workbook::FormatReference(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeStringFieldResult(env, NullHandleError(env), "value", "");
+    return ThrowInvalidHandle(env);
   }
   Napi::Object options;
   if (!OptionsArg(info, 1, "formatReference", &options)) {
@@ -93,7 +95,19 @@ Napi::Value Workbook::FormatReference(const Napi::CallbackInfo& info) {
   const char* text = nullptr;
   const fm_status_t rc =
       fm_workbook_format_reference(handle_, has_sheet ? sheet_name.c_str() : nullptr, &rect, absolute ? 1 : 0, &text);
-  return MakeStringResult(env, rc, text);
+  return ValueOrThrow(env, rc, JsString(env, text));
+}
+
+Napi::Value Workbook::GetSheetIndex(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const std::string name = ArgString(info, 0);
+  std::size_t index = 0;
+  int32_t present = 0;
+  const fm_status_t rc = fm_workbook_get_sheet_index(handle_, name.c_str(), &index, &present);
+  return OptionalOrNull(env, rc, present, Napi::Number::New(env, static_cast<double>(index)));
 }
 
 }  // namespace formulon_node

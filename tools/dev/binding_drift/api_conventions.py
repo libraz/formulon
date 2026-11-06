@@ -87,6 +87,9 @@ PROCESS_STRING_FUNCTIONS = frozenset(
     }
 )
 
+# Process functions allowed to return a plain numeric constant.
+PROCESS_NUMBER_FUNCTIONS = frozenset({"fm_get_version_number"})
+
 # The lifetime classes a `const char**` output's doc must name.
 LIFETIME_CLASSES = ("model-backed", "read-scratch-backed", "owned snapshot", "static", "thread-local view")
 _LIFETIME_RE = re.compile(
@@ -758,8 +761,9 @@ def _rule_typedef_suffix(ctx: Context) -> Iterable[Violation]:
 
 @rule("R8.c")
 def _rule_c_returns(ctx: Context) -> Iterable[Violation]:
-    """A C function returns `fm_status_t`; only `*_destroy` returns `void`, and only the
-    process string functions return `const char*`. Counts are judged by `R6.c`.
+    """A C function returns `fm_status_t`; only `*_destroy` returns `void`, only the process string
+    functions return `const char*`, and only the process number functions return `uint32_t`. Counts are
+    judged by `R6.c`.
     """
     for fn in ctx.functions:
         target = ctx.target_c(fn.name)
@@ -768,6 +772,8 @@ def _rule_c_returns(ctx: Context) -> Iterable[Violation]:
         if fn.ret == "void" and target.endswith("_destroy"):
             continue
         if fn.ret == "const char*" and target in PROCESS_STRING_FUNCTIONS:
+            continue
+        if fn.ret == "uint32_t" and target in PROCESS_NUMBER_FUNCTIONS:
             continue
         yield ctx.c_violation(
             "R8.c", fn.name, NO_DISCRIMINATOR, f"{fn.name} returns `{fn.ret}`, not `fm_status_t`", fn.line

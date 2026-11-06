@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { deflateSync } from 'node:zlib';
 import { AnchorEditAs, AnchorKind, DrawingObjectKind, ImageFormat } from '../../packages/npm/common.mjs';
+import { expectFailure } from './smoke_support.mjs';
 
 const EMU_PER_PX = 9525;
 
@@ -42,7 +43,7 @@ function makePng(width, height) {
 }
 
 function withWorkbook(Module, fn) {
-  const wb = Module.Workbook.createDefault().value;
+  const wb = Module.Workbook.createDefault();
   try {
     fn(wb);
   } finally {
@@ -62,13 +63,10 @@ export function registerDrawing(Module, test) {
   test('probeImage reports the format and pixel size, and rejects non-images', () => {
     withWorkbook(Module, (wb) => {
       const info = wb.getImageInfo(makePng(3, 2));
-      assert.ok(info.status.ok, JSON.stringify(info.status));
       assert.equal(info.format, ImageFormat.Png);
       assert.equal(info.pxWidth, 3);
       assert.equal(info.pxHeight, 2);
-      const bad = wb.getImageInfo(new Uint8Array([1, 2, 3, 4]));
-      assert.equal(bad.status.ok, false);
-      assert.equal(bad.pxWidth, 0);
+      expectFailure(() => wb.getImageInfo(new Uint8Array([1, 2, 3, 4])));
     });
   });
 
@@ -76,18 +74,16 @@ export function registerDrawing(Module, test) {
     withWorkbook(Module, (wb) => {
       const png = makePng(4, 3);
       assert.equal(wb.listDrawingObjects(0).length, 0);
-      assert.ok(wb.listDrawingObjects(0).status.ok);
+      wb.listDrawingObjects(0);
 
       const ins = wb.addImage(0, png, { name: 'Logo', descr: 'alt text', row: 2, col: 1, colOffsetEmu: 100 });
-      assert.ok(ins.status.ok, JSON.stringify(ins.status));
-      assert.ok(ins.objectId > 0);
+      assert.ok(ins > 0);
 
       const check = (book) => {
         const list = book.listDrawingObjects(0);
-        assert.ok(list.status.ok, JSON.stringify(list.status));
         assert.equal(list.length, 1);
         const o = list[0];
-        assert.equal(o.objectId, ins.objectId);
+        assert.equal(o.objectId, ins);
         assert.equal(o.kind, DrawingObjectKind.Picture);
         assert.equal(o.anchorKind, AnchorKind.OneCell);
         assert.equal(o.fromRow, 2);
@@ -100,8 +96,7 @@ export function registerDrawing(Module, test) {
         assert.equal(o.descr, 'alt text');
         assert.ok(o.mediaPath.length > 0);
         const found = book.getImage(0, o.objectId);
-        assert.ok(found.status.ok, JSON.stringify(found.status));
-        const img = found.value;
+        const img = found;
         assert.equal(img.format, ImageFormat.Png);
         assert.equal(img.pxWidth, 4);
         assert.equal(img.pxHeight, 3);
@@ -111,15 +106,13 @@ export function registerDrawing(Module, test) {
       check(wb);
 
       const saved = wb.save();
-      assert.ok(saved.status.ok, JSON.stringify(saved.status));
-      const loaded = Module.Workbook.load(saved.bytes).value;
+      const loaded = Module.Workbook.load(saved);
       try {
         check(loaded);
-        const rm = loaded.removeDrawing(0, ins.objectId);
-        assert.ok(rm.ok, JSON.stringify(rm));
+        loaded.removeDrawing(0, ins);
         assert.equal(loaded.listDrawingObjects(0).length, 0);
-        assert.equal(loaded.getImage(0, ins.objectId).value, null);
-        assert.equal(loaded.removeDrawing(0, ins.objectId).ok, false);
+        assert.equal(loaded.getImage(0, ins), null);
+        expectFailure(() => loaded.removeDrawing(0, ins));
       } finally {
         loaded.delete();
       }
@@ -134,35 +127,30 @@ export function registerDrawing(Module, test) {
         widthEmu: 2 * EMU_PER_PX * 10,
         heightEmu: EMU_PER_PX * 20,
       });
-      assert.ok(ins.status.ok, JSON.stringify(ins.status));
       const o = wb.listDrawingObjects(0)[0];
       assert.equal(o.anchorKind, AnchorKind.TwoCell);
       assert.equal(o.editAs, AnchorEditAs.OneCell);
       assert.equal(o.cx, 2 * EMU_PER_PX * 10);
       assert.equal(o.cy, EMU_PER_PX * 20);
       // Default names count from 1 (the id is one ahead) with the profile's word.
-      assert.equal(o.name, `Picture ${ins.objectId - 1}`);
+      assert.equal(o.name, `Picture ${ins - 1}`);
     });
   });
 
-  test('image calls report failures on the envelope without throwing', () => {
+  test('image calls throw on failure and return null for a missing image', () => {
     withWorkbook(Module, (wb) => {
-      assert.equal(wb.addImage(0, new Uint8Array([1, 2, 3, 4])).status.ok, false);
-      assert.equal(wb.addImage(0, new Uint8Array([1, 2, 3, 4])).objectId, 0);
-      assert.equal(wb.addImage(99, makePng(1, 1)).status.ok, false);
-      assert.equal(wb.addImage(0, makePng(1, 1), { anchorKind: AnchorKind.Absolute }).status.ok, false);
-      assert.equal(wb.listDrawingObjects(99).status.ok, false);
-      const img = wb.getImage(0, 12345);
-      assert.equal(img.status.ok, true);
-      assert.equal(img.value, null);
+      expectFailure(() => wb.addImage(0, new Uint8Array([1, 2, 3, 4])));
+      expectFailure(() => wb.addImage(99, makePng(1, 1)));
+      expectFailure(() => wb.addImage(0, makePng(1, 1), { anchorKind: AnchorKind.Absolute }));
+      expectFailure(() => wb.listDrawingObjects(99));
+      assert.equal(wb.getImage(0, 12345), null);
     });
   });
 
   test('setDrawingAnchor moves and resizes a picture and keeps its id', () => {
     withWorkbook(Module, (wb) => {
       const ins = wb.addImage(0, makePng(4, 3), { name: 'Logo', row: 1, col: 1 });
-      assert.ok(ins.status.ok, JSON.stringify(ins.status));
-      const moved = wb.setDrawingAnchor(0, ins.objectId, {
+      wb.setDrawingAnchor(0, ins, {
         anchorKind: AnchorKind.TwoCell,
         editAs: AnchorEditAs.OneCell,
         row: 5,
@@ -171,9 +159,8 @@ export function registerDrawing(Module, test) {
         colOffsetEmu: 2000,
         widthEmu: 200000,
       });
-      assert.ok(moved.ok, JSON.stringify(moved));
       const o = wb.listDrawingObjects(0)[0];
-      assert.equal(o.objectId, ins.objectId);
+      assert.equal(o.objectId, ins);
       assert.equal(o.name, 'Logo');
       assert.equal(o.anchorKind, AnchorKind.TwoCell);
       assert.equal(o.editAs, AnchorEditAs.OneCell);
@@ -183,9 +170,9 @@ export function registerDrawing(Module, test) {
       assert.equal(o.fromColOffset, 2000);
       assert.equal(o.cx, 200000);
       assert.equal(o.cy, 3 * EMU_PER_PX);
-      assert.equal(wb.setDrawingAnchor(0, ins.objectId, { anchorKind: AnchorKind.Absolute }).ok, false);
-      assert.equal(wb.setDrawingAnchor(0, 9999, {}).ok, false);
-      assert.throws(() => wb.setDrawingAnchor(0, ins.objectId, { row: 'x' }), TypeError);
+      expectFailure(() => wb.setDrawingAnchor(0, ins, { anchorKind: AnchorKind.Absolute }));
+      expectFailure(() => wb.setDrawingAnchor(0, 9999, {}));
+      assert.throws(() => wb.setDrawingAnchor(0, ins, { row: 'x' }), TypeError);
     });
   });
 
@@ -195,12 +182,12 @@ export function registerDrawing(Module, test) {
       const b = wb.addImage(0, makePng(2, 2), { row: 3 });
       const c = wb.addImage(0, makePng(2, 2), { row: 6 });
       const ids = () => Array.from(wb.listDrawingObjects(0), (o) => o.objectId);
-      assert.deepEqual(ids(), [a.objectId, b.objectId, c.objectId]);
-      assert.ok(wb.setDrawingZOrder(0, c.objectId, 0).ok);
-      assert.deepEqual(ids(), [c.objectId, a.objectId, b.objectId]);
-      assert.equal(wb.setDrawingZOrder(0, c.objectId, 3).ok, false);
-      assert.equal(wb.setDrawingZOrder(0, 9999, 0).ok, false);
-      assert.deepEqual(ids(), [c.objectId, a.objectId, b.objectId]);
+      assert.deepEqual(ids(), [a, b, c]);
+      wb.setDrawingZOrder(0, c, 0);
+      assert.deepEqual(ids(), [c, a, b]);
+      expectFailure(() => wb.setDrawingZOrder(0, c, 3));
+      expectFailure(() => wb.setDrawingZOrder(0, 9999, 0));
+      assert.deepEqual(ids(), [c, a, b]);
     });
   });
 
@@ -209,34 +196,29 @@ export function registerDrawing(Module, test) {
       const png = makePng(4, 3);
       const a = wb.addImage(0, png, { name: 'A', row: 1 });
       const b = wb.addImage(0, makePng(2, 2), { name: 'B', row: 4 });
-      const snap = wb.snapshotDrawing(0, a.objectId);
-      assert.ok(snap.status.ok, JSON.stringify(snap.status));
-      assert.ok(snap.bytes instanceof Uint8Array);
-      assert.ok(snap.bytes.length > 0);
+      const snap = wb.snapshotDrawing(0, a);
+      assert.ok(snap instanceof Uint8Array);
+      assert.ok(snap.length > 0);
       const ids = () => Array.from(wb.listDrawingObjects(0), (o) => o.objectId);
 
-      assert.ok(wb.removeDrawing(0, a.objectId).ok);
-      const restored = wb.restoreDrawing(0, snap.bytes);
-      assert.ok(restored.status.ok, JSON.stringify(restored.status));
-      assert.equal(restored.objectId, a.objectId);
-      assert.deepEqual(ids(), [a.objectId, b.objectId]);
-      assert.deepEqual(Buffer.from(wb.getImage(0, a.objectId).value.bytes), Buffer.from(png));
+      wb.removeDrawing(0, a);
+      const restored = wb.restoreDrawing(0, snap);
+      assert.equal(restored, a);
+      assert.deepEqual(ids(), [a, b]);
+      assert.deepEqual(Buffer.from(wb.getImage(0, a).bytes), Buffer.from(png));
 
-      assert.ok(wb.setDrawingAnchor(0, a.objectId, { row: 9 }).ok);
-      assert.ok(wb.setDrawingZOrder(0, a.objectId, 1).ok);
-      assert.ok(wb.restoreDrawing(0, snap.bytes, {}).status.ok);
-      assert.deepEqual(ids(), [a.objectId, b.objectId]);
+      wb.setDrawingAnchor(0, a, { row: 9 });
+      wb.setDrawingZOrder(0, a, 1);
+      wb.restoreDrawing(0, snap, {});
+      assert.deepEqual(ids(), [a, b]);
       assert.equal(wb.listDrawingObjects(0)[0].fromRow, 1);
 
-      const copy = wb.restoreDrawing(0, snap.bytes, { newId: true });
-      assert.ok(copy.status.ok, JSON.stringify(copy.status));
-      assert.notEqual(copy.objectId, a.objectId);
-      assert.deepEqual(ids(), [a.objectId, b.objectId, copy.objectId]);
+      const copy = wb.restoreDrawing(0, snap, { newId: true });
+      assert.notEqual(copy, a);
+      assert.deepEqual(ids(), [a, b, copy]);
 
-      assert.equal(wb.restoreDrawing(0, new Uint8Array([1, 2, 3, 4])).status.ok, false);
-      assert.equal(wb.restoreDrawing(0, new Uint8Array([1, 2, 3, 4])).objectId, 0);
-      assert.equal(wb.snapshotDrawing(0, 9999).status.ok, false);
-      assert.equal(wb.snapshotDrawing(0, 9999).bytes.length, 0);
+      expectFailure(() => wb.restoreDrawing(0, new Uint8Array([1, 2, 3, 4])));
+      expectFailure(() => wb.snapshotDrawing(0, 9999));
     });
   });
 }

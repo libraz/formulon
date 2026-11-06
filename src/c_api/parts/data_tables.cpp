@@ -13,6 +13,7 @@
 
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::to_cell_rect;
@@ -32,9 +33,9 @@ formulon::DataTableInput input_of(int32_t has, uint32_t row, uint32_t col) {
 extern "C" fm_status_t fm_sheet_add_data_table(fm_workbook_t* wb, size_t sheet_index, const fm_data_table_t* spec) {
   clear_last_error();
   if (spec == nullptr) {
-    return null_argument("fm_sheet_add_data_table", "spec");
+    return null_argument("spec");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_data_table"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const formulon::MergeRange ref{spec->rect.first_row, spec->rect.first_col, spec->rect.last_row, spec->rect.last_col};
@@ -51,9 +52,9 @@ extern "C" fm_status_t fm_sheet_get_data_table(const fm_workbook_t* wb, size_t s
                                                int32_t* out_present, fm_data_table_t* out) {
   clear_last_error();
   if (out_present == nullptr || out == nullptr) {
-    return null_argument("fm_sheet_get_data_table");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_data_table"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   *out_present = 0;
@@ -81,8 +82,11 @@ extern "C" fm_status_t fm_sheet_get_data_table(const fm_workbook_t* wb, size_t s
 
 extern "C" fm_status_t fm_sheet_remove_data_table(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_remove_data_table"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
+  }
+  if (wb->workbook().data_table_at(sheet_index, row, col) == nullptr) {
+    return not_found("no data table at that cell", "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
   auto removed = wb->workbook().remove_data_table(sheet_index, row, col);
   if (!removed) {
@@ -94,7 +98,7 @@ extern "C" fm_status_t fm_sheet_remove_data_table(fm_workbook_t* wb, size_t shee
 extern "C" fm_status_t fm_workbook_recalc_data_tables(fm_workbook_t* wb) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_recalc_data_tables", "wb");
+    return null_argument("wb");
   }
   auto r = wb->workbook().recalc_data_tables(formulon::eval::default_registry());
   if (!r) {

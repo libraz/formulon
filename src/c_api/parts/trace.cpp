@@ -83,14 +83,11 @@ std::vector<formulon::eval::CellNodeId> bfs_collect(formulon::eval::CellNodeId s
 fm_status_t trace_impl(bool precedents, const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
                        std::uint32_t col, std::uint32_t depth, fm_cell_nodes_t** out) {
   clear_last_error();
-  const char* fn_name = precedents ? "fm_sheet_get_precedents" : "fm_sheet_get_dependents";
   if (out == nullptr) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kBindingNullPointer,
-        precedents ? "fm_sheet_get_precedents: NULL argument" : "fm_sheet_get_dependents: NULL argument");
+    return null_argument("out");
   }
   *out = nullptr;
-  if (auto rc = check_sheet_index(wb, sheet_index, fn_name); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const auto& workbook = wb->workbook();
@@ -137,7 +134,7 @@ extern "C" void fm_cell_nodes_destroy(fm_cell_nodes_t* nodes) {
 extern "C" fm_status_t fm_cell_nodes_get_node_count(const fm_cell_nodes_t* nodes, size_t* out_count) {
   clear_last_error();
   if (nodes == nullptr || out_count == nullptr) {
-    return null_argument("fm_cell_nodes_get_node_count");
+    return null_argument();
   }
   *out_count = nodes->nodes.size();
   return 0;
@@ -146,9 +143,9 @@ extern "C" fm_status_t fm_cell_nodes_get_node_count(const fm_cell_nodes_t* nodes
 extern "C" fm_status_t fm_cell_nodes_get_node_at(const fm_cell_nodes_t* nodes, std::size_t idx, fm_cell_node_t* out) {
   clear_last_error();
   if (nodes == nullptr || out == nullptr) {
-    return null_argument("fm_cell_nodes_get_node_at");
+    return null_argument();
   }
-  if (auto rc = check_index(idx, nodes->nodes.size(), "fm_cell_nodes_get_node_at", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, nodes->nodes.size(), "index"); rc != 0) {
     return rc;
   }
   out->sheet = static_cast<std::uint32_t>(nodes->nodes[idx].sheet_id);

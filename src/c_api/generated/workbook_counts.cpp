@@ -17,14 +17,14 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
-using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::null_argument;
 
 extern "C" fm_status_t fm_workbook_get_sheet_count(const fm_workbook_t* wb, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_get_sheet_count: NULL argument");
+    return null_argument();
   }
   *out_count = wb->workbook().sheet_count();
   return 0;
@@ -33,8 +33,7 @@ extern "C" fm_status_t fm_workbook_get_sheet_count(const fm_workbook_t* wb, size
 extern "C" fm_status_t fm_workbook_get_table_count(const fm_workbook_t* wb, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_get_table_count: NULL argument");
+    return null_argument();
   }
   *out_count = wb->workbook().tables().size();
   return 0;

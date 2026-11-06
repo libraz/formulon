@@ -60,10 +60,11 @@ class EvalFormulaTests(unittest.TestCase):
     def test_division_by_zero_surfaces_as_value(self) -> None:
         v = formulon.eval_formula("=1/0")
         self.assertEqual(v.kind, ValueKind.ERROR)
-        # to_python returns the Value itself for ERROR; callers inspect
-        # the error_code rather than catching an exception.
-        self.assertIs(v.to_python(), v)
-        self.assertIsNotNone(v.error_code)
+        # to_python returns an ExcelError for ERROR; callers inspect
+        # the code rather than catching an exception.
+        self.assertEqual(v.to_python(), formulon.ExcelError(formulon.ErrorCode.DIV0))
+        self.assertEqual(str(v.to_python()), "#DIV/0!")
+        self.assertEqual(v.error_code, formulon.ErrorCode.DIV0)
 
     def test_intersection_uses_read_only_evaluation(self) -> None:
         v = formulon.eval_formula("=A1 B1")
@@ -84,7 +85,7 @@ class EvalFormulaTests(unittest.TestCase):
 class WorkbookLifecycleTests(unittest.TestCase):
     def test_create_default_has_one_sheet(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertTrue(wb.is_valid)
+            self.assertFalse(wb.closed)
             self.assertEqual(wb.get_sheet_count(), 1)
             self.assertEqual(wb.get_sheet_name(0), "Sheet1")
 
@@ -111,12 +112,12 @@ class WorkbookLifecycleTests(unittest.TestCase):
 
     def test_close_is_idempotent(self) -> None:
         wb = Workbook.create_default()
-        self.assertTrue(wb.is_valid)
+        self.assertFalse(wb.closed)
         wb.close()
-        self.assertFalse(wb.is_valid)
+        self.assertTrue(wb.closed)
         # Second close must not crash; the C ABI accepts NULL.
         wb.close()
-        self.assertFalse(wb.is_valid)
+        self.assertTrue(wb.closed)
 
     def test_method_after_close_raises(self) -> None:
         wb = Workbook.create_default()
@@ -129,8 +130,9 @@ class WorkbookLifecycleTests(unittest.TestCase):
         with self.assertRaises(FormulonError) as ctx:
             wb.get_sheet_count()
         error = ctx.exception
+        self.assertIsInstance(error, formulon.WorkbookClosedError)
         self.assertEqual(error.code, 7000)
-        self.assertEqual(error.message, "handle is NULL or already closed")
+        self.assertEqual(error.message, "the workbook is closed")
         self.assertEqual(error.context, "")
         self.assertNotIn("index=99", str(error))
         self.assertNotIn("sheet_count=1", str(error))

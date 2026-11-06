@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 const RANGE = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
 
 function withWorkbook(Module, fn) {
-  const wb = Module.Workbook.createDefault().value;
+  const wb = Module.Workbook.createDefault();
   try {
     fn(wb);
   } finally {
@@ -13,8 +13,7 @@ function withWorkbook(Module, fn) {
 
 function protection(wb) {
   const result = wb.getSheetProtection(0);
-  assert.ok(result.status.ok, JSON.stringify(result.status));
-  return result.protection;
+  return result;
 }
 
 export function registerLayoutValidation(Module, test) {
@@ -68,8 +67,8 @@ export function registerLayoutValidation(Module, test) {
       });
       assert.throws(() => wb.getCellRectPt(0, throwingRange, 0), /wasm geometry getter/);
 
-      assert.ok(wb.setNumber(0, 0, 0, 1).ok);
-      assert.ok(wb.setFormula(0, 0, 1, '=A1+1').ok);
+      wb.setNumber(0, 0, 0, 1);
+      wb.setFormula(0, 0, 1, '=A1+1');
       assert.throws(() => wb.recalcViewport(0, { ...RANGE, firstRow: 1.5 }), TypeError);
 
       const throwingViewport = { firstRow: 0, lastRow: 0, firstCol: 0 };

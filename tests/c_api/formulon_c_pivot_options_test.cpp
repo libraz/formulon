@@ -186,10 +186,11 @@ TEST(FormulonCApiPivotOptions, GrandTotalCaptionBoundaries) {
   EXPECT_EQ(SetGrandTotalCaption(wb.handle, 0U, kPivot, Repeat("a", 256).c_str()), kInvalidArgument);
   EXPECT_EQ(SetGrandTotalCaption(wb.handle, 0U, kPivot, "\xC3"), kBindingUtf8EncodingError);
   EXPECT_EQ(fm_sheet_set_pivot_options(wb.handle, 9U, kPivot, keep.get()), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_set_pivot_options(wb.handle, 0U, 9U, keep.get()), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_pivot_options(wb.handle, 0U, 9U, keep.get()), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_pivot_options(wb.handle, 0U, std::numeric_limits<std::size_t>::max(), keep.get()),
-            kInvalidArgument);
-  EXPECT_EQ(fm_sheet_get_pivot_options(wb.handle, 0U, std::numeric_limits<std::size_t>::max(), &o), kInvalidArgument);
+            FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_get_pivot_options(wb.handle, 0U, std::numeric_limits<std::size_t>::max(), &o),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_pivot_options(nullptr, 0U, kPivot, keep.get()), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_get_pivot_options(wb.handle, 0U, kPivot, nullptr), kBindingNullPointer);
   // The rejected calls left the accepted caption alone.
@@ -213,7 +214,7 @@ TEST(FormulonCApiPivotOptions, AutoFormattingSetsAndGets) {
   EXPECT_EQ(o.auto_formatting, 1);
 
   EXPECT_EQ(SetAutoFormatting(wb.handle, 1U, kPivot, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(SetAutoFormatting(wb.handle, 0U, 1U, 1), kInvalidArgument);
+  EXPECT_EQ(SetAutoFormatting(wb.handle, 0U, 1U, 1), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(SetAutoFormatting(nullptr, 0U, kPivot, 1), kBindingNullPointer);
 }
 
@@ -258,11 +259,11 @@ TEST(FormulonCApiPivotOptions, FieldFlagsRejectBadIndices) {
   for (const Setter setter : {&fm_sheet_set_pivot_field_default_subtotal, &fm_sheet_set_pivot_field_insert_blank_row,
                               &fm_sheet_set_pivot_field_fill_down_labels, &fm_sheet_set_pivot_field_show_detail}) {
     EXPECT_EQ(setter(wb.handle, 9U, kPivot, kRegionField, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-    EXPECT_EQ(setter(wb.handle, 0U, 9U, kRegionField, 1), kInvalidArgument);
-    EXPECT_EQ(setter(wb.handle, 0U, kPivot, 9U, 1), kInvalidArgument);
-    EXPECT_EQ(setter(wb.handle, 0U, kPivot, std::numeric_limits<std::size_t>::max(), 1), kInvalidArgument);
+    EXPECT_EQ(setter(wb.handle, 0U, 9U, kRegionField, 1), FM_STATUS_INDEX_OUT_OF_RANGE);
+    EXPECT_EQ(setter(wb.handle, 0U, kPivot, 9U, 1), FM_STATUS_INDEX_OUT_OF_RANGE);
+    EXPECT_EQ(setter(wb.handle, 0U, kPivot, std::numeric_limits<std::size_t>::max(), 1), FM_STATUS_INDEX_OUT_OF_RANGE);
     if constexpr (sizeof(std::size_t) > 4U) {
-      EXPECT_EQ(setter(wb.handle, 0U, kPivot, static_cast<std::size_t>(1) << 32U, 1), kInvalidArgument);
+      EXPECT_EQ(setter(wb.handle, 0U, kPivot, static_cast<std::size_t>(1) << 32U, 1), FM_STATUS_INDEX_OUT_OF_RANGE);
     }
     EXPECT_EQ(setter(nullptr, 0U, kPivot, kRegionField, 1), kBindingNullPointer);
   }
@@ -319,16 +320,18 @@ TEST(FormulonCApiPivotOptions, ItemShowDetailRejectsBadIndices) {
   LoadScratchPivot(wb);
   EXPECT_EQ(fm_sheet_set_pivot_field_item_show_detail(wb.handle, 9U, kPivot, kRegionField, 0, 0),
             FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_set_pivot_field_item_show_detail(wb.handle, 0U, 9U, kRegionField, 0, 0), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_pivot_field_item_show_detail(wb.handle, 0U, kPivot, 9U, 0, 0), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_pivot_field_item_show_detail(wb.handle, 0U, kPivot, kRegionField, 2U, 0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_pivot_field_item_show_detail(wb.handle, 0U, 9U, kRegionField, 0, 0),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_pivot_field_item_show_detail(wb.handle, 0U, kPivot, 9U, 0, 0), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_pivot_field_item_show_detail(wb.handle, 0U, kPivot, kRegionField, 2U, 0),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_pivot_field_item_show_detail(wb.handle, 0U, kPivot, kRegionField,
                                                       std::numeric_limits<std::size_t>::max(), 0),
-            kInvalidArgument);
+            FM_STATUS_INDEX_OUT_OF_RANGE);
   if constexpr (sizeof(std::size_t) > 4U) {
     EXPECT_EQ(fm_sheet_set_pivot_field_item_show_detail(wb.handle, 0U, kPivot, kRegionField,
                                                         static_cast<std::size_t>(1) << 32U, 0),
-              kInvalidArgument);
+              FM_STATUS_INDEX_OUT_OF_RANGE);
   }
   EXPECT_EQ(fm_sheet_set_pivot_field_item_show_detail(nullptr, 0U, kPivot, kRegionField, 0, 0), kBindingNullPointer);
 }
@@ -412,16 +415,18 @@ TEST(FormulonCApiPivotOptions, ItemCaptionBoundaries) {
             kBindingUtf8EncodingError);
   EXPECT_EQ(fm_sheet_set_pivot_field_item_caption(wb.handle, 9U, kPivot, kRegionField, 0, "x"),
             FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_set_pivot_field_item_caption(wb.handle, 0U, 9U, kRegionField, 0, "x"), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_pivot_field_item_caption(wb.handle, 0U, kPivot, 9U, 0, "x"), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_pivot_field_item_caption(wb.handle, 0U, kPivot, kRegionField, 2U, "x"), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_pivot_field_item_caption(wb.handle, 0U, 9U, kRegionField, 0, "x"),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_pivot_field_item_caption(wb.handle, 0U, kPivot, 9U, 0, "x"), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_pivot_field_item_caption(wb.handle, 0U, kPivot, kRegionField, 2U, "x"),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_pivot_field_item_caption(wb.handle, 0U, kPivot, kRegionField,
                                                   std::numeric_limits<std::size_t>::max(), "x"),
-            kInvalidArgument);
+            FM_STATUS_INDEX_OUT_OF_RANGE);
   if constexpr (sizeof(std::size_t) > 4U) {
     EXPECT_EQ(fm_sheet_set_pivot_field_item_caption(wb.handle, 0U, kPivot, kRegionField,
                                                     static_cast<std::size_t>(1) << 32U, "x"),
-              kInvalidArgument);
+              FM_STATUS_INDEX_OUT_OF_RANGE);
   }
   EXPECT_EQ(fm_sheet_set_pivot_field_item_caption(nullptr, 0U, kPivot, kRegionField, 0, "x"), kBindingNullPointer);
   // The rejected calls left the accepted caption alone.
@@ -522,8 +527,8 @@ TEST(FormulonCApiPivotOptions, ValuesFieldRejectsDuplicatesAndStrayIndices) {
 
   EXPECT_EQ(SetOrder(wb.handle, true, {FM_PIVOT_VALUES_FIELD, 0U, FM_PIVOT_VALUES_FIELD}), kInvalidArgument);
   EXPECT_EQ(SetOrder(wb.handle, false, {FM_PIVOT_VALUES_FIELD, FM_PIVOT_VALUES_FIELD}), kInvalidArgument);
-  EXPECT_EQ(SetOrder(wb.handle, true, {0U, FM_PIVOT_VALUES_FIELD - 1U}), kInvalidArgument);
-  EXPECT_EQ(SetOrder(wb.handle, true, {0U, 0xFFFFFFFFU}), kInvalidArgument);
+  EXPECT_EQ(SetOrder(wb.handle, true, {0U, FM_PIVOT_VALUES_FIELD - 1U}), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(SetOrder(wb.handle, true, {0U, 0xFFFFFFFFU}), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(ReadOrder(wb.handle, true), (std::vector<std::uint32_t>{0U}));
   EXPECT_EQ(ReadOrder(wb.handle, false), (std::vector<std::uint32_t>{FM_PIVOT_VALUES_FIELD}));
 }
@@ -600,7 +605,7 @@ TEST(FormulonCApiPivotOptions, ShowDetailsRejectsBadCellsAndArguments) {
   EXPECT_EQ(fm_sheet_show_pivot_details(wb.handle, 0U, kPivot, 5000U, 5000U, &created), kInvalidArgument);
   EXPECT_EQ(fm_sheet_show_pivot_details(wb.handle, 0U, kPivot, 0xFFFFFFFFU, 0xFFFFFFFFU, &created), kInvalidArgument);
   EXPECT_EQ(fm_sheet_show_pivot_details(wb.handle, 9U, kPivot, row, col, &created), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_show_pivot_details(wb.handle, 0U, 9U, row, col, &created), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_show_pivot_details(wb.handle, 0U, 9U, row, col, &created), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_show_pivot_details(wb.handle, 0U, kPivot, row, col, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_show_pivot_details(nullptr, 0U, kPivot, row, col, &created), kBindingNullPointer);
   EXPECT_EQ(created, 99U);
@@ -920,9 +925,9 @@ TEST(FormulonCApiPivotOptions, OptionsArgumentBoundaries) {
   EXPECT_EQ(fm_sheet_set_pivot_options(wb.handle, 0U, kPivot, nullptr), kBindingNullPointer);
   for (const std::size_t index : {std::size_t{1}, std::size_t{0x80000000U}, static_cast<std::size_t>(0x100000000ULL)}) {
     EXPECT_EQ(fm_sheet_get_pivot_options(wb.handle, index, kPivot, &out), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE) << index;
-    EXPECT_EQ(fm_sheet_get_pivot_options(wb.handle, 0U, index, &out), kInvalidArgument) << index;
+    EXPECT_EQ(fm_sheet_get_pivot_options(wb.handle, 0U, index, &out), FM_STATUS_INDEX_OUT_OF_RANGE) << index;
     EXPECT_EQ(fm_sheet_set_pivot_options(wb.handle, index, kPivot, &o), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE) << index;
-    EXPECT_EQ(fm_sheet_set_pivot_options(wb.handle, 0U, index, &o), kInvalidArgument) << index;
+    EXPECT_EQ(fm_sheet_set_pivot_options(wb.handle, 0U, index, &o), FM_STATUS_INDEX_OUT_OF_RANGE) << index;
   }
 
   // indent 0..126, page_wrap 0..255.
@@ -1125,9 +1130,12 @@ TEST(FormulonCApiPivotOptions, CustomNameBoundaries) {
             kBindingUtf8EncodingError);
   EXPECT_EQ(fm_sheet_set_pivot_field_custom_name(nullptr, 0U, kPivot, kRegionField, "x"), kBindingNullPointer);
   for (const std::size_t index : {std::size_t{9}, std::size_t{0x80000000U}, static_cast<std::size_t>(0x100000000ULL)}) {
-    EXPECT_EQ(fm_sheet_set_pivot_field_custom_name(wb.handle, 0U, kPivot, index, "x"), kInvalidArgument) << index;
-    EXPECT_EQ(fm_sheet_set_pivot_field_custom_name(wb.handle, 0U, index, kRegionField, "x"), kInvalidArgument);
-    EXPECT_EQ(fm_sheet_set_pivot_field_show_all(wb.handle, 0U, kPivot, index, 1), kInvalidArgument) << index;
+    EXPECT_EQ(fm_sheet_set_pivot_field_custom_name(wb.handle, 0U, kPivot, index, "x"), FM_STATUS_INDEX_OUT_OF_RANGE)
+        << index;
+    EXPECT_EQ(fm_sheet_set_pivot_field_custom_name(wb.handle, 0U, index, kRegionField, "x"),
+              FM_STATUS_INDEX_OUT_OF_RANGE);
+    EXPECT_EQ(fm_sheet_set_pivot_field_show_all(wb.handle, 0U, kPivot, index, 1), FM_STATUS_INDEX_OUT_OF_RANGE)
+        << index;
     EXPECT_EQ(fm_sheet_set_pivot_field_show_all(wb.handle, index, kPivot, kRegionField, 1),
               FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   }
@@ -1287,18 +1295,18 @@ TEST(FormulonCApiPivotOptions, DefaultNameArgumentBoundaries) {
   for (const std::size_t index : {std::size_t{2}, std::size_t{0x80000000U}, static_cast<std::size_t>(0x100000000ULL)}) {
     EXPECT_EQ(
         fm_sheet_get_pivot_data_field_default_name(wb.handle, 0U, kPivot, index, FM_PIVOT_AGG_SUM, SIZE_MAX, &name),
-        kInvalidArgument)
+        FM_STATUS_INDEX_OUT_OF_RANGE)
         << index;
     EXPECT_EQ(
         fm_sheet_get_pivot_data_field_default_name(wb.handle, 0U, kPivot, 1U, FM_PIVOT_AGG_SUM, index - 1U, &name),
-        kInvalidArgument)
+        FM_STATUS_INDEX_OUT_OF_RANGE)
         << index;
     EXPECT_EQ(
         fm_sheet_get_pivot_data_field_default_name(wb.handle, index, kPivot, 1U, FM_PIVOT_AGG_SUM, SIZE_MAX, &name),
         FM_STATUS_SHEET_INDEX_OUT_OF_RANGE)
         << index;
     EXPECT_EQ(fm_sheet_get_pivot_data_field_default_name(wb.handle, 0U, index, 1U, FM_PIVOT_AGG_SUM, SIZE_MAX, &name),
-              kInvalidArgument)
+              FM_STATUS_INDEX_OUT_OF_RANGE)
         << index;
   }
 }

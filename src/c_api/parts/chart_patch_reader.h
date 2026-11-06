@@ -22,8 +22,6 @@ namespace parts {
 /// Translates patch fields, keeping the first validation failure.
 class PatchReader {
  public:
-  explicit PatchReader(const char* api) : api_(api) {}
-
   fm_status_t status() const { return rc_; }
 
   template <typename T>
@@ -63,7 +61,7 @@ class PatchReader {
   // Records a malformed-UTF-8 `value` as the failure; NULL passes.
   bool text_ok(const char* value, const char* name) {
     if (rc_ == 0 && value != nullptr) {
-      rc_ = check_utf8(value, api_, "field", name);
+      rc_ = check_utf8(value, "field", name);
     }
     return rc_ == 0;
   }
@@ -94,7 +92,7 @@ class PatchReader {
 
   bool enum_ok(std::int64_t value, std::int64_t max, const char* name) {
     if (rc_ == 0) {
-      rc_ = check_enum_domain(value, max, api_, name);
+      rc_ = check_enum_domain(value, max, name);
     }
     return rc_ == 0;
   }
@@ -106,8 +104,7 @@ class PatchReader {
 
   void fail(const char* name, const char* why) {
     if (rc_ == 0) {
-      rc_ =
-          set_binding_error(FormulonErrorCode::kInvalidArgument, (std::string(api_) + ": " + name + " " + why).c_str());
+      rc_ = set_binding_error(FormulonErrorCode::kInvalidArgument, (std::string(name) + " " + why).c_str());
     }
   }
 
@@ -116,7 +113,6 @@ class PatchReader {
     return enum_ok(op, static_cast<std::int64_t>(FM_CHART_PATCH_SET), name);
   }
 
-  const char* api_;
   fm_status_t rc_ = 0;
 };
 

@@ -129,7 +129,7 @@ class WasmTrapPoisoningTests(unittest.TestCase):
             instance.fm_workbook_recalc(0)
         self.assertEqual(caught.exception.code.name, "INTERNAL_ERROR")
         self.assertIn("out of memory", caught.exception.message)
-        self.assertIn("fm_workbook_recalc", str(caught.exception))
+        self.assertNotIn("fm_workbook_recalc", str(caught.exception))
 
     def test_trap_poisons_instance_for_every_later_call(self) -> None:
         instance, _calls = _fake_instance("fm_workbook_recalc", 0)

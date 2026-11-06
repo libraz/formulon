@@ -124,10 +124,10 @@ TEST(FormulonCApiTable, CreateDefaultsAndReadBack) {
   EXPECT_STREQ(column.totals_row_function, "none");
   EXPECT_STREQ(column.totals_row_label, "");
   EXPECT_STREQ(column.totals_row_formula, "");
-  EXPECT_EQ(fm_workbook_get_table_column(wb.handle, 0, 2, &column), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_get_table_column(wb.handle, 0, 2, &column), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_workbook_get_table_info(wb.handle, 1, nullptr), kBindingNullPointer);
   fm_table_info_t ignored{};
-  EXPECT_EQ(fm_workbook_get_table_info(wb.handle, 1, &ignored), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_get_table_info(wb.handle, 1, &ignored), FM_STATUS_INDEX_OUT_OF_RANGE);
 
   WorkbookGuard plain;
   CreateSalesTable(plain, "");
@@ -205,7 +205,7 @@ TEST(FormulonCApiTable, SetStyleInfoWritesTheElementInSchemaPosition) {
   // An empty style through update still removes the element.
   ASSERT_EQ(fm_workbook_update_table(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "", -1, -1), 0);
   EXPECT_EQ(Info(wb.handle).style_present, 0);
-  EXPECT_EQ(fm_workbook_set_table_style_info(wb.handle, 3, "X", 0, 0, 0, 0), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_set_table_style_info(wb.handle, 3, "X", 0, 0, 0, 0), FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiTable, ColumnTotalsWriteTheTotalsRowCells) {
@@ -366,7 +366,7 @@ TEST(FormulonCApiTable, RenameRewritesStructuredReferences) {
   EXPECT_EQ(fm_workbook_rename_table(wb.handle, 0, "other", nullptr), kInvalidArgument);
   EXPECT_EQ(fm_workbook_rename_table(wb.handle, 0, "", nullptr), kInvalidArgument);
   EXPECT_EQ(fm_workbook_rename_table(wb.handle, 0, nullptr, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_rename_table(wb.handle, 5, "Revenue", nullptr), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_rename_table(wb.handle, 5, "Revenue", nullptr), FM_STATUS_INDEX_OUT_OF_RANGE);
   // A case-only rename of the table itself is not a collision.
   ASSERT_EQ(fm_workbook_rename_table(wb.handle, 0, "SALES", nullptr), 0);
   ASSERT_EQ(fm_workbook_rename_table(wb.handle, 0, "Revenue", nullptr), 0);
@@ -549,7 +549,7 @@ TEST(FormulonCApiTableStyles, DefaultsAndRemove) {
   EXPECT_STREQ(table, "Mine");
   EXPECT_STREQ(pivot, "PivotStyleLight16");
 
-  EXPECT_EQ(fm_workbook_remove_table_style(wb.handle, "Missing"), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_remove_table_style(wb.handle, "Missing"), FM_STATUS_NOT_FOUND);
   ASSERT_EQ(fm_workbook_remove_table_style(wb.handle, "mine"), 0);
   ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &table, &pivot), 0);
   EXPECT_STREQ(table, "TableStyleMedium2");

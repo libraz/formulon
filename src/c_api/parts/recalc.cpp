@@ -52,7 +52,7 @@ bool iterative_progress_adapter(std::uint32_t iteration, double max_residual, st
 extern "C" fm_status_t fm_workbook_recalc(fm_workbook_t* wb) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_recalc", "wb");
+    return null_argument("wb");
   }
   auto r = wb->workbook().recalc(formulon::eval::default_registry());
   if (!r) {
@@ -68,11 +68,10 @@ extern "C" fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t t
     *out_stats = fm_parallel_recalc_stats_t{};
   }
   if (wb == nullptr) {
-    return null_argument("fm_workbook_recalc_parallel", "wb");
+    return null_argument("wb");
   }
   if (thread_count > formulon::eval::kMaxSchedulerThreads) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_recalc_parallel: thread_count must be 0..8",
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "thread_count must be 0..8",
                              "thread_count=" + std::to_string(thread_count) +
                                  " max=" + std::to_string(formulon::eval::kMaxSchedulerThreads));
   }
@@ -103,9 +102,9 @@ extern "C" fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enab
                                                  double max_change) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_set_iterative", "wb");
+    return null_argument("wb");
   }
-  if (const fm_status_t st = check_finite_non_negative(max_change, "fm_workbook_set_iterative", "max_change")) {
+  if (const fm_status_t st = check_finite_non_negative(max_change, "max_change")) {
     return st;
   }
   formulon::IterativeOptions opts;
@@ -127,7 +126,7 @@ extern "C" fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enab
 extern "C" fm_status_t fm_workbook_set_iterative_enabled(fm_workbook_t* wb, int32_t enabled) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_set_iterative_enabled", "wb");
+    return null_argument("wb");
   }
   formulon::IterativeOptions opts = wb->workbook().iterative_options();
   opts.enabled = enabled != 0;
@@ -139,7 +138,7 @@ extern "C" fm_status_t fm_workbook_get_iterative(const fm_workbook_t* wb, int32_
                                                  uint32_t* out_max_iterations, double* out_max_change) {
   clear_last_error();
   if (wb == nullptr || out_enabled == nullptr || out_max_iterations == nullptr || out_max_change == nullptr) {
-    return null_argument("fm_workbook_get_iterative");
+    return null_argument();
   }
   const formulon::IterativeOptions& opts = wb->workbook().iterative_options();
   *out_enabled = opts.enabled ? 1 : 0;
@@ -151,7 +150,7 @@ extern "C" fm_status_t fm_workbook_get_iterative(const fm_workbook_t* wb, int32_
 extern "C" fm_status_t fm_workbook_get_calc_mode(const fm_workbook_t* wb, std::int32_t* out_mode) {
   clear_last_error();
   if (wb == nullptr || out_mode == nullptr) {
-    return null_argument("fm_workbook_get_calc_mode");
+    return null_argument();
   }
   switch (wb->workbook().calc_mode()) {
     case formulon::Workbook::CalcMode::kAuto:
@@ -170,7 +169,7 @@ extern "C" fm_status_t fm_workbook_get_calc_mode(const fm_workbook_t* wb, std::i
 extern "C" fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, std::int32_t mode) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_set_calc_mode", "wb");
+    return null_argument("wb");
   }
   formulon::Workbook::CalcMode resolved = formulon::Workbook::CalcMode::kAuto;
   switch (mode) {
@@ -184,8 +183,7 @@ extern "C" fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, std::int32_t
       resolved = formulon::Workbook::CalcMode::kAutoNoTable;
       break;
     default:
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "fm_workbook_set_calc_mode: unknown mode");
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "unknown mode");
   }
   wb->workbook().set_calc_mode(resolved);
   return 0;
@@ -195,20 +193,20 @@ namespace {
 
 /// Reads a boolean workbook flag into an `int32_t` out-parameter.
 template <typename Read>
-fm_status_t read_workbook_flag(const fm_workbook_t* wb, std::int32_t* out, const char* fn, Read read) {
+fm_status_t read_workbook_flag(const fm_workbook_t* wb, std::int32_t* out, Read read) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, fn, "NULL argument");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "a required argument is NULL");
   }
   *out = read(wb->workbook()) ? 1 : 0;
   return 0;
 }
 
 template <typename Write>
-fm_status_t write_workbook_flag(fm_workbook_t* wb, const char* fn, Write write) {
+fm_status_t write_workbook_flag(fm_workbook_t* wb, Write write) {
   clear_last_error();
   if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, fn, "wb is NULL");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "wb is NULL");
   }
   write(wb->workbook());
   return 0;
@@ -217,31 +215,27 @@ fm_status_t write_workbook_flag(fm_workbook_t* wb, const char* fn, Write write) 
 }  // namespace
 
 extern "C" fm_status_t fm_workbook_get_full_precision(const fm_workbook_t* wb, std::int32_t* out) {
-  return read_workbook_flag(wb, out, "fm_workbook_get_full_precision",
-                            [](const formulon::Workbook& w) { return w.calc_options().full_precision; });
+  return read_workbook_flag(wb, out, [](const formulon::Workbook& w) { return w.calc_options().full_precision; });
 }
 
 extern "C" fm_status_t fm_workbook_set_full_precision(fm_workbook_t* wb, std::int32_t full_precision) {
-  return write_workbook_flag(wb, "fm_workbook_set_full_precision", [full_precision](formulon::Workbook& w) {
-    w.mutable_calc_options().full_precision = full_precision != 0;
-  });
+  return write_workbook_flag(
+      wb, [full_precision](formulon::Workbook& w) { w.mutable_calc_options().full_precision = full_precision != 0; });
 }
 
 extern "C" fm_status_t fm_workbook_get_calc_on_save(const fm_workbook_t* wb, std::int32_t* out) {
-  return read_workbook_flag(wb, out, "fm_workbook_get_calc_on_save",
-                            [](const formulon::Workbook& w) { return w.calc_options().calc_on_save; });
+  return read_workbook_flag(wb, out, [](const formulon::Workbook& w) { return w.calc_options().calc_on_save; });
 }
 
 extern "C" fm_status_t fm_workbook_set_calc_on_save(fm_workbook_t* wb, std::int32_t calc_on_save) {
-  return write_workbook_flag(wb, "fm_workbook_set_calc_on_save", [calc_on_save](formulon::Workbook& w) {
-    w.mutable_calc_options().calc_on_save = calc_on_save != 0;
-  });
+  return write_workbook_flag(
+      wb, [calc_on_save](formulon::Workbook& w) { w.mutable_calc_options().calc_on_save = calc_on_save != 0; });
 }
 
 extern "C" fm_status_t fm_workbook_get_ref_mode(const fm_workbook_t* wb, std::int32_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return null_argument("fm_workbook_get_ref_mode");
+    return null_argument();
   }
   *out = wb->workbook().calc_options().ref_mode == formulon::RefMode::kR1C1 ? FM_REF_MODE_R1C1 : FM_REF_MODE_A1;
   return 0;
@@ -250,10 +244,10 @@ extern "C" fm_status_t fm_workbook_get_ref_mode(const fm_workbook_t* wb, std::in
 extern "C" fm_status_t fm_workbook_set_ref_mode(fm_workbook_t* wb, std::int32_t mode) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_set_ref_mode", "wb");
+    return null_argument("wb");
   }
   if (mode != FM_REF_MODE_A1 && mode != FM_REF_MODE_R1C1) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_set_ref_mode: unknown mode");
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "unknown mode");
   }
   wb->workbook().mutable_calc_options().ref_mode =
       mode == FM_REF_MODE_R1C1 ? formulon::RefMode::kR1C1 : formulon::RefMode::kA1;
@@ -261,20 +255,18 @@ extern "C" fm_status_t fm_workbook_set_ref_mode(fm_workbook_t* wb, std::int32_t 
 }
 
 extern "C" fm_status_t fm_workbook_get_date1904(const fm_workbook_t* wb, std::int32_t* out) {
-  return read_workbook_flag(wb, out, "fm_workbook_get_date1904",
-                            [](const formulon::Workbook& w) { return w.date1904(); });
+  return read_workbook_flag(wb, out, [](const formulon::Workbook& w) { return w.date1904(); });
 }
 
 extern "C" fm_status_t fm_workbook_set_date1904(fm_workbook_t* wb, std::int32_t date1904) {
-  return write_workbook_flag(wb, "fm_workbook_set_date1904",
-                             [date1904](formulon::Workbook& w) { w.set_date1904(date1904 != 0); });
+  return write_workbook_flag(wb, [date1904](formulon::Workbook& w) { w.set_date1904(date1904 != 0); });
 }
 
 extern "C" fm_status_t fm_workbook_get_pinned_now(const fm_workbook_t* wb, fm_civil_time_t* out_now,
                                                   std::int32_t* out_pinned) {
   clear_last_error();
   if (wb == nullptr || out_now == nullptr || out_pinned == nullptr) {
-    return null_argument("fm_workbook_get_pinned_now");
+    return null_argument();
   }
   *out_now = fm_civil_time_t{};
   const auto& pinned = wb->workbook().pinned_now();
@@ -293,7 +285,7 @@ extern "C" fm_status_t fm_workbook_get_pinned_now(const fm_workbook_t* wb, fm_ci
 extern "C" fm_status_t fm_workbook_set_pinned_now(fm_workbook_t* wb, const fm_civil_time_t* now) {
   clear_last_error();
   if (wb == nullptr || now == nullptr) {
-    return null_argument("fm_workbook_set_pinned_now");
+    return null_argument();
   }
   // Validated rather than normalised: `days_from_civil` would happily roll
   // month 13 into the next January, and a pin that silently moved would make
@@ -305,8 +297,7 @@ extern "C" fm_status_t fm_workbook_set_pinned_now(fm_workbook_t* wb, const fm_ci
       now->hour >= 0 && now->hour <= 23 && now->minute >= 0 && now->minute <= 59 && now->second >= 0 &&
       now->second <= 59;
   if (!in_range) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_set_pinned_now: field out of range");
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "field out of range");
   }
   wb->workbook().set_pinned_now(formulon::date_time::CivilTime{
       {now->year, static_cast<unsigned>(now->month), static_cast<unsigned>(now->day)},
@@ -317,7 +308,7 @@ extern "C" fm_status_t fm_workbook_set_pinned_now(fm_workbook_t* wb, const fm_ci
 extern "C" fm_status_t fm_workbook_clear_pinned_now(fm_workbook_t* wb) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_clear_pinned_now", "wb");
+    return null_argument("wb");
   }
   wb->workbook().clear_pinned_now();
   return 0;
@@ -326,7 +317,7 @@ extern "C" fm_status_t fm_workbook_clear_pinned_now(fm_workbook_t* wb) {
 extern "C" fm_status_t fm_workbook_get_excel_profile_id(const fm_workbook_t* wb, const char** out_profile_id) {
   clear_last_error();
   if (wb == nullptr || out_profile_id == nullptr) {
-    return null_argument("fm_workbook_get_excel_profile_id");
+    return null_argument();
   }
   *out_profile_id = formulon::excel_profile_id(wb->workbook().excel_profile());
   return 0;
@@ -335,10 +326,10 @@ extern "C" fm_status_t fm_workbook_get_excel_profile_id(const fm_workbook_t* wb,
 extern "C" fm_status_t fm_workbook_set_excel_profile_id(fm_workbook_t* wb, const char* profile_id) {
   clear_last_error();
   if (wb == nullptr || profile_id == nullptr) {
-    return null_argument("fm_workbook_set_excel_profile_id");
+    return null_argument();
   }
   formulon::ExcelProfile profile;
-  if (auto rc = check_profile_id(profile_id, "fm_workbook_set_excel_profile_id", &profile); rc != 0) {
+  if (auto rc = check_profile_id(profile_id, &profile); rc != 0) {
     return rc;
   }
   formulon::Workbook& book = wb->workbook();
@@ -357,7 +348,7 @@ extern "C" fm_status_t fm_workbook_set_excel_profile_id(fm_workbook_t* wb, const
 extern "C" fm_status_t fm_workbook_get_file_name(const fm_workbook_t* wb, const char** out_name) {
   clear_last_error();
   if (wb == nullptr || out_name == nullptr) {
-    return null_argument("fm_workbook_get_file_name");
+    return null_argument();
   }
   *out_name = publish_scratch(wb, wb->workbook().file_name());
   return 0;
@@ -366,7 +357,7 @@ extern "C" fm_status_t fm_workbook_get_file_name(const fm_workbook_t* wb, const 
 extern "C" fm_status_t fm_workbook_set_file_name(fm_workbook_t* wb, const char* name) {
   clear_last_error();
   if (wb == nullptr || name == nullptr) {
-    return null_argument("fm_workbook_set_file_name");
+    return null_argument();
   }
   formulon::Workbook& book = wb->workbook();
   const bool changed = book.file_name() != name;
@@ -384,23 +375,22 @@ extern "C" fm_status_t fm_sheet_recalc_viewport(fm_workbook_t* wb, size_t sheet_
                                                 uint32_t* out_recomputed_count) {
   clear_last_error();
   if (wb == nullptr || viewport == nullptr) {
-    return null_argument("fm_sheet_recalc_viewport");
+    return null_argument();
   }
   // A sheet index past the end reaches the engine as a closure that
   // matches nothing, so the call would report a successful no-op recalc
   // and the caller would keep rendering stale values. Every other entry
   // point that takes a sheet rejects the same input.
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_recalc_viewport"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_rect(*viewport, "fm_sheet_recalc_viewport"); rc != 0) {
+  if (auto rc = check_sheet_rect(*viewport); rc != 0) {
     return rc;
   }
   // `SheetCellRange::sheet_id` is 16-bit; refuse an index it cannot hold
   // rather than recalculating a different sheet.
   if (sheet_index > 0xFFFFU) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_recalc_viewport: sheet_index exceeds 16-bit sheet id range",
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "sheet_index exceeds 16-bit sheet id range",
                              "sheet_index=" + std::to_string(sheet_index));
   }
   formulon::eval::SheetCellRange range;
@@ -423,7 +413,7 @@ extern "C" fm_status_t fm_workbook_set_iterative_progress(fm_workbook_t* wb, fm_
                                                           void* user_data) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_set_iterative_progress", "wb");
+    return null_argument("wb");
   }
   wb->iterative_progress_cb = cb;
   wb->iterative_progress_user_data = cb == nullptr ? nullptr : user_data;

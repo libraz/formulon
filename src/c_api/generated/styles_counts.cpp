@@ -17,14 +17,14 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
-using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::null_argument;
 
 extern "C" fm_status_t fm_workbook_get_border_count(const fm_workbook_t* wb, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_get_border_count: NULL argument");
+    return null_argument();
   }
   *out_count = wb->workbook().styles().borders.size();
   return 0;
@@ -33,8 +33,7 @@ extern "C" fm_status_t fm_workbook_get_border_count(const fm_workbook_t* wb, siz
 extern "C" fm_status_t fm_workbook_get_cell_xf_count(const fm_workbook_t* wb, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_get_cell_xf_count: NULL argument");
+    return null_argument();
   }
   *out_count = wb->workbook().styles().cell_xfs.size();
   return 0;
@@ -43,8 +42,7 @@ extern "C" fm_status_t fm_workbook_get_cell_xf_count(const fm_workbook_t* wb, si
 extern "C" fm_status_t fm_workbook_get_fill_count(const fm_workbook_t* wb, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_get_fill_count: NULL argument");
+    return null_argument();
   }
   *out_count = wb->workbook().styles().fills.size();
   return 0;
@@ -53,8 +51,7 @@ extern "C" fm_status_t fm_workbook_get_fill_count(const fm_workbook_t* wb, size_
 extern "C" fm_status_t fm_workbook_get_font_count(const fm_workbook_t* wb, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_get_font_count: NULL argument");
+    return null_argument();
   }
   *out_count = wb->workbook().styles().fonts.size();
   return 0;

@@ -28,6 +28,7 @@ using formulon::c_api::parts::check_cell_xf_index;
 using formulon::c_api::parts::check_column_span;
 using formulon::c_api::parts::check_finite_non_negative;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_limit;
 using formulon::c_api::parts::check_row_span;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
@@ -40,20 +41,18 @@ using formulon::c_api::parts::set_last_error;
 
 namespace {
 
-fm_status_t check_sheet_column_span(const fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
-                                    const char* fn) {
-  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+fm_status_t check_sheet_column_span(const fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  return check_column_span(first, last, fn);
+  return check_column_span(first, last);
 }
 
-fm_status_t check_sheet_row_span(const fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
-                                 const char* fn) {
-  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+fm_status_t check_sheet_row_span(const fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  return check_row_span(first, last, fn);
+  return check_row_span(first, last);
 }
 
 }  // namespace
@@ -62,9 +61,9 @@ extern "C" fm_status_t fm_sheet_get_column_override_count(const fm_workbook_t* w
                                                           size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return null_argument("fm_sheet_get_column_override_count");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_column_override_count"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   *out_count = wb->workbook().sheet(sheet_index).layout().columns.size();
@@ -75,13 +74,13 @@ extern "C" fm_status_t fm_sheet_get_column_override_at(const fm_workbook_t* wb, 
                                                        fm_column_layout_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return null_argument("fm_sheet_get_column_override_at");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_column_override_at"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const auto& cols = wb->workbook().sheet(sheet_index).layout().columns;
-  if (auto rc = check_index(idx, cols.size(), "fm_sheet_get_column_override_at", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, cols.size(), "index"); rc != 0) {
     return rc;
   }
   *out = fm_column_layout_t{};
@@ -100,9 +99,9 @@ extern "C" fm_status_t fm_sheet_get_column_override_at(const fm_workbook_t* wb, 
 extern "C" fm_status_t fm_sheet_get_row_override_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return null_argument("fm_sheet_get_row_override_count");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_row_override_count"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   *out_count = wb->workbook().sheet(sheet_index).layout().row_overrides.size();
@@ -113,13 +112,13 @@ extern "C" fm_status_t fm_sheet_get_row_override_at(const fm_workbook_t* wb, siz
                                                     fm_row_layout_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return null_argument("fm_sheet_get_row_override_at");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_row_override_at"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const auto& rows = wb->workbook().sheet(sheet_index).layout().row_overrides;
-  if (auto rc = check_index(idx, rows.size(), "fm_sheet_get_row_override_at", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, rows.size(), "index"); rc != 0) {
     return rc;
   }
   *out = fm_row_layout_t{};
@@ -138,10 +137,10 @@ extern "C" fm_status_t fm_sheet_get_row_override_at(const fm_workbook_t* wb, siz
 extern "C" fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                  double width) {
   clear_last_error();
-  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last, "fm_sheet_set_column_width"); rc != 0) {
+  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
-  if (auto rc = check_finite_non_negative(width, "fm_sheet_set_column_width", "width"); rc != 0) {
+  if (auto rc = check_finite_non_negative(width, "width"); rc != 0) {
     return rc;
   }
   overlay_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
@@ -155,7 +154,7 @@ extern "C" fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet
 extern "C" fm_status_t fm_sheet_clear_column_width(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
                                                    uint32_t last) {
   clear_last_error();
-  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last, "fm_sheet_clear_column_width"); rc != 0) {
+  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
   formulon::SheetLayout& layout = wb->workbook().sheet(sheet_index).mutable_layout();
@@ -170,7 +169,7 @@ extern "C" fm_status_t fm_sheet_clear_column_width(fm_workbook_t* wb, size_t she
 extern "C" fm_status_t fm_sheet_set_column_hidden(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                   int32_t hidden) {
   clear_last_error();
-  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last, "fm_sheet_set_column_hidden"); rc != 0) {
+  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
   overlay_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
@@ -181,10 +180,10 @@ extern "C" fm_status_t fm_sheet_set_column_hidden(fm_workbook_t* wb, size_t shee
 extern "C" fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                    uint8_t level) {
   clear_last_error();
-  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last, "fm_sheet_set_column_outline"); rc != 0) {
+  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
-  if (auto rc = check_index(level, kMaxOutlineLevel + 1U, "fm_sheet_set_column_outline", "level"); rc != 0) {
+  if (auto rc = check_limit(level, kMaxOutlineLevel + 1U, "level"); rc != 0) {
     return rc;
   }
   overlay_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
@@ -195,7 +194,7 @@ extern "C" fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t she
 extern "C" fm_status_t fm_sheet_set_column_collapsed(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
                                                      uint32_t last, int32_t collapsed) {
   clear_last_error();
-  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last, "fm_sheet_set_column_collapsed"); rc != 0) {
+  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
   formulon::SheetLayout& layout = wb->workbook().sheet(sheet_index).mutable_layout();
@@ -209,12 +208,11 @@ extern "C" fm_status_t fm_sheet_set_column_collapsed(fm_workbook_t* wb, size_t s
 
 extern "C" fm_status_t fm_sheet_set_column_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                  size_t xf_index) {
-  static constexpr const char* kFn = "fm_sheet_set_column_style";
   clear_last_error();
-  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last, kFn); rc != 0) {
+  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
-  if (auto rc = check_cell_xf_index(wb, xf_index, kFn); rc != 0) {
+  if (auto rc = check_cell_xf_index(wb, xf_index); rc != 0) {
     return rc;
   }
   formulon::set_column_style_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last, true,
@@ -224,9 +222,8 @@ extern "C" fm_status_t fm_sheet_set_column_style(fm_workbook_t* wb, size_t sheet
 
 extern "C" fm_status_t fm_sheet_clear_column_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
                                                    uint32_t last) {
-  static constexpr const char* kFn = "fm_sheet_clear_column_style";
   clear_last_error();
-  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last, kFn); rc != 0) {
+  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
   formulon::set_column_style_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last, false, 0U);
@@ -294,12 +291,12 @@ struct RowHeightEdit {
 // `custom` and as an automatic height's cached value otherwise; every other
 // row attribute is kept.
 fm_status_t store_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last, double height,
-                             bool custom, const char* fn) {
+                             bool custom) {
   clear_last_error();
-  if (auto rc = check_sheet_row_span(wb, sheet_index, first, last, fn); rc != 0) {
+  if (auto rc = check_sheet_row_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
-  if (auto rc = check_finite_non_negative(height, fn, "height"); rc != 0) {
+  if (auto rc = check_finite_non_negative(height, "height"); rc != 0) {
     return rc;
   }
   RowHeightEdit edit{height, custom};
@@ -324,18 +321,18 @@ struct RowHiddenEdit {
 
 extern "C" fm_status_t fm_sheet_set_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                double height) {
-  return store_row_height(wb, sheet_index, first, last, height, true, "fm_sheet_set_row_height");
+  return store_row_height(wb, sheet_index, first, last, height, true);
 }
 
 extern "C" fm_status_t fm_sheet_set_row_auto_height(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
                                                     uint32_t last, double height) {
-  return store_row_height(wb, sheet_index, first, last, height, false, "fm_sheet_set_row_auto_height");
+  return store_row_height(wb, sheet_index, first, last, height, false);
 }
 
 extern "C" fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                int32_t hidden) {
   clear_last_error();
-  if (auto rc = check_sheet_row_span(wb, sheet_index, first, last, "fm_sheet_set_row_hidden"); rc != 0) {
+  if (auto rc = check_sheet_row_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
   RowHiddenEdit edit{hidden != 0, false};
@@ -360,10 +357,10 @@ extern "C" fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_i
 extern "C" fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                 uint8_t level) {
   clear_last_error();
-  if (auto rc = check_sheet_row_span(wb, sheet_index, first, last, "fm_sheet_set_row_outline"); rc != 0) {
+  if (auto rc = check_sheet_row_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
-  if (auto rc = check_index(level, kMaxOutlineLevel + 1U, "fm_sheet_set_row_outline", "level"); rc != 0) {
+  if (auto rc = check_limit(level, kMaxOutlineLevel + 1U, "level"); rc != 0) {
     return rc;
   }
   overlay_row_span(
@@ -375,7 +372,7 @@ extern "C" fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_
 extern "C" fm_status_t fm_sheet_set_row_collapsed(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                   int32_t collapsed) {
   clear_last_error();
-  if (auto rc = check_sheet_row_span(wb, sheet_index, first, last, "fm_sheet_set_row_collapsed"); rc != 0) {
+  if (auto rc = check_sheet_row_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
   formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
@@ -389,12 +386,11 @@ extern "C" fm_status_t fm_sheet_set_row_collapsed(fm_workbook_t* wb, size_t shee
 
 extern "C" fm_status_t fm_sheet_set_row_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                               size_t xf_index) {
-  static constexpr const char* kFn = "fm_sheet_set_row_style";
   clear_last_error();
-  if (auto rc = check_sheet_row_span(wb, sheet_index, first, last, kFn); rc != 0) {
+  if (auto rc = check_sheet_row_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
-  if (auto rc = check_cell_xf_index(wb, xf_index, kFn); rc != 0) {
+  if (auto rc = check_cell_xf_index(wb, xf_index); rc != 0) {
     return rc;
   }
   formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
@@ -404,9 +400,8 @@ extern "C" fm_status_t fm_sheet_set_row_style(fm_workbook_t* wb, size_t sheet_in
 }
 
 extern "C" fm_status_t fm_sheet_clear_row_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last) {
-  static constexpr const char* kFn = "fm_sheet_clear_row_style";
   clear_last_error();
-  if (auto rc = check_sheet_row_span(wb, sheet_index, first, last, kFn); rc != 0) {
+  if (auto rc = check_sheet_row_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
   formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
@@ -418,14 +413,14 @@ namespace {
 
 // Validates a selection rect and copies it into the engine's form.
 fm_status_t resolve_style_rect(const fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* range,
-                               formulon::StyleRect* out, const char* fn) {
+                               formulon::StyleRect* out) {
   if (range == nullptr) {
-    return null_argument(fn);
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_rect(*range, fn); rc != 0) {
+  if (auto rc = check_sheet_rect(*range); rc != 0) {
     return rc;
   }
   out->first_row = range->first_row;
@@ -437,15 +432,15 @@ fm_status_t resolve_style_rect(const fm_workbook_t* wb, size_t sheet_index, cons
 
 fm_status_t range_style_bases_into(const fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* range,
                                    const uint32_t* excluded_rows, const uint32_t* excluded_cols, size_t excluded_count,
-                                   uint32_t* out_xfs, size_t cap, size_t* out_len, const char* fn) {
+                                   uint32_t* out_xfs, size_t cap, size_t* out_len) {
   clear_last_error();
   if (out_len == nullptr || (out_xfs == nullptr && cap > 0U) ||
       (excluded_count > 0U && (excluded_rows == nullptr || excluded_cols == nullptr))) {
-    return null_argument(fn);
+    return null_argument();
   }
   *out_len = 0U;
   formulon::StyleRect rect;
-  if (auto rc = resolve_style_rect(wb, sheet_index, range, &rect, fn); rc != 0) {
+  if (auto rc = resolve_style_rect(wb, sheet_index, range, &rect); rc != 0) {
     return rc;
   }
   std::vector<formulon::StyleCell> excluded(excluded_count);
@@ -466,8 +461,7 @@ fm_status_t range_style_bases_into(const fm_workbook_t* wb, size_t sheet_index, 
 extern "C" fm_status_t fm_sheet_get_range_style_bases(const fm_workbook_t* wb, size_t sheet_index,
                                                       const fm_cell_rect_t* range, uint32_t* out_xfs, size_t cap,
                                                       size_t* out_len) {
-  return range_style_bases_into(wb, sheet_index, range, nullptr, nullptr, 0U, out_xfs, cap, out_len,
-                                "fm_sheet_get_range_style_bases");
+  return range_style_bases_into(wb, sheet_index, range, nullptr, nullptr, 0U, out_xfs, cap, out_len);
 }
 
 extern "C" fm_status_t fm_sheet_get_range_style_bases_excluding(const fm_workbook_t* wb, size_t sheet_index,
@@ -476,18 +470,17 @@ extern "C" fm_status_t fm_sheet_get_range_style_bases_excluding(const fm_workboo
                                                                 const uint32_t* excluded_cols, size_t excluded_count,
                                                                 uint32_t* out_xfs, size_t cap, size_t* out_len) {
   return range_style_bases_into(wb, sheet_index, range, excluded_rows, excluded_cols, excluded_count, out_xfs, cap,
-                                out_len, "fm_sheet_get_range_style_bases_excluding");
+                                out_len);
 }
 
 extern "C" fm_status_t fm_sheet_remap_range_style(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* range,
                                                   const uint32_t* from_xfs, const uint32_t* to_xfs, size_t count) {
-  static constexpr const char* kFn = "fm_sheet_remap_range_style";
   clear_last_error();
   if (count > 0U && (from_xfs == nullptr || to_xfs == nullptr)) {
-    return null_argument(kFn);
+    return null_argument();
   }
   formulon::StyleRect rect;
-  if (auto rc = resolve_style_rect(wb, sheet_index, range, &rect, kFn); rc != 0) {
+  if (auto rc = resolve_style_rect(wb, sheet_index, range, &rect); rc != 0) {
     return rc;
   }
   std::vector<formulon::XfRemap> map(count);
@@ -500,7 +493,6 @@ extern "C" fm_status_t fm_sheet_remap_range_style(fm_workbook_t* wb, size_t shee
 extern "C" fm_status_t fm_sheet_snapshot_range_style(const fm_workbook_t* wb, size_t sheet_index,
                                                      const fm_cell_rect_t* range, uint8_t** out_bytes,
                                                      size_t* out_len) {
-  static constexpr const char* kFn = "fm_sheet_snapshot_range_style";
   clear_last_error();
   if (out_bytes != nullptr) {
     *out_bytes = nullptr;
@@ -509,10 +501,10 @@ extern "C" fm_status_t fm_sheet_snapshot_range_style(const fm_workbook_t* wb, si
     *out_len = 0U;
   }
   if (out_bytes == nullptr || out_len == nullptr) {
-    return null_argument(kFn);
+    return null_argument();
   }
   formulon::StyleRect rect;
-  if (auto rc = resolve_style_rect(wb, sheet_index, range, &rect, kFn); rc != 0) {
+  if (auto rc = resolve_style_rect(wb, sheet_index, range, &rect); rc != 0) {
     return rc;
   }
   auto bytes = wb->workbook().snapshot_range_style(sheet_index, rect);
@@ -525,12 +517,11 @@ extern "C" fm_status_t fm_sheet_snapshot_range_style(const fm_workbook_t* wb, si
 
 extern "C" fm_status_t fm_sheet_restore_range_style(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes,
                                                     size_t len) {
-  static constexpr const char* kFn = "fm_sheet_restore_range_style";
   clear_last_error();
   if (bytes == nullptr && len > 0U) {
-    return null_argument(kFn);
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   return finish_status(wb->workbook().restore_range_style(sheet_index, bytes, len));
@@ -538,7 +529,7 @@ extern "C" fm_status_t fm_sheet_restore_range_style(fm_workbook_t* wb, size_t sh
 
 extern "C" fm_status_t fm_sheet_clear_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last) {
   clear_last_error();
-  if (auto rc = check_sheet_row_span(wb, sheet_index, first, last, "fm_sheet_clear_row_height"); rc != 0) {
+  if (auto rc = check_sheet_row_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
   formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
@@ -554,9 +545,9 @@ extern "C" fm_status_t fm_sheet_get_format_defaults(const fm_workbook_t* wb, siz
                                                     fm_sheet_format_defaults_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return null_argument("fm_sheet_get_format_defaults");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_format_defaults"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const formulon::SheetFormatDefaults& defaults = wb->workbook().sheet(sheet_index).format_defaults();
@@ -579,25 +570,24 @@ extern "C" fm_status_t fm_sheet_set_format_defaults(fm_workbook_t* wb, size_t sh
                                                     const fm_sheet_format_defaults_t* defaults) {
   clear_last_error();
   if (defaults == nullptr) {
-    return null_argument("fm_sheet_set_format_defaults");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_format_defaults"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  constexpr const char* kApi = "fm_sheet_set_format_defaults";
   const bool has_col_width = defaults->has_default_col_width != 0;
   const bool has_row_height = defaults->has_default_row_height != 0;
   if (has_col_width) {
-    if (auto rc = check_finite_non_negative(defaults->default_col_width, kApi, "default_col_width"); rc != 0) {
+    if (auto rc = check_finite_non_negative(defaults->default_col_width, "default_col_width"); rc != 0) {
       return rc;
     }
   }
   if (has_row_height) {
-    if (auto rc = check_finite_non_negative(defaults->default_row_height, kApi, "default_row_height"); rc != 0) {
+    if (auto rc = check_finite_non_negative(defaults->default_row_height, "default_row_height"); rc != 0) {
       return rc;
     }
   }
-  if (auto rc = check_finite_non_negative(defaults->base_col_width, kApi, "base_col_width"); rc != 0) {
+  if (auto rc = check_finite_non_negative(defaults->base_col_width, "base_col_width"); rc != 0) {
     return rc;
   }
   formulon::SheetFormatDefaults& target = wb->workbook().sheet(sheet_index).mutable_format_defaults();

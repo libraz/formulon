@@ -22,10 +22,6 @@
 
 namespace formulon_node {
 
-/// Reads a `Value`-shaped JS object into `value`; `text` backs a text payload
-/// and must outlive the C call. A missing `kind` reads as blank.
-bool ReadValueSpec(CheckedSpecReader& reader, const Napi::Object& spec, std::string& text, fm_value_t& value);
-
 /// Reads the placement fields shared by `fm_image_insert_t`, `fm_drawing_anchor_t`
 /// and a chart's `placement`; only the default anchor kind differs by caller.
 template <typename Record>
@@ -86,7 +82,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
 
   // Lifecycle.
   Napi::Value Dispose(const Napi::CallbackInfo& info);
-  Napi::Value IsValid(const Napi::CallbackInfo& info);
+  /// Getter of the read-only `disposed` property: true once the handle is released.
+  Napi::Value Disposed(const Napi::CallbackInfo& info);
   Napi::Value MemoryUsage(const Napi::CallbackInfo& info);
 
   // Lambda text read.
@@ -97,14 +94,14 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value RecalcParallel(const Napi::CallbackInfo& info);
   Napi::Value PartialRecalc(const Napi::CallbackInfo& info);
   Napi::Value SetIterative(const Napi::CallbackInfo& info);
-  /// The stored iterative-calculation settings as `{status, enabled,
+  /// The stored iterative-calculation settings as `{enabled,
   /// maxIterations, maxChange}`. The cap and threshold are the stored
   /// values even while `enabled` is false, so a host can render Excel's
   /// iterative-calculation dialog without having written them first.
   Napi::Value GetIterative(const Napi::CallbackInfo& info);
   Napi::Value SetIterativeProgress(const Napi::CallbackInfo& info);
+  /// `save(format?)`: the workbook's bytes, as XLSX when `format` is omitted.
   Napi::Value Save(const Napi::CallbackInfo& info);
-  Napi::Value SaveAs(const Napi::CallbackInfo& info);
   Napi::Value SaveWithDiagnostics(const Napi::CallbackInfo& info);
   Napi::Value ReadDiagnostics(const Napi::CallbackInfo& info);
 
@@ -120,8 +117,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value Date1904(const Napi::CallbackInfo& info);
   Napi::Value SetDate1904(const Napi::CallbackInfo& info);
   /// Clock seam: `getPinnedNow()` returns `{year, ..., second}` or `null`;
-  /// `setPinnedNow(y, mo, d, h, mi, s)` and `clearPinnedNow()` return a
-  /// status. See `fm_workbook_set_pinned_now` for the accepted ranges.
+  /// `setPinnedNow(y, mo, d, h, mi, s)` and `clearPinnedNow()` return
+  /// nothing. See `fm_workbook_set_pinned_now` for the accepted ranges.
   Napi::Value PinnedNow(const Napi::CallbackInfo& info);
   Napi::Value SetPinnedNow(const Napi::CallbackInfo& info);
   Napi::Value ClearPinnedNow(const Napi::CallbackInfo& info);
@@ -141,6 +138,9 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SpillInfo(const Napi::CallbackInfo& info);
   Napi::Value ParseReference(const Napi::CallbackInfo& info);
   Napi::Value FormatReference(const Napi::CallbackInfo& info);
+  /// `getSheetIndex(name)`: the index of the sheet named `name` (ignoring
+  /// case), or `null` when no sheet has that name.
+  Napi::Value GetSheetIndex(const Napi::CallbackInfo& info);
   Napi::Value GetArrayFormula(const Napi::CallbackInfo& info);
   Napi::Value SetArrayFormula(const Napi::CallbackInfo& info);
 
@@ -167,8 +167,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value RenameSheet(const Napi::CallbackInfo& info);
   Napi::Value MoveSheet(const Napi::CallbackInfo& info);
   Napi::Value SheetCount(const Napi::CallbackInfo& info);
-  /// The active sheet (`activeTab` of the first `<workbookView>`) as
-  /// `{ status, index }`, and its setter.
+  /// The active sheet (`activeTab` of the first `<workbookView>`) as an
+  /// index, and its setter.
   Napi::Value ActiveSheet(const Napi::CallbackInfo& info);
   Napi::Value SetActiveSheet(const Napi::CallbackInfo& info);
   Napi::Value SheetName(const Napi::CallbackInfo& info);
@@ -275,7 +275,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotGetLayout(const Napi::CallbackInfo& info);
   Napi::Value PivotSetLayout(const Napi::CallbackInfo& info);
   /// Definition read-back; works for pivots created in-session and loaded
-  /// from a package alike. `pivotCacheId` returns `{ status, index: cacheId }`.
+  /// from a package alike. `pivotCacheId` returns the cache id.
   Napi::Value PivotCacheId(const Napi::CallbackInfo& info);
   Napi::Value PivotName(const Napi::CallbackInfo& info);
   Napi::Value PivotGetGrandTotals(const Napi::CallbackInfo& info);
@@ -385,7 +385,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetSheetTopLeft(const Napi::CallbackInfo& info);
   Napi::Value SetSheetPaneTopLeft(const Napi::CallbackInfo& info);
   Napi::Value SetSheetSplit(const Napi::CallbackInfo& info);
-  /// The active pane's selection as `{ status, activeRow, activeCol, ranges }`,
+  /// The active pane's selection as `{ activeRow, activeCol, ranges }`,
   /// and its setter taking `{ activeRow, activeCol, ranges }`.
   Napi::Value GetSheetSelection(const Napi::CallbackInfo& info);
   Napi::Value SetSheetSelection(const Napi::CallbackInfo& info);
@@ -645,44 +645,47 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
     }
   }
 
-  /// Runs `call(handle_)` and returns its status envelope, or the
-  /// destroyed-handle envelope when the wrapper no longer owns a workbook.
+  /// Runs `call(handle_)` for a method returning nothing: throws the call's
+  /// failure, or the disposed-workbook failure when the wrapper no longer
+  /// owns a workbook.
   template <typename Call>
   Napi::Value StatusCall(const Napi::CallbackInfo& info, Call&& call) {
     if (handle_ == nullptr) {
-      return NullHandleError(info.Env());
+      return ThrowInvalidHandle(info.Env());
     }
-    return MakeStatus(info.Env(), call(handle_));
+    return ValueOrThrow(info.Env(), call(handle_), info.Env().Undefined());
   }
 
   /// `StatusCall` for an add that returns the allocated index: `call(handle, out)`
-  /// writes it, and the result is an `{ status, index }` object.
+  /// writes it, and the method returns it as a number.
   template <typename Call>
   Napi::Value IndexCall(const Napi::CallbackInfo& info, Call&& call) {
+    Napi::Env env = info.Env();
     if (handle_ == nullptr) {
-      return MakeIndexResult(info.Env(), NullHandleError(info.Env()), 0);
+      return ThrowInvalidHandle(env);
     }
     std::size_t out = 0;
     const fm_status_t rc = call(handle_, &out);
-    return MakeIndexResult(info.Env(), rc, static_cast<uint32_t>(out));
+    return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(out)));
   }
 
-  /// Status entry for a C function `(wb, lead, args...)`: `info[0]` is the
-  /// leading index (sheet or cache id) and `info[1...]` convert through
+  /// Entry returning nothing for a C function `(wb, lead, args...)`: `info[0]`
+  /// is the leading index (sheet or cache id) and `info[1...]` convert through
   /// `ArgAs` to the parameter types.
   template <typename Lead, typename... Args>
   Napi::Value InvokeSheetCall(const Napi::CallbackInfo& info, fm_status_t (*fn)(fm_workbook_t*, Lead, Args...)) {
     return InvokeSheetCallImpl(info, fn, std::index_sequence_for<Args...>{});
   }
 
-  /// Status entry for `(sheet, spec:object)`. A missing or non-object spec
-  /// throws a `TypeError` carrying `usage`; `pull(reader, spec)` fills the
-  /// caller's record, and `apply(handle_)` runs only if every field read.
+  /// Entry returning nothing for `(sheet, spec:object)`. A missing or
+  /// non-object spec throws a `TypeError` carrying `usage`;
+  /// `pull(reader, spec)` fills the caller's record, and `apply(handle_)`
+  /// runs only if every field read.
   template <typename Pull, typename Apply>
   Napi::Value InvokeSheetSpec(const Napi::CallbackInfo& info, const char* usage, Pull&& pull, Apply&& apply) {
     Napi::Env env = info.Env();
     if (handle_ == nullptr) {
-      return NullHandleError(env);
+      return ThrowInvalidHandle(env);
     }
     Napi::Object spec;
     if (!ObjectArg(info, 1, &spec)) {
@@ -696,17 +699,17 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
       // call commits a default value for it.
       return env.Undefined();
     }
-    return MakeStatus(env, apply(handle_));
+    return ValueOrThrow(env, apply(handle_), env.Undefined());
   }
 
-  /// `{status, index}` entry adding a style-pool record: `pull(reader, record)`
-  /// fills the caller's record from the `info[0]` object, and
-  /// `add(handle_, &index)` stores it.
+  /// Entry adding a style-pool record and returning its index:
+  /// `pull(reader, record)` fills the caller's record from the `info[0]`
+  /// object, and `add(handle_, &index)` stores it.
   template <typename Pull, typename Add>
   Napi::Value AddStyleRecord(const Napi::CallbackInfo& info, Pull&& pull, Add&& add) {
     Napi::Env env = info.Env();
     if (handle_ == nullptr) {
-      return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
+      return ThrowInvalidHandle(env);
     }
     const Napi::Object record = ArgObject(info, 0);
     CheckedSpecReader reader(env);
@@ -716,27 +719,24 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
       // call commits a default value for it.
       return env.Undefined();
     }
-    std::size_t idx = 0;
-    const fm_status_t rc = add(handle_, &idx);
-    return MakeNumberFieldResult(env, rc, "index", static_cast<double>(idx));
+    std::size_t index = 0;
+    const fm_status_t rc = add(handle_, &index);
+    return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(index)));
   }
 
-  /// Object result `{status, ...}` for a getter: `call(handle_)` fills the
-  /// captured out-params, and `fill(out)` adds the payload on success only.
+  /// Record result of a getter: `call(handle_)` fills the captured
+  /// out-params, and `fill(out)` adds the record's fields once it succeeded.
   template <typename Call, typename Fill>
   Napi::Value StatusObject(const Napi::CallbackInfo& info, Call&& call, Fill&& fill) {
     Napi::Env env = info.Env();
-    Napi::Object out = Napi::Object::New(env);
     if (handle_ == nullptr) {
-      out.Set("status", NullHandleError(env));
-      return out;
+      return ThrowInvalidHandle(env);
     }
     const fm_status_t rc = call(handle_);
     if (rc != 0) {
-      out.Set("status", MakeErrorStatus(env, rc));
-      return out;
+      return ThrowStatus(env, rc);
     }
-    out.Set("status", MakeOkStatus(env));
+    Napi::Object out = Napi::Object::New(env);
     fill(out);
     return out;
   }
@@ -749,7 +749,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
 
   // Shared bodies for the per-sheet string accessors (the five raw
   // print-settings fragment pairs) and the two break
-  // enumerators. The getter returns the `{status, value}` StringResult.
+  // enumerators. The getter returns the string.
   using SheetStringGetFn = fm_status_t (*)(const fm_workbook_t*, size_t, const char**);
   using SheetStringSetFn = fm_status_t (*)(fm_workbook_t*, size_t, const char*);
   Napi::Value SheetStringGetter(const Napi::CallbackInfo& info, SheetStringGetFn getter);
@@ -772,8 +772,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   using CreateFn = fm_status_t (*)(fm_workbook_t**);
   /// Shared body of the `createDefault` / `createEmpty` factories.
   static Napi::Value CreateWith(const Napi::CallbackInfo& info, CreateFn create);
-  /// Wraps a factory's outcome as `{ status, value }`: the wrapper on
-  /// success, `null` (and the wrapper's handle cleared) on failure.
+  /// Returns the wrapper of a factory that succeeded; on failure clears the
+  /// wrapper's handle and throws the factory's status.
   static Napi::Value FactoryResult(Napi::Env env, Napi::Object jsobj, Workbook* wb, fm_status_t rc);
 
   /// Matches `fm_iterative_progress_cb`: the header-wide wide-POD boolean
@@ -797,18 +797,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   /// Applies an already measured footprint to V8's external-memory count.
   void ApplyExternalMemoryEstimate(Napi::Env env, size_t bytes);
 
-  /// Clears the record of a throwing progress callback and reports whether
-  /// it was set. The solver is only told "abort", which is
-  /// indistinguishable from a deliberate cancel, so the recalc entry
-  /// points consume this on the way out and report the throw instead of
-  /// returning success. The WASM binding reports the same status for the
-  /// same event.
-  bool TakeIterativeProgressThrew() {
-    const bool threw = iterative_progress_threw_;
-    iterative_progress_threw_ = false;
-    return threw;
-  }
-
   /// The JS property of this wrapper holding the iterative progress callback.
   /// Kept on the wrapper rather than in a persistent reference so that a
   /// callback closing over the workbook forms a cycle the collector can see.
@@ -819,9 +807,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   uint32_t active_calls_ = 0;
   /// Set while the iterative progress callback runs.
   bool in_iterative_progress_callback_ = false;
-  /// Set when the installed progress callback threw during the pass that
-  /// is still unwinding. Consumed by the recalc entry points.
-  bool iterative_progress_threw_ = false;
   /// Bytes currently attributed to this wrapper in V8's external-memory
   /// accounting; the baseline `SyncExternalMemory` computes its delta
   /// against.

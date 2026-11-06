@@ -22,6 +22,7 @@ NODE_DTS = REPO_ROOT / "packages" / "npm-native" / "index.d.ts"
 NODE_README = REPO_ROOT / "packages" / "npm-native" / "README.md"
 NODE_INDEX_MJS = REPO_ROOT / "packages" / "npm-native" / "index.mjs"
 NODE_DIST_DIR = REPO_ROOT / "packages" / "npm-native" / "dist"
+NODE_STAGE_MJS = REPO_ROOT / "packages" / "npm-native" / "scripts" / "stage.mjs"
 
 C_ABI_BASELINE = Path(__file__).resolve().parents[1] / "c_abi_baseline.txt"
 C_ABI_BREAKS = Path(__file__).resolve().parents[1] / "c_abi_breaks.txt"

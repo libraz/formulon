@@ -46,8 +46,8 @@ CLI binaries for `darwin-arm64`, `linux-x64` and `linux-arm64` are on [GitHub Re
 ```js
 import createFormulon from '@libraz/formulon';
 
-const Module = await createFormulon();
-console.log(Module.evalFormula('=SUM(1,2,3)').value.number); // 6
+const formulon = await createFormulon();
+console.log(formulon.evalFormula('=SUM(1,2,3)').number); // 6
 ```
 
 ```python
@@ -61,7 +61,7 @@ formulon eval '=SUM(1,2,3)'
 formulon recalc input.xlsx -o output.xlsx
 ```
 
-Loading, editing and saving workbooks are covered in [Recalculate a workbook](https://formulon.libraz.net/start/recalculate).
+Failures throw `FormulonError` in JavaScript and `FormulonError` subclasses in Python. Loading, editing and saving workbooks are covered in [Recalculate a workbook](https://formulon.libraz.net/start/recalculate).
 
 ## Switching locale profiles
 
@@ -72,7 +72,7 @@ wb.setExcelProfileId('mac-365-ja_JP'); // Python: wb.set_excel_profile_id(...)
 wb.recalc(); // a profile change marks formulas dirty
 ```
 
-The ids are `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}`. Every `mac-*` profile and `win-365-ja_JP` is measured against Excel; the other `win-*` profiles are estimated from the Mac measurements. The profile is not saved into the file, so apply it again after loading. `Workbook.createForProfile(id)` also gives a new workbook the fonts, style names and sheet names Excel uses in that locale. See [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles) and [Text comparison and sorting](https://formulon.libraz.net/compatibility/text-collation).
+The ids are `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}`. Every `mac-*` profile and `win-365-ja_JP` is measured against Excel; the other `win-*` profiles are estimated from the Mac measurements. The profile is not saved into the file, so apply it again after loading. `formulon.Workbook.createForProfile(id)` also gives a new workbook the fonts, style names and sheet names Excel uses in that locale. See [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles) and [Text comparison and sorting](https://formulon.libraz.net/compatibility/text-collation).
 
 ## Non-goals
 

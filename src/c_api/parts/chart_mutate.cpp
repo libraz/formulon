@@ -122,12 +122,12 @@ void ingest_title_ref(fm_workbook_t* wb, formulon::ChartTitle& title) {
 }
 
 /// Shared entry checks of the edit functions.
-fm_status_t edit_entry(const fm_workbook_t* wb, std::size_t sheet_index, const void* required, const char* api) {
+fm_status_t edit_entry(const fm_workbook_t* wb, std::size_t sheet_index, const void* required) {
   clear_last_error();
   if (required == nullptr) {
-    return null_argument(api);
+    return null_argument();
   }
-  return check_sheet_index(wb, sheet_index, api);
+  return check_sheet_index(wb, sheet_index);
 }
 
 }  // namespace
@@ -138,20 +138,19 @@ fm_status_t edit_entry(const fm_workbook_t* wb, std::size_t sheet_index, const v
 
 extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index, const fm_chart_insert_t* opts,
                                           uint32_t* out_object_id) {
-  constexpr const char* kApi = "fm_sheet_add_chart";
   if (out_object_id == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
-  if (auto rc = edit_entry(wb, sheet_index, opts, kApi); rc != 0) {
+  if (auto rc = edit_entry(wb, sheet_index, opts); rc != 0) {
     return rc;
   }
   if (opts->source == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
-  if (auto rc = check_utf8(kApi, {opts->source, opts->title, opts->placement.name, opts->placement.descr}); rc != 0) {
+  if (auto rc = check_utf8({opts->source, opts->title, opts->placement.name, opts->placement.descr}); rc != 0) {
     return rc;
   }
-  PatchReader r(kApi);
+  PatchReader r;
   r.enum_ok(opts->kind, formulon::ChartInsertKind::kDoughnut, "kind");
   r.enum_ok(opts->grouping, formulon::ChartGrouping::kStandard, "grouping");
   r.enum_ok(opts->direction, formulon::ChartSeriesDirection::kRows, "direction");
@@ -195,11 +194,10 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
 
 extern "C" fm_status_t fm_sheet_set_chart_type(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
                                                int32_t kind, int32_t grouping) {
-  constexpr const char* kApi = "fm_sheet_set_chart_type";
-  if (auto rc = edit_entry(wb, sheet_index, wb, kApi); rc != 0) {
+  if (auto rc = edit_entry(wb, sheet_index, wb); rc != 0) {
     return rc;
   }
-  PatchReader r(kApi);
+  PatchReader r;
   r.enum_ok(kind, formulon::ChartInsertKind::kDoughnut, "kind");
   r.enum_ok(grouping, formulon::ChartGrouping::kStandard, "grouping");
   if (r.status() != 0) {
@@ -212,14 +210,13 @@ extern "C" fm_status_t fm_sheet_set_chart_type(fm_workbook_t* wb, size_t sheet_i
 
 extern "C" fm_status_t fm_sheet_set_chart_title(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                 const fm_chart_title_t* title) {
-  constexpr const char* kApi = "fm_sheet_set_chart_title";
-  if (auto rc = edit_entry(wb, sheet_index, title, kApi); rc != 0) {
+  if (auto rc = edit_entry(wb, sheet_index, title); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(title->kind, FM_CHART_TITLE_AUTO, kApi, "kind"); rc != 0) {
+  if (auto rc = check_enum_domain(title->kind, FM_CHART_TITLE_AUTO, "kind"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8(kApi, {title->text, title->formula}); rc != 0) {
+  if (auto rc = check_utf8({title->text, title->formula}); rc != 0) {
     return rc;
   }
   formulon::ChartTitle model = title_of(*title);
@@ -229,14 +226,13 @@ extern "C" fm_status_t fm_sheet_set_chart_title(fm_workbook_t* wb, size_t sheet_
 
 extern "C" fm_status_t fm_sheet_set_chart_legend(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                  const fm_chart_legend_patch_t* legend) {
-  constexpr const char* kApi = "fm_sheet_set_chart_legend";
-  if (auto rc = edit_entry(wb, sheet_index, legend, kApi); rc != 0) {
+  if (auto rc = edit_entry(wb, sheet_index, legend); rc != 0) {
     return rc;
   }
   if (legend->hidden_series == nullptr && legend->hidden_series_count != 0) {
-    return null_argument(kApi);
+    return null_argument();
   }
-  PatchReader r(kApi);
+  PatchReader r;
   r.enum_ok(legend->position, formulon::ChartLegendPosition::kTopRight, "position");
   formulon::ChartLegendPatch model;
   model.position = static_cast<formulon::ChartLegendPosition>(legend->position);
@@ -254,11 +250,10 @@ extern "C" fm_status_t fm_sheet_set_chart_legend(fm_workbook_t* wb, size_t sheet
 
 extern "C" fm_status_t fm_sheet_set_chart_axis(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                uint32_t axis_id, const fm_chart_axis_patch_t* patch) {
-  constexpr const char* kApi = "fm_sheet_set_chart_axis";
-  if (auto rc = edit_entry(wb, sheet_index, patch, kApi); rc != 0) {
+  if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
     return rc;
   }
-  PatchReader r(kApi);
+  PatchReader r;
   formulon::ChartAxisPatch model;
   r.flag(patch->visible_op, patch->visible, model.visible, "visible_op");
   if (patch->title_op == FM_CHART_PATCH_SET) {
@@ -288,11 +283,10 @@ extern "C" fm_status_t fm_sheet_set_chart_axis(fm_workbook_t* wb, size_t sheet_i
 
 extern "C" fm_status_t fm_sheet_set_chart_display(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                   const fm_chart_display_patch_t* patch) {
-  constexpr const char* kApi = "fm_sheet_set_chart_display";
-  if (auto rc = edit_entry(wb, sheet_index, patch, kApi); rc != 0) {
+  if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
     return rc;
   }
-  PatchReader r(kApi);
+  PatchReader r;
   formulon::ChartDisplayPatch model;
   if (patch->blanks_as_op == FM_CHART_PATCH_SET && patch->blanks_as == FM_CHART_BLANKS_ABSENT) {
     r.fail("blanks_as", "cannot be set to ABSENT");
@@ -308,11 +302,10 @@ extern "C" fm_status_t fm_sheet_set_chart_display(fm_workbook_t* wb, size_t shee
 
 extern "C" fm_status_t fm_sheet_set_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
                                                  size_t series_index, const fm_chart_series_patch_t* patch) {
-  constexpr const char* kApi = "fm_sheet_set_chart_series";
-  if (auto rc = edit_entry(wb, sheet_index, patch, kApi); rc != 0) {
+  if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
     return rc;
   }
-  PatchReader r(kApi);
+  PatchReader r;
   formulon::ChartSeriesPatch model = read_series(r, *patch);
   if (r.status() != 0) {
     return r.status();
@@ -325,11 +318,10 @@ extern "C" fm_status_t fm_sheet_set_chart_series(fm_workbook_t* wb, size_t sheet
 extern "C" fm_status_t fm_sheet_set_chart_point(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
                                                 size_t series_index, size_t point_index,
                                                 const fm_chart_point_patch_t* patch) {
-  constexpr const char* kApi = "fm_sheet_set_chart_point";
-  if (auto rc = edit_entry(wb, sheet_index, patch, kApi); rc != 0) {
+  if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
     return rc;
   }
-  PatchReader r(kApi);
+  PatchReader r;
   formulon::ChartPointPatch model;
   model.fill = read_fill(r, patch->fill);
   model.line = read_line(r, patch->line);
@@ -345,11 +337,10 @@ extern "C" fm_status_t fm_sheet_set_chart_point(fm_workbook_t* wb, size_t sheet_
 
 extern "C" fm_status_t fm_sheet_set_chart_plot(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
                                                const fm_chart_plot_patch_t* patch) {
-  constexpr const char* kApi = "fm_sheet_set_chart_plot";
-  if (auto rc = edit_entry(wb, sheet_index, patch, kApi); rc != 0) {
+  if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
     return rc;
   }
-  PatchReader r(kApi);
+  PatchReader r;
   formulon::ChartPlotPatch model;
   r.optional(patch->gap_width_op, patch->gap_width, model.gap_width, "gap_width_op");
   r.optional(patch->overlap_op, patch->overlap, model.overlap, "overlap_op");
@@ -365,13 +356,12 @@ extern "C" fm_status_t fm_sheet_set_chart_plot(fm_workbook_t* wb, size_t sheet_i
 extern "C" fm_status_t fm_sheet_set_chart_filter(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                  const uint32_t* hidden_series, size_t hidden_series_count,
                                                  const uint32_t* hidden_categories, size_t hidden_category_count) {
-  constexpr const char* kApi = "fm_sheet_set_chart_filter";
-  if (auto rc = edit_entry(wb, sheet_index, wb, kApi); rc != 0) {
+  if (auto rc = edit_entry(wb, sheet_index, wb); rc != 0) {
     return rc;
   }
   if ((hidden_series == nullptr && hidden_series_count != 0) ||
       (hidden_categories == nullptr && hidden_category_count != 0)) {
-    return null_argument(kApi);
+    return null_argument();
   }
   std::vector<std::uint32_t> series;
   std::vector<std::uint32_t> categories;
@@ -386,14 +376,13 @@ extern "C" fm_status_t fm_sheet_set_chart_filter(fm_workbook_t* wb, size_t sheet
 
 extern "C" fm_status_t fm_sheet_add_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,
                                                  const fm_chart_series_patch_t* patch, size_t* out_series_index) {
-  constexpr const char* kApi = "fm_sheet_add_chart_series";
   if (out_series_index == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
-  if (auto rc = edit_entry(wb, sheet_index, patch, kApi); rc != 0) {
+  if (auto rc = edit_entry(wb, sheet_index, patch); rc != 0) {
     return rc;
   }
-  PatchReader r(kApi);
+  PatchReader r;
   formulon::ChartSeriesPatch model = read_series(r, *patch);
   if (r.status() != 0) {
     return r.status();
@@ -409,8 +398,7 @@ extern "C" fm_status_t fm_sheet_add_chart_series(fm_workbook_t* wb, size_t sheet
 
 extern "C" fm_status_t fm_sheet_remove_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                     size_t plot, size_t series_index) {
-  constexpr const char* kApi = "fm_sheet_remove_chart_series";
-  if (auto rc = edit_entry(wb, sheet_index, wb, kApi); rc != 0) {
+  if (auto rc = edit_entry(wb, sheet_index, wb); rc != 0) {
     return rc;
   }
   return finish_status(
@@ -420,14 +408,13 @@ extern "C" fm_status_t fm_sheet_remove_chart_series(fm_workbook_t* wb, size_t sh
 extern "C" fm_status_t fm_sheet_set_chart_source(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                  const char* source, int32_t direction, int32_t header_row,
                                                  int32_t header_column) {
-  constexpr const char* kApi = "fm_sheet_set_chart_source";
-  if (auto rc = edit_entry(wb, sheet_index, source, kApi); rc != 0) {
+  if (auto rc = edit_entry(wb, sheet_index, source); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8(kApi, {source}); rc != 0) {
+  if (auto rc = check_utf8({source}); rc != 0) {
     return rc;
   }
-  PatchReader r(kApi);
+  PatchReader r;
   r.enum_ok(direction, formulon::ChartSeriesDirection::kRows, "direction");
   r.enum_ok(header_row, formulon::ChartHeaderMode::kNo, "header_row");
   r.enum_ok(header_column, formulon::ChartHeaderMode::kNo, "header_column");

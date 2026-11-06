@@ -169,10 +169,10 @@ TEST(FormulonCApiFunctionMetadata, FunctionNamesAreSortedAndComplete) {
   }
 }
 
-TEST(FormulonCApiFunctionMetadata, NameAtOutOfRangeReturnsInvalidArgument) {
+TEST(FormulonCApiFunctionMetadata, NameAtOutOfRangeReturnsIndexOutOfRange) {
   const char* out = nullptr;
   fm_status_t rc = fm_get_function_name_at(static_cast<std::size_t>(-1), &out);
-  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(rc, FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 
 // Lazy-dispatch forms (XLOOKUP, SUMIFS, ...) and parser special forms (LET,

@@ -13,6 +13,7 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { FormulonError } from '../../packages/npm/common.mjs';
 import { registerCellGeometryDisplay } from './run_cell_geometry_display.mjs';
 import { registerCellsIo } from './run_cells_io.mjs';
 import { registerDrawing } from './run_drawing.mjs';
@@ -58,7 +59,7 @@ async function run() {
     postReplacement: null,
   };
   const probePositionalHook = (hookModule) => {
-    const wb = hookModule.Workbook.createDefault().value;
+    const wb = hookModule.Workbook.createDefault();
     try {
       wb.setNumber(0, 0, 0, 42);
       let threw = false;
@@ -67,12 +68,13 @@ async function run() {
       } catch (error) {
         threw = error instanceof RangeError;
       }
-      return { threw, a1: wb.getValue(0, 0, 0).value.number };
+      return { threw, a1: wb.getValue(0, 0, 0).number };
     } finally {
       wb.delete();
     }
   };
   const factoryOptions = {
+    FormulonError,
     preInit() {
       // preInit runs before Emscripten snapshots preRun. Replace that list
       // with a callback which replaces both later hooks, then let the guard's

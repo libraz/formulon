@@ -46,8 +46,8 @@ pip install formulon            # Python 3.9+
 ```js
 import createFormulon from '@libraz/formulon';
 
-const Module = await createFormulon();
-console.log(Module.evalFormula('=SUM(1,2,3)').value.number); // 6
+const formulon = await createFormulon();
+console.log(formulon.evalFormula('=SUM(1,2,3)').number); // 6
 ```
 
 ```python
@@ -61,7 +61,7 @@ formulon eval '=SUM(1,2,3)'
 formulon recalc input.xlsx -o output.xlsx
 ```
 
-ワークブックの読み込み、編集、保存は [ワークブックを再計算する](https://formulon.libraz.net/ja/start/recalculate) で説明しています。
+失敗時は、JavaScript では `FormulonError` が投げられ、Python では `FormulonError` のサブクラスが送出されます。ワークブックの読み込み、編集、保存は [ワークブックを再計算する](https://formulon.libraz.net/ja/start/recalculate) で説明しています。
 
 ## ロケールプロファイルの切り替え
 
@@ -72,7 +72,7 @@ wb.setExcelProfileId('mac-365-ja_JP'); // Python: wb.set_excel_profile_id(...)
 wb.recalc(); // a profile change marks formulas dirty
 ```
 
-プロファイル ID は `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` です。`mac-*` のすべてと `win-365-ja_JP` は Excel で測定したもので、それ以外の `win-*` は Mac での測定値からの推定です。プロファイルはファイルに保存されないため、読み込み後に設定し直してください。`Workbook.createForProfile(id)` を使うと、新しいブックのフォント、スタイル名、シート名も Excel がそのロケールで使うものになります。詳しくは [ロケールプロファイル](https://formulon.libraz.net/ja/compatibility/locale-profiles) と [テキストの比較と並べ替え](https://formulon.libraz.net/ja/compatibility/text-collation) を参照してください。
+プロファイル ID は `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` です。`mac-*` のすべてと `win-365-ja_JP` は Excel で測定したもので、それ以外の `win-*` は Mac での測定値からの推定です。プロファイルはファイルに保存されないため、読み込み後に設定し直してください。`formulon.Workbook.createForProfile(id)` を使うと、新しいブックのフォント、スタイル名、シート名も Excel がそのロケールで使うものになります。詳しくは [ロケールプロファイル](https://formulon.libraz.net/ja/compatibility/locale-profiles) と [テキストの比較と並べ替え](https://formulon.libraz.net/ja/compatibility/text-collation) を参照してください。
 
 ## 対象外
 

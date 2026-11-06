@@ -254,6 +254,8 @@ enum class FormulonErrorCode : int32_t {
   /// workbook holding more sheets than that could not address the excess
   /// ones without aliasing an existing sheet.
   kSheetCountLimitExceeded = 5053,
+  /// A non-sheet index addresses past the end of a counted collection.
+  kIndexOutOfRange = 5054,
 };
 
 /// Structured error payload returned by every fallible internal API.
@@ -548,6 +550,8 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kCannotRemoveLastSheet";
     case FormulonErrorCode::kSheetCountLimitExceeded:
       return "kSheetCountLimitExceeded";
+    case FormulonErrorCode::kIndexOutOfRange:
+      return "kIndexOutOfRange";
   }
   return "kUnknownError";
 }

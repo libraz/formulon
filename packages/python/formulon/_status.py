@@ -124,6 +124,7 @@ class StatusCode(IntEnum):
     INVALID_SHEET_NAME = 5051
     CANNOT_REMOVE_LAST_SHEET = 5052
     SHEET_COUNT_LIMIT_EXCEEDED = 5053
+    INDEX_OUT_OF_RANGE = 5054
 
 
 # Codes raised as `NotFoundError`.
@@ -132,6 +133,14 @@ NOT_FOUND_CODES = frozenset(
         StatusCode.NOT_FOUND,
         StatusCode.EVAL_LAMBDA_NOT_FOUND,
         StatusCode.PIVOT_FIELD_NOT_FOUND,
+    )
+)
+
+
+# Codes raised as `IndexOutOfRangeError`.
+INDEX_OUT_OF_RANGE_CODES = frozenset(
+    (
         StatusCode.SHEET_INDEX_OUT_OF_RANGE,
+        StatusCode.INDEX_OUT_OF_RANGE,
     )
 )

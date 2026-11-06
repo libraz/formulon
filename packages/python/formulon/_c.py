@@ -53,13 +53,15 @@ from typing import Optional, Tuple, Union
 
 import wasmtime
 
-from ._status import NOT_FOUND_CODES, StatusCode
+from ._status import INDEX_OUT_OF_RANGE_CODES, NOT_FOUND_CODES, StatusCode
 
 __all__ = [
     "LIB",
     "FormulonError",
+    "IndexOutOfRangeError",
     "InvalidArgumentError",
     "NotFoundError",
+    "WorkbookClosedError",
     "ValueKind",
     "decode_cstr",
     "fm_value_t_size",
@@ -147,25 +149,25 @@ def _sint(value: int, name: str, bits: int = 32) -> int:
 
 
 class FormulonError(Exception):
-    """Raised for host-side failures of the Formulon C ABI.
+    """Raised for host-side failures of the Formulon engine.
 
     Constructing ``FormulonError`` with a status that has a dedicated
-    subclass yields that subclass (:class:`InvalidArgumentError`,
-    :class:`NotFoundError`), so ``except ValueError`` / ``except
-    LookupError`` also catch the matching failures.
+    subclass yields that subclass (:class:`IndexOutOfRangeError`,
+    :class:`InvalidArgumentError`, :class:`NotFoundError`,
+    :class:`WorkbookClosedError`), so ``except IndexError`` / ``except
+    ValueError`` / ``except KeyError`` also catch the matching failures.
+
+    ``str(e)`` is the engine's message, followed by ``[context]`` when the
+    context is non-empty.
 
     Attributes:
-      code: the :class:`~formulon._status.StatusCode` member of the
-        ``fm_status_t`` (a plain ``int`` for a value the enum does not
-        list).
-      message: thread-local diagnostic message captured from
-        ``fm_get_last_error_message`` at the time the failure was detected.
-      context: optional context string captured from
-        ``fm_get_last_error_context``.
+      code: the :class:`~formulon.StatusCode` member of the failure (a plain
+        ``int`` for a value the enum does not list).
+      message: human-readable description of the failure.
+      context: structured ``key=value`` details; empty when there are none.
 
-    The message and context are copied out of the thread-local WASM
-    buffers eagerly, so they remain valid even after subsequent WASM
-    calls overwrite those buffers.
+    The message and context are copied out when the failure is detected, so
+    they stay valid whatever later calls do.
 
     Defined here rather than in :mod:`formulon.workbook` (which
     re-exports it) so the low-level export trampoline below can raise it
@@ -179,26 +181,27 @@ class FormulonError(Exception):
 
     def __new__(cls, status: int, *args: object, **kwargs: object) -> "FormulonError":
         if cls is FormulonError:
-            if status == StatusCode.INVALID_ARGUMENT:
+            if status in INDEX_OUT_OF_RANGE_CODES:
+                cls = IndexOutOfRangeError
+            elif status == StatusCode.INVALID_ARGUMENT:
                 cls = InvalidArgumentError
             elif status in NOT_FOUND_CODES:
                 cls = NotFoundError
+            elif status == StatusCode.BINDING_INVALID_HANDLE:
+                cls = WorkbookClosedError
         return super().__new__(cls)
 
     def __init__(
         self,
         status: int,
         *,
-        op: str = "",
         _diagnostic_override: Optional[Tuple[str, str]] = None,
         _host_only: bool = False,
     ) -> None:
         try:
             self.code = StatusCode(int(status))
-            name = self.code.name
         except ValueError:
             self.code = int(status)
-            name = "UNRECOGNIZED_STATUS"
         if _host_only:
             # A trap leaves the module instance poisoned (see `_wrapped`
             # below); reading the diagnostic buffers would call back into
@@ -211,21 +214,31 @@ class FormulonError(Exception):
             if _diagnostic_override is not None:
                 message, context = _diagnostic_override
             self.message, self.context = message, context
-        prefix = f"{op}: " if op else ""
-        text = f"{prefix}{name} ({int(status)})"
-        if self.message:
-            text += f": {self.message}"
+        text = self.message
         if self.context:
             text += f" [{self.context}]"
         super().__init__(text)
+
+    def __str__(self) -> str:
+        # `KeyError` (a base of `NotFoundError`) would otherwise render the
+        # message through `repr`.
+        return Exception.__str__(self)
 
 
 class InvalidArgumentError(FormulonError, ValueError):
     """The engine refused an argument (``StatusCode.INVALID_ARGUMENT``)."""
 
 
-class NotFoundError(FormulonError, LookupError):
-    """A named or indexed item does not exist (``NOT_FOUND`` and its variants)."""
+class NotFoundError(FormulonError, KeyError):
+    """A named item does not exist (``NOT_FOUND`` and its variants)."""
+
+
+class IndexOutOfRangeError(FormulonError, IndexError):
+    """An index is past the end of its collection (``SHEET_INDEX_OUT_OF_RANGE``, ``INDEX_OUT_OF_RANGE``)."""
+
+
+class WorkbookClosedError(FormulonError, ValueError):
+    """The workbook was used after :meth:`~formulon.Workbook.close` (``BINDING_INVALID_HANDLE``)."""
 
 
 # Generated from the current working-tree C header and WASM export manifest:
@@ -720,6 +733,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_workbook_set_theme_fonts",
     "fm_workbook_set_theme_script_font",
     "fm_workbook_get_sheet_name",
+    "fm_workbook_get_sheet_index",
     "fm_sheet_get_spill_info",
     "fm_workbook_get_table",
     "fm_workbook_add_table",
@@ -917,7 +931,6 @@ class _WasmInstance:
         if self._poison_message is not None:
             raise FormulonError(
                 StatusCode.INTERNAL_ERROR,
-                op=name,
                 _diagnostic_override=(self._poison_message, ""),
                 _host_only=True,
             )
@@ -932,7 +945,6 @@ class _WasmInstance:
             self._poison_message = str(trap)
             raise FormulonError(
                 StatusCode.INTERNAL_ERROR,
-                op=name,
                 _diagnostic_override=(self._poison_message, ""),
                 _host_only=True,
             ) from trap
@@ -982,8 +994,7 @@ class _WasmInstance:
                             )
                     return result
 
-            # Callers that derive a FormulonError's ``op`` prefix from
-            # ``fn.__name__`` must see the C ABI entry point, not this
+            # Tracebacks and reprs name the C ABI entry point, not this
             # binding-internal closure.
             _wrapped.__name__ = name
             _wrapped.__qualname__ = name

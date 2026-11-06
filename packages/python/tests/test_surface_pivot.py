@@ -284,14 +284,15 @@ class PivotMutatorTableTests(unittest.TestCase):
     # and returns its result; `expect(test, fixture, result)` reads it back.
     def _rows(self) -> Dict[str, Tuple[Any, Any, Any, Any]]:
         eq = self.assertEqual
+        IDX = StatusCode.INDEX_OUT_OF_RANGE
 
         def grid_is(expected: List[str]) -> Any:
             return lambda t, f, r: eq(f.grid(), expected)
 
-        def rejects(call: Any) -> None:
+        def rejects(call: Any, code: StatusCode = StatusCode.INVALID_ARGUMENT) -> None:
             with self.assertRaises(FormulonError) as caught:
                 call()
-            eq(caught.exception.code, 2)
+            eq(caught.exception.code, code)
 
         def cache_create(t: Any, f: _PivotFixture, r: int) -> None:
             eq(r, 77)
@@ -381,7 +382,7 @@ class PivotMutatorTableTests(unittest.TestCase):
             f.wb.set_pivot_field_date_group(0, f.pivot, f.date, PivotDatePeriod.YEARS, PivotCalendar.GREGORIAN)
 
         def number_format(t: Any, f: _PivotFixture, r: None) -> None:
-            rejects(lambda: f.wb.set_pivot_field_number_format(0, f.pivot, 99, "4"))
+            rejects(lambda: f.wb.set_pivot_field_number_format(0, f.pivot, 99, "4"), IDX)
             rejects(lambda: f.wb.set_pivot_field_number_format(0, f.pivot, f.amount, "0.00"))
             # A field's numFmtId is only observable in the part the writer emits.
             part = _package_part(f.wb.save(), "xl/pivotTables/pivotTable1.xml")
@@ -430,7 +431,7 @@ class PivotMutatorTableTests(unittest.TestCase):
             eq((o.show_error, o.error_caption), (True, "N/A"))
             eq((o.show_missing, o.missing_caption, o.indent, o.page_wrap), (True, "-", 3, 2))
             eq((o.alt_text, o.alt_text_summary, o.grand_total_caption), ("Title", "", "Sum"))
-            rejects(lambda: f.wb.set_pivot_options(0, 9, o))
+            rejects(lambda: f.wb.set_pivot_options(0, 9, o), IDX)
             rejects(lambda: f.wb.set_pivot_options(0, f.pivot, replace(o, indent=127)))
             rejects(lambda: f.wb.set_pivot_options(0, f.pivot, replace(o, page_wrap=256)))
             rejects(lambda: f.wb.set_pivot_options(0, f.pivot, replace(o, error_caption="x" * 256)))
@@ -477,30 +478,30 @@ class PivotMutatorTableTests(unittest.TestCase):
             item = f.wb.get_pivot_cache_calculated_item(f.cache, 0)
             eq((item.field_index, item.name, item.scoped), (f.region, "Both", False))
             eq(item.formula, "Region[East]+Region[West]")
-            rejects(lambda: f.wb.get_pivot_cache_calculated_item(f.cache, 5))
+            rejects(lambda: f.wb.get_pivot_cache_calculated_item(f.cache, 5), IDX)
             rejects(lambda: f.wb.add_pivot_cache_calculated_item(f.cache, f.region, "East", "East+West"))
             rejects(lambda: f.wb.add_pivot_cache_calculated_item(f.cache, f.region, "Other", ""))
-            rejects(lambda: f.wb.add_pivot_cache_calculated_item(f.cache, 99, "Other", "East+West"))
+            rejects(lambda: f.wb.add_pivot_cache_calculated_item(f.cache, 99, "Other", "East+West"), IDX)
             type_rejected(lambda: f.wb.add_pivot_cache_calculated_item(f.cache, f.region, None, "East+West"))
             eq(f.wb.get_pivot_cache_calculated_item_count(f.cache), 1)
 
         def calc_item_set_formula(t: Any, f: _PivotFixture, r: None) -> None:
             eq(f.wb.get_pivot_cache_calculated_item(f.cache, 0).formula, "Region[East]*2")
-            rejects(lambda: f.wb.set_pivot_cache_calculated_item_formula(f.cache, 5, "East*2"))
+            rejects(lambda: f.wb.set_pivot_cache_calculated_item_formula(f.cache, 5, "East*2"), IDX)
             type_rejected(lambda: f.wb.set_pivot_cache_calculated_item_formula(f.cache, 0, 2))
 
         def calc_item_move(t: Any, f: _PivotFixture, r: None) -> None:
             eq([f.wb.get_pivot_cache_calculated_item(f.cache, i).name for i in (0, 1)], ["Diff", "Both"])
-            rejects(lambda: f.wb.move_pivot_cache_calculated_item(f.cache, 0, 5))
+            rejects(lambda: f.wb.move_pivot_cache_calculated_item(f.cache, 0, 5), IDX)
             type_rejected(lambda: f.wb.move_pivot_cache_calculated_item(f.cache, 0, "1"))
 
         def calc_item_remove(t: Any, f: _PivotFixture, r: None) -> None:
             eq(f.wb.get_pivot_cache_calculated_item_count(f.cache), 0)
-            rejects(lambda: f.wb.remove_pivot_cache_calculated_item(f.cache, 0))
+            rejects(lambda: f.wb.remove_pivot_cache_calculated_item(f.cache, 0), IDX)
 
         def custom_name(t: Any, f: _PivotFixture, r: None) -> None:
             eq(f.wb.get_pivot_field(0, f.pivot, f.region).custom_name, "Area")
-            rejects(lambda: f.wb.set_pivot_field_custom_name(0, f.pivot, 99, "x"))
+            rejects(lambda: f.wb.set_pivot_field_custom_name(0, f.pivot, 99, "x"), IDX)
             rejects(lambda: f.wb.set_pivot_field_custom_name(0, f.pivot, f.region, "Product"))
             rejects(lambda: f.wb.set_pivot_field_custom_name(0, f.pivot, f.region, "x" * 256))
             type_rejected(lambda: f.wb.set_pivot_field_custom_name(0, f.pivot, f.region, 5))
@@ -513,8 +514,8 @@ class PivotMutatorTableTests(unittest.TestCase):
 
         def project(t: Any, f: _PivotFixture, r: None) -> None:
             eq(f.wb.is_pivot_projection_pending(0, f.pivot), False)
-            rejects(lambda: f.wb.project_pivot(0, 9))
-            rejects(lambda: f.wb.is_pivot_projection_pending(0, 9))
+            rejects(lambda: f.wb.project_pivot(0, 9), IDX)
+            rejects(lambda: f.wb.is_pivot_projection_pending(0, 9), IDX)
 
         W = PivotAggregation
         return {
@@ -608,7 +609,7 @@ class PivotMutatorTableTests(unittest.TestCase):
                 lambda t, f, r: (
                     eq(f.wb.get_pivot_field(0, f.pivot, f.region).show_all, True),
                     eq(f.wb.get_pivot_field(0, f.pivot, f.product).show_all, False),
-                    rejects(lambda: f.wb.set_pivot_field_show_all(0, f.pivot, 99, True)),
+                    rejects(lambda: f.wb.set_pivot_field_show_all(0, f.pivot, 99, True), IDX),
                     type_rejected(lambda: f.wb.set_pivot_field_show_all(0, f.pivot, "0", False)),
                     eq(f.wb.get_pivot_field(0, f.pivot, f.region).show_all, True),
                 ),
@@ -944,7 +945,7 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 lambda t, f, r: (
                     eq(f.wb.get_pivot_field(0, f.pivot, f.region).default_subtotal, False),
-                    rejects(lambda: f.wb.set_pivot_field_default_subtotal(0, f.pivot, 99, True)),
+                    rejects(lambda: f.wb.set_pivot_field_default_subtotal(0, f.pivot, 99, True), IDX),
                 ),
             ),
             "set_pivot_field_insert_blank_row": (
@@ -953,7 +954,7 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 lambda t, f, r: (
                     eq(f.wb.get_pivot_field(0, f.pivot, f.region).insert_blank_row, True),
-                    rejects(lambda: f.wb.set_pivot_field_insert_blank_row(0, f.pivot, 99, True)),
+                    rejects(lambda: f.wb.set_pivot_field_insert_blank_row(0, f.pivot, 99, True), IDX),
                 ),
             ),
             "set_pivot_field_fill_down_labels": (
@@ -962,7 +963,7 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 lambda t, f, r: (
                     eq(f.wb.get_pivot_field(0, f.pivot, f.region).fill_down_labels, True),
-                    rejects(lambda: f.wb.set_pivot_field_fill_down_labels(0, f.pivot, 99, True)),
+                    rejects(lambda: f.wb.set_pivot_field_fill_down_labels(0, f.pivot, 99, True), IDX),
                 ),
             ),
             "set_pivot_field_show_detail": (
@@ -973,7 +974,7 @@ class PivotMutatorTableTests(unittest.TestCase):
                     eq(
                         [f.wb.get_pivot_field_item(0, f.pivot, f.region, i).show_detail for i in (0, 1)], [False, False]
                     ),
-                    rejects(lambda: f.wb.set_pivot_field_show_detail(0, f.pivot, 99, False)),
+                    rejects(lambda: f.wb.set_pivot_field_show_detail(0, f.pivot, 99, False), IDX),
                 ),
             ),
             "set_pivot_field_item_show_detail": (
@@ -982,7 +983,7 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 lambda t, f, r: (
                     eq([f.wb.get_pivot_field_item(0, f.pivot, f.region, i).show_detail for i in (0, 1)], [True, False]),
-                    rejects(lambda: f.wb.set_pivot_field_item_show_detail(0, f.pivot, f.region, 9, False)),
+                    rejects(lambda: f.wb.set_pivot_field_item_show_detail(0, f.pivot, f.region, 9, False), IDX),
                 ),
             ),
             "set_pivot_field_item_caption": (
@@ -994,7 +995,7 @@ class PivotMutatorTableTests(unittest.TestCase):
                     eq(f.wb.get_pivot_field_item(0, f.pivot, f.region, 1).caption, None),
                     f.wb.set_pivot_field_item_caption(0, f.pivot, f.region, 0, None),
                     eq(f.wb.get_pivot_field_item(0, f.pivot, f.region, 0).caption, None),
-                    rejects(lambda: f.wb.set_pivot_field_item_caption(0, f.pivot, f.region, 9, "x")),
+                    rejects(lambda: f.wb.set_pivot_field_item_caption(0, f.pivot, f.region, 9, "x"), IDX),
                     rejects(lambda: f.wb.set_pivot_field_item_caption(0, f.pivot, f.region, 0, "West")),
                 ),
             ),
@@ -1193,7 +1194,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
     def test_out_of_range_indices_raise(self) -> None:
         with Workbook.create_default() as wb:
             f = _PivotFixture(wb)
-            invalid, bad_sheet = StatusCode.INVALID_ARGUMENT, StatusCode.SHEET_INDEX_OUT_OF_RANGE
+            invalid, bad_sheet = StatusCode.INDEX_OUT_OF_RANGE, StatusCode.SHEET_INDEX_OUT_OF_RANGE
             for call, code in (
                 (lambda: wb.get_pivot_cache_id(0, 9), invalid),
                 (lambda: wb.get_pivot_name(0, 9), invalid),
@@ -1242,15 +1243,15 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
     def test_default_name_rejects_bad_arguments(self) -> None:
         with Workbook.create_default() as wb:
             f = _PivotFixture(wb)
-            for args in (
-                (0, 9, f.amount, 0),
-                (0, f.pivot, 99, 0),
-                (0, f.pivot, f.amount, 99),
-                (0, f.pivot, f.amount, 0, 5),
+            for args, code in (
+                ((0, 9, f.amount, 0), StatusCode.INDEX_OUT_OF_RANGE),
+                ((0, f.pivot, 99, 0), StatusCode.INDEX_OUT_OF_RANGE),
+                ((0, f.pivot, f.amount, 99), StatusCode.INVALID_ARGUMENT),
+                ((0, f.pivot, f.amount, 0, 5), StatusCode.INDEX_OUT_OF_RANGE),
             ):
                 with self.assertRaises(FormulonError) as caught:
                     wb.get_pivot_data_field_default_name(*args)
-                self.assertEqual(caught.exception.code, 2)
+                self.assertEqual(caught.exception.code, code)
             with self.assertRaises(TypeError):
                 wb.get_pivot_data_field_default_name(0, f.pivot, "0", 0)
 

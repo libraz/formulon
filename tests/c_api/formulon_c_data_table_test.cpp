@@ -156,7 +156,7 @@ TEST(FormulonCApiDataTable, RemoveBlanksTheResultCells) {
   fm_data_table_t info{};
   ASSERT_EQ(fm_sheet_get_data_table(wb.handle, 0, 3, 1, &present, &info), 0);
   EXPECT_EQ(present, 0);
-  EXPECT_EQ(fm_sheet_remove_data_table(wb.handle, 0, 4, 1), kDataTableInvalid);
+  EXPECT_EQ(fm_sheet_remove_data_table(wb.handle, 0, 4, 1), FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_sheet_set_number(wb.handle, 0, 3, 1, 7.0), 0);
 }
 

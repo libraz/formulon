@@ -495,7 +495,7 @@ TEST(FormulonCApiPivotCalc, CalculatedFieldArgumentBoundaries) {
     EXPECT_EQ(fm_workbook_remove_pivot_cache_calculated_field(wb.handle, cache, index), kInvalidArgument) << index;
   }
   const char* formula = nullptr;
-  EXPECT_EQ(fm_workbook_get_pivot_cache_field_formula(wb.handle, cache, 99U, &formula), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_get_pivot_cache_field_formula(wb.handle, cache, 99U, &formula), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_workbook_get_pivot_cache_field_formula(wb.handle, cache, 0U, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_get_pivot_cache_field_formula(nullptr, cache, 0U, &formula), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_set_pivot_cache_calculated_field_formula(wb.handle, cache, out, nullptr), kBindingNullPointer);
@@ -752,7 +752,7 @@ TEST(FormulonCApiPivotCalc, CalculatedItemArgumentBoundaries) {
       fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache + 100U, kRegion, "X", "North", ignored_index()),
       kInvalidArgument);
   EXPECT_EQ(fm_workbook_add_pivot_cache_calculated_item(wb.handle, cache, 99U, "X", "North", ignored_index()),
-            kInvalidArgument);
+            FM_STATUS_INDEX_OUT_OF_RANGE);
   // Reserved, bracketed and existing item names.
   for (const char* name : {"All", "Blank", "X[1]", "north", "South"}) {
     EXPECT_EQ(add(name, "North"), kInvalidArgument) << name;
@@ -768,11 +768,13 @@ TEST(FormulonCApiPivotCalc, CalculatedItemArgumentBoundaries) {
   // Index edges of the other entry points.
   fm_pivot_calculated_item_t item{};
   for (const std::size_t index : {std::size_t{1}, std::size_t{0x80000000U}, static_cast<std::size_t>(0x100000000ULL)}) {
-    EXPECT_EQ(fm_workbook_get_pivot_cache_calculated_item(wb.handle, cache, index, &item), kInvalidArgument) << index;
-    EXPECT_EQ(fm_workbook_set_pivot_cache_calculated_item_formula(wb.handle, cache, index, "North"), kInvalidArgument);
-    EXPECT_EQ(fm_workbook_move_pivot_cache_calculated_item(wb.handle, cache, index, 0U), kInvalidArgument);
-    EXPECT_EQ(fm_workbook_move_pivot_cache_calculated_item(wb.handle, cache, 0U, index), kInvalidArgument);
-    EXPECT_EQ(fm_workbook_remove_pivot_cache_calculated_item(wb.handle, cache, index), kInvalidArgument);
+    EXPECT_EQ(fm_workbook_get_pivot_cache_calculated_item(wb.handle, cache, index, &item), FM_STATUS_INDEX_OUT_OF_RANGE)
+        << index;
+    EXPECT_EQ(fm_workbook_set_pivot_cache_calculated_item_formula(wb.handle, cache, index, "North"),
+              FM_STATUS_INDEX_OUT_OF_RANGE);
+    EXPECT_EQ(fm_workbook_move_pivot_cache_calculated_item(wb.handle, cache, index, 0U), FM_STATUS_INDEX_OUT_OF_RANGE);
+    EXPECT_EQ(fm_workbook_move_pivot_cache_calculated_item(wb.handle, cache, 0U, index), FM_STATUS_INDEX_OUT_OF_RANGE);
+    EXPECT_EQ(fm_workbook_remove_pivot_cache_calculated_item(wb.handle, cache, index), FM_STATUS_INDEX_OUT_OF_RANGE);
   }
   std::size_t count = 0;
   EXPECT_EQ(fm_workbook_get_pivot_cache_calculated_item_count(nullptr, cache, &count), kBindingNullPointer);

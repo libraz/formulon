@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { StatusCode } from '../../packages/npm/common.mjs';
+import { expectFailure } from './smoke_support.mjs';
 
 const RANGE = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
 
@@ -36,41 +38,39 @@ export function registerPositional(Module, test, hookProbe) {
   }
 
   test('WASM uint32 positions reject coercion and preserve the cell', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
-      assert.ok(wb.setNumber(0, 0, 0, 42).ok);
+      wb.setNumber(0, 0, 0, 42);
       for (const value of [2 ** 32, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
         expectRangeError(() => wb.setNumber(value, 0, 0, 7));
-        assert.equal(wb.getValue(0, 0, 0).value.number, 42);
+        assert.equal(wb.getValue(0, 0, 0).number, 42);
       }
       expectTypeError(() => wb.setNumber(Symbol('sheet'), 0, 0, 7));
-      assert.equal(wb.getValue(0, 0, 0).value.number, 42);
+      assert.equal(wb.getValue(0, 0, 0).number, 42);
 
       // A valid but out-of-range sheet remains a native status failure. This
       // distinguishes the guard from the engine's own sheet lookup.
-      const native = wb.setNumber(1, 0, 0, 7);
-      assert.equal(native.ok, false);
-      assert.equal(wb.getValue(0, 0, 0).value.number, 42);
+      expectFailure(() => wb.setNumber(1, 0, 0, 7));
+      assert.equal(wb.getValue(0, 0, 0).number, 42);
     } finally {
       wb.delete();
     }
   });
 
   test('WASM signed and string positions reject symbols and out-of-range values', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
       for (const value of [2 ** 31, -(2 ** 31) - 1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
         expectRangeError(() => wb.setError(0, 0, 0, value));
       }
       expectTypeError(() => wb.setError(0, 0, 0, Symbol('error')));
       expectTypeError(() => wb.setText(0, 0, 0, Symbol('text')));
-      assert.ok(wb.setText(0, 0, 0, 'valid').ok);
+      wb.setText(0, 0, 0, 'valid');
 
-      const errorControl = wb.setError(1, 0, 0, -1);
-      assert.equal(typeof errorControl.ok, 'boolean');
+      expectFailure(() => wb.setError(1, 0, 0, -1), StatusCode.SheetIndexOutOfRange);
       assert.equal(typeof Module.getStatusName(-1), 'string');
       assert.equal(typeof Module.getErrorDisplayName(-1), 'string');
-      assert.equal(typeof Module.setLogMinLevel(-1).ok, 'boolean');
+      expectFailure(() => Module.setLogMinLevel(-1), StatusCode.InvalidArgument);
       expectTypeError(() => Module.getStatusName(Symbol('status')));
       expectTypeError(() => Module.getErrorDisplayName(Symbol('error')));
       expectTypeError(() => Module.setLogMinLevel(Symbol('level')));
@@ -89,14 +89,13 @@ export function registerPositional(Module, test, hookProbe) {
       }),
     );
     const result = Module.evalFormula('=1+1');
-    assert.equal(result.status.ok, true);
-    assert.equal(result.value.number, 2);
+    assert.equal(result.number, 2);
   });
 
   test('WASM paging positions reject invalid cursors and retain nullish defaults', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
-      assert.ok(wb.setNumber(0, 0, 0, 42).ok);
+      wb.setNumber(0, 0, 0, 42);
       for (const value of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53, 2 ** 64]) {
         expectRangeError(() => wb.getCellsInRange(0, RANGE, value, 1));
         expectRangeError(() => wb.getCellsInRange(0, RANGE, 0, value));
@@ -106,18 +105,18 @@ export function registerPositional(Module, test, hookProbe) {
       expectTypeError(() => wb.getCellsInRange(0, RANGE, Symbol('cursor'), 1));
       expectTypeError(() => wb.getInvalidCells(0, Symbol('cursor'), 1));
 
-      assert.equal(wb.getCellsInRange(0, RANGE, null, null).status.ok, true);
-      assert.equal(wb.getCellsInRange(0, RANGE, undefined, undefined).status.ok, true);
-      assert.equal(wb.getInvalidCells(0, null, null).status.ok, true);
-      assert.equal(wb.getInvalidCells(0, undefined, undefined).status.ok, true);
-      assert.equal(wb.getValue(0, 0, 0).value.number, 42);
+      wb.getCellsInRange(0, RANGE, null, null);
+      wb.getCellsInRange(0, RANGE, undefined, undefined);
+      wb.getInvalidCells(0, null, null);
+      wb.getInvalidCells(0, undefined, undefined);
+      assert.equal(wb.getValue(0, 0, 0).number, 42);
     } finally {
       wb.delete();
     }
   });
 
   test('WASM-only table and auto-filter positions are guarded', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
       for (const method of ['removeTable', 'updateTable', 'getAutoFilterXml']) {
         expectRangeError(() => wb[method](2 ** 32, {}));
@@ -125,10 +124,8 @@ export function registerPositional(Module, test, hookProbe) {
       expectRangeError(() => wb.setAutoFilterXml(2 ** 32, ''));
       expectTypeError(() => wb.setAutoFilterXml(0, Symbol('xml')));
 
-      const got = wb.getAutoFilterXml(0);
-      assert.equal(typeof got.status.ok, 'boolean');
-      assert.equal(typeof got.value, 'string');
-      assert.equal(typeof wb.setAutoFilterXml(0, '').ok, 'boolean');
+      assert.equal(typeof wb.getAutoFilterXml(0), 'string');
+      wb.setAutoFilterXml(0, '');
     } finally {
       wb.delete();
     }
@@ -139,23 +136,23 @@ export function registerPositional(Module, test, hookProbe) {
     assert.equal(descriptor.enumerable, true);
     assert.equal(descriptor.writable, true);
     assert.equal(descriptor.configurable, true);
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
       const detached = wb.setNumber;
       assert.throws(() => detached(0, 0, 0, 7));
       const forged = Object.create(Module.Workbook.prototype);
       assert.throws(() => forged.setNumber(0, 0, 0, 7));
-      assert.equal(wb.setNumber.call(wb, 0, 0, 0, 42).ok, true);
-      assert.equal(wb.getValue(0, 0, 0).value.number, 42);
+      wb.setNumber.call(wb, 0, 0, 0, 42);
+      assert.equal(wb.getValue(0, 0, 0).number, 42);
     } finally {
       wb.delete();
     }
   });
 
   test('WASM overload leaves validate positions and track active Workbook calls', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
-      assert.ok(wb.setNumber(0, 0, 0, 42).ok);
+      wb.setNumber(0, 0, 0, 42);
       const leaf = (name, argCount) => {
         const table = Module.Workbook.prototype[name].overloadTable;
         assert.ok(Array.isArray(table), `${name} overload table missing`);
@@ -170,11 +167,11 @@ export function registerPositional(Module, test, hookProbe) {
       expectRangeError(() => getCellsLeaf.call(wb, 0, RANGE, 2 ** 64, 1));
       expectRangeError(() => listInvalidLeaf.call(wb, 0, -1, 1));
       expectRangeError(() => insertImageLeaf.call(wb, 2 ** 32, new Uint8Array(), {}));
-      assert.equal(wb.getValue(0, 0, 0).value.number, 42);
+      assert.equal(wb.getValue(0, 0, 0).number, 42);
 
-      assert.equal(wb.getCellsInRange(0, RANGE, 0, 1).status.ok, true);
-      assert.equal(wb.getInvalidCells(0, 0, 1).status.ok, true);
-      assert.equal(typeof wb.addImage(0, new Uint8Array(), {}).status.ok, 'boolean');
+      wb.getCellsInRange(0, RANGE, 0, 1);
+      wb.getInvalidCells(0, 0, 1);
+      expectFailure(() => wb.addImage(0, new Uint8Array(), {}), StatusCode.BindingNullPointer);
 
       const nestedRange = {};
       Object.defineProperties(nestedRange, {
@@ -193,7 +190,7 @@ export function registerPositional(Module, test, hookProbe) {
         message: /cannot dispose Workbook during an active method call/,
       });
       assert.equal(wb.isDeleted(), false);
-      assert.equal(wb.getValue(0, 0, 0).value.number, 42);
+      assert.equal(wb.getValue(0, 0, 0).number, 42);
     } finally {
       if (!wb.isDeleted()) wb.delete();
     }
@@ -201,9 +198,9 @@ export function registerPositional(Module, test, hookProbe) {
 
   test('WASM guards reject reentrant Workbook deletion during nested reads', () => {
     for (const lifecycle of ['delete', 'deleteLater', Symbol.dispose]) {
-      const wb = Module.Workbook.createDefault().value;
+      const wb = Module.Workbook.createDefault();
       try {
-        const before = wb.getCellXfCount().value;
+        const before = wb.getCellXfCount();
         const spec = {};
         Object.defineProperty(spec, 'horizontalAlign', {
           get() {
@@ -216,7 +213,7 @@ export function registerPositional(Module, test, hookProbe) {
           /cannot dispose Workbook during an active method call/,
           `${String(lifecycle)} unexpectedly succeeded`,
         );
-        assert.equal(wb.getCellXfCount().value, before);
+        assert.equal(wb.getCellXfCount(), before);
         assert.equal(wb.isDeleted(), false);
       } finally {
         deleteAfterLifecycleProbe(wb, lifecycle);
@@ -226,12 +223,12 @@ export function registerPositional(Module, test, hookProbe) {
 
   test('WASM lifecycle guards cover inherited descriptor calls during nested reads', () => {
     for (const lifecycle of ['delete', 'deleteLater', Symbol.dispose]) {
-      const wb = Module.Workbook.createDefault().value;
+      const wb = Module.Workbook.createDefault();
       const inherited = Object.getPrototypeOf(Object.getPrototypeOf(wb));
       const descriptor = Object.getOwnPropertyDescriptor(inherited, lifecycle);
       assert.equal(typeof descriptor?.value, 'function', `${String(lifecycle)} descriptor missing`);
       try {
-        const before = wb.getCellXfCount().value;
+        const before = wb.getCellXfCount();
         const spec = {};
         Object.defineProperty(spec, 'horizontalAlign', {
           get() {
@@ -244,7 +241,7 @@ export function registerPositional(Module, test, hookProbe) {
           /cannot dispose Workbook during an active method call/,
           `${String(lifecycle)} inherited call unexpectedly succeeded`,
         );
-        assert.equal(wb.getCellXfCount().value, before);
+        assert.equal(wb.getCellXfCount(), before);
         assert.equal(wb.isDeleted(), false);
       } finally {
         deleteAfterLifecycleProbe(wb, lifecycle);
@@ -253,21 +250,21 @@ export function registerPositional(Module, test, hookProbe) {
   });
 
   test('WASM Workbook [Symbol.dispose] is dispose(): the handle goes, the wrapper stays', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     assert.equal(wb[Symbol.dispose], wb.dispose);
     wb[Symbol.dispose]();
     wb[Symbol.dispose]();
-    assert.equal(wb.isValid(), false);
+    assert.equal(wb.disposed, true);
     assert.equal(wb.isDeleted(), false);
-    assert.equal(wb.getSheetCount().status.code, 7000);
+    expectFailure(() => wb.getSheetCount(), StatusCode.BindingInvalidHandle);
     wb.delete();
   });
 
   test('WASM lifecycle depth follows empty Proxy Workbook receivers', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     const proxy = new Proxy(wb, {});
     try {
-      assert.ok(proxy.setNumber(0, 0, 0, 42).ok);
+      proxy.setNumber(0, 0, 0, 42);
 
       let originalDeleteError;
       const originalDeleteSpec = {};
@@ -281,8 +278,7 @@ export function registerPositional(Module, test, hookProbe) {
           return 1;
         },
       });
-      const originalDeleteResult = proxy.addCellXf(originalDeleteSpec);
-      assert.ok(originalDeleteResult.status.ok, JSON.stringify(originalDeleteResult.status));
+      proxy.addCellXf(originalDeleteSpec);
       assert.ok(originalDeleteError instanceof TypeError);
       assert.equal(proxy.isDeleted(), false);
 
@@ -298,8 +294,7 @@ export function registerPositional(Module, test, hookProbe) {
           return 1;
         },
       });
-      const proxyDeleteResult = proxy.addCellXf(proxyDeleteSpec);
-      assert.ok(proxyDeleteResult.status.ok, JSON.stringify(proxyDeleteResult.status));
+      proxy.addCellXf(proxyDeleteSpec);
       assert.ok(proxyDeleteError instanceof TypeError);
       assert.equal(wb.isDeleted(), false);
     } finally {
@@ -308,7 +303,7 @@ export function registerPositional(Module, test, hookProbe) {
   });
 
   test('WASM lifecycle guard permits a getter to catch its deletion error', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
       let caught;
       const spec = {};
@@ -322,8 +317,7 @@ export function registerPositional(Module, test, hookProbe) {
           return 1;
         },
       });
-      const result = wb.addCellXf(spec);
-      assert.ok(result.status.ok, JSON.stringify(result.status));
+      wb.addCellXf(spec);
       assert.ok(caught instanceof TypeError);
       assert.equal(wb.isDeleted(), false);
     } finally {

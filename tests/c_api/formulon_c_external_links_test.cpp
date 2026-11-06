@@ -71,7 +71,7 @@ TEST(FormulonCApiExternalLinks, IndexOutOfRangeReturnsInvalidArgument) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_external_link_record_t rec{};
   EXPECT_EQ(fm_workbook_get_external_link(wb.handle, 0, &rec),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
 }
 
 TEST(FormulonCApiExternalLinks, NullArgsReturnBindingNullPointer) {

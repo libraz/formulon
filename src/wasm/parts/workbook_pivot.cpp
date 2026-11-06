@@ -49,51 +49,56 @@ bool build_data_field_spec_checked(JsNarrowNumericReader& reader, const emscript
 
 // ---- PivotTable --------------------------------------------------------
 
-JsAddStyleResult JsWorkbook::pivotCreate(uint32_t sheet, const std::string& name, uint32_t cacheId, uint32_t anchorRow,
-                                         uint32_t anchorCol) {
-  JsAddStyleResult r;
+uint32_t JsWorkbook::pivotCreate(uint32_t sheet, const std::string& name, uint32_t cacheId, uint32_t anchorRow,
+                                 uint32_t anchorCol) {
   if (handle_ == nullptr) {
-    r.status = invalid_handle_status();
-    return r;
+    record_invalid_handle();
+    return 0U;
   }
   std::size_t out = 0;
   fm_status_t rc = fm_sheet_add_pivot(handle_, sheet, name.c_str(), cacheId, anchorRow, anchorCol, &out);
-  return index_result(rc, out);
+  if (!succeeded(rc)) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(out);
 }
 
-JsStatus JsWorkbook::pivotRemove(uint32_t sheet, uint32_t pivotIndex) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_pivot(handle_, sheet, pivotIndex) : kBindingInvalidHandle);
+void JsWorkbook::pivotRemove(uint32_t sheet, uint32_t pivotIndex) {
+  succeeded(handle_ != nullptr ? fm_sheet_remove_pivot(handle_, sheet, pivotIndex) : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotSetName(uint32_t sheet, uint32_t pivotIndex, const std::string& name) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_set_pivot_name(handle_, sheet, pivotIndex, name.c_str())
-                                           : kBindingInvalidHandle);
+void JsWorkbook::pivotSetName(uint32_t sheet, uint32_t pivotIndex, const std::string& name) {
+  succeeded(handle_ != nullptr ? fm_sheet_set_pivot_name(handle_, sheet, pivotIndex, name.c_str())
+                               : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotSetAnchor(uint32_t sheet, uint32_t pivotIndex, emscripten::val rect) {
+void JsWorkbook::pivotSetAnchor(uint32_t sheet, uint32_t pivotIndex, emscripten::val rect) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setPivotAnchor");
   const fm_cell_rect_t r = js_pull_range(rect, &reader);
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
-  return status_from_rc(fm_sheet_set_pivot_anchor(handle_, sheet, pivotIndex, &r));
+  succeeded(fm_sheet_set_pivot_anchor(handle_, sheet, pivotIndex, &r));
 }
 
-JsStatus JsWorkbook::pivotSetGrandTotals(uint32_t sheet, uint32_t pivotIndex, bool rowsEnabled, bool colsEnabled) {
+void JsWorkbook::pivotSetGrandTotals(uint32_t sheet, uint32_t pivotIndex, bool rowsEnabled, bool colsEnabled) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   fm_status_t rc =
       fm_sheet_set_pivot_grand_totals(handle_, sheet, pivotIndex, rowsEnabled ? 1 : 0, colsEnabled ? 1 : 0);
-  return status_from_rc(rc);
+  succeeded(rc);
 }
 
-JsStatus JsWorkbook::pivotSetStyleInfo(uint32_t sheet, uint32_t pivotIndex, emscripten::val info) {
+void JsWorkbook::pivotSetStyleInfo(uint32_t sheet, uint32_t pivotIndex, emscripten::val info) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   std::string name;
   JsNarrowNumericReader reader("setPivotStyleInfo");
@@ -104,65 +109,74 @@ JsStatus JsWorkbook::pivotSetStyleInfo(uint32_t sheet, uint32_t pivotIndex, emsc
   const bool col_stripes = reader.boolean(info, "showColStripes", false, "info.showColStripes");
   const bool last_column = reader.boolean(info, "showLastColumn", false, "info.showLastColumn");
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
-  return status_from_rc(fm_sheet_set_pivot_style_info(handle_, sheet, pivotIndex, name_ptr, row_headers ? 1 : 0,
-                                                      col_headers ? 1 : 0, row_stripes ? 1 : 0, col_stripes ? 1 : 0,
-                                                      last_column ? 1 : 0));
+  succeeded(fm_sheet_set_pivot_style_info(handle_, sheet, pivotIndex, name_ptr, row_headers ? 1 : 0,
+                                          col_headers ? 1 : 0, row_stripes ? 1 : 0, col_stripes ? 1 : 0,
+                                          last_column ? 1 : 0));
 }
 
-JsNumberResult JsWorkbook::pivotGetLayout(uint32_t sheet, uint32_t pivotIndex) const {
+double JsWorkbook::pivotGetLayout(uint32_t sheet, uint32_t pivotIndex) const {
   std::int32_t layout = FM_PIVOT_REPORT_LAYOUT_COMPACT;
   const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_pivot_report_layout(handle_, sheet, pivotIndex, &layout)
                                             : kBindingInvalidHandle;
-  return number_result(rc, static_cast<double>(layout));
+  if (!succeeded(rc)) {
+    return 0.0;
+  }
+  return static_cast<double>(layout);
 }
 
-JsStatus JsWorkbook::pivotSetLayout(uint32_t sheet, uint32_t pivotIndex, uint32_t layout) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_set_pivot_report_layout(handle_, sheet, pivotIndex,
-                                                                              static_cast<std::int32_t>(layout))
-                                           : kBindingInvalidHandle);
+void JsWorkbook::pivotSetLayout(uint32_t sheet, uint32_t pivotIndex, uint32_t layout) {
+  succeeded(handle_ != nullptr
+                ? fm_sheet_set_pivot_report_layout(handle_, sheet, pivotIndex, static_cast<std::int32_t>(layout))
+                : kBindingInvalidHandle);
 }
 
-JsAddStyleResult JsWorkbook::pivotCacheId(uint32_t sheet, uint32_t pivotIndex) const {
-  JsAddStyleResult r;
+uint32_t JsWorkbook::pivotCacheId(uint32_t sheet, uint32_t pivotIndex) const {
   if (handle_ == nullptr) {
-    r.status = invalid_handle_status();
-    return r;
+    record_invalid_handle();
+    return 0U;
   }
   uint32_t out = 0;
   const fm_status_t rc = fm_sheet_get_pivot_cache_id(handle_, sheet, pivotIndex, &out);
-  return index_result(rc, out);
+  if (!succeeded(rc)) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(out);
 }
 
-JsStringResult JsWorkbook::pivotName(uint32_t sheet, uint32_t pivotIndex) const {
+std::string JsWorkbook::pivotName(uint32_t sheet, uint32_t pivotIndex) const {
   const char* name = nullptr;
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_pivot_name(handle_, sheet, pivotIndex, &name) : kBindingInvalidHandle;
-  return string_result(rc, rc == 0 ? name : nullptr);
+  if (!succeeded(rc)) {
+    return std::string();
+  }
+  return string_from_cstr(name);
 }
 
 emscripten::val JsWorkbook::pivotGetGrandTotals(uint32_t sheet, uint32_t pivotIndex) const {
-  emscripten::val o = emscripten::val::object();
   int32_t rows = 0;
   int32_t cols = 0;
   const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_pivot_grand_totals(handle_, sheet, pivotIndex, &rows, &cols)
                                             : kBindingInvalidHandle;
-  o.set("status", status_from_rc(rc));
-  o.set("rows", rc == 0 && rows != 0);
-  o.set("cols", rc == 0 && cols != 0);
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
+  }
+  emscripten::val o = emscripten::val::object();
+  o.set("rows", rows != 0);
+  o.set("cols", cols != 0);
   return o;
 }
 
 emscripten::val JsWorkbook::pivotGetStyleInfo(uint32_t sheet, uint32_t pivotIndex) const {
-  emscripten::val o = emscripten::val::object();
   fm_pivot_style_info_t info{};
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_pivot_style_info(handle_, sheet, pivotIndex, &info) : kBindingInvalidHandle;
-  if (rc != 0) {
-    info = fm_pivot_style_info_t{};
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
   }
-  o.set("status", status_from_rc(rc));
+  emscripten::val o = emscripten::val::object();
   o.set("present", info.present != 0);
   js_set_cstr(o, "name", info.name);
   o.set("showRowHeaders", info.show_row_headers != 0);
@@ -173,18 +187,20 @@ emscripten::val JsWorkbook::pivotGetStyleInfo(uint32_t sheet, uint32_t pivotInde
   return o;
 }
 
-JsNumberResult JsWorkbook::pivotFieldCount(uint32_t sheet, uint32_t pivotIndex) const {
+double JsWorkbook::pivotFieldCount(uint32_t sheet, uint32_t pivotIndex) const {
   std::size_t count = 0;
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_pivot_field_count(handle_, sheet, pivotIndex, &count) : kBindingInvalidHandle;
-  return number_result(rc, static_cast<double>(count));
+  if (!succeeded(rc)) {
+    return 0.0;
+  }
+  return static_cast<double>(count);
 }
 
-JsAddStyleResult JsWorkbook::pivotFieldAdd(uint32_t sheet, uint32_t pivotIndex, emscripten::val spec) {
-  JsAddStyleResult r;
+uint32_t JsWorkbook::pivotFieldAdd(uint32_t sheet, uint32_t pivotIndex, emscripten::val spec) {
   if (handle_ == nullptr) {
-    r.status = invalid_handle_status();
-    return r;
+    record_invalid_handle();
+    return 0U;
   }
   std::string source_name;
   std::string custom_name;
@@ -209,27 +225,25 @@ JsAddStyleResult JsWorkbook::pivotFieldAdd(uint32_t sheet, uint32_t pivotIndex, 
   c_spec.number_format = number_format_ptr;
 
   if (!reader.ok()) {
-    r.status = reader.failure();
-    return r;
+    return 0U;
   }
 
   std::size_t out = 0;
   fm_status_t rc = fm_sheet_add_pivot_field(handle_, sheet, pivotIndex, &c_spec, &out);
-  return index_result(rc, out);
+  if (!succeeded(rc)) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(out);
 }
 
 emscripten::val JsWorkbook::pivotFieldAt(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) const {
-  emscripten::val o = emscripten::val::object();
   fm_pivot_field_info_t info{};
   const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_pivot_field(handle_, sheet, pivotIndex, fieldIndex, &info)
                                             : kBindingInvalidHandle;
-  if (rc != 0) {
-    info = fm_pivot_field_info_t{};
-    info.axis = -1;
-    info.cache_field_index = -1;
-    info.group_base_index = -1;
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
   }
-  o.set("status", status_from_rc(rc));
+  emscripten::val o = emscripten::val::object();
   js_set_cstr(o, "sourceName", info.source_name);
   js_set_cstr(o, "customName", info.custom_name);
   o.set("axis", info.axis);
@@ -255,26 +269,27 @@ emscripten::val JsWorkbook::pivotFieldAt(uint32_t sheet, uint32_t pivotIndex, ui
   return o;
 }
 
-JsNumberResult JsWorkbook::pivotFieldItemCount(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) const {
+double JsWorkbook::pivotFieldItemCount(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) const {
   std::size_t count = 0;
   const fm_status_t rc = handle_ != nullptr
                              ? fm_sheet_get_pivot_field_item_count(handle_, sheet, pivotIndex, fieldIndex, &count)
                              : kBindingInvalidHandle;
-  return number_result(rc, static_cast<double>(count));
+  if (!succeeded(rc)) {
+    return 0.0;
+  }
+  return static_cast<double>(count);
 }
 
 emscripten::val JsWorkbook::pivotFieldItemAt(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
                                              uint32_t itemIndex) const {
-  emscripten::val o = emscripten::val::object();
   fm_pivot_item_info_t info{};
   const fm_status_t rc = handle_ != nullptr
                              ? fm_sheet_get_pivot_field_item(handle_, sheet, pivotIndex, fieldIndex, itemIndex, &info)
                              : kBindingInvalidHandle;
-  if (rc != 0) {
-    info = fm_pivot_item_info_t{};
-    info.cache_index = -1;
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
   }
-  o.set("status", status_from_rc(rc));
+  emscripten::val o = emscripten::val::object();
   js_set_cstr(o, "name", info.name);
   o.set("cacheIndex", info.cache_index);
   o.set("visible", info.visible != 0);
@@ -287,99 +302,97 @@ emscripten::val JsWorkbook::pivotFieldItemAt(uint32_t sheet, uint32_t pivotIndex
   return o;
 }
 
-JsStatus JsWorkbook::pivotFieldClear(uint32_t sheet, uint32_t pivotIndex) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_clear_pivot_fields(handle_, sheet, pivotIndex)
-                                           : kBindingInvalidHandle);
+void JsWorkbook::pivotFieldClear(uint32_t sheet, uint32_t pivotIndex) {
+  succeeded(handle_ != nullptr ? fm_sheet_clear_pivot_fields(handle_, sheet, pivotIndex) : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotFieldSetAxis(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, int32_t axis) {
+void JsWorkbook::pivotFieldSetAxis(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, int32_t axis) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   fm_status_t rc =
       fm_sheet_set_pivot_field_axis(handle_, sheet, pivotIndex, fieldIndex, static_cast<std::int32_t>(axis));
-  return status_from_rc(rc);
+  succeeded(rc);
 }
 
-JsStatus JsWorkbook::pivotFieldSetSort(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t order,
-                                       const std::string& byField) {
+void JsWorkbook::pivotFieldSetSort(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t order,
+                                   const std::string& byField) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   const char* by = byField.empty() ? nullptr : byField.c_str();
   fm_status_t rc =
       fm_sheet_set_pivot_field_sort(handle_, sheet, pivotIndex, fieldIndex, static_cast<std::int32_t>(order), by);
-  return status_from_rc(rc);
+  succeeded(rc);
 }
 
-JsStatus JsWorkbook::pivotFieldSetSubtotalTop(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool top) {
-  return status_from_rc(handle_ != nullptr
-                            ? fm_sheet_set_pivot_field_subtotal_top(handle_, sheet, pivotIndex, fieldIndex, top ? 1 : 0)
-                            : kBindingInvalidHandle);
+void JsWorkbook::pivotFieldSetSubtotalTop(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool top) {
+  succeeded(handle_ != nullptr
+                ? fm_sheet_set_pivot_field_subtotal_top(handle_, sheet, pivotIndex, fieldIndex, top ? 1 : 0)
+                : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotFieldSetDefaultSubtotal(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on) {
-  return status_from_rc(
-      handle_ != nullptr ? fm_sheet_set_pivot_field_default_subtotal(handle_, sheet, pivotIndex, fieldIndex, on ? 1 : 0)
-                         : kBindingInvalidHandle);
+void JsWorkbook::pivotFieldSetDefaultSubtotal(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on) {
+  succeeded(handle_ != nullptr
+                ? fm_sheet_set_pivot_field_default_subtotal(handle_, sheet, pivotIndex, fieldIndex, on ? 1 : 0)
+                : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotFieldSetInsertBlankRow(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on) {
-  return status_from_rc(
-      handle_ != nullptr ? fm_sheet_set_pivot_field_insert_blank_row(handle_, sheet, pivotIndex, fieldIndex, on ? 1 : 0)
-                         : kBindingInvalidHandle);
+void JsWorkbook::pivotFieldSetInsertBlankRow(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on) {
+  succeeded(handle_ != nullptr
+                ? fm_sheet_set_pivot_field_insert_blank_row(handle_, sheet, pivotIndex, fieldIndex, on ? 1 : 0)
+                : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotFieldSetFillDownLabels(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on) {
-  return status_from_rc(
-      handle_ != nullptr ? fm_sheet_set_pivot_field_fill_down_labels(handle_, sheet, pivotIndex, fieldIndex, on ? 1 : 0)
-                         : kBindingInvalidHandle);
+void JsWorkbook::pivotFieldSetFillDownLabels(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on) {
+  succeeded(handle_ != nullptr
+                ? fm_sheet_set_pivot_field_fill_down_labels(handle_, sheet, pivotIndex, fieldIndex, on ? 1 : 0)
+                : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotFieldSetShowDetail(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on) {
-  return status_from_rc(handle_ != nullptr
-                            ? fm_sheet_set_pivot_field_show_detail(handle_, sheet, pivotIndex, fieldIndex, on ? 1 : 0)
-                            : kBindingInvalidHandle);
+void JsWorkbook::pivotFieldSetShowDetail(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on) {
+  succeeded(handle_ != nullptr
+                ? fm_sheet_set_pivot_field_show_detail(handle_, sheet, pivotIndex, fieldIndex, on ? 1 : 0)
+                : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotFieldSetItemShowDetail(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
-                                                 uint32_t itemIndex, bool on) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_set_pivot_field_item_show_detail(
-                                                 handle_, sheet, pivotIndex, fieldIndex, itemIndex, on ? 1 : 0)
-                                           : kBindingInvalidHandle);
+void JsWorkbook::pivotFieldSetItemShowDetail(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
+                                             uint32_t itemIndex, bool on) {
+  succeeded(handle_ != nullptr ? fm_sheet_set_pivot_field_item_show_detail(handle_, sheet, pivotIndex, fieldIndex,
+                                                                           itemIndex, on ? 1 : 0)
+                               : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotFieldSetItemCaption(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
-                                              uint32_t itemIndex, const std::string& caption) {
+void JsWorkbook::pivotFieldSetItemCaption(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t itemIndex,
+                                          const std::string& caption) {
   const char* text = caption.empty() ? nullptr : caption.c_str();
-  return status_from_rc(handle_ != nullptr ? fm_sheet_set_pivot_field_item_caption(handle_, sheet, pivotIndex,
-                                                                                   fieldIndex, itemIndex, text)
-                                           : kBindingInvalidHandle);
+  succeeded(handle_ != nullptr
+                ? fm_sheet_set_pivot_field_item_caption(handle_, sheet, pivotIndex, fieldIndex, itemIndex, text)
+                : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotFieldSetCustomName(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
-                                             const std::string& name) {
+void JsWorkbook::pivotFieldSetCustomName(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
+                                         const std::string& name) {
   const char* text = name.empty() ? nullptr : name.c_str();
-  return status_from_rc(handle_ != nullptr
-                            ? fm_sheet_set_pivot_field_custom_name(handle_, sheet, pivotIndex, fieldIndex, text)
-                            : kBindingInvalidHandle);
+  succeeded(handle_ != nullptr ? fm_sheet_set_pivot_field_custom_name(handle_, sheet, pivotIndex, fieldIndex, text)
+                               : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotFieldSetShowAll(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on) {
-  return status_from_rc(handle_ != nullptr
-                            ? fm_sheet_set_pivot_field_show_all(handle_, sheet, pivotIndex, fieldIndex, on ? 1 : 0)
-                            : kBindingInvalidHandle);
+void JsWorkbook::pivotFieldSetShowAll(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on) {
+  succeeded(handle_ != nullptr ? fm_sheet_set_pivot_field_show_all(handle_, sheet, pivotIndex, fieldIndex, on ? 1 : 0)
+                               : kBindingInvalidHandle);
 }
 
 emscripten::val JsWorkbook::pivotGetOptions(uint32_t sheet, uint32_t pivotIndex) const {
   fm_pivot_options_t opt{};
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_pivot_options(handle_, sheet, pivotIndex, &opt) : kBindingInvalidHandle;
-  if (rc != 0) {
-    opt = fm_pivot_options_t{};
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
   }
   emscripten::val o = emscripten::val::object();
-  o.set("status", status_from_rc(rc));
   o.set("showError", opt.show_error != 0);
   js_set_cstr(o, "errorCaption", opt.error_caption);
   o.set("showMissing", opt.show_missing != 0);
@@ -409,19 +422,20 @@ emscripten::val JsWorkbook::pivotGetOptions(uint32_t sheet, uint32_t pivotIndex)
   return o;
 }
 
-JsStatus JsWorkbook::pivotSetOptions(uint32_t sheet, uint32_t pivotIndex, emscripten::val options) {
+void JsWorkbook::pivotSetOptions(uint32_t sheet, uint32_t pivotIndex, emscripten::val options) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   if (!js_value_present(options)) {
-    return binding_error_status(kInvalidArgument, "setPivotOptions: `options` must be an object");
+    record_type_error("setPivotOptions: `options` must be an object");
+    return;
   }
   // The C call writes every member, so members the caller omits keep the
   // pivot's current value.
   fm_pivot_options_t opt{};
-  const fm_status_t get_rc = fm_sheet_get_pivot_options(handle_, sheet, pivotIndex, &opt);
-  if (get_rc != 0) {
-    return status_from_rc(get_rc);
+  if (!succeeded(fm_sheet_get_pivot_options(handle_, sheet, pivotIndex, &opt))) {
+    return;
   }
   std::string error_caption = string_from_cstr(opt.error_caption);
   std::string missing_caption = string_from_cstr(opt.missing_caption);
@@ -468,7 +482,7 @@ JsStatus JsWorkbook::pivotSetOptions(uint32_t sheet, uint32_t pivotIndex, emscri
   opt.auto_formatting = flag("autoFormatting", opt.auto_formatting);
   opt.enable_drill = flag("enableDrill", opt.enable_drill);
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
   const auto view = [](const std::string& s) { return s.empty() ? nullptr : s.c_str(); };
   opt.error_caption = view(error_caption);
@@ -476,108 +490,121 @@ JsStatus JsWorkbook::pivotSetOptions(uint32_t sheet, uint32_t pivotIndex, emscri
   opt.alt_text = view(alt_text);
   opt.alt_text_summary = view(alt_summary);
   opt.grand_total_caption = view(grand_total);
-  return status_from_rc(fm_sheet_set_pivot_options(handle_, sheet, pivotIndex, &opt));
+  succeeded(fm_sheet_set_pivot_options(handle_, sheet, pivotIndex, &opt));
 }
 
-JsStringResult JsWorkbook::pivotDataFieldDefaultName(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
-                                                     int32_t aggregation, std::size_t excludeDataField) const {
+std::string JsWorkbook::pivotDataFieldDefaultName(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
+                                                  int32_t aggregation, std::size_t excludeDataField) const {
   const char* name = nullptr;
   const fm_status_t rc = handle_ != nullptr
                              ? fm_sheet_get_pivot_data_field_default_name(handle_, sheet, pivotIndex, fieldIndex,
                                                                           aggregation, excludeDataField, &name)
                              : kBindingInvalidHandle;
-  return string_result(rc, rc == 0 ? name : nullptr);
+  if (!succeeded(rc)) {
+    return std::string();
+  }
+  return string_from_cstr(name);
 }
 
-JsStatus JsWorkbook::pivotProject(uint32_t sheet, uint32_t pivotIndex) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_project_pivot(handle_, sheet, pivotIndex)
-                                           : kBindingInvalidHandle);
+void JsWorkbook::pivotProject(uint32_t sheet, uint32_t pivotIndex) {
+  succeeded(handle_ != nullptr ? fm_sheet_project_pivot(handle_, sheet, pivotIndex) : kBindingInvalidHandle);
 }
 
-emscripten::val JsWorkbook::pivotProjectionPending(uint32_t sheet, uint32_t pivotIndex) const {
+bool JsWorkbook::pivotProjectionPending(uint32_t sheet, uint32_t pivotIndex) const {
   int32_t pending = 0;
   const fm_status_t rc = handle_ != nullptr ? fm_sheet_is_pivot_projection_pending(handle_, sheet, pivotIndex, &pending)
                                             : kBindingInvalidHandle;
-  return bool_result(rc, pending);
+  if (!succeeded(rc)) {
+    return false;
+  }
+  return pending != 0;
 }
 
-JsAddStyleResult JsWorkbook::pivotShowDetails(uint32_t sheet, uint32_t pivotIndex, uint32_t row, uint32_t col) {
+uint32_t JsWorkbook::pivotShowDetails(uint32_t sheet, uint32_t pivotIndex, uint32_t row, uint32_t col) {
   std::size_t newSheet = 0;
   const fm_status_t rc = handle_ != nullptr
                              ? fm_sheet_show_pivot_details(handle_, sheet, pivotIndex, row, col, &newSheet)
                              : kBindingInvalidHandle;
-  return index_result(rc, newSheet);
+  if (!succeeded(rc)) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(newSheet);
 }
 
-JsAddStyleResult JsWorkbook::pivotFieldAddItem(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
-                                               const std::string& name, bool visible) {
+uint32_t JsWorkbook::pivotFieldAddItem(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
+                                       const std::string& name, bool visible) {
   std::size_t out = 0;
-  return index_result(handle_ != nullptr ? fm_sheet_add_pivot_field_item(handle_, sheet, pivotIndex, fieldIndex,
-                                                                         name.c_str(), visible ? 1 : 0, &out)
-                                         : kBindingInvalidHandle,
-                      out);
+  if (!succeeded(handle_ != nullptr ? fm_sheet_add_pivot_field_item(handle_, sheet, pivotIndex, fieldIndex,
+                                                                    name.c_str(), visible ? 1 : 0, &out)
+                                    : kBindingInvalidHandle)) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(out);
 }
 
-JsAddStyleResult JsWorkbook::pivotFieldAddItemAt(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
-                                                 uint32_t cacheIndex, bool visible) {
+uint32_t JsWorkbook::pivotFieldAddItemAt(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t cacheIndex,
+                                         bool visible) {
   std::size_t out = 0;
-  return index_result(handle_ != nullptr ? fm_sheet_add_pivot_field_shared_item(handle_, sheet, pivotIndex, fieldIndex,
-                                                                                cacheIndex, visible ? 1 : 0, &out)
-                                         : kBindingInvalidHandle,
-                      out);
+  if (!succeeded(handle_ != nullptr ? fm_sheet_add_pivot_field_shared_item(handle_, sheet, pivotIndex, fieldIndex,
+                                                                           cacheIndex, visible ? 1 : 0, &out)
+                                    : kBindingInvalidHandle)) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(out);
 }
 
-JsStatus JsWorkbook::pivotFieldClearItems(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_clear_pivot_field_items(handle_, sheet, pivotIndex, fieldIndex)
-                                           : kBindingInvalidHandle);
+void JsWorkbook::pivotFieldClearItems(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) {
+  succeeded(handle_ != nullptr ? fm_sheet_clear_pivot_field_items(handle_, sheet, pivotIndex, fieldIndex)
+                               : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotFieldSetItemVisible(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
-                                              uint32_t itemIndex, bool visible) {
+void JsWorkbook::pivotFieldSetItemVisible(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t itemIndex,
+                                          bool visible) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   fm_status_t rc =
       fm_sheet_set_pivot_field_item_visible(handle_, sheet, pivotIndex, fieldIndex, itemIndex, visible ? 1 : 0);
-  return status_from_rc(rc);
+  succeeded(rc);
 }
 
-JsStatus JsWorkbook::pivotFieldAddSubtotalFn(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t agg) {
+void JsWorkbook::pivotFieldAddSubtotalFn(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t agg) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   fm_status_t rc =
       fm_sheet_add_pivot_field_subtotal_fn(handle_, sheet, pivotIndex, fieldIndex, static_cast<std::int32_t>(agg));
-  return status_from_rc(rc);
+  succeeded(rc);
 }
 
-JsStatus JsWorkbook::pivotFieldClearSubtotalFns(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) {
-  return status_from_rc(handle_ != nullptr
-                            ? fm_sheet_clear_pivot_field_subtotal_fns(handle_, sheet, pivotIndex, fieldIndex)
-                            : kBindingInvalidHandle);
+void JsWorkbook::pivotFieldClearSubtotalFns(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) {
+  succeeded(handle_ != nullptr ? fm_sheet_clear_pivot_field_subtotal_fns(handle_, sheet, pivotIndex, fieldIndex)
+                               : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotFieldSetDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t periods,
-                                            uint32_t calendar, uint32_t intervalDays, double start, double end) {
+void JsWorkbook::pivotFieldSetDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t periods,
+                                        uint32_t calendar, uint32_t intervalDays, double start, double end) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   fm_status_t rc = fm_sheet_set_pivot_field_date_group(handle_, sheet, pivotIndex, fieldIndex, periods,
                                                        static_cast<std::int32_t>(calendar), intervalDays, start, end);
-  return status_from_rc(rc);
+  succeeded(rc);
 }
 
-JsStatus JsWorkbook::pivotFieldClearDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) {
-  return status_from_rc(handle_ != nullptr
-                            ? fm_sheet_clear_pivot_field_date_group(handle_, sheet, pivotIndex, fieldIndex)
-                            : kBindingInvalidHandle);
+void JsWorkbook::pivotFieldClearDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) {
+  succeeded(handle_ != nullptr ? fm_sheet_clear_pivot_field_date_group(handle_, sheet, pivotIndex, fieldIndex)
+                               : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotFieldSetNumberFormat(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
-                                               const std::string& utf8) {
-  return status_from_rc(
-      handle_ != nullptr ? fm_sheet_set_pivot_field_number_format(handle_, sheet, pivotIndex, fieldIndex, utf8.c_str())
-                         : kBindingInvalidHandle);
+void JsWorkbook::pivotFieldSetNumberFormat(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
+                                           const std::string& utf8) {
+  succeeded(handle_ != nullptr
+                ? fm_sheet_set_pivot_field_number_format(handle_, sheet, pivotIndex, fieldIndex, utf8.c_str())
+                : kBindingInvalidHandle);
 }
 
 namespace {
@@ -588,18 +615,20 @@ constexpr int32_t kPivotValuesFieldJs = -2;
 // Shared body of `pivotSetRowFieldOrder` / `pivotSetColFieldOrder`.
 using PivotFieldOrderFn = fm_status_t (*)(fm_workbook_t*, size_t, size_t, const uint32_t*, size_t);
 
-JsStatus set_pivot_field_order(fm_workbook_t* wb, uint32_t sheet, uint32_t pivotIndex, const emscripten::val& indices,
-                               PivotFieldOrderFn fn) {
+void set_pivot_field_order(fm_workbook_t* wb, uint32_t sheet, uint32_t pivotIndex, const emscripten::val& indices,
+                           PivotFieldOrderFn fn) {
   if (wb == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("pivotFieldOrder");
   if (!reader.is_array(indices, "pivotFieldOrder")) {
-    return binding_error_status(kInvalidArgument, "pivot field order must be an array");
+    record_type_error("pivot field order must be an array");
+    return;
   }
   const uint32_t length = reader.length(indices, "pivotFieldOrder");
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
   std::vector<uint32_t> v;
   v.reserve(length);
@@ -609,29 +638,24 @@ JsStatus set_pivot_field_order(fm_workbook_t* wb, uint32_t sheet, uint32_t pivot
     // or uint32 overflow. No subsequent JS reads occur after failure.
     const std::string key = std::to_string(i);
     const emscripten::val value = reader.value(indices, key.c_str(), "pivotFieldOrder.indices");
-    // -2 is the Values level; the checked i32 read still rejects other negatives.
+    // -2 is the Values level; any other negative reaches the C ABI as an
+    // out-of-range index and is rejected there.
     const int32_t index = reader.i32_value(value, 0, "pivotFieldOrder.indices");
-    if (index == kPivotValuesFieldJs) {
-      v.push_back(FM_PIVOT_VALUES_FIELD);
-    } else if (index < 0) {
-      return binding_error_status(kInvalidArgument, "pivot field order index must be >= 0 or PIVOT_VALUES_FIELD");
-    } else {
-      v.push_back(static_cast<uint32_t>(index));
-    }
+    v.push_back(index == kPivotValuesFieldJs ? FM_PIVOT_VALUES_FIELD : static_cast<uint32_t>(index));
   }
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
-  return status_from_rc(fn(wb, sheet, pivotIndex, v.empty() ? nullptr : v.data(), v.size()));
+  succeeded(fn(wb, sheet, pivotIndex, v.empty() ? nullptr : v.data(), v.size()));
 }
 
 }  // namespace
 
-JsStatus JsWorkbook::pivotSetRowFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices) {
+void JsWorkbook::pivotSetRowFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices) {
   return set_pivot_field_order(handle_, sheet, pivotIndex, indices, &fm_sheet_set_pivot_row_field_order);
 }
 
-JsStatus JsWorkbook::pivotSetColFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices) {
+void JsWorkbook::pivotSetColFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices) {
   return set_pivot_field_order(handle_, sheet, pivotIndex, indices, &fm_sheet_set_pivot_column_field_order);
 }
 
@@ -642,17 +666,16 @@ using PivotFieldOrderGetter = fm_status_t (*)(const fm_workbook_t*, size_t, size
 
 emscripten::val get_pivot_field_order(const fm_workbook_t* wb, uint32_t sheet, uint32_t pivotIndex,
                                       PivotFieldOrderGetter fn) {
-  emscripten::val o = emscripten::val::object();
   emscripten::val indices = emscripten::val::array();
   const uint32_t* data = nullptr;
   std::size_t count = 0;
-  const fm_status_t rc = wb != nullptr ? fn(wb, sheet, pivotIndex, &data, &count) : kBindingInvalidHandle;
-  for (std::size_t i = 0; rc == 0 && i < count; ++i) {
+  if (!succeeded(wb != nullptr ? fn(wb, sheet, pivotIndex, &data, &count) : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
+  }
+  for (std::size_t i = 0; i < count; ++i) {
     indices.call<void>("push", data[i] == FM_PIVOT_VALUES_FIELD ? kPivotValuesFieldJs : static_cast<int32_t>(data[i]));
   }
-  o.set("status", status_from_rc(rc));
-  o.set("indices", indices);
-  return o;
+  return indices;
 }
 
 }  // namespace
@@ -665,44 +688,45 @@ emscripten::val JsWorkbook::pivotColFieldOrder(uint32_t sheet, uint32_t pivotInd
   return get_pivot_field_order(handle_, sheet, pivotIndex, &fm_sheet_get_pivot_column_field_order);
 }
 
-JsNumberResult JsWorkbook::pivotDataFieldCount(uint32_t sheet, uint32_t pivotIndex) const {
+double JsWorkbook::pivotDataFieldCount(uint32_t sheet, uint32_t pivotIndex) const {
   std::size_t count = 0;
   const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_pivot_data_field_count(handle_, sheet, pivotIndex, &count)
                                             : kBindingInvalidHandle;
-  return number_result(rc, static_cast<double>(count));
+  if (!succeeded(rc)) {
+    return 0.0;
+  }
+  return static_cast<double>(count);
 }
 
-JsAddStyleResult JsWorkbook::pivotDataFieldAdd(uint32_t sheet, uint32_t pivotIndex, emscripten::val spec) {
-  JsAddStyleResult r;
+uint32_t JsWorkbook::pivotDataFieldAdd(uint32_t sheet, uint32_t pivotIndex, emscripten::val spec) {
   if (handle_ == nullptr) {
-    r.status = invalid_handle_status();
-    return r;
+    record_invalid_handle();
+    return 0U;
   }
   fm_pivot_data_field_spec_t c_spec{};
   std::string name_buf;
   std::string nfmt_buf;
   JsNarrowNumericReader reader("addPivotDataField");
   if (!build_data_field_spec_checked(reader, spec, c_spec, name_buf, nfmt_buf)) {
-    r.status = reader.failure();
-    return r;
+    return 0U;
   }
   std::size_t out = 0;
   fm_status_t rc = fm_sheet_add_pivot_data_field(handle_, sheet, pivotIndex, &c_spec, &out);
-  return index_result(rc, out);
+  if (!succeeded(rc)) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(out);
 }
 
 emscripten::val JsWorkbook::pivotDataFieldAt(uint32_t sheet, uint32_t pivotIndex, uint32_t dataFieldIndex) const {
-  emscripten::val o = emscripten::val::object();
   fm_pivot_data_field_spec_t spec{};
   const fm_status_t rc = handle_ != nullptr
                              ? fm_sheet_get_pivot_data_field(handle_, sheet, pivotIndex, dataFieldIndex, &spec)
                              : kBindingInvalidHandle;
-  if (rc != 0) {
-    spec = fm_pivot_data_field_spec_t{};
-    spec.show_as_base_field = -1;
-    spec.show_as_base_item = -1;
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
   }
-  o.set("status", status_from_rc(rc));
+  emscripten::val o = emscripten::val::object();
   js_set_cstr(o, "name", spec.name);
   o.set("fieldIndex", spec.field_index);
   o.set("aggregation", static_cast<int32_t>(spec.aggregation));
@@ -713,37 +737,40 @@ emscripten::val JsWorkbook::pivotDataFieldAt(uint32_t sheet, uint32_t pivotIndex
   return o;
 }
 
-JsStatus JsWorkbook::pivotDataFieldClear(uint32_t sheet, uint32_t pivotIndex) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_clear_pivot_data_fields(handle_, sheet, pivotIndex)
-                                           : kBindingInvalidHandle);
+void JsWorkbook::pivotDataFieldClear(uint32_t sheet, uint32_t pivotIndex) {
+  succeeded(handle_ != nullptr ? fm_sheet_clear_pivot_data_fields(handle_, sheet, pivotIndex) : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotDataFieldSet(uint32_t sheet, uint32_t pivotIndex, uint32_t dataFieldIndex,
-                                       emscripten::val spec) {
+void JsWorkbook::pivotDataFieldSet(uint32_t sheet, uint32_t pivotIndex, uint32_t dataFieldIndex, emscripten::val spec) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   fm_pivot_data_field_spec_t c_spec{};
   std::string name_buf;
   std::string nfmt_buf;
   JsNarrowNumericReader reader("setPivotDataField");
   if (!build_data_field_spec_checked(reader, spec, c_spec, name_buf, nfmt_buf)) {
-    return reader.failure();
+    return;
   }
   fm_status_t rc = fm_sheet_set_pivot_data_field(handle_, sheet, pivotIndex, dataFieldIndex, &c_spec);
-  return status_from_rc(rc);
+  succeeded(rc);
 }
 
-JsNumberResult JsWorkbook::pivotFilterCount(uint32_t sheet, uint32_t pivotIndex) const {
+double JsWorkbook::pivotFilterCount(uint32_t sheet, uint32_t pivotIndex) const {
   std::size_t count = 0;
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_pivot_filter_count(handle_, sheet, pivotIndex, &count) : kBindingInvalidHandle;
-  return number_result(rc, static_cast<double>(count));
+  if (!succeeded(rc)) {
+    return 0.0;
+  }
+  return static_cast<double>(count);
 }
 
-JsAddStyleResult JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIndex, emscripten::val spec) {
+uint32_t JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIndex, emscripten::val spec) {
   if (handle_ == nullptr) {
-    return {invalid_handle_status()};
+    record_invalid_handle();
+    return 0U;
   }
   // `fieldName` is required; an omitted key passes NULL through rather
   // than `js_pull_string`'s empty-string default, which the C ABI's own
@@ -778,23 +805,25 @@ JsAddStyleResult JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIndex,
   c_spec.data_field_index = reader.u32(spec, "dataFieldIndex", 0U, "pivotFilter.dataFieldIndex");
 
   if (!reader.ok()) {
-    return {reader.failure()};
+    return 0U;
   }
 
   std::size_t out = 0;
   fm_status_t rc = fm_sheet_add_pivot_filter(handle_, sheet, pivotIndex, &c_spec, &out);
-  return index_result(rc, out);
+  if (!succeeded(rc)) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(out);
 }
 
 emscripten::val JsWorkbook::pivotFilterAt(uint32_t sheet, uint32_t pivotIndex, uint32_t filterIndex) const {
-  emscripten::val o = emscripten::val::object();
   fm_pivot_filter_spec_t spec{};
   const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_pivot_filter(handle_, sheet, pivotIndex, filterIndex, &spec)
                                             : kBindingInvalidHandle;
-  if (rc != 0) {
-    spec = fm_pivot_filter_spec_t{};
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
   }
-  o.set("status", status_from_rc(rc));
+  emscripten::val o = emscripten::val::object();
   o.set("axis", static_cast<int32_t>(spec.axis));
   js_set_cstr(o, "fieldName", spec.field_name);
   o.set("type", static_cast<int32_t>(spec.type));
@@ -810,14 +839,13 @@ emscripten::val JsWorkbook::pivotFilterAt(uint32_t sheet, uint32_t pivotIndex, u
   return o;
 }
 
-JsStatus JsWorkbook::pivotFilterClear(uint32_t sheet, uint32_t pivotIndex) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_clear_pivot_filters(handle_, sheet, pivotIndex)
-                                           : kBindingInvalidHandle);
+void JsWorkbook::pivotFilterClear(uint32_t sheet, uint32_t pivotIndex) {
+  succeeded(handle_ != nullptr ? fm_sheet_clear_pivot_filters(handle_, sheet, pivotIndex) : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotFilterRemoveAt(uint32_t sheet, uint32_t pivotIndex, uint32_t filterIndex) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_pivot_filter(handle_, sheet, pivotIndex, filterIndex)
-                                           : kBindingInvalidHandle);
+void JsWorkbook::pivotFilterRemoveAt(uint32_t sheet, uint32_t pivotIndex, uint32_t filterIndex) {
+  succeeded(handle_ != nullptr ? fm_sheet_remove_pivot_filter(handle_, sheet, pivotIndex, filterIndex)
+                               : kBindingInvalidHandle);
 }
 
 }  // namespace parts

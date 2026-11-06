@@ -344,11 +344,12 @@ TEST(FormulonCApiPivot, PivotCacheSharedItemValueRejectsBadArguments) {
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
-  const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   const auto null_ptr = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
   fm_value_t v{};
-  EXPECT_EQ(fm_workbook_get_pivot_cache_field_shared_item_value(wb.handle, cache_id, 0, 2, &v), invalid);
-  EXPECT_EQ(fm_workbook_get_pivot_cache_field_shared_item_value(wb.handle, cache_id, 99, 0, &v), invalid);
+  EXPECT_EQ(fm_workbook_get_pivot_cache_field_shared_item_value(wb.handle, cache_id, 0, 2, &v),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_get_pivot_cache_field_shared_item_value(wb.handle, cache_id, 99, 0, &v),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_workbook_get_pivot_cache_field_shared_item_value(wb.handle, cache_id, 0, 0, nullptr), null_ptr);
   EXPECT_EQ(fm_workbook_get_pivot_cache_field_shared_item_value(nullptr, cache_id, 0, 0, &v), null_ptr);
 }
@@ -879,7 +880,6 @@ TEST(FormulonCApiPivot, PivotCacheRecordSettersRejectOutOfRangeFieldIndex) {
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
-  const auto kInvalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   const std::size_t kFieldCount = 2;
   const std::size_t kMax = static_cast<std::size_t>(-1);
 
@@ -887,12 +887,13 @@ TEST(FormulonCApiPivot, PivotCacheRecordSettersRejectOutOfRangeFieldIndex) {
   EXPECT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, 0, kFieldCount - 1, 1.0), 0);
 
   // field_index == field_count and beyond are rejected on every setter.
-  EXPECT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, 0, kFieldCount, 1.0), kInvalid);
-  EXPECT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, 0, kMax, 1.0), kInvalid);
-  EXPECT_EQ(fm_workbook_set_pivot_cache_record_text(wb.handle, cache_id, 0, kMax, "x"), kInvalid);
-  EXPECT_EQ(fm_workbook_set_pivot_cache_record_bool(wb.handle, cache_id, 0, kMax, 1), kInvalid);
-  EXPECT_EQ(fm_workbook_set_pivot_cache_record_blank(wb.handle, cache_id, 0, kMax), kInvalid);
-  EXPECT_EQ(fm_workbook_set_pivot_cache_record_error(wb.handle, cache_id, 0, kMax, 0), kInvalid);
+  EXPECT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, 0, kFieldCount, 1.0),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, 0, kMax, 1.0), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_set_pivot_cache_record_text(wb.handle, cache_id, 0, kMax, "x"), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_set_pivot_cache_record_bool(wb.handle, cache_id, 0, kMax, 1), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_set_pivot_cache_record_blank(wb.handle, cache_id, 0, kMax), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_set_pivot_cache_record_error(wb.handle, cache_id, 0, kMax, 0), FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiPivot, FieldAxisKeepsRowAndColumnOrdersInStep) {
@@ -1037,24 +1038,25 @@ TEST(FormulonCApiPivot, PivotCacheDateSharedItemsReadBackAsDates) {
 
   std::int32_t is_date = -1;
   EXPECT_EQ(fm_workbook_is_pivot_cache_field_shared_item_date(wb.handle, cache_id, 0, 4, &is_date),
-            kInvalidArgumentStatus);
+            FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_workbook_is_pivot_cache_field_shared_item_date(wb.handle, cache_id, 9, 0, &is_date),
-            kInvalidArgumentStatus);
+            FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_workbook_is_pivot_cache_field_shared_item_date(wb.handle, 9999U, 0, 0, &is_date),
             kInvalidArgumentStatus);
   EXPECT_EQ(fm_workbook_is_pivot_cache_field_shared_item_date(wb.handle, cache_id, 0, 0, nullptr), kNullPointerStatus);
   EXPECT_EQ(fm_workbook_is_pivot_cache_field_shared_item_date(nullptr, cache_id, 0, 0, &is_date), kNullPointerStatus);
   EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_date(nullptr, cache_id, 0, 45292.0), kNullPointerStatus);
   EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_date(wb.handle, cache_id, 9, 45292.0),
-            kInvalidArgumentStatus);
+            FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_date(wb.handle, 9999U, 0, 45292.0), kInvalidArgumentStatus);
   EXPECT_EQ(fm_workbook_set_pivot_cache_record_date(nullptr, cache_id, 0, 0, 45292.0), kNullPointerStatus);
-  EXPECT_EQ(fm_workbook_set_pivot_cache_record_date(wb.handle, cache_id, 0, 0, 45292.0), kInvalidArgumentStatus);
+  EXPECT_EQ(fm_workbook_set_pivot_cache_record_date(wb.handle, cache_id, 0, 0, 45292.0), FM_STATUS_INDEX_OUT_OF_RANGE);
   size_t record = 0;
   ASSERT_EQ(fm_workbook_add_pivot_cache_record(wb.handle, cache_id, &record), 0);
-  EXPECT_EQ(fm_workbook_set_pivot_cache_record_date(wb.handle, cache_id, record, 9, 45292.0), kInvalidArgumentStatus);
+  EXPECT_EQ(fm_workbook_set_pivot_cache_record_date(wb.handle, cache_id, record, 9, 45292.0),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_workbook_set_pivot_cache_record_date(wb.handle, cache_id, record + 1, 0, 45292.0),
-            kInvalidArgumentStatus);
+            FM_STATUS_INDEX_OUT_OF_RANGE);
   size_t count = 0;
   ASSERT_EQ(fm_workbook_get_pivot_cache_field_shared_item_count(wb.handle, cache_id, 0, &count), 0);
   EXPECT_EQ(count, 4U);

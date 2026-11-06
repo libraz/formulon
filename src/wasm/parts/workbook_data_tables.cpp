@@ -41,9 +41,10 @@ emscripten::val input_to_val(int32_t has, uint32_t row, uint32_t col, int32_t de
 
 }  // namespace
 
-JsStatus JsWorkbook::addDataTable(uint32_t sheet, emscripten::val spec) {
+void JsWorkbook::addDataTable(uint32_t sheet, emscripten::val spec) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("addDataTable");
   fm_data_table_t table{};
@@ -53,9 +54,9 @@ JsStatus JsWorkbook::addDataTable(uint32_t sheet, emscripten::val spec) {
     pull_input(reader, spec, "colInput", &table.has_col_input, &table.col_input_row, &table.col_input_col);
   }
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
-  return status_from_rc(fm_sheet_add_data_table(handle_, sheet, &table));
+  succeeded(fm_sheet_add_data_table(handle_, sheet, &table));
 }
 
 emscripten::val JsWorkbook::getDataTable(uint32_t sheet, uint32_t row, uint32_t col) const {
@@ -64,7 +65,7 @@ emscripten::val JsWorkbook::getDataTable(uint32_t sheet, uint32_t row, uint32_t 
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_data_table(handle_, sheet, row, col, &present, &t) : kBindingInvalidHandle;
   if (rc != 0 || present == 0) {
-    return optional_result(rc, present, emscripten::val::null());
+    return optional_or_null(rc, present, emscripten::val::null());
   }
   emscripten::val table = emscripten::val::object();
   table.set("rect", cell_rect_to_val(t.rect));
@@ -72,16 +73,15 @@ emscripten::val JsWorkbook::getDataTable(uint32_t sheet, uint32_t row, uint32_t 
   table.set("rowOriented", t.row_oriented != 0);
   table.set("rowInput", input_to_val(t.has_row_input, t.row_input_row, t.row_input_col, t.row_input_deleted));
   table.set("colInput", input_to_val(t.has_col_input, t.col_input_row, t.col_input_col, t.col_input_deleted));
-  return optional_result(rc, present, table);
+  return optional_or_null(rc, present, table);
 }
 
-JsStatus JsWorkbook::removeDataTable(uint32_t sheet, uint32_t row, uint32_t col) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_data_table(handle_, sheet, row, col)
-                                           : kBindingInvalidHandle);
+void JsWorkbook::removeDataTable(uint32_t sheet, uint32_t row, uint32_t col) {
+  succeeded(handle_ != nullptr ? fm_sheet_remove_data_table(handle_, sheet, row, col) : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::recalcDataTables() {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_recalc_data_tables(handle_) : kBindingInvalidHandle);
+void JsWorkbook::recalcDataTables() {
+  succeeded(handle_ != nullptr ? fm_workbook_recalc_data_tables(handle_) : kBindingInvalidHandle);
 }
 
 }  // namespace parts

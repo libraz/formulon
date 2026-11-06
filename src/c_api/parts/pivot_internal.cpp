@@ -60,55 +60,55 @@ const formulon::pivot::PivotCache* find_cache(const formulon::Workbook& wb, std:
   return wb.find_pivot_cache(cache_id);
 }
 
-fm_status_t resolve_pivot(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index, const char* fn,
+fm_status_t resolve_pivot(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                           const formulon::pivot::PivotTable** out) {
   *out = nullptr;
-  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
-  if (auto rc = check_index(pivot_index, sheet.pivot_tables().size(), fn, "pivot_index"); rc != 0) {
+  if (auto rc = check_index(pivot_index, sheet.pivot_tables().size(), "pivot_index"); rc != 0) {
     return rc;
   }
   const formulon::pivot::PivotTable* table = sheet.pivot_tables()[pivot_index].get();
   if (table == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kEvalPivotInvalid, "pivot table entry is NULL",
-                             std::string(fn) + ": sheet_index=" + std::to_string(sheet_index) +
-                                 " pivot_index=" + std::to_string(pivot_index));
+    return set_binding_error(
+        formulon::FormulonErrorCode::kEvalPivotInvalid, "pivot table entry is NULL",
+        "sheet_index=" + std::to_string(sheet_index) + " pivot_index=" + std::to_string(pivot_index));
   }
   *out = table;
   return 0;
 }
 
-fm_status_t resolve_pivot_mut(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index, const char* fn,
+fm_status_t resolve_pivot_mut(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                               formulon::pivot::PivotTable** out) {
   // The pivot tables are owned non-const objects; only the lookup path is shared.
   const formulon::pivot::PivotTable* table = nullptr;
-  const fm_status_t rc = resolve_pivot(wb, sheet_index, pivot_index, fn, &table);
+  const fm_status_t rc = resolve_pivot(wb, sheet_index, pivot_index, &table);
   *out = const_cast<formulon::pivot::PivotTable*>(table);
   return rc;
 }
 
-fm_status_t resolve_pivot_checked(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index, const char* fn,
+fm_status_t resolve_pivot_checked(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                                   formulon::pivot::PivotTable** out) {
   if (wb == nullptr) {
     *out = nullptr;
-    return null_argument(fn, "wb");
+    return null_argument("wb");
   }
-  return resolve_pivot_mut(wb, sheet_index, pivot_index, fn, out);
+  return resolve_pivot_mut(wb, sheet_index, pivot_index, out);
 }
 
 fm_status_t resolve_pivot_checked(const fm_workbook_t* wb, std::initializer_list<const void*> out_args,
-                                  std::size_t sheet_index, std::size_t pivot_index, const char* fn,
+                                  std::size_t sheet_index, std::size_t pivot_index,
                                   const formulon::pivot::PivotTable** out) {
   bool null_arg = wb == nullptr;
   for (const void* arg : out_args) {
     null_arg = null_arg || arg == nullptr;
   }
   if (null_arg) {
-    return null_argument(fn);
+    return null_argument();
   }
-  return resolve_pivot(wb, sheet_index, pivot_index, fn, out);
+  return resolve_pivot(wb, sheet_index, pivot_index, out);
 }
 
 void invalidate_pivot_result(formulon::Workbook& wb, formulon::pivot::PivotTable& table) {
@@ -249,9 +249,9 @@ std::optional<fm_pivot_axis_t> pivot_axis_to_fm(formulon::pivot::PivotAxis axis)
 }
 
 fm_status_t pivot_count(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                        std::size_t* out_count, const char* fn, TableCount count) {
+                        std::size_t* out_count, TableCount count) {
   const formulon::pivot::PivotTable* table = nullptr;
-  if (auto rc = resolve_pivot_checked(wb, {out_count}, sheet_index, pivot_index, fn, &table); rc != 0) {
+  if (auto rc = resolve_pivot_checked(wb, {out_count}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
   *out_count = count(*table);

@@ -45,11 +45,14 @@
 #include "utils/resource_budget.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fragment_within_size_limit;
 using formulon::c_api::parts::FragmentValidation;
+using formulon::c_api::parts::not_found;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::validate_single_element_fragment;
@@ -94,13 +97,13 @@ constexpr FragmentSlot kHeaderFooterSlot{&SheetPrintSettings::header_footer_xml,
 constexpr FragmentSlot kSheetPrSlot{&SheetPrintSettings::sheet_pr_xml, "sheetPr", formulon::kMaxSheetPrFragmentBytes};
 
 /// Shared body of the five raw-XML getters.
-fm_status_t get_fragment(const fm_workbook_t* wb, std::size_t sheet_index, const FragmentSlot& slot, const char* fn,
+fm_status_t get_fragment(const fm_workbook_t* wb, std::size_t sheet_index, const FragmentSlot& slot,
                          const char** out_xml) {
   clear_last_error();
   if (out_xml == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, fn, "arg=out_xml");
+    return null_argument("out_xml");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   *out_xml = publish_scratch(wb, wb->workbook().sheet(sheet_index).print_settings().*slot.member);
@@ -109,13 +112,12 @@ fm_status_t get_fragment(const fm_workbook_t* wb, std::size_t sheet_index, const
 
 /// Shared body of the five raw-XML setters: size gate, structural check,
 /// store, re-derive.
-fm_status_t set_fragment(fm_workbook_t* wb, std::size_t sheet_index, const FragmentSlot& slot, const char* fn,
-                         const char* xml) {
+fm_status_t set_fragment(fm_workbook_t* wb, std::size_t sheet_index, const FragmentSlot& slot, const char* xml) {
   clear_last_error();
   if (xml == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, fn, "arg=xml");
+    return null_argument("xml");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const std::string_view fragment(xml);
@@ -124,16 +126,16 @@ fm_status_t set_fragment(fm_workbook_t* wb, std::size_t sheet_index, const Fragm
     // would exercise, so it must not see one the engine would reject
     // anyway.
     if (!fragment_within_size_limit(fragment, slot.limit_bytes)) {
-      return set_binding_error(formulon::FormulonErrorCode::kPreconditionFailed, fn,
+      return set_binding_error(formulon::FormulonErrorCode::kPreconditionFailed, "XML fragment exceeds the size limit",
                                "element=" + std::string(slot.element) + " bytes=" + std::to_string(fragment.size()) +
                                    " limit=" + std::to_string(slot.limit_bytes));
     }
-    if (auto rc = check_utf8(fragment, fn, "element", slot.element); rc != 0) {
+    if (auto rc = check_utf8(fragment, "element", slot.element); rc != 0) {
       return rc;
     }
     const FragmentValidation validation = validate_single_element_fragment(fragment, slot.element);
     if (!validation.valid) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, fn,
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "invalid XML fragment",
                                "element=" + std::string(slot.element) + " " + validation.context);
     }
   }
@@ -251,8 +253,7 @@ void set_header_footer_section(pugi::xml_node root, std::size_t section_index, s
 }
 
 /// Upserts a manual break into an axis vector, keeping it sorted by index.
-fm_status_t upsert_break(std::vector<ManualBreak>& breaks, std::uint32_t index, std::uint32_t span_max, bool manual,
-                         const char* fn) {
+fm_status_t upsert_break(std::vector<ManualBreak>& breaks, std::uint32_t index, std::uint32_t span_max, bool manual) {
   const auto pos = std::lower_bound(breaks.begin(), breaks.end(), index,
                                     [](const ManualBreak& entry, std::uint32_t key) { return entry.id < key; });
   if (pos != breaks.end() && pos->id == index) {
@@ -263,7 +264,7 @@ fm_status_t upsert_break(std::vector<ManualBreak>& breaks, std::uint32_t index, 
   }
   if (breaks.size() >= formulon::kMaxManualBreaksPerAxis) {
     return set_binding_error(
-        formulon::FormulonErrorCode::kPreconditionFailed, fn,
+        formulon::FormulonErrorCode::kPreconditionFailed, "too many manual page breaks",
         "breaks=" + std::to_string(breaks.size()) + " limit=" + std::to_string(formulon::kMaxManualBreaksPerAxis));
   }
   ManualBreak entry;
@@ -275,27 +276,30 @@ fm_status_t upsert_break(std::vector<ManualBreak>& breaks, std::uint32_t index, 
   return 0;
 }
 
-void erase_break(std::vector<ManualBreak>& breaks, std::uint32_t index) {
+/// Erases the break at `index`; NOT_FOUND when the axis has none there.
+fm_status_t erase_break(std::vector<ManualBreak>& breaks, std::uint32_t index, const char* what) {
   const auto pos = std::lower_bound(breaks.begin(), breaks.end(), index,
                                     [](const ManualBreak& entry, std::uint32_t key) { return entry.id < key; });
-  if (pos != breaks.end() && pos->id == index) {
-    breaks.erase(pos);
+  if (pos == breaks.end() || pos->id != index) {
+    return not_found(what, "index=" + std::to_string(index));
   }
+  breaks.erase(pos);
+  return 0;
 }
 
 /// Shared body of `fm_sheet_add_row_break` / `fm_sheet_add_column_break`.
-fm_status_t add_break(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t index, bool manual, bool rows,
-                      const char* fn) {
-  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+fm_status_t add_break(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t index, bool manual, bool rows) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   if (index >= (rows ? Sheet::kMaxRows : Sheet::kMaxCols)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, fn,
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             rows ? "row is outside the sheet grid" : "column is outside the sheet grid",
                              std::string(rows ? "row=" : "col=") + std::to_string(index));
   }
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
-  return rows ? upsert_break(print.manual_row_breaks, index, kWholeSheetColSpanMax, manual, fn)
-              : upsert_break(print.manual_col_breaks, index, kWholeSheetRowSpanMax, manual, fn);
+  return rows ? upsert_break(print.manual_row_breaks, index, kWholeSheetColSpanMax, manual)
+              : upsert_break(print.manual_col_breaks, index, kWholeSheetRowSpanMax, manual);
 }
 
 // Counts one axis. The `size_t` return has no room for a status, so an
@@ -305,13 +309,12 @@ fm_status_t add_break(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t 
 // enumerate by count-then-`break_at` must consult the diagnostic, since
 // the `break_at` loop that would otherwise surface the status never runs
 // on a zero count.
-fm_status_t break_count(const fm_workbook_t* wb, std::size_t sheet_index, bool rows, const char* fn,
-                        std::size_t* out_count) {
+fm_status_t break_count(const fm_workbook_t* wb, std::size_t sheet_index, bool rows, std::size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, fn, "arg=out_count");
+    return null_argument("out_count");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const SheetPrintSettings& print = wb->workbook().sheet(sheet_index).print_settings();
@@ -319,20 +322,19 @@ fm_status_t break_count(const fm_workbook_t* wb, std::size_t sheet_index, bool r
   return 0;
 }
 
-fm_status_t break_at(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t index, bool rows, const char* fn,
+fm_status_t break_at(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t index, bool rows,
                      fm_page_break_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, fn, "arg=out");
+    return null_argument("out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const SheetPrintSettings& print = wb->workbook().sheet(sheet_index).print_settings();
   const std::vector<ManualBreak>& breaks = rows ? print.manual_row_breaks : print.manual_col_breaks;
-  if (index >= breaks.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, fn,
-                             "index=" + std::to_string(index) + " count=" + std::to_string(breaks.size()));
+  if (auto rc = check_index(index, breaks.size(), "index"); rc != 0) {
+    return rc;
   }
   const ManualBreak& entry = breaks[index];
   out->id = entry.id;
@@ -349,16 +351,15 @@ fm_status_t break_at(const fm_workbook_t* wb, std::size_t sheet_index, std::size
 /* -------------------------------------------------------------------------- */
 
 extern "C" fm_status_t fm_sheet_get_page_setup_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml) {
-  return get_fragment(wb, sheet_index, kPageSetupSlot, "fm_sheet_get_page_setup_xml", out_xml);
+  return get_fragment(wb, sheet_index, kPageSetupSlot, out_xml);
 }
 
 extern "C" fm_status_t fm_sheet_set_page_setup_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml) {
-  static constexpr const char* kFn = "fm_sheet_set_page_setup_xml";
   clear_last_error();
   if (xml == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn, "arg=xml");
+    return null_argument("xml");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   // A `<pageSetup r:id>` names the sheet's printerSettings part. Storing
@@ -369,50 +370,50 @@ extern "C" fm_status_t fm_sheet_set_page_setup_xml(fm_workbook_t* wb, size_t she
   const std::string_view fragment(xml);
   if (fragment.find("r:id") != std::string_view::npos &&
       wb->workbook().sheet(sheet_index).print_settings().printer_settings_path.empty()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, kFn, "printer_settings_rid_without_part");
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "printer settings relationship has no part");
   }
-  return set_fragment(wb, sheet_index, kPageSetupSlot, kFn, xml);
+  return set_fragment(wb, sheet_index, kPageSetupSlot, xml);
 }
 
 extern "C" fm_status_t fm_sheet_get_page_margins_xml(const fm_workbook_t* wb, size_t sheet_index,
                                                      const char** out_xml) {
-  return get_fragment(wb, sheet_index, kPageMarginsSlot, "fm_sheet_get_page_margins_xml", out_xml);
+  return get_fragment(wb, sheet_index, kPageMarginsSlot, out_xml);
 }
 
 extern "C" fm_status_t fm_sheet_set_page_margins_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml) {
-  return set_fragment(wb, sheet_index, kPageMarginsSlot, "fm_sheet_set_page_margins_xml", xml);
+  return set_fragment(wb, sheet_index, kPageMarginsSlot, xml);
 }
 
 extern "C" fm_status_t fm_sheet_get_print_options_xml(const fm_workbook_t* wb, size_t sheet_index,
                                                       const char** out_xml) {
-  return get_fragment(wb, sheet_index, kPrintOptionsSlot, "fm_sheet_get_print_options_xml", out_xml);
+  return get_fragment(wb, sheet_index, kPrintOptionsSlot, out_xml);
 }
 
 extern "C" fm_status_t fm_sheet_set_print_options_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml) {
-  return set_fragment(wb, sheet_index, kPrintOptionsSlot, "fm_sheet_set_print_options_xml", xml);
+  return set_fragment(wb, sheet_index, kPrintOptionsSlot, xml);
 }
 
 extern "C" fm_status_t fm_sheet_get_header_footer_xml(const fm_workbook_t* wb, size_t sheet_index,
                                                       const char** out_xml) {
-  return get_fragment(wb, sheet_index, kHeaderFooterSlot, "fm_sheet_get_header_footer_xml", out_xml);
+  return get_fragment(wb, sheet_index, kHeaderFooterSlot, out_xml);
 }
 
 extern "C" fm_status_t fm_sheet_set_header_footer_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml) {
-  return set_fragment(wb, sheet_index, kHeaderFooterSlot, "fm_sheet_set_header_footer_xml", xml);
+  return set_fragment(wb, sheet_index, kHeaderFooterSlot, xml);
 }
 
 extern "C" fm_status_t fm_sheet_get_sheet_pr_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml) {
-  return get_fragment(wb, sheet_index, kSheetPrSlot, "fm_sheet_get_sheet_pr_xml", out_xml);
+  return get_fragment(wb, sheet_index, kSheetPrSlot, out_xml);
 }
 
 extern "C" fm_status_t fm_sheet_set_sheet_pr_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml) {
-  return set_fragment(wb, sheet_index, kSheetPrSlot, "fm_sheet_set_sheet_pr_xml", xml);
+  return set_fragment(wb, sheet_index, kSheetPrSlot, xml);
 }
 
 extern "C" fm_status_t fm_sheet_set_fit_to_page(fm_workbook_t* wb, size_t sheet_index, int32_t enabled) {
-  static constexpr const char* kFn = "fm_sheet_set_fit_to_page";
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
@@ -445,35 +446,35 @@ extern "C" fm_status_t fm_sheet_set_fit_to_page(fm_workbook_t* wb, size_t sheet_
 
 extern "C" fm_status_t fm_sheet_add_row_break(fm_workbook_t* wb, size_t sheet_index, uint32_t row, int32_t manual) {
   clear_last_error();
-  return add_break(wb, sheet_index, row, manual != 0, /*rows=*/true, "fm_sheet_add_row_break");
+  return add_break(wb, sheet_index, row, manual != 0, /*rows=*/true);
 }
 
 extern "C" fm_status_t fm_sheet_add_column_break(fm_workbook_t* wb, size_t sheet_index, uint32_t col, int32_t manual) {
   clear_last_error();
-  return add_break(wb, sheet_index, col, manual != 0, /*rows=*/false, "fm_sheet_add_column_break");
+  return add_break(wb, sheet_index, col, manual != 0, /*rows=*/false);
 }
 
 extern "C" fm_status_t fm_sheet_remove_row_break(fm_workbook_t* wb, size_t sheet_index, uint32_t row) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_remove_row_break"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  erase_break(wb->workbook().sheet(sheet_index).mutable_print_settings().manual_row_breaks, row);
-  return 0;
+  return erase_break(wb->workbook().sheet(sheet_index).mutable_print_settings().manual_row_breaks, row,
+                     "no row break at that row");
 }
 
 extern "C" fm_status_t fm_sheet_remove_column_break(fm_workbook_t* wb, size_t sheet_index, uint32_t col) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_remove_column_break"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  erase_break(wb->workbook().sheet(sheet_index).mutable_print_settings().manual_col_breaks, col);
-  return 0;
+  return erase_break(wb->workbook().sheet(sheet_index).mutable_print_settings().manual_col_breaks, col,
+                     "no column break at that column");
 }
 
 extern "C" fm_status_t fm_sheet_clear_breaks(fm_workbook_t* wb, size_t sheet_index) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_clear_breaks"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
@@ -483,21 +484,21 @@ extern "C" fm_status_t fm_sheet_clear_breaks(fm_workbook_t* wb, size_t sheet_ind
 }
 
 extern "C" fm_status_t fm_sheet_get_row_break_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
-  return break_count(wb, sheet_index, /*rows=*/true, "fm_sheet_get_row_break_count", out_count);
+  return break_count(wb, sheet_index, /*rows=*/true, out_count);
 }
 
 extern "C" fm_status_t fm_sheet_get_row_break_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
                                                  fm_page_break_t* out) {
-  return break_at(wb, sheet_index, index, /*rows=*/true, "fm_sheet_get_row_break_at", out);
+  return break_at(wb, sheet_index, index, /*rows=*/true, out);
 }
 
 extern "C" fm_status_t fm_sheet_get_column_break_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
-  return break_count(wb, sheet_index, /*rows=*/false, "fm_sheet_get_column_break_count", out_count);
+  return break_count(wb, sheet_index, /*rows=*/false, out_count);
 }
 
 extern "C" fm_status_t fm_sheet_get_column_break_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
                                                     fm_page_break_t* out) {
-  return break_at(wb, sheet_index, index, /*rows=*/false, "fm_sheet_get_column_break_at", out);
+  return break_at(wb, sheet_index, index, /*rows=*/false, out);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -505,20 +506,19 @@ extern "C" fm_status_t fm_sheet_get_column_break_at(const fm_workbook_t* wb, siz
 /* -------------------------------------------------------------------------- */
 
 extern "C" fm_status_t fm_sheet_set_page_setup(fm_workbook_t* wb, size_t sheet_index, const fm_page_setup_t* setup) {
-  static constexpr const char* kFn = "fm_sheet_set_page_setup";
   clear_last_error();
   if (setup == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn, "arg=setup");
+    return null_argument("setup");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   if (setup->orientation_engaged != 0 && setup->orientation > FM_ORIENTATION_LANDSCAPE) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, kFn,
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "orientation is not a known value",
                              "orientation=" + std::to_string(setup->orientation));
   }
   if (setup->scale_engaged != 0 && (setup->scale < kMinPrintScalePercent || setup->scale > kMaxPrintScalePercent)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, kFn,
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "scale is out of range",
                              "scale=" + std::to_string(setup->scale));
   }
 
@@ -557,12 +557,11 @@ extern "C" fm_status_t fm_sheet_set_page_setup(fm_workbook_t* wb, size_t sheet_i
 
 extern "C" fm_status_t fm_sheet_set_page_margins(fm_workbook_t* wb, size_t sheet_index,
                                                  const fm_page_margins_t* margins) {
-  static constexpr const char* kFn = "fm_sheet_set_page_margins";
   clear_last_error();
   if (margins == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn, "arg=margins");
+    return null_argument("margins");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   struct MarginField {
@@ -587,7 +586,7 @@ extern "C" fm_status_t fm_sheet_set_page_margins(fm_workbook_t* wb, size_t sheet
     // The paginator subtracts these from the paper; a negative, infinite or
     // NaN one produces a printable body that is not a rectangle.
     if (!std::isfinite(field.value) || field.value < 0.0) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, kFn,
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "margin must be finite and non-negative",
                                std::string(field.attr) + "=invalid");
     }
   }
@@ -607,12 +606,11 @@ extern "C" fm_status_t fm_sheet_set_page_margins(fm_workbook_t* wb, size_t sheet
 
 extern "C" fm_status_t fm_sheet_set_print_options(fm_workbook_t* wb, size_t sheet_index,
                                                   const fm_print_options_t* options) {
-  static constexpr const char* kFn = "fm_sheet_set_print_options";
   clear_last_error();
   if (options == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn, "arg=options");
+    return null_argument("options");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();
@@ -630,16 +628,15 @@ extern "C" fm_status_t fm_sheet_set_print_options(fm_workbook_t* wb, size_t shee
 }
 
 extern "C" fm_status_t fm_sheet_set_header_footer(fm_workbook_t* wb, size_t sheet_index, const fm_header_footer_t* hf) {
-  static constexpr const char* kFn = "fm_sheet_set_header_footer";
   clear_last_error();
   if (hf == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn, "arg=hf");
+    return null_argument("hf");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   if (auto rc = check_utf8(
-          kFn, {hf->odd_header, hf->odd_footer, hf->even_header, hf->even_footer, hf->first_header, hf->first_footer});
+          {hf->odd_header, hf->odd_footer, hf->even_header, hf->even_footer, hf->first_header, hf->first_footer});
       rc != 0) {
     return rc;
   }
@@ -666,12 +663,11 @@ extern "C" fm_status_t fm_sheet_set_header_footer(fm_workbook_t* wb, size_t shee
 }
 
 extern "C" fm_status_t fm_sheet_get_page_setup(const fm_workbook_t* wb, size_t sheet_index, fm_page_setup_t* out) {
-  static constexpr const char* kFn = "fm_sheet_get_page_setup";
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn, "arg=out");
+    return null_argument("out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const SheetPrintSettings& print = wb->workbook().sheet(sheet_index).print_settings();
@@ -720,12 +716,11 @@ extern "C" fm_status_t fm_sheet_get_page_setup(const fm_workbook_t* wb, size_t s
 }
 
 extern "C" fm_status_t fm_sheet_get_page_margins(const fm_workbook_t* wb, size_t sheet_index, fm_page_margins_t* out) {
-  static constexpr const char* kFn = "fm_sheet_get_page_margins";
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn, "arg=out");
+    return null_argument("out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const SheetPrintSettings& print = wb->workbook().sheet(sheet_index).print_settings();

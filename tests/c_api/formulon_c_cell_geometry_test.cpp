@@ -361,7 +361,7 @@ TEST(FormulonCApiCellRange, RejectsBadArguments) {
   std::uint32_t row = 0;
   std::uint32_t col = 0;
   fm_value_t value{};
-  EXPECT_EQ(fm_cell_range_get_cell_at(page.handle, 0, &row, &col, nullptr, &value), kInvalidArgument);
+  EXPECT_EQ(fm_cell_range_get_cell_at(page.handle, 0, &row, &col, nullptr, &value), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_NE(fm_cell_range_get_cell_count(nullptr, &count), 0);
   std::uint64_t next = 0;
   EXPECT_NE(fm_cell_range_next_cursor(nullptr, &next), 0);
@@ -513,7 +513,7 @@ TEST(FormulonCApiPaginationDetail, PagesFollowPageOrderAndCoverEveryPage) {
   EXPECT_EQ(pages[1].rect.first_row, pages[0].rect.first_row);
   EXPECT_GT(pages[1].rect.first_col, pages[0].rect.last_col);
   fm_page_layout_t extra{};
-  EXPECT_EQ(fm_pagination_get_page_at(p.handle, page_count, &extra), kInvalidArgument);
+  EXPECT_EQ(fm_pagination_get_page_at(p.handle, page_count, &extra), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_NE(fm_pagination_get_page_order(nullptr, &order), 0);
 }
 
@@ -545,7 +545,7 @@ TEST(FormulonCApiPaginationDetail, ManualBreaksAreFlagged) {
     EXPECT_EQ(manual, 0);
   }
   int32_t manual = 0;
-  EXPECT_EQ(fm_pagination_is_row_break_manual(p.handle, h_count, &manual), kInvalidArgument);
-  EXPECT_EQ(fm_pagination_is_column_break_manual(p.handle, v_count, &manual), kInvalidArgument);
+  EXPECT_EQ(fm_pagination_is_row_break_manual(p.handle, h_count, &manual), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_pagination_is_column_break_manual(p.handle, v_count, &manual), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_NE(fm_pagination_is_column_break_manual(nullptr, 0, &manual), 0);
 }

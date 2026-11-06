@@ -276,7 +276,7 @@ TEST(FormulonCApiDrawing, InsertListGetRemoveNextToChart) {
   EXPECT_EQ(count, 0U);
   EXPECT_EQ(formulon::io::ooxml::find_passthrough_part(wb.handle->workbook(), "xl/charts/chart1.xml"), nullptr);
   EXPECT_EQ(fm_sheet_remove_drawing(wb.handle, 0, 2), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_get_drawing_object_at(wb.handle, 0, 1, &pic), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_drawing_object_at(wb.handle, 0, 1, &pic), FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiDrawing, InsertSaveReloadKeepsBytes) {

@@ -6,12 +6,18 @@
 // `JsWorkbook` class plus its own `EMSCRIPTEN_BINDINGS` block or
 // dispatches into the central registrar in `bindings_register.cpp`.
 //
+// Every binding method returns its payload directly. A failure is recorded
+// through `record_failure` (or one of the builders over it) and the method
+// returns the type's default value; the generated pre-js wrapper throws the
+// recorded failure as a `FormulonError` once the native frame has returned,
+// so no JS exception ever unwinds a C++ frame.
+//
 // What lives here:
-//   * Value-object structs (`JsStatus`, `JsValue`, `JsCellResult`, ...)
-//     that the JS-facing API surface returns.
-//   * Translation helpers (`translate_value`, `translate_cf_*`,
-//     `cell_rect_to_val`, `bytes_to_val`, `val_to_bytes_checked`).
-//   * Status builders (`ok_status`, `error_status`, `status_from_rc`).
+//   * Value-object structs (`JsSheetView`, `JsCfMatch`, ...) for the
+//     records the JS-facing API returns.
+//   * Failure builders (`record_failure`, `succeeded`, `failed`,
+//     `optional_or_null`) and the `Value` converters (`value_to_val`,
+//     `val_to_value`).
 //   * checked nested-field readers and `js_set_*` record builders.
 //
 // The helpers are deliberately out of line: they sit on the cold side of
@@ -54,27 +60,6 @@ constexpr double kMaxU32 = 4294967295.0;
 // cleanly than `uint8_t`; the few unsigned fields are kept `uint32_t` to
 // match the upstream `fm_*` ABI shape.
 
-/// Mirror of `fm_value_t`. embind cannot project a C union, so the
-/// variant payload is flattened across `number / boolean / text /
-/// errorCode` and JS dispatches on `kind`.
-struct JsValue {
-  int32_t kind = 0;       ///< `fm_value_kind_t` ordinal (0..7).
-  double number = 0.0;    ///< Active when kind == FM_VAL_NUMBER.
-  int32_t boolean = 0;    ///< Active when kind == FM_VAL_BOOL (0/1).
-  std::string text;       ///< Active when kind == FM_VAL_TEXT.
-  int32_t errorCode = 0;  ///< Active when kind == FM_VAL_ERROR.
-};
-
-/// `{ ok, code, message, context }` envelope returned by every
-/// fallible binding entry point. Replaces throwing across the JS
-/// boundary, which we cannot do under `-fno-exceptions`.
-struct JsStatus {
-  bool ok = true;
-  int32_t code = 0;
-  std::string message;
-  std::string context;
-};
-
 /// Per-call counters returned by `Workbook.recalcParallel`. The five
 /// scheduler counters originate as `uint64_t` in the C ABI but are widened
 /// to `double` here deliberately: embind then exposes them as JavaScript
@@ -90,34 +75,9 @@ struct JsParallelRecalcStats {
   uint32_t workerThreadsUsed = 0U;
 };
 
-/// `{ status, stats }` envelope returned by `Workbook.recalcParallel`.
-struct JsParallelRecalcResult {
-  JsStatus status;
-  JsParallelRecalcStats stats;
-};
-
-/// Bundles `JsStatus` and a `JsValue` payload for `evalFormula`.
-struct JsEvalResult {
-  JsStatus status;
-  JsValue value;
-};
-
-/// Result envelope for `getValue`-style calls.
-struct JsCellResult {
-  JsStatus status;
-  JsValue value;
-};
-
-/// Result envelope for `save()` returning the bytes as a JS Uint8Array.
-struct JsSaveResult {
-  JsStatus status;
-  emscripten::val bytes = emscripten::val::null();
-};
-
-/// Result envelope for an explicit-format save with the loss counters the
-/// write produced. Counters a given container cannot produce stay zero.
-struct JsSaveDiagnosticsResult {
-  JsStatus status;
+/// The bytes of an explicit-format save with the loss counters the write
+/// produced. Counters a given container cannot produce stay zero.
+struct JsSaveDiagnostics {
   emscripten::val bytes = emscripten::val::null();
   uint32_t downgradedFormulaCount = 0;
   uint32_t deferredFeatureCount = 0;
@@ -128,27 +88,12 @@ struct JsSaveDiagnosticsResult {
 
 /// Recovery / passthrough counters captured while loading a workbook, for
 /// either container format.
-struct JsReadDiagnosticsResult {
-  JsStatus status;
+struct JsReadDiagnostics {
   uint32_t undecodedFormulaCount = 0;
   uint32_t undecodedDefinedNameCount = 0;
   uint32_t undecodedPartCount = 0;
   uint32_t skippedFeatureCount = 0;
   uint32_t unknownContentTypeCount = 0;
-};
-
-/// Result envelope for the string-payload accessors (`sheetName`,
-/// `pivotCacheFieldName`, ...).
-struct JsStringResult {
-  JsStatus status;
-  std::string value;
-};
-
-/// Result envelope for the numeric accessors (every `*Count`, `calcMode`).
-/// `value` stays zero on failure.
-struct JsNumberResult {
-  JsStatus status;
-  double value = 0.0;
 };
 
 /// JS-side mirror of `fm_cf_color_t`. Channels are 0-255 (sRGB); widened
@@ -205,12 +150,6 @@ struct JsSheetView {
   int32_t showOutlineSymbols = 1;
 };
 
-/// Return envelope for `Workbook.getSheetView(...)`.
-struct JsSheetViewResult {
-  JsStatus status;
-  JsSheetView view{};
-};
-
 /// JS-side mirror of `fm_sheet_protection_t`. The deeply-copied string
 /// fields decouple the returned record from the workbook's storage.
 struct JsSheetProtection {
@@ -238,62 +177,57 @@ struct JsSheetProtection {
   int32_t pivotTables = 0;
 };
 
-/// Return envelope for `Workbook.getSheetProtection(...)`.
-struct JsSheetProtectionResult {
-  JsStatus status;
-  JsSheetProtection protection{};
-};
-
-/// Return envelope for `Workbook.addFont` / `addFill` / `addBorder` /
-/// `addXf` and most "add and return the index" surfaces.
-struct JsAddStyleResult {
-  JsStatus status;
-  uint32_t index = 0U;
-};
-
-/// Return envelope for `Workbook.addNumFmt`. `numFmtId` may reuse any
-/// existing effective mapping (built-in or custom, including a custom record
-/// overriding a built-in slot), or be the freshly-assigned custom id
-/// (`>= 164`). Effective mappings use the first valid custom record for an id
-/// in document order, then a non-empty built-in code.
-struct JsAddNumFmtResult {
-  JsStatus status;
-  uint32_t numFmtId = 0U;
-};
-
-// ---- Status builders ----------------------------------------------------
+// ---- Failure builders ---------------------------------------------------
 //
-// Out-of-line so the linker emits exactly one copy across all part TUs;
-// they capture the thread-local diagnostic surface that follows every
-// C-ABI call.
+// A failure is recorded into the pre-js wrapper's per-call slot and thrown
+// there as a `FormulonError` after the native method returns. An argument
+// rejection recorded in the same call takes precedence. Outside a wrapped
+// call there is no slot, and the record is dropped.
 
-/// Builds an `ok` envelope with empty diagnostic strings.
-JsStatus ok_status();
+/// Records `rc` as the call's failure, carrying the message and context of
+/// the most recent C-ABI call. `kBindingInvalidHandle` records as
+/// `record_invalid_handle` does, since no C-ABI call produced it.
+void record_failure(fm_status_t rc);
+
+/// Records a `BindingInvalidHandle` failure for a call on a disposed
+/// workbook, with the message "the workbook is disposed".
+void record_invalid_handle();
+
+/// Records a failure the binding raised itself, carrying `message` and an
+/// empty context. Never reads the thread-local diagnostics, which at that
+/// point still belong to a previous call.
+void record_binding_failure(int32_t code, const char* message);
+
+/// Records a `TypeError` the wrapper throws once the method returns: an
+/// argument of the wrong shape (not an array, not a function, missing).
+void record_type_error(const char* message);
+
+/// Records a `RangeError` the wrapper throws once the method returns: a
+/// number outside the integer range the parameter accepts.
+void record_range_error(const char* message);
+
+/// True when `rc` is 0; otherwise records it through `record_failure` and
+/// returns false.
+bool succeeded(fm_status_t rc);
+
+/// Records `rc` through `record_failure` and returns `T`'s default value,
+/// which the wrapper's throw keeps from reaching the caller.
+template <class T>
+T failed(fm_status_t rc) {
+  record_failure(rc);
+  return T{};
+}
+
+/// Result of a lookup by key: `item` when `rc` is 0 and the key was
+/// `present`, `null` when it is 0 and absent, and `undefined` after
+/// recording the failure otherwise.
+emscripten::val optional_or_null(fm_status_t rc, int32_t present, emscripten::val item);
 
 /// Returns true when a JS value is neither `undefined` nor `null`.
 bool js_value_present(const emscripten::val& value);
 
 /// Returns `value`, or a fresh empty object when it is `undefined` or `null`.
 emscripten::val js_object_or_empty(const emscripten::val& value);
-
-/// Builds a failure envelope from `code`, copying out the thread-local
-/// diagnostics surfaced by the most recent C-ABI call. `code ==
-/// kBindingInvalidHandle` is special-cased: that failure is raised before
-/// any C-ABI call, so the envelope carries a synthesised message rather
-/// than the residue of an earlier, unrelated call.
-JsStatus error_status(int32_t code);
-
-/// Failure envelope for a call made on a destroyed workbook handle.
-JsStatus invalid_handle_status();
-
-/// Builds a failure envelope for a rejection the binding raised itself --
-/// a missing or wrongly-shaped JS argument -- carrying `message` and an
-/// empty context. Never reads the thread-local diagnostics, which at that
-/// point still belong to a previous call.
-JsStatus binding_error_status(int32_t code, const char* message);
-
-/// Bridges a `fm_status_t` into a `JsStatus` envelope.
-JsStatus status_from_rc(fm_status_t rc);
 
 /// Per-call validator for fields in nested binding records. Binding parsers
 /// share this reader to reject lossy conversions before the C ABI mutates a
@@ -337,10 +271,9 @@ class JsNarrowNumericReader {
   uint32_t length(const emscripten::val& array, const char* field = nullptr);
   emscripten::val array_element(const emscripten::val& array, uint32_t index, const char* field = nullptr);
 
+  /// True until the reader has recorded its first rejection.
   bool ok() const;
   const std::string& message() const;
-  /// Failure envelope carrying the reader's first error.
-  JsStatus failure() const;
 
  private:
   /// Reads `owner[key]`; `*fetched` is false when the reader already failed or the access threw.
@@ -379,32 +312,10 @@ using JsListItem = fm_status_t (*)(const fm_workbook_t*, size_t, size_t, emscrip
 fm_status_t js_collect_list(const fm_workbook_t* handle, size_t sheet, JsListCount count, JsListItem item,
                             emscripten::val& list);
 
-/// Reads the element count of a count-then-`at` collection scoped to `sheet`
-/// into a `JsNumberResult`; `kBindingInvalidHandle` for a NULL `handle`.
-JsNumberResult js_count_result(const fm_workbook_t* handle, size_t sheet, JsListCount count);
-
-/// Stamps an index getter's status onto `record`, giving the `<Record> &
-/// {status}` result shape. A failed read passes the zero record, so every
-/// declared key is present on the failure path too.
-emscripten::val record_result(fm_status_t rc, emscripten::val record);
-
-/// Builds a `JsNumberResult` from `rc`, carrying `value` only on success.
-JsNumberResult number_result(fm_status_t rc, double value);
-
-/// Builds a `{status, value}` boolean result from `rc`; `value` is `flag != 0`
-/// on success and `false` otherwise.
-emscripten::val bool_result(fm_status_t rc, std::int32_t flag);
-
-/// Builds a `JsStringResult` from `rc`, carrying `value` only on success.
-/// A NULL `value` becomes the empty string.
-JsStringResult string_result(fm_status_t rc, const char* value);
-
-/// Builds a `JsAddStyleResult` from `rc`, carrying `index` only on success.
-JsAddStyleResult index_result(fm_status_t rc, std::size_t index);
-
-/// Builds an `OptionalResult` `{status, value}` for a lookup by key: `value` is
-/// `item` when `rc` is 0 and the key was `present`, else `null`.
-emscripten::val optional_result(fm_status_t rc, int32_t present, const emscripten::val& item);
+/// Reads the element count of a count-then-`at` collection scoped to
+/// `sheet`, recording a failure (`kBindingInvalidHandle` for a NULL
+/// `handle`) and returning 0 when the read fails.
+double js_count(const fm_workbook_t* handle, size_t sheet, JsListCount count);
 
 // ---- Guarded JS callback invocation -------------------------------------
 //
@@ -436,18 +347,25 @@ enum class JsCallbackOutcome : int32_t {
 };
 
 /// Invokes `fn` with the JS array `args`, catching anything it throws.
-/// Never propagates a JS exception into the calling C++ frame.
+/// Never propagates a JS exception into the calling C++ frame; a thrown
+/// exception is recorded so the enclosing wrapped call rethrows that same
+/// object once it returns.
 JsCallbackOutcome call_js_callback(const emscripten::val& fn, const emscripten::val& args);
 
 // ---- Translation helpers -----------------------------------------------
 
-/// Translates a `fm_value_t` into the embind-friendly `JsValue`. The
-/// text variant is deep-copied; the other variants project the scalar
-/// payload directly.
-JsValue translate_value(const fm_value_t& v);
+/// Builds the JS `Value` for `v`: `{kind}` plus only the field that kind
+/// carries (`number`, a JS boolean `boolean`, a deep-copied `text`, or
+/// `errorCode`).
+emscripten::val value_to_val(const fm_value_t& v);
 
-/// Moves a value-producing C call's outcome into a result envelope.
-void adopt_value(fm_status_t rc, const fm_value_t& v, JsStatus& status, JsValue& value);
+/// Reads a caller-supplied `Value` into `*out`. `kind` is required, and
+/// only the field that kind carries is read: `boolean` must be a JS
+/// boolean, `number` a Number, `text` a string, `errorCode` an int32.
+/// `text` owns the storage a `FM_VAL_TEXT` payload points at, so it must
+/// outlive the C call. Records a TypeError and returns false on any
+/// missing or wrongly-typed field.
+bool val_to_value(const emscripten::val& in, fm_value_t* out, std::string& text);
 
 /// Translates an `fm_cf_color_t` into the embind value-object mirror.
 JsCfColor translate_cf_color(const fm_cf_color_t& c);
@@ -459,35 +377,24 @@ JsCfMatch translate_cf_match(const fm_cf_match_t& m);
 /// Builds a `CellRect` `{firstRow, firstCol, lastRow, lastCol}` JS object.
 emscripten::val cell_rect_to_val(const fm_cell_rect_t& m);
 
-/// Builds the empty `{status, rect: null, cells: []}` envelope shape used by
-/// `getPivotLayout()` on failure paths.
-emscripten::val empty_pivot_layout_result(JsStatus status);
-
 /// Translates one `fm_pivot_cell_t` into a JS object suitable for
 /// inclusion in the pivotLayout `cells` array.
 emscripten::val pivot_cell_to_val(const fm_pivot_cell_t& cell);
 
-/// Result of a guarded byte-array read. `ok == false` means the input was not
-/// the accepted Uint8Array shape or a JS proxy/typed-array operation threw;
-/// `message` is suitable for a binding-level invalid-argument envelope.
-struct JsBytesReadResult {
-  bool ok = true;
-  std::vector<uint8_t> bytes;
-  std::string message;
-};
-
-/// Reads a caller-supplied Uint8Array through the JS try/catch boundary. The
-/// result distinguishes an invalid input from a valid empty array so factory
-/// callers can preserve their existing invalid-workbook contract.
-JsBytesReadResult val_to_bytes_checked(const emscripten::val& v);
+/// Copies a caller-supplied Uint8Array into `*out` through the JS try/catch
+/// boundary. A non-Uint8Array records a TypeError, and a throwing proxy or
+/// typed-array hook records its exception; both return false. A valid empty
+/// array returns true with `*out` empty.
+bool val_to_bytes_checked(const emscripten::val& v, std::vector<uint8_t>* out);
 
 /// Materialises a fresh JS `Uint8Array` from a contiguous byte range
 /// (a single bulk `set` from a transient WASM memory view).
 emscripten::val bytes_to_val(const uint8_t* data, std::size_t len);
 
-/// Builds `{ status, bytes }` for a snapshot call and releases `data`;
-/// `bytes` is empty when `rc` is non-zero.
-emscripten::val snapshot_bytes_result(fm_status_t rc, uint8_t* data, std::size_t len);
+/// Returns a snapshot call's bytes as a fresh `Uint8Array`, or `undefined`
+/// after recording the failure when `rc` is non-zero; releases `data`
+/// either way.
+emscripten::val snapshot_bytes(fm_status_t rc, uint8_t* data, std::size_t len);
 
 // ---- JS field readers and record builders -----------------------------
 //
@@ -504,11 +411,6 @@ emscripten::val snapshot_bytes_result(fm_status_t rc, uint8_t* data, std::size_t
 /// Reads a `CellRect` record with the explicit numeric reader; every field is
 /// required. A missing / nullish record reads as all zeros.
 fm_cell_rect_t js_pull_range(const emscripten::val& v, JsNarrowNumericReader* reader);
-
-/// Reads a `{kind, number, boolean, text, errorCode}` value record into
-/// `out`; `text` owns the storage a `FM_VAL_TEXT` payload points at. Returns
-/// false when any nested field fails validation.
-bool pull_value(JsNarrowNumericReader& reader, const emscripten::val& value, std::string& text, fm_value_t* out);
 
 /// Reads a range list with the explicit numeric reader. Other WASM families
 /// must use the same per-call reader before invoking a C mutator.
@@ -541,10 +443,6 @@ std::string string_from_cstr(const char* s);
 
 /// Sets `o[key]` to `s`, or to the empty string when `s` is NULL.
 void js_set_cstr(emscripten::val& o, const char* key, const char* s);
-
-/// Builds `{status, [key]: text}` from `rc`; `text` is emitted only on
-/// success and the empty string otherwise.
-emscripten::val js_text_result(fm_status_t rc, const char* key, const char* text);
 
 /// Sets every field of `fields` on `o` as `js_set_cstr` would.
 void js_set_cstr_fields(emscripten::val& o, const JsStrField* fields, std::size_t n);

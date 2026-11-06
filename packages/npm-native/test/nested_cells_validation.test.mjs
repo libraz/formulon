@@ -2,7 +2,7 @@ import test from 'node:test';
 import { assert, getModule, readAll } from './smoke_support.mjs';
 
 function withWorkbook(Workbook, fn) {
-  const wb = Workbook.createDefault().value;
+  const wb = Workbook.createDefault();
   try {
     return fn(wb);
   } finally {
@@ -26,8 +26,8 @@ test('cell phonetic run integers reject narrowing before replacing existing runs
   const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY];
   for (const value of invalid) {
     withWorkbook(mod.Workbook, (wb) => {
-      assert.ok(wb.setText(0, 0, 0, '東京都').ok);
-      assert.ok(wb.setCellPhoneticRuns(0, 0, 0, validRuns()).ok);
+      wb.setText(0, 0, 0, '東京都');
+      wb.setCellPhoneticRuns(0, 0, 0, validRuns());
       const before = readAll(
         () => wb.getCellPhoneticRunCount(0, 0, 0),
         (i) => wb.getCellPhoneticRun(0, 0, 0, i),
@@ -53,8 +53,8 @@ test('cell phonetic run integers reject narrowing before replacing existing runs
 test('cell phonetic run text rejects coercible non-strings like the WASM surface', async () => {
   const mod = await getModule();
   withWorkbook(mod.Workbook, (wb) => {
-    assert.ok(wb.setText(0, 0, 0, '東京都').ok);
-    assert.ok(wb.setCellPhoneticRuns(0, 0, 0, validRuns()).ok);
+    wb.setText(0, 0, 0, '東京都');
+    wb.setCellPhoneticRuns(0, 0, 0, validRuns());
     const before = readAll(
       () => wb.getCellPhoneticRunCount(0, 0, 0),
       (i) => wb.getCellPhoneticRun(0, 0, 0, i),
@@ -74,7 +74,7 @@ test('cell phonetic run text rejects coercible non-strings like the WASM surface
       );
     }
     const bytes = new TextEncoder().encode('トウキョウ');
-    assert.ok(wb.setCellPhoneticRuns(0, 0, 0, [{ ...validRuns()[0], text: bytes }, validRuns()[1]]).ok);
+    wb.setCellPhoneticRuns(0, 0, 0, [{ ...validRuns()[0], text: bytes }, validRuns()[1]]);
     assert.deepEqual(
       readAll(
         () => wb.getCellPhoneticRunCount(0, 0, 0),
@@ -90,8 +90,8 @@ test('cell phonetic properties reject narrowing before changing the stored prope
   const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY];
   for (const value of invalid) {
     withWorkbook(mod.Workbook, (wb) => {
-      assert.ok(wb.setText(0, 0, 0, '大阪').ok);
-      assert.ok(wb.setCellPhoneticProperties(0, 0, 0, { fontId: 3, type: 2, alignment: 2 }).ok);
+      wb.setText(0, 0, 0, '大阪');
+      wb.setCellPhoneticProperties(0, 0, 0, { fontId: 3, type: 2, alignment: 2 });
       const before = wb.getCellPhoneticProperties(0, 0, 0);
       for (const key of ['fontId', 'type', 'alignment']) {
         assert.throws(
@@ -109,24 +109,24 @@ test('cell phonetic properties reject narrowing before changing the stored prope
   }
 });
 
-test('cell nested value integers reject narrowing before formatValue reads them', async () => {
+test('cell nested value fields of the wrong shape are rejected before formatValue reads them', async () => {
   const mod = await getModule();
   const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY];
   for (const value of invalid) {
     withWorkbook(mod.Workbook, (wb) => {
       assert.throws(
-        () => wb.formatValue({ kind: value, number: 1, boolean: 0, text: '', errorCode: 0 }, 'General'),
-        RangeError,
+        () => wb.formatValue({ kind: value, number: 1 }, 'General'),
+        TypeError,
         `formatValue kind=${String(value)}`,
       );
       assert.throws(
-        () => wb.formatValue({ kind: 2, number: 0, boolean: value, text: '', errorCode: 0 }, 'General'),
-        RangeError,
+        () => wb.formatValue({ kind: 2, boolean: value }, 'General'),
+        TypeError,
         `formatValue boolean=${String(value)}`,
       );
       assert.throws(
-        () => wb.formatValue({ kind: 4, number: 0, boolean: 0, text: '', errorCode: value }, 'General'),
-        RangeError,
+        () => wb.formatValue({ kind: 4, errorCode: value }, 'General'),
+        TypeError,
         `formatValue errorCode=${String(value)}`,
       );
     });
@@ -137,18 +137,9 @@ test('cell nested value symbols are rejected before formatValue', async () => {
   const mod = await getModule();
   withWorkbook(mod.Workbook, (wb) => {
     const symbol = Symbol('cell value integer');
-    assert.throws(
-      () => wb.formatValue({ kind: symbol, number: 1, boolean: 0, text: '', errorCode: 0 }, 'General'),
-      TypeError,
-    );
-    assert.throws(
-      () => wb.formatValue({ kind: 2, number: 0, boolean: symbol, text: '', errorCode: 0 }, 'General'),
-      TypeError,
-    );
-    assert.throws(
-      () => wb.formatValue({ kind: 4, number: 0, boolean: 0, text: '', errorCode: symbol }, 'General'),
-      TypeError,
-    );
+    assert.throws(() => wb.formatValue({ kind: symbol, number: 1 }, 'General'), TypeError);
+    assert.throws(() => wb.formatValue({ kind: 2, boolean: symbol }, 'General'), TypeError);
+    assert.throws(() => wb.formatValue({ kind: 4, errorCode: symbol }, 'General'), TypeError);
   });
 });
 
@@ -157,7 +148,7 @@ test('cell range integers reject narrowing before getCellsInRange touches the wo
   const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY];
   for (const value of invalid) {
     withWorkbook(mod.Workbook, (wb) => {
-      assert.ok(wb.setNumber(0, 0, 0, 7).ok);
+      wb.setNumber(0, 0, 0, 7);
       for (const key of ['firstRow', 'firstCol', 'lastRow', 'lastCol']) {
         assert.throws(
           () => wb.getCellsInRange(0, { ...validRange(), [key]: value }),
@@ -172,7 +163,7 @@ test('cell range integers reject narrowing before getCellsInRange touches the wo
 test('cell range getters stop before getCellsInRange calls the C API', async () => {
   const mod = await getModule();
   withWorkbook(mod.Workbook, (wb) => {
-    assert.ok(wb.setNumber(0, 0, 0, 7).ok);
+    wb.setNumber(0, 0, 0, 7);
     const range = validRange();
     Object.defineProperty(range, 'firstRow', {
       enumerable: true,

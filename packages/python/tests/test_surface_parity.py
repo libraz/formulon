@@ -163,7 +163,8 @@ class SurfaceParityTests(unittest.TestCase):
         "get_external_link_count",
         "get_external_link",
         "save",
-        "save_as",
+        "get_sheet_index",
+        "sheet",
         "save_with_diagnostics",
         "get_diagnostics",
     ]
@@ -179,6 +180,10 @@ class SurfaceParityTests(unittest.TestCase):
     def test_public_types_exported(self) -> None:
         for name in (
             "CellRect",
+            "Sheet",
+            "ExcelError",
+            "IndexOutOfRangeError",
+            "WorkbookClosedError",
             "Comment",
             "Hyperlink",
             "DataValidation",

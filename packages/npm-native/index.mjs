@@ -1,11 +1,9 @@
 //
 // ESM entry point for @libraz/formulon-native.
 //
-// This shim loads the compiled `.node` addon and re-exports the
-// JS-friendly API. The `.node` module itself is a CommonJS binary
-// loaded via `createRequire`, then surfaced to ESM consumers verbatim.
-// The JS-visible shape is intentionally kept identical to
-// `@libraz/formulon` (the WASM package) so consumers can swap binaries
+// This shim loads the compiled `.node` addon (a CommonJS binary loaded via
+// `createRequire`) and exposes it through the same `createFormulon()` entry
+// as `@libraz/formulon` (the WASM package), so consumers can swap binaries
 // without code changes.
 //
 // Binary lookup order at require-time:
@@ -16,69 +14,7 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  AnchorEditAs,
-  AnchorKind,
-  CalcMode,
-  CfMatchKind,
-  ChartAxisCrosses,
-  ChartAxisKind,
-  ChartBlanksAs,
-  ChartGrouping,
-  ChartInsertKind,
-  ChartLabelPosition,
-  ChartLegendPosition,
-  ChartLineDash,
-  ChartMarkerSymbol,
-  ChartPlotType,
-  ChartPointState,
-  ChartSeriesDirection,
-  ChartTitleKind,
-  CollationStrength,
-  ColorContext,
-  ColorResolution,
-  DateTimeGrouping,
-  DisplayStatus,
-  DrawingObjectKind,
-  DynamicFilterType,
-  EffectiveStyleSource,
-  ErrorCode,
-  ExternalLinkKind,
-  FilterKind,
-  FilterOperator,
-  GeometryMode,
-  ImageFormat,
-  LogLevel,
-  mergeFunctionMetadata,
-  PIVOT_SHOW_AS_BASE_NEXT,
-  PIVOT_SHOW_AS_BASE_PREVIOUS,
-  PIVOT_VALUES_FIELD,
-  PivotAggregation,
-  PivotAxis,
-  PivotCalendar,
-  PivotCellKind,
-  PivotDatePeriod,
-  PivotFilterType,
-  PivotFilterValueKind,
-  PivotReportLayout,
-  PivotShowValuesAs,
-  PivotSortOrder,
-  RefMode,
-  ShapePaint,
-  SheetVisibility,
-  SlicerCrossFilter,
-  SlicerSortOrder,
-  SortBy,
-  SortMethod,
-  SparklineAxisType,
-  SparklineEmptyCells,
-  SparklineType,
-  StatusCode,
-  ThemeSource,
-  ValidationErrorStyle,
-  ValueKind,
-  WorkbookFormat,
-} from '../npm/common.mjs';
+import * as common from '../npm/common.mjs';
 
 const require_ = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -100,21 +36,24 @@ if (existsSync(prebuildSlot)) {
 }
 
 const native = require_(nativePath);
+native.__setErrorClass(common.FormulonError);
+common.installWorkbookExtensions(native.Workbook);
+const formulon = common.buildFormulon(native, common);
 
-export const Workbook = native.Workbook;
-export const evalFormula = native.evalFormula;
-export const getVersion = native.getVersion;
-export const getLastErrorMessage = native.getLastErrorMessage;
-export const getLastErrorContext = native.getLastErrorContext;
-export const getStatusName = native.getStatusName;
-export const getErrorDisplayName = native.getErrorDisplayName;
-export const setLogMinLevel = native.setLogMinLevel;
-export const setLogSink = native.setLogSink;
+/**
+ * Resolves to the frozen `Formulon` object at once. `options` is accepted for
+ * parity with `@libraz/formulon` and not used.
+ *
+ * @param {object} [_options] `FormulonOptions`.
+ * @returns {Promise<object>}
+ */
+export function createFormulon(_options) {
+  return Promise.resolve(formulon);
+}
+export default createFormulon;
 
-// Keep the native entry point's explicit export list in lockstep with the
-// WASM package while taking the shared values and helper from one canonical
-// module. The default export below deliberately remains explicit as well so
-// adding an internal common export cannot change this package's public shape.
+// The value tables and the error class; everything else is a member of the
+// `Formulon` object.
 export {
   AnchorEditAs,
   AnchorKind,
@@ -145,10 +84,10 @@ export {
   ExternalLinkKind,
   FilterKind,
   FilterOperator,
+  FormulonError,
   GeometryMode,
   ImageFormat,
   LogLevel,
-  mergeFunctionMetadata,
   PIVOT_SHOW_AS_BASE_NEXT,
   PIVOT_SHOW_AS_BASE_PREVIOUS,
   PIVOT_VALUES_FIELD,
@@ -177,77 +116,4 @@ export {
   ValidationErrorStyle,
   ValueKind,
   WorkbookFormat,
-};
-
-export default {
-  Workbook,
-  evalFormula,
-  getVersion,
-  getLastErrorMessage,
-  getLastErrorContext,
-  getStatusName,
-  getErrorDisplayName,
-  setLogMinLevel,
-  setLogSink,
-  mergeFunctionMetadata,
-  ValueKind,
-  CfMatchKind,
-  ChartPlotType,
-  ChartInsertKind,
-  ChartGrouping,
-  ChartBlanksAs,
-  ChartPointState,
-  ChartAxisKind,
-  ChartAxisCrosses,
-  ChartTitleKind,
-  ChartSeriesDirection,
-  ChartLegendPosition,
-  ChartLineDash,
-  ChartMarkerSymbol,
-  ChartLabelPosition,
-  PivotCellKind,
-  PivotAxis,
-  PivotAggregation,
-  PivotShowValuesAs,
-  PIVOT_SHOW_AS_BASE_PREVIOUS,
-  PIVOT_VALUES_FIELD,
-  PIVOT_SHOW_AS_BASE_NEXT,
-  PivotFilterType,
-  PivotDatePeriod,
-  PivotCalendar,
-  PivotFilterValueKind,
-  PivotReportLayout,
-  PivotSortOrder,
-  LogLevel,
-  CalcMode,
-  RefMode,
-  CollationStrength,
-  SheetVisibility,
-  GeometryMode,
-  DisplayStatus,
-  ColorContext,
-  ImageFormat,
-  DrawingObjectKind,
-  AnchorKind,
-  AnchorEditAs,
-  ShapePaint,
-  SlicerSortOrder,
-  SlicerCrossFilter,
-  SparklineType,
-  StatusCode,
-  SparklineAxisType,
-  SparklineEmptyCells,
-  FilterKind,
-  FilterOperator,
-  DynamicFilterType,
-  SortBy,
-  SortMethod,
-  DateTimeGrouping,
-  ValidationErrorStyle,
-  ColorResolution,
-  ThemeSource,
-  EffectiveStyleSource,
-  ExternalLinkKind,
-  ErrorCode,
-  WorkbookFormat,
-};
+} from '../npm/common.mjs';

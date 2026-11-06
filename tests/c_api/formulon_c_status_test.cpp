@@ -66,5 +66,5 @@ TEST(FormulonCStatus, EveryEngineCodeIsNamedAndNothingElseIs) {
       EXPECT_EQ(c_name, UpperSnake(engine_name)) << value;
     }
   }
-  EXPECT_EQ(named, 114);
+  EXPECT_EQ(named, 115);
 }

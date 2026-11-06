@@ -25,10 +25,12 @@ namespace {
 
 using ProfileTextMapFn = fm_status_t (*)(const char*, const char*, const char**);
 
-JsStringResult map_profile_text(ProfileTextMapFn fn, const std::string& text, const std::string& profile_id) {
+std::string map_profile_text(ProfileTextMapFn fn, const std::string& text, const std::string& profile_id) {
   const char* out = nullptr;
-  const fm_status_t rc = fn(text.c_str(), profile_id.c_str(), &out);
-  return string_result(rc, out);
+  if (!succeeded(fn(text.c_str(), profile_id.c_str(), &out))) {
+    return std::string();
+  }
+  return string_from_cstr(out);
 }
 
 }  // namespace
@@ -36,23 +38,21 @@ JsStringResult map_profile_text(ProfileTextMapFn fn, const std::string& text, co
 // ---- Trace helpers -----------------------------------------------------
 //
 // Shared bridge for `precedents` / `dependents`: invokes the C ABI
-// entry point, copies the result into a `ListResult` of {sheet, row, col}
+// entry point, copies the result into an array of {sheet, row, col}
 // value-objects, and frees the C-owned handle.
 
 emscripten::val JsWorkbook::trace_to_val(TraceFn fn, uint32_t sheet, uint32_t row, uint32_t col, uint32_t depth) const {
-  emscripten::val arr = emscripten::val::array();
   if (handle_ == nullptr) {
-    arr.set("status", invalid_handle_status());
-    return arr;
+    record_invalid_handle();
+    return emscripten::val::undefined();
   }
   fm_cell_nodes_t* nodes = nullptr;
-  fm_status_t rc = fn(handle_, sheet, row, col, depth, &nodes);
-  if (rc != 0) {
-    arr.set("status", status_from_rc(rc));
-    return arr;
+  if (!succeeded(fn(handle_, sheet, row, col, depth, &nodes))) {
+    return emscripten::val::undefined();
   }
+  emscripten::val arr = emscripten::val::array();
   std::size_t count = 0;
-  rc = fm_cell_nodes_get_node_count(nodes, &count);
+  fm_status_t rc = fm_cell_nodes_get_node_count(nodes, &count);
   for (std::size_t i = 0; i < count; ++i) {
     fm_cell_node_t n{};
     rc = fm_cell_nodes_get_node_at(nodes, i, &n);
@@ -66,7 +66,9 @@ emscripten::val JsWorkbook::trace_to_val(TraceFn fn, uint32_t sheet, uint32_t ro
     arr.set(static_cast<uint32_t>(i), item);
   }
   fm_cell_nodes_destroy(nodes);
-  arr.set("status", status_from_rc(rc));
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
+  }
   return arr;
 }
 
@@ -85,7 +87,7 @@ emscripten::val JsWorkbook::functionMetadata(const std::string& name) const {
   fm_function_metadata_t md{};
   const fm_status_t rc = fm_get_function_metadata(name.c_str(), &present, &md);
   if (rc != 0 || present == 0) {
-    return optional_result(rc, present, emscripten::val::null());
+    return optional_or_null(rc, present, emscripten::val::null());
   }
   emscripten::val o = emscripten::val::object();
   js_set_cstr(o, "name", md.canonical_name);
@@ -104,7 +106,7 @@ emscripten::val JsWorkbook::functionMetadata(const std::string& name) const {
   if (md.description != nullptr) {
     o.set("description", std::string(md.description));
   }
-  return optional_result(rc, present, o);
+  return optional_or_null(rc, present, o);
 }
 
 emscripten::val JsWorkbook::functionNames() const {
@@ -119,25 +121,26 @@ emscripten::val JsWorkbook::functionNames() const {
     }
     arr.set(static_cast<uint32_t>(i), string_from_cstr(name));
   }
-  arr.set("status", status_from_rc(rc));
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
+  }
   return arr;
 }
 
-JsStringResult JsWorkbook::localizeFunctionName(const std::string& canonical_name,
-                                                const std::string& profile_id) const {
+std::string JsWorkbook::localizeFunctionName(const std::string& canonical_name, const std::string& profile_id) const {
   return map_profile_text(fm_localize_function_name, canonical_name, profile_id);
 }
 
-JsStringResult JsWorkbook::canonicalizeFunctionName(const std::string& localized_name,
-                                                    const std::string& profile_id) const {
+std::string JsWorkbook::canonicalizeFunctionName(const std::string& localized_name,
+                                                 const std::string& profile_id) const {
   return map_profile_text(fm_canonicalize_function_name, localized_name, profile_id);
 }
 
-JsStringResult JsWorkbook::localizeFormula(const std::string& formula, const std::string& profile_id) const {
+std::string JsWorkbook::localizeFormula(const std::string& formula, const std::string& profile_id) const {
   return map_profile_text(fm_localize_formula, formula, profile_id);
 }
 
-JsStringResult JsWorkbook::canonicalizeFormula(const std::string& formula, const std::string& profile_id) const {
+std::string JsWorkbook::canonicalizeFormula(const std::string& formula, const std::string& profile_id) const {
   return map_profile_text(fm_canonicalize_formula, formula, profile_id);
 }
 
@@ -167,13 +170,9 @@ fm_status_t collect_locale_error_names(const std::string& profile_id, emscripten
 }  // namespace
 
 emscripten::val JsWorkbook::localeFacts(const std::string& profile_id) const {
-  emscripten::val o = emscripten::val::object();
-  o.set("facts", emscripten::val::null());
   fm_locale_facts_t f{};
-  fm_status_t rc = fm_get_locale_facts(profile_id.c_str(), &f);
-  if (rc != 0) {
-    o.set("status", status_from_rc(rc));
-    return o;
+  if (!succeeded(fm_get_locale_facts(profile_id.c_str(), &f))) {
+    return emscripten::val::undefined();
   }
   static const char* const kDateOrders[] = {"mdy", "ymd", "dmy"};
   emscripten::val facts = emscripten::val::object();
@@ -192,96 +191,83 @@ emscripten::val JsWorkbook::localeFacts(const std::string& profile_id) const {
   facts.set("measured", f.measured != 0);
   facts.set("collationMeasured", f.collation_measured != 0);
   emscripten::val errors = emscripten::val::array();
-  rc = collect_locale_error_names(profile_id, errors);
-  facts.set("errorNames", errors);
-  o.set("status", status_from_rc(rc));
-  if (rc == 0) {
-    o.set("facts", facts);
+  if (!succeeded(collect_locale_error_names(profile_id, errors))) {
+    return emscripten::val::undefined();
   }
-  return o;
+  facts.set("errorNames", errors);
+  return facts;
 }
 
 emscripten::val JsWorkbook::listLocaleErrorNames(const std::string& profile_id) const {
   emscripten::val arr = emscripten::val::array();
-  arr.set("status", status_from_rc(collect_locale_error_names(profile_id, arr)));
+  if (!succeeded(collect_locale_error_names(profile_id, arr))) {
+    return emscripten::val::undefined();
+  }
   return arr;
 }
 
 // ---- Spill info --------------------------------------------------------
 
 emscripten::val JsWorkbook::spillInfo(uint32_t sheet, uint32_t row, uint32_t col) const {
-  emscripten::val item = emscripten::val::object();
-  item.set("engaged", false);
-  item.set("blocked", false);
-  item.set("rect", emscripten::val::null());
-  if (handle_ == nullptr) {
-    item.set("status", invalid_handle_status());
-    return item;
-  }
   fm_spill_info_t info{};
-  const fm_status_t rc = fm_sheet_get_spill_info(handle_, sheet, row, col, &info);
-  item.set("status", status_from_rc(rc));
-  if (rc != 0) {
-    return item;
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_spill_info(handle_, sheet, row, col, &info)
+                                    : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
   }
+  emscripten::val item = emscripten::val::object();
   item.set("engaged", info.engaged != 0);
   item.set("blocked", info.blocked != 0);
-  if (info.engaged != 0 || info.blocked != 0) {
-    item.set("rect", cell_rect_to_val(info.rect));
-  }
+  item.set("rect", info.engaged != 0 || info.blocked != 0 ? cell_rect_to_val(info.rect) : emscripten::val::null());
   return item;
 }
 
 // ---- Legacy array (CSE) formulas ---------------------------------------
 
 emscripten::val JsWorkbook::getArrayFormula(uint32_t sheet, uint32_t row, uint32_t col) const {
-  emscripten::val o = emscripten::val::object();
-  o.set("arrayFormula", emscripten::val::null());
-  if (handle_ == nullptr) {
-    o.set("status", invalid_handle_status());
-    return o;
-  }
   fm_array_formula_t info{};
-  const fm_status_t rc = fm_sheet_get_array_formula(handle_, sheet, row, col, &info);
-  o.set("status", status_from_rc(rc));
-  if (rc == 0 && info.engaged != 0) {
-    emscripten::val array = emscripten::val::object();
-    array.set("rect", cell_rect_to_val(info.rect));
-    array.set("formula", std::string(info.formula));
-    o.set("arrayFormula", array);
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_array_formula(handle_, sheet, row, col, &info)
+                                    : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
   }
-  return o;
+  if (info.engaged == 0) {
+    return emscripten::val::null();
+  }
+  emscripten::val array = emscripten::val::object();
+  array.set("rect", cell_rect_to_val(info.rect));
+  array.set("formula", std::string(info.formula));
+  return array;
 }
 
-JsStatus JsWorkbook::setArrayFormula(uint32_t sheet, emscripten::val range, const std::string& formula) {
+void JsWorkbook::setArrayFormula(uint32_t sheet, emscripten::val range, const std::string& formula) {
   if (handle_ == nullptr) {
-    return status_from_rc(kBindingInvalidHandle);
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setArrayFormula");
   const fm_cell_rect_t rect = js_pull_range(range, &reader);
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
-  return status_from_rc(fm_sheet_set_array_formula(handle_, sheet, &rect, formula.c_str()));
+  succeeded(fm_sheet_set_array_formula(handle_, sheet, &rect, formula.c_str()));
 }
 
-JsNumberResult JsWorkbook::compareText(const std::string& a, const std::string& b, int32_t strength,
-                                       const std::string& profile_id) const {
+double JsWorkbook::compareText(const std::string& a, const std::string& b, int32_t strength,
+                               const std::string& profile_id) const {
   int32_t order = 0;
-  const fm_status_t rc = fm_compare_text(a.c_str(), b.c_str(), profile_id.c_str(), strength, &order);
-  return number_result(rc, order);
+  if (!succeeded(fm_compare_text(a.c_str(), b.c_str(), profile_id.c_str(), strength, &order))) {
+    return 0.0;
+  }
+  return order;
 }
 
 emscripten::val JsWorkbook::collationClasses(emscripten::val values, int32_t strength,
                                              const std::string& profile_id) const {
-  emscripten::val o = emscripten::val::object();
-  o.set("classIds", emscripten::val::global("Uint32Array").new_(0));
-  o.set("classCount", 0U);
   JsNarrowNumericReader reader("getCollationClasses");
   if (!reader.is_array(values, "values")) {
-    o.set("status", binding_error_status(kInvalidArgument, reader.ok() ? "getCollationClasses: values must be an array"
-                                                                       : reader.message().c_str()));
-    return o;
+    if (reader.ok()) {
+      record_type_error("getCollationClasses: values must be an array");
+    }
+    return emscripten::val::undefined();
   }
   const uint32_t n = reader.length(values, "values");
   // Text payloads must keep their addresses until the C call returns.
@@ -292,34 +278,28 @@ emscripten::val JsWorkbook::collationClasses(emscripten::val values, int32_t str
     if (!reader.ok()) {
       break;
     }
-    if (!reader.has_own(element, "kind", "value.kind")) {
-      if (!reader.ok()) {
-        break;
-      }
-      o.set("status", binding_error_status(kInvalidArgument, "getCollationClasses: each value requires a `kind`"));
-      return o;
-    }
     items[i] = fm_value_t{};
-    pull_value(reader, element, texts[i], &items[i]);
+    if (!val_to_value(element, &items[i], texts[i])) {
+      return emscripten::val::undefined();
+    }
   }
   if (!reader.ok()) {
-    o.set("status", reader.failure());
-    return o;
+    return emscripten::val::undefined();
   }
   std::vector<uint32_t> ids(n);
   uint32_t class_count = 0;
-  const fm_status_t rc = fm_get_collation_classes(items.data(), n, profile_id.c_str(), strength,
-                                                  n == 0 ? nullptr : ids.data(), &class_count);
-  o.set("status", status_from_rc(rc));
-  if (rc == 0) {
-    emscripten::val u32 = emscripten::val::global("Uint32Array").new_(n);
-    if (n != 0) {
-      // The destination is a standalone JS buffer; `set` copies the transient WASM view.
-      u32.call<void>("set", emscripten::val(emscripten::typed_memory_view(n, ids.data())));
-    }
-    o.set("classIds", u32);
-    o.set("classCount", class_count);
+  if (!succeeded(fm_get_collation_classes(items.data(), n, profile_id.c_str(), strength, n == 0 ? nullptr : ids.data(),
+                                          &class_count))) {
+    return emscripten::val::undefined();
   }
+  emscripten::val o = emscripten::val::object();
+  emscripten::val u32 = emscripten::val::global("Uint32Array").new_(n);
+  if (n != 0) {
+    // The destination is a standalone JS buffer; `set` copies the transient WASM view.
+    u32.call<void>("set", emscripten::val(emscripten::typed_memory_view(n, ids.data())));
+  }
+  o.set("classIds", u32);
+  o.set("classCount", class_count);
   return o;
 }
 

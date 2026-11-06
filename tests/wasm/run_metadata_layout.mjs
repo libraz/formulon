@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { readAll } from './smoke_support.mjs';
+import { StatusCode } from '../../packages/npm/common.mjs';
+import { expectFailure, readAll } from './smoke_support.mjs';
 
 export function registerMetadataLayout(Module, test) {
   test('addMerge / getMerges round-trip', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
-      assert.ok(wb.addMerge(0, { firstRow: 0, lastRow: 1, firstCol: 0, lastCol: 2 }).ok);
+      wb.addMerge(0, { firstRow: 0, lastRow: 1, firstCol: 0, lastCol: 2 });
       const merges = wb.listMerges(0);
       assert.equal(merges.length, 1);
       assert.equal(merges[0].firstRow, 0);
@@ -16,24 +17,24 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('removeMerge / removeMergeAt / clearMerges step-wise prune the merge list', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
       const a = { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 };
       const b = { firstRow: 4, firstCol: 4, lastRow: 5, lastCol: 5 };
-      assert.ok(wb.addMerge(0, a).ok);
-      assert.ok(wb.addMerge(0, b).ok);
+      wb.addMerge(0, a);
+      wb.addMerge(0, b);
       // removeMerge with an overlap that hits `a` only.
-      assert.ok(wb.removeMerge(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }).ok);
+      wb.removeMerge(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 });
       const list = wb.listMerges(0);
       assert.equal(list.length, 1);
       assert.equal(list[0].firstRow, 4);
       // removeMergeAt drops the survivor by index.
-      assert.ok(wb.removeMergeAt(0, 0).ok);
+      wb.removeMergeAt(0, 0);
       assert.equal(wb.listMerges(0).length, 0);
       // clearMerges nukes the remainder; safe on an empty list.
-      assert.ok(wb.addMerge(0, a).ok);
-      assert.ok(wb.addMerge(0, b).ok);
-      assert.ok(wb.clearMerges(0).ok);
+      wb.addMerge(0, a);
+      wb.addMerge(0, b);
+      wb.clearMerges(0);
       assert.equal(wb.listMerges(0).length, 0);
     } finally {
       wb.delete();
@@ -41,7 +42,7 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('hyperlinks are read after save+load', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
       assert.equal(wb.listHyperlinks(0).length, 0);
     } finally {
@@ -50,22 +51,20 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('addHyperlink + getHyperlinks round-trip', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
       assert.equal(wb.listHyperlinks(0).length, 0);
       // Three entries with progressively more optional fields populated.
-      assert.ok(wb.addHyperlink(0, 1, 2, 'https://example.com/', '', '', '').ok);
-      assert.ok(wb.addHyperlink(0, 3, 4, 'mailto:hello@example.com', 'Hello', '', '').ok);
-      assert.ok(wb.addHyperlink(0, 5, 6, '', 'See X', 'Internal link', 'Sheet1!A1').ok);
-      assert.ok(
-        wb.addHyperlinkRange(
-          0,
-          { firstRow: 7, firstCol: 8, lastRow: 9, lastCol: 10 },
-          'https://example.com/range',
-          'Range',
-          'Range tip',
-          '',
-        ).ok,
+      wb.addHyperlink(0, 1, 2, 'https://example.com/', '', '', '');
+      wb.addHyperlink(0, 3, 4, 'mailto:hello@example.com', 'Hello', '', '');
+      wb.addHyperlink(0, 5, 6, '', 'See X', 'Internal link', 'Sheet1!A1');
+      wb.addHyperlinkRange(
+        0,
+        { firstRow: 7, firstCol: 8, lastRow: 9, lastCol: 10 },
+        'https://example.com/range',
+        'Range',
+        'Range tip',
+        '',
       );
       const list = wb.listHyperlinks(0);
       assert.equal(list.length, 4);
@@ -93,9 +92,9 @@ export function registerMetadataLayout(Module, test) {
         },
       );
       // Sheet-out-of-range is rejected.
-      assert.ok(!wb.addHyperlink(999, 0, 0, 'https://x/', '', '', '').ok);
+      expectFailure(() => wb.addHyperlink(999, 0, 0, 'https://x/', '', '', ''));
       // clearHyperlinks drops everything.
-      assert.ok(wb.clearHyperlinks(0).ok);
+      wb.clearHyperlinks(0);
       assert.equal(wb.listHyperlinks(0).length, 0);
     } finally {
       wb.delete();
@@ -103,17 +102,17 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('removeHyperlink / removeHyperlinkAt / clearHyperlinks surface on an empty sheet', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
-      // No-op variants on an empty list still return kOk.
-      assert.ok(wb.removeHyperlink(0, 0, 0).ok);
-      assert.ok(wb.clearHyperlinks(0).ok);
+      // Clearing an empty list succeeds; removing a hyperlink that is not there does not.
+      wb.clearHyperlinks(0);
+      expectFailure(() => wb.removeHyperlink(0, 0, 0), StatusCode.NotFound);
       // Out-of-range index is rejected.
-      assert.ok(!wb.removeHyperlinkAt(0, 0).ok);
+      expectFailure(() => wb.removeHyperlinkAt(0, 0), StatusCode.IndexOutOfRange);
       // Sheet-index-out-of-range is rejected on every variant.
-      assert.ok(!wb.removeHyperlink(999, 0, 0).ok);
-      assert.ok(!wb.removeHyperlinkAt(999, 0).ok);
-      assert.ok(!wb.clearHyperlinks(999).ok);
+      expectFailure(() => wb.removeHyperlink(999, 0, 0));
+      expectFailure(() => wb.removeHyperlinkAt(999, 0));
+      expectFailure(() => wb.clearHyperlinks(999));
       // Final list still matches the post-save+load read.
       assert.equal(wb.listHyperlinks(0).length, 0);
     } finally {
@@ -122,44 +121,39 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('setComment / getComment round-trip', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
-      assert.ok(wb.setComment(0, 1, 1, 'Alice', 'Hello').ok);
-      const c = wb.getComment(0, 1, 1).value;
+      wb.setComment(0, 1, 1, 'Alice', 'Hello');
+      const c = wb.getComment(0, 1, 1);
       assert.ok(c !== null);
       assert.equal(c.author, 'Alice');
       assert.equal(c.text, 'Hello');
       // Empty text removes.
-      assert.ok(wb.setComment(0, 1, 1, '', '').ok);
+      wb.setComment(0, 1, 1, '', '');
       const after = wb.getComment(0, 1, 1);
-      assert.ok(after.status.ok, JSON.stringify(after.status));
-      assert.equal(after.value, null);
+      assert.equal(after, null);
     } finally {
       wb.delete();
     }
   });
 
   test('getComment distinguishes absence from an invalid sheet', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
       const missing = wb.getComment(0, 1, 1);
-      assert.equal(missing.status.ok, true);
-      assert.equal(missing.value, null);
-      const invalid = wb.getComment(99, 1, 1);
-      assert.equal(invalid.status.code, 5050);
-      assert.equal(invalid.value, null);
-      assert.ok(wb.setComment(0, 1, 1, 'libraz', 'hello').ok);
+      assert.equal(missing, null);
+      expectFailure(() => wb.getComment(99, 1, 1), StatusCode.SheetIndexOutOfRange);
+      wb.setComment(0, 1, 1, 'libraz', 'hello');
       const found = wb.getComment(0, 1, 1);
-      assert.equal(found.status.ok, true);
-      assert.equal(found.value.author, 'libraz');
-      assert.equal(found.value.text, 'hello');
+      assert.equal(found.author, 'libraz');
+      assert.equal(found.text, 'hello');
     } finally {
       wb.delete();
     }
   });
 
   test('getValidation returns an array', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
       const arr = readAll(
         () => wb.getValidationCount(0),
@@ -173,7 +167,7 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('addValidation / getValidation / removeValidationAt / clearValidations round-trip', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
       // List-type validation at A1:B3 with prompts and an error message.
       const listRule = {
@@ -190,7 +184,7 @@ export function registerMetadataLayout(Module, test) {
         errorTitle: 'Bad value',
         errorMessage: 'Pick from the list',
       };
-      assert.ok(wb.addValidation(0, listRule).status.ok);
+      wb.addValidation(0, listRule);
 
       // Decimal between [0, 100] across two rectangles.
       const decimalRule = {
@@ -204,7 +198,7 @@ export function registerMetadataLayout(Module, test) {
         formula2: '100',
         allowBlank: false,
       };
-      assert.ok(wb.addValidation(0, decimalRule).status.ok);
+      wb.addValidation(0, decimalRule);
 
       const list = readAll(
         () => wb.getValidationCount(0),
@@ -241,7 +235,7 @@ export function registerMetadataLayout(Module, test) {
       assert.equal(b.ranges[1].lastRow, 9);
 
       // removeValidationAt drops the first rule.
-      assert.ok(wb.removeValidation(0, 0).ok);
+      wb.removeValidation(0, 0);
       const after = readAll(
         () => wb.getValidationCount(0),
         (i) => wb.getValidation(0, i),
@@ -250,10 +244,10 @@ export function registerMetadataLayout(Module, test) {
       assert.equal(after[0].type, 2);
 
       // Out-of-range index is rejected.
-      assert.ok(!wb.removeValidation(0, 99).ok);
+      expectFailure(() => wb.removeValidation(0, 99));
 
       // clearValidations drops everything; safe to call again.
-      assert.ok(wb.clearValidations(0).ok);
+      wb.clearValidations(0);
       assert.equal(
         readAll(
           () => wb.getValidationCount(0),
@@ -261,44 +255,41 @@ export function registerMetadataLayout(Module, test) {
         ).length,
         0,
       );
-      assert.ok(wb.clearValidations(0).ok);
+      wb.clearValidations(0);
 
       // Sheet-out-of-range is rejected on every entry.
-      assert.ok(!wb.addValidation(999, listRule).status.ok);
-      assert.ok(!wb.removeValidation(999, 0).ok);
-      assert.ok(!wb.clearValidations(999).ok);
+      expectFailure(() => wb.addValidation(999, listRule));
+      expectFailure(() => wb.removeValidation(999, 0));
+      expectFailure(() => wb.clearValidations(999));
     } finally {
       wb.delete();
     }
   });
 
   test('CF and sheet-layout lists are plain JS arrays with no delete lifecycle', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
       const cf = wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 }, Number.NaN);
-      assert.ok(cf.status.ok);
-      assert.ok(Array.isArray(cf.cells));
+      assert.ok(Array.isArray(cf));
 
-      assert.ok(wb.setColumnWidth(0, 2, 2, 18).ok);
+      wb.setColumnWidth(0, 2, 2, 18);
       const columns = wb.listColumnOverrides(0);
-      assert.ok(columns.status.ok);
-      assert.ok(Array.isArray(columns.columns));
-      assert.equal(columns.columns[0].first, 2);
-      assert.equal(columns.columns[0].width, 18);
+      assert.ok(Array.isArray(columns));
+      assert.equal(columns[0].first, 2);
+      assert.equal(columns[0].width, 18);
 
-      assert.ok(wb.setRowHeight(0, 3, 3, 22).ok);
+      wb.setRowHeight(0, 3, 3, 22);
       const rows = wb.listRowOverrides(0);
-      assert.ok(rows.status.ok);
-      assert.ok(Array.isArray(rows.rows));
-      assert.equal(rows.rows[0].row, 3);
-      assert.equal(rows.rows[0].height, 22);
+      assert.ok(Array.isArray(rows));
+      assert.equal(rows[0].row, 3);
+      assert.equal(rows[0].height, 22);
     } finally {
       wb.delete();
     }
   });
 
   test('sheet-layout setters refuse coordinates and metrics Excel cannot open', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
       // These six setters marshal straight to the C ABI, which is where the
       // validation lives. The assertions below are what keeps that true: a
@@ -316,60 +307,66 @@ export function registerMetadataLayout(Module, test) {
       const kSpanRefused = 'column span out of range';
       const kRowSpanRefused = 'row span out of range';
       const kMetricRefused = 'value must be finite and non-negative';
-      const refused = (status, expectedMessage, label) => {
-        assert.equal(status.ok, false, `${label} should have been refused`);
-        assert.equal(status.code, kInvalidArgument, `${label}: ${JSON.stringify(status)}`);
-        assert.equal(status.message, expectedMessage, `${label}: ${JSON.stringify(status)}`);
+      const refused = (call, expectedMessage, label) => {
+        assert.throws(call, (e) => {
+          assert.equal(e.name, 'FormulonError', label);
+          assert.equal(e.code, kInvalidArgument, `${label}: ${e.message}`);
+          assert.equal(e.message, expectedMessage, label);
+          return true;
+        });
       };
 
       // One past Excel's last column / row.
-      refused(wb.setColumnWidth(0, 0, 16384, 10), kSpanRefused, 'setColumnWidth past the grid');
-      refused(wb.setColumnHidden(0, 0, 16384, true), kSpanRefused, 'setColumnHidden past the grid');
-      refused(wb.setColumnOutline(0, 0, 16384, 1), kSpanRefused, 'setColumnOutline past the grid');
-      refused(wb.setRowHeight(0, 0, 1048576, 10), kRowSpanRefused, 'setRowHeight past the grid');
-      refused(wb.setRowHidden(0, 0, 1048576, true), kRowSpanRefused, 'setRowHidden past the grid');
-      refused(wb.setRowOutline(0, 0, 1048576, 1), kRowSpanRefused, 'setRowOutline past the grid');
+      refused(() => wb.setColumnWidth(0, 0, 16384, 10), kSpanRefused, 'setColumnWidth past the grid');
+      refused(() => wb.setColumnHidden(0, 0, 16384, true), kSpanRefused, 'setColumnHidden past the grid');
+      refused(() => wb.setColumnOutline(0, 0, 16384, 1), kSpanRefused, 'setColumnOutline past the grid');
+      refused(() => wb.setRowHeight(0, 0, 1048576, 10), kRowSpanRefused, 'setRowHeight past the grid');
+      refused(() => wb.setRowHidden(0, 0, 1048576, true), kRowSpanRefused, 'setRowHidden past the grid');
+      refused(() => wb.setRowOutline(0, 0, 1048576, 1), kRowSpanRefused, 'setRowOutline past the grid');
 
       for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1]) {
-        refused(wb.setColumnWidth(0, 0, 2, bad), kMetricRefused, `setColumnWidth(${bad})`);
-        refused(wb.setRowHeight(0, 1, 1, bad), kMetricRefused, `setRowHeight(${bad})`);
+        refused(() => wb.setColumnWidth(0, 0, 2, bad), kMetricRefused, `setColumnWidth(${bad})`);
+        refused(() => wb.setRowHeight(0, 1, 1, bad), kMetricRefused, `setRowHeight(${bad})`);
       }
 
-      // The context names the C ABI entry point that refused the call and
-      // the values it saw, which is what makes a rejection actionable.
-      // These six answer with a bare `Status`, not a `{status}` envelope.
-      const span = wb.setColumnWidth(0, 0, 16384, 10);
-      assert.match(span.context, /fm_sheet_set_column_width: first=0 last=16384/);
+      // The context carries the values the call saw, which is what makes a
+      // rejection actionable.
+      assert.throws(
+        () => wb.setColumnWidth(0, 0, 16384, 10),
+        (e) => e.name === 'FormulonError' && /first=0 last=16384/.test(e.context),
+      );
       // Pinned separately because the metric path runs through a different
       // helper than the span path, and it is the only one of the three that
       // interpolates a `double`. The value itself is left unmatched on
       // purpose: `std::to_string` of a NaN is implementation-defined
       // spelling (`nan`, `-nan`, `nan(ind)`), so asserting it would be a
       // portability trap across the platforms the prebuilds target.
-      const metric = wb.setRowHeight(0, 1, 1, Number.NaN);
-      assert.match(metric.context, /fm_sheet_set_row_height: height=/);
+      assert.throws(
+        () => wb.setRowHeight(0, 1, 1, Number.NaN),
+        (e) => e.name === 'FormulonError' && /height=/.test(e.context),
+      );
 
       // Zero is a real width and a real height, not a rejected one.
-      assert.ok(wb.setColumnWidth(0, 0, 2, 0).ok);
-      assert.ok(wb.setRowHeight(0, 1, 1, 0).ok);
+      wb.setColumnWidth(0, 0, 2, 0);
+      wb.setRowHeight(0, 1, 1, 0);
 
       // The last coordinates Excel does address stay accepted -- an
       // off-by-one in either bound would refuse them.
-      assert.ok(wb.setColumnWidth(0, 16383, 16383, 10).ok);
-      assert.ok(wb.setColumnHidden(0, 16383, 16383, true).ok);
-      assert.ok(wb.setColumnOutline(0, 16383, 16383, 1).ok);
-      assert.ok(wb.setRowHeight(0, 1048575, 1048575, 10).ok);
-      assert.ok(wb.setRowHidden(0, 1048575, 1048575, true).ok);
-      assert.ok(wb.setRowOutline(0, 1048575, 1048575, 1).ok);
+      wb.setColumnWidth(0, 16383, 16383, 10);
+      wb.setColumnHidden(0, 16383, 16383, true);
+      wb.setColumnOutline(0, 16383, 16383, 1);
+      wb.setRowHeight(0, 1048575, 1048575, 10);
+      wb.setRowHidden(0, 1048575, 1048575, true);
+      wb.setRowOutline(0, 1048575, 1048575, 1);
     } finally {
       wb.delete();
     }
   });
 
   test('typed print patches throw on lossy numbers before changing the page setup', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
-      assert.ok(wb.setPageSetup(0, { orientation: 2, scale: 125 }).ok);
+      wb.setPageSetup(0, { orientation: 2, scale: 125 });
       const expectRejected = (patch, field) => {
         assert.throws(() => wb.setPageSetup(0, patch), {
           name: 'RangeError',
@@ -388,7 +385,7 @@ export function registerMetadataLayout(Module, test) {
 
       // Nullish values keep the old patch meaning: the attribute is omitted
       // from this update and the prior value remains in force.
-      assert.ok(wb.setPageSetup(0, { scale: null, orientation: undefined }).ok);
+      wb.setPageSetup(0, { scale: null, orientation: undefined });
       const unchanged = wb.getPageSetup(0);
       assert.equal(unchanged.orientation, 2);
       assert.equal(unchanged.scale, 125);
@@ -398,9 +395,9 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('typed print patches throw on coercion and preserve header/footer fields', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
-      assert.ok(wb.setPrintOptions(0, { gridLines: true }).ok);
+      wb.setPrintOptions(0, { gridLines: true });
       const throwingOptions = {};
       Object.defineProperty(throwingOptions, 'gridLines', {
         get() {
@@ -408,30 +405,30 @@ export function registerMetadataLayout(Module, test) {
         },
       });
       assert.throws(() => wb.setPrintOptions(0, throwingOptions), /print-options getter/);
-      assert.match(wb.getPrintOptionsXml(0).value, /gridLines="true"/);
+      assert.match(wb.getPrintOptionsXml(0), /gridLines="true"/);
 
-      assert.ok(wb.setPageMargins(0, { left: 0.5 }).ok);
+      wb.setPageMargins(0, { left: 0.5 });
       assert.throws(() => wb.setPageMargins(0, { left: '0.75' }), {
         name: 'TypeError',
         message: /setPageMargins.*left/,
       });
       assert.equal(wb.getPageMargins(0).left, 0.5);
 
-      assert.ok(wb.setHeaderFooter(0, { oddHeader: 'before' }).ok);
+      wb.setHeaderFooter(0, { oddHeader: 'before' });
       assert.throws(() => wb.setHeaderFooter(0, { oddHeader: 42 }), {
         name: 'TypeError',
         message: /setHeaderFooter.*oddHeader/,
       });
-      assert.match(wb.getHeaderFooterXml(0).value, /before/);
+      assert.match(wb.getHeaderFooterXml(0), /before/);
     } finally {
       wb.delete();
     }
   });
 
   test('header/footer getter failures are rethrown before any mutation', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
-      assert.ok(wb.setHeaderFooter(0, { oddHeader: 'before' }).ok);
+      wb.setHeaderFooter(0, { oddHeader: 'before' });
       const lateFailure = { oddHeader: 'after' };
       Object.defineProperty(lateFailure, 'alignWithMargins', {
         get() {
@@ -440,65 +437,60 @@ export function registerMetadataLayout(Module, test) {
       });
 
       assert.throws(() => wb.setHeaderFooter(0, lateFailure), /late header getter/);
-      assert.match(wb.getHeaderFooterXml(0).value, /before/);
-      assert.doesNotMatch(wb.getHeaderFooterXml(0).value, /after/);
+      assert.match(wb.getHeaderFooterXml(0), /before/);
+      assert.doesNotMatch(wb.getHeaderFooterXml(0), /after/);
     } finally {
       wb.delete();
     }
   });
 
   test('setSheetVisibility states veryHidden, which the bool setter cannot', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
       const read = () => {
         const r = wb.getView(0);
-        assert.ok(r.status.ok, `getSheetView: ${JSON.stringify(r.status)}`);
-        return r.view;
+        return r;
       };
       assert.equal(read().visibility, 0);
       assert.equal(read().tabHidden, 0);
       // The only visible sheet cannot be hidden: kInvalidArgument, sheet left alone.
-      for (const refused of [wb.setVisibility(0, 1), wb.setTabHidden(0, true)]) {
-        assert.equal(refused.ok, false);
-        assert.equal(refused.code, 2);
-      }
+      expectFailure(() => wb.setVisibility(0, 1), StatusCode.InvalidArgument);
+      expectFailure(() => wb.setTabHidden(0, true), StatusCode.InvalidArgument);
       assert.equal(read().visibility, 0);
       // The last sheet keeps its own refusal (kCannotRemoveLastSheet).
-      assert.equal(wb.removeSheet(0).code, 5052);
-      assert.equal(wb.getSheetCount().value, 1);
+      expectFailure(() => wb.removeSheet(0), StatusCode.CannotRemoveLastSheet);
+      assert.equal(wb.getSheetCount(), 1);
       // A second sheet lets the first one change state, but removing the first
       // while the second is hidden would leave no visible sheet.
-      assert.ok(wb.addSheet('Second').status.ok);
-      assert.ok(wb.setTabHidden(1, true).ok);
-      const lastVisible = wb.removeSheet(0);
-      assert.equal(lastVisible.ok, false);
-      assert.equal(lastVisible.code, 2);
-      assert.equal(wb.getSheetCount().value, 2);
-      assert.ok(wb.setTabHidden(1, false).ok);
+      wb.addSheet('Second');
+      wb.setTabHidden(1, true);
+      expectFailure(() => wb.removeSheet(0), StatusCode.InvalidArgument);
+      assert.equal(wb.getSheetCount(), 2);
+      wb.setTabHidden(1, false);
 
-      assert.ok(wb.setVisibility(0, 2).ok);
+      wb.setVisibility(0, 2);
       // The two-state view stays consistent: a very-hidden sheet reads as
       // hidden to a caller that knows only the bool, never as visible.
       assert.equal(read().visibility, 2);
       assert.equal(read().tabHidden, 1);
 
       // Asking for plain "hidden" must not weaken the stronger state.
-      assert.ok(wb.setTabHidden(0, true).ok);
+      wb.setTabHidden(0, true);
       assert.equal(read().visibility, 2);
 
       // Demotion is the other direction the bool cannot express.
-      assert.ok(wb.setVisibility(0, 1).ok);
+      wb.setVisibility(0, 1);
       assert.equal(read().visibility, 1);
       assert.equal(read().tabHidden, 1);
 
       // Showing the sheet clears either hidden state.
-      assert.ok(wb.setTabHidden(0, false).ok);
+      wb.setTabHidden(0, false);
       assert.equal(read().visibility, 0);
       assert.equal(read().tabHidden, 0);
 
       // An unknown ordinal is refused and leaves the sheet alone.
-      assert.ok(wb.setVisibility(0, 2).ok);
-      assert.equal(wb.setVisibility(0, 3).ok, false);
+      wb.setVisibility(0, 2);
+      expectFailure(() => wb.setVisibility(0, 3));
       assert.equal(read().visibility, 2);
     } finally {
       wb.delete();
@@ -506,26 +498,23 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('getIterative reads back what setIterative stored', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
       const initial = wb.getIterative();
-      assert.ok(initial.status.ok, `getIterative: ${JSON.stringify(initial.status)}`);
       assert.equal(typeof initial.enabled, 'boolean');
       assert.equal(typeof initial.maxIterations, 'number');
       assert.equal(typeof initial.maxChange, 'number');
 
-      assert.ok(wb.setIterative(true, 42, 0.25).ok);
+      wb.setIterative(true, 42, 0.25);
       const enabled = wb.getIterative();
-      assert.ok(enabled.status.ok);
       assert.equal(enabled.enabled, true);
       assert.equal(enabled.maxIterations, 42);
       assert.equal(enabled.maxChange, 0.25);
 
       // The cap and threshold survive switching iteration back off, which is
       // what lets a host render the dialog with the stored values.
-      assert.ok(wb.setIterative(false, 42, 0.25).ok);
+      wb.setIterative(false, 42, 0.25);
       const disabled = wb.getIterative();
-      assert.ok(disabled.status.ok);
       assert.equal(disabled.enabled, false);
       assert.equal(disabled.maxIterations, 42);
       assert.equal(disabled.maxChange, 0.25);
@@ -535,15 +524,13 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('addValidation defaults allowBlank to false', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
-      assert.ok(
-        wb.addValidation(0, {
-          ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
-          type: 3,
-          formula1: '"a,b"',
-        }).status.ok,
-      );
+      wb.addValidation(0, {
+        ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+        type: 3,
+        formula1: '"a,b"',
+      });
       const list = readAll(
         () => wb.getValidationCount(0),
         (i) => wb.getValidation(0, i),
@@ -556,16 +543,14 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('getCellStyleXf reports xfId alongside the cell-format fields', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
       const read = wb.getCellStyleXf(0);
-      assert.ok(read.status.ok, `getCellStyleXf: ${JSON.stringify(read.status)}`);
       // A named-style xf is its own parent, so it never inherits one.
       assert.equal(read.xfId, 0);
       // The record shape matches `getCellXf`, which the documented
       // read / edit / addCellStyleXf round-trip depends on.
       const cellXf = wb.getCellXf(0);
-      assert.ok(cellXf.status.ok);
       for (const key of Object.keys(cellXf)) {
         assert.ok(key in read, `getCellStyleXf is missing '${key}'`);
       }

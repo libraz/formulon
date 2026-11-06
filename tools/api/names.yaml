@@ -1425,18 +1425,21 @@ entries:
     js: AddNumFmtResult
     surfaces: [wasm, native]
     was: { js: AddNumFmtResult }
+    drop: { js: AddNumFmtResult, closes: R8.js }
   record.add_style_result:
     kind: record
     role: result
     js: IndexResult
     surfaces: [wasm, native]
     was: { js: AddStyleResult }
+    drop: { js: IndexResult, closes: R8.js }
   record.array_formula_result:
     kind: record
     role: result
     js: ArrayFormulaResult
     surfaces: [wasm, native]
     was: { js: ArrayFormulaResult }
+    drop: { js: ArrayFormulaResult, closes: R8.js }
   record.auto_filter_column:
     kind: record
     js: AutoFilterColumn
@@ -1452,7 +1455,7 @@ entries:
   record.auto_filter_eval_result:
     kind: record
     role: result
-    js: AutoFilterEvalResult
+    js: AutoFilterEval
     py: AutoFilterEval
     surfaces: [wasm, native, py]
     was: { js: AutoFilterEvalResult }
@@ -1462,6 +1465,7 @@ entries:
     js: AutoFilterResult
     surfaces: [wasm, native]
     was: { js: AutoFilterResult }
+    drop: { js: AutoFilterResult, closes: R8.js }
   record.auto_filter_sort_condition:
     kind: record
     js: AutoFilterSortCondition
@@ -1480,6 +1484,7 @@ entries:
     js: BorderResult
     surfaces: [wasm, native]
     was: { js: BorderResult }
+    drop: { js: BorderResult, closes: R8.js }
   record.cell_entry:
     kind: record
     js: CellEntry
@@ -1491,12 +1496,14 @@ entries:
     js: CellRectResult
     surfaces: [wasm, native]
     was: { js: CellRectResult }
+    drop: { js: CellRectResult, closes: R8.js }
   record.cell_result:
     kind: record
     role: result
     js: CellResult
     surfaces: [wasm, native]
     was: { js: CellResult }
+    drop: { js: CellResult, closes: R8.js }
   record.cell_show_phonetic_result:
     kind: record
     role: result
@@ -1517,17 +1524,19 @@ entries:
     js: CellXfResult
     surfaces: [wasm, native]
     was: { js: CellXfResult }
+    replaced_by: record.cell_xf
+    closes: R8.js
   record.cells_in_range_result:
     kind: record
     role: result
-    js: CellsInRangeResult
+    js: CellsInRange
     py: CellsInRange
     surfaces: [wasm, native, py]
     was: { js: CellsInRangeResult }
   record.cf_cell_result:
     kind: record
     role: result
-    js: CfCellResult
+    js: CfCell
     py: CfCell
     surfaces: [wasm, native, py]
     was: { js: CfCellResult, py: CfCellResult }
@@ -1542,6 +1551,7 @@ entries:
     js: CfRangeResult
     surfaces: [wasm, native]
     was: { js: CfRangeResult }
+    drop: { js: CfRangeResult, closes: R8.js }
   record.cf_value_object_input:
     kind: record
     js: CfValueObjectInput
@@ -1559,6 +1569,7 @@ entries:
     js: ChartDataResult
     surfaces: [wasm, native]
     was: { js: ChartDataResult }
+    drop: { js: ChartDataResult, closes: R8.js }
   record.chart_fill_info:
     kind: record
     js: ChartFillInfo
@@ -1616,7 +1627,7 @@ entries:
   record.collation_classes_result:
     kind: record
     role: result
-    js: CollationClassesResult
+    js: CollationClasses
     surfaces: [wasm, native]
     was: { js: CollationClassesResult }
   record.columns_result:
@@ -1625,6 +1636,7 @@ entries:
     js: ColumnsResult
     surfaces: [wasm, native]
     was: { js: ColumnsResult }
+    drop: { js: ColumnsResult, closes: R8.js }
   record.comment_result:
     kind: record
     role: result
@@ -1689,7 +1701,7 @@ entries:
   record.display_text_result:
     kind: record
     role: result
-    js: DisplayTextResult
+    js: DisplayText
     py: DisplayText
     surfaces: [wasm, native, py]
     was: { js: DisplayTextResult }
@@ -1699,10 +1711,11 @@ entries:
     js: DxfResult
     surfaces: [wasm, native]
     was: { js: DxfResult }
+    drop: { js: DxfResult, closes: R8.js }
   record.effective_style_result:
     kind: record
     role: result
-    js: EffectiveStyleResult
+    js: EffectiveStyle
     surfaces: [wasm, native]
     was: { js: EffectiveStyleResult }
   enum.effective_style_source:
@@ -1714,7 +1727,7 @@ entries:
   record.eval_array_result:
     kind: record
     role: result
-    js: EvalArrayResult
+    js: EvalArray
     surfaces: [wasm, native]
     was: { js: EvalArrayResult }
   record.eval_result:
@@ -1723,6 +1736,7 @@ entries:
     js: EvalResult
     surfaces: [wasm, native]
     was: { js: EvalResult }
+    drop: { js: EvalResult, closes: R8.js }
   record.excel_profile_id:
     kind: record
     js: ExcelProfileId
@@ -1740,12 +1754,14 @@ entries:
     js: FillResult
     surfaces: [wasm, native]
     was: { js: FillResult }
+    drop: { js: FillResult, closes: R8.js }
   record.font_result:
     kind: record
     role: result
     js: FontResult
     surfaces: [wasm, native]
     was: { js: FontResult }
+    drop: { js: FontResult, closes: R8.js }
   record.format_reference_options:
     kind: record
     js: FormatReferenceOptions
@@ -1760,13 +1776,13 @@ entries:
     was: { js: FormulaResult }
   record.formulon_module:
     kind: record
-    js: FormulonModule
-    surfaces: [wasm]
+    js: Formulon
+    surfaces: [wasm, native]
     was: { js: FormulonModule }
   record.formulon_module_options:
     kind: record
-    js: FormulonModuleOptions
-    surfaces: [wasm]
+    js: FormulonOptions
+    surfaces: [wasm, native]
     was: { js: FormulonModuleOptions }
   record.function_metadata_entry:
     kind: record
@@ -1800,7 +1816,7 @@ entries:
   record.image_info_result:
     kind: record
     role: result
-    js: ImageInfoResult
+    js: ImageInfo
     surfaces: [wasm, native]
     was: { js: ImageInfoResult }
   record.image_placement:
@@ -1820,6 +1836,7 @@ entries:
     js: ImageSnapshotResult
     surfaces: [wasm, native]
     was: { js: ImageSnapshotResult }
+    drop: { js: ImageSnapshotResult, closes: R8.js }
   record.insert_chart_result:
     kind: record
     role: result
@@ -1833,6 +1850,7 @@ entries:
     js: ObjectIdResult
     surfaces: [wasm, native]
     was: { js: InsertImageResult }
+    drop: { js: ObjectIdResult, closes: R8.js }
   record.iterative_progress_callback:
     kind: record
     js: IterativeProgressCallback
@@ -1841,7 +1859,7 @@ entries:
   record.iterative_settings_result:
     kind: record
     role: result
-    js: IterativeSettingsResult
+    js: IterativeSettings
     surfaces: [wasm, native]
     was: { js: IterativeSettingsResult }
   record.lambda_text_result:
@@ -1856,37 +1874,44 @@ entries:
     role: result
     js: ConditionalFormatResult
     surfaces: [wasm, native]
+    drop: { js: ConditionalFormatResult, closes: R8.js }
   record.data_validation_result:
     kind: record
     role: result
     js: DataValidationResult
     surfaces: [wasm, native]
+    drop: { js: DataValidationResult, closes: R8.js }
   record.external_link_result:
     kind: record
     role: result
     js: ExternalLinkResult
     surfaces: [wasm, native]
+    drop: { js: ExternalLinkResult, closes: R8.js }
   record.phonetic_run_result:
     kind: record
     role: result
     js: PhoneticRunResult
     surfaces: [wasm, native]
+    drop: { js: PhoneticRunResult, closes: R8.js }
   record.protected_range_result:
     kind: record
     role: result
     js: ProtectedRangeResult
     surfaces: [wasm, native]
+    drop: { js: ProtectedRangeResult, closes: R8.js }
   record.sparkline_group_result:
     kind: record
     role: result
     js: SparklineGroupResult
     surfaces: [wasm, native]
+    drop: { js: SparklineGroupResult, closes: R8.js }
   record.list_result:
     kind: record
     role: result
     js: ListResult
     surfaces: [wasm, native]
     was: { js: ListResult }
+    drop: { js: ListResult, closes: R8.js }
   record.patch:
     kind: record
     js: Patch
@@ -1897,6 +1922,7 @@ entries:
     role: result
     js: OptionalResult
     surfaces: [wasm, native]
+    drop: { js: OptionalResult, closes: R8.js }
   record.locale_date_order:
     kind: record
     js: LocaleDateOrder
@@ -1913,6 +1939,7 @@ entries:
     js: LocaleFactsResult
     surfaces: [wasm, native]
     was: { js: LocaleFactsResult }
+    drop: { js: LocaleFactsResult, closes: R8.js }
   record.merge_function_metadata:
     kind: record
     js: MergeFunctionMetadata
@@ -1936,12 +1963,14 @@ entries:
     js: BoolResult
     surfaces: [wasm, native]
     was: { js: BoolResult }
+    drop: { js: BoolResult, closes: R8.js }
   record.number_result:
     kind: record
     role: result
     js: NumberResult
     surfaces: [wasm, native]
     was: { js: NumberResult }
+    drop: { js: NumberResult, closes: R8.js }
   record.orientation:
     kind: record
     js: Orientation
@@ -1970,7 +1999,7 @@ entries:
   record.pagination_result:
     kind: record
     role: result
-    js: PaginationResult
+    js: Pagination
     py: Pagination
     surfaces: [wasm, native, py]
     was: { js: PaginationResult, py: PaginationResult }
@@ -1980,6 +2009,7 @@ entries:
     js: ParallelRecalcResult
     surfaces: [wasm, native]
     was: { js: ParallelRecalcResult }
+    drop: { js: ParallelRecalcResult, closes: R8.js }
   record.parse_reference_options:
     kind: record
     js: ParseReferenceOptions
@@ -1998,8 +2028,10 @@ entries:
     js: PersonsResult
     surfaces: [wasm, native]
     was: { js: PersonsResult }
+    drop: { js: PersonsResult, closes: R8.js }
   record.phonetic_properties:
     kind: record
+    role: result
     js: PhoneticProperties
     py: PhoneticProperties
     surfaces: [wasm, native, py]
@@ -2010,18 +2042,22 @@ entries:
     js: PhoneticPropertiesResult
     surfaces: [wasm, native]
     was: { js: PhoneticPropertiesResult }
+    replaced_by: record.phonetic_properties
+    closes: R8.js
   record.pinned_now_result:
     kind: record
     role: result
     js: PinnedNowResult
     surfaces: [wasm, native]
     was: { js: PinnedNowResult }
+    drop: { js: PinnedNowResult, closes: R8.js }
   record.pivot_cache_options_result:
     kind: record
     role: result
     js: PivotCacheOptionsResult
     surfaces: [wasm, native]
     was: { js: PivotCacheOptionsResult }
+    drop: { js: PivotCacheOptionsResult, closes: R8.js }
   record.pivot_cache_shared_item_is_date_result:
     kind: record
     role: result
@@ -2032,13 +2068,13 @@ entries:
   record.pivot_calculated_item_result:
     kind: record
     role: result
-    js: PivotCalculatedItemResult
+    js: PivotCalculatedItem
     surfaces: [wasm, native]
     was: { js: PivotCalculatedItemResult }
   record.pivot_data_field_result:
     kind: record
     role: result
-    js: PivotDataFieldResult
+    js: PivotDataField
     surfaces: [wasm, native]
     was: { js: PivotDataFieldResult }
   enum.pivot_date_period:
@@ -2053,34 +2089,35 @@ entries:
     js: PivotFieldOrderResult
     surfaces: [wasm, native]
     was: { js: PivotFieldOrderResult }
+    drop: { js: PivotFieldOrderResult, closes: R8.js }
   record.pivot_field_result:
     kind: record
     role: result
-    js: PivotFieldResult
+    js: PivotField
     surfaces: [wasm, native]
     was: { js: PivotFieldResult }
   record.pivot_filter_result:
     kind: record
     role: result
-    js: PivotFilterResult
+    js: PivotFilter
     surfaces: [wasm, native]
     was: { js: PivotFilterResult }
   record.pivot_grand_totals_result:
     kind: record
     role: result
-    js: PivotGrandTotalsResult
+    js: PivotGrandTotals
     surfaces: [wasm, native]
     was: { js: PivotGrandTotalsResult }
   record.pivot_item_result:
     kind: record
     role: result
-    js: PivotItemResult
+    js: PivotItem
     surfaces: [wasm, native]
     was: { js: PivotItemResult }
   record.pivot_layout_result:
     kind: record
     role: result
-    js: PivotLayoutResult
+    js: PivotLayout
     surfaces: [wasm, native]
     was: { js: PivotLayoutResult }
   record.pivot_options_result:
@@ -2089,6 +2126,7 @@ entries:
     js: PivotOptionsResult
     surfaces: [wasm, native]
     was: { js: PivotOptionsResult }
+    drop: { js: PivotOptionsResult, closes: R8.js }
   record.pivot_projection_pending_result:
     kind: record
     role: result
@@ -2109,8 +2147,11 @@ entries:
     js: PivotStyleInfoResult
     surfaces: [wasm, native]
     was: { js: PivotStyleInfoResult }
+    replaced_by: record.pivot_style_info
+    closes: R8.js
   record.pivot_worksheet_source:
     kind: record
+    role: result
     js: PivotWorksheetSource
     py: PivotWorksheetSource
     surfaces: [wasm, native, py]
@@ -2121,6 +2162,8 @@ entries:
     js: PivotWorksheetSourceResult
     surfaces: [wasm, native]
     was: { js: PivotWorksheetSourceResult }
+    replaced_by: record.pivot_worksheet_source
+    closes: R8.js
   record.range_cell:
     kind: record
     js: RangeCell
@@ -2132,16 +2175,18 @@ entries:
     js: RangeStyleBasesResult
     surfaces: [wasm, native]
     was: { js: RangeStyleBasesResult }
+    drop: { js: RangeStyleBasesResult, closes: R8.js }
   record.range_style_snapshot_result:
     kind: record
     role: result
     js: RangeStyleSnapshotResult
     surfaces: [wasm, native]
     was: { js: RangeStyleSnapshotResult }
+    drop: { js: RangeStyleSnapshotResult, closes: R8.js }
   record.read_diagnostics_result:
     kind: record
     role: result
-    js: ReadDiagnosticsResult
+    js: ReadDiagnostics
     surfaces: [wasm, native]
     was: { js: ReadDiagnosticsResult }
   record.reference_range:
@@ -2161,6 +2206,7 @@ entries:
     js: ResolvedColorResult
     surfaces: [wasm, native]
     was: { js: ResolvedColorResult }
+    drop: { js: ResolvedColorResult, closes: R8.js }
   record.restore_image_options:
     kind: record
     js: RestoreImageOptions
@@ -2172,10 +2218,11 @@ entries:
     js: RowsResult
     surfaces: [wasm, native]
     was: { js: RowsResult }
+    drop: { js: RowsResult, closes: R8.js }
   record.save_diagnostics_result:
     kind: record
     role: result
-    js: SaveDiagnosticsResult
+    js: SaveDiagnostics
     surfaces: [wasm, native]
     was: { js: SaveDiagnosticsResult }
   record.save_result:
@@ -2184,6 +2231,7 @@ entries:
     js: SaveResult
     surfaces: [wasm, native]
     was: { js: SaveResult }
+    drop: { js: SaveResult, closes: R8.js }
   record.shape_input:
     kind: record
     js: ShapeInput
@@ -2207,22 +2255,25 @@ entries:
     js: SheetFormatDefaultsResult
     surfaces: [wasm, native]
     was: { js: SheetFormatDefaultsResult }
+    replaced_by: record.sheet_format_defaults
+    closes: R8.js
   record.sheet_page_breaks_result:
     kind: record
     role: result
     js: SheetPageBreaksResult
     surfaces: [wasm, native]
     was: { js: SheetPageBreaksResult }
+    drop: { js: SheetPageBreaksResult, closes: R8.js }
   record.sheet_page_margins_result:
     kind: record
     role: result
-    js: SheetPageMarginsResult
+    js: SheetPageMargins
     surfaces: [wasm, native]
     was: { js: SheetPageMarginsResult }
   record.sheet_page_setup_result:
     kind: record
     role: result
-    js: SheetPageSetupResult
+    js: SheetPageSetup
     surfaces: [wasm, native]
     was: { js: SheetPageSetupResult }
   record.sheet_print_area_result:
@@ -2231,10 +2282,11 @@ entries:
     js: SheetPrintAreaResult
     surfaces: [wasm, native]
     was: { js: SheetPrintAreaResult }
+    drop: { js: SheetPrintAreaResult, closes: R8.js }
   record.sheet_print_titles_result:
     kind: record
     role: result
-    js: SheetPrintTitlesResult
+    js: SheetPrintTitles
     surfaces: [wasm, native]
     was: { js: SheetPrintTitlesResult }
   record.sheet_print_xml_result:
@@ -2250,8 +2302,10 @@ entries:
     js: SheetProtectionResult
     surfaces: [wasm, native]
     was: { js: SheetProtectionResult }
+    drop: { js: SheetProtectionResult, closes: R8.js }
   record.sheet_selection:
     kind: record
+    role: result
     js: SheetSelection
     py: SheetSelection
     surfaces: [wasm, native, py]
@@ -2262,12 +2316,15 @@ entries:
     js: SheetSelectionResult
     surfaces: [wasm, native]
     was: { js: SheetSelectionResult }
+    replaced_by: record.sheet_selection
+    closes: R8.js
   record.sheet_view_result:
     kind: record
     role: result
     js: SheetViewResult
     surfaces: [wasm, native]
     was: { js: SheetViewResult }
+    drop: { js: SheetViewResult, closes: R8.js }
   record.slicer_input:
     kind: record
     js: SlicerInput
@@ -2283,6 +2340,7 @@ entries:
     js: Status
     surfaces: [wasm, native]
     was: { js: Status }
+    drop: { js: Status, closes: R8.js }
   enum.status_code:
     kind: enum
     js: StatusCode
@@ -2295,6 +2353,7 @@ entries:
     js: StringResult
     surfaces: [wasm, native]
     was: { js: StringResult }
+    drop: { js: StringResult, closes: R8.js }
   record.table_column_entry:
     kind: record
     js: TableColumnEntry
@@ -2318,7 +2377,7 @@ entries:
   record.table_style_defaults_result:
     kind: record
     role: result
-    js: TableStyleDefaultsResult
+    js: TableStyleDefaults
     surfaces: [wasm, native]
     was: { js: TableStyleDefaultsResult }
   record.table_style_element_type:
@@ -2339,7 +2398,7 @@ entries:
   record.theme_result:
     kind: record
     role: result
-    js: ThemeResult
+    js: Theme
     surfaces: [wasm, native]
     was: { js: ThemeResult }
   record.theme_script_font:
@@ -2360,6 +2419,7 @@ entries:
     js: ThreadedCommentsResult
     surfaces: [wasm, native]
     was: { js: ThreadedCommentsResult }
+    drop: { js: ThreadedCommentsResult, closes: R8.js }
   record.validation_entry:
     kind: record
     js: ValidationEntry
@@ -2368,13 +2428,13 @@ entries:
   record.validation_outcome_result:
     kind: record
     role: result
-    js: ValidationOutcomeResult
+    js: ValidationOutcome
     surfaces: [wasm, native]
     was: { js: ValidationOutcomeResult }
   record.width_model_result:
     kind: record
     role: result
-    js: WidthModelResult
+    js: WidthModel
     surfaces: [wasm, native]
     was: { js: WidthModelResult }
   record.workbook_ctor:
@@ -2388,6 +2448,7 @@ entries:
     js: WorkbookProtectionResult
     surfaces: [wasm, native]
     was: { js: WorkbookProtectionResult }
+    drop: { js: WorkbookProtectionResult, closes: R8.js }
   record.cell:
     kind: record
     py: Cell
@@ -2456,8 +2517,9 @@ entries:
     was: { py: ErrorName }
   record.formulon_error:
     kind: record
+    js: FormulonError
     py: FormulonError
-    surfaces: [py]
+    surfaces: [wasm, native, py]
     was: { py: FormulonError }
   record.icon_set:
     kind: record
@@ -2604,6 +2666,9 @@ entries:
     params: { format: "enum:workbook_format", fmt: "enum:workbook_format" }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_save_as, js: saveAs, py: save_as }
+    drop: { js: saveAs, py: save_as, closes: R5.derive }
+    replaced_by: workbook.save
+    closes: R5.derive
   with_diagnostics.save:
     kind: op
     scope: workbook
@@ -2639,6 +2704,15 @@ entries:
     py: get_sheet_name
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_sheet_name, js: sheetName, py: sheet_name }
+  sheet_index.get:
+    kind: op
+    scope: workbook
+    noun: sheet_index
+    c: fm_workbook_get_sheet_index
+    js: getSheetIndex
+    py: get_sheet_index
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_workbook_get_sheet_index }
   sheet.add:
     kind: op
     scope: workbook
@@ -6076,6 +6150,7 @@ entries:
     js: getLastErrorMessage
     surfaces: [c, wasm, native]
     was: { c: fm_last_error_message, js: lastErrorMessage }
+    drop: { js: getLastErrorMessage, closes: R8.js }
   last_error_context.get:
     kind: op
     scope: process
@@ -6084,6 +6159,7 @@ entries:
     js: getLastErrorContext
     surfaces: [c, wasm, native]
     was: { c: fm_last_error_context, js: lastErrorContext }
+    drop: { js: getLastErrorContext, closes: R8.js }
   status_name.get:
     kind: op
     scope: process
@@ -7144,6 +7220,13 @@ entries:
     py: get_version
     surfaces: [c, wasm, native, py]
     was: { c: fm_version_string, js: versionString, py: library_version }
+  version_number.get:
+    kind: op
+    scope: process
+    noun: version_number
+    c: fm_get_version_number
+    surfaces: [c]
+    was: { c: fm_get_version_number }
   version.get.version_string:
     kind: op
     surfaces: [py]
@@ -10631,13 +10714,18 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     was: { c: FM_STATUS_SHEET_COUNT_LIMIT_EXCEEDED }
-  binding.is_valid:
+  constant.fm_status_index_out_of_range:
+    kind: constant
+    c: FM_STATUS_INDEX_OUT_OF_RANGE
+    enum: enum.status_code
+    surfaces: [c]
+  binding.disposed:
     kind: op
-    js: isValid
-    py: is_valid
+    js: disposed
+    py: closed
     surfaces: [wasm, native, py]
     was: { js: isValid, py: is_valid }
-    exception: "binding-only liveness check of the wrapped handle"
+    exception: "binding-only read-only property of the wrapped handle; the predicate follows each language's release verb (dispose / close)"
   workbook.delete:
     kind: op
     surfaces: [wasm]
@@ -10660,11 +10748,103 @@ entries:
     surfaces: [wasm, native, py]
     was: { js: mergeFunctionMetadata, py: merge_function_metadata }
     exception: "binding-only helper that merges function metadata documents"
+  binding.set_value:
+    kind: op
+    js: setValue
+    py: set_value
+    surfaces: [wasm, native, py]
+    exception: "binding convenience: dispatches on the type of the value to the typed setters"
+  binding.sheet:
+    kind: op
+    js: sheet
+    py: sheet
+    surfaces: [wasm, native, py]
+    exception: "binding convenience: the A1 view of one sheet"
+  record.sheet:
+    kind: record
+    js: Sheet
+    py: Sheet
+    surfaces: [wasm, native, py]
+  record.excel_error:
+    kind: record
+    py: ExcelError
+    surfaces: [py]
+  record.index_out_of_range_error:
+    kind: record
+    py: IndexOutOfRangeError
+    surfaces: [py]
+  record.workbook_closed_error:
+    kind: record
+    py: WorkbookClosedError
+    surfaces: [py]
+  record.blank_value:
+    kind: record
+    js: BlankValue
+    surfaces: [wasm, native]
+  record.number_value:
+    kind: record
+    js: NumberValue
+    surfaces: [wasm, native]
+  record.bool_value:
+    kind: record
+    js: BoolValue
+    surfaces: [wasm, native]
+  record.text_value:
+    kind: record
+    js: TextValue
+    surfaces: [wasm, native]
+  record.error_value:
+    kind: record
+    js: ErrorValue
+    surfaces: [wasm, native]
+  record.array_value:
+    kind: record
+    js: ArrayValue
+    surfaces: [wasm, native]
+  record.ref_value:
+    kind: record
+    js: RefValue
+    surfaces: [wasm, native]
+  record.lambda_value:
+    kind: record
+    js: LambdaValue
+    surfaces: [wasm, native]
+  record.cell_xf_input:
+    kind: record
+    role: input
+    js: CellXfInput
+    surfaces: [wasm, native]
+  record.phonetic_properties_input:
+    kind: record
+    role: input
+    js: PhoneticPropertiesInput
+    py: PhoneticPropertiesInput
+    surfaces: [wasm, native, py]
+  record.pivot_style_info_input:
+    kind: record
+    role: input
+    js: PivotStyleInfoInput
+    surfaces: [wasm, native]
+  record.pivot_worksheet_source_input:
+    kind: record
+    role: input
+    js: PivotWorksheetSourceInput
+    surfaces: [wasm, native]
+  record.sheet_format_defaults_input:
+    kind: record
+    role: input
+    js: SheetFormatDefaultsInput
+    surfaces: [wasm, native]
+  record.sheet_selection_input:
+    kind: record
+    role: input
+    js: SheetSelectionInput
+    surfaces: [wasm, native]
   module.create:
     kind: free
     js: createFormulon
-    surfaces: [wasm]
-    exception: "WASM module entry point (default export); the native package has none"
+    surfaces: [wasm, native]
+    exception: "entry point of both npm packages (default and named export)"
     was: { js: createFormulon }
   constant.fm_version_major:
     kind: constant
@@ -10677,6 +10857,10 @@ entries:
   constant.fm_version_patch:
     kind: constant
     c: FM_VERSION_PATCH
+    surfaces: [c]
+  constant.fm_version_number:
+    kind: constant
+    c: FM_VERSION_NUMBER
     surfaces: [c]
   constant.functionmetadataprovider:
     kind: constant

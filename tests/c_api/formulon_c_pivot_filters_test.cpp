@@ -261,7 +261,6 @@ TEST(FormulonCApiPivot, InspectPivotFiltersByIndex) {
   ASSERT_NE(reacquired.value_text, nullptr);
   EXPECT_STREQ(reacquired.value_text, "o");
 
-  const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   const auto make_sentinel = [] {
     fm_pivot_filter_spec_t sentinel{};
     sentinel.axis = FM_PIVOT_AXIS_PAGE;
@@ -300,13 +299,13 @@ TEST(FormulonCApiPivot, InspectPivotFiltersByIndex) {
   };
   expect_error_preserves_output(
       [&](fm_pivot_filter_spec_t* out) { return fm_sheet_get_pivot_filter(wb.handle, 0, pivot_index, 6, out); },
-      invalid);
+      FM_STATUS_INDEX_OUT_OF_RANGE);
   expect_error_preserves_output(
       [&](fm_pivot_filter_spec_t* out) { return fm_sheet_get_pivot_filter(wb.handle, 1, pivot_index, 0, out); },
       FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   expect_error_preserves_output(
       [&](fm_pivot_filter_spec_t* out) { return fm_sheet_get_pivot_filter(wb.handle, 0, pivot_index + 1, 0, out); },
-      invalid);
+      FM_STATUS_INDEX_OUT_OF_RANGE);
   expect_error_preserves_output(
       [&](fm_pivot_filter_spec_t* out) { return fm_sheet_get_pivot_filter(nullptr, 0, pivot_index, 0, out); },
       static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
@@ -401,8 +400,7 @@ TEST(FormulonCApiPivot, PivotFilterRejectsInvalidDataFieldWithoutMutation) {
   spec.value_int = 1;
   spec.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
   spec.data_field_index = 1;  // BuildScratchPivot has only slot 0.
-  const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-  EXPECT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_index, &spec, ignored_index()), invalid);
+  EXPECT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_index, &spec, ignored_index()), FM_STATUS_INDEX_OUT_OF_RANGE);
 
   std::size_t count = 99;
   ASSERT_EQ(fm_sheet_get_pivot_filter_count(wb.handle, 0, pivot_index, &count), 0);
@@ -425,8 +423,7 @@ TEST(FormulonCApiPivot, PivotFilterRejectsSelectorWhenNoDataFields) {
   spec.value_int = 1;
   spec.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
   spec.data_field_index = 0;
-  const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-  EXPECT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_index, &spec, ignored_index()), invalid);
+  EXPECT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_index, &spec, ignored_index()), FM_STATUS_INDEX_OUT_OF_RANGE);
 
   std::size_t count = 99;
   ASSERT_EQ(fm_sheet_get_pivot_filter_count(wb.handle, 0, pivot_index, &count), 0);
@@ -542,7 +539,7 @@ TEST(FormulonCApiPivot, FilterErrorUsesApiName) {
   spec.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
   const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_index, &spec, ignored_index()), invalid);
-  EXPECT_EQ(std::string_view(fm_get_last_error_message()).find("fm_sheet_add_pivot_filter:"), 0U);
+  EXPECT_STRNE(fm_get_last_error_message(), "");
 }
 
 // The spec of a well-formed filter of `type` on the scratch pivot's Region
@@ -647,6 +644,7 @@ TEST(FormulonCApiPivot, FilterAddRejectsPayloadsThatDoNotFitTheType) {
   struct Case {
     const char* label;
     fm_pivot_filter_spec_t spec;
+    bool names_collection_element = false;
   };
   std::vector<Case> cases;
   const auto with = [&](const char* label, int type, auto edit) {
@@ -692,13 +690,15 @@ TEST(FormulonCApiPivot, FilterAddRejectsPayloadsThatDoNotFitTheType) {
   with("negative sum", FM_PIVOT_FILTER_VALUE_BOTTOM_SUM, [](fm_pivot_filter_spec_t& s) { s.value_int = -5; });
   with("data field out of range", FM_PIVOT_FILTER_VALUE_BOTTOM_COUNT,
        [](fm_pivot_filter_spec_t& s) { s.data_field_index = 3; });
+  cases.back().names_collection_element = true;
   with("type past the last", FM_PIVOT_FILTER_DATE_M12,
        [](fm_pivot_filter_spec_t& s) { s.type = RawEnumValue<fm_pivot_filter_type_t>(68); });
 
   const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   for (const Case& c : cases) {
     SCOPED_TRACE(c.label);
-    EXPECT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_index, &c.spec, ignored_index()), invalid);
+    EXPECT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_index, &c.spec, ignored_index()),
+              c.names_collection_element ? FM_STATUS_INDEX_OUT_OF_RANGE : invalid);
     std::size_t count = 99;
     ASSERT_EQ(fm_sheet_get_pivot_filter_count(wb.handle, 0, pivot_index, &count), 0);
     EXPECT_EQ(count, 0U);

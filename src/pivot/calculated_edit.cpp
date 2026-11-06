@@ -32,6 +32,15 @@ Error invalid(std::string message, std::string_view context = {}) {
   return make_error(FormulonErrorCode::kInvalidArgument, std::move(message), std::string(context));
 }
 
+// Same wording and context as the C API's collection-index check.
+Error out_of_range(std::string_view field, std::size_t index, std::size_t count) {
+  const std::string i = std::to_string(index);
+  const std::string n = std::to_string(count);
+  return make_error(FormulonErrorCode::kIndexOutOfRange,
+                    std::string(field) + " " + i + " is out of range (" + n + " items)",
+                    std::string(field) + "=" + i + " count=" + n);
+}
+
 Error precondition(std::string message) {
   return make_error(FormulonErrorCode::kPreconditionFailed, std::move(message));
 }
@@ -380,7 +389,7 @@ Expected<std::size_t, Error> add_calculated_item(PivotCache& cache, const std::v
                                                  std::size_t field_index, std::string_view name,
                                                  std::string_view formula, PivotFormulaHost& host) {
   if (field_index >= cache.fields().size()) {
-    return invalid("calculated item field out of range");
+    return out_of_range("field_index", field_index, cache.fields().size());
   }
   const PivotCacheField& cache_field = cache.fields()[field_index];
   if (cache_field.formula.has_value() || cache_field.field_group.has_value()) {
@@ -464,7 +473,7 @@ Expected<std::size_t, Error> add_calculated_item(PivotCache& cache, const std::v
 Expected<void, Error> set_calculated_item_formula(PivotCache& cache, std::size_t index, std::string_view formula,
                                                   PivotFormulaHost& host) {
   if (index >= cache.calculated_items().size()) {
-    return invalid("calculated item out of range");
+    return out_of_range("index", index, cache.calculated_items().size());
   }
   const PivotCalculatedItem& entry = cache.calculated_items()[index];
   const std::size_t field = entry.cache_field_index;
@@ -483,8 +492,11 @@ Expected<void, Error> set_calculated_item_formula(PivotCache& cache, std::size_t
 
 Expected<void, Error> move_calculated_item(PivotCache& cache, std::size_t index, std::size_t new_index) {
   std::vector<PivotCalculatedItem>& entries = cache.mutable_calculated_items();
-  if (index >= entries.size() || new_index >= entries.size()) {
-    return invalid("calculated item out of range");
+  if (index >= entries.size()) {
+    return out_of_range("index", index, entries.size());
+  }
+  if (new_index >= entries.size()) {
+    return out_of_range("new_index", new_index, entries.size());
   }
   PivotCalculatedItem entry = std::move(entries[index]);
   entries.erase(entries.begin() + static_cast<std::ptrdiff_t>(index));
@@ -495,7 +507,7 @@ Expected<void, Error> move_calculated_item(PivotCache& cache, std::size_t index,
 Expected<void, Error> remove_calculated_item(PivotCache& cache, const std::vector<PivotTable*>& tables,
                                              std::size_t index, PivotFormulaHost& host) {
   if (index >= cache.calculated_items().size()) {
-    return invalid("calculated item out of range");
+    return out_of_range("index", index, cache.calculated_items().size());
   }
   const std::size_t field = cache.calculated_items()[index].cache_field_index;
   const std::optional<std::uint32_t> item = entry_item(cache.calculated_items()[index]);

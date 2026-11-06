@@ -25,10 +25,12 @@
 // a string handed to the JS glue generator rather than compiled C++.
 // `Reflect.apply` rather than `fn.apply` so an object that shadows `apply`
 // cannot redirect the call, and a non-callable argument surfaces as a
-// TypeError this handler classifies like any other throw. The body carries
-// no `//` comments: it is stringified onto a single line. `clang-format`
-// is off over it for the same reason -- it reads the body as C++ and
-// splits JavaScript's `===` into `== =`.
+// TypeError this handler classifies like any other throw. A throw is also
+// recorded (kind 2) in the enclosing wrapped call's slot, displacing a status
+// failure but not an argument error, so that call rethrows the same object.
+// The body carries no `//` comments: it is stringified onto a single line.
+// `clang-format` is off over it for the same reason -- it reads the body as
+// C++ and splits JavaScript's `===` into `== =`.
 //
 // FORMULON-ALLOW: the try / catch below is JavaScript source, not C++. It
 // is the only place a JS exception can be intercepted in a binary linked
@@ -45,6 +47,10 @@ EM_JS(int32_t, fm_wasm_invoke_js_callback, (emscripten::EM_VAL fn_handle, emscri
     }
     return result ? 1 : 0;
   } catch (e) {
+    var errors = Module[Symbol.for('formulon.argumentErrors')];
+    if (errors && errors.depth > 0 && (errors.pending === undefined || errors.pending.kind === 3)) {
+      errors.pending = { kind: 2, message: '', thrown: { value: e } };
+    }
     return -1;
   }
 });
@@ -100,16 +106,11 @@ JsCallbackOutcome call_js_callback(const emscripten::val& fn, const emscripten::
 
 namespace {
 
-/// The envelope a throwing progress callback produces. Built by hand
-/// rather than through `error_status`: the engine never saw a failure, so
-/// there is no thread-local C-ABI diagnostic to copy out.
-JsStatus progress_callback_threw_status() {
-  JsStatus s;
-  s.ok = false;
-  s.code = kBindingCallbackException;
-  s.message = "the iterative progress callback threw; the solve was aborted";
-  s.context = "Workbook.setIterativeProgress";
-  return s;
+/// Records the failure of a solve a throwing progress callback aborted. The
+/// callback's own exception, recorded by the trampoline, takes precedence;
+/// this stands only when that record could not be made.
+void record_progress_callback_threw() {
+  record_binding_failure(kBindingCallbackException, "the iterative progress callback threw; the solve was aborted");
 }
 
 /// `typeof value === 'function'`, which never runs user code.
@@ -172,13 +173,13 @@ JsWorkbook& JsWorkbook::operator=(JsWorkbook&& other) noexcept {
 
 namespace {
 
-// Wraps a factory's outcome as `{ status, value }`: the JS-owned wrapper on
-// success, `null` on failure.
+// Hands a factory's workbook to JS, which owns it from here on; `undefined`
+// after recording the failure.
 emscripten::val factory_result(fm_status_t rc, std::unique_ptr<JsWorkbook> wb) {
-  if (rc != 0) {
-    return optional_result(rc, 0, emscripten::val::null());
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
   }
-  return optional_result(rc, 1, emscripten::val(wb.release(), emscripten::allow_raw_pointers()));
+  return emscripten::val(wb.release(), emscripten::allow_raw_pointers());
 }
 
 }  // namespace
@@ -202,69 +203,54 @@ emscripten::val JsWorkbook::createForProfile(const std::string& profileId) {
 }
 
 emscripten::val JsWorkbook::loadBytes(emscripten::val bytes) {
+  std::vector<uint8_t> data;
+  if (!val_to_bytes_checked(bytes, &data)) {
+    return emscripten::val::undefined();
+  }
   auto wb = std::unique_ptr<JsWorkbook>(new JsWorkbook());
-  const JsBytesReadResult read = val_to_bytes_checked(bytes);
-  // Malformed, non-Uint8Array and empty input go to C as an empty buffer so
-  // the failure refreshes the last-error diagnostics.
-  const bool usable = read.ok && !read.bytes.empty();
-  const fm_status_t rc =
-      fm_workbook_load(usable ? read.bytes.data() : nullptr, usable ? read.bytes.size() : 0, &wb->handle_);
+  // An empty array still reaches C, which rejects it with its own diagnostic.
+  static const uint8_t kEmpty = 0;
+  const fm_status_t rc = fm_workbook_load(data.empty() ? &kEmpty : data.data(), data.size(), &wb->handle_);
   return factory_result(rc, std::move(wb));
 }
 
 namespace {
 
-// Moves a finished save's outcome into the result envelope: the error status,
-// or a JS copy of the buffer, after which the C buffer is freed.
-void finish_save(fm_status_t rc, uint8_t* out, std::size_t len, JsStatus& status, emscripten::val& bytes) {
-  if (rc != 0) {
-    status = error_status(rc);
-    return;
+// The `fm_workbook_format_t` ordinal a save's optional `format` argument
+// names: xlsx when absent. A value past int32 names no format, so it maps to
+// the unknown ordinal for the C layer to reject.
+int32_t save_format(const emscripten::val& format) {
+  if (!js_value_present(format)) {
+    return FM_WORKBOOK_FORMAT_XLSX;
   }
-  bytes = bytes_to_val(out, len);
-  fm_buffer_destroy(out);
-  status = ok_status();
+  const double value = format.as<double>();
+  return value >= 0.0 && value <= 2147483647.0 ? static_cast<int32_t>(value) : FM_WORKBOOK_FORMAT_UNKNOWN;
 }
 
 }  // namespace
 
-JsSaveResult JsWorkbook::save() const {
-  JsSaveResult r;
+emscripten::val JsWorkbook::save(emscripten::val format) const {
   if (handle_ == nullptr) {
-    r.status = invalid_handle_status();
-    return r;
+    record_invalid_handle();
+    return emscripten::val::undefined();
   }
   uint8_t* out = nullptr;
   std::size_t len = 0;
-  const fm_status_t rc = fm_workbook_save(handle_, &out, &len);
-  finish_save(rc, out, len, r.status, r.bytes);
-  return r;
+  const fm_status_t rc = fm_workbook_save_as(handle_, save_format(format), &out, &len);
+  return snapshot_bytes(rc, out, len);
 }
 
-JsSaveResult JsWorkbook::saveAs(int32_t format) const {
-  JsSaveResult r;
+JsSaveDiagnostics JsWorkbook::saveWithDiagnostics(emscripten::val format) const {
+  JsSaveDiagnostics r;
   if (handle_ == nullptr) {
-    r.status = invalid_handle_status();
-    return r;
-  }
-  uint8_t* out = nullptr;
-  std::size_t len = 0;
-  const fm_status_t rc = fm_workbook_save_as(handle_, format, &out, &len);
-  finish_save(rc, out, len, r.status, r.bytes);
-  return r;
-}
-
-JsSaveDiagnosticsResult JsWorkbook::saveWithDiagnostics(int32_t format) const {
-  JsSaveDiagnosticsResult r;
-  if (handle_ == nullptr) {
-    r.status = invalid_handle_status();
+    record_invalid_handle();
     return r;
   }
   uint8_t* out = nullptr;
   std::size_t len = 0;
   fm_save_diagnostics_t d{};
-  fm_status_t rc = fm_workbook_save_with_diagnostics(handle_, format, &out, &len, &d);
-  finish_save(rc, out, len, r.status, r.bytes);
+  const fm_status_t rc = fm_workbook_save_with_diagnostics(handle_, save_format(format), &out, &len, &d);
+  r.bytes = snapshot_bytes(rc, out, len);
   if (rc != 0) {
     return r;
   }
@@ -276,16 +262,14 @@ JsSaveDiagnosticsResult JsWorkbook::saveWithDiagnostics(int32_t format) const {
   return r;
 }
 
-JsReadDiagnosticsResult JsWorkbook::readDiagnostics() const {
-  JsReadDiagnosticsResult r;
+JsReadDiagnostics JsWorkbook::readDiagnostics() const {
+  JsReadDiagnostics r;
   if (handle_ == nullptr) {
-    r.status = invalid_handle_status();
+    record_invalid_handle();
     return r;
   }
   fm_read_diagnostics_t d{};
-  fm_status_t rc = fm_workbook_get_diagnostics(handle_, &d);
-  if (rc != 0) {
-    r.status = error_status(rc);
+  if (!succeeded(fm_workbook_get_diagnostics(handle_, &d))) {
     return r;
   }
   r.undecodedFormulaCount = d.undecoded_formula_count;
@@ -293,28 +277,27 @@ JsReadDiagnosticsResult JsWorkbook::readDiagnostics() const {
   r.undecodedPartCount = d.undecoded_part_count;
   r.skippedFeatureCount = d.skipped_feature_count;
   r.unknownContentTypeCount = d.unknown_content_type_count;
-  r.status = ok_status();
   return r;
 }
 
 // ---- Sheet management ----------------------------------------------------
 
-JsAddStyleResult JsWorkbook::addSheet(const std::string& name) {
+uint32_t JsWorkbook::addSheet(const std::string& name) {
   std::size_t out = 0;
-  return index_result(handle_ != nullptr ? fm_workbook_add_sheet(handle_, name.c_str(), &out) : kBindingInvalidHandle,
-                      out);
+  if (!succeeded(handle_ != nullptr ? fm_workbook_add_sheet(handle_, name.c_str(), &out) : kBindingInvalidHandle)) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(out);
 }
 
-JsStatus JsWorkbook::moveSheet(uint32_t fromIndex, uint32_t toIndex) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_move_sheet(handle_, fromIndex, toIndex)
-                                           : kBindingInvalidHandle);
+void JsWorkbook::moveSheet(uint32_t fromIndex, uint32_t toIndex) {
+  succeeded(handle_ != nullptr ? fm_workbook_move_sheet(handle_, fromIndex, toIndex) : kBindingInvalidHandle);
 }
 
-JsAddStyleResult JsWorkbook::copySheet(uint32_t sourceIndex, uint32_t insertBefore, emscripten::val newName) {
-  JsAddStyleResult r;
+uint32_t JsWorkbook::copySheet(uint32_t sourceIndex, uint32_t insertBefore, emscripten::val newName) {
   if (handle_ == nullptr) {
-    r.status = invalid_handle_status();
-    return r;
+    record_invalid_handle();
+    return 0U;
   }
   std::string name;
   const bool has_name = js_value_present(newName);
@@ -322,49 +305,51 @@ JsAddStyleResult JsWorkbook::copySheet(uint32_t sourceIndex, uint32_t insertBefo
     name = newName.as<std::string>();
   }
   std::size_t out = 0;
-  const fm_status_t rc =
-      fm_workbook_copy_sheet(handle_, sourceIndex, insertBefore, has_name ? name.c_str() : nullptr, &out);
-  return index_result(rc, out);
+  if (!succeeded(fm_workbook_copy_sheet(handle_, sourceIndex, insertBefore, has_name ? name.c_str() : nullptr, &out))) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(out);
 }
 
-JsAddStyleResult JsWorkbook::activeSheet() const {
-  JsAddStyleResult r;
+uint32_t JsWorkbook::activeSheet() const {
   if (handle_ == nullptr) {
-    r.status = invalid_handle_status();
-    return r;
+    record_invalid_handle();
+    return 0U;
   }
   std::size_t out = 0;
-  const fm_status_t rc = fm_workbook_get_active_sheet(handle_, &out);
-  return index_result(rc, out);
+  if (!succeeded(fm_workbook_get_active_sheet(handle_, &out))) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(out);
 }
 
-JsStatus JsWorkbook::setActiveSheet(uint32_t sheet) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_set_active_sheet(handle_, sheet) : kBindingInvalidHandle);
+void JsWorkbook::setActiveSheet(uint32_t sheet) {
+  succeeded(handle_ != nullptr ? fm_workbook_set_active_sheet(handle_, sheet) : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::removeSheet(uint32_t index) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_remove_sheet(handle_, index) : kBindingInvalidHandle);
+void JsWorkbook::removeSheet(uint32_t index) {
+  succeeded(handle_ != nullptr ? fm_workbook_remove_sheet(handle_, index) : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::renameSheet(uint32_t index, const std::string& newName) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_rename_sheet(handle_, index, newName.c_str())
-                                           : kBindingInvalidHandle);
+void JsWorkbook::renameSheet(uint32_t index, const std::string& newName) {
+  succeeded(handle_ != nullptr ? fm_workbook_rename_sheet(handle_, index, newName.c_str()) : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::setDefinedName(const std::string& name, const std::string& formula) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_set_defined_name(handle_, name.c_str(), formula.c_str())
-                                           : kBindingInvalidHandle);
+void JsWorkbook::setDefinedName(const std::string& name, const std::string& formula) {
+  succeeded(handle_ != nullptr ? fm_workbook_set_defined_name(handle_, name.c_str(), formula.c_str())
+                               : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::setDefinedNameScoped(const std::string& name, const std::string& formula, int32_t localSheetId) {
-  return status_from_rc(handle_ != nullptr
-                            ? fm_workbook_set_defined_name_scoped(handle_, name.c_str(), formula.c_str(), localSheetId)
-                            : kBindingInvalidHandle);
+void JsWorkbook::setDefinedNameScoped(const std::string& name, const std::string& formula, int32_t localSheetId) {
+  succeeded(handle_ != nullptr
+                ? fm_workbook_set_defined_name_scoped(handle_, name.c_str(), formula.c_str(), localSheetId)
+                : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::setDefinedNameAttrs(const std::string& name, int32_t localSheetId, emscripten::val attrs) {
+void JsWorkbook::setDefinedNameAttrs(const std::string& name, int32_t localSheetId, emscripten::val attrs) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setDefinedNameAttrs");
   const emscripten::val comment_value = reader.value(attrs, "comment", "attrs.comment");
@@ -373,51 +358,55 @@ JsStatus JsWorkbook::setDefinedNameAttrs(const std::string& name, int32_t localS
   const std::string comment = has_comment ? reader.string(attrs, "comment", "attrs.comment") : std::string();
   const int32_t hidden = js_value_present(hidden_value) ? (reader.boolean_value(hidden_value, false) ? 1 : 0) : -1;
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
-  return status_from_rc(fm_workbook_set_defined_name_attrs(handle_, name.c_str(), localSheetId,
-                                                           has_comment ? comment.c_str() : nullptr, hidden));
+  succeeded(fm_workbook_set_defined_name_attrs(handle_, name.c_str(), localSheetId,
+                                               has_comment ? comment.c_str() : nullptr, hidden));
 }
 
 // ---- Row / column edits --------------------------------------------------
 
-JsStatus JsWorkbook::invoke_row_col_edit(RowColEditFn fn, uint32_t sheet, uint32_t index, uint32_t count) {
+void JsWorkbook::invoke_row_col_edit(RowColEditFn fn, uint32_t sheet, uint32_t index, uint32_t count) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
-  return status_from_rc(fn(handle_, sheet, index, count));
+  succeeded(fn(handle_, sheet, index, count));
 }
 
-JsStatus JsWorkbook::insertRows(uint32_t sheet, uint32_t row, uint32_t count) {
-  return invoke_row_col_edit(fm_sheet_insert_rows, sheet, row, count);
+void JsWorkbook::insertRows(uint32_t sheet, uint32_t row, uint32_t count) {
+  invoke_row_col_edit(fm_sheet_insert_rows, sheet, row, count);
 }
 
-JsStatus JsWorkbook::deleteRows(uint32_t sheet, uint32_t row, uint32_t count) {
-  return invoke_row_col_edit(fm_sheet_delete_rows, sheet, row, count);
+void JsWorkbook::deleteRows(uint32_t sheet, uint32_t row, uint32_t count) {
+  invoke_row_col_edit(fm_sheet_delete_rows, sheet, row, count);
 }
 
-JsStatus JsWorkbook::insertColumns(uint32_t sheet, uint32_t col, uint32_t count) {
-  return invoke_row_col_edit(fm_sheet_insert_columns, sheet, col, count);
+void JsWorkbook::insertColumns(uint32_t sheet, uint32_t col, uint32_t count) {
+  invoke_row_col_edit(fm_sheet_insert_columns, sheet, col, count);
 }
 
-JsStatus JsWorkbook::deleteColumns(uint32_t sheet, uint32_t col, uint32_t count) {
-  return invoke_row_col_edit(fm_sheet_delete_columns, sheet, col, count);
+void JsWorkbook::deleteColumns(uint32_t sheet, uint32_t col, uint32_t count) {
+  invoke_row_col_edit(fm_sheet_delete_columns, sheet, col, count);
 }
 
 // `JsWorkbook::sheetCount` is now emitted by the binding codegen (see
 // `src/wasm/generated/workbook_counts.cpp`).
 
-JsStringResult JsWorkbook::sheetName(uint32_t idx) const {
+std::string JsWorkbook::sheetName(uint32_t idx) const {
   const char* name = nullptr;
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_sheet_name(handle_, idx, &name) : kBindingInvalidHandle;
-  return string_result(rc, name);
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_sheet_name(handle_, idx, &name) : kBindingInvalidHandle)) {
+    return std::string();
+  }
+  return string_from_cstr(name);
 }
 
 // ---- Recalc / calc mode --------------------------------------------------
 
-JsStatus JsWorkbook::recalc() {
+void JsWorkbook::recalc() {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   progress_callback_threw_ = false;
   fm_status_t rc = fm_workbook_recalc(handle_);
@@ -427,32 +416,32 @@ JsStatus JsWorkbook::recalc() {
   // specific answer. Otherwise a throwing progress callback, which the
   // engine only saw as a cancellation, becomes the reported failure.
   if (rc == 0 && callback_threw) {
-    return progress_callback_threw_status();
+    record_progress_callback_threw();
+    return;
   }
-  return status_from_rc(rc);
+  succeeded(rc);
 }
 
-JsParallelRecalcResult JsWorkbook::recalcParallel(emscripten::val threadCount) {
-  JsParallelRecalcResult r;
+JsParallelRecalcStats JsWorkbook::recalcParallel(emscripten::val threadCount) {
+  JsParallelRecalcStats r;
   if (handle_ == nullptr) {
-    r.status = invalid_handle_status();
+    record_invalid_handle();
     return r;
   }
 
   // Do not bind this parameter as uint32_t: embind would otherwise coerce
   // e.g. -0.5, 1.5, NaN, Infinity, null, and a missing argument before this
   // method could apply the public 0..8 integer contract.
+  // Same contract as the Node guard: a non-number is a TypeError, a number
+  // that is not a uint32 is a RangeError, and the 0..8 limit is the C ABI's.
+  if (!threadCount.isNumber()) {
+    record_type_error("positional argument must be a number");
+    return r;
+  }
   const emscripten::val number = emscripten::val::global("Number");
-  const bool is_finite = number.call<bool>("isFinite", threadCount);
-  const bool is_integer = is_finite && number.call<bool>("isInteger", threadCount);
-  const double requested = is_integer ? threadCount.as<double>() : -1.0;
-  const bool is_valid = is_integer && requested >= 0.0 && requested <= 8.0;
-  if (!is_valid) {
-    // Reject here instead of forwarding a sentinel to the C ABI: its own
-    // out-of-range diagnostic would otherwise report a thread_count value
-    // the caller never passed, violating the Status contract that a
-    // binding-raised failure carries an empty context.
-    r.status = binding_error_status(kInvalidArgument, "recalcParallel: `threadCount` must be an integer in 0..8");
+  const double requested = threadCount.as<double>();
+  if (!number.call<bool>("isInteger", threadCount) || requested < 0.0 || requested > 4294967295.0) {
+    record_range_error("positional argument is outside uint32 range");
     return r;
   }
 
@@ -462,132 +451,114 @@ JsParallelRecalcResult JsWorkbook::recalcParallel(emscripten::val threadCount) {
   const fm_status_t rc = fm_workbook_recalc_parallel(handle_, native_thread_count, &stats);
   const bool callback_threw = progress_callback_threw_;
   progress_callback_threw_ = false;
-  if (rc != 0) {
-    // The C ABI guarantees zeroed stats on every failure. Keep the result's
-    // default-zero payload as the binding-level equivalent of that contract.
-    r.status = error_status(rc);
+  if (!succeeded(rc)) {
     return r;
   }
   if (callback_threw) {
     // Same shape as an engine failure: the pass did not finish, so the
     // counters are not reported.
-    r.status = progress_callback_threw_status();
+    record_progress_callback_threw();
     return r;
   }
 
   // Keep these counters as JS numbers. Values through 2^53-1 are represented
   // exactly by a double, and the public TypeScript contract documents that
   // precision boundary rather than leaking a runtime-dependent BigInt.
-  r.stats.cellsEvaluated = static_cast<double>(stats.cells_evaluated);
-  r.stats.sccsProcessed = static_cast<double>(stats.sccs_processed);
-  r.stats.parallelSteps = static_cast<double>(stats.parallel_steps);
-  r.stats.serialFallbackSteps = static_cast<double>(stats.serial_fallback_steps);
-  r.stats.cycleRecoveries = static_cast<double>(stats.cycle_recoveries);
-  r.stats.workerThreadsStarted = stats.worker_threads_started;
-  r.stats.workerThreadsUsed = stats.worker_threads_used;
-  r.status = ok_status();
+  r.cellsEvaluated = static_cast<double>(stats.cells_evaluated);
+  r.sccsProcessed = static_cast<double>(stats.sccs_processed);
+  r.parallelSteps = static_cast<double>(stats.parallel_steps);
+  r.serialFallbackSteps = static_cast<double>(stats.serial_fallback_steps);
+  r.cycleRecoveries = static_cast<double>(stats.cycle_recoveries);
+  r.workerThreadsStarted = stats.worker_threads_started;
+  r.workerThreadsUsed = stats.worker_threads_used;
   return r;
 }
 
-JsStatus JsWorkbook::setIterative(bool enabled, int32_t max_iterations, double max_change) {
-  return status_from_rc(handle_ != nullptr
-                            ? fm_workbook_set_iterative(handle_, enabled ? 1 : 0, max_iterations, max_change)
-                            : kBindingInvalidHandle);
+void JsWorkbook::setIterative(bool enabled, int32_t max_iterations, double max_change) {
+  succeeded(handle_ != nullptr ? fm_workbook_set_iterative(handle_, enabled ? 1 : 0, max_iterations, max_change)
+                               : kBindingInvalidHandle);
 }
 
 emscripten::val JsWorkbook::getIterative() const {
   int32_t enabled = 0;
   uint32_t max_iterations = 0;
   double max_change = 0.0;
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_iterative(handle_, &enabled, &max_iterations, &max_change)
-                                            : kBindingInvalidHandle;
-  if (rc != 0) {
-    enabled = 0;
-    max_iterations = 0;
-    max_change = 0.0;
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_iterative(handle_, &enabled, &max_iterations, &max_change)
+                                    : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
   }
   emscripten::val o = emscripten::val::object();
-  o.set("status", status_from_rc(rc));
   o.set("enabled", enabled != 0);
   o.set("maxIterations", max_iterations);
   o.set("maxChange", max_change);
   return o;
 }
 
-JsNumberResult JsWorkbook::calcMode() const {
-  if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
-  }
+double JsWorkbook::calcMode() const {
   std::int32_t mode = FM_CALC_MODE_AUTO;
-  const fm_status_t rc = fm_workbook_get_calc_mode(handle_, &mode);
-  return number_result(rc, static_cast<double>(mode));
-}
-
-JsStatus JsWorkbook::setCalcMode(uint32_t mode) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_set_calc_mode(handle_, static_cast<std::int32_t>(mode))
-                                           : kBindingInvalidHandle);
-}
-
-emscripten::val JsWorkbook::fullPrecision() const {
-  std::int32_t value = 1;
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_full_precision(handle_, &value) : kBindingInvalidHandle;
-  return bool_result(rc, value);
-}
-
-JsStatus JsWorkbook::setFullPrecision(bool fullPrecision) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_set_full_precision(handle_, fullPrecision ? 1 : 0)
-                                           : kBindingInvalidHandle);
-}
-
-emscripten::val JsWorkbook::calcOnSave() const {
-  std::int32_t value = 1;
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_calc_on_save(handle_, &value) : kBindingInvalidHandle;
-  return bool_result(rc, value);
-}
-
-JsStatus JsWorkbook::setCalcOnSave(bool calcOnSave) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_set_calc_on_save(handle_, calcOnSave ? 1 : 0)
-                                           : kBindingInvalidHandle);
-}
-
-JsNumberResult JsWorkbook::refMode() const {
-  if (handle_ == nullptr) {
-    return number_result(kBindingInvalidHandle, 0.0);
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_calc_mode(handle_, &mode) : kBindingInvalidHandle)) {
+    return 0.0;
   }
+  return static_cast<double>(mode);
+}
+
+void JsWorkbook::setCalcMode(uint32_t mode) {
+  succeeded(handle_ != nullptr ? fm_workbook_set_calc_mode(handle_, static_cast<std::int32_t>(mode))
+                               : kBindingInvalidHandle);
+}
+
+bool JsWorkbook::fullPrecision() const {
+  std::int32_t value = 1;
+  return succeeded(handle_ != nullptr ? fm_workbook_get_full_precision(handle_, &value) : kBindingInvalidHandle) &&
+         value != 0;
+}
+
+void JsWorkbook::setFullPrecision(bool fullPrecision) {
+  succeeded(handle_ != nullptr ? fm_workbook_set_full_precision(handle_, fullPrecision ? 1 : 0)
+                               : kBindingInvalidHandle);
+}
+
+bool JsWorkbook::calcOnSave() const {
+  std::int32_t value = 1;
+  return succeeded(handle_ != nullptr ? fm_workbook_get_calc_on_save(handle_, &value) : kBindingInvalidHandle) &&
+         value != 0;
+}
+
+void JsWorkbook::setCalcOnSave(bool calcOnSave) {
+  succeeded(handle_ != nullptr ? fm_workbook_set_calc_on_save(handle_, calcOnSave ? 1 : 0) : kBindingInvalidHandle);
+}
+
+double JsWorkbook::refMode() const {
   std::int32_t mode = FM_REF_MODE_A1;
-  const fm_status_t rc = fm_workbook_get_ref_mode(handle_, &mode);
-  return number_result(rc, static_cast<double>(mode));
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_ref_mode(handle_, &mode) : kBindingInvalidHandle)) {
+    return 0.0;
+  }
+  return static_cast<double>(mode);
 }
 
-JsStatus JsWorkbook::setRefMode(uint32_t mode) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_set_ref_mode(handle_, static_cast<std::int32_t>(mode))
-                                           : kBindingInvalidHandle);
+void JsWorkbook::setRefMode(uint32_t mode) {
+  succeeded(handle_ != nullptr ? fm_workbook_set_ref_mode(handle_, static_cast<std::int32_t>(mode))
+                               : kBindingInvalidHandle);
 }
 
-emscripten::val JsWorkbook::date1904() const {
+bool JsWorkbook::date1904() const {
   std::int32_t value = 0;
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_date1904(handle_, &value) : kBindingInvalidHandle;
-  return bool_result(rc, value);
+  return succeeded(handle_ != nullptr ? fm_workbook_get_date1904(handle_, &value) : kBindingInvalidHandle) &&
+         value != 0;
 }
 
-JsStatus JsWorkbook::setDate1904(bool date1904) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_set_date1904(handle_, date1904 ? 1 : 0)
-                                           : kBindingInvalidHandle);
+void JsWorkbook::setDate1904(bool date1904) {
+  succeeded(handle_ != nullptr ? fm_workbook_set_date1904(handle_, date1904 ? 1 : 0) : kBindingInvalidHandle);
 }
 
 emscripten::val JsWorkbook::pinnedNow() const {
-  emscripten::val out = emscripten::val::object();
-  out.set("now", emscripten::val::null());
-  if (handle_ == nullptr) {
-    out.set("status", invalid_handle_status());
-    return out;
-  }
   fm_civil_time_t now{};
   std::int32_t pinned = 0;
-  const fm_status_t rc = fm_workbook_get_pinned_now(handle_, &now, &pinned);
-  out.set("status", status_from_rc(rc));
-  if (rc != 0 || pinned == 0) {
-    return out;
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_pinned_now(handle_, &now, &pinned) : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
+  }
+  if (pinned == 0) {
+    return emscripten::val::null();
   }
   emscripten::val civil = emscripten::val::object();
   civil.set("year", now.year);
@@ -596,14 +567,14 @@ emscripten::val JsWorkbook::pinnedNow() const {
   civil.set("hour", now.hour);
   civil.set("minute", now.minute);
   civil.set("second", now.second);
-  out.set("now", civil);
-  return out;
+  return civil;
 }
 
-JsStatus JsWorkbook::setPinnedNow(uint32_t year, uint32_t month, uint32_t day, uint32_t hour, uint32_t minute,
-                                  uint32_t second) {
+void JsWorkbook::setPinnedNow(uint32_t year, uint32_t month, uint32_t day, uint32_t hour, uint32_t minute,
+                              uint32_t second) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   // Each field is widened rather than range-checked here: the C layer owns
   // the calendar domain, and a JS-side duplicate would be a second place to
@@ -611,51 +582,46 @@ JsStatus JsWorkbook::setPinnedNow(uint32_t year, uint32_t month, uint32_t day, u
   const fm_civil_time_t now{static_cast<std::int32_t>(year),   static_cast<std::int32_t>(month),
                             static_cast<std::int32_t>(day),    static_cast<std::int32_t>(hour),
                             static_cast<std::int32_t>(minute), static_cast<std::int32_t>(second)};
-  return status_from_rc(fm_workbook_set_pinned_now(handle_, &now));
+  succeeded(fm_workbook_set_pinned_now(handle_, &now));
 }
 
-JsStatus JsWorkbook::clearPinnedNow() {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_clear_pinned_now(handle_) : kBindingInvalidHandle);
+void JsWorkbook::clearPinnedNow() {
+  succeeded(handle_ != nullptr ? fm_workbook_clear_pinned_now(handle_) : kBindingInvalidHandle);
 }
 
-JsStringResult JsWorkbook::excelProfileId() const {
-  if (handle_ == nullptr) {
-    return string_result(kBindingInvalidHandle, nullptr);
-  }
+std::string JsWorkbook::excelProfileId() const {
   const char* id = nullptr;
-  const fm_status_t rc = fm_workbook_get_excel_profile_id(handle_, &id);
-  return string_result(rc, id);
-}
-
-JsStatus JsWorkbook::setExcelProfileId(const std::string& profile_id) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_set_excel_profile_id(handle_, profile_id.c_str())
-                                           : kBindingInvalidHandle);
-}
-
-JsStringResult JsWorkbook::fileName() const {
-  if (handle_ == nullptr) {
-    return string_result(kBindingInvalidHandle, nullptr);
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_excel_profile_id(handle_, &id) : kBindingInvalidHandle)) {
+    return std::string();
   }
+  return string_from_cstr(id);
+}
+
+void JsWorkbook::setExcelProfileId(const std::string& profile_id) {
+  succeeded(handle_ != nullptr ? fm_workbook_set_excel_profile_id(handle_, profile_id.c_str()) : kBindingInvalidHandle);
+}
+
+std::string JsWorkbook::fileName() const {
   const char* name = nullptr;
-  const fm_status_t rc = fm_workbook_get_file_name(handle_, &name);
-  return string_result(rc, name);
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_file_name(handle_, &name) : kBindingInvalidHandle)) {
+    return std::string();
+  }
+  return string_from_cstr(name);
 }
 
-JsStatus JsWorkbook::setFileName(const std::string& name) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_set_file_name(handle_, name.c_str()) : kBindingInvalidHandle);
+void JsWorkbook::setFileName(const std::string& name) {
+  succeeded(handle_ != nullptr ? fm_workbook_set_file_name(handle_, name.c_str()) : kBindingInvalidHandle);
 }
 
-JsNumberResult JsWorkbook::partialRecalc(uint32_t sheet, emscripten::val viewport) {
-  JsNumberResult out;
+double JsWorkbook::partialRecalc(uint32_t sheet, emscripten::val viewport) {
   if (handle_ == nullptr) {
-    out.status = invalid_handle_status();
-    return out;
+    record_invalid_handle();
+    return 0.0;
   }
   JsNarrowNumericReader reader("recalcViewport");
   const fm_cell_rect_t vp = js_pull_range(viewport, &reader);
   if (!reader.ok()) {
-    out.status = reader.failure();
-    return out;
+    return 0.0;
   }
   uint32_t recomputed = 0;
   progress_callback_threw_ = false;
@@ -663,10 +629,13 @@ JsNumberResult JsWorkbook::partialRecalc(uint32_t sheet, emscripten::val viewpor
   const bool callback_threw = progress_callback_threw_;
   progress_callback_threw_ = false;
   if (rc == 0 && callback_threw) {
-    out.status = progress_callback_threw_status();
-    return out;
+    record_progress_callback_threw();
+    return 0.0;
   }
-  return number_result(rc, recomputed);
+  if (!succeeded(rc)) {
+    return 0.0;
+  }
+  return static_cast<double>(recomputed);
 }
 
 // ---- Iterative-progress callback bridge --------------------------------
@@ -710,52 +679,40 @@ void JsWorkbook::rebind_progress_callback() {
   (void)fm_workbook_set_iterative_progress(handle_, &JsWorkbook::iterativeProgressTrampoline, this);
 }
 
-JsStatus JsWorkbook::setIterativeProgress(emscripten::val cb) {
+void JsWorkbook::setIterativeProgress(emscripten::val cb) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   if (cb.isNull() || cb.isUndefined()) {
     progress_callback_ = emscripten::val::null();
-    fm_status_t rc = fm_workbook_set_iterative_progress(handle_, nullptr, nullptr);
-    return status_from_rc(rc);
+    succeeded(fm_workbook_set_iterative_progress(handle_, nullptr, nullptr));
+    return;
   }
   // Rejected at install, as on the Node surface; the installed callback stays.
   if (!is_js_function(cb)) {
-    return binding_error_status(kInvalidArgument, "setIterativeProgress: `callback` must be a function or null");
+    record_type_error("setIterativeProgress: `callback` must be a function or null");
+    return;
   }
   progress_callback_ = cb;
-  fm_status_t rc = fm_workbook_set_iterative_progress(handle_, &JsWorkbook::iterativeProgressTrampoline, this);
-  return status_from_rc(rc);
+  succeeded(fm_workbook_set_iterative_progress(handle_, &JsWorkbook::iterativeProgressTrampoline, this));
 }
 
 // ---- Free helpers ------------------------------------------------------
 
-JsEvalResult eval_formula(const std::string& formula) {
-  JsEvalResult r;
+emscripten::val eval_formula(const std::string& formula) {
   fm_workbook_t* wb = nullptr;
-  fm_status_t rc = fm_workbook_create_empty(&wb);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
+  if (!succeeded(fm_workbook_create_empty(&wb))) {
+    return emscripten::val::undefined();
   }
   std::size_t sheet_index = 0;
-  rc = fm_workbook_add_sheet(wb, "Sheet1", &sheet_index);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    fm_workbook_destroy(wb);
-    return r;
-  }
   fm_value_t v{};
-  rc = fm_sheet_evaluate_formula(wb, 0, 0, 0, formula.c_str(), &v);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    fm_workbook_destroy(wb);
-    return r;
-  }
-  r.value = translate_value(v);
-  r.status = ok_status();
+  const bool ok = succeeded(fm_workbook_add_sheet(wb, "Sheet1", &sheet_index)) &&
+                  succeeded(fm_sheet_evaluate_formula(wb, 0, 0, 0, formula.c_str(), &v));
+  // The text payload points into the workbook, so convert before destroying it.
+  emscripten::val out = ok ? value_to_val(v) : emscripten::val::undefined();
   fm_workbook_destroy(wb);
-  return r;
+  return out;
 }
 
 std::string version_string() {
@@ -768,14 +725,6 @@ std::string status_string(int32_t status) {
 
 std::string error_display_name(int32_t error_code) {
   return string_from_cstr(fm_get_error_display_name(static_cast<fm_error_code_t>(error_code)));
-}
-
-std::string last_error_message() {
-  return string_from_cstr(fm_get_last_error_message());
-}
-
-std::string last_error_context() {
-  return string_from_cstr(fm_get_last_error_context());
 }
 
 // ---- Structured logging (process-wide, not per handle) --------------------
@@ -799,28 +748,29 @@ void log_sink_trampoline(const char* record, std::size_t len, void* /*user_data*
   // most browsers' `TextDecoder#decode` rejects such a backing buffer.
   emscripten::val args = emscripten::val::array();
   args.set(0, bytes_to_val(reinterpret_cast<const std::uint8_t*>(record), len));
-  // A throwing sink is dropped. Records are emitted from arbitrary depth
-  // inside the engine and a log write has no return path to report on, so
-  // the only contract worth keeping is that it cannot damage the caller.
+  // A log write has no return path to report on, so the engine carries on;
+  // a throwing sink is rethrown by the enclosing call once it returns.
   (void)call_js_callback(sink, args);
 }
 
 }  // namespace
 
-JsStatus set_log_min_level(int32_t level) {
-  return status_from_rc(fm_set_log_min_level(level));
+void set_log_min_level(int32_t level) {
+  succeeded(fm_set_log_min_level(level));
 }
 
-JsStatus set_log_sink(emscripten::val sink) {
+void set_log_sink(emscripten::val sink) {
   if (sink.isNull() || sink.isUndefined()) {
     js_log_sink() = emscripten::val::null();
-    return status_from_rc(fm_set_log_sink(nullptr, nullptr));
+    succeeded(fm_set_log_sink(nullptr, nullptr));
+    return;
   }
   if (!is_js_function(sink)) {
-    return binding_error_status(kInvalidArgument, "setLogSink: `sink` must be a function or null");
+    record_type_error("setLogSink: `sink` must be a function or null");
+    return;
   }
   js_log_sink() = sink;
-  return status_from_rc(fm_set_log_sink(&log_sink_trampoline, nullptr));
+  succeeded(fm_set_log_sink(&log_sink_trampoline, nullptr));
 }
 
 }  // namespace parts

@@ -10,6 +10,7 @@ package is imported.
 from __future__ import annotations
 
 import ast
+import builtins
 import re
 import subprocess
 from pathlib import Path
@@ -39,34 +40,72 @@ _TS_EXPORT_RE = re.compile(
 _JSDOC_LINK_RE = re.compile(r"\{@link\s+([A-Za-z_$][\w$]*)(?:\.([A-Za-z_$][\w$]*))?[^}]*\}")
 _PY_ROLE_RE = re.compile(r":(?:meth|func|class):`~?([^`]+)`")
 _NATIVE_PACKAGE = "@libraz/formulon-native"
+ENTRY_INTERFACE = "Formulon"
+
+_DTS_COMMENT_RE = re.compile(r"/\*.*?\*/", re.S)
+_FENCED_RE_DOC = re.compile(r"```.*?```", re.S)
+_DTS_NAME_RE = re.compile(r"(?:^|(?<=[{;,(]))\s*(?:readonly\s+)?(?:\.\.\.)?([A-Za-z_$][\w$]*)\??\s*[(:<]", re.M)
+_CALL_TOKEN_RE = re.compile(r"([A-Za-z_$][\w$]*)\(\)")
+_MEMBER_TOKEN_RE = re.compile(r"([A-Z][\w$]*)\.([A-Za-z_$][\w$]*)(?:\(\))?")
+_CAMEL_TOKEN_RE = re.compile(r"[a-z][a-z0-9]*[A-Z][\w$]*")
+_PY_LITERAL_RE = re.compile(r"``([^`\n]+)``")
+_PY_CALL_TOKEN_RE = re.compile(r"(?:([A-Za-z_]\w*)\.)?([A-Za-z_]\w*)\(\)")
+_C_TOKEN_RE = re.compile(r"(?<![\w$])(?:fm_[a-z0-9_]+|k[A-Z][a-z]\w*)")
+
+# Tokens a public comment may spell although they look like C names; they are allowed only in a paragraph
+# that opens with "C ABI" and names the C surface on purpose.
+C_TOKEN_DOC_ALLOWLIST: frozenset = frozenset()
+
+EXTERNAL_NAMES_FILE = Path(__file__).with_name("doc_external_names.yaml")
+
+
+def _external_names() -> frozenset:
+    """Tokens of `doc_external_names.yaml` (`- token` entries under the `ooxml:` / `excel_object_model:` groups)."""
+    names = re.findall(r"^\s+-\s+(\S+)\s*$", EXTERNAL_NAMES_FILE.read_text(encoding="utf-8"), re.M)
+    return frozenset(names)
+
+
+# Standard-library and platform names a TSDoc comment may mention without declaring them.
+_JS_GLOBALS = frozenset(
+    {
+        "Array", "ArrayBuffer", "BigInt", "Buffer", "Date", "Error", "Float64Array", "JSON", "Map", "Math",
+        "Number", "Object", "Promise", "RangeError", "Set", "String", "Symbol", "TypeError", "Uint8Array",
+        "Uint32Array", "WebAssembly",
+    }
+)  # fmt: skip
+_JS_PROPERTIES = frozenset(
+    {
+        "byteLength", "byteOffset", "toString", "toJSON", "valueOf", "hasOwnProperty",
+        "isArray", "isFinite", "isInteger", "isNaN",
+    }
+)  # fmt: skip
 
 
 def _members(text: str, interface: str, source: Path) -> Set[str]:
-    match = re.search(r"^export interface %s\b[^{]*\{" % re.escape(interface), text, re.M)
+    match = re.search(r"^export (?:interface|class) %s\b[^{]*\{" % re.escape(interface), text, re.M)
     if match is None:
         raise RuntimeError(f"interface {interface!r} not found in {source}")
     return set(_TS_MEMBER_RE.findall(_extract_braced_block(text, match.end())))
 
 
 class _JsSurface:
-    """What one JS package exports: top-level names, module members, `Workbook` members, factory members."""
+    """What one JS package exports: top-level names, `Formulon` members, `Workbook` members, factory members."""
 
-    def __init__(self, dts: Path, native: bool) -> None:
+    def __init__(self, dts: Path) -> None:
         text = _read(dts)
         self.exports = set(_TS_EXPORT_RE.findall(text))
         self.workbook = _members(text, "Workbook", dts) | {"dispose"}
         self.ctor = _members(text, "WorkbookCtor", dts)
-        self.module = self.exports - {"default"} if native else _members(text, "FormulonModule", dts)
+        self.module = _members(text, ENTRY_INTERFACE, dts)
         self.interfaces = {
             name: _members(text, name, dts)
             for name in self.exports
-            if re.search(r"^export interface %s\b" % re.escape(name), text, re.M)
+            if re.search(r"^export (?:interface|class) %s\b" % re.escape(name), text, re.M)
         }
 
 
 def _js_surfaces() -> Dict[str, _JsSurface]:
-    wasm = _JsSurface(WASM_DTS, native=False)
-    return {"@libraz/formulon": wasm, _NATIVE_PACKAGE: _JsSurface(NODE_DTS, native=True)}
+    return {"@libraz/formulon": _JsSurface(WASM_DTS), _NATIVE_PACKAGE: _JsSurface(NODE_DTS)}
 
 
 def _surface_for(package: str, surfaces: Dict[str, _JsSurface]) -> _JsSurface:
@@ -145,6 +184,8 @@ def _check_js_block(label: str, line: int, block: str, surfaces: Dict[str, _JsSu
             if name not in surface.exports:
                 problems.append(f"readme-identifiers: {where}: `{name}` is not exported by {package}")
     surface = _surface_for(package or "@libraz/formulon", surfaces)
+    if factory is None and "createFormulon" in imported:
+        factory = "createFormulon"
     modules: Set[str] = set()
     if factory:
         modules |= {
@@ -152,14 +193,10 @@ def _check_js_block(label: str, line: int, block: str, surfaces: Dict[str, _JsSu
         }
     ctors = {f"{mod}.Workbook" for mod in modules} | ({"Workbook"} if "Workbook" in imported else set())
     ctor_re = "|".join(re.escape(c) for c in sorted(ctors, key=len, reverse=True))
-    results: Set[str] = set()
     workbooks: Set[str] = set()
     if ctors:
-        for m in re.finditer(r"(?:const|let)\s+(\w+)\s*=\s*(?:%s)\.\w+\([^)]*\)(\.value)?" % ctor_re, block):
-            (workbooks if m.group(2) else results).add(m.group(1))
-        for m in re.finditer(r"(?:const|let)\s+(\w+)\s*=\s*(\w+)\.value\b", block):
-            if m.group(2) in results:
-                workbooks.add(m.group(1))
+        for m in re.finditer(r"(?:const|let)\s+(\w+)\s*=\s*(?:%s)\.\w+\([^)]*\)" % ctor_re, block):
+            workbooks.add(m.group(1))
     if ctors:
         for m in re.finditer(r"(?<![\w.])(?:%s)\.(\w+)\(" % ctor_re, block):
             if m.group(1) not in surface.ctor:
@@ -227,7 +264,7 @@ def _check_js_doc_links(surfaces: Dict[str, _JsSurface], problems: List[str]) ->
         label = path.relative_to(REPO_ROOT)
         for m in _JSDOC_LINK_RE.finditer(_read(path)):
             head, member = m.group(1), m.group(2)
-            if head not in surface.exports:
+            if head not in surface.exports and head not in surface.module:
                 problems.append(f"readme-identifiers: {label}: {{@link {head}}} is not exported")
             elif member and member not in surface.interfaces.get(head, set()):
                 problems.append(f"readme-identifiers: {label}: {{@link {head}.{member}}} has no such member")
@@ -253,6 +290,100 @@ def _check_py_doc_roles(py: _PySurface, problems: List[str]) -> None:
                 problems.append(f"readme-identifiers: {where}: `{raw}` does not resolve")
 
 
+def _is_excel_function(name: str) -> bool:
+    """An all-uppercase identifier in a code span is an Excel function name, not an implementation word."""
+    return re.fullmatch(r"[A-Z][A-Z0-9_.]*", name) is not None
+
+
+def _comment_text(dts_text: str) -> str:
+    """The prose of every block comment, without fenced code."""
+    blocks = (re.sub(r"^\s*\* ?", "", block[3:-2], flags=re.M) for block in _DTS_COMMENT_RE.findall(dts_text))
+    return _FENCED_RE_DOC.sub("", "\n".join(blocks))
+
+
+def _declared_names(dts_text: str) -> Set[str]:
+    code = _DTS_COMMENT_RE.sub(" ", dts_text)
+    return set(_TS_EXPORT_RE.findall(code)) | set(_DTS_NAME_RE.findall(code))
+
+
+def _members_of_declaration(dts_text: str, head: str) -> Optional[Set[str]]:
+    code = _DTS_COMMENT_RE.sub(" ", dts_text)
+    out: Optional[Set[str]] = None
+    for name in (head, head + "Ctor"):
+        pattern = r"^export\s+(?:declare\s+)?(?:interface|class|const|enum)\s+%s\b[^{;]*\{" % re.escape(name)
+        match = re.search(pattern, code, re.M)
+        if match is None:
+            continue
+        body = _extract_braced_block(code, match.end())
+        found = set(_DTS_NAME_RE.findall("{" + body))
+        found |= set(re.findall(r"(?:^|[{,])\s*([A-Za-z_$][\w$]*)\s*=", body, re.M))
+        out = (out or set()) | found
+    return out
+
+
+def check_dts_doc_tokens(label: object, dts_text: str, problems: List[str]) -> None:
+    """Backticked `ident()`, `Type.member` and camelCase tokens of a declaration file's comments resolve to
+    a declaration of the same file, and no comment spells a C name.
+    """
+    declared = _declared_names(dts_text) | _external_names()
+    exports = set(_TS_EXPORT_RE.findall(_DTS_COMMENT_RE.sub(" ", dts_text)))
+    prose = _comment_text(dts_text)
+    seen: Set[str] = set()
+    for span in _INLINE_CODE_RE.findall(prose):
+        token = span.strip()
+        if token in seen:
+            continue
+        seen.add(token)
+        member = _MEMBER_TOKEN_RE.fullmatch(token)
+        call = _CALL_TOKEN_RE.fullmatch(token)
+        if token in declared:
+            continue
+        if member:
+            head, name = member.groups()
+            if head in _JS_GLOBALS:
+                continue
+            members = _members_of_declaration(dts_text, head) if head in exports else None
+            if head not in exports:
+                problems.append(f"readme-identifiers: {label}: `{token}` names `{head}`, which is not declared")
+            elif members is not None and name not in members:
+                problems.append(f"readme-identifiers: {label}: `{token}` has no member `{name}`")
+            elif members is None and name not in declared:
+                problems.append(f"readme-identifiers: {label}: `{token}` does not resolve")
+        elif call:
+            if not _is_excel_function(call.group(1)) and call.group(1) not in declared | _JS_PROPERTIES:
+                problems.append(f"readme-identifiers: {label}: `{token}` does not resolve")
+        elif _CAMEL_TOKEN_RE.fullmatch(token):
+            if token not in declared and token not in _JS_PROPERTIES:
+                problems.append(f"readme-identifiers: {label}: `{token}` does not resolve")
+    for token in sorted(set(_C_TOKEN_RE.findall(prose)) - C_TOKEN_DOC_ALLOWLIST):
+        problems.append(f"readme-identifiers: {label}: the comments name the C identifier `{token}`")
+
+
+def check_py_doc_tokens(py: object, problems: List[str]) -> None:
+    """Double-backticked `ident()` tokens of the public docstrings resolve to a public name of the package,
+    and no docstring spells a C name.
+    """
+    members = set().union(*py.classes.values()) if py.classes else set()
+    for where, doc in py.docstrings:
+        for span in _PY_LITERAL_RE.findall(doc):
+            call = _PY_CALL_TOKEN_RE.fullmatch(span.strip())
+            if call is None:
+                continue
+            head, name = call.groups()
+            if head is not None:
+                if head in py.classes and name not in py.classes[head]:
+                    problems.append(f"readme-identifiers: {where}: ``{span}`` has no member `{name}`")
+            elif (
+                not _is_excel_function(name)
+                and name not in py.module
+                and name not in members
+                and not hasattr(builtins, name)
+            ):
+                problems.append(f"readme-identifiers: {where}: ``{span}`` does not resolve")
+        for token in sorted(set(_C_TOKEN_RE.findall(doc)) - C_TOKEN_DOC_ALLOWLIST):
+            problems.append(f"readme-identifiers: {where}: the docstring names the C identifier `{token}`")
+
+
 def check_readme_identifiers() -> List[str]:
     """Every identifier a public doc names exists on its surface, and no public link leads to an ignored path."""
     problems: List[str] = []
@@ -274,5 +405,8 @@ def check_readme_identifiers() -> List[str]:
             elif lang in ("python", "py"):
                 _check_py_block(label, line, block, py, problems)
     _check_js_doc_links(surfaces, problems)
+    for path in (WASM_DTS, NODE_DTS):
+        check_dts_doc_tokens(path.relative_to(REPO_ROOT), _read(path), problems)
     _check_py_doc_roles(py, problems)
+    check_py_doc_tokens(py, problems)
     return problems

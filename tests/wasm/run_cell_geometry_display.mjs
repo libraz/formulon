@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { StatusCode } from '../../packages/npm/common.mjs';
+import { expectFailure } from './smoke_support.mjs';
 
 const RANGE_A1_F6 = { firstRow: 0, firstCol: 0, lastRow: 5, lastCol: 5 };
 
 function withWorkbook(Module, fn) {
-  const wb = Module.Workbook.createDefault().value;
+  const wb = Module.Workbook.createDefault();
   try {
     fn(wb);
   } finally {
@@ -14,22 +16,22 @@ function withWorkbook(Module, fn) {
 export function registerCellGeometryDisplay(Module, test) {
   test('clearColumnWidth returns a column to the sheet default and follows later default changes', () => {
     withWorkbook(Module, (wb) => {
-      assert.ok(wb.setFormatDefaults(0, { defaultColWidth: 10 }).ok);
-      assert.ok(wb.setColumnWidth(0, 0, 0, 10).ok);
-      assert.ok(wb.clearColumnWidth(0, 0, 0).ok);
-      assert.ok(wb.setFormatDefaults(0, { defaultColWidth: 20 }).ok);
-      assert.equal(wb.getColumnWidthPt(0, 0, 0).value, wb.getColumnWidthPt(0, 1, 0).value);
-      assert.equal(wb.listColumnOverrides(0).columns.length, 0);
+      wb.setFormatDefaults(0, { defaultColWidth: 10 });
+      wb.setColumnWidth(0, 0, 0, 10);
+      wb.clearColumnWidth(0, 0, 0);
+      wb.setFormatDefaults(0, { defaultColWidth: 20 });
+      assert.equal(wb.getColumnWidthPt(0, 0, 0), wb.getColumnWidthPt(0, 1, 0));
+      assert.equal(wb.listColumnOverrides(0).length, 0);
     });
   });
 
   test('clearColumnWidth splits a span, keeps hidden / outline, and rejects bad arguments', () => {
     withWorkbook(Module, (wb) => {
-      assert.ok(wb.setColumnWidth(0, 0, 4, 20).ok);
-      assert.ok(wb.setColumnHidden(0, 2, 2, true).ok);
-      assert.ok(wb.setColumnOutline(0, 2, 2, 3).ok);
-      assert.ok(wb.clearColumnWidth(0, 1, 3).ok);
-      const cols = wb.listColumnOverrides(0).columns;
+      wb.setColumnWidth(0, 0, 4, 20);
+      wb.setColumnHidden(0, 2, 2, true);
+      wb.setColumnOutline(0, 2, 2, 3);
+      wb.clearColumnWidth(0, 1, 3);
+      const cols = wb.listColumnOverrides(0);
       assert.deepEqual(
         cols.map((c) => [c.first, c.last, c.hasWidth, c.hidden, c.outlineLevel]),
         [
@@ -38,12 +40,12 @@ export function registerCellGeometryDisplay(Module, test) {
           [4, 4, 1, 0, 0],
         ],
       );
-      assert.ok(wb.clearColumnWidth(0, 8, 9).ok);
-      assert.equal(wb.listColumnOverrides(0).columns.length, 3);
-      assert.equal(wb.clearColumnWidth(0, 5, 3).ok, false);
-      assert.equal(wb.clearColumnWidth(0, 0, 16384).ok, false);
-      assert.equal(wb.clearColumnWidth(9, 0, 0).ok, false);
-      assert.equal(wb.listColumnOverrides(0).columns.length, 3);
+      wb.clearColumnWidth(0, 8, 9);
+      assert.equal(wb.listColumnOverrides(0).length, 3);
+      expectFailure(() => wb.clearColumnWidth(0, 5, 3));
+      expectFailure(() => wb.clearColumnWidth(0, 0, 16384));
+      expectFailure(() => wb.clearColumnWidth(9, 0, 0));
+      assert.equal(wb.listColumnOverrides(0).length, 3);
     });
   });
 
@@ -53,7 +55,7 @@ export function registerCellGeometryDisplay(Module, test) {
       assert.equal(d.hasDefaultColWidth, false);
       assert.equal(d.effectiveDefaultColWidth, 2340 / 256); // Base-8 Calibri 11 default, shown as 8.43.
       assert.equal(d.effectiveDefaultRowHeight, 102 / 7);
-      assert.ok(wb.setFormatDefaults(0, { defaultColWidth: 12.5, defaultRowHeight: 20.25 }).ok);
+      wb.setFormatDefaults(0, { defaultColWidth: 12.5, defaultRowHeight: 20.25 });
       d = wb.getFormatDefaults(0);
       assert.equal(d.effectiveDefaultColWidth, 12.5);
       assert.equal(d.effectiveDefaultRowHeight, 20.25);
@@ -62,30 +64,26 @@ export function registerCellGeometryDisplay(Module, test) {
 
   test('getFormula / getFormulaR1C1 report the stored formula or null', () => {
     withWorkbook(Module, (wb) => {
-      assert.ok(wb.setNumber(0, 0, 0, 5).ok);
-      assert.ok(wb.setFormula(0, 0, 1, '=A1*2').ok);
+      wb.setNumber(0, 0, 0, 5);
+      wb.setFormula(0, 0, 1, '=A1*2');
       const a1 = wb.getFormula(0, 0, 1);
-      assert.ok(a1.status.ok);
-      assert.equal(a1.value, '=A1*2');
-      assert.equal(wb.getFormula(0, 0, 0).value, null);
+      assert.equal(a1, '=A1*2');
+      assert.equal(wb.getFormula(0, 0, 0), null);
       const r1c1 = wb.getFormulaR1C1(0, 0, 1);
-      assert.ok(r1c1.status.ok);
-      assert.equal(r1c1.value, 'RC[-1]*2');
-      assert.equal(wb.getFormulaR1C1(0, 0, 0).value, null);
-      assert.equal(wb.getFormula(9, 0, 0).status.ok, false);
-      assert.equal(wb.getFormula(9, 0, 0).value, null);
+      assert.equal(r1c1, 'RC[-1]*2');
+      assert.equal(wb.getFormulaR1C1(0, 0, 0), null);
+      expectFailure(() => wb.getFormula(9, 0, 0), StatusCode.SheetIndexOutOfRange);
     });
   });
 
   test('getCellsInRange pages through populated cells with a cursor', () => {
     withWorkbook(Module, (wb) => {
-      assert.ok(wb.setNumber(0, 0, 0, 1).ok);
-      assert.ok(wb.setFormula(0, 0, 1, '=A1+1').ok);
-      assert.ok(wb.setText(0, 1, 0, 'hi').ok);
-      assert.ok(wb.recalc().ok);
+      wb.setNumber(0, 0, 0, 1);
+      wb.setFormula(0, 0, 1, '=A1+1');
+      wb.setText(0, 1, 0, 'hi');
+      wb.recalc();
 
       const all = wb.getCellsInRange(0, RANGE_A1_F6);
-      assert.ok(all.status.ok);
       assert.equal(all.cells.length, 3);
       assert.equal(all.nextCursor, null);
       assert.equal(all.cells[1].formula, '=A1+1');
@@ -96,7 +94,6 @@ export function registerCellGeometryDisplay(Module, test) {
       let cursor = null;
       for (let guard = 0; guard < 10; guard += 1) {
         const page = wb.getCellsInRange(0, RANGE_A1_F6, cursor, 1);
-        assert.ok(page.status.ok);
         assert.ok(page.cells.length <= 1);
         seen.push(...page.cells.map((c) => `${c.row},${c.col}`));
         if (page.nextCursor === null) break;
@@ -106,7 +103,6 @@ export function registerCellGeometryDisplay(Module, test) {
 
       assert.throws(() => wb.getCellsInRange(0, RANGE_A1_F6, -1), RangeError);
       const unchanged = wb.getCellsInRange(0, RANGE_A1_F6);
-      assert.ok(unchanged.status.ok);
       assert.deepEqual(unchanged.cells, all.cells);
       assert.equal(unchanged.nextCursor, null);
     });
@@ -115,7 +111,7 @@ export function registerCellGeometryDisplay(Module, test) {
   test('getCellsInRange throws on every invalid range integer before the C call', () => {
     const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Symbol('range integer')];
     withWorkbook(Module, (wb) => {
-      assert.ok(wb.setNumber(0, 0, 0, 7).ok);
+      wb.setNumber(0, 0, 0, 7);
       for (const value of invalid) {
         for (const key of ['firstRow', 'firstCol', 'lastRow', 'lastCol']) {
           assert.throws(
@@ -147,39 +143,32 @@ export function registerCellGeometryDisplay(Module, test) {
   test('getMergesInRange lists only intersecting merges', () => {
     withWorkbook(Module, (wb) => {
       const merge = { firstRow: 0, lastRow: 1, firstCol: 3, lastCol: 4 };
-      assert.ok(wb.addMerge(0, merge).ok);
+      wb.addMerge(0, merge);
       const hit = wb.getMergesInRange(0, { firstRow: 0, lastRow: 0, firstCol: 0, lastCol: 3 });
-      assert.ok(hit.status.ok);
       assert.deepEqual([...hit], [merge]);
       const miss = wb.getMergesInRange(0, { firstRow: 5, lastRow: 6, firstCol: 0, lastCol: 0 });
-      assert.ok(miss.status.ok);
       assert.equal(miss.length, 0);
-      assert.equal(wb.getMergesInRange(9, merge).status.ok, false);
+      expectFailure(() => wb.getMergesInRange(9, merge));
     });
   });
 
   test('getDisplayText / formatValue render through the number format', () => {
     withWorkbook(Module, (wb) => {
-      assert.ok(wb.setNumber(0, 0, 0, 1234.5).ok);
+      wb.setNumber(0, 0, 0, 1234.5);
       const plain = wb.getDisplayText(0, 0, 0);
-      assert.ok(plain.status.ok);
       assert.equal(plain.text, '1234.5');
       assert.equal(plain.displayStatus, 0);
       assert.equal(wb.getDisplayText(0, 7, 7).text, '');
 
-      const pct = wb.formatValue({ kind: 1, number: 0.5, boolean: 0, text: '', errorCode: 0 }, '0.0%');
-      assert.ok(pct.status.ok);
+      const pct = wb.formatValue({ kind: 1, number: 0.5 }, '0.0%');
       assert.equal(pct.text, '50.0%');
       assert.equal(pct.displayStatus, 0);
-      const txt = wb.formatValue({ kind: 3, number: 0, boolean: 0, text: 'abc', errorCode: 0 }, '@');
+      const txt = wb.formatValue({ kind: 3, text: 'abc' }, '@');
       assert.equal(txt.text, 'abc');
-      const bad = wb.formatValue({ kind: 1, number: 1, boolean: 0, text: '', errorCode: 0 }, '[[');
-      assert.ok(bad.status.ok);
+      const bad = wb.formatValue({ kind: 1, number: 1 }, '[[');
       assert.equal(bad.displayStatus, 2);
-      const noKind = wb.formatValue({ number: 0.5 }, '0.0%');
-      assert.equal(noKind.status.ok, false, 'a value without `kind` is rejected, not read as blank');
-      assert.match(noKind.status.message, /requires a `kind`/);
-      assert.equal(wb.getDisplayText(9, 0, 0).status.ok, false);
+      assert.throws(() => wb.formatValue({ number: 0.5 }, '0.0%'), TypeError);
+      expectFailure(() => wb.getDisplayText(9, 0, 0));
     });
   });
 
@@ -192,8 +181,7 @@ export function registerCellGeometryDisplay(Module, test) {
         [0.6125, '?/?', '3/5'],
       ];
       for (const [number, format, expected] of cases) {
-        const out = wb.formatValue({ kind: 1, number, boolean: 0, text: '', errorCode: 0 }, format);
-        assert.ok(out.status.ok);
+        const out = wb.formatValue({ kind: 1, number }, format);
         assert.equal(out.text, expected, `${number} "${format}"`);
       }
     });
@@ -201,16 +189,16 @@ export function registerCellGeometryDisplay(Module, test) {
 
   test('nested SUBTOTAL skips inner subtotal cells in value, formula and display text', () => {
     withWorkbook(Module, (wb) => {
-      assert.ok(wb.setNumber(0, 0, 0, 1).ok);
-      assert.ok(wb.setNumber(0, 1, 0, 2).ok);
-      assert.ok(wb.setNumber(0, 2, 0, 3).ok);
-      assert.ok(wb.setFormula(0, 3, 0, '=SUBTOTAL(9,A1:A3)').ok);
-      assert.ok(wb.setFormula(0, 4, 0, '=SUBTOTAL(9,A1:A4)').ok);
-      assert.ok(wb.recalc().ok);
-      assert.equal(wb.getValue(0, 3, 0).value.number, 6);
-      assert.equal(wb.getValue(0, 4, 0).value.number, 6);
-      assert.equal(wb.getFormula(0, 4, 0).value, '=SUBTOTAL(9,A1:A4)');
-      assert.equal(wb.getFormulaR1C1(0, 4, 0).value, 'SUBTOTAL(9,R[-4]C:R[-1]C)');
+      wb.setNumber(0, 0, 0, 1);
+      wb.setNumber(0, 1, 0, 2);
+      wb.setNumber(0, 2, 0, 3);
+      wb.setFormula(0, 3, 0, '=SUBTOTAL(9,A1:A3)');
+      wb.setFormula(0, 4, 0, '=SUBTOTAL(9,A1:A4)');
+      wb.recalc();
+      assert.equal(wb.getValue(0, 3, 0).number, 6);
+      assert.equal(wb.getValue(0, 4, 0).number, 6);
+      assert.equal(wb.getFormula(0, 4, 0), '=SUBTOTAL(9,A1:A4)');
+      assert.equal(wb.getFormulaR1C1(0, 4, 0), 'SUBTOTAL(9,R[-4]C:R[-1]C)');
       assert.equal(wb.getDisplayText(0, 4, 0).text, '6');
       const page = wb.getCellsInRange(0, { firstRow: 3, firstCol: 0, lastRow: 4, lastCol: 0 });
       assert.deepEqual(
@@ -222,42 +210,41 @@ export function registerCellGeometryDisplay(Module, test) {
 
   test('row heights: clearRowHeight and the has/custom flags on row overrides', () => {
     withWorkbook(Module, (wb) => {
-      assert.ok(wb.setRowHeight(0, 3, 3, 30).ok);
-      const rows = wb.listRowOverrides(0).rows;
+      wb.setRowHeight(0, 3, 3, 30);
+      const rows = wb.listRowOverrides(0);
       assert.equal(rows.length, 1);
       assert.equal(rows[0].height, 30);
       assert.equal(rows[0].hasHeight, 1);
       assert.equal(rows[0].customHeight, 1);
-      assert.ok(wb.clearRowHeight(0, 3, 3).ok);
-      assert.equal(wb.listRowOverrides(0).rows.length, 0);
-      assert.ok(wb.clearRowHeight(0, 3, 3).ok);
-      assert.equal(wb.clearRowHeight(9, 0, 0).ok, false);
+      wb.clearRowHeight(0, 3, 3);
+      assert.equal(wb.listRowOverrides(0).length, 0);
+      wb.clearRowHeight(0, 3, 3);
+      expectFailure(() => wb.clearRowHeight(9, 0, 0));
     });
   });
 
   test('row heights: setRowAutoHeight caches the height and keeps the row automatic', () => {
     withWorkbook(Module, (wb) => {
-      assert.ok(wb.setRowHidden(0, 4, 4, true).ok);
-      assert.ok(wb.setRowAutoHeight(0, 4, 4, 31.5).ok);
-      const rows = wb.listRowOverrides(0).rows;
+      wb.setRowHidden(0, 4, 4, true);
+      wb.setRowAutoHeight(0, 4, 4, 31.5);
+      const rows = wb.listRowOverrides(0);
       assert.equal(rows.length, 1);
       assert.equal(rows[0].height, 31.5);
       assert.equal(rows[0].hasHeight, 1);
       assert.equal(rows[0].customHeight, 0);
       assert.equal(rows[0].hidden, 1);
-      assert.equal(wb.setRowAutoHeight(0, 4, 4, -1).ok, false);
+      expectFailure(() => wb.setRowAutoHeight(0, 4, 4, -1));
     });
   });
 
   test('sheet format defaults round-trip with presence flags', () => {
     withWorkbook(Module, (wb) => {
       const initial = wb.getFormatDefaults(0);
-      assert.ok(initial.status.ok);
       assert.equal(initial.hasDefaultColWidth, false);
       assert.equal(initial.hasDefaultRowHeight, false);
       assert.equal(initial.baseColWidth, 8);
 
-      assert.ok(wb.setFormatDefaults(0, { defaultColWidth: 10, defaultRowHeight: 18, baseColWidth: 9 }).ok);
+      wb.setFormatDefaults(0, { defaultColWidth: 10, defaultRowHeight: 18, baseColWidth: 9 });
       const set = wb.getFormatDefaults(0);
       assert.equal(set.defaultColWidth, 10);
       assert.equal(set.defaultRowHeight, 18);
@@ -265,9 +252,9 @@ export function registerCellGeometryDisplay(Module, test) {
       assert.equal(set.hasDefaultColWidth, true);
       assert.equal(set.hasDefaultRowHeight, true);
 
-      assert.equal(wb.setFormatDefaults(0, { defaultColWidth: -1 }).ok, false);
+      expectFailure(() => wb.setFormatDefaults(0, { defaultColWidth: -1 }));
       assert.equal(wb.getFormatDefaults(0).defaultColWidth, 10);
-      assert.equal(wb.getFormatDefaults(9).status.ok, false);
+      expectFailure(() => wb.getFormatDefaults(9));
     });
   });
 
@@ -275,40 +262,37 @@ export function registerCellGeometryDisplay(Module, test) {
     withWorkbook(Module, (wb) => {
       const range = { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 };
       const rect = wb.getCellRectPt(0, range, 0);
-      assert.ok(rect.status.ok);
       assert.equal(rect.x, 0);
       assert.equal(rect.y, 0);
       assert.ok(rect.width > 0 && rect.height > 0);
 
       const col = wb.getColumnWidthPt(0, 0, 1);
       const row = wb.getRowHeightPt(0, 0);
-      assert.ok(col.status.ok && col.value > 0);
-      assert.ok(row.status.ok && row.value > 0);
+      assert.ok(col > 0);
+      assert.ok(row > 0);
 
       const wide = wb.getCellRectPt(0, { ...range, lastRow: 0, lastCol: 0 }, 0);
-      assert.ok(Math.abs(wide.height - row.value) < 1e-9);
+      assert.ok(Math.abs(wide.height - row) < 1e-9);
 
-      assert.ok(wb.setColumnHidden(0, 0, 0, true).ok);
-      assert.equal(wb.getColumnWidthPt(0, 0, 0).value, 0);
-      assert.ok(wb.setColumnHidden(0, 0, 0, false).ok);
+      wb.setColumnHidden(0, 0, 0, true);
+      assert.equal(wb.getColumnWidthPt(0, 0, 0), 0);
+      wb.setColumnHidden(0, 0, 0, false);
 
       const model = wb.getWidthModel(0, 0);
-      assert.ok(model.status.ok);
       assert.equal(typeof model.calibrated, 'boolean');
       assert.equal(typeof model.normalFontName, 'string');
       assert.ok(model.pointsPerChar > 0);
       assert.ok(model.platform.length > 0);
 
       const pt = wb.convertColumnCharsToPt(0, 0, 10);
-      assert.ok(pt.status.ok);
       // Stored width 10 is Truncate((2560 + 18) / 256 * 7) = 70 px with Calibri 11.
-      assert.equal(pt.value, 70 * 0.75);
-      const chars = wb.convertColumnPtToChars(0, 0, pt.value);
-      assert.ok(Math.abs(chars.value - 10) < 1e-6);
-      assert.equal(wb.convertColumnCharsToPt(0, 0, 0).value, 0);
-      assert.equal(wb.convertColumnCharsToPt(0, 0, -1).status.ok, false);
-      assert.equal(wb.getWidthModel(0, 7).status.ok, false);
-      assert.equal(wb.getCellRectPt(0, range, 7).status.ok, false);
+      assert.equal(pt, 70 * 0.75);
+      const chars = wb.convertColumnPtToChars(0, 0, pt);
+      assert.ok(Math.abs(chars - 10) < 1e-6);
+      assert.equal(wb.convertColumnCharsToPt(0, 0, 0), 0);
+      expectFailure(() => wb.convertColumnCharsToPt(0, 0, -1));
+      expectFailure(() => wb.getWidthModel(0, 7));
+      expectFailure(() => wb.getCellRectPt(0, range, 7));
     });
   });
 
@@ -335,8 +319,7 @@ export function registerCellGeometryDisplay(Module, test) {
         locked: false,
         hidden: true,
       });
-      assert.ok(added.status.ok);
-      const xf = wb.getCellXf(added.index);
+      const xf = wb.getCellXf(added);
       assert.equal(xf.applyFont, true);
       assert.equal(xf.applyProtection, true);
       assert.equal(xf.applyNumberFormat, false);
@@ -349,12 +332,11 @@ export function registerCellGeometryDisplay(Module, test) {
 
   test('paginate carries paper, margins, scale, titles, pages and manual-break flags', () => {
     withWorkbook(Module, (wb) => {
-      assert.ok(wb.setNumber(0, 0, 0, 1).ok);
-      assert.ok(wb.setNumber(0, 120, 0, 2).ok);
-      assert.ok(wb.addRowBreak(0, 10, true).ok);
-      assert.ok(wb.setPrintTitles(0, '1:2', '').ok);
+      wb.setNumber(0, 0, 0, 1);
+      wb.setNumber(0, 120, 0, 2);
+      wb.addRowBreak(0, 10, true);
+      wb.setPrintTitles(0, '1:2', '');
       const r = wb.getPagination(0);
-      assert.ok(r.status.ok);
       assert.ok(r.paper.widthPt > 0 && r.paper.heightPt > 0);
       assert.equal(typeof r.paper.landscape, 'boolean');
       assert.equal(typeof r.paper.known, 'boolean');
@@ -377,10 +359,7 @@ export function registerCellGeometryDisplay(Module, test) {
       assert.equal(r.horizontalBreakManual[manualAt], true);
       assert.ok(r.horizontalBreakManual.some((m) => m === false));
 
-      const failed = wb.getPagination(9);
-      assert.equal(failed.status.ok, false);
-      assert.deepEqual(failed.pages, []);
-      assert.equal(failed.paper.known, false);
+      expectFailure(() => wb.getPagination(9), StatusCode.SheetIndexOutOfRange);
     });
   });
 }

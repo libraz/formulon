@@ -217,8 +217,9 @@ TEST(FormulonCApiStyles, SetFontRejectsInvalidSizesWithoutMutationAndKeepsIndexP
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_font_record_t invalid = MakeArial();
   invalid.size = std::numeric_limits<double>::quiet_NaN();
-  EXPECT_EQ(fm_workbook_set_font(wb.handle, std::numeric_limits<uint32_t>::max(), &invalid), kInvalidArgument);
-  EXPECT_NE(std::string(fm_get_last_error_message()).find("font_index out of range"), std::string::npos);
+  EXPECT_EQ(fm_workbook_set_font(wb.handle, std::numeric_limits<uint32_t>::max(), &invalid),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_NE(std::string(fm_get_last_error_message()).find("font_index"), std::string::npos);
   EXPECT_EQ(fm_workbook_set_font(nullptr, 0U, &invalid),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }

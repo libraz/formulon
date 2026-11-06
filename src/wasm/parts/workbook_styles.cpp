@@ -277,11 +277,8 @@ emscripten::val js_border_record(const fm_border_record_t& b) {
 }
 
 /// Builds the JS mirror of a cell format. Shared by `getCellXf` and
-/// `getCellStyleXf`; a zero-initialised `xf` yields the all-default record
-/// those two return on their failure paths, so the key set a caller sees
-/// does not depend on whether the read succeeded. `xfId` is set by the
-/// callers: a named-style xf is its own parent, so `getCellStyleXf`
-/// always reports 0 there.
+/// `getCellStyleXf`. `xfId` is set by the callers: a named-style xf is its
+/// own parent, so `getCellStyleXf` always reports 0 there.
 emscripten::val js_cell_xf_record(const fm_cell_xf_t& xf) {
   emscripten::val o = emscripten::val::object();
   o.set("fontIndex", xf.font_index);
@@ -330,14 +327,13 @@ void js_set_cell_xf_alignment(const fm_cell_xf_t& xf, emscripten::val* object) {
   }
 }
 
-// Builds the `getCellXf` / `getCellStyleXf` result from the C call's status
-// and record; a failed read reports the all-default record.
-emscripten::val js_cell_xf_result(fm_status_t rc, fm_cell_xf_t xf) {
-  if (rc != 0) {
-    xf = fm_cell_xf_t{};
+// Builds the `getCellXf` / `getCellStyleXf` record from the C call's status
+// and xf; `undefined` after recording the failure.
+emscripten::val js_cell_xf_result(fm_status_t rc, const fm_cell_xf_t& xf) {
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
   }
   emscripten::val o = js_cell_xf_record(xf);
-  o.set("status", status_from_rc(rc));
   o.set("xfId", xf.xf_id);
   js_set_cell_xf_alignment(xf, &o);
   return o;
@@ -347,39 +343,35 @@ emscripten::val js_cell_xf_result(fm_status_t rc, fm_cell_xf_t xf) {
 
 // ---- Per-cell xf index get/set -----------------------------------------
 
-// Every getter below emits its declared payload keys on all three exit
-// paths -- dead handle, non-zero rc, success -- so `status.ok` is the only
-// thing a caller has to branch on. A key that is present only on success
-// makes the TypeScript declaration a lie and turns a missed status check
-// into a `TypeError` instead of a wrong-but-typed value.
-
-JsNumberResult JsWorkbook::getCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) const {
+double JsWorkbook::getCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) const {
   std::size_t xf = 0;
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_sheet_get_cell_xf_index(handle_, sheet, row, col, &xf) : kBindingInvalidHandle;
-  return number_result(rc, static_cast<double>(xf));
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_cell_xf_index(handle_, sheet, row, col, &xf)
+                                    : kBindingInvalidHandle)) {
+    return 0.0;
+  }
+  return static_cast<double>(xf);
 }
 
-JsStatus JsWorkbook::setCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col, uint32_t xf_index) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_set_cell_xf_index(handle_, sheet, row, col, xf_index)
-                                           : kBindingInvalidHandle);
+void JsWorkbook::setCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col, uint32_t xf_index) {
+  succeeded(handle_ != nullptr ? fm_sheet_set_cell_xf_index(handle_, sheet, row, col, xf_index)
+                               : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::clearCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_clear_cell_xf_index(handle_, sheet, row, col)
-                                           : kBindingInvalidHandle);
+void JsWorkbook::clearCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) {
+  succeeded(handle_ != nullptr ? fm_sheet_clear_cell_xf_index(handle_, sheet, row, col) : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::setRangeXfIndex(uint32_t sheet, emscripten::val range, uint32_t xf_index) {
+void JsWorkbook::setRangeXfIndex(uint32_t sheet, emscripten::val range, uint32_t xf_index) {
   if (handle_ == nullptr) {
-    return status_from_rc(kBindingInvalidHandle);
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setRangeXfIndex");
   const fm_cell_rect_t rect = js_pull_range(range, &reader);
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
-  return status_from_rc(fm_sheet_set_range_xf_index(handle_, sheet, &rect, xf_index));
+  succeeded(fm_sheet_set_range_xf_index(handle_, sheet, &rect, xf_index));
 }
 
 // ---- Style record getters ----------------------------------------------
@@ -392,35 +384,26 @@ emscripten::val JsWorkbook::getCellXf(uint32_t xf_index) const {
 
 emscripten::val JsWorkbook::getFont(uint32_t font_index) const {
   fm_font_record_t f{};
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_font(handle_, font_index, &f) : kBindingInvalidHandle;
-  if (rc != 0) {
-    f = fm_font_record_t{};
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_font(handle_, font_index, &f) : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
   }
-  emscripten::val o = js_font_record(f);
-  o.set("status", status_from_rc(rc));
-  return o;
+  return js_font_record(f);
 }
 
 emscripten::val JsWorkbook::getFill(uint32_t fill_index) const {
   fm_fill_record_t f{};
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_fill(handle_, fill_index, &f) : kBindingInvalidHandle;
-  if (rc != 0) {
-    f = fm_fill_record_t{};
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_fill(handle_, fill_index, &f) : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
   }
-  emscripten::val o = js_fill_record(f);
-  o.set("status", status_from_rc(rc));
-  return o;
+  return js_fill_record(f);
 }
 
 emscripten::val JsWorkbook::getBorder(uint32_t border_index) const {
   fm_border_record_t b{};
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_border(handle_, border_index, &b) : kBindingInvalidHandle;
-  if (rc != 0) {
-    b = fm_border_record_t{};
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_border(handle_, border_index, &b) : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
   }
-  emscripten::val o = js_border_record(b);
-  o.set("status", status_from_rc(rc));
-  return o;
+  return js_border_record(b);
 }
 
 emscripten::val JsWorkbook::getNumFmt(uint32_t num_fmt_id) const {
@@ -428,23 +411,16 @@ emscripten::val JsWorkbook::getNumFmt(uint32_t num_fmt_id) const {
   const char* s = nullptr;
   const fm_status_t rc =
       handle_ != nullptr ? fm_workbook_get_num_fmt_string(handle_, num_fmt_id, &present, &s) : kBindingInvalidHandle;
-  return optional_result(rc, present,
-                         rc == 0 && present != 0 ? emscripten::val(std::string(s)) : emscripten::val::null());
+  return optional_or_null(rc, present,
+                          rc == 0 && present != 0 ? emscripten::val(std::string(s)) : emscripten::val::null());
 }
 
 emscripten::val JsWorkbook::getDxf(uint32_t dxf_index) const {
-  emscripten::val o = emscripten::val::object();
-  if (handle_ == nullptr) {
-    o.set("status", invalid_handle_status());
-    return o;
-  }
   fm_dxf_record_t d{};
-  fm_status_t rc = fm_workbook_get_dxf(handle_, dxf_index, &d);
-  if (rc != 0) {
-    o.set("status", error_status(rc));
-    return o;
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_dxf(handle_, dxf_index, &d) : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
   }
-  o.set("status", ok_status());
+  emscripten::val o = emscripten::val::object();
   if (d.font_engaged != 0) {
     o.set("font", js_font_record(d.font));
   }
@@ -471,128 +447,121 @@ emscripten::val JsWorkbook::getDxf(uint32_t dxf_index) const {
 
 // ---- Style record adders -----------------------------------------------
 
-JsAddStyleResult JsWorkbook::addFont(emscripten::val record) {
-  JsAddStyleResult r;
+uint32_t JsWorkbook::addFont(emscripten::val record) {
   if (handle_ == nullptr) {
-    r.status = invalid_handle_status();
-    return r;
+    record_invalid_handle();
+    return 0U;
   }
   std::string name;
   fm_font_record_t fr{};
   JsNarrowNumericReader reader("addFont");
   js_pull_font_record(record, &name, &fr, reader);
   if (!reader.ok()) {
-    r.status = reader.failure();
-    return r;
+    return 0U;
   }
   std::size_t idx = 0;
-  const fm_status_t rc = fm_workbook_add_font(handle_, &fr, &idx);
-  return index_result(rc, idx);
+  if (!succeeded(fm_workbook_add_font(handle_, &fr, &idx))) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(idx);
 }
 
-JsStatus JsWorkbook::setFont(uint32_t font_index, emscripten::val record) {
+void JsWorkbook::setFont(uint32_t font_index, emscripten::val record) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   std::string name;
   fm_font_record_t fr{};
   JsNarrowNumericReader reader("setFont");
   js_pull_font_record(record, &name, &fr, reader);
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
-  return status_from_rc(fm_workbook_set_font(handle_, font_index, &fr));
+  succeeded(fm_workbook_set_font(handle_, font_index, &fr));
 }
 
-JsStatus JsWorkbook::setDefaultFont(emscripten::val record) {
+void JsWorkbook::setDefaultFont(emscripten::val record) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   std::string name;
   fm_font_record_t fr{};
   JsNarrowNumericReader reader("setDefaultFont");
   js_pull_font_record(record, &name, &fr, reader);
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
-  return status_from_rc(fm_workbook_set_default_font(handle_, &fr));
+  succeeded(fm_workbook_set_default_font(handle_, &fr));
 }
 
-JsAddStyleResult JsWorkbook::addFill(emscripten::val record) {
-  JsAddStyleResult r;
+uint32_t JsWorkbook::addFill(emscripten::val record) {
   if (handle_ == nullptr) {
-    r.status = invalid_handle_status();
-    return r;
+    record_invalid_handle();
+    return 0U;
   }
   JsNarrowNumericReader reader("addFill");
   std::vector<fm_gradient_stop_t> stops;
   const fm_fill_record_t fr = js_pull_fill_record(record, &stops, reader);
   if (!reader.ok()) {
-    r.status = reader.failure();
-    return r;
+    return 0U;
   }
   std::size_t idx = 0;
-  const fm_status_t rc = fm_workbook_add_fill(handle_, &fr, &idx);
-  return index_result(rc, idx);
+  if (!succeeded(fm_workbook_add_fill(handle_, &fr, &idx))) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(idx);
 }
 
-JsAddStyleResult JsWorkbook::addBorder(emscripten::val record) {
-  JsAddStyleResult r;
+uint32_t JsWorkbook::addBorder(emscripten::val record) {
   if (handle_ == nullptr) {
-    r.status = invalid_handle_status();
-    return r;
+    record_invalid_handle();
+    return 0U;
   }
   JsNarrowNumericReader reader("addBorder");
   const fm_border_record_t br = js_pull_border_record(record, kBorderFields, reader);
   if (!reader.ok()) {
-    r.status = reader.failure();
-    return r;
+    return 0U;
   }
   std::size_t idx = 0;
-  const fm_status_t rc = fm_workbook_add_border(handle_, &br, &idx);
-  return index_result(rc, idx);
+  if (!succeeded(fm_workbook_add_border(handle_, &br, &idx))) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(idx);
 }
 
-JsAddNumFmtResult JsWorkbook::addNumFmt(const std::string& format_code) {
-  JsAddNumFmtResult r;
-  if (handle_ == nullptr) {
-    r.status = invalid_handle_status();
-    return r;
-  }
+uint32_t JsWorkbook::addNumFmt(const std::string& format_code) {
   uint32_t id = 0;
-  fm_status_t rc = fm_workbook_add_num_fmt(handle_, format_code.c_str(), &id);
-  if (rc != 0) {
-    r.status = error_status(rc);
-    return r;
+  if (!succeeded(handle_ != nullptr ? fm_workbook_add_num_fmt(handle_, format_code.c_str(), &id)
+                                    : kBindingInvalidHandle)) {
+    return 0U;
   }
-  r.status = ok_status();
-  r.numFmtId = id;
-  return r;
+  return id;
 }
 
-JsAddStyleResult JsWorkbook::addXf(emscripten::val record) {
-  JsAddStyleResult r;
+uint32_t JsWorkbook::addXf(emscripten::val record) {
   if (handle_ == nullptr) {
-    r.status = invalid_handle_status();
-    return r;
+    record_invalid_handle();
+    return 0U;
   }
   fm_cell_xf_t xf{};
   JsNarrowNumericReader reader("addCellXf");
   js_pull_cell_xf(record, &xf, reader);
   if (!reader.ok()) {
-    r.status = reader.failure();
-    return r;
+    return 0U;
   }
   std::size_t idx = 0;
-  const fm_status_t rc = fm_workbook_add_cell_xf(handle_, &xf, &idx);
-  return index_result(rc, idx);
+  if (!succeeded(fm_workbook_add_cell_xf(handle_, &xf, &idx))) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(idx);
 }
 
-JsAddStyleResult JsWorkbook::addDxf(emscripten::val record) {
-  JsAddStyleResult r;
+uint32_t JsWorkbook::addDxf(emscripten::val record) {
   if (handle_ == nullptr) {
-    r.status = invalid_handle_status();
-    return r;
+    record_invalid_handle();
+    return 0U;
   }
 
   std::string font_name;
@@ -635,13 +604,14 @@ JsAddStyleResult JsWorkbook::addDxf(emscripten::val record) {
   dxf.protection_xml = protection_xml.c_str();
 
   if (!reader.ok()) {
-    r.status = reader.failure();
-    return r;
+    return 0U;
   }
 
   std::size_t idx = 0;
-  const fm_status_t rc = fm_workbook_add_dxf(handle_, &dxf, &idx);
-  return index_result(rc, idx);
+  if (!succeeded(fm_workbook_add_dxf(handle_, &dxf, &idx))) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(idx);
 }
 
 // ---- Style count accessors ---------------------------------------------
@@ -649,18 +619,22 @@ JsAddStyleResult JsWorkbook::addDxf(emscripten::val record) {
 // `fontCount` / `fillCount` / `borderCount` / `xfCount` are now emitted
 // by the binding codegen (see `src/wasm/generated/styles_counts.cpp`).
 
-JsNumberResult JsWorkbook::dxfCount() const {
+double JsWorkbook::dxfCount() const {
   std::size_t n = 0;
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_dxf_count(handle_, &n) : kBindingInvalidHandle;
-  return number_result(rc, static_cast<double>(n));
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_dxf_count(handle_, &n) : kBindingInvalidHandle)) {
+    return 0.0;
+  }
+  return static_cast<double>(n);
 }
 // `cellStyleXfCount` stays here because it has no N-API counterpart and is
 // therefore not part of the cross-binding manifest.
 
-JsNumberResult JsWorkbook::cellStyleXfCount() const {
+double JsWorkbook::cellStyleXfCount() const {
   std::size_t n = 0;
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_cell_style_xf_count(handle_, &n) : kBindingInvalidHandle;
-  return number_result(rc, static_cast<double>(n));
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_cell_style_xf_count(handle_, &n) : kBindingInvalidHandle)) {
+    return 0.0;
+  }
+  return static_cast<double>(n);
 }
 
 namespace {
@@ -727,7 +701,9 @@ fm_status_t table_style_item(const fm_workbook_t* handle, size_t, size_t index, 
 
 emscripten::val JsWorkbook::listCellStyles() const {
   emscripten::val arr = emscripten::val::array();
-  arr.set("status", status_from_rc(js_collect_list(handle_, 0U, &count_cell_styles, &cell_style_item, arr)));
+  if (!succeeded(js_collect_list(handle_, 0U, &count_cell_styles, &cell_style_item, arr))) {
+    return emscripten::val::undefined();
+  }
   return arr;
 }
 
@@ -736,7 +712,7 @@ emscripten::val JsWorkbook::getCellStyle(const std::string& name) const {
   int32_t present = 0;
   const fm_status_t rc =
       handle_ != nullptr ? fm_workbook_get_cell_style(handle_, name.c_str(), &present, &cs) : kBindingInvalidHandle;
-  return optional_result(rc, present, rc == 0 && present != 0 ? cell_style_to_val(cs) : emscripten::val::null());
+  return optional_or_null(rc, present, rc == 0 && present != 0 ? cell_style_to_val(cs) : emscripten::val::null());
 }
 
 emscripten::val JsWorkbook::getCellStyleXf(uint32_t index) const {
@@ -746,27 +722,28 @@ emscripten::val JsWorkbook::getCellStyleXf(uint32_t index) const {
   return js_cell_xf_result(rc, xf);
 }
 
-JsAddStyleResult JsWorkbook::addCellStyleXf(emscripten::val record) {
-  JsAddStyleResult out;
+uint32_t JsWorkbook::addCellStyleXf(emscripten::val record) {
   if (handle_ == nullptr) {
-    out.status = invalid_handle_status();
-    return out;
+    record_invalid_handle();
+    return 0U;
   }
   fm_cell_xf_t xf{};
   JsNarrowNumericReader reader("addCellStyleXf");
   js_pull_cell_xf(record, &xf, reader);
   if (!reader.ok()) {
-    out.status = reader.failure();
-    return out;
+    return 0U;
   }
   std::size_t index = 0;
-  const fm_status_t rc = fm_workbook_add_cell_style_xf(handle_, &xf, &index);
-  return index_result(rc, index);
+  if (!succeeded(fm_workbook_add_cell_style_xf(handle_, &xf, &index))) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(index);
 }
 
-JsStatus JsWorkbook::setCellStyle(emscripten::val record) {
+void JsWorkbook::setCellStyle(emscripten::val record) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setCellStyle");
   const std::string name = reader.string(record, "name", "cellStyle.name");
@@ -778,19 +755,20 @@ JsStatus JsWorkbook::setCellStyle(emscripten::val record) {
   cs.hidden = reader.boolean(record, "hidden", false, "cellStyle.hidden") ? 1 : 0;
   cs.custom_builtin = reader.boolean(record, "customBuiltin", false, "cellStyle.customBuiltin") ? 1 : 0;
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
-  return status_from_rc(fm_workbook_set_cell_style(handle_, &cs));
+  succeeded(fm_workbook_set_cell_style(handle_, &cs));
 }
 
-JsStatus JsWorkbook::removeCellStyle(const std::string& name) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_remove_cell_style(handle_, name.c_str())
-                                           : kBindingInvalidHandle);
+void JsWorkbook::removeCellStyle(const std::string& name) {
+  succeeded(handle_ != nullptr ? fm_workbook_remove_cell_style(handle_, name.c_str()) : kBindingInvalidHandle);
 }
 
 emscripten::val JsWorkbook::listTableStyles() const {
   emscripten::val arr = emscripten::val::array();
-  arr.set("status", status_from_rc(js_collect_list(handle_, 0U, &count_table_styles, &table_style_item, arr)));
+  if (!succeeded(js_collect_list(handle_, 0U, &count_table_styles, &table_style_item, arr))) {
+    return emscripten::val::undefined();
+  }
   return arr;
 }
 
@@ -799,12 +777,13 @@ emscripten::val JsWorkbook::getTableStyle(const std::string& name) const {
   int32_t present = 0;
   const fm_status_t rc =
       handle_ != nullptr ? fm_workbook_get_table_style(handle_, name.c_str(), &present, &style) : kBindingInvalidHandle;
-  return optional_result(rc, present, rc == 0 && present != 0 ? table_style_to_val(style) : emscripten::val::null());
+  return optional_or_null(rc, present, rc == 0 && present != 0 ? table_style_to_val(style) : emscripten::val::null());
 }
 
-JsStatus JsWorkbook::setTableStyle(emscripten::val style) {
+void JsWorkbook::setTableStyle(emscripten::val style) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setTableStyle");
   const std::string name = reader.string(style, "name", "style.name");
@@ -815,7 +794,8 @@ JsStatus JsWorkbook::setTableStyle(emscripten::val style) {
   std::vector<fm_table_style_element_t> records;
   if (reader.ok() && js_value_present(elements)) {
     if (!reader.is_array(elements, "style.elements")) {
-      return binding_error_status(kInvalidArgument, "setTableStyle: `elements` must be an array");
+      record_type_error("setTableStyle: `elements` must be an array");
+      return;
     }
     const uint32_t count = reader.length(elements, "style.elements.length");
     types.reserve(count);
@@ -834,7 +814,7 @@ JsStatus JsWorkbook::setTableStyle(emscripten::val style) {
     }
   }
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
   // `types` has stopped growing, so its `c_str()` views stay put.
   for (std::size_t i = 0; i < records.size(); ++i) {
@@ -846,29 +826,30 @@ JsStatus JsWorkbook::setTableStyle(emscripten::val style) {
   record.table = table ? 1 : 0;
   record.elements = records.empty() ? nullptr : records.data();
   record.element_count = static_cast<uint32_t>(records.size());
-  return status_from_rc(fm_workbook_set_table_style(handle_, &record));
+  succeeded(fm_workbook_set_table_style(handle_, &record));
 }
 
-JsStatus JsWorkbook::removeTableStyle(const std::string& name) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_remove_table_style(handle_, name.c_str())
-                                           : kBindingInvalidHandle);
+void JsWorkbook::removeTableStyle(const std::string& name) {
+  succeeded(handle_ != nullptr ? fm_workbook_remove_table_style(handle_, name.c_str()) : kBindingInvalidHandle);
 }
 
 emscripten::val JsWorkbook::getTableStyleDefaults() const {
-  emscripten::val o = emscripten::val::object();
   const char* table = nullptr;
   const char* pivot = nullptr;
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_get_table_style_defaults(handle_, &table, &pivot) : kBindingInvalidHandle;
-  o.set("status", status_from_rc(rc));
-  js_set_cstr(o, "tableStyle", rc == 0 ? table : nullptr);
-  js_set_cstr(o, "pivotStyle", rc == 0 ? pivot : nullptr);
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_table_style_defaults(handle_, &table, &pivot)
+                                    : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
+  }
+  emscripten::val o = emscripten::val::object();
+  js_set_cstr(o, "tableStyle", table);
+  js_set_cstr(o, "pivotStyle", pivot);
   return o;
 }
 
-JsStatus JsWorkbook::setTableStyleDefaults(emscripten::val defaults) {
+void JsWorkbook::setTableStyleDefaults(emscripten::val defaults) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setTableStyleDefaults");
   std::string table;
@@ -876,9 +857,9 @@ JsStatus JsWorkbook::setTableStyleDefaults(emscripten::val defaults) {
   const char* table_ptr = reader.optional_string(defaults, "tableStyle", table, "defaults.tableStyle");
   const char* pivot_ptr = reader.optional_string(defaults, "pivotStyle", pivot, "defaults.pivotStyle");
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
-  return status_from_rc(fm_workbook_set_table_style_defaults(handle_, table_ptr, pivot_ptr));
+  succeeded(fm_workbook_set_table_style_defaults(handle_, table_ptr, pivot_ptr));
 }
 
 namespace {
@@ -924,7 +905,7 @@ emscripten::val JsWorkbook::getThemeScriptFont(bool major, const std::string& sc
     item = emscripten::val::object();
     js_set_cstr_fields(item, {{"script", script.c_str()}, {"typeface", typeface}});
   }
-  return optional_result(rc, present, item);
+  return optional_or_null(rc, present, item);
 }
 
 emscripten::val JsWorkbook::getTheme() const {
@@ -935,10 +916,8 @@ emscripten::val JsWorkbook::getTheme() const {
   if (rc == 0) {
     rc = fm_workbook_get_theme_fonts(handle_, &fonts);
   }
-  if (rc != 0) {
-    colors = fm_theme_colors_t{};
-    fonts = fm_theme_fonts_t{};
-    source = 0;
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
   }
   emscripten::val list = emscripten::val::array();
   for (uint32_t i = 0; i < 12U; ++i) {
@@ -950,7 +929,6 @@ emscripten::val JsWorkbook::getTheme() const {
                          {"minorLatin", fonts.minor_latin},
                          {"minorEastAsian", fonts.minor_east_asian}});
   emscripten::val o = emscripten::val::object();
-  o.set("status", status_from_rc(rc));
   o.set("source", source);
   o.set("colors", list);
   o.set("fonts", f);
@@ -959,27 +937,30 @@ emscripten::val JsWorkbook::getTheme() const {
   return o;
 }
 
-JsStatus JsWorkbook::setThemeColors(emscripten::val colors) {
+void JsWorkbook::setThemeColors(emscripten::val colors) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   fm_theme_colors_t tc{};
   JsNarrowNumericReader reader("setThemeColors");
   if (!reader.is_array(colors, "colors") || reader.length(colors, "colors") != std::size(tc.argb)) {
-    return binding_error_status(kInvalidArgument, "setThemeColors: `colors` must be an array of 12 ARGB numbers");
+    record_type_error("setThemeColors: `colors` must be an array of 12 ARGB numbers");
+    return;
   }
   for (uint32_t i = 0; i < std::size(tc.argb); ++i) {
     tc.argb[i] = reader.u32_value(reader.array_element(colors, i, "colors[]"), 0U, "colors[]");
   }
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
-  return status_from_rc(fm_workbook_set_theme_colors(handle_, &tc));
+  succeeded(fm_workbook_set_theme_colors(handle_, &tc));
 }
 
-JsStatus JsWorkbook::setThemeFonts(emscripten::val fonts) {
+void JsWorkbook::setThemeFonts(emscripten::val fonts) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setThemeFonts");
   const std::string major_latin = reader.string(fonts, "majorLatin", "theme.majorLatin");
@@ -987,62 +968,53 @@ JsStatus JsWorkbook::setThemeFonts(emscripten::val fonts) {
   const std::string minor_latin = reader.string(fonts, "minorLatin", "theme.minorLatin");
   const std::string minor_ea = reader.string(fonts, "minorEastAsian", "theme.minorEastAsian");
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
   fm_theme_fonts_t tf{};
   tf.major_latin = major_latin.c_str();
   tf.major_east_asian = major_ea.c_str();
   tf.minor_latin = minor_latin.c_str();
   tf.minor_east_asian = minor_ea.c_str();
-  return status_from_rc(fm_workbook_set_theme_fonts(handle_, &tf));
+  succeeded(fm_workbook_set_theme_fonts(handle_, &tf));
 }
 
-JsStatus JsWorkbook::setThemeScriptFont(bool major, const std::string& script, const std::string& typeface) {
-  return status_from_rc(
-      handle_ != nullptr ? fm_workbook_set_theme_script_font(handle_, major ? 1 : 0, script.c_str(), typeface.c_str())
-                         : kBindingInvalidHandle);
+void JsWorkbook::setThemeScriptFont(bool major, const std::string& script, const std::string& typeface) {
+  succeeded(handle_ != nullptr
+                ? fm_workbook_set_theme_script_font(handle_, major ? 1 : 0, script.c_str(), typeface.c_str())
+                : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::resetTheme() {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_clear_theme(handle_) : kBindingInvalidHandle);
+void JsWorkbook::resetTheme() {
+  succeeded(handle_ != nullptr ? fm_workbook_clear_theme(handle_) : kBindingInvalidHandle);
 }
 
 emscripten::val JsWorkbook::resolveColor(emscripten::val spec, int32_t context) const {
-  uint32_t argb = 0;
-  int32_t resolution = 0;
-  emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {
-    o.set("status", invalid_handle_status());
-    o.set("argb", 0U);
-    o.set("resolution", 0);
-    return o;
+    record_invalid_handle();
+    return emscripten::val::undefined();
   }
   emscripten::val holder = emscripten::val::object();
   holder.set("c", spec);
   JsNarrowNumericReader reader("resolveColor");
   const fm_color_spec_t color = js_pull_color_spec(holder, "c", &reader);
   if (!reader.ok()) {
-    o.set("status", reader.failure());
-    o.set("argb", 0U);
-    o.set("resolution", 0);
-    return o;
+    return emscripten::val::undefined();
   }
-  const fm_status_t rc = fm_workbook_resolve_color(handle_, &color, context, &argb, &resolution);
-  o.set("status", status_from_rc(rc));
-  o.set("argb", rc == 0 ? argb : 0U);
-  o.set("resolution", rc == 0 ? resolution : 0);
-  return o;
+  uint32_t argb = 0;
+  int32_t resolution = 0;
+  if (!succeeded(fm_workbook_resolve_color(handle_, &color, context, &argb, &resolution))) {
+    return emscripten::val::undefined();
+  }
+  return js_resolved_color(argb, resolution);
 }
 
 emscripten::val JsWorkbook::getEffectiveStyle(uint32_t sheet, uint32_t row, uint32_t col) const {
   fm_effective_style_t e{};
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_sheet_get_effective_style(handle_, sheet, row, col, &e) : kBindingInvalidHandle;
-  if (rc != 0) {
-    e = fm_effective_style_t{};
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_effective_style(handle_, sheet, row, col, &e)
+                                    : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
   }
   emscripten::val o = emscripten::val::object();
-  o.set("status", status_from_rc(rc));
   o.set("xfIndex", e.xf_index);
   o.set("source", e.source);
   o.set("fontIndex", e.font_index);

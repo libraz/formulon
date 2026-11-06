@@ -13,7 +13,7 @@ from formulon import (
     FormulonError,
     ImageFormat,
     ImageInfo,
-    NotFoundError,
+    IndexOutOfRangeError,
     Workbook,
 )
 
@@ -109,7 +109,7 @@ class DrawingImageTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.add_image(0, b"junk")
             self.assertIsNone(wb.get_image(0, 12345))
-            with self.assertRaises(NotFoundError):
+            with self.assertRaises(IndexOutOfRangeError):
                 wb.get_image(9, 1)
         finally:
             wb.close()

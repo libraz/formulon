@@ -1,5 +1,7 @@
-// Value constants and pure helpers declared in formulon.d.ts, shared by the
-// `@libraz/formulon` and `@libraz/formulon/threads` entry shims.
+// Value constants and pure-JS members declared in formulon.d.ts, shared by the
+// `@libraz/formulon` and `@libraz/formulon/threads` entry shims and copied
+// into `@libraz/formulon-native` by its staging script. Each package therefore
+// has its own `FormulonError` class.
 
 export const ValueKind = Object.freeze({
   Blank: 0,
@@ -416,6 +418,7 @@ export const StatusCode = Object.freeze({
   InvalidSheetName: 5051,
   CannotRemoveLastSheet: 5052,
   SheetCountLimitExceeded: 5053,
+  IndexOutOfRange: 5054,
 });
 // <status-codes:end>
 
@@ -437,7 +440,7 @@ export const StatusCode = Object.freeze({
  *     `entry.description` -> `base.description`
  *   - localizedName: `entry.aliases[locale]` -> `base.name`
  *
- * @param {object} base A `FunctionMetadata`, the `value` of `getFunctionMetadata()`.
+ * @param {object} base A `FunctionMetadata`, as `getFunctionMetadata()` returns it.
  * @param {object|undefined} entry The provider's `functions[NAME]` entry, or
  *   `undefined`/`null` to leave `base` unchanged (signature/description
  *   stay `undefined`).
@@ -457,4 +460,287 @@ export function mergeFunctionMetadata(base, entry, locale) {
   const aliasName = entry.aliases && entry.aliases[locale];
   const localizedName = aliasName ?? base.name;
   return { ...base, signatureTemplate, description, localizedName };
+}
+
+/**
+ * The error every host-side failure throws: an engine call that did not
+ * complete, or a call on a disposed workbook. Failures are told apart by
+ * `code`, a `StatusCode`; there are no subclasses.
+ *
+ * `instanceof` holds only for the class of the package that threw, so code
+ * handling errors from both packages tests `e.name === 'FormulonError'`.
+ */
+export class FormulonError extends Error {
+  /**
+   * @param {number} code A `StatusCode`.
+   * @param {string} message What went wrong, in English.
+   * @param {string} [context] Structured `key=value` detail; `''` when none.
+   */
+  constructor(code, message, context = '') {
+    super(message);
+    this.name = 'FormulonError';
+    this.code = code;
+    this.context = context;
+  }
+}
+
+/**
+ * Member names of the frozen object `createFormulon()` resolves to, the same
+ * on both packages.
+ */
+export const FORMULON_MEMBERS = Object.freeze([
+  'Workbook',
+  'FormulonError',
+  'ValueKind',
+  'StatusCode',
+  'WorkbookFormat',
+  'PivotCellKind',
+  'PivotAxis',
+  'PivotAggregation',
+  'PivotShowValuesAs',
+  'PivotFilterType',
+  'PivotDatePeriod',
+  'PivotCalendar',
+  'PivotSortOrder',
+  'PivotReportLayout',
+  'PivotFilterValueKind',
+  'CfMatchKind',
+  'ErrorCode',
+  'CalcMode',
+  'RefMode',
+  'CollationStrength',
+  'GeometryMode',
+  'DisplayStatus',
+  'SheetVisibility',
+  'LogLevel',
+  'ExternalLinkKind',
+  'FilterKind',
+  'FilterOperator',
+  'DynamicFilterType',
+  'SortBy',
+  'SortMethod',
+  'DateTimeGrouping',
+  'ValidationErrorStyle',
+  'ColorContext',
+  'ImageFormat',
+  'DrawingObjectKind',
+  'AnchorKind',
+  'AnchorEditAs',
+  'ShapePaint',
+  'SlicerSortOrder',
+  'SlicerCrossFilter',
+  'SparklineType',
+  'SparklineAxisType',
+  'SparklineEmptyCells',
+  'ChartPlotType',
+  'ChartInsertKind',
+  'ChartGrouping',
+  'ChartBlanksAs',
+  'ChartPointState',
+  'ChartAxisKind',
+  'ChartAxisCrosses',
+  'ChartTitleKind',
+  'ChartSeriesDirection',
+  'ChartLegendPosition',
+  'ChartLineDash',
+  'ChartMarkerSymbol',
+  'ChartLabelPosition',
+  'ColorResolution',
+  'ThemeSource',
+  'EffectiveStyleSource',
+  'PIVOT_SHOW_AS_BASE_PREVIOUS',
+  'PIVOT_SHOW_AS_BASE_NEXT',
+  'PIVOT_VALUES_FIELD',
+  'mergeFunctionMetadata',
+  'evalFormula',
+  'getVersion',
+  'getStatusName',
+  'getErrorDisplayName',
+  'setLogMinLevel',
+  'setLogSink',
+]);
+
+// Members the engine runtime (Emscripten module or addon) provides; every
+// other member comes from this module.
+const RUNTIME_MEMBERS = new Set([
+  'Workbook',
+  'evalFormula',
+  'getVersion',
+  'getStatusName',
+  'getErrorDisplayName',
+  'setLogMinLevel',
+  'setLogSink',
+]);
+
+const FORWARDED_OPTIONS = ['locateFile', 'print', 'printErr'];
+
+/**
+ * Builds the frozen `Formulon` object from an engine runtime.
+ *
+ * @param {object} runtime The Emscripten module or the native addon.
+ * @param {object} shared This module's namespace object.
+ * @returns {object} The object `createFormulon()` resolves to.
+ */
+export function buildFormulon(runtime, shared) {
+  const formulon = {};
+  for (const name of FORMULON_MEMBERS) {
+    const value = RUNTIME_MEMBERS.has(name) ? runtime[name] : shared[name];
+    if (value === undefined) {
+      throw new TypeError(`formulon: the engine runtime does not provide ${name}`);
+    }
+    formulon[name] = value;
+  }
+  return Object.freeze(formulon);
+}
+
+/**
+ * Instantiates an Emscripten module factory and builds the `Formulon` object.
+ * Only `locateFile`, `print` and `printErr` reach the factory.
+ *
+ * @param {Function} factory The Emscripten module factory.
+ * @param {object} [options] `FormulonOptions`.
+ * @param {object} shared This module's namespace object.
+ * @returns {Promise<object>} The `Formulon` object.
+ */
+export async function loadFormulon(factory, options, shared) {
+  const moduleOptions = { FormulonError };
+  if (options !== undefined && options !== null) {
+    for (const key of FORWARDED_OPTIONS) {
+      if (options[key] !== undefined) moduleOptions[key] = options[key];
+    }
+  }
+  const module = await factory(moduleOptions);
+  installWorkbookExtensions(module.Workbook);
+  return buildFormulon(module, shared);
+}
+
+function invalidAddress(a1) {
+  return new FormulonError(
+    StatusCode.InvalidArgument,
+    `${JSON.stringify(a1)} is not a single-cell A1 address without a sheet name`,
+    `address=${a1}`,
+  );
+}
+
+// The only A1 reader: whatever `parseReference` accepts as one unqualified
+// cell is an address; everything else is rejected.
+function cellAddress(workbook, a1) {
+  const ref = workbook.parseReference(a1);
+  if (ref === null || ref.sheetName !== null) throw invalidAddress(a1);
+  const { rect } = ref;
+  if (rect.firstRow !== rect.lastRow || rect.firstCol !== rect.lastCol) throw invalidAddress(a1);
+  return rect;
+}
+
+/** A1 view of one worksheet; see `Sheet` in formulon.d.ts. */
+class Sheet {
+  #workbook;
+  #index;
+
+  constructor(workbook, index) {
+    this.#workbook = workbook;
+    this.#index = index;
+  }
+
+  get workbook() {
+    return this.#workbook;
+  }
+
+  get index() {
+    return this.#index;
+  }
+
+  get name() {
+    return this.#workbook.getSheetName(this.#index);
+  }
+
+  get(a1) {
+    const cell = cellAddress(this.#workbook, a1);
+    return this.#workbook.getValue(this.#index, cell.firstRow, cell.firstCol);
+  }
+
+  set(a1, value) {
+    const cell = cellAddress(this.#workbook, a1);
+    this.#workbook.setValue(this.#index, cell.firstRow, cell.firstCol, value);
+  }
+
+  getFormula(a1) {
+    const cell = cellAddress(this.#workbook, a1);
+    return this.#workbook.getFormula(this.#index, cell.firstRow, cell.firstCol);
+  }
+
+  setFormula(a1, formula) {
+    const cell = cellAddress(this.#workbook, a1);
+    this.#workbook.setFormula(this.#index, cell.firstRow, cell.firstCol, formula);
+  }
+}
+
+function requireField(value, field, type) {
+  if (typeof value[field] !== type) {
+    throw new TypeError(`setValue argument 4: a Value of this kind needs a ${type} \`${field}\``);
+  }
+  return value[field];
+}
+
+function setValue(sheet, row, col, value) {
+  if (value === null) return this.setBlank(sheet, row, col);
+  switch (typeof value) {
+    case 'number':
+      return this.setNumber(sheet, row, col, value);
+    case 'string':
+      return this.setText(sheet, row, col, value);
+    case 'boolean':
+      return this.setBool(sheet, row, col, value);
+    case 'object':
+      if (Array.isArray(value)) break;
+      switch (value.kind) {
+        case ValueKind.Blank:
+          return this.setBlank(sheet, row, col);
+        case ValueKind.Number:
+          return this.setNumber(sheet, row, col, requireField(value, 'number', 'number'));
+        case ValueKind.Bool:
+          return this.setBool(sheet, row, col, requireField(value, 'boolean', 'boolean'));
+        case ValueKind.Text:
+          return this.setText(sheet, row, col, requireField(value, 'text', 'string'));
+        case ValueKind.Error:
+          return this.setError(sheet, row, col, requireField(value, 'errorCode', 'number'));
+      }
+      break;
+  }
+  throw new TypeError('setValue argument 4 must be a number, string, boolean, null or a scalar Value');
+}
+
+function sheet(nameOrIndex) {
+  if (typeof nameOrIndex === 'string') {
+    const index = this.getSheetIndex(nameOrIndex);
+    if (index === null) {
+      throw new FormulonError(
+        StatusCode.NotFound,
+        `no sheet is named ${JSON.stringify(nameOrIndex)}`,
+        `sheet_name=${nameOrIndex}`,
+      );
+    }
+    return new Sheet(this, index);
+  }
+  if (typeof nameOrIndex === 'number') {
+    // Validates the index exactly as every other sheet-index argument is validated.
+    this.getSheetName(nameOrIndex);
+    return new Sheet(this, nameOrIndex);
+  }
+  throw new TypeError('sheet argument 1 must be a sheet name or index');
+}
+
+/**
+ * Adds the pure-JS `Workbook` methods (`setValue`, `sheet`) to a runtime's
+ * Workbook class. Both packages share this one implementation.
+ *
+ * @param {Function} WorkbookCtor The runtime's `Workbook` class.
+ */
+export function installWorkbookExtensions(WorkbookCtor) {
+  for (const [name, fn] of [
+    ['setValue', setValue],
+    ['sheet', sheet],
+  ]) {
+    Object.defineProperty(WorkbookCtor.prototype, name, { value: fn, writable: true, configurable: true });
+  }
 }

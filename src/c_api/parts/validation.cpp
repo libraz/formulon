@@ -46,15 +46,14 @@ struct Candidate {
 extern "C" fm_status_t fm_sheet_validate_value(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                                const fm_value_t* proposed, fm_validation_outcome_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_validate_value";
   if (proposed == nullptr || out == nullptr) {
-    return null_argument("fm_sheet_validate_value");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   formulon::Value value = formulon::Value::blank();
-  if (auto rc = value_from_fm(*proposed, &value, kApi); rc != 0) {
+  if (auto rc = value_from_fm(*proposed, &value); rc != 0) {
     return rc;
   }
   const formulon::Workbook& book = wb->workbook();
@@ -73,15 +72,14 @@ extern "C" fm_status_t fm_sheet_validate_value(const fm_workbook_t* wb, size_t s
 extern "C" fm_status_t fm_sheet_get_invalid_cells(const fm_workbook_t* wb, size_t sheet_index, uint64_t cursor,
                                                   uint32_t limit, fm_cell_range_t** out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_get_invalid_cells";
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_invalid_cells: NULL out");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out is NULL");
   }
   *out = nullptr;
-  if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_cell_cursor(cursor, kApi); rc != 0) {
+  if (auto rc = check_cell_cursor(cursor); rc != 0) {
     return rc;
   }
   const formulon::Workbook& book = wb->workbook();

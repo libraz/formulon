@@ -404,7 +404,7 @@ TEST(EvaluateFormulaArray, IndexOutOfRangeRejected) {
 
   fm_value_t v{};
   EXPECT_EQ(fm_value_array_get_value_at(array.handle, 3, &v),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
 }
 
 TEST(EvaluateFormulaArray, NullArgumentsRejected) {

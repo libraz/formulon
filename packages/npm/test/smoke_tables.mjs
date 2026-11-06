@@ -1,5 +1,5 @@
 import test from 'node:test';
-import { assert, getModule } from './smoke_support.mjs';
+import { assert, expectFailure, getModule } from './smoke_support.mjs';
 
 const release = (wb) => wb.delete();
 
@@ -10,11 +10,11 @@ const release = (wb) => wb.delete();
 // round trip here.
 
 function salesWorkbook(mod, rect = { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 }, totalsRow = false) {
-  const wb = mod.Workbook.createDefault().value;
-  assert.ok(wb.setText(0, 0, 0, 'Product').ok);
-  assert.ok(wb.setText(0, 0, 1, 'Amount').ok);
-  assert.ok(wb.setNumber(0, 1, 1, 10).ok);
-  assert.ok(wb.setNumber(0, 2, 1, 20).ok);
+  const wb = mod.Workbook.createDefault();
+  wb.setText(0, 0, 0, 'Product');
+  wb.setText(0, 0, 1, 'Amount');
+  wb.setNumber(0, 1, 1, 10);
+  wb.setNumber(0, 2, 1, 20);
   const created = wb.addTable({
     range: { sheet: 0, rect },
     name: 'Sales',
@@ -22,8 +22,7 @@ function salesWorkbook(mod, rect = { firstRow: 0, firstCol: 0, lastRow: 2, lastC
     styleName: 'TableStyleLight9',
     totalsRow,
   });
-  assert.ok(created.status.ok, JSON.stringify(created.status));
-  assert.equal(created.index, 0);
+  assert.equal(created, 0);
   return wb;
 }
 
@@ -32,7 +31,6 @@ test('tableAt reads the style toggles, row counts and columns', async () => {
   const wb = salesWorkbook(mod);
   try {
     const table = wb.getTable(0);
-    assert.ok(table.status.ok, JSON.stringify(table.status));
     assert.equal(table.styleName, 'TableStyleLight9');
     assert.equal(table.hasStyleInfo, true);
     assert.equal(table.showRowStripes, true);
@@ -56,15 +54,14 @@ test('updateTable keeps the toggles across a style name change', async () => {
   const wb = salesWorkbook(mod);
   let bytes;
   try {
-    assert.ok(wb.updateTable(0, { showFirstColumn: true, showRowStripes: false, showColumnStripes: true }).ok);
-    assert.ok(wb.updateTable(0, { styleName: 'TableStyleMedium4' }).ok);
+    wb.updateTable(0, { showFirstColumn: true, showRowStripes: false, showColumnStripes: true });
+    wb.updateTable(0, { styleName: 'TableStyleMedium4' });
     const saved = wb.save();
-    assert.ok(saved.status.ok, JSON.stringify(saved.status));
-    bytes = saved.bytes;
+    bytes = saved;
   } finally {
     release(wb);
   }
-  const reloaded = mod.Workbook.load(bytes).value;
+  const reloaded = mod.Workbook.load(bytes);
   try {
     const table = reloaded.getTable(0);
     assert.equal(table.styleName, 'TableStyleMedium4');
@@ -80,17 +77,17 @@ test('setTableColumnTotals writes the totals-row cells', async () => {
   const mod = await getModule();
   const wb = salesWorkbook(mod, { firstRow: 0, firstCol: 0, lastRow: 3, lastCol: 1 }, true);
   try {
-    assert.ok(wb.setTableColumnTotals(0, 0, { label: 'Total' }).ok);
-    assert.ok(wb.setTableColumnTotals(0, 1, { function: 'sum' }).ok);
-    assert.equal(wb.getFormula(0, 3, 1).value, '=SUBTOTAL(109,[Amount])');
-    assert.ok(wb.recalc().ok);
-    assert.equal(wb.getValue(0, 3, 1).value.number, 30);
-    assert.equal(wb.getValue(0, 3, 0).value.text, 'Total');
-    assert.equal(wb.setTableColumnTotals(0, 1, { function: 'median' }).ok, false);
+    wb.setTableColumnTotals(0, 0, { label: 'Total' });
+    wb.setTableColumnTotals(0, 1, { function: 'sum' });
+    assert.equal(wb.getFormula(0, 3, 1), '=SUBTOTAL(109,[Amount])');
+    wb.recalc();
+    assert.equal(wb.getValue(0, 3, 1).number, 30);
+    assert.equal(wb.getValue(0, 3, 0).text, 'Total');
+    expectFailure(() => wb.setTableColumnTotals(0, 1, { function: 'median' }));
     const columns = wb.getTable(0).columns;
     assert.equal(columns[0].totalsRowLabel, 'Total');
     assert.equal(columns[1].totalsRowFunction, 'sum');
-    assert.ok(wb.setTableColumnTotals(0, 1, { function: 'custom', formula: '=MAX(Sales[Amount])' }).ok);
+    wb.setTableColumnTotals(0, 1, { function: 'custom', formula: '=MAX(Sales[Amount])' });
     assert.equal(wb.getTable(0).columns[1].totalsRowFormula, 'MAX([Amount])');
   } finally {
     release(wb);
@@ -101,24 +98,22 @@ test('updateTable renames the table and its structured references', async () => 
   const mod = await getModule();
   const wb = salesWorkbook(mod);
   try {
-    assert.ok(wb.setFormula(0, 0, 3, '=SUM(Sales[Amount])').ok);
-    assert.ok(wb.updateTable(0, { name: 'Revenue' }).ok);
+    wb.setFormula(0, 0, 3, '=SUM(Sales[Amount])');
+    wb.updateTable(0, { name: 'Revenue' });
     const table = wb.getTable(0);
     assert.equal(table.name, 'Revenue');
     assert.equal(table.displayName, 'Revenue');
-    assert.equal(wb.getFormula(0, 0, 3).value, '=SUM(Revenue[Amount])');
+    assert.equal(wb.getFormula(0, 0, 3), '=SUM(Revenue[Amount])');
     const other = wb.addTable({
       range: { sheet: 0, rect: { firstRow: 0, firstCol: 5, lastRow: 1, lastCol: 5 } },
       name: 'Other',
       columns: ['X'],
     });
-    assert.ok(other.status.ok);
     // A clash is refused and leaves the rest of the update unapplied.
-    assert.equal(
-      wb.updateTable(other.index, { name: 'revenue', rect: { firstRow: 0, firstCol: 5, lastRow: 4, lastCol: 5 } }).ok,
-      false,
+    expectFailure(() =>
+      wb.updateTable(other, { name: 'revenue', rect: { firstRow: 0, firstCol: 5, lastRow: 4, lastCol: 5 } }),
     );
-    assert.deepEqual(wb.getTable(other.index).range.rect, { firstRow: 0, firstCol: 5, lastRow: 1, lastCol: 5 });
+    assert.deepEqual(wb.getTable(other).range.rect, { firstRow: 0, firstCol: 5, lastRow: 1, lastCol: 5 });
   } finally {
     release(wb);
   }
@@ -128,14 +123,13 @@ test('renameTableColumn renames the column and its structured references', async
   const mod = await getModule();
   const wb = salesWorkbook(mod);
   try {
-    assert.ok(wb.setFormula(0, 0, 3, '=SUM(Sales[Amount])').ok);
+    wb.setFormula(0, 0, 3, '=SUM(Sales[Amount])');
     const renamed = wb.renameTableColumn(0, 1, 'Revenue');
-    assert.ok(renamed.status.ok, JSON.stringify(renamed.status));
-    assert.equal(renamed.value, 'Revenue');
-    assert.equal(wb.getFormula(0, 0, 3).value, '=SUM(Sales[Revenue])');
-    assert.equal(wb.getValue(0, 0, 1).value.text, 'Revenue');
-    assert.equal(wb.renameTableColumn(0, 1, '').value, 'Column1');
-    assert.equal(wb.renameTableColumn(0, 9, 'X').status.ok, false);
+    assert.equal(renamed, 'Revenue');
+    assert.equal(wb.getFormula(0, 0, 3), '=SUM(Sales[Revenue])');
+    assert.equal(wb.getValue(0, 0, 1).text, 'Revenue');
+    assert.equal(wb.renameTableColumn(0, 1, ''), 'Column1');
+    expectFailure(() => wb.renameTableColumn(0, 9, 'X'));
   } finally {
     release(wb);
   }
@@ -147,40 +141,36 @@ test('custom table styles round-trip and a table can use one', async () => {
   let bytes;
   try {
     const dxf = wb.addDxf({ font: { name: 'Calibri', bold: true } });
-    assert.ok(dxf.status.ok, JSON.stringify(dxf.status));
     const style = {
       name: 'Corporate',
       pivot: false,
       table: true,
       elements: [
-        { type: 'wholeTable', size: 1, dxfId: dxf.index },
-        { type: 'firstRowStripe', size: 2, dxfId: dxf.index },
+        { type: 'wholeTable', size: 1, dxfId: dxf },
+        { type: 'firstRowStripe', size: 2, dxfId: dxf },
         { type: 'totalRow', size: 1 },
       ],
     };
-    assert.ok(wb.setTableStyle(style).ok);
-    assert.equal(wb.setTableStyle({ name: 'TableStyleMedium2' }).ok, false);
-    assert.equal(wb.setTableStyle({ name: 'Bad', elements: [{ type: 'bodyRow' }] }).ok, false);
+    wb.setTableStyle(style);
+    expectFailure(() => wb.setTableStyle({ name: 'TableStyleMedium2' }));
+    expectFailure(() => wb.setTableStyle({ name: 'Bad', elements: [{ type: 'bodyRow' }] }));
     assert.equal(wb.listTableStyles().length, 1);
-    assert.ok(wb.updateTable(0, { styleName: 'Corporate' }).ok);
+    wb.updateTable(0, { styleName: 'Corporate' });
     const defaults = wb.getTableStyleDefaults();
     assert.equal(defaults.tableStyle, 'TableStyleMedium2');
     assert.equal(defaults.pivotStyle, 'PivotStyleLight16');
     const saved = wb.save();
-    assert.ok(saved.status.ok, JSON.stringify(saved.status));
-    bytes = saved.bytes;
+    bytes = saved;
   } finally {
     release(wb);
   }
-  const reloaded = mod.Workbook.load(bytes).value;
+  const reloaded = mod.Workbook.load(bytes);
   try {
     const styles = reloaded.listTableStyles();
-    assert.ok(styles.status.ok, JSON.stringify(styles.status));
     const got = styles[0];
     const byName = reloaded.getTableStyle('corporate');
-    assert.ok(byName.status.ok);
-    assert.equal(byName.value.name, 'Corporate');
-    assert.equal(reloaded.getTableStyle('Other').value, null);
+    assert.equal(byName.name, 'Corporate');
+    assert.equal(reloaded.getTableStyle('Other'), null);
     assert.equal(got.name, 'Corporate');
     assert.equal(got.pivot, false);
     assert.equal(got.table, true);
@@ -193,9 +183,9 @@ test('custom table styles round-trip and a table can use one', async () => {
       ],
     );
     assert.equal(reloaded.getTable(0).styleName, 'Corporate');
-    assert.ok(reloaded.setTableStyleDefaults({ tableStyle: 'Corporate' }).ok);
+    reloaded.setTableStyleDefaults({ tableStyle: 'Corporate' });
     assert.equal(reloaded.getTableStyleDefaults().tableStyle, 'Corporate');
-    assert.ok(reloaded.removeTableStyle('corporate').ok);
+    reloaded.removeTableStyle('corporate');
     assert.equal(reloaded.listTableStyles().length, 0);
     assert.equal(reloaded.getTableStyleDefaults().tableStyle, 'TableStyleMedium2');
   } finally {
@@ -205,15 +195,15 @@ test('custom table styles round-trip and a table can use one', async () => {
 
 test('addTable throws TypeError for a missing range or range.rect', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
     const rect = { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 };
     const columns = ['Product', 'Amount'];
     assert.throws(() => wb.addTable({ name: 'T', columns }), TypeError);
     assert.throws(() => wb.addTable({ range: { sheet: 0 }, name: 'T', columns }), TypeError);
     assert.throws(() => wb.addTable({ range: { rect }, name: 'T', columns }), TypeError);
-    assert.equal(wb.getTableCount().value, 0);
-    assert.ok(wb.addTable({ range: { sheet: 0, rect }, name: 'T', columns }).status.ok);
+    assert.equal(wb.getTableCount(), 0);
+    wb.addTable({ range: { sheet: 0, rect }, name: 'T', columns });
   } finally {
     release(wb);
   }

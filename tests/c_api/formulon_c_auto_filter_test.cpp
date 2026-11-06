@@ -503,8 +503,8 @@ TEST(FormulonCApiAutoFilter, TableFilterAppliesAndRoundTrips) {
   ASSERT_EQ(fm_workbook_get_table_auto_filter(reloaded.handle, 0, &out, &present), 0);
   EXPECT_EQ(present, 0);
   EXPECT_EQ(fm_workbook_apply_table_auto_filter(reloaded.handle, 0), kNotFound);
-  EXPECT_EQ(fm_workbook_get_table_auto_filter(reloaded.handle, 4, &out, &present), kInvalidArgument);
-  EXPECT_EQ(fm_workbook_set_table_auto_filter(reloaded.handle, 4, &filter), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_get_table_auto_filter(reloaded.handle, 4, &out, &present), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_set_table_auto_filter(reloaded.handle, 4, &filter), FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 
 /// Unmodelled content on every level: an `xr:uid` and an unknown attribute,

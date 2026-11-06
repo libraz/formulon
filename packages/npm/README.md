@@ -33,11 +33,11 @@ The package is ES modules only and ships its TypeScript declarations.
 ```js
 import createFormulon from '@libraz/formulon';
 
-const Module = await createFormulon();
-console.log(Module.evalFormula('=SUM(1,2,3)').value.number); // 6
+const formulon = await createFormulon();
+console.log(formulon.evalFormula('=SUM(1,2,3)').number); // 6
 ```
 
-Excel errors such as `#DIV/0!` come back as values (`value.kind === 4`); `status.ok === false` is reserved for host-side failures. See [Errors](https://formulon.libraz.net/compatibility/errors).
+Excel errors such as `#DIV/0!` come back as values (`v.kind === ValueKind.Error`); a host-side failure throws `FormulonError`, whose `code` is a `StatusCode`. See [Errors](https://formulon.libraz.net/compatibility/errors).
 
 ## Recalculate a workbook
 
@@ -45,29 +45,28 @@ Excel errors such as `#DIV/0!` come back as values (`value.kind === 4`); `status
 import createFormulon from '@libraz/formulon';
 import { readFile, writeFile } from 'node:fs/promises';
 
-const Module = await createFormulon();
-const loaded = Module.Workbook.load(await readFile('input.xlsx'));
-if (!loaded.status.ok) throw new Error(loaded.status.message);
-const wb = loaded.value;
+const formulon = await createFormulon();
+const wb = formulon.Workbook.load(await readFile('input.xlsx'));
 try {
   wb.setNumber(0, 0, 0, 42);        // Sheet1!A1
   wb.setFormula(0, 1, 0, '=A1*2');  // Sheet1!A2
   wb.recalc();
-  console.log(wb.getValue(0, 1, 0).value.number); // 84
+  console.log(wb.getValue(0, 1, 0).number); // 84
 
-  const saved = wb.save();
-  if (saved.status.ok) await writeFile('output.xlsx', saved.bytes);
+  await writeFile('output.xlsx', wb.save());
 } finally {
-  wb.dispose(); // workbooks wrap a native handle
+  wb.dispose(); // workbooks wrap a native handle; `wb.disposed` turns true
 }
 ```
+
+A sheet can also be addressed in A1 notation through a view: `wb.sheet('Sheet1').set('A1', 42)`. `wb.getSheetIndex('Sheet1')` returns the sheet index, or `null` when there is no such sheet.
 
 ## Switching locale profiles
 
 New workbooks use `win-365-en_US`. Formulas are always written with English function names and the stored separators; the profile decides how text is parsed and how results are rendered. Switch it per workbook and recalculate:
 
 ```js
-const wb = Module.Workbook.createDefault().value;
+const wb = formulon.Workbook.createDefault();
 try {
   wb.setFormula(0, 0, 0, '=LENB("日本")');  // A1
   wb.setFormula(0, 1, 0, '=VALUE("1,5")');  // A2
@@ -88,7 +87,7 @@ try {
 
 The ids are `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}`. Every `mac-*` profile and `win-365-ja_JP` is measured against Excel; the other `win-*` profiles are estimated from the Mac measurements. On a `mac-*` profile, text comparison, sorting, lookups and grouping follow that locale's measured Mac Excel collation; `win-*` profiles add the Windows word-sort rules measured on Windows Excel 365 ja-JP to that locale's collation. The profile is not saved into the file, so store the id your application targets and apply it again after loading.
 
-For a new workbook that matches what Excel creates in a locale, use `Workbook.createForProfile(id)` instead of `createDefault`: it selects the profile and also sets the body and phonetic fonts, the localized Normal style and first sheet names, and the page margins Excel uses there. Sheets added later take the first sheet's row metrics, page margins and phonetic settings.
+For a new workbook that matches what Excel creates in a locale, use `formulon.Workbook.createForProfile(id)` instead of `createDefault`: it selects the profile and also sets the body and phonetic fonts, the localized Normal style and first sheet names, and the page margins Excel uses there. Sheets added later take the first sheet's row metrics, page margins and phonetic settings.
 
 ## Choosing a build
 

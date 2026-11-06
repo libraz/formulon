@@ -1,5 +1,5 @@
 import test from 'node:test';
-import { assert, getModule, readAll } from './smoke_support.mjs';
+import { assert, expectFailure, getModule, readAll } from './smoke_support.mjs';
 
 // ---- Sheet-annotation surfaces -----------------------------------------
 //
@@ -75,7 +75,7 @@ const EXPECTED_CFVO_VALUES = Object.freeze(['0', '50', '100', '5', '95', '0', '3
 
 test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault().value;
+  const wb = Module.Workbook.createDefault();
   let bytes;
   try {
     assert.equal(
@@ -86,8 +86,7 @@ test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
       0,
     );
     for (const rule of [COLOR_SCALE_RULE, DATA_BAR_RULE, ICON_SET_RULE]) {
-      const added = wb.addCfRule(0, rule);
-      assert.ok(added.status.ok, `addConditionalFormat type=${rule.type}: ${JSON.stringify(added.status)}`);
+      wb.addCfRule(0, rule);
     }
 
     const inSession = readAll(
@@ -112,13 +111,12 @@ test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
     assert.equal(byType.get(3).dataBar.fill.b, 192);
 
     const saved = wb.save();
-    assert.ok(saved.status.ok, JSON.stringify(saved.status));
-    bytes = saved.bytes;
+    bytes = saved;
   } finally {
     wb.delete();
   }
 
-  const reloaded = Module.Workbook.load(bytes).value;
+  const reloaded = Module.Workbook.load(bytes);
   try {
     const rules = readAll(
       () => reloaded.getCfRuleCount(0),
@@ -133,17 +131,15 @@ test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
 
 test('addValidation defaults every omitted boolean to false', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault().value;
+  const wb = Module.Workbook.createDefault();
   try {
     // A list rule stating only what it needs: the booleans are left out
     // so the binding's own defaults are what is read back.
-    assert.ok(
-      wb.addValidation(0, {
-        ranges: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
-        type: 3,
-        formula1: '"Yes,No"',
-      }).status.ok,
-    );
+    wb.addValidation(0, {
+      ranges: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
+      type: 3,
+      formula1: '"Yes,No"',
+    });
     const rules = readAll(
       () => wb.getValidationCount(0),
       (i) => wb.getValidation(0, i),
@@ -166,14 +162,12 @@ test('addValidation defaults every omitted boolean to false', async () => {
     assert.equal(rule.ranges[0].lastRow, 2);
 
     // An explicit `true` is not overwritten by the default.
-    assert.ok(
-      wb.addValidation(0, {
-        ranges: [{ firstRow: 3, firstCol: 0, lastRow: 3, lastCol: 0 }],
-        type: 3,
-        allowBlank: true,
-        formula1: '"A,B"',
-      }).status.ok,
-    );
+    wb.addValidation(0, {
+      ranges: [{ firstRow: 3, firstCol: 0, lastRow: 3, lastCol: 0 }],
+      type: 3,
+      allowBlank: true,
+      formula1: '"A,B"',
+    });
     assert.equal(
       readAll(
         () => wb.getValidationCount(0),
@@ -188,53 +182,44 @@ test('addValidation defaults every omitted boolean to false', async () => {
 
 test('merges, comments and hyperlinks round-trip through save and load', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault().value;
+  const wb = Module.Workbook.createDefault();
   let bytes;
   try {
-    assert.ok(wb.setText(0, 0, 0, '見出し').ok);
-    assert.ok(wb.addMerge(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 3 }).ok);
-    assert.ok(wb.setComment(0, 2, 1, '校閲者', '要確認').ok);
-    assert.ok(wb.addHyperlink(0, 3, 0, 'https://example.com/', '例', 'ツールチップ', '').ok);
+    wb.setText(0, 0, 0, '見出し');
+    wb.addMerge(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 3 });
+    wb.setComment(0, 2, 1, '校閲者', '要確認');
+    wb.addHyperlink(0, 3, 0, 'https://example.com/', '例', 'ツールチップ', '');
 
     const merges = wb.listMerges(0);
-    assert.ok(merges.status.ok, JSON.stringify(merges.status));
     assert.equal(merges.length, 1);
     assert.equal(merges[0].lastCol, 3);
 
     const comment = wb.getComment(0, 2, 1);
-    assert.ok(comment.status.ok, JSON.stringify(comment.status));
-    assert.equal(comment.value.author, '校閲者');
-    assert.equal(comment.value.text, '要確認');
-    // An absent comment and an unreadable sheet both answer with a null
-    // value, and are told apart by the status they carry.
+    assert.equal(comment.author, '校閲者');
+    assert.equal(comment.text, '要確認');
+    // An absent comment answers null; an unreadable sheet throws.
     const none = wb.getComment(0, 9, 9);
-    assert.equal(none.status.ok, true);
-    assert.equal(none.value, null);
-    const badSheet = wb.getComment(99, 0, 0);
-    assert.equal(badSheet.status.code, 5050);
-    assert.equal(badSheet.value, null);
+    assert.equal(none, null);
+    expectFailure(() => wb.getComment(99, 0, 0), Module.StatusCode.SheetIndexOutOfRange);
 
     const saved = wb.save();
-    assert.ok(saved.status.ok, JSON.stringify(saved.status));
-    bytes = saved.bytes;
+    bytes = saved;
   } finally {
     wb.delete();
   }
 
-  const reloaded = Module.Workbook.load(bytes).value;
+  const reloaded = Module.Workbook.load(bytes);
   try {
     assert.equal(reloaded.listMerges(0).length, 1);
     assert.equal(reloaded.listMerges(0)[0].lastCol, 3);
 
     const comments = reloaded.listComments(0);
-    assert.ok(comments.status.ok, JSON.stringify(comments.status));
     assert.equal(comments.length, 1);
     assert.equal(comments[0].row, 2);
     assert.equal(comments[0].col, 1);
     assert.equal(comments[0].text, '要確認');
 
     const links = reloaded.listHyperlinks(0);
-    assert.ok(links.status.ok, JSON.stringify(links.status));
     assert.equal(links.length, 1);
     assert.equal(links[0].rect.firstRow, 3);
     assert.equal(links[0].target, 'https://example.com/');

@@ -1,36 +1,30 @@
 import test from 'node:test';
-import { assert, getModule, readAll } from './smoke_support.mjs';
+import { assert, getModule, isFormulonError, readAll } from './smoke_support.mjs';
 
 test('a nested recalc from the iterative progress callback throws on serial and parallel passes', async () => {
   const mod = await getModule();
   const runOuterRecalc = (recalcOuter) => {
-    const wb = mod.Workbook.createDefault().value;
+    const wb = mod.Workbook.createDefault();
     try {
-      assert.ok(wb.setIterative(true, 10, 0.001).ok);
-      assert.ok(wb.setFormula(0, 0, 0, '=(A1+10)/2').ok);
+      wb.setIterative(true, 10, 0.001);
+      wb.setFormula(0, 0, 0, '=(A1+10)/2');
       let calls = 0;
       let nested;
-      assert.ok(
-        wb.setIterativeProgress(() => {
-          calls += 1;
-          try {
-            wb.recalc();
-          } catch (err) {
-            nested = err;
-          }
-          return false;
-        }).ok,
-      );
+      wb.setIterativeProgress(() => {
+        calls += 1;
+        try {
+          wb.recalc();
+        } catch (err) {
+          nested = err;
+        }
+        return false;
+      });
 
-      const outer = recalcOuter(wb);
-      const outerStatus = typeof outer.status === 'object' ? outer.status : outer;
-      assert.ok(outerStatus.ok, `outer recalc: ${JSON.stringify(outerStatus)}`);
+      recalcOuter(wb);
       assert.equal(calls, 1);
       assert.ok(nested instanceof TypeError, `the nested recalc must throw: ${String(nested)}`);
       assert.match(nested.message, /kGraphRecalcReentrant, 4005/);
 
-      const value = wb.getValue(0, 0, 0);
-      assert.ok(value.status.ok, `workbook remains usable: ${JSON.stringify(value.status)}`);
       return nested.message;
     } finally {
       wb.setIterativeProgress(null);
@@ -43,42 +37,36 @@ test('a nested recalc from the iterative progress callback throws on serial and 
   assert.equal(parallel, serial, 'serial and parallel outer recalcs refuse the nested call alike');
 });
 
-test('a throwing iterative progress callback aborts the solve and reports a status', async () => {
+test('a throwing iterative progress callback aborts the solve and its exception reaches the caller', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
-    assert.ok(wb.setIterative(true, 100, 0.0001).ok);
-    assert.ok(wb.setFormula(0, 0, 0, '=(A1+10)/2').ok);
+    wb.setIterative(true, 100, 0.0001);
+    wb.setFormula(0, 0, 0, '=(A1+10)/2');
     let calls = 0;
-    assert.ok(
-      wb.setIterativeProgress(() => {
-        calls += 1;
-        throw new Error('callback failure');
-      }).ok,
-    );
+    const thrown = new Error('callback failure');
+    wb.setIterativeProgress(() => {
+      calls += 1;
+      throw thrown;
+    });
 
-    // Reported as a status rather than propagated, and with the same
-    // ordinal the WASM binding uses (`kBindingCallbackException`).
-    const aborted = wb.recalc();
-    assert.equal(aborted.ok, false, `expected a failure envelope: ${JSON.stringify(aborted)}`);
-    assert.equal(aborted.code, 7003);
-    // The engine reported success (it only saw a cancellation), so there
-    // is no thread-local diagnostic to read here -- this must be the
-    // binding's own message, matching the WASM package's, not the residue
-    // of an earlier call.
-    assert.equal(aborted.message, 'the iterative progress callback threw; the solve was aborted');
-    assert.equal(aborted.context, 'Workbook.setIterativeProgress');
+    // The callback's own exception is rethrown by the outer call.
+    let caught;
+    try {
+      wb.recalc();
+    } catch (err) {
+      caught = err;
+    }
+    assert.equal(caught, thrown);
     assert.equal(calls, 1, 'the solve must stop at the first throw');
 
-    const mid = wb.getValue(0, 0, 0);
-    assert.ok(mid.status.ok, JSON.stringify(mid.status));
+    wb.getValue(0, 0, 0);
 
-    assert.ok(wb.setIterativeProgress(null).ok);
-    assert.ok(wb.setFormula(0, 0, 0, '=(A1+10)/2').ok);
-    const recovered = wb.recalc();
-    assert.ok(recovered.ok, `recalc after the throwing callback: ${JSON.stringify(recovered)}`);
+    wb.setIterativeProgress(null);
+    wb.setFormula(0, 0, 0, '=(A1+10)/2');
+    wb.recalc();
     const converged = wb.getValue(0, 0, 0);
-    assert.ok(Math.abs(converged.value.number - 10) < 0.001, `A1=${converged.value.number}`);
+    assert.ok(Math.abs(converged.number - 10) < 0.001, `A1=${converged.number}`);
   } finally {
     wb.setIterativeProgress(null);
     wb.dispose();
@@ -156,12 +144,11 @@ test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
   // thresholds are all `min` / `max` never take that path, because those
   // types carry no value string.
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   let bytes;
   try {
     for (const rule of [COLOR_SCALE_RULE, DATA_BAR_RULE, ICON_SET_RULE]) {
-      const added = wb.addCfRule(0, rule);
-      assert.ok(added.status.ok, `addConditionalFormat type=${rule.type}: ${JSON.stringify(added.status)}`);
+      wb.addCfRule(0, rule);
     }
 
     const inSession = readAll(
@@ -186,13 +173,12 @@ test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
     assert.equal(byType.get(3).dataBar.fill.b, 192);
 
     const saved = wb.save();
-    assert.ok(saved.status.ok, JSON.stringify(saved.status));
-    bytes = saved.bytes;
+    bytes = saved;
   } finally {
     wb.dispose();
   }
 
-  const reloaded = mod.Workbook.load(bytes).value;
+  const reloaded = mod.Workbook.load(bytes);
   try {
     const rules = readAll(
       () => reloaded.getCfRuleCount(0),
@@ -207,26 +193,23 @@ test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
 
 test('getIterative reads back what setIterative stored', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
     const initial = wb.getIterative();
-    assert.ok(initial.status.ok, `getIterative: ${JSON.stringify(initial.status)}`);
     assert.equal(typeof initial.enabled, 'boolean');
     assert.equal(typeof initial.maxIterations, 'number');
     assert.equal(typeof initial.maxChange, 'number');
 
-    assert.ok(wb.setIterative(true, 42, 0.25).ok);
+    wb.setIterative(true, 42, 0.25);
     const enabled = wb.getIterative();
-    assert.ok(enabled.status.ok);
     assert.equal(enabled.enabled, true);
     assert.equal(enabled.maxIterations, 42);
     assert.equal(enabled.maxChange, 0.25);
 
     // The cap and threshold survive switching iteration back off, which is
     // what lets a host render the dialog with the stored values.
-    assert.ok(wb.setIterative(false, 42, 0.25).ok);
+    wb.setIterative(false, 42, 0.25);
     const disabled = wb.getIterative();
-    assert.ok(disabled.status.ok);
     assert.equal(disabled.enabled, false);
     assert.equal(disabled.maxIterations, 42);
     assert.equal(disabled.maxChange, 0.25);
@@ -237,15 +220,13 @@ test('getIterative reads back what setIterative stored', async () => {
 
 test('addValidation defaults allowBlank to false', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
-    assert.ok(
-      wb.addValidation(0, {
-        ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
-        type: 3,
-        formula1: '"a,b"',
-      }).status.ok,
-    );
+    wb.addValidation(0, {
+      ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+      type: 3,
+      formula1: '"a,b"',
+    });
     const list = readAll(
       () => wb.getValidationCount(0),
       (i) => wb.getValidation(0, i),
@@ -259,16 +240,14 @@ test('addValidation defaults allowBlank to false', async () => {
 
 test('getCellStyleXf reports xfId alongside the cell-format fields', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
     const read = wb.getCellStyleXf(0);
-    assert.ok(read.status.ok, `getCellStyleXf: ${JSON.stringify(read.status)}`);
     // A named-style xf is its own parent, so it never inherits one.
     assert.equal(read.xfId, 0);
     // The record shape matches `getCellXf`, which the documented
     // read / edit / addCellStyleXf round-trip depends on.
     const cellXf = wb.getCellXf(0);
-    assert.ok(cellXf.status.ok);
     for (const key of Object.keys(cellXf)) {
       assert.ok(key in read, `getCellStyleXf is missing '${key}'`);
     }
@@ -279,46 +258,35 @@ test('getCellStyleXf reports xfId alongside the cell-format fields', async () =>
 
 test('pivotFieldAddItemAt hides the blank item an empty label cannot name', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
     const cache = wb.addPivotCache(0);
-    assert.ok(cache.status.ok, `pivotCacheCreate: ${JSON.stringify(cache.status)}`);
-    const region = wb.addPivotCacheField(cache.index, 'Region');
-    assert.ok(region.status.ok);
-    const amount = wb.addPivotCacheField(cache.index, 'Amount');
-    assert.ok(amount.status.ok);
+    const region = wb.addPivotCacheField(cache, 'Region');
+    const amount = wb.addPivotCacheField(cache, 'Amount');
     // Shared item 0 renders as "North"; shared item 1 is the blank, which
     // carries no label of its own and can only be named by its index.
-    assert.ok(wb.addPivotCacheFieldSharedItemText(cache.index, region.index, 'North').ok);
-    assert.ok(wb.addPivotCacheFieldSharedItemBlank(cache.index, region.index).ok);
+    wb.addPivotCacheFieldSharedItemText(cache, region, 'North');
+    wb.addPivotCacheFieldSharedItemBlank(cache, region);
 
-    const first = wb.addPivotCacheRecord(cache.index);
-    assert.ok(first.status.ok);
-    assert.ok(wb.setPivotCacheRecordNumber(cache.index, first.index, region.index, 0).ok);
-    assert.ok(wb.setPivotCacheRecordNumber(cache.index, first.index, amount.index, 100).ok);
-    const second = wb.addPivotCacheRecord(cache.index);
-    assert.ok(second.status.ok);
-    assert.ok(wb.setPivotCacheRecordBlank(cache.index, second.index, region.index).ok);
-    assert.ok(wb.setPivotCacheRecordNumber(cache.index, second.index, amount.index, 200).ok);
+    const first = wb.addPivotCacheRecord(cache);
+    wb.setPivotCacheRecordNumber(cache, first, region, 0);
+    wb.setPivotCacheRecordNumber(cache, first, amount, 100);
+    const second = wb.addPivotCacheRecord(cache);
+    wb.setPivotCacheRecordBlank(cache, second, region);
+    wb.setPivotCacheRecordNumber(cache, second, amount, 200);
 
-    const pivot = wb.addPivot(0, 'PT', cache.index, 0, 0);
-    assert.ok(pivot.status.ok, `pivotCreate: ${JSON.stringify(pivot.status)}`);
-    const regionField = wb.addPivotField(0, pivot.index, { sourceName: 'Region', axis: 0 });
-    assert.ok(regionField.status.ok);
-    const amountField = wb.addPivotField(0, pivot.index, { sourceName: 'Amount', axis: 2 });
-    assert.ok(amountField.status.ok);
-    assert.ok(wb.setPivotRowFieldOrder(0, pivot.index, [regionField.index]).ok);
-    assert.ok(
-      wb.addPivotDataField(0, pivot.index, {
-        name: 'Sum of Amount',
-        fieldIndex: amountField.index,
-        aggregation: 0,
-      }).status.ok,
-    );
+    const pivot = wb.addPivot(0, 'PT', cache, 0, 0);
+    const regionField = wb.addPivotField(0, pivot, { sourceName: 'Region', axis: 0 });
+    const amountField = wb.addPivotField(0, pivot, { sourceName: 'Amount', axis: 2 });
+    wb.setPivotRowFieldOrder(0, pivot, [regionField]);
+    wb.addPivotDataField(0, pivot, {
+      name: 'Sum of Amount',
+      fieldIndex: amountField,
+      aggregation: 0,
+    });
 
     const sumDataCells = () => {
-      const layout = wb.getPivotLayout(0, pivot.index);
-      assert.ok(layout.status.ok, `pivotLayout: ${JSON.stringify(layout.status)}`);
+      const layout = wb.getPivotLayout(0, pivot);
       let total = 0;
       for (const cell of layout.cells) {
         if (cell.kind === mod.PivotCellKind.Data && cell.value.kind === mod.ValueKind.Number) {
@@ -329,8 +297,8 @@ test('pivotFieldAddItemAt hides the blank item an empty label cannot name', asyn
     };
     assert.equal(sumDataCells(), 300);
 
-    assert.ok(wb.addPivotFieldItem(0, pivot.index, regionField.index, 'North', true).status.ok);
-    assert.ok(wb.addPivotFieldSharedItem(0, pivot.index, regionField.index, 1, false).status.ok);
+    wb.addPivotFieldItem(0, pivot, regionField, 'North', true);
+    wb.addPivotFieldSharedItem(0, pivot, regionField, 1, false);
     assert.equal(sumDataCells(), 100);
   } finally {
     wb.dispose();
@@ -339,25 +307,30 @@ test('pivotFieldAddItemAt hides the blank item an empty label cannot name', asyn
 
 test('a rejected argument reports its own diagnostic, not the previous call', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
     // Leave a failure of a different call in the thread-local diagnostics.
-    const stale = wb.getValue(99, 0, 0);
-    assert.equal(stale.status.ok, false);
-    assert.ok(stale.status.message.length > 0);
+    const failure = (call) => {
+      try {
+        call();
+      } catch (err) {
+        return err;
+      }
+      return assert.fail('expected the call to throw');
+    };
+    const stale = failure(() => wb.getValue(99, 0, 0));
+    assert.ok(isFormulonError(stale));
+    assert.ok(stale.message.length > 0);
 
     // An argument the binding rejects before any C call carries its own
-    // message, and kInvalidArgument rather than the destroyed-handle code.
-    const shortColors = wb.setThemeColors([1, 2]);
-    assert.equal(shortColors.ok, false);
-    assert.equal(shortColors.code, 2);
+    // message, and a TypeError rather than the destroyed-handle code.
+    const shortColors = failure(() => wb.setThemeColors([1, 2]));
+    assert.ok(shortColors instanceof TypeError);
     assert.match(shortColors.message, /setThemeColors/);
-    assert.notEqual(shortColors.message, stale.status.message);
-    assert.equal(shortColors.context, '');
+    assert.notEqual(shortColors.message, stale.message);
 
-    const badCallback = wb.setIterativeProgress(42);
-    assert.equal(badCallback.ok, false);
-    assert.equal(badCallback.code, 2);
+    const badCallback = failure(() => wb.setIterativeProgress(42));
+    assert.ok(badCallback instanceof TypeError);
     assert.match(badCallback.message, /callback/);
   } finally {
     wb.setIterativeProgress(null);
@@ -367,19 +340,19 @@ test('a rejected argument reports its own diagnostic, not the previous call', as
 
 test('a call on a disposed workbook names the destroyed handle', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   wb.dispose();
   // 7000 is reserved for this: an argument fault reports 2 instead, so
   // "make a new workbook" stays the correct recovery for exactly this code.
-  const after = wb.recalc();
-  assert.equal(after.ok, false);
-  assert.equal(after.code, 7000);
-  assert.ok(after.message.length > 0, 'the destroyed-handle status must carry a message');
+  assert.throws(
+    () => wb.recalc(),
+    (e) => isFormulonError(e, 7000) && e.message.length > 0,
+  );
 });
 
 test('sheet-layout setters refuse coordinates and metrics Excel cannot open', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
     // These six setters marshal straight to the C ABI, which is where the
     // validation lives. The assertions below are what keeps that true: a
@@ -397,46 +370,49 @@ test('sheet-layout setters refuse coordinates and metrics Excel cannot open', as
     const kSpanRefused = 'column span out of range';
     const kRowSpanRefused = 'row span out of range';
     const kMetricRefused = 'value must be finite and non-negative';
-    // These six setters answer with a bare Status, not a `{status}`
-    // envelope, so the diagnostics are read off the returned object.
-    const refused = (status, expectedMessage, label) => {
-      assert.equal(status.ok, false, `${label} should have been refused`);
-      assert.equal(status.code, kInvalidArgument, `${label}: ${JSON.stringify(status)}`);
-      assert.equal(status.message, expectedMessage, `${label}: ${JSON.stringify(status)}`);
+    const refused = (call, expectedMessage, label) => {
+      assert.throws(
+        call,
+        (e) => isFormulonError(e, kInvalidArgument) && e.message === expectedMessage,
+        `${label} should have been refused`,
+      );
     };
 
     // One past Excel's last column / row.
-    refused(wb.setColumnWidth(0, 0, 16384, 10), kSpanRefused, 'setColumnWidth past the grid');
-    refused(wb.setColumnHidden(0, 0, 16384, true), kSpanRefused, 'setColumnHidden past the grid');
-    refused(wb.setColumnOutline(0, 0, 16384, 1), kSpanRefused, 'setColumnOutline past the grid');
-    refused(wb.setRowHeight(0, 0, 1048576, 10), kRowSpanRefused, 'setRowHeight past the grid');
-    refused(wb.setRowHidden(0, 0, 1048576, true), kRowSpanRefused, 'setRowHidden past the grid');
-    refused(wb.setRowOutline(0, 0, 1048576, 1), kRowSpanRefused, 'setRowOutline past the grid');
+    refused(() => wb.setColumnWidth(0, 0, 16384, 10), kSpanRefused, 'setColumnWidth past the grid');
+    refused(() => wb.setColumnHidden(0, 0, 16384, true), kSpanRefused, 'setColumnHidden past the grid');
+    refused(() => wb.setColumnOutline(0, 0, 16384, 1), kSpanRefused, 'setColumnOutline past the grid');
+    refused(() => wb.setRowHeight(0, 0, 1048576, 10), kRowSpanRefused, 'setRowHeight past the grid');
+    refused(() => wb.setRowHidden(0, 0, 1048576, true), kRowSpanRefused, 'setRowHidden past the grid');
+    refused(() => wb.setRowOutline(0, 0, 1048576, 1), kRowSpanRefused, 'setRowOutline past the grid');
 
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1]) {
-      refused(wb.setColumnWidth(0, 0, 2, bad), kMetricRefused, `setColumnWidth(${bad})`);
-      refused(wb.setRowHeight(0, 1, 1, bad), kMetricRefused, `setRowHeight(${bad})`);
+      refused(() => wb.setColumnWidth(0, 0, 2, bad), kMetricRefused, `setColumnWidth(${bad})`);
+      refused(() => wb.setRowHeight(0, 1, 1, bad), kMetricRefused, `setRowHeight(${bad})`);
     }
 
-    // The context names the C ABI entry point that refused the call and
-    // the values it saw, which is what makes a rejection actionable.
-    const span = wb.setColumnWidth(0, 0, 16384, 10);
-    assert.match(span.context, /fm_sheet_set_column_width: first=0 last=16384/);
-    const metric = wb.setRowHeight(0, 1, 1, Number.NaN);
-    assert.match(metric.context, /fm_sheet_set_row_height: height=/);
+    // The context carries the values the engine saw, which is what makes a rejection actionable.
+    assert.throws(
+      () => wb.setColumnWidth(0, 0, 16384, 10),
+      (e) => /first=0 last=16384/.test(e.context),
+    );
+    assert.throws(
+      () => wb.setRowHeight(0, 1, 1, Number.NaN),
+      (e) => /height=/.test(e.context),
+    );
 
     // Zero is a real width and a real height, not a rejected one.
-    assert.ok(wb.setColumnWidth(0, 0, 2, 0).ok);
-    assert.ok(wb.setRowHeight(0, 1, 1, 0).ok);
+    wb.setColumnWidth(0, 0, 2, 0);
+    wb.setRowHeight(0, 1, 1, 0);
 
     // The last coordinates Excel does address stay accepted -- an
     // off-by-one in either bound would refuse them.
-    assert.ok(wb.setColumnWidth(0, 16383, 16383, 10).ok);
-    assert.ok(wb.setColumnHidden(0, 16383, 16383, true).ok);
-    assert.ok(wb.setColumnOutline(0, 16383, 16383, 1).ok);
-    assert.ok(wb.setRowHeight(0, 1048575, 1048575, 10).ok);
-    assert.ok(wb.setRowHidden(0, 1048575, 1048575, true).ok);
-    assert.ok(wb.setRowOutline(0, 1048575, 1048575, 1).ok);
+    wb.setColumnWidth(0, 16383, 16383, 10);
+    wb.setColumnHidden(0, 16383, 16383, true);
+    wb.setColumnOutline(0, 16383, 16383, 1);
+    wb.setRowHeight(0, 1048575, 1048575, 10);
+    wb.setRowHidden(0, 1048575, 1048575, true);
+    wb.setRowOutline(0, 1048575, 1048575, 1);
   } finally {
     wb.dispose();
   }
@@ -444,57 +420,59 @@ test('sheet-layout setters refuse coordinates and metrics Excel cannot open', as
 
 test('setSheetVisibility states veryHidden, which the bool setter cannot', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
     const read = () => {
       const r = wb.getView(0);
-      assert.ok(r.status.ok, `getSheetView: ${JSON.stringify(r.status)}`);
-      return r.view;
+      return r;
     };
     assert.equal(read().visibility, mod.SheetVisibility.Visible);
     assert.equal(read().tabHidden, 0);
     // The only visible sheet cannot be hidden: kInvalidArgument, sheet left alone.
-    for (const refused of [wb.setVisibility(0, mod.SheetVisibility.Hidden), wb.setTabHidden(0, true)]) {
-      assert.equal(refused.ok, false);
-      assert.equal(refused.code, 2);
+    for (const refused of [() => wb.setVisibility(0, mod.SheetVisibility.Hidden), () => wb.setTabHidden(0, true)]) {
+      assert.throws(refused, (e) => isFormulonError(e, 2));
     }
     assert.equal(read().visibility, mod.SheetVisibility.Visible);
     // The last sheet keeps its own refusal (kCannotRemoveLastSheet).
-    assert.equal(wb.removeSheet(0).code, 5052);
-    assert.equal(wb.getSheetCount().value, 1);
+    assert.throws(
+      () => wb.removeSheet(0),
+      (e) => isFormulonError(e, 5052),
+    );
+    assert.equal(wb.getSheetCount(), 1);
     // A second sheet lets the first one change state, but removing the first
     // while the second is hidden would leave no visible sheet.
-    assert.ok(wb.addSheet('Second').status.ok);
-    assert.ok(wb.setTabHidden(1, true).ok);
-    const lastVisible = wb.removeSheet(0);
-    assert.equal(lastVisible.ok, false);
-    assert.equal(lastVisible.code, 2);
-    assert.equal(wb.getSheetCount().value, 2);
-    assert.ok(wb.setTabHidden(1, false).ok);
+    wb.addSheet('Second');
+    wb.setTabHidden(1, true);
+    assert.throws(
+      () => wb.removeSheet(0),
+      (e) => isFormulonError(e, 2),
+    );
+    assert.equal(wb.getSheetCount(), 2);
+    wb.setTabHidden(1, false);
 
-    assert.ok(wb.setVisibility(0, mod.SheetVisibility.VeryHidden).ok);
+    wb.setVisibility(0, mod.SheetVisibility.VeryHidden);
     // The two-state view stays consistent: a very-hidden sheet reads as
     // hidden to a caller that knows only the bool, never as visible.
     assert.equal(read().visibility, mod.SheetVisibility.VeryHidden);
     assert.equal(read().tabHidden, 1);
 
     // Asking for plain "hidden" must not weaken the stronger state.
-    assert.ok(wb.setTabHidden(0, true).ok);
+    wb.setTabHidden(0, true);
     assert.equal(read().visibility, mod.SheetVisibility.VeryHidden);
 
     // Demotion is the other direction the bool cannot express.
-    assert.ok(wb.setVisibility(0, mod.SheetVisibility.Hidden).ok);
+    wb.setVisibility(0, mod.SheetVisibility.Hidden);
     assert.equal(read().visibility, mod.SheetVisibility.Hidden);
     assert.equal(read().tabHidden, 1);
 
     // Showing the sheet clears either hidden state.
-    assert.ok(wb.setTabHidden(0, false).ok);
+    wb.setTabHidden(0, false);
     assert.equal(read().visibility, mod.SheetVisibility.Visible);
     assert.equal(read().tabHidden, 0);
 
     // An unknown ordinal is refused and leaves the sheet alone.
-    assert.ok(wb.setVisibility(0, mod.SheetVisibility.VeryHidden).ok);
-    assert.equal(wb.setVisibility(0, 3).ok, false);
+    wb.setVisibility(0, mod.SheetVisibility.VeryHidden);
+    assert.throws(() => wb.setVisibility(0, 3), isFormulonError);
     assert.equal(read().visibility, mod.SheetVisibility.VeryHidden);
   } finally {
     wb.dispose();

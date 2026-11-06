@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { getModule } from './smoke_support.mjs';
+import { getModule, loadStagedModule } from './smoke_support.mjs';
 
 const headerPath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -23,13 +23,13 @@ async function headerCodes() {
 const upperSnake = (key) => key.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase();
 
 test('StatusCode mirrors the C status defines', async () => {
-  const mod = await getModule();
+  const mod = await loadStagedModule();
   const expected = await headerCodes();
-  assert.equal(expected.size, 114);
+  assert.equal(expected.size, 115);
   assert.ok(Object.isFrozen(mod.StatusCode));
   const actual = new Map(Object.entries(mod.StatusCode).map(([key, value]) => [upperSnake(key), value]));
   assert.deepEqual([...actual].sort(), [...expected].sort());
-  assert.equal(mod.default.StatusCode, mod.StatusCode);
+  assert.equal((await mod.createFormulon()).StatusCode, mod.StatusCode);
 });
 
 test('StatusCode keys are PascalCase code names', async () => {

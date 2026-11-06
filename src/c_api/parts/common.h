@@ -67,14 +67,18 @@ fm_status_t finish_status(const formulon::Expected<void, formulon::Error>& r);
 fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* message, std::string context);
 fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* message);
 
-// Binding error for a NULL required argument: "<api>: NULL argument".
-fm_status_t null_argument(const char* api);
+// Binding error for a NULL required argument: "a required argument is NULL".
+fm_status_t null_argument();
 
-// Binding error for a NULL required argument: "<api>: <what> is NULL".
-fm_status_t null_argument(const char* api, const char* what);
+// Binding error for a NULL required argument: "<what> is NULL".
+fm_status_t null_argument(const char* what);
 
-// kInvalidArgument binding error "<api>: <what>" carrying `context`.
-fm_status_t invalid_argument(const char* api, const char* what, std::string context);
+// kInvalidArgument binding error with the sentence `what`, carrying `context`.
+fm_status_t invalid_argument(const char* what, std::string context);
+
+// kNotFound binding error with the sentence `what`, carrying `context`: a
+// natural key (name, id, cell) that names nothing.
+fm_status_t not_found(const char* what, std::string context = std::string());
 
 // `text` as an owned string; NULL reads as empty.
 inline std::string text_or_empty(const char* text) {
@@ -83,16 +87,16 @@ inline std::string text_or_empty(const char* text) {
 
 // Rejects `text` that is not well-formed UTF-8 (`sheet_names::valid_utf8`:
 // surrogate code points, overlong forms and truncated sequences fail) with
-// `kBindingUtf8EncodingError` ("<api>: text is not valid UTF-8", `context`).
+// `kBindingUtf8EncodingError` ("text is not valid UTF-8", `context`).
 // The context string is built only on failure; the keyed forms spell it
 // `<key>=<value>` / `<key>=<index>`.
-fm_status_t check_utf8(std::string_view text, const char* api, std::string_view context);
-fm_status_t check_utf8(std::string_view text, const char* api, std::string_view key, std::string_view value);
-fm_status_t check_utf8(std::string_view text, const char* api, std::string_view key, std::size_t index);
+fm_status_t check_utf8(std::string_view text, std::string_view context);
+fm_status_t check_utf8(std::string_view text, std::string_view key, std::string_view value);
+fm_status_t check_utf8(std::string_view text, std::string_view key, std::size_t index);
 
 // `check_utf8` of every non-NULL entry of `texts`, context `text_index=<i>`.
 // NULL entries are left to the caller's own NULL rule.
-fm_status_t check_utf8(const char* api, std::initializer_list<const char*> texts);
+fm_status_t check_utf8(std::initializer_list<const char*> texts);
 
 // Entry form of formula text stored outside a cell (CF, DV, defined name, CF
 // threshold): a non-empty `formula` must pass the entry parse check
@@ -101,7 +105,7 @@ fm_status_t check_utf8(const char* api, std::initializer_list<const char*> texts
 // (`Workbook::normalize_formula_text`, `kEntered`) without its one leading
 // '=', the spelling files carry and readers produce; a second leading '=' is
 // refused. An empty `formula` yields "".
-fm_status_t check_stored_formula(const char* api, std::string_view formula, std::string_view context, std::string* out);
+fm_status_t check_stored_formula(std::string_view formula, std::string_view context, std::string* out);
 
 // Stored form of a `formula` that passed `check_stored_formula`, taken as the
 // entry commits: `Workbook::ingest_entered_formula` (which binds the books it
@@ -118,12 +122,11 @@ std::string ingest_entered_formula(fm_workbook_t* wb, std::string_view formula);
 // fails that, or that `eval::needs_r1c1_entry` sends to R1C1, is taken as
 // `eval::translate_r1c1_entry` at the cell when that passes the same checks.
 // Typed `_xlpm.` before a cell-shaped name is refused everywhere. Returns 0,
-// or sets `kParserUnexpectedToken` ("<api>: formula does not parse") with
+// or sets `kParserUnexpectedToken` ("formula does not parse") with
 // `context`. `*bound` receives the bound (or translated) text, not yet
 // normalized, for `Workbook::set_cell_formula`.
-fm_status_t check_entered_cell_formula(const char* api, const fm_workbook_t* wb, std::size_t sheet, std::uint32_t row,
-                                       std::uint32_t col, std::string_view formula, std::string_view context,
-                                       std::string* bound);
+fm_status_t check_entered_cell_formula(const fm_workbook_t* wb, std::size_t sheet, std::uint32_t row, std::uint32_t col,
+                                       std::string_view formula, std::string_view context, std::string* bound);
 
 // Display name of the table whose range holds (`sheet`, `row`, `col`), or ""
 // outside every table.
@@ -167,13 +170,13 @@ constexpr std::uint32_t kMaxRangesPerCApiCall = 16384U;
 // the per-call range cap. The caller threads the result back as the
 // fail-fast path so the body never starts the per-range loop with a
 // bogus reservation.
-bool check_range_count(std::size_t n, const char* api);
+bool check_range_count(std::size_t n);
 
 // Validates a required `const fm_cell_rect_t* ranges, size_t range_count`
 // list: at least one entry (`kInvalidArgument`), `ranges` non-NULL
 // (`kBindingNullPointer`), at most the per-call cap, and every rectangle
 // ordered and inside the grid (`kInvalidArgument`).
-fm_status_t check_rect_list(const fm_cell_rect_t* ranges, std::size_t range_count, const char* api);
+fm_status_t check_rect_list(const fm_cell_rect_t* ranges, std::size_t range_count);
 
 // Field-for-field conversions between the engine range and the C rectangle.
 inline fm_cell_rect_t to_cell_rect(const formulon::MergeRange& r) {
@@ -194,8 +197,8 @@ const fm_cell_rect_t* publish_rects(const fm_workbook_t* wb, const std::vector<f
 std::string format_rect_a1(std::string_view sheet_name, const fm_cell_rect_t& rect, bool absolute);
 
 // Resolves a non-NULL `profile_id` to its `ExcelProfile`. Returns 0, or sets
-// `kInvalidArgument` ("<api>: unknown profile", context `profile_id=<id>`).
-fm_status_t check_profile_id(const char* profile_id, const char* api, formulon::ExcelProfile* out);
+// `kInvalidArgument` ("unknown profile", context `profile_id=<id>`).
+fm_status_t check_profile_id(const char* profile_id, formulon::ExcelProfile* out);
 
 // --- Input validation ------------------------------------------------
 //
@@ -213,9 +216,9 @@ fm_status_t check_profile_id(const char* profile_id, const char* api, formulon::
 //
 // Each returns `0` on success and `kInvalidArgument` otherwise,
 // having already populated the thread-local diagnostic; callers just
-// propagate the returned code. `api` names the entry point and `field`
-// the struct member, so the context string identifies the argument
-// without the caller assembling a message.
+// propagate the returned code. `field` names the struct member, so the
+// context string identifies the argument without the caller assembling a
+// message.
 
 // Rejects a rectangle that is inverted or reaches outside Excel's grid.
 // Structured entry points that copy a caller-supplied rectangle into the
@@ -223,8 +226,8 @@ fm_status_t check_profile_id(const char* profile_id, const char* api, formulon::
 // cannot encode. Mirrors the per-coordinate check the scalar coordinate
 // entry points apply.
 fm_status_t check_sheet_rect(std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
-                             std::uint32_t last_col, const char* api);
-fm_status_t check_sheet_rect(const fm_cell_rect_t& rect, const char* api);
+                             std::uint32_t last_col);
+fm_status_t check_sheet_rect(const fm_cell_rect_t& rect);
 
 // The rectangle `rows` x `cols` cells whose top-left cell is `(row, col)`;
 // both extents are at least 1.
@@ -241,15 +244,15 @@ inline fm_cell_rect_t cell_rect_from_extent(std::uint32_t row, std::uint32_t col
 // columns are refused rather than clamped: clamping would move the
 // override onto the last addressable column, which is a column the
 // caller never named.
-fm_status_t check_column_span(std::uint32_t first, std::uint32_t last, const char* api);
+fm_status_t check_column_span(std::uint32_t first, std::uint32_t last);
 
 // Rejects a row index past Excel's last row, for the same reason
 // `check_column_span` rejects an out-of-grid span: `<row r="...">` past
 // the grid is a repair prompt, not a discarded attribute.
-fm_status_t check_row_index(std::uint32_t row, const char* api);
+fm_status_t check_row_index(std::uint32_t row);
 
 // Row counterpart of `check_column_span`: `first <= last` inside the grid.
-fm_status_t check_row_span(std::uint32_t first, std::uint32_t last, const char* api);
+fm_status_t check_row_span(std::uint32_t first, std::uint32_t last);
 
 // Rejects a measurement that is not a finite, non-negative double. Row
 // heights and column widths reach the file as `xsd:double` attributes,
@@ -257,7 +260,7 @@ fm_status_t check_row_span(std::uint32_t first, std::uint32_t last, const char* 
 // string, which is not a lexical `xsd:double` at all; a negative value
 // is outside the measurement's own domain. Zero is accepted: it is the
 // legitimate metric of a zero-width column or zero-height row.
-fm_status_t check_finite_non_negative(double value, const char* api, const char* field);
+fm_status_t check_finite_non_negative(double value, const char* field);
 
 // Rejects a value that is not a finite double. A Number-kind `Value` is
 // otherwise the engine's own invariant everywhere else -- every arithmetic
@@ -266,13 +269,13 @@ fm_status_t check_finite_non_negative(double value, const char* api, const char*
 // literal to `#NUM!` on write (`io/ooxml_writer_cell.cpp`), so a number
 // setter that skipped this check would let ISNUMBER and arithmetic
 // disagree about the cell right up until the first save.
-fm_status_t check_finite(double value, const char* api, const char* field);
+fm_status_t check_finite(double value, const char* field);
 
 // Converts a caller-supplied scalar into a `Value`, rejecting a non-finite
 // number, a NULL or malformed-UTF-8 text, an out-of-range error code, and the array / reference
 // / lambda kinds. A Text value aliases the caller's string, so the result is
 // valid only for the duration of the call.
-fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out, const char* api);
+fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out);
 
 // Rejects an ordinal outside `[0, max]`. `max` is the last declared
 // enumerator of the model enum the field mirrors, so extending that enum
@@ -280,7 +283,7 @@ fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out, const char
 // `static_cast` into the enum and collapse onto whichever case the
 // consuming switch treats as its default, which the caller observes as a
 // silently different rule rather than as a rejected one.
-fm_status_t check_enum_domain(std::int64_t value, std::int64_t max, const char* api, const char* field);
+fm_status_t check_enum_domain(std::int64_t value, std::int64_t max, const char* field);
 
 // Rejects a string that is not GUID-shaped, i.e. not
 // `{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}` with hexadecimal digits and
@@ -289,7 +292,7 @@ fm_status_t check_enum_domain(std::int64_t value, std::int64_t max, const char* 
 // Applied wherever a caller-supplied string reaches an XML attribute
 // whose schema type is `ST_Guid` — Excel repairs (and so discards) the
 // whole block when such an attribute holds anything else.
-fm_status_t check_guid(const char* text, const char* api, const char* field);
+fm_status_t check_guid(const char* text, const char* field);
 
 // Returns whether `id` is a built-in number-format id in some locale or one
 // registered in `styles.num_fmts`.
@@ -299,30 +302,30 @@ bool num_fmt_id_known(const formulon::StylesTable& styles, std::uint16_t id);
 // decimal digits naming an id
 // `num_fmt_id_known` accepts. NULL and the empty string pass: both mean
 // "no number format".
-fm_status_t check_num_fmt_id_text(const formulon::Workbook& wb, const char* text, const char* api);
+fm_status_t check_num_fmt_id_text(const formulon::Workbook& wb, const char* text);
 
 // Validates a conditional-formatting rule record: sqref shape and every
 // rectangle in it, plus the `type` / `op` / `time_period` /
 // `icon_set_name` / `data_bar_axis_position` / `fm_cfvo_t::type` domains
 // the GUID shape of `id` and the UTF-8 of `text`. Checks that need the workbook (the
 // `dxf_id` bound) stay with the entry point.
-fm_status_t validate(const fm_cf_rule_t& rule, const char* api);
+fm_status_t validate(const fm_cf_rule_t& rule);
 
 // Validates a data-validation record: range shape and rectangles, the
 // `type` / `op` / `error_style` domains, and the UTF-8 of the four messages.
-fm_status_t validate(const fm_data_validation_t& v, const char* api);
+fm_status_t validate(const fm_data_validation_t& v);
 
 // Validates a pivot field spec: required and UTF-8 strings and the `axis` domain.
-fm_status_t validate(const fm_pivot_field_spec_t& spec, const char* api);
+fm_status_t validate(const fm_pivot_field_spec_t& spec);
 
 // Validates a pivot data-field spec: UTF-8 strings and the
 // `aggregation` / `show_as` domains.
-fm_status_t validate(const fm_pivot_data_field_spec_t& spec, const char* api);
+fm_status_t validate(const fm_pivot_data_field_spec_t& spec);
 
 // Validates a pivot filter spec: UTF-8 strings and the `axis` / `type` domains. The
 // payload-variant and data-field checks need the pivot table and stay
 // with the entry point.
-fm_status_t validate(const fm_pivot_filter_spec_t& spec, const char* api);
+fm_status_t validate(const fm_pivot_filter_spec_t& spec);
 
 // Translates a `Value` into a C-side `fm_value_t`. For text variants the
 // payload is appended to `store` and the returned pointer is a stable,
@@ -338,13 +341,13 @@ void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out);
 // status. On failure the diagnostic is already populated; callers should
 // just propagate the returned code. `sheet_index` is the `size_t`-typed
 // API variant used by most pre-existing entry points.
-fm_status_t check_sheet_index(const fm_workbook_t* wb, std::size_t sheet_index, const char* fn);
+fm_status_t check_sheet_index(const fm_workbook_t* wb, std::size_t sheet_index);
 
 // Bounds-check for the uint32-typed sheet index used by the sheet UI
 // surface. Mirrors `check_sheet_index` but accepts the ABI's uint32.
 // Accepts `const` so read-only entry points (`fm_sheet_get_*`) can share
 // the same validator as the mutators.
-fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet, const char* fn);
+fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet);
 
 // Clears the handle's read scratch and returns it. The store is logically
 // internal (it never affects observable workbook state), so a const handle
@@ -354,14 +357,23 @@ TextStore& fresh_read_scratch(const fm_workbook_t* wb);
 // Replaces the read scratch with `text` and returns its stable `c_str()`.
 const char* publish_scratch(const fm_workbook_t* wb, std::string text);
 
-// Rejects a cell coordinate outside the sheet grid, naming `api` and the
-// offending row / column in the diagnostic.
-fm_status_t check_cell_coord(std::uint32_t row, std::uint32_t col, const char* api);
+// Rejects a cell coordinate outside the sheet grid, naming the offending
+// row / column in the diagnostic context.
+fm_status_t check_cell_coord(std::uint32_t row, std::uint32_t col);
 
 // Bounds-checks a caller-supplied element index against a collection of
-// `size` entries. On failure writes `"<fn>: <field> out of range"` with an
-// `<field>=<index> count=<size>` context and returns the error status.
-fm_status_t check_index(std::size_t index, std::size_t size, const char* fn, const char* field);
+// `size` entries. On failure sets `kIndexOutOfRange` with the message
+// `"<field> <index> is out of range (<size> items)"` and an
+// `<field>=<index> count=<size>` context, and returns the error status.
+fm_status_t check_index(std::size_t index, std::size_t size, const char* field);
+
+// Bounds-checks a caller-supplied limit value (freeze counts, outline level)
+// against the exclusive `bound` it must stay below. Unlike `check_index` the
+// value names no element of a collection, so a failure sets
+// `kInvalidArgument` with the message
+// `"<field> <value> is out of range (maximum <bound - 1>)"` and a
+// `<field>=<value> max=<bound - 1>` context.
+fm_status_t check_limit(std::size_t value, std::size_t bound, const char* field);
 
 // Narrows an ABI `size_t` index for an engine call taking `uint32_t`,
 // saturating so the engine's own range check refuses an oversized index
@@ -372,10 +384,10 @@ inline std::uint32_t saturate_index(std::size_t index) {
 }
 
 // `check_sheet_index` followed by `check_row_index`.
-fm_status_t check_sheet_row(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row, const char* fn);
+fm_status_t check_sheet_row(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row);
 
 // Rejects an `anchor_kind` / `edit_as` ordinal outside the drawing anchor enums.
-fm_status_t check_anchor_enums(std::int64_t anchor_kind, std::int64_t edit_as, const char* api);
+fm_status_t check_anchor_enums(std::int64_t anchor_kind, std::int64_t edit_as);
 
 // Copies the anchor kind and the two anchor points of drawing object `obj`
 // into the record `out`; both share the `from_*` / `to_*` field names.
@@ -398,12 +410,12 @@ constexpr std::uint8_t kMaxOutlineLevel = 7U;
 
 // `check_index` of `xf_index` against the workbook's cell-XF table. Every
 // setter storing a cell, row or column `xf_index` runs it before writing.
-fm_status_t check_cell_xf_index(const fm_workbook_t* wb, std::size_t xf_index, const char* fn);
+fm_status_t check_cell_xf_index(const fm_workbook_t* wb, std::size_t xf_index);
 
 // Rejects hiding or removing sheet `index` when it is the workbook's only
 // visible sheet: Excel repairs a file whose sheets are all hidden. Returns
-// `kInvalidArgument` ("<fn>: workbook needs a visible sheet") or 0.
-fm_status_t check_keeps_visible_sheet(const formulon::Workbook& workbook, std::uint32_t index, const char* fn);
+// `kInvalidArgument` ("workbook needs a visible sheet") or 0.
+fm_status_t check_keeps_visible_sheet(const formulon::Workbook& workbook, std::uint32_t index);
 
 }  // namespace parts
 }  // namespace c_api

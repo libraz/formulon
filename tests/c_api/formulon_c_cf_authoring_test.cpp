@@ -71,7 +71,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsDxfIdPastTheStylesTable) {
   std::size_t rule_index = 99U;
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_index),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  EXPECT_STREQ(fm_get_last_error_message(), "fm_sheet_add_cf_rule: dxf_id out of range");
+  EXPECT_STREQ(fm_get_last_error_message(), "dxf_id out of range");
 
   // The rejected rule is not appended, so a workbook saved after the failed
   // call carries no `<cfRule>` whose `dxfId` Excel cannot resolve.

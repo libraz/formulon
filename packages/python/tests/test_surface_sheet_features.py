@@ -93,7 +93,7 @@ class MergeCommentHyperlinkTests(unittest.TestCase):
 
     def test_comment_invalid_sheet_raises_instead_of_looking_absent(self) -> None:
         with Workbook.create_default() as wb:
-            with self.assertRaises(formulon.NotFoundError) as ctx:
+            with self.assertRaises(formulon.IndexOutOfRangeError) as ctx:
                 wb.get_comment(99, 0, 0)
             self.assertEqual(ctx.exception.code, formulon.StatusCode.SHEET_INDEX_OUT_OF_RANGE)
 

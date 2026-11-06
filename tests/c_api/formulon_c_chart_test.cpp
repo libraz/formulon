@@ -326,7 +326,7 @@ TEST(FormulonCApiChart, ResolvedDataAccessors) {
   ASSERT_EQ(fm_chart_data_get_category_at(data.handle, 2, &label, &value), 0);
   EXPECT_STREQ(label, "c");
   EXPECT_TRUE(std::isnan(value));
-  EXPECT_EQ(fm_chart_data_get_category_at(data.handle, 4, &label, &value), kInvalidArgument);
+  EXPECT_EQ(fm_chart_data_get_category_at(data.handle, 4, &label, &value), FM_STATUS_INDEX_OUT_OF_RANGE);
 
   fm_chart_data_series_t s{};
   ASSERT_EQ(fm_chart_data_get_series_at(data.handle, 0, &s), 0);
@@ -358,9 +358,9 @@ TEST(FormulonCApiChart, ResolvedDataAccessors) {
   EXPECT_EQ(r.rect.first_col, 1U);
   EXPECT_EQ(r.rect.last_row, 4U);
   EXPECT_EQ(r.rect.last_col, 1U);
-  EXPECT_EQ(fm_chart_data_get_range_at(data.handle, 0, FM_CHART_ROLE_X, 0, &r), kInvalidArgument);
+  EXPECT_EQ(fm_chart_data_get_range_at(data.handle, 0, FM_CHART_ROLE_X, 0, &r), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_chart_data_get_range_at(data.handle, 0, 6, 0, &r), kInvalidArgument);
-  EXPECT_EQ(fm_chart_data_get_range_at(data.handle, 3, FM_CHART_ROLE_VALUES, 0, &r), kInvalidArgument);
+  EXPECT_EQ(fm_chart_data_get_range_at(data.handle, 3, FM_CHART_ROLE_VALUES, 0, &r), FM_STATUS_INDEX_OUT_OF_RANGE);
 
   // A reference to an empty sheet range, then a value change, reach the next open.
   fm_chart_series_patch_t patch{};
@@ -393,9 +393,9 @@ TEST(FormulonCApiChart, ResolvedDataAccessors) {
   ASSERT_EQ(fm_chart_data_get_axis_title_at(data.handle, 0, &at), 0);
   EXPECT_EQ(at.axis_id, val_id);
   EXPECT_STREQ(at.text, "Amount");
-  EXPECT_EQ(fm_chart_data_get_axis_title_at(data.handle, 1, &at), kInvalidArgument);
+  EXPECT_EQ(fm_chart_data_get_axis_title_at(data.handle, 1, &at), FM_STATUS_INDEX_OUT_OF_RANGE);
   fm_chart_unresolved_t un{};
-  EXPECT_EQ(fm_chart_data_get_unresolved_at(data.handle, 0, &un), kInvalidArgument);
+  EXPECT_EQ(fm_chart_data_get_unresolved_at(data.handle, 0, &un), FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiChart, ScatterDataCarriesX) {
@@ -498,7 +498,7 @@ TEST(FormulonCApiChart, TypeTitleLegendDisplayPlotEdits) {
   uint32_t entry = 0;
   ASSERT_EQ(fm_chart_get_legend_hidden_at(chart.handle, 0, &entry), 0);
   EXPECT_EQ(entry, 1U);
-  EXPECT_EQ(fm_chart_get_legend_hidden_at(chart.handle, 1, &entry), kInvalidArgument);
+  EXPECT_EQ(fm_chart_get_legend_hidden_at(chart.handle, 1, &entry), FM_STATUS_INDEX_OUT_OF_RANGE);
   legend = fm_chart_legend_patch_t{FM_CHART_LEGEND_NONE, 0, FM_CHART_PATCH_KEEP, nullptr, 0};
   ASSERT_EQ(fm_sheet_set_chart_legend(wb.handle, 0, id, &legend), 0);
   Open(wb.handle, id, &chart);
@@ -743,7 +743,7 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   EXPECT_EQ(pt.line.color, 0xFF123456U);
   ASSERT_EQ(pt.has_marker, 1);
   EXPECT_EQ(pt.marker.symbol, FM_CHART_MARKER_TRIANGLE);
-  EXPECT_EQ(fm_chart_get_series_point_at(chart.handle, 0, 1, 1, &pt), kInvalidArgument);
+  EXPECT_EQ(fm_chart_get_series_point_at(chart.handle, 0, 1, 1, &pt), FM_STATUS_INDEX_OUT_OF_RANGE);
   const fm_chart_point_patch_t empty{};
   ASSERT_EQ(fm_sheet_set_chart_point(wb.handle, 0, id, 0, 1, 2, &empty), 0);
   Open(wb.handle, id, &chart);
@@ -759,7 +759,7 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   uint32_t cat = 0;
   ASSERT_EQ(fm_chart_get_hidden_category_at(chart.handle, 1, &cat), 0);
   EXPECT_EQ(cat, 2U);
-  EXPECT_EQ(fm_chart_get_hidden_category_at(chart.handle, 2, &cat), kInvalidArgument);
+  EXPECT_EQ(fm_chart_get_hidden_category_at(chart.handle, 2, &cat), FM_STATUS_INDEX_OUT_OF_RANGE);
   bool filtered = false;
   fm_chart_plot_t plot{};
   ASSERT_EQ(fm_chart_get_plot_at(chart.handle, 0, &plot), 0);
@@ -975,33 +975,34 @@ TEST(FormulonCApiChart, OpenAndAccessorsRejectBadArguments) {
   EXPECT_EQ(fm_chart_get_info(nullptr, &info), kBindingNullPointer);
   EXPECT_EQ(fm_chart_get_info(guard.handle, nullptr), kBindingNullPointer);
   fm_chart_plot_t plot{};
-  EXPECT_EQ(fm_chart_get_plot_at(guard.handle, 1, &plot), kInvalidArgument);
+  EXPECT_EQ(fm_chart_get_plot_at(guard.handle, 1, &plot), FM_STATUS_INDEX_OUT_OF_RANGE);
   uint32_t u = 0;
-  EXPECT_EQ(fm_chart_get_plot_axis_id_at(guard.handle, 0, 2, &u), kInvalidArgument);
-  EXPECT_EQ(fm_chart_get_plot_axis_id_at(guard.handle, 1, 0, &u), kInvalidArgument);
+  EXPECT_EQ(fm_chart_get_plot_axis_id_at(guard.handle, 0, 2, &u), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_chart_get_plot_axis_id_at(guard.handle, 1, 0, &u), FM_STATUS_INDEX_OUT_OF_RANGE);
   fm_chart_series_t s{};
-  EXPECT_EQ(fm_chart_get_series_at(guard.handle, 0, 3, &s), kInvalidArgument);
+  EXPECT_EQ(fm_chart_get_series_at(guard.handle, 0, 3, &s), FM_STATUS_INDEX_OUT_OF_RANGE);
   fm_chart_literal_t lit{};
-  EXPECT_EQ(fm_chart_get_series_literal_at(guard.handle, 0, 0, FM_CHART_ROLE_VALUES, 0, &lit), kInvalidArgument);
+  EXPECT_EQ(fm_chart_get_series_literal_at(guard.handle, 0, 0, FM_CHART_ROLE_VALUES, 0, &lit),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_chart_get_series_literal_at(guard.handle, 0, 0, 6, 0, &lit), kInvalidArgument);
   EXPECT_EQ(fm_chart_get_series_literal_at(guard.handle, 0, 0, -1, 0, &lit), kInvalidArgument);
   fm_chart_point_t pt{};
-  EXPECT_EQ(fm_chart_get_series_point_at(guard.handle, 0, 0, 0, &pt), kInvalidArgument);
+  EXPECT_EQ(fm_chart_get_series_point_at(guard.handle, 0, 0, 0, &pt), FM_STATUS_INDEX_OUT_OF_RANGE);
   fm_chart_axis_t axis{};
-  EXPECT_EQ(fm_chart_get_axis_at(guard.handle, 2, &axis), kInvalidArgument);
+  EXPECT_EQ(fm_chart_get_axis_at(guard.handle, 2, &axis), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_chart_get_axis_at(guard.handle, 0, nullptr), kBindingNullPointer);
 
   DataGuard dg;
   OpenData(wb.handle, id, &dg);
   fm_chart_data_series_t ds{};
-  EXPECT_EQ(fm_chart_data_get_series_at(dg.handle, 3, &ds), kInvalidArgument);
+  EXPECT_EQ(fm_chart_data_get_series_at(dg.handle, 3, &ds), FM_STATUS_INDEX_OUT_OF_RANGE);
   fm_chart_data_points_t pts{};
-  EXPECT_EQ(fm_chart_data_get_series_points(dg.handle, 3, &pts), kInvalidArgument);
+  EXPECT_EQ(fm_chart_data_get_series_points(dg.handle, 3, &pts), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_chart_data_get_series_points(nullptr, 0, &pts), kBindingNullPointer);
   size_t n = 0;
-  EXPECT_EQ(fm_chart_data_get_category_level_size(dg.handle, 0, &n), kInvalidArgument);
+  EXPECT_EQ(fm_chart_data_get_category_level_size(dg.handle, 0, &n), FM_STATUS_INDEX_OUT_OF_RANGE);
   const char* text = nullptr;
-  EXPECT_EQ(fm_chart_data_get_category_level_at(dg.handle, 0, 0, &text), kInvalidArgument);
+  EXPECT_EQ(fm_chart_data_get_category_level_at(dg.handle, 0, 0, &text), FM_STATUS_INDEX_OUT_OF_RANGE);
   double v = 0.0;
   EXPECT_EQ(fm_chart_data_get_category_at(dg.handle, 0, nullptr, &v), kBindingNullPointer);
 }
@@ -1121,7 +1122,8 @@ TEST(FormulonCApiChart, LiteralsAndMultiLevelCategoriesFromExcelFiles) {
             ++literals;
           }
           fm_chart_literal_t l{};
-          EXPECT_EQ(fm_chart_get_series_literal_at(chart.handle, p, i, role, src.literal_count, &l), kInvalidArgument);
+          EXPECT_EQ(fm_chart_get_series_literal_at(chart.handle, p, i, role, src.literal_count, &l),
+                    FM_STATUS_INDEX_OUT_OF_RANGE);
         }
       }
     }
@@ -1145,7 +1147,7 @@ TEST(FormulonCApiChart, LiteralsAndMultiLevelCategoriesFromExcelFiles) {
         ASSERT_NE(label, nullptr);
       }
       const char* label = nullptr;
-      EXPECT_EQ(fm_chart_data_get_category_level_at(data.handle, level, n, &label), kInvalidArgument);
+      EXPECT_EQ(fm_chart_data_get_category_level_at(data.handle, level, n, &label), FM_STATUS_INDEX_OUT_OF_RANGE);
       found = true;
     }
   }

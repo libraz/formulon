@@ -38,12 +38,7 @@ from .ts_decl import (
 # it here is the deliberate act that says otherwise.
 # ---------------------------------------------------------------------------
 
-_DTS_SURFACE_ONLY_TYPES = {
-    # The embind module factory and its options: there is no equivalent on a
-    # native addon, which is `require`d rather than instantiated.
-    ("wasm", "FormulonModule"),
-    ("wasm", "FormulonModuleOptions"),
-}
+_DTS_SURFACE_ONLY_TYPES: set = set()
 
 # Shared methods whose two declarations are allowed to differ, with the
 # reason. Empty by design: a difference that is not worth an entry here is a

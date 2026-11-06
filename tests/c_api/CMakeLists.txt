@@ -76,8 +76,14 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_trace_test.cpp
   formulon_c_utf8_input_test.cpp
   formulon_c_zip_budget_test.cpp
+  empty_load_test.cpp
+  error_text_test.cpp
+  index_out_of_range_test.cpp
   partial_recalc_test.cpp
   pivot_field_order_test.cpp
+  remove_missing_key_test.cpp
+  sheet_index_by_name_test.cpp
+  version_number_test.cpp
   workbook_copy_sheet_test.cpp
   workbook_sheet_ops_test.cpp
 )

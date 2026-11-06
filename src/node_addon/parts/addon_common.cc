@@ -23,32 +23,6 @@ Napi::Uint8Array TakeSavedBytes(Napi::Env env, uint8_t* bytes, std::size_t len) 
   return copy;
 }
 
-Napi::Object SnapshotBytesResult(Napi::Env env, fm_status_t rc, uint8_t* bytes, std::size_t len) {
-  Napi::Object out = Napi::Object::New(env);
-  if (rc == 0) {
-    out.Set("bytes", TakeSavedBytes(env, bytes, len));
-  } else {
-    fm_buffer_destroy(bytes);
-    out.Set("bytes", Napi::Uint8Array::New(env, 0));
-  }
-  out.Set("status", MakeStatus(env, rc));
-  return out;
-}
-
-namespace {
-
-// Builds `{ ok, code, message, context }`; NULL strings become "".
-Napi::Object MakeStatusEnvelope(Napi::Env env, bool ok, fm_status_t code, const char* message, const char* context) {
-  Napi::Object o = Napi::Object::New(env);
-  o.Set("ok", Napi::Boolean::New(env, ok));
-  o.Set("code", Napi::Number::New(env, static_cast<int32_t>(code)));
-  o.Set("message", JsString(env, message));
-  o.Set("context", JsString(env, context));
-  return o;
-}
-
-}  // namespace
-
 // FORMULON-ALLOW: N-API uses JavaScript exceptions for argument validation.
 void CheckedSpecReader::ObservePending() {
   if (!failed_ && env_.IsExceptionPending()) {
@@ -460,164 +434,177 @@ bool BytesArg(const Napi::CallbackInfo& info, size_t idx, Napi::Uint8Array* out)
   return true;
 }
 
-Napi::Object MakeOkStatus(Napi::Env env) {
-  return MakeStatusEnvelope(env, true, 0, "", "");
-}
+namespace {
 
-Napi::Object MakeBindingError(Napi::Env env, fm_status_t code, const char* message) {
-  return MakeStatusEnvelope(env, false, code, message, "");
-}
+// Message of the `TypeError` thrown when a failure is due but the JS loader
+// never injected the error class.
+constexpr const char* kMissingErrorClassMessage = "FormulonError was not provided to the addon";
 
-Napi::Object MakeBindingArgumentError(Napi::Env env, const char* message) {
-  return MakeBindingError(env, kInvalidArgument, message);
-}
-
-Napi::Object MakeCallbackThrewStatus(Napi::Env env) {
-  return MakeStatusEnvelope(env, false, kBindingCallbackException,
-                            "the iterative progress callback threw; the solve was aborted",
-                            "Workbook.setIterativeProgress");
-}
-
-Napi::Object MakeErrorStatus(Napi::Env env, fm_status_t code) {
-  if (code == kBindingInvalidHandle) {
-    // No C-ABI call ran, so the thread-local diagnostics still describe
-    // whatever call came before. Synthesise the message here instead.
-    return MakeBindingError(env, code, "the workbook handle was already destroyed");
+// Throws `new FormulonError(code, message, context)`; NULL strings become "".
+Napi::Value ThrowFormulonError(Napi::Env env, fm_status_t code, const char* message, const char* context) {
+  const Napi::FunctionReference& error_class = GetAddonData(env).error_class;
+  if (error_class.IsEmpty()) {
+    Napi::TypeError::New(env, kMissingErrorClassMessage).ThrowAsJavaScriptException();
+    return env.Undefined();
   }
-  return MakeStatusEnvelope(env, false, code, fm_get_last_error_message(), fm_get_last_error_context());
+  const Napi::Object error = error_class.New({
+      Napi::Number::New(env, static_cast<double>(code)),
+      JsString(env, message),
+      JsString(env, context),
+  });
+  if (!env.IsExceptionPending()) {
+    napi_throw(env, error);
+  }
+  return env.Undefined();
 }
 
-Napi::Object MakeStatus(Napi::Env env, fm_status_t code) {
-  return code == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, code);
+// Rejects a malformed input `Value`.
+bool RejectValue(Napi::Env env, const char* message) {
+  Napi::TypeError::New(env, message).ThrowAsJavaScriptException();
+  return false;
 }
 
-Napi::Array FinishListResult(Napi::Env env, Napi::Array items, fm_status_t code) {
-  items.Set("status", MakeStatus(env, code));
-  return items;
+// Reads `object[key]`; false when the getter threw.
+bool ValueField(Napi::Env env, const Napi::Object& object, const char* key, Napi::Value* out) {
+  *out = object.Get(key);
+  return !env.IsExceptionPending();
 }
 
-Napi::Object FinishItemResult(Napi::Env env, Napi::Object item, fm_status_t code) {
-  item.Set("status", MakeStatus(env, code));
-  return item;
+// True when `value` is an integral Number in [min_value, max_value].
+bool IsIntegerIn(const Napi::Value& value, double min_value, double max_value) {
+  if (!value.IsNumber()) {
+    return false;
+  }
+  const double number = value.As<Napi::Number>().DoubleValue();
+  return std::isfinite(number) && std::trunc(number) == number && number >= min_value && number <= max_value;
 }
 
-Napi::Object TranslateValue(Napi::Env env, const fm_value_t& v) {
+}  // namespace
+
+AddonData& GetAddonData(Napi::Env env) {
+  AddonData* data = env.GetInstanceData<AddonData>();
+  if (data == nullptr) {
+    data = new AddonData{};
+    env.SetInstanceData(data);
+  }
+  return *data;
+}
+
+Napi::Value ThrowStatus(Napi::Env env, fm_status_t rc) {
+  if (env.IsExceptionPending()) {
+    return env.Undefined();
+  }
+  return ThrowFormulonError(env, rc, fm_get_last_error_message(), fm_get_last_error_context());
+}
+
+Napi::Value ThrowInvalidHandle(Napi::Env env) {
+  if (env.IsExceptionPending()) {
+    return env.Undefined();
+  }
+  return ThrowFormulonError(env, kBindingInvalidHandle, "the workbook is disposed", "");
+}
+
+Napi::Value ValueOrThrow(Napi::Env env, fm_status_t rc, Napi::Value ok_value) {
+  return rc == 0 ? ok_value : ThrowStatus(env, rc);
+}
+
+Napi::Value OptionalOrNull(Napi::Env env, fm_status_t rc, int32_t present, Napi::Value item) {
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
+  return present != 0 ? item : env.Null();
+}
+
+Napi::Value ValueToJs(Napi::Env env, const fm_value_t& v) {
   Napi::Object o = Napi::Object::New(env);
   o.Set("kind", Napi::Number::New(env, static_cast<int32_t>(v.kind)));
-  // Default-zero all fields so consumers can read any field without
-  // checking kind first (matches the embind shape).
-  double number_field = 0.0;
-  int32_t boolean_field = 0;
-  std::string text_field;
-  int32_t error_code_field = 0;
   switch (v.kind) {
     case FM_VAL_NUMBER:
-      number_field = v.u.number;
+      o.Set("number", Napi::Number::New(env, v.u.number));
       break;
     case FM_VAL_BOOL:
-      boolean_field = v.u.boolean;
+      o.Set("boolean", Napi::Boolean::New(env, v.u.boolean != 0));
       break;
     case FM_VAL_TEXT:
-      text_field = (v.u.text != nullptr) ? std::string(v.u.text) : std::string();
+      o.Set("text", JsString(env, v.u.text));
       break;
     case FM_VAL_ERROR:
-      error_code_field = v.u.error_code;
+      o.Set("errorCode", Napi::Number::New(env, v.u.error_code));
       break;
-    case FM_VAL_BLANK:
-    case FM_VAL_ARRAY:
-    case FM_VAL_REF:
-    case FM_VAL_LAMBDA:
     default:
       break;
   }
-  o.Set("number", Napi::Number::New(env, number_field));
-  o.Set("boolean", Napi::Number::New(env, boolean_field));
-  o.Set("text", Napi::String::New(env, text_field));
-  o.Set("errorCode", Napi::Number::New(env, error_code_field));
   return o;
 }
 
-Napi::Object MakeFieldResult(Napi::Env env, Napi::Object status, const char* field, Napi::Value value) {
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("status", status);
-  out.Set(field, value);
-  return out;
-}
-
-Napi::Object MakeNumberFieldResult(Napi::Env env, Napi::Object status, const char* field, double value) {
-  return MakeFieldResult(env, status, field, Napi::Number::New(env, value));
-}
-
-Napi::Object MakeStringFieldResult(Napi::Env env, Napi::Object status, const char* field, const char* value) {
-  return MakeFieldResult(env, status, field, JsString(env, value));
-}
-
-Napi::Object MakeNumberFieldResult(Napi::Env env, fm_status_t code, const char* field, double value) {
-  return MakeNumberFieldResult(env, MakeStatus(env, code), field, code == 0 ? value : 0.0);
-}
-
-Napi::Object MakeStringFieldResult(Napi::Env env, fm_status_t code, const char* field, const char* value) {
-  return MakeStringFieldResult(env, MakeStatus(env, code), field, code == 0 ? value : nullptr);
-}
-
-Napi::Object MakeNumberResult(Napi::Env env, fm_status_t code, double value) {
-  return MakeNumberFieldResult(env, code, "value", value);
-}
-
-Napi::Object MakeBoolResult(Napi::Env env, fm_status_t code, int32_t flag) {
-  return MakeFieldResult(env, MakeStatus(env, code), "value", Napi::Boolean::New(env, code == 0 && flag != 0));
-}
-
-Napi::Object MakeStringResult(Napi::Env env, fm_status_t code, const char* value) {
-  return MakeStringFieldResult(env, code, "value", value);
-}
-
-Napi::Object MakeValueResult(Napi::Env env, Napi::Object status, const fm_value_t& value) {
-  return MakeFieldResult(env, status, "value", TranslateValue(env, value));
-}
-
-Napi::Object MakeEmptyValueResult(Napi::Env env, Napi::Object status) {
-  fm_value_t empty{};
-  return MakeValueResult(env, status, empty);
-}
-
-Napi::Object MakeValueResult(Napi::Env env, fm_status_t code, const fm_value_t& value) {
-  return code == 0 ? MakeValueResult(env, MakeOkStatus(env), value)
-                   : MakeEmptyValueResult(env, MakeErrorStatus(env, code));
-}
-
-Napi::Object MakeIndexResult(Napi::Env env, Napi::Object status, uint32_t index) {
-  return MakeNumberFieldResult(env, status, "index", index);
-}
-
-Napi::Object MakeIndexResult(Napi::Env env, fm_status_t code, uint32_t index) {
-  return MakeNumberFieldResult(env, code, "index", index);
-}
-
-Napi::Object MakeOptionalResult(Napi::Env env, Napi::Object status, Napi::Value value) {
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("status", status);
-  out.Set("value", value);
-  return out;
-}
-
-Napi::Object MakeOptionalResult(Napi::Env env, fm_status_t code, int32_t present, Napi::Value item) {
-  return MakeOptionalResult(env, MakeStatus(env, code), code == 0 && present != 0 ? item : env.Null());
-}
-
-Napi::Object EmptyPivotLayoutResult(Napi::Env env, Napi::Object status) {
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("status", status);
-  out.Set("rect", env.Null());
-  out.Set("cells", Napi::Array::New(env));
-  return out;
+bool JsToValue(Napi::Env env, Napi::Value in, fm_value_t* out, std::string* text) {
+  *out = fm_value_t{};
+  if (env.IsExceptionPending()) {
+    return false;
+  }
+  if (!in.IsObject()) {
+    return RejectValue(env, "value must be an object");
+  }
+  const Napi::Object object = in.As<Napi::Object>();
+  Napi::Value kind;
+  if (!ValueField(env, object, "kind", &kind)) {
+    return false;
+  }
+  if (!IsIntegerIn(kind, static_cast<double>(FM_VAL_BLANK), static_cast<double>(FM_VAL_LAMBDA))) {
+    return RejectValue(env, "value.kind must be a ValueKind");
+  }
+  out->kind = static_cast<int32_t>(kind.As<Napi::Number>().DoubleValue());
+  Napi::Value field;
+  switch (out->kind) {
+    case FM_VAL_NUMBER:
+      if (!ValueField(env, object, "number", &field)) {
+        return false;
+      }
+      if (!field.IsNumber()) {
+        return RejectValue(env, "value.number must be a number");
+      }
+      out->u.number = field.As<Napi::Number>().DoubleValue();
+      break;
+    case FM_VAL_BOOL:
+      if (!ValueField(env, object, "boolean", &field)) {
+        return false;
+      }
+      if (!field.IsBoolean()) {
+        return RejectValue(env, "value.boolean must be a boolean");
+      }
+      out->u.boolean = field.As<Napi::Boolean>().Value() ? 1 : 0;
+      break;
+    case FM_VAL_TEXT:
+      if (!ValueField(env, object, "text", &field)) {
+        return false;
+      }
+      if (!field.IsString()) {
+        return RejectValue(env, "value.text must be a string");
+      }
+      *text = field.As<Napi::String>().Utf8Value();
+      out->u.text = text->c_str();
+      break;
+    case FM_VAL_ERROR:
+      if (!ValueField(env, object, "errorCode", &field)) {
+        return false;
+      }
+      if (!IsIntegerIn(field, static_cast<double>(std::numeric_limits<int32_t>::min()),
+                       static_cast<double>(std::numeric_limits<int32_t>::max()))) {
+        return RejectValue(env, "value.errorCode must be an ErrorCode");
+      }
+      out->u.error_code = static_cast<int32_t>(field.As<Napi::Number>().DoubleValue());
+      break;
+    default:
+      break;
+  }
+  return true;
 }
 
 Napi::Object TranslatePivotCell(Napi::Env env, const fm_pivot_cell_t& cell) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("row", Napi::Number::New(env, cell.row));
   out.Set("col", Napi::Number::New(env, cell.col));
-  out.Set("value", TranslateValue(env, cell.value));
+  out.Set("value", ValueToJs(env, cell.value));
   out.Set("kind", Napi::Number::New(env, static_cast<int32_t>(cell.kind)));
   out.Set("depth", Napi::Number::New(env, cell.depth));
   out.Set("fieldName", JsString(env, cell.field_name));

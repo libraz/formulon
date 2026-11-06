@@ -134,7 +134,7 @@ TEST_F(CApiLogging, MinLevelRejectsOrdinalsOutsideTheEnum) {
   for (const int32_t level : invalid) {
     EXPECT_EQ(fm_set_log_min_level(level), static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument))
         << "level=" << level;
-    EXPECT_STREQ(fm_get_last_error_message(), "fm_set_log_min_level: unknown level");
+    EXPECT_STREQ(fm_get_last_error_message(), "unknown level");
   }
   // Every documented ordinal is accepted.
   for (int32_t level = FM_LOG_LEVEL_DEBUG; level <= FM_LOG_LEVEL_OFF; ++level) {

@@ -27,6 +27,7 @@ using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::ingest_entered_formula;
 using formulon::c_api::parts::may_respell_formula;
+using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::text_or_empty;
@@ -39,12 +40,12 @@ namespace {
 using SheetItemSize = std::size_t (*)(const formulon::Sheet& sheet);
 
 // Shared body of the `fm_sheet_get_*_count` getters.
-fm_status_t sheet_item_count(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t* out_count, const char* fn,
+fm_status_t sheet_item_count(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t* out_count,
                              SheetItemSize size_of) {
   if (out_count == nullptr) {
-    return null_argument(fn, "out_count");
+    return null_argument("out_count");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   *out_count = size_of(wb->workbook().sheet(sheet_index));
@@ -52,13 +53,12 @@ fm_status_t sheet_item_count(const fm_workbook_t* wb, std::size_t sheet_index, s
 }
 
 template <typename GetItems>
-fm_status_t remove_sheet_item_at(fm_workbook_t* wb, std::size_t sheet_index, std::size_t index, const char* fn,
-                                 GetItems get_items) {
-  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+fm_status_t remove_sheet_item_at(fm_workbook_t* wb, std::size_t sheet_index, std::size_t index, GetItems get_items) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   auto& list = get_items(wb->workbook().sheet(sheet_index));
-  if (auto rc = check_index(index, list.size(), fn, "index"); rc != 0) {
+  if (auto rc = check_index(index, list.size(), "index"); rc != 0) {
     return rc;
   }
   list.erase(list.begin() + static_cast<std::ptrdiff_t>(index));
@@ -81,15 +81,15 @@ void fill_comment(const formulon::CellComment& c, fm_comment_t* out) {
 extern "C" fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, std::size_t sheet_index, const fm_hyperlink_t* hl) {
   clear_last_error();
   if (hl == nullptr) {
-    return null_argument("fm_sheet_add_hyperlink", "hl");
+    return null_argument("hl");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_hyperlink"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_rect(hl->rect, "fm_sheet_add_hyperlink"); rc != 0) {
+  if (auto rc = check_sheet_rect(hl->rect); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8("fm_sheet_add_hyperlink", {hl->target, hl->location, hl->display, hl->tooltip}); rc != 0) {
+  if (auto rc = check_utf8({hl->target, hl->location, hl->display, hl->tooltip}); rc != 0) {
     return rc;
   }
   formulon::Hyperlink out;
@@ -109,25 +109,28 @@ extern "C" fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, std::size_t she
 extern "C" fm_status_t fm_sheet_remove_hyperlink(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
                                                  std::uint32_t col) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_remove_hyperlink"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   auto& hls = wb->workbook().sheet(sheet_index).mutable_hyperlinks();
-  hls.erase(std::remove_if(hls.begin(), hls.end(),
-                           [&](const formulon::Hyperlink& h) { return h.row == row && h.col == col; }),
-            hls.end());
+  const auto removed = std::remove_if(hls.begin(), hls.end(),
+                                      [&](const formulon::Hyperlink& h) { return h.row == row && h.col == col; });
+  if (removed == hls.end()) {
+    return not_found("no hyperlink at that cell", "row=" + std::to_string(row) + " col=" + std::to_string(col));
+  }
+  hls.erase(removed, hls.end());
   return 0;
 }
 
 extern "C" fm_status_t fm_sheet_remove_hyperlink_at(fm_workbook_t* wb, std::size_t sheet_index, std::size_t index) {
   clear_last_error();
-  return remove_sheet_item_at(wb, sheet_index, index, "fm_sheet_remove_hyperlink_at",
+  return remove_sheet_item_at(wb, sheet_index, index,
                               [](formulon::Sheet& s) -> decltype(auto) { return s.mutable_hyperlinks(); });
 }
 
 extern "C" fm_status_t fm_sheet_clear_hyperlinks(fm_workbook_t* wb, std::size_t sheet_index) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_clear_hyperlinks"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   wb->workbook().sheet(sheet_index).mutable_hyperlinks().clear();
@@ -138,13 +141,13 @@ extern "C" fm_status_t fm_sheet_get_hyperlink_at(const fm_workbook_t* wb, std::s
                                                  fm_hyperlink_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return null_argument("fm_sheet_get_hyperlink_at", "out");
+    return null_argument("out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_hyperlink_at"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const auto& hls = wb->workbook().sheet(sheet_index).hyperlinks();
-  if (auto rc = check_index(index, hls.size(), "fm_sheet_get_hyperlink_at", "index"); rc != 0) {
+  if (auto rc = check_index(index, hls.size(), "index"); rc != 0) {
     return rc;
   }
   const formulon::Hyperlink& h = hls[index];
@@ -160,9 +163,9 @@ extern "C" fm_status_t fm_sheet_get_hyperlink(const fm_workbook_t* wb, std::size
                                               std::uint32_t col, std::int32_t* out_present, fm_hyperlink_t* out) {
   clear_last_error();
   if (out_present == nullptr || out == nullptr) {
-    return null_argument("fm_sheet_get_hyperlink", "out");
+    return null_argument("out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_hyperlink"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   *out_present = 0;
@@ -180,8 +183,7 @@ extern "C" fm_status_t fm_sheet_get_hyperlink(const fm_workbook_t* wb, std::size
 extern "C" fm_status_t fm_sheet_get_hyperlink_count(const fm_workbook_t* wb, std::size_t sheet_index,
                                                     std::size_t* out_count) {
   clear_last_error();
-  return sheet_item_count(wb, sheet_index, out_count, "fm_sheet_get_hyperlink_count",
-                          [](const formulon::Sheet& s) { return s.hyperlinks().size(); });
+  return sheet_item_count(wb, sheet_index, out_count, [](const formulon::Sheet& s) { return s.hyperlinks().size(); });
 }
 
 // ---------------------------------------------------------------------------
@@ -191,12 +193,12 @@ extern "C" fm_status_t fm_sheet_get_hyperlink_count(const fm_workbook_t* wb, std
 extern "C" fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, std::size_t sheet_index, const fm_cell_rect_t* merge) {
   clear_last_error();
   if (merge == nullptr) {
-    return null_argument("fm_sheet_add_merge", "merge");
+    return null_argument("merge");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_merge"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_rect(*merge, "fm_sheet_add_merge"); rc != 0) {
+  if (auto rc = check_sheet_rect(*merge); rc != 0) {
     return rc;
   }
   return finish_status(wb->workbook().add_merge(sheet_index, to_merge_range(*merge)));
@@ -205,20 +207,32 @@ extern "C" fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, std::size_t sheet_i
 extern "C" fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, std::size_t sheet_index, const fm_cell_rect_t* range) {
   clear_last_error();
   if (range == nullptr) {
-    return null_argument("fm_sheet_remove_merge", "range");
+    return null_argument("range");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_remove_merge"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_rect(*range, "fm_sheet_remove_merge"); rc != 0) {
+  if (auto rc = check_sheet_rect(*range); rc != 0) {
     return rc;
   }
-  return finish_status(wb->workbook().remove_merges_intersecting(sheet_index, to_merge_range(*range)));
+  const formulon::MergeRange target = to_merge_range(*range);
+  const auto& merges = wb->workbook().sheet(sheet_index).merges();
+  const bool any = std::any_of(merges.begin(), merges.end(), [&](const formulon::MergeRange& m) {
+    return m.first_row <= target.last_row && target.first_row <= m.last_row && m.first_col <= target.last_col &&
+           target.first_col <= m.last_col;
+  });
+  if (!any) {
+    return not_found("no merged range intersects that range");
+  }
+  return finish_status(wb->workbook().remove_merges_intersecting(sheet_index, target));
 }
 
 extern "C" fm_status_t fm_sheet_remove_merge_at(fm_workbook_t* wb, std::size_t sheet_index, std::size_t index) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_remove_merge_at"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_index(index, wb->workbook().sheet(sheet_index).merges().size(), "index"); rc != 0) {
     return rc;
   }
   return finish_status(wb->workbook().remove_merge_at(sheet_index, index));
@@ -226,7 +240,7 @@ extern "C" fm_status_t fm_sheet_remove_merge_at(fm_workbook_t* wb, std::size_t s
 
 extern "C" fm_status_t fm_sheet_clear_merges(fm_workbook_t* wb, std::size_t sheet_index) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_clear_merges"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   return finish_status(wb->workbook().clear_merges(sheet_index));
@@ -236,13 +250,13 @@ extern "C" fm_status_t fm_sheet_get_merge_at(const fm_workbook_t* wb, std::size_
                                              fm_cell_rect_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return null_argument("fm_sheet_get_merge_at", "out");
+    return null_argument("out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_merge_at"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const auto& merges = wb->workbook().sheet(sheet_index).merges();
-  if (auto rc = check_index(index, merges.size(), "fm_sheet_get_merge_at", "index"); rc != 0) {
+  if (auto rc = check_index(index, merges.size(), "index"); rc != 0) {
     return rc;
   }
   const formulon::MergeRange& m = merges[index];
@@ -253,8 +267,7 @@ extern "C" fm_status_t fm_sheet_get_merge_at(const fm_workbook_t* wb, std::size_
 extern "C" fm_status_t fm_sheet_get_merge_count(const fm_workbook_t* wb, std::size_t sheet_index,
                                                 std::size_t* out_count) {
   clear_last_error();
-  return sheet_item_count(wb, sheet_index, out_count, "fm_sheet_get_merge_count",
-                          [](const formulon::Sheet& s) { return s.merges().size(); });
+  return sheet_item_count(wb, sheet_index, out_count, [](const formulon::Sheet& s) { return s.merges().size(); });
 }
 
 extern "C" fm_status_t fm_sheet_get_merges_in_range(const fm_workbook_t* wb, std::size_t sheet_index,
@@ -262,12 +275,12 @@ extern "C" fm_status_t fm_sheet_get_merges_in_range(const fm_workbook_t* wb, std
                                                     std::uint32_t capacity, std::uint32_t* out_count) {
   clear_last_error();
   if (range == nullptr || out_count == nullptr || (out == nullptr && capacity > 0U)) {
-    return null_argument("fm_sheet_get_merges_in_range");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_merges_in_range"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_rect(*range, "fm_sheet_get_merges_in_range"); rc != 0) {
+  if (auto rc = check_sheet_rect(*range); rc != 0) {
     return rc;
   }
   const formulon::MergeRange query = to_merge_range(*range);
@@ -294,14 +307,14 @@ extern "C" fm_status_t fm_sheet_get_comment(const fm_workbook_t* wb, std::size_t
                                             std::uint32_t col, int32_t* out_present, fm_comment_t* out) {
   clear_last_error();
   if (out_present == nullptr) {
-    return null_argument("fm_sheet_get_comment", "out_present");
+    return null_argument("out_present");
   }
   if (out == nullptr) {
-    return null_argument("fm_sheet_get_comment", "out");
+    return null_argument("out");
   }
   *out_present = 0;
   *out = fm_comment_t{};
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_comment"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   for (const formulon::CellComment& c : wb->workbook().sheet(sheet_index).comments()) {
@@ -317,21 +330,20 @@ extern "C" fm_status_t fm_sheet_get_comment(const fm_workbook_t* wb, std::size_t
 extern "C" fm_status_t fm_sheet_get_comment_count(const fm_workbook_t* wb, std::size_t sheet_index,
                                                   std::size_t* out_count) {
   clear_last_error();
-  return sheet_item_count(wb, sheet_index, out_count, "fm_sheet_get_comment_count",
-                          [](const formulon::Sheet& s) { return s.comments().size(); });
+  return sheet_item_count(wb, sheet_index, out_count, [](const formulon::Sheet& s) { return s.comments().size(); });
 }
 
 extern "C" fm_status_t fm_sheet_get_comment_at(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t index,
                                                fm_comment_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return null_argument("fm_sheet_get_comment_at", "out");
+    return null_argument("out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_comment_at"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const auto& comments = wb->workbook().sheet(sheet_index).comments();
-  if (auto rc = check_index(index, comments.size(), "fm_sheet_get_comment_at", "index"); rc != 0) {
+  if (auto rc = check_index(index, comments.size(), "index"); rc != 0) {
     return rc;
   }
   const formulon::CellComment& c = comments[index];
@@ -360,13 +372,13 @@ formulon::CellComment* FindNote(fm_workbook_t* wb, std::size_t sheet_index, std:
 extern "C" fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
                                             std::uint32_t col, const char* author, const char* text) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_comment"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_cell_coord(row, col, "fm_sheet_set_comment"); rc != 0) {
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8("fm_sheet_set_comment", {author, text}); rc != 0) {
+  if (auto rc = check_utf8({author, text}); rc != 0) {
     return rc;
   }
   auto& list = wb->workbook().sheet(sheet_index).mutable_comments();
@@ -381,9 +393,8 @@ extern "C" fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, std::size_t sheet
   // A cell holds a note or a threaded comment, never both.
   for (const formulon::ThreadedComment& thread : wb->workbook().sheet(sheet_index).threaded_comments()) {
     if (thread.parent_id.empty() && thread.row == row && thread.col == col) {
-      return formulon::c_api::parts::set_last_error(
-          formulon::make_error(formulon::FormulonErrorCode::kThreadedCommentInvalid,
-                               "fm_sheet_set_comment: cell already has a threaded comment", thread.id));
+      return formulon::c_api::parts::set_last_error(formulon::make_error(
+          formulon::FormulonErrorCode::kThreadedCommentInvalid, "cell already has a threaded comment", thread.id));
     }
   }
   formulon::CellComment c;
@@ -408,14 +419,14 @@ extern "C" fm_status_t fm_sheet_get_comment_visible(const fm_workbook_t* wb, std
                                                     std::uint32_t col, std::int32_t* out_visible) {
   clear_last_error();
   if (out_visible == nullptr) {
-    return null_argument("fm_sheet_get_comment_visible", "out_visible");
+    return null_argument("out_visible");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_comment_visible"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const formulon::CellComment* note = FindNote(wb, sheet_index, row, col);
   if (note == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kNotFound, "fm_sheet_get_comment_visible: no comment at cell",
+    return set_binding_error(formulon::FormulonErrorCode::kNotFound, "no comment at cell",
                              "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
   *out_visible = note->visible ? 1 : 0;
@@ -425,12 +436,12 @@ extern "C" fm_status_t fm_sheet_get_comment_visible(const fm_workbook_t* wb, std
 extern "C" fm_status_t fm_sheet_set_comment_visible(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
                                                     std::uint32_t col, std::int32_t visible) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_comment_visible"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   formulon::CellComment* note = FindNote(wb, sheet_index, row, col);
   if (note == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kNotFound, "fm_sheet_set_comment_visible: no comment at cell",
+    return set_binding_error(formulon::FormulonErrorCode::kNotFound, "no comment at cell",
                              "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
   note->visible = visible != 0;
@@ -452,32 +463,31 @@ static_assert(sizeof(fm_cell_rect_t) == sizeof(formulon::MergeRange),
 static_assert(alignof(fm_cell_rect_t) == alignof(formulon::MergeRange),
               "fm_cell_rect_t / MergeRange alignment mismatch breaks validation getter");
 static_assert(offsetof(fm_cell_rect_t, first_row) == offsetof(formulon::MergeRange, first_row),
-              "fm_cell_rect_t::first_row layout mismatch");
+              "cell rect field first_row layout mismatch");
 static_assert(offsetof(fm_cell_rect_t, first_col) == offsetof(formulon::MergeRange, first_col),
-              "fm_cell_rect_t::first_col layout mismatch");
+              "cell rect field first_col layout mismatch");
 static_assert(offsetof(fm_cell_rect_t, last_row) == offsetof(formulon::MergeRange, last_row),
-              "fm_cell_rect_t::last_row layout mismatch");
+              "cell rect field last_row layout mismatch");
 static_assert(offsetof(fm_cell_rect_t, last_col) == offsetof(formulon::MergeRange, last_col),
-              "fm_cell_rect_t::last_col layout mismatch");
+              "cell rect field last_col layout mismatch");
 
 extern "C" fm_status_t fm_sheet_get_validation_count(const fm_workbook_t* wb, std::size_t sheet_index,
                                                      std::size_t* out_count) {
   clear_last_error();
-  return sheet_item_count(wb, sheet_index, out_count, "fm_sheet_get_validation_count",
-                          [](const formulon::Sheet& s) { return s.validations().size(); });
+  return sheet_item_count(wb, sheet_index, out_count, [](const formulon::Sheet& s) { return s.validations().size(); });
 }
 
 extern "C" fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t index,
                                                fm_data_validation_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return null_argument("fm_sheet_get_validation", "out");
+    return null_argument("out");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_validation"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const auto& list = wb->workbook().sheet(sheet_index).validations();
-  if (auto rc = check_index(index, list.size(), "fm_sheet_get_validation", "index"); rc != 0) {
+  if (auto rc = check_index(index, list.size(), "index"); rc != 0) {
     return rc;
   }
   const formulon::DataValidation& v = list[index];
@@ -515,12 +525,12 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::size_t sh
                                                const fm_data_validation_t* v, std::size_t* out_index) {
   clear_last_error();
   if (v == nullptr || out_index == nullptr) {
-    return null_argument("fm_sheet_add_validation", v == nullptr ? "v" : "out_index");
+    return null_argument(v == nullptr ? "v" : "out_index");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_validation"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = validate(*v, "fm_sheet_add_validation"); rc != 0) {
+  if (auto rc = validate(*v); rc != 0) {
     return rc;
   }
   const char* const formula_fields[] = {v->formula1, v->formula2};
@@ -528,8 +538,8 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::size_t sh
   std::string* const formula_slots[] = {&out.formula1, &out.formula2};
   for (std::size_t i = 0; i < 2; ++i) {
     if (formula_fields[i] != nullptr) {
-      if (auto rc = check_stored_formula("fm_sheet_add_validation", formula_fields[i],
-                                         i == 0 ? "field=formula1" : "field=formula2", formula_slots[i]);
+      if (auto rc =
+              check_stored_formula(formula_fields[i], i == 0 ? "field=formula1" : "field=formula2", formula_slots[i]);
           rc != 0) {
         return rc;
       }
@@ -563,13 +573,13 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::size_t sh
 
 extern "C" fm_status_t fm_sheet_remove_validation(fm_workbook_t* wb, std::size_t sheet_index, std::size_t index) {
   clear_last_error();
-  return remove_sheet_item_at(wb, sheet_index, index, "fm_sheet_remove_validation",
+  return remove_sheet_item_at(wb, sheet_index, index,
                               [](formulon::Sheet& s) -> decltype(auto) { return s.mutable_validations(); });
 }
 
 extern "C" fm_status_t fm_sheet_clear_validations(fm_workbook_t* wb, std::size_t sheet_index) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_clear_validations"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   wb->workbook().sheet(sheet_index).mutable_validations().clear();
@@ -584,9 +594,9 @@ extern "C" fm_status_t fm_sheet_get_sheet_protection(const fm_workbook_t* wb, st
                                                      fm_sheet_protection_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return null_argument("fm_sheet_get_sheet_protection");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_sheet_protection"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const formulon::SheetProtection& p = wb->workbook().sheet(sheet_index).protection();
@@ -619,14 +629,12 @@ extern "C" fm_status_t fm_sheet_set_sheet_protection(fm_workbook_t* wb, std::siz
                                                      const fm_sheet_protection_t* in) {
   clear_last_error();
   if (in == nullptr) {
-    return null_argument("fm_sheet_set_sheet_protection");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_sheet_protection"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8("fm_sheet_set_sheet_protection",
-                           {in->algorithm_name, in->hash_value, in->salt_value, in->legacy_password});
-      rc != 0) {
+  if (auto rc = check_utf8({in->algorithm_name, in->hash_value, in->salt_value, in->legacy_password}); rc != 0) {
     return rc;
   }
   formulon::SheetProtection& p = wb->workbook().sheet(sheet_index).mutable_protection();

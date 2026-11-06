@@ -263,7 +263,7 @@ TEST_F(FormulonCApiSheetFeatures, RemoveMergeByRangeNoOverlap) {
   fm_cell_rect_t a{0, 0, 1, 1};
   ASSERT_EQ(fm_sheet_add_merge(wb_, 0, &a), 0);
   fm_cell_rect_t q{4, 2, 5, 3};
-  ASSERT_EQ(fm_sheet_remove_merge(wb_, 0, &q), 0);
+  ASSERT_EQ(fm_sheet_remove_merge(wb_, 0, &q), FM_STATUS_NOT_FOUND);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 1U);
@@ -359,8 +359,8 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowColNoMatch) {
   a.rect.last_col = 2;
   a.target = "https://a.example";
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, &a), 0);
-  // No hyperlink anchored at (5, 5); call is still kOk.
-  ASSERT_EQ(fm_sheet_remove_hyperlink(wb_, 0, 5, 5), 0);
+  // No hyperlink anchored at (5, 5).
+  ASSERT_EQ(fm_sheet_remove_hyperlink(wb_, 0, 5, 5), FM_STATUS_NOT_FOUND);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 1U);

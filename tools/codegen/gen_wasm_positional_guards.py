@@ -9,8 +9,11 @@ surface drift stops generation before an artifact can be built.
 
 The generated file is passed to emscripten as --pre-js. It contains no
 native code, so the guard lives in the JS glue and does not change the wasm
-module. The same wrapper throws the nested-field rejections the native readers
-record, so a bad field raises TypeError/RangeError as on the Node surface.
+module. The same wrapper throws what the native code records during the call:
+a nested-field rejection as TypeError/RangeError, a callback's own exception
+as itself, and a failed status as `FormulonError`, as on the Node surface.
+Every Workbook method, every Workbook static function and every free function
+is wrapped; installation fails if one is left unwrapped.
 """
 
 from __future__ import annotations
@@ -26,7 +29,7 @@ from typing import Iterable
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_NODE_SOURCE = REPO_ROOT / "src/node_addon/parts/workbook_class.cc"
 DEFAULT_WASM_SOURCE = REPO_ROOT / "src/wasm/parts/bindings_register.cpp"
-EXPECTED_NODE_REGISTRATIONS = 436
+EXPECTED_NODE_REGISTRATIONS = 435
 
 MASK_NAMES = (
     "u32",
@@ -43,7 +46,8 @@ MASK_NAMES = (
 MASK_TOKEN = re.compile(r"0x([0-9a-fA-F]+)ULL\Z")
 METHOD_MARKER = re.compile(r"\bGuardedInstanceMethod(?=\s*<)")
 WASM_METHOD = re.compile(r"\.function\(\s*\"([A-Za-z0-9_]+)\"")
-WASM_FREE_FUNCTION = re.compile(r"\bfunction\(\s*\"([A-Za-z0-9_]+)\"")
+WASM_FREE_FUNCTION = re.compile(r"(?<![.\w])function\(\s*\"([A-Za-z0-9_]+)\"")
+WASM_STATIC_FUNCTION = re.compile(r"\.class_function\(\s*\"([A-Za-z0-9_]+)\"")
 
 # The Node class has one lifecycle helper that is intentionally not exposed
 # by the embind class. Every other method both surfaces share takes its spec
@@ -51,11 +55,22 @@ WASM_FREE_FUNCTION = re.compile(r"\bfunction\(\s*\"([A-Za-z0-9_]+)\"")
 # drift fail at generation time instead of silently losing validation.
 NODE_ONLY_METHODS = frozenset(("getMemoryUsage",))
 
+# Positional specs of the free functions that take checked primitives. Every
+# other registered free function is still wrapped, with an empty spec.
 FREE_FUNCTION_GUARDS = {
     "evalFormula": {"string": 0x1},
     "getStatusName": {"i32": 0x1},
     "getErrorDisplayName": {"i32": 0x1},
     "setLogMinLevel": {"i32": 0x1},
+}
+
+# Positional specs of the Workbook static functions. The set must equal the
+# registered `class_function` names, so a new static cannot go unwrapped.
+STATIC_FUNCTION_GUARDS = {
+    "createDefault": {},
+    "createEmpty": {},
+    "createForProfile": {"string": 0x1},
+    "load": {"object": 0x1},
 }
 
 
@@ -194,12 +209,23 @@ def _parse_wasm_methods(source: Path) -> set[str]:
     return methods
 
 
-def _check_free_functions(source: Path) -> None:
+def _parse_free_functions(source: Path) -> set[str]:
     text = source.read_text(encoding="utf-8")
     functions = set(WASM_FREE_FUNCTION.findall(text))
     missing = sorted(set(FREE_FUNCTION_GUARDS) - functions)
     if missing:
         raise GuardGenerationError(f"{source}: positional free-function registration drift: missing={missing}")
+    return functions
+
+
+def _parse_static_functions(source: Path) -> set[str]:
+    text = source.read_text(encoding="utf-8")
+    functions = set(WASM_STATIC_FUNCTION.findall(text))
+    if functions != set(STATIC_FUNCTION_GUARDS):
+        missing = sorted(set(STATIC_FUNCTION_GUARDS) - functions)
+        extra = sorted(functions - set(STATIC_FUNCTION_GUARDS))
+        raise GuardGenerationError(f"{source}: static function registration drift: missing={missing}, extra={extra}")
+    return functions
 
 
 def _check_surface(node: Iterable[Registration], wasm_methods: set[str]) -> None:
@@ -212,14 +238,15 @@ def _check_surface(node: Iterable[Registration], wasm_methods: set[str]) -> None
         raise GuardGenerationError(f"WASM/Node binding surface drift: missing={missing}, extra={extra}")
 
 
-def _build_metadata(node: list[Registration]) -> dict[str, object]:
+def _build_metadata(node: list[Registration], free: set[str], static: set[str]) -> dict[str, object]:
     workbook: dict[str, dict[str, int]] = {
         entry.js_name: entry.as_js_spec() for entry in sorted(node, key=lambda entry: entry.js_name)
     }
     return {
         "nodeRegistrationCount": len(node),
         "workbook": dict(sorted(workbook.items())),
-        "free": {name: dict(spec) for name, spec in sorted(FREE_FUNCTION_GUARDS.items())},
+        "static": {name: dict(STATIC_FUNCTION_GUARDS[name]) for name in sorted(static)},
+        "free": {name: dict(FREE_FUNCTION_GUARDS.get(name, {})) for name in sorted(free)},
         "wasmExcluded": sorted(NODE_ONLY_METHODS),
     }
 
@@ -242,13 +269,22 @@ def _render(metadata: dict[str, object]) -> str:
   const INT32_MIN = -0x80000000;
   const INT32_MAX = 0x7fffffff;
   const UINT64_MAX_EXACT = Number.MAX_SAFE_INTEGER;
-  // The native readers record a nested-field rejection here while a wrapped
-  // call is active; the wrapper throws it after the method returns, so native
-  // frames unwind normally and both surfaces raise the same error class.
+  // The native code records the call's failure here while a wrapped call is
+  // active: kind 0 / 1 a nested-field TypeError / RangeError, 2 an exception a
+  // getter or callback threw, 3 a failed status. The wrapper throws it after
+  // the method returns, so native frames unwind normally and both surfaces
+  // raise the same error.
   const argumentErrors = {{ depth: 0, pending: undefined, thrown: undefined }};
   module[Symbol.for('formulon.argumentErrors')] = argumentErrors;
 
-  function nestedArgumentError(pending) {{
+  function pendingError(pending) {{
+    if (pending.kind === 3) {{
+      const FormulonError = module.FormulonError;
+      if (typeof FormulonError !== 'function') {{
+        return new TypeError('FormulonError was not provided to the module factory');
+      }}
+      return new FormulonError(pending.code, pending.message, pending.context);
+    }}
     if (pending.kind === 1) return new RangeError(pending.message);
     if (pending.kind === 2 && pending.thrown !== undefined) return pending.thrown.value;
     return new TypeError(pending.message);
@@ -369,8 +405,8 @@ def _render(metadata: dict[str, object]) -> str:
       }}
       const receiverTracked = receiverKey !== null;
       if (receiverTracked) activeWorkbookCalls.set(receiverKey, (activeWorkbookCalls.get(receiverKey) ?? 0) + 1);
-      // A getter may re-enter another wrapped method mid-read; each call
-      // owns only the rejection recorded during its own native frame.
+      // A getter or callback may re-enter another wrapped method mid-call;
+      // each call owns only the failure recorded during its own native frame.
       const outerPending = argumentErrors.pending;
       argumentErrors.pending = undefined;
       argumentErrors.depth += 1;
@@ -388,7 +424,7 @@ def _render(metadata: dict[str, object]) -> str:
           else activeWorkbookCalls.set(receiverKey, depth - 1);
         }}
       }}
-      if (pending !== undefined) throw nestedArgumentError(pending);
+      if (pending !== undefined) throw pendingError(pending);
       return result;
     }};
     Object.defineProperty(wrapped, 'name', {{ value: original.name, configurable: true }});
@@ -439,15 +475,32 @@ def _render(metadata: dict[str, object]) -> str:
     return true;
   }}
 
+  // Fails closed: an own function of `target` that `wrapped` does not name
+  // would return its default value on failure instead of throwing.
+  function requireWrapped(target, wrapped, what) {{
+    for (const name of Object.getOwnPropertyNames(target)) {{
+      if (name === 'constructor' || wrapped.has(name)) continue;
+      const descriptor = Object.getOwnPropertyDescriptor(target, name);
+      if (descriptor && typeof descriptor.value === 'function') {{
+        throw new Error('unwrapped ' + what + ' ' + name);
+      }}
+    }}
+  }}
+
   function install() {{
     if (module[installKey]) return;
     const workbook = module.Workbook;
     if (!workbook || !workbook.prototype) return;
+    const wrappedMethods = new Set();
     for (const [name, spec] of Object.entries(metadata.workbook)) {{
-      if (!wrap(workbook.prototype, name, spec, true) && !metadata.wasmExcluded.includes(name)) {{
-        throw new Error('missing positional binding ' + name);
-      }}
+      if (wrap(workbook.prototype, name, spec, true)) wrappedMethods.add(name);
+      else if (!metadata.wasmExcluded.includes(name)) throw new Error('missing positional binding ' + name);
     }}
+    requireWrapped(workbook.prototype, wrappedMethods, 'Workbook method');
+    for (const [name, spec] of Object.entries(metadata.static)) {{
+      if (!wrap(workbook, name, spec)) throw new Error('missing Workbook static function ' + name);
+    }}
+    requireWrapped(workbook, new Set(Object.keys(metadata.static)), 'Workbook static function');
     for (const [name, spec] of Object.entries(metadata.free)) {{
       if (!wrap(module, name, spec)) throw new Error('missing positional free function ' + name);
     }}
@@ -551,8 +604,9 @@ def generate(node_source: Path, wasm_source: Path, output: Path) -> None:
     node = _parse_node_registrations(node_source)
     wasm = _parse_wasm_methods(wasm_source)
     _check_surface(node, wasm)
-    _check_free_functions(wasm_source)
-    metadata = _build_metadata(node)
+    free = _parse_free_functions(wasm_source)
+    static = _parse_static_functions(wasm_source)
+    metadata = _build_metadata(node, free, static)
     rendered = _render(metadata)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(rendered, encoding="utf-8")

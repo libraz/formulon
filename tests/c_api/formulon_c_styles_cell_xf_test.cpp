@@ -47,49 +47,57 @@ TEST(FormulonCApiStyles, GetCellXfRejectsOutOfRange) {
   EXPECT_NE(fm_workbook_get_cell_xf(wb.handle, 1, &xf), 0);
 }
 
-TEST(FormulonCApiStyles, CellXfGetterDiagnosticsUseInvokedApi) {
+TEST(FormulonCApiStyles, CellXfGetterRecordsDiagnostics) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  auto expect_prefix = [](fm_status_t status, const char* prefix) {
+  auto expect_diagnostic = [](fm_status_t status, const char* field) {
     EXPECT_NE(status, 0);
     const char* message = fm_get_last_error_message();
     ASSERT_NE(message, nullptr);
-    EXPECT_EQ(std::string(message).rfind(prefix, 0), 0U) << message;
+    EXPECT_STRNE(message, "");
+    EXPECT_EQ(std::string(message).find("fm_"), std::string::npos) << message;
+    if (field != nullptr) {
+      EXPECT_NE(std::string(fm_get_last_error_context()).find(field), std::string::npos) << fm_get_last_error_context();
+    }
   };
 
   // Index 1 is past both seeded single-entry tables, so each getter takes
-  // its out-of-range path and must name itself in the diagnostic.
+  // its out-of-range path and must record a diagnostic.
   fm_cell_xf_t cell_xf{};
-  expect_prefix(fm_workbook_get_cell_xf(wb.handle, 1, &cell_xf), "fm_workbook_get_cell_xf:");
-  expect_prefix(fm_workbook_get_cell_style_xf(wb.handle, 1, &cell_xf), "fm_workbook_get_cell_style_xf:");
+  expect_diagnostic(fm_workbook_get_cell_xf(wb.handle, 1, &cell_xf), "index");
+  expect_diagnostic(fm_workbook_get_cell_style_xf(wb.handle, 1, &cell_xf), "index");
 }
 
-TEST(FormulonCApiStyles, CellXfAdderDiagnosticsUseInvokedApi) {
-  auto expect_prefix = [](fm_status_t status, const char* prefix) {
+TEST(FormulonCApiStyles, CellXfAdderRecordsDiagnostics) {
+  auto expect_diagnostic = [](fm_status_t status, const char* field) {
     EXPECT_NE(status, 0);
     const char* message = fm_get_last_error_message();
     ASSERT_NE(message, nullptr);
-    EXPECT_EQ(std::string(message).rfind(prefix, 0), 0U) << message;
+    EXPECT_STRNE(message, "");
+    EXPECT_EQ(std::string(message).find("fm_"), std::string::npos) << message;
+    if (field != nullptr) {
+      EXPECT_NE(std::string(fm_get_last_error_context()).find(field), std::string::npos) << fm_get_last_error_context();
+    }
   };
 
   std::size_t index = 0;
   fm_cell_xf_t cell_xf{};
-  expect_prefix(fm_workbook_add_cell_xf(nullptr, &cell_xf, &index), "fm_workbook_add_cell_xf:");
+  expect_diagnostic(fm_workbook_add_cell_xf(nullptr, &cell_xf, &index), nullptr);
 
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   cell_xf.font_index = 1U;
-  expect_prefix(fm_workbook_add_cell_xf(wb.handle, &cell_xf, &index), "fm_workbook_add_cell_xf:");
+  expect_diagnostic(fm_workbook_add_cell_xf(wb.handle, &cell_xf, &index), "font_index");
 
   cell_xf = fm_cell_xf_t{};
   cell_xf.xf_id = 1U;
-  expect_prefix(fm_workbook_add_cell_xf(wb.handle, &cell_xf, &index), "fm_workbook_add_cell_xf:");
+  expect_diagnostic(fm_workbook_add_cell_xf(wb.handle, &cell_xf, &index), "xf_id");
 
   cell_xf = fm_cell_xf_t{};
   cell_xf.has_text_rotation = 1;
   cell_xf.text_rotation = 181U;
-  expect_prefix(fm_workbook_add_cell_xf(wb.handle, &cell_xf, &index), "fm_workbook_add_cell_xf:");
+  expect_diagnostic(fm_workbook_add_cell_xf(wb.handle, &cell_xf, &index), "text_rotation");
 }
 
 TEST(FormulonCApiStyles, SetThenSaveLoadPreservesXfIndex) {

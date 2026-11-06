@@ -34,7 +34,7 @@ from .api_conventions import (
     derive_type,
     rule,
 )
-from .surface_files import _SKIPPED, NODE_DTS, PYTHON_PKG_DIR, REPO_ROOT, WASM_DTS
+from .surface_files import _SKIPPED, NODE_DTS, NPM_COMMON_MJS, PYTHON_PKG_DIR, REPO_ROOT, WASM_DTS
 from .ts_decl import _extract_braced_block
 
 JS_SURFACES = ("wasm", "native")
@@ -42,6 +42,7 @@ BINDING_SURFACES = ("wasm", "native", "py")
 SHEET_RECT = "fm_sheet_rect_t"
 WORKBOOK_HANDLE = "fm_workbook_t"
 DEFAULT_DROP_RULE = "R5.list"
+ENTRY_INTERFACE = "Formulon"
 
 # Synonyms whose left side must not appear in a name (R4); a pair is two adjacent words.
 SYNONYMS = {("horizontal", "break"): "row_break", ("vertical", "break"): "column_break", ("idx",): "index"}
@@ -58,9 +59,19 @@ _JS_EDGE_QUADS = (("firstRow", "firstCol", "lastRow", "lastCol"), ("top", "left"
 # Loose corners a record keyed by a sheet name (a reference) may spell instead of `rect`.
 _NAMED_EDGE_QUADS = (("row0", "col0", "row1", "col1"),)
 
-_SCALAR_RESULTS = {"string": "StringResult", "number": "NumberResult", "int": "NumberResult", "double": "NumberResult"}
+_SCALAR_JS = {"string": "string", "number": "number", "int": "number", "double": "number"}
 _PY_SCALARS = {"string": ("str",), "number": ("int", "float"), "int": ("int",), "double": ("float",)}
-_VALUE_ENVELOPES = ("StringResult", "NumberResult", "BoolResult")
+# Result-envelope types that no JS declaration may carry: a failure is thrown, a success is the payload.
+_RETIRED_RESULT_TYPES = (
+    "Status",
+    "OptionalResult",
+    "ListResult",
+    "StringResult",
+    "NumberResult",
+    "BoolResult",
+    "IndexResult",
+    "ObjectIdResult",
+)
 _PATCH_ALIAS = "{ [K in keyof T]?: T[K] | null }"
 
 
@@ -89,7 +100,6 @@ _TS_DECL_RE = re.compile(
     r"^export\s+(?:declare\s+)?(?:default\s+)?(interface|type|enum|const|function|class)\s+([A-Za-z_$][\w$]*)",
     re.M,
 )
-_TS_DEFAULT_OBJECT_RE = re.compile(r"^declare\s+const\s+_default\s*:\s*\{", re.M)
 _TS_HEAD_RE = re.compile(r"(readonly\s+)?([A-Za-z_$][\w$]*|\[[^\]]+\])\??\s*")
 _TS_PARAM_RE = re.compile(r"(?:\.\.\.)?([A-Za-z_$][\w$]*|\{[^}]*\}|\[[^\]]*\])\??\s*(?::\s*(.*))?$", re.S)
 _OPEN, _CLOSE = "([{<", ")]}>"
@@ -189,10 +199,6 @@ class JsSurface:
                     rhs = rhs[1:]
                 decl = TsDecl(name, kind, _norm(rhs), ())
             self.decls.setdefault(name, decl)
-        default = _TS_DEFAULT_OBJECT_RE.search(text)
-        self.default_object: Tuple[TsMember, ...] = (
-            _parse_members(_extract_braced_block(text, default.end())) if default else ()
-        )
 
     def interface_members(self, name: str) -> Dict[str, TsMember]:
         decl = self.decls.get(name)
@@ -208,14 +214,13 @@ class JsSurface:
 
     @property
     def module_object(self) -> Dict[str, TsMember]:
-        """Members of the module object: `FormulonModule`, else the default export's object type."""
-        members = self.interface_members("FormulonModule")
-        return members or {m.name: m for m in self.default_object}
+        """Members of the object `createFormulon` resolves to: the `Formulon` interface."""
+        return self.interface_members(ENTRY_INTERFACE)
 
     @property
     def functions(self) -> Dict[str, TsMember]:
-        """Free functions: methods of `FormulonModule`, else top-level `export function`s."""
-        module = {n: m for n, m in self.interface_members("FormulonModule").items() if m.is_method}
+        """Free functions: methods of `Formulon`, and the top-level `export function`s."""
+        module = {n: m for n, m in self.module_object.items() if m.is_method}
         exported = {d.name: d.members[0] for d in self.decls.values() if d.kind == "function" and d.members}
         return {**exported, **module}
 
@@ -976,13 +981,13 @@ def _scalar_type_problems(
     On the Python surface a `bool` parameter may be `Optional[bool] = None` (absent means unchanged), and a
     boolean natural-key lookup returns `Optional[bool]`.
     """
-    bool_return = ("BoolResult", "boolean") if field == "js" else ("bool",)
+    bool_return = ("boolean",) if field == "js" else ("bool",)
     spec = entry.get("returns")
     if isinstance(spec, str):
         if spec == "bool" and field == "py" and lookup:
             if not _OPTIONAL_BOOL_RE.fullmatch(returns):
                 yield "return", f"returns `{returns}`; a boolean lookup result is `Optional[bool]`"
-        elif spec == "bool" and field == "js" and lookup and returns == "OptionalResult<boolean>":
+        elif spec == "bool" and field == "js" and lookup and returns == "boolean | null":
             pass
         elif spec == "bool" and not any(returns == t or returns.startswith(t + "<") for t in bool_return):
             yield "return", f"returns `{returns}`; a boolean result is `{bool_return[0]}`"
@@ -1007,7 +1012,7 @@ def _scalar_type_problems(
 
 @_owned("R6.js")
 def _rule_js_types(ctx: Context) -> Iterable[Violation]:
-    """Ledger `returns` / `params` on the JS surfaces: a boolean is `boolean` (`BoolResult` as a result), an
+    """Ledger `returns` / `params` on the JS surfaces: a boolean is `boolean` (`boolean | null` as a lookup), an
     `enum:<key>` names the enum's type, a `union:<Name>` names the string-literal union.
     """
     lookups = _optional_lookups(ctx)
@@ -1063,9 +1068,16 @@ def _role_name_problem(name: str, role: str) -> Optional[str]:
     return None
 
 
+def _is_interface_union(decls: Dict[str, TsDecl], decl: TsDecl) -> bool:
+    """True for a type alias that is a union of two or more exported interfaces (a discriminated record)."""
+    alternatives = _top_union(decl.text)
+    return len(alternatives) > 1 and all(a in decls and decls[a].kind == "interface" for a in alternatives)
+
+
 @_owned("R7.js")
 def _rule_js_records(ctx: Context) -> Iterable[Violation]:
-    """JS record shape by role: a result is an interface of `readonly` fields, an input an interface named
+    """JS record shape by role: a result is an interface of `readonly` fields (or a union of such interfaces,
+    which R16.js judges), an input an interface named
     `<Name>Input`, a patch `type <Name>Patch = Patch<...>`; `Patch<T>` is declared once as
     `{ [K in keyof T]?: T[K] | null }`.
     """
@@ -1084,6 +1096,8 @@ def _rule_js_records(ctx: Context) -> Iterable[Violation]:
             if role == "patch":
                 if decl.kind != "type" or not decl.text.startswith("Patch<"):
                     yield _violation(ctx, "R7.js", surface, key, "patch", f"`{name}` is not declared as `Patch<...>`")
+            elif decl.kind == "type" and _is_interface_union(decls, decl):
+                continue
             elif decl.kind != "interface":
                 yield _violation(
                     ctx, "R7.js", surface, key, "interface", f"`{name}` is a {decl.kind}, not an interface"
@@ -1180,13 +1194,11 @@ def _optional_lookups(ctx: Context) -> Set[str]:
     return out
 
 
-def _allocated_key_result(fn: CFunction) -> Optional[str]:
+def _allocates_key(fn: CFunction) -> bool:
     names = {p.name for p in fn.params if p.pointer_depth == 1}
-    if "out_object_id" in names:
-        return "ObjectIdResult"
-    if any(n == "out_index" or (n.startswith("out_") and n.endswith("_index")) for n in names):
-        return "IndexResult"
-    return None
+    return "out_object_id" in names or any(
+        n == "out_index" or (n.startswith("out_") and n.endswith("_index")) for n in names
+    )
 
 
 def _record_fields(found: Surfaces, record: dict, surface: str) -> Optional[Tuple[str, Set[str]]]:
@@ -1220,44 +1232,58 @@ def _field_renames(ctx: Context, surface: str, rule_id: str) -> Iterator[Violati
 
 @_owned("R8.js")
 def _rule_js_results(ctx: Context) -> Iterable[Violation]:
-    """JS results: a scalar result is `StringResult` / `NumberResult` (`.value`), an allocated key
-    `IndexResult` / `ObjectIdResult`, a natural-key lookup or a factory `OptionalResult<T>`; no method returns
-    `null` bare; `kind: field` renames are applied.
+    """JS results carry no envelope: no declaration is named like a retired result type, no `export interface`
+    has a `status` field, and no callable returns a retired type. A scalar result is the scalar, an allocated
+    key a `number`, a natural-key lookup `T | null`; `kind: field` renames are applied.
     """
     found = surfaces(ctx)
     lookups = _optional_lookups(ctx)
     for surface in JS_SURFACES:
         js = found.js[surface]
         pool = _callables(ctx, surface)
-        for envelope in _VALUE_ENVELOPES:
-            decl = js.decls.get(envelope)
-            if decl is not None and "value" not in {m.name for m in decl.members}:
+        for name in _RETIRED_RESULT_TYPES:
+            if name in js.decls:
                 yield _violation(
-                    ctx, "R8.js", surface, _key(ctx, surface, envelope), "value", f"`{envelope}` has no `value`"
+                    ctx, "R8.js", surface, _key(ctx, surface, name), name, f"`{name}` is a retired result type"
                 )
-        for name, member in sorted(pool.items()):
-            if "null" in _top_union(member.type):
+        for decl in sorted(js.decls.values()):
+            if decl.kind == "interface" and any(m.name == "status" and not m.is_method for m in decl.members):
                 yield _violation(
                     ctx,
                     "R8.js",
                     surface,
-                    _key(ctx, surface, name),
-                    "null",
-                    f"`{name}` returns `{member.type}`; wrap it",
+                    _key(ctx, surface, decl.name),
+                    "status",
+                    f"`{decl.name}` has a `status` field",
                 )
+        for name, member in sorted(pool.items()):
+            for retired in _RETIRED_RESULT_TYPES:
+                if _mentions(member.type, retired):
+                    yield _violation(
+                        ctx,
+                        "R8.js",
+                        surface,
+                        _key(ctx, surface, name),
+                        retired,
+                        f"`{name}` returns `{member.type}`; a failure throws and a success is the payload",
+                    )
         for key, entry in sorted(ctx.ledger.entries.items()):
             if not isinstance(entry, dict):
                 continue
             name, member = _member_for(pool, entry, "js")
             if member is None:
                 continue
-            want = _SCALAR_RESULTS.get(entry.get("returns")) if isinstance(entry.get("returns"), str) else None
+            if key in lookups:
+                if "null" not in _top_union(member.type):
+                    yield _violation(
+                        ctx, "R8.js", surface, key, "optional", f"`{name}` returns `{member.type}`, not `... | null`"
+                    )
+                continue
+            want = _SCALAR_JS.get(entry.get("returns")) if isinstance(entry.get("returns"), str) else None
             fn = _tree_c(ctx, entry)
-            if fn is not None and c_verb(ctx.target_c(fn.name)) == "add":
-                want = _allocated_key_result(fn) or want
-            if key in lookups or entry.get("kind") == "factory":
-                want = "OptionalResult"
-            if want and not (member.type == want or member.type.startswith(want + "<")):
+            if fn is not None and c_verb(ctx.target_c(fn.name)) == "add" and _allocates_key(fn):
+                want = "number"
+            if want and member.type != want:
                 yield _violation(
                     ctx, "R8.js", surface, key, "result", f"`{name}` returns `{member.type}`, not `{want}`"
                 )
@@ -1565,3 +1591,251 @@ def _rule_entry_points(ctx: Context) -> Iterable[Violation]:
     yield from _one_sided(ctx, {s: set(js[s].workbook) for s in JS_SURFACES}, "method")
     yield from _one_sided(ctx, {s: {f"Workbook.{n}" for n in js[s].statics} for s in JS_SURFACES}, "static")
     yield from _one_sided(ctx, {s: set(js[s].functions) - {"createFormulon"} for s in JS_SURFACES}, "function")
+
+
+_ENTRY_REQUIRED_EXPORTS = frozenset({"FormulonError", "createFormulon"})
+_SCALAR_CONSTANT_RE = re.compile(r"=?\s*-?\d+")
+_MEMBERS_LIST_RE = re.compile(r"\bFORMULON_MEMBERS\s*=\s*(?:Object\.freeze\(\s*)?\[(.*?)\]", re.S)
+_MJS_COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
+
+
+def _is_constant(decl: TsDecl) -> bool:
+    if decl.kind == "enum":
+        return True
+    if decl.kind != "const":
+        return False
+    return decl.text.startswith("Readonly<{") or _SCALAR_CONSTANT_RE.fullmatch(decl.text) is not None
+
+
+def _formulon_members(ctx: Context) -> Optional[Set[str]]:
+    """The names `FORMULON_MEMBERS` lists in the npm package's `common.mjs`, or None when it is not declared."""
+    path = ctx.repo_root / NPM_COMMON_MJS.relative_to(REPO_ROOT)
+    if not path.is_file():
+        return None
+    match = _MEMBERS_LIST_RE.search(path.read_text(encoding="utf-8"))
+    if match is None:
+        return None
+    body = _MJS_COMMENT_RE.sub(" ", match.group(1))
+    return {a or b for a, b in re.findall(r"'([^']*)'|\"([^\"]*)\"", body)}
+
+
+@_owned("R17.entry")
+def _rule_entry_shape(ctx: Context) -> Iterable[Violation]:
+    """Each declaration file's `Formulon` interface has exactly the members `FORMULON_MEMBERS` lists, and its
+    runtime named exports are the constant tables, `FormulonError` and `createFormulon` only.
+    """
+    js = surfaces(ctx).js
+    listed = _formulon_members(ctx)
+    for surface in JS_SURFACES:
+        key = _key(ctx, surface, ENTRY_INTERFACE)
+        declared = set(js[surface].module_object)
+        if listed is None:
+            yield _violation(
+                ctx, "R17.entry", surface, key, "FORMULON_MEMBERS", "`FORMULON_MEMBERS` is not declared in common.mjs"
+            )
+        else:
+            for name in sorted(declared - listed):
+                yield _violation(
+                    ctx, "R17.entry", surface, key, name, f"`{ENTRY_INTERFACE}.{name}` is not in `FORMULON_MEMBERS`"
+                )
+            for name in sorted(listed - declared):
+                yield _violation(
+                    ctx,
+                    "R17.entry",
+                    surface,
+                    key,
+                    name,
+                    f"`FORMULON_MEMBERS` lists `{name}`; `{ENTRY_INTERFACE}` lacks it",
+                )
+        values = {d.name: d for d in js[surface].decls.values() if d.kind in ("const", "function", "class", "enum")}
+        for name in sorted(values):
+            if name not in _ENTRY_REQUIRED_EXPORTS and not _is_constant(values[name]):
+                yield _violation(
+                    ctx,
+                    "R17.entry",
+                    surface,
+                    _key(ctx, surface, name),
+                    name,
+                    f"`{name}` is a named export; only constants, `FormulonError` and `createFormulon` are",
+                )
+        for name in sorted(_ENTRY_REQUIRED_EXPORTS - set(values)):
+            yield _violation(ctx, "R17.entry", surface, _key(ctx, surface, name), name, f"`{name}` is not exported")
+
+
+# ---------------------------------------------------------------------------
+# R16: the JS `Value` union.
+# ---------------------------------------------------------------------------
+
+
+@_owned("R16.js")
+def _rule_value_union(ctx: Context) -> Iterable[Violation]:
+    """`Value` is a union of eight interfaces, each with a `readonly kind: typeof ValueKind.X` of its own;
+    the `Bool` member's `boolean` is `boolean`, the `Error` member's `errorCode` is `ErrorCode`.
+    """
+    for surface in JS_SURFACES:
+        js = surfaces(ctx).js[surface]
+        key = _key(ctx, surface, "Value")
+        decl = js.decls.get("Value")
+        if decl is None or decl.kind != "type":
+            yield _violation(ctx, "R16.js", surface, key, "union", "`Value` is not an exported type alias")
+            continue
+        alternatives = _top_union(decl.text)
+        if len(alternatives) != 8:
+            yield _violation(
+                ctx, "R16.js", surface, key, "union", f"`Value` has {len(alternatives)} members, not eight"
+            )
+        kinds: Dict[str, List[str]] = {}
+        for alt in alternatives:
+            member = js.decls.get(alt)
+            if member is None or member.kind != "interface":
+                yield _violation(ctx, "R16.js", surface, key, alt, f"`{alt}` is not an exported interface")
+                continue
+            fields = {m.name: m for m in member.members if not m.is_method}
+            tag = fields.get("kind")
+            if tag is None or not tag.readonly or re.fullmatch(r"typeof ValueKind\.\w+", tag.type) is None:
+                yield _violation(
+                    ctx,
+                    "R16.js",
+                    surface,
+                    key,
+                    f"{alt}.kind",
+                    f"`{alt}.kind` is not `readonly kind: typeof ValueKind.X`",
+                )
+                continue
+            kinds.setdefault(tag.type, []).append(alt)
+            for kind, field, want in (("Bool", "boolean", "boolean"), ("Error", "errorCode", "ErrorCode")):
+                if tag.type == f"typeof ValueKind.{kind}" and (field not in fields or fields[field].type != want):
+                    yield _violation(ctx, "R16.js", surface, key, f"{alt}.{field}", f"`{alt}.{field}` is not `{want}`")
+        for tag, owners in sorted(kinds.items()):
+            if len(owners) > 1:
+                yield _violation(
+                    ctx, "R16.js", surface, key, tag, f"`{tag}` is the kind of {', '.join(f'`{o}`' for o in owners)}"
+                )
+
+
+# ---------------------------------------------------------------------------
+# R13 / R14: enum-typed parameters and abbreviations, on both binding languages.
+# ---------------------------------------------------------------------------
+
+
+class _Member(NamedTuple):
+    owner: str
+    name: str
+    is_method: bool
+    params: Tuple[Tuple[str, str], ...]
+    type: str
+    js: bool
+
+    @property
+    def where(self) -> str:
+        return self.name if self.owner == self.name else f"{self.owner}.{self.name}"
+
+
+def _members_of(ctx: Context, surface: str) -> Iterator[_Member]:
+    """Every public field and callable of a binding surface, with the type that declares it."""
+    found = surfaces(ctx)
+    if surface != "py":
+        for decl in sorted(found.js[surface].decls.values()):
+            for m in decl.members:
+                yield _Member(decl.name, m.name, m.is_method, m.params, m.type, True)
+        return
+    py = found.py
+    public = set(py.exports) | {"Workbook"}
+    for cls in sorted(py.classes.values()):
+        if cls.name not in public:
+            continue
+        for name, annotation in cls.fields.items():
+            if not name.startswith("_"):
+                yield _Member(cls.name, name, False, (), annotation, False)
+        for name, fn in cls.methods.items():
+            if not name.startswith("_"):
+                yield _Member(cls.name, name, True, fn.params, fn.returns, False)
+    for name, fn in sorted(py.functions.items()):
+        if name in public:
+            yield _Member(name, name, True, fn.params, fn.returns, False)
+
+
+def _identifier(name: str) -> bool:
+    return re.fullmatch(r"[A-Za-z_]\w*", name) is not None
+
+
+# Parameter and field names that carry an enum, whatever enum it is.
+_ENUM_NAMES = {
+    True: frozenset({"format", "errorCode", "level", "status"}),
+    False: frozenset({"format", "error_code", "level", "status"}),
+}
+
+
+# Functions whose `level` is an outline depth, a bounded integer rather than a log level.
+_OUTLINE_DEPTH_FUNCTIONS = frozenset({"setRowOutline", "setColumnOutline", "set_row_outline", "set_column_outline"})
+
+
+def _bare_number(annotation: str, js: bool) -> bool:
+    text = annotation.strip()
+    inner = re.fullmatch(r"(?:typing\.)?Optional\[(.*)\]", text)
+    return ("number" if js else "int") in _top_union(inner.group(1) if inner else text)
+
+
+@_owned("R13.enum")
+def _rule_enum_types(ctx: Context) -> Iterable[Violation]:
+    """A parameter or field named `format`, `errorCode` (`error_code`), `level` or `status` is typed by an enum;
+    a bare `number` (`int`), alone or in a union, is not one. The outline-depth setters' `level` is exempt.
+    """
+    for surface in BINDING_SURFACES:
+        for m in _members_of(ctx, surface):
+            slots = [(m.name, m.type, f"{m.where}")] if not m.is_method else []
+            if m.name not in _OUTLINE_DEPTH_FUNCTIONS:
+                slots += [(pname, ptype, f"{m.where}({pname})") for pname, ptype in m.params]
+            for name, annotation, path in slots:
+                if name in _ENUM_NAMES[m.js] and annotation and _bare_number(annotation, m.js):
+                    yield _violation(
+                        ctx,
+                        "R13.enum",
+                        surface,
+                        _key(ctx, surface, m.name if m.is_method else m.owner),
+                        path,
+                        f"`{path}` is `{annotation}`; type it with an enum",
+                    )
+
+
+def _field_accessor(name: str, js: bool, fields: Set[str]) -> bool:
+    """True for `get<Field>` / `set<Field>` (`get_<field>` / `set_<field>`) over an existing field."""
+    head = name[:3]
+    if head not in ("get", "set"):
+        return False
+    rest = name[3:] if js else name[4:]
+    return (rest[:1].lower() + rest[1:] if js else rest) in fields
+
+
+@_owned("R14.abbrev")
+def _rule_abbreviations(ctx: Context) -> Iterable[Violation]:
+    """A method name does not use the word `col` / `cols` (`column` / `columns`), except a `get` / `set` over an
+    existing field, which follows the field's spelling. A field or parameter name does not use `off`
+    (`offset`); `col` is a coordinate word there and stays. No name uses `idx` (`index`).
+    """
+    for surface in BINDING_SURFACES:
+        members = list(_members_of(ctx, surface))
+        fields = {m.name for m in members if not m.is_method}
+        for m in members:
+            names = [(m.name, m.where, m.is_method)]
+            names += [(pname, f"{m.where}({pname})", False) for pname, _ in m.params]
+            for name, path, method in names:
+                if not _identifier(name):
+                    continue
+                words = set(_words(name))
+                problems = []
+                if method and words & {"col", "cols"} and not _field_accessor(name, m.js, fields):
+                    problems.append(("col", "`col` / `cols` is spelled `column` / `columns` in a method name"))
+                if not method and "off" in words:
+                    problems.append(("off", "`off` is spelled `offset`"))
+                if "idx" in words:
+                    problems.append(("idx", "`idx` is spelled `index`"))
+                for word, text in problems:
+                    yield _violation(
+                        ctx,
+                        "R14.abbrev",
+                        surface,
+                        _key(ctx, surface, m.name if m.is_method else m.owner),
+                        f"{word}:{path}",
+                        f"`{path}`: {text}",
+                    )

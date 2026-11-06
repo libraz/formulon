@@ -64,28 +64,6 @@ bool step(fm_status_t& rc, fm_status_t next) {
   return rc == 0;
 }
 
-/// `{ status, <field>: value }`.
-val envelope(JsStatus status, const char* field, const val& value) {
-  val o = val::object();
-  put(o, "status", val(std::move(status)));
-  put(o, field, value);
-  return o;
-}
-
-/// `{ status, <field>: value | null }`; the value is dropped on failure.
-val read_envelope(fm_status_t rc, const char* field, const val& value) {
-  return envelope(status_from_rc(rc), field, rc == 0 ? value : val::null());
-}
-
-/// `{ status, <field>: id }` for the calls that create something; `id` is zero on failure.
-val id_envelope(JsStatus status, const char* field, uint32_t id) {
-  return envelope(std::move(status), field, val(id));
-}
-
-JsStatus argument_error(const JsNarrowNumericReader& reader) {
-  return reader.failure();
-}
-
 // ---- Reads ----------------------------------------------------------
 
 enum class Rd : uint8_t { kI32, kU32, kF64, kBool, kStr, kStrOrNull, kNanNull, kOptI32, kOptU32, kTri, kObj, kObjOpt };
@@ -154,7 +132,7 @@ constexpr RdField kLabelsRd[] = {
 };
 
 constexpr RdField kPointRd[] = {
-    RD("idx", fm_chart_point_t, idx, kU32),
+    RD("index", fm_chart_point_t, idx, kU32),
     RD_OBJ("fill", fm_chart_point_t, fill, kFillRd),
     RD_OBJ("line", fm_chart_point_t, line, kLineRd),
     RD_OBJ_OPT("marker", fm_chart_point_t, has_marker, marker, kMarkerRd),
@@ -162,7 +140,7 @@ constexpr RdField kPointRd[] = {
 };
 
 constexpr RdField kSeriesRd[] = {
-    RD("idx", fm_chart_series_t, idx, kU32),
+    RD("index", fm_chart_series_t, idx, kU32),
     RD("order", fm_chart_series_t, order, kU32),
     RD("filtered", fm_chart_series_t, filtered, kBool),
     RD_OBJ("fill", fm_chart_series_t, fill, kFillRd),
@@ -443,7 +421,7 @@ val data_series_to_val(const fm_chart_data_t* data, size_t index, fm_status_t& r
   }
   val o = val::object();
   put(o, "plotIndex", val(s.plot_index));
-  put(o, "idx", val(s.idx));
+  put(o, "index", val(s.idx));
   put(o, "name", s.name != nullptr ? val(std::string(s.name)) : val::null());
   put(o, "formatCode", val(string_from_cstr(s.format_code)));
   put(o, "xFormatCode", val(string_from_cstr(s.x_format_code)));
@@ -548,7 +526,14 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
 
 val open_chart_data_val(fm_status_t rc, fm_chart_data_t* raw) {
   const std::unique_ptr<fm_chart_data_t, ChartDataDeleter> data(raw);
-  return read_envelope(rc, "data", rc == 0 ? chart_data_to_val(data.get(), rc) : val::null());
+  if (!succeeded(rc)) {
+    return val::undefined();
+  }
+  const val out = chart_data_to_val(data.get(), rc);
+  if (!succeeded(rc)) {
+    return val::undefined();
+  }
+  return out;
 }
 
 // ---- Patch input ----------------------------------------------------
@@ -791,16 +776,17 @@ val JsWorkbook::getChart(uint32_t sheet, uint32_t objectId) const {
       handle_ != nullptr ? fm_sheet_get_chart(handle_, sheet, objectId, &present, &raw) : kBindingInvalidHandle;
   const std::unique_ptr<fm_chart_t, ChartDeleter> chart(raw);
   if (rc != 0 || present == 0) {
-    return optional_result(rc, present, val::null());
+    return optional_or_null(rc, present, val::null());
   }
   // A failed sub-read inside the conversion replaces `rc`.
   const val info = chart_to_val(chart.get(), rc);
-  return optional_result(rc, present, info);
+  return optional_or_null(rc, present, info);
 }
 
 val JsWorkbook::getChartData(uint32_t sheet, uint32_t objectId) const {
   if (handle_ == nullptr) {
-    return read_envelope(kBindingInvalidHandle, "data", val::null());
+    record_invalid_handle();
+    return val::undefined();
   }
   fm_chart_data_t* raw = nullptr;
   const fm_status_t rc = fm_sheet_get_chart_data(handle_, sheet, objectId, &raw);
@@ -809,7 +795,8 @@ val JsWorkbook::getChartData(uint32_t sheet, uint32_t objectId) const {
 
 val JsWorkbook::previewChartData(uint32_t sheet, uint32_t objectId, val overrides) const {
   if (handle_ == nullptr) {
-    return read_envelope(kBindingInvalidHandle, "data", val::null());
+    record_invalid_handle();
+    return val::undefined();
   }
   JsNarrowNumericReader reader("getChartPreview");
   const val spec = js_object_or_empty(overrides);
@@ -831,7 +818,7 @@ val JsWorkbook::previewChartData(uint32_t sheet, uint32_t objectId, val override
   set("plotVisibleOnly", o.plot_vis_only_op, o.plot_vis_only, true);
   set("naAsBlank", o.na_as_blank_op, o.na_as_blank, true);
   if (!reader.ok()) {
-    return envelope(argument_error(reader), "data", val::null());
+    return val::undefined();
   }
   fm_chart_data_t* raw = nullptr;
   const fm_status_t rc = fm_sheet_get_chart_preview(handle_, sheet, objectId, &o, &raw);
@@ -840,13 +827,14 @@ val JsWorkbook::previewChartData(uint32_t sheet, uint32_t objectId, val override
 
 // ---- Creation and edits ---------------------------------------------
 
-val JsWorkbook::insertChart(uint32_t sheet, val options) {
+uint32_t JsWorkbook::insertChart(uint32_t sheet, val options) {
   if (handle_ == nullptr) {
-    return id_envelope(invalid_handle_status(), "objectId", 0U);
+    record_invalid_handle();
+    return 0U;
   }
   if (!options.typeOf().strictlyEquals(val("object"))) {
-    return id_envelope(binding_error_status(kInvalidArgument, "addChart expects (sheet:number, options:object)"),
-                       "objectId", 0U);
+    record_type_error("addChart expects (sheet:number, options:object)");
+    return 0U;
   }
   JsNarrowNumericReader reader("addChart");
   std::string name_store;
@@ -868,28 +856,32 @@ val JsWorkbook::insertChart(uint32_t sheet, val options) {
   set_insert_placement(opts.placement,
                        pull_drawing_anchor(reader, js_object_or_empty(placement), FM_ANCHOR_KIND_TWO_CELL));
   if (!reader.ok()) {
-    return id_envelope(argument_error(reader), "objectId", 0U);
+    return 0U;
   }
   uint32_t object_id = 0;
-  const fm_status_t rc = fm_sheet_add_chart(handle_, sheet, &opts, &object_id);
-  return id_envelope(status_from_rc(rc), "objectId", rc == 0 ? object_id : 0U);
+  if (!succeeded(fm_sheet_add_chart(handle_, sheet, &opts, &object_id))) {
+    return 0U;
+  }
+  return object_id;
 }
 
-JsStatus JsWorkbook::setChartType(uint32_t sheet, uint32_t objectId, uint32_t plot, int32_t kind, val grouping) {
+void JsWorkbook::setChartType(uint32_t sheet, uint32_t objectId, uint32_t plot, int32_t kind, val grouping) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setChartType");
   const int32_t group = reader.i32_value(grouping, FM_CHART_GROUPING_CLUSTERED, "grouping");
   if (!reader.ok()) {
-    return argument_error(reader);
+    return;
   }
-  return status_from_rc(fm_sheet_set_chart_type(handle_, sheet, objectId, plot, kind, group));
+  succeeded(fm_sheet_set_chart_type(handle_, sheet, objectId, plot, kind, group));
 }
 
-JsStatus JsWorkbook::setChartTitle(uint32_t sheet, uint32_t objectId, val title) {
+void JsWorkbook::setChartTitle(uint32_t sheet, uint32_t objectId, val title) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setChartTitle");
   Arena arena;
@@ -899,20 +891,20 @@ JsStatus JsWorkbook::setChartTitle(uint32_t sheet, uint32_t objectId, val title)
     t = read_title(reader, arena, title, "title");
   }
   if (!reader.ok()) {
-    return argument_error(reader);
+    return;
   }
-  return status_from_rc(fm_sheet_set_chart_title(handle_, sheet, objectId, &t));
+  succeeded(fm_sheet_set_chart_title(handle_, sheet, objectId, &t));
 }
 
-JsStatus JsWorkbook::setChartLegend(uint32_t sheet, uint32_t objectId, int32_t position, bool overlay,
-                                    val hiddenSeries) {
+void JsWorkbook::setChartLegend(uint32_t sheet, uint32_t objectId, int32_t position, bool overlay, val hiddenSeries) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setChartLegend");
   const std::vector<uint32_t> hidden = read_indices(reader, hiddenSeries, "hiddenSeries");
   if (!reader.ok()) {
-    return argument_error(reader);
+    return;
   }
   fm_chart_legend_patch_t legend{};
   legend.position = position;
@@ -922,122 +914,132 @@ JsStatus JsWorkbook::setChartLegend(uint32_t sheet, uint32_t objectId, int32_t p
     legend.hidden_series = data_or_null(hidden);
     legend.hidden_series_count = hidden.size();
   }
-  return status_from_rc(fm_sheet_set_chart_legend(handle_, sheet, objectId, &legend));
+  succeeded(fm_sheet_set_chart_legend(handle_, sheet, objectId, &legend));
 }
 
-JsStatus JsWorkbook::setChartAxis(uint32_t sheet, uint32_t objectId, uint32_t axisId, val patch) {
+void JsWorkbook::setChartAxis(uint32_t sheet, uint32_t objectId, uint32_t axisId, val patch) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setChartAxis");
   Arena arena;
   fm_chart_axis_patch_t p{};
   if (!read_patch_arg(reader, patch, &p, kAxisWr, arena)) {
-    return argument_error(reader);
+    return;
   }
-  return status_from_rc(fm_sheet_set_chart_axis(handle_, sheet, objectId, axisId, &p));
+  succeeded(fm_sheet_set_chart_axis(handle_, sheet, objectId, axisId, &p));
 }
 
-JsStatus JsWorkbook::setChartDisplay(uint32_t sheet, uint32_t objectId, val patch) {
+void JsWorkbook::setChartDisplay(uint32_t sheet, uint32_t objectId, val patch) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setChartDisplay");
   Arena arena;
   fm_chart_display_patch_t p{};
   if (!read_patch_arg(reader, patch, &p, kDisplayWr, arena)) {
-    return argument_error(reader);
+    return;
   }
-  return status_from_rc(fm_sheet_set_chart_display(handle_, sheet, objectId, &p));
+  succeeded(fm_sheet_set_chart_display(handle_, sheet, objectId, &p));
 }
 
-JsStatus JsWorkbook::setChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIndex, val patch) {
+void JsWorkbook::setChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIndex, val patch) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setChartSeries");
   Arena arena;
   fm_chart_series_patch_t p{};
   if (!read_patch_arg(reader, patch, &p, kSeriesWr, arena)) {
-    return argument_error(reader);
+    return;
   }
-  return status_from_rc(fm_sheet_set_chart_series(handle_, sheet, objectId, plot, seriesIndex, &p));
+  succeeded(fm_sheet_set_chart_series(handle_, sheet, objectId, plot, seriesIndex, &p));
 }
 
-JsStatus JsWorkbook::setChartPoint(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIndex,
-                                   uint32_t pointIndex, val patch) {
+void JsWorkbook::setChartPoint(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIndex,
+                               uint32_t pointIndex, val patch) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setChartPoint");
   Arena arena;
   fm_chart_point_patch_t p{};
   // A null or empty patch removes the point's formatting.
   if (!read_patch_arg(reader, patch, &p, kPointWr, arena)) {
-    return argument_error(reader);
+    return;
   }
-  return status_from_rc(fm_sheet_set_chart_point(handle_, sheet, objectId, plot, seriesIndex, pointIndex, &p));
+  succeeded(fm_sheet_set_chart_point(handle_, sheet, objectId, plot, seriesIndex, pointIndex, &p));
 }
 
-JsStatus JsWorkbook::setChartPlot(uint32_t sheet, uint32_t objectId, uint32_t plot, val patch) {
+void JsWorkbook::setChartPlot(uint32_t sheet, uint32_t objectId, uint32_t plot, val patch) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setChartPlot");
   Arena arena;
   fm_chart_plot_patch_t p{};
   if (!read_patch_arg(reader, patch, &p, kPlotWr, arena)) {
-    return argument_error(reader);
+    return;
   }
-  return status_from_rc(fm_sheet_set_chart_plot(handle_, sheet, objectId, plot, &p));
+  succeeded(fm_sheet_set_chart_plot(handle_, sheet, objectId, plot, &p));
 }
 
-JsStatus JsWorkbook::setChartFilter(uint32_t sheet, uint32_t objectId, val hiddenSeries, val hiddenCategories) {
+void JsWorkbook::setChartFilter(uint32_t sheet, uint32_t objectId, val hiddenSeries, val hiddenCategories) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setChartFilter");
   const std::vector<uint32_t> series = read_indices(reader, hiddenSeries, "hiddenSeries");
   const std::vector<uint32_t> categories = read_indices(reader, hiddenCategories, "hiddenCategories");
   if (!reader.ok()) {
-    return argument_error(reader);
+    return;
   }
-  return status_from_rc(fm_sheet_set_chart_filter(handle_, sheet, objectId, data_or_null(series), series.size(),
-                                                  data_or_null(categories), categories.size()));
+  succeeded(fm_sheet_set_chart_filter(handle_, sheet, objectId, data_or_null(series), series.size(),
+                                      data_or_null(categories), categories.size()));
 }
 
-val JsWorkbook::addChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, val patch) {
+uint32_t JsWorkbook::addChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, val patch) {
   if (handle_ == nullptr) {
-    return id_envelope(invalid_handle_status(), "index", 0U);
+    record_invalid_handle();
+    return 0U;
   }
   JsNarrowNumericReader reader("addChartSeries");
   Arena arena;
   fm_chart_series_patch_t p{};
   if (!read_patch_arg(reader, patch, &p, kSeriesWr, arena)) {
-    return id_envelope(argument_error(reader), "index", 0U);
+    return 0U;
   }
   std::size_t series_index = 0;
-  const fm_status_t rc = fm_sheet_add_chart_series(handle_, sheet, objectId, plot, &p, &series_index);
-  return id_envelope(status_from_rc(rc), "index", rc == 0 ? static_cast<uint32_t>(series_index) : 0U);
+  if (!succeeded(fm_sheet_add_chart_series(handle_, sheet, objectId, plot, &p, &series_index))) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(series_index);
 }
 
-JsStatus JsWorkbook::removeChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIndex) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_chart_series(handle_, sheet, objectId, plot, seriesIndex)
-                                           : kBindingInvalidHandle);
+void JsWorkbook::removeChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIndex) {
+  succeeded(handle_ != nullptr ? fm_sheet_remove_chart_series(handle_, sheet, objectId, plot, seriesIndex)
+                               : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::setChartSource(uint32_t sheet, uint32_t objectId, const std::string& source, int32_t direction,
-                                    val headerRow, val headerColumn) {
+void JsWorkbook::setChartSource(uint32_t sheet, uint32_t objectId, const std::string& source, int32_t direction,
+                                val headerRow, val headerColumn) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("setChartSource");
   const int32_t row = header_mode(reader, headerRow, "headerRow");
   const int32_t column = header_mode(reader, headerColumn, "headerColumn");
   if (!reader.ok()) {
-    return argument_error(reader);
+    return;
   }
-  return status_from_rc(fm_sheet_set_chart_source(handle_, sheet, objectId, source.c_str(), direction, row, column));
+  succeeded(fm_sheet_set_chart_source(handle_, sheet, objectId, source.c_str(), direction, row, column));
 }
 
 }  // namespace parts

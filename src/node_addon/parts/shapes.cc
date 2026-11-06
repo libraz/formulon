@@ -177,36 +177,33 @@ Napi::Object ShapeToJs(Napi::Env env, const fm_shape_t& s) {
 
 Napi::Value Workbook::ListShapes(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Array arr = Napi::Array::New(env);
   if (handle_ == nullptr) {
-    return FinishListResult(env, arr, kBindingInvalidHandle);
+    return ThrowInvalidHandle(env);
   }
+  Napi::Array arr = Napi::Array::New(env);
   const uint32_t sheet = ArgU32(info, 0);
   const fm_status_t rc = CollectList<fm_shape_t>(
       arr, [&](size_t* n) { return fm_sheet_get_shape_count(handle_, sheet, n); },
       [&](size_t i, fm_shape_t* s) { return fm_sheet_get_shape_at(handle_, sheet, i, s); },
       [&](const fm_shape_t& s) { return ShapeToJs(env, s); });
-  return FinishListResult(env, arr, rc);
+  return ValueOrThrow(env, rc, arr);
 }
 
 Napi::Value Workbook::GetShape(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+    return ThrowInvalidHandle(env);
   }
   fm_shape_t s{};
   int32_t present = 0;
   const fm_status_t rc = fm_sheet_get_shape(handle_, ArgU32(info, 0), ArgU32(info, 1), &present, &s);
-  return MakeOptionalResult(env, rc, present, rc == 0 && present != 0 ? Napi::Value(ShapeToJs(env, s)) : env.Null());
+  return OptionalOrNull(env, rc, present, rc == 0 && present != 0 ? Napi::Value(ShapeToJs(env, s)) : env.Null());
 }
 
 Napi::Value Workbook::InsertShape(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("objectId", JsNumber(env, 0));
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
+    return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
   ShapeText store;
@@ -216,15 +213,13 @@ Napi::Value Workbook::InsertShape(const Napi::CallbackInfo& info) {
   }
   uint32_t object_id = 0;
   const fm_status_t rc = fm_sheet_add_shape(handle_, ArgU32(info, 0), &shape, &object_id);
-  out.Set("objectId", JsNumber(env, rc == 0 ? object_id : 0));
-  out.Set("status", MakeStatus(env, rc));
-  return out;
+  return ValueOrThrow(env, rc, JsNumber(env, object_id));
 }
 
 Napi::Value Workbook::UpdateShape(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
   ShapeText store;
@@ -232,7 +227,7 @@ Napi::Value Workbook::UpdateShape(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_sheet_update_shape(handle_, ArgU32(info, 0), ArgU32(info, 1), &shape));
+  return ValueOrThrow(env, fm_sheet_update_shape(handle_, ArgU32(info, 0), ArgU32(info, 1), &shape), env.Undefined());
 }
 
 Napi::Value Workbook::RemoveShape(const Napi::CallbackInfo& info) {
@@ -240,21 +235,26 @@ Napi::Value Workbook::RemoveShape(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::GetSparklineGroupCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   std::size_t count = 0;
-  const fm_status_t rc =
-      handle_ != nullptr ? fm_sheet_get_sparkline_group_count(handle_, ArgU32(info, 0), &count) : kBindingInvalidHandle;
-  return MakeNumberResult(info.Env(), rc, static_cast<double>(count));
+  const fm_status_t rc = fm_sheet_get_sparkline_group_count(handle_, ArgU32(info, 0), &count);
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
 }
 
 Napi::Value Workbook::GetSparklineGroup(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const fm_workbook_t* handle = handle_;
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   const std::size_t sheet = ArgU32(info, 0);
   const std::size_t index = ArgU32(info, 1);
   fm_sparkline_group_t g{};
-  fm_status_t rc = handle != nullptr ? fm_sheet_get_sparkline_group(handle, sheet, index, &g) : kBindingInvalidHandle;
+  fm_status_t rc = fm_sheet_get_sparkline_group(handle_, sheet, index, &g);
   if (rc != 0) {
-    g = fm_sparkline_group_t{};
+    return ThrowStatus(env, rc);
   }
   Napi::Object item = Napi::Object::New(env);
   for (size_t c = 0; c < 8U; ++c) {
@@ -278,10 +278,9 @@ Napi::Value Workbook::GetSparklineGroup(const Napi::CallbackInfo& info) {
   item.Set("lineWeight", JsNumber(env, g.line_weight));
   item.Set("emptyCellsAs", JsNumber(env, g.empty_cells_as));
   Napi::Array sparklines = Napi::Array::New(env);
-  const size_t n = rc == 0 ? g.sparkline_count : 0U;
-  for (size_t k = 0; rc == 0 && k < n; ++k) {
+  for (size_t k = 0; rc == 0 && k < g.sparkline_count; ++k) {
     fm_sparkline_t sp{};
-    rc = fm_sheet_get_sparkline(handle, sheet, index, k, &sp);
+    rc = fm_sheet_get_sparkline(handle_, sheet, index, k, &sp);
     if (rc == 0) {
       Napi::Object entry = Napi::Object::New(env);
       entry.Set("formula", JsString(env, sp.formula));
@@ -289,14 +288,17 @@ Napi::Value Workbook::GetSparklineGroup(const Napi::CallbackInfo& info) {
       sparklines.Set(static_cast<uint32_t>(k), entry);
     }
   }
-  item.Set("sparklines", rc == 0 ? sparklines : Napi::Array::New(env));
-  return FinishItemResult(env, item, rc);
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
+  item.Set("sparklines", sparklines);
+  return item;
 }
 
 Napi::Value Workbook::AddSparklineGroup(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeIndexResult(env, NullHandleError(env), 0);
+    return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
   const Napi::Object spec = ArgObject(info, 1);
@@ -316,13 +318,13 @@ Napi::Value Workbook::AddSparklineGroup(const Napi::CallbackInfo& info) {
   std::size_t out = 0;
   const fm_status_t rc = fm_sheet_add_sparkline_group(handle_, ArgU32(info, 0), &group,
                                                       items.empty() ? &none : items.data(), items.size(), &out);
-  return MakeIndexResult(env, rc, static_cast<uint32_t>(out));
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(out)));
 }
 
 Napi::Value Workbook::UpdateSparklineGroup(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   CheckedSpecReader reader(env);
   std::string ref_store;
@@ -330,18 +332,20 @@ Napi::Value Workbook::UpdateSparklineGroup(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  return MakeStatus(env, fm_sheet_update_sparkline_group(handle_, ArgU32(info, 0), ArgU32(info, 1), &group));
+  return ValueOrThrow(env, fm_sheet_update_sparkline_group(handle_, ArgU32(info, 0), ArgU32(info, 1), &group),
+                      env.Undefined());
 }
 
 Napi::Value Workbook::SetSparklineGroupSparklines(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   Napi::Array sparklines;
   if (!ArrayArg(info, 2, &sparklines)) {
-    return MakeBindingArgumentError(
-        env, "setSparklineGroupSparklines expects (sheet:number, index:number, sparklines:array)");
+    Napi::TypeError::New(env, "setSparklineGroupSparklines expects (sheet:number, index:number, sparklines:array)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
   }
   CheckedSpecReader reader(env);
   std::vector<std::string> texts;
@@ -350,8 +354,10 @@ Napi::Value Workbook::SetSparklineGroupSparklines(const Napi::CallbackInfo& info
     return env.Undefined();
   }
   fm_sparkline_t none{};
-  return MakeStatus(env, fm_sheet_set_sparkline_group_sparklines(handle_, ArgU32(info, 0), ArgU32(info, 1),
-                                                                 items.empty() ? &none : items.data(), items.size()));
+  return ValueOrThrow(env,
+                      fm_sheet_set_sparkline_group_sparklines(handle_, ArgU32(info, 0), ArgU32(info, 1),
+                                                              items.empty() ? &none : items.data(), items.size()),
+                      env.Undefined());
 }
 
 Napi::Value Workbook::RemoveSparklineGroup(const Napi::CallbackInfo& info) {

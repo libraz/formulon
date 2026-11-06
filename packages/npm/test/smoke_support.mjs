@@ -66,34 +66,37 @@ function getModule() {
 // A self-referential average: from a blank A1 the iterative solver walks
 // towards 10, and the progress callback fires after every sweep.
 function makeIterativeWorkbook(Module) {
-  const wb = Module.Workbook.createDefault().value;
-  assert.ok(wb.setIterative(true, 100, 0.0001).ok);
-  assert.ok(wb.setFormula(0, 0, 0, '=(A1+10)/2').ok);
+  const wb = Module.Workbook.createDefault();
+  wb.setIterative(true, 100, 0.0001);
+  wb.setFormula(0, 0, 0, '=(A1+10)/2');
   return wb;
 }
 
 // A structured reference the XLSB encoder cannot lower, which
 // makes the writer emit one per-cell warn record.
 function emitXlsbWarning(Module, xlsbFormat) {
-  const wb = Module.Workbook.createDefault().value;
+  const wb = Module.Workbook.createDefault();
   try {
-    assert.ok(wb.setFormula(0, 0, 0, '=SUM(T[C])').ok);
-    assert.ok(wb.recalc().ok);
-    assert.ok(wb.saveAs(xlsbFormat).status.ok);
+    wb.setFormula(0, 0, 0, '=SUM(T[C])');
+    wb.recalc();
+    wb.save(xlsbFormat);
   } finally {
     wb.delete();
   }
 }
 
 // Reads every element of an index-keyed collection through its count / index
-// getter pair, each element without its status.
+// getter pair.
 function readAll(count, get) {
-  const n = count();
-  assert.ok(n.status.ok, JSON.stringify(n.status));
-  return Array.from({ length: n.value }, (_, i) => {
-    const { status, ...item } = get(i);
-    assert.ok(status.ok, JSON.stringify(status));
-    return item;
+  return Array.from({ length: count() }, (_, i) => get(i));
+}
+
+// Asserts that `fn` fails with a FormulonError, optionally of the given code.
+function expectFailure(fn, code) {
+  assert.throws(fn, (e) => {
+    assert.equal(e.name, 'FormulonError', `expected a FormulonError, got ${e}`);
+    if (code !== undefined) assert.equal(e.code, code, `code ${e.code} (${e.message})`);
+    return true;
   });
 }
 
@@ -101,6 +104,7 @@ export {
   assert,
   emitXlsbWarning,
   entry,
+  expectFailure,
   getModule,
   loadStagedFactory,
   loadStagedModule,

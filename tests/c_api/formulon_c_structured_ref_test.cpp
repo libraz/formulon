@@ -23,7 +23,6 @@
 
 namespace {
 
-constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
 constexpr fm_status_t kBindingUtf8EncodingError =
     static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingUtf8EncodingError);
@@ -302,8 +301,8 @@ TEST(FormulonCApiStructuredRef, RenameColumnRefusesBadArguments) {
   EXPECT_EQ(fm_workbook_rename_table_column(nullptr, 0, 0, "X", &out), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_rename_table_column(wb.handle, 0, 0, nullptr, &out), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_rename_table_column(wb.handle, 0, 0, "X", nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_rename_table_column(wb.handle, 1, 0, "X", &out), kInvalidArgument);
-  EXPECT_EQ(fm_workbook_rename_table_column(wb.handle, 0, 5, "X", &out), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_rename_table_column(wb.handle, 1, 0, "X", &out), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_workbook_rename_table_column(wb.handle, 0, 5, "X", &out), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_workbook_rename_table_column(wb.handle, 0, 0, "\xC3\x28", &out), kBindingUtf8EncodingError);
   EXPECT_EQ(ColumnName(wb, 0), "Qty");
 }

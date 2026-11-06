@@ -113,10 +113,10 @@ fm_status_t rename_from_header(fm_workbook_t* wb, const HeaderCell& header, std:
 extern "C" fm_status_t fm_sheet_set_number(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                            double value) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_number"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_finite(value, "fm_sheet_set_number", "value"); rc != 0) {
+  if (auto rc = check_finite(value, "value"); rc != 0) {
     return rc;
   }
   if (const auto header = table_header_cell(wb->workbook(), sheet_index, row, col)) {
@@ -132,7 +132,7 @@ extern "C" fm_status_t fm_sheet_set_number(fm_workbook_t* wb, size_t sheet_index
 extern "C" fm_status_t fm_sheet_set_bool(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                          int32_t value) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_bool"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   if (const auto header = table_header_cell(wb->workbook(), sheet_index, row, col)) {
@@ -146,12 +146,12 @@ extern "C" fm_status_t fm_sheet_set_bool(fm_workbook_t* wb, size_t sheet_index, 
 extern "C" fm_status_t fm_sheet_set_error(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                           fm_error_code_t error) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_error"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   if (error < 0 || error > static_cast<fm_error_code_t>(formulon::ErrorCode::Unknown)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_set_error: error code out of range", "error=" + std::to_string(error));
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "error code out of range",
+                             "error=" + std::to_string(error));
   }
   if (const auto header = table_header_cell(wb->workbook(), sheet_index, row, col)) {
     return rename_from_header(wb, *header, formulon::display_name(static_cast<formulon::ErrorCode>(error)));
@@ -165,15 +165,15 @@ extern "C" fm_status_t fm_sheet_set_text(fm_workbook_t* wb, size_t sheet_index, 
                                          const char* utf8) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_sheet_set_text", "wb");
+    return null_argument("wb");
   }
   if (utf8 == nullptr) {
-    return null_argument("fm_sheet_set_text", "utf8");
+    return null_argument("utf8");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_text"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8("fm_sheet_set_text", {utf8}); rc != 0) {
+  if (auto rc = check_utf8({utf8}); rc != 0) {
     return rc;
   }
   if (const auto header = table_header_cell(wb->workbook(), sheet_index, row, col)) {
@@ -189,18 +189,18 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic(fm_workbook_t* wb, size_t shee
                                                   const char* utf8) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_sheet_set_cell_phonetic", "wb");
+    return null_argument("wb");
   }
   if (utf8 == nullptr) {
-    return null_argument("fm_sheet_set_cell_phonetic", "utf8");
+    return null_argument("utf8");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_cell_phonetic"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8("fm_sheet_set_cell_phonetic", {utf8}); rc != 0) {
+  if (auto rc = check_utf8({utf8}); rc != 0) {
     return rc;
   }
-  if (auto rc = check_cell_coord(row, col, "fm_sheet_set_cell_phonetic"); rc != 0) {
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
   wb->workbook().sheet(sheet_index).set_cell_phonetic(row, col, utf8);
@@ -216,13 +216,13 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic(fm_workbook_t* wb, size_t shee
 extern "C" fm_status_t fm_sheet_set_cell_phonetic_runs(fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                        uint32_t col, const fm_phonetic_run_t* runs, size_t count) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_cell_phonetic_runs"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   if (runs == nullptr && count != 0U) {
-    return null_argument("fm_sheet_set_cell_phonetic_runs", "runs");
+    return null_argument("runs");
   }
-  if (auto rc = check_cell_coord(row, col, "fm_sheet_set_cell_phonetic_runs"); rc != 0) {
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
 
@@ -237,20 +237,19 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic_runs(fm_workbook_t* wb, size_t
   for (size_t i = 0; i < count; ++i) {
     const fm_phonetic_run_t& run = runs[i];
     if (run.text == nullptr) {
-      return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                               "fm_sheet_set_cell_phonetic_runs: run text is NULL", "run_index=" + std::to_string(i));
+      return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "run text is NULL",
+                               "run_index=" + std::to_string(i));
     }
-    if (auto rc = check_utf8(run.text, "fm_sheet_set_cell_phonetic_runs", "run_index", i); rc != 0) {
+    if (auto rc = check_utf8(run.text, "run_index", i); rc != 0) {
       return rc;
     }
     if (run.eb < run.sb) {
       return set_binding_error(
-          formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_cell_phonetic_runs: run ends before it starts",
+          formulon::FormulonErrorCode::kInvalidArgument, "run ends before it starts",
           "run_index=" + std::to_string(i) + " sb=" + std::to_string(run.sb) + " eb=" + std::to_string(run.eb));
     }
     if (i != 0U && run.sb < previous_end) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "fm_sheet_set_cell_phonetic_runs: runs overlap or are out of order",
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "runs overlap or are out of order",
                                "run_index=" + std::to_string(i) + " sb=" + std::to_string(run.sb) +
                                    " previous_eb=" + std::to_string(previous_end));
     }
@@ -267,10 +266,10 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic_properties(fm_workbook_t* wb, 
                                                              uint32_t col, uint32_t font_id, uint32_t type,
                                                              uint32_t alignment) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_cell_phonetic_properties"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_cell_coord(row, col, "fm_sheet_set_cell_phonetic_properties"); rc != 0) {
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
   // Both enumerations occupy two bits of the XLSB trailer's flags word, so
@@ -278,19 +277,16 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic_properties(fm_workbook_t* wb, 
   // it here rather than truncate it into a different, valid-looking form.
   constexpr uint32_t kMaxOrdinal = 3U;
   if (type > kMaxOrdinal) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_set_cell_phonetic_properties: type out of range",
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "type out of range",
                              "type=" + std::to_string(type));
   }
   if (alignment > kMaxOrdinal) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_set_cell_phonetic_properties: alignment out of range",
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "alignment out of range",
                              "alignment=" + std::to_string(alignment));
   }
   constexpr uint32_t kMaxFontId = 0xFFFFU;
   if (font_id > kMaxFontId) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_set_cell_phonetic_properties: font_id out of range",
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "font_id out of range",
                              "font_id=" + std::to_string(font_id));
   }
 
@@ -307,10 +303,10 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic_properties(fm_workbook_t* wb, 
 extern "C" fm_status_t fm_sheet_set_cell_show_phonetic(fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                        uint32_t col, int32_t show) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_cell_show_phonetic"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_cell_coord(row, col, "fm_sheet_set_cell_show_phonetic"); rc != 0) {
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
   wb->workbook().sheet(sheet_index).set_cell_show_phonetic(row, col, show != 0);
@@ -323,11 +319,11 @@ namespace {
 // in the diagnostic; skipped when `out_name` is NULL), a valid sheet, then the
 // cell at (row, col), left NULL when the cell does not exist.
 fm_status_t lookup_phonetic_cell(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
-                                 const char* fn, const void* out, const char* out_name, const formulon::Cell** cell) {
+                                 const void* out, const char* out_name, const formulon::Cell** cell) {
   if (out_name != nullptr && out == nullptr) {
-    return null_argument(fn, out_name);
+    return null_argument(out_name);
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   *cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
@@ -340,9 +336,7 @@ extern "C" fm_status_t fm_sheet_get_cell_show_phonetic(const fm_workbook_t* wb, 
                                                        uint32_t col, int32_t* out_show) {
   clear_last_error();
   const formulon::Cell* cell = nullptr;
-  if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, "fm_sheet_get_cell_show_phonetic", out_show, "out_show",
-                                     &cell);
-      rc != 0) {
+  if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, out_show, "out_show", &cell); rc != 0) {
     return rc;
   }
   *out_show = cell != nullptr && cell->show_phonetic ? 1 : 0;
@@ -353,9 +347,7 @@ extern "C" fm_status_t fm_sheet_has_cell_phonetic_properties(const fm_workbook_t
                                                              uint32_t col, int32_t* out_present) {
   clear_last_error();
   const formulon::Cell* cell = nullptr;
-  if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, "fm_sheet_has_cell_phonetic_properties", out_present,
-                                     "out_present", &cell);
-      rc != 0) {
+  if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, out_present, "out_present", &cell); rc != 0) {
     return rc;
   }
   *out_present = cell != nullptr && cell->phonetic_present ? 1 : 0;
@@ -364,7 +356,7 @@ extern "C" fm_status_t fm_sheet_has_cell_phonetic_properties(const fm_workbook_t
 
 extern "C" fm_status_t fm_sheet_set_blank(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_blank"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   if (const auto header = table_header_cell(wb->workbook(), sheet_index, row, col)) {
@@ -377,16 +369,16 @@ extern "C" fm_status_t fm_sheet_set_formula(fm_workbook_t* wb, size_t sheet_inde
                                             const char* formula) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_sheet_set_formula", "wb");
+    return null_argument("wb");
   }
   if (formula == nullptr) {
-    return null_argument("fm_sheet_set_formula", "formula");
+    return null_argument("formula");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_formula"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   std::string bound;
-  if (auto rc = check_entered_cell_formula("fm_sheet_set_formula", wb, sheet_index, row, col, formula,
+  if (auto rc = check_entered_cell_formula(wb, sheet_index, row, col, formula,
                                            "row=" + std::to_string(row) + " col=" + std::to_string(col), &bound);
       rc != 0) {
     return rc;
@@ -404,12 +396,12 @@ extern "C" fm_status_t fm_sheet_get_value(const fm_workbook_t* wb, size_t sheet_
                                           fm_value_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return null_argument("fm_sheet_get_value");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_value"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_cell_coord(row, col, "fm_sheet_get_value"); rc != 0) {
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
   // `resolve_cell_value` is the spill-aware accessor: phantoms of a
@@ -427,9 +419,7 @@ extern "C" fm_status_t fm_sheet_get_cell_phonetic(const fm_workbook_t* wb, size_
                                                   uint32_t col, const char** out_text) {
   clear_last_error();
   const formulon::Cell* cell = nullptr;
-  if (auto rc =
-          lookup_phonetic_cell(wb, sheet_index, row, col, "fm_sheet_get_cell_phonetic", out_text, "out_text", &cell);
-      rc != 0) {
+  if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, out_text, "out_text", &cell); rc != 0) {
     return rc;
   }
   TextStore& store = fresh_read_scratch(wb);
@@ -444,9 +434,7 @@ extern "C" fm_status_t fm_sheet_get_cell_phonetic_run_count(const fm_workbook_t*
                                                             uint32_t col, size_t* out_count) {
   clear_last_error();
   const formulon::Cell* cell = nullptr;
-  if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, "fm_sheet_get_cell_phonetic_run_count", out_count,
-                                     "out_count", &cell);
-      rc != 0) {
+  if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, out_count, "out_count", &cell); rc != 0) {
     return rc;
   }
   *out_count = cell == nullptr ? 0U : cell->phonetic_runs.size();
@@ -457,12 +445,11 @@ extern "C" fm_status_t fm_sheet_get_cell_phonetic_run(const fm_workbook_t* wb, s
                                                       uint32_t col, size_t run_index, fm_phonetic_run_t* out) {
   clear_last_error();
   const formulon::Cell* cell = nullptr;
-  if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, "fm_sheet_get_cell_phonetic_run", out, "out", &cell);
-      rc != 0) {
+  if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, out, "out", &cell); rc != 0) {
     return rc;
   }
   const size_t run_count = cell == nullptr ? 0U : cell->phonetic_runs.size();
-  if (auto rc = check_index(run_index, run_count, "fm_sheet_get_cell_phonetic_run", "run_index"); rc != 0) {
+  if (auto rc = check_index(run_index, run_count, "run_index"); rc != 0) {
     return rc;
   }
   const formulon::PhoneticRun& run = cell->phonetic_runs[run_index];
@@ -479,9 +466,7 @@ extern "C" fm_status_t fm_sheet_get_cell_phonetic_properties(const fm_workbook_t
                                                              uint32_t* out_alignment) {
   clear_last_error();
   const formulon::Cell* cell = nullptr;
-  if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, "fm_sheet_get_cell_phonetic_properties", nullptr,
-                                     nullptr, &cell);
-      rc != 0) {
+  if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, nullptr, nullptr, &cell); rc != 0) {
     return rc;
   }
   // An absent cell reports the defaults rather than failing, matching the
@@ -504,11 +489,11 @@ extern "C" fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t 
                                                 int32_t* out_present, const char** out_text) {
   clear_last_error();
   if (out_present == nullptr || out_text == nullptr) {
-    return null_argument("fm_sheet_get_lambda_text");
+    return null_argument();
   }
   *out_present = 0;
   *out_text = nullptr;
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_lambda_text"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
@@ -517,8 +502,7 @@ extern "C" fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t 
   }
   const formulon::eval::LambdaValue* lv = cell->cached_value.as_lambda();
   if (lv == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_get_lambda_text: lambda payload is NULL");
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "lambda payload is NULL");
   }
   std::string formatted = wb->workbook().spell_self_book_names(formulon::eval::format_lambda_value(*lv));
   // Read-path scratch: cleared per call so the lambda text does not
@@ -616,9 +600,9 @@ extern "C" fm_status_t fm_sheet_get_cell_at(const fm_workbook_t* wb, size_t shee
                                             uint32_t* out_col, const char** out_formula, fm_value_t* out_value) {
   clear_last_error();
   if (out_row == nullptr || out_col == nullptr || out_value == nullptr) {
-    return null_argument("fm_sheet_get_cell_at");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_cell_at"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
@@ -626,7 +610,7 @@ extern "C" fm_status_t fm_sheet_get_cell_at(const fm_workbook_t* wb, size_t shee
   // enumeration revision changes. A `cell_count` / `cell_at(0..N)` pass
   // therefore pays the O(N log N) collection once rather than per cell.
   const auto& addrs = cached_cell_addresses(wb, sheet_index);
-  if (auto rc = check_index(idx, addrs.size(), "fm_sheet_get_cell_at", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, addrs.size(), "index"); rc != 0) {
     return rc;
   }
   const auto [row, col] = addrs[idx];
@@ -669,9 +653,9 @@ extern "C" fm_status_t fm_sheet_get_spill_info(const fm_workbook_t* wb, std::siz
                                                std::uint32_t col, fm_spill_info_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return null_argument("fm_sheet_get_spill_info");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_spill_info"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   *out = fm_spill_info_t{};
@@ -705,12 +689,12 @@ extern "C" fm_status_t fm_sheet_get_array_formula(const fm_workbook_t* wb, std::
                                                   std::uint32_t col, fm_array_formula_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return null_argument("fm_sheet_get_array_formula");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_array_formula"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_cell_coord(row, col, "fm_sheet_get_array_formula"); rc != 0) {
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
   *out = fm_array_formula_t{};
@@ -731,18 +715,18 @@ extern "C" fm_status_t fm_sheet_set_array_formula(fm_workbook_t* wb, std::size_t
                                                   const fm_cell_rect_t* range, const char* formula) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_sheet_set_array_formula", "wb");
+    return null_argument("wb");
   }
   if (range == nullptr) {
-    return null_argument("fm_sheet_set_array_formula", "range");
+    return null_argument("range");
   }
   if (formula == nullptr) {
-    return null_argument("fm_sheet_set_array_formula", "formula");
+    return null_argument("formula");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_array_formula"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_rect(*range, "fm_sheet_set_array_formula"); rc != 0) {
+  if (auto rc = check_sheet_rect(*range); rc != 0) {
     return rc;
   }
   const std::uint32_t row = range->first_row;
@@ -750,7 +734,7 @@ extern "C" fm_status_t fm_sheet_set_array_formula(fm_workbook_t* wb, std::size_t
   const std::uint32_t rows = range->last_row - row + 1U;
   const std::uint32_t cols = range->last_col - col + 1U;
   std::string bound;
-  if (auto rc = check_entered_cell_formula("fm_sheet_set_array_formula", wb, sheet_index, row, col, formula,
+  if (auto rc = check_entered_cell_formula(wb, sheet_index, row, col, formula,
                                            "row=" + std::to_string(row) + " col=" + std::to_string(col), &bound);
       rc != 0) {
     return rc;
@@ -769,14 +753,14 @@ namespace {
 // Shared front half of the two formula getters: validates, then copies the
 // stored formula text (empty for a non-formula) out under the sheet lock.
 fm_status_t read_stored_formula(const fm_workbook_t* wb, size_t sheet_index, std::uint32_t row, std::uint32_t col,
-                                const char** out_formula, const char* api, std::string* out_text) {
+                                const char** out_formula, std::string* out_text) {
   if (out_formula == nullptr) {
-    return null_argument(api);
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, api); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_cell_coord(row, col, api); rc != 0) {
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
   formulon::Sheet::CellRead read;
@@ -795,7 +779,7 @@ extern "C" fm_status_t fm_sheet_get_formula(const fm_workbook_t* wb, size_t shee
                                             const char** out_formula) {
   clear_last_error();
   std::string text;
-  if (auto rc = read_stored_formula(wb, sheet_index, row, col, out_formula, "fm_sheet_get_formula", &text); rc != 0) {
+  if (auto rc = read_stored_formula(wb, sheet_index, row, col, out_formula, &text); rc != 0) {
     return rc;
   }
   *out_formula = publish_scratch(
@@ -807,8 +791,7 @@ extern "C" fm_status_t fm_sheet_get_formula_r1c1(const fm_workbook_t* wb, size_t
                                                  uint32_t col, const char** out_formula) {
   clear_last_error();
   std::string text;
-  if (auto rc = read_stored_formula(wb, sheet_index, row, col, out_formula, "fm_sheet_get_formula_r1c1", &text);
-      rc != 0) {
+  if (auto rc = read_stored_formula(wb, sheet_index, row, col, out_formula, &text); rc != 0) {
     return rc;
   }
   if (text.empty()) {
@@ -818,8 +801,7 @@ extern "C" fm_status_t fm_sheet_get_formula_r1c1(const fm_workbook_t* wb, size_t
   formulon::Arena arena;
   const formulon::parser::AstNode* root = formulon::parser::parse_strict(formulon::strip_formula_prefix(text), arena);
   if (root == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken,
-                             "fm_sheet_get_formula_r1c1: stored formula does not parse",
+    return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken, "stored formula does not parse",
                              "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
   const formulon::parser::StructuredRefDisplay display{table_display_name_at(wb->workbook(), sheet_index, row, col)};
@@ -833,19 +815,19 @@ extern "C" fm_status_t fm_sheet_get_cells_in_range(const fm_workbook_t* wb, size
                                                    fm_cell_range_t** out) {
   clear_last_error();
   if (out == nullptr) {
-    return null_argument("fm_sheet_get_cells_in_range", "out");
+    return null_argument("out");
   }
   *out = nullptr;
   if (range == nullptr) {
-    return null_argument("fm_sheet_get_cells_in_range", "range");
+    return null_argument("range");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_cells_in_range"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_rect(*range, "fm_sheet_get_cells_in_range"); rc != 0) {
+  if (auto rc = check_sheet_rect(*range); rc != 0) {
     return rc;
   }
-  if (auto rc = check_cell_cursor(cursor, "fm_sheet_get_cells_in_range"); rc != 0) {
+  if (auto rc = check_cell_cursor(cursor); rc != 0) {
     return rc;
   }
   auto handle = std::unique_ptr<fm_cell_range_t>(new fm_cell_range_t{});
@@ -874,7 +856,7 @@ extern "C" fm_status_t fm_sheet_get_cells_in_range(const fm_workbook_t* wb, size
 extern "C" fm_status_t fm_cell_range_get_cell_count(const fm_cell_range_t* range, size_t* out_count) {
   clear_last_error();
   if (range == nullptr || out_count == nullptr) {
-    return null_argument("fm_cell_range_get_cell_count");
+    return null_argument();
   }
   *out_count = range->entries.size();
   return 0;
@@ -884,9 +866,9 @@ extern "C" fm_status_t fm_cell_range_get_cell_at(const fm_cell_range_t* range, s
                                                  uint32_t* out_col, const char** out_formula, fm_value_t* out_value) {
   clear_last_error();
   if (range == nullptr || out_row == nullptr || out_col == nullptr || out_value == nullptr) {
-    return null_argument("fm_cell_range_get_cell_at");
+    return null_argument();
   }
-  if (auto rc = check_index(idx, range->entries.size(), "fm_cell_range_get_cell_at", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, range->entries.size(), "index"); rc != 0) {
     return rc;
   }
   const fm_cell_range_t::Entry& entry = range->entries[idx];
@@ -902,7 +884,7 @@ extern "C" fm_status_t fm_cell_range_get_cell_at(const fm_cell_range_t* range, s
 extern "C" fm_status_t fm_cell_range_next_cursor(const fm_cell_range_t* range, uint64_t* out_cursor) {
   clear_last_error();
   if (range == nullptr || out_cursor == nullptr) {
-    return null_argument("fm_cell_range_next_cursor");
+    return null_argument();
   }
   *out_cursor = range->next_cursor;
   return 0;

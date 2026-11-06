@@ -44,17 +44,16 @@ const char* one_char(char c) noexcept {
 }
 
 // Shared body of `fm_localize_formula` / `fm_canonicalize_formula`.
-fm_status_t convert_formula(const char* api, const char* formula, const char* profile_id, bool localize,
-                            const char** out_formula) {
+fm_status_t convert_formula(const char* formula, const char* profile_id, bool localize, const char** out_formula) {
   clear_last_error();
   if (formula == nullptr || profile_id == nullptr || out_formula == nullptr) {
-    return null_argument(api);
+    return null_argument();
   }
-  if (auto rc = check_utf8(api, {formula}); rc != 0) {
+  if (auto rc = check_utf8({formula}); rc != 0) {
     return rc;
   }
   formulon::ExcelProfile profile;
-  if (auto rc = check_profile_id(profile_id, api, &profile); rc != 0) {
+  if (auto rc = check_profile_id(profile_id, &profile); rc != 0) {
     return rc;
   }
   thread_local std::string buffer;
@@ -67,20 +66,20 @@ fm_status_t convert_formula(const char* api, const char* formula, const char* pr
 }  // namespace
 
 extern "C" fm_status_t fm_localize_formula(const char* formula, const char* profile_id, const char** out_formula) {
-  return convert_formula("fm_localize_formula", formula, profile_id, /*localize=*/true, out_formula);
+  return convert_formula(formula, profile_id, /*localize=*/true, out_formula);
 }
 
 extern "C" fm_status_t fm_canonicalize_formula(const char* formula, const char* profile_id, const char** out_formula) {
-  return convert_formula("fm_canonicalize_formula", formula, profile_id, /*localize=*/false, out_formula);
+  return convert_formula(formula, profile_id, /*localize=*/false, out_formula);
 }
 
 extern "C" fm_status_t fm_get_locale_facts(const char* profile_id, fm_locale_facts_t* out) {
   clear_last_error();
   if (profile_id == nullptr || out == nullptr) {
-    return null_argument("fm_get_locale_facts");
+    return null_argument();
   }
   formulon::ExcelProfile profile;
-  if (auto rc = check_profile_id(profile_id, "fm_get_locale_facts", &profile); rc != 0) {
+  if (auto rc = check_profile_id(profile_id, &profile); rc != 0) {
     return rc;
   }
   const formulon::LocaleFacts& facts = formulon::locale_facts(profile);
@@ -104,7 +103,7 @@ extern "C" fm_status_t fm_get_locale_facts(const char* profile_id, fm_locale_fac
 extern "C" fm_status_t fm_get_locale_error_name_count(size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return null_argument("fm_get_locale_error_name_count", "out_count");
+    return null_argument("out_count");
   }
   *out_count = formulon::kErrorNameCount;
   return 0;
@@ -114,13 +113,13 @@ extern "C" fm_status_t fm_get_locale_error_name_at(const char* profile_id, size_
                                                    const char** out_localized, int32_t* out_measured) {
   clear_last_error();
   if (profile_id == nullptr || out_canonical == nullptr || out_localized == nullptr || out_measured == nullptr) {
-    return null_argument("fm_get_locale_error_name_at");
+    return null_argument();
   }
   formulon::ExcelProfile profile;
-  if (auto rc = check_profile_id(profile_id, "fm_get_locale_error_name_at", &profile); rc != 0) {
+  if (auto rc = check_profile_id(profile_id, &profile); rc != 0) {
     return rc;
   }
-  if (auto rc = check_index(index, formulon::kErrorNameCount, "fm_get_locale_error_name_at", "index"); rc != 0) {
+  if (auto rc = check_index(index, formulon::kErrorNameCount, "index"); rc != 0) {
     return rc;
   }
   *out_canonical = formulon::kErrorTable[index].display_name;

@@ -1,0 +1,19 @@
+# Names from outside Formulon that public comments quote in backticks: the OOXML
+# file format and the Excel object model. R15.doc treats a listed token as resolved.
+# One token per entry; a Formulon identifier never belongs here.
+ooxml:
+  - activeTab
+  - beginsWith
+  - cellIs
+  - cellXfs
+  - clrScheme
+  - containsText
+  - endsWith
+  - firstSheet
+  - horizontalDpi
+  - nextTo
+  - notContainsText
+  - phoneticPr
+  - topLeftCell
+excel_object_model:
+  - Range.Width

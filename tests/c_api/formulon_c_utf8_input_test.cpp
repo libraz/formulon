@@ -58,7 +58,7 @@ TEST(FormulonCApiUtf8Input, MalformedTextIsRefusedWithTheWorkbookUnchanged) {
     EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, bad, "=1"), kUtf8Error);
     EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, "Name", (std::string("=\"") + bad + "\"").c_str()), kUtf8Error);
     // The diagnostic never echoes the rejected bytes.
-    EXPECT_STREQ(fm_get_last_error_message(), "fm_workbook_set_defined_name: text is not valid UTF-8");
+    EXPECT_STREQ(fm_get_last_error_message(), "text is not valid UTF-8");
   }
   EXPECT_EQ(CellCount(wb), 0U);
   EXPECT_EQ(count_of(fm_workbook_get_sheet_count, wb.handle), 1U);

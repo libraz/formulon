@@ -29,6 +29,7 @@ fm_buffer_destroy
 # -- Sheets ----------------------------------------------------------------------
 fm_workbook_get_sheet_count
 fm_workbook_get_sheet_name
+fm_workbook_get_sheet_index
 fm_workbook_add_sheet
 fm_workbook_move_sheet
 fm_workbook_copy_sheet
@@ -604,6 +605,7 @@ fm_sheet_remove_data_table
 
 # -- Version ---------------------------------------------------------------------
 fm_get_version
+fm_get_version_number
 
 # -- Allocator (host-side scratch buffer plumbing) -------------------------------
 malloc

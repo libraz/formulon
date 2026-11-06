@@ -96,9 +96,9 @@ TEST(FormulonCApiNamedStyles, IndexOutOfRangeReturnsInvalidArgument) {
   fm_cell_xf_t xf{};
   // Index 0 is the seeded `Normal` style; index 1 is past both tables.
   EXPECT_EQ(fm_workbook_get_cell_style_at(wb.handle, 1, &cs),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
   EXPECT_EQ(fm_workbook_get_cell_style_xf(wb.handle, 1, &xf),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
 }
 
 TEST(FormulonCApiNamedStyles, NullArgsReturnBindingNullPointer) {
@@ -338,7 +338,7 @@ TEST(FormulonCApiNamedStyles, RemoveCellStyleRejectsNormalAndUnknownNames) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   EXPECT_EQ(fm_workbook_remove_cell_style(wb.handle, "Normal"), kInvalidArgument);
-  EXPECT_EQ(fm_workbook_remove_cell_style(wb.handle, "Missing"), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_remove_cell_style(wb.handle, "Missing"), FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_workbook_remove_cell_style(nullptr, "Normal"), kNullPointer);
   EXPECT_EQ(fm_workbook_remove_cell_style(wb.handle, nullptr), kNullPointer);
   std::size_t count = 0;

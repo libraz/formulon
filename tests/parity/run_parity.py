@@ -264,7 +264,7 @@ def _normalize_cli(payload: Dict[str, Any]) -> Dict[str, Any]:
 # %.15g canonicalization the CLI's `format_double` uses, keeping the
 # three channels apples-to-apples.
 NPM_RUNNER_SCRIPT = r"""
-import factory from {dist_url};
+import createFormulon from {dist_url};
 const ERROR_CODE_TO_NAME = {error_table};
 function payloadOf(value) {{
   switch (value.kind) {{
@@ -284,13 +284,15 @@ function payloadOf(value) {{
   }}
 }}
 const formula = process.argv[process.argv.length - 1];
-const M = await factory();
-const r = M.evalFormula(formula);
-if (!r.status.ok) {{
-  process.stderr.write('npm-channel: status not ok: ' + JSON.stringify(r.status) + '\n');
+const M = await createFormulon();
+let value;
+try {{
+  value = M.evalFormula(formula);
+}} catch (e) {{
+  process.stderr.write('npm-channel: evalFormula failed: ' + e.name + ' ' + e.code + ': ' + e.message + '\n');
   process.exit(2);
 }}
-process.stdout.write(JSON.stringify(payloadOf(r.value)) + '\n');
+process.stdout.write(JSON.stringify(payloadOf(value)) + '\n');
 """
 
 

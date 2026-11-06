@@ -107,29 +107,28 @@ fm_status_t slicer_item(const fm_workbook_t* handle, size_t sheet, size_t index,
 
 emscripten::val JsWorkbook::listSlicers(uint32_t sheet) const {
   emscripten::val arr = emscripten::val::array();
-  arr.set("status", status_from_rc(js_collect_list(handle_, sheet, &fm_sheet_get_slicer_count, &slicer_item, arr)));
+  if (!succeeded(js_collect_list(handle_, sheet, &fm_sheet_get_slicer_count, &slicer_item, arr))) {
+    return emscripten::val::undefined();
+  }
   return arr;
 }
 
-emscripten::val JsWorkbook::addSlicer(uint32_t sheet, uint32_t table, uint32_t column, emscripten::val spec) {
-  emscripten::val o = emscripten::val::object();
-  o.set("objectId", 0U);
+uint32_t JsWorkbook::addSlicer(uint32_t sheet, uint32_t table, uint32_t column, emscripten::val spec) {
   if (handle_ == nullptr) {
-    o.set("status", invalid_handle_status());
-    return o;
+    record_invalid_handle();
+    return 0U;
   }
   JsNarrowNumericReader reader("addSlicer");
   SlicerText store;
   const fm_slicer_t slicer = pull_slicer(reader, spec, store);
   if (!reader.ok()) {
-    o.set("status", reader.failure());
-    return o;
+    return 0U;
   }
   uint32_t id = 0;
-  const fm_status_t rc = fm_sheet_add_slicer(handle_, sheet, table, column, &slicer, &id);
-  o.set("objectId", rc == 0 ? id : 0U);
-  o.set("status", status_from_rc(rc));
-  return o;
+  if (!succeeded(fm_sheet_add_slicer(handle_, sheet, table, column, &slicer, &id))) {
+    return 0U;
+  }
+  return id;
 }
 
 emscripten::val JsWorkbook::getSlicer(uint32_t sheet, uint32_t objectId) const {
@@ -137,24 +136,25 @@ emscripten::val JsWorkbook::getSlicer(uint32_t sheet, uint32_t objectId) const {
   int32_t present = 0;
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_slicer(handle_, sheet, objectId, &present, &s) : kBindingInvalidHandle;
-  return optional_result(rc, present, rc == 0 && present != 0 ? slicer_to_val(s) : emscripten::val::null());
+  return optional_or_null(rc, present, rc == 0 && present != 0 ? slicer_to_val(s) : emscripten::val::null());
 }
 
-JsStatus JsWorkbook::updateSlicer(uint32_t sheet, uint32_t objectId, emscripten::val spec) {
+void JsWorkbook::updateSlicer(uint32_t sheet, uint32_t objectId, emscripten::val spec) {
   if (handle_ == nullptr) {
-    return invalid_handle_status();
+    record_invalid_handle();
+    return;
   }
   JsNarrowNumericReader reader("updateSlicer");
   SlicerText store;
   const fm_slicer_t slicer = pull_slicer(reader, spec, store);
   if (!reader.ok()) {
-    return reader.failure();
+    return;
   }
-  return status_from_rc(fm_sheet_update_slicer(handle_, sheet, objectId, &slicer));
+  succeeded(fm_sheet_update_slicer(handle_, sheet, objectId, &slicer));
 }
 
-JsStatus JsWorkbook::removeSlicer(uint32_t sheet, uint32_t objectId) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_slicer(handle_, sheet, objectId) : kBindingInvalidHandle);
+void JsWorkbook::removeSlicer(uint32_t sheet, uint32_t objectId) {
+  succeeded(handle_ != nullptr ? fm_sheet_remove_slicer(handle_, sheet, objectId) : kBindingInvalidHandle);
 }
 
 }  // namespace parts

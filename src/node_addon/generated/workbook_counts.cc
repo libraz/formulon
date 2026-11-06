@@ -15,21 +15,21 @@ namespace formulon_node {
 Napi::Value Workbook::SheetCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+    return ThrowInvalidHandle(env);
   }
   std::size_t count = 0;
   const fm_status_t rc = fm_workbook_get_sheet_count(handle_, &count);
-  return MakeNumberResult(env, rc, static_cast<double>(count));
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
 }
 
 Napi::Value Workbook::TableCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+    return ThrowInvalidHandle(env);
   }
   std::size_t count = 0;
   const fm_status_t rc = fm_workbook_get_table_count(handle_, &count);
-  return MakeNumberResult(env, rc, static_cast<double>(count));
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
 }
 
 }  // namespace formulon_node

@@ -67,7 +67,7 @@ class PackageDiagnosticsTests(unittest.TestCase):
     def test_unknown_save_format_raises_formulon_error(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(formulon.FormulonError) as ctx:
-                wb.save_with_diagnostics(WorkbookFormat.UNKNOWN)
+                wb.save_with_diagnostics(format=WorkbookFormat.UNKNOWN)
             self.assertIn("unsupported format", str(ctx.exception))
 
     def test_save_and_read_diagnostics_report_every_counter(self) -> None:
@@ -91,7 +91,7 @@ class PackageDiagnosticsTests(unittest.TestCase):
                 ),
             )
 
-            xlsx = wb.save_with_diagnostics(WorkbookFormat.XLSX)
+            xlsx = wb.save_with_diagnostics(format=WorkbookFormat.XLSX)
             self.assertIsInstance(xlsx, SaveDiagnostics)
             self.assertIsInstance(xlsx.bytes, bytes)
             self.assertEqual(xlsx.downgraded_formula_count, 0)
@@ -100,15 +100,15 @@ class PackageDiagnosticsTests(unittest.TestCase):
             self.assertEqual(xlsx.dropped_relationship_count, 0)
             self.assertEqual(xlsx.renumbered_part_count, 0)
 
-            xlsb = wb.save_with_diagnostics(WorkbookFormat.XLSB)
+            xlsb = wb.save_with_diagnostics(format=WorkbookFormat.XLSB)
             self.assertEqual(xlsb.downgraded_formula_count, 1)
             # The validation and the CF rule (no dxf) are both written.
             self.assertEqual(xlsb.deferred_feature_count, 0)
             # The binary writer never reassigns a part id.
             self.assertEqual(xlsb.renumbered_part_count, 0)
 
-            # `save_as` remains a plain bytes return value.
-            self.assertIsInstance(wb.save_as(WorkbookFormat.XLSB), bytes)
+            # `save` remains a plain bytes return value.
+            self.assertIsInstance(wb.save(format=WorkbookFormat.XLSB), bytes)
 
             with Workbook.load(xlsb.bytes) as loaded:
                 read = loaded.get_diagnostics()
@@ -143,7 +143,7 @@ class PackageDiagnosticsTests(unittest.TestCase):
                 mock.patch.object(formulon.workbook.LIB, "free", wraps=formulon.workbook.LIB.free) as free,
             ):
                 with self.assertRaises(RuntimeError):
-                    wb.save_with_diagnostics(WorkbookFormat.XLSB)
+                    wb.save_with_diagnostics(format=WorkbookFormat.XLSB)
             self.assertEqual(free.call_count, 1)
 
 

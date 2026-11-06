@@ -67,9 +67,8 @@ formulon::Arena make_eval_arena() {
   return formulon::Arena(/*initial_chunk_bytes=*/4096, formulon::kMaxEvalArenaBytes);
 }
 
-fm_status_t arena_exhausted_error(const char* api) {
-  return set_binding_error(formulon::FormulonErrorCode::kOutOfMemory,
-                           (std::string(api) + ": evaluation arena exhausted").c_str());
+fm_status_t arena_exhausted_error() {
+  return set_binding_error(formulon::FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted");
 }
 
 }  // namespace
@@ -78,15 +77,15 @@ extern "C" fm_status_t fm_sheet_evaluate_formula(const fm_workbook_t* wb, size_t
                                                  uint32_t col, const char* formula, fm_value_t* out) {
   clear_last_error();
   if (out == nullptr || formula == nullptr) {
-    return null_argument("fm_sheet_evaluate_formula");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_evaluate_formula"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_rect(row, col, row, col, "fm_sheet_evaluate_formula"); rc != 0) {
+  if (auto rc = check_sheet_rect(row, col, row, col); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8("fm_sheet_evaluate_formula", {formula}); rc != 0) {
+  if (auto rc = check_utf8({formula}); rc != 0) {
     return rc;
   }
   // The arena backs any text payload in the result until it is copied into
@@ -99,7 +98,7 @@ extern "C" fm_status_t fm_sheet_evaluate_formula(const fm_workbook_t* wb, size_t
   const formulon::Value v = formulon::eval::evaluate_formula_text(
       wb->workbook(), wb->workbook().sheet(sheet_index), row, col, text, arena, formulon::eval::default_registry());
   if (arena.exhausted()) {
-    return arena_exhausted_error("fm_sheet_evaluate_formula");
+    return arena_exhausted_error();
   }
   // Returned text pointers stay valid only until the next read (see
   // `fm_sheet_get_value`).
@@ -112,15 +111,15 @@ extern "C" fm_status_t fm_sheet_evaluate_formula_array(const fm_workbook_t* wb, 
                                                        uint32_t col, const char* formula, fm_value_array_t** out) {
   clear_last_error();
   if (out == nullptr || formula == nullptr) {
-    return null_argument("fm_sheet_evaluate_formula_array");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_evaluate_formula_array"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_rect(row, col, row, col, "fm_sheet_evaluate_formula_array"); rc != 0) {
+  if (auto rc = check_sheet_rect(row, col, row, col); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8("fm_sheet_evaluate_formula_array", {formula}); rc != 0) {
+  if (auto rc = check_utf8({formula}); rc != 0) {
     return rc;
   }
   // The arena backs any text payload in the result until it is deep-copied
@@ -131,7 +130,7 @@ extern "C" fm_status_t fm_sheet_evaluate_formula_array(const fm_workbook_t* wb, 
   const formulon::Value v = formulon::eval::evaluate_formula_text_array(
       wb->workbook(), wb->workbook().sheet(sheet_index), row, col, text, arena, formulon::eval::default_registry());
   if (arena.exhausted()) {
-    return arena_exhausted_error("fm_sheet_evaluate_formula_array");
+    return arena_exhausted_error();
   }
 
   auto result = std::unique_ptr<fm_value_array_t>(new fm_value_array_t{});
@@ -164,7 +163,7 @@ extern "C" fm_status_t fm_value_array_get_dimensions(const fm_value_array_t* arr
                                                      uint32_t* out_cols) {
   clear_last_error();
   if (array == nullptr || out_rows == nullptr || out_cols == nullptr) {
-    return null_argument("fm_value_array_get_dimensions");
+    return null_argument();
   }
   *out_rows = array->rows;
   *out_cols = array->cols;
@@ -174,7 +173,7 @@ extern "C" fm_status_t fm_value_array_get_dimensions(const fm_value_array_t* arr
 extern "C" fm_status_t fm_value_array_get_value_count(const fm_value_array_t* array, size_t* out_count) {
   clear_last_error();
   if (array == nullptr || out_count == nullptr) {
-    return null_argument("fm_value_array_get_value_count");
+    return null_argument();
   }
   *out_count = array->cells.size();
   return 0;
@@ -183,9 +182,9 @@ extern "C" fm_status_t fm_value_array_get_value_count(const fm_value_array_t* ar
 extern "C" fm_status_t fm_value_array_get_value_at(const fm_value_array_t* array, size_t index, fm_value_t* out) {
   clear_last_error();
   if (array == nullptr || out == nullptr) {
-    return null_argument("fm_value_array_get_value_at");
+    return null_argument();
   }
-  if (auto rc = check_index(index, array->cells.size(), "fm_value_array_get_value_at", "index"); rc != 0) {
+  if (auto rc = check_index(index, array->cells.size(), "index"); rc != 0) {
     return rc;
   }
   const formulon::Value& cell = array->cells[index];
@@ -205,20 +204,18 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_formula(const fm_workbook_t* wb, siz
                                                     const char* formula, fm_value_t* out) {
   clear_last_error();
   if (out == nullptr || formula == nullptr) {
-    return null_argument("fm_sheet_evaluate_cf_formula");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_evaluate_cf_formula"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_sheet_rect(row, col, row, col, "fm_sheet_evaluate_cf_formula"); rc != 0) {
+  if (auto rc = check_sheet_rect(row, col, row, col); rc != 0) {
     return rc;
   }
-  if (auto rc =
-          check_sheet_rect(anchor_row, anchor_col, anchor_row, anchor_col, "fm_sheet_evaluate_cf_formula: anchor");
-      rc != 0) {
+  if (auto rc = check_sheet_rect(anchor_row, anchor_col, anchor_row, anchor_col); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8("fm_sheet_evaluate_cf_formula", {formula}); rc != 0) {
+  if (auto rc = check_utf8({formula}); rc != 0) {
     return rc;
   }
   formulon::Arena arena = make_eval_arena();
@@ -228,7 +225,7 @@ extern "C" fm_status_t fm_sheet_evaluate_cf_formula(const fm_workbook_t* wb, siz
       formulon::eval::evaluate_cf_formula(wb->workbook(), wb->workbook().sheet(sheet_index), row, col, anchor_row,
                                           anchor_col, text, arena, formulon::eval::default_registry());
   if (arena.exhausted()) {
-    return arena_exhausted_error("fm_sheet_evaluate_cf_formula");
+    return arena_exhausted_error();
   }
   *out = fm_value_t{};
   out->kind = FM_VAL_BOOL;

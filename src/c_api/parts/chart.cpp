@@ -184,13 +184,13 @@ const std::vector<formulon::SheetRect>* ranges_of(const formulon::ChartDataSerie
 }
 
 /// Validates `plot` / `series` against the handle and returns the series.
-fm_status_t find_series(const fm_chart_t* chart, std::size_t plot, std::size_t series, const char* api,
+fm_status_t find_series(const fm_chart_t* chart, std::size_t plot, std::size_t series,
                         const formulon::ChartSeries** out) {
-  if (auto rc = check_index(plot, chart->model.plots.size(), api, "plot"); rc != 0) {
+  if (auto rc = check_index(plot, chart->model.plots.size(), "plot"); rc != 0) {
     return rc;
   }
   const std::vector<formulon::ChartSeries>& list = chart->model.plots[plot].series;
-  if (auto rc = check_index(series, list.size(), api, "series"); rc != 0) {
+  if (auto rc = check_index(series, list.size(), "series"); rc != 0) {
     return rc;
   }
   *out = &list[series];
@@ -230,13 +230,12 @@ std::unique_ptr<fm_chart_data_t> make_data_handle(formulon::ChartData data) {
 extern "C" fm_status_t fm_sheet_get_chart(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                           int32_t* out_present, fm_chart_t** out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_get_chart";
   if (out_present == nullptr || out == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
   *out_present = 0;
   *out = nullptr;
-  if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   auto model = formulon::get_chart(wb->workbook(), sheet_index, object_id);
@@ -262,7 +261,7 @@ extern "C" void fm_chart_destroy(fm_chart_t* chart) {
 extern "C" fm_status_t fm_chart_get_info(const fm_chart_t* chart, fm_chart_info_t* out) {
   clear_last_error();
   if (chart == nullptr || out == nullptr) {
-    return null_argument("fm_chart_get_info");
+    return null_argument();
   }
   const formulon::ChartModel& m = chart->model;
   *out = fm_chart_info_t{};
@@ -312,11 +311,11 @@ namespace {
 
 // Reads `list[idx]` into `*out` after the NULL and range checks shared by the index-list accessors.
 fm_status_t index_list_at(const fm_chart_t* chart, const std::vector<std::uint32_t>* list, size_t idx,
-                          std::uint32_t* out, const char* api) {
+                          std::uint32_t* out) {
   if (chart == nullptr || out == nullptr) {
-    return null_argument(api);
+    return null_argument();
   }
-  if (auto rc = check_index(idx, list->size(), api, "idx"); rc != 0) {
+  if (auto rc = check_index(idx, list->size(), "index"); rc != 0) {
     return rc;
   }
   *out = (*list)[idx];
@@ -327,23 +326,20 @@ fm_status_t index_list_at(const fm_chart_t* chart, const std::vector<std::uint32
 
 extern "C" fm_status_t fm_chart_get_legend_hidden_at(const fm_chart_t* chart, size_t idx, uint32_t* out) {
   clear_last_error();
-  return index_list_at(chart, chart != nullptr ? &chart->model.legend.hidden_series_idx : nullptr, idx, out,
-                       "fm_chart_get_legend_hidden_at");
+  return index_list_at(chart, chart != nullptr ? &chart->model.legend.hidden_series_idx : nullptr, idx, out);
 }
 
 extern "C" fm_status_t fm_chart_get_hidden_category_at(const fm_chart_t* chart, size_t idx, uint32_t* out) {
   clear_last_error();
-  return index_list_at(chart, chart != nullptr ? &chart->model.category_filter : nullptr, idx, out,
-                       "fm_chart_get_hidden_category_at");
+  return index_list_at(chart, chart != nullptr ? &chart->model.category_filter : nullptr, idx, out);
 }
 
 extern "C" fm_status_t fm_chart_get_plot_at(const fm_chart_t* chart, size_t plot, fm_chart_plot_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_get_plot_at";
   if (chart == nullptr || out == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
-  if (auto rc = check_index(plot, chart->model.plots.size(), kApi, "plot"); rc != 0) {
+  if (auto rc = check_index(plot, chart->model.plots.size(), "plot"); rc != 0) {
     return rc;
   }
   const formulon::ChartPlot& p = chart->model.plots[plot];
@@ -369,15 +365,14 @@ extern "C" fm_status_t fm_chart_get_plot_at(const fm_chart_t* chart, size_t plot
 
 extern "C" fm_status_t fm_chart_get_plot_axis_id_at(const fm_chart_t* chart, size_t plot, size_t idx, uint32_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_get_plot_axis_id_at";
   if (chart == nullptr || out == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
-  if (auto rc = check_index(plot, chart->model.plots.size(), kApi, "plot"); rc != 0) {
+  if (auto rc = check_index(plot, chart->model.plots.size(), "plot"); rc != 0) {
     return rc;
   }
   const std::vector<std::uint32_t>& ids = chart->model.plots[plot].axis_ids;
-  if (auto rc = check_index(idx, ids.size(), kApi, "idx"); rc != 0) {
+  if (auto rc = check_index(idx, ids.size(), "index"); rc != 0) {
     return rc;
   }
   *out = ids[idx];
@@ -387,12 +382,11 @@ extern "C" fm_status_t fm_chart_get_plot_axis_id_at(const fm_chart_t* chart, siz
 extern "C" fm_status_t fm_chart_get_series_at(const fm_chart_t* chart, size_t plot, size_t series,
                                               fm_chart_series_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_get_series_at";
   if (chart == nullptr || out == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
   const formulon::ChartSeries* s = nullptr;
-  if (auto rc = find_series(chart, plot, series, kApi, &s); rc != 0) {
+  if (auto rc = find_series(chart, plot, series, &s); rc != 0) {
     return rc;
   }
   *out = fm_chart_series_t{};
@@ -423,19 +417,18 @@ extern "C" fm_status_t fm_chart_get_series_at(const fm_chart_t* chart, size_t pl
 extern "C" fm_status_t fm_chart_get_series_literal_at(const fm_chart_t* chart, size_t plot, size_t series, int32_t role,
                                                       size_t idx, fm_chart_literal_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_get_series_literal_at";
   if (chart == nullptr || out == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
   const formulon::ChartSeries* s = nullptr;
-  if (auto rc = find_series(chart, plot, series, kApi, &s); rc != 0) {
+  if (auto rc = find_series(chart, plot, series, &s); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(role, FM_CHART_ROLE_SIZE, kApi, "role"); rc != 0) {
+  if (auto rc = check_enum_domain(role, FM_CHART_ROLE_SIZE, "role"); rc != 0) {
     return rc;
   }
   const std::vector<formulon::ChartValue>& points = source_of(*s, role)->literal;
-  if (auto rc = check_index(idx, points.size(), kApi, "idx"); rc != 0) {
+  if (auto rc = check_index(idx, points.size(), "index"); rc != 0) {
     return rc;
   }
   const formulon::ChartValue& v = points[idx];
@@ -447,15 +440,14 @@ extern "C" fm_status_t fm_chart_get_series_literal_at(const fm_chart_t* chart, s
 extern "C" fm_status_t fm_chart_get_series_point_at(const fm_chart_t* chart, size_t plot, size_t series, size_t idx,
                                                     fm_chart_point_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_get_series_point_at";
   if (chart == nullptr || out == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
   const formulon::ChartSeries* s = nullptr;
-  if (auto rc = find_series(chart, plot, series, kApi, &s); rc != 0) {
+  if (auto rc = find_series(chart, plot, series, &s); rc != 0) {
     return rc;
   }
-  if (auto rc = check_index(idx, s->points.size(), kApi, "idx"); rc != 0) {
+  if (auto rc = check_index(idx, s->points.size(), "index"); rc != 0) {
     return rc;
   }
   const formulon::ChartPoint& p = s->points[idx];
@@ -472,11 +464,10 @@ extern "C" fm_status_t fm_chart_get_series_point_at(const fm_chart_t* chart, siz
 
 extern "C" fm_status_t fm_chart_get_axis_at(const fm_chart_t* chart, size_t idx, fm_chart_axis_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_get_axis_at";
   if (chart == nullptr || out == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
-  if (auto rc = check_index(idx, chart->model.axes.size(), kApi, "idx"); rc != 0) {
+  if (auto rc = check_index(idx, chart->model.axes.size(), "index"); rc != 0) {
     return rc;
   }
   const formulon::ChartAxis& a = chart->model.axes[idx];
@@ -510,12 +501,11 @@ extern "C" fm_status_t fm_chart_get_axis_at(const fm_chart_t* chart, size_t idx,
 extern "C" fm_status_t fm_sheet_get_chart_data(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                fm_chart_data_t** out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_get_chart_data";
   if (out == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
   *out = nullptr;
-  if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   auto data = formulon::get_chart_data(wb->workbook(), sheet_index, object_id);
@@ -530,20 +520,19 @@ extern "C" fm_status_t fm_sheet_get_chart_preview(const fm_workbook_t* wb, size_
                                                   const fm_chart_preview_overrides_t* overrides,
                                                   fm_chart_data_t** out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_sheet_get_chart_preview";
   if (out != nullptr) {
     *out = nullptr;
   }
   if (out == nullptr || overrides == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8(kApi, {overrides->source}); rc != 0) {
+  if (auto rc = check_utf8({overrides->source}); rc != 0) {
     return rc;
   }
-  PatchReader r(kApi);
+  PatchReader r;
   formulon::ChartPreviewOverrides model;
   if (overrides->source != nullptr) {
     model.source = std::string(overrides->source);
@@ -574,7 +563,7 @@ extern "C" void fm_chart_data_destroy(fm_chart_data_t* data) {
 extern "C" fm_status_t fm_chart_data_get_info(const fm_chart_data_t* data, fm_chart_data_info_t* out) {
   clear_last_error();
   if (data == nullptr || out == nullptr) {
-    return null_argument("fm_chart_data_get_info");
+    return null_argument();
   }
   const formulon::ChartData& d = data->data;
   *out = fm_chart_data_info_t{};
@@ -595,12 +584,11 @@ extern "C" fm_status_t fm_chart_data_get_info(const fm_chart_data_t* data, fm_ch
 extern "C" fm_status_t fm_chart_data_get_category_at(const fm_chart_data_t* data, size_t idx, const char** out_label,
                                                      double* out_value) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_data_get_category_at";
   if (data == nullptr || out_label == nullptr || out_value == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
   const formulon::ChartDataCategories& c = data->data.categories;
-  if (auto rc = check_index(idx, c.labels.size(), kApi, "idx"); rc != 0) {
+  if (auto rc = check_index(idx, c.labels.size(), "index"); rc != 0) {
     return rc;
   }
   *out_label = c.labels[idx].c_str();
@@ -611,12 +599,11 @@ extern "C" fm_status_t fm_chart_data_get_category_at(const fm_chart_data_t* data
 extern "C" fm_status_t fm_chart_data_get_category_level_size(const fm_chart_data_t* data, size_t level,
                                                              size_t* out_count) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_data_get_category_level_size";
   if (data == nullptr || out_count == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
   const std::vector<std::vector<std::string>>& levels = data->data.categories.levels;
-  if (auto rc = check_index(level, levels.size(), kApi, "level"); rc != 0) {
+  if (auto rc = check_index(level, levels.size(), "level"); rc != 0) {
     return rc;
   }
   *out_count = levels[level].size();
@@ -626,15 +613,14 @@ extern "C" fm_status_t fm_chart_data_get_category_level_size(const fm_chart_data
 extern "C" fm_status_t fm_chart_data_get_category_level_at(const fm_chart_data_t* data, size_t level, size_t idx,
                                                            const char** out_label) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_data_get_category_level_at";
   if (data == nullptr || out_label == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
   const std::vector<std::vector<std::string>>& levels = data->data.categories.levels;
-  if (auto rc = check_index(level, levels.size(), kApi, "level"); rc != 0) {
+  if (auto rc = check_index(level, levels.size(), "level"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_index(idx, levels[level].size(), kApi, "idx"); rc != 0) {
+  if (auto rc = check_index(idx, levels[level].size(), "index"); rc != 0) {
     return rc;
   }
   *out_label = levels[level][idx].c_str();
@@ -644,11 +630,10 @@ extern "C" fm_status_t fm_chart_data_get_category_level_at(const fm_chart_data_t
 extern "C" fm_status_t fm_chart_data_get_series_at(const fm_chart_data_t* data, size_t series,
                                                    fm_chart_data_series_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_data_get_series_at";
   if (data == nullptr || out == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
-  if (auto rc = check_index(series, data->data.series.size(), kApi, "series"); rc != 0) {
+  if (auto rc = check_index(series, data->data.series.size(), "series"); rc != 0) {
     return rc;
   }
   const formulon::ChartDataSeries& s = data->data.series[series];
@@ -670,11 +655,10 @@ extern "C" fm_status_t fm_chart_data_get_series_at(const fm_chart_data_t* data, 
 extern "C" fm_status_t fm_chart_data_get_series_points(const fm_chart_data_t* data, size_t series,
                                                        fm_chart_data_points_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_data_get_series_points";
   if (data == nullptr || out == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
-  if (auto rc = check_index(series, data->data.series.size(), kApi, "series"); rc != 0) {
+  if (auto rc = check_index(series, data->data.series.size(), "series"); rc != 0) {
     return rc;
   }
   const fm_chart_data::Points& p = data->points[series];
@@ -691,18 +675,17 @@ extern "C" fm_status_t fm_chart_data_get_series_points(const fm_chart_data_t* da
 extern "C" fm_status_t fm_chart_data_get_range_at(const fm_chart_data_t* data, size_t series, int32_t role, size_t idx,
                                                   fm_sheet_rect_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_data_get_range_at";
   if (data == nullptr || out == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
-  if (auto rc = check_index(series, data->data.series.size(), kApi, "series"); rc != 0) {
+  if (auto rc = check_index(series, data->data.series.size(), "series"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(role, FM_CHART_ROLE_SIZE, kApi, "role"); rc != 0) {
+  if (auto rc = check_enum_domain(role, FM_CHART_ROLE_SIZE, "role"); rc != 0) {
     return rc;
   }
   const std::vector<formulon::SheetRect>& ranges = *ranges_of(data->data.series[series], role);
-  if (auto rc = check_index(idx, ranges.size(), kApi, "idx"); rc != 0) {
+  if (auto rc = check_index(idx, ranges.size(), "index"); rc != 0) {
     return rc;
   }
   const formulon::SheetRect& r = ranges[idx];
@@ -713,12 +696,11 @@ extern "C" fm_status_t fm_chart_data_get_range_at(const fm_chart_data_t* data, s
 extern "C" fm_status_t fm_chart_data_get_axis_title_at(const fm_chart_data_t* data, size_t idx,
                                                        fm_chart_axis_title_text_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_data_get_axis_title_at";
   if (data == nullptr || out == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
   const std::vector<formulon::ChartAxisTitleText>& list = data->data.axis_title_texts;
-  if (auto rc = check_index(idx, list.size(), kApi, "idx"); rc != 0) {
+  if (auto rc = check_index(idx, list.size(), "index"); rc != 0) {
     return rc;
   }
   *out = fm_chart_axis_title_text_t{list[idx].axis_id, list[idx].text.c_str()};
@@ -728,12 +710,11 @@ extern "C" fm_status_t fm_chart_data_get_axis_title_at(const fm_chart_data_t* da
 extern "C" fm_status_t fm_chart_data_get_unresolved_at(const fm_chart_data_t* data, size_t idx,
                                                        fm_chart_unresolved_t* out) {
   clear_last_error();
-  constexpr const char* kApi = "fm_chart_data_get_unresolved_at";
   if (data == nullptr || out == nullptr) {
-    return null_argument(kApi);
+    return null_argument();
   }
   const std::vector<formulon::ChartUnresolved>& list = data->data.unresolved;
-  if (auto rc = check_index(idx, list.size(), kApi, "idx"); rc != 0) {
+  if (auto rc = check_index(idx, list.size(), "index"); rc != 0) {
     return rc;
   }
   *out = fm_chart_unresolved_t{list[idx].series_idx, list[idx].source.c_str(), list[idx].axis_id};

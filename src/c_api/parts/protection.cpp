@@ -53,19 +53,19 @@ formulon::ProtectedRange ToModel(const fm_protected_range_t& range) {
 
 // Every text is UTF-8 and a name is unique per sheet; `skip` is the entry being replaced.
 fm_status_t CheckRange(const std::vector<formulon::ProtectedRange>& ranges, const formulon::ProtectedRange& range,
-                       std::size_t skip, const char* fn) {
-  if (auto rc = check_utf8(fn, {range.name.c_str(), range.password.c_str(), range.algorithm_name.c_str(),
-                                range.hash_value.c_str(), range.salt_value.c_str(), range.security_descriptor.c_str()});
+                       std::size_t skip) {
+  if (auto rc = check_utf8({range.name.c_str(), range.password.c_str(), range.algorithm_name.c_str(),
+                            range.hash_value.c_str(), range.salt_value.c_str(), range.security_descriptor.c_str()});
       rc != 0) {
     return rc;
   }
   if (range.name.empty()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, (std::string(fn) + ": empty name").c_str());
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "empty name");
   }
   for (std::size_t i = 0; i < ranges.size(); ++i) {
     if (i != skip && ranges[i].name == range.name) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               (std::string(fn) + ": name already in use").c_str(), "name=" + range.name);
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "name already in use",
+                               "name=" + range.name);
     }
   }
   return 0;
@@ -76,7 +76,7 @@ fm_status_t CheckRange(const std::vector<formulon::ProtectedRange>& ranges, cons
 extern "C" fm_status_t fm_workbook_get_workbook_protection(const fm_workbook_t* wb, fm_workbook_protection_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return null_argument("fm_workbook_get_workbook_protection");
+    return null_argument();
   }
   const formulon::WorkbookProtection p =
       formulon::io::parse_workbook_protection(wb->workbook().workbook_protection_xml());
@@ -101,13 +101,12 @@ extern "C" fm_status_t fm_workbook_set_workbook_protection(fm_workbook_t* wb,
                                                            const fm_workbook_protection_t* protection) {
   clear_last_error();
   if (wb == nullptr || protection == nullptr) {
-    return null_argument("fm_workbook_set_workbook_protection");
+    return null_argument();
   }
-  if (auto rc = check_utf8(
-          "fm_workbook_set_workbook_protection",
-          {protection->workbook_password, protection->workbook_algorithm_name, protection->workbook_hash_value,
-           protection->workbook_salt_value, protection->revisions_password, protection->revisions_algorithm_name,
-           protection->revisions_hash_value, protection->revisions_salt_value});
+  if (auto rc = check_utf8({protection->workbook_password, protection->workbook_algorithm_name,
+                            protection->workbook_hash_value, protection->workbook_salt_value,
+                            protection->revisions_password, protection->revisions_algorithm_name,
+                            protection->revisions_hash_value, protection->revisions_salt_value});
       rc != 0) {
     return rc;
   }
@@ -134,10 +133,9 @@ extern "C" fm_status_t fm_sheet_get_protected_range_count(const fm_workbook_t* w
                                                           size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_protected_range_count: NULL out_count");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out_count is NULL");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_protected_range_count"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   *out_count = formulon::io::read_protected_ranges(wb->workbook().sheet(sheet_index).raw_extensions()).size();
@@ -148,14 +146,13 @@ extern "C" fm_status_t fm_sheet_get_protected_range(const fm_workbook_t* wb, siz
                                                     fm_protected_range_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_get_protected_range: NULL out");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "out is NULL");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_protected_range"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const auto ranges = formulon::io::read_protected_ranges(wb->workbook().sheet(sheet_index).raw_extensions());
-  if (auto rc = check_index(index, ranges.size(), "fm_sheet_get_protected_range", "index"); rc != 0) {
+  if (auto rc = check_index(index, ranges.size(), "index"); rc != 0) {
     return rc;
   }
   const formulon::ProtectedRange& r = ranges[index];
@@ -178,19 +175,18 @@ extern "C" fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sh
                                                     const fm_protected_range_t* range, size_t* out_index) {
   clear_last_error();
   if (range == nullptr || out_index == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_add_protected_range: NULL argument");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "a required argument is NULL");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_add_protected_range"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_rect_list(range->ranges, range->range_count, "fm_sheet_add_protected_range"); rc != 0) {
+  if (auto rc = check_rect_list(range->ranges, range->range_count); rc != 0) {
     return rc;
   }
   formulon::WorksheetRawExtensions& raw = wb->workbook().sheet(sheet_index).mutable_raw_extensions();
   auto ranges = formulon::io::read_protected_ranges(raw);
   formulon::ProtectedRange added = ToModel(*range);
-  if (auto rc = CheckRange(ranges, added, ranges.size(), "fm_sheet_add_protected_range"); rc != 0) {
+  if (auto rc = CheckRange(ranges, added, ranges.size()); rc != 0) {
     return rc;
   }
   ranges.push_back(std::move(added));
@@ -203,22 +199,21 @@ extern "C" fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t
                                                        const fm_protected_range_t* range) {
   clear_last_error();
   if (range == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_update_protected_range: NULL range");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "range is NULL");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_update_protected_range"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   formulon::WorksheetRawExtensions& raw = wb->workbook().sheet(sheet_index).mutable_raw_extensions();
   auto ranges = formulon::io::read_protected_ranges(raw);
-  if (auto rc = check_index(index, ranges.size(), "fm_sheet_update_protected_range", "index"); rc != 0) {
+  if (auto rc = check_index(index, ranges.size(), "index"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_rect_list(range->ranges, range->range_count, "fm_sheet_update_protected_range"); rc != 0) {
+  if (auto rc = check_rect_list(range->ranges, range->range_count); rc != 0) {
     return rc;
   }
   formulon::ProtectedRange updated = ToModel(*range);
-  if (auto rc = CheckRange(ranges, updated, index, "fm_sheet_update_protected_range"); rc != 0) {
+  if (auto rc = CheckRange(ranges, updated, index); rc != 0) {
     return rc;
   }
   ranges[index] = std::move(updated);
@@ -228,12 +223,12 @@ extern "C" fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t
 
 extern "C" fm_status_t fm_sheet_remove_protected_range(fm_workbook_t* wb, size_t sheet_index, size_t index) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_remove_protected_range"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   formulon::WorksheetRawExtensions& raw = wb->workbook().sheet(sheet_index).mutable_raw_extensions();
   auto ranges = formulon::io::read_protected_ranges(raw);
-  if (auto rc = check_index(index, ranges.size(), "fm_sheet_remove_protected_range", "index"); rc != 0) {
+  if (auto rc = check_index(index, ranges.size(), "index"); rc != 0) {
     return rc;
   }
   ranges.erase(ranges.begin() + static_cast<std::ptrdiff_t>(index));

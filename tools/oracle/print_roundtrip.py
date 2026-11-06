@@ -240,7 +240,7 @@ def author_case(case: Dict[str, Any], *, module: Any) -> bytes:
             sheet = int(sheet_key)
 
         _apply_print_settings(wb, sheet, spec)
-        return wb.save_as(module.WorkbookFormat.XLSX)
+        return wb.save(format=module.WorkbookFormat.XLSX)
 
 
 def input_path(cases_dir: Path, suite: str, case_id: str) -> Path:

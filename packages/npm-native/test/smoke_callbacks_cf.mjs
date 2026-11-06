@@ -3,104 +3,91 @@ import { assert, getModule } from './smoke_support.mjs';
 
 test('setIterativeProgress accepts a function and accepts null to clear', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   // Registration roundtrip; we don't assert the callback fires because
   // a non-iterative recalc never invokes the trampoline. The smoke
   // signal we want is "the addon does not crash on register / clear".
   const cb = () => true;
-  const reg = wb.setIterativeProgress(cb);
-  assert.ok(reg.ok, `setIterativeProgress(fn): ${JSON.stringify(reg)}`);
-  const clr = wb.setIterativeProgress(null);
-  assert.ok(clr.ok, `setIterativeProgress(null): ${JSON.stringify(clr)}`);
+  wb.setIterativeProgress(cb);
+  wb.setIterativeProgress(null);
 });
 
 test('setIterativeProgress keeps callbacks isolated per Workbook', async () => {
   const mod = await getModule();
-  const first = mod.Workbook.createDefault().value;
-  const second = mod.Workbook.createDefault().value;
+  const first = mod.Workbook.createDefault();
+  const second = mod.Workbook.createDefault();
   let firstCalls = 0;
   let secondCalls = 0;
 
   for (const wb of [first, second]) {
-    assert.ok(wb.setIterative(true, 10, 0.001).ok);
-    assert.ok(wb.setFormula(0, 0, 0, '=(A1+10)/2').ok);
+    wb.setIterative(true, 10, 0.001);
+    wb.setFormula(0, 0, 0, '=(A1+10)/2');
   }
-  assert.ok(
-    first.setIterativeProgress(() => {
-      firstCalls += 1;
-      return true;
-    }).ok,
-  );
-  assert.ok(
-    second.setIterativeProgress(() => {
-      secondCalls += 1;
-      return true;
-    }).ok,
-  );
+  first.setIterativeProgress(() => {
+    firstCalls += 1;
+    return true;
+  });
+  second.setIterativeProgress(() => {
+    secondCalls += 1;
+    return true;
+  });
 
-  assert.ok(first.recalc().ok);
+  first.recalc();
   assert.ok(firstCalls > 0);
   assert.equal(secondCalls, 0);
 });
 
 test('dispose is rejected while this workbook is executing its progress callback', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
-  assert.ok(wb.setIterative(true, 10, 0.001).ok);
-  assert.ok(wb.setFormula(0, 0, 0, '=(A1+10)/2').ok);
+  const wb = mod.Workbook.createDefault();
+  wb.setIterative(true, 10, 0.001);
+  wb.setFormula(0, 0, 0, '=(A1+10)/2');
   let calls = 0;
-  assert.ok(
-    wb.setIterativeProgress(() => {
-      calls += 1;
-      assert.throws(() => wb.dispose(), /cannot dispose Workbook during an active method call/);
-      return true;
-    }).ok,
-  );
-  assert.ok(wb.recalc().ok);
+  wb.setIterativeProgress(() => {
+    calls += 1;
+    assert.throws(() => wb.dispose(), /cannot dispose Workbook during an active method call/);
+    return true;
+  });
+  wb.recalc();
   assert.ok(calls > 0);
-  assert.equal(wb.isValid(), true);
+  assert.equal(wb.disposed, false);
   wb.dispose();
 });
 
-test('evaluateCfRange returns ok envelope with empty cells for a CF-less workbook', async () => {
+test('evaluateCfRange returns an empty list for a CF-less workbook', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   // The default workbook has no CF rules, so the call should succeed
   // and return an empty cell list. NaN disables `TimePeriod` rules.
   const r = wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 4 }, Number.NaN);
-  assert.ok(r.status.ok, `evaluateCfRange: ${JSON.stringify(r.status)}`);
-  assert.ok(Array.isArray(r.cells));
-  assert.equal(r.cells.length, 0);
+  assert.ok(Array.isArray(r));
+  assert.equal(r.length, 0);
 });
 
 test('evaluateCfRange requires todaySerial; NaN disables timePeriod rules', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   // timePeriod rule (type 15) for "today" (period 0) over A1. The cell
   // holds the serial for 1899-12-30, which a 0.0 basis would match.
-  assert.ok(wb.setNumber(0, 0, 0, 0).ok);
+  wb.setNumber(0, 0, 0, 0);
   const dxf = wb.addDxf({ font: { bold: true } });
-  assert.ok(dxf.status.ok, JSON.stringify(dxf.status));
-  const add = wb.addCfRule(0, {
+  wb.addCfRule(0, {
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
     type: 15,
     timePeriod: 0,
-    dxfId: dxf.index,
+    dxfId: dxf,
   });
-  assert.ok(add.status.ok, `addConditionalFormat: ${JSON.stringify(add)}`);
-  assert.ok(wb.recalc().ok);
+  wb.recalc();
 
   // todaySerial is required: an omitted one is rejected rather than read as
   // 0, the valid serial for 1899-12-30 that would make the rule match. NaN
   // is the documented disabling value.
   assert.throws(() => wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }), TypeError);
   const explicitNaN = wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, Number.NaN);
-  assert.ok(explicitNaN.status.ok, `evaluateCfRange: ${JSON.stringify(explicitNaN.status)}`);
-  assert.equal(explicitNaN.cells.length, 0);
+  assert.equal(explicitNaN.length, 0);
 
   // A concrete basis of 0 does engage the rule, proving the default is
   // not merely a no-op for this workbook.
   const zeroBasis = wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, 0);
-  assert.ok(zeroBasis.status.ok, `evaluateCfRange: ${JSON.stringify(zeroBasis.status)}`);
-  assert.equal(zeroBasis.cells.length, 1);
+  assert.equal(zeroBasis.length, 1);
 });

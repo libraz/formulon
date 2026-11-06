@@ -18,6 +18,7 @@ WASM = "src/wasm/formulon.d.ts"
 NATIVE = "packages/npm-native/index.d.ts"
 PY_INIT = "packages/python/formulon/__init__.py"
 PY_WORKBOOK = "packages/python/formulon/workbook.py"
+COMMON = "packages/npm/common.mjs"
 
 RECT = (
     "typedef struct {\n  uint32_t first_row;\n  uint32_t first_col;\n  uint32_t last_row;\n  uint32_t last_col;\n"
@@ -28,7 +29,8 @@ RECT = (
 STATIC_RULE_IDS = {
     "R0.coverage", "R1.form", "R1.scope", "R2.verb", "R3.suffix", "R3.keys", "R4.unique", "R5.derive",
     "R5.list", "R6.c", "R6.js", "R6.py", "R7.c.byptr", "R7.c.typedef", "R7.js", "R7.py", "R8.c", "R8.js",
-    "R8.py", "R10.c.doc", "R11.axis", "R11.rect", "R11.multi", "R11.sheet", "R12",
+    "R8.py", "R10.c.doc", "R11.axis", "R11.rect", "R11.multi", "R11.sheet", "R12", "R13.enum", "R14.abbrev",
+    "R16.js", "R17.entry",
 }  # fmt: skip
 
 
@@ -50,7 +52,7 @@ class Fixture:
     def context(self, header: str = "", ledger: dict | None = None, **files: str) -> api_conventions.Context:
         self.count += 1
         root = self.tmp / str(self.count)
-        paths = {"wasm": WASM, "native": NATIVE, "py_init": PY_INIT, "py_workbook": PY_WORKBOOK}
+        paths = {"wasm": WASM, "native": NATIVE, "py_init": PY_INIT, "py_workbook": PY_WORKBOOK, "common": COMMON}
         defaults = {"py_init": "__all__ = []\n"}
         for name, rel in paths.items():
             path = root / rel
@@ -88,7 +90,7 @@ class RegistryTest(unittest.TestCase):
     def test_without_a_ledger_the_bound_rules_are_skipped_visibly(self) -> None:
         ctx = api_conventions.Context("FM_API fm_status_t fm_workbook_sheet_name(const fm_workbook_t* wb);\n")
         bound = {r: fn for r, fn in api_conventions.all_rules().items() if fn.__module__.endswith("_bindings")}
-        self.assertEqual(len(bound), 16)
+        self.assertEqual(len(bound), 20)
         self.assertEqual(api_conventions.collect(ctx, bound), [])
         self.assertTrue(any("no name ledger" in note for note in _SKIPPED))
 
@@ -623,9 +625,9 @@ class ScalarTypeTest(BindingRuleTestBase):
         }
     }
     GOOD_JS = _wb(
-        "  getDate1904(): BoolResult;\n"
-        "  setOrientation(sheet: number, orientation: PageOrientation): Status;\n"
-        "  setFullPrecision(enabled: boolean): Status;\n"
+        "  getDate1904(): boolean;\n"
+        "  setOrientation(sheet: number, orientation: PageOrientation): void;\n"
+        "  setFullPrecision(enabled: boolean): void;\n"
     )
     GOOD_PY = _py_wb(
         "    def get_date1904(self) -> bool: ...\n"
@@ -638,9 +640,9 @@ class ScalarTypeTest(BindingRuleTestBase):
             "",
             self.LEDGER,
             wasm=_wb(
-                "  getDate1904(): NumberResult;\n"
-                "  setOrientation(sheet: number, orientation: number): Status;\n"
-                "  setFullPrecision(enabled: number): Status;\n"
+                "  getDate1904(): number;\n"
+                "  setOrientation(sheet: number, orientation: number): void;\n"
+                "  setFullPrecision(enabled: number): void;\n"
             ),
             native=self.GOOD_JS,
             py_workbook=_py_wb(
@@ -745,7 +747,7 @@ class OptionalBoolTest(BindingRuleTestBase):
         )
         self.assertEqual(hits(ctx, "R6.py"), [("py", "chart_title.set", "title")])
 
-    def test_boolean_lookup_accepts_optional_result_on_js(self) -> None:
+    def test_boolean_lookup_accepts_a_nullable_boolean_on_js(self) -> None:
         py = _py_wb(
             "    def set_flag(self, enabled: bool) -> None: ...\n"
             "    def set_chart_title(self, title: Union[str, None, ChartTitle]) -> None: ...\n"
@@ -754,8 +756,8 @@ class OptionalBoolTest(BindingRuleTestBase):
         head = (
             "  setFlag(enabled?: boolean): Status;\n  setChartTitle(title: string | null | { kind: number }): Status;\n"
         )
-        good = _wb(head + "  getCommentVisible(sheet: number, cell: string): OptionalResult<boolean>;\n")
-        bad = _wb(head + "  getCommentVisible(sheet: number, cell: string): NumberResult;\n")
+        good = _wb(head + "  getCommentVisible(sheet: number, cell: string): boolean | null;\n")
+        bad = _wb(head + "  getCommentVisible(sheet: number, cell: string): number;\n")
         self.assertEqual(
             hits(self.fixture.context("", self.LEDGER, wasm=good, native=good, py_workbook=py), "R6.js"), []
         )
@@ -884,40 +886,67 @@ class ResultShapeTest(BindingRuleTestBase):
             self.HEADER,
             self.LEDGER,
             wasm="export interface Status { readonly ok: boolean; readonly status: number }\n"
-            "export interface StringResult { readonly status: Status; readonly text: string }\n"
+            "export interface StringResult { readonly status: Status; readonly value: string }\n"
             + _wb(
-                "  getSheetName(sheet: number): string;\n"
+                "  getSheetName(sheet: number): StringResult;\n"
                 "  addTable(sheet: number): Status;\n"
-                "  getComment(sheet: number, row: number): Comment | null;\n"
+                "  getComment(sheet: number, row: number): Comment;\n"
             )
             + "export interface WorkbookCtor {\n  load(bytes: Uint8Array): Workbook;\n}\n",
         )
         good = self.fixture.context(
             self.HEADER,
             self.LEDGER,
-            wasm="export interface Status { readonly ok: boolean; readonly code: StatusCode }\n"
-            "export interface StringResult { readonly status: Status; readonly value: string }\n"
+            wasm="export interface Comment { readonly text: string }\n"
             + _wb(
-                "  getSheetName(sheet: number): StringResult;\n"
-                "  addTable(sheet: number): IndexResult;\n"
-                "  getComment(sheet: number, row: number): OptionalResult<Comment>;\n"
+                "  getSheetName(sheet: number): string;\n"
+                "  addTable(sheet: number): number;\n"
+                "  getComment(sheet: number, row: number): Comment | null;\n"
             )
-            + "export interface WorkbookCtor {\n  load(bytes: Uint8Array): OptionalResult<Workbook>;\n}\n",
+            + "export interface WorkbookCtor {\n  load(bytes: Uint8Array): Workbook;\n}\n",
         )
         self.assert_rule(
             "R8.js",
             bad,
             good,
             [
-                ("wasm", "StringResult", "value"),
-                ("wasm", "comment.get", "null"),
-                ("wasm", "comment.get", "result"),
+                ("wasm", "StringResult", "StringResult"),
+                ("wasm", "StringResult", "status"),
+                ("wasm", "comment.get", "optional"),
                 ("wasm", "field.status_code", "code"),
+                ("wasm", "record.status", "Status"),
+                ("wasm", "record.status", "status"),
+                ("wasm", "sheet.get_name", "StringResult"),
                 ("wasm", "sheet.get_name", "result"),
+                ("wasm", "table.add", "Status"),
                 ("wasm", "table.add", "result"),
-                ("wasm", "workbook.load", "result"),
             ],
         )
+
+    def test_r8_js_retires_every_envelope_type_and_status_field(self) -> None:
+        retired = (
+            "Status", "OptionalResult", "ListResult", "StringResult", "NumberResult", "BoolResult", "IndexResult",
+            "ObjectIdResult",
+        )  # fmt: skip
+        for name in retired:
+            ctx = self.fixture.context("", {"entries": {}}, wasm=f"export type {name}<T = void> = T;\n")
+            self.assertEqual(hits(ctx, "R8.js"), [("wasm", name, name)])
+        record = self.fixture.context(
+            "", {"entries": {}}, wasm="export interface SaveDiagnostics { readonly status: number }\n"
+        )
+        self.assertEqual(hits(record, "R8.js"), [("wasm", "SaveDiagnostics", "status")])
+        clean = self.fixture.context(
+            "", {"entries": {}}, wasm="export interface SaveDiagnostics { readonly code: number }\n"
+        )
+        self.assertEqual(hits(clean, "R8.js"), [])
+
+    def test_r8_js_flags_a_retired_type_in_any_return(self) -> None:
+        ctx = self.fixture.context(
+            "",
+            {"entries": {}},
+            wasm=_wb("  recalc(): Status;\n  list(): ListResult<number>;\n  count(): number;\n"),
+        )
+        self.assertEqual(hits(ctx, "R8.js"), [("wasm", "list", "ListResult"), ("wasm", "recalc", "Status")])
 
     def test_r8_py(self) -> None:
         error = (
@@ -976,14 +1005,14 @@ class ResultShapeTest(BindingRuleTestBase):
             return self.fixture.context(
                 self.HEADER,
                 ledger,
-                wasm=_wb("  getComment(sheet: number, row: number): CommentResult;\n"),
+                wasm=_wb("  getComment(sheet: number, row: number): Comment;\n"),
                 py_workbook=_py_wb("    def get_comment(self, sheet: int, row: int) -> Comment: ...\n"),
             )
 
-        self.assertIn(("wasm", "comment.get", "result"), hits(ctx(), "R8.js"))
+        self.assertIn(("wasm", "comment.get", "optional"), hits(ctx(), "R8.js"))
         self.assertIn(("py", "comment.get", "optional"), hits(ctx(), "R8.py"))
         ledger["entries"]["comment.get"]["total"] = "every cell reads as some comment"
-        self.assertNotIn(("wasm", "comment.get", "result"), hits(ctx(), "R8.js"))
+        self.assertNotIn(("wasm", "comment.get", "optional"), hits(ctx(), "R8.js"))
         self.assertNotIn(("py", "comment.get", "optional"), hits(ctx(), "R8.py"))
 
 
@@ -1086,25 +1115,25 @@ class EntryPointTest(BindingRuleTestBase):
     def test_r12(self) -> None:
         enum = "export enum ValueKind { Blank = 0 }\n"
         native_table = "export const ValueKind: Readonly<{ Blank: 0 }>;\n"
-        native_default = "declare const _default: {\n  Workbook: WorkbookCtor;\n  ValueKind: typeof ValueKind;\n};\n"
         bad = self.fixture.context(
             "",
             self.LEDGER,
             wasm=enum
-            + _wb("  addCellStyleXf(): Status;\n  delete(): void;\n")
-            + "export interface FormulonModule {\n  Workbook: WorkbookCtor;\n  evalFormula(f: string): EvalResult;\n}\n",
-            native=native_table + _wb("  getMemoryUsage(): number;\n") + native_default,
+            + _wb("  addCellStyleXf(): void;\n  delete(): void;\n")
+            + "export interface Formulon {\n  Workbook: WorkbookCtor;\n  evalFormula(f: string): number;\n}\n",
+            native=native_table
+            + _wb("  getMemoryUsage(): number;\n")
+            + "export interface Formulon {\n  Workbook: WorkbookCtor;\n  ValueKind: typeof ValueKind;\n}\n",
         )
         good = self.fixture.context(
             "",
             self.LEDGER,
             wasm=enum
-            + _wb("  addCellStyleXf(): Status;\n")
-            + "export interface FormulonModule {\n  ValueKind: typeof ValueKind;\n  evalFormula(f: string): EvalResult;\n}\n",
+            + _wb("  addCellStyleXf(): void;\n")
+            + "export interface Formulon {\n  ValueKind: typeof ValueKind;\n  evalFormula(f: string): number;\n}\n",
             native=native_table
-            + _wb("  addCellStyleXf(): Status;\n  getMemoryUsage(): number;\n")
-            + "export function evalFormula(f: string): EvalResult;\n"
-            + native_default,
+            + _wb("  addCellStyleXf(): void;\n  getMemoryUsage(): number;\n")
+            + "export interface Formulon {\n  ValueKind: typeof ValueKind;\n  evalFormula(f: string): number;\n}\n",
         )
         self.assert_rule(
             "R12",
@@ -1115,6 +1144,272 @@ class EntryPointTest(BindingRuleTestBase):
                 ("native", "delete", "method"),
                 ("native", "evalFormula", "function"),
                 ("wasm", "ValueKind", "module"),
+            ],
+        )
+
+
+def _value_union(
+    count: int = 8, *, bool_type: str = "boolean", error_type: str = "ErrorCode", tag: str = "readonly"
+) -> str:
+    kinds = ["Blank", "Number", "Bool", "Text", "Error", "Array", "Ref", "Lambda"][:count]
+    fields = {"Number": "number: number", "Bool": f"boolean: {bool_type}", "Text": "text: string"}
+    fields["Error"] = f"errorCode: {error_type}"
+    out = ""
+    for kind in kinds:
+        extra = f"; readonly {fields[kind]}" if kind in fields else ""
+        out += f"export interface {kind}Value {{ {tag} kind: typeof ValueKind.{kind}{extra} }}\n"
+    return out + "export type Value =\n" + "".join(f"  | {kind}Value\n" for kind in kinds).rstrip("\n") + ";\n"
+
+
+class ValueUnionTest(BindingRuleTestBase):
+    def test_r16_js(self) -> None:
+        def ctx(wasm: str, native: str):
+            return self.fixture.context("", None, wasm=wasm, native=native)
+
+        good = ctx(_value_union(), _value_union())
+        bad = ctx(
+            _value_union(7),
+            _value_union(bool_type="number", error_type="number", tag="")
+            + "export interface TextValue2 { readonly kind: typeof ValueKind.Text }\n",
+        )
+        self.assert_rule(
+            "R16.js",
+            bad,
+            good,
+            [
+                ("native", "Value", "BlankValue.kind"),
+                ("native", "Value", "NumberValue.kind"),
+                ("native", "Value", "BoolValue.kind"),
+                ("native", "Value", "TextValue.kind"),
+                ("native", "Value", "ErrorValue.kind"),
+                ("native", "Value", "ArrayValue.kind"),
+                ("native", "Value", "RefValue.kind"),
+                ("native", "Value", "LambdaValue.kind"),
+                ("wasm", "Value", "union"),
+            ],
+        )
+
+    def test_r16_js_field_types_and_duplicate_kinds(self) -> None:
+        bad = self.fixture.context(
+            "",
+            None,
+            wasm=_value_union(bool_type="number", error_type="number"),
+            native=_value_union().replace("typeof ValueKind.Ref", "typeof ValueKind.Array"),
+        )
+        self.assertEqual(
+            hits(bad, "R16.js"),
+            [
+                ("native", "Value", "typeof ValueKind.Array"),
+                ("wasm", "Value", "BoolValue.boolean"),
+                ("wasm", "Value", "ErrorValue.errorCode"),
+            ],
+        )
+
+    def test_a_missing_value_is_reported(self) -> None:
+        ctx = self.fixture.context("", None, wasm="export interface Value { readonly kind: number }\n", native="")
+        self.assertEqual(hits(ctx, "R16.js"), [("native", "Value", "union"), ("wasm", "Value", "union")])
+
+    def test_r7_js_accepts_a_union_of_result_interfaces(self) -> None:
+        ledger = {"entries": {"record.value": {"kind": "record", "role": "result", "js": "Value"}}}
+        good = self.fixture.context("", ledger, wasm=_value_union(), native=_value_union())
+        bad = self.fixture.context("", ledger, wasm="export type Value = number | string;\n", native=_value_union())
+        self.assertEqual(hits(good, "R7.js"), [])
+        self.assertEqual(hits(bad, "R7.js"), [("wasm", "record.value", "interface")])
+
+
+class EntryShapeTest(BindingRuleTestBase):
+    COMMON = (
+        "export const FORMULON_MEMBERS = Object.freeze([\n"
+        "  'Workbook', // factory\n  'ValueKind',\n  'FormulonError',\n  'getVersion',\n]);\n"
+    )
+    GOOD = (
+        "export const ValueKind: Readonly<{ Blank: 0 }>;\n"
+        "export const PIVOT_VALUES_FIELD = -2;\n"
+        "export class FormulonError extends Error { readonly code: number }\n"
+        "export interface Formulon {\n  Workbook: WorkbookCtor;\n  ValueKind: typeof ValueKind;\n"
+        "  FormulonError: typeof FormulonError;\n  getVersion(): string;\n}\n"
+        "export default function createFormulon(opts?: FormulonOptions): Promise<Formulon>;\n"
+    )
+
+    def test_r17_entry(self) -> None:
+        bad_native = (
+            "export const ValueKind: Readonly<{ Blank: 0 }>;\n"
+            "export const Workbook: WorkbookCtor;\n"
+            "export function getVersion(): string;\n"
+            "export class FormulonError extends Error { readonly code: number }\n"
+            "export interface Formulon {\n  Workbook: WorkbookCtor;\n  ValueKind: typeof ValueKind;\n"
+            "  FormulonError: typeof FormulonError;\n  evalFormula(f: string): number;\n}\n"
+        )
+        bad = self.fixture.context("", None, wasm=self.GOOD, native=bad_native, common=self.COMMON)
+        good = self.fixture.context("", None, wasm=self.GOOD, native=self.GOOD, common=self.COMMON)
+        self.assert_rule(
+            "R17.entry",
+            bad,
+            good,
+            [
+                ("native", "Formulon", "evalFormula"),
+                ("native", "Formulon", "getVersion"),
+                ("native", "Workbook", "Workbook"),
+                ("native", "createFormulon", "createFormulon"),
+                ("native", "getVersion", "getVersion"),
+            ],
+        )
+
+    def test_r17_entry_without_a_member_list(self) -> None:
+        ctx = self.fixture.context("", None, wasm=self.GOOD, native=self.GOOD, common="export const X = 1;\n")
+        self.assertEqual(
+            hits(ctx, "R17.entry"),
+            [("native", "Formulon", "FORMULON_MEMBERS"), ("wasm", "Formulon", "FORMULON_MEMBERS")],
+        )
+
+
+class EnumTypeTest(BindingRuleTestBase):
+    def test_r13_enum_js(self) -> None:
+        bad = self.fixture.context(
+            "",
+            None,
+            wasm="export interface ImageInfo { readonly format: number; readonly level: LogLevel }\n"
+            + _wb(
+                "  save(format?: number): Uint8Array;\n"
+                "  setError(sheet: number, errorCode: ErrorCode | number): void;\n"
+                "  setLogMinLevel(level: number): void;\n"
+                "  setRowOutline(sheet: number, row: number, level: number): void;\n"
+                "  setColumnOutline(sheet: number, column: number, level: number): void;\n"
+            ),
+        )
+        good = self.fixture.context(
+            "",
+            None,
+            wasm="export interface ImageInfo { readonly format: ImageFormat; readonly level: LogLevel }\n"
+            + _wb(
+                "  save(format?: WorkbookFormat): Uint8Array;\n"
+                "  setError(sheet: number, errorCode: ErrorCode): void;\n"
+                "  setLogMinLevel(level: LogLevel): void;\n"
+                "  setRowOutline(sheet: number, row: number, level: number): void;\n"
+                "  setColumnOutline(sheet: number, column: number, level: number): void;\n"
+            ),
+        )
+        self.assert_rule(
+            "R13.enum",
+            bad,
+            good,
+            [
+                ("wasm", "ImageInfo", "ImageInfo.format"),
+                ("wasm", "save", "Workbook.save(format)"),
+                ("wasm", "setError", "Workbook.setError(errorCode)"),
+                ("wasm", "setLogMinLevel", "Workbook.setLogMinLevel(level)"),
+            ],
+        )
+
+    def test_r13_enum_py(self) -> None:
+        bad = "@dataclass(frozen=True)\nclass StatusBox:\n    status: int\n    code: int\n\n" + _py_wb(
+            "    def save(self, format: int = 0) -> bytes: ...\n"
+            "    def set_error(self, sheet: int, error_code: ErrorCode | int) -> None: ...\n"
+            "    def set_log_min_level(self, level: Optional[int]) -> None: ...\n"
+            "    def set_row_outline(self, sheet: int, row: int, level: int) -> None: ...\n"
+        )
+        good = "@dataclass(frozen=True)\nclass StatusBox:\n    status: StatusCode\n    code: int\n\n" + _py_wb(
+            "    def save(self, format: WorkbookFormat = WorkbookFormat.XLSX) -> bytes: ...\n"
+            "    def set_error(self, sheet: int, error_code: ErrorCode) -> None: ...\n"
+            "    def set_log_min_level(self, level: LogLevel) -> None: ...\n"
+            "    def set_row_outline(self, sheet: int, row: int, level: int) -> None: ...\n"
+        )
+        init = "__all__ = ['StatusBox']\n"
+        self.assert_rule(
+            "R13.enum",
+            self.fixture.context("", None, py_init=init, py_workbook=bad),
+            self.fixture.context("", None, py_init=init, py_workbook=good),
+            [
+                ("py", "StatusBox", "StatusBox.status"),
+                ("py", "save", "Workbook.save(format)"),
+                ("py", "set_error", "Workbook.set_error(error_code)"),
+                ("py", "set_log_min_level", "Workbook.set_log_min_level(level)"),
+            ],
+        )
+
+
+class AbbreviationTest(BindingRuleTestBase):
+    def test_r14_abbrev_js(self) -> None:
+        bad = self.fixture.context(
+            "",
+            None,
+            wasm="export interface Anchor {\n  readonly fromColOff: number;\n  readonly firstCol: number;\n"
+            "  readonly idx: number;\n}\n"
+            + _wb(
+                "  addColBreak(sheet: number, col: number): void;\n"
+                "  insertCols(sheet: number, pivotIdx: number): void;\n"
+                "  getByIdx(): number;\n"
+                "  setShowRowColHeaders(show: boolean): void;\n"
+                "  addColumnBreak(sheet: number, col: number): void;\n"
+            ),
+        )
+        good = self.fixture.context(
+            "",
+            None,
+            wasm="export interface Anchor { readonly fromColOffset: number; readonly firstCol: number }\n"
+            "export interface View { readonly showRowColHeaders: boolean; readonly colOffsetEmu: number }\n"
+            + _wb(
+                "  addColumnBreak(sheet: number, col: number): void;\n"
+                "  insertColumns(sheet: number, pivotIndex: number): void;\n"
+                "  getByIndex(): number;\n"
+                "  setShowRowColHeaders(show: boolean): void;\n"
+            ),
+        )
+        self.assert_rule(
+            "R14.abbrev",
+            bad,
+            good,
+            [
+                ("wasm", "Anchor", "idx:Anchor.idx"),
+                ("wasm", "Anchor", "off:Anchor.fromColOff"),
+                ("wasm", "addColBreak", "col:Workbook.addColBreak"),
+                ("wasm", "getByIdx", "idx:Workbook.getByIdx"),
+                ("wasm", "insertCols", "col:Workbook.insertCols"),
+                ("wasm", "insertCols", "idx:Workbook.insertCols(pivotIdx)"),
+                ("wasm", "setShowRowColHeaders", "col:Workbook.setShowRowColHeaders"),
+            ],
+        )
+
+    def test_r14_abbrev_py(self) -> None:
+        bad = "@dataclass(frozen=True)\nclass Anchor:\n    from_col_off: int\n    first_col: int\n\n" + _py_wb(
+            "    def add_col_break(self, sheet: int, col: int) -> None: ...\n"
+            "    def get_pivot_idx(self, pivot_idx: int) -> int: ...\n"
+            "    def set_show_row_col_headers(self, show: bool) -> None: ...\n"
+        )
+        good = (
+            "@dataclass(frozen=True)\nclass Anchor:\n    from_col_offset: int\n    first_col: int\n\n"
+            "@dataclass(frozen=True)\nclass View:\n    show_row_col_headers: bool\n\n"
+            + _py_wb(
+                "    def add_column_break(self, sheet: int, col: int) -> None: ...\n"
+                "    def get_pivot_index(self, pivot_index: int) -> int: ...\n"
+                "    def set_show_row_col_headers(self, show: bool) -> None: ...\n"
+            )
+        )
+        init = "__all__ = ['Anchor', 'View']\n"
+        self.assert_rule(
+            "R14.abbrev",
+            self.fixture.context("", None, py_init=init, py_workbook=bad),
+            self.fixture.context("", None, py_init=init, py_workbook=good),
+            [
+                ("py", "Anchor", "off:Anchor.from_col_off"),
+                ("py", "add_col_break", "col:Workbook.add_col_break"),
+                ("py", "get_pivot_idx", "idx:Workbook.get_pivot_idx"),
+                ("py", "get_pivot_idx", "idx:Workbook.get_pivot_idx(pivot_idx)"),
+                ("py", "set_show_row_col_headers", "col:Workbook.set_show_row_col_headers"),
+            ],
+        )
+
+    def test_r4_synonym_for_a_vertical_break_is_the_column_break(self) -> None:
+        decl = "FM_API fm_status_t fm_pagination_get_{}_count(const fm_pagination_t* p, size_t* out_count);\n"
+        bad = self.fixture.context(decl.format("vertical_break"), None, wasm=_wb("  getVerticalBreaks(): number[];\n"))
+        good = self.fixture.context(decl.format("column_break"), None, wasm=_wb("  getColumnBreaks(): number[];\n"))
+        self.assert_rule(
+            "R4.unique",
+            bad,
+            good,
+            [
+                ("c", "fm_pagination_get_vertical_break_count", "vertical_break"),
+                ("wasm", "getVerticalBreaks", "vertical_break"),
             ],
         )
 

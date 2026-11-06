@@ -129,7 +129,7 @@ TEST(FormulonCApiShapes, InsertListUpdateRemoveAndReload) {
   ASSERT_EQ(fm_sheet_remove_shape(again.handle, 0, id), 0);
   ASSERT_EQ(fm_sheet_get_shape_count(again.handle, 0, &count), 0);
   EXPECT_EQ(count, 1U);
-  EXPECT_EQ(fm_sheet_remove_shape(again.handle, 0, id), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_remove_shape(again.handle, 0, id), FM_STATUS_NOT_FOUND);
 }
 
 TEST(FormulonCApiShapes, Validation) {
@@ -158,7 +158,7 @@ TEST(FormulonCApiShapes, Validation) {
   ASSERT_EQ(fm_sheet_get_shape_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 0U);
   fm_shape_t out{};
-  EXPECT_EQ(fm_sheet_get_shape_at(wb.handle, 0, 0, &out), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_shape_at(wb.handle, 0, 0, &out), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_shape_at(wb.handle, 0, 0, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_get_shape_count(wb.handle, 0, nullptr), kBindingNullPointer);
 }
@@ -237,8 +237,8 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
   ASSERT_EQ(fm_sheet_get_sparkline(again.handle, 0, 0, 1, &sp), 0);
   EXPECT_STREQ(sp.formula, "Sheet1!A2:D2");
   EXPECT_STREQ(sp.location, "F2");
-  EXPECT_EQ(fm_sheet_get_sparkline(again.handle, 0, 0, 2, &sp), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_get_sparkline(again.handle, 0, 5, 0, &sp), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_sparkline(again.handle, 0, 0, 2, &sp), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_get_sparkline(again.handle, 0, 5, 0, &sp), FM_STATUS_INDEX_OUT_OF_RANGE);
 
   // Update rewrites the group's modelled fields and keeps its sparklines.
   out.type = FM_SPARKLINE_STACKED;
@@ -264,7 +264,7 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
   ASSERT_EQ(fm_sheet_get_sparkline_group_count(again.handle, 0, &count), 0);
   EXPECT_EQ(count, 1U);
   ASSERT_EQ(fm_sheet_remove_sparkline_group(again.handle, 0, 0), 0);
-  EXPECT_EQ(fm_sheet_remove_sparkline_group(again.handle, 0, 0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_remove_sparkline_group(again.handle, 0, 0), FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiSparklines, Validation) {
@@ -290,10 +290,10 @@ TEST(FormulonCApiSparklines, Validation) {
   size_t count = 5;
   ASSERT_EQ(fm_sheet_get_sparkline_group_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 0U);
-  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 0, &g), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_sparkline_group_sparklines(wb.handle, 0, 0, good, 1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, 0, &g), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_sparkline_group_sparklines(wb.handle, 0, 0, good, 1), FM_STATUS_INDEX_OUT_OF_RANGE);
   fm_sparkline_group_t out{};
-  EXPECT_EQ(fm_sheet_get_sparkline_group(wb.handle, 0, 0, &out), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_sparkline_group(wb.handle, 0, 0, &out), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_sparkline_group(wb.handle, 0, 0, nullptr), kBindingNullPointer);
 }
 

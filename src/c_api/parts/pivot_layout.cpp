@@ -80,22 +80,21 @@ extern "C" fm_status_t fm_sheet_get_pivot_layout(const fm_workbook_t* wb, std::s
                                                  std::size_t pivot_index, fm_pivot_cells_t** out) {
   clear_last_error();
   if (out == nullptr) {
-    return null_argument("fm_sheet_get_pivot_layout");
+    return null_argument();
   }
   *out = nullptr;
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_pivot_layout"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
-  if (auto rc = check_index(pivot_index, sheet.pivot_tables().size(), "fm_sheet_get_pivot_layout", "pivot_index");
-      rc != 0) {
+  if (auto rc = check_index(pivot_index, sheet.pivot_tables().size(), "pivot_index"); rc != 0) {
     return rc;
   }
 
   const formulon::pivot::PivotTable* table = sheet.pivot_tables()[pivot_index].get();
   if (table == nullptr) {
     return set_binding_error(
-        formulon::FormulonErrorCode::kEvalPivotInvalid, "fm_sheet_get_pivot_layout: pivot table entry is NULL",
+        formulon::FormulonErrorCode::kEvalPivotInvalid, "pivot table entry is NULL",
         "sheet_index=" + std::to_string(sheet_index) + " pivot_index=" + std::to_string(pivot_index));
   }
 
@@ -109,8 +108,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_layout(const fm_workbook_t* wb, std::s
   if (!result) {
     const formulon::pivot::PivotCache* cache = wb->workbook().find_pivot_cache(table->pivot_cache_id());
     if (cache == nullptr) {
-      return set_binding_error(formulon::FormulonErrorCode::kEvalPivotMissing,
-                               "fm_sheet_get_pivot_layout: pivot cache not found",
+      return set_binding_error(formulon::FormulonErrorCode::kEvalPivotMissing, "pivot cache not found",
                                "cache_id=" + std::to_string(table->pivot_cache_id()));
     }
     // Calculated fields and items are evaluated through the formula host.
@@ -165,7 +163,7 @@ extern "C" void fm_pivot_cells_destroy(fm_pivot_cells_t* cells) {
 extern "C" fm_status_t fm_pivot_cells_get_cell_count(const fm_pivot_cells_t* cells, std::size_t* out_count) {
   clear_last_error();
   if (cells == nullptr || out_count == nullptr) {
-    return null_argument("fm_pivot_cells_get_cell_count");
+    return null_argument();
   }
   *out_count = cells->cells.size();
   return 0;
@@ -175,7 +173,7 @@ extern "C" fm_status_t fm_pivot_cells_get_bounds(const fm_pivot_cells_t* cells, 
                                                  fm_cell_rect_t* out_rect) {
   clear_last_error();
   if (cells == nullptr || out_present == nullptr || out_rect == nullptr) {
-    return null_argument("fm_pivot_cells_get_bounds");
+    return null_argument();
   }
   *out_rect = fm_cell_rect_t{};
   *out_present = 0;
@@ -191,9 +189,9 @@ extern "C" fm_status_t fm_pivot_cells_get_cell_at(const fm_pivot_cells_t* cells,
                                                   fm_pivot_cell_t* out) {
   clear_last_error();
   if (cells == nullptr || out == nullptr) {
-    return null_argument("fm_pivot_cells_get_cell_at");
+    return null_argument();
   }
-  if (auto rc = check_index(idx, cells->cells.size(), "fm_pivot_cells_get_cell_at", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, cells->cells.size(), "index"); rc != 0) {
     return rc;
   }
   *out = cells->cells[idx];

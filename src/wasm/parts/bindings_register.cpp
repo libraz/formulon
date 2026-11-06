@@ -28,12 +28,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
   using emscripten::value_object;
 
   // ---- Value-object surface ------------------------------------------------
-  value_object<JsStatus>("Status")
-      .field("ok", &JsStatus::ok)
-      .field("code", &JsStatus::code)
-      .field("message", &JsStatus::message)
-      .field("context", &JsStatus::context);
-
   value_object<JsParallelRecalcStats>("ParallelRecalcStats")
       .field("cellsEvaluated", &JsParallelRecalcStats::cellsEvaluated)
       .field("sccsProcessed", &JsParallelRecalcStats::sccsProcessed)
@@ -43,47 +37,20 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .field("workerThreadsStarted", &JsParallelRecalcStats::workerThreadsStarted)
       .field("workerThreadsUsed", &JsParallelRecalcStats::workerThreadsUsed);
 
-  value_object<JsParallelRecalcResult>("ParallelRecalcResult")
-      .field("status", &JsParallelRecalcResult::status)
-      .field("stats", &JsParallelRecalcResult::stats);
+  value_object<JsSaveDiagnostics>("SaveDiagnostics")
+      .field("bytes", &JsSaveDiagnostics::bytes)
+      .field("downgradedFormulaCount", &JsSaveDiagnostics::downgradedFormulaCount)
+      .field("deferredFeatureCount", &JsSaveDiagnostics::deferredFeatureCount)
+      .field("droppedPartCount", &JsSaveDiagnostics::droppedPartCount)
+      .field("droppedRelationshipCount", &JsSaveDiagnostics::droppedRelationshipCount)
+      .field("renumberedPartCount", &JsSaveDiagnostics::renumberedPartCount);
 
-  value_object<JsValue>("Value")
-      .field("kind", &JsValue::kind)
-      .field("number", &JsValue::number)
-      .field("boolean", &JsValue::boolean)
-      .field("text", &JsValue::text)
-      .field("errorCode", &JsValue::errorCode);
-
-  value_object<JsCellResult>("CellResult").field("status", &JsCellResult::status).field("value", &JsCellResult::value);
-
-  value_object<JsEvalResult>("EvalResult").field("status", &JsEvalResult::status).field("value", &JsEvalResult::value);
-
-  value_object<JsSaveResult>("SaveResult").field("status", &JsSaveResult::status).field("bytes", &JsSaveResult::bytes);
-
-  value_object<JsSaveDiagnosticsResult>("SaveDiagnosticsResult")
-      .field("status", &JsSaveDiagnosticsResult::status)
-      .field("bytes", &JsSaveDiagnosticsResult::bytes)
-      .field("downgradedFormulaCount", &JsSaveDiagnosticsResult::downgradedFormulaCount)
-      .field("deferredFeatureCount", &JsSaveDiagnosticsResult::deferredFeatureCount)
-      .field("droppedPartCount", &JsSaveDiagnosticsResult::droppedPartCount)
-      .field("droppedRelationshipCount", &JsSaveDiagnosticsResult::droppedRelationshipCount)
-      .field("renumberedPartCount", &JsSaveDiagnosticsResult::renumberedPartCount);
-
-  value_object<JsReadDiagnosticsResult>("ReadDiagnosticsResult")
-      .field("status", &JsReadDiagnosticsResult::status)
-      .field("undecodedFormulaCount", &JsReadDiagnosticsResult::undecodedFormulaCount)
-      .field("undecodedDefinedNameCount", &JsReadDiagnosticsResult::undecodedDefinedNameCount)
-      .field("undecodedPartCount", &JsReadDiagnosticsResult::undecodedPartCount)
-      .field("skippedFeatureCount", &JsReadDiagnosticsResult::skippedFeatureCount)
-      .field("unknownContentTypeCount", &JsReadDiagnosticsResult::unknownContentTypeCount);
-
-  value_object<JsStringResult>("StringResult")
-      .field("status", &JsStringResult::status)
-      .field("value", &JsStringResult::value);
-
-  value_object<JsNumberResult>("NumberResult")
-      .field("status", &JsNumberResult::status)
-      .field("value", &JsNumberResult::value);
+  value_object<JsReadDiagnostics>("ReadDiagnostics")
+      .field("undecodedFormulaCount", &JsReadDiagnostics::undecodedFormulaCount)
+      .field("undecodedDefinedNameCount", &JsReadDiagnostics::undecodedDefinedNameCount)
+      .field("undecodedPartCount", &JsReadDiagnostics::undecodedPartCount)
+      .field("skippedFeatureCount", &JsReadDiagnostics::skippedFeatureCount)
+      .field("unknownContentTypeCount", &JsReadDiagnostics::unknownContentTypeCount);
 
   // ---- Conditional-format value-objects ------------------------------------
   value_object<JsCfColor>("CfColor")
@@ -131,13 +98,9 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .field("showFormulas", &JsSheetView::showFormulas)
       .field("showOutlineSymbols", &JsSheetView::showOutlineSymbols);
 
-  value_object<JsSheetViewResult>("SheetViewResult")
-      .field("status", &JsSheetViewResult::status)
-      .field("view", &JsSheetViewResult::view);
-
   // @size-budget: 14 KB
-  // Covers the JsSheetProtection value_object, JsSheetProtectionResult,
-  // and the two bridge methods (getSheetProtection / setSheetProtection).
+  // Covers the JsSheetProtection value_object and the two bridge methods
+  // (getSheetProtection / setSheetProtection).
   value_object<JsSheetProtection>("SheetProtection")
       .field("enabled", &JsSheetProtection::enabled)
       .field("algorithmName", &JsSheetProtection::algorithmName)
@@ -162,20 +125,9 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .field("autoFilter", &JsSheetProtection::autoFilter)
       .field("pivotTables", &JsSheetProtection::pivotTables);
 
-  value_object<JsSheetProtectionResult>("SheetProtectionResult")
-      .field("status", &JsSheetProtectionResult::status)
-      .field("protection", &JsSheetProtectionResult::protection);
-
-  value_object<JsAddStyleResult>("IndexResult")
-      .field("status", &JsAddStyleResult::status)
-      .field("index", &JsAddStyleResult::index);
-
-  value_object<JsAddNumFmtResult>("AddNumFmtResult")
-      .field("status", &JsAddNumFmtResult::status)
-      .field("numFmtId", &JsAddNumFmtResult::numFmtId);
-
   // ---- Workbook class ------------------------------------------------------
   class_<JsWorkbook>("Workbook")
+      .property("disposed", &JsWorkbook::disposed)
       .class_function("createDefault", &JsWorkbook::createDefault)
       .class_function("createEmpty", &JsWorkbook::createEmpty)
       .class_function("createForProfile", &JsWorkbook::createForProfile)
@@ -413,7 +365,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getValue", &JsWorkbook::getValue)
       .function("insertColumns", &JsWorkbook::insertColumns)
       .function("insertRows", &JsWorkbook::insertRows)
-      .function("isValid", &JsWorkbook::isValid)
       .function("getLocaleFacts", &JsWorkbook::localeFacts)
       .function("listLocaleErrorNames", &JsWorkbook::listLocaleErrorNames)
       .function("localizeFormula", &JsWorkbook::localizeFormula)
@@ -576,8 +527,13 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("renameSheet", &JsWorkbook::renameSheet)
       .function("renameTableColumn", &JsWorkbook::renameTableColumn)
       .function("save", &JsWorkbook::save)
-      .function("saveAs", &JsWorkbook::saveAs)
+      // Without `format`, the workbook saves as xlsx.
+      .function("save", emscripten::optional_override(
+                            [](const JsWorkbook& self) { return self.save(emscripten::val::undefined()); }))
       .function("saveWithDiagnostics", &JsWorkbook::saveWithDiagnostics)
+      .function("saveWithDiagnostics", emscripten::optional_override([](const JsWorkbook& self) {
+                  return self.saveWithDiagnostics(emscripten::val::undefined());
+                }))
       .function("getDiagnostics", &JsWorkbook::readDiagnostics)
       .function("setBlank", &JsWorkbook::setBlank)
       .function("setBool", &JsWorkbook::setBool)
@@ -684,6 +640,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("setText", &JsWorkbook::setText)
       .function("getSheetCount", &JsWorkbook::sheetCount)
       .function("getSheetName", &JsWorkbook::sheetName)
+      .function("getSheetIndex", &JsWorkbook::getSheetIndex)
       .function("getSpillInfo", &JsWorkbook::spillInfo)
       .function("parseReference", &JsWorkbook::parseReference)
       .function("parseReference", emscripten::optional_override([](const JsWorkbook& self, const std::string& text) {
@@ -706,8 +663,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
   function("getVersion", &version_string);
   function("getStatusName", &status_string);
   function("getErrorDisplayName", &error_display_name);
-  function("getLastErrorMessage", &last_error_message);
-  function("getLastErrorContext", &last_error_context);
   function("setLogMinLevel", &set_log_min_level);
   function("setLogSink", &set_log_sink);
 }

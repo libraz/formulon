@@ -60,8 +60,8 @@ std::size_t table_ref_column_count(std::string_view ref) {
 }
 
 /// The A1 `ref` of a table covering `rect`, which must be ordered and inside the grid.
-fm_status_t table_ref_text(const fm_cell_rect_t& rect, const char* api, std::string* out) {
-  if (auto rc = check_sheet_rect(rect, api); rc != 0) {
+fm_status_t table_ref_text(const fm_cell_rect_t& rect, std::string* out) {
+  if (auto rc = check_sheet_rect(rect); rc != 0) {
     return rc;
   }
   out->clear();
@@ -133,9 +133,9 @@ fm_status_t write_totals_cell(formulon::Workbook& book, const formulon::TableMet
 /// uses as its name or display name, a table part kept verbatim included.
 /// Table names share one case-insensitive namespace.
 fm_status_t check_table_names(const formulon::Workbook& book, std::string_view name, std::string_view display_name,
-                              std::size_t self, const char* api) {
+                              std::size_t self) {
   if (name.empty() || display_name.empty()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, api, "reason=empty table name");
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "table name is empty");
   }
   const auto collides = [name, display_name](const auto& existing) {
     return formulon::strings::case_insensitive_eq(existing.name, name) ||
@@ -149,14 +149,14 @@ fm_status_t check_table_names(const formulon::Workbook& book, std::string_view n
       continue;
     }
     if (collides(tables[i])) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, api,
-                               "reason=table name already exists name=" + std::string(name));
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "table name already exists",
+                               "name=" + std::string(name));
     }
   }
   for (const formulon::io::xlsb::XlsbRetainedTable& retained : formulon::io::xlsb::xlsb_retained_tables(book)) {
     if (collides(retained)) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, api,
-                               "reason=table name already exists name=" + std::string(name));
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "table name already exists",
+                               "name=" + std::string(name));
     }
   }
   return 0;
@@ -285,16 +285,16 @@ extern "C" fm_status_t fm_workbook_get_table(const fm_workbook_t* wb, size_t idx
   clear_last_error();
   if (wb == nullptr || out_name == nullptr || out_display_name == nullptr || out_rect == nullptr ||
       out_sheet_index == nullptr) {
-    return null_argument("fm_workbook_get_table");
+    return null_argument();
   }
   const auto& tables = wb->workbook().tables();
-  if (auto rc = check_index(idx, tables.size(), "fm_workbook_get_table", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, tables.size(), "index"); rc != 0) {
     return rc;
   }
   const std::optional<formulon::MergeRange> rect = formulon::parse_a1_rectangle(tables[idx].ref);
   if (!rect) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_get_table: table ref is not a range", "ref=" + tables[idx].ref);
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "table ref is not a range",
+                             "ref=" + tables[idx].ref);
   }
   *out_name = tables[idx].name.c_str();
   *out_display_name = tables[idx].display_name.c_str();
@@ -311,23 +311,23 @@ extern "C" fm_status_t fm_workbook_add_table(fm_workbook_t* wb, size_t sheet_ind
   clear_last_error();
   if (wb == nullptr || rect == nullptr || name == nullptr || display_name == nullptr || column_names == nullptr ||
       out_index == nullptr) {
-    return null_argument("fm_workbook_add_table");
+    return null_argument();
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_add_table"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
   std::string ref;
-  if (auto rc = table_ref_text(*rect, "fm_workbook_add_table", &ref); rc != 0) {
+  if (auto rc = table_ref_text(*rect, &ref); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8("fm_workbook_add_table", {name, display_name, style_name}); rc != 0) {
+  if (auto rc = check_utf8({name, display_name, style_name}); rc != 0) {
     return rc;
   }
   for (size_t i = 0; i < column_count; ++i) {
     if (column_names[i] == nullptr) {
       continue;
     }
-    if (auto rc = check_utf8(column_names[i], "fm_workbook_add_table", "column", i); rc != 0) {
+    if (auto rc = check_utf8(column_names[i], "column", i); rc != 0) {
       return rc;
     }
   }
@@ -350,9 +350,7 @@ extern "C" fm_status_t fm_workbook_add_table(fm_workbook_t* wb, size_t sheet_ind
   table.style_info = default_style_info(style_name != nullptr ? style_name : "");
   auto added = book.add_table(std::move(table));
   if (!added) {
-    formulon::Error err = added.error();
-    err.message = "fm_workbook_add_table: " + err.message;
-    return formulon::c_api::parts::set_last_error(err);
+    return formulon::c_api::parts::set_last_error(added.error());
   }
   *out_index = added.value();
   return 0;
@@ -362,24 +360,23 @@ extern "C" fm_status_t fm_workbook_update_table(fm_workbook_t* wb, size_t index,
                                                 const char* style_name, int32_t header_row, int32_t totals_row) {
   clear_last_error();
   if (wb == nullptr || rect == nullptr) {
-    return null_argument("fm_workbook_update_table");
+    return null_argument();
   }
   std::string ref;
-  if (auto rc = table_ref_text(*rect, "fm_workbook_update_table", &ref); rc != 0) {
+  if (auto rc = table_ref_text(*rect, &ref); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8("fm_workbook_update_table", {style_name}); rc != 0) {
+  if (auto rc = check_utf8({style_name}); rc != 0) {
     return rc;
   }
   auto& tables = wb->workbook().mutable_tables();
-  if (index >= tables.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_update_table: table index is invalid");
+  if (auto rc = check_index(index, tables.size(), "index"); rc != 0) {
+    return rc;
   }
   formulon::TableMetadata& table = tables[index];
   if (!table.columns.empty() && table_ref_column_count(ref) != table.columns.size()) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_update_table: ref width does not match the table's column count",
+                             "ref width does not match the table's column count",
                              "ref=" + std::string(ref) + " column_count=" + std::to_string(table.columns.size()));
   }
 
@@ -442,12 +439,11 @@ extern "C" fm_status_t fm_workbook_update_table(fm_workbook_t* wb, size_t index,
 extern "C" fm_status_t fm_workbook_remove_table(fm_workbook_t* wb, size_t index) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_remove_table", "wb");
+    return null_argument("wb");
   }
   auto& tables = wb->workbook().mutable_tables();
-  if (index >= tables.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_remove_table: table index out of range");
+  if (auto rc = check_index(index, tables.size(), "index"); rc != 0) {
+    return rc;
   }
   // Capture identity before erasing: a formula naming the removed table now
   // resolves to nothing (Excel surfaces #NAME? / #REF! at the structured
@@ -467,10 +463,10 @@ extern "C" fm_status_t fm_workbook_remove_table(fm_workbook_t* wb, size_t index)
 extern "C" fm_status_t fm_workbook_get_table_info(const fm_workbook_t* wb, size_t index, fm_table_info_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return null_argument("fm_workbook_get_table_info");
+    return null_argument();
   }
   const auto& tables = wb->workbook().tables();
-  if (auto rc = check_index(index, tables.size(), "fm_workbook_get_table_info", "index"); rc != 0) {
+  if (auto rc = check_index(index, tables.size(), "index"); rc != 0) {
     return rc;
   }
   const formulon::TableMetadata& table = tables[index];
@@ -492,14 +488,14 @@ extern "C" fm_status_t fm_workbook_get_table_column(const fm_workbook_t* wb, siz
                                                     fm_table_column_info_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
-    return null_argument("fm_workbook_get_table_column");
+    return null_argument();
   }
   const auto& tables = wb->workbook().tables();
-  if (auto rc = check_index(index, tables.size(), "fm_workbook_get_table_column", "index"); rc != 0) {
+  if (auto rc = check_index(index, tables.size(), "index"); rc != 0) {
     return rc;
   }
   const auto& columns = tables[index].columns;
-  if (auto rc = check_index(column, columns.size(), "fm_workbook_get_table_column", "column"); rc != 0) {
+  if (auto rc = check_index(column, columns.size(), "column"); rc != 0) {
     return rc;
   }
   const formulon::TableColumn& col = columns[column];
@@ -520,13 +516,13 @@ extern "C" fm_status_t fm_workbook_set_table_style_info(fm_workbook_t* wb, size_
                                                         int32_t show_row_stripes, int32_t show_column_stripes) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_set_table_style_info", "wb");
+    return null_argument("wb");
   }
   auto& tables = wb->workbook().mutable_tables();
-  if (auto rc = check_index(index, tables.size(), "fm_workbook_set_table_style_info", "index"); rc != 0) {
+  if (auto rc = check_index(index, tables.size(), "index"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8("fm_workbook_set_table_style_info", {style_name}); rc != 0) {
+  if (auto rc = check_utf8({style_name}); rc != 0) {
     return rc;
   }
   formulon::TableStyleInfo& style = tables[index].style_info;
@@ -543,20 +539,18 @@ extern "C" fm_status_t fm_workbook_rename_table(fm_workbook_t* wb, size_t index,
                                                 const char* display_name) {
   clear_last_error();
   if (wb == nullptr || name == nullptr) {
-    return null_argument("fm_workbook_rename_table");
+    return null_argument();
   }
-  if (auto rc = check_utf8("fm_workbook_rename_table", {name, display_name}); rc != 0) {
+  if (auto rc = check_utf8({name, display_name}); rc != 0) {
     return rc;
   }
   formulon::Workbook& book = wb->workbook();
-  if (auto rc = check_index(index, book.tables().size(), "fm_workbook_rename_table", "index"); rc != 0) {
+  if (auto rc = check_index(index, book.tables().size(), "index"); rc != 0) {
     return rc;
   }
   const std::string next_name = name;
   const std::string next_display_name = display_name != nullptr ? display_name : name;
-  if (auto rc = check_table_names(book, next_name, next_display_name, index,
-                                  "fm_workbook_rename_table: table name is empty or already exists");
-      rc != 0) {
+  if (auto rc = check_table_names(book, next_name, next_display_name, index); rc != 0) {
     return rc;
   }
   return finish_status(book.rename_table(index, next_name, next_display_name));
@@ -566,17 +560,16 @@ extern "C" fm_status_t fm_workbook_rename_table_column(fm_workbook_t* wb, size_t
                                                        const char** out_name) {
   clear_last_error();
   if (wb == nullptr || name == nullptr || out_name == nullptr) {
-    return null_argument("fm_workbook_rename_table_column");
+    return null_argument();
   }
   formulon::Workbook& book = wb->workbook();
-  if (auto rc = check_index(index, book.tables().size(), "fm_workbook_rename_table_column", "index"); rc != 0) {
+  if (auto rc = check_index(index, book.tables().size(), "index"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_index(column, book.tables()[index].columns.size(), "fm_workbook_rename_table_column", "column");
-      rc != 0) {
+  if (auto rc = check_index(column, book.tables()[index].columns.size(), "column"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8("fm_workbook_rename_table_column", {name}); rc != 0) {
+  if (auto rc = check_utf8({name}); rc != 0) {
     return rc;
   }
   auto renamed = book.rename_table_column(index, column, name);
@@ -592,49 +585,44 @@ extern "C" fm_status_t fm_workbook_set_table_column_totals(fm_workbook_t* wb, si
                                                            const char* formula) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_workbook_set_table_column_totals", "wb");
+    return null_argument("wb");
   }
   formulon::Workbook& book = wb->workbook();
   auto& tables = book.mutable_tables();
-  if (auto rc = check_index(index, tables.size(), "fm_workbook_set_table_column_totals", "index"); rc != 0) {
+  if (auto rc = check_index(index, tables.size(), "index"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_index(column, tables[index].columns.size(), "fm_workbook_set_table_column_totals", "column");
-      rc != 0) {
+  if (auto rc = check_index(column, tables[index].columns.size(), "column"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8("fm_workbook_set_table_column_totals", {function, label}); rc != 0) {
+  if (auto rc = check_utf8({function, label}); rc != 0) {
     return rc;
   }
   const std::string_view token = function != nullptr ? function : "none";
   if (find_totals_function(token) == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_set_table_column_totals: unknown totals-row function",
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "unknown totals-row function",
                              "function=" + std::string(token));
   }
   std::string stored_formula;
   if (token == "custom") {
     if (formula == nullptr || formula[0] == '\0') {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "fm_workbook_set_table_column_totals: custom function needs a formula");
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "custom function needs a formula");
     }
     // Entered at the column's totals cell, so `[Qty]` and `[@Qty]` bind to this table.
     const std::optional<formulon::MergeRange> rect = formulon::parse_a1_rectangle(tables[index].ref);
     if (!rect) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "fm_workbook_set_table_column_totals: table ref is not a range",
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "table ref is not a range",
                                "ref=" + tables[index].ref);
     }
     // The stored text drops one '=', so a second one would not survive.
     if (formula[0] == '=' && formula[1] == '=') {
-      return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken,
-                               "fm_workbook_set_table_column_totals: formula does not parse",
+      return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken, "formula does not parse",
                                "column=" + std::to_string(column));
     }
     std::string bound;
-    if (auto rc = check_entered_cell_formula("fm_workbook_set_table_column_totals", wb, tables[index].sheet_index,
-                                             rect->last_row, rect->first_col + static_cast<std::uint32_t>(column),
-                                             formula, "column=" + std::to_string(column), &bound);
+    if (auto rc = check_entered_cell_formula(wb, tables[index].sheet_index, rect->last_row,
+                                             rect->first_col + static_cast<std::uint32_t>(column), formula,
+                                             "column=" + std::to_string(column), &bound);
         rc != 0) {
       return rc;
     }

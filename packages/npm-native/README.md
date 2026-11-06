@@ -32,7 +32,7 @@ Why prefer the native build:
 
 - **Multithreaded recalc**: pthreads are wired in by default through
   the engine's parallel scheduler.
-- **No V8 ↔ WASM heap copies** on `loadBytes` / `save` (the most
+- **No V8 ↔ WASM heap copies** on `load` / `save` (the most
   expensive operations on large workbooks).
 - **Larger workbook capacity**: not bound by the WASM package's 2 GiB
   growth ceiling (`ALLOW_MEMORY_GROWTH` without an explicit
@@ -43,12 +43,12 @@ Why prefer the native build:
 This package exposes the shared `Workbook` surface of the WASM-backed
 `@libraz/formulon` package, all marshalling to the identical C-ABI
 functions. Its TypeScript declarations and its native class table
-register 436 instance methods plus the four static factories. Of those
-instance methods, 435 are shared with WASM; zero remain WASM-only, while
+register 435 instance methods plus the four static factories. Of those
+instance methods, 434 are shared with WASM; zero remain WASM-only, while
 `getMemoryUsage()` is a native-only helper.
-The shared `Workbook` methods use the same status-bearing result envelopes
-and field shapes; switching packages still requires updating the module
-import and validating the target platform's native prebuild. The
+The shared `Workbook` methods take the same arguments, return the same values
+and throw the same `FormulonError`; switching packages still requires updating
+the module import and validating the target platform's native prebuild. The
 declarations are generated from the WASM package's, so the two cannot differ
 in any shared record, type or method.
 
@@ -78,8 +78,7 @@ the [WASM API reference](https://formulon.libraz.net/api/wasm); the rows
 where the packages differ are tabulated in
 [Package surfaces](https://formulon.libraz.net/api/surfaces).
 
-Every top-level function is available both as a named export and on the
-default export object.
+`createFormulon` is both the default export and a named export.
 
 The `prebuild` CI workflow stages a build per supported OS/arch slot into
 `dist/prebuilds/` as a workflow artifact for npm-publish staging; it is not
@@ -101,27 +100,28 @@ To use it directly out of a source checkout, point Node at the staged
 package:
 
 ```bash
-node -e "import('./packages/npm-native/dist/index.mjs').then(m => console.log(m.evalFormula('=1+2')))"
+node -e "import('./packages/npm-native/dist/index.mjs').then(async m => console.log((await m.createFormulon()).evalFormula('=1+2')))"
 ```
 
 ## Usage
 
 ```js
-import { Workbook, evalFormula, ValueKind } from '@libraz/formulon-native';
+import createFormulon from '@libraz/formulon-native';
 
-console.log(evalFormula('=SUM(1,2,3)'));
-// { status: { ok: true, ... }, value: { kind: 1, number: 6, ... } }
+const formulon = await createFormulon();
+console.log(formulon.evalFormula('=SUM(1,2,3)'));
+// { kind: 1, number: 6 }
 
-const wb = Workbook.createDefault().value;
+const wb = formulon.Workbook.createDefault();
 try {
   wb.setFormula(0, 0, 0, '=1+2');
   wb.recalc();
-  const r = wb.getValue(0, 0, 0);
-  if (r.status.ok && r.value.kind === ValueKind.Number) {
-    console.log(r.value.number);  // 3
+  const v = wb.getValue(0, 0, 0);
+  if (v.kind === formulon.ValueKind.Number) {
+    console.log(v.number);  // 3
   }
 } finally {
-  wb.dispose();
+  wb.dispose(); // wb.disposed is now true
 }
 ```
 
@@ -129,16 +129,17 @@ try {
 `wb.recalcParallel(threadCount)`: `threadCount` must be a finite integer;
 `0` auto-detects up to 8 workers, `1` starts no workers, and `2..8` set the
 worker upper bound. Missing, fractional, non-finite, negative, or above-8
-values return a failed status with zeroed stats. The result is `{ status,
-stats }`, where `stats` reports evaluated cells, processed SCCs, parallel and
+values throw `RangeError` or `TypeError`. The result is a
+`ParallelRecalcStats` that reports evaluated cells, processed SCCs, parallel and
 serial steps, cycle recoveries, and started/used worker counts. The five
 64-bit engine counters are exposed as JavaScript `number` values and are exact
 through `Number.MAX_SAFE_INTEGER`.
 
-The `{ status, value }` envelope mirrors the WASM package's contract for
-engine operations. Module loading can throw when the native prebuild is not
-available; after the module loads, fallible engine operations report failure through
-`status`: `{ ok: false, code, message, context }`.
+Failures follow the WASM package's contract. `createFormulon()` rejects when
+the native prebuild is not available. After that, an engine operation that
+cannot complete throws `FormulonError` with `code`, `message` and `context`.
+`instanceof FormulonError` holds for the class this package exports; code that
+also loads `@libraz/formulon` should test `e.name === 'FormulonError'`.
 
 ## Memory accounting
 

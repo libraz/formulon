@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { expectFailure } from './smoke_support.mjs';
 
 const SOURCE_PART = 0;
 const SOURCE_DEFAULT = 1;
@@ -11,7 +12,7 @@ const RESOLUTION_AUTO_CONTEXT = 4;
 const ACCENT1_DEFAULT = 0xff156082;
 
 function withWorkbook(Module, fn) {
-  const wb = Module.Workbook.createDefault().value;
+  const wb = Module.Workbook.createDefault();
   try {
     fn(wb);
   } finally {
@@ -25,7 +26,6 @@ export function registerThemeStyles(Module, test) {
   test('getTheme reports the default theme until a part exists', () => {
     withWorkbook(Module, (wb) => {
       const t = wb.getThemeFonts();
-      assert.ok(t.status.ok);
       assert.equal(t.source, SOURCE_DEFAULT);
       assert.equal(t.colors.length, 12);
       assert.equal(t.colors[4], ACCENT1_DEFAULT);
@@ -39,23 +39,20 @@ export function registerThemeStyles(Module, test) {
   test('setThemeColors / setThemeFonts persist through save and reload', () => {
     withWorkbook(Module, (wb) => {
       const colors = Array.from({ length: 12 }, (_, i) => 0xff101010 + i);
-      assert.ok(wb.setThemeColors(colors).ok);
-      assert.ok(
-        wb.setThemeFonts({
-          majorLatin: 'Arial',
-          majorEastAsian: 'MS Gothic',
-          minorLatin: 'Verdana',
-          minorEastAsian: 'MS Mincho',
-        }).ok,
-      );
+      wb.setThemeColors(colors);
+      wb.setThemeFonts({
+        majorLatin: 'Arial',
+        majorEastAsian: 'MS Gothic',
+        minorLatin: 'Verdana',
+        minorEastAsian: 'MS Mincho',
+      });
       const live = wb.getThemeFonts();
       assert.equal(live.source, SOURCE_PART);
       assert.deepEqual(live.colors, colors);
       assert.equal(live.fonts.majorLatin, 'Arial');
 
       const saved = wb.save();
-      assert.ok(saved.status.ok);
-      const reloaded = Module.Workbook.load(saved.bytes).value;
+      const reloaded = Module.Workbook.load(saved);
       try {
         const t = reloaded.getThemeFonts();
         assert.equal(t.source, SOURCE_PART);
@@ -70,20 +67,19 @@ export function registerThemeStyles(Module, test) {
 
   test('resetTheme returns an edited theme to the default and drops the part', () => {
     withWorkbook(Module, (wb) => {
-      assert.ok(wb.clearTheme().ok);
+      wb.clearTheme();
       assert.equal(wb.getThemeFonts().source, SOURCE_DEFAULT);
       const colors = Array.from({ length: 12 }, (_, i) => 0xff101010 + i);
-      assert.ok(wb.setThemeColors(colors).ok);
+      wb.setThemeColors(colors);
       assert.equal(wb.getThemeFonts().source, SOURCE_PART);
-      assert.ok(wb.clearTheme().ok);
+      wb.clearTheme();
       const t = wb.getThemeFonts();
       assert.equal(t.source, SOURCE_DEFAULT);
       assert.equal(t.colors[4], ACCENT1_DEFAULT);
 
       const saved = wb.save();
-      assert.ok(saved.status.ok);
-      assert.equal(Buffer.from(saved.bytes).includes('xl/theme/theme1.xml'), false);
-      const reloaded = Module.Workbook.load(saved.bytes).value;
+      assert.equal(Buffer.from(saved).includes('xl/theme/theme1.xml'), false);
+      const reloaded = Module.Workbook.load(saved);
       try {
         assert.equal(reloaded.getThemeFonts().source, SOURCE_DEFAULT);
       } finally {
@@ -94,7 +90,7 @@ export function registerThemeStyles(Module, test) {
 
   test('setThemeColors rejects a malformed colour list', () => {
     withWorkbook(Module, (wb) => {
-      assert.equal(wb.setThemeColors([1, 2, 3]).ok, false);
+      assert.throws(() => wb.setThemeColors([1, 2, 3]), TypeError);
       assert.throws(() => wb.setThemeColors(null), TypeError);
     });
   });
@@ -102,7 +98,6 @@ export function registerThemeStyles(Module, test) {
   test('resolveColor reports how each colour was resolved', () => {
     withWorkbook(Module, (wb) => {
       const rgb = wb.resolveColor({ kind: 1, rgb: 0xff123456, theme: 0, tint: 0, indexed: 0 }, CONTEXT_FILL_FG);
-      assert.ok(rgb.status.ok);
       assert.equal(rgb.argb, 0xff123456);
       assert.equal(rgb.resolution, RESOLUTION_EXACT);
 
@@ -110,7 +105,7 @@ export function registerThemeStyles(Module, test) {
       assert.equal(fromDefault.argb, ACCENT1_DEFAULT);
       assert.equal(fromDefault.resolution, RESOLUTION_DEFAULT_THEME);
 
-      assert.ok(wb.setThemeColors(wb.getThemeFonts().colors).ok);
+      wb.setThemeColors(wb.getThemeFonts().colors);
       const lighter = wb.resolveColor(themeSpec(4, 0.4), CONTEXT_FILL_FG);
       assert.equal(lighter.argb, 0xff44b3e1);
       assert.equal(lighter.resolution, RESOLUTION_EXACT);
@@ -126,8 +121,8 @@ export function registerThemeStyles(Module, test) {
       assert.equal(fill.argb, 0xffffffff);
       assert.equal(fill.resolution, RESOLUTION_AUTO_CONTEXT);
 
-      assert.equal(wb.resolveColor(themeSpec(4, Number.NaN), CONTEXT_FONT).status.ok, false);
-      assert.equal(wb.resolveColor(auto, 99).status.ok, false);
+      expectFailure(() => wb.resolveColor(themeSpec(4, Number.NaN), CONTEXT_FONT));
+      expectFailure(() => wb.resolveColor(auto, 99));
     });
   });
 
@@ -151,22 +146,20 @@ export function registerThemeStyles(Module, test) {
         bg: { kind: 4, rgb: 0, theme: 0, tint: 0, indexed: 0 },
       });
       const xf = wb.addCellXf({
-        fontIndex: font.index,
-        fillIndex: fill.index,
+        fontIndex: font,
+        fillIndex: fill,
         borderIndex: 0,
         numFmtId: 14,
         locked: false,
         hidden: true,
       });
-      assert.ok(xf.status.ok, JSON.stringify(xf.status));
-      assert.ok(wb.setCellXfIndex(0, 0, 0, xf.index).ok);
+      wb.setCellXfIndex(0, 0, 0, xf);
 
       const e = wb.getEffectiveStyle(0, 0, 0);
-      assert.ok(e.status.ok);
-      assert.equal(e.xfIndex, xf.index);
+      assert.equal(e.xfIndex, xf);
       assert.equal(e.source, 0);
-      assert.equal(e.fontIndex, font.index);
-      assert.equal(e.fillIndex, fill.index);
+      assert.equal(e.fontIndex, font);
+      assert.equal(e.fillIndex, fill);
       assert.equal(e.font.argb, ACCENT1_DEFAULT);
       assert.equal(e.font.resolution, RESOLUTION_DEFAULT_THEME);
       assert.equal(e.fillForeground.argb, 0xffff0000);
@@ -178,13 +171,12 @@ export function registerThemeStyles(Module, test) {
       assert.equal(e.numFmtCode, 'm/d/yy');
 
       const plain = wb.getEffectiveStyle(0, 5, 5);
-      assert.ok(plain.status.ok);
       assert.equal(plain.source, 3);
       assert.equal(plain.xfIndex, 0);
       assert.equal(plain.locked, true);
       assert.equal(plain.numFmtCode, 'General');
 
-      assert.equal(wb.getEffectiveStyle(99, 0, 0).status.ok, false);
+      expectFailure(() => wb.getEffectiveStyle(99, 0, 0));
     });
   });
 
@@ -192,27 +184,26 @@ export function registerThemeStyles(Module, test) {
     withWorkbook(Module, (wb) => {
       const xfCol = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 14 });
       const xfCell = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 10 });
-      assert.ok(xfCol.status.ok && xfCell.status.ok);
-      assert.ok(wb.setColumnStyle(0, 0, 0, xfCol.index).ok);
-      assert.ok(wb.setCellXfIndex(0, 0, 0, xfCell.index).ok);
+      wb.setColumnStyle(0, 0, 0, xfCol);
+      wb.setCellXfIndex(0, 0, 0, xfCell);
       let e = wb.getEffectiveStyle(0, 0, 0);
       assert.equal(e.source, 0);
-      assert.equal(e.xfIndex, xfCell.index);
+      assert.equal(e.xfIndex, xfCell);
 
-      assert.ok(wb.clearCellXfIndex(0, 0, 0).ok);
+      wb.clearCellXfIndex(0, 0, 0);
       e = wb.getEffectiveStyle(0, 0, 0);
       assert.equal(e.source, 2);
-      assert.equal(e.xfIndex, xfCol.index);
+      assert.equal(e.xfIndex, xfCol);
 
-      assert.ok(wb.setCellXfIndex(0, 0, 0, 0).ok);
+      wb.setCellXfIndex(0, 0, 0, 0);
       e = wb.getEffectiveStyle(0, 0, 0);
       assert.equal(e.source, 0);
       assert.equal(e.xfIndex, 0);
 
-      const before = wb.getCellCount(0).value;
-      assert.ok(wb.clearCellXfIndex(0, 7, 7).ok);
-      assert.equal(wb.getCellCount(0).value, before);
-      assert.equal(wb.clearCellXfIndex(99, 0, 0).ok, false);
+      const before = wb.getCellCount(0);
+      wb.clearCellXfIndex(0, 7, 7);
+      assert.equal(wb.getCellCount(0), before);
+      expectFailure(() => wb.clearCellXfIndex(99, 0, 0));
     });
   });
 
@@ -221,14 +212,12 @@ export function registerThemeStyles(Module, test) {
       const rowXf = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 14 });
       const xfA = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 9 });
       const xfB = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 10 });
-      assert.ok(rowXf.status.ok && xfA.status.ok && xfB.status.ok);
-      assert.ok(wb.setRowStyle(0, 2, 2, rowXf.index).ok);
+      wb.setRowStyle(0, 2, 2, rowXf);
       assert.equal(wb.getEffectiveStyle(0, 2, 1).source, 1);
-      assert.equal(wb.setRowStyle(0, 5, 4, rowXf.index).ok, false);
+      expectFailure(() => wb.setRowStyle(0, 5, 4, rowXf));
 
       const bases = wb.getRangeStyleBases(0, { firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 });
-      assert.ok(bases.status.ok, JSON.stringify(bases.status));
-      assert.ok(bases.xfIndices.includes(0) && bases.xfIndices.includes(rowXf.index));
+      assert.ok(bases.includes(0) && bases.includes(rowXf));
       // Row 2 of a one-column selection is a single cell; excluding it hides the row style.
       const excluded = wb.getRangeStyleBasesExcluding(
         0,
@@ -236,48 +225,38 @@ export function registerThemeStyles(Module, test) {
         [2, 2, 9],
         [1, 1, 9],
       );
-      assert.ok(excluded.status.ok, JSON.stringify(excluded.status));
-      assert.deepEqual(excluded.xfIndices, [0]);
-      assert.equal(
-        wb.getRangeStyleBasesExcluding(0, { firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 }, [2], []).status
-          .ok,
-        false,
+      assert.deepEqual(excluded, [0]);
+      assert.throws(
+        () => wb.getRangeStyleBasesExcluding(0, { firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 }, [2], []),
+        TypeError,
       );
 
       const snap = wb.snapshotRangeStyle(0, { firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 });
-      assert.ok(snap.status.ok && snap.bytes.length > 0);
-      assert.equal(
-        wb.remapRangeStyle(0, { firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 }, [0, rowXf.index], [xfA.index])
-          .ok,
-        false,
+      assert.ok(snap.length > 0);
+      assert.throws(
+        () => wb.remapRangeStyle(0, { firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 }, [0, rowXf], [xfA]),
+        TypeError,
       );
-      assert.ok(
-        wb.remapRangeStyle(
-          0,
-          { firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 },
-          [0, rowXf.index],
-          [xfA.index, xfB.index],
-        ).ok,
-      );
+      wb.remapRangeStyle(0, { firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 1 }, [0, rowXf], [xfA, xfB]);
 
       let e = wb.getEffectiveStyle(0, 2, 1);
       assert.equal(e.source, 0);
-      assert.equal(e.xfIndex, xfB.index);
+      assert.equal(e.xfIndex, xfB);
       e = wb.getEffectiveStyle(0, 2, 2);
       assert.equal(e.source, 1);
-      assert.equal(e.xfIndex, rowXf.index);
+      assert.equal(e.xfIndex, rowXf);
       e = wb.getEffectiveStyle(0, 499, 1);
       assert.equal(e.source, 2);
-      assert.equal(e.xfIndex, xfA.index);
+      assert.equal(e.xfIndex, xfA);
 
-      assert.ok(wb.restoreRangeStyle(0, snap.bytes).ok);
+      wb.restoreRangeStyle(0, snap);
       e = wb.getEffectiveStyle(0, 2, 1);
       assert.equal(e.source, 1);
-      assert.equal(e.xfIndex, rowXf.index);
+      assert.equal(e.xfIndex, rowXf);
       assert.equal(wb.getEffectiveStyle(0, 499, 1).source, 3);
-      assert.equal(wb.restoreRangeStyle(0, new Uint8Array([1, 2, 3])).ok, false);
+      expectFailure(() => wb.restoreRangeStyle(0, new Uint8Array([1, 2, 3])));
 
-      assert.ok(wb.clearRowStyle(0, 2, 2).ok);
+      wb.clearRowStyle(0, 2, 2);
       assert.equal(wb.getEffectiveStyle(0, 2, 2).source, 3);
     });
   });
@@ -286,8 +265,7 @@ export function registerThemeStyles(Module, test) {
     withWorkbook(Module, (wb) => {
       const before = wb.listCellStyles().length;
       const styleXf = wb.addCellStyleXf({ numFmtId: 14 });
-      assert.ok(styleXf.status.ok);
-      assert.ok(wb.setCellStyle({ name: 'Dated', xfId: styleXf.index }).ok);
+      wb.setCellStyle({ name: 'Dated', xfId: styleXf });
       assert.equal(wb.listCellStyles().length, before + 1);
       let found = null;
       for (let i = 0; i < wb.listCellStyles().length; i += 1) {
@@ -295,16 +273,16 @@ export function registerThemeStyles(Module, test) {
         if (cs.name === 'Dated') found = cs;
       }
       assert.ok(found, 'Dated is listed');
-      assert.equal(found.xfId, styleXf.index);
+      assert.equal(found.xfId, styleXf);
       assert.equal(found.builtinId, 0xffffffff);
       assert.equal(found.hidden, false);
 
       // Replacing by name keeps one entry and takes the new flags.
-      assert.ok(wb.setCellStyle({ name: 'Dated', xfId: styleXf.index, hidden: true, customBuiltin: true }).ok);
+      wb.setCellStyle({ name: 'Dated', xfId: styleXf, hidden: true, customBuiltin: true });
       assert.equal(wb.listCellStyles().length, before + 1);
 
       // A built-in ordinal beyond the old 0..47 range round-trips.
-      assert.ok(wb.setCellStyle({ name: 'Normal 2', xfId: 0, builtinId: 53 }).ok);
+      wb.setCellStyle({ name: 'Normal 2', xfId: 0, builtinId: 53 });
       let builtin = null;
       for (let i = 0; i < wb.listCellStyles().length; i += 1) {
         const cs = wb.listCellStyles()[i];
@@ -312,26 +290,24 @@ export function registerThemeStyles(Module, test) {
       }
       assert.equal(builtin.builtinId, 53);
 
-      assert.ok(wb.removeCellStyle('Dated').ok);
+      wb.removeCellStyle('Dated');
       assert.equal(wb.listCellStyles().length, before + 1);
-      assert.equal(wb.removeCellStyle('Dated').ok, false);
+      expectFailure(() => wb.removeCellStyle('Dated'));
     });
   });
 
-  test('createForProfile builds the locale defaults and reports a bad id as an invalid wrapper', () => {
-    const wb = Module.Workbook.createForProfile('mac-365-ja_JP').value;
+  test('createForProfile builds the locale defaults and throws for a bad id', () => {
+    const wb = Module.Workbook.createForProfile('mac-365-ja_JP');
     try {
-      assert.ok(wb.isValid());
-      assert.equal(wb.getExcelProfileId().value, 'mac-365-ja_JP');
+      assert.equal(wb.disposed, false);
+      assert.equal(wb.getExcelProfileId(), 'mac-365-ja_JP');
       const font = wb.getFont(0);
       assert.equal(font.name, '游ゴシック');
       assert.equal(font.size, 12);
     } finally {
       wb.delete();
     }
-    const bad = Module.Workbook.createForProfile('no-such-profile');
-    assert.equal(bad.status.ok, false);
-    assert.equal(bad.value, null);
+    expectFailure(() => Module.Workbook.createForProfile('no-such-profile'));
   });
 
   test('getTheme lists the 47 script faces and setThemeScriptFont round-trips', () => {
@@ -343,10 +319,9 @@ export function registerThemeStyles(Module, test) {
       assert.equal(minor.Jpan, '游ゴシック');
       assert.equal(minor.Hang, '맑은 고딕');
 
-      assert.ok(wb.setThemeScriptFont(false, 'Hang', 'Test Face').ok);
+      wb.setThemeScriptFont(false, 'Hang', 'Test Face');
       const saved = wb.save();
-      assert.ok(saved.status.ok);
-      const reloaded = Module.Workbook.load(saved.bytes).value;
+      const reloaded = Module.Workbook.load(saved);
       try {
         const r = reloaded.getThemeFonts();
         assert.equal(r.minorScripts.length, 47);
@@ -362,8 +337,8 @@ export function registerThemeStyles(Module, test) {
 
   test('setThemeScriptFont rejects an invalid script or empty typeface', () => {
     withWorkbook(Module, (wb) => {
-      assert.equal(wb.setThemeScriptFont(true, 'Jp', 'X').ok, false);
-      assert.equal(wb.setThemeScriptFont(true, 'Jpan', '').ok, false);
+      expectFailure(() => wb.setThemeScriptFont(true, 'Jp', 'X'));
+      expectFailure(() => wb.setThemeScriptFont(true, 'Jpan', ''));
     });
   });
 }

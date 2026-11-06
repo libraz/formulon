@@ -113,8 +113,8 @@ class CollationClassesTests(unittest.TestCase):
             get_collation_classes([_num(float("inf"))], CollationStrength.COMPARE, self.PROFILE)
         with self.assertRaises(FormulonError):
             get_collation_classes([_num(float("nan"))], CollationStrength.COMPARE, self.PROFILE)
-        with self.assertRaises(FormulonError):
-            get_collation_classes([_err(99)], CollationStrength.COMPARE, self.PROFILE)
+        with self.assertRaises(ValueError):
+            _err(99)
 
 
 class CollationMeasuredTests(unittest.TestCase):

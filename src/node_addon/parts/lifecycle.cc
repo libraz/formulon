@@ -1,5 +1,5 @@
 // Workbook lifecycle bindings: calc policy, recalc & save, iterative-solver
-// registration, diagnostics, and the trivial `isValid` predicate.
+// registration, diagnostics, and the `disposed` property.
 
 #include <cmath>
 #include <cstddef>
@@ -12,7 +12,7 @@ namespace formulon_node {
 
 namespace {
 
-Napi::Object MakeParallelRecalcResult(Napi::Env env, Napi::Object status, const fm_parallel_recalc_stats_t& stats) {
+Napi::Object ParallelRecalcStatsToJs(Napi::Env env, const fm_parallel_recalc_stats_t& stats) {
   Napi::Object stats_obj = Napi::Object::New(env);
   // The C ABI counters are uint64_t. The engine's counters are bounded well
   // below Number.MAX_SAFE_INTEGER for a single call, so this conversion is
@@ -24,28 +24,38 @@ Napi::Object MakeParallelRecalcResult(Napi::Env env, Napi::Object status, const 
   stats_obj.Set("cycleRecoveries", Napi::Number::New(env, static_cast<double>(stats.cycle_recoveries)));
   stats_obj.Set("workerThreadsStarted", Napi::Number::New(env, static_cast<double>(stats.worker_threads_started)));
   stats_obj.Set("workerThreadsUsed", Napi::Number::New(env, static_cast<double>(stats.worker_threads_used)));
-
-  Napi::Object result = Napi::Object::New(env);
-  result.Set("status", status);
-  result.Set("stats", stats_obj);
-  return result;
+  return stats_obj;
 }
 
-// Builds `{ status, bytes }` for a save call; `bytes` is null on failure.
-Napi::Object MakeSaveResult(Napi::Env env, fm_status_t rc, uint8_t* buf, std::size_t len) {
+// The saved bytes, or the save's failure; the buffer is released either way.
+Napi::Value SavedBytesOrThrow(Napi::Env env, fm_status_t rc, uint8_t* buf, std::size_t len) {
   if (rc != 0) {
-    return MakeFieldResult(env, MakeErrorStatus(env, rc), "bytes", env.Null());
+    fm_buffer_destroy(buf);
+    return ThrowStatus(env, rc);
   }
-  Napi::Uint8Array dst = TakeSavedBytes(env, buf, len);
-  return MakeFieldResult(env, MakeOkStatus(env), "bytes", dst);
+  return TakeSavedBytes(env, buf, len);
 }
 
+// True when the optional `format` at `info[0]` was omitted.
+bool FormatOmitted(const Napi::CallbackInfo& info) {
+  return info.Length() == 0 || info[0].IsUndefined();
+}
+
+// Reads `threadCount`: a non-number is a TypeError and a non-integer or a
+// value outside uint32 a RangeError. The C ABI rejects a count past its
+// scheduler limit with the value the caller passed.
 bool ReadThreadCount(const Napi::CallbackInfo& info, uint32_t& thread_count) {
-  const double value = NumberArg(info, 0, std::nan(""));
-  if (!std::isfinite(value) || std::trunc(value) != value || value < 0.0 || value > 8.0) {
+  const Napi::Value value = info[0];
+  if (!value.IsNumber()) {
+    Napi::TypeError::New(info.Env(), "positional argument must be a number").ThrowAsJavaScriptException();
     return false;
   }
-  thread_count = static_cast<uint32_t>(value);
+  const double number = NumberValue(value, 0.0);
+  if (!std::isfinite(number) || std::trunc(number) != number || number < 0.0 || number > kUint32MaxNumber) {
+    Napi::RangeError::New(info.Env(), "positional argument is outside uint32 range").ThrowAsJavaScriptException();
+    return false;
+  }
+  thread_count = static_cast<uint32_t>(number);
   return true;
 }
 
@@ -56,33 +66,33 @@ bool ReadThreadCount(const Napi::CallbackInfo& info, uint32_t& thread_count) {
 Napi::Value Workbook::CalcMode(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+    return ThrowInvalidHandle(env);
   }
   std::int32_t mode = FM_CALC_MODE_AUTO;
   const fm_status_t rc = fm_workbook_get_calc_mode(handle_, &mode);
-  return MakeNumberResult(env, rc, mode);
+  return ValueOrThrow(env, rc, Napi::Number::New(env, mode));
 }
 
 Napi::Value Workbook::SetCalcMode(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   const std::int32_t mode = ArgI32(info, 0);
-  fm_status_t rc = fm_workbook_set_calc_mode(handle_, mode);
-  return MakeStatus(env, rc);
+  const fm_status_t rc = fm_workbook_set_calc_mode(handle_, mode);
+  return ValueOrThrow(env, rc, env.Undefined());
 }
 
 namespace {
 
-/// Reads one boolean workbook flag as a `{ status, value }` BoolResult.
+/// Reads one boolean workbook flag.
 Napi::Value FlagResult(Napi::Env env, fm_workbook_t* handle, fm_status_t (*read)(const fm_workbook_t*, int32_t*)) {
   if (handle == nullptr) {
-    return MakeBoolResult(env, kBindingInvalidHandle, 0);
+    return ThrowInvalidHandle(env);
   }
   int32_t value = 0;
   const fm_status_t rc = read(handle, &value);
-  return MakeBoolResult(env, rc, value);
+  return ValueOrThrow(env, rc, JsBool(env, value));
 }
 
 }  // namespace
@@ -108,11 +118,11 @@ Napi::Value Workbook::SetCalcOnSave(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::RefMode(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+    return ThrowInvalidHandle(env);
   }
   std::int32_t mode = FM_REF_MODE_A1;
   const fm_status_t rc = fm_workbook_get_ref_mode(handle_, &mode);
-  return MakeNumberResult(env, rc, mode);
+  return ValueOrThrow(env, rc, Napi::Number::New(env, mode));
 }
 
 Napi::Value Workbook::SetRefMode(const Napi::CallbackInfo& info) {
@@ -130,13 +140,13 @@ Napi::Value Workbook::SetDate1904(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PinnedNow(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeFieldResult(env, NullHandleError(env), "now", env.Null());
+    return ThrowInvalidHandle(env);
   }
   fm_civil_time_t now{};
   std::int32_t pinned = 0;
   const fm_status_t rc = fm_workbook_get_pinned_now(handle_, &now, &pinned);
   if (rc != 0 || pinned == 0) {
-    return MakeFieldResult(env, MakeStatus(env, rc), "now", env.Null());
+    return OptionalOrNull(env, rc, 0, env.Null());
   }
   Napi::Object civil = Napi::Object::New(env);
   civil.Set("year", Napi::Number::New(env, now.year));
@@ -145,13 +155,13 @@ Napi::Value Workbook::PinnedNow(const Napi::CallbackInfo& info) {
   civil.Set("hour", Napi::Number::New(env, now.hour));
   civil.Set("minute", Napi::Number::New(env, now.minute));
   civil.Set("second", Napi::Number::New(env, now.second));
-  return MakeFieldResult(env, MakeOkStatus(env), "now", civil);
+  return civil;
 }
 
 Napi::Value Workbook::SetPinnedNow(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   // The registration guard requires all six as int32; the calendar domain
   // is validated in exactly one place, the C layer.
@@ -160,54 +170,54 @@ Napi::Value Workbook::SetPinnedNow(const Napi::CallbackInfo& info) {
   for (std::size_t index = 0; index < 6; ++index) {
     *fields[index] = ArgI32(info, index);
   }
-  return MakeStatus(env, fm_workbook_set_pinned_now(handle_, &now));
+  return ValueOrThrow(env, fm_workbook_set_pinned_now(handle_, &now), env.Undefined());
 }
 
 Napi::Value Workbook::ClearPinnedNow(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
-  return MakeStatus(env, fm_workbook_clear_pinned_now(handle_));
+  return ValueOrThrow(env, fm_workbook_clear_pinned_now(handle_), env.Undefined());
 }
 
 Napi::Value Workbook::ExcelProfileId(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeStringResult(env, kBindingInvalidHandle, nullptr);
+    return ThrowInvalidHandle(env);
   }
   const char* id = nullptr;
   const fm_status_t rc = fm_workbook_get_excel_profile_id(handle_, &id);
-  return MakeStringResult(env, rc, id);
+  return ValueOrThrow(env, rc, JsString(env, id));
 }
 
 Napi::Value Workbook::SetExcelProfileId(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   const std::string profile_id = ArgString(info, 0);
-  fm_status_t rc = fm_workbook_set_excel_profile_id(handle_, profile_id.c_str());
-  return MakeStatus(env, rc);
+  const fm_status_t rc = fm_workbook_set_excel_profile_id(handle_, profile_id.c_str());
+  return ValueOrThrow(env, rc, env.Undefined());
 }
 
 Napi::Value Workbook::FileName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeStringResult(env, kBindingInvalidHandle, nullptr);
+    return ThrowInvalidHandle(env);
   }
   const char* name = nullptr;
   const fm_status_t rc = fm_workbook_get_file_name(handle_, &name);
-  return MakeStringResult(env, rc, name);
+  return ValueOrThrow(env, rc, JsString(env, name));
 }
 
 Napi::Value Workbook::SetFileName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   const std::string name = ArgString(info, 0);
-  return MakeStatus(env, fm_workbook_set_file_name(handle_, name.c_str()));
+  return ValueOrThrow(env, fm_workbook_set_file_name(handle_, name.c_str()), env.Undefined());
 }
 
 // ---- Recalc + save --------------------------------------------------
@@ -215,67 +225,44 @@ Napi::Value Workbook::SetFileName(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::Recalc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
-  (void)TakeIterativeProgressThrew();
-  fm_status_t rc = fm_workbook_recalc(handle_);
-  const bool callback_threw = TakeIterativeProgressThrew();
-  // Build the status before the memory query below clears the thread-local diagnostics.
-  Napi::Object status = MakeStatus(env, rc);
+  const fm_status_t rc = fm_workbook_recalc(handle_);
+  // Raise the failure before the memory query below clears the thread-local
+  // diagnostics. An exception the progress callback raised stays pending,
+  // and that exception is what the caller sees.
+  const Napi::Value result = ValueOrThrow(env, rc, env.Undefined());
   // A full recalc is the coarsest boundary the binding has and the one
   // after which the footprint has most likely moved (spilled arrays,
   // newly cached text), so the external-memory figure is refreshed here
   // rather than on every cell write.
   SyncExternalMemory(env);
-  // An engine failure wins: it carries its own diagnostic and is the more
-  // specific answer. Otherwise a throwing progress callback, which the
-  // engine only saw as a cancellation, becomes the reported failure.
-  if (rc == 0 && callback_threw) {
-    return MakeCallbackThrewStatus(env);
-  }
-  return status;
+  return result;
 }
 
 Napi::Value Workbook::RecalcParallel(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  fm_parallel_recalc_stats_t stats{};
   if (handle_ == nullptr) {
-    return MakeParallelRecalcResult(env, NullHandleError(env), stats);
+    return ThrowInvalidHandle(env);
   }
-
   uint32_t thread_count = 0;
   if (!ReadThreadCount(info, thread_count)) {
-    // Reject here instead of forwarding a sentinel to the C ABI: its own
-    // out-of-range diagnostic would otherwise report a thread_count value
-    // the caller never passed, violating the Status contract that a
-    // binding-raised failure carries an empty context.
-    Napi::Object status =
-        MakeBindingError(env, kInvalidArgument, "recalcParallel: `threadCount` must be an integer in 0..8");
-    return MakeParallelRecalcResult(env, status, stats);
+    return env.Undefined();
   }
-
-  (void)TakeIterativeProgressThrew();
+  fm_parallel_recalc_stats_t stats{};
   const fm_status_t rc = fm_workbook_recalc_parallel(handle_, thread_count, &stats);
-  const bool callback_threw = TakeIterativeProgressThrew();
-  if (rc == 0 && callback_threw) {
-    // Same shape as an engine failure: the pass did not finish, so the
-    // counters are not reported.
-    stats = fm_parallel_recalc_stats_t{};
-    SyncExternalMemory(env);
-    return MakeParallelRecalcResult(env, MakeCallbackThrewStatus(env), stats);
-  }
-  Napi::Object status = MakeStatus(env, rc);
+  const Napi::Value result =
+      rc == 0 && !env.IsExceptionPending() ? Napi::Value(ParallelRecalcStatsToJs(env, stats)) : ThrowStatus(env, rc);
   // Parallel recalc can change cached values and spill geometry just like the
-  // serial entry point, so keep V8's external-memory estimate in sync before
-  // returning the result envelope.
+  // serial entry point, so keep V8's external-memory estimate in sync.
   SyncExternalMemory(env);
-  return MakeParallelRecalcResult(env, status, stats);
+  return result;
 }
 
 Napi::Value Workbook::PartialRecalc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeNumberFieldResult(env, NullHandleError(env), "value", 0);
+    return ThrowInvalidHandle(env);
   }
   const std::size_t sheet = ArgU32(info, 0);
   fm_cell_rect_t vp{};
@@ -284,44 +271,35 @@ Napi::Value Workbook::PartialRecalc(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   uint32_t recomputed = 0;
-  (void)TakeIterativeProgressThrew();
-  fm_status_t rc = fm_sheet_recalc_viewport(handle_, sheet, &vp, &recomputed);
-  const bool callback_threw = TakeIterativeProgressThrew();
-  if (rc != 0) {
-    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "value", 0);
-  }
-  if (callback_threw) {
-    return MakeNumberFieldResult(env, MakeCallbackThrewStatus(env), "value", 0);
-  }
-  return MakeNumberResult(env, 0, recomputed);
+  const fm_status_t rc = fm_sheet_recalc_viewport(handle_, sheet, &vp, &recomputed);
+  return ValueOrThrow(env, rc, Napi::Number::New(env, recomputed));
 }
 
 Napi::Value Workbook::SetIterative(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   const bool enabled = ArgBool(info, 0);
   const int32_t max_iter = ArgI32(info, 1);
   const double max_change = ArgDouble(info, 2);
-  fm_status_t rc = fm_workbook_set_iterative(handle_, enabled ? 1 : 0, max_iter, max_change);
-  return MakeStatus(env, rc);
+  const fm_status_t rc = fm_workbook_set_iterative(handle_, enabled ? 1 : 0, max_iter, max_change);
+  return ValueOrThrow(env, rc, env.Undefined());
 }
 
 Napi::Value Workbook::GetIterative(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   int32_t enabled = 0;
   uint32_t max_iterations = 0;
   double max_change = 0.0;
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_iterative(handle_, &enabled, &max_iterations, &max_change)
-                                            : kBindingInvalidHandle;
+  const fm_status_t rc = fm_workbook_get_iterative(handle_, &enabled, &max_iterations, &max_change);
   if (rc != 0) {
-    enabled = 0;
-    max_iterations = 0;
-    max_change = 0.0;
+    return ThrowStatus(env, rc);
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("status", MakeStatus(env, rc));
   out.Set("enabled", Napi::Boolean::New(env, enabled != 0));
   out.Set("maxIterations", Napi::Number::New(env, max_iterations));
   out.Set("maxChange", Napi::Number::New(env, max_change));
@@ -331,23 +309,25 @@ Napi::Value Workbook::GetIterative(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::SetIterativeProgress(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return ThrowInvalidHandle(env);
   }
   // Passing null clears the callback. Anything else MUST be a JS function;
   // a rejected value leaves the installed callback in place.
   Napi::Function callback;
   if (info[0].IsNull()) {
     (void)Value().Delete(IterativeProgressKey(env));
-    return MakeStatus(env, fm_workbook_set_iterative_progress(handle_, nullptr, nullptr));
+    return ValueOrThrow(env, fm_workbook_set_iterative_progress(handle_, nullptr, nullptr), env.Undefined());
   }
   if (!FunctionArg(info, 0, &callback)) {
-    return MakeBindingArgumentError(env, "setIterativeProgress: `callback` must be a function or null");
+    Napi::TypeError::New(env, "callback must be a function or null").ThrowAsJavaScriptException();
+    return env.Undefined();
   }
   // The function lives on this wrapper, and the C ABI hands the trampoline
   // this wrapper as user-data, so replacing a callback on another Workbook
   // never changes this instance's callback.
   (void)Value().Set(IterativeProgressKey(env), callback);
-  return MakeStatus(env, fm_workbook_set_iterative_progress(handle_, &Workbook::IterativeProgressTrampoline, this));
+  return ValueOrThrow(env, fm_workbook_set_iterative_progress(handle_, &Workbook::IterativeProgressTrampoline, this),
+                      env.Undefined());
 }
 
 int32_t Workbook::IterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations,
@@ -357,27 +337,28 @@ int32_t Workbook::IterativeProgressTrampoline(uint32_t iteration, double max_res
     return 1;
   }
   Napi::Env env = workbook->Env();
+  // A pending exception was raised by the callback in an earlier sweep:
+  // keep aborting, and leave it pending so the recalc entry point returns it
+  // to JS unchanged.
+  if (env.IsExceptionPending()) {
+    return 0;
+  }
   Napi::HandleScope scope(env);
   const Napi::Value callback = workbook->Value().Get(IterativeProgressKey(env));
-  Napi::Value ret;
-  if (!env.IsExceptionPending()) {
-    if (!callback.IsFunction()) {
-      return 1;
-    }
-    workbook->in_iterative_progress_callback_ = true;
-    ret = callback.As<Napi::Function>().Call({
-        Napi::Number::New(env, iteration),
-        Napi::Number::New(env, max_residual),
-        Napi::Number::New(env, max_iterations),
-    });
-    workbook->in_iterative_progress_callback_ = false;
-  }
   if (env.IsExceptionPending()) {
-    // Abort the solve and leave the reason behind for the recalc entry
-    // point: without it the throw is indistinguishable from a deliberate
-    // cancel and `recalc()` reports success over a half-solved workbook.
-    (void)env.GetAndClearPendingException();
-    workbook->iterative_progress_threw_ = true;
+    return 0;
+  }
+  if (!callback.IsFunction()) {
+    return 1;
+  }
+  workbook->in_iterative_progress_callback_ = true;
+  const Napi::Value ret = callback.As<Napi::Function>().Call({
+      Napi::Number::New(env, iteration),
+      Napi::Number::New(env, max_residual),
+      Napi::Number::New(env, max_iterations),
+  });
+  workbook->in_iterative_progress_callback_ = false;
+  if (env.IsExceptionPending()) {
     return 0;
   }
   return (ret.IsUndefined() || ret.IsNull() || ret.ToBoolean().Value()) ? 1 : 0;
@@ -397,8 +378,8 @@ Napi::Value Workbook::Dispose(const Napi::CallbackInfo& info) {
   return env.Undefined();
 }
 
-Napi::Value Workbook::IsValid(const Napi::CallbackInfo& info) {
-  return Napi::Boolean::New(info.Env(), handle_ != nullptr);
+Napi::Value Workbook::Disposed(const Napi::CallbackInfo& info) {
+  return Napi::Boolean::New(info.Env(), handle_ == nullptr);
 }
 
 Napi::Value Workbook::MemoryUsage(const Napi::CallbackInfo& info) {
@@ -418,49 +399,33 @@ Napi::Value Workbook::MemoryUsage(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::Save(const Napi::CallbackInfo& info) {
-  uint8_t* buf = nullptr;
-  std::size_t len = 0;
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_save(handle_, &buf, &len) : kBindingInvalidHandle;
-  return MakeSaveResult(info.Env(), rc, buf, len);
-}
-
-Napi::Value Workbook::SaveAs(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  // `format` is required by the registration guard: a silent default would
-  // pick a container format the caller never asked for.
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
   uint8_t* buf = nullptr;
   std::size_t len = 0;
-  fm_status_t rc = kBindingInvalidHandle;
-  if (handle_ != nullptr) {
-    rc = fm_workbook_save_as(handle_, ArgI32(info, 0), &buf, &len);
-  }
-  return MakeSaveResult(env, rc, buf, len);
+  const fm_status_t rc = FormatOmitted(info) ? fm_workbook_save(handle_, &buf, &len)
+                                             : fm_workbook_save_as(handle_, ArgI32(info, 0), &buf, &len);
+  return SavedBytesOrThrow(env, rc, buf, len);
 }
 
 Napi::Value Workbook::SaveWithDiagnostics(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("bytes", env.Null());
-  out.Set("downgradedFormulaCount", Napi::Number::New(env, 0));
-  out.Set("deferredFeatureCount", Napi::Number::New(env, 0));
-  out.Set("droppedPartCount", Napi::Number::New(env, 0));
-  out.Set("droppedRelationshipCount", Napi::Number::New(env, 0));
-  out.Set("renumberedPartCount", Napi::Number::New(env, 0));
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
+    return ThrowInvalidHandle(env);
   }
+  const int32_t format = FormatOmitted(info) ? static_cast<int32_t>(FM_WORKBOOK_FORMAT_XLSX) : ArgI32(info, 0);
   uint8_t* buf = nullptr;
   std::size_t len = 0;
   fm_save_diagnostics_t d{};
-  fm_status_t rc = fm_workbook_save_with_diagnostics(handle_, ArgI32(info, 0), &buf, &len, &d);
+  const fm_status_t rc = fm_workbook_save_with_diagnostics(handle_, format, &buf, &len, &d);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    return out;
+    fm_buffer_destroy(buf);
+    return ThrowStatus(env, rc);
   }
-  Napi::Uint8Array dst = TakeSavedBytes(env, buf, len);
-  out.Set("status", MakeOkStatus(env));
-  out.Set("bytes", dst);
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("bytes", TakeSavedBytes(env, buf, len));
   out.Set("downgradedFormulaCount", Napi::Number::New(env, static_cast<double>(d.downgraded_formula_count)));
   out.Set("deferredFeatureCount", Napi::Number::New(env, static_cast<double>(d.deferred_feature_count)));
   out.Set("droppedPartCount", Napi::Number::New(env, static_cast<double>(d.dropped_part_count)));
@@ -471,23 +436,15 @@ Napi::Value Workbook::SaveWithDiagnostics(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::ReadDiagnostics(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("undecodedFormulaCount", Napi::Number::New(env, 0));
-  out.Set("undecodedDefinedNameCount", Napi::Number::New(env, 0));
-  out.Set("undecodedPartCount", Napi::Number::New(env, 0));
-  out.Set("skippedFeatureCount", Napi::Number::New(env, 0));
-  out.Set("unknownContentTypeCount", Napi::Number::New(env, 0));
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
+    return ThrowInvalidHandle(env);
   }
   fm_read_diagnostics_t d{};
-  fm_status_t rc = fm_workbook_get_diagnostics(handle_, &d);
+  const fm_status_t rc = fm_workbook_get_diagnostics(handle_, &d);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    return out;
+    return ThrowStatus(env, rc);
   }
-  out.Set("status", MakeOkStatus(env));
+  Napi::Object out = Napi::Object::New(env);
   out.Set("undecodedFormulaCount", Napi::Number::New(env, static_cast<double>(d.undecoded_formula_count)));
   out.Set("undecodedDefinedNameCount", Napi::Number::New(env, static_cast<double>(d.undecoded_defined_name_count)));
   out.Set("undecodedPartCount", Napi::Number::New(env, static_cast<double>(d.undecoded_part_count)));

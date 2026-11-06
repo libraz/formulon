@@ -1,6 +1,6 @@
 import test from 'node:test';
 import { inflateRawSync } from 'node:zlib';
-import { assert, getModule, loadStagedModule, readAll } from './smoke_support.mjs';
+import { assert, expectFailure, getModule, loadStagedModule, readAll } from './smoke_support.mjs';
 
 // ---- Drawing shapes, sparkline groups and legacy note shapes -----------------
 
@@ -14,8 +14,7 @@ const load = async () => {
 
 const roundTrip = (mod, wb) => {
   const saved = wb.save();
-  assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  return mod.Workbook.load(saved.bytes).value;
+  return mod.Workbook.load(saved);
 };
 
 // Reads one stored or deflated entry of a ZIP archive by name.
@@ -59,10 +58,9 @@ const box = (mod) => ({
 
 test('shapes insert, list, update, remove and round-trip', async () => {
   const mod = await load();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   assert.equal(wb.listShapes(0).length, 0);
   const rect = wb.addShape(0, box(mod));
-  assert.ok(rect.status.ok, JSON.stringify(rect.status));
   const line = wb.addShape(0, {
     prst: 'line',
     anchorKind: mod.AnchorKind.OneCell,
@@ -74,14 +72,12 @@ test('shapes insert, list, update, remove and round-trip', async () => {
     lineRgb: 0x00ff00,
     lineWidthEmu: 19050,
   });
-  assert.ok(line.status.ok);
-  assert.notEqual(rect.objectId, line.objectId);
+  assert.notEqual(rect, line);
 
   const loaded = roundTrip(mod, wb);
   const shapes = loaded.listShapes(0);
-  assert.ok(shapes.status.ok);
   assert.equal(shapes.length, 2);
-  assert.equal(shapes[0].objectId, rect.objectId);
+  assert.equal(shapes[0].objectId, rect);
   assert.equal(shapes[0].kind, mod.DrawingObjectKind.Shape);
   assert.equal(shapes[0].name, 'Box');
   assert.equal(shapes[0].prst, 'roundRect');
@@ -101,8 +97,8 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   assert.equal(shapes[1].lineWidthEmu, 19050);
 
   // An update changes the named fields only, and an anchor moves with a row insert.
-  assert.ok(loaded.updateShape(0, rect.objectId, { name: 'Renamed', hidden: true, fillKind: mod.ShapePaint.None }).ok);
-  assert.ok(loaded.insertRows(0, 0, 3).ok);
+  loaded.updateShape(0, rect, { name: 'Renamed', hidden: true, fillKind: mod.ShapePaint.None });
+  loaded.insertRows(0, 0, 3);
   const moved = loaded.listShapes(0)[0];
   assert.equal(moved.name, 'Renamed');
   assert.equal(moved.hidden, true);
@@ -112,10 +108,10 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   assert.equal(moved.fromRow, 4);
   assert.equal(moved.toRow, 8);
 
-  assert.ok(loaded.removeShape(0, rect.objectId).ok);
+  loaded.removeShape(0, rect);
   assert.deepEqual(
     loaded.listShapes(0).map((s) => s.objectId),
-    [line.objectId],
+    [line],
   );
   release(loaded);
   release(wb);
@@ -123,16 +119,16 @@ test('shapes insert, list, update, remove and round-trip', async () => {
 
 test('shape arguments are validated', async () => {
   const mod = await load();
-  const wb = mod.Workbook.createDefault().value;
-  assert.equal(wb.addShape(0, { prst: 'rect' }).status.ok, false);
-  assert.equal(wb.addShape(0, { ...box(mod), anchorKind: 9 }).status.ok, false);
-  assert.equal(wb.addShape(0, { ...box(mod), fillKind: mod.ShapePaint.Other }).status.ok, false);
-  assert.equal(wb.addShape(0, { ...box(mod), toRow: 0 }).status.ok, false);
-  assert.equal(wb.addShape(0, { ...box(mod), prst: 'a"/>' }).status.ok, false);
-  assert.equal(wb.addShape(5, box(mod)).status.ok, false);
+  const wb = mod.Workbook.createDefault();
+  expectFailure(() => wb.addShape(0, { prst: 'rect' }));
+  expectFailure(() => wb.addShape(0, { ...box(mod), anchorKind: 9 }));
+  expectFailure(() => wb.addShape(0, { ...box(mod), fillKind: mod.ShapePaint.Other }));
+  expectFailure(() => wb.addShape(0, { ...box(mod), toRow: 0 }));
+  expectFailure(() => wb.addShape(0, { ...box(mod), prst: 'a"/>' }));
+  expectFailure(() => wb.addShape(5, box(mod)));
   assert.equal(wb.listShapes(0).length, 0);
-  assert.equal(wb.updateShape(0, 99, { name: 'x' }).ok, false);
-  assert.equal(wb.removeShape(0, 99).ok, false);
+  expectFailure(() => wb.updateShape(0, 99, { name: 'x' }));
+  expectFailure(() => wb.removeShape(0, 99));
   assert.throws(() => wb.addShape(0, { ...box(mod), fromRow: -1 }), RangeError);
   release(wb);
 });
@@ -157,7 +153,7 @@ const sparklineGroup = (mod) => ({
 
 test('sparkline groups add, list, update, replace, remove and follow row edits', async () => {
   const mod = await load();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   assert.equal(
     readAll(
       () => wb.getSparklineGroupCount(0),
@@ -165,8 +161,8 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
     ).length,
     0,
   );
-  assert.ok(wb.addSparklineGroup(0, sparklineGroup(mod)).status.ok);
-  assert.ok(wb.addSparklineGroup(0, { sparklines: [{ formula: 'Sheet1!A9:D9', location: 'G9' }] }).status.ok);
+  wb.addSparklineGroup(0, sparklineGroup(mod));
+  wb.addSparklineGroup(0, { sparklines: [{ formula: 'Sheet1!A9:D9', location: 'G9' }] });
 
   const loaded = roundTrip(mod, wb);
   const groups = readAll(
@@ -195,7 +191,7 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   assert.equal(second.type, mod.SparklineType.Line);
   assert.equal(second.lineWeight, 0.75);
 
-  assert.ok(loaded.insertRows(0, 0, 2).ok);
+  loaded.insertRows(0, 0, 2);
   assert.equal(
     readAll(
       () => loaded.getSparklineGroupCount(0),
@@ -212,15 +208,13 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   );
 
   // Update rewrites the modelled fields and keeps the sparklines.
-  assert.ok(
-    loaded.updateSparklineGroup(0, 0, {
-      ...first,
-      type: mod.SparklineType.Stacked,
-      high: true,
-      dateAxis: true,
-      dateAxisRef: 'Sheet1!A4:D4',
-    }).ok,
-  );
+  loaded.updateSparklineGroup(0, 0, {
+    ...first,
+    type: mod.SparklineType.Stacked,
+    high: true,
+    dateAxis: true,
+    dateAxisRef: 'Sheet1!A4:D4',
+  });
   const updated = readAll(
     () => loaded.getSparklineGroupCount(0),
     (i) => loaded.getSparklineGroup(0, i),
@@ -231,7 +225,7 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   assert.equal(updated.dateAxisRef, 'Sheet1!A4:D4');
   assert.equal(updated.sparklines.length, 2);
 
-  assert.ok(loaded.setSparklineGroupSparklines(0, 0, [{ formula: 'Sheet1!B1:B5', location: 'H1' }]).ok);
+  loaded.setSparklineGroupSparklines(0, 0, [{ formula: 'Sheet1!B1:B5', location: 'H1' }]);
   assert.deepEqual(
     readAll(
       () => loaded.getSparklineGroupCount(0),
@@ -239,7 +233,7 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
     )[0].sparklines,
     [{ formula: 'Sheet1!B1:B5', location: 'H1' }],
   );
-  assert.ok(loaded.removeSparklineGroup(0, 0).ok);
+  loaded.removeSparklineGroup(0, 0);
   assert.equal(
     readAll(
       () => loaded.getSparklineGroupCount(0),
@@ -260,18 +254,15 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
 
 test('sparkline group arguments are validated', async () => {
   const mod = await load();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   const good = [{ formula: 'Sheet1!A1:D1', location: 'F1' }];
-  assert.equal(wb.addSparklineGroup(0, {}).status.ok, false);
-  assert.equal(wb.addSparklineGroup(0, { sparklines: [] }).status.ok, false);
-  assert.equal(
-    wb.addSparklineGroup(0, { sparklines: [{ formula: 'Sheet1!A1:D1', location: 'F1:F2' }] }).status.ok,
-    false,
-  );
-  assert.equal(wb.addSparklineGroup(0, { sparklines: [{ formula: '', location: 'F1' }] }).status.ok, false);
-  assert.equal(wb.addSparklineGroup(0, { type: 7, sparklines: good }).status.ok, false);
-  assert.equal(wb.addSparklineGroup(0, { lineWeight: -1, sparklines: good }).status.ok, false);
-  assert.equal(wb.addSparklineGroup(4, { sparklines: good }).status.ok, false);
+  expectFailure(() => wb.addSparklineGroup(0, {}));
+  expectFailure(() => wb.addSparklineGroup(0, { sparklines: [] }));
+  expectFailure(() => wb.addSparklineGroup(0, { sparklines: [{ formula: 'Sheet1!A1:D1', location: 'F1:F2' }] }));
+  expectFailure(() => wb.addSparklineGroup(0, { sparklines: [{ formula: '', location: 'F1' }] }));
+  expectFailure(() => wb.addSparklineGroup(0, { type: 7, sparklines: good }));
+  expectFailure(() => wb.addSparklineGroup(0, { lineWeight: -1, sparklines: good }));
+  expectFailure(() => wb.addSparklineGroup(4, { sparklines: good }));
   assert.equal(
     readAll(
       () => wb.getSparklineGroupCount(0),
@@ -279,33 +270,32 @@ test('sparkline group arguments are validated', async () => {
     ).length,
     0,
   );
-  assert.equal(wb.updateSparklineGroup(0, 0, {}).ok, false);
-  assert.equal(wb.setSparklineGroupSparklines(0, 0, good).ok, false);
-  assert.equal(wb.removeSparklineGroup(0, 0).ok, false);
+  expectFailure(() => wb.updateSparklineGroup(0, 0, {}));
+  expectFailure(() => wb.setSparklineGroupSparklines(0, 0, good));
+  expectFailure(() => wb.removeSparklineGroup(0, 0));
   release(wb);
 });
 
 test('a surviving note keeps its own shape when notes are added', async () => {
   const mod = await load();
-  const wb = mod.Workbook.createDefault().value;
-  assert.ok(wb.setComment(0, 1, 1, 'Alice', 'one').ok);
-  assert.ok(wb.setComment(0, 3, 3, 'Alice', 'two').ok);
-  assert.ok(wb.setCommentVisible(0, 1, 1, true).ok);
+  const wb = mod.Workbook.createDefault();
+  wb.setComment(0, 1, 1, 'Alice', 'one');
+  wb.setComment(0, 3, 3, 'Alice', 'two');
+  wb.setCommentVisible(0, 1, 1, true);
   const first = roundTrip(mod, wb);
-  assert.ok(first.setComment(0, 8, 8, 'Alice', 'three').ok);
-  assert.ok(first.setCommentVisible(0, 3, 3, true).ok);
+  first.setComment(0, 8, 8, 'Alice', 'three');
+  first.setCommentVisible(0, 3, 3, true);
   const saved = first.save();
-  assert.ok(saved.status.ok);
-  const vml = readZipEntry(saved.bytes, 'xl/drawings/vmlDrawing1.vml');
+  const vml = readZipEntry(saved, 'xl/drawings/vmlDrawing1.vml');
   assert.ok(vml, 'comment VML part is written');
   assert.equal(vml.match(/<v:shape /g).length, 3);
   assert.equal(new Set(vml.match(/id="_x0000_s\d+"/g)).size, 3);
   assert.equal(vml.match(/visibility:visible/g).length, 2);
-  const again = mod.Workbook.load(saved.bytes).value;
-  assert.equal(again.getCommentVisible(0, 1, 1).value, true);
-  assert.equal(again.getCommentVisible(0, 3, 3).value, true);
-  assert.equal(again.getCommentVisible(0, 8, 8).value, false);
-  assert.equal(again.getCommentVisible(0, 9, 9).value, null);
+  const again = mod.Workbook.load(saved);
+  assert.equal(again.getCommentVisible(0, 1, 1), true);
+  assert.equal(again.getCommentVisible(0, 3, 3), true);
+  assert.equal(again.getCommentVisible(0, 8, 8), false);
+  assert.equal(again.getCommentVisible(0, 9, 9), null);
   release(again);
   release(first);
   release(wb);

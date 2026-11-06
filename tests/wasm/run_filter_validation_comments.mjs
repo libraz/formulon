@@ -8,7 +8,7 @@ import {
   SortMethod,
   ValidationErrorStyle,
 } from '../../packages/npm/common.mjs';
-import { readAll } from './smoke_support.mjs';
+import { expectFailure, readAll } from './smoke_support.mjs';
 
 const ALICE = '{0A1B2C3D-0000-4000-8000-000000000001}';
 const BOB = '{0A1B2C3D-0000-4000-8000-000000000002}';
@@ -18,7 +18,7 @@ const MENTION = '{6F1E0D2C-1111-4111-8111-0000000000AA}';
 const CREATED = '2026-10-05T09:30:00.00';
 
 function withWorkbook(Module, fn) {
-  const wb = Module.Workbook.createDefault().value;
+  const wb = Module.Workbook.createDefault();
   try {
     fn(wb);
   } finally {
@@ -28,15 +28,15 @@ function withWorkbook(Module, fn) {
 
 // A1 is the header; A2:A6 hold 1..5.
 function fillNumbers(wb) {
-  assert.ok(wb.setText(0, 0, 0, 'N').ok);
-  for (let i = 1; i <= 5; i += 1) assert.ok(wb.setNumber(0, i, 0, i).ok);
+  wb.setText(0, 0, 0, 'N');
+  for (let i = 1; i <= 5; i += 1) wb.setNumber(0, i, 0, i);
 }
 
 const range = (firstRow, firstCol, lastRow, lastCol) => ({ firstRow, firstCol, lastRow, lastCol });
 const hiddenRows = (wb) =>
   wb
     .listRowOverrides(0)
-    .rows.filter((r) => r.hidden)
+    .filter((r) => r.hidden)
     .map((r) => r.row);
 
 const customGreaterThanThree = {
@@ -63,8 +63,7 @@ export function registerFilterValidationComments(Module, test) {
     withWorkbook(Module, (wb) => {
       fillNumbers(wb);
       const absent = wb.getAutoFilter(0);
-      assert.ok(absent.status.ok);
-      assert.equal(absent.autoFilter, null);
+      assert.equal(absent, null);
 
       const filter = {
         range: range(0, 0, 5, 2),
@@ -106,10 +105,9 @@ export function registerFilterValidationComments(Module, test) {
           conditions: [{ ref: range(1, 0, 5, 0), descending: true, sortBy: SortBy.Value, customList: '' }],
         },
       };
-      assert.ok(wb.setAutoFilter(0, filter).ok);
+      wb.setAutoFilter(0, filter);
       const got = wb.getAutoFilter(0);
-      assert.ok(got.status.ok, JSON.stringify(got.status));
-      const af = got.autoFilter;
+      const af = got;
       assert.deepEqual(af.range, filter.range);
       assert.equal(af.columns.length, 3);
       assert.deepEqual(af.columns[0].values, ['a', 'b']);
@@ -126,32 +124,31 @@ export function registerFilterValidationComments(Module, test) {
       assert.equal(af.sort.conditions[0].descending, true);
 
       // get -> set of the unchanged record is a no-op.
-      assert.ok(wb.setAutoFilter(0, af).ok);
-      assert.deepEqual(wb.getAutoFilter(0).autoFilter, af);
+      wb.setAutoFilter(0, af);
+      assert.deepEqual(wb.getAutoFilter(0), af);
 
-      assert.ok(wb.removeAutoFilter(0).ok);
-      assert.equal(wb.getAutoFilter(0).autoFilter, null);
+      wb.removeAutoFilter(0);
+      assert.equal(wb.getAutoFilter(0), null);
     });
   });
 
   test('evaluate, apply and clear a sheet AutoFilter', () => {
     withWorkbook(Module, (wb) => {
       fillNumbers(wb);
-      assert.equal(wb.evaluateAutoFilter(0).status.ok, false);
-      assert.equal(wb.applyAutoFilter(0).ok, false);
-      assert.ok(wb.setAutoFilter(0, { range: range(0, 0, 5, 0), columns: [customGreaterThanThree], sort: null }).ok);
+      expectFailure(() => wb.evaluateAutoFilter(0));
+      expectFailure(() => wb.applyAutoFilter(0));
+      wb.setAutoFilter(0, { range: range(0, 0, 5, 0), columns: [customGreaterThanThree], sort: null });
 
       const ev = wb.evaluateAutoFilter(0);
-      assert.ok(ev.status.ok, JSON.stringify(ev.status));
       assert.equal(ev.firstRow, 1);
       assert.deepEqual(ev.match, [false, false, false, true, true]);
       assert.deepEqual(hiddenRows(wb), []);
 
-      assert.ok(wb.applyAutoFilter(0).ok);
+      wb.applyAutoFilter(0);
       assert.deepEqual(hiddenRows(wb), [1, 2, 3]);
-      assert.ok(wb.clearAutoFilter(0).ok);
+      wb.clearAutoFilter(0);
       assert.deepEqual(hiddenRows(wb), []);
-      assert.equal(wb.getAutoFilter(0).autoFilter.columns.length, 0);
+      assert.equal(wb.getAutoFilter(0).columns.length, 0);
     });
   });
 
@@ -163,31 +160,27 @@ export function registerFilterValidationComments(Module, test) {
         name: 'Nums',
         columns: ['N'],
       });
-      assert.ok(created.status.ok, JSON.stringify(created.status));
-      const table = created.index;
+      const table = created;
       const got = wb.getTableAutoFilter(table);
-      assert.ok(got.status.ok);
-      assert.equal(got.autoFilter.range.lastRow, 5);
+      assert.equal(got.range.lastRow, 5);
 
-      assert.ok(
-        wb.setTableAutoFilter(table, { range: range(0, 0, 5, 0), columns: [customGreaterThanThree], sort: null }).ok,
-      );
+      wb.setTableAutoFilter(table, { range: range(0, 0, 5, 0), columns: [customGreaterThanThree], sort: null });
       const ev = wb.evaluateTableAutoFilter(table);
       assert.deepEqual(ev.match, [false, false, false, true, true]);
-      assert.ok(wb.applyTableAutoFilter(table).ok);
+      wb.applyTableAutoFilter(table);
       assert.deepEqual(hiddenRows(wb), [1, 2, 3]);
-      assert.ok(wb.clearTableAutoFilter(table).ok);
+      wb.clearTableAutoFilter(table);
       assert.deepEqual(hiddenRows(wb), []);
-      assert.ok(wb.removeTableAutoFilter(table).ok);
-      assert.equal(wb.getTableAutoFilter(table).autoFilter, null);
-      assert.equal(wb.getTableAutoFilter(99).status.ok, false);
+      wb.removeTableAutoFilter(table);
+      assert.equal(wb.getTableAutoFilter(table), null);
+      expectFailure(() => wb.getTableAutoFilter(99));
     });
   });
 
   test('setAutoFilter rejects an out-of-range sheet and unordered columns', () => {
     withWorkbook(Module, (wb) => {
       const f = { range: range(0, 0, 5, 1), columns: [], sort: null };
-      assert.equal(wb.setAutoFilter(99, f).ok, false);
+      expectFailure(() => wb.setAutoFilter(99, f));
       const bad = {
         ...f,
         columns: [
@@ -195,7 +188,7 @@ export function registerFilterValidationComments(Module, test) {
           { colId: 0, kind: FilterKind.None },
         ],
       };
-      assert.equal(wb.setAutoFilter(0, bad).ok, false);
+      expectFailure(() => wb.setAutoFilter(0, bad));
     });
   });
 
@@ -208,7 +201,7 @@ export function registerFilterValidationComments(Module, test) {
         formula1: '1',
         formula2: '10',
       };
-      assert.ok(wb.addValidation(0, base).status.ok);
+      wb.addValidation(0, base);
       const before = readAll(
         () => wb.getValidationCount(0),
         (i) => wb.getValidation(0, i),
@@ -247,7 +240,7 @@ export function registerFilterValidationComments(Module, test) {
       );
 
       // Nullish enum fields keep their documented zero defaults.
-      assert.ok(wb.addValidation(0, { ranges: [range(3, 0, 3, 0)] }).status.ok);
+      wb.addValidation(0, { ranges: [range(3, 0, 3, 0)] });
       assert.equal(
         readAll(
           () => wb.getValidationCount(0),
@@ -272,8 +265,8 @@ export function registerFilterValidationComments(Module, test) {
         ],
         sort: null,
       };
-      assert.ok(wb.setAutoFilter(0, good).ok);
-      const before = wb.getAutoFilter(0).autoFilter;
+      wb.setAutoFilter(0, good);
+      const before = wb.getAutoFilter(0);
       const bad = {
         ...good,
         columns: [
@@ -284,7 +277,7 @@ export function registerFilterValidationComments(Module, test) {
         ],
       };
       assert.throws(() => wb.setAutoFilter(0, bad), RangeError);
-      assert.deepEqual(wb.getAutoFilter(0).autoFilter, before);
+      assert.deepEqual(wb.getAutoFilter(0), before);
 
       assert.throws(
         () =>
@@ -294,7 +287,7 @@ export function registerFilterValidationComments(Module, test) {
           }),
         RangeError,
       );
-      assert.deepEqual(wb.getAutoFilter(0).autoFilter, before);
+      assert.deepEqual(wb.getAutoFilter(0), before);
 
       assert.throws(
         () =>
@@ -304,9 +297,9 @@ export function registerFilterValidationComments(Module, test) {
           }),
         TypeError,
       );
-      assert.deepEqual(wb.getAutoFilter(0).autoFilter, before);
+      assert.deepEqual(wb.getAutoFilter(0), before);
 
-      const defaults = wb.setAutoFilter(0, {
+      wb.setAutoFilter(0, {
         range: range(0, 0, 2, 1),
         columns: [
           { colId: null, kind: undefined },
@@ -314,8 +307,7 @@ export function registerFilterValidationComments(Module, test) {
         ],
         sort: null,
       });
-      assert.ok(defaults.ok, JSON.stringify(defaults));
-      const stored = wb.getAutoFilter(0).autoFilter;
+      const stored = wb.getAutoFilter(0);
       assert.equal(stored.columns[0].colId, 0);
       assert.equal(stored.columns[0].kind, 0);
       assert.equal(stored.columns[1].dateGroups[0].month, 0);
@@ -324,8 +316,8 @@ export function registerFilterValidationComments(Module, test) {
 
   test('threaded mention and image integer readers throw before C mutation', () => {
     withWorkbook(Module, (wb) => {
-      assert.ok(wb.addPerson({ id: ALICE, displayName: 'Alice' }).ok);
-      const beforeComments = wb.listThreadedComments(0).comments.length;
+      wb.addPerson({ id: ALICE, displayName: 'Alice' });
+      const beforeComments = wb.listThreadedComments(0).length;
       assert.throws(
         () =>
           wb.addThreadedComment(0, {
@@ -339,7 +331,7 @@ export function registerFilterValidationComments(Module, test) {
           }),
         RangeError,
       );
-      assert.equal(wb.listThreadedComments(0).comments.length, beforeComments);
+      assert.equal(wb.listThreadedComments(0).length, beforeComments);
 
       for (const value of [Number.NaN, 1.5, Symbol('rowOffsetEmu')]) {
         assert.throws(
@@ -350,11 +342,12 @@ export function registerFilterValidationComments(Module, test) {
         assert.equal(wb.listDrawingObjects(0).length, 0);
       }
 
-      const boundary = wb.addImage(0, new Uint8Array([1, 2, 3]), {
-        rowOffsetEmu: -(2 ** 63),
-        colOffsetEmu: 2 ** 63 - 1024,
-      });
-      assert.equal(boundary.status.ok, false);
+      expectFailure(() =>
+        wb.addImage(0, new Uint8Array([1, 2, 3]), {
+          rowOffsetEmu: -(2 ** 63),
+          colOffsetEmu: 2 ** 63 - 1024,
+        }),
+      );
       assert.equal(wb.listDrawingObjects(0).length, 0);
 
       assert.throws(() => wb.addImage(0, new Uint8Array([1, 2, 3]), { widthEmu: 2 ** 63 }), RangeError);
@@ -424,9 +417,7 @@ export function registerFilterValidationComments(Module, test) {
           throw new Error('bytes getter should stay inside the JS reader boundary');
         },
       });
-      const imageResult = wb.addImage(0, bytesProxy, {});
-      assert.equal(imageResult.status.ok, false);
-      assert.equal(imageResult.status.code, 2);
+      assert.throws(() => wb.addImage(0, bytesProxy, {}), TypeError);
       assert.equal(wb.listDrawingObjects(0).length, 0);
     });
   });
@@ -441,10 +432,9 @@ export function registerFilterValidationComments(Module, test) {
         formula2: '10',
         errorStyle: ValidationErrorStyle.Warning,
       };
-      assert.ok(wb.addValidation(0, rule).status.ok);
+      wb.addValidation(0, rule);
 
       const none = wb.validateValue(0, 0, 3, { kind: 1, number: 99 });
-      assert.ok(none.status.ok);
       assert.equal(none.hasRule, false);
       assert.equal(none.valid, true);
 
@@ -457,19 +447,16 @@ export function registerFilterValidationComments(Module, test) {
       assert.equal(bad.valid, false);
       assert.equal(bad.errorStyle, ValidationErrorStyle.Warning);
       assert.equal(wb.validateValue(0, 0, 0, { kind: 3, text: 'x' }).valid, false);
-      assert.equal(wb.validateValue(99, 0, 0, { kind: 1, number: 1 }).status.ok, false);
-      const noKind = wb.validateValue(0, 0, 0, { number: 50 });
-      assert.equal(noKind.status.ok, false, 'a value without `kind` is rejected, not read as blank');
-      assert.match(noKind.status.message, /requires a `kind`/);
+      expectFailure(() => wb.validateValue(99, 0, 0, { kind: 1, number: 1 }));
+      assert.throws(() => wb.validateValue(0, 0, 0, { number: 50 }), TypeError);
 
-      assert.ok(wb.setNumber(0, 0, 0, 5).ok);
-      assert.ok(wb.setNumber(0, 1, 0, 50).ok);
-      assert.ok(wb.setText(0, 2, 0, 'x').ok);
-      assert.ok(wb.setNumber(0, 3, 0, 7).ok);
-      assert.ok(wb.setNumber(0, 4, 0, 70).ok);
+      wb.setNumber(0, 0, 0, 5);
+      wb.setNumber(0, 1, 0, 50);
+      wb.setText(0, 2, 0, 'x');
+      wb.setNumber(0, 3, 0, 7);
+      wb.setNumber(0, 4, 0, 70);
 
       const all = wb.getInvalidCells(0);
-      assert.ok(all.status.ok, JSON.stringify(all.status));
       assert.deepEqual(
         all.cells.map((c) => [c.row, c.col]),
         [
@@ -490,27 +477,26 @@ export function registerFilterValidationComments(Module, test) {
       );
       assert.equal(rest.nextCursor, null);
 
-      assert.equal(wb.getInvalidCells(99).status.ok, false);
+      expectFailure(() => wb.getInvalidCells(99));
       assert.throws(() => wb.getInvalidCells(0, -1), RangeError);
     });
   });
 
   test('persons and threaded comments support the full CRUD cycle', () => {
     withWorkbook(Module, (wb) => {
-      assert.deepEqual(wb.listPeople().persons, []);
-      assert.ok(wb.addPerson({ id: ALICE, displayName: 'Alice', userId: 'alice', providerId: 'None' }).ok);
-      assert.ok(wb.addPerson({ id: BOB, displayName: 'Bob', userId: 'bob', providerId: 'None' }).ok);
-      assert.equal(wb.addPerson({ id: ALICE, displayName: 'Dup' }).ok, false);
+      assert.deepEqual(wb.listPeople(), []);
+      wb.addPerson({ id: ALICE, displayName: 'Alice', userId: 'alice', providerId: 'None' });
+      wb.addPerson({ id: BOB, displayName: 'Bob', userId: 'bob', providerId: 'None' });
+      expectFailure(() => wb.addPerson({ id: ALICE, displayName: 'Dup' }));
       const persons = wb.listPeople();
-      assert.ok(persons.status.ok);
       assert.deepEqual(
-        persons.persons.map((p) => p.displayName),
+        persons.map((p) => p.displayName),
         ['Alice', 'Bob'],
       );
-      assert.equal(persons.persons[0].userId, 'alice');
+      assert.equal(persons[0].userId, 'alice');
 
-      assert.deepEqual(wb.listThreadedComments(0).comments, []);
-      const opened = wb.addThreadedComment(0, {
+      assert.deepEqual(wb.listThreadedComments(0), []);
+      wb.addThreadedComment(0, {
         id: THREAD,
         row: 2,
         col: 1,
@@ -519,21 +505,17 @@ export function registerFilterValidationComments(Module, test) {
         text: 'Check this, @Bob',
         mentions: [{ personId: BOB, mentionId: MENTION, start: 12, length: 4 }],
       });
-      assert.ok(opened.ok, JSON.stringify(opened));
-      assert.ok(
-        wb.addThreadedComment(0, {
-          id: REPLY,
-          personId: BOB,
-          created: CREATED,
-          text: 'Done',
-          parentId: THREAD,
-        }).ok,
-      );
+      wb.addThreadedComment(0, {
+        id: REPLY,
+        personId: BOB,
+        created: CREATED,
+        text: 'Done',
+        parentId: THREAD,
+      });
 
       const list = wb.listThreadedComments(0);
-      assert.ok(list.status.ok);
-      assert.equal(list.comments.length, 2);
-      const [head, reply] = list.comments;
+      assert.equal(list.length, 2);
+      const [head, reply] = list;
       assert.equal(head.id, THREAD);
       assert.equal(head.row, 2);
       assert.equal(head.col, 1);
@@ -543,26 +525,26 @@ export function registerFilterValidationComments(Module, test) {
       assert.equal(reply.parentId, THREAD);
       assert.deepEqual(reply.mentions, []);
 
-      assert.equal(wb.removePerson(BOB).ok, false);
-      assert.ok(wb.updateThreadedComment(0, THREAD, 'Edited', []).ok);
-      assert.equal(wb.listThreadedComments(0).comments[0].text, 'Edited');
-      assert.deepEqual(wb.listThreadedComments(0).comments[0].mentions, []);
-      assert.equal(wb.updateThreadedComment(0, '{00000000-0000-4000-8000-000000000000}', 'x', []).ok, false);
+      expectFailure(() => wb.removePerson(BOB));
+      wb.updateThreadedComment(0, THREAD, 'Edited', []);
+      assert.equal(wb.listThreadedComments(0)[0].text, 'Edited');
+      assert.deepEqual(wb.listThreadedComments(0)[0].mentions, []);
+      expectFailure(() => wb.updateThreadedComment(0, '{00000000-0000-4000-8000-000000000000}', 'x', []));
 
-      assert.ok(wb.setThreadResolved(0, THREAD, true).ok);
-      assert.equal(wb.listThreadedComments(0).comments[0].done, true);
-      assert.ok(wb.setThreadResolved(0, THREAD, false).ok);
-      assert.equal(wb.listThreadedComments(0).comments[0].done, false);
+      wb.setThreadResolved(0, THREAD, true);
+      assert.equal(wb.listThreadedComments(0)[0].done, true);
+      wb.setThreadResolved(0, THREAD, false);
+      assert.equal(wb.listThreadedComments(0)[0].done, false);
 
-      assert.ok(wb.removeThreadedComment(0, REPLY).ok);
-      assert.equal(wb.listThreadedComments(0).comments.length, 1);
-      assert.ok(wb.removeThreadedComment(0, THREAD).ok);
-      assert.equal(wb.listThreadedComments(0).comments.length, 0);
-      assert.equal(wb.removeThreadedComment(0, THREAD).ok, false);
+      wb.removeThreadedComment(0, REPLY);
+      assert.equal(wb.listThreadedComments(0).length, 1);
+      wb.removeThreadedComment(0, THREAD);
+      assert.equal(wb.listThreadedComments(0).length, 0);
+      expectFailure(() => wb.removeThreadedComment(0, THREAD));
 
-      assert.ok(wb.removePerson(BOB).ok);
-      assert.equal(wb.listPeople().persons.length, 1);
-      assert.equal(wb.listThreadedComments(99).status.ok, false);
+      wb.removePerson(BOB);
+      assert.equal(wb.listPeople().length, 1);
+      expectFailure(() => wb.listThreadedComments(99));
     });
   });
 }

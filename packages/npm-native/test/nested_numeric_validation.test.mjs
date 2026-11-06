@@ -1,5 +1,6 @@
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
+import { FormulonError } from '../dist/common.mjs';
 import { assert, getModule, readAll } from './smoke_support.mjs';
 
 const RANGE = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
@@ -19,45 +20,46 @@ function dataBarRule(overrides = {}) {
 async function getValidationModule() {
   if (process.env.FORMULON_NODE_ADDON) {
     const addon = await import(pathToFileURL(process.env.FORMULON_NODE_ADDON).href);
-    return addon.default ?? addon;
+    const bound = addon.default ?? addon;
+    bound.__setErrorClass(FormulonError);
+    return bound;
   }
   return getModule();
 }
 
 test('nested style integers reject narrowing before addXf mutates the workbook', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
-    const before = wb.getCellXfCount().value;
+    const before = wb.getCellXfCount();
     assert.throws(() => wb.addCellXf({ horizontalAlign: 256 }), RangeError);
-    assert.equal(wb.getCellXfCount().value, before);
+    assert.equal(wb.getCellXfCount(), before);
 
     assert.throws(() => wb.addCellXf({ numFmtId: 65536 }), RangeError);
-    assert.equal(wb.getCellXfCount().value, before);
+    assert.equal(wb.getCellXfCount(), before);
 
     assert.throws(() => wb.addCellXf({ fontIndex: 2 ** 32 }), RangeError);
-    assert.equal(wb.getCellXfCount().value, before);
+    assert.equal(wb.getCellXfCount(), before);
 
-    const beforeFonts = wb.getFontCount().value;
+    const beforeFonts = wb.getFontCount();
     assert.throws(() => wb.addFont({ underline: 256 }), RangeError);
-    assert.equal(wb.getFontCount().value, beforeFonts);
+    assert.equal(wb.getFontCount(), beforeFonts);
 
-    const beforeFills = wb.getFillCount().value;
+    const beforeFills = wb.getFillCount();
     assert.throws(() => wb.addFill({ pattern: 256 }), RangeError);
-    assert.equal(wb.getFillCount().value, beforeFills);
+    assert.equal(wb.getFillCount(), beforeFills);
 
-    const beforeBorders = wb.getBorderCount().value;
+    const beforeBorders = wb.getBorderCount();
     assert.throws(() => wb.addBorder({ left: { style: 256 } }), RangeError);
-    assert.equal(wb.getBorderCount().value, beforeBorders);
+    assert.equal(wb.getBorderCount(), beforeBorders);
 
     for (const value of [Number.NaN, Number.POSITIVE_INFINITY, 1.5, -1]) {
       assert.throws(() => wb.addCellXf({ horizontalAlign: value }), RangeError, `horizontalAlign=${String(value)}`);
-      assert.equal(wb.getCellXfCount().value, before);
+      assert.equal(wb.getCellXfCount(), before);
     }
 
-    const omitted = wb.addCellXf({ horizontalAlign: null, verticalAlign: undefined });
-    assert.ok(omitted.status.ok, JSON.stringify(omitted.status));
-    assert.equal(wb.getCellXfCount().value, before);
+    wb.addCellXf({ horizontalAlign: null, verticalAlign: undefined });
+    assert.equal(wb.getCellXfCount(), before);
   } finally {
     wb.dispose();
   }
@@ -65,11 +67,11 @@ test('nested style integers reject narrowing before addXf mutates the workbook',
 
 test('nested conditional-format integers reject narrowing before addConditionalFormat mutates', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
-    const beforeDxfs = wb.getDxfCount().value;
+    const beforeDxfs = wb.getDxfCount();
     assert.throws(() => wb.addDxf({ numFmt: { numFmtId: 65536 } }), RangeError);
-    assert.equal(wb.getDxfCount().value, beforeDxfs);
+    assert.equal(wb.getDxfCount(), beforeDxfs);
 
     assert.equal(
       readAll(
@@ -102,8 +104,7 @@ test('nested conditional-format integers reject narrowing before addConditionalF
       );
     }
 
-    const omitted = wb.addCfRule(0, dataBarRule({ minLengthPct: null, maxLengthPct: undefined }));
-    assert.ok(omitted.status.ok, JSON.stringify(omitted));
+    wb.addCfRule(0, dataBarRule({ minLengthPct: null, maxLengthPct: undefined }));
     const stored = readAll(
       () => wb.getCfRuleCount(0),
       (i) => wb.getCfRule(0, i),
@@ -118,14 +119,14 @@ test('nested conditional-format integers reject narrowing before addConditionalF
 
 test('nested style and conditional-format fields require primitive numeric values', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
-    const beforeXfs = wb.getCellXfCount().value;
+    const beforeXfs = wb.getCellXfCount();
     assert.throws(() => wb.addCellXf({ horizontalAlign: '1' }), TypeError);
-    assert.equal(wb.getCellXfCount().value, beforeXfs);
+    assert.equal(wb.getCellXfCount(), beforeXfs);
 
     assert.throws(() => wb.addCellXf({ horizontalAlign: Symbol('numeric') }), TypeError);
-    assert.equal(wb.getCellXfCount().value, beforeXfs);
+    assert.equal(wb.getCellXfCount(), beforeXfs);
 
     assert.throws(() => wb.addCfRule(0, dataBarRule({ minLengthPct: '10' })), TypeError);
     assert.equal(
@@ -151,9 +152,9 @@ test('nested style and conditional-format fields require primitive numeric value
 
 test('nested readers preserve the original getter error and abort the whole mutation', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
-    const beforeXfs = wb.getCellXfCount().value;
+    const beforeXfs = wb.getCellXfCount();
     const style = {};
     Object.defineProperty(style, 'horizontalAlign', {
       enumerable: true,
@@ -162,7 +163,7 @@ test('nested readers preserve the original getter error and abort the whole muta
       },
     });
     assert.throws(() => wb.addCellXf(style), /style getter/);
-    assert.equal(wb.getCellXfCount().value, beforeXfs);
+    assert.equal(wb.getCellXfCount(), beforeXfs);
 
     const rule = dataBarRule();
     Object.defineProperty(rule.dataBar, 'minLengthPct', {
@@ -186,7 +187,7 @@ test('nested readers preserve the original getter error and abort the whole muta
 
 test('style and conditional-format readers snapshot stateful fields once', async () => {
   const mod = await getValidationModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
     let horizontalReads = 0;
     const statefulXf = {};
@@ -197,33 +198,29 @@ test('style and conditional-format readers snapshot stateful fields once', async
       },
     });
     const xf = wb.addCellXf(statefulXf);
-    assert.ok(xf.status.ok, JSON.stringify(xf.status));
     assert.equal(horizontalReads, 1);
-    const storedXf = wb.getCellXf(xf.index);
+    const storedXf = wb.getCellXf(xf);
     assert.equal(storedXf.horizontalAlign, 1);
     assert.equal(storedXf.hasHorizontalAlign, true);
 
-    const firstDxf = wb.addDxf({ font: { name: 'first' } });
+    wb.addDxf({ font: { name: 'first' } });
     const secondDxf = wb.addDxf({ font: { name: 'second' } });
-    assert.ok(firstDxf.status.ok, JSON.stringify(firstDxf.status));
-    assert.ok(secondDxf.status.ok, JSON.stringify(secondDxf.status));
     let dxfReads = 0;
     const rule = dataBarRule();
     Object.defineProperty(rule, 'dxfId', {
       get() {
         dxfReads += 1;
-        return dxfReads === 1 ? secondDxf.index : undefined;
+        return dxfReads === 1 ? secondDxf : undefined;
       },
     });
-    const cf = wb.addCfRule(0, rule);
-    assert.ok(cf.status.ok, JSON.stringify(cf.status));
+    wb.addCfRule(0, rule);
     assert.equal(dxfReads, 1);
     assert.equal(
       readAll(
         () => wb.getCfRuleCount(0),
         (i) => wb.getCfRule(0, i),
       )[0].dxfId,
-      secondDxf.index,
+      secondDxf,
     );
 
     const beforeMemory = wb.getMemoryUsage();
@@ -233,11 +230,11 @@ test('style and conditional-format readers snapshot stateful fields once', async
         throw new Error('late font getter');
       },
     });
-    const beforeFonts = wb.getFontCount().value;
+    const beforeFonts = wb.getFontCount();
     for (let i = 0; i < 8; i += 1) {
       assert.throws(() => wb.addFont(lateFont), /late font getter/);
     }
-    assert.equal(wb.getFontCount().value, beforeFonts);
+    assert.equal(wb.getFontCount(), beforeFonts);
     assert.equal(wb.getMemoryUsage(), beforeMemory);
   } finally {
     wb.dispose();
@@ -246,16 +243,15 @@ test('style and conditional-format readers snapshot stateful fields once', async
 
 test('conditional-format arrays skip nullish entries and keep later records', async () => {
   const mod = await getValidationModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
-    const added = wb.addCfRule(0, {
+    wb.addCfRule(0, {
       // Include null, undefined, and a hole before the valid range. The old
       // reader skipped those entries and still passed the later range to C.
       ranges: Object.assign(new Array(4), { 0: null, 1: undefined, 3: RANGE }),
       type: 3,
       dataBar: { min: { type: 3 }, max: { type: 4 } },
     });
-    assert.ok(added.status.ok, JSON.stringify(added.status));
     const stored = readAll(
       () => wb.getCfRuleCount(0),
       (i) => wb.getCfRule(0, i),
@@ -270,7 +266,7 @@ test('conditional-format arrays skip nullish entries and keep later records', as
 
 test('named-style and theme integer fields reject before their C mutations', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
     const styleCount = wb.listCellStyles().length;
     for (const value of [2 ** 32, Number.NaN, 1.5, -1]) {
@@ -294,15 +290,14 @@ test('named-style and theme integer fields reject before their C mutations', asy
 
 test('style and CF reader defaults survive nullish fields and valid u8 boundaries', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
     const font = wb.addFont({ name: 'Reader defaults', size: null, colorArgb: undefined, underline: null });
-    assert.ok(font.status.ok, JSON.stringify(font.status));
-    const storedFont = wb.getFont(font.index);
+    const storedFont = wb.getFont(font);
     assert.equal(storedFont.size, 11);
     assert.equal(storedFont.colorArgb >>> 0, 0xff000000);
 
-    const cf = wb.addCfRule(
+    wb.addCfRule(
       0,
       dataBarRule({
         fill: { r: 255, g: 0, b: 1 },
@@ -310,7 +305,6 @@ test('style and CF reader defaults survive nullish fields and valid u8 boundarie
         maxLengthPct: 100,
       }),
     );
-    assert.ok(cf.status.ok, JSON.stringify(cf));
     const stored = readAll(
       () => wb.getCfRuleCount(0),
       (i) => wb.getCfRule(0, i),

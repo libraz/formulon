@@ -4,13 +4,9 @@ import { assert, getModule, pkgRoot, readAll } from './smoke_support.mjs';
 
 const RANGE = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
 
-function statusOf(result) {
-  return typeof result.ok === 'boolean' ? result : result.status;
-}
-
 test('validation and merge range integers reject narrowing before mutation', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
     const before = readAll(
       () => wb.getValidationCount(0),
@@ -50,9 +46,9 @@ test('validation and merge range integers reject narrowing before mutation', asy
 
 test('filter kind is validated without aborting and date-group bytes do not wrap', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
-    const before = wb.getAutoFilter(0).autoFilter;
+    const before = wb.getAutoFilter(0);
     assert.throws(
       () =>
         wb.setAutoFilter(0, {
@@ -61,11 +57,10 @@ test('filter kind is validated without aborting and date-group bytes do not wrap
         }),
       RangeError,
     );
-    assert.deepEqual(wb.getAutoFilter(0).autoFilter, before);
+    assert.deepEqual(wb.getAutoFilter(0), before);
 
-    const keep = wb.setAutoFilter(0, { range: RANGE, columns: [{ colId: 0, kind: 0 }] });
-    assert.ok(statusOf(keep).ok, JSON.stringify(keep));
-    assert.equal(wb.getAutoFilter(0).autoFilter.columns[0].kind, 0);
+    wb.setAutoFilter(0, { range: RANGE, columns: [{ colId: 0, kind: 0 }] });
+    assert.equal(wb.getAutoFilter(0).columns[0].kind, 0);
   } finally {
     wb.dispose();
   }
@@ -75,14 +70,15 @@ test('filter wrong primitive is caught in a child process instead of aborting No
   await getModule();
   const moduleUrl = new URL('../dist/index.mjs', import.meta.url).href;
   const script = `
-    import mod from ${JSON.stringify(moduleUrl)};
-    const wb = mod.Workbook.createDefault().value;
+    import { createFormulon } from ${JSON.stringify(moduleUrl)};
+    const mod = await createFormulon();
+    const wb = mod.Workbook.createDefault();
     try {
       wb.setAutoFilter(0, { range: { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, columns: [{ kind: 'bad' }] });
       process.exitCode = 2;
     } catch (error) {
       if (!(error instanceof TypeError)) process.exitCode = 3;
-      else if (wb.getAutoFilter(0).autoFilter !== null) process.exitCode = 4;
+      else if (wb.getAutoFilter(0) !== null) process.exitCode = 4;
       else console.log('caught');
     } finally {
       wb.dispose();
@@ -99,9 +95,9 @@ test('filter wrong primitive is caught in a child process instead of aborting No
 
 test('threaded mention and image integer fields reject before C mutation', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
-    const beforeComments = wb.listThreadedComments(0).comments.length;
+    const beforeComments = wb.listThreadedComments(0).length;
     assert.throws(
       () =>
         wb.addThreadedComment(0, {
@@ -112,16 +108,19 @@ test('threaded mention and image integer fields reject before C mutation', async
         }),
       RangeError,
     );
-    assert.equal(wb.listThreadedComments(0).comments.length, beforeComments);
+    assert.equal(wb.listThreadedComments(0).length, beforeComments);
 
     assert.throws(() => wb.addImage(0, new Uint8Array([1, 2, 3]), { rowOffsetEmu: Number.NaN }), RangeError);
     assert.equal(wb.listDrawingObjects(0).length, 0);
 
-    assert.doesNotThrow(() =>
-      wb.addImage(0, new Uint8Array([1, 2, 3]), {
-        rowOffsetEmu: -(2 ** 63),
-        colOffsetEmu: 2 ** 63 - 1024,
-      }),
+    // The offsets fit the binding's int64 range; only the image bytes are refused, by the host.
+    assert.throws(
+      () =>
+        wb.addImage(0, new Uint8Array([1, 2, 3]), {
+          rowOffsetEmu: -(2 ** 63),
+          colOffsetEmu: 2 ** 63 - 1024,
+        }),
+      (e) => e.name === 'FormulonError',
     );
 
     assert.throws(() => wb.addImage(0, new Uint8Array([1, 2, 3]), { widthEmu: 2 ** 63 }), RangeError);
@@ -133,7 +132,7 @@ test('threaded mention and image integer fields reject before C mutation', async
 
 test('UI reader stops at a throwing getter and leaves the workbook unchanged', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
     const filter = { range: RANGE, columns: [{}] };
     Object.defineProperty(filter.columns[0], 'kind', {
@@ -143,7 +142,7 @@ test('UI reader stops at a throwing getter and leaves the workbook unchanged', a
       },
     });
     assert.throws(() => wb.setAutoFilter(0, filter), /filter getter/);
-    assert.equal(wb.getAutoFilter(0).autoFilter, null);
+    assert.equal(wb.getAutoFilter(0), null);
 
     const validation = { ranges: [RANGE] };
     Object.defineProperty(validation, 'type', {
@@ -167,9 +166,9 @@ test('UI reader stops at a throwing getter and leaves the workbook unchanged', a
 
 test('nullish UI fields retain their defaults', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
-    const result = wb.setAutoFilter(0, {
+    wb.setAutoFilter(0, {
       range: { ...RANGE, lastCol: 1 },
       columns: [
         { colId: null, kind: undefined },
@@ -177,8 +176,7 @@ test('nullish UI fields retain their defaults', async () => {
       ],
       sort: null,
     });
-    assert.ok(statusOf(result).ok, JSON.stringify(result));
-    const stored = wb.getAutoFilter(0).autoFilter;
+    const stored = wb.getAutoFilter(0);
     assert.equal(stored.columns[0].colId, 0);
     assert.equal(stored.columns[0].kind, 0);
     assert.equal(stored.columns[1].dateGroups[0].month, 0);

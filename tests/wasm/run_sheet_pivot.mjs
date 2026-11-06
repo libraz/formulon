@@ -1,112 +1,107 @@
 import assert from 'node:assert/strict';
-import { buildPivotWorkbookBytes, findPivotCell, PIVOT, VAL } from './smoke_support.mjs';
+import { StatusCode } from '../../packages/npm/common.mjs';
+import { buildPivotWorkbookBytes, expectFailure, findPivotCell, PIVOT, VAL } from './smoke_support.mjs';
 
 export function registerSheetPivot(Module, test) {
   test('setIterative accepts knobs without crashing', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
-      assert.ok(wb.setIterative(true, 50, 0.001).ok);
+      wb.setIterative(true, 50, 0.001);
       // Set a fixed-point formula (sqrt(2) iteration). The engine may
       // surface NUMBER (converged) or ERROR depending on the recalc
       // path; we only assert that the call sequence doesn't crash and
-      // that getValue returns a well-formed envelope.
-      assert.ok(wb.setNumber(0, 0, 0, 1.0).ok);
-      assert.ok(wb.setFormula(0, 0, 0, '=0.5*(A1+2/A1)').ok);
-      assert.ok(wb.recalc().ok);
+      // that getValue returns a well-formed value.
+      wb.setNumber(0, 0, 0, 1.0);
+      wb.setFormula(0, 0, 0, '=0.5*(A1+2/A1)');
+      wb.recalc();
       const v = wb.getValue(0, 0, 0);
-      assert.ok(v.status.ok);
       // Known well-formed kinds.
-      assert.ok([VAL.NUMBER, VAL.ERROR, VAL.BLANK].includes(v.value.kind));
+      assert.ok([VAL.NUMBER, VAL.ERROR, VAL.BLANK].includes(v.kind));
     } finally {
       wb.delete();
     }
   });
 
   test('renameSheet updates the sheet name', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
-      assert.equal(wb.getSheetCount().value, 1);
-      assert.ok(wb.renameSheet(0, 'Renamed').ok);
+      assert.equal(wb.getSheetCount(), 1);
+      wb.renameSheet(0, 'Renamed');
       const r = wb.getSheetName(0);
-      assert.ok(r.status.ok);
-      assert.equal(r.value, 'Renamed');
+      assert.equal(r, 'Renamed');
     } finally {
       wb.delete();
     }
   });
 
   test('renameSheet rejects forbidden characters', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
-      const r = wb.renameSheet(0, 'Bad/Name');
-      assert.equal(r.ok, false);
-      assert.notEqual(r.code, 0);
+      expectFailure(() => wb.renameSheet(0, 'Bad/Name'));
     } finally {
       wb.delete();
     }
   });
 
   test('removeSheet drops a sheet but rejects the last one', () => {
-    const wb = Module.Workbook.createEmpty().value;
+    const wb = Module.Workbook.createEmpty();
     try {
-      assert.ok(wb.addSheet('A').status.ok);
-      assert.ok(wb.addSheet('B').status.ok);
-      assert.ok(wb.addSheet('C').status.ok);
-      assert.equal(wb.getSheetCount().value, 3);
-      assert.ok(wb.removeSheet(1).ok);
-      assert.equal(wb.getSheetCount().value, 2);
-      assert.equal(wb.getSheetName(0).value, 'A');
-      assert.equal(wb.getSheetName(1).value, 'C');
+      wb.addSheet('A');
+      wb.addSheet('B');
+      wb.addSheet('C');
+      assert.equal(wb.getSheetCount(), 3);
+      wb.removeSheet(1);
+      assert.equal(wb.getSheetCount(), 2);
+      assert.equal(wb.getSheetName(0), 'A');
+      assert.equal(wb.getSheetName(1), 'C');
     } finally {
       wb.delete();
     }
 
     // Workbook with a single sheet rejects removeSheet(0).
-    const lone = Module.Workbook.createDefault().value;
+    const lone = Module.Workbook.createDefault();
     try {
-      const r = lone.removeSheet(0);
-      assert.equal(r.ok, false);
+      expectFailure(() => lone.removeSheet(0));
     } finally {
       lone.delete();
     }
   });
 
   test('moveSheet rearranges sheets (Excel UI semantics)', () => {
-    const wb = Module.Workbook.createEmpty().value;
+    const wb = Module.Workbook.createEmpty();
     try {
-      assert.ok(wb.addSheet('Alpha').status.ok);
-      assert.ok(wb.addSheet('Beta').status.ok);
-      assert.ok(wb.addSheet('Gamma').status.ok);
+      wb.addSheet('Alpha');
+      wb.addSheet('Beta');
+      wb.addSheet('Gamma');
       // Move Alpha (0) to the end. Excel semantics: to=2 (post-removal).
-      assert.ok(wb.moveSheet(0, 2).ok);
-      assert.equal(wb.getSheetName(0).value, 'Beta');
-      assert.equal(wb.getSheetName(1).value, 'Gamma');
-      assert.equal(wb.getSheetName(2).value, 'Alpha');
+      wb.moveSheet(0, 2);
+      assert.equal(wb.getSheetName(0), 'Beta');
+      assert.equal(wb.getSheetName(1), 'Gamma');
+      assert.equal(wb.getSheetName(2), 'Alpha');
     } finally {
       wb.delete();
     }
   });
 
   test('setDefinedName adds, updates, and removes', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
       assert.equal(wb.listDefinedNames().length, 0);
-      assert.ok(wb.setDefinedName('Pi', '=3.14').ok);
+      wb.setDefinedName('Pi', '=3.14');
       const listed = wb.listDefinedNames();
-      assert.ok(listed.status.ok);
       assert.equal(listed.length, 1);
       const a = listed[0];
       assert.equal(a.name, 'Pi');
       // The setter drops the leading '=', as the file form carries none.
       assert.equal(a.formula, '3.14');
 
-      assert.ok(wb.setDefinedName('PI', '=3.14159').ok);
+      wb.setDefinedName('PI', '=3.14159');
       assert.equal(wb.listDefinedNames().length, 1);
       const b = wb.listDefinedNames()[0];
       assert.equal(b.name, 'Pi'); // authored case preserved
       assert.equal(b.formula, '3.14159');
 
-      assert.ok(wb.setDefinedName('Pi', '').ok);
+      wb.setDefinedName('Pi', '');
       assert.equal(wb.listDefinedNames().length, 0);
     } finally {
       wb.delete();
@@ -114,19 +109,18 @@ export function registerSheetPivot(Module, test) {
   });
 
   test('cellCount + cellAt iterate populated cells in order', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
-      assert.ok(wb.setNumber(0, 0, 0, 1).ok);
-      assert.ok(wb.setNumber(0, 0, 1, 2).ok);
-      assert.ok(wb.setFormula(0, 1, 0, '=A1+B1').ok);
-      assert.ok(wb.recalc().ok);
+      wb.setNumber(0, 0, 0, 1);
+      wb.setNumber(0, 0, 1, 2);
+      wb.setFormula(0, 1, 0, '=A1+B1');
+      wb.recalc();
 
-      const count = wb.getCellCount(0).value;
+      const count = wb.getCellCount(0);
       assert.ok(count >= 3, `expected >=3 cells, got ${count}`);
 
       // The very first iteration entry should be A1 (row=0, col=0).
       const c0 = wb.getCellAt(0, 0);
-      assert.ok(c0.status.ok);
       assert.equal(c0.row, 0);
       assert.equal(c0.col, 0);
       assert.equal(c0.formula, null);
@@ -137,43 +131,35 @@ export function registerSheetPivot(Module, test) {
     }
   });
 
-  test('failed entry lookups omit optional payload fields', () => {
-    const wb = Module.Workbook.createDefault().value;
+  test('failed entry lookups throw', () => {
+    const wb = Module.Workbook.createDefault();
     try {
-      for (const entry of [wb.getCellAt(99, 0), wb.getTable(0)]) {
-        assert.equal(entry.status.ok, false);
-      }
-      assert.ok(!('value' in wb.getCellAt(99, 0)));
-      assert.ok(!('name' in wb.getTable(0)));
+      expectFailure(() => wb.getCellAt(99, 0), StatusCode.SheetIndexOutOfRange);
+      expectFailure(() => wb.getTable(0), StatusCode.IndexOutOfRange);
     } finally {
       wb.delete();
     }
   });
 
   test('pivotCount + pivotLayout expose PivotTable projection status', () => {
-    const wb = Module.Workbook.createDefault().value;
+    const wb = Module.Workbook.createDefault();
     try {
-      assert.equal(wb.getPivotCount(0).value, 0);
+      assert.equal(wb.getPivotCount(0), 0);
 
-      const missing = wb.getPivotLayout(0, 0);
-      assert.equal(missing.status.ok, false);
-      assert.notEqual(missing.status.code, 0);
-      assert.equal(missing.rect, null);
-      assert.deepEqual(missing.cells, []);
+      expectFailure(() => wb.getPivotLayout(0, 0), StatusCode.IndexOutOfRange);
     } finally {
       wb.delete();
     }
   });
 
   test('pivotLayout projects loaded PivotTable cells for grid rendering', () => {
-    const wb = Module.Workbook.load(buildPivotWorkbookBytes()).value;
+    const wb = Module.Workbook.load(buildPivotWorkbookBytes());
     try {
-      assert.ok(wb.isValid(), Module.getLastErrorMessage());
-      assert.equal(wb.getPivotCount(0).value, 0);
-      assert.equal(wb.getPivotCount(1).value, 1);
+      assert.equal(wb.disposed, false);
+      assert.equal(wb.getPivotCount(0), 0);
+      assert.equal(wb.getPivotCount(1), 1);
 
       const layout = wb.getPivotLayout(1, 0);
-      assert.ok(layout.status.ok, `status=${JSON.stringify(layout.status)}`);
       assert.deepEqual(layout.rect, { firstRow: 0, firstCol: 3, lastRow: 3, lastCol: 4 });
       assert.ok(layout.cells.length > 0);
 

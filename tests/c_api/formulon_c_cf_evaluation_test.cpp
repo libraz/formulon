@@ -195,7 +195,7 @@ TEST(FormulonCApiCf, DestroyHandlesNullSafely) {
   SUCCEED();
 }
 
-TEST(FormulonCApiCf, OutOfRangeIndicesReturnInvalidArgument) {
+TEST(FormulonCApiCf, OutOfRangeIndicesReturnIndexOutOfRange) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
@@ -209,11 +209,11 @@ TEST(FormulonCApiCf, OutOfRangeIndicesReturnInvalidArgument) {
   std::uint32_t col = 0;
   std::size_t match_count = 0;
   fm_status_t rc = fm_cf_results_get_cell_at(results.handle, 0, &row, &col, &match_count);
-  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(rc, FM_STATUS_INDEX_OUT_OF_RANGE);
 
   fm_cf_match_t m{};
   rc = fm_cf_results_get_match_at(results.handle, 0, 0, &m);
-  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(rc, FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiCf, NullWorkbookSetsBindingError) {

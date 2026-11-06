@@ -540,12 +540,10 @@ TEST(FormulonCApiPrintSettings, ColumnBreaksSpanEveryRow) {
   EXPECT_EQ(brk.max, 1048575U);
 }
 
-TEST(FormulonCApiPrintSettings, RemovingAnAbsentBreakSucceeds) {
+TEST(FormulonCApiPrintSettings, RemovingAnAbsentBreakIsNotFound) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  // A caller clearing a break it is not sure exists is not making a
-  // mistake, so absence is not an error.
-  EXPECT_EQ(fm_sheet_remove_row_break(wb.handle, 0, 7), 0);
+  EXPECT_EQ(fm_sheet_remove_row_break(wb.handle, 0, 7), FM_STATUS_NOT_FOUND);
   ASSERT_EQ(fm_sheet_add_row_break(wb.handle, 0, 7, 1), 0);
   EXPECT_EQ(fm_sheet_remove_row_break(wb.handle, 0, 7), 0);
   EXPECT_EQ(count_of(fm_sheet_get_row_break_count, wb.handle, 0), 0U);
@@ -580,8 +578,8 @@ TEST(FormulonCApiPrintSettings, BreakAtRejectsOutOfRangeIndex) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_page_break_t brk{};
-  EXPECT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 0, &brk), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_get_column_break_at(wb.handle, 0, 0, &brk), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 0, &brk), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_get_column_break_at(wb.handle, 0, 0, &brk), FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 
 /* -------------------------------------------------------------------------- */

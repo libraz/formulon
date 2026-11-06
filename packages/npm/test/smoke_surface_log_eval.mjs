@@ -2,6 +2,7 @@ import test from 'node:test';
 import {
   assert,
   emitXlsbWarning,
+  expectFailure,
   getModule,
   loadStagedFactory,
   loadStagedModule,
@@ -57,27 +58,25 @@ test('setLogMinLevel / setLogSink are module-level controls on the Module', asyn
   assert.equal(typeof Module.setLogSink, 'function');
   const mod = await loadStagedModule();
   for (const level of Object.values(mod.LogLevel)) {
-    assert.ok(Module.setLogMinLevel(level).ok, `level=${level}`);
+    Module.setLogMinLevel(level);
   }
   for (const bad of [-1, 5, 99]) {
-    const r = Module.setLogMinLevel(bad);
-    assert.equal(r.ok, false, `level=${bad} should be rejected`);
-    assert.equal(r.code, 2);
+    expectFailure(() => Module.setLogMinLevel(bad), Module.StatusCode.InvalidArgument);
   }
-  assert.ok(Module.setLogMinLevel(mod.LogLevel.Off).ok);
+  Module.setLogMinLevel(mod.LogLevel.Off);
 });
 
 test('a registered sink receives records only once the threshold admits them', async () => {
   const Module = await getModule();
   const mod = await loadStagedModule();
   const records = [];
-  assert.ok(Module.setLogSink((record) => records.push(new Uint8Array(record))).ok);
+  Module.setLogSink((record) => records.push(new Uint8Array(record)));
   try {
     // Default threshold is Off: the same save must produce nothing.
     emitXlsbWarning(Module, mod.WorkbookFormat.Xlsb);
     assert.deepEqual(records, []);
 
-    assert.ok(Module.setLogMinLevel(mod.LogLevel.Warn).ok);
+    Module.setLogMinLevel(mod.LogLevel.Warn);
     emitXlsbWarning(Module, mod.WorkbookFormat.Xlsb);
     assert.ok(records.length > 0, 'expected at least one record');
     for (const r of records) {
@@ -92,39 +91,41 @@ test('a registered sink receives records only once the threshold admits them', a
     assert.match(text, /xlsb\.writer\.formula_downgraded/);
     assert.match(text, /"level":"warn"/);
   } finally {
-    assert.ok(Module.setLogMinLevel(mod.LogLevel.Off).ok);
-    assert.ok(Module.setLogSink(null).ok);
+    Module.setLogMinLevel(mod.LogLevel.Off);
+    Module.setLogSink(null);
   }
 });
 
-test('a throwing log sink is dropped and leaves the engine usable', async () => {
+test('a throwing log sink surfaces its own exception and leaves the engine usable', async () => {
   const Module = await getModule();
   const mod = await loadStagedModule();
   let calls = 0;
-  assert.ok(
-    Module.setLogSink(() => {
-      calls += 1;
-      throw new Error('sink failure');
-    }).ok,
-  );
+  const thrown = new Error('sink failure');
+  Module.setLogSink(() => {
+    calls += 1;
+    throw thrown;
+  });
   try {
-    assert.ok(Module.setLogMinLevel(mod.LogLevel.Warn).ok);
+    Module.setLogMinLevel(mod.LogLevel.Warn);
     // The sink runs from deep inside the writer. If its exception reached
     // the C++ frames it would tear them down without running a single
-    // destructor, because the binary is linked without exception support.
-    emitXlsbWarning(Module, mod.WorkbookFormat.Xlsb);
+    // destructor, because the binary is linked without exception support;
+    // it is re-thrown from the outer call instead.
+    assert.throws(
+      () => emitXlsbWarning(Module, mod.WorkbookFormat.Xlsb),
+      (e) => e === thrown,
+    );
     assert.ok(calls > 0, 'expected the sink to be invoked');
   } finally {
-    assert.ok(Module.setLogMinLevel(mod.LogLevel.Off).ok);
-    assert.ok(Module.setLogSink(null).ok);
+    Module.setLogMinLevel(mod.LogLevel.Off);
+    Module.setLogSink(null);
   }
 
-  const wb = Module.Workbook.createDefault().value;
+  const wb = Module.Workbook.createDefault();
   try {
-    assert.ok(wb.setFormula(0, 0, 0, '=1+1').ok);
-    const after = wb.recalc();
-    assert.ok(after.ok, `recalc after a throwing sink: ${JSON.stringify(after)}`);
-    assert.equal(wb.getValue(0, 0, 0).value.number, 2);
+    wb.setFormula(0, 0, 0, '=1+1');
+    wb.recalc();
+    assert.equal(wb.getValue(0, 0, 0).number, 2);
   } finally {
     wb.delete();
   }
@@ -138,7 +139,7 @@ const ONE_SHOT_CASES = [
   { formula: '=1+2', kind: 1, number: 3 },
   { formula: '=A1', kind: 1, number: 0 },
   { formula: '=COUNTA(A1)', kind: 1, number: 0 },
-  { formula: '=ISBLANK(A1)', kind: 2, boolean: 1 },
+  { formula: '=ISBLANK(A1)', kind: 2, boolean: true },
   { formula: '=SUM(A1:A3)', kind: 1, number: 0 },
   { formula: '=SEQUENCE(3)', kind: 1, number: 1 },
   { formula: '=ROWS(SEQUENCE(3))', kind: 1, number: 3 },
@@ -147,15 +148,14 @@ test('evalFormula evaluates read-only against a blank anchor', async () => {
   const Module = await getModule();
   for (const spec of ONE_SHOT_CASES) {
     const r = Module.evalFormula(spec.formula);
-    assert.ok(r.status.ok, `${spec.formula}: ${JSON.stringify(r.status)}`);
-    assert.equal(r.value.kind, spec.kind, spec.formula);
+    assert.equal(r.kind, spec.kind, spec.formula);
     if (spec.number !== undefined) {
-      assert.equal(r.value.number, spec.number, spec.formula);
+      assert.equal(r.number, spec.number, spec.formula);
     }
     if (spec.boolean !== undefined) {
-      assert.equal(r.value.boolean, spec.boolean, spec.formula);
+      assert.equal(r.boolean, spec.boolean, spec.formula);
     }
-    assert.equal(r.value.errorCode, 0, spec.formula);
+    assert.equal('errorCode' in r, false, spec.formula);
   }
 });
 
@@ -193,34 +193,30 @@ test('staged constant tables carry the ordinals the staged .d.ts declares', asyn
 // Builds a workbook with one pivot, ready for the filter-contract cases.
 // `delete` is embind's auto-added finaliser; the caller must call it.
 function makePivotWorkbook(Workbook) {
-  const wb = Workbook.createDefault().value;
-  const cacheId = wb.addPivotCache(0).index;
+  const wb = Workbook.createDefault();
+  const cacheId = wb.addPivotCache(0);
   // A cache without a worksheet source cannot be saved, so the fixture
   // declares the range its two fields and two records occupy.
-  assert.ok(wb.setPivotCacheWorksheetSource(cacheId, { present: true, ref: 'A1:B3', sheet: 'Sheet1' }).ok);
-  assert.ok(wb.addPivotCacheField(cacheId, 'Region').status.ok);
-  assert.ok(wb.addPivotCacheField(cacheId, 'Amount').status.ok);
+  wb.setPivotCacheWorksheetSource(cacheId, { present: true, ref: 'A1:B3', sheet: 'Sheet1' });
+  wb.addPivotCacheField(cacheId, 'Region');
+  wb.addPivotCacheField(cacheId, 'Amount');
   for (const [region, amount] of [
     ['East', 10],
     ['West', 30],
   ]) {
-    const rec = wb.addPivotCacheRecord(cacheId).index;
-    assert.ok(wb.setPivotCacheRecordText(cacheId, rec, 0, region).ok);
-    assert.ok(wb.setPivotCacheRecordNumber(cacheId, rec, 1, amount).ok);
+    const rec = wb.addPivotCacheRecord(cacheId);
+    wb.setPivotCacheRecordText(cacheId, rec, 0, region);
+    wb.setPivotCacheRecordNumber(cacheId, rec, 1, amount);
   }
   const pivot = wb.addPivot(0, 'Pivot1', cacheId, 0, 4);
-  assert.ok(pivot.status.ok, JSON.stringify(pivot.status));
-  assert.ok(wb.addPivotField(0, pivot.index, { sourceName: 'Region', axis: 0 }).status.ok);
-  const amountField = wb.addPivotField(0, pivot.index, { sourceName: 'Amount', axis: 2 });
-  assert.ok(amountField.status.ok);
-  assert.ok(
-    wb.addPivotDataField(0, pivot.index, {
-      name: 'Sum of Amount',
-      fieldIndex: amountField.index,
-      aggregation: 0,
-    }).status.ok,
-  );
-  return { wb, pivot: pivot.index };
+  wb.addPivotField(0, pivot, { sourceName: 'Region', axis: 0 });
+  const amountField = wb.addPivotField(0, pivot, { sourceName: 'Amount', axis: 2 });
+  wb.addPivotDataField(0, pivot, {
+    name: 'Sum of Amount',
+    fieldIndex: amountField,
+    aggregation: 0,
+  });
+  return { wb, pivot: pivot };
 }
 
 // greaterThan on a double payload: the shape pivotFilterAt must read back.
@@ -236,10 +232,9 @@ test('pivotFilterAt reads back an added filter field for field', async () => {
   const Module = await getModule();
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
-    assert.ok(wb.addPivotFilter(0, pivot, PIVOT_FILTER).status.ok);
-    assert.equal(wb.getPivotFilterCount(0, pivot).value, 1);
+    wb.addPivotFilter(0, pivot, PIVOT_FILTER);
+    assert.equal(wb.getPivotFilterCount(0, pivot), 1);
     const got = wb.getPivotFilter(0, pivot, 0);
-    assert.ok(got.status.ok, JSON.stringify(got.status));
     assert.equal(got.axis, PIVOT_FILTER.axis);
     assert.equal(got.fieldName, PIVOT_FILTER.fieldName);
     assert.equal(got.type, PIVOT_FILTER.type);
@@ -254,9 +249,9 @@ test('pivotFilterCount counts the filters on the pivot', async () => {
   const Module = await getModule();
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
-    assert.equal(wb.getPivotFilterCount(0, pivot).value, 0);
-    assert.ok(wb.addPivotFilter(0, pivot, PIVOT_FILTER).status.ok);
-    assert.equal(wb.getPivotFilterCount(0, pivot).value, 1);
+    assert.equal(wb.getPivotFilterCount(0, pivot), 0);
+    wb.addPivotFilter(0, pivot, PIVOT_FILTER);
+    assert.equal(wb.getPivotFilterCount(0, pivot), 1);
   } finally {
     wb.delete();
   }
@@ -267,21 +262,19 @@ test('pivot filters survive save/load', async () => {
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   let bytes;
   try {
-    assert.ok(wb.addPivotFilter(0, pivot, PIVOT_FILTER).status.ok);
-    assert.equal(wb.getPivotFilterCount(0, pivot).value, 1);
+    wb.addPivotFilter(0, pivot, PIVOT_FILTER);
+    assert.equal(wb.getPivotFilterCount(0, pivot), 1);
     const saved = wb.save();
-    assert.ok(saved.status.ok, JSON.stringify(saved.status));
-    bytes = saved.bytes;
+    bytes = saved;
   } finally {
     wb.delete();
   }
-  const reloaded = Module.Workbook.load(bytes).value;
+  const reloaded = Module.Workbook.load(bytes);
   try {
-    assert.equal(reloaded.getPivotCount(0).value, 1);
+    assert.equal(reloaded.getPivotCount(0), 1);
     // The filter is written as `<filters>` and decodes back into the list.
-    assert.equal(reloaded.getPivotFilterCount(0, 0).value, 1);
+    assert.equal(reloaded.getPivotFilterCount(0, 0), 1);
     const got = reloaded.getPivotFilter(0, 0, 0);
-    assert.ok(got.status.ok, JSON.stringify(got.status));
     assert.equal(got.fieldName, PIVOT_FILTER.fieldName);
     assert.equal(got.type, PIVOT_FILTER.type);
     assert.equal(got.valueKind, PIVOT_FILTER.valueKind);
@@ -295,8 +288,7 @@ test('pivotFilterAt rejects an out-of-range index', async () => {
   const Module = await getModule();
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
-    const got = wb.getPivotFilter(0, pivot, 99);
-    assert.equal(got.status.ok, false);
+    expectFailure(() => wb.getPivotFilter(0, pivot, 99));
   } finally {
     wb.delete();
   }
@@ -306,24 +298,24 @@ test('a required pivot spec string field left out of the object is rejected, not
   const Module = await getModule();
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
-    const fieldCountBefore = wb.getPivotFieldCount(0, pivot).value;
-    const field = wb.addPivotField(0, pivot, { axis: 0 }); // no `sourceName`
-    assert.equal(field.status.ok, false);
-    assert.equal(field.status.code, 7001);
-    assert.equal(wb.getPivotFieldCount(0, pivot).value, fieldCountBefore, 'no field must have been added');
+    const fieldCountBefore = wb.getPivotFieldCount(0, pivot);
+    // no `sourceName`
+    expectFailure(() => wb.addPivotField(0, pivot, { axis: 0 }), Module.StatusCode.BindingNullPointer);
+    assert.equal(wb.getPivotFieldCount(0, pivot), fieldCountBefore, 'no field must have been added');
 
     // `name` is optional: an omitted one is derived from the workbook profile.
-    const dataFieldCountBefore = wb.getPivotDataFieldCount(0, pivot).value;
+    const dataFieldCountBefore = wb.getPivotDataFieldCount(0, pivot);
     const dataField = wb.addPivotDataField(0, pivot, { fieldIndex: 0, aggregation: 0 }); // no `name`
-    assert.ok(dataField.status.ok, JSON.stringify(dataField.status));
-    assert.equal(wb.getPivotDataFieldCount(0, pivot).value, dataFieldCountBefore + 1);
-    assert.equal(wb.getPivotDataField(0, pivot, dataField.index).name, 'Sum of Region');
+    assert.equal(wb.getPivotDataFieldCount(0, pivot), dataFieldCountBefore + 1);
+    assert.equal(wb.getPivotDataField(0, pivot, dataField).name, 'Sum of Region');
 
-    const filterCountBefore = wb.getPivotFilterCount(0, pivot).value;
-    const filter = wb.addPivotFilter(0, pivot, { axis: 0, type: 1, valueKind: 1, valueDouble: 15 }); // no `fieldName`
-    assert.equal(filter.status.ok, false);
-    assert.equal(filter.status.code, 7001);
-    assert.equal(wb.getPivotFilterCount(0, pivot).value, filterCountBefore, 'no filter must have been added');
+    const filterCountBefore = wb.getPivotFilterCount(0, pivot);
+    // no `fieldName`
+    expectFailure(
+      () => wb.addPivotFilter(0, pivot, { axis: 0, type: 1, valueKind: 1, valueDouble: 15 }),
+      Module.StatusCode.BindingNullPointer,
+    );
+    assert.equal(wb.getPivotFilterCount(0, pivot), filterCountBefore, 'no filter must have been added');
   } finally {
     wb.delete();
   }
@@ -339,24 +331,21 @@ test('getVersion returns a non-empty string', async () => {
 test('evalFormula(=SUM(1,2,3)) returns NUMBER 6', async () => {
   const Module = await getModule();
   const r = Module.evalFormula('=SUM(1,2,3)');
-  assert.ok(r.status.ok, `status=${JSON.stringify(r.status)}`);
-  assert.equal(r.value.kind, VAL.NUMBER);
-  assert.equal(r.value.number, 6);
+  assert.equal(r.kind, VAL.NUMBER);
+  assert.equal(r.number, 6);
 });
 
 test('evalFormula(=1/0) surfaces Excel error as a value (not failed status)', async () => {
   const Module = await getModule();
   const r = Module.evalFormula('=1/0');
-  assert.ok(r.status.ok, `status=${JSON.stringify(r.status)}`);
-  assert.equal(r.value.kind, VAL.ERROR);
+  assert.equal(r.kind, VAL.ERROR);
 });
 
 test('evalFormula uses read-only evaluation for the intersection operator', async () => {
   const Module = await getModule();
   const r = Module.evalFormula('=A1 B1');
-  assert.ok(r.status.ok, `status=${JSON.stringify(r.status)}`);
-  assert.equal(r.value.kind, VAL.ERROR);
-  assert.equal(r.value.errorCode, 0); // ErrorCode::Null / #NULL!
+  assert.equal(r.kind, VAL.ERROR);
+  assert.equal(r.errorCode, 0); // ErrorCode::Null / #NULL!
 });
 
 // Values are the mac-365-* oracle captures of `DOLLAR(-1234.567)`; the
@@ -396,22 +385,22 @@ const PROFILE_LOCALES = [
 
 test('setExcelProfileId switches a live workbook through every profile id', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
-    assert.equal(wb.getExcelProfileId().value, 'win-365-en_US');
-    assert.ok(wb.setFormula(0, 0, 0, '=DOLLAR(-1234.567)').ok);
+    assert.equal(wb.getExcelProfileId(), 'win-365-en_US');
+    wb.setFormula(0, 0, 0, '=DOLLAR(-1234.567)');
     for (const host of ['mac', 'win']) {
       for (const locale of PROFILE_LOCALES) {
         const id = `${host}-365-${locale}`;
-        assert.ok(wb.setExcelProfileId(id).ok, id);
-        assert.equal(wb.getExcelProfileId().value, id);
-        assert.ok(wb.recalc().ok, id);
+        wb.setExcelProfileId(id);
+        assert.equal(wb.getExcelProfileId(), id);
+        wb.recalc();
         if (id in PROFILE_DOLLAR) {
-          assert.equal(wb.getValue(0, 0, 0).value.text, PROFILE_DOLLAR[id], id);
+          assert.equal(wb.getValue(0, 0, 0).text, PROFILE_DOLLAR[id], id);
         }
       }
     }
-    assert.equal(wb.setExcelProfileId('mac-365-xx_XX').ok, false);
+    expectFailure(() => wb.setExcelProfileId('mac-365-xx_XX'));
   } finally {
     wb.delete();
   }
@@ -419,19 +408,19 @@ test('setExcelProfileId switches a live workbook through every profile id', asyn
 
 test('formula and function-name localization is keyed by profile id', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
-    assert.equal(wb.localizeFormula('=SUM(1.5,2)', 'mac-365-de_DE').value, '=SUMME(1,5;2)');
-    assert.equal(wb.canonicalizeFormula('=SUMME(1,5;2)', 'mac-365-de_DE').value, '=SUM(1.5,2)');
-    assert.equal(wb.localizeFormula('=IF(TRUE,1,2)', 'mac-365-fr_FR').value, '=SI(VRAI;1;2)');
-    assert.equal(wb.localizeFormula('=#N/A', 'mac-365-de_DE').value, '=#NV');
-    assert.equal(wb.canonicalizeFormula('=#NV', 'mac-365-de_DE').value, '=#N/A');
-    assert.equal(wb.localizeFormula('=A1&";"', 'mac-365-de_DE').value, '=A1&";"');
-    assert.equal(wb.localizeFunctionName('SUM', 'mac-365-de_DE').value, 'SUMME');
-    assert.equal(wb.canonicalizeFunctionName('SUMME', 'win-365-de_DE').value, 'SUM');
-    assert.equal(wb.localizeFormula('=SUM(1)', 'nope').status.ok, false);
-    assert.equal(wb.canonicalizeFormula('=SUM(1)', 'nope').status.ok, false);
-    assert.equal(wb.canonicalizeFunctionName('SUM', 'nope').status.ok, false);
+    assert.equal(wb.localizeFormula('=SUM(1.5,2)', 'mac-365-de_DE'), '=SUMME(1,5;2)');
+    assert.equal(wb.canonicalizeFormula('=SUMME(1,5;2)', 'mac-365-de_DE'), '=SUM(1.5,2)');
+    assert.equal(wb.localizeFormula('=IF(TRUE,1,2)', 'mac-365-fr_FR'), '=SI(VRAI;1;2)');
+    assert.equal(wb.localizeFormula('=#N/A', 'mac-365-de_DE'), '=#NV');
+    assert.equal(wb.canonicalizeFormula('=#NV', 'mac-365-de_DE'), '=#N/A');
+    assert.equal(wb.localizeFormula('=A1&";"', 'mac-365-de_DE'), '=A1&";"');
+    assert.equal(wb.localizeFunctionName('SUM', 'mac-365-de_DE'), 'SUMME');
+    assert.equal(wb.canonicalizeFunctionName('SUMME', 'win-365-de_DE'), 'SUM');
+    expectFailure(() => wb.localizeFormula('=SUM(1)', 'nope'));
+    expectFailure(() => wb.canonicalizeFormula('=SUM(1)', 'nope'));
+    expectFailure(() => wb.canonicalizeFunctionName('SUM', 'nope'));
   } finally {
     wb.delete();
   }
@@ -439,25 +428,21 @@ test('formula and function-name localization is keyed by profile id', async () =
 
 test('getLocaleFacts reports separators, names, error spellings and measurement', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
     const mac = wb.getLocaleFacts('mac-365-de_DE');
-    assert.ok(mac.status.ok);
-    assert.equal(mac.facts.decimalSeparator, ',');
-    assert.equal(mac.facts.listSeparator, ';');
-    assert.equal(mac.facts.dateOrder, 'dmy');
-    assert.equal(mac.facts.measured, true);
-    const na = mac.facts.errorNames.find((e) => e.canonical === '#N/A');
+    assert.equal(mac.decimalSeparator, ',');
+    assert.equal(mac.listSeparator, ';');
+    assert.equal(mac.dateOrder, 'dmy');
+    assert.equal(mac.measured, true);
+    const na = mac.errorNames.find((e) => e.canonical === '#N/A');
     assert.equal(na.localized, '#NV');
     const listed = wb.listLocaleErrorNames('mac-365-de_DE');
-    assert.ok(listed.status.ok);
-    assert.deepEqual([...listed], mac.facts.errorNames);
-    assert.equal(wb.listLocaleErrorNames('nope').status.ok, false);
-    assert.equal(wb.getLocaleFacts('win-365-de_DE').facts.measured, false);
-    assert.equal(wb.getLocaleFacts('win-365-en_US').facts.decimalSeparator, '.');
-    const bad = wb.getLocaleFacts('nope');
-    assert.equal(bad.status.ok, false);
-    assert.equal(bad.facts, null);
+    assert.deepEqual([...listed], mac.errorNames);
+    expectFailure(() => wb.listLocaleErrorNames('nope'));
+    assert.equal(wb.getLocaleFacts('win-365-de_DE').measured, false);
+    assert.equal(wb.getLocaleFacts('win-365-en_US').decimalSeparator, '.');
+    expectFailure(() => wb.getLocaleFacts('nope'));
   } finally {
     wb.delete();
   }
@@ -467,24 +452,22 @@ test('pivot definition read-backs report what the setters wrote', async () => {
   const Module = await getModule();
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
-    assert.equal(wb.getPivotCacheId(0, pivot).index, wb.listPivotCaches()[0]);
-    assert.equal(wb.getPivotName(0, pivot).value, 'Pivot1');
+    assert.equal(wb.getPivotCacheId(0, pivot), wb.listPivotCaches()[0]);
+    assert.equal(wb.getPivotName(0, pivot), 'Pivot1');
     assert.deepEqual((({ rows, cols }) => ({ rows, cols }))(wb.getPivotGrandTotals(0, pivot)), {
       rows: true,
       cols: true,
     });
-    assert.ok(wb.setPivotGrandTotals(0, pivot, false, true).ok);
+    wb.setPivotGrandTotals(0, pivot, false, true);
     const totals = wb.getPivotGrandTotals(0, pivot);
-    assert.ok(totals.status.ok);
     assert.equal(totals.rows, false);
     assert.equal(totals.cols, true);
 
-    assert.deepEqual(wb.getPivotRowFieldOrder(0, pivot).indices, [0]);
-    assert.deepEqual(wb.getPivotColumnFieldOrder(0, pivot).indices, []);
+    assert.deepEqual(wb.getPivotRowFieldOrder(0, pivot), [0]);
+    assert.deepEqual(wb.getPivotColumnFieldOrder(0, pivot), []);
 
-    assert.ok(wb.setPivotFieldSort(0, pivot, 0, 0, 'Sum of Amount').ok);
+    wb.setPivotFieldSort(0, pivot, 0, 0, 'Sum of Amount');
     const region = wb.getPivotField(0, pivot, 0);
-    assert.ok(region.status.ok, JSON.stringify(region.status));
     assert.equal(region.sourceName, 'Region');
     assert.equal(region.axis, 0);
     assert.equal(region.cacheFieldIndex, 0);
@@ -494,23 +477,22 @@ test('pivot definition read-backs report what the setters wrote', async () => {
     assert.equal(region.groupBaseIndex, -1);
     assert.equal(wb.getPivotField(0, pivot, 1).axis, 2);
 
-    assert.ok(wb.addPivotFieldItem(0, pivot, 0, 'East', true).status.ok);
-    assert.ok(wb.addPivotFieldItem(0, pivot, 0, 'West', true).status.ok);
-    assert.ok(wb.setPivotFieldItemVisible(0, pivot, 0, 1, false).ok);
-    assert.equal(wb.getPivotFieldItemCount(0, pivot, 0).value, 2);
+    wb.addPivotFieldItem(0, pivot, 0, 'East', true);
+    wb.addPivotFieldItem(0, pivot, 0, 'West', true);
+    wb.setPivotFieldItemVisible(0, pivot, 0, 1, false);
+    assert.equal(wb.getPivotFieldItemCount(0, pivot, 0), 2);
     const east = wb.getPivotFieldItem(0, pivot, 0, 0);
     assert.equal(east.name, 'East');
     // The scratch cache holds no shared items, so a label binds to nothing.
     assert.equal(east.cacheIndex, -1);
     assert.equal(east.visible, true);
     assert.equal(wb.getPivotFieldItem(0, pivot, 0, 1).visible, false);
-    assert.ok(wb.addPivotFieldSharedItem(0, pivot, 0, 5, true).status.ok);
+    wb.addPivotFieldSharedItem(0, pivot, 0, 5, true);
     const bound = wb.getPivotFieldItem(0, pivot, 0, 2);
     assert.equal(bound.cacheIndex, 5);
     assert.equal(bound.name, '');
 
     const dataField = wb.getPivotDataField(0, pivot, 0);
-    assert.ok(dataField.status.ok, JSON.stringify(dataField.status));
     assert.equal(dataField.name, 'Sum of Amount');
     assert.equal(dataField.fieldIndex, 1);
     assert.equal(dataField.aggregation, 0);
@@ -526,7 +508,6 @@ test('pivot style info defaults on create, reads back what the setter wrote and 
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
     const initial = wb.getPivotStyleInfo(0, pivot);
-    assert.ok(initial.status.ok, JSON.stringify(initial.status));
     assert.equal(initial.present, true);
     assert.equal(initial.name, 'PivotStyleLight16');
     assert.deepEqual(
@@ -535,7 +516,7 @@ test('pivot style info defaults on create, reads back what the setter wrote and 
     );
     assert.equal(initial.showLastColumn, true);
 
-    assert.ok(wb.setPivotStyleInfo(0, pivot, { name: 'PivotStyleDark3', showRowStripes: true }).ok);
+    wb.setPivotStyleInfo(0, pivot, { name: 'PivotStyleDark3', showRowStripes: true });
     const set = wb.getPivotStyleInfo(0, pivot);
     assert.equal(set.name, 'PivotStyleDark3');
     assert.deepEqual(
@@ -545,8 +526,7 @@ test('pivot style info defaults on create, reads back what the setter wrote and 
 
     // Survives a save/load.
     const saved = wb.save();
-    assert.ok(saved.status.ok, JSON.stringify(saved.status));
-    const reloaded = Module.Workbook.load(saved.bytes).value;
+    const reloaded = Module.Workbook.load(saved);
     try {
       assert.equal(reloaded.getPivotStyleInfo(0, 0).name, 'PivotStyleDark3');
       assert.equal(reloaded.getPivotStyleInfo(0, 0).showRowStripes, true);
@@ -555,13 +535,13 @@ test('pivot style info defaults on create, reads back what the setter wrote and 
     }
 
     // An omitted name keeps the element without a style name.
-    assert.ok(wb.setPivotStyleInfo(0, pivot, {}).ok);
+    wb.setPivotStyleInfo(0, pivot, {});
     const bare = wb.getPivotStyleInfo(0, pivot);
     assert.equal(bare.present, true);
     assert.equal(bare.name, '');
 
-    assert.equal(wb.getPivotStyleInfo(0, 9).status.ok, false);
-    assert.equal(wb.setPivotStyleInfo(0, 9, { name: 'X' }).ok, false);
+    expectFailure(() => wb.getPivotStyleInfo(0, 9));
+    expectFailure(() => wb.setPivotStyleInfo(0, 9, { name: 'X' }));
   } finally {
     wb.delete();
   }
@@ -571,21 +551,19 @@ test('pivot definition read-backs reject out-of-range indices', async () => {
   const Module = await getModule();
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
-    for (const r of [
-      wb.getPivotCacheId(0, 9),
-      wb.getPivotName(0, 9),
-      wb.getPivotGrandTotals(9, pivot),
-      wb.getPivotRowFieldOrder(0, 9),
-      wb.getPivotColumnFieldOrder(0, 9),
-      wb.getPivotField(0, pivot, 99),
-      wb.getPivotFieldItemCount(0, pivot, 99),
-      wb.getPivotFieldItem(0, pivot, 0, 99),
-      wb.getPivotDataField(0, pivot, 99),
+    for (const call of [
+      () => wb.getPivotCacheId(0, 9),
+      () => wb.getPivotName(0, 9),
+      () => wb.getPivotGrandTotals(9, pivot),
+      () => wb.getPivotRowFieldOrder(0, 9),
+      () => wb.getPivotColumnFieldOrder(0, 9),
+      () => wb.getPivotField(0, pivot, 99),
+      () => wb.getPivotFieldItemCount(0, pivot, 99),
+      () => wb.getPivotFieldItem(0, pivot, 0, 99),
+      () => wb.getPivotDataField(0, pivot, 99),
     ]) {
-      const status = r.status;
-      assert.equal(status.ok, false, JSON.stringify(status));
+      expectFailure(call);
     }
-    assert.equal(wb.getPivotField(0, pivot, 99).axis, -1);
   } finally {
     wb.delete();
   }
@@ -599,21 +577,20 @@ test('an empty or omitted data field name is derived from the workbook profile',
       ['win-365-ja_JP', '合計 / Amount'],
       ['win-365-en_US', 'Sum of Amount'],
     ]) {
-      assert.ok(wb.setExcelProfileId(profile).ok);
+      wb.setExcelProfileId(profile);
       for (const spec of [
         { fieldIndex: 1, aggregation: 0 },
         { name: '', fieldIndex: 1, aggregation: 0 },
       ]) {
         // A repeat of the same source field is numbered, so each name starts from none.
-        assert.ok(wb.clearPivotDataFields(0, pivot).ok);
+        wb.clearPivotDataFields(0, pivot);
         const added = wb.addPivotDataField(0, pivot, spec);
-        assert.ok(added.status.ok, JSON.stringify(added.status));
-        assert.equal(wb.getPivotDataField(0, pivot, added.index).name, expected);
+        assert.equal(wb.getPivotDataField(0, pivot, added).name, expected);
       }
-      assert.ok(wb.setPivotDataField(0, pivot, 0, { fieldIndex: 1, aggregation: 2 }).ok);
+      wb.setPivotDataField(0, pivot, 0, { fieldIndex: 1, aggregation: 2 });
       assert.ok(wb.getPivotDataField(0, pivot, 0).name.endsWith(' Amount'));
     }
-    assert.equal(wb.addPivotDataField(0, pivot, { fieldIndex: 99, aggregation: 0 }).status.ok, false);
+    expectFailure(() => wb.addPivotDataField(0, pivot, { fieldIndex: 99, aggregation: 0 }));
   } finally {
     wb.delete();
   }
@@ -621,21 +598,19 @@ test('an empty or omitted data field name is derived from the workbook profile',
 
 test('active sheet is recorded in bookViews and survives a round trip', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault().value;
-  assert.ok(wb.addSheet('B').status.ok);
-  assert.ok(wb.addSheet('C').status.ok);
-  assert.equal(wb.getActiveSheet().index, 0);
-  assert.ok(wb.setActiveSheet(2).ok);
+  const wb = Module.Workbook.createDefault();
+  wb.addSheet('B');
+  wb.addSheet('C');
+  assert.equal(wb.getActiveSheet(), 0);
+  wb.setActiveSheet(2);
   const active = wb.getActiveSheet();
-  assert.ok(active.status.ok, JSON.stringify(active.status));
-  assert.equal(active.index, 2);
-  assert.equal(wb.setActiveSheet(9).ok, false);
-  assert.equal(wb.getActiveSheet().index, 2);
+  assert.equal(active, 2);
+  expectFailure(() => wb.setActiveSheet(9));
+  assert.equal(wb.getActiveSheet(), 2);
   const saved = wb.save();
-  assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  const loaded = Module.Workbook.load(saved.bytes).value;
+  const loaded = Module.Workbook.load(saved);
   try {
-    assert.equal(loaded.getActiveSheet().index, 2);
+    assert.equal(loaded.getActiveSheet(), 2);
   } finally {
     loaded.delete();
     wb.delete();
@@ -644,23 +619,20 @@ test('active sheet is recorded in bookViews and survives a round trip', async ()
 
 test('the show-phonetic flag survives value writes and a round trip', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault().value;
-  assert.equal(wb.getCellShowPhonetic(0, 0, 0).value, false);
-  assert.ok(wb.setText(0, 0, 0, '漢字').ok);
-  assert.ok(wb.setCellShowPhonetic(0, 0, 0, true).ok);
-  assert.ok(wb.setText(0, 0, 0, '漢字').ok);
-  assert.equal(wb.getCellShowPhonetic(0, 0, 0).value, true);
+  const wb = Module.Workbook.createDefault();
+  assert.equal(wb.getCellShowPhonetic(0, 0, 0), false);
+  wb.setText(0, 0, 0, '漢字');
+  wb.setCellShowPhonetic(0, 0, 0, true);
+  wb.setText(0, 0, 0, '漢字');
+  assert.equal(wb.getCellShowPhonetic(0, 0, 0), true);
   const saved = wb.save();
-  assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  const loaded = Module.Workbook.load(saved.bytes).value;
+  const loaded = Module.Workbook.load(saved);
   try {
-    assert.equal(loaded.getCellShowPhonetic(0, 0, 0).value, true);
-    assert.ok(loaded.setCellShowPhonetic(0, 0, 0, false).ok);
-    assert.equal(loaded.getCellShowPhonetic(0, 0, 0).value, false);
-    const rejected = loaded.getCellShowPhonetic(99, 0, 0);
-    assert.equal(rejected.status.ok, false);
-    assert.equal(rejected.value, false);
-    assert.equal(loaded.setCellShowPhonetic(99, 0, 0, true).ok, false);
+    assert.equal(loaded.getCellShowPhonetic(0, 0, 0), true);
+    loaded.setCellShowPhonetic(0, 0, 0, false);
+    assert.equal(loaded.getCellShowPhonetic(0, 0, 0), false);
+    expectFailure(() => loaded.getCellShowPhonetic(99, 0, 0));
+    expectFailure(() => loaded.setCellShowPhonetic(99, 0, 0, true));
   } finally {
     loaded.delete();
     wb.delete();
@@ -669,15 +641,14 @@ test('the show-phonetic flag survives value writes and a round trip', async () =
 
 test('an explicit all-zero phoneticPr is reported as present and survives a round trip', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault().value;
-  assert.ok(wb.setText(0, 0, 0, '漢字').ok);
-  assert.ok(wb.setCellPhoneticRuns(0, 0, 0, [{ sb: 0, eb: 2, text: 'かんじ' }]).ok);
+  const wb = Module.Workbook.createDefault();
+  wb.setText(0, 0, 0, '漢字');
+  wb.setCellPhoneticRuns(0, 0, 0, [{ sb: 0, eb: 2, text: 'かんじ' }]);
   assert.equal(wb.getCellPhoneticProperties(0, 0, 0).present, false);
-  assert.ok(wb.setCellPhoneticProperties(0, 0, 0, { fontId: 0, type: 0, alignment: 0 }).ok);
+  wb.setCellPhoneticProperties(0, 0, 0, { fontId: 0, type: 0, alignment: 0 });
   assert.equal(wb.getCellPhoneticProperties(0, 0, 0).present, true);
   const saved = wb.save();
-  assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  const loaded = Module.Workbook.load(saved.bytes).value;
+  const loaded = Module.Workbook.load(saved);
   try {
     const got = loaded.getCellPhoneticProperties(0, 0, 0);
     assert.equal(got.present, true);
@@ -690,35 +661,32 @@ test('an explicit all-zero phoneticPr is reported as present and survives a roun
 
 test('scroll origin, pane origin and selection round-trip through save', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault().value;
-  assert.ok(wb.setFreeze(0, 2, 1).ok);
-  const view = wb.getView(0).view;
+  const wb = Module.Workbook.createDefault();
+  wb.setFreeze(0, 2, 1);
+  const view = wb.getView(0);
   assert.equal(view.paneTopLeftRow, 2);
   assert.equal(view.paneTopLeftCol, 1);
-  assert.ok(wb.setTopLeft(0, 5, 0).ok);
-  assert.ok(wb.setPaneTopLeft(0, 40, 6).ok);
-  assert.equal(wb.setPaneTopLeft(0, 1, 6).ok, false);
+  wb.setTopLeft(0, 5, 0);
+  wb.setPaneTopLeft(0, 40, 6);
+  expectFailure(() => wb.setPaneTopLeft(0, 1, 6));
   const ranges = [
     { firstRow: 41, firstCol: 7, lastRow: 43, lastCol: 8 },
     { firstRow: 50, firstCol: 9, lastRow: 50, lastCol: 9 },
   ];
-  assert.ok(wb.setSelection(0, { activeRow: 41, activeCol: 7, ranges }).ok);
-  assert.equal(
+  wb.setSelection(0, { activeRow: 41, activeCol: 7, ranges });
+  expectFailure(() =>
     wb.setSelection(0, {
       activeRow: 0,
       activeCol: 0,
       ranges: [{ firstRow: 3, firstCol: 0, lastRow: 1, lastCol: 0 }],
-    }).ok,
-    false,
+    }),
   );
   const saved = wb.save();
-  assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  const loaded = Module.Workbook.load(saved.bytes).value;
+  const loaded = Module.Workbook.load(saved);
   try {
-    const got = loaded.getView(0).view;
+    const got = loaded.getView(0);
     assert.deepEqual([got.topLeftRow, got.topLeftCol, got.paneTopLeftRow, got.paneTopLeftCol], [5, 0, 40, 6]);
     const selection = loaded.getSelection(0);
-    assert.ok(selection.status.ok, JSON.stringify(selection.status));
     assert.equal(selection.activeRow, 41);
     assert.equal(selection.activeCol, 7);
     assert.deepEqual(
@@ -728,9 +696,7 @@ test('scroll origin, pane origin and selection round-trip through save', async (
         [50, 9, 50, 9],
       ],
     );
-    const missing = loaded.getSelection(99);
-    assert.equal(missing.status.ok, false);
-    assert.deepEqual(missing.ranges, []);
+    expectFailure(() => loaded.getSelection(99));
   } finally {
     loaded.delete();
     wb.delete();
@@ -739,32 +705,31 @@ test('scroll origin, pane origin and selection round-trip through save', async (
 
 test('sheet split reads back, round-trips and exchanges with the freeze', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault().value;
+  const wb = Module.Workbook.createDefault();
   try {
-    assert.deepEqual([wb.getView(0).view.splitX, wb.getView(0).view.splitY], [0, 0]);
-    assert.ok(wb.setSplit(0, 2000, 1500).ok);
-    const view = wb.getView(0).view;
+    assert.deepEqual([wb.getView(0).splitX, wb.getView(0).splitY], [0, 0]);
+    wb.setSplit(0, 2000, 1500);
+    const view = wb.getView(0);
     assert.deepEqual([view.splitX, view.splitY, view.freezeRows, view.freezeCols], [2000, 1500, 0, 0]);
     const saved = wb.save();
-    assert.ok(saved.status.ok, JSON.stringify(saved.status));
-    const loaded = Module.Workbook.load(saved.bytes).value;
+    const loaded = Module.Workbook.load(saved);
     try {
-      const got = loaded.getView(0).view;
+      const got = loaded.getView(0);
       assert.deepEqual([got.splitX, got.splitY, got.freezeRows, got.freezeCols], [2000, 1500, 0, 0]);
     } finally {
       loaded.delete();
     }
-    assert.ok(wb.setFreeze(0, 2, 1).ok);
-    assert.deepEqual([wb.getView(0).view.splitX, wb.getView(0).view.splitY], [0, 0]);
-    assert.ok(wb.setSplit(0, 0, 900).ok);
-    const split = wb.getView(0).view;
+    wb.setFreeze(0, 2, 1);
+    assert.deepEqual([wb.getView(0).splitX, wb.getView(0).splitY], [0, 0]);
+    wb.setSplit(0, 0, 900);
+    const split = wb.getView(0);
     assert.deepEqual([split.splitX, split.splitY, split.freezeRows, split.freezeCols], [0, 900, 0, 0]);
-    assert.equal(wb.setSplit(0, -1, 0).ok, false);
-    assert.equal(wb.setSplit(0, 0, Number.NaN).ok, false);
-    assert.equal(wb.setSplit(0, Number.POSITIVE_INFINITY, 0).ok, false);
-    assert.equal(wb.getView(0).view.splitY, 900);
-    assert.ok(wb.setSplit(0, 0, 0).ok);
-    assert.equal(wb.getView(0).view.splitY, 0);
+    expectFailure(() => wb.setSplit(0, -1, 0));
+    expectFailure(() => wb.setSplit(0, 0, Number.NaN));
+    expectFailure(() => wb.setSplit(0, Number.POSITIVE_INFINITY, 0));
+    assert.equal(wb.getView(0).splitY, 900);
+    wb.setSplit(0, 0, 0);
+    assert.equal(wb.getView(0).splitY, 0);
   } finally {
     wb.delete();
   }
@@ -772,33 +737,32 @@ test('sheet split reads back, round-trips and exchanges with the freeze', async 
 
 test('pivotFieldAdd binds by cache column name and axis -1 takes a field off the report', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault().value;
+  const wb = Module.Workbook.createDefault();
   try {
-    const cacheId = wb.addPivotCache(0).index;
-    assert.ok(wb.setPivotCacheWorksheetSource(cacheId, { present: true, ref: 'A1:D3', sheet: 'Sheet1' }).ok);
-    for (const name of ['Region', 'Product', 'Sales', 'Qty']) assert.ok(wb.addPivotCacheField(cacheId, name).status.ok);
+    const cacheId = wb.addPivotCache(0);
+    wb.setPivotCacheWorksheetSource(cacheId, { present: true, ref: 'A1:D3', sheet: 'Sheet1' });
+    for (const name of ['Region', 'Product', 'Sales', 'Qty']) wb.addPivotCacheField(cacheId, name);
     for (const sales of [100, 200]) {
-      const rec = wb.addPivotCacheRecord(cacheId).index;
-      for (const [col, value] of [0, 0, sales, 1].entries())
-        assert.ok(wb.setPivotCacheRecordNumber(cacheId, rec, col, value).ok);
+      const rec = wb.addPivotCacheRecord(cacheId);
+      for (const [col, value] of [0, 0, sales, 1].entries()) wb.setPivotCacheRecordNumber(cacheId, rec, col, value);
     }
-    const pivot = wb.addPivot(0, 'PT', cacheId, 0, 6).index;
+    const pivot = wb.addPivot(0, 'PT', cacheId, 0, 6);
     const region = wb.addPivotField(0, pivot, { sourceName: 'Region', axis: 0 });
     const sales = wb.addPivotField(0, pivot, { sourceName: 'Sales', axis: 2 });
-    assert.equal(region.index, 0);
-    assert.equal(sales.index, 2);
-    assert.equal(wb.getPivotFieldCount(0, pivot).value, 4);
+    assert.equal(region, 0);
+    assert.equal(sales, 2);
+    assert.equal(wb.getPivotFieldCount(0, pivot), 4);
     assert.equal(wb.getPivotField(0, pivot, 1).axis, -1);
-    assert.ok(wb.addPivotDataField(0, pivot, { fieldIndex: 2, aggregation: 0 }).status.ok);
-    assert.equal(wb.getPivotDataFieldCount(0, pivot).value, 1);
+    wb.addPivotDataField(0, pivot, { fieldIndex: 2, aggregation: 0 });
+    assert.equal(wb.getPivotDataFieldCount(0, pivot), 1);
 
-    assert.ok(wb.setPivotFieldAxis(0, pivot, 2, -1).ok);
+    wb.setPivotFieldAxis(0, pivot, 2, -1);
     assert.equal(wb.getPivotField(0, pivot, 2).axis, -1);
-    assert.equal(wb.getPivotDataFieldCount(0, pivot).value, 0);
-    assert.ok(wb.setPivotFieldAxis(0, pivot, 0, -1).ok);
-    assert.deepEqual(wb.getPivotRowFieldOrder(0, pivot).indices, []);
-    assert.equal(wb.setPivotFieldAxis(0, pivot, 0, 4).ok, false);
-    assert.equal(wb.setPivotFieldAxis(0, pivot, 0, -2).ok, false);
+    assert.equal(wb.getPivotDataFieldCount(0, pivot), 0);
+    wb.setPivotFieldAxis(0, pivot, 0, -1);
+    assert.deepEqual(wb.getPivotRowFieldOrder(0, pivot), []);
+    expectFailure(() => wb.setPivotFieldAxis(0, pivot, 0, 4));
+    expectFailure(() => wb.setPivotFieldAxis(0, pivot, 0, -2));
   } finally {
     wb.delete();
   }
@@ -806,24 +770,22 @@ test('pivotFieldAdd binds by cache column name and axis -1 takes a field off the
 
 test('copySheet names the copy automatically or explicitly and reports bad arguments', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault().value;
+  const wb = Module.Workbook.createDefault();
   try {
-    assert.ok(wb.setNumber(0, 0, 0, 5).ok);
-    assert.ok(wb.setFormula(0, 0, 1, '=A1*2').ok);
+    wb.setNumber(0, 0, 0, 5);
+    wb.setFormula(0, 0, 1, '=A1*2');
     const auto = wb.copySheet(0, 1);
-    assert.ok(auto.status.ok, JSON.stringify(auto.status));
-    assert.equal(auto.index, 1);
-    assert.equal(wb.getSheetName(1).value, 'Sheet1 (2)');
+    assert.equal(auto, 1);
+    assert.equal(wb.getSheetName(1), 'Sheet1 (2)');
     const named = wb.copySheet(0, 0, 'Archive');
-    assert.ok(named.status.ok, JSON.stringify(named.status));
-    assert.equal(named.index, 0);
-    assert.equal(wb.getSheetName(0).value, 'Archive');
-    assert.ok(wb.recalc().ok);
-    assert.equal(wb.getValue(0, 0, 1).value.number, 10);
-    assert.equal(wb.copySheet(9, 0).status.code, 5050);
-    assert.equal(wb.copySheet(0, 9).status.code, 5050);
-    assert.equal(wb.copySheet(0, 0, '').status.code, 5051);
-    assert.equal(wb.getSheetCount().value, 3);
+    assert.equal(named, 0);
+    assert.equal(wb.getSheetName(0), 'Archive');
+    wb.recalc();
+    assert.equal(wb.getValue(0, 0, 1).number, 10);
+    expectFailure(() => wb.copySheet(9, 0), Module.StatusCode.SheetIndexOutOfRange);
+    expectFailure(() => wb.copySheet(0, 9), Module.StatusCode.SheetIndexOutOfRange);
+    expectFailure(() => wb.copySheet(0, 0, ''), Module.StatusCode.InvalidSheetName);
+    assert.equal(wb.getSheetCount(), 3);
   } finally {
     wb.delete();
   }

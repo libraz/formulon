@@ -211,10 +211,10 @@ TEST(FormulonCApiPivotFieldOrder, InvalidAndDuplicateOrdersLeaveAllStateUntouche
 
   const std::uint32_t out_of_range[] = {3U, 99U, 0U};
   EXPECT_EQ(SetFieldOrder(wb.handle, pivot_index, true, out_of_range, 3U),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange));
   std::string error = fm_get_last_error_message();
-  EXPECT_NE(error.find("indices[i] out of range"), std::string::npos) << error;
-  EXPECT_STREQ(fm_get_last_error_context(), "i=1 value=99");
+  EXPECT_NE(error.find("indices[i] 99 is out of range"), std::string::npos) << error;
+  EXPECT_NE(std::string(fm_get_last_error_context()).find("indices[i]=99 count="), std::string::npos);
   EXPECT_EQ(ReadFieldOrder(wb.handle, pivot_index, true), (std::vector<std::uint32_t>{0U, 1U}));
   EXPECT_EQ(ReadFieldOrder(wb.handle, pivot_index, false), (std::vector<std::uint32_t>{2U, 3U, 4U}));
   EXPECT_EQ(table.row_values_position(), 1U);

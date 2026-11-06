@@ -9,7 +9,7 @@ alone:
 * C functions, typedefs and enum constants: ``\\b<old>\\b`` in every file.
 * JS methods: ``.old(``, the registration strings of the embind / N-API
   layers, member declarations of ``Workbook`` / ``WorkbookCtor`` /
-  ``FormulonModule`` in ``.d.ts`` files, ``{@link Workbook.old}``,
+  ``Formulon`` in ``.d.ts`` files, ``{@link Workbook.old}``,
   ```old(``` and ```Workbook.old```; process functions also as bare
   identifiers. JS type names: ``\\b<Old>\\b``. Scope: ``.mjs`` / ``.js`` /
   ``.d.ts``, ``src/wasm`` / ``src/node_addon`` and Markdown.
@@ -79,7 +79,7 @@ JS_BINDING_DIRS = ("src/wasm/", "src/node_addon/")
 PY_PACKAGE_DIR = "packages/python/formulon/"
 PY_DOC_DIR = "packages/python/"
 PARITY_TEST = "packages/python/tests/test_surface_parity.py"
-DTS_MEMBER_INTERFACES = ("Workbook", "WorkbookCtor", "FormulonModule")
+DTS_MEMBER_INTERFACES = ("Workbook", "WorkbookCtor", "Formulon")
 
 _FENCE_RE = re.compile(r"^\s*(```+|~~~+)\s*([A-Za-z0-9_+-]*)")
 _FENCE_LANG = {
@@ -355,7 +355,7 @@ def _run(forms: Sequence[Form], text: str, counts: Counts, label: str) -> str:
 
 
 def _dts_members(form: Optional[Form], text: str, counts: Counts) -> str:
-    """Rewrites member declarations inside `Workbook`, `WorkbookCtor` and `FormulonModule`."""
+    """Rewrites member declarations inside `Workbook`, `WorkbookCtor` and `Formulon`."""
     if form is None:
         return text
     out: List[str] = []

@@ -1,5 +1,5 @@
 import test from 'node:test';
-import { assert, getModule } from './smoke_support.mjs';
+import { assert, expectFailure, getModule } from './smoke_support.mjs';
 
 const kInvalidArgument = 2;
 
@@ -7,19 +7,19 @@ const dispose = (wb) => wb.delete();
 
 test('spillInfo reports a spill blocked by a value', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
-    assert.ok(wb.setFormula(0, 1, 3, '=SEQUENCE(5)').ok);
-    assert.ok(wb.setText(0, 3, 3, 'x').ok);
-    assert.ok(wb.recalc().ok);
+    wb.setFormula(0, 1, 3, '=SEQUENCE(5)');
+    wb.setText(0, 3, 3, 'x');
+    wb.recalc();
     const blocked = wb.getSpillInfo(0, 1, 3);
     assert.equal(blocked.engaged, false);
     assert.equal(blocked.blocked, true);
     assert.deepEqual(blocked.rect, { firstRow: 1, firstCol: 3, lastRow: 5, lastCol: 3 });
     // Only the anchor reports the attempt.
     assert.equal(wb.getSpillInfo(0, 2, 3).blocked, false);
-    assert.ok(wb.setBlank(0, 3, 3).ok);
-    assert.ok(wb.recalc().ok);
+    wb.setBlank(0, 3, 3);
+    wb.recalc();
     const engaged = wb.getSpillInfo(0, 1, 3);
     assert.equal(engaged.engaged, true);
     assert.equal(engaged.blocked, false);
@@ -31,12 +31,11 @@ test('spillInfo reports a spill blocked by a value', async () => {
 
 test('parseReference reads the INDIRECT grammar', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
     const ref = (text, options) => {
       const r = wb.parseReference(text, options);
-      assert.ok(r.status.ok, JSON.stringify(r.status));
-      return r.value;
+      return r;
     };
     assert.deepEqual(ref('A1'), { sheetName: null, rect: { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 } });
     assert.deepEqual(ref('$B$2:C3'), { sheetName: null, rect: { firstRow: 1, firstCol: 1, lastRow: 2, lastCol: 2 } });
@@ -63,9 +62,7 @@ test('parseReference reads the INDIRECT grammar', async () => {
     assert.equal(ref('R[-1]C', { r1c1: true }), null);
     assert.throws(() => ref('R[-1]C', { r1c1: true, baseRow: 5 }), TypeError);
     assert.throws(() => ref('R[-1]C', { r1c1: true, baseCol: 5 }), TypeError);
-    const offGrid = wb.parseReference('A1', { baseRow: 2000000, baseCol: 0 });
-    assert.equal(offGrid.status.code, kInvalidArgument);
-    assert.equal(offGrid.value, null);
+    expectFailure(() => wb.parseReference('A1', { baseRow: 2000000, baseCol: 0 }), kInvalidArgument);
     assert.throws(() => ref('A1', 5), TypeError);
     assert.throws(() => ref(5), TypeError);
   } finally {
@@ -75,14 +72,21 @@ test('parseReference reads the INDIRECT grammar', async () => {
 
 test('formatReference writes A1 reference text and round-trips', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault().value;
+  const wb = mod.Workbook.createDefault();
   try {
     const fmt = (range, options) => {
       const r = wb.formatReference(range, options);
-      assert.ok(r.status.ok, JSON.stringify(r.status));
-      return r.value;
+      return r;
     };
-    const refused = (range) => wb.formatReference(range).status.code;
+    const refused = (range) => {
+      try {
+        wb.formatReference(range);
+      } catch (e) {
+        assert.equal(e.name, 'FormulonError');
+        return e.code;
+      }
+      return assert.fail('expected formatReference to throw');
+    };
     assert.equal(fmt({ rect: { firstRow: 0, firstCol: 1, lastRow: 1048575, lastCol: 3 } }), 'B:D');
     assert.equal(fmt({ rect: { firstRow: 1, firstCol: 0, lastRow: 10, lastCol: 16383 } }), '2:11');
     assert.equal(fmt({ rect: { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 } }), 'A1');
@@ -101,7 +105,7 @@ test('formatReference writes A1 reference text and round-trips', async () => {
     assert.throws(() => fmt({ sheetName: 'Sheet1' }), TypeError);
     for (const sheetName of ['Sheet1', 'My Sheet', "O'Brien", '売上', 'Sheet.1', '1a', 'A1', 'TRUE']) {
       const range = { sheetName, rect: { firstRow: 1, firstCol: 2, lastRow: 4, lastCol: 6 } };
-      assert.deepEqual(wb.parseReference(fmt(range)).value, range, sheetName);
+      assert.deepEqual(wb.parseReference(fmt(range)), range, sheetName);
     }
   } finally {
     dispose(wb);

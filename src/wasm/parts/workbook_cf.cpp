@@ -57,34 +57,26 @@ emscripten::val cfvo_to_js(const fm_cfvo_t& cfvo) {
 }  // namespace
 
 emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, emscripten::val range, double todaySerial) const {
-  emscripten::val r = emscripten::val::object();
   emscripten::val cells = emscripten::val::array();
   if (handle_ == nullptr) {
-    r.set("status", invalid_handle_status());
-    r.set("cells", cells);
-    return r;
+    record_invalid_handle();
+    return emscripten::val::undefined();
   }
   JsNarrowNumericReader reader("evaluateCfRange");
   const fm_cell_rect_t rect = js_pull_range(range, &reader);
   if (!reader.ok()) {
-    r.set("status", reader.failure());
-    r.set("cells", cells);
-    return r;
+    return emscripten::val::undefined();
   }
   fm_cf_results_t* results = nullptr;
   fm_status_t rc = fm_sheet_evaluate_cf_range(handle_, sheet, &rect, todaySerial, &results);
-  if (rc != 0) {
-    r.set("status", error_status(rc));
-    r.set("cells", cells);
-    return r;
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
   }
   std::size_t cell_count = 0;
   rc = fm_cf_results_get_cell_count(results, &cell_count);
-  if (rc != 0) {
+  if (!succeeded(rc)) {
     fm_cf_results_destroy(results);
-    r.set("status", error_status(rc));
-    r.set("cells", cells);
-    return r;
+    return emscripten::val::undefined();
   }
   std::size_t emitted_cells = 0;
   for (std::size_t i = 0; i < cell_count; ++i) {
@@ -114,9 +106,7 @@ emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, emscripten::val rang
     ++emitted_cells;
   }
   fm_cf_results_destroy(results);
-  r.set("status", ok_status());
-  r.set("cells", cells);
-  return r;
+  return cells;
 }
 
 namespace {
@@ -244,22 +234,24 @@ emscripten::val cf_rule_to_val(const fm_cf_rule_t& rule) {
 
 }  // namespace
 
-JsNumberResult JsWorkbook::getCfRuleCount(uint32_t sheet) const {
-  return js_count_result(handle_, sheet, &fm_sheet_get_cf_rule_count);
+double JsWorkbook::getCfRuleCount(uint32_t sheet) const {
+  return js_count(handle_, sheet, &fm_sheet_get_cf_rule_count);
 }
 
 emscripten::val JsWorkbook::getCfRule(uint32_t sheet, uint32_t cfRuleIndex) const {
   fm_cf_rule_t rule{};
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_cf_rule(handle_, sheet, cfRuleIndex, &rule) : kBindingInvalidHandle;
-  return record_result(rc, cf_rule_to_val(rc == 0 ? rule : fm_cf_rule_t{}));
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
+  }
+  return cf_rule_to_val(rule);
 }
 
-JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
-  JsAddStyleResult r;
+uint32_t JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
   if (handle_ == nullptr) {
-    r.status = invalid_handle_status();
-    return r;
+    record_invalid_handle();
+    return 0U;
   }
   // Pull every JS field into local storage; the C ABI receives
   // borrowed `const char*` views that must stay valid for the
@@ -434,21 +426,22 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
     }
   }
   if (!reader.ok()) {
-    r.status = reader.failure();
-    return r;
+    return 0U;
   }
 
   std::size_t new_index = 0;
-  const fm_status_t rc = fm_sheet_add_cf_rule(handle_, sheet, &rule, &new_index);
-  return index_result(rc, new_index);
+  if (!succeeded(fm_sheet_add_cf_rule(handle_, sheet, &rule, &new_index))) {
+    return 0U;
+  }
+  return static_cast<uint32_t>(new_index);
 }
 
-JsStatus JsWorkbook::removeConditionalFormatAt(uint32_t sheet, uint32_t index) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_cf_rule(handle_, sheet, index) : kBindingInvalidHandle);
+void JsWorkbook::removeConditionalFormatAt(uint32_t sheet, uint32_t index) {
+  succeeded(handle_ != nullptr ? fm_sheet_remove_cf_rule(handle_, sheet, index) : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::clearConditionalFormats(uint32_t sheet) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_clear_cf_rules(handle_, sheet) : kBindingInvalidHandle);
+void JsWorkbook::clearConditionalFormats(uint32_t sheet) {
+  succeeded(handle_ != nullptr ? fm_sheet_clear_cf_rules(handle_, sheet) : kBindingInvalidHandle);
 }
 
 }  // namespace parts

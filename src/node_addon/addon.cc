@@ -13,7 +13,7 @@
 //   * `parts/cells.cc`             -- cell mutation / read, phonetic
 //     metadata, ad-hoc formula evaluation, lambda text.
 //   * `parts/lifecycle.cc`         -- calc policy, recalc, save,
-//     iterative-solver registration, diagnostics, isValid.
+//     iterative-solver registration, diagnostics, `disposed`.
 //   * `parts/sheet.cc`             -- sheet operations, row/col edits,
 //     metadata iteration, defined-name mutation.
 //   * `parts/pivot_cache.cc`       -- PivotCache mutation surface.
@@ -28,9 +28,11 @@
 //   * `parts/auto_filter.cc`      -- typed AutoFilter for sheets and
 //     tables.
 //   * `parts/drawing.cc`          -- drawing images.
+//   * `parts/reference.cc`         -- parseReference / formatReference /
+//     getSheetIndex.
 //   * `parts/free_funcs.{h,cc}`    -- evalFormula / getVersion /
-//     lastError* / statusString / the process-wide structured-log
-//     controls.
+//     getStatusName / getErrorDisplayName / the process-wide
+//     structured-log controls / `__setErrorClass`.
 //
 // ## Design notes
 //
@@ -40,14 +42,14 @@
 //     `NAPI_DISABLE_CPP_EXCEPTIONS`) before any napi header include,
 //     which the FormulonNodeAddon.cmake target propagates.
 //
-//   * Every fallible binding entry returns the same JS shape as the
-//     embind binding:
-//        Status = { ok: boolean, code: number,
-//                   message: string, context: string }
-//        Value  = { kind: number, number: number, boolean: number,
-//                   text: string, errorCode: number }
-//     The thread-local `fm_last_error_*` strings are snapshotted into
-//     the Status envelope on every error path.
+//   * A binding entry returns its payload on success, the same JS shape
+//     as the embind binding. A failed C-ABI call throws the `FormulonError`
+//     the package loader injected through `__setErrorClass`, carrying the
+//     status code and the thread-local `fm_last_error_*` message and
+//     context. A `Value` carries `kind` and only that kind's field.
+//
+//   * An exception a JS callback throws stays pending: the C call is
+//     aborted and the outer entry returns that exception unchanged.
 //
 //   * `Workbook` is wrapped in `Napi::ObjectWrap<Workbook>`. The wrapper
 //     owns the `fm_workbook_t*` and frees it in its destructor, which
@@ -78,12 +80,11 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("Workbook", formulon_node::Workbook::GetClass(env));
   exports.Set("evalFormula", Napi::Function::New(env, &formulon_node::EvalFormula, "evalFormula"));
   exports.Set("getVersion", Napi::Function::New(env, &formulon_node::Version, "getVersion"));
-  exports.Set("getLastErrorMessage", Napi::Function::New(env, &formulon_node::LastErrorMessage, "getLastErrorMessage"));
-  exports.Set("getLastErrorContext", Napi::Function::New(env, &formulon_node::LastErrorContext, "getLastErrorContext"));
   exports.Set("getStatusName", Napi::Function::New(env, &formulon_node::StatusString, "getStatusName"));
   exports.Set("getErrorDisplayName", Napi::Function::New(env, &formulon_node::ErrorDisplayName, "getErrorDisplayName"));
   exports.Set("setLogMinLevel", Napi::Function::New(env, &formulon_node::SetLogMinLevel, "setLogMinLevel"));
   exports.Set("setLogSink", Napi::Function::New(env, &formulon_node::SetLogSink, "setLogSink"));
+  exports.Set("__setErrorClass", Napi::Function::New(env, &formulon_node::SetErrorClass, "__setErrorClass"));
   return exports;
 }
 

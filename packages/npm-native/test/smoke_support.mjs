@@ -26,10 +26,11 @@ async function loadStagedModule() {
   return import(pathToFileURL(mainPath).href);
 }
 
+// The resolved `Formulon` object (value tables, Workbook, free functions).
 let modPromise;
 function getModule() {
   if (!modPromise) {
-    modPromise = loadStagedModule();
+    modPromise = loadStagedModule().then((mod) => mod.createFormulon());
   }
   return modPromise;
 }
@@ -99,16 +100,15 @@ function appendEmptyZipEntry(bytes, name) {
   return Uint8Array.from(out);
 }
 
-// Reads every element of an index-keyed collection through its count / index
-// getter pair, each element without its status.
-function readAll(count, get) {
-  const n = count();
-  assert.ok(n.status.ok, JSON.stringify(n.status));
-  return Array.from({ length: n.value }, (_, i) => {
-    const { status, ...item } = get(i);
-    assert.ok(status.ok, JSON.stringify(status));
-    return item;
-  });
+// Predicate for `assert.throws`: a host failure, optionally with a given code.
+function isFormulonError(error, code) {
+  return error?.name === 'FormulonError' && (code === undefined || error.code === code);
 }
 
-export { appendEmptyZipEntry, assert, getModule, loadStagedModule, path, pkgRoot, readAll, readFile };
+// Reads every element of an index-keyed collection through its count / index
+// getter pair.
+function readAll(count, get) {
+  return Array.from({ length: count() }, (_, i) => get(i));
+}
+
+export { appendEmptyZipEntry, assert, getModule, isFormulonError, loadStagedModule, path, pkgRoot, readAll, readFile };

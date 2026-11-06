@@ -23,6 +23,7 @@ from .surface_files import (
     NODE_DTS,
     NODE_INDEX_MJS,
     NODE_README,
+    NODE_STAGE_MJS,
     NODE_WORKBOOK_CLASS_CC,
     NPM_COMMON_MJS,
     NPM_ENTRY_MJS,
@@ -35,9 +36,12 @@ from .surface_files import (
     _read_bytes,
 )
 from .ts_decl import (
+    _extract_ts_callable_members,
     _extract_ts_methods,
     _find_interface_body,
-    _js_common_reexported_function_source,
+    _js_common_imports,
+    _js_common_namespaces,
+    _js_common_wired_function_source,
     _js_exported_function_source,
     _parse_js_constants,
 )
@@ -48,12 +52,27 @@ from .ts_decl import (
 WASM_ONLY_METHODS: set = set()
 NODE_ONLY_METHODS = {"getMemoryUsage"}
 
-# Pure-JS free functions declared in packages/npm-native/index.d.ts that are
-# intentionally NOT backed by a native `exports.Set(...)` registration -- they
-# are host-side helpers implemented in index.mjs (e.g. the function-metadata
-# provider merge helper). Excluded before comparing the d.ts free-function
-# surface against the addon's native exports.
+# Members of the `Formulon` interface that are intentionally NOT backed by a
+# native `exports.Set(...)` / embind `function(...)` registration -- host-side
+# helpers implemented once in packages/npm/common.mjs (e.g. the
+# function-metadata provider merge helper). Excluded before comparing the
+# d.ts free-function surface against the registrations.
 NODE_PURE_JS_FREE_FUNCTIONS = {"mergeFunctionMetadata"}
+
+# `Workbook` methods that `installWorkbookExtensions` adds in pure JS; no
+# registration stands behind them in either runtime.
+PURE_JS_WORKBOOK_METHODS = {"setValue", "sheet"}
+
+# Read-only `Workbook` properties, registered as an accessor rather than a method.
+WORKBOOK_ACCESSORS = {"disposed"}
+
+# Addon exports that are internal wiring and not part of the `Formulon` interface.
+NODE_ADDON_INTERNAL_EXPORTS = {"__setErrorClass"}
+
+# The interface `createFormulon` resolves to; its methods are the free functions.
+ENTRY_INTERFACE = "Formulon"
+
+_READONLY_FIELD_RE = re.compile(r"^\s*readonly\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*:", re.MULTILINE)
 
 
 # ---------------------------------------------------------------------------
@@ -72,12 +91,17 @@ def check_dts_wasm() -> List[str]:
     dts_text = _read(WASM_DTS)
     instance_dts = _extract_ts_methods(_find_interface_body(dts_text, "Workbook", WASM_DTS))
     static_dts = _extract_ts_methods(_find_interface_body(dts_text, "WorkbookCtor", WASM_DTS))
-    free_dts = _extract_ts_methods(_find_interface_body(dts_text, "FormulonModule", WASM_DTS))
+    free_dts = _extract_ts_methods(_find_interface_body(dts_text, ENTRY_INTERFACE, WASM_DTS))
+    free_dts -= NODE_PURE_JS_FREE_FUNCTIONS
+    instance_dts -= PURE_JS_WORKBOOK_METHODS
+    accessor_cpp = set(re.findall(r'\.property\("([^"]+)"', cpp_text))
+    accessor_dts = set(_READONLY_FIELD_RE.findall(_find_interface_body(dts_text, "Workbook", WASM_DTS)))
 
     for label, cpp_set, dts_set in (
         ("Workbook instance methods", instance_cpp, instance_dts),
         ("Workbook static factories", static_cpp, static_dts),
         ("free functions", free_cpp, free_dts),
+        ("Workbook accessors", accessor_cpp & WORKBOOK_ACCESSORS, accessor_dts),
     ):
         diff = _format_diff(
             f"{WASM_BINDINGS_CPP.relative_to(REPO_ROOT)}",
@@ -87,6 +111,11 @@ def check_dts_wasm() -> List[str]:
         )
         if diff:
             problems.append(f"dts-wasm: {label} mismatch:\n" + "\n".join(diff))
+    if accessor_cpp & WORKBOOK_ACCESSORS != WORKBOOK_ACCESSORS:
+        problems.append(
+            f"dts-wasm: Workbook accessors {sorted(WORKBOOK_ACCESSORS - accessor_cpp)} are not registered "
+            f"with `.property(...)` in {WASM_BINDINGS_CPP.relative_to(REPO_ROOT)}"
+        )
 
     return problems
 
@@ -104,13 +133,23 @@ def check_dts_node() -> List[str]:
     static_cc = set(re.findall(r'StaticMethod<[^>]+>\("([^"]+)"\)', cc_text))
 
     addon_text = _read(NODE_ADDON_CC)
-    free_cc = set(re.findall(r'exports\.Set\("([^"]+)"', addon_text)) - {"Workbook"}
+    exported_cc = set(re.findall(r'exports\.Set\("([^"]+)"', addon_text)) - {"Workbook"}
+    free_cc = exported_cc - NODE_ADDON_INTERNAL_EXPORTS
+    accessor_cc = set(re.findall(r'InstanceAccessor(?:<[^>]*>)?\(\s*"([^"]+)"', cc_text))
 
     dts_text = _read(NODE_DTS)
     instance_dts = _extract_ts_methods(_find_interface_body(dts_text, "Workbook", NODE_DTS))
+    instance_dts -= PURE_JS_WORKBOOK_METHODS
     static_dts = _extract_ts_methods(_find_interface_body(dts_text, "WorkbookCtor", NODE_DTS))
-    free_dts = set(re.findall(r"^export function ([A-Za-z0-9_]+)\(", dts_text, re.MULTILINE))
+    free_dts = _extract_ts_methods(_find_interface_body(dts_text, ENTRY_INTERFACE, NODE_DTS))
     free_dts -= NODE_PURE_JS_FREE_FUNCTIONS
+    accessor_dts = set(_READONLY_FIELD_RE.findall(_find_interface_body(dts_text, "Workbook", NODE_DTS)))
+    missing_internal = NODE_ADDON_INTERNAL_EXPORTS - exported_cc
+    if missing_internal:
+        problems.append(
+            f"dts-node: {NODE_ADDON_CC.relative_to(REPO_ROOT)} does not export the internal "
+            f"{sorted(missing_internal)} the package entry point calls"
+        )
 
     wasm_cpp_text = _read(WASM_BINDINGS_CPP)
     wasm_instance = set(re.findall(r'\.function\("([^"]+)"', wasm_cpp_text))
@@ -137,6 +176,7 @@ def check_dts_node() -> List[str]:
         ("Workbook instance methods", instance_cc, instance_dts),
         ("Workbook static factories", static_cc, static_dts),
         ("free functions", free_cc, free_dts),
+        ("Workbook accessors", accessor_cc & WORKBOOK_ACCESSORS, accessor_dts),
     ):
         diff = _format_diff(
             f"{NODE_WORKBOOK_CLASS_CC.relative_to(REPO_ROOT)} / {NODE_ADDON_CC.relative_to(REPO_ROOT)}",
@@ -146,16 +186,24 @@ def check_dts_node() -> List[str]:
         )
         if diff:
             problems.append(f"dts-node: {label} mismatch:\n" + "\n".join(diff))
+    if accessor_cc & WORKBOOK_ACCESSORS != WORKBOOK_ACCESSORS:
+        problems.append(
+            f"dts-node: Workbook accessors {sorted(WORKBOOK_ACCESSORS - accessor_cc)} are not registered "
+            f"with `InstanceAccessor` in {NODE_WORKBOOK_CLASS_CC.relative_to(REPO_ROOT)}"
+        )
 
     return problems
 
 
+_COMMON_REEXPORT_RE = re.compile(r"^export (?:\*|\{[^}]*\}) from '\./common\.js';", re.MULTILINE)
+
+
 def _npm_entries_reexport_common(check: str) -> List[str]:
-    """Every WASM npm entry point must re-export common.mjs."""
+    """Every WASM npm entry point must re-export from common.mjs."""
     return [
-        f"{check}: {entry.relative_to(REPO_ROOT)} does not `export * from './common.js'`"
+        f"{check}: {entry.relative_to(REPO_ROOT)} does not re-export from './common.js'"
         for entry in NPM_ENTRY_MJS
-        if not re.search(r"^export \* from '\./common\.js';", _read(entry), re.MULTILINE)
+        if not _COMMON_REEXPORT_RE.search(_read(entry))
     ]
 
 
@@ -165,20 +213,21 @@ def check_pure_js_helpers() -> List[str]:
         "npm": (NPM_COMMON_MJS, WASM_DTS),
         "npm-native": (NODE_INDEX_MJS, NODE_DTS),
     }
+    common_text = _read(NPM_COMMON_MJS)
 
     for name in sorted(NODE_PURE_JS_FREE_FUNCTIONS):
         bodies: dict[str, str] = {}
         for package, (mjs_path, dts_path) in sources.items():
-            mjs_text = _read(mjs_path)
             if package == "npm-native":
-                body = _js_common_reexported_function_source(mjs_path, name)
+                body = _js_common_wired_function_source(mjs_path, name)
             else:
-                body = _js_exported_function_source(mjs_text, name)
+                body = _js_exported_function_source(_read(mjs_path), name)
             if body is None:
                 if package == "npm-native":
                     problems.append(
-                        f"pure-js-helpers: {mjs_path.relative_to(REPO_ROOT)} must explicitly re-export "
-                        f"`{name}` imported from ../npm/common.mjs"
+                        f"pure-js-helpers: {mjs_path.relative_to(REPO_ROOT)} must import ../npm/common.mjs "
+                        f"as a namespace, call `buildFormulon`, and common.mjs must list `{name}` "
+                        "in FORMULON_MEMBERS"
                     )
                 else:
                     problems.append(
@@ -188,17 +237,39 @@ def check_pure_js_helpers() -> List[str]:
                     )
             else:
                 bodies[package] = body
-            if not re.search(r"^export function %s\s*\(" % re.escape(name), _read(dts_path), re.MULTILINE):
+            if name not in _extract_ts_callable_members(
+                _find_interface_body(_read(dts_path), ENTRY_INTERFACE, dts_path)
+            ):
                 problems.append(
-                    f"pure-js-helpers: {dts_path.relative_to(REPO_ROOT)} does not declare `export function {name}`"
+                    f"pure-js-helpers: {dts_path.relative_to(REPO_ROOT)} does not declare `{ENTRY_INTERFACE}.{name}`"
                 )
         if len(bodies) == len(sources) and len(set(bodies.values())) != 1:
             problems.append(
                 f"pure-js-helpers: the `{name}` implementations have diverged between "
                 f"{NPM_COMMON_MJS.relative_to(REPO_ROOT)} and {NODE_INDEX_MJS.relative_to(REPO_ROOT)}. "
-                "The native entry point must re-export the canonical helper from "
+                "The native entry point must import the canonical helper from "
                 "packages/npm/common.mjs so both packages stay tied to one implementation."
             )
+
+    extensions = _js_exported_function_source(common_text, "installWorkbookExtensions")
+    if extensions is None:
+        problems.append(
+            f"pure-js-helpers: {NPM_COMMON_MJS.relative_to(REPO_ROOT)} does not export `installWorkbookExtensions`"
+        )
+    else:
+        for method in sorted(PURE_JS_WORKBOOK_METHODS):
+            if not re.search(r"\b%s\b" % re.escape(method), extensions):
+                problems.append(f"pure-js-helpers: `installWorkbookExtensions` does not add `Workbook.{method}`")
+    native_text = _read(NODE_INDEX_MJS)
+    installed = "installWorkbookExtensions" in _js_common_imports(native_text).values() or any(
+        re.search(r"\b%s\.installWorkbookExtensions\s*\(" % re.escape(ns), native_text)
+        for ns in _js_common_namespaces(native_text)
+    )
+    if not installed:
+        problems.append(
+            f"pure-js-helpers: {NODE_INDEX_MJS.relative_to(REPO_ROOT)} must take "
+            "`installWorkbookExtensions` from ../npm/common.mjs"
+        )
 
     return problems
 
@@ -423,15 +494,30 @@ _NATIVE_COMMON_IMPORT = b"from '../npm/common.mjs'"
 _STAGED_COMMON_IMPORT = b"from './common.mjs'"
 
 
+_STAGE_SITES_RE = re.compile(r"commonImportSites\s*!==\s*(\d+)")
+
+
+def _expected_common_import_sites() -> int | None:
+    """The import-site count `stage.mjs` insists on before it rewrites, or None when unreadable."""
+    match = _STAGE_SITES_RE.search(_read(NODE_STAGE_MJS)) if NODE_STAGE_MJS.is_file() else None
+    return int(match.group(1)) if match else None
+
+
 def _staged_bytes(source: Path, data: bytes) -> tuple[bytes | None, str | None]:
     """Returns expected bytes and an error for a malformed native shim source."""
     if source != NODE_INDEX_MJS:
         return data, None
+    expected_sites = _expected_common_import_sites()
+    if expected_sites is None:
+        return (
+            None,
+            f"staged-dist: cannot read the common import-site count from {NODE_STAGE_MJS.relative_to(REPO_ROOT)}",
+        )
     sites = data.count(_NATIVE_COMMON_IMPORT)
-    if sites != 1:
+    if sites != expected_sites:
         return None, (
-            f"staged-dist: {NODE_INDEX_MJS.relative_to(REPO_ROOT)} must contain exactly 1 canonical common import "
-            f"for staging, found {sites}"
+            f"staged-dist: {NODE_INDEX_MJS.relative_to(REPO_ROOT)} must contain exactly {expected_sites} canonical "
+            f"common imports for staging (as {NODE_STAGE_MJS.relative_to(REPO_ROOT)} rewrites), found {sites}"
         )
     return data.replace(_NATIVE_COMMON_IMPORT, _STAGED_COMMON_IMPORT), None
 

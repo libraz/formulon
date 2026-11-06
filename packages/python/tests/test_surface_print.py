@@ -8,6 +8,7 @@ from formulon import (
     CellRect,
     CellXf,
     FormulonError,
+    NotFoundError,
     SheetPrintTitles,
     Workbook,
 )
@@ -152,8 +153,9 @@ class PrintSettingsTests(unittest.TestCase):
             self.assertEqual(len(rows), 2)
             self.assertFalse(rows[0].manual)
 
-            # Removing an absent break is not an error.
-            wb.remove_row_break(0, 999)
+            # Removing an absent break reports it as missing.
+            with self.assertRaises(NotFoundError):
+                wb.remove_row_break(0, 999)
             wb.clear_breaks(0)
             self.assertEqual(wb.list_row_breaks(0), [])
             self.assertEqual(wb.list_column_breaks(0), [])

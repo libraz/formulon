@@ -144,7 +144,7 @@ TEST(FormulonCApiThreadedComments, PersonsAddListAndRemove) {
   EXPECT_STREQ(p.id, kBob);
   EXPECT_STREQ(p.user_id, "bob@example.com");
   EXPECT_STREQ(p.provider_id, "None");
-  EXPECT_EQ(fm_workbook_get_person_at(wb.handle, 2, &p), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_get_person_at(wb.handle, 2, &p), FM_STATUS_INDEX_OUT_OF_RANGE);
 
   const fm_person_t duplicate{kAlice, "Again", nullptr, nullptr};
   EXPECT_EQ(fm_workbook_add_person(wb.handle, &duplicate), kThreadedCommentInvalid);
@@ -154,7 +154,7 @@ TEST(FormulonCApiThreadedComments, PersonsAddListAndRemove) {
 
   ASSERT_EQ(fm_workbook_remove_person(wb.handle, kAlice), 0);
   EXPECT_EQ(PersonNames(wb.handle), (std::vector<std::string>{"Bob"}));
-  EXPECT_EQ(fm_workbook_remove_person(wb.handle, kAlice), kThreadedCommentInvalid);
+  EXPECT_EQ(fm_workbook_remove_person(wb.handle, kAlice), FM_STATUS_NOT_FOUND);
 }
 
 TEST(FormulonCApiThreadedComments, ThreadRepliesAndMentionsRoundTrip) {
@@ -221,7 +221,7 @@ TEST(FormulonCApiThreadedComments, RemovingTheOpeningCommentRemovesTheThread) {
   EXPECT_EQ(fm_sheet_add_threaded_comment(wb.handle, 0, nullptr), kBindingNullPointer);
   ASSERT_EQ(fm_sheet_remove_threaded_comment(wb.handle, 0, kThread), 0);
   EXPECT_TRUE(ReadComments(wb.handle).empty());
-  EXPECT_EQ(fm_sheet_remove_threaded_comment(wb.handle, 0, kThread), kThreadedCommentInvalid);
+  EXPECT_EQ(fm_sheet_remove_threaded_comment(wb.handle, 0, kThread), FM_STATUS_NOT_FOUND);
   ASSERT_EQ(fm_workbook_remove_person(wb.handle, kBob), 0);
 }
 
@@ -270,7 +270,7 @@ TEST(FormulonCApiThreadedComments, RejectsMalformedInput) {
   std::size_t count = 0;
   EXPECT_EQ(fm_sheet_get_threaded_comment_count(wb.handle, 5, &count), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   fm_threaded_comment_t out{};
-  EXPECT_EQ(fm_sheet_get_threaded_comment_at(wb.handle, 0, 1, &out), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_get_threaded_comment_at(wb.handle, 0, 1, &out), FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 
 }  // namespace

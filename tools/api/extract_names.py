@@ -217,11 +217,15 @@ def _scan_dts(root: Path, rel: Path):
         tops.setdefault(name, kind)
     workbook = _dts_member_decls(_dts_block(stripped, "Workbook"))
     statics = _dts_member_decls(_dts_block(stripped, "WorkbookCtor"))
-    module = _dts_member_decls(_dts_block(stripped, "FormulonModule"))
+    module = _dts_member_decls(_dts_block(stripped, "Formulon"))
     # Both enum spellings: a TS `enum`, and a frozen `as const` table with its union type.
     enums = set(re.findall(r"^export enum (\w+)", stripped, re.M))
     enums |= set(re.findall(r"^export const (\w+): Readonly<\{", stripped, re.M))
     return tops, workbook, statics, module, enums
+
+
+# Addon exports the package entry point calls and the public surface does not carry.
+NODE_INTERNAL_EXPORTS = frozenset({"__setErrorClass"})
 
 
 def _scan_js(root: Path) -> Dict[str, Dict[str, Member]]:
@@ -247,7 +251,8 @@ def _scan_js(root: Path) -> Dict[str, Dict[str, Member]]:
     for target, name in re.findall(r'StaticMethod<&Workbook::(\w+)>\("([^"]+)"\)', klass):
         targets.setdefault(name, ("static", target))
     for name, target in re.findall(r'exports\.Set\("([^"]+)",\s*Napi::Function::New\(env,\s*&[\w:]*?(\w+)\b', addon):
-        targets.setdefault(name, ("free", target))
+        if name not in NODE_INTERNAL_EXPORTS:
+            targets.setdefault(name, ("free", target))
     js["native"] = _js_members(root, NODE_DTS, targets, graph)
     return js
 
@@ -791,7 +796,7 @@ BINDING_ONLY = {
     "eval_formula": ("formula.eval", "free", "evalFormula", "eval_formula",
                      "binding convenience: evaluates one formula in a default workbook"),
     "createFormulon": ("module.create", "free", "createFormulon", None,
-                       "WASM module entry point (default export); the native package has none"),
+                       "entry point of both npm packages (default and named export)"),
 }  # fmt: skip
 # Second binding names of one C function the rules retire.
 SPEC_DROPS = {

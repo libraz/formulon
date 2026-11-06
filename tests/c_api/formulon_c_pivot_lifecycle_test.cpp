@@ -101,9 +101,8 @@ TEST(FormulonCApiPivot, CacheRemoveBlockedByPivot) {
   EXPECT_EQ(fm_workbook_remove_pivot_cache(wb.handle, cache_id),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 
-  // Removing a non-existent cache id must also surface kInvalidArgument.
-  EXPECT_EQ(fm_workbook_remove_pivot_cache(wb.handle, 9999U),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  // Removing a non-existent cache id is a missing key.
+  EXPECT_EQ(fm_workbook_remove_pivot_cache(wb.handle, 9999U), FM_STATUS_NOT_FOUND);
 }
 
 TEST(FormulonCApiPivot, NullPointerArgumentsRejected) {
@@ -173,8 +172,8 @@ TEST(FormulonCApiPivot, NullHandleStatusMatchesRecordedError) {
   expect_null_handle(fm_workbook_set_pivot_cache_record_blank(nullptr, 0U, 0U, 0U));
   expect_null_handle(fm_workbook_set_pivot_cache_record_error(nullptr, 0U, 0U, 0U, /*error=*/1));
 
-  // A live handle with an out-of-range coordinate keeps reporting
-  // kInvalidArgument through the same helpers.
+  // A live handle with an out-of-range field index reports kIndexOutOfRange and
+  // an unknown cache id kInvalidArgument, through the same helpers.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
@@ -182,11 +181,12 @@ TEST(FormulonCApiPivot, NullHandleStatusMatchesRecordedError) {
   std::size_t field_index = 99;
   ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache_id, "F", &field_index), 0);
 
-  EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_number(wb.handle, cache_id, field_index + 1U, 1.0), invalid);
+  EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_number(wb.handle, cache_id, field_index + 1U, 1.0),
+            FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_workbook_add_pivot_cache_field_shared_item_number(wb.handle, cache_id + 100U, field_index, 1.0),
             invalid);
   EXPECT_EQ(fm_workbook_set_pivot_cache_record_number(wb.handle, cache_id, /*record_index=*/0U, field_index, 1.0),
-            invalid);
+            FM_STATUS_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiPivot, OutOfGridAnchorRejected) {
