@@ -7,6 +7,7 @@
 #include <string_view>
 
 #include "sheet_name_casefold_data.h"
+#include "utils/strings.h"
 #include "utils/text_ops.h"
 
 namespace formulon {
@@ -54,8 +55,8 @@ bool equal(std::string_view lhs, std::string_view rhs) noexcept {
     if (((a | b) & 0x80U) != 0U) {
       break;
     }
-    a = (a >= 'A' && a <= 'Z') ? static_cast<unsigned char>(a + 0x20U) : a;
-    b = (b >= 'A' && b <= 'Z') ? static_cast<unsigned char>(b + 0x20U) : b;
+    a = static_cast<unsigned char>(strings::ascii_to_lower(static_cast<char>(a)));
+    b = static_cast<unsigned char>(strings::ascii_to_lower(static_cast<char>(b)));
     if (a != b) {
       return false;
     }

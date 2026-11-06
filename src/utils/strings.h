@@ -70,6 +70,12 @@ inline std::string_view rtrim_spaces(std::string_view input) noexcept {
   return last == std::string_view::npos ? std::string_view() : input.substr(0, last + 1);
 }
 
+/// Returns `input` with leading and trailing U+0020 removed; other whitespace
+/// is kept.
+inline std::string_view trim_spaces(std::string_view input) noexcept {
+  return ltrim_spaces(rtrim_spaces(input));
+}
+
 /// Uppercase ASCII hexadecimal digit for the low nibble of `n`.
 constexpr char hex_digit_upper(unsigned n) noexcept {
   return "0123456789ABCDEF"[n & 0x0FU];

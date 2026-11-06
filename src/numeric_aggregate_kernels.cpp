@@ -289,11 +289,7 @@ std::vector<ValueRun> group_equal_values(const std::vector<double>& xs) {
   // sort's position tie-break starts each run at its first occurrence, which
   // is Excel's tie rule.
   std::vector<std::uint32_t> ranked;
-  sorted_index_order(ranked, static_cast<std::uint32_t>(xs.size()),
-                     IndexLess{&xs, [](const void* context, std::uint32_t lhs, std::uint32_t rhs) {
-                                 const auto& values = *static_cast<const std::vector<double>*>(context);
-                                 return values[lhs] < values[rhs];
-                               }});
+  sorted_index_order_ascending(ranked, xs);
   std::vector<ValueRun> runs;
   for (std::size_t begin = 0; begin < ranked.size();) {
     std::size_t end = begin + 1U;

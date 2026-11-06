@@ -273,11 +273,6 @@ namespace {
 // turn their entire bounding rectangle into work.
 constexpr std::uint64_t kSqrefDenseThresholdCells = 65536U;
 
-// Keep the lightweight grid constants in `cf_types.h` in sync with the
-// canonical `Sheet` extents used everywhere else.
-static_assert(kCfMaxRows == Sheet::kMaxRows, "kCfMaxRows must match Sheet::kMaxRows");
-static_assert(kCfMaxCols == Sheet::kMaxCols, "kCfMaxCols must match Sheet::kMaxCols");
-
 // Calls `visit` with the effective values relevant to population rules in
 // `sqref`. Blank cells never contribute to numeric populations or duplicate
 // counts, so oversized ranges can visit populated cells only. Each range is

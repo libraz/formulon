@@ -221,7 +221,7 @@ std::string displayed_text(const Workbook& wb, const Sheet& sheet, std::uint32_t
 
 /// An inline item matches the displayed text exactly (after the space trim) or numerically.
 bool inline_list_matches(const std::vector<std::string>& items, const std::string& shown_raw) {
-  const std::string_view shown = strings::ltrim_spaces(strings::rtrim_spaces(shown_raw));
+  const std::string_view shown = strings::trim_spaces(shown_raw);
   const std::optional<double> shown_number = text_number(shown);
   for (const std::string& raw : items) {
     const std::string_view item = strings::ltrim_spaces(raw);

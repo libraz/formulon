@@ -92,6 +92,17 @@ void sort_by_index(std::vector<T>& values, const Less& element_less) {
   apply_index_order(values, order);
 }
 
+/// Fills `order` with the indices of `values` in ascending order (`operator<`),
+/// ties keeping index order.
+template <typename T>
+void sorted_index_order_ascending(std::vector<std::uint32_t>& order, const std::vector<T>& values) {
+  sorted_index_order(order, static_cast<std::uint32_t>(values.size()),
+                     IndexLess{&values, [](const void* context, std::uint32_t lhs, std::uint32_t rhs) {
+                                 const auto& items = *static_cast<const std::vector<T>*>(context);
+                                 return items[lhs] < items[rhs];
+                               }});
+}
+
 }  // namespace formulon
 
 #endif  // FORMULON_UTILS_INDEX_SORT_H_

@@ -225,11 +225,7 @@ std::uint64_t packed_cell_key(std::uint32_t row, std::uint32_t col) noexcept {
 // Indices of `keys` in ascending key order.
 std::vector<std::uint32_t> sorted_key_order(const std::vector<std::uint64_t>& keys) {
   std::vector<std::uint32_t> order;
-  sorted_index_order(order, static_cast<std::uint32_t>(keys.size()),
-                     IndexLess{&keys, [](const void* context, std::uint32_t lhs, std::uint32_t rhs) {
-                                 const auto& packed = *static_cast<const std::vector<std::uint64_t>*>(context);
-                                 return packed[lhs] < packed[rhs];
-                               }});
+  sorted_index_order_ascending(order, keys);
   return order;
 }
 
@@ -597,30 +593,38 @@ std::size_t Sheet::cell_count() const noexcept {
   return total;
 }
 
-std::size_t Sheet::materialised_cells_in_rect_locked(std::uint32_t row_begin, std::uint64_t row_end,
-                                                     std::uint32_t col_begin, std::uint64_t col_end) const noexcept {
-  const auto overlap = [&](const RowCells& cells) noexcept -> std::size_t {
-    return cells.count_in(col_begin, col_end);
-  };
+namespace {
 
-  // Same choice `footprint_holds_occupied_cell_locked` makes: whichever of
-  // the stored rows and the rectangle's rows is the smaller set.
-  std::size_t total = 0;
-  if (static_cast<std::uint64_t>(rows_.size()) <= row_end - row_begin) {
-    for (const auto& [row, cells] : rows_) {
-      if (static_cast<std::uint64_t>(row) < row_begin || static_cast<std::uint64_t>(row) >= row_end) {
-        continue;
+// Calls `fn(row, cells)` for each stored row in [row_begin, row_end), walking
+// whichever of the stored rows and the rectangle's rows is the smaller set.
+template <typename Rows, typename Fn>
+void for_each_stored_row_in(const Rows& rows, std::uint64_t row_begin, std::uint64_t row_end, Fn&& fn) {
+  if (row_end <= row_begin) {
+    return;
+  }
+  if (static_cast<std::uint64_t>(rows.size()) <= row_end - row_begin) {
+    for (const auto& [row, cells] : rows) {
+      if (static_cast<std::uint64_t>(row) >= row_begin && static_cast<std::uint64_t>(row) < row_end) {
+        fn(row, cells);
       }
-      total += overlap(cells);
     }
-    return total;
+    return;
   }
   for (std::uint64_t row = row_begin; row < row_end; ++row) {
-    const auto it = rows_.find(static_cast<std::uint32_t>(row));
-    if (it != rows_.end()) {
-      total += overlap(it->second);
+    const auto it = rows.find(static_cast<std::uint32_t>(row));
+    if (it != rows.end()) {
+      fn(static_cast<std::uint32_t>(row), it->second);
     }
   }
+}
+
+}  // namespace
+
+std::size_t Sheet::materialised_cells_in_rect_locked(std::uint32_t row_begin, std::uint64_t row_end,
+                                                     std::uint32_t col_begin, std::uint64_t col_end) const noexcept {
+  std::size_t total = 0;
+  for_each_stored_row_in(rows_, row_begin, row_end,
+                         [&](std::uint32_t, const RowCells& cells) { total += cells.count_in(col_begin, col_end); });
   return total;
 }
 
@@ -656,22 +660,7 @@ std::optional<Sheet::PopulatedExtent> Sheet::populated_extent(std::uint32_t firs
       }
     }
   };
-  // Walk whichever of the stored rows and the rectangle's rows is smaller,
-  // as `materialised_cells_in_rect_locked` does.
-  if (static_cast<std::uint64_t>(rows_.size()) <= static_cast<std::uint64_t>(last_row - first_row) + 1U) {
-    for (const auto& [row, cells] : rows_) {
-      if (row >= first_row && row <= last_row) {
-        scan_row(row, cells);
-      }
-    }
-  } else {
-    for (std::uint32_t row = first_row; row <= last_row; ++row) {
-      const auto it = rows_.find(row);
-      if (it != rows_.end()) {
-        scan_row(row, it->second);
-      }
-    }
-  }
+  for_each_stored_row_in(rows_, first_row, static_cast<std::uint64_t>(last_row) + 1U, scan_row);
 
   // A committed spill is represented by one rectangle, so fold its clipped
   // intersection into the result without walking its phantom payload.
@@ -990,9 +979,8 @@ void Sheet::read_range(std::uint32_t first_row, std::uint32_t last_row, std::uin
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
 
   // Narrow the spill table to the regions this rectangle can actually reach,
-  // once. `spill_region_covering_locked` is a linear scan of every registered
-  // anchor, and calling it per coordinate makes the read cost area x table
-  // size — the opposite of the amortisation this method exists for.
+  // once, so the per-coordinate test scans only those instead of paying a
+  // banded-index lookup per cell.
   std::vector<const SpillRegion*> regions;
   if (spill_table_ != nullptr) {
     const std::uint64_t row_end = static_cast<std::uint64_t>(last_row) + 1U;

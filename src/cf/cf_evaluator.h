@@ -101,6 +101,7 @@
 #include "cf/cf_types.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/resource_budget.h"
 #include "value.h"
 
 namespace formulon {
@@ -327,17 +328,8 @@ struct CFRangeCellMatches {
   std::vector<CFMatch> matches;
 };
 
-/// Largest request `evaluate_cf_for_range` accepts, in cells.
-///
-/// The walker exists to answer "what does the host paint in the region
-/// it is currently drawing", so the ceiling is sized from what a
-/// viewport can be: even a wall-sized display at the smallest usable
-/// zoom shows on the order of a few thousand cells. One full Excel
-/// column leaves three orders of magnitude of headroom above that while
-/// still rejecting whole-sheet rectangles, whose ~17e9 coordinates
-/// would occupy the calling thread indefinitely. A request past this
-/// point is a caller mistake, not work worth attempting.
-inline constexpr std::uint64_t kCfMaxViewportCells = 1048576U;  // 2^20
+/// Largest request `evaluate_cf_for_range` accepts, in cells (the shared viewport budget).
+inline constexpr std::uint64_t kCfMaxViewportCells = kMaxRecalcViewportCells;
 
 /// Returns one `CFRangeCellMatches` entry for each cell of `range`
 /// (inclusive on both corners) that produced at least one match. The

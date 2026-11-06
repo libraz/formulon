@@ -3,6 +3,7 @@
 #include "sheet_name.h"
 #include "utils/a1_ref.h"
 #include "utils/strings.h"
+#include "utils/text_ops.h"
 #include "utils/utf8_length.h"
 
 namespace formulon {
@@ -24,34 +25,6 @@ std::string_view strip_copy_suffix(std::string_view name) {
   }
   const std::size_t base_len = pos - 2;
   return base_len == 0 ? name : name.substr(0, base_len);
-}
-
-/// Longest prefix of `s` ending on a code-point boundary within `max_units`
-/// UTF-16 units.
-std::string_view truncate_units(std::string_view s, std::uint32_t max_units) {
-  std::size_t cut = 0;
-  std::uint32_t units = 0;
-  while (cut < s.size()) {
-    const auto lead = static_cast<unsigned char>(s[cut]);
-    std::size_t len = 1;
-    if (lead >= 0xF0) {
-      len = 4;
-    } else if (lead >= 0xE0) {
-      len = 3;
-    } else if (lead >= 0xC0) {
-      len = 2;
-    }
-    if (len > s.size() - cut) {
-      len = s.size() - cut;
-    }
-    const std::uint32_t u = utf16_units_in(s.substr(cut, len));
-    if (units + u > max_units) {
-      break;
-    }
-    units += u;
-    cut += len;
-  }
-  return s.substr(0, cut);
 }
 
 /// Whole-string A1 reference: 1-3 letters up to XFD, 1-7 digits up to 1048576.
@@ -119,7 +92,7 @@ std::string copy_sheet_default_name(std::string_view source_name, const std::vec
     candidate += suffix;
     if (utf16_units_in(candidate) > sheet_names::kMaxNameUnits) {
       const std::uint32_t room = sheet_names::kMaxNameUnits - utf16_units_in(suffix);
-      std::string_view cut = truncate_units(base, room);
+      std::string_view cut = base.substr(0, utf16_to_byte_offset_floor(base, room));
       std::string_view trimmed = cut;
       while (!trimmed.empty() && (trimmed.back() == ' ' || trimmed.back() == '\'')) {
         trimmed.remove_suffix(1);
