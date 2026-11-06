@@ -17,7 +17,7 @@
 // than one argument is in error the leftmost one surfaces.
 //
 // Compile + match runs through a single shared kernel in
-// `regex_lazy.cpp`; see that file for the option set, error mapping,
+// `regex_program.cpp`; see that file for the option set, error mapping,
 // and resource limits applied to every regex evaluation.
 
 #ifndef FORMULON_EVAL_REGEX_LAZY_H_
@@ -77,7 +77,7 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
 /// `$<name>`, `$&`, `` $` ``, `$'`, `$_`, `$$`) and a backslash layer
 /// (group references, character escapes, `\u` / `\l`, `\U`..`\E` /
 /// `\L`..`\E` case runs, `\Q`..`\E`); the full grammar is listed in
-/// `regex_lazy.cpp`. A bare `$`, an unknown escape or a reference to a
+/// `regex_replacement.cpp`. A bare `$`, an unknown escape or a reference to a
 /// missing group is `#VALUE!` once a match is expanded.
 Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                              const EvalContext& ctx);

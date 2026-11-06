@@ -11,6 +11,8 @@
 #include <utility>
 #include <vector>
 
+#include "eval/coerce.h"
+#include "utils/case_map.h"
 #include "utils/strings.h"
 #include "utils/text_ops.h"
 
@@ -324,6 +326,148 @@ std::vector<ReplToken> parse_replacement(std::string_view r) {
   }
   flush();
   return tokens;
+}
+
+namespace {
+
+// Conservative byte bound for the cap: a UTF-16 unit never needs more than
+// 4 UTF-8 bytes, so a required substitution output beyond this many bytes
+// always exceeds the cap and can be rejected before any buffer growth.
+constexpr std::size_t kMaxSubstituteOutputBytes = static_cast<std::size_t>(kExcelTextCapUnits) * 4U;
+
+// Output of one expansion. A pending `\u` / `\l` maps the next character on its
+// own; text appended under `\U` / `\L` is gathered and mapped as one span when
+// the run ends, so a sigma inside it sees its neighbours.
+class ReplacementWriter {
+ public:
+  explicit ReplacementWriter(std::string& out) : out_(out) {}
+
+  void append(std::string_view text) {
+    if (next_ != CaseMode::kNone && !text.empty()) {
+      std::size_t bytes = 0;
+      const std::uint32_t cp = decode_utf8_step(text, 0, &bytes);
+      const bool valid = cp != 0xFFFDU || bytes != 1U;
+      const std::uint32_t mapped = !valid                      ? cp
+                                   : next_ == CaseMode::kUpper ? case_map_upper(cp)
+                                                               : case_map_lower_isolated(cp);
+      emit(mapped == cp ? std::string(text.substr(0, bytes)) : encode_utf8_codepoint(mapped));
+      next_ = CaseMode::kNone;
+      text.remove_prefix(bytes);
+    }
+    if (run_ == CaseMode::kNone) {
+      out_.append(text);
+    } else {
+      span_.append(text);
+    }
+  }
+  void next(bool upper) { next_ = upper ? CaseMode::kUpper : CaseMode::kLower; }
+  void run(bool upper) {
+    flush_span();
+    run_ = upper ? CaseMode::kUpper : CaseMode::kLower;
+  }
+  void end_run() {
+    flush_span();
+    run_ = CaseMode::kNone;
+  }
+  // Ends an unterminated run at the end of the replacement.
+  void finish() { end_run(); }
+  // Bytes written so far, including a case span not yet flushed.
+  std::size_t size() const noexcept { return out_.size() + span_.size(); }
+
+ private:
+  enum class CaseMode : std::uint8_t { kNone, kUpper, kLower };
+
+  // A one-shot character sits outside the run, after the span gathered so far.
+  void emit(const std::string& piece) {
+    flush_span();
+    out_.append(piece);
+  }
+  void flush_span() {
+    if (run_ != CaseMode::kNone) {
+      out_ += run_ == CaseMode::kUpper ? case_map_to_upper(span_) : case_map_to_lower(span_);
+    }
+    span_.clear();
+  }
+
+  std::string& out_;
+  std::string span_;
+  CaseMode run_ = CaseMode::kNone;
+  CaseMode next_ = CaseMode::kNone;
+};
+
+// Resolves a group number from a name; -1 when absent or ambiguous.
+long long group_number_for_name(const CompiledPattern& program, const std::string& name) {
+  const int n = pcre2_substring_number_from_name(program.code(), reinterpret_cast<PCRE2_SPTR>(name.c_str()));
+  return n < 0 ? -1 : n;
+}
+
+}  // namespace
+
+// Appends the expansion of `tokens` for one match to `out`. `ovec` is the
+// PCRE2 ovector of the match. False when a token is invalid or names a group
+// the pattern lacks.
+bool expand_replacement(const std::vector<ReplToken>& tokens, const CompiledPattern& program, std::string_view subject,
+                        const PCRE2_SIZE* ovec, std::string& out) {
+  ReplacementWriter writer(out);
+  const auto group_text = [&](std::size_t group) -> std::string_view {
+    if (ovec[2 * group] == PCRE2_UNSET) {
+      return {};
+    }
+    return subject.substr(static_cast<std::size_t>(ovec[2 * group]),
+                          static_cast<std::size_t>(ovec[2 * group + 1] - ovec[2 * group]));
+  };
+  for (const ReplToken& tok : tokens) {
+    switch (tok.kind) {
+      case ReplTokenKind::kLiteral:
+        writer.append(tok.text);
+        break;
+      case ReplTokenKind::kGroup:
+        if (tok.number > program.capture_count()) {
+          return false;
+        }
+        writer.append(group_text(tok.number));
+        break;
+      case ReplTokenKind::kNamed: {
+        const long long group = group_number_for_name(program, tok.text);
+        if (group < 0) {
+          return false;
+        }
+        writer.append(group_text(static_cast<std::size_t>(group)));
+        break;
+      }
+      case ReplTokenKind::kBefore:
+        writer.append(subject.substr(0, static_cast<std::size_t>(ovec[0])));
+        break;
+      case ReplTokenKind::kAfter:
+        writer.append(subject.substr(static_cast<std::size_t>(ovec[1])));
+        break;
+      case ReplTokenKind::kSubject:
+        writer.append(subject);
+        break;
+      case ReplTokenKind::kUpperNext:
+        writer.next(/*upper=*/true);
+        break;
+      case ReplTokenKind::kLowerNext:
+        writer.next(/*upper=*/false);
+        break;
+      case ReplTokenKind::kUpperRun:
+        writer.run(/*upper=*/true);
+        break;
+      case ReplTokenKind::kLowerRun:
+        writer.run(/*upper=*/false);
+        break;
+      case ReplTokenKind::kCaseEnd:
+        writer.end_run();
+        break;
+      case ReplTokenKind::kInvalid:
+        return false;
+    }
+    if (writer.size() > kMaxSubstituteOutputBytes) {
+      return false;
+    }
+  }
+  writer.finish();
+  return out.size() <= kMaxSubstituteOutputBytes;
 }
 
 }  // namespace formulon::eval::detail

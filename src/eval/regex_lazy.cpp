@@ -32,7 +32,6 @@
 #include "eval/regex_lazy.h"
 
 #include <algorithm>
-#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -48,13 +47,12 @@
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/regex_program.h"
 #include "eval/regex_replacement.h"
 #include "eval/scalar_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
-#include "utils/case_map.h"
-#include "utils/resource_budget.h"
 #include "utils/strings.h"
 #include "utils/text_ops.h"
 #include "utils/utf8_length.h"
@@ -65,37 +63,17 @@ namespace eval {
 
 namespace {
 
-// Worksheet formula text length cap; matches Excel's 32 767-character
-// limit on a single formula token. PCRE2 itself can compile much longer
-// patterns, but Excel's REGEX argument cannot in practice exceed this,
-// and capping early gives a clean #VALUE! instead of a slow compile.
-constexpr std::size_t kMaxPatternBytes = 32767U;
-
-// Conservative byte bound for the cap: a UTF-16 unit never needs more than
-// 4 UTF-8 bytes, so a required substitution output beyond this many bytes
-// always exceeds the cap and can be rejected before any buffer growth.
-constexpr std::size_t kMaxSubstituteOutputBytes = static_cast<std::size_t>(kExcelTextCapUnits) * 4U;
-
-// The match limit bounds backtracking iterations; the depth limit bounds
-// recursion in the regex VM. Both are checked by pcre2_match itself; on
-// overflow it returns PCRE2_ERROR_MATCHLIMIT or PCRE2_ERROR_DEPTHLIMIT.
-constexpr std::uint32_t kMatchLimit = 1000000U;
-constexpr std::uint32_t kDepthLimit = 10000U;
-
-// What a REGEX* call returns when a match attempt exhausts `kMatchLimit`, and
-// what the extract / replace pair returns for any other resource exhaustion
-// (depth / heap limit, retained-match budget).
-constexpr ErrorCode kMatchLimitError = ErrorCode::Value;
-constexpr ErrorCode kResourceError = ErrorCode::Calc;
-
+using detail::CompiledPattern;
+using detail::expand_replacement;
+using detail::KernelResult;
+using detail::kMatchLimitError;
+using detail::kResourceError;
+using detail::MatchSpan;
 using detail::parse_replacement;
+using detail::regex_kernel;
 using detail::ReplToken;
-using detail::ReplTokenKind;
-
-// Published through `regex_compile_count()`. Atomic because two worker
-// threads of a parallel recalc may evaluate REGEX* cells concurrently;
-// relaxed ordering is enough for a pure counter.
-std::atomic<std::uint64_t> g_compile_count{0U};
+using detail::scan_matches;
+using detail::ScanEnd;
 
 // --- Argument coercion helpers -------------------------------------------
 //
@@ -141,249 +119,6 @@ bool read_case_insensitive(const parser::AstNode& node, Arena& arena, const Func
   }
   out = (cs == 1);
   return true;
-}
-
-// --- Match-result accumulator --------------------------------------------
-//
-// The kernel is a generator: it yields one match at a time to the
-// per-function consumer. We model this by having the kernel iterate
-// internally and store offsets into a small_vector-equivalent
-// (arena-backed std::vector is fine here because the impl is a leaf
-// TU and the sizes are bounded by the subject length).
-
-struct MatchSpan {
-  std::size_t whole_start;
-  std::size_t whole_end;
-  // Per match: offsets for each capture group (group 0 is the whole
-  // match, group i = i-th `(...)`). PCRE2 uses (PCRE2_SIZE)-1 to mean
-  // "did not participate"; we map that to {0, 0} and the caller
-  // distinguishes via the `participated` bitset.
-  std::vector<std::pair<std::size_t, std::size_t>> groups;
-  std::vector<bool> participated;
-};
-
-// Result of `regex_kernel`. `compiled` and `match_data` are owned by
-// the kernel and freed before return; the caller only sees the matches
-// vector and the capture-group count. `error` is set on any failure
-// (compile failure, match-limit hit, allocation failure).
-struct KernelResult {
-  std::vector<MatchSpan> matches;
-  std::uint32_t capture_count = 0;  // # of `(...)` groups, EXCLUDING group 0
-  bool ok = true;
-  // Error to return when ok == false. Distinct from a "no match" (which
-  // is ok = true with matches empty); the distinction matters because
-  // REGEXEXTRACT mode 2 needs to surface #N/A on no match versus
-  // #VALUE! on no capture groups.
-  Value err = Value::error(ErrorCode::Value);
-};
-
-// One compiled pattern plus the match data and match context that go with
-// it, owned for the lifetime of a single REGEX* call.
-//
-// Compilation is loop-invariant work: it costs an order of magnitude more
-// than matching a short cell string, so a REGEX* call whose `text` argument
-// is an N-cell range builds exactly one of these and reuses it for every
-// subject. The constructor applies the same pattern guards the kernel used
-// to apply inline; a rejected or uncompilable pattern leaves `ok()` false
-// and every subject then surfaces the same `#VALUE!` it did before, which
-// keeps a broadcast's result shape unchanged.
-class CompiledPattern {
- public:
-  CompiledPattern(std::string_view pattern, bool case_insensitive) {
-    // Pattern guards before pcre2_compile so pathological inputs cannot
-    // burn time inside the regex compiler.
-    if (pattern.size() > kMaxPatternBytes) {
-      return;
-    }
-
-    std::uint32_t compile_flags = PCRE2_UTF | PCRE2_UCP;
-    if (case_insensitive) {
-      compile_flags |= PCRE2_CASELESS;
-    }
-
-    int err_code = 0;
-    PCRE2_SIZE err_offset = 0;
-    code_ = pcre2_compile(reinterpret_cast<PCRE2_SPTR>(pattern.empty() ? "" : pattern.data()),
-                          static_cast<PCRE2_SIZE>(pattern.size()), compile_flags, &err_code, &err_offset, nullptr);
-    g_compile_count.fetch_add(1U, std::memory_order_relaxed);
-    if (code_ == nullptr) {
-      return;
-    }
-
-    // Inspect capture group count. PCRE2_INFO_CAPTURECOUNT excludes the
-    // whole-match group, which is exactly what the kernel reports.
-    pcre2_pattern_info(code_, PCRE2_INFO_CAPTURECOUNT, &capture_count_);
-
-    match_data_ = pcre2_match_data_create_from_pattern(code_, nullptr);
-    if (match_data_ == nullptr) {
-      return;
-    }
-    context_ = pcre2_match_context_create(nullptr);
-    if (context_ == nullptr) {
-      return;
-    }
-    pcre2_set_match_limit(context_, kMatchLimit);
-    pcre2_set_depth_limit(context_, kDepthLimit);
-    ok_ = true;
-  }
-
-  ~CompiledPattern() {
-    if (context_ != nullptr) {
-      pcre2_match_context_free(context_);
-    }
-    if (match_data_ != nullptr) {
-      pcre2_match_data_free(match_data_);
-    }
-    if (code_ != nullptr) {
-      pcre2_code_free(code_);
-    }
-  }
-
-  CompiledPattern(const CompiledPattern&) = delete;
-  CompiledPattern& operator=(const CompiledPattern&) = delete;
-
-  /// True once the pattern compiled and both PCRE2 side structures were
-  /// obtained. A false value is always the caller's `#VALUE!`.
-  bool ok() const noexcept { return ok_; }
-
-  pcre2_code* code() const noexcept { return code_; }
-  pcre2_match_data* match_data() const noexcept { return match_data_; }
-  pcre2_match_context* context() const noexcept { return context_; }
-  std::uint32_t capture_count() const noexcept { return capture_count_; }
-
- private:
-  pcre2_code* code_ = nullptr;
-  pcre2_match_data* match_data_ = nullptr;
-  pcre2_match_context* context_ = nullptr;
-  std::uint32_t capture_count_ = 0;
-  bool ok_ = false;
-};
-
-// How a `scan_matches` walk ended.
-enum class ScanEnd : std::uint8_t {
-  kExhausted,  // no further match
-  kStopped,    // the visitor declined to continue
-  kLimitHit,   // the match limit was hit
-  kError,      // any other PCRE2 error (depth / heap limit, bad offset)
-};
-
-// Walks the matches of `program` over `subject` left to right, handing each
-// one's ovector to `on_match`; a visitor returning false stops the walk. With
-// `find_all` false the walk ends after the first match.
-template <typename OnMatch>
-ScanEnd scan_matches(const CompiledPattern& program, std::string_view subject, bool find_all, OnMatch&& on_match) {
-  PCRE2_SIZE start_offset = 0;
-  while (start_offset <= static_cast<PCRE2_SIZE>(subject.size())) {
-    const int rc =
-        pcre2_match(program.code(), reinterpret_cast<PCRE2_SPTR>(subject.data()),
-                    static_cast<PCRE2_SIZE>(subject.size()), start_offset, 0, program.match_data(), program.context());
-    if (rc == PCRE2_ERROR_NOMATCH) {
-      break;
-    }
-    if (rc == PCRE2_ERROR_MATCHLIMIT) {
-      return ScanEnd::kLimitHit;
-    }
-    if (rc < 0) {
-      return ScanEnd::kError;
-    }
-    const PCRE2_SIZE* ovec = pcre2_get_ovector_pointer(program.match_data());
-    if (!on_match(ovec)) {
-      return ScanEnd::kStopped;
-    }
-    if (!find_all) {
-      break;
-    }
-
-    // Advance past the match. Zero-length matches at `start_offset` would
-    // loop forever; bump by one whole UTF-8 codepoint rather than one byte.
-    // Under PCRE2_UTF, `pcre2_match` rejects a `start_offset` that lands
-    // inside a multi-byte sequence with PCRE2_ERROR_BADUTFOFFSET, so a raw
-    // one-byte bump is only safe before an ASCII byte.
-    const std::size_t new_start = static_cast<std::size_t>(ovec[1]);
-    if (new_start <= start_offset) {
-      if (start_offset >= subject.size()) {
-        break;
-      }
-      std::size_t step = 0;
-      decode_utf8_step(subject, start_offset, &step);
-      start_offset = start_offset + static_cast<PCRE2_SIZE>(step == 0 ? 1 : step);
-    } else {
-      start_offset = new_start;
-    }
-  }
-  return ScanEnd::kExhausted;
-}
-
-// Single shared match pipeline.
-//
-// `subject` must remain valid for the duration of the call. `find_all`
-// decides whether the kernel iterates after the first match (REGEXTEST and
-// REGEXEXTRACT modes 0 / 2 only need the first hit; everything else wants
-// every hit).
-//
-// `on_match_limit_returns_no_match`: when true (REGEXTEST), a hit on
-// depth_limit is converted to "no match" (kernel still returns ok=true with
-// matches empty). When false (the extract / replace pair), it surfaces as
-// #CALC!. Exhausting the match limit is #VALUE! either way.
-KernelResult regex_kernel(const CompiledPattern& program, std::string_view subject, bool find_all,
-                          bool on_match_limit_returns_no_match) {
-  KernelResult result;
-
-  if (!program.ok()) {
-    result.ok = false;
-    result.err = Value::error(ErrorCode::Value);
-    return result;
-  }
-
-  const std::uint32_t capture_count = program.capture_count();
-  result.capture_count = capture_count;
-
-  // PCRE2's limits bound one match attempt, not how much a find-all scan
-  // retains across attempts. Charge each retained match its whole-match slot
-  // plus one per capture group so a many-group pattern over a long subject
-  // cannot accumulate without bound.
-  ResourceBudget match_slots(kMaxRegexMatchSlots);
-  bool budget_exhausted = false;
-
-  const ScanEnd end = scan_matches(program, subject, find_all, [&](const PCRE2_SIZE* ovec) {
-    if (!match_slots.consume(static_cast<std::uint64_t>(capture_count) + 1U)) {
-      budget_exhausted = true;
-      return false;
-    }
-    MatchSpan ms;
-    ms.whole_start = static_cast<std::size_t>(ovec[0]);
-    ms.whole_end = static_cast<std::size_t>(ovec[1]);
-    ms.groups.reserve(capture_count);
-    ms.participated.reserve(capture_count);
-    for (std::uint32_t g = 1; g <= capture_count; ++g) {
-      const PCRE2_SIZE gs = ovec[2 * g];
-      const PCRE2_SIZE ge = ovec[2 * g + 1];
-      if (gs == PCRE2_UNSET) {
-        ms.groups.emplace_back(0U, 0U);
-        ms.participated.push_back(false);
-      } else {
-        ms.groups.emplace_back(static_cast<std::size_t>(gs), static_cast<std::size_t>(ge));
-        ms.participated.push_back(true);
-      }
-    }
-    result.matches.push_back(std::move(ms));
-    return true;
-  });
-
-  if (end == ScanEnd::kLimitHit) {
-    result.ok = false;
-    result.err = Value::error(kMatchLimitError);
-    return result;
-  }
-  if (budget_exhausted || end == ScanEnd::kError) {
-    // Resource exhaustion (match-slot budget, depth / heap limit): REGEXTEST
-    // degrades to "no match", the extract / replace pair reports #CALC!.
-    if (!on_match_limit_returns_no_match) {
-      result.ok = false;
-      result.err = Value::error(kResourceError);
-    }
-  }
-  return result;
 }
 
 // Materialises a substring of `subject` into the arena and returns a
@@ -558,139 +293,6 @@ Value extract_dispatch(const KernelResult& kr, std::string_view subject, long lo
   }
 }
 
-// Output of one expansion. A pending `\u` / `\l` maps the next character on its
-// own; text appended under `\U` / `\L` is gathered and mapped as one span when
-// the run ends, so a sigma inside it sees its neighbours.
-class ReplacementWriter {
- public:
-  explicit ReplacementWriter(std::string& out) : out_(out) {}
-
-  void append(std::string_view text) {
-    if (next_ != CaseMode::kNone && !text.empty()) {
-      std::size_t bytes = 0;
-      const std::uint32_t cp = decode_utf8_step(text, 0, &bytes);
-      const bool valid = cp != 0xFFFDU || bytes != 1U;
-      const std::uint32_t mapped = !valid                      ? cp
-                                   : next_ == CaseMode::kUpper ? case_map_upper(cp)
-                                                               : case_map_lower_isolated(cp);
-      emit(mapped == cp ? std::string(text.substr(0, bytes)) : encode_utf8_codepoint(mapped));
-      next_ = CaseMode::kNone;
-      text.remove_prefix(bytes);
-    }
-    if (run_ == CaseMode::kNone) {
-      out_.append(text);
-    } else {
-      span_.append(text);
-    }
-  }
-  void next(bool upper) { next_ = upper ? CaseMode::kUpper : CaseMode::kLower; }
-  void run(bool upper) {
-    flush_span();
-    run_ = upper ? CaseMode::kUpper : CaseMode::kLower;
-  }
-  void end_run() {
-    flush_span();
-    run_ = CaseMode::kNone;
-  }
-  // Ends an unterminated run at the end of the replacement.
-  void finish() { end_run(); }
-  // Bytes written so far, including a case span not yet flushed.
-  std::size_t size() const noexcept { return out_.size() + span_.size(); }
-
- private:
-  enum class CaseMode : std::uint8_t { kNone, kUpper, kLower };
-
-  // A one-shot character sits outside the run, after the span gathered so far.
-  void emit(const std::string& piece) {
-    flush_span();
-    out_.append(piece);
-  }
-  void flush_span() {
-    if (run_ != CaseMode::kNone) {
-      out_ += run_ == CaseMode::kUpper ? case_map_to_upper(span_) : case_map_to_lower(span_);
-    }
-    span_.clear();
-  }
-
-  std::string& out_;
-  std::string span_;
-  CaseMode run_ = CaseMode::kNone;
-  CaseMode next_ = CaseMode::kNone;
-};
-
-// Resolves a group number from a name; -1 when absent or ambiguous.
-long long group_number_for_name(const CompiledPattern& program, const std::string& name) {
-  const int n = pcre2_substring_number_from_name(program.code(), reinterpret_cast<PCRE2_SPTR>(name.c_str()));
-  return n < 0 ? -1 : n;
-}
-
-// Appends the expansion of `tokens` for one match to `out`. `ovec` is the
-// PCRE2 ovector of the match. False when a token is invalid or names a group
-// the pattern lacks.
-bool expand_replacement(const std::vector<ReplToken>& tokens, const CompiledPattern& program, std::string_view subject,
-                        const PCRE2_SIZE* ovec, std::string& out) {
-  ReplacementWriter writer(out);
-  const auto group_text = [&](std::size_t group) -> std::string_view {
-    if (ovec[2 * group] == PCRE2_UNSET) {
-      return {};
-    }
-    return subject.substr(static_cast<std::size_t>(ovec[2 * group]),
-                          static_cast<std::size_t>(ovec[2 * group + 1] - ovec[2 * group]));
-  };
-  for (const ReplToken& tok : tokens) {
-    switch (tok.kind) {
-      case ReplTokenKind::kLiteral:
-        writer.append(tok.text);
-        break;
-      case ReplTokenKind::kGroup:
-        if (tok.number > program.capture_count()) {
-          return false;
-        }
-        writer.append(group_text(tok.number));
-        break;
-      case ReplTokenKind::kNamed: {
-        const long long group = group_number_for_name(program, tok.text);
-        if (group < 0) {
-          return false;
-        }
-        writer.append(group_text(static_cast<std::size_t>(group)));
-        break;
-      }
-      case ReplTokenKind::kBefore:
-        writer.append(subject.substr(0, static_cast<std::size_t>(ovec[0])));
-        break;
-      case ReplTokenKind::kAfter:
-        writer.append(subject.substr(static_cast<std::size_t>(ovec[1])));
-        break;
-      case ReplTokenKind::kSubject:
-        writer.append(subject);
-        break;
-      case ReplTokenKind::kUpperNext:
-        writer.next(/*upper=*/true);
-        break;
-      case ReplTokenKind::kLowerNext:
-        writer.next(/*upper=*/false);
-        break;
-      case ReplTokenKind::kUpperRun:
-        writer.run(/*upper=*/true);
-        break;
-      case ReplTokenKind::kLowerRun:
-        writer.run(/*upper=*/false);
-        break;
-      case ReplTokenKind::kCaseEnd:
-        writer.end_run();
-        break;
-      case ReplTokenKind::kInvalid:
-        return false;
-    }
-    if (writer.size() > kMaxSubstituteOutputBytes) {
-      return false;
-    }
-  }
-  writer.finish();
-  return out.size() <= kMaxSubstituteOutputBytes;
-}
-
 // Finishes a replacement result: one past the Excel text cap is `#VALUE!`.
 Value finish_replacement(const std::string& out, Arena& arena) {
   if (static_cast<std::uint64_t>(utf16_units_in(out)) > kExcelTextCapUnits) {
@@ -826,10 +428,6 @@ Expected<bool, ErrorCode> RegexSearch::matches(std::string_view subject) const {
     return result.err.as_error();
   }
   return !result.matches.empty();
-}
-
-std::uint64_t regex_compile_count() noexcept {
-  return g_compile_count.load(std::memory_order_relaxed);
 }
 
 // ---------------------------------------------------------------------------
