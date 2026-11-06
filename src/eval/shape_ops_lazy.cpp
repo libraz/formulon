@@ -667,8 +667,8 @@ Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const Func
   // (left-to-right), walk its cells in row-major order. The first
   // error encountered wins. This runs before the numeric accumulation
   // so the returned code matches Excel's leftmost-wins rule even if a
-  // later numeric overflow would otherwise upstage it. A whole-axis
-  // argument is scanned over its dense head, then its repeated tail.
+  // later numeric overflow would otherwise upstage it. A whole-row
+  // argument interleaves each row's head with that row's repeated tail.
   for (const ArgArray& a : all_args) {
     for (const Value& v : a.cells) {
       if (v.is_error()) {
@@ -676,19 +676,9 @@ Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const Func
       }
     }
     if (a.tail != nullptr) {
-      const TailArray& ta = *a.tail;
-      const std::size_t head_cells =
-          static_cast<std::size_t>(ta.axis == TailAxis::kRows ? ta.head * ta.cols : ta.rows * ta.head);
-      const std::size_t tail_cells = ta.axis == TailAxis::kRows ? ta.cols : ta.rows;
-      for (std::size_t i = 0; i < head_cells; ++i) {
-        if (ta.cells[i].is_error()) {
-          return ta.cells[i];
-        }
-      }
-      for (std::size_t i = 0; i < tail_cells; ++i) {
-        if (ta.tail[i].is_error()) {
-          return ta.tail[i];
-        }
+      const Value err = first_tail_error(*a.tail);
+      if (err.is_error()) {
+        return err;
       }
     }
   }

@@ -106,6 +106,31 @@ const Value& tail_array_at(const TailArray& ta, std::uint32_t r, std::uint32_t c
   return c < ta.head ? ta.cells[static_cast<std::size_t>(r) * ta.head + c] : ta.tail[r];
 }
 
+Value first_tail_error(const TailArray& ta) {
+  const auto first_error = [](const Value* cells, std::size_t count) {
+    for (std::size_t i = 0; i < count; ++i) {
+      if (cells[i].is_error()) {
+        return cells[i];
+      }
+    }
+    return Value::blank();
+  };
+  if (ta.axis == TailAxis::kRows) {
+    const Value head = first_error(ta.cells, static_cast<std::size_t>(ta.head) * ta.cols);
+    return head.is_error() || ta.head >= ta.rows ? head : first_error(ta.tail, ta.cols);
+  }
+  for (std::uint32_t r = 0; r < ta.rows; ++r) {
+    const Value head = first_error(ta.cells + static_cast<std::size_t>(r) * ta.head, ta.head);
+    if (head.is_error()) {
+      return head;
+    }
+    if (ta.head < ta.cols && ta.tail[r].is_error()) {
+      return ta.tail[r];
+    }
+  }
+  return Value::blank();
+}
+
 Value densify(const Shaped& s, Arena& arena) {
   if (s.tail_array == nullptr) {
     return s.value;

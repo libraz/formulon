@@ -46,9 +46,6 @@ struct StreamedTail {
   const TailArray* tail;
 };
 
-// The first error a row-major walk of `ta` reaches, or Blank.
-Value first_tail_error(const TailArray& ta);
-
 // Folds the collected `values` with the streamed tails at their positions.
 Value fold_with_tails(const FunctionDef& def, const std::vector<Value>& values,
                       const std::vector<StreamedTail>& streamed);

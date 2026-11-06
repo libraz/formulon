@@ -287,6 +287,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/whole_axis_shape_test.cpp
   unit/eval/whole_axis_names_test.cpp
   unit/eval/whole_axis_reduce_test.cpp
+  unit/eval/sumproduct_error_order_test.cpp
   unit/eval/countblank_countif_tail_test.cpp
   unit/eval/builtins_stats_test.cpp
   unit/eval/builtins_subtotal_test.cpp

@@ -58,6 +58,9 @@ Shaped make_reference_tail(Arena& arena, std::uint32_t rows, std::uint32_t cols,
 /// Value at position (`r`, `c`) of `ta`; both indices must be within the declared size.
 const Value& tail_array_at(const TailArray& ta, std::uint32_t r, std::uint32_t c);
 
+/// The first error a row-major walk of `ta` reaches, or Blank.
+Value first_tail_error(const TailArray& ta);
+
 /// Dense value of `s`: `s.value` for a non-tail result, otherwise a row-major
 /// `Value::array`. Over `kMaxDerivedArrayCells` it is the error the dense path
 /// gives: `#CALC!` for a reference read (as range expansion), `#NUM!` otherwise.

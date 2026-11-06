@@ -16,32 +16,6 @@
 namespace formulon {
 namespace eval {
 
-// The first error a row-major walk of `ta` reaches, or Blank.
-Value first_tail_error(const TailArray& ta) {
-  const auto first_error = [](const Value* cells, std::size_t count) {
-    for (std::size_t i = 0; i < count; ++i) {
-      if (cells[i].is_error()) {
-        return cells[i];
-      }
-    }
-    return Value::blank();
-  };
-  if (ta.axis == TailAxis::kRows) {
-    const Value head = first_error(ta.cells, static_cast<std::size_t>(ta.head) * ta.cols);
-    return head.is_error() || ta.head >= ta.rows ? head : first_error(ta.tail, ta.cols);
-  }
-  for (std::uint32_t r = 0; r < ta.rows; ++r) {
-    const Value head = first_error(ta.cells + static_cast<std::size_t>(r) * ta.head, ta.head);
-    if (head.is_error()) {
-      return head;
-    }
-    if (ta.head < ta.cols && ta.tail[r].is_error()) {
-      return ta.tail[r];
-    }
-  }
-  return Value::blank();
-}
-
 namespace {
 
 // Feeds `line`'s filtered cells through `def`'s fold `repeat` times in order.
