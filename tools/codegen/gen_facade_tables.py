@@ -12,8 +12,10 @@ Outputs (read through ``facade_scope.py``, never edited by hand):
   ``facade: handwritten``), ``CELL_ARGS`` (``{method: [[row, col], ...]}``, the
   argument positions of each one-cell ``(row, col)`` pair, the receiver
   excluded) and ``RECT_ARGS`` (``{method: [position, ...]}``, the ``CellRect``
-  arguments), both from the ledger's ``cell_args`` / ``rect_args``.
-* ``packages/python/formulon/sheet.py``: the same tables in its
+  arguments), both from the ledger's ``cell_args`` / ``rect_args``, and
+  ``REF_ARGS`` (``{method: [position, kind]}``, the ``*Ref`` argument) from its
+  ``ref_args``.
+* ``packages/python/formulon/sheet.py``: the same tables but ``REF_ARGS`` in its
   ``# <facade-tables>`` region, with the Python names. ``--check`` skips the
   file while it has no region or an empty one; ``--write`` fills an empty one.
 * ``src/node_addon/generated/facade_scope.inc``: the sorted raw names of the
@@ -89,7 +91,8 @@ def _js_positions(value: object) -> str:
 
 
 def address_tables(language: str, ledger: Optional[facade_scope.Ledger] = None) -> str:
-    """The `CELL_ARGS` and `RECT_ARGS` tables of `language`'s facade region."""
+    """The `CELL_ARGS` and `RECT_ARGS` tables of `language`'s facade region, and in JS `REF_ARGS`, which the
+    generic wrapper reads (Python methods resolve their reference themselves)."""
     ledger = ledger or facade_scope.load()
     tables = {
         "CELL_ARGS": facade_scope.cell_args(ledger, language),
@@ -103,6 +106,10 @@ def address_tables(language: str, ledger: Optional[facade_scope.Ledger] = None) 
         else:
             body = "".join(f'    "{name}": {_py_positions(value)},\n' for name, value in entries.items())
             out.append(f"{table} = {{\n{body}}}\n")
+    if language == "js":
+        refs = facade_scope.ref_args(ledger, language)
+        body = "".join(f"{_INDENT}{name}: [{pos}, '{kind}'],\n" for name, (pos, kind) in refs.items())
+        out.append(f"const REF_ARGS = Object.freeze({{\n{body}}});\n")
     return "".join(out)
 
 

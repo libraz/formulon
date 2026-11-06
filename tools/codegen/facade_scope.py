@@ -158,6 +158,16 @@ def rect_args(ledger: Ledger, language: str) -> Dict[str, list]:
     return _positions(ledger, language, "rect_args")
 
 
+def ref_args(ledger: Ledger, language: str) -> Dict[str, list]:
+    """`{publicName: [position, kind]}` of the ops and lists whose ledger entry carries `ref_args`."""
+    out: Dict[str, list] = {}
+    for _key, entry in _ops(ledger, ("op", "list")):
+        name = public_name(entry, language)
+        if name is not None and entry.get("ref_args"):
+            out[name] = list(entry["ref_args"])
+    return dict(sorted(out.items()))
+
+
 def structure_ops(ledger: Ledger, language: str, header: Optional[str] = None) -> List[str]:
     """Sorted public names of the ops that add, remove or reorder sheets: every non-`get` op of the sheet
     collection, and every op whose C function writes `out_sheet_index` without a `get` verb."""

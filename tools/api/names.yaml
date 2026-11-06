@@ -5,8 +5,10 @@
 # `kind: typedef` names a type that is neither a record nor an enum: a handle, an alias,
 # a callback, an error class, or a module or options object.
 # `cell_args` / `rect_args` list the argument positions (receiver excluded) of each one-cell
-# `(row, col)` pair and each `CellRect`. `patch: true` marks a partial update whose keys are fields
-# of `patch_record`, or `patch_record: none` with a `patch_reason` when no getter returns a record.
+# `(row, col)` pair and each `CellRect`; `ref_args` is `[position, kind]` of an op's or list's
+# `TableRef` / `PivotRef` / `CfRuleRef` / `ProtectedRangeRef` argument. `patch: true` marks a
+# partial update whose keys are fields of `patch_record`, or `patch_record: none` with a
+# `patch_reason` when no getter returns a record.
 schema: 1
 collections:
   sheet: { key: index, access: handles, plural: sheets, ops: [sheet.add, sheet.copy, sheet.get_count, sheet.move, sheet.remove, sheet.rename, sheet_index.get, sheet_name.get] }
@@ -3487,6 +3489,7 @@ entries:
     js: updateTable
     py: update_table
     params: { header_row: bool, totals_row: bool, show_first_column: bool, show_last_column: bool, show_row_stripes: bool, show_column_stripes: bool }
+    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_table_update, js: updateTable, py: table_update }
   table.remove:
@@ -3496,6 +3499,7 @@ entries:
     c: fm_workbook_remove_table
     js: removeTable
     py: remove_table
+    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_table_remove, js: removeTable, py: table_remove }
   table_info.get:
@@ -3538,6 +3542,7 @@ entries:
     c: fm_workbook_rename_table_column
     js: renameTableColumn
     py: rename_table_column
+    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_table_rename_column, js: renameTableColumn, py: table_rename_column }
   table_column_totals.set:
@@ -3547,6 +3552,7 @@ entries:
     c: fm_workbook_set_table_column_totals
     js: setTableColumnTotals
     py: set_table_column_totals
+    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_table_set_column_totals, js: setTableColumnTotals, py: table_set_column_totals }
   passthrough.get_count:
@@ -3826,6 +3832,7 @@ entries:
     c: fm_sheet_update_protected_range
     js: updateProtectedRange
     py: update_protected_range
+    ref_args: [0, protectedRange]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_update_protected_range, js: updateProtectedRange, py: update_protected_range }
   protected_range.remove:
@@ -3835,6 +3842,7 @@ entries:
     c: fm_sheet_remove_protected_range
     js: removeProtectedRange
     py: remove_protected_range
+    ref_args: [0, protectedRange]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_remove_protected_range, js: removeProtectedRange, py: remove_protected_range }
   validation.get_count:
@@ -4726,6 +4734,7 @@ entries:
     c: fm_sheet_remove_cf_rule
     js: removeCfRule
     py: remove_cf_rule
+    ref_args: [0, cfRule]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_cf_remove_at, js: removeConditionalFormatAt, py: remove_conditional_format_at }
   cf_rule.clear:
@@ -4795,6 +4804,7 @@ entries:
     c: fm_sheet_get_pivot_layout
     js: getPivotLayout
     py: get_pivot_layout
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_layout, js: pivotLayout, py: pivot_layout }
   pivot_cells.destroy:
@@ -5234,6 +5244,7 @@ entries:
     c: fm_sheet_remove_pivot
     js: removePivot
     py: remove_pivot
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_remove, js: pivotRemove, py: pivot_remove }
   pivot_name.set:
@@ -5243,6 +5254,7 @@ entries:
     c: fm_sheet_set_pivot_name
     js: setPivotName
     py: set_pivot_name
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_name, js: pivotSetName, py: pivot_set_name }
   pivot_anchor.set:
@@ -5253,6 +5265,7 @@ entries:
     js: setPivotAnchor
     py: set_pivot_anchor
     rect_args: [1]
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_anchor, js: pivotSetAnchor, py: pivot_set_anchor }
   pivot_grand_totals.set:
@@ -5265,6 +5278,7 @@ entries:
     params: { rows_enabled: bool, cols_enabled: bool }
     patch: true
     patch_record: PivotGrandTotals
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_grand_totals, js: pivotSetGrandTotals, py: pivot_set_grand_totals }
     facade: handwritten
@@ -5278,6 +5292,7 @@ entries:
     params: { show_row_headers: bool, show_col_headers: bool, show_row_stripes: bool, show_col_stripes: bool, show_last_column: bool }
     patch: true
     patch_record: PivotStyle
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_style_info, js: pivotSetStyleInfo, py: pivot_set_style_info }
   pivot_report_layout.get:
@@ -5288,6 +5303,7 @@ entries:
     js: getPivotReportLayout
     py: get_pivot_report_layout
     returns: "enum:pivot_layout"
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_layout, js: pivotGetLayout, py: get_pivot_report_layout }
   pivot_report_layout.set:
@@ -5298,6 +5314,7 @@ entries:
     js: setPivotReportLayout
     py: set_pivot_report_layout
     params: { layout: "enum:pivot_layout" }
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_layout, js: pivotSetLayout, py: set_pivot_report_layout }
   pivot_field.get_count:
@@ -5317,6 +5334,7 @@ entries:
     c: fm_sheet_add_pivot_field
     js: addPivotField
     py: add_pivot_field
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_add, js: pivotFieldAdd, py: pivot_field_add }
   pivot_field.clear:
@@ -5326,6 +5344,7 @@ entries:
     c: fm_sheet_clear_pivot_fields
     js: clearPivotFields
     py: clear_pivot_fields
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_clear, js: pivotFieldClear, py: pivot_field_clear }
   pivot_field_axis.set:
@@ -5336,6 +5355,7 @@ entries:
     js: setPivotFieldAxis
     py: set_pivot_field_axis
     params: { axis: "enum:pivot_axis" }
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_set_axis, js: pivotFieldSetAxis, py: pivot_field_set_axis }
   pivot_field_sort.set:
@@ -5346,6 +5366,7 @@ entries:
     js: setPivotFieldSort
     py: set_pivot_field_sort
     params: { order: "enum:pivot_sort_order" }
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_set_sort, js: pivotFieldSetSort, py: pivot_field_set_sort }
   pivot_field_subtotal_top.set:
@@ -5421,6 +5442,7 @@ entries:
     js: setPivotFieldShowDetail
     py: set_pivot_field_show_detail
     params: { "on": bool }
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_set_show_detail, js: pivotFieldSetShowDetail, py: pivot_field_set_show_detail }
   pivot_field_item_show_detail.set:
@@ -5452,6 +5474,7 @@ entries:
     js: addPivotFieldItem
     py: add_pivot_field_item
     params: { visible: bool }
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_add_item, js: pivotFieldAddItem, py: pivot_field_add_item }
   pivot_field_item.add_at:
@@ -5462,6 +5485,7 @@ entries:
     js: addPivotFieldSharedItem
     py: add_pivot_field_shared_item
     params: { visible: bool }
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_add_item_at, js: pivotFieldAddItemAt, py: pivot_field_add_item_at }
   pivot_field_items.clear:
@@ -5471,6 +5495,7 @@ entries:
     c: fm_sheet_clear_pivot_field_items
     js: clearPivotFieldItems
     py: clear_pivot_field_items
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_clear_items, js: pivotFieldClearItems, py: pivot_field_clear_items }
   pivot_field_item_visible.set:
@@ -5492,6 +5517,7 @@ entries:
     js: addPivotFieldSubtotalFn
     py: add_pivot_field_subtotal_fn
     params: { agg: "enum:pivot_aggregation" }
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_add_subtotal_fn, js: pivotFieldAddSubtotalFn, py: pivot_field_add_subtotal_fn }
   pivot_field_subtotal_fns.clear:
@@ -5501,6 +5527,7 @@ entries:
     c: fm_sheet_clear_pivot_field_subtotal_fns
     js: clearPivotFieldSubtotalFns
     py: clear_pivot_field_subtotal_fns
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_clear_subtotal_fns, js: pivotFieldClearSubtotalFns, py: pivot_field_clear_subtotal_fns }
   pivot_field_date_group.set:
@@ -5511,6 +5538,7 @@ entries:
     js: setPivotFieldDateGroup
     py: set_pivot_field_date_group
     params: { calendar: "enum:pivot_calendar" }
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_set_date_group, js: pivotFieldSetDateGroup, py: pivot_field_set_date_group }
     facade: handwritten
@@ -5521,6 +5549,7 @@ entries:
     c: fm_sheet_clear_pivot_field_date_group
     js: clearPivotFieldDateGroup
     py: clear_pivot_field_date_group
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_clear_date_group, js: pivotFieldClearDateGroup, py: pivot_field_clear_date_group }
   pivot_field_number_format.set:
@@ -5540,6 +5569,7 @@ entries:
     c: fm_sheet_set_pivot_row_field_order
     js: setPivotRowFieldOrder
     py: set_pivot_row_field_order
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_row_field_order, js: pivotSetRowFieldOrder, py: pivot_set_row_field_order }
   pivot_column_field_order.set:
@@ -5549,6 +5579,7 @@ entries:
     c: fm_sheet_set_pivot_column_field_order
     js: setPivotColumnFieldOrder
     py: set_pivot_column_field_order
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_col_field_order, js: pivotSetColFieldOrder, py: pivot_set_col_field_order }
   pivot_data_field.get_count:
@@ -5568,6 +5599,7 @@ entries:
     c: fm_sheet_add_pivot_data_field
     js: addPivotDataField
     py: add_pivot_data_field
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_data_field_add, js: pivotDataFieldAdd, py: pivot_data_field_add }
   pivot_data_field.clear:
@@ -5577,6 +5609,7 @@ entries:
     c: fm_sheet_clear_pivot_data_fields
     js: clearPivotDataFields
     py: clear_pivot_data_fields
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_data_field_clear, js: pivotDataFieldClear, py: pivot_data_field_clear }
   pivot_data_field.set:
@@ -5586,6 +5619,7 @@ entries:
     c: fm_sheet_set_pivot_data_field
     js: setPivotDataField
     py: set_pivot_data_field
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_data_field_set, js: pivotDataFieldSet, py: pivot_data_field_set }
   pivot_data_field_default_name.get:
@@ -5596,6 +5630,7 @@ entries:
     js: getPivotDataFieldDefaultName
     py: get_pivot_data_field_default_name
     params: { aggregation: "enum:pivot_aggregation" }
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_data_field_default_name, js: pivotDataFieldDefaultName, py: pivot_data_field_default_name }
   pivot_cache.get_id:
@@ -5606,6 +5641,7 @@ entries:
     c: fm_sheet_get_pivot_cache_id
     js: getPivotCacheId
     py: get_pivot_cache_id
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_cache_id, js: pivotCacheId, py: pivot_cache_id }
   pivot_name.get:
@@ -5615,6 +5651,7 @@ entries:
     c: fm_sheet_get_pivot_name
     js: getPivotName
     py: get_pivot_name
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_name, js: pivotName, py: pivot_name }
   pivot_options.get:
@@ -5624,6 +5661,7 @@ entries:
     c: fm_sheet_get_pivot_options
     js: getPivotOptions
     py: get_pivot_options
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_options, js: pivotGetOptions, py: pivot_get_options }
   pivot_options.set:
@@ -5635,6 +5673,7 @@ entries:
     py: set_pivot_options
     patch: true
     patch_record: PivotOptions
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_options, js: pivotSetOptions, py: pivot_set_options }
   pivot_project.get:
@@ -5644,6 +5683,7 @@ entries:
     c: fm_sheet_project_pivot
     js: projectPivot
     py: project_pivot
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_project, js: pivotProject, py: pivot_project }
   pivot_projection_pending.get:
@@ -5654,6 +5694,7 @@ entries:
     js: isPivotProjectionPending
     py: is_pivot_projection_pending
     returns: bool
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_projection_pending, js: pivotProjectionPending, py: pivot_projection_pending }
   pivot_show_details.get:
@@ -5665,6 +5706,7 @@ entries:
     py: show_pivot_details
     returns: "union:Sheet"
     cell_args: [[1, 2]]
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_show_details, js: pivotShowDetails, py: pivot_show_details }
     facade: handwritten
@@ -5675,6 +5717,7 @@ entries:
     c: fm_sheet_get_pivot_grand_totals
     js: getPivotGrandTotals
     py: get_pivot_grand_totals
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_grand_totals, js: pivotGetGrandTotals, py: pivot_grand_totals }
   pivot_style_info.get:
@@ -5684,6 +5727,7 @@ entries:
     c: fm_sheet_get_pivot_style_info
     js: getPivotStyleInfo
     py: get_pivot_style_info
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_style_info, js: pivotGetStyleInfo, py: pivot_style_info }
   pivot_field.get:
@@ -5713,6 +5757,7 @@ entries:
     c: fm_sheet_get_pivot_field_item
     js: getPivotFieldItem
     py: get_pivot_field_item
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_item_at, js: pivotFieldItemAt, py: pivot_field_item_at }
   pivot_data_field.get:
@@ -5732,6 +5777,7 @@ entries:
     c: fm_sheet_get_pivot_row_field_order
     js: getPivotRowFieldOrder
     py: get_pivot_row_field_order
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_row_field_order, js: pivotRowFieldOrder, py: pivot_row_field_order }
   pivot_column_field_order.get:
@@ -5741,6 +5787,7 @@ entries:
     c: fm_sheet_get_pivot_column_field_order
     js: getPivotColumnFieldOrder
     py: get_pivot_column_field_order
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_col_field_order, js: pivotColFieldOrder, py: pivot_col_field_order }
   pivot_filter.get_count:
@@ -5770,6 +5817,7 @@ entries:
     c: fm_sheet_add_pivot_filter
     js: addPivotFilter
     py: add_pivot_filter
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_filter_add, js: pivotFilterAdd, py: pivot_filter_add }
   pivot_filter.clear:
@@ -5779,6 +5827,7 @@ entries:
     c: fm_sheet_clear_pivot_filters
     js: clearPivotFilters
     py: clear_pivot_filters
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_filter_clear, js: pivotFilterClear, py: pivot_filter_clear }
   pivot_filter.remove:
@@ -5788,6 +5837,7 @@ entries:
     c: fm_sheet_remove_pivot_filter
     js: removePivotFilter
     py: remove_pivot_filter
+    ref_args: [0, pivot]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_filter_remove_at, js: pivotFilterRemoveAt, py: pivot_filter_remove_at }
   spill_info.get:
@@ -6096,6 +6146,7 @@ entries:
     c: fm_workbook_get_table_auto_filter
     js: getTableAutoFilter
     py: get_table_auto_filter
+    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_table_get_auto_filter, js: getTableAutoFilter, py: get_table_auto_filter }
     missing: null
@@ -6106,6 +6157,7 @@ entries:
     c: fm_workbook_set_table_auto_filter
     js: setTableAutoFilter
     py: set_table_auto_filter
+    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_table_set_auto_filter, js: setTableAutoFilter, py: set_table_auto_filter }
   table_auto_filter.remove:
@@ -6115,6 +6167,7 @@ entries:
     c: fm_workbook_remove_table_auto_filter
     js: removeTableAutoFilter
     py: remove_table_auto_filter
+    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_table_remove_auto_filter, js: removeTableAutoFilter, py: remove_table_auto_filter }
   table_auto_filter.apply:
@@ -6124,6 +6177,7 @@ entries:
     c: fm_workbook_apply_table_auto_filter
     js: applyTableAutoFilter
     py: apply_table_auto_filter
+    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_table_apply_auto_filter, js: applyTableAutoFilter, py: apply_table_auto_filter }
   table_auto_filter.clear:
@@ -6133,6 +6187,7 @@ entries:
     c: fm_workbook_clear_table_auto_filter
     js: clearTableAutoFilter
     py: clear_table_auto_filter
+    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_table_clear_auto_filter, js: clearTableAutoFilter, py: clear_table_auto_filter }
   table_auto_filter.evaluate:
@@ -6142,6 +6197,7 @@ entries:
     c: fm_workbook_evaluate_table_auto_filter
     js: evaluateTableAutoFilter
     py: evaluate_table_auto_filter
+    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_table_evaluate_auto_filter, js: evaluateTableAutoFilter, py: evaluate_table_auto_filter }
   column_width.set:
@@ -7228,6 +7284,7 @@ entries:
     js: addSlicer
     py: add_slicer
     params: { sort_order: "enum:slicer_sort", cross_filter: "enum:slicer_cross_filter" }
+    ref_args: [0, table]
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_add_slicer, js: addSlicer, py: add_slicer }
   slicer.update:
@@ -7957,6 +8014,7 @@ entries:
     from: [pivot_field.get_count, pivot_field.get]
     js: listPivotFields
     py: list_pivot_fields
+    ref_args: [0, pivot]
     surfaces: [wasm, native, py]
   pivot_data_fields.list:
     kind: list
@@ -7964,6 +8022,7 @@ entries:
     from: [pivot_data_field.get_count, pivot_data_field.get]
     js: listPivotDataFields
     py: list_pivot_data_fields
+    ref_args: [0, pivot]
     surfaces: [wasm, native, py]
   pivot_filters.list:
     kind: list
@@ -7971,6 +8030,7 @@ entries:
     from: [pivot_filter.get_count, pivot_filter.get]
     js: listPivotFilters
     py: list_pivot_filters
+    ref_args: [0, pivot]
     surfaces: [wasm, native, py]
   pivot_cache_calculated_items.list:
     kind: list
@@ -11331,6 +11391,7 @@ entries:
     py: update_pivot_field
     patch: true
     patch_record: PivotField
+    ref_args: [0, pivot]
     surfaces: [wasm, native, py]
     exception: "binding convenience: applies a partial update of a pivot field through the per-property setters"
     facade: handwritten
@@ -11341,6 +11402,7 @@ entries:
     py: update_pivot_item
     patch: true
     patch_record: PivotItem
+    ref_args: [0, pivot]
     surfaces: [wasm, native, py]
     exception: "binding convenience: applies a partial update of a pivot field item through the per-property setters"
     facade: handwritten
@@ -11408,6 +11470,7 @@ entries:
     from: [pivot_field_item.get_count, pivot_field_item.get]
     js: listPivotFieldItems
     py: list_pivot_field_items
+    ref_args: [0, pivot]
     surfaces: [wasm, native, py]
   pivots.list:
     kind: list

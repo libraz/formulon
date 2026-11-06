@@ -1531,6 +1531,11 @@ class FacadeAddressTablesTest(unittest.TestCase):
                           "surfaces": ["wasm", "native", "py"], "rect_args": [0]},
             "old.set": {"kind": "op", "scope": "sheet", "js": "setOld", "surfaces": ["wasm"],
                         "drop": {"js": "setOld", "closes": "R5.list"}, "cell_args": [[0, 1]]},
+            "table.remove": {"kind": "op", "scope": "sheet", "js": "removeTable", "py": "remove_table",
+                             "surfaces": ["wasm", "native", "py"], "ref_args": [0, "table"]},
+            "pivot_fields.list": {"kind": "list", "scope": "sheet", "js": "listPivotFields",
+                                  "py": "list_pivot_fields", "surfaces": ["wasm", "native", "py"],
+                                  "ref_args": [0, "pivot"]},
         },
     }  # fmt: skip
 
@@ -1542,6 +1547,9 @@ class FacadeAddressTablesTest(unittest.TestCase):
         scope = self.gen.facade_scope
         self.assertEqual(scope.cell_args(self.ledger, "js"), {"evaluateCf": [[0, 1], [2, 3]], "setValue": [[0, 1]]})
         self.assertEqual(scope.rect_args(self.ledger, "py"), {"add_merge": [0]})
+        self.assertEqual(
+            scope.ref_args(self.ledger, "py"), {"list_pivot_fields": [0, "pivot"], "remove_table": [0, "table"]}
+        )
 
     def test_regions_carry_the_tables(self) -> None:
         js = self.gen.address_tables("js", self.ledger)
@@ -1553,6 +1561,11 @@ class FacadeAddressTablesTest(unittest.TestCase):
         py = self.gen.address_tables("py", self.ledger)
         self.assertIn('CELL_ARGS = {\n    "evaluate_cf": ((0, 1), (2, 3)),\n    "set_value": ((0, 1),),\n}\n', py)
         self.assertIn('RECT_ARGS = {\n    "add_merge": (0,),\n}\n', py)
+        self.assertIn(
+            "const REF_ARGS = Object.freeze({\n  listPivotFields: [0, 'pivot'],\n  removeTable: [0, 'table'],\n});\n",
+            js,
+        )
+        self.assertNotIn("REF_ARGS", py)
 
     def test_the_json_is_sorted_and_per_language(self) -> None:
         import json
@@ -1576,6 +1589,8 @@ class LedgerAddressArgsTest(unittest.TestCase):
         "  setPrintArea(ranges: readonly CellRect[] | null): void;\n"
         "  insertRows(row: number, count: number): void;\n"
         "  setFreeze(freezeRows: number, freezeCols: number): void;\n"
+        "  removeTable(table: TableRef): void;\n"
+        "  listPivotFields(pivot: PivotRef): PivotFieldInfo[];\n"
         "}\n"
     )
 
@@ -1588,6 +1603,8 @@ class LedgerAddressArgsTest(unittest.TestCase):
             "print_area.set": {"kind": "op", "js": "setPrintArea", "rect_args": [0]},
             "rows.insert": {"kind": "op", "js": "insertRows"},
             "freeze.set": {"kind": "op", "js": "setFreeze"},
+            "table.remove": {"kind": "op", "js": "removeTable", "ref_args": [0, "table"]},
+            "pivot_fields.list": {"kind": "list", "js": "listPivotFields", "ref_args": [0, "pivot"]},
         }
         for key, changes in fields.items():
             base[key.replace("__", ".")] = {**base.get(key.replace("__", "."), {}), **changes}
@@ -1603,8 +1620,11 @@ class LedgerAddressArgsTest(unittest.TestCase):
         del entries["cf.evaluate"]["cell_args"]
         entries["rows.insert"]["cell_args"] = [[0, 1]]
         entries["merge.add"]["rect_args"] = [1]
+        del entries["pivot_fields.list"]["ref_args"]
+        entries["table.remove"]["ref_args"] = [0, "pivot"]
         problems = validate.check_address_args(entries, self.DTS)
-        self.assertEqual(len(problems), 3, problems)
+        self.assertEqual(len(problems), 5, problems)
+        self.assertTrue(any("pivot_fields.list" in p and "[0, 'pivot']" in p for p in problems), problems)
         self.assertTrue(any("cf.evaluate" in p and "[[0, 1], [2, 3]]" in p for p in problems), problems)
 
     def test_schema_shapes(self) -> None:
@@ -1620,6 +1640,9 @@ class LedgerAddressArgsTest(unittest.TestCase):
         self.assertTrue(problems(cell_args=[[0]]))
         self.assertTrue(problems(cell_args=[[-1, 0]]))
         self.assertTrue(problems(rect_args=["a"]))
+        self.assertEqual(problems(ref_args=[0, "table"]), [])
+        self.assertTrue(problems(ref_args=[0, "chart"]))
+        self.assertTrue(problems(ref_args=[[0, "table"]]))
         self.assertTrue(problems(patch=True))
         self.assertTrue(problems(patch=False, patch_record="X"))
         self.assertTrue(problems(patch=True, patch_record="none"))

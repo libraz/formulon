@@ -12,7 +12,8 @@ factory and free function on a binding surface carries a `scope`; index-keyed
 collections carry `access` (and `plural`, or `exempt` with a reason);
 `enum_families` and `enum_distinct` name existing enum entries. An op's
 `cell_args` / `rect_args` equal the `(row, col)` pairs and `CellRect` arguments
-of its first signature in src/wasm/formulon.d.ts; `patch: true` names its
+of its first signature in src/wasm/formulon.d.ts, and an op's or list's
+`ref_args` its `*Ref` argument; `patch: true` names its
 getter's record in `patch_record`, or `none` with a `patch_reason`.
 
 `--coverage` additionally requires every symbol the current tree exports
@@ -52,9 +53,12 @@ FIELDS = frozenset(
     {
         "kind", "scope", "noun", "qualifies", "record", "role", "from", "c", "js", "py", "enum", "returns",
         "params", "surfaces", "exception", "replaced_by", "closes", "was", "drop", "flag", "sheet_arg", "total",
-        "missing", "facade", "review", "note", "cell_args", "rect_args", "patch", "patch_record", "patch_reason",
+        "missing", "facade", "review", "note", "cell_args", "rect_args", "ref_args", "patch", "patch_record",
+        "patch_reason",
     }
 )  # fmt: skip
+# Reference types of the JS surface, by the `ref_args` kind that names them.
+JS_REF_KINDS = {"TableRef": "table", "PivotRef": "pivot", "CfRuleRef": "cfRule", "ProtectedRangeRef": "protectedRange"}
 ROLES = frozenset({"result", "input", "patch", "both"})
 SCOPED_KINDS = frozenset({"op", "list", "factory", "free"})
 BINDING_SURFACES = frozenset({"wasm", "native", "py"})
@@ -198,9 +202,15 @@ def _index(value) -> bool:
 
 
 def _address_and_patch_schema(where: str, entry: dict) -> List[str]:
-    """`cell_args` lists `[i, j]` pairs and `rect_args` positions; `patch: true` carries `patch_record`, and
-    `patch_record: none` a `patch_reason`."""
+    """`cell_args` lists `[i, j]` pairs, `rect_args` positions and `ref_args` one `[i, kind]`; `patch: true`
+    carries `patch_record`, and `patch_record: none` a `patch_reason`."""
     problems: List[str] = []
+    if "ref_args" in entry:
+        ref = entry["ref_args"]
+        if entry.get("kind") not in ("op", "list"):
+            problems.append(f"{where}: ref_args belong to an op or a list")
+        if not (isinstance(ref, list) and len(ref) == 2 and _index(ref[0]) and ref[1] in JS_REF_KINDS.values()):
+            problems.append(f"{where}: ref_args is `[position, kind]`, kind one of {sorted(JS_REF_KINDS.values())}")
     fields = [f for f in ("cell_args", "rect_args", "patch", "patch_record", "patch_reason") if f in entry]
     if fields and entry.get("kind") != "op":
         problems.append(f"{where}: {', '.join(fields)} belong to an op")
@@ -416,23 +426,37 @@ def _js_rect_positions(params) -> List[int]:
     return [i for i, (_, ptype) in enumerate(params) if re.search(r"(?<![\w$])CellRect(?![\w$])", ptype)]
 
 
+def _js_ref_arg(params) -> List:
+    """`[position, kind]` of the argument typed by a `*Ref` of `JS_REF_KINDS`, or `[]`."""
+    for i, (_, ptype) in enumerate(params):
+        for ref, kind in JS_REF_KINDS.items():
+            if re.search(rf"(?<![\w$]){ref}(?![\w$])", ptype):
+                return [i, kind]
+    return []
+
+
 def check_address_args(entries: Dict[str, dict], dts_text: str) -> List[str]:
-    """Each op's `cell_args` / `rect_args` equal what the first signature of its JS member declares."""
+    """Each op's `cell_args` / `rect_args`, and each op's or list's `ref_args`, equal what the first signature
+    of its JS member declares."""
     pool = JsSurface(dts_text).callables()
     problems: List[str] = []
     for key, entry in sorted(entries.items()):
-        if not isinstance(entry, dict) or entry.get("kind") != "op":
+        kind = entry.get("kind") if isinstance(entry, dict) else None
+        if kind not in ("op", "list"):
             continue
+        fields = ("cell_args", "rect_args", "ref_args") if kind == "op" else ("ref_args",)
         member = pool.get(entry.get("js")) if isinstance(entry.get("js"), str) else None
         if member is None:
-            for field in ("cell_args", "rect_args"):
+            for field in fields:
                 if field in entry:
                     problems.append(f"{key}: {field} names no member of {WASM_DTS.name}")
             continue
-        for field, want in (
-            ("cell_args", _js_cell_pairs(member.params)),
-            ("rect_args", _js_rect_positions(member.params)),
-        ):
+        derived = {
+            "cell_args": lambda: _js_cell_pairs(member.params),
+            "rect_args": lambda: _js_rect_positions(member.params),
+            "ref_args": lambda: _js_ref_arg(member.params),
+        }
+        for field, want in ((f, derived[f]()) for f in fields):
             have = entry.get(field) or []
             if have != want:
                 problems.append(
