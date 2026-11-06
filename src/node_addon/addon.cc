@@ -31,6 +31,8 @@
 //   * `parts/auto_filter.cc`      -- typed AutoFilter for sheets and
 //     tables.
 //   * `parts/drawing.cc`          -- drawing images.
+//   * `parts/chart_read.cc`       -- chart view, resolved data and preview.
+//   * `parts/chart_patch.cc`      -- chart creation and typed edits.
 //   * `parts/reference.cc`         -- parseReference / formatReference /
 //     getSheetIndex.
 //   * `parts/free_funcs.{h,cc}`    -- evalFormula / getVersion /
