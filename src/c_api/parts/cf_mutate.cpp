@@ -63,21 +63,21 @@ static_assert(offsetof(fm_cell_rect_t, last_row) == offsetof(formulon::cf::CFCel
 namespace {
 
 // Walks the sheet's `conditional_formats` vector and resolves the
-// `flat_idx`-th rule into the (block_idx, rule_idx) pair. Returns
-// 0 on success; the `check_index` error for `fn` when `flat_idx` is past the end.
-fm_status_t resolve_flat_index(const std::vector<formulon::cf::ConditionalFormat>& blocks, std::size_t flat_idx,
+// `flat_index`-th rule into the (block_index, rule_index) pair. Returns
+// 0 on success; the `check_index` error for `fn` when `flat_index` is past the end.
+fm_status_t resolve_flat_index(const std::vector<formulon::cf::ConditionalFormat>& blocks, std::size_t flat_index,
                                const char* fn, std::size_t* out_block, std::size_t* out_rule) {
   std::size_t cursor = 0;
   for (std::size_t b = 0; b < blocks.size(); ++b) {
     const auto& block = blocks[b];
-    if (flat_idx < cursor + block.rules.size()) {
+    if (flat_index < cursor + block.rules.size()) {
       *out_block = b;
-      *out_rule = flat_idx - cursor;
+      *out_rule = flat_index - cursor;
       return 0;
     }
     cursor += block.rules.size();
   }
-  return check_index(flat_idx, cursor, fn, "idx");
+  return check_index(flat_index, cursor, fn, "idx");
 }
 
 // Materialises a `cf::CFRule` onto the wire-format `fm_cf_rule_t`.

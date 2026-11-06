@@ -209,7 +209,7 @@ def _apply_print_settings(wb: Any, sheet: int, spec: Dict[str, Any]) -> None:
         # the schema; the API takes a zero-based row.
         wb.add_row_break(sheet, int(row) - 1)
     for col_key in spec.get("col_breaks") or []:
-        wb.add_col_break(sheet, _column_index(str(col_key)))
+        wb.add_column_break(sheet, _column_index(str(col_key)))
 
 
 def author_case(case: Dict[str, Any], *, module: Any) -> bytes:

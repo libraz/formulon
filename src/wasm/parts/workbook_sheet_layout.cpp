@@ -29,7 +29,7 @@ emscripten::val entry_list(const fm_workbook_t* handle, uint32_t sheet, JsListCo
 
 fm_status_t column_entry(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
   fm_column_layout_t entry{};
-  if (const fm_status_t rc = fm_sheet_get_col_override_at(handle, sheet, index, &entry); rc != 0) {
+  if (const fm_status_t rc = fm_sheet_get_column_override_at(handle, sheet, index, &entry); rc != 0) {
     return rc;
   }
   *out = emscripten::val::object();
@@ -100,7 +100,7 @@ void set_pagination_detail(emscripten::val* result, const fm_pagination_t* pagin
     fm_pagination_get_print_titles(pagination, &titles);
     fm_pagination_get_page_count(pagination, &page_count);
     fm_pagination_get_row_break_count(pagination, &horizontal_count);
-    fm_pagination_get_col_break_count(pagination, &vertical_count);
+    fm_pagination_get_column_break_count(pagination, &vertical_count);
   }
   emscripten::val paper_val = emscripten::val::object();
   paper_val.set("widthPt", paper.width_pt);
@@ -153,7 +153,7 @@ void set_pagination_detail(emscripten::val* result, const fm_pagination_t* pagin
   emscripten::val vertical_manual = emscripten::val::array();
   for (std::size_t i = 0; i < vertical_count; ++i) {
     int32_t manual = 0;
-    fm_pagination_is_col_break_manual(pagination, i, &manual);
+    fm_pagination_is_column_break_manual(pagination, i, &manual);
     vertical_manual.call<void>("push", manual != 0);
   }
   result->set("verticalBreakManual", vertical_manual);
@@ -201,10 +201,10 @@ emscripten::val JsWorkbook::paginate(uint32_t sheet) const {
     }
   }
   std::size_t vertical_count = 0;
-  fm_pagination_get_col_break_count(pagination, &vertical_count);
+  fm_pagination_get_column_break_count(pagination, &vertical_count);
   for (std::size_t i = 0; i < vertical_count; ++i) {
     uint32_t col = 0;
-    if (fm_pagination_get_col_break_at(pagination, i, &col) == 0) {
+    if (fm_pagination_get_column_break_at(pagination, i, &col) == 0) {
       vertical_breaks.set(i, col);
     }
   }
@@ -463,7 +463,7 @@ JsStatus JsWorkbook::setSheetViewMode(uint32_t sheet, std::string mode) {
 // ---- Column layout overrides --------------------------------------------
 
 emscripten::val JsWorkbook::getSheetColumns(uint32_t sheet) const {
-  return entry_list(handle_, sheet, &fm_sheet_get_col_override_count, "columns", &column_entry);
+  return entry_list(handle_, sheet, &fm_sheet_get_column_override_count, "columns", &column_entry);
 }
 
 JsStatus JsWorkbook::setColumnWidth(uint32_t sheet, uint32_t first, uint32_t last, double width) {

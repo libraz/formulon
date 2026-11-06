@@ -280,7 +280,7 @@ export function registerMetadataLayout(Module, test) {
       assert.ok(Array.isArray(cf.cells));
 
       assert.ok(wb.setColumnWidth(0, 2, 2, 18).ok);
-      const columns = wb.listColOverrides(0);
+      const columns = wb.listColumnOverrides(0);
       assert.ok(columns.status.ok);
       assert.ok(Array.isArray(columns.columns));
       assert.equal(columns.columns[0].first, 2);

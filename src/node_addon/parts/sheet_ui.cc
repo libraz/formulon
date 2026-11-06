@@ -371,17 +371,17 @@ Napi::Value Workbook::RemoveProtectedRange(const Napi::CallbackInfo& info) {
 namespace {
 
 // Adds a hyperlink over `rect` whose texts are the already type-checked
-// arguments `(target, display, tooltip, location)` from `text_idx` on.
+// arguments `(target, display, tooltip, location)` from `text_index` on.
 // Empty strings are forwarded as NULL.
 fm_status_t AddHyperlinkFromArgs(fm_workbook_t* wb, const Napi::CallbackInfo& info, const fm_cell_rect_t& rect,
-                                 std::size_t text_idx) {
+                                 std::size_t text_index) {
   const uint32_t sheet = Workbook::ArgU32(info, 0);
   // Keep the std::string buffers alive until after the C ABI call so the
   // borrowed `const char*` pointers in `fm_hyperlink_t` stay valid.
-  const std::string target = Workbook::ArgString(info, text_idx);
-  const std::string display = Workbook::ArgString(info, text_idx + 1);
-  const std::string tooltip = Workbook::ArgString(info, text_idx + 2);
-  const std::string location = Workbook::ArgString(info, text_idx + 3);
+  const std::string target = Workbook::ArgString(info, text_index);
+  const std::string display = Workbook::ArgString(info, text_index + 1);
+  const std::string tooltip = Workbook::ArgString(info, text_index + 2);
+  const std::string location = Workbook::ArgString(info, text_index + 3);
   fm_hyperlink_t hl{};
   hl.rect = rect;
   hl.target = target.empty() ? nullptr : target.c_str();

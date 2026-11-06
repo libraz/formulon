@@ -113,10 +113,11 @@ JsNumberResult JsWorkbook::pivotCacheFieldCount(uint32_t cacheId) const {
   return number_result(rc, static_cast<double>(count));
 }
 
-JsStringResult JsWorkbook::pivotCacheFieldName(uint32_t cacheId, uint32_t fieldIdx) const {
+JsStringResult JsWorkbook::pivotCacheFieldName(uint32_t cacheId, uint32_t fieldIndex) const {
   const char* name = nullptr;
-  const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_pivot_cache_field_name(handle_, cacheId, fieldIdx, &name)
-                                            : kBindingInvalidHandle;
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_workbook_get_pivot_cache_field_name(handle_, cacheId, fieldIndex, &name)
+                             : kBindingInvalidHandle;
   return string_result(rc, name);
 }
 
@@ -136,77 +137,79 @@ JsStatus JsWorkbook::pivotCacheFieldClear(uint32_t cacheId) {
                                            : kBindingInvalidHandle);
 }
 
-JsNumberResult JsWorkbook::pivotCacheFieldSharedItemCount(uint32_t cacheId, uint32_t fieldIdx) const {
+JsNumberResult JsWorkbook::pivotCacheFieldSharedItemCount(uint32_t cacheId, uint32_t fieldIndex) const {
   std::size_t count = 0;
   const fm_status_t rc = handle_ != nullptr
-                             ? fm_workbook_get_pivot_cache_field_shared_item_count(handle_, cacheId, fieldIdx, &count)
+                             ? fm_workbook_get_pivot_cache_field_shared_item_count(handle_, cacheId, fieldIndex, &count)
                              : kBindingInvalidHandle;
   return number_result(rc, static_cast<double>(count));
 }
 
-JsCellResult JsWorkbook::pivotCacheFieldSharedItemValue(uint32_t cacheId, uint32_t fieldIdx, uint32_t itemIdx) const {
+JsCellResult JsWorkbook::pivotCacheFieldSharedItemValue(uint32_t cacheId, uint32_t fieldIndex,
+                                                        uint32_t itemIndex) const {
   JsCellResult r;
   if (handle_ == nullptr) {
     r.status = invalid_handle_status();
     return r;
   }
   fm_value_t v{};
-  const fm_status_t rc = fm_workbook_get_pivot_cache_field_shared_item_value(handle_, cacheId, fieldIdx, itemIdx, &v);
+  const fm_status_t rc =
+      fm_workbook_get_pivot_cache_field_shared_item_value(handle_, cacheId, fieldIndex, itemIndex, &v);
   adopt_value(rc, v, r.status, r.value);
   return r;
 }
 
-JsStatus JsWorkbook::pivotCacheFieldAddSharedItemNumber(uint32_t cacheId, uint32_t fieldIdx, double value) {
+JsStatus JsWorkbook::pivotCacheFieldAddSharedItemNumber(uint32_t cacheId, uint32_t fieldIndex, double value) {
   return status_from_rc(handle_ != nullptr
-                            ? fm_workbook_add_pivot_cache_field_shared_item_number(handle_, cacheId, fieldIdx, value)
+                            ? fm_workbook_add_pivot_cache_field_shared_item_number(handle_, cacheId, fieldIndex, value)
                             : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotCacheFieldAddSharedItemDate(uint32_t cacheId, uint32_t fieldIdx, double serial) {
+JsStatus JsWorkbook::pivotCacheFieldAddSharedItemDate(uint32_t cacheId, uint32_t fieldIndex, double serial) {
   return status_from_rc(handle_ != nullptr
-                            ? fm_workbook_add_pivot_cache_field_shared_item_date(handle_, cacheId, fieldIdx, serial)
+                            ? fm_workbook_add_pivot_cache_field_shared_item_date(handle_, cacheId, fieldIndex, serial)
                             : kBindingInvalidHandle);
 }
 
-emscripten::val JsWorkbook::pivotCacheFieldSharedItemIsDate(uint32_t cacheId, uint32_t fieldIdx,
-                                                            uint32_t itemIdx) const {
+emscripten::val JsWorkbook::pivotCacheFieldSharedItemIsDate(uint32_t cacheId, uint32_t fieldIndex,
+                                                            uint32_t itemIndex) const {
   int32_t isDate = 0;
   const fm_status_t rc = handle_ != nullptr ? fm_workbook_is_pivot_cache_field_shared_item_date(
-                                                  handle_, cacheId, fieldIdx, itemIdx, &isDate)
+                                                  handle_, cacheId, fieldIndex, itemIndex, &isDate)
                                             : kBindingInvalidHandle;
   return bool_result(rc, isDate);
 }
 
-JsStatus JsWorkbook::pivotCacheFieldAddSharedItemText(uint32_t cacheId, uint32_t fieldIdx, const std::string& utf8) {
-  return status_from_rc(
-      handle_ != nullptr ? fm_workbook_add_pivot_cache_field_shared_item_text(handle_, cacheId, fieldIdx, utf8.c_str())
-                         : kBindingInvalidHandle);
+JsStatus JsWorkbook::pivotCacheFieldAddSharedItemText(uint32_t cacheId, uint32_t fieldIndex, const std::string& utf8) {
+  return status_from_rc(handle_ != nullptr ? fm_workbook_add_pivot_cache_field_shared_item_text(
+                                                 handle_, cacheId, fieldIndex, utf8.c_str())
+                                           : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotCacheFieldAddSharedItemBool(uint32_t cacheId, uint32_t fieldIdx, bool value) {
-  return status_from_rc(
-      handle_ != nullptr ? fm_workbook_add_pivot_cache_field_shared_item_bool(handle_, cacheId, fieldIdx, value ? 1 : 0)
-                         : kBindingInvalidHandle);
+JsStatus JsWorkbook::pivotCacheFieldAddSharedItemBool(uint32_t cacheId, uint32_t fieldIndex, bool value) {
+  return status_from_rc(handle_ != nullptr ? fm_workbook_add_pivot_cache_field_shared_item_bool(
+                                                 handle_, cacheId, fieldIndex, value ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotCacheFieldAddSharedItemBlank(uint32_t cacheId, uint32_t fieldIdx) {
+JsStatus JsWorkbook::pivotCacheFieldAddSharedItemBlank(uint32_t cacheId, uint32_t fieldIndex) {
   return status_from_rc(handle_ != nullptr
-                            ? fm_workbook_add_pivot_cache_field_shared_item_blank(handle_, cacheId, fieldIdx)
+                            ? fm_workbook_add_pivot_cache_field_shared_item_blank(handle_, cacheId, fieldIndex)
                             : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotCacheFieldAddSharedItemError(uint32_t cacheId, uint32_t fieldIdx, int32_t errorCode) {
+JsStatus JsWorkbook::pivotCacheFieldAddSharedItemError(uint32_t cacheId, uint32_t fieldIndex, int32_t errorCode) {
   if (handle_ == nullptr) {
     return invalid_handle_status();
   }
-  fm_status_t rc = fm_workbook_add_pivot_cache_field_shared_item_error(handle_, cacheId, fieldIdx,
+  fm_status_t rc = fm_workbook_add_pivot_cache_field_shared_item_error(handle_, cacheId, fieldIndex,
                                                                        static_cast<fm_error_code_t>(errorCode));
   return status_from_rc(rc);
 }
 
-JsStatus JsWorkbook::pivotCacheFieldClearSharedItems(uint32_t cacheId, uint32_t fieldIdx) {
+JsStatus JsWorkbook::pivotCacheFieldClearSharedItems(uint32_t cacheId, uint32_t fieldIndex) {
   return status_from_rc(handle_ != nullptr
-                            ? fm_workbook_clear_pivot_cache_field_shared_items(handle_, cacheId, fieldIdx)
+                            ? fm_workbook_clear_pivot_cache_field_shared_items(handle_, cacheId, fieldIndex)
                             : kBindingInvalidHandle);
 }
 
@@ -233,43 +236,45 @@ JsStatus JsWorkbook::pivotCacheRecordClear(uint32_t cacheId) {
                                            : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotCacheRecordSetNumber(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, double value) {
+JsStatus JsWorkbook::pivotCacheRecordSetNumber(uint32_t cacheId, uint32_t recordIndex, uint32_t fieldIndex,
+                                               double value) {
+  return status_from_rc(
+      handle_ != nullptr ? fm_workbook_set_pivot_cache_record_number(handle_, cacheId, recordIndex, fieldIndex, value)
+                         : kBindingInvalidHandle);
+}
+
+JsStatus JsWorkbook::pivotCacheRecordSetDate(uint32_t cacheId, uint32_t recordIndex, uint32_t fieldIndex,
+                                             double serial) {
   return status_from_rc(handle_ != nullptr
-                            ? fm_workbook_set_pivot_cache_record_number(handle_, cacheId, recordIdx, fieldIdx, value)
+                            ? fm_workbook_set_pivot_cache_record_date(handle_, cacheId, recordIndex, fieldIndex, serial)
                             : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotCacheRecordSetDate(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, double serial) {
-  return status_from_rc(handle_ != nullptr
-                            ? fm_workbook_set_pivot_cache_record_date(handle_, cacheId, recordIdx, fieldIdx, serial)
-                            : kBindingInvalidHandle);
-}
-
-JsStatus JsWorkbook::pivotCacheRecordSetText(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx,
+JsStatus JsWorkbook::pivotCacheRecordSetText(uint32_t cacheId, uint32_t recordIndex, uint32_t fieldIndex,
                                              const std::string& utf8) {
-  return status_from_rc(
-      handle_ != nullptr ? fm_workbook_set_pivot_cache_record_text(handle_, cacheId, recordIdx, fieldIdx, utf8.c_str())
-                         : kBindingInvalidHandle);
+  return status_from_rc(handle_ != nullptr ? fm_workbook_set_pivot_cache_record_text(handle_, cacheId, recordIndex,
+                                                                                     fieldIndex, utf8.c_str())
+                                           : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotCacheRecordSetBool(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, bool value) {
-  return status_from_rc(
-      handle_ != nullptr ? fm_workbook_set_pivot_cache_record_bool(handle_, cacheId, recordIdx, fieldIdx, value ? 1 : 0)
-                         : kBindingInvalidHandle);
+JsStatus JsWorkbook::pivotCacheRecordSetBool(uint32_t cacheId, uint32_t recordIndex, uint32_t fieldIndex, bool value) {
+  return status_from_rc(handle_ != nullptr ? fm_workbook_set_pivot_cache_record_bool(handle_, cacheId, recordIndex,
+                                                                                     fieldIndex, value ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotCacheRecordSetBlank(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx) {
+JsStatus JsWorkbook::pivotCacheRecordSetBlank(uint32_t cacheId, uint32_t recordIndex, uint32_t fieldIndex) {
   return status_from_rc(handle_ != nullptr
-                            ? fm_workbook_set_pivot_cache_record_blank(handle_, cacheId, recordIdx, fieldIdx)
+                            ? fm_workbook_set_pivot_cache_record_blank(handle_, cacheId, recordIndex, fieldIndex)
                             : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotCacheRecordSetError(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx,
+JsStatus JsWorkbook::pivotCacheRecordSetError(uint32_t cacheId, uint32_t recordIndex, uint32_t fieldIndex,
                                               int32_t errorCode) {
   if (handle_ == nullptr) {
     return invalid_handle_status();
   }
-  fm_status_t rc = fm_workbook_set_pivot_cache_record_error(handle_, cacheId, recordIdx, fieldIdx,
+  fm_status_t rc = fm_workbook_set_pivot_cache_record_error(handle_, cacheId, recordIndex, fieldIndex,
                                                             static_cast<fm_error_code_t>(errorCode));
   return status_from_rc(rc);
 }
@@ -322,31 +327,32 @@ JsAddStyleResult JsWorkbook::pivotCacheCalculatedFieldAdd(uint32_t cacheId, cons
   return index_result(rc, index);
 }
 
-JsStatus JsWorkbook::pivotCacheCalculatedFieldSetFormula(uint32_t cacheId, uint32_t fieldIdx,
+JsStatus JsWorkbook::pivotCacheCalculatedFieldSetFormula(uint32_t cacheId, uint32_t fieldIndex,
                                                          const std::string& formula) {
   return status_from_rc(handle_ != nullptr ? fm_workbook_set_pivot_cache_calculated_field_formula(
-                                                 handle_, cacheId, fieldIdx, formula.c_str())
+                                                 handle_, cacheId, fieldIndex, formula.c_str())
                                            : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotCacheCalculatedFieldRemove(uint32_t cacheId, uint32_t fieldIdx) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_remove_pivot_cache_calculated_field(handle_, cacheId, fieldIdx)
-                                           : kBindingInvalidHandle);
+JsStatus JsWorkbook::pivotCacheCalculatedFieldRemove(uint32_t cacheId, uint32_t fieldIndex) {
+  return status_from_rc(handle_ != nullptr
+                            ? fm_workbook_remove_pivot_cache_calculated_field(handle_, cacheId, fieldIndex)
+                            : kBindingInvalidHandle);
 }
 
-JsStringResult JsWorkbook::pivotCacheFieldFormula(uint32_t cacheId, uint32_t fieldIdx) const {
+JsStringResult JsWorkbook::pivotCacheFieldFormula(uint32_t cacheId, uint32_t fieldIndex) const {
   const char* formula = nullptr;
   const fm_status_t rc = handle_ != nullptr
-                             ? fm_workbook_get_pivot_cache_field_formula(handle_, cacheId, fieldIdx, &formula)
+                             ? fm_workbook_get_pivot_cache_field_formula(handle_, cacheId, fieldIndex, &formula)
                              : kBindingInvalidHandle;
   return string_result(rc, rc == 0 ? formula : nullptr);
 }
 
-JsAddStyleResult JsWorkbook::pivotCacheCalculatedItemAdd(uint32_t cacheId, uint32_t fieldIdx, const std::string& name,
+JsAddStyleResult JsWorkbook::pivotCacheCalculatedItemAdd(uint32_t cacheId, uint32_t fieldIndex, const std::string& name,
                                                          const std::string& formula) {
   std::size_t out = 0;
   return index_result(handle_ != nullptr ? fm_workbook_add_pivot_cache_calculated_item(
-                                               handle_, cacheId, fieldIdx, name.c_str(), formula.c_str(), &out)
+                                               handle_, cacheId, fieldIndex, name.c_str(), formula.c_str(), &out)
                                          : kBindingInvalidHandle,
                       out);
 }
@@ -381,9 +387,10 @@ JsStatus JsWorkbook::pivotCacheCalculatedItemSetFormula(uint32_t cacheId, uint32
                          : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotCacheCalculatedItemMove(uint32_t cacheId, uint32_t idx, uint32_t newIdx) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_move_pivot_cache_calculated_item(handle_, cacheId, idx, newIdx)
-                                           : kBindingInvalidHandle);
+JsStatus JsWorkbook::pivotCacheCalculatedItemMove(uint32_t cacheId, uint32_t idx, uint32_t newIndex) {
+  return status_from_rc(handle_ != nullptr
+                            ? fm_workbook_move_pivot_cache_calculated_item(handle_, cacheId, idx, newIndex)
+                            : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::pivotCacheCalculatedItemRemove(uint32_t cacheId, uint32_t idx) {

@@ -121,7 +121,7 @@ void BuildSales(WorkbookGuard& wb, std::uint32_t* out_cache, bool product_on_col
       ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0U, kPivot, kProduct, item, 1, ignored_index()), 0);
     }
     const std::uint32_t cols[] = {static_cast<std::uint32_t>(kProduct)};
-    ASSERT_EQ(fm_sheet_set_pivot_col_field_order(wb.handle, 0U, kPivot, cols, 1U), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_sheet_set_pivot_column_field_order(wb.handle, 0U, kPivot, cols, 1U), 0) << fm_get_last_error_message();
   } else {
     AddField(wb.handle, "Qty", FM_PIVOT_AXIS_VALUE);
   }

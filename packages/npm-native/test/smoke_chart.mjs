@@ -369,10 +369,10 @@ test('series can be added, removed and rebuilt from a new source', async () => {
       'addChartSeries',
     );
     assert.equal(chartOf(wb, id).plots[0].series.length, 3);
-    assert.ok(chartOf(wb, id).plots[0].series.some((s) => s.idx === added.seriesIdx));
+    assert.ok(chartOf(wb, id).plots[0].series.some((s) => s.idx === added.index));
     assert.equal(dataOf(wb, id).series.length, 3);
 
-    must(wb.removeChartSeries(0, id, 0, added.seriesIdx), 'removeChartSeries');
+    must(wb.removeChartSeries(0, id, 0, added.index), 'removeChartSeries');
     assert.equal(chartOf(wb, id).plots[0].series.length, 2);
 
     must(wb.setChartSeries(0, id, 0, 0, { fill: { color: 0xff112233 } }), 'setChartSeries');

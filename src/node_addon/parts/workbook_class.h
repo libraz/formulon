@@ -34,8 +34,8 @@ void PullPlacement(CheckedSpecReader& reader, const Napi::Object& spec, Record& 
   record.edit_as = reader.I32(spec, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL);
   record.row = reader.U32(spec, "row", 0U);
   record.col = reader.U32(spec, "col", 0U);
-  record.row_off_emu = reader.I64(spec, "rowOffEmu", 0);
-  record.col_off_emu = reader.I64(spec, "colOffEmu", 0);
+  record.row_offset_emu = reader.I64(spec, "rowOffsetEmu", 0);
+  record.col_offset_emu = reader.I64(spec, "colOffsetEmu", 0);
   record.width_emu = reader.I64(spec, "widthEmu", 0);
   record.height_emu = reader.I64(spec, "heightEmu", 0);
 }
@@ -338,7 +338,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotDataFieldSet(const Napi::CallbackInfo& info);
   Napi::Value PivotFilterCount(const Napi::CallbackInfo& info);
   Napi::Value PivotFilterAdd(const Napi::CallbackInfo& info);
-  /// Reads the active filter at `filterIdx`.
+  /// Reads the active filter at `filterIndex`.
   ///
   /// The active-filter list is **session state**: an entry added through
   /// `pivotFilterAdd` affects evaluation only while this workbook handle

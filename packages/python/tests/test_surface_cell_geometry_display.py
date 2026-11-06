@@ -49,13 +49,13 @@ class GeometryTests(unittest.TestCase):
                 0, SheetFormatDefaults(default_col_width=20.0, base_col_width=8.0, has_default_col_width=True)
             )
             self.assertEqual(wb.get_column_width_pt(0, 0), wb.get_column_width_pt(0, 1))
-            self.assertEqual(wb.list_col_overrides(0), [])
+            self.assertEqual(wb.list_column_overrides(0), [])
 
             wb.set_column_width(0, 0, 4, 20.0)
             wb.set_column_hidden(0, 2, 2, True)
             wb.set_column_outline(0, 2, 2, 3)
             wb.clear_column_width(0, 1, 3)
-            cols = wb.list_col_overrides(0)
+            cols = wb.list_column_overrides(0)
             self.assertEqual(
                 [(c.first, c.last, c.has_width, c.hidden, c.outline_level) for c in cols],
                 [(0, 0, True, False, 0), (2, 2, False, True, 3), (4, 4, True, False, 0)],
@@ -80,7 +80,7 @@ class GeometryTests(unittest.TestCase):
 
             wb.clear_column_style(0, 1, 1)
             wb.clear_row_style(0, 2, 2)
-            cols = wb.list_col_overrides(0)
+            cols = wb.list_column_overrides(0)
             self.assertEqual([(c.first, c.last, c.has_width, c.has_style) for c in cols], [(1, 1, True, False)])
             self.assertEqual(wb.list_row_overrides(0), [])
             with self.assertRaises(FormulonError):

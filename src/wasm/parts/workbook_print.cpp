@@ -57,8 +57,8 @@ emscripten::val breaks_array(const fm_workbook_t* handle, uint32_t sheet, bool r
     return out;
   }
   size_t count = 0;
-  const fm_status_t count_rc =
-      rows ? fm_sheet_get_row_break_count(handle, sheet, &count) : fm_sheet_get_col_break_count(handle, sheet, &count);
+  const fm_status_t count_rc = rows ? fm_sheet_get_row_break_count(handle, sheet, &count)
+                                    : fm_sheet_get_column_break_count(handle, sheet, &count);
   if (count_rc != 0) {
     out.set("status", error_status(count_rc));
     out.set("breaks", emscripten::val::array());
@@ -67,7 +67,7 @@ emscripten::val breaks_array(const fm_workbook_t* handle, uint32_t sheet, bool r
   for (size_t i = 0; i < count; ++i) {
     fm_page_break_t brk{};
     const fm_status_t rc =
-        rows ? fm_sheet_get_row_break_at(handle, sheet, i, &brk) : fm_sheet_get_col_break_at(handle, sheet, i, &brk);
+        rows ? fm_sheet_get_row_break_at(handle, sheet, i, &brk) : fm_sheet_get_column_break_at(handle, sheet, i, &brk);
     if (rc != 0) {
       out.set("status", error_status(rc));
       out.set("breaks", emscripten::val::array());
@@ -202,7 +202,7 @@ JsStatus JsWorkbook::addSheetRowBreak(uint32_t sheet, uint32_t row, bool manual)
 }
 
 JsStatus JsWorkbook::addSheetColBreak(uint32_t sheet, uint32_t col, bool manual) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_add_col_break(handle_, sheet, col, manual ? 1 : 0)
+  return status_from_rc(handle_ != nullptr ? fm_sheet_add_column_break(handle_, sheet, col, manual ? 1 : 0)
                                            : kBindingInvalidHandle);
 }
 
@@ -211,7 +211,7 @@ JsStatus JsWorkbook::removeSheetRowBreak(uint32_t sheet, uint32_t row) {
 }
 
 JsStatus JsWorkbook::removeSheetColBreak(uint32_t sheet, uint32_t col) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_col_break(handle_, sheet, col) : kBindingInvalidHandle);
+  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_column_break(handle_, sheet, col) : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::clearSheetBreaks(uint32_t sheet) {

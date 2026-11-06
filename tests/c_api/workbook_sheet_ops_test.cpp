@@ -314,7 +314,7 @@ TEST(WorkbookSheetOpsCApi, DeleteRejectsCountPastSheetBoundWithoutMutatingCells)
   // structural-edit implementation.
   constexpr std::uint32_t kWrappedNegative = std::numeric_limits<std::uint32_t>::max();
   EXPECT_NE(fm_sheet_delete_rows(wb.handle, 0, 0, kWrappedNegative), 0);
-  EXPECT_NE(fm_sheet_delete_cols(wb.handle, 0, 0, kWrappedNegative), 0);
+  EXPECT_NE(fm_sheet_delete_columns(wb.handle, 0, 0, kWrappedNegative), 0);
 
   fm_value_t value{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 1, 1, &value), 0);
@@ -328,7 +328,7 @@ TEST(WorkbookSheetOpsCApi, InsertRowsAndColumnsShiftCells) {
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 2, 1, 42.0), 0);  // B3
 
   ASSERT_EQ(fm_sheet_insert_rows(wb.handle, 0, 1, 1), 0);
-  ASSERT_EQ(fm_sheet_insert_cols(wb.handle, 0, 1, 1), 0);
+  ASSERT_EQ(fm_sheet_insert_columns(wb.handle, 0, 1, 1), 0);
 
   fm_value_t value{};
   ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 3, 2, &value), 0);  // C4

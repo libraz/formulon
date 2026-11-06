@@ -247,7 +247,7 @@ TEST(FormulonCApiPivot, AddingAFieldAfterLoadReprojectsTheLocationRef) {
   std::size_t added = 99;
   ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 1, 0, &region_spec, &added), 0) << fm_get_last_error_message();
   const std::uint32_t col_order[] = {static_cast<std::uint32_t>(added)};
-  ASSERT_EQ(fm_sheet_set_pivot_col_field_order(wb.handle, 1, 0, col_order, 1), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_pivot_column_field_order(wb.handle, 1, 0, col_order, 1), 0) << fm_get_last_error_message();
 
   PivotCellsGuard projected;
   ASSERT_EQ(fm_sheet_get_pivot_layout(wb.handle, 1, 0, &projected.handle), 0) << fm_get_last_error_message();
@@ -331,6 +331,6 @@ TEST(FormulonCApiPivot, ReadBackDefinitionOfLoadedPivot) {
   ASSERT_EQ(fm_sheet_get_pivot_row_field_order(wb.handle, 1, 0, &order, &order_count), 0);
   ASSERT_EQ(order_count, 1U);
   EXPECT_EQ(order[0], 0U);
-  ASSERT_EQ(fm_sheet_get_pivot_col_field_order(wb.handle, 1, 0, &order, &order_count), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_column_field_order(wb.handle, 1, 0, &order, &order_count), 0);
   EXPECT_EQ(order_count, 0U);
 }

@@ -46,7 +46,7 @@ std::vector<std::uint32_t> ReadFieldOrder(const fm_workbook_t* wb, std::size_t p
   const std::uint32_t* indices = nullptr;
   std::size_t count = 0;
   const fm_status_t status = row ? fm_sheet_get_pivot_row_field_order(wb, 0U, pivot_index, &indices, &count)
-                                 : fm_sheet_get_pivot_col_field_order(wb, 0U, pivot_index, &indices, &count);
+                                 : fm_sheet_get_pivot_column_field_order(wb, 0U, pivot_index, &indices, &count);
   EXPECT_EQ(status, 0) << fm_get_last_error_message();
   if (status != 0 || count == 0U) {
     return {};
@@ -69,7 +69,7 @@ void ExpectAxes(const fm_workbook_t* wb, std::size_t pivot_index, const std::arr
 fm_status_t SetFieldOrder(fm_workbook_t* wb, std::size_t pivot_index, bool row, const std::uint32_t* indices,
                           std::size_t count) {
   return row ? fm_sheet_set_pivot_row_field_order(wb, 0U, pivot_index, indices, count)
-             : fm_sheet_set_pivot_col_field_order(wb, 0U, pivot_index, indices, count);
+             : fm_sheet_set_pivot_column_field_order(wb, 0U, pivot_index, indices, count);
 }
 
 }  // namespace
@@ -119,7 +119,7 @@ TEST(FormulonCApiPivotFieldOrder, AcceptsGetterOrderAsTheOtherAxisInput) {
 
   // The getter exposes borrowed storage. Replacing the opposite axis with that
   // storage is a valid C API call even though the operation removes from it.
-  ASSERT_EQ(fm_sheet_set_pivot_col_field_order(wb.handle, 0U, pivot_index, borrowed_row_order, count), 0)
+  ASSERT_EQ(fm_sheet_set_pivot_column_field_order(wb.handle, 0U, pivot_index, borrowed_row_order, count), 0)
       << fm_get_last_error_message();
   EXPECT_TRUE(ReadFieldOrder(wb.handle, pivot_index, true).empty());
   EXPECT_EQ(ReadFieldOrder(wb.handle, pivot_index, false), (std::vector<std::uint32_t>{0U, 1U}));
@@ -251,7 +251,7 @@ TEST(FormulonCApiPivotFieldOrder, NullPointerWithEmptyOrderClearsBothAxesSafely)
   EXPECT_EQ(ReadFieldOrder(wb.handle, pivot_index, false), (std::vector<std::uint32_t>{2U, 3U, 4U}));
   ExpectAxes(wb.handle, pivot_index, {-1, -1, FM_PIVOT_AXIS_COL, FM_PIVOT_AXIS_COL, FM_PIVOT_AXIS_COL});
 
-  ASSERT_EQ(fm_sheet_set_pivot_col_field_order(wb.handle, 0U, pivot_index, nullptr, 0U), 0)
+  ASSERT_EQ(fm_sheet_set_pivot_column_field_order(wb.handle, 0U, pivot_index, nullptr, 0U), 0)
       << fm_get_last_error_message();
   EXPECT_TRUE(ReadFieldOrder(wb.handle, pivot_index, false).empty());
   ExpectAxes(wb.handle, pivot_index, {-1, -1, -1, -1, -1});
@@ -268,7 +268,7 @@ TEST(FormulonCApiPivotFieldOrder, MovesOnlyFirstOccurrenceFromMalformedOppositeO
   GetPivot(wb, pivot_index).mutable_row_field_order() = {0U, 1U, 2U, 1U, 3U};
 
   const std::uint32_t moved[] = {1U};
-  ASSERT_EQ(fm_sheet_set_pivot_col_field_order(wb.handle, 0U, pivot_index, moved, 1U), 0)
+  ASSERT_EQ(fm_sheet_set_pivot_column_field_order(wb.handle, 0U, pivot_index, moved, 1U), 0)
       << fm_get_last_error_message();
   EXPECT_EQ(ReadFieldOrder(wb.handle, pivot_index, true), (std::vector<std::uint32_t>{0U, 2U, 1U, 3U}));
   EXPECT_EQ(ReadFieldOrder(wb.handle, pivot_index, false), (std::vector<std::uint32_t>{1U}));

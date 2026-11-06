@@ -72,7 +72,7 @@ std::vector<std::uint32_t> ReadOrder(const fm_workbook_t* wb, bool row) {
   const std::uint32_t* indices = nullptr;
   std::size_t count = 0;
   const fm_status_t status = row ? fm_sheet_get_pivot_row_field_order(wb, 0U, kPivot, &indices, &count)
-                                 : fm_sheet_get_pivot_col_field_order(wb, 0U, kPivot, &indices, &count);
+                                 : fm_sheet_get_pivot_column_field_order(wb, 0U, kPivot, &indices, &count);
   EXPECT_EQ(status, 0) << fm_get_last_error_message();
   if (status != 0 || count == 0U) {
     return {};
@@ -82,7 +82,7 @@ std::vector<std::uint32_t> ReadOrder(const fm_workbook_t* wb, bool row) {
 
 fm_status_t SetOrder(fm_workbook_t* wb, bool row, std::vector<std::uint32_t> order) {
   return row ? fm_sheet_set_pivot_row_field_order(wb, 0U, kPivot, order.data(), order.size())
-             : fm_sheet_set_pivot_col_field_order(wb, 0U, kPivot, order.data(), order.size());
+             : fm_sheet_set_pivot_column_field_order(wb, 0U, kPivot, order.data(), order.size());
 }
 
 std::string Repeat(const std::string& unit, std::size_t times) {

@@ -201,7 +201,7 @@ class AuthoringTest(unittest.TestCase):
         reloaded = _formulon.Workbook.load(data)
         try:
             rows = reloaded.list_row_breaks(0)
-            cols = reloaded.list_col_breaks(0)
+            cols = reloaded.list_column_breaks(0)
         finally:
             reloaded.close()
         # A case states 1-based rows, matching the rest of the schema; the

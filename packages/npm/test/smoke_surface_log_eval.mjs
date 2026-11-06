@@ -480,7 +480,7 @@ test('pivot definition read-backs report what the setters wrote', async () => {
     assert.equal(totals.cols, true);
 
     assert.deepEqual(wb.getPivotRowFieldOrder(0, pivot).indices, [0]);
-    assert.deepEqual(wb.getPivotColFieldOrder(0, pivot).indices, []);
+    assert.deepEqual(wb.getPivotColumnFieldOrder(0, pivot).indices, []);
 
     assert.ok(wb.setPivotFieldSort(0, pivot, 0, 0, 'Sum of Amount').ok);
     const region = wb.getPivotField(0, pivot, 0);
@@ -576,7 +576,7 @@ test('pivot definition read-backs reject out-of-range indices', async () => {
       wb.getPivotName(0, 9),
       wb.getPivotGrandTotals(9, pivot),
       wb.getPivotRowFieldOrder(0, 9),
-      wb.getPivotColFieldOrder(0, 9),
+      wb.getPivotColumnFieldOrder(0, 9),
       wb.getPivotField(0, pivot, 99),
       wb.getPivotFieldItemCount(0, pivot, 99),
       wb.getPivotFieldItem(0, pivot, 0, 99),

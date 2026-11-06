@@ -384,12 +384,12 @@ void fill_anchor(const Object& obj, Record* out) {
   out->anchor_kind = static_cast<std::int32_t>(obj.anchor_kind);
   out->from_row = obj.from.row;
   out->from_col = obj.from.col;
-  out->from_row_off = obj.from.row_off;
-  out->from_col_off = obj.from.col_off;
+  out->from_row_offset = obj.from.row_off;
+  out->from_col_offset = obj.from.col_off;
   out->to_row = obj.to.row;
   out->to_col = obj.to.col;
-  out->to_row_off = obj.to.row_off;
-  out->to_col_off = obj.to.col_off;
+  out->to_row_offset = obj.to.row_off;
+  out->to_col_offset = obj.to.col_off;
 }
 
 // Deepest row / column outline level the file formats encode (`outlineLevel`

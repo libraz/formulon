@@ -134,8 +134,8 @@ test('setDrawingAnchor moves and resizes a picture and keeps its id', async () =
         editAs: mod.AnchorEditAs.OneCell,
         row: 5,
         col: 3,
-        rowOffEmu: 1000,
-        colOffEmu: 2000,
+        rowOffsetEmu: 1000,
+        colOffsetEmu: 2000,
         widthEmu: 200000,
       }),
       'setDrawingAnchor',
@@ -147,8 +147,8 @@ test('setDrawingAnchor moves and resizes a picture and keeps its id', async () =
     assert.equal(o.editAs, mod.AnchorEditAs.OneCell);
     assert.equal(o.fromRow, 5);
     assert.equal(o.fromCol, 3);
-    assert.equal(o.fromRowOff, 1000);
-    assert.equal(o.fromColOff, 2000);
+    assert.equal(o.fromRowOffset, 1000);
+    assert.equal(o.fromColOffset, 2000);
     assert.equal(o.cx, 200000);
     assert.equal(o.cy, 9525);
     assert.equal(wb.setDrawingAnchor(0, ins.objectId, { anchorKind: mod.AnchorKind.Absolute }).ok, false);

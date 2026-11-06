@@ -55,12 +55,12 @@ Napi::Object DrawingObjectToJs(Napi::Env env, const fm_drawing_object_t& o) {
   item.Set("editAs", JsNumber(env, o.edit_as));
   item.Set("fromRow", JsNumber(env, o.from_row));
   item.Set("fromCol", JsNumber(env, o.from_col));
-  item.Set("fromRowOff", JsNumber(env, static_cast<double>(o.from_row_off)));
-  item.Set("fromColOff", JsNumber(env, static_cast<double>(o.from_col_off)));
+  item.Set("fromRowOffset", JsNumber(env, static_cast<double>(o.from_row_offset)));
+  item.Set("fromColOffset", JsNumber(env, static_cast<double>(o.from_col_offset)));
   item.Set("toRow", JsNumber(env, o.to_row));
   item.Set("toCol", JsNumber(env, o.to_col));
-  item.Set("toRowOff", JsNumber(env, static_cast<double>(o.to_row_off)));
-  item.Set("toColOff", JsNumber(env, static_cast<double>(o.to_col_off)));
+  item.Set("toRowOffset", JsNumber(env, static_cast<double>(o.to_row_offset)));
+  item.Set("toColOffset", JsNumber(env, static_cast<double>(o.to_col_offset)));
   item.Set("cx", JsNumber(env, static_cast<double>(o.cx)));
   item.Set("cy", JsNumber(env, static_cast<double>(o.cy)));
   item.Set("imageFormat", JsNumber(env, o.image_format));

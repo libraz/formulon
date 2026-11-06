@@ -58,29 +58,30 @@ fm_status_t check_sheet_row_span(const fm_workbook_t* wb, size_t sheet_index, ui
 
 }  // namespace
 
-extern "C" fm_status_t fm_sheet_get_col_override_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
+extern "C" fm_status_t fm_sheet_get_column_override_count(const fm_workbook_t* wb, size_t sheet_index,
+                                                          size_t* out_count) {
   clear_last_error();
   if (out_count == nullptr) {
-    return null_argument("fm_sheet_get_col_override_count");
+    return null_argument("fm_sheet_get_column_override_count");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_col_override_count"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_column_override_count"); rc != 0) {
     return rc;
   }
   *out_count = wb->workbook().sheet(sheet_index).layout().columns.size();
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_get_col_override_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
-                                                    fm_column_layout_t* out) {
+extern "C" fm_status_t fm_sheet_get_column_override_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
+                                                       fm_column_layout_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return null_argument("fm_sheet_get_col_override_at");
+    return null_argument("fm_sheet_get_column_override_at");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_col_override_at"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_column_override_at"); rc != 0) {
     return rc;
   }
   const auto& cols = wb->workbook().sheet(sheet_index).layout().columns;
-  if (auto rc = check_index(idx, cols.size(), "fm_sheet_get_col_override_at", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, cols.size(), "fm_sheet_get_column_override_at", "idx"); rc != 0) {
     return rc;
   }
   *out = fm_column_layout_t{};

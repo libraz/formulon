@@ -143,10 +143,10 @@ using TableCount = std::size_t (*)(const formulon::pivot::PivotTable& table);
 fm_status_t pivot_count(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                         std::size_t* out_count, const char* fn, TableCount count);
 
-// Ensures the record's cell vector has at least `field_idx + 1` slots.
+// Ensures the record's cell vector has at least `field_index + 1` slots.
 // Newly-added slots are initialised to Blank so existing semantics
 // match the cache reader's behaviour for short rows.
-void grow_record_cells(formulon::pivot::PivotCacheRecord& rec, std::size_t field_idx);
+void grow_record_cells(formulon::pivot::PivotCacheRecord& rec, std::size_t field_index);
 
 }  // namespace parts
 }  // namespace c_api

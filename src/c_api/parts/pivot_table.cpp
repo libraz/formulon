@@ -450,11 +450,11 @@ extern "C" fm_status_t fm_sheet_set_pivot_row_field_order(fm_workbook_t* wb, std
   return set_field_order(wb, sheet_index, pivot_index, indices, count, true, "fm_sheet_set_pivot_row_field_order");
 }
 
-extern "C" fm_status_t fm_sheet_set_pivot_col_field_order(fm_workbook_t* wb, std::size_t sheet_index,
-                                                          std::size_t pivot_index, const std::uint32_t* indices,
-                                                          std::size_t count) {
+extern "C" fm_status_t fm_sheet_set_pivot_column_field_order(fm_workbook_t* wb, std::size_t sheet_index,
+                                                             std::size_t pivot_index, const std::uint32_t* indices,
+                                                             std::size_t count) {
   clear_last_error();
-  return set_field_order(wb, sheet_index, pivot_index, indices, count, false, "fm_sheet_set_pivot_col_field_order");
+  return set_field_order(wb, sheet_index, pivot_index, indices, count, false, "fm_sheet_set_pivot_column_field_order");
 }
 
 // ---------------------------------------------------------------------------
@@ -575,7 +575,7 @@ extern "C" fm_status_t fm_sheet_clear_pivot_data_fields(fm_workbook_t* wb, std::
 }
 
 extern "C" fm_status_t fm_sheet_set_pivot_data_field(fm_workbook_t* wb, std::size_t sheet_index,
-                                                     std::size_t pivot_index, std::size_t data_field_idx,
+                                                     std::size_t pivot_index, std::size_t data_field_index,
                                                      const fm_pivot_data_field_spec_t* spec) {
   clear_last_error();
   if (wb == nullptr || spec == nullptr) {
@@ -594,18 +594,18 @@ extern "C" fm_status_t fm_sheet_set_pivot_data_field(fm_workbook_t* wb, std::siz
   if (auto rc = resolve_pivot_mut(wb, sheet_index, pivot_index, "fm_sheet_set_pivot_data_field", &table); rc != 0) {
     return rc;
   }
-  if (auto rc =
-          check_index(data_field_idx, table->data_fields().size(), "fm_sheet_set_pivot_data_field", "data_field_idx");
+  if (auto rc = check_index(data_field_index, table->data_fields().size(), "fm_sheet_set_pivot_data_field",
+                            "data_field_index");
       rc != 0) {
     return rc;
   }
   formulon::pivot::PivotDataField df;
-  if (auto rc = fill_data_field(wb->workbook(), *table, *spec, data_field_idx, "fm_sheet_set_pivot_data_field", &df);
+  if (auto rc = fill_data_field(wb->workbook(), *table, *spec, data_field_index, "fm_sheet_set_pivot_data_field", &df);
       rc != 0) {
     return rc;
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
-  table->mutable_data_fields()[data_field_idx] = std::move(df);
+  table->mutable_data_fields()[data_field_index] = std::move(df);
   return edit.commit();
 }
 
@@ -715,7 +715,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_style_info(const fm_workbook_t* wb, st
 }
 
 extern "C" fm_status_t fm_sheet_get_pivot_data_field(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                     std::size_t pivot_index, std::size_t data_field_idx,
+                                                     std::size_t pivot_index, std::size_t data_field_index,
                                                      fm_pivot_data_field_spec_t* out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
@@ -723,12 +723,12 @@ extern "C" fm_status_t fm_sheet_get_pivot_data_field(const fm_workbook_t* wb, st
       rc != 0) {
     return rc;
   }
-  if (auto rc =
-          check_index(data_field_idx, table->data_fields().size(), "fm_sheet_get_pivot_data_field", "data_field_idx");
+  if (auto rc = check_index(data_field_index, table->data_fields().size(), "fm_sheet_get_pivot_data_field",
+                            "data_field_index");
       rc != 0) {
     return rc;
   }
-  const formulon::pivot::PivotDataField& df = table->data_fields()[data_field_idx];
+  const formulon::pivot::PivotDataField& df = table->data_fields()[data_field_index];
   fm_pivot_data_field_spec_t result{};
   result.name = df.name.c_str();
   result.field_index = df.field_index;
@@ -750,12 +750,12 @@ extern "C" fm_status_t fm_sheet_get_pivot_row_field_order(const fm_workbook_t* w
                          "fm_sheet_get_pivot_row_field_order");
 }
 
-extern "C" fm_status_t fm_sheet_get_pivot_col_field_order(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                          std::size_t pivot_index, const std::uint32_t** out_indices,
-                                                          std::size_t* out_count) {
+extern "C" fm_status_t fm_sheet_get_pivot_column_field_order(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                             std::size_t pivot_index, const std::uint32_t** out_indices,
+                                                             std::size_t* out_count) {
   clear_last_error();
   return get_field_order(wb, sheet_index, pivot_index, out_indices, out_count, false,
-                         "fm_sheet_get_pivot_col_field_order");
+                         "fm_sheet_get_pivot_column_field_order");
 }
 
 // ---------------------------------------------------------------------------

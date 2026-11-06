@@ -61,7 +61,7 @@ test('shapes insert, list, update, remove and round-trip', async () => {
     prst: 'line',
     anchorKind: mod.AnchorKind.OneCell,
     fromRow: 10,
-    fromColOff: 500,
+    fromColOffset: 500,
     cx: 914400,
     cy: 0,
     lineKind: mod.ShapePaint.Solid,
@@ -89,7 +89,7 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   assert.equal(shapes[0].hidden, false);
   assert.equal(shapes[1].kind, mod.DrawingObjectKind.Connector);
   assert.equal(shapes[1].anchorKind, mod.AnchorKind.OneCell);
-  assert.equal(shapes[1].fromColOff, 500);
+  assert.equal(shapes[1].fromColOffset, 500);
   assert.equal(shapes[1].cx, 914400);
   assert.equal(shapes[1].lineRgb, 0x00ff00);
   assert.equal(shapes[1].lineWidthEmu, 19050);

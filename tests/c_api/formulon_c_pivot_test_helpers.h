@@ -144,9 +144,9 @@ template <typename Enum>
 }
 
 // True when the projected layout holds a text cell spelling `text`.
-[[maybe_unused]] inline bool LayoutHasText(fm_workbook_t* wb, std::size_t pivot_idx, std::string_view text) {
+[[maybe_unused]] inline bool LayoutHasText(fm_workbook_t* wb, std::size_t pivot_index, std::string_view text) {
   PivotCellsGuard projected;
-  EXPECT_EQ(fm_sheet_get_pivot_layout(wb, 0, pivot_idx, &projected.handle), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_get_pivot_layout(wb, 0, pivot_index, &projected.handle), 0) << fm_get_last_error_message();
   for (const fm_pivot_cell_t& cell : CollectCells(projected.handle)) {
     if (cell.value.kind == FM_VAL_TEXT && cell.value.u.text != nullptr && text == cell.value.u.text) {
       return true;
@@ -175,22 +175,22 @@ template <typename Enum>
   if (st != 0) {
     return st;
   }
-  std::size_t region_idx = 99;
-  st = fm_workbook_add_pivot_cache_field(wb, cache_id, "Region", &region_idx);
+  std::size_t region_index = 99;
+  st = fm_workbook_add_pivot_cache_field(wb, cache_id, "Region", &region_index);
   if (st != 0) {
     return st;
   }
-  std::size_t amount_idx = 99;
-  st = fm_workbook_add_pivot_cache_field(wb, cache_id, "Amount", &amount_idx);
+  std::size_t amount_index = 99;
+  st = fm_workbook_add_pivot_cache_field(wb, cache_id, "Amount", &amount_index);
   if (st != 0) {
     return st;
   }
   // Shared items for "Region": index 0 = "North", index 1 = "South".
-  st = fm_workbook_add_pivot_cache_field_shared_item_text(wb, cache_id, region_idx, "North");
+  st = fm_workbook_add_pivot_cache_field_shared_item_text(wb, cache_id, region_index, "North");
   if (st != 0) {
     return st;
   }
-  st = fm_workbook_add_pivot_cache_field_shared_item_text(wb, cache_id, region_idx, "South");
+  st = fm_workbook_add_pivot_cache_field_shared_item_text(wb, cache_id, region_index, "South");
   if (st != 0) {
     return st;
   }
@@ -200,23 +200,23 @@ template <typename Enum>
     double amount;
   } rows[] = {{0.0, 100.0}, {1.0, 200.0}, {0.0, 300.0}, {1.0, 400.0}};
   for (const auto& row : rows) {
-    std::size_t rec_idx = 99;
-    st = fm_workbook_add_pivot_cache_record(wb, cache_id, &rec_idx);
+    std::size_t rec_index = 99;
+    st = fm_workbook_add_pivot_cache_record(wb, cache_id, &rec_index);
     if (st != 0) {
       return st;
     }
-    st = fm_workbook_set_pivot_cache_record_number(wb, cache_id, rec_idx, region_idx, row.region_index);
+    st = fm_workbook_set_pivot_cache_record_number(wb, cache_id, rec_index, region_index, row.region_index);
     if (st != 0) {
       return st;
     }
-    st = fm_workbook_set_pivot_cache_record_number(wb, cache_id, rec_idx, amount_idx, row.amount);
+    st = fm_workbook_set_pivot_cache_record_number(wb, cache_id, rec_index, amount_index, row.amount);
     if (st != 0) {
       return st;
     }
   }
   // Pivot table.
-  std::size_t pivot_idx = 99;
-  st = fm_sheet_add_pivot(wb, 0, "PT", cache_id, /*anchor_row=*/0U, /*anchor_col=*/3U, &pivot_idx);
+  std::size_t pivot_index = 99;
+  st = fm_sheet_add_pivot(wb, 0, "PT", cache_id, /*anchor_row=*/0U, /*anchor_col=*/3U, &pivot_index);
   if (st != 0) {
     return st;
   }
@@ -228,15 +228,15 @@ template <typename Enum>
   region_spec.subtotal_top = 0;
   region_spec.number_format = "";
   std::size_t region_field = 99;
-  st = fm_sheet_add_pivot_field(wb, 0, pivot_idx, &region_spec, &region_field);
+  st = fm_sheet_add_pivot_field(wb, 0, pivot_index, &region_spec, &region_field);
   if (st != 0) {
     return st;
   }
-  st = fm_sheet_add_pivot_field_item(wb, 0, pivot_idx, region_field, "North", 1, ignored_index());
+  st = fm_sheet_add_pivot_field_item(wb, 0, pivot_index, region_field, "North", 1, ignored_index());
   if (st != 0) {
     return st;
   }
-  st = fm_sheet_add_pivot_field_item(wb, 0, pivot_idx, region_field, "South", 1, ignored_index());
+  st = fm_sheet_add_pivot_field_item(wb, 0, pivot_index, region_field, "South", 1, ignored_index());
   if (st != 0) {
     return st;
   }
@@ -248,13 +248,13 @@ template <typename Enum>
   amount_spec.subtotal_top = 0;
   amount_spec.number_format = "";
   std::size_t amount_field = 99;
-  st = fm_sheet_add_pivot_field(wb, 0, pivot_idx, &amount_spec, &amount_field);
+  st = fm_sheet_add_pivot_field(wb, 0, pivot_index, &amount_spec, &amount_field);
   if (st != 0) {
     return st;
   }
   // Row-field order.
   const std::uint32_t row_order[] = {static_cast<std::uint32_t>(region_field)};
-  st = fm_sheet_set_pivot_row_field_order(wb, 0, pivot_idx, row_order, 1U);
+  st = fm_sheet_set_pivot_row_field_order(wb, 0, pivot_index, row_order, 1U);
   if (st != 0) {
     return st;
   }
@@ -267,8 +267,8 @@ template <typename Enum>
   df_spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
   df_spec.show_as_base_field = -1;
   df_spec.show_as_base_item = -1;
-  std::size_t df_idx = 99;
-  st = fm_sheet_add_pivot_data_field(wb, 0, pivot_idx, &df_spec, &df_idx);
+  std::size_t df_index = 99;
+  st = fm_sheet_add_pivot_data_field(wb, 0, pivot_index, &df_spec, &df_index);
   if (st != 0) {
     return st;
   }
@@ -276,7 +276,7 @@ template <typename Enum>
     *out_cache_id = cache_id;
   }
   if (out_pivot_index != nullptr) {
-    *out_pivot_index = pivot_idx;
+    *out_pivot_index = pivot_index;
   }
   return 0;
 }

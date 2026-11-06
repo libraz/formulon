@@ -44,7 +44,7 @@ WORKBOOK_HANDLE = "fm_workbook_t"
 DEFAULT_DROP_RULE = "R5.list"
 
 # Synonyms whose left side must not appear in a name (R4); a pair is two adjacent words.
-SYNONYMS = {("horizontal", "break"): "row_break", ("vertical", "break"): "col_break", ("idx",): "index"}
+SYNONYMS = {("horizontal", "break"): "row_break", ("vertical", "break"): "column_break", ("idx",): "index"}
 
 # Names a multi-range argument or field carries while it is still A1 text or a non-canonical list.
 _A1_MULTI_NAMES = frozenset({"sqref", "ranges_a1", "ranges"})

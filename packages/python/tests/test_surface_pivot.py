@@ -233,7 +233,7 @@ _PIVOT_READERS = {
     "get_pivot_grand_totals",
     "get_pivot_style_info",
     "get_pivot_row_field_order",
-    "get_pivot_col_field_order",
+    "get_pivot_column_field_order",
     "get_pivot_field",
     "get_pivot_field_item_count",
     "get_pivot_field_item",
@@ -738,7 +738,7 @@ class PivotMutatorTableTests(unittest.TestCase):
                 set_anchor,
             ),
             "set_pivot_grand_totals": (
-                lambda f: f.wb.set_pivot_col_field_order(0, f.pivot, [f.product]),
+                lambda f: f.wb.set_pivot_column_field_order(0, f.pivot, [f.product]),
                 # Rows off drops the per-row total column; columns on keeps
                 # the bottom total row, so a swapped pair shows the opposite.
                 lambda f: f.wb.set_pivot_grand_totals(0, f.pivot, False, True),
@@ -879,9 +879,9 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 grid_is(["行ラベル|Sum of Amount", "Apple|40", "Pear|12", "総計|52"]),
             ),
-            "set_pivot_col_field_order": (
+            "set_pivot_column_field_order": (
                 None,
-                lambda f: f.wb.set_pivot_col_field_order(0, f.pivot, [f.product]),
+                lambda f: f.wb.set_pivot_column_field_order(0, f.pivot, [f.product]),
                 None,
                 grid_is(
                     [
@@ -1055,7 +1055,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
         eq(wb.get_pivot_name(0, pivot), "Pivot1")
         eq(wb.get_pivot_grand_totals(0, pivot), PivotGrandTotals(rows=True, cols=True))
         eq(wb.get_pivot_row_field_order(0, pivot), [f.region])
-        eq(wb.get_pivot_col_field_order(0, pivot), [])
+        eq(wb.get_pivot_column_field_order(0, pivot), [])
 
         region = wb.get_pivot_field(0, pivot, f.region)
         eq(region.source_name, "Region")
@@ -1098,10 +1098,10 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             self.assertEqual(date.axis, PivotAxis.VALUE)
 
             wb.set_pivot_field_axis(0, f.pivot, f.product, PivotAxis.COL)
-            self.assertEqual(wb.get_pivot_col_field_order(0, f.pivot), [f.product])
+            self.assertEqual(wb.get_pivot_column_field_order(0, f.pivot), [f.product])
             wb.set_pivot_row_field_order(0, f.pivot, [f.product, f.region])
             self.assertEqual(wb.get_pivot_row_field_order(0, f.pivot), [f.product, f.region])
-            self.assertEqual(wb.get_pivot_col_field_order(0, f.pivot), [])
+            self.assertEqual(wb.get_pivot_column_field_order(0, f.pivot), [])
 
     def test_values_level_marker_round_trips_in_field_order(self) -> None:
         self.assertEqual(PIVOT_VALUES_FIELD, -2)
@@ -1112,10 +1112,10 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
                 f.pivot,
                 PivotDataFieldSpec(name="Count of Amount", field_index=f.amount, aggregation=PivotAggregation.COUNT),
             )
-            wb.set_pivot_col_field_order(0, f.pivot, [PIVOT_VALUES_FIELD])
-            self.assertEqual(wb.get_pivot_col_field_order(0, f.pivot), [PIVOT_VALUES_FIELD])
+            wb.set_pivot_column_field_order(0, f.pivot, [PIVOT_VALUES_FIELD])
+            self.assertEqual(wb.get_pivot_column_field_order(0, f.pivot), [PIVOT_VALUES_FIELD])
             with self.assertRaises(ValueError):
-                wb.set_pivot_col_field_order(0, f.pivot, [-3])
+                wb.set_pivot_column_field_order(0, f.pivot, [-3])
 
     def test_style_info_defaults_on_create_and_round_trips(self) -> None:
         with Workbook.create_default() as wb:
@@ -1199,7 +1199,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
                 (lambda: wb.get_pivot_name(0, 9), invalid),
                 (lambda: wb.get_pivot_grand_totals(9, f.pivot), bad_sheet),
                 (lambda: wb.get_pivot_row_field_order(0, 9), invalid),
-                (lambda: wb.get_pivot_col_field_order(0, 9), invalid),
+                (lambda: wb.get_pivot_column_field_order(0, 9), invalid),
                 (lambda: wb.get_pivot_field(0, f.pivot, 99), invalid),
                 (lambda: wb.get_pivot_field_item_count(0, f.pivot, 99), invalid),
                 (lambda: wb.get_pivot_field_item(0, f.pivot, f.region, 99), invalid),

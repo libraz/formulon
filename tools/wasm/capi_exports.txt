@@ -43,8 +43,8 @@ fm_workbook_set_defined_name_attrs
 # -- Row / column structural edits -----------------------------------------------
 fm_sheet_insert_rows
 fm_sheet_delete_rows
-fm_sheet_insert_cols
-fm_sheet_delete_cols
+fm_sheet_insert_columns
+fm_sheet_delete_columns
 
 # -- Cell mutation ---------------------------------------------------------------
 fm_sheet_set_number
@@ -225,8 +225,8 @@ fm_sheet_set_split
 fm_sheet_get_selection
 fm_sheet_set_selection
 fm_sheet_set_view_mode
-fm_sheet_get_col_override_count
-fm_sheet_get_col_override_at
+fm_sheet_get_column_override_count
+fm_sheet_get_column_override_at
 fm_sheet_set_column_width
 fm_sheet_set_column_hidden
 fm_sheet_set_column_outline
@@ -389,7 +389,7 @@ fm_sheet_get_pivot_name
 fm_sheet_get_pivot_grand_totals
 fm_sheet_get_pivot_style_info
 fm_sheet_get_pivot_row_field_order
-fm_sheet_get_pivot_col_field_order
+fm_sheet_get_pivot_column_field_order
 fm_sheet_get_pivot_field_count
 fm_sheet_add_pivot_field
 fm_sheet_get_pivot_field
@@ -415,7 +415,7 @@ fm_sheet_set_pivot_field_date_group
 fm_sheet_clear_pivot_field_date_group
 fm_sheet_set_pivot_field_number_format
 fm_sheet_set_pivot_row_field_order
-fm_sheet_set_pivot_col_field_order
+fm_sheet_set_pivot_column_field_order
 fm_sheet_get_pivot_data_field_count
 fm_sheet_add_pivot_data_field
 fm_sheet_get_pivot_data_field
@@ -483,8 +483,8 @@ fm_pagination_get_print_area_count
 fm_pagination_get_print_area_at
 fm_pagination_get_row_break_count
 fm_pagination_get_row_break_at
-fm_pagination_get_col_break_count
-fm_pagination_get_col_break_at
+fm_pagination_get_column_break_count
+fm_pagination_get_column_break_at
 fm_pagination_get_paper
 fm_pagination_get_margins
 fm_pagination_get_printable
@@ -493,7 +493,7 @@ fm_pagination_get_page_order
 fm_pagination_get_print_titles
 fm_pagination_get_page_at
 fm_pagination_is_row_break_manual
-fm_pagination_is_col_break_manual
+fm_pagination_is_column_break_manual
 fm_sheet_get_page_setup_xml
 fm_sheet_set_page_setup_xml
 fm_sheet_get_page_margins_xml
@@ -510,14 +510,14 @@ fm_sheet_set_print_area
 fm_sheet_get_print_titles
 fm_sheet_set_print_titles
 fm_sheet_add_row_break
-fm_sheet_add_col_break
+fm_sheet_add_column_break
 fm_sheet_remove_row_break
-fm_sheet_remove_col_break
+fm_sheet_remove_column_break
 fm_sheet_clear_breaks
 fm_sheet_get_row_break_count
 fm_sheet_get_row_break_at
-fm_sheet_get_col_break_count
-fm_sheet_get_col_break_at
+fm_sheet_get_column_break_count
+fm_sheet_get_column_break_at
 fm_sheet_set_page_setup
 fm_sheet_set_page_margins
 fm_sheet_set_print_options

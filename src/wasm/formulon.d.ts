@@ -450,7 +450,7 @@ export interface BoolResult {
   readonly value: boolean;
 }
 
-/** Return type of `Workbook.getCellAt(sheet, idx)`. */
+/** Return type of `Workbook.getCellAt(sheet, index)`. */
 export interface CellEntry {
   status: Status;
   row?: number;
@@ -495,7 +495,7 @@ export interface TableColumnEntry {
   totalsRowFormula: string;
 }
 
-/** Return type of `Workbook.getTable(idx)`. `styleName` is empty without a
+/** Return type of `Workbook.getTable(index)`. `styleName` is empty without a
  *  style and may name a custom style (`getTableStyle`); `hasStyleInfo` is
  *  false when the table has no `<tableStyleInfo>` (the toggles then read
  *  false). The row counts are 0 or 1. */
@@ -1718,7 +1718,7 @@ export interface ColumnLayout {
   readonly styleXf: number;
 }
 
-/** Return type of `Workbook.listColOverrides(sheet)`. */
+/** Return type of `Workbook.listColumnOverrides(sheet)`. */
 export interface ColumnsResult {
   readonly status: Status;
   readonly columns: ReadonlyArray<ColumnLayout>;
@@ -3362,7 +3362,7 @@ export interface Image {
 }
 
 /** One anchored object of a sheet's drawing. An absolute anchor reports its
- *  position from A1 as `fromColOff` (x) and `fromRowOff` (y); `toRow` /
+ *  position from A1 as `fromColOffset` (x) and `fromRowOffset` (y); `toRow` /
  *  `toCol` and their offsets are zero unless the anchor is two-cell. Offsets
  *  and `cx` / `cy` are in EMU. `imageFormat` is non-zero for a picture whose
  *  media part is present; `mediaPath` is empty for a non-picture. */
@@ -3373,12 +3373,12 @@ export interface DrawingObject {
   readonly editAs: AnchorEditAs;
   readonly fromRow: number;
   readonly fromCol: number;
-  readonly fromRowOff: number;
-  readonly fromColOff: number;
+  readonly fromRowOffset: number;
+  readonly fromColOffset: number;
   readonly toRow: number;
   readonly toCol: number;
-  readonly toRowOff: number;
-  readonly toColOff: number;
+  readonly toRowOffset: number;
+  readonly toColOffset: number;
   readonly cx: number;
   readonly cy: number;
   readonly imageFormat: ImageFormat;
@@ -3389,7 +3389,7 @@ export interface DrawingObject {
 
 /** Placement of an inserted image. `anchorKind` is `OneCell` (default) or
  *  `TwoCell`; `editAs` applies to a two-cell anchor only. `row` / `col` is
- *  the 0-based top-left cell and `rowOffEmu` / `colOffEmu` the offset inside
+ *  the 0-based top-left cell and `rowOffsetEmu` / `colOffsetEmu` the offset inside
  *  it. A zero `widthEmu` / `heightEmu` means the pixel size times 9525. An
  *  empty `name` becomes `Picture <id>`. */
 export interface ImageInsertInput {
@@ -3399,8 +3399,8 @@ export interface ImageInsertInput {
   editAs?: AnchorEditAs;
   row?: number;
   col?: number;
-  rowOffEmu?: number;
-  colOffEmu?: number;
+  rowOffsetEmu?: number;
+  colOffsetEmu?: number;
   widthEmu?: number;
   heightEmu?: number;
 }
@@ -3414,7 +3414,7 @@ export interface ObjectIdResult {
 }
 
 /** New placement of an existing picture, in the quantities `listDrawingObjects`
- *  reports: `row` / `col` / `rowOffEmu` / `colOffEmu` are the top-left marker of the
+ *  reports: `row` / `col` / `rowOffsetEmu` / `colOffsetEmu` are the top-left marker of the
  *  anchor box (`fromRow` ...), `widthEmu` / `heightEmu` the picture's own unrotated
  *  size (`cx` / `cy`); a zero size keeps the current one. `anchorKind` is `OneCell`
  *  (default) or `TwoCell`; `editAs` applies to a two-cell anchor only. */
@@ -3423,8 +3423,8 @@ export interface ImagePlacement {
   editAs?: AnchorEditAs;
   row?: number;
   col?: number;
-  rowOffEmu?: number;
-  colOffEmu?: number;
+  rowOffsetEmu?: number;
+  colOffsetEmu?: number;
   widthEmu?: number;
   heightEmu?: number;
 }
@@ -3441,12 +3441,12 @@ export interface Shape {
   readonly editAs: AnchorEditAs;
   readonly fromRow: number;
   readonly fromCol: number;
-  readonly fromRowOff: number;
-  readonly fromColOff: number;
+  readonly fromRowOffset: number;
+  readonly fromColOffset: number;
   readonly toRow: number;
   readonly toCol: number;
-  readonly toRowOff: number;
-  readonly toColOff: number;
+  readonly toRowOffset: number;
+  readonly toColOffset: number;
   readonly cx: number;
   readonly cy: number;
   readonly name: string;
@@ -3477,12 +3477,12 @@ export interface ShapeInput {
   editAs?: AnchorEditAs;
   fromRow?: number;
   fromCol?: number;
-  fromRowOff?: number;
-  fromColOff?: number;
+  fromRowOffset?: number;
+  fromColOffset?: number;
   toRow?: number;
   toCol?: number;
-  toRowOff?: number;
-  toColOff?: number;
+  toRowOffset?: number;
+  toColOffset?: number;
   cx?: number;
   cy?: number;
   fillKind?: ShapePaint;
@@ -3514,12 +3514,12 @@ export interface Slicer {
   readonly anchorKind: AnchorKind;
   readonly fromRow: number;
   readonly fromCol: number;
-  readonly fromRowOff: number;
-  readonly fromColOff: number;
+  readonly fromRowOffset: number;
+  readonly fromColOffset: number;
   readonly toRow: number;
   readonly toCol: number;
-  readonly toRowOff: number;
-  readonly toColOff: number;
+  readonly toRowOffset: number;
+  readonly toColOffset: number;
 }
 
 /** Fields `addSlicer` / `updateSlicer` apply; a key left out (or `null`) is not applied.
@@ -3535,12 +3535,12 @@ export interface SlicerInput {
   rowHeight?: number;
   fromRow?: number;
   fromCol?: number;
-  fromRowOff?: number;
-  fromColOff?: number;
+  fromRowOffset?: number;
+  fromColOffset?: number;
   toRow?: number;
   toCol?: number;
-  toRowOff?: number;
-  toColOff?: number;
+  toRowOffset?: number;
+  toColOffset?: number;
   sortOrder?: SlicerSortOrder;
   crossFilter?: SlicerCrossFilter;
 }
@@ -3789,7 +3789,7 @@ export interface ChartData {
   series: ChartDataSeries[];
   titleText: string | null;
   axisTitleTexts: { axisId: number; text: string }[];
-  unresolved: { seriesIdx: number; source: string; axisId: number }[];
+  unresolved: { seriesIndex: number; source: string; axisId: number }[];
 }
 
 /** Options of `Workbook.addChart`. An omitted `headerRow` / `headerColumn` follows Excel's detection, an omitted `title`
@@ -3915,12 +3915,6 @@ export interface ChartPreviewOverridesInput {
 export interface ChartDataResult {
   readonly status: Status;
   readonly data: ChartData | null;
-}
-
-/** Result of `Workbook.addChartSeries`; `seriesIdx` is the new series' `c:idx`, zero on failure. */
-export interface AddChartSeriesResult {
-  readonly status: Status;
-  readonly seriesIdx: number;
 }
 
 /** Result of `Workbook.getRangeStyleBases`; `xfIndices` is ascending and empty on failure. */
@@ -4139,8 +4133,8 @@ export interface Workbook {
   removeSheet(index: number): Status;
   /** Renames the sheet at `index`. */
   renameSheet(index: number, newName: string): Status;
-  /** Moves the sheet from `fromIdx` to `toIdx` (post-removal index). */
-  moveSheet(fromIdx: number, toIdx: number): Status;
+  /** Moves the sheet from `fromIndex` to `toIndex` (post-removal index). */
+  moveSheet(fromIndex: number, toIndex: number): Status;
   /** Copies the worksheet at `sourceIndex` into the workbook before the sheet now at `insertBefore`
    *  (`getSheetCount()` appends) and returns `{ status, index }` with the copy's index. Without `newName` the copy
    *  is named `Src (2)`; an explicit name follows the `addSheet` rules. References qualified with the source
@@ -4151,8 +4145,8 @@ export interface Workbook {
   copySheet(sourceIndex: number, insertBefore: number, newName?: string): IndexResult;
   /** Number of sheets. */
   getSheetCount(): NumberResult;
-  /** Display name of the sheet at `idx`; `kSheetIndexOutOfRange` when `idx` is out of range. */
-  getSheetName(idx: number): StringResult;
+  /** Display name of the sheet at `index`; `kSheetIndexOutOfRange` when `index` is out of range. */
+  getSheetName(index: number): StringResult;
   /** Returns `{ status, index }`: the sheet the first `<workbookView>` marks
    *  active (`activeTab`); without workbook views (an XLSB load) the first
    *  tab-selected sheet; `0` when neither is recorded. Removing or hiding the
@@ -4422,19 +4416,19 @@ export interface Workbook {
    *  Returns `kPreconditionFailed` when the edit cuts into a data table, legacy
    *  array block or PivotTable, or would push one of them or a table past
    *  the sheet bound; the workbook is unchanged. */
-  insertCols(sheet: number, col: number, count: number): Status;
+  insertColumns(sheet: number, col: number, count: number): Status;
   /** Deletes `count` columns starting at `col` on `sheet`.
    *  Returns `kPreconditionFailed` when the edit cuts into a data table, legacy
    *  array block or PivotTable, or would push one of them or a table past
    *  the sheet bound; the workbook is unchanged. */
-  deleteCols(sheet: number, col: number, count: number): Status;
+  deleteColumns(sheet: number, col: number, count: number): Status;
 
   /** Number of written coordinates on `sheet`: cells set by any value, formula or format setter,
    *  `setBlank`, or a spill anchor commit or rejection (clearing keeps the slot),
    *  plus spill phantoms that have no stored slot. Unwritten columns are not counted. */
   getCellCount(sheet: number): NumberResult;
-  /** Reads the `idx`-th counted coordinate, `idx` in `[0, cellCount)`, ordered by `(row, col)` ascending. */
-  getCellAt(sheet: number, idx: number): CellEntry;
+  /** Reads the `index`-th counted coordinate, `index` in `[0, cellCount)`, ordered by `(row, col)` ascending. */
+  getCellAt(sheet: number, index: number): CellEntry;
 
   /** Lists the defined names, workbook- and sheet-scoped alike, in file order. */
   listDefinedNames(): ListResult<DefinedName>;
@@ -4457,18 +4451,18 @@ export interface Workbook {
 
   /** Number of worksheet tables in the workbook. */
   getTableCount(): NumberResult;
-  /** Reads the `idx`-th table's identifying metadata; `kInvalidArgument` when `idx` is out of range. */
-  getTable(idx: number): TableEntry;
+  /** Reads the `index`-th table's identifying metadata; `kInvalidArgument` when `index` is out of range. */
+  getTable(index: number): TableEntry;
   /** Creates a worksheet table; `index` of the result is its workbook-wide table index (see `tableAt`).
    *  `input.columns` must hold one unique, non-empty header per column of `input.ref`. */
   addTable(input: TableInput): IndexResult;
   /** Partially updates a table. Omitted fields preserve their current
    *  values. A supplied `ref` must keep the table's existing column count;
    *  an empty `styleName` clears the style. */
-  updateTable(idx: number, input: TableUpdateInput): Status;
-  /** Removes the table at `idx`. */
-  removeTable(idx: number): Status;
-  /** Renames column `column` (0-based) of table `idx`, as typing over its
+  updateTable(index: number, input: TableUpdateInput): Status;
+  /** Removes the table at `index`. */
+  removeTable(index: number): Status;
+  /** Renames column `column` (0-based) of table `index`, as typing over its
    *  header cell does, and returns the final name in `value`. An empty
    *  `name` takes the profile's `Column<N>` (`列<N>`) with the lowest unused
    *  N, a name another column already has (ASCII case-insensitively) gains
@@ -4476,13 +4470,13 @@ export interface Workbook {
    *  structured reference to the column through this table follows: cell,
    *  totals-row and defined-name formulas and chart series. Writing a value
    *  to a header cell (`setText`, `setNumber`, ...) renames the same way. */
-  renameTableColumn(idx: number, column: number, name: string): StringResult;
+  renameTableColumn(index: number, column: number, name: string): StringResult;
   /** Sets column `column`'s totals-row function and label. While the totals
    *  row is shown its cell follows, as the desktop application writes it:
    *  `SUBTOTAL(109,Table[Column])` and the other 1xx codes for a built-in
    *  function, the formula for `'custom'`, else the label as text, else
    *  nothing. */
-  setTableColumnTotals(idx: number, column: number, totals: TableColumnTotalsInput): Status;
+  setTableColumnTotals(index: number, column: number, totals: TableColumnTotalsInput): Status;
 
   /** Reads the complete worksheet-level `<autoFilter>` XML fragment; `""` when the sheet has no
    *  AutoFilter definition. */
@@ -4650,15 +4644,15 @@ export interface Workbook {
   setChartAxis(sheet: number, objectId: number, axisId: number, patch: ChartAxisPatch): Status;
   /** Patches how blanks are plotted, whether hidden cells are skipped and whether `#N/A` draws as blank. */
   setChartDisplay(sheet: number, objectId: number, patch: ChartDisplayPatch): Status;
-  /** Patches the series with `c:idx` `seriesIdx` of plot group `plot`. */
-  setChartSeries(sheet: number, objectId: number, plot: number, seriesIdx: number, patch: ChartSeriesPatch): Status;
+  /** Patches the series with `c:idx` `seriesIndex` of plot group `plot`. */
+  setChartSeries(sheet: number, objectId: number, plot: number, seriesIndex: number, patch: ChartSeriesPatch): Status;
   /** Patches a data point; `null` or an empty patch removes its formatting. */
   setChartPoint(
     sheet: number,
     objectId: number,
     plot: number,
-    seriesIdx: number,
-    pointIdx: number,
+    seriesIndex: number,
+    pointIndex: number,
     patch: ChartPointPatch | null,
   ): Status;
   /** Patches plot group `plot`. */
@@ -4666,9 +4660,9 @@ export interface Workbook {
   /** Replaces the chart filter: series by `c:idx` and categories by position are hidden. */
   setChartFilter(sheet: number, objectId: number, hiddenSeries: number[], hiddenCategories: number[]): Status;
   /** Appends a series to plot group `plot`; the patch must set `values` (`y` for a scatter plot). */
-  addChartSeries(sheet: number, objectId: number, plot: number, patch: ChartSeriesPatch): AddChartSeriesResult;
-  /** Removes the series with `c:idx` `seriesIdx` from plot group `plot`. */
-  removeChartSeries(sheet: number, objectId: number, plot: number, seriesIdx: number): Status;
+  addChartSeries(sheet: number, objectId: number, plot: number, patch: ChartSeriesPatch): IndexResult;
+  /** Removes the series with `c:idx` `seriesIndex` from plot group `plot`. */
+  removeChartSeries(sheet: number, objectId: number, plot: number, seriesIndex: number): Status;
   /** Rebuilds every series from `source`, keeping the chart kind and each series' formatting by idx, and clears the filter. An omitted header flag follows Excel's detection. */
   setChartSource(
     sheet: number,
@@ -4705,8 +4699,8 @@ export interface Workbook {
 
   /** Number of fields on the cache identified by `cacheId`. */
   getPivotCacheFieldCount(cacheId: number): NumberResult;
-  /** Reads the name of the cache field at `fieldIdx`. */
-  getPivotCacheFieldName(cacheId: number, fieldIdx: number): StringResult;
+  /** Reads the name of the cache field at `fieldIndex`. */
+  getPivotCacheFieldName(cacheId: number, fieldIndex: number): StringResult;
   /** Appends a new field with the given UTF-8 name to the cache.
    *  `index` carries the new field's index. */
   addPivotCacheField(cacheId: number, name: string): IndexResult;
@@ -4720,49 +4714,49 @@ export interface Workbook {
   /** Adds calculated field `name` with `formula` (English canonical form, naming cache fields only) as the last
    *  cache field. Returns `{ status, index }` with the new field's index. */
   addPivotCacheCalculatedField(cacheId: number, name: string, formula: string): IndexResult;
-  /** Replaces the formula of calculated field `fieldIdx`. */
-  setPivotCacheCalculatedFieldFormula(cacheId: number, fieldIdx: number, formula: string): Status;
-  /** Removes calculated field `fieldIdx` and its data fields in every pivot. */
-  removePivotCacheCalculatedField(cacheId: number, fieldIdx: number): Status;
-  /** Reads the formula of cache field `fieldIdx` without a leading `=`; empty when it is not calculated. */
-  getPivotCacheFieldFormula(cacheId: number, fieldIdx: number): StringResult;
-  /** Adds calculated item `name` with `formula` to cache field `fieldIdx`; `index` is its position in solve order. */
-  addPivotCacheCalculatedItem(cacheId: number, fieldIdx: number, name: string, formula: string): IndexResult;
+  /** Replaces the formula of calculated field `fieldIndex`. */
+  setPivotCacheCalculatedFieldFormula(cacheId: number, fieldIndex: number, formula: string): Status;
+  /** Removes calculated field `fieldIndex` and its data fields in every pivot. */
+  removePivotCacheCalculatedField(cacheId: number, fieldIndex: number): Status;
+  /** Reads the formula of cache field `fieldIndex` without a leading `=`; empty when it is not calculated. */
+  getPivotCacheFieldFormula(cacheId: number, fieldIndex: number): StringResult;
+  /** Adds calculated item `name` with `formula` to cache field `fieldIndex`; `index` is its position in solve order. */
+  addPivotCacheCalculatedItem(cacheId: number, fieldIndex: number, name: string, formula: string): IndexResult;
   /** Number of calculated items in the cache, in solve order. */
   getPivotCacheCalculatedItemCount(cacheId: number): NumberResult;
-  /** Reads calculated item `idx` in solve order. */
-  getPivotCacheCalculatedItem(cacheId: number, idx: number): PivotCalculatedItemResult;
-  /** Replaces the formula of calculated item `idx`. */
-  setPivotCacheCalculatedItemFormula(cacheId: number, idx: number, formula: string): Status;
-  /** Moves calculated item `idx` to position `newIdx` in solve order. */
-  movePivotCacheCalculatedItem(cacheId: number, idx: number, newIdx: number): Status;
-  /** Removes calculated item `idx`, its item in the cache field and in every pivot. */
-  removePivotCacheCalculatedItem(cacheId: number, idx: number): Status;
+  /** Reads calculated item `index` in solve order. */
+  getPivotCacheCalculatedItem(cacheId: number, index: number): PivotCalculatedItemResult;
+  /** Replaces the formula of calculated item `index`. */
+  setPivotCacheCalculatedItemFormula(cacheId: number, index: number, formula: string): Status;
+  /** Moves calculated item `index` to position `newIndex` in solve order. */
+  movePivotCacheCalculatedItem(cacheId: number, index: number, newIndex: number): Status;
+  /** Removes calculated item `index`, its item in the cache field and in every pivot. */
+  removePivotCacheCalculatedItem(cacheId: number, index: number): Status;
 
-  /** Number of shared items configured on cache field `fieldIdx`. */
-  getPivotCacheFieldSharedItemCount(cacheId: number, fieldIdx: number): NumberResult;
-  /** Reads shared item `itemIdx` of cache field `fieldIdx`; date items read back as serial numbers.
-   *  Fails with `kInvalidArgument` when `itemIdx` is not below the shared item count. */
-  getPivotCacheFieldSharedItemValue(cacheId: number, fieldIdx: number, itemIdx: number): CellResult;
-  /** Appends a numeric shared item to cache field `fieldIdx`. */
-  addPivotCacheFieldSharedItemNumber(cacheId: number, fieldIdx: number, value: number): Status;
-  /** Appends a date shared item to cache field `fieldIdx`. `serial` is a date serial in the workbook's
+  /** Number of shared items configured on cache field `fieldIndex`. */
+  getPivotCacheFieldSharedItemCount(cacheId: number, fieldIndex: number): NumberResult;
+  /** Reads shared item `itemIndex` of cache field `fieldIndex`; date items read back as serial numbers.
+   *  Fails with `kInvalidArgument` when `itemIndex` is not below the shared item count. */
+  getPivotCacheFieldSharedItemValue(cacheId: number, fieldIndex: number, itemIndex: number): CellResult;
+  /** Appends a numeric shared item to cache field `fieldIndex`. */
+  addPivotCacheFieldSharedItemNumber(cacheId: number, fieldIndex: number, value: number): Status;
+  /** Appends a date shared item to cache field `fieldIndex`. `serial` is a date serial in the workbook's
    *  date system, as a cell holds it; it must be finite, non-negative and not past 9999-12-31, else
    *  `kInvalidArgument`. Saved with seconds precision. */
-  addPivotCacheFieldSharedItemDate(cacheId: number, fieldIdx: number, serial: number): Status;
-  /** Reports whether shared item `itemIdx` of cache field `fieldIdx` is a date.
-   *  Fails with `kInvalidArgument` when `itemIdx` is not below the shared item count. */
-  isPivotCacheFieldSharedItemDate(cacheId: number, fieldIdx: number, itemIdx: number): BoolResult;
-  /** Appends a text shared item to cache field `fieldIdx`. */
-  addPivotCacheFieldSharedItemText(cacheId: number, fieldIdx: number, value: string): Status;
-  /** Appends a boolean shared item to cache field `fieldIdx`. */
-  addPivotCacheFieldSharedItemBool(cacheId: number, fieldIdx: number, value: boolean): Status;
-  /** Appends a blank shared item to cache field `fieldIdx`. */
-  addPivotCacheFieldSharedItemBlank(cacheId: number, fieldIdx: number): Status;
-  /** Appends an Excel error shared item to cache field `fieldIdx`. */
-  addPivotCacheFieldSharedItemError(cacheId: number, fieldIdx: number, errorCode: number): Status;
-  /** Drops every shared item from cache field `fieldIdx`. */
-  clearPivotCacheFieldSharedItems(cacheId: number, fieldIdx: number): Status;
+  addPivotCacheFieldSharedItemDate(cacheId: number, fieldIndex: number, serial: number): Status;
+  /** Reports whether shared item `itemIndex` of cache field `fieldIndex` is a date.
+   *  Fails with `kInvalidArgument` when `itemIndex` is not below the shared item count. */
+  isPivotCacheFieldSharedItemDate(cacheId: number, fieldIndex: number, itemIndex: number): BoolResult;
+  /** Appends a text shared item to cache field `fieldIndex`. */
+  addPivotCacheFieldSharedItemText(cacheId: number, fieldIndex: number, value: string): Status;
+  /** Appends a boolean shared item to cache field `fieldIndex`. */
+  addPivotCacheFieldSharedItemBool(cacheId: number, fieldIndex: number, value: boolean): Status;
+  /** Appends a blank shared item to cache field `fieldIndex`. */
+  addPivotCacheFieldSharedItemBlank(cacheId: number, fieldIndex: number): Status;
+  /** Appends an Excel error shared item to cache field `fieldIndex`. */
+  addPivotCacheFieldSharedItemError(cacheId: number, fieldIndex: number, errorCode: number): Status;
+  /** Drops every shared item from cache field `fieldIndex`. */
+  clearPivotCacheFieldSharedItems(cacheId: number, fieldIndex: number): Status;
 
   /** Returns the number of records on the cache. */
   getPivotCacheRecordCount(cacheId: number): NumberResult;
@@ -4770,61 +4764,61 @@ export interface Workbook {
   addPivotCacheRecord(cacheId: number): IndexResult;
   /** Drops every record from the cache. */
   clearPivotCacheRecords(cacheId: number): Status;
-  /** Sets cell `(recordIdx, fieldIdx)` to a numeric value. */
-  setPivotCacheRecordNumber(cacheId: number, recordIdx: number, fieldIdx: number, value: number): Status;
-  /** Sets cell `(recordIdx, fieldIdx)` to an inline date; `serial` is validated as in
+  /** Sets cell `(recordIndex, fieldIndex)` to a numeric value. */
+  setPivotCacheRecordNumber(cacheId: number, recordIndex: number, fieldIndex: number, value: number): Status;
+  /** Sets cell `(recordIndex, fieldIndex)` to an inline date; `serial` is validated as in
    *  `pivotCacheFieldAddSharedItemDate` and saved with seconds precision. */
-  setPivotCacheRecordDate(cacheId: number, recordIdx: number, fieldIdx: number, serial: number): Status;
-  /** Sets cell `(recordIdx, fieldIdx)` to a UTF-8 text value. */
-  setPivotCacheRecordText(cacheId: number, recordIdx: number, fieldIdx: number, value: string): Status;
-  /** Sets cell `(recordIdx, fieldIdx)` to a boolean value. */
-  setPivotCacheRecordBool(cacheId: number, recordIdx: number, fieldIdx: number, value: boolean): Status;
-  /** Sets cell `(recordIdx, fieldIdx)` to Blank. */
-  setPivotCacheRecordBlank(cacheId: number, recordIdx: number, fieldIdx: number): Status;
-  /** Sets cell `(recordIdx, fieldIdx)` to an Excel error value. */
-  setPivotCacheRecordError(cacheId: number, recordIdx: number, fieldIdx: number, errorCode: number): Status;
+  setPivotCacheRecordDate(cacheId: number, recordIndex: number, fieldIndex: number, serial: number): Status;
+  /** Sets cell `(recordIndex, fieldIndex)` to a UTF-8 text value. */
+  setPivotCacheRecordText(cacheId: number, recordIndex: number, fieldIndex: number, value: string): Status;
+  /** Sets cell `(recordIndex, fieldIndex)` to a boolean value. */
+  setPivotCacheRecordBool(cacheId: number, recordIndex: number, fieldIndex: number, value: boolean): Status;
+  /** Sets cell `(recordIndex, fieldIndex)` to Blank. */
+  setPivotCacheRecordBlank(cacheId: number, recordIndex: number, fieldIndex: number): Status;
+  /** Sets cell `(recordIndex, fieldIndex)` to an Excel error value. */
+  setPivotCacheRecordError(cacheId: number, recordIndex: number, fieldIndex: number, errorCode: number): Status;
 
   // ---- PivotTable mutation -----------------------------------------------
-  /** Creates a new empty pivot table. Returns `{ status, index: pivotIdx }`. */
+  /** Creates a new empty pivot table. Returns `{ status, index: pivotIndex }`. */
   addPivot(sheet: number, name: string, cacheId: number, anchorRow: number, anchorCol: number): IndexResult;
-  /** Removes the pivot table at `pivotIdx`. */
-  removePivot(sheet: number, pivotIdx: number): Status;
+  /** Removes the pivot table at `pivotIndex`. */
+  removePivot(sheet: number, pivotIndex: number): Status;
   /** Renames the pivot table. */
-  setPivotName(sheet: number, pivotIdx: number, name: string): Status;
+  setPivotName(sheet: number, pivotIndex: number, name: string): Status;
   /** Sets the rectangle the pivot reserves (`<location ref>`); its top-left cell is the anchor. */
-  setPivotAnchor(sheet: number, pivotIdx: number, rect: CellRect): Status;
+  setPivotAnchor(sheet: number, pivotIndex: number, rect: CellRect): Status;
   /** Toggles the row / column grand total bands on the pivot. */
-  setPivotGrandTotals(sheet: number, pivotIdx: number, rowsEnabled: boolean, colsEnabled: boolean): Status;
+  setPivotGrandTotals(sheet: number, pivotIndex: number, rowsEnabled: boolean, colsEnabled: boolean): Status;
   /** Sets the pivot's table style and toggles, making the style element
    *  present. New pivots start as `PivotStyleLight16` with row / column
    *  headers and last column on. */
-  setPivotStyleInfo(sheet: number, pivotIdx: number, info: PivotStyleInfo): Status;
+  setPivotStyleInfo(sheet: number, pivotIndex: number, info: PivotStyleInfo): Status;
   /** Reads the pivot's compact / tabular / outline report layout. */
-  getPivotReportLayout(sheet: number, pivotIdx: number): NumberResult<PivotReportLayout>;
+  getPivotReportLayout(sheet: number, pivotIndex: number): NumberResult<PivotReportLayout>;
   /** Sets the pivot's compact / tabular / outline report layout. */
-  setPivotReportLayout(sheet: number, pivotIdx: number, layout: PivotReportLayout): Status;
+  setPivotReportLayout(sheet: number, pivotIndex: number, layout: PivotReportLayout): Status;
   /** Returns `{ status, index: cacheId }`: the cache the pivot draws from.
    *  The definition read-backs here work for pivots created in-session and
    *  loaded from a package alike. */
-  getPivotCacheId(sheet: number, pivotIdx: number): IndexResult;
+  getPivotCacheId(sheet: number, pivotIndex: number): IndexResult;
   /** Reads the pivot's name. */
-  getPivotName(sheet: number, pivotIdx: number): StringResult;
+  getPivotName(sheet: number, pivotIndex: number): StringResult;
   /** Reads the row / column grand total flags `pivotSetGrandTotals` writes. */
-  getPivotGrandTotals(sheet: number, pivotIdx: number): PivotGrandTotalsResult;
+  getPivotGrandTotals(sheet: number, pivotIndex: number): PivotGrandTotalsResult;
   /** Reads the PivotTable Options `pivotSetOptions` writes. */
-  getPivotOptions(sheet: number, pivotIdx: number): PivotOptionsResult;
+  getPivotOptions(sheet: number, pivotIndex: number): PivotOptionsResult;
   /** Reads whether a cache change left the pivot's sheet cells stale; see `pivotProject`. */
-  isPivotProjectionPending(sheet: number, pivotIdx: number): BoolResult;
+  isPivotProjectionPending(sheet: number, pivotIndex: number): BoolResult;
   /** Reads the table style `pivotSetStyleInfo` writes. */
-  getPivotStyleInfo(sheet: number, pivotIdx: number): PivotStyleInfoResult;
+  getPivotStyleInfo(sheet: number, pivotIndex: number): PivotStyleInfoResult;
   /** Reads the row-axis field order (the list `pivotSetRowFieldOrder` takes). */
-  getPivotRowFieldOrder(sheet: number, pivotIdx: number): PivotFieldOrderResult;
+  getPivotRowFieldOrder(sheet: number, pivotIndex: number): PivotFieldOrderResult;
   /** Reads the column-axis field order. */
-  getPivotColFieldOrder(sheet: number, pivotIdx: number): PivotFieldOrderResult;
+  getPivotColumnFieldOrder(sheet: number, pivotIndex: number): PivotFieldOrderResult;
 
   /** Number of fields configured on the pivot. */
-  getPivotFieldCount(sheet: number, pivotIdx: number): NumberResult;
-  /** Places a field on the pivot. Returns `{ status, index: fieldIdx }`.
+  getPivotFieldCount(sheet: number, pivotIndex: number): NumberResult;
+  /** Places a field on the pivot. Returns `{ status, index: fieldIndex }`.
    *  A pivot's fields are positional over its cache's fields (field `i` is
    *  cache field `i`): when `sourceName` names a cache field the pivot first
    *  gets one bare, axis-less field per cache field and the named one is
@@ -4832,63 +4826,81 @@ export interface Workbook {
    *  adding it again updates it. A name the cache lacks appends a field.
    *  A field added on the row or column axis is appended to that axis's
    *  order. */
-  addPivotField(sheet: number, pivotIdx: number, spec: PivotFieldSpecInput): IndexResult;
-  /** Reads the definition of field `fieldIdx`. */
-  getPivotField(sheet: number, pivotIdx: number, fieldIdx: number): PivotFieldResult;
+  addPivotField(sheet: number, pivotIndex: number, spec: PivotFieldSpecInput): IndexResult;
+  /** Reads the definition of field `fieldIndex`. */
+  getPivotField(sheet: number, pivotIndex: number, fieldIndex: number): PivotFieldResult;
   /** Number of items in the field's item list (what `pivotFieldAddItem` /
    *  `pivotFieldAddItemAt` append to). */
-  getPivotFieldItemCount(sheet: number, pivotIdx: number, fieldIdx: number): NumberResult;
-  /** Reads item `itemIdx` of the field; the index `pivotFieldSetItemVisible`
+  getPivotFieldItemCount(sheet: number, pivotIndex: number, fieldIndex: number): NumberResult;
+  /** Reads item `itemIndex` of the field; the index `pivotFieldSetItemVisible`
    *  takes. */
-  getPivotFieldItem(sheet: number, pivotIdx: number, fieldIdx: number, itemIdx: number): PivotItemResult;
+  getPivotFieldItem(sheet: number, pivotIndex: number, fieldIndex: number, itemIndex: number): PivotItemResult;
   /** Turns the automatic subtotal of the field on or off. */
-  setPivotFieldDefaultSubtotal(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  setPivotFieldDefaultSubtotal(sheet: number, pivotIndex: number, fieldIndex: number, on: boolean): Status;
   /** Inserts a blank row after each item of the field. */
-  setPivotFieldInsertBlankRow(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  setPivotFieldInsertBlankRow(sheet: number, pivotIndex: number, fieldIndex: number, on: boolean): Status;
   /** Repeats the item labels of the field on every row. */
-  setPivotFieldFillDownLabels(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  setPivotFieldFillDownLabels(sheet: number, pivotIndex: number, fieldIndex: number, on: boolean): Status;
   /** Expands or collapses the whole field. */
-  setPivotFieldShowDetail(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  setPivotFieldShowDetail(sheet: number, pivotIndex: number, fieldIndex: number, on: boolean): Status;
   /** Expands or collapses one item of the field. */
-  setPivotFieldItemShowDetail(sheet: number, pivotIdx: number, fieldIdx: number, itemIdx: number, on: boolean): Status;
+  setPivotFieldItemShowDetail(
+    sheet: number,
+    pivotIndex: number,
+    fieldIndex: number,
+    itemIndex: number,
+    on: boolean,
+  ): Status;
   /** Shows `caption` instead of the item's value; `""` clears it. */
-  setPivotFieldItemCaption(sheet: number, pivotIdx: number, fieldIdx: number, itemIdx: number, caption: string): Status;
-  /** Renames pivot field `fieldIdx` in the report; `""` clears the name. The field's own source name is allowed;
+  setPivotFieldItemCaption(
+    sheet: number,
+    pivotIndex: number,
+    fieldIndex: number,
+    itemIndex: number,
+    caption: string,
+  ): Status;
+  /** Renames pivot field `fieldIndex` in the report; `""` clears the name. The field's own source name is allowed;
    *  another field's source or custom name, or a data field's name, is not. */
-  setPivotFieldCustomName(sheet: number, pivotIdx: number, fieldIdx: number, name: string): Status;
+  setPivotFieldCustomName(sheet: number, pivotIndex: number, fieldIndex: number, name: string): Status;
   /** Lists the field's items without data. */
-  setPivotFieldShowAll(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  setPivotFieldShowAll(sheet: number, pivotIndex: number, fieldIndex: number, on: boolean): Status;
   /** Writes the PivotTable Options; members the object omits keep their current value. Wrong-typed members
    *  fail without changing the pivot. Fails with `kPreconditionFailed` when the report would overlap another structure. */
-  setPivotOptions(sheet: number, pivotIdx: number, options: Partial<PivotOptions>): Status;
+  setPivotOptions(sheet: number, pivotIndex: number, options: Partial<PivotOptions>): Status;
   /** Writes the pivot's report into its sheet cells now and clears the pending flag. */
-  projectPivot(sheet: number, pivotIdx: number): Status;
+  projectPivot(sheet: number, pivotIndex: number): Status;
   /** Writes the records behind data cell (`row`, `col`) onto a new sheet and activates it. Returns
    *  `{ status, index }` with the new sheet's index; sheets at or after the pivot's sheet shift by one. */
-  showPivotDetails(sheet: number, pivotIdx: number, row: number, col: number): IndexResult;
+  showPivotDetails(sheet: number, pivotIndex: number, row: number, col: number): IndexResult;
   /** Drops every field from the pivot, emptying the row and column orders. */
-  clearPivotFields(sheet: number, pivotIdx: number): Status;
-  /** Sets the axis of pivot field `fieldIdx`. Moving onto the row or column
+  clearPivotFields(sheet: number, pivotIndex: number): Status;
+  /** Sets the axis of pivot field `fieldIndex`. Moving onto the row or column
    *  axis appends the field to that axis's order; moving off removes it.
    *  `-1` takes the field off every axis, as unchecking it in a field list
    *  does: its data fields are removed (later data-field indices shift
    *  down), as are filters naming it and value filters scoring a
    *  removed data field; its item visibility is kept. */
-  setPivotFieldAxis(sheet: number, pivotIdx: number, fieldIdx: number, axis: PivotAxis | -1): Status;
-  /** Sets the sibling order of pivot field `fieldIdx`. `PivotSortOrder.Manual`
+  setPivotFieldAxis(sheet: number, pivotIndex: number, fieldIndex: number, axis: PivotAxis | -1): Status;
+  /** Sets the sibling order of pivot field `fieldIndex`. `PivotSortOrder.Manual`
    *  keeps items in `pivotFieldAddItem` order and takes no `byField`; for the
    *  other orders an empty `byField` sorts by label. */
-  setPivotFieldSort(sheet: number, pivotIdx: number, fieldIdx: number, order: PivotSortOrder, byField: string): Status;
-  /** Sets the `subtotal_top` flag on pivot field `fieldIdx`. */
-  setPivotFieldSubtotalTop(sheet: number, pivotIdx: number, fieldIdx: number, top: boolean): Status;
-  /** Appends a manual-filter item to pivot field `fieldIdx`, addressed by
+  setPivotFieldSort(
+    sheet: number,
+    pivotIndex: number,
+    fieldIndex: number,
+    order: PivotSortOrder,
+    byField: string,
+  ): Status;
+  /** Sets the `subtotal_top` flag on pivot field `fieldIndex`. */
+  setPivotFieldSubtotalTop(sheet: number, pivotIndex: number, fieldIndex: number, top: boolean): Status;
+  /** Appends a manual-filter item to pivot field `fieldIndex`, addressed by
    *  its label. The item binds to the first shared item of the cache field
    *  that renders as `name` (unbound when none does), and the filter engine
    *  matches source records by comparing their rendered label against
    *  `name`. An empty `name` therefore cannot express the blank item,
    *  which has no label of its own; use `pivotFieldAddItemAt`. */
-  addPivotFieldItem(sheet: number, pivotIdx: number, fieldIdx: number, name: string, visible: boolean): IndexResult;
-  /** Appends a manual-filter item to pivot field `fieldIdx`, addressed by
+  addPivotFieldItem(sheet: number, pivotIndex: number, fieldIndex: number, name: string, visible: boolean): IndexResult;
+  /** Appends a manual-filter item to pivot field `fieldIndex`, addressed by
    *  its position in the bound cache field's shared items -- the same
    *  index space as OOXML `<item x="N">`. The label is resolved from that
    *  shared item, which makes this the form that can express the blank
@@ -4897,26 +4909,26 @@ export interface Workbook {
    *  yields an item with an empty label that filters nothing. */
   addPivotFieldSharedItem(
     sheet: number,
-    pivotIdx: number,
-    fieldIdx: number,
+    pivotIndex: number,
+    fieldIndex: number,
     cacheIndex: number,
     visible: boolean,
   ): IndexResult;
-  /** Drops every manual-filter item from pivot field `fieldIdx`. */
-  clearPivotFieldItems(sheet: number, pivotIdx: number, fieldIdx: number): Status;
-  /** Toggles the visibility of item `itemIdx` on field `fieldIdx`. */
+  /** Drops every manual-filter item from pivot field `fieldIndex`. */
+  clearPivotFieldItems(sheet: number, pivotIndex: number, fieldIndex: number): Status;
+  /** Toggles the visibility of item `itemIndex` on field `fieldIndex`. */
   setPivotFieldItemVisible(
     sheet: number,
-    pivotIdx: number,
-    fieldIdx: number,
-    itemIdx: number,
+    pivotIndex: number,
+    fieldIndex: number,
+    itemIndex: number,
     visible: boolean,
   ): Status;
-  /** Appends a subtotal-fn entry to pivot field `fieldIdx`. */
-  addPivotFieldSubtotalFn(sheet: number, pivotIdx: number, fieldIdx: number, agg: PivotAggregation): Status;
-  /** Drops every subtotal-fn entry from pivot field `fieldIdx`. */
-  clearPivotFieldSubtotalFns(sheet: number, pivotIdx: number, fieldIdx: number): Status;
-  /** Groups the date field `fieldIdx` (a source field, or one of its group
+  /** Appends a subtotal-fn entry to pivot field `fieldIndex`. */
+  addPivotFieldSubtotalFn(sheet: number, pivotIndex: number, fieldIndex: number, agg: PivotAggregation): Status;
+  /** Drops every subtotal-fn entry from pivot field `fieldIndex`. */
+  clearPivotFieldSubtotalFns(sheet: number, pivotIndex: number, fieldIndex: number): Status;
+  /** Groups the date field `fieldIndex` (a source field, or one of its group
    *  fields) by the `PivotDatePeriod` bits of `periods`, as Excel's Group
    *  command does, replacing any grouping it has. Each period becomes a
    *  group field appended to the pivot cache, finest first, named and
@@ -4931,66 +4943,66 @@ export interface Workbook {
    *  or a field holding anything but dates is `kInvalidArgument`. */
   setPivotFieldDateGroup(
     sheet: number,
-    pivotIdx: number,
-    fieldIdx: number,
+    pivotIndex: number,
+    fieldIndex: number,
     periods: number,
     calendar: PivotCalendar,
     intervalDays?: number,
     start?: number,
     end?: number,
   ): Status;
-  /** Removes the date grouping of pivot field `fieldIdx` (a source field,
+  /** Removes the date grouping of pivot field `fieldIndex` (a source field,
    *  or one of its group fields) from every pivot on its cache; the field
    *  returns to the axis position its group fields held. A field that is
    *  not grouped is left as it is. `kPreconditionFailed` when the group
    *  fields are not the last fields of the cache. */
-  clearPivotFieldDateGroup(sheet: number, pivotIdx: number, fieldIdx: number): Status;
-  /** Sets the `numFmtId` of pivot field `fieldIdx`, as a decimal string
+  clearPivotFieldDateGroup(sheet: number, pivotIndex: number, fieldIndex: number): Status;
+  /** Sets the `numFmtId` of pivot field `fieldIndex`, as a decimal string
    *  naming a built-in id or one returned by `addNumFmt`. Pass an empty
    *  string to clear; any other unknown id is rejected. */
-  setPivotFieldNumberFormat(sheet: number, pivotIdx: number, fieldIdx: number, utf8: string): Status;
+  setPivotFieldNumberFormat(sheet: number, pivotIndex: number, fieldIndex: number, utf8: string): Status;
 
   /** Replaces the row-axis field order with `indices`. Each entry must
    *  be `< pivotFieldCount` and appear once. The list is the axis's whole
    *  membership: listed fields move onto the row axis and fields left out
    *  come off it. Pass an empty array to clear. */
-  setPivotRowFieldOrder(sheet: number, pivotIdx: number, indices: ReadonlyArray<number>): Status;
+  setPivotRowFieldOrder(sheet: number, pivotIndex: number, indices: ReadonlyArray<number>): Status;
   /** Replaces the column-axis field order. Same contract as rows. */
-  setPivotColFieldOrder(sheet: number, pivotIdx: number, indices: ReadonlyArray<number>): Status;
+  setPivotColumnFieldOrder(sheet: number, pivotIndex: number, indices: ReadonlyArray<number>): Status;
 
   /** Number of `<dataField>` entries on the pivot. */
-  getPivotDataFieldCount(sheet: number, pivotIdx: number): NumberResult;
+  getPivotDataFieldCount(sheet: number, pivotIndex: number): NumberResult;
   /** Appends a new data-field entry. An omitted or empty `spec.name` is
    *  derived from the workbook profile; see {@link PivotDataFieldSpec}. */
-  addPivotDataField(sheet: number, pivotIdx: number, spec: PivotDataFieldSpec): IndexResult;
-  /** Reads data field `dataFieldIdx`. */
-  getPivotDataField(sheet: number, pivotIdx: number, dataFieldIdx: number): PivotDataFieldResult;
+  addPivotDataField(sheet: number, pivotIndex: number, spec: PivotDataFieldSpec): IndexResult;
+  /** Reads data field `dataFieldIndex`. */
+  getPivotDataField(sheet: number, pivotIndex: number, dataFieldIndex: number): PivotDataFieldResult;
   /** Reads the name a new data field would get for `fieldIndex` and `aggregation`, without adding one.
    *  `excludeDataField` leaves that data field out of the numbering (as `pivotDataFieldSet` does); omit it
    *  for a new data field. */
   getPivotDataFieldDefaultName(
     sheet: number,
-    pivotIdx: number,
-    fieldIdx: number,
+    pivotIndex: number,
+    fieldIndex: number,
     aggregation: PivotAggregation,
     excludeDataField?: number,
   ): StringResult;
   /** Drops every data-field entry from the pivot. */
-  clearPivotDataFields(sheet: number, pivotIdx: number): Status;
-  /** Replaces the data-field entry at `dataFieldIdx` in place. An omitted
+  clearPivotDataFields(sheet: number, pivotIndex: number): Status;
+  /** Replaces the data-field entry at `dataFieldIndex` in place. An omitted
    *  or empty `spec.name` is derived as in `pivotDataFieldAdd`. */
-  setPivotDataField(sheet: number, pivotIdx: number, dataFieldIdx: number, spec: PivotDataFieldSpec): Status;
+  setPivotDataField(sheet: number, pivotIndex: number, dataFieldIndex: number, spec: PivotDataFieldSpec): Status;
 
   /** Number of filters on the pivot -- see {@link PivotFilterResult}. */
-  getPivotFilterCount(sheet: number, pivotIdx: number): NumberResult;
+  getPivotFilterCount(sheet: number, pivotIndex: number): NumberResult;
   /** Appends a filter, saved with the pivot; see {@link PivotFilterResult}. */
-  addPivotFilter(sheet: number, pivotIdx: number, spec: PivotFilterSpec): IndexResult;
-  /** Reads the filter at `filterIdx`; see {@link PivotFilterResult}. */
-  getPivotFilter(sheet: number, pivotIdx: number, filterIdx: number): PivotFilterResult;
+  addPivotFilter(sheet: number, pivotIndex: number, spec: PivotFilterSpec): IndexResult;
+  /** Reads the filter at `filterIndex`; see {@link PivotFilterResult}. */
+  getPivotFilter(sheet: number, pivotIndex: number, filterIndex: number): PivotFilterResult;
   /** Drops every listed filter from the pivot. */
-  clearPivotFilters(sheet: number, pivotIdx: number): Status;
-  /** Removes the filter at `filterIdx`. */
-  removePivotFilter(sheet: number, pivotIdx: number, filterIdx: number): Status;
+  clearPivotFilters(sheet: number, pivotIndex: number): Status;
+  /** Removes the filter at `filterIndex`. */
+  removePivotFilter(sheet: number, pivotIndex: number, filterIndex: number): Status;
 
   /** Evaluates every CF block on `sheet` against the cells of `range`. `todaySerial` pins the
    *  date basis for `TimePeriod` rules; pass `NaN` to disable them (no
@@ -5045,17 +5057,17 @@ export interface Workbook {
   /** Upserts a row break before `row`, spanning the whole sheet. */
   addRowBreak(sheet: number, row: number, manual: boolean): Status;
   /** Upserts a column break before `col`, spanning the whole sheet. */
-  addColBreak(sheet: number, col: number, manual: boolean): Status;
+  addColumnBreak(sheet: number, col: number, manual: boolean): Status;
   /** Removes the row break at `row`. An absent break is a no-op. */
   removeRowBreak(sheet: number, row: number): Status;
   /** Removes the column break at `col`. An absent break is a no-op. */
-  removeColBreak(sheet: number, col: number): Status;
+  removeColumnBreak(sheet: number, col: number): Status;
   /** Removes every manual break on both axes. */
   clearBreaks(sheet: number): Status;
   /** Returns the row breaks, ascending by row. */
   listRowBreaks(sheet: number): SheetPageBreaksResult;
   /** Returns the column breaks, ascending by column. */
-  listColBreaks(sheet: number): SheetPageBreaksResult;
+  listColumnBreaks(sheet: number): SheetPageBreaksResult;
 
   /** Applies a partial `<pageSetup>` update. */
   setPageSetup(sheet: number, setup: PageSetup): Status;
@@ -5139,7 +5151,7 @@ export interface Workbook {
   setSheetProtection(sheet: number, protection: SheetProtection): Status;
 
   /** Returns the column-layout overrides on `sheet` in storage order. */
-  listColOverrides(sheet: number): ColumnsResult;
+  listColumnOverrides(sheet: number): ColumnsResult;
   /** Sets / replaces the column width override on `[first, last]`. `width` is a stored width:
    *  characters with the column padding included, as `<col width>` holds it. */
   setColumnWidth(sheet: number, first: number, last: number, width: number): Status;

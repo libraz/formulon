@@ -26,12 +26,12 @@ emscripten::val slicer_to_val(const fm_slicer_t& s) {
   o.set("anchorKind", s.anchor_kind);
   o.set("fromRow", s.from_row);
   o.set("fromCol", s.from_col);
-  o.set("fromRowOff", static_cast<double>(s.from_row_off));
-  o.set("fromColOff", static_cast<double>(s.from_col_off));
+  o.set("fromRowOffset", static_cast<double>(s.from_row_offset));
+  o.set("fromColOffset", static_cast<double>(s.from_col_offset));
   o.set("toRow", s.to_row);
   o.set("toCol", s.to_col);
-  o.set("toRowOff", static_cast<double>(s.to_row_off));
-  o.set("toColOff", static_cast<double>(s.to_col_off));
+  o.set("toRowOffset", static_cast<double>(s.to_row_offset));
+  o.set("toColOffset", static_cast<double>(s.to_col_offset));
   o.set("rowHeight", static_cast<double>(s.row_height));
   js_set_cstr_fields(o, {{"name", s.name},
                          {"caption", s.caption},
@@ -76,12 +76,12 @@ fm_slicer_t pull_slicer(JsNarrowNumericReader& reader, const emscripten::val& sp
     s.fields |= FM_SLICER_FIELD_ANCHOR;
     s.from_row = reader.u32(spec, "fromRow", 0U, "slicer.fromRow");
     s.from_col = reader.u32(spec, "fromCol", 0U, "slicer.fromCol");
-    s.from_row_off = reader.i64(spec, "fromRowOff", 0, "slicer.fromRowOff");
-    s.from_col_off = reader.i64(spec, "fromColOff", 0, "slicer.fromColOff");
+    s.from_row_offset = reader.i64(spec, "fromRowOffset", 0, "slicer.fromRowOffset");
+    s.from_col_offset = reader.i64(spec, "fromColOffset", 0, "slicer.fromColOffset");
     s.to_row = reader.u32(spec, "toRow", 0U, "slicer.toRow");
     s.to_col = reader.u32(spec, "toCol", 0U, "slicer.toCol");
-    s.to_row_off = reader.i64(spec, "toRowOff", 0, "slicer.toRowOff");
-    s.to_col_off = reader.i64(spec, "toColOff", 0, "slicer.toColOff");
+    s.to_row_offset = reader.i64(spec, "toRowOffset", 0, "slicer.toRowOffset");
+    s.to_col_offset = reader.i64(spec, "toColOffset", 0, "slicer.toColOffset");
   }
   if (has("sortOrder")) {
     s.fields |= FM_SLICER_FIELD_SORT_ORDER;

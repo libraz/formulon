@@ -186,7 +186,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_filter_count(const fm_workbook_t* wb, 
 }
 
 extern "C" fm_status_t fm_sheet_get_pivot_filter(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                 std::size_t pivot_index, std::size_t filter_idx,
+                                                 std::size_t pivot_index, std::size_t filter_index,
                                                  fm_pivot_filter_spec_t* out) {
   clear_last_error();
   const formulon::pivot::PivotTable* table = nullptr;
@@ -195,11 +195,11 @@ extern "C" fm_status_t fm_sheet_get_pivot_filter(const fm_workbook_t* wb, std::s
     return rc;
   }
   const auto& filters = table->active_filters();
-  if (auto rc = check_index(filter_idx, filters.size(), "fm_sheet_get_pivot_filter", "filter_idx"); rc != 0) {
+  if (auto rc = check_index(filter_index, filters.size(), "fm_sheet_get_pivot_filter", "filter_index"); rc != 0) {
     return rc;
   }
 
-  const auto& filter = filters[filter_idx];
+  const auto& filter = filters[filter_index];
   const auto axis = pivot_axis_to_fm(filter.axis);
   if (!axis.has_value()) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
@@ -263,7 +263,7 @@ extern "C" fm_status_t fm_sheet_clear_pivot_filters(fm_workbook_t* wb, std::size
 }
 
 extern "C" fm_status_t fm_sheet_remove_pivot_filter(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                                                    std::size_t filter_idx) {
+                                                    std::size_t filter_index) {
   clear_last_error();
   if (wb == nullptr) {
     return null_argument("fm_sheet_remove_pivot_filter", "wb");
@@ -272,12 +272,13 @@ extern "C" fm_status_t fm_sheet_remove_pivot_filter(fm_workbook_t* wb, std::size
   if (auto rc = resolve_pivot_mut(wb, sheet_index, pivot_index, "fm_sheet_remove_pivot_filter", &table); rc != 0) {
     return rc;
   }
-  if (auto rc = check_index(filter_idx, table->active_filters().size(), "fm_sheet_remove_pivot_filter", "filter_idx");
+  if (auto rc =
+          check_index(filter_index, table->active_filters().size(), "fm_sheet_remove_pivot_filter", "filter_index");
       rc != 0) {
     return rc;
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
   std::size_t position = 0;
-  table->erase_active_filters_if([&](const formulon::pivot::PivotFilter&) { return position++ == filter_idx; });
+  table->erase_active_filters_if([&](const formulon::pivot::PivotFilter&) { return position++ == filter_index; });
   return edit.commit();
 }

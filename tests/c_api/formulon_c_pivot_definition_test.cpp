@@ -11,8 +11,8 @@ std::string DerivedDataFieldName(const char* profile_id, fm_pivot_aggregation_t 
   WorkbookGuard wb;
   EXPECT_EQ(fm_workbook_create_for_profile(profile_id, &wb.handle), 0) << fm_get_last_error_message();
   std::uint32_t cache_id = 0;
-  std::size_t pivot_idx = 0;
-  EXPECT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
+  std::size_t pivot_index = 0;
+  EXPECT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
   fm_pivot_data_field_spec_t spec{};
   spec.name = name;
   spec.field_index = 1;  // "Amount"
@@ -20,9 +20,9 @@ std::string DerivedDataFieldName(const char* profile_id, fm_pivot_aggregation_t 
   spec.show_as_base_field = -1;
   spec.show_as_base_item = -1;
   std::size_t idx = 99;
-  EXPECT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0, pivot_idx, &spec, &idx), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0, pivot_index, &spec, &idx), 0) << fm_get_last_error_message();
   fm_pivot_data_field_spec_t read{};
-  EXPECT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0, pivot_idx, idx, &read), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0, pivot_index, idx, &read), 0) << fm_get_last_error_message();
   return read.name != nullptr ? read.name : "";
 }
 
@@ -32,35 +32,35 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
-  std::size_t pivot_idx = 0;
-  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
   std::uint32_t read_cache = 99;
-  ASSERT_EQ(fm_sheet_get_pivot_cache_id(wb.handle, 0, pivot_idx, &read_cache), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_cache_id(wb.handle, 0, pivot_index, &read_cache), 0);
   EXPECT_EQ(read_cache, cache_id);
   const char* name = nullptr;
-  ASSERT_EQ(fm_sheet_get_pivot_name(wb.handle, 0, pivot_idx, &name), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_name(wb.handle, 0, pivot_index, &name), 0);
   EXPECT_STREQ(name, "PT");
 
-  ASSERT_EQ(fm_sheet_set_pivot_name(wb.handle, 0, pivot_idx, "Renamed"), 0);
-  ASSERT_EQ(fm_sheet_get_pivot_name(wb.handle, 0, pivot_idx, &name), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_name(wb.handle, 0, pivot_index, "Renamed"), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_name(wb.handle, 0, pivot_index, &name), 0);
   EXPECT_STREQ(name, "Renamed");
 
-  ASSERT_EQ(fm_sheet_set_pivot_grand_totals(wb.handle, 0, pivot_idx, 0, 1), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_grand_totals(wb.handle, 0, pivot_index, 0, 1), 0);
   std::int32_t grand_rows = -1;
   std::int32_t grand_cols = -1;
-  ASSERT_EQ(fm_sheet_get_pivot_grand_totals(wb.handle, 0, pivot_idx, &grand_rows, &grand_cols), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_grand_totals(wb.handle, 0, pivot_index, &grand_rows, &grand_cols), 0);
   EXPECT_EQ(grand_rows, 0);
   EXPECT_EQ(grand_cols, 1);
 
   // Field 0 is "Region" (row), field 1 is "Amount" (value).
-  ASSERT_EQ(fm_sheet_set_pivot_field_sort(wb.handle, 0, pivot_idx, 0, FM_PIVOT_SORT_DESCENDING, "Sum of Amount"), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_field_sort(wb.handle, 0, pivot_index, 0, FM_PIVOT_SORT_DESCENDING, "Sum of Amount"), 0);
   // Region holds text, which no date group takes.
-  EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, pivot_idx, 0, FM_PIVOT_PERIOD_DAYS,
+  EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, pivot_index, 0, FM_PIVOT_PERIOD_DAYS,
                                                 FM_PIVOT_CALENDAR_GREGORIAN, 7U, 45000.0, 45100.0),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   fm_pivot_field_info_t region{};
-  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_idx, 0, &region), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 0, &region), 0) << fm_get_last_error_message();
   EXPECT_STREQ(region.source_name, "Region");
   EXPECT_EQ(region.axis, FM_PIVOT_AXIS_ROW);
   EXPECT_EQ(region.subtotal_top, 0);
@@ -73,28 +73,28 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   EXPECT_EQ(region.insert_blank_row, 0);
   EXPECT_EQ(region.fill_down_labels, 0);
 
-  ASSERT_EQ(fm_sheet_set_pivot_field_sort(wb.handle, 0, pivot_idx, 0, FM_PIVOT_SORT_MANUAL, nullptr), 0);
-  ASSERT_EQ(fm_sheet_clear_pivot_field_date_group(wb.handle, 0, pivot_idx, 0), 0);
-  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_idx, 0, &region), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_field_sort(wb.handle, 0, pivot_index, 0, FM_PIVOT_SORT_MANUAL, nullptr), 0);
+  ASSERT_EQ(fm_sheet_clear_pivot_field_date_group(wb.handle, 0, pivot_index, 0), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 0, &region), 0);
   EXPECT_EQ(region.sort_order, FM_PIVOT_SORT_MANUAL);
   EXPECT_EQ(region.date_periods, 0U);
 
   // Items: the scratch pivot added North and South by label, bound to the shared items.
   std::size_t item_count = 99;
-  ASSERT_EQ(fm_sheet_get_pivot_field_item_count(wb.handle, 0, pivot_idx, 0, &item_count), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field_item_count(wb.handle, 0, pivot_index, 0, &item_count), 0);
   ASSERT_EQ(item_count, 2U);
-  ASSERT_EQ(fm_sheet_set_pivot_field_item_visible(wb.handle, 0, pivot_idx, 0, 1, 0), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_field_item_visible(wb.handle, 0, pivot_index, 0, 1, 0), 0);
   fm_pivot_item_info_t item{};
-  ASSERT_EQ(fm_sheet_get_pivot_field_item(wb.handle, 0, pivot_idx, 0, 0, &item), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field_item(wb.handle, 0, pivot_index, 0, 0, &item), 0);
   EXPECT_STREQ(item.name, "North");
   EXPECT_EQ(item.cache_index, 0);
   EXPECT_EQ(item.visible, 1);
-  ASSERT_EQ(fm_sheet_get_pivot_field_item(wb.handle, 0, pivot_idx, 0, 1, &item), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field_item(wb.handle, 0, pivot_index, 0, 1, &item), 0);
   EXPECT_STREQ(item.name, "South");
   EXPECT_EQ(item.cache_index, 1);
   EXPECT_EQ(item.visible, 0);
-  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_idx, 0, 1U, 1, ignored_index()), 0);
-  ASSERT_EQ(fm_sheet_get_pivot_field_item(wb.handle, 0, pivot_idx, 0, 2, &item), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_shared_item(wb.handle, 0, pivot_index, 0, 1U, 1, ignored_index()), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field_item(wb.handle, 0, pivot_index, 0, 2, &item), 0);
   EXPECT_STREQ(item.name, "");
   EXPECT_EQ(item.cache_index, 1);
   EXPECT_EQ(item.visible, 1);
@@ -108,9 +108,9 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   written.show_as = FM_PIVOT_SHOW_VALUES_AS_DIFFERENCE_FROM;
   written.show_as_base_field = 0;
   written.show_as_base_item = 1;
-  ASSERT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0, pivot_idx, 0, &written), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0, pivot_index, 0, &written), 0) << fm_get_last_error_message();
   fm_pivot_data_field_spec_t data_field{};
-  ASSERT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0, pivot_idx, 0, &data_field), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0, pivot_index, 0, &data_field), 0);
   EXPECT_STREQ(data_field.name, "Share");
   EXPECT_EQ(data_field.field_index, 1U);
   EXPECT_EQ(data_field.aggregation, FM_PIVOT_AGG_AVERAGE);
@@ -123,30 +123,30 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   extra.source_name = "Amount";
   extra.axis = FM_PIVOT_AXIS_COL;
   extra.subtotal_top = 1;
-  std::size_t extra_idx = 99;
-  ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot_idx, &extra, &extra_idx), 0);
+  std::size_t extra_index = 99;
+  ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot_index, &extra, &extra_index), 0);
   const std::uint32_t* order = nullptr;
   std::size_t order_count = 99;
-  ASSERT_EQ(fm_sheet_get_pivot_col_field_order(wb.handle, 0, pivot_idx, &order, &order_count), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_column_field_order(wb.handle, 0, pivot_index, &order, &order_count), 0);
   ASSERT_EQ(order_count, 1U);
-  EXPECT_EQ(order[0], static_cast<std::uint32_t>(extra_idx));
-  const std::uint32_t swapped[] = {static_cast<std::uint32_t>(extra_idx), 0U};
-  ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb.handle, 0, pivot_idx, swapped, 2U), 0);
-  ASSERT_EQ(fm_sheet_get_pivot_row_field_order(wb.handle, 0, pivot_idx, &order, &order_count), 0);
+  EXPECT_EQ(order[0], static_cast<std::uint32_t>(extra_index));
+  const std::uint32_t swapped[] = {static_cast<std::uint32_t>(extra_index), 0U};
+  ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb.handle, 0, pivot_index, swapped, 2U), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_row_field_order(wb.handle, 0, pivot_index, &order, &order_count), 0);
   ASSERT_EQ(order_count, 2U);
-  EXPECT_EQ(order[0], static_cast<std::uint32_t>(extra_idx));
+  EXPECT_EQ(order[0], static_cast<std::uint32_t>(extra_index));
   EXPECT_EQ(order[1], 0U);
-  ASSERT_EQ(fm_sheet_get_pivot_col_field_order(wb.handle, 0, pivot_idx, &order, &order_count), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_column_field_order(wb.handle, 0, pivot_index, &order, &order_count), 0);
   EXPECT_EQ(order_count, 0U);
   fm_pivot_field_info_t moved{};
-  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_idx, extra_idx, &moved), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, extra_index, &moved), 0);
   EXPECT_EQ(moved.axis, FM_PIVOT_AXIS_ROW);
 
   // A field left out of an axis order sits on no axis.
-  const std::uint32_t only_extra[] = {static_cast<std::uint32_t>(extra_idx)};
-  ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb.handle, 0, pivot_idx, only_extra, 1U), 0);
+  const std::uint32_t only_extra[] = {static_cast<std::uint32_t>(extra_index)};
+  ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb.handle, 0, pivot_index, only_extra, 1U), 0);
   fm_pivot_field_info_t dropped{};
-  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_idx, 0, &dropped), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 0, &dropped), 0);
   EXPECT_EQ(dropped.axis, -1);
 }
 
@@ -154,10 +154,10 @@ TEST(FormulonCApiPivot, ReadBackSurvivesSaveAndReload) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
-  std::size_t pivot_idx = 0;
-  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_sheet_set_pivot_grand_totals(wb.handle, 0, pivot_idx, 1, 0), 0);
-  ASSERT_EQ(fm_sheet_set_pivot_field_item_visible(wb.handle, 0, pivot_idx, 0, 1, 0), 0);
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_pivot_grand_totals(wb.handle, 0, pivot_index, 1, 0), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_field_item_visible(wb.handle, 0, pivot_index, 0, 1, 0), 0);
 
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_get_last_error_message();
@@ -202,34 +202,34 @@ TEST(FormulonCApiPivot, ReadBackRejectsBadArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
-  std::size_t pivot_idx = 0;
-  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
   std::uint32_t out_cache = 7;
-  EXPECT_EQ(fm_sheet_get_pivot_cache_id(nullptr, 0, pivot_idx, &out_cache),
+  EXPECT_EQ(fm_sheet_get_pivot_cache_id(nullptr, 0, pivot_index, &out_cache),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_sheet_get_pivot_cache_id(wb.handle, 0, pivot_idx, nullptr),
+  EXPECT_EQ(fm_sheet_get_pivot_cache_id(wb.handle, 0, pivot_index, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_sheet_get_pivot_cache_id(wb.handle, 0, pivot_idx + 1U, &out_cache),
+  EXPECT_EQ(fm_sheet_get_pivot_cache_id(wb.handle, 0, pivot_index + 1U, &out_cache),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   EXPECT_EQ(out_cache, 7U);
 
   fm_pivot_field_info_t field{};
-  EXPECT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_idx, 99, &field),
+  EXPECT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 99, &field),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  EXPECT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_idx, 0, nullptr),
+  EXPECT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 0, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   fm_pivot_item_info_t item{};
-  EXPECT_EQ(fm_sheet_get_pivot_field_item(wb.handle, 0, pivot_idx, 0, 99, &item),
+  EXPECT_EQ(fm_sheet_get_pivot_field_item(wb.handle, 0, pivot_index, 0, 99, &item),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   fm_pivot_data_field_spec_t data_field{};
-  EXPECT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0, pivot_idx, 99, &data_field),
+  EXPECT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0, pivot_index, 99, &data_field),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   const std::uint32_t* order = nullptr;
   std::size_t count = 0;
-  EXPECT_EQ(fm_sheet_get_pivot_row_field_order(wb.handle, 0, pivot_idx, nullptr, &count),
+  EXPECT_EQ(fm_sheet_get_pivot_row_field_order(wb.handle, 0, pivot_index, nullptr, &count),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_sheet_get_pivot_col_field_order(wb.handle, 9, pivot_idx, &order, &count),
+  EXPECT_EQ(fm_sheet_get_pivot_column_field_order(wb.handle, 9, pivot_index, &order, &count),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
 }
 
@@ -247,8 +247,8 @@ TEST(FormulonCApiPivot, DerivedDataFieldNameUsesTheFieldDisplayNameAndSetPath) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_for_profile("win-365-en_US", &wb.handle), 0);
   std::uint32_t cache_id = 0;
-  std::size_t pivot_idx = 0;
-  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
   // A renamed source field is named by its caption.
   fm_pivot_field_spec_t caption{};
@@ -256,34 +256,34 @@ TEST(FormulonCApiPivot, DerivedDataFieldNameUsesTheFieldDisplayNameAndSetPath) {
   caption.custom_name = "Sales";
   caption.axis = FM_PIVOT_AXIS_VALUE;
   caption.subtotal_top = 1;
-  std::size_t caption_idx = 99;
-  ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot_idx, &caption, &caption_idx), 0);
+  std::size_t caption_index = 99;
+  ASSERT_EQ(fm_sheet_add_pivot_field(wb.handle, 0, pivot_index, &caption, &caption_index), 0);
 
   fm_pivot_data_field_spec_t spec{};
-  spec.field_index = static_cast<std::uint32_t>(caption_idx);
+  spec.field_index = static_cast<std::uint32_t>(caption_index);
   spec.aggregation = FM_PIVOT_AGG_MAX;
   spec.show_as_base_field = -1;
   spec.show_as_base_item = -1;
-  ASSERT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0, pivot_idx, 0, &spec), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0, pivot_index, 0, &spec), 0) << fm_get_last_error_message();
   fm_pivot_data_field_spec_t read{};
-  ASSERT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0, pivot_idx, 0, &read), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0, pivot_index, 0, &read), 0);
   EXPECT_STREQ(read.name, "Max of Sales");
 
   // A derived name needs a field to name it after.
   spec.field_index = 99;
-  EXPECT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0, pivot_idx, 0, &spec),
+  EXPECT_EQ(fm_sheet_set_pivot_data_field(wb.handle, 0, pivot_index, 0, &spec),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   std::size_t added = 0;
-  EXPECT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0, pivot_idx, &spec, &added),
+  EXPECT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0, pivot_index, &spec, &added),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  ASSERT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0, pivot_idx, 0, &read), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_data_field(wb.handle, 0, pivot_index, 0, &read), 0);
   EXPECT_STREQ(read.name, "Max of Sales");
 }
 
 namespace {
 
 // A cache [Region, Product, Sales, Qty] over three records, and a pivot on it with no fields yet.
-void BuildWideCachePivot(fm_workbook_t* wb, std::uint32_t* cache_id, std::size_t* pivot_idx) {
+void BuildWideCachePivot(fm_workbook_t* wb, std::uint32_t* cache_id, std::size_t* pivot_index) {
   ASSERT_EQ(fm_workbook_add_pivot_cache(wb, 0, cache_id), 0);
   ASSERT_EQ(fm_workbook_set_pivot_cache_worksheet_source(wb, *cache_id, 1, "A1:D4", "Sheet1", nullptr), 0);
   for (const char* name : {"Region", "Product", "Sales", "Qty"}) {
@@ -301,7 +301,7 @@ void BuildWideCachePivot(fm_workbook_t* wb, std::uint32_t* cache_id, std::size_t
       ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb, *cache_id, rec, col, row[col]), 0);
     }
   }
-  ASSERT_EQ(fm_sheet_add_pivot(wb, 0, "PT", *cache_id, 0, 6, pivot_idx), 0);
+  ASSERT_EQ(fm_sheet_add_pivot(wb, 0, "PT", *cache_id, 0, 6, pivot_index), 0);
 }
 
 fm_pivot_field_spec_t FieldSpec(const char* name, fm_pivot_axis_t axis) {
@@ -345,8 +345,8 @@ TEST(FormulonCApiPivot, FieldAddBindsToTheCacheColumnByName) {
   df.aggregation = FM_PIVOT_AGG_SUM;
   df.show_as_base_field = -1;
   df.show_as_base_item = -1;
-  std::size_t df_idx = 0;
-  ASSERT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0, pivot, &df, &df_idx), 0);
+  std::size_t df_index = 0;
+  ASSERT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0, pivot, &df, &df_index), 0);
   PivotCellsGuard projected;
   ASSERT_EQ(fm_sheet_get_pivot_layout(wb.handle, 0, pivot, &projected.handle), 0) << fm_get_last_error_message();
   double grand_total = 0.0;
@@ -530,8 +530,8 @@ TEST(FormulonCApiPivot, CreatedPivotCarriesTheDefaultTableStyle) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
-  std::size_t pivot_idx = 0;
-  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
   const fm_pivot_style_info_t style = ReadStyleInfo(wb.handle);
   EXPECT_EQ(style.present, 1);
@@ -555,10 +555,10 @@ TEST(FormulonCApiPivot, StyleInfoRoundTripsThroughSetSaveAndLoad) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
-  std::size_t pivot_idx = 0;
-  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
-  ASSERT_EQ(fm_sheet_set_pivot_style_info(wb.handle, 0, pivot_idx, "PivotStyleMedium9", 0, 1, 1, 1, 0), 0)
+  ASSERT_EQ(fm_sheet_set_pivot_style_info(wb.handle, 0, pivot_index, "PivotStyleMedium9", 0, 1, 1, 1, 0), 0)
       << fm_get_last_error_message();
   fm_pivot_style_info_t style = ReadStyleInfo(wb.handle);
   EXPECT_STREQ(style.name, "PivotStyleMedium9");
@@ -582,7 +582,7 @@ TEST(FormulonCApiPivot, StyleInfoRoundTripsThroughSetSaveAndLoad) {
   EXPECT_EQ(style.show_last_column, 0);
 
   // A NULL name keeps the element but drops the style name.
-  ASSERT_EQ(fm_sheet_set_pivot_style_info(wb.handle, 0, pivot_idx, nullptr, 1, 1, 0, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_style_info(wb.handle, 0, pivot_index, nullptr, 1, 1, 0, 0, 0), 0);
   style = ReadStyleInfo(wb.handle);
   EXPECT_EQ(style.present, 1);
   EXPECT_STREQ(style.name, "");
@@ -594,26 +594,26 @@ TEST(FormulonCApiPivot, StyleInfoRejectsBadArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
-  std::size_t pivot_idx = 0;
-  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
   fm_pivot_style_info_t style{};
-  EXPECT_EQ(fm_sheet_get_pivot_style_info(nullptr, 0, pivot_idx, &style),
+  EXPECT_EQ(fm_sheet_get_pivot_style_info(nullptr, 0, pivot_index, &style),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_sheet_get_pivot_style_info(wb.handle, 0, pivot_idx, nullptr),
+  EXPECT_EQ(fm_sheet_get_pivot_style_info(wb.handle, 0, pivot_index, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_sheet_get_pivot_style_info(wb.handle, 0, pivot_idx + 1U, &style),
+  EXPECT_EQ(fm_sheet_get_pivot_style_info(wb.handle, 0, pivot_index + 1U, &style),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  EXPECT_NE(fm_sheet_set_pivot_style_info(wb.handle, 0, pivot_idx + 1U, "X", 1, 1, 0, 0, 0), 0);
-  EXPECT_NE(fm_sheet_set_pivot_style_info(nullptr, 0, pivot_idx, "X", 1, 1, 0, 0, 0), 0);
+  EXPECT_NE(fm_sheet_set_pivot_style_info(wb.handle, 0, pivot_index + 1U, "X", 1, 1, 0, 0, 0), 0);
+  EXPECT_NE(fm_sheet_set_pivot_style_info(nullptr, 0, pivot_index, "X", 1, 1, 0, 0, 0), 0);
 }
 
 TEST(FormulonCApiPivot, LoadedStyleInfoKeepsSchemaOrderBetweenFormatsAndExtLst) {
   WorkbookGuard source;
   ASSERT_EQ(fm_workbook_create_default(&source.handle), 0);
   std::uint32_t cache_id = 0;
-  std::size_t pivot_idx = 0;
-  ASSERT_EQ(BuildScratchPivot(source.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(source.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
   WorkbookGuard loaded;
   LoadWithPivotTail(source.handle,
@@ -653,8 +653,8 @@ TEST(FormulonCApiPivot, LoadedPivotWithoutStyleInfoStaysWithoutIt) {
   WorkbookGuard source;
   ASSERT_EQ(fm_workbook_create_default(&source.handle), 0);
   std::uint32_t cache_id = 0;
-  std::size_t pivot_idx = 0;
-  ASSERT_EQ(BuildScratchPivot(source.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(source.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
 
   WorkbookGuard loaded;
   LoadWithPivotTail(source.handle, "", &loaded);
@@ -670,8 +670,8 @@ TEST(FormulonCApiPivot, SettingAWorksheetSourceDropsTheCapturedSourceKind) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
-  std::size_t pivot_idx = 0;
-  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
   formulon::pivot::PivotCache* cache = nullptr;
   for (const auto& candidate : wb.handle->workbook().mutable_pivot_caches()) {
     if (candidate->cache_id() == cache_id) {

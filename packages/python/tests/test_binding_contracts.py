@@ -1466,9 +1466,9 @@ class PackedIntegerGuardTests(unittest.TestCase):
     def test_shape_emu_offsets(self) -> None:
         with Workbook.create_default() as wb:
             for bad, exception in ((1.9, ValueError), ("5", TypeError), (2**63, ValueError)):
-                with self.subTest(from_col_off=bad):
+                with self.subTest(from_col_offset=bad):
                     with self.assertRaises(exception):
-                        wb.add_shape(0, anchor_kind=AnchorKind.TWO_CELL, to_row=5, to_col=4, from_col_off=bad)
+                        wb.add_shape(0, anchor_kind=AnchorKind.TWO_CELL, to_row=5, to_col=4, from_col_offset=bad)
             self.assertEqual(wb.list_shapes(0), [])
 
     def test_pivot_field_order_indices(self) -> None:

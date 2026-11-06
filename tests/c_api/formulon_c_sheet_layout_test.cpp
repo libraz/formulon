@@ -316,17 +316,17 @@ TEST(FormulonCApiSheetLayout, ColumnWidthAndOutline) {
   ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 12U, 12U, 0.0), 0);
 
   size_t count = 0;
-  ASSERT_EQ(fm_sheet_get_col_override_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 4U);
 
   fm_column_layout_t a{};
   fm_column_layout_t b{};
   fm_column_layout_t c{};
   fm_column_layout_t d{};
-  ASSERT_EQ(fm_sheet_get_col_override_at(wb.handle, 0, 0, &a), 0);
-  ASSERT_EQ(fm_sheet_get_col_override_at(wb.handle, 0, 1, &b), 0);
-  ASSERT_EQ(fm_sheet_get_col_override_at(wb.handle, 0, 2, &c), 0);
-  ASSERT_EQ(fm_sheet_get_col_override_at(wb.handle, 0, 3, &d), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_at(wb.handle, 0, 0, &a), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_at(wb.handle, 0, 1, &b), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_at(wb.handle, 0, 2, &c), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_at(wb.handle, 0, 3, &d), 0);
   EXPECT_EQ(a.first, 0U);
   EXPECT_EQ(a.last, 4U);
   EXPECT_DOUBLE_EQ(a.width, 18.5);
@@ -371,12 +371,12 @@ TEST(FormulonCApiSheetLayout, WidthOverlayPreservesAdjacentStylesAcrossSaveLoad)
   ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 0U, 1U, 12.5), 0);
 
   size_t count = 0;
-  ASSERT_EQ(fm_sheet_get_col_override_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 2U);
   fm_column_layout_t col0{};
   fm_column_layout_t col1{};
-  ASSERT_EQ(fm_sheet_get_col_override_at(wb.handle, 0, 0U, &col0), 0);
-  ASSERT_EQ(fm_sheet_get_col_override_at(wb.handle, 0, 1U, &col1), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_at(wb.handle, 0, 0U, &col0), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_at(wb.handle, 0, 1U, &col1), 0);
   EXPECT_EQ(col0.first, 0U);
   EXPECT_EQ(col0.last, 0U);
   EXPECT_DOUBLE_EQ(col0.width, 12.5);
@@ -394,8 +394,8 @@ TEST(FormulonCApiSheetLayout, WidthOverlayPreservesAdjacentStylesAcrossSaveLoad)
   // leave both width and style attributes on their intersections untouched.
   ASSERT_EQ(fm_sheet_set_column_hidden(wb.handle, 0, 0U, 1U, 1), 0);
   ASSERT_EQ(fm_sheet_set_column_outline(wb.handle, 0, 0U, 1U, 2U), 0);
-  ASSERT_EQ(fm_sheet_get_col_override_at(wb.handle, 0, 0U, &col0), 0);
-  ASSERT_EQ(fm_sheet_get_col_override_at(wb.handle, 0, 1U, &col1), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_at(wb.handle, 0, 0U, &col0), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_at(wb.handle, 0, 1U, &col1), 0);
   EXPECT_EQ(col0.hidden, 1);
   EXPECT_EQ(col1.hidden, 1);
   EXPECT_EQ(col0.outline_level, 2U);
@@ -409,8 +409,8 @@ TEST(FormulonCApiSheetLayout, WidthOverlayPreservesAdjacentStylesAcrossSaveLoad)
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
-  ASSERT_EQ(fm_sheet_get_col_override_at(reloaded.handle, 0, 0U, &col0), 0);
-  ASSERT_EQ(fm_sheet_get_col_override_at(reloaded.handle, 0, 1U, &col1), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_at(reloaded.handle, 0, 0U, &col0), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_at(reloaded.handle, 0, 1U, &col1), 0);
   EXPECT_EQ(col0.has_style, 1);
   EXPECT_EQ(col0.style_xf, 1U);
   EXPECT_EQ(col0.has_width, 1);
@@ -444,11 +444,11 @@ TEST(FormulonCApiSheetLayout, WidthOverlayDoesNotSmearAttributesIntoTargetGaps) 
   ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 0U, 3U, 9.0), 0);
 
   size_t count = 0;
-  ASSERT_EQ(fm_sheet_get_col_override_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 4U);
   for (size_t i = 0; i < count; ++i) {
     fm_column_layout_t column{};
-    ASSERT_EQ(fm_sheet_get_col_override_at(wb.handle, 0, i, &column), 0);
+    ASSERT_EQ(fm_sheet_get_column_override_at(wb.handle, 0, i, &column), 0);
     EXPECT_EQ(column.first, static_cast<std::uint32_t>(i));
     EXPECT_EQ(column.last, static_cast<std::uint32_t>(i));
     EXPECT_DOUBLE_EQ(column.width, 9.0);
@@ -485,7 +485,7 @@ TEST(FormulonCApiSheetLayout, GetterNormalizesLegacyNonZeroWidthPresence) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_load(source_bytes.value().data(), source_bytes.value().size(), &wb.handle), 0);
   fm_column_layout_t column{};
-  ASSERT_EQ(fm_sheet_get_col_override_at(wb.handle, 0, 0U, &column), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_at(wb.handle, 0, 0U, &column), 0);
   EXPECT_EQ(column.first, 4U);
   EXPECT_EQ(column.last, 4U);
   EXPECT_DOUBLE_EQ(column.width, 12.5);
@@ -721,10 +721,10 @@ TEST(FormulonCApiSheetLayout, RejectedColumnSpanLeavesTheLayoutUntouched) {
   EXPECT_EQ(fm_sheet_set_column_outline(wb.handle, 0, 5U, 3U, 7U), kInvalidArgument);
 
   size_t count = 0;
-  ASSERT_EQ(fm_sheet_get_col_override_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 1U) << "a refused span still created or split an entry";
   fm_column_layout_t only{};
-  ASSERT_EQ(fm_sheet_get_col_override_at(wb.handle, 0, 0U, &only), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_at(wb.handle, 0, 0U, &only), 0);
   EXPECT_EQ(only.first, 1U);
   EXPECT_EQ(only.last, 2U);
   EXPECT_DOUBLE_EQ(only.width, 14.0);
@@ -748,10 +748,10 @@ TEST(FormulonCApiSheetLayout, ColumnWidthRejectsNonFiniteOrNegativeWidth) {
   EXPECT_EQ(fm_sheet_set_column_width(wb.handle, 0, 1U, 2U, -1.0), kInvalidArgument);
 
   size_t count = 0;
-  ASSERT_EQ(fm_sheet_get_col_override_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 1U) << "a refused width still created or split an entry";
   fm_column_layout_t only{};
-  ASSERT_EQ(fm_sheet_get_col_override_at(wb.handle, 0, 0U, &only), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_at(wb.handle, 0, 0U, &only), 0);
   EXPECT_EQ(only.first, 1U);
   EXPECT_EQ(only.last, 2U);
   EXPECT_DOUBLE_EQ(only.width, 14.0);
@@ -799,10 +799,10 @@ TEST(FormulonCApiSheetLayout, ColumnSettersRejectSpanPastTheGrid) {
   EXPECT_EQ(fm_sheet_set_column_outline(wb.handle, 0, kLastColumn + 1U, kLastColumn + 5U, 2U), kInvalidArgument);
 
   size_t count = 0;
-  ASSERT_EQ(fm_sheet_get_col_override_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_count(wb.handle, 0, &count), 0);
   ASSERT_EQ(count, 1U) << "a refused span still created or split an entry";
   fm_column_layout_t only{};
-  ASSERT_EQ(fm_sheet_get_col_override_at(wb.handle, 0, 0U, &only), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_at(wb.handle, 0, 0U, &only), 0);
   EXPECT_EQ(only.first, 1U);
   EXPECT_EQ(only.last, 2U);
   EXPECT_DOUBLE_EQ(only.width, 14.0);
@@ -841,7 +841,7 @@ TEST(FormulonCApiSheetLayout, LastGridCoordinateIsStillAccepted) {
   ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, kLastRow, kLastRow, 2U), 0);
 
   fm_column_layout_t column{};
-  ASSERT_EQ(fm_sheet_get_col_override_at(wb.handle, 0, 0U, &column), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_at(wb.handle, 0, 0U, &column), 0);
   EXPECT_EQ(column.first, kLastColumn);
   EXPECT_EQ(column.last, kLastColumn);
   EXPECT_DOUBLE_EQ(column.width, 11.0);
@@ -977,10 +977,10 @@ namespace {
 
 std::vector<fm_column_layout_t> ReadColumns(const fm_workbook_t* wb) {
   size_t count = 0;
-  EXPECT_EQ(fm_sheet_get_col_override_count(wb, 0, &count), 0);
+  EXPECT_EQ(fm_sheet_get_column_override_count(wb, 0, &count), 0);
   std::vector<fm_column_layout_t> columns(count);
   for (size_t i = 0; i < count; ++i) {
-    EXPECT_EQ(fm_sheet_get_col_override_at(wb, 0, i, &columns[i]), 0);
+    EXPECT_EQ(fm_sheet_get_column_override_at(wb, 0, i, &columns[i]), 0);
   }
   return columns;
 }
@@ -1121,7 +1121,7 @@ TEST(FormulonCApiSheetLayout, ColumnAndRowStyleRejectInvalidXfWithoutMutation) {
 
   size_t column_count = 0;
   size_t row_count = 0;
-  ASSERT_EQ(fm_sheet_get_col_override_count(wb.handle, 0, &column_count), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_count(wb.handle, 0, &column_count), 0);
   ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &row_count), 0);
   EXPECT_EQ(column_count, 0U);
   EXPECT_EQ(row_count, 0U);

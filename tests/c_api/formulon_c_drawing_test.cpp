@@ -208,8 +208,8 @@ TEST(FormulonCApiDrawing, InsertListGetRemoveNextToChart) {
   opts.descr = "alt";
   opts.row = 3;
   opts.col = 2;
-  opts.row_off_emu = 1000;
-  opts.col_off_emu = 2000;
+  opts.row_offset_emu = 1000;
+  opts.col_offset_emu = 2000;
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_image(wb.handle, 0, png.data(), png.size(), &opts, &id), 0) << fm_get_last_error_message();
   EXPECT_EQ(id, 3U);
@@ -232,8 +232,8 @@ TEST(FormulonCApiDrawing, InsertListGetRemoveNextToChart) {
   EXPECT_EQ(pic.anchor_kind, FM_ANCHOR_KIND_ONE_CELL);
   EXPECT_EQ(pic.from_row, 3U);
   EXPECT_EQ(pic.from_col, 2U);
-  EXPECT_EQ(pic.from_row_off, 1000);
-  EXPECT_EQ(pic.from_col_off, 2000);
+  EXPECT_EQ(pic.from_row_offset, 1000);
+  EXPECT_EQ(pic.from_col_offset, 2000);
   EXPECT_EQ(pic.cx, 16 * 9525);
   EXPECT_EQ(pic.cy, 8 * 9525);
   EXPECT_EQ(pic.image_format, FM_IMAGE_FORMAT_PNG);
@@ -376,8 +376,8 @@ fm_drawing_anchor_t AnchorOf(const fm_drawing_object_t& obj) {
   anchor.edit_as = obj.edit_as;
   anchor.row = obj.from_row;
   anchor.col = obj.from_col;
-  anchor.row_off_emu = obj.from_row_off;
-  anchor.col_off_emu = obj.from_col_off;
+  anchor.row_offset_emu = obj.from_row_offset;
+  anchor.col_offset_emu = obj.from_col_offset;
   anchor.width_emu = obj.cx;
   anchor.height_emu = obj.cy;
   return anchor;
@@ -423,8 +423,8 @@ TEST(FormulonCApiDrawing, SetImageAnchorMovesAndResizesKeepingId) {
   anchor.edit_as = FM_ANCHOR_EDIT_AS_ONE_CELL;
   anchor.row = 5;
   anchor.col = 3;
-  anchor.row_off_emu = 1000;
-  anchor.col_off_emu = 2000;
+  anchor.row_offset_emu = 1000;
+  anchor.col_offset_emu = 2000;
   anchor.width_emu = 200000;
   anchor.height_emu = 0;  // keeps the current height
   ASSERT_EQ(fm_sheet_set_drawing_anchor(wb.handle, 0, id, &anchor), 0) << fm_get_last_error_message();
@@ -436,8 +436,8 @@ TEST(FormulonCApiDrawing, SetImageAnchorMovesAndResizesKeepingId) {
   EXPECT_EQ(obj.edit_as, FM_ANCHOR_EDIT_AS_ONE_CELL);
   EXPECT_EQ(obj.from_row, 5U);
   EXPECT_EQ(obj.from_col, 3U);
-  EXPECT_EQ(obj.from_row_off, 1000);
-  EXPECT_EQ(obj.from_col_off, 2000);
+  EXPECT_EQ(obj.from_row_offset, 1000);
+  EXPECT_EQ(obj.from_col_offset, 2000);
   EXPECT_EQ(obj.cx, 200000);
   EXPECT_EQ(obj.cy, 8 * 9525);
   EXPECT_STREQ(obj.name, "Logo");

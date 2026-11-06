@@ -56,14 +56,14 @@ class DrawingImageTests(unittest.TestCase):
         wb = Workbook.create_default()
         try:
             self.assertEqual(wb.list_drawing_objects(0), [])
-            oid = wb.add_image(0, png, name="logo", descr="a logo", row=2, col=1, row_off_emu=100)
+            oid = wb.add_image(0, png, name="logo", descr="a logo", row=2, col=1, row_offset_emu=100)
             objs = wb.list_drawing_objects(0)
             self.assertEqual(len(objs), 1)
             obj = objs[0]
             self.assertEqual(obj.object_id, oid)
             self.assertEqual(obj.kind, DrawingObjectKind.PICTURE)
             self.assertEqual(obj.anchor_kind, AnchorKind.ONE_CELL)
-            self.assertEqual((obj.from_row, obj.from_col, obj.from_row_off), (2, 1, 100))
+            self.assertEqual((obj.from_row, obj.from_col, obj.from_row_offset), (2, 1, 100))
             self.assertEqual((obj.cx, obj.cy), (4 * 9525, 3 * 9525))
             self.assertEqual((obj.name, obj.descr), ("logo", "a logo"))
             self.assertEqual(obj.image_format, ImageFormat.PNG)
@@ -124,14 +124,14 @@ class DrawingImageTests(unittest.TestCase):
                 edit_as=AnchorEditAs.ONE_CELL,
                 row=5,
                 col=3,
-                row_off_emu=1000,
-                col_off_emu=2000,
+                row_offset_emu=1000,
+                col_offset_emu=2000,
                 width_emu=200_000,
             )
             obj = wb.list_drawing_objects(0)[0]
             self.assertEqual((obj.object_id, obj.name), (oid, "logo"))
             self.assertEqual((obj.anchor_kind, obj.edit_as), (AnchorKind.TWO_CELL, AnchorEditAs.ONE_CELL))
-            self.assertEqual((obj.from_row, obj.from_col, obj.from_row_off, obj.from_col_off), (5, 3, 1000, 2000))
+            self.assertEqual((obj.from_row, obj.from_col, obj.from_row_offset, obj.from_col_offset), (5, 3, 1000, 2000))
             self.assertEqual((obj.cx, obj.cy), (200_000, 3 * 9525))
             with self.assertRaises(FormulonError):
                 wb.set_drawing_anchor(0, oid, anchor_kind=AnchorKind.ABSOLUTE)

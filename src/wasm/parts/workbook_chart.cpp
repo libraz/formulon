@@ -537,7 +537,7 @@ val chart_data_to_val(const fm_chart_data_t* data, fm_status_t& rc) {
       break;
     }
     val item = val::object();
-    put(item, "seriesIdx", val(u.series_idx));
+    put(item, "seriesIndex", val(u.series_index));
     put(item, "source", val(string_from_cstr(u.source)));
     put(item, "axisId", val(u.axis_id));
     push(unresolved, item);
@@ -951,7 +951,7 @@ JsStatus JsWorkbook::setChartDisplay(uint32_t sheet, uint32_t objectId, val patc
   return status_from_rc(fm_sheet_set_chart_display(handle_, sheet, objectId, &p));
 }
 
-JsStatus JsWorkbook::setChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIdx, val patch) {
+JsStatus JsWorkbook::setChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIndex, val patch) {
   if (handle_ == nullptr) {
     return invalid_handle_status();
   }
@@ -961,11 +961,11 @@ JsStatus JsWorkbook::setChartSeries(uint32_t sheet, uint32_t objectId, uint32_t 
   if (!read_patch_arg(reader, patch, &p, kSeriesWr, arena)) {
     return argument_error(reader);
   }
-  return status_from_rc(fm_sheet_set_chart_series(handle_, sheet, objectId, plot, seriesIdx, &p));
+  return status_from_rc(fm_sheet_set_chart_series(handle_, sheet, objectId, plot, seriesIndex, &p));
 }
 
-JsStatus JsWorkbook::setChartPoint(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIdx,
-                                   uint32_t pointIdx, val patch) {
+JsStatus JsWorkbook::setChartPoint(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIndex,
+                                   uint32_t pointIndex, val patch) {
   if (handle_ == nullptr) {
     return invalid_handle_status();
   }
@@ -976,7 +976,7 @@ JsStatus JsWorkbook::setChartPoint(uint32_t sheet, uint32_t objectId, uint32_t p
   if (!read_patch_arg(reader, patch, &p, kPointWr, arena)) {
     return argument_error(reader);
   }
-  return status_from_rc(fm_sheet_set_chart_point(handle_, sheet, objectId, plot, seriesIdx, pointIdx, &p));
+  return status_from_rc(fm_sheet_set_chart_point(handle_, sheet, objectId, plot, seriesIndex, pointIndex, &p));
 }
 
 JsStatus JsWorkbook::setChartPlot(uint32_t sheet, uint32_t objectId, uint32_t plot, val patch) {
@@ -1008,21 +1008,21 @@ JsStatus JsWorkbook::setChartFilter(uint32_t sheet, uint32_t objectId, val hidde
 
 val JsWorkbook::addChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, val patch) {
   if (handle_ == nullptr) {
-    return id_envelope(invalid_handle_status(), "seriesIdx", 0U);
+    return id_envelope(invalid_handle_status(), "index", 0U);
   }
   JsNarrowNumericReader reader("addChartSeries");
   Arena arena;
   fm_chart_series_patch_t p{};
   if (!read_patch_arg(reader, patch, &p, kSeriesWr, arena)) {
-    return id_envelope(argument_error(reader), "seriesIdx", 0U);
+    return id_envelope(argument_error(reader), "index", 0U);
   }
-  std::size_t series_idx = 0;
-  const fm_status_t rc = fm_sheet_add_chart_series(handle_, sheet, objectId, plot, &p, &series_idx);
-  return id_envelope(status_from_rc(rc), "seriesIdx", rc == 0 ? static_cast<uint32_t>(series_idx) : 0U);
+  std::size_t series_index = 0;
+  const fm_status_t rc = fm_sheet_add_chart_series(handle_, sheet, objectId, plot, &p, &series_index);
+  return id_envelope(status_from_rc(rc), "index", rc == 0 ? static_cast<uint32_t>(series_index) : 0U);
 }
 
-JsStatus JsWorkbook::removeChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIdx) {
-  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_chart_series(handle_, sheet, objectId, plot, seriesIdx)
+JsStatus JsWorkbook::removeChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIndex) {
+  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_chart_series(handle_, sheet, objectId, plot, seriesIndex)
                                            : kBindingInvalidHandle);
 }
 

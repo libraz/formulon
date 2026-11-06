@@ -41,7 +41,7 @@ collections:
   function: { key: natural, by: name, plural: function_names, ops: [function.canonicalize_name, function.get_count, function.get_name_at, function.localize_name, function_metadata.get] }
   locale_error_name: { key: natural, by: "error code", plural: locale_error_names, ops: [locale_error_name.get_at, locale_error_name.get_count, error_display_name.get] }
   row_break: { key: natural, by: row, plural: row_breaks, ops: [row_break.add, row_break.get_at, row_break.get_count, row_break.remove], no_getter: "the element is its row number; a lookup by key returns nothing more" }
-  col_break: { key: natural, by: col, plural: col_breaks, ops: [col_break.add, col_break.get_at, col_break.get_count, col_break.remove], no_getter: "the element is its column number; a lookup by key returns nothing more" }
+  column_break: { key: natural, by: col, plural: column_breaks, ops: [column_break.add, column_break.get_at, column_break.get_count, column_break.remove], no_getter: "the element is its column number; a lookup by key returns nothing more" }
   row_override: { key: natural, by: row, plural: row_overrides, ops: [row_override.get_at, row_override.get_count], no_getter: "read by row through the per-property row getters" }
   theme_script_font: { key: natural, by: script, plural: theme_script_fonts, ops: [theme_script_font.get, theme_script_font.get_at, theme_script_font.get_count, theme_script_font.set] }
   shape: { key: natural, by: object_id, plural: shapes, ops: [shape.add, shape.get, shape.get_at, shape.get_count, shape.remove, shape.update] }
@@ -51,7 +51,7 @@ collections:
   drawing_object: { key: natural, by: object_id, plural: drawing_objects, ops: [drawing_object.get, drawing_object.get_at, drawing_object.get_count] }
   passthrough: { key: natural, by: "part name", plural: passthroughs, ops: [passthrough.get, passthrough.get_at, passthrough.get_count] }
   cell: { key: natural, by: cell, ops: [cell.get_at, cell.get_count, value.get] }
-  col_override: { key: natural, by: col, plural: col_overrides, ops: [col_override.get_at, col_override.get_count], no_getter: "read by column through the per-property column getters" }
+  column_override: { key: natural, by: col, plural: column_overrides, ops: [column_override.get_at, column_override.get_count], no_getter: "read by column through the per-property column getters" }
   table_style: { key: natural, by: name, plural: table_styles, ops: [table_style.get, table_style.get_at, table_style.get_count, table_style.remove, table_style.set] }
   cell_style: { key: natural, by: name, plural: cell_styles, ops: [cell_style.get, cell_style.get_at, cell_style.get_count, cell_style.remove, cell_style.set] }
 entries:
@@ -1416,9 +1416,9 @@ entries:
   record.add_chart_series_result:
     kind: record
     role: result
-    js: AddChartSeriesResult
     surfaces: [wasm, native]
     was: { js: AddChartSeriesResult }
+    drop: { js: AddChartSeriesResult, closes: R8.js }
   record.add_num_fmt_result:
     kind: record
     role: result
@@ -1528,7 +1528,7 @@ entries:
     kind: record
     role: result
     js: CfCellResult
-    py: CfCellResult
+    py: CfCell
     surfaces: [wasm, native, py]
     was: { js: CfCellResult, py: CfCellResult }
   record.cf_icon_input:
@@ -1971,7 +1971,7 @@ entries:
     kind: record
     role: result
     js: PaginationResult
-    py: PaginationResult
+    py: Pagination
     surfaces: [wasm, native, py]
     was: { js: PaginationResult, py: PaginationResult }
   record.parallel_recalc_result:
@@ -2752,18 +2752,18 @@ entries:
     kind: op
     scope: sheet
     noun: cols
-    c: fm_sheet_insert_cols
-    js: insertCols
-    py: insert_cols
+    c: fm_sheet_insert_columns
+    js: insertColumns
+    py: insert_columns
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_insert_cols, js: insertCols, py: insert_cols }
   cols.delete:
     kind: op
     scope: sheet
     noun: cols
-    c: fm_sheet_delete_cols
-    js: deleteCols
-    py: delete_cols
+    c: fm_sheet_delete_columns
+    js: deleteColumns
+    py: delete_columns
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_delete_cols, js: deleteCols, py: delete_cols }
   number.set:
@@ -3923,16 +3923,16 @@ entries:
   pagination.get_col_break_count:
     kind: op
     scope: pagination
-    noun: col_break
-    c: fm_pagination_get_col_break_count
+    noun: column_break
+    c: fm_pagination_get_column_break_count
     surfaces: [c]
     was: { c: fm_pagination_vertical_break_count }
   pagination.get_col_break_at:
     kind: op
     scope: pagination
-    noun: col_break
+    noun: column_break
     qualifies: "result-handle view of the sheet column breaks"
-    c: fm_pagination_get_col_break_at
+    c: fm_pagination_get_column_break_at
     surfaces: [c]
     was: { c: fm_pagination_vertical_break_at }
   pagination.get_paper:
@@ -3996,8 +3996,8 @@ entries:
   pagination.is_col_break_manual:
     kind: op
     scope: pagination
-    noun: col_break_manual
-    c: fm_pagination_is_col_break_manual
+    noun: column_break_manual
+    c: fm_pagination_is_column_break_manual
     returns: bool
     surfaces: [c]
     was: { c: fm_pagination_vertical_break_is_manual }
@@ -4147,13 +4147,13 @@ entries:
     params: { manual: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_add_row_break, js: addSheetRowBreak, py: add_row_break }
-  col_break.add:
+  column_break.add:
     kind: op
     scope: sheet
-    noun: col_break
-    c: fm_sheet_add_col_break
-    js: addColBreak
-    py: add_col_break
+    noun: column_break
+    c: fm_sheet_add_column_break
+    js: addColumnBreak
+    py: add_column_break
     params: { manual: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_add_col_break, js: addSheetColBreak, py: add_col_break }
@@ -4166,13 +4166,13 @@ entries:
     py: remove_row_break
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_remove_row_break, js: removeSheetRowBreak, py: remove_row_break }
-  col_break.remove:
+  column_break.remove:
     kind: op
     scope: sheet
-    noun: col_break
-    c: fm_sheet_remove_col_break
-    js: removeColBreak
-    py: remove_col_break
+    noun: column_break
+    c: fm_sheet_remove_column_break
+    js: removeColumnBreak
+    py: remove_column_break
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_remove_col_break, js: removeSheetColBreak, py: remove_col_break }
   breaks.clear:
@@ -4198,18 +4198,18 @@ entries:
     c: fm_sheet_get_row_break_at
     surfaces: [c]
     was: { c: fm_sheet_row_break_at }
-  col_break.get_count:
+  column_break.get_count:
     kind: op
     scope: sheet
-    noun: col_break
-    c: fm_sheet_get_col_break_count
+    noun: column_break
+    c: fm_sheet_get_column_break_count
     surfaces: [c]
     was: { c: fm_sheet_col_break_count }
-  col_break.get_at:
+  column_break.get_at:
     kind: op
     scope: sheet
-    noun: col_break
-    c: fm_sheet_get_col_break_at
+    noun: column_break
+    c: fm_sheet_get_column_break_at
     surfaces: [c]
     was: { c: fm_sheet_col_break_at }
   page_setup.set:
@@ -5112,13 +5112,13 @@ entries:
     py: set_pivot_row_field_order
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_row_field_order, js: pivotSetRowFieldOrder, py: pivot_set_row_field_order }
-  pivot_col_field_order.set:
+  pivot_column_field_order.set:
     kind: op
     scope: sheet
-    noun: pivot_col_field_order
-    c: fm_sheet_set_pivot_col_field_order
-    js: setPivotColFieldOrder
-    py: set_pivot_col_field_order
+    noun: pivot_column_field_order
+    c: fm_sheet_set_pivot_column_field_order
+    js: setPivotColumnFieldOrder
+    py: set_pivot_column_field_order
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_set_col_field_order, js: pivotSetColFieldOrder, py: pivot_set_col_field_order }
   pivot_data_field.get_count:
@@ -5295,13 +5295,13 @@ entries:
     py: get_pivot_row_field_order
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_row_field_order, js: pivotRowFieldOrder, py: pivot_row_field_order }
-  pivot_col_field_order.get:
+  pivot_column_field_order.get:
     kind: op
     scope: sheet
-    noun: pivot_col_field_order
-    c: fm_sheet_get_pivot_col_field_order
-    js: getPivotColFieldOrder
-    py: get_pivot_col_field_order
+    noun: pivot_column_field_order
+    c: fm_sheet_get_pivot_column_field_order
+    js: getPivotColumnFieldOrder
+    py: get_pivot_column_field_order
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_col_field_order, js: pivotColFieldOrder, py: pivot_col_field_order }
   pivot_filter.get_count:
@@ -5482,18 +5482,18 @@ entries:
     c: fm_get_locale_error_name_at
     surfaces: [c]
     was: { c: fm_locale_error_name }
-  col_override.get_count:
+  column_override.get_count:
     kind: op
     scope: sheet
-    noun: col_override
-    c: fm_sheet_get_col_override_count
+    noun: column_override
+    c: fm_sheet_get_column_override_count
     surfaces: [c]
     was: { c: fm_sheet_get_column_count }
-  col_override.get_at:
+  column_override.get_at:
     kind: op
     scope: sheet
-    noun: col_override
-    c: fm_sheet_get_col_override_at
+    noun: column_override
+    c: fm_sheet_get_column_override_at
     surfaces: [c]
     was: { c: fm_sheet_get_column }
   row_override.get_count:
@@ -7270,11 +7270,11 @@ entries:
     surfaces: [wasm, native, py]
     was: { js: getConditionalFormats, py: get_conditional_formats }
     drop: { js: getConditionalFormats, py: get_conditional_formats, closes: R5.list }
-  col_breaks.list:
+  column_breaks.list:
     kind: list
-    from: [col_break.get_count, col_break.get_at]
-    js: listColBreaks
-    py: list_col_breaks
+    from: [column_break.get_count, column_break.get_at]
+    js: listColumnBreaks
+    py: list_column_breaks
     surfaces: [wasm, native, py]
     was: { js: getSheetColBreaks, py: get_col_breaks }
   drawing_objects.list:
@@ -7284,11 +7284,11 @@ entries:
     py: list_drawing_objects
     surfaces: [wasm, native, py]
     was: { js: listDrawingObjects, py: list_drawing_objects }
-  col_overrides.list:
+  column_overrides.list:
     kind: list
-    from: [col_override.get_count, col_override.get_at]
-    js: listColOverrides
-    py: list_col_overrides
+    from: [column_override.get_count, column_override.get_at]
+    js: listColumnOverrides
+    py: list_column_overrides
     surfaces: [wasm, native, py]
     was: { js: getSheetColumns, py: get_sheet_columns }
   comments.list:

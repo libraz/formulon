@@ -50,8 +50,8 @@ fm_status_t to_spec(const fm_slicer_t& slicer, const char* api, formulon::Slicer
   spec.style = slicer.style != nullptr ? slicer.style : "";
   spec.column_count = slicer.column_count;
   spec.row_height = slicer.row_height;
-  spec.from = formulon::AnchorPoint{slicer.from_row, slicer.from_col, slicer.from_row_off, slicer.from_col_off};
-  spec.to = formulon::AnchorPoint{slicer.to_row, slicer.to_col, slicer.to_row_off, slicer.to_col_off};
+  spec.from = formulon::AnchorPoint{slicer.from_row, slicer.from_col, slicer.from_row_offset, slicer.from_col_offset};
+  spec.to = formulon::AnchorPoint{slicer.to_row, slicer.to_col, slicer.to_row_offset, slicer.to_col_offset};
   spec.sort_order = static_cast<formulon::SlicerSortOrder>(slicer.sort_order);
   spec.cross_filter = static_cast<formulon::SlicerCrossFilter>(slicer.cross_filter);
   return 0;

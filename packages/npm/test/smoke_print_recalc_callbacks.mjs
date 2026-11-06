@@ -179,7 +179,7 @@ test('sheet layout getters preserve explicit width presence flags', async () => 
     assert.ok(wb.setColumnHidden(0, 1, 1, true).ok);
     assert.ok(wb.setRowHeight(0, 3, 3, 30).ok);
 
-    const columns = wb.listColOverrides(0);
+    const columns = wb.listColumnOverrides(0);
     assert.ok(columns.status.ok, `getSheetColumns: ${JSON.stringify(columns.status)}`);
     const widthZero = columns.columns.find((column) => column.first === 0 && column.last === 0);
     assert.ok(widthZero);

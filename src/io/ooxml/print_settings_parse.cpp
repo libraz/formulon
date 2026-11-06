@@ -91,7 +91,7 @@ void read_manual_breaks(const pugi::xml_node& breaks_node, std::vector<ManualBre
   // enumeration API documents ascending order. A file is under no such
   // obligation, and a third-party writer emitting `<brk>` in authoring
   // order rather than sheet order would leave a loaded workbook where
-  // `fm_sheet_remove_col_break` silently matches nothing and an upsert
+  // `fm_sheet_remove_column_break` silently matches nothing and an upsert
   // appends a duplicate index. Normalising here makes the invariant hold
   // for the load path too, at the cost of the document order of a list
   // whose order carries no meaning.

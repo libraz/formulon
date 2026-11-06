@@ -341,18 +341,18 @@ export function registerFilterValidationComments(Module, test) {
       );
       assert.equal(wb.listThreadedComments(0).comments.length, beforeComments);
 
-      for (const value of [Number.NaN, 1.5, Symbol('rowOffEmu')]) {
+      for (const value of [Number.NaN, 1.5, Symbol('rowOffsetEmu')]) {
         assert.throws(
-          () => wb.addImage(0, new Uint8Array([1, 2, 3]), { rowOffEmu: value }),
+          () => wb.addImage(0, new Uint8Array([1, 2, 3]), { rowOffsetEmu: value }),
           typeof value === 'symbol' ? TypeError : RangeError,
-          `rowOffEmu=${String(value)}`,
+          `rowOffsetEmu=${String(value)}`,
         );
         assert.equal(wb.listDrawingObjects(0).length, 0);
       }
 
       const boundary = wb.addImage(0, new Uint8Array([1, 2, 3]), {
-        rowOffEmu: -(2 ** 63),
-        colOffEmu: 2 ** 63 - 1024,
+        rowOffsetEmu: -(2 ** 63),
+        colOffsetEmu: 2 ** 63 - 1024,
       });
       assert.equal(boundary.status.ok, false);
       assert.equal(wb.listDrawingObjects(0).length, 0);

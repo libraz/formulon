@@ -102,7 +102,7 @@ function envelopeProbes(wb) {
     ['SheetProtectionResult', true, () => wb.getSheetProtection(99)],
     // A released handle is the only failure path of the workbook-level getter.
     ['WorkbookProtectionResult', false, () => wb.getWorkbookProtection()],
-    ['ColumnsResult', true, () => wb.listColOverrides(99)],
+    ['ColumnsResult', true, () => wb.listColumnOverrides(99)],
     ['RowsResult', true, () => wb.listRowOverrides(99)],
     ['OptionalResult', true, () => wb.getComment(99, 0, 0)],
     ['NumberResult', true, () => wb.getCellXfIndex(99, 0, 0)],
@@ -130,7 +130,7 @@ function envelopeProbes(wb) {
     ['StringResult', true, () => wb.getPageSetupXml(99)],
     ['SheetPrintAreaResult', true, () => wb.getPrintArea(99)],
     ['SheetPrintTitlesResult', true, () => wb.getPrintTitles(99)],
-    // `listRowBreaks` / `listColBreaks` answer an out-of-range
+    // `listRowBreaks` / `listColumnBreaks` answer an out-of-range
     // sheet with an empty list rather than an error, unlike every sibling
     // print getter, so no failure path is reachable from here.
     ['SheetPageBreaksResult', false, () => wb.listRowBreaks(99)],
@@ -166,7 +166,7 @@ function envelopeProbes(wb) {
     ['OptionalResult', true, () => wb.getChart(99, 1)],
     ['ChartDataResult', true, () => wb.getChartData(99, 1)],
     ['ObjectIdResult', true, () => wb.addChart(99, { kind: 0, source: 'A1:B2' })],
-    ['AddChartSeriesResult', true, () => wb.addChartSeries(99, 1, 0, { values: 'A1:A2' })],
+    ['IndexResult', true, () => wb.addChartSeries(99, 1, 0, { values: 'A1:A2' })],
     [
       'RangeStyleBasesResult',
       true,

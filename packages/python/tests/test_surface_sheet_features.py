@@ -66,7 +66,7 @@ class MatrixEditTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.set_number(0, 0, 0, 1.0)  # A1
             wb.set_number(0, 0, 1, 2.0)  # B1
-            wb.delete_cols(0, 0, 1)
+            wb.delete_columns(0, 0, 1)
             wb.recalc()
             # The old B1 collapses into A1.
             self.assertEqual(wb.get_value(0, 0, 0).to_python(), 2.0)
@@ -235,12 +235,12 @@ class SheetViewProtectionTests(unittest.TestCase):
     def test_column_row_overrides(self) -> None:
         with Workbook.create_default() as wb:
             wb.set_column_width(0, 0, 2, 18.5)
-            cols = wb.list_col_overrides(0)
+            cols = wb.list_column_overrides(0)
             explicit = next(c for c in cols if abs(c.width - 18.5) < 1e-9)
             self.assertTrue(explicit.has_width)
             self.assertFalse(explicit.has_style)
             wb.set_column_width(0, 4, 4, 0.0)
-            zero = next(c for c in wb.list_col_overrides(0) if c.first == 4 and c.last == 4)
+            zero = next(c for c in wb.list_column_overrides(0) if c.first == 4 and c.last == 4)
             self.assertEqual(zero.width, 0.0)
             self.assertTrue(zero.has_width)
             wb.set_row_height(0, 0, 0, 30.0)

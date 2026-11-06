@@ -237,7 +237,8 @@ void ReadFilterColumn(CheckedSpecReader& reader, const Napi::Object& spec, AutoF
   c.has_icon_id = reader.Bool(spec, "hasIconId", false) ? 1 : 0;
 }
 
-void ReadSortCondition(CheckedSpecReader& reader, const Napi::Object& spec, AutoFilterInput& in, fm_sort_condition_t& c) {
+void ReadSortCondition(CheckedSpecReader& reader, const Napi::Object& spec, AutoFilterInput& in,
+                       fm_sort_condition_t& c) {
   c = fm_sort_condition_t{};
   PullRange(reader, spec, "ref", &c.ref);
   c.descending = reader.Bool(spec, "descending", false) ? 1 : 0;
@@ -331,8 +332,8 @@ Napi::Value GetAutoFilterImpl(const Napi::CallbackInfo& info, const fm_workbook_
   const size_t idx = Workbook::ArgU32(info, 0);
   fm_auto_filter_t af{};
   int32_t present = 0;
-  const fm_status_t rc =
-      table ? fm_workbook_get_table_auto_filter(wb, idx, &af, &present) : fm_sheet_get_auto_filter(wb, idx, &af, &present);
+  const fm_status_t rc = table ? fm_workbook_get_table_auto_filter(wb, idx, &af, &present)
+                               : fm_sheet_get_auto_filter(wb, idx, &af, &present);
   const bool has = rc == 0 && present != 0;
   return MakeFieldResult(env, MakeStatus(env, rc), "autoFilter",
                          has ? static_cast<Napi::Value>(AutoFilterToJs(env, af)) : env.Null());
@@ -420,7 +421,7 @@ Napi::Value Workbook::SetAutoFilter(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::SetTableAutoFilter(const Napi::CallbackInfo& info) {
   return SetAutoFilterImpl(info, handle_, &fm_workbook_set_table_auto_filter,
-                           "setTableAutoFilter expects (tableIdx:number, autoFilter:object)");
+                           "setTableAutoFilter expects (tableIndex:number, autoFilter:object)");
 }
 
 Napi::Value Workbook::RemoveAutoFilter(const Napi::CallbackInfo& info) {

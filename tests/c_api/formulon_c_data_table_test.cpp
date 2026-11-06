@@ -244,8 +244,8 @@ TEST(FormulonCApiDataTable, StructuralEditsMoveOrRemoveTheTableWhole) {
   EXPECT_EQ(fm_sheet_delete_rows(wb.handle, 0, 3, 1), kPreconditionFailed);
   EXPECT_EQ(fm_sheet_delete_rows(wb.handle, 0, 2, 3), kPreconditionFailed);
   EXPECT_EQ(fm_sheet_insert_rows(wb.handle, 0, 4, 1), kPreconditionFailed);
-  EXPECT_EQ(fm_sheet_delete_cols(wb.handle, 0, 0, 1), kPreconditionFailed);
-  EXPECT_EQ(fm_sheet_insert_cols(wb.handle, 0, 1, 1), kPreconditionFailed);
+  EXPECT_EQ(fm_sheet_delete_columns(wb.handle, 0, 0, 1), kPreconditionFailed);
+  EXPECT_EQ(fm_sheet_insert_columns(wb.handle, 0, 1, 1), kPreconditionFailed);
   int32_t present = 0;
   fm_data_table_t info{};
   ASSERT_EQ(fm_sheet_get_data_table(wb.handle, 0, 2, 1, &present, &info), 0);

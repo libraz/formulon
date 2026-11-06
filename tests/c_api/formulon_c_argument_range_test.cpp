@@ -76,7 +76,7 @@ TEST(FormulonCApiArgumentRange, OutlineLevelAboveSevenIsRejected) {
   ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &rows), 0);
   EXPECT_EQ(rows, 0U);
   std::size_t columns = 99U;
-  ASSERT_EQ(fm_sheet_get_col_override_count(wb.handle, 0, &columns), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_count(wb.handle, 0, &columns), 0);
   EXPECT_EQ(columns, 0U);
 }
 
@@ -94,7 +94,7 @@ TEST(FormulonCApiArgumentRange, OutlineLevelSevenRoundTripsThroughBothFormats) {
     EXPECT_EQ(row.row, 3U) << format;
     EXPECT_EQ(row.outline_level, 7U) << format;
     fm_column_layout_t column{};
-    ASSERT_EQ(fm_sheet_get_col_override_at(reloaded.handle, 0, 0U, &column), 0) << format;
+    ASSERT_EQ(fm_sheet_get_column_override_at(reloaded.handle, 0, 0U, &column), 0) << format;
     EXPECT_EQ(column.first, 2U) << format;
     EXPECT_EQ(column.outline_level, 7U) << format;
   }

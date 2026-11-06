@@ -195,8 +195,8 @@ extern "C" fm_status_t fm_sheet_add_image(fm_workbook_t* wb, size_t sheet_index,
   model.edit_as = static_cast<formulon::EditAs>(opts->edit_as);
   model.row = opts->row;
   model.col = opts->col;
-  model.row_off = opts->row_off_emu;
-  model.col_off = opts->col_off_emu;
+  model.row_off = opts->row_offset_emu;
+  model.col_off = opts->col_offset_emu;
   model.width_emu = opts->width_emu;
   model.height_emu = opts->height_emu;
   auto id = formulon::insert_image(wb->workbook(), sheet_index, bytes, len, model);
@@ -233,8 +233,8 @@ extern "C" fm_status_t fm_sheet_set_drawing_anchor(fm_workbook_t* wb, size_t she
   model.edit_as = static_cast<formulon::EditAs>(anchor->edit_as);
   model.row = anchor->row;
   model.col = anchor->col;
-  model.row_off = anchor->row_off_emu;
-  model.col_off = anchor->col_off_emu;
+  model.row_off = anchor->row_offset_emu;
+  model.col_off = anchor->col_offset_emu;
   model.width_emu = anchor->width_emu;
   model.height_emu = anchor->height_emu;
   return finish_status(formulon::set_drawing_anchor(wb->workbook(), sheet_index, object_id, model));

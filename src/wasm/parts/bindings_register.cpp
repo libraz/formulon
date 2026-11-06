@@ -193,7 +193,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("addMerge", &JsWorkbook::addMerge)
       .function("addNumFmt", &JsWorkbook::addNumFmt)
       .function("addSheet", &JsWorkbook::addSheet)
-      .function("addColBreak", &JsWorkbook::addSheetColBreak)
+      .function("addColumnBreak", &JsWorkbook::addSheetColBreak)
       .function("addRowBreak", &JsWorkbook::addSheetRowBreak)
       .function("addValidation", &JsWorkbook::addValidation)
       .function("addCellXf", &JsWorkbook::addXf)
@@ -218,7 +218,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("listDefinedNames", &JsWorkbook::listDefinedNames)
       .function("getDefinedName", &JsWorkbook::getDefinedName)
       .function("removeDefinedName", &JsWorkbook::removeDefinedName)
-      .function("deleteCols", &JsWorkbook::deleteCols)
+      .function("deleteColumns", &JsWorkbook::deleteColumns)
       .function("deleteRows", &JsWorkbook::deleteRows)
       .function("getDependents", &JsWorkbook::dependents)
       .function("dispose", &JsWorkbook::dispose)
@@ -392,9 +392,9 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("listMerges", &JsWorkbook::getMerges)
       .function("getMergesInRange", &JsWorkbook::getMergesInRange)
       .function("getNumFmtString", &JsWorkbook::getNumFmt)
-      .function("listColOverrides", &JsWorkbook::getSheetColumns)
+      .function("listColumnOverrides", &JsWorkbook::getSheetColumns)
       .function("getAutoFilterXml", &JsWorkbook::getSheetAutoFilterXml)
-      .function("listColBreaks", &JsWorkbook::getSheetColBreaks)
+      .function("listColumnBreaks", &JsWorkbook::getSheetColBreaks)
       .function("getHeaderFooterXml", &JsWorkbook::getSheetHeaderFooterXml)
       .function("getPageMargins", &JsWorkbook::getSheetPageMargins)
       .function("getPageMarginsXml", &JsWorkbook::getSheetPageMarginsXml)
@@ -411,7 +411,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getValidationCount", &JsWorkbook::getValidationCount)
       .function("getValidation", &JsWorkbook::getValidation)
       .function("getValue", &JsWorkbook::getValue)
-      .function("insertCols", &JsWorkbook::insertCols)
+      .function("insertColumns", &JsWorkbook::insertColumns)
       .function("insertRows", &JsWorkbook::insertRows)
       .function("isValid", &JsWorkbook::isValid)
       .function("getLocaleFacts", &JsWorkbook::localeFacts)
@@ -478,22 +478,23 @@ EMSCRIPTEN_BINDINGS(formulon) {
       // and the field's own first and last date (NaN).
       .function(
           "setPivotFieldDateGroup",
-          emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx,
+          emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
                                            uint32_t periods, uint32_t calendar, uint32_t intervalDays, double start) {
-            return self.pivotFieldSetDateGroup(sheet, pivotIdx, fieldIdx, periods, calendar, intervalDays, start,
+            return self.pivotFieldSetDateGroup(sheet, pivotIndex, fieldIndex, periods, calendar, intervalDays, start,
+                                               std::numeric_limits<double>::quiet_NaN());
+          }))
+      .function(
+          "setPivotFieldDateGroup",
+          emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
+                                           uint32_t periods, uint32_t calendar, uint32_t intervalDays) {
+            return self.pivotFieldSetDateGroup(sheet, pivotIndex, fieldIndex, periods, calendar, intervalDays,
+                                               std::numeric_limits<double>::quiet_NaN(),
                                                std::numeric_limits<double>::quiet_NaN());
           }))
       .function("setPivotFieldDateGroup",
-                emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx,
-                                                 uint32_t periods, uint32_t calendar, uint32_t intervalDays) {
-                  return self.pivotFieldSetDateGroup(sheet, pivotIdx, fieldIdx, periods, calendar, intervalDays,
-                                                     std::numeric_limits<double>::quiet_NaN(),
-                                                     std::numeric_limits<double>::quiet_NaN());
-                }))
-      .function("setPivotFieldDateGroup",
-                emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx,
-                                                 uint32_t periods, uint32_t calendar) {
-                  return self.pivotFieldSetDateGroup(sheet, pivotIdx, fieldIdx, periods, calendar, 1U,
+                emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t pivotIndex,
+                                                 uint32_t fieldIndex, uint32_t periods, uint32_t calendar) {
+                  return self.pivotFieldSetDateGroup(sheet, pivotIndex, fieldIndex, periods, calendar, 1U,
                                                      std::numeric_limits<double>::quiet_NaN(),
                                                      std::numeric_limits<double>::quiet_NaN());
                 }))
@@ -526,15 +527,15 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("projectPivot", &JsWorkbook::pivotProject)
       .function("isPivotProjectionPending", &JsWorkbook::pivotProjectionPending)
       .function("getPivotDataFieldDefaultName",
-                emscripten::optional_override([](const JsWorkbook& self, uint32_t sheet, uint32_t pivotIdx,
-                                                 uint32_t fieldIdx, int32_t aggregation, uint32_t excludeDataField) {
-                  return self.pivotDataFieldDefaultName(sheet, pivotIdx, fieldIdx, aggregation, excludeDataField);
+                emscripten::optional_override([](const JsWorkbook& self, uint32_t sheet, uint32_t pivotIndex,
+                                                 uint32_t fieldIndex, int32_t aggregation, uint32_t excludeDataField) {
+                  return self.pivotDataFieldDefaultName(sheet, pivotIndex, fieldIndex, aggregation, excludeDataField);
                 }))
       // Without `excludeDataField`, no data field is left out of the numbering.
       .function("getPivotDataFieldDefaultName",
-                emscripten::optional_override([](const JsWorkbook& self, uint32_t sheet, uint32_t pivotIdx,
-                                                 uint32_t fieldIdx, int32_t aggregation) {
-                  return self.pivotDataFieldDefaultName(sheet, pivotIdx, fieldIdx, aggregation,
+                emscripten::optional_override([](const JsWorkbook& self, uint32_t sheet, uint32_t pivotIndex,
+                                                 uint32_t fieldIndex, int32_t aggregation) {
+                  return self.pivotDataFieldDefaultName(sheet, pivotIndex, fieldIndex, aggregation,
                                                         std::numeric_limits<std::size_t>::max());
                 }))
       .function("showPivotDetails", &JsWorkbook::pivotShowDetails)
@@ -546,7 +547,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getPivotLayout", &JsWorkbook::pivotLayout)
       .function("removePivot", &JsWorkbook::pivotRemove)
       .function("setPivotAnchor", &JsWorkbook::pivotSetAnchor)
-      .function("setPivotColFieldOrder", &JsWorkbook::pivotSetColFieldOrder)
+      .function("setPivotColumnFieldOrder", &JsWorkbook::pivotSetColFieldOrder)
       .function("setPivotGrandTotals", &JsWorkbook::pivotSetGrandTotals)
       .function("setPivotStyleInfo", &JsWorkbook::pivotSetStyleInfo)
       .function("getPivotReportLayout", &JsWorkbook::pivotGetLayout)
@@ -555,7 +556,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getPivotGrandTotals", &JsWorkbook::pivotGetGrandTotals)
       .function("getPivotStyleInfo", &JsWorkbook::pivotGetStyleInfo)
       .function("getPivotRowFieldOrder", &JsWorkbook::pivotRowFieldOrder)
-      .function("getPivotColFieldOrder", &JsWorkbook::pivotColFieldOrder)
+      .function("getPivotColumnFieldOrder", &JsWorkbook::pivotColFieldOrder)
       .function("setPivotReportLayout", &JsWorkbook::pivotSetLayout)
       .function("setPivotName", &JsWorkbook::pivotSetName)
       .function("setPivotRowFieldOrder", &JsWorkbook::pivotSetRowFieldOrder)
@@ -568,7 +569,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("removeMerge", &JsWorkbook::removeMerge)
       .function("removeMergeAt", &JsWorkbook::removeMergeAt)
       .function("removeSheet", &JsWorkbook::removeSheet)
-      .function("removeColBreak", &JsWorkbook::removeSheetColBreak)
+      .function("removeColumnBreak", &JsWorkbook::removeSheetColBreak)
       .function("removeRowBreak", &JsWorkbook::removeSheetRowBreak)
       .function("removeTable", &JsWorkbook::removeTable)
       .function("removeValidation", &JsWorkbook::removeValidationAt)

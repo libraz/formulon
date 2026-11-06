@@ -120,17 +120,17 @@ TEST(FormulonCApiStyles, SetThenSaveLoadPreservesXfIndex) {
 TEST(FormulonCApiStyles, AddCellXfDedupReturnsExistingIndex) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  std::size_t font_idx = 0;
-  std::size_t fill_idx = 0;
-  std::size_t border_idx = 0;
-  ASSERT_EQ(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), &font_idx), 0);
-  ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_idx), 0);
-  ASSERT_EQ(fm_workbook_add_border(wb.handle, record_arg(MakeThinBoxBorder()), &border_idx), 0);
+  std::size_t font_index = 0;
+  std::size_t fill_index = 0;
+  std::size_t border_index = 0;
+  ASSERT_EQ(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), &font_index), 0);
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_index), 0);
+  ASSERT_EQ(fm_workbook_add_border(wb.handle, record_arg(MakeThinBoxBorder()), &border_index), 0);
 
   fm_cell_xf_t xf{};
-  xf.font_index = static_cast<uint32_t>(font_idx);
-  xf.fill_index = static_cast<uint32_t>(fill_idx);
-  xf.border_index = static_cast<uint32_t>(border_idx);
+  xf.font_index = static_cast<uint32_t>(font_index);
+  xf.fill_index = static_cast<uint32_t>(fill_index);
+  xf.border_index = static_cast<uint32_t>(border_index);
   xf.num_fmt_id = 0;  // built-in General
   xf.horizontal_align = 1;
   xf.vertical_align = 2;
@@ -146,17 +146,17 @@ TEST(FormulonCApiStyles, AddCellXfDedupReturnsExistingIndex) {
 TEST(FormulonCApiStyles, AddCellXfDistinctReturnsNewIndex) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  std::size_t font_idx = 0;
-  std::size_t fill_idx = 0;
-  std::size_t border_idx = 0;
-  ASSERT_EQ(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), &font_idx), 0);
-  ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_idx), 0);
-  ASSERT_EQ(fm_workbook_add_border(wb.handle, record_arg(MakeThinBoxBorder()), &border_idx), 0);
+  std::size_t font_index = 0;
+  std::size_t fill_index = 0;
+  std::size_t border_index = 0;
+  ASSERT_EQ(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), &font_index), 0);
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_index), 0);
+  ASSERT_EQ(fm_workbook_add_border(wb.handle, record_arg(MakeThinBoxBorder()), &border_index), 0);
 
   fm_cell_xf_t xf{};
-  xf.font_index = static_cast<uint32_t>(font_idx);
-  xf.fill_index = static_cast<uint32_t>(fill_idx);
-  xf.border_index = static_cast<uint32_t>(border_idx);
+  xf.font_index = static_cast<uint32_t>(font_index);
+  xf.fill_index = static_cast<uint32_t>(fill_index);
+  xf.border_index = static_cast<uint32_t>(border_index);
   xf.num_fmt_id = 0;
   xf.horizontal_align = 1;
   xf.vertical_align = 2;
@@ -176,18 +176,18 @@ TEST(FormulonCApiStyles, AddCellXfDistinctReturnsNewIndex) {
 TEST(FormulonCApiStyles, AddCellXfGrowsTable) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  std::size_t font_idx = 0;
-  std::size_t fill_idx = 0;
-  std::size_t border_idx = 0;
-  ASSERT_EQ(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), &font_idx), 0);
-  ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_idx), 0);
-  ASSERT_EQ(fm_workbook_add_border(wb.handle, record_arg(MakeThinBoxBorder()), &border_idx), 0);
+  std::size_t font_index = 0;
+  std::size_t fill_index = 0;
+  std::size_t border_index = 0;
+  ASSERT_EQ(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), &font_index), 0);
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_index), 0);
+  ASSERT_EQ(fm_workbook_add_border(wb.handle, record_arg(MakeThinBoxBorder()), &border_index), 0);
   std::size_t before = 0;
   ASSERT_EQ(fm_workbook_get_cell_xf_count(wb.handle, &before), 0);
   fm_cell_xf_t xf{};
-  xf.font_index = static_cast<uint32_t>(font_idx);
-  xf.fill_index = static_cast<uint32_t>(fill_idx);
-  xf.border_index = static_cast<uint32_t>(border_idx);
+  xf.font_index = static_cast<uint32_t>(font_index);
+  xf.fill_index = static_cast<uint32_t>(fill_index);
+  xf.border_index = static_cast<uint32_t>(border_index);
   xf.num_fmt_id = 0;
   // Distinguish this record from the all-zero placeholder xf that
   // `ensure_default_cell_xf` seeds at index 0 so the caller's record is
@@ -208,24 +208,24 @@ TEST(FormulonCApiStyles, AddCellXfGrowsTable) {
 TEST(FormulonCApiStyles, AddCellXfOnFreshWorkbookKeepsZeroAsDefault) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  std::size_t font_idx = 0;
-  std::size_t fill_idx = 0;
-  std::size_t border_idx = 0;
-  ASSERT_EQ(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), &font_idx), 0);
-  ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_idx), 0);
-  ASSERT_EQ(fm_workbook_add_border(wb.handle, record_arg(MakeThinBoxBorder()), &border_idx), 0);
+  std::size_t font_index = 0;
+  std::size_t fill_index = 0;
+  std::size_t border_index = 0;
+  ASSERT_EQ(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), &font_index), 0);
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_index), 0);
+  ASSERT_EQ(fm_workbook_add_border(wb.handle, record_arg(MakeThinBoxBorder()), &border_index), 0);
 
   // A fresh workbook seeds Excel's reserved slots, so the caller's first
   // record lands after them: one default font, one empty border, and the
   // two fills (`none`, `gray125`) Excel always writes first.
-  EXPECT_EQ(font_idx, 1U);
-  EXPECT_EQ(fill_idx, 2U);
-  EXPECT_EQ(border_idx, 1U);
+  EXPECT_EQ(font_index, 1U);
+  EXPECT_EQ(fill_index, 2U);
+  EXPECT_EQ(border_index, 1U);
 
   fm_cell_xf_t xf{};
-  xf.font_index = static_cast<uint32_t>(font_idx);
-  xf.fill_index = static_cast<uint32_t>(fill_idx);
-  xf.border_index = static_cast<uint32_t>(border_idx);
+  xf.font_index = static_cast<uint32_t>(font_index);
+  xf.fill_index = static_cast<uint32_t>(fill_index);
+  xf.border_index = static_cast<uint32_t>(border_index);
   xf.num_fmt_id = 0;
   // Distinguish this record from the all-zero placeholder xf that
   // `ensure_default_cell_xf` seeds at index 0 so the caller's record is
@@ -234,9 +234,9 @@ TEST(FormulonCApiStyles, AddCellXfOnFreshWorkbookKeepsZeroAsDefault) {
   xf.wrap_text = 1;
   xf.has_wrap_text = 1;
 
-  std::size_t xf_idx = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_idx), 0);
-  EXPECT_NE(xf_idx, 0U);
+  std::size_t xf_index = 0;
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_index), 0);
+  EXPECT_NE(xf_index, 0U);
 
   fm_cell_xf_t default_xf{};
   ASSERT_EQ(fm_workbook_get_cell_xf(wb.handle, 0, &default_xf), 0);
@@ -263,17 +263,17 @@ TEST(FormulonCApiStyles, AddCellXfRejectsOutOfRangeIndex) {
 TEST(FormulonCApiStyles, AddCellXfRejectsUnknownNumFmt) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  std::size_t font_idx = 0;
-  std::size_t fill_idx = 0;
-  std::size_t border_idx = 0;
-  ASSERT_EQ(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), &font_idx), 0);
-  ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_idx), 0);
-  ASSERT_EQ(fm_workbook_add_border(wb.handle, record_arg(MakeThinBoxBorder()), &border_idx), 0);
+  std::size_t font_index = 0;
+  std::size_t fill_index = 0;
+  std::size_t border_index = 0;
+  ASSERT_EQ(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), &font_index), 0);
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_index), 0);
+  ASSERT_EQ(fm_workbook_add_border(wb.handle, record_arg(MakeThinBoxBorder()), &border_index), 0);
 
   fm_cell_xf_t xf{};
-  xf.font_index = static_cast<uint32_t>(font_idx);
-  xf.fill_index = static_cast<uint32_t>(fill_idx);
-  xf.border_index = static_cast<uint32_t>(border_idx);
+  xf.font_index = static_cast<uint32_t>(font_index);
+  xf.fill_index = static_cast<uint32_t>(fill_index);
+  xf.border_index = static_cast<uint32_t>(border_index);
   xf.num_fmt_id = 200;  // not a registered custom and not a documented built-in
   std::size_t idx = 0xFFFFFFFFU;
   EXPECT_NE(fm_workbook_add_cell_xf(wb.handle, &xf, &idx), 0);

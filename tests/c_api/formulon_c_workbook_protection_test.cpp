@@ -207,7 +207,7 @@ TEST(FormulonCApiProtectedRanges, SqrefFollowsRowAndColumnEdits) {
   const fm_protected_range_t r = Range("Inputs", kInputsRanges, 2);
   ASSERT_EQ(fm_sheet_add_protected_range(wb.handle, 0, &r, ignored_index()), 0);
   ASSERT_EQ(fm_sheet_insert_rows(wb.handle, 0, 0, 2), 0);
-  ASSERT_EQ(fm_sheet_insert_cols(wb.handle, 0, 0, 1), 0);
+  ASSERT_EQ(fm_sheet_insert_columns(wb.handle, 0, 0, 1), 0);
   fm_protected_range_t out{};
   ASSERT_EQ(fm_sheet_get_protected_range(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(RangesText(wb, out), "C4:D5 F7");

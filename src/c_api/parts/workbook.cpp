@@ -489,23 +489,23 @@ extern "C" fm_status_t fm_sheet_delete_rows(fm_workbook_t* wb, size_t sheet_inde
   return finish_status(wb->workbook().delete_rows(sheet_index, row, count));
 }
 
-extern "C" fm_status_t fm_sheet_insert_cols(fm_workbook_t* wb, size_t sheet_index, uint32_t col, uint32_t count) {
+extern "C" fm_status_t fm_sheet_insert_columns(fm_workbook_t* wb, size_t sheet_index, uint32_t col, uint32_t count) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_sheet_insert_cols");
+    return null_argument("fm_sheet_insert_columns");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_insert_cols"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_insert_columns"); rc != 0) {
     return rc;
   }
   return finish_status(wb->workbook().insert_cols(sheet_index, col, count));
 }
 
-extern "C" fm_status_t fm_sheet_delete_cols(fm_workbook_t* wb, size_t sheet_index, uint32_t col, uint32_t count) {
+extern "C" fm_status_t fm_sheet_delete_columns(fm_workbook_t* wb, size_t sheet_index, uint32_t col, uint32_t count) {
   clear_last_error();
   if (wb == nullptr) {
-    return null_argument("fm_sheet_delete_cols");
+    return null_argument("fm_sheet_delete_columns");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_delete_cols"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_delete_columns"); rc != 0) {
     return rc;
   }
   return finish_status(wb->workbook().delete_cols(sheet_index, col, count));

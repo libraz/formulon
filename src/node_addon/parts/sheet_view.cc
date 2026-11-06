@@ -375,8 +375,8 @@ Napi::Value Workbook::SetSheetViewMode(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::GetSheetColumns(const Napi::CallbackInfo& info) {
-  return SheetLayoutList(info, handle_, "columns", &fm_sheet_get_col_override_count, &fm_sheet_get_col_override_at,
-                         &ColumnLayoutToJs);
+  return SheetLayoutList(info, handle_, "columns", &fm_sheet_get_column_override_count,
+                         &fm_sheet_get_column_override_at, &ColumnLayoutToJs);
 }
 
 Napi::Value Workbook::SetColumnWidth(const Napi::CallbackInfo& info) {

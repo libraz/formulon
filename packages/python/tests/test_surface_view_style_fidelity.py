@@ -37,7 +37,7 @@ class OutlineTests(unittest.TestCase):
                 rows = {r.row: r for r in reloaded.list_row_overrides(0)}
                 self.assertTrue(rows[3].collapsed)
                 self.assertEqual(rows[1].outline_level, 2)
-                self.assertEqual(sum(1 for c in reloaded.list_col_overrides(0) if c.collapsed), 1)
+                self.assertEqual(sum(1 for c in reloaded.list_column_overrides(0) if c.collapsed), 1)
 
     def test_clearing_collapsed_drops_an_empty_override(self) -> None:
         with Workbook.create_default() as wb:
@@ -46,7 +46,7 @@ class OutlineTests(unittest.TestCase):
             wb.set_column_collapsed(0, 1, 2, True)
             wb.set_column_collapsed(0, 1, 2, False)
             self.assertEqual(wb.list_row_overrides(0), [])
-            self.assertEqual(wb.list_col_overrides(0), [])
+            self.assertEqual(wb.list_column_overrides(0), [])
 
     def test_bad_arguments_are_rejected(self) -> None:
         with Workbook.create_default() as wb:

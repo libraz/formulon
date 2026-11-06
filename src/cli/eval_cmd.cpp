@@ -157,8 +157,8 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
       // unconsumed argument; we leave the outer loop's own `++i` to
       // step past `--repeat` itself, which is why we pass `i + 1` and
       // copy the result back rather than &i directly.
-      std::size_t value_idx = i + 1;
-      const long n = parse_repeat(args, value_idx);
+      std::size_t value_index = i + 1;
+      const long n = parse_repeat(args, value_index);
       if (n < 0) {
         err << "formulon: eval: --repeat requires a positive integer\n";
         return kExitUsage;
@@ -166,7 +166,7 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
       repeat = n;
       // Skip the value: the outer `++i` handles `--repeat`, and we
       // bump `i` once more here for the value.
-      i = value_idx - 1;
+      i = value_index - 1;
       continue;
     }
     if (!accept_positional(a, options_ended, formula_seen, "eval", "formula", err)) {

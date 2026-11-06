@@ -191,8 +191,8 @@ extern "C" fm_status_t fm_sheet_get_sparkline_group(const fm_workbook_t* wb, siz
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_get_sparkline(const fm_workbook_t* wb, size_t sheet_index, size_t group_idx, size_t idx,
-                                              fm_sparkline_t* out) {
+extern "C" fm_status_t fm_sheet_get_sparkline(const fm_workbook_t* wb, size_t sheet_index, size_t group_index,
+                                              size_t idx, fm_sparkline_t* out) {
   clear_last_error();
   if (out == nullptr) {
     return set_binding_error(FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_sparkline: NULL out");
@@ -202,13 +202,13 @@ extern "C" fm_status_t fm_sheet_get_sparkline(const fm_workbook_t* wb, size_t sh
   }
   const std::vector<io::SparklineGroup> groups =
       io::read_sparkline_groups(wb->workbook().sheet(sheet_index).ext_lst_xml());
-  if (auto rc = check_index(group_idx, groups.size(), "fm_sheet_get_sparkline", "group_idx"); rc != 0) {
+  if (auto rc = check_index(group_index, groups.size(), "fm_sheet_get_sparkline", "group_index"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_index(idx, groups[group_idx].items.size(), "fm_sheet_get_sparkline", "idx"); rc != 0) {
+  if (auto rc = check_index(idx, groups[group_index].items.size(), "fm_sheet_get_sparkline", "idx"); rc != 0) {
     return rc;
   }
-  const io::SparklineItem& item = groups[group_idx].items[idx];
+  const io::SparklineItem& item = groups[group_index].items[idx];
   TextStore& store = fresh_read_scratch(wb);
   out->formula = store_cstr(store, item.formula);
   out->location = store_cstr(store, item.location);

@@ -42,12 +42,12 @@ emscripten::val shape_to_val(const fm_shape_t& s) {
   o.set("editAs", s.edit_as);
   o.set("fromRow", s.from_row);
   o.set("fromCol", s.from_col);
-  o.set("fromRowOff", static_cast<double>(s.from_row_off));
-  o.set("fromColOff", static_cast<double>(s.from_col_off));
+  o.set("fromRowOffset", static_cast<double>(s.from_row_offset));
+  o.set("fromColOffset", static_cast<double>(s.from_col_offset));
   o.set("toRow", s.to_row);
   o.set("toCol", s.to_col);
-  o.set("toRowOff", static_cast<double>(s.to_row_off));
-  o.set("toColOff", static_cast<double>(s.to_col_off));
+  o.set("toRowOffset", static_cast<double>(s.to_row_offset));
+  o.set("toColOffset", static_cast<double>(s.to_col_offset));
   o.set("cx", static_cast<double>(s.cx));
   o.set("cy", static_cast<double>(s.cy));
   js_set_cstr_fields(o, {{"name", s.name}, {"prst", s.prst}, {"text", s.text}});
@@ -93,12 +93,12 @@ fm_shape_t pull_shape(JsNarrowNumericReader& reader, const emscripten::val& spec
     s.edit_as = reader.i32(spec, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL, "shape.editAs");
     s.from_row = reader.u32(spec, "fromRow", 0U, "shape.fromRow");
     s.from_col = reader.u32(spec, "fromCol", 0U, "shape.fromCol");
-    s.from_row_off = reader.i64(spec, "fromRowOff", 0, "shape.fromRowOff");
-    s.from_col_off = reader.i64(spec, "fromColOff", 0, "shape.fromColOff");
+    s.from_row_offset = reader.i64(spec, "fromRowOffset", 0, "shape.fromRowOffset");
+    s.from_col_offset = reader.i64(spec, "fromColOffset", 0, "shape.fromColOffset");
     s.to_row = reader.u32(spec, "toRow", 0U, "shape.toRow");
     s.to_col = reader.u32(spec, "toCol", 0U, "shape.toCol");
-    s.to_row_off = reader.i64(spec, "toRowOff", 0, "shape.toRowOff");
-    s.to_col_off = reader.i64(spec, "toColOff", 0, "shape.toColOff");
+    s.to_row_offset = reader.i64(spec, "toRowOffset", 0, "shape.toRowOffset");
+    s.to_col_offset = reader.i64(spec, "toColOffset", 0, "shape.toColOffset");
     s.cx = reader.i64(spec, "cx", 0, "shape.cx");
     s.cy = reader.i64(spec, "cy", 0, "shape.cy");
   }

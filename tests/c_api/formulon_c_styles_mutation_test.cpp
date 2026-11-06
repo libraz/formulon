@@ -9,23 +9,23 @@ TEST(FormulonCApiStyles, FullLifecycleSurvivesSaveLoad) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  std::size_t font_idx = 0;
-  std::size_t fill_idx = 0;
-  std::size_t border_idx = 0;
-  ASSERT_EQ(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), &font_idx), 0);
-  ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_idx), 0);
-  ASSERT_EQ(fm_workbook_add_border(wb.handle, record_arg(MakeThinBoxBorder()), &border_idx), 0);
+  std::size_t font_index = 0;
+  std::size_t fill_index = 0;
+  std::size_t border_index = 0;
+  ASSERT_EQ(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), &font_index), 0);
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_index), 0);
+  ASSERT_EQ(fm_workbook_add_border(wb.handle, record_arg(MakeThinBoxBorder()), &border_index), 0);
 
   fm_cell_xf_t xf{};
-  xf.font_index = static_cast<uint32_t>(font_idx);
-  xf.fill_index = static_cast<uint32_t>(fill_idx);
-  xf.border_index = static_cast<uint32_t>(border_idx);
+  xf.font_index = static_cast<uint32_t>(font_index);
+  xf.fill_index = static_cast<uint32_t>(fill_index);
+  xf.border_index = static_cast<uint32_t>(border_index);
   xf.num_fmt_id = 0;
-  std::size_t xf_idx = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_idx), 0);
+  std::size_t xf_index = 0;
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_index), 0);
 
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 1.5), 0);
-  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, xf_idx), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, xf_index), 0);
 
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
@@ -49,30 +49,30 @@ TEST(FormulonCApiStyles, AddXfWithNonDefaultFontFillNumFmtRoundTripsThroughSaveL
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
-  std::size_t font_idx = 0xFFFFFFFFU;
-  std::size_t fill_idx = 0xFFFFFFFFU;
+  std::size_t font_index = 0xFFFFFFFFU;
+  std::size_t fill_index = 0xFFFFFFFFU;
   uint32_t num_fmt_id = 0;
-  ASSERT_EQ(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), &font_idx), 0);
-  ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_idx), 0);
+  ASSERT_EQ(fm_workbook_add_font(wb.handle, record_arg(MakeArial()), &font_index), 0);
+  ASSERT_EQ(fm_workbook_add_fill(wb.handle, record_arg(MakeRedFill()), &fill_index), 0);
   ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "0.00%", &num_fmt_id), 0);
 
   fm_cell_xf_t xf{};
-  xf.font_index = static_cast<uint32_t>(font_idx);
-  xf.fill_index = static_cast<uint32_t>(fill_idx);
+  xf.font_index = static_cast<uint32_t>(font_index);
+  xf.fill_index = static_cast<uint32_t>(fill_index);
   xf.border_index = 0;
   xf.num_fmt_id = static_cast<uint16_t>(num_fmt_id);
-  std::size_t xf_idx = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_idx), 0);
-  ASSERT_NE(xf_idx, 0U) << "non-default font/fill/numFmt must not dedup to the "
-                           "all-zero placeholder xf at index 0";
+  std::size_t xf_index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_index), 0);
+  ASSERT_NE(xf_index, 0U) << "non-default font/fill/numFmt must not dedup to the "
+                             "all-zero placeholder xf at index 0";
 
   // Stability: re-adding the identical record must return the same index.
   std::size_t xf_idx_again = 0xFFFFFFFFU;
   ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_idx_again), 0);
-  EXPECT_EQ(xf_idx, xf_idx_again);
+  EXPECT_EQ(xf_index, xf_idx_again);
 
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 1, 1, 0.4225), 0);
-  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1, 1, xf_idx), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1, 1, xf_index), 0);
 
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
@@ -83,12 +83,12 @@ TEST(FormulonCApiStyles, AddXfWithNonDefaultFontFillNumFmtRoundTripsThroughSaveL
 
   std::size_t reread_xf = 0;
   ASSERT_EQ(fm_sheet_get_cell_xf_index(wb2.handle, 0, 1, 1, &reread_xf), 0);
-  ASSERT_EQ(reread_xf, xf_idx);
+  ASSERT_EQ(reread_xf, xf_index);
 
   fm_cell_xf_t reloaded{};
   ASSERT_EQ(fm_workbook_get_cell_xf(wb2.handle, reread_xf, &reloaded), 0);
-  EXPECT_EQ(reloaded.font_index, font_idx);
-  EXPECT_EQ(reloaded.fill_index, fill_idx);
+  EXPECT_EQ(reloaded.font_index, font_index);
+  EXPECT_EQ(reloaded.fill_index, fill_index);
   EXPECT_EQ(reloaded.num_fmt_id, num_fmt_id);
 
   fm_font_record_t reloaded_font{};
@@ -119,25 +119,25 @@ TEST(FormulonCApiStyles, JustifyLastLineRoundTripsThroughSaveLoad) {
   xf.vertical_align = 2;  // bottom
   xf.justify_last_line = 1;
   xf.has_justify_last_line = 1;
-  std::size_t xf_idx = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_idx), 0);
+  std::size_t xf_index = 0;
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &xf_index), 0);
 
-  std::size_t duplicate_idx = 0;
-  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &duplicate_idx), 0);
-  EXPECT_EQ(duplicate_idx, xf_idx);
+  std::size_t duplicate_index = 0;
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &xf, &duplicate_index), 0);
+  EXPECT_EQ(duplicate_index, xf_index);
 
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "distributed"), 0);
-  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, xf_idx), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, xf_index), 0);
 
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
 
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
-  std::size_t reread_idx = 0;
-  ASSERT_EQ(fm_sheet_get_cell_xf_index(reloaded.handle, 0, 0, 0, &reread_idx), 0);
+  std::size_t reread_index = 0;
+  ASSERT_EQ(fm_sheet_get_cell_xf_index(reloaded.handle, 0, 0, 0, &reread_index), 0);
   fm_cell_xf_t reread{};
-  ASSERT_EQ(fm_workbook_get_cell_xf(reloaded.handle, reread_idx, &reread), 0);
+  ASSERT_EQ(fm_workbook_get_cell_xf(reloaded.handle, reread_index, &reread), 0);
   EXPECT_EQ(reread.horizontal_align, 7U);
   EXPECT_EQ(reread.justify_last_line, 1);
 }

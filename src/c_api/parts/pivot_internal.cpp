@@ -258,9 +258,9 @@ fm_status_t pivot_count(const fm_workbook_t* wb, std::size_t sheet_index, std::s
   return 0;
 }
 
-void grow_record_cells(formulon::pivot::PivotCacheRecord& rec, std::size_t field_idx) {
-  if (rec.cells.size() <= field_idx) {
-    rec.cells.resize(field_idx + 1U, formulon::Value::blank());
+void grow_record_cells(formulon::pivot::PivotCacheRecord& rec, std::size_t field_index) {
+  if (rec.cells.size() <= field_index) {
+    rec.cells.resize(field_index + 1U, formulon::Value::blank());
   }
 }
 

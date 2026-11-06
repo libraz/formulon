@@ -364,7 +364,7 @@ const PIVOT_MUTATORS = [
   [
     'setPivotGrandTotals',
     {
-      setup: (b) => b.wb.setPivotColFieldOrder(0, b.pivot, [b.product]),
+      setup: (b) => b.wb.setPivotColumnFieldOrder(0, b.pivot, [b.product]),
       // Rows off drops the per-row total column; columns on keeps the
       // bottom total row, so a swapped pair would show the opposite.
       act: (b) => b.wb.setPivotGrandTotals(0, b.pivot, false, true),
@@ -799,9 +799,9 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
-    'setPivotColFieldOrder',
+    'setPivotColumnFieldOrder',
     {
-      act: (b) => b.wb.setPivotColFieldOrder(0, b.pivot, [b.product]),
+      act: (b) => b.wb.setPivotColumnFieldOrder(0, b.pivot, [b.product]),
       expect: (b) =>
         assert.deepEqual(pivotGrid(b.wb), [
           'Sum of Amount|列ラベル||',
@@ -1275,7 +1275,7 @@ test('new pivot calls reject bad arguments and map the Values level', async () =
     assert.ok(wb.addPivotDataField(0, pivot, { name: 'Count of Date', fieldIndex: b.date, aggregation: 1 }).status.ok);
     assert.ok(wb.setPivotRowFieldOrder(0, pivot, [region, PIVOT_VALUES_FIELD, product]).ok);
     assert.deepEqual(wb.getPivotRowFieldOrder(0, pivot).indices, [region, PIVOT_VALUES_FIELD, product]);
-    assert.equal(wb.setPivotColFieldOrder(0, pivot, [-3]).ok, false);
+    assert.equal(wb.setPivotColumnFieldOrder(0, pivot, [-3]).ok, false);
   } finally {
     b.wb.delete();
   }

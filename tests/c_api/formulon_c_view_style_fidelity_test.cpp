@@ -99,11 +99,11 @@ TEST(FormulonCApiOutline, CollapsedIsReadBackAndRoundTrips) {
   EXPECT_EQ(RowOverride(reloaded, 2).collapsed, 0);
 
   size_t count = 0;
-  ASSERT_EQ(fm_sheet_get_col_override_count(reloaded.handle, 0, &count), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_count(reloaded.handle, 0, &count), 0);
   int collapsed_spans = 0;
   for (size_t i = 0; i < count; ++i) {
     fm_column_layout_t col{};
-    ASSERT_EQ(fm_sheet_get_col_override_at(reloaded.handle, 0, i, &col), 0);
+    ASSERT_EQ(fm_sheet_get_column_override_at(reloaded.handle, 0, i, &col), 0);
     collapsed_spans += col.collapsed != 0 ? 1 : 0;
   }
   EXPECT_EQ(collapsed_spans, 1);
@@ -120,7 +120,7 @@ TEST(FormulonCApiOutline, ClearingCollapsedRemovesAnOtherwiseEmptyOverride) {
   size_t rows = 0;
   size_t cols = 0;
   ASSERT_EQ(fm_sheet_get_row_override_count(wb.handle, 0, &rows), 0);
-  ASSERT_EQ(fm_sheet_get_col_override_count(wb.handle, 0, &cols), 0);
+  ASSERT_EQ(fm_sheet_get_column_override_count(wb.handle, 0, &cols), 0);
   EXPECT_EQ(rows, 0U);
   EXPECT_EQ(cols, 0U);
 }

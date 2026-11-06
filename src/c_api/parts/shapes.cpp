@@ -58,8 +58,8 @@ fm_status_t to_spec(const fm_shape_t& shape, const char* api, formulon::ShapeSpe
   }
   spec.anchor_kind = static_cast<AnchorKind>(shape.anchor_kind);
   spec.edit_as = static_cast<EditAs>(shape.edit_as);
-  spec.from = formulon::AnchorPoint{shape.from_row, shape.from_col, shape.from_row_off, shape.from_col_off};
-  spec.to = formulon::AnchorPoint{shape.to_row, shape.to_col, shape.to_row_off, shape.to_col_off};
+  spec.from = formulon::AnchorPoint{shape.from_row, shape.from_col, shape.from_row_offset, shape.from_col_offset};
+  spec.to = formulon::AnchorPoint{shape.to_row, shape.to_col, shape.to_row_offset, shape.to_col_offset};
   spec.cx = shape.cx;
   spec.cy = shape.cy;
   spec.fill = static_cast<formulon::ShapePaint>(shape.fill_kind);

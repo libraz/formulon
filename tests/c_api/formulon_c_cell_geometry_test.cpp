@@ -501,7 +501,7 @@ TEST(FormulonCApiPaginationDetail, PagesFollowPageOrderAndCoverEveryPage) {
   EXPECT_EQ(order, 1);
 
   const std::size_t page_count = count_of(fm_pagination_get_page_count, p.handle);
-  ASSERT_GT(count_of(fm_pagination_get_col_break_count, p.handle), 0U);
+  ASSERT_GT(count_of(fm_pagination_get_column_break_count, p.handle), 0U);
   ASSERT_GT(page_count, 2U);
   std::vector<fm_page_layout_t> pages(page_count);
   for (std::uint32_t i = 0; i < page_count; ++i) {
@@ -538,14 +538,14 @@ TEST(FormulonCApiPaginationDetail, ManualBreaksAreFlagged) {
   }
   EXPECT_EQ(manual_breaks, 1U);
 
-  const size_t v_count = count_of(fm_pagination_get_col_break_count, p.handle);
+  const size_t v_count = count_of(fm_pagination_get_column_break_count, p.handle);
   for (size_t i = 0; i < v_count; ++i) {
     int32_t manual = -1;
-    ASSERT_EQ(fm_pagination_is_col_break_manual(p.handle, i, &manual), 0);
+    ASSERT_EQ(fm_pagination_is_column_break_manual(p.handle, i, &manual), 0);
     EXPECT_EQ(manual, 0);
   }
   int32_t manual = 0;
   EXPECT_EQ(fm_pagination_is_row_break_manual(p.handle, h_count, &manual), kInvalidArgument);
-  EXPECT_EQ(fm_pagination_is_col_break_manual(p.handle, v_count, &manual), kInvalidArgument);
-  EXPECT_NE(fm_pagination_is_col_break_manual(nullptr, 0, &manual), 0);
+  EXPECT_EQ(fm_pagination_is_column_break_manual(p.handle, v_count, &manual), kInvalidArgument);
+  EXPECT_NE(fm_pagination_is_column_break_manual(nullptr, 0, &manual), 0);
 }

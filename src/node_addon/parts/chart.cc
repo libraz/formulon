@@ -418,7 +418,7 @@ Napi::Object ChartDataToJs(Napi::Env env, const fm_chart_data_t* data, fm_status
     fm_chart_unresolved_t u{};
     if (Step(rc, fm_chart_data_get_unresolved_at(data, i, &u))) {
       Napi::Object item = Napi::Object::New(env);
-      item.Set("seriesIdx", JsNumber(env, u.series_idx));
+      item.Set("seriesIndex", JsNumber(env, u.series_index));
       item.Set("source", JsString(env, u.source));
       item.Set("axisId", JsNumber(env, u.axis_id));
       unresolved.Set(static_cast<uint32_t>(i), item);
@@ -1003,7 +1003,7 @@ Napi::Value Workbook::SetChartFilter(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::AddChartSeries(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
-  out.Set("seriesIdx", JsNumber(env, 0));
+  out.Set("index", JsNumber(env, 0));
   if (handle_ == nullptr) {
     out.Set("status", NullHandleError(env));
     return out;
@@ -1019,10 +1019,10 @@ Napi::Value Workbook::AddChartSeries(const Napi::CallbackInfo& info) {
   if (!reader.ok()) {
     return env.Undefined();
   }
-  std::size_t series_idx = 0;
+  std::size_t series_index = 0;
   const fm_status_t rc =
-      fm_sheet_add_chart_series(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &patch, &series_idx);
-  out.Set("seriesIdx", JsNumber(env, rc == 0 ? static_cast<double>(series_idx) : 0));
+      fm_sheet_add_chart_series(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &patch, &series_index);
+  out.Set("index", JsNumber(env, rc == 0 ? static_cast<double>(series_index) : 0));
   out.Set("status", MakeStatus(env, rc));
   return out;
 }

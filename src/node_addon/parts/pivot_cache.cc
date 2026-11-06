@@ -19,8 +19,8 @@ namespace {
 
 struct CacheRecordArgs {
   uint32_t cache_id;
-  std::size_t record_idx;
-  std::size_t field_idx;
+  std::size_t record_index;
+  std::size_t field_index;
 };
 
 CacheRecordArgs ReadCacheRecord(const Napi::CallbackInfo& info) {
@@ -133,9 +133,9 @@ Napi::Value Workbook::PivotCacheFieldName(const Napi::CallbackInfo& info) {
     return MakeStringResult(env, kBindingInvalidHandle, nullptr);
   }
   const uint32_t cache_id = ArgU32(info, 0);
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_index = static_cast<std::size_t>(ArgU32(info, 1));
   const char* name = nullptr;
-  fm_status_t rc = fm_workbook_get_pivot_cache_field_name(handle_, cache_id, field_idx, &name);
+  fm_status_t rc = fm_workbook_get_pivot_cache_field_name(handle_, cache_id, field_index, &name);
   return MakeStringResult(env, rc, name);
 }
 
@@ -157,9 +157,9 @@ Napi::Value Workbook::PivotCacheFieldSharedItemCount(const Napi::CallbackInfo& i
     return MakeNumberResult(env, kBindingInvalidHandle, 0);
   }
   const uint32_t cache_id = ArgU32(info, 0);
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t field_index = static_cast<std::size_t>(ArgU32(info, 1));
   std::size_t count = 0;
-  const fm_status_t rc = fm_workbook_get_pivot_cache_field_shared_item_count(handle_, cache_id, field_idx, &count);
+  const fm_status_t rc = fm_workbook_get_pivot_cache_field_shared_item_count(handle_, cache_id, field_index, &count);
   return MakeNumberResult(env, rc, static_cast<double>(count));
 }
 
@@ -169,11 +169,11 @@ Napi::Value Workbook::PivotCacheFieldSharedItemValue(const Napi::CallbackInfo& i
     return MakeEmptyValueResult(env, NullHandleError(env));
   }
   const uint32_t cache_id = ArgU32(info, 0);
-  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const std::size_t item_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  const std::size_t field_index = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t item_index = static_cast<std::size_t>(ArgU32(info, 2));
   fm_value_t v{};
   const fm_status_t rc =
-      fm_workbook_get_pivot_cache_field_shared_item_value(handle_, cache_id, field_idx, item_idx, &v);
+      fm_workbook_get_pivot_cache_field_shared_item_value(handle_, cache_id, field_index, item_index, &v);
   return MakeValueResult(env, rc, v);
 }
 
@@ -198,17 +198,17 @@ Napi::Value Workbook::PivotCacheFieldSharedItemIsDate(const Napi::CallbackInfo& 
 Napi::Value Workbook::PivotCacheFieldAddSharedItemText(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const uint32_t cache_id = ArgU32(info, 0);
-    const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
+    const std::size_t field_index = static_cast<std::size_t>(ArgU32(info, 1));
     const std::string utf8 = ArgString(info, 2);
-    return fm_workbook_add_pivot_cache_field_shared_item_text(handle, cache_id, field_idx, utf8.c_str());
+    return fm_workbook_add_pivot_cache_field_shared_item_text(handle, cache_id, field_index, utf8.c_str());
   });
 }
 
 Napi::Value Workbook::PivotCacheFieldAddSharedItemBool(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const uint32_t cache_id = ArgU32(info, 0);
-    const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
-    return fm_workbook_add_pivot_cache_field_shared_item_bool(handle, cache_id, field_idx, ArgFlag(info, 2));
+    const std::size_t field_index = static_cast<std::size_t>(ArgU32(info, 1));
+    return fm_workbook_add_pivot_cache_field_shared_item_bool(handle, cache_id, field_index, ArgFlag(info, 2));
   });
 }
 
@@ -219,9 +219,9 @@ Napi::Value Workbook::PivotCacheFieldAddSharedItemBlank(const Napi::CallbackInfo
 Napi::Value Workbook::PivotCacheFieldAddSharedItemError(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const uint32_t cache_id = ArgU32(info, 0);
-    const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
+    const std::size_t field_index = static_cast<std::size_t>(ArgU32(info, 1));
     const fm_error_code_t error = static_cast<fm_error_code_t>(ArgI32(info, 2));
-    return fm_workbook_add_pivot_cache_field_shared_item_error(handle, cache_id, field_idx, error);
+    return fm_workbook_add_pivot_cache_field_shared_item_error(handle, cache_id, field_index, error);
   });
 }
 
@@ -255,7 +255,7 @@ Napi::Value Workbook::PivotCacheRecordSetText(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const CacheRecordArgs record = ReadCacheRecord(info);
     const std::string utf8 = ArgString(info, 3);
-    return fm_workbook_set_pivot_cache_record_text(handle, record.cache_id, record.record_idx, record.field_idx,
+    return fm_workbook_set_pivot_cache_record_text(handle, record.cache_id, record.record_index, record.field_index,
                                                    utf8.c_str());
   });
 }
@@ -263,7 +263,7 @@ Napi::Value Workbook::PivotCacheRecordSetText(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PivotCacheRecordSetBool(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const CacheRecordArgs record = ReadCacheRecord(info);
-    return fm_workbook_set_pivot_cache_record_bool(handle, record.cache_id, record.record_idx, record.field_idx,
+    return fm_workbook_set_pivot_cache_record_bool(handle, record.cache_id, record.record_index, record.field_index,
                                                    ArgFlag(info, 3));
   });
 }
@@ -276,7 +276,7 @@ Napi::Value Workbook::PivotCacheRecordSetError(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const CacheRecordArgs record = ReadCacheRecord(info);
     const int32_t error_code = ArgI32(info, 3);
-    return fm_workbook_set_pivot_cache_record_error(handle, record.cache_id, record.record_idx, record.field_idx,
+    return fm_workbook_set_pivot_cache_record_error(handle, record.cache_id, record.record_index, record.field_index,
                                                     static_cast<fm_error_code_t>(error_code));
   });
 }

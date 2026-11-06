@@ -78,7 +78,7 @@ export function registerDrawing(Module, test) {
       assert.equal(wb.listDrawingObjects(0).length, 0);
       assert.ok(wb.listDrawingObjects(0).status.ok);
 
-      const ins = wb.addImage(0, png, { name: 'Logo', descr: 'alt text', row: 2, col: 1, colOffEmu: 100 });
+      const ins = wb.addImage(0, png, { name: 'Logo', descr: 'alt text', row: 2, col: 1, colOffsetEmu: 100 });
       assert.ok(ins.status.ok, JSON.stringify(ins.status));
       assert.ok(ins.objectId > 0);
 
@@ -92,7 +92,7 @@ export function registerDrawing(Module, test) {
         assert.equal(o.anchorKind, AnchorKind.OneCell);
         assert.equal(o.fromRow, 2);
         assert.equal(o.fromCol, 1);
-        assert.equal(o.fromColOff, 100);
+        assert.equal(o.fromColOffset, 100);
         assert.equal(o.cx, 4 * EMU_PER_PX);
         assert.equal(o.cy, 3 * EMU_PER_PX);
         assert.equal(o.imageFormat, ImageFormat.Png);
@@ -167,8 +167,8 @@ export function registerDrawing(Module, test) {
         editAs: AnchorEditAs.OneCell,
         row: 5,
         col: 3,
-        rowOffEmu: 1000,
-        colOffEmu: 2000,
+        rowOffsetEmu: 1000,
+        colOffsetEmu: 2000,
         widthEmu: 200000,
       });
       assert.ok(moved.ok, JSON.stringify(moved));
@@ -179,8 +179,8 @@ export function registerDrawing(Module, test) {
       assert.equal(o.editAs, AnchorEditAs.OneCell);
       assert.equal(o.fromRow, 5);
       assert.equal(o.fromCol, 3);
-      assert.equal(o.fromRowOff, 1000);
-      assert.equal(o.fromColOff, 2000);
+      assert.equal(o.fromRowOffset, 1000);
+      assert.equal(o.fromColOffset, 2000);
       assert.equal(o.cx, 200000);
       assert.equal(o.cy, 3 * EMU_PER_PX);
       assert.equal(wb.setDrawingAnchor(0, ins.objectId, { anchorKind: AnchorKind.Absolute }).ok, false);

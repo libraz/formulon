@@ -55,12 +55,12 @@ fm_shape_t PullShape(CheckedSpecReader& reader, const Napi::Object& spec, ShapeT
     s.edit_as = reader.I32(spec, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL);
     s.from_row = reader.U32(spec, "fromRow", 0U);
     s.from_col = reader.U32(spec, "fromCol", 0U);
-    s.from_row_off = reader.I64(spec, "fromRowOff", 0);
-    s.from_col_off = reader.I64(spec, "fromColOff", 0);
+    s.from_row_offset = reader.I64(spec, "fromRowOffset", 0);
+    s.from_col_offset = reader.I64(spec, "fromColOffset", 0);
     s.to_row = reader.U32(spec, "toRow", 0U);
     s.to_col = reader.U32(spec, "toCol", 0U);
-    s.to_row_off = reader.I64(spec, "toRowOff", 0);
-    s.to_col_off = reader.I64(spec, "toColOff", 0);
+    s.to_row_offset = reader.I64(spec, "toRowOffset", 0);
+    s.to_col_offset = reader.I64(spec, "toColOffset", 0);
     s.cx = reader.I64(spec, "cx", 0);
     s.cy = reader.I64(spec, "cy", 0);
   }
@@ -151,12 +151,12 @@ Napi::Object ShapeToJs(Napi::Env env, const fm_shape_t& s) {
   item.Set("editAs", JsNumber(env, s.edit_as));
   item.Set("fromRow", JsNumber(env, s.from_row));
   item.Set("fromCol", JsNumber(env, s.from_col));
-  item.Set("fromRowOff", JsNumber(env, static_cast<double>(s.from_row_off)));
-  item.Set("fromColOff", JsNumber(env, static_cast<double>(s.from_col_off)));
+  item.Set("fromRowOffset", JsNumber(env, static_cast<double>(s.from_row_offset)));
+  item.Set("fromColOffset", JsNumber(env, static_cast<double>(s.from_col_offset)));
   item.Set("toRow", JsNumber(env, s.to_row));
   item.Set("toCol", JsNumber(env, s.to_col));
-  item.Set("toRowOff", JsNumber(env, static_cast<double>(s.to_row_off)));
-  item.Set("toColOff", JsNumber(env, static_cast<double>(s.to_col_off)));
+  item.Set("toRowOffset", JsNumber(env, static_cast<double>(s.to_row_offset)));
+  item.Set("toColOffset", JsNumber(env, static_cast<double>(s.to_col_offset)));
   item.Set("cx", JsNumber(env, static_cast<double>(s.cx)));
   item.Set("cy", JsNumber(env, static_cast<double>(s.cy)));
   item.Set("name", JsString(env, s.name));

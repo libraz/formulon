@@ -49,10 +49,10 @@ fm_status_t Remap(WorkbookGuard& wb, std::uint32_t r1, std::uint32_t c1, std::ui
 
 std::vector<fm_column_layout_t> Columns(const WorkbookGuard& wb) {
   size_t count = 0;
-  EXPECT_EQ(fm_sheet_get_col_override_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(fm_sheet_get_column_override_count(wb.handle, 0, &count), 0);
   std::vector<fm_column_layout_t> out(count);
   for (size_t i = 0; i < count; ++i) {
-    EXPECT_EQ(fm_sheet_get_col_override_at(wb.handle, 0, i, &out[i]), 0);
+    EXPECT_EQ(fm_sheet_get_column_override_at(wb.handle, 0, i, &out[i]), 0);
   }
   return out;
 }

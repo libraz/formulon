@@ -353,7 +353,7 @@ const PIVOT_MUTATORS = [
   [
     'setPivotGrandTotals',
     {
-      setup: (b) => b.wb.setPivotColFieldOrder(0, b.pivot, [b.product]),
+      setup: (b) => b.wb.setPivotColumnFieldOrder(0, b.pivot, [b.product]),
       // Rows off drops the per-row total column; columns on keeps the
       // bottom total row, so a swapped pair would show the opposite.
       act: (b) => b.wb.setPivotGrandTotals(0, b.pivot, false, true),
@@ -573,9 +573,9 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
-    'setPivotColFieldOrder',
+    'setPivotColumnFieldOrder',
     {
-      act: (b) => b.wb.setPivotColFieldOrder(0, b.pivot, [b.product]),
+      act: (b) => b.wb.setPivotColumnFieldOrder(0, b.pivot, [b.product]),
       expect: (b) =>
         assert.deepEqual(pivotGrid(b.wb), [
           'Sum of Amount|列ラベル||',

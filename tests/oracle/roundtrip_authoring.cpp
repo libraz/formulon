@@ -353,7 +353,7 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
       if (!entry.is_string() || !column_index(entry.as_string(), &col)) {
         return invalid("col_breaks entries are column letters");
       }
-      RETURN_IF_ERROR(checked(fm_sheet_add_col_break(wb, sheet, col, 1), "fm_sheet_add_col_break"));
+      RETURN_IF_ERROR(checked(fm_sheet_add_column_break(wb, sheet, col, 1), "fm_sheet_add_column_break"));
     }
   }
 

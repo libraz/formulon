@@ -37,7 +37,7 @@ test('collapsed reads back on rows and columns and survives save/load', async ()
   assert.deepEqual(collapsedRows(wb), [3]);
   const loaded = roundTrip(mod, wb);
   assert.deepEqual(collapsedRows(loaded), [3]);
-  assert.equal(loaded.listColOverrides(0).columns.filter((c) => c.collapsed).length, 1);
+  assert.equal(loaded.listColumnOverrides(0).columns.filter((c) => c.collapsed).length, 1);
   // Clearing the flag drops an override that carries nothing else.
   assert.ok(loaded.setRowCollapsed(0, 3, 3, false).ok);
   assert.deepEqual(collapsedRows(loaded), []);

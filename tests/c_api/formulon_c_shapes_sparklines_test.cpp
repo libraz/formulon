@@ -78,7 +78,7 @@ TEST(FormulonCApiShapes, InsertListUpdateRemoveAndReload) {
   connector.prst = "straightConnector1";
   connector.anchor_kind = FM_ANCHOR_KIND_ONE_CELL;
   connector.from_row = 10;
-  connector.from_col_off = 500;
+  connector.from_col_offset = 500;
   connector.cx = 914400;
   connector.cy = 0;
   connector.line_kind = FM_SHAPE_PAINT_SOLID;
@@ -109,7 +109,7 @@ TEST(FormulonCApiShapes, InsertListUpdateRemoveAndReload) {
   EXPECT_EQ(out.fields, 0U);
   ASSERT_EQ(fm_sheet_get_shape_at(again.handle, 0, 1, &out), 0);
   EXPECT_EQ(out.kind, FM_DRAWING_OBJECT_CONNECTOR);
-  EXPECT_EQ(out.from_col_off, 500);
+  EXPECT_EQ(out.from_col_offset, 500);
   EXPECT_EQ(out.cx, 914400);
   EXPECT_EQ(out.line_rgb, 0x00FF00U);
 

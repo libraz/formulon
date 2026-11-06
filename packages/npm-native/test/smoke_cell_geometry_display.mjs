@@ -85,14 +85,14 @@ test('clearColumnWidth follows later default changes and keeps hidden / outline 
   assert.ok(wb.clearColumnWidth(0, 0, 0).ok);
   assert.ok(wb.setFormatDefaults(0, { defaultColWidth: 20 }).ok);
   assert.equal(wb.getColumnWidthPt(0, 0, 0).value, wb.getColumnWidthPt(0, 1, 0).value);
-  assert.equal(wb.listColOverrides(0).columns.length, 0);
+  assert.equal(wb.listColumnOverrides(0).columns.length, 0);
 
   assert.ok(wb.setColumnWidth(0, 0, 4, 20).ok);
   assert.ok(wb.setColumnHidden(0, 2, 2, true).ok);
   assert.ok(wb.setColumnOutline(0, 2, 2, 3).ok);
   assert.ok(wb.clearColumnWidth(0, 1, 3).ok);
   assert.deepEqual(
-    wb.listColOverrides(0).columns.map((c) => [c.first, c.last, c.hasWidth, c.hidden, c.outlineLevel]),
+    wb.listColumnOverrides(0).columns.map((c) => [c.first, c.last, c.hasWidth, c.hidden, c.outlineLevel]),
     [
       [0, 0, 1, 0, 0],
       [2, 2, 0, 1, 3],

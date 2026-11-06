@@ -72,7 +72,7 @@ void BuildHostPivot(fm_workbook_t* wb) {
   const std::uint32_t rows[] = {0U};
   const std::uint32_t cols[] = {1U};
   ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb, 0, pivot, rows, 1U), 0);
-  ASSERT_EQ(fm_sheet_set_pivot_col_field_order(wb, 0, pivot, cols, 1U), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_column_field_order(wb, 0, pivot, cols, 1U), 0);
   const struct {
     const char* name;
     std::uint32_t field;

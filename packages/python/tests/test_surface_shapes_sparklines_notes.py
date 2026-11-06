@@ -52,7 +52,7 @@ class ShapeTests(unittest.TestCase):
                 0,
                 anchor_kind=AnchorKind.ONE_CELL,
                 from_row=10,
-                from_col_off=500,
+                from_col_offset=500,
                 cx=914400,
                 cy=0,
                 prst="line",
@@ -73,7 +73,7 @@ class ShapeTests(unittest.TestCase):
                 self.assertEqual((shapes[0].rotation, shapes[0].hidden, shapes[0].text_box), (900000, False, False))
                 self.assertEqual((shapes[0].from_row, shapes[0].to_row, shapes[0].to_col), (1, 5, 4))
                 self.assertEqual(shapes[1].kind, DrawingObjectKind.CONNECTOR)
-                self.assertEqual((shapes[1].from_col_off, shapes[1].cx, shapes[1].line_rgb), (500, 914400, 0x00FF00))
+                self.assertEqual((shapes[1].from_col_offset, shapes[1].cx, shapes[1].line_rgb), (500, 914400, 0x00FF00))
                 self.assertEqual(shapes[1].line_width_emu, 19050)
 
                 loaded.update_shape(0, rect, name="Renamed", hidden=True, fill_kind=ShapePaint.NONE)

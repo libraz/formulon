@@ -283,7 +283,7 @@ void erase_break(std::vector<ManualBreak>& breaks, std::uint32_t index) {
   }
 }
 
-/// Shared body of `fm_sheet_add_row_break` / `fm_sheet_add_col_break`.
+/// Shared body of `fm_sheet_add_row_break` / `fm_sheet_add_column_break`.
 fm_status_t add_break(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t index, bool manual, bool rows,
                       const char* fn) {
   if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
@@ -448,9 +448,9 @@ extern "C" fm_status_t fm_sheet_add_row_break(fm_workbook_t* wb, size_t sheet_in
   return add_break(wb, sheet_index, row, manual != 0, /*rows=*/true, "fm_sheet_add_row_break");
 }
 
-extern "C" fm_status_t fm_sheet_add_col_break(fm_workbook_t* wb, size_t sheet_index, uint32_t col, int32_t manual) {
+extern "C" fm_status_t fm_sheet_add_column_break(fm_workbook_t* wb, size_t sheet_index, uint32_t col, int32_t manual) {
   clear_last_error();
-  return add_break(wb, sheet_index, col, manual != 0, /*rows=*/false, "fm_sheet_add_col_break");
+  return add_break(wb, sheet_index, col, manual != 0, /*rows=*/false, "fm_sheet_add_column_break");
 }
 
 extern "C" fm_status_t fm_sheet_remove_row_break(fm_workbook_t* wb, size_t sheet_index, uint32_t row) {
@@ -462,9 +462,9 @@ extern "C" fm_status_t fm_sheet_remove_row_break(fm_workbook_t* wb, size_t sheet
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_remove_col_break(fm_workbook_t* wb, size_t sheet_index, uint32_t col) {
+extern "C" fm_status_t fm_sheet_remove_column_break(fm_workbook_t* wb, size_t sheet_index, uint32_t col) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_remove_col_break"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_remove_column_break"); rc != 0) {
     return rc;
   }
   erase_break(wb->workbook().sheet(sheet_index).mutable_print_settings().manual_col_breaks, col);
@@ -491,13 +491,13 @@ extern "C" fm_status_t fm_sheet_get_row_break_at(const fm_workbook_t* wb, size_t
   return break_at(wb, sheet_index, index, /*rows=*/true, "fm_sheet_get_row_break_at", out);
 }
 
-extern "C" fm_status_t fm_sheet_get_col_break_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
-  return break_count(wb, sheet_index, /*rows=*/false, "fm_sheet_get_col_break_count", out_count);
+extern "C" fm_status_t fm_sheet_get_column_break_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
+  return break_count(wb, sheet_index, /*rows=*/false, "fm_sheet_get_column_break_count", out_count);
 }
 
-extern "C" fm_status_t fm_sheet_get_col_break_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
-                                                 fm_page_break_t* out) {
-  return break_at(wb, sheet_index, index, /*rows=*/false, "fm_sheet_get_col_break_at", out);
+extern "C" fm_status_t fm_sheet_get_column_break_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
+                                                    fm_page_break_t* out) {
+  return break_at(wb, sheet_index, index, /*rows=*/false, "fm_sheet_get_column_break_at", out);
 }
 
 /* -------------------------------------------------------------------------- */

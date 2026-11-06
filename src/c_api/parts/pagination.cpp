@@ -124,19 +124,19 @@ extern "C" fm_status_t fm_pagination_get_row_break_at(const fm_pagination_t* pag
   return 0;
 }
 
-extern "C" fm_status_t fm_pagination_get_col_break_count(const fm_pagination_t* pagination, size_t* out_count) {
+extern "C" fm_status_t fm_pagination_get_column_break_count(const fm_pagination_t* pagination, size_t* out_count) {
   clear_last_error();
   if (pagination == nullptr || out_count == nullptr) {
-    return null_argument("fm_pagination_get_col_break_count");
+    return null_argument("fm_pagination_get_column_break_count");
   }
   *out_count = pagination->result.v_breaks.size();
   return 0;
 }
 
-extern "C" fm_status_t fm_pagination_get_col_break_at(const fm_pagination_t* pagination, size_t index,
-                                                      uint32_t* out_col) {
+extern "C" fm_status_t fm_pagination_get_column_break_at(const fm_pagination_t* pagination, size_t index,
+                                                         uint32_t* out_col) {
   uint32_t value = 0;
-  if (auto rc = break_entry(pagination, index, out_col, false, false, "fm_pagination_get_col_break_at", &value);
+  if (auto rc = break_entry(pagination, index, out_col, false, false, "fm_pagination_get_column_break_at", &value);
       rc != 0) {
     return rc;
   }
@@ -243,10 +243,10 @@ extern "C" fm_status_t fm_pagination_is_row_break_manual(const fm_pagination_t* 
   return 0;
 }
 
-extern "C" fm_status_t fm_pagination_is_col_break_manual(const fm_pagination_t* pagination, size_t index,
-                                                         int32_t* out_manual) {
+extern "C" fm_status_t fm_pagination_is_column_break_manual(const fm_pagination_t* pagination, size_t index,
+                                                            int32_t* out_manual) {
   uint32_t value = 0;
-  if (auto rc = break_entry(pagination, index, out_manual, false, true, "fm_pagination_is_col_break_manual", &value);
+  if (auto rc = break_entry(pagination, index, out_manual, false, true, "fm_pagination_is_column_break_manual", &value);
       rc != 0) {
     return rc;
   }

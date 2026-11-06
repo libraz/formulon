@@ -138,13 +138,13 @@ class PrintSettingsTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.add_row_break(0, 40)
             wb.add_row_break(0, 10)
-            wb.add_col_break(0, 5)
+            wb.add_column_break(0, 5)
             rows = wb.list_row_breaks(0)
             # Kept sorted by index regardless of insertion order.
             self.assertEqual([b.id for b in rows], [10, 40])
             self.assertEqual(rows[0].max, 16383)
             self.assertTrue(rows[0].manual)
-            self.assertEqual(wb.list_col_breaks(0)[0].max, 1048575)
+            self.assertEqual(wb.list_column_breaks(0)[0].max, 1048575)
 
             # Re-adding an existing index replaces rather than duplicates.
             wb.add_row_break(0, 10, manual=False)
@@ -156,7 +156,7 @@ class PrintSettingsTests(unittest.TestCase):
             wb.remove_row_break(0, 999)
             wb.clear_breaks(0)
             self.assertEqual(wb.list_row_breaks(0), [])
-            self.assertEqual(wb.list_col_breaks(0), [])
+            self.assertEqual(wb.list_column_breaks(0), [])
 
     def test_settings_reach_paginate_without_a_save_cycle(self) -> None:
         with Workbook.create_default() as wb:

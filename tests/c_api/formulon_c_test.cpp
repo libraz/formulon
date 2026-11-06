@@ -420,7 +420,7 @@ TEST(FormulonCApi, PaginationSnapshotExposesBreaksAndUsedRangeFallback) {
     EXPECT_LE(row, 199U);
     previous = row;
   }
-  EXPECT_EQ(count_of(fm_pagination_get_col_break_count, pagination), 0U);
+  EXPECT_EQ(count_of(fm_pagination_get_column_break_count, pagination), 0U);
   EXPECT_NE(fm_pagination_get_row_break_at(pagination, breaks, &row), 0);
   fm_pagination_destroy(pagination);
 

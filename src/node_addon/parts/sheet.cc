@@ -61,7 +61,8 @@ Napi::Value Workbook::CopySheet(const Napi::CallbackInfo& info) {
 // `src/node_addon/generated/workbook_counts.cc`).
 
 Napi::Value Workbook::ActiveSheet(const Napi::CallbackInfo& info) {
-  return IndexCall(info, [](fm_workbook_t* handle, std::size_t* out) { return fm_workbook_get_active_sheet(handle, out); });
+  return IndexCall(info,
+                   [](fm_workbook_t* handle, std::size_t* out) { return fm_workbook_get_active_sheet(handle, out); });
 }
 
 Napi::Value Workbook::SetActiveSheet(const Napi::CallbackInfo& info) {
@@ -90,11 +91,11 @@ Napi::Value Workbook::DeleteRows(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::InsertCols(const Napi::CallbackInfo& info) {
-  return InvokeRowColEdit(info, fm_sheet_insert_cols);
+  return InvokeRowColEdit(info, fm_sheet_insert_columns);
 }
 
 Napi::Value Workbook::DeleteCols(const Napi::CallbackInfo& info) {
-  return InvokeRowColEdit(info, fm_sheet_delete_cols);
+  return InvokeRowColEdit(info, fm_sheet_delete_columns);
 }
 
 // ---- Iteration / metadata accessors ---------------------------------

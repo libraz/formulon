@@ -48,12 +48,12 @@ emscripten::val drawing_object_to_val(const fm_drawing_object_t& d) {
   o.set("editAs", d.edit_as);
   o.set("fromRow", d.from_row);
   o.set("fromCol", d.from_col);
-  o.set("fromRowOff", static_cast<double>(d.from_row_off));
-  o.set("fromColOff", static_cast<double>(d.from_col_off));
+  o.set("fromRowOffset", static_cast<double>(d.from_row_offset));
+  o.set("fromColOffset", static_cast<double>(d.from_col_offset));
   o.set("toRow", d.to_row);
   o.set("toCol", d.to_col);
-  o.set("toRowOff", static_cast<double>(d.to_row_off));
-  o.set("toColOff", static_cast<double>(d.to_col_off));
+  o.set("toRowOffset", static_cast<double>(d.to_row_offset));
+  o.set("toColOffset", static_cast<double>(d.to_col_offset));
   o.set("cx", static_cast<double>(d.cx));
   o.set("cy", static_cast<double>(d.cy));
   o.set("imageFormat", d.image_format);
@@ -79,8 +79,8 @@ fm_drawing_anchor_t pull_drawing_anchor(JsNarrowNumericReader& reader, const ems
   anchor.edit_as = reader.i32(placement, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL, "placement.editAs");
   anchor.row = reader.u32(placement, "row", 0U, "placement.row");
   anchor.col = reader.u32(placement, "col", 0U, "placement.col");
-  anchor.row_off_emu = reader.i64(placement, "rowOffEmu", 0, "placement.rowOffEmu");
-  anchor.col_off_emu = reader.i64(placement, "colOffEmu", 0, "placement.colOffEmu");
+  anchor.row_offset_emu = reader.i64(placement, "rowOffsetEmu", 0, "placement.rowOffsetEmu");
+  anchor.col_offset_emu = reader.i64(placement, "colOffsetEmu", 0, "placement.colOffsetEmu");
   anchor.width_emu = reader.i64(placement, "widthEmu", 0, "placement.widthEmu");
   anchor.height_emu = reader.i64(placement, "heightEmu", 0, "placement.heightEmu");
   return anchor;
@@ -91,8 +91,8 @@ void set_insert_placement(fm_image_insert_t& ins, const fm_drawing_anchor_t& anc
   ins.edit_as = anchor.edit_as;
   ins.row = anchor.row;
   ins.col = anchor.col;
-  ins.row_off_emu = anchor.row_off_emu;
-  ins.col_off_emu = anchor.col_off_emu;
+  ins.row_offset_emu = anchor.row_offset_emu;
+  ins.col_offset_emu = anchor.col_offset_emu;
   ins.width_emu = anchor.width_emu;
   ins.height_emu = anchor.height_emu;
 }

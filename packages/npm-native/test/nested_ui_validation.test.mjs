@@ -114,13 +114,13 @@ test('threaded mention and image integer fields reject before C mutation', async
     );
     assert.equal(wb.listThreadedComments(0).comments.length, beforeComments);
 
-    assert.throws(() => wb.addImage(0, new Uint8Array([1, 2, 3]), { rowOffEmu: Number.NaN }), RangeError);
+    assert.throws(() => wb.addImage(0, new Uint8Array([1, 2, 3]), { rowOffsetEmu: Number.NaN }), RangeError);
     assert.equal(wb.listDrawingObjects(0).length, 0);
 
     assert.doesNotThrow(() =>
       wb.addImage(0, new Uint8Array([1, 2, 3]), {
-        rowOffEmu: -(2 ** 63),
-        colOffEmu: 2 ** 63 - 1024,
+        rowOffsetEmu: -(2 ** 63),
+        colOffsetEmu: 2 ** 63 - 1024,
       }),
     );
 

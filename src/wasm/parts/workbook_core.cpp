@@ -305,8 +305,9 @@ JsAddStyleResult JsWorkbook::addSheet(const std::string& name) {
                       out);
 }
 
-JsStatus JsWorkbook::moveSheet(uint32_t fromIdx, uint32_t toIdx) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_move_sheet(handle_, fromIdx, toIdx) : kBindingInvalidHandle);
+JsStatus JsWorkbook::moveSheet(uint32_t fromIndex, uint32_t toIndex) {
+  return status_from_rc(handle_ != nullptr ? fm_workbook_move_sheet(handle_, fromIndex, toIndex)
+                                           : kBindingInvalidHandle);
 }
 
 JsAddStyleResult JsWorkbook::copySheet(uint32_t sourceIndex, uint32_t insertBefore, emscripten::val newName) {
@@ -395,12 +396,12 @@ JsStatus JsWorkbook::deleteRows(uint32_t sheet, uint32_t row, uint32_t count) {
   return invoke_row_col_edit(fm_sheet_delete_rows, sheet, row, count);
 }
 
-JsStatus JsWorkbook::insertCols(uint32_t sheet, uint32_t col, uint32_t count) {
-  return invoke_row_col_edit(fm_sheet_insert_cols, sheet, col, count);
+JsStatus JsWorkbook::insertColumns(uint32_t sheet, uint32_t col, uint32_t count) {
+  return invoke_row_col_edit(fm_sheet_insert_columns, sheet, col, count);
 }
 
-JsStatus JsWorkbook::deleteCols(uint32_t sheet, uint32_t col, uint32_t count) {
-  return invoke_row_col_edit(fm_sheet_delete_cols, sheet, col, count);
+JsStatus JsWorkbook::deleteColumns(uint32_t sheet, uint32_t col, uint32_t count) {
+  return invoke_row_col_edit(fm_sheet_delete_columns, sheet, col, count);
 }
 
 // `JsWorkbook::sheetCount` is now emitted by the binding codegen (see

@@ -276,12 +276,12 @@ extern "C" fm_status_t fm_chart_get_info(const fm_chart_t* chart, fm_chart_info_
   out->edit_as = static_cast<std::int32_t>(m.edit_as);
   out->from_row = m.from.row;
   out->from_col = m.from.col;
-  out->from_row_off = m.from.row_off;
-  out->from_col_off = m.from.col_off;
+  out->from_row_offset = m.from.row_off;
+  out->from_col_offset = m.from.col_off;
   out->to_row = m.to.row;
   out->to_col = m.to.col;
-  out->to_row_off = m.to.row_off;
-  out->to_col_off = m.to.col_off;
+  out->to_row_offset = m.to.row_off;
+  out->to_col_offset = m.to.col_off;
   out->cx = m.cx;
   out->cy = m.cy;
   out->title = to_fm(m.title);

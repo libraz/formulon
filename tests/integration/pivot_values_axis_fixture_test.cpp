@@ -72,7 +72,7 @@ std::vector<std::uint32_t> ReadOrder(const fm_workbook_t* wb, bool row) {
   const std::uint32_t* indices = nullptr;
   std::size_t count = 0;
   const fm_status_t status = row ? fm_sheet_get_pivot_row_field_order(wb, 0U, 0U, &indices, &count)
-                                 : fm_sheet_get_pivot_col_field_order(wb, 0U, 0U, &indices, &count);
+                                 : fm_sheet_get_pivot_column_field_order(wb, 0U, 0U, &indices, &count);
   EXPECT_EQ(status, 0) << fm_get_last_error_message();
   if (status != 0 || count == 0U) {
     return {};
@@ -130,7 +130,7 @@ TEST_P(PivotValuesAxisFixture, MovingTheValuesFieldToTheColumnsGivesTheDefaultLa
   fm_pivot_cells_destroy(layout);
 
   std::vector<std::uint32_t> columns = {FM_PIVOT_VALUES_FIELD};
-  ASSERT_EQ(fm_sheet_set_pivot_col_field_order(wb_.handle, 0U, 0U, columns.data(), columns.size()), 0)
+  ASSERT_EQ(fm_sheet_set_pivot_column_field_order(wb_.handle, 0U, 0U, columns.data(), columns.size()), 0)
       << fm_get_last_error_message();
   std::vector<std::uint32_t> rows(GetParam().rows.begin(), GetParam().rows.end() - 1);
   ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb_.handle, 0U, 0U, rows.data(), rows.size()), 0)
@@ -156,7 +156,7 @@ TEST_P(PivotValuesAxisFixture, MovingTheValuesFieldToTheColumnsGivesTheDefaultLa
 
 TEST_P(PivotValuesAxisFixture, MovingItBackToTheRowsRestoresTheExcelPlacement) {
   std::vector<std::uint32_t> columns = {FM_PIVOT_VALUES_FIELD};
-  ASSERT_EQ(fm_sheet_set_pivot_col_field_order(wb_.handle, 0U, 0U, columns.data(), columns.size()), 0);
+  ASSERT_EQ(fm_sheet_set_pivot_column_field_order(wb_.handle, 0U, 0U, columns.data(), columns.size()), 0);
   std::vector<std::uint32_t> rows = GetParam().rows;
   ASSERT_EQ(fm_sheet_set_pivot_row_field_order(wb_.handle, 0U, 0U, rows.data(), rows.size()), 0)
       << fm_get_last_error_message();

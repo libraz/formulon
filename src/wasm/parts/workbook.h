@@ -66,7 +66,7 @@ class JsWorkbook {
   // ---- Sheet management ---------------------------------------------------
 
   JsAddStyleResult addSheet(const std::string& name);
-  JsStatus moveSheet(uint32_t fromIdx, uint32_t toIdx);
+  JsStatus moveSheet(uint32_t fromIndex, uint32_t toIndex);
   JsAddStyleResult copySheet(uint32_t sourceIndex, uint32_t insertBefore, emscripten::val newName);
   JsStatus removeSheet(uint32_t index);
   JsStatus renameSheet(uint32_t index, const std::string& newName);
@@ -79,8 +79,8 @@ class JsWorkbook {
 
   JsStatus insertRows(uint32_t sheet, uint32_t row, uint32_t count);
   JsStatus deleteRows(uint32_t sheet, uint32_t row, uint32_t count);
-  JsStatus insertCols(uint32_t sheet, uint32_t col, uint32_t count);
-  JsStatus deleteCols(uint32_t sheet, uint32_t col, uint32_t count);
+  JsStatus insertColumns(uint32_t sheet, uint32_t col, uint32_t count);
+  JsStatus deleteColumns(uint32_t sheet, uint32_t col, uint32_t count);
 
   JsNumberResult sheetCount() const;
   JsStringResult sheetName(uint32_t idx) const;
@@ -545,14 +545,15 @@ class JsWorkbook {
                           emscripten::val hiddenSeries);
   JsStatus setChartAxis(uint32_t sheet, uint32_t objectId, uint32_t axisId, emscripten::val patch);
   JsStatus setChartDisplay(uint32_t sheet, uint32_t objectId, emscripten::val patch);
-  JsStatus setChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIdx, emscripten::val patch);
-  JsStatus setChartPoint(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIdx, uint32_t pointIdx,
+  JsStatus setChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIndex,
+                          emscripten::val patch);
+  JsStatus setChartPoint(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIndex, uint32_t pointIndex,
                          emscripten::val patch);
   JsStatus setChartPlot(uint32_t sheet, uint32_t objectId, uint32_t plot, emscripten::val patch);
   JsStatus setChartFilter(uint32_t sheet, uint32_t objectId, emscripten::val hiddenSeries,
                           emscripten::val hiddenCategories);
   emscripten::val addChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, emscripten::val patch);
-  JsStatus removeChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIdx);
+  JsStatus removeChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIndex);
   JsStatus setChartSource(uint32_t sheet, uint32_t objectId, const std::string& source, int32_t direction,
                           emscripten::val headerRow, emscripten::val headerColumn);
 
@@ -600,122 +601,124 @@ class JsWorkbook {
   JsStatus pivotCacheSetWorksheetSource(uint32_t cacheId, emscripten::val source);
 
   JsNumberResult pivotCacheFieldCount(uint32_t cacheId) const;
-  JsStringResult pivotCacheFieldName(uint32_t cacheId, uint32_t fieldIdx) const;
+  JsStringResult pivotCacheFieldName(uint32_t cacheId, uint32_t fieldIndex) const;
   JsAddStyleResult pivotCacheFieldAdd(uint32_t cacheId, const std::string& name);
   JsStatus pivotCacheFieldClear(uint32_t cacheId);
 
-  JsNumberResult pivotCacheFieldSharedItemCount(uint32_t cacheId, uint32_t fieldIdx) const;
-  JsCellResult pivotCacheFieldSharedItemValue(uint32_t cacheId, uint32_t fieldIdx, uint32_t itemIdx) const;
-  JsStatus pivotCacheFieldAddSharedItemNumber(uint32_t cacheId, uint32_t fieldIdx, double value);
-  JsStatus pivotCacheFieldAddSharedItemDate(uint32_t cacheId, uint32_t fieldIdx, double serial);
-  emscripten::val pivotCacheFieldSharedItemIsDate(uint32_t cacheId, uint32_t fieldIdx, uint32_t itemIdx) const;
-  JsStatus pivotCacheFieldAddSharedItemText(uint32_t cacheId, uint32_t fieldIdx, const std::string& utf8);
-  JsStatus pivotCacheFieldAddSharedItemBool(uint32_t cacheId, uint32_t fieldIdx, bool value);
-  JsStatus pivotCacheFieldAddSharedItemBlank(uint32_t cacheId, uint32_t fieldIdx);
-  JsStatus pivotCacheFieldAddSharedItemError(uint32_t cacheId, uint32_t fieldIdx, int32_t errorCode);
-  JsStatus pivotCacheFieldClearSharedItems(uint32_t cacheId, uint32_t fieldIdx);
+  JsNumberResult pivotCacheFieldSharedItemCount(uint32_t cacheId, uint32_t fieldIndex) const;
+  JsCellResult pivotCacheFieldSharedItemValue(uint32_t cacheId, uint32_t fieldIndex, uint32_t itemIndex) const;
+  JsStatus pivotCacheFieldAddSharedItemNumber(uint32_t cacheId, uint32_t fieldIndex, double value);
+  JsStatus pivotCacheFieldAddSharedItemDate(uint32_t cacheId, uint32_t fieldIndex, double serial);
+  emscripten::val pivotCacheFieldSharedItemIsDate(uint32_t cacheId, uint32_t fieldIndex, uint32_t itemIndex) const;
+  JsStatus pivotCacheFieldAddSharedItemText(uint32_t cacheId, uint32_t fieldIndex, const std::string& utf8);
+  JsStatus pivotCacheFieldAddSharedItemBool(uint32_t cacheId, uint32_t fieldIndex, bool value);
+  JsStatus pivotCacheFieldAddSharedItemBlank(uint32_t cacheId, uint32_t fieldIndex);
+  JsStatus pivotCacheFieldAddSharedItemError(uint32_t cacheId, uint32_t fieldIndex, int32_t errorCode);
+  JsStatus pivotCacheFieldClearSharedItems(uint32_t cacheId, uint32_t fieldIndex);
 
   JsNumberResult pivotCacheRecordCount(uint32_t cacheId) const;
   JsAddStyleResult pivotCacheRecordAdd(uint32_t cacheId);
   JsStatus pivotCacheRecordClear(uint32_t cacheId);
-  JsStatus pivotCacheRecordSetNumber(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, double value);
-  JsStatus pivotCacheRecordSetDate(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, double serial);
-  JsStatus pivotCacheRecordSetText(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, const std::string& utf8);
-  JsStatus pivotCacheRecordSetBool(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, bool value);
-  JsStatus pivotCacheRecordSetBlank(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx);
-  JsStatus pivotCacheRecordSetError(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, int32_t errorCode);
+  JsStatus pivotCacheRecordSetNumber(uint32_t cacheId, uint32_t recordIndex, uint32_t fieldIndex, double value);
+  JsStatus pivotCacheRecordSetDate(uint32_t cacheId, uint32_t recordIndex, uint32_t fieldIndex, double serial);
+  JsStatus pivotCacheRecordSetText(uint32_t cacheId, uint32_t recordIndex, uint32_t fieldIndex,
+                                   const std::string& utf8);
+  JsStatus pivotCacheRecordSetBool(uint32_t cacheId, uint32_t recordIndex, uint32_t fieldIndex, bool value);
+  JsStatus pivotCacheRecordSetBlank(uint32_t cacheId, uint32_t recordIndex, uint32_t fieldIndex);
+  JsStatus pivotCacheRecordSetError(uint32_t cacheId, uint32_t recordIndex, uint32_t fieldIndex, int32_t errorCode);
 
   // ---- PivotTable mutation ------------------------------------------------
 
   JsAddStyleResult pivotCreate(uint32_t sheet, const std::string& name, uint32_t cacheId, uint32_t anchorRow,
                                uint32_t anchorCol);
-  JsStatus pivotRemove(uint32_t sheet, uint32_t pivotIdx);
-  JsStatus pivotSetName(uint32_t sheet, uint32_t pivotIdx, const std::string& name);
-  JsStatus pivotSetAnchor(uint32_t sheet, uint32_t pivotIdx, emscripten::val rect);
-  JsStatus pivotSetGrandTotals(uint32_t sheet, uint32_t pivotIdx, bool rowsEnabled, bool colsEnabled);
-  JsStatus pivotSetStyleInfo(uint32_t sheet, uint32_t pivotIdx, emscripten::val info);
-  JsNumberResult pivotGetLayout(uint32_t sheet, uint32_t pivotIdx) const;
-  JsStatus pivotSetLayout(uint32_t sheet, uint32_t pivotIdx, uint32_t layout);
+  JsStatus pivotRemove(uint32_t sheet, uint32_t pivotIndex);
+  JsStatus pivotSetName(uint32_t sheet, uint32_t pivotIndex, const std::string& name);
+  JsStatus pivotSetAnchor(uint32_t sheet, uint32_t pivotIndex, emscripten::val rect);
+  JsStatus pivotSetGrandTotals(uint32_t sheet, uint32_t pivotIndex, bool rowsEnabled, bool colsEnabled);
+  JsStatus pivotSetStyleInfo(uint32_t sheet, uint32_t pivotIndex, emscripten::val info);
+  JsNumberResult pivotGetLayout(uint32_t sheet, uint32_t pivotIndex) const;
+  JsStatus pivotSetLayout(uint32_t sheet, uint32_t pivotIndex, uint32_t layout);
   /// Definition read-back; works for pivots created in-session and loaded
   /// from a package alike. `pivotCacheId` returns `{ status, index: cacheId }`.
-  JsAddStyleResult pivotCacheId(uint32_t sheet, uint32_t pivotIdx) const;
-  JsStringResult pivotName(uint32_t sheet, uint32_t pivotIdx) const;
-  emscripten::val pivotGetGrandTotals(uint32_t sheet, uint32_t pivotIdx) const;
-  emscripten::val pivotGetStyleInfo(uint32_t sheet, uint32_t pivotIdx) const;
-  emscripten::val pivotRowFieldOrder(uint32_t sheet, uint32_t pivotIdx) const;
-  emscripten::val pivotColFieldOrder(uint32_t sheet, uint32_t pivotIdx) const;
+  JsAddStyleResult pivotCacheId(uint32_t sheet, uint32_t pivotIndex) const;
+  JsStringResult pivotName(uint32_t sheet, uint32_t pivotIndex) const;
+  emscripten::val pivotGetGrandTotals(uint32_t sheet, uint32_t pivotIndex) const;
+  emscripten::val pivotGetStyleInfo(uint32_t sheet, uint32_t pivotIndex) const;
+  emscripten::val pivotRowFieldOrder(uint32_t sheet, uint32_t pivotIndex) const;
+  emscripten::val pivotColFieldOrder(uint32_t sheet, uint32_t pivotIndex) const;
 
-  JsNumberResult pivotFieldCount(uint32_t sheet, uint32_t pivotIdx) const;
-  JsAddStyleResult pivotFieldAdd(uint32_t sheet, uint32_t pivotIdx, emscripten::val spec);
-  emscripten::val pivotFieldAt(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx) const;
-  JsNumberResult pivotFieldItemCount(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx) const;
-  emscripten::val pivotFieldItemAt(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t itemIdx) const;
-  JsStatus pivotFieldClear(uint32_t sheet, uint32_t pivotIdx);
-  JsStatus pivotFieldSetAxis(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, int32_t axis);
-  JsStatus pivotFieldSetSort(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t order,
+  JsNumberResult pivotFieldCount(uint32_t sheet, uint32_t pivotIndex) const;
+  JsAddStyleResult pivotFieldAdd(uint32_t sheet, uint32_t pivotIndex, emscripten::val spec);
+  emscripten::val pivotFieldAt(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) const;
+  JsNumberResult pivotFieldItemCount(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) const;
+  emscripten::val pivotFieldItemAt(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t itemIndex) const;
+  JsStatus pivotFieldClear(uint32_t sheet, uint32_t pivotIndex);
+  JsStatus pivotFieldSetAxis(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, int32_t axis);
+  JsStatus pivotFieldSetSort(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t order,
                              const std::string& byField);
-  JsStatus pivotFieldSetSubtotalTop(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool top);
-  JsStatus pivotFieldSetDefaultSubtotal(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool on);
-  JsStatus pivotFieldSetInsertBlankRow(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool on);
-  JsStatus pivotFieldSetFillDownLabels(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool on);
-  JsStatus pivotFieldSetShowDetail(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool on);
-  JsStatus pivotFieldSetItemShowDetail(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t itemIdx, bool on);
-  JsStatus pivotFieldSetItemCaption(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t itemIdx,
+  JsStatus pivotFieldSetSubtotalTop(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool top);
+  JsStatus pivotFieldSetDefaultSubtotal(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on);
+  JsStatus pivotFieldSetInsertBlankRow(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on);
+  JsStatus pivotFieldSetFillDownLabels(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on);
+  JsStatus pivotFieldSetShowDetail(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on);
+  JsStatus pivotFieldSetItemShowDetail(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t itemIndex,
+                                       bool on);
+  JsStatus pivotFieldSetItemCaption(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t itemIndex,
                                     const std::string& caption);
-  JsStatus pivotFieldSetCustomName(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, const std::string& name);
-  JsStatus pivotFieldSetShowAll(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool on);
-  emscripten::val pivotGetOptions(uint32_t sheet, uint32_t pivotIdx) const;
+  JsStatus pivotFieldSetCustomName(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, const std::string& name);
+  JsStatus pivotFieldSetShowAll(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, bool on);
+  emscripten::val pivotGetOptions(uint32_t sheet, uint32_t pivotIndex) const;
   /// Members the object omits keep the pivot's current value.
-  JsStatus pivotSetOptions(uint32_t sheet, uint32_t pivotIdx, emscripten::val options);
+  JsStatus pivotSetOptions(uint32_t sheet, uint32_t pivotIndex, emscripten::val options);
   emscripten::val pivotCacheGetOptions(uint32_t cacheId) const;
   JsStatus pivotCacheSetOptions(uint32_t cacheId, emscripten::val options);
   JsAddStyleResult pivotCacheCalculatedFieldAdd(uint32_t cacheId, const std::string& name, const std::string& formula);
-  JsStatus pivotCacheCalculatedFieldSetFormula(uint32_t cacheId, uint32_t fieldIdx, const std::string& formula);
-  JsStatus pivotCacheCalculatedFieldRemove(uint32_t cacheId, uint32_t fieldIdx);
-  JsStringResult pivotCacheFieldFormula(uint32_t cacheId, uint32_t fieldIdx) const;
-  JsAddStyleResult pivotCacheCalculatedItemAdd(uint32_t cacheId, uint32_t fieldIdx, const std::string& name,
+  JsStatus pivotCacheCalculatedFieldSetFormula(uint32_t cacheId, uint32_t fieldIndex, const std::string& formula);
+  JsStatus pivotCacheCalculatedFieldRemove(uint32_t cacheId, uint32_t fieldIndex);
+  JsStringResult pivotCacheFieldFormula(uint32_t cacheId, uint32_t fieldIndex) const;
+  JsAddStyleResult pivotCacheCalculatedItemAdd(uint32_t cacheId, uint32_t fieldIndex, const std::string& name,
                                                const std::string& formula);
   JsNumberResult pivotCacheCalculatedItemCount(uint32_t cacheId) const;
   emscripten::val pivotCacheCalculatedItemAt(uint32_t cacheId, uint32_t idx) const;
   JsStatus pivotCacheCalculatedItemSetFormula(uint32_t cacheId, uint32_t idx, const std::string& formula);
-  JsStatus pivotCacheCalculatedItemMove(uint32_t cacheId, uint32_t idx, uint32_t newIdx);
+  JsStatus pivotCacheCalculatedItemMove(uint32_t cacheId, uint32_t idx, uint32_t newIndex);
   JsStatus pivotCacheCalculatedItemRemove(uint32_t cacheId, uint32_t idx);
   /// `excludeDataField` is a data field index, or SIZE_MAX for none.
-  JsStringResult pivotDataFieldDefaultName(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, int32_t aggregation,
-                                           std::size_t excludeDataField) const;
-  JsStatus pivotProject(uint32_t sheet, uint32_t pivotIdx);
-  emscripten::val pivotProjectionPending(uint32_t sheet, uint32_t pivotIdx) const;
-  JsAddStyleResult pivotShowDetails(uint32_t sheet, uint32_t pivotIdx, uint32_t row, uint32_t col);
-  JsAddStyleResult pivotFieldAddItem(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, const std::string& name,
+  JsStringResult pivotDataFieldDefaultName(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
+                                           int32_t aggregation, std::size_t excludeDataField) const;
+  JsStatus pivotProject(uint32_t sheet, uint32_t pivotIndex);
+  emscripten::val pivotProjectionPending(uint32_t sheet, uint32_t pivotIndex) const;
+  JsAddStyleResult pivotShowDetails(uint32_t sheet, uint32_t pivotIndex, uint32_t row, uint32_t col);
+  JsAddStyleResult pivotFieldAddItem(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, const std::string& name,
                                      bool visible);
   /// Appends a manual-filter item addressed by its position in the bound
   /// cache field's shared items. The only form that can express the blank
   /// item, which has no label of its own and is matched by its binding.
-  JsAddStyleResult pivotFieldAddItemAt(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t cacheIndex,
+  JsAddStyleResult pivotFieldAddItemAt(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t cacheIndex,
                                        bool visible);
-  JsStatus pivotFieldClearItems(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx);
-  JsStatus pivotFieldSetItemVisible(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t itemIdx,
+  JsStatus pivotFieldClearItems(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex);
+  JsStatus pivotFieldSetItemVisible(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t itemIndex,
                                     bool visible);
-  JsStatus pivotFieldAddSubtotalFn(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t agg);
-  JsStatus pivotFieldClearSubtotalFns(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx);
+  JsStatus pivotFieldAddSubtotalFn(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t agg);
+  JsStatus pivotFieldClearSubtotalFns(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex);
   /// Groups a date field by the `PivotDatePeriod` bits of `periods`; NaN
   /// bounds take the field's own.
-  JsStatus pivotFieldSetDateGroup(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t periods,
+  JsStatus pivotFieldSetDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t periods,
                                   uint32_t calendar, uint32_t intervalDays, double start, double end);
-  JsStatus pivotFieldClearDateGroup(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx);
-  JsStatus pivotFieldSetNumberFormat(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, const std::string& utf8);
+  JsStatus pivotFieldClearDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex);
+  JsStatus pivotFieldSetNumberFormat(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, const std::string& utf8);
 
-  JsStatus pivotSetRowFieldOrder(uint32_t sheet, uint32_t pivotIdx, emscripten::val indices);
-  JsStatus pivotSetColFieldOrder(uint32_t sheet, uint32_t pivotIdx, emscripten::val indices);
+  JsStatus pivotSetRowFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices);
+  JsStatus pivotSetColFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices);
 
-  JsNumberResult pivotDataFieldCount(uint32_t sheet, uint32_t pivotIdx) const;
-  JsAddStyleResult pivotDataFieldAdd(uint32_t sheet, uint32_t pivotIdx, emscripten::val spec);
-  emscripten::val pivotDataFieldAt(uint32_t sheet, uint32_t pivotIdx, uint32_t dataFieldIdx) const;
-  JsStatus pivotDataFieldClear(uint32_t sheet, uint32_t pivotIdx);
-  JsStatus pivotDataFieldSet(uint32_t sheet, uint32_t pivotIdx, uint32_t dataFieldIdx, emscripten::val spec);
+  JsNumberResult pivotDataFieldCount(uint32_t sheet, uint32_t pivotIndex) const;
+  JsAddStyleResult pivotDataFieldAdd(uint32_t sheet, uint32_t pivotIndex, emscripten::val spec);
+  emscripten::val pivotDataFieldAt(uint32_t sheet, uint32_t pivotIndex, uint32_t dataFieldIndex) const;
+  JsStatus pivotDataFieldClear(uint32_t sheet, uint32_t pivotIndex);
+  JsStatus pivotDataFieldSet(uint32_t sheet, uint32_t pivotIndex, uint32_t dataFieldIndex, emscripten::val spec);
 
-  JsNumberResult pivotFilterCount(uint32_t sheet, uint32_t pivotIdx) const;
-  /// Reads the active filter at `filterIdx`.
+  JsNumberResult pivotFilterCount(uint32_t sheet, uint32_t pivotIndex) const;
+  /// Reads the active filter at `filterIndex`.
   ///
   /// The active-filter list is **session state**: an entry added through
   /// `pivotFilterAdd` affects evaluation only while this workbook handle
@@ -723,10 +726,10 @@ class JsWorkbook {
   /// Excel wrote is preserved verbatim on save but does not appear here, so
   /// `pivotFilterCount` reports only what this session added. The filter
   /// surface that does persist is pivot field item visibility.
-  emscripten::val pivotFilterAt(uint32_t sheet, uint32_t pivotIdx, uint32_t filterIdx) const;
-  JsAddStyleResult pivotFilterAdd(uint32_t sheet, uint32_t pivotIdx, emscripten::val spec);
-  JsStatus pivotFilterClear(uint32_t sheet, uint32_t pivotIdx);
-  JsStatus pivotFilterRemoveAt(uint32_t sheet, uint32_t pivotIdx, uint32_t filterIdx);
+  emscripten::val pivotFilterAt(uint32_t sheet, uint32_t pivotIndex, uint32_t filterIndex) const;
+  JsAddStyleResult pivotFilterAdd(uint32_t sheet, uint32_t pivotIndex, emscripten::val spec);
+  JsStatus pivotFilterClear(uint32_t sheet, uint32_t pivotIndex);
+  JsStatus pivotFilterRemoveAt(uint32_t sheet, uint32_t pivotIndex, uint32_t filterIndex);
 
  private:
   using RowColEditFn = fm_status_t (*)(fm_workbook_t*, std::size_t, uint32_t, uint32_t);

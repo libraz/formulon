@@ -73,15 +73,16 @@ removed fm_pagination_print_area_count :: renamed to fm_pagination_get_print_are
 removed fm_pagination_print_titles :: renamed to fm_pagination_get_print_titles
 removed fm_pagination_printable :: renamed to fm_pagination_get_printable
 removed fm_pagination_scale :: renamed to fm_pagination_get_scale
-removed fm_pagination_vertical_break_at :: renamed to fm_pagination_get_col_break_at
-removed fm_pagination_vertical_break_count :: renamed to fm_pagination_get_col_break_count
-removed fm_pagination_vertical_break_is_manual :: renamed to fm_pagination_is_col_break_manual
+removed fm_pagination_vertical_break_at :: renamed to fm_pagination_get_column_break_at
+removed fm_pagination_vertical_break_count :: renamed to fm_pagination_get_column_break_count
+removed fm_pagination_vertical_break_is_manual :: renamed to fm_pagination_is_column_break_manual
 removed fm_pivot_cells_at :: renamed to fm_pivot_cells_get_cell_at
 removed fm_pivot_cells_bounds :: renamed to fm_pivot_cells_get_bounds
 removed fm_pivot_cells_count :: renamed to fm_pivot_cells_get_cell_count
 signature fm_sheet_add_hyperlink :: parameter type renamed (fm_hyperlink -> fm_hyperlink_t); sheet index widened to size_t sheet_index; record passed as const pointer
 retyped fm_sheet_add_threaded_comment :: parameter type renamed (fm_threaded_comment -> fm_threaded_comment_t)
 signature fm_sheet_add_validation :: parameter type renamed (fm_data_validation -> fm_data_validation_t); sheet index widened to size_t sheet_index; record passed as const pointer; returns the new rule's index through size_t* out_index
+removed fm_sheet_add_col_break :: renamed to fm_sheet_add_column_break
 removed fm_sheet_cell_rect_pt :: renamed to fm_sheet_get_cell_rect_pt
 removed fm_sheet_cells_in_range :: renamed to fm_sheet_get_cells_in_range
 removed fm_sheet_cf_add_rule :: renamed to fm_sheet_add_cf_rule
@@ -89,8 +90,8 @@ removed fm_sheet_cf_clear :: renamed to fm_sheet_clear_cf_rules
 removed fm_sheet_cf_count :: renamed to fm_sheet_get_cf_rule_count
 removed fm_sheet_cf_get_at :: renamed to fm_sheet_get_cf_rule
 removed fm_sheet_cf_remove_at :: renamed to fm_sheet_remove_cf_rule
-removed fm_sheet_col_break_at :: renamed to fm_sheet_get_col_break_at
-removed fm_sheet_col_break_count :: renamed to fm_sheet_get_col_break_count
+removed fm_sheet_col_break_at :: renamed to fm_sheet_get_column_break_at
+removed fm_sheet_col_break_count :: renamed to fm_sheet_get_column_break_count
 removed fm_sheet_column_chars_to_pt :: renamed to fm_sheet_convert_column_chars_to_pt
 removed fm_sheet_column_pt_to_chars :: renamed to fm_sheet_convert_column_pt_to_chars
 removed fm_sheet_column_width_pt :: renamed to fm_sheet_get_column_width_pt
@@ -98,8 +99,8 @@ removed fm_sheet_drawing_object_at :: renamed to fm_sheet_get_drawing_object_at
 removed fm_sheet_drawing_object_count :: renamed to fm_sheet_get_drawing_object_count
 removed fm_sheet_edit_threaded_comment :: renamed to fm_sheet_update_threaded_comment
 retyped fm_sheet_get_auto_filter :: parameter type renamed (fm_auto_filter -> fm_auto_filter_t)
-removed fm_sheet_get_column :: renamed to fm_sheet_get_col_override_at
-removed fm_sheet_get_column_count :: renamed to fm_sheet_get_col_override_count
+removed fm_sheet_get_column :: renamed to fm_sheet_get_column_override_at
+removed fm_sheet_get_column_count :: renamed to fm_sheet_get_column_override_count
 signature fm_sheet_get_comment_at :: the name now reads a comment by position; the cell lookup is fm_sheet_get_comment; sheet index widened to size_t sheet_index, index widened to size_t, handle is const
 removed fm_sheet_get_comment_at_index :: renamed to fm_sheet_get_comment_at
 retyped fm_sheet_get_effective_style :: parameter type renamed (fm_effective_style -> fm_effective_style_t)
@@ -113,6 +114,7 @@ removed fm_sheet_insert_image :: renamed to fm_sheet_add_image
 removed fm_sheet_list_invalid_cells :: renamed to fm_sheet_get_invalid_cells
 removed fm_sheet_merges_in_range :: renamed to fm_sheet_get_merges_in_range
 removed fm_sheet_range_style_bases :: renamed to fm_sheet_get_range_style_bases
+removed fm_sheet_remove_col_break :: renamed to fm_sheet_remove_column_break
 removed fm_sheet_remove_validation_at :: renamed to fm_sheet_remove_validation
 removed fm_sheet_row_break_at :: renamed to fm_sheet_get_row_break_at
 removed fm_sheet_row_break_count :: renamed to fm_sheet_get_row_break_count
@@ -167,7 +169,7 @@ removed fm_workbook_cf_evaluate_range :: renamed to fm_sheet_evaluate_cf_range
 removed fm_workbook_create :: renamed to fm_workbook_create_default
 removed fm_workbook_defined_name_at :: renamed to fm_workbook_get_defined_name_at
 removed fm_workbook_defined_name_count :: renamed to fm_workbook_get_defined_name_count
-removed fm_workbook_delete_cols :: renamed to fm_sheet_delete_cols
+removed fm_workbook_delete_cols :: renamed to fm_sheet_delete_columns
 removed fm_workbook_delete_rows :: renamed to fm_sheet_delete_rows
 removed fm_workbook_dependents :: renamed to fm_sheet_get_dependents
 removed fm_workbook_evaluate_cf_formula :: renamed to fm_sheet_evaluate_cf_formula
@@ -186,7 +188,7 @@ removed fm_workbook_get_formula_r1c1 :: renamed to fm_sheet_get_formula_r1c1
 retyped fm_workbook_get_theme_colors :: parameter type renamed (fm_theme_colors -> fm_theme_colors_t)
 retyped fm_workbook_get_theme_fonts :: parameter type renamed (fm_theme_fonts -> fm_theme_fonts_t)
 removed fm_workbook_get_value :: renamed to fm_sheet_get_value
-removed fm_workbook_insert_cols :: renamed to fm_sheet_insert_cols
+removed fm_workbook_insert_cols :: renamed to fm_sheet_insert_columns
 removed fm_workbook_insert_rows :: renamed to fm_sheet_insert_rows
 removed fm_workbook_lambda_text_at :: renamed to fm_sheet_get_lambda_text
 removed fm_workbook_memory_usage :: renamed to fm_workbook_get_memory_usage
@@ -251,7 +253,7 @@ removed fm_workbook_pivot_get_layout :: renamed to fm_sheet_get_pivot_report_lay
 removed fm_workbook_pivot_layout :: renamed to fm_sheet_get_pivot_layout
 removed fm_workbook_pivot_remove :: renamed to fm_sheet_remove_pivot
 removed fm_workbook_pivot_set_anchor :: renamed to fm_sheet_set_pivot_anchor
-removed fm_workbook_pivot_set_col_field_order :: renamed to fm_sheet_set_pivot_col_field_order
+removed fm_workbook_pivot_set_col_field_order :: renamed to fm_sheet_set_pivot_column_field_order
 removed fm_workbook_pivot_set_grand_totals :: renamed to fm_sheet_set_pivot_grand_totals
 removed fm_workbook_pivot_set_layout :: renamed to fm_sheet_set_pivot_report_layout
 removed fm_workbook_pivot_set_name :: renamed to fm_sheet_set_pivot_name

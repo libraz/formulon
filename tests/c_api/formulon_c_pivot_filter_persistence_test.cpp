@@ -236,10 +236,10 @@ TEST(FormulonCApiPivotFilterPersistence, ScratchPivotFilterSurvivesSaveAndReload
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
-  std::size_t pivot_idx = 0;
-  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
   const fm_pivot_filter_spec_t spec = TextSpec(FM_PIVOT_FILTER_LABEL_BEGINS_WITH, "Region", "N");
-  ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_idx, &spec, ignored_index()), 0)
+  ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_index, &spec, ignored_index()), 0)
       << fm_get_last_error_message();
   const std::vector<std::uint8_t> saved = Save(wb.handle);
 
@@ -320,16 +320,16 @@ TEST(FormulonCApiPivotFilterPersistence, SubtotalFunctionsReadBack) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
-  std::size_t pivot_idx = 0;
-  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_get_last_error_message();
+  std::size_t pivot_index = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
   fm_pivot_field_info_t info{};
-  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_idx, 0, &info), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 0, &info), 0);
   EXPECT_EQ(info.default_subtotal, 1);
   EXPECT_EQ(info.subtotal_fns, 0U);
 
-  ASSERT_EQ(fm_sheet_add_pivot_field_subtotal_fn(wb.handle, 0, pivot_idx, 0, FM_PIVOT_AGG_COUNT), 0);
-  ASSERT_EQ(fm_sheet_add_pivot_field_subtotal_fn(wb.handle, 0, pivot_idx, 0, FM_PIVOT_AGG_SUM), 0);
-  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_idx, 0, &info), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_subtotal_fn(wb.handle, 0, pivot_index, 0, FM_PIVOT_AGG_COUNT), 0);
+  ASSERT_EQ(fm_sheet_add_pivot_field_subtotal_fn(wb.handle, 0, pivot_index, 0, FM_PIVOT_AGG_SUM), 0);
+  ASSERT_EQ(fm_sheet_get_pivot_field(wb.handle, 0, pivot_index, 0, &info), 0);
   const std::uint32_t sum_count = (1U << FM_PIVOT_AGG_SUM) | (1U << FM_PIVOT_AGG_COUNT);
   EXPECT_EQ(info.default_subtotal, 0);
   EXPECT_EQ(info.subtotal_fns, sum_count);
