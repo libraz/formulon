@@ -250,6 +250,8 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/retained_part_fingerprint.cpp
   src/io/xlsb/sheet_properties_records.cpp
   src/io/xlsb/sheet_reader.cpp
+  src/io/xlsb/sheet_cell_decode.cpp
+  src/io/xlsb/sheet_tail_retention.cpp
   src/io/xlsb/sheet_writer.cpp
   src/io/xlsb/slicer_records.cpp
   src/io/xlsb/sparkline_records.cpp

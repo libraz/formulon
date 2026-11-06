@@ -6,10 +6,10 @@
 // (`[Content_Types].xml`, `_rels/.rels`, `xl/_rels/workbook.xml.rels`).
 // The binary parts (`xl/workbook.bin`, `xl/worksheets/sheet*.bin`,
 // `xl/sharedStrings.bin`) are decoded via the record framing in
-// `io/xlsb/record.h`; worksheets decode in `io/xlsb/sheet_reader.cpp`,
-// the shared-string table in `io/xlsb/sst_reader.cpp`. Formulas are
+// `io/xlsb/record.h`; worksheets decode in `io/xlsb/sheet_reader.cpp` and
+// `io/xlsb/sheet_cell_decode.cpp`, the shared-string table in `io/xlsb/sst_reader.cpp`. Formulas are
 // decoded through a full `Ptg → AST → Excel-formula-text` pipeline
-// (`DecodeFormulaText` in `io/xlsb/sheet_reader.cpp`); a Ptg stream
+// (`DecodeFormulaText` in `io/xlsb/sheet_cell_decode.cpp`); a Ptg stream
 // outside the supported token set logs a structured warning and leaves
 // the formula text empty instead.
 

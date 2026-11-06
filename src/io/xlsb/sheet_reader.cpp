@@ -23,6 +23,7 @@
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_ids.h"
 #include "io/xlsb/sheet_properties_records.h"
+#include "io/xlsb/sheet_reader_internal.h"
 #include "io/xlsb/sheet_record_flags.h"
 #include "io/xlsb/sparkline_records.h"
 #include "io/xlsb/view_records.h"
@@ -46,64 +47,15 @@ namespace io {
 namespace xlsb {
 namespace {
 
-/// True when `ptgs` is the placeholder Excel stores in a cell whose real
-/// tokens live in a separate record: a lone `PtgExp` (`0x01`) naming the
-/// owning anchor. Both the anchor and the phantoms of an array or
-/// dynamic-array formula carry it, and `BrtArrFmla` supplies the tokens
-/// out-of-band, so the shell is the expected encoding rather than a Ptg
-/// the decoder failed on.
-///
-/// It is only ever the whole stream — it takes no operands and cannot
-/// combine with another token — so testing the first byte classifies
-/// the record.
-bool IsAnchorShellFormula(ByteSpan ptgs) {
-  return ptgs.size != 0U && ptgs.data[0] == 0x01U;
-}
-
-/// Attempts to decode the `rgce` Ptg byte stream into an Excel formula
-/// text (with a leading `=`). Returns the formula text on success, or an
-/// empty string when the stream uses a token outside the supported set
-/// (a structured-log diagnostic records the reason). On the empty-string
-/// path the caller PRESERVES the cell's cached value and stores no
-/// formula, so the cell still displays the correct cached result instead
-/// of a fabricated formula that would recalc to `#NAME?`.
-///
-/// An anchor shell returns empty as well, but neither logs nor counts:
-/// `undecoded_formula_count` states that the reader could not recover a
-/// formula the source carried, and for a shell there is no formula at
-/// that position to recover. The record that does carry the tokens is
-/// decoded on its own. A shell whose owning record the reader does not
-/// model instead surfaces through that record's own disposition, so the
-/// loss is still reported — just not as a decode failure here.
-std::string DecodeFormulaText(ByteSpan ptg_bytes, ByteSpan rgcb, const std::vector<std::string>& sheet_names,
-                              const std::vector<XlsbName>& name_table, const std::vector<XlsbSheetRange>& sheet_ranges,
-                              const XlsbExternalBooks& external_books, std::size_t sheet_index, std::uint32_t row,
-                              std::uint32_t col, std::uint32_t* undecoded_formula_count,
-                              const std::vector<TableMetadata>* tables) {
-  if (IsAnchorShellFormula(ptg_bytes)) {
-    return {};
-  }
-  Arena arena(kDefaultArenaChunkBytes, kMaxLoadArenaBytes);
-  parser::FormulaWhitespace whitespace;
-  auto ast_or = decode_ptgs(ptg_bytes, rgcb, arena, sheet_names, name_table, sheet_ranges, external_books,
-                            static_cast<std::int32_t>(sheet_index), std::nullopt, &whitespace, tables);
-  if (!ast_or) {
-    StructuredLog("xlsb.formula.not_decoded")
-        .field("sheet_index", static_cast<std::int64_t>(sheet_index))
-        .field("row", static_cast<std::int64_t>(row))
-        .field("col", static_cast<std::int64_t>(col))
-        .field("ptg_bytes", static_cast<std::int64_t>(ptg_bytes.size))
-        .field("reason", ast_or.error().message)
-        .warn();
-    if (undecoded_formula_count != nullptr) {
-      ++*undecoded_formula_count;
-    }
-    return {};
-  }
-  std::string out("=");
-  out.append(parser::format_formula(*ast_or.value(), &whitespace));
-  return out;
-}
+using detail::CellHeaderInfo;
+using detail::CommitCell;
+using detail::DecodeFormulaText;
+using detail::DecodeLiteralCell;
+using detail::ReadCellHeader;
+using detail::ReadCellParsedFormula;
+using detail::RecordDisposition;
+using detail::ResolveUnmodelledRecord;
+using detail::RetainTailRecord;
 
 /// Decodes a `BrtTable` payload ([MS-XLSB] 2.4.846, record 428): RfX, rwInput1 /
 /// colInput1, rwInput2 / colInput2 (u32 each), then fRw, fTbl2, fDeleted1,
@@ -156,140 +108,6 @@ bool DecodeDataTableRecord(ByteSpan p, DataTable* out) {
                          kDataTableExplicitDel2 | kDataTableExplicitCa;
   *out = table;
   return true;
-}
-
-/// What became of one source record. The four values are exhaustive: a
-/// record is decoded into the model, kept verbatim for re-emission,
-/// left to the writer to re-derive, or reported as content this load
-/// could not carry. There is no fifth outcome, and in particular no
-/// outcome that discards a record without saying so.
-///
-/// `[[nodiscard]]` is deliberate. The defect this classification exists
-/// to prevent is a record reaching the end of the dispatch with nothing
-/// done to it, so the dispatch's answer must not be droppable either.
-enum class [[nodiscard]] RecordDisposition {
-  /// Decoded into the `Workbook` / `Sheet` model. Also covers a record
-  /// whose content the reader took responsibility for and whose partial
-  /// loss it reported through a more specific counter -- a formula whose
-  /// Ptg stream fell outside the supported set is counted once, as an
-  /// undecoded formula, not twice.
-  kModelled,
-  /// Kept verbatim in `XlsbSheetTail` and re-emitted byte-for-byte.
-  kRetained,
-  /// Not kept, because the writer emits an equivalent record of its own
-  /// from the model. The membership test is
-  /// `IsWriterRegeneratedSheetRecord`.
-  kRegenerated,
-  /// Neither decoded nor preserved: the content is reported through
-  /// `XlsbReadResult::dropped_record_count` and a structured warning.
-  /// A record decoded only in part resolves here too, so the residue is
-  /// visible rather than implied.
-  kAccounted,
-};
-
-/// True for a record the sheet writer produces from the model, so keeping
-/// the source copy would emit it twice. Every entry is a record
-/// `sheet_writer.cpp`'s `emit_sheet` writes; adding one here is an
-/// assertion that the writer covers it, and is the only way to make a
-/// record vanish without the load saying so.
-bool IsWriterRegeneratedSheetRecord(XlsbRecordType type) {
-  switch (type) {
-    case XlsbRecordType::BrtBeginSheet:
-    case XlsbRecordType::BrtEndSheet:
-    case XlsbRecordType::BrtWsDim:
-    case XlsbRecordType::BrtBeginWsViews:
-    case XlsbRecordType::BrtEndWsView:
-    case XlsbRecordType::BrtEndWsViews:
-    case XlsbRecordType::BrtBeginColInfos:
-    case XlsbRecordType::BrtEndColInfos:
-    case XlsbRecordType::BrtBeginSheetData:
-    case XlsbRecordType::BrtEndSheetData:
-    case XlsbRecordType::BrtBeginMergeCells:
-    case XlsbRecordType::BrtEndMergeCells:
-    // Re-derived for every spilled dynamic array from the sheet's spill
-    // regions, keyed to the workbook's own XLDAPR metadata entry. The
-    // entry travels with the workbook, so a package that carried these
-    // records carries the metadata part that makes them meaningful.
-    case XlsbRecordType::BrtCellMeta:
-      return true;
-    default:
-      return false;
-  }
-}
-
-/// Tail records in this slot occur after the model-owned merge block and
-/// before the model-owned hyperlink block, even when the source stream omits
-/// BrtBeginMergeCells/BrtEndMergeCells entirely.  The worksheet grammar uses
-/// these ids for phonetic metadata, conditional formatting and data
-/// validations; relying only on `merges_seen` would put them before newly
-/// added model hyperlinks on a no-merge sheet.
-bool IsAfterMergesBeforeHyperlinks(XlsbRecordType type) {
-  switch (static_cast<std::uint16_t>(type)) {
-    case kBrtPhoneticInfo:
-    case kBrtBeginConditionalFormatting:
-    case kBrtEndConditionalFormatting:
-    case kBrtBeginCFRule:
-    case kBrtEndCFRule:
-    case kBrtBeginIconSet:
-    case kBrtEndIconSet:
-    case kBrtBeginDataBar:
-    case kBrtEndDataBar:
-    case kBrtBeginColorScale:
-    case kBrtEndColorScale:
-    case kBrtCFVO:
-    case kBrtColor:
-    case kBrtBeginDVals:
-    case kBrtDVal:
-    case kBrtEndDVals:
-      return true;
-    default:
-      return false;
-  }
-}
-
-/// Appends the framed bytes of one worksheet-tail record to the grammar slot
-/// represented by `XlsbSheetTail`. `framed` spans the record header *and*
-/// payload, so re-emission is a plain byte copy rather than a re-encode.
-/// Slots only move forward: a record classified into a later slot advances
-/// the phase, so an unlisted record after it (an x14 FRT block after
-/// BrtMargins on a sheet with no merges or hyperlinks) is not hoisted ahead.
-void RetainTailRecord(SheetDecodeState& state, XlsbRecordType type, const std::uint8_t* framed, std::size_t size) {
-  std::vector<std::uint8_t>* dst = &state.tail.before_merges;
-  if (state.hyperlinks_seen || is_after_hyperlinks(static_cast<std::uint16_t>(type))) {
-    dst = &state.tail.after_hyperlinks;
-    state.hyperlinks_seen = true;
-  } else if (state.merges_seen || IsAfterMergesBeforeHyperlinks(type)) {
-    dst = &state.tail.after_merges_before_hyperlinks;
-    state.merges_seen = true;
-  }
-  dst->insert(dst->end(), framed, framed + size);
-}
-
-/// Decides what happens to a record the dispatch did not decode. This is
-/// the whole of the fallback: retention where the writer has a slot for
-/// the bytes, silence only where the writer produces the record itself,
-/// and a counted warning otherwise.
-///
-/// Verbatim retention is available for the worksheet tail alone, because
-/// `emit_sheet` re-derives the entire prefix (properties, dimensions,
-/// views, column layout) and offers no position to splice foreign bytes
-/// into. A record before `BrtEndSheetData` therefore has to be decoded to
-/// survive; one that is not lands in the counted bucket rather than
-/// disappearing.
-RecordDisposition ResolveUnmodelledRecord(SheetDecodeState& state, XlsbRecordType type, const std::uint8_t* framed,
-                                          std::size_t size) {
-  if (IsWriterRegeneratedSheetRecord(type)) {
-    return RecordDisposition::kRegenerated;
-  }
-  if (state.in_tail) {
-    RetainTailRecord(state, type, framed, size);
-    return RecordDisposition::kRetained;
-  }
-  StructuredLog("xlsb.record.dropped")
-      .field("record_type", static_cast<std::int64_t>(type))
-      .field("bytes", static_cast<std::int64_t>(size))
-      .warn();
-  return RecordDisposition::kAccounted;
 }
 
 /// Decodes the model-owned tail features -- sheet and range protection,
@@ -369,93 +187,6 @@ Expected<bool, Error> DecodeTailFeature(ByteSpan& cursor, const std::uint8_t* fr
   return true;
 }
 
-/// Column + style-table index decoded by `ReadCellHeader`.
-struct CellHeaderInfo {
-  std::uint32_t col = 0;
-  /// 0-based index into `StylesTable::cell_xfs`. `0` is the default xf;
-  /// value records skip storing it, blank and formula records store it as an
-  /// explicit assignment.
-  std::uint32_t xf_index = 0;
-  /// fPhShow: the cell shows its phonetic guide.
-  bool show_phonetic = false;
-};
-
-/// Reads the eight-byte cell header common to every cell record:
-///   * column   : u32 (zero-based)
-///   * iStyleRef: u24 (index into `StylesTable::cell_xfs`)
-///   * fPhShow  : u8  (Phonetic-text flag; bit 0)
-///
-/// Returns the column index and style-xf index, and advances the
-/// cursor past the header.
-Expected<CellHeaderInfo, Error> ReadCellHeader(ByteSpan& cursor) {
-  ASSIGN_OR_RETURN(auto col, read_u32(cursor));
-  if (col >= Sheet::kMaxCols) {
-    return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb cell header column out of range",
-                      "context=xlsb_reader");
-  }
-  // iStyleRef (3 bytes, little-endian) + fPhShow (1 byte) = 4 bytes.
-  if (cursor.size < 4) {
-    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb cell header truncated (style/phonetic)",
-                      "context=xlsb_reader");
-  }
-  const std::uint32_t xf_index = static_cast<std::uint32_t>(cursor.data[0]) |
-                                 (static_cast<std::uint32_t>(cursor.data[1]) << 8) |
-                                 (static_cast<std::uint32_t>(cursor.data[2]) << 16);
-  const bool show_phonetic = (cursor.data[3] & 0x01U) != 0U;
-  cursor.data += 4;
-  cursor.size -= 4;
-  return CellHeaderInfo{col, xf_index, show_phonetic};
-}
-
-/// Stores `xf_index` on `(sheet_index, row, col)` when it differs from
-/// the default xf (`0`); a value record's default style is implicit.
-Expected<void, Error> ApplyXfIndex(Workbook& wb, std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
-                                   std::uint32_t xf_index) {
-  if (xf_index == 0) {
-    return Expected<void, Error>::Ok();
-  }
-  return wb.set_cell_xf_index(sheet_index, row, col, xf_index);
-}
-
-/// Stores the cell's xf and counts it as decoded. Value records skip the
-/// default xf (`0`); blank and formula records store it explicitly.
-Expected<void, Error> CommitCell(Workbook& wb, std::size_t sheet_index, SheetDecodeState& state,
-                                 const CellHeaderInfo& header, bool explicit_xf) {
-  if (explicit_xf) {
-    RETURN_IF_ERROR(wb.set_cell_xf_index(sheet_index, state.current_row, header.col, header.xf_index));
-  } else {
-    RETURN_IF_ERROR(ApplyXfIndex(wb, sheet_index, state.current_row, header.col, header.xf_index));
-  }
-  if (header.show_phonetic) {
-    wb.sheet(sheet_index).set_cell_show_phonetic(state.current_row, header.col, true);
-  }
-  ++state.cells_decoded;
-  return Expected<void, Error>::Ok();
-}
-
-/// Slices a `CellParsedFormula` (u32 cce + rgce, then an optional u32 cb + rgcb
-/// when at least four bytes remain); `what` names the record in error text.
-Expected<void, Error> ReadCellParsedFormula(ByteSpan& p, const char* what, ByteSpan* rgce, ByteSpan* rgcb) {
-  ASSIGN_OR_RETURN(const std::uint32_t cce, read_u32(p));
-  if (cce > p.size) {
-    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
-                      std::string("xlsb ") + what + " rgce length exceeds payload", "context=xlsb_reader");
-  }
-  *rgce = ByteSpan{p.data, cce};
-  p.data += cce;
-  p.size -= cce;
-  *rgcb = ByteSpan{};
-  if (p.size >= 4) {
-    ASSIGN_OR_RETURN(const std::uint32_t cb, read_u32(p));
-    if (cb > p.size) {
-      return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
-                        std::string("xlsb ") + what + " rgcb length exceeds payload", "context=xlsb_reader");
-    }
-    *rgcb = ByteSpan{p.data, cb};
-  }
-  return Expected<void, Error>::Ok();
-}
-
 /// Registers each recorded dynamic-array anchor as a spill region so the
 /// footprint's non-anchor cells' raw literal payload (Excel writes a
 /// plain `BrtCellRk` / `BrtCellReal` / ... for the cached spill targets
@@ -501,91 +232,6 @@ void ApplyDecodedRowHeaders(Sheet& sheet, const std::vector<SheetDecodeState::De
     visible.row = header.layout.row;
     insert_row_override(sheet.mutable_layout(), visible);
   }
-}
-
-/// Decodes one literal cell record (blank, RK, real, bool, error, inline or
-/// shared string): the cell header, the value, then the style commit. A
-/// blank stores its xf explicitly; the value records skip the default one.
-Expected<RecordDisposition, Error> DecodeLiteralCell(const XlsbRecord& rec, XlsbRecordType type,
-                                                     SheetDecodeState& state, std::size_t sheet_index, Workbook& wb,
-                                                     const std::vector<std::string_view>& sst_entries,
-                                                     const std::vector<std::vector<PhoneticRun>>& sst_phonetic,
-                                                     const std::vector<PhoneticProperties>& sst_phonetic_props,
-                                                     std::deque<std::string>& text_storage) {
-  if (!state.row_seen) {
-    return RecordDisposition::kAccounted;
-  }
-  ByteSpan p = rec.payload;
-  ASSIGN_OR_RETURN(auto col, ReadCellHeader(p));
-  Value value = Value::blank();
-  std::uint32_t sst_index = 0;
-  switch (type) {
-    case XlsbRecordType::BrtCellRk: {
-      ASSIGN_OR_RETURN(auto rk, read_u32(p));
-      value = Value::number(decode_rk_number(rk));
-      break;
-    }
-    case XlsbRecordType::BrtCellReal: {
-      if (p.size < 8) {
-        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtCellReal payload truncated",
-                          "context=xlsb_reader");
-      }
-      double v;
-      std::memcpy(&v, p.data, sizeof(v));
-      value = Value::number(v);
-      break;
-    }
-    case XlsbRecordType::BrtCellBool: {
-      ASSIGN_OR_RETURN(auto b, read_u8(p));
-      value = Value::boolean(b != 0);
-      break;
-    }
-    case XlsbRecordType::BrtCellError: {
-      ASSIGN_OR_RETURN(auto code, read_u8(p));
-      // Map the OOXML wire code to `ErrorCode` via the single
-      // `kErrorTable`-backed lookup shared with the writer, so this
-      // path stays symmetric with `ooxml_code()` (see
-      // `error_from_ooxml_code` in `value.h`).
-      value = Value::error(error_from_ooxml_code(static_cast<std::int32_t>(code)));
-      break;
-    }
-    case XlsbRecordType::BrtCellSt: {
-      ASSIGN_OR_RETURN(auto str, read_xlwidestring(p));
-      text_storage.push_back(std::move(str));
-      value = Value::text(text_storage.back());
-      break;
-    }
-    case XlsbRecordType::BrtCellIsst: {
-      ASSIGN_OR_RETURN(sst_index, read_u32(p));
-      if (sst_index >= sst_entries.size()) {
-        std::string ctx("context=xlsb_reader sheet_index=");
-        ctx.append(std::to_string(sheet_index));
-        ctx.append(" row=").append(std::to_string(state.current_row));
-        ctx.append(" col=").append(std::to_string(col.col));
-        ctx.append(" sst_index=").append(std::to_string(sst_index));
-        ctx.append(" sst_size=").append(std::to_string(sst_entries.size()));
-        return make_error(FormulonErrorCode::kIoXlsbCorrupt, "xlsb sst index out of range", std::move(ctx));
-      }
-      value = Value::text(sst_entries[sst_index]);
-      break;
-    }
-    default:
-      break;
-  }
-  Sheet& sheet = wb.sheet(sheet_index);
-  sheet.set_cell_cached_value_borrowed(state.current_row, col.col, std::move(value));
-  // Attached after the value, mirroring the OOXML reader: every
-  // value-mutating setter clears the annotation, so the order is
-  // load-bearing. Skipped when the entry carries no guide so an
-  // unannotated cell keeps its default-constructed run vector.
-  if (type == XlsbRecordType::BrtCellIsst && sst_index < sst_phonetic.size() && !sst_phonetic[sst_index].empty()) {
-    sheet.set_cell_phonetic_runs(state.current_row, col.col, sst_phonetic[sst_index]);
-    if (sst_index < sst_phonetic_props.size()) {
-      sheet.set_cell_phonetic_props(state.current_row, col.col, sst_phonetic_props[sst_index]);
-    }
-  }
-  RETURN_IF_ERROR(CommitCell(wb, sheet_index, state, col, /*explicit_xf=*/type == XlsbRecordType::BrtCellBlank));
-  return RecordDisposition::kModelled;
 }
 
 /// Classifies and decodes one worksheet record.
@@ -993,58 +639,6 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
   }
 }
 }  // namespace
-
-/// Tail records in this slot are emitted after the model-owned hyperlink
-/// block.  This explicit grammar classification is needed when the source
-/// has no BrtHLink at all but the in-memory caller adds one before writing.
-bool is_after_hyperlinks(std::uint16_t type) {
-  switch (type) {
-    case kBrtPrintOptions:
-    case kBrtMargins:
-    case kBrtBeginHeaderFooter:
-    case kBrtEndHeaderFooter:
-    case kBrtPageSetup:
-    case kBrtBeginRwBrk:
-    case kBrtBrk:
-    case kBrtEndRwBrk:
-    case kBrtBeginColBrk:
-    case kBrtEndColBrk:
-    case kBrtBigName:
-    case kBrtBeginCellWatches:
-    case kBrtCellWatch:
-    case kBrtEndCellWatches:
-    case kBrtBeginCellIgnoreECs:
-    case kBrtCellIgnoreEC:
-    case kBrtEndCellIgnoreECs:
-    case kBrtBeginSmartTags:
-    case kBrtBeginCellSmartTags:
-    case kBrtBeginCellSmartTag:
-    case kBrtCellSmartTagProperty:
-    case kBrtEndCellSmartTag:
-    case kBrtEndCellSmartTags:
-    case kBrtEndSmartTags:
-    case kBrtDrawing:
-    case kBrtLegacyDrawing:
-    case kBrtLegacyDrawingHF:
-    case kBrtBkhim:
-    case kBrtBeginOleObjects:
-    case kBrtOleObject:
-    case kBrtEndOleObjects:
-    case kBrtBeginActiveXControls:
-    case kBrtActiveX:
-    case kBrtEndActiveXControls:
-    case kBrtBeginWebPubItems:
-    case kBrtBeginWebPubItem:
-    case kBrtEndWebPubItem:
-    case kBrtEndWebPubItems:
-    case kBrtBeginTableParts:
-    case kBrtTablePart:
-    case kBrtEndTableParts:
-      return true;
-    default:
-      return false;
-  }
-}
 
 Expected<SheetDecodeState, Error> DecodeSheetBin(
     const std::vector<std::uint8_t>& body, std::size_t sheet_index, Workbook& wb,
