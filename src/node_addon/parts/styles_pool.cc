@@ -1,6 +1,5 @@
-// Style-table bindings: read / write entries in the xf / font / fill /
-// border / numFmt pools plus the per-cell xf-index getters and the named
-// cell-style accessors.
+// Style-pool bindings: font / fill / border / numFmt / xf / dxf records and
+// the per-cell xf-index accessors.
 
 #include <cstddef>
 #include <cstdint>
@@ -8,9 +7,14 @@
 #include <utility>
 #include <vector>
 
+#include "node_addon/parts/styles_internal.h"
 #include "node_addon/parts/workbook_class.h"
 
 namespace formulon_node {
+
+using detail::CellXfResultToJs;
+using detail::StyleCountResult;
+
 namespace {
 
 /// Builds the JS mirror of a font record. Shared by `getFont` and the
@@ -251,49 +255,6 @@ void SetCellXfAlignment(Napi::Env env, const fm_cell_xf_t& xf, Napi::Object* out
   }
 }
 
-/// Builds the `getCellXf` / `getCellStyleXf` record.
-Napi::Object CellXfResultToJs(Napi::Env env, const fm_cell_xf_t& xf) {
-  Napi::Object out = CellXfToJs(env, xf);
-  out.Set("xfId", Napi::Number::New(env, xf.xf_id));
-  SetCellXfAlignment(env, xf, &out);
-  return out;
-}
-
-// Shared body of the style-pool count getters that take no argument.
-using StyleCountFn = fm_status_t (*)(const fm_workbook_t*, std::size_t*);
-
-Napi::Value StyleCountResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle, StyleCountFn fn) {
-  Napi::Env env = info.Env();
-  if (handle == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  std::size_t n = 0;
-  const fm_status_t rc = fn(handle, &n);
-  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(n)));
-}
-
-/// Reads the major or minor script-font list as `{script, typeface}` records.
-/// Each pair is copied before the next `_at` call reuses the read scratch.
-Napi::Array ThemeScriptFonts(Napi::Env env, const fm_workbook_t* handle, bool major) {
-  Napi::Array list = Napi::Array::New(env);
-  size_t count = 0;
-  if (fm_workbook_get_theme_script_font_count(handle, major ? 1 : 0, &count) != 0) {
-    return list;
-  }
-  for (size_t i = 0; i < count; ++i) {
-    const char* script = nullptr;
-    const char* typeface = nullptr;
-    if (fm_workbook_get_theme_script_font_at(handle, major ? 1 : 0, i, &script, &typeface) != 0) {
-      break;
-    }
-    Napi::Object item = Napi::Object::New(env);
-    item.Set("script", JsString(env, script));
-    item.Set("typeface", JsString(env, typeface));
-    list.Set(static_cast<uint32_t>(i), item);
-  }
-  return list;
-}
-
 // Explicit `has*` flag wins; otherwise the flag is implied by the fields it covers.
 inline int Implied(bool has_present, bool has_value, bool implied) {
   return has_present ? (has_value ? 1 : 0) : (implied ? 1 : 0);
@@ -371,6 +332,31 @@ void PullCellXf(CheckedSpecReader& reader, const Napi::Object& record, fm_cell_x
 }
 
 }  // namespace
+
+namespace detail {
+
+/// Builds the `getCellXf` / `getCellStyleXf` record.
+Napi::Object CellXfResultToJs(Napi::Env env, const fm_cell_xf_t& xf) {
+  Napi::Object out = CellXfToJs(env, xf);
+  out.Set("xfId", Napi::Number::New(env, xf.xf_id));
+  SetCellXfAlignment(env, xf, &out);
+  return out;
+}
+
+// Shared body of the style-pool count getters that take no argument.
+using StyleCountFn = fm_status_t (*)(const fm_workbook_t*, std::size_t*);
+
+Napi::Value StyleCountResult(const Napi::CallbackInfo& info, const fm_workbook_t* handle, StyleCountFn fn) {
+  Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  std::size_t n = 0;
+  const fm_status_t rc = fn(handle, &n);
+  return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(n)));
+}
+
+}  // namespace detail
 
 // ---- Cell-XF index --------------------------------------------------
 
@@ -599,427 +585,6 @@ Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::DxfCount(const Napi::CallbackInfo& info) {
   return StyleCountResult(info, handle_, &fm_workbook_get_dxf_count);
-}
-
-// ---- Named cell styles ----------------------------------------------
-
-namespace {
-
-// The JS `CellStyleRecord` record of `cs`.
-Napi::Object CellStyleToJs(Napi::Env env, const fm_cell_style_record_t& cs) {
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("name", JsString(env, cs.name));
-  out.Set("xfId", Napi::Number::New(env, cs.xf_id));
-  out.Set("builtinId", Napi::Number::New(env, cs.builtin_id));
-  out.Set("iLevel", Napi::Number::New(env, cs.i_level));
-  out.Set("hidden", Napi::Boolean::New(env, cs.hidden != 0));
-  out.Set("customBuiltin", Napi::Boolean::New(env, cs.custom_builtin != 0));
-  return out;
-}
-
-// The JS `TableStyle` record of `style`.
-Napi::Object TableStyleToJs(Napi::Env env, const fm_table_style_t& style) {
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("name", JsString(env, style.name));
-  out.Set("pivot", JsBool(env, style.pivot));
-  out.Set("table", JsBool(env, style.table));
-  Napi::Array elements = Napi::Array::New(env, style.element_count);
-  for (uint32_t i = 0; i < style.element_count; ++i) {
-    const fm_table_style_element_t& element = style.elements[i];
-    Napi::Object e = Napi::Object::New(env);
-    e.Set("type", JsString(env, element.type));
-    e.Set("size", Napi::Number::New(env, element.size));
-    if (element.has_dxf_id != 0) {
-      e.Set("dxfId", Napi::Number::New(env, element.dxf_id));
-    }
-    elements.Set(i, e);
-  }
-  out.Set("elements", elements);
-  return out;
-}
-
-// Lists a workbook-scoped style table through its count and `_at` getters.
-template <typename Record, typename Convert>
-Napi::Value StyleList(Napi::Env env, const fm_workbook_t* handle, fm_status_t (*count)(const fm_workbook_t*, size_t*),
-                      fm_status_t (*at)(const fm_workbook_t*, size_t, Record*), Convert convert) {
-  Napi::Array arr = Napi::Array::New(env);
-  if (handle == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  size_t n = 0;
-  fm_status_t rc = count(handle, &n);
-  for (size_t i = 0; rc == 0 && i < n; ++i) {
-    Record record{};
-    rc = at(handle, i, &record);
-    if (rc == 0) {
-      arr.Set(static_cast<uint32_t>(i), convert(env, record));
-    }
-  }
-  return ValueOrThrow(env, rc, arr);
-}
-
-}  // namespace
-
-Napi::Value Workbook::ListCellStyles(const Napi::CallbackInfo& info) {
-  return StyleList(info.Env(), handle_, &fm_workbook_get_cell_style_count, &fm_workbook_get_cell_style_at,
-                   &CellStyleToJs);
-}
-
-Napi::Value Workbook::CellStyleXfCount(const Napi::CallbackInfo& info) {
-  return StyleCountResult(info, handle_, &fm_workbook_get_cell_style_xf_count);
-}
-
-Napi::Value Workbook::GetCellStyle(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const std::string name = ArgString(info, 0);
-  fm_cell_style_record_t cs{};
-  int32_t present = 0;
-  const fm_status_t rc = fm_workbook_get_cell_style(handle_, name.c_str(), &present, &cs);
-  return OptionalOrNull(env, rc, present, rc == 0 && present != 0 ? Napi::Value(CellStyleToJs(env, cs)) : env.Null());
-}
-
-Napi::Value Workbook::GetCellStyleXf(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const uint32_t index = ArgU32(info, 0);
-  fm_cell_xf_t xf{};
-  const fm_status_t rc = fm_workbook_get_cell_style_xf(handle_, index, &xf);
-  return rc == 0 ? Napi::Value(CellXfResultToJs(env, xf)) : ThrowStatus(env, rc);
-}
-
-Napi::Value Workbook::SetCellStyle(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  Napi::Object record = ArgObject(info, 0);
-  CheckedSpecReader reader(env);
-  std::string name;
-  reader.String(record, "name", &name);
-  fm_cell_style_record_t cs{};
-  cs.name = name.c_str();
-  cs.xf_id = reader.U32(record, "xfId", 0U);
-  cs.builtin_id = reader.U32(record, "builtinId", FM_CELL_STYLE_BUILTIN_ID_NONE);
-  cs.i_level = reader.U32(record, "iLevel", 0U);
-  cs.hidden = reader.Bool(record, "hidden", false) ? 1 : 0;
-  cs.custom_builtin = reader.Bool(record, "customBuiltin", false) ? 1 : 0;
-  if (!reader.ok()) {
-    return env.Undefined();
-  }
-  return ValueOrThrow(env, fm_workbook_set_cell_style(handle_, &cs), env.Undefined());
-}
-
-Napi::Value Workbook::RemoveCellStyle(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const std::string name = ArgString(info, 0);
-  return ValueOrThrow(env, fm_workbook_remove_cell_style(handle_, name.c_str()), env.Undefined());
-}
-
-// ---- Custom table / PivotTable styles --------------------------------
-
-Napi::Value Workbook::ListTableStyles(const Napi::CallbackInfo& info) {
-  return StyleList(info.Env(), handle_, &fm_workbook_get_table_style_count, &fm_workbook_get_table_style_at,
-                   &TableStyleToJs);
-}
-
-Napi::Value Workbook::GetTableStyle(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const std::string name = ArgString(info, 0);
-  fm_table_style_t style{};
-  int32_t present = 0;
-  const fm_status_t rc = fm_workbook_get_table_style(handle_, name.c_str(), &present, &style);
-  return OptionalOrNull(env, rc, present,
-                        rc == 0 && present != 0 ? Napi::Value(TableStyleToJs(env, style)) : env.Null());
-}
-
-Napi::Value Workbook::SetTableStyle(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const Napi::Object record = ArgObject(info, 0);
-  CheckedSpecReader reader(env);
-  std::string name;
-  reader.String(record, "name", &name);
-  const bool pivot = reader.Bool(record, "pivot", true);
-  const bool table = reader.Bool(record, "table", true);
-  Napi::Array elements;
-  const bool has_elements = reader.Array(record, "elements", &elements);
-  std::vector<std::string> types;
-  std::vector<fm_table_style_element_t> records;
-  for (uint32_t i = 0; has_elements && reader.ok() && i < elements.Length(); ++i) {
-    Napi::Value value;
-    Napi::Object element;
-    if (!reader.ArrayElement(elements, i, &value) || !reader.Object(value, "elements[]", &element)) {
-      continue;
-    }
-    std::string type;
-    reader.String(element, "type", &type);
-    types.push_back(std::move(type));
-    fm_table_style_element_t out{};
-    out.size = reader.U32(element, "size", 1U);
-    bool has_dxf = false;
-    out.dxf_id = reader.U32(element, "dxfId", 0U, &has_dxf);
-    out.has_dxf_id = has_dxf ? 1 : 0;
-    records.push_back(out);
-  }
-  if (!reader.ok()) {
-    return env.Undefined();
-  }
-  // `types` has stopped growing, so its `c_str()` views stay put.
-  for (std::size_t i = 0; i < records.size(); ++i) {
-    records[i].type = types[i].c_str();
-  }
-  fm_table_style_t style{};
-  style.name = name.c_str();
-  style.pivot = pivot ? 1 : 0;
-  style.table = table ? 1 : 0;
-  style.elements = records.empty() ? nullptr : records.data();
-  style.element_count = static_cast<uint32_t>(records.size());
-  return ValueOrThrow(env, fm_workbook_set_table_style(handle_, &style), env.Undefined());
-}
-
-Napi::Value Workbook::RemoveTableStyle(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const std::string name = ArgString(info, 0);
-  return ValueOrThrow(env, fm_workbook_remove_table_style(handle_, name.c_str()), env.Undefined());
-}
-
-Napi::Value Workbook::GetTableStyleDefaults(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const char* table = nullptr;
-  const char* pivot = nullptr;
-  const fm_status_t rc = fm_workbook_get_table_style_defaults(handle_, &table, &pivot);
-  if (rc != 0) {
-    return ThrowStatus(env, rc);
-  }
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("tableStyle", JsString(env, table));
-  out.Set("pivotStyle", JsString(env, pivot));
-  return out;
-}
-
-Napi::Value Workbook::SetTableStyleDefaults(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const Napi::Object defaults = ArgObject(info, 0);
-  CheckedSpecReader reader(env);
-  std::string table;
-  std::string pivot;
-  const bool has_table = reader.String(defaults, "tableStyle", &table);
-  const bool has_pivot = reader.String(defaults, "pivotStyle", &pivot);
-  if (!reader.ok()) {
-    return env.Undefined();
-  }
-  const fm_status_t rc = fm_workbook_set_table_style_defaults(handle_, has_table ? table.c_str() : nullptr,
-                                                              has_pivot ? pivot.c_str() : nullptr);
-  return ValueOrThrow(env, rc, env.Undefined());
-}
-
-// ---- Theme, colour resolution, effective style ----------------------
-
-Napi::Value Workbook::GetTheme(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  fm_theme_colors_t colors{};
-  fm_theme_fonts_t fonts{};
-  int32_t source = 0;
-  fm_status_t rc = fm_workbook_get_theme_colors(handle_, &colors, &source);
-  if (rc == 0) {
-    rc = fm_workbook_get_theme_fonts(handle_, &fonts);
-  }
-  if (rc != 0) {
-    return ThrowStatus(env, rc);
-  }
-  Napi::Array arr = Napi::Array::New(env, 12);
-  for (uint32_t i = 0; i < 12; ++i) {
-    arr.Set(i, Napi::Number::New(env, colors.argb[i]));
-  }
-  const auto face = [&env](const char* s) { return JsString(env, s); };
-  Napi::Object fontsOut = Napi::Object::New(env);
-  fontsOut.Set("majorLatin", face(fonts.major_latin));
-  fontsOut.Set("majorEastAsian", face(fonts.major_east_asian));
-  fontsOut.Set("minorLatin", face(fonts.minor_latin));
-  fontsOut.Set("minorEastAsian", face(fonts.minor_east_asian));
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("source", Napi::Number::New(env, source));
-  out.Set("colors", arr);
-  out.Set("fonts", fontsOut);
-  out.Set("majorScripts", ThemeScriptFonts(env, handle_, true));
-  out.Set("minorScripts", ThemeScriptFonts(env, handle_, false));
-  return out;
-}
-
-Napi::Value Workbook::SetThemeColors(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  Napi::Array arr;
-  if (!ArrayArg(info, 0, &arr) || arr.Length() != 12) {
-    Napi::TypeError::New(env, "setThemeColors expects an array of 12 ARGB numbers").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  CheckedSpecReader reader(env);
-  fm_theme_colors_t colors{};
-  for (uint32_t i = 0; i < 12; ++i) {
-    const std::string key = std::to_string(i);
-    colors.argb[i] = reader.U32(arr, key.c_str(), 0U);
-  }
-  if (!reader.ok()) {
-    return env.Undefined();
-  }
-  return ValueOrThrow(env, fm_workbook_set_theme_colors(handle_, &colors), env.Undefined());
-}
-
-Napi::Value Workbook::SetThemeFonts(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  Napi::Object record = ArgObject(info, 0);
-  CheckedSpecReader reader(env);
-  std::string major_latin;
-  std::string major_ea;
-  std::string minor_latin;
-  std::string minor_ea;
-  reader.String(record, "majorLatin", &major_latin);
-  reader.String(record, "majorEastAsian", &major_ea);
-  reader.String(record, "minorLatin", &minor_latin);
-  reader.String(record, "minorEastAsian", &minor_ea);
-  if (!reader.ok()) {
-    return env.Undefined();
-  }
-  fm_theme_fonts_t fonts{};
-  fonts.major_latin = major_latin.c_str();
-  fonts.major_east_asian = major_ea.c_str();
-  fonts.minor_latin = minor_latin.c_str();
-  fonts.minor_east_asian = minor_ea.c_str();
-  return ValueOrThrow(env, fm_workbook_set_theme_fonts(handle_, &fonts), env.Undefined());
-}
-
-Napi::Value Workbook::GetThemeScriptFont(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const std::string script = ArgString(info, 1);
-  const char* typeface = nullptr;
-  int32_t present = 0;
-  const fm_status_t rc =
-      fm_workbook_get_theme_script_font(handle_, ArgBool(info, 0) ? 1 : 0, script.c_str(), &present, &typeface);
-  if (rc != 0 || present == 0) {
-    return OptionalOrNull(env, rc, present, env.Null());
-  }
-  Napi::Object item = Napi::Object::New(env);
-  item.Set("script", JsString(env, script.c_str()));
-  item.Set("typeface", JsString(env, typeface));
-  return OptionalOrNull(env, rc, present, item);
-}
-
-Napi::Value Workbook::SetThemeScriptFont(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  const std::string script = ArgString(info, 1);
-  const std::string typeface = ArgString(info, 2);
-  const fm_status_t rc =
-      fm_workbook_set_theme_script_font(handle_, ArgBool(info, 0) ? 1 : 0, script.c_str(), typeface.c_str());
-  return ValueOrThrow(env, rc, env.Undefined());
-}
-
-Napi::Value Workbook::ResetTheme(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  return ValueOrThrow(env, fm_workbook_clear_theme(handle_), env.Undefined());
-}
-
-Napi::Value Workbook::ResolveColor(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  CheckedSpecReader reader(env);
-  fm_color_spec_t spec{};
-  if (info.Length() > 0 && info[0].IsObject()) {
-    Napi::Object holder = Napi::Object::New(env);
-    holder.Set("spec", info[0]);
-    spec = PullColorSpec(reader, holder, "spec");
-  }
-  if (!reader.ok()) {
-    return env.Undefined();
-  }
-  uint32_t argb = 0;
-  int32_t resolution = 0;
-  const fm_status_t rc = fm_workbook_resolve_color(handle_, &spec, ArgI32(info, 1), &argb, &resolution);
-  if (rc != 0) {
-    return ThrowStatus(env, rc);
-  }
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("argb", Napi::Number::New(env, argb));
-  out.Set("resolution", Napi::Number::New(env, resolution));
-  return out;
-}
-
-Napi::Value Workbook::GetEffectiveStyle(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
-  fm_effective_style_t es{};
-  const fm_status_t rc = fm_sheet_get_effective_style(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &es);
-  if (rc != 0) {
-    return ThrowStatus(env, rc);
-  }
-  const auto colorOf = [&env](uint32_t argb, int32_t resolution) {
-    Napi::Object c = Napi::Object::New(env);
-    c.Set("argb", Napi::Number::New(env, argb));
-    c.Set("resolution", Napi::Number::New(env, resolution));
-    return c;
-  };
-  static const char* const kSides[5] = {"left", "right", "top", "bottom", "diagonal"};
-  Napi::Object borders = Napi::Object::New(env);
-  for (size_t i = 0; i < 5; ++i) {
-    borders.Set(kSides[i], colorOf(es.border_argb[i], es.border_resolution[i]));
-  }
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("xfIndex", Napi::Number::New(env, es.xf_index));
-  out.Set("source", Napi::Number::New(env, es.source));
-  out.Set("fontIndex", Napi::Number::New(env, es.font_index));
-  out.Set("fillIndex", Napi::Number::New(env, es.fill_index));
-  out.Set("borderIndex", Napi::Number::New(env, es.border_index));
-  out.Set("font", colorOf(es.font_argb, es.font_resolution));
-  out.Set("fillForeground", colorOf(es.fill_fg_argb, es.fill_fg_resolution));
-  out.Set("fillBackground", colorOf(es.fill_bg_argb, es.fill_bg_resolution));
-  out.Set("borders", borders);
-  out.Set("locked", Napi::Boolean::New(env, es.locked != 0));
-  out.Set("hidden", Napi::Boolean::New(env, es.hidden != 0));
-  out.Set("numFmtCode", JsString(env, es.num_fmt_code));
-  return out;
 }
 
 }  // namespace formulon_node

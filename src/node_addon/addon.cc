@@ -18,7 +18,10 @@
 //     metadata iteration, defined-name mutation.
 //   * `parts/pivot_cache.cc`       -- PivotCache mutation surface.
 //   * `parts/pivot_table.cc`       -- PivotTable mutation surface.
-//   * `parts/styles.cc`            -- styles.
+//   * `parts/styles_pool.cc`      -- font / fill / border / numFmt / xf / dxf
+//                                    records and cell xf indices.
+//   * `parts/cell_table_styles.cc` -- named cell styles + table styles.
+//   * `parts/theme.cc`            -- theme, colour resolution, effective style.
 //   * `parts/conditional_format.cc` -- conditional-format surface +
 //     EvaluateCfRange.
 //   * `parts/sheet_view.cc`        -- view / protection / column / row
