@@ -419,7 +419,11 @@ set(FORMULON_CORE_SOURCES
   src/eval/tree_walker/binding_source.cpp
   src/eval/tree_walker/broadcast.cpp
   src/eval/tree_walker/dispatch.cpp
+  src/eval/tree_walker/evaluate_top.cpp
   src/eval/tree_walker/lambda_invoke.cpp
+  src/eval/tree_walker/range_args_collect.cpp
+  src/eval/tree_walker/spill_position.cpp
+  src/eval/tree_walker/tail_fold.cpp
   src/eval/tree_walker/walker.cpp
   src/eval/tree_walker_lazy_table.cpp
   src/eval/eval_context.cpp
