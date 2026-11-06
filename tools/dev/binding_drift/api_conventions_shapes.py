@@ -449,6 +449,17 @@ def _js_records(ctx: Context, surface: str) -> Dict[str, Set[str]]:
     return {name: fields(name) for name in own}
 
 
+def _alias_alternatives(decls: Dict[str, object], text: str, seen: Tuple[str, ...] = ()) -> List[str]:
+    """Top-level union alternatives of `text` without `null`, each union type alias also expanded in place."""
+    out: List[str] = []
+    for alternative in _strip_null(text, True):
+        out.append(alternative)
+        decl = decls.get(alternative)
+        if decl is not None and decl.kind == "type" and alternative not in seen and len(_top_union(decl.text)) > 1:
+            out.extend(_alias_alternatives(decls, decl.text, seen + (alternative,)))
+    return out
+
+
 def _accessor_pairs(pool: Dict[str, object], js: bool) -> Iterator[Tuple[str, str]]:
     for name in sorted(pool):
         if js and name.startswith("get") and "set" + name[3:] in pool:
@@ -471,10 +482,16 @@ def _rule_js_symmetry(ctx: Context) -> Iterable[Violation]:
             if record is None:
                 continue
             shared = {p for p, _ in pool[getter].params}
-            values = [(p, t) for p, t in _value_params(pool[setter].params, True) if p not in shared]
+            # A `sheet` argument typed by the record (through an alias such as `SheetRef`) is the value, not an
+            # address.
+            values = [
+                (p, t)
+                for p, t in pool[setter].params
+                if p not in shared and (not _is_coordinate(p, True) or record in _alias_alternatives(decls, t))
+            ]
             accepted = {record, f"{record}Patch", f"{record}Input", f"Patch<{record}>"}
             kinds = _strip_null(values[0][1], True) if len(values) == 1 else []
-            if record in kinds:
+            if len(values) == 1 and record in _alias_alternatives(decls, values[0][1]):
                 continue
             if len(kinds) != 1 or kinds[0] not in accepted:
                 shown = ", ".join(f"{p}: {t}" for p, t in values) or "nothing"

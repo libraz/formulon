@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Tuple
 
 from .c_header import _c_struct_fields
 from .surface_files import (
@@ -180,25 +180,47 @@ _STYLE_RECORD_STRUCTS = {
     "BorderSide": "fm_border_side_t",
 }
 
-# Deliberate omissions, keyed by (surface, type name). Python models a border
-# side as a plain dict rather than a dataclass, so it has no `BorderSide` type
-# to compare; the dict shape is covered by the wasm32 struct-layout check.
-_STYLE_RECORD_EXEMPT_TYPES = {
-    ("python", "BorderSide"),
-}
+# Deliberate omissions, keyed by (surface, type name); every surface currently
+# models every style record.
+_STYLE_RECORD_EXEMPT_TYPES: Set[Tuple[str, str]] = set()
 
 # C presence flags that neither host language mirrors as a field, because both
-# already have a way to say "absent": the TS surface omits the optional
-# property, Python leaves it `None`. Naming the value field alone would let a
-# host drop the distinction entirely, so each entry lists the value field the
-# flag governs and both are required to exist together.
+# say "absent" with a nullable value field: `null` in TS, `None` in Python.
+# Naming the value field alone would let a host drop the distinction entirely,
+# so each entry lists the value field (or the group of fields) the flag
+# governs, and all of them are required to exist together with the flag.
 _STYLE_RECORD_PRESENCE_FLAGS = {
     "fm_cell_xf_t": {
+        "has_alignment": (
+            "horizontal_align",
+            "vertical_align",
+            "wrap_text",
+            "justify_last_line",
+            "text_rotation",
+            "indent",
+        ),
+        "has_horizontal_align": "horizontal_align",
+        "has_vertical_align": "vertical_align",
+        "has_wrap_text": "wrap_text",
+        "has_justify_last_line": "justify_last_line",
+        "has_protection": ("locked", "hidden"),
         "has_text_rotation": "text_rotation",
         "has_indent": "indent",
         "has_relative_indent": "relative_indent",
         "has_shrink_to_fit": "shrink_to_fit",
         "has_reading_order": "reading_order",
+    },
+    "fm_font_record_t": {
+        "has_bold": "bold",
+        "has_italic": "italic",
+        "has_strike": "strike",
+        "has_family": "family",
+        "has_charset": "charset",
+        "has_size": "size",
+        "has_outline": "outline",
+        "has_shadow": "shadow",
+        "has_condense": "condense",
+        "has_extend": "extend",
     },
 }
 
@@ -255,12 +277,13 @@ def check_style_record_fields() -> List[str]:
         # governed value field is confirmed present on the C side -- otherwise
         # renaming the value field would silently retire the flag with it.
         presence = _STYLE_RECORD_PRESENCE_FLAGS.get(struct_name, {})
-        for flag, value_field in sorted(presence.items()):
-            if flag in c_fields and value_field not in c_fields:
-                problems.append(
-                    f"style-record-fields: {struct_name}.{flag} is exempted as a presence flag for "
-                    f"{value_field!r}, which no longer exists in {CAPI_HEADER.relative_to(REPO_ROOT)}"
-                )
+        for flag, governed in sorted(presence.items()):
+            for value_field in (governed,) if isinstance(governed, str) else governed:
+                if flag in c_fields and value_field not in c_fields:
+                    problems.append(
+                        f"style-record-fields: {struct_name}.{flag} is exempted as a presence flag for "
+                        f"{value_field!r}, which no longer exists in {CAPI_HEADER.relative_to(REPO_ROOT)}"
+                    )
         stale_flags = sorted(flag for flag in presence if flag not in c_fields)
         if stale_flags:
             problems.append(f"style-record-fields: stale presence-flag exemptions for {struct_name}: {stale_flags}")

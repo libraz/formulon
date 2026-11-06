@@ -20,7 +20,7 @@ TEST(FormulonCli, PaginateWriteFailureReturnsOutputError) {
   ASSERT_TRUE(write_fixture_workbook(path));
 
   CliRun r = run_cli({"paginate", path}, /*merge_streams=*/false, /*close_stdout=*/true);
-  EXPECT_EQ(r.exit_code, 1);
+  EXPECT_EQ(r.exit_code, 74);
   EXPECT_NE(r.stderr_text.find("failed to write output"), std::string::npos);
 }
 
@@ -109,7 +109,7 @@ TEST(FormulonCli, DumpWriteFailureReturnsOutputError) {
   PathGuard guard(in);
   ASSERT_TRUE(write_fixture_workbook(in));
   CliRun r = run_cli({"dump", "--sheets", in}, /*merge_streams=*/false, /*close_stdout=*/true);
-  EXPECT_EQ(r.exit_code, 1);
+  EXPECT_EQ(r.exit_code, 74);
   EXPECT_NE(r.stderr_text.find("failed to write output"), std::string::npos);
 }
 
@@ -147,7 +147,7 @@ TEST(FormulonCli, DumpPostTerminatorHelpIsAnInputPath) {
   std::remove(input.c_str());
 
   const CliRun result = run_cli({"dump", "--", input});
-  EXPECT_EQ(result.exit_code, 1);
+  EXPECT_EQ(result.exit_code, 66);
   EXPECT_TRUE(result.stdout_text.empty());
   EXPECT_NE(result.stderr_text.find("cannot read"), std::string::npos);
 }
@@ -170,8 +170,10 @@ TEST(FormulonCli, DumpMetadataDistinguishesDefinedNameScope) {
   fm_workbook_t* wb = nullptr;
   ASSERT_EQ(fm_workbook_create_default(&wb), 0);
   ASSERT_EQ(fm_sheet_set_number(wb, 0, 0, 0, 1.0), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name(wb, "WorkbookConst", "=1"), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb, "SheetLocal", "=Sheet1!$A$1", 0), 0);
+  const fm_defined_name_input_t workbook_const{"WorkbookConst", "=1", -1, nullptr, 0};
+  const fm_defined_name_input_t sheet_local{"SheetLocal", "=Sheet1!$A$1", 0, nullptr, 0};
+  ASSERT_EQ(fm_workbook_set_defined_name(wb, &workbook_const), 0);
+  ASSERT_EQ(fm_workbook_set_defined_name(wb, &sheet_local), 0);
   ASSERT_EQ(fm_workbook_recalc(wb), 0);
   std::uint8_t* bytes = nullptr;
   std::size_t len = 0;
@@ -228,7 +230,7 @@ TEST(FormulonCli, PaginatePostTerminatorHelpIsAnInputPath) {
   std::remove(input.c_str());
 
   const CliRun result = run_cli({"paginate", "--", input});
-  EXPECT_EQ(result.exit_code, 1);
+  EXPECT_EQ(result.exit_code, 66);
   EXPECT_TRUE(result.stdout_text.empty());
   EXPECT_NE(result.stderr_text.find("cannot read"), std::string::npos);
 }

@@ -306,12 +306,12 @@ fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out) {
   }
 }
 
-fm_status_t check_enum_domain(std::int64_t value, std::int64_t max, const char* field) {
-  if (value >= 0 && value <= max) {
+fm_status_t check_enum_domain(std::int64_t value, std::int64_t min, std::int64_t max, const char* field) {
+  if (value >= min && value <= max) {
     return 0;
   }
-  return invalid_argument("enum ordinal out of range",
-                          std::string(field) + "=" + std::to_string(value) + " max=" + std::to_string(max));
+  return invalid_argument("enum ordinal out of range", std::string(field) + "=" + std::to_string(value) + " min=" +
+                                                           std::to_string(min) + " max=" + std::to_string(max));
 }
 
 fm_status_t check_guid(const char* text, const char* field) {
@@ -346,7 +346,7 @@ namespace {
 // established `count` against its pointer must not reach here.
 fm_status_t check_cfvo_types(const fm_cfvo_t* thresholds, std::uint32_t count, const char* field) {
   for (std::uint32_t i = 0; i < count; ++i) {
-    if (auto rc = check_enum_domain(thresholds[i].type, static_cast<std::int64_t>(cf::CfvoType::AutoMax), field);
+    if (auto rc = check_enum_domain(thresholds[i].type, 0, static_cast<std::int64_t>(cf::CfvoType::AutoMax), field);
         rc != 0) {
       return rc;
     }
@@ -364,18 +364,19 @@ fm_status_t validate(const fm_cf_rule_t& rule) {
   if (auto rc = check_rect_list(rule.ranges, rule.range_count); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(rule.type, static_cast<std::int64_t>(cf::RuleType::UniqueValues), "type"); rc != 0) {
+  if (auto rc = check_enum_domain(rule.type, 0, static_cast<std::int64_t>(cf::RuleType::UniqueValues), "type");
+      rc != 0) {
     return rc;
   }
   if (rule.op_engaged != 0) {
-    if (auto rc = check_enum_domain(rule.op, static_cast<std::int64_t>(cf::CellIsOperator::NotBetween), "op");
+    if (auto rc = check_enum_domain(rule.op, 0, static_cast<std::int64_t>(cf::CellIsOperator::NotBetween), "op");
         rc != 0) {
       return rc;
     }
   }
   if (rule.time_period_engaged != 0) {
     if (auto rc =
-            check_enum_domain(rule.time_period, static_cast<std::int64_t>(cf::TimePeriod::NextMonth), "time_period");
+            check_enum_domain(rule.time_period, 0, static_cast<std::int64_t>(cf::TimePeriod::NextMonth), "time_period");
         rc != 0) {
       return rc;
     }
@@ -389,14 +390,13 @@ fm_status_t validate(const fm_cf_rule_t& rule) {
     }
     if (rule.data_bar_axis_position_engaged != 0) {
       if (auto rc =
-              check_enum_domain(rule.data_bar_axis_position, static_cast<std::int64_t>(cf::DataBarAxisPosition::None),
-                                "data_bar_axis_position");
+              check_enum_domain(rule.data_bar_axis_position, 0, FM_CF_DATA_BAR_AXIS_NONE, "data_bar_axis_position");
           rc != 0) {
         return rc;
       }
     }
-    if (auto rc = check_enum_domain(rule.data_bar_direction,
-                                    static_cast<std::int64_t>(cf::DataBarDirection::RightToLeft), "data_bar_direction");
+    if (auto rc =
+            check_enum_domain(rule.data_bar_direction, 0, FM_CF_DATA_BAR_DIRECTION_RIGHT_TO_LEFT, "data_bar_direction");
         rc != 0) {
       return rc;
     }
@@ -412,7 +412,7 @@ fm_status_t validate(const fm_cf_rule_t& rule) {
     }
   }
   if (rule.icon_set_engaged != 0) {
-    if (auto rc = check_enum_domain(rule.icon_set_name, static_cast<std::int64_t>(cf::IconSetName::Five_Quarters),
+    if (auto rc = check_enum_domain(rule.icon_set_name, 0, static_cast<std::int64_t>(cf::IconSetName::Five_Quarters),
                                     "icon_set_name");
         rc != 0) {
       return rc;
@@ -463,13 +463,13 @@ fm_status_t validate(const fm_data_validation_t& v) {
   // The three domains the writer's attribute tables spell out
   // (`sheet_xml_builder.cpp`): a value past them is emitted as an absent
   // attribute, so a mistyped `type` saves as "no validation at all".
-  if (auto rc = check_enum_domain(v.type, 7, "type"); rc != 0) {
+  if (auto rc = check_enum_domain(v.type, 0, 7, "type"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(v.op, 7, "op"); rc != 0) {
+  if (auto rc = check_enum_domain(v.op, 0, 7, "op"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(v.error_style, 2, "error_style"); rc != 0) {
+  if (auto rc = check_enum_domain(v.error_style, 0, 2, "error_style"); rc != 0) {
     return rc;
   }
   return check_utf8({v.error_title, v.error_message, v.prompt_title, v.prompt_message});
@@ -518,27 +518,27 @@ fm_status_t validate(const fm_pivot_field_spec_t& spec) {
   if (auto rc = check_utf8({spec.source_name, spec.custom_name}); rc != 0) {
     return rc;
   }
-  return check_enum_domain(spec.axis, FM_PIVOT_AXIS_PAGE, "axis");
+  return check_enum_domain(spec.axis, 0, FM_PIVOT_AXIS_PAGE, "axis");
 }
 
 fm_status_t validate(const fm_pivot_data_field_spec_t& spec) {
   if (auto rc = check_utf8({spec.name}); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(spec.aggregation, FM_PIVOT_AGG_VARP, "aggregation"); rc != 0) {
+  if (auto rc = check_enum_domain(spec.aggregation, 0, FM_PIVOT_AGG_VARP, "aggregation"); rc != 0) {
     return rc;
   }
-  return check_enum_domain(spec.show_as, FM_PIVOT_SHOW_VALUES_AS_RANK_DESCENDING, "show_as");
+  return check_enum_domain(spec.show_as, 0, FM_PIVOT_SHOW_VALUES_AS_RANK_DESCENDING, "show_as");
 }
 
 fm_status_t validate(const fm_pivot_filter_spec_t& spec) {
   if (auto rc = check_utf8({spec.field_name, spec.value_text, spec.value_high_text}); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(spec.axis, FM_PIVOT_AXIS_PAGE, "axis"); rc != 0) {
+  if (auto rc = check_enum_domain(spec.axis, 0, FM_PIVOT_AXIS_PAGE, "axis"); rc != 0) {
     return rc;
   }
-  return check_enum_domain(spec.type, FM_PIVOT_FILTER_DATE_M12, "type");
+  return check_enum_domain(spec.type, 0, FM_PIVOT_FILTER_DATE_M12, "type");
 }
 
 void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out) {
@@ -687,12 +687,10 @@ fm_status_t check_sheet_row(const fm_workbook_t* wb, std::size_t sheet_index, st
 }
 
 fm_status_t check_anchor_enums(std::int64_t anchor_kind, std::int64_t edit_as) {
-  if (auto rc =
-          check_enum_domain(anchor_kind, static_cast<std::int64_t>(formulon::AnchorKind::kAbsolute), "anchor_kind");
-      rc != 0) {
+  if (auto rc = check_enum_domain(anchor_kind, 0, FM_ANCHOR_KIND_ABSOLUTE, "anchor_kind"); rc != 0) {
     return rc;
   }
-  return check_enum_domain(edit_as, static_cast<std::int64_t>(formulon::EditAs::kAbsolute), "edit_as");
+  return check_enum_domain(edit_as, 0, FM_ANCHOR_EDIT_AS_ABSOLUTE, "edit_as");
 }
 
 namespace {

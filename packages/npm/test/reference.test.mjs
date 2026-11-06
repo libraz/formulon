@@ -3,27 +3,27 @@ import { assert, expectFailure, getModule } from './smoke_support.mjs';
 
 const kInvalidArgument = 2;
 
-const dispose = (wb) => wb.delete();
+const dispose = (wb) => wb.dispose();
 
 test('spillInfo reports a spill blocked by a value', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    wb.setFormula(0, 1, 3, '=SEQUENCE(5)');
-    wb.setText(0, 3, 3, 'x');
+    wb.sheet(0).setFormula(1, 3, '=SEQUENCE(5)');
+    wb.sheet(0).setText(3, 3, 'x');
     wb.recalc();
-    const blocked = wb.getSpillInfo(0, 1, 3);
+    const blocked = wb.sheet(0).getSpillInfo(1, 3);
     assert.equal(blocked.engaged, false);
     assert.equal(blocked.blocked, true);
     assert.deepEqual(blocked.rect, { firstRow: 1, firstCol: 3, lastRow: 5, lastCol: 3 });
     // Only the anchor reports the attempt.
-    assert.equal(wb.getSpillInfo(0, 2, 3).blocked, false);
-    wb.setBlank(0, 3, 3);
+    assert.equal(wb.sheet(0).getSpillInfo(2, 3).blocked, false);
+    wb.sheet(0).setBlank(3, 3);
     wb.recalc();
-    const engaged = wb.getSpillInfo(0, 1, 3);
+    const engaged = wb.sheet(0).getSpillInfo(1, 3);
     assert.equal(engaged.engaged, true);
     assert.equal(engaged.blocked, false);
-    assert.equal(wb.getSpillInfo(0, 0, 0).blocked, false);
+    assert.equal(wb.sheet(0).getSpillInfo(0, 0).blocked, false);
   } finally {
     dispose(wb);
   }

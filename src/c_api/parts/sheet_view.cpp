@@ -16,14 +16,13 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_keeps_visible_sheet;
 using formulon::c_api::parts::check_limit;
 using formulon::c_api::parts::check_sheet_index;
-using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::set_binding_error;
 
 extern "C" fm_status_t fm_sheet_set_zoom(fm_workbook_t* wb, size_t sheet_index, uint32_t zoom_scale) {
   clear_last_error();
@@ -62,6 +61,31 @@ extern "C" fm_status_t fm_sheet_set_freeze(fm_workbook_t* wb, size_t sheet_index
 
 namespace {
 
+// `<sheetView view>` text of an `fm_sheet_view_mode_t`; the normal view is
+// the absent attribute.
+std::string_view view_mode_from_c(std::int32_t mode) {
+  switch (mode) {
+    case FM_SHEET_VIEW_MODE_PAGE_BREAK_PREVIEW:
+      return "pageBreakPreview";
+    case FM_SHEET_VIEW_MODE_PAGE_LAYOUT:
+      return "pageLayout";
+    default:
+      return "";
+  }
+}
+
+// An unrecognised `view` value reads as the normal view; the stored text
+// still round-trips on save.
+std::int32_t view_mode_to_c(std::string_view mode) {
+  if (mode == "pageBreakPreview") {
+    return FM_SHEET_VIEW_MODE_PAGE_BREAK_PREVIEW;
+  }
+  if (mode == "pageLayout") {
+    return FM_SHEET_VIEW_MODE_PAGE_LAYOUT;
+  }
+  return FM_SHEET_VIEW_MODE_NORMAL;
+}
+
 // Hiding the active sheet hands the active tab on as Excel does. Kept out of
 // the Workbook setters so a load replaying a hidden active sheet keeps it.
 void activate_successor_if_hidden(formulon::Workbook& workbook, std::uint32_t index) {
@@ -74,31 +98,6 @@ void activate_successor_if_hidden(formulon::Workbook& workbook, std::uint32_t in
 }
 
 }  // namespace
-
-extern "C" fm_status_t fm_sheet_set_tab_hidden(fm_workbook_t* wb, size_t sheet_index, int32_t hidden) {
-  clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  if (hidden != 0) {
-    if (auto rc = check_keeps_visible_sheet(wb->workbook(), static_cast<std::uint32_t>(sheet_index)); rc != 0) {
-      return rc;
-    }
-  }
-  formulon::SheetView& view = wb->workbook().sheet(sheet_index).mutable_view();
-  if (hidden != 0) {
-    // A sheet already loaded as very-hidden stays that way: this bool
-    // cannot express the difference, so asking for "hidden" on a sheet
-    // that is hidden says nothing new and must not quietly demote it.
-    view.tab_hidden = true;
-    activate_successor_if_hidden(wb->workbook(), static_cast<std::uint32_t>(sheet_index));
-  } else {
-    // Showing a sheet has to clear both bits, or the workbook would save
-    // a state the caller just asked to leave.
-    view.set_visibility(formulon::SheetVisibility::kVisible);
-  }
-  return 0;
-}
 
 extern "C" fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_index, int32_t visibility) {
   clear_last_error();
@@ -131,17 +130,15 @@ extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_i
   out->zoom_scale = v.zoom_scale;
   out->freeze_rows = v.freeze_rows;
   out->freeze_cols = v.freeze_cols;
-  // `visibility()` resolves the model's two bits, so the pair handed out
-  // here agrees even for the combination no writer should produce.
-  const formulon::SheetVisibility state = v.visibility();
-  out->tab_hidden = state != formulon::SheetVisibility::kVisible ? 1 : 0;
-  out->visibility = static_cast<int32_t>(state);
+  // `visibility()` resolves the model's two bits, including the
+  // combination no writer should produce.
+  out->visibility = static_cast<int32_t>(v.visibility());
   out->show_grid_lines = v.show_grid_lines ? 1 : 0;
   out->show_row_col_headers = v.show_row_col_headers ? 1 : 0;
   out->show_zeros = v.show_zeros ? 1 : 0;
   out->right_to_left = v.right_to_left ? 1 : 0;
   out->tab_selected = v.tab_selected ? 1 : 0;
-  out->view_mode = v.view_mode.c_str();
+  out->view_mode = view_mode_to_c(v.view_mode);
   out->top_left_row = 0;
   out->top_left_col = 0;
   (void)formulon::a1::parse_a1_ref(v.top_left_cell, &out->top_left_row, &out->top_left_col);
@@ -306,17 +303,14 @@ extern "C" fm_status_t fm_sheet_set_tab_selected(fm_workbook_t* wb, size_t sheet
   return set_view_flag(wb, sheet_index, &formulon::SheetView::tab_selected, selected);
 }
 
-extern "C" fm_status_t fm_sheet_set_view_mode(fm_workbook_t* wb, size_t sheet_index, const char* mode) {
+extern "C" fm_status_t fm_sheet_set_view_mode(fm_workbook_t* wb, size_t sheet_index, int32_t mode) {
   clear_last_error();
-  if (mode == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "mode is NULL");
-  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8({mode}); rc != 0) {
+  if (auto rc = check_enum_domain(mode, 0, FM_SHEET_VIEW_MODE_PAGE_LAYOUT, "mode"); rc != 0) {
     return rc;
   }
-  wb->workbook().sheet(sheet_index).mutable_view().view_mode = mode;
+  wb->workbook().sheet(sheet_index).mutable_view().view_mode = std::string(view_mode_from_c(mode));
   return 0;
 }

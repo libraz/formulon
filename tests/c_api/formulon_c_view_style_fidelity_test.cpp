@@ -14,6 +14,7 @@
 
 #include "c_api/formulon_c.h"
 #include "formulon_c_record_arg.h"
+#include "formulon_c_setters.h"
 #include "gtest/gtest.h"
 #include "io/zip_reader.h"
 #include "utils/error.h"
@@ -224,7 +225,7 @@ fm_fill_record_t GradientFill(fm_gradient_stop_t* stops, size_t count) {
   fill.gradient_top = 0.25;
   fill.gradient_bottom = 0.75;
   fill.gradient_stops = stops;
-  fill.gradient_stop_count = count;
+  fill.gradient_stop_count = static_cast<uint32_t>(count);
   return fill;
 }
 
@@ -492,41 +493,31 @@ TEST(FormulonCApiCalcOptions, NullArgumentsAreRejected) {
 // Defined-name attributes
 // ---------------------------------------------------------------------------
 
-TEST(FormulonCApiDefinedNameAttrs, SetReadBackAndKeepAcrossReplacement) {
+TEST(FormulonCApiDefinedNameAttrs, SetReadBackAndRoundTrip) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Rate", "Sheet1!$A$1", -1), 0);
-  EXPECT_EQ(fm_workbook_set_defined_name_attrs(wb.handle, "Nope", -1, "x", 1), kInvalidArgument);
-  ASSERT_EQ(fm_workbook_set_defined_name_attrs(wb.handle, "rate", -1, "Tax rate", 1), 0);
+  const fm_defined_name_input_t rate{"Rate", "Sheet1!$A$1", -1, "Tax rate", 1};
+  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, &rate), 0);
 
-  const char* comment = nullptr;
-  int32_t hidden = -1;
-  ASSERT_EQ(fm_workbook_get_defined_name_attrs_at(wb.handle, 0, &comment, &hidden), 0);
-  EXPECT_STREQ(comment, "Tax rate");
-  EXPECT_EQ(hidden, 1);
+  fm_defined_name_t dn{};
+  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
+  EXPECT_STREQ(dn.comment, "Tax rate");
+  EXPECT_EQ(dn.hidden, 1);
 
-  // A replacement keeps the attributes; a NULL / negative argument leaves one alone.
-  ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Rate", "Sheet1!$B$2", -1), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name_attrs(wb.handle, "Rate", -1, nullptr, 0), 0);
-  ASSERT_EQ(fm_workbook_get_defined_name_attrs_at(wb.handle, 0, &comment, &hidden), 0);
-  EXPECT_STREQ(comment, "Tax rate");
-  EXPECT_EQ(hidden, 0);
+  EXPECT_EQ(fm_workbook_get_defined_name_at(wb.handle, 4, &dn), FM_STATUS_INDEX_OUT_OF_RANGE);
 
-  EXPECT_EQ(fm_workbook_get_defined_name_attrs_at(wb.handle, 4, &comment, &hidden), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_NE(fm_workbook_get_defined_name_attrs_at(wb.handle, 0, nullptr, &hidden), 0);
-
-  ASSERT_EQ(fm_workbook_set_defined_name_attrs(wb.handle, "Rate", -1, "Tax rate", 1), 0);
   WorkbookGuard reloaded;
   RoundTrip(wb, &reloaded);
-  ASSERT_EQ(fm_workbook_get_defined_name_attrs_at(reloaded.handle, 0, &comment, &hidden), 0);
-  EXPECT_STREQ(comment, "Tax rate");
-  EXPECT_EQ(hidden, 1);
+  ASSERT_EQ(fm_workbook_get_defined_name_at(reloaded.handle, 0, &dn), 0);
+  EXPECT_STREQ(dn.comment, "Tax rate");
+  EXPECT_EQ(dn.hidden, 1);
 
-  // Clearing the comment with an empty string.
-  ASSERT_EQ(fm_workbook_set_defined_name_attrs(reloaded.handle, "Rate", -1, "", -1), 0);
-  ASSERT_EQ(fm_workbook_get_defined_name_attrs_at(reloaded.handle, 0, &comment, &hidden), 0);
-  EXPECT_STREQ(comment, "");
-  EXPECT_EQ(hidden, 1);
+  // An empty comment clears it.
+  const fm_defined_name_input_t cleared{"Rate", "Sheet1!$A$1", -1, "", 1};
+  ASSERT_EQ(fm_workbook_set_defined_name(reloaded.handle, &cleared), 0);
+  ASSERT_EQ(fm_workbook_get_defined_name_at(reloaded.handle, 0, &dn), 0);
+  EXPECT_STREQ(dn.comment, "");
+  EXPECT_EQ(dn.hidden, 1);
 }
 
 // ---------------------------------------------------------------------------

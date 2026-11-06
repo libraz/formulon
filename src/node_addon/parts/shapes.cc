@@ -24,7 +24,7 @@ fm_color_spec_t* GroupColor(fm_sparkline_group_t& g, size_t i) {
 
 struct ShapeText {
   std::string name;
-  std::string prst;
+  std::string preset_geometry;
   std::string text;
 };
 
@@ -36,9 +36,9 @@ fm_shape_t PullShape(CheckedSpecReader& reader, const Napi::Object& spec, ShapeT
     s.fields |= FM_SHAPE_FIELD_NAME;
     s.name = store.name.c_str();
   }
-  if (reader.String(spec, "prst", &store.prst)) {
-    s.fields |= FM_SHAPE_FIELD_PRST;
-    s.prst = store.prst.c_str();
+  if (reader.String(spec, "presetGeometry", &store.preset_geometry)) {
+    s.fields |= FM_SHAPE_FIELD_PRESET_GEOMETRY;
+    s.preset_geometry = store.preset_geometry.c_str();
   }
   if (reader.String(spec, "text", &store.text)) {
     s.fields |= FM_SHAPE_FIELD_TEXT;
@@ -55,14 +55,14 @@ fm_shape_t PullShape(CheckedSpecReader& reader, const Napi::Object& spec, ShapeT
     s.edit_as = reader.I32(spec, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL);
     s.from_row = reader.U32(spec, "fromRow", 0U);
     s.from_col = reader.U32(spec, "fromCol", 0U);
-    s.from_row_offset = reader.I64(spec, "fromRowOffset", 0);
-    s.from_col_offset = reader.I64(spec, "fromColOffset", 0);
+    s.from_row_offset_emu = reader.I64(spec, "fromRowOffsetEmu", 0);
+    s.from_col_offset_emu = reader.I64(spec, "fromColOffsetEmu", 0);
     s.to_row = reader.U32(spec, "toRow", 0U);
     s.to_col = reader.U32(spec, "toCol", 0U);
-    s.to_row_offset = reader.I64(spec, "toRowOffset", 0);
-    s.to_col_offset = reader.I64(spec, "toColOffset", 0);
-    s.cx = reader.I64(spec, "cx", 0);
-    s.cy = reader.I64(spec, "cy", 0);
+    s.to_row_offset_emu = reader.I64(spec, "toRowOffsetEmu", 0);
+    s.to_col_offset_emu = reader.I64(spec, "toColOffsetEmu", 0);
+    s.width_emu = reader.I64(spec, "widthEmu", 0);
+    s.height_emu = reader.I64(spec, "heightEmu", 0);
   }
   s.fill_kind = reader.I32(spec, "fillKind", 0, &present);
   if (present) {
@@ -151,21 +151,21 @@ Napi::Object ShapeToJs(Napi::Env env, const fm_shape_t& s) {
   item.Set("editAs", JsNumber(env, s.edit_as));
   item.Set("fromRow", JsNumber(env, s.from_row));
   item.Set("fromCol", JsNumber(env, s.from_col));
-  item.Set("fromRowOffset", JsNumber(env, static_cast<double>(s.from_row_offset)));
-  item.Set("fromColOffset", JsNumber(env, static_cast<double>(s.from_col_offset)));
+  item.Set("fromRowOffsetEmu", JsNumber(env, static_cast<double>(s.from_row_offset_emu)));
+  item.Set("fromColOffsetEmu", JsNumber(env, static_cast<double>(s.from_col_offset_emu)));
   item.Set("toRow", JsNumber(env, s.to_row));
   item.Set("toCol", JsNumber(env, s.to_col));
-  item.Set("toRowOffset", JsNumber(env, static_cast<double>(s.to_row_offset)));
-  item.Set("toColOffset", JsNumber(env, static_cast<double>(s.to_col_offset)));
-  item.Set("cx", JsNumber(env, static_cast<double>(s.cx)));
-  item.Set("cy", JsNumber(env, static_cast<double>(s.cy)));
+  item.Set("toRowOffsetEmu", JsNumber(env, static_cast<double>(s.to_row_offset_emu)));
+  item.Set("toColOffsetEmu", JsNumber(env, static_cast<double>(s.to_col_offset_emu)));
+  item.Set("widthEmu", JsNumber(env, static_cast<double>(s.width_emu)));
+  item.Set("heightEmu", JsNumber(env, static_cast<double>(s.height_emu)));
   item.Set("name", JsString(env, s.name));
-  item.Set("prst", JsString(env, s.prst));
+  item.Set("presetGeometry", JsString(env, s.preset_geometry));
   item.Set("text", JsString(env, s.text));
   item.Set("textBox", Napi::Boolean::New(env, s.text_box != 0));
-  item.Set("fillKind", JsNumber(env, s.fill_kind));
+  item.Set("fillKind", JsIndexOrNull(env, s.fill_kind));
   item.Set("fillRgb", JsNumber(env, s.fill_rgb));
-  item.Set("lineKind", JsNumber(env, s.line_kind));
+  item.Set("lineKind", JsIndexOrNull(env, s.line_kind));
   item.Set("lineRgb", JsNumber(env, s.line_rgb));
   item.Set("lineWidthEmu", JsNumber(env, static_cast<double>(s.line_width_emu)));
   item.Set("rotation", JsNumber(env, s.rotation));
@@ -274,7 +274,7 @@ Napi::Value Workbook::GetSparklineGroup(const Napi::CallbackInfo& info) {
   item.Set("manualMin", g.has_manual_min != 0 ? JsNumber(env, g.manual_min) : env.Null());
   item.Set("manualMax", g.has_manual_max != 0 ? JsNumber(env, g.manual_max) : env.Null());
   item.Set("dateAxis", Napi::Boolean::New(env, g.date_axis != 0));
-  item.Set("dateAxisRef", JsString(env, g.date_axis_ref));
+  item.Set("dateAxisRef", JsStringOrNull(env, g.date_axis_ref));
   item.Set("lineWeight", JsNumber(env, g.line_weight));
   item.Set("emptyCellsAs", JsNumber(env, g.empty_cells_as));
   Napi::Array sparklines = Napi::Array::New(env);

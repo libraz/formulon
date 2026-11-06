@@ -50,9 +50,9 @@ TEST(FormulonCli, ProfilesJsonListsTheSameIdsInTheSameOrder) {
   EXPECT_EQ(r.stdout_text, expected);
 }
 
-TEST(FormulonCli, ProfilesJsonWriteFailureExitsOne) {
+TEST(FormulonCli, ProfilesJsonWriteFailureExitsIoError) {
   const CliRun r = run_cli({"profiles", "--json"}, /*merge_streams=*/false, /*close_stdout=*/true);
-  EXPECT_EQ(r.exit_code, 1);
+  EXPECT_EQ(r.exit_code, 74);
 }
 
 TEST(FormulonCli, EvalEngineFailureExitsOne) {

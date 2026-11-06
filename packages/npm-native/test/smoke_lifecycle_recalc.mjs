@@ -4,9 +4,9 @@ import { assert, getModule, isFormulonError } from './smoke_support.mjs';
 test("Workbook.createDefault + setFormula '=1+2' + recalc -> 3", async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.setFormula(0, 0, 0, '=1+2');
+  wb.sheet(0).setFormula(0, 0, '=1+2');
   wb.recalc();
-  const r = wb.getValue(0, 0, 0);
+  const r = wb.sheet(0).getValue(0, 0);
   assert.equal(r.kind, mod.ValueKind.Number);
   assert.equal(r.number, 3);
 });
@@ -16,8 +16,8 @@ test('recalcParallel evaluates a wide DAG and reports bounded telemetry', async 
   const wb = mod.Workbook.createDefault();
   const width = 128;
   for (let row = 0; row < width; row += 1) {
-    wb.setNumber(0, row, 0, row + 1);
-    wb.setFormula(0, row, 1, `=A${row + 1}*2`);
+    wb.sheet(0).setNumber(row, 0, row + 1);
+    wb.sheet(0).setFormula(row, 1, `=A${row + 1}*2`);
   }
 
   const serial = wb.recalcParallel(1);
@@ -25,13 +25,13 @@ test('recalcParallel evaluates a wide DAG and reports bounded telemetry', async 
   assert.equal(serial.workerThreadsUsed, 0);
   assert.equal(serial.cellsEvaluated, width);
   for (let row = 0; row < width; row += 1) {
-    const value = wb.getValue(0, row, 1);
+    const value = wb.sheet(0).getValue(row, 1);
     assert.equal(value.kind, mod.ValueKind.Number);
     assert.equal(value.number, (row + 1) * 2);
   }
 
   for (let row = 0; row < width; row += 1) {
-    wb.setNumber(0, row, 0, row + 2);
+    wb.sheet(0).setNumber(row, 0, row + 2);
   }
   const parallel = wb.recalcParallel(8);
   if (parallel.workerThreadsStarted <= 1) {
@@ -46,7 +46,7 @@ test('recalcParallel evaluates a wide DAG and reports bounded telemetry', async 
   }
   assert.equal(parallel.cellsEvaluated, width);
   for (let row = 0; row < width; row += 1) {
-    const value = wb.getValue(0, row, 1);
+    const value = wb.sheet(0).getValue(row, 1);
     assert.equal(value.kind, mod.ValueKind.Number);
     assert.equal(value.number, (row + 2) * 2);
   }
@@ -74,7 +74,7 @@ test('recalcParallel evaluates a wide DAG and reports bounded telemetry', async 
 test("evaluateFormulaArray('=SEQUENCE(2,3)') returns a 2x3 grid", async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const r = wb.evaluateFormulaArray(0, 0, 0, '=SEQUENCE(2,3)');
+  const r = wb.sheet(0).evaluateFormulaArray(0, 0, '=SEQUENCE(2,3)');
   assert.equal(r.rows, 2);
   assert.equal(r.cols, 3);
   assert.equal(r.cells.length, 2);
@@ -88,7 +88,7 @@ test("evaluateFormulaArray('=SEQUENCE(2,3)') returns a 2x3 grid", async () => {
 test("evaluateFormulaArray('=1+2') reports a 1x1 scalar array", async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const r = wb.evaluateFormulaArray(0, 0, 0, '=1+2');
+  const r = wb.sheet(0).evaluateFormulaArray(0, 0, '=1+2');
   assert.equal(r.rows, 1);
   assert.equal(r.cols, 1);
   assert.equal(r.cells[0][0].kind, mod.ValueKind.Number);
@@ -99,8 +99,8 @@ test('Workbook.createEmpty + addSheet -> sheetCount/sheetName work', async () =>
   const mod = await getModule();
   const wb = mod.Workbook.createEmpty();
   wb.addSheet('Sheet1');
-  assert.equal(wb.getSheetCount(), 1);
-  const sn = wb.getSheetName(0);
+  assert.equal(wb.listSheets().length, 1);
+  const sn = wb.sheet(0).name;
   assert.equal(sn, 'Sheet1');
 });
 
@@ -114,25 +114,25 @@ test('Unicode sheet identity rejects folded duplicate and permits casing rename'
     () => wb.renameSheet(1, 'ä'),
     (e) => isFormulonError(e) && e.code !== 0,
   );
-  assert.equal(wb.getSheetName(0), 'Ä');
-  assert.equal(wb.getSheetName(1), 'Ö');
+  assert.equal(wb.sheet(0).name, 'Ä');
+  assert.equal(wb.sheet(1).name, 'Ö');
   wb.renameSheet(0, 'ä');
-  const sn = wb.getSheetName(0);
+  const sn = wb.sheet(0).name;
   assert.equal(sn, 'ä');
-  assert.equal(wb.getSheetName(1), 'Ö');
+  assert.equal(wb.sheet(1).name, 'Ö');
   wb.dispose();
 });
 
 test('save() returns Uint8Array; loadBytes round-trips the value', async () => {
   const mod = await getModule();
   const wb1 = mod.Workbook.createDefault();
-  wb1.setNumber(0, 0, 0, 42);
+  wb1.sheet(0).setNumber(0, 0, 42);
   const bytes = wb1.save();
   assert.ok(bytes instanceof Uint8Array, 'expected Uint8Array');
   assert.ok(bytes.length > 0, 'expected non-empty save buffer');
 
   const wb2 = mod.Workbook.load(bytes);
-  const r = wb2.getValue(0, 0, 0);
+  const r = wb2.sheet(0).getValue(0, 0);
   assert.equal(r.kind, mod.ValueKind.Number);
   assert.equal(r.number, 42);
 });
@@ -159,7 +159,7 @@ test('dispose deterministically releases a workbook and is idempotent', async ()
   assert.equal(wb.disposed, false);
   assert.equal(wb.dispose(), undefined);
   assert.equal(wb.disposed, true);
-  assert.throws(() => wb.getValue(0, 0, 0), isFormulonError);
+  assert.throws(() => wb.sheet(0).getValue(0, 0), isFormulonError);
   assert.equal(wb.dispose(), undefined);
 });
 
@@ -173,7 +173,7 @@ test('memoryUsage grows with the workbook and reads zero after dispose', async (
   // Distinct strings so the shared-string storage cannot fold them into
   // one entry and hide the growth.
   for (let row = 0; row < 2000; row += 1) {
-    wb.setText(0, row, 0, `payload-${row}-${'x'.repeat(64)}`);
+    wb.sheet(0).setText(row, 0, `payload-${row}-${'x'.repeat(64)}`);
   }
   const filled = wb.getMemoryUsage();
   assert.ok(filled > empty, `expected growth, got ${empty} -> ${filled}`);
@@ -190,7 +190,7 @@ test('memoryUsage is stable across repeated calls and survives a recalc', async 
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   for (let row = 0; row < 500; row += 1) {
-    wb.setFormula(0, row, 0, `=${row}+1`);
+    wb.sheet(0).setFormula(row, 0, `=${row}+1`);
   }
 
   const first = wb.getMemoryUsage();
@@ -215,16 +215,18 @@ test('Workbook factories return instances of the exported Workbook class', async
 test('copySheet names the copy automatically or explicitly and reports bad arguments', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.setNumber(0, 0, 0, 5);
-  wb.setFormula(0, 0, 1, '=A1*2');
+  wb.sheet(0).setNumber(0, 0, 5);
+  wb.sheet(0).setFormula(0, 1, '=A1*2');
   const auto = wb.copySheet(0, 1);
-  assert.equal(auto, 1);
-  assert.equal(wb.getSheetName(1), 'Sheet1 (2)');
+  assert.equal(auto.index, 1);
+  assert.equal(auto.name, 'Sheet1 (2)');
+  assert.equal(wb.sheet(1), auto);
   const named = wb.copySheet(0, 0, 'Archive');
-  assert.equal(named, 0);
-  assert.equal(wb.getSheetName(0), 'Archive');
+  assert.equal(named.index, 0);
+  assert.equal(named.name, 'Archive');
+  assert.equal(wb.sheet(0), named);
   wb.recalc();
-  assert.equal(wb.getValue(0, 0, 1).number, 10);
+  assert.equal(wb.sheet(0).getValue(0, 1).number, 10);
   assert.throws(
     () => wb.copySheet(9, 0),
     (e) => isFormulonError(e, 5050),
@@ -237,6 +239,6 @@ test('copySheet names the copy automatically or explicitly and reports bad argum
     () => wb.copySheet(0, 0, ''),
     (e) => isFormulonError(e, 5051),
   );
-  assert.equal(wb.getSheetCount(), 3);
+  assert.equal(wb.listSheets().length, 3);
   wb.dispose();
 });

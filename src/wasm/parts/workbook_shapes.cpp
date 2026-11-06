@@ -35,19 +35,19 @@ emscripten::val shape_to_val(const fm_shape_t& s) {
   o.set("editAs", s.edit_as);
   o.set("fromRow", s.from_row);
   o.set("fromCol", s.from_col);
-  o.set("fromRowOffset", static_cast<double>(s.from_row_offset));
-  o.set("fromColOffset", static_cast<double>(s.from_col_offset));
+  o.set("fromRowOffsetEmu", static_cast<double>(s.from_row_offset_emu));
+  o.set("fromColOffsetEmu", static_cast<double>(s.from_col_offset_emu));
   o.set("toRow", s.to_row);
   o.set("toCol", s.to_col);
-  o.set("toRowOffset", static_cast<double>(s.to_row_offset));
-  o.set("toColOffset", static_cast<double>(s.to_col_offset));
-  o.set("cx", static_cast<double>(s.cx));
-  o.set("cy", static_cast<double>(s.cy));
-  js_set_cstr_fields(o, {{"name", s.name}, {"prst", s.prst}, {"text", s.text}});
+  o.set("toRowOffsetEmu", static_cast<double>(s.to_row_offset_emu));
+  o.set("toColOffsetEmu", static_cast<double>(s.to_col_offset_emu));
+  o.set("widthEmu", static_cast<double>(s.width_emu));
+  o.set("heightEmu", static_cast<double>(s.height_emu));
+  js_set_cstr_fields(o, {{"name", s.name}, {"presetGeometry", s.preset_geometry}, {"text", s.text}});
   o.set("textBox", s.text_box != 0);
-  o.set("fillKind", s.fill_kind);
+  js_set_index_or_null(o, "fillKind", s.fill_kind);
   o.set("fillRgb", s.fill_rgb);
-  o.set("lineKind", s.line_kind);
+  js_set_index_or_null(o, "lineKind", s.line_kind);
   o.set("lineRgb", s.line_rgb);
   o.set("lineWidthEmu", static_cast<double>(s.line_width_emu));
   o.set("rotation", s.rotation);
@@ -57,7 +57,7 @@ emscripten::val shape_to_val(const fm_shape_t& s) {
 
 struct ShapeText {
   std::string name;
-  std::string prst;
+  std::string preset_geometry;
   std::string text;
 };
 
@@ -68,9 +68,9 @@ fm_shape_t pull_shape(JsNarrowNumericReader& reader, const emscripten::val& spec
     s.fields |= FM_SHAPE_FIELD_NAME;
     s.name = reader.optional_string(spec, "name", store.name, "shape.name");
   }
-  if (present(reader, spec, "prst")) {
-    s.fields |= FM_SHAPE_FIELD_PRST;
-    s.prst = reader.optional_string(spec, "prst", store.prst, "shape.prst");
+  if (present(reader, spec, "presetGeometry")) {
+    s.fields |= FM_SHAPE_FIELD_PRESET_GEOMETRY;
+    s.preset_geometry = reader.optional_string(spec, "presetGeometry", store.preset_geometry, "shape.presetGeometry");
   }
   if (present(reader, spec, "text")) {
     s.fields |= FM_SHAPE_FIELD_TEXT;
@@ -86,14 +86,14 @@ fm_shape_t pull_shape(JsNarrowNumericReader& reader, const emscripten::val& spec
     s.edit_as = reader.i32(spec, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL, "shape.editAs");
     s.from_row = reader.u32(spec, "fromRow", 0U, "shape.fromRow");
     s.from_col = reader.u32(spec, "fromCol", 0U, "shape.fromCol");
-    s.from_row_offset = reader.i64(spec, "fromRowOffset", 0, "shape.fromRowOffset");
-    s.from_col_offset = reader.i64(spec, "fromColOffset", 0, "shape.fromColOffset");
+    s.from_row_offset_emu = reader.i64(spec, "fromRowOffsetEmu", 0, "shape.fromRowOffsetEmu");
+    s.from_col_offset_emu = reader.i64(spec, "fromColOffsetEmu", 0, "shape.fromColOffsetEmu");
     s.to_row = reader.u32(spec, "toRow", 0U, "shape.toRow");
     s.to_col = reader.u32(spec, "toCol", 0U, "shape.toCol");
-    s.to_row_offset = reader.i64(spec, "toRowOffset", 0, "shape.toRowOffset");
-    s.to_col_offset = reader.i64(spec, "toColOffset", 0, "shape.toColOffset");
-    s.cx = reader.i64(spec, "cx", 0, "shape.cx");
-    s.cy = reader.i64(spec, "cy", 0, "shape.cy");
+    s.to_row_offset_emu = reader.i64(spec, "toRowOffsetEmu", 0, "shape.toRowOffsetEmu");
+    s.to_col_offset_emu = reader.i64(spec, "toColOffsetEmu", 0, "shape.toColOffsetEmu");
+    s.width_emu = reader.i64(spec, "widthEmu", 0, "shape.widthEmu");
+    s.height_emu = reader.i64(spec, "heightEmu", 0, "shape.heightEmu");
   }
   if (present(reader, spec, "fillKind")) {
     s.fields |= FM_SHAPE_FIELD_FILL;
@@ -145,7 +145,7 @@ emscripten::val sparkline_group_to_val(fm_sparkline_group_t g, emscripten::val s
   o.set("manualMin", g.has_manual_min != 0 ? emscripten::val(g.manual_min) : emscripten::val::null());
   o.set("manualMax", g.has_manual_max != 0 ? emscripten::val(g.manual_max) : emscripten::val::null());
   o.set("dateAxis", g.date_axis != 0);
-  js_set_cstr(o, "dateAxisRef", g.date_axis_ref);
+  js_set_cstr_or_null(o, "dateAxisRef", g.date_axis_ref);
   o.set("lineWeight", g.line_weight);
   o.set("emptyCellsAs", g.empty_cells_as);
   o.set("sparklines", sparklines);

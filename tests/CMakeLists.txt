@@ -651,6 +651,14 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/codegen/gen_native_dts.py --check
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  # The Workbook / Sheet facade tables in packages/npm/common.mjs and
+  # packages/python/formulon/sheet.py, and the addon's sheet-scope name list,
+  # are the output of gen_facade_tables.py over tools/api/names.yaml.
+  add_test(
+    NAME FacadeTablesCodegenDrift
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/codegen/gen_facade_tables.py --check
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
   # Unit tests of the drift checks themselves, so a check that stops
   # detecting anything fails here instead of reporting "no drift".
   add_test(

@@ -202,6 +202,12 @@ Napi::Value Workbook::SetComment(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, rc, env.Undefined());
 }
 
+Napi::Value Workbook::RemoveComment(const Napi::CallbackInfo& info) {
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    return fm_sheet_remove_comment(handle, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2));
+  });
+}
+
 Napi::Value Workbook::GetCommentVisible(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
@@ -233,19 +239,19 @@ Napi::Value Workbook::GetWorkbookProtection(const Napi::CallbackInfo& info) {
     return ThrowStatus(env, rc);
   }
   Napi::Object o = Napi::Object::New(env);
-  o.Set("lockStructure", Napi::Number::New(env, p.lock_structure));
-  o.Set("lockWindows", Napi::Number::New(env, p.lock_windows));
-  o.Set("lockRevision", Napi::Number::New(env, p.lock_revision));
+  o.Set("lockStructure", JsBool(env, p.lock_structure));
+  o.Set("lockWindows", JsBool(env, p.lock_windows));
+  o.Set("lockRevision", JsBool(env, p.lock_revision));
   o.Set("workbookSpinCount", Napi::Number::New(env, p.workbook_spin_count));
   o.Set("revisionsSpinCount", Napi::Number::New(env, p.revisions_spin_count));
-  o.Set("workbookPassword", JsString(env, p.workbook_password));
-  o.Set("workbookAlgorithmName", JsString(env, p.workbook_algorithm_name));
-  o.Set("workbookHashValue", JsString(env, p.workbook_hash_value));
-  o.Set("workbookSaltValue", JsString(env, p.workbook_salt_value));
-  o.Set("revisionsPassword", JsString(env, p.revisions_password));
-  o.Set("revisionsAlgorithmName", JsString(env, p.revisions_algorithm_name));
-  o.Set("revisionsHashValue", JsString(env, p.revisions_hash_value));
-  o.Set("revisionsSaltValue", JsString(env, p.revisions_salt_value));
+  o.Set("workbookPassword", JsStringOrNull(env, p.workbook_password));
+  o.Set("workbookAlgorithmName", JsStringOrNull(env, p.workbook_algorithm_name));
+  o.Set("workbookHashValue", JsStringOrNull(env, p.workbook_hash_value));
+  o.Set("workbookSaltValue", JsStringOrNull(env, p.workbook_salt_value));
+  o.Set("revisionsPassword", JsStringOrNull(env, p.revisions_password));
+  o.Set("revisionsAlgorithmName", JsStringOrNull(env, p.revisions_algorithm_name));
+  o.Set("revisionsHashValue", JsStringOrNull(env, p.revisions_hash_value));
+  o.Set("revisionsSaltValue", JsStringOrNull(env, p.revisions_salt_value));
   return o;
 }
 
@@ -255,33 +261,29 @@ Napi::Value Workbook::SetWorkbookProtection(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   Napi::Object in = ArgObject(info, 0);
+  // A missing or `null` string is no stored value.
   CheckedSpecReader reader(env);
   std::string text[8];
-  (void)reader.String(in, "workbookPassword", &text[0]);
-  (void)reader.String(in, "workbookAlgorithmName", &text[1]);
-  (void)reader.String(in, "workbookHashValue", &text[2]);
-  (void)reader.String(in, "workbookSaltValue", &text[3]);
-  (void)reader.String(in, "revisionsPassword", &text[4]);
-  (void)reader.String(in, "revisionsAlgorithmName", &text[5]);
-  (void)reader.String(in, "revisionsHashValue", &text[6]);
-  (void)reader.String(in, "revisionsSaltValue", &text[7]);
+  const auto optional = [&](const char* key, std::string* store) {
+    return reader.String(in, key, store) ? store->c_str() : nullptr;
+  };
   fm_workbook_protection_t p{};
-  p.lock_structure = reader.I32(in, "lockStructure", 0);
-  p.lock_windows = reader.I32(in, "lockWindows", 0);
-  p.lock_revision = reader.I32(in, "lockRevision", 0);
+  p.lock_structure = reader.Bool(in, "lockStructure", false) ? 1 : 0;
+  p.lock_windows = reader.Bool(in, "lockWindows", false) ? 1 : 0;
+  p.lock_revision = reader.Bool(in, "lockRevision", false) ? 1 : 0;
   p.workbook_spin_count = reader.U32(in, "workbookSpinCount", 0U);
   p.revisions_spin_count = reader.U32(in, "revisionsSpinCount", 0U);
+  p.workbook_password = optional("workbookPassword", &text[0]);
+  p.workbook_algorithm_name = optional("workbookAlgorithmName", &text[1]);
+  p.workbook_hash_value = optional("workbookHashValue", &text[2]);
+  p.workbook_salt_value = optional("workbookSaltValue", &text[3]);
+  p.revisions_password = optional("revisionsPassword", &text[4]);
+  p.revisions_algorithm_name = optional("revisionsAlgorithmName", &text[5]);
+  p.revisions_hash_value = optional("revisionsHashValue", &text[6]);
+  p.revisions_salt_value = optional("revisionsSaltValue", &text[7]);
   if (!reader.ok()) {
     return env.Undefined();
   }
-  p.workbook_password = text[0].c_str();
-  p.workbook_algorithm_name = text[1].c_str();
-  p.workbook_hash_value = text[2].c_str();
-  p.workbook_salt_value = text[3].c_str();
-  p.revisions_password = text[4].c_str();
-  p.revisions_algorithm_name = text[5].c_str();
-  p.revisions_hash_value = text[6].c_str();
-  p.revisions_salt_value = text[7].c_str();
   return ValueOrThrow(env, fm_workbook_set_workbook_protection(handle_, &p), env.Undefined());
 }
 
@@ -443,9 +445,9 @@ Napi::Object HyperlinkToJs(Napi::Env env, const fm_hyperlink_t& h) {
   Napi::Object item = Napi::Object::New(env);
   item.Set("rect", RangeToJs(env, h.rect));
   item.Set("target", JsString(env, h.target));
-  item.Set("location", JsString(env, h.location));
-  item.Set("display", JsString(env, h.display));
-  item.Set("tooltip", JsString(env, h.tooltip));
+  item.Set("location", JsStringOrNull(env, h.location));
+  item.Set("display", JsStringOrNull(env, h.display));
+  item.Set("tooltip", JsStringOrNull(env, h.tooltip));
   return item;
 }
 
@@ -692,15 +694,13 @@ Napi::Value Workbook::AddThreadedComment(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   const Napi::Object spec = ArgObject(info, 1);
-  std::string id;
+  const std::string id = reader.RequiredString(spec, "id");
   std::string person_id;
   std::string created;
-  std::string text;
   std::string parent_id;
-  reader.String(spec, "id", &id);
   reader.String(spec, "personId", &person_id);
   reader.String(spec, "created", &created);
-  reader.String(spec, "text", &text);
+  const std::string text = reader.RequiredString(spec, "text");
   reader.String(spec, "parentId", &parent_id);
   std::vector<std::string> mention_ids;
   std::vector<fm_mention_t> mentions;

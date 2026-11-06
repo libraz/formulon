@@ -2,6 +2,8 @@
 # `was` holds the current names, the top-level names the target ones. `scope: process`
 # marks a process-wide function (JS named export, Python module function). `drop` names
 # leave a surface when the `closes` rule closes; `replaced_by` folds a type into another.
+# `kind: typedef` names a type that is neither a record nor an enum: a handle, an alias,
+# a callback, an error class, or a module or options object.
 schema: 1
 collections:
   sheet: { key: index, access: handles, plural: sheets, ops: [sheet.add, sheet.copy, sheet.get_count, sheet.move, sheet.remove, sheet.rename, sheet_index.get, sheet_name.get] }
@@ -28,7 +30,7 @@ collections:
   sparkline: { key: index, access: exempt, plural: sparklines, exempt: "C-only getter; the bindings read sparklines as a SparklineGroup field", ops: [sparkline.get] }
   external_link: { key: index, access: list, plural: external_links, ops: [external_link.get, external_link.get_count] }
   cell_phonetic_run: { key: index, access: property, plural: cell_phonetic_runs, ops: [cell_phonetic_run.get, cell_phonetic_run.get_count] }
-  comment: { key: natural, by: cell, plural: comments, ops: [comment.get, comment.get_at, comment.get_count, comment.set, comment_visible.get] }
+  comment: { key: natural, by: cell, plural: comments, ops: [comment.get, comment.get_at, comment.get_count, comment.remove, comment.set, comment_visible.get] }
   threaded_comment: { key: natural, by: id, plural: threaded_comments, ops: [threaded_comment.add, threaded_comment.get, threaded_comment.get_at, threaded_comment.get_count, threaded_comment.remove, threaded_comment.update] }
   person: { key: natural, by: id, plural: people, ops: [person.add, person.get, person.get_at, person.get_count, person.remove] }
   hyperlink: { key: natural, by: cell, plural: hyperlinks, ops: [hyperlink.add, hyperlink.get, hyperlink.get_at, hyperlink.get_count, hyperlink.remove, hyperlink.remove_at] }
@@ -195,6 +197,11 @@ entries:
     py: Hyperlink
     surfaces: [c, wasm, native, py]
     was: { c: fm_hyperlink, js: HyperlinkEntry, py: Hyperlink }
+  record.hyperlink_input:
+    kind: record
+    role: input
+    js: HyperlinkInput
+    surfaces: [wasm, native]
   record.comment:
     kind: record
     role: result
@@ -257,6 +264,17 @@ entries:
     py: ThreadedComment
     surfaces: [c, wasm, native, py]
     was: { c: fm_threaded_comment, js: ThreadedComment, py: ThreadedComment }
+  record.threaded_comment_input:
+    kind: record
+    role: input
+    js: ThreadedCommentInput
+    py: ThreadedCommentInput
+    surfaces: [wasm, native, py]
+  record.threaded_comment_patch:
+    kind: record
+    role: patch
+    js: ThreadedCommentPatch
+    surfaces: [wasm, native]
   record.person:
     kind: record
     role: result
@@ -294,6 +312,8 @@ entries:
     py: CivilTime
     surfaces: [c, wasm, native, py]
     was: { c: fm_civil_time_t, js: CivilTime, py: CivilTime }
+    drop: { py: CivilTime, closes: R18.py }
+    exception: "Python reads and writes the pinned time as datetime.datetime"
   record.sheet_protection:
     kind: record
     role: result
@@ -313,7 +333,8 @@ entries:
     kind: enum
     c: fm_cf_match_kind_t
     js: CfMatchKind
-    surfaces: [c, wasm, native]
+    py: CfMatchKind
+    surfaces: [c, wasm, native, py]
     was: { c: fm_cf_match_kind_t, js: CfMatchKind }
   record.cf_color:
     kind: record
@@ -362,11 +383,18 @@ entries:
     was: { c: fm_margins_pt, py: MarginsPt }
   record.print_titles:
     kind: record
-    role: result
+    role: both
     c: fm_print_titles_t
+    js: PrintTitles
     py: PrintTitles
-    surfaces: [c, py]
+    surfaces: [c, wasm, native, py]
     was: { c: fm_print_titles, py: PrintTitles }
+  record.span:
+    kind: record
+    role: both
+    js: Span
+    py: Span
+    surfaces: [wasm, native, py]
   record.page_layout:
     kind: record
     role: result
@@ -389,7 +417,17 @@ entries:
     js: PageSetup
     py: PageSetup
     surfaces: [c, wasm, native, py]
-    was: { c: fm_page_setup_t, js: PageSetupInput, py: PageSetup }
+    was: { c: fm_page_setup_t, py: PageSetup }
+  record.page_setup_input:
+    kind: record
+    role: input
+    js: PageSetupInput
+    surfaces: [wasm, native]
+  record.page_setup_patch:
+    kind: record
+    role: patch
+    js: PageSetupPatch
+    surfaces: [wasm, native]
   record.page_margins:
     kind: record
     role: result
@@ -397,7 +435,17 @@ entries:
     js: PageMargins
     py: PageMargins
     surfaces: [c, wasm, native, py]
-    was: { c: fm_page_margins_t, js: PageMarginsInput, py: PageMargins }
+    was: { c: fm_page_margins_t, py: PageMargins }
+  record.page_margins_input:
+    kind: record
+    role: input
+    js: PageMarginsInput
+    surfaces: [wasm, native]
+  record.page_margins_patch:
+    kind: record
+    role: patch
+    js: PageMarginsPatch
+    surfaces: [wasm, native]
   record.print_options:
     kind: record
     role: input
@@ -589,6 +637,16 @@ entries:
     py: PivotOptions
     surfaces: [c, wasm, native, py]
     was: { c: fm_pivot_options_t, js: PivotOptions, py: PivotOptions }
+  record.pivot_options_patch:
+    kind: record
+    role: patch
+    js: PivotOptionsPatch
+    surfaces: [wasm, native]
+  record.pivot_date_group_input:
+    kind: record
+    role: input
+    js: PivotDateGroupInput
+    surfaces: [wasm, native]
   record.pivot_cache_options:
     kind: record
     role: result
@@ -597,6 +655,11 @@ entries:
     py: PivotCacheOptions
     surfaces: [c, wasm, native, py]
     was: { c: fm_pivot_cache_options_t, js: PivotCacheOptions, py: PivotCacheOptions }
+  record.pivot_cache_options_patch:
+    kind: record
+    role: patch
+    js: PivotCacheOptionsPatch
+    surfaces: [wasm, native]
   record.pivot_calculated_item:
     kind: record
     role: result
@@ -623,7 +686,9 @@ entries:
   enum.function_availability:
     kind: enum
     c: fm_function_availability_t
-    surfaces: [c]
+    js: FunctionAvailability
+    py: FunctionAvailability
+    surfaces: [c, wasm, native, py]
     was: { c: fm_function_availability_t }
   record.function_metadata:
     kind: record
@@ -636,8 +701,11 @@ entries:
   enum.date_order:
     kind: enum
     c: fm_date_order_t
-    surfaces: [c]
+    js: LocaleDateOrder
+    py: LocaleDateOrder
+    surfaces: [c, wasm, native, py]
     was: { c: fm_date_order_t }
+    exception: "the binding name says whose order it is: the order a locale reads a date in"
   record.locale_facts:
     kind: record
     role: result
@@ -760,6 +828,11 @@ entries:
     py: SheetFormatDefaults
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_format_defaults, js: SheetFormatDefaults, py: SheetFormatDefaults }
+  record.sheet_format_defaults_patch:
+    kind: record
+    role: patch
+    js: SheetFormatDefaultsPatch
+    surfaces: [wasm, native]
   enum.geometry_mode:
     kind: enum
     c: fm_geometry_mode_t
@@ -792,7 +865,9 @@ entries:
   enum.color_kind:
     kind: enum
     c: fm_color_kind_t
-    surfaces: [c]
+    js: ColorKind
+    py: ColorKind
+    surfaces: [c, wasm, native, py]
     was: { c: fm_color_kind_t }
   record.color_spec:
     kind: record
@@ -831,14 +906,16 @@ entries:
     role: result
     c: fm_border_side_t
     js: BorderSide
-    surfaces: [c, wasm, native]
+    py: BorderSide
+    surfaces: [c, wasm, native, py]
     was: { c: fm_border_side, js: BorderSide }
   record.border_record:
     kind: record
     role: result
     c: fm_border_record_t
     js: Border
-    surfaces: [c, wasm, native]
+    py: Border
+    surfaces: [c, wasm, native, py]
     was: { c: fm_border_record, js: BorderRecord }
   record.styles_batch:
     kind: record
@@ -888,8 +965,16 @@ entries:
     kind: record
     role: result
     c: fm_theme_colors_t
-    surfaces: [c]
+    js: ThemeColors
+    py: ThemeColors
+    surfaces: [c, wasm, native, py]
     was: { c: fm_theme_colors }
+  record.theme_colors_input:
+    kind: record
+    role: input
+    js: ThemeColorsInput
+    py: ThemeColorsInput
+    surfaces: [wasm, native, py]
   record.theme_fonts:
     kind: record
     role: result
@@ -988,8 +1073,10 @@ entries:
     kind: record
     role: input
     c: fm_drawing_anchor_t
-    surfaces: [c]
+    js: DrawingAnchor
+    surfaces: [c, wasm, native]
     was: { c: fm_drawing_anchor }
+    exception: "one anchor shape for ImageInsertInput, ChartInsertInput and setDrawingAnchor; no result carries it"
   enum.shape_paint:
     kind: enum
     c: fm_shape_paint_t
@@ -1109,7 +1196,9 @@ entries:
   enum.chart_axis_position:
     kind: enum
     c: fm_chart_axis_position_t
-    surfaces: [c]
+    js: ChartAxisPosition
+    py: ChartAxisPosition
+    surfaces: [c, wasm, native, py]
     was: { c: fm_chart_axis_position_t }
   enum.chart_axis_crosses:
     kind: enum
@@ -1168,7 +1257,9 @@ entries:
   enum.chart_bar_direction:
     kind: enum
     c: fm_chart_bar_direction_t
-    surfaces: [c]
+    js: ChartBarDirection
+    py: ChartBarDirection
+    surfaces: [c, wasm, native, py]
     was: { c: fm_chart_bar_direction_t }
   enum.chart_tri:
     kind: enum
@@ -1465,12 +1556,14 @@ entries:
     drop: { js: ArrayFormulaResult, closes: R8.js }
   record.auto_filter_column:
     kind: record
+    role: both
     js: AutoFilterColumn
     py: AutoFilterColumn
     surfaces: [wasm, native, py]
     was: { js: AutoFilterColumn, py: AutoFilterColumn }
   record.auto_filter_date_group:
     kind: record
+    role: both
     js: AutoFilterDateGroup
     py: AutoFilterDateGroup
     surfaces: [wasm, native, py]
@@ -1491,12 +1584,14 @@ entries:
     drop: { js: AutoFilterResult, closes: R8.js }
   record.auto_filter_sort_condition:
     kind: record
+    role: both
     js: AutoFilterSortCondition
     py: AutoFilterSortCondition
     surfaces: [wasm, native, py]
     was: { js: AutoFilterSortCondition, py: AutoFilterSortCondition }
   record.auto_filter_sort_state:
     kind: record
+    role: both
     js: AutoFilterSortState
     py: AutoFilterSortState
     surfaces: [wasm, native, py]
@@ -1560,6 +1655,7 @@ entries:
     was: { js: CfCellResult, py: CfCellResult }
   record.cf_icon_input:
     kind: record
+    role: both
     js: CfIconInput
     surfaces: [wasm, native]
     was: { js: CfIconInput }
@@ -1572,11 +1668,13 @@ entries:
     drop: { js: CfRangeResult, closes: R8.js }
   record.cf_value_object_input:
     kind: record
+    role: both
     js: CfValueObjectInput
     surfaces: [wasm, native]
     was: { js: CfValueObjectInput }
   record.chart_axis_info:
     kind: record
+    role: result
     js: ChartAxis
     py: ChartAxis
     surfaces: [wasm, native, py]
@@ -1590,36 +1688,42 @@ entries:
     drop: { js: ChartDataResult, closes: R8.js }
   record.chart_fill_info:
     kind: record
+    role: result
     js: ChartFill
     py: ChartFill
     surfaces: [wasm, native, py]
     was: { js: ChartFillInfo, py: ChartFillInfo }
   record.chart_labels_info:
     kind: record
+    role: result
     js: ChartLabels
     py: ChartLabels
     surfaces: [wasm, native, py]
     was: { js: ChartLabelsInfo, py: ChartLabelsInfo }
   record.chart_line_info:
     kind: record
+    role: result
     js: ChartLine
     py: ChartLine
     surfaces: [wasm, native, py]
     was: { js: ChartLineInfo, py: ChartLineInfo }
   record.chart_marker_info:
     kind: record
+    role: result
     js: ChartMarker
     py: ChartMarker
     surfaces: [wasm, native, py]
     was: { js: ChartMarkerInfo, py: ChartMarkerInfo }
   record.chart_plot_info:
     kind: record
+    role: result
     js: ChartPlot
     py: ChartPlot
     surfaces: [wasm, native, py]
     was: { js: ChartPlotInfo, py: ChartPlotInfo }
   record.chart_point_info:
     kind: record
+    role: result
     js: ChartPoint
     py: ChartPoint
     surfaces: [wasm, native, py]
@@ -1633,6 +1737,7 @@ entries:
     was: { js: ChartResult }
   record.chart_series_info:
     kind: record
+    role: result
     js: ChartSeries
     py: ChartSeries
     surfaces: [wasm, native, py]
@@ -1666,6 +1771,7 @@ entries:
     was: { js: CompareTextResult }
   record.conditional_format_input:
     kind: record
+    role: input
     js: ConditionalFormatInput
     py: ConditionalFormatInput
     surfaces: [wasm, native, py]
@@ -1682,7 +1788,7 @@ entries:
     js: DataTableInputCell
     py: DataTableInputCell
     surfaces: [wasm, native, py]
-    was: { js: DataTableInput, py: DataTableInput }
+    was: { js: DataTableInputCell, py: DataTableInputCell }
   record.data_table_result:
     kind: record
     role: result
@@ -1693,11 +1799,12 @@ entries:
   record.data_table_spec:
     kind: record
     role: input
-    js: DataTableSpec
+    js: DataTableInput
     surfaces: [wasm, native]
     was: { js: DataTableSpec }
   record.data_validation_input:
     kind: record
+    role: input
     js: DataValidationInput
     py: DataValidationInput
     surfaces: [wasm, native, py]
@@ -1747,10 +1854,11 @@ entries:
     surfaces: [wasm, native]
     was: { js: EvalResult }
     drop: { js: EvalResult, closes: R8.js }
-  record.excel_profile_id:
-    kind: record
+  enum.excel_profile_id:
+    kind: enum
     js: ExcelProfileId
-    surfaces: [wasm, native]
+    py: ExcelProfileId
+    surfaces: [wasm, native, py]
     was: { js: ExcelProfileId }
   enum.external_link_kind:
     kind: enum
@@ -1772,8 +1880,8 @@ entries:
     surfaces: [wasm, native]
     was: { js: FontResult }
     drop: { js: FontResult, closes: R8.js }
-  record.format_reference_options:
-    kind: record
+  type.format_reference_options:
+    kind: typedef
     js: FormatReferenceOptions
     surfaces: [wasm, native]
     was: { js: FormatReferenceOptions }
@@ -1784,18 +1892,19 @@ entries:
     replaced_by: record.optional_result
     closes: R8.js
     was: { js: FormulaResult }
-  record.formulon_module:
-    kind: record
+  type.formulon_module:
+    kind: typedef
     js: Formulon
     surfaces: [wasm, native]
     was: { js: FormulonModule }
-  record.formulon_module_options:
-    kind: record
+  type.formulon_module_options:
+    kind: typedef
     js: FormulonOptions
     surfaces: [wasm, native]
     was: { js: FormulonModuleOptions }
   record.function_metadata_entry:
     kind: record
+    role: input
     js: FunctionMetadataEntry
     py: FunctionMetadataEntry
     surfaces: [wasm, native, py]
@@ -1803,12 +1912,14 @@ entries:
     exception: "one item of a function-metadata file; the format is in docs/function-metadata-schema.md"
   record.function_metadata_localized:
     kind: record
+    role: input
     js: FunctionMetadataLocalized
     py: FunctionMetadataLocalized
     surfaces: [wasm, native, py]
     was: { js: FunctionMetadataLocalized, py: FunctionMetadataLocalized }
-  record.function_metadata_provider:
-    kind: record
+    exception: "the per-locale part of a FunctionMetadataEntry; the format is in docs/function-metadata-schema.md"
+  type.function_metadata_provider:
+    kind: typedef
     js: FunctionMetadataProvider
     surfaces: [wasm, native]
     was: { js: FunctionMetadataProvider }
@@ -1820,6 +1931,7 @@ entries:
     drop: { js: FunctionMetadataResult, closes: R8.js }
   record.gradient_fill:
     kind: record
+    role: both
     js: GradientFill
     py: GradientFill
     surfaces: [wasm, native, py]
@@ -1837,6 +1949,8 @@ entries:
     js: ImagePlacement
     surfaces: [wasm, native]
     was: { js: ImagePlacement }
+    replaced_by: record.drawing_anchor
+    closes: R21.name
   record.image_result:
     kind: record
     role: result
@@ -1864,8 +1978,8 @@ entries:
     surfaces: [wasm, native]
     was: { js: InsertImageResult }
     drop: { js: ObjectIdResult, closes: R8.js }
-  record.iterative_progress_callback:
-    kind: record
+  type.iterative_progress_callback:
+    kind: typedef
     js: IterativeProgressCallback
     surfaces: [wasm, native]
     was: { js: IterativeProgressCallback }
@@ -1925,8 +2039,8 @@ entries:
     surfaces: [wasm, native]
     was: { js: ListResult }
     drop: { js: ListResult, closes: R8.js }
-  record.patch:
-    kind: record
+  type.patch:
+    kind: typedef
     js: Patch
     surfaces: [wasm, native]
     was: { js: Patch }
@@ -1936,13 +2050,9 @@ entries:
     js: OptionalResult
     surfaces: [wasm, native]
     drop: { js: OptionalResult, closes: R8.js }
-  record.locale_date_order:
-    kind: record
-    js: LocaleDateOrder
-    surfaces: [wasm, native]
-    was: { js: LocaleDateOrder }
   record.locale_error_name:
     kind: record
+    role: result
     js: LocaleErrorName
     surfaces: [wasm, native]
     was: { js: LocaleErrorName }
@@ -1953,8 +2063,8 @@ entries:
     surfaces: [wasm, native]
     was: { js: LocaleFactsResult }
     drop: { js: LocaleFactsResult, closes: R8.js }
-  record.merge_function_metadata:
-    kind: record
+  type.merge_function_metadata:
+    kind: typedef
     js: MergeFunctionMetadata
     surfaces: [wasm, native]
     was: { js: MergeFunctionMetadata }
@@ -1989,18 +2099,23 @@ entries:
     js: Orientation
     surfaces: [wasm, native]
     was: { js: Orientation }
+    replaced_by: enum.page_orientation
+    closes: R6.closed.js
   record.pagination_margins:
     kind: record
+    role: result
     js: PaginationMargins
     surfaces: [wasm, native]
     was: { js: PaginationMargins }
   record.pagination_page:
     kind: record
+    role: result
     js: PaginationPage
     surfaces: [wasm, native]
     was: { js: PaginationPage }
   record.pagination_paper:
     kind: record
+    role: result
     js: PaginationPaper
     surfaces: [wasm, native]
     was: { js: PaginationPaper }
@@ -2009,6 +2124,8 @@ entries:
     js: PaginationPrintTitles
     surfaces: [wasm, native]
     was: { js: PaginationPrintTitles }
+    replaced_by: record.print_titles
+    closes: R7.absent.js
   record.pagination_result:
     kind: record
     role: result
@@ -2023,8 +2140,8 @@ entries:
     surfaces: [wasm, native]
     was: { js: ParallelRecalcResult }
     drop: { js: ParallelRecalcResult, closes: R8.js }
-  record.parse_reference_options:
-    kind: record
+  type.parse_reference_options:
+    kind: typedef
     js: ParseReferenceOptions
     surfaces: [wasm, native]
     was: { js: ParseReferenceOptions }
@@ -2088,7 +2205,8 @@ entries:
     kind: record
     role: result
     js: PivotDataField
-    surfaces: [wasm, native]
+    py: PivotDataField
+    surfaces: [wasm, native, py]
     was: { js: PivotDataFieldResult }
   enum.pivot_date_period:
     kind: enum
@@ -2115,7 +2233,8 @@ entries:
     kind: record
     role: result
     js: PivotFilter
-    surfaces: [wasm, native]
+    py: PivotFilter
+    surfaces: [wasm, native, py]
     was: { js: PivotFilterResult }
   record.pivot_grand_totals_result:
     kind: record
@@ -2123,6 +2242,11 @@ entries:
     js: PivotGrandTotals
     surfaces: [wasm, native]
     was: { js: PivotGrandTotalsResult }
+  record.pivot_grand_totals_patch:
+    kind: record
+    role: patch
+    js: PivotGrandTotalsPatch
+    surfaces: [wasm, native]
   record.pivot_item_result:
     kind: record
     role: result
@@ -2183,6 +2307,7 @@ entries:
     closes: R8.js
   record.range_cell:
     kind: record
+    role: result
     js: RangeCell
     surfaces: [wasm, native]
     was: { js: RangeCell }
@@ -2206,13 +2331,15 @@ entries:
     js: ReadDiagnostics
     surfaces: [wasm, native]
     was: { js: ReadDiagnosticsResult }
-  record.reference_range:
+  record.reference_range_input:
     kind: record
-    js: ReferenceRange
+    role: input
+    js: ReferenceRangeInput
     surfaces: [wasm, native]
     was: { js: ReferenceRange }
   record.resolved_color:
     kind: record
+    role: result
     js: ResolvedColor
     py: ResolvedColor
     surfaces: [wasm, native, py]
@@ -2224,8 +2351,8 @@ entries:
     surfaces: [wasm, native]
     was: { js: ResolvedColorResult }
     drop: { js: ResolvedColorResult, closes: R8.js }
-  record.restore_image_options:
-    kind: record
+  type.restore_image_options:
+    kind: typedef
     js: RestoreImageOptions
     surfaces: [wasm, native]
     was: { js: RestoreImageOptions }
@@ -2251,6 +2378,7 @@ entries:
     drop: { js: SaveResult, closes: R8.js }
   record.shape_input:
     kind: record
+    role: input
     js: ShapeInput
     surfaces: [wasm, native]
     was: { js: ShapeInput }
@@ -2263,6 +2391,7 @@ entries:
     was: { js: SheetAutoFilterXmlResult }
   record.sheet_comment_entry:
     kind: record
+    role: result
     js: SheetComment
     py: SheetComment
     surfaces: [wasm, native, py]
@@ -2288,12 +2417,16 @@ entries:
     js: SheetPageMargins
     surfaces: [wasm, native]
     was: { js: SheetPageMarginsResult }
+    replaced_by: record.page_margins
+    closes: R18.js
   record.sheet_page_setup_result:
     kind: record
     role: result
     js: SheetPageSetup
     surfaces: [wasm, native]
     was: { js: SheetPageSetupResult }
+    replaced_by: record.page_setup
+    closes: R18.js
   record.sheet_print_area_result:
     kind: record
     role: result
@@ -2307,6 +2440,7 @@ entries:
     js: SheetPrintTitles
     surfaces: [wasm, native]
     was: { js: SheetPrintTitlesResult }
+    drop: { js: SheetPrintTitles, closes: R18.js }
   record.sheet_print_xml_result:
     kind: record
     role: result
@@ -2345,16 +2479,19 @@ entries:
     drop: { js: SheetViewResult, closes: R8.js }
   record.slicer_input:
     kind: record
+    role: input
     js: SlicerInput
     surfaces: [wasm, native]
     was: { js: SlicerInput }
   record.sparkline_group_input:
     kind: record
+    role: input
     js: SparklineGroupInput
     surfaces: [wasm, native]
     was: { js: SparklineGroupInput }
   record.status:
     kind: record
+    role: result
     js: Status
     surfaces: [wasm, native]
     was: { js: Status }
@@ -2374,11 +2511,13 @@ entries:
     drop: { js: StringResult, closes: R8.js }
   record.table_column_totals_input:
     kind: record
+    role: input
     js: TableColumnTotalsInput
     surfaces: [wasm, native]
     was: { js: TableColumnTotalsInput }
   record.table_input:
     kind: record
+    role: input
     js: TableInput
     surfaces: [wasm, native]
     was: { js: TableInput }
@@ -2388,18 +2527,24 @@ entries:
     js: TableStyleDefaults
     surfaces: [wasm, native]
     was: { js: TableStyleDefaultsResult }
-  record.table_style_element_type:
+  record.table_style_defaults_patch:
     kind: record
+    role: patch
+    js: TableStyleDefaultsPatch
+    surfaces: [wasm, native]
+  enum.table_style_element_type:
+    kind: enum
     js: TableStyleElementType
     surfaces: [wasm, native]
     was: { js: TableStyleElementType }
-  record.table_totals_row_function:
-    kind: record
+  enum.table_totals_row_function:
+    kind: enum
     js: TableTotalsRowFunction
     surfaces: [wasm, native]
     was: { js: TableTotalsRowFunction }
   record.table_update_input:
     kind: record
+    role: input
     js: TableUpdateInput
     surfaces: [wasm, native]
     was: { js: TableUpdateInput }
@@ -2412,10 +2557,17 @@ entries:
     drop: { js: Theme, closes: R18.js }
   record.theme_script_font:
     kind: record
+    role: result
     js: ThemeScriptFont
     py: ThemeScriptFont
     surfaces: [wasm, native, py]
     was: { js: ThemeScriptFont, py: ThemeScriptFont }
+  record.theme_script_font_input:
+    kind: record
+    role: input
+    js: ThemeScriptFontInput
+    py: ThemeScriptFontInput
+    surfaces: [wasm, native, py]
   enum.theme_source:
     kind: enum
     js: ThemeSource
@@ -2429,8 +2581,8 @@ entries:
     surfaces: [wasm, native]
     was: { js: ThreadedCommentsResult }
     drop: { js: ThreadedCommentsResult, closes: R8.js }
-  record.validation_entry:
-    kind: record
+  type.validation_entry:
+    kind: typedef
     js: Validation
     surfaces: [wasm, native]
     was: { js: ValidationEntry }
@@ -2446,8 +2598,8 @@ entries:
     js: WidthModel
     surfaces: [wasm, native]
     was: { js: WidthModelResult }
-  record.workbook_ctor:
-    kind: record
+  type.workbook_ctor:
+    kind: typedef
     js: WorkbookCtor
     surfaces: [wasm, native]
     was: { js: WorkbookCtor }
@@ -2460,80 +2612,99 @@ entries:
     drop: { js: WorkbookProtectionResult, closes: R8.js }
   record.cell:
     kind: record
+    role: result
     js: Cell
     py: Cell
     surfaces: [wasm, native, py]
     was: { js: CellEntry, py: Cell }
   record.chart_categories:
     kind: record
+    role: result
     py: ChartCategories
     surfaces: [py]
     was: { py: ChartCategories }
   record.chart_legend_info:
     kind: record
+    role: result
+    js: ChartLegend
     py: ChartLegend
-    surfaces: [py]
+    surfaces: [wasm, native, py]
     was: { py: ChartLegendInfo }
   record.chart_series_ranges:
     kind: record
+    role: result
     py: ChartSeriesRanges
     surfaces: [py]
     was: { py: ChartSeriesRanges }
   record.chart_source_info:
     kind: record
+    role: result
     py: ChartSource
     surfaces: [py]
     was: { py: ChartSourceInfo }
+  record.chart_source_input:
+    kind: record
+    role: input
+    js: ChartSourceInput
+    surfaces: [wasm, native]
   record.collation_classes:
     kind: record
+    role: result
     py: CollationClasses
     surfaces: [py]
     was: { py: CollationClasses }
   record.color_scale:
     kind: record
+    role: both
     py: ColorScale
     surfaces: [py]
     was: { py: ColorScale }
   record.conditional_format:
     kind: record
+    role: result
     js: ConditionalFormat
     py: ConditionalFormat
     surfaces: [wasm, native, py]
     was: { js: ConditionalFormatEntry, py: ConditionalFormat }
   record.data_bar:
     kind: record
+    role: both
     py: DataBar
     surfaces: [py]
     was: { py: DataBar }
   record.defined_name:
     kind: record
+    role: result
     js: DefinedName
     py: DefinedName
     surfaces: [wasm, native, py]
     was: { py: DefinedName }
   record.differential_format:
     kind: record
+    role: both
     py: DifferentialFormat
     surfaces: [py]
     was: { py: DifferentialFormat }
   record.error_name:
     kind: record
+    role: result
     py: ErrorName
     surfaces: [py]
     was: { py: ErrorName }
-  record.formulon_error:
-    kind: record
+  type.formulon_error:
+    kind: typedef
     js: FormulonError
     py: FormulonError
     surfaces: [wasm, native, py]
     was: { py: FormulonError }
   record.icon_set:
     kind: record
+    role: both
     py: IconSet
     surfaces: [py]
     was: { py: IconSet }
-  record.invalid_argument_error:
-    kind: record
+  type.invalid_argument_error:
+    kind: typedef
     py: InvalidArgumentError
     surfaces: [py]
     was: { py: InvalidArgumentError }
@@ -2553,6 +2724,7 @@ entries:
     role: result
     py: SheetPrintTitles
     surfaces: [py]
+    drop: { py: SheetPrintTitles, closes: R18.py }
   record.table_style_defaults:
     kind: record
     role: result
@@ -2560,34 +2732,39 @@ entries:
     surfaces: [py]
   record.merged_function_metadata:
     kind: record
+    role: result
     js: MergedFunctionMetadata
     py: MergedFunctionMetadata
     surfaces: [wasm, native, py]
     was: { py: MergedFunctionMetadata }
-  record.not_found_error:
-    kind: record
+  type.not_found_error:
+    kind: typedef
     py: NotFoundError
     surfaces: [py]
     was: { py: NotFoundError }
   record.passthrough_part:
     kind: record
+    role: result
     py: PassthroughPart
     surfaces: [py]
     was: { py: PassthroughPart }
   record.table:
     kind: record
+    role: result
     js: Table
     py: Table
     surfaces: [wasm, native, py]
     was: { js: TableEntry, py: Table }
   record.table_column:
     kind: record
+    role: result
     js: TableColumn
     py: TableColumn
     surfaces: [wasm, native, py]
     was: { js: TableColumnEntry, py: TableColumn }
   record.theme:
     kind: record
+    role: result
     py: Theme
     surfaces: [py]
     was: { py: Theme }
@@ -2720,6 +2897,7 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_sheet_name, js: sheetName, py: sheet_name }
     drop: { js: getSheetName, py: get_sheet_name, closes: R23.list }
+    sheet_arg: "the sheet index is the op's subject: it names the sheet"
   sheet_index.get:
     kind: op
     scope: workbook
@@ -2738,6 +2916,7 @@ entries:
     c: fm_workbook_add_sheet
     js: addSheet
     py: add_sheet
+    returns: "union:Sheet"
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_add_sheet, js: addSheet, py: add_sheet }
     facade: handwritten
@@ -2758,6 +2937,7 @@ entries:
     c: fm_workbook_copy_sheet
     js: copySheet
     py: copy_sheet
+    returns: "union:Sheet"
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_copy_sheet, js: copySheet, py: copy_sheet }
     facade: handwritten
@@ -2768,6 +2948,7 @@ entries:
     c: fm_workbook_get_active_sheet
     js: getActiveSheet
     py: get_active_sheet
+    returns: "union:Sheet"
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_active_sheet, js: activeSheet, py: active_sheet }
     facade: handwritten
@@ -2780,6 +2961,7 @@ entries:
     py: set_active_sheet
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_active_sheet, js: setActiveSheet, py: set_active_sheet }
+    sheet_arg: "the sheet index is the op's subject: the workbook's active sheet"
     facade: handwritten
   sheet.remove:
     kind: op
@@ -2801,6 +2983,14 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_rename_sheet, js: renameSheet, py: rename_sheet }
     facade: handwritten
+  sheets.list:
+    kind: list
+    scope: workbook
+    js: listSheets
+    py: list_sheets
+    surfaces: [wasm, native, py]
+    facade: handwritten
+    note: "the elements are the facade's Sheet handles, not records read through a count and a getter"
   defined_name.set:
     kind: op
     scope: workbook
@@ -2814,21 +3004,21 @@ entries:
     kind: op
     scope: workbook
     noun: defined_name_scoped
-    c: fm_workbook_set_defined_name_scoped
     js: setDefinedNameScoped
     py: set_defined_name_scoped
-    surfaces: [c, wasm, native, py]
+    surfaces: [wasm, native, py]
     was: { c: fm_workbook_set_defined_name_scoped, js: setDefinedNameScoped, py: set_defined_name_scoped }
+    drop: { c: fm_workbook_set_defined_name_scoped, js: setDefinedNameScoped, py: set_defined_name_scoped, closes: R0.coverage }
   defined_name_attrs.set:
     kind: op
     scope: workbook
     noun: defined_name_attrs
-    c: fm_workbook_set_defined_name_attrs
     js: setDefinedNameAttrs
     py: set_defined_name_attrs
     params: { hidden: bool }
-    surfaces: [c, wasm, native, py]
+    surfaces: [wasm, native, py]
     was: { c: fm_workbook_set_defined_name_attrs, js: setDefinedNameAttrs, py: set_defined_name_attrs }
+    drop: { c: fm_workbook_set_defined_name_attrs, js: setDefinedNameAttrs, py: set_defined_name_attrs, closes: R0.coverage }
   rows.insert:
     kind: op
     scope: sheet
@@ -3224,9 +3414,9 @@ entries:
     kind: op
     scope: workbook
     noun: defined_name_attrs
-    c: fm_workbook_get_defined_name_attrs_at
     surfaces: [c]
     was: { c: fm_workbook_defined_name_attrs_at }
+    drop: { c: fm_workbook_defined_name_attrs_at, closes: R0.coverage }
   table.get_count:
     kind: op
     scope: workbook
@@ -3505,6 +3695,15 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_comment, js: setComment, py: set_comment }
     facade: handwritten
+  comment.remove:
+    kind: op
+    scope: sheet
+    noun: comment
+    c: fm_sheet_remove_comment
+    js: removeComment
+    py: remove_comment
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_sheet_remove_comment }
   comment_visible.get:
     kind: op
     scope: sheet
@@ -3772,11 +3971,11 @@ entries:
     kind: op
     scope: workbook
     noun: iterative_enabled
-    c: fm_workbook_set_iterative_enabled
     py: set_iterative_enabled
     params: { enabled: bool }
-    surfaces: [c, py]
+    surfaces: [py]
     was: { c: fm_workbook_set_iterative_enabled, py: set_iterative_enabled }
+    drop: { c: fm_workbook_set_iterative_enabled, py: set_iterative_enabled, closes: R0.coverage }
   iterative.get:
     kind: op
     scope: workbook
@@ -3914,6 +4113,7 @@ entries:
     py: clear_pinned_now
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_clear_pinned_now, js: clearPinnedNow, py: clear_pinned_now }
+    drop: { js: clearPinnedNow, py: clear_pinned_now, closes: R0.coverage }
   excel_profile_id.get:
     kind: op
     scope: workbook
@@ -5212,6 +5412,7 @@ entries:
     params: { calendar: "enum:pivot_calendar" }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_field_set_date_group, js: pivotFieldSetDateGroup, py: pivot_field_set_date_group }
+    facade: handwritten
   pivot_field_date_group.clear:
     kind: op
     scope: sheet
@@ -5358,6 +5559,7 @@ entries:
     c: fm_sheet_show_pivot_details
     js: showPivotDetails
     py: show_pivot_details
+    returns: "union:Sheet"
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_show_details, js: pivotShowDetails, py: pivot_show_details }
     facade: handwritten
@@ -5509,6 +5711,7 @@ entries:
     py: set_array_formula
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_array_formula, js: setArrayFormula, py: set_array_formula }
+    facade: handwritten
   function_metadata.get:
     kind: op
     scope: process
@@ -6114,12 +6317,12 @@ entries:
     kind: op
     scope: sheet
     noun: tab_hidden
-    c: fm_sheet_set_tab_hidden
     js: setTabHidden
     py: set_tab_hidden
     params: { hidden: bool }
-    surfaces: [c, wasm, native, py]
+    surfaces: [wasm, native, py]
     was: { c: fm_sheet_set_tab_hidden, js: setSheetTabHidden, py: set_sheet_tab_hidden }
+    drop: { c: fm_sheet_set_tab_hidden, js: setTabHidden, py: set_tab_hidden, closes: R0.coverage }
   visibility.set:
     kind: op
     scope: sheet
@@ -6622,6 +6825,7 @@ entries:
     py: set_theme_colors
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_theme_colors, js: setThemeColors, py: set_theme_colors }
+    facade: handwritten
   theme_fonts.get:
     kind: op
     scope: workbook
@@ -7261,6 +7465,7 @@ entries:
     params: { direction: "enum:chart_series_direction", header_row: bool, header_column: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_chart_source, js: setChartSource, py: set_chart_source }
+    facade: handwritten
   data_table.add:
     kind: op
     scope: sheet
@@ -10010,21 +10215,6 @@ entries:
     c: FM_PHONETIC_ALIGNMENT_DISTRIBUTED
     surfaces: [c]
     was: { c: FM_PHONETIC_ALIGNMENT_DISTRIBUTED }
-  constant.fm_orientation_default:
-    kind: constant
-    c: FM_ORIENTATION_DEFAULT
-    surfaces: [c]
-    was: { c: FM_ORIENTATION_DEFAULT }
-  constant.fm_orientation_portrait:
-    kind: constant
-    c: FM_ORIENTATION_PORTRAIT
-    surfaces: [c]
-    was: { c: FM_ORIENTATION_PORTRAIT }
-  constant.fm_orientation_landscape:
-    kind: constant
-    c: FM_ORIENTATION_LANDSCAPE
-    surfaces: [c]
-    was: { c: FM_ORIENTATION_LANDSCAPE }
   constant.fm_pivot_values_field:
     kind: constant
     c: FM_PIVOT_VALUES_FIELD
@@ -10112,9 +10302,9 @@ entries:
     c: FM_SHAPE_FIELD_NAME
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_NAME }
-  constant.fm_shape_field_prst:
+  constant.fm_shape_field_preset_geometry:
     kind: constant
-    c: FM_SHAPE_FIELD_PRST
+    c: FM_SHAPE_FIELD_PRESET_GEOMETRY
     surfaces: [c]
     was: { c: FM_SHAPE_FIELD_PRST }
   constant.fm_shape_field_anchor:
@@ -10934,53 +11124,67 @@ entries:
     surfaces: [wasm, native, py]
     exception: "binding convenience: the A1 view of one sheet"
     missing: throw
-  record.sheet:
-    kind: record
+  type.sheet:
+    kind: typedef
     js: Sheet
     py: Sheet
     surfaces: [wasm, native, py]
+  type.sheet_ref:
+    kind: typedef
+    js: SheetRef
+    py: SheetRef
+    surfaces: [wasm, native, py]
   record.excel_error:
     kind: record
+    role: both
     py: ExcelError
     surfaces: [py]
-  record.index_out_of_range_error:
-    kind: record
+  type.index_out_of_range_error:
+    kind: typedef
     py: IndexOutOfRangeError
     surfaces: [py]
-  record.workbook_closed_error:
-    kind: record
+  type.workbook_closed_error:
+    kind: typedef
     py: WorkbookClosedError
     surfaces: [py]
   record.blank_value:
     kind: record
+    role: both
     js: BlankValue
     surfaces: [wasm, native]
   record.number_value:
     kind: record
+    role: both
     js: NumberValue
     surfaces: [wasm, native]
   record.bool_value:
     kind: record
+    role: both
     js: BoolValue
     surfaces: [wasm, native]
   record.text_value:
     kind: record
+    role: both
     js: TextValue
     surfaces: [wasm, native]
   record.error_value:
     kind: record
+    role: both
     js: ErrorValue
     surfaces: [wasm, native]
   record.array_value:
     kind: record
+    role: both
     js: ArrayValue
     surfaces: [wasm, native]
   record.ref_value:
     kind: record
+    role: both
     js: RefValue
     surfaces: [wasm, native]
   record.lambda_value:
     kind: record
+    role: both
     js: LambdaValue
     surfaces: [wasm, native]
   record.cell_xf_input:
@@ -10998,7 +11202,8 @@ entries:
     kind: record
     role: input
     js: PivotStyleInput
-    surfaces: [wasm, native]
+    py: PivotStyleInput
+    surfaces: [wasm, native, py]
     was: { js: PivotStyleInfoInput }
   record.pivot_worksheet_source_input:
     kind: record
@@ -11048,6 +11253,10 @@ entries:
     py: __version__
     surfaces: [py]
     was: { py: __version__ }
+  constant.unchanged:
+    kind: constant
+    py: UNCHANGED
+    surfaces: [py]
   field.status_code:
     kind: field
     record: record.status
@@ -11210,3 +11419,123 @@ entries:
     surfaces: [py]
     was: { py: vertical_break_manual }
     closes: R8.py
+  record.defined_name_input:
+    kind: record
+    role: input
+    c: fm_defined_name_input_t
+    js: DefinedNameInput
+    py: DefinedNameInput
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_defined_name_input_t }
+  record.defined_name_item:
+    kind: record
+    role: result
+    c: fm_defined_name_t
+    surfaces: [c]
+    was: { c: fm_defined_name_t }
+  record.iterative_settings_patch:
+    kind: record
+    role: patch
+    c: fm_iterative_settings_patch_t
+    js: IterativeSettingsPatch
+    surfaces: [c, wasm, native]
+    was: { c: fm_iterative_settings_patch_t }
+  enum.page_orientation:
+    kind: enum
+    c: fm_page_orientation_t
+    js: PageOrientation
+    py: PageOrientation
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_page_orientation_t }
+  enum.sheet_view_mode:
+    kind: enum
+    c: fm_sheet_view_mode_t
+    js: SheetViewMode
+    py: SheetViewMode
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_sheet_view_mode_t }
+  enum.external_link_kind_c:
+    kind: enum
+    c: fm_external_link_kind_t
+    surfaces: [c]
+    was: { c: fm_external_link_kind_t }
+  enum.cf_data_bar_direction:
+    kind: enum
+    c: fm_cf_data_bar_direction_t
+    js: CfDataBarDirection
+    py: CfDataBarDirection
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_cf_data_bar_direction_t }
+  enum.cf_data_bar_axis_position:
+    kind: enum
+    c: fm_cf_data_bar_axis_position_t
+    js: CfDataBarAxisPosition
+    py: CfDataBarAxisPosition
+    surfaces: [c, wasm, native, py]
+    was: { c: fm_cf_data_bar_axis_position_t }
+  constant.fm_page_orientation_portrait:
+    kind: constant
+    c: FM_PAGE_ORIENTATION_PORTRAIT
+    enum: enum.page_orientation
+    surfaces: [c]
+    was: { c: FM_PAGE_ORIENTATION_PORTRAIT }
+  constant.fm_page_orientation_landscape:
+    kind: constant
+    c: FM_PAGE_ORIENTATION_LANDSCAPE
+    enum: enum.page_orientation
+    surfaces: [c]
+    was: { c: FM_PAGE_ORIENTATION_LANDSCAPE }
+  constant.fm_sheet_view_mode_normal:
+    kind: constant
+    c: FM_SHEET_VIEW_MODE_NORMAL
+    enum: enum.sheet_view_mode
+    surfaces: [c]
+    was: { c: FM_SHEET_VIEW_MODE_NORMAL }
+  constant.fm_sheet_view_mode_page_break_preview:
+    kind: constant
+    c: FM_SHEET_VIEW_MODE_PAGE_BREAK_PREVIEW
+    enum: enum.sheet_view_mode
+    surfaces: [c]
+    was: { c: FM_SHEET_VIEW_MODE_PAGE_BREAK_PREVIEW }
+  constant.fm_sheet_view_mode_page_layout:
+    kind: constant
+    c: FM_SHEET_VIEW_MODE_PAGE_LAYOUT
+    enum: enum.sheet_view_mode
+    surfaces: [c]
+    was: { c: FM_SHEET_VIEW_MODE_PAGE_LAYOUT }
+  constant.fm_cf_data_bar_direction_context:
+    kind: constant
+    c: FM_CF_DATA_BAR_DIRECTION_CONTEXT
+    enum: enum.cf_data_bar_direction
+    surfaces: [c]
+    was: { c: FM_CF_DATA_BAR_DIRECTION_CONTEXT }
+  constant.fm_cf_data_bar_direction_left_to_right:
+    kind: constant
+    c: FM_CF_DATA_BAR_DIRECTION_LEFT_TO_RIGHT
+    enum: enum.cf_data_bar_direction
+    surfaces: [c]
+    was: { c: FM_CF_DATA_BAR_DIRECTION_LEFT_TO_RIGHT }
+  constant.fm_cf_data_bar_direction_right_to_left:
+    kind: constant
+    c: FM_CF_DATA_BAR_DIRECTION_RIGHT_TO_LEFT
+    enum: enum.cf_data_bar_direction
+    surfaces: [c]
+    was: { c: FM_CF_DATA_BAR_DIRECTION_RIGHT_TO_LEFT }
+  constant.fm_cf_data_bar_axis_automatic:
+    kind: constant
+    c: FM_CF_DATA_BAR_AXIS_AUTOMATIC
+    enum: enum.cf_data_bar_axis_position
+    surfaces: [c]
+    was: { c: FM_CF_DATA_BAR_AXIS_AUTOMATIC }
+  constant.fm_cf_data_bar_axis_middle:
+    kind: constant
+    c: FM_CF_DATA_BAR_AXIS_MIDDLE
+    enum: enum.cf_data_bar_axis_position
+    surfaces: [c]
+    was: { c: FM_CF_DATA_BAR_AXIS_MIDDLE }
+  constant.fm_cf_data_bar_axis_none:
+    kind: constant
+    c: FM_CF_DATA_BAR_AXIS_NONE
+    enum: enum.cf_data_bar_axis_position
+    surfaces: [c]
+    was: { c: FM_CF_DATA_BAR_AXIS_NONE }

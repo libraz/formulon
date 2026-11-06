@@ -51,7 +51,7 @@ fm_protected_range_t Range(const char* name, const fm_cell_rect_t* ranges, size_
   fm_protected_range_t r{};
   r.name = name;
   r.ranges = ranges;
-  r.range_count = range_count;
+  r.range_count = static_cast<uint32_t>(range_count);
   return r;
 }
 

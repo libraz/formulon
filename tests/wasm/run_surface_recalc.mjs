@@ -195,12 +195,12 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
       const result = wb.getPagination(0);
       assert.ok(result.pageCount >= 2, `pageCount=${result.pageCount}`);
       assert.deepEqual(result.printArea, []);
-      assert.ok(result.horizontalBreaks.length > 0);
+      assert.ok(result.rowBreaks.length > 0);
       assert.deepEqual(
-        result.horizontalBreaks,
-        [...new Set(result.horizontalBreaks)].sort((a, b) => a - b),
+        result.rowBreaks,
+        [...new Set(result.rowBreaks)].sort((a, b) => a - b),
       );
-      assert.deepEqual(result.verticalBreaks, []);
+      assert.deepEqual(result.columnBreaks, []);
     } finally {
       wb.delete();
     }

@@ -438,7 +438,9 @@ TEST(FormulonCApiPaginationDetail, ReportsPaperMarginsScaleAndTitles) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   FillGrid(wb.handle);
   ASSERT_EQ(fm_sheet_set_page_setup_xml(wb.handle, 0, "<pageSetup paperSize=\"9\" orientation=\"landscape\"/>"), 0);
-  ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, "1:1", ""), 0);
+  fm_print_titles_t repeat{};
+  repeat.has_rows = 1;
+  ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, &repeat), 0);
 
   PaginationGuard p;
   ASSERT_EQ(fm_sheet_get_pagination(wb.handle, 0, &p.handle), 0);

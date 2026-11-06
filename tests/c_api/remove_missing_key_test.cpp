@@ -6,6 +6,7 @@
 #include <string>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_setters.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
 
@@ -56,7 +57,7 @@ TEST_F(FormulonCApiRemoveMissingKey, AnAbsentSheetIsStillASheetIndexError) {
 }
 
 TEST_F(FormulonCApiRemoveMissingKey, APresentKeyRemovesOnceThenIsNotFound) {
-  ASSERT_EQ(fm_workbook_set_defined_name(wb(), "Rate", "0.5"), 0);
+  ASSERT_EQ(SetDefinedName(wb(), "Rate", "0.5"), 0);
   EXPECT_EQ(fm_workbook_remove_defined_name(wb(), "rate", -1), 0);
   ExpectNotFound(fm_workbook_remove_defined_name(wb(), "rate", -1), "defined name again");
 
@@ -71,7 +72,7 @@ TEST_F(FormulonCApiRemoveMissingKey, APresentKeyRemovesOnceThenIsNotFound) {
 }
 
 TEST_F(FormulonCApiRemoveMissingKey, AFailedRemoveLeavesTheOtherEntriesAlone) {
-  ASSERT_EQ(fm_workbook_set_defined_name(wb(), "Keep", "1"), 0);
+  ASSERT_EQ(SetDefinedName(wb(), "Keep", "1"), 0);
   ExpectNotFound(fm_workbook_remove_defined_name(wb(), "Other", -1), "other name");
   size_t count = 0;
   ASSERT_EQ(fm_workbook_get_defined_name_count(wb(), &count), 0);

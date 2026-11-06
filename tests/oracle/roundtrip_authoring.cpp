@@ -234,6 +234,16 @@ void patch_u32(const JsonValue* block, const char* field, std::int32_t* engaged,
   }
 }
 
+/// Reads a case `orientation` (Excel's `XlPageOrientation`: 1 = portrait,
+/// 2 = landscape) as an `fm_page_orientation_t`.
+void patch_orientation(const JsonValue* block, std::int32_t* engaged, std::int32_t* out) {
+  const JsonValue* v = block->find("orientation");
+  if (v != nullptr && v->is_number()) {
+    *engaged = 1;
+    *out = v->as_number() == 2.0 ? FM_PAGE_ORIENTATION_LANDSCAPE : FM_PAGE_ORIENTATION_PORTRAIT;
+  }
+}
+
 void patch_bool(const JsonValue* block, const char* field, std::int32_t* engaged, std::int32_t* out) {
   const JsonValue* v = block->find(field);
   if (v != nullptr && v->is_bool()) {
@@ -262,7 +272,7 @@ const char* optional_text(const JsonValue* block, const char* field) {
 Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t sheet, const JsonValue& rt) {
   if (const JsonValue* block = rt.find("page_setup"); block != nullptr && block->is_object()) {
     fm_page_setup_t setup{};
-    patch_u32(block, "orientation", &setup.orientation_engaged, &setup.orientation);
+    patch_orientation(block, &setup.orientation_engaged, &setup.orientation);
     patch_u32(block, "paper_size", &setup.paper_size_engaged, &setup.paper_size);
     patch_u32(block, "scale", &setup.scale_engaged, &setup.scale);
     patch_u32(block, "fit_to_width", &setup.fit_to_width_engaged, &setup.fit_to_width);
@@ -327,12 +337,28 @@ Expected<void, Error> apply_print_settings(fm_workbook_t* wb, std::uint32_t shee
   }
 
   if (const JsonValue* titles = rt.find("print_titles"); titles != nullptr && titles->is_object()) {
-    const JsonValue* rows = titles->find("repeat_rows");
-    const JsonValue* cols = titles->find("repeat_cols");
-    const char* repeat_rows = rows != nullptr && rows->is_string() ? rows->as_string().c_str() : "";
-    const char* repeat_cols = cols != nullptr && cols->is_string() ? cols->as_string().c_str() : "";
-    RETURN_IF_ERROR(
-        checked(fm_sheet_set_print_titles(wb, sheet, repeat_rows, repeat_cols), "fm_sheet_set_print_titles"));
+    // The case spells each span in A1 (`1:2`, `A:A`).
+    fm_print_titles_t spans{};
+    fm_parsed_reference_t rows{};
+    fm_parsed_reference_t cols{};
+    for (fm_parsed_reference_t* ref : {&rows, &cols}) {
+      const JsonValue* v = titles->find(ref == &rows ? "repeat_rows" : "repeat_cols");
+      if (v == nullptr || !v->is_string() || v->as_string().empty()) {
+        continue;
+      }
+      RETURN_IF_ERROR(checked(fm_workbook_parse_reference(wb, v->as_string().c_str(), 0, 0, 0U, 0U, ref),
+                              "fm_workbook_parse_reference"));
+      if (ref->valid == 0) {
+        return invalid("print_titles span is not an A1 range: " + v->as_string());
+      }
+    }
+    spans.has_rows = rows.valid;
+    spans.first_row = rows.rect.first_row;
+    spans.last_row = rows.rect.last_row;
+    spans.has_cols = cols.valid;
+    spans.first_col = cols.rect.first_col;
+    spans.last_col = cols.rect.last_col;
+    RETURN_IF_ERROR(checked(fm_sheet_set_print_titles(wb, sheet, &spans), "fm_sheet_set_print_titles"));
   }
 
   if (const JsonValue* rows = rt.find("row_breaks"); rows != nullptr && rows->is_array()) {

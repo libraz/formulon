@@ -647,20 +647,50 @@ CIVIL_TIME = Struct(
     ],
 )
 
+ITERATIVE_SETTINGS_PATCH = Struct(
+    "fm_iterative_settings_patch_t",
+    [
+        ("enabled", I32),
+        ("max_iterations", I32),
+        ("max_change", F64),
+    ],
+)
+
+DEFINED_NAME_INPUT = Struct(
+    "fm_defined_name_input_t",
+    [
+        ("name", PTR),
+        ("formula", PTR),
+        ("local_sheet_id", I32),
+        ("comment", PTR),
+        ("hidden", I32),
+    ],
+)
+
+DEFINED_NAME = Struct(
+    "fm_defined_name_t",
+    [
+        ("name", PTR),
+        ("formula", PTR),
+        ("local_sheet_id", I32),
+        ("comment", PTR),
+        ("hidden", I32),
+    ],
+)
+
 SHEET_VIEW = Struct(
     "fm_sheet_view_t",
     [
         ("zoom_scale", U32),
         ("freeze_rows", U32),
         ("freeze_cols", U32),
-        ("tab_hidden", I32),
         ("visibility", I32),
         ("show_grid_lines", I32),
         ("show_row_col_headers", I32),
         ("show_zeros", I32),
         ("right_to_left", I32),
         ("tab_selected", I32),
-        ("view_mode", PTR),
+        ("view_mode", I32),
         ("top_left_row", U32),
         ("top_left_col", U32),
         ("pane_top_left_row", U32),
@@ -1004,7 +1034,7 @@ EXTERNAL_LINK_RECORD = Struct(
         ("part_path", PTR),
         ("target", PTR),
         ("target_external", I32),
-        ("kind", U32),
+        ("kind", I32),
     ],
 )
 
@@ -1028,7 +1058,7 @@ PAGE_SETUP = Struct(
     "fm_page_setup_t",
     [
         ("orientation_engaged", I32),
-        ("orientation", U32),
+        ("orientation", I32),
         ("paper_size_engaged", I32),
         ("paper_size", U32),
         ("scale_engaged", I32),
@@ -1271,34 +1301,18 @@ DRAWING_OBJECT = Struct(
         ("edit_as", I32),
         ("from_row", U32),
         ("from_col", U32),
-        ("from_row_offset", I64),
-        ("from_col_offset", I64),
+        ("from_row_offset_emu", I64),
+        ("from_col_offset_emu", I64),
         ("to_row", U32),
         ("to_col", U32),
-        ("to_row_offset", I64),
-        ("to_col_offset", I64),
-        ("cx", I64),
-        ("cy", I64),
-        ("image_format", I32),
-        ("name", PTR),
-        ("descr", PTR),
-        ("media_path", PTR),
-    ],
-)
-
-IMAGE_INSERT = Struct(
-    "fm_image_insert_t",
-    [
-        ("name", PTR),
-        ("descr", PTR),
-        ("anchor_kind", I32),
-        ("edit_as", I32),
-        ("row", U32),
-        ("col", U32),
-        ("row_offset_emu", I64),
-        ("col_offset_emu", I64),
+        ("to_row_offset_emu", I64),
+        ("to_col_offset_emu", I64),
         ("width_emu", I64),
         ("height_emu", I64),
+        ("image_format", I32),
+        ("name", PTR),
+        ("description", PTR),
+        ("media_path", PTR),
     ],
 )
 
@@ -1313,6 +1327,15 @@ DRAWING_ANCHOR = Struct(
         ("col_offset_emu", I64),
         ("width_emu", I64),
         ("height_emu", I64),
+    ],
+)
+
+IMAGE_INSERT = Struct(
+    "fm_image_insert_t",
+    [
+        ("name", PTR),
+        ("description", PTR),
+        ("anchor", nested(DRAWING_ANCHOR)),
     ],
 )
 
@@ -1336,15 +1359,15 @@ SHAPE = Struct(
         ("rotation", I32),
         ("hidden", I32),
         ("text_box", I32),
-        ("from_row_offset", I64),
-        ("from_col_offset", I64),
-        ("to_row_offset", I64),
-        ("to_col_offset", I64),
-        ("cx", I64),
-        ("cy", I64),
+        ("from_row_offset_emu", I64),
+        ("from_col_offset_emu", I64),
+        ("to_row_offset_emu", I64),
+        ("to_col_offset_emu", I64),
+        ("width_emu", I64),
+        ("height_emu", I64),
         ("line_width_emu", I64),
         ("name", PTR),
-        ("prst", PTR),
+        ("preset_geometry", PTR),
         ("text", PTR),
     ],
 )
@@ -1379,11 +1402,11 @@ SLICER = Struct(
         ("from_col", U32),
         ("to_row", U32),
         ("to_col", U32),
-        ("from_row_offset", I64),
-        ("from_col_offset", I64),
-        ("to_row_offset", I64),
-        ("to_col_offset", I64),
-        ("row_height", I64),
+        ("from_row_offset_emu", I64),
+        ("from_col_offset_emu", I64),
+        ("to_row_offset_emu", I64),
+        ("to_col_offset_emu", I64),
+        ("row_height_emu", I64),
         ("name", PTR),
         ("caption", PTR),
         ("cache_name", PTR),
@@ -1490,7 +1513,7 @@ CHART_INFO = Struct(
     [
         ("object_id", U32),
         ("name", PTR),
-        ("descr", PTR),
+        ("description", PTR),
         ("is_chartex", I32),
         ("is_pivot_chart", I32),
         ("on_chartsheet", I32),
@@ -1498,14 +1521,14 @@ CHART_INFO = Struct(
         ("edit_as", I32),
         ("from_row", U32),
         ("from_col", U32),
-        ("from_row_offset", I64),
-        ("from_col_offset", I64),
+        ("from_row_offset_emu", I64),
+        ("from_col_offset_emu", I64),
         ("to_row", U32),
         ("to_col", U32),
-        ("to_row_offset", I64),
-        ("to_col_offset", I64),
-        ("cx", I64),
-        ("cy", I64),
+        ("to_row_offset_emu", I64),
+        ("to_col_offset_emu", I64),
+        ("width_emu", I64),
+        ("height_emu", I64),
         ("title", nested(CHART_TITLE)),
         ("auto_title_deleted", I32),
         ("legend_position", I32),

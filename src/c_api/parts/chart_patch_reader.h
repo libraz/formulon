@@ -44,6 +44,17 @@ class PatchReader {
     field(op, static_cast<E>(value), out, name);
   }
 
+  // An enum whose C order differs from the model's: `from_c` maps a value
+  // already inside `[min, max]`.
+  template <typename E>
+  void enum_field(std::int32_t op, std::int32_t value, std::int64_t min, std::int64_t max, E (*from_c)(std::int32_t),
+                  ChartPatchField<E>& out, const char* name) {
+    if (op == FM_CHART_PATCH_SET && !enum_ok(value, min, max, name)) {
+      return;
+    }
+    field(op, from_c(value), out, name);
+  }
+
   // A removable boolean; a `SET` value other than 0/1 is rejected.
   void bool_field(std::int32_t op, std::int32_t value, ChartPatchField<bool>& out, const char* name) {
     if (op == FM_CHART_PATCH_SET && !enum_ok(value, 1, name)) {
@@ -90,12 +101,23 @@ class PatchReader {
     optional(op, static_cast<E>(value), out, name);
   }
 
-  bool enum_ok(std::int64_t value, std::int64_t max, const char* name) {
+  template <typename E>
+  void enum_optional(std::int32_t op, std::int32_t value, std::int64_t min, std::int64_t max, E (*from_c)(std::int32_t),
+                     std::optional<E>& out, const char* name) {
+    if (op == FM_CHART_PATCH_SET && !enum_ok(value, min, max, name)) {
+      return;
+    }
+    optional(op, from_c(value), out, name);
+  }
+
+  bool enum_ok(std::int64_t value, std::int64_t min, std::int64_t max, const char* name) {
     if (rc_ == 0) {
-      rc_ = check_enum_domain(value, max, name);
+      rc_ = check_enum_domain(value, min, max, name);
     }
     return rc_ == 0;
   }
+
+  bool enum_ok(std::int64_t value, std::int64_t max, const char* name) { return enum_ok(value, 0, max, name); }
 
   template <typename E>
   bool enum_ok(std::int64_t value, E max, const char* name) {

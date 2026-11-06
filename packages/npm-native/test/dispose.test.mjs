@@ -21,7 +21,7 @@ test('[Symbol.dispose]() releases the handle, repeats safely and leaves the wrap
   wb.dispose();
   assert.equal(wb.disposed, true);
   assert.throws(
-    () => wb.getSheetCount(),
+    () => wb.listSheets(),
     (e) => e.name === 'FormulonError' && e.code === StatusCode.BindingInvalidHandle,
   );
 });
@@ -30,8 +30,8 @@ test('dispose() and [Symbol.dispose]() are refused inside the iterative progress
   const { Workbook } = await getModule();
   for (const release of [(wb) => wb.dispose(), (wb) => wb[Symbol.dispose]()]) {
     const wb = Workbook.createDefault();
-    wb.setIterative(true, 100, 0.0001);
-    wb.setFormula(0, 0, 0, '=(A1+10)/2');
+    wb.setIterative({ enabled: true, maxIterations: 100, maxChange: 0.0001 });
+    wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
     let caught = null;
     wb.setIterativeProgress(() => {
       try {

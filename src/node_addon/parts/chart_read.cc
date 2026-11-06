@@ -51,11 +51,15 @@ Napi::Value TriToJs(Napi::Env env, int32_t tri) {
   return tri == FM_CHART_TRI_ABSENT ? env.Null() : Napi::Boolean::New(env, tri == FM_CHART_TRI_TRUE);
 }
 
-Napi::Object TitleToJs(Napi::Env env, const fm_chart_title_t& t) {
+// A title of kind NONE is no title.
+Napi::Value TitleToJs(Napi::Env env, const fm_chart_title_t& t) {
+  if (t.kind == FM_CHART_TITLE_NONE) {
+    return env.Null();
+  }
   Napi::Object o = Napi::Object::New(env);
   o.Set("kind", JsNumber(env, t.kind));
-  o.Set("text", JsString(env, t.text));
-  o.Set("formula", JsString(env, t.formula));
+  o.Set("text", JsStringOrNull(env, t.text));
+  o.Set("formula", JsStringOrNull(env, t.formula));
   return o;
 }
 
@@ -100,19 +104,6 @@ Napi::Object LabelsToJs(Napi::Env env, const fm_chart_labels_t& l) {
   o.Set("fontSizePt", NumberOrNull(env, l.font_size_pt));
   o.Set("deleted", JsBool(env, l.deleted));
   return o;
-}
-
-const char* AxisPositionName(int32_t position) {
-  switch (position) {
-    case FM_CHART_AXIS_POS_TOP:
-      return "t";
-    case FM_CHART_AXIS_POS_LEFT:
-      return "l";
-    case FM_CHART_AXIS_POS_RIGHT:
-      return "r";
-    default:
-      return "b";
-  }
 }
 
 Napi::Object DataSourceToJs(Napi::Env env, const fm_chart_t* chart, size_t plot, size_t series, int32_t role,
@@ -180,9 +171,7 @@ Napi::Object PlotToJs(Napi::Env env, const fm_chart_t* chart, size_t index, fm_s
   o.Set("type", JsNumber(env, p.type));
   o.Set("chartexLayout",
         p.chartex_layout != nullptr && p.chartex_layout[0] != '\0' ? JsString(env, p.chartex_layout) : env.Null());
-  o.Set("barDirection", p.bar_dir == FM_CHART_BAR_DIR_COL   ? Napi::Value(JsString(env, "col"))
-                        : p.bar_dir == FM_CHART_BAR_DIR_BAR ? Napi::Value(JsString(env, "bar"))
-                                                            : env.Null());
+  o.Set("barDirection", p.bar_dir == FM_CHART_BAR_DIR_ABSENT ? env.Null() : JsNumber(env, p.bar_dir));
   o.Set("grouping", OptionalNumber(env, p.has_grouping, p.grouping));
   o.Set("varyColors", Napi::Boolean::New(env, p.vary_colors == FM_CHART_TRI_TRUE));
   o.Set("gapWidth", OptionalNumber(env, p.has_gap_width, p.gap_width));
@@ -209,10 +198,10 @@ Napi::Object AxisToJs(Napi::Env env, const fm_chart_axis_t& a) {
   Napi::Object o = Napi::Object::New(env);
   o.Set("id", JsNumber(env, a.id));
   o.Set("kind", JsNumber(env, a.kind));
-  o.Set("position", JsString(env, AxisPositionName(a.position)));
+  o.Set("position", JsNumber(env, a.position));
   o.Set("deleted", JsBool(env, a.deleted));
   o.Set("crossAxis", JsNumber(env, a.cross_axis));
-  o.Set("crosses", JsNumber(env, a.crosses));
+  o.Set("crosses", JsIndexOrNull(env, a.crosses));
   o.Set("crossesAt", NumberOrNull(env, a.crosses_at));
   o.Set("min", NumberOrNull(env, a.min));
   o.Set("max", NumberOrNull(env, a.max));
@@ -237,27 +226,31 @@ Napi::Object ChartToJs(Napi::Env env, const fm_chart_t* chart, fm_status_t& rc) 
   }
   o.Set("objectId", JsNumber(env, info.object_id));
   o.Set("name", JsString(env, info.name));
-  o.Set("description", JsString(env, info.descr));
+  o.Set("description", JsString(env, info.description));
   o.Set("isChartex", JsBool(env, info.is_chartex));
   o.Set("isPivotChart", JsBool(env, info.is_pivot_chart));
   o.Set("onChartsheet", JsBool(env, info.on_chartsheet));
   o.Set("title", TitleToJs(env, info.title));
   o.Set("autoTitleDeleted", TriToJs(env, info.auto_title_deleted));
 
-  Napi::Object legend = Napi::Object::New(env);
-  legend.Set("position", JsNumber(env, info.legend_position));
-  legend.Set("overlay", JsBool(env, info.legend_overlay));
-  Napi::Array hidden = Napi::Array::New(env);
-  for (size_t i = 0; i < info.legend_hidden_count && rc == 0; ++i) {
-    uint32_t idx = 0;
-    if (Step(rc, fm_chart_get_legend_hidden_at(chart, i, &idx))) {
-      hidden.Set(static_cast<uint32_t>(i), JsNumber(env, idx));
+  if (info.legend_position == FM_CHART_LEGEND_NONE) {
+    o.Set("legend", env.Null());
+  } else {
+    Napi::Object legend = Napi::Object::New(env);
+    legend.Set("position", JsNumber(env, info.legend_position));
+    legend.Set("overlay", JsBool(env, info.legend_overlay));
+    Napi::Array hidden = Napi::Array::New(env);
+    for (size_t i = 0; i < info.legend_hidden_count && rc == 0; ++i) {
+      uint32_t idx = 0;
+      if (Step(rc, fm_chart_get_legend_hidden_at(chart, i, &idx))) {
+        hidden.Set(static_cast<uint32_t>(i), JsNumber(env, idx));
+      }
     }
+    legend.Set("hiddenSeries", hidden);
+    o.Set("legend", legend);
   }
-  legend.Set("hiddenSeries", hidden);
-  o.Set("legend", legend);
 
-  o.Set("blanksAs", JsNumber(env, info.blanks_as));
+  o.Set("blanksAs", JsIndexOrNull(env, info.blanks_as));
   o.Set("plotVisibleOnly", TriToJs(env, info.plot_vis_only));
   o.Set("naAsBlank", TriToJs(env, info.na_as_blank));
   o.Set("date1904", JsBool(env, info.date1904));

@@ -32,8 +32,7 @@ int main(void) {
   fm_status_t (*get_cell_style_xf)(const fm_workbook_t*, size_t, fm_cell_xf_t*) = fm_workbook_get_cell_style_xf;
   fm_status_t (*add_cell_style_xf)(fm_workbook_t*, const fm_cell_xf_t*, size_t*) = fm_workbook_add_cell_style_xf;
   fm_status_t (*get_view)(const fm_workbook_t*, size_t, fm_sheet_view_t*) = fm_sheet_get_view;
-  fm_status_t (*defined_name_at)(const fm_workbook_t*, size_t, const char**, const char**, int32_t*) =
-      fm_workbook_get_defined_name_at;
+  fm_status_t (*defined_name_at)(const fm_workbook_t*, size_t, fm_defined_name_t*) = fm_workbook_get_defined_name_at;
   fm_status_t (*pivot_add_item_at)(fm_workbook_t*, size_t, size_t, size_t, size_t, int32_t, size_t*) =
       fm_sheet_add_pivot_field_shared_item;
   // The two entry points whose records no binding marshals, written out in
@@ -50,12 +49,12 @@ int main(void) {
   // definition of either record is miscompiled rather than diagnosed.
   _Static_assert(sizeof(fm_cell_xf_t) == 128, "fm_cell_xf_t ABI layout changed");
   _Static_assert(sizeof(fm_row_layout_t) == 40, "fm_row_layout_t ABI layout changed");
-  _Static_assert(sizeof(fm_sheet_view_t) == 88, "fm_sheet_view_t ABI layout changed");
+  _Static_assert(sizeof(fm_sheet_view_t) == 80, "fm_sheet_view_t ABI layout changed");
   // The three records a C consumer marshals without help from any binding:
   // `fm_value_t` comes back from every cell read, `fm_cell_rect_t` from
   // pagination, and `fm_styles_batch_t` is passed in by pointer with fifteen
   // pointer-width slots. The first two are target-independent; the batch is
-  // pinned in terms of `sizeof(void*)` because its `size_t` counts are not.
+  // pinned in terms of `sizeof(void*)` because its pointers are not.
   _Static_assert(sizeof(fm_value_t) == 16, "fm_value_t ABI layout changed");
   _Static_assert(offsetof(fm_value_t, u) == 8, "fm_value_t.u offset changed");
   _Static_assert(sizeof(fm_cell_rect_t) == 16, "fm_cell_rect_t ABI layout changed");

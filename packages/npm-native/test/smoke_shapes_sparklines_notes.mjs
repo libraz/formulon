@@ -1,6 +1,6 @@
 import test from 'node:test';
 import { inflateRawSync } from 'node:zlib';
-import { assert, getModule, isFormulonError, readAll } from './smoke_support.mjs';
+import { assert, getModule, isFormulonError } from './smoke_support.mjs';
 
 // ---- Drawing shapes, sparkline groups and legacy note shapes -----------------
 
@@ -37,7 +37,7 @@ const readZipEntry = (bytes, name) => {
 
 const box = (mod) => ({
   name: 'Box',
-  prst: 'roundRect',
+  presetGeometry: 'roundRect',
   text: 'Hello\nWorld',
   anchorKind: mod.AnchorKind.TwoCell,
   fromRow: 1,
@@ -53,15 +53,15 @@ const box = (mod) => ({
 test('shapes insert, list, update, remove and round-trip', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.equal(wb.listShapes(0).length, 0);
-  const rect = wb.addShape(0, box(mod));
-  const line = wb.addShape(0, {
-    prst: 'line',
+  assert.equal(wb.sheet(0).listShapes().length, 0);
+  const rect = wb.sheet(0).addShape(box(mod));
+  const line = wb.sheet(0).addShape({
+    presetGeometry: 'line',
     anchorKind: mod.AnchorKind.OneCell,
     fromRow: 10,
-    fromColOffset: 500,
-    cx: 914400,
-    cy: 0,
+    fromColOffsetEmu: 500,
+    widthEmu: 914400,
+    heightEmu: 0,
     lineKind: mod.ShapePaint.Solid,
     lineRgb: 0x00ff00,
     lineWidthEmu: 19050,
@@ -69,12 +69,12 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   assert.notEqual(rect, line);
 
   const loaded = roundTrip(mod, wb);
-  const shapes = loaded.listShapes(0);
+  const shapes = loaded.sheet(0).listShapes();
   assert.equal(shapes.length, 2);
   assert.equal(shapes[0].objectId, rect);
   assert.equal(shapes[0].kind, mod.DrawingObjectKind.Shape);
   assert.equal(shapes[0].name, 'Box');
-  assert.equal(shapes[0].prst, 'roundRect');
+  assert.equal(shapes[0].presetGeometry, 'roundRect');
   assert.equal(shapes[0].text, 'Hello\nWorld');
   assert.equal(shapes[0].anchorKind, mod.AnchorKind.TwoCell);
   assert.equal(shapes[0].toCol, 4);
@@ -85,26 +85,29 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   assert.equal(shapes[0].hidden, false);
   assert.equal(shapes[1].kind, mod.DrawingObjectKind.Connector);
   assert.equal(shapes[1].anchorKind, mod.AnchorKind.OneCell);
-  assert.equal(shapes[1].fromColOffset, 500);
-  assert.equal(shapes[1].cx, 914400);
+  assert.equal(shapes[1].fromColOffsetEmu, 500);
+  assert.equal(shapes[1].widthEmu, 914400);
   assert.equal(shapes[1].lineRgb, 0x00ff00);
   assert.equal(shapes[1].lineWidthEmu, 19050);
 
   // An update changes the named fields only, and an anchor moves with a row insert.
-  loaded.updateShape(0, rect, { name: 'Renamed', hidden: true, fillKind: mod.ShapePaint.None });
-  loaded.insertRows(0, 0, 3);
-  const moved = loaded.listShapes(0)[0];
+  loaded.sheet(0).updateShape(rect, { name: 'Renamed', hidden: true, fillKind: mod.ShapePaint.None });
+  loaded.sheet(0).insertRows(0, 3);
+  const moved = loaded.sheet(0).listShapes()[0];
   assert.equal(moved.name, 'Renamed');
   assert.equal(moved.hidden, true);
   assert.equal(moved.fillKind, mod.ShapePaint.None);
-  assert.equal(moved.prst, 'roundRect');
+  assert.equal(moved.presetGeometry, 'roundRect');
   assert.equal(moved.rotation, 900000);
   assert.equal(moved.fromRow, 4);
   assert.equal(moved.toRow, 8);
 
-  loaded.removeShape(0, rect);
+  loaded.sheet(0).removeShape(rect);
   assert.deepEqual(
-    loaded.listShapes(0).map((s) => s.objectId),
+    loaded
+      .sheet(0)
+      .listShapes()
+      .map((s) => s.objectId),
     [line],
   );
   release(loaded);
@@ -114,16 +117,16 @@ test('shapes insert, list, update, remove and round-trip', async () => {
 test('shape arguments are validated', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.throws(() => wb.addShape(0, { prst: 'rect' }), isFormulonError);
-  assert.throws(() => wb.addShape(0, { ...box(mod), anchorKind: 9 }), isFormulonError);
-  assert.throws(() => wb.addShape(0, { ...box(mod), fillKind: mod.ShapePaint.Other }), isFormulonError);
-  assert.throws(() => wb.addShape(0, { ...box(mod), toRow: 0 }), isFormulonError);
-  assert.throws(() => wb.addShape(0, { ...box(mod), prst: 'a"/>' }), isFormulonError);
-  assert.throws(() => wb.addShape(5, box(mod)), isFormulonError);
-  assert.equal(wb.listShapes(0).length, 0);
-  assert.throws(() => wb.updateShape(0, 99, { name: 'x' }), isFormulonError);
-  assert.throws(() => wb.removeShape(0, 99), isFormulonError);
-  assert.throws(() => wb.addShape(0, { ...box(mod), fromRow: -1 }), RangeError);
+  assert.throws(() => wb.sheet(0).addShape({ presetGeometry: 'rect' }), isFormulonError);
+  assert.throws(() => wb.sheet(0).addShape({ ...box(mod), anchorKind: 9 }), isFormulonError);
+  assert.throws(() => wb.sheet(0).addShape({ ...box(mod), fillKind: mod.ShapePaint.Other }), isFormulonError);
+  assert.throws(() => wb.sheet(0).addShape({ ...box(mod), toRow: 0 }), isFormulonError);
+  assert.throws(() => wb.sheet(0).addShape({ ...box(mod), presetGeometry: 'a"/>' }), isFormulonError);
+  assert.throws(() => wb.sheet(5).addShape(box(mod)), isFormulonError);
+  assert.equal(wb.sheet(0).listShapes().length, 0);
+  assert.throws(() => wb.sheet(0).updateShape(99, { name: 'x' }), isFormulonError);
+  assert.throws(() => wb.sheet(0).removeShape(99), isFormulonError);
+  assert.throws(() => wb.sheet(0).addShape({ ...box(mod), fromRow: -1 }), RangeError);
   release(wb);
 });
 
@@ -148,21 +151,12 @@ const sparklineGroup = (mod) => ({
 test('sparkline groups add, list, update, replace, remove and follow row edits', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.equal(
-    readAll(
-      () => wb.getSparklineGroupCount(0),
-      (i) => wb.getSparklineGroup(0, i),
-    ).length,
-    0,
-  );
-  wb.addSparklineGroup(0, sparklineGroup(mod));
-  wb.addSparklineGroup(0, { sparklines: [{ formula: 'Sheet1!A9:D9', location: 'G9' }] });
+  assert.equal(wb.sheet(0).listSparklineGroups().length, 0);
+  wb.sheet(0).addSparklineGroup(sparklineGroup(mod));
+  wb.sheet(0).addSparklineGroup({ sparklines: [{ formula: 'Sheet1!A9:D9', location: 'G9' }] });
 
   const loaded = roundTrip(mod, wb);
-  const groups = readAll(
-    () => loaded.getSparklineGroupCount(0),
-    (i) => loaded.getSparklineGroup(0, i),
-  );
+  const groups = loaded.sheet(0).listSparklineGroups();
   assert.equal(groups.length, 2);
   const [first, second] = groups;
   assert.equal(first.type, mod.SparklineType.Column);
@@ -185,63 +179,30 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   assert.equal(second.type, mod.SparklineType.Line);
   assert.equal(second.lineWeight, 0.75);
 
-  loaded.insertRows(0, 0, 2);
-  assert.equal(
-    readAll(
-      () => loaded.getSparklineGroupCount(0),
-      (i) => loaded.getSparklineGroup(0, i),
-    )[0].sparklines[1].location,
-    'F4',
-  );
-  assert.equal(
-    readAll(
-      () => loaded.getSparklineGroupCount(0),
-      (i) => loaded.getSparklineGroup(0, i),
-    )[0].sparklines[1].formula,
-    'Sheet1!A4:D4',
-  );
+  loaded.sheet(0).insertRows(0, 2);
+  assert.equal(loaded.sheet(0).listSparklineGroups()[0].sparklines[1].location, 'F4');
+  assert.equal(loaded.sheet(0).listSparklineGroups()[0].sparklines[1].formula, 'Sheet1!A4:D4');
 
   // Update rewrites the modelled fields and keeps the sparklines.
-  loaded.updateSparklineGroup(0, 0, {
+  loaded.sheet(0).updateSparklineGroup(0, {
     ...first,
     type: mod.SparklineType.Stacked,
     high: true,
     dateAxis: true,
     dateAxisRef: 'Sheet1!A4:D4',
   });
-  const updated = readAll(
-    () => loaded.getSparklineGroupCount(0),
-    (i) => loaded.getSparklineGroup(0, i),
-  )[0];
+  const updated = loaded.sheet(0).listSparklineGroups()[0];
   assert.equal(updated.type, mod.SparklineType.Stacked);
   assert.equal(updated.high, true);
   assert.equal(updated.dateAxis, true);
   assert.equal(updated.dateAxisRef, 'Sheet1!A4:D4');
   assert.equal(updated.sparklines.length, 2);
 
-  loaded.setSparklineGroupSparklines(0, 0, [{ formula: 'Sheet1!B1:B5', location: 'H1' }]);
-  assert.deepEqual(
-    readAll(
-      () => loaded.getSparklineGroupCount(0),
-      (i) => loaded.getSparklineGroup(0, i),
-    )[0].sparklines,
-    [{ formula: 'Sheet1!B1:B5', location: 'H1' }],
-  );
-  loaded.removeSparklineGroup(0, 0);
-  assert.equal(
-    readAll(
-      () => loaded.getSparklineGroupCount(0),
-      (i) => loaded.getSparklineGroup(0, i),
-    ).length,
-    1,
-  );
-  assert.equal(
-    readAll(
-      () => loaded.getSparklineGroupCount(0),
-      (i) => loaded.getSparklineGroup(0, i),
-    )[0].sparklines[0].location,
-    'G11',
-  );
+  loaded.sheet(0).setSparklineGroupSparklines(0, [{ formula: 'Sheet1!B1:B5', location: 'H1' }]);
+  assert.deepEqual(loaded.sheet(0).listSparklineGroups()[0].sparklines, [{ formula: 'Sheet1!B1:B5', location: 'H1' }]);
+  loaded.sheet(0).removeSparklineGroup(0);
+  assert.equal(loaded.sheet(0).listSparklineGroups().length, 1);
+  assert.equal(loaded.sheet(0).listSparklineGroups()[0].sparklines[0].location, 'G11');
   release(loaded);
   release(wb);
 });
@@ -250,38 +211,35 @@ test('sparkline group arguments are validated', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   const good = [{ formula: 'Sheet1!A1:D1', location: 'F1' }];
-  assert.throws(() => wb.addSparklineGroup(0, {}), isFormulonError);
-  assert.throws(() => wb.addSparklineGroup(0, { sparklines: [] }), isFormulonError);
+  assert.throws(() => wb.sheet(0).addSparklineGroup({}), isFormulonError);
+  assert.throws(() => wb.sheet(0).addSparklineGroup({ sparklines: [] }), isFormulonError);
   assert.throws(
-    () => wb.addSparklineGroup(0, { sparklines: [{ formula: 'Sheet1!A1:D1', location: 'F1:F2' }] }),
+    () => wb.sheet(0).addSparklineGroup({ sparklines: [{ formula: 'Sheet1!A1:D1', location: 'F1:F2' }] }),
     isFormulonError,
   );
-  assert.throws(() => wb.addSparklineGroup(0, { sparklines: [{ formula: '', location: 'F1' }] }), isFormulonError);
-  assert.throws(() => wb.addSparklineGroup(0, { type: 7, sparklines: good }), isFormulonError);
-  assert.throws(() => wb.addSparklineGroup(0, { lineWeight: -1, sparklines: good }), isFormulonError);
-  assert.throws(() => wb.addSparklineGroup(4, { sparklines: good }), isFormulonError);
-  assert.equal(
-    readAll(
-      () => wb.getSparklineGroupCount(0),
-      (i) => wb.getSparklineGroup(0, i),
-    ).length,
-    0,
+  assert.throws(
+    () => wb.sheet(0).addSparklineGroup({ sparklines: [{ formula: '', location: 'F1' }] }),
+    isFormulonError,
   );
-  assert.throws(() => wb.updateSparklineGroup(0, 0, {}), isFormulonError);
-  assert.throws(() => wb.setSparklineGroupSparklines(0, 0, good), isFormulonError);
-  assert.throws(() => wb.removeSparklineGroup(0, 0), isFormulonError);
+  assert.throws(() => wb.sheet(0).addSparklineGroup({ type: 7, sparklines: good }), isFormulonError);
+  assert.throws(() => wb.sheet(0).addSparklineGroup({ lineWeight: -1, sparklines: good }), isFormulonError);
+  assert.throws(() => wb.sheet(4).addSparklineGroup({ sparklines: good }), isFormulonError);
+  assert.equal(wb.sheet(0).listSparklineGroups().length, 0);
+  assert.throws(() => wb.sheet(0).updateSparklineGroup(0, {}), isFormulonError);
+  assert.throws(() => wb.sheet(0).setSparklineGroupSparklines(0, good), isFormulonError);
+  assert.throws(() => wb.sheet(0).removeSparklineGroup(0), isFormulonError);
   release(wb);
 });
 
 test('a surviving note keeps its own shape when notes are added', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.setComment(0, 1, 1, 'Alice', 'one');
-  wb.setComment(0, 3, 3, 'Alice', 'two');
-  wb.setCommentVisible(0, 1, 1, true);
+  wb.sheet(0).setComment(1, 1, { author: 'Alice', text: 'one' });
+  wb.sheet(0).setComment(3, 3, { author: 'Alice', text: 'two' });
+  wb.sheet(0).setCommentVisible(1, 1, true);
   const first = roundTrip(mod, wb);
-  first.setComment(0, 8, 8, 'Alice', 'three');
-  first.setCommentVisible(0, 3, 3, true);
+  first.sheet(0).setComment(8, 8, { author: 'Alice', text: 'three' });
+  first.sheet(0).setCommentVisible(3, 3, true);
   const saved = first.save();
   const vml = readZipEntry(saved, 'xl/drawings/vmlDrawing1.vml');
   assert.ok(vml, 'comment VML part is written');
@@ -289,10 +247,10 @@ test('a surviving note keeps its own shape when notes are added', async () => {
   assert.equal(new Set(vml.match(/id="_x0000_s\d+"/g)).size, 3);
   assert.equal(vml.match(/visibility:visible/g).length, 2);
   const again = mod.Workbook.load(saved);
-  assert.equal(again.getCommentVisible(0, 1, 1), true);
-  assert.equal(again.getCommentVisible(0, 3, 3), true);
-  assert.equal(again.getCommentVisible(0, 8, 8), false);
-  assert.equal(again.getCommentVisible(0, 9, 9), null);
+  assert.equal(again.sheet(0).getCommentVisible(1, 1), true);
+  assert.equal(again.sheet(0).getCommentVisible(3, 3), true);
+  assert.equal(again.sheet(0).getCommentVisible(8, 8), false);
+  assert.equal(again.sheet(0).getCommentVisible(9, 9), null);
   release(again);
   release(first);
   release(wb);

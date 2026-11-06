@@ -73,11 +73,10 @@ class JsWorkbook {
   void removeSheet(uint32_t index);
   void renameSheet(uint32_t index, const std::string& newName);
 
-  void setDefinedName(const std::string& name, const std::string& formula);
-  void setDefinedNameScoped(const std::string& name, const std::string& formula, int32_t localSheetId);
-  /// Sets the `comment` and / or `hidden` of an existing defined name; an
-  /// absent key in `attrs` leaves that attribute unchanged.
-  void setDefinedNameAttrs(const std::string& name, int32_t localSheetId, emscripten::val attrs);
+  /// Creates or wholly replaces the defined name `input` describes
+  /// (`{ name, formula, localSheetId?, comment?, hidden? }`); an omitted or
+  /// `null` `localSheetId` is workbook scope.
+  void setDefinedName(emscripten::val input);
 
   void insertRows(uint32_t sheet, uint32_t row, uint32_t count);
   void deleteRows(uint32_t sheet, uint32_t row, uint32_t count);
@@ -133,7 +132,8 @@ class JsWorkbook {
   emscripten::val formatValue(emscripten::val value, const std::string& formatCode) const;
 
   emscripten::val getValue(uint32_t sheet, uint32_t row, uint32_t col) const;
-  std::string getCellPhonetic(uint32_t sheet, uint32_t row, uint32_t col) const;
+  /// The cell's furigana; `null` when it has none.
+  emscripten::val getCellPhonetic(uint32_t sheet, uint32_t row, uint32_t col) const;
   /// Reads a cell's furigana as `{ runs: [{ sb, eb, text }] }`,
   /// spans included. `getCellPhonetic` returns the same readings
   /// concatenated, without the spans.
@@ -175,7 +175,9 @@ class JsWorkbook {
   /// fractional, non-finite, and out-of-range values before embind's normal
   /// integer coercion would silently change them.
   JsParallelRecalcStats recalcParallel(emscripten::val threadCount);
-  void setIterative(bool enabled, int32_t max_iterations, double max_change);
+  /// Applies `patch` (`{ enabled?, maxIterations?, maxChange? }`); an omitted
+  /// key keeps the stored setting.
+  void setIterative(emscripten::val patch);
   /// The stored iterative-calculation settings as `{enabled,
   /// maxIterations, maxChange}`. The cap and threshold are the stored
   /// values even while `enabled` is false, so a host can render Excel's
@@ -200,7 +202,8 @@ class JsWorkbook {
   void clearPinnedNow();
   std::string excelProfileId() const;
   void setExcelProfileId(const std::string& profile_id);
-  std::string fileName() const;
+  /// The stored file name; `null` when none is set.
+  emscripten::val fileName() const;
   void setFileName(const std::string& name);
   double partialRecalc(uint32_t sheet, emscripten::val viewport);
   /// Installs the JS callback the iterative solver invokes after each
@@ -247,17 +250,17 @@ class JsWorkbook {
   // sheet index fails the call, so it stays distinguishable from an
   // absent setting.
 
-  /// Raw print-settings fragments; the empty string when the sheet
-  /// declares no such element.
-  std::string getSheetPageSetupXml(uint32_t sheet) const;
+  /// Raw print-settings fragments; `null` when the sheet declares no such
+  /// element. The setters take "" to remove the element.
+  emscripten::val getSheetPageSetupXml(uint32_t sheet) const;
   void setSheetPageSetupXml(uint32_t sheet, const std::string& xml);
-  std::string getSheetPageMarginsXml(uint32_t sheet) const;
+  emscripten::val getSheetPageMarginsXml(uint32_t sheet) const;
   void setSheetPageMarginsXml(uint32_t sheet, const std::string& xml);
-  std::string getSheetPrintOptionsXml(uint32_t sheet) const;
+  emscripten::val getSheetPrintOptionsXml(uint32_t sheet) const;
   void setSheetPrintOptionsXml(uint32_t sheet, const std::string& xml);
-  std::string getSheetHeaderFooterXml(uint32_t sheet) const;
+  emscripten::val getSheetHeaderFooterXml(uint32_t sheet) const;
   void setSheetHeaderFooterXml(uint32_t sheet, const std::string& xml);
-  std::string getSheetSheetPrXml(uint32_t sheet) const;
+  emscripten::val getSheetSheetPrXml(uint32_t sheet) const;
   void setSheetSheetPrXml(uint32_t sheet, const std::string& xml);
 
   /// Toggles `<sheetPr><pageSetUpPr fitToPage>` without touching anything
@@ -269,9 +272,11 @@ class JsWorkbook {
   emscripten::val getSheetPrintArea(uint32_t sheet) const;
   void setSheetPrintArea(uint32_t sheet, emscripten::val ranges);
 
-  /// Repeat rows / columns. `{ repeatRows, repeatCols }`.
+  /// Repeat rows / columns as `{ rows, columns }`, each a `{ first, last }`
+  /// span or `null`; `null` when neither axis repeats.
   emscripten::val getSheetPrintTitles(uint32_t sheet) const;
-  void setSheetPrintTitles(uint32_t sheet, const std::string& repeatRows, const std::string& repeatCols);
+  /// Replaces the print titles with `titles` (same shape); `null` removes them.
+  void setSheetPrintTitles(uint32_t sheet, emscripten::val titles);
 
   /// Manual page breaks. The enumerators return the whole array rather
   /// than a count + getter pair, matching the rest of this surface.
@@ -299,10 +304,8 @@ class JsWorkbook {
   void setSheetProtection(uint32_t sheet, emscripten::val in);
   void setSheetZoom(uint32_t sheet, uint32_t zoomScale);
   void setSheetFreeze(uint32_t sheet, uint32_t freezeRows, uint32_t freezeCols);
-  void setSheetTabHidden(uint32_t sheet, bool hidden);
-  /// States the whole tab visibility, including `veryHidden`, which the
-  /// bool setter cannot express in either direction. Takes a raw signed
-  /// ordinal so an unknown value is rejected by the C ABI rather than
+  /// States the whole tab visibility, including `veryHidden`. Takes a raw
+  /// signed ordinal so an unknown value is rejected by the C ABI rather than
   /// coerced by embind.
   void setSheetVisibility(uint32_t sheet, int32_t visibility);
   void setSheetShowGridLines(uint32_t sheet, bool show);
@@ -321,7 +324,8 @@ class JsWorkbook {
   /// and its setter taking `{ activeRow, activeCol, ranges }`.
   emscripten::val getSheetSelection(uint32_t sheet) const;
   void setSheetSelection(uint32_t sheet, emscripten::val selection);
-  void setSheetViewMode(uint32_t sheet, std::string mode);
+  /// `mode` is an `fm_sheet_view_mode_t` ordinal; the C ABI rejects others.
+  void setSheetViewMode(uint32_t sheet, int32_t mode);
 
   emscripten::val getSheetColumns(uint32_t sheet) const;
   void setColumnWidth(uint32_t sheet, uint32_t first, uint32_t last, double width);
@@ -364,9 +368,9 @@ class JsWorkbook {
   double columnCharsToPt(uint32_t sheet, int32_t mode, double chars) const;
   double columnPtToChars(uint32_t sheet, int32_t mode, double pt) const;
 
-  /** Complete worksheet-level `<autoFilter>` fragment. The empty string
-   * means no filter; a bad sheet fails the call instead. */
-  std::string getSheetAutoFilterXml(uint32_t sheet) const;
+  /** Complete worksheet-level `<autoFilter>` fragment. `null` means no
+   * filter; a bad sheet fails the call instead. */
+  emscripten::val getSheetAutoFilterXml(uint32_t sheet) const;
   void setSheetAutoFilterXml(uint32_t sheet, const std::string& xml);
 
   // ---- Styles -------------------------------------------------------------
@@ -422,8 +426,10 @@ class JsWorkbook {
 
   // ---- Theme, colour resolution and effective style ----------------------
 
-  /// `{ source, colors, fonts }`: the 12 scheme colours in `a:clrScheme` order and the theme typefaces.
-  emscripten::val getTheme() const;
+  /// `{ source, colors }`: the twelve `clrScheme` colours as ARGB.
+  emscripten::val getThemeColors() const;
+  /// The four theme typefaces `{ majorLatin, majorEastAsian, minorLatin, minorEastAsian }`.
+  emscripten::val getThemeFonts() const;
   emscripten::val getThemeScriptFont(bool major, const std::string& script) const;
   void setThemeColors(emscripten::val colors);
   void setThemeFonts(emscripten::val fonts);
@@ -448,6 +454,9 @@ class JsWorkbook {
   emscripten::val getComments(uint32_t sheet) const;
   void setComment(uint32_t sheet, uint32_t row, uint32_t col, const std::string& author, const std::string& text);
   /// Whether the note at the cell is shown without hovering, or `null` when there is no note.
+  /// Removes the note at `(row, col)`; a cell without one fails with
+  /// `NotFound`.
+  void removeComment(uint32_t sheet, uint32_t row, uint32_t col);
   emscripten::val getCommentVisible(uint32_t sheet, uint32_t row, uint32_t col) const;
   void setCommentVisible(uint32_t sheet, uint32_t row, uint32_t col, bool visible);
 
@@ -506,11 +515,11 @@ class JsWorkbook {
   emscripten::val listDrawingObjects(uint32_t sheet) const;
   emscripten::val getDrawingObject(uint32_t sheet, uint32_t objectId) const;
   emscripten::val getImage(uint32_t sheet, uint32_t objectId) const;
-  uint32_t insertImage(uint32_t sheet, emscripten::val bytes, emscripten::val opts);
+  uint32_t insertImage(uint32_t sheet, emscripten::val bytes, emscripten::val input);
   void removeDrawing(uint32_t sheet, uint32_t objectId);
-  void setDrawingAnchor(uint32_t sheet, uint32_t objectId, emscripten::val placement);
+  void setDrawingAnchor(uint32_t sheet, uint32_t objectId, emscripten::val anchor);
   void setDrawingName(uint32_t sheet, uint32_t objectId, const std::string& name);
-  void setDrawingZOrder(uint32_t sheet, uint32_t objectId, uint32_t index);
+  void setDrawingZOrder(uint32_t sheet, uint32_t objectId, uint32_t zOrderIndex);
   emscripten::val snapshotDrawing(uint32_t sheet, uint32_t objectId) const;
   uint32_t restoreDrawing(uint32_t sheet, emscripten::val bytes, emscripten::val opts);
 
@@ -596,6 +605,8 @@ class JsWorkbook {
   emscripten::val listPivotCaches() const;
   uint32_t pivotCacheCreate(uint32_t requestedId);
   void pivotCacheRemove(uint32_t cacheId);
+  /// `{ present, ref, sheet, name }`, the strings `null` when absent; `null`
+  /// when the cache has no worksheet source.
   emscripten::val pivotCacheGetWorksheetSource(uint32_t cacheId) const;
   void pivotCacheSetWorksheetSource(uint32_t cacheId, emscripten::val source);
 
@@ -673,7 +684,8 @@ class JsWorkbook {
   uint32_t pivotCacheCalculatedFieldAdd(uint32_t cacheId, const std::string& name, const std::string& formula);
   void pivotCacheCalculatedFieldSetFormula(uint32_t cacheId, uint32_t fieldIndex, const std::string& formula);
   void pivotCacheCalculatedFieldRemove(uint32_t cacheId, uint32_t fieldIndex);
-  std::string pivotCacheFieldFormula(uint32_t cacheId, uint32_t fieldIndex) const;
+  /// The formula of a calculated cache field; `null` for a field that is not calculated.
+  emscripten::val pivotCacheFieldFormula(uint32_t cacheId, uint32_t fieldIndex) const;
   uint32_t pivotCacheCalculatedItemAdd(uint32_t cacheId, uint32_t fieldIndex, const std::string& name,
                                        const std::string& formula);
   double pivotCacheCalculatedItemCount(uint32_t cacheId) const;
@@ -704,7 +716,8 @@ class JsWorkbook {
   void pivotFieldSetDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t periods,
                               uint32_t calendar, uint32_t intervalDays, double start, double end);
   void pivotFieldClearDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex);
-  void pivotFieldSetNumberFormat(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, const std::string& utf8);
+  void pivotFieldSetNumberFormat(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
+                                 const std::string& formatCode);
 
   void pivotSetRowFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices);
   void pivotSetColFieldOrder(uint32_t sheet, uint32_t pivotIndex, emscripten::val indices);
@@ -805,14 +818,17 @@ void set_log_min_level(int32_t level);
 /// call; copy or decode it before returning.
 void set_log_sink(emscripten::val sink);
 
-/// Reads a placement record (`anchorKind`, `editAs`, `row`, `col`, the EMU
+/// Reads a `DrawingAnchor` (`anchorKind`, `editAs`, `row`, `col`, the EMU
 /// offsets and size) shared by the picture, chart and re-anchor calls; an
 /// absent `anchorKind` takes `default_anchor_kind`.
-fm_drawing_anchor_t pull_drawing_anchor(JsNarrowNumericReader& reader, const emscripten::val& placement,
+fm_drawing_anchor_t pull_drawing_anchor(JsNarrowNumericReader& reader, const emscripten::val& anchor,
                                         int32_t default_anchor_kind);
 
-/// Copies `anchor` into the placement fields of `ins`.
-void set_insert_placement(fm_image_insert_t& ins, const fm_drawing_anchor_t& anchor);
+/// Reads an `ImageInsertInput` (`name`, `description`, nested `anchor`); an
+/// absent `input` is all defaults. The stores own the returned strings.
+fm_image_insert_t pull_image_insert(JsNarrowNumericReader& reader, const emscripten::val& input,
+                                    int32_t default_anchor_kind, std::string& name_store,
+                                    std::string& description_store);
 
 }  // namespace parts
 }  // namespace wasm

@@ -23,16 +23,18 @@ function withWorkbook(Module, fn) {
 const themeSpec = (theme, tint) => ({ kind: 2, rgb: 0, theme, tint, indexed: 0 });
 
 export function registerThemeStyles(Module, test) {
-  test('getTheme reports the default theme until a part exists', () => {
+  test('getThemeColors / getThemeFonts report the default theme until a part exists', () => {
     withWorkbook(Module, (wb) => {
-      const t = wb.getThemeFonts();
-      assert.equal(t.source, SOURCE_DEFAULT);
-      assert.equal(t.colors.length, 12);
-      assert.equal(t.colors[4], ACCENT1_DEFAULT);
-      assert.equal(t.fonts.majorLatin, 'Aptos Display');
-      assert.equal(t.fonts.minorLatin, 'Aptos Narrow');
-      assert.equal(typeof t.fonts.minorEastAsian, 'string');
-      assert.ok(t.fonts.minorEastAsian.length > 0);
+      const c = wb.getThemeColors();
+      assert.equal(c.source, SOURCE_DEFAULT);
+      assert.equal(c.colors.length, 12);
+      assert.equal(c.colors[4], ACCENT1_DEFAULT);
+      const f = wb.getThemeFonts();
+      assert.deepEqual(Object.keys(f).sort(), ['majorEastAsian', 'majorLatin', 'minorEastAsian', 'minorLatin']);
+      assert.equal(f.majorLatin, 'Aptos Display');
+      assert.equal(f.minorLatin, 'Aptos Narrow');
+      assert.equal(typeof f.minorEastAsian, 'string');
+      assert.ok(f.minorEastAsian.length > 0);
     });
   });
 
@@ -46,19 +48,20 @@ export function registerThemeStyles(Module, test) {
         minorLatin: 'Verdana',
         minorEastAsian: 'MS Mincho',
       });
-      const live = wb.getThemeFonts();
+      const live = wb.getThemeColors();
       assert.equal(live.source, SOURCE_PART);
       assert.deepEqual(live.colors, colors);
-      assert.equal(live.fonts.majorLatin, 'Arial');
+      assert.equal(wb.getThemeFonts().majorLatin, 'Arial');
 
       const saved = wb.save();
       const reloaded = Module.Workbook.load(saved);
       try {
-        const t = reloaded.getThemeFonts();
-        assert.equal(t.source, SOURCE_PART);
-        assert.deepEqual(t.colors, colors);
-        assert.equal(t.fonts.minorLatin, 'Verdana');
-        assert.equal(t.fonts.minorEastAsian, 'MS Mincho');
+        const c = reloaded.getThemeColors();
+        assert.equal(c.source, SOURCE_PART);
+        assert.deepEqual(c.colors, colors);
+        const f = reloaded.getThemeFonts();
+        assert.equal(f.minorLatin, 'Verdana');
+        assert.equal(f.minorEastAsian, 'MS Mincho');
       } finally {
         reloaded.delete();
       }
@@ -68,12 +71,12 @@ export function registerThemeStyles(Module, test) {
   test('resetTheme returns an edited theme to the default and drops the part', () => {
     withWorkbook(Module, (wb) => {
       wb.clearTheme();
-      assert.equal(wb.getThemeFonts().source, SOURCE_DEFAULT);
+      assert.equal(wb.getThemeColors().source, SOURCE_DEFAULT);
       const colors = Array.from({ length: 12 }, (_, i) => 0xff101010 + i);
       wb.setThemeColors(colors);
-      assert.equal(wb.getThemeFonts().source, SOURCE_PART);
+      assert.equal(wb.getThemeColors().source, SOURCE_PART);
       wb.clearTheme();
-      const t = wb.getThemeFonts();
+      const t = wb.getThemeColors();
       assert.equal(t.source, SOURCE_DEFAULT);
       assert.equal(t.colors[4], ACCENT1_DEFAULT);
 
@@ -81,7 +84,7 @@ export function registerThemeStyles(Module, test) {
       assert.equal(Buffer.from(saved).includes('xl/theme/theme1.xml'), false);
       const reloaded = Module.Workbook.load(saved);
       try {
-        assert.equal(reloaded.getThemeFonts().source, SOURCE_DEFAULT);
+        assert.equal(reloaded.getThemeColors().source, SOURCE_DEFAULT);
       } finally {
         reloaded.delete();
       }
@@ -105,7 +108,7 @@ export function registerThemeStyles(Module, test) {
       assert.equal(fromDefault.argb, ACCENT1_DEFAULT);
       assert.equal(fromDefault.resolution, RESOLUTION_DEFAULT_THEME);
 
-      wb.setThemeColors(wb.getThemeFonts().colors);
+      wb.setThemeColors(wb.getThemeColors().colors);
       const lighter = wb.resolveColor(themeSpec(4, 0.4), CONTEXT_FILL_FG);
       assert.equal(lighter.argb, 0xff44b3e1);
       assert.equal(lighter.resolution, RESOLUTION_EXACT);
@@ -310,25 +313,21 @@ export function registerThemeStyles(Module, test) {
     expectFailure(() => Module.Workbook.createForProfile('no-such-profile'));
   });
 
-  test('getTheme lists the 47 script faces and setThemeScriptFont round-trips', () => {
+  test('getThemeScriptFont reads the default script faces and setThemeScriptFont round-trips', () => {
     withWorkbook(Module, (wb) => {
-      const t = wb.getThemeFonts();
-      assert.equal(t.majorScripts.length, 47);
-      assert.equal(t.minorScripts.length, 47);
-      const minor = Object.fromEntries(t.minorScripts.map((s) => [s.script, s.typeface]));
-      assert.equal(minor.Jpan, '游ゴシック');
-      assert.equal(minor.Hang, '맑은 고딕');
+      const face = (book, major, script) => book.getThemeScriptFont(major, script);
+      assert.deepEqual(face(wb, false, 'Jpan'), { major: false, script: 'Jpan', typeface: '游ゴシック' });
+      assert.equal(face(wb, false, 'Hang').typeface, '맑은 고딕');
+      const majorHang = face(wb, true, 'Hang');
+      assert.equal(majorHang.major, true);
 
       wb.setThemeScriptFont(false, 'Hang', 'Test Face');
       const saved = wb.save();
       const reloaded = Module.Workbook.load(saved);
       try {
-        const r = reloaded.getThemeFonts();
-        assert.equal(r.minorScripts.length, 47);
-        const after = Object.fromEntries(r.minorScripts.map((s) => [s.script, s.typeface]));
-        assert.equal(after.Hang, 'Test Face');
-        assert.equal(after.Jpan, minor.Jpan);
-        assert.deepEqual(r.majorScripts, t.majorScripts);
+        assert.equal(face(reloaded, false, 'Hang').typeface, 'Test Face');
+        assert.equal(face(reloaded, false, 'Jpan').typeface, '游ゴシック');
+        assert.deepEqual(face(reloaded, true, 'Hang'), majorHang);
       } finally {
         reloaded.delete();
       }

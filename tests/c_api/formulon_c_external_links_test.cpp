@@ -12,6 +12,7 @@
 #include "c_api/formulon_c.h"
 #include "formulon_c_out_index.h"
 #include "formulon_c_record_arg.h"
+#include "formulon_c_setters.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 
@@ -53,7 +54,7 @@ std::string Str(const char* text) {
 // A workbook with the workbook-scope name `LN` = 10.
 void CreateWithName(WorkbookGuard* wb) {
   ASSERT_EQ(fm_workbook_create_default(&wb->handle), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name(wb->handle, "LN", "10"), 0) << fm_get_last_error_message();
+  ASSERT_EQ(SetDefinedName(wb->handle, "LN", "10"), 0) << fm_get_last_error_message();
 }
 
 }  // namespace
@@ -328,22 +329,21 @@ TEST(FormulonCApiExternalLinks, FileNameDefinedNamesStoreAndSpellTheName) {
   WorkbookGuard wb;
   CreateWithName(&wb);
   ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "LP", "M5.xlsx!LN*2"), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "LQ", "=M5.xlsx!LN*3", 0), 0) << fm_get_last_error_message();
+  ASSERT_EQ(SetDefinedName(wb.handle, "LP", "M5.xlsx!LN*2"), 0) << fm_get_last_error_message();
+  ASSERT_EQ(SetDefinedName(wb.handle, "LQ", "=M5.xlsx!LN*3", 0), 0) << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 0U);
   for (const bool named : {true, false}) {
     ASSERT_EQ(fm_workbook_set_file_name(wb.handle, named ? "M5.xlsx" : ""), 0);
     const std::string book = named ? "M5.xlsx!" : "[0]!";
-    const char* name = nullptr;
-    const char* formula = nullptr;
-    int32_t scope = -2;
-    ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 1, &name, &formula, &scope), 0) << fm_get_last_error_message();
-    EXPECT_EQ(Str(name), "LP");
-    EXPECT_EQ(Str(formula), book + "LN*2");
-    ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 2, &name, &formula, &scope), 0) << fm_get_last_error_message();
-    EXPECT_EQ(Str(name), "LQ");
-    EXPECT_EQ(scope, 0);
-    EXPECT_EQ(Str(formula), book + "LN*3");
+    fm_defined_name_t dn{};
+    dn.local_sheet_id = -2;
+    ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 1, &dn), 0) << fm_get_last_error_message();
+    EXPECT_EQ(Str(dn.name), "LP");
+    EXPECT_EQ(Str(dn.formula), book + "LN*2");
+    ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 2, &dn), 0) << fm_get_last_error_message();
+    EXPECT_EQ(Str(dn.name), "LQ");
+    EXPECT_EQ(dn.local_sheet_id, 0);
+    EXPECT_EQ(Str(dn.formula), book + "LN*3");
   }
 }
 
@@ -442,13 +442,14 @@ TEST(FormulonCApiExternalLinks, FileNameChartSeriesStoreAndSpellTheName) {
     ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, r, 1, static_cast<double>(r)), 0);
     ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, r, 2, static_cast<double>(r * 2)), 0);
   }
-  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "LR", "Sheet1!$C$2:$C$5"), 0) << fm_get_last_error_message();
+  ASSERT_EQ(SetDefinedName(wb.handle, "LR", "Sheet1!$C$2:$C$5"), 0) << fm_get_last_error_message();
   fm_chart_insert_t opts{};
   opts.kind = FM_CHART_INSERT_COLUMN;
   opts.source = "Sheet1!$A$1:$B$5";
   opts.legend = FM_CHART_LEGEND_RIGHT;
-  opts.placement.anchor_kind = FM_ANCHOR_KIND_TWO_CELL;
-  opts.placement.row = 6;
+  opts.placement.anchor.anchor_kind = FM_ANCHOR_KIND_TWO_CELL;
+  opts.placement.anchor.edit_as = FM_ANCHOR_EDIT_AS_TWO_CELL;
+  opts.placement.anchor.row = 6;
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &opts, &id), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);

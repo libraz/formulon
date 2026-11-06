@@ -5,9 +5,13 @@
 
 #include "node_addon/parts/workbook_class.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
+#include <iterator>
 #include <limits>
+#include <string>
 
 namespace formulon_node {
 namespace {
@@ -17,7 +21,7 @@ namespace {
 // position. A typed, `object` or `required` position must be present; an
 // unset bit means the position is optional and handled by the method itself.
 // `tools/codegen/gen_wasm_positional_guards.py` emits the same table into the
-// WASM pre-js, so both surfaces reject the same arguments the same way.
+// WASM pre-js, so both surfaces reject the same arguments with the same words.
 struct PositionalArgSpec {
   std::uint64_t u32_mask;
   std::uint64_t i32_mask;
@@ -33,17 +37,50 @@ struct PositionalArgSpec {
   std::uint64_t required_mask;
 };
 
+/// One registered method: its masks and the name its errors carry.
+struct GuardedMethodData {
+  PositionalArgSpec spec;
+  const char* name;
+  /// The `Sheet` facade supplies the first argument (the sheet index).
+  bool sheet_scoped;
+};
+
 // A uint64 argument arrives as a Number, which is exact only up to 2^53 - 1;
 // a larger value could not name the cursor the caller holds.
 constexpr double kMaxSafeInteger = 9007199254740991.0;
 
-bool RejectArgumentType(const Napi::CallbackInfo& info, const char* expected) {
-  Napi::TypeError::New(info.Env(), expected).ThrowAsJavaScriptException();
+// The raw methods the `Sheet` facade calls with the sheet index first, sorted.
+constexpr const char* kSheetMethods[] = {
+#include "node_addon/generated/facade_scope.inc"
+};
+
+bool IsSheetMethod(const char* name) {
+  return std::binary_search(std::begin(kSheetMethods), std::end(kSheetMethods), name,
+                            [](const char* a, const char* b) { return std::strcmp(a, b) < 0; });
+}
+
+// Names the argument at `idx` as the facade method sees it: a sheet-scoped
+// method's first argument is the sheet index, which the facade supplies.
+std::string ArgumentLabel(const GuardedMethodData& method, std::size_t idx) {
+  if (method.sheet_scoped) {
+    return idx == 0 ? std::string("Sheet.") + method.name + " sheet index"
+                    : std::string("Sheet.") + method.name + " argument " + std::to_string(idx);
+  }
+  return std::string("Workbook.") + method.name + " argument " + std::to_string(idx + 1);
+}
+
+bool RejectArgumentType(const Napi::CallbackInfo& info, const std::string& label, const char* expected) {
+  Napi::TypeError::New(info.Env(), label + " must be a primitive " + expected).ThrowAsJavaScriptException();
   return false;
 }
 
-bool RejectArgumentRange(const Napi::CallbackInfo& info, const char* expected) {
-  Napi::RangeError::New(info.Env(), expected).ThrowAsJavaScriptException();
+bool RejectArgumentRequired(const Napi::CallbackInfo& info, const std::string& label) {
+  Napi::TypeError::New(info.Env(), label + " is required").ThrowAsJavaScriptException();
+  return false;
+}
+
+bool RejectArgumentRange(const Napi::CallbackInfo& info, const std::string& label, const char* kind) {
+  Napi::RangeError::New(info.Env(), label + " is outside " + kind + " range").ThrowAsJavaScriptException();
   return false;
 }
 
@@ -57,30 +94,30 @@ std::size_t MaskWidth(std::uint64_t mask) {
   return width;
 }
 
-bool ValidatePositionalArgs(const Napi::CallbackInfo& info, const PositionalArgSpec& spec) {
+bool ValidatePositionalArgs(const Napi::CallbackInfo& info, const GuardedMethodData& method) {
+  const PositionalArgSpec& spec = method.spec;
   // A number that is an integer in [min_value, max_value].
-  const auto validate_integer = [&](std::size_t idx, double min_value, double max_value, const char* range_message) {
+  const auto validate_integer = [&](std::size_t idx, double min_value, double max_value, const char* kind) {
     const Napi::Value value = info[idx];
     if (!value.IsNumber()) {
-      return RejectArgumentType(info, "positional argument must be a number");
+      return RejectArgumentType(info, ArgumentLabel(method, idx), "number");
     }
     const double number = NumberValue(value, 0.0);
     if (!std::isfinite(number) || std::trunc(number) != number || number < min_value || number > max_value) {
-      return RejectArgumentRange(info, range_message);
+      return RejectArgumentRange(info, ArgumentLabel(method, idx), kind);
     }
     return true;
   };
   // An optional position may be absent or `undefined`; `null` only when its bit is in `optional_null_mask`.
-  const auto validate_optional_integer = [&](std::size_t idx, std::uint64_t bit, double max_value,
-                                             const char* range_message) {
+  const auto validate_optional_integer = [&](std::size_t idx, std::uint64_t bit, double max_value, const char* kind) {
     if (idx >= info.Length()) {
       return true;
     }
     const Napi::Value value = info[idx];
     if (value.IsNull() && (spec.optional_null_mask & bit) == 0) {
-      return RejectArgumentType(info, "positional argument must be a number");
+      return RejectArgumentType(info, ArgumentLabel(method, idx), "number");
     }
-    return value.IsUndefined() || value.IsNull() || validate_integer(idx, 0.0, max_value, range_message);
+    return value.IsUndefined() || value.IsNull() || validate_integer(idx, 0.0, max_value, kind);
   };
 
   // Required positions are checked even past the supplied arguments, where
@@ -91,40 +128,34 @@ bool ValidatePositionalArgs(const Napi::CallbackInfo& info, const PositionalArgS
   const std::size_t positional_count = supplied > required_width ? supplied : required_width;
   for (std::size_t idx = 0; idx < positional_count; ++idx) {
     const std::uint64_t bit = std::uint64_t{1} << idx;
-    if ((spec.u32_mask & bit) != 0 &&
-        !validate_integer(idx, 0.0, kUint32MaxNumber, "positional argument is outside uint32 range")) {
-      return false;
+    if ((spec.object_mask & bit) != 0 && !info[idx].IsObject()) {
+      return RejectArgumentType(info, ArgumentLabel(method, idx), "object");
     }
-    if ((spec.optional_u32_mask & bit) != 0 &&
-        !validate_optional_integer(idx, bit, kUint32MaxNumber, "positional argument is outside uint32 range")) {
+    if ((spec.required_mask & bit) != 0 && info[idx].IsUndefined()) {
+      return RejectArgumentRequired(info, ArgumentLabel(method, idx));
+    }
+    if ((spec.u32_mask & bit) != 0 && !validate_integer(idx, 0.0, kUint32MaxNumber, "uint32")) {
       return false;
     }
     if ((spec.i32_mask & bit) != 0 &&
         !validate_integer(idx, static_cast<double>(std::numeric_limits<std::int32_t>::min()),
-                          static_cast<double>(std::numeric_limits<std::int32_t>::max()),
-                          "positional argument is outside int32 range")) {
+                          static_cast<double>(std::numeric_limits<std::int32_t>::max()), "int32")) {
       return false;
     }
-    if ((spec.u64_mask & bit) != 0 &&
-        !validate_integer(idx, 0.0, kMaxSafeInteger, "positional argument is outside the safe-integer range")) {
-      return false;
-    }
-    if ((spec.optional_u64_mask & bit) != 0 &&
-        !validate_optional_integer(idx, bit, kMaxSafeInteger,
-                                   "positional argument is outside the safe-integer range")) {
+    if ((spec.u64_mask & bit) != 0 && !validate_integer(idx, 0.0, kMaxSafeInteger, "uint64")) {
       return false;
     }
     if ((spec.double_mask & bit) != 0 && !info[idx].IsNumber()) {
-      return RejectArgumentType(info, "positional argument must be a number");
+      return RejectArgumentType(info, ArgumentLabel(method, idx), "number");
     }
     if ((spec.string_mask & bit) != 0 && !info[idx].IsString()) {
-      return RejectArgumentType(info, "positional argument must be a string");
+      return RejectArgumentType(info, ArgumentLabel(method, idx), "string");
     }
-    if ((spec.object_mask & bit) != 0 && !info[idx].IsObject()) {
-      return RejectArgumentType(info, "positional argument must be an object");
+    if ((spec.optional_u32_mask & bit) != 0 && !validate_optional_integer(idx, bit, kUint32MaxNumber, "uint32")) {
+      return false;
     }
-    if ((spec.required_mask & bit) != 0 && info[idx].IsUndefined()) {
-      return RejectArgumentType(info, "positional argument is required");
+    if ((spec.optional_u64_mask & bit) != 0 && !validate_optional_integer(idx, bit, kMaxSafeInteger, "uint64")) {
+      return false;
     }
   }
   return true;
@@ -132,25 +163,12 @@ bool ValidatePositionalArgs(const Napi::CallbackInfo& info, const PositionalArgS
 
 using InstanceMethodCallback = Napi::Value (Workbook::*)(const Napi::CallbackInfo&);
 
-template <InstanceMethodCallback method, std::uint64_t u32_mask, std::uint64_t i32_mask, std::uint64_t u64_mask,
-          std::uint64_t double_mask, std::uint64_t string_mask, std::uint64_t optional_u32_mask,
-          std::uint64_t optional_u64_mask, std::uint64_t optional_null_mask, std::uint64_t object_mask,
-          std::uint64_t required_mask>
-struct GuardedMethodSpec {
-  static constexpr PositionalArgSpec value{u32_mask,    i32_mask,          u64_mask,          double_mask,
-                                           string_mask, optional_u32_mask, optional_u64_mask, optional_null_mask,
-                                           object_mask, required_mask};
-};
-
-template <InstanceMethodCallback method, std::uint64_t u32_mask, std::uint64_t i32_mask, std::uint64_t u64_mask,
-          std::uint64_t double_mask, std::uint64_t string_mask, std::uint64_t optional_u32_mask,
-          std::uint64_t optional_u64_mask, std::uint64_t optional_null_mask, std::uint64_t object_mask,
-          std::uint64_t required_mask>
+template <InstanceMethodCallback method>
 napi_value GuardedInstanceMethodCallback(napi_env raw_env, napi_callback_info raw_info) {
   return Napi::details::WrapCallback(raw_env, [&] {
     Napi::CallbackInfo info(raw_env, raw_info);
-    const auto* const spec = static_cast<const PositionalArgSpec*>(info.Data());
-    if (spec == nullptr || !ValidatePositionalArgs(info, *spec)) {
+    const auto* const data = static_cast<const GuardedMethodData*>(info.Data());
+    if (data == nullptr || !ValidatePositionalArgs(info, *data)) {
       return info.Env().Undefined();
     }
     Workbook* const instance = Workbook::Unwrap(info.This().As<Napi::Object>());
@@ -158,19 +176,21 @@ napi_value GuardedInstanceMethodCallback(napi_env raw_env, napi_callback_info ra
   });
 }
 
+// Each method is registered once, so the per-instantiation static holds its
+// one name for every environment.
 template <InstanceMethodCallback method, std::uint64_t u32_mask = 0, std::uint64_t i32_mask = 0,
           std::uint64_t u64_mask = 0, std::uint64_t double_mask = 0, std::uint64_t string_mask = 0,
           std::uint64_t optional_u32_mask = 0, std::uint64_t optional_u64_mask = 0,
           std::uint64_t optional_null_mask = 0, std::uint64_t object_mask = 0, std::uint64_t required_mask = 0>
 Napi::ClassPropertyDescriptor<Workbook> GuardedInstanceMethod(const char* name) {
+  static const GuardedMethodData data{{u32_mask, i32_mask, u64_mask, double_mask, string_mask, optional_u32_mask,
+                                       optional_u64_mask, optional_null_mask, object_mask, required_mask},
+                                      name,
+                                      IsSheetMethod(name)};
   napi_property_descriptor descriptor{};
   descriptor.utf8name = name;
-  descriptor.method =
-      &GuardedInstanceMethodCallback<method, u32_mask, i32_mask, u64_mask, double_mask, string_mask, optional_u32_mask,
-                                     optional_u64_mask, optional_null_mask, object_mask, required_mask>;
-  descriptor.data = const_cast<void*>(static_cast<const void*>(
-      &GuardedMethodSpec<method, u32_mask, i32_mask, u64_mask, double_mask, string_mask, optional_u32_mask,
-                         optional_u64_mask, optional_null_mask, object_mask, required_mask>::value));
+  descriptor.method = &GuardedInstanceMethodCallback<method>;
+  descriptor.data = const_cast<void*>(static_cast<const void*>(&data));
   descriptor.attributes = napi_default;
   return descriptor;
 }
@@ -300,7 +320,8 @@ Napi::Value Workbook::CreateEmpty(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::CreateForProfile(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!info[0].IsString()) {
-    RejectArgumentType(info, "positional argument must be a string");
+    Napi::TypeError::New(env, "Workbook.createForProfile argument 1 must be a primitive string")
+        .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Object jsobj = GetClass(env).New({});
@@ -312,12 +333,12 @@ Napi::Value Workbook::CreateForProfile(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::LoadBytes(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!info[0].IsObject()) {
-    RejectArgumentType(info, "positional argument must be an object");
+    Napi::TypeError::New(env, "Workbook.load argument 1 must be a primitive object").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Uint8Array u8;
   if (!BytesArg(info, 0, &u8)) {
-    RejectArgumentType(info, "bytes must be a Uint8Array");
+    Napi::TypeError::New(env, "bytes must be a Uint8Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Object jsobj = GetClass(env).New({});
@@ -489,7 +510,8 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::GetCellStyle, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("getCellStyle"),
           GuardedInstanceMethod<&Workbook::GetCellStyleXf, 0x1ULL>("getCellStyleXf"),
           GuardedInstanceMethod<&Workbook::GetEffectiveStyle, 0x7ULL>("getEffectiveStyle"),
-          GuardedInstanceMethod<&Workbook::GetTheme>("getThemeFonts"),
+          GuardedInstanceMethod<&Workbook::GetThemeColors>("getThemeColors"),
+          GuardedInstanceMethod<&Workbook::GetThemeFonts>("getThemeFonts"),
           GuardedInstanceMethod<&Workbook::RemoveCellStyle, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("removeCellStyle"),
           GuardedInstanceMethod<&Workbook::ResolveColor, 0x0ULL, 0x2ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("resolveColor"),
           GuardedInstanceMethod<&Workbook::SetCellStyle, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setCellStyle"),
@@ -566,7 +588,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::GetSheetPrintArea, 0x1ULL>("getPrintArea"),
           GuardedInstanceMethod<&Workbook::SetSheetPrintArea, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setPrintArea"),
           GuardedInstanceMethod<&Workbook::GetSheetPrintTitles, 0x1ULL>("getPrintTitles"),
-          GuardedInstanceMethod<&Workbook::SetSheetPrintTitles, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x6ULL>("setPrintTitles"),
+          GuardedInstanceMethod<&Workbook::SetSheetPrintTitles, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setPrintTitles"),
           GuardedInstanceMethod<&Workbook::AddSheetRowBreak, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("addRowBreak"),
           GuardedInstanceMethod<&Workbook::AddSheetColBreak, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("addColumnBreak"),
           GuardedInstanceMethod<&Workbook::RemoveSheetRowBreak, 0x3ULL>("removeRowBreak"),
@@ -718,21 +740,20 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::SetColumnStyle, 0xFULL>("setColumnStyle"),
           GuardedInstanceMethod<&Workbook::SetColumnWidth, 0x7ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setColumnWidth"),
           GuardedInstanceMethod<&Workbook::SetComment, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x18ULL>("setComment"),
+          GuardedInstanceMethod<&Workbook::RemoveComment, 0x7ULL>("removeComment"),
           GuardedInstanceMethod<&Workbook::SetCommentVisible, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setCommentVisible"),
           GuardedInstanceMethod<&Workbook::SetWorkbookProtection, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setWorkbookProtection"),
           GuardedInstanceMethod<&Workbook::AddProtectedRange, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("addProtectedRange"),
           GuardedInstanceMethod<&Workbook::UpdateProtectedRange, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("updateProtectedRange"),
           GuardedInstanceMethod<&Workbook::RemoveProtectedRange, 0x3ULL>("removeProtectedRange"),
-          GuardedInstanceMethod<&Workbook::SetDefinedName, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>("setDefinedName"),
-          GuardedInstanceMethod<&Workbook::SetDefinedNameScoped, 0x0ULL, 0x4ULL, 0x0ULL, 0x0ULL, 0x3ULL>("setDefinedNameScoped"),
-          GuardedInstanceMethod<&Workbook::SetDefinedNameAttrs, 0x0ULL, 0x2ULL, 0x0ULL, 0x0ULL, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setDefinedNameAttrs"),
+          GuardedInstanceMethod<&Workbook::SetDefinedName, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setDefinedName"),
           GuardedInstanceMethod<&Workbook::SetDefaultFont, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setDefaultFont"),
           GuardedInstanceMethod<&Workbook::SetFont, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setFont"),
           GuardedInstanceMethod<&Workbook::SetError, 0x7ULL, 0x8ULL>("setError"),
           GuardedInstanceMethod<&Workbook::SetExcelProfileId, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setExcelProfileId"),
           GuardedInstanceMethod<&Workbook::SetFileName, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setFileName"),
           GuardedInstanceMethod<&Workbook::SetFormula, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setFormula"),
-          GuardedInstanceMethod<&Workbook::SetIterative, 0x0ULL, 0x2ULL, 0x0ULL, 0x4ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setIterative"),
+          GuardedInstanceMethod<&Workbook::SetIterative, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setIterative"),
           GuardedInstanceMethod<&Workbook::SetIterativeProgress, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setIterativeProgress"),
           GuardedInstanceMethod<&Workbook::SetNumber, 0x7ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setNumber"),
           GuardedInstanceMethod<&Workbook::SetRowAutoHeight, 0x7ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setRowAutoHeight"),
@@ -754,13 +775,12 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::SetSheetShowZeros, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setShowZeros"),
           GuardedInstanceMethod<&Workbook::SetSheetShowFormulas, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setShowFormulas"),
           GuardedInstanceMethod<&Workbook::SetSheetShowOutlineSymbols, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setShowOutlineSymbols"),
-          GuardedInstanceMethod<&Workbook::SetSheetTabHidden, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setTabHidden"),
           GuardedInstanceMethod<&Workbook::SetSheetPaneTopLeft, 0x7ULL>("setPaneTopLeft"),
           GuardedInstanceMethod<&Workbook::SetSheetSplit, 0x1ULL, 0x0ULL, 0x0ULL, 0x6ULL>("setSplit"),
           GuardedInstanceMethod<&Workbook::SetSheetSelection, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSelection"),
           GuardedInstanceMethod<&Workbook::SetSheetTopLeft, 0x7ULL>("setTopLeft"),
           GuardedInstanceMethod<&Workbook::SetSheetTabSelected, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setTabSelected"),
-          GuardedInstanceMethod<&Workbook::SetSheetViewMode, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setViewMode"),
+          GuardedInstanceMethod<&Workbook::SetSheetViewMode, 0x3ULL>("setViewMode"),
           GuardedInstanceMethod<&Workbook::SetSheetVisibility, 0x1ULL, 0x2ULL>("setVisibility"),
           GuardedInstanceMethod<&Workbook::SetSheetZoom, 0x3ULL>("setZoom"),
           GuardedInstanceMethod<&Workbook::SetText, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setText"),

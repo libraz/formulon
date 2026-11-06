@@ -329,6 +329,29 @@ bool CheckedSpecReader::RequiredArray(const Napi::Object& owner, const char* key
   return false;
 }
 
+std::string CheckedSpecReader::RequiredString(const Napi::Object& owner, const char* key) {
+  const Napi::Value value = Get(owner, key);
+  if (!ok()) {
+    return std::string();
+  }
+  if (!value.IsString()) {
+    ReportType(key, "string");
+    return std::string();
+  }
+  std::string out;
+  (void)String(value, key, &out);
+  return out;
+}
+
+Napi::Value CheckedSpecReader::Get(const Napi::Object& owner, const char* key) {
+  if (!ok()) {
+    return env_.Undefined();
+  }
+  const Napi::Value value = owner.Get(key);
+  ObservePending();
+  return ok() ? value : env_.Undefined();
+}
+
 uint32_t CheckedSpecReader::RequiredU32(const Napi::Object& owner, const char* key) {
   Napi::Value value;
   if (!ReadOptional(owner, key, &value)) {
@@ -608,7 +631,7 @@ Napi::Object TranslatePivotCell(Napi::Env env, const fm_pivot_cell_t& cell) {
   out.Set("kind", Napi::Number::New(env, static_cast<int32_t>(cell.kind)));
   out.Set("depth", Napi::Number::New(env, cell.depth));
   out.Set("fieldName", JsString(env, cell.field_name));
-  out.Set("numberFormat", JsString(env, cell.number_format));
+  out.Set("numberFormat", JsStringOrNull(env, cell.number_format));
   return out;
 }
 
@@ -670,6 +693,55 @@ Napi::Value JsNumber(Napi::Env env, double v) {
 
 Napi::Value JsBool(Napi::Env env, int32_t v) {
   return Napi::Boolean::New(env, v != 0);
+}
+
+Napi::Value JsStringOrNull(Napi::Env env, const char* s) {
+  return s != nullptr && s[0] != '\0' ? Napi::Value(Napi::String::New(env, s)) : env.Null();
+}
+
+Napi::Value JsIndexOrNull(Napi::Env env, int32_t v) {
+  return v >= 0 ? Napi::Value(Napi::Number::New(env, v)) : env.Null();
+}
+
+Napi::Value JsNumberOrNull(Napi::Env env, int32_t present, double v) {
+  return present != 0 ? Napi::Value(Napi::Number::New(env, v)) : env.Null();
+}
+
+Napi::Value JsBoolOrNull(Napi::Env env, int32_t present, int32_t v) {
+  return present != 0 ? Napi::Value(Napi::Boolean::New(env, v != 0)) : env.Null();
+}
+
+Napi::Value PrintTitlesToJs(Napi::Env env, const fm_print_titles_t& titles) {
+  if (titles.has_rows == 0 && titles.has_cols == 0) {
+    return env.Null();
+  }
+  const auto span = [&](int32_t present, uint32_t first, uint32_t last) -> Napi::Value {
+    if (present == 0) {
+      return env.Null();
+    }
+    Napi::Object o = Napi::Object::New(env);
+    o.Set("first", Napi::Number::New(env, first));
+    o.Set("last", Napi::Number::New(env, last));
+    return o;
+  };
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("rows", span(titles.has_rows, titles.first_row, titles.last_row));
+  out.Set("columns", span(titles.has_cols, titles.first_col, titles.last_col));
+  return out;
+}
+
+PatchKey ClassifyPatchKey(CheckedSpecReader& reader, const Napi::Value& value, const char* key, bool nullable) {
+  if (!reader.ok() || value.IsUndefined()) {
+    return PatchKey::kKeep;
+  }
+  if (value.IsNull()) {
+    if (nullable) {
+      return PatchKey::kClear;
+    }
+    reader.FailType(key, "value (null cannot clear this field)");
+    return PatchKey::kKeep;
+  }
+  return PatchKey::kSet;
 }
 
 void BuildDataFieldSpec(CheckedSpecReader& reader, const Napi::Object& spec, fm_pivot_data_field_spec_t& out,

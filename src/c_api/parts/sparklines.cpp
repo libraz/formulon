@@ -9,6 +9,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/enum_map.h"
 #include "io/sparkline_groups.h"
 #include "utils/error.h"
 #include "workbook.h"
@@ -21,8 +22,10 @@ using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::sparkline_empty_cells_from_c;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::TextStore;
+using formulon::c_api::parts::to_c;
 
 namespace {
 
@@ -77,7 +80,7 @@ io::SparklineGroup group_from_c(const fm_sparkline_group_t& g) {
   out.date_axis = g.date_axis != 0;
   out.date_axis_ref = g.date_axis_ref != nullptr ? g.date_axis_ref : "";
   out.line_weight = g.line_weight;
-  out.empty_cells_as = static_cast<io::SparklineEmptyCells>(g.empty_cells_as);
+  out.empty_cells_as = sparkline_empty_cells_from_c(g.empty_cells_as);
   return out;
 }
 
@@ -192,9 +195,9 @@ extern "C" fm_status_t fm_sheet_get_sparkline_group(const fm_workbook_t* wb, siz
   out->has_manual_min = g.has_manual_min ? 1 : 0;
   out->has_manual_max = g.has_manual_max ? 1 : 0;
   out->date_axis = g.date_axis ? 1 : 0;
-  out->empty_cells_as = static_cast<int32_t>(g.empty_cells_as);
+  out->empty_cells_as = to_c(g.empty_cells_as);
   out->date_axis_ref = store_cstr(store, g.date_axis_ref);
-  out->sparkline_count = g.items.size();
+  out->sparkline_count = static_cast<std::uint32_t>(g.items.size());
   return 0;
 }
 

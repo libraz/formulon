@@ -6,12 +6,13 @@ import unittest
 
 import formulon
 from formulon import (
+    Sheet,
     Workbook,
 )
 
 
 class SurfaceParityTests(unittest.TestCase):
-    """Every advertised method must exist on the Workbook class."""
+    """Every advertised method must exist on ``Workbook`` or ``Sheet``."""
 
     METHODS = [
         "move_sheet",
@@ -19,7 +20,6 @@ class SurfaceParityTests(unittest.TestCase):
         "remove_sheet",
         "rename_sheet",
         "set_defined_name",
-        "set_defined_name_scoped",
         "set_error",
         "insert_rows",
         "delete_rows",
@@ -33,7 +33,6 @@ class SurfaceParityTests(unittest.TestCase):
         "recalc_data_tables",
         "get_pinned_now",
         "set_pinned_now",
-        "clear_pinned_now",
         "get_excel_profile_id",
         "set_excel_profile_id",
         "recalc_viewport",
@@ -51,16 +50,11 @@ class SurfaceParityTests(unittest.TestCase):
         "list_hyperlinks",
         "get_comment",
         "set_comment",
-        "get_validation_count",
-        "get_validation",
-        "get_protected_range_count",
-        "get_protected_range",
-        "get_sparkline_group_count",
-        "get_sparkline_group",
-        "get_cell_phonetic_run_count",
-        "get_cell_phonetic_run",
-        "get_table_count",
-        "get_table",
+        "list_validations",
+        "list_protected_ranges",
+        "list_sparkline_groups",
+        "get_cell_phonetic_runs",
+        "list_tables",
         "get_cell_count",
         "get_cell_at",
         "add_validation",
@@ -71,7 +65,6 @@ class SurfaceParityTests(unittest.TestCase):
         "get_view",
         "set_zoom",
         "set_freeze",
-        "set_tab_hidden",
         "set_visibility",
         "set_show_grid_lines",
         "set_show_row_col_headers",
@@ -98,10 +91,7 @@ class SurfaceParityTests(unittest.TestCase):
         "snapshot_range_style",
         "restore_range_style",
         "evaluate_cf_range",
-        "get_cf_rule_count",
-        "get_cf_rule",
-        "get_cf_rule_count",
-        "get_cf_rule",
+        "list_cf_rules",
         "add_cf_rule",
         "remove_cf_rule",
         "clear_cf_rules",
@@ -160,10 +150,8 @@ class SurfaceParityTests(unittest.TestCase):
         "format_reference",
         "get_array_formula",
         "set_array_formula",
-        "get_external_link_count",
-        "get_external_link",
+        "list_external_links",
         "save",
-        "get_sheet_index",
         "sheet",
         "save_with_diagnostics",
         "get_diagnostics",
@@ -171,7 +159,7 @@ class SurfaceParityTests(unittest.TestCase):
 
     def test_all_methods_present(self) -> None:
         for name in self.METHODS:
-            self.assertTrue(hasattr(Workbook, name), f"Workbook missing method: {name}")
+            self.assertTrue(hasattr(Workbook, name) or hasattr(Sheet, name), f"missing method: {name}")
 
     def test_default_workbook_uses_english_profile(self) -> None:
         with Workbook.create_default() as wb:

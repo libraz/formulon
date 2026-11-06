@@ -70,8 +70,9 @@ export function registerMetadataLayout(Module, test) {
       assert.equal(list.length, 4);
       assert.deepEqual(list[0].rect, { firstRow: 1, firstCol: 2, lastRow: 1, lastCol: 2 });
       assert.equal(list[0].target, 'https://example.com/');
-      assert.equal(list[0].display, '');
-      assert.equal(list[0].tooltip, '');
+      assert.equal(list[0].display, null);
+      assert.equal(list[0].tooltip, null);
+      assert.equal(list[0].location, null);
       assert.equal(list[1].target, 'mailto:hello@example.com');
       assert.equal(list[1].display, 'Hello');
       assert.equal(list[2].display, 'See X');
@@ -128,10 +129,12 @@ export function registerMetadataLayout(Module, test) {
       assert.ok(c !== null);
       assert.equal(c.author, 'Alice');
       assert.equal(c.text, 'Hello');
-      // Empty text removes.
-      wb.setComment(0, 1, 1, '', '');
-      const after = wb.getComment(0, 1, 1);
-      assert.equal(after, null);
+      // Empty text writes an empty note; removeComment removes it.
+      wb.setComment(0, 1, 1, 'Alice', '');
+      assert.deepEqual({ ...wb.getComment(0, 1, 1) }, { author: 'Alice', text: '' });
+      wb.removeComment(0, 1, 1);
+      assert.equal(wb.getComment(0, 1, 1), null);
+      expectFailure(() => wb.removeComment(0, 1, 1), StatusCode.NotFound);
     } finally {
       wb.delete();
     }
@@ -366,14 +369,14 @@ export function registerMetadataLayout(Module, test) {
   test('typed print patches throw on lossy numbers before changing the page setup', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      wb.setPageSetup(0, { orientation: 2, scale: 125 });
+      wb.setPageSetup(0, { orientation: 1, scale: 125 });
       const expectRejected = (patch, field) => {
         assert.throws(() => wb.setPageSetup(0, patch), {
           name: 'RangeError',
           message: new RegExp(`setPageSetup.*\`${field}\``),
         });
         const setup = wb.getPageSetup(0);
-        assert.equal(setup.orientation, 2);
+        assert.equal(setup.orientation, 1);
         assert.equal(setup.scale, 125);
       };
 
@@ -387,7 +390,7 @@ export function registerMetadataLayout(Module, test) {
       // from this update and the prior value remains in force.
       wb.setPageSetup(0, { scale: null, orientation: undefined });
       const unchanged = wb.getPageSetup(0);
-      assert.equal(unchanged.orientation, 2);
+      assert.equal(unchanged.orientation, 1);
       assert.equal(unchanged.scale, 125);
     } finally {
       wb.delete();
@@ -444,54 +447,37 @@ export function registerMetadataLayout(Module, test) {
     }
   });
 
-  test('setSheetVisibility states veryHidden, which the bool setter cannot', () => {
+  test('setVisibility states hidden and veryHidden and refuses to hide the last visible sheet', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      const read = () => {
-        const r = wb.getView(0);
-        return r;
-      };
-      assert.equal(read().visibility, 0);
-      assert.equal(read().tabHidden, 0);
+      const read = () => wb.getView(0).visibility;
+      assert.equal(read(), 0);
+      assert.equal('tabHidden' in wb.getView(0), false);
       // The only visible sheet cannot be hidden: kInvalidArgument, sheet left alone.
       expectFailure(() => wb.setVisibility(0, 1), StatusCode.InvalidArgument);
-      expectFailure(() => wb.setTabHidden(0, true), StatusCode.InvalidArgument);
-      assert.equal(read().visibility, 0);
+      assert.equal(read(), 0);
       // The last sheet keeps its own refusal (kCannotRemoveLastSheet).
       expectFailure(() => wb.removeSheet(0), StatusCode.CannotRemoveLastSheet);
       assert.equal(wb.getSheetCount(), 1);
       // A second sheet lets the first one change state, but removing the first
       // while the second is hidden would leave no visible sheet.
       wb.addSheet('Second');
-      wb.setTabHidden(1, true);
+      wb.setVisibility(1, 1);
       expectFailure(() => wb.removeSheet(0), StatusCode.InvalidArgument);
       assert.equal(wb.getSheetCount(), 2);
-      wb.setTabHidden(1, false);
+      wb.setVisibility(1, 0);
 
       wb.setVisibility(0, 2);
-      // The two-state view stays consistent: a very-hidden sheet reads as
-      // hidden to a caller that knows only the bool, never as visible.
-      assert.equal(read().visibility, 2);
-      assert.equal(read().tabHidden, 1);
-
-      // Asking for plain "hidden" must not weaken the stronger state.
-      wb.setTabHidden(0, true);
-      assert.equal(read().visibility, 2);
-
-      // Demotion is the other direction the bool cannot express.
+      assert.equal(read(), 2);
       wb.setVisibility(0, 1);
-      assert.equal(read().visibility, 1);
-      assert.equal(read().tabHidden, 1);
-
-      // Showing the sheet clears either hidden state.
-      wb.setTabHidden(0, false);
-      assert.equal(read().visibility, 0);
-      assert.equal(read().tabHidden, 0);
+      assert.equal(read(), 1);
+      wb.setVisibility(0, 0);
+      assert.equal(read(), 0);
 
       // An unknown ordinal is refused and leaves the sheet alone.
       wb.setVisibility(0, 2);
       expectFailure(() => wb.setVisibility(0, 3));
-      assert.equal(read().visibility, 2);
+      assert.equal(read(), 2);
     } finally {
       wb.delete();
     }
@@ -505,7 +491,7 @@ export function registerMetadataLayout(Module, test) {
       assert.equal(typeof initial.maxIterations, 'number');
       assert.equal(typeof initial.maxChange, 'number');
 
-      wb.setIterative(true, 42, 0.25);
+      wb.setIterative({ enabled: true, maxIterations: 42, maxChange: 0.25 });
       const enabled = wb.getIterative();
       assert.equal(enabled.enabled, true);
       assert.equal(enabled.maxIterations, 42);
@@ -513,7 +499,7 @@ export function registerMetadataLayout(Module, test) {
 
       // The cap and threshold survive switching iteration back off, which is
       // what lets a host render the dialog with the stored values.
-      wb.setIterative(false, 42, 0.25);
+      wb.setIterative({ enabled: false });
       const disabled = wb.getIterative();
       assert.equal(disabled.enabled, false);
       assert.equal(disabled.maxIterations, 42);

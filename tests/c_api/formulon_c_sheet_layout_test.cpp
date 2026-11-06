@@ -39,12 +39,11 @@ static_assert(sizeof(fm_row_layout_t) == 40U);
 // the end of its own storage rather than getting a diagnosable error. Pin the
 // size here: changing the struct must break the build and be acknowledged,
 // not merely be reflected in the bindings afterwards.
-static_assert(sizeof(fm_sheet_view_t) == 88U);
-static_assert(offsetof(fm_sheet_view_t, tab_hidden) == 12U);
-static_assert(offsetof(fm_sheet_view_t, visibility) == 16U);
-static_assert(offsetof(fm_sheet_view_t, tab_selected) == 36U);
-static_assert(offsetof(fm_sheet_view_t, view_mode) == 40U);
-static_assert(offsetof(fm_sheet_view_t, top_left_row) == (sizeof(void*) == 4U ? 44U : 48U));
+static_assert(sizeof(fm_sheet_view_t) == 80U);
+static_assert(offsetof(fm_sheet_view_t, visibility) == 12U);
+static_assert(offsetof(fm_sheet_view_t, tab_selected) == 32U);
+static_assert(offsetof(fm_sheet_view_t, view_mode) == 36U);
+static_assert(offsetof(fm_sheet_view_t, top_left_row) == 40U);
 
 /// The status every documented rejection on this surface returns. Pinning
 /// the value rather than "non-zero" is what makes the assertions below
@@ -100,15 +99,13 @@ TEST(FormulonCApiSheetLayout, GetViewDefaults) {
   EXPECT_EQ(v.zoom_scale, 100U);
   EXPECT_EQ(v.freeze_rows, 0U);
   EXPECT_EQ(v.freeze_cols, 0U);
-  EXPECT_EQ(v.tab_hidden, 0);
   EXPECT_EQ(v.visibility, FM_SHEET_VISIBLE);
   EXPECT_EQ(v.show_grid_lines, 1);
   EXPECT_EQ(v.show_row_col_headers, 1);
   EXPECT_EQ(v.show_zeros, 1);
   EXPECT_EQ(v.right_to_left, 0);
   EXPECT_EQ(v.tab_selected, 0);
-  ASSERT_NE(v.view_mode, nullptr);
-  EXPECT_STREQ(v.view_mode, "");
+  EXPECT_EQ(v.view_mode, FM_SHEET_VIEW_MODE_NORMAL);
 }
 
 TEST(FormulonCApiSheetLayout, SetViewSetters) {
@@ -118,13 +115,12 @@ TEST(FormulonCApiSheetLayout, SetViewSetters) {
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible", ignored_index()), 0);
   ASSERT_EQ(fm_sheet_set_zoom(wb.handle, 0, 175U), 0);
   ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 4U, 2U), 0);
-  ASSERT_EQ(fm_sheet_set_tab_hidden(wb.handle, 0, 1), 0);
+  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_HIDDEN), 0);
   fm_sheet_view_t v{};
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
   EXPECT_EQ(v.zoom_scale, 175U);
   EXPECT_EQ(v.freeze_rows, 4U);
   EXPECT_EQ(v.freeze_cols, 2U);
-  EXPECT_EQ(v.tab_hidden, 1);
   EXPECT_EQ(v.visibility, FM_SHEET_HIDDEN);
 }
 
@@ -135,45 +131,18 @@ TEST(FormulonCApiSheetLayout, SetVisibilityStatesAllThreeTabStates) {
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible", ignored_index()), 0);
   fm_sheet_view_t v{};
 
-  // The state the bool setter cannot reach in either direction.
   ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VERY_HIDDEN), 0);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
   EXPECT_EQ(v.visibility, FM_SHEET_VERY_HIDDEN);
-  // The two-state view stays consistent: a very-hidden sheet is hidden to
-  // a caller that reads only the bool, never visible.
-  EXPECT_EQ(v.tab_hidden, 1);
 
-  // Demotion to plain hidden is the other direction the bool cannot state.
+  // Demotion to plain hidden.
   ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_HIDDEN), 0);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
   EXPECT_EQ(v.visibility, FM_SHEET_HIDDEN);
-  EXPECT_EQ(v.tab_hidden, 1);
 
   ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VISIBLE), 0);
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
   EXPECT_EQ(v.visibility, FM_SHEET_VISIBLE);
-  EXPECT_EQ(v.tab_hidden, 0);
-}
-
-TEST(FormulonCApiSheetLayout, SetTabHiddenDoesNotDemoteVeryHidden) {
-  WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  // A workbook keeps one visible sheet, so sheet 0 can only be hidden beside another.
-  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible", ignored_index()), 0);
-  ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VERY_HIDDEN), 0);
-
-  // "Hidden" says nothing a very-hidden sheet does not already satisfy, so
-  // it must not weaken the author's stronger choice.
-  ASSERT_EQ(fm_sheet_set_tab_hidden(wb.handle, 0, 1), 0);
-  fm_sheet_view_t v{};
-  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
-  EXPECT_EQ(v.visibility, FM_SHEET_VERY_HIDDEN);
-
-  // Showing it, however, has to clear both states.
-  ASSERT_EQ(fm_sheet_set_tab_hidden(wb.handle, 0, 0), 0);
-  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
-  EXPECT_EQ(v.visibility, FM_SHEET_VISIBLE);
-  EXPECT_EQ(v.tab_hidden, 0);
 }
 
 TEST(FormulonCApiSheetLayout, SetVisibilityRejectsUnknownStateAndLeavesTheSheet) {
@@ -200,7 +169,7 @@ TEST(FormulonCApiSheetLayout, SetViewDisplayFlagSetters) {
   ASSERT_EQ(fm_sheet_set_show_zeros(wb.handle, 0, 0), 0);
   ASSERT_EQ(fm_sheet_set_right_to_left(wb.handle, 0, 1), 0);
   ASSERT_EQ(fm_sheet_set_tab_selected(wb.handle, 0, 1), 0);
-  ASSERT_EQ(fm_sheet_set_view_mode(wb.handle, 0, "pageBreakPreview"), 0);
+  ASSERT_EQ(fm_sheet_set_view_mode(wb.handle, 0, FM_SHEET_VIEW_MODE_PAGE_BREAK_PREVIEW), 0);
   fm_sheet_view_t v{};
   ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
   EXPECT_EQ(v.show_grid_lines, 0);
@@ -208,8 +177,7 @@ TEST(FormulonCApiSheetLayout, SetViewDisplayFlagSetters) {
   EXPECT_EQ(v.show_zeros, 0);
   EXPECT_EQ(v.right_to_left, 1);
   EXPECT_EQ(v.tab_selected, 1);
-  ASSERT_NE(v.view_mode, nullptr);
-  EXPECT_STREQ(v.view_mode, "pageBreakPreview");
+  EXPECT_EQ(v.view_mode, FM_SHEET_VIEW_MODE_PAGE_BREAK_PREVIEW);
 }
 
 TEST(FormulonCApiSheetLayout, AutoFilterXmlRoundTripsAndClears) {
@@ -289,10 +257,19 @@ TEST(FormulonCApiSheetLayout, AutoFilterXmlFailureIncludesParseContext) {
   EXPECT_NE(std::string(fm_get_last_error_context()).find("pugixml"), std::string::npos);
 }
 
-TEST(FormulonCApiSheetLayout, SetViewModeRejectsNullPointer) {
+TEST(FormulonCApiSheetLayout, SetViewModeRejectsUnknownModeAndKeepsTheView) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  EXPECT_NE(fm_sheet_set_view_mode(wb.handle, 0, nullptr), 0);
+  ASSERT_EQ(fm_sheet_set_view_mode(wb.handle, 0, FM_SHEET_VIEW_MODE_PAGE_LAYOUT), 0);
+  EXPECT_EQ(fm_sheet_set_view_mode(wb.handle, 0, -1), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_view_mode(wb.handle, 0, 3), kInvalidArgument);
+  fm_sheet_view_t v{};
+  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
+  EXPECT_EQ(v.view_mode, FM_SHEET_VIEW_MODE_PAGE_LAYOUT);
+
+  ASSERT_EQ(fm_sheet_set_view_mode(wb.handle, 0, FM_SHEET_VIEW_MODE_NORMAL), 0);
+  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
+  EXPECT_EQ(v.view_mode, FM_SHEET_VIEW_MODE_NORMAL);
 }
 
 TEST(FormulonCApiSheetLayout, ZoomClampedToBounds) {
@@ -678,7 +655,7 @@ TEST(FormulonCApiSheetLayout, InvalidSheetIndexRejected) {
   EXPECT_EQ(fm_sheet_get_view(wb.handle, 99U, &v), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_zoom(wb.handle, 99U, 100U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_freeze(wb.handle, 99U, 1U, 1U), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_set_tab_hidden(wb.handle, 99U, 1), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 99U, FM_SHEET_HIDDEN), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_column_width(wb.handle, 99U, 0U, 1U, 10.0), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 

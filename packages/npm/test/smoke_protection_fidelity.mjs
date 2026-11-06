@@ -1,9 +1,9 @@
 import test from 'node:test';
-import { assert, expectFailure, getModule, readAll } from './smoke_support.mjs';
+import { assert, expectFailure, getModule } from './smoke_support.mjs';
 
 // ---- Workbook protection, protected ranges and note visibility ---------------
 
-const release = (wb) => wb.delete();
+const release = (wb) => wb.dispose();
 
 const roundTrip = (mod, wb) => {
   const saved = wb.save();
@@ -11,9 +11,9 @@ const roundTrip = (mod, wb) => {
 };
 
 const fullProtection = {
-  lockStructure: 1,
-  lockWindows: 1,
-  lockRevision: 0,
+  lockStructure: true,
+  lockWindows: true,
+  lockRevision: false,
   workbookPassword: 'CF1A',
   workbookAlgorithmName: 'SHA-512',
   workbookHashValue: 'aGFzaA==',
@@ -30,15 +30,15 @@ test('workbook protection is absent by default and every field round-trips', asy
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   const empty = wb.getWorkbookProtection();
-  assert.equal(empty.lockStructure, 0);
-  assert.equal(empty.workbookHashValue, '');
+  assert.equal(empty.lockStructure, false);
+  assert.equal(empty.workbookHashValue, null);
   wb.setWorkbookProtection(fullProtection);
   assert.deepEqual(wb.getWorkbookProtection(), fullProtection);
   const loaded = roundTrip(mod, wb);
   assert.deepEqual(loaded.getWorkbookProtection(), fullProtection);
   // An all-empty record removes the element.
   loaded.setWorkbookProtection({});
-  assert.equal(roundTrip(mod, loaded).getWorkbookProtection().lockStructure, 0);
+  assert.equal(roundTrip(mod, loaded).getWorkbookProtection().lockStructure, false);
   release(loaded);
   release(wb);
 });
@@ -46,7 +46,7 @@ test('workbook protection is absent by default and every field round-trips', asy
 test('protected ranges add, list, update, remove and follow row edits', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.addProtectedRange(0, {
+  wb.sheet(0).addProtectedRange({
     name: 'Inputs',
     ranges: [
       { firstRow: 1, firstCol: 1, lastRow: 2, lastCol: 2 },
@@ -54,7 +54,7 @@ test('protected ranges add, list, update, remove and follow row edits', async ()
     ],
     password: 'CC1A',
   });
-  wb.addProtectedRange(0, {
+  wb.sheet(0).addProtectedRange({
     name: 'Totals',
     ranges: [{ firstRow: 9, firstCol: 0, lastRow: 11, lastCol: 0 }],
     algorithmName: 'SHA-512',
@@ -64,10 +64,7 @@ test('protected ranges add, list, update, remove and follow row edits', async ()
     securityDescriptor: 'O:WDG:WD',
   });
   const loaded = roundTrip(mod, wb);
-  const ranges = readAll(
-    () => loaded.getProtectedRangeCount(0),
-    (i) => loaded.getProtectedRange(0, i),
-  );
+  const ranges = loaded.sheet(0).listProtectedRanges();
   assert.equal(ranges.length, 2);
   assert.equal(ranges[0].name, 'Inputs');
   assert.deepEqual(ranges[0].ranges, [
@@ -78,34 +75,22 @@ test('protected ranges add, list, update, remove and follow row edits', async ()
   assert.equal(ranges[1].spinCount, 100000);
   assert.equal(ranges[1].securityDescriptor, 'O:WDG:WD');
 
-  loaded.insertRows(0, 0, 2);
-  assert.deepEqual(
-    readAll(
-      () => loaded.getProtectedRangeCount(0),
-      (i) => loaded.getProtectedRange(0, i),
-    )[0].ranges,
-    [
-      { firstRow: 3, firstCol: 1, lastRow: 4, lastCol: 2 },
-      { firstRow: 6, firstCol: 4, lastRow: 6, lastCol: 4 },
-    ],
-  );
-  loaded.updateProtectedRange(0, 0, {
+  loaded.sheet(0).insertRows(0, 2);
+  assert.deepEqual(loaded.sheet(0).listProtectedRanges()[0].ranges, [
+    { firstRow: 3, firstCol: 1, lastRow: 4, lastCol: 2 },
+    { firstRow: 6, firstCol: 4, lastRow: 6, lastCol: 4 },
+  ]);
+  loaded.sheet(0).updateProtectedRange(0, {
     name: 'Renamed',
     ranges: [{ firstRow: 3, firstCol: 3, lastRow: 3, lastCol: 3 }],
   });
-  assert.equal(
-    readAll(
-      () => loaded.getProtectedRangeCount(0),
-      (i) => loaded.getProtectedRange(0, i),
-    )[0].password,
-    '',
-  );
-  loaded.removeProtectedRange(0, 0);
+  assert.equal(loaded.sheet(0).listProtectedRanges()[0].password, '');
+  loaded.sheet(0).removeProtectedRange(0);
   assert.deepEqual(
-    readAll(
-      () => loaded.getProtectedRangeCount(0),
-      (i) => loaded.getProtectedRange(0, i),
-    ).map((r) => r.name),
+    loaded
+      .sheet(0)
+      .listProtectedRanges()
+      .map((r) => r.name),
     ['Totals'],
   );
   release(loaded);
@@ -115,47 +100,43 @@ test('protected ranges add, list, update, remove and follow row edits', async ()
 test('protected range arguments are validated', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.addProtectedRange(0, { name: 'Inputs', ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }] });
+  wb.sheet(0).addProtectedRange({ name: 'Inputs', ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }] });
   expectFailure(() =>
-    wb.addProtectedRange(0, { name: 'Inputs', ranges: [{ firstRow: 0, firstCol: 1, lastRow: 0, lastCol: 1 }] }),
-  );
-  expectFailure(() =>
-    wb.addProtectedRange(0, { name: '', ranges: [{ firstRow: 0, firstCol: 1, lastRow: 0, lastCol: 1 }] }),
-  );
-  expectFailure(() => wb.addProtectedRange(0, { name: 'Other', ranges: [] }));
-  expectFailure(() =>
-    wb.addProtectedRange(9, { name: 'Other', ranges: [{ firstRow: 0, firstCol: 1, lastRow: 0, lastCol: 1 }] }),
+    wb.sheet(0).addProtectedRange({ name: 'Inputs', ranges: [{ firstRow: 0, firstCol: 1, lastRow: 0, lastCol: 1 }] }),
   );
   expectFailure(() =>
-    wb.updateProtectedRange(0, 5, { name: 'Other', ranges: [{ firstRow: 0, firstCol: 1, lastRow: 0, lastCol: 1 }] }),
+    wb.sheet(0).addProtectedRange({ name: '', ranges: [{ firstRow: 0, firstCol: 1, lastRow: 0, lastCol: 1 }] }),
   );
-  expectFailure(() => wb.removeProtectedRange(0, 5));
-  assert.equal(
-    readAll(
-      () => wb.getProtectedRangeCount(0),
-      (i) => wb.getProtectedRange(0, i),
-    ).length,
-    1,
+  expectFailure(() => wb.sheet(0).addProtectedRange({ name: 'Other', ranges: [] }));
+  expectFailure(() =>
+    wb.sheet(9).addProtectedRange({ name: 'Other', ranges: [{ firstRow: 0, firstCol: 1, lastRow: 0, lastCol: 1 }] }),
   );
+  expectFailure(() =>
+    wb
+      .sheet(0)
+      .updateProtectedRange(5, { name: 'Other', ranges: [{ firstRow: 0, firstCol: 1, lastRow: 0, lastCol: 1 }] }),
+  );
+  expectFailure(() => wb.sheet(0).removeProtectedRange(5));
+  assert.equal(wb.sheet(0).listProtectedRanges().length, 1);
   release(wb);
 });
 
 test('note visibility reads back, persists and rejects a missing note', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.setComment(0, 1, 1, 'Alice', 'shown');
-  wb.setComment(0, 3, 3, 'Alice', 'hidden');
-  assert.equal(wb.getCommentVisible(0, 1, 1), false);
-  wb.setCommentVisible(0, 1, 1, true);
+  wb.sheet(0).setComment(1, 1, { author: 'Alice', text: 'shown' });
+  wb.sheet(0).setComment(3, 3, { author: 'Alice', text: 'hidden' });
+  assert.equal(wb.sheet(0).getCommentVisible(1, 1), false);
+  wb.sheet(0).setCommentVisible(1, 1, true);
   const loaded = roundTrip(mod, wb);
-  assert.equal(loaded.getCommentVisible(0, 1, 1), true);
-  assert.equal(loaded.getCommentVisible(0, 3, 3), false);
-  loaded.setComment(0, 1, 1, 'Alice', 'edited');
-  assert.equal(loaded.getCommentVisible(0, 1, 1), true);
-  const absent = loaded.getCommentVisible(0, 7, 7);
+  assert.equal(loaded.sheet(0).getCommentVisible(1, 1), true);
+  assert.equal(loaded.sheet(0).getCommentVisible(3, 3), false);
+  loaded.sheet(0).setComment(1, 1, { author: 'Alice', text: 'edited' });
+  assert.equal(loaded.sheet(0).getCommentVisible(1, 1), true);
+  const absent = loaded.sheet(0).getCommentVisible(7, 7);
   assert.equal(absent, null);
-  expectFailure(() => loaded.getCommentVisible(99, 1, 1));
-  expectFailure(() => loaded.setCommentVisible(0, 7, 7, true));
+  expectFailure(() => loaded.sheet(99).getCommentVisible(1, 1));
+  expectFailure(() => loaded.sheet(0).setCommentVisible(7, 7, true));
   release(loaded);
   release(wb);
 });
@@ -163,23 +144,14 @@ test('note visibility reads back, persists and rejects a missing note', async ()
 test('range-list inputs need at least one rectangle', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.throws(() => wb.addProtectedRange(0, { name: 'Inputs' }), TypeError);
-  assert.throws(() => wb.addValidation(0, { type: 3, formula1: '"A,B"' }), TypeError);
-  assert.throws(() => wb.addCfRule(0, { type: 0, formula1: 'TRUE' }), TypeError);
-  assert.equal(
-    readAll(
-      () => wb.getCfRuleCount(0),
-      (i) => wb.getCfRule(0, i),
-    ).length,
-    0,
+  assert.throws(() => wb.sheet(0).addProtectedRange({ name: 'Inputs' }), TypeError);
+  assert.throws(() => wb.sheet(0).addValidation({ type: 3, formula1: '"A,B"' }), TypeError);
+  assert.throws(() => wb.sheet(0).addCfRule({ type: 0, formula1: 'TRUE' }), TypeError);
+  assert.equal(wb.sheet(0).listCfRules().length, 0);
+  expectFailure(
+    () => wb.sheet(0).addValidation({ ranges: [], type: 3, formula1: '"A,B"' }),
+    mod.StatusCode.InvalidArgument,
   );
-  expectFailure(() => wb.addValidation(0, { ranges: [], type: 3, formula1: '"A,B"' }), mod.StatusCode.InvalidArgument);
-  assert.equal(
-    readAll(
-      () => wb.getValidationCount(0),
-      (i) => wb.getValidation(0, i),
-    ).length,
-    0,
-  );
+  assert.equal(wb.sheet(0).listValidations().length, 0);
   release(wb);
 });

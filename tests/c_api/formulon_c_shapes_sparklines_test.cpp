@@ -31,10 +31,10 @@ void SaveAndReload(fm_workbook_t* wb, WorkbookGuard* out) {
 
 fm_shape_t Callout() {
   fm_shape_t s{};
-  s.fields = FM_SHAPE_FIELD_NAME | FM_SHAPE_FIELD_PRST | FM_SHAPE_FIELD_ANCHOR | FM_SHAPE_FIELD_TEXT |
+  s.fields = FM_SHAPE_FIELD_NAME | FM_SHAPE_FIELD_PRESET_GEOMETRY | FM_SHAPE_FIELD_ANCHOR | FM_SHAPE_FIELD_TEXT |
              FM_SHAPE_FIELD_FILL | FM_SHAPE_FIELD_LINE | FM_SHAPE_FIELD_LINE_WIDTH | FM_SHAPE_FIELD_ROTATION;
   s.name = "Callout";
-  s.prst = "wedgeRectCallout";
+  s.preset_geometry = "wedgeRectCallout";
   s.text = "Hello\nWorld";
   s.anchor_kind = FM_ANCHOR_KIND_TWO_CELL;
   s.edit_as = FM_ANCHOR_EDIT_AS_ONE_CELL;
@@ -51,10 +51,10 @@ fm_shape_t Callout() {
 }
 
 TEST(FormulonCApiShapes, EnumOrdinalsAndFieldBits) {
-  EXPECT_EQ(FM_SHAPE_PAINT_UNSET, 0);
-  EXPECT_EQ(FM_SHAPE_PAINT_SOLID, 1);
-  EXPECT_EQ(FM_SHAPE_PAINT_NONE, 2);
-  EXPECT_EQ(FM_SHAPE_PAINT_OTHER, 3);
+  EXPECT_EQ(FM_SHAPE_PAINT_UNSET, -1);
+  EXPECT_EQ(FM_SHAPE_PAINT_SOLID, 0);
+  EXPECT_EQ(FM_SHAPE_PAINT_NONE, 1);
+  EXPECT_EQ(FM_SHAPE_PAINT_OTHER, 2);
   EXPECT_EQ(FM_SHAPE_FIELD_HIDDEN, 0x200u);
   EXPECT_EQ(FM_SPARKLINE_STACKED, 2);
   EXPECT_EQ(FM_SPARKLINE_AXIS_CUSTOM, 2);
@@ -74,13 +74,13 @@ TEST(FormulonCApiShapes, InsertListUpdateRemoveAndReload) {
   EXPECT_EQ(id, 2U);
 
   fm_shape_t connector{};
-  connector.fields = FM_SHAPE_FIELD_PRST | FM_SHAPE_FIELD_ANCHOR | FM_SHAPE_FIELD_LINE;
-  connector.prst = "straightConnector1";
+  connector.fields = FM_SHAPE_FIELD_PRESET_GEOMETRY | FM_SHAPE_FIELD_ANCHOR | FM_SHAPE_FIELD_LINE;
+  connector.preset_geometry = "straightConnector1";
   connector.anchor_kind = FM_ANCHOR_KIND_ONE_CELL;
   connector.from_row = 10;
-  connector.from_col_offset = 500;
-  connector.cx = 914400;
-  connector.cy = 0;
+  connector.from_col_offset_emu = 500;
+  connector.width_emu = 914400;
+  connector.height_emu = 0;
   connector.line_kind = FM_SHAPE_PAINT_SOLID;
   connector.line_rgb = 0x00FF00;
   uint32_t line_id = 0;
@@ -95,7 +95,7 @@ TEST(FormulonCApiShapes, InsertListUpdateRemoveAndReload) {
   EXPECT_EQ(out.object_id, id);
   EXPECT_EQ(out.kind, FM_DRAWING_OBJECT_SHAPE);
   EXPECT_STREQ(out.name, "Callout");
-  EXPECT_STREQ(out.prst, "wedgeRectCallout");
+  EXPECT_STREQ(out.preset_geometry, "wedgeRectCallout");
   EXPECT_STREQ(out.text, "Hello\nWorld");
   EXPECT_EQ(out.anchor_kind, FM_ANCHOR_KIND_TWO_CELL);
   EXPECT_EQ(out.edit_as, FM_ANCHOR_EDIT_AS_ONE_CELL);
@@ -109,8 +109,8 @@ TEST(FormulonCApiShapes, InsertListUpdateRemoveAndReload) {
   EXPECT_EQ(out.fields, 0U);
   ASSERT_EQ(fm_sheet_get_shape_at(again.handle, 0, 1, &out), 0);
   EXPECT_EQ(out.kind, FM_DRAWING_OBJECT_CONNECTOR);
-  EXPECT_EQ(out.from_col_offset, 500);
-  EXPECT_EQ(out.cx, 914400);
+  EXPECT_EQ(out.from_col_offset_emu, 500);
+  EXPECT_EQ(out.width_emu, 914400);
   EXPECT_EQ(out.line_rgb, 0x00FF00U);
 
   fm_shape_t patch{};
@@ -123,7 +123,7 @@ TEST(FormulonCApiShapes, InsertListUpdateRemoveAndReload) {
   EXPECT_STREQ(out.name, "Renamed");
   EXPECT_EQ(out.hidden, 1);
   EXPECT_EQ(out.fill_kind, FM_SHAPE_PAINT_NONE);
-  EXPECT_STREQ(out.prst, "wedgeRectCallout");  // unnamed fields stay
+  EXPECT_STREQ(out.preset_geometry, "wedgeRectCallout");  // unnamed fields stay
   EXPECT_EQ(out.rotation, 300000);
 
   ASSERT_EQ(fm_sheet_remove_shape(again.handle, 0, id), 0);
@@ -143,7 +143,7 @@ TEST(FormulonCApiShapes, Validation) {
   spec.anchor_kind = 9;
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), kInvalidArgument);
   spec = Callout();
-  spec.fields = FM_SHAPE_FIELD_PRST;  // no anchor
+  spec.fields = FM_SHAPE_FIELD_PRESET_GEOMETRY;  // no anchor
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), kInvalidArgument);
   spec = Callout();
   spec.fields |= 0x80000000u;

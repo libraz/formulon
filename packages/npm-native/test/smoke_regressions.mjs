@@ -1,13 +1,13 @@
 import test from 'node:test';
-import { assert, getModule, isFormulonError, readAll } from './smoke_support.mjs';
+import { assert, getModule, isFormulonError } from './smoke_support.mjs';
 
 test('a nested recalc from the iterative progress callback throws on serial and parallel passes', async () => {
   const mod = await getModule();
   const runOuterRecalc = (recalcOuter) => {
     const wb = mod.Workbook.createDefault();
     try {
-      wb.setIterative(true, 10, 0.001);
-      wb.setFormula(0, 0, 0, '=(A1+10)/2');
+      wb.setIterative({ enabled: true, maxIterations: 10, maxChange: 0.001 });
+      wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
       let calls = 0;
       let nested;
       wb.setIterativeProgress(() => {
@@ -41,8 +41,8 @@ test('a throwing iterative progress callback aborts the solve and its exception 
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    wb.setIterative(true, 100, 0.0001);
-    wb.setFormula(0, 0, 0, '=(A1+10)/2');
+    wb.setIterative({ enabled: true, maxIterations: 100, maxChange: 0.0001 });
+    wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
     let calls = 0;
     const thrown = new Error('callback failure');
     wb.setIterativeProgress(() => {
@@ -60,12 +60,12 @@ test('a throwing iterative progress callback aborts the solve and its exception 
     assert.equal(caught, thrown);
     assert.equal(calls, 1, 'the solve must stop at the first throw');
 
-    wb.getValue(0, 0, 0);
+    wb.sheet(0).getValue(0, 0);
 
     wb.setIterativeProgress(null);
-    wb.setFormula(0, 0, 0, '=(A1+10)/2');
+    wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
     wb.recalc();
-    const converged = wb.getValue(0, 0, 0);
+    const converged = wb.sheet(0).getValue(0, 0);
     assert.ok(Math.abs(converged.number - 10) < 0.001, `A1=${converged.number}`);
   } finally {
     wb.setIterativeProgress(null);
@@ -148,13 +148,10 @@ test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
   let bytes;
   try {
     for (const rule of [COLOR_SCALE_RULE, DATA_BAR_RULE, ICON_SET_RULE]) {
-      wb.addCfRule(0, rule);
+      wb.sheet(0).addCfRule(rule);
     }
 
-    const inSession = readAll(
-      () => wb.getCfRuleCount(0),
-      (i) => wb.getCfRule(0, i),
-    );
+    const inSession = wb.sheet(0).listCfRules();
     assert.equal(inSession.length, 3);
     assert.deepEqual(cfvoValues(inSession), EXPECTED_CFVO_VALUES);
     const byType = new Map(inSession.map((rule) => [rule.type, rule]));
@@ -180,10 +177,7 @@ test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
 
   const reloaded = mod.Workbook.load(bytes);
   try {
-    const rules = readAll(
-      () => reloaded.getCfRuleCount(0),
-      (i) => reloaded.getCfRule(0, i),
-    );
+    const rules = reloaded.sheet(0).listCfRules();
     assert.equal(rules.length, 3);
     assert.deepEqual(cfvoValues(rules), EXPECTED_CFVO_VALUES);
   } finally {
@@ -200,7 +194,7 @@ test('getIterative reads back what setIterative stored', async () => {
     assert.equal(typeof initial.maxIterations, 'number');
     assert.equal(typeof initial.maxChange, 'number');
 
-    wb.setIterative(true, 42, 0.25);
+    wb.setIterative({ enabled: true, maxIterations: 42, maxChange: 0.25 });
     const enabled = wb.getIterative();
     assert.equal(enabled.enabled, true);
     assert.equal(enabled.maxIterations, 42);
@@ -208,7 +202,7 @@ test('getIterative reads back what setIterative stored', async () => {
 
     // The cap and threshold survive switching iteration back off, which is
     // what lets a host render the dialog with the stored values.
-    wb.setIterative(false, 42, 0.25);
+    wb.setIterative({ enabled: false, maxIterations: 42, maxChange: 0.25 });
     const disabled = wb.getIterative();
     assert.equal(disabled.enabled, false);
     assert.equal(disabled.maxIterations, 42);
@@ -222,15 +216,12 @@ test('addValidation defaults allowBlank to false', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    wb.addValidation(0, {
+    wb.sheet(0).addValidation({
       ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
       type: 3,
       formula1: '"a,b"',
     });
-    const list = readAll(
-      () => wb.getValidationCount(0),
-      (i) => wb.getValidation(0, i),
-    );
+    const list = wb.sheet(0).listValidations();
     assert.equal(list.length, 1);
     assert.equal(list[0].allowBlank, false);
   } finally {
@@ -275,18 +266,18 @@ test('pivotFieldAddItemAt hides the blank item an empty label cannot name', asyn
     wb.setPivotCacheRecordBlank(cache, second, region);
     wb.setPivotCacheRecordNumber(cache, second, amount, 200);
 
-    const pivot = wb.addPivot(0, 'PT', cache, 0, 0);
-    const regionField = wb.addPivotField(0, pivot, { sourceName: 'Region', axis: 0 });
-    const amountField = wb.addPivotField(0, pivot, { sourceName: 'Amount', axis: 2 });
-    wb.setPivotRowFieldOrder(0, pivot, [regionField]);
-    wb.addPivotDataField(0, pivot, {
+    const pivot = wb.sheet(0).addPivot('PT', cache, 0, 0);
+    const regionField = wb.sheet(0).addPivotField(pivot, { sourceName: 'Region', axis: 0 });
+    const amountField = wb.sheet(0).addPivotField(pivot, { sourceName: 'Amount', axis: 2 });
+    wb.sheet(0).setPivotRowFieldOrder(pivot, [regionField]);
+    wb.sheet(0).addPivotDataField(pivot, {
       name: 'Sum of Amount',
       fieldIndex: amountField,
       aggregation: 0,
     });
 
     const sumDataCells = () => {
-      const layout = wb.getPivotLayout(0, pivot);
+      const layout = wb.sheet(0).getPivotLayout(pivot);
       let total = 0;
       for (const cell of layout.cells) {
         if (cell.kind === mod.PivotCellKind.Data && cell.value.kind === mod.ValueKind.Number) {
@@ -297,8 +288,8 @@ test('pivotFieldAddItemAt hides the blank item an empty label cannot name', asyn
     };
     assert.equal(sumDataCells(), 300);
 
-    wb.addPivotFieldItem(0, pivot, regionField, 'North', true);
-    wb.addPivotFieldSharedItem(0, pivot, regionField, 1, false);
+    wb.sheet(0).addPivotFieldItem(pivot, regionField, 'North', true);
+    wb.sheet(0).addPivotFieldSharedItem(pivot, regionField, 1, false);
     assert.equal(sumDataCells(), 100);
   } finally {
     wb.dispose();
@@ -318,13 +309,13 @@ test('a rejected argument reports its own diagnostic, not the previous call', as
       }
       return assert.fail('expected the call to throw');
     };
-    const stale = failure(() => wb.getValue(99, 0, 0));
+    const stale = failure(() => wb.sheet(99).getValue(0, 0));
     assert.ok(isFormulonError(stale));
     assert.ok(stale.message.length > 0);
 
     // An argument the binding rejects before any C call carries its own
     // message, and a TypeError rather than the destroyed-handle code.
-    const shortColors = failure(() => wb.setThemeColors([1, 2]));
+    const shortColors = failure(() => wb.setThemeColors({ colors: [1, 2] }));
     assert.ok(shortColors instanceof TypeError);
     assert.match(shortColors.message, /setThemeColors/);
     assert.notEqual(shortColors.message, stale.message);
@@ -379,100 +370,86 @@ test('sheet-layout setters refuse coordinates and metrics Excel cannot open', as
     };
 
     // One past Excel's last column / row.
-    refused(() => wb.setColumnWidth(0, 0, 16384, 10), kSpanRefused, 'setColumnWidth past the grid');
-    refused(() => wb.setColumnHidden(0, 0, 16384, true), kSpanRefused, 'setColumnHidden past the grid');
-    refused(() => wb.setColumnOutline(0, 0, 16384, 1), kSpanRefused, 'setColumnOutline past the grid');
-    refused(() => wb.setRowHeight(0, 0, 1048576, 10), kRowSpanRefused, 'setRowHeight past the grid');
-    refused(() => wb.setRowHidden(0, 0, 1048576, true), kRowSpanRefused, 'setRowHidden past the grid');
-    refused(() => wb.setRowOutline(0, 0, 1048576, 1), kRowSpanRefused, 'setRowOutline past the grid');
+    refused(() => wb.sheet(0).setColumnWidth(0, 16384, 10), kSpanRefused, 'setColumnWidth past the grid');
+    refused(() => wb.sheet(0).setColumnHidden(0, 16384, true), kSpanRefused, 'setColumnHidden past the grid');
+    refused(() => wb.sheet(0).setColumnOutline(0, 16384, 1), kSpanRefused, 'setColumnOutline past the grid');
+    refused(() => wb.sheet(0).setRowHeight(0, 1048576, 10), kRowSpanRefused, 'setRowHeight past the grid');
+    refused(() => wb.sheet(0).setRowHidden(0, 1048576, true), kRowSpanRefused, 'setRowHidden past the grid');
+    refused(() => wb.sheet(0).setRowOutline(0, 1048576, 1), kRowSpanRefused, 'setRowOutline past the grid');
 
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1]) {
-      refused(() => wb.setColumnWidth(0, 0, 2, bad), kMetricRefused, `setColumnWidth(${bad})`);
-      refused(() => wb.setRowHeight(0, 1, 1, bad), kMetricRefused, `setRowHeight(${bad})`);
+      refused(() => wb.sheet(0).setColumnWidth(0, 2, bad), kMetricRefused, `setColumnWidth(${bad})`);
+      refused(() => wb.sheet(0).setRowHeight(1, 1, bad), kMetricRefused, `setRowHeight(${bad})`);
     }
 
     // The context carries the values the engine saw, which is what makes a rejection actionable.
     assert.throws(
-      () => wb.setColumnWidth(0, 0, 16384, 10),
+      () => wb.sheet(0).setColumnWidth(0, 16384, 10),
       (e) => /first=0 last=16384/.test(e.context),
     );
     assert.throws(
-      () => wb.setRowHeight(0, 1, 1, Number.NaN),
+      () => wb.sheet(0).setRowHeight(1, 1, Number.NaN),
       (e) => /height=/.test(e.context),
     );
 
     // Zero is a real width and a real height, not a rejected one.
-    wb.setColumnWidth(0, 0, 2, 0);
-    wb.setRowHeight(0, 1, 1, 0);
+    wb.sheet(0).setColumnWidth(0, 2, 0);
+    wb.sheet(0).setRowHeight(1, 1, 0);
 
     // The last coordinates Excel does address stay accepted -- an
     // off-by-one in either bound would refuse them.
-    wb.setColumnWidth(0, 16383, 16383, 10);
-    wb.setColumnHidden(0, 16383, 16383, true);
-    wb.setColumnOutline(0, 16383, 16383, 1);
-    wb.setRowHeight(0, 1048575, 1048575, 10);
-    wb.setRowHidden(0, 1048575, 1048575, true);
-    wb.setRowOutline(0, 1048575, 1048575, 1);
+    wb.sheet(0).setColumnWidth(16383, 16383, 10);
+    wb.sheet(0).setColumnHidden(16383, 16383, true);
+    wb.sheet(0).setColumnOutline(16383, 16383, 1);
+    wb.sheet(0).setRowHeight(1048575, 1048575, 10);
+    wb.sheet(0).setRowHidden(1048575, 1048575, true);
+    wb.sheet(0).setRowOutline(1048575, 1048575, 1);
   } finally {
     wb.dispose();
   }
 });
 
-test('setSheetVisibility states veryHidden, which the bool setter cannot', async () => {
+test('setVisibility states every tab visibility, veryHidden included', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const read = () => {
-      const r = wb.getView(0);
-      return r;
-    };
+    const read = () => wb.sheet(0).getView();
     assert.equal(read().visibility, mod.SheetVisibility.Visible);
-    assert.equal(read().tabHidden, 0);
     // The only visible sheet cannot be hidden: kInvalidArgument, sheet left alone.
-    for (const refused of [() => wb.setVisibility(0, mod.SheetVisibility.Hidden), () => wb.setTabHidden(0, true)]) {
-      assert.throws(refused, (e) => isFormulonError(e, 2));
-    }
+    assert.throws(
+      () => wb.sheet(0).setVisibility(mod.SheetVisibility.Hidden),
+      (e) => isFormulonError(e, 2),
+    );
     assert.equal(read().visibility, mod.SheetVisibility.Visible);
     // The last sheet keeps its own refusal (kCannotRemoveLastSheet).
     assert.throws(
       () => wb.removeSheet(0),
       (e) => isFormulonError(e, 5052),
     );
-    assert.equal(wb.getSheetCount(), 1);
+    assert.equal(wb.listSheets().length, 1);
     // A second sheet lets the first one change state, but removing the first
     // while the second is hidden would leave no visible sheet.
     wb.addSheet('Second');
-    wb.setTabHidden(1, true);
+    wb.sheet(1).setVisibility(mod.SheetVisibility.Hidden);
     assert.throws(
       () => wb.removeSheet(0),
       (e) => isFormulonError(e, 2),
     );
-    assert.equal(wb.getSheetCount(), 2);
-    wb.setTabHidden(1, false);
+    assert.equal(wb.listSheets().length, 2);
+    wb.sheet(1).setVisibility(mod.SheetVisibility.Visible);
 
-    wb.setVisibility(0, mod.SheetVisibility.VeryHidden);
-    // The two-state view stays consistent: a very-hidden sheet reads as
-    // hidden to a caller that knows only the bool, never as visible.
-    assert.equal(read().visibility, mod.SheetVisibility.VeryHidden);
-    assert.equal(read().tabHidden, 1);
-
-    // Asking for plain "hidden" must not weaken the stronger state.
-    wb.setTabHidden(0, true);
+    wb.sheet(0).setVisibility(mod.SheetVisibility.VeryHidden);
     assert.equal(read().visibility, mod.SheetVisibility.VeryHidden);
 
-    // Demotion is the other direction the bool cannot express.
-    wb.setVisibility(0, mod.SheetVisibility.Hidden);
+    // Demotion and showing are explicit states too.
+    wb.sheet(0).setVisibility(mod.SheetVisibility.Hidden);
     assert.equal(read().visibility, mod.SheetVisibility.Hidden);
-    assert.equal(read().tabHidden, 1);
-
-    // Showing the sheet clears either hidden state.
-    wb.setTabHidden(0, false);
+    wb.sheet(0).setVisibility(mod.SheetVisibility.Visible);
     assert.equal(read().visibility, mod.SheetVisibility.Visible);
-    assert.equal(read().tabHidden, 0);
 
     // An unknown ordinal is refused and leaves the sheet alone.
-    wb.setVisibility(0, mod.SheetVisibility.VeryHidden);
-    assert.throws(() => wb.setVisibility(0, 3), isFormulonError);
+    wb.sheet(0).setVisibility(mod.SheetVisibility.VeryHidden);
+    assert.throws(() => wb.sheet(0).setVisibility(3), isFormulonError);
     assert.equal(read().visibility, mod.SheetVisibility.VeryHidden);
   } finally {
     wb.dispose();

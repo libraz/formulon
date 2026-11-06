@@ -129,69 +129,60 @@ fm_border_record_t js_pull_border_record(const emscripten::val& record, const Bo
 }
 
 /// Builds the JS mirror of a font record. Shared by `getFont` and the
-/// `<dxf>` font projection so both surface the same field set.
+/// `<dxf>` font projection so both surface the same field set. An absent
+/// element reads as `null`.
 emscripten::val js_font_record(const fm_font_record_t& f) {
   emscripten::val o = emscripten::val::object();
   js_set_cstr(o, "name", f.name);
-  o.set("size", f.size);
+  js_set_present_or_null(o, "size", f.has_size, f.size);
   o.set("colorArgb", f.color_argb);
-  o.set("bold", f.bold != 0);
-  o.set("italic", f.italic != 0);
-  o.set("strike", f.strike != 0);
-  o.set("hasBold", f.has_bold != 0);
-  o.set("hasItalic", f.has_italic != 0);
-  o.set("hasStrike", f.has_strike != 0);
+  js_set_present_or_null(o, "bold", f.has_bold, f.bold != 0);
+  js_set_present_or_null(o, "italic", f.has_italic, f.italic != 0);
+  js_set_present_or_null(o, "strike", f.has_strike, f.strike != 0);
   o.set("underline", static_cast<std::uint32_t>(f.underline));
   o.set("vertAlign", static_cast<std::uint32_t>(f.vert_align));
-  o.set("hasFamily", f.has_family != 0);
-  o.set("family", static_cast<std::uint32_t>(f.family));
-  o.set("hasCharset", f.has_charset != 0);
-  o.set("charset", static_cast<std::uint32_t>(f.charset));
-  o.set("hasSize", f.has_size != 0);
+  js_set_present_or_null(o, "family", f.has_family, static_cast<std::uint32_t>(f.family));
+  js_set_present_or_null(o, "charset", f.has_charset, static_cast<std::uint32_t>(f.charset));
   o.set("scheme", static_cast<std::uint32_t>(f.scheme));
-  o.set("outline", f.outline != 0);
-  o.set("shadow", f.shadow != 0);
-  o.set("condense", f.condense != 0);
-  o.set("extend", f.extend != 0);
-  o.set("hasOutline", f.has_outline != 0);
-  o.set("hasShadow", f.has_shadow != 0);
-  o.set("hasCondense", f.has_condense != 0);
-  o.set("hasExtend", f.has_extend != 0);
+  js_set_present_or_null(o, "outline", f.has_outline, f.outline != 0);
+  js_set_present_or_null(o, "shadow", f.has_shadow, f.shadow != 0);
+  js_set_present_or_null(o, "condense", f.has_condense, f.condense != 0);
+  js_set_present_or_null(o, "extend", f.has_extend, f.extend != 0);
   o.set("color", js_color_spec(f.color));
   return o;
 }
 
 /// Reads a font record out of a JS object. `name_storage` owns the font
-/// name for the duration of the C ABI call, which borrows the pointer.
+/// name for the duration of the C ABI call, which borrows the pointer. An
+/// omitted or `null` element is absent from the record.
 void js_pull_font_record(const emscripten::val& record, std::string* name_storage, fm_font_record_t* out,
                          JsNarrowNumericReader& reader) {
+  const auto flag = [&](const char* key, const char* field, int32_t* has, int32_t* value) {
+    const emscripten::val v = reader.value(record, key, field);
+    *has = js_value_present(v) ? 1 : 0;
+    *value = reader.boolean_value(v, false) ? 1 : 0;
+  };
   *name_storage = reader.string(record, "name", "font.name");
   out->name = name_storage->c_str();
-  out->size = reader.number(record, "size", 11.0, "font.size");
-  out->bold = reader.boolean(record, "bold", false, "font.bold") ? 1 : 0;
-  out->italic = reader.boolean(record, "italic", false, "font.italic") ? 1 : 0;
-  out->strike = reader.boolean(record, "strike", false, "font.strike") ? 1 : 0;
-  out->has_bold = reader.boolean(record, "hasBold", false, "font.hasBold") ? 1 : 0;
-  out->has_italic = reader.boolean(record, "hasItalic", false, "font.hasItalic") ? 1 : 0;
-  out->has_strike = reader.boolean(record, "hasStrike", false, "font.hasStrike") ? 1 : 0;
+  const emscripten::val size = reader.value(record, "size", "font.size");
+  out->has_size = js_value_present(size) ? 1 : 0;
+  out->size = reader.number_value(size, 11.0, "font.size");
+  flag("bold", "font.bold", &out->has_bold, &out->bold);
+  flag("italic", "font.italic", &out->has_italic, &out->italic);
+  flag("strike", "font.strike", &out->has_strike, &out->strike);
   out->underline = reader.u8(record, "underline", 0U, "font.underline");
   out->vert_align = reader.u8(record, "vertAlign", 0U, "font.vertAlign");
-  out->has_family = reader.boolean(record, "hasFamily", false, "font.hasFamily") ? 1 : 0;
-  out->family = reader.u8(record, "family", 0U, "font.family");
-  out->has_charset = reader.boolean(record, "hasCharset", false, "font.hasCharset") ? 1 : 0;
-  out->charset = reader.u8(record, "charset", 0U, "font.charset");
-  // An omitted size means "leave the size unchanged" unless hasSize says otherwise.
-  out->has_size =
-      reader.boolean(record, "hasSize", reader.has_own(record, "size", "font.size"), "font.hasSize") ? 1 : 0;
+  const emscripten::val family = reader.value(record, "family", "font.family");
+  out->has_family = js_value_present(family) ? 1 : 0;
+  out->family = reader.u8_value(family, 0U, "font.family");
+  const emscripten::val charset = reader.value(record, "charset", "font.charset");
+  out->has_charset = js_value_present(charset) ? 1 : 0;
+  out->charset = reader.u8_value(charset, 0U, "font.charset");
   out->scheme = reader.u8(record, "scheme", 0U, "font.scheme");
-  out->outline = reader.boolean(record, "outline", false, "font.outline") ? 1 : 0;
-  out->shadow = reader.boolean(record, "shadow", false, "font.shadow") ? 1 : 0;
-  out->condense = reader.boolean(record, "condense", false, "font.condense") ? 1 : 0;
-  out->extend = reader.boolean(record, "extend", false, "font.extend") ? 1 : 0;
-  out->has_outline = reader.boolean(record, "hasOutline", false, "font.hasOutline") ? 1 : 0;
-  out->has_shadow = reader.boolean(record, "hasShadow", false, "font.hasShadow") ? 1 : 0;
-  out->has_condense = reader.boolean(record, "hasCondense", false, "font.hasCondense") ? 1 : 0;
-  out->has_extend = reader.boolean(record, "hasExtend", false, "font.hasExtend") ? 1 : 0;
+  flag("outline", "font.outline", &out->has_outline, &out->outline);
+  flag("shadow", "font.shadow", &out->has_shadow, &out->shadow);
+  flag("condense", "font.condense", &out->has_condense, &out->condense);
+  flag("extend", "font.extend", &out->has_extend, &out->extend);
   out->color_argb = reader.u32(record, "colorArgb", 0xFF000000U, "font.colorArgb");
   out->color = js_pull_color_spec(record, "color", &reader);
 }
@@ -284,15 +275,10 @@ emscripten::val js_cell_xf_record(const fm_cell_xf_t& xf) {
   o.set("fillIndex", xf.fill_index);
   o.set("borderIndex", xf.border_index);
   o.set("numFmtId", static_cast<uint32_t>(xf.num_fmt_id));
-  o.set("horizontalAlign", static_cast<uint32_t>(xf.horizontal_align));
-  o.set("verticalAlign", static_cast<uint32_t>(xf.vertical_align));
-  o.set("wrapText", xf.wrap_text != 0);
-  o.set("justifyLastLine", xf.justify_last_line != 0);
-  o.set("hasAlignment", xf.has_alignment != 0);
-  o.set("hasHorizontalAlign", xf.has_horizontal_align != 0);
-  o.set("hasVerticalAlign", xf.has_vertical_align != 0);
-  o.set("hasWrapText", xf.has_wrap_text != 0);
-  o.set("hasJustifyLastLine", xf.has_justify_last_line != 0);
+  js_set_present_or_null(o, "horizontalAlign", xf.has_horizontal_align, static_cast<uint32_t>(xf.horizontal_align));
+  js_set_present_or_null(o, "verticalAlign", xf.has_vertical_align, static_cast<uint32_t>(xf.vertical_align));
+  js_set_present_or_null(o, "wrapText", xf.has_wrap_text, xf.wrap_text != 0);
+  js_set_present_or_null(o, "justifyLastLine", xf.has_justify_last_line, xf.justify_last_line != 0);
   o.set("applyNumberFormat", xf.apply_number_format != 0);
   o.set("applyFont", xf.apply_font != 0);
   o.set("applyFill", xf.apply_fill != 0);
@@ -300,11 +286,10 @@ emscripten::val js_cell_xf_record(const fm_cell_xf_t& xf) {
   o.set("applyAlignment", xf.apply_alignment != 0);
   o.set("applyProtection", xf.apply_protection != 0);
   o.set("quotePrefix", xf.quote_prefix != 0);
-  o.set("hasProtection", xf.has_protection != 0);
-  // Without a `<protection>` child the model default applies: locked, not
-  // hidden. This also fixes the all-default record a failed read reports.
-  o.set("locked", xf.has_protection == 0 || xf.locked != 0);
-  o.set("hidden", xf.has_protection != 0 && xf.hidden != 0);
+  // Without a `<protection>` child both read `null`: the model default
+  // (locked, not hidden) applies.
+  js_set_present_or_null(o, "locked", xf.has_protection, xf.locked != 0);
+  js_set_present_or_null(o, "hidden", xf.has_protection, xf.hidden != 0);
   return o;
 }
 

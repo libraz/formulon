@@ -3,8 +3,8 @@
 //
 // Both settings live in workbook-scope defined names (`_xlnm.Print_Area` /
 // `_xlnm.Print_Titles`) rather than in the worksheet part, so they are read
-// and written through the defined-name table. The helpers here render and
-// parse the sheet-qualified A1 text those names carry.
+// and written through the defined-name table. The helpers here render the
+// sheet-qualified A1 text those names carry.
 //
 // @size-budget: 5 KB
 
@@ -22,23 +22,18 @@
 #include "print/print_area.h"
 #include "sheet.h"
 #include "utils/a1_column.h"
-#include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_column_span;
+using formulon::c_api::parts::check_row_span;
 using formulon::c_api::parts::check_sheet_index;
-using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::null_argument;
-using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
-using formulon::c_api::parts::store_cstr;
-using formulon::c_api::parts::TextStore;
 
 namespace {
-
-using formulon::Sheet;
 
 // OOXML built-in defined names for the two print settings Excel stores
 // outside the worksheet part.
@@ -52,74 +47,6 @@ std::string sheet_qualifier(std::string_view sheet_name) {
   formulon::parser::append_sheet_name(sheet_name, /*force_quote=*/false, out);
   out.push_back('!');
   return out;
-}
-
-/// Rewrites one A1 token with every column and row anchored.
-///
-/// Works on the authored text rather than a parsed rectangle so a
-/// whole-axis area keeps its shape: `A:D` becomes `$A:$D`, not the
-/// `$A$1:$D$1048576` a round trip through `CellRange` would produce.
-/// Existing anchors are not doubled.
-std::string absolutise_a1_token(std::string_view token) {
-  // A run is a maximal stretch of one character class. `A1` is two runs
-  // (the column and the row), each needing its own anchor; `AB` and `12`
-  // are one run each.
-  enum class Run { kNone, kLetters, kDigits };
-
-  std::string out;
-  out.reserve(token.size() + 4U);
-  Run run = Run::kNone;
-  bool anchor_pending = false;
-  for (const char chr : token) {
-    if (chr == '$') {
-      anchor_pending = true;
-      run = Run::kNone;
-      out.push_back(chr);
-      continue;
-    }
-    Run kind = Run::kNone;
-    if ((chr >= 'A' && chr <= 'Z') || (chr >= 'a' && chr <= 'z')) {
-      kind = Run::kLetters;
-    } else if (chr >= '0' && chr <= '9') {
-      kind = Run::kDigits;
-    }
-    if (kind == Run::kNone) {
-      run = Run::kNone;
-      anchor_pending = false;
-      out.push_back(chr);
-      continue;
-    }
-    if (kind != run) {
-      if (!anchor_pending) {
-        out.push_back('$');
-      }
-      run = kind;
-    }
-    anchor_pending = false;
-    out.push_back(chr);
-  }
-  return out;
-}
-
-/// A span endpoint reader: `formulon::a1::parse_uint` or `parse_column_letters`.
-using SpanEndParser = bool (*)(std::string_view, std::size_t*, std::uint32_t*);
-
-/// True when `token` is a whole-row (`1:2`) or whole-column (`A:A`) span
-/// whose endpoints `parse_end` reads within `1..max`.
-bool is_span(std::string_view token, SpanEndParser parse_end, std::uint32_t max) {
-  const std::size_t colon = token.find(':');
-  if (colon == std::string_view::npos) {
-    return false;
-  }
-  const auto is_end = [&](std::string_view part) {
-    std::size_t pos = 0;
-    std::uint32_t value = 0;
-    if (!part.empty() && part.front() == '$') {
-      part.remove_prefix(1);
-    }
-    return parse_end(part, &pos, &value) && pos == part.size() && value >= 1U && value <= max;
-  };
-  return is_end(token.substr(0, colon)) && is_end(token.substr(colon + 1));
 }
 
 }  // namespace
@@ -183,40 +110,43 @@ extern "C" fm_status_t fm_sheet_get_print_area(const fm_workbook_t* wb, size_t s
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_set_print_titles(fm_workbook_t* wb, size_t sheet_index, const char* repeat_rows,
-                                                 const char* repeat_cols) {
+extern "C" fm_status_t fm_sheet_set_print_titles(fm_workbook_t* wb, size_t sheet_index,
+                                                 const fm_print_titles_t* titles) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8({repeat_rows, repeat_cols}); rc != 0) {
-    return rc;
+  const bool has_rows = titles != nullptr && titles->has_rows != 0;
+  const bool has_cols = titles != nullptr && titles->has_cols != 0;
+  if (has_rows) {
+    if (auto rc = check_row_span(titles->first_row, titles->last_row); rc != 0) {
+      return rc;
+    }
   }
-  const std::string_view rows(repeat_rows == nullptr ? "" : repeat_rows);
-  const std::string_view cols(repeat_cols == nullptr ? "" : repeat_cols);
+  if (has_cols) {
+    if (auto rc = check_column_span(titles->first_col, titles->last_col); rc != 0) {
+      return rc;
+    }
+  }
   std::string formula;
-  if (!rows.empty() || !cols.empty()) {
+  if (has_rows || has_cols) {
     const std::string qualifier = sheet_qualifier(wb->workbook().sheet(sheet_index).name());
     // Excel lists rows before columns; the resolver accepts either order,
     // but matching Excel keeps a diffed worksheet quiet.
-    if (!rows.empty()) {
-      if (!is_span(rows, &formulon::a1::parse_uint, Sheet::kMaxRows)) {
-        return set_binding_error(formulon::FormulonErrorCode::kPrintInvalidArea, "repeat_rows is not a row span",
-                                 "repeat_rows=" + std::string(rows));
-      }
+    if (has_rows) {
       formula.append(qualifier);
-      formula.append(absolutise_a1_token(rows));
+      formula.append("$" + std::to_string(static_cast<std::uint64_t>(titles->first_row) + 1U) + ":$" +
+                     std::to_string(static_cast<std::uint64_t>(titles->last_row) + 1U));
     }
-    if (!cols.empty()) {
-      if (!is_span(cols, &formulon::a1::parse_column_letters, Sheet::kMaxCols)) {
-        return set_binding_error(formulon::FormulonErrorCode::kPrintInvalidArea, "repeat_cols is not a column span",
-                                 "repeat_cols=" + std::string(cols));
-      }
+    if (has_cols) {
       if (!formula.empty()) {
         formula.push_back(',');
       }
       formula.append(qualifier);
-      formula.append(absolutise_a1_token(cols));
+      formula.push_back('$');
+      formulon::a1::append_column_letters(formula, titles->first_col);
+      formula.append(":$");
+      formulon::a1::append_column_letters(formula, titles->last_col);
     }
   }
   auto result = wb->workbook().set_defined_name_scoped(std::string(kPrintTitlesName), std::move(formula),
@@ -227,11 +157,10 @@ extern "C" fm_status_t fm_sheet_set_print_titles(fm_workbook_t* wb, size_t sheet
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_get_print_titles(const fm_workbook_t* wb, size_t sheet_index,
-                                                 const char** out_repeat_rows, const char** out_repeat_cols) {
+extern "C" fm_status_t fm_sheet_get_print_titles(const fm_workbook_t* wb, size_t sheet_index, fm_print_titles_t* out) {
   clear_last_error();
-  if (out_repeat_rows == nullptr || out_repeat_cols == nullptr) {
-    return null_argument("out_repeat_rows or out_repeat_cols");
+  if (out == nullptr) {
+    return null_argument("out");
   }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
@@ -240,24 +169,16 @@ extern "C" fm_status_t fm_sheet_get_print_titles(const fm_workbook_t* wb, size_t
   if (!titles) {
     return set_last_error(titles.error());
   }
-  std::string rows;
+  *out = fm_print_titles_t{};
   if (titles.value().repeat_rows.has_value()) {
-    const auto& span = *titles.value().repeat_rows;
-    rows.append(std::to_string(static_cast<std::uint64_t>(span.first) + 1U));
-    rows.push_back(':');
-    rows.append(std::to_string(static_cast<std::uint64_t>(span.second) + 1U));
+    out->has_rows = 1;
+    out->first_row = titles.value().repeat_rows->first;
+    out->last_row = titles.value().repeat_rows->second;
   }
-  std::string cols;
   if (titles.value().repeat_cols.has_value()) {
-    const auto& span = *titles.value().repeat_cols;
-    formulon::a1::append_column_letters(cols, span.first);
-    cols.push_back(':');
-    formulon::a1::append_column_letters(cols, span.second);
+    out->has_cols = 1;
+    out->first_col = titles.value().repeat_cols->first;
+    out->last_col = titles.value().repeat_cols->second;
   }
-  // Both pointers are handed out from one refresh: clearing between the two
-  // pushes would dangle the first.
-  TextStore& store = fresh_read_scratch(wb);
-  *out_repeat_rows = store_cstr(store, rows);
-  *out_repeat_cols = store_cstr(store, cols);
   return 0;
 }

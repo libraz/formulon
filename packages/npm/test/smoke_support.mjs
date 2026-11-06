@@ -67,8 +67,8 @@ function getModule() {
 // towards 10, and the progress callback fires after every sweep.
 function makeIterativeWorkbook(Module) {
   const wb = Module.Workbook.createDefault();
-  wb.setIterative(true, 100, 0.0001);
-  wb.setFormula(0, 0, 0, '=(A1+10)/2');
+  wb.setIterative({ enabled: true, maxIterations: 100, maxChange: 0.0001 });
+  wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
   return wb;
 }
 
@@ -77,18 +77,12 @@ function makeIterativeWorkbook(Module) {
 function emitXlsbWarning(Module, xlsbFormat) {
   const wb = Module.Workbook.createDefault();
   try {
-    wb.setFormula(0, 0, 0, '=SUM(T[C])');
+    wb.sheet(0).setFormula(0, 0, '=SUM(T[C])');
     wb.recalc();
     wb.save(xlsbFormat);
   } finally {
-    wb.delete();
+    wb.dispose();
   }
-}
-
-// Reads every element of an index-keyed collection through its count / index
-// getter pair.
-function readAll(count, get) {
-  return Array.from({ length: count() }, (_, i) => get(i));
 }
 
 // Asserts that `fn` fails with a FormulonError, optionally of the given code.
@@ -112,7 +106,6 @@ export {
   path,
   pkgJsonPath,
   pkgRoot,
-  readAll,
   readFile,
   threadsEntry,
   VAL,

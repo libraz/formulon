@@ -76,21 +76,11 @@ class PayloadTest(unittest.TestCase):
         self.assertEqual(payload["xlsx_sha256"], hashlib.sha256(data).hexdigest())
 
 
-class _RecordingWorkbook:
-    """Records the sheet calls `_apply_sheets` makes, in order."""
+class _RecordingSheet:
+    """Accepts the cell writes `_apply_sheets` makes and drops them."""
 
-    def __init__(self, default_name="Sheet1"):
-        self.default_name = default_name
-        self.order = []
-
-    def rename_sheet(self, index, name):
-        self.order.append(name)
-
-    def add_sheet(self, name):
-        self.order.append(name)
-
-    def get_sheet_name(self, index):
-        return self.default_name
+    def __init__(self, name):
+        self.name = name
 
     def set_blank(self, *args):
         pass
@@ -106,6 +96,23 @@ class _RecordingWorkbook:
 
     def set_formula(self, *args):
         pass
+
+
+class _RecordingWorkbook:
+    """Records the sheet calls `_apply_sheets` makes, in order."""
+
+    def __init__(self, default_name="Sheet1"):
+        self.default_name = default_name
+        self.order = []
+
+    def rename_sheet(self, index, name):
+        self.order.append(name)
+
+    def add_sheet(self, name):
+        self.order.append(name)
+
+    def sheet(self, index):
+        return _RecordingSheet(self.default_name)
 
 
 class SheetIndexTest(unittest.TestCase):
@@ -200,8 +207,8 @@ class AuthoringTest(unittest.TestCase):
         data = rt.author_case(_case({"sheet": "Sheet1", "row_breaks": [21], "col_breaks": ["D"]}), module=_formulon)
         reloaded = _formulon.Workbook.load(data)
         try:
-            rows = reloaded.list_row_breaks(0)
-            cols = reloaded.list_column_breaks(0)
+            rows = reloaded.sheet(0).list_row_breaks()
+            cols = reloaded.sheet(0).list_column_breaks()
         finally:
             reloaded.close()
         # A case states 1-based rows, matching the rest of the schema; the

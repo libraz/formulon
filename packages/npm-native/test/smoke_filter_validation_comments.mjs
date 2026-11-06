@@ -9,13 +9,14 @@ const MENTION = '{BBBBBBBB-0000-0000-0000-000000000001}';
 
 function hiddenRows(wb) {
   return wb
-    .listRowOverrides(0)
+    .sheet(0)
+    .listRowOverrides()
     .filter((r) => r.hidden)
     .map((r) => r.row);
 }
 
 function seedColumn(wb) {
-  for (const [row, text] of ['h', 'a', 'b', 'a'].entries()) wb.setText(0, row, 0, text);
+  for (const [row, text] of ['h', 'a', 'b', 'a'].entries()) wb.sheet(0).setText(row, 0, text);
 }
 
 const RANGE = { firstRow: 0, firstCol: 0, lastRow: 3, lastCol: 0 };
@@ -37,7 +38,7 @@ test('AutoFilter round-trips and its criteria evaluate, apply and clear', async 
   const wb = mod.Workbook.createDefault();
   try {
     seedColumn(wb);
-    const absent = wb.getAutoFilter(0);
+    const absent = wb.sheet(0).getAutoFilter();
     assert.equal(absent, null);
 
     const filter = {
@@ -51,8 +52,8 @@ test('AutoFilter round-trips and its criteria evaluate, apply and clear', async 
         },
       ],
     };
-    wb.setAutoFilter(0, filter);
-    const got = wb.getAutoFilter(0);
+    wb.sheet(0).setAutoFilter(filter);
+    const got = wb.sheet(0).getAutoFilter();
     assert.deepEqual(got.range, RANGE);
     assert.equal(got.columns.length, 1);
     const col = got.columns[0];
@@ -67,25 +68,25 @@ test('AutoFilter round-trips and its criteria evaluate, apply and clear', async 
     assert.equal(col.dxfId, 0);
     assert.equal(got.sort, null);
     // Setting the unchanged record back is accepted.
-    wb.setAutoFilter(0, got);
-    assert.deepEqual(wb.getAutoFilter(0), got);
+    wb.sheet(0).setAutoFilter(got);
+    assert.deepEqual(wb.sheet(0).getAutoFilter(), got);
 
     // Replace the date group with a plain value filter: dateGroups drops out.
-    wb.setAutoFilter(0, { range: RANGE, columns: [{ colId: 0, kind: mod.FilterKind.Values, values: ['a'] }] });
+    wb.sheet(0).setAutoFilter({ range: RANGE, columns: [{ colId: 0, kind: mod.FilterKind.Values, values: ['a'] }] });
 
-    const ev = wb.evaluateAutoFilter(0);
+    const ev = wb.sheet(0).evaluateAutoFilter();
     assert.equal(ev.firstRow, 1);
     assert.deepEqual(ev.match, [true, false, true]);
     assert.deepEqual(hiddenRows(wb), []);
 
-    wb.applyAutoFilter(0);
+    wb.sheet(0).applyAutoFilter();
     assert.deepEqual(hiddenRows(wb), [2]);
-    wb.clearAutoFilter(0);
+    wb.sheet(0).clearAutoFilter();
     assert.deepEqual(hiddenRows(wb), []);
-    assert.equal(wb.getAutoFilter(0).columns.length, 0);
+    assert.equal(wb.sheet(0).getAutoFilter().columns.length, 0);
 
     // A custom criterion and a sort state survive a round trip.
-    wb.setAutoFilter(0, {
+    wb.sheet(0).setAutoFilter({
       range: RANGE,
       columns: [{ colId: 0, kind: mod.FilterKind.Custom, customCount: 1, op1: mod.FilterOperator.NotEqual, val1: 'b' }],
       sort: {
@@ -93,30 +94,30 @@ test('AutoFilter round-trips and its criteria evaluate, apply and clear', async 
         conditions: [{ ref: { firstRow: 1, firstCol: 0, lastRow: 3, lastCol: 0 }, descending: true }],
       },
     });
-    const custom = wb.getAutoFilter(0);
+    const custom = wb.sheet(0).getAutoFilter();
     assert.equal(custom.columns[0].kind, 2);
     assert.equal(custom.columns[0].op1, mod.FilterOperator.NotEqual);
     assert.equal(custom.columns[0].val1, 'b');
     assert.equal(custom.sort.conditions.length, 1);
     assert.equal(custom.sort.conditions[0].descending, true);
     assert.equal(custom.sort.columnSort, false);
-    assert.deepEqual(wb.evaluateAutoFilter(0).match, [true, false, true]);
+    assert.deepEqual(wb.sheet(0).evaluateAutoFilter().match, [true, false, true]);
 
-    wb.removeAutoFilter(0);
-    assert.equal(wb.getAutoFilter(0), null);
-    assert.throws(() => wb.evaluateAutoFilter(0), isFormulonError);
+    wb.sheet(0).removeAutoFilter();
+    assert.equal(wb.sheet(0).getAutoFilter(), null);
+    assert.throws(() => wb.sheet(0).evaluateAutoFilter(), isFormulonError);
 
     // An out-of-range column id is rejected and leaves the sheet unchanged.
     assert.throws(
       () =>
-        wb.setAutoFilter(0, {
+        wb.sheet(0).setAutoFilter({
           range: RANGE,
           columns: [{ colId: 5, kind: mod.FilterKind.Values, values: ['a'] }],
         }),
       isFormulonError,
     );
-    assert.equal(wb.getAutoFilter(0), null);
-    assert.throws(() => wb.setAutoFilter(0, null), TypeError);
+    assert.equal(wb.sheet(0).getAutoFilter(), null);
+    assert.throws(() => wb.sheet(0).setAutoFilter(null), TypeError);
   } finally {
     wb.dispose();
   }
@@ -126,7 +127,7 @@ test('table AutoFilter entry points reject a table index that does not exist', a
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    assert.equal(wb.getTableCount(), 0);
+    assert.equal(wb.listTables().length, 0);
     assert.throws(() => wb.getTableAutoFilter(0), isFormulonError);
     assert.throws(() => wb.evaluateTableAutoFilter(0), isFormulonError);
     assert.throws(() => wb.setTableAutoFilter(0, { range: RANGE, columns: [] }), isFormulonError);
@@ -142,11 +143,11 @@ test('validateValue and listInvalidCells follow the rule covering a cell', async
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const free = wb.validateValue(0, 0, 1, { kind: mod.ValueKind.Number, number: 99 });
-    assert.equal(free.hasRule, false);
+    const free = wb.sheet(0).validateValue(0, 1, { kind: mod.ValueKind.Number, number: 99 });
+    assert.equal(free.ruleIndex, null);
     assert.equal(free.valid, true);
 
-    wb.addValidation(0, {
+    wb.sheet(0).addValidation({
       ranges: [{ firstRow: 0, lastRow: 3, firstCol: 1, lastCol: 1 }],
       type: 1,
       op: 0,
@@ -155,28 +156,28 @@ test('validateValue and listInvalidCells follow the rule covering a cell', async
       formula2: '10',
       showErrorMessage: true,
     });
-    const ok = wb.validateValue(0, 0, 1, { kind: mod.ValueKind.Number, number: 5 });
+    const ok = wb.sheet(0).validateValue(0, 1, { kind: mod.ValueKind.Number, number: 5 });
     assert.deepEqual(
-      { hasRule: ok.hasRule, valid: ok.valid, ruleIndex: ok.ruleIndex, errorStyle: ok.errorStyle },
-      { hasRule: true, valid: true, ruleIndex: 0, errorStyle: mod.ValidationErrorStyle.Warning },
+      { valid: ok.valid, ruleIndex: ok.ruleIndex, errorStyle: ok.errorStyle },
+      { valid: true, ruleIndex: 0, errorStyle: mod.ValidationErrorStyle.Warning },
     );
-    const bad = wb.validateValue(0, 0, 1, { kind: mod.ValueKind.Number, number: 50 });
+    const bad = wb.sheet(0).validateValue(0, 1, { kind: mod.ValueKind.Number, number: 50 });
     assert.equal(bad.valid, false);
-    assert.equal(bad.hasRule, true);
-    const text = wb.validateValue(0, 0, 1, { kind: mod.ValueKind.Text, text: '5' });
+    assert.equal(bad.ruleIndex, 0);
+    const text = wb.sheet(0).validateValue(0, 1, { kind: mod.ValueKind.Text, text: '5' });
     assert.equal(text.valid, false, 'text "5" is text, not a number');
-    assert.throws(() => wb.validateValue(99, 0, 0, { kind: mod.ValueKind.Number, number: 1 }), isFormulonError);
-    assert.throws(() => wb.validateValue(0, 0, 0, null), TypeError);
+    assert.throws(() => wb.sheet(99).validateValue(0, 0, { kind: mod.ValueKind.Number, number: 1 }), isFormulonError);
+    assert.throws(() => wb.sheet(0).validateValue(0, 0, null), TypeError);
     assert.throws(
-      () => wb.validateValue(0, 0, 0, { number: 50 }),
+      () => wb.sheet(0).validateValue(0, 0, { number: 50 }),
       TypeError,
       'a value without `kind` is rejected, not read as blank',
     );
 
-    wb.setNumber(0, 0, 1, 5);
-    wb.setNumber(0, 1, 1, 50);
-    wb.setNumber(0, 2, 1, 70);
-    const page = wb.getInvalidCells(0);
+    wb.sheet(0).setNumber(0, 1, 5);
+    wb.sheet(0).setNumber(1, 1, 50);
+    wb.sheet(0).setNumber(2, 1, 70);
+    const page = wb.sheet(0).getInvalidCells();
     assert.deepEqual(
       page.cells.map((c) => [c.row, c.col, c.value.number]),
       [
@@ -186,15 +187,15 @@ test('validateValue and listInvalidCells follow the rule covering a cell', async
     );
     assert.equal(page.nextCursor, null);
 
-    const first = wb.getInvalidCells(0, 0, 1);
+    const first = wb.sheet(0).getInvalidCells(0, 1);
     assert.equal(first.cells.length, 1);
     assert.equal(typeof first.nextCursor, 'number');
-    const second = wb.getInvalidCells(0, first.nextCursor, 1);
+    const second = wb.sheet(0).getInvalidCells(first.nextCursor, 1);
     assert.deepEqual(
       second.cells.map((c) => c.row),
       [2],
     );
-    assert.throws(() => wb.getInvalidCells(99), isFormulonError);
+    assert.throws(() => wb.sheet(99).getInvalidCells(), isFormulonError);
   } finally {
     wb.dispose();
   }
@@ -218,7 +219,7 @@ test('threaded comments cover a thread, a reply with a mention, resolution and r
       ],
     );
 
-    wb.addThreadedComment(0, {
+    wb.sheet(0).addThreadedComment({
       id: THREAD,
       row: 2,
       col: 3,
@@ -226,7 +227,7 @@ test('threaded comments cover a thread, a reply with a mention, resolution and r
       created: '2026-01-01T10:00:00.00',
       text: 'Review this',
     });
-    wb.addThreadedComment(0, {
+    wb.sheet(0).addThreadedComment({
       id: REPLY,
       personId: BOB,
       created: '2026-01-01T11:00:00.00',
@@ -234,7 +235,7 @@ test('threaded comments cover a thread, a reply with a mention, resolution and r
       parentId: THREAD,
       mentions: [{ personId: ANN, mentionId: MENTION, start: 0, length: 4 }],
     });
-    const result = wb.listThreadedComments(0);
+    const result = wb.sheet(0).listThreadedComments();
     const list = result;
     assert.equal(list.length, 2);
     assert.equal(list[0].id, THREAD);
@@ -248,29 +249,32 @@ test('threaded comments cover a thread, a reply with a mention, resolution and r
     assert.equal(list[1].personId, BOB);
     assert.deepEqual(list[1].mentions, [{ personId: ANN, mentionId: MENTION, start: 0, length: 4 }]);
 
-    wb.updateThreadedComment(0, REPLY, '@Ann fixed', [{ personId: ANN, mentionId: MENTION, start: 0, length: 4 }]);
-    assert.equal(wb.listThreadedComments(0)[1].text, '@Ann fixed');
-    wb.updateThreadedComment(0, REPLY, 'plain', []);
-    assert.deepEqual(wb.listThreadedComments(0)[1].mentions, []);
+    wb.sheet(0).updateThreadedComment(REPLY, {
+      text: '@Ann fixed',
+      mentions: [{ personId: ANN, mentionId: MENTION, start: 0, length: 4 }],
+    });
+    assert.equal(wb.sheet(0).listThreadedComments()[1].text, '@Ann fixed');
+    wb.sheet(0).updateThreadedComment(REPLY, { text: 'plain', mentions: [] });
+    assert.deepEqual(wb.sheet(0).listThreadedComments()[1].mentions, []);
 
-    wb.setThreadResolved(0, THREAD, true);
-    assert.equal(wb.listThreadedComments(0)[0].done, true);
-    wb.setThreadResolved(0, THREAD, false);
-    assert.equal(wb.listThreadedComments(0)[0].done, false);
+    wb.sheet(0).setThreadResolved(THREAD, true);
+    assert.equal(wb.sheet(0).listThreadedComments()[0].done, true);
+    wb.sheet(0).setThreadResolved(THREAD, false);
+    assert.equal(wb.sheet(0).listThreadedComments()[0].done, false);
 
     assert.throws(() => wb.removePerson(ANN), isFormulonError, 'a person with comments stays');
     assert.throws(
-      () => wb.updateThreadedComment(0, '{00000000-0000-0000-0000-000000000000}', 'x', []),
+      () => wb.sheet(0).updateThreadedComment('{00000000-0000-0000-0000-000000000000}', { text: 'x', mentions: [] }),
       isFormulonError,
     );
-    assert.throws(() => wb.setThreadResolved(0, REPLY, true), isFormulonError, 'a reply is not a thread');
-    assert.throws(() => wb.addThreadedComment(0, null), TypeError);
-    assert.throws(() => wb.listThreadedComments(99), isFormulonError);
+    assert.throws(() => wb.sheet(0).setThreadResolved(REPLY, true), isFormulonError, 'a reply is not a thread');
+    assert.throws(() => wb.sheet(0).addThreadedComment(null), TypeError);
+    assert.throws(() => wb.sheet(99).listThreadedComments(), isFormulonError);
 
-    wb.removeThreadedComment(0, REPLY);
-    assert.equal(wb.listThreadedComments(0).length, 1);
-    wb.removeThreadedComment(0, THREAD);
-    assert.equal(wb.listThreadedComments(0).length, 0);
+    wb.sheet(0).removeThreadedComment(REPLY);
+    assert.equal(wb.sheet(0).listThreadedComments().length, 1);
+    wb.sheet(0).removeThreadedComment(THREAD);
+    assert.equal(wb.sheet(0).listThreadedComments().length, 0);
     wb.removePerson(ANN);
     assert.equal(wb.listPeople().length, 1);
     assert.throws(() => wb.removePerson(ANN), isFormulonError);
@@ -284,11 +288,11 @@ test('the new accessors report a released handle', async () => {
   const wb = mod.Workbook.createDefault();
   wb.dispose();
   const released = (e) => isFormulonError(e, mod.StatusCode.BindingInvalidHandle);
-  assert.throws(() => wb.getAutoFilter(0), released);
-  assert.throws(() => wb.evaluateAutoFilter(0), released);
-  assert.throws(() => wb.validateValue(0, 0, 0, { kind: 0 }), released);
-  assert.throws(() => wb.getInvalidCells(0), released);
-  assert.throws(() => wb.listThreadedComments(0), released);
+  assert.throws(() => wb.sheet(0).getAutoFilter(), released);
+  assert.throws(() => wb.sheet(0).evaluateAutoFilter(), released);
+  assert.throws(() => wb.sheet(0).validateValue(0, 0, { kind: 0 }), released);
+  assert.throws(() => wb.sheet(0).getInvalidCells(), released);
+  assert.throws(() => wb.sheet(0).listThreadedComments(), released);
   assert.throws(() => wb.listPeople(), released);
   assert.throws(() => wb.addPerson({ id: ANN, displayName: 'Ann' }), released);
 });

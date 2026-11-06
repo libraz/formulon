@@ -1118,8 +1118,12 @@ def _rule_py_types(ctx: Context) -> Iterable[Violation]:
 
 
 def _records(ctx: Context) -> Iterator[Tuple[str, dict, str]]:
+    """`(key, entry, role)` of the records whose role fixes their binding shape; an `exception:` keeps a record's
+    name and form, as it does for R21.name."""
     for key, entry in sorted(ctx.ledger.entries.items()):
         if isinstance(entry, dict) and entry.get("kind") == "record" and "replaced_by" not in entry:
+            if "exception" in entry:
+                continue
             role = entry.get("role")
             if role in ("result", "input", "patch"):
                 yield key, entry, role
@@ -1301,7 +1305,8 @@ def _field_renames(ctx: Context, surface: str, rule_id: str) -> Iterator[Violati
 def _rule_js_results(ctx: Context) -> Iterable[Violation]:
     """JS results carry no envelope: no declaration is named like a retired result type, no `export interface`
     has a `status` field, and no callable returns a retired type. A scalar result is the scalar, an allocated
-    key a `number`, a natural-key lookup `T | null`; `kind: field` renames are applied.
+    key a `number` (or the type the ledger's `returns: union:<Type>` names), a natural-key lookup `T | null`;
+    `kind: field` renames are applied.
     """
     found = surfaces(ctx)
     lookups = _optional_lookups(ctx)
@@ -1346,9 +1351,12 @@ def _rule_js_results(ctx: Context) -> Iterable[Violation]:
                         ctx, "R8.js", surface, key, "optional", f"`{name}` returns `{member.type}`, not `... | null`"
                     )
                 continue
-            want = _SCALAR_JS.get(entry.get("returns")) if isinstance(entry.get("returns"), str) else None
+            spec = entry.get("returns")
+            want = _SCALAR_JS.get(spec) if isinstance(spec, str) else None
+            typed = _type_name(ctx, spec, "js") if isinstance(spec, str) else None
             fn = _tree_c(ctx, entry)
-            if fn is not None and c_verb(ctx.target_c(fn.name)) == "add" and _allocates_key(fn):
+            # An allocated key is a `number` unless the ledger types the result (a handle the facade wraps).
+            if fn is not None and c_verb(ctx.target_c(fn.name)) == "add" and _allocates_key(fn) and typed is None:
                 want = "number"
             if want and member.type != want:
                 yield _violation(
@@ -1407,7 +1415,12 @@ def _is_text(ctype: str) -> bool:
     return ctype.replace("const ", "").strip() in ("char*", "char**")
 
 
-def _multi_problems(members: Sequence[CParam], owner: str) -> Iterator[Tuple[str, str]]:
+# A struct field counts in `uint32_t` (R6.c.field forbids `size_t` there); a function parameter in `size_t`.
+_MULTI_FIELD_COUNT_TYPES = ("uint32_t", "size_t")
+_MULTI_PARAM_COUNT_TYPES = ("size_t",)
+
+
+def _multi_problems(members: Sequence[CParam], owner: str, count_types: Sequence[str]) -> Iterator[Tuple[str, str]]:
     for i, member in enumerate(members):
         role = member.role_name
         if _is_text(member.ctype) and (role in _A1_MULTI_NAMES or (role == "ref" and "table" in owner)):
@@ -1424,11 +1437,11 @@ def _multi_problems(members: Sequence[CParam], owner: str) -> Iterator[Tuple[str
             and follower.role_name.endswith("count")
             and (role in _A1_MULTI_NAMES or member.base_type == CELL_RECT)
         ):
-            if (member.base_type, member.name, follower.ctype, follower.name) != (
-                CELL_RECT,
-                "ranges",
-                "size_t",
-                "range_count",
+            if (
+                member.base_type != CELL_RECT
+                or member.name != "ranges"
+                or follower.ctype not in count_types
+                or follower.name != "range_count"
             ):
                 yield (
                     member.name,
@@ -1445,13 +1458,13 @@ def _rule_multi_ranges(ctx: Context) -> Iterable[Violation]:
     the bindings, never as A1 text (`sqref`, `ranges_a1`, a table's `ref`).
     """
     for typedef in ctx.typedefs:
-        for disc, message in _multi_problems(typedef.fields, typedef.name):
+        for disc, message in _multi_problems(typedef.fields, typedef.name, _MULTI_FIELD_COUNT_TYPES):
             yield ctx.c_violation("R11.multi", typedef.name, disc, f"{typedef.name}: {message}", typedef.line)
     for fn in ctx.functions:
         target = ctx.target_c(fn.name)
         if c_verb(target) in _TEXT_VERBS:
             continue
-        for disc, message in _multi_problems(fn.params, target):
+        for disc, message in _multi_problems(fn.params, target, _MULTI_PARAM_COUNT_TYPES):
             yield ctx.c_violation("R11.multi", fn.name, disc, f"{fn.name}: {message}", fn.line)
     found = surfaces(ctx)
     for surface in JS_SURFACES:

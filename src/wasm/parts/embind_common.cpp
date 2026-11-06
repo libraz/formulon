@@ -385,6 +385,27 @@ uint32_t JsNarrowNumericReader::u32_value(const emscripten::val& value, uint32_t
   return static_cast<uint32_t>(integer_value(value, dflt, field, 0.0, kMaxU32, "[0, 4294967295]"));
 }
 
+std::string JsNarrowNumericReader::required_string(const emscripten::val& owner, const char* key, const char* field) {
+  bool fetched = false;
+  const emscripten::val value = fetch(owner, key, field, &fetched);
+  if (!fetched) {
+    return std::string();
+  }
+  if (!value.isString()) {
+    reject_type(field, "a string");
+    return std::string();
+  }
+  return string_value(value, field);
+}
+
+void JsNarrowNumericReader::fail_type(const char* field, const char* expected) {
+  reject_type(field, expected);
+}
+
+void JsNarrowNumericReader::fail_range(const char* field, const char* range) {
+  reject(nullptr, field, range);
+}
+
 uint32_t JsNarrowNumericReader::required_u32(const emscripten::val& owner, const char* key, const char* field) {
   bool fetched = false;
   const emscripten::val value = fetch(owner, key, field, &fetched);
@@ -726,7 +747,7 @@ emscripten::val pivot_cell_to_val(const fm_pivot_cell_t& cell) {
   item.set("kind", static_cast<int32_t>(cell.kind));
   item.set("depth", cell.depth);
   js_set_cstr(item, "fieldName", cell.field_name);
-  js_set_cstr(item, "numberFormat", cell.number_format);
+  js_set_cstr_or_null(item, "numberFormat", cell.number_format);
   return item;
 }
 
@@ -881,6 +902,61 @@ void js_set_cstr(emscripten::val& o, const char* key, const char* s) {
 void js_set_cstr_fields(emscripten::val& o, const JsStrField* fields, std::size_t n) {
   for (std::size_t i = 0; i < n; ++i) {
     js_set_cstr(o, fields[i].key, fields[i].value);
+  }
+}
+
+JsPatchKey js_patch_key(JsNarrowNumericReader& reader, const emscripten::val& value, const char* field, bool nullable) {
+  if (!reader.ok() || value.isUndefined()) {
+    return JsPatchKey::kKeep;
+  }
+  if (value.isNull()) {
+    if (nullable) {
+      return JsPatchKey::kClear;
+    }
+    reader.fail_type(field, "a value (null cannot clear this field)");
+    return JsPatchKey::kKeep;
+  }
+  return JsPatchKey::kSet;
+}
+
+emscripten::val print_titles_to_val(const fm_print_titles_t& titles) {
+  if (titles.has_rows == 0 && titles.has_cols == 0) {
+    return emscripten::val::null();
+  }
+  const auto span = [](int32_t present, uint32_t first, uint32_t last) {
+    if (present == 0) {
+      return emscripten::val::null();
+    }
+    emscripten::val o = emscripten::val::object();
+    o.set("first", first);
+    o.set("last", last);
+    return o;
+  };
+  emscripten::val out = emscripten::val::object();
+  out.set("rows", span(titles.has_rows, titles.first_row, titles.last_row));
+  out.set("columns", span(titles.has_cols, titles.first_col, titles.last_col));
+  return out;
+}
+
+emscripten::val cstr_or_null(const char* s) {
+  return s != nullptr && s[0] != '\0' ? emscripten::val(std::string(s)) : emscripten::val::null();
+}
+
+void js_set_cstr_or_null(emscripten::val& o, const char* key, const char* s) {
+  o.set(key, cstr_or_null(s));
+}
+
+void js_set_cstr_or_null_fields(emscripten::val& o, const JsStrField* fields, std::size_t n) {
+  for (std::size_t i = 0; i < n; ++i) {
+    js_set_cstr_or_null(o, fields[i].key, fields[i].value);
+  }
+}
+
+void js_set_index_or_null(emscripten::val& o, const char* key, int32_t value) {
+  if (value >= 0) {
+    o.set(key, value);
+  } else {
+    o.set(key, emscripten::val::null());
   }
 }
 

@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -137,8 +138,8 @@ Napi::Object DefinedNameToJs(Napi::Env env, const char* name, const char* formul
   Napi::Object item = Napi::Object::New(env);
   item.Set("name", JsString(env, name));
   item.Set("formula", JsString(env, formula));
-  item.Set("localSheetId", Napi::Number::New(env, local_sheet_id));
-  item.Set("comment", JsString(env, comment));
+  item.Set("localSheetId", JsIndexOrNull(env, local_sheet_id));
+  item.Set("comment", JsStringOrNull(env, comment));
   item.Set("hidden", Napi::Boolean::New(env, hidden != 0));
   return item;
 }
@@ -154,17 +155,10 @@ Napi::Value Workbook::ListDefinedNames(const Napi::CallbackInfo& info) {
   std::size_t n = 0;
   fm_status_t rc = fm_workbook_get_defined_name_count(handle_, &n);
   for (std::size_t i = 0; rc == 0 && i < n; ++i) {
-    const char* name = nullptr;
-    const char* formula = nullptr;
-    int32_t local_sheet_id = -1;
-    const char* comment = nullptr;
-    int32_t hidden = 0;
-    rc = fm_workbook_get_defined_name_at(handle_, i, &name, &formula, &local_sheet_id);
+    fm_defined_name_t d{};
+    rc = fm_workbook_get_defined_name_at(handle_, i, &d);
     if (rc == 0) {
-      rc = fm_workbook_get_defined_name_attrs_at(handle_, i, &comment, &hidden);
-    }
-    if (rc == 0) {
-      arr.Set(static_cast<uint32_t>(i), DefinedNameToJs(env, name, formula, local_sheet_id, comment, hidden));
+      arr.Set(static_cast<uint32_t>(i), DefinedNameToJs(env, d.name, d.formula, d.local_sheet_id, d.comment, d.hidden));
     }
   }
   return ValueOrThrow(env, rc, arr);
@@ -232,8 +226,7 @@ Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
         range.Set("sheet", Napi::Number::New(env, static_cast<double>(sheet_index)));
         range.Set("rect", RangeToJs(env, rect));
         out.Set("range", range);
-        out.Set("styleName", JsString(env, table.style_name));
-        out.Set("hasStyleInfo", JsBool(env, table.style_present));
+        out.Set("styleName", JsStringOrNull(env, table.style_name));
         out.Set("showFirstColumn", JsBool(env, table.show_first_column));
         out.Set("showLastColumn", JsBool(env, table.show_last_column));
         out.Set("showRowStripes", JsBool(env, table.show_row_stripes));
@@ -552,41 +545,33 @@ Napi::Value Workbook::PivotLayout(const Napi::CallbackInfo& info) {
 // ---- Defined names --------------------------------------------------
 
 Napi::Value Workbook::SetDefinedName(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
-    const std::string name = ArgString(info, 0);
-    const std::string formula = ArgString(info, 1);
-    return fm_workbook_set_defined_name(handle, name.c_str(), formula.c_str());
-  });
-}
-
-Napi::Value Workbook::SetDefinedNameScoped(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
-    const std::string name = ArgString(info, 0);
-    const std::string formula = ArgString(info, 1);
-    return fm_workbook_set_defined_name_scoped(handle, name.c_str(), formula.c_str(), ArgI32(info, 2));
-  });
-}
-
-Napi::Value Workbook::SetDefinedNameAttrs(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  const std::string name = ArgString(info, 0);
-  const int32_t local_sheet_id = ArgI32(info, 1);
-  Napi::Object attrs = ArgObject(info, 2);
+  // Creates or wholly replaces the name; an omitted or `null` scope is the workbook.
+  Napi::Object input = ArgObject(info, 0);
   CheckedSpecReader reader(env);
+  const std::string name = reader.RequiredString(input, "name");
+  const std::string formula = reader.RequiredString(input, "formula");
+  bool scoped = false;
+  const uint32_t sheet = reader.U32(input, "localSheetId", 0U, &scoped);
+  if (reader.ok() && scoped && sheet > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
+    reader.FailRange("localSheetId", "int32");
+  }
   std::string comment;
-  bool has_hidden = false;
-  const bool has_comment = reader.String(attrs, "comment", &comment);
-  const bool hidden = reader.Bool(attrs, "hidden", false, &has_hidden);
+  const bool has_comment = reader.String(input, "comment", &comment);
+  const bool hidden = reader.Bool(input, "hidden", false);
   if (!reader.ok()) {
     return env.Undefined();
   }
-  const fm_status_t rc =
-      fm_workbook_set_defined_name_attrs(handle_, name.c_str(), local_sheet_id, has_comment ? comment.c_str() : nullptr,
-                                         has_hidden ? (hidden ? 1 : 0) : -1);
-  return ValueOrThrow(env, rc, env.Undefined());
+  fm_defined_name_input_t in{};
+  in.name = name.c_str();
+  in.formula = formula.c_str();
+  in.local_sheet_id = scoped ? static_cast<int32_t>(sheet) : -1;
+  in.comment = has_comment ? comment.c_str() : nullptr;
+  in.hidden = hidden ? 1 : 0;
+  return ValueOrThrow(env, fm_workbook_set_defined_name(handle_, &in), env.Undefined());
 }
 
 }  // namespace formulon_node

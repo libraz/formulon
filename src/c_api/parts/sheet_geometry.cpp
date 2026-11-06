@@ -31,7 +31,7 @@ fm_status_t check_geometry_args(const fm_workbook_t* wb, size_t sheet_index, int
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  return check_enum_domain(mode, FM_GEOMETRY_PRINT, "mode");
+  return check_enum_domain(mode, 0, FM_GEOMETRY_PRINT, "mode");
 }
 
 formulon::ColumnWidthModel width_model_for(const fm_workbook_t* wb, int32_t mode) {

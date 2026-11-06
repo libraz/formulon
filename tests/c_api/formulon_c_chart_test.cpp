@@ -32,21 +32,21 @@ static_assert(sizeof(fm_chart_fill_t) == 16U, "fm_chart_fill_t ABI layout change
 static_assert(sizeof(fm_chart_line_t) == 40U, "fm_chart_line_t ABI layout changed");
 static_assert(sizeof(fm_chart_marker_t) == 72U, "fm_chart_marker_t ABI layout changed");
 static_assert(sizeof(fm_chart_labels_t) == (kWasm32 ? 64U : 80U), "fm_chart_labels_t ABI layout changed");
-static_assert(sizeof(fm_chart_info_t) == (kWasm32 ? 176U : 232U), "fm_chart_info_t ABI layout changed");
-static_assert(sizeof(fm_chart_plot_t) == (kWasm32 ? 64U : 80U), "fm_chart_plot_t ABI layout changed");
+static_assert(sizeof(fm_chart_info_t) == (kWasm32 ? 176U : 208U), "fm_chart_info_t ABI layout changed");
+static_assert(sizeof(fm_chart_plot_t) == (kWasm32 ? 64U : 72U), "fm_chart_plot_t ABI layout changed");
 static_assert(sizeof(fm_chart_data_source_t) == (kWasm32 ? 12U : 24U), "fm_chart_data_source_t ABI layout changed");
-static_assert(sizeof(fm_chart_series_t) == (kWasm32 ? 304U : 400U), "fm_chart_series_t ABI layout changed");
+static_assert(sizeof(fm_chart_series_t) == (kWasm32 ? 304U : 392U), "fm_chart_series_t ABI layout changed");
 static_assert(sizeof(fm_chart_literal_t) == 24U, "fm_chart_literal_t ABI layout changed");
 static_assert(sizeof(fm_chart_point_t) == 144U, "fm_chart_point_t ABI layout changed");
 static_assert(sizeof(fm_chart_axis_t) == (kWasm32 ? 112U : 136U), "fm_chart_axis_t ABI layout changed");
 static_assert(sizeof(fm_chart_preview_overrides_t) == (kWasm32 ? 52U : 56U),
               "fm_chart_preview_overrides_t ABI layout changed");
-static_assert(sizeof(fm_chart_data_info_t) == (kWasm32 ? 44U : 88U), "fm_chart_data_info_t ABI layout changed");
-static_assert(sizeof(fm_chart_data_series_t) == (kWasm32 ? 56U : 112U), "fm_chart_data_series_t ABI layout changed");
-static_assert(offsetof(fm_chart_data_series_t, x_format_code) == (kWasm32 ? 52U : 104U),
+static_assert(sizeof(fm_chart_data_info_t) == (kWasm32 ? 44U : 56U), "fm_chart_data_info_t ABI layout changed");
+static_assert(sizeof(fm_chart_data_series_t) == (kWasm32 ? 56U : 72U), "fm_chart_data_series_t ABI layout changed");
+static_assert(offsetof(fm_chart_data_series_t, x_format_code) == (kWasm32 ? 52U : 64U),
               "fm_chart_data_series_t x_format_code offset changed");
 static_assert(sizeof(fm_chart_data_points_t) == (kWasm32 ? 20U : 40U), "fm_chart_data_points_t ABI layout changed");
-static_assert(sizeof(fm_sheet_rect_t) == (kWasm32 ? 20U : 24U), "fm_sheet_rect_t ABI layout changed");
+static_assert(sizeof(fm_sheet_rect_t) == 20U, "fm_sheet_rect_t ABI layout changed");
 static_assert(sizeof(fm_chart_axis_title_text_t) == (kWasm32 ? 8U : 16U),
               "fm_chart_axis_title_text_t ABI layout changed");
 static_assert(sizeof(fm_chart_unresolved_t) == (kWasm32 ? 12U : 24U), "fm_chart_unresolved_t ABI layout changed");
@@ -61,7 +61,7 @@ static_assert(sizeof(fm_chart_plot_patch_t) == 40U, "fm_chart_plot_patch_t ABI l
 static_assert(sizeof(fm_chart_axis_patch_t) == (kWasm32 ? 136U : 168U), "fm_chart_axis_patch_t ABI layout changed");
 static_assert(sizeof(fm_chart_legend_patch_t) == (kWasm32 ? 20U : 32U), "fm_chart_legend_patch_t ABI layout changed");
 static_assert(sizeof(fm_chart_display_patch_t) == 24U, "fm_chart_display_patch_t ABI layout changed");
-static_assert(offsetof(fm_chart_info_t, na_as_blank) == (kWasm32 ? 172U : 228U), "fm_chart_info_t na_as_blank offset");
+static_assert(offsetof(fm_chart_info_t, na_as_blank) == (kWasm32 ? 172U : 204U), "fm_chart_info_t na_as_blank offset");
 
 constexpr fm_status_t Code(formulon::FormulonErrorCode c) {
   return static_cast<fm_status_t>(c);
@@ -105,8 +105,9 @@ fm_chart_insert_t Options(int32_t kind, const char* source) {
   o.kind = kind;
   o.source = source;
   o.legend = FM_CHART_LEGEND_RIGHT;
-  o.placement.anchor_kind = FM_ANCHOR_KIND_TWO_CELL;
-  o.placement.row = 6;
+  o.placement.anchor.anchor_kind = FM_ANCHOR_KIND_TWO_CELL;
+  o.placement.anchor.edit_as = FM_ANCHOR_EDIT_AS_TWO_CELL;
+  o.placement.anchor.row = 6;
   return o;
 }
 
@@ -210,23 +211,60 @@ TEST(FormulonCApiChart, EnumOrdinals) {
   EXPECT_EQ(FM_CHART_INSERT_SCATTER, 5);
   EXPECT_EQ(FM_CHART_INSERT_DOUGHNUT, 6);
   EXPECT_EQ(FM_CHART_GROUPING_STANDARD, 3);
-  EXPECT_EQ(FM_CHART_BLANKS_SPAN, 3);
+  EXPECT_EQ(FM_CHART_BLANKS_GAP, 0);
+  EXPECT_EQ(FM_CHART_BLANKS_SPAN, 2);
   EXPECT_EQ(FM_CHART_POINT_CONNECT, 2);
   EXPECT_EQ(FM_CHART_AXIS_SERIES, 3);
   EXPECT_EQ(FM_CHART_AXIS_POS_RIGHT, 3);
-  EXPECT_EQ(FM_CHART_CROSSES_AT, 4);
+  EXPECT_EQ(FM_CHART_CROSSES_AUTO_ZERO, 0);
+  EXPECT_EQ(FM_CHART_CROSSES_AT, 3);
   EXPECT_EQ(FM_CHART_TITLE_AUTO, 3);
   EXPECT_EQ(FM_CHART_DIRECTION_ROWS, 2);
   EXPECT_EQ(FM_CHART_HEADER_NO, 2);
-  EXPECT_EQ(FM_CHART_LEGEND_TOP_RIGHT, 5);
+  EXPECT_EQ(FM_CHART_LEGEND_BOTTOM, 0);
+  EXPECT_EQ(FM_CHART_LEGEND_TOP_RIGHT, 4);
   EXPECT_EQ(FM_CHART_DASH_OTHER, 4);
   EXPECT_EQ(FM_CHART_MARKER_PICTURE, 11);
   EXPECT_EQ(FM_CHART_LABEL_RIGHT, 8);
-  EXPECT_EQ(FM_CHART_BAR_DIR_BAR, 2);
+  EXPECT_EQ(FM_CHART_BAR_DIR_COL, 0);
+  EXPECT_EQ(FM_CHART_BAR_DIR_BAR, 1);
+  // The side family: a legend position and an axis position share values.
+  EXPECT_EQ(static_cast<int>(FM_CHART_LEGEND_BOTTOM), static_cast<int>(FM_CHART_AXIS_POS_BOTTOM));
+  EXPECT_EQ(static_cast<int>(FM_CHART_LEGEND_TOP), static_cast<int>(FM_CHART_AXIS_POS_TOP));
+  EXPECT_EQ(static_cast<int>(FM_CHART_LEGEND_LEFT), static_cast<int>(FM_CHART_AXIS_POS_LEFT));
+  EXPECT_EQ(static_cast<int>(FM_CHART_LEGEND_RIGHT), static_cast<int>(FM_CHART_AXIS_POS_RIGHT));
+  // The blanks family.
+  EXPECT_EQ(static_cast<int>(FM_CHART_BLANKS_GAP), static_cast<int>(FM_SPARKLINE_EMPTY_GAP));
+  EXPECT_EQ(static_cast<int>(FM_CHART_BLANKS_ZERO), static_cast<int>(FM_SPARKLINE_EMPTY_ZERO));
+  EXPECT_EQ(static_cast<int>(FM_CHART_BLANKS_SPAN), static_cast<int>(FM_SPARKLINE_EMPTY_SPAN));
+  // A member meaning "the element is absent" is -1.
+  EXPECT_EQ(FM_CHART_BLANKS_ABSENT, -1);
+  EXPECT_EQ(FM_CHART_CROSSES_ABSENT, -1);
+  EXPECT_EQ(FM_CHART_BAR_DIR_ABSENT, -1);
+  EXPECT_EQ(FM_CHART_LEGEND_NONE, -1);
   EXPECT_EQ(FM_CHART_TRI_TRUE, 2);
   EXPECT_EQ(FM_CHART_ROLE_SIZE, 5);
   EXPECT_EQ(FM_CHART_PATCH_SET, 2);
   EXPECT_EQ(FM_CHART_SOURCE_LITERAL, 2);
+}
+
+// An element the chart does not carry reads as -1: no legend, and no
+// `c:barDir` on a plot that is not a bar plot.
+TEST(FormulonCApiChart, AbsentElementsReadAsMinusOne) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  FillGrid(wb.handle);
+  fm_chart_insert_t o = Options(FM_CHART_INSERT_LINE, "Sheet1!$A$1:$D$5");
+  o.legend = FM_CHART_LEGEND_NONE;
+  uint32_t id = 0;
+  ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &o, &id), 0) << fm_get_last_error_message();
+  ChartGuard chart;
+  Open(wb.handle, id, &chart);
+  EXPECT_EQ(Info(chart).legend_position, -1);
+  fm_chart_plot_t plot{};
+  ASSERT_EQ(fm_chart_get_plot_at(chart.handle, 0, &plot), 0);
+  EXPECT_EQ(plot.type, FM_CHART_PLOT_LINE);
+  EXPECT_EQ(plot.bar_dir, -1);
 }
 
 TEST(FormulonCApiChart, InsertAndReadThroughAccessors) {
@@ -619,8 +657,13 @@ TEST(FormulonCApiChart, AxisEdits) {
   EXPECT_EQ(fm_sheet_set_chart_axis(wb.handle, 0, id, val_id, &patch), kInvalidArgument);
   patch = fm_chart_axis_patch_t{};
   patch.crosses_op = FM_CHART_PATCH_SET;
-  patch.crosses = 5;
+  patch.crosses = FM_CHART_CROSSES_AT + 1;
   EXPECT_EQ(fm_sheet_set_chart_axis(wb.handle, 0, id, val_id, &patch), kInvalidArgument);
+  // ABSENT (-1) is inside the domain; nothing below it is.
+  patch.crosses = FM_CHART_CROSSES_ABSENT - 1;
+  EXPECT_EQ(fm_sheet_set_chart_axis(wb.handle, 0, id, val_id, &patch), kInvalidArgument);
+  patch.crosses = FM_CHART_CROSSES_ABSENT;
+  EXPECT_EQ(fm_sheet_set_chart_axis(wb.handle, 0, id, val_id, &patch), 0) << fm_get_last_error_message();
   const fm_chart_axis_patch_t keep{};
   EXPECT_EQ(fm_sheet_set_chart_axis(wb.handle, 0, id, 999, &keep), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_chart_axis(wb.handle, 0, id, val_id, nullptr), kBindingNullPointer);
@@ -1022,7 +1065,7 @@ TEST(FormulonCApiChart, InsertRejectsBadOptions) {
   o.header_row = 3;
   EXPECT_EQ(fm_sheet_add_chart(wb.handle, 0, &o, &id), kInvalidArgument);
   o = Options(FM_CHART_INSERT_COLUMN, "Sheet1!$A$1:$D$5");
-  o.placement.anchor_kind = 3;
+  o.placement.anchor.anchor_kind = 3;
   EXPECT_EQ(fm_sheet_add_chart(wb.handle, 0, &o, &id), kInvalidArgument);
   o = Options(FM_CHART_INSERT_COLUMN, "Nope!$A$1:$D$5");
   EXPECT_EQ(fm_sheet_add_chart(wb.handle, 0, &o, &id), kInvalidReference);
@@ -1039,7 +1082,7 @@ TEST(FormulonCApiChart, InsertRejectsBadOptions) {
   // An empty title is no title; a given name and description are kept.
   o.title = "";
   o.placement.name = "Sales chart";
-  o.placement.descr = "Quarterly";
+  o.placement.description = "Quarterly";
   ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &o, &id), 0) << fm_get_last_error_message();
   ChartGuard chart;
   Open(wb.handle, id, &chart);
@@ -1047,7 +1090,7 @@ TEST(FormulonCApiChart, InsertRejectsBadOptions) {
   EXPECT_EQ(info.title.kind, FM_CHART_TITLE_NONE);
   EXPECT_EQ(info.auto_title_deleted, FM_CHART_TRI_TRUE);
   EXPECT_STREQ(info.name, "Sales chart");
-  EXPECT_STREQ(info.descr, "Quarterly");
+  EXPECT_STREQ(info.description, "Quarterly");
 }
 
 TEST(FormulonCApiChart, ChartexAndPivotChartsRefuseEdits) {

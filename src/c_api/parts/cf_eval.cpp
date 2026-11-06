@@ -19,6 +19,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/enum_map.h"
 #include "cf/cf_evaluator.h"
 #include "cf/cf_match.h"
 #include "cf/cf_types.h"
@@ -37,6 +38,7 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::to_c;
 
 // Opaque results handle. Owns the engine-produced match list verbatim so
 // the address / index accessors can return data without re-walking the
@@ -92,7 +94,7 @@ void fill_match(const formulon::cf::CFMatch& match, fm_cf_match_t* out) {
           out->bar_border = to_c_color(*bar.border);
         }
         out->bar_gradient = bar.gradient ? 1 : 0;
-        out->bar_direction = static_cast<std::uint8_t>(bar.direction);
+        out->bar_direction = to_c(bar.direction);
       }
       return;
     case formulon::cf::CFMatchKind::IconSet:

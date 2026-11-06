@@ -129,51 +129,50 @@ struct JsSheetView {
   uint32_t zoomScale = 100U;
   uint32_t freezeRows = 0U;
   uint32_t freezeCols = 0U;
-  int32_t tabHidden = 0;
-  /// `fm_sheet_visibility_t` ordinal. `tabHidden` is its two-state view
-  /// and is non-zero for both hidden states.
+  /// `fm_sheet_visibility_t` ordinal.
   int32_t visibility = 0;
-  int32_t showGridLines = 1;
-  int32_t showRowColHeaders = 1;
-  int32_t showZeros = 1;
-  int32_t rightToLeft = 0;
-  int32_t tabSelected = 0;
-  std::string viewMode;
+  bool showGridLines = true;
+  bool showRowColHeaders = true;
+  bool showZeros = true;
+  bool rightToLeft = false;
+  bool tabSelected = false;
+  /// `fm_sheet_view_mode_t` ordinal.
+  int32_t viewMode = 0;
   uint32_t topLeftRow = 0U;
   uint32_t topLeftCol = 0U;
   uint32_t paneTopLeftRow = 0U;
   uint32_t paneTopLeftCol = 0U;
   double splitX = 0.0;
   double splitY = 0.0;
-  int32_t showFormulas = 0;
-  int32_t showOutlineSymbols = 1;
+  bool showFormulas = false;
+  bool showOutlineSymbols = true;
 };
 
-/// JS-side mirror of `fm_sheet_protection_t`. The deeply-copied string
-/// fields decouple the returned record from the workbook's storage.
+/// JS-side mirror of `fm_sheet_protection_t`. The string fields are deep
+/// copies, `null` when the sheet stores none.
 struct JsSheetProtection {
-  int32_t enabled = 0;
-  std::string algorithmName;
-  std::string hashValue;
-  std::string saltValue;
+  bool enabled = false;
+  emscripten::val algorithmName = emscripten::val::null();
+  emscripten::val hashValue = emscripten::val::null();
+  emscripten::val saltValue = emscripten::val::null();
   uint32_t spinCount = 0U;
-  std::string legacyPassword;
-  int32_t sheet = 0;
-  int32_t objects = 0;
-  int32_t scenarios = 0;
-  int32_t formatCells = 0;
-  int32_t formatColumns = 0;
-  int32_t formatRows = 0;
-  int32_t insertColumns = 0;
-  int32_t insertRows = 0;
-  int32_t insertHyperlinks = 0;
-  int32_t deleteColumns = 0;
-  int32_t deleteRows = 0;
-  int32_t selectLockedCells = 0;
-  int32_t selectUnlockedCells = 0;
-  int32_t sort = 0;
-  int32_t autoFilter = 0;
-  int32_t pivotTables = 0;
+  emscripten::val legacyPassword = emscripten::val::null();
+  bool sheet = false;
+  bool objects = false;
+  bool scenarios = false;
+  bool formatCells = false;
+  bool formatColumns = false;
+  bool formatRows = false;
+  bool insertColumns = false;
+  bool insertRows = false;
+  bool insertHyperlinks = false;
+  bool deleteColumns = false;
+  bool deleteRows = false;
+  bool selectLockedCells = false;
+  bool selectUnlockedCells = false;
+  bool sort = false;
+  bool autoFilter = false;
+  bool pivotTables = false;
 };
 
 // ---- Failure builders ---------------------------------------------------
@@ -267,6 +266,12 @@ class JsNarrowNumericReader {
   bool require_array(const emscripten::val& value, const char* field);
   /// Fails the reader with a type error unless `value` is a non-null object.
   bool require_object(const emscripten::val& value, const char* field);
+  /// Reads a required string field: absent, `null` or a non-string is a type error.
+  std::string required_string(const emscripten::val& owner, const char* key, const char* field);
+  /// Records a type error for `field` (it "must be `expected`") unless one is recorded already.
+  void fail_type(const char* field, const char* expected);
+  /// Records a range error for `field` (it "must be a finite integer in `range`").
+  void fail_range(const char* field, const char* range);
   uint32_t length(const emscripten::val& array, const char* field = nullptr);
   emscripten::val array_element(const emscripten::val& array, uint32_t index, const char* field = nullptr);
 
@@ -298,6 +303,17 @@ class JsNarrowNumericReader {
   std::string operation_;
   std::string message_;
 };
+
+/// The state of one key of a partial-update (patch) object.
+enum class JsPatchKey : int32_t {
+  kKeep = 0,   ///< `undefined` or omitted: the stored value stays.
+  kClear = 1,  ///< `null` on a nullable field: the stored value is removed.
+  kSet = 2,    ///< Any other value.
+};
+
+/// Classifies `value`, read from a patch, as `JsPatchKey`. When `nullable`
+/// is false a `null` records a type error on `reader` and reads as `kKeep`.
+JsPatchKey js_patch_key(JsNarrowNumericReader& reader, const emscripten::val& value, const char* field, bool nullable);
 
 /// Count getter of a count-then-`at` collection scoped to a sheet.
 using JsListCount = fm_status_t (*)(const fm_workbook_t*, size_t, size_t*);
@@ -376,6 +392,10 @@ JsCfMatch translate_cf_match(const fm_cf_match_t& m);
 /// Builds a `CellRect` `{firstRow, firstCol, lastRow, lastCol}` JS object.
 emscripten::val cell_rect_to_val(const fm_cell_rect_t& m);
 
+/// Builds a `PrintTitles` `{ rows, columns }` object, each axis a
+/// `{ first, last }` span or `null`; `null` when neither axis repeats.
+emscripten::val print_titles_to_val(const fm_print_titles_t& titles);
+
 /// Builds a JS array of `CellRect` objects from `count` rectangles.
 emscripten::val cell_rects_to_val(const fm_cell_rect_t* rects, std::size_t count);
 
@@ -452,6 +472,35 @@ void js_set_cstr_fields(emscripten::val& o, const JsStrField* fields, std::size_
 template <std::size_t N>
 inline void js_set_cstr_fields(emscripten::val& o, const JsStrField (&fields)[N]) {
   js_set_cstr_fields(o, fields, N);
+}
+
+/// `s` as a JS string, or `null` when `s` is NULL or empty: the C ABI spells
+/// an absent string attribute as "".
+emscripten::val cstr_or_null(const char* s);
+
+/// Sets `o[key]` to `cstr_or_null(s)`.
+void js_set_cstr_or_null(emscripten::val& o, const char* key, const char* s);
+
+/// Sets every field of `fields` on `o` as `js_set_cstr_or_null` would.
+void js_set_cstr_or_null_fields(emscripten::val& o, const JsStrField* fields, std::size_t n);
+
+template <std::size_t N>
+inline void js_set_cstr_or_null_fields(emscripten::val& o, const JsStrField (&fields)[N]) {
+  js_set_cstr_or_null_fields(o, fields, N);
+}
+
+/// Sets `o[key]` to `value`, or to `null` when it is negative: the C ABI's
+/// sentinel for an absent index or member.
+void js_set_index_or_null(emscripten::val& o, const char* key, int32_t value);
+
+/// Sets `o[key]` to `value` when `present` is non-zero, else to `null`.
+template <class T>
+inline void js_set_present_or_null(emscripten::val& o, const char* key, int32_t present, T value) {
+  if (present != 0) {
+    o.set(key, value);
+  } else {
+    o.set(key, emscripten::val::null());
+  }
 }
 
 /// Builds the JS mirror of a colour specification. Reads emit it

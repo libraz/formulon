@@ -23,20 +23,25 @@ from unittest import mock
 import formulon
 from formulon import (
     AnchorKind,
+    Border,
+    BorderSide,
     CalcMode,
     CellRect,
     CellStyle,
     CellXf,
     CfColor,
     Cfvo,
+    Comment,
     ConditionalFormatInput,
     DataBar,
+    DefinedNameInput,
     DifferentialFormat,
     ErrorCode,
     ExternalLinkKind,
     Fill,
     Font,
     FormulonError,
+    LocaleDateOrder,
     LogLevel,
     PhoneticProperties,
     PhoneticPropertiesInput,
@@ -50,6 +55,7 @@ from formulon import (
     PivotFilterValueKind,
     PivotGrandTotals,
     PivotWorksheetSource,
+    Sheet,
     SheetRect,
     SheetSelection,
     TableStyle,
@@ -72,32 +78,36 @@ from formulon import (
 class IndexGetterTests(unittest.TestCase):
     def test_an_out_of_range_index_raises(self) -> None:
         with Workbook.create_default() as wb:
-            for name, call in (
-                ("get_cf_rule", lambda: wb.get_cf_rule(0, 0)),
-                ("get_validation", lambda: wb.get_validation(0, 0)),
-                ("get_protected_range", lambda: wb.get_protected_range(0, 0)),
-                ("get_sparkline_group", lambda: wb.get_sparkline_group(0, 0)),
-                ("get_external_link", lambda: wb.get_external_link(0)),
-                ("get_cell_phonetic_run", lambda: wb.get_cell_phonetic_run(0, 0, 0, 0)),
-                ("get_table", lambda: wb.get_table(0)),
-                ("get_cell_at", lambda: wb.get_cell_at(0, 0)),
+            with self.assertRaises(FormulonError):
+                wb.sheet(0).get_cell_at(0)
+
+    def test_empty_collections_list_as_empty(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            for name, listed in (
+                ("list_cf_rules", ws.list_cf_rules()),
+                ("list_validations", ws.list_validations()),
+                ("list_protected_ranges", ws.list_protected_ranges()),
+                ("list_sparkline_groups", ws.list_sparkline_groups()),
+                ("list_external_links", wb.list_external_links()),
+                ("get_cell_phonetic_runs", ws.get_cell_phonetic_runs(0, 0)),
+                ("list_tables", wb.list_tables()),
             ):
-                with self.subTest(getter=name):
-                    with self.assertRaises(FormulonError):
-                        call()
+                with self.subTest(name=name):
+                    self.assertEqual(listed, [])
 
     def test_counts_start_at_zero(self) -> None:
         with Workbook.create_default() as wb:
             self.assertEqual(
                 [
-                    wb.get_cf_rule_count(0),
-                    wb.get_validation_count(0),
-                    wb.get_protected_range_count(0),
-                    wb.get_sparkline_group_count(0),
-                    wb.get_external_link_count(),
-                    wb.get_cell_phonetic_run_count(0, 0, 0),
-                    wb.get_table_count(),
-                    wb.get_cell_count(0),
+                    len(wb.sheet(0).list_cf_rules()),
+                    len(wb.sheet(0).list_validations()),
+                    len(wb.sheet(0).list_protected_ranges()),
+                    len(wb.sheet(0).list_sparkline_groups()),
+                    len(wb.list_external_links()),
+                    len(wb.sheet(0).get_cell_phonetic_runs(0, 0)),
+                    len(wb.list_tables()),
+                    wb.sheet(0).get_cell_count(),
                 ],
                 [0] * 8,
             )
@@ -118,7 +128,7 @@ class FormulonErrorStatusTests(unittest.TestCase):
 
             with mock.patch.object(_c.LIB, "fm_sheet_get_pagination", fake_paginate, create=True):
                 with self.assertRaises(FormulonError) as caught:
-                    wb.get_pagination(0)
+                    wb.sheet(0).get_pagination()
         self.assertEqual(caught.exception.code, 7001)
         self.assertEqual(str(caught.exception), "returned OK with a null pagination handle")
         self.assertNotIn("fm_", str(caught.exception))
@@ -129,7 +139,7 @@ class ErrorOperationNameTests(unittest.TestCase):
         """Messages are written for Python callers: no ABI symbol, no binding helper."""
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError) as caught:
-                wb.list_merges(99)
+                wb.sheet(99).list_merges()
         message = str(caught.exception)
         self.assertIsInstance(caught.exception, formulon.IndexOutOfRangeError)
         self.assertNotIn("fm_", message)
@@ -138,7 +148,7 @@ class ErrorOperationNameTests(unittest.TestCase):
     def test_trace_failure_carries_no_c_abi_name(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError) as caught:
-                wb.get_precedents(99, 0, 0)
+                wb.sheet(99).get_precedents(0, 0)
         message = str(caught.exception)
         self.assertIsInstance(caught.exception, formulon.IndexOutOfRangeError)
         self.assertNotIn("fm_", message)
@@ -202,7 +212,7 @@ class CatalogProfileTests(unittest.TestCase):
         mac = get_locale_facts("mac-365-de_DE")
         self.assertEqual(mac.decimal_separator, ",")
         self.assertEqual(mac.list_separator, ";")
-        self.assertEqual(mac.date_order, "dmy")
+        self.assertEqual(mac.date_order, LocaleDateOrder.DMY)
         self.assertTrue(mac.measured)
         na = next(e for e in mac.error_names if e.canonical == "#N/A")
         self.assertEqual(na.localized, "#NV")
@@ -247,8 +257,8 @@ class NamedConstantTableTests(unittest.TestCase):
 
     def test_error_code_names_a_value_read_back_from_a_cell(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_error(0, 0, 0, ErrorCode.DIV0)
-            value = wb.get_value(0, 0, 0)
+            wb.sheet(0).set_error(0, 0, ErrorCode.DIV0)
+            value = wb.sheet(0).get_value(0, 0)
         self.assertEqual(value.kind, ValueKind.ERROR)
         self.assertEqual(value.error_code, ErrorCode.DIV0)
 
@@ -283,7 +293,7 @@ class StyleAndCalcAccessorTests(unittest.TestCase):
 
     def test_iterative_settings_read_back_what_was_set(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_iterative(True, 42, 0.5)
+            wb.set_iterative(enabled=True, max_iterations=42, max_change=0.5)
             settings = wb.get_iterative()
         self.assertTrue(settings.enabled)
         self.assertEqual(settings.max_iterations, 42)
@@ -291,8 +301,8 @@ class StyleAndCalcAccessorTests(unittest.TestCase):
 
     def test_iterative_cap_and_threshold_survive_being_disabled(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_iterative(True, 42, 0.5)
-            wb.set_iterative(False, 42, 0.5)
+            wb.set_iterative(enabled=True, max_iterations=42, max_change=0.5)
+            wb.set_iterative(enabled=False, max_iterations=42, max_change=0.5)
             settings = wb.get_iterative()
         self.assertFalse(settings.enabled)
         self.assertEqual(settings.max_iterations, 42)
@@ -300,10 +310,10 @@ class StyleAndCalcAccessorTests(unittest.TestCase):
 
     def test_enable_toggle_keeps_the_cap_and_threshold(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_iterative(True, 42, 0.5)
-            wb.set_iterative_enabled(False)
+            wb.set_iterative(enabled=True, max_iterations=42, max_change=0.5)
+            wb.set_iterative(enabled=False)
             disabled = wb.get_iterative()
-            wb.set_iterative_enabled(True)
+            wb.set_iterative(enabled=True)
             reenabled = wb.get_iterative()
         self.assertFalse(disabled.enabled)
         self.assertTrue(reenabled.enabled)
@@ -320,7 +330,7 @@ class StyleSeedingTests(unittest.TestCase):
             font_index = wb.add_font(Font(name="Arial", size=12.0))
             # Excel reserves fill 0 for `none` and fill 1 for `gray125`.
             fill_index = wb.add_fill(Fill(pattern=1, fg_argb=0xFFFF0000))
-            border_index = wb.add_border({"left": {"style": 1, "color_argb": 0xFF000000}})
+            border_index = wb.add_border(Border(left=BorderSide(style=1, color_argb=0xFF000000)))
             xf_index = wb.add_cell_xf(
                 CellXf(
                     font_index=font_index,
@@ -352,7 +362,7 @@ class StyleBatchTests(unittest.TestCase):
             indices = wb.add_batch(
                 fonts=[Font(name="Arial", size=10.0), Font(name="Arial", size=12.0)],
                 fills=[Fill(pattern=1, fg_argb=0xFF00FF00)],
-                borders=[{"left": {"style": 1, "color_argb": 0xFF000000}}],
+                borders=[Border(left=BorderSide(style=1, color_argb=0xFF000000))],
                 num_fmts=["0.000"],
             )
             xf = wb.add_batch(
@@ -434,13 +444,13 @@ class MemoryUsageTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             empty = wb.get_memory_usage()
             for row in range(2000):
-                wb.set_number(0, row, 0, float(row))
+                wb.sheet(0).set_number(row, 0, float(row))
             filled = wb.get_memory_usage()
         self.assertGreater(filled, empty)
 
     def test_estimate_is_stable_across_repeated_calls(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_number(0, 0, 0, 1.0)
+            wb.sheet(0).set_number(0, 0, 1.0)
             self.assertEqual(wb.get_memory_usage(), wb.get_memory_usage())
 
     def test_closed_handle_raises_rather_than_reporting_zero(self) -> None:
@@ -474,7 +484,7 @@ class StructuredLogTests(unittest.TestCase):
                     # A structured reference the XLSB encoder
                     # cannot lower, which makes the writer emit a per-cell
                     # warn record.
-                    wb.set_formula(0, 0, 0, "=SUM(T[C])")
+                    wb.sheet(0).set_formula(0, 0, "=SUM(T[C])")
                     wb.recalc()
                     wb.save(format=formulon.WorkbookFormat.XLSB)
             finally:
@@ -518,46 +528,39 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
 
     def test_phonetic_guide_round_trips(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "日本語")
-            self.assertEqual(wb.get_cell_phonetic(0, 0, 0), "")
-            wb.set_cell_phonetic(0, 0, 0, "ニホンゴ")
-            self.assertEqual(wb.get_cell_phonetic(0, 0, 0), "ニホンゴ")
+            wb.sheet(0).set_text(0, 0, "日本語")
+            self.assertIsNone(wb.sheet(0).get_cell_phonetic(0, 0))
+            wb.sheet(0).set_cell_phonetic(0, 0, "ニホンゴ")
+            self.assertEqual(wb.sheet(0).get_cell_phonetic(0, 0), "ニホンゴ")
 
     def test_phonetic_guide_survives_a_save_load_round_trip(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "日本語")
-            wb.set_cell_phonetic(0, 0, 0, "ニホンゴ")
+            wb.sheet(0).set_text(0, 0, "日本語")
+            wb.sheet(0).set_cell_phonetic(0, 0, "ニホンゴ")
             data = wb.save()
         with Workbook.load(data) as reloaded:
-            self.assertEqual(reloaded.get_cell_phonetic(0, 0, 0), "ニホンゴ")
+            self.assertEqual(reloaded.sheet(0).get_cell_phonetic(0, 0), "ニホンゴ")
 
     def test_empty_phonetic_guide_clears_it(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "日本語")
-            wb.set_cell_phonetic(0, 0, 0, "ニホンゴ")
-            wb.set_cell_phonetic(0, 0, 0, "")
-            self.assertEqual(wb.get_cell_phonetic(0, 0, 0), "")
+            wb.sheet(0).set_text(0, 0, "日本語")
+            wb.sheet(0).set_cell_phonetic(0, 0, "ニホンゴ")
+            wb.sheet(0).set_cell_phonetic(0, 0, "")
+            self.assertIsNone(wb.sheet(0).get_cell_phonetic(0, 0))
 
     def test_phonetic_runs_keep_their_spans(self) -> None:
         runs = [PhoneticRun(0, 2, "トウキョウ"), PhoneticRun(2, 3, "ト")]
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "東京都")
-            self.assertEqual(
-                [wb.get_cell_phonetic_run(0, 0, 0, i) for i in range(wb.get_cell_phonetic_run_count(0, 0, 0))], []
-            )
-            wb.set_cell_phonetic_runs(0, 0, 0, runs)
-            self.assertEqual(
-                [wb.get_cell_phonetic_run(0, 0, 0, i) for i in range(wb.get_cell_phonetic_run_count(0, 0, 0))], runs
-            )
+            wb.sheet(0).set_text(0, 0, "東京都")
+            self.assertEqual(wb.sheet(0).get_cell_phonetic_runs(0, 0), [])
+            wb.sheet(0).set_cell_phonetic_runs(0, 0, runs)
+            self.assertEqual(wb.sheet(0).get_cell_phonetic_runs(0, 0), runs)
             # The flattening getter still reports the concatenation.
-            self.assertEqual(wb.get_cell_phonetic(0, 0, 0), "トウキョウト")
+            self.assertEqual(wb.sheet(0).get_cell_phonetic(0, 0), "トウキョウト")
             data = wb.save()
         with Workbook.load(data) as reloaded:
             self.assertEqual(
-                [
-                    reloaded.get_cell_phonetic_run(0, 0, 0, i)
-                    for i in range(reloaded.get_cell_phonetic_run_count(0, 0, 0))
-                ],
+                reloaded.sheet(0).get_cell_phonetic_runs(0, 0),
                 runs,
             )
 
@@ -567,77 +570,71 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
         # run text but accepts a zero-length one, so this must not raise.
         runs = [PhoneticRun(0, 2, "トウキョウ"), PhoneticRun(2, 3, "")]
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "東京都")
-            wb.set_cell_phonetic_runs(0, 0, 0, runs)
-            self.assertEqual(
-                [wb.get_cell_phonetic_run(0, 0, 0, i) for i in range(wb.get_cell_phonetic_run_count(0, 0, 0))], runs
-            )
+            wb.sheet(0).set_text(0, 0, "東京都")
+            wb.sheet(0).set_cell_phonetic_runs(0, 0, runs)
+            self.assertEqual(wb.sheet(0).get_cell_phonetic_runs(0, 0), runs)
 
     def test_whole_cell_setter_collapses_the_spans(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "東京都")
-            wb.set_cell_phonetic_runs(0, 0, 0, [PhoneticRun(0, 2, "トウキョウ"), PhoneticRun(2, 3, "ト")])
-            wb.set_cell_phonetic(0, 0, 0, wb.get_cell_phonetic(0, 0, 0))
+            wb.sheet(0).set_text(0, 0, "東京都")
+            wb.sheet(0).set_cell_phonetic_runs(0, 0, [PhoneticRun(0, 2, "トウキョウ"), PhoneticRun(2, 3, "ト")])
+            wb.sheet(0).set_cell_phonetic(0, 0, wb.sheet(0).get_cell_phonetic(0, 0))
             self.assertEqual(
-                [wb.get_cell_phonetic_run(0, 0, 0, i) for i in range(wb.get_cell_phonetic_run_count(0, 0, 0))],
+                wb.sheet(0).get_cell_phonetic_runs(0, 0),
                 [PhoneticRun(0, 3, "トウキョウト")],
             )
 
     def test_empty_run_list_clears_the_guide(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "東京都")
-            wb.set_cell_phonetic_runs(0, 0, 0, [PhoneticRun(0, 3, "トウキョウト")])
-            wb.set_cell_phonetic_runs(0, 0, 0, [])
-            self.assertEqual(
-                [wb.get_cell_phonetic_run(0, 0, 0, i) for i in range(wb.get_cell_phonetic_run_count(0, 0, 0))], []
-            )
-            self.assertEqual(wb.get_cell_phonetic(0, 0, 0), "")
+            wb.sheet(0).set_text(0, 0, "東京都")
+            wb.sheet(0).set_cell_phonetic_runs(0, 0, [PhoneticRun(0, 3, "トウキョウト")])
+            wb.sheet(0).set_cell_phonetic_runs(0, 0, [])
+            self.assertEqual(wb.sheet(0).get_cell_phonetic_runs(0, 0), [])
+            self.assertIsNone(wb.sheet(0).get_cell_phonetic(0, 0))
 
     def test_out_of_order_runs_are_rejected(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "東京都")
+            wb.sheet(0).set_text(0, 0, "東京都")
             with self.assertRaises(FormulonError):
-                wb.set_cell_phonetic_runs(0, 0, 0, [PhoneticRun(2, 3, "ト"), PhoneticRun(0, 2, "トウ")])
+                wb.sheet(0).set_cell_phonetic_runs(0, 0, [PhoneticRun(2, 3, "ト"), PhoneticRun(0, 2, "トウ")])
 
     def test_phonetic_properties_are_independent_of_the_runs(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "大阪")
+            wb.sheet(0).set_text(0, 0, "大阪")
             # An unannotated cell reports what Excel infers for a guide
             # written with no <phoneticPr> element at all.
-            self.assertEqual(wb.get_cell_phonetic_properties(0, 0, 0), PhoneticProperties(0, 0, 0))
+            self.assertEqual(wb.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(0, 0, 0))
 
-            wb.set_cell_phonetic_properties(0, 0, 0, PhoneticPropertiesInput(font_id=3, type=2, alignment=2))
+            wb.sheet(0).set_cell_phonetic_properties(0, 0, PhoneticPropertiesInput(font_id=3, type=2, alignment=2))
             # Setting the readings must not reset the rendering.
-            wb.set_cell_phonetic_runs(0, 0, 0, [PhoneticRun(0, 2, "おおさか")])
-            self.assertEqual(wb.get_cell_phonetic_properties(0, 0, 0), PhoneticProperties(3, 2, 2))
+            wb.sheet(0).set_cell_phonetic_runs(0, 0, [PhoneticRun(0, 2, "おおさか")])
+            self.assertEqual(wb.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(3, 2, 2))
             data = wb.save()
         with Workbook.load(data) as reloaded:
-            self.assertEqual(reloaded.get_cell_phonetic_properties(0, 0, 0), PhoneticProperties(3, 2, 2))
+            self.assertEqual(reloaded.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(3, 2, 2))
 
     def test_phonetic_properties_reject_values_the_container_cannot_hold(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "大阪")
-            wb.set_cell_phonetic_properties(0, 0, 0, PhoneticPropertiesInput(1, 3, 3))
+            wb.sheet(0).set_text(0, 0, "大阪")
+            wb.sheet(0).set_cell_phonetic_properties(0, 0, PhoneticPropertiesInput(1, 3, 3))
             # Two bits each on the binary side, so a wider ordinal is
             # refused rather than truncated into a valid-looking one.
             with self.assertRaises(FormulonError):
-                wb.set_cell_phonetic_properties(0, 0, 0, PhoneticPropertiesInput(type=4))
+                wb.sheet(0).set_cell_phonetic_properties(0, 0, PhoneticPropertiesInput(type=4))
             with self.assertRaises(FormulonError):
-                wb.set_cell_phonetic_properties(0, 0, 0, PhoneticPropertiesInput(alignment=4))
+                wb.sheet(0).set_cell_phonetic_properties(0, 0, PhoneticPropertiesInput(alignment=4))
             with self.assertRaises(FormulonError):
-                wb.set_cell_phonetic_properties(0, 0, 0, PhoneticPropertiesInput(font_id=0x10000))
-            self.assertEqual(wb.get_cell_phonetic_properties(0, 0, 0), PhoneticProperties(1, 3, 3))
+                wb.sheet(0).set_cell_phonetic_properties(0, 0, PhoneticPropertiesInput(font_id=0x10000))
+            self.assertEqual(wb.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(1, 3, 3))
 
     def test_a_value_write_discards_the_guide_and_its_rendering(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "大阪")
-            wb.set_cell_phonetic_runs(0, 0, 0, [PhoneticRun(0, 2, "おおさか")])
-            wb.set_cell_phonetic_properties(0, 0, 0, PhoneticPropertiesInput(3, 2, 2))
-            wb.set_text(0, 0, 0, "京都")
-            self.assertEqual(
-                [wb.get_cell_phonetic_run(0, 0, 0, i) for i in range(wb.get_cell_phonetic_run_count(0, 0, 0))], []
-            )
-            self.assertEqual(wb.get_cell_phonetic_properties(0, 0, 0), PhoneticProperties(0, 0, 0))
+            wb.sheet(0).set_text(0, 0, "大阪")
+            wb.sheet(0).set_cell_phonetic_runs(0, 0, [PhoneticRun(0, 2, "おおさか")])
+            wb.sheet(0).set_cell_phonetic_properties(0, 0, PhoneticPropertiesInput(3, 2, 2))
+            wb.sheet(0).set_text(0, 0, "京都")
+            self.assertEqual(wb.sheet(0).get_cell_phonetic_runs(0, 0), [])
+            self.assertEqual(wb.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(0, 0, 0))
 
     def test_default_font_replaces_what_an_unstyled_cell_saves_as(self) -> None:
         with Workbook.create_default() as wb:
@@ -646,7 +643,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             self.assertGreater(wb.add_font(Font(name="游ゴシック", size=11.0)), 0)
             self.assertEqual(wb.get_font(0).name, "Calibri")
 
-            wb.set_default_font(Font(name="游ゴシック", size=11.0, has_charset=True, charset=128))
+            wb.set_default_font(Font(name="游ゴシック", size=11.0, charset=128))
             self.assertEqual(wb.get_font(0).name, "游ゴシック")
             self.assertEqual(wb.get_font(0).charset, 128)
             data = wb.save()
@@ -664,72 +661,89 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
 
     def test_table_create_update_remove(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "A")
-            wb.set_text(0, 0, 1, "B")
-            index = wb.add_table(0, CellRect(0, 0, 2, 1), "Table1", "Table1", ["A", "B"])
+            wb.sheet(0).set_text(0, 0, "A")
+            wb.sheet(0).set_text(0, 1, "B")
+            index = wb.add_table(
+                range=SheetRect(0, CellRect(0, 0, 2, 1)), name="Table1", display_name="Table1", columns=["A", "B"]
+            )
             self.assertEqual(
-                [t.range for t in [wb.get_table(i) for i in range(wb.get_table_count())]],
+                [t.range for t in wb.list_tables()],
                 [SheetRect(0, CellRect(0, 0, 2, 1))],
             )
-            self.assertEqual([t.name for t in [wb.get_table(i) for i in range(wb.get_table_count())]], ["Table1"])
+            self.assertEqual([t.name for t in wb.list_tables()], ["Table1"])
 
-            wb.update_table(index, CellRect(0, 0, 4, 1))
+            wb.update_table(index, rect=CellRect(0, 0, 4, 1))
             self.assertEqual(
-                [t.range for t in [wb.get_table(i) for i in range(wb.get_table_count())]],
+                [t.range for t in wb.list_tables()],
                 [SheetRect(0, CellRect(0, 0, 4, 1))],
             )
 
             wb.remove_table(index)
-            self.assertEqual([wb.get_table(i) for i in range(wb.get_table_count())], [])
+            self.assertEqual(wb.list_tables(), [])
 
     def test_table_style_toggles_survive_a_style_name_change(self) -> None:
         with Workbook.create_default() as wb:
-            index = wb.add_table(0, CellRect(0, 0, 2, 1), "Sales", "Sales", ["A", "B"], "TableStyleLight9")
-            table = [wb.get_table(i) for i in range(wb.get_table_count())][0]
+            index = wb.add_table(
+                range=SheetRect(0, CellRect(0, 0, 2, 1)),
+                name="Sales",
+                display_name="Sales",
+                columns=["A", "B"],
+                style_name="TableStyleLight9",
+            )
+            table = wb.list_tables()[0]
             self.assertEqual(table.style_name, "TableStyleLight9")
-            self.assertTrue(table.has_style_info)
             self.assertTrue(table.show_row_stripes)
             self.assertFalse(table.show_first_column)
             self.assertEqual((table.header_row_count, table.totals_row_count), (1, 0))
             self.assertEqual([c.name for c in table.columns], ["A", "B"])
 
-            wb.update_table(index, CellRect(0, 0, 2, 1), show_first_column=True, show_row_stripes=False)
-            wb.update_table(index, CellRect(0, 0, 2, 1), "TableStyleMedium4")
+            wb.update_table(index, rect=CellRect(0, 0, 2, 1), show_first_column=True, show_row_stripes=False)
+            wb.update_table(index, rect=CellRect(0, 0, 2, 1), style_name="TableStyleMedium4")
             with Workbook.load(wb.save()) as reloaded:
-                table = [reloaded.get_table(i) for i in range(reloaded.get_table_count())][0]
+                table = reloaded.list_tables()[0]
                 self.assertEqual(table.style_name, "TableStyleMedium4")
                 self.assertTrue(table.show_first_column)
                 self.assertFalse(table.show_row_stripes)
 
     def test_table_column_totals_write_the_totals_row(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "Product")
-            wb.set_text(0, 0, 1, "Amount")
-            wb.set_number(0, 1, 1, 10.0)
-            wb.set_number(0, 2, 1, 20.0)
-            index = wb.add_table(0, CellRect(0, 0, 3, 1), "Sales", "Sales", ["Product", "Amount"], totals_row=True)
+            wb.sheet(0).set_text(0, 0, "Product")
+            wb.sheet(0).set_text(0, 1, "Amount")
+            wb.sheet(0).set_number(1, 1, 10.0)
+            wb.sheet(0).set_number(2, 1, 20.0)
+            index = wb.add_table(
+                range=SheetRect(0, CellRect(0, 0, 3, 1)),
+                name="Sales",
+                display_name="Sales",
+                columns=["Product", "Amount"],
+                totals_row=True,
+            )
             wb.set_table_column_totals(index, 0, label="Total")
-            wb.set_table_column_totals(index, 1, "sum")
-            self.assertEqual(wb.get_formula(0, 3, 1), "=SUBTOTAL(109,[Amount])")
+            wb.set_table_column_totals(index, 1, function="sum")
+            self.assertEqual(wb.sheet(0).get_formula(3, 1), "=SUBTOTAL(109,[Amount])")
             wb.recalc()
-            self.assertEqual(wb.get_value(0, 3, 1).number, 30.0)
+            self.assertEqual(wb.sheet(0).get_value(3, 1).number, 30.0)
             with self.assertRaises(FormulonError):
-                wb.set_table_column_totals(index, 1, "median")
+                wb.set_table_column_totals(index, 1, function="median")
             with Workbook.load(wb.save()) as reloaded:
-                columns = [reloaded.get_table(i) for i in range(reloaded.get_table_count())][0].columns
+                columns = reloaded.list_tables()[0].columns
                 self.assertEqual(columns[0].totals_row_label, "Total")
                 self.assertEqual(columns[1].totals_row_function, "sum")
 
     def test_table_rename_rewrites_structured_references(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "Amount")
-            wb.set_number(0, 1, 0, 5.0)
-            index = wb.add_table(0, CellRect(0, 0, 1, 0), "Sales", "Sales", ["Amount"])
-            wb.set_formula(0, 0, 3, "=SUM(Sales[Amount])")
-            wb.update_table(index, CellRect(0, 0, 1, 0), name="Revenue")
-            self.assertEqual(wb.get_formula(0, 0, 3), "=SUM(Revenue[Amount])")
-            self.assertEqual([wb.get_table(i) for i in range(wb.get_table_count())][0].display_name, "Revenue")
-            other = wb.add_table(0, CellRect(0, 2, 1, 2), "Other", "Other", ["X"])
+            wb.sheet(0).set_text(0, 0, "Amount")
+            wb.sheet(0).set_number(1, 0, 5.0)
+            index = wb.add_table(
+                range=SheetRect(0, CellRect(0, 0, 1, 0)), name="Sales", display_name="Sales", columns=["Amount"]
+            )
+            wb.sheet(0).set_formula(0, 3, "=SUM(Sales[Amount])")
+            wb.update_table(index, rect=CellRect(0, 0, 1, 0), name="Revenue")
+            self.assertEqual(wb.sheet(0).get_formula(0, 3), "=SUM(Revenue[Amount])")
+            self.assertEqual(wb.list_tables()[0].display_name, "Revenue")
+            other = wb.add_table(
+                range=SheetRect(0, CellRect(0, 2, 1, 2)), name="Other", display_name="Other", columns=["X"]
+            )
             with self.assertRaises(FormulonError):
                 wb.rename_table(other, "revenue")
 
@@ -739,11 +753,11 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             style = TableStyle(
                 name="Corporate",
                 pivot=False,
-                elements=(
+                elements=[
                     TableStyleElement("wholeTable", dxf_id=dxf),
                     TableStyleElement("firstRowStripe", size=2, dxf_id=dxf),
                     TableStyleElement("totalRow"),
-                ),
+                ],
             )
             wb.set_table_style(style)
             self.assertEqual(len(wb.list_table_styles()), 1)
@@ -751,16 +765,20 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                 wb.get_table_style_defaults(),
                 TableStyleDefaults(table_style="TableStyleMedium2", pivot_style="PivotStyleLight16"),
             )
-            index = wb.add_table(0, CellRect(0, 0, 1, 0), "T", "T", ["X"], "Corporate")
+            index = wb.add_table(
+                range=SheetRect(0, CellRect(0, 0, 1, 0)),
+                name="T",
+                display_name="T",
+                columns=["X"],
+                style_name="Corporate",
+            )
             with self.assertRaises(FormulonError):
                 wb.set_table_style(TableStyle(name="TableStyleMedium2"))
             with Workbook.load(wb.save()) as reloaded:
                 self.assertEqual(reloaded.list_table_styles(), [style])
                 self.assertEqual(reloaded.get_table_style("corporate"), style)
                 self.assertIsNone(reloaded.get_table_style("Other"))
-                self.assertEqual(
-                    [reloaded.get_table(i) for i in range(reloaded.get_table_count())][index].style_name, "Corporate"
-                )
+                self.assertEqual(reloaded.list_tables()[index].style_name, "Corporate")
                 reloaded.set_table_style_defaults(table_style="Corporate")
                 self.assertEqual(reloaded.get_table_style_defaults().table_style, "Corporate")
                 reloaded.remove_table_style("corporate")
@@ -769,36 +787,45 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
 
     def test_table_update_empty_style_name_removes_the_style(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "A")
-            wb.set_text(0, 0, 1, "B")
-            index = wb.add_table(0, CellRect(0, 0, 2, 1), "Sales", "Sales", ["A", "B"], "TableStyleMedium2")
-            wb.update_table(index, CellRect(0, 0, 2, 1), style_name=None)
-            self.assertEqual([wb.get_table(i) for i in range(wb.get_table_count())][0].style_name, "TableStyleMedium2")
+            wb.sheet(0).set_text(0, 0, "A")
+            wb.sheet(0).set_text(0, 1, "B")
+            index = wb.add_table(
+                range=SheetRect(0, CellRect(0, 0, 2, 1)),
+                name="Sales",
+                display_name="Sales",
+                columns=["A", "B"],
+                style_name="TableStyleMedium2",
+            )
+            wb.update_table(index, rect=CellRect(0, 0, 2, 1), style_name=None)
+            self.assertEqual(wb.list_tables()[0].style_name, "TableStyleMedium2")
 
-            wb.update_table(index, CellRect(0, 0, 2, 1), style_name="")
-            table = [wb.get_table(i) for i in range(wb.get_table_count())][0]
-            self.assertEqual((table.style_name, table.has_style_info), ("", False))
+            wb.update_table(index, rect=CellRect(0, 0, 2, 1), style_name="")
+            table = wb.list_tables()[0]
+            self.assertIsNone(table.style_name)
+            self.assertFalse(table.show_row_stripes)
             data = wb.save()
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             parts = [name for name in archive.namelist() if name.startswith("xl/tables/")]
             self.assertEqual(len(parts), 1)
             self.assertNotIn(b"tableStyleInfo", archive.read(parts[0]))
         with Workbook.load(data) as reloaded:
-            self.assertFalse([reloaded.get_table(i) for i in range(reloaded.get_table_count())][0].has_style_info)
+            self.assertIsNone(reloaded.list_tables()[0].style_name)
 
     def test_table_create_rejects_a_column_count_that_does_not_match_ref(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.add_table(0, CellRect(0, 0, 2, 1), "Table1", "Table1", ["OnlyOne"])
+                wb.add_table(
+                    range=SheetRect(0, CellRect(0, 0, 2, 1)), name="Table1", display_name="Table1", columns=["OnlyOne"]
+                )
 
     def test_auto_filter_xml_round_trips(self) -> None:
         fragment = '<autoFilter ref="A1:B3"/>'
         with Workbook.create_default() as wb:
-            self.assertEqual(wb.get_auto_filter_xml(0), "")
-            wb.set_auto_filter_xml(0, fragment)
-            self.assertEqual(wb.get_auto_filter_xml(0), fragment)
-            wb.set_auto_filter_xml(0, "")
-            self.assertEqual(wb.get_auto_filter_xml(0), "")
+            self.assertIsNone(wb.sheet(0).get_auto_filter_xml())
+            wb.sheet(0).set_auto_filter_xml(fragment)
+            self.assertEqual(wb.sheet(0).get_auto_filter_xml(), fragment)
+            wb.sheet(0).set_auto_filter_xml("")
+            self.assertIsNone(wb.sheet(0).get_auto_filter_xml())
 
     def test_named_cell_style_registration_reaches_the_reader(self) -> None:
         with Workbook.create_default() as wb:
@@ -885,11 +912,10 @@ class PivotFilterPersistenceTests(unittest.TestCase):
             rec = wb.add_pivot_cache_record(cache_id)
             wb.set_pivot_cache_record_text(cache_id, rec, 0, region)
             wb.set_pivot_cache_record_number(cache_id, rec, 1, amount)
-        pivot = wb.add_pivot(0, "Pivot1", cache_id, 0, 4)
-        wb.add_pivot_field(0, pivot, PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
-        amount_field = wb.add_pivot_field(0, pivot, PivotFieldInput(source_name="Amount", axis=PivotAxis.VALUE))
-        wb.add_pivot_data_field(
-            0,
+        pivot = wb.sheet(0).add_pivot("Pivot1", cache_id, 0, 4)
+        wb.sheet(0).add_pivot_field(pivot, PivotFieldInput(source_name="Region", axis=PivotAxis.ROW))
+        amount_field = wb.sheet(0).add_pivot_field(pivot, PivotFieldInput(source_name="Amount", axis=PivotAxis.VALUE))
+        wb.sheet(0).add_pivot_data_field(
             pivot,
             PivotDataFieldInput(name="Sum of Amount", field_index=amount_field, aggregation=PivotAggregation.SUM),
         )
@@ -908,9 +934,9 @@ class PivotFilterPersistenceTests(unittest.TestCase):
     def test_added_filter_reads_back_field_for_field(self) -> None:
         wb, pivot = self._workbook_with_pivot()
         try:
-            wb.add_pivot_filter(0, pivot, self._filter())
-            self.assertEqual(wb.get_pivot_filter_count(0, pivot), 1)
-            got = wb.get_pivot_filter(0, pivot, 0)
+            wb.sheet(0).add_pivot_filter(pivot, self._filter())
+            self.assertEqual(len(wb.sheet(0).list_pivot_filters(pivot)), 1)
+            got = wb.sheet(0).list_pivot_filters(pivot)[0]
         finally:
             wb.close()
         self.assertEqual(got.axis, PivotAxis.ROW)
@@ -922,9 +948,9 @@ class PivotFilterPersistenceTests(unittest.TestCase):
     def test_count_reports_the_filters_on_the_pivot(self) -> None:
         wb, pivot = self._workbook_with_pivot()
         try:
-            self.assertEqual(wb.get_pivot_filter_count(0, pivot), 0)
-            wb.add_pivot_filter(0, pivot, self._filter())
-            self.assertEqual(wb.get_pivot_filter_count(0, pivot), 1)
+            self.assertEqual(len(wb.sheet(0).list_pivot_filters(pivot)), 0)
+            wb.sheet(0).add_pivot_filter(pivot, self._filter())
+            self.assertEqual(len(wb.sheet(0).list_pivot_filters(pivot)), 1)
         finally:
             wb.close()
 
@@ -932,23 +958,23 @@ class PivotFilterPersistenceTests(unittest.TestCase):
         """The list is written by save() and decodes back on load."""
         wb, pivot = self._workbook_with_pivot()
         try:
-            wb.add_pivot_filter(0, pivot, self._filter())
-            self.assertEqual(wb.get_pivot_filter_count(0, pivot), 1)
+            wb.sheet(0).add_pivot_filter(pivot, self._filter())
+            self.assertEqual(len(wb.sheet(0).list_pivot_filters(pivot)), 1)
             data = wb.save()
         finally:
             wb.close()
         with Workbook.load(data) as reloaded:
-            self.assertEqual(reloaded.get_pivot_count(0), 1)
-            self.assertEqual(reloaded.get_pivot_filter_count(0, 0), 1)
-            got = reloaded.get_pivot_filter(0, 0, 0)
+            self.assertEqual(reloaded.sheet(0).get_pivot_count(), 1)
+            self.assertEqual(len(reloaded.sheet(0).list_pivot_filters(0)), 1)
+            got = reloaded.sheet(0).list_pivot_filters(0)[0]
             self.assertEqual((got.field_name, got.type), ("Region", PivotFilterType.VALUE_GREATER_THAN))
             self.assertEqual((got.value_kind, got.value_double), (PivotFilterValueKind.DOUBLE, 15.0))
 
     def test_out_of_range_index_is_rejected(self) -> None:
         wb, pivot = self._workbook_with_pivot()
         try:
-            with self.assertRaises(FormulonError):
-                wb.get_pivot_filter(0, pivot, 99)
+            with self.assertRaises(IndexError):
+                wb.sheet(0).list_pivot_filters(pivot)[99]
         finally:
             wb.close()
 
@@ -959,26 +985,26 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
     def test_definition_survives_save_and_load(self) -> None:
         wb, pivot = PivotFilterPersistenceTests._workbook_with_pivot()
         try:
-            wb.set_pivot_grand_totals(0, pivot, True, False)
-            cache_id = wb.get_pivot_cache_id(0, pivot)
+            wb.sheet(0).set_pivot_grand_totals(pivot, rows=True, columns=False)
+            cache_id = wb.sheet(0).get_pivot_cache_id(pivot)
             data = wb.save()
         finally:
             wb.close()
         with Workbook.load(data) as reloaded:
-            self.assertEqual(reloaded.get_pivot_cache_id(0, 0), cache_id)
-            self.assertEqual(reloaded.get_pivot_name(0, 0), "Pivot1")
-            self.assertEqual(reloaded.get_pivot_grand_totals(0, 0), PivotGrandTotals(rows=True, columns=False))
-            self.assertEqual(reloaded.get_pivot_row_field_order(0, 0), [0])
-            self.assertEqual(reloaded.get_pivot_field(0, 0, 0).axis, PivotAxis.ROW)
-            self.assertEqual(reloaded.get_pivot_data_field(0, 0, 0).name, "Sum of Amount")
+            self.assertEqual(reloaded.sheet(0).get_pivot_cache_id(0), cache_id)
+            self.assertEqual(reloaded.sheet(0).get_pivot_name(0), "Pivot1")
+            self.assertEqual(reloaded.sheet(0).get_pivot_grand_totals(0), PivotGrandTotals(rows=True, columns=False))
+            self.assertEqual(reloaded.sheet(0).get_pivot_row_field_order(0), [0])
+            self.assertEqual(reloaded.sheet(0).list_pivot_fields(0)[0].axis, PivotAxis.ROW)
+            self.assertEqual(reloaded.sheet(0).list_pivot_data_fields(0)[0].name, "Sum of Amount")
 
     def test_out_of_range_index_is_rejected(self) -> None:
         wb, pivot = PivotFilterPersistenceTests._workbook_with_pivot()
         try:
-            with self.assertRaises(FormulonError):
-                wb.get_pivot_field(0, pivot, 99)
-            with self.assertRaises(FormulonError):
-                wb.get_pivot_data_field(0, pivot, 99)
+            with self.assertRaises(IndexError):
+                wb.sheet(0).list_pivot_fields(pivot)[99]
+            with self.assertRaises(IndexError):
+                wb.sheet(0).list_pivot_data_fields(pivot)[99]
         finally:
             wb.close()
 
@@ -988,113 +1014,116 @@ class WorkbookViewAndPhoneticFlagTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.add_sheet("B")
             wb.add_sheet("C")
-            self.assertEqual(wb.get_active_sheet(), 0)
+            self.assertEqual(wb.get_active_sheet().index, 0)
             wb.set_active_sheet(2)
-            self.assertEqual(wb.get_active_sheet(), 2)
+            self.assertEqual(wb.get_active_sheet().index, 2)
             with self.assertRaises(FormulonError):
                 wb.set_active_sheet(9)
-            self.assertEqual(wb.get_active_sheet(), 2)
+            self.assertEqual(wb.get_active_sheet().index, 2)
             data = wb.save()
         with Workbook.load(data) as reloaded:
-            self.assertEqual(reloaded.get_active_sheet(), 2)
+            self.assertEqual(reloaded.get_active_sheet().index, 2)
             reloaded.move_sheet(2, 0)
-            self.assertEqual(reloaded.get_active_sheet(), 0)
+            self.assertEqual(reloaded.get_active_sheet().index, 0)
 
     def test_show_phonetic_survives_value_writes_and_a_round_trip(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertFalse(wb.get_cell_show_phonetic(0, 0, 0))
-            wb.set_text(0, 0, 0, "漢字")
-            wb.set_cell_show_phonetic(0, 0, 0, True)
-            wb.set_text(0, 0, 0, "漢字")
-            self.assertTrue(wb.get_cell_show_phonetic(0, 0, 0))
+            self.assertFalse(wb.sheet(0).get_cell_show_phonetic(0, 0))
+            wb.sheet(0).set_text(0, 0, "漢字")
+            wb.sheet(0).set_cell_show_phonetic(0, 0, True)
+            wb.sheet(0).set_text(0, 0, "漢字")
+            self.assertTrue(wb.sheet(0).get_cell_show_phonetic(0, 0))
             with self.assertRaises(FormulonError):
-                wb.set_cell_show_phonetic(9, 0, 0, True)
+                wb.sheet(9).set_cell_show_phonetic(0, 0, True)
             data = wb.save()
         with Workbook.load(data) as reloaded:
-            self.assertTrue(reloaded.get_cell_show_phonetic(0, 0, 0))
-            reloaded.set_cell_show_phonetic(0, 0, 0, False)
-            self.assertFalse(reloaded.get_cell_show_phonetic(0, 0, 0))
+            self.assertTrue(reloaded.sheet(0).get_cell_show_phonetic(0, 0))
+            reloaded.sheet(0).set_cell_show_phonetic(0, 0, False)
+            self.assertFalse(reloaded.sheet(0).get_cell_show_phonetic(0, 0))
 
     def test_explicit_all_zero_phonetic_pr_is_present_and_round_trips(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "漢字")
-            wb.set_cell_phonetic_runs(0, 0, 0, [PhoneticRun(0, 2, "かんじ")])
-            self.assertFalse(wb.has_cell_phonetic_properties(0, 0, 0))
-            wb.set_cell_phonetic_properties(0, 0, 0, PhoneticPropertiesInput(0, 0, 0))
-            self.assertTrue(wb.has_cell_phonetic_properties(0, 0, 0))
+            wb.sheet(0).set_text(0, 0, "漢字")
+            wb.sheet(0).set_cell_phonetic_runs(0, 0, [PhoneticRun(0, 2, "かんじ")])
+            self.assertFalse(wb.sheet(0).has_cell_phonetic_properties(0, 0))
+            wb.sheet(0).set_cell_phonetic_properties(0, 0, PhoneticPropertiesInput(0, 0, 0))
+            self.assertTrue(wb.sheet(0).has_cell_phonetic_properties(0, 0))
             data = wb.save()
         with Workbook.load(data) as reloaded:
-            self.assertTrue(reloaded.has_cell_phonetic_properties(0, 0, 0))
-            self.assertEqual(reloaded.get_cell_phonetic_properties(0, 0, 0), PhoneticProperties(0, 0, 0))
+            self.assertTrue(reloaded.sheet(0).has_cell_phonetic_properties(0, 0))
+            self.assertEqual(reloaded.sheet(0).get_cell_phonetic_properties(0, 0), PhoneticProperties(0, 0, 0))
             with self.assertRaises(FormulonError):
-                reloaded.has_cell_phonetic_properties(9, 0, 0)
+                reloaded.sheet(9).has_cell_phonetic_properties(0, 0)
 
 
 class SheetViewOriginAndSelectionTests(unittest.TestCase):
     def test_scroll_origin_pane_origin_and_selection_round_trip(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_freeze(0, 2, 1)
-            view = wb.get_view(0)
+            wb.sheet(0).set_freeze(2, 1)
+            view = wb.sheet(0).get_view()
             self.assertEqual((view.pane_top_left_row, view.pane_top_left_col), (2, 1))
-            wb.set_top_left(0, 5, 0)
-            wb.set_pane_top_left(0, 40, 6)
+            wb.sheet(0).set_top_left(5, 0)
+            wb.sheet(0).set_pane_top_left(40, 6)
             with self.assertRaises(FormulonError):
-                wb.set_pane_top_left(0, 1, 6)
+                wb.sheet(0).set_pane_top_left(1, 6)
             ranges = [CellRect(41, 7, 43, 8), CellRect(50, 9, 50, 9)]
-            wb.set_selection(0, 41, 7, ranges)
+            wb.sheet(0).set_selection(SheetSelection(41, 7, list(ranges)))
             with self.assertRaises(FormulonError):
-                wb.set_selection(0, 0, 0, [CellRect(3, 0, 1, 0)])
+                wb.sheet(0).set_selection(SheetSelection(0, 0, list([CellRect(3, 0, 1, 0)])))
             data = wb.save()
         with Workbook.load(data) as reloaded:
-            view = reloaded.get_view(0)
+            view = reloaded.sheet(0).get_view()
             self.assertEqual(
                 (view.top_left_row, view.top_left_col, view.pane_top_left_row, view.pane_top_left_col),
                 (5, 0, 40, 6),
             )
-            self.assertEqual(reloaded.get_selection(0), SheetSelection(active_row=41, active_col=7, ranges=ranges))
+            self.assertEqual(
+                reloaded.sheet(0).get_selection(), SheetSelection(active_row=41, active_col=7, ranges=ranges)
+            )
 
     def test_split_reads_back_round_trips_and_exchanges_with_freeze(self) -> None:
         with Workbook.create_default() as wb:
-            view = wb.get_view(0)
+            view = wb.sheet(0).get_view()
             self.assertEqual((view.split_x, view.split_y), (0.0, 0.0))
-            wb.set_split(0, 2000, 1500)
-            view = wb.get_view(0)
+            wb.sheet(0).set_split(2000, 1500)
+            view = wb.sheet(0).get_view()
             self.assertEqual((view.split_x, view.split_y, view.freeze_rows, view.freeze_cols), (2000.0, 1500.0, 0, 0))
             data = wb.save()
-            wb.set_freeze(0, 2, 1)
-            view = wb.get_view(0)
+            wb.sheet(0).set_freeze(2, 1)
+            view = wb.sheet(0).get_view()
             self.assertEqual((view.split_x, view.split_y), (0.0, 0.0))
-            wb.set_split(0, 0, 900)
-            view = wb.get_view(0)
+            wb.sheet(0).set_split(0, 900)
+            view = wb.sheet(0).get_view()
             self.assertEqual((view.split_y, view.freeze_rows, view.freeze_cols), (900.0, 0, 0))
             for bad in ((-1, 0), (0, float("nan")), (float("inf"), 0)):
                 with self.assertRaises(FormulonError):
-                    wb.set_split(0, *bad)
-            self.assertEqual(wb.get_view(0).split_y, 900.0)
-            wb.set_split(0, 0, 0)
-            self.assertEqual(wb.get_view(0).split_y, 0.0)
+                    wb.sheet(0).set_split(*bad)
+            self.assertEqual(wb.sheet(0).get_view().split_y, 900.0)
+            wb.sheet(0).set_split(0, 0)
+            self.assertEqual(wb.sheet(0).get_view().split_y, 0.0)
         with Workbook.load(data) as reloaded:
-            view = reloaded.get_view(0)
+            view = reloaded.sheet(0).get_view()
             self.assertEqual((view.split_x, view.split_y, view.freeze_rows, view.freeze_cols), (2000.0, 1500.0, 0, 0))
 
     def test_unset_selection_reads_as_a1(self) -> None:
         with Workbook.create_default() as wb:
             self.assertEqual(
-                wb.get_selection(0), SheetSelection(active_row=0, active_col=0, ranges=[CellRect(0, 0, 0, 0)])
+                wb.sheet(0).get_selection(), SheetSelection(active_row=0, active_col=0, ranges=[CellRect(0, 0, 0, 0)])
             )
             with self.assertRaises(FormulonError):
-                wb.get_selection(9)
+                wb.sheet(9).get_selection()
 
     def test_selection_without_ranges_is_the_active_cell(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_selection(0, 4, 2)
+            wb.sheet(0).set_selection(SheetSelection(4, 2))
             self.assertEqual(
-                wb.get_selection(0), SheetSelection(active_row=4, active_col=2, ranges=[CellRect(4, 2, 4, 2)])
+                wb.sheet(0).get_selection(), SheetSelection(active_row=4, active_col=2, ranges=[CellRect(4, 2, 4, 2)])
             )
             data = wb.save()
         with Workbook.load(data) as reloaded:
             self.assertEqual(
-                reloaded.get_selection(0), SheetSelection(active_row=4, active_col=2, ranges=[CellRect(4, 2, 4, 2)])
+                reloaded.sheet(0).get_selection(),
+                SheetSelection(active_row=4, active_col=2, ranges=[CellRect(4, 2, 4, 2)]),
             )
 
 
@@ -1137,50 +1166,49 @@ class CollectionReaderAllocationTests(unittest.TestCase):
 
     def test_get_merges_allocation_count_is_flat(self) -> None:
         self._assert_flat_in_item_count(
-            lambda wb, n: [wb.add_merge(0, CellRect(r, 4, r, 6)) for r in range(n)],
-            lambda wb: wb.list_merges(0),
+            lambda wb, n: [wb.sheet(0).add_merge(CellRect(r, 4, r, 6)) for r in range(n)],
+            lambda wb: wb.sheet(0).list_merges(),
         )
 
     def test_get_hyperlinks_allocation_count_is_flat(self) -> None:
         self._assert_flat_in_item_count(
-            lambda wb, n: [wb.add_hyperlink(0, r, 8, "https://example.com/") for r in range(n)],
-            lambda wb: wb.list_hyperlinks(0),
+            lambda wb, n: [wb.sheet(0).add_hyperlink(r, 8, target="https://example.com/") for r in range(n)],
+            lambda wb: wb.sheet(0).list_hyperlinks(),
         )
 
     def test_get_comments_allocation_count_is_flat(self) -> None:
         self._assert_flat_in_item_count(
-            lambda wb, n: [wb.set_comment(0, r, 10, "author", "text") for r in range(n)],
-            lambda wb: wb.list_comments(0),
+            lambda wb, n: [wb.sheet(0).set_comment(r, 10, Comment("author", "text")) for r in range(n)],
+            lambda wb: wb.sheet(0).list_comments(),
         )
 
     def test_list_defined_names_allocation_count_is_flat(self) -> None:
         self._assert_flat_in_item_count(
-            lambda wb, n: [wb.set_defined_name(f"Name{r}", "=1") for r in range(n)],
+            lambda wb, n: [wb.set_defined_name(DefinedNameInput(f"Name{r}", "=1")) for r in range(n)],
             lambda wb: wb.list_defined_names(),
         )
 
     def test_get_sheet_row_overrides_allocation_count_is_flat(self) -> None:
         self._assert_flat_in_item_count(
-            lambda wb, n: [wb.set_row_height(0, r, r, 15.0) for r in range(n)],
-            lambda wb: wb.list_row_overrides(0),
+            lambda wb, n: [wb.sheet(0).set_row_height(r, r, 15.0) for r in range(n)],
+            lambda wb: wb.sheet(0).list_row_overrides(),
         )
 
     def test_precedents_allocation_count_is_flat(self) -> None:
         def populate(wb, n):
             for r in range(n):
-                wb.set_number(0, r + 1, 1, float(r))
-            wb.set_formula(0, 0, 0, f"=SUM(B2:B{n + 1})")
+                wb.sheet(0).set_number(r + 1, 1, float(r))
+            wb.sheet(0).set_formula(0, 0, f"=SUM(B2:B{n + 1})")
             wb.recalc()
 
-        self._assert_flat_in_item_count(populate, lambda wb: wb.get_precedents(0, 0, 0))
+        self._assert_flat_in_item_count(populate, lambda wb: wb.sheet(0).get_precedents(0, 0))
 
     def test_evaluate_cf_range_allocation_count_is_flat(self) -> None:
         def populate(wb, n):
             dxf_index = wb.add_dxf(DifferentialFormat())
             for r in range(n):
-                wb.set_number(0, r, 0, float(r + 100))
-            wb.add_cf_rule(
-                0,
+                wb.sheet(0).set_number(r, 0, float(r + 100))
+            wb.sheet(0).add_cf_rule(
                 ConditionalFormatInput(
                     ranges=[CellRect(0, 0, n - 1, 0)],
                     type=1,
@@ -1191,7 +1219,7 @@ class CollectionReaderAllocationTests(unittest.TestCase):
             )
             wb.recalc()
 
-        self._assert_flat_in_item_count(populate, lambda wb: wb.evaluate_cf_range(0, CellRect(0, 0, 39, 0)))
+        self._assert_flat_in_item_count(populate, lambda wb: wb.sheet(0).evaluate_cf_range(CellRect(0, 0, 39, 0)))
 
 
 class AbiScratchBlockTests(unittest.TestCase):
@@ -1227,7 +1255,7 @@ class AbiScratchBlockTests(unittest.TestCase):
     def test_value_out_param_stays_within_the_wrappers_block(self) -> None:
         size = _c.fm_value_t_size
         with Workbook.create_default() as wb:
-            wb.set_number(0, 0, 0, 6.25)
+            wb.sheet(0).set_number(0, 0, 6.25)
             wb.recalc()
             ptr = self._guarded_block(size)
             try:
@@ -1246,7 +1274,7 @@ class AbiScratchBlockTests(unittest.TestCase):
     def test_print_range_out_param_stays_within_the_wrappers_block(self) -> None:
         size = 16  # fm_cell_rect_t: four uint32_t, as Workbook.paginate reads it
         with Workbook.create_default() as wb:
-            wb.set_defined_name_scoped("_xlnm.Print_Area", "Sheet1!$A$1:$C$5", 0)
+            wb.set_defined_name(DefinedNameInput("_xlnm.Print_Area", "Sheet1!$A$1:$C$5", 0))
             out = _c.LIB.alloc(4)
             try:
                 self.assertEqual(_c.LIB.fm_sheet_get_pagination(wb._require(), 0, out), 0)
@@ -1276,22 +1304,23 @@ class CellMutatorDocstringTests(unittest.TestCase):
     def test_cell_mutators_document_zero_based_coordinates(self) -> None:
         for name in ("set_number", "set_bool", "set_error", "set_text", "set_blank", "set_formula"):
             with self.subTest(method=name):
-                doc = inspect.getdoc(getattr(Workbook, name))
+                doc = inspect.getdoc(getattr(Sheet, name))
                 self.assertTrue(doc, f"{name} has no docstring")
                 self.assertIn("0-based", doc)
 
     def test_set_error_documents_the_error_code_ordinal(self) -> None:
-        doc = inspect.getdoc(Workbook.set_error)
+        doc = inspect.getdoc(Sheet.set_error)
         self.assertIn("ErrorCode", doc)
         self.assertIn("Value.error_code", doc)
 
-    def test_every_public_workbook_method_has_a_docstring(self) -> None:
-        undocumented = [
-            name
-            for name, member in inspect.getmembers(Workbook, callable)
-            if not name.startswith("_") and not (inspect.getdoc(member) or "").strip()
-        ]
-        self.assertEqual(undocumented, [])
+    def test_every_public_method_has_a_docstring(self) -> None:
+        for cls in (Workbook, Sheet):
+            undocumented = [
+                name
+                for name, member in inspect.getmembers(cls, callable)
+                if not name.startswith("_") and not (inspect.getdoc(member) or "").strip()
+            ]
+            self.assertEqual(undocumented, [], cls.__name__)
 
 
 class EvaluateCfRangeDefaultTests(unittest.TestCase):
@@ -1299,9 +1328,8 @@ class EvaluateCfRangeDefaultTests(unittest.TestCase):
         """Omitting ``today_serial`` must not pin the basis to 1899-12-30."""
         with Workbook.create_default() as wb:
             dxf_index = wb.add_dxf(DifferentialFormat())
-            wb.set_number(0, 0, 0, 0.0)
-            wb.add_cf_rule(
-                0,
+            wb.sheet(0).set_number(0, 0, 0.0)
+            wb.sheet(0).add_cf_rule(
                 ConditionalFormatInput(
                     ranges=[CellRect(0, 0, 0, 0)],
                     type=15,
@@ -1310,9 +1338,9 @@ class EvaluateCfRangeDefaultTests(unittest.TestCase):
                 ),
             )
             wb.recalc()
-            omitted = wb.evaluate_cf_range(0, CellRect(0, 0, 0, 0))
-            explicit_nan = wb.evaluate_cf_range(0, CellRect(0, 0, 0, 0), float("nan"))
-            zero_basis = wb.evaluate_cf_range(0, CellRect(0, 0, 0, 0), 0.0)
+            omitted = wb.sheet(0).evaluate_cf_range(CellRect(0, 0, 0, 0))
+            explicit_nan = wb.sheet(0).evaluate_cf_range(CellRect(0, 0, 0, 0), float("nan"))
+            zero_basis = wb.sheet(0).evaluate_cf_range(CellRect(0, 0, 0, 0), 0.0)
         self.assertEqual([c for c in omitted if c.matches], [])
         self.assertEqual(len(omitted), len(explicit_nan))
         self.assertEqual(len([c for c in zero_basis if c.matches]), 1)
@@ -1379,10 +1407,10 @@ class ArgumentScopeTests(unittest.TestCase):
         bad_spec = PivotDataFieldInput(name="Sum", field_index=-1)
         with Workbook.create_default() as wb:
             for name, call in (
-                ("set_cell_phonetic_runs", lambda: wb.set_cell_phonetic_runs(0, 0, 0, runs)),
-                ("set_selection", lambda: wb.set_selection(0, 0, 0, ranges)),
-                ("add_pivot_data_field", lambda: wb.add_pivot_data_field(0, 0, bad_spec)),
-                ("set_pivot_data_field", lambda: wb.set_pivot_data_field(0, 0, 0, bad_spec)),
+                ("set_cell_phonetic_runs", lambda: wb.sheet(0).set_cell_phonetic_runs(0, 0, runs)),
+                ("set_selection", lambda: wb.sheet(0).set_selection(SheetSelection(0, 0, list(ranges)))),
+                ("add_pivot_data_field", lambda: wb.sheet(0).add_pivot_data_field(0, bad_spec)),
+                ("set_pivot_data_field", lambda: wb.sheet(0).set_pivot_data_field(0, 0, bad_spec)),
             ):
                 with self.subTest(method=name):
                     self.assertGreater(self._assert_rejected_without_leak(call), 0)
@@ -1391,11 +1419,11 @@ class ArgumentScopeTests(unittest.TestCase):
         ranges = [CellRect(0, 0, 0, 0)] * 20000 + [CellRect(-1, 0, 0, 0)]
         with Workbook.create_default() as wb:
             with self.assertRaises(ValueError):
-                wb.set_selection(0, 0, 0, ranges)
+                wb.sheet(0).set_selection(SheetSelection(0, 0, list(ranges)))
             before = _c.LIB.memory.data_len(_c.LIB.store)
             for _ in range(20):
                 with self.assertRaises(ValueError):
-                    wb.set_selection(0, 0, 0, ranges)
+                    wb.sheet(0).set_selection(SheetSelection(0, 0, list(ranges)))
             self.assertEqual(_c.LIB.memory.data_len(_c.LIB.store), before)
 
     def test_a_value_of_the_wrong_type_is_rejected_before_any_allocation(self) -> None:
@@ -1408,21 +1436,21 @@ class LoneSurrogateTests(unittest.TestCase):
     """A lone surrogate is stored as U+FFFD, as the JavaScript bindings store it."""
 
     def _assert_normalised(self, wb: Workbook) -> None:
-        self.assertEqual(wb.get_value(0, 0, 0).text, "a\ufffdb")
-        self.assertEqual(wb.get_value(0, 2, 0).text, "\U0001f600")
-        self.assertEqual(wb.get_sheet_name(0), "S\ufffd")
-        self.assertEqual(wb.get_formula(0, 1, 0), '="x\ufffd"')
+        self.assertEqual(wb.sheet(0).get_value(0, 0).text, "a\ufffdb")
+        self.assertEqual(wb.sheet(0).get_value(2, 0).text, "\U0001f600")
+        self.assertEqual(wb.sheet(0).name, "S\ufffd")
+        self.assertEqual(wb.sheet(0).get_formula(1, 0), '="x\ufffd"')
         formula = next(n.formula for n in wb.list_defined_names() if n.name == "Lone")
         self.assertIn("y\ufffd", formula)
 
     def test_text_names_and_formulas_store_the_replacement_character(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "a\ud800b")
+            wb.sheet(0).set_text(0, 0, "a\ud800b")
             # A surrogate pair is one code point, not two replacements.
-            wb.set_text(0, 2, 0, "\ud83d\ude00")
+            wb.sheet(0).set_text(2, 0, "\ud83d\ude00")
             wb.rename_sheet(0, "S\udc00")
-            wb.set_formula(0, 1, 0, '="x\ud800"')
-            wb.set_defined_name("Lone", '="y\udfff"')
+            wb.sheet(0).set_formula(1, 0, '="x\ud800"')
+            wb.set_defined_name(DefinedNameInput("Lone", '="y\udfff"'))
             self._assert_normalised(wb)
             data = wb.save()
         with Workbook.load(data) as reloaded:
@@ -1470,17 +1498,19 @@ class PackedIntegerGuardTests(unittest.TestCase):
     def test_shape_emu_offsets(self) -> None:
         with Workbook.create_default() as wb:
             for bad, exception in ((1.9, ValueError), ("5", TypeError), (2**63, ValueError)):
-                with self.subTest(from_col_offset=bad):
+                with self.subTest(from_col_offset_emu=bad):
                     with self.assertRaises(exception):
-                        wb.add_shape(0, anchor_kind=AnchorKind.TWO_CELL, to_row=5, to_col=4, from_col_offset=bad)
-            self.assertEqual(wb.list_shapes(0), [])
+                        wb.sheet(0).add_shape(
+                            anchor_kind=AnchorKind.TWO_CELL, to_row=5, to_col=4, from_col_offset_emu=bad
+                        )
+            self.assertEqual(wb.sheet(0).list_shapes(), [])
 
     def test_pivot_field_order_indices(self) -> None:
         with Workbook.create_default() as wb:
             for indices in ([1.7], [-1], ["1"]):
                 with self.subTest(indices=indices):
                     with self.assertRaises((TypeError, ValueError)):
-                        wb.set_pivot_row_field_order(0, 0, indices)
+                        wb.sheet(0).set_pivot_row_field_order(0, indices)
 
     def test_data_bar_length_percentages(self) -> None:
         with Workbook.create_default() as wb:
@@ -1492,8 +1522,8 @@ class PackedIntegerGuardTests(unittest.TestCase):
                         data_bar=DataBar(Cfvo(3), Cfvo(4), CfColor(0, 0, 255), min_length_pct=bad),
                     )
                     with self.assertRaises(ValueError):
-                        wb.add_cf_rule(0, rule)
-            self.assertEqual(wb.get_cf_rule_count(0), 0)
+                        wb.sheet(0).add_cf_rule(rule)
+            self.assertEqual(len(wb.sheet(0).list_cf_rules()), 0)
 
 
 if __name__ == "__main__":

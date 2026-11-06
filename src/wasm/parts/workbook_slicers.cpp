@@ -26,19 +26,19 @@ emscripten::val slicer_to_val(const fm_slicer_t& s) {
   o.set("anchorKind", s.anchor_kind);
   o.set("fromRow", s.from_row);
   o.set("fromCol", s.from_col);
-  o.set("fromRowOffset", static_cast<double>(s.from_row_offset));
-  o.set("fromColOffset", static_cast<double>(s.from_col_offset));
+  o.set("fromRowOffsetEmu", static_cast<double>(s.from_row_offset_emu));
+  o.set("fromColOffsetEmu", static_cast<double>(s.from_col_offset_emu));
   o.set("toRow", s.to_row);
   o.set("toCol", s.to_col);
-  o.set("toRowOffset", static_cast<double>(s.to_row_offset));
-  o.set("toColOffset", static_cast<double>(s.to_col_offset));
-  o.set("rowHeight", static_cast<double>(s.row_height));
+  o.set("toRowOffsetEmu", static_cast<double>(s.to_row_offset_emu));
+  o.set("toColOffsetEmu", static_cast<double>(s.to_col_offset_emu));
+  o.set("rowHeightEmu", static_cast<double>(s.row_height_emu));
   js_set_cstr_fields(o, {{"name", s.name},
                          {"caption", s.caption},
                          {"cacheName", s.cache_name},
                          {"tableName", s.table_name},
-                         {"columnName", s.column_name},
-                         {"style", s.style}});
+                         {"columnName", s.column_name}});
+  js_set_cstr_or_null(o, "style", s.style);
   return o;
 }
 
@@ -60,28 +60,30 @@ fm_slicer_t pull_slicer(JsNarrowNumericReader& reader, const emscripten::val& sp
     s.fields |= FM_SLICER_FIELD_CAPTION;
     s.caption = reader.optional_string(spec, "caption", store.caption, "slicer.caption");
   }
-  if (has("style")) {
+  // `null` removes the style, as the empty string does.
+  const emscripten::val style = reader.value(spec, "style", "style");
+  if (reader.ok() && !style.isUndefined()) {
     s.fields |= FM_SLICER_FIELD_STYLE;
-    s.style = reader.optional_string(spec, "style", store.style, "slicer.style");
+    s.style = style.isNull() ? "" : reader.optional_string_value(style, store.style, "slicer.style");
   }
   if (has("columnCount")) {
     s.fields |= FM_SLICER_FIELD_COLUMN_COUNT;
     s.column_count = reader.u32(spec, "columnCount", 1U, "slicer.columnCount");
   }
-  if (has("rowHeight")) {
+  if (has("rowHeightEmu")) {
     s.fields |= FM_SLICER_FIELD_ROW_HEIGHT;
-    s.row_height = reader.i64(spec, "rowHeight", 0, "slicer.rowHeight");
+    s.row_height_emu = reader.i64(spec, "rowHeightEmu", 0, "slicer.rowHeightEmu");
   }
   if (has("fromRow")) {
     s.fields |= FM_SLICER_FIELD_ANCHOR;
     s.from_row = reader.u32(spec, "fromRow", 0U, "slicer.fromRow");
     s.from_col = reader.u32(spec, "fromCol", 0U, "slicer.fromCol");
-    s.from_row_offset = reader.i64(spec, "fromRowOffset", 0, "slicer.fromRowOffset");
-    s.from_col_offset = reader.i64(spec, "fromColOffset", 0, "slicer.fromColOffset");
+    s.from_row_offset_emu = reader.i64(spec, "fromRowOffsetEmu", 0, "slicer.fromRowOffsetEmu");
+    s.from_col_offset_emu = reader.i64(spec, "fromColOffsetEmu", 0, "slicer.fromColOffsetEmu");
     s.to_row = reader.u32(spec, "toRow", 0U, "slicer.toRow");
     s.to_col = reader.u32(spec, "toCol", 0U, "slicer.toCol");
-    s.to_row_offset = reader.i64(spec, "toRowOffset", 0, "slicer.toRowOffset");
-    s.to_col_offset = reader.i64(spec, "toColOffset", 0, "slicer.toColOffset");
+    s.to_row_offset_emu = reader.i64(spec, "toRowOffsetEmu", 0, "slicer.toRowOffsetEmu");
+    s.to_col_offset_emu = reader.i64(spec, "toColOffsetEmu", 0, "slicer.toColOffsetEmu");
   }
   if (has("sortOrder")) {
     s.fields |= FM_SLICER_FIELD_SORT_ORDER;

@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import datetime
 import subprocess
 import unittest
 from pathlib import Path
 
 from formulon import (
+    ArrayFormula,
     CalcMode,
     CellRect,
-    CivilTime,
+    DefinedNameInput,
     FormulonError,
+    InvalidArgumentError,
     ValueKind,
     Workbook,
     _c,
@@ -62,7 +65,7 @@ class StructLayoutTests(unittest.TestCase):
         "FUNCTION_METADATA": 24,
         "LOCALE_FACTS": 56,
         "CIVIL_TIME": 24,
-        "SHEET_VIEW": 88,
+        "SHEET_VIEW": 80,
         "COLUMN_LAYOUT": 40,
         "ROW_LAYOUT": 40,
         "CELL_XF": 128,
@@ -147,6 +150,9 @@ class StructLayoutTests(unittest.TestCase):
         "CHART_LEGEND_PATCH": 20,
         "CHART_DISPLAY_PATCH": 24,
         "REFERENCE": 28,
+        "ITERATIVE_SETTINGS_PATCH": 16,
+        "DEFINED_NAME_INPUT": 20,
+        "DEFINED_NAME": 20,
     }
 
     def test_struct_sizes(self) -> None:
@@ -207,7 +213,7 @@ class StructLayoutTests(unittest.TestCase):
 class AdHocArrayEvalTests(unittest.TestCase):
     def test_sequence_matrix_preserves_all_cells(self) -> None:
         with Workbook.create_default() as wb:
-            grid = wb.evaluate_formula_array(0, 0, 0, "=SEQUENCE(2,3)")
+            grid = wb.sheet(0).evaluate_formula_array(0, 0, "=SEQUENCE(2,3)")
             self.assertEqual(len(grid), 2)
             self.assertEqual(len(grid[0]), 3)
             # Row-major 1..6.
@@ -216,7 +222,7 @@ class AdHocArrayEvalTests(unittest.TestCase):
 
     def test_scalar_reported_as_one_by_one(self) -> None:
         with Workbook.create_default() as wb:
-            grid = wb.evaluate_formula_array(0, 0, 0, "=1+2")
+            grid = wb.sheet(0).evaluate_formula_array(0, 0, "=1+2")
             self.assertEqual(len(grid), 1)
             self.assertEqual(len(grid[0]), 1)
             self.assertEqual(grid[0][0].kind, ValueKind.NUMBER)
@@ -226,32 +232,34 @@ class AdHocArrayEvalTests(unittest.TestCase):
 class DefinedNameTests(unittest.TestCase):
     def test_defined_name_set_get_remove(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_defined_name("MyRef", "Sheet1!$A$1")
+            wb.set_defined_name(DefinedNameInput("MyRef", "Sheet1!$A$1"))
             names = {dn.name: dn.formula for dn in wb.list_defined_names()}
             self.assertIn("MyRef", names)
             self.assertEqual(names["MyRef"], "Sheet1!$A$1")
 
             # Updating in place replaces the formula text.
-            wb.set_defined_name("MyRef", "Sheet1!$B$2")
+            wb.set_defined_name(DefinedNameInput("MyRef", "Sheet1!$B$2"))
             names = {dn.name: dn.formula for dn in wb.list_defined_names()}
             self.assertEqual(names["MyRef"], "Sheet1!$B$2")
 
-            # An empty formula removes the entry.
-            wb.set_defined_name("MyRef", "")
+            # An empty formula is rejected; removal has its own call.
+            with self.assertRaises(InvalidArgumentError):
+                wb.set_defined_name(DefinedNameInput("MyRef", ""))
+            wb.remove_defined_name("MyRef")
             self.assertNotIn("MyRef", {dn.name for dn in wb.list_defined_names()})
 
     def test_scoped_defined_name_set_get_remove(self) -> None:
         with Workbook.create_empty() as wb:
             wb.add_sheet("Sheet1")
             wb.add_sheet("Sheet2")
-            wb.set_defined_name("Rate", "=1")
-            wb.set_defined_name_scoped("Rate", "=2", 1)
+            wb.set_defined_name(DefinedNameInput("Rate", "=1"))
+            wb.set_defined_name(DefinedNameInput("Rate", "=2", 1))
             names = {(dn.name, dn.local_sheet_id): dn.formula for dn in wb.list_defined_names()}
             # The setter drops the leading "=", as the file form carries none.
-            self.assertEqual(names[("Rate", -1)], "1")
+            self.assertEqual(names[("Rate", None)], "1")
             self.assertEqual(names[("Rate", 1)], "2")
 
-            wb.set_defined_name_scoped("Rate", "", 1)
+            wb.remove_defined_name("Rate", 1)
             self.assertNotIn(
                 ("Rate", 1),
                 {(dn.name, dn.local_sheet_id) for dn in wb.list_defined_names()},
@@ -269,21 +277,23 @@ class CalcPolicyTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             # Unpinned by default: the workbook follows the host clock.
             self.assertIsNone(wb.get_pinned_now())
-            wb.set_pinned_now(2026, 4, 23, 15, 30, 45)
-            self.assertEqual(wb.get_pinned_now(), CivilTime(2026, 4, 23, 15, 30, 45))
+            wb.set_pinned_now(datetime.datetime(2026, 4, 23, 15, 30, 45))
+            self.assertEqual(wb.get_pinned_now(), datetime.datetime(2026, 4, 23, 15, 30, 45))
             # 2026-04-23 is serial 46135 under the 1900 date system.
-            grid = wb.evaluate_formula_array(0, 0, 0, "=TODAY()")
+            grid = wb.sheet(0).evaluate_formula_array(0, 0, "=TODAY()")
             self.assertEqual(grid[0][0].number, 46135.0)
-            wb.clear_pinned_now()
+            wb.set_pinned_now(None)
             self.assertIsNone(wb.get_pinned_now())
 
     def test_pinned_now_rejects_a_non_calendar_instant(self) -> None:
         with Workbook.create_default() as wb:
-            # The pin is a calendar instant, not a normalising constructor.
-            with self.assertRaises(FormulonError):
-                wb.set_pinned_now(2026, 13, 1)
-            with self.assertRaises(FormulonError):
-                wb.set_pinned_now(2025, 2, 29)
+            # The engine accepts years 1900..9999 only.
+            with self.assertRaises(InvalidArgumentError):
+                wb.set_pinned_now(datetime.datetime(1899, 12, 31))
+            with self.assertRaises(TypeError):
+                wb.set_pinned_now(datetime.date(2026, 1, 1))  # type: ignore[arg-type]
+            with self.assertRaises(ValueError):
+                wb.set_pinned_now(datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc))
             self.assertIsNone(wb.get_pinned_now())
 
     def test_excel_profile_roundtrip(self) -> None:
@@ -329,7 +339,7 @@ class CalcPolicyTests(unittest.TestCase):
         )
         with Workbook.create_default() as wb:
             self.assertEqual(wb.get_excel_profile_id(), "win-365-en_US")
-            wb.set_formula(0, 0, 0, "=DOLLAR(-1234.567)")
+            wb.sheet(0).set_formula(0, 0, "=DOLLAR(-1234.567)")
             for host in ("mac", "win"):
                 for locale in locales:
                     profile_id = f"{host}-365-{locale}"
@@ -337,7 +347,7 @@ class CalcPolicyTests(unittest.TestCase):
                     self.assertEqual(wb.get_excel_profile_id(), profile_id)
                     wb.recalc()
                     if profile_id in dollar:
-                        self.assertEqual(wb.get_value(0, 0, 0).to_python(), dollar[profile_id], profile_id)
+                        self.assertEqual(wb.sheet(0).get_value(0, 0).to_python(), dollar[profile_id], profile_id)
             with self.assertRaises(FormulonError):
                 wb.set_excel_profile_id("mac-365-xx_XX")
 
@@ -345,79 +355,79 @@ class CalcPolicyTests(unittest.TestCase):
 class PartialRecalcTests(unittest.TestCase):
     def test_partial_recalc_recomputes_chain(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_number(0, 0, 0, 10.0)  # A1
-            wb.set_formula(0, 0, 1, "=A1*2")  # B1
-            recomputed = wb.recalc_viewport(0, CellRect(0, 1, 0, 1))
+            wb.sheet(0).set_number(0, 0, 10.0)  # A1
+            wb.sheet(0).set_formula(0, 1, "=A1*2")  # B1
+            recomputed = wb.sheet(0).recalc_viewport(CellRect(0, 1, 0, 1))
             self.assertGreater(recomputed, 0)
-            self.assertEqual(wb.get_value(0, 0, 1).to_python(), 20.0)
+            self.assertEqual(wb.sheet(0).get_value(0, 1).to_python(), 20.0)
             with self.assertRaises(TypeError):
-                wb.recalc_viewport(0, (0, 1, 0, 1))  # type: ignore[arg-type]
+                wb.sheet(0).recalc_viewport((0, 1, 0, 1))  # type: ignore[arg-type]
 
 
 class TraceTests(unittest.TestCase):
     def test_precedents_and_dependents(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_number(0, 0, 0, 1.0)  # A1
-            wb.set_formula(0, 0, 1, "=A1")  # B1
+            wb.sheet(0).set_number(0, 0, 1.0)  # A1
+            wb.sheet(0).set_formula(0, 1, "=A1")  # B1
             wb.recalc()
-            prec = wb.get_precedents(0, 0, 1, 1)
+            prec = wb.sheet(0).get_precedents(0, 1, 1)
             self.assertIn((0, 0, 0), [(p.sheet, p.row, p.col) for p in prec])
-            deps = wb.get_dependents(0, 0, 0, 1)
+            deps = wb.sheet(0).get_dependents(0, 0, 1)
             self.assertIn((0, 0, 1), [(d.sheet, d.row, d.col) for d in deps])
 
 
 class SpillTests(unittest.TestCase):
     def test_sequence_spills(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_formula(0, 0, 0, "=SEQUENCE(3)")
+            wb.sheet(0).set_formula(0, 0, "=SEQUENCE(3)")
             wb.recalc()
-            info = wb.get_spill_info(0, 0, 0)
+            info = wb.sheet(0).get_spill_info(0, 0)
             self.assertTrue(info.engaged)
             self.assertEqual(info.rect, CellRect(0, 0, 2, 0))
             self.assertFalse(info.blocked)
 
     def test_blocked_spill_reports_the_attempted_footprint(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_formula(0, 0, 0, "=SEQUENCE(5)")
-            wb.set_number(0, 3, 0, 1.0)
+            wb.sheet(0).set_formula(0, 0, "=SEQUENCE(5)")
+            wb.sheet(0).set_number(3, 0, 1.0)
             wb.recalc()
-            info = wb.get_spill_info(0, 0, 0)
+            info = wb.sheet(0).get_spill_info(0, 0)
             self.assertTrue(info.blocked)
             self.assertFalse(info.engaged)
             self.assertEqual(info.rect, CellRect(0, 0, 4, 0))
-            self.assertFalse(wb.get_spill_info(0, 1, 0).blocked)
-            self.assertIsNone(wb.get_spill_info(0, 9, 9).rect)
+            self.assertFalse(wb.sheet(0).get_spill_info(1, 0).blocked)
+            self.assertIsNone(wb.sheet(0).get_spill_info(9, 9).rect)
 
 
 class ArrayFormulaTests(unittest.TestCase):
     def test_set_get_clear_and_refusals(self) -> None:
         with Workbook.create_default() as wb:
             for r in range(3):
-                wb.set_number(0, r, 0, float(r + 1))
-            self.assertIsNone(wb.get_array_formula(0, 0, 2))
-            wb.set_array_formula(0, CellRect(0, 2, 2, 2), "=A1:A3*2")
+                wb.sheet(0).set_number(r, 0, float(r + 1))
+            self.assertIsNone(wb.sheet(0).get_array_formula(0, 2))
+            wb.sheet(0).set_array_formula(ArrayFormula(CellRect(0, 2, 2, 2), "=A1:A3*2"))
             wb.recalc()
             for r in range(3):
-                found = wb.get_array_formula(0, r, 2)
+                found = wb.sheet(0).get_array_formula(r, 2)
                 self.assertIsNotNone(found)
                 assert found is not None
                 self.assertEqual(found.rect, CellRect(0, 2, 2, 2))
                 self.assertIn("A1:A3", found.formula)
-            self.assertEqual(wb.get_value(0, 2, 2).to_python(), 6.0)
+            self.assertEqual(wb.sheet(0).get_value(2, 2).to_python(), 6.0)
             with self.assertRaises(FormulonError):
-                wb.set_array_formula(0, CellRect(1, 2, 2, 2), "=1")
+                wb.sheet(0).set_array_formula(ArrayFormula(CellRect(1, 2, 2, 2), "=1"))
             with self.assertRaises(FormulonError):
-                wb.set_number(0, 1, 2, 1.0)
-            wb.set_blank(0, 0, 2)
+                wb.sheet(0).set_number(1, 2, 1.0)
+            wb.sheet(0).set_blank(0, 2)
             wb.recalc()
-            self.assertIsNone(wb.get_array_formula(0, 1, 2))
+            self.assertIsNone(wb.sheet(0).get_array_formula(1, 2))
 
 
 class ExternalLinkTests(unittest.TestCase):
     def test_fresh_workbook_has_no_external_links(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertEqual(wb.get_external_link_count(), 0)
-            self.assertEqual([wb.get_external_link(i) for i in range(wb.get_external_link_count())], [])
+            self.assertEqual(len(wb.list_external_links()), 0)
+            self.assertEqual(wb.list_external_links(), [])
 
 
 if __name__ == "__main__":

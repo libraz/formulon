@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "formulon_c_out_index.h"
+#include "formulon_c_setters.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
@@ -329,7 +330,7 @@ TEST(FormulonCApi, SuccessClearsPreviousLastError) {
 TEST(FormulonCApi, IterativeOptionsConverge) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, 100, 1e-6), 0);
+  ASSERT_EQ(SetIterative(wb.handle, 1, 100, 1e-6), 0);
 
   // A1 = 0.5 * (A1 + 2) converges to 2 from the blank initial cache
   // value. Unlike Newton's method, this intentionally needs no separate

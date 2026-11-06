@@ -174,7 +174,6 @@ emscripten::val JsWorkbook::localeFacts(const std::string& profile_id) const {
   if (!succeeded(fm_get_locale_facts(profile_id.c_str(), &f))) {
     return emscripten::val::undefined();
   }
-  static const char* const kDateOrders[] = {"mdy", "ymd", "dmy"};
   emscripten::val facts = emscripten::val::object();
   js_set_cstr(facts, "decimalSeparator", f.decimal_separator);
   js_set_cstr(facts, "groupSeparator", f.group_separator);
@@ -183,7 +182,7 @@ emscripten::val JsWorkbook::localeFacts(const std::string& profile_id) const {
   js_set_cstr(facts, "arrayRowSeparator", f.array_row_separator);
   js_set_cstr(facts, "trueName", f.true_name);
   js_set_cstr(facts, "falseName", f.false_name);
-  facts.set("dateOrder", std::string(kDateOrders[static_cast<std::size_t>(f.date_order)]));
+  facts.set("dateOrder", static_cast<int32_t>(f.date_order));
   js_set_cstr(facts, "currencySymbol", f.currency_symbol);
   facts.set("currencySuffix", f.currency_suffix != 0);
   facts.set("currencySpace", f.currency_space != 0);

@@ -1,12 +1,12 @@
 import test from 'node:test';
-import { assert, getModule, isFormulonError, readAll } from './smoke_support.mjs';
+import { assert, getModule, isFormulonError } from './smoke_support.mjs';
 
 test('addMerge + getMerges round-trip a single range', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   const range = { firstRow: 1, firstCol: 1, lastRow: 2, lastCol: 3 };
-  wb.addMerge(0, range);
-  const list = wb.listMerges(0);
+  wb.sheet(0).addMerge(range);
+  const list = wb.sheet(0).listMerges();
   assert.ok(Array.isArray(list), `expected Array, got ${typeof list}`);
   assert.equal(list.length, 1);
   assert.deepEqual(
@@ -23,25 +23,26 @@ test('addMerge + getMerges round-trip a single range', async () => {
 test('addHyperlink + getHyperlinks round-trip', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.equal(wb.listHyperlinks(0).length, 0);
+  assert.equal(wb.sheet(0).listHyperlinks().length, 0);
   // Three entries with progressively more optional fields populated.
-  wb.addHyperlink(0, 1, 2, 'https://example.com/', '', '', '');
-  wb.addHyperlink(0, 3, 4, 'mailto:hello@example.com', 'Hello', '', '');
-  wb.addHyperlink(0, 5, 6, '', 'See X', 'Internal link', 'Sheet1!A1');
-  wb.addHyperlinkRange(
-    0,
+  wb.sheet(0).addHyperlink(1, 2, { target: 'https://example.com/' });
+  wb.sheet(0).addHyperlink(3, 4, { target: 'mailto:hello@example.com', display: 'Hello' });
+  wb.sheet(0).addHyperlink(5, 6, {
+    target: null,
+    location: 'Sheet1!A1',
+    display: 'See X',
+    tooltip: 'Internal link',
+  });
+  wb.sheet(0).addHyperlinkRange(
     { firstRow: 7, firstCol: 8, lastRow: 9, lastCol: 10 },
-    'https://example.com/range',
-    'Range',
-    'Range tip',
-    '',
+    { target: 'https://example.com/range', display: 'Range', tooltip: 'Range tip' },
   );
-  const list = wb.listHyperlinks(0);
+  const list = wb.sheet(0).listHyperlinks();
   assert.equal(list.length, 4);
   assert.deepEqual(list[0].rect, { firstRow: 1, firstCol: 2, lastRow: 1, lastCol: 2 });
   assert.equal(list[0].target, 'https://example.com/');
-  assert.equal(list[0].display, '');
-  assert.equal(list[0].tooltip, '');
+  assert.equal(list[0].display, null);
+  assert.equal(list[0].tooltip, null);
   assert.equal(list[1].target, 'mailto:hello@example.com');
   assert.equal(list[1].display, 'Hello');
   assert.equal(list[2].display, 'See X');
@@ -62,10 +63,10 @@ test('addHyperlink + getHyperlinks round-trip', async () => {
     },
   );
   // Sheet-out-of-range is rejected.
-  assert.throws(() => wb.addHyperlink(999, 0, 0, 'https://x/', '', '', ''), isFormulonError);
+  assert.throws(() => wb.sheet(999).addHyperlink(0, 0, { target: 'https://x/' }), isFormulonError);
   // clearHyperlinks drops everything.
-  wb.clearHyperlinks(0);
-  assert.equal(wb.listHyperlinks(0).length, 0);
+  wb.sheet(0).clearHyperlinks();
+  assert.equal(wb.sheet(0).listHyperlinks().length, 0);
 });
 
 test('removeHyperlink / removeHyperlinkAt / clearHyperlinks surface on an empty sheet', async () => {
@@ -73,22 +74,22 @@ test('removeHyperlink / removeHyperlinkAt / clearHyperlinks surface on an empty 
   const wb = mod.Workbook.createDefault();
   // Removing by cell reports NotFound when no hyperlink sits there; clearing is a no-op.
   assert.throws(
-    () => wb.removeHyperlink(0, 0, 0),
+    () => wb.sheet(0).removeHyperlink(0, 0),
     (e) => isFormulonError(e, mod.StatusCode.NotFound),
   );
-  wb.clearHyperlinks(0);
+  wb.sheet(0).clearHyperlinks();
   // Out-of-range index is rejected.
   assert.throws(
-    () => wb.removeHyperlinkAt(0, 0),
+    () => wb.sheet(0).removeHyperlinkAt(0),
     (e) => isFormulonError(e, mod.StatusCode.IndexOutOfRange),
   );
   // Sheet-index-out-of-range is rejected on every variant.
   const sheetRange = (e) => isFormulonError(e, mod.StatusCode.SheetIndexOutOfRange);
-  assert.throws(() => wb.removeHyperlink(999, 0, 0), sheetRange);
-  assert.throws(() => wb.removeHyperlinkAt(999, 0), sheetRange);
-  assert.throws(() => wb.clearHyperlinks(999), sheetRange);
+  assert.throws(() => wb.sheet(999).removeHyperlink(0, 0), sheetRange);
+  assert.throws(() => wb.sheet(999).removeHyperlinkAt(0), sheetRange);
+  assert.throws(() => wb.sheet(999).clearHyperlinks(), sheetRange);
   // The hyperlink list is still empty afterwards.
-  assert.equal(wb.listHyperlinks(0).length, 0);
+  assert.equal(wb.sheet(0).listHyperlinks().length, 0);
 });
 
 test('removeMerge + removeMergeAt + clearMerges step-wise prune the merge list', async () => {
@@ -96,104 +97,103 @@ test('removeMerge + removeMergeAt + clearMerges step-wise prune the merge list',
   const wb = mod.Workbook.createDefault();
   const a = { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 };
   const b = { firstRow: 4, firstCol: 4, lastRow: 5, lastCol: 5 };
-  wb.addMerge(0, a);
-  wb.addMerge(0, b);
+  wb.sheet(0).addMerge(a);
+  wb.sheet(0).addMerge(b);
   // removeMerge with an overlap that hits `a` only.
   const overlap = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
-  wb.removeMerge(0, overlap);
-  let list = wb.listMerges(0);
+  wb.sheet(0).removeMerge(overlap);
+  let list = wb.sheet(0).listMerges();
   assert.equal(list.length, 1);
   assert.equal(list[0].firstRow, 4);
   // removeMergeAt drops the survivor by index.
-  wb.removeMergeAt(0, 0);
-  list = wb.listMerges(0);
+  wb.sheet(0).removeMergeAt(0);
+  list = wb.sheet(0).listMerges();
   assert.equal(list.length, 0);
   // clearMerges is a no-op on an empty list.
-  wb.addMerge(0, a);
-  wb.addMerge(0, b);
-  wb.clearMerges(0);
-  list = wb.listMerges(0);
+  wb.sheet(0).addMerge(a);
+  wb.sheet(0).addMerge(b);
+  wb.sheet(0).clearMerges();
+  list = wb.sheet(0).listMerges();
   assert.equal(list.length, 0);
 });
 
 test('setSheetZoom + getSheetView surface the new zoom', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.setZoom(0, 175);
-  const v = wb.getView(0);
+  wb.sheet(0).setZoom(175);
+  const v = wb.sheet(0).getView();
   assert.equal(v.zoomScale, 175);
-  // Default freeze / tab-hidden state survives a zoom change.
+  // Default freeze / visibility state survives a zoom change.
   assert.equal(v.freezeRows, 0);
   assert.equal(v.freezeCols, 0);
-  assert.equal(v.tabHidden, 0);
+  assert.equal(v.visibility, mod.SheetVisibility.Visible);
 });
 
 test('sheet layout getters preserve explicit width presence flags', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.setColumnWidth(0, 0, 0, 0);
-  wb.setColumnHidden(0, 1, 1, true);
-  wb.setRowHeight(0, 3, 3, 30);
+  wb.sheet(0).setColumnWidth(0, 0, 0);
+  wb.sheet(0).setColumnHidden(1, 1, true);
+  wb.sheet(0).setRowHeight(3, 3, 30);
 
-  const columns = wb.listColumnOverrides(0);
+  const columns = wb.sheet(0).listColumnOverrides();
   const widthZero = columns.find((column) => column.first === 0 && column.last === 0);
   assert.ok(widthZero);
   assert.equal(widthZero.width, 0);
-  assert.equal(widthZero.hasWidth, 1);
-  assert.equal(widthZero.hasStyle, 0);
+  assert.equal(widthZero.styleXf, null);
+  assert.equal(widthZero.hidden, false);
   const hidden = columns.find((column) => column.first === 1 && column.last === 1);
   assert.ok(hidden);
-  assert.equal(hidden.hidden, 1);
-  assert.equal(hidden.hasWidth, 0);
+  assert.equal(hidden.hidden, true);
+  assert.equal(hidden.width, null);
 
-  const rows = wb.listRowOverrides(0);
+  const rows = wb.sheet(0).listRowOverrides();
   const row = rows.find((entry) => entry.row === 3);
   assert.ok(row);
   assert.equal(row.height, 30);
-  assert.equal(row.hasStyle, 0);
-  assert.equal(row.styleXf, 0);
+  assert.equal(row.styleXf, null);
 });
 
 test('getSheetView surfaces display / orientation defaults', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const v = wb.getView(0);
-  assert.equal(v.showGridLines, 1);
-  assert.equal(v.showRowColHeaders, 1);
-  assert.equal(v.showZeros, 1);
-  assert.equal(v.rightToLeft, 0);
-  assert.equal(v.tabSelected, 0);
-  assert.equal(v.viewMode, '');
+  const v = wb.sheet(0).getView();
+  assert.equal(v.showGridLines, true);
+  assert.equal(v.showRowColHeaders, true);
+  assert.equal(v.showZeros, true);
+  assert.equal(v.rightToLeft, false);
+  assert.equal(v.tabSelected, false);
+  assert.equal(v.viewMode, mod.SheetViewMode.Normal);
 });
 
 test('setSheetShowGridLines / setSheetRightToLeft / setSheetTabSelected / setSheetViewMode round-trip', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.setShowGridLines(0, false);
-  wb.setShowRowColHeaders(0, false);
-  wb.setShowZeros(0, false);
-  wb.setRightToLeft(0, true);
-  wb.setTabSelected(0, true);
-  wb.setViewMode(0, 'pageBreakPreview');
-  const v = wb.getView(0);
-  assert.equal(v.showGridLines, 0);
-  assert.equal(v.showRowColHeaders, 0);
-  assert.equal(v.showZeros, 0);
-  assert.equal(v.rightToLeft, 1);
-  assert.equal(v.tabSelected, 1);
-  assert.equal(v.viewMode, 'pageBreakPreview');
+  wb.sheet(0).setShowGridLines(false);
+  wb.sheet(0).setShowRowColHeaders(false);
+  wb.sheet(0).setShowZeros(false);
+  wb.sheet(0).setRightToLeft(true);
+  wb.sheet(0).setTabSelected(true);
+  wb.sheet(0).setViewMode(mod.SheetViewMode.PageBreakPreview);
+  const v = wb.sheet(0).getView();
+  assert.equal(v.showGridLines, false);
+  assert.equal(v.showRowColHeaders, false);
+  assert.equal(v.showZeros, false);
+  assert.equal(v.rightToLeft, true);
+  assert.equal(v.tabSelected, true);
+  assert.equal(v.viewMode, mod.SheetViewMode.PageBreakPreview);
 });
 
 test('insertRows shifts an existing literal forward', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   // Populate row 0; insert one row at row 0; the literal is now at row 1.
-  wb.setNumber(0, 0, 0, 99);
-  wb.insertRows(0, 0, 1);
-  const r0 = wb.getValue(0, 0, 0);
+  wb.sheet(0).setNumber(0, 0, 99);
+  wb.sheet(0).insertRows(0, 1);
+  const r0 = wb.sheet(0).getValue(0, 0);
   // The freshly-inserted row 0 is blank.
   assert.equal(r0.kind, mod.ValueKind.Blank);
-  const r1 = wb.getValue(0, 1, 0);
+  const r1 = wb.sheet(0).getValue(1, 0);
   assert.equal(r1.kind, mod.ValueKind.Number);
   assert.equal(r1.number, 99);
 });
@@ -202,10 +202,10 @@ test('setCellXfIndex + getCellXfIndex round-trip the xf id', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   // Seed the cell so the xf attaches to a stored slot.
-  wb.setNumber(0, 0, 0, 1);
+  wb.sheet(0).setNumber(0, 0, 1);
   // xfIndex 0 is always the default xf and is guaranteed to be valid.
-  wb.setCellXfIndex(0, 0, 0, 0);
-  const r = wb.getCellXfIndex(0, 0, 0);
+  wb.sheet(0).setCellXfIndex(0, 0, 0);
+  const r = wb.sheet(0).getCellXfIndex(0, 0);
   assert.equal(typeof r, 'number');
   assert.equal(r, 0);
 });
@@ -271,18 +271,16 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
     wrapText: true,
   });
 
-  wb.setNumber(0, 0, 0, 1);
-  wb.setCellXfIndex(0, 0, 0, xf);
+  wb.sheet(0).setNumber(0, 0, 1);
+  wb.sheet(0).setCellXfIndex(0, 0, xf);
 
   const reread = wb.getCellXf(xf);
   assert.equal(reread.fontIndex, fontResult);
   assert.equal(reread.numFmtId, custom);
   assert.equal(reread.wrapText, true);
-  assert.equal(reread.hasAlignment, true);
-  assert.equal(reread.hasHorizontalAlign, true);
-  assert.equal(reread.hasVerticalAlign, true);
-  assert.equal(reread.hasWrapText, true);
-  assert.equal(reread.hasJustifyLastLine, false);
+  assert.equal(reread.horizontalAlign, 1);
+  assert.equal(reread.verticalAlign, 2);
+  assert.equal(reread.justifyLastLine, null);
 
   const optional = wb.addCellXf({
     fontIndex: fontResult,
@@ -303,8 +301,7 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
   assert.equal(optionalRead.shrinkToFit, false);
   assert.equal(optionalRead.readingOrder, 0);
   assert.equal(optionalRead.justifyLastLine, true);
-  assert.equal(optionalRead.hasAlignment, true);
-  assert.equal(optionalRead.hasJustifyLastLine, true);
+  assert.equal(optionalRead.horizontalAlign, null);
   assert.equal(wb.addCellXf(optionalRead), optional);
 
   const omitted = wb.addCellXf({
@@ -314,7 +311,10 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
     numFmtId: custom,
   });
   const omittedRead = wb.getCellXf(omitted);
-  assert.equal(omittedRead.hasAlignment, false);
+  assert.deepEqual(
+    [omittedRead.horizontalAlign, omittedRead.wrapText, omittedRead.justifyLastLine],
+    [null, null, null],
+  );
 
   const explicitEmpty = wb.addCellXf({
     fontIndex: fontResult,
@@ -324,8 +324,6 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
     hasAlignment: true,
   });
   assert.notEqual(explicitEmpty, omitted);
-  const explicitEmptyRead = wb.getCellXf(explicitEmpty);
-  assert.equal(explicitEmptyRead.hasAlignment, true);
 
   const rfont = wb.getFont(fontResult);
   assert.equal(rfont.name, 'Arial');
@@ -398,9 +396,9 @@ test('selector colours survive get/add identity and save/load', async () => {
   assert.equal(gotDxf.fill.fg.kind, 3);
   assert.equal(gotDxf.border.left.color.kind, 2);
   const dxfAgain = wb.addDxf(gotDxf);
-  assert.equal(gotDxf.font.hasSize, true);
-  const bareDxf = wb.addDxf({ font: { bold: true, hasBold: true } });
-  assert.equal(wb.getDxf(bareDxf).font.hasSize, false);
+  assert.notEqual(gotDxf.font.size, null);
+  const bareDxf = wb.addDxf({ font: { bold: true } });
+  assert.equal(wb.getDxf(bareDxf).font.size, null);
   assert.equal(dxfAgain, dxf);
 
   const saved = wb.save();
@@ -492,53 +490,29 @@ test('addFont/setFont with a non-numeric field throws and does not commit a coer
 test('phonetic runs keep their spans through a save/load round trip', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.setText(0, 0, 0, '東京都');
-  assert.deepEqual(
-    readAll(
-      () => wb.getCellPhoneticRunCount(0, 0, 0),
-      (i) => wb.getCellPhoneticRun(0, 0, 0, i),
-    ),
-    [],
-  );
+  wb.sheet(0).setText(0, 0, '東京都');
+  assert.deepEqual(wb.sheet(0).getCellPhoneticRuns(0, 0), []);
 
   const runs = [
     { sb: 0, eb: 2, text: 'トウキョウ' },
     { sb: 2, eb: 3, text: 'ト' },
   ];
-  wb.setCellPhoneticRuns(0, 0, 0, runs);
-  assert.deepEqual(
-    readAll(
-      () => wb.getCellPhoneticRunCount(0, 0, 0),
-      (i) => wb.getCellPhoneticRun(0, 0, 0, i),
-    ),
-    runs,
-  );
+  wb.sheet(0).setCellPhoneticRuns(0, 0, runs);
+  assert.deepEqual(wb.sheet(0).getCellPhoneticRuns(0, 0), runs);
   // The flattening getter still reports the concatenation.
-  assert.equal(wb.getCellPhonetic(0, 0, 0), 'トウキョウト');
+  assert.equal(wb.sheet(0).getCellPhonetic(0, 0), 'トウキョウト');
 
   const saved = wb.save();
   const loaded = mod.Workbook.load(saved);
-  assert.deepEqual(
-    readAll(
-      () => loaded.getCellPhoneticRunCount(0, 0, 0),
-      (i) => loaded.getCellPhoneticRun(0, 0, 0, i),
-    ),
-    runs,
-  );
+  assert.deepEqual(loaded.sheet(0).getCellPhoneticRuns(0, 0), runs);
 
   // Writing the flattened reading back is the collapse the run API avoids.
-  wb.setCellPhonetic(0, 0, 0, 'トウキョウト');
-  assert.deepEqual(
-    readAll(
-      () => wb.getCellPhoneticRunCount(0, 0, 0),
-      (i) => wb.getCellPhoneticRun(0, 0, 0, i),
-    ),
-    [{ sb: 0, eb: 3, text: 'トウキョウト' }],
-  );
+  wb.sheet(0).setCellPhonetic(0, 0, 'トウキョウト');
+  assert.deepEqual(wb.sheet(0).getCellPhoneticRuns(0, 0), [{ sb: 0, eb: 3, text: 'トウキョウト' }]);
 
   assert.throws(
     () =>
-      wb.setCellPhoneticRuns(0, 0, 0, [
+      wb.sheet(0).setCellPhoneticRuns(0, 0, [
         { sb: 2, eb: 3, text: 'ト' },
         { sb: 0, eb: 2, text: 'トウ' },
       ]),
@@ -553,16 +527,16 @@ test('phonetic properties are independent of the runs and survive a round trip',
   const mod = await getModule();
   // Compare the triple alone: the record carries more fields than the ones under test.
   const props = (book) => {
-    const { fontId, type, alignment } = book.getCellPhoneticProperties(0, 0, 0);
+    const { fontId, type, alignment } = book.sheet(0).getCellPhoneticProperties(0, 0);
     return { fontId, type, alignment };
   };
   const wb = mod.Workbook.createDefault();
-  wb.setText(0, 0, 0, '大阪');
+  wb.sheet(0).setText(0, 0, '大阪');
   assert.deepEqual(props(wb), { fontId: 0, type: 0, alignment: 0 });
 
-  wb.setCellPhoneticProperties(0, 0, 0, { fontId: 3, type: 2, alignment: 2 });
+  wb.sheet(0).setCellPhoneticProperties(0, 0, { fontId: 3, type: 2, alignment: 2 });
   // Setting the readings must not reset the rendering.
-  wb.setCellPhoneticRuns(0, 0, 0, [{ sb: 0, eb: 2, text: 'おおさか' }]);
+  wb.sheet(0).setCellPhoneticRuns(0, 0, [{ sb: 0, eb: 2, text: 'おおさか' }]);
   assert.deepEqual(props(wb), { fontId: 3, type: 2, alignment: 2 });
 
   const saved = wb.save();
@@ -570,7 +544,10 @@ test('phonetic properties are independent of the runs and survive a round trip',
   assert.deepEqual(props(loaded), { fontId: 3, type: 2, alignment: 2 });
 
   // Two bits each on the binary side, so a wider ordinal is refused.
-  assert.throws(() => wb.setCellPhoneticProperties(0, 0, 0, { fontId: 0, type: 4, alignment: 0 }), isFormulonError);
+  assert.throws(
+    () => wb.sheet(0).setCellPhoneticProperties(0, 0, { fontId: 0, type: 4, alignment: 0 }),
+    isFormulonError,
+  );
   assert.deepEqual(props(wb), { fontId: 3, type: 2, alignment: 2 });
 
   loaded.dispose();
@@ -587,7 +564,7 @@ test('setDefaultFont declares what an unstyled cell is saved as', async () => {
   assert.ok(appended > 0);
   assert.equal(wb.getFont(0).name, 'Calibri');
 
-  wb.setDefaultFont({ name: '游ゴシック', size: 11, hasCharset: true, charset: 128 });
+  wb.setDefaultFont({ name: '游ゴシック', size: 11, charset: 128 });
   assert.equal(wb.getFont(0).name, '游ゴシック');
   assert.equal(wb.getFont(0).charset, 128);
 
@@ -645,16 +622,17 @@ test('active sheet is recorded in bookViews and survives a round trip', async ()
   const wb = mod.Workbook.createDefault();
   wb.addSheet('B');
   wb.addSheet('C');
-  assert.equal(wb.getActiveSheet(), 0);
+  assert.equal(wb.getActiveSheet().index, 0);
   wb.setActiveSheet(2);
   const active = wb.getActiveSheet();
-  assert.equal(active, 2);
+  assert.equal(active.index, 2);
+  assert.equal(active, wb.sheet(2));
   assert.throws(() => wb.setActiveSheet(9), isFormulonError);
-  assert.equal(wb.getActiveSheet(), 2);
+  assert.equal(wb.getActiveSheet().index, 2);
   const saved = wb.save();
   const loaded = mod.Workbook.load(saved);
   try {
-    assert.equal(loaded.getActiveSheet(), 2);
+    assert.equal(loaded.getActiveSheet().index, 2);
   } finally {
     loaded.dispose();
     wb.dispose();
@@ -664,18 +642,18 @@ test('active sheet is recorded in bookViews and survives a round trip', async ()
 test('the show-phonetic flag survives value writes and a round trip', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.equal(wb.getCellShowPhonetic(0, 0, 0), false);
-  wb.setText(0, 0, 0, '漢字');
-  wb.setCellShowPhonetic(0, 0, 0, true);
-  wb.setText(0, 0, 0, '漢字');
-  assert.equal(wb.getCellShowPhonetic(0, 0, 0), true);
+  assert.equal(wb.sheet(0).getCellShowPhonetic(0, 0), false);
+  wb.sheet(0).setText(0, 0, '漢字');
+  wb.sheet(0).setCellShowPhonetic(0, 0, true);
+  wb.sheet(0).setText(0, 0, '漢字');
+  assert.equal(wb.sheet(0).getCellShowPhonetic(0, 0), true);
   const saved = wb.save();
   const loaded = mod.Workbook.load(saved);
   try {
-    assert.equal(loaded.getCellShowPhonetic(0, 0, 0), true);
-    loaded.setCellShowPhonetic(0, 0, 0, false);
-    assert.equal(loaded.getCellShowPhonetic(0, 0, 0), false);
-    assert.throws(() => loaded.setCellShowPhonetic(99, 0, 0, true), isFormulonError);
+    assert.equal(loaded.sheet(0).getCellShowPhonetic(0, 0), true);
+    loaded.sheet(0).setCellShowPhonetic(0, 0, false);
+    assert.equal(loaded.sheet(0).getCellShowPhonetic(0, 0), false);
+    assert.throws(() => loaded.sheet(99).setCellShowPhonetic(0, 0, true), isFormulonError);
   } finally {
     loaded.dispose();
     wb.dispose();
@@ -685,15 +663,15 @@ test('the show-phonetic flag survives value writes and a round trip', async () =
 test('an explicit all-zero phoneticPr is reported as present and survives a round trip', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.setText(0, 0, 0, '漢字');
-  wb.setCellPhoneticRuns(0, 0, 0, [{ sb: 0, eb: 2, text: 'かんじ' }]);
-  assert.equal(wb.getCellPhoneticProperties(0, 0, 0).present, false);
-  wb.setCellPhoneticProperties(0, 0, 0, { fontId: 0, type: 0, alignment: 0 });
-  assert.equal(wb.getCellPhoneticProperties(0, 0, 0).present, true);
+  wb.sheet(0).setText(0, 0, '漢字');
+  wb.sheet(0).setCellPhoneticRuns(0, 0, [{ sb: 0, eb: 2, text: 'かんじ' }]);
+  assert.equal(wb.sheet(0).getCellPhoneticProperties(0, 0).present, false);
+  wb.sheet(0).setCellPhoneticProperties(0, 0, { fontId: 0, type: 0, alignment: 0 });
+  assert.equal(wb.sheet(0).getCellPhoneticProperties(0, 0).present, true);
   const saved = wb.save();
   const loaded = mod.Workbook.load(saved);
   try {
-    const got = loaded.getCellPhoneticProperties(0, 0, 0);
+    const got = loaded.sheet(0).getCellPhoneticProperties(0, 0);
     assert.equal(got.present, true);
     assert.deepEqual([got.fontId, got.type, got.alignment], [0, 0, 0]);
   } finally {
@@ -705,21 +683,21 @@ test('an explicit all-zero phoneticPr is reported as present and survives a roun
 test('scroll origin, pane origin and selection round-trip through save', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.setFreeze(0, 2, 1);
-  const view = wb.getView(0);
+  wb.sheet(0).setFreeze(2, 1);
+  const view = wb.sheet(0).getView();
   assert.equal(view.paneTopLeftRow, 2);
   assert.equal(view.paneTopLeftCol, 1);
-  wb.setTopLeft(0, 5, 0);
-  wb.setPaneTopLeft(0, 40, 6);
-  assert.throws(() => wb.setPaneTopLeft(0, 1, 6), isFormulonError);
+  wb.sheet(0).setTopLeft(5, 0);
+  wb.sheet(0).setPaneTopLeft(40, 6);
+  assert.throws(() => wb.sheet(0).setPaneTopLeft(1, 6), isFormulonError);
   const ranges = [
     { firstRow: 41, firstCol: 7, lastRow: 43, lastCol: 8 },
     { firstRow: 50, firstCol: 9, lastRow: 50, lastCol: 9 },
   ];
-  wb.setSelection(0, { activeRow: 41, activeCol: 7, ranges });
+  wb.sheet(0).setSelection({ activeRow: 41, activeCol: 7, ranges });
   assert.throws(
     () =>
-      wb.setSelection(0, {
+      wb.sheet(0).setSelection({
         activeRow: 0,
         activeCol: 0,
         ranges: [{ firstRow: 3, firstCol: 0, lastRow: 1, lastCol: 0 }],
@@ -729,9 +707,9 @@ test('scroll origin, pane origin and selection round-trip through save', async (
   const saved = wb.save();
   const loaded = mod.Workbook.load(saved);
   try {
-    const got = loaded.getView(0);
+    const got = loaded.sheet(0).getView();
     assert.deepEqual([got.topLeftRow, got.topLeftCol, got.paneTopLeftRow, got.paneTopLeftCol], [5, 0, 40, 6]);
-    const selection = loaded.getSelection(0);
+    const selection = loaded.sheet(0).getSelection();
     assert.equal(selection.activeRow, 41);
     assert.equal(selection.activeCol, 7);
     assert.deepEqual(
@@ -741,7 +719,7 @@ test('scroll origin, pane origin and selection round-trip through save', async (
         [50, 9, 50, 9],
       ],
     );
-    assert.throws(() => loaded.getSelection(99), isFormulonError);
+    assert.throws(() => loaded.sheet(99).getSelection(), isFormulonError);
   } finally {
     loaded.dispose();
     wb.dispose();
@@ -752,29 +730,29 @@ test('sheet split reads back, round-trips and exchanges with the freeze', async 
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    assert.deepEqual([wb.getView(0).splitX, wb.getView(0).splitY], [0, 0]);
-    wb.setSplit(0, 2000, 1500);
-    const view = wb.getView(0);
+    assert.deepEqual([wb.sheet(0).getView().splitX, wb.sheet(0).getView().splitY], [0, 0]);
+    wb.sheet(0).setSplit(2000, 1500);
+    const view = wb.sheet(0).getView();
     assert.deepEqual([view.splitX, view.splitY, view.freezeRows, view.freezeCols], [2000, 1500, 0, 0]);
     const saved = wb.save();
     const loaded = mod.Workbook.load(saved);
     try {
-      const got = loaded.getView(0);
+      const got = loaded.sheet(0).getView();
       assert.deepEqual([got.splitX, got.splitY, got.freezeRows, got.freezeCols], [2000, 1500, 0, 0]);
     } finally {
       loaded.dispose();
     }
-    wb.setFreeze(0, 2, 1);
-    assert.deepEqual([wb.getView(0).splitX, wb.getView(0).splitY], [0, 0]);
-    wb.setSplit(0, 0, 900);
-    const split = wb.getView(0);
+    wb.sheet(0).setFreeze(2, 1);
+    assert.deepEqual([wb.sheet(0).getView().splitX, wb.sheet(0).getView().splitY], [0, 0]);
+    wb.sheet(0).setSplit(0, 900);
+    const split = wb.sheet(0).getView();
     assert.deepEqual([split.splitX, split.splitY, split.freezeRows, split.freezeCols], [0, 900, 0, 0]);
-    assert.throws(() => wb.setSplit(0, -1, 0), isFormulonError);
-    assert.throws(() => wb.setSplit(0, 0, Number.NaN), isFormulonError);
-    assert.throws(() => wb.setSplit(0, Number.POSITIVE_INFINITY, 0), isFormulonError);
-    assert.equal(wb.getView(0).splitY, 900);
-    wb.setSplit(0, 0, 0);
-    assert.equal(wb.getView(0).splitY, 0);
+    assert.throws(() => wb.sheet(0).setSplit(-1, 0), isFormulonError);
+    assert.throws(() => wb.sheet(0).setSplit(0, Number.NaN), isFormulonError);
+    assert.throws(() => wb.sheet(0).setSplit(Number.POSITIVE_INFINITY, 0), isFormulonError);
+    assert.equal(wb.sheet(0).getView().splitY, 900);
+    wb.sheet(0).setSplit(0, 0);
+    assert.equal(wb.sheet(0).getView().splitY, 0);
   } finally {
     wb.dispose();
   }

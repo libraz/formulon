@@ -6,6 +6,8 @@ import unittest
 from dataclasses import replace
 
 from formulon import (
+    Border,
+    BorderSide,
     Color,
     DifferentialFormat,
     Fill,
@@ -30,7 +32,7 @@ class StyleTests(unittest.TestCase):
 
             # add_cell_xf validates indices against the parallel tables, so a
             # border must exist before it can be referenced.
-            border = wb.add_border({"left": {"style": 1, "color_argb": 0xFF000000}})
+            border = wb.add_border(Border(left=BorderSide(style=1, color_argb=0xFF000000)))
 
             from formulon import CellXf
 
@@ -40,9 +42,7 @@ class StyleTests(unittest.TestCase):
                     fill_index=fill,
                     border_index=border,
                     num_fmt_id=nf,
-                    horizontal_align=0,
                     vertical_align=0,
-                    wrap_text=False,
                     text_rotation=255,
                     indent=0,
                     relative_indent=-3,
@@ -51,38 +51,27 @@ class StyleTests(unittest.TestCase):
                     justify_last_line=True,
                 )
             )
-            wb.set_cell_xf_index(0, 0, 0, xf)
-            self.assertEqual(wb.get_cell_xf_index(0, 0, 0), xf)
+            wb.sheet(0).set_cell_xf_index(0, 0, xf)
+            self.assertEqual(wb.sheet(0).get_cell_xf_index(0, 0), xf)
             resolved = wb.get_cell_xf(xf)
             self.assertEqual(resolved.font_index, fi)
             self.assertEqual(resolved.num_fmt_id, nf)
             self.assertEqual(resolved.text_rotation, 255)
-            self.assertTrue(resolved.has_alignment)
             self.assertEqual(resolved.indent, 0)
             self.assertEqual(resolved.relative_indent, -3)
             self.assertIs(resolved.shrink_to_fit, False)
             self.assertEqual(resolved.reading_order, 0)
             self.assertIs(resolved.justify_last_line, True)
-            self.assertFalse(resolved.has_horizontal_align)
-            self.assertTrue(resolved.has_vertical_align)
-            self.assertFalse(resolved.has_wrap_text)
-            self.assertTrue(resolved.has_justify_last_line)
+            self.assertIsNone(resolved.horizontal_align)
+            self.assertEqual(resolved.vertical_align, 0)
+            self.assertIsNone(resolved.wrap_text)
             self.assertEqual(wb.add_cell_xf(resolved), xf)
 
-            omitted = wb.add_cell_xf(
-                CellXf(
-                    font_index=fi,
-                    fill_index=fill,
-                    border_index=border,
-                    num_fmt_id=nf,
-                    horizontal_align=0,
-                    vertical_align=2,
-                    wrap_text=False,
-                )
-            )
-            self.assertFalse(wb.get_cell_xf(omitted).has_alignment)
+            omitted = wb.add_cell_xf(CellXf(font_index=fi, fill_index=fill, border_index=border, num_fmt_id=nf))
+            got = wb.get_cell_xf(omitted)
+            self.assertEqual((got.horizontal_align, got.vertical_align, got.wrap_text), (None, None, None))
 
-            explicit_empty = wb.add_cell_xf(
+            stated = wb.add_cell_xf(
                 CellXf(
                     font_index=fi,
                     fill_index=fill,
@@ -91,11 +80,11 @@ class StyleTests(unittest.TestCase):
                     horizontal_align=0,
                     vertical_align=2,
                     wrap_text=False,
-                    has_alignment=True,
                 )
             )
-            self.assertNotEqual(explicit_empty, omitted)
-            self.assertTrue(wb.get_cell_xf(explicit_empty).has_alignment)
+            self.assertNotEqual(stated, omitted)
+            got = wb.get_cell_xf(stated)
+            self.assertEqual((got.horizontal_align, got.vertical_align, got.wrap_text), (0, 2, False))
 
     def test_font_vert_align_roundtrip_is_the_identity(self) -> None:
         with Workbook.create_default() as wb:
@@ -130,12 +119,12 @@ class StyleTests(unittest.TestCase):
 
     def test_dxf_font_without_size_reads_back_without_size(self) -> None:
         with Workbook.create_default() as wb:
-            bare = wb.add_dxf(DifferentialFormat(font=Font(has_bold=True, bold=True, has_size=False)))
-            sized = wb.add_dxf(DifferentialFormat(font=Font(has_bold=True, bold=True, size=13.0)))
+            bare = wb.add_dxf(DifferentialFormat(font=Font(bold=True, size=None)))
+            sized = wb.add_dxf(DifferentialFormat(font=Font(bold=True, size=13.0)))
             self.assertNotEqual(bare, sized)
-            self.assertFalse(wb.get_dxf(bare).font.has_size)
-            self.assertTrue(wb.get_dxf(sized).font.has_size)
-            self.assertTrue(wb.get_font(wb.add_font(Font(name="Arial", size=14.0))).has_size)
+            self.assertIsNone(wb.get_dxf(bare).font.size)
+            self.assertEqual(wb.get_dxf(sized).font.size, 13.0)
+            self.assertEqual(wb.get_font(wb.add_font(Font(name="Arial", size=14.0))).size, 14.0)
 
     def test_dxf_roundtrip_and_dedup(self) -> None:
         with Workbook.create_default() as wb:
@@ -167,9 +156,9 @@ class StyleTests(unittest.TestCase):
 
             got_alignment = wb.get_dxf(alignment_index)
             self.assertEqual(got_alignment.alignment_xml, alignment_xml)
-            self.assertEqual(got_alignment.protection_xml, "")
+            self.assertIsNone(got_alignment.protection_xml)
             got_protection = wb.get_dxf(protection_index)
-            self.assertEqual(got_protection.alignment_xml, "")
+            self.assertIsNone(got_protection.alignment_xml)
             self.assertEqual(got_protection.protection_xml, protection_xml)
             self.assertEqual(wb.add_dxf(got_alignment), alignment_index)
             self.assertEqual(wb.add_dxf(got_protection), protection_index)
@@ -178,8 +167,8 @@ class StyleTests(unittest.TestCase):
                 reloaded_alignment = reloaded.get_dxf(alignment_index)
                 reloaded_protection = reloaded.get_dxf(protection_index)
                 self.assertEqual(reloaded_alignment.alignment_xml, alignment_xml)
-                self.assertEqual(reloaded_alignment.protection_xml, "")
-                self.assertEqual(reloaded_protection.alignment_xml, "")
+                self.assertIsNone(reloaded_alignment.protection_xml)
+                self.assertIsNone(reloaded_protection.alignment_xml)
                 self.assertEqual(reloaded_protection.protection_xml, protection_xml)
                 self.assertEqual(reloaded.add_dxf(reloaded_alignment), alignment_index)
                 self.assertEqual(reloaded.add_dxf(reloaded_protection), protection_index)
@@ -209,35 +198,35 @@ class StyleTests(unittest.TestCase):
             self.assertEqual(got_fill.bg, automatic)
             self.assertEqual(wb.add_fill(got_fill), fill_index)
 
-            border = {
-                "left": {"style": 1, "color_argb": 0x01020304, "color": theme},
-                "right": {"style": 1, "color_argb": 0x05060708, "color": indexed},
-                "top": {"style": 1, "color_argb": 0x090A0B0C, "color": automatic},
-            }
+            border = Border(
+                left=BorderSide(style=1, color_argb=0x01020304, color=theme),
+                right=BorderSide(style=1, color_argb=0x05060708, color=indexed),
+                top=BorderSide(style=1, color_argb=0x090A0B0C, color=automatic),
+            )
             border_index = wb.add_border(border)
             got_border = wb.get_border(border_index)
-            self.assertEqual(got_border["left"]["color"], theme)
-            self.assertEqual(got_border["right"]["color"], indexed)
-            self.assertEqual(got_border["top"]["color"], automatic)
+            self.assertEqual(got_border.left.color, theme)
+            self.assertEqual(got_border.right.color, indexed)
+            self.assertEqual(got_border.top.color, automatic)
             self.assertEqual(wb.add_border(got_border), border_index)
 
             dxf_index = wb.add_dxf(
                 DifferentialFormat(
                     font=Font(name="DxfSelector", size=9.0, color_argb=0x11121314, color=automatic),
                     fill=Fill(pattern=1, fg_argb=0x15161718, fg=indexed),
-                    border={"left": {"style": 1, "color_argb": 0x191A1B1C, "color": theme}},
+                    border=Border(left=BorderSide(style=1, color_argb=0x191A1B1C, color=theme)),
                 )
             )
             got_dxf = wb.get_dxf(dxf_index)
             self.assertEqual(got_dxf.font.color, automatic)
             self.assertEqual(got_dxf.fill.fg, indexed)
-            self.assertEqual(got_dxf.border["left"]["color"], theme)
+            self.assertEqual(got_dxf.border.left.color, theme)
             self.assertEqual(wb.add_dxf(got_dxf), dxf_index)
 
             with Workbook.load(wb.save()) as reloaded:
                 self.assertEqual(reloaded.get_font(font_index).color, theme)
                 self.assertEqual(reloaded.get_fill(fill_index).fg, indexed)
-                self.assertEqual(reloaded.get_border(border_index)["left"]["color"], theme)
+                self.assertEqual(reloaded.get_border(border_index).left.color, theme)
                 self.assertEqual(reloaded.get_dxf(dxf_index).font.color, automatic)
 
 

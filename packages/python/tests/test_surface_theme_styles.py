@@ -13,8 +13,10 @@ from formulon import (
     EffectiveStyleSource,
     Font,
     FormulonError,
+    ThemeColorsInput,
     ThemeFonts,
     ThemeScriptFont,
+    ThemeScriptFontInput,
     ThemeSource,
     Workbook,
 )
@@ -39,18 +41,19 @@ def _xf(font_index: int) -> CellXf:
 class ThemeTests(unittest.TestCase):
     def test_get_theme_reports_twelve_colors_and_fonts(self) -> None:
         with Workbook.create_default() as wb:
-            theme = wb.get_theme_fonts()
-        self.assertIn(theme.source, (ThemeSource.PART, ThemeSource.DEFAULT))
-        self.assertEqual(len(theme.colors), 12)
-        self.assertTrue(theme.fonts.minor_latin)
+            colors = wb.get_theme_colors()
+            fonts = wb.get_theme_fonts()
+        self.assertIn(colors.source, (ThemeSource.PART, ThemeSource.DEFAULT))
+        self.assertEqual(len(colors.colors), 12)
+        self.assertTrue(fonts.minor_latin)
 
     def test_set_theme_colors_roundtrip(self) -> None:
         colors = [0xFF000000 | (0x112233 * (i + 1) & 0xFFFFFF) for i in range(12)]
         with Workbook.create_default() as wb:
-            wb.set_theme_colors(colors)
-            theme = wb.get_theme_fonts()
+            wb.set_theme_colors(ThemeColorsInput(colors))
+            theme = wb.get_theme_colors()
             with self.assertRaises(ValueError):
-                wb.set_theme_colors(colors[:11])
+                wb.set_theme_colors(ThemeColorsInput(colors[:11]))
         self.assertEqual(theme.source, ThemeSource.PART)
         self.assertEqual(theme.colors, colors)
 
@@ -58,17 +61,17 @@ class ThemeTests(unittest.TestCase):
         fonts = ThemeFonts("Arial", "MS Gothic", "Verdana", "Meiryo")
         with Workbook.create_default() as wb:
             wb.set_theme_fonts(fonts)
-            self.assertEqual(wb.get_theme_fonts().fonts, fonts)
+            self.assertEqual(wb.get_theme_fonts(), fonts)
 
     def test_reset_theme_returns_to_default(self) -> None:
         colors = [0xFF000000 | (0x112233 * (i + 1) & 0xFFFFFF) for i in range(12)]
         with Workbook.create_default() as wb:
             wb.clear_theme()
-            self.assertEqual(wb.get_theme_fonts().source, ThemeSource.DEFAULT)
-            wb.set_theme_colors(colors)
-            self.assertEqual(wb.get_theme_fonts().source, ThemeSource.PART)
+            self.assertEqual(wb.get_theme_colors().source, ThemeSource.DEFAULT)
+            wb.set_theme_colors(ThemeColorsInput(colors))
+            self.assertEqual(wb.get_theme_colors().source, ThemeSource.PART)
             wb.clear_theme()
-            theme = wb.get_theme_fonts()
+            theme = wb.get_theme_colors()
             self.assertEqual(theme.source, ThemeSource.DEFAULT)
             self.assertNotEqual(theme.colors, colors)
             self.assertNotIn(b"xl/theme/theme1.xml", wb.save())
@@ -80,7 +83,7 @@ class ThemeTests(unittest.TestCase):
             self.assertEqual(rgb.resolution, ColorResolution.EXACT)
 
             colors = [0xFF000000 + i * 0x010101 for i in range(12)]
-            wb.set_theme_colors(colors)
+            wb.set_theme_colors(ThemeColorsInput(colors))
             # Theme index 1 is dk1, which is clrScheme slot 0.
             theme = wb.resolve_color(Color(kind=_THEME_KIND, theme=1))
             self.assertEqual(theme.argb, colors[0])
@@ -99,7 +102,7 @@ class ThemeTests(unittest.TestCase):
 class EffectiveStyleTests(unittest.TestCase):
     def test_default_cell_reads_default_xf(self) -> None:
         with Workbook.create_default() as wb:
-            style = wb.get_effective_style(0, 4, 4)
+            style = wb.sheet(0).get_effective_style(4, 4)
         self.assertEqual(style.xf_index, 0)
         self.assertEqual(style.source, EffectiveStyleSource.DEFAULT)
         self.assertEqual(len(style.borders), 5)
@@ -110,10 +113,10 @@ class EffectiveStyleTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             font = wb.add_font(Font(name="Calibri", size=11.0, bold=True, color_argb=0xFFFF0000))
             xf = wb.add_cell_xf(_xf(font))
-            wb.set_cell_xf_index(0, 1, 1, xf)
-            style = wb.get_effective_style(0, 1, 1)
+            wb.sheet(0).set_cell_xf_index(1, 1, xf)
+            style = wb.sheet(0).get_effective_style(1, 1)
             with self.assertRaises(FormulonError):
-                wb.get_effective_style(99, 0, 0)
+                wb.sheet(99).get_effective_style(0, 0)
         self.assertEqual(style.xf_index, xf)
         self.assertEqual(style.source, EffectiveStyleSource.CELL)
         self.assertEqual(style.font_index, font)
@@ -125,41 +128,41 @@ class ClearCellXfIndexTests(unittest.TestCase):
             font = wb.add_font(Font(name="Calibri", size=11.0, bold=True, color_argb=0xFFFF0000))
             col_xf = wb.add_cell_xf(_xf(font))
             cell_xf = wb.add_cell_xf(_xf(font))
-            wb.set_column_style(0, 0, 0, col_xf)
+            wb.sheet(0).set_column_style(0, 0, col_xf)
 
-            wb.set_cell_xf_index(0, 0, 0, cell_xf)
-            style = wb.get_effective_style(0, 0, 0)
+            wb.sheet(0).set_cell_xf_index(0, 0, cell_xf)
+            style = wb.sheet(0).get_effective_style(0, 0)
             self.assertEqual((style.source, style.xf_index), (EffectiveStyleSource.CELL, cell_xf))
 
-            wb.clear_cell_xf_index(0, 0, 0)
-            style = wb.get_effective_style(0, 0, 0)
+            wb.sheet(0).clear_cell_xf_index(0, 0)
+            style = wb.sheet(0).get_effective_style(0, 0)
             self.assertEqual((style.source, style.xf_index), (EffectiveStyleSource.COLUMN, col_xf))
 
-            wb.set_cell_xf_index(0, 0, 0, 0)
-            style = wb.get_effective_style(0, 0, 0)
+            wb.sheet(0).set_cell_xf_index(0, 0, 0)
+            style = wb.sheet(0).get_effective_style(0, 0)
             self.assertEqual((style.source, style.xf_index), (EffectiveStyleSource.CELL, 0))
 
     def test_absent_cell_is_noop(self) -> None:
         with Workbook.create_default() as wb:
             font = wb.add_font(Font(name="Calibri", size=11.0, bold=True, color_argb=0xFFFF0000))
             col_xf = wb.add_cell_xf(_xf(font))
-            wb.set_column_style(0, 0, 0, col_xf)
-            wb.clear_cell_xf_index(0, 5, 0)
-            wb.clear_cell_xf_index(0, 0, 0)
-            style = wb.get_effective_style(0, 0, 0)
+            wb.sheet(0).set_column_style(0, 0, col_xf)
+            wb.sheet(0).clear_cell_xf_index(5, 0)
+            wb.sheet(0).clear_cell_xf_index(0, 0)
+            style = wb.sheet(0).get_effective_style(0, 0)
             self.assertEqual((style.source, style.xf_index), (EffectiveStyleSource.COLUMN, col_xf))
             with self.assertRaises(FormulonError):
-                wb.clear_cell_xf_index(99, 0, 0)
+                wb.sheet(99).clear_cell_xf_index(0, 0)
 
     def test_value_is_kept(self) -> None:
         with Workbook.create_default() as wb:
             font = wb.add_font(Font(name="Calibri", size=11.0, bold=True, color_argb=0xFFFF0000))
             xf = wb.add_cell_xf(_xf(font))
-            wb.set_number(0, 0, 0, 7.0)
-            wb.set_cell_xf_index(0, 0, 0, xf)
-            wb.clear_cell_xf_index(0, 0, 0)
-            self.assertEqual(wb.get_value(0, 0, 0).number, 7.0)
-            self.assertEqual(wb.get_cell_xf_index(0, 0, 0), 0)
+            wb.sheet(0).set_number(0, 0, 7.0)
+            wb.sheet(0).set_cell_xf_index(0, 0, xf)
+            wb.sheet(0).clear_cell_xf_index(0, 0)
+            self.assertEqual(wb.sheet(0).get_value(0, 0).number, 7.0)
+            self.assertEqual(wb.sheet(0).get_cell_xf_index(0, 0), 0)
 
 
 class NamedStyleTests(unittest.TestCase):
@@ -189,7 +192,6 @@ class CreateForProfileTests(unittest.TestCase):
             body = wb.get_font(0)
             self.assertEqual(body.name, "游ゴシック")
             self.assertEqual(body.size, 12.0)
-            self.assertTrue(body.has_charset)
             self.assertEqual(body.charset, 128)
             self.assertEqual(body.scheme, 2)
             self.assertEqual(wb.get_font(1).size, 6.0)
@@ -200,38 +202,32 @@ class CreateForProfileTests(unittest.TestCase):
 
 
 class ThemeScriptFontTests(unittest.TestCase):
-    def test_default_theme_reports_47_scripts(self) -> None:
+    def test_default_theme_reports_its_scripts(self) -> None:
         with Workbook.create_for_profile("mac-365-ja_JP") as wb:
-            theme = wb.get_theme_fonts()
-        self.assertEqual(len(theme.major_scripts), 47)
-        self.assertIsInstance(theme.major_scripts[0], ThemeScriptFont)
-        self.assertEqual(len(theme.minor_scripts), 47)
-        minor = {s.script: s.typeface for s in theme.minor_scripts}
-        self.assertEqual(minor["Jpan"], "游ゴシック")
-        self.assertEqual(minor["Hang"], "맑은 고딕")
+            jpan = wb.get_theme_script_font(major=False, script="Jpan")
+            hang = wb.get_theme_script_font(major=False, script="Hang")
+            missing = wb.get_theme_script_font(major=True, script="Zzzz")
+        self.assertEqual(jpan, ThemeScriptFont("Jpan", "游ゴシック"))
+        self.assertEqual(hang, ThemeScriptFont("Hang", "맑은 고딕"))
+        self.assertIsNone(missing)
 
     def test_set_script_font_roundtrip(self) -> None:
         with Workbook.create_for_profile("mac-365-en_US") as wb:
-            before = {s.script: s.typeface for s in wb.get_theme_fonts().minor_scripts}
-            wb.set_theme_script_font(False, "Hang", "Test Face")
+            jpan = wb.get_theme_script_font(major=False, script="Jpan")
+            wb.set_theme_script_font(ThemeScriptFontInput(False, "Hang", "Test Face"))
             data = wb.save()
         with Workbook.load(data) as wb2:
-            theme = wb2.get_theme_fonts()
-        self.assertEqual(len(theme.minor_scripts), 47)
-        after = {s.script: s.typeface for s in theme.minor_scripts}
-        self.assertEqual(after.pop("Hang"), "Test Face")
-        before.pop("Hang")
-        self.assertEqual(after, before)
-        self.assertEqual(
-            theme.major_scripts[0], ThemeScriptFont(theme.major_scripts[0].script, theme.major_scripts[0].typeface)
-        )
+            self.assertEqual(
+                wb2.get_theme_script_font(major=False, script="Hang"), ThemeScriptFont("Hang", "Test Face")
+            )
+            self.assertEqual(wb2.get_theme_script_font(major=False, script="Jpan"), jpan)
 
     def test_invalid_script_raises(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.set_theme_script_font(True, "Jp", "Face")
+                wb.set_theme_script_font(ThemeScriptFontInput(True, "Jp", "Face"))
             with self.assertRaises(FormulonError):
-                wb.set_theme_script_font(True, "Jpan", "")
+                wb.set_theme_script_font(ThemeScriptFontInput(True, "Jpan", ""))
 
 
 if __name__ == "__main__":

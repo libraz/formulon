@@ -552,6 +552,7 @@ src/eval/aggregate_lazy.cpp
   src/c_api/parts/sheets_ui.cpp
   src/c_api/parts/styles.cpp
   src/c_api/parts/styles_mutate.cpp
+  src/c_api/parts/struct_layout.cpp
   src/c_api/parts/table_styles.cpp
   src/c_api/parts/trace.cpp
   src/c_api/parts/version.cpp

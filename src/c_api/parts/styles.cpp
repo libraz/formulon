@@ -251,7 +251,7 @@ void fill_to_c(const formulon::FillRecord& f, fm_fill_record_t* out, fm_workbook
     color_to_c(stop.color, &c.color);
     stops.push_back(c);
   }
-  out->gradient_stop_count = stops.size();
+  out->gradient_stop_count = static_cast<std::uint32_t>(stops.size());
   out->gradient_stops = scratch->gradient_stop_scratch.adopt(std::move(stops));
 }
 

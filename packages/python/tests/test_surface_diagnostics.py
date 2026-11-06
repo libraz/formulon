@@ -72,17 +72,15 @@ class PackageDiagnosticsTests(unittest.TestCase):
 
     def test_save_and_read_diagnostics_report_every_counter(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_formula(0, 0, 0, "=SUM(T[C])")
-            wb.add_validation(
-                0,
+            wb.sheet(0).set_formula(0, 0, "=SUM(T[C])")
+            wb.sheet(0).add_validation(
                 DataValidationInput(
                     type=3,
                     ranges=[CellRect(0, 0, 0, 0)],
                     formula1='"Yes,No"',
                 ),
             )
-            wb.add_cf_rule(
-                0,
+            wb.sheet(0).add_cf_rule(
                 ConditionalFormatInput(
                     ranges=[CellRect(0, 0, 0, 0)],
                     type=1,

@@ -14,6 +14,8 @@ set(FORMULON_CLI_TEST_SOURCES
   cli_json_test.cpp
   cli_profiles_test.cpp
   cli_plain_escape_test.cpp
+  cli_stdio_test.cpp
+  cli_exit_code_test.cpp
   cli_test_support.cpp
   # `cli/file_io.cpp`: the atomic-write helper ships only in the CLI
   # binary, and a leaked descriptor cannot be observed from outside a

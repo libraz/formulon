@@ -424,9 +424,9 @@ class ArgumentSweepTests(unittest.TestCase):
         self.assertIn("u32 spin_count", findings[0])
 
     def test_sweep_catches_a_64_bit_field_coerced_with_int(self) -> None:
-        findings = _sweep_source('S.SHAPE.pack(LIB, ptr, {"cx": int(cx)})', _parse_header(_HEADER))
+        findings = _sweep_source('S.SHAPE.pack(LIB, ptr, {"width_emu": int(width_emu)})', _parse_header(_HEADER))
         self.assertEqual(len(findings), 1, findings)
-        self.assertIn("i64 cx <- int(cx)", findings[0])
+        self.assertIn("i64 width_emu <- int(width_emu)", findings[0])
 
     def test_sweep_catches_int_inside_a_guard(self) -> None:
         findings = _sweep_source('S.COMMENT.pack(LIB, ptr, {"row": _uint(int(row), "row")})', _parse_header(_HEADER))
@@ -484,69 +484,67 @@ class IndexRangeTests(unittest.TestCase):
 
         with Workbook.create_default() as wb:
             with self.assertRaises(ValueError):
-                wb.get_value(0, 1.5, 0)
+                wb.sheet(0).get_value(1.5, 0)
             with self.assertRaises(ValueError):
-                wb.add_hyperlink(0, 1.5, 0, "https://example.test")
+                wb.sheet(0).add_hyperlink(1.5, 0, target="https://example.test")
             # Integral real-valued inputs remain compatible with the old
             # ``int(value)`` conversion used by this binding.
-            wb.set_iterative(True, 100.0, 0.001)
+            wb.set_iterative(enabled=True, max_iterations=100.0, max_change=0.001)
 
     def test_wrapping_row_does_not_overwrite_the_aliased_cell(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_number(0, 5, 0, 1.0)
+            wb.sheet(0).set_number(5, 0, 1.0)
             with self.assertRaises(ValueError):
-                wb.set_number(0, 2**32 + 5, 0, 99.0)
-            self.assertEqual(wb.get_value(0, 5, 0).number, 1.0)
+                wb.sheet(0).set_number(2**32 + 5, 0, 99.0)
+            self.assertEqual(wb.sheet(0).get_value(5, 0).number, 1.0)
 
     def test_wrapping_sheet_index_is_rejected(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_number(0, 0, 0, 7.0)
-            with self.assertRaises(ValueError):
-                wb.set_number(2**32, 0, 0, 99.0)
-            with self.assertRaises(ValueError):
-                wb.get_value(2**32, 0, 0)
-            self.assertEqual(wb.get_value(0, 0, 0).number, 7.0)
+            wb.sheet(0).set_number(0, 0, 7.0)
+            with self.assertRaises(IndexError):
+                wb.sheet(2**32).set_number(0, 0, 99.0)
+            with self.assertRaises(IndexError):
+                wb.sheet(2**32).get_value(0, 0)
+            self.assertEqual(wb.sheet(0).get_value(0, 0).number, 7.0)
 
     def test_negative_indices_are_rejected(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_number(0, 0, 0, 3.0)
+            wb.sheet(0).set_number(0, 0, 3.0)
             for sheet, row, col in ((0, -1, 0), (0, 0, -1), (-1, 0, 0)):
                 with self.assertRaises(ValueError):
-                    wb.set_number(sheet, row, col, 99.0)
-            self.assertEqual(wb.get_value(0, 0, 0).number, 3.0)
+                    wb.sheet(sheet).set_number(row, col, 99.0)
+            self.assertEqual(wb.sheet(0).get_value(0, 0).number, 3.0)
 
     def test_huge_indices_are_rejected(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(ValueError):
-                wb.set_text(0, 2**64, 0, "wrapped")
+                wb.sheet(0).set_text(2**64, 0, "wrapped")
             with self.assertRaises(ValueError):
-                wb.set_formula(0, 0, 2**48, "=1")
+                wb.sheet(0).set_formula(0, 2**48, "=1")
+            with self.assertRaises(IndexError):
+                wb.sheet(2**32 + 0).name
             with self.assertRaises(ValueError):
-                wb.get_sheet_name(2**32 + 0)
+                wb.sheet(2**64)
 
     def test_error_message_names_the_parameter(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(ValueError) as ctx:
-                wb.set_number(0, 2**32 + 5, 0, 1.0)
+                wb.sheet(0).set_number(2**32 + 5, 0, 1.0)
             self.assertIn("row", str(ctx.exception))
 
-    def test_count_getters_reject_a_wrapping_sheet(self) -> None:
-        # These reach the ABI through a helper that is handed the function
-        # rather than calling it inline. Unguarded, the index wrapped to 0
-        # and the getter answered about a different sheet -- a plausible
-        # count for a question the caller never asked.
+    def test_a_wrapping_sheet_index_finds_no_handle(self) -> None:
+        # A sheet index that would wrap modulo 2**32 never reaches the ABI:
+        # the handle lookup rejects it before any per-sheet call.
         with Workbook.create_default() as wb:
-            for name in ("list_merges", "list_hyperlinks", "list_comments", "get_validation_count"):
-                with self.subTest(getter=name):
-                    with self.assertRaises(ValueError):
-                        getattr(wb, name)(2**32)
+            with self.assertRaises(IndexError):
+                wb.sheet(2**32)
 
     def test_trace_walk_rejects_a_wrapping_index(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(ValueError):
-                wb.get_precedents(0, 2**32 + 5, 0, 1)
+                wb.sheet(0).get_precedents(2**32 + 5, 0, 1)
             with self.assertRaises(ValueError):
-                wb.get_dependents(0, 0, 0, 2**32)
+                wb.sheet(0).get_dependents(0, 0, 2**32)
 
     def test_packed_coordinates_raise_value_error_naming_the_parameter(self) -> None:
         # A coordinate packed into a struct never appears as a scalar
@@ -554,11 +552,11 @@ class IndexRangeTests(unittest.TestCase):
         # ``struct.error`` that no caller guarding on ``ValueError`` sees.
         with Workbook.create_default() as wb:
             with self.assertRaises(ValueError) as ctx:
-                wb.add_hyperlink(0, 2**32 + 5, 0, "http://example.invalid")
+                wb.sheet(0).add_hyperlink(2**32 + 5, 0, target="http://example.invalid")
             self.assertIn("row", str(ctx.exception))
 
             with self.assertRaises(ValueError) as ctx:
-                wb.add_merge(0, formulon.CellRect(first_row=-1, first_col=0, last_row=1, last_col=1))
+                wb.sheet(0).add_merge(formulon.CellRect(first_row=-1, first_col=0, last_row=1, last_col=1))
             self.assertIn("first_row", str(ctx.exception))
 
     def test_narrow_struct_fields_are_checked_at_their_own_width(self) -> None:
@@ -574,7 +572,7 @@ class IndexRangeTests(unittest.TestCase):
         # inside uint32 must still be handled by the engine's own bounds.
         with Workbook.create_default() as wb:
             with self.assertRaises(formulon.FormulonError):
-                wb.set_number(0, 0xFFFFFFFF, 0, 1.0)
+                wb.sheet(0).set_number(0xFFFFFFFF, 0, 1.0)
 
 
 if __name__ == "__main__":

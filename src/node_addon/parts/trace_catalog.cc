@@ -162,7 +162,7 @@ Napi::Value Workbook::GetExternalLink(const Napi::CallbackInfo& info) {
   item.Set("index", Napi::Number::New(env, rec.index));
   item.Set("relId", JsString(env, rec.rel_id));
   item.Set("partPath", JsString(env, rec.part_path));
-  item.Set("target", JsString(env, rec.target));
+  item.Set("target", JsStringOrNull(env, rec.target));
   item.Set("targetExternal", Napi::Boolean::New(env, rec.target_external != 0));
   item.Set("kind", Napi::Number::New(env, rec.kind));
   return item;
@@ -258,7 +258,6 @@ Napi::Value Workbook::LocaleFacts(const Napi::CallbackInfo& info) {
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
-  static const char* const kDateOrders[] = {"mdy", "ymd", "dmy"};
   const auto str = [&env](const char* s) { return JsString(env, s); };
   Napi::Object facts = Napi::Object::New(env);
   facts.Set("decimalSeparator", str(f.decimal_separator));
@@ -268,7 +267,7 @@ Napi::Value Workbook::LocaleFacts(const Napi::CallbackInfo& info) {
   facts.Set("arrayRowSeparator", str(f.array_row_separator));
   facts.Set("trueName", str(f.true_name));
   facts.Set("falseName", str(f.false_name));
-  facts.Set("dateOrder", Napi::String::New(env, kDateOrders[static_cast<std::size_t>(f.date_order)]));
+  facts.Set("dateOrder", Napi::Number::New(env, static_cast<int32_t>(f.date_order)));
   facts.Set("currencySymbol", str(f.currency_symbol));
   facts.Set("currencySuffix", Napi::Boolean::New(env, f.currency_suffix != 0));
   facts.Set("currencySpace", Napi::Boolean::New(env, f.currency_space != 0));

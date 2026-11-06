@@ -66,8 +66,15 @@ line-length = 120
 # Conservative, auto-fix-friendly set: pycodestyle errors/warnings,
 # pyflakes, and import sorting. Broader opinionated rule families
 # (pyupgrade, bugbear, ...) are deliberately not enabled -- they demand
-# hand edits rather than mechanical fixes.
-select = ["E4", "E7", "E9", "F", "I", "W"]
+# hand edits rather than mechanical fixes. FBT001 / FBT002 keep boolean
+# arguments keyword-only; a setter whose one value is the boolean its name
+# points at (`set_show_grid_lines(show)`) stays positional with a `noqa`.
+select = ["E4", "E7", "E9", "F", "I", "W", "FBT001", "FBT002"]
+
+[tool.ruff.lint.per-file-ignores]
+# Test helpers are not public API.
+"tests/**" = ["FBT001", "FBT002"]
+"scripts/**" = ["FBT001", "FBT002"]
 
 [tool.setuptools]
 packages = ["formulon", "formulon._wasm"]

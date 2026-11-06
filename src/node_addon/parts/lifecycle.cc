@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 
 #include "node_addon/parts/workbook_class.h"
@@ -208,7 +209,7 @@ Napi::Value Workbook::FileName(const Napi::CallbackInfo& info) {
   }
   const char* name = nullptr;
   const fm_status_t rc = fm_workbook_get_file_name(handle_, &name);
-  return ValueOrThrow(env, rc, JsString(env, name));
+  return ValueOrThrow(env, rc, JsStringOrNull(env, name));
 }
 
 Napi::Value Workbook::SetFileName(const Napi::CallbackInfo& info) {
@@ -280,11 +281,42 @@ Napi::Value Workbook::SetIterative(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  const bool enabled = ArgBool(info, 0);
-  const int32_t max_iter = ArgI32(info, 1);
-  const double max_change = ArgDouble(info, 2);
-  const fm_status_t rc = fm_workbook_set_iterative(handle_, enabled ? 1 : 0, max_iter, max_change);
-  return ValueOrThrow(env, rc, env.Undefined());
+  // Every field is non-nullable: an omitted or `undefined` key keeps the
+  // stored value, `null` and a non-integer cap are type errors.
+  const Napi::Object patch = ArgObject(info, 0);
+  CheckedSpecReader reader(env);
+  fm_iterative_settings_patch_t p{-1, -1, -1.0};
+  const Napi::Value enabled = reader.Get(patch, "enabled");
+  if (reader.ok() && !enabled.IsUndefined()) {
+    if (!enabled.IsBoolean()) {
+      reader.FailType("enabled", "boolean");
+    } else {
+      p.enabled = enabled.As<Napi::Boolean>().Value() ? 1 : 0;
+    }
+  }
+  const Napi::Value cap = reader.Get(patch, "maxIterations");
+  if (reader.ok() && !cap.IsUndefined()) {
+    const double requested = cap.IsNumber() ? cap.As<Napi::Number>().DoubleValue() : 0.0;
+    if (!cap.IsNumber() || !std::isfinite(requested) || std::trunc(requested) != requested) {
+      reader.FailType("maxIterations", "whole number");
+    } else if (requested < 0.0 || requested > static_cast<double>(std::numeric_limits<int32_t>::max())) {
+      reader.FailRange("maxIterations", "[0, 2147483647]");
+    } else {
+      p.max_iterations = static_cast<int32_t>(requested);
+    }
+  }
+  const Napi::Value change = reader.Get(patch, "maxChange");
+  if (reader.ok() && !change.IsUndefined()) {
+    if (!change.IsNumber()) {
+      reader.FailType("maxChange", "number");
+    } else {
+      p.max_change = change.As<Napi::Number>().DoubleValue();
+    }
+  }
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  return ValueOrThrow(env, fm_workbook_set_iterative(handle_, &p), env.Undefined());
 }
 
 Napi::Value Workbook::GetIterative(const Napi::CallbackInfo& info) {

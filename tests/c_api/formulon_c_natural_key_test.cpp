@@ -9,6 +9,7 @@
 
 #include "c_api/formulon_c.h"
 #include "formulon_c_out_index.h"
+#include "formulon_c_setters.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
@@ -28,9 +29,9 @@ void CreateDefault(WorkbookGuard& wb) {
 TEST(FormulonCApiNaturalKey, DefinedNameByNameAndScope) {
   WorkbookGuard wb;
   CreateDefault(wb);
-  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "Rate", "Sheet1!$A$1"), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Rate", "Sheet1!$B$1", 0), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name_attrs(wb.handle, "Rate", -1, "the rate", 1), 0);
+  const fm_defined_name_input_t rate{"Rate", "Sheet1!$A$1", -1, "the rate", 1};
+  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, &rate), 0);
+  ASSERT_EQ(SetDefinedName(wb.handle, "Rate", "Sheet1!$B$1", 0), 0);
 
   int32_t present = 0;
   const char* stored = nullptr;
@@ -67,7 +68,7 @@ TEST(FormulonCApiNaturalKey, RemovingADefinedNameRefreshesItsReaders) {
   WorkbookGuard wb;
   CreateDefault(wb);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 5.0), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "Five", "Sheet1!$A$1"), 0);
+  ASSERT_EQ(SetDefinedName(wb.handle, "Five", "Sheet1!$A$1"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, "=Five"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   ASSERT_EQ(fm_workbook_remove_defined_name(wb.handle, "Five", -1), 0);
@@ -160,12 +161,12 @@ TEST(FormulonCApiNaturalKey, ShapeAndDrawingObjectByObjectId) {
   WorkbookGuard wb;
   CreateDefault(wb);
   fm_shape_t spec{};
-  spec.fields = FM_SHAPE_FIELD_PRST | FM_SHAPE_FIELD_ANCHOR;
-  spec.prst = "rect";
+  spec.fields = FM_SHAPE_FIELD_PRESET_GEOMETRY | FM_SHAPE_FIELD_ANCHOR;
+  spec.preset_geometry = "rect";
   spec.anchor_kind = FM_ANCHOR_KIND_ONE_CELL;
   spec.from_row = 2;
-  spec.cx = 914400;
-  spec.cy = 457200;
+  spec.width_emu = 914400;
+  spec.height_emu = 457200;
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
 
@@ -174,7 +175,7 @@ TEST(FormulonCApiNaturalKey, ShapeAndDrawingObjectByObjectId) {
   ASSERT_EQ(fm_sheet_get_shape(wb.handle, 0, id, &present, &shape), 0);
   ASSERT_EQ(present, 1);
   EXPECT_EQ(shape.object_id, id);
-  EXPECT_STREQ(shape.prst, "rect");
+  EXPECT_STREQ(shape.preset_geometry, "rect");
   ASSERT_EQ(fm_sheet_get_shape(wb.handle, 0, id + 1U, &present, &shape), 0);
   EXPECT_EQ(present, 0);
 

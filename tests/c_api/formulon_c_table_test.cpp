@@ -12,6 +12,7 @@
 #include "c_api/formulon_c.h"
 #include "formulon_c_pivot_test_helpers.h"
 #include "formulon_c_record_arg.h"
+#include "formulon_c_setters.h"
 #include "gtest/gtest.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
@@ -360,7 +361,7 @@ TEST(FormulonCApiTable, RenameRewritesStructuredReferences) {
             0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 3, "=SUM(Sales[Amount])+COUNTA(sales[Product])"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1, 3, "=Sales"), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "Doubled", "=SUM(Sales[Amount])*2"), 0);
+  ASSERT_EQ(SetDefinedName(wb.handle, "Doubled", "=SUM(Sales[Amount])*2"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 2, 3, "=Doubled"), 0);
 
   EXPECT_EQ(fm_workbook_rename_table(wb.handle, 0, "other", nullptr), kInvalidArgument);
@@ -380,11 +381,9 @@ TEST(FormulonCApiTable, RenameRewritesStructuredReferences) {
   EXPECT_STREQ(display, "Revenue");
   EXPECT_EQ(Formula(wb.handle, 0, 3), "=SUM(Revenue[Amount])+COUNTA(Revenue[Product])");
   EXPECT_EQ(Formula(wb.handle, 1, 3), "=Revenue") << "an entered bare table name binds to the whole table";
-  const char* dn_name = nullptr;
-  const char* dn_formula = nullptr;
-  int32_t scope = 0;
-  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn_name, &dn_formula, &scope), 0);
-  EXPECT_STREQ(dn_formula, "SUM(Revenue[Amount])*2");
+  fm_defined_name_t dn{};
+  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
+  EXPECT_STREQ(dn.formula, "SUM(Revenue[Amount])*2");
 
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
   fm_value_t v = Value(wb.handle, 0, 3);

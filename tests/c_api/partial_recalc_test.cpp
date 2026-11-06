@@ -11,6 +11,7 @@
 
 #include "c_api/formulon_c.h"
 #include "formulon_c_count_of.h"
+#include "formulon_c_setters.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 
@@ -144,7 +145,7 @@ TEST(FormulonCApiPartialRecalc, IterativeProgressContinueRunsToConvergence) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   // Enable iterative calc.
-  ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, 100, 0.001), 0);
+  ASSERT_EQ(SetIterative(wb.handle, 1, 100, 0.001), 0);
   // Build a self-referential cell: A1 = (A1 + 10) / 2 → fixed point 10.
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=(A1+10)/2"), 0);
 
@@ -162,7 +163,7 @@ TEST(FormulonCApiPartialRecalc, IterativeProgressContinueRunsToConvergence) {
 TEST(FormulonCApiPartialRecalc, IterativeProgressAbortStopsEarly) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, 100, 0.001), 0);
+  ASSERT_EQ(SetIterative(wb.handle, 1, 100, 0.001), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=(A1+10)/2"), 0);
 
   g_callback_invocations.store(0);
@@ -186,7 +187,7 @@ TEST(FormulonCApiPartialRecalc, IterativeProgressNullArgumentRejected) {
 TEST(FormulonCApiPartialRecalc, IterativeProgressForwardsCallerUserData) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, 100, 0.001), 0);
+  ASSERT_EQ(SetIterative(wb.handle, 1, 100, 0.001), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=(A1+10)/2"), 0);
 
   int marker = 0;
@@ -201,7 +202,7 @@ TEST(FormulonCApiPartialRecalc, IterativeProgressForwardsCallerUserData) {
 TEST(FormulonCApiPartialRecalc, IterativeProgressClearedByNullCallback) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, 100, 0.001), 0);
+  ASSERT_EQ(SetIterative(wb.handle, 1, 100, 0.001), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=(A1+10)/2"), 0);
 
   ASSERT_EQ(fm_workbook_set_iterative_progress(wb.handle, &always_abort, nullptr), 0);

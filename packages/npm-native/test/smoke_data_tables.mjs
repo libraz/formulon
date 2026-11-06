@@ -36,7 +36,7 @@ const readZipEntry = (bytes, name) => {
 };
 
 const num = (wb, row, col) => {
-  const r = wb.getValue(0, row, col);
+  const r = wb.sheet(0).getValue(row, col);
   assert.equal(r.kind, KIND.Number, `${row},${col}`);
   return r.number;
 };
@@ -44,9 +44,9 @@ const num = (wb, row, col) => {
 // B1 = 3 is the column input, B2 = B1 * B1 the formula; A3:A5 = 1, 2, 3 are the values, B3:B5 the results.
 const squaresWorkbook = (mod) => {
   const wb = mod.Workbook.createDefault();
-  wb.setNumber(0, 0, 1, 3);
-  wb.setFormula(0, 1, 1, '=B1*B1');
-  for (let i = 0; i < 3; i += 1) wb.setNumber(0, 2 + i, 0, i + 1);
+  wb.sheet(0).setNumber(0, 1, 3);
+  wb.sheet(0).setFormula(1, 1, '=B1*B1');
+  for (let i = 0; i < 3; i += 1) wb.sheet(0).setNumber(2 + i, 0, i + 1);
   return wb;
 };
 
@@ -55,13 +55,13 @@ const squares = { rect: { firstRow: 2, firstCol: 1, lastRow: 4, lastCol: 1 }, co
 test('a one-variable data table computes, reads back and refuses writes', async () => {
   const mod = await load();
   const wb = squaresWorkbook(mod);
-  wb.addDataTable(0, squares);
+  wb.sheet(0).addDataTable(squares);
   wb.recalc();
   assert.deepEqual([num(wb, 2, 1), num(wb, 3, 1), num(wb, 4, 1)], [1, 4, 9]);
   assert.equal(num(wb, 0, 1), 3);
   assert.equal(num(wb, 1, 1), 9);
 
-  const found = wb.getDataTable(0, 3, 1);
+  const found = wb.sheet(0).getDataTable(3, 1);
   assert.deepEqual(found, {
     rect: { firstRow: 2, firstCol: 1, lastRow: 4, lastCol: 1 },
     twoDimensional: false,
@@ -69,14 +69,14 @@ test('a one-variable data table computes, reads back and refuses writes', async 
     rowInput: null,
     colInput: { row: 0, col: 1, deleted: false },
   });
-  assert.equal(wb.getDataTable(0, 1, 1), null);
+  assert.equal(wb.sheet(0).getDataTable(1, 1), null);
 
   // The result range refuses writes; the values column does not.
-  assert.throws(() => wb.setNumber(0, 3, 1, 7), isFormulonError);
-  assert.throws(() => wb.setText(0, 2, 1, 'x'), isFormulonError);
-  assert.throws(() => wb.setFormula(0, 4, 1, '=1'), isFormulonError);
+  assert.throws(() => wb.sheet(0).setNumber(3, 1, 7), isFormulonError);
+  assert.throws(() => wb.sheet(0).setText(2, 1, 'x'), isFormulonError);
+  assert.throws(() => wb.sheet(0).setFormula(4, 1, '=1'), isFormulonError);
   assert.equal(num(wb, 3, 1), 4);
-  wb.setNumber(0, 3, 0, 10);
+  wb.sheet(0).setNumber(3, 0, 10);
   wb.recalc();
   assert.equal(num(wb, 3, 1), 100);
   release(wb);
@@ -85,21 +85,21 @@ test('a one-variable data table computes, reads back and refuses writes', async 
 test('a two-variable data table fills a multiplication table', async () => {
   const mod = await load();
   const wb = mod.Workbook.createDefault();
-  wb.setNumber(0, 0, 5, 1);
-  wb.setNumber(0, 1, 5, 1);
-  wb.setFormula(0, 2, 2, '=F1*F2');
+  wb.sheet(0).setNumber(0, 5, 1);
+  wb.sheet(0).setNumber(1, 5, 1);
+  wb.sheet(0).setFormula(2, 2, '=F1*F2');
   for (let k = 0; k < 3; k += 1) {
-    wb.setNumber(0, 2, 3 + k, k + 1);
-    wb.setNumber(0, 3 + k, 2, 10 * (k + 1));
+    wb.sheet(0).setNumber(2, 3 + k, k + 1);
+    wb.sheet(0).setNumber(3 + k, 2, 10 * (k + 1));
   }
-  wb.addDataTable(0, {
+  wb.sheet(0).addDataTable({
     rect: { firstRow: 3, firstCol: 3, lastRow: 5, lastCol: 5 },
     rowInput: { row: 0, col: 5 },
     colInput: { row: 1, col: 5 },
   });
   wb.recalc();
   assert.deepEqual([num(wb, 3, 3), num(wb, 4, 4), num(wb, 5, 5)], [10, 40, 90]);
-  const table = wb.getDataTable(0, 4, 4);
+  const table = wb.sheet(0).getDataTable(4, 4);
   assert.equal(table.twoDimensional, true);
   assert.deepEqual(table.rowInput, { row: 0, col: 5, deleted: false });
   assert.deepEqual(table.colInput, { row: 1, col: 5, deleted: false });
@@ -112,7 +112,7 @@ test('a two-variable data table fills a multiplication table', async () => {
 test('a data table survives save and load as a dataTable formula and follows row edits', async () => {
   const mod = await load();
   const wb = squaresWorkbook(mod);
-  wb.addDataTable(0, squares);
+  wb.sheet(0).addDataTable(squares);
   wb.recalc();
   const saved = wb.save();
   const sheet = readZipEntry(saved, 'xl/worksheets/sheet1.xml');
@@ -120,17 +120,17 @@ test('a data table survives save and load as a dataTable formula and follows row
   assert.equal((sheet.match(/t="dataTable"/g) ?? []).length, 1);
 
   const loaded = mod.Workbook.load(saved);
-  assert.deepEqual(loaded.getDataTable(0, 4, 1).colInput, { row: 0, col: 1, deleted: false });
-  assert.throws(() => loaded.setNumber(0, 4, 1, 1), isFormulonError);
-  loaded.insertRows(0, 0, 2);
-  const moved = loaded.getDataTable(0, 6, 1);
+  assert.deepEqual(loaded.sheet(0).getDataTable(4, 1).colInput, { row: 0, col: 1, deleted: false });
+  assert.throws(() => loaded.sheet(0).setNumber(4, 1, 1), isFormulonError);
+  loaded.sheet(0).insertRows(0, 2);
+  const moved = loaded.sheet(0).getDataTable(6, 1);
   assert.deepEqual([moved.rect.firstRow, moved.rect.lastRow], [4, 6]);
   assert.deepEqual(moved.colInput, { row: 2, col: 1, deleted: false });
   // Deleting the input's row marks it deleted and the table turns into errors.
-  loaded.deleteRows(0, 2, 1);
-  assert.equal(loaded.getDataTable(0, 5, 1).colInput.deleted, true);
+  loaded.sheet(0).deleteRows(2, 1);
+  assert.equal(loaded.sheet(0).getDataTable(5, 1).colInput.deleted, true);
   loaded.recalc();
-  assert.equal(loaded.getValue(0, 3, 1).kind, KIND.Error);
+  assert.equal(loaded.sheet(0).getValue(3, 1).kind, KIND.Error);
   release(loaded);
   release(wb);
 });
@@ -138,7 +138,7 @@ test('a data table survives save and load as a dataTable formula and follows row
 test('autoNoTable leaves tables to recalcDataTables and removal blanks them', async () => {
   const mod = await load();
   const wb = squaresWorkbook(mod);
-  wb.addDataTable(0, squares);
+  wb.sheet(0).addDataTable(squares);
   wb.setCalcMode(mod.CalcMode.AutoNoTable);
   wb.recalc();
   assert.equal(num(wb, 4, 1), 0);
@@ -146,25 +146,28 @@ test('autoNoTable leaves tables to recalcDataTables and removal blanks them', as
   wb.recalcDataTables();
   assert.equal(num(wb, 4, 1), 9);
 
-  wb.removeDataTable(0, 3, 1);
-  assert.equal(wb.getDataTable(0, 3, 1), null);
-  assert.equal(wb.getValue(0, 3, 1).kind, KIND.Blank);
-  assert.throws(() => wb.removeDataTable(0, 3, 1), isFormulonError);
-  wb.setNumber(0, 3, 1, 7);
+  wb.sheet(0).removeDataTable(3, 1);
+  assert.equal(wb.sheet(0).getDataTable(3, 1), null);
+  assert.equal(wb.sheet(0).getValue(3, 1).kind, KIND.Blank);
+  assert.throws(() => wb.sheet(0).removeDataTable(3, 1), isFormulonError);
+  wb.sheet(0).setNumber(3, 1, 7);
   release(wb);
 });
 
 test('data table arguments are validated', async () => {
   const mod = await load();
   const wb = squaresWorkbook(mod);
-  assert.throws(() => wb.addDataTable(0, { rect: squares.rect }), isFormulonError);
-  assert.throws(() => wb.addDataTable(0, { ...squares, rect: { ...squares.rect, firstRow: 0 } }), isFormulonError);
-  assert.throws(() => wb.addDataTable(0, { ...squares, colInput: { row: 3, col: 1 } }), isFormulonError);
-  assert.throws(() => wb.addDataTable(5, squares), isFormulonError);
-  assert.throws(() => wb.getDataTable(5, 0, 0), isFormulonError);
-  assert.throws(() => wb.removeDataTable(5, 0, 0), isFormulonError);
-  assert.throws(() => wb.addDataTable(0, { ...squares, colInput: { row: -1, col: 1 } }), RangeError);
-  wb.addDataTable(0, squares);
-  assert.throws(() => wb.addDataTable(0, squares), isFormulonError);
+  assert.throws(() => wb.sheet(0).addDataTable({ rect: squares.rect }), isFormulonError);
+  assert.throws(
+    () => wb.sheet(0).addDataTable({ ...squares, rect: { ...squares.rect, firstRow: 0 } }),
+    isFormulonError,
+  );
+  assert.throws(() => wb.sheet(0).addDataTable({ ...squares, colInput: { row: 3, col: 1 } }), isFormulonError);
+  assert.throws(() => wb.sheet(5).addDataTable(squares), isFormulonError);
+  assert.throws(() => wb.sheet(5).getDataTable(0, 0), isFormulonError);
+  assert.throws(() => wb.sheet(5).removeDataTable(0, 0), isFormulonError);
+  assert.throws(() => wb.sheet(0).addDataTable({ ...squares, colInput: { row: -1, col: 1 } }), RangeError);
+  wb.sheet(0).addDataTable(squares);
+  assert.throws(() => wb.sheet(0).addDataTable(squares), isFormulonError);
   release(wb);
 });

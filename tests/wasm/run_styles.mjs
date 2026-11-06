@@ -109,11 +109,9 @@ export function registerStyles(Module, test) {
       assert.equal(reread.fontIndex, f1);
       assert.equal(reread.numFmtId, custom);
       assert.equal(reread.wrapText, true);
-      assert.equal(reread.hasAlignment, true);
-      assert.equal(reread.hasHorizontalAlign, true);
-      assert.equal(reread.hasVerticalAlign, true);
-      assert.equal(reread.hasWrapText, true);
-      assert.equal(reread.hasJustifyLastLine, false);
+      assert.equal(reread.horizontalAlign, 1);
+      assert.equal(reread.verticalAlign, 2);
+      assert.equal(reread.justifyLastLine, null);
 
       const optional = wb.addCellXf({
         fontIndex: f1,
@@ -134,8 +132,7 @@ export function registerStyles(Module, test) {
       assert.equal(optionalRead.shrinkToFit, false);
       assert.equal(optionalRead.readingOrder, 0);
       assert.equal(optionalRead.justifyLastLine, true);
-      assert.equal(optionalRead.hasAlignment, true);
-      assert.equal(optionalRead.hasJustifyLastLine, true);
+      assert.equal(optionalRead.horizontalAlign, null);
       assert.equal(wb.addCellXf(optionalRead), optional);
 
       const omitted = wb.addCellXf({
@@ -145,7 +142,11 @@ export function registerStyles(Module, test) {
         numFmtId: custom,
       });
       const omittedRead = wb.getCellXf(omitted);
-      assert.equal(omittedRead.hasAlignment, false);
+      assert.deepEqual(
+        [omittedRead.horizontalAlign, omittedRead.verticalAlign, omittedRead.wrapText, omittedRead.justifyLastLine],
+        [null, null, null, null],
+      );
+      assert.equal('textRotation' in omittedRead, false);
 
       const explicitEmpty = wb.addCellXf({
         fontIndex: f1,
@@ -155,8 +156,6 @@ export function registerStyles(Module, test) {
         hasAlignment: true,
       });
       assert.notEqual(explicitEmpty, omitted);
-      const explicitEmptyRead = wb.getCellXf(explicitEmpty);
-      assert.equal(explicitEmptyRead.hasAlignment, true);
 
       const rfont = wb.getFont(f1);
       assert.equal(rfont.name, 'Arial');
@@ -238,9 +237,11 @@ export function registerStyles(Module, test) {
       assert.equal(gotDxf.fill.fg.kind, 3);
       assert.equal(gotDxf.border.left.color.kind, 2);
       const dxfAgain = wb.addDxf(gotDxf);
-      assert.equal(gotDxf.font.hasSize, true);
-      const bareDxf = wb.addDxf({ font: { bold: true, hasBold: true } });
-      assert.equal(wb.getDxf(bareDxf).font.hasSize, false);
+      assert.equal(gotDxf.font.size, 9);
+      const bareDxf = wb.addDxf({ font: { bold: true } });
+      assert.equal(wb.getDxf(bareDxf).font.size, null);
+      assert.equal(wb.getDxf(bareDxf).font.bold, true);
+      assert.equal(wb.getDxf(bareDxf).font.italic, null);
       assert.equal(dxfAgain, dxf);
 
       const saved = wb.save();
@@ -456,9 +457,9 @@ export function registerStyles(Module, test) {
       );
       assert.equal(wb.getCellStyleXfCount(), styleXfBefore);
 
-      const themeBefore = wb.getThemeFonts().colors;
+      const themeBefore = wb.getThemeColors().colors;
       assert.throws(() => wb.setThemeColors([0x100000000, ...themeBefore.slice(1)]), RangeError);
-      assert.deepEqual(wb.getThemeFonts().colors, themeBefore);
+      assert.deepEqual(wb.getThemeColors().colors, themeBefore);
 
       const dxf = wb.addDxf({ font: { name: 'cf-dxf' } });
       const base = {
@@ -666,7 +667,6 @@ export function registerStyles(Module, test) {
       assert.equal(horizontalReads, 1);
       const storedXf = wb.getCellXf(xf);
       assert.equal(storedXf.horizontalAlign, 1);
-      assert.equal(storedXf.hasHorizontalAlign, true);
 
       wb.addDxf({ font: { name: 'first' } });
       const secondDxf = wb.addDxf({ font: { name: 'second' } });

@@ -37,18 +37,17 @@ if (existsSync(prebuildSlot)) {
 
 const native = require_(nativePath);
 native.__setErrorClass(common.FormulonError);
-common.installWorkbookExtensions(native.Workbook);
-const formulon = common.buildFormulon(native, common);
 
 /**
- * Resolves to the frozen `Formulon` object at once. `options` is accepted for
+ * Resolves to a new frozen `Formulon` object, whose `Workbook` is a class of
+ * its own, as each `@libraz/formulon` call yields. `options` is accepted for
  * parity with `@libraz/formulon` and not used.
  *
  * @param {object} [_options] `FormulonOptions`.
  * @returns {Promise<object>}
  */
 export function createFormulon(_options) {
-  return Promise.resolve(formulon);
+  return Promise.resolve(common.buildFormulon(native, common));
 }
 export default createFormulon;
 
@@ -58,9 +57,13 @@ export {
   AnchorEditAs,
   AnchorKind,
   CalcMode,
+  CfDataBarAxisPosition,
+  CfDataBarDirection,
   CfMatchKind,
   ChartAxisCrosses,
   ChartAxisKind,
+  ChartAxisPosition,
+  ChartBarDirection,
   ChartBlanksAs,
   ChartGrouping,
   ChartInsertKind,
@@ -74,6 +77,7 @@ export {
   ChartTitleKind,
   CollationStrength,
   ColorContext,
+  ColorKind,
   ColorResolution,
   DateTimeGrouping,
   DisplayStatus,
@@ -85,9 +89,12 @@ export {
   FilterKind,
   FilterOperator,
   FormulonError,
+  FunctionAvailability,
   GeometryMode,
   ImageFormat,
+  LocaleDateOrder,
   LogLevel,
+  PageOrientation,
   PIVOT_SHOW_AS_BASE_NEXT,
   PIVOT_SHOW_AS_BASE_PREVIOUS,
   PIVOT_VALUES_FIELD,
@@ -103,6 +110,7 @@ export {
   PivotSortOrder,
   RefMode,
   ShapePaint,
+  SheetViewMode,
   SheetVisibility,
   SlicerCrossFilter,
   SlicerSortOrder,

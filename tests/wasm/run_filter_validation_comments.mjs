@@ -83,7 +83,6 @@ export function registerFilterValidationComments(Module, test) {
             top: true,
             percent: true,
             topVal: 10,
-            hasFilterVal: true,
             filterVal: 4.5,
           },
           {
@@ -117,6 +116,9 @@ export function registerFilterValidationComments(Module, test) {
       assert.equal(af.columns[1].percent, true);
       assert.equal(af.columns[1].topVal, 10);
       assert.equal(af.columns[1].filterVal, 4.5);
+      assert.equal(af.columns[0].filterVal, null);
+      assert.equal(af.columns[0].iconId, null);
+      assert.equal(af.sort.conditions[0].dxfId, null);
       assert.equal(af.columns[2].customAnd, true);
       assert.equal(af.columns[2].val2, '9');
       assert.equal(af.sort.caseSensitive, true);
@@ -335,7 +337,7 @@ export function registerFilterValidationComments(Module, test) {
 
       for (const value of [Number.NaN, 1.5, Symbol('rowOffsetEmu')]) {
         assert.throws(
-          () => wb.addImage(0, new Uint8Array([1, 2, 3]), { rowOffsetEmu: value }),
+          () => wb.addImage(0, new Uint8Array([1, 2, 3]), { anchor: { rowOffsetEmu: value } }),
           typeof value === 'symbol' ? TypeError : RangeError,
           `rowOffsetEmu=${String(value)}`,
         );
@@ -344,13 +346,12 @@ export function registerFilterValidationComments(Module, test) {
 
       expectFailure(() =>
         wb.addImage(0, new Uint8Array([1, 2, 3]), {
-          rowOffsetEmu: -(2 ** 63),
-          colOffsetEmu: 2 ** 63 - 1024,
+          anchor: { rowOffsetEmu: -(2 ** 63), colOffsetEmu: 2 ** 63 - 1024 },
         }),
       );
       assert.equal(wb.listDrawingObjects(0).length, 0);
 
-      assert.throws(() => wb.addImage(0, new Uint8Array([1, 2, 3]), { widthEmu: 2 ** 63 }), RangeError);
+      assert.throws(() => wb.addImage(0, new Uint8Array([1, 2, 3]), { anchor: { widthEmu: 2 ** 63 } }), RangeError);
       assert.equal(wb.listDrawingObjects(0).length, 0);
     });
   });
@@ -435,11 +436,9 @@ export function registerFilterValidationComments(Module, test) {
       wb.addValidation(0, rule);
 
       const none = wb.validateValue(0, 0, 3, { kind: 1, number: 99 });
-      assert.equal(none.hasRule, false);
-      assert.equal(none.valid, true);
+      assert.deepEqual({ ...none }, { valid: true, ruleIndex: null, errorStyle: null });
 
       const good = wb.validateValue(0, 0, 0, { kind: 1, number: 5 });
-      assert.equal(good.hasRule, true);
       assert.equal(good.valid, true);
       assert.equal(good.ruleIndex, 0);
 

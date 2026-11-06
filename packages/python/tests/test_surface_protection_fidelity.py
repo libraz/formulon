@@ -6,11 +6,13 @@ import unittest
 
 from formulon import (
     CellRect,
+    Comment,
     ConditionalFormatInput,
     DataValidationInput,
     FormulonError,
     InvalidArgumentError,
     ProtectedRange,
+    SheetRect,
     Workbook,
     WorkbookProtection,
 )
@@ -50,11 +52,10 @@ class WorkbookProtectionTests(unittest.TestCase):
 class ProtectedRangeTests(unittest.TestCase):
     def test_add_list_update_remove_and_row_edit_shift(self) -> None:
         with Workbook.create_default() as wb:
-            wb.add_protected_range(
-                0, ProtectedRange(name="Inputs", ranges=[CellRect(1, 1, 2, 2), CellRect(4, 4, 4, 4)], password="CC1A")
+            wb.sheet(0).add_protected_range(
+                ProtectedRange(name="Inputs", ranges=[CellRect(1, 1, 2, 2), CellRect(4, 4, 4, 4)], password="CC1A")
             )
-            wb.add_protected_range(
-                0,
+            wb.sheet(0).add_protected_range(
                 ProtectedRange(
                     name="Totals",
                     ranges=[CellRect(9, 0, 11, 0)],
@@ -66,56 +67,49 @@ class ProtectedRangeTests(unittest.TestCase):
                 ),
             )
             with Workbook.load(wb.save()) as reloaded:
-                ranges = [reloaded.get_protected_range(0, i) for i in range(reloaded.get_protected_range_count(0))]
-                self.assertEqual(reloaded.get_protected_range_count(0), 2)
+                ranges = reloaded.sheet(0).list_protected_ranges()
+                self.assertEqual(len(reloaded.sheet(0).list_protected_ranges()), 2)
                 self.assertEqual([r.name for r in ranges], ["Inputs", "Totals"])
                 self.assertEqual(ranges[0].ranges, [CellRect(1, 1, 2, 2), CellRect(4, 4, 4, 4)])
                 self.assertEqual(ranges[0].password, "CC1A")
                 self.assertEqual(ranges[1].spin_count, 100000)
                 self.assertEqual(ranges[1].security_descriptor, "O:WDG:WD")
 
-                reloaded.insert_rows(0, 0, 2)
+                reloaded.sheet(0).insert_rows(0, 2)
                 self.assertEqual(
-                    [reloaded.get_protected_range(0, i) for i in range(reloaded.get_protected_range_count(0))][
-                        0
-                    ].ranges,
+                    reloaded.sheet(0).list_protected_ranges()[0].ranges,
                     [CellRect(3, 1, 4, 2), CellRect(6, 4, 6, 4)],
                 )
-                reloaded.update_protected_range(0, 0, ProtectedRange(name="Renamed", ranges=[CellRect(3, 3, 3, 3)]))
+                reloaded.sheet(0).update_protected_range(
+                    0, ProtectedRange(name="Renamed", ranges=[CellRect(3, 3, 3, 3)])
+                )
                 self.assertEqual(
-                    [reloaded.get_protected_range(0, i) for i in range(reloaded.get_protected_range_count(0))][
-                        0
-                    ].password,
+                    reloaded.sheet(0).list_protected_ranges()[0].password,
                     "",
                 )
-                reloaded.remove_protected_range(0, 0)
+                reloaded.sheet(0).remove_protected_range(0)
                 self.assertEqual(
-                    [
-                        r.name
-                        for r in [
-                            reloaded.get_protected_range(0, i) for i in range(reloaded.get_protected_range_count(0))
-                        ]
-                    ],
+                    [r.name for r in reloaded.sheet(0).list_protected_ranges()],
                     ["Totals"],
                 )
 
     def test_arguments_are_validated(self) -> None:
         with Workbook.create_default() as wb:
-            wb.add_protected_range(0, ProtectedRange(name="Inputs", ranges=[CellRect(0, 0, 0, 0)]))
+            wb.sheet(0).add_protected_range(ProtectedRange(name="Inputs", ranges=[CellRect(0, 0, 0, 0)]))
             for bad in (
                 ProtectedRange(name="Inputs", ranges=[CellRect(0, 1, 0, 1)]),
                 ProtectedRange(name="", ranges=[CellRect(0, 1, 0, 1)]),
                 ProtectedRange(name="Other", ranges=[]),
             ):
                 with self.assertRaises(FormulonError):
-                    wb.add_protected_range(0, bad)
+                    wb.sheet(0).add_protected_range(bad)
             with self.assertRaises(FormulonError):
-                wb.add_protected_range(9, ProtectedRange(name="Other", ranges=[CellRect(0, 1, 0, 1)]))
+                wb.sheet(9).add_protected_range(ProtectedRange(name="Other", ranges=[CellRect(0, 1, 0, 1)]))
             with self.assertRaises(FormulonError):
-                wb.update_protected_range(0, 5, ProtectedRange(name="Other", ranges=[CellRect(0, 1, 0, 1)]))
+                wb.sheet(0).update_protected_range(5, ProtectedRange(name="Other", ranges=[CellRect(0, 1, 0, 1)]))
             with self.assertRaises(FormulonError):
-                wb.remove_protected_range(0, 5)
-            self.assertEqual(wb.get_protected_range_count(0), 1)
+                wb.sheet(0).remove_protected_range(5)
+            self.assertEqual(len(wb.sheet(0).list_protected_ranges()), 1)
 
 
 class RangeInputTests(unittest.TestCase):
@@ -126,36 +120,36 @@ class RangeInputTests(unittest.TestCase):
             with self.assertRaises(TypeError):
                 ConditionalFormatInput(type=0)  # type: ignore[call-arg]
             with self.assertRaises(TypeError):
-                wb.add_table(0, None, "T", "T", ["A"])  # type: ignore[arg-type]
-            self.assertEqual([wb.get_table(i) for i in range(wb.get_table_count())], [])
+                wb.add_table(range=SheetRect(0, None), name="T", display_name="T", columns=["A"])  # type: ignore[arg-type]
+            self.assertEqual(wb.list_tables(), [])
 
     def test_an_empty_validation_range_list_is_rejected(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(InvalidArgumentError):
-                wb.add_validation(0, DataValidationInput(type=3, ranges=[], formula1='"A,B"'))
-            self.assertEqual(wb.get_validation_count(0), 0)
+                wb.sheet(0).add_validation(DataValidationInput(type=3, ranges=[], formula1='"A,B"'))
+            self.assertEqual(len(wb.sheet(0).list_validations()), 0)
 
 
 class NoteVisibilityTests(unittest.TestCase):
     def test_visibility_reads_back_and_persists(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_comment(0, 1, 1, "Alice", "shown")
-            wb.set_comment(0, 3, 3, "Alice", "hidden")
-            self.assertIs(wb.get_comment_visible(0, 1, 1), False)
-            wb.set_comment_visible(0, 1, 1, True)
+            wb.sheet(0).set_comment(1, 1, Comment("Alice", "shown"))
+            wb.sheet(0).set_comment(3, 3, Comment("Alice", "hidden"))
+            self.assertIs(wb.sheet(0).get_comment_visible(1, 1), False)
+            wb.sheet(0).set_comment_visible(1, 1, True)
             with Workbook.load(wb.save()) as reloaded:
-                self.assertIs(reloaded.get_comment_visible(0, 1, 1), True)
-                self.assertIs(reloaded.get_comment_visible(0, 3, 3), False)
-                reloaded.set_comment(0, 1, 1, "Alice", "edited")
-                self.assertIs(reloaded.get_comment_visible(0, 1, 1), True)
-                self.assertIsNone(reloaded.get_comment_visible(0, 7, 7))
+                self.assertIs(reloaded.sheet(0).get_comment_visible(1, 1), True)
+                self.assertIs(reloaded.sheet(0).get_comment_visible(3, 3), False)
+                reloaded.sheet(0).set_comment(1, 1, Comment("Alice", "edited"))
+                self.assertIs(reloaded.sheet(0).get_comment_visible(1, 1), True)
+                self.assertIsNone(reloaded.sheet(0).get_comment_visible(7, 7))
                 with self.assertRaises(FormulonError):
-                    reloaded.set_comment_visible(0, 7, 7, True)
+                    reloaded.sheet(0).set_comment_visible(7, 7, True)
 
     def test_out_of_range_sheet_raises_instead_of_returning_none(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.get_comment_visible(99, 1, 1)
+                wb.sheet(99).get_comment_visible(1, 1)
 
 
 if __name__ == "__main__":

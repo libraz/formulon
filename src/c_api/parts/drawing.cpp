@@ -10,6 +10,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/enum_map.h"
 #include "drawing/drawing_edit.h"
 #include "drawing/drawing_xml.h"
 #include "drawing/image_header.h"
@@ -18,12 +19,14 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::anchor_kind_from_c;
 using formulon::c_api::parts::check_anchor_enums;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::copy_owned_bytes;
+using formulon::c_api::parts::edit_as_from_c;
 using formulon::c_api::parts::fill_anchor;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
@@ -32,6 +35,7 @@ using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::TextStore;
+using formulon::c_api::parts::to_c;
 
 namespace {
 
@@ -94,13 +98,13 @@ extern "C" fm_status_t fm_sheet_get_drawing_object_at(const fm_workbook_t* wb, s
   *out = fm_drawing_object_t{};
   out->object_id = obj.object_id;
   out->kind = static_cast<int32_t>(obj.kind);
-  out->edit_as = static_cast<int32_t>(obj.edit_as);
+  out->edit_as = to_c(obj.edit_as);
   fill_anchor(obj, out);
-  out->cx = obj.cx;
-  out->cy = obj.cy;
+  out->width_emu = obj.cx;
+  out->height_emu = obj.cy;
   out->image_format = static_cast<int32_t>(obj.image_format);
   out->name = store_cstr(store, obj.name);
-  out->descr = store_cstr(store, obj.descr);
+  out->description = store_cstr(store, obj.descr);
   out->media_path = store_cstr(store, obj.media_path);
   return 0;
 }
@@ -178,23 +182,24 @@ extern "C" fm_status_t fm_sheet_add_image(fm_workbook_t* wb, size_t sheet_index,
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (auto rc = check_anchor_enums(opts->anchor_kind, opts->edit_as); rc != 0) {
+  const fm_drawing_anchor_t& anchor = opts->anchor;
+  if (auto rc = check_anchor_enums(anchor.anchor_kind, anchor.edit_as); rc != 0) {
     return rc;
   }
-  if (auto rc = check_utf8({opts->name, opts->descr}); rc != 0) {
+  if (auto rc = check_utf8({opts->name, opts->description}); rc != 0) {
     return rc;
   }
   formulon::ImageInsertOptions model;
   model.name = opts->name != nullptr ? opts->name : "";
-  model.descr = opts->descr != nullptr ? opts->descr : "";
-  model.anchor_kind = static_cast<formulon::AnchorKind>(opts->anchor_kind);
-  model.edit_as = static_cast<formulon::EditAs>(opts->edit_as);
-  model.row = opts->row;
-  model.col = opts->col;
-  model.row_off = opts->row_offset_emu;
-  model.col_off = opts->col_offset_emu;
-  model.width_emu = opts->width_emu;
-  model.height_emu = opts->height_emu;
+  model.descr = opts->description != nullptr ? opts->description : "";
+  model.anchor_kind = anchor_kind_from_c(anchor.anchor_kind);
+  model.edit_as = edit_as_from_c(anchor.edit_as);
+  model.row = anchor.row;
+  model.col = anchor.col;
+  model.row_off = anchor.row_offset_emu;
+  model.col_off = anchor.col_offset_emu;
+  model.width_emu = anchor.width_emu;
+  model.height_emu = anchor.height_emu;
   auto id = formulon::insert_image(wb->workbook(), sheet_index, bytes, len, model);
   if (!id) {
     return set_last_error(id.error());
@@ -224,8 +229,8 @@ extern "C" fm_status_t fm_sheet_set_drawing_anchor(fm_workbook_t* wb, size_t she
     return rc;
   }
   formulon::DrawingAnchor model;
-  model.anchor_kind = static_cast<formulon::AnchorKind>(anchor->anchor_kind);
-  model.edit_as = static_cast<formulon::EditAs>(anchor->edit_as);
+  model.anchor_kind = anchor_kind_from_c(anchor->anchor_kind);
+  model.edit_as = edit_as_from_c(anchor->edit_as);
   model.row = anchor->row;
   model.col = anchor->col;
   model.row_off = anchor->row_offset_emu;

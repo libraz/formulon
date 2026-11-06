@@ -9,6 +9,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/enum_map.h"
 #include "drawing/slicer_edit.h"
 #include "utils/error.h"
 #include "workbook.h"
@@ -26,8 +27,10 @@ using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::slicer_sort_order_from_c;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::TextStore;
+using formulon::c_api::parts::to_c;
 
 namespace {
 
@@ -35,12 +38,12 @@ namespace {
 fm_status_t to_spec(const fm_slicer_t& slicer, formulon::SlicerSpec& spec) {
   spec.fields = slicer.fields;
   if ((slicer.fields & FM_SLICER_FIELD_SORT_ORDER) != 0U) {
-    if (auto rc = check_enum_domain(slicer.sort_order, FM_SLICER_SORT_ORDER_DESCENDING, "sort_order"); rc != 0) {
+    if (auto rc = check_enum_domain(slicer.sort_order, 0, FM_SLICER_SORT_ORDER_DESCENDING, "sort_order"); rc != 0) {
       return rc;
     }
   }
   if ((slicer.fields & FM_SLICER_FIELD_CROSS_FILTER) != 0U) {
-    if (auto rc = check_enum_domain(slicer.cross_filter, FM_SLICER_CROSS_NONE, "cross_filter"); rc != 0) {
+    if (auto rc = check_enum_domain(slicer.cross_filter, 0, FM_SLICER_CROSS_NONE, "cross_filter"); rc != 0) {
       return rc;
     }
   }
@@ -51,10 +54,11 @@ fm_status_t to_spec(const fm_slicer_t& slicer, formulon::SlicerSpec& spec) {
   spec.caption = slicer.caption != nullptr ? slicer.caption : "";
   spec.style = slicer.style != nullptr ? slicer.style : "";
   spec.column_count = slicer.column_count;
-  spec.row_height = slicer.row_height;
-  spec.from = formulon::AnchorPoint{slicer.from_row, slicer.from_col, slicer.from_row_offset, slicer.from_col_offset};
-  spec.to = formulon::AnchorPoint{slicer.to_row, slicer.to_col, slicer.to_row_offset, slicer.to_col_offset};
-  spec.sort_order = static_cast<formulon::SlicerSortOrder>(slicer.sort_order);
+  spec.row_height = slicer.row_height_emu;
+  spec.from =
+      formulon::AnchorPoint{slicer.from_row, slicer.from_col, slicer.from_row_offset_emu, slicer.from_col_offset_emu};
+  spec.to = formulon::AnchorPoint{slicer.to_row, slicer.to_col, slicer.to_row_offset_emu, slicer.to_col_offset_emu};
+  spec.sort_order = slicer_sort_order_from_c(slicer.sort_order);
   spec.cross_filter = static_cast<formulon::SlicerCrossFilter>(slicer.cross_filter);
   return 0;
 }
@@ -131,10 +135,10 @@ extern "C" fm_status_t fm_sheet_get_slicer_at(const fm_workbook_t* wb, size_t sh
   *out = fm_slicer_t{};
   out->object_id = obj.object_id;
   out->column_count = info.column_count;
-  out->sort_order = static_cast<int32_t>(info.sort_order);
+  out->sort_order = to_c(info.sort_order);
   out->cross_filter = static_cast<int32_t>(info.cross_filter);
   fill_anchor(obj, out);
-  out->row_height = info.row_height;
+  out->row_height_emu = info.row_height;
   out->name = store_cstr(store, info.name);
   out->caption = store_cstr(store, info.caption);
   out->cache_name = store_cstr(store, info.cache_name);

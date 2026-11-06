@@ -148,8 +148,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build
 
-      - name: Install wasmtime
-        run: python -m pip install wasmtime
+      - name: Install wasmtime and PyYAML
+        run: python -m pip install wasmtime pyyaml
 
       - name: Build capi WASM, stage, and smoke-test Python binding
         # CMAKE override mirrors ci.yml's wasm job and release.yml's

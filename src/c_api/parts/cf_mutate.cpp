@@ -27,6 +27,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/enum_map.h"
 #include "cf/cf_authoring.h"
 #include "cf/cf_types.h"
 #include "cf/cf_x14_id.h"
@@ -42,10 +43,13 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::data_bar_axis_position_from_c;
+using formulon::c_api::parts::data_bar_direction_from_c;
 using formulon::c_api::parts::ingest_entered_formula;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::text_or_empty;
+using formulon::c_api::parts::to_c;
 using formulon::c_api::parts::validate;
 
 // `fm_cell_rect_t` mirrors `cf::CFCellRange`, so the model's range
@@ -145,7 +149,7 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
     const auto* first = reinterpret_cast<const fm_cell_rect_t*>(block.sqref.data());
     out->ranges = range_arena.adopt(std::vector<fm_cell_rect_t>(first, first + block.sqref.size()));
   }
-  out->range_count = block.sqref.size();
+  out->range_count = static_cast<std::uint32_t>(block.sqref.size());
   out->formula1 =
       rule.formula1.has_value()
           ? text_arena.emplace(formulon::parser::display_cell_shaped_names(wb.spell_self_book_names(*rule.formula1)))
@@ -206,7 +210,7 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
     out->data_bar_gradient_engaged = 1;
     out->data_bar_gradient = spec.gradient ? 1 : 0;
     out->data_bar_axis_position_engaged = 1;
-    out->data_bar_axis_position = static_cast<std::uint8_t>(spec.axis_position);
+    out->data_bar_axis_position = to_c(spec.axis_position);
     out->data_bar_negative_fill_engaged = 1;
     out->data_bar_negative_fill = from_cf_color(wb, spec.negative_fill, formulon::ColorContext::kFillForeground);
     out->data_bar_border_engaged = spec.border.has_value() ? 1 : 0;
@@ -219,7 +223,7 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
     }
     out->data_bar_axis_color_engaged = 1;
     out->data_bar_axis_color = from_cf_color(wb, spec.axis_color, formulon::ColorContext::kBorder);
-    out->data_bar_direction = static_cast<std::uint8_t>(spec.direction);
+    out->data_bar_direction = to_c(spec.direction);
   }
   if (rule.icon_set.has_value()) {
     const auto& spec = *rule.icon_set;
@@ -301,7 +305,7 @@ bool copy_data_bar_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_r
     spec.negative_border = to_cf_color(rule.data_bar_negative_border);
   }
   if (rule.data_bar_axis_position_engaged != 0) {
-    spec.axis_position = static_cast<formulon::cf::DataBarAxisPosition>(rule.data_bar_axis_position);
+    spec.axis_position = data_bar_axis_position_from_c(rule.data_bar_axis_position);
   }
   if (rule.data_bar_axis_color_engaged != 0) {
     spec.axis_color = to_cf_color(rule.data_bar_axis_color);
@@ -309,7 +313,7 @@ bool copy_data_bar_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_r
   if (rule.data_bar_gradient_engaged != 0) {
     spec.gradient = rule.data_bar_gradient != 0;
   }
-  spec.direction = static_cast<formulon::cf::DataBarDirection>(rule.data_bar_direction);
+  spec.direction = data_bar_direction_from_c(rule.data_bar_direction);
   spec.show_value = rule.data_bar_show_value != 0;
   spec.min_length_pct = rule.data_bar_min_length_pct;
   spec.max_length_pct = rule.data_bar_max_length_pct;

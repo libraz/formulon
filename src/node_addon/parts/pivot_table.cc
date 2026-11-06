@@ -77,13 +77,19 @@ fm_status_t ReadOptions(const fm_workbook_t* handle, std::size_t sheet, std::siz
 }
 
 // A string member: an omitted key keeps the current value, '' clears it.
+// An omitted caption keeps the stored one; `null` removes it.
 void MergeString(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, const char*& field,
                  std::string& store) {
-  std::string value;
-  if (reader.String(spec, key, &value)) {
-    store = std::move(value);
-    field = store.c_str();
+  const Napi::Value raw = reader.Get(spec, key);
+  if (!reader.ok() || raw.IsUndefined()) {
+    return;
   }
+  std::string value;
+  if (!raw.IsNull() && !reader.String(raw, key, &value)) {
+    return;
+  }
+  store = std::move(value);
+  field = store.c_str();
 }
 
 Napi::Value OptionsFlag(Napi::Env env, int32_t v) {
@@ -221,7 +227,7 @@ Napi::Value Workbook::PivotGetGrandTotals(const Napi::CallbackInfo& info) {
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("rows", Napi::Boolean::New(env, rows != 0));
-  out.Set("cols", Napi::Boolean::New(env, cols != 0));
+  out.Set("columns", Napi::Boolean::New(env, cols != 0));
   return out;
 }
 
@@ -299,16 +305,16 @@ Napi::Value Workbook::PivotFieldAt(const Napi::CallbackInfo& info) {
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("sourceName", JsString(env, field.source_name));
-  out.Set("customName", JsString(env, field.custom_name));
-  out.Set("axis", Napi::Number::New(env, field.axis));
+  out.Set("customName", JsStringOrNull(env, field.custom_name));
+  out.Set("axis", JsIndexOrNull(env, field.axis));
   out.Set("subtotalTop", Napi::Boolean::New(env, field.subtotal_top != 0));
-  out.Set("numberFormat", JsString(env, field.number_format));
-  out.Set("cacheFieldIndex", Napi::Number::New(env, field.cache_field_index));
+  out.Set("numberFormat", JsStringOrNull(env, field.number_format));
+  out.Set("cacheFieldIndex", JsIndexOrNull(env, field.cache_field_index));
   out.Set("sortOrder", Napi::Number::New(env, field.sort_order));
   out.Set("sortByField", JsString(env, field.sort_by_field));
   out.Set("datePeriods", Napi::Number::New(env, field.date_periods));
   out.Set("dateCalendar", Napi::Number::New(env, field.date_calendar));
-  out.Set("groupBaseIndex", Napi::Number::New(env, field.group_base_index));
+  out.Set("groupBaseIndex", JsIndexOrNull(env, field.group_base_index));
   out.Set("defaultSubtotal", Napi::Boolean::New(env, field.default_subtotal != 0));
   out.Set("insertBlankRow", Napi::Boolean::New(env, field.insert_blank_row != 0));
   out.Set("fillDownLabels", Napi::Boolean::New(env, field.fill_down_labels != 0));
@@ -350,7 +356,7 @@ Napi::Value Workbook::PivotFieldItemAt(const Napi::CallbackInfo& info) {
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("name", JsString(env, item.name));
-  out.Set("cacheIndex", Napi::Number::New(env, item.cache_index));
+  out.Set("cacheIndex", JsIndexOrNull(env, item.cache_index));
   out.Set("visible", Napi::Boolean::New(env, item.visible != 0));
   out.Set("caption", item.caption != nullptr ? Napi::Value(Napi::String::New(env, item.caption)) : env.Null());
   out.Set("showDetail", Napi::Boolean::New(env, item.show_detail != 0));
@@ -469,9 +475,9 @@ Napi::Value Workbook::PivotGetOptions(const Napi::CallbackInfo& info) {
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("showError", OptionsFlag(env, o.show_error));
-  out.Set("errorCaption", JsString(env, o.error_caption));
+  out.Set("errorCaption", JsStringOrNull(env, o.error_caption));
   out.Set("showMissing", OptionsFlag(env, o.show_missing));
-  out.Set("missingCaption", JsString(env, o.missing_caption));
+  out.Set("missingCaption", JsStringOrNull(env, o.missing_caption));
   out.Set("showHeaders", OptionsFlag(env, o.show_headers));
   out.Set("showDrill", OptionsFlag(env, o.show_drill));
   out.Set("showDataTips", OptionsFlag(env, o.show_data_tips));
@@ -489,9 +495,9 @@ Napi::Value Workbook::PivotGetOptions(const Napi::CallbackInfo& info) {
   out.Set("multipleFieldFilters", OptionsFlag(env, o.multiple_field_filters));
   out.Set("preserveFormatting", OptionsFlag(env, o.preserve_formatting));
   out.Set("customListSort", OptionsFlag(env, o.custom_list_sort));
-  out.Set("altText", JsString(env, o.alt_text));
-  out.Set("altTextSummary", JsString(env, o.alt_text_summary));
-  out.Set("grandTotalCaption", JsString(env, o.grand_total_caption));
+  out.Set("altText", JsStringOrNull(env, o.alt_text));
+  out.Set("altTextSummary", JsStringOrNull(env, o.alt_text_summary));
+  out.Set("grandTotalCaption", JsStringOrNull(env, o.grand_total_caption));
   out.Set("autoFormatting", OptionsFlag(env, o.auto_formatting));
   out.Set("enableDrill", OptionsFlag(env, o.enable_drill));
   return out;
@@ -775,10 +781,10 @@ Napi::Value Workbook::PivotDataFieldAt(const Napi::CallbackInfo& info) {
   out.Set("name", JsString(env, spec.name));
   out.Set("fieldIndex", Napi::Number::New(env, spec.field_index));
   out.Set("aggregation", Napi::Number::New(env, static_cast<int32_t>(spec.aggregation)));
-  out.Set("numberFormat", JsString(env, spec.number_format));
+  out.Set("numberFormat", JsStringOrNull(env, spec.number_format));
   out.Set("showAs", Napi::Number::New(env, static_cast<int32_t>(spec.show_as)));
-  out.Set("showAsBaseField", Napi::Number::New(env, spec.show_as_base_field));
-  out.Set("showAsBaseItem", Napi::Number::New(env, spec.show_as_base_item));
+  out.Set("showAsBaseField", JsIndexOrNull(env, spec.show_as_base_field));
+  out.Set("showAsBaseItem", JsIndexOrNull(env, spec.show_as_base_item));
   return out;
 }
 
@@ -830,14 +836,14 @@ Napi::Value Workbook::PivotFilterAt(const Napi::CallbackInfo& info) {
   out.Set("fieldName", JsString(env, spec.field_name));
   out.Set("type", Napi::Number::New(env, static_cast<int32_t>(spec.type)));
   out.Set("dataFieldIndex", Napi::Number::New(env, spec.data_field_index));
-  out.Set("valueKind", Napi::Number::New(env, static_cast<int32_t>(spec.value_kind)));
+  out.Set("valueKind", JsIndexOrNull(env, static_cast<int32_t>(spec.value_kind)));
   out.Set("valueInt", Napi::Number::New(env, spec.value_int));
   out.Set("valueDouble", Napi::Number::New(env, spec.value_double));
   out.Set("valueText", JsString(env, spec.value_text));
-  out.Set("valueHighKind", Napi::Number::New(env, static_cast<int32_t>(spec.value_high_kind)));
+  out.Set("valueHighKind", JsIndexOrNull(env, static_cast<int32_t>(spec.value_high_kind)));
   out.Set("valueHighInt", Napi::Number::New(env, spec.value_high_int));
   out.Set("valueHighDouble", Napi::Number::New(env, spec.value_high_double));
-  out.Set("valueHighText", JsString(env, spec.value_high_text));
+  out.Set("valueHighText", JsStringOrNull(env, spec.value_high_text));
   return out;
 }
 

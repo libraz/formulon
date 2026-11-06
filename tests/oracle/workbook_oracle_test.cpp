@@ -311,8 +311,8 @@ void verify_roundtrip(const RoundtripObservation& got, const JsonValue& expect, 
   };
 
   expect_page_setup_u32("paper_size", "paper_size", got.paper_size_stated, got.paper_size);
-  // FM_ORIENTATION_* and Excel's XlPageOrientation agree on 1 = portrait,
-  // 2 = landscape, so the golden needs no translation.
+  // The observation reads the XML as Excel's XlPageOrientation (1 = portrait,
+  // 2 = landscape), so the golden needs no translation.
   expect_page_setup_u32("orientation", "orientation", got.orientation_stated, got.orientation);
   expect_page_setup_u32("fit_to_width", "fit_to_pages_wide", got.fit_to_width_stated, got.fit_to_width);
   expect_page_setup_u32("fit_to_height", "fit_to_pages_tall", got.fit_to_height_stated, got.fit_to_height);

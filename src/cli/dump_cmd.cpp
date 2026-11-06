@@ -42,15 +42,14 @@ std::string escape_c_string(const char* text) {
 }
 
 void print_dump_usage(std::ostream& out) {
-  out << "Usage: formulon dump [--formulas|--values|--sheets|--metadata] [--json] [--] <in>\n"
+  out << "Usage: formulon dump [--formulas|--values|--sheets|--metadata] [--json] [--] <in | ->\n"
       << "\n"
-      << "Print a diff-friendly snapshot of <in>, an xlsx or xlsb file:\n"
+      << "Print a diff-friendly snapshot of <in>, an xlsx or xlsb file ('-' reads stdin):\n"
       << "  --formulas  list every formula cell (default)\n"
       << "  --values    recalculate, then list every non-blank cell with its rendered value\n"
       << "  --sheets    list sheet names in document order\n"
       << "  --metadata  list defined names, tables and passthrough parts\n"
-      << "  --json      print every non-blank or formula cell of every sheet as one JSON object\n"
-      << "              (with --formulas or --values; not with --sheets or --metadata)\n"
+      << "  --json      print the selected view as one JSON object: {\"format\":1,...}\n"
       << "  --           end options; the next token is the input path\n"
       << "Plain output escapes only \\n, \\r, \\t and \\\\.\n";
   print_shared_options(out);
@@ -156,19 +155,32 @@ fm_status_t dump_cells_json(const fm_workbook_t* wb, std::ostream& out) {
   return 0;
 }
 
-// Emits one sheet name per line in document order.
-fm_status_t dump_sheets(const fm_workbook_t* wb, std::ostream& out) {
-  return for_each_sheet(wb, [&](std::size_t, const char* sheet_name) -> fm_status_t {
-    out << escape_c_string(sheet_name) << '\n';
+// Emits one sheet name per line in document order, or with `json`
+// `{"format":1,"sheets":[{"name":...}]}`.
+fm_status_t dump_sheets(const fm_workbook_t* wb, bool json, std::ostream& out) {
+  std::string doc = "{\"format\":1,\"sheets\":[";
+  const fm_status_t rc = for_each_sheet(wb, [&](std::size_t s, const char* sheet_name) -> fm_status_t {
+    if (json) {
+      doc += (s != 0 ? "," : "") + std::string("{\"name\":") + render_json_string(view_or_empty(sheet_name)) + "}";
+    } else {
+      out << escape_c_string(sheet_name) << '\n';
+    }
     return 0;
   });
+  if (rc == 0 && json) {
+    out << doc << "]}\n";
+  }
+  return rc;
 }
 
 // Emits defined names, tables, and passthrough parts under
 // section headers. Empty sections still emit their header so callers
-// can diff "now empty" vs "had entries".
-fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
+// can diff "now empty" vs "had entries". With `json` the same three sections
+// are the members of one `{"format":1,...}` object; a name's `scope` is its
+// sheet name, `#<id>` for a sheet that does not exist, or null for workbook scope.
+fm_status_t dump_metadata(const fm_workbook_t* wb, bool json, std::ostream& out) {
   std::ostringstream snapshot;
+  std::string doc = "{\"format\":1,\"defined_names\":[";
   std::size_t n_sheets = 0;
   if (auto rc = fm_workbook_get_sheet_count(wb, &n_sheets); rc != 0) {
     return rc;
@@ -180,25 +192,35 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
     return rc;
   }
   for (std::size_t i = 0; i < n_names; ++i) {
-    const char* name = nullptr;
-    const char* formula = nullptr;
-    int32_t local_sheet_id = -1;
-    if (auto rc = fm_workbook_get_defined_name_at(wb, i, &name, &formula, &local_sheet_id); rc != 0) {
+    fm_defined_name_t entry{};
+    if (auto rc = fm_workbook_get_defined_name_at(wb, i, &entry); rc != 0) {
       return rc;
     }
-    const std::string rendered = escape_c_string(name) + ' ' + escape_c_string(formula);
+    const int32_t local_sheet_id = entry.local_sheet_id;
+    const std::string rendered = escape_c_string(entry.name) + ' ' + escape_c_string(entry.formula);
+    std::string scope;
     if (local_sheet_id >= 0 && static_cast<std::size_t>(local_sheet_id) < n_sheets) {
       const char* sheet_name = nullptr;
       if (auto rc = fm_workbook_get_sheet_name(wb, static_cast<std::size_t>(local_sheet_id), &sheet_name); rc != 0) {
         return rc;
       }
-      snapshot << escape_c_string(sheet_name) << '!';
+      scope = std::string(view_or_empty(sheet_name));
     } else if (local_sheet_id >= 0) {
-      snapshot << '#' << local_sheet_id << '!';
+      scope = '#' + std::to_string(local_sheet_id);
     }
-    snapshot << rendered << '\n';
+    if (json) {
+      doc += (i != 0 ? "," : "") + std::string("{\"name\":") + render_json_string(view_or_empty(entry.name)) +
+             ",\"formula\":" + render_json_string(view_or_empty(entry.formula)) +
+             ",\"scope\":" + (local_sheet_id >= 0 ? render_json_string(scope) : std::string("null")) + "}";
+    } else {
+      if (local_sheet_id >= 0) {
+        snapshot << escape_single_line(scope) << '!';
+      }
+      snapshot << rendered << '\n';
+    }
   }
   snapshot << "[tables]\n";
+  doc += "],\"tables\":[";
   std::size_t n_tables = 0;
   if (auto rc = fm_workbook_get_table_count(wb, &n_tables); rc != 0) {
     return rc;
@@ -216,10 +238,17 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
     if (rect.first_row != rect.last_row || rect.first_col != rect.last_col) {
       ref += ':' + format_a1(rect.last_row, rect.last_col);
     }
-    snapshot << escape_c_string(name) << ' ' << escape_c_string(display) << ' ' << sheet_index << ' '
-             << escape_c_string(ref.c_str()) << '\n';
+    if (json) {
+      doc += (i != 0 ? "," : "") + std::string("{\"name\":") + render_json_string(view_or_empty(name)) +
+             ",\"display_name\":" + render_json_string(view_or_empty(display)) +
+             ",\"sheet\":" + std::to_string(sheet_index) + ",\"ref\":" + render_json_string(ref) + "}";
+    } else {
+      snapshot << escape_c_string(name) << ' ' << escape_c_string(display) << ' ' << sheet_index << ' '
+               << escape_c_string(ref.c_str()) << '\n';
+    }
   }
   snapshot << "[passthrough_parts]\n";
+  doc += "],\"passthrough_parts\":[";
   std::size_t n_parts = 0;
   if (auto rc = fm_workbook_get_passthrough_count(wb, &n_parts); rc != 0) {
     return rc;
@@ -229,9 +258,17 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
     if (auto rc = fm_workbook_get_passthrough_at(wb, i, &path); rc != 0) {
       return rc;
     }
-    snapshot << escape_c_string(path) << '\n';
+    if (json) {
+      doc += (i != 0 ? "," : "") + render_json_string(view_or_empty(path));
+    } else {
+      snapshot << escape_c_string(path) << '\n';
+    }
   }
-  out << snapshot.str();
+  if (json) {
+    out << doc << "]}\n";
+  } else {
+    out << snapshot.str();
+  }
   return 0;
 }
 
@@ -295,7 +332,7 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
       }
       continue;
     }
-    if (!accept_positional(a, options_ended, input_seen, "dump", "input path", err)) {
+    if (!accept_positional(a, options_ended, input_seen, "dump", "input path", err, /*allow_dash=*/true)) {
       return kExitUsage;
     }
     input_path.assign(a);
@@ -304,10 +341,6 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
 
   if (!input_seen) {
     return missing_positional("dump", "input path", print_dump_usage, err);
-  }
-  if (want_json && (mode == DumpMode::kSheets || mode == DumpMode::kMetadata)) {
-    err << "formulon: dump: --json cannot be combined with --sheets or --metadata\n";
-    return kExitUsage;
   }
 
   WorkbookGuard wb;
@@ -332,10 +365,10 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
       rc = want_json ? dump_cells_json(wb.handle, out) : dump_cells(wb.handle, mode, out);
       break;
     case DumpMode::kSheets:
-      rc = dump_sheets(wb.handle, out);
+      rc = dump_sheets(wb.handle, want_json, out);
       break;
     case DumpMode::kMetadata:
-      rc = dump_metadata(wb.handle, out);
+      rc = dump_metadata(wb.handle, want_json, out);
       break;
   }
   if (rc != 0) {

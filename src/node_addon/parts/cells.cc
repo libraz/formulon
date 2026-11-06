@@ -180,7 +180,7 @@ Napi::Value Workbook::GetCellPhonetic(const Napi::CallbackInfo& info) {
   const CellAddressArgs address = ReadCellAddress(info);
   const char* text = nullptr;
   fm_status_t rc = fm_sheet_get_cell_phonetic(handle_, address.sheet, address.row, address.col, &text);
-  return ValueOrThrow(env, rc, JsString(env, text));
+  return ValueOrThrow(env, rc, JsStringOrNull(env, text));
 }
 
 Napi::Value Workbook::GetCellPhoneticRunCount(const Napi::CallbackInfo& info) {
@@ -466,10 +466,9 @@ Napi::Value Workbook::ValidateValue(const Napi::CallbackInfo& info) {
     return ThrowStatus(env, rc);
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("hasRule", Napi::Boolean::New(env, outcome.has_rule != 0));
   out.Set("valid", Napi::Boolean::New(env, outcome.valid != 0));
-  out.Set("ruleIndex", Napi::Number::New(env, outcome.rule_index));
-  out.Set("errorStyle", Napi::Number::New(env, outcome.error_style));
+  out.Set("ruleIndex", JsNumberOrNull(env, outcome.has_rule, outcome.rule_index));
+  out.Set("errorStyle", JsNumberOrNull(env, outcome.has_rule, static_cast<uint32_t>(outcome.error_style)));
   return out;
 }
 

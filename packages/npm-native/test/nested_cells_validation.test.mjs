@@ -1,5 +1,5 @@
 import test from 'node:test';
-import { assert, getModule, readAll } from './smoke_support.mjs';
+import { assert, getModule } from './smoke_support.mjs';
 
 function withWorkbook(Workbook, fn) {
   const wb = Workbook.createDefault();
@@ -26,25 +26,16 @@ test('cell phonetic run integers reject narrowing before replacing existing runs
   const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY];
   for (const value of invalid) {
     withWorkbook(mod.Workbook, (wb) => {
-      wb.setText(0, 0, 0, '東京都');
-      wb.setCellPhoneticRuns(0, 0, 0, validRuns());
-      const before = readAll(
-        () => wb.getCellPhoneticRunCount(0, 0, 0),
-        (i) => wb.getCellPhoneticRun(0, 0, 0, i),
-      );
+      wb.sheet(0).setText(0, 0, '東京都');
+      wb.sheet(0).setCellPhoneticRuns(0, 0, validRuns());
+      const before = wb.sheet(0).getCellPhoneticRuns(0, 0);
       for (const key of ['sb', 'eb']) {
         assert.throws(
-          () => wb.setCellPhoneticRuns(0, 0, 0, [{ ...validRuns()[0], [key]: value }, validRuns()[1]]),
+          () => wb.sheet(0).setCellPhoneticRuns(0, 0, [{ ...validRuns()[0], [key]: value }, validRuns()[1]]),
           RangeError,
           `setCellPhoneticRuns ${key}=${String(value)}`,
         );
-        assert.deepEqual(
-          readAll(
-            () => wb.getCellPhoneticRunCount(0, 0, 0),
-            (i) => wb.getCellPhoneticRun(0, 0, 0, i),
-          ),
-          before,
-        );
+        assert.deepEqual(wb.sheet(0).getCellPhoneticRuns(0, 0), before);
       }
     });
   }
@@ -53,35 +44,20 @@ test('cell phonetic run integers reject narrowing before replacing existing runs
 test('cell phonetic run text rejects coercible non-strings like the WASM surface', async () => {
   const mod = await getModule();
   withWorkbook(mod.Workbook, (wb) => {
-    wb.setText(0, 0, 0, '東京都');
-    wb.setCellPhoneticRuns(0, 0, 0, validRuns());
-    const before = readAll(
-      () => wb.getCellPhoneticRunCount(0, 0, 0),
-      (i) => wb.getCellPhoneticRun(0, 0, 0, i),
-    );
+    wb.sheet(0).setText(0, 0, '東京都');
+    wb.sheet(0).setCellPhoneticRuns(0, 0, validRuns());
+    const before = wb.sheet(0).getCellPhoneticRuns(0, 0);
     for (const value of [42, true, { toString: () => 'ト' }]) {
       assert.throws(
-        () => wb.setCellPhoneticRuns(0, 0, 0, [{ ...validRuns()[0], text: value }, validRuns()[1]]),
+        () => wb.sheet(0).setCellPhoneticRuns(0, 0, [{ ...validRuns()[0], text: value }, validRuns()[1]]),
         TypeError,
         `setCellPhoneticRuns text=${String(value)}`,
       );
-      assert.deepEqual(
-        readAll(
-          () => wb.getCellPhoneticRunCount(0, 0, 0),
-          (i) => wb.getCellPhoneticRun(0, 0, 0, i),
-        ),
-        before,
-      );
+      assert.deepEqual(wb.sheet(0).getCellPhoneticRuns(0, 0), before);
     }
     const bytes = new TextEncoder().encode('トウキョウ');
-    wb.setCellPhoneticRuns(0, 0, 0, [{ ...validRuns()[0], text: bytes }, validRuns()[1]]);
-    assert.deepEqual(
-      readAll(
-        () => wb.getCellPhoneticRunCount(0, 0, 0),
-        (i) => wb.getCellPhoneticRun(0, 0, 0, i),
-      ),
-      before,
-    );
+    wb.sheet(0).setCellPhoneticRuns(0, 0, [{ ...validRuns()[0], text: bytes }, validRuns()[1]]);
+    assert.deepEqual(wb.sheet(0).getCellPhoneticRuns(0, 0), before);
   });
 });
 
@@ -90,16 +66,16 @@ test('cell phonetic properties reject narrowing before changing the stored prope
   const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY];
   for (const value of invalid) {
     withWorkbook(mod.Workbook, (wb) => {
-      wb.setText(0, 0, 0, '大阪');
-      wb.setCellPhoneticProperties(0, 0, 0, { fontId: 3, type: 2, alignment: 2 });
-      const before = wb.getCellPhoneticProperties(0, 0, 0);
+      wb.sheet(0).setText(0, 0, '大阪');
+      wb.sheet(0).setCellPhoneticProperties(0, 0, { fontId: 3, type: 2, alignment: 2 });
+      const before = wb.sheet(0).getCellPhoneticProperties(0, 0);
       for (const key of ['fontId', 'type', 'alignment']) {
         assert.throws(
-          () => wb.setCellPhoneticProperties(0, 0, 0, { fontId: 3, type: 2, alignment: 2, [key]: value }),
+          () => wb.sheet(0).setCellPhoneticProperties(0, 0, { fontId: 3, type: 2, alignment: 2, [key]: value }),
           RangeError,
           `setCellPhoneticProperties ${key}=${String(value)}`,
         );
-        const after = wb.getCellPhoneticProperties(0, 0, 0);
+        const after = wb.sheet(0).getCellPhoneticProperties(0, 0);
         assert.deepEqual(
           { fontId: after.fontId, type: after.type, alignment: after.alignment },
           { fontId: before.fontId, type: before.type, alignment: before.alignment },
@@ -148,10 +124,10 @@ test('cell range integers reject narrowing before getCellsInRange touches the wo
   const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY];
   for (const value of invalid) {
     withWorkbook(mod.Workbook, (wb) => {
-      wb.setNumber(0, 0, 0, 7);
+      wb.sheet(0).setNumber(0, 0, 7);
       for (const key of ['firstRow', 'firstCol', 'lastRow', 'lastCol']) {
         assert.throws(
-          () => wb.getCellsInRange(0, { ...validRange(), [key]: value }),
+          () => wb.sheet(0).getCellsInRange({ ...validRange(), [key]: value }),
           value === 2 ** 32 ? RangeError : TypeError,
           `getCellsInRange ${key}=${String(value)}`,
         );
@@ -163,7 +139,7 @@ test('cell range integers reject narrowing before getCellsInRange touches the wo
 test('cell range getters stop before getCellsInRange calls the C API', async () => {
   const mod = await getModule();
   withWorkbook(mod.Workbook, (wb) => {
-    wb.setNumber(0, 0, 0, 7);
+    wb.sheet(0).setNumber(0, 0, 7);
     const range = validRange();
     Object.defineProperty(range, 'firstRow', {
       enumerable: true,
@@ -171,6 +147,6 @@ test('cell range getters stop before getCellsInRange calls the C API', async () 
         throw new Error('cell range getter');
       },
     });
-    assert.throws(() => wb.getCellsInRange(0, range), /cell range getter/);
+    assert.throws(() => wb.sheet(0).getCellsInRange(range), /cell range getter/);
   });
 });

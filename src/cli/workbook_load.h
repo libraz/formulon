@@ -13,7 +13,8 @@
 
 namespace formulon::cli {
 
-/// Reads and loads `path` into `wb`, names it after the file, applies the
+/// Reads and loads `path` into `wb` (`-` reads stdin to the end and leaves the
+/// workbook unnamed), names it after the file, applies the
 /// shared options and reports load diagnostics. Every failure is written to
 /// `err` under `subcommand` and its status returned.
 fm_status_t load_workbook_file(const std::string& path, const SharedOptions& shared, WorkbookGuard& wb,

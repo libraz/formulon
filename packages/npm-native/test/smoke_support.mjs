@@ -105,10 +105,4 @@ function isFormulonError(error, code) {
   return error?.name === 'FormulonError' && (code === undefined || error.code === code);
 }
 
-// Reads every element of an index-keyed collection through its count / index
-// getter pair.
-function readAll(count, get) {
-  return Array.from({ length: count() }, (_, i) => get(i));
-}
-
-export { appendEmptyZipEntry, assert, getModule, isFormulonError, loadStagedModule, path, pkgRoot, readAll, readFile };
+export { appendEmptyZipEntry, assert, getModule, isFormulonError, loadStagedModule, path, pkgRoot, readFile };

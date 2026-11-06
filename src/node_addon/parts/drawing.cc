@@ -55,18 +55,18 @@ Napi::Object DrawingObjectToJs(Napi::Env env, const fm_drawing_object_t& o) {
   item.Set("editAs", JsNumber(env, o.edit_as));
   item.Set("fromRow", JsNumber(env, o.from_row));
   item.Set("fromCol", JsNumber(env, o.from_col));
-  item.Set("fromRowOffset", JsNumber(env, static_cast<double>(o.from_row_offset)));
-  item.Set("fromColOffset", JsNumber(env, static_cast<double>(o.from_col_offset)));
+  item.Set("fromRowOffsetEmu", JsNumber(env, static_cast<double>(o.from_row_offset_emu)));
+  item.Set("fromColOffsetEmu", JsNumber(env, static_cast<double>(o.from_col_offset_emu)));
   item.Set("toRow", JsNumber(env, o.to_row));
   item.Set("toCol", JsNumber(env, o.to_col));
-  item.Set("toRowOffset", JsNumber(env, static_cast<double>(o.to_row_offset)));
-  item.Set("toColOffset", JsNumber(env, static_cast<double>(o.to_col_offset)));
-  item.Set("cx", JsNumber(env, static_cast<double>(o.cx)));
-  item.Set("cy", JsNumber(env, static_cast<double>(o.cy)));
+  item.Set("toRowOffsetEmu", JsNumber(env, static_cast<double>(o.to_row_offset_emu)));
+  item.Set("toColOffsetEmu", JsNumber(env, static_cast<double>(o.to_col_offset_emu)));
+  item.Set("widthEmu", JsNumber(env, static_cast<double>(o.width_emu)));
+  item.Set("heightEmu", JsNumber(env, static_cast<double>(o.height_emu)));
   item.Set("imageFormat", JsNumber(env, o.image_format));
   item.Set("name", JsString(env, o.name));
-  item.Set("descr", JsString(env, o.descr));
-  item.Set("mediaPath", JsString(env, o.media_path));
+  item.Set("description", JsString(env, o.description));
+  item.Set("mediaPath", JsStringOrNull(env, o.media_path));
   return item;
 }
 
@@ -158,18 +158,13 @@ Napi::Value Workbook::InsertImage(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   BytesWithOpts args;
-  if (!ReadBytesWithOpts(info, "addImage expects (sheet:number, bytes:Uint8Array, opts?:object)", args)) {
+  if (!ReadBytesWithOpts(info, "addImage expects (sheet:number, bytes:Uint8Array, input?:object)", args)) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
   std::string name;
-  std::string descr;
-  reader.String(args.spec, "name", &name);
-  reader.String(args.spec, "descr", &descr);
-  fm_image_insert_t opts{};
-  opts.name = name.c_str();
-  opts.descr = descr.c_str();
-  PullPlacement(reader, args.spec, opts, FM_ANCHOR_KIND_ONE_CELL);
+  std::string description;
+  const fm_image_insert_t opts = PullImageInsert(reader, args.spec, FM_ANCHOR_KIND_ONE_CELL, name, description);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -189,8 +184,7 @@ Napi::Value Workbook::SetDrawingAnchor(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   const Napi::Object spec = ArgObject(info, 2);
-  fm_drawing_anchor_t anchor{};
-  PullPlacement(reader, spec, anchor, FM_ANCHOR_KIND_ONE_CELL);
+  const fm_drawing_anchor_t anchor = PullDrawingAnchor(reader, spec, FM_ANCHOR_KIND_ONE_CELL);
   if (!reader.ok()) {
     return env.Undefined();
   }

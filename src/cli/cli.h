@@ -20,10 +20,18 @@
 //     in the C API, so the CLI surfaces the diagnostic by reading
 //     `fm_get_last_error_message()` and prefixing with the subcommand name.
 //   * `64` on a usage error (mirrors sysexits(3) `EX_USAGE`).
-//   * Any other engine / I/O / binding failure maps to the stable
-//     generic-failure exit code `1`. The detailed `fm_status_t` remains
-//     available in the diagnostic text; it is never encoded in the
-//     process status, where it could collide after POSIX truncation.
+//   * `66` when an input file is missing, unreadable or a directory.
+//   * `73` when an output file cannot be created.
+//   * `74` on an I/O error while reading or writing a stream, including a
+//     closed pipe on stdout.
+//   * Any other engine / binding failure, including an empty or corrupt
+//     input workbook, maps to the stable generic-failure exit code `1`. The
+//     detailed `fm_status_t` remains available in the diagnostic text; it is
+//     never encoded in the process status, where it could collide after
+//     POSIX truncation.
+//
+// An input path of `-` reads stdin to the end; `-o -` writes the workbook
+// to stdout. `./-` names a file called `-`.
 
 #ifndef FORMULON_CLI_CLI_H_
 #define FORMULON_CLI_CLI_H_
@@ -38,6 +46,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "cli/exit_codes.h"
 #include "excel_profile.h"
 #include "utils/date_time.h"
 #include "utils/error.h"
@@ -140,25 +149,8 @@ inline fm_status_t apply_shared_options(fm_workbook_t* workbook, const SharedOpt
   return 0;
 }
 
-/// Generic failure exit code for engine, I/O and output errors.
-inline constexpr int kExitFailure = 1;
-
-/// Generic usage exit code. Mirrors sysexits(3) `EX_USAGE = 64`.
-inline constexpr int kExitUsage = 64;
-
-/// Maps an internal command status to the CLI's small, stable exit-code
-/// vocabulary. `fm_status_t` values are intentionally not exposed as
-/// process statuses: POSIX shells truncate them to eight bits, making
-/// unrelated failures indistinguishable (for example 8000 and EX_USAGE).
-constexpr int exit_code_for_status(int status) {
-  if (status == 0) {
-    return 0;
-  }
-  return status == kExitUsage ? kExitUsage : kExitFailure;
-}
-
-/// Flushes a command's primary output and turns a stream failure into the
-/// stable CLI output error. Commands must call this after emitting their
+/// Flushes a command's primary output and turns a stream failure into
+/// `kExitIoError`. Commands must call this after emitting their
 /// main result so exit status 0 means the complete result reached `out`.
 inline int flush_output(std::ostream& out, std::ostream& err, std::string_view subcommand) {
   out.flush();
@@ -166,7 +158,7 @@ inline int flush_output(std::ostream& out, std::ostream& err, std::string_view s
     return 0;
   }
   err << "formulon: " << subcommand << ": failed to write output\n";
-  return static_cast<int>(FormulonErrorCode::kCliOutputFailed);
+  return kExitIoError;
 }
 
 /// Prints the engine version line to `out`. The usage banner lists
@@ -181,6 +173,61 @@ inline int print_version(std::ostream& out, std::ostream& err) {
   const char* version = fm_get_version();
   out << (version != nullptr ? version : "") << '\n';
   return flush_output(out, err, "version");
+}
+
+/// Rewrites every `--opt=value` token as the two tokens `--opt`, `value`, so
+/// the handlers parse one spelling. Tokens after `--` and the value slot of a
+/// value-taking option are left verbatim. `=value` on a flag that takes no
+/// value is a usage error; an unrecognized `--name=...` is left for the
+/// handler to reject as an unknown flag. Returns false after writing the
+/// diagnostic when the invocation is a usage error.
+inline bool split_option_values(const ArgList& raw, std::string_view subcommand, std::vector<std::string>& storage,
+                                ArgList& expanded, std::ostream& err) {
+  constexpr std::string_view kValueOptions[] = {"--profile", "--now", "--repeat", "--threads", "--output", "--sheet"};
+  constexpr std::string_view kFlagOptions[] = {"--json",   "--iterative", "--quiet", "--formulas", "--values",
+                                               "--sheets", "--metadata",  "--help",  "--version"};
+  const auto contains = [](const auto& names, std::string_view name) {
+    for (const std::string_view candidate : names) {
+      if (candidate == name) {
+        return true;
+      }
+    }
+    return false;
+  };
+  storage.clear();
+  storage.reserve(raw.size() * 2);
+  for (std::size_t i = 0; i < raw.size(); ++i) {
+    const std::string_view arg = raw[i];
+    if (arg == "--") {
+      for (; i < raw.size(); ++i) {
+        storage.emplace_back(raw[i]);
+      }
+      break;
+    }
+    if (contains(kValueOptions, arg) || arg == "-o") {
+      storage.emplace_back(arg);
+      if (i + 1 < raw.size()) {
+        storage.emplace_back(raw[++i]);
+      }
+      continue;
+    }
+    const std::size_t equals = arg.find('=');
+    if (arg.substr(0, 2) == "--" && equals != std::string_view::npos) {
+      const std::string_view name = arg.substr(0, equals);
+      if (contains(kFlagOptions, name)) {
+        err << "formulon: " << subcommand << ": " << name << " does not take a value\n";
+        return false;
+      }
+      if (contains(kValueOptions, name)) {
+        storage.emplace_back(name);
+        storage.emplace_back(arg.substr(equals + 1));
+        continue;
+      }
+    }
+    storage.emplace_back(arg);
+  }
+  expanded.assign(storage.begin(), storage.end());
+  return true;
 }
 
 /// Outcome of `handle_common_option`.
@@ -255,9 +302,11 @@ inline CommonOption handle_common_option(const ArgList& args, std::size_t& index
 /// Vets a non-option argument for a command taking exactly one positional
 /// operand named `noun`. Returns true when `arg` may be stored; otherwise
 /// writes the diagnostic and returns false, and the caller returns `kExitUsage`.
+/// A lone `-` is an operand only when `allow_dash` is set (an input path that
+/// stands for stdin).
 inline bool accept_positional(std::string_view arg, bool options_ended, bool already_seen, std::string_view subcommand,
-                              std::string_view noun, std::ostream& err) {
-  if (!options_ended && !arg.empty() && arg[0] == '-') {
+                              std::string_view noun, std::ostream& err, bool allow_dash = false) {
+  if (!options_ended && !arg.empty() && arg[0] == '-' && !(allow_dash && arg == "-")) {
     err << "formulon: " << subcommand << ": unknown flag '" << arg << "'\n";
     return false;
   }
@@ -294,11 +343,9 @@ inline int missing_positional(std::string_view subcommand, std::string_view noun
 /// `cols` fields each, so cell payloads are escaped the way `dump`
 /// escapes them and an embedded newline or TAB cannot forge a record.
 ///
-/// `--json` has two shapes, selected by the result's dimensions: a single
-/// `{"kind": ..., "value": ...}` object when the result is exactly one row
-/// by one column, and otherwise a row-major array of arrays of those
-/// objects (one inner array per row). A formula that spills therefore
-/// produces the nested shape and a scalar one does not.
+/// `--json` prints `{"format":1,"rows":[[cell,...],...]}`: a row-major array
+/// of arrays of `{"kind": ..., "value": ...}` objects, one inner array per
+/// row. A scalar result is a single 1x1 grid.
 int run_eval(const ArgList& args, std::ostream& out, std::ostream& err);
 
 /// `recalc` handler: load `.xlsx`, recalc, save to `--output`.
@@ -306,7 +353,7 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err);
 /// `args` carries the post-`recalc` arguments. The first non-flag
 /// argument is the input path.
 ///
-/// Supported flags: the common options above, `-o | --output PATH` (required), `--iterative`
+/// Supported flags: the common options above, `-o | --output PATH` (required; `-` writes to stdout), `--iterative`
 /// (enable iterative calc), `--threads N` (opt in to parallel recalc with
 /// an inclusive 0..8 worker setting), `--quiet`, `-h | --help`, and `--` to
 /// end option parsing before the input path. All options, including `-o`,
@@ -321,9 +368,8 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err);
 ///
 /// Supported flags: the common options above and (mutually exclusive): `--formulas` (default),
 /// `--values`, `--sheets`, `--metadata`, `-h | --help`, and `--` to end
-/// option parsing before an input path. `--json` prints the cells of every
-/// sheet as one JSON object and cannot be combined with `--sheets` or
-/// `--metadata`.
+/// option parsing before an input path. `--json` prints the selected view as
+/// one JSON object with a top-level `"format":1`.
 int run_dump(const ArgList& args, std::ostream& out, std::ostream& err);
 
 /// `paginate` handler: resolve the print geometry of one worksheet.

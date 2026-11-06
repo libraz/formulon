@@ -100,8 +100,8 @@ Bytes Bmp(std::int32_t w, std::int32_t h) {
 
 fm_image_insert_t Defaults() {
   fm_image_insert_t opts{};
-  opts.anchor_kind = FM_ANCHOR_KIND_ONE_CELL;
-  opts.edit_as = FM_ANCHOR_EDIT_AS_TWO_CELL;
+  opts.anchor.anchor_kind = FM_ANCHOR_KIND_ONE_CELL;
+  opts.anchor.edit_as = FM_ANCHOR_EDIT_AS_TWO_CELL;
   return opts;
 }
 
@@ -160,9 +160,10 @@ TEST(FormulonCApiDrawing, EnumOrdinals) {
   EXPECT_EQ(FM_ANCHOR_KIND_ONE_CELL, 0);
   EXPECT_EQ(FM_ANCHOR_KIND_TWO_CELL, 1);
   EXPECT_EQ(FM_ANCHOR_KIND_ABSOLUTE, 2);
-  EXPECT_EQ(FM_ANCHOR_EDIT_AS_TWO_CELL, 0);
-  EXPECT_EQ(FM_ANCHOR_EDIT_AS_ONE_CELL, 1);
-  EXPECT_EQ(FM_ANCHOR_EDIT_AS_ABSOLUTE, 2);
+  // The anchor family: an edit mode takes its anchor kind's value.
+  EXPECT_EQ(static_cast<int>(FM_ANCHOR_EDIT_AS_ONE_CELL), static_cast<int>(FM_ANCHOR_KIND_ONE_CELL));
+  EXPECT_EQ(static_cast<int>(FM_ANCHOR_EDIT_AS_TWO_CELL), static_cast<int>(FM_ANCHOR_KIND_TWO_CELL));
+  EXPECT_EQ(static_cast<int>(FM_ANCHOR_EDIT_AS_ABSOLUTE), static_cast<int>(FM_ANCHOR_KIND_ABSOLUTE));
 }
 
 TEST(FormulonCApiDrawing, ProbeEachFormat) {
@@ -205,11 +206,11 @@ TEST(FormulonCApiDrawing, InsertListGetRemoveNextToChart) {
   const Bytes png = Png(16, 8);
   fm_image_insert_t opts = Defaults();
   opts.name = "Logo";
-  opts.descr = "alt";
-  opts.row = 3;
-  opts.col = 2;
-  opts.row_offset_emu = 1000;
-  opts.col_offset_emu = 2000;
+  opts.description = "alt";
+  opts.anchor.row = 3;
+  opts.anchor.col = 2;
+  opts.anchor.row_offset_emu = 1000;
+  opts.anchor.col_offset_emu = 2000;
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_image(wb.handle, 0, png.data(), png.size(), &opts, &id), 0) << fm_get_last_error_message();
   EXPECT_EQ(id, 3U);
@@ -232,13 +233,13 @@ TEST(FormulonCApiDrawing, InsertListGetRemoveNextToChart) {
   EXPECT_EQ(pic.anchor_kind, FM_ANCHOR_KIND_ONE_CELL);
   EXPECT_EQ(pic.from_row, 3U);
   EXPECT_EQ(pic.from_col, 2U);
-  EXPECT_EQ(pic.from_row_offset, 1000);
-  EXPECT_EQ(pic.from_col_offset, 2000);
-  EXPECT_EQ(pic.cx, 16 * 9525);
-  EXPECT_EQ(pic.cy, 8 * 9525);
+  EXPECT_EQ(pic.from_row_offset_emu, 1000);
+  EXPECT_EQ(pic.from_col_offset_emu, 2000);
+  EXPECT_EQ(pic.width_emu, 16 * 9525);
+  EXPECT_EQ(pic.height_emu, 8 * 9525);
   EXPECT_EQ(pic.image_format, FM_IMAGE_FORMAT_PNG);
   EXPECT_STREQ(pic.name, "Logo");
-  EXPECT_STREQ(pic.descr, "alt");
+  EXPECT_STREQ(pic.description, "alt");
   EXPECT_NE(std::string(pic.media_path).find("xl/media/image"), std::string::npos);
   // The previous record's strings live until the next successful read.
   fm_drawing_object_t again{};
@@ -285,13 +286,13 @@ TEST(FormulonCApiDrawing, InsertSaveReloadKeepsBytes) {
   const Bytes png = Png(16, 8);
   const Bytes jpeg = Jpeg(30, 20);
   fm_image_insert_t opts = Defaults();
-  opts.row = 1;
+  opts.anchor.row = 1;
   uint32_t first = 0;
   uint32_t second = 0;
   ASSERT_EQ(fm_sheet_add_image(wb.handle, 0, png.data(), png.size(), &opts, &first), 0) << fm_get_last_error_message();
-  opts.anchor_kind = FM_ANCHOR_KIND_TWO_CELL;
-  opts.edit_as = FM_ANCHOR_EDIT_AS_ONE_CELL;
-  opts.row = 5;
+  opts.anchor.anchor_kind = FM_ANCHOR_KIND_TWO_CELL;
+  opts.anchor.edit_as = FM_ANCHOR_EDIT_AS_ONE_CELL;
+  opts.anchor.row = 5;
   ASSERT_EQ(fm_sheet_add_image(wb.handle, 0, jpeg.data(), jpeg.size(), &opts, &second), 0)
       << fm_get_last_error_message();
   EXPECT_NE(first, second);
@@ -332,15 +333,15 @@ TEST(FormulonCApiDrawing, InsertRejectsBadArguments) {
   EXPECT_EQ(fm_sheet_add_image(wb.handle, 0, png.data(), png.size(), nullptr, &id), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_add_image(wb.handle, 0, png.data(), png.size(), &opts, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_add_image(wb.handle, 7, png.data(), png.size(), &opts, &id), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  opts.anchor_kind = FM_ANCHOR_KIND_ABSOLUTE;
+  opts.anchor.anchor_kind = FM_ANCHOR_KIND_ABSOLUTE;
   EXPECT_EQ(fm_sheet_add_image(wb.handle, 0, png.data(), png.size(), &opts, &id), kInvalidArgument);
-  opts.anchor_kind = 3;
-  EXPECT_EQ(fm_sheet_add_image(wb.handle, 0, png.data(), png.size(), &opts, &id), kInvalidArgument);
-  opts = Defaults();
-  opts.edit_as = -1;
+  opts.anchor.anchor_kind = 3;
   EXPECT_EQ(fm_sheet_add_image(wb.handle, 0, png.data(), png.size(), &opts, &id), kInvalidArgument);
   opts = Defaults();
-  opts.width_emu = -1;
+  opts.anchor.edit_as = -1;
+  EXPECT_EQ(fm_sheet_add_image(wb.handle, 0, png.data(), png.size(), &opts, &id), kInvalidArgument);
+  opts = Defaults();
+  opts.anchor.width_emu = -1;
   EXPECT_EQ(fm_sheet_add_image(wb.handle, 0, png.data(), png.size(), &opts, &id), kInvalidArgument);
   size_t count = 99;
   ASSERT_EQ(fm_sheet_get_drawing_object_count(wb.handle, 0, &count), 0);
@@ -376,10 +377,10 @@ fm_drawing_anchor_t AnchorOf(const fm_drawing_object_t& obj) {
   anchor.edit_as = obj.edit_as;
   anchor.row = obj.from_row;
   anchor.col = obj.from_col;
-  anchor.row_offset_emu = obj.from_row_offset;
-  anchor.col_offset_emu = obj.from_col_offset;
-  anchor.width_emu = obj.cx;
-  anchor.height_emu = obj.cy;
+  anchor.row_offset_emu = obj.from_row_offset_emu;
+  anchor.col_offset_emu = obj.from_col_offset_emu;
+  anchor.width_emu = obj.width_emu;
+  anchor.height_emu = obj.height_emu;
   return anchor;
 }
 
@@ -405,7 +406,7 @@ std::uint32_t InsertAt(fm_workbook_t* wb, std::uint32_t row, const char* name) {
   const Bytes png = Png(16, 8);
   fm_image_insert_t opts = Defaults();
   opts.name = name;
-  opts.row = row;
+  opts.anchor.row = row;
   uint32_t id = 0;
   EXPECT_EQ(fm_sheet_add_image(wb, 0, png.data(), png.size(), &opts, &id), 0) << fm_get_last_error_message();
   return id;
@@ -436,10 +437,10 @@ TEST(FormulonCApiDrawing, SetImageAnchorMovesAndResizesKeepingId) {
   EXPECT_EQ(obj.edit_as, FM_ANCHOR_EDIT_AS_ONE_CELL);
   EXPECT_EQ(obj.from_row, 5U);
   EXPECT_EQ(obj.from_col, 3U);
-  EXPECT_EQ(obj.from_row_offset, 1000);
-  EXPECT_EQ(obj.from_col_offset, 2000);
-  EXPECT_EQ(obj.cx, 200000);
-  EXPECT_EQ(obj.cy, 8 * 9525);
+  EXPECT_EQ(obj.from_row_offset_emu, 1000);
+  EXPECT_EQ(obj.from_col_offset_emu, 2000);
+  EXPECT_EQ(obj.width_emu, 200000);
+  EXPECT_EQ(obj.height_emu, 8 * 9525);
   EXPECT_STREQ(obj.name, "Logo");
 
   WorkbookGuard reloaded;
@@ -447,7 +448,7 @@ TEST(FormulonCApiDrawing, SetImageAnchorMovesAndResizesKeepingId) {
   fm_drawing_object_t again{};
   ASSERT_EQ(fm_sheet_get_drawing_object_at(reloaded.handle, 0, 0, &again), 0);
   EXPECT_EQ(again.from_row, 5U);
-  EXPECT_EQ(again.cx, 200000);
+  EXPECT_EQ(again.width_emu, 200000);
 }
 
 TEST(FormulonCApiDrawing, SetImageAnchorWithListedValuesWritesNothing) {

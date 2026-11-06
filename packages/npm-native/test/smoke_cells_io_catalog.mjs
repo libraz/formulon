@@ -1,32 +1,32 @@
 import test from 'node:test';
-import { appendEmptyZipEntry, assert, getModule, isFormulonError, readAll } from './smoke_support.mjs';
+import { appendEmptyZipEntry, assert, getModule, isFormulonError } from './smoke_support.mjs';
 
 test('comments round-trip: setComment + getComment', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   // Pre-existing cell so the comment attaches to a stored slot.
-  wb.setNumber(0, 1, 1, 7);
-  wb.setComment(0, 1, 1, 'libraz', 'hello world');
-  const c = wb.getComment(0, 1, 1);
+  wb.sheet(0).setNumber(1, 1, 7);
+  wb.sheet(0).setComment(1, 1, { author: 'libraz', text: 'hello world' });
+  const c = wb.sheet(0).getComment(1, 1);
   assert.ok(c !== null, 'expected non-null Comment');
   assert.equal(c.author, 'libraz');
   assert.equal(c.text, 'hello world');
   // Removing surfaces null on the next read.
-  wb.setComment(0, 1, 1, '', '');
-  assert.equal(wb.getComment(0, 1, 1), null);
+  wb.sheet(0).removeComment(1, 1);
+  assert.equal(wb.sheet(0).getComment(1, 1), null);
 });
 
 test('getComment distinguishes absence from an invalid sheet', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const missing = wb.getComment(0, 1, 1);
+  const missing = wb.sheet(0).getComment(1, 1);
   assert.equal(missing, null);
   assert.throws(
-    () => wb.getComment(99, 1, 1),
+    () => wb.sheet(99).getComment(1, 1),
     (e) => isFormulonError(e, mod.StatusCode.SheetIndexOutOfRange),
   );
-  wb.setComment(0, 1, 1, 'libraz', 'hello');
-  const found = wb.getComment(0, 1, 1);
+  wb.sheet(0).setComment(1, 1, { author: 'libraz', text: 'hello' });
+  const found = wb.sheet(0).getComment(1, 1);
   assert.equal(found.author, 'libraz');
   assert.equal(found.text, 'hello');
 });
@@ -34,17 +34,17 @@ test('getComment distinguishes absence from an invalid sheet', async () => {
 test('cellCount + cellAt enumerate stored cells', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.setNumber(0, 0, 0, 1);
-  wb.setNumber(0, 0, 1, 2);
-  wb.setFormula(0, 1, 0, '=A1+B1');
+  wb.sheet(0).setNumber(0, 0, 1);
+  wb.sheet(0).setNumber(0, 1, 2);
+  wb.sheet(0).setFormula(1, 0, '=A1+B1');
   wb.recalc();
-  const n = wb.getCellCount(0);
+  const n = wb.sheet(0).getCellCount();
   assert.equal(typeof n, 'number');
   assert.ok(n >= 3, `expected >= 3 stored cells, got ${n}`);
   // Iterate; one of the entries should carry our formula.
   let foundFormula = false;
   for (let i = 0; i < n; ++i) {
-    const e = wb.getCellAt(0, i);
+    const e = wb.sheet(0).getCellAt(i);
     assert.equal(typeof e.row, 'number');
     assert.equal(typeof e.col, 'number');
     if (e.formula === '=A1+B1') {
@@ -78,16 +78,16 @@ test('default export exposes ErrorCode ordinals and getVersion', async () => {
 test('setError() rejects a missing errorCode argument', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.throws(() => wb.setError(0, 0, 0), TypeError);
+  assert.throws(() => wb.sheet(0).setError(0, 0), TypeError);
 });
 
 test('setError() rejects a non-number errorCode before mutating the cell', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.setNumber(0, 0, 0, 7);
-  assert.throws(() => wb.setError(0, 0, 0, 'not a number'), TypeError);
+  wb.sheet(0).setNumber(0, 0, 7);
+  assert.throws(() => wb.sheet(0).setError(0, 0, 'not a number'), TypeError);
   // The rejected call must not have overwritten the cell.
-  const got = wb.getValue(0, 0, 0);
+  const got = wb.sheet(0).getValue(0, 0);
   assert.equal(got.number, 7);
 });
 
@@ -105,15 +105,15 @@ test('save() writes xlsx and xlsb bytes; a missing format selects the default', 
 test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable shape', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.setFormula(0, 0, 0, '=SUM(T[C])');
-  wb.addValidation(0, {
+  wb.sheet(0).setFormula(0, 0, '=SUM(T[C])');
+  wb.sheet(0).addValidation({
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
     type: 3,
     formula1: '"Yes,No"',
   });
   // A CF rule's dxfId must resolve against a registered dxf.
   const dxf = wb.addDxf({ font: { bold: true } });
-  wb.addCfRule(0, {
+  wb.sheet(0).addCfRule({
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
     type: 1,
     op: 5,
@@ -167,13 +167,7 @@ test('addValidation / getValidation / removeValidationAt / clearValidations roun
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   // Empty by default.
-  assert.equal(
-    readAll(
-      () => wb.getValidationCount(0),
-      (i) => wb.getValidation(0, i),
-    ).length,
-    0,
-  );
+  assert.equal(wb.sheet(0).listValidations().length, 0);
 
   // List-type validation at A1:B3.
   const listRule = {
@@ -190,7 +184,7 @@ test('addValidation / getValidation / removeValidationAt / clearValidations roun
     errorTitle: 'Bad value',
     errorMessage: 'Pick from the list',
   };
-  wb.addValidation(0, listRule);
+  wb.sheet(0).addValidation(listRule);
 
   // Decimal between [0, 100] across two rectangles.
   const decimalRule = {
@@ -204,12 +198,9 @@ test('addValidation / getValidation / removeValidationAt / clearValidations roun
     formula2: '100',
     allowBlank: false,
   };
-  wb.addValidation(0, decimalRule);
+  wb.sheet(0).addValidation(decimalRule);
 
-  const list = readAll(
-    () => wb.getValidationCount(0),
-    (i) => wb.getValidation(0, i),
-  );
+  const list = wb.sheet(0).listValidations();
   assert.equal(list.length, 2);
   // Booleans must arrive as JS booleans, not 0/1.
   assert.equal(typeof list[0].allowBlank, 'boolean');
@@ -225,31 +216,22 @@ test('addValidation / getValidation / removeValidationAt / clearValidations roun
   assert.equal(list[1].ranges[1].firstRow, 6);
 
   // removeValidationAt removes the first rule.
-  wb.removeValidation(0, 0);
-  const after = readAll(
-    () => wb.getValidationCount(0),
-    (i) => wb.getValidation(0, i),
-  );
+  wb.sheet(0).removeValidation(0);
+  const after = wb.sheet(0).listValidations();
   assert.equal(after.length, 1);
   assert.equal(after[0].type, 2);
 
   // Out-of-range index is rejected.
-  assert.throws(() => wb.removeValidation(0, 99), isFormulonError);
+  assert.throws(() => wb.sheet(0).removeValidation(99), isFormulonError);
   // Sheet-out-of-range is rejected on every entry.
-  assert.throws(() => wb.addValidation(999, listRule), isFormulonError);
-  assert.throws(() => wb.removeValidation(999, 0), isFormulonError);
-  assert.throws(() => wb.clearValidations(999), isFormulonError);
+  assert.throws(() => wb.sheet(999).addValidation(listRule), isFormulonError);
+  assert.throws(() => wb.sheet(999).removeValidation(0), isFormulonError);
+  assert.throws(() => wb.sheet(999).clearValidations(), isFormulonError);
 
   // clearValidations drops everything; safe to call again.
-  wb.clearValidations(0);
-  assert.equal(
-    readAll(
-      () => wb.getValidationCount(0),
-      (i) => wb.getValidation(0, i),
-    ).length,
-    0,
-  );
-  wb.clearValidations(0);
+  wb.sheet(0).clearValidations();
+  assert.equal(wb.sheet(0).listValidations().length, 0);
+  wb.sheet(0).clearValidations();
 });
 
 // -- Newly wired surface (audit parity with the WASM binding) ----------
@@ -260,17 +242,11 @@ test('addValidation / getValidation / removeValidationAt / clearValidations roun
 test('addConditionalFormat + getCfRule + clearConditionalFormats round-trip', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.equal(
-    readAll(
-      () => wb.getCfRuleCount(0),
-      (i) => wb.getCfRule(0, i),
-    ).length,
-    0,
-  );
+  assert.equal(wb.sheet(0).listCfRules().length, 0);
   // A CF rule's dxfId must resolve against a registered dxf.
   const dxf = wb.addDxf({ font: { bold: true } });
   // cellIs rule (type 1) comparing the cell to a literal.
-  const add = wb.addCfRule(0, {
+  const add = wb.sheet(0).addCfRule({
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 0 }],
     type: 1,
     op: 5,
@@ -279,10 +255,7 @@ test('addConditionalFormat + getCfRule + clearConditionalFormats round-trip', as
     stopIfTrue: false,
   });
   assert.equal(typeof add, 'number');
-  const list = readAll(
-    () => wb.getCfRuleCount(0),
-    (i) => wb.getCfRule(0, i),
-  );
+  const list = wb.sheet(0).listCfRules();
   assert.equal(list.length, 1);
   assert.equal(list[0].type, 1);
   assert.equal(typeof list[0].id, 'string');
@@ -290,18 +263,12 @@ test('addConditionalFormat + getCfRule + clearConditionalFormats round-trip', as
   assert.equal(list[0].ranges[0].lastRow, 4);
   assert.equal(list[0].formula1, '10');
   // removeConditionalFormatAt drops the only rule.
-  wb.removeCfRule(0, 0);
-  assert.equal(
-    readAll(
-      () => wb.getCfRuleCount(0),
-      (i) => wb.getCfRule(0, i),
-    ).length,
-    0,
-  );
+  wb.sheet(0).removeCfRule(0);
+  assert.equal(wb.sheet(0).listCfRules().length, 0);
   // clearConditionalFormats is a safe no-op on an empty sheet.
-  wb.clearCfRules(0);
+  wb.sheet(0).clearCfRules();
   // Sheet-out-of-range is rejected.
-  assert.throws(() => wb.clearCfRules(999), isFormulonError);
+  assert.throws(() => wb.sheet(999).clearCfRules(), isFormulonError);
 });
 
 test('data bar x14 fields survive save and load', async () => {
@@ -311,7 +278,7 @@ test('data bar x14 fields survive save and load', async () => {
   // lost. Only a save/load cycle pins them.
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.addCfRule(0, {
+  wb.sheet(0).addCfRule({
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
     type: 3,
     dataBar: {
@@ -330,10 +297,7 @@ test('data bar x14 fields survive save and load', async () => {
 
   const saved = wb.save();
   const loaded = mod.Workbook.load(saved);
-  const bar = readAll(
-    () => loaded.getCfRuleCount(0),
-    (i) => loaded.getCfRule(0, i),
-  )[0].dataBar;
+  const bar = loaded.sheet(0).listCfRules()[0].dataBar;
   assert.equal(bar.gradient, false);
   assert.equal(bar.axisPosition, 1);
   assert.equal(bar.negativeFill.r, 255);
@@ -343,15 +307,12 @@ test('data bar x14 fields survive save and load', async () => {
   assert.equal(bar.direction, 2);
 
   // The decoded bar fed straight back must reproduce the same rule.
-  loaded.addCfRule(0, {
+  loaded.sheet(0).addCfRule({
     ranges: [{ firstRow: 4, firstCol: 0, lastRow: 6, lastCol: 0 }],
     type: 3,
     dataBar: bar,
   });
-  const reread = readAll(
-    () => loaded.getCfRuleCount(0),
-    (i) => loaded.getCfRule(0, i),
-  )[1].dataBar;
+  const reread = loaded.sheet(0).listCfRules()[1].dataBar;
   assert.equal(reread.gradient, false);
   assert.equal(reread.axisPosition, 1);
   assert.equal(reread.axisColor.b, 3);
@@ -364,7 +325,7 @@ test('data bar x14 fields survive save and load', async () => {
 test('icon set floor survives save and load', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.addCfRule(0, {
+  wb.sheet(0).addCfRule({
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 9, lastCol: 0 }],
     type: 4,
     iconSet: {
@@ -378,10 +339,7 @@ test('icon set floor survives save and load', async () => {
   });
   const saved = wb.save();
   const loaded = mod.Workbook.load(saved);
-  const floor = readAll(
-    () => loaded.getCfRuleCount(0),
-    (i) => loaded.getCfRule(0, i),
-  )[0].iconSet.floor;
+  const floor = loaded.sheet(0).listCfRules()[0].iconSet.floor;
   assert.equal(floor.type, 0);
   assert.equal(floor.value, '5');
   assert.equal(floor.gte, false);
@@ -392,15 +350,12 @@ test('icon set floor survives save and load', async () => {
 test('omitted data bar x14 fields keep the model defaults', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.addCfRule(0, {
+  wb.sheet(0).addCfRule({
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
     type: 3,
     dataBar: { min: { type: 3 }, max: { type: 4 }, fill: { r: 0, g: 0, b: 255 } },
   });
-  const bar = readAll(
-    () => wb.getCfRuleCount(0),
-    (i) => wb.getCfRule(0, i),
-  )[0].dataBar;
+  const bar = wb.sheet(0).listCfRules()[0].dataBar;
   // The getter engages all six, so they read back as the defaults rather
   // than as absent keys.
   assert.equal(bar.gradient, true);
@@ -440,13 +395,13 @@ test('setCalcMode / calcMode round-trip the calc policy', async () => {
   assert.equal(wb.getCalcMode(), 2);
 });
 
-test('setPinnedNow / pinnedNow / clearPinnedNow drive the clock seam', async () => {
+test('setPinnedNow / getPinnedNow / setPinnedNow(null) drive the clock seam', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   // Unpinned by default: the workbook follows the host clock.
   assert.equal(wb.getPinnedNow(), null);
 
-  wb.setPinnedNow(2026, 4, 23, 15, 30, 45);
+  wb.setPinnedNow({ year: 2026, month: 4, day: 23, hour: 15, minute: 30, second: 45 });
   assert.deepEqual(wb.getPinnedNow(), {
     year: 2026,
     month: 4,
@@ -457,14 +412,18 @@ test('setPinnedNow / pinnedNow / clearPinnedNow drive the clock seam', async () 
   });
 
   // 2026-04-23 is serial 46135 under the 1900 date system.
-  const today = wb.evaluateFormula(0, 0, 0, '=TODAY()');
+  const today = wb.sheet(0).evaluateFormula(0, 0, '=TODAY()');
   assert.equal(today.number, 46135);
 
   // The pin is a calendar instant, not a normalising constructor.
-  assert.throws(() => wb.setPinnedNow(2026, 13, 1, 0, 0, 0), isFormulonError);
-  assert.throws(() => wb.setPinnedNow(2025, 2, 29, 0, 0, 0), isFormulonError);
+  for (const [year, month, day] of [
+    [2026, 13, 1],
+    [2025, 2, 29],
+  ]) {
+    assert.throws(() => wb.setPinnedNow({ year, month, day, hour: 0, minute: 0, second: 0 }), isFormulonError);
+  }
 
-  wb.clearPinnedNow();
+  wb.setPinnedNow(null);
   assert.equal(wb.getPinnedNow(), null);
 });
 
@@ -517,7 +476,7 @@ test('setExcelProfileId switches a live workbook through every profile id', asyn
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   assert.equal(wb.getExcelProfileId(), 'win-365-en_US');
-  wb.setFormula(0, 0, 0, '=DOLLAR(-1234.567)');
+  wb.sheet(0).setFormula(0, 0, '=DOLLAR(-1234.567)');
   for (const host of ['mac', 'win']) {
     for (const locale of PROFILE_LOCALES) {
       const id = `${host}-365-${locale}`;
@@ -525,7 +484,7 @@ test('setExcelProfileId switches a live workbook through every profile id', asyn
       assert.equal(wb.getExcelProfileId(), id);
       wb.recalc();
       if (id in PROFILE_DOLLAR) {
-        assert.equal(wb.getValue(0, 0, 0).text, PROFILE_DOLLAR[id], id);
+        assert.equal(wb.sheet(0).getValue(0, 0).text, PROFILE_DOLLAR[id], id);
       }
     }
   }
@@ -628,7 +587,7 @@ test('getLocaleFacts reports separators, names, error spellings and measurement'
     const mac = wb.getLocaleFacts('mac-365-de_DE');
     assert.equal(mac.decimalSeparator, ',');
     assert.equal(mac.listSeparator, ';');
-    assert.equal(mac.dateOrder, 'dmy');
+    assert.equal(mac.dateOrder, mod.LocaleDateOrder.Dmy);
     assert.equal(mac.measured, true);
     assert.equal(mac.collationMeasured, true);
     const na = mac.errorNames.find((e) => e.canonical === '#N/A');
@@ -756,12 +715,12 @@ test('getCollationClasses timing on 100k mixed CJK/ASCII texts', async () => {
 test('precedents / dependents return arrays for a small formula graph', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.setNumber(0, 0, 0, 1); // A1
-  wb.setNumber(0, 0, 1, 2); // B1
-  wb.setFormula(0, 1, 0, '=A1+B1'); // A2 = A1 + B1
+  wb.sheet(0).setNumber(0, 0, 1); // A1
+  wb.sheet(0).setNumber(0, 1, 2); // B1
+  wb.sheet(0).setFormula(1, 0, '=A1+B1'); // A2 = A1 + B1
   wb.recalc();
   // A2 reads A1 and B1.
-  const prec = wb.getPrecedents(0, 1, 0, 1);
+  const prec = wb.sheet(0).getPrecedents(1, 0, 1);
   assert.ok(Array.isArray(prec));
   assert.equal(prec.length, 2);
   for (const node of prec) {
@@ -770,7 +729,7 @@ test('precedents / dependents return arrays for a small formula graph', async ()
     assert.equal(typeof node.col, 'number');
   }
   // A1 is read by A2.
-  const dep = wb.getDependents(0, 0, 0, 1);
+  const dep = wb.sheet(0).getDependents(0, 0, 1);
   assert.ok(Array.isArray(dep));
   assert.equal(dep.length, 1);
   assert.equal(dep[0].row, 1);
@@ -781,13 +740,13 @@ test('spillInfo reports a dynamic-array region', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   // Non-spill cell: engaged is false, fields zeroed.
-  const none = wb.getSpillInfo(0, 0, 0);
+  const none = wb.sheet(0).getSpillInfo(0, 0);
   assert.equal(typeof none.engaged, 'boolean');
   assert.equal(none.engaged, false);
   // A spilling dynamic array anchored at A1.
-  wb.setFormula(0, 0, 0, '=SEQUENCE(3,1)');
+  wb.sheet(0).setFormula(0, 0, '=SEQUENCE(3,1)');
   wb.recalc();
-  const info = wb.getSpillInfo(0, 0, 0);
+  const info = wb.sheet(0).getSpillInfo(0, 0);
   assert.equal(info.engaged, true);
   assert.deepEqual(info.rect, { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 });
 });
@@ -795,27 +754,27 @@ test('spillInfo reports a dynamic-array region', async () => {
 test('array formulas can be authored, read from every cell and cleared', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  for (let r = 0; r < 3; r += 1) wb.setNumber(0, r, 0, r + 1);
-  const none = wb.getArrayFormula(0, 0, 2);
+  for (let r = 0; r < 3; r += 1) wb.sheet(0).setNumber(r, 0, r + 1);
+  const none = wb.sheet(0).getArrayFormula(0, 2);
   assert.equal(none, null);
-  wb.setArrayFormula(0, { firstRow: 0, firstCol: 2, lastRow: 2, lastCol: 2 }, '=A1:A3*2');
+  wb.sheet(0).setArrayFormula({ rect: { firstRow: 0, firstCol: 2, lastRow: 2, lastCol: 2 }, formula: '=A1:A3*2' });
   wb.recalc();
   for (let r = 0; r < 3; r += 1) {
-    const found = wb.getArrayFormula(0, r, 2);
+    const found = wb.sheet(0).getArrayFormula(r, 2);
     assert.deepEqual(found.rect, { firstRow: 0, firstCol: 2, lastRow: 2, lastCol: 2 });
     assert.ok(found.formula.includes('A1:A3'));
   }
-  assert.equal(wb.getValue(0, 2, 2).number, 6);
+  assert.equal(wb.sheet(0).getValue(2, 2).number, 6);
   // A partial overlap and a write into a non-anchor cell are refused.
   assert.throws(
-    () => wb.setArrayFormula(0, { firstRow: 1, firstCol: 2, lastRow: 2, lastCol: 2 }, '=1'),
+    () => wb.sheet(0).setArrayFormula({ rect: { firstRow: 1, firstCol: 2, lastRow: 2, lastCol: 2 }, formula: '=1' }),
     isFormulonError,
   );
-  assert.throws(() => wb.setNumber(0, 1, 2, 1), isFormulonError);
-  wb.setBlank(0, 0, 2);
+  assert.throws(() => wb.sheet(0).setNumber(1, 2, 1), isFormulonError);
+  wb.sheet(0).setBlank(0, 2);
   wb.recalc();
-  assert.equal(wb.getArrayFormula(0, 1, 2), null);
-  assert.throws(() => wb.getArrayFormula(99, 0, 0), isFormulonError);
+  assert.equal(wb.sheet(0).getArrayFormula(1, 2), null);
+  assert.throws(() => wb.sheet(99).getArrayFormula(0, 0), isFormulonError);
 });
 
 test('getLambdaText is wired and reports the documented contract', async () => {
@@ -825,16 +784,16 @@ test('getLambdaText is wired and reports the documented contract', async () => {
   // retain a renderable closure; the engine mirrors that, so no lambda is
   // present. A plain number cell is likewise not a lambda, and a bad sheet
   // throws.
-  wb.setFormula(0, 0, 0, '=LAMBDA(x,x+1)');
+  wb.sheet(0).setFormula(0, 0, '=LAMBDA(x,x+1)');
   wb.recalc();
-  const bare = wb.getLambdaText(0, 0, 0);
+  const bare = wb.sheet(0).getLambdaText(0, 0);
   assert.equal(bare, null);
 
-  wb.setNumber(0, 1, 0, 5);
-  const num = wb.getLambdaText(0, 1, 0);
+  wb.sheet(0).setNumber(1, 0, 5);
+  const num = wb.sheet(0).getLambdaText(1, 0);
   assert.equal(num, null);
   assert.throws(
-    () => wb.getLambdaText(99, 0, 0),
+    () => wb.sheet(99).getLambdaText(0, 0),
     (e) => isFormulonError(e, mod.StatusCode.SheetIndexOutOfRange),
   );
 });
@@ -842,28 +801,27 @@ test('getLambdaText is wired and reports the documented contract', async () => {
 test('a fresh workbook has no external links', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.equal(wb.getExternalLinkCount(), 0);
-  assert.throws(() => wb.getExternalLink(0), isFormulonError);
+  assert.deepEqual(wb.listExternalLinks(), []);
 });
 
 test('getSheetProtection / setSheetProtection round-trip the protection flags', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  const before = wb.getSheetProtection(0);
-  assert.equal(before.enabled, 0);
+  const before = wb.sheet(0).getSheetProtection();
+  assert.equal(before.enabled, false);
   // Enable protection and lock cell selection.
   const next = {
     ...before,
-    enabled: 1,
-    selectLockedCells: 1,
-    sort: 1,
+    enabled: true,
+    selectLockedCells: true,
+    sort: true,
   };
-  wb.setSheetProtection(0, next);
-  const after = wb.getSheetProtection(0);
-  assert.equal(after.enabled, 1);
-  assert.equal(after.selectLockedCells, 1);
-  assert.equal(after.sort, 1);
+  wb.sheet(0).setSheetProtection(next);
+  const after = wb.sheet(0).getSheetProtection();
+  assert.equal(after.enabled, true);
+  assert.equal(after.selectLockedCells, true);
+  assert.equal(after.sort, true);
   // Sheet-out-of-range is rejected.
-  assert.throws(() => wb.getSheetProtection(999), isFormulonError);
-  assert.throws(() => wb.setSheetProtection(999, next), isFormulonError);
+  assert.throws(() => wb.sheet(999).getSheetProtection(), isFormulonError);
+  assert.throws(() => wb.sheet(999).setSheetProtection(next), isFormulonError);
 });

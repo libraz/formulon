@@ -13,6 +13,7 @@
 #include "formulon_c_count_of.h"
 #include "formulon_c_out_index.h"
 #include "formulon_c_record_arg.h"
+#include "formulon_c_setters.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 #include "workbook.h"
@@ -163,40 +164,34 @@ TEST(FormulonCApiFormulaEntry, BracketNameWithoutBangIsAcceptedAsAName) {
 TEST(FormulonCApiFormulaEntry, DefinedNameRejectsUnparseableTextAndKeepsState) {
   WorkbookGuard wb;
   MakeWorkbook(&wb);
-  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "Rate", "Sheet1!$A$1"), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Local", "Sheet1!$B$1", 0), 0);
+  ASSERT_EQ(SetDefinedName(wb.handle, "Rate", "Sheet1!$A$1"), 0);
+  ASSERT_EQ(SetDefinedName(wb.handle, "Local", "Sheet1!$B$1", 0), 0);
   ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 2U);
   for (const std::string& formula : RejectedFormulas()) {
     SCOPED_TRACE(formula);
-    EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, "Rate", formula.c_str()), kParserUnexpectedToken);
+    EXPECT_EQ(SetDefinedName(wb.handle, "Rate", formula.c_str()), kParserUnexpectedToken);
     EXPECT_NE(std::string(fm_get_last_error_message()).find("formula does not parse"), std::string::npos);
-    EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, "Fresh", formula.c_str()), kParserUnexpectedToken);
-    EXPECT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Local", formula.c_str(), 0), kParserUnexpectedToken);
+    EXPECT_EQ(SetDefinedName(wb.handle, "Fresh", formula.c_str()), kParserUnexpectedToken);
+    EXPECT_EQ(SetDefinedName(wb.handle, "Local", formula.c_str(), 0), kParserUnexpectedToken);
     EXPECT_NE(std::string(fm_get_last_error_message()).find("formula does not parse"), std::string::npos);
-    EXPECT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Fresh", formula.c_str(), -1), kParserUnexpectedToken);
+    EXPECT_EQ(SetDefinedName(wb.handle, "Fresh", formula.c_str(), -1), kParserUnexpectedToken);
   }
   ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 2U);
-  const char* name = nullptr;
-  const char* formula = nullptr;
-  int32_t scope = 0;
-  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &name, &formula, &scope), 0);
-  EXPECT_STREQ(formula, "Sheet1!$A$1");
-  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 1, &name, &formula, &scope), 0);
-  EXPECT_STREQ(formula, "Sheet1!$B$1");
+  fm_defined_name_t entry{};
+  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &entry), 0);
+  EXPECT_STREQ(entry.formula, "Sheet1!$A$1");
+  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 1, &entry), 0);
+  EXPECT_STREQ(entry.formula, "Sheet1!$B$1");
 }
 
-TEST(FormulonCApiFormulaEntry, DefinedNameAcceptsParseableAndEmptyText) {
+TEST(FormulonCApiFormulaEntry, DefinedNameAcceptsParseableText) {
   WorkbookGuard wb;
   MakeWorkbook(&wb);
-  EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, "Quoted", "'S2'!$A$1"), 0);
-  EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, "Missing", "Gone!$A$1"), 0);
-  EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, "Const", "1.5"), 0);
-  EXPECT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Local", "'S2'!$A$1", 1), 0);
+  EXPECT_EQ(SetDefinedName(wb.handle, "Quoted", "'S2'!$A$1"), 0);
+  EXPECT_EQ(SetDefinedName(wb.handle, "Missing", "Gone!$A$1"), 0);
+  EXPECT_EQ(SetDefinedName(wb.handle, "Const", "1.5"), 0);
+  EXPECT_EQ(SetDefinedName(wb.handle, "Local", "'S2'!$A$1", 1), 0);
   ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 4U);
-  // An empty formula removes the entry rather than being parsed.
-  EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, "Const", ""), 0);
-  EXPECT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Local", "", 1), 0);
-  EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 2U);
 }
 
 fm_cf_rule_t MakeCfRule(const fm_cell_rect_t* sqref, const char* formula1, const char* formula2) {
@@ -315,15 +310,13 @@ TEST(FormulonCApiFormulaEntry, EveryFormulaSetterStoresTheEnteredSpelling) {
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, "=SUM( +1.50 , 1E3 ) "), 0);
   EXPECT_EQ(GetFormula(wb.handle, 0, 1), "=SUM( 1.5, 1000 )");
 
-  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "Rate", "=Sheet1!$A$1+-0 "), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Local", " 1+ +5", 0), 0);
-  const char* name = nullptr;
-  const char* formula = nullptr;
-  int32_t scope = 0;
-  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &name, &formula, &scope), 0);
-  EXPECT_STREQ(formula, "Sheet1!$A$1+0");
-  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 1, &name, &formula, &scope), 0);
-  EXPECT_STREQ(formula, " 1+ 5");
+  ASSERT_EQ(SetDefinedName(wb.handle, "Rate", "=Sheet1!$A$1+-0 "), 0);
+  ASSERT_EQ(SetDefinedName(wb.handle, "Local", " 1+ +5", 0), 0);
+  fm_defined_name_t entry{};
+  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &entry), 0);
+  EXPECT_STREQ(entry.formula, "Sheet1!$A$1+0");
+  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 1, &entry), 0);
+  EXPECT_STREQ(entry.formula, " 1+ 5");
 
   const fm_cell_rect_t sqref{0, 0, 9, 0};
   std::size_t index = 0;

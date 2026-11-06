@@ -7,6 +7,7 @@
 #include <string>
 
 #include "formulon_c_out_index.h"
+#include "formulon_c_setters.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
@@ -55,8 +56,8 @@ TEST(FormulonCApiUtf8Input, MalformedTextIsRefusedWithTheWorkbookUnchanged) {
     EXPECT_EQ(fm_workbook_rename_sheet(wb.handle, 0, bad), kUtf8Error);
     EXPECT_EQ(fm_workbook_add_sheet(wb.handle, bad, ignored_index()), kUtf8Error);
     EXPECT_EQ(fm_sheet_set_comment(wb.handle, 0, 0, 2, "author", bad), kUtf8Error);
-    EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, bad, "=1"), kUtf8Error);
-    EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, "Name", (std::string("=\"") + bad + "\"").c_str()), kUtf8Error);
+    EXPECT_EQ(SetDefinedName(wb.handle, bad, "=1"), kUtf8Error);
+    EXPECT_EQ(SetDefinedName(wb.handle, "Name", (std::string("=\"") + bad + "\"").c_str()), kUtf8Error);
     // The diagnostic never echoes the rejected bytes.
     EXPECT_STREQ(fm_get_last_error_message(), "text is not valid UTF-8");
   }

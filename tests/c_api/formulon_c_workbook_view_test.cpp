@@ -186,7 +186,7 @@ TEST(FormulonCApiWorkbookView, HidingOrRemovingTheActiveSheetActivatesTheNextVis
     five_sheets(wb);
     ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 4, FM_SHEET_VERY_HIDDEN), 0);
     ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 3), 0);
-    ASSERT_EQ(fm_sheet_set_tab_hidden(wb.handle, 3, 1), 0);
+    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 3, FM_SHEET_HIDDEN), 0);
     EXPECT_EQ(ActiveSheet(wb.handle), 2U);
     EXPECT_TRUE(tab_selected(wb, 2));
   }

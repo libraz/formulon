@@ -335,33 +335,39 @@ void JsWorkbook::renameSheet(uint32_t index, const std::string& newName) {
   succeeded(handle_ != nullptr ? fm_workbook_rename_sheet(handle_, index, newName.c_str()) : kBindingInvalidHandle);
 }
 
-void JsWorkbook::setDefinedName(const std::string& name, const std::string& formula) {
-  succeeded(handle_ != nullptr ? fm_workbook_set_defined_name(handle_, name.c_str(), formula.c_str())
-                               : kBindingInvalidHandle);
-}
-
-void JsWorkbook::setDefinedNameScoped(const std::string& name, const std::string& formula, int32_t localSheetId) {
-  succeeded(handle_ != nullptr
-                ? fm_workbook_set_defined_name_scoped(handle_, name.c_str(), formula.c_str(), localSheetId)
-                : kBindingInvalidHandle);
-}
-
-void JsWorkbook::setDefinedNameAttrs(const std::string& name, int32_t localSheetId, emscripten::val attrs) {
+void JsWorkbook::setDefinedName(emscripten::val input) {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setDefinedNameAttrs");
-  const emscripten::val comment_value = reader.value(attrs, "comment", "attrs.comment");
-  const emscripten::val hidden_value = reader.value(attrs, "hidden", "attrs.hidden");
-  const bool has_comment = js_value_present(comment_value);
-  const std::string comment = has_comment ? reader.string(attrs, "comment", "attrs.comment") : std::string();
-  const int32_t hidden = js_value_present(hidden_value) ? (reader.boolean_value(hidden_value, false) ? 1 : 0) : -1;
+  JsNarrowNumericReader reader("Workbook.setDefinedName");
+  if (!reader.require_object(input, "definedName")) {
+    return;
+  }
+  const std::string name = reader.required_string(input, "name", "name");
+  const std::string formula = reader.required_string(input, "formula", "formula");
+  const emscripten::val scope = reader.value(input, "localSheetId", "localSheetId");
+  int32_t local_sheet_id = -1;
+  if (js_value_present(scope)) {
+    const uint32_t sheet = reader.u32_value(scope, 0U, "localSheetId");
+    if (reader.ok() && sheet > 2147483647U) {
+      reader.fail_range("localSheetId", "[0, 2147483647]");
+    }
+    local_sheet_id = static_cast<int32_t>(sheet);
+  }
+  std::string comment_store;
+  const char* comment = reader.optional_string(input, "comment", comment_store, "comment");
+  const bool hidden = reader.boolean(input, "hidden", false, "hidden");
   if (!reader.ok()) {
     return;
   }
-  succeeded(fm_workbook_set_defined_name_attrs(handle_, name.c_str(), localSheetId,
-                                               has_comment ? comment.c_str() : nullptr, hidden));
+  fm_defined_name_input_t in{};
+  in.name = name.c_str();
+  in.formula = formula.c_str();
+  in.local_sheet_id = local_sheet_id;
+  in.comment = comment;
+  in.hidden = hidden ? 1 : 0;
+  succeeded(fm_workbook_set_defined_name(handle_, &in));
 }
 
 // ---- Row / column edits --------------------------------------------------
@@ -474,9 +480,50 @@ JsParallelRecalcStats JsWorkbook::recalcParallel(emscripten::val threadCount) {
   return r;
 }
 
-void JsWorkbook::setIterative(bool enabled, int32_t max_iterations, double max_change) {
-  succeeded(handle_ != nullptr ? fm_workbook_set_iterative(handle_, enabled ? 1 : 0, max_iterations, max_change)
-                               : kBindingInvalidHandle);
+void JsWorkbook::setIterative(emscripten::val patch) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  // Every field is non-nullable: an omitted or `undefined` key keeps the stored
+  // value, `null` and a non-integer cap are type errors.
+  JsNarrowNumericReader reader("Workbook.setIterative");
+  if (!reader.require_object(patch, "patch")) {
+    return;
+  }
+  fm_iterative_settings_patch_t p{-1, -1, -1.0};
+  const emscripten::val enabled = reader.value(patch, "enabled", "enabled");
+  if (reader.ok() && !enabled.isUndefined()) {
+    if (enabled.isNull() || !(enabled.isTrue() || enabled.isFalse())) {
+      reader.fail_type("enabled", "a boolean");
+    }
+    p.enabled = enabled.isTrue() ? 1 : 0;
+  }
+  const emscripten::val cap = reader.value(patch, "maxIterations", "maxIterations");
+  if (reader.ok() && !cap.isUndefined()) {
+    const emscripten::val number = emscripten::val::global("Number");
+    if (!cap.isNumber() || !number.call<bool>("isInteger", cap)) {
+      reader.fail_type("maxIterations", "an integer Number");
+    } else {
+      const double requested = cap.as<double>();
+      if (requested < 0.0 || requested > 2147483647.0) {
+        reader.fail_range("maxIterations", "[0, 2147483647]");
+      }
+      p.max_iterations = static_cast<int32_t>(requested);
+    }
+  }
+  const emscripten::val change = reader.value(patch, "maxChange", "maxChange");
+  if (reader.ok() && !change.isUndefined()) {
+    if (!change.isNumber()) {
+      reader.fail_type("maxChange", "a Number");
+    } else {
+      p.max_change = change.as<double>();
+    }
+  }
+  if (!reader.ok()) {
+    return;
+  }
+  succeeded(fm_workbook_set_iterative(handle_, &p));
 }
 
 emscripten::val JsWorkbook::getIterative() const {
@@ -601,12 +648,12 @@ void JsWorkbook::setExcelProfileId(const std::string& profile_id) {
   succeeded(handle_ != nullptr ? fm_workbook_set_excel_profile_id(handle_, profile_id.c_str()) : kBindingInvalidHandle);
 }
 
-std::string JsWorkbook::fileName() const {
+emscripten::val JsWorkbook::fileName() const {
   const char* name = nullptr;
   if (!succeeded(handle_ != nullptr ? fm_workbook_get_file_name(handle_, &name) : kBindingInvalidHandle)) {
-    return std::string();
+    return emscripten::val::undefined();
   }
-  return string_from_cstr(name);
+  return cstr_or_null(name);
 }
 
 void JsWorkbook::setFileName(const std::string& name) {

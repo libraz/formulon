@@ -22,18 +22,38 @@
 
 namespace formulon_node {
 
-/// Reads the placement fields shared by `fm_image_insert_t`, `fm_drawing_anchor_t`
-/// and a chart's `placement`; only the default anchor kind differs by caller.
-template <typename Record>
-void PullPlacement(CheckedSpecReader& reader, const Napi::Object& spec, Record& record, int32_t default_anchor_kind) {
-  record.anchor_kind = reader.I32(spec, "anchorKind", default_anchor_kind);
-  record.edit_as = reader.I32(spec, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL);
-  record.row = reader.U32(spec, "row", 0U);
-  record.col = reader.U32(spec, "col", 0U);
-  record.row_offset_emu = reader.I64(spec, "rowOffsetEmu", 0);
-  record.col_offset_emu = reader.I64(spec, "colOffsetEmu", 0);
-  record.width_emu = reader.I64(spec, "widthEmu", 0);
-  record.height_emu = reader.I64(spec, "heightEmu", 0);
+/// Reads a `DrawingAnchor` (`anchorKind`, `editAs`, `row`, `col`, the EMU
+/// offsets and size) shared by the picture, chart and re-anchor calls; an
+/// absent `anchorKind` takes `default_anchor_kind`.
+inline fm_drawing_anchor_t PullDrawingAnchor(CheckedSpecReader& reader, const Napi::Object& spec,
+                                             int32_t default_anchor_kind) {
+  fm_drawing_anchor_t anchor{};
+  anchor.anchor_kind = reader.I32(spec, "anchorKind", default_anchor_kind);
+  anchor.edit_as = reader.I32(spec, "editAs", FM_ANCHOR_EDIT_AS_TWO_CELL);
+  anchor.row = reader.U32(spec, "row", 0U);
+  anchor.col = reader.U32(spec, "col", 0U);
+  anchor.row_offset_emu = reader.I64(spec, "rowOffsetEmu", 0);
+  anchor.col_offset_emu = reader.I64(spec, "colOffsetEmu", 0);
+  anchor.width_emu = reader.I64(spec, "widthEmu", 0);
+  anchor.height_emu = reader.I64(spec, "heightEmu", 0);
+  return anchor;
+}
+
+/// Reads an `ImageInsertInput` (`name`, `description`, nested `anchor`) out
+/// of `input`; an absent `input` is all defaults. The stores own the
+/// returned strings.
+inline fm_image_insert_t PullImageInsert(CheckedSpecReader& reader, const Napi::Value& input,
+                                         int32_t default_anchor_kind, std::string& name_store,
+                                         std::string& description_store) {
+  fm_image_insert_t ins{};
+  Napi::Object options = Napi::Object::New(input.Env());
+  (void)reader.Object(input, "input", &options);
+  ins.name = reader.String(options, "name", &name_store) ? name_store.c_str() : nullptr;
+  ins.description = reader.String(options, "description", &description_store) ? description_store.c_str() : nullptr;
+  Napi::Object anchor = Napi::Object::New(input.Env());
+  (void)reader.Object(options, "anchor", &anchor);
+  ins.anchor = PullDrawingAnchor(reader, anchor, default_anchor_kind);
+  return ins;
 }
 
 class Workbook : public Napi::ObjectWrap<Workbook> {
@@ -352,8 +372,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
 
   // Defined names.
   Napi::Value SetDefinedName(const Napi::CallbackInfo& info);
-  Napi::Value SetDefinedNameScoped(const Napi::CallbackInfo& info);
-  Napi::Value SetDefinedNameAttrs(const Napi::CallbackInfo& info);
 
   // Conditional formatting.
   Napi::Value EvaluateCfRange(const Napi::CallbackInfo& info);
@@ -369,7 +387,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetSheetProtection(const Napi::CallbackInfo& info);
   Napi::Value SetSheetZoom(const Napi::CallbackInfo& info);
   Napi::Value SetSheetFreeze(const Napi::CallbackInfo& info);
-  Napi::Value SetSheetTabHidden(const Napi::CallbackInfo& info);
   /// States the whole tab visibility, including `veryHidden`, which the
   /// bool setter cannot express in either direction.
   Napi::Value SetSheetVisibility(const Napi::CallbackInfo& info);
@@ -462,7 +479,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetTableStyleDefaults(const Napi::CallbackInfo& info);
 
   // Theme, colour resolution, effective style.
-  Napi::Value GetTheme(const Napi::CallbackInfo& info);
+  Napi::Value GetThemeColors(const Napi::CallbackInfo& info);
+  Napi::Value GetThemeFonts(const Napi::CallbackInfo& info);
   Napi::Value SetThemeColors(const Napi::CallbackInfo& info);
   Napi::Value SetThemeFonts(const Napi::CallbackInfo& info);
   Napi::Value SetThemeScriptFont(const Napi::CallbackInfo& info);
@@ -481,6 +499,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetComment(const Napi::CallbackInfo& info);
   Napi::Value GetComments(const Napi::CallbackInfo& info);
   Napi::Value SetComment(const Napi::CallbackInfo& info);
+  Napi::Value RemoveComment(const Napi::CallbackInfo& info);
   Napi::Value GetCommentVisible(const Napi::CallbackInfo& info);
   Napi::Value SetCommentVisible(const Napi::CallbackInfo& info);
   Napi::Value GetWorkbookProtection(const Napi::CallbackInfo& info);

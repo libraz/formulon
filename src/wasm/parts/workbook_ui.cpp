@@ -176,6 +176,10 @@ void JsWorkbook::setComment(uint32_t sheet, uint32_t row, uint32_t col, const st
   succeeded(rc);
 }
 
+void JsWorkbook::removeComment(uint32_t sheet, uint32_t row, uint32_t col) {
+  succeeded(handle_ != nullptr ? fm_sheet_remove_comment(handle_, sheet, row, col) : kBindingInvalidHandle);
+}
+
 emscripten::val JsWorkbook::getCommentVisible(uint32_t sheet, uint32_t row, uint32_t col) const {
   int32_t visible = 0;
   const fm_status_t rc =
@@ -198,19 +202,19 @@ emscripten::val JsWorkbook::getWorkbookProtection() const {
     return emscripten::val::undefined();
   }
   emscripten::val protection = emscripten::val::object();
-  protection.set("lockStructure", p.lock_structure);
-  protection.set("lockWindows", p.lock_windows);
-  protection.set("lockRevision", p.lock_revision);
+  protection.set("lockStructure", p.lock_structure != 0);
+  protection.set("lockWindows", p.lock_windows != 0);
+  protection.set("lockRevision", p.lock_revision != 0);
   protection.set("workbookSpinCount", p.workbook_spin_count);
   protection.set("revisionsSpinCount", p.revisions_spin_count);
-  js_set_cstr_fields(protection, {{"workbookPassword", p.workbook_password},
-                                  {"workbookAlgorithmName", p.workbook_algorithm_name},
-                                  {"workbookHashValue", p.workbook_hash_value},
-                                  {"workbookSaltValue", p.workbook_salt_value},
-                                  {"revisionsPassword", p.revisions_password},
-                                  {"revisionsAlgorithmName", p.revisions_algorithm_name},
-                                  {"revisionsHashValue", p.revisions_hash_value},
-                                  {"revisionsSaltValue", p.revisions_salt_value}});
+  js_set_cstr_or_null_fields(protection, {{"workbookPassword", p.workbook_password},
+                                          {"workbookAlgorithmName", p.workbook_algorithm_name},
+                                          {"workbookHashValue", p.workbook_hash_value},
+                                          {"workbookSaltValue", p.workbook_salt_value},
+                                          {"revisionsPassword", p.revisions_password},
+                                          {"revisionsAlgorithmName", p.revisions_algorithm_name},
+                                          {"revisionsHashValue", p.revisions_hash_value},
+                                          {"revisionsSaltValue", p.revisions_salt_value}});
   return protection;
 }
 
@@ -221,9 +225,9 @@ void JsWorkbook::setWorkbookProtection(emscripten::val protection) {
   }
   JsNarrowNumericReader reader("setWorkbookProtection");
   fm_workbook_protection_t p{};
-  p.lock_structure = reader.i32(protection, "lockStructure", 0, "protection.lockStructure");
-  p.lock_windows = reader.i32(protection, "lockWindows", 0, "protection.lockWindows");
-  p.lock_revision = reader.i32(protection, "lockRevision", 0, "protection.lockRevision");
+  p.lock_structure = reader.boolean(protection, "lockStructure", false, "protection.lockStructure") ? 1 : 0;
+  p.lock_windows = reader.boolean(protection, "lockWindows", false, "protection.lockWindows") ? 1 : 0;
+  p.lock_revision = reader.boolean(protection, "lockRevision", false, "protection.lockRevision") ? 1 : 0;
   p.workbook_spin_count = reader.u32(protection, "workbookSpinCount", 0U, "protection.workbookSpinCount");
   p.revisions_spin_count = reader.u32(protection, "revisionsSpinCount", 0U, "protection.revisionsSpinCount");
   std::string text[8];
@@ -397,8 +401,8 @@ namespace {
 emscripten::val hyperlink_to_val(const fm_hyperlink_t& h) {
   emscripten::val item = emscripten::val::object();
   item.set("rect", cell_rect_to_val(h.rect));
-  js_set_cstr_fields(item,
-                     {{"target", h.target}, {"location", h.location}, {"display", h.display}, {"tooltip", h.tooltip}});
+  js_set_cstr(item, "target", h.target);
+  js_set_cstr_or_null_fields(item, {{"location", h.location}, {"display", h.display}, {"tooltip", h.tooltip}});
   return item;
 }
 
@@ -639,11 +643,14 @@ void JsWorkbook::addThreadedComment(uint32_t sheet, emscripten::val comment) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("addThreadedComment");
-  const std::string id = reader.string(comment, "id", "comment.id");
+  JsNarrowNumericReader reader("Sheet.addThreadedComment");
+  if (!reader.require_object(comment, "comment")) {
+    return;
+  }
+  const std::string id = reader.required_string(comment, "id", "id");
   const std::string person_id = reader.string(comment, "personId", "comment.personId");
   const std::string created = reader.string(comment, "created", "comment.created");
-  const std::string text = reader.string(comment, "text", "comment.text");
+  const std::string text = reader.required_string(comment, "text", "text");
   const std::string parent_id = reader.string(comment, "parentId", "comment.parentId");
   if (!reader.ok()) {
     return;

@@ -15,7 +15,18 @@ import threading
 import unittest
 
 import formulon
-from formulon import LIB, CellRect, FormulonError, Value, ValueKind, Workbook
+from formulon import (
+    LIB,
+    CellRect,
+    Comment,
+    DefinedNameInput,
+    FormulonError,
+    SheetComment,
+    SheetRect,
+    Value,
+    ValueKind,
+    Workbook,
+)
 
 # Excel error code ordinals, mirrored from src/value.h ``ErrorCode``.
 ERROR_DIV0 = 1
@@ -86,15 +97,15 @@ class WorkbookLifecycleTests(unittest.TestCase):
     def test_create_default_has_one_sheet(self) -> None:
         with Workbook.create_default() as wb:
             self.assertFalse(wb.closed)
-            self.assertEqual(wb.get_sheet_count(), 1)
-            self.assertEqual(wb.get_sheet_name(0), "Sheet1")
+            self.assertEqual(len(wb), 1)
+            self.assertEqual(wb.sheet(0).name, "Sheet1")
 
     def test_create_empty_has_no_sheets(self) -> None:
         with Workbook.create_empty() as wb:
-            self.assertEqual(wb.get_sheet_count(), 0)
+            self.assertEqual(len(wb), 0)
             wb.add_sheet("S1")
-            self.assertEqual(wb.get_sheet_count(), 1)
-            self.assertEqual(wb.get_sheet_name(0), "S1")
+            self.assertEqual(len(wb), 1)
+            self.assertEqual(wb.sheet(0).name, "S1")
 
     def test_unicode_sheet_identity_rejects_duplicate_and_renames_casing(self) -> None:
         with Workbook.create_empty() as wb:
@@ -104,11 +115,11 @@ class WorkbookLifecycleTests(unittest.TestCase):
                 wb.add_sheet("ä")
             with self.assertRaises(FormulonError):
                 wb.rename_sheet(1, "ä")
-            self.assertEqual(wb.get_sheet_name(0), "Ä")
-            self.assertEqual(wb.get_sheet_name(1), "Ö")
+            self.assertEqual(wb.sheet(0).name, "Ä")
+            self.assertEqual(wb.sheet(1).name, "Ö")
             wb.rename_sheet(0, "ä")
-            self.assertEqual(wb.get_sheet_name(0), "ä")
-            self.assertEqual(wb.get_sheet_name(1), "Ö")
+            self.assertEqual(wb.sheet(0).name, "ä")
+            self.assertEqual(wb.sheet(1).name, "Ö")
 
     def test_close_is_idempotent(self) -> None:
         wb = Workbook.create_default()
@@ -128,7 +139,7 @@ class WorkbookLifecycleTests(unittest.TestCase):
         self.assertNotEqual(status, 0)
         wb.close()
         with self.assertRaises(FormulonError) as ctx:
-            wb.get_sheet_count()
+            len(wb)
         error = ctx.exception
         self.assertIsInstance(error, formulon.WorkbookClosedError)
         self.assertEqual(error.code, 7000)
@@ -152,7 +163,7 @@ class WorkbookLifecycleTests(unittest.TestCase):
                     for _ in range(200):
                         barrier.wait()
                         try:
-                            worker.remove_sheet(index)
+                            worker.remove_table(index)
                         except FormulonError as error:
                             contexts[index].append(error.context)
                         barrier.wait()
@@ -169,7 +180,7 @@ class WorkbookLifecycleTests(unittest.TestCase):
             try:
                 for _ in range(200):
                     barrier.wait()
-                    main.get_value(0, 0, 0)
+                    main.sheet(0).get_value(0, 0)
                     barrier.wait()
             finally:
                 for thread in threads:
@@ -177,7 +188,7 @@ class WorkbookLifecycleTests(unittest.TestCase):
             self.assertEqual(unexpected, [])
             for index in indices:
                 self.assertEqual(len(contexts[index]), 200)
-                expected = f"index={index} sheet_count=1"
+                expected = f"index={index} count=0"
                 self.assertEqual(contexts[index], [expected] * 200)
             self.assertEqual(sum(len(values) for values in contexts.values()), 800)
         finally:
@@ -189,7 +200,7 @@ class WorkbookLifecycleTests(unittest.TestCase):
     def test_close_waits_for_real_wasm_fetch_and_decode(self) -> None:
         """A close cannot free the handle between a native fetch and its decode."""
         wb = Workbook.create_default()
-        wb.set_text(0, 0, 0, "borrowed")
+        wb.sheet(0).set_text(0, 0, "borrowed")
         decode_started = threading.Event()
         release_decode = threading.Event()
         close_finished = threading.Event()
@@ -212,7 +223,7 @@ class WorkbookLifecycleTests(unittest.TestCase):
 
         def read_value() -> None:
             try:
-                result.append(wb.get_value(0, 0, 0))
+                result.append(wb.sheet(0).get_value(0, 0))
             except BaseException as error:  # pragma: no cover - assertion aid
                 errors.append(error)
 
@@ -252,10 +263,10 @@ class WorkbookLifecycleTests(unittest.TestCase):
 class WorkbookRoundtripTests(unittest.TestCase):
     def test_comment_enumeration_and_cf_formula_evaluation(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_comment(0, 2, 3, "Ada", "review")
-            self.assertEqual(len(wb.list_comments(0)), 1)
-            self.assertEqual(wb.list_comments(0), [(2, 3, "Ada", "review")])
-            self.assertTrue(wb.evaluate_cf_formula(0, 0, 0, 0, 0, "=A1=0"))
+            wb.sheet(0).set_comment(2, 3, Comment("Ada", "review"))
+            self.assertEqual(len(wb.sheet(0).list_comments()), 1)
+            self.assertEqual(wb.sheet(0).list_comments(), [SheetComment(row=2, col=3, author="Ada", text="review")])
+            self.assertTrue(wb.sheet(0).evaluate_cf_formula(0, 0, 0, 0, "=A1=0"))
 
     def test_paginate_returns_resolved_breaks(self) -> None:
         # Asserts the envelope's shape, not the page geometry: how many rows
@@ -263,72 +274,72 @@ class WorkbookRoundtripTests(unittest.TestCase):
         # native print suite against Excel. Row 400 is far enough down to
         # force a break under any plausible body height.
         with Workbook.create_default() as wb:
-            wb.set_number(0, 0, 0, 1.0)
-            wb.set_number(0, 400, 0, 2.0)
-            result = wb.get_pagination(0)
+            wb.sheet(0).set_number(0, 0, 1.0)
+            wb.sheet(0).set_number(400, 0, 2.0)
+            result = wb.sheet(0).get_pagination()
             self.assertGreaterEqual(result.page_count, 2)
             self.assertEqual(result.print_area, [])
-            self.assertTrue(result.horizontal_breaks)
+            self.assertTrue(result.row_breaks)
             self.assertEqual(
-                result.horizontal_breaks,
-                sorted(set(result.horizontal_breaks)),
+                result.row_breaks,
+                sorted(set(result.row_breaks)),
             )
-            self.assertEqual(result.vertical_breaks, [])
+            self.assertEqual(result.column_breaks, [])
 
     def test_set_get_number(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_number(0, 0, 0, 42.0)
+            wb.sheet(0).set_number(0, 0, 42.0)
             wb.recalc()
-            v = wb.get_value(0, 0, 0)
+            v = wb.sheet(0).get_value(0, 0)
             self.assertEqual(v.kind, ValueKind.NUMBER)
             self.assertEqual(v.to_python(), 42.0)
 
     def test_set_get_text(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "hello")
+            wb.sheet(0).set_text(0, 0, "hello")
             wb.recalc()
-            v = wb.get_value(0, 0, 0)
+            v = wb.sheet(0).get_value(0, 0)
             self.assertEqual(v.kind, ValueKind.TEXT)
             self.assertEqual(v.to_python(), "hello")
 
     def test_set_get_bool(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_bool(0, 0, 0, True)
+            wb.sheet(0).set_bool(0, 0, True)
             wb.recalc()
-            v = wb.get_value(0, 0, 0)
+            v = wb.sheet(0).get_value(0, 0)
             self.assertEqual(v.kind, ValueKind.BOOL)
             self.assertIs(v.to_python(), True)
 
     def test_blank_cell_returns_blank_value(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_number(0, 0, 0, 1.0)
-            wb.set_blank(0, 0, 0)
+            wb.sheet(0).set_number(0, 0, 1.0)
+            wb.sheet(0).set_blank(0, 0)
             wb.recalc()
-            v = wb.get_value(0, 0, 0)
+            v = wb.sheet(0).get_value(0, 0)
             self.assertEqual(v.kind, ValueKind.BLANK)
             self.assertIsNone(v.to_python())
 
     def test_formula_recalc_chain(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_number(0, 0, 0, 21.0)
-            wb.set_formula(0, 0, 1, "=A1*2")
+            wb.sheet(0).set_number(0, 0, 21.0)
+            wb.sheet(0).set_formula(0, 1, "=A1*2")
             wb.recalc()
-            v = wb.get_value(0, 0, 1)
+            v = wb.sheet(0).get_value(0, 1)
             self.assertEqual(v.kind, ValueKind.NUMBER)
             self.assertEqual(v.to_python(), 42.0)
 
             # Mutate, recalc, observe.
-            wb.set_number(0, 0, 0, 100.0)
+            wb.sheet(0).set_number(0, 0, 100.0)
             wb.recalc()
-            v = wb.get_value(0, 0, 1)
+            v = wb.sheet(0).get_value(0, 1)
             self.assertEqual(v.to_python(), 200.0)
 
 
 class WorkbookSaveLoadTests(unittest.TestCase):
     def test_save_then_load_preserves_values(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_number(0, 0, 0, 7.5)
-            wb.set_text(0, 0, 1, "world")
+            wb.sheet(0).set_number(0, 0, 7.5)
+            wb.sheet(0).set_text(0, 1, "world")
             wb.recalc()
             blob = wb.save()
             self.assertIsInstance(blob, bytes)
@@ -338,10 +349,10 @@ class WorkbookSaveLoadTests(unittest.TestCase):
 
         with Workbook.load(blob) as wb2:
             wb2.recalc()
-            v0 = wb2.get_value(0, 0, 0)
+            v0 = wb2.sheet(0).get_value(0, 0)
             self.assertEqual(v0.kind, ValueKind.NUMBER)
             self.assertEqual(v0.to_python(), 7.5)
-            v1 = wb2.get_value(0, 0, 1)
+            v1 = wb2.sheet(0).get_value(0, 1)
             self.assertEqual(v1.kind, ValueKind.TEXT)
             self.assertEqual(v1.to_python(), "world")
 
@@ -365,11 +376,11 @@ class WorkbookSaveLoadTests(unittest.TestCase):
 class IterationTests(unittest.TestCase):
     def test_get_cell_at_reads_set_cells(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_number(0, 0, 0, 1.0)
-            wb.set_number(0, 1, 1, 2.0)
-            wb.set_formula(0, 2, 0, "=A1+B2")
+            wb.sheet(0).set_number(0, 0, 1.0)
+            wb.sheet(0).set_number(1, 1, 2.0)
+            wb.sheet(0).set_formula(2, 0, "=A1+B2")
             wb.recalc()
-            cells = [wb.get_cell_at(0, i) for i in range(wb.get_cell_count(0))]
+            cells = [wb.sheet(0).get_cell_at(i) for i in range(wb.sheet(0).get_cell_count())]
             # We expect at least the three cells we set.
             self.assertGreaterEqual(len(cells), 3)
             row_col = {(c.row, c.col): c for c in cells}
@@ -395,17 +406,17 @@ class IteratorHandleLivenessTests(unittest.TestCase):
 
     def test_get_cell_at_after_close_raises(self) -> None:
         wb = Workbook.create_default()
-        wb.set_number(0, 0, 0, 1.0)
-        wb.set_number(0, 1, 0, 2.0)
-        wb.get_cell_at(0, 0)
+        wb.sheet(0).set_number(0, 0, 1.0)
+        wb.sheet(0).set_number(1, 0, 2.0)
+        wb.sheet(0).get_cell_at(0)
         wb.close()
         with self.assertRaises(FormulonError):
-            wb.get_cell_at(0, 1)
+            wb.sheet(0).get_cell_at(1)
 
     def test_list_defined_names_after_close_raises(self) -> None:
         wb = Workbook.create_default()
-        wb.set_defined_name("NameOne", "=1")
-        wb.set_defined_name("NameTwo", "=2")
+        wb.set_defined_name(DefinedNameInput("NameOne", "=1"))
+        wb.set_defined_name(DefinedNameInput("NameTwo", "=2"))
         self.assertEqual(len(wb.list_defined_names()), 2)
         wb.close()
         with self.assertRaises(FormulonError):
@@ -414,23 +425,23 @@ class IteratorHandleLivenessTests(unittest.TestCase):
     def test_get_table_after_close_raises(self) -> None:
         wb = Workbook.create_default()
         wb.add_sheet("Sheet2")
-        wb.set_text(0, 0, 0, "A")
-        wb.set_text(1, 0, 0, "A")
-        wb.add_table(0, CellRect(0, 0, 0, 0), "TableOne", "TableOne", ["A"])
-        wb.add_table(1, CellRect(0, 0, 0, 0), "TableTwo", "TableTwo", ["A"])
-        wb.get_table(0)
+        wb.sheet(0).set_text(0, 0, "A")
+        wb.sheet(1).set_text(0, 0, "A")
+        wb.add_table(range=SheetRect(0, CellRect(0, 0, 0, 0)), name="TableOne", display_name="TableOne", columns=["A"])
+        wb.add_table(range=SheetRect(1, CellRect(0, 0, 0, 0)), name="TableTwo", display_name="TableTwo", columns=["A"])
+        wb.list_tables()[0]
         wb.close()
         with self.assertRaises(FormulonError):
-            wb.get_table(1)
+            wb.list_tables()[1]
 
     def test_table_rename_column_rewrites_structured_references(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "Qty")
-            wb.set_number(0, 1, 0, 2)
-            wb.add_table(0, CellRect(0, 0, 1, 0), "T", "T", ["Qty"])
-            wb.set_formula(0, 0, 2, "=SUM(T[Qty])")
+            wb.sheet(0).set_text(0, 0, "Qty")
+            wb.sheet(0).set_number(1, 0, 2)
+            wb.add_table(range=SheetRect(0, CellRect(0, 0, 1, 0)), name="T", display_name="T", columns=["Qty"])
+            wb.sheet(0).set_formula(0, 2, "=SUM(T[Qty])")
             self.assertEqual(wb.rename_table_column(0, 0, "Amount"), "Amount")
-            self.assertEqual(wb.get_formula(0, 0, 2), "=SUM(T[Amount])")
+            self.assertEqual(wb.sheet(0).get_formula(0, 2), "=SUM(T[Amount])")
             self.assertEqual(wb.rename_table_column(0, 0, ""), "Column1")
             with self.assertRaises(FormulonError):
                 wb.rename_table_column(0, 1, "X")

@@ -875,7 +875,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_data_field_default_name(const fm_workb
   if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, &table); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(aggregation, FM_PIVOT_AGG_VARP, "aggregation"); rc != 0) {
+  if (auto rc = check_enum_domain(aggregation, 0, FM_PIVOT_AGG_VARP, "aggregation"); rc != 0) {
     return rc;
   }
   if (auto rc = check_index(field_index, table->fields().size(), "field_index"); rc != 0) {

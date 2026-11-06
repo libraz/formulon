@@ -315,7 +315,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_axis(fm_workbook_t* wb, std::siz
     return rc;
   }
   // -1 takes the field off every axis.
-  fm_status_t enum_status = axis == kPivotAxisNone ? 0 : check_enum_domain(axis, 3, "axis");
+  fm_status_t enum_status = axis == kPivotAxisNone ? 0 : check_enum_domain(axis, 0, 3, "axis");
   if (enum_status != 0) {
     return enum_status;
   }
@@ -345,7 +345,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_sort(fm_workbook_t* wb, std::siz
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  fm_status_t enum_status = check_enum_domain(order, FM_PIVOT_SORT_MANUAL, "order");
+  fm_status_t enum_status = check_enum_domain(order, 0, FM_PIVOT_SORT_MANUAL, "order");
   if (enum_status != 0) {
     return enum_status;
   }
@@ -643,7 +643,7 @@ extern "C" fm_status_t fm_sheet_add_pivot_field_subtotal_fn(fm_workbook_t* wb, s
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  fm_status_t enum_status = check_enum_domain(agg, 10, "aggregation");
+  fm_status_t enum_status = check_enum_domain(agg, 0, 10, "aggregation");
   if (enum_status != 0) {
     return enum_status;
   }
@@ -671,7 +671,7 @@ extern "C" fm_status_t fm_sheet_set_pivot_field_date_group(fm_workbook_t* wb, st
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (fm_status_t rc = check_enum_domain(calendar, 1, "calendar"); rc != 0) {
+  if (fm_status_t rc = check_enum_domain(calendar, 0, 1, "calendar"); rc != 0) {
     return rc;
   }
   const auto bound = [](double serial) { return std::isnan(serial) ? std::nullopt : std::optional<double>(serial); };

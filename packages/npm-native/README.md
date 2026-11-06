@@ -61,12 +61,9 @@ available on both the native and WASM packages and returns the parallel SCC
 telemetry described in the API declarations. See
 [Memory accounting](#memory-accounting).
 
-Two C ABI functions bound in the Python package have no JS method of their
-own; what they do is reachable from both JS packages:
+One C ABI function bound in the Python package has no JS method of its own;
+what it does is reachable from both JS packages:
 
-- `fm_workbook_set_iterative_enabled` toggles iterative calculation and keeps
-  the stored cap and threshold. In JS, read them back and pass them on:
-  `const it = wb.getIterative(); wb.setIterative(on, it.maxIterations, it.maxChange)`.
 - `fm_workbook_add_batch` registers fonts, fills, borders and cell xfs in one
   all-or-nothing call. JS registers the same records one call each
   (`addFont`, `addFill`, `addBorder`, `addXf`), so a failure part-way leaves

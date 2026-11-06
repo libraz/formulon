@@ -35,12 +35,12 @@ namespace {
 using XmlGetter = fm_status_t (*)(const fm_workbook_t*, size_t, const char**);
 using XmlSetter = fm_status_t (*)(fm_workbook_t*, size_t, const char*);
 
-std::string xml_result(const fm_workbook_t* handle, uint32_t sheet, XmlGetter getter) {
+emscripten::val xml_result(const fm_workbook_t* handle, uint32_t sheet, XmlGetter getter) {
   const char* xml = nullptr;
   if (!succeeded(handle != nullptr ? getter(handle, sheet, &xml) : kBindingInvalidHandle)) {
-    return std::string();
+    return emscripten::val::undefined();
   }
-  return string_from_cstr(xml);
+  return cstr_or_null(xml);
 }
 
 void xml_set(fm_workbook_t* handle, uint32_t sheet, const std::string& xml, XmlSetter setter) {
@@ -80,7 +80,7 @@ emscripten::val breaks_array(const fm_workbook_t* handle, uint32_t sheet, bool r
 
 // ---- Raw XML -----------------------------------------------------------
 
-std::string JsWorkbook::getSheetPageSetupXml(uint32_t sheet) const {
+emscripten::val JsWorkbook::getSheetPageSetupXml(uint32_t sheet) const {
   return xml_result(handle_, sheet, &fm_sheet_get_page_setup_xml);
 }
 
@@ -88,7 +88,7 @@ void JsWorkbook::setSheetPageSetupXml(uint32_t sheet, const std::string& xml) {
   return xml_set(handle_, sheet, xml, &fm_sheet_set_page_setup_xml);
 }
 
-std::string JsWorkbook::getSheetPageMarginsXml(uint32_t sheet) const {
+emscripten::val JsWorkbook::getSheetPageMarginsXml(uint32_t sheet) const {
   return xml_result(handle_, sheet, &fm_sheet_get_page_margins_xml);
 }
 
@@ -96,7 +96,7 @@ void JsWorkbook::setSheetPageMarginsXml(uint32_t sheet, const std::string& xml) 
   return xml_set(handle_, sheet, xml, &fm_sheet_set_page_margins_xml);
 }
 
-std::string JsWorkbook::getSheetPrintOptionsXml(uint32_t sheet) const {
+emscripten::val JsWorkbook::getSheetPrintOptionsXml(uint32_t sheet) const {
   return xml_result(handle_, sheet, &fm_sheet_get_print_options_xml);
 }
 
@@ -104,7 +104,7 @@ void JsWorkbook::setSheetPrintOptionsXml(uint32_t sheet, const std::string& xml)
   return xml_set(handle_, sheet, xml, &fm_sheet_set_print_options_xml);
 }
 
-std::string JsWorkbook::getSheetHeaderFooterXml(uint32_t sheet) const {
+emscripten::val JsWorkbook::getSheetHeaderFooterXml(uint32_t sheet) const {
   return xml_result(handle_, sheet, &fm_sheet_get_header_footer_xml);
 }
 
@@ -112,7 +112,7 @@ void JsWorkbook::setSheetHeaderFooterXml(uint32_t sheet, const std::string& xml)
   return xml_set(handle_, sheet, xml, &fm_sheet_set_header_footer_xml);
 }
 
-std::string JsWorkbook::getSheetSheetPrXml(uint32_t sheet) const {
+emscripten::val JsWorkbook::getSheetSheetPrXml(uint32_t sheet) const {
   return xml_result(handle_, sheet, &fm_sheet_get_sheet_pr_xml);
 }
 
@@ -150,21 +150,43 @@ void JsWorkbook::setSheetPrintArea(uint32_t sheet, emscripten::val ranges) {
 }
 
 emscripten::val JsWorkbook::getSheetPrintTitles(uint32_t sheet) const {
-  const char* rows = nullptr;
-  const char* cols = nullptr;
-  if (!succeeded(handle_ != nullptr ? fm_sheet_get_print_titles(handle_, sheet, &rows, &cols)
-                                    : kBindingInvalidHandle)) {
+  fm_print_titles_t titles{};
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_print_titles(handle_, sheet, &titles) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
-  emscripten::val out = emscripten::val::object();
-  js_set_cstr(out, "repeatRows", rows);
-  js_set_cstr(out, "repeatCols", cols);
-  return out;
+  return print_titles_to_val(titles);
 }
 
-void JsWorkbook::setSheetPrintTitles(uint32_t sheet, const std::string& repeatRows, const std::string& repeatCols) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_print_titles(handle_, sheet, repeatRows.c_str(), repeatCols.c_str())
-                               : kBindingInvalidHandle);
+void JsWorkbook::setSheetPrintTitles(uint32_t sheet, emscripten::val titles) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  if (!js_value_present(titles)) {
+    succeeded(fm_sheet_set_print_titles(handle_, sheet, nullptr));
+    return;
+  }
+  JsNarrowNumericReader reader("Sheet.setPrintTitles");
+  if (!reader.require_object(titles, "titles")) {
+    return;
+  }
+  fm_print_titles_t in{};
+  const emscripten::val rows = reader.value(titles, "rows", "rows");
+  if (reader.ok() && js_value_present(rows) && reader.require_object(rows, "rows")) {
+    in.has_rows = 1;
+    in.first_row = reader.required_u32(rows, "first", "rows.first");
+    in.last_row = reader.required_u32(rows, "last", "rows.last");
+  }
+  const emscripten::val columns = reader.value(titles, "columns", "columns");
+  if (reader.ok() && js_value_present(columns) && reader.require_object(columns, "columns")) {
+    in.has_cols = 1;
+    in.first_col = reader.required_u32(columns, "first", "columns.first");
+    in.last_col = reader.required_u32(columns, "last", "columns.last");
+  }
+  if (!reader.ok()) {
+    return;
+  }
+  succeeded(fm_sheet_set_print_titles(handle_, sheet, &in));
 }
 
 // ---- Manual page breaks -------------------------------------------------
@@ -341,7 +363,7 @@ emscripten::val JsWorkbook::getSheetPageSetup(uint32_t sheet) const {
     return emscripten::val::undefined();
   }
   emscripten::val out = emscripten::val::object();
-  out.set("orientation", setup.orientation);
+  js_set_present_or_null(out, "orientation", setup.orientation_engaged, setup.orientation);
   out.set("paperSize", setup.paper_size);
   out.set("scale", setup.scale);
   out.set("fitToWidth", setup.fit_to_width);

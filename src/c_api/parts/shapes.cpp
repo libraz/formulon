@@ -9,15 +9,18 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/enum_map.h"
 #include "drawing/shape_edit.h"
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::anchor_kind_from_c;
 using formulon::c_api::parts::check_anchor_enums;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::edit_as_from_c;
 using formulon::c_api::parts::fill_anchor;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
@@ -25,27 +28,27 @@ using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::shape_paint_from_c;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::TextStore;
+using formulon::c_api::parts::to_c;
 
 namespace {
 
 // Converts `shape` to the model spec; a non-zero return is the status to report.
 fm_status_t to_spec(const fm_shape_t& shape, formulon::ShapeSpec& spec) {
-  using formulon::AnchorKind;
-  using formulon::EditAs;
   spec.fields = shape.fields;
   if ((shape.fields & ~formulon::shape_field::kAll) != 0U) {
     return invalid_argument("unknown field bit");
   }
-  if (auto rc = check_utf8({shape.name, shape.prst, shape.text}); rc != 0) {
+  if (auto rc = check_utf8({shape.name, shape.preset_geometry, shape.text}); rc != 0) {
     return rc;
   }
   if (shape.name != nullptr) {
     spec.name = shape.name;
   }
-  if (shape.prst != nullptr) {
-    spec.prst = shape.prst;
+  if (shape.preset_geometry != nullptr) {
+    spec.prst = shape.preset_geometry;
   }
   if (shape.text != nullptr) {
     spec.text = shape.text;
@@ -56,15 +59,16 @@ fm_status_t to_spec(const fm_shape_t& shape, formulon::ShapeSpec& spec) {
       return rc;
     }
   }
-  spec.anchor_kind = static_cast<AnchorKind>(shape.anchor_kind);
-  spec.edit_as = static_cast<EditAs>(shape.edit_as);
-  spec.from = formulon::AnchorPoint{shape.from_row, shape.from_col, shape.from_row_offset, shape.from_col_offset};
-  spec.to = formulon::AnchorPoint{shape.to_row, shape.to_col, shape.to_row_offset, shape.to_col_offset};
-  spec.cx = shape.cx;
-  spec.cy = shape.cy;
-  spec.fill = static_cast<formulon::ShapePaint>(shape.fill_kind);
+  spec.anchor_kind = anchor_kind_from_c(shape.anchor_kind);
+  spec.edit_as = edit_as_from_c(shape.edit_as);
+  spec.from =
+      formulon::AnchorPoint{shape.from_row, shape.from_col, shape.from_row_offset_emu, shape.from_col_offset_emu};
+  spec.to = formulon::AnchorPoint{shape.to_row, shape.to_col, shape.to_row_offset_emu, shape.to_col_offset_emu};
+  spec.cx = shape.width_emu;
+  spec.cy = shape.height_emu;
+  spec.fill = shape_paint_from_c(shape.fill_kind);
   spec.fill_rgb = shape.fill_rgb;
-  spec.line = static_cast<formulon::ShapePaint>(shape.line_kind);
+  spec.line = shape_paint_from_c(shape.line_kind);
   spec.line_rgb = shape.line_rgb;
   spec.line_width_emu = shape.line_width_emu;
   spec.rotation = shape.rotation;
@@ -112,20 +116,20 @@ extern "C" fm_status_t fm_sheet_get_shape_at(const fm_workbook_t* wb, size_t she
   *out = fm_shape_t{};
   out->object_id = obj.object_id;
   out->kind = static_cast<int32_t>(obj.kind);
-  out->edit_as = static_cast<int32_t>(obj.edit_as);
+  out->edit_as = to_c(obj.edit_as);
   fill_anchor(obj, out);
-  out->cx = obj.cx;
-  out->cy = obj.cy;
-  out->fill_kind = static_cast<int32_t>(info.fill);
+  out->width_emu = obj.cx;
+  out->height_emu = obj.cy;
+  out->fill_kind = to_c(info.fill);
   out->fill_rgb = info.fill_rgb;
-  out->line_kind = static_cast<int32_t>(info.line);
+  out->line_kind = to_c(info.line);
   out->line_rgb = info.line_rgb;
   out->line_width_emu = info.line_width_emu;
   out->rotation = info.rotation;
   out->hidden = info.hidden ? 1 : 0;
   out->text_box = info.text_box ? 1 : 0;
   out->name = store_cstr(store, obj.name);
-  out->prst = store_cstr(store, info.prst);
+  out->preset_geometry = store_cstr(store, info.prst);
   out->text = store_cstr(store, info.text);
   return 0;
 }

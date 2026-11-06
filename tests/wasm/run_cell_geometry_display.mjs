@@ -33,11 +33,11 @@ export function registerCellGeometryDisplay(Module, test) {
       wb.clearColumnWidth(0, 1, 3);
       const cols = wb.listColumnOverrides(0);
       assert.deepEqual(
-        cols.map((c) => [c.first, c.last, c.hasWidth, c.hidden, c.outlineLevel]),
+        cols.map((c) => [c.first, c.last, c.width, c.hidden, c.outlineLevel]),
         [
-          [0, 0, 1, 0, 0],
-          [2, 2, 0, 1, 3],
-          [4, 4, 1, 0, 0],
+          [0, 0, 20, false, 0],
+          [2, 2, null, true, 3],
+          [4, 4, 20, false, 0],
         ],
       );
       wb.clearColumnWidth(0, 8, 9);
@@ -52,7 +52,7 @@ export function registerCellGeometryDisplay(Module, test) {
   test('getSheetFormatDefaults reports the effective default width and height', () => {
     withWorkbook(Module, (wb) => {
       let d = wb.getFormatDefaults(0);
-      assert.equal(d.hasDefaultColWidth, false);
+      assert.equal(d.defaultColWidth, null);
       assert.equal(d.effectiveDefaultColWidth, 2340 / 256); // Base-8 Calibri 11 default, shown as 8.43.
       assert.equal(d.effectiveDefaultRowHeight, 102 / 7);
       wb.setFormatDefaults(0, { defaultColWidth: 12.5, defaultRowHeight: 20.25 });
@@ -208,14 +208,13 @@ export function registerCellGeometryDisplay(Module, test) {
     });
   });
 
-  test('row heights: clearRowHeight and the has/custom flags on row overrides', () => {
+  test('row heights: clearRowHeight and the height / custom flag on row overrides', () => {
     withWorkbook(Module, (wb) => {
       wb.setRowHeight(0, 3, 3, 30);
       const rows = wb.listRowOverrides(0);
       assert.equal(rows.length, 1);
       assert.equal(rows[0].height, 30);
-      assert.equal(rows[0].hasHeight, 1);
-      assert.equal(rows[0].customHeight, 1);
+      assert.equal(rows[0].customHeight, true);
       wb.clearRowHeight(0, 3, 3);
       assert.equal(wb.listRowOverrides(0).length, 0);
       wb.clearRowHeight(0, 3, 3);
@@ -230,18 +229,17 @@ export function registerCellGeometryDisplay(Module, test) {
       const rows = wb.listRowOverrides(0);
       assert.equal(rows.length, 1);
       assert.equal(rows[0].height, 31.5);
-      assert.equal(rows[0].hasHeight, 1);
-      assert.equal(rows[0].customHeight, 0);
-      assert.equal(rows[0].hidden, 1);
+      assert.equal(rows[0].customHeight, false);
+      assert.equal(rows[0].hidden, true);
       expectFailure(() => wb.setRowAutoHeight(0, 4, 4, -1));
     });
   });
 
-  test('sheet format defaults round-trip with presence flags', () => {
+  test('sheet format defaults round-trip, an absent value reading as null', () => {
     withWorkbook(Module, (wb) => {
       const initial = wb.getFormatDefaults(0);
-      assert.equal(initial.hasDefaultColWidth, false);
-      assert.equal(initial.hasDefaultRowHeight, false);
+      assert.equal(initial.defaultColWidth, null);
+      assert.equal(initial.defaultRowHeight, null);
       assert.equal(initial.baseColWidth, 8);
 
       wb.setFormatDefaults(0, { defaultColWidth: 10, defaultRowHeight: 18, baseColWidth: 9 });
@@ -249,8 +247,9 @@ export function registerCellGeometryDisplay(Module, test) {
       assert.equal(set.defaultColWidth, 10);
       assert.equal(set.defaultRowHeight, 18);
       assert.equal(set.baseColWidth, 9);
-      assert.equal(set.hasDefaultColWidth, true);
-      assert.equal(set.hasDefaultRowHeight, true);
+      wb.setFormatDefaults(0, { defaultRowHeight: null });
+      assert.equal(wb.getFormatDefaults(0).defaultRowHeight, null);
+      assert.equal(wb.getFormatDefaults(0).defaultColWidth, 10);
 
       expectFailure(() => wb.setFormatDefaults(0, { defaultColWidth: -1 }));
       assert.equal(wb.getFormatDefaults(0).defaultColWidth, 10);
@@ -299,9 +298,8 @@ export function registerCellGeometryDisplay(Module, test) {
   test('cell xf carries apply flags, quotePrefix and protection', () => {
     withWorkbook(Module, (wb) => {
       const base = wb.getCellXf(0);
-      assert.equal(base.hasProtection, false);
-      assert.equal(base.locked, true);
-      assert.equal(base.hidden, false);
+      assert.equal(base.locked, null);
+      assert.equal(base.hidden, null);
       assert.equal(base.quotePrefix, false);
       assert.equal(base.applyFont, false);
 
@@ -324,7 +322,6 @@ export function registerCellGeometryDisplay(Module, test) {
       assert.equal(xf.applyProtection, true);
       assert.equal(xf.applyNumberFormat, false);
       assert.equal(xf.quotePrefix, true);
-      assert.equal(xf.hasProtection, true);
       assert.equal(xf.locked, false);
       assert.equal(xf.hidden, true);
     });
@@ -335,7 +332,7 @@ export function registerCellGeometryDisplay(Module, test) {
       wb.setNumber(0, 0, 0, 1);
       wb.setNumber(0, 120, 0, 2);
       wb.addRowBreak(0, 10, true);
-      wb.setPrintTitles(0, '1:2', '');
+      wb.setPrintTitles(0, { rows: { first: 0, last: 1 }, columns: null });
       const r = wb.getPagination(0);
       assert.ok(r.paper.widthPt > 0 && r.paper.heightPt > 0);
       assert.equal(typeof r.paper.landscape, 'boolean');
@@ -344,20 +341,17 @@ export function registerCellGeometryDisplay(Module, test) {
       assert.ok(r.printable.width > 0 && r.printable.height > 0);
       assert.equal(r.scale, 1);
       assert.equal(r.pageOrder, 0);
-      assert.equal(r.printTitles.hasRows, true);
-      assert.equal(r.printTitles.firstRow, 0);
-      assert.equal(r.printTitles.lastRow, 1);
-      assert.equal(r.printTitles.hasCols, false);
+      assert.deepEqual(r.printTitles, { rows: { first: 0, last: 1 }, columns: null });
       assert.equal(r.pages.length, r.pageCount);
       assert.ok(r.pages.length >= 2);
       assert.equal(r.pages[0].rect.firstRow, 0);
       assert.ok(r.pages[0].widthPt > 0);
-      assert.equal(r.horizontalBreakManual.length, r.horizontalBreaks.length);
-      assert.equal(r.verticalBreakManual.length, r.verticalBreaks.length);
-      const manualAt = r.horizontalBreaks.indexOf(10);
-      assert.ok(manualAt >= 0, `breaks=${JSON.stringify(r.horizontalBreaks)}`);
-      assert.equal(r.horizontalBreakManual[manualAt], true);
-      assert.ok(r.horizontalBreakManual.some((m) => m === false));
+      assert.equal(r.rowBreakManual.length, r.rowBreaks.length);
+      assert.equal(r.columnBreakManual.length, r.columnBreaks.length);
+      const manualAt = r.rowBreaks.indexOf(10);
+      assert.ok(manualAt >= 0, `breaks=${JSON.stringify(r.rowBreaks)}`);
+      assert.equal(r.rowBreakManual[manualAt], true);
+      assert.ok(r.rowBreakManual.some((m) => m === false));
 
       expectFailure(() => wb.getPagination(9), StatusCode.SheetIndexOutOfRange);
     });

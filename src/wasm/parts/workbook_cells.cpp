@@ -128,13 +128,13 @@ emscripten::val JsWorkbook::getValue(uint32_t sheet, uint32_t row, uint32_t col)
   return value_to_val(v);
 }
 
-std::string JsWorkbook::getCellPhonetic(uint32_t sheet, uint32_t row, uint32_t col) const {
+emscripten::val JsWorkbook::getCellPhonetic(uint32_t sheet, uint32_t row, uint32_t col) const {
   const char* text = nullptr;
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_cell_phonetic(handle_, sheet, row, col, &text)
                                     : kBindingInvalidHandle)) {
-    return std::string();
+    return emscripten::val::undefined();
   }
-  return string_from_cstr(text);
+  return cstr_or_null(text);
 }
 
 double JsWorkbook::getCellPhoneticRunCount(uint32_t sheet, uint32_t row, uint32_t col) const {
@@ -281,8 +281,9 @@ namespace {
 emscripten::val defined_name_to_val(const char* name, const char* formula, int32_t local_sheet_id, const char* comment,
                                     int32_t hidden) {
   emscripten::val item = emscripten::val::object();
-  js_set_cstr_fields(item, {{"name", name}, {"formula", formula}, {"comment", comment}});
-  item.set("localSheetId", local_sheet_id);
+  js_set_cstr_fields(item, {{"name", name}, {"formula", formula}});
+  js_set_cstr_or_null(item, "comment", comment);
+  js_set_index_or_null(item, "localSheetId", local_sheet_id);
   item.set("hidden", hidden != 0);
   return item;
 }
@@ -292,17 +293,10 @@ fm_status_t count_defined_names(const fm_workbook_t* handle, size_t, size_t* out
 }
 
 fm_status_t defined_name_item(const fm_workbook_t* handle, size_t, size_t index, emscripten::val* out) {
-  const char* name = nullptr;
-  const char* formula = nullptr;
-  int32_t local_sheet_id = -1;
-  const char* comment = nullptr;
-  int32_t hidden = 0;
-  fm_status_t rc = fm_workbook_get_defined_name_at(handle, index, &name, &formula, &local_sheet_id);
+  fm_defined_name_t d{};
+  const fm_status_t rc = fm_workbook_get_defined_name_at(handle, index, &d);
   if (rc == 0) {
-    rc = fm_workbook_get_defined_name_attrs_at(handle, index, &comment, &hidden);
-  }
-  if (rc == 0) {
-    *out = defined_name_to_val(name, formula, local_sheet_id, comment, hidden);
+    *out = defined_name_to_val(d.name, d.formula, d.local_sheet_id, d.comment, d.hidden);
   }
   return rc;
 }
@@ -364,8 +358,7 @@ emscripten::val JsWorkbook::tableAt(uint32_t idx) const {
   range.set("sheet", static_cast<uint32_t>(sheet_index));
   range.set("rect", cell_rect_to_val(rect));
   o.set("range", range);
-  js_set_cstr(o, "styleName", info.style_name);
-  o.set("hasStyleInfo", info.style_present != 0);
+  js_set_cstr_or_null(o, "styleName", info.style_name);
   o.set("showFirstColumn", info.show_first_column != 0);
   o.set("showLastColumn", info.show_last_column != 0);
   o.set("showRowStripes", info.show_row_stripes != 0);
@@ -680,7 +673,7 @@ emscripten::val external_link_to_val(const fm_external_link_record_t& rec) {
   item.set("index", rec.index);
   js_set_cstr(item, "relId", rec.rel_id);
   js_set_cstr(item, "partPath", rec.part_path);
-  js_set_cstr(item, "target", rec.target);
+  js_set_cstr_or_null(item, "target", rec.target);
   item.set("targetExternal", rec.target_external != 0);
   item.set("kind", rec.kind);
   return item;
@@ -840,10 +833,9 @@ emscripten::val JsWorkbook::validateValue(uint32_t sheet, uint32_t row, uint32_t
     return emscripten::val::undefined();
   }
   emscripten::val o = emscripten::val::object();
-  o.set("hasRule", outcome.has_rule != 0);
   o.set("valid", outcome.valid != 0);
-  o.set("ruleIndex", outcome.rule_index);
-  o.set("errorStyle", static_cast<uint32_t>(outcome.error_style));
+  js_set_present_or_null(o, "ruleIndex", outcome.has_rule, outcome.rule_index);
+  js_set_present_or_null(o, "errorStyle", outcome.has_rule, static_cast<uint32_t>(outcome.error_style));
   return o;
 }
 

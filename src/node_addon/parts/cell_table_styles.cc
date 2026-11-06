@@ -224,8 +224,8 @@ Napi::Value Workbook::GetTableStyleDefaults(const Napi::CallbackInfo& info) {
     return ThrowStatus(env, rc);
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("tableStyle", JsString(env, table));
-  out.Set("pivotStyle", JsString(env, pivot));
+  out.Set("tableStyle", JsStringOrNull(env, table));
+  out.Set("pivotStyle", JsStringOrNull(env, pivot));
   return out;
 }
 
@@ -235,16 +235,28 @@ Napi::Value Workbook::SetTableStyleDefaults(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   const Napi::Object defaults = ArgObject(info, 0);
+  // An omitted name keeps the default (NULL); `null` removes it ("").
   CheckedSpecReader reader(env);
   std::string table;
   std::string pivot;
-  const bool has_table = reader.String(defaults, "tableStyle", &table);
-  const bool has_pivot = reader.String(defaults, "pivotStyle", &pivot);
+  const auto name = [&](const char* key, std::string* store) -> const char* {
+    const Napi::Value v = reader.Get(defaults, key);
+    switch (ClassifyPatchKey(reader, v, key, true)) {
+      case PatchKey::kClear:
+        return "";
+      case PatchKey::kSet:
+        return reader.String(v, key, store) ? store->c_str() : nullptr;
+      case PatchKey::kKeep:
+        break;
+    }
+    return nullptr;
+  };
+  const char* table_ptr = name("tableStyle", &table);
+  const char* pivot_ptr = name("pivotStyle", &pivot);
   if (!reader.ok()) {
     return env.Undefined();
   }
-  const fm_status_t rc = fm_workbook_set_table_style_defaults(handle_, has_table ? table.c_str() : nullptr,
-                                                              has_pivot ? pivot.c_str() : nullptr);
+  const fm_status_t rc = fm_workbook_set_table_style_defaults(handle_, table_ptr, pivot_ptr);
   return ValueOrThrow(env, rc, env.Undefined());
 }
 

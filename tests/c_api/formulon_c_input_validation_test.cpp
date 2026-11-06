@@ -7,6 +7,7 @@
 #include <limits>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_setters.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 
@@ -24,12 +25,12 @@ struct WorkbookGuard {
   WorkbookGuard& operator=(const WorkbookGuard&) = delete;
 };
 
-TEST(CApiSetIterative, RejectsNonFiniteOrNegativeMaxChangeAndKeepsOptions) {
+TEST(CApiSetIterative, RejectsNonFiniteMaxChangeAndKeepsOptions) {
   WorkbookGuard g;
   ASSERT_EQ(fm_workbook_create_default(&g.handle), 0);
-  ASSERT_EQ(fm_workbook_set_iterative(g.handle, 1, 50, 0.25), 0);
-  for (const double bad : {kNaN, kInf, -kInf, -1.0}) {
-    EXPECT_EQ(fm_workbook_set_iterative(g.handle, 0, 7, bad), kInvalidArgument);
+  ASSERT_EQ(SetIterative(g.handle, 1, 50, 0.25), 0);
+  for (const double bad : {kNaN, kInf, -kInf}) {
+    EXPECT_EQ(SetIterative(g.handle, 0, 7, bad), kInvalidArgument);
   }
   int32_t enabled = 0;
   uint32_t iterations = 0;
@@ -43,7 +44,34 @@ TEST(CApiSetIterative, RejectsNonFiniteOrNegativeMaxChangeAndKeepsOptions) {
 TEST(CApiSetIterative, AcceptsZeroMaxChange) {
   WorkbookGuard g;
   ASSERT_EQ(fm_workbook_create_default(&g.handle), 0);
-  EXPECT_EQ(fm_workbook_set_iterative(g.handle, 1, 10, 0.0), 0);
+  EXPECT_EQ(SetIterative(g.handle, 1, 10, 0.0), 0);
+}
+
+// A negative field of the patch keeps that setting, so each one can change
+// alone and an all-negative patch changes nothing.
+TEST(CApiSetIterative, NegativePatchFieldsKeepTheStoredSettings) {
+  WorkbookGuard g;
+  ASSERT_EQ(fm_workbook_create_default(&g.handle), 0);
+  ASSERT_EQ(SetIterative(g.handle, 1, 50, 0.25), 0);
+  int32_t enabled = 0;
+  uint32_t iterations = 0;
+  double max_change = 0.0;
+
+  ASSERT_EQ(SetIterative(g.handle, -1, -1, -1.0), 0);
+  ASSERT_EQ(fm_workbook_get_iterative(g.handle, &enabled, &iterations, &max_change), 0);
+  EXPECT_EQ(enabled, 1);
+  EXPECT_EQ(iterations, 50U);
+  EXPECT_DOUBLE_EQ(max_change, 0.25);
+
+  ASSERT_EQ(SetIterative(g.handle, 0, -1, -1.0), 0);
+  ASSERT_EQ(SetIterative(g.handle, -1, 9, -1.0), 0);
+  ASSERT_EQ(SetIterative(g.handle, -1, -1, 0.5), 0);
+  ASSERT_EQ(fm_workbook_get_iterative(g.handle, &enabled, &iterations, &max_change), 0);
+  EXPECT_EQ(enabled, 0);
+  EXPECT_EQ(iterations, 9U);
+  EXPECT_DOUBLE_EQ(max_change, 0.5);
+
+  EXPECT_NE(fm_workbook_set_iterative(g.handle, nullptr), 0);
 }
 
 TEST(CApiPivotCacheNumbers, RejectNonFiniteValues) {

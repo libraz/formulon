@@ -85,11 +85,14 @@ Napi::Value Workbook::PivotCacheGetWorksheetSource(const Napi::CallbackInfo& inf
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
+  if (present == 0) {
+    return env.Null();
+  }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("present", Napi::Boolean::New(env, present != 0));
-  out.Set("ref", JsString(env, ref));
-  out.Set("sheet", JsString(env, sheet));
-  out.Set("name", JsString(env, name));
+  out.Set("present", Napi::Boolean::New(env, true));
+  out.Set("ref", JsStringOrNull(env, ref));
+  out.Set("sheet", JsStringOrNull(env, sheet));
+  out.Set("name", JsStringOrNull(env, name));
   return out;
 }
 
@@ -289,7 +292,7 @@ Napi::Value Workbook::PivotCacheGetOptions(const Napi::CallbackInfo& info) {
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("saveData", Napi::Boolean::New(env, o.save_data != 0));
-  out.Set("missingItemsLimit", Napi::Number::New(env, o.missing_items_limit));
+  out.Set("missingItemsLimit", JsIndexOrNull(env, o.missing_items_limit));
   out.Set("refreshOnLoad", Napi::Boolean::New(env, o.refresh_on_load != 0));
   return out;
 }
@@ -309,7 +312,21 @@ Napi::Value Workbook::PivotCacheSetOptions(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   o.save_data = reader.Bool(spec, "saveData", o.save_data != 0) ? 1 : 0;
-  o.missing_items_limit = reader.I32(spec, "missingItemsLimit", o.missing_items_limit);
+  // `null` is the automatic limit (no attribute).
+  const Napi::Value limit = reader.Get(spec, "missingItemsLimit");
+  switch (ClassifyPatchKey(reader, limit, "missingItemsLimit", true)) {
+    case PatchKey::kClear:
+      o.missing_items_limit = -1;
+      break;
+    case PatchKey::kSet:
+      o.missing_items_limit = reader.I32(limit, "missingItemsLimit", -1);
+      if (reader.ok() && o.missing_items_limit < 0) {
+        reader.FailRange("missingItemsLimit", "[0, 2147483647]");
+      }
+      break;
+    case PatchKey::kKeep:
+      break;
+  }
   o.refresh_on_load = reader.Bool(spec, "refreshOnLoad", o.refresh_on_load != 0) ? 1 : 0;
   if (!reader.ok()) {
     return env.Undefined();
@@ -348,7 +365,7 @@ Napi::Value Workbook::PivotCacheFieldFormula(const Napi::CallbackInfo& info) {
   const char* formula = nullptr;
   const fm_status_t rc = fm_workbook_get_pivot_cache_field_formula(handle_, ArgU32(info, 0),
                                                                    static_cast<std::size_t>(ArgU32(info, 1)), &formula);
-  return ValueOrThrow(env, rc, JsString(env, formula));
+  return ValueOrThrow(env, rc, JsStringOrNull(env, formula));
 }
 
 Napi::Value Workbook::PivotCacheCalculatedItemAdd(const Napi::CallbackInfo& info) {

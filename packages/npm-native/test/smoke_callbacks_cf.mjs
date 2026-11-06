@@ -20,8 +20,8 @@ test('setIterativeProgress keeps callbacks isolated per Workbook', async () => {
   let secondCalls = 0;
 
   for (const wb of [first, second]) {
-    wb.setIterative(true, 10, 0.001);
-    wb.setFormula(0, 0, 0, '=(A1+10)/2');
+    wb.setIterative({ enabled: true, maxIterations: 10, maxChange: 0.001 });
+    wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
   }
   first.setIterativeProgress(() => {
     firstCalls += 1;
@@ -40,8 +40,8 @@ test('setIterativeProgress keeps callbacks isolated per Workbook', async () => {
 test('dispose is rejected while this workbook is executing its progress callback', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  wb.setIterative(true, 10, 0.001);
-  wb.setFormula(0, 0, 0, '=(A1+10)/2');
+  wb.setIterative({ enabled: true, maxIterations: 10, maxChange: 0.001 });
+  wb.sheet(0).setFormula(0, 0, '=(A1+10)/2');
   let calls = 0;
   wb.setIterativeProgress(() => {
     calls += 1;
@@ -59,7 +59,7 @@ test('evaluateCfRange returns an empty list for a CF-less workbook', async () =>
   const wb = mod.Workbook.createDefault();
   // The default workbook has no CF rules, so the call should succeed
   // and return an empty cell list. NaN disables `TimePeriod` rules.
-  const r = wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 4 }, Number.NaN);
+  const r = wb.sheet(0).evaluateCfRange({ firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 4 }, Number.NaN);
   assert.ok(Array.isArray(r));
   assert.equal(r.length, 0);
 });
@@ -69,9 +69,9 @@ test('evaluateCfRange requires todaySerial; NaN disables timePeriod rules', asyn
   const wb = mod.Workbook.createDefault();
   // timePeriod rule (type 15) for "today" (period 0) over A1. The cell
   // holds the serial for 1899-12-30, which a 0.0 basis would match.
-  wb.setNumber(0, 0, 0, 0);
+  wb.sheet(0).setNumber(0, 0, 0);
   const dxf = wb.addDxf({ font: { bold: true } });
-  wb.addCfRule(0, {
+  wb.sheet(0).addCfRule({
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
     type: 15,
     timePeriod: 0,
@@ -82,12 +82,12 @@ test('evaluateCfRange requires todaySerial; NaN disables timePeriod rules', asyn
   // todaySerial is required: an omitted one is rejected rather than read as
   // 0, the valid serial for 1899-12-30 that would make the rule match. NaN
   // is the documented disabling value.
-  assert.throws(() => wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }), TypeError);
-  const explicitNaN = wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, Number.NaN);
+  assert.throws(() => wb.sheet(0).evaluateCfRange({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }), TypeError);
+  const explicitNaN = wb.sheet(0).evaluateCfRange({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, Number.NaN);
   assert.equal(explicitNaN.length, 0);
 
   // A concrete basis of 0 does engage the rule, proving the default is
   // not merely a no-op for this workbook.
-  const zeroBasis = wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, 0);
+  const zeroBasis = wb.sheet(0).evaluateCfRange({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, 0);
   assert.equal(zeroBasis.length, 1);
 });

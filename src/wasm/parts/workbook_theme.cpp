@@ -25,27 +25,6 @@ emscripten::val js_resolved_color(uint32_t argb, int32_t resolution) {
   return o;
 }
 
-/// Reads the major or minor script-font list as `{script, typeface}` records.
-/// Each pair is copied before the next `_at` call reuses the read scratch.
-emscripten::val theme_script_fonts(const fm_workbook_t* handle, bool major) {
-  emscripten::val list = emscripten::val::array();
-  size_t count = 0;
-  if (handle == nullptr || fm_workbook_get_theme_script_font_count(handle, major ? 1 : 0, &count) != 0) {
-    return list;
-  }
-  for (size_t i = 0; i < count; ++i) {
-    const char* script = nullptr;
-    const char* typeface = nullptr;
-    if (fm_workbook_get_theme_script_font_at(handle, major ? 1 : 0, i, &script, &typeface) != 0) {
-      break;
-    }
-    emscripten::val item = emscripten::val::object();
-    js_set_cstr_fields(item, {{"script", script}, {"typeface", typeface}});
-    list.set(static_cast<uint32_t>(i), item);
-  }
-  return list;
-}
-
 }  // namespace
 
 emscripten::val JsWorkbook::getThemeScriptFont(bool major, const std::string& script) const {
@@ -57,38 +36,40 @@ emscripten::val JsWorkbook::getThemeScriptFont(bool major, const std::string& sc
   emscripten::val item = emscripten::val::null();
   if (rc == 0 && present != 0) {
     item = emscripten::val::object();
+    item.set("major", major);
     js_set_cstr_fields(item, {{"script", script.c_str()}, {"typeface", typeface}});
   }
   return optional_or_null(rc, present, item);
 }
 
-emscripten::val JsWorkbook::getTheme() const {
+emscripten::val JsWorkbook::getThemeColors() const {
   fm_theme_colors_t colors{};
-  fm_theme_fonts_t fonts{};
   int32_t source = 0;
-  fm_status_t rc = handle_ != nullptr ? fm_workbook_get_theme_colors(handle_, &colors, &source) : kBindingInvalidHandle;
-  if (rc == 0) {
-    rc = fm_workbook_get_theme_fonts(handle_, &fonts);
-  }
-  if (!succeeded(rc)) {
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_theme_colors(handle_, &colors, &source)
+                                    : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
   emscripten::val list = emscripten::val::array();
   for (uint32_t i = 0; i < 12U; ++i) {
     list.set(i, colors.argb[i]);
   }
+  emscripten::val o = emscripten::val::object();
+  o.set("source", source);
+  o.set("colors", list);
+  return o;
+}
+
+emscripten::val JsWorkbook::getThemeFonts() const {
+  fm_theme_fonts_t fonts{};
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_theme_fonts(handle_, &fonts) : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
+  }
   emscripten::val f = emscripten::val::object();
   js_set_cstr_fields(f, {{"majorLatin", fonts.major_latin},
                          {"majorEastAsian", fonts.major_east_asian},
                          {"minorLatin", fonts.minor_latin},
                          {"minorEastAsian", fonts.minor_east_asian}});
-  emscripten::val o = emscripten::val::object();
-  o.set("source", source);
-  o.set("colors", list);
-  o.set("fonts", f);
-  o.set("majorScripts", theme_script_fonts(handle_, true));
-  o.set("minorScripts", theme_script_fonts(handle_, false));
-  return o;
+  return f;
 }
 
 void JsWorkbook::setThemeColors(emscripten::val colors) {

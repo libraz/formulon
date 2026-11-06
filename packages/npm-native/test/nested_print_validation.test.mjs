@@ -111,7 +111,7 @@ test('print option and header/footer readers stop before native mutation on gett
       },
     });
     assert.throws(() => wb.setHeaderFooter(0, headerFooter), /oddHeader getter/);
-    assert.equal(wb.getHeaderFooterXml(0), '');
+    assert.equal(wb.getHeaderFooterXml(0), null);
   } finally {
     wb.dispose();
   }

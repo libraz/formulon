@@ -10,6 +10,7 @@
 
 #include "c_api/formulon_c.h"
 #include "formulon_c_out_index.h"
+#include "formulon_c_setters.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
 #include "utils/error.h"
@@ -97,7 +98,7 @@ TEST(EvaluateFormula, CrossSheetReference) {
 TEST(EvaluateFormula, WorkbookScopedDefinedName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "TAX", "0.08"), 0);
+  ASSERT_EQ(SetDefinedName(wb.handle, "TAX", "0.08"), 0);
 
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=TAX*100", &v), 0);

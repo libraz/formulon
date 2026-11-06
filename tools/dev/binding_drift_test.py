@@ -1138,6 +1138,35 @@ class DeclarationEntryShapeTest(unittest.TestCase):
         self.assertEqual(declaration_checks._present(c_values), enum_decl._extract_ts_enum(dts, "Blanks"))
         self.assertNotEqual(c_values, enum_decl._extract_ts_enum(dts, "Blanks"))
 
+    def test_a_patch_only_member_is_left_out_of_the_table(self) -> None:
+        header = self.write(
+            "h.h",
+            "typedef enum { FM_CHART_TITLE_NONE = 0, FM_CHART_TITLE_TEXT = 1, FM_CHART_TITLE_REF = 2 } "
+            "fm_chart_title_kind_t;\n",
+        )
+        ledger = self.write(
+            "names.yaml",
+            "schema: 1\ncollections: {}\nentries:\n"
+            "  enum.chart_title_kind:\n"
+            "    { kind: enum, c: fm_chart_title_kind_t, js: ChartTitleKind, surfaces: [c, wasm] }\n",
+        )
+
+        def problems(table: str) -> list:
+            dts = self.write("w.d.ts", "export const ChartTitleKind: Readonly<{\n" + table + "}>;\n")
+            with (
+                patch.object(declaration_checks, "CAPI_HEADER", header),
+                patch.object(declaration_checks, "LEDGER_PATH", ledger),
+                patch.object(declaration_checks, "WASM_DTS", dts),
+                patch.object(declaration_checks, "REPO_ROOT", dts.parent),
+                patch.object(declaration_checks, "_DTS_ENUM_SOURCES", {}),
+                patch.object(declaration_checks, "_check_js_constant_tables", lambda _text: []),
+            ):
+                return declaration_checks.check_dts_enums()
+
+        self.assertEqual(problems("  Text: 1;\n  Ref: 2;\n"), [])
+        self.assertTrue(any("patch-only" in p for p in problems("  None: 0;\n  Text: 1;\n  Ref: 2;\n")))
+        self.assertTrue(any("has ordinals" in p for p in problems("  Text: 1;\n")))
+
     def test_a_member_missing_from_common_members_or_the_interface_is_reported(self) -> None:
         problems = self.run_check(
             declaration_checks.check_pure_js_helpers,
@@ -1312,20 +1341,17 @@ class SheetSurfaceMigrationTest(unittest.TestCase):
     def test_inline_decoder_may_live_on_sheet(self) -> None:
         import ast
 
-        source = python_checks.PYTHON_WORKBOOK.read_text(encoding="utf-8")
+        source = python_checks.PYTHON_SHEET.read_text(encoding="utf-8")
         tree = ast.parse(source)
-        workbook = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "Workbook")
-        method = next(n for n in workbook.body if getattr(n, "name", "") == "get_pagination")
+        sheet = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "Sheet")
+        method = next(n for n in sheet.body if getattr(n, "name", "") == "get_pagination")
         moved = ast.get_source_segment(source, method)
-        stripped = source.replace(moved, "def get_pagination_moved(self):\n        pass")
-        workbook_py = self.write("workbook.py", stripped)
-        sheet_py = self.write("sheet.py", "class Sheet:\n    " + moved + "\n")
-        with (
-            patch.object(python_checks, "PYTHON_WORKBOOK", workbook_py),
-            patch.object(python_checks, "PYTHON_SHEET", sheet_py),
-        ):
+        sheet_py = self.write("sheet.py", source)
+        with patch.object(python_checks, "PYTHON_SHEET", sheet_py):
             self.assertEqual(python_checks.check_python_inline_structs(), [])
-            sheet_py.unlink()
+            sheet_py.write_text(
+                source.replace(moved, "def get_pagination_moved(self):\n        pass"), encoding="utf-8"
+            )
             problems = python_checks.check_python_inline_structs()
         self.assertTrue(any("Sheet.get_pagination" in p for p in problems), problems)
 

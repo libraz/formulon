@@ -6,7 +6,7 @@ export function registerSheetPivot(Module, test) {
   test('setIterative accepts knobs without crashing', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      wb.setIterative(true, 50, 0.001);
+      wb.setIterative({ enabled: true, maxIterations: 50, maxChange: 0.001 });
       // Set a fixed-point formula (sqrt(2) iteration). The engine may
       // surface NUMBER (converged) or ERROR depending on the recalc
       // path; we only assert that the call sequence doesn't crash and
@@ -83,11 +83,11 @@ export function registerSheetPivot(Module, test) {
     }
   });
 
-  test('setDefinedName adds, updates, and removes', () => {
+  test('setDefinedName adds and updates, and removeDefinedName removes', () => {
     const wb = Module.Workbook.createDefault();
     try {
       assert.equal(wb.listDefinedNames().length, 0);
-      wb.setDefinedName('Pi', '=3.14');
+      wb.setDefinedName({ name: 'Pi', formula: '=3.14' });
       const listed = wb.listDefinedNames();
       assert.equal(listed.length, 1);
       const a = listed[0];
@@ -95,13 +95,16 @@ export function registerSheetPivot(Module, test) {
       // The setter drops the leading '=', as the file form carries none.
       assert.equal(a.formula, '3.14');
 
-      wb.setDefinedName('PI', '=3.14159');
+      wb.setDefinedName({ name: 'PI', formula: '=3.14159' });
       assert.equal(wb.listDefinedNames().length, 1);
       const b = wb.listDefinedNames()[0];
       assert.equal(b.name, 'Pi'); // authored case preserved
       assert.equal(b.formula, '3.14159');
 
-      wb.setDefinedName('Pi', '');
+      // An empty formula is refused; removal has its own call.
+      expectFailure(() => wb.setDefinedName({ name: 'Pi', formula: '' }), StatusCode.InvalidArgument);
+      assert.equal(wb.listDefinedNames().length, 1);
+      wb.removeDefinedName('Pi', -1);
       assert.equal(wb.listDefinedNames().length, 0);
     } finally {
       wb.delete();

@@ -14,14 +14,21 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/chart_patch_reader.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/enum_map.h"
 #include "chart/chart_edit.h"
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::anchor_kind_from_c;
+using formulon::c_api::parts::chart_axis_crosses_from_c;
+using formulon::c_api::parts::chart_blanks_as_from_c;
+using formulon::c_api::parts::chart_legend_position_from_c;
+using formulon::c_api::parts::chart_title_kind_from_c;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::edit_as_from_c;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::ingest_entered_formula;
 using formulon::c_api::parts::null_argument;
@@ -37,7 +44,7 @@ namespace {
 
 /// A C title as the model's; `NULL` strings read as empty.
 formulon::ChartTitle title_of(const fm_chart_title_t& t) {
-  return formulon::ChartTitle{static_cast<formulon::ChartTitleKind>(t.kind), t.text != nullptr ? t.text : "",
+  return formulon::ChartTitle{chart_title_kind_from_c(t.kind), t.text != nullptr ? t.text : "",
                               t.formula != nullptr ? t.formula : ""};
 }
 
@@ -147,7 +154,7 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
   if (opts->source == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_utf8({opts->source, opts->title, opts->placement.name, opts->placement.descr}); rc != 0) {
+  if (auto rc = check_utf8({opts->source, opts->title, opts->placement.name, opts->placement.description}); rc != 0) {
     return rc;
   }
   PatchReader r;
@@ -156,9 +163,9 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
   r.enum_ok(opts->direction, formulon::ChartSeriesDirection::kRows, "direction");
   r.enum_ok(opts->header_row, formulon::ChartHeaderMode::kNo, "header_row");
   r.enum_ok(opts->header_column, formulon::ChartHeaderMode::kNo, "header_column");
-  r.enum_ok(opts->legend, formulon::ChartLegendPosition::kTopRight, "legend");
-  r.enum_ok(opts->placement.anchor_kind, formulon::AnchorKind::kAbsolute, "placement.anchor_kind");
-  r.enum_ok(opts->placement.edit_as, formulon::EditAs::kAbsolute, "placement.edit_as");
+  r.enum_ok(opts->legend, FM_CHART_LEGEND_NONE, FM_CHART_LEGEND_TOP_RIGHT, "legend");
+  r.enum_ok(opts->placement.anchor.anchor_kind, FM_ANCHOR_KIND_ABSOLUTE, "placement.anchor.anchor_kind");
+  r.enum_ok(opts->placement.anchor.edit_as, FM_ANCHOR_EDIT_AS_ABSOLUTE, "placement.anchor.edit_as");
   if (r.status() != 0) {
     return r.status();
   }
@@ -172,18 +179,18 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
   if (opts->title != nullptr) {
     model.title = std::string(opts->title);
   }
-  model.legend = static_cast<formulon::ChartLegendPosition>(opts->legend);
-  const fm_image_insert_t& p = opts->placement;
-  model.placement.anchor_kind = static_cast<formulon::AnchorKind>(p.anchor_kind);
-  model.placement.edit_as = static_cast<formulon::EditAs>(p.edit_as);
+  model.legend = chart_legend_position_from_c(opts->legend);
+  const fm_drawing_anchor_t& p = opts->placement.anchor;
+  model.placement.anchor_kind = anchor_kind_from_c(p.anchor_kind);
+  model.placement.edit_as = edit_as_from_c(p.edit_as);
   model.placement.row = p.row;
   model.placement.col = p.col;
   model.placement.row_off = p.row_offset_emu;
   model.placement.col_off = p.col_offset_emu;
   model.placement.width_emu = p.width_emu;
   model.placement.height_emu = p.height_emu;
-  model.name = p.name != nullptr ? p.name : "";
-  model.descr = p.descr != nullptr ? p.descr : "";
+  model.name = opts->placement.name != nullptr ? opts->placement.name : "";
+  model.descr = opts->placement.description != nullptr ? opts->placement.description : "";
   auto id = formulon::insert_chart(wb->workbook(), sheet_index, model);
   if (!id) {
     return set_last_error(id.error());
@@ -213,7 +220,7 @@ extern "C" fm_status_t fm_sheet_set_chart_title(fm_workbook_t* wb, size_t sheet_
   if (auto rc = edit_entry(wb, sheet_index, title); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(title->kind, FM_CHART_TITLE_AUTO, "kind"); rc != 0) {
+  if (auto rc = check_enum_domain(title->kind, 0, FM_CHART_TITLE_AUTO, "kind"); rc != 0) {
     return rc;
   }
   if (auto rc = check_utf8({title->text, title->formula}); rc != 0) {
@@ -233,9 +240,9 @@ extern "C" fm_status_t fm_sheet_set_chart_legend(fm_workbook_t* wb, size_t sheet
     return null_argument();
   }
   PatchReader r;
-  r.enum_ok(legend->position, formulon::ChartLegendPosition::kTopRight, "position");
+  r.enum_ok(legend->position, FM_CHART_LEGEND_NONE, FM_CHART_LEGEND_TOP_RIGHT, "position");
   formulon::ChartLegendPatch model;
-  model.position = static_cast<formulon::ChartLegendPosition>(legend->position);
+  model.position = chart_legend_position_from_c(legend->position);
   model.overlay = legend->overlay != 0;
   std::vector<std::uint32_t> hidden;
   if (legend->hidden_series_count != 0) {
@@ -257,7 +264,7 @@ extern "C" fm_status_t fm_sheet_set_chart_axis(fm_workbook_t* wb, size_t sheet_i
   formulon::ChartAxisPatch model;
   r.flag(patch->visible_op, patch->visible, model.visible, "visible_op");
   if (patch->title_op == FM_CHART_PATCH_SET) {
-    r.enum_ok(patch->title.kind, formulon::ChartTitleKind::kAuto, "title.kind");
+    r.enum_ok(patch->title.kind, FM_CHART_TITLE_AUTO, "title.kind");
     r.text_ok(patch->title.text, "title.text");
     r.text_ok(patch->title.formula, "title.formula");
   }
@@ -269,7 +276,8 @@ extern "C" fm_status_t fm_sheet_set_chart_axis(fm_workbook_t* wb, size_t sheet_i
   r.flag(patch->major_gridlines_op, patch->major_gridlines, model.major_gridlines, "major_gridlines_op");
   r.flag(patch->reversed_op, patch->reversed, model.reversed, "reversed_op");
   r.field(patch->log_base_op, patch->log_base, model.log_base, "log_base_op");
-  r.enum_optional(patch->crosses_op, patch->crosses, formulon::ChartAxisCrosses::kAt, model.crosses, "crosses");
+  r.enum_optional(patch->crosses_op, patch->crosses, FM_CHART_CROSSES_ABSENT, FM_CHART_CROSSES_AT,
+                  chart_axis_crosses_from_c, model.crosses, "crosses");
   model.crosses_at = patch->crosses_at;
   r.text_field(patch->tick_label_pos_op, patch->tick_label_pos, model.tick_label_pos, "tick_label_pos_op");
   if (r.status() != 0) {
@@ -291,7 +299,8 @@ extern "C" fm_status_t fm_sheet_set_chart_display(fm_workbook_t* wb, size_t shee
   if (patch->blanks_as_op == FM_CHART_PATCH_SET && patch->blanks_as == FM_CHART_BLANKS_ABSENT) {
     r.fail("blanks_as", "cannot be set to ABSENT");
   }
-  r.enum_field(patch->blanks_as_op, patch->blanks_as, formulon::ChartBlanksAs::kSpan, model.blanks_as, "blanks_as");
+  r.enum_field(patch->blanks_as_op, patch->blanks_as, FM_CHART_BLANKS_ABSENT, FM_CHART_BLANKS_SPAN,
+               chart_blanks_as_from_c, model.blanks_as, "blanks_as");
   r.bool_field(patch->plot_vis_only_op, patch->plot_vis_only, model.plot_vis_only, "plot_vis_only");
   r.bool_field(patch->na_as_blank_op, patch->na_as_blank, model.na_as_blank, "na_as_blank");
   if (r.status() != 0) {

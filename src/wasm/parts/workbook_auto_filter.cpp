@@ -19,12 +19,12 @@ namespace parts {
 
 // ---- AutoFilter --------------------------------------------------------
 
-std::string JsWorkbook::getSheetAutoFilterXml(uint32_t sheet) const {
+emscripten::val JsWorkbook::getSheetAutoFilterXml(uint32_t sheet) const {
   const char* xml = nullptr;
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_auto_filter_xml(handle_, sheet, &xml) : kBindingInvalidHandle)) {
-    return std::string();
+    return emscripten::val::undefined();
   }
-  return string_from_cstr(xml);
+  return cstr_or_null(xml);
 }
 
 void JsWorkbook::setSheetAutoFilterXml(uint32_t sheet, const std::string& xml) {
@@ -88,19 +88,15 @@ emscripten::val filter_column_to_val(const fm_filter_column_t& c) {
   o.set("op2", c.op2);
   o.set("top", c.top != 0);
   o.set("percent", c.percent != 0);
-  o.set("hasFilterVal", c.has_filter_val != 0);
   o.set("topVal", c.top_val);
-  o.set("filterVal", c.filter_val);
+  js_set_present_or_null(o, "filterVal", c.has_filter_val, c.filter_val);
   o.set("dynamicType", c.dynamic_type);
-  o.set("hasDynVal", c.has_dyn_val != 0);
-  o.set("hasDynMaxVal", c.has_dyn_max_val != 0);
-  o.set("dynVal", c.dyn_val);
-  o.set("dynMaxVal", c.dyn_max_val);
+  js_set_present_or_null(o, "dynVal", c.has_dyn_val, c.dyn_val);
+  js_set_present_or_null(o, "dynMaxVal", c.has_dyn_max_val, c.dyn_max_val);
   o.set("dxfId", c.dxf_id);
   o.set("cellColor", c.cell_color != 0);
   o.set("iconSet", c.icon_set);
-  o.set("iconId", c.icon_id);
-  o.set("hasIconId", c.has_icon_id != 0);
+  js_set_present_or_null(o, "iconId", c.has_icon_id, c.icon_id);
   js_set_cstr_fields(o, {{"val1", c.val1}, {"val2", c.val2}, {"valIso", c.val_iso}, {"maxValIso", c.max_val_iso}});
   return o;
 }
@@ -110,11 +106,9 @@ emscripten::val sort_condition_to_val(const fm_sort_condition_t& c) {
   o.set("ref", cell_rect_to_val(c.ref));
   o.set("descending", c.descending != 0);
   o.set("sortBy", c.sort_by);
-  o.set("dxfId", c.dxf_id);
-  o.set("hasDxfId", c.has_dxf_id != 0);
+  js_set_present_or_null(o, "dxfId", c.has_dxf_id, c.dxf_id);
   o.set("iconSet", c.icon_set);
-  o.set("iconId", c.icon_id);
-  o.set("hasIconId", c.has_icon_id != 0);
+  js_set_present_or_null(o, "iconId", c.has_icon_id, c.icon_id);
   js_set_cstr(o, "customList", c.custom_list);
   return o;
 }
@@ -269,28 +263,29 @@ void pull_filter_column(const emscripten::val& v, FilterColumnStore& st, fm_filt
   c.max_val_iso = st.max_val_iso.c_str();
   c.top = pull_flag(v, "top", reader);
   c.percent = pull_flag(v, "percent", reader);
-  c.has_filter_val = pull_flag(v, "hasFilterVal", reader);
   c.top_val = reader.number(v, "topVal", 0.0, "filterColumn.topVal");
-  c.filter_val = reader.number(v, "filterVal", 0.0, "filterColumn.filterVal");
+  const emscripten::val filter_val = reader.value(v, "filterVal", "filterColumn.filterVal");
+  c.has_filter_val = js_value_present(filter_val) ? 1 : 0;
+  c.filter_val = reader.number_value(filter_val, 0.0, "filterColumn.filterVal");
   c.dynamic_type = reader.i32(v, "dynamicType", 0, "filterColumn.dynamicType");
   if (!reader.ok()) {
     return;
   }
-  c.has_dyn_val = pull_flag(v, "hasDynVal", reader);
-  c.has_dyn_max_val = pull_flag(v, "hasDynMaxVal", reader);
-  c.dyn_val = reader.number(v, "dynVal", 0.0, "filterColumn.dynVal");
-  c.dyn_max_val = reader.number(v, "dynMaxVal", 0.0, "filterColumn.dynMaxVal");
+  const emscripten::val dyn_val = reader.value(v, "dynVal", "filterColumn.dynVal");
+  c.has_dyn_val = js_value_present(dyn_val) ? 1 : 0;
+  c.dyn_val = reader.number_value(dyn_val, 0.0, "filterColumn.dynVal");
+  const emscripten::val dyn_max_val = reader.value(v, "dynMaxVal", "filterColumn.dynMaxVal");
+  c.has_dyn_max_val = js_value_present(dyn_max_val) ? 1 : 0;
+  c.dyn_max_val = reader.number_value(dyn_max_val, 0.0, "filterColumn.dynMaxVal");
   c.dxf_id = reader.u32(v, "dxfId", UINT32_MAX, "filterColumn.dxfId");
   if (!reader.ok()) {
     return;
   }
   c.cell_color = pull_flag(v, "cellColor", reader);
   c.icon_set = reader.i32(v, "iconSet", 0, "filterColumn.iconSet");
-  c.icon_id = reader.i32(v, "iconId", 0, "filterColumn.iconId");
-  if (!reader.ok()) {
-    return;
-  }
-  c.has_icon_id = pull_flag(v, "hasIconId", reader);
+  const emscripten::val icon_id = reader.value(v, "iconId", "filterColumn.iconId");
+  c.has_icon_id = js_value_present(icon_id) ? 1 : 0;
+  c.icon_id = reader.i32_value(icon_id, 0, "filterColumn.iconId");
 }
 
 void pull_sort_condition(const emscripten::val& v, std::string& custom_list, fm_sort_condition_t& c,
@@ -307,17 +302,13 @@ void pull_sort_condition(const emscripten::val& v, std::string& custom_list, fm_
   }
   custom_list = reader.string(v, "customList", "sortCondition.customList");
   c.custom_list = custom_list.c_str();
-  c.dxf_id = reader.u32(v, "dxfId", 0U, "sortCondition.dxfId");
-  if (!reader.ok()) {
-    return;
-  }
-  c.has_dxf_id = pull_flag(v, "hasDxfId", reader);
+  const emscripten::val dxf_id = reader.value(v, "dxfId", "sortCondition.dxfId");
+  c.has_dxf_id = js_value_present(dxf_id) ? 1 : 0;
+  c.dxf_id = reader.u32_value(dxf_id, 0U, "sortCondition.dxfId");
   c.icon_set = reader.i32(v, "iconSet", 0, "sortCondition.iconSet");
-  c.icon_id = reader.i32(v, "iconId", 0, "sortCondition.iconId");
-  if (!reader.ok()) {
-    return;
-  }
-  c.has_icon_id = pull_flag(v, "hasIconId", reader);
+  const emscripten::val icon_id = reader.value(v, "iconId", "sortCondition.iconId");
+  c.has_icon_id = js_value_present(icon_id) ? 1 : 0;
+  c.icon_id = reader.i32_value(icon_id, 0, "sortCondition.iconId");
 }
 
 emscripten::val get_auto_filter(const fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t index) {

@@ -10,46 +10,16 @@
 
 namespace formulon_node {
 
-namespace {
-
-/// Reads the major or minor script-font list as `{script, typeface}` records.
-/// Each pair is copied before the next `_at` call reuses the read scratch.
-Napi::Array ThemeScriptFonts(Napi::Env env, const fm_workbook_t* handle, bool major) {
-  Napi::Array list = Napi::Array::New(env);
-  size_t count = 0;
-  if (fm_workbook_get_theme_script_font_count(handle, major ? 1 : 0, &count) != 0) {
-    return list;
-  }
-  for (size_t i = 0; i < count; ++i) {
-    const char* script = nullptr;
-    const char* typeface = nullptr;
-    if (fm_workbook_get_theme_script_font_at(handle, major ? 1 : 0, i, &script, &typeface) != 0) {
-      break;
-    }
-    Napi::Object item = Napi::Object::New(env);
-    item.Set("script", JsString(env, script));
-    item.Set("typeface", JsString(env, typeface));
-    list.Set(static_cast<uint32_t>(i), item);
-  }
-  return list;
-}
-
-}  // namespace
-
 // ---- Theme, colour resolution, effective style ----------------------
 
-Napi::Value Workbook::GetTheme(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::GetThemeColors(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
   fm_theme_colors_t colors{};
-  fm_theme_fonts_t fonts{};
   int32_t source = 0;
-  fm_status_t rc = fm_workbook_get_theme_colors(handle_, &colors, &source);
-  if (rc == 0) {
-    rc = fm_workbook_get_theme_fonts(handle_, &fonts);
-  }
+  const fm_status_t rc = fm_workbook_get_theme_colors(handle_, &colors, &source);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
@@ -57,18 +27,27 @@ Napi::Value Workbook::GetTheme(const Napi::CallbackInfo& info) {
   for (uint32_t i = 0; i < 12; ++i) {
     arr.Set(i, Napi::Number::New(env, colors.argb[i]));
   }
-  const auto face = [&env](const char* s) { return JsString(env, s); };
-  Napi::Object fontsOut = Napi::Object::New(env);
-  fontsOut.Set("majorLatin", face(fonts.major_latin));
-  fontsOut.Set("majorEastAsian", face(fonts.major_east_asian));
-  fontsOut.Set("minorLatin", face(fonts.minor_latin));
-  fontsOut.Set("minorEastAsian", face(fonts.minor_east_asian));
   Napi::Object out = Napi::Object::New(env);
   out.Set("source", Napi::Number::New(env, source));
   out.Set("colors", arr);
-  out.Set("fonts", fontsOut);
-  out.Set("majorScripts", ThemeScriptFonts(env, handle_, true));
-  out.Set("minorScripts", ThemeScriptFonts(env, handle_, false));
+  return out;
+}
+
+Napi::Value Workbook::GetThemeFonts(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  fm_theme_fonts_t fonts{};
+  const fm_status_t rc = fm_workbook_get_theme_fonts(handle_, &fonts);
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("majorLatin", JsString(env, fonts.major_latin));
+  out.Set("majorEastAsian", JsString(env, fonts.major_east_asian));
+  out.Set("minorLatin", JsString(env, fonts.minor_latin));
+  out.Set("minorEastAsian", JsString(env, fonts.minor_east_asian));
   return out;
 }
 
@@ -125,15 +104,17 @@ Napi::Value Workbook::GetThemeScriptFont(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
+  const bool major = ArgBool(info, 0);
   const std::string script = ArgString(info, 1);
   const char* typeface = nullptr;
   int32_t present = 0;
   const fm_status_t rc =
-      fm_workbook_get_theme_script_font(handle_, ArgBool(info, 0) ? 1 : 0, script.c_str(), &present, &typeface);
+      fm_workbook_get_theme_script_font(handle_, major ? 1 : 0, script.c_str(), &present, &typeface);
   if (rc != 0 || present == 0) {
     return OptionalOrNull(env, rc, present, env.Null());
   }
   Napi::Object item = Napi::Object::New(env);
+  item.Set("major", Napi::Boolean::New(env, major));
   item.Set("script", JsString(env, script.c_str()));
   item.Set("typeface", JsString(env, typeface));
   return OptionalOrNull(env, rc, present, item);

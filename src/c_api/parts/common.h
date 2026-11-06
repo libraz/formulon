@@ -283,13 +283,14 @@ fm_status_t check_finite(double value, const char* field);
 // valid only for the duration of the call.
 fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out);
 
-// Rejects an ordinal outside `[0, max]`. `max` is the last declared
-// enumerator of the model enum the field mirrors, so extending that enum
-// widens the domain at the same time. A value past it would otherwise be
-// `static_cast` into the enum and collapse onto whichever case the
-// consuming switch treats as its default, which the caller observes as a
-// silently different rule rather than as a rejected one.
-fm_status_t check_enum_domain(std::int64_t value, std::int64_t max, const char* field);
+// Rejects an ordinal outside `[min, max]`. `min` is `0`, or `-1` for an enum
+// whose `-1` member means "absent". `max` is the last declared enumerator
+// of the model enum the field mirrors, so extending that enum widens the
+// domain at the same time. A value past it would otherwise be `static_cast`
+// into the enum and collapse onto whichever case the consuming switch treats
+// as its default, which the caller observes as a silently different rule
+// rather than as a rejected one.
+fm_status_t check_enum_domain(std::int64_t value, std::int64_t min, std::int64_t max, const char* field);
 
 // Rejects a string that is not GUID-shaped, i.e. not
 // `{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}` with hexadecimal digits and
@@ -388,21 +389,6 @@ fm_status_t check_sheet_row(const fm_workbook_t* wb, std::size_t sheet_index, st
 
 // Rejects an `anchor_kind` / `edit_as` ordinal outside the drawing anchor enums.
 fm_status_t check_anchor_enums(std::int64_t anchor_kind, std::int64_t edit_as);
-
-// Copies the anchor kind and the two anchor points of drawing object `obj`
-// into the record `out`; both share the `from_*` / `to_*` field names.
-template <typename Object, typename Record>
-void fill_anchor(const Object& obj, Record* out) {
-  out->anchor_kind = static_cast<std::int32_t>(obj.anchor_kind);
-  out->from_row = obj.from.row;
-  out->from_col = obj.from.col;
-  out->from_row_offset = obj.from.row_off;
-  out->from_col_offset = obj.from.col_off;
-  out->to_row = obj.to.row;
-  out->to_col = obj.to.col;
-  out->to_row_offset = obj.to.row_off;
-  out->to_col_offset = obj.to.col_off;
-}
 
 // Deepest row / column outline level the file formats encode (`outlineLevel`
 // is 0-7 in OOXML and three bits in XLSB).

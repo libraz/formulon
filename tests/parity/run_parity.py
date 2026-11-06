@@ -232,7 +232,22 @@ class CliChannel(Channel):
 
 
 def _normalize_cli(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Translate the CLI's ``{"kind": str, "value": ...}`` JSON into a record."""
+    """Translate the CLI's ``eval --json`` envelope into a record.
+
+    The envelope is ``{"format": 1, "rows": [[cell, ...], ...]}`` with one
+    ``{"kind": str, "value": ...}`` object per cell; a scalar result is the
+    1x1 grid. A larger grid becomes an ``array`` record of cell records.
+    """
+    rows = payload.get("rows")
+    if payload.get("format") != 1 or not isinstance(rows, list) or not rows:
+        return {"kind": "unrecognized", "value": payload}
+    if len(rows) == 1 and isinstance(rows[0], list) and len(rows[0]) == 1:
+        return _normalize_cli_cell(rows[0][0])
+    return {"kind": "array", "value": [[_normalize_cli_cell(cell) for cell in row] for row in rows]}
+
+
+def _normalize_cli_cell(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Translate one ``{"kind": str, "value": ...}`` cell of the CLI envelope into a record."""
     kind = payload.get("kind")
     value = payload.get("value")
     if kind == "blank":

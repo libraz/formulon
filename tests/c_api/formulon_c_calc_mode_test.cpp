@@ -8,6 +8,7 @@
 #include <limits>
 
 #include "c_api/formulon_c.h"
+#include "formulon_c_setters.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 
@@ -61,8 +62,8 @@ TEST(FormulonCApiCalcMode, SetThenGetReturnsRequestedMode) {
 TEST(FormulonCApiCalcMode, IterativeEnabledTogglePreservesConfiguredLimits) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 0, 42, 0.25), 0);
-  ASSERT_EQ(fm_workbook_set_iterative_enabled(wb.handle, 1), 0);
+  ASSERT_EQ(SetIterative(wb.handle, 0, 42, 0.25), 0);
+  ASSERT_EQ(SetIterative(wb.handle, 1, -1, -1.0), 0);
 
   int32_t enabled = 0;
   uint32_t max_iterations = 0;
@@ -86,7 +87,7 @@ TEST(FormulonCApiCalcMode, IterativeMaxIterationsSaturatesAtExcelsLimit) {
   for (const std::int32_t requested : oversized) {
     WorkbookGuard wb;
     ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-    ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, requested, 0.001), 0) << requested;
+    ASSERT_EQ(SetIterative(wb.handle, 1, requested, 0.001), 0) << requested;
 
     int32_t enabled = 0;
     uint32_t max_iterations = 0;
@@ -105,16 +106,12 @@ TEST(FormulonCApiCalcMode, IterativeMaxIterationsKeepsInRangeValues) {
   int32_t enabled = 0;
   uint32_t max_iterations = 0;
   double max_change = 0.0;
-  ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, static_cast<std::int32_t>(kExcelLimit), 0.001), 0);
+  ASSERT_EQ(SetIterative(wb.handle, 1, static_cast<std::int32_t>(kExcelLimit), 0.001), 0);
   ASSERT_EQ(fm_workbook_get_iterative(wb.handle, &enabled, &max_iterations, &max_change), 0);
   EXPECT_EQ(max_iterations, kExcelLimit);
 
-  // The pre-existing lower clamp is unchanged.
-  ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, 0, 0.001), 0);
-  ASSERT_EQ(fm_workbook_get_iterative(wb.handle, &enabled, &max_iterations, &max_change), 0);
-  EXPECT_EQ(max_iterations, 1U);
-
-  ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, -5, 0.001), 0);
+  // The lower clamp: 0 is read as 1 (a negative value keeps the stored cap).
+  ASSERT_EQ(SetIterative(wb.handle, 1, 0, 0.001), 0);
   ASSERT_EQ(fm_workbook_get_iterative(wb.handle, &enabled, &max_iterations, &max_change), 0);
   EXPECT_EQ(max_iterations, 1U);
 }
@@ -258,7 +255,7 @@ TEST(FormulonCApiCalcMode, IterativeOptionsRoundTripThroughCalcPr) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_set_calc_mode(wb.handle, FM_CALC_MODE_MANUAL), 0);
-  ASSERT_EQ(fm_workbook_set_iterative(wb.handle, /*enabled=*/1, /*max_iterations=*/25, /*max_change=*/0.005), 0);
+  ASSERT_EQ(SetIterative(wb.handle, /*enabled=*/1, /*max_iterations=*/25, /*max_change=*/0.005), 0);
   // Cyclic refs would surface #REF! without iterative on; using a
   // literal here keeps the test focused on metadata, not recalc paths.
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=42"), 0);

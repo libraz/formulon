@@ -14,6 +14,7 @@
 #include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
 #include "formulon_c_record_arg.h"
+#include "formulon_c_setters.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
@@ -138,11 +139,10 @@ std::string Rename(const WorkbookGuard& wb, std::size_t column, const char* name
 std::string DefinedName(const WorkbookGuard& wb, const std::string& wanted) {
   const std::size_t count = count_of(fm_workbook_get_defined_name_count, wb.handle);
   for (std::size_t i = 0; i < count; ++i) {
-    const char* name = nullptr;
-    const char* formula = nullptr;
-    EXPECT_EQ(fm_workbook_get_defined_name_at(wb.handle, i, &name, &formula, nullptr), 0);
-    if (wanted == name) {
-      return formula;
+    fm_defined_name_t entry{};
+    EXPECT_EQ(fm_workbook_get_defined_name_at(wb.handle, i, &entry), 0);
+    if (wanted == entry.name) {
+      return entry.formula;
     }
   }
   ADD_FAILURE() << "no defined name " << wanted;
@@ -241,9 +241,8 @@ TEST(FormulonCApiStructuredRef, TotalsRowShowsTheInsideForm) {
 TEST(FormulonCApiStructuredRef, DefinedNamesShowTheOutsideForm) {
   WorkbookGuard wb;
   BuildSales(wb);
-  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "NmR", "=tblSales[[#This Row],[Qty]]"), 0)
-      << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "NmH", "=tblSales[[#Headers],[Qty]]"), 0);
+  ASSERT_EQ(SetDefinedName(wb.handle, "NmR", "=tblSales[[#This Row],[Qty]]"), 0) << fm_get_last_error_message();
+  ASSERT_EQ(SetDefinedName(wb.handle, "NmH", "=tblSales[[#Headers],[Qty]]"), 0);
   EXPECT_EQ(DefinedName(wb, "NmR"), "tblSales[@Qty]");
   EXPECT_EQ(DefinedName(wb, "NmH"), "tblSales[[#Headers],[Qty]]");
 }
@@ -313,7 +312,7 @@ TEST(FormulonCApiStructuredRef, RenameColumnRewritesEveryReference) {
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, kInsideRow, kInsideCol, "=tblSales[[#This Row],[Qty]]"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 2, kInsideCol, "=SUM(tblSales[[#This Row],[Qty]:[Price]])"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, kOtherSheet, 1, 1, "=SUM(tblSales[Qty])"), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "NmQ", "=tblSales[Qty]"), 0);
+  ASSERT_EQ(SetDefinedName(wb.handle, "NmQ", "=tblSales[Qty]"), 0);
   ASSERT_EQ(fm_workbook_set_table_column_totals(wb.handle, 0, 0, "sum", nullptr, nullptr), 0);
 
   EXPECT_EQ(Rename(wb, 0, "Amount"), "Amount");

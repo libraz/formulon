@@ -1,6 +1,7 @@
 
 #include "cli/file_io.h"
 
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -16,27 +17,75 @@
 #include <string>
 #include <vector>
 
-#include "utils/error.h"
-
 namespace formulon::cli {
 
-fm_status_t read_file(const std::string& path, std::vector<std::uint8_t>& out) {
-  std::ifstream in(path, std::ios::binary);
-  if (!in) {
-    return static_cast<fm_status_t>(FormulonErrorCode::kCliFileNotFound);
-  }
-  in.seekg(0, std::ios::end);
-  const std::streamsize size = in.tellg();
-  if (size < 0) {
-    return static_cast<fm_status_t>(FormulonErrorCode::kCliFileNotFound);
-  }
-  in.seekg(0, std::ios::beg);
-  out.resize(static_cast<std::size_t>(size));
-  if (size > 0) {
-    in.read(reinterpret_cast<char*>(out.data()), size);
-    if (!in) {
-      return static_cast<fm_status_t>(FormulonErrorCode::kCliFileNotFound);
+namespace {
+
+/// Reads descriptor `fd` to the end into `out`.
+fm_status_t read_descriptor(int fd, std::vector<std::uint8_t>& out) {
+  out.clear();
+  constexpr std::size_t kChunk = 1U << 16;
+  for (;;) {
+    const std::size_t used = out.size();
+    out.resize(used + kChunk);
+    const ssize_t count = ::read(fd, out.data() + used, kChunk);
+    if (count < 0) {
+      if (errno == EINTR) {
+        out.resize(used);
+        continue;
+      }
+      return kExitIoError;
     }
+    out.resize(used + static_cast<std::size_t>(count));
+    if (count == 0) {
+      return 0;
+    }
+  }
+}
+
+}  // namespace
+
+fm_status_t read_file(const std::string& path, std::vector<std::uint8_t>& out) {
+  const int fd = ::open(path.c_str(), O_RDONLY);
+  if (fd < 0) {
+    return kExitNoInput;
+  }
+  struct stat info {};
+  if (::fstat(fd, &info) == 0 && S_ISDIR(info.st_mode)) {
+    ::close(fd);
+    errno = EISDIR;
+    return kExitNoInput;
+  }
+  const fm_status_t rc = read_descriptor(fd, out);
+  const int saved_errno = errno;
+  ::close(fd);
+  errno = saved_errno;
+  return rc;
+}
+
+fm_status_t read_stdin(std::vector<std::uint8_t>& out) {
+  if (::isatty(STDIN_FILENO) != 0) {
+    return kExitUsage;
+  }
+  return read_descriptor(STDIN_FILENO, out);
+}
+
+bool stdout_is_terminal() {
+  return ::isatty(STDOUT_FILENO) != 0;
+}
+
+fm_status_t write_stdout(const std::uint8_t* bytes, std::size_t len) {
+  std::size_t written = 0;
+  while (written < len) {
+    const std::size_t chunk = std::min(len - written, static_cast<std::size_t>(std::numeric_limits<ssize_t>::max()));
+    const ssize_t count = ::write(STDOUT_FILENO, bytes + written, chunk);
+    if (count < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      return kExitIoError;
+    }
+    written += static_cast<std::size_t>(count);
   }
   return 0;
 }
@@ -129,14 +178,16 @@ fm_status_t write_file_atomically(const std::string& link_or_path, const std::ui
   std::string tmp_path = path + ".formulon-tmp.XXXXXX";
   FdGuard tmp_fd(::mkstemp(tmp_path.data()));
   if (tmp_fd.get() < 0) {
-    return static_cast<fm_status_t>(FormulonErrorCode::kCliOutputFailed);
+    return kExitCantCreate;
   }
 
   // Removing the temp is all a failure path has to do by hand; `tmp_fd`
   // closes the descriptor when the function returns.
   const auto fail = [&] {
+    const int saved_errno = errno;
     std::remove(tmp_path.c_str());
-    return static_cast<fm_status_t>(FormulonErrorCode::kCliOutputFailed);
+    errno = saved_errno;
+    return static_cast<fm_status_t>(kExitIoError);
   };
   // Replacing a file keeps its identity, including its permissions; creating
   // one gives what an ordinary `open(path, O_CREAT|O_WRONLY, 0666)` would
@@ -175,8 +226,10 @@ fm_status_t write_file_atomically(const std::string& link_or_path, const std::ui
   }
 
   if (std::rename(tmp_path.c_str(), path.c_str()) != 0) {
+    const int saved_errno = errno;
     std::remove(tmp_path.c_str());
-    return static_cast<fm_status_t>(FormulonErrorCode::kCliOutputFailed);
+    errno = saved_errno;
+    return kExitCantCreate;
   }
   return 0;
 }

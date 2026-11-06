@@ -864,6 +864,27 @@ class RecordRoleTest(BindingRuleTestBase):
             ],
         )
 
+    def test_r7_exception_keeps_name_and_form(self) -> None:
+        ledger = copy.deepcopy(self.LEDGER)
+        ledger["entries"]["record.hyperlink_input"]["exception"] = "one shape shared by an external file format"
+
+        def ctx() -> api_conventions.Context:
+            return self.fixture.context(
+                "",
+                ledger,
+                wasm="export interface HyperlinkSpec { target: string }\n",
+                py_workbook="class HyperlinkSpec(TypedDict):\n    target: str\n",
+            )
+
+        def own(rule_id: str) -> list[tuple[str, str, str]]:
+            return [h for h in hits(ctx(), rule_id) if h[1] == "record.hyperlink_input"]
+
+        self.assertEqual(own("R7.js"), [])
+        self.assertEqual(own("R7.py"), [])
+        del ledger["entries"]["record.hyperlink_input"]["exception"]
+        self.assertIn(("wasm", "record.hyperlink_input", "name"), hits(ctx(), "R7.js"))
+        self.assertIn(("py", "record.hyperlink_input", "dataclass"), hits(ctx(), "R7.py"))
+
 
 class ResultShapeTest(BindingRuleTestBase):
     LEDGER = {
@@ -1005,6 +1026,20 @@ class ResultShapeTest(BindingRuleTestBase):
         good = ctx("    def get_display_text(self, sheet: int) -> DisplayText: ...\n")
         self.assertEqual([h for h in hits(good, "R8.py") if h[2] == "tuple"], [])
 
+    def test_r8_js_allocated_key_may_be_a_typed_handle(self) -> None:
+        header = (
+            "FM_API fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* name, size_t* out_sheet_index);\n"
+        )
+        ledger = {"entries": {"sheet.add": {"kind": "op", "c": "fm_workbook_add_sheet", "js": "addSheet"}}}
+
+        def ctx() -> api_conventions.Context:
+            wasm = "export interface Sheet { readonly name: string }\n" + _wb("  addSheet(name: string): Sheet;\n")
+            return self.fixture.context(header, ledger, wasm=wasm)
+
+        self.assertEqual(hits(ctx(), "R8.js"), [("wasm", "sheet.add", "result")])
+        ledger["entries"]["sheet.add"]["returns"] = "union:Sheet"
+        self.assertEqual(hits(ctx(), "R8.js"), [])
+
     def test_r8_total_lookup_is_not_optional(self) -> None:
         ledger = copy.deepcopy(self.LEDGER)
 
@@ -1039,7 +1074,7 @@ class RangeTest(BindingRuleTestBase):
         good = self.fixture.context(
             RECT
             + parse
-            + "typedef struct {\n  const fm_cell_rect_t* ranges;\n  size_t range_count;\n} fm_protected_range_t;\n"
+            + "typedef struct {\n  const fm_cell_rect_t* ranges;\n  uint32_t range_count;\n} fm_protected_range_t;\n"
             "FM_API fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_index,"
             " const fm_cell_rect_t* ranges, size_t range_count);\n"
             "FM_API fm_status_t fm_sheet_recalc_viewport(fm_workbook_t* wb, size_t sheet_index,"
@@ -1669,6 +1704,19 @@ class SetterSymmetryTest(BindingRuleTestBase):
             self.fixture.context("", None, wasm=bad),
             self.fixture.context("", None, wasm=good),
             [("wasm", "setIterative", "shape"), ("wasm", "setOptions", "Partial:o"), ("wasm", "setThing", "fields")],
+        )
+
+    def test_r18_js_reads_a_sheet_argument_through_its_alias(self) -> None:
+        records = (
+            "export interface Sheet {\n  readonly name: string;\n}\nexport type SheetRef = Sheet | number | string;\n"
+        )
+        bad = records + _wb("  getActiveSheet(): Sheet;\n  setActiveSheet(sheet: number): void;\n")
+        good = records + _wb("  getActiveSheet(): Sheet;\n  setActiveSheet(sheet: SheetRef): void;\n")
+        self.assert_rule(
+            "R18.js",
+            self.fixture.context("", None, wasm=bad),
+            self.fixture.context("", None, wasm=good),
+            [("wasm", "setActiveSheet", "shape")],
         )
 
     def test_r18_py(self) -> None:

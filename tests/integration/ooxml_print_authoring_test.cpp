@@ -112,7 +112,7 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   setup.paper_size_engaged = 1;
   setup.paper_size = 9;  // A4
   setup.orientation_engaged = 1;
-  setup.orientation = FM_ORIENTATION_PORTRAIT;
+  setup.orientation = FM_PAGE_ORIENTATION_PORTRAIT;
   setup.fit_to_page_engaged = 1;
   setup.fit_to_page = 1;
   setup.fit_to_width_engaged = 1;
@@ -148,7 +148,11 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
 
   const fm_cell_rect_t print_area{0, 0, 79, 5};
   ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, &print_area, 1), 0);
-  ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, "1:2", ""), 0);
+  fm_print_titles_t titles{};
+  titles.has_rows = 1;
+  titles.first_row = 0;
+  titles.last_row = 1;
+  ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, &titles), 0);
   ASSERT_EQ(fm_sheet_add_row_break(wb.handle, 0, 39, 1), 0);
 
   BufferGuard saved;
@@ -203,7 +207,7 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   fm_page_setup_t read_setup{};
   ASSERT_EQ(fm_sheet_get_page_setup(reloaded.handle, 0, &read_setup), 0);
   EXPECT_EQ(read_setup.paper_size, 9U);
-  EXPECT_EQ(read_setup.orientation, FM_ORIENTATION_PORTRAIT);
+  EXPECT_EQ(read_setup.orientation, FM_PAGE_ORIENTATION_PORTRAIT);
   EXPECT_EQ(read_setup.fit_to_page, 1);
   EXPECT_EQ(read_setup.fit_to_width, 1U);
   EXPECT_EQ(read_setup.fit_to_height, 0U);
@@ -220,11 +224,12 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   EXPECT_EQ(ranges[0].last_row, 79U);
   EXPECT_EQ(ranges[0].last_col, 5U);
 
-  const char* rows = nullptr;
-  const char* cols = nullptr;
-  ASSERT_EQ(fm_sheet_get_print_titles(reloaded.handle, 0, &rows, &cols), 0);
-  EXPECT_STREQ(rows, "1:2");
-  EXPECT_STREQ(cols, "");
+  fm_print_titles_t read_titles{};
+  ASSERT_EQ(fm_sheet_get_print_titles(reloaded.handle, 0, &read_titles), 0);
+  EXPECT_EQ(read_titles.has_rows, 1);
+  EXPECT_EQ(read_titles.first_row, 0U);
+  EXPECT_EQ(read_titles.last_row, 1U);
+  EXPECT_EQ(read_titles.has_cols, 0);
 
   std::size_t row_break_count = 0;
   ASSERT_EQ(fm_sheet_get_row_break_count(reloaded.handle, 0, &row_break_count), 0);
@@ -332,7 +337,7 @@ TEST(OoxmlPrintAuthoring, TypedPatchOnATemplateKeepsEverythingItDoesNotState) {
   // Change exactly one attribute.
   fm_page_setup_t patch{};
   patch.orientation_engaged = 1;
-  patch.orientation = FM_ORIENTATION_LANDSCAPE;
+  patch.orientation = FM_PAGE_ORIENTATION_LANDSCAPE;
   ASSERT_EQ(fm_sheet_set_page_setup(wb.handle, 0, &patch), 0);
 
   BufferGuard saved;

@@ -18,19 +18,23 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/chart_patch_reader.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/enum_map.h"
 #include "chart/chart_edit.h"
 #include "chart/chart_model.h"
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::chart_blanks_as_from_c;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::fill_anchor;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::PatchReader;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::to_c;
 
 struct fm_chart {
   formulon::ChartModel model;
@@ -72,7 +76,7 @@ double transparency_of(const std::optional<std::uint32_t>& alpha) {
 // ---------------------------------------------------------------------------
 
 fm_chart_title_t to_fm(const formulon::ChartTitle& t) {
-  return fm_chart_title_t{static_cast<std::int32_t>(t.kind), t.text.c_str(), t.ref_formula.c_str()};
+  return fm_chart_title_t{to_c(t.kind), t.text.c_str(), t.ref_formula.c_str()};
 }
 
 fm_chart_fill_t to_fm(const formulon::ChartFill& f) {
@@ -121,7 +125,8 @@ fm_chart_labels_t to_fm(const formulon::ChartLabels& l) {
 }
 
 fm_chart_data_source_t to_fm(const formulon::ChartDataSource& d) {
-  return fm_chart_data_source_t{static_cast<std::int32_t>(d.kind), d.formula.c_str(), d.literal.size()};
+  return fm_chart_data_source_t{static_cast<std::int32_t>(d.kind), d.formula.c_str(),
+                                static_cast<std::uint32_t>(d.literal.size())};
 }
 
 /// Respells every formula `model` carries as the workbook's getters hand formulas out.
@@ -267,36 +272,27 @@ extern "C" fm_status_t fm_chart_get_info(const fm_chart_t* chart, fm_chart_info_
   *out = fm_chart_info_t{};
   out->object_id = m.object_id;
   out->name = m.name.c_str();
-  out->descr = m.descr.c_str();
+  out->description = m.descr.c_str();
   out->is_chartex = m.is_chartex ? 1 : 0;
   out->is_pivot_chart = m.is_pivot_chart ? 1 : 0;
   out->on_chartsheet = m.on_chartsheet ? 1 : 0;
-  out->anchor_kind = static_cast<std::int32_t>(m.anchor_kind);
-  out->edit_as = static_cast<std::int32_t>(m.edit_as);
-  out->from_row = m.from.row;
-  out->from_col = m.from.col;
-  out->from_row_offset = m.from.row_off;
-  out->from_col_offset = m.from.col_off;
-  out->to_row = m.to.row;
-  out->to_col = m.to.col;
-  out->to_row_offset = m.to.row_off;
-  out->to_col_offset = m.to.col_off;
-  out->cx = m.cx;
-  out->cy = m.cy;
+  out->edit_as = to_c(m.edit_as);
+  fill_anchor(m, out);
+  out->width_emu = m.cx;
+  out->height_emu = m.cy;
   out->title = to_fm(m.title);
   out->auto_title_deleted = tri(m.auto_title_deleted);
-  out->legend_position =
-      m.legend.present ? static_cast<std::int32_t>(m.legend.position) : static_cast<std::int32_t>(FM_CHART_LEGEND_NONE);
+  out->legend_position = m.legend.present ? to_c(m.legend.position) : static_cast<std::int32_t>(FM_CHART_LEGEND_NONE);
   out->legend_overlay = m.legend.overlay ? 1 : 0;
-  out->legend_hidden_count = m.legend.hidden_series_idx.size();
-  out->blanks_as = static_cast<std::int32_t>(m.disp_blanks_as);
+  out->legend_hidden_count = static_cast<std::uint32_t>(m.legend.hidden_series_idx.size());
+  out->blanks_as = to_c(m.disp_blanks_as);
   out->plot_vis_only = tri(m.plot_vis_only);
   out->date1904 = m.date1904 ? 1 : 0;
   out->has_style = m.style ? 1 : 0;
   out->style = m.style.value_or(0);
-  out->plot_count = m.plots.size();
-  out->axis_count = m.axes.size();
-  out->hidden_category_count = m.category_filter.size();
+  out->plot_count = static_cast<std::uint32_t>(m.plots.size());
+  out->axis_count = static_cast<std::uint32_t>(m.axes.size());
+  out->hidden_category_count = static_cast<std::uint32_t>(m.category_filter.size());
   if (m.source) {
     out->source_range = m.source->range.c_str();
     out->source_direction = static_cast<std::int32_t>(m.source->direction);
@@ -346,7 +342,7 @@ extern "C" fm_status_t fm_chart_get_plot_at(const fm_chart_t* chart, size_t plot
   *out = fm_chart_plot_t{};
   out->type = static_cast<std::int32_t>(p.type);
   out->chartex_layout = p.chartex_layout.c_str();
-  out->bar_dir = static_cast<std::int32_t>(p.bar_dir);
+  out->bar_dir = to_c(p.bar_dir);
   out->has_grouping = p.grouping ? 1 : 0;
   out->grouping = p.grouping ? static_cast<std::int32_t>(*p.grouping) : 0;
   out->vary_colors = tri(p.vary_colors);
@@ -358,8 +354,8 @@ extern "C" fm_status_t fm_chart_get_plot_at(const fm_chart_t* chart, size_t plot
   out->hole_size = p.hole_size.value_or(0U);
   out->has_first_slice_angle = p.first_slice_angle ? 1 : 0;
   out->first_slice_angle = p.first_slice_angle.value_or(0U);
-  out->axis_id_count = p.axis_ids.size();
-  out->series_count = p.series.size();
+  out->axis_id_count = static_cast<std::uint32_t>(p.axis_ids.size());
+  out->series_count = static_cast<std::uint32_t>(p.series.size());
   return 0;
 }
 
@@ -406,7 +402,7 @@ extern "C" fm_status_t fm_chart_get_series_at(const fm_chart_t* chart, size_t pl
     out->marker = to_fm(*s->marker);
   }
   out->smooth = tri(s->smooth);
-  out->point_count = s->points.size();
+  out->point_count = static_cast<std::uint32_t>(s->points.size());
   if (s->labels) {
     out->has_labels = 1;
     out->labels = to_fm(*s->labels);
@@ -424,7 +420,7 @@ extern "C" fm_status_t fm_chart_get_series_literal_at(const fm_chart_t* chart, s
   if (auto rc = find_series(chart, plot, series, &s); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(role, FM_CHART_ROLE_SIZE, "role"); rc != 0) {
+  if (auto rc = check_enum_domain(role, 0, FM_CHART_ROLE_SIZE, "role"); rc != 0) {
     return rc;
   }
   const std::vector<formulon::ChartValue>& points = source_of(*s, role)->literal;
@@ -474,10 +470,10 @@ extern "C" fm_status_t fm_chart_get_axis_at(const fm_chart_t* chart, size_t idx,
   *out = fm_chart_axis_t{};
   out->id = a.id;
   out->kind = static_cast<std::int32_t>(a.kind);
-  out->position = static_cast<std::int32_t>(a.position);
+  out->position = to_c(a.position);
   out->deleted = a.deleted ? 1 : 0;
   out->cross_axis = a.cross_ax;
-  out->crosses = static_cast<std::int32_t>(a.crosses);
+  out->crosses = to_c(a.crosses);
   out->crosses_at = a.crosses_at;
   out->reversed = a.reversed ? 1 : 0;
   out->log_base = a.log_base;
@@ -541,8 +537,8 @@ extern "C" fm_status_t fm_sheet_get_chart_preview(const fm_workbook_t* wb, size_
                   "direction");
   r.flag(overrides->header_row_op, overrides->header_row, model.header_row, "header_row_op");
   r.flag(overrides->header_column_op, overrides->header_column, model.header_column, "header_column_op");
-  r.enum_optional(overrides->blanks_as_op, overrides->blanks_as, formulon::ChartBlanksAs::kSpan, model.blanks_as,
-                  "blanks_as");
+  r.enum_optional(overrides->blanks_as_op, overrides->blanks_as, FM_CHART_BLANKS_ABSENT, FM_CHART_BLANKS_SPAN,
+                  chart_blanks_as_from_c, model.blanks_as, "blanks_as");
   r.flag(overrides->plot_vis_only_op, overrides->plot_vis_only, model.plot_vis_only, "plot_vis_only_op");
   r.flag(overrides->na_as_blank_op, overrides->na_as_blank, model.na_as_blank, "na_as_blank_op");
   if (r.status() != 0) {
@@ -568,16 +564,16 @@ extern "C" fm_status_t fm_chart_data_get_info(const fm_chart_data_t* data, fm_ch
   const formulon::ChartData& d = data->data;
   *out = fm_chart_data_info_t{};
   out->is_xy = d.domain == formulon::ChartData::Domain::kXY ? 1 : 0;
-  out->point_count = d.point_count;
-  out->series_count = d.series.size();
-  out->category_label_count = d.categories.labels.size();
-  out->category_value_count = d.categories.values.size();
-  out->category_level_count = d.categories.levels.size();
+  out->point_count = static_cast<std::uint32_t>(d.point_count);
+  out->series_count = static_cast<std::uint32_t>(d.series.size());
+  out->category_label_count = static_cast<std::uint32_t>(d.categories.labels.size());
+  out->category_value_count = static_cast<std::uint32_t>(d.categories.values.size());
+  out->category_level_count = static_cast<std::uint32_t>(d.categories.levels.size());
   out->category_format_code = d.categories.format_code.c_str();
   out->categories_generated = d.categories.generated ? 1 : 0;
   out->title_text = opt_cstr(d.title_text);
-  out->axis_title_count = d.axis_title_texts.size();
-  out->unresolved_count = d.unresolved.size();
+  out->axis_title_count = static_cast<std::uint32_t>(d.axis_title_texts.size());
+  out->unresolved_count = static_cast<std::uint32_t>(d.unresolved.size());
   return 0;
 }
 
@@ -638,16 +634,16 @@ extern "C" fm_status_t fm_chart_data_get_series_at(const fm_chart_data_t* data, 
   }
   const formulon::ChartDataSeries& s = data->data.series[series];
   *out = fm_chart_data_series_t{};
-  out->plot_index = s.plot_index;
+  out->plot_index = static_cast<std::uint32_t>(s.plot_index);
   out->idx = s.idx;
   out->name = opt_cstr(s.name);
   out->format_code = s.format_code.c_str();
   out->x_format_code = s.x_format_code.c_str();
   out->filtered = s.filtered ? 1 : 0;
-  out->point_count = data->points[series].values.size();
+  out->point_count = static_cast<std::uint32_t>(data->points[series].values.size());
   out->has_sizes = s.sizes.empty() ? 0 : 1;
   for (std::int32_t role = FM_CHART_ROLE_NAME; role <= FM_CHART_ROLE_SIZE; ++role) {
-    out->range_count[role] = ranges_of(s, role)->size();
+    out->range_count[role] = static_cast<std::uint32_t>(ranges_of(s, role)->size());
   }
   return 0;
 }
@@ -664,7 +660,7 @@ extern "C" fm_status_t fm_chart_data_get_series_points(const fm_chart_data_t* da
   const fm_chart_data::Points& p = data->points[series];
   const std::vector<double>& sizes = data->data.series[series].sizes;
   *out = fm_chart_data_points_t{};
-  out->count = p.values.size();
+  out->count = static_cast<std::uint32_t>(p.values.size());
   out->values = p.values.data();
   out->states = p.states.data();
   out->x = data->data.domain == formulon::ChartData::Domain::kXY ? p.x.data() : nullptr;
@@ -681,7 +677,7 @@ extern "C" fm_status_t fm_chart_data_get_range_at(const fm_chart_data_t* data, s
   if (auto rc = check_index(series, data->data.series.size(), "series"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(role, FM_CHART_ROLE_SIZE, "role"); rc != 0) {
+  if (auto rc = check_enum_domain(role, 0, FM_CHART_ROLE_SIZE, "role"); rc != 0) {
     return rc;
   }
   const std::vector<formulon::SheetRect>& ranges = *ranges_of(data->data.series[series], role);
@@ -689,7 +685,7 @@ extern "C" fm_status_t fm_chart_data_get_range_at(const fm_chart_data_t* data, s
     return rc;
   }
   const formulon::SheetRect& r = ranges[idx];
-  *out = fm_sheet_rect_t{r.sheet, fm_cell_rect_t{r.top, r.left, r.bottom, r.right}};
+  *out = fm_sheet_rect_t{static_cast<std::uint32_t>(r.sheet), fm_cell_rect_t{r.top, r.left, r.bottom, r.right}};
   return 0;
 }
 

@@ -383,13 +383,6 @@ extern "C" fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, std::size_t sheet
   }
   auto& list = wb->workbook().sheet(sheet_index).mutable_comments();
   formulon::CellComment* existing = FindNote(wb, sheet_index, row, col);
-  // Empty/NULL text => removal.
-  if (text == nullptr || text[0] == '\0') {
-    if (existing != nullptr) {
-      list.erase(list.begin() + (existing - list.data()));
-    }
-    return 0;
-  }
   // A cell holds a note or a threaded comment, never both.
   for (const formulon::ThreadedComment& thread : wb->workbook().sheet(sheet_index).threaded_comments()) {
     if (thread.parent_id.empty() && thread.row == row && thread.col == col) {
@@ -401,7 +394,7 @@ extern "C" fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, std::size_t sheet
   c.row = row;
   c.col = col;
   c.author = text_or_empty(author);
-  c.text = std::string(text);
+  c.text = text_or_empty(text);
   if (existing != nullptr) {
     c.uid = std::move(existing->uid);
     c.visible = existing->visible;
@@ -412,6 +405,21 @@ extern "C" fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, std::size_t sheet
   } else {
     list.push_back(std::move(c));
   }
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_remove_comment(fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
+                                               std::uint32_t col) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  formulon::CellComment* existing = FindNote(wb, sheet_index, row, col);
+  if (existing == nullptr) {
+    return not_found("no comment at that cell", "row=" + std::to_string(row) + " col=" + std::to_string(col));
+  }
+  auto& list = wb->workbook().sheet(sheet_index).mutable_comments();
+  list.erase(list.begin() + (existing - list.data()));
   return 0;
 }
 
@@ -497,7 +505,7 @@ extern "C" fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, std::siz
   // touches the validation list) follows naturally from
   // `std::vector::data()` invalidation rules.
   out->ranges = v.ranges.empty() ? nullptr : reinterpret_cast<const fm_cell_rect_t*>(v.ranges.data());
-  out->range_count = v.ranges.size();
+  out->range_count = static_cast<std::uint32_t>(v.ranges.size());
   out->type = v.type;
   out->op = v.op;
   out->error_style = v.error_style;

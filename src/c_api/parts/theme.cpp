@@ -205,11 +205,12 @@ extern "C" fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, const 
   if (wb == nullptr || spec == nullptr || out_argb == nullptr || out_resolution == nullptr) {
     return null_argument();
   }
-  if (auto rc = check_enum_domain(context, static_cast<std::int64_t>(formulon::ColorContext::kBorder), "context");
+  if (auto rc = check_enum_domain(context, 0, static_cast<std::int64_t>(formulon::ColorContext::kBorder), "context");
       rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(spec->kind, static_cast<std::int64_t>(formulon::ColorSpec::Kind::kAuto), "spec.kind");
+  if (auto rc =
+          check_enum_domain(spec->kind, 0, static_cast<std::int64_t>(formulon::ColorSpec::Kind::kAuto), "spec.kind");
       rc != 0) {
     return rc;
   }

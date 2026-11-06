@@ -79,6 +79,42 @@ export function registerPositional(Module, test, hookProbe) {
     }
   });
 
+  test('WASM guard messages name the facade method and count its arguments', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.throws(() => wb.setNumber('x', 0, 0, 1), {
+        name: 'TypeError',
+        message: 'Sheet.setNumber sheet index must be a primitive number',
+      });
+      assert.throws(() => wb.setNumber(0, -1, 0, 1), {
+        name: 'RangeError',
+        message: 'Sheet.setNumber argument 1 is outside uint32 range',
+      });
+      assert.throws(() => wb.setNumber(0, 0, 0, 'x'), {
+        name: 'TypeError',
+        message: 'Sheet.setNumber argument 3 must be a primitive number',
+      });
+      assert.throws(() => wb.addSheet(1), {
+        name: 'TypeError',
+        message: 'Workbook.addSheet argument 1 must be a primitive string',
+      });
+      assert.throws(() => wb.setPrintTitles(0), {
+        name: 'TypeError',
+        message: 'Sheet.setPrintTitles argument 1 is required',
+      });
+    } finally {
+      wb.delete();
+    }
+    assert.throws(() => Module.Workbook.createForProfile(1), {
+      name: 'TypeError',
+      message: 'Workbook.createForProfile argument 1 must be a primitive string',
+    });
+    assert.throws(() => Module.evalFormula(1), {
+      name: 'TypeError',
+      message: 'evalFormula argument 1 must be a primitive string',
+    });
+  });
+
   test('WASM string free function is primitive-only', () => {
     expectTypeError(() => Module.evalFormula(Symbol('formula')));
     expectTypeError(() =>
@@ -124,7 +160,7 @@ export function registerPositional(Module, test, hookProbe) {
       expectRangeError(() => wb.setAutoFilterXml(2 ** 32, ''));
       expectTypeError(() => wb.setAutoFilterXml(0, Symbol('xml')));
 
-      assert.equal(typeof wb.getAutoFilterXml(0), 'string');
+      assert.equal(wb.getAutoFilterXml(0), null);
       wb.setAutoFilterXml(0, '');
     } finally {
       wb.delete();

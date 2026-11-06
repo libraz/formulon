@@ -9,6 +9,7 @@ from formulon import (
     CfIcon,
     Cfvo,
     ConditionalFormatInput,
+    DefinedNameInput,
     DifferentialFormat,
     Fill,
     Font,
@@ -16,6 +17,7 @@ from formulon import (
     GradientFill,
     GradientStop,
     IconSet,
+    InvalidArgumentError,
     RefMode,
     SheetFormatDefaults,
     Workbook,
@@ -26,46 +28,46 @@ from formulon.workbook import Color
 class OutlineTests(unittest.TestCase):
     def test_collapsed_is_read_back_and_survives_save_load(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_row_outline(0, 1, 1, 2)
-            wb.set_row_collapsed(0, 3, 3, True)
-            wb.set_column_outline(0, 2, 3, 3)
-            wb.set_column_collapsed(0, 4, 4, True)
-            rows = {r.row: r for r in wb.list_row_overrides(0)}
+            wb.sheet(0).set_row_outline(1, 1, 2)
+            wb.sheet(0).set_row_collapsed(3, 3, True)
+            wb.sheet(0).set_column_outline(2, 3, 3)
+            wb.sheet(0).set_column_collapsed(4, 4, True)
+            rows = {r.row: r for r in wb.sheet(0).list_row_overrides()}
             self.assertTrue(rows[3].collapsed)
             self.assertFalse(rows[1].collapsed)
             with Workbook.load(wb.save()) as reloaded:
-                rows = {r.row: r for r in reloaded.list_row_overrides(0)}
+                rows = {r.row: r for r in reloaded.sheet(0).list_row_overrides()}
                 self.assertTrue(rows[3].collapsed)
                 self.assertEqual(rows[1].outline_level, 2)
-                self.assertEqual(sum(1 for c in reloaded.list_column_overrides(0) if c.collapsed), 1)
+                self.assertEqual(sum(1 for c in reloaded.sheet(0).list_column_overrides() if c.collapsed), 1)
 
     def test_clearing_collapsed_drops_an_empty_override(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_row_collapsed(0, 5, 5, True)
-            wb.set_row_collapsed(0, 5, 5, False)
-            wb.set_column_collapsed(0, 1, 2, True)
-            wb.set_column_collapsed(0, 1, 2, False)
-            self.assertEqual(wb.list_row_overrides(0), [])
-            self.assertEqual(wb.list_column_overrides(0), [])
+            wb.sheet(0).set_row_collapsed(5, 5, True)
+            wb.sheet(0).set_row_collapsed(5, 5, False)
+            wb.sheet(0).set_column_collapsed(1, 2, True)
+            wb.sheet(0).set_column_collapsed(1, 2, False)
+            self.assertEqual(wb.sheet(0).list_row_overrides(), [])
+            self.assertEqual(wb.sheet(0).list_column_overrides(), [])
 
     def test_bad_arguments_are_rejected(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.set_row_collapsed(9, 0, 0, True)
+                wb.sheet(9).set_row_collapsed(0, 0, True)
             with self.assertRaises(FormulonError):
-                wb.set_column_collapsed(0, 3, 2, True)
+                wb.sheet(0).set_column_collapsed(3, 2, True)
 
 
 class SheetViewFlagTests(unittest.TestCase):
     def test_show_formulas_and_outline_symbols(self) -> None:
         with Workbook.create_default() as wb:
-            view = wb.get_view(0)
+            view = wb.sheet(0).get_view()
             self.assertFalse(view.show_formulas)
             self.assertTrue(view.show_outline_symbols)
-            wb.set_show_formulas(0, True)
-            wb.set_show_outline_symbols(0, False)
+            wb.sheet(0).set_show_formulas(True)
+            wb.sheet(0).set_show_outline_symbols(False)
             with Workbook.load(wb.save()) as reloaded:
-                view = reloaded.get_view(0)
+                view = reloaded.sheet(0).get_view()
                 self.assertTrue(view.show_formulas)
                 self.assertFalse(view.show_outline_symbols)
 
@@ -76,22 +78,19 @@ class FontToggleTests(unittest.TestCase):
             name="Arial",
             size=12.0,
             color_argb=0xFF000000,
-            has_outline=True,
             outline=True,
-            has_shadow=True,
             shadow=False,
-            has_condense=True,
             condense=True,
-            has_extend=True,
             extend=True,
         )
         with Workbook.create_default() as wb:
             index = wb.add_font(record)
             self.assertEqual(wb.add_font(record), index)
             back = wb.get_font(index)
-            self.assertTrue(back.outline and back.has_outline)
-            self.assertTrue(back.has_shadow and not back.shadow)
+            self.assertIs(back.outline, True)
+            self.assertIs(back.shadow, False)
             self.assertTrue(back.condense and back.extend)
+            self.assertIsNone(back.bold)
 
 
 class GradientFillTests(unittest.TestCase):
@@ -154,26 +153,26 @@ class CustomIconTests(unittest.TestCase):
     def test_icons_round_trip_through_save_load(self) -> None:
         icons = [CfIcon("3Triangles", 0), CfIcon("NoIcons", 0), CfIcon("5Boxes", 4)]
         with Workbook.create_default() as wb:
-            wb.add_cf_rule(0, self._rule(icons))
+            wb.sheet(0).add_cf_rule(self._rule(icons))
             with Workbook.load(wb.save()) as reloaded:
-                back = reloaded.get_cf_rule(0, 0).icon_set
+                back = reloaded.sheet(0).list_cf_rules()[0].icon_set
                 assert back is not None
                 self.assertEqual(back.icons, icons)
 
     def test_rules_without_icons_report_none(self) -> None:
         with Workbook.create_default() as wb:
-            wb.add_cf_rule(0, self._rule([]))
-            back = wb.get_cf_rule(0, 0).icon_set
+            wb.sheet(0).add_cf_rule(self._rule([]))
+            back = wb.sheet(0).list_cf_rules()[0].icon_set
             assert back is not None
             self.assertEqual(back.icons, [])
 
     def test_malformed_icon_lists_are_rejected(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.add_cf_rule(0, self._rule([CfIcon("3Arrows", 0), CfIcon("3Arrows", 1)]))
+                wb.sheet(0).add_cf_rule(self._rule([CfIcon("3Arrows", 0), CfIcon("3Arrows", 1)]))
             with self.assertRaises(FormulonError):
-                wb.add_cf_rule(0, self._rule([CfIcon("3Arrows", 0), CfIcon("7Dwarfs", 1), CfIcon("3Arrows", 2)]))
-            self.assertEqual([wb.get_cf_rule(0, i) for i in range(wb.get_cf_rule_count(0))], [])
+                wb.sheet(0).add_cf_rule(self._rule([CfIcon("3Arrows", 0), CfIcon("7Dwarfs", 1), CfIcon("3Arrows", 2)]))
+            self.assertEqual(wb.sheet(0).list_cf_rules(), [])
 
 
 class CalcOptionTests(unittest.TestCase):
@@ -202,48 +201,45 @@ class CalcOptionTests(unittest.TestCase):
 class FileNameTests(unittest.TestCase):
     def test_file_name_spells_and_binds_the_workbooks_own_names(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertEqual(wb.get_file_name(), "")
-            wb.set_defined_name("LN", "10")
+            self.assertIsNone(wb.get_file_name())
+            wb.set_defined_name(DefinedNameInput("LN", "10"))
             wb.set_file_name("M5.xlsx")
             self.assertEqual(wb.get_file_name(), "M5.xlsx")
-            wb.set_formula(0, 0, 0, "=M5.xlsx!LN+1")
-            self.assertEqual(wb.get_formula(0, 0, 0), "=M5.xlsx!LN+1")
-            self.assertEqual([wb.get_cell_at(0, i) for i in range(wb.get_cell_count(0))][0].formula, "=M5.xlsx!LN+1")
+            wb.sheet(0).set_formula(0, 0, "=M5.xlsx!LN+1")
+            self.assertEqual(wb.sheet(0).get_formula(0, 0), "=M5.xlsx!LN+1")
+            self.assertEqual(
+                [wb.sheet(0).get_cell_at(i) for i in range(wb.sheet(0).get_cell_count())][0].formula, "=M5.xlsx!LN+1"
+            )
             wb.set_file_name("1M5.xlsx")
-            self.assertEqual(wb.get_formula(0, 0, 0), "='1M5.xlsx'!LN+1")
+            self.assertEqual(wb.sheet(0).get_formula(0, 0), "='1M5.xlsx'!LN+1")
             with self.assertRaises(FormulonError):
                 wb.set_file_name("Book1")
             self.assertEqual(wb.get_file_name(), "1M5.xlsx")
             wb.set_file_name("")
-            self.assertEqual(wb.get_formula(0, 0, 0), "=[0]!LN+1")
+            self.assertEqual(wb.sheet(0).get_formula(0, 0), "=[0]!LN+1")
 
 
 class FormatDefaultFlagTests(unittest.TestCase):
     def test_custom_height_and_zero_height_round_trip(self) -> None:
         with Workbook.create_default() as wb:
-            defaults = wb.get_format_defaults(0)
+            defaults = wb.sheet(0).get_format_defaults()
             self.assertFalse(defaults.custom_height)
             self.assertFalse(defaults.zero_height)
-            wb.set_format_defaults(
-                0,
-                SheetFormatDefaults(
-                    default_row_height=18.0, has_default_row_height=True, custom_height=True, zero_height=True
-                ),
+            wb.sheet(0).set_format_defaults(
+                SheetFormatDefaults(default_row_height=18.0, custom_height=True, zero_height=True),
             )
             with Workbook.load(wb.save()) as reloaded:
-                back = reloaded.get_format_defaults(0)
+                back = reloaded.sheet(0).get_format_defaults()
                 self.assertTrue(back.custom_height)
                 self.assertTrue(back.zero_height)
                 self.assertEqual(back.default_row_height, 18.0)
-                reloaded.set_format_defaults(
-                    0, SheetFormatDefaults(default_row_height=20.0, has_default_row_height=True)
-                )
-                kept = reloaded.get_format_defaults(0)
+                reloaded.sheet(0).set_format_defaults(SheetFormatDefaults(default_row_height=20.0))
+                kept = reloaded.sheet(0).get_format_defaults()
                 self.assertTrue(kept.custom_height)
                 self.assertTrue(kept.zero_height)
                 self.assertEqual(kept.default_row_height, 20.0)
-                reloaded.set_format_defaults(0, SheetFormatDefaults(custom_height=False, zero_height=False))
-                cleared = reloaded.get_format_defaults(0)
+                reloaded.sheet(0).set_format_defaults(SheetFormatDefaults(custom_height=False, zero_height=False))
+                cleared = reloaded.sheet(0).get_format_defaults()
                 self.assertFalse(cleared.custom_height)
                 self.assertFalse(cleared.zero_height)
 
@@ -251,26 +247,25 @@ class FormatDefaultFlagTests(unittest.TestCase):
 class DefinedNameAttrTests(unittest.TestCase):
     def test_comment_and_hidden(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_defined_name("Rate", "Sheet1!$A$1")
-            wb.set_defined_name_attrs("rate", comment="Tax rate", hidden=True)
+            wb.set_defined_name(DefinedNameInput("Rate", "Sheet1!$A$1", comment="Tax rate", hidden=True))
             entry = wb.list_defined_names()[0]
             self.assertEqual((entry.comment, entry.hidden), ("Tax rate", True))
 
-            # A replacement keeps both; an omitted argument leaves one alone.
-            wb.set_defined_name_scoped("Rate", "Sheet1!$B$2", -1)
-            wb.set_defined_name_attrs("Rate", hidden=False)
+            # A replacement is whole: omitted attributes return to their defaults.
+            wb.set_defined_name(DefinedNameInput("Rate", "Sheet1!$B$2"))
             entry = wb.list_defined_names()[0]
-            self.assertEqual((entry.comment, entry.hidden), ("Tax rate", False))
+            self.assertEqual((entry.comment, entry.hidden), (None, False))
 
-            wb.set_defined_name_attrs("Rate", comment="", hidden=True)
+            wb.set_defined_name(DefinedNameInput("Rate", "Sheet1!$B$2", hidden=True))
             with Workbook.load(wb.save()) as reloaded:
                 entry = reloaded.list_defined_names()[0]
-                self.assertEqual((entry.formula, entry.comment, entry.hidden), ("Sheet1!$B$2", "", True))
+                self.assertEqual((entry.formula, entry.comment, entry.hidden), ("Sheet1!$B$2", None, True))
 
-    def test_missing_name_is_rejected(self) -> None:
+    def test_empty_formula_is_rejected(self) -> None:
         with Workbook.create_default() as wb:
-            with self.assertRaises(FormulonError):
-                wb.set_defined_name_attrs("Nope", comment="x")
+            with self.assertRaises(InvalidArgumentError):
+                wb.set_defined_name(DefinedNameInput("Nope", ""))
+            self.assertEqual(wb.list_defined_names(), [])
 
 
 if __name__ == "__main__":

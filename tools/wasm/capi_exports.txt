@@ -38,8 +38,6 @@ fm_workbook_set_active_sheet
 fm_workbook_remove_sheet
 fm_workbook_rename_sheet
 fm_workbook_set_defined_name
-fm_workbook_set_defined_name_scoped
-fm_workbook_set_defined_name_attrs
 
 # -- Row / column structural edits -----------------------------------------------
 fm_sheet_insert_rows
@@ -93,7 +91,6 @@ fm_cell_range_next_cursor
 fm_cell_range_destroy
 fm_workbook_get_defined_name_count
 fm_workbook_get_defined_name_at
-fm_workbook_get_defined_name_attrs_at
 fm_workbook_get_defined_name
 fm_workbook_remove_defined_name
 fm_workbook_get_table_count
@@ -114,7 +111,6 @@ fm_workbook_get_passthrough
 # -- Recalc / calc policy / profile ----------------------------------------------
 fm_workbook_recalc
 fm_workbook_set_iterative
-fm_workbook_set_iterative_enabled
 fm_workbook_get_iterative
 fm_sheet_recalc_viewport
 fm_workbook_recalc_data_tables
@@ -156,6 +152,7 @@ fm_sheet_get_comment
 fm_sheet_get_comment_count
 fm_sheet_get_comment_at
 fm_sheet_set_comment
+fm_sheet_remove_comment
 fm_sheet_get_comment_visible
 fm_sheet_set_comment_visible
 
@@ -211,7 +208,6 @@ fm_workbook_evaluate_table_auto_filter
 fm_sheet_get_view
 fm_sheet_set_zoom
 fm_sheet_set_freeze
-fm_sheet_set_tab_hidden
 fm_sheet_set_visibility
 fm_sheet_set_show_grid_lines
 fm_sheet_set_show_row_col_headers

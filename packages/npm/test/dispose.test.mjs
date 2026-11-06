@@ -20,7 +20,7 @@ test('[Symbol.dispose]() releases the handle, repeats safely and leaves the wrap
   wb[Symbol.dispose]();
   wb.dispose();
   assert.equal(wb.disposed, true);
-  expectFailure(() => wb.getSheetCount(), Module.StatusCode.BindingInvalidHandle);
+  expectFailure(() => wb.listSheets(), Module.StatusCode.BindingInvalidHandle);
 });
 
 test('dispose() and [Symbol.dispose]() are refused inside the iterative progress callback', async () => {

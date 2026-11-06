@@ -162,7 +162,7 @@ extern "C" fm_status_t fm_sheet_get_protected_range(const fm_workbook_t* wb, siz
   std::vector<formulon::MergeRange> rects;
   formulon::io::parse_selection_sqref_text(r.sqref, rects);
   out->ranges = publish_rects(wb, rects);
-  out->range_count = rects.size();
+  out->range_count = static_cast<std::uint32_t>(rects.size());
   out->password = store_cstr(store, r.password);
   out->algorithm_name = store_cstr(store, r.algorithm_name);
   out->hash_value = store_cstr(store, r.hash_value);

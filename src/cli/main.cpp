@@ -3,14 +3,18 @@
 //
 // Subcommands live in their own translation units (`eval_cmd.cpp`,
 // `recalc_cmd.cpp`, `dump_cmd.cpp`); this file just routes `argv[1]`
-// to the right handler and translates the returned `fm_status_t` into
-// a process exit code. The translation is "low byte clamped to
-// [1, 127]", which mirrors the historical sysexits convention and
-// survives shell encoding.
+// to the right handler and translates the returned status into a process
+// exit code, shared by every subcommand: 0 success, 1 engine failure,
+// 64 usage, 66 input missing or unreadable, 73 output cannot be created,
+// 74 I/O error mid-stream. `--opt=value` is split into `--opt value` here,
+// once, before dispatch. SIGPIPE is ignored so a closed stdout surfaces as
+// exit 74 instead of killing the process.
 
+#include <csignal>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -25,7 +29,7 @@ void print_top_usage(std::ostream& out) {
       << "Commands:\n"
       << "  eval <formula>          Evaluate a single formula on a fresh empty workbook.\n"
       << "  recalc [--iterative] [--threads N] [--quiet] <in> -o <out>\n"
-      << "                          Load, recalc, and write a workbook.\n"
+      << "                          Load, recalc, and write a workbook ('-o -' writes to stdout).\n"
       << "  dump [--formulas|--values|--sheets|--metadata] <in>\n"
       << "                          Print a diff-friendly snapshot of a workbook.\n"
       << "                          --values recalculates first; the others do not.\n"
@@ -34,15 +38,24 @@ void print_top_usage(std::ostream& out) {
       << "  profiles [--json]       List the supported Excel profile ids, one per line.\n"
       << "\n"
       << "<in> and <out> are xlsx or xlsb files. eval accepts --json and --repeat N;\n"
-      << "dump, paginate and profiles accept --json;\n"
+      << "dump, paginate and profiles accept --json (output starts with {\"format\":1,...});\n"
       << "recalc accepts -o/--output, --iterative, --threads N and --quiet; every\n"
-      << "subcommand accepts -- to end options.\n"
+      << "subcommand accepts -- to end options. Options take their value as\n"
+      << "'--opt value' or '--opt=value'.\n"
       << "Plain output escapes only \\n, \\r, \\t and \\\\.\n"
+      << "\n"
+      << "Standard streams:\n"
+      << "  An input of '-' reads the whole workbook from stdin (refused on a terminal).\n"
+      << "  recalc -o - writes the .xlsx workbook to stdout (refused on a terminal).\n"
+      << "  Use './-' for a file named '-'.\n"
       << "\n"
       << "Exit codes:\n"
       << "  0   success (an Excel error value such as #DIV/0! is still a result)\n"
-      << "  1   engine, I/O or output failure\n"
+      << "  1   engine failure, including an empty or corrupt input workbook\n"
       << "  64  usage error\n"
+      << "  66  input file missing, unreadable or a directory\n"
+      << "  73  output file cannot be created\n"
+      << "  74  I/O error while reading or writing, including a closed stdout\n"
       << "\n"
       << "Common options:\n";
   formulon::cli::print_shared_options(out);
@@ -109,6 +122,7 @@ int run_profiles(const ArgList& args, std::ostream& out, std::ostream& err) {
 }  // namespace formulon
 
 int main(int argc, char** argv) {
+  std::signal(SIGPIPE, SIG_IGN);
   if (argc < 2) {
     print_top_usage(std::cerr);
     return formulon::cli::kExitUsage;
@@ -125,10 +139,15 @@ int main(int argc, char** argv) {
 
   // Pack the post-subcommand args into a `string_view` vector so the
   // handlers can do their own flag parsing without re-walking argv.
-  formulon::cli::ArgList args;
-  args.reserve(static_cast<std::size_t>(argc));
+  formulon::cli::ArgList raw_args;
+  raw_args.reserve(static_cast<std::size_t>(argc));
   for (int i = 2; i < argc; ++i) {
-    args.emplace_back(argv[i]);
+    raw_args.emplace_back(argv[i]);
+  }
+  std::vector<std::string> expanded_storage;
+  formulon::cli::ArgList args;
+  if (!formulon::cli::split_option_values(raw_args, cmd, expanded_storage, args, std::cerr)) {
+    return formulon::cli::kExitUsage;
   }
 
   int rc = 0;

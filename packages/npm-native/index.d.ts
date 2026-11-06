@@ -339,7 +339,7 @@ export interface LambdaValue {
 export type Value = BlankValue | NumberValue | BoolValue | TextValue | ErrorValue | ArrayValue | RefValue | LambdaValue;
 
 /**
- * Return type of `Workbook.evaluateFormulaArray(...)`: the whole multi-cell
+ * Return type of `Sheet.evaluateFormulaArray(...)`: the whole multi-cell
  * result of an ad-hoc formula. `cells` is a `rows` x `cols` nested array in
  * row-major order (`cells[r][c]`); a scalar result is reported as a 1x1
  * array (`rows === cols === 1`).
@@ -347,7 +347,7 @@ export type Value = BlankValue | NumberValue | BoolValue | TextValue | ErrorValu
 export interface EvalArray {
   readonly rows: number;
   readonly cols: number;
-  readonly cells: Value[][];
+  readonly cells: readonly (readonly Value[])[];
 }
 
 /**
@@ -411,26 +411,36 @@ export const WorkbookFormat: Readonly<{
 /** Union of the {@link WorkbookFormat} ordinals. */
 export type WorkbookFormat = 0 | 1 | 2;
 
-/** Return type of `Workbook.getCellAt(sheet, index)`. */
+/** Return type of `Sheet.getCellAt(index)`. */
 export interface Cell {
-  row: number;
-  col: number;
+  readonly row: number;
+  readonly col: number;
   /** Formula text spelled as `getFormula` returns it, or `null` for pure literals. */
-  formula: string | null;
-  value: Value;
+  readonly formula: string | null;
+  readonly value: Value;
 }
 
 /** A defined name, as `Workbook.getDefinedName` and `Workbook.listDefinedNames` return it. */
 export interface DefinedName {
-  name: string;
+  readonly name: string;
   /** Formula text spelled as `getFormula` spells formulas. */
-  formula: string;
-  /** -1 for workbook scope; otherwise a 0-based sheet index. */
-  localSheetId: number;
-  /** The note Excel shows in the Name Manager; empty when none. */
-  comment: string;
+  readonly formula: string;
+  /** `null` for workbook scope; otherwise a 0-based sheet index. */
+  readonly localSheetId: number | null;
+  /** The note Excel shows in the Name Manager; `null` when none. */
+  readonly comment: string | null;
   /** Whether the name is hidden from the Name Manager. */
-  hidden: boolean;
+  readonly hidden: boolean;
+}
+
+/** Argument of `Workbook.setDefinedName`: the whole defined name. An omitted (or `null`) `localSheetId` is
+ *  workbook scope; an omitted `comment` / `hidden` is no comment / visible. */
+export interface DefinedNameInput {
+  name: string;
+  formula: string;
+  localSheetId?: number | null;
+  comment?: string | null;
+  hidden?: boolean;
 }
 
 /** A table column's totals-row function (`ST_TotalsRowFunction`). */
@@ -449,30 +459,28 @@ export type TableTotalsRowFunction =
 /** One column of `Table.columns`. `totalsRowFormula` is the `custom`
  *  function's formula (no leading `=`), empty otherwise. */
 export interface TableColumn {
-  name: string;
-  totalsRowFunction: TableTotalsRowFunction;
-  totalsRowLabel: string;
-  totalsRowFormula: string;
+  readonly name: string;
+  readonly totalsRowFunction: TableTotalsRowFunction;
+  readonly totalsRowLabel: string;
+  readonly totalsRowFormula: string;
 }
 
-/** Return type of `Workbook.getTable(index)`. `styleName` is empty without a
- *  style and may name a custom style (`getTableStyle`); `hasStyleInfo` is
- *  false when the table has no `<tableStyleInfo>` (the toggles then read
- *  false). The row counts are 0 or 1. */
+/** One element of `Workbook.listTables()`. `styleName` is `null` without a named
+ *  style and may name a custom style (`getTableStyle`); the toggles read false when the table has no
+ *  `<tableStyleInfo>`. The row counts are 0 or 1. */
 export interface Table {
-  name: string;
-  displayName: string;
+  readonly name: string;
+  readonly displayName: string;
   /** The table's sheet and range. */
-  range: SheetRect;
-  styleName: string;
-  hasStyleInfo: boolean;
-  showFirstColumn: boolean;
-  showLastColumn: boolean;
-  showRowStripes: boolean;
-  showColumnStripes: boolean;
-  headerRowCount: number;
-  totalsRowCount: number;
-  columns: TableColumn[];
+  readonly range: SheetRect;
+  readonly styleName: string | null;
+  readonly showFirstColumn: boolean;
+  readonly showLastColumn: boolean;
+  readonly showRowStripes: boolean;
+  readonly showColumnStripes: boolean;
+  readonly headerRowCount: number;
+  readonly totalsRowCount: number;
+  readonly columns: readonly TableColumn[];
 }
 
 /** Authoring input for a worksheet table over `range`. `columns` must have
@@ -486,7 +494,7 @@ export interface TableInput {
   range: SheetRect;
   name: string;
   displayName?: string;
-  columns: string[];
+  columns: readonly string[];
   styleName?: string;
   showFirstColumn?: boolean;
   showLastColumn?: boolean;
@@ -576,14 +584,17 @@ export interface TableStyle {
   readonly name: string;
   readonly pivot?: boolean;
   readonly table?: boolean;
-  readonly elements?: TableStyleElement[];
+  readonly elements?: readonly TableStyleElement[];
 }
 
-/** Return type of `Workbook.getTableStyleDefaults()`; empty when unset. */
+/** Return type of `Workbook.getTableStyleDefaults()`; a name is `null` when unset. */
 export interface TableStyleDefaults {
-  readonly tableStyle: string;
-  readonly pivotStyle: string;
+  readonly tableStyle: string | null;
+  readonly pivotStyle: string | null;
 }
+
+/** Argument of `Workbook.setTableStyleDefaults`. */
+export type TableStyleDefaultsPatch = Patch<TableStyleDefaults>;
 
 /** PivotTable layout cell kind. */
 export const PivotCellKind: Readonly<{
@@ -611,16 +622,16 @@ export interface PivotCell {
   readonly depth: number;
   /** Source field name when known. */
   readonly fieldName: string;
-  /** The data field's `numFmtId` as a decimal string; empty when unset. */
-  readonly numberFormat: string;
+  /** The data field's `numFmtId` as a decimal string; `null` when unset. */
+  readonly numberFormat: string | null;
 }
 
-/** Return type of `Workbook.getPivotLayout(sheet, pivotIndex)`. */
+/** Return type of `Sheet.getPivotLayout(pivotIndex)`. */
 export interface PivotLayout {
   /** The rectangle the layout covers in absolute sheet coordinates; `null` when it spans no cell. */
   readonly rect: CellRect | null;
   /** Sparse projected cells in row-major order. */
-  readonly cells: ReadonlyArray<PivotCell>;
+  readonly cells: readonly PivotCell[];
 }
 
 /** PivotTable axis enumeration. */
@@ -874,26 +885,25 @@ export interface PivotWorksheetSourceInput {
 }
 
 /** Return type of `Workbook.getPivotCacheWorksheetSource(cacheId)`: the source metadata;
- *  `ref`, `sheet` and `name` are empty strings when absent. */
-export interface PivotWorksheetSource extends PivotWorksheetSourceInput {
-  readonly ref: string;
-  readonly sheet: string;
-  readonly name: string;
+ *  `ref`, `sheet` and `name` are `null` when absent. */
+export interface PivotWorksheetSource {
+  readonly present: boolean;
+  readonly ref: string | null;
+  readonly sheet: string | null;
+  readonly name: string | null;
 }
 
 /** Discriminator for the variant payload carried by a pivot filter
- *  spec. `None` (= -1) means the slot is unset (only meaningful for
- *  the optional upper-bound payload on range filters). */
+ *  spec. A slot without a payload (the optional upper bound of a range filter) is `null`. */
 export const PivotFilterValueKind: Readonly<{
-  None: -1;
   Int: 0;
   Double: 1;
   Text: 2;
 }>;
 /** Union of the {@link PivotFilterValueKind} ordinals. */
-export type PivotFilterValueKind = -1 | 0 | 1 | 2;
+export type PivotFilterValueKind = 0 | 1 | 2;
 
-/** Plain-data spec for `Workbook.addPivotField`. */
+/** Plain-data spec for `Sheet.addPivotField`. */
 export interface PivotFieldInput {
   sourceName: string;
   customName?: string;
@@ -906,11 +916,10 @@ export interface PivotFieldInput {
   numberFormat?: string;
 }
 
-/** Plain-data spec for `Workbook.addPivotDataField` /
- *  `setPivotDataField`. Pass
- *  `-1` for `showAsBaseField` / `showAsBaseItem` to mean "unset". */
+/** Plain-data spec for `Sheet.addPivotDataField` /
+ *  `setPivotDataField`. A `showAsBaseField` / `showAsBaseItem` that is omitted or `null` is unset. */
 export interface PivotDataFieldInput {
-  /** Display name (key for GETPIVOTDATA). Omit or pass `""` to let the
+  /** Display name (key for GETPIVOTDATA). Omit it to let the
    *  engine name the data field from the workbook profile's pivot wording,
    *  e.g. `"Sum of Sales"` (en-US) or `"合計 / Sales"` (ja-JP). That needs
    *  `fieldIndex` to be in range. */
@@ -920,8 +929,8 @@ export interface PivotDataFieldInput {
   /** `numFmtId` as a decimal string (built-in or from `addNumFmt`). */
   readonly numberFormat?: string;
   readonly showAs?: PivotShowValuesAs;
-  readonly showAsBaseField?: number;
-  readonly showAsBaseItem?: number;
+  readonly showAsBaseField?: number | null;
+  readonly showAsBaseItem?: number | null;
 }
 
 /** Table style and toggles of a PivotTable (`setPivotStyleInfo`). An omitted
@@ -936,7 +945,7 @@ export interface PivotStyleInput {
   readonly showLastColumn?: boolean;
 }
 
-/** Return type of `Workbook.getPivotStyleInfo(...)`, which returns `null` when
+/** Return type of `Sheet.getPivotStyleInfo(...)`, which returns `null` when
  *  the definition has no style element. */
 export interface PivotStyle {
   readonly name: string;
@@ -947,23 +956,26 @@ export interface PivotStyle {
   readonly showLastColumn: boolean;
 }
 
-/** Return type of `Workbook.getPivotGrandTotals(...)`. */
+/** Return type of `Sheet.getPivotGrandTotals(...)`: whether the row and the column grand total bands show. */
 export interface PivotGrandTotals {
   readonly rows: boolean;
-  readonly cols: boolean;
+  readonly columns: boolean;
 }
 
+/** Argument of `Sheet.setPivotGrandTotals`. */
+export type PivotGrandTotalsPatch = Patch<PivotGrandTotals>;
+
 /** The PivotTable Options of one pivot (`getPivotOptions` /
- *  `setPivotOptions`). A string is `""` when
+ *  `setPivotOptions`). A string is `null` when
  *  the option is unset. `setPivotOptions` takes any subset of the members:
- *  an omitted member keeps its current value, and `""` unsets a string. */
+ *  an omitted member keeps its current value, and `null` unsets a string. */
 export interface PivotOptions {
   /** Error cells show `errorCaption`; the caption is kept while this is off. */
   readonly showError: boolean;
-  readonly errorCaption: string;
+  readonly errorCaption: string | null;
   /** Empty value cells show `missingCaption` (`"-"` is written as the number 0). */
   readonly showMissing: boolean;
-  readonly missingCaption: string;
+  readonly missingCaption: string | null;
   /** Field captions and filter drop-downs. */
   readonly showHeaders: boolean;
   /** Expand / collapse buttons. */
@@ -987,27 +999,33 @@ export interface PivotOptions {
   readonly multipleFieldFilters: boolean;
   readonly preserveFormatting: boolean;
   readonly customListSort: boolean;
-  readonly altText: string;
-  readonly altTextSummary: string;
+  readonly altText: string | null;
+  readonly altTextSummary: string | null;
   /** The grand total label in place of the locale's word. */
-  readonly grandTotalCaption: string;
+  readonly grandTotalCaption: string | null;
   /** Autofit column widths on update. */
   readonly autoFormatting: boolean;
   /** Show Details is allowed. */
   readonly enableDrill: boolean;
 }
 
+/** Argument of `Sheet.setPivotOptions`. */
+export type PivotOptionsPatch = Patch<PivotOptions>;
+
 /** The options of one pivot cache (`getPivotCacheOptions` /
  *  `setPivotCacheOptions`). */
 export interface PivotCacheOptions {
   /** Save the source records with the file. */
   readonly saveData: boolean;
-  /** Items kept per field after they leave the source: `-1` automatic, `0` none, up to `1048576`. */
-  readonly missingItemsLimit: number;
+  /** Items kept per field after they leave the source, `0` none up to `1048576`; `null` is automatic. */
+  readonly missingItemsLimit: number | null;
   readonly refreshOnLoad: boolean;
 }
 
-/** Return type of `Workbook.getPivotCacheCalculatedItem(...)`. */
+/** Argument of `Workbook.setPivotCacheOptions`. */
+export type PivotCacheOptionsPatch = Patch<PivotCacheOptions>;
+
+/** One element of `Workbook.listPivotCacheCalculatedItems(...)`. */
 export interface PivotCalculatedItem {
   /** The cache field the item belongs to. */
   readonly fieldIndex: number;
@@ -1018,18 +1036,18 @@ export interface PivotCalculatedItem {
   readonly scoped: boolean;
 }
 
-/** Return type of `Workbook.getPivotField(...)`. `sourceName`, `customName`,
+/** One element of `Sheet.listPivotFields(...)`. `sourceName`, `customName`,
  *  `axis`, `subtotalTop` and `numberFormat` match `PivotFieldInput`, except
- *  that `axis` is `-1` for a field that sits on no axis. */
+ *  that `axis` is `null` for a field that sits on no axis. */
 export interface PivotField {
   readonly sourceName: string;
-  readonly customName: string;
-  readonly axis: PivotAxis | -1;
+  readonly customName: string | null;
+  readonly axis: PivotAxis | null;
   readonly subtotalTop: boolean;
-  readonly numberFormat: string;
-  /** Index of the bound pivot-cache field, `-1` when the cache does not
+  readonly numberFormat: string | null;
+  /** Index of the bound pivot-cache field, `null` when the cache does not
    *  cover this field. Pivot field `i` binds to cache field `i`. */
-  readonly cacheFieldIndex: number;
+  readonly cacheFieldIndex: number | null;
   /** As written by `setPivotFieldSort`. */
   readonly sortOrder: PivotSortOrder;
   readonly sortByField: string;
@@ -1038,8 +1056,8 @@ export interface PivotField {
   readonly datePeriods: number;
   /** Calendar of that grouping; `Gregorian` when ungrouped. */
   readonly dateCalendar: PivotCalendar;
-  /** For a group field, the index of the field it groups; `-1` otherwise. */
-  readonly groupBaseIndex: number;
+  /** For a group field, the index of the field it groups; `null` otherwise. */
+  readonly groupBaseIndex: number | null;
   /** Whether the automatic subtotal shows; `false` whenever `subtotalFns`
    *  is non-empty, since custom functions replace it. */
   readonly defaultSubtotal: boolean;
@@ -1051,16 +1069,16 @@ export interface PivotField {
   readonly showAll: boolean;
   /** Custom subtotal functions (`addPivotFieldSubtotalFn`), in ascending
    *  `PivotAggregation` order. */
-  readonly subtotalFns: PivotAggregation[];
+  readonly subtotalFns: readonly PivotAggregation[];
 }
 
-/** Return type of `Workbook.getPivotFieldItem(...)`. */
+/** Return type of `Sheet.getPivotFieldItem(...)`. */
 export interface PivotItem {
   /** The item's own label; empty for an item bound only by cache index. */
   readonly name: string;
-  /** Index into the bound cache field's shared items, `-1` for an item
+  /** Index into the bound cache field's shared items, `null` for an item
    *  bound by label only. */
-  readonly cacheIndex: number;
+  readonly cacheIndex: number | null;
   readonly visible: boolean;
   /** Caption shown instead of the item's value; `null` when none. */
   readonly caption: string | null;
@@ -1068,20 +1086,31 @@ export interface PivotItem {
   readonly showDetail: boolean;
 }
 
-/** Return type of `Workbook.getPivotDataField(...)`. Same shape as
+/** One element of `Sheet.listPivotDataFields(...)`. Same shape as
  *  `PivotDataFieldInput` with every member present; `showAsBaseField` /
- *  `showAsBaseItem` are `-1` when unset and `numberFormat` is `""` for none. */
+ *  `showAsBaseItem` are `null` when unset and `numberFormat` is `null` for none. */
 export interface PivotDataField {
   readonly name: string;
   readonly fieldIndex: number;
   readonly aggregation: PivotAggregation;
-  readonly numberFormat: string;
+  readonly numberFormat: string | null;
   readonly showAs: PivotShowValuesAs;
-  readonly showAsBaseField: number;
-  readonly showAsBaseItem: number;
+  readonly showAsBaseField: number | null;
+  readonly showAsBaseItem: number | null;
 }
 
-/** Plain-data spec for `Workbook.addPivotFilter`. For non-range filters, `valueKind` must be
+/** Argument of `Sheet.setPivotFieldDateGroup`: the `PivotDatePeriod` bits to group by, the calendar
+ *  (`Gregorian` when omitted), the day interval (`1` when omitted) and the date-serial bounds (the field's
+ *  first and last value when omitted). */
+export interface PivotDateGroupInput {
+  periods: number;
+  calendar?: PivotCalendar;
+  intervalDays?: number;
+  start?: number;
+  end?: number;
+}
+
+/** Plain-data spec for `Sheet.addPivotFilter`. For non-range filters, `valueKind` must be
  *  one of `Int` / `Double` / `Text`; the high-bound payload is honoured
  *  only for range filter types (`ValueBetween`, `ValueNotBetween`,
  *  `LabelDate`, `DateNotBetween`); `LabelBetween` / `LabelNotBetween` take
@@ -1102,26 +1131,27 @@ export interface PivotFilterInput {
   readonly valueHighText?: string;
 }
 
-/** Return type of `Workbook.getPivotFilter(...)`: the stored filter. Field names and semantics match `PivotFilterInput`.
+/** One element of `Sheet.listPivotFilters(...)`: the stored filter. Field names and semantics match `PivotFilterInput`.
  *
  *  The filter list is saved as the definition's `<filters>` block. Loaded
  *  filters of every type appear here, naming their field by source name;
  *  only an entry the engine cannot interpret is not listed, still filters,
  *  survives `clearPivotFilters` / `removePivotFilter`, and is saved verbatim. */
 export interface PivotFilter {
-  readonly axis: number;
+  readonly axis: PivotAxis;
   readonly fieldName: string;
-  readonly type: number;
+  readonly type: PivotFilterType;
   readonly dataFieldIndex: number;
-  readonly valueKind: number;
+  readonly valueKind: PivotFilterValueKind | null;
   readonly valueInt: number;
   readonly valueDouble: number;
   readonly valueText: string;
-  readonly valueHighKind: number;
+  /** `null` when the filter has no high bound. */
+  readonly valueHighKind: PivotFilterValueKind | null;
   readonly valueHighInt: number;
   readonly valueHighDouble: number;
-  /** `""` when none. */
-  readonly valueHighText: string;
+  /** `null` when the filter has no high bound. */
+  readonly valueHighText: string | null;
 }
 
 /** Conditional-format match kind. Mirrors `formulon::cf::CFMatchKind`. */
@@ -1270,6 +1300,24 @@ export interface CfValueObjectInput {
   gte?: boolean;
 }
 
+/** The edge a data bar grows from; `Context` follows the sheet's reading direction. */
+export const CfDataBarDirection: Readonly<{
+  Context: 0;
+  LeftToRight: 1;
+  RightToLeft: 2;
+}>;
+/** Union of the {@link CfDataBarDirection} ordinals. */
+export type CfDataBarDirection = 0 | 1 | 2;
+
+/** Where a data bar's axis sits. */
+export const CfDataBarAxisPosition: Readonly<{
+  Automatic: 0;
+  Middle: 1;
+  None: 2;
+}>;
+/** Union of the {@link CfDataBarAxisPosition} ordinals. */
+export type CfDataBarAxisPosition = 0 | 1 | 2;
+
 /** Resolved CF match. Active fields depend on `kind`; the others carry
  *  default-zero values. */
 export interface CfMatch {
@@ -1288,9 +1336,8 @@ export interface CfMatch {
   readonly barBorderEngaged: number;
   readonly barBorder: CfColor;
   readonly barGradient: number;
-  /** The rule's direction (0 = context, 1 = left to right, 2 = right to
-   *  left); the bar geometry is stated from the left edge. */
-  readonly barDirection: number;
+  /** The rule's direction; the bar geometry is stated from the left edge. */
+  readonly barDirection: CfDataBarDirection;
   /** Active when `kind === IconSet`; ordinal of `formulon::cf::IconSetName`. */
   readonly iconSetName: number;
   readonly iconIndex: number;
@@ -1300,18 +1347,18 @@ export interface CfMatch {
 export interface CfCell {
   readonly row: number;
   readonly col: number;
-  readonly matches: ReadonlyArray<CfMatch>;
+  readonly matches: readonly CfMatch[];
 }
 
 /** Resolved print geometry for one worksheet. All coordinates are 0-based. */
 export interface Pagination {
-  /** The sheet's declared `_xlnm.Print_Area`. Empty when the sheet declares
+  /** The sheet's declared `_xlnm.Print_Area`; no rectangles when the sheet declares
    *  none -- it is not backfilled with the used range. Pagination itself
    *  still falls back to the used range in that case, so `pageCount` can be
-   *  non-zero while this is empty. */
-  readonly printArea: CellRect[];
-  readonly horizontalBreaks: number[];
-  readonly verticalBreaks: number[];
+   *  non-zero without a declared area. */
+  readonly printArea: readonly CellRect[];
+  readonly rowBreaks: readonly number[];
+  readonly columnBreaks: readonly number[];
   readonly pageCount: number;
   /** Paper the layout ran on, after the orientation swap. `known` is false
    *  when the stored `paperSize` was unrecognised and A4 was substituted. */
@@ -1323,45 +1370,34 @@ export interface Pagination {
   readonly scale: number;
   /** 0 = down then over, 1 = over then down. */
   readonly pageOrder: number;
-  /** Repeat rows / columns in effect (0-based, inclusive); a span is meaningful only when its flag is set. */
-  readonly printTitles: PaginationPrintTitles;
+  /** Repeat rows / columns in effect; `null` when neither axis repeats. */
+  readonly printTitles: PrintTitles | null;
   /** Physical pages in print order. */
-  readonly pages: PaginationPage[];
-  /** Parallel to `horizontalBreaks`: true for a manual break. */
-  readonly horizontalBreakManual: boolean[];
-  /** Parallel to `verticalBreaks`: true for a manual break. */
-  readonly verticalBreakManual: boolean[];
+  readonly pages: readonly PaginationPage[];
+  /** Parallel to `rowBreaks`: true for a manual break. */
+  readonly rowBreakManual: readonly boolean[];
+  /** Parallel to `columnBreaks`: true for a manual break. */
+  readonly columnBreakManual: readonly boolean[];
 }
 
 /** `Pagination.paper`. `known` is false when the stored `paperSize` was
  *  unrecognised and A4 was substituted. */
 export interface PaginationPaper {
-  widthPt: number;
-  heightPt: number;
-  landscape: boolean;
-  known: boolean;
+  readonly widthPt: number;
+  readonly heightPt: number;
+  readonly landscape: boolean;
+  readonly known: boolean;
 }
 
 /** `Pagination.margins`, in points; `header` / `footer` are measured
  *  from the page edge to the header / footer band. */
 export interface PaginationMargins {
-  left: number;
-  right: number;
-  top: number;
-  bottom: number;
-  header: number;
-  footer: number;
-}
-
-/** `Pagination.printTitles`: repeat rows / columns (0-based,
- *  inclusive). A span is meaningful only when its `has*` flag is true. */
-export interface PaginationPrintTitles {
-  hasRows: boolean;
-  firstRow: number;
-  lastRow: number;
-  hasCols: boolean;
-  firstCol: number;
-  lastCol: number;
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly bottom: number;
+  readonly header: number;
+  readonly footer: number;
 }
 
 /** A rectangle in points. */
@@ -1377,13 +1413,13 @@ export interface RectPt {
  *  `originXPt` / `originYPt` is that block's top-left corner on the paper. */
 export interface PaginationPage {
   /** Index into `Pagination.printArea` (0 for the used-range fallback). */
-  areaIndex: number;
+  readonly areaIndex: number;
   /** The page's cell block. */
-  rect: CellRect;
-  originXPt: number;
-  originYPt: number;
-  widthPt: number;
-  heightPt: number;
+  readonly rect: CellRect;
+  readonly originXPt: number;
+  readonly originYPt: number;
+  readonly widthPt: number;
+  readonly heightPt: number;
 }
 
 /** Which Windows column-width figure a geometry call uses.
@@ -1396,7 +1432,7 @@ export const GeometryMode: Readonly<{
 /** Union of the {@link GeometryMode} ordinals. */
 export type GeometryMode = 0 | 1;
 
-/** Return type of `Workbook.getWidthModel(...)`. `pointsPerChar` and `paddingPt` are per displayed
+/** Return type of `Sheet.getWidthModel(...)`. `pointsPerChar` and `paddingPt` are per displayed
  *  character: `chars * pointsPerChar + paddingPt`; stored widths go through `convertColumnCharsToPt`. */
 export interface WidthModel {
   readonly pointsPerChar: number;
@@ -1408,17 +1444,15 @@ export interface WidthModel {
   readonly platform: string;
 }
 
-/** Sheet default column / row metrics (`<sheetFormatPr>`). A width / height is
- *  meaningful only when its `has*` flag is set. */
+/** Sheet default column / row metrics (`<sheetFormatPr>`). `defaultColWidth` and `defaultRowHeight`
+ *  are `null` when the sheet stores none; on set, `null` clears the stored value and an omitted key keeps it. */
 export interface SheetFormatDefaultsInput {
   /** Character units. */
-  readonly defaultColWidth: number;
+  readonly defaultColWidth: number | null;
   /** Points. */
-  readonly defaultRowHeight: number;
+  readonly defaultRowHeight: number | null;
   /** Character units; OOXML default 8. */
   readonly baseColWidth: number;
-  readonly hasDefaultColWidth: boolean;
-  readonly hasDefaultRowHeight: boolean;
   /** `<sheetFormatPr customHeight>`: `defaultRowHeight` is an explicit override that stays as
    *  written, rather than a cached figure Excel recomputes from the Normal font. An omitted key
    *  on set keeps the stored flag. */
@@ -1428,7 +1462,10 @@ export interface SheetFormatDefaultsInput {
   readonly zeroHeight: boolean;
 }
 
-/** Return type of `Workbook.getFormatDefaults(sheet)`. The effective
+/** Argument of `Sheet.setFormatDefaults`. */
+export type SheetFormatDefaultsPatch = Patch<SheetFormatDefaultsInput>;
+
+/** Return type of `Sheet.getFormatDefaults()`. The effective
  *  values are read-only and ignored by `setFormatDefaults`. */
 export interface SheetFormatDefaults extends SheetFormatDefaultsInput {
   /** Stored width the sheet lays columns out with: `defaultColWidth` when set, else the column
@@ -1438,17 +1475,17 @@ export interface SheetFormatDefaults extends SheetFormatDefaultsInput {
   readonly effectiveDefaultRowHeight: number;
 }
 
-/** One populated cell of `Workbook.getCellsInRange`. */
+/** One populated cell of `Sheet.getCellsInRange`. */
 export interface RangeCell {
-  row: number;
-  col: number;
-  formula: string | null;
-  value: Value;
+  readonly row: number;
+  readonly col: number;
+  readonly formula: string | null;
+  readonly value: Value;
 }
 
-/** Return type of `Workbook.getCellsInRange(...)`. */
+/** Return type of `Sheet.getCellsInRange(...)`. */
 export interface CellsInRange {
-  readonly cells: RangeCell[];
+  readonly cells: readonly RangeCell[];
   /** Resume position for the next page, or `null` when the range is exhausted. */
   readonly nextCursor: number | null;
 }
@@ -1465,7 +1502,7 @@ export const DisplayStatus: Readonly<{
 /** Union of the {@link DisplayStatus} ordinals. */
 export type DisplayStatus = 0 | 1 | 2;
 
-/** Return type of `Workbook.getDisplayText` / `formatValue`. */
+/** Return type of `Sheet.getDisplayText` / `formatValue`. */
 export interface DisplayText {
   readonly text: string;
   readonly displayStatus: DisplayStatus;
@@ -1484,6 +1521,15 @@ export const SheetVisibility: Readonly<{
 /** Union of the {@link SheetVisibility} ordinals. */
 export type SheetVisibility = 0 | 1 | 2;
 
+/** The `<sheetView view>` mode of a sheet. */
+export const SheetViewMode: Readonly<{
+  Normal: 0;
+  PageBreakPreview: 1;
+  PageLayout: 2;
+}>;
+/** Union of the {@link SheetViewMode} ordinals. */
+export type SheetViewMode = 0 | 1 | 2;
+
 /** Per-sheet view: zoom (10..400, default 100), frozen-pane row/col
  *  counts, tab visibility, and the display / orientation flags mirrored
  *  from OOXML `<sheetView>` (gridlines, row/col headers, zero display,
@@ -1493,26 +1539,20 @@ export interface SheetView {
   readonly zoomScale: number;
   readonly freezeRows: number;
   readonly freezeCols: number;
-  /** Boolean stored as 0/1.
-   *  The two-state view of `visibility`: `1` for both hidden states, so
-   *  reading only this field sees a very-hidden sheet as hidden rather
-   *  than visible. Read `visibility` to tell the two apart. */
-  readonly tabHidden: number;
-  /** The authoritative tab state, as a `SheetVisibility` code. Always
-   *  agrees with `tabHidden`. */
-  readonly visibility: number;
-  /** `showGridLines`; default 1. */
-  readonly showGridLines: number;
-  /** `showRowColHeaders`; default 1. */
-  readonly showRowColHeaders: number;
-  /** `showZeros`; default 1. */
-  readonly showZeros: number;
-  /** `rightToLeft`; default 0. */
-  readonly rightToLeft: number;
-  /** `tabSelected`; default 0. */
-  readonly tabSelected: number;
-  /** `view` mode: `""` (normal), `"pageBreakPreview"`, or `"pageLayout"`. */
-  readonly viewMode: string;
+  /** The tab state. */
+  readonly visibility: SheetVisibility;
+  /** `showGridLines`; default true. */
+  readonly showGridLines: boolean;
+  /** `showRowColHeaders`; default true. */
+  readonly showRowColHeaders: boolean;
+  /** `showZeros`; default true. */
+  readonly showZeros: boolean;
+  /** `rightToLeft`; default false. */
+  readonly rightToLeft: boolean;
+  /** `tabSelected`; default false. */
+  readonly tabSelected: boolean;
+  /** `view` mode; `Normal` when the attribute is absent. */
+  readonly viewMode: SheetViewMode;
   /** Scroll origin of the sheet view (`topLeftCell`), 0-based; A1 by default. */
   readonly topLeftRow: number;
   readonly topLeftCol: number;
@@ -1525,29 +1565,29 @@ export interface SheetView {
    *  split on that axis, and always `0` while the view is frozen. */
   readonly splitX: number;
   readonly splitY: number;
-  /** `showFormulas`: cells show their formula text; default 0. */
-  readonly showFormulas: number;
-  /** `showOutlineSymbols`: the outline gutter's group symbols are shown; default 1. */
-  readonly showOutlineSymbols: number;
+  /** `showFormulas`: cells show their formula text; default false. */
+  readonly showFormulas: boolean;
+  /** `showOutlineSymbols`: the outline gutter's group symbols are shown; default true. */
+  readonly showOutlineSymbols: boolean;
 }
 
 /** The active pane's selection: the active cell and the selected ranges.
- *  Input of `Workbook.setSelection`; `ranges` may be empty or omitted,
+ *  Input of `Sheet.setSelection`; `ranges` may be empty or omitted,
  *  which selects the active cell alone. */
 export interface SheetSelectionInput {
   activeRow: number;
   activeCol: number;
-  ranges?: ReadonlyArray<CellRect>;
+  ranges?: readonly CellRect[];
 }
 
-/** Return type of `Workbook.getSelection(sheet)`, read as it is saved:
+/** Return type of `Sheet.getSelection(sheet)`, read as it is saved:
  *  a pane that stores no selection reports A1 with the single range A1 (the
  *  pane's top-left cell for a frozen or split view's active pane), and an
  *  active cell outside every range moves to the first range's top-left. */
 export interface SheetSelection {
   readonly activeRow: number;
   readonly activeCol: number;
-  readonly ranges: CellRect[];
+  readonly ranges: readonly CellRect[];
 }
 
 /**
@@ -1562,28 +1602,28 @@ export interface SheetSelection {
  * save.
  */
 export interface SheetProtection {
-  readonly enabled: number;
-  readonly algorithmName: string;
-  readonly hashValue: string;
-  readonly saltValue: string;
+  readonly enabled: boolean;
+  readonly algorithmName: string | null;
+  readonly hashValue: string | null;
+  readonly saltValue: string | null;
   readonly spinCount: number;
-  readonly legacyPassword: string;
-  readonly sheet: number;
-  readonly objects: number;
-  readonly scenarios: number;
-  readonly formatCells: number;
-  readonly formatColumns: number;
-  readonly formatRows: number;
-  readonly insertColumns: number;
-  readonly insertRows: number;
-  readonly insertHyperlinks: number;
-  readonly deleteColumns: number;
-  readonly deleteRows: number;
-  readonly selectLockedCells: number;
-  readonly selectUnlockedCells: number;
-  readonly sort: number;
-  readonly autoFilter: number;
-  readonly pivotTables: number;
+  readonly legacyPassword: string | null;
+  readonly sheet: boolean;
+  readonly objects: boolean;
+  readonly scenarios: boolean;
+  readonly formatCells: boolean;
+  readonly formatColumns: boolean;
+  readonly formatRows: boolean;
+  readonly insertColumns: boolean;
+  readonly insertRows: boolean;
+  readonly insertHyperlinks: boolean;
+  readonly deleteColumns: boolean;
+  readonly deleteRows: boolean;
+  readonly selectLockedCells: boolean;
+  readonly selectUnlockedCells: boolean;
+  readonly sort: boolean;
+  readonly autoFilter: boolean;
+  readonly pivotTables: boolean;
 }
 
 /** Per-column-range layout override. Inclusive `[first, last]` columns
@@ -1591,35 +1631,29 @@ export interface SheetProtection {
 export interface ColumnLayout {
   readonly first: number;
   readonly last: number;
-  readonly width: number;
-  /** Boolean stored as 0/1. */
-  readonly hidden: number;
+  /** The explicit width (raw presence or non-zero legacy width); `null` when the span states none. */
+  readonly width: number | null;
+  readonly hidden: boolean;
   readonly outlineLevel: number;
-  /** Boolean stored as 0/1: the outline group this span summarises is collapsed. */
-  readonly collapsed: number;
-  /** Whether the width is logically explicit (raw presence or non-zero legacy width). */
-  readonly hasWidth: number;
-  /** Whether the source / model carries an explicit style attribute. */
-  readonly hasStyle: number;
-  readonly styleXf: number;
+  /** The outline group this span summarises is collapsed. */
+  readonly collapsed: boolean;
+  /** The explicit column style; `null` when the span carries none. */
+  readonly styleXf: number | null;
 }
 
 /** Per-row layout override. */
 export interface RowLayout {
   readonly row: number;
-  readonly height: number;
-  /** Boolean stored as 0/1. */
-  readonly hidden: number;
+  /** The stored height; `null` when the row stores none. */
+  readonly height: number | null;
+  readonly hidden: boolean;
   readonly outlineLevel: number;
-  /** Boolean stored as 0/1: the outline group this row summarises is collapsed. */
-  readonly collapsed: number;
-  /** Whether OOXML customFormat=1 makes the row style effective. */
-  readonly hasStyle: number;
-  readonly styleXf: number;
-  /** Boolean stored as 0/1: whether a height is stored; `height` is meaningful only then. */
-  readonly hasHeight: number;
-  /** Boolean stored as 0/1: an explicit override (`customHeight="1"`) rather than an auto height Excel recomputes. */
-  readonly customHeight: number;
+  /** The outline group this row summarises is collapsed. */
+  readonly collapsed: boolean;
+  /** The row style OOXML `customFormat="1"` makes effective; `null` when the row has none. */
+  readonly styleXf: number | null;
+  /** An explicit override (`customHeight="1"`) rather than an auto height Excel recomputes. */
+  readonly customHeight: boolean;
 }
 
 /** Cell rectangle: 0-based, inclusive corners `(firstRow, firstCol)` through `(lastRow, lastCol)`.
@@ -1643,15 +1677,24 @@ export interface Hyperlink {
   readonly rect: CellRect;
   /** Absolute or relative target (URL, email, internal ref, …). */
   readonly target: string;
-  /** In-workbook destination (empty for an external target). */
-  readonly location: string;
-  /** Display text override (empty when default). */
-  readonly display: string;
-  /** Tooltip text (empty when none). */
-  readonly tooltip: string;
+  /** In-workbook destination; `null` for an external target. */
+  readonly location: string | null;
+  /** Display text override; `null` when default. */
+  readonly display: string | null;
+  /** Tooltip text; `null` when none. */
+  readonly tooltip: string | null;
 }
 
-/** Cell comment entry returned by `getComment(sheet, row, col)`. */
+/** Argument of `Sheet.addHyperlink` / `addHyperlinkRange`. A `null` `target` is an in-workbook link and needs
+ *  `location`, its A1 destination. */
+export interface HyperlinkInput {
+  target: string | null;
+  location?: string;
+  display?: string;
+  tooltip?: string;
+}
+
+/** Cell comment entry returned by `Sheet.getComment(row, col)`. */
 export interface Comment {
   readonly author: string;
   readonly text: string;
@@ -1661,19 +1704,19 @@ export interface Comment {
  *  Hash fields are stored exactly as given; the host computes them. A zero
  *  spin count and an empty string are absent. */
 export interface WorkbookProtection {
-  readonly lockStructure: number;
-  readonly lockWindows: number;
-  readonly lockRevision: number;
+  readonly lockStructure: boolean;
+  readonly lockWindows: boolean;
+  readonly lockRevision: boolean;
   /** Legacy 16-bit password hash, as the hex text Excel writes. */
-  readonly workbookPassword: string;
-  readonly workbookAlgorithmName: string;
-  readonly workbookHashValue: string;
-  readonly workbookSaltValue: string;
+  readonly workbookPassword: string | null;
+  readonly workbookAlgorithmName: string | null;
+  readonly workbookHashValue: string | null;
+  readonly workbookSaltValue: string | null;
   readonly workbookSpinCount: number;
-  readonly revisionsPassword: string;
-  readonly revisionsAlgorithmName: string;
-  readonly revisionsHashValue: string;
-  readonly revisionsSaltValue: string;
+  readonly revisionsPassword: string | null;
+  readonly revisionsAlgorithmName: string | null;
+  readonly revisionsHashValue: string | null;
+  readonly revisionsSaltValue: string | null;
   readonly revisionsSpinCount: number;
 }
 
@@ -1681,7 +1724,7 @@ export interface WorkbookProtection {
  *  covering the rectangles of `ranges`. */
 export interface ProtectedRange {
   readonly name: string;
-  readonly ranges: ReadonlyArray<CellRect>;
+  readonly ranges: readonly CellRect[];
   readonly password: string;
   readonly algorithmName: string;
   readonly hashValue: string;
@@ -1694,12 +1737,12 @@ export interface ProtectedRange {
  *  `Comment` with the anchor cell so comments on otherwise-empty
  *  cells can be discovered without already knowing their `(row, col)`. */
 export interface SheetComment extends Comment {
-  row: number;
-  col: number;
+  readonly row: number;
+  readonly col: number;
 }
 
 /** One sheet `<dataValidation>` block as returned by
- *  `getValidation(sheet, validationIndex)`.
+ *  `Sheet.listValidations()`.
  *
  *  Field semantics (matches OOXML `dataValidations.xsd`):
  *    * `type`        — 0 none, 1 whole, 2 decimal, 3 list, 4 date,
@@ -1710,7 +1753,7 @@ export interface SheetComment extends Comment {
  *    * `errorStyle`  — a `ValidationErrorStyle`.
  */
 export interface DataValidation {
-  readonly ranges: ReadonlyArray<CellRect>;
+  readonly ranges: readonly CellRect[];
   readonly type: number;
   readonly op: number;
   readonly errorStyle: ValidationErrorStyle;
@@ -1728,12 +1771,12 @@ export interface DataValidation {
   readonly promptMessage: string;
 }
 
-/** Argument shape accepted by `addValidation(sheet, validation)`. Every
+/** Argument shape accepted by `Sheet.addValidation(validation)`. Every
  *  field except `ranges` and `type` is optional; missing fields default to
  *  `0` for the small enum-shaped integers, `false` for booleans, and `""`
  *  for strings. `ranges` must hold at least one rectangle. */
 export interface DataValidationInput {
-  ranges: ReadonlyArray<CellRect>;
+  ranges: readonly CellRect[];
   type: number;
   op?: number;
   errorStyle?: ValidationErrorStyle;
@@ -1772,7 +1815,13 @@ export interface LocaleErrorName {
 }
 
 /** Order in which a locale writes day, month and year. */
-export type LocaleDateOrder = 'mdy' | 'ymd' | 'dmy';
+export const LocaleDateOrder: Readonly<{
+  Mdy: 0;
+  Ymd: 1;
+  Dmy: 2;
+}>;
+/** Union of the {@link LocaleDateOrder} ordinals. */
+export type LocaleDateOrder = 0 | 1 | 2;
 
 /** Scalar locale facts of one {@link ExcelProfileId}. `measured` is `true`
  *  for the profiles captured from Excel (every `mac-*` id and
@@ -1810,6 +1859,16 @@ export interface CollationClasses {
   readonly classCount: number;
 }
 
+/** How far the engine implements a built-in function. */
+export const FunctionAvailability: Readonly<{
+  Implemented: 0;
+  ImplementedUnverified: 1;
+  EnvironmentBound: 2;
+  UnavailableStub: 3;
+}>;
+/** Union of the {@link FunctionAvailability} ordinals. */
+export type FunctionAvailability = 0 | 1 | 2 | 3;
+
 /** Metadata of a registered function, as `getFunctionMetadata(name)` returns it.
  *  `signatureTemplate` and `description` are always `undefined`: the engine ships no
  *  human-readable function text, and {@link mergeFunctionMetadata} overlays a host-supplied
@@ -1819,9 +1878,8 @@ export interface FunctionMetadata {
   readonly minArity: number;
   /** `null` denotes an unbounded variadic. */
   readonly maxArity: number | null;
-  /** Availability class: 0 implemented, 1 implemented_unverified,
-   *  2 environment_bound, 3 unavailable_stub. */
-  readonly availability: number;
+  /** How far the engine implements the function. */
+  readonly availability: FunctionAvailability;
   readonly signatureTemplate?: string;
   readonly description?: string;
 }
@@ -1896,7 +1954,7 @@ export interface ArrayFormula {
   readonly formula: string;
 }
 
-/** Spill region info returned by `getSpillInfo(sheet, row, col)`. */
+/** Spill region info returned by `Sheet.getSpillInfo(row, col)`. */
 export interface Spill {
   readonly engaged: boolean;
   /** `true` when the cell is the anchor of a spill that failed with `#SPILL!`; then `rect` is the rectangle
@@ -1922,7 +1980,7 @@ export interface ParseReferenceOptions {
 }
 
 /** The rectangle `formatReference` writes; `sheetName` `null`, omitted or `""` writes no qualifier. */
-export interface ReferenceRange {
+export interface ReferenceRangeInput {
   sheetName?: string | null;
   rect: CellRect;
 }
@@ -1932,7 +1990,7 @@ export interface FormatReferenceOptions {
   absolute?: boolean;
 }
 
-/** One CF rule as returned by `getCfRule(sheet, cfRuleIndex)`.
+/** One CF rule, an element of `Sheet.listCfRules()`.
  *
  *  `type` ordinal mirrors `formulon::cf::RuleType`:
  *    0 expression, 1 cellIs, 2 colorScale, 3 dataBar, 4 iconSet,
@@ -1952,7 +2010,7 @@ export interface ConditionalFormat {
   readonly type: number;
   readonly priority: number;
   readonly stopIfTrue: boolean;
-  readonly ranges: ReadonlyArray<CellRect>;
+  readonly ranges: readonly CellRect[];
   readonly dxfId?: number;
   readonly formula1?: string;
   readonly formula2?: string;
@@ -1974,8 +2032,8 @@ export interface ConditionalFormat {
   readonly timePeriod?: number;
   /** Engaged for `colorScale` rules. */
   readonly colorScale?: {
-    readonly thresholds: ReadonlyArray<CfValueObjectInput>;
-    readonly colors: ReadonlyArray<CfColor>;
+    readonly thresholds: readonly CfValueObjectInput[];
+    readonly colors: readonly CfColor[];
   };
   /** Engaged for `dataBar` rules. */
   readonly dataBar?: {
@@ -1989,24 +2047,21 @@ export interface ConditionalFormat {
      * `x14` extension payload. Present whenever the rule states the
      * setting; a rule read back from a workbook always carries all six, so
      * the object can be handed straight to `addCfRule`.
-     *
-     * `axisPosition` is 0 = automatic, 1 = middle, 2 = none.
      */
     readonly gradient?: boolean;
-    readonly axisPosition?: number;
+    readonly axisPosition?: CfDataBarAxisPosition;
     readonly negativeFill?: CfColor;
     readonly border?: CfColor;
     readonly negativeBorder?: CfColor;
     readonly axisColor?: CfColor;
-    /** Edge the bar grows from: 0 = context (the sheet's reading
-     *  direction), 1 = left to right, 2 = right to left. */
-    readonly direction: number;
+    /** Edge the bar grows from. */
+    readonly direction: CfDataBarDirection;
   };
   /** Engaged for `iconSet` rules. */
   readonly iconSet?: {
     readonly name: number;
     /** Exactly N-1 thresholds for an N-icon set (the floor is `floor`, not a threshold). A formula-typed value carries no leading `=`. */
-    readonly thresholds: ReadonlyArray<CfValueObjectInput>;
+    readonly thresholds: readonly CfValueObjectInput[];
     readonly reverse: boolean;
     readonly showValue: boolean;
     /** Round-trip only: the `percent` attribute is preserved across load
@@ -2018,7 +2073,7 @@ export interface ConditionalFormat {
     readonly floor?: CfValueObjectInput;
     /** Custom icon set: the icon drawn for each level, present only when the
      *  set does not draw its own icons. */
-    readonly icons?: ReadonlyArray<CfIconInput>;
+    readonly icons?: readonly CfIconInput[];
   };
 }
 
@@ -2031,13 +2086,13 @@ export interface CfIconInput {
   iconId: number;
 }
 
-/** Argument shape accepted by `addCfRule(sheet, rule)`.
+/** Argument shape accepted by `Sheet.addCfRule(rule)`.
  *
  *  When `priority` is missing, zero, or negative, the engine assigns
  *  `existing_max + 1`. When `id` is missing or empty, the engine
  *  synthesises one. */
 export interface ConditionalFormatInput {
-  ranges: ReadonlyArray<CellRect>;
+  ranges: readonly CellRect[];
   type: number;
   priority?: number;
   stopIfTrue?: boolean;
@@ -2056,8 +2111,8 @@ export interface ConditionalFormatInput {
   timePeriod?: number;
   /** Payload for type 2 (`colorScale`). Threshold and color counts must match: 2 or 3. */
   colorScale?: {
-    thresholds: ReadonlyArray<CfValueObjectInput>;
-    colors: ReadonlyArray<CfColor>;
+    thresholds: readonly CfValueObjectInput[];
+    colors: readonly CfColor[];
   };
   /** Payload for type 3 (`dataBar`). */
   dataBar?: {
@@ -2070,23 +2125,22 @@ export interface ConditionalFormatInput {
     /**
      * `x14` extension payload. Omit a key to keep the model default:
      * gradient fill on, automatic axis, negative fill equal to `fill`, no
-     * border, and a black axis. `axisPosition` is 0 = automatic,
-     * 1 = middle, 2 = none.
+     * border, and a black axis.
      */
     gradient?: boolean;
-    axisPosition?: number;
+    axisPosition?: CfDataBarAxisPosition;
     negativeFill?: CfColor;
     border?: CfColor;
     negativeBorder?: CfColor;
     axisColor?: CfColor;
-    /** 0 = context (default), 1 = left to right, 2 = right to left. */
-    direction?: number;
+    /** Defaults to `CfDataBarDirection.Context`. */
+    direction?: CfDataBarDirection;
   };
   /** Payload for type 4 (`iconSet`). `name` is `formulon::cf::IconSetName` ordinal. */
   iconSet?: {
     name: number;
     /** Exactly N-1 thresholds for an N-icon set (the floor is `floor`, not a threshold); any other count is rejected with `StatusCode.InvalidArgument`. A formula-typed value is stored without its leading `=`. */
-    thresholds: ReadonlyArray<CfValueObjectInput>;
+    thresholds: readonly CfValueObjectInput[];
     reverse?: boolean;
     showValue?: boolean;
     /** Round-trip only: preserved across load and save but never
@@ -2098,7 +2152,7 @@ export interface ConditionalFormatInput {
     floor?: CfValueObjectInput;
     /** Custom icon set: one icon per level (the set's icon count), or omit
      *  for the set's own icons. Evaluation still buckets against `name`. */
-    icons?: ReadonlyArray<CfIconInput>;
+    icons?: readonly CfIconInput[];
   };
 }
 
@@ -2108,21 +2162,14 @@ export interface CellXf {
   readonly fillIndex: number;
   readonly borderIndex: number;
   readonly numFmtId: number;
-  readonly horizontalAlign: number;
-  readonly verticalAlign: number;
-  readonly wrapText: boolean;
-  /** OOXML `justifyLastLine`; effective with distributed horizontal alignment. */
-  readonly justifyLastLine: boolean;
-  /** Whether the source `<xf>` carried an `<alignment>` child. */
-  readonly hasAlignment: boolean;
-  /** Whether `horizontal="..."` was explicitly present. */
-  readonly hasHorizontalAlign: boolean;
-  /** Whether `vertical="..."` was explicitly present. */
-  readonly hasVerticalAlign: boolean;
-  /** Whether `wrapText="..."` was explicitly present. */
-  readonly hasWrapText: boolean;
-  /** Whether `justifyLastLine="..."` was explicitly present. */
-  readonly hasJustifyLastLine: boolean;
+  /** OOXML `horizontal`; `null` when the attribute is absent. */
+  readonly horizontalAlign: number | null;
+  /** OOXML `vertical`; `null` when the attribute is absent. */
+  readonly verticalAlign: number | null;
+  /** OOXML `wrapText`; `null` when the attribute is absent. */
+  readonly wrapText: boolean | null;
+  /** OOXML `justifyLastLine`; effective with distributed horizontal alignment. `null` when the attribute is absent. */
+  readonly justifyLastLine: boolean | null;
   /** OOXML `applyNumberFormat` / `applyFont` / `applyFill` / `applyBorder` /
    *  `applyAlignment` / `applyProtection`: whether this record's value for
    *  the group overrides its parent named style. */
@@ -2134,10 +2181,10 @@ export interface CellXf {
   readonly applyProtection: boolean;
   /** OOXML `quotePrefix`. */
   readonly quotePrefix: boolean;
-  /** Whether the record carries a `<protection>` child. When false, `locked` / `hidden` are the model defaults (true / false). */
-  readonly hasProtection: boolean;
-  readonly locked: boolean;
-  readonly hidden: boolean;
+  /** `<protection locked>`; `null` without a `<protection>` child, which means locked. */
+  readonly locked: boolean | null;
+  /** `<protection hidden>`; `null` without a `<protection>` child, which means not hidden. */
+  readonly hidden: boolean | null;
   /** OOXML `textRotation`; present only when the source attribute existed. */
   readonly textRotation?: number;
   /** OOXML `indent`; present only when the source attribute existed. */
@@ -2153,6 +2200,17 @@ export interface CellXf {
   readonly xfId?: number;
 }
 
+/** Which selector a `Color` carries. */
+export const ColorKind: Readonly<{
+  None: 0;
+  Rgb: 1;
+  Theme: 2;
+  Indexed: 3;
+  Auto: 4;
+}>;
+/** Union of the {@link ColorKind} ordinals. */
+export type ColorKind = 0 | 1 | 2 | 3 | 4;
+
 /** How an OOXML `<color>` element expressed its value.
  *  Mirrors `formulon::io::Color`.
  *
@@ -2163,58 +2221,45 @@ export interface CellXf {
  *  fallback otherwise. Leave `kind` at 0 on a record built from scratch and
  *  the writer emits the sibling `*Argb` as `rgb`. */
 export interface Color {
-  /** 0=none, 1=rgb, 2=theme, 3=indexed, 4=auto. */
-  readonly kind: number;
-  /** AARRGGBB; meaningful when `kind` is 1. */
+  /** Which selector the colour carries. */
+  readonly kind: ColorKind;
+  /** AARRGGBB; meaningful when `kind` is `Rgb`. */
   readonly rgb: number;
-  /** Theme index; meaningful when `kind` is 2. */
+  /** Theme index; meaningful when `kind` is `Theme`. */
   readonly theme: number;
-  /** Theme tint in -1..1; meaningful when `kind` is 2. */
+  /** Theme tint in -1..1; meaningful when `kind` is `Theme`. */
   readonly tint: number;
-  /** Legacy palette index; meaningful when `kind` is 3. */
+  /** Legacy palette index; meaningful when `kind` is `Indexed`. */
   readonly indexed: number;
 }
 
 /** Plain-data shape of a font record. Mirrors `formulon::io::Font`. */
 export interface Font {
   readonly name: string;
-  readonly size: number;
-  readonly bold: boolean;
-  readonly italic: boolean;
-  readonly strike: boolean;
-  /** Whether the source carried a `<b>` element at all. An absent element
-   *  on a differential font means "leave bold unchanged"; `hasBold` with
-   *  `bold: false` means "switch bold off". */
-  readonly hasBold: boolean;
-  /** Whether the source carried an `<i>` element at all. */
-  readonly hasItalic: boolean;
-  /** Whether the source carried a `<strike>` element at all. */
-  readonly hasStrike: boolean;
+  /** The `<sz>` size; `null` without the element, which on a differential font leaves the size unchanged. On
+   *  input an omitted size is `null`. */
+  readonly size: number | null;
+  /** The `<b>` element: `null` without it, which on a differential font means "leave bold unchanged";
+   *  `false` means "switch bold off". */
+  readonly bold: boolean | null;
+  /** The `<i>` element, with the same `null` rule as `bold`. */
+  readonly italic: boolean | null;
+  /** The `<strike>` element, with the same `null` rule as `bold`. */
+  readonly strike: boolean | null;
   /** `<outline>`, `<shadow>`, `<condense>` and `<extend>` toggles, with the
-   *  same `has*` rule as `bold`. */
-  readonly outline: boolean;
-  readonly shadow: boolean;
-  readonly condense: boolean;
-  readonly extend: boolean;
-  readonly hasOutline: boolean;
-  readonly hasShadow: boolean;
-  readonly hasCondense: boolean;
-  readonly hasExtend: boolean;
+   *  same `null` rule as `bold`. */
+  readonly outline: boolean | null;
+  readonly shadow: boolean | null;
+  readonly condense: boolean | null;
+  readonly extend: boolean | null;
   /** 0=none, 1=single, 2=double, 3=singleAccounting, 4=doubleAccounting. */
   readonly underline: number;
   /** 0=baseline, 1=superscript, 2=subscript. */
   readonly vertAlign: number;
-  /** Whether the source carried a `<family>` element. */
-  readonly hasFamily: boolean;
-  /** OOXML font-family class (0..5). */
-  readonly family: number;
-  /** Whether the source carried a `<charset>` element. */
-  readonly hasCharset: boolean;
-  /** OOXML charset codepage id (e.g. 128 = Shift_JIS). */
-  readonly charset: number;
-  /** Whether the font carries a `<sz>` element. A differential font without
-   *  one leaves the size unchanged; on input it defaults to whether `size` is given. */
-  readonly hasSize: boolean;
+  /** OOXML font-family class (0..5); `null` without a `<family>` element. */
+  readonly family: number | null;
+  /** OOXML charset codepage id (e.g. 128 = Shift_JIS); `null` without a `<charset>` element. */
+  readonly charset: number | null;
   /** `<scheme>` theme link: 0=absent, 1=major, 2=minor. Meaningful only on
    *  a workbook that carries a theme part. */
   readonly scheme: number;
@@ -2251,7 +2296,7 @@ export interface GradientFill {
   right: number;
   top: number;
   bottom: number;
-  stops: ReadonlyArray<GradientStop>;
+  stops: readonly GradientStop[];
 }
 
 /** One stop of a `GradientFill`. */
@@ -2360,7 +2405,7 @@ export interface PhoneticPropertiesInput {
   alignment: number;
 }
 
-/** Return type of `Workbook.getCellPhoneticProperties(sheet, row, col)`. */
+/** Return type of `Sheet.getCellPhoneticProperties(row, col)`. */
 export interface PhoneticProperties extends PhoneticPropertiesInput {
   /** `true` when the triple came from an explicit `<phoneticPr>` element or
    *  `setCellPhoneticProperties` (an all-zero triple included); `false` for
@@ -2408,7 +2453,7 @@ export const ExternalLinkKind: Readonly<{
 /** Union of the {@link ExternalLinkKind} ordinals. */
 export type ExternalLinkKind = 0 | 1 | 2 | 3;
 
-/** Record returned by `Workbook.getExternalLink(externalLinkIndex)`. Mirrors
+/** One element of `Workbook.listExternalLinks()`. Mirrors
  *  `formulon::io::ExternalLink`. The body part itself is not
  *  exposed (it round-trips through the OOXML passthrough mechanism);
  *  this surface only enumerates the cross-workbook references and
@@ -2423,9 +2468,9 @@ export interface ExternalLink {
    *  `xl/externalLinks/externalLink1.xml`). */
   readonly partPath: string;
   /** Remote workbook URL (e.g. `file:///path/book.xlsx`,
-   *  `https://example/sheet.xlsx`). Empty when the per-link rels file
+   *  `https://example/sheet.xlsx`); `null` when the per-link rels file
    *  was missing or unparseable. */
-  readonly target: string;
+  readonly target: string | null;
   /** Whether the per-link rels relationship was emitted with
    *  `TargetMode="External"` (the common case). */
   readonly targetExternal: boolean;
@@ -2633,27 +2678,26 @@ export type AnchorKind = 0 | 1 | 2;
 
 /** How a drawing object follows row and column edits. */
 export const AnchorEditAs: Readonly<{
-  TwoCell: 0;
-  OneCell: 1;
+  OneCell: 0;
+  TwoCell: 1;
   Absolute: 2;
 }>;
 /** Union of the {@link AnchorEditAs} ordinals. */
 export type AnchorEditAs = 0 | 1 | 2;
 
-/** How a shape's fill or outline is specified. */
+/** How a shape's fill or outline is specified; a shape with no fill or outline element reads `null`. */
 export const ShapePaint: Readonly<{
-  Unset: 0;
-  Solid: 1;
-  None: 2;
-  Other: 3;
+  Solid: 0;
+  None: 1;
+  Other: 2;
 }>;
 /** Union of the {@link ShapePaint} ordinals. */
-export type ShapePaint = 0 | 1 | 2 | 3;
+export type ShapePaint = 0 | 1 | 2;
 
 /** Table slicer item order. */
 export const SlicerSortOrder: Readonly<{
-  Ascending: 0;
-  Descending: 1;
+  Descending: 0;
+  Ascending: 1;
 }>;
 /** Union of the {@link SlicerSortOrder} ordinals. */
 export type SlicerSortOrder = 0 | 1;
@@ -2740,15 +2784,14 @@ export const ChartGrouping: Readonly<{
 /** Union of the {@link ChartGrouping} ordinals. */
 export type ChartGrouping = 0 | 1 | 2 | 3;
 
-/** How blank cells are plotted; `Absent` writes no element. */
+/** How blank cells are plotted; a chart without the element reads `null`. */
 export const ChartBlanksAs: Readonly<{
-  Absent: 0;
-  Gap: 1;
-  Zero: 2;
-  Span: 3;
+  Gap: 0;
+  Zero: 1;
+  Span: 2;
 }>;
 /** Union of the {@link ChartBlanksAs} ordinals. */
-export type ChartBlanksAs = 0 | 1 | 2 | 3;
+export type ChartBlanksAs = 0 | 1 | 2;
 
 /** How a resolved point is drawn. */
 export const ChartPointState: Readonly<{
@@ -2769,26 +2812,43 @@ export const ChartAxisKind: Readonly<{
 /** Union of the {@link ChartAxisKind} ordinals. */
 export type ChartAxisKind = 0 | 1 | 2 | 3;
 
+/** The side of the plot area an axis sits on. */
+export const ChartAxisPosition: Readonly<{
+  Bottom: 0;
+  Top: 1;
+  Left: 2;
+  Right: 3;
+}>;
+/** Union of the {@link ChartAxisPosition} ordinals. */
+export type ChartAxisPosition = 0 | 1 | 2 | 3;
+
+/** Bar direction of a bar-family plot: vertical columns or horizontal bars. */
+export const ChartBarDirection: Readonly<{
+  Col: 0;
+  Bar: 1;
+}>;
+/** Union of the {@link ChartBarDirection} ordinals. */
+export type ChartBarDirection = 0 | 1;
+
 /** Where an axis crosses its cross axis; `At` uses `crossesAt`. */
 export const ChartAxisCrosses: Readonly<{
-  Absent: 0;
-  AutoZero: 1;
-  Min: 2;
-  Max: 3;
-  At: 4;
+  AutoZero: 0;
+  Min: 1;
+  Max: 2;
+  At: 3;
 }>;
 /** Union of the {@link ChartAxisCrosses} ordinals. */
-export type ChartAxisCrosses = 0 | 1 | 2 | 3 | 4;
+export type ChartAxisCrosses = 0 | 1 | 2 | 3;
 
-/** Title kind; `Auto` is a title element without text, left to the viewer. */
+/** Title kind; `Auto` is a title element without text, left to the viewer. A chart or axis without a title reads
+ *  `null` for the whole title. */
 export const ChartTitleKind: Readonly<{
-  None: 0;
   Text: 1;
   Ref: 2;
   Auto: 3;
 }>;
 /** Union of the {@link ChartTitleKind} ordinals. */
-export type ChartTitleKind = 0 | 1 | 2 | 3;
+export type ChartTitleKind = 1 | 2 | 3;
 
 /** Whether series run down columns or across rows; `Auto` follows Excel. */
 export const ChartSeriesDirection: Readonly<{
@@ -2799,17 +2859,16 @@ export const ChartSeriesDirection: Readonly<{
 /** Union of the {@link ChartSeriesDirection} ordinals. */
 export type ChartSeriesDirection = 0 | 1 | 2;
 
-/** Legend position; `None` has no legend. */
+/** Legend position. A chart without a legend reads `null` for the whole legend. */
 export const ChartLegendPosition: Readonly<{
-  None: 0;
-  Bottom: 1;
-  Top: 2;
-  Left: 3;
-  Right: 4;
-  TopRight: 5;
+  Bottom: 0;
+  Top: 1;
+  Left: 2;
+  Right: 3;
+  TopRight: 4;
 }>;
 /** Union of the {@link ChartLegendPosition} ordinals. */
-export type ChartLegendPosition = 0 | 1 | 2 | 3 | 4 | 5;
+export type ChartLegendPosition = 0 | 1 | 2 | 3 | 4;
 
 /** Outline dash style. */
 export const ChartLineDash: Readonly<{
@@ -2907,31 +2966,40 @@ export interface ThemeFonts {
  * entry). Use the same table when choosing by the script of the characters.
  */
 export interface ThemeScriptFont {
+  /** Whether the face belongs to the major font set rather than the minor one. */
+  readonly major: boolean;
+  readonly script: string;
+  readonly typeface: string;
+}
+
+/** Return type of `Workbook.getThemeColors()`. */
+export interface ThemeColors {
+  /** Where the theme came from: the part, or the default theme when the part is absent or unparseable. */
+  readonly source: ThemeSource;
+  /** 0xFFRRGGBB in `clrScheme` order: dk1, lt1, dk2, lt2, accent1..6, hlink, folHlink. */
+  readonly colors: readonly number[];
+}
+
+/** Argument of `Workbook.setThemeColors`: the 12 scheme colours. */
+export interface ThemeColorsInput {
+  readonly colors: readonly number[];
+}
+
+/** Argument of `Workbook.setThemeScriptFont`: one script's typeface in the major (`major` true) or minor font
+ *  set. */
+export interface ThemeScriptFontInput {
+  major: boolean;
   script: string;
   typeface: string;
 }
 
-/** Return type of `Workbook.getThemeFonts()`. */
-export interface Theme {
-  /** One of `ThemeSource.*`. */
-  readonly source: ThemeSource;
-  /** 0xFFRRGGBB in `clrScheme` order: dk1, lt1, dk2, lt2, accent1..6, hlink, folHlink. */
-  readonly colors: number[];
-  readonly fonts: ThemeFonts;
-  /** The major font set's per-script faces in theme-part order (the 47 Office
-   *  scripts when the part is absent). */
-  readonly majorScripts: ThemeScriptFont[];
-  /** The minor font set's per-script faces; see `majorScripts`. */
-  readonly minorScripts: ThemeScriptFont[];
-}
-
 /** A resolved colour: 0xFFRRGGBB plus how it was obtained. */
 export interface ResolvedColor {
-  argb: number;
-  resolution: ColorResolution;
+  readonly argb: number;
+  readonly resolution: ColorResolution;
 }
 
-/** Return type of `Workbook.getEffectiveStyle(...)`. */
+/** Return type of `Sheet.getEffectiveStyle(...)`. */
 export interface EffectiveStyle {
   readonly xfIndex: number;
   /** One of `EffectiveStyleSource.*`. */
@@ -2964,6 +3032,9 @@ export interface IterativeSettings {
   readonly maxChange: number;
 }
 
+/** Argument of `Workbook.setIterative`; every field is required when given, so `null` throws `TypeError`. */
+export type IterativeSettingsPatch = Patch<IterativeSettings>;
+
 /** One `<dateGroupItem>` of a values filter. `grouping` is the granularity
  *  the item matches at (a `DateTimeGrouping`); fields finer than `grouping` are zero. */
 export interface AutoFilterDateGroup {
@@ -2990,8 +3061,8 @@ export interface AutoFilterColumn {
   showButton: boolean;
   kind: FilterKind;
   filterBlank: boolean;
-  values: string[];
-  dateGroups: AutoFilterDateGroup[];
+  values: readonly string[];
+  dateGroups: readonly AutoFilterDateGroup[];
   customAnd: boolean;
   customCount: number;
   op1: FilterOperator;
@@ -3000,21 +3071,21 @@ export interface AutoFilterColumn {
   val2: string;
   top: boolean;
   percent: boolean;
-  hasFilterVal: boolean;
   topVal: number;
-  filterVal: number;
+  /** The top-10 `filterVal`; `null` when absent. */
+  filterVal: number | null;
   dynamicType: DynamicFilterType;
-  hasDynVal: boolean;
-  hasDynMaxVal: boolean;
-  dynVal: number;
-  dynMaxVal: number;
+  /** The dynamic filter's `val`; `null` when absent. */
+  dynVal: number | null;
+  /** The dynamic filter's `maxVal`; `null` when absent. */
+  dynMaxVal: number | null;
   valIso: string;
   maxValIso: string;
   dxfId: number;
   cellColor: boolean;
   iconSet: number;
-  iconId: number;
-  hasIconId: boolean;
+  /** `null` when the icon filter names no icon. */
+  iconId: number | null;
 }
 
 /** One `<sortCondition>`. `sortBy` is a `SortBy`. `dxfId` is read only when `hasDxfId`, `iconId` only when
@@ -3024,11 +3095,11 @@ export interface AutoFilterSortCondition {
   descending: boolean;
   sortBy: SortBy;
   customList: string;
-  dxfId: number;
-  hasDxfId: boolean;
+  /** `null` when the condition names no differential format. */
+  dxfId: number | null;
   iconSet: number;
-  iconId: number;
-  hasIconId: boolean;
+  /** `null` when the condition names no icon. */
+  iconId: number | null;
 }
 
 /** The `<sortState>` of an AutoFilter. `sortMethod` is a
@@ -3038,32 +3109,31 @@ export interface AutoFilterSortState {
   columnSort: boolean;
   caseSensitive: boolean;
   sortMethod: SortMethod;
-  conditions: AutoFilterSortCondition[];
+  conditions: readonly AutoFilterSortCondition[];
 }
 
 /** A sheet or table AutoFilter. `range` includes the header row; `columns`
  *  must be in strictly ascending `colId` order inside it. */
 export interface AutoFilter {
   readonly range: CellRect;
-  readonly columns: AutoFilterColumn[];
+  readonly columns: readonly AutoFilterColumn[];
   readonly sort: AutoFilterSortState | null;
 }
 
-/** Result of `Workbook.evaluateAutoFilter` / `evaluateTableAutoFilter`.
+/** Result of `Sheet.evaluateAutoFilter` / `evaluateTableAutoFilter`.
  *  `match[i]` tells whether body row `firstRow + i` satisfies the criteria. */
 export interface AutoFilterEval {
   readonly firstRow: number;
-  readonly match: boolean[];
+  readonly match: readonly boolean[];
 }
 
-/** Result of `Workbook.validateValue`. `hasRule` is false when no rule covers
- *  the cell, and `valid` is then true. Otherwise `ruleIndex` indexes
- *  `getValidation` and `errorStyle` is a `ValidationErrorStyle`. */
+/** Result of `Sheet.validateValue`. `ruleIndex` is `null` when no rule covers
+ *  the cell, and `valid` is then true; otherwise it indexes `listValidations()`. `errorStyle` is `null`
+ *  without a rule. */
 export interface ValidationOutcome {
-  readonly hasRule: boolean;
   readonly valid: boolean;
-  readonly ruleIndex: number;
-  readonly errorStyle: ValidationErrorStyle;
+  readonly ruleIndex: number | null;
+  readonly errorStyle: ValidationErrorStyle | null;
 }
 
 /** One `@person` mention in a threaded comment's text; `start` and `length`
@@ -3088,8 +3158,25 @@ export interface ThreadedComment {
   readonly text: string;
   readonly parentId: string;
   readonly done: boolean;
-  readonly mentions: Mention[];
+  readonly mentions: readonly Mention[];
 }
+
+/** Argument of `Sheet.addThreadedComment`: `id` and `text` are required; an omitted or empty `parentId` opens a
+ *  new thread at `row` / `col`. */
+export interface ThreadedCommentInput {
+  id: string;
+  text: string;
+  row?: number;
+  col?: number;
+  personId?: string;
+  created?: string;
+  parentId?: string;
+  done?: boolean;
+  mentions?: readonly Mention[];
+}
+
+/** Argument of `Sheet.updateThreadedComment`: the text and / or the mentions. */
+export type ThreadedCommentPatch = Patch<Pick<ThreadedComment, 'text' | 'mentions'>>;
 
 /** One entry of the workbook's person list. */
 export interface Person {
@@ -3106,7 +3193,7 @@ export interface ImageInfo {
   readonly pxHeight: number;
 }
 
-/** A picture read by `Workbook.getImage`: its format, pixel size and a copy of its media bytes. */
+/** A picture read by `Sheet.getImage`: its format, pixel size and a copy of its media bytes. */
 export interface Image {
   readonly format: ImageFormat;
   readonly pxWidth: number;
@@ -3115,10 +3202,10 @@ export interface Image {
 }
 
 /** One anchored object of a sheet's drawing. An absolute anchor reports its
- *  position from A1 as `fromColOffset` (x) and `fromRowOffset` (y); `toRow` /
+ *  position from A1 as `fromColOffsetEmu` (x) and `fromRowOffsetEmu` (y); `toRow` /
  *  `toCol` and their offsets are zero unless the anchor is two-cell. Offsets
- *  and `cx` / `cy` are in EMU. `imageFormat` is non-zero for a picture whose
- *  media part is present; `mediaPath` is empty for a non-picture. */
+ *  and `widthEmu` / `heightEmu` are in EMU. `imageFormat` is non-zero for a picture whose
+ *  media part is present; `mediaPath` is `null` for a non-picture. */
 export interface DrawingObject {
   readonly objectId: number;
   readonly kind: DrawingObjectKind;
@@ -3126,44 +3213,35 @@ export interface DrawingObject {
   readonly editAs: AnchorEditAs;
   readonly fromRow: number;
   readonly fromCol: number;
-  readonly fromRowOffset: number;
-  readonly fromColOffset: number;
+  readonly fromRowOffsetEmu: number;
+  readonly fromColOffsetEmu: number;
   readonly toRow: number;
   readonly toCol: number;
-  readonly toRowOffset: number;
-  readonly toColOffset: number;
-  readonly cx: number;
-  readonly cy: number;
+  readonly toRowOffsetEmu: number;
+  readonly toColOffsetEmu: number;
+  readonly widthEmu: number;
+  readonly heightEmu: number;
   readonly imageFormat: ImageFormat;
   readonly name: string;
-  readonly descr: string;
-  readonly mediaPath: string;
+  readonly description: string;
+  readonly mediaPath: string | null;
 }
 
-/** Placement of an inserted image. `anchorKind` is `OneCell` (default) or
- *  `TwoCell`; `editAs` applies to a two-cell anchor only. `row` / `col` is
- *  the 0-based top-left cell and `rowOffsetEmu` / `colOffsetEmu` the offset inside
- *  it. A zero `widthEmu` / `heightEmu` means the pixel size times 9525. An
- *  empty `name` becomes `Picture <id>`. */
+/** Name, description and placement of an inserted picture or chart frame. An omitted or empty `name` becomes
+ *  `Picture <id>` (a chart's own default for a chart); an omitted `anchor` is a one-cell anchor at A1. */
 export interface ImageInsertInput {
   name?: string;
-  descr?: string;
-  anchorKind?: AnchorKind;
-  editAs?: AnchorEditAs;
-  row?: number;
-  col?: number;
-  rowOffsetEmu?: number;
-  colOffsetEmu?: number;
-  widthEmu?: number;
-  heightEmu?: number;
+  description?: string;
+  anchor?: DrawingAnchor;
 }
 
-/** New placement of an existing picture, in the quantities `listDrawingObjects`
+/** The placement of a picture or chart frame, in the quantities `listDrawingObjects`
  *  reports: `row` / `col` / `rowOffsetEmu` / `colOffsetEmu` are the top-left marker of the
- *  anchor box (`fromRow` ...), `widthEmu` / `heightEmu` the picture's own unrotated
- *  size (`cx` / `cy`); a zero size keeps the current one. `anchorKind` is `OneCell`
- *  (default) or `TwoCell`; `editAs` applies to a two-cell anchor only. */
-export interface ImagePlacement {
+ *  anchor box (`fromRow` ...), `widthEmu` / `heightEmu` the object's own unrotated
+ *  size. A zero size is the picture's pixel size times 9525 on insert, Excel's default frame for a chart, and
+ *  keeps the current size on `setDrawingAnchor`. `anchorKind` is `OneCell` (default) or `TwoCell`; `editAs`
+ *  applies to a two-cell anchor only. */
+export interface DrawingAnchor {
   anchorKind?: AnchorKind;
   editAs?: AnchorEditAs;
   row?: number;
@@ -3177,7 +3255,7 @@ export interface ImagePlacement {
 /** A shape, connector or group of a sheet's drawing. The anchor fields read as in
  *  {@link DrawingObject}. `fillKind` / `lineKind` are {@link ShapePaint}; `fillRgb` /
  *  `lineRgb` are 0xRRGGBB when the kind is `Solid`. `rotation` is in 60000ths of a degree,
- *  `lineWidthEmu` is 0 without a width. `prst` is the preset geometry, empty for custom
+ *  `lineWidthEmu` is 0 without a width. `presetGeometry` is the preset geometry, empty for custom
  *  geometry or a group; `text` joins paragraphs with `\n`. */
 export interface Shape {
   readonly objectId: number;
@@ -3186,21 +3264,21 @@ export interface Shape {
   readonly editAs: AnchorEditAs;
   readonly fromRow: number;
   readonly fromCol: number;
-  readonly fromRowOffset: number;
-  readonly fromColOffset: number;
+  readonly fromRowOffsetEmu: number;
+  readonly fromColOffsetEmu: number;
   readonly toRow: number;
   readonly toCol: number;
-  readonly toRowOffset: number;
-  readonly toColOffset: number;
-  readonly cx: number;
-  readonly cy: number;
+  readonly toRowOffsetEmu: number;
+  readonly toColOffsetEmu: number;
+  readonly widthEmu: number;
+  readonly heightEmu: number;
   readonly name: string;
-  readonly prst: string;
+  readonly presetGeometry: string;
   readonly text: string;
   readonly textBox: boolean;
-  readonly fillKind: ShapePaint;
+  readonly fillKind: ShapePaint | null;
   readonly fillRgb: number;
-  readonly lineKind: ShapePaint;
+  readonly lineKind: ShapePaint | null;
   readonly lineRgb: number;
   readonly lineWidthEmu: number;
   readonly rotation: number;
@@ -3208,28 +3286,28 @@ export interface Shape {
 }
 
 /** Fields `addShape` / `updateShape` apply; a key left out (or `null`) is not applied.
- *  Giving `anchorKind` applies the whole anchor (`editAs`, `from*`, `to*`, `cx`, `cy`; a
+ *  Giving `anchorKind` applies the whole anchor (`editAs`, `from*`, `to*`, `widthEmu`, `heightEmu`; a
  *  two-cell anchor's size is its box). `fillKind` / `lineKind` must be `Solid` (with
- *  `fillRgb` / `lineRgb`) or `None`. An insert needs `anchorKind`, defaults `prst` to
- *  `rect` and `name` to `Shape <id>`; a `prst` naming a line or connector geometry makes a
+ *  `fillRgb` / `lineRgb`) or `None`. An insert needs `anchorKind`, defaults `presetGeometry` to
+ *  `rect` and `name` to `Shape <id>`; a `presetGeometry` naming a line or connector geometry makes a
  *  connector, which holds no text. An update cannot change the anchor kind. */
 export interface ShapeInput {
   name?: string;
-  prst?: string;
+  presetGeometry?: string;
   text?: string;
   textBox?: boolean;
   anchorKind?: AnchorKind;
   editAs?: AnchorEditAs;
   fromRow?: number;
   fromCol?: number;
-  fromRowOffset?: number;
-  fromColOffset?: number;
+  fromRowOffsetEmu?: number;
+  fromColOffsetEmu?: number;
   toRow?: number;
   toCol?: number;
-  toRowOffset?: number;
-  toColOffset?: number;
-  cx?: number;
-  cy?: number;
+  toRowOffsetEmu?: number;
+  toColOffsetEmu?: number;
+  widthEmu?: number;
+  heightEmu?: number;
   fillKind?: ShapePaint;
   fillRgb?: number;
   lineKind?: ShapePaint;
@@ -3241,9 +3319,9 @@ export interface ShapeInput {
 
 /** A table slicer of a worksheet. `objectId` is the slicer's frame in the sheet's drawing (0
  *  without one); the anchor fields read as in {@link DrawingObject}, with `to*` zero unless the
- *  anchor is two-cell. `rowHeight` is in EMU. `cacheName`, `tableName` and `columnName`
+ *  anchor is two-cell. `cacheName`, `tableName` and `columnName`
  *  identify the slicer cache and the table column it filters; the selection itself lives in the
- *  table's AutoFilter. `style` is empty without a style. */
+ *  table's AutoFilter. `style` is `null` without a style. */
 export interface Slicer {
   readonly objectId: number;
   readonly name: string;
@@ -3251,50 +3329,51 @@ export interface Slicer {
   readonly cacheName: string;
   readonly tableName: string;
   readonly columnName: string;
-  readonly style: string;
+  readonly style: string | null;
   readonly columnCount: number;
-  readonly rowHeight: number;
+  readonly rowHeightEmu: number;
   readonly sortOrder: SlicerSortOrder;
   readonly crossFilter: SlicerCrossFilter;
   readonly anchorKind: AnchorKind;
   readonly fromRow: number;
   readonly fromCol: number;
-  readonly fromRowOffset: number;
-  readonly fromColOffset: number;
+  readonly fromRowOffsetEmu: number;
+  readonly fromColOffsetEmu: number;
   readonly toRow: number;
   readonly toCol: number;
-  readonly toRowOffset: number;
-  readonly toColOffset: number;
+  readonly toRowOffsetEmu: number;
+  readonly toColOffsetEmu: number;
 }
 
 /** Fields `addSlicer` / `updateSlicer` apply; a key left out (or `null`) is not applied.
  *  Giving `fromRow` applies the whole two-cell anchor (`from*`, `to*`). `addSlicer` needs the
  *  anchor and defaults `name` and `caption` to the column name (the name is made unique),
- *  `rowHeight` to 241300 EMU and `columnCount` to 1; `name` cannot be updated. An empty
+ *  `rowHeightEmu` to 241300 and `columnCount` to 1; `name` cannot be updated. A `null` (or empty)
  *  `style` removes the style. */
 export interface SlicerInput {
   name?: string;
   caption?: string;
-  style?: string;
+  style?: string | null;
   columnCount?: number;
-  rowHeight?: number;
+  rowHeightEmu?: number;
   fromRow?: number;
   fromCol?: number;
-  fromRowOffset?: number;
-  fromColOffset?: number;
+  fromRowOffsetEmu?: number;
+  fromColOffsetEmu?: number;
   toRow?: number;
   toCol?: number;
-  toRowOffset?: number;
-  toColOffset?: number;
+  toRowOffsetEmu?: number;
+  toColOffsetEmu?: number;
   sortOrder?: SlicerSortOrder;
   crossFilter?: SlicerCrossFilter;
 }
 
 /** An input cell of a {@link DataTable}. `deleted` is set once a row or column delete removed the cell. */
 export interface DataTableInputCell {
-  row: number;
-  col: number;
-  deleted: boolean;
+  readonly row: number;
+  readonly col: number;
+  /** Ignored on input. */
+  readonly deleted: boolean;
 }
 
 /** A What-If data table (`TABLE()`); every coordinate is 0-based and the range inclusive. The row input
@@ -3311,10 +3390,10 @@ export interface DataTable {
 
 /** Argument of `addDataTable`: the result range plus the input cells (`{ row, col }`). Give `rowInput`
  *  or `colInput` for a one-variable table, both for a two-variable one. */
-export interface DataTableSpec {
+export interface DataTableInput {
   rect: CellRect;
-  rowInput?: { row: number; col: number } | null;
-  colInput?: { row: number; col: number } | null;
+  rowInput?: DataTableInputCell | null;
+  colInput?: DataTableInputCell | null;
 }
 
 /** One sparkline: the data `formula` (a sheet-qualified range without `=`) and the
@@ -3324,9 +3403,9 @@ export interface Sparkline {
   readonly location: string;
 }
 
-/** A sparkline group of the sheet's worksheet extension list. A colour with `kind` 0 is
+/** A sparkline group of the sheet's worksheet extension list. A colour with `kind` `ColorKind.None` is
  *  absent. `manualMin` / `manualMax` are `null` when the axis bound is not set.
- *  `dateAxisRef` is the group's date range, empty when absent. */
+ *  `dateAxisRef` is the group's date range, `null` when absent. */
 export interface SparklineGroup {
   readonly type: SparklineType;
   readonly colorSeries: Color;
@@ -3350,127 +3429,163 @@ export interface SparklineGroup {
   readonly manualMin: number | null;
   readonly manualMax: number | null;
   readonly dateAxis: boolean;
-  readonly dateAxisRef: string;
+  readonly dateAxisRef: string | null;
   readonly lineWeight: number;
   readonly emptyCellsAs: SparklineEmptyCells;
-  readonly sparklines: Sparkline[];
+  readonly sparklines: readonly Sparkline[];
 }
 
 /** Input of `addSparklineGroup` / `updateSparklineGroup`: every modelled field, each
  *  defaulting as a new line group does when left out. `sparklines` is required by an add and
  *  ignored by an update. */
-export type SparklineGroupInput = Partial<SparklineGroup>;
+export interface SparklineGroupInput {
+  readonly type?: SparklineType;
+  readonly colorSeries?: Color;
+  readonly colorNegative?: Color;
+  readonly colorAxis?: Color;
+  readonly colorMarkers?: Color;
+  readonly colorFirst?: Color;
+  readonly colorLast?: Color;
+  readonly colorHigh?: Color;
+  readonly colorLow?: Color;
+  readonly markers?: boolean;
+  readonly high?: boolean;
+  readonly low?: boolean;
+  readonly first?: boolean;
+  readonly last?: boolean;
+  readonly negative?: boolean;
+  readonly displayXAxis?: boolean;
+  readonly displayHidden?: boolean;
+  readonly minAxisType?: SparklineAxisType;
+  readonly maxAxisType?: SparklineAxisType;
+  readonly manualMin?: number | null;
+  readonly manualMax?: number | null;
+  readonly dateAxis?: boolean;
+  readonly dateAxisRef?: string | null;
+  readonly lineWeight?: number;
+  readonly emptyCellsAs?: SparklineEmptyCells;
+  readonly sparklines?: readonly Sparkline[];
+}
 
 /** One series input: nothing, a range reference, or literal points. */
 export interface ChartDataSource {
   readonly kind: 'none' | 'ref' | 'literal';
   readonly formula: string;
-  readonly literal: (number | string)[];
+  readonly literal: readonly (number | string)[];
 }
 
 /** Solid fill; `color` is ARGB (`0xAARRGGBB`), `transparency` a percentage (0..100). */
 export interface ChartFill {
-  color: number | null;
-  transparency: number | null;
+  readonly color: number | null;
+  readonly transparency: number | null;
 }
 
 export interface ChartLine {
-  color: number | null;
-  transparency: number | null;
-  widthPt: number | null;
-  dash: ChartLineDash | null;
-  none: boolean;
+  readonly color: number | null;
+  readonly transparency: number | null;
+  readonly widthPt: number | null;
+  readonly dash: ChartLineDash | null;
+  readonly none: boolean;
 }
 
 export interface ChartMarker {
-  symbol: ChartMarkerSymbol;
-  size: number | null;
-  fill: ChartFill;
-  line: ChartLine;
+  readonly symbol: ChartMarkerSymbol;
+  readonly size: number | null;
+  readonly fill: ChartFill;
+  readonly line: ChartLine;
 }
 
 export interface ChartLabels {
-  showValue: boolean;
-  showCategory: boolean;
-  showSeries: boolean;
-  showPercent: boolean;
-  showLegendKey: boolean;
-  separator: string | null;
-  position: ChartLabelPosition | null;
-  numberFormat: string | null;
-  sourceLinked: boolean;
-  fontColor: number | null;
-  fontSizePt: number | null;
-  deleted: boolean;
+  readonly showValue: boolean;
+  readonly showCategory: boolean;
+  readonly showSeries: boolean;
+  readonly showPercent: boolean;
+  readonly showLegendKey: boolean;
+  readonly separator: string | null;
+  readonly position: ChartLabelPosition | null;
+  readonly numberFormat: string | null;
+  readonly sourceLinked: boolean;
+  readonly fontColor: number | null;
+  readonly fontSizePt: number | null;
+  readonly deleted: boolean;
 }
 
 /** A formatted data point (`c:dPt`). */
 export interface ChartPoint {
-  index: number;
-  fill: ChartFill;
-  line: ChartLine;
-  marker: ChartMarker | null;
+  readonly index: number;
+  readonly fill: ChartFill;
+  readonly line: ChartLine;
+  readonly marker: ChartMarker | null;
 }
 
 export interface ChartSeries {
-  index: number;
-  order: number;
-  filtered: boolean;
-  name: ChartDataSource;
-  categories: ChartDataSource;
-  values: ChartDataSource;
-  x: ChartDataSource;
-  y: ChartDataSource;
-  size: ChartDataSource;
-  fill: ChartFill;
-  line: ChartLine;
-  marker: ChartMarker | null;
-  smooth: boolean | null;
-  points: ChartPoint[];
-  labels: ChartLabels | null;
+  readonly index: number;
+  readonly order: number;
+  readonly filtered: boolean;
+  readonly name: ChartDataSource;
+  readonly categories: ChartDataSource;
+  readonly values: ChartDataSource;
+  readonly x: ChartDataSource;
+  readonly y: ChartDataSource;
+  readonly size: ChartDataSource;
+  readonly fill: ChartFill;
+  readonly line: ChartLine;
+  readonly marker: ChartMarker | null;
+  readonly smooth: boolean | null;
+  readonly points: readonly ChartPoint[];
+  readonly labels: ChartLabels | null;
 }
 
 export interface ChartPlot {
-  type: ChartPlotType;
-  chartexLayout: string | null;
-  barDirection: 'col' | 'bar' | null;
-  grouping: ChartGrouping | null;
-  varyColors: boolean;
-  gapWidth: number | null;
-  overlap: number | null;
-  holeSize: number | null;
-  firstSliceAngle: number | null;
-  axisIds: number[];
-  series: ChartSeries[];
+  readonly type: ChartPlotType;
+  readonly chartexLayout: string | null;
+  readonly barDirection: ChartBarDirection | null;
+  readonly grouping: ChartGrouping | null;
+  readonly varyColors: boolean;
+  readonly gapWidth: number | null;
+  readonly overlap: number | null;
+  readonly holeSize: number | null;
+  readonly firstSliceAngle: number | null;
+  readonly axisIds: readonly number[];
+  readonly series: readonly ChartSeries[];
 }
 
 /** A chart or axis title: `text` for `Text`, `formula` for `Ref`, each empty otherwise. */
 export interface ChartTitle {
-  kind: ChartTitleKind;
-  text: string;
-  formula: string;
+  readonly kind: ChartTitleKind;
+  /** The literal text of a `Text` title; `null` for another kind. */
+  readonly text: string | null;
+  /** The reference of a `Ref` title; `null` for another kind. */
+  readonly formula: string | null;
+}
+
+/** A chart's legend: where it sits, whether it overlays the plot, and the series (`c:idx` values) it hides. */
+export interface ChartLegend {
+  readonly position: ChartLegendPosition;
+  readonly overlay: boolean;
+  readonly hiddenSeries: readonly number[];
 }
 
 export interface ChartAxis {
-  id: number;
-  kind: ChartAxisKind;
-  position: 'b' | 't' | 'l' | 'r';
-  deleted: boolean;
-  crossAxis: number;
-  crosses: ChartAxisCrosses;
-  crossesAt: number | null;
-  min: number | null;
-  max: number | null;
-  majorUnit: number | null;
-  minorUnit: number | null;
-  logBase: number | null;
-  reversed: boolean;
-  numberFormat: string | null;
-  sourceLinked: boolean;
-  title: ChartTitle;
-  majorGridlines: boolean;
-  minorGridlines: boolean;
-  tickLabelPosition: string | null;
+  readonly id: number;
+  readonly kind: ChartAxisKind;
+  readonly position: ChartAxisPosition;
+  readonly deleted: boolean;
+  readonly crossAxis: number;
+  readonly crosses: ChartAxisCrosses | null;
+  readonly crossesAt: number | null;
+  readonly min: number | null;
+  readonly max: number | null;
+  readonly majorUnit: number | null;
+  readonly minorUnit: number | null;
+  readonly logBase: number | null;
+  readonly reversed: boolean;
+  readonly numberFormat: string | null;
+  readonly sourceLinked: boolean;
+  readonly title: ChartTitle | null;
+  readonly majorGridlines: boolean;
+  readonly minorGridlines: boolean;
+  readonly tickLabelPosition: 'nextTo' | 'low' | 'high' | 'none' | null;
 }
 
 /** The typed view of a chart. `source` is the rectangle every series was split from, `null` when they share none. */
@@ -3481,18 +3596,18 @@ export interface Chart {
   readonly isChartex: boolean;
   readonly isPivotChart: boolean;
   readonly onChartsheet: boolean;
-  readonly title: ChartTitle;
+  readonly title: ChartTitle | null;
   readonly autoTitleDeleted: boolean | null;
-  readonly legend: { position: ChartLegendPosition; overlay: boolean; hiddenSeries: number[] };
-  readonly blanksAs: ChartBlanksAs;
+  readonly legend: ChartLegend | null;
+  readonly blanksAs: ChartBlanksAs | null;
   readonly plotVisibleOnly: boolean | null;
   /** Whether `#N/A` points draw as blank cells; `null` when the chart carries no setting. */
   readonly naAsBlank: boolean | null;
   readonly date1904: boolean;
   readonly style: number | null;
-  readonly plots: ChartPlot[];
-  readonly axes: ChartAxis[];
-  readonly hiddenCategories: number[];
+  readonly plots: readonly ChartPlot[];
+  readonly axes: readonly ChartAxis[];
+  readonly hiddenCategories: readonly number[];
   readonly source: { range: string; direction: ChartSeriesDirection; headerRow: boolean; headerColumn: boolean } | null;
 }
 
@@ -3537,21 +3652,29 @@ export interface ChartData {
   unresolved: { seriesIndex: number; source: string; axisId: number }[];
 }
 
-/** Options of `Workbook.addChart`. An omitted `headerRow` / `headerColumn` follows Excel's detection, an omitted `title`
- *  is Excel's automatic title and an empty one is no title. `placement` defaults to a two-cell anchor, and a zero
- *  `widthEmu` / `heightEmu` means Excel's default frame. */
+/** Options of `Sheet.addChart`. A `headerRow` / `headerColumn` that is omitted or `null` follows Excel's detection,
+ *  an omitted `title` is Excel's automatic title and an empty one is no title, and a `null` `legend` is no legend.
+ *  `placement` names the frame and places it; its anchor defaults to a two-cell anchor, and a zero `widthEmu` /
+ *  `heightEmu` means Excel's default frame. */
 export interface ChartInsertInput {
   kind: ChartInsertKind;
   grouping?: ChartGrouping;
   source: string;
   direction?: ChartSeriesDirection;
-  headerRow?: boolean;
-  headerColumn?: boolean;
+  headerRow?: boolean | null;
+  headerColumn?: boolean | null;
   title?: string;
-  legend?: ChartLegendPosition;
-  name?: string;
-  description?: string;
-  placement?: ImagePlacement;
+  legend?: ChartLegendPosition | null;
+  placement?: ImageInsertInput;
+}
+
+/** Argument of `Sheet.setChartSource`: the source range text and its series direction. A header flag that is
+ *  omitted or `null` follows Excel's detection. */
+export interface ChartSourceInput {
+  source: string;
+  direction: ChartSeriesDirection;
+  headerRow?: boolean | null;
+  headerColumn?: boolean | null;
 }
 
 /** A patch leaves an omitted field unchanged; `null` removes the element. Colors are ARGB (`0xAARRGGBB`). */
@@ -3619,11 +3742,11 @@ export type ChartPlotPatch = Patch<{
 }>;
 
 /** `crossesAt` is read when `crosses` is `At`. `title` takes the forms of `setChartTitle`, so
- *  `{ kind: ChartTitleKind.Auto }` gives the axis Excel's automatic title; `null` removes it. `null` on `logBase` makes
+ *  a title of kind `ChartTitleKind.Auto` gives the axis Excel's automatic title; `null` removes it. `null` on `logBase` makes
  *  the axis linear and on `tickLabelPosition` (`nextTo`, `low`, `high`, `none`) restores the default. */
 export type ChartAxisPatch = Patch<{
   visible: boolean;
-  title: string | null | { kind: ChartTitleKind; text?: string; formula?: string };
+  title: string | ChartTitle;
   min: number;
   max: number;
   majorUnit: number;
@@ -3633,7 +3756,7 @@ export type ChartAxisPatch = Patch<{
   logBase: number;
   crosses: ChartAxisCrosses;
   crossesAt: number;
-  tickLabelPosition: string;
+  tickLabelPosition: 'nextTo' | 'low' | 'high' | 'none';
 }>;
 
 /** Patch for `setChartDisplay`. An omitted key keeps the element, `null` removes it, a value sets it.
@@ -3656,19 +3779,23 @@ export interface ChartPreviewOverridesInput {
   naAsBlank?: boolean;
 }
 
-/** Options of `Workbook.restoreDrawing`. With `newId` the capture is added on top as a
+/** Options of `Sheet.restoreDrawing`. With `newId` the capture is added on top as a
  *  copy with a fresh id; otherwise a picture with the same id is replaced. */
 export interface RestoreImageOptions {
   newId?: boolean;
 }
 
-/** Result of `Workbook.getPrintTitles`. Either span is empty when
- * that axis has no repeat setting. */
-export interface SheetPrintTitles {
-  /** Whole-row span, e.g. `"1:2"`. */
-  readonly repeatRows: string;
-  /** Whole-column span, e.g. `"A:A"`. */
-  readonly repeatCols: string;
+/** An inclusive 0-based span of rows or columns. */
+export interface Span {
+  readonly first: number;
+  readonly last: number;
+}
+
+/** The rows and columns repeated on every printed page (`_xlnm.Print_Titles`); an axis that does not repeat is
+ *  `null`. */
+export interface PrintTitles {
+  readonly rows: Span | null;
+  readonly columns: Span | null;
 }
 
 /** One manual page break. `id` is the 0-based row / column the break
@@ -3681,15 +3808,16 @@ export interface PageBreak {
   readonly manual: boolean;
 }
 
-/** Page orientation as `<pageSetup orientation>` encodes it: `0` leaves the
- * attribute off (the printer default), `1` is portrait, `2` is landscape.
- *
- * Declared as a union rather than an `enum` so it stays a compile-time-only
- * type: there is no runtime table to keep in step across the two packages,
- * and the three values are the whole domain. */
-export type Orientation = 0 | 1 | 2;
+/** Page orientation as `<pageSetup orientation>` states it; without the attribute (the printer default) the
+ *  orientation reads `null`. */
+export const PageOrientation: Readonly<{
+  Portrait: 0;
+  Landscape: 1;
+}>;
+/** Union of the {@link PageOrientation} ordinals. */
+export type PageOrientation = 0 | 1;
 
-/** Partial `<pageSetup>` update. Only the keys present are applied; every
+/** The `<pageSetup>` values `Sheet.setPageSetup` accepts. Only the keys present are applied; every
  * other attribute in the stored XML — including ones this engine does not
  * model, such as `r:id`, `horizontalDpi` and `copies` — is left alone.
  *
@@ -3697,22 +3825,25 @@ export type Orientation = 0 | 1 | 2;
  * `<sheetPr><pageSetUpPr>`. It selects the fit-to-page mode, and
  * `fitToWidth` / `fitToHeight` state the target, so "fit onto one page"
  * needs all three. */
-export interface PageSetup {
-  readonly orientation?: Orientation;
+export interface PageSetupInput {
+  readonly orientation: PageOrientation;
   /** OOXML paperSize code; 9 = A4. */
-  readonly paperSize?: number;
+  readonly paperSize: number;
   /** Print scale percentage. Outside `[10, 400]` is rejected, not clamped. */
-  readonly scale?: number;
-  readonly fitToWidth?: number;
-  readonly fitToHeight?: number;
-  readonly fitToPage?: boolean;
+  readonly scale: number;
+  readonly fitToWidth: number;
+  readonly fitToHeight: number;
+  readonly fitToPage: boolean;
 }
 
-/** Result of `Workbook.getPageSetup`. Every value carries the setting
+/** Argument of `Sheet.setPageSetup`. */
+export type PageSetupPatch = Patch<PageSetupInput>;
+
+/** Result of `Sheet.getPageSetup`. Every value carries the setting
  * in force; the `*Stated` flags say whether the XML declares it, which is
- * the only way to tell `scale="100"` from an absent attribute. */
-export interface SheetPageSetup {
-  readonly orientation: Orientation;
+ * the only way to tell `scale="100"` from an absent attribute. `orientation` is `null` without the attribute. */
+export interface PageSetup {
+  readonly orientation: PageOrientation | null;
   readonly paperSize: number;
   readonly scale: number;
   readonly fitToWidth: number;
@@ -3726,19 +3857,22 @@ export interface SheetPageSetup {
   readonly fitToPageStated: boolean;
 }
 
-/** Partial `<pageMargins>` update, in inches. A negative, infinite or NaN
+/** The `<pageMargins>` values `Sheet.setPageMargins` accepts, in inches. A negative, infinite or NaN
  * margin is rejected: the paginator subtracts these from the paper. */
-export interface PageMargins {
-  readonly left?: number;
-  readonly right?: number;
-  readonly top?: number;
-  readonly bottom?: number;
-  readonly header?: number;
-  readonly footer?: number;
+export interface PageMarginsInput {
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly bottom: number;
+  readonly header: number;
+  readonly footer: number;
 }
 
-/** Result of `Workbook.getPageMargins`, in inches. */
-export interface SheetPageMargins {
+/** Argument of `Sheet.setPageMargins`. */
+export type PageMarginsPatch = Patch<PageMarginsInput>;
+
+/** Result of `Sheet.getPageMargins`, in inches. */
+export interface PageMargins {
   readonly left: number;
   readonly right: number;
   readonly top: number;
@@ -3803,18 +3937,31 @@ export type IterativeProgressCallback = (
   maxIterations: number,
 ) => boolean | undefined | void;
 
-/** Workbook handle. Release it with `dispose()` (or a `using` declaration) when finished.
+/** A sheet passed by its `Sheet` handle, its 0-based index, or its name (matched case-insensitively, as sheet
+ *  names compare). A `Sheet` of another workbook throws `TypeError`. */
+export type SheetRef = Sheet | number | string;
+
+/** Workbook handle: the workbook-scope operations, and the `Sheet` handles that carry the sheet-scope ones.
+ *  Release it with `dispose()` (or a `using` declaration) when finished. Create one with the static factories of
+ *  `Formulon.Workbook`; `new Workbook()` throws `TypeError`.
+ *
+ *  Rows, columns and every index are 0-based; a row / column pair is `(row, col)`.
  *
  *  A method that cannot complete throws {@link FormulonError}, whose `code` is a `StatusCode`; a
  *  "fails with" note below names that code by its `StatusCode` key. An argument of the wrong type or outside its
  *  integer range throws `TypeError` / `RangeError` before any engine work. A method that looks
- *  something up returns `null` when nothing has that key. */
+ *  something up returns `null` when nothing has that key.
+ *
+ *  Each `createFormulon()` result has its own `Workbook` and `Sheet` classes, so `instanceof` holds only within one
+ *  result; code handling workbooks from several results tells them apart by `constructor.name`, as
+ *  `FormulonError` is told apart by `name`. */
 export interface Workbook {
   /** `true` once `dispose()` has run. The only member that still answers after disposal. */
   readonly disposed: boolean;
-  /** Deterministically releases the native workbook handle. Idempotent; every later call throws
-   *  `FormulonError` with `StatusCode.BindingInvalidHandle`. Throws, and leaves the handle intact, if called
-   *  from inside this workbook's own iterative-progress callback or another active method call. */
+  /** Deterministically releases the native workbook handle. Idempotent; every later call, on the workbook or on
+   *  one of its `Sheet` handles, throws `FormulonError` with `StatusCode.BindingInvalidHandle`. Throws, and leaves
+   *  the handle intact, if called from inside this workbook's own iterative-progress callback or another active
+   *  method call. */
   dispose(): void;
   /** Same as `dispose()`, so `using wb = ...` releases the handle. */
   [Symbol.dispose](): void;
@@ -3827,163 +3974,45 @@ export interface Workbook {
   saveWithDiagnostics(format?: WorkbookFormat): SaveDiagnostics;
   /** Returns the loss counters captured when this handle was loaded. */
   getDiagnostics(): ReadDiagnostics;
-  /** Appends a sheet. Fails with `StatusCode.InvalidSheetName` when the name is empty, longer than 31 UTF-16 units,
-   *  contains one of `: \ / ? * [ ]`, or collides case-insensitively (Unicode simple case folding) with an
-   *  existing sheet, and with `StatusCode.SheetCountLimitExceeded` at the maximum sheet count. */
-  addSheet(name: string): number;
-  /** Removes the sheet at `index`. References to it are rewritten to `#REF!` at the affected subexpression
-   *  (cell formulas, defined names, conditional-format, validation and table formulas); sheet-scoped names and
-   *  tables owned by the sheet are dropped, as are pivot caches sourced from it and their pivot tables.
-   *  Fails with `StatusCode.SheetIndexOutOfRange`, or `StatusCode.CannotRemoveLastSheet` when only one sheet remains.
-   *  Removing the only visible sheet fails with `StatusCode.InvalidArgument` and leaves the workbook unchanged. */
-  removeSheet(index: number): void;
-  /** Renames the sheet at `index`. */
-  renameSheet(index: number, newName: string): void;
-  /** Moves the sheet from `fromIndex` to `toIndex` (post-removal index). */
-  moveSheet(fromIndex: number, toIndex: number): void;
-  /** Copies the worksheet at `sourceIndex` into the workbook before the sheet now at `insertBefore`
-   *  (`getSheetCount()` appends) and returns the copy's index. Without `newName` the copy
+  /** The handle of one sheet, by `SheetRef`. The workbook keeps one `Sheet` per sheet, so every lookup of the same
+   *  sheet returns the same object. A name no sheet has fails with `StatusCode.NotFound`, an index past the last
+   *  sheet with `StatusCode.SheetIndexOutOfRange`; a negative or fractional index throws `RangeError`. */
+  sheet(key: SheetRef): Sheet;
+  /** Every sheet's handle, in sheet order; a new array on each call. */
+  listSheets(): readonly Sheet[];
+  /** Appends a sheet and returns its handle. Fails with `StatusCode.InvalidSheetName` when the name is empty, longer
+   *  than 31 UTF-16 units, contains one of `: \ / ? * [ ]`, or collides case-insensitively (Unicode simple case
+   *  folding) with an existing sheet, and with `StatusCode.SheetCountLimitExceeded` at the maximum sheet count. */
+  addSheet(name: string): Sheet;
+  /** Removes `sheet`; its handle then throws `StatusCode.NotFound`, and the handles after it move down one place.
+   *  References to it are rewritten to `#REF!` at the affected subexpression (cell formulas, defined names,
+   *  conditional-format, validation and table formulas); sheet-scoped names and tables owned by the sheet are
+   *  dropped, as are pivot caches sourced from it and their pivot tables. Fails with
+   *  `StatusCode.CannotRemoveLastSheet` when only one sheet remains. Removing the only visible sheet fails with
+   *  `StatusCode.InvalidArgument` and leaves the workbook unchanged. */
+  removeSheet(sheet: SheetRef): void;
+  /** Renames `sheet`; its handle keeps addressing it under the new name. */
+  renameSheet(sheet: SheetRef, newName: string): void;
+  /** Moves `sheet` to `toIndex` (the index after its removal); every handle keeps addressing its sheet. */
+  moveSheet(sheet: SheetRef, toIndex: number): void;
+  /** Copies the worksheet `source` into the workbook before the sheet now at `insertBefore`
+   *  (`listSheets().length` appends) and returns the copy's handle. Without `newName` the copy
    *  is named `Src (2)`; an explicit name follows the `addSheet` rules. References qualified with the source
    *  sheet are re-pointed at the copy, tables are renamed, and the active sheet does not change. Fails with
-   *  `StatusCode.SheetIndexOutOfRange`, `StatusCode.InvalidSheetName`, `StatusCode.SheetCountLimitExceeded`, `StatusCode.PreconditionFailed` (very
-   *  hidden source) or `StatusCode.NotImplemented` (slicers, shapes, pivot charts and other content the copy cannot
-   *  model); the workbook is unchanged when it throws. */
-  copySheet(sourceIndex: number, insertBefore: number, newName?: string): number;
-  /** Number of sheets. */
-  getSheetCount(): number;
-  /** Display name of the sheet at `index`; `StatusCode.SheetIndexOutOfRange` when `index` is out of range. */
-  getSheetName(index: number): string;
-  /** Index of the sheet named `name`, matched case-insensitively as sheet names are compared; `null`
-   *  when no sheet has that name. */
-  getSheetIndex(name: string): number | null;
-  /** Returns the index of the sheet the first `<workbookView>` marks
-   *  active (`activeTab`); without workbook views (an XLSB load) the first
-   *  tab-selected sheet; `0` when neither is recorded. Removing or hiding the
+   *  `StatusCode.SheetIndexOutOfRange`, `StatusCode.InvalidSheetName`, `StatusCode.SheetCountLimitExceeded`,
+   *  `StatusCode.PreconditionFailed` (very hidden source) or `StatusCode.NotImplemented` (slicers, shapes, pivot
+   *  charts and other content the copy cannot model); the workbook is unchanged when it throws. */
+  copySheet(source: SheetRef, insertBefore: number, newName?: string): Sheet;
+  /** Returns the sheet the first `<workbookView>` marks active (`activeTab`); without workbook views (an XLSB
+   *  load) the first tab-selected sheet; the first sheet when neither is recorded. Removing or hiding the
    *  active sheet activates the next visible sheet, else the previous one. */
-  getActiveSheet(): number;
-  /** Marks sheet `sheet` active so a save records it, creating a minimal
-   *  `<bookViews>` when the workbook has none. Other `<workbookView>`
-   *  attributes survive; `firstSheet` is lowered to `sheet` when larger. The
-   *  sheet becomes the only tab-selected one. A sheet index out of range or a
-   *  hidden sheet is rejected. */
-  setActiveSheet(sheet: number): void;
-
-  /** Stores a numeric literal. NaN and infinity are rejected with `StatusCode.InvalidArgument`, an out-of-range `sheet` with
-   *  `StatusCode.SheetIndexOutOfRange`. */
-  setNumber(sheet: number, row: number, col: number, value: number): void;
-  /** Stores a boolean literal. */
-  setBool(sheet: number, row: number, col: number, value: boolean): void;
-  /** Stores a static Excel error literal. Unlike `setNumber`/`setBool`/`setText`, an omitted
-   *  `errorCode` has no sane zero-value default, so it is rejected
-   *  rather than silently writing error code 0 (`#NULL!`). */
-  setError(sheet: number, row: number, col: number, errorCode: ErrorCode): void;
-  /** Stores a text literal. */
-  setText(sheet: number, row: number, col: number, text: string): void;
-  /** Stores (or, when empty, clears) the cell's OOXML phonetic guide (`<rPh>`). */
-  setCellPhonetic(sheet: number, row: number, col: number, phonetic: string): void;
-  /** Stores (or, when empty, clears) the cell's phonetic guide as one `<rPh>`
-   *  block per run. Unlike `setCellPhonetic`, which annotates the whole cell,
-   *  this keeps the span each reading covers. The runs must be an ordered
-   *  partition: each needs `sb <= eb` and must start at or after the previous
-   *  run's `eb`. */
-  setCellPhoneticRuns(sheet: number, row: number, col: number, runs: PhoneticRun[]): void;
-  /** Stores how the cell's guide renders. Independent of
-   *  `setCellPhoneticRuns` in both directions, and only observable on a cell
-   *  that has runs; every value setter clears both, so call it after the
-   *  cell's text. */
-  setCellPhoneticProperties(sheet: number, row: number, col: number, properties: PhoneticPropertiesInput): void;
-  /** Stores a blank literal at the cell; equivalent to clearing it. */
-  setBlank(sheet: number, row: number, col: number): void;
-  /** Stores a formula. Fails with `StatusCode.ParserUnexpectedToken` and changes nothing when the text
-   *  does not parse: a syntax error, or a built-in called through a sheet / workbook qualifier. */
-  setFormula(sheet: number, row: number, col: number, formula: string): void;
-  /** Stores `value` through the setter its type selects: a `number` through `setNumber` (`-0` included; NaN and
-   *  infinity fail with `StatusCode.InvalidArgument`), a `string` through `setText` (a leading `=` stays
-   *  text; use `setFormula` for formulas), a `boolean` through `setBool` and `null` through `setBlank`. A
-   *  {@link Value} is stored by its `kind`; an `ErrorValue` goes through `setError`. `undefined`, a
-   *  `bigint`, a symbol, an array, any other object, and an `ArrayValue` / `RefValue` / `LambdaValue`
-   *  throw `TypeError`. The value `getValue` returns stores back unchanged for every scalar kind. */
-  setValue(sheet: number, row: number, col: number, value: number | string | boolean | null | Value): void;
-  /** An A1 view of one worksheet, by name (matched as `getSheetIndex` matches) or by index. A name no
-   *  sheet has fails with `StatusCode.NotFound`, an index past the last sheet with
-   *  `StatusCode.SheetIndexOutOfRange`. The view keeps the index it was created with: after inserting,
-   *  removing or moving sheets, take a new one. */
-  sheet(nameOrIndex: string | number): Sheet;
-
-  /** Reads the cell's cached value, as of the most recent recalc; call `recalc` first after mutating cells.
-   *  Fails with `StatusCode.SheetIndexOutOfRange` when `sheet` is out of range and `StatusCode.InvalidArgument` when `row` or `col` is. */
-  getValue(sheet: number, row: number, col: number): Value;
-
-  /** The stored A1 formula (leading `=` included), or `null` for a cell that holds none.
-   *  The text is returned as entered; a formula loaded from a file shows book names, not `[N]` indexes. */
-  getFormula(sheet: number, row: number, col: number): string | null;
-  /** The formula in R1C1 notation relative to the cell, without a leading `=`; `null` when the cell holds none.
-   *  A formula loaded from a file that does not parse is kept verbatim, evaluates to `#NAME?`, and fails here with
-   *  `StatusCode.ParserUnexpectedToken`; `setFormula` never produces that state.
-   *  Sheet and external qualifiers are quoted as a whole only when the path, book or sheet name needs it. */
-  getFormulaR1C1(sheet: number, row: number, col: number): string | null;
-  /** One page of the populated cells (formula or non-blank value, spill phantoms included) inside
-   *  `range`, row-major. `cursor` is the `nextCursor` of the previous page (omit for the first);
-   *  `limit` caps the page (omit or 0 for the maximum, 65536). */
-  getCellsInRange(sheet: number, range: CellRect, cursor?: number | null, limit?: number | null): CellsInRange;
-  /** The text Excel displays for the cell, from its value and number format under the workbook's date system. */
-  getDisplayText(sheet: number, row: number, col: number): DisplayText;
+  getActiveSheet(): Sheet;
+  /** Marks `sheet` active so a save records it, creating a minimal `<bookViews>` when the workbook has none.
+   *  Other `<workbookView>` attributes survive; `firstSheet` is lowered to the sheet's index when larger. The
+   *  sheet becomes the only tab-selected one. A hidden sheet is rejected. */
+  setActiveSheet(sheet: SheetRef): void;
   /** Renders `value` (blank, number, boolean, text or error) under the stored-form number format `formatCode`; empty means General. */
   formatValue(value: Value, formatCode: string): DisplayText;
-
-  /** Evaluates `formula` as if entered at `(sheet, row, col)` and returns a
-   *  single scalar result, without mutating the workbook. Local and
-   *  cross-sheet references, defined names, and `ROW()` / `COLUMN()` resolve
-   *  relative to the anchor. An array / spill result is reduced to its
-   *  top-left element (not Excel implicit intersection or spilling; use
-   *  `evaluateFormulaArray` for the whole multi-cell result).
-   *  Note: a self-reference reads the target cell's cached value rather than
-   *  raising `#REF!`, since the ad-hoc formula never joins the dep graph. */
-  evaluateFormula(sheet: number, row: number, col: number, formula: string): Value;
-
-  /** Evaluates `formula` as if entered at `(sheet, row, col)` and returns the
-   *  whole multi-cell result without mutating the workbook. Unlike
-   *  `evaluateFormula` (which reduces an array to its top-left element),
-   *  a dynamic-array formula such as `=SEQUENCE(2,3)` yields the full
-   *  `rows` x `cols` grid in `result.cells` (row-major, `cells[r][c]`); a
-   *  scalar result is reported as a 1x1 array. Same read-only purity and
-   *  self-reference caveat as `evaluateFormula`. */
-  evaluateFormulaArray(sheet: number, row: number, col: number, formula: string): EvalArray;
-
-  /** Evaluates `formula` as a conditional-formatting predicate anchored at
-   *  `(sheet, row, col)`, with relative references written relative to
-   *  `(anchorRow, anchorCol)` (the CF-applied range's top-left). The result
-   *  is coerced with Excel's CF rules: error / blank / text / numeric-zero
-   *  yield `false`, any non-zero number yields `true`. Read-only. */
-  evaluateCfFormula(
-    sheet: number,
-    row: number,
-    col: number,
-    anchorRow: number,
-    anchorCol: number,
-    formula: string,
-  ): Value;
-
-  /** Renders the lambda value cached at `(sheet, row, col)` as Excel formula text in `LAMBDA(p1,p2,body)`
-   *  form; `null` when the cell is absent or its value is not a lambda. */
-  getLambdaText(sheet: number, row: number, col: number): string | null;
-  /** Returns the cell's OOXML phonetic guide (`<rPh>`), or an empty string. */
-  getCellPhonetic(sheet: number, row: number, col: number): string;
-  /** Number of `<rPh>` blocks on the cell; 0 for an unannotated cell. */
-  getCellPhoneticRunCount(sheet: number, row: number, col: number): number;
-  /** Reads the cell's `phoneticRunIndex`-th `<rPh>` block with its span. `getCellPhonetic`
-   *  returns the readings concatenated, without the spans. */
-  getCellPhoneticRun(sheet: number, row: number, col: number, phoneticRunIndex: number): PhoneticRun;
-  /** Returns how the cell's guide renders. A cell with no annotation
-   *  reports the all-zero triple. */
-  getCellPhoneticProperties(sheet: number, row: number, col: number): PhoneticProperties;
-  /** Reads the cell's "Show Phonetic" flag (`<c ph="1">`); `false` for an
-   *  absent cell. */
-  getCellShowPhonetic(sheet: number, row: number, col: number): boolean;
-  /** Sets the cell's "Show Phonetic" display flag. It is independent of the
-   *  readings and survives value writes; a formula cell's flag is neither
-   *  saved nor read from a file. */
-  setCellShowPhonetic(sheet: number, row: number, col: number, show: boolean): void;
 
   /** Recalculates all dirty cells serially on the caller thread.
    *
@@ -4007,14 +4036,12 @@ export interface Workbook {
    * serially with `workerThreadsStarted` at 0.
    */
   recalcParallel(threadCount: number): ParallelRecalcStats;
-  /** Recalculates only cells touched by the supplied viewport and returns the number of cells evaluated.
-   *  An exception thrown by an `IterativeProgressCallback` is rethrown from this call. */
-  recalcViewport(sheet: number, viewport: CellRect): number;
 
-  /** Sets iterative calculation. When disabled (the default) cyclic references surface `#REF!`.
-   *  `maxIterations` is clamped to `[1, 32767]` (Excel's own limit) and `getIterative` reports the
-   *  clamped value; `maxChange` is the absolute convergence threshold. */
-  setIterative(enabled: boolean, maxIterations: number, maxChange: number): void;
+  /** Updates the iterative-calculation settings; an omitted key keeps its value. When disabled (the default)
+   *  cyclic references surface `#REF!`. `maxIterations` is clamped to `[1, 32767]` (Excel's own limit) and
+   *  `getIterative` reports the clamped value; `maxChange` is the absolute convergence threshold, and a value
+   *  that is not finite fails with `StatusCode.InvalidArgument`. */
+  setIterative(patch: IterativeSettingsPatch): void;
   /** Reads back the stored iterative-calculation settings. The cap and
    *  threshold are the stored values even while `enabled` is false, so a
    *  host can render Excel's iterative-calculation dialog before the user
@@ -4081,10 +4108,9 @@ export interface Workbook {
    * is rejected rather than rolled into the next year.
    */
   getPinnedNow(): CivilTime | null;
-  /** Pins the workbook clock to a local civil instant; see `getPinnedNow` for the accepted ranges. */
-  setPinnedNow(year: number, month: number, day: number, hour: number, minute: number, second: number): void;
-  /** Releases the pin so the clock follows the host again. Clearing an unpinned workbook succeeds and does nothing. */
-  clearPinnedNow(): void;
+  /** Pins the workbook clock to a local civil instant (see `getPinnedNow` for the accepted ranges), or with `null`
+   *  releases the pin so the clock follows the host again; releasing an unpinned workbook does nothing. */
+  setPinnedNow(time: CivilTime | null): void;
 
   /** Full formula-behaviour profile id. Defaults to `win-365-en_US`.
    * Pick another locale or host with any {@link ExcelProfileId}.
@@ -4093,96 +4119,39 @@ export interface Workbook {
   /** Selects the formula-behaviour profile; `StatusCode.InvalidArgument` for an id that is not an {@link ExcelProfileId}.
    *  Cached formula values are not recomputed until the next `recalc()`. */
   setExcelProfileId(profileId: ExcelProfileId): void;
-  /** File name the workbook is shown under, extension included and without a directory; `""` when unset.
+  /** File name the workbook is shown under, extension included and without a directory; `null` when unset.
    *  While set, every formula getter spells a reference to the workbook's own defined name (stored `[0]!Name`)
    *  as `Book.xlsx!Name`, quoted when needed (`'My Book.xlsx'!Name`); unset, it reads `[0]!Name`.
    *  Loading from bytes leaves it unset. */
-  getFileName(): string;
-  /** Sets `getFileName()`; `""` unsets it. Entered formulas then read `Book.xlsx!Name` and `[Book.xlsx]Sheet1!A1`
+  getFileName(): string | null;
+  /** Sets `getFileName()`; `null` (or `""`) unsets it. Entered formulas then read `Book.xlsx!Name` and `[Book.xlsx]Sheet1!A1`
    *  as this workbook and create no external link. `StatusCode.InvalidArgument` when the name lacks a workbook extension,
    *  holds one of `[ ] : / \ ? *`, is longer than 218 bytes, or equals an external link's book name. */
-  setFileName(name: string): void;
-
-  /**
-   * The four structural edits move every structure the engine models:
-   * cells, formulas, merges, conditional-format ranges, validations,
-   * hyperlinks, tables, print areas, manual breaks and the auto-filter
-   * range. The ranges and formulas inside the worksheet `<extLst>` (the
-   * `x14` conditional-formatting block, sparkline groups, `x14`
-   * validations) move with them, as Excel moves them, and so do the cells
-   * named by the other worksheet content kept verbatim for a lossless save:
-   * protected ranges, scenarios, a sheet sort state, cell watches,
-   * ignored-error ranges and web-publish ranges.
-   *
-   * They do not move the anchor of an embedded OLE object or form control,
-   * also kept verbatim: it keeps its pre-edit cell, and nothing reports it.
-   * An insert also does not copy the formatting of the row or column before
-   * it onto the new one, which Excel does — a sparkline included.
-   */
-
-  /** Inserts `count` rows at `row` on `sheet` and rewrites cross-workbook
-   *  references to follow the shift.
-   *  Fails with `StatusCode.PreconditionFailed` when the edit cuts into a data table, legacy
-   *  array block or PivotTable, or would push one of them or a table past
-   *  the sheet bound; the workbook is unchanged. */
-  insertRows(sheet: number, row: number, count: number): void;
-  /** Deletes `count` rows starting at `row` on `sheet`. References that
-   *  fall inside the deleted interval collapse to `#REF!`.
-   *  Fails with `StatusCode.PreconditionFailed` when the edit cuts into a data table, legacy
-   *  array block or PivotTable, or would push one of them or a table past
-   *  the sheet bound; the workbook is unchanged. */
-  deleteRows(sheet: number, row: number, count: number): void;
-  /** Inserts `count` columns at `col` on `sheet`.
-   *  Fails with `StatusCode.PreconditionFailed` when the edit cuts into a data table, legacy
-   *  array block or PivotTable, or would push one of them or a table past
-   *  the sheet bound; the workbook is unchanged. */
-  insertColumns(sheet: number, col: number, count: number): void;
-  /** Deletes `count` columns starting at `col` on `sheet`.
-   *  Fails with `StatusCode.PreconditionFailed` when the edit cuts into a data table, legacy
-   *  array block or PivotTable, or would push one of them or a table past
-   *  the sheet bound; the workbook is unchanged. */
-  deleteColumns(sheet: number, col: number, count: number): void;
-
-  /** Number of written coordinates on `sheet`: cells set by any value, formula or format setter,
-   *  `setBlank`, or a spill anchor commit or rejection (clearing keeps the slot),
-   *  plus spill phantoms that have no stored slot. Unwritten columns are not counted. */
-  getCellCount(sheet: number): number;
-  /** Reads the `index`-th counted coordinate, `index` in `[0, cellCount)`, ordered by `(row, col)` ascending. */
-  getCellAt(sheet: number, index: number): Cell;
+  setFileName(name: string | null): void;
 
   /** Lists the defined names, workbook- and sheet-scoped alike, in file order. */
   listDefinedNames(): readonly DefinedName[];
-  /** Reads the defined name `name` (ASCII case-insensitive) in scope `localSheetId` (-1 for workbook scope, else a
-   *  0-based sheet index); `null` when the scope has no such name. */
-  getDefinedName(name: string, localSheetId: number): DefinedName | null;
+  /** Reads the defined name `name` (ASCII case-insensitive) in scope `localSheetId` (`null` for workbook scope, else
+   *  a 0-based sheet index); `null` when the scope has no such name. */
+  getDefinedName(name: string, localSheetId: number | null): DefinedName | null;
   /** Removes the defined name `name` in scope `localSheetId`; `StatusCode.NotFound` when the scope has no such name. */
-  removeDefinedName(name: string, localSheetId: number): void;
-  /** Adds, replaces, or (when `formula` is empty) removes a workbook-
-   *  scoped defined name. A non-empty `formula` that does not parse is
-   *  rejected with `StatusCode.ParserUnexpectedToken`. */
-  setDefinedName(name: string, formula: string): void;
-  /** Adds, replaces, or removes a defined name in workbook scope (-1)
-   *  or a sheet-local scope (0-based sheet index). A non-empty `formula`
-   *  that does not parse is rejected with `StatusCode.ParserUnexpectedToken`. */
-  setDefinedNameScoped(name: string, formula: string, localSheetId: number): void;
-  /** Sets the `comment` and / or `hidden` of an existing defined name in the given scope;
-   *  an omitted key leaves that attribute unchanged. `StatusCode.InvalidArgument` when no such name exists. */
-  setDefinedNameAttrs(name: string, localSheetId: number, attrs: { comment?: string; hidden?: boolean }): void;
-
-  /** Number of worksheet tables in the workbook. */
-  getTableCount(): number;
-  /** Reads the `index`-th table's identifying metadata; `StatusCode.IndexOutOfRange` when `index` is out of range. */
-  getTable(index: number): Table;
-  /** Creates a worksheet table and returns its workbook-wide table index (see `getTable`).
+  removeDefinedName(name: string, localSheetId: number | null): void;
+  /** Adds a defined name, or replaces every attribute of an existing one in the same scope: an omitted `comment` /
+   *  `hidden` returns to its default. An empty `formula` fails with `StatusCode.InvalidArgument`, and one that does
+   *  not parse with `StatusCode.ParserUnexpectedToken`; `removeDefinedName` removes a name. */
+  setDefinedName(definedName: DefinedNameInput): void;
+  /** Lists the workbook's worksheet tables; a table's position in the array is its workbook-wide table index. */
+  listTables(): readonly Table[];
+  /** Creates a worksheet table and returns its workbook-wide table index (its position in `listTables()`).
    *  `input.columns` must hold one unique, non-empty header per column of `input.range`. */
   addTable(input: TableInput): number;
   /** Partially updates a table. Omitted fields preserve their current
    *  values. A supplied `ref` must keep the table's existing column count;
    *  an empty `styleName` clears the style. */
-  updateTable(index: number, input: TableUpdateInput): void;
-  /** Removes the table at `index`. */
-  removeTable(index: number): void;
-  /** Renames column `column` (0-based) of table `index`, as typing over its
+  updateTable(tableIndex: number, input: TableUpdateInput): void;
+  /** Removes the table at `tableIndex`. */
+  removeTable(tableIndex: number): void;
+  /** Renames column `column` (0-based) of table `tableIndex`, as typing over its
    *  header cell does, and returns the final name. An empty
    *  `name` takes the profile's `Column<N>` (`列<N>`) with the lowest unused
    *  N, a name another column already has (ASCII case-insensitively) gains
@@ -4190,37 +4159,15 @@ export interface Workbook {
    *  structured reference to the column through this table follows: cell,
    *  totals-row and defined-name formulas and chart series. Writing a value
    *  to a header cell (`setText`, `setNumber`, ...) renames the same way. */
-  renameTableColumn(index: number, column: number, name: string): string;
+  renameTableColumn(tableIndex: number, column: number, name: string): string;
   /** Sets column `column`'s totals-row function and label. While the totals
    *  row is shown its cell follows, as the desktop application writes it:
    *  `SUBTOTAL(109,Table[Column])` and the other 1xx codes for a built-in
    *  function, the formula for `'custom'`, else the label as text, else
    *  nothing. */
-  setTableColumnTotals(index: number, column: number, totals: TableColumnTotalsInput): void;
-
-  /** Reads the complete worksheet-level `<autoFilter>` XML fragment; `""` when the sheet has no
-   *  AutoFilter definition. */
-  getAutoFilterXml(sheet: number): string;
-  /** Replaces the worksheet-level `<autoFilter>` XML fragment; empty clears it. */
-  setAutoFilterXml(sheet: number, xml: string): void;
-
-  /** Reads the sheet's typed AutoFilter; `null` when absent. */
-  getAutoFilter(sheet: number): AutoFilter | null;
-  /** Replaces the sheet AutoFilter and its hidden `_xlnm._FilterDatabase`
-   *  name. Row visibility is unchanged; call `applyAutoFilter` to hide the
-   *  excluded rows. */
-  setAutoFilter(sheet: number, filter: AutoFilter): void;
-  /** Removes the sheet AutoFilter. Row visibility is unchanged. */
-  removeAutoFilter(sheet: number): void;
-  /** Hides every body row the criteria exclude and shows the rest, as
-   *  Excel's Reapply does. Fails with `StatusCode.NotFound` when there is no AutoFilter. */
-  applyAutoFilter(sheet: number): void;
-  /** Drops every column criterion and shows all body rows. */
-  clearAutoFilter(sheet: number): void;
-  /** Evaluates the sheet AutoFilter without changing the sheet. */
-  evaluateAutoFilter(sheet: number): AutoFilterEval;
+  setTableColumnTotals(tableIndex: number, column: number, totals: TableColumnTotalsInput): void;
   /** Table counterparts, addressed by the workbook-wide table index
-   *  (`getTable`). */
+   *  (the position in `listTables()`). */
   getTableAutoFilter(table: number): AutoFilter | null;
   /** Replaces the table's AutoFilter. Row visibility is unchanged. */
   setTableAutoFilter(table: number, filter: AutoFilter): void;
@@ -4232,29 +4179,8 @@ export interface Workbook {
   clearTableAutoFilter(table: number): void;
   /** Evaluates the table's AutoFilter without changing the sheet. */
   evaluateTableAutoFilter(table: number): AutoFilterEval;
-
-  /** Checks `value` against the validation rule covering `(row, col)` without
-   *  storing it. The first rule in `getValidation` index order wins on overlap. */
-  validateValue(sheet: number, row: number, col: number, value: Value): ValidationOutcome;
-  /** Enumerates populated cells whose value fails their validation rule, in
-   *  row-major order, one page at a time; paging as `getCellsInRange`. */
-  getInvalidCells(sheet: number, cursor?: number | null, limit?: number | null): CellsInRange;
-
-  /** Lists the sheet's threaded comments in file order: each thread's opening comment followed by its replies. */
-  listThreadedComments(sheet: number): ThreadedComment[];
-  /** Adds a threaded comment. An empty `parentId` opens a new thread at
-   *  `row` / `col`; otherwise it replies to that thread. */
-  addThreadedComment(sheet: number, comment: Partial<ThreadedComment> & Pick<ThreadedComment, 'id' | 'text'>): void;
-  /** Replaces the text and mentions of the comment with `id`. */
-  updateThreadedComment(sheet: number, id: string, text: string, mentions: Mention[]): void;
-  /** Sets the resolved state of the thread opened by `threadId`. */
-  setThreadResolved(sheet: number, threadId: string, done: boolean): void;
-  /** Removes a comment; removing an opening comment removes its thread. */
-  removeThreadedComment(sheet: number, id: string): void;
-  /** Reads the threaded comment with `id`; `null` when the sheet has none. */
-  getThreadedComment(sheet: number, id: string): ThreadedComment | null;
   /** Lists the workbook's persons. */
-  listPeople(): Person[];
+  listPeople(): readonly Person[];
   /** Appends a person to the workbook's person list. Fails with `StatusCode.ThreadedCommentInvalid` when the id is
    *  malformed or already listed, or the display name is empty. */
   addPerson(person: Person): void;
@@ -4265,157 +4191,30 @@ export interface Workbook {
 
   /** Sniffs the format and pixel size of PNG, JPEG, GIF or BMP bytes without touching the workbook. */
   getImageInfo(bytes: Uint8Array): ImageInfo;
-  /** Lists the anchored objects of the sheet's drawing, in document order. */
-  listDrawingObjects(sheet: number): readonly DrawingObject[];
-  /** Reads the drawing object `objectId`; `null` when the sheet's drawing has none. */
-  getDrawingObject(sheet: number, objectId: number): DrawingObject | null;
-  /** Returns a copy of the media bytes of the picture `objectId`; `null` when the sheet has no
-   *  such picture with a present media part. */
-  getImage(sheet: number, objectId: number): Image | null;
-  /** Inserts `bytes` as a picture; existing drawing content is kept. */
-  addImage(sheet: number, bytes: Uint8Array, opts?: ImageInsertInput): number;
-  /** Removes the picture or chart `objectId` and the parts only it reaches; other drawing content is kept. */
-  removeDrawingObject(sheet: number, objectId: number): void;
-  /** Renames the picture or chart `objectId`; duplicate names are allowed. */
-  setDrawingName(sheet: number, objectId: number, name: string): void;
-  /** Moves and resizes the picture or chart `objectId`, keeping its id, crop, rotation and every other element. */
-  setDrawingAnchor(sheet: number, objectId: number, placement: ImagePlacement): void;
-  /** Makes the picture or chart `objectId` item `index` of `listDrawingObjects`, whose order is the stacking order (0 is the back). */
-  setDrawingZOrder(sheet: number, objectId: number, index: number): void;
-  /** Captures the picture or chart `objectId` with its list position, element and dependent parts as opaque bytes for `restoreDrawing`. */
-  snapshotDrawing(sheet: number, objectId: number): Uint8Array;
-  /** Puts a `snapshotDrawing` capture back and returns the object's id: in place of an object with the same id at its recorded position, or as a copy on top with `newId`. */
-  restoreDrawing(sheet: number, bytes: Uint8Array, opts?: RestoreImageOptions): number;
-
-  // Drawing shapes. A shape is addressed as `(sheet, objectId)`, the id `listShapes` reports.
-  /** Lists the shapes, connectors and groups of the sheet's drawing in z-order (back first); children of a group are not listed. */
-  listShapes(sheet: number): readonly Shape[];
-  /** Appends a shape on top and returns its id; a sheet without a drawing gets one and existing drawing content is kept. */
-  addShape(sheet: number, spec: ShapeInput): number;
-  /** Applies the fields `spec` names to the shape `objectId`; every other part of its XML is kept. */
-  updateShape(sheet: number, objectId: number, spec: ShapeInput): void;
-  /** Removes the shape, connector or group `objectId` with its children. */
-  removeShape(sheet: number, objectId: number): void;
-  /** Reads the shape `objectId`; `null` when the sheet's drawing has none. */
-  getShape(sheet: number, objectId: number): Shape | null;
-
-  // Table slicers. A slicer is addressed as `(sheet, objectId)`, the id `addSlicer` returns and `listSlicers` reports.
-  /** Lists the table slicers the sheet hosts; slicers over a pivot cache are not listed. */
-  listSlicers(sheet: number): readonly Slicer[];
-  /** Reads the slicer `objectId`; `null` when the sheet hosts none (a slicer without a frame has no id). */
-  getSlicer(sheet: number, objectId: number): Slicer | null;
-  /** Adds a slicer over column `column` (0-based) of table `table` and returns its frame's id. It creates the slicer and cache parts, the `Slicer_*` defined name and the drawing frame; the table may live on another sheet. */
-  addSlicer(sheet: number, table: number, column: number, spec: SlicerInput): number;
-  /** Applies the fields `spec` names to the slicer `objectId`; every other part of its XML is kept. */
-  updateSlicer(sheet: number, objectId: number, spec: SlicerInput): void;
-  /** Removes the slicer `objectId` with its drawing frame, and its cache when no other slicer uses it. Removing a table or sheet removes the slicers bound to it. */
-  removeSlicer(sheet: number, objectId: number): void;
-
-  // What-If data tables. The formulas sit in the row above the result range and the substitution values in the column left of it (or the other way round); each result cell is found by substituting into the input cell(s), recalculating the cells that read them and restoring the inputs.
-  /** Creates a data table over `spec`'s result range. The result cells read 0 until the next recalc and refuse writes ("cannot change part of a data table") until the table is removed. `StatusCode.DataTableInvalid` (8005) when no input is given, the range has no row above or column left of it, an input lies inside the range, or the range overlaps another data table. */
-  addDataTable(sheet: number, spec: DataTableSpec): void;
-  /** Reads the data table whose result range contains `(row, col)`; `null` when no table covers the cell. */
-  getDataTable(sheet: number, row: number, col: number): DataTable | null;
-  /** Removes the data table containing `(row, col)` and blanks its result cells. `StatusCode.DataTableInvalid` (8005) when none covers the cell. */
-  removeDataTable(sheet: number, row: number, col: number): void;
   /** Recomputes every data table now, whatever the calc mode. `recalc()` does the same after a pass that had a dirty cell or a volatile formula, except under `CalcMode.AutoNoTable`, which leaves it to this call; `recalcViewport()` never computes tables. */
   recalcDataTables(): void;
-
-  // Sparkline groups. A group is addressed by its position in document order; adding or removing one shifts later indices.
-  /** Number of sparkline groups on the sheet. */
-  getSparklineGroupCount(sheet: number): number;
-  /** Reads the `sparklineGroupIndex`-th sparkline group in document order with its sparklines. */
-  getSparklineGroup(sheet: number, sparklineGroupIndex: number): SparklineGroup;
-  /** Appends a group; `spec.sparklines` must hold at least one sparkline. */
-  addSparklineGroup(sheet: number, spec: SparklineGroupInput): number;
-  /** Rewrites the modelled attributes, colours and date range of group `index`; its sparklines and unmodelled XML are kept. */
-  updateSparklineGroup(sheet: number, index: number, spec: SparklineGroupInput): void;
-  /** Replaces the sparklines of group `index`. */
-  setSparklineGroupSparklines(sheet: number, index: number, sparklines: Sparkline[]): void;
-  /** Removes group `index`. */
-  removeSparklineGroup(sheet: number, index: number): void;
-
-  // Charts. A chart is addressed as `(sheet, objectId)`, the id `listDrawingObjects` reports for a `DrawingObjectKind.Chart`.
-  /** Reads the typed view of the chart `objectId`; `null` when the sheet has no such chart. */
-  getChart(sheet: number, objectId: number): Chart | null;
-  /** Resolves the chart's series against the current cell values. Throws when the sheet has no chart
-   *  `objectId`; use `getChart` to test for one. */
-  getChartData(sheet: number, objectId: number): ChartData;
-  /** Resolves the series as if `overrides` were applied to the chart; the workbook is not changed.
-   *  Throws when the sheet has no chart `objectId`. */
-  getChartPreview(sheet: number, objectId: number, overrides: ChartPreviewOverridesInput): ChartData;
-  /** Creates a chart with filled caches and returns its object id. */
-  addChart(sheet: number, options: ChartInsertInput): number;
-  /** Replaces plot group `plot` with `kind`; `grouping` applies to column, bar, line and area. */
-  setChartType(sheet: number, objectId: number, plot: number, kind: ChartInsertKind, grouping?: ChartGrouping): void;
-  /** Sets the chart title text, or removes the title with `null`. A {@link ChartTitle} sets that kind, so `{ kind: ChartTitleKind.Auto }` returns the title to Excel's automatic one. */
-  setChartTitle(
-    sheet: number,
-    objectId: number,
-    title: string | null | { kind: ChartTitleKind; text?: string; formula?: string },
-  ): void;
-  /** Sets the legend position (`None` removes it) and overlay; `hiddenSeries` (series `c:idx` values) replaces the hidden legend entries when given. */
-  setChartLegend(
-    sheet: number,
-    objectId: number,
-    position: ChartLegendPosition,
-    overlay: boolean,
-    hiddenSeries?: number[],
-  ): void;
-  /** Patches the axis `axisId`. */
-  setChartAxis(sheet: number, objectId: number, axisId: number, patch: ChartAxisPatch): void;
-  /** Patches how blanks are plotted, whether hidden cells are skipped and whether `#N/A` draws as blank. */
-  setChartDisplay(sheet: number, objectId: number, patch: ChartDisplayPatch): void;
-  /** Patches the series with `c:idx` `seriesIndex` of plot group `plot`. */
-  setChartSeries(sheet: number, objectId: number, plot: number, seriesIndex: number, patch: ChartSeriesPatch): void;
-  /** Patches a data point; `null` or an empty patch removes its formatting. */
-  setChartPoint(
-    sheet: number,
-    objectId: number,
-    plot: number,
-    seriesIndex: number,
-    pointIndex: number,
-    patch: ChartPointPatch | null,
-  ): void;
-  /** Patches plot group `plot`. */
-  setChartPlot(sheet: number, objectId: number, plot: number, patch: ChartPlotPatch): void;
-  /** Replaces the chart filter: series by `c:idx` and categories by position are hidden. */
-  setChartFilter(sheet: number, objectId: number, hiddenSeries: number[], hiddenCategories: number[]): void;
-  /** Appends a series to plot group `plot`; the patch must set `values` (`y` for a scatter plot). */
-  addChartSeries(sheet: number, objectId: number, plot: number, patch: ChartSeriesPatch): number;
-  /** Removes the series with `c:idx` `seriesIndex` from plot group `plot`. */
-  removeChartSeries(sheet: number, objectId: number, plot: number, seriesIndex: number): void;
-  /** Rebuilds every series from `source`, keeping the chart kind and each series' formatting by index, and clears the filter. An omitted header flag follows Excel's detection. */
-  setChartSource(
-    sheet: number,
-    objectId: number,
-    source: string,
-    direction: ChartSeriesDirection,
-    headerRow?: boolean,
-    headerColumn?: boolean,
-  ): void;
 
   /** Lists the paths of the OOXML parts the reader carried through unchanged. */
   listPassthroughs(): readonly string[];
   /** Reports whether a passthrough part sits at `path` (no leading `/`); returns the path, or `null`. */
   getPassthrough(path: string): string | null;
-
-  /** Returns the number of PivotTables anchored on `sheet`. */
-  getPivotCount(sheet: number): number;
-  /** Evaluates and projects a PivotTable into concrete grid cells. */
-  getPivotLayout(sheet: number, pivotIndex: number): PivotLayout;
+  /** Lists the external-link records in `<externalReferences>` document order; empty for a fresh workbook and for
+   *  a package without that block. A formula, name, conditional-format rule or data validation that names an
+   *  unregistered book (bracket or path spelling) appends a record without renumbering; a book already present,
+   *  in any letter case, adds none. */
+  listExternalLinks(): readonly ExternalLink[];
 
   // ---- PivotCache mutation -----------------------------------------------
   /** Lists the cache ids of the pivot caches the workbook owns. */
   listPivotCaches(): readonly number[];
-  /** Creates a new empty pivot cache. Pass `0` for `requestedId` to
-   *  auto-assign. Returns the cache id. */
-  addPivotCache(requestedId: number): number;
+  /** Creates a new empty pivot cache and returns its id: `requestedId` when given, else one the engine assigns. */
+  addPivotCache(requestedId?: number): number;
   /** Removes the pivot cache with id `cacheId`. Fails if any pivot
    *  table still references it. */
   removePivotCache(cacheId: number): void;
-  /** Reads the cache's worksheet source range / defined-name metadata. */
-  getPivotCacheWorksheetSource(cacheId: number): PivotWorksheetSource;
+  /** Reads the cache's worksheet source range / defined-name metadata; `null` when the cache has no worksheet
+   *  source. */
+  getPivotCacheWorksheetSource(cacheId: number): PivotWorksheetSource | null;
   /** Sets or clears the cache's worksheet source metadata. */
   setPivotCacheWorksheetSource(cacheId: number, source: PivotWorksheetSourceInput): void;
 
@@ -4432,7 +4231,7 @@ export interface Workbook {
   /** Reads the cache's options. */
   getPivotCacheOptions(cacheId: number): PivotCacheOptions;
   /** Writes the cache's options; members the object omits keep their current value. */
-  setPivotCacheOptions(cacheId: number, options: Partial<PivotCacheOptions>): void;
+  setPivotCacheOptions(cacheId: number, options: PivotCacheOptionsPatch): void;
   /** Adds calculated field `name` with `formula` (English canonical form, naming cache fields only) as the last
    *  cache field. Returns the new field's index. */
   addPivotCacheCalculatedField(cacheId: number, name: string, formula: string): number;
@@ -4440,20 +4239,18 @@ export interface Workbook {
   setPivotCacheCalculatedFieldFormula(cacheId: number, fieldIndex: number, formula: string): void;
   /** Removes calculated field `fieldIndex` and its data fields in every pivot. */
   removePivotCacheCalculatedField(cacheId: number, fieldIndex: number): void;
-  /** Reads the formula of cache field `fieldIndex` without a leading `=`; empty when it is not calculated. */
-  getPivotCacheFieldFormula(cacheId: number, fieldIndex: number): string;
+  /** Reads the formula of cache field `fieldIndex` without a leading `=`; `null` when it is not calculated. */
+  getPivotCacheFieldFormula(cacheId: number, fieldIndex: number): string | null;
   /** Adds calculated item `name` with `formula` to cache field `fieldIndex`; `index` is its position in solve order. */
   addPivotCacheCalculatedItem(cacheId: number, fieldIndex: number, name: string, formula: string): number;
-  /** Number of calculated items in the cache, in solve order. */
-  getPivotCacheCalculatedItemCount(cacheId: number): number;
-  /** Reads calculated item `index` in solve order. */
-  getPivotCacheCalculatedItem(cacheId: number, index: number): PivotCalculatedItem;
-  /** Replaces the formula of calculated item `index`. */
-  setPivotCacheCalculatedItemFormula(cacheId: number, index: number, formula: string): void;
-  /** Moves calculated item `index` to position `newIndex` in solve order. */
-  movePivotCacheCalculatedItem(cacheId: number, index: number, newIndex: number): void;
-  /** Removes calculated item `index`, its item in the cache field and in every pivot. */
-  removePivotCacheCalculatedItem(cacheId: number, index: number): void;
+  /** Lists the cache's calculated items in solve order; an item's position is its `calculatedItemIndex`. */
+  listPivotCacheCalculatedItems(cacheId: number): readonly PivotCalculatedItem[];
+  /** Replaces the formula of calculated item `calculatedItemIndex`. */
+  setPivotCacheCalculatedItemFormula(cacheId: number, calculatedItemIndex: number, formula: string): void;
+  /** Moves calculated item `calculatedItemIndex` to position `newIndex` in solve order. */
+  movePivotCacheCalculatedItem(cacheId: number, calculatedItemIndex: number, newIndex: number): void;
+  /** Removes calculated item `calculatedItemIndex`, its item in the cache field and in every pivot. */
+  removePivotCacheCalculatedItem(cacheId: number, calculatedItemIndex: number): void;
 
   /** Number of shared items configured on cache field `fieldIndex`. */
   getPivotCacheFieldSharedItemCount(cacheId: number, fieldIndex: number): number;
@@ -4499,490 +4296,6 @@ export interface Workbook {
   setPivotCacheRecordBlank(cacheId: number, recordIndex: number, fieldIndex: number): void;
   /** Sets cell `(recordIndex, fieldIndex)` to an Excel error value. */
   setPivotCacheRecordError(cacheId: number, recordIndex: number, fieldIndex: number, errorCode: ErrorCode): void;
-
-  // ---- PivotTable mutation -----------------------------------------------
-  /** Creates a new empty pivot table. Returns its pivot index. */
-  addPivot(sheet: number, name: string, cacheId: number, anchorRow: number, anchorCol: number): number;
-  /** Removes the pivot table at `pivotIndex`. */
-  removePivot(sheet: number, pivotIndex: number): void;
-  /** Renames the pivot table. */
-  setPivotName(sheet: number, pivotIndex: number, name: string): void;
-  /** Sets the rectangle the pivot reserves (`<location ref>`); its top-left cell is the anchor. */
-  setPivotAnchor(sheet: number, pivotIndex: number, rect: CellRect): void;
-  /** Toggles the row / column grand total bands on the pivot. */
-  setPivotGrandTotals(sheet: number, pivotIndex: number, rowsEnabled: boolean, colsEnabled: boolean): void;
-  /** Sets the pivot's table style and toggles, making the style element
-   *  present. New pivots start as `PivotStyleLight16` with row / column
-   *  headers and last column on. */
-  setPivotStyleInfo(sheet: number, pivotIndex: number, info: PivotStyleInput): void;
-  /** Reads the pivot's compact / tabular / outline report layout. */
-  getPivotReportLayout(sheet: number, pivotIndex: number): PivotReportLayout;
-  /** Sets the pivot's compact / tabular / outline report layout. */
-  setPivotReportLayout(sheet: number, pivotIndex: number, layout: PivotReportLayout): void;
-  /** Returns the id of the cache the pivot draws from.
-   *  The definition read-backs here work for pivots created in-session and
-   *  loaded from a package alike. */
-  getPivotCacheId(sheet: number, pivotIndex: number): number;
-  /** Reads the pivot's name. */
-  getPivotName(sheet: number, pivotIndex: number): string;
-  /** Reads the row / column grand total flags `setPivotGrandTotals` writes. */
-  getPivotGrandTotals(sheet: number, pivotIndex: number): PivotGrandTotals;
-  /** Reads the PivotTable Options `setPivotOptions` writes. */
-  getPivotOptions(sheet: number, pivotIndex: number): PivotOptions;
-  /** Reads whether a cache change left the pivot's sheet cells stale; see `projectPivot`. */
-  isPivotProjectionPending(sheet: number, pivotIndex: number): boolean;
-  /** Reads the table style `setPivotStyleInfo` writes. */
-  getPivotStyleInfo(sheet: number, pivotIndex: number): PivotStyle | null;
-  /** Reads the row-axis field order (the list `setPivotRowFieldOrder` takes). */
-  getPivotRowFieldOrder(sheet: number, pivotIndex: number): number[];
-  /** Reads the column-axis field order. */
-  getPivotColumnFieldOrder(sheet: number, pivotIndex: number): number[];
-
-  /** Number of fields configured on the pivot. */
-  getPivotFieldCount(sheet: number, pivotIndex: number): number;
-  /** Places a field on the pivot. Returns its field index.
-   *  A pivot's fields are positional over its cache's fields (field `i` is
-   *  cache field `i`): when `sourceName` names a cache field the pivot first
-   *  gets one bare, axis-less field per cache field and the named one is
-   *  configured in place, so `index` is that cache field's position and
-   *  adding it again updates it. A name the cache lacks appends a field.
-   *  A field added on the row or column axis is appended to that axis's
-   *  order. */
-  addPivotField(sheet: number, pivotIndex: number, spec: PivotFieldInput): number;
-  /** Reads the definition of field `fieldIndex`. */
-  getPivotField(sheet: number, pivotIndex: number, fieldIndex: number): PivotField;
-  /** Number of items in the field's item list (what `addPivotFieldItem` appends to). */
-  getPivotFieldItemCount(sheet: number, pivotIndex: number, fieldIndex: number): number;
-  /** Reads item `itemIndex` of the field; the index `setPivotFieldItemVisible`
-   *  takes. */
-  getPivotFieldItem(sheet: number, pivotIndex: number, fieldIndex: number, itemIndex: number): PivotItem;
-  /** Turns the automatic subtotal of the field on or off. */
-  setPivotFieldDefaultSubtotal(sheet: number, pivotIndex: number, fieldIndex: number, on: boolean): void;
-  /** Inserts a blank row after each item of the field. */
-  setPivotFieldInsertBlankRow(sheet: number, pivotIndex: number, fieldIndex: number, on: boolean): void;
-  /** Repeats the item labels of the field on every row. */
-  setPivotFieldFillDownLabels(sheet: number, pivotIndex: number, fieldIndex: number, on: boolean): void;
-  /** Expands or collapses the whole field. */
-  setPivotFieldShowDetail(sheet: number, pivotIndex: number, fieldIndex: number, on: boolean): void;
-  /** Expands or collapses one item of the field. */
-  setPivotFieldItemShowDetail(
-    sheet: number,
-    pivotIndex: number,
-    fieldIndex: number,
-    itemIndex: number,
-    on: boolean,
-  ): void;
-  /** Shows `caption` instead of the item's value; `""` clears it. */
-  setPivotFieldItemCaption(
-    sheet: number,
-    pivotIndex: number,
-    fieldIndex: number,
-    itemIndex: number,
-    caption: string,
-  ): void;
-  /** Renames pivot field `fieldIndex` in the report; `""` clears the name. The field's own source name is allowed;
-   *  another field's source or custom name, or a data field's name, is not. */
-  setPivotFieldCustomName(sheet: number, pivotIndex: number, fieldIndex: number, name: string): void;
-  /** Lists the field's items without data. */
-  setPivotFieldShowAll(sheet: number, pivotIndex: number, fieldIndex: number, on: boolean): void;
-  /** Writes the PivotTable Options; members the object omits keep their current value. Wrong-typed members
-   *  fail without changing the pivot. Fails with `StatusCode.PreconditionFailed` when the report would overlap another structure. */
-  setPivotOptions(sheet: number, pivotIndex: number, options: Partial<PivotOptions>): void;
-  /** Writes the pivot's report into its sheet cells now and clears the pending flag. */
-  projectPivot(sheet: number, pivotIndex: number): void;
-  /** Writes the records behind data cell (`row`, `col`) onto a new sheet and activates it. Returns
-   *  the new sheet's index; sheets at or after the pivot's sheet shift by one. */
-  showPivotDetails(sheet: number, pivotIndex: number, row: number, col: number): number;
-  /** Drops every field from the pivot, emptying the row and column orders. */
-  clearPivotFields(sheet: number, pivotIndex: number): void;
-  /** Sets the axis of pivot field `fieldIndex`. Moving onto the row or column
-   *  axis appends the field to that axis's order; moving off removes it.
-   *  `-1` takes the field off every axis, as unchecking it in a field list
-   *  does: its data fields are removed (later data-field indices shift
-   *  down), as are filters naming it and value filters scoring a
-   *  removed data field; its item visibility is kept. */
-  setPivotFieldAxis(sheet: number, pivotIndex: number, fieldIndex: number, axis: PivotAxis | -1): void;
-  /** Sets the sibling order of pivot field `fieldIndex`. `PivotSortOrder.Manual`
-   *  keeps items in `addPivotFieldItem` order and takes no `byField`; for the
-   *  other orders an empty `byField` sorts by label. */
-  setPivotFieldSort(
-    sheet: number,
-    pivotIndex: number,
-    fieldIndex: number,
-    order: PivotSortOrder,
-    byField: string,
-  ): void;
-  /** Sets the `subtotal_top` flag on pivot field `fieldIndex`. */
-  setPivotFieldSubtotalTop(sheet: number, pivotIndex: number, fieldIndex: number, top: boolean): void;
-  /** Appends a manual-filter item to pivot field `fieldIndex`, addressed by
-   *  its label. The item binds to the first shared item of the cache field
-   *  that renders as `name` (unbound when none does), and the filter engine
-   *  matches source records by comparing their rendered label against
-   *  `name`. An empty `name` therefore cannot express the blank item,
-   *  which has no label of its own; use `addPivotFieldSharedItem`. */
-  addPivotFieldItem(sheet: number, pivotIndex: number, fieldIndex: number, name: string, visible: boolean): number;
-  /** Appends a manual-filter item to pivot field `fieldIndex`, addressed by
-   *  its position in the bound cache field's shared items -- the same
-   *  index space as OOXML `<item x="N">`. The label is resolved from that
-   *  shared item, which makes this the form that can express the blank
-   *  item. `cacheIndex` is not validated: the cache field may be filled in
-   *  after the pivot definition, and an index that resolves to nothing
-   *  yields an item with an empty label that filters nothing. */
-  addPivotFieldSharedItem(
-    sheet: number,
-    pivotIndex: number,
-    fieldIndex: number,
-    cacheIndex: number,
-    visible: boolean,
-  ): number;
-  /** Drops every manual-filter item from pivot field `fieldIndex`. */
-  clearPivotFieldItems(sheet: number, pivotIndex: number, fieldIndex: number): void;
-  /** Toggles the visibility of item `itemIndex` on field `fieldIndex`. */
-  setPivotFieldItemVisible(
-    sheet: number,
-    pivotIndex: number,
-    fieldIndex: number,
-    itemIndex: number,
-    visible: boolean,
-  ): void;
-  /** Appends a subtotal-fn entry to pivot field `fieldIndex`. */
-  addPivotFieldSubtotalFn(sheet: number, pivotIndex: number, fieldIndex: number, agg: PivotAggregation): void;
-  /** Drops every subtotal-fn entry from pivot field `fieldIndex`. */
-  clearPivotFieldSubtotalFns(sheet: number, pivotIndex: number, fieldIndex: number): void;
-  /** Groups the date field `fieldIndex` (a source field, or one of its group
-   *  fields) by the `PivotDatePeriod` bits of `periods`, as Excel's Group
-   *  command does, replacing any grouping it has. Each period becomes a
-   *  group field appended to the pivot cache, finest first, named and
-   *  labelled in the workbook's locale; this pivot shows them in the
-   *  field's place, coarsest outermost, and another pivot showing the field
-   *  shows them before it. `PivotCalendar.Japanese` groups the years by era
-   *  year. `intervalDays` (default `1`) above 1 groups by runs of days and
-   *  needs `periods === PivotDatePeriod.Days`. `start` / `end` are date
-   *  serials; `NaN` (the default) takes the field's first value and its
-   *  last (the midnight after it for a date without a time). An empty or
-   *  unknown mask, a zero interval, an invalid bound, a start after the end
-   *  or a field holding anything but dates is `StatusCode.InvalidArgument`. */
-  setPivotFieldDateGroup(
-    sheet: number,
-    pivotIndex: number,
-    fieldIndex: number,
-    periods: number,
-    calendar: PivotCalendar,
-    intervalDays?: number,
-    start?: number,
-    end?: number,
-  ): void;
-  /** Removes the date grouping of pivot field `fieldIndex` (a source field,
-   *  or one of its group fields) from every pivot on its cache; the field
-   *  returns to the axis position its group fields held. A field that is
-   *  not grouped is left as it is. `StatusCode.PreconditionFailed` when the group
-   *  fields are not the last fields of the cache. */
-  clearPivotFieldDateGroup(sheet: number, pivotIndex: number, fieldIndex: number): void;
-  /** Sets the `numFmtId` of pivot field `fieldIndex`, as a decimal string
-   *  naming a built-in id or one returned by `addNumFmt`. Pass an empty
-   *  string to clear; any other unknown id is rejected. */
-  setPivotFieldNumberFormat(sheet: number, pivotIndex: number, fieldIndex: number, utf8: string): void;
-
-  /** Replaces the row-axis field order with `indices`. Each entry must
-   *  be `< pivotFieldCount` and appear once. The list is the axis's whole
-   *  membership: listed fields move onto the row axis and fields left out
-   *  come off it. Pass an empty array to clear. */
-  setPivotRowFieldOrder(sheet: number, pivotIndex: number, indices: ReadonlyArray<number>): void;
-  /** Replaces the column-axis field order. Same contract as rows. */
-  setPivotColumnFieldOrder(sheet: number, pivotIndex: number, indices: ReadonlyArray<number>): void;
-
-  /** Number of `<dataField>` entries on the pivot. */
-  getPivotDataFieldCount(sheet: number, pivotIndex: number): number;
-  /** Appends a new data-field entry. An omitted or empty `spec.name` is
-   *  derived from the workbook profile; see {@link PivotDataFieldInput}. */
-  addPivotDataField(sheet: number, pivotIndex: number, spec: PivotDataFieldInput): number;
-  /** Reads data field `dataFieldIndex`. */
-  getPivotDataField(sheet: number, pivotIndex: number, dataFieldIndex: number): PivotDataField;
-  /** Reads the name a new data field would get for `fieldIndex` and `aggregation`, without adding one.
-   *  `excludeDataField` leaves that data field out of the numbering (as `setPivotDataField` does); omit it
-   *  for a new data field. */
-  getPivotDataFieldDefaultName(
-    sheet: number,
-    pivotIndex: number,
-    fieldIndex: number,
-    aggregation: PivotAggregation,
-    excludeDataField?: number,
-  ): string;
-  /** Drops every data-field entry from the pivot. */
-  clearPivotDataFields(sheet: number, pivotIndex: number): void;
-  /** Replaces the data-field entry at `dataFieldIndex` in place. An omitted
-   *  or empty `spec.name` is derived as in `addPivotDataField`. */
-  setPivotDataField(sheet: number, pivotIndex: number, dataFieldIndex: number, spec: PivotDataFieldInput): void;
-
-  /** Number of filters on the pivot -- see {@link PivotFilter}. */
-  getPivotFilterCount(sheet: number, pivotIndex: number): number;
-  /** Appends a filter, saved with the pivot; see {@link PivotFilter}. */
-  addPivotFilter(sheet: number, pivotIndex: number, spec: PivotFilterInput): number;
-  /** Reads the filter at `filterIndex`; see {@link PivotFilter}. */
-  getPivotFilter(sheet: number, pivotIndex: number, filterIndex: number): PivotFilter;
-  /** Drops every listed filter from the pivot. */
-  clearPivotFilters(sheet: number, pivotIndex: number): void;
-  /** Removes the filter at `filterIndex`. */
-  removePivotFilter(sheet: number, pivotIndex: number, filterIndex: number): void;
-
-  /** Evaluates every CF block on `sheet` against the cells of `range` and returns only the cells that
-   *  produced at least one match. `todaySerial` pins the
-   *  date basis for `TimePeriod` rules; pass `NaN` to disable them (no
-   *  `TimePeriod` rule then matches). `0` does *not* disable them -- it is
-   *  the valid serial for 1899-12-30. */
-  evaluateCfRange(sheet: number, range: CellRect, todaySerial: number): ReadonlyArray<CfCell>;
-
-  /** Computes print-area page breaks and physical page count for `sheet`. */
-  getPagination(sheet: number): Pagination;
-
-  /** Reads the worksheet's `<pageSetup>` fragment; empty when absent. */
-  getPageSetupXml(sheet: number): string;
-  /** Replaces `<pageSetup>`; empty removes it and restores the defaults.
-   *  A fragment carrying `r:id` is rejected unless the sheet already has a
-   *  printerSettings part, since the reference would otherwise dangle. */
-  setPageSetupXml(sheet: number, xml: string): void;
-  /** Reads the worksheet's `<pageMargins>` fragment; empty when absent. */
-  getPageMarginsXml(sheet: number): string;
-  /** Replaces `<pageMargins>`; empty removes it. */
-  setPageMarginsXml(sheet: number, xml: string): void;
-  /** Reads the worksheet's `<printOptions>` fragment; empty when absent. */
-  getPrintOptionsXml(sheet: number): string;
-  /** Replaces `<printOptions>`; empty removes it. */
-  setPrintOptionsXml(sheet: number, xml: string): void;
-  /** Reads the worksheet's `<headerFooter>` fragment; empty when absent. */
-  getHeaderFooterXml(sheet: number): string;
-  /** Replaces `<headerFooter>`; empty removes it. Header codes live in XML
-   *  element text, so a hand-built fragment writes them escaped
-   *  (`<oddHeader>&amp;C...</oddHeader>`); `setHeaderFooter` takes the
-   *  decoded text instead. */
-  setHeaderFooterXml(sheet: number, xml: string): void;
-  /** Reads the worksheet's `<sheetPr>` fragment; empty when absent. It also
-   *  carries the tab colour and VBA code name, not just print settings. */
-  getSheetPrXml(sheet: number): string;
-  /** Replaces `<sheetPr>`; empty removes it. */
-  setSheetPrXml(sheet: number, xml: string): void;
-  /** Sets or clears `<sheetPr><pageSetUpPr fitToPage>` without disturbing
-   *  anything else `<sheetPr>` carries. */
-  setFitToPage(sheet: number, enabled: boolean): void;
-
-  /** Reads `_xlnm.Print_Area` as rectangles; empty when no print area is declared. A whole-axis area reads
-   *  back expanded to the grid edge. */
-  getPrintArea(sheet: number): CellRect[];
-  /** Writes `_xlnm.Print_Area` from one or more rectangles, printed in the
-   *  given order; a rectangle spanning every row or column is stored as whole
-   *  columns or rows. An empty array removes it. */
-  setPrintArea(sheet: number, ranges: ReadonlyArray<CellRect>): void;
-  /** Reads `_xlnm.Print_Titles` as a row span and a column span. */
-  getPrintTitles(sheet: number): SheetPrintTitles;
-  /** Writes `_xlnm.Print_Titles`. Both empty removes it. */
-  setPrintTitles(sheet: number, repeatRows: string, repeatCols: string): void;
-
-  /** Upserts a row break before `row`, spanning the whole sheet. */
-  addRowBreak(sheet: number, row: number, manual: boolean): void;
-  /** Upserts a column break before `col`, spanning the whole sheet. */
-  addColumnBreak(sheet: number, col: number, manual: boolean): void;
-  /** Removes the row break at `row`. An absent break is a no-op. */
-  removeRowBreak(sheet: number, row: number): void;
-  /** Removes the column break at `col`. An absent break is a no-op. */
-  removeColumnBreak(sheet: number, col: number): void;
-  /** Removes every manual break on both axes. */
-  clearBreaks(sheet: number): void;
-  /** Returns the row breaks, ascending by row. */
-  listRowBreaks(sheet: number): PageBreak[];
-  /** Returns the column breaks, ascending by column. */
-  listColumnBreaks(sheet: number): PageBreak[];
-
-  /** Applies a partial `<pageSetup>` update. */
-  setPageSetup(sheet: number, setup: PageSetup): void;
-  /** Applies a partial `<pageMargins>` update, in inches. */
-  setPageMargins(sheet: number, margins: PageMargins): void;
-  /** Applies a partial `<printOptions>` update. */
-  setPrintOptions(sheet: number, options: PrintOptionsInput): void;
-  /** Applies a partial `<headerFooter>` update. */
-  setHeaderFooter(sheet: number, headerFooter: HeaderFooterInput): void;
-  /** Reads the effective page setup and which attributes state it. */
-  getPageSetup(sheet: number): SheetPageSetup;
-  /** Reads the effective page margins, in inches. */
-  getPageMargins(sheet: number): SheetPageMargins;
-
-  /** Reads the full per-sheet view (zoom, freeze, tab-hidden, and the
-   *  display / orientation flags). */
-  getView(sheet: number): SheetView;
-  /** Sets the sheet zoom percentage (clamped to `[10, 400]`). */
-  setZoom(sheet: number, zoomScale: number): void;
-  /** Sets the frozen pane in `(rows, cols)`. */
-  setFreeze(sheet: number, freezeRows: number, freezeCols: number): void;
-  /** Sets the sheet tab's hidden flag — the two-state view of
-   *  `setVisibility`. `true` on an already very-hidden sheet leaves
-   *  it very-hidden rather than demoting it, since "hidden" says nothing
-   *  that sheet does not already satisfy; `false` shows it from either
-   *  hidden state. Hiding the only visible sheet fails with
-   *  `StatusCode.InvalidArgument` and leaves it visible. */
-  setTabHidden(sheet: number, hidden: boolean): void;
-  /** Sets the sheet tab's visibility to one of the three states. The only
-   *  way to newly state `SheetVisibility.VeryHidden`, and the only way to
-   *  demote a very-hidden sheet to plain hidden; `setTabHidden` can
-   *  express neither. A value outside `SheetVisibility` fails with
-   *  `StatusCode.InvalidArgument` and leaves the sheet unchanged. So does hiding the only
-   *  visible sheet. */
-  setVisibility(sheet: number, visibility: SheetVisibility): void;
-  /** Sets the sheet's `showGridLines` flag. */
-  setShowGridLines(sheet: number, show: boolean): void;
-  /** Sets the sheet's `showRowColHeaders` flag. */
-  setShowRowColHeaders(sheet: number, show: boolean): void;
-  /** Sets the sheet's `showZeros` flag. */
-  setShowZeros(sheet: number, show: boolean): void;
-  /** Sets the sheet's `showFormulas` flag. */
-  setShowFormulas(sheet: number, show: boolean): void;
-  /** Sets the sheet's `showOutlineSymbols` flag. */
-  setShowOutlineSymbols(sheet: number, show: boolean): void;
-  /** Sets the sheet's `rightToLeft` flag. */
-  setRightToLeft(sheet: number, rightToLeft: boolean): void;
-  /** Sets the sheet's `tabSelected` flag. */
-  setTabSelected(sheet: number, selected: boolean): void;
-  /** Sets the sheet view's scroll origin (`<sheetView topLeftCell>`). */
-  setTopLeft(sheet: number, row: number, col: number): void;
-  /** Sets the first visible cell of a frozen or split view's lower-right
-   *  pane. It must lie past any frozen rows and columns; rejected without
-   *  panes. Changing the freeze resets it to the first unfrozen cell. */
-  setPaneTopLeft(sheet: number, row: number, col: number): void;
-  /** Splits the view at `xTwips` / `yTwips` (`0` for none on that axis;
-   *  `0, 0` removes the split). Replaces any freeze, as `setFreeze`
-   *  replaces a split. Negative or non-finite values fail with
-   *  `StatusCode.InvalidArgument` and leave the view unchanged. */
-  setSplit(sheet: number, xTwips: number, yTwips: number): void;
-  /** Reads the active pane's selection (active cell and ranges). */
-  getSelection(sheet: number): SheetSelection;
-  /** Replaces the active pane's selection. In a frozen or split view the
-   *  selection belongs to the pane the view is active in; other panes' are
-   *  kept. */
-  setSelection(sheet: number, selection: SheetSelectionInput): void;
-  /** Sets the sheet's `<sheetView view="...">` mode: `""`,
-   *  `"pageBreakPreview"`, or `"pageLayout"`. Stored verbatim. */
-  setViewMode(sheet: number, mode: string): void;
-
-  /**
-   * Reads the sheet's `<sheetProtection>` flags. Strings are
-   * deep-copied; the returned object is independent of the
-   * workbook's storage.
-   */
-  getSheetProtection(sheet: number): SheetProtection;
-  /**
-   * Replaces the sheet's `<sheetProtection>` flags wholesale.
-   * Setting `enabled = 0` clears the protection block on save.
-   */
-  setSheetProtection(sheet: number, protection: SheetProtection): void;
-
-  /** Returns the column-layout overrides on `sheet` in storage order. */
-  listColumnOverrides(sheet: number): ReadonlyArray<ColumnLayout>;
-  /** Sets / replaces the column width override on `[first, last]`. `width` is a stored width:
-   *  characters with the column padding included, as `<col width>` holds it. */
-  setColumnWidth(sheet: number, first: number, last: number, width: number): void;
-  /** Sets / replaces the column hidden flag on `[first, last]`. */
-  setColumnHidden(sheet: number, first: number, last: number, hidden: boolean): void;
-  /** Sets / replaces the column outline level on `[first, last]`. A level
-   *  above 7, the deepest Excel stores, fails with `StatusCode.InvalidArgument`. */
-  setColumnOutline(sheet: number, first: number, last: number, level: number): void;
-  /** Sets / clears the column `collapsed` flag on `[first, last]`. */
-  setColumnCollapsed(sheet: number, first: number, last: number, collapsed: boolean): void;
-  /** Sets / replaces the cell-style XF on `[first, last]`; index 0 is the default XF. A value later entered into an unstyled cell of the span takes this XF, unless its row has a style. */
-  setColumnStyle(sheet: number, first: number, last: number, xfIndex: number): void;
-  /** Removes the cell-style XF on `[first, last]`, retaining other column attributes. */
-  clearColumnStyle(sheet: number, first: number, last: number): void;
-
-  /** Returns the row-layout overrides on `sheet`. */
-  listRowOverrides(sheet: number): ReadonlyArray<RowLayout>;
-  /** Sets / replaces the row height on `[first, last]` as a manual height (`customHeight`), which stays put when the row's content or font changes. */
-  setRowHeight(sheet: number, first: number, last: number, height: number): void;
-  /** Stores `height` as the cached automatic height of the rows on `[first, last]`: saved as `ht` without `customHeight`, so each row keeps following its content and font. Row style, hidden, outline and collapsed state are kept; `clearRowHeight` drops it. */
-  setRowAutoHeight(sheet: number, first: number, last: number, height: number): void;
-  /** Sets / replaces the row hidden flag on `[first, last]`. */
-  setRowHidden(sheet: number, first: number, last: number, hidden: boolean): void;
-  /** Sets / replaces the row outline level on `[first, last]`. A level
-   *  above 7, the deepest Excel stores, fails with `StatusCode.InvalidArgument`. */
-  setRowOutline(sheet: number, first: number, last: number, level: number): void;
-  /** Sets / clears the row `collapsed` flag on `[first, last]`. */
-  setRowCollapsed(sheet: number, first: number, last: number, collapsed: boolean): void;
-  /** Sets / replaces the cell-style XF of the inclusive row span `first..last`; index 0 is the default XF. A value later entered into an unstyled cell of a covered row takes this XF. Nothing changes when it throws. */
-  setRowStyle(sheet: number, first: number, last: number, xfIndex: number): void;
-  /** Removes the cell-style XF of the inclusive row span `first..last`, retaining other row attributes. */
-  clearRowStyle(sheet: number, first: number, last: number): void;
-  /**
-   * Lists, ascending, every cell-XF index some cell of the selection resolves to: the XFs of
-   * cells that carry their own, then the row, column or default (0) style of the rest. `range`
-   * is a selection: all rows make it a column
-   * selection, all columns a row selection, both the whole sheet.
-   *
-   * First step of an attribute-only change (say the font size) over a selection, the way
-   * Excel applies it to a row, column, range or the whole sheet: read the bases here, build
-   * each one's patched XF with `addFont` / `addCellXf`, then apply the pairs with
-   * `remapRangeStyle`.
-   */
-  getRangeStyleBases(sheet: number, range: CellRect): number[];
-  /**
-   * `getRangeStyleBases` over the selection less the cells `(excludedRows[i], excludedCols[i])`:
-   * an excluded cell contributes no XF, neither its own nor the row, column or default style
-   * beneath it. Use it when the host resolves those cells itself (say, a pending edit overrides
-   * their style). Excluded cells outside the selection and repeats are ignored; excluding every
-   * cell yields an empty list. Fails when the arrays differ in length.
-   */
-  getRangeStyleBasesExcluding(sheet: number, range: CellRect, excludedRows: number[], excludedCols: number[]): number[];
-  /**
-   * Second step of the attribute patch: every cell of the selection ends at `toXfs[i]` where
-   * it resolved to `fromXfs[i]` before; an XF not listed is kept. Covered row and column
-   * styles are rewritten and existing cells remapped; a cell is materialised only where
-   * row-over-column precedence would otherwise resolve differently (for a plain range, every
-   * cell). Values and formulas are untouched. Fails, changing nothing, when the arrays differ
-   * in length, a `fromXfs` entry repeats, a `toXfs` entry is past the cell-XF table, or more
-   * than 1,048,576 cells would be written.
-   */
-  remapRangeStyle(sheet: number, range: CellRect, fromXfs: number[], toXfs: number[]): void;
-  /** Captures the style state of a selection (covered column or row styles and every stored cell's XF) as opaque, versioned bytes for `restoreRangeStyle`; use it to undo a `remapRangeStyle`. */
-  snapshotRangeStyle(sheet: number, range: CellRect): Uint8Array;
-  /** Puts a `snapshotRangeStyle` capture back exactly. Values, formulas, phonetic runs and comments are not touched; nothing changes when it throws. */
-  restoreRangeStyle(sheet: number, bytes: Uint8Array): void;
-  /** Removes the height override on rows `first..last`, returning them to the sheet default height. */
-  clearRowHeight(sheet: number, first: number, last: number): void;
-  /** Removes the width override on columns `first..last`, returning them to the sheet default width. Hidden state, outline level and column style are kept. */
-  clearColumnWidth(sheet: number, first: number, last: number): void;
-
-  /** Reads the sheet's default column / row metrics. */
-  getFormatDefaults(sheet: number): SheetFormatDefaults;
-  /** Replaces the sheet's default column / row metrics. A `has*` flag left out defaults to whether its value was supplied. */
-  setFormatDefaults(sheet: number, defaults: Partial<SheetFormatDefaultsInput>): void;
-
-  /** Rectangle covering the inclusive cell range, in points from the top-left of A1.
-   *  Hidden rows and columns contribute zero extent. */
-  getCellRectPt(sheet: number, range: CellRect, mode: GeometryMode): RectPt;
-  /** Effective column width in points; zero when hidden. */
-  getColumnWidthPt(sheet: number, col: number, mode: GeometryMode): number;
-  /** Effective row height in points; zero when hidden. */
-  getRowHeightPt(sheet: number, row: number): number;
-  /** The character-unit to point conversion model for the workbook's Normal font. */
-  getWidthModel(sheet: number, mode: GeometryMode): WidthModel;
-  /** Converts a stored column width (padding included) to points, snapped to whole screen pixels. */
-  convertColumnCharsToPt(sheet: number, mode: GeometryMode, chars: number): number;
-  /** Inverse of `convertColumnCharsToPt`: the stored width Excel writes for a column of `pt`. */
-  convertColumnPtToChars(sheet: number, mode: GeometryMode, pt: number): number;
-
-  /** Returns the cell XF index of the cell at `(sheet, row, col)`. */
-  getCellXfIndex(sheet: number, row: number, col: number): number;
-  /** Persists `xfIndex` on the cell at `(sheet, row, col)`. An index not
-   *  below `getCellXfCount()` fails with `StatusCode.InvalidArgument`. */
-  setCellXfIndex(sheet: number, row: number, col: number, xfIndex: number): void;
-  /**
-   * Removes the direct style assignment from the cell at `(sheet, row, col)`
-   * so a blank cell inherits its row / column style again. Value, formula and
-   * comments are kept; an absent cell stays absent. A non-blank cell keeps
-   * owning the default xf. Use `getEffectiveStyle().source` to tell an
-   * unassigned cell (`Row` / `Column` / `Default`) from a direct Normal
-   * (`Cell`).
-   */
-  clearCellXfIndex(sheet: number, row: number, col: number): void;
-  /** Applies `xfIndex` across the cells of `range`, materialising blank
-   *  cells so an empty ruled box renders. Saves one call per cell. An
-   *  index not below `getCellXfCount()` fails with `StatusCode.InvalidArgument`. */
-  setRangeXfIndex(sheet: number, range: CellRect, xfIndex: number): void;
   /** Returns the resolved XF record at `xfIndex`. */
   getCellXf(xfIndex: number): CellXf;
   /** Returns the font record at `fontIndex`, including its Color selector. */
@@ -5048,9 +4361,9 @@ export interface Workbook {
   getCellStyleXfCount(): number;
   /** Reads the named cell style `name` (matched exactly); `null` when there is none. */
   getCellStyle(name: string): CellStyle | null;
-  /** Returns the named-style xf record at `index`. Output shape mirrors
+  /** Returns the named-style xf record at `cellStyleXfIndex`. Output shape mirrors
    *  `getCellXf`. */
-  getCellStyleXf(index: number): CellXf;
+  getCellStyleXf(cellStyleXfIndex: number): CellXf;
   /** Appends (deduplicating) a named-style xf and returns its
    *  `<cellStyleXfs>` index, which is what `setCellStyle` and
    *  `CellXf.xfId` reference. */
@@ -5078,17 +4391,18 @@ export interface Workbook {
   removeTableStyle(name: string): void;
   /** Reads the default table and PivotTable style names. */
   getTableStyleDefaults(): TableStyleDefaults;
-  /** Sets the default style names; an omitted field keeps its default and an
-   *  empty string removes it. */
-  setTableStyleDefaults(defaults: { tableStyle?: string; pivotStyle?: string }): void;
+  /** Sets the default style names; an omitted field keeps its default and `null` (or `""`) removes it. */
+  setTableStyleDefaults(patch: TableStyleDefaultsPatch): void;
 
-  /** The 12 theme colours (`clrScheme` order) and the theme typefaces. The
-   *  default theme is reported when the part is absent or unparseable;
-   *  `source` tells the cases apart. */
-  getThemeFonts(): Theme;
+  /** The theme's major and minor typefaces; the default theme's when the part is absent or unparseable
+   *  (`getThemeColors().source` tells the cases apart). */
+  getThemeFonts(): ThemeFonts;
+  /** The 12 theme colours in `clrScheme` order, and where they came from: the default theme is reported when
+   *  the part is absent or unparseable. */
+  getThemeColors(): ThemeColors;
   /** Rewrites the 12 scheme colours (`clrScheme` order, alpha ignored). A
    *  workbook without a theme part first gets a minimal one. */
-  setThemeColors(colors: number[]): void;
+  setThemeColors(colors: ThemeColorsInput): void;
   /** Rewrites the theme's major and minor typefaces. */
   setThemeFonts(fonts: ThemeFonts): void;
   /** Sets one script's typeface in the major (`major` true) or minor font set;
@@ -5096,7 +4410,7 @@ export interface Workbook {
    *  changes `ThemeFonts.*EastAsian`. A workbook without a theme part first gets
    *  one with the full default set. `script` must be four ASCII letters and
    *  `typeface` non-empty, else the call fails with `StatusCode.InvalidArgument`. */
-  setThemeScriptFont(major: boolean, script: string, typeface: string): void;
+  setThemeScriptFont(font: ThemeScriptFontInput): void;
   /** Reads the typeface of `script` in the major (`major` true) or minor font set; `null` when the set
    *  does not list the script. */
   getThemeScriptFont(major: boolean, script: string): ThemeScriptFont | null;
@@ -5105,133 +4419,13 @@ export interface Workbook {
   /** Resolves a colour specification to ARGB against the theme and the
    *  indexed palette; `context` decides what an automatic colour means. */
   resolveColor(spec: Color, context: ColorContext): ResolvedColor;
-  /** The formatting a cell shows: the xf chosen from cell, row, column or
-   *  the default, with its colours resolved. Conditional formatting is not
-   *  applied. */
-  getEffectiveStyle(sheet: number, row: number, col: number): EffectiveStyle;
 
-  /** Number of external-link records carried by the workbook. 0 for fresh workbooks
-   *  and any package whose source archive had no `<externalReferences>`
-   *  block. A formula, name, conditional-format rule or data validation that names an unregistered
-   *  book (bracket or path spelling) appends a record without renumbering; a book already present,
-   *  in any letter case, adds none. */
-  getExternalLinkCount(): number;
-  /** Reads the `externalLinkIndex`-th external-link record in `<externalReferences>` document order. */
-  getExternalLink(externalLinkIndex: number): ExternalLink;
-
-  /** Adds a merge range to `sheet`. */
-  addMerge(sheet: number, range: CellRect): void;
-  /** Removes every merge that overlaps `range` (inclusive). No-op when nothing overlaps. */
-  removeMerge(sheet: number, range: CellRect): void;
-  /** Removes the merge at `index`. Fails with `StatusCode.IndexOutOfRange` if `index` is out of range. */
-  removeMergeAt(sheet: number, index: number): void;
-  /** Drops every merge on `sheet`. */
-  clearMerges(sheet: number): void;
-  /** Returns every merge range on `sheet` as a JS array. */
-  listMerges(sheet: number): readonly CellRect[];
-  /** Returns the merge ranges on `sheet` that intersect `range`, in storage order. */
-  getMergesInRange(sheet: number, range: CellRect): readonly CellRect[];
-
-  /** Returns the cell comment at `(sheet, row, col)`; `null` when none is anchored there. */
-  getComment(sheet: number, row: number, col: number): Comment | null;
-  /** Returns every comment on `sheet`, including comments anchored on
-   *  cells that carry no value. */
-  listComments(sheet: number): readonly SheetComment[];
-  /** Sets / replaces the cell comment. Pass an empty `text` to remove. */
-  setComment(sheet: number, row: number, col: number, author: string, text: string): void;
-  /** Whether the note at `(sheet, row, col)` is shown without hovering; `null` when no note is anchored there. */
-  getCommentVisible(sheet: number, row: number, col: number): boolean | null;
-  /** Shows or hides the note at `(sheet, row, col)`; its box geometry is kept. */
-  setCommentVisible(sheet: number, row: number, col: number, visible: boolean): void;
-
-  /** Reads the workbook's `<workbookProtection>`; every field is zero or empty when absent. */
+  /** Reads the workbook's `<workbookProtection>`; without one every flag is `false`, every count `0` and every
+   *  string `null`. */
   getWorkbookProtection(): WorkbookProtection;
-  /** Replaces the modelled `<workbookProtection>` attributes. An all-empty record removes the element. */
-  setWorkbookProtection(protection: WorkbookProtection): void;
-  /** Number of protected ranges on `sheet`. */
-  getProtectedRangeCount(sheet: number): number;
-  /** Reads the `protectedRangeIndex`-th protected range of `sheet` in file order. */
-  getProtectedRange(sheet: number, protectedRangeIndex: number): ProtectedRange;
-  /** Appends a protected range. `name` must be non-empty and unique on the sheet; `ranges` must hold at least one rectangle. */
-  addProtectedRange(sheet: number, range: ProtectedRange): number;
-  /** Replaces protected range `index`. */
-  updateProtectedRange(sheet: number, index: number, range: ProtectedRange): void;
-  /** Removes protected range `index`. */
-  removeProtectedRange(sheet: number, index: number): void;
-
-  /** Appends a hyperlink to `sheet`. For an in-workbook link, pass an empty
-   *  `target` and its A1 destination as `location`. */
-  addHyperlink(
-    sheet: number,
-    row: number,
-    col: number,
-    target: string,
-    display: string,
-    tooltip: string,
-    location: string,
-  ): void;
-  /** Appends a hyperlink covering the cells of `range`. */
-  addHyperlinkRange(
-    sheet: number,
-    range: CellRect,
-    target: string,
-    display: string,
-    tooltip: string,
-    location: string,
-  ): void;
-  /** Removes every hyperlink anchored at `(row, col)`. No-op when none match. */
-  removeHyperlink(sheet: number, row: number, col: number): void;
-  /** Removes the hyperlink at `index`. Fails with `StatusCode.IndexOutOfRange` if `index` is out of range. */
-  removeHyperlinkAt(sheet: number, index: number): void;
-  /** Drops every hyperlink on `sheet`. */
-  clearHyperlinks(sheet: number): void;
-  /** Returns every hyperlink on `sheet` as a JS array. */
-  listHyperlinks(sheet: number): readonly Hyperlink[];
-  /** Reads the hyperlink whose range starts at `(row, col)`; `null` when none does. */
-  getHyperlink(sheet: number, row: number, col: number): Hyperlink | null;
-
-  /** Number of data-validation rules on `sheet`. */
-  getValidationCount(sheet: number): number;
-  /** Reads the `validationIndex`-th data-validation rule on `sheet` in storage order. Its
-   *  `ranges` mirrors the OOXML `<dataValidation sqref=...>` cell-range list. */
-  getValidation(sheet: number, validationIndex: number): DataValidation;
-  /** Appends a data-validation rule to `sheet`. A non-empty `formula1` / `formula2`
-   *  that does not parse is rejected with `StatusCode.ParserUnexpectedToken`. */
-  addValidation(sheet: number, validation: DataValidationInput): number;
-  /** Removes the validation rule at `index`. Fails with `StatusCode.IndexOutOfRange`
-   *  if `index` is out of range. */
-  removeValidation(sheet: number, index: number): void;
-  /** Drops every validation rule on `sheet`. */
-  clearValidations(sheet: number): void;
-
-  /** Number of CF rules on `sheet`. */
-  getCfRuleCount(sheet: number): number;
-  /** Reads the `cfRuleIndex`-th CF rule on `sheet` in flattened priority order. */
-  getCfRule(sheet: number, cfRuleIndex: number): ConditionalFormat;
-  /** Appends a new single-rule `<conditionalFormatting>` block to
-   *  `sheet`, including visual rules when their payload object is supplied.
-   *  `index` is the new rule's position in the sheet's flattened CF rule
-   *  sequence (the same indexing `getCfRule` and
-   *  `removeCfRule` use); it stays valid until a subsequent
-   *  add/remove/clear mutation on the same sheet renumbers the sequence.
-   *  A non-empty `formula1` / `formula2` that does not parse is rejected
-   *  with `StatusCode.ParserUnexpectedToken`. */
-  addCfRule(sheet: number, rule: ConditionalFormatInput): number;
-  /** Removes the CF rule at `index` (flattened order). When the
-   *  containing block becomes empty it is removed too. */
-  removeCfRule(sheet: number, index: number): void;
-  /** Drops every CF block on `sheet`. */
-  clearCfRules(sheet: number): void;
-
-  /** Returns the cells that `(sheet, row, col)` directly reads
-   *  (1-step precedents) when `depth <= 1`, or every cell reached
-   *  within `depth` BFS steps otherwise. `depth` is capped at 32 to
-   *  avoid runaway expansion in cyclic graphs. An invalid sheet, row or
-   *  column throws `FormulonError`. */
-  getPrecedents(sheet: number, row: number, col: number, depth: number): readonly CellNode[];
-  /** Returns the cells that read `(sheet, row, col)` directly
-   *  (1-step dependents). Same depth semantics as `precedents`. */
-  getDependents(sheet: number, row: number, col: number, depth: number): readonly CellNode[];
+  /** Replaces the modelled `<workbookProtection>` attributes; `null`, like a record with nothing set, removes the
+   *  element. */
+  setWorkbookProtection(protection: WorkbookProtection | null): void;
 
   /** Returns metadata for the function `name` (case-insensitive); `null` when no function
    *  matches. The result is locale-invariant: the description / signature fields are always `undefined`
@@ -5298,14 +4492,6 @@ export interface Workbook {
    *    blank/zero distinction. */
   getCollationClasses(values: Value[], strength: CollationStrength, profileId: ExcelProfileId): CollationClasses;
 
-  /** Returns dynamic-array spill info for `(sheet, row, col)`.
-   *  When the cell is part of a spill region (anchor or phantom),
-   *  `engaged` is `true` and `rect` is the region; the per-cell values
-   *  are read via `getValue`, which is already spill-aware. When the cell
-   *  is not part of any region, `engaged` is `false` and `rect` is `null`
-   *  unless the cell is a blocked anchor. */
-  getSpillInfo(sheet: number, row: number, col: number): Spill;
-
   /** Parses `text` as `INDIRECT` reads a reference under the workbook's profile: A1, or R1C1 with the
    *  profile's letters when `options.r1c1` is set. Accepts an optional local sheet qualifier, `$` markers, a
    *  range in either order and whole columns / rows. Returns `null` for anything else
@@ -5316,22 +4502,7 @@ export interface Workbook {
   /** Writes the inclusive rectangle as A1 reference text: `A1`, `$A$1:$B$2`, `B:D` (every row), `2:11`
    *  (every column), with the sheet name quoted as a stored formula quotes it. A coordinate outside the
    *  grid or an unordered rectangle fails with `StatusCode.InvalidArgument`. */
-  formatReference(range: ReferenceRange, options?: FormatReferenceOptions): string;
-
-  /** Returns the legacy array (CSE, `<f t="array">`) formula covering `(sheet, row, col)`, the same
-   *  value for every cell of the block; `null` outside any block. A dynamic-array
-   *  spill is not a legacy array formula; read that through `getSpillInfo`. */
-  getArrayFormula(sheet: number, row: number, col: number): ArrayFormula | null;
-
-  /** Enters `formula` as one legacy array formula over `range`, whose top-left cell anchors it; a
-   *  1 x 1 block is allowed. Every cell of the rectangle loses its value and formula
-   *  (styles are kept) and the next recalc distributes the result, filling `#N/A` where a smaller
-   *  result cannot reach. Refused, changing nothing, when the rectangle partially overlaps another
-   *  array (one wholly inside is replaced), intersects a merged area, a data table or a PivotTable,
-   *  or, for more than one cell, a table. Writing a value, blank or formula to a block's top-left
-   *  cell replaces the whole block, which is how a block is cleared; a write to any other cell of
-   *  a block is refused. */
-  setArrayFormula(sheet: number, range: CellRect, formula: string): void;
+  formatReference(range: ReferenceRangeInput, options?: FormatReferenceOptions): string;
 
   /** Estimated heap bytes the native workbook occupies.
    *
@@ -5346,28 +4517,891 @@ export interface Workbook {
   getMemoryUsage(): number;
 }
 
-/** An A1 view of one worksheet, from `Workbook.sheet(nameOrIndex)`. Each address is one cell without a
- *  sheet name (`B3`, `$B$3`, `b3`), read by `Workbook.parseReference`: an address that does not parse, names a
- *  sheet, or spans more than one cell fails with `StatusCode.InvalidArgument`. The view holds the sheet index it
- *  was created with, so it addresses a different sheet after sheets are inserted, removed or moved; take a new
- *  view then. Every call on a view of a disposed workbook fails with `StatusCode.BindingInvalidHandle`. */
+/** One worksheet: the sheet-scope operations, addressed without a sheet argument. Get it from
+ *  `Workbook.sheet(key)`, `listSheets()`, `addSheet` or `copySheet`; the workbook keeps one handle per sheet, so
+ *  `wb.sheet(0) === wb.sheet('Data')` for the sheet named `Data` at index 0.
+ *
+ *  A handle follows its sheet when sheets are added, copied, moved or renamed. Once its sheet is removed, every
+ *  member but `workbook` fails with `StatusCode.NotFound`; once the workbook is disposed, with
+ *  `StatusCode.BindingInvalidHandle`. Rows, columns and every index are 0-based, as on `Workbook`.
+ *
+ *  An A1 address (`get`, `set`, and the one-string forms of `getFormula` / `setFormula`) is one cell without a
+ *  sheet name (`B3`, `$B$3`, `b3`), read as `Workbook.parseReference` reads it: an address that does not parse,
+ *  names a sheet or spans more than one cell fails with `StatusCode.InvalidArgument`. */
 export interface Sheet {
+  /** The workbook this sheet belongs to. */
   readonly workbook: Workbook;
-  /** The sheet index, fixed when the view was created. */
+  /** The sheet's current 0-based position in the workbook. */
   readonly index: number;
-  /** The sheet's current name, read from the workbook on each access. */
+  /** The sheet's current name. */
   readonly name: string;
-  /** `Workbook.getValue` at `a1`. */
+  /** `getValue` at `a1`. */
   get(a1: string): Value;
-  /** `Workbook.setValue` at `a1`. */
+  /** `setValue` at `a1`. */
   set(a1: string, value: number | string | boolean | null | Value): void;
-  /** `Workbook.getFormula` at `a1`. */
-  getFormula(a1: string): string | null;
-  /** `Workbook.setFormula` at `a1`. */
+
+  /** Stores a numeric literal. NaN and infinity are rejected with `StatusCode.InvalidArgument`. */
+  setNumber(row: number, col: number, value: number): void;
+  /** Stores a boolean literal. */
+  setBool(row: number, col: number, value: boolean): void;
+  /** Stores a static Excel error literal. Unlike `setNumber`/`setBool`/`setText`, an omitted
+   *  `errorCode` has no sane zero-value default, so it is rejected
+   *  rather than silently writing error code 0 (`#NULL!`). */
+  setError(row: number, col: number, errorCode: ErrorCode): void;
+  /** Stores a text literal. */
+  setText(row: number, col: number, text: string): void;
+  /** Stores the cell's OOXML phonetic guide (`<rPh>`); `null` (or `""`) clears it. */
+  setCellPhonetic(row: number, col: number, phonetic: string | null): void;
+  /** Stores the cell's phonetic guide as one `<rPh>` block per run; `null` (or `[]`) clears it. Unlike `setCellPhonetic`, which annotates the whole cell,
+   *  this keeps the span each reading covers. The runs must be an ordered
+   *  partition: each needs `sb <= eb` and must start at or after the previous
+   *  run's `eb`. */
+  setCellPhoneticRuns(row: number, col: number, runs: readonly PhoneticRun[] | null): void;
+  /** Stores how the cell's guide renders. Independent of
+   *  `setCellPhoneticRuns` in both directions, and only observable on a cell
+   *  that has runs; every value setter clears both, so call it after the
+   *  cell's text. */
+  setCellPhoneticProperties(row: number, col: number, properties: PhoneticPropertiesInput): void;
+  /** Stores a blank literal at the cell; equivalent to clearing it. */
+  setBlank(row: number, col: number): void;
+  /** Stores a formula at `(row, col)`. Fails with `StatusCode.ParserUnexpectedToken` and changes nothing when the
+   *  text does not parse: a syntax error, or a built-in called through a sheet / workbook qualifier. */
+  setFormula(row: number, col: number, formula: string): void;
+  /** `setFormula` at the A1 address `a1`. */
   setFormula(a1: string, formula: string): void;
+  /** Stores `value` through the setter its type selects: a `number` through `setNumber` (`-0` included; NaN and
+   *  infinity fail with `StatusCode.InvalidArgument`), a `string` through `setText` (a leading `=` stays
+   *  text; use `setFormula` for formulas), a `boolean` through `setBool` and `null` through `setBlank`. A
+   *  {@link Value} is stored by its `kind`; an `ErrorValue` goes through `setError`. `undefined`, a
+   *  `bigint`, a symbol, an array, any other object, and an `ArrayValue` / `RefValue` / `LambdaValue`
+   *  throw `TypeError`. The value `getValue` returns stores back unchanged for every scalar kind. */
+  setValue(row: number, col: number, value: number | string | boolean | null | Value): void;
+
+  /** Reads the cell's cached value, as of the most recent recalc; call `recalc` first after mutating cells.
+   *  Fails with `StatusCode.InvalidArgument` when `row` or `col` is out of range. */
+  getValue(row: number, col: number): Value;
+
+  /** The stored A1 formula (leading `=` included), or `null` for a cell that holds none.
+   *  The text is returned as entered; a formula loaded from a file shows book names, not `[N]` indexes. */
+  getFormula(row: number, col: number): string | null;
+  /** `getFormula` at the A1 address `a1`. */
+  getFormula(a1: string): string | null;
+  /** The formula in R1C1 notation relative to the cell, without a leading `=`; `null` when the cell holds none.
+   *  A formula loaded from a file that does not parse is kept verbatim, evaluates to `#NAME?`, and fails here with
+   *  `StatusCode.ParserUnexpectedToken`; `setFormula` never produces that state.
+   *  Sheet and external qualifiers are quoted as a whole only when the path, book or sheet name needs it. */
+  getFormulaR1C1(row: number, col: number): string | null;
+  /** One page of the populated cells (formula or non-blank value, spill phantoms included) inside
+   *  `range`, row-major. `cursor` is the `nextCursor` of the previous page (omit for the first);
+   *  `limit` caps the page (omit or 0 for the maximum, 65536). */
+  getCellsInRange(range: CellRect, cursor?: number | null, limit?: number | null): CellsInRange;
+  /** The text Excel displays for the cell, from its value and number format under the workbook's date system. */
+  getDisplayText(row: number, col: number): DisplayText;
+
+  /** Evaluates `formula` as if entered at `(row, col)` and returns a
+   *  single scalar result, without mutating the workbook. Local and
+   *  cross-sheet references, defined names, and `ROW()` / `COLUMN()` resolve
+   *  relative to the anchor. An array / spill result is reduced to its
+   *  top-left element (not Excel implicit intersection or spilling; use
+   *  `evaluateFormulaArray` for the whole multi-cell result).
+   *  Note: a self-reference reads the target cell's cached value rather than
+   *  raising `#REF!`, since the ad-hoc formula never joins the dep graph. */
+  evaluateFormula(row: number, col: number, formula: string): Value;
+
+  /** Evaluates `formula` as if entered at `(row, col)` and returns the
+   *  whole multi-cell result without mutating the workbook. Unlike
+   *  `evaluateFormula` (which reduces an array to its top-left element),
+   *  a dynamic-array formula such as `=SEQUENCE(2,3)` yields the full
+   *  `rows` x `cols` grid in `result.cells` (row-major, `cells[r][c]`); a
+   *  scalar result is reported as a 1x1 array. Same read-only purity and
+   *  self-reference caveat as `evaluateFormula`. */
+  evaluateFormulaArray(row: number, col: number, formula: string): EvalArray;
+
+  /** Evaluates `formula` as a conditional-formatting predicate anchored at
+   *  `(row, col)`, with relative references written relative to
+   *  `(anchorRow, anchorCol)` (the CF-applied range's top-left). The result
+   *  is coerced with Excel's CF rules: error / blank / text / numeric-zero
+   *  yield `false`, any non-zero number yields `true`. Read-only. */
+  evaluateCfFormula(row: number, col: number, anchorRow: number, anchorCol: number, formula: string): Value;
+
+  /** Renders the lambda value cached at `(row, col)` as Excel formula text in `LAMBDA(p1,p2,body)`
+   *  form; `null` when the cell is absent or its value is not a lambda. */
+  getLambdaText(row: number, col: number): string | null;
+  /** Returns the cell's OOXML phonetic guide (`<rPh>`); `null` when it has none. */
+  getCellPhonetic(row: number, col: number): string | null;
+  /** Returns the cell's phonetic guide as its `<rPh>` runs; `[]` for a cell without a guide. */
+  getCellPhoneticRuns(row: number, col: number): readonly PhoneticRun[];
+  /** Returns how the cell's guide renders. A cell with no annotation
+   *  reports the all-zero triple. */
+  getCellPhoneticProperties(row: number, col: number): PhoneticProperties;
+  /** Reads the cell's "Show Phonetic" flag (`<c ph="1">`); `false` for an
+   *  absent cell. */
+  getCellShowPhonetic(row: number, col: number): boolean;
+  /** Sets the cell's "Show Phonetic" display flag. It is independent of the
+   *  readings and survives value writes; a formula cell's flag is neither
+   *  saved nor read from a file. */
+  setCellShowPhonetic(row: number, col: number, show: boolean): void;
+  /** Recalculates only cells touched by the supplied viewport and returns the number of cells evaluated.
+   *  An exception thrown by an `IterativeProgressCallback` is rethrown from this call. */
+  recalcViewport(viewport: CellRect): number;
+
+  /**
+   * The four structural edits move every structure the engine models:
+   * cells, formulas, merges, conditional-format ranges, validations,
+   * hyperlinks, tables, print areas, manual breaks and the auto-filter
+   * range. The ranges and formulas inside the worksheet `<extLst>` (the
+   * `x14` conditional-formatting block, sparkline groups, `x14`
+   * validations) move with them, as Excel moves them, and so do the cells
+   * named by the other worksheet content kept verbatim for a lossless save:
+   * protected ranges, scenarios, a sheet sort state, cell watches,
+   * ignored-error ranges and web-publish ranges.
+   *
+   * They do not move the anchor of an embedded OLE object or form control,
+   * also kept verbatim: it keeps its pre-edit cell, and nothing reports it.
+   * An insert also does not copy the formatting of the row or column before
+   * it onto the new one, which Excel does — a sparkline included.
+   */
+
+  /** Inserts `count` rows at `row` on the sheet and rewrites cross-workbook
+   *  references to follow the shift.
+   *  Fails with `StatusCode.PreconditionFailed` when the edit cuts into a data table, legacy
+   *  array block or PivotTable, or would push one of them or a table past
+   *  the sheet bound; the workbook is unchanged. */
+  insertRows(row: number, count: number): void;
+  /** Deletes `count` rows starting at `row` on the sheet. References that
+   *  fall inside the deleted interval collapse to `#REF!`.
+   *  Fails with `StatusCode.PreconditionFailed` when the edit cuts into a data table, legacy
+   *  array block or PivotTable, or would push one of them or a table past
+   *  the sheet bound; the workbook is unchanged. */
+  deleteRows(row: number, count: number): void;
+  /** Inserts `count` columns at `col` on the sheet.
+   *  Fails with `StatusCode.PreconditionFailed` when the edit cuts into a data table, legacy
+   *  array block or PivotTable, or would push one of them or a table past
+   *  the sheet bound; the workbook is unchanged. */
+  insertColumns(col: number, count: number): void;
+  /** Deletes `count` columns starting at `col` on the sheet.
+   *  Fails with `StatusCode.PreconditionFailed` when the edit cuts into a data table, legacy
+   *  array block or PivotTable, or would push one of them or a table past
+   *  the sheet bound; the workbook is unchanged. */
+  deleteColumns(col: number, count: number): void;
+
+  /** Number of written coordinates on the sheet: cells set by any value, formula or format setter,
+   *  `setBlank`, or a spill anchor commit or rejection (clearing keeps the slot),
+   *  plus spill phantoms that have no stored slot. Unwritten columns are not counted. */
+  getCellCount(): number;
+  /** Reads the `index`-th counted coordinate, `index` in `[0, cellCount)`, ordered by `(row, col)` ascending. */
+  getCellAt(index: number): Cell;
+
+  /** Reads the complete worksheet-level `<autoFilter>` XML fragment; `null` when the sheet has no
+   *  AutoFilter definition. */
+  getAutoFilterXml(): string | null;
+  /** Replaces the worksheet-level `<autoFilter>` XML fragment; `null` (or `""`) clears it. */
+  setAutoFilterXml(xml: string | null): void;
+
+  /** Reads the sheet's typed AutoFilter; `null` when absent. */
+  getAutoFilter(): AutoFilter | null;
+  /** Replaces the sheet AutoFilter and its hidden `_xlnm._FilterDatabase`
+   *  name. Row visibility is unchanged; call `applyAutoFilter` to hide the
+   *  excluded rows. */
+  setAutoFilter(filter: AutoFilter): void;
+  /** Removes the sheet AutoFilter. Row visibility is unchanged. */
+  removeAutoFilter(): void;
+  /** Hides every body row the criteria exclude and shows the rest, as
+   *  Excel's Reapply does. Fails with `StatusCode.NotFound` when there is no AutoFilter. */
+  applyAutoFilter(): void;
+  /** Drops every column criterion and shows all body rows. */
+  clearAutoFilter(): void;
+  /** Evaluates the sheet AutoFilter without changing the sheet. */
+  evaluateAutoFilter(): AutoFilterEval;
+
+  /** Checks `value` against the validation rule covering `(row, col)` without
+   *  storing it. The first rule in `listValidations` order wins on overlap. */
+  validateValue(row: number, col: number, value: Value): ValidationOutcome;
+  /** Enumerates populated cells whose value fails their validation rule, in
+   *  row-major order, one page at a time; paging as `getCellsInRange`. */
+  getInvalidCells(cursor?: number | null, limit?: number | null): CellsInRange;
+
+  /** Lists the sheet's threaded comments in file order: each thread's opening comment followed by its replies. */
+  listThreadedComments(): readonly ThreadedComment[];
+  /** Adds a threaded comment. A `parentId` that is omitted or `null` opens a new thread at
+   *  `row` / `col`; otherwise it replies to that thread. */
+  addThreadedComment(comment: ThreadedCommentInput): void;
+  /** Updates the text and / or mentions of the comment with `id`; an omitted key keeps its value. */
+  updateThreadedComment(id: string, patch: ThreadedCommentPatch): void;
+  /** Sets the resolved state of the thread opened by `threadId`. */
+  setThreadResolved(threadId: string, done: boolean): void;
+  /** Removes a comment; removing an opening comment removes its thread. */
+  removeThreadedComment(id: string): void;
+  /** Reads the threaded comment with `id`; `null` when the sheet has none. */
+  getThreadedComment(id: string): ThreadedComment | null;
+  /** Lists the anchored objects of the sheet's drawing, in document order. */
+  listDrawingObjects(): readonly DrawingObject[];
+  /** Reads the drawing object `objectId`; `null` when the sheet's drawing has none. */
+  getDrawingObject(objectId: number): DrawingObject | null;
+  /** Returns a copy of the media bytes of the picture `objectId`; `null` when the sheet has no
+   *  such picture with a present media part. */
+  getImage(objectId: number): Image | null;
+  /** Inserts `bytes` as a picture and returns its object id; existing drawing content is kept. */
+  addImage(bytes: Uint8Array, input?: ImageInsertInput): number;
+  /** Removes the picture or chart `objectId` and the parts only it reaches; other drawing content is kept. */
+  removeDrawingObject(objectId: number): void;
+  /** Renames the picture or chart `objectId`; duplicate names are allowed. */
+  setDrawingName(objectId: number, name: string): void;
+  /** Moves and resizes the picture or chart `objectId`, keeping its id, crop, rotation and every other element. */
+  setDrawingAnchor(objectId: number, anchor: DrawingAnchor): void;
+  /** Makes the picture or chart `objectId` item `zOrderIndex` of `listDrawingObjects`, whose order is the stacking
+   *  order (0 is the back). */
+  setDrawingZOrder(objectId: number, zOrderIndex: number): void;
+  /** Captures the picture or chart `objectId` with its list position, element and dependent parts as opaque bytes for `restoreDrawing`. */
+  snapshotDrawing(objectId: number): Uint8Array;
+  /** Puts a `snapshotDrawing` capture back and returns the object's id: in place of an object with the same id at its recorded position, or as a copy on top with `newId`. */
+  restoreDrawing(bytes: Uint8Array, opts?: RestoreImageOptions): number;
+
+  // Drawing shapes. A shape is addressed by `objectId`, the id `listShapes` reports.
+  /** Lists the shapes, connectors and groups of the sheet's drawing in z-order (back first); children of a group are not listed. */
+  listShapes(): readonly Shape[];
+  /** Appends a shape on top and returns its id; a sheet without a drawing gets one and existing drawing content is kept. */
+  addShape(spec: ShapeInput): number;
+  /** Applies the fields `spec` names to the shape `objectId`; every other part of its XML is kept. */
+  updateShape(objectId: number, spec: ShapeInput): void;
+  /** Removes the shape, connector or group `objectId` with its children. */
+  removeShape(objectId: number): void;
+  /** Reads the shape `objectId`; `null` when the sheet's drawing has none. */
+  getShape(objectId: number): Shape | null;
+
+  // Table slicers. A slicer is addressed by `objectId`, the id `addSlicer` returns and `listSlicers` reports.
+  /** Lists the table slicers the sheet hosts; slicers over a pivot cache are not listed. */
+  listSlicers(): readonly Slicer[];
+  /** Reads the slicer `objectId`; `null` when the sheet hosts none (a slicer without a frame has no id). */
+  getSlicer(objectId: number): Slicer | null;
+  /** Adds a slicer over column `column` (0-based) of table `table` and returns its frame's id. It creates the slicer and cache parts, the `Slicer_*` defined name and the drawing frame; the table may live on another sheet. */
+  addSlicer(table: number, column: number, spec: SlicerInput): number;
+  /** Applies the fields `spec` names to the slicer `objectId`; every other part of its XML is kept. */
+  updateSlicer(objectId: number, spec: SlicerInput): void;
+  /** Removes the slicer `objectId` with its drawing frame, and its cache when no other slicer uses it. Removing a table or sheet removes the slicers bound to it. */
+  removeSlicer(objectId: number): void;
+
+  // What-If data tables. The formulas sit in the row above the result range and the substitution values in the column left of it (or the other way round); each result cell is found by substituting into the input cell(s), recalculating the cells that read them and restoring the inputs.
+  /** Creates a data table over `spec`'s result range. The result cells read 0 until the next recalc and refuse writes ("cannot change part of a data table") until the table is removed. `StatusCode.DataTableInvalid` (8005) when no input is given, the range has no row above or column left of it, an input lies inside the range, or the range overlaps another data table. */
+  addDataTable(spec: DataTableInput): void;
+  /** Reads the data table whose result range contains `(row, col)`; `null` when no table covers the cell. */
+  getDataTable(row: number, col: number): DataTable | null;
+  /** Removes the data table containing `(row, col)` and blanks its result cells. `StatusCode.DataTableInvalid` (8005) when none covers the cell. */
+  removeDataTable(row: number, col: number): void;
+  /** Appends a group; `spec.sparklines` must hold at least one sparkline. */
+  addSparklineGroup(spec: SparklineGroupInput): number;
+  /** Lists the sheet's sparkline groups; a group's position is its `sparklineGroupIndex`. */
+  listSparklineGroups(): readonly SparklineGroup[];
+  /** Rewrites the modelled attributes, colours and date range of group `sparklineGroupIndex`; its sparklines and
+   *  unmodelled XML are kept. */
+  updateSparklineGroup(sparklineGroupIndex: number, spec: SparklineGroupInput): void;
+  /** Replaces the sparklines of group `sparklineGroupIndex`. */
+  setSparklineGroupSparklines(sparklineGroupIndex: number, sparklines: readonly Sparkline[]): void;
+  /** Removes group `sparklineGroupIndex`. */
+  removeSparklineGroup(sparklineGroupIndex: number): void;
+
+  // Charts. A chart is addressed by `objectId`, the id `listDrawingObjects` reports for a `DrawingObjectKind.Chart`.
+  /** Reads the typed view of the chart `objectId`; `null` when the sheet has no such chart. */
+  getChart(objectId: number): Chart | null;
+  /** Resolves the chart's series against the current cell values. Fails with `StatusCode.NotFound` when the
+   *  sheet has no chart `objectId`; use `getChart` to test for one. */
+  getChartData(objectId: number): ChartData;
+  /** Resolves the series as if `overrides` were applied to the chart; the workbook is not changed.
+   *  Fails with `StatusCode.NotFound` when the sheet has no chart `objectId`. */
+  getChartPreview(objectId: number, overrides: ChartPreviewOverridesInput): ChartData;
+  /** Creates a chart with filled caches and returns its object id. */
+  addChart(options: ChartInsertInput): number;
+  /** Replaces plot group `plot` with `kind`; `grouping` applies to column, bar, line and area. */
+  setChartType(objectId: number, plot: number, kind: ChartInsertKind, grouping?: ChartGrouping): void;
+  /** Sets the chart title text, or removes the title with `null`. A {@link ChartTitle} sets that kind, so a title
+   *  of kind `ChartTitleKind.Auto` returns the title to Excel's automatic one. */
+  setChartTitle(objectId: number, title: string | ChartTitle | null): void;
+  /** Sets the legend position and overlay, or removes the legend with `null`; `hiddenSeries` (series `c:idx`
+   *  values) replaces the hidden legend entries when given. */
+  setChartLegend(
+    objectId: number,
+    position: ChartLegendPosition | null,
+    overlay: boolean,
+    hiddenSeries?: readonly number[],
+  ): void;
+  /** Patches the axis `axisId`. */
+  setChartAxis(objectId: number, axisId: number, patch: ChartAxisPatch): void;
+  /** Patches how blanks are plotted, whether hidden cells are skipped and whether `#N/A` draws as blank. */
+  setChartDisplay(objectId: number, patch: ChartDisplayPatch): void;
+  /** Patches the series with `c:idx` `seriesIndex` of plot group `plot`. */
+  setChartSeries(objectId: number, plot: number, seriesIndex: number, patch: ChartSeriesPatch): void;
+  /** Patches a data point; `null` or an empty patch removes its formatting. */
+  setChartPoint(
+    objectId: number,
+    plot: number,
+    seriesIndex: number,
+    pointIndex: number,
+    patch: ChartPointPatch | null,
+  ): void;
+  /** Patches plot group `plot`. */
+  setChartPlot(objectId: number, plot: number, patch: ChartPlotPatch): void;
+  /** Replaces the chart filter: series by `c:idx` and categories by position are hidden. */
+  setChartFilter(objectId: number, hiddenSeries: readonly number[], hiddenCategories: readonly number[]): void;
+  /** Appends a series to plot group `plot`; the patch must set `values` (`y` for a scatter plot). */
+  addChartSeries(objectId: number, plot: number, patch: ChartSeriesPatch): number;
+  /** Removes the series with `c:idx` `seriesIndex` from plot group `plot`. */
+  removeChartSeries(objectId: number, plot: number, seriesIndex: number): void;
+  /** Rebuilds every series from `source.source`, keeping the chart kind and each series' formatting by index, and
+   *  clears the filter. A header flag that is omitted or `null` follows Excel's detection. */
+  setChartSource(objectId: number, source: ChartSourceInput): void;
+
+  /** Returns the number of PivotTables anchored on the sheet. */
+  getPivotCount(): number;
+  /** Evaluates and projects a PivotTable into concrete grid cells. */
+  getPivotLayout(pivotIndex: number): PivotLayout;
+
+  // ---- PivotTable mutation -----------------------------------------------
+  /** Creates a new empty pivot table. Returns its pivot index. */
+  addPivot(name: string, cacheId: number, anchorRow: number, anchorCol: number): number;
+  /** Removes the pivot table at `pivotIndex`. */
+  removePivot(pivotIndex: number): void;
+  /** Renames the pivot table. */
+  setPivotName(pivotIndex: number, name: string): void;
+  /** Sets the rectangle the pivot reserves (`<location ref>`); its top-left cell is the anchor. */
+  setPivotAnchor(pivotIndex: number, rect: CellRect): void;
+  /** Toggles the row / column grand total bands on the pivot; an omitted key keeps its band. */
+  setPivotGrandTotals(pivotIndex: number, patch: PivotGrandTotalsPatch): void;
+  /** Sets the pivot's table style and toggles, making the style element
+   *  present. New pivots start as `PivotStyleLight16` with row / column
+   *  headers and last column on. */
+  setPivotStyleInfo(pivotIndex: number, info: PivotStyleInput): void;
+  /** Reads the pivot's compact / tabular / outline report layout. */
+  getPivotReportLayout(pivotIndex: number): PivotReportLayout;
+  /** Sets the pivot's compact / tabular / outline report layout. */
+  setPivotReportLayout(pivotIndex: number, layout: PivotReportLayout): void;
+  /** Returns the id of the cache the pivot draws from.
+   *  The definition read-backs here work for pivots created in-session and
+   *  loaded from a package alike. */
+  getPivotCacheId(pivotIndex: number): number;
+  /** Reads the pivot's name. */
+  getPivotName(pivotIndex: number): string;
+  /** Reads the row / column grand total flags `setPivotGrandTotals` writes. */
+  getPivotGrandTotals(pivotIndex: number): PivotGrandTotals;
+  /** Reads the PivotTable Options `setPivotOptions` writes. */
+  getPivotOptions(pivotIndex: number): PivotOptions;
+  /** Reads whether a cache change left the pivot's sheet cells stale; see `projectPivot`. */
+  isPivotProjectionPending(pivotIndex: number): boolean;
+  /** Reads the table style `setPivotStyleInfo` writes. */
+  getPivotStyleInfo(pivotIndex: number): PivotStyle | null;
+  /** Reads the row-axis field order (the list `setPivotRowFieldOrder` takes). */
+  getPivotRowFieldOrder(pivotIndex: number): readonly number[];
+  /** Reads the column-axis field order. */
+  getPivotColumnFieldOrder(pivotIndex: number): readonly number[];
+  /** Lists the pivot's fields; a field's position is its `fieldIndex`. */
+  listPivotFields(pivotIndex: number): readonly PivotField[];
+  /** Lists the pivot's data fields; a data field's position is its `dataFieldIndex`. */
+  listPivotDataFields(pivotIndex: number): readonly PivotDataField[];
+  /** Lists the pivot's filters; a filter's position is its `filterIndex`. */
+  listPivotFilters(pivotIndex: number): readonly PivotFilter[];
+  /** Places a field on the pivot. Returns its field index.
+   *  A pivot's fields are positional over its cache's fields (field `i` is
+   *  cache field `i`): when `sourceName` names a cache field the pivot first
+   *  gets one bare, axis-less field per cache field and the named one is
+   *  configured in place, so `index` is that cache field's position and
+   *  adding it again updates it. A name the cache lacks appends a field.
+   *  A field added on the row or column axis is appended to that axis's
+   *  order. */
+  addPivotField(pivotIndex: number, spec: PivotFieldInput): number;
+  /** Number of items in the field's item list (what `addPivotFieldItem` appends to). */
+  getPivotFieldItemCount(pivotIndex: number, fieldIndex: number): number;
+  /** Reads item `itemIndex` of the field; the index `setPivotFieldItemVisible`
+   *  takes. */
+  getPivotFieldItem(pivotIndex: number, fieldIndex: number, itemIndex: number): PivotItem;
+  /** Turns the automatic subtotal of the field on or off. */
+  setPivotFieldDefaultSubtotal(pivotIndex: number, fieldIndex: number, on: boolean): void;
+  /** Inserts a blank row after each item of the field. */
+  setPivotFieldInsertBlankRow(pivotIndex: number, fieldIndex: number, on: boolean): void;
+  /** Repeats the item labels of the field on every row. */
+  setPivotFieldFillDownLabels(pivotIndex: number, fieldIndex: number, on: boolean): void;
+  /** Expands or collapses the whole field. */
+  setPivotFieldShowDetail(pivotIndex: number, fieldIndex: number, on: boolean): void;
+  /** Expands or collapses one item of the field. */
+  setPivotFieldItemShowDetail(pivotIndex: number, fieldIndex: number, itemIndex: number, on: boolean): void;
+  /** Shows `caption` instead of the item's value; `null` (or `""`) clears it. */
+  setPivotFieldItemCaption(pivotIndex: number, fieldIndex: number, itemIndex: number, caption: string | null): void;
+  /** Renames pivot field `fieldIndex` in the report; `null` (or `""`) clears the name. The field's own source name
+   *  is allowed; another field's source or custom name, or a data field's name, is not. */
+  setPivotFieldCustomName(pivotIndex: number, fieldIndex: number, name: string | null): void;
+  /** Lists the field's items without data. */
+  setPivotFieldShowAll(pivotIndex: number, fieldIndex: number, on: boolean): void;
+  /** Writes the PivotTable Options; members the object omits keep their current value. Wrong-typed members
+   *  fail without changing the pivot. Fails with `StatusCode.PreconditionFailed` when the report would overlap another structure. */
+  setPivotOptions(pivotIndex: number, options: PivotOptionsPatch): void;
+  /** Writes the pivot's report into its sheet cells now and clears the pending flag. */
+  projectPivot(pivotIndex: number): void;
+  /** Writes the records behind data cell (`row`, `col`) onto a new sheet, inserted before this one, and activates
+   *  it. Returns the new sheet's handle; this sheet and the ones after it move up one place. */
+  showPivotDetails(pivotIndex: number, row: number, col: number): Sheet;
+  /** Drops every field from the pivot, emptying the row and column orders. */
+  clearPivotFields(pivotIndex: number): void;
+  /** Sets the axis of pivot field `fieldIndex`. Moving onto the row or column
+   *  axis appends the field to that axis's order; moving off removes it.
+   *  `null` takes the field off every axis, as unchecking it in a field list
+   *  does: its data fields are removed (later data-field indices shift
+   *  down), as are filters naming it and value filters scoring a
+   *  removed data field; its item visibility is kept. */
+  setPivotFieldAxis(pivotIndex: number, fieldIndex: number, axis: PivotAxis | null): void;
+  /** Sets the sibling order of pivot field `fieldIndex`. `PivotSortOrder.Manual`
+   *  keeps items in `addPivotFieldItem` order and takes no `byField`; for the
+   *  other orders an empty `byField` sorts by label. */
+  setPivotFieldSort(pivotIndex: number, fieldIndex: number, order: PivotSortOrder, byField: string): void;
+  /** Sets the `subtotal_top` flag on pivot field `fieldIndex`. */
+  setPivotFieldSubtotalTop(pivotIndex: number, fieldIndex: number, top: boolean): void;
+  /** Appends a manual-filter item to pivot field `fieldIndex`, addressed by
+   *  its label. The item binds to the first shared item of the cache field
+   *  that renders as `name` (unbound when none does), and the filter engine
+   *  matches source records by comparing their rendered label against
+   *  `name`. An empty `name` therefore cannot express the blank item,
+   *  which has no label of its own; use `addPivotFieldSharedItem`. */
+  addPivotFieldItem(pivotIndex: number, fieldIndex: number, name: string, visible: boolean): number;
+  /** Appends a manual-filter item to pivot field `fieldIndex`, addressed by
+   *  its position in the bound cache field's shared items -- the same
+   *  index space as OOXML `<item x="N">`. The label is resolved from that
+   *  shared item, which makes this the form that can express the blank
+   *  item. `cacheIndex` is not validated: the cache field may be filled in
+   *  after the pivot definition, and an index that resolves to nothing
+   *  yields an item with an empty label that filters nothing. */
+  addPivotFieldSharedItem(pivotIndex: number, fieldIndex: number, cacheIndex: number, visible: boolean): number;
+  /** Drops every manual-filter item from pivot field `fieldIndex`. */
+  clearPivotFieldItems(pivotIndex: number, fieldIndex: number): void;
+  /** Toggles the visibility of item `itemIndex` on field `fieldIndex`. */
+  setPivotFieldItemVisible(pivotIndex: number, fieldIndex: number, itemIndex: number, visible: boolean): void;
+  /** Appends a subtotal-fn entry to pivot field `fieldIndex`. */
+  addPivotFieldSubtotalFn(pivotIndex: number, fieldIndex: number, agg: PivotAggregation): void;
+  /** Drops every subtotal-fn entry from pivot field `fieldIndex`. */
+  clearPivotFieldSubtotalFns(pivotIndex: number, fieldIndex: number): void;
+  /** Groups the date field `fieldIndex` (a source field, or one of its group
+   *  fields) by the `PivotDatePeriod` bits of `group.periods`, as Excel's Group
+   *  command does, replacing any grouping it has. Each period becomes a
+   *  group field appended to the pivot cache, finest first, named and
+   *  labelled in the workbook's locale; this pivot shows them in the
+   *  field's place, coarsest outermost, and another pivot showing the field
+   *  shows them before it. `PivotCalendar.Japanese` groups the years by era
+   *  year (`calendar` defaults to Gregorian). `intervalDays` (default `1`) above 1 groups by runs of days and
+   *  needs `periods === PivotDatePeriod.Days`. `start` / `end` are date
+   *  serials; `NaN` (the default) takes the field's first value and its
+   *  last (the midnight after it for a date without a time). An empty or
+   *  unknown mask, a zero interval, an invalid bound, a start after the end
+   *  or a field holding anything but dates is `StatusCode.InvalidArgument`. */
+  setPivotFieldDateGroup(pivotIndex: number, fieldIndex: number, group: PivotDateGroupInput): void;
+  /** Removes the date grouping of pivot field `fieldIndex` (a source field,
+   *  or one of its group fields) from every pivot on its cache; the field
+   *  returns to the axis position its group fields held. A field that is
+   *  not grouped is left as it is. `StatusCode.PreconditionFailed` when the group
+   *  fields are not the last fields of the cache. */
+  clearPivotFieldDateGroup(pivotIndex: number, fieldIndex: number): void;
+  /** Sets the `numFmtId` of pivot field `fieldIndex`, as a decimal string
+   *  naming a built-in id or one returned by `addNumFmt`; `null` (or `""`) clears it. Any other unknown id is
+   *  rejected. */
+  setPivotFieldNumberFormat(pivotIndex: number, fieldIndex: number, formatCode: string | null): void;
+
+  /** Replaces the row-axis field order with `indices`. Each entry must
+   *  be `< pivotFieldCount` and appear once. The list is the axis's whole
+   *  membership: listed fields move onto the row axis and fields left out
+   *  come off it. Pass an empty array to clear. */
+  setPivotRowFieldOrder(pivotIndex: number, indices: readonly number[]): void;
+  /** Replaces the column-axis field order. Same contract as rows. */
+  setPivotColumnFieldOrder(pivotIndex: number, indices: readonly number[]): void;
+  /** Appends a new data-field entry. An omitted or empty `spec.name` is
+   *  derived from the workbook profile; see {@link PivotDataFieldInput}. */
+  addPivotDataField(pivotIndex: number, spec: PivotDataFieldInput): number;
+  /** Reads the name a new data field would get for `fieldIndex` and `aggregation`, without adding one.
+   *  `excludeDataField` leaves that data field out of the numbering (as `setPivotDataField` does); omit it
+   *  for a new data field. */
+  getPivotDataFieldDefaultName(
+    pivotIndex: number,
+    fieldIndex: number,
+    aggregation: PivotAggregation,
+    excludeDataField?: number,
+  ): string;
+  /** Drops every data-field entry from the pivot. */
+  clearPivotDataFields(pivotIndex: number): void;
+  /** Replaces the data-field entry at `dataFieldIndex` in place. An omitted
+   *  or empty `spec.name` is derived as in `addPivotDataField`. */
+  setPivotDataField(pivotIndex: number, dataFieldIndex: number, spec: PivotDataFieldInput): void;
+  /** Appends a filter, saved with the pivot; see {@link PivotFilter}. */
+  addPivotFilter(pivotIndex: number, spec: PivotFilterInput): number;
+  /** Drops every listed filter from the pivot. */
+  clearPivotFilters(pivotIndex: number): void;
+  /** Removes the filter at `filterIndex`. */
+  removePivotFilter(pivotIndex: number, filterIndex: number): void;
+
+  /** Evaluates every CF block on the sheet against the cells of `range` and returns only the cells that
+   *  produced at least one match. `todaySerial` pins the
+   *  date basis for `TimePeriod` rules; pass `NaN` to disable them (no
+   *  `TimePeriod` rule then matches). `0` does *not* disable them -- it is
+   *  the valid serial for 1899-12-30. */
+  evaluateCfRange(range: CellRect, todaySerial: number): readonly CfCell[];
+
+  /** Computes print-area page breaks and physical page count for the sheet. */
+  getPagination(): Pagination;
+
+  /** Reads the worksheet's `<pageSetup>` fragment; `null` when absent. */
+  getPageSetupXml(): string | null;
+  /** Replaces `<pageSetup>`; `null` (or `""`) removes it and restores the defaults.
+   *  A fragment carrying `r:id` is rejected unless the sheet already has a
+   *  printerSettings part, since the reference would otherwise dangle. */
+  setPageSetupXml(xml: string | null): void;
+  /** Reads the worksheet's `<pageMargins>` fragment; `null` when absent. */
+  getPageMarginsXml(): string | null;
+  /** Replaces `<pageMargins>`; `null` (or `""`) removes it. */
+  setPageMarginsXml(xml: string | null): void;
+  /** Reads the worksheet's `<printOptions>` fragment; `null` when absent. */
+  getPrintOptionsXml(): string | null;
+  /** Replaces `<printOptions>`; `null` (or `""`) removes it. */
+  setPrintOptionsXml(xml: string | null): void;
+  /** Reads the worksheet's `<headerFooter>` fragment; `null` when absent. */
+  getHeaderFooterXml(): string | null;
+  /** Replaces `<headerFooter>`; `null` (or `""`) removes it. Header codes live in XML
+   *  element text, so a hand-built fragment writes them escaped
+   *  (`<oddHeader>&amp;C...</oddHeader>`); `setHeaderFooter` takes the
+   *  decoded text instead. */
+  setHeaderFooterXml(xml: string | null): void;
+  /** Reads the worksheet's `<sheetPr>` fragment; `null` when absent. It also
+   *  carries the tab colour and VBA code name, not just print settings. */
+  getSheetPrXml(): string | null;
+  /** Replaces `<sheetPr>`; `null` (or `""`) removes it. */
+  setSheetPrXml(xml: string | null): void;
+  /** Sets or clears `<sheetPr><pageSetUpPr fitToPage>` without disturbing
+   *  anything else `<sheetPr>` carries. */
+  setFitToPage(enabled: boolean): void;
+
+  /** Reads `_xlnm.Print_Area` as rectangles, in print order; an empty array without a print area. A whole-axis
+   *  area reads back expanded to the grid edge. */
+  getPrintArea(): readonly CellRect[];
+  /** Writes `_xlnm.Print_Area` from one or more rectangles, printed in the
+   *  given order; a rectangle spanning every row or column is stored as whole
+   *  columns or rows. `null` (or an empty array) removes it. */
+  setPrintArea(ranges: readonly CellRect[] | null): void;
+  /** Reads `_xlnm.Print_Titles` as a row span and a column span; `null` when neither axis repeats. */
+  getPrintTitles(): PrintTitles | null;
+  /** Writes `_xlnm.Print_Titles`; an axis whose span is `null` does not repeat, and `null` removes the name. */
+  setPrintTitles(titles: PrintTitles | null): void;
+
+  /** Upserts a row break before `row`, spanning the whole sheet. */
+  addRowBreak(row: number, manual: boolean): void;
+  /** Upserts a column break before `col`, spanning the whole sheet. */
+  addColumnBreak(col: number, manual: boolean): void;
+  /** Removes the row break at `row`. An absent break is a no-op. */
+  removeRowBreak(row: number): void;
+  /** Removes the column break at `col`. An absent break is a no-op. */
+  removeColumnBreak(col: number): void;
+  /** Removes every manual break on both axes. */
+  clearBreaks(): void;
+  /** Returns the row breaks, ascending by row. */
+  listRowBreaks(): readonly PageBreak[];
+  /** Returns the column breaks, ascending by column. */
+  listColumnBreaks(): readonly PageBreak[];
+
+  /** Applies a partial `<pageSetup>` update. */
+  setPageSetup(setup: PageSetupPatch): void;
+  /** Applies a partial `<pageMargins>` update, in inches. */
+  setPageMargins(margins: PageMarginsPatch): void;
+  /** Applies a partial `<printOptions>` update. */
+  setPrintOptions(options: PrintOptionsInput): void;
+  /** Applies a partial `<headerFooter>` update. */
+  setHeaderFooter(headerFooter: HeaderFooterInput): void;
+  /** Reads the effective page setup and which attributes state it. */
+  getPageSetup(): PageSetup;
+  /** Reads the effective page margins, in inches. */
+  getPageMargins(): PageMargins;
+
+  /** Reads the full per-sheet view (zoom, freeze, visibility, and the
+   *  display / orientation flags). */
+  getView(): SheetView;
+  /** Sets the sheet zoom percentage (clamped to `[10, 400]`). */
+  setZoom(zoomScale: number): void;
+  /** Sets the frozen pane in `(rows, cols)`. */
+  setFreeze(freezeRows: number, freezeCols: number): void;
+  /** Sets the sheet tab's visibility to one of the three states. A value outside `SheetVisibility` fails with
+   *  `StatusCode.InvalidArgument` and leaves the sheet unchanged. So does hiding the only
+   *  visible sheet. */
+  setVisibility(visibility: SheetVisibility): void;
+  /** Sets the sheet's `showGridLines` flag. */
+  setShowGridLines(show: boolean): void;
+  /** Sets the sheet's `showRowColHeaders` flag. */
+  setShowRowColHeaders(show: boolean): void;
+  /** Sets the sheet's `showZeros` flag. */
+  setShowZeros(show: boolean): void;
+  /** Sets the sheet's `showFormulas` flag. */
+  setShowFormulas(show: boolean): void;
+  /** Sets the sheet's `showOutlineSymbols` flag. */
+  setShowOutlineSymbols(show: boolean): void;
+  /** Sets the sheet's `rightToLeft` flag. */
+  setRightToLeft(rightToLeft: boolean): void;
+  /** Sets the sheet's `tabSelected` flag. */
+  setTabSelected(selected: boolean): void;
+  /** Sets the sheet view's scroll origin (`<sheetView topLeftCell>`). */
+  setTopLeft(row: number, col: number): void;
+  /** Sets the first visible cell of a frozen or split view's lower-right
+   *  pane. It must lie past any frozen rows and columns; rejected without
+   *  panes. Changing the freeze resets it to the first unfrozen cell. */
+  setPaneTopLeft(row: number, col: number): void;
+  /** Splits the view at `xTwips` / `yTwips` (`0` for none on that axis;
+   *  `0, 0` removes the split). Replaces any freeze, as `setFreeze`
+   *  replaces a split. Negative or non-finite values fail with
+   *  `StatusCode.InvalidArgument` and leave the view unchanged. */
+  setSplit(xTwips: number, yTwips: number): void;
+  /** Reads the active pane's selection (active cell and ranges). */
+  getSelection(): SheetSelection;
+  /** Replaces the active pane's selection. In a frozen or split view the
+   *  selection belongs to the pane the view is active in; other panes' are
+   *  kept. */
+  setSelection(selection: SheetSelectionInput): void;
+  /** Sets the sheet's `<sheetView view="...">` mode; `SheetViewMode.Normal` leaves the attribute off. */
+  setViewMode(mode: SheetViewMode): void;
+
+  /**
+   * Reads the sheet's `<sheetProtection>` flags. Strings are
+   * deep-copied; the returned object is independent of the
+   * workbook's storage.
+   */
+  getSheetProtection(): SheetProtection;
+  /**
+   * Replaces the sheet's `<sheetProtection>` flags wholesale. `null`, like a record with `enabled: false`,
+   * clears the protection block on save.
+   */
+  setSheetProtection(protection: SheetProtection | null): void;
+
+  /** Returns the column-layout overrides on the sheet in storage order. */
+  listColumnOverrides(): readonly ColumnLayout[];
+  /** Sets / replaces the column width override on `[first, last]`. `width` is a stored width:
+   *  characters with the column padding included, as `<col width>` holds it. */
+  setColumnWidth(first: number, last: number, width: number): void;
+  /** Sets / replaces the column hidden flag on `[first, last]`. */
+  setColumnHidden(first: number, last: number, hidden: boolean): void;
+  /** Sets / replaces the column outline level on `[first, last]`. A level
+   *  above 7, the deepest Excel stores, fails with `StatusCode.InvalidArgument`. */
+  setColumnOutline(first: number, last: number, level: number): void;
+  /** Sets / clears the column `collapsed` flag on `[first, last]`. */
+  setColumnCollapsed(first: number, last: number, collapsed: boolean): void;
+  /** Sets / replaces the cell-style XF on `[first, last]`; index 0 is the default XF. A value later entered into an unstyled cell of the span takes this XF, unless its row has a style. */
+  setColumnStyle(first: number, last: number, xfIndex: number): void;
+  /** Removes the cell-style XF on `[first, last]`, retaining other column attributes. */
+  clearColumnStyle(first: number, last: number): void;
+
+  /** Returns the row-layout overrides on the sheet. */
+  listRowOverrides(): readonly RowLayout[];
+  /** Sets / replaces the row height on `[first, last]` as a manual height (`customHeight`), which stays put when the row's content or font changes. */
+  setRowHeight(first: number, last: number, height: number): void;
+  /** Stores `height` as the cached automatic height of the rows on `[first, last]`: saved as `ht` without `customHeight`, so each row keeps following its content and font. Row style, hidden, outline and collapsed state are kept; `clearRowHeight` drops it. */
+  setRowAutoHeight(first: number, last: number, height: number): void;
+  /** Sets / replaces the row hidden flag on `[first, last]`. */
+  setRowHidden(first: number, last: number, hidden: boolean): void;
+  /** Sets / replaces the row outline level on `[first, last]`. A level
+   *  above 7, the deepest Excel stores, fails with `StatusCode.InvalidArgument`. */
+  setRowOutline(first: number, last: number, level: number): void;
+  /** Sets / clears the row `collapsed` flag on `[first, last]`. */
+  setRowCollapsed(first: number, last: number, collapsed: boolean): void;
+  /** Sets / replaces the cell-style XF of the inclusive row span `first..last`; index 0 is the default XF. A value later entered into an unstyled cell of a covered row takes this XF. Nothing changes when it throws. */
+  setRowStyle(first: number, last: number, xfIndex: number): void;
+  /** Removes the cell-style XF of the inclusive row span `first..last`, retaining other row attributes. */
+  clearRowStyle(first: number, last: number): void;
+  /**
+   * Lists, ascending, every cell-XF index some cell of the selection resolves to: the XFs of
+   * cells that carry their own, then the row, column or default (0) style of the rest. `range`
+   * is a selection: all rows make it a column
+   * selection, all columns a row selection, both the whole sheet.
+   *
+   * First step of an attribute-only change (say the font size) over a selection, the way
+   * Excel applies it to a row, column, range or the whole sheet: read the bases here, build
+   * each one's patched XF with `addFont` / `addCellXf`, then apply the pairs with
+   * `remapRangeStyle`.
+   */
+  getRangeStyleBases(range: CellRect): readonly number[];
+  /**
+   * `getRangeStyleBases` over the selection less the cells `(excludedRows[i], excludedCols[i])`:
+   * an excluded cell contributes no XF, neither its own nor the row, column or default style
+   * beneath it. Use it when the host resolves those cells itself (say, a pending edit overrides
+   * their style). Excluded cells outside the selection and repeats are ignored; excluding every
+   * cell yields an empty list. Fails when the arrays differ in length.
+   */
+  getRangeStyleBasesExcluding(
+    range: CellRect,
+    excludedRows: readonly number[],
+    excludedCols: readonly number[],
+  ): readonly number[];
+  /**
+   * Second step of the attribute patch: every cell of the selection ends at `toXfs[i]` where
+   * it resolved to `fromXfs[i]` before; an XF not listed is kept. Covered row and column
+   * styles are rewritten and existing cells remapped; a cell is materialised only where
+   * row-over-column precedence would otherwise resolve differently (for a plain range, every
+   * cell). Values and formulas are untouched. Fails, changing nothing, when the arrays differ
+   * in length, a `fromXfs` entry repeats, a `toXfs` entry is past the cell-XF table, or more
+   * than 1,048,576 cells would be written.
+   */
+  remapRangeStyle(range: CellRect, fromXfs: readonly number[], toXfs: readonly number[]): void;
+  /** Captures the style state of a selection (covered column or row styles and every stored cell's XF) as opaque, versioned bytes for `restoreRangeStyle`; use it to undo a `remapRangeStyle`. */
+  snapshotRangeStyle(range: CellRect): Uint8Array;
+  /** Puts a `snapshotRangeStyle` capture back exactly. Values, formulas, phonetic runs and comments are not touched; nothing changes when it throws. */
+  restoreRangeStyle(bytes: Uint8Array): void;
+  /** Removes the height override on rows `first..last`, returning them to the sheet default height. */
+  clearRowHeight(first: number, last: number): void;
+  /** Removes the width override on columns `first..last`, returning them to the sheet default width. Hidden state, outline level and column style are kept. */
+  clearColumnWidth(first: number, last: number): void;
+
+  /** Reads the sheet's default column / row metrics. */
+  getFormatDefaults(): SheetFormatDefaults;
+  /** Replaces the sheet's default column / row metrics; an omitted key keeps its value. A `has*` flag left out
+   *  defaults to whether its value was supplied. */
+  setFormatDefaults(defaults: SheetFormatDefaultsPatch): void;
+
+  /** Rectangle covering the inclusive cell range, in points from the top-left of A1.
+   *  Hidden rows and columns contribute zero extent. */
+  getCellRectPt(range: CellRect, mode: GeometryMode): RectPt;
+  /** Effective column width in points; zero when hidden. */
+  getColumnWidthPt(col: number, mode: GeometryMode): number;
+  /** Effective row height in points; zero when hidden. */
+  getRowHeightPt(row: number): number;
+  /** The character-unit to point conversion model for the workbook's Normal font. */
+  getWidthModel(mode: GeometryMode): WidthModel;
+  /** Converts a stored column width (padding included) to points, snapped to whole screen pixels. */
+  convertColumnCharsToPt(mode: GeometryMode, chars: number): number;
+  /** Inverse of `convertColumnCharsToPt`: the stored width Excel writes for a column of `pt`. */
+  convertColumnPtToChars(mode: GeometryMode, pt: number): number;
+
+  /** Returns the cell XF index of the cell at `(row, col)`. */
+  getCellXfIndex(row: number, col: number): number;
+  /** Persists `xfIndex` on the cell at `(row, col)`. An index not
+   *  below `getCellXfCount()` fails with `StatusCode.InvalidArgument`. */
+  setCellXfIndex(row: number, col: number, xfIndex: number): void;
+  /**
+   * Removes the direct style assignment from the cell at `(row, col)`
+   * so a blank cell inherits its row / column style again. Value, formula and
+   * comments are kept; an absent cell stays absent. A non-blank cell keeps
+   * owning the default xf. Use `getEffectiveStyle().source` to tell an
+   * unassigned cell (`Row` / `Column` / `Default`) from a direct Normal
+   * (`Cell`).
+   */
+  clearCellXfIndex(row: number, col: number): void;
+  /** Applies `xfIndex` across the cells of `range`, materialising blank
+   *  cells so an empty ruled box renders. Saves one call per cell. An
+   *  index not below `getCellXfCount()` fails with `StatusCode.InvalidArgument`. */
+  setRangeXfIndex(range: CellRect, xfIndex: number): void;
+  /** The formatting a cell shows: the xf chosen from cell, row, column or
+   *  the default, with its colours resolved. Conditional formatting is not
+   *  applied. */
+  getEffectiveStyle(row: number, col: number): EffectiveStyle;
+
+  /** Adds a merge range to the sheet. */
+  addMerge(range: CellRect): void;
+  /** Removes every merge that overlaps `range` (inclusive). No-op when nothing overlaps. */
+  removeMerge(range: CellRect): void;
+  /** Removes the merge at `index`. Fails with `StatusCode.IndexOutOfRange` if `index` is out of range. */
+  removeMergeAt(index: number): void;
+  /** Drops every merge on the sheet. */
+  clearMerges(): void;
+  /** Returns every merge range on the sheet as a JS array. */
+  listMerges(): readonly CellRect[];
+  /** Returns the merge ranges on the sheet that intersect `range`, in storage order. */
+  getMergesInRange(range: CellRect): readonly CellRect[];
+
+  /** Returns the cell comment at `(row, col)`; `null` when none is anchored there. */
+  getComment(row: number, col: number): Comment | null;
+  /** Returns every comment on the sheet, including comments anchored on
+   *  cells that carry no value. */
+  listComments(): readonly SheetComment[];
+  /** Sets / replaces the cell comment; an empty `text` writes an empty comment. */
+  setComment(row: number, col: number, comment: Comment): void;
+  /** Removes the cell comment at `(row, col)`; `StatusCode.NotFound` when none is anchored there. */
+  removeComment(row: number, col: number): void;
+  /** Whether the note at `(row, col)` is shown without hovering; `null` when no note is anchored there. */
+  getCommentVisible(row: number, col: number): boolean | null;
+  /** Shows or hides the note at `(row, col)`; its box geometry is kept. */
+  setCommentVisible(row: number, col: number, visible: boolean): void;
+  /** Lists the sheet's protected ranges; a range's position is its `protectedRangeIndex`. */
+  listProtectedRanges(): readonly ProtectedRange[];
+  /** Appends a protected range. `name` must be non-empty and unique on the sheet; `ranges` must hold at least one rectangle. */
+  addProtectedRange(range: ProtectedRange): number;
+  /** Replaces protected range `protectedRangeIndex`. */
+  updateProtectedRange(protectedRangeIndex: number, range: ProtectedRange): void;
+  /** Removes protected range `protectedRangeIndex`. */
+  removeProtectedRange(protectedRangeIndex: number): void;
+
+  /** Appends a hyperlink at `(row, col)`. For an in-workbook link, pass a `null` `target` and the A1 destination as
+   *  `location`. */
+  addHyperlink(row: number, col: number, link: HyperlinkInput): void;
+  /** Appends a hyperlink covering the cells of `range`. */
+  addHyperlinkRange(range: CellRect, link: HyperlinkInput): void;
+  /** Removes every hyperlink anchored at `(row, col)`. No-op when none match. */
+  removeHyperlink(row: number, col: number): void;
+  /** Removes the hyperlink at `index`. Fails with `StatusCode.IndexOutOfRange` if `index` is out of range. */
+  removeHyperlinkAt(index: number): void;
+  /** Drops every hyperlink on the sheet. */
+  clearHyperlinks(): void;
+  /** Returns every hyperlink on the sheet. */
+  listHyperlinks(): readonly Hyperlink[];
+  /** Reads the hyperlink whose range starts at `(row, col)`; `null` when none does. */
+  getHyperlink(row: number, col: number): Hyperlink | null;
+  /** Lists the sheet's data-validation rules; a rule's position is its `validationIndex`. */
+  listValidations(): readonly DataValidation[];
+  /** Appends a data-validation rule to the sheet. A non-empty `formula1` / `formula2`
+   *  that does not parse is rejected with `StatusCode.ParserUnexpectedToken`. */
+  addValidation(validation: DataValidationInput): number;
+  /** Removes the validation rule at `validationIndex`. Fails with `StatusCode.IndexOutOfRange`
+   *  if `validationIndex` is out of range. */
+  removeValidation(validationIndex: number): void;
+  /** Drops every validation rule on the sheet. */
+  clearValidations(): void;
+  /** Lists the sheet's conditional-format rules in flattened order; a rule's position is its `cfRuleIndex`. */
+  listCfRules(): readonly ConditionalFormat[];
+  /** Appends a new single-rule `<conditionalFormatting>` block to
+   *  the sheet, including visual rules when their payload object is supplied.
+   *  The result is the new rule's position in the sheet's flattened CF rule
+   *  sequence (the same indexing `listCfRules` and
+   *  `removeCfRule` use); it stays valid until a subsequent
+   *  add/remove/clear mutation on the same sheet renumbers the sequence.
+   *  A non-empty `formula1` / `formula2` that does not parse is rejected
+   *  with `StatusCode.ParserUnexpectedToken`. */
+  addCfRule(rule: ConditionalFormatInput): number;
+  /** Removes the CF rule at `cfRuleIndex` (flattened order). When the
+   *  containing block becomes empty it is removed too. */
+  removeCfRule(cfRuleIndex: number): void;
+  /** Drops every CF block on the sheet. */
+  clearCfRules(): void;
+
+  /** Returns the cells that `(row, col)` directly reads
+   *  (1-step precedents) when `depth <= 1`, or every cell reached
+   *  within `depth` BFS steps otherwise. `depth` is capped at 32 to
+   *  avoid runaway expansion in cyclic graphs. An invalid sheet, row or
+   *  column throws `FormulonError`. */
+  getPrecedents(row: number, col: number, depth: number): readonly CellNode[];
+  /** Returns the cells that read `(row, col)` directly
+   *  (1-step dependents). Same depth semantics as `precedents`. */
+  getDependents(row: number, col: number, depth: number): readonly CellNode[];
+
+  /** Returns dynamic-array spill info for `(row, col)`.
+   *  When the cell is part of a spill region (anchor or phantom),
+   *  `engaged` is `true` and `rect` is the region; the per-cell values
+   *  are read via `getValue`, which is already spill-aware. When the cell
+   *  is not part of any region, `engaged` is `false` and `rect` is `null`
+   *  unless the cell is a blocked anchor. */
+  getSpillInfo(row: number, col: number): Spill;
+
+  /** Returns the legacy array (CSE, `<f t="array">`) formula covering `(row, col)`, the same
+   *  value for every cell of the block; `null` outside any block. A dynamic-array
+   *  spill is not a legacy array formula; read that through `getSpillInfo`. */
+  getArrayFormula(row: number, col: number): ArrayFormula | null;
+
+  /** Enters `arrayFormula.formula` as one legacy array formula over `arrayFormula.rect`, whose top-left cell
+   *  anchors it; a
+   *  1 x 1 block is allowed. Every cell of the rectangle loses its value and formula
+   *  (styles are kept) and the next recalc distributes the result, filling `#N/A` where a smaller
+   *  result cannot reach. Refused, changing nothing, when the rectangle partially overlaps another
+   *  array (one wholly inside is replaced), intersects a merged area, a data table or a PivotTable,
+   *  or, for more than one cell, a table. Writing a value, blank or formula to a block's top-left
+   *  cell replaces the whole block, which is how a block is cleared; a write to any other cell of
+   *  a block is refused. */
+  setArrayFormula(arrayFormula: ArrayFormula): void;
 }
 
-/** Static factories on the Workbook class. Each returns a new workbook or throws `FormulonError`. */
+/** Static factories on the Workbook class, the only way to create one. Each returns a new workbook or throws
+ *  `FormulonError`. */
 export interface WorkbookCtor {
   /** Workbook with a single default sheet (`"Sheet1"`). */
   createDefault(): Workbook;
@@ -5383,7 +5417,7 @@ export interface WorkbookCtor {
    *  table with an 11 pt body font, no row height or base column width).
    *  `setDefaultFont` afterwards leaves font 1 unchanged. `createDefault`
    *  still seeds Calibri 11. An unknown id fails with `StatusCode.InvalidArgument`. */
-  createForProfile(profileId: string): Workbook;
+  createForProfile(profileId: ExcelProfileId): Workbook;
   /** Loads from an in-memory workbook byte buffer, auto-detecting
    *  `.xlsx` vs `.xlsb` from the package contents (there is no filename
    *  to route on). Empty input fails with `StatusCode.InvalidArgument`, a damaged archive with one of
@@ -5409,7 +5443,8 @@ export interface FormulonOptions {
 /** The engine surface {@link createFormulon} resolves to: a frozen object with the same members on both
  *  packages. */
 export interface Formulon {
-  /** Factory object for `Workbook` handles (`createDefault`, `createEmpty`, `load`, ...). */
+  /** The `Workbook` class: its static factories (`createDefault`, `createEmpty`, `load`, ...) create workbooks. A
+   *  new class per `createFormulon()` result. */
   Workbook: WorkbookCtor;
   /** The error class this package throws; the same class as the named export. */
   FormulonError: typeof FormulonError;
@@ -5472,6 +5507,15 @@ export interface Formulon {
   ColorResolution: typeof ColorResolution;
   ThemeSource: typeof ThemeSource;
   EffectiveStyleSource: typeof EffectiveStyleSource;
+  PageOrientation: typeof PageOrientation;
+  SheetViewMode: typeof SheetViewMode;
+  ChartBarDirection: typeof ChartBarDirection;
+  ChartAxisPosition: typeof ChartAxisPosition;
+  LocaleDateOrder: typeof LocaleDateOrder;
+  CfDataBarDirection: typeof CfDataBarDirection;
+  CfDataBarAxisPosition: typeof CfDataBarAxisPosition;
+  ColorKind: typeof ColorKind;
+  FunctionAvailability: typeof FunctionAvailability;
   PIVOT_SHOW_AS_BASE_PREVIOUS: typeof PIVOT_SHOW_AS_BASE_PREVIOUS;
   PIVOT_SHOW_AS_BASE_NEXT: typeof PIVOT_SHOW_AS_BASE_NEXT;
   PIVOT_VALUES_FIELD: typeof PIVOT_VALUES_FIELD;
@@ -5482,7 +5526,7 @@ export interface Formulon {
    *  and no recalc runs, so an anchor-referencing formula such as `=A1`
    *  or `=COUNTA(A1)` reads the blank anchor rather than becoming a
    *  self-reference. An array result is reduced to its top-left element;
-   *  use `Workbook.evaluateFormulaArray` for the whole grid. */
+   *  use `Sheet.evaluateFormulaArray` for the whole grid. */
   evalFormula(formula: string): Value;
 
   /** Library version string (UTF-8). */

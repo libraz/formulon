@@ -20,7 +20,7 @@ export function registerLayoutValidation(Module, test) {
   test('layout nested integer fields throw before native mutation', () => {
     withWorkbook(Module, (wb) => {
       const before = protection(wb);
-      assert.throws(() => wb.setSheetProtection(0, { ...before, enabled: 1.5 }), RangeError);
+      assert.throws(() => wb.setSheetProtection(0, { ...before, spinCount: 1.5 }), RangeError);
       assert.deepEqual(protection(wb), before);
 
       assert.throws(() => wb.setSheetProtection(0, { ...before, spinCount: 2 ** 32 }), RangeError);
@@ -31,7 +31,7 @@ export function registerLayoutValidation(Module, test) {
   test('layout nested getters are read once and leave state unchanged on failure', () => {
     withWorkbook(Module, (wb) => {
       const beforeProtection = protection(wb);
-      const protectionInput = { ...beforeProtection, enabled: 1 };
+      const protectionInput = { ...beforeProtection, enabled: true };
       Object.defineProperty(protectionInput, 'formatRows', {
         enumerable: true,
         get() {

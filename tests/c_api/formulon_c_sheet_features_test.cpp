@@ -134,10 +134,29 @@ TEST_F(FormulonCApiSheetFeatures, CommentSetGetAndRemove) {
   ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 1, 1, &present, &got), 0);
   EXPECT_STREQ(got.author, "Bob");
   EXPECT_STREQ(got.text, "World");
-  // Empty text removes.
-  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Bob", ""), 0);
+  // Removing deletes the note.
+  ASSERT_EQ(fm_sheet_remove_comment(wb_, 0, 1, 1), 0);
   ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 1, 1, &present, &got), 0);
   EXPECT_EQ(present, 0);
+}
+
+// Excel keeps a note with no text, so an empty text writes one rather than
+// removing the note; the setter never deletes.
+TEST_F(FormulonCApiSheetFeatures, CommentEmptyTextWritesAnEmptyNote) {
+  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Alice", "Hello"), 0);
+  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Bob", ""), 0);
+  fm_comment_t got{};
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 1, 1, &present, &got), 0);
+  EXPECT_EQ(present, 1);
+  EXPECT_STREQ(got.author, "Bob");
+  EXPECT_STREQ(got.text, "");
+
+  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 2, 2, nullptr, nullptr), 0);
+  ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 2, 2, &present, &got), 0);
+  EXPECT_EQ(present, 1);
+  EXPECT_STREQ(got.author, "");
+  EXPECT_STREQ(got.text, "");
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentRejectedOnThreadedCell) {
@@ -180,9 +199,15 @@ TEST_F(FormulonCApiSheetFeatures, CommentLookupDistinguishesAbsenceFromInvalidSh
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 
-TEST_F(FormulonCApiSheetFeatures, CommentRemoveViaNullText) {
+TEST_F(FormulonCApiSheetFeatures, CommentRemoveReportsAMissingNote) {
+  EXPECT_EQ(fm_sheet_remove_comment(wb_, 0, 0, 0), static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
   ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 0, 0, "Alice", "x"), 0);
-  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 0, 0, nullptr, nullptr), 0);
+  ASSERT_EQ(fm_sheet_remove_comment(wb_, 0, 0, 0), 0);
+  EXPECT_EQ(fm_sheet_remove_comment(wb_, 0, 0, 0), static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
+  EXPECT_EQ(fm_sheet_remove_comment(wb_, 99, 0, 0),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
+  EXPECT_EQ(fm_sheet_remove_comment(nullptr, 0, 0, 0),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   fm_comment_t got{};
   int32_t present = 0;
   ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 0, 0, &present, &got), 0);

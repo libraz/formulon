@@ -14,7 +14,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
-using formulon::c_api::parts::check_finite_non_negative;
+using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
@@ -98,38 +98,34 @@ extern "C" fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t t
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enabled, int32_t max_iterations,
-                                                 double max_change) {
+extern "C" fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, const fm_iterative_settings_patch_t* patch) {
   clear_last_error();
   if (wb == nullptr) {
     return null_argument("wb");
   }
-  if (const fm_status_t st = check_finite_non_negative(max_change, "max_change")) {
+  if (patch == nullptr) {
+    return null_argument("patch");
+  }
+  if (const fm_status_t st = check_finite(patch->max_change, "max_change")) {
     return st;
   }
-  formulon::IterativeOptions opts;
-  opts.enabled = (enabled != 0);
-  // Clamped into Excel's own dialog range rather than rejected: the
-  // pre-existing contract for this argument is "out-of-range values are
-  // adjusted", and a binding author who passes a large cap wants a long
-  // solve, not an error. The upper bound is what keeps that from becoming
-  // a hang the host cannot cancel without a progress callback.
-  opts.max_iterations = max_iterations < 1 ? 1U
-                        : static_cast<std::uint32_t>(max_iterations) > formulon::kMaxIterationsCap
-                            ? formulon::kMaxIterationsCap
-                            : static_cast<std::uint32_t>(max_iterations);
-  opts.max_change = max_change;
-  wb->workbook().set_iterative_options(opts);
-  return 0;
-}
-
-extern "C" fm_status_t fm_workbook_set_iterative_enabled(fm_workbook_t* wb, int32_t enabled) {
-  clear_last_error();
-  if (wb == nullptr) {
-    return null_argument("wb");
-  }
   formulon::IterativeOptions opts = wb->workbook().iterative_options();
-  opts.enabled = enabled != 0;
+  if (patch->enabled >= 0) {
+    opts.enabled = patch->enabled != 0;
+  }
+  // Clamped into Excel's own dialog range rather than rejected: a binding
+  // author who passes a large cap wants a long solve, not an error. The upper
+  // bound is what keeps that from becoming a hang the host cannot cancel
+  // without a progress callback.
+  if (patch->max_iterations >= 0) {
+    opts.max_iterations = patch->max_iterations < 1 ? 1U
+                          : static_cast<std::uint32_t>(patch->max_iterations) > formulon::kMaxIterationsCap
+                              ? formulon::kMaxIterationsCap
+                              : static_cast<std::uint32_t>(patch->max_iterations);
+  }
+  if (patch->max_change >= 0.0) {
+    opts.max_change = patch->max_change;
+  }
   wb->workbook().set_iterative_options(opts);
   return 0;
 }

@@ -69,7 +69,7 @@ Napi::Value Workbook::SheetStringGetter(const Napi::CallbackInfo& info, SheetStr
   }
   const char* text = nullptr;
   const fm_status_t rc = getter(handle_, ArgU32(info, 0), &text);
-  return ValueOrThrow(env, rc, JsString(env, text));
+  return ValueOrThrow(env, rc, JsStringOrNull(env, text));
 }
 
 Napi::Value Workbook::SheetStringSetter(const Napi::CallbackInfo& info, SheetStringSetFn setter) {
@@ -161,24 +161,46 @@ Napi::Value Workbook::GetSheetPrintTitles(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  const char* rows = nullptr;
-  const char* cols = nullptr;
-  const fm_status_t rc = fm_sheet_get_print_titles(handle_, ArgU32(info, 0), &rows, &cols);
+  fm_print_titles_t titles{};
+  const fm_status_t rc = fm_sheet_get_print_titles(handle_, ArgU32(info, 0), &titles);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
-  Napi::Object result = Napi::Object::New(env);
-  result.Set("repeatRows", JsString(env, rows));
-  result.Set("repeatCols", JsString(env, cols));
-  return result;
+  return PrintTitlesToJs(env, titles);
 }
 
 Napi::Value Workbook::SetSheetPrintTitles(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
-    const std::string rows = ArgString(info, 1);
-    const std::string cols = ArgString(info, 2);
-    return fm_sheet_set_print_titles(handle, ArgU32(info, 0), rows.c_str(), cols.c_str());
-  });
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  // `null` removes both axes.
+  if (info[1].IsNull()) {
+    return ValueOrThrow(env, fm_sheet_set_print_titles(handle_, sheet, nullptr), env.Undefined());
+  }
+  CheckedSpecReader reader(env);
+  Napi::Object titles;
+  if (!reader.Object(info[1], "titles", &titles)) {
+    return env.Undefined();
+  }
+  fm_print_titles_t in{};
+  Napi::Object rows;
+  if (reader.Object(titles, "rows", &rows)) {
+    in.has_rows = 1;
+    in.first_row = reader.RequiredU32(rows, "first");
+    in.last_row = reader.RequiredU32(rows, "last");
+  }
+  Napi::Object columns;
+  if (reader.Object(titles, "columns", &columns)) {
+    in.has_cols = 1;
+    in.first_col = reader.RequiredU32(columns, "first");
+    in.last_col = reader.RequiredU32(columns, "last");
+  }
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  return ValueOrThrow(env, fm_sheet_set_print_titles(handle_, sheet, &in), env.Undefined());
 }
 
 Napi::Value Workbook::AddSheetRowBreak(const Napi::CallbackInfo& info) {
@@ -248,7 +270,10 @@ Napi::Value Workbook::SetSheetPageSetup(const Napi::CallbackInfo& info) {
   return InvokeSheetSpec(
       info, "setPageSetup expects (sheet:number, setup:object)",
       [&](CheckedSpecReader& reader, const Napi::Object& spec) {
-        PullOptionalU32(reader, spec, "orientation", 0U, out.orientation, out.orientation_engaged);
+        uint32_t orientation = 0U;
+        PullOptionalU32(reader, spec, "orientation", 0U, orientation, out.orientation_engaged);
+        // Past int32 the ordinal wraps negative, which the C ABI rejects like any unknown one.
+        out.orientation = static_cast<int32_t>(orientation);
         PullOptionalU32(reader, spec, "paperSize", 0U, out.paper_size, out.paper_size_engaged);
         PullOptionalU32(reader, spec, "scale", 0U, out.scale, out.scale_engaged);
         PullOptionalU32(reader, spec, "fitToWidth", 0U, out.fit_to_width, out.fit_to_width_engaged);
@@ -327,7 +352,7 @@ Napi::Value Workbook::GetSheetPageSetup(const Napi::CallbackInfo& info) {
     return ThrowStatus(env, rc);
   }
   Napi::Object result = Napi::Object::New(env);
-  result.Set("orientation", Napi::Number::New(env, setup.orientation));
+  result.Set("orientation", JsNumberOrNull(env, setup.orientation_engaged, setup.orientation));
   result.Set("paperSize", Napi::Number::New(env, setup.paper_size));
   result.Set("scale", Napi::Number::New(env, setup.scale));
   result.Set("fitToWidth", Napi::Number::New(env, setup.fit_to_width));
@@ -443,22 +468,15 @@ void SetPaginationDetail(Napi::Env env, Napi::Object result, const fm_pagination
   margins_js.Set("bottom", Napi::Number::New(env, margins.bottom));
   margins_js.Set("header", Napi::Number::New(env, margins.header));
   margins_js.Set("footer", Napi::Number::New(env, margins.footer));
-  Napi::Object titles_js = Napi::Object::New(env);
-  titles_js.Set("hasRows", Napi::Boolean::New(env, titles.has_rows != 0));
-  titles_js.Set("firstRow", Napi::Number::New(env, titles.first_row));
-  titles_js.Set("lastRow", Napi::Number::New(env, titles.last_row));
-  titles_js.Set("hasCols", Napi::Boolean::New(env, titles.has_cols != 0));
-  titles_js.Set("firstCol", Napi::Number::New(env, titles.first_col));
-  titles_js.Set("lastCol", Napi::Number::New(env, titles.last_col));
   result.Set("paper", paper_js);
   result.Set("margins", margins_js);
   result.Set("printable", RectToJs(env, printable));
   result.Set("scale", Napi::Number::New(env, scale));
   result.Set("pageOrder", Napi::Number::New(env, page_order));
-  result.Set("printTitles", titles_js);
+  result.Set("printTitles", PrintTitlesToJs(env, titles));
   result.Set("pages", pages);
-  result.Set("horizontalBreakManual", horizontal_manual);
-  result.Set("verticalBreakManual", vertical_manual);
+  result.Set("rowBreakManual", horizontal_manual);
+  result.Set("columnBreakManual", vertical_manual);
 }
 
 }  // namespace
@@ -501,8 +519,8 @@ Napi::Value Workbook::Paginate(const Napi::CallbackInfo& info) {
     }
   }
   result.Set("printArea", print_area);
-  result.Set("horizontalBreaks", horizontal_breaks);
-  result.Set("verticalBreaks", vertical_breaks);
+  result.Set("rowBreaks", horizontal_breaks);
+  result.Set("columnBreaks", vertical_breaks);
   result.Set("pageCount",
              Napi::Number::New(env, static_cast<double>(PaginationCount(pagination, &fm_pagination_get_page_count))));
   SetPaginationDetail(env, result, pagination);

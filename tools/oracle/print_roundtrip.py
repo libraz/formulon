@@ -75,15 +75,15 @@ def _write_cell(wb: Any, sheet: int, addr: str, rec: Dict[str, Any]) -> None:
     row, col = _split_a1(addr)
     kind = rec.get("kind")
     if kind == "blank":
-        wb.set_blank(sheet, row, col)
+        wb.sheet(sheet).set_blank(row, col)
     elif kind == "number":
-        wb.set_number(sheet, row, col, float(rec["value"]))
+        wb.sheet(sheet).set_number(row, col, float(rec["value"]))
     elif kind == "bool":
-        wb.set_bool(sheet, row, col, bool(rec["value"]))
+        wb.sheet(sheet).set_bool(row, col, bool(rec["value"]))
     elif kind == "text":
-        wb.set_text(sheet, row, col, str(rec["value"]))
+        wb.sheet(sheet).set_text(row, col, str(rec["value"]))
     elif kind == "formula":
-        wb.set_formula(sheet, row, col, str(rec["formula"]))
+        wb.sheet(sheet).set_formula(row, col, str(rec["formula"]))
     else:
         # `error` is deliberately unsupported: the COM side reaches an
         # error value by evaluating a trigger formula, and a round-trip
@@ -106,7 +106,7 @@ def _apply_sheets(wb: Any, case: Dict[str, Any]) -> Dict[str, int]:
         for addr, rec in (cells or {}).items():
             _write_cell(wb, position, addr, rec)
     if not indices:
-        indices[wb.get_sheet_name(0)] = 0
+        indices[wb.sheet(0).name] = 0
     return indices
 
 
@@ -119,13 +119,37 @@ def _apply_layout(wb: Any, case: Dict[str, Any]) -> None:
 
     for col_key, width in (case.get("column_widths") or {}).items():
         col = _column_index(str(col_key))
-        wb.set_column_width(0, col, col, float(width))
+        wb.sheet(0).set_column_width(col, col, float(width))
     for row_key, height in (case.get("row_heights") or {}).items():
         row = int(row_key) - 1
-        wb.set_row_height(0, row, row, float(height))
+        wb.sheet(0).set_row_height(row, row, float(height))
 
 
-def _apply_print_settings(wb: Any, sheet: int, spec: Dict[str, Any]) -> None:
+# The `page_setup` / `page_margins` fields a case may state; each maps to the keyword argument of the same name.
+_PAGE_SETUP_FIELDS = ("orientation", "paper_size", "scale", "fit_to_width", "fit_to_height", "fit_to_page")
+_PAGE_MARGIN_FIELDS = ("left", "right", "top", "bottom", "header", "footer")
+
+
+def _stated(block: Dict[str, Any], fields: Tuple[str, ...]) -> Dict[str, Any]:
+    """The fields `block` states, as keyword arguments; an omitted field keeps the workbook's setting."""
+
+    return {name: block[name] for name in fields if block.get(name) is not None}
+
+
+def _title_span(text: Optional[str], *, module: Any, rows: bool) -> Any:
+    """Converts a `1:2` row span or an `A:A` column span to the binding's 0-based `Span`."""
+
+    if not text:
+        return None
+    first, sep, last = str(text).partition(":")
+    if not sep:
+        raise RoundtripSpecError(f"print title span is not `first:last`: {text!r}")
+    if rows:
+        return module.Span(int(first) - 1, int(last) - 1)
+    return module.Span(_column_index(first), _column_index(last))
+
+
+def _apply_print_settings(wb: Any, sheet: int, spec: Dict[str, Any], module: Any) -> None:
     """Drives the print-authoring API from the `roundtrip` block.
 
     Every sub-block is optional and every field inside one is optional:
@@ -137,32 +161,20 @@ def _apply_print_settings(wb: Any, sheet: int, spec: Dict[str, Any]) -> None:
 
     page_setup = spec.get("page_setup")
     if isinstance(page_setup, dict):
-        wb.set_page_setup(
-            sheet,
-            orientation=page_setup.get("orientation"),
-            paper_size=page_setup.get("paper_size"),
-            scale=page_setup.get("scale"),
-            fit_to_width=page_setup.get("fit_to_width"),
-            fit_to_height=page_setup.get("fit_to_height"),
-            fit_to_page=page_setup.get("fit_to_page"),
-        )
+        fields = _stated(page_setup, _PAGE_SETUP_FIELDS)
+        if "orientation" in fields:
+            # A case states Excel's `XlPageOrientation` (1 = portrait, 2 = landscape), the value the capture reads back.
+            landscape = int(fields["orientation"]) == 2
+            fields["orientation"] = module.PageOrientation.LANDSCAPE if landscape else module.PageOrientation.PORTRAIT
+        wb.sheet(sheet).set_page_setup(**fields)
 
     margins = spec.get("page_margins")
     if isinstance(margins, dict):
-        wb.set_page_margins(
-            sheet,
-            left=margins.get("left"),
-            right=margins.get("right"),
-            top=margins.get("top"),
-            bottom=margins.get("bottom"),
-            header=margins.get("header"),
-            footer=margins.get("footer"),
-        )
+        wb.sheet(sheet).set_page_margins(**_stated(margins, _PAGE_MARGIN_FIELDS))
 
     options = spec.get("print_options")
     if isinstance(options, dict):
-        wb.set_print_options(
-            sheet,
+        wb.sheet(sheet).set_print_options(
             grid_lines=options.get("grid_lines"),
             headings=options.get("headings"),
             horizontal_centered=options.get("horizontal_centered"),
@@ -171,8 +183,7 @@ def _apply_print_settings(wb: Any, sheet: int, spec: Dict[str, Any]) -> None:
 
     header_footer = spec.get("header_footer")
     if isinstance(header_footer, dict):
-        wb.set_header_footer(
-            sheet,
+        wb.sheet(sheet).set_header_footer(
             odd_header=header_footer.get("odd_header"),
             odd_footer=header_footer.get("odd_footer"),
             even_header=header_footer.get("even_header"),
@@ -194,22 +205,20 @@ def _apply_print_settings(wb: Any, sheet: int, spec: Dict[str, Any]) -> None:
             if parsed is None:
                 raise RoundtripSpecError(f"print_area token is not an A1 range: {token!r}")
             rects.append(parsed.rect)
-        wb.set_print_area(sheet, rects)
+        wb.sheet(sheet).set_print_area(rects)
 
     titles = spec.get("print_titles")
     if isinstance(titles, dict):
-        wb.set_print_titles(
-            sheet,
-            titles.get("repeat_rows", "") or "",
-            titles.get("repeat_cols", "") or "",
-        )
+        rows = _title_span(titles.get("repeat_rows"), module=module, rows=True)
+        columns = _title_span(titles.get("repeat_cols"), module=module, rows=False)
+        wb.sheet(sheet).set_print_titles(module.PrintTitles(rows=rows, columns=columns))
 
     for row in spec.get("row_breaks") or []:
         # Case rows are 1-based, matching every other A1-shaped field in
         # the schema; the API takes a zero-based row.
-        wb.add_row_break(sheet, int(row) - 1)
+        wb.sheet(sheet).add_row_break(int(row) - 1)
     for col_key in spec.get("col_breaks") or []:
-        wb.add_column_break(sheet, _column_index(str(col_key)))
+        wb.sheet(sheet).add_column_break(_column_index(str(col_key)))
 
 
 def author_case(case: Dict[str, Any], *, module: Any) -> bytes:
@@ -239,7 +248,7 @@ def author_case(case: Dict[str, Any], *, module: Any) -> bytes:
         else:
             sheet = int(sheet_key)
 
-        _apply_print_settings(wb, sheet, spec)
+        _apply_print_settings(wb, sheet, spec, module)
         return wb.save(format=module.WorkbookFormat.XLSX)
 
 

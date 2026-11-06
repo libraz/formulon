@@ -21,7 +21,7 @@ Napi::Value Workbook::GetAutoFilterXml(const Napi::CallbackInfo& info) {
   }
   const char* xml = nullptr;
   const fm_status_t rc = fm_sheet_get_auto_filter_xml(handle_, ArgU32(info, 0), &xml);
-  return ValueOrThrow(env, rc, JsString(env, xml));
+  return ValueOrThrow(env, rc, JsStringOrNull(env, xml));
 }
 
 Napi::Value Workbook::SetAutoFilterXml(const Napi::CallbackInfo& info) {
@@ -80,21 +80,17 @@ Napi::Object FilterColumnToJs(Napi::Env env, const fm_filter_column_t& c) {
   o.Set("val2", JsString(env, c.val2));
   o.Set("top", JsBool(env, c.top));
   o.Set("percent", JsBool(env, c.percent));
-  o.Set("hasFilterVal", JsBool(env, c.has_filter_val));
   o.Set("topVal", JsNumber(env, c.top_val));
-  o.Set("filterVal", JsNumber(env, c.filter_val));
+  o.Set("filterVal", JsNumberOrNull(env, c.has_filter_val, c.filter_val));
   o.Set("dynamicType", JsNumber(env, c.dynamic_type));
-  o.Set("hasDynVal", JsBool(env, c.has_dyn_val));
-  o.Set("hasDynMaxVal", JsBool(env, c.has_dyn_max_val));
-  o.Set("dynVal", JsNumber(env, c.dyn_val));
-  o.Set("dynMaxVal", JsNumber(env, c.dyn_max_val));
+  o.Set("dynVal", JsNumberOrNull(env, c.has_dyn_val, c.dyn_val));
+  o.Set("dynMaxVal", JsNumberOrNull(env, c.has_dyn_max_val, c.dyn_max_val));
   o.Set("valIso", JsString(env, c.val_iso));
   o.Set("maxValIso", JsString(env, c.max_val_iso));
   o.Set("dxfId", JsNumber(env, c.dxf_id));
   o.Set("cellColor", JsBool(env, c.cell_color));
   o.Set("iconSet", JsNumber(env, c.icon_set));
-  o.Set("iconId", JsNumber(env, c.icon_id));
-  o.Set("hasIconId", JsBool(env, c.has_icon_id));
+  o.Set("iconId", JsNumberOrNull(env, c.has_icon_id, c.icon_id));
   return o;
 }
 
@@ -123,11 +119,9 @@ Napi::Object AutoFilterToJs(Napi::Env env, const fm_auto_filter_t& f) {
     item.Set("descending", JsBool(env, c.descending));
     item.Set("sortBy", JsNumber(env, c.sort_by));
     item.Set("customList", JsString(env, c.custom_list));
-    item.Set("dxfId", JsNumber(env, c.dxf_id));
-    item.Set("hasDxfId", JsBool(env, c.has_dxf_id));
+    item.Set("dxfId", JsNumberOrNull(env, c.has_dxf_id, c.dxf_id));
     item.Set("iconSet", JsNumber(env, c.icon_set));
-    item.Set("iconId", JsNumber(env, c.icon_id));
-    item.Set("hasIconId", JsBool(env, c.has_icon_id));
+    item.Set("iconId", JsNumberOrNull(env, c.has_icon_id, c.icon_id));
     conditions.Set(i, item);
   }
   sort.Set("conditions", conditions);
@@ -218,14 +212,16 @@ void ReadFilterColumn(CheckedSpecReader& reader, const Napi::Object& spec, AutoF
   c.val2 = in.Keep(std::move(val2));
   c.top = reader.Bool(spec, "top", false) ? 1 : 0;
   c.percent = reader.Bool(spec, "percent", false) ? 1 : 0;
-  c.has_filter_val = reader.Bool(spec, "hasFilterVal", false) ? 1 : 0;
+  // A nullable member is absent when omitted or `null`.
+  bool present = false;
   c.top_val = reader.Double(spec, "topVal", 0.0);
-  c.filter_val = reader.Double(spec, "filterVal", 0.0);
+  c.filter_val = reader.Double(spec, "filterVal", 0.0, &present);
+  c.has_filter_val = present ? 1 : 0;
   c.dynamic_type = reader.I32(spec, "dynamicType", 0);
-  c.has_dyn_val = reader.Bool(spec, "hasDynVal", false) ? 1 : 0;
-  c.has_dyn_max_val = reader.Bool(spec, "hasDynMaxVal", false) ? 1 : 0;
-  c.dyn_val = reader.Double(spec, "dynVal", 0.0);
-  c.dyn_max_val = reader.Double(spec, "dynMaxVal", 0.0);
+  c.dyn_val = reader.Double(spec, "dynVal", 0.0, &present);
+  c.has_dyn_val = present ? 1 : 0;
+  c.dyn_max_val = reader.Double(spec, "dynMaxVal", 0.0, &present);
+  c.has_dyn_max_val = present ? 1 : 0;
   std::string val_iso;
   std::string max_val_iso;
   reader.String(spec, "valIso", &val_iso);
@@ -235,8 +231,8 @@ void ReadFilterColumn(CheckedSpecReader& reader, const Napi::Object& spec, AutoF
   c.dxf_id = reader.U32(spec, "dxfId", kAbsentDxfId);
   c.cell_color = reader.Bool(spec, "cellColor", false) ? 1 : 0;
   c.icon_set = reader.I32(spec, "iconSet", 0);
-  c.icon_id = reader.I32(spec, "iconId", 0);
-  c.has_icon_id = reader.Bool(spec, "hasIconId", false) ? 1 : 0;
+  c.icon_id = reader.I32(spec, "iconId", 0, &present);
+  c.has_icon_id = present ? 1 : 0;
 }
 
 void ReadSortCondition(CheckedSpecReader& reader, const Napi::Object& spec, AutoFilterInput& in,
@@ -248,11 +244,13 @@ void ReadSortCondition(CheckedSpecReader& reader, const Napi::Object& spec, Auto
   std::string custom_list;
   reader.String(spec, "customList", &custom_list);
   c.custom_list = in.Keep(std::move(custom_list));
-  c.dxf_id = reader.U32(spec, "dxfId", kAbsentDxfId);
-  c.has_dxf_id = reader.Bool(spec, "hasDxfId", false) ? 1 : 0;
+  // A nullable member is absent when omitted or `null`.
+  bool present = false;
+  c.dxf_id = reader.U32(spec, "dxfId", 0U, &present);
+  c.has_dxf_id = present ? 1 : 0;
   c.icon_set = reader.I32(spec, "iconSet", 0);
-  c.icon_id = reader.I32(spec, "iconId", 0);
-  c.has_icon_id = reader.Bool(spec, "hasIconId", false) ? 1 : 0;
+  c.icon_id = reader.I32(spec, "iconId", 0, &present);
+  c.has_icon_id = present ? 1 : 0;
 }
 
 // Reads the `AutoFilter` record at `info[idx]`; false when it is not an object.

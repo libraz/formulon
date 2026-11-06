@@ -20,9 +20,10 @@ from formulon import (
     FormulonError,
     Mention,
     Person,
+    SheetRect,
     SortBy,
     SortMethod,
-    ThreadedComment,
+    ThreadedCommentInput,
     ValidationErrorStyle,
     ValidationOutcome,
     Value,
@@ -42,9 +43,9 @@ def _text(s: str) -> Value:
 
 
 def _seed_numbers(wb: Workbook, col: int = 0, first_row: int = 0) -> None:
-    wb.set_text(0, first_row, col, "n")
+    wb.sheet(0).set_text(first_row, col, "n")
     for i, v in enumerate((1, 2, 3, 4, 5)):
-        wb.set_number(0, first_row + 1 + i, col, float(v))
+        wb.sheet(0).set_number(first_row + 1 + i, col, float(v))
 
 
 class EnumOrdinalTests(unittest.TestCase):
@@ -62,7 +63,7 @@ class EnumOrdinalTests(unittest.TestCase):
 class AutoFilterTests(unittest.TestCase):
     def test_absent_filter_reads_none(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertIsNone(wb.get_auto_filter(0))
+            self.assertIsNone(wb.sheet(0).get_auto_filter())
 
     def test_set_get_roundtrip_every_criterion(self) -> None:
         with Workbook.create_default() as wb:
@@ -100,8 +101,8 @@ class AutoFilterTests(unittest.TestCase):
                 ],
                 sort=sort,
             )
-            wb.set_auto_filter(0, af)
-            got = wb.get_auto_filter(0)
+            wb.sheet(0).set_auto_filter(af)
+            got = wb.sheet(0).get_auto_filter()
             assert got is not None
             self.assertEqual(got.range, af.range)
             self.assertEqual(len(got.columns), 2)
@@ -123,8 +124,8 @@ class AutoFilterTests(unittest.TestCase):
             self.assertEqual(got.sort.conditions[0].custom_list, "a,b")
             self.assertTrue(got.sort.conditions[0].descending)
             # A get followed by a set of the unchanged record is stable.
-            wb.set_auto_filter(0, got)
-            self.assertEqual(wb.get_auto_filter(0), got)
+            wb.sheet(0).set_auto_filter(got)
+            self.assertEqual(wb.sheet(0).get_auto_filter(), got)
 
     def test_top10_and_dynamic_fields_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
@@ -135,19 +136,17 @@ class AutoFilterTests(unittest.TestCase):
                 top=False,
                 percent=True,
                 top_val=25.0,
-                has_filter_val=True,
                 filter_val=2.0,
             )
             dyn = AutoFilterColumn(
                 col_id=1,
                 kind=FilterKind.DYNAMIC,
                 dynamic_type=DynamicFilterType.ABOVE_AVERAGE,
-                has_dyn_val=True,
                 dyn_val=3.5,
                 val_iso="x",
             )
-            wb.set_auto_filter(0, AutoFilter(range=CellRect(0, 0, 5, 1), columns=[col, dyn]))
-            got = wb.get_auto_filter(0)
+            wb.sheet(0).set_auto_filter(AutoFilter(range=CellRect(0, 0, 5, 1), columns=[col, dyn]))
+            got = wb.sheet(0).get_auto_filter()
             assert got is not None
             self.assertFalse(got.columns[0].top)
             self.assertTrue(got.columns[0].percent)
@@ -158,8 +157,7 @@ class AutoFilterTests(unittest.TestCase):
     def test_evaluate_apply_clear_remove(self) -> None:
         with Workbook.create_default() as wb:
             _seed_numbers(wb)
-            wb.set_auto_filter(
-                0,
+            wb.sheet(0).set_auto_filter(
                 AutoFilter(
                     range=CellRect(0, 0, 5, 0),
                     columns=[
@@ -169,44 +167,45 @@ class AutoFilterTests(unittest.TestCase):
                     ],
                 ),
             )
-            evaluated = wb.evaluate_auto_filter(0)
+            evaluated = wb.sheet(0).evaluate_auto_filter()
             first_row, match = evaluated.first_row, evaluated.match
             self.assertEqual(first_row, 1)
             self.assertEqual(match, [False, False, True, True, True])
-            wb.apply_auto_filter(0)
-            hidden = [r.row for r in wb.list_row_overrides(0) if r.hidden]
+            wb.sheet(0).apply_auto_filter()
+            hidden = [r.row for r in wb.sheet(0).list_row_overrides() if r.hidden]
             self.assertEqual(hidden, [1, 2])
-            wb.clear_auto_filter(0)
-            got = wb.get_auto_filter(0)
+            wb.sheet(0).clear_auto_filter()
+            got = wb.sheet(0).get_auto_filter()
             assert got is not None
             self.assertEqual(got.columns, [])
-            self.assertEqual(wb.evaluate_auto_filter(0), AutoFilterEval(1, [True] * 5))
-            wb.remove_auto_filter(0)
-            self.assertIsNone(wb.get_auto_filter(0))
-            wb.remove_auto_filter(0)
+            self.assertEqual(wb.sheet(0).evaluate_auto_filter(), AutoFilterEval(1, [True] * 5))
+            wb.sheet(0).remove_auto_filter()
+            self.assertIsNone(wb.sheet(0).get_auto_filter())
+            wb.sheet(0).remove_auto_filter()
             with self.assertRaises(FormulonError):
-                wb.apply_auto_filter(0)
+                wb.sheet(0).apply_auto_filter()
             with self.assertRaises(FormulonError):
-                wb.evaluate_auto_filter(0)
+                wb.sheet(0).evaluate_auto_filter()
 
     def test_invalid_filter_is_rejected(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.set_auto_filter(
-                    0,
+                wb.sheet(0).set_auto_filter(
                     AutoFilter(range=CellRect(0, 0, 3, 0), columns=[AutoFilterColumn(col_id=5)]),
                 )
             with self.assertRaises(FormulonError):
-                wb.get_auto_filter(99)
+                wb.sheet(99).get_auto_filter()
 
     def test_table_auto_filter(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_text(0, 0, 0, "n")
-            wb.set_text(0, 0, 1, "m")
+            wb.sheet(0).set_text(0, 0, "n")
+            wb.sheet(0).set_text(0, 1, "m")
             for i in range(1, 4):
-                wb.set_number(0, i, 0, float(i))
-                wb.set_number(0, i, 1, 0.0)
-            idx = wb.add_table(0, CellRect(0, 0, 3, 1), "T1", "T1", ["n", "m"])
+                wb.sheet(0).set_number(i, 0, float(i))
+                wb.sheet(0).set_number(i, 1, 0.0)
+            idx = wb.add_table(
+                range=SheetRect(0, CellRect(0, 0, 3, 1)), name="T1", display_name="T1", columns=["n", "m"]
+            )
             wb.remove_table_auto_filter(idx)
             self.assertIsNone(wb.get_table_auto_filter(idx))
             wb.set_table_auto_filter(
@@ -240,8 +239,7 @@ class AutoFilterTests(unittest.TestCase):
 class ValidationCheckTests(unittest.TestCase):
     def _wb_with_list_rule(self) -> Workbook:
         wb = Workbook.create_default()
-        wb.add_validation(
-            0,
+        wb.sheet(0).add_validation(
             DataValidationInput(
                 type=3, ranges=[CellRect(0, 3, 9, 3)], formula1='"Yes,No"', error_style=ValidationErrorStyle.WARNING
             ),
@@ -250,26 +248,22 @@ class ValidationCheckTests(unittest.TestCase):
 
     def test_validate_value(self) -> None:
         with self._wb_with_list_rule() as wb:
-            ok = wb.validate_value(0, 0, 3, _text("Yes"))
-            self.assertEqual(
-                ok, ValidationOutcome(has_rule=True, valid=True, rule_index=0, error_style=ValidationErrorStyle.WARNING)
-            )
-            bad = wb.validate_value(0, 0, 3, _text("Maybe"))
-            self.assertTrue(bad.has_rule)
+            ok = wb.sheet(0).validate_value(0, 3, _text("Yes"))
+            self.assertEqual(ok, ValidationOutcome(valid=True, rule_index=0, error_style=ValidationErrorStyle.WARNING))
+            bad = wb.sheet(0).validate_value(0, 3, _text("Maybe"))
+            self.assertEqual(bad.rule_index, 0)
             self.assertFalse(bad.valid)
             self.assertEqual(bad.error_style, ValidationErrorStyle.WARNING)
-            none = wb.validate_value(0, 0, 0, Value(kind=ValueKind.NUMBER, number=1.0))
-            self.assertEqual(
-                none, ValidationOutcome(has_rule=False, valid=True, rule_index=0, error_style=ValidationErrorStyle.STOP)
-            )
+            none = wb.sheet(0).validate_value(0, 0, Value(kind=ValueKind.NUMBER, number=1.0))
+            self.assertEqual(none, ValidationOutcome(valid=True, rule_index=None, error_style=None))
             with self.assertRaises(FormulonError):
-                wb.validate_value(99, 0, 3, _text("Yes"))
+                wb.sheet(99).validate_value(0, 3, _text("Yes"))
 
     def test_list_invalid_cells_pages(self) -> None:
         with self._wb_with_list_rule() as wb:
             for r, v in enumerate(["Yes", "bad1", "No", "bad2", "bad3"]):
-                wb.set_text(0, r, 3, v)
-            first_page = wb.get_invalid_cells(0)
+                wb.sheet(0).set_text(r, 3, v)
+            first_page = wb.sheet(0).get_invalid_cells()
             cells, cursor = first_page.cells, first_page.next_cursor
             self.assertEqual([c.row for c in cells], [1, 3, 4])
             self.assertIsNone(cursor)
@@ -277,7 +271,7 @@ class ValidationCheckTests(unittest.TestCase):
             cursor = None
             pages = 0
             while True:
-                got = wb.get_invalid_cells(0, cursor, 2)
+                got = wb.sheet(0).get_invalid_cells(cursor, 2)
                 page, cursor = got.cells, got.next_cursor
                 pages += 1
                 seen += [(c.row, c.value.text) for c in page]
@@ -286,7 +280,7 @@ class ValidationCheckTests(unittest.TestCase):
             self.assertEqual(seen, [(1, "bad1"), (3, "bad2"), (4, "bad3")])
             self.assertGreaterEqual(pages, 2)
             with self.assertRaises(FormulonError):
-                wb.get_invalid_cells(99)
+                wb.sheet(99).get_invalid_cells()
 
 
 class ThreadedCommentTests(unittest.TestCase):
@@ -310,10 +304,10 @@ class ThreadedCommentTests(unittest.TestCase):
 
     def test_thread_with_reply_and_mention(self) -> None:
         with self._wb() as wb:
-            self.assertEqual(wb.list_threaded_comments(0), [])
-            opener = ThreadedComment(id=THREAD, row=2, col=1, person_id=ALICE, created=STAMP, text="Check this")
-            wb.add_threaded_comment(0, opener)
-            reply = ThreadedComment(
+            self.assertEqual(wb.sheet(0).list_threaded_comments(), [])
+            opener = ThreadedCommentInput(id=THREAD, row=2, col=1, person_id=ALICE, created=STAMP, text="Check this")
+            wb.sheet(0).add_threaded_comment(opener)
+            reply = ThreadedCommentInput(
                 id=REPLY,
                 person_id=BOB,
                 created=STAMP,
@@ -323,8 +317,8 @@ class ThreadedCommentTests(unittest.TestCase):
                     Mention(person_id=ALICE, mention_id="{55555555-5555-4555-8555-555555555555}", start=0, length=6)
                 ],
             )
-            wb.add_threaded_comment(0, reply)
-            got = wb.list_threaded_comments(0)
+            wb.sheet(0).add_threaded_comment(reply)
+            got = wb.sheet(0).list_threaded_comments()
             self.assertEqual([c.id for c in got], [THREAD, REPLY])
             self.assertEqual((got[0].row, got[0].col, got[0].text), (2, 1, "Check this"))
             self.assertEqual((got[1].row, got[1].col, got[1].parent_id), (2, 1, THREAD))
@@ -333,31 +327,33 @@ class ThreadedCommentTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.remove_person(ALICE)
 
-            wb.update_threaded_comment(0, REPLY, "plain", [])
-            self.assertEqual(wb.list_threaded_comments(0)[1].text, "plain")
-            self.assertEqual(wb.list_threaded_comments(0)[1].mentions, [])
+            wb.sheet(0).update_threaded_comment(REPLY, text="plain", mentions=[])
+            self.assertEqual(wb.sheet(0).list_threaded_comments()[1].text, "plain")
+            self.assertEqual(wb.sheet(0).list_threaded_comments()[1].mentions, [])
 
-            wb.set_thread_resolved(0, THREAD, True)
-            self.assertTrue(wb.list_threaded_comments(0)[0].done)
-            wb.set_thread_resolved(0, THREAD, False)
-            self.assertFalse(wb.list_threaded_comments(0)[0].done)
+            wb.sheet(0).set_thread_resolved(THREAD, True)
+            self.assertTrue(wb.sheet(0).list_threaded_comments()[0].done)
+            wb.sheet(0).set_thread_resolved(THREAD, False)
+            self.assertFalse(wb.sheet(0).list_threaded_comments()[0].done)
 
-            wb.remove_threaded_comment(0, REPLY)
-            self.assertEqual([c.id for c in wb.list_threaded_comments(0)], [THREAD])
-            wb.remove_threaded_comment(0, THREAD)
-            self.assertEqual(wb.list_threaded_comments(0), [])
+            wb.sheet(0).remove_threaded_comment(REPLY)
+            self.assertEqual([c.id for c in wb.sheet(0).list_threaded_comments()], [THREAD])
+            wb.sheet(0).remove_threaded_comment(THREAD)
+            self.assertEqual(wb.sheet(0).list_threaded_comments(), [])
             wb.remove_person(ALICE)
 
     def test_invalid_comment_is_rejected(self) -> None:
         with self._wb() as wb:
             with self.assertRaises(FormulonError):
-                wb.add_threaded_comment(0, ThreadedComment(id="not-a-guid", person_id=ALICE, created=STAMP, text="x"))
+                wb.sheet(0).add_threaded_comment(
+                    ThreadedCommentInput(id="not-a-guid", person_id=ALICE, created=STAMP, text="x")
+                )
             with self.assertRaises(FormulonError):
-                wb.update_threaded_comment(0, THREAD, "x")
+                wb.sheet(0).update_threaded_comment(THREAD, text="x")
             with self.assertRaises(FormulonError):
-                wb.set_thread_resolved(0, THREAD, True)
+                wb.sheet(0).set_thread_resolved(THREAD, True)
             with self.assertRaises(FormulonError):
-                wb.remove_threaded_comment(0, THREAD)
+                wb.sheet(0).remove_threaded_comment(THREAD)
 
 
 if __name__ == "__main__":

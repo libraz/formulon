@@ -17,11 +17,11 @@ namespace formulon::cli {
 namespace {
 
 void print_paginate_usage(std::ostream& out) {
-  out << "Usage: formulon paginate [--sheet INDEX] [--json] [--] <in>\n"
+  out << "Usage: formulon paginate [--sheet INDEX] [--json] [--] <in | ->\n"
       << "\n"
       << "Resolve a worksheet's print area, automatic page breaks, and physical page count.\n"
       << "INDEX is zero-based and defaults to 0. print_area lists A1 ranges (e.g. B2:D5);\n"
-      << "break positions are zero-based. <in> is an xlsx or xlsb file.\n"
+      << "break positions are zero-based. <in> is an xlsx or xlsb file; '-' reads stdin.\n"
       << "  --json       print the sheet's name and one A1 range per physical page as JSON\n"
       << "  --           end options; the next token is the input path\n";
   print_shared_options(out);
@@ -60,7 +60,7 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
       ++i;
       continue;
     }
-    if (!accept_positional(arg, options_ended, input_seen, "paginate", "input path", err)) {
+    if (!accept_positional(arg, options_ended, input_seen, "paginate", "input path", err, /*allow_dash=*/true)) {
       return kExitUsage;
     }
     input_path.assign(arg);

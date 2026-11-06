@@ -37,9 +37,9 @@ const saveBytes = (wb) => {
 
 const salesWorkbook = (mod) => {
   const wb = mod.Workbook.createDefault();
-  wb.setText(0, 0, 0, 'Product');
-  wb.setText(0, 0, 1, 'Amount');
-  wb.setNumber(0, 1, 1, 10);
+  wb.sheet(0).setText(0, 0, 'Product');
+  wb.sheet(0).setText(0, 1, 'Amount');
+  wb.sheet(0).setNumber(1, 1, 10);
   wb.addTable({
     range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 } },
     name: 'Sales',
@@ -53,8 +53,8 @@ const anchor = { fromRow: 4, fromCol: 3, toRow: 14, toCol: 5 };
 test('slicers add, list, update, remove and round-trip', async () => {
   const mod = await getModule();
   const wb = salesWorkbook(mod);
-  assert.equal(wb.listSlicers(0).length, 0);
-  const added = wb.addSlicer(0, 0, 0, {
+  assert.equal(wb.sheet(0).listSlicers().length, 0);
+  const added = wb.sheet(0).addSlicer(0, 0, {
     ...anchor,
     caption: 'Pick a product',
     style: 'SlicerStyleLight3',
@@ -73,7 +73,7 @@ test('slicers add, list, update, remove and round-trip', async () => {
   assert.match(readZipEntry(bytes, 'xl/drawings/drawing1.xml'), /<mc:Fallback>/);
 
   const loaded = mod.Workbook.load(bytes);
-  const slicers = loaded.listSlicers(0);
+  const slicers = loaded.sheet(0).listSlicers();
   assert.equal(slicers.length, 1);
   const s = slicers[0];
   assert.equal(s.objectId, added);
@@ -84,27 +84,27 @@ test('slicers add, list, update, remove and round-trip', async () => {
   assert.equal(s.columnName, 'Product');
   assert.equal(s.style, 'SlicerStyleLight3');
   assert.equal(s.columnCount, 2);
-  assert.equal(s.rowHeight, 241300);
+  assert.equal(s.rowHeightEmu, 241300);
   assert.equal(s.sortOrder, mod.SlicerSortOrder.Descending);
   assert.equal(s.crossFilter, mod.SlicerCrossFilter.None);
   assert.equal(s.anchorKind, mod.AnchorKind.TwoCell);
   assert.deepEqual([s.fromRow, s.fromCol, s.toRow, s.toCol], [4, 3, 14, 5]);
 
   // An update changes the named fields only; the frame follows row edits.
-  loaded.updateSlicer(0, added, { caption: 'Renamed', style: '', columnCount: 1, fromRow: 0, toRow: 8 });
-  const found = loaded.getSlicer(0, added);
+  loaded.sheet(0).updateSlicer(added, { caption: 'Renamed', style: '', columnCount: 1, fromRow: 0, toRow: 8 });
+  const found = loaded.sheet(0).getSlicer(added);
   assert.equal(found.caption, 'Renamed');
-  loaded.insertRows(0, 0, 3);
-  const moved = loaded.listSlicers(0)[0];
+  loaded.sheet(0).insertRows(0, 3);
+  const moved = loaded.sheet(0).listSlicers()[0];
   assert.equal(moved.caption, 'Renamed');
-  assert.equal(moved.style, '');
+  assert.equal(moved.style, null);
   assert.equal(moved.columnCount, 1);
   assert.equal(moved.sortOrder, mod.SlicerSortOrder.Descending);
   assert.deepEqual([moved.fromRow, moved.toRow], [3, 11]);
 
-  loaded.removeSlicer(0, added);
-  assert.equal(loaded.listSlicers(0).length, 0);
-  const gone = loaded.getSlicer(0, added);
+  loaded.sheet(0).removeSlicer(added);
+  assert.equal(loaded.sheet(0).listSlicers().length, 0);
+  const gone = loaded.sheet(0).getSlicer(added);
   assert.equal(gone, null);
   const emptied = saveBytes(loaded);
   assert.equal(readZipEntry(emptied, 'xl/slicers/slicer1.xml'), null);
@@ -117,11 +117,11 @@ test('slicers add, list, update, remove and round-trip', async () => {
 test('removing a table removes its slicers and caches', async () => {
   const mod = await getModule();
   const wb = salesWorkbook(mod);
-  wb.addSlicer(0, 0, 0, anchor);
-  wb.addSlicer(0, 0, 1, anchor);
-  assert.equal(wb.listSlicers(0).length, 2);
+  wb.sheet(0).addSlicer(0, 0, anchor);
+  wb.sheet(0).addSlicer(0, 1, anchor);
+  assert.equal(wb.sheet(0).listSlicers().length, 2);
   wb.removeTable(0);
-  assert.equal(wb.listSlicers(0).length, 0);
+  assert.equal(wb.sheet(0).listSlicers().length, 0);
   const bytes = saveBytes(wb);
   for (const part of [
     'xl/slicers/slicer1.xml',
@@ -137,19 +137,19 @@ test('removing a table removes its slicers and caches', async () => {
 test('slicer arguments are validated', async () => {
   const mod = await getModule();
   const wb = salesWorkbook(mod);
-  assert.throws(() => wb.addSlicer(0, 0, 0, {}), isFormulonError);
-  assert.throws(() => wb.addSlicer(0, 1, 0, anchor), isFormulonError);
-  assert.throws(() => wb.addSlicer(0, 0, 2, anchor), isFormulonError);
-  assert.throws(() => wb.addSlicer(5, 0, 0, anchor), isFormulonError);
-  assert.throws(() => wb.addSlicer(0, 0, 0, { ...anchor, toRow: 1 }), isFormulonError);
-  assert.throws(() => wb.addSlicer(0, 0, 0, { ...anchor, columnCount: 0 }), isFormulonError);
-  assert.throws(() => wb.addSlicer(0, 0, 0, { ...anchor, sortOrder: 5 }), isFormulonError);
-  assert.equal(wb.listSlicers(0).length, 0);
-  const added = wb.addSlicer(0, 0, 0, anchor);
-  assert.throws(() => wb.updateSlicer(0, added + 1, { caption: 'x' }), isFormulonError);
-  assert.throws(() => wb.updateSlicer(0, added, { name: 'x' }), isFormulonError);
-  assert.throws(() => wb.removeSlicer(0, added + 1), isFormulonError);
-  assert.throws(() => wb.getSlicer(5, added), isFormulonError);
-  assert.throws(() => wb.addSlicer(0, 0, 0, { ...anchor, fromRow: -1 }), RangeError);
+  assert.throws(() => wb.sheet(0).addSlicer(0, 0, {}), isFormulonError);
+  assert.throws(() => wb.sheet(0).addSlicer(1, 0, anchor), isFormulonError);
+  assert.throws(() => wb.sheet(0).addSlicer(0, 2, anchor), isFormulonError);
+  assert.throws(() => wb.sheet(5).addSlicer(0, 0, anchor), isFormulonError);
+  assert.throws(() => wb.sheet(0).addSlicer(0, 0, { ...anchor, toRow: 1 }), isFormulonError);
+  assert.throws(() => wb.sheet(0).addSlicer(0, 0, { ...anchor, columnCount: 0 }), isFormulonError);
+  assert.throws(() => wb.sheet(0).addSlicer(0, 0, { ...anchor, sortOrder: 5 }), isFormulonError);
+  assert.equal(wb.sheet(0).listSlicers().length, 0);
+  const added = wb.sheet(0).addSlicer(0, 0, anchor);
+  assert.throws(() => wb.sheet(0).updateSlicer(added + 1, { caption: 'x' }), isFormulonError);
+  assert.throws(() => wb.sheet(0).updateSlicer(added, { name: 'x' }), isFormulonError);
+  assert.throws(() => wb.sheet(0).removeSlicer(added + 1), isFormulonError);
+  assert.throws(() => wb.sheet(5).getSlicer(added), isFormulonError);
+  assert.throws(() => wb.sheet(0).addSlicer(0, 0, { ...anchor, fromRow: -1 }), RangeError);
   release(wb);
 });

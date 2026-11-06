@@ -53,7 +53,7 @@ TEST(FormulonCli, PlainEscapeEvalPlainKeepsQuotesButJsonStaysJson) {
 
   CliRun json = run_cli({"eval", "--json", "=CHAR(34)"});
   ASSERT_EQ(json.exit_code, 0) << json.stderr_text;
-  EXPECT_EQ(json.stdout_text, "{\"kind\":\"text\",\"value\":\"\\\"\"}\n");
+  EXPECT_EQ(json.stdout_text, "{\"format\":1,\"rows\":[[{\"kind\":\"text\",\"value\":\"\\\"\"}]]}\n");
 }
 
 TEST(FormulonCli, PlainEscapeLeavesOtherControlCharactersRaw) {
@@ -94,8 +94,9 @@ TEST(FormulonCli, HelpDocumentsFlagsExitCodesAndInputFormats) {
   CliRun r = run_cli({"--help"});
   ASSERT_EQ(r.exit_code, 0);
   for (const char* needle :
-       {"--repeat", "--json", "--iterative", "--threads", "--quiet", "--sheet", "--output", "--formulas", "--values",
-        "--sheets", "--metadata", "Exit codes", "64", "recalculates", "xlsx or xlsb"}) {
+       {"--repeat",   "--json",   "--iterative", "--threads",  "--quiet",      "--sheet",     "--output",
+        "--formulas", "--values", "--sheets",    "--metadata", "Exit codes",   "64",          "66",
+        "73",         "74",       "stdin",       "stdout",     "recalculates", "xlsx or xlsb"}) {
     EXPECT_NE(r.stdout_text.find(needle), std::string::npos) << needle;
   }
 }

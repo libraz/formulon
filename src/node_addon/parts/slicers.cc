@@ -29,24 +29,26 @@ fm_slicer_t PullSlicer(CheckedSpecReader& reader, const Napi::Object& spec, Slic
     s.fields |= FM_SLICER_FIELD_CAPTION;
     s.caption = store.caption.c_str();
   }
-  if (reader.String(spec, "style", &store.style)) {
+  // `null` removes the style, as the empty string does.
+  const Napi::Value style = reader.Get(spec, "style");
+  if (reader.ok() && !style.IsUndefined()) {
     s.fields |= FM_SLICER_FIELD_STYLE;
-    s.style = store.style.c_str();
+    s.style = style.IsNull() ? "" : (reader.String(style, "style", &store.style) ? store.style.c_str() : "");
   }
   s.column_count = reader.U32(spec, "columnCount", 1U, &present);
   s.fields |= present ? FM_SLICER_FIELD_COLUMN_COUNT : 0U;
-  s.row_height = reader.I64(spec, "rowHeight", 0, &present);
+  s.row_height_emu = reader.I64(spec, "rowHeightEmu", 0, &present);
   s.fields |= present ? FM_SLICER_FIELD_ROW_HEIGHT : 0U;
   s.from_row = reader.U32(spec, "fromRow", 0U, &present);
   if (present) {
     s.fields |= FM_SLICER_FIELD_ANCHOR;
     s.from_col = reader.U32(spec, "fromCol", 0U);
-    s.from_row_offset = reader.I64(spec, "fromRowOffset", 0);
-    s.from_col_offset = reader.I64(spec, "fromColOffset", 0);
+    s.from_row_offset_emu = reader.I64(spec, "fromRowOffsetEmu", 0);
+    s.from_col_offset_emu = reader.I64(spec, "fromColOffsetEmu", 0);
     s.to_row = reader.U32(spec, "toRow", 0U);
     s.to_col = reader.U32(spec, "toCol", 0U);
-    s.to_row_offset = reader.I64(spec, "toRowOffset", 0);
-    s.to_col_offset = reader.I64(spec, "toColOffset", 0);
+    s.to_row_offset_emu = reader.I64(spec, "toRowOffsetEmu", 0);
+    s.to_col_offset_emu = reader.I64(spec, "toColOffsetEmu", 0);
   }
   s.sort_order = reader.I32(spec, "sortOrder", 0, &present);
   s.fields |= present ? FM_SLICER_FIELD_SORT_ORDER : 0U;
@@ -65,19 +67,19 @@ Napi::Object SlicerToJs(Napi::Env env, const fm_slicer_t& s) {
   item.Set("anchorKind", JsNumber(env, s.anchor_kind));
   item.Set("fromRow", JsNumber(env, s.from_row));
   item.Set("fromCol", JsNumber(env, s.from_col));
-  item.Set("fromRowOffset", JsNumber(env, static_cast<double>(s.from_row_offset)));
-  item.Set("fromColOffset", JsNumber(env, static_cast<double>(s.from_col_offset)));
+  item.Set("fromRowOffsetEmu", JsNumber(env, static_cast<double>(s.from_row_offset_emu)));
+  item.Set("fromColOffsetEmu", JsNumber(env, static_cast<double>(s.from_col_offset_emu)));
   item.Set("toRow", JsNumber(env, s.to_row));
   item.Set("toCol", JsNumber(env, s.to_col));
-  item.Set("toRowOffset", JsNumber(env, static_cast<double>(s.to_row_offset)));
-  item.Set("toColOffset", JsNumber(env, static_cast<double>(s.to_col_offset)));
-  item.Set("rowHeight", JsNumber(env, static_cast<double>(s.row_height)));
+  item.Set("toRowOffsetEmu", JsNumber(env, static_cast<double>(s.to_row_offset_emu)));
+  item.Set("toColOffsetEmu", JsNumber(env, static_cast<double>(s.to_col_offset_emu)));
+  item.Set("rowHeightEmu", JsNumber(env, static_cast<double>(s.row_height_emu)));
   item.Set("name", JsString(env, s.name));
   item.Set("caption", JsString(env, s.caption));
   item.Set("cacheName", JsString(env, s.cache_name));
   item.Set("tableName", JsString(env, s.table_name));
   item.Set("columnName", JsString(env, s.column_name));
-  item.Set("style", JsString(env, s.style));
+  item.Set("style", JsStringOrNull(env, s.style));
   return item;
 }
 

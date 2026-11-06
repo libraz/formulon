@@ -31,24 +31,24 @@ function buildPivot(mod) {
     const rec = wb.addPivotCacheRecord(cacheId);
     for (const [field, v] of values.entries()) wb.setPivotCacheRecordNumber(cacheId, rec, field, v);
   }
-  const pivot = wb.addPivot(0, 'Pivot1', cacheId, 0, 6);
-  const addField = (spec) => wb.addPivotField(0, pivot, spec);
+  const pivot = wb.sheet(0).addPivot('Pivot1', cacheId, 0, 6);
+  const addField = (spec) => wb.sheet(0).addPivotField(pivot, spec);
   const region = addField({ sourceName: 'Region', axis: 0 });
-  wb.addPivotFieldItem(0, pivot, region, 'East', true);
-  wb.addPivotFieldItem(0, pivot, region, 'West', true);
+  wb.sheet(0).addPivotFieldItem(pivot, region, 'East', true);
+  wb.sheet(0).addPivotFieldItem(pivot, region, 'West', true);
   const product = addField({ sourceName: 'Product', axis: 2 });
-  wb.addPivotFieldItem(0, pivot, product, 'Apple', true);
-  wb.addPivotFieldItem(0, pivot, product, 'Pear', true);
+  wb.sheet(0).addPivotFieldItem(pivot, product, 'Apple', true);
+  wb.sheet(0).addPivotFieldItem(pivot, product, 'Pear', true);
   const amount = addField({ sourceName: 'Amount', axis: 2 });
   const date = addField({ sourceName: 'Date', axis: 2 });
-  wb.setPivotRowFieldOrder(0, pivot, [region]);
-  wb.addPivotDataField(0, pivot, { name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
+  wb.sheet(0).setPivotRowFieldOrder(pivot, [region]);
+  wb.sheet(0).addPivotDataField(pivot, { name: 'Sum of Amount', fieldIndex: amount, aggregation: 0 });
   return { wb, cacheId, pivot, region, product, amount, date };
 }
 
 // The projected grid as one `|`-joined string per sheet row.
 function pivotGrid(wb, pivot = 0) {
-  const layout = wb.getPivotLayout(0, pivot);
+  const layout = wb.sheet(0).getPivotLayout(pivot);
   const rows = new Map();
   for (const cell of layout.cells) {
     const v = cell.value;
@@ -71,9 +71,9 @@ const TWO_LEVEL_GRID = [
   '総計|52',
 ];
 const DATE_SERIAL_GRID = ['行ラベル|Sum of Amount', '45292|10', '45323|30', '45658|5', '45689|7', '総計|52'];
-const twoLevels = (b) => b.wb.setPivotRowFieldOrder(0, b.pivot, [b.region, b.product]);
-const dateRows = (b) => b.wb.setPivotRowFieldOrder(0, b.pivot, [b.date]);
-const hideEast = (b) => b.wb.setPivotFieldItemVisible(0, b.pivot, b.region, 0, false);
+const twoLevels = (b) => b.wb.sheet(0).setPivotRowFieldOrder(b.pivot, [b.region, b.product]);
+const dateRows = (b) => b.wb.sheet(0).setPivotRowFieldOrder(b.pivot, [b.date]);
+const hideEast = (b) => b.wb.sheet(0).setPivotFieldItemVisible(b.pivot, b.region, 0, false);
 const WEST_ONLY = ['行ラベル|Sum of Amount', 'West|37', '総計|37'];
 const GREATER_THAN_20 = Object.freeze({ axis: 0, fieldName: 'Region', type: 1, valueKind: 1, valueDouble: 20 });
 const BETWEEN_10_20 = Object.freeze({
@@ -124,7 +124,10 @@ const PIVOT_MUTATORS = [
       },
     },
   ],
-  ['getPivotCacheId', { act: (b) => b.wb.getPivotCacheId(0, b.pivot), expect: (b, r) => assert.equal(r, b.cacheId) }],
+  [
+    'getPivotCacheId',
+    { act: (b) => b.wb.sheet(0).getPivotCacheId(b.pivot), expect: (b, r) => assert.equal(r, b.cacheId) },
+  ],
   [
     'removePivotCache',
     {
@@ -167,7 +170,7 @@ const PIVOT_MUTATORS = [
       expect: (b) => {
         assert.equal(b.wb.getPivotCacheFieldCount(b.cacheId), 0);
         // The data field now names a cache field that no longer exists.
-        assert.throws(() => b.wb.getPivotLayout(0, b.pivot), isFormulonError);
+        assert.throws(() => b.wb.sheet(0).getPivotLayout(b.pivot), isFormulonError);
       },
     },
   ],
@@ -293,10 +296,10 @@ const PIVOT_MUTATORS = [
   [
     'addPivot',
     {
-      act: (b) => b.wb.addPivot(0, 'Pivot2', b.cacheId, 20, 1),
+      act: (b) => b.wb.sheet(0).addPivot('Pivot2', b.cacheId, 20, 1),
       expect: (b, r) => {
         assert.equal(r, 1);
-        const layout = b.wb.getPivotLayout(0, 1);
+        const layout = b.wb.sheet(0).getPivotLayout(1);
         assert.equal(layout.rect.firstRow, 20);
         assert.equal(layout.rect.firstCol, 1);
         assert.deepEqual(pivotGrid(b.wb, 0), BASE_GRID);
@@ -306,17 +309,17 @@ const PIVOT_MUTATORS = [
   [
     'removePivot',
     {
-      act: (b) => b.wb.removePivot(0, b.pivot),
+      act: (b) => b.wb.sheet(0).removePivot(b.pivot),
       expect: (b) => {
-        assert.equal(b.wb.getPivotCount(0), 0);
-        assert.throws(() => b.wb.getPivotLayout(0, 0), isFormulonError);
+        assert.equal(b.wb.sheet(0).getPivotCount(), 0);
+        assert.throws(() => b.wb.sheet(0).getPivotLayout(0), isFormulonError);
       },
     },
   ],
   [
     'setPivotName',
     {
-      act: (b) => b.wb.setPivotName(0, b.pivot, 'Renamed'),
+      act: (b) => b.wb.sheet(0).setPivotName(b.pivot, 'Renamed'),
       // A pivot's name is only observable in the part the writer emits.
       expect: (b) => {
         const saved = b.wb.save();
@@ -327,9 +330,9 @@ const PIVOT_MUTATORS = [
   [
     'setPivotAnchor',
     {
-      act: (b) => b.wb.setPivotAnchor(0, b.pivot, { firstRow: 10, firstCol: 2, lastRow: 13, lastCol: 3 }),
+      act: (b) => b.wb.sheet(0).setPivotAnchor(b.pivot, { firstRow: 10, firstCol: 2, lastRow: 13, lastCol: 3 }),
       expect: (b) => {
-        const layout = b.wb.getPivotLayout(0, b.pivot);
+        const layout = b.wb.sheet(0).getPivotLayout(b.pivot);
         assert.equal(layout.rect.firstRow, 10);
         assert.equal(layout.rect.firstCol, 2);
         assert.deepEqual(pivotGrid(b.wb), BASE_GRID);
@@ -339,10 +342,10 @@ const PIVOT_MUTATORS = [
   [
     'setPivotGrandTotals',
     {
-      setup: (b) => b.wb.setPivotColumnFieldOrder(0, b.pivot, [b.product]),
+      setup: (b) => b.wb.sheet(0).setPivotColumnFieldOrder(b.pivot, [b.product]),
       // Rows off drops the per-row total column; columns on keeps the
       // bottom total row, so a swapped pair would show the opposite.
-      act: (b) => b.wb.setPivotGrandTotals(0, b.pivot, false, true),
+      act: (b) => b.wb.sheet(0).setPivotGrandTotals(b.pivot, { rows: false, columns: true }),
       expect: (b) =>
         assert.deepEqual(pivotGrid(b.wb), [
           'Sum of Amount|列ラベル|',
@@ -357,7 +360,7 @@ const PIVOT_MUTATORS = [
     'setPivotStyleInfo',
     {
       act: (b) =>
-        b.wb.setPivotStyleInfo(0, b.pivot, {
+        b.wb.sheet(0).setPivotStyleInfo(b.pivot, {
           name: 'PivotStyleMedium9',
           showRowHeaders: false,
           showColHeaders: true,
@@ -366,7 +369,7 @@ const PIVOT_MUTATORS = [
           showLastColumn: true,
         }),
       expect: (b) => {
-        const style = b.wb.getPivotStyleInfo(0, b.pivot);
+        const style = b.wb.sheet(0).getPivotStyleInfo(b.pivot);
         assert.equal(style.name, 'PivotStyleMedium9');
         assert.deepEqual(
           [
@@ -385,9 +388,9 @@ const PIVOT_MUTATORS = [
   [
     'setPivotReportLayout',
     {
-      act: (b) => b.wb.setPivotReportLayout(0, b.pivot, 1),
+      act: (b) => b.wb.sheet(0).setPivotReportLayout(b.pivot, 1),
       expect: (b) => {
-        assert.equal(b.wb.getPivotReportLayout(0, b.pivot), 1);
+        assert.equal(b.wb.sheet(0).getPivotReportLayout(b.pivot), 1);
         assert.deepEqual(pivotGrid(b.wb), ['Region|Sum of Amount', 'East|15', 'West|37', '総計|52']);
       },
     },
@@ -395,7 +398,7 @@ const PIVOT_MUTATORS = [
   [
     'addPivotField',
     {
-      act: (b) => b.wb.addPivotField(0, b.pivot, { sourceName: 'Product', customName: 'Fruit', axis: 3 }),
+      act: (b) => b.wb.sheet(0).addPivotField(b.pivot, { sourceName: 'Product', customName: 'Fruit', axis: 3 }),
       expect: (b, r) => {
         // Product is a cache column the fixture already added, so it is updated in place.
         assert.equal(r, b.product);
@@ -407,9 +410,9 @@ const PIVOT_MUTATORS = [
     'clearPivotFields',
     {
       setup: hideEast,
-      act: (b) => b.wb.clearPivotFields(0, b.pivot),
+      act: (b) => b.wb.sheet(0).clearPivotFields(b.pivot),
       expect: (b) => {
-        assert.equal(b.wb.getPivotFieldCount(0, b.pivot), 0);
+        assert.equal(b.wb.sheet(0).listPivotFields(b.pivot).length, 0);
         // The row order empties with the fields; East's hidden flag goes too.
         assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', '|52']);
       },
@@ -418,7 +421,7 @@ const PIVOT_MUTATORS = [
   [
     'setPivotFieldAxis',
     {
-      act: (b) => b.wb.setPivotFieldAxis(0, b.pivot, b.product, 3),
+      act: (b) => b.wb.sheet(0).setPivotFieldAxis(b.pivot, b.product, 3),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), ['Product|(すべて)', '|', ...BASE_GRID]),
     },
   ],
@@ -428,7 +431,7 @@ const PIVOT_MUTATORS = [
       // East now outsums West, so sorting ascending by the data field
       // differs from both label orders.
       setup: (b) => b.wb.setPivotCacheRecordNumber(b.cacheId, 0, 2, 40),
-      act: (b) => b.wb.setPivotFieldSort(0, b.pivot, b.region, 1, 'Sum of Amount'),
+      act: (b) => b.wb.sheet(0).setPivotFieldSort(b.pivot, b.region, 1, 'Sum of Amount'),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', 'West|37', 'East|45', '総計|82']),
     },
   ],
@@ -436,7 +439,7 @@ const PIVOT_MUTATORS = [
     'setPivotFieldSubtotalTop',
     {
       setup: twoLevels,
-      act: (b) => b.wb.setPivotFieldSubtotalTop(0, b.pivot, b.region, false),
+      act: (b) => b.wb.sheet(0).setPivotFieldSubtotalTop(b.pivot, b.region, false),
       expect: (b) =>
         assert.deepEqual(pivotGrid(b.wb), [
           '行ラベル|Sum of Amount',
@@ -455,7 +458,7 @@ const PIVOT_MUTATORS = [
   [
     'addPivotFieldItem',
     {
-      act: (b) => b.wb.addPivotFieldItem(0, b.pivot, b.region, 'East', false),
+      act: (b) => b.wb.sheet(0).addPivotFieldItem(b.pivot, b.region, 'East', false),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), WEST_ONLY),
     },
   ],
@@ -467,7 +470,7 @@ const PIVOT_MUTATORS = [
         b.wb.addPivotCacheFieldSharedItemBlank(b.cacheId, 0);
         b.wb.setPivotCacheRecordBlank(b.cacheId, 0, 0);
       },
-      act: (b) => b.wb.addPivotFieldSharedItem(0, b.pivot, b.region, 2, false),
+      act: (b) => b.wb.sheet(0).addPivotFieldSharedItem(b.pivot, b.region, 2, false),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', 'East|5', 'West|37', '総計|42']),
     },
   ],
@@ -475,14 +478,14 @@ const PIVOT_MUTATORS = [
     'clearPivotFieldItems',
     {
       setup: hideEast,
-      act: (b) => b.wb.clearPivotFieldItems(0, b.pivot, b.region),
+      act: (b) => b.wb.sheet(0).clearPivotFieldItems(b.pivot, b.region),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), BASE_GRID),
     },
   ],
   [
     'setPivotFieldItemVisible',
     {
-      act: (b) => b.wb.setPivotFieldItemVisible(0, b.pivot, b.region, 1, false),
+      act: (b) => b.wb.sheet(0).setPivotFieldItemVisible(b.pivot, b.region, 1, false),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', 'East|15', '総計|15']),
     },
   ],
@@ -490,7 +493,7 @@ const PIVOT_MUTATORS = [
     'addPivotFieldSubtotalFn',
     {
       setup: twoLevels,
-      act: (b) => b.wb.addPivotFieldSubtotalFn(0, b.pivot, b.region, 3),
+      act: (b) => b.wb.sheet(0).addPivotFieldSubtotalFn(b.pivot, b.region, 3),
       expect: (b) =>
         assert.deepEqual(pivotGrid(b.wb), [
           '行ラベル|Sum of Amount',
@@ -509,9 +512,9 @@ const PIVOT_MUTATORS = [
     {
       setup: (b) => {
         twoLevels(b);
-        b.wb.addPivotFieldSubtotalFn(0, b.pivot, b.region, 3);
+        b.wb.sheet(0).addPivotFieldSubtotalFn(b.pivot, b.region, 3);
       },
-      act: (b) => b.wb.clearPivotFieldSubtotalFns(0, b.pivot, b.region),
+      act: (b) => b.wb.sheet(0).clearPivotFieldSubtotalFns(b.pivot, b.region),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), TWO_LEVEL_GRID),
     },
   ],
@@ -519,7 +522,7 @@ const PIVOT_MUTATORS = [
     'setPivotFieldDateGroup',
     {
       setup: dateRows,
-      act: (b) => b.wb.setPivotFieldDateGroup(0, b.pivot, b.date, 64, 1),
+      act: (b) => b.wb.sheet(0).setPivotFieldDateGroup(b.pivot, b.date, { periods: 64, calendar: 1 }),
       expect: (b) =>
         assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', '令和6年|40', '令和7年|12', '総計|52']),
     },
@@ -529,24 +532,24 @@ const PIVOT_MUTATORS = [
     {
       setup: (b) => {
         dateRows(b);
-        b.wb.setPivotFieldDateGroup(0, b.pivot, b.date, 64, 0);
+        b.wb.sheet(0).setPivotFieldDateGroup(b.pivot, b.date, { periods: 64, calendar: 0 });
       },
-      act: (b) => b.wb.clearPivotFieldDateGroup(0, b.pivot, b.date),
+      act: (b) => b.wb.sheet(0).clearPivotFieldDateGroup(b.pivot, b.date),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), DATE_SERIAL_GRID),
     },
   ],
   [
     'setPivotFieldNumberFormat',
     {
-      act: (b) => b.wb.setPivotFieldNumberFormat(0, b.pivot, b.amount, '4'),
+      act: (b) => b.wb.sheet(0).setPivotFieldNumberFormat(b.pivot, b.amount, '4'),
       // A field's numFmtId is only observable in the part the writer emits.
       expect: (b) => {
         assert.throws(
-          () => b.wb.setPivotFieldNumberFormat(0, b.pivot, 99, '4'),
+          () => b.wb.sheet(0).setPivotFieldNumberFormat(b.pivot, 99, '4'),
           (e) => isFormulonError(e, 5054),
         );
         assert.throws(
-          () => b.wb.setPivotFieldNumberFormat(0, b.pivot, b.amount, '0.00'),
+          () => b.wb.sheet(0).setPivotFieldNumberFormat(b.pivot, b.amount, '0.00'),
           (e) => isFormulonError(e, 2),
         );
         const saved = b.wb.save();
@@ -558,14 +561,14 @@ const PIVOT_MUTATORS = [
   [
     'setPivotRowFieldOrder',
     {
-      act: (b) => b.wb.setPivotRowFieldOrder(0, b.pivot, [b.product]),
+      act: (b) => b.wb.sheet(0).setPivotRowFieldOrder(b.pivot, [b.product]),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', 'Apple|40', 'Pear|12', '総計|52']),
     },
   ],
   [
     'setPivotColumnFieldOrder',
     {
-      act: (b) => b.wb.setPivotColumnFieldOrder(0, b.pivot, [b.product]),
+      act: (b) => b.wb.sheet(0).setPivotColumnFieldOrder(b.pivot, [b.product]),
       expect: (b) =>
         assert.deepEqual(pivotGrid(b.wb), [
           'Sum of Amount|列ラベル||',
@@ -579,7 +582,8 @@ const PIVOT_MUTATORS = [
   [
     'addPivotDataField',
     {
-      act: (b) => b.wb.addPivotDataField(0, b.pivot, { name: 'Max of Amount', fieldIndex: b.amount, aggregation: 3 }),
+      act: (b) =>
+        b.wb.sheet(0).addPivotDataField(b.pivot, { name: 'Max of Amount', fieldIndex: b.amount, aggregation: 3 }),
       expect: (b, r) => {
         assert.equal(r, 1);
         assert.deepEqual(pivotGrid(b.wb), [
@@ -594,7 +598,7 @@ const PIVOT_MUTATORS = [
   [
     'clearPivotDataFields',
     {
-      act: (b) => b.wb.clearPivotDataFields(0, b.pivot),
+      act: (b) => b.wb.sheet(0).clearPivotDataFields(b.pivot),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), ['行ラベル', 'East', 'West', '総計']),
     },
   ],
@@ -602,7 +606,7 @@ const PIVOT_MUTATORS = [
     'setPivotDataField',
     {
       act: (b) =>
-        b.wb.setPivotDataField(0, b.pivot, 0, {
+        b.wb.sheet(0).setPivotDataField(b.pivot, 0, {
           name: 'Count of Amount',
           fieldIndex: b.amount,
           aggregation: 1,
@@ -610,7 +614,10 @@ const PIVOT_MUTATORS = [
         }),
       expect: (b) => {
         assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Count of Amount', 'East|2', 'West|2', '総計|4']);
-        const counts = b.wb.getPivotLayout(0, b.pivot).cells.filter((c) => c.value.kind === 1);
+        const counts = b.wb
+          .sheet(0)
+          .getPivotLayout(b.pivot)
+          .cells.filter((c) => c.value.kind === 1);
         assert.deepEqual(
           counts.map((c) => c.numberFormat),
           ['2', '2', '2'],
@@ -621,15 +628,15 @@ const PIVOT_MUTATORS = [
   [
     'addPivotFilter',
     {
-      act: (b) => b.wb.addPivotFilter(0, b.pivot, GREATER_THAN_20),
+      act: (b) => b.wb.sheet(0).addPivotFilter(b.pivot, GREATER_THAN_20),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), WEST_ONLY),
     },
   ],
   [
     'clearPivotFilters',
     {
-      setup: (b) => b.wb.addPivotFilter(0, b.pivot, GREATER_THAN_20),
-      act: (b) => b.wb.clearPivotFilters(0, b.pivot),
+      setup: (b) => b.wb.sheet(0).addPivotFilter(b.pivot, GREATER_THAN_20),
+      act: (b) => b.wb.sheet(0).clearPivotFilters(b.pivot),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), BASE_GRID),
     },
   ],
@@ -639,68 +646,69 @@ const PIVOT_MUTATORS = [
       // Each filter alone keeps a different region, so removing the wrong
       // index leaves the wrong one.
       setup: (b) => {
-        b.wb.addPivotFilter(0, b.pivot, GREATER_THAN_20);
-        b.wb.addPivotFilter(0, b.pivot, BETWEEN_10_20);
+        b.wb.sheet(0).addPivotFilter(b.pivot, GREATER_THAN_20);
+        b.wb.sheet(0).addPivotFilter(b.pivot, BETWEEN_10_20);
       },
-      act: (b) => b.wb.removePivotFilter(0, b.pivot, 1),
+      act: (b) => b.wb.sheet(0).removePivotFilter(b.pivot, 1),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), WEST_ONLY),
     },
   ],
   [
     'setPivotFieldDefaultSubtotal',
     {
-      act: (b) => b.wb.setPivotFieldDefaultSubtotal(0, b.pivot, b.region, false),
-      expect: (b) => assert.equal(b.wb.getPivotField(0, b.pivot, b.region).defaultSubtotal, false),
+      act: (b) => b.wb.sheet(0).setPivotFieldDefaultSubtotal(b.pivot, b.region, false),
+      expect: (b) => assert.equal(b.wb.sheet(0).listPivotFields(b.pivot)[b.region].defaultSubtotal, false),
     },
   ],
   [
     'setPivotFieldInsertBlankRow',
     {
-      act: (b) => b.wb.setPivotFieldInsertBlankRow(0, b.pivot, b.region, true),
-      expect: (b) => assert.equal(b.wb.getPivotField(0, b.pivot, b.region).insertBlankRow, true),
+      act: (b) => b.wb.sheet(0).setPivotFieldInsertBlankRow(b.pivot, b.region, true),
+      expect: (b) => assert.equal(b.wb.sheet(0).listPivotFields(b.pivot)[b.region].insertBlankRow, true),
     },
   ],
   [
     'setPivotFieldFillDownLabels',
     {
-      act: (b) => b.wb.setPivotFieldFillDownLabels(0, b.pivot, b.region, true),
-      expect: (b) => assert.equal(b.wb.getPivotField(0, b.pivot, b.region).fillDownLabels, true),
+      act: (b) => b.wb.sheet(0).setPivotFieldFillDownLabels(b.pivot, b.region, true),
+      expect: (b) => assert.equal(b.wb.sheet(0).listPivotFields(b.pivot)[b.region].fillDownLabels, true),
     },
   ],
   [
     'setPivotFieldShowDetail',
     {
-      act: (b) => b.wb.setPivotFieldShowDetail(0, b.pivot, b.region, false),
-      expect: (b) => assert.equal(b.wb.getPivotFieldItem(0, b.pivot, b.region, 0).showDetail, false),
+      act: (b) => b.wb.sheet(0).setPivotFieldShowDetail(b.pivot, b.region, false),
+      expect: (b) => assert.equal(b.wb.sheet(0).getPivotFieldItem(b.pivot, b.region, 0).showDetail, false),
     },
   ],
   [
     'setPivotFieldItemShowDetail',
     {
-      act: (b) => b.wb.setPivotFieldItemShowDetail(0, b.pivot, b.region, 1, false),
+      act: (b) => b.wb.sheet(0).setPivotFieldItemShowDetail(b.pivot, b.region, 1, false),
       expect: (b) => {
-        assert.equal(b.wb.getPivotFieldItem(0, b.pivot, b.region, 0).showDetail, true);
-        assert.equal(b.wb.getPivotFieldItem(0, b.pivot, b.region, 1).showDetail, false);
+        assert.equal(b.wb.sheet(0).getPivotFieldItem(b.pivot, b.region, 0).showDetail, true);
+        assert.equal(b.wb.sheet(0).getPivotFieldItem(b.pivot, b.region, 1).showDetail, false);
       },
     },
   ],
   [
     'setPivotFieldItemCaption',
     {
-      act: (b) => b.wb.setPivotFieldItemCaption(0, b.pivot, b.region, 0, 'Eastern'),
+      act: (b) => b.wb.sheet(0).setPivotFieldItemCaption(b.pivot, b.region, 0, 'Eastern'),
       expect: (b) => {
-        assert.equal(b.wb.getPivotFieldItem(0, b.pivot, b.region, 0).caption, 'Eastern');
-        assert.equal(b.wb.getPivotFieldItem(0, b.pivot, b.region, 1).caption, null);
+        assert.equal(b.wb.sheet(0).getPivotFieldItem(b.pivot, b.region, 0).caption, 'Eastern');
+        assert.equal(b.wb.sheet(0).getPivotFieldItem(b.pivot, b.region, 1).caption, null);
       },
     },
   ],
   [
     'showPivotDetails',
     {
-      act: (b) => b.wb.showPivotDetails(0, b.pivot, 1, 7),
+      act: (b) => b.wb.sheet(0).showPivotDetails(b.pivot, 1, 7),
       expect: (b, r) => {
-        assert.equal(r, 0);
-        assert.equal(b.wb.getSheetCount(), 2);
+        assert.equal(r, b.wb.sheet(0));
+        assert.equal(r.index, 0);
+        assert.equal(b.wb.listSheets().length, 2);
       },
     },
   ],
@@ -708,12 +716,12 @@ const PIVOT_MUTATORS = [
     'setPivotOptions',
     {
       setup: (b) => {
-        b.before = b.wb.getPivotOptions(0, b.pivot);
+        b.before = b.wb.sheet(0).getPivotOptions(b.pivot);
       },
       act: (b) =>
-        b.wb.setPivotOptions(0, b.pivot, { errorCaption: 'oops', indent: 3, pageWrap: 2, showHeaders: false }),
+        b.wb.sheet(0).setPivotOptions(b.pivot, { errorCaption: 'oops', indent: 3, pageWrap: 2, showHeaders: false }),
       expect: (b) => {
-        const o = b.wb.getPivotOptions(0, b.pivot);
+        const o = b.wb.sheet(0).getPivotOptions(b.pivot);
         assert.equal(o.errorCaption, 'oops');
         assert.equal(o.indent, 3);
         assert.equal(o.pageWrap, 2);
@@ -743,7 +751,7 @@ const PIVOT_MUTATORS = [
         assert.equal(r, 4);
         assert.equal(b.wb.getPivotCacheFieldName(b.cacheId, 4), 'Double');
         assert.equal(b.wb.getPivotCacheFieldFormula(b.cacheId, 4), 'Amount*2');
-        assert.equal(b.wb.getPivotCacheFieldFormula(b.cacheId, 2), '');
+        assert.equal(b.wb.getPivotCacheFieldFormula(b.cacheId, 2), null);
       },
     },
   ],
@@ -768,8 +776,8 @@ const PIVOT_MUTATORS = [
     {
       act: (b) => b.wb.addPivotCacheCalculatedItem(b.cacheId, b.region, 'Both', 'East+West'),
       expect: (b) => {
-        assert.equal(b.wb.getPivotCacheCalculatedItemCount(b.cacheId), 1);
-        const item = b.wb.getPivotCacheCalculatedItem(b.cacheId, 0);
+        assert.equal(b.wb.listPivotCacheCalculatedItems(b.cacheId).length, 1);
+        const item = b.wb.listPivotCacheCalculatedItems(b.cacheId)[0];
         assert.equal(item.fieldIndex, b.region);
         assert.equal(item.name, 'Both');
         assert.equal(item.formula, 'Region[East]+Region[West]');
@@ -781,7 +789,7 @@ const PIVOT_MUTATORS = [
     {
       setup: (b) => b.wb.addPivotCacheCalculatedItem(b.cacheId, b.region, 'Both', 'East+West'),
       act: (b) => b.wb.setPivotCacheCalculatedItemFormula(b.cacheId, 0, 'East'),
-      expect: (b) => assert.equal(b.wb.getPivotCacheCalculatedItem(b.cacheId, 0).formula, 'Region[East]'),
+      expect: (b) => assert.equal(b.wb.listPivotCacheCalculatedItems(b.cacheId)[0].formula, 'Region[East]'),
     },
   ],
   [
@@ -793,8 +801,8 @@ const PIVOT_MUTATORS = [
       },
       act: (b) => b.wb.movePivotCacheCalculatedItem(b.cacheId, 0, 1),
       expect: (b) => {
-        assert.equal(b.wb.getPivotCacheCalculatedItem(b.cacheId, 0).name, 'Second');
-        assert.equal(b.wb.getPivotCacheCalculatedItem(b.cacheId, 1).name, 'First');
+        assert.equal(b.wb.listPivotCacheCalculatedItems(b.cacheId)[0].name, 'Second');
+        assert.equal(b.wb.listPivotCacheCalculatedItems(b.cacheId)[1].name, 'First');
       },
     },
   ],
@@ -803,37 +811,37 @@ const PIVOT_MUTATORS = [
     {
       setup: (b) => b.wb.addPivotCacheCalculatedItem(b.cacheId, b.region, 'Both', 'East+West'),
       act: (b) => b.wb.removePivotCacheCalculatedItem(b.cacheId, 0),
-      expect: (b) => assert.equal(b.wb.getPivotCacheCalculatedItemCount(b.cacheId), 0),
+      expect: (b) => assert.equal(b.wb.listPivotCacheCalculatedItems(b.cacheId).length, 0),
     },
   ],
   [
     'setPivotFieldCustomName',
     {
-      act: (b) => b.wb.setPivotFieldCustomName(0, b.pivot, b.region, 'Area'),
+      act: (b) => b.wb.sheet(0).setPivotFieldCustomName(b.pivot, b.region, 'Area'),
       expect: (b) => {
-        assert.equal(b.wb.getPivotField(0, b.pivot, b.region).customName, 'Area');
-        b.wb.setPivotFieldCustomName(0, b.pivot, b.region, '');
-        assert.equal(b.wb.getPivotField(0, b.pivot, b.region).customName, '');
+        assert.equal(b.wb.sheet(0).listPivotFields(b.pivot)[b.region].customName, 'Area');
+        b.wb.sheet(0).setPivotFieldCustomName(b.pivot, b.region, null);
+        assert.equal(b.wb.sheet(0).listPivotFields(b.pivot)[b.region].customName, null);
       },
     },
   ],
   [
     'setPivotFieldShowAll',
     {
-      act: (b) => b.wb.setPivotFieldShowAll(0, b.pivot, b.product, true),
+      act: (b) => b.wb.sheet(0).setPivotFieldShowAll(b.pivot, b.product, true),
       expect: (b) => {
-        assert.equal(b.wb.getPivotField(0, b.pivot, b.product).showAll, true);
-        b.wb.setPivotFieldShowAll(0, b.pivot, b.product, false);
-        assert.equal(b.wb.getPivotField(0, b.pivot, b.product).showAll, false);
+        assert.equal(b.wb.sheet(0).listPivotFields(b.pivot)[b.product].showAll, true);
+        b.wb.sheet(0).setPivotFieldShowAll(b.pivot, b.product, false);
+        assert.equal(b.wb.sheet(0).listPivotFields(b.pivot)[b.product].showAll, false);
       },
     },
   ],
   [
     'projectPivot',
     {
-      act: (b) => b.wb.projectPivot(0, b.pivot),
+      act: (b) => b.wb.sheet(0).projectPivot(b.pivot),
       expect: (b) => {
-        assert.equal(b.wb.isPivotProjectionPending(0, b.pivot), false);
+        assert.equal(b.wb.sheet(0).isPivotProjectionPending(b.pivot), false);
         assert.deepEqual(pivotGrid(b.wb), BASE_GRID);
       },
     },
@@ -842,7 +850,7 @@ const PIVOT_MUTATORS = [
 
 test('the pivot mutator table covers every declared pivot mutator', async () => {
   const dts = await readFile(path.join(pkgRoot, 'dist', 'index.d.ts'), 'utf8');
-  const declaredAll = [...dts.matchAll(/^ {2}((?:[a-z]+Pivot|pivot)\w*)\([^)]*\): (?:void|number);/gm)].map(
+  const declaredAll = [...dts.matchAll(/^ {2}((?:[a-z]+Pivot|pivot)\w*)\([^)]*\): (?:void|number|Sheet);/gm)].map(
     (m) => m[1],
   );
   const declared = declaredAll.filter((name) => !/^(?:get|is|list)/.test(name));
@@ -888,17 +896,17 @@ test('manual pivot sort order keeps item order and rejects bad arguments', async
   const mod = await getModule();
   const b = buildPivot(mod);
   try {
-    b.wb.clearPivotFieldItems(0, b.pivot, b.region);
-    b.wb.addPivotFieldItem(0, b.pivot, b.region, 'West', true);
-    b.wb.addPivotFieldItem(0, b.pivot, b.region, 'East', true);
-    b.wb.setPivotFieldSort(0, b.pivot, b.region, mod.PivotSortOrder.Manual, '');
+    b.wb.sheet(0).clearPivotFieldItems(b.pivot, b.region);
+    b.wb.sheet(0).addPivotFieldItem(b.pivot, b.region, 'West', true);
+    b.wb.sheet(0).addPivotFieldItem(b.pivot, b.region, 'East', true);
+    b.wb.sheet(0).setPivotFieldSort(b.pivot, b.region, mod.PivotSortOrder.Manual, '');
     assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', 'West|37', 'East|15', '総計|52']);
-    assert.throws(() => b.wb.setPivotFieldSort(0, b.pivot, b.region, 3, ''), isFormulonError);
+    assert.throws(() => b.wb.sheet(0).setPivotFieldSort(b.pivot, b.region, 3, ''), isFormulonError);
     assert.throws(
-      () => b.wb.setPivotFieldSort(0, b.pivot, b.region, mod.PivotSortOrder.Manual, 'Sum of Amount'),
+      () => b.wb.sheet(0).setPivotFieldSort(b.pivot, b.region, mod.PivotSortOrder.Manual, 'Sum of Amount'),
       isFormulonError,
     );
-    b.wb.setPivotFieldSort(0, b.pivot, b.region, mod.PivotSortOrder.Ascending, '');
+    b.wb.sheet(0).setPivotFieldSort(b.pivot, b.region, mod.PivotSortOrder.Ascending, '');
     assert.deepEqual(pivotGrid(b.wb), BASE_GRID);
   } finally {
     b.wb.dispose();
@@ -909,14 +917,14 @@ test('pivot filters and subtotal functions survive save and reload', async () =>
   const mod = await getModule();
   const b = buildPivot(mod);
   try {
-    b.wb.addPivotFilter(0, b.pivot, GREATER_THAN_20);
-    b.wb.addPivotFieldSubtotalFn(0, b.pivot, b.region, 2);
-    b.wb.addPivotFieldSubtotalFn(0, b.pivot, b.region, 0);
-    const region = b.wb.getPivotField(0, b.pivot, b.region);
+    b.wb.sheet(0).addPivotFilter(b.pivot, GREATER_THAN_20);
+    b.wb.sheet(0).addPivotFieldSubtotalFn(b.pivot, b.region, 2);
+    b.wb.sheet(0).addPivotFieldSubtotalFn(b.pivot, b.region, 0);
+    const region = b.wb.sheet(0).listPivotFields(b.pivot)[b.region];
     assert.equal(region.defaultSubtotal, false);
     assert.deepEqual(region.subtotalFns, [0, 2]);
-    assert.equal(b.wb.getPivotField(0, b.pivot, b.amount).defaultSubtotal, true);
-    assert.deepEqual(b.wb.getPivotField(0, b.pivot, b.amount).subtotalFns, []);
+    assert.equal(b.wb.sheet(0).listPivotFields(b.pivot)[b.amount].defaultSubtotal, true);
+    assert.deepEqual(b.wb.sheet(0).listPivotFields(b.pivot)[b.amount].subtotalFns, []);
 
     const saved = b.wb.save();
     assert.match(
@@ -926,17 +934,17 @@ test('pivot filters and subtotal functions survive save and reload', async () =>
     const back = mod.Workbook.load(saved);
     try {
       back.setExcelProfileId('win-365-ja_JP');
-      assert.equal(back.getPivotFilterCount(0, 0), 1);
-      const filter = back.getPivotFilter(0, 0, 0);
+      assert.equal(back.sheet(0).listPivotFilters(0).length, 1);
+      const filter = back.sheet(0).listPivotFilters(0)[0];
       assert.equal(filter.type, 1);
       assert.equal(filter.fieldName, 'Region');
       assert.equal(filter.valueKind, 1);
       assert.equal(filter.valueDouble, 20);
       assert.deepEqual(pivotGrid(back), WEST_ONLY);
-      const field = back.getPivotField(0, 0, 0);
+      const field = back.sheet(0).listPivotFields(0)[0];
       assert.equal(field.defaultSubtotal, false);
       assert.deepEqual(field.subtotalFns, [0, 2]);
-      back.clearPivotFilters(0, 0);
+      back.sheet(0).clearPivotFilters(0);
       assert.doesNotMatch(packagePart(back.save(), 'xl/pivotTables/pivotTable1.xml'), /<filters/);
     } finally {
       back.dispose();
@@ -954,7 +962,7 @@ test('pivot filters and subtotal functions survive save and reload', async () =>
 // [method, args that succeed, args the engine rejects (or null when only
 // a released handle can fail it)].
 const STATUS_ACCESSORS = [
-  ['getSheetCount', [], null],
+  ['listSheets', [], null],
   ['getCellCount', [0], [99]],
   ['getCellXfIndex', [0, 0, 0], [99, 0, 0]],
   [
@@ -963,27 +971,27 @@ const STATUS_ACCESSORS = [
     [99, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 }],
   ],
   ['compareText', ['a', 'b', 0, 'win-365-en_US'], ['a', 'b', 0, 'nope']],
-  ['getCfRuleCount', [0], [99]],
-  ['getValidationCount', [0], [99]],
-  ['getProtectedRangeCount', [0], [99]],
-  ['getSparklineGroupCount', [0], [99]],
-  ['getCellPhoneticRunCount', [0, 0, 0], [99, 0, 0]],
-  ['getExternalLinkCount', [], null],
+  ['listCfRules', [0], [99]],
+  ['listValidations', [0], [99]],
+  ['listProtectedRanges', [0], [99]],
+  ['listSparklineGroups', [0], [99]],
+  ['getCellPhoneticRuns', [0, 0, 0], [99, 0, 0]],
+  ['listExternalLinks', [], null],
   ['listDefinedNames', [], null],
-  ['getTableCount', [], null],
+  ['listTables', [], null],
   ['listPassthroughs', [], null],
   ['getPivotCount', [0], [99]],
   ['listPivotCaches', [], null],
   ['getPivotCacheFieldCount', null, [9999]],
   ['getPivotCacheFieldSharedItemCount', null, [9999, 0]],
   ['getPivotCacheRecordCount', null, [9999]],
-  ['getPivotCacheCalculatedItemCount', null, [9999]],
-  ['getPivotFieldCount', null, [99, 0]],
-  ['getPivotFieldItemCount', null, [99, 0, 0]],
-  ['getPivotName', null, [99, 0]],
-  ['getPivotReportLayout', null, [99, 0]],
-  ['getPivotDataFieldCount', null, [99, 0]],
-  ['getPivotFilterCount', null, [99, 0]],
+  ['listPivotFields', null, [0, 99]],
+  ['getPivotFieldItemCount', null, [0, 99, 0]],
+  ['getPivotName', null, [0, 99]],
+  ['getPivotReportLayout', null, [0, 99]],
+  ['listPivotDataFields', null, [0, 99]],
+  ['listPivotFilters', null, [0, 99]],
+  ['listPivotCacheCalculatedItems', null, [9999]],
   ['getFontCount', [], null],
   ['getFillCount', [], null],
   ['getBorderCount', [], null],
@@ -1014,7 +1022,12 @@ const STATUS_ACCESSORS = [
   ['listLocaleErrorNames', ['win-365-en_US'], ['nope']],
 ];
 
-test('every row of the accessor table names a declared Workbook method', async () => {
+// Calls a STATUS_ACCESSORS row on the workbook, or on the sheet its first argument names.
+function callAccessor(wb, name, args) {
+  return name in wb ? wb[name](...args) : wb.sheet(args[0])[name](...args.slice(1));
+}
+
+test('every row of the accessor table names a declared Workbook or Sheet method', async () => {
   const dts = await readFile(path.join(pkgRoot, 'dist', 'index.d.ts'), 'utf8');
   const declared = new Set([...dts.matchAll(/^ {2}([A-Za-z]\w*)\(/gm)].map((m) => m[1]));
   assert.deepEqual(
@@ -1029,13 +1042,17 @@ test('fallible accessors succeed, throw on a rejection and on a released handle'
   const wb = mod.Workbook.createDefault();
   for (const [name, okArgs, badArgs] of STATUS_ACCESSORS) {
     if (okArgs !== null) {
-      assert.doesNotThrow(() => wb[name](...okArgs), name);
+      assert.doesNotThrow(() => callAccessor(wb, name, okArgs), name);
     }
     if (badArgs !== null) {
-      assert.throws(() => wb[name](...badArgs), isFormulonError, `${name} must report the rejected arguments`);
+      assert.throws(
+        () => callAccessor(wb, name, badArgs),
+        isFormulonError,
+        `${name} must report the rejected arguments`,
+      );
     }
   }
-  assert.equal(wb.getSheetCount(), 1);
+  assert.equal(wb.listSheets().length, 1);
   assert.equal(wb.getExcelProfileId(), 'win-365-en_US');
   assert.equal(wb.localizeFunctionName('SUM', 'win-365-ja_JP'), 'SUM');
   assert.throws(() => wb.localizeFunctionName('SUM', 'nope'), isFormulonError);
@@ -1054,7 +1071,7 @@ test('fallible accessors succeed, throw on a rejection and on a released handle'
       continue;
     }
     assert.throws(
-      () => dead[name](...(okArgs ?? badArgs)),
+      () => callAccessor(dead, name, okArgs ?? badArgs),
       (e) => isFormulonError(e, 7000),
       `${name} after release`,
     );
@@ -1068,10 +1085,10 @@ test('list getters return arrays and throw on an unreadable sheet', async () => 
     // A readable sheet: every list is empty but the enumeration succeeded,
     // which is what distinguishes it from a sheet that could not be read.
     for (const [name, call] of [
-      ['listMerges', () => wb.listMerges(0)],
-      ['listComments', () => wb.listComments(0)],
-      ['listHyperlinks', () => wb.listHyperlinks(0)],
-      ['listDrawingObjects', () => wb.listDrawingObjects(0)],
+      ['listMerges', () => wb.sheet(0).listMerges()],
+      ['listComments', () => wb.sheet(0).listComments()],
+      ['listHyperlinks', () => wb.sheet(0).listHyperlinks()],
+      ['listDrawingObjects', () => wb.sheet(0).listDrawingObjects()],
     ]) {
       const list = call();
       assert.ok(Array.isArray(list), `${name} must stay an array`);
@@ -1080,10 +1097,10 @@ test('list getters return arrays and throw on an unreadable sheet', async () => 
 
     // An unreadable sheet is reported, not silently rendered as "empty".
     for (const [name, call] of [
-      ['listMerges', () => wb.listMerges(99)],
-      ['listComments', () => wb.listComments(99)],
-      ['listHyperlinks', () => wb.listHyperlinks(99)],
-      ['listDrawingObjects', () => wb.listDrawingObjects(99)],
+      ['listMerges', () => wb.sheet(99).listMerges()],
+      ['listComments', () => wb.sheet(99).listComments()],
+      ['listHyperlinks', () => wb.sheet(99).listHyperlinks()],
+      ['listDrawingObjects', () => wb.sheet(99).listDrawingObjects()],
     ]) {
       assert.throws(call, isFormulonError, `${name} must signal an unreadable sheet`);
     }
@@ -1092,7 +1109,7 @@ test('list getters return arrays and throw on an unreadable sheet', async () => 
   }
 });
 
-test('pivotFieldSetDateGroup defaults its trailing three arguments', async () => {
+test('setPivotFieldDateGroup defaults its optional group fields', async () => {
   const mod = await getModule();
   const explicit = buildPivot(mod);
   const defaulted = buildPivot(mod);
@@ -1100,11 +1117,17 @@ test('pivotFieldSetDateGroup defaults its trailing three arguments', async () =>
     dateRows(explicit);
     dateRows(defaulted);
     const days = 8; // PivotDatePeriod.Days
-    explicit.wb.setPivotFieldDateGroup(0, explicit.pivot, explicit.date, days, 0, 1, NaN, NaN);
-    defaulted.wb.setPivotFieldDateGroup(0, defaulted.pivot, defaulted.date, days, 0);
-    const field = defaulted.wb.getPivotField(0, defaulted.pivot, defaulted.date);
+    explicit.wb.sheet(0).setPivotFieldDateGroup(explicit.pivot, explicit.date, {
+      periods: days,
+      calendar: 0,
+      intervalDays: 1,
+      start: Number.NaN,
+      end: Number.NaN,
+    });
+    defaulted.wb.sheet(0).setPivotFieldDateGroup(defaulted.pivot, defaulted.date, { periods: days });
+    const field = defaulted.wb.sheet(0).listPivotFields(defaulted.pivot)[defaulted.date];
     assert.equal(field.datePeriods, days);
-    assert.deepEqual(field, explicit.wb.getPivotField(0, explicit.pivot, explicit.date));
+    assert.deepEqual(field, explicit.wb.sheet(0).listPivotFields(explicit.pivot)[explicit.date]);
     assert.deepEqual(pivotGrid(defaulted.wb), pivotGrid(explicit.wb));
   } finally {
     explicit.wb.dispose();
@@ -1171,18 +1194,21 @@ test('pivot report options and the Values field order report bad arguments', asy
   try {
     assert.equal(mod.PIVOT_VALUES_FIELD, -2);
     // A single data field has no Values level to place.
-    assert.throws(() => b.wb.setPivotRowFieldOrder(0, b.pivot, [b.region, mod.PIVOT_VALUES_FIELD]), isFormulonError);
-    assert.throws(() => b.wb.setPivotFieldDefaultSubtotal(0, b.pivot, 99, true), isFormulonError);
-    assert.throws(() => b.wb.setPivotFieldInsertBlankRow(0, b.pivot, 99, true), isFormulonError);
-    assert.throws(() => b.wb.setPivotFieldFillDownLabels(0, b.pivot, 99, true), isFormulonError);
-    assert.throws(() => b.wb.setPivotFieldShowDetail(0, b.pivot, 99, true), isFormulonError);
-    assert.throws(() => b.wb.setPivotFieldItemShowDetail(0, b.pivot, b.region, 99, true), isFormulonError);
-    assert.throws(() => b.wb.setPivotFieldItemCaption(0, b.pivot, b.region, 99, 'x'), isFormulonError);
+    assert.throws(
+      () => b.wb.sheet(0).setPivotRowFieldOrder(b.pivot, [b.region, mod.PIVOT_VALUES_FIELD]),
+      isFormulonError,
+    );
+    assert.throws(() => b.wb.sheet(0).setPivotFieldDefaultSubtotal(b.pivot, 99, true), isFormulonError);
+    assert.throws(() => b.wb.sheet(0).setPivotFieldInsertBlankRow(b.pivot, 99, true), isFormulonError);
+    assert.throws(() => b.wb.sheet(0).setPivotFieldFillDownLabels(b.pivot, 99, true), isFormulonError);
+    assert.throws(() => b.wb.sheet(0).setPivotFieldShowDetail(b.pivot, 99, true), isFormulonError);
+    assert.throws(() => b.wb.sheet(0).setPivotFieldItemShowDetail(b.pivot, b.region, 99, true), isFormulonError);
+    assert.throws(() => b.wb.sheet(0).setPivotFieldItemCaption(b.pivot, b.region, 99, 'x'), isFormulonError);
     // Captions collide with another item's label.
-    assert.throws(() => b.wb.setPivotFieldItemCaption(0, b.pivot, b.region, 0, 'West'), isFormulonError);
-    assert.throws(() => b.wb.showPivotDetails(99, 0, 0, 0), isFormulonError);
-    assert.throws(() => b.wb.setDrawingName(0, 9999, 'x'), isFormulonError);
-    assert.throws(() => b.wb.setDrawingName(0, 9999, ''), isFormulonError);
+    assert.throws(() => b.wb.sheet(0).setPivotFieldItemCaption(b.pivot, b.region, 0, 'West'), isFormulonError);
+    assert.throws(() => b.wb.sheet(99).showPivotDetails(0, 0, 0), isFormulonError);
+    assert.throws(() => b.wb.sheet(0).setDrawingName(9999, 'x'), isFormulonError);
+    assert.throws(() => b.wb.sheet(0).setDrawingName(9999, ''), isFormulonError);
   } finally {
     b.wb.dispose();
   }
@@ -1192,8 +1218,8 @@ test('pivot options read back every member and keep what a partial write omits',
   const mod = await getModule();
   const b = buildPivot(mod);
   try {
-    const before = b.wb.getPivotOptions(0, b.pivot);
-    assert.equal(typeof before.errorCaption, 'string');
+    const before = b.wb.sheet(0).getPivotOptions(b.pivot);
+    assert.equal(before.errorCaption, null);
     assert.equal(typeof before.indent, 'number');
     const patch = {
       showError: true,
@@ -1209,17 +1235,17 @@ test('pivot options read back every member and keep what a partial write omits',
       autoFormatting: false,
       enableDrill: false,
     };
-    b.wb.setPivotOptions(0, b.pivot, patch);
-    const after = b.wb.getPivotOptions(0, b.pivot);
+    b.wb.sheet(0).setPivotOptions(b.pivot, patch);
+    const after = b.wb.sheet(0).getPivotOptions(b.pivot);
     for (const [key, value] of Object.entries(patch)) assert.equal(after[key], value, key);
     assert.equal(after.showHeaders, before.showHeaders);
     assert.equal(after.indent, before.indent);
-    // A write of the whole read-back is a no-op, and '' clears a string.
-    b.wb.setPivotOptions(0, b.pivot, { ...after, errorCaption: '' });
-    assert.equal(b.wb.getPivotOptions(0, b.pivot).errorCaption, '');
-    assert.equal(b.wb.getPivotOptions(0, b.pivot).altText, 'Sales');
-    b.wb.setPivotOptions(0, b.pivot, { grandTotalCaption: '' });
-    assert.equal(b.wb.getPivotOptions(0, b.pivot).grandTotalCaption, '');
+    // A write of the whole read-back is a no-op, and null or '' clears a string.
+    b.wb.sheet(0).setPivotOptions(b.pivot, { ...after, errorCaption: null });
+    assert.equal(b.wb.sheet(0).getPivotOptions(b.pivot).errorCaption, null);
+    assert.equal(b.wb.sheet(0).getPivotOptions(b.pivot).altText, 'Sales');
+    b.wb.sheet(0).setPivotOptions(b.pivot, { grandTotalCaption: '' });
+    assert.equal(b.wb.sheet(0).getPivotOptions(b.pivot).grandTotalCaption, null);
   } finally {
     b.wb.dispose();
   }
@@ -1229,38 +1255,36 @@ test('pivot options reject out-of-range values and wrong types without changing 
   const mod = await getModule();
   const b = buildPivot(mod);
   try {
-    const base = b.wb.getPivotOptions(0, b.pivot);
-    const unchanged = () => assert.deepEqual(b.wb.getPivotOptions(0, b.pivot), base);
+    const base = b.wb.sheet(0).getPivotOptions(b.pivot);
+    const unchanged = () => assert.deepEqual(b.wb.sheet(0).getPivotOptions(b.pivot), base);
     for (const bad of [{ indent: 127 }, { pageWrap: 256 }, { errorCaption: 'x'.repeat(256) }]) {
-      assert.throws(() => b.wb.setPivotOptions(0, b.pivot, bad), isFormulonError, JSON.stringify(bad).slice(0, 40));
+      assert.throws(
+        () => b.wb.sheet(0).setPivotOptions(b.pivot, bad),
+        isFormulonError,
+        JSON.stringify(bad).slice(0, 40),
+      );
       unchanged();
     }
     for (const bad of [{ indent: 'a' }, { errorCaption: 5 }]) {
-      assert.throws(() => b.wb.setPivotOptions(0, b.pivot, bad), TypeError, JSON.stringify(bad));
+      assert.throws(() => b.wb.sheet(0).setPivotOptions(b.pivot, bad), TypeError, JSON.stringify(bad));
       unchanged();
     }
     for (const bad of [{ indent: 1.5 }, { indent: -1 }, { pageWrap: Number.NaN }]) {
-      assert.throws(() => b.wb.setPivotOptions(0, b.pivot, bad), RangeError, JSON.stringify(bad));
+      assert.throws(() => b.wb.sheet(0).setPivotOptions(b.pivot, bad), RangeError, JSON.stringify(bad));
       unchanged();
     }
-    assert.throws(() => b.wb.setPivotOptions(0, b.pivot, 'x'), TypeError);
-    assert.throws(() => b.wb.setPivotOptions(0, b.pivot), TypeError);
-    assert.throws(() => b.wb.setPivotOptions('0', b.pivot, {}), TypeError);
-    assert.throws(() => b.wb.setPivotOptions(2 ** 32, b.pivot, {}));
+    assert.throws(() => b.wb.sheet(0).setPivotOptions(b.pivot, 'x'), TypeError);
+    assert.throws(() => b.wb.sheet(0).setPivotOptions(b.pivot), TypeError);
+    assert.throws(() => b.wb.sheet(0).setPivotOptions(String(b.pivot), {}), TypeError);
+    assert.throws(() => b.wb.sheet(2 ** 32).setPivotOptions(b.pivot, {}));
     unchanged();
-    assert.throws(() => b.wb.setPivotOptions(99, 0, {}), isFormulonError);
-    assert.throws(() => b.wb.getPivotOptions(99, 0), isFormulonError);
+    assert.throws(() => b.wb.sheet(99).setPivotOptions(0, {}), isFormulonError);
+    assert.throws(() => b.wb.sheet(99).getPivotOptions(0), isFormulonError);
 
     const cacheBase = b.wb.getPivotCacheOptions(b.cacheId);
-    for (const limit of [-2, 1048577]) {
-      assert.throws(
-        () => b.wb.setPivotCacheOptions(b.cacheId, { missingItemsLimit: limit }),
-        isFormulonError,
-        String(limit),
-      );
-    }
+    assert.throws(() => b.wb.setPivotCacheOptions(b.cacheId, { missingItemsLimit: 1048577 }), isFormulonError);
     assert.throws(() => b.wb.setPivotCacheOptions(b.cacheId, { missingItemsLimit: 'a' }), TypeError);
-    for (const bad of [{ missingItemsLimit: 1.5 }, { missingItemsLimit: Number.NaN }]) {
+    for (const bad of [{ missingItemsLimit: 1.5 }, { missingItemsLimit: Number.NaN }, { missingItemsLimit: -2 }]) {
       assert.throws(() => b.wb.setPivotCacheOptions(b.cacheId, bad), RangeError, JSON.stringify(bad));
     }
     assert.throws(() => b.wb.setPivotCacheOptions(b.cacheId, null), TypeError);
@@ -1286,7 +1310,7 @@ test('calculated fields and items reject bad arguments and change nothing', asyn
     assert.throws(() => b.wb.addPivotCacheCalculatedItem(b.cacheId, 0.5, 'N', 'East'), RangeError);
     assert.throws(() => b.wb.addPivotCacheCalculatedItem(b.cacheId, b.region, 'N', undefined), TypeError);
     assert.throws(() => b.wb.movePivotCacheCalculatedItem(b.cacheId, 0, -1), RangeError);
-    assert.throws(() => b.wb.getPivotCacheCalculatedItem(b.cacheId, 'a'), TypeError);
+    assert.throws(() => b.wb.listPivotCacheCalculatedItems('a'), TypeError);
     // Rejected by the engine: empty or reserved names, bad formulas.
     for (const [name, formula] of [
       ['', 'Amount'],
@@ -1325,8 +1349,8 @@ test('calculated fields and items reject bad arguments and change nothing', asyn
     assert.throws(() => b.wb.addPivotCacheCalculatedItem(b.cacheId, b.region, 'East', 'West'), isFormulonError);
     assert.throws(() => b.wb.addPivotCacheCalculatedItem(b.cacheId, b.region, 'N', 'Nope'), isFormulonError);
     assert.throws(() => b.wb.addPivotCacheCalculatedItem(9999, b.region, 'N', 'East'), isFormulonError);
-    assert.equal(b.wb.getPivotCacheCalculatedItemCount(b.cacheId), 0);
-    assert.throws(() => b.wb.getPivotCacheCalculatedItem(b.cacheId, 0), isFormulonError);
+    assert.equal(b.wb.listPivotCacheCalculatedItems(b.cacheId).length, 0);
+    assert.throws(() => b.wb.listPivotCacheCalculatedItems(9999), isFormulonError);
     assert.throws(() => b.wb.setPivotCacheCalculatedItemFormula(b.cacheId, 0, 'East'), isFormulonError);
     assert.throws(() => b.wb.movePivotCacheCalculatedItem(b.cacheId, 0, 0), isFormulonError);
     assert.throws(() => b.wb.removePivotCacheCalculatedItem(b.cacheId, 0), isFormulonError);
@@ -1340,39 +1364,39 @@ test('pivot field custom names, show-all and default data field names report bad
   const mod = await getModule();
   const b = buildPivot(mod);
   try {
-    assert.throws(() => b.wb.setPivotFieldCustomName(0, b.pivot, b.region, null), TypeError);
-    assert.throws(() => b.wb.setPivotFieldCustomName(0, b.pivot, b.region), TypeError);
-    assert.throws(() => b.wb.setPivotFieldCustomName(0, b.pivot, -1, 'x'), RangeError);
-    assert.throws(() => b.wb.setPivotFieldShowAll(0, b.pivot, b.region), TypeError);
-    assert.throws(() => b.wb.setPivotFieldCustomName(0, b.pivot, 99, 'x'), isFormulonError);
-    assert.throws(() => b.wb.setPivotFieldCustomName(0, b.pivot, b.region, 'x'.repeat(256)), isFormulonError);
+    assert.throws(() => b.wb.sheet(0).setPivotFieldCustomName(b.pivot, b.region, 5), TypeError);
+    assert.throws(() => b.wb.sheet(0).setPivotFieldCustomName(b.pivot, b.region), TypeError);
+    assert.throws(() => b.wb.sheet(0).setPivotFieldCustomName(b.pivot, -1, 'x'), RangeError);
+    assert.throws(() => b.wb.sheet(0).setPivotFieldShowAll(b.pivot, b.region), TypeError);
+    assert.throws(() => b.wb.sheet(0).setPivotFieldCustomName(b.pivot, 99, 'x'), isFormulonError);
+    assert.throws(() => b.wb.sheet(0).setPivotFieldCustomName(b.pivot, b.region, 'x'.repeat(256)), isFormulonError);
     // Another field's source name or display name is taken.
-    assert.throws(() => b.wb.setPivotFieldCustomName(0, b.pivot, b.region, 'Product'), isFormulonError);
-    assert.throws(() => b.wb.setPivotFieldCustomName(0, b.pivot, b.region, 'Sum of Amount'), isFormulonError);
+    assert.throws(() => b.wb.sheet(0).setPivotFieldCustomName(b.pivot, b.region, 'Product'), isFormulonError);
+    assert.throws(() => b.wb.sheet(0).setPivotFieldCustomName(b.pivot, b.region, 'Sum of Amount'), isFormulonError);
     // The field's own source name is accepted.
-    b.wb.setPivotFieldCustomName(0, b.pivot, b.region, 'Region');
-    assert.throws(() => b.wb.setPivotFieldShowAll(0, b.pivot, 99, true), isFormulonError);
+    b.wb.sheet(0).setPivotFieldCustomName(b.pivot, b.region, 'Region');
+    assert.throws(() => b.wb.sheet(0).setPivotFieldShowAll(b.pivot, 99, true), isFormulonError);
 
     // The first derived name is free; once taken, a new one is numbered
     // unless the entry that holds it is the one being replaced.
-    assert.equal(b.wb.getPivotDataFieldDefaultName(0, b.pivot, b.amount, 0), '合計 / Amount');
-    b.wb.addPivotDataField(0, b.pivot, { fieldIndex: b.amount, aggregation: 0 });
-    assert.equal(b.wb.getPivotDataField(0, b.pivot, 1).name, '合計 / Amount');
-    assert.equal(b.wb.getPivotDataFieldDefaultName(0, b.pivot, b.amount, 0), '合計 / Amount2');
-    assert.equal(b.wb.getPivotDataFieldDefaultName(0, b.pivot, b.amount, 0, undefined), '合計 / Amount2');
-    assert.equal(b.wb.getPivotDataFieldDefaultName(0, b.pivot, b.amount, 0, 1), '合計 / Amount');
-    assert.throws(() => b.wb.getPivotDataFieldDefaultName(0, b.pivot, b.amount, 0, 99), isFormulonError);
-    assert.equal(b.wb.getPivotDataFieldCount(0, b.pivot), 2);
-    assert.throws(() => b.wb.getPivotDataFieldDefaultName(0, b.pivot, 99, 0), isFormulonError);
-    assert.throws(() => b.wb.getPivotDataFieldDefaultName(0, b.pivot, b.amount, 99), isFormulonError);
-    assert.throws(() => b.wb.getPivotDataFieldDefaultName(99, 0, 0, 0), isFormulonError);
-    assert.throws(() => b.wb.getPivotDataFieldDefaultName(0, b.pivot, b.amount, 'sum'), TypeError);
-    assert.throws(() => b.wb.getPivotDataFieldDefaultName(0, b.pivot, b.amount, 0, null), TypeError);
-    assert.throws(() => b.wb.getPivotDataFieldDefaultName(0, b.pivot, b.amount), TypeError);
-    assert.equal(b.wb.getPivotDataField(0, b.pivot, 0).name, 'Sum of Amount');
-    assert.throws(() => b.wb.projectPivot(99, 0), isFormulonError);
-    assert.throws(() => b.wb.isPivotProjectionPending(99, 0), isFormulonError);
-    assert.throws(() => b.wb.projectPivot(0), TypeError);
+    assert.equal(b.wb.sheet(0).getPivotDataFieldDefaultName(b.pivot, b.amount, 0), '合計 / Amount');
+    b.wb.sheet(0).addPivotDataField(b.pivot, { fieldIndex: b.amount, aggregation: 0 });
+    assert.equal(b.wb.sheet(0).listPivotDataFields(b.pivot)[1].name, '合計 / Amount');
+    assert.equal(b.wb.sheet(0).getPivotDataFieldDefaultName(b.pivot, b.amount, 0), '合計 / Amount2');
+    assert.equal(b.wb.sheet(0).getPivotDataFieldDefaultName(b.pivot, b.amount, 0, undefined), '合計 / Amount2');
+    assert.equal(b.wb.sheet(0).getPivotDataFieldDefaultName(b.pivot, b.amount, 0, 1), '合計 / Amount');
+    assert.throws(() => b.wb.sheet(0).getPivotDataFieldDefaultName(b.pivot, b.amount, 0, 99), isFormulonError);
+    assert.equal(b.wb.sheet(0).listPivotDataFields(b.pivot).length, 2);
+    assert.throws(() => b.wb.sheet(0).getPivotDataFieldDefaultName(b.pivot, 99, 0), isFormulonError);
+    assert.throws(() => b.wb.sheet(0).getPivotDataFieldDefaultName(b.pivot, b.amount, 99), isFormulonError);
+    assert.throws(() => b.wb.sheet(99).getPivotDataFieldDefaultName(0, 0, 0), isFormulonError);
+    assert.throws(() => b.wb.sheet(0).getPivotDataFieldDefaultName(b.pivot, b.amount, 'sum'), TypeError);
+    assert.throws(() => b.wb.sheet(0).getPivotDataFieldDefaultName(b.pivot, b.amount, 0, null), TypeError);
+    assert.throws(() => b.wb.sheet(0).getPivotDataFieldDefaultName(b.pivot, b.amount), TypeError);
+    assert.equal(b.wb.sheet(0).listPivotDataFields(b.pivot)[0].name, 'Sum of Amount');
+    assert.throws(() => b.wb.sheet(99).projectPivot(0), isFormulonError);
+    assert.throws(() => b.wb.sheet(99).isPivotProjectionPending(0), isFormulonError);
+    assert.throws(() => b.wb.sheet(0).projectPivot(), TypeError);
   } finally {
     b.wb.dispose();
   }
@@ -1391,19 +1415,20 @@ test('label-between filters carry valueHighText', async () => {
       valueHighKind: 2,
     };
     // The upper bound is required for the between types.
-    assert.throws(() => b.wb.addPivotFilter(0, b.pivot, spec), isFormulonError);
-    b.wb.addPivotFilter(0, b.pivot, { ...spec, valueHighText: 'F' });
-    const at = b.wb.getPivotFilter(0, b.pivot, 0);
+    assert.throws(() => b.wb.sheet(0).addPivotFilter(b.pivot, spec), isFormulonError);
+    b.wb.sheet(0).addPivotFilter(b.pivot, { ...spec, valueHighText: 'F' });
+    const at = b.wb.sheet(0).listPivotFilters(b.pivot)[0];
     assert.equal(at.type, 22);
     assert.equal(at.valueText, 'A');
     assert.equal(at.valueHighText, 'F');
     // And rejected for every other type.
     assert.throws(
-      () => b.wb.addPivotFilter(0, b.pivot, { ...spec, type: mod.PivotFilterType.LabelEqual, valueHighText: 'F' }),
+      () =>
+        b.wb.sheet(0).addPivotFilter(b.pivot, { ...spec, type: mod.PivotFilterType.LabelEqual, valueHighText: 'F' }),
       isFormulonError,
     );
-    assert.throws(() => b.wb.addPivotFilter(0, b.pivot, { ...spec, valueHighText: 5 }), TypeError);
-    assert.equal(b.wb.getPivotFilterCount(0, b.pivot), 1);
+    assert.throws(() => b.wb.sheet(0).addPivotFilter(b.pivot, { ...spec, valueHighText: 5 }), TypeError);
+    assert.equal(b.wb.sheet(0).listPivotFilters(b.pivot).length, 1);
   } finally {
     b.wb.dispose();
   }

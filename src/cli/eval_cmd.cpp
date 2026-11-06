@@ -42,7 +42,7 @@ void print_eval_usage(std::ostream& out) {
       << "Cell-level Excel errors (#NAME?, #DIV/0!, ...) print to stdout and\n"
       << "do NOT cause a non-zero exit code; only structural failures do.\n"
       << "Malformed input is not an error: a formula that does not parse evaluates to #NAME?.\n"
-      << "  --json       print each value as {\"kind\":...,\"value\":...} JSON\n"
+      << "  --json       print {\"format\":1,\"rows\":[[{\"kind\":...,\"value\":...},...],...]}\n"
       << "  --repeat N   evaluate N times and report the elapsed time on stderr\n"
       << "  --           end options; the next token is the formula\n"
       << "Plain output escapes only \\n, \\r, \\t and \\\\.\n";
@@ -77,24 +77,12 @@ int render_eval_result(const fm_value_array_t* result, bool want_json, std::ostr
     emit_last_error(err, "eval");
     return kExitFailure;
   }
-  if (want_json && rows == 1 && cols == 1) {
-    fm_value_t value{};
-    if (auto rc = fm_value_array_get_value_at(result, 0, &value); rc != 0) {
-      emit_last_error(err, "eval");
-      return kExitFailure;
-    }
-    out << render_value_json(value) << '\n';
-    return 0;
-  }
-  if (want_json) {
-    out << '[';
-  }
+  // The JSON document is assembled before anything is written so a failure
+  // leaves `out` untouched.
+  std::string doc = "{\"format\":1,\"rows\":[";
   for (uint32_t row = 0; row < rows; ++row) {
     if (want_json) {
-      if (row != 0) {
-        out << ',';
-      }
-      out << '[';
+      doc += (row != 0 ? ",[" : "[");
     }
     for (uint32_t col = 0; col < cols; ++col) {
       fm_value_t value{};
@@ -103,22 +91,26 @@ int render_eval_result(const fm_value_array_t* result, bool want_json, std::ostr
         emit_last_error(err, "eval");
         return rc;
       }
+      if (want_json) {
+        doc += (col != 0 ? "," : "") + render_value_json(value);
+        continue;
+      }
       if (col != 0) {
-        out << (want_json ? ',' : '\t');
+        out << '\t';
       }
       // The plain grid is TAB-separated and newline-terminated, so a cell
       // carrying either character would add fields and rows a consumer
       // reads as real ones. `dump` escapes for the same reason.
-      out << (want_json ? render_value_json(value) : escape_single_line(render_value(value)));
+      out << escape_single_line(render_value(value));
     }
     if (want_json) {
-      out << ']';
+      doc += ']';
     } else {
       out << '\n';
     }
   }
   if (want_json) {
-    out << "]\n";
+    out << doc << "]}\n";
   }
   return 0;
 }

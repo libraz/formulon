@@ -37,11 +37,11 @@ export function registerCellsIo(Module, test) {
       assert.equal(phonetic, 'かんじ');
 
       wb.setCellPhonetic(0, 0, 0, '');
-      assert.equal(wb.getCellPhonetic(0, 0, 0), '');
+      assert.equal(wb.getCellPhonetic(0, 0, 0), null);
 
       wb.setCellPhonetic(0, 0, 0, 'かんじ');
       wb.setText(0, 0, 0, '文字列');
-      assert.equal(wb.getCellPhonetic(0, 0, 0), '');
+      assert.equal(wb.getCellPhonetic(0, 0, 0), null);
     } finally {
       wb.delete();
     }
@@ -229,7 +229,7 @@ export function registerCellsIo(Module, test) {
       assert.ok(appended > 0);
       assert.equal(wb.getFont(0).name, 'Calibri');
 
-      wb.setDefaultFont({ name: '游ゴシック', size: 11, hasCharset: true, charset: 128 });
+      wb.setDefaultFont({ name: '游ゴシック', size: 11, charset: 128 });
       assert.equal(wb.getFont(0).name, '游ゴシック');
       assert.equal(wb.getFont(0).charset, 128);
 

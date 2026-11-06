@@ -174,7 +174,6 @@ TEST(FormulonCApiArgumentRange, TheOnlyVisibleSheetCannotBeHidden) {
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Hidden", ignored_index()), 0);
   ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_HIDDEN), 0);
 
-  EXPECT_EQ(fm_sheet_set_tab_hidden(wb.handle, 0, 1), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_HIDDEN), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VERY_HIDDEN), kInvalidArgument);
   EXPECT_EQ(View(wb, 0).visibility, FM_SHEET_VISIBLE);
@@ -182,7 +181,6 @@ TEST(FormulonCApiArgumentRange, TheOnlyVisibleSheetCannotBeHidden) {
 
   // Re-stating a hidden sheet's state leaves the visible one alone, so it passes.
   EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_VERY_HIDDEN), 0);
-  EXPECT_EQ(fm_sheet_set_tab_hidden(wb.handle, 1, 1), 0);
 }
 
 TEST(FormulonCApiArgumentRange, TheOnlyVisibleSheetCannotBeRemoved) {

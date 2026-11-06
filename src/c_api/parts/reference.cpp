@@ -42,10 +42,10 @@ extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, cons
   if (auto rc = check_utf8({text}); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(r1c1, 1, "r1c1"); rc != 0) {
+  if (auto rc = check_enum_domain(r1c1, 0, 1, "r1c1"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(has_base, 1, "has_base"); rc != 0) {
+  if (auto rc = check_enum_domain(has_base, 0, 1, "has_base"); rc != 0) {
     return rc;
   }
   if (has_base == 1) {
@@ -107,7 +107,7 @@ extern "C" fm_status_t fm_workbook_format_reference(const fm_workbook_t* wb, con
   if (row0 > row1 || col0 > col1) {
     return invalid_argument("inverted rectangle");
   }
-  if (auto rc = check_enum_domain(absolute, 1, "absolute"); rc != 0) {
+  if (auto rc = check_enum_domain(absolute, 0, 1, "absolute"); rc != 0) {
     return rc;
   }
   *out_text = publish_scratch(

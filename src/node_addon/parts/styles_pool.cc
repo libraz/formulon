@@ -18,69 +18,57 @@ using detail::StyleCountResult;
 namespace {
 
 /// Builds the JS mirror of a font record. Shared by `getFont` and the
-/// `<dxf>` font projection so both surface the same field set.
+/// `<dxf>` font projection so both surface the same field set. An absent
+/// element reads as `null`.
 Napi::Object FontRecordToJs(Napi::Env env, const fm_font_record_t& f) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("name", JsString(env, f.name));
-  out.Set("size", Napi::Number::New(env, f.size));
+  out.Set("size", JsNumberOrNull(env, f.has_size, f.size));
   out.Set("colorArgb", Napi::Number::New(env, f.color_argb));
-  out.Set("bold", Napi::Boolean::New(env, f.bold != 0));
-  out.Set("italic", Napi::Boolean::New(env, f.italic != 0));
-  out.Set("strike", Napi::Boolean::New(env, f.strike != 0));
-  out.Set("hasBold", Napi::Boolean::New(env, f.has_bold != 0));
-  out.Set("hasItalic", Napi::Boolean::New(env, f.has_italic != 0));
-  out.Set("hasStrike", Napi::Boolean::New(env, f.has_strike != 0));
+  out.Set("bold", JsBoolOrNull(env, f.has_bold, f.bold));
+  out.Set("italic", JsBoolOrNull(env, f.has_italic, f.italic));
+  out.Set("strike", JsBoolOrNull(env, f.has_strike, f.strike));
   out.Set("underline", Napi::Number::New(env, static_cast<uint32_t>(f.underline)));
   out.Set("vertAlign", Napi::Number::New(env, static_cast<uint32_t>(f.vert_align)));
-  out.Set("hasFamily", Napi::Boolean::New(env, f.has_family != 0));
-  out.Set("family", Napi::Number::New(env, static_cast<uint32_t>(f.family)));
-  out.Set("hasCharset", Napi::Boolean::New(env, f.has_charset != 0));
-  out.Set("charset", Napi::Number::New(env, static_cast<uint32_t>(f.charset)));
-  out.Set("hasSize", Napi::Boolean::New(env, f.has_size != 0));
+  out.Set("family", JsNumberOrNull(env, f.has_family, static_cast<uint32_t>(f.family)));
+  out.Set("charset", JsNumberOrNull(env, f.has_charset, static_cast<uint32_t>(f.charset)));
   out.Set("scheme", Napi::Number::New(env, static_cast<uint32_t>(f.scheme)));
-  out.Set("outline", Napi::Boolean::New(env, f.outline != 0));
-  out.Set("shadow", Napi::Boolean::New(env, f.shadow != 0));
-  out.Set("condense", Napi::Boolean::New(env, f.condense != 0));
-  out.Set("extend", Napi::Boolean::New(env, f.extend != 0));
-  out.Set("hasOutline", Napi::Boolean::New(env, f.has_outline != 0));
-  out.Set("hasShadow", Napi::Boolean::New(env, f.has_shadow != 0));
-  out.Set("hasCondense", Napi::Boolean::New(env, f.has_condense != 0));
-  out.Set("hasExtend", Napi::Boolean::New(env, f.has_extend != 0));
+  out.Set("outline", JsBoolOrNull(env, f.has_outline, f.outline));
+  out.Set("shadow", JsBoolOrNull(env, f.has_shadow, f.shadow));
+  out.Set("condense", JsBoolOrNull(env, f.has_condense, f.condense));
+  out.Set("extend", JsBoolOrNull(env, f.has_extend, f.extend));
   out.Set("color", ColorSpecToJs(env, f.color));
   return out;
 }
 
 /// Reads a font record out of a JS object. `name_storage` owns the font
-/// name for the duration of the C ABI call, which borrows the pointer.
+/// name for the duration of the C ABI call, which borrows the pointer. An
+/// omitted or `null` element is absent from the record.
 void PullFontRecord(CheckedSpecReader& reader, const Napi::Object& record, std::string* name_storage,
                     fm_font_record_t* out) {
+  bool present = false;
+  const auto flag = [&](const char* key, int32_t* has, int32_t* value) {
+    *value = reader.Bool(record, key, false, &present) ? 1 : 0;
+    *has = present ? 1 : 0;
+  };
   reader.String(record, "name", name_storage);
   out->name = name_storage->c_str();
-  bool size_present = false;
-  out->size = reader.Double(record, "size", 11.0, &size_present);
-  out->bold = reader.Bool(record, "bold", false) ? 1 : 0;
-  out->italic = reader.Bool(record, "italic", false) ? 1 : 0;
-  out->strike = reader.Bool(record, "strike", false) ? 1 : 0;
-  out->has_bold = reader.Bool(record, "hasBold", false) ? 1 : 0;
-  out->has_italic = reader.Bool(record, "hasItalic", false) ? 1 : 0;
-  out->has_strike = reader.Bool(record, "hasStrike", false) ? 1 : 0;
+  out->size = reader.Double(record, "size", 11.0, &present);
+  out->has_size = present ? 1 : 0;
+  flag("bold", &out->has_bold, &out->bold);
+  flag("italic", &out->has_italic, &out->italic);
+  flag("strike", &out->has_strike, &out->strike);
   out->underline = reader.U8(record, "underline", 0U);
   out->vert_align = reader.U8(record, "vertAlign", 0U);
-  out->has_family = reader.Bool(record, "hasFamily", false) ? 1 : 0;
-  out->family = reader.U8(record, "family", 0U);
-  out->has_charset = reader.Bool(record, "hasCharset", false) ? 1 : 0;
-  out->charset = reader.U8(record, "charset", 0U);
-  // An omitted size means "leave the size unchanged" unless hasSize says otherwise.
-  out->has_size = reader.Bool(record, "hasSize", size_present) ? 1 : 0;
+  out->family = reader.U8(record, "family", 0U, &present);
+  out->has_family = present ? 1 : 0;
+  out->charset = reader.U8(record, "charset", 0U, &present);
+  out->has_charset = present ? 1 : 0;
   out->scheme = reader.U8(record, "scheme", 0U);
-  out->outline = reader.Bool(record, "outline", false) ? 1 : 0;
-  out->shadow = reader.Bool(record, "shadow", false) ? 1 : 0;
-  out->condense = reader.Bool(record, "condense", false) ? 1 : 0;
-  out->extend = reader.Bool(record, "extend", false) ? 1 : 0;
-  out->has_outline = reader.Bool(record, "hasOutline", false) ? 1 : 0;
-  out->has_shadow = reader.Bool(record, "hasShadow", false) ? 1 : 0;
-  out->has_condense = reader.Bool(record, "hasCondense", false) ? 1 : 0;
-  out->has_extend = reader.Bool(record, "hasExtend", false) ? 1 : 0;
+  flag("outline", &out->has_outline, &out->outline);
+  flag("shadow", &out->has_shadow, &out->shadow);
+  flag("condense", &out->has_condense, &out->condense);
+  flag("extend", &out->has_extend, &out->extend);
   out->color_argb = reader.U32(record, "colorArgb", 0xFF000000U);
   out->color = PullColorSpec(reader, record, "color");
 }
@@ -214,15 +202,11 @@ Napi::Object CellXfToJs(Napi::Env env, const fm_cell_xf_t& xf) {
   out.Set("fillIndex", Napi::Number::New(env, xf.fill_index));
   out.Set("borderIndex", Napi::Number::New(env, xf.border_index));
   out.Set("numFmtId", Napi::Number::New(env, static_cast<uint32_t>(xf.num_fmt_id)));
-  out.Set("horizontalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.horizontal_align)));
-  out.Set("verticalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.vertical_align)));
-  out.Set("wrapText", Napi::Boolean::New(env, xf.wrap_text != 0));
-  out.Set("justifyLastLine", Napi::Boolean::New(env, xf.justify_last_line != 0));
-  out.Set("hasAlignment", Napi::Boolean::New(env, xf.has_alignment != 0));
-  out.Set("hasHorizontalAlign", Napi::Boolean::New(env, xf.has_horizontal_align != 0));
-  out.Set("hasVerticalAlign", Napi::Boolean::New(env, xf.has_vertical_align != 0));
-  out.Set("hasWrapText", Napi::Boolean::New(env, xf.has_wrap_text != 0));
-  out.Set("hasJustifyLastLine", Napi::Boolean::New(env, xf.has_justify_last_line != 0));
+  out.Set("horizontalAlign",
+          JsNumberOrNull(env, xf.has_horizontal_align, static_cast<uint32_t>(xf.horizontal_align)));
+  out.Set("verticalAlign", JsNumberOrNull(env, xf.has_vertical_align, static_cast<uint32_t>(xf.vertical_align)));
+  out.Set("wrapText", JsBoolOrNull(env, xf.has_wrap_text, xf.wrap_text));
+  out.Set("justifyLastLine", JsBoolOrNull(env, xf.has_justify_last_line, xf.justify_last_line));
   out.Set("applyNumberFormat", Napi::Boolean::New(env, xf.apply_number_format != 0));
   out.Set("applyFont", Napi::Boolean::New(env, xf.apply_font != 0));
   out.Set("applyFill", Napi::Boolean::New(env, xf.apply_fill != 0));
@@ -230,10 +214,10 @@ Napi::Object CellXfToJs(Napi::Env env, const fm_cell_xf_t& xf) {
   out.Set("applyAlignment", Napi::Boolean::New(env, xf.apply_alignment != 0));
   out.Set("applyProtection", Napi::Boolean::New(env, xf.apply_protection != 0));
   out.Set("quotePrefix", Napi::Boolean::New(env, xf.quote_prefix != 0));
-  out.Set("hasProtection", Napi::Boolean::New(env, xf.has_protection != 0));
-  // Without a `<protection>` child the model default applies: locked, not hidden.
-  out.Set("locked", Napi::Boolean::New(env, xf.has_protection == 0 || xf.locked != 0));
-  out.Set("hidden", Napi::Boolean::New(env, xf.has_protection != 0 && xf.hidden != 0));
+  // Without a `<protection>` child both read `null`: the model default
+  // (locked, not hidden) applies.
+  out.Set("locked", JsBoolOrNull(env, xf.has_protection, xf.locked));
+  out.Set("hidden", JsBoolOrNull(env, xf.has_protection, xf.hidden));
   return out;
 }
 

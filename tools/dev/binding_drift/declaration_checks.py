@@ -534,6 +534,13 @@ def _present(values: List[int]) -> List[int]:
     return [v for v in values if v != -1]
 
 
+# C members that only instruct a patch, keyed by the `.d.ts` table that leaves them out: the binding spells the
+# instruction as a `null` record (`title: null` clears the title), so the table never carries the member.
+_PATCH_ONLY_ORDINALS = {
+    "ChartTitleKind": frozenset({0}),
+}
+
+
 def check_dts_enums() -> List[str]:
     problems: List[str] = []
     dts_text = _read(WASM_DTS)
@@ -555,7 +562,13 @@ def check_dts_enums() -> List[str]:
             )
             continue
 
-        if _present(ts_values) != _present(source_values):
+        patch_only = _PATCH_ONLY_ORDINALS.get(ts_name, frozenset())
+        stale = sorted(v for v in patch_only if v not in source_values or v in ts_values)
+        if stale:
+            problems.append(
+                f"dts-enums: {ts_name} lists patch-only ordinals {stale} that {source_enum} lacks or the table carries"
+            )
+        if _present(ts_values) != [v for v in _present(source_values) if v not in patch_only]:
             problems.append(
                 f"dts-enums: {ts_name} in {WASM_DTS.relative_to(REPO_ROOT)} has ordinals {ts_values}, "
                 f"but its source {source_enum} in {source_path.relative_to(REPO_ROOT)} has {source_values}"

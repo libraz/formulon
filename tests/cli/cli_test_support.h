@@ -43,7 +43,25 @@ std::string sh_quote(const std::string& s);
 const std::string& temp_prefix();
 std::string temp_path(std::string_view name);
 std::vector<std::string> list_directory(const std::string& dir);
-CliRun run_cli(const std::vector<std::string>& args, bool merge_streams = false, bool close_stdout = false);
+CliRun run_cli(const std::vector<std::string>& args, bool merge_streams = false, bool close_stdout = false,
+               const std::string& stdin_path = {});
+
+/// How `run_cli_spawn` wires the child's standard streams. Streams not made a
+/// terminal or a broken pipe read from `/dev/null` (stdin) or are captured
+/// (stdout); stderr is always captured.
+struct SpawnOptions {
+  bool stdin_tty = false;           ///< stdin is the slave side of a pseudo-terminal.
+  bool stdout_tty = false;          ///< stdout is the slave side of a pseudo-terminal.
+  bool stdout_broken_pipe = false;  ///< stdout is a pipe whose read end is already closed.
+};
+
+/// Runs the CLI without a shell so the child's descriptors are exactly the
+/// ones `options` names. A child that does not exit within a few seconds is
+/// killed and reported with exit code -5.
+CliRun run_cli_spawn(const std::vector<std::string>& args, const SpawnOptions& options);
+
+/// Writes `bytes` to `path`. Returns true on success.
+bool write_bytes(const std::string& path, std::string_view bytes);
 
 struct PathGuard {
   std::string path;

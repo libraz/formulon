@@ -12,6 +12,7 @@
 #include "c_api/formulon_c.h"
 #include "formulon_c_count_of.h"
 #include "formulon_c_out_index.h"
+#include "formulon_c_setters.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 #include "value.h"
@@ -182,55 +183,52 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameAddsAndUpdates) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 0U);
 
-  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "MyName", "=42"), 0);
+  ASSERT_EQ(SetDefinedName(wb.handle, "MyName", "=42"), 0);
   EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 1U);
 
-  const char* nm = nullptr;
-  const char* fr = nullptr;
-  // The scope out-param is optional; NULL exercises the skip path.
-  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &nm, &fr, nullptr), 0);
-  EXPECT_STREQ(nm, "MyName");
-  EXPECT_STREQ(fr, "42");
+  fm_defined_name_t dn{};
+  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
+  EXPECT_STREQ(dn.name, "MyName");
+  EXPECT_STREQ(dn.formula, "42");
 
   // Update the formula text via case-insensitive match.
-  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "MYNAME", "=99"), 0);
+  ASSERT_EQ(SetDefinedName(wb.handle, "MYNAME", "=99"), 0);
   EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 1U);
-  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &nm, &fr, nullptr), 0);
-  EXPECT_STREQ(nm, "MyName");  // authored case preserved
-  EXPECT_STREQ(fr, "99");
+  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
+  EXPECT_STREQ(dn.name, "MyName");  // authored case preserved
+  EXPECT_STREQ(dn.formula, "99");
 }
 
 TEST(WorkbookSheetOpsCApi, SetDefinedNameScopedAllowsWorkbookAndSheetNames) {
   WorkbookGuard wb;
   MakeThreeSheets(wb);
 
-  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "Rate", "=1"), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Rate", "=2", 1), 0);
+  ASSERT_EQ(SetDefinedName(wb.handle, "Rate", "=1"), 0);
+  ASSERT_EQ(SetDefinedName(wb.handle, "Rate", "=2", 1), 0);
   EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 2U);
 
-  const char* nm = nullptr;
-  const char* fr = nullptr;
-  int32_t local_sheet_id = -99;
-  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &nm, &fr, &local_sheet_id), 0);
-  EXPECT_STREQ(nm, "Rate");
-  EXPECT_STREQ(fr, "1");
-  EXPECT_EQ(local_sheet_id, -1);
+  fm_defined_name_t dn{};
+  dn.local_sheet_id = -99;
+  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
+  EXPECT_STREQ(dn.name, "Rate");
+  EXPECT_STREQ(dn.formula, "1");
+  EXPECT_EQ(dn.local_sheet_id, -1);
 
-  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 1, &nm, &fr, &local_sheet_id), 0);
-  EXPECT_STREQ(nm, "Rate");
-  EXPECT_STREQ(fr, "2");
-  EXPECT_EQ(local_sheet_id, 1);
+  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 1, &dn), 0);
+  EXPECT_STREQ(dn.name, "Rate");
+  EXPECT_STREQ(dn.formula, "2");
+  EXPECT_EQ(dn.local_sheet_id, 1);
 
-  ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "RATE", "=3", 1), 0);
-  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 1, &nm, &fr, &local_sheet_id), 0);
-  EXPECT_STREQ(nm, "Rate");
-  EXPECT_STREQ(fr, "3");
-  EXPECT_EQ(local_sheet_id, 1);
+  ASSERT_EQ(SetDefinedName(wb.handle, "RATE", "=3", 1), 0);
+  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 1, &dn), 0);
+  EXPECT_STREQ(dn.name, "Rate");
+  EXPECT_STREQ(dn.formula, "3");
+  EXPECT_EQ(dn.local_sheet_id, 1);
 
-  ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Rate", "", 1), 0);
+  ASSERT_EQ(fm_workbook_remove_defined_name(wb.handle, "Rate", 1), 0);
   EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 1U);
-  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &nm, &fr, &local_sheet_id), 0);
-  EXPECT_EQ(local_sheet_id, -1);
+  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
+  EXPECT_EQ(dn.local_sheet_id, -1);
 }
 
 // The name stores its formula as files carry it, so a save / load cycle
@@ -238,19 +236,18 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameScopedAllowsWorkbookAndSheetNames) {
 TEST(WorkbookSheetOpsCApi, SetDefinedNameDropsTheLeadingEquals) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "Foo", "=Sheet1!$A$1"), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Bar", "=Sheet1!$B$2", 0), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "Baz", "Sheet1!$C$3"), 0);
-  EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, "Bad", "==1"),
+  ASSERT_EQ(SetDefinedName(wb.handle, "Foo", "=Sheet1!$A$1"), 0);
+  ASSERT_EQ(SetDefinedName(wb.handle, "Bar", "=Sheet1!$B$2", 0), 0);
+  ASSERT_EQ(SetDefinedName(wb.handle, "Baz", "Sheet1!$C$3"), 0);
+  EXPECT_EQ(SetDefinedName(wb.handle, "Bad", "==1"),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kParserUnexpectedToken));
 
   const char* expected[] = {"Sheet1!$A$1", "Sheet1!$B$2", "Sheet1!$C$3"};
-  const char* nm = nullptr;
-  const char* fr = nullptr;
+  fm_defined_name_t dn{};
   ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 3U);
   for (std::size_t i = 0; i < 3U; ++i) {
-    ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, i, &nm, &fr, nullptr), 0);
-    EXPECT_STREQ(fr, expected[i]) << nm;
+    ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, i, &dn), 0);
+    EXPECT_STREQ(dn.formula, expected[i]) << dn.name;
   }
 
   uint8_t* bytes = nullptr;
@@ -264,44 +261,75 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameDropsTheLeadingEquals) {
   // The writer may reorder names, so match them by name.
   const char* names[] = {"Foo", "Bar", "Baz"};
   for (std::size_t i = 0; i < 3U; ++i) {
-    ASSERT_EQ(fm_workbook_get_defined_name_at(reloaded.handle, i, &nm, &fr, nullptr), 0);
+    ASSERT_EQ(fm_workbook_get_defined_name_at(reloaded.handle, i, &dn), 0);
     std::size_t k = 0;
-    while (k < 3U && std::strcmp(nm, names[k]) != 0) {
+    while (k < 3U && std::strcmp(dn.name, names[k]) != 0) {
       ++k;
     }
-    ASSERT_LT(k, 3U) << nm;
-    EXPECT_STREQ(fr, expected[k]) << nm;
+    ASSERT_LT(k, 3U) << dn.name;
+    EXPECT_STREQ(dn.formula, expected[k]) << dn.name;
   }
 }
 
 TEST(WorkbookSheetOpsCApi, SetDefinedNameScopedRejectsOutOfRangeScope) {
   WorkbookGuard wb;
   MakeThreeSheets(wb);
-  EXPECT_NE(fm_workbook_set_defined_name_scoped(wb.handle, "Bad", "=1", -2), 0);
-  EXPECT_NE(fm_workbook_set_defined_name_scoped(wb.handle, "Bad", "=1", 3), 0);
+  EXPECT_NE(SetDefinedName(wb.handle, "Bad", "=1", -2), 0);
+  EXPECT_NE(SetDefinedName(wb.handle, "Bad", "=1", 3), 0);
 }
 
-TEST(WorkbookSheetOpsCApi, SetDefinedNameEmptyFormulaRemoves) {
+// Excel has no defined name without a formula, so an empty one is refused
+// rather than read as a removal; `fm_workbook_remove_defined_name` removes.
+TEST(WorkbookSheetOpsCApi, SetDefinedNameRejectsEmptyFormulaAndKeepsTheName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "Tmp", "=1"), 0);
-  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "Tmp", ""), 0);
-  EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 0U);
+  ASSERT_EQ(SetDefinedName(wb.handle, "Tmp", "=1"), 0);
+  EXPECT_EQ(SetDefinedName(wb.handle, "Tmp", ""),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(SetDefinedName(wb.handle, "Fresh", ""),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 1U);
+  fm_defined_name_t dn{};
+  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
+  EXPECT_STREQ(dn.formula, "1");
+}
+
+// The record replaces the whole entry: attributes it leaves at their
+// defaults reset on a name that had them.
+TEST(WorkbookSheetOpsCApi, SetDefinedNameReplacesCommentAndHidden) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_defined_name_input_t full{"Rate", "=0.1", -1, "Tax rate", 1};
+  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, &full), 0);
+  fm_defined_name_t dn{};
+  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
+  EXPECT_STREQ(dn.comment, "Tax rate");
+  EXPECT_EQ(dn.hidden, 1);
+
+  ASSERT_EQ(SetDefinedName(wb.handle, "Rate", "=0.2"), 0);
+  ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 1U);
+  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &dn), 0);
+  EXPECT_STREQ(dn.formula, "0.2");
+  EXPECT_EQ(dn.local_sheet_id, -1);
+  EXPECT_STREQ(dn.comment, "");
+  EXPECT_EQ(dn.hidden, 0);
 }
 
 TEST(WorkbookSheetOpsCApi, SetDefinedNameRejectsEmptyName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  fm_status_t rc = fm_workbook_set_defined_name(wb.handle, "", "=1");
+  fm_status_t rc = SetDefinedName(wb.handle, "", "=1");
   EXPECT_NE(rc, 0);
 }
 
 TEST(WorkbookSheetOpsCApi, SetDefinedNameNullArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  EXPECT_NE(fm_workbook_set_defined_name(nullptr, "n", "=1"), 0);
-  EXPECT_NE(fm_workbook_set_defined_name(wb.handle, nullptr, "=1"), 0);
-  EXPECT_NE(fm_workbook_set_defined_name(wb.handle, "n", nullptr), 0);
+  EXPECT_NE(SetDefinedName(nullptr, "n", "=1"), 0);
+  EXPECT_NE(SetDefinedName(wb.handle, nullptr, "=1"), 0);
+  EXPECT_NE(SetDefinedName(wb.handle, "n", nullptr), 0);
+  EXPECT_NE(fm_workbook_set_defined_name(wb.handle, nullptr), 0);
+  EXPECT_NE(fm_workbook_get_defined_name_at(wb.handle, 0, nullptr), 0);
 }
 
 TEST(WorkbookSheetOpsCApi, DeleteRejectsCountPastSheetBoundWithoutMutatingCells) {

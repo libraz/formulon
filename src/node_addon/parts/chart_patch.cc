@@ -258,11 +258,9 @@ Napi::Value Workbook::InsertChart(const Napi::CallbackInfo& info) {
   const Napi::Object spec = ArgObject(info, 1);
   std::string source;
   std::string name;
-  std::string descr;
+  std::string description;
   std::string title;
   reader.String(spec, "source", &source);
-  reader.String(spec, "name", &name);
-  reader.String(spec, "description", &descr);
   bool has_title = false;
   {
     const Field f = Probe(reader, spec, "title");
@@ -279,16 +277,10 @@ Napi::Value Workbook::InsertChart(const Napi::CallbackInfo& info) {
   opts.header_row = HeaderMode(reader, reader.ok() ? spec.Get("headerRow") : env.Undefined(), "headerRow");
   opts.header_column = HeaderMode(reader, reader.ok() ? spec.Get("headerColumn") : env.Undefined(), "headerColumn");
   opts.title = has_title ? title.c_str() : nullptr;
-  opts.legend = reader.I32(spec, "legend", FM_CHART_LEGEND_BOTTOM);
-  opts.placement.name = name.c_str();
-  opts.placement.descr = descr.c_str();
-  Napi::Object placement;
-  if (ReadChild(reader, spec, "placement", &placement)) {
-    PullPlacement(reader, placement, opts.placement, FM_ANCHOR_KIND_TWO_CELL);
-  } else {
-    opts.placement.anchor_kind = FM_ANCHOR_KIND_TWO_CELL;
-    opts.placement.edit_as = FM_ANCHOR_EDIT_AS_TWO_CELL;
-  }
+  // An omitted legend is Excel's default bottom legend; `null` is none.
+  const Napi::Value legend = reader.Get(spec, "legend");
+  opts.legend = legend.IsNull() ? FM_CHART_LEGEND_NONE : reader.I32(legend, "legend", FM_CHART_LEGEND_BOTTOM);
+  opts.placement = PullImageInsert(reader, reader.Get(spec, "placement"), FM_ANCHOR_KIND_TWO_CELL, name, description);
   if (!reader.ok()) {
     return env.Undefined();
   }

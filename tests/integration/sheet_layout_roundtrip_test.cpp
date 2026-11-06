@@ -172,15 +172,15 @@ TEST(SheetVisibility, VeryHiddenCrossesFromXlsbToOoxml) {
   EXPECT_NE(workbook_xml.find("state=\"veryHidden\""), std::string::npos) << workbook_xml;
 }
 
-/// Loads `bytes` through the C API, applies `hidden` with the bool setter,
-/// saves again, and returns the resulting `<sheet state>` value.
-std::string StateAfterSettingTabHidden(const std::vector<std::uint8_t>& bytes, int32_t hidden) {
+/// Loads `bytes` through the C API, applies `visibility`, saves again, and
+/// returns the resulting `<sheet state>` value.
+std::string StateAfterSettingVisibility(const std::vector<std::uint8_t>& bytes, int32_t visibility) {
   fm_workbook_t* handle = nullptr;
   EXPECT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &handle), 0);
   if (handle == nullptr) {
     return std::string();
   }
-  EXPECT_EQ(fm_sheet_set_tab_hidden(handle, 0, hidden), 0);
+  EXPECT_EQ(fm_sheet_set_visibility(handle, 0, visibility), 0);
   std::uint8_t* saved = nullptr;
   std::size_t saved_len = 0;
   EXPECT_EQ(fm_workbook_save(handle, &saved, &saved_len), 0);
@@ -199,18 +199,14 @@ std::string StateAfterSettingTabHidden(const std::vector<std::uint8_t>& bytes, i
   return workbook_xml.substr(value, workbook_xml.find('"', value) - value);
 }
 
-TEST(SheetVisibility, ShowingASheetThroughTheBoolSetterClearsVeryHidden) {
-  // `fm_sheet_set_tab_hidden` cannot name the third state. Asking for
-  // hidden on a very-hidden sheet therefore says nothing new and must not
-  // demote it, while asking for visible has to clear the state outright --
-  // saving `veryHidden` after a caller showed the sheet would ignore the
-  // call.
+TEST(SheetVisibility, ShowingAVeryHiddenSheetClearsTheState) {
+  // Asking for visible has to clear the state outright -- saving
+  // `veryHidden` after a caller showed the sheet would ignore the call.
   Workbook src = Workbook::create();
   src.sheet(0).mutable_view().set_visibility(SheetVisibility::kVeryHidden);
   const std::vector<std::uint8_t> bytes = SaveOrDie(src);
 
-  EXPECT_EQ(StateAfterSettingTabHidden(bytes, 1), "veryHidden");
-  EXPECT_EQ(StateAfterSettingTabHidden(bytes, 0), "");
+  EXPECT_EQ(StateAfterSettingVisibility(bytes, FM_SHEET_VISIBLE), "");
 }
 
 TEST(SheetLayoutRoundTrip, ReShowingSheetRemovesLegacySheetPrTabHidden) {

@@ -41,7 +41,8 @@ namespace cli {
 namespace {
 
 void print_recalc_usage(std::ostream& out) {
-  out << "Usage: formulon recalc [--iterative] [--threads N] [--quiet] <in.xlsx-or-xlsb> -o <out.xlsx-or-xlsb>\n"
+  out << "Usage: formulon recalc [--iterative] [--threads N] [--quiet] <in.xlsx-or-xlsb | -> -o <out.xlsx-or-xlsb | "
+         "->\n"
       << "       formulon recalc [--iterative] [--threads N] [--quiet] -o <out.xlsx-or-xlsb> -- <in.xlsx-or-xlsb>\n"
       << "\n"
       << "Load <in.xlsx-or-xlsb>, drive a full recalc, and write the result to <out.xlsx-or-xlsb>.\n"
@@ -51,6 +52,8 @@ void print_recalc_usage(std::ostream& out) {
       << "1 stays on the caller thread, and 2..8 select the worker cap. Without --threads,\n"
       << "recalc remains serial.\n"
       << "Options must precede --; after --, exactly one input path is accepted.\n"
+      << "An input of '-' reads the workbook from stdin; '-o -' writes it to stdout as .xlsx\n"
+      << "(refused when stdout is a terminal). Use './-' for a file named '-'.\n"
       << "Status: prints \"formulon: recalc: ok, wrote M bytes to 'OUT'\" on stderr unless\n"
       << "--quiet is supplied; --quiet does not suppress load/save loss warnings.\n";
   print_shared_options(out);
@@ -141,7 +144,7 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
       ++i;
       continue;
     }
-    if (!accept_positional(a, options_ended, input_seen, "recalc", "input path", err)) {
+    if (!accept_positional(a, options_ended, input_seen, "recalc", "input path", err, /*allow_dash=*/true)) {
       return kExitUsage;
     }
     input_path.assign(a);
@@ -164,13 +167,20 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     return kExitUsage;
   }
 
+  const bool to_stdout = output_path == kStdioPath;
+  if (to_stdout && stdout_is_terminal()) {
+    err << "formulon: recalc: refusing to write a binary workbook to a terminal; redirect stdout or name a file\n";
+    return kExitUsage;
+  }
+
   WorkbookGuard wb;
   if (auto rc = load_workbook_file(input_path, shared, wb, err, "recalc"); rc != 0) {
     return rc;
   }
 
   if (iterative) {
-    if (auto rc = fm_workbook_set_iterative_enabled(wb.handle, 1); rc != 0) {
+    const fm_iterative_settings_patch_t enable{1, -1, -1.0};
+    if (auto rc = fm_workbook_set_iterative(wb.handle, &enable); rc != 0) {
       emit_last_error(err, "recalc");
       return rc;
     }
@@ -198,7 +208,13 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
   emit_write_diagnostics(err, "recalc", format, save_diagnostics);
 
-  if (auto rc = write_file_atomically(output_path, buf.data, buf.len); rc != 0) {
+  if (to_stdout) {
+    out.flush();
+    if (auto rc = write_stdout(buf.data, buf.len); rc != 0) {
+      err << "formulon: recalc: cannot write to stdout: " << std::strerror(errno) << '\n';
+      return rc;
+    }
+  } else if (auto rc = write_file_atomically(output_path, buf.data, buf.len); rc != 0) {
     err << "formulon: recalc: cannot write '" << output_path << "': " << std::strerror(errno) << '\n';
     return rc;
   }

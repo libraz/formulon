@@ -72,7 +72,10 @@ fm_slicer_t Anchored(std::uint32_t fields) {
 }
 
 TEST(FormulonCApiSlicers, EnumOrdinalsAndFieldBits) {
-  EXPECT_EQ(FM_SLICER_SORT_ORDER_DESCENDING, 1);
+  // The sort_order family: the slicer order takes the pivot order's values.
+  EXPECT_EQ(FM_SLICER_SORT_ORDER_DESCENDING, 0);
+  EXPECT_EQ(static_cast<int>(FM_SLICER_SORT_ORDER_DESCENDING), static_cast<int>(FM_PIVOT_SORT_DESCENDING));
+  EXPECT_EQ(static_cast<int>(FM_SLICER_SORT_ORDER_ASCENDING), static_cast<int>(FM_PIVOT_SORT_ASCENDING));
   EXPECT_EQ(FM_SLICER_CROSS_SHOW_ITEMS_WITH_NO_DATA, 1);
   EXPECT_EQ(FM_SLICER_CROSS_NONE, 2);
   EXPECT_EQ(FM_SLICER_FIELD_CROSS_FILTER, 0x80u);
@@ -111,7 +114,7 @@ TEST(FormulonCApiSlicers, AddListUpdateRemoveAndReload) {
   EXPECT_STREQ(out.column_name, "Product");
   EXPECT_STREQ(out.style, "SlicerStyleLight3");
   EXPECT_EQ(out.column_count, 2U);
-  EXPECT_EQ(out.row_height, 241300);
+  EXPECT_EQ(out.row_height_emu, 241300);
   EXPECT_EQ(out.sort_order, FM_SLICER_SORT_ORDER_DESCENDING);
   EXPECT_EQ(out.cross_filter, FM_SLICER_CROSS_NONE);
   EXPECT_EQ(out.anchor_kind, FM_ANCHOR_KIND_TWO_CELL);

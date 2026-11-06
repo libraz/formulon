@@ -124,12 +124,16 @@ test('integer positional arguments reject wrapping and non-finite values', () =>
 test('iterative caps use the signed int32 contract', () => {
   const wb = addon.Workbook.createDefault();
   try {
-    wb.setIterative(true, 2 ** 31 - 1, 0.1);
-    wb.setIterative(false, -1, 0.1);
-    assert.equal(wb.getIterative().maxIterations, 1, 'negative caps retain the native clamp');
-    for (const value of [2 ** 31, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
-      assert.throws(() => wb.setIterative(true, value, 0.1), RangeError, `maxIterations=${String(value)}`);
+    wb.setIterative({ enabled: true, maxIterations: 2 ** 31 - 1, maxChange: 0.1 });
+    wb.setIterative({ enabled: false, maxIterations: 0 });
+    assert.equal(wb.getIterative().maxIterations, 1, 'a zero cap is the native clamp of 1');
+    for (const value of [2 ** 31, -1]) {
+      assert.throws(() => wb.setIterative({ maxIterations: value }), RangeError, `maxIterations=${String(value)}`);
     }
+    for (const value of [1.5, Number.NaN, Number.POSITIVE_INFINITY, '5', null]) {
+      assert.throws(() => wb.setIterative({ maxIterations: value }), TypeError, `maxIterations=${String(value)}`);
+    }
+    assert.equal(wb.getIterative().maxIterations, 1);
   } finally {
     wb.dispose();
   }
@@ -176,7 +180,7 @@ test('paging cursor and limit reject values outside native integer ranges', () =
 test('missing required positional arguments are rejected; optional ones keep their defaults', () => {
   const wb = addon.Workbook.createDefault();
   try {
-    assert.throws(() => wb.setIterative(true), TypeError);
+    assert.throws(() => wb.setIterative(), TypeError);
     assert.throws(() => wb.setVisibility(0), TypeError);
     assert.equal(wb.getIterative().maxIterations, 100, 'the rejected setIterative must not store a cap');
     wb.getFunctionMetadata('SUM');

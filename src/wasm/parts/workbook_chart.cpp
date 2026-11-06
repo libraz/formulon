@@ -285,12 +285,11 @@ uint32_t JsWorkbook::insertChart(uint32_t sheet, val options) {
   opts.header_row = header_mode(reader, reader.value(options, "headerRow", "headerRow"), "headerRow");
   opts.header_column = header_mode(reader, reader.value(options, "headerColumn", "headerColumn"), "headerColumn");
   opts.title = reader.optional_string(options, "title", title_store, "title");
-  opts.legend = reader.i32(options, "legend", FM_CHART_LEGEND_BOTTOM, "legend");
-  opts.placement.name = reader.optional_string(options, "name", name_store, "name");
-  opts.placement.descr = reader.optional_string(options, "description", descr_store, "description");
+  // An omitted legend is Excel's default bottom legend; `null` is none.
+  const val legend = reader.value(options, "legend", "legend");
+  opts.legend = legend.isNull() ? FM_CHART_LEGEND_NONE : reader.i32_value(legend, FM_CHART_LEGEND_BOTTOM, "legend");
   const val placement = reader.value(options, "placement", "placement");
-  set_insert_placement(opts.placement,
-                       pull_drawing_anchor(reader, js_object_or_empty(placement), FM_ANCHOR_KIND_TWO_CELL));
+  opts.placement = pull_image_insert(reader, placement, FM_ANCHOR_KIND_TWO_CELL, name_store, descr_store);
   if (!reader.ok()) {
     return 0U;
   }

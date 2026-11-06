@@ -68,11 +68,9 @@ std::set<std::uint32_t> HiddenRows(const fm_workbook_t* wb) {
 bool HasDefinedName(const fm_workbook_t* wb, const std::string& wanted) {
   const std::size_t count = count_of(fm_workbook_get_defined_name_count, wb);
   for (std::size_t i = 0; i < count; ++i) {
-    const char* name = nullptr;
-    const char* formula = nullptr;
-    int32_t local = 0;
-    EXPECT_EQ(fm_workbook_get_defined_name_at(wb, i, &name, &formula, &local), 0);
-    if (wanted == name) {
+    fm_defined_name_t entry{};
+    EXPECT_EQ(fm_workbook_get_defined_name_at(wb, i, &entry), 0);
+    if (wanted == entry.name) {
       return true;
     }
   }

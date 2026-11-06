@@ -165,7 +165,7 @@ emscripten::val JsWorkbook::pivotGetGrandTotals(uint32_t sheet, uint32_t pivotIn
   }
   emscripten::val o = emscripten::val::object();
   o.set("rows", rows != 0);
-  o.set("cols", cols != 0);
+  o.set("columns", cols != 0);
   return o;
 }
 
@@ -176,8 +176,10 @@ emscripten::val JsWorkbook::pivotGetStyleInfo(uint32_t sheet, uint32_t pivotInde
   if (!succeeded(rc)) {
     return emscripten::val::undefined();
   }
+  if (info.present == 0) {
+    return emscripten::val::null();
+  }
   emscripten::val o = emscripten::val::object();
-  o.set("present", info.present != 0);
   js_set_cstr(o, "name", info.name);
   o.set("showRowHeaders", info.show_row_headers != 0);
   o.set("showColHeaders", info.show_col_headers != 0);
@@ -245,16 +247,16 @@ emscripten::val JsWorkbook::pivotFieldAt(uint32_t sheet, uint32_t pivotIndex, ui
   }
   emscripten::val o = emscripten::val::object();
   js_set_cstr(o, "sourceName", info.source_name);
-  js_set_cstr(o, "customName", info.custom_name);
-  o.set("axis", info.axis);
+  js_set_cstr_or_null(o, "customName", info.custom_name);
+  js_set_index_or_null(o, "axis", info.axis);
   o.set("subtotalTop", info.subtotal_top != 0);
-  js_set_cstr(o, "numberFormat", info.number_format);
-  o.set("cacheFieldIndex", info.cache_field_index);
+  js_set_cstr_or_null(o, "numberFormat", info.number_format);
+  js_set_index_or_null(o, "cacheFieldIndex", info.cache_field_index);
   o.set("sortOrder", info.sort_order);
   js_set_cstr(o, "sortByField", info.sort_by_field);
   o.set("datePeriods", info.date_periods);
   o.set("dateCalendar", info.date_calendar);
-  o.set("groupBaseIndex", info.group_base_index);
+  js_set_index_or_null(o, "groupBaseIndex", info.group_base_index);
   o.set("defaultSubtotal", info.default_subtotal != 0);
   o.set("insertBlankRow", info.insert_blank_row != 0);
   o.set("fillDownLabels", info.fill_down_labels != 0);
@@ -291,7 +293,7 @@ emscripten::val JsWorkbook::pivotFieldItemAt(uint32_t sheet, uint32_t pivotIndex
   }
   emscripten::val o = emscripten::val::object();
   js_set_cstr(o, "name", info.name);
-  o.set("cacheIndex", info.cache_index);
+  js_set_index_or_null(o, "cacheIndex", info.cache_index);
   o.set("visible", info.visible != 0);
   if (info.caption != nullptr) {
     js_set_cstr(o, "caption", info.caption);
@@ -394,9 +396,9 @@ emscripten::val JsWorkbook::pivotGetOptions(uint32_t sheet, uint32_t pivotIndex)
   }
   emscripten::val o = emscripten::val::object();
   o.set("showError", opt.show_error != 0);
-  js_set_cstr(o, "errorCaption", opt.error_caption);
+  js_set_cstr_or_null(o, "errorCaption", opt.error_caption);
   o.set("showMissing", opt.show_missing != 0);
-  js_set_cstr(o, "missingCaption", opt.missing_caption);
+  js_set_cstr_or_null(o, "missingCaption", opt.missing_caption);
   o.set("showHeaders", opt.show_headers != 0);
   o.set("showDrill", opt.show_drill != 0);
   o.set("showDataTips", opt.show_data_tips != 0);
@@ -414,9 +416,9 @@ emscripten::val JsWorkbook::pivotGetOptions(uint32_t sheet, uint32_t pivotIndex)
   o.set("multipleFieldFilters", opt.multiple_field_filters != 0);
   o.set("preserveFormatting", opt.preserve_formatting != 0);
   o.set("customListSort", opt.custom_list_sort != 0);
-  js_set_cstr(o, "altText", opt.alt_text);
-  js_set_cstr(o, "altTextSummary", opt.alt_text_summary);
-  js_set_cstr(o, "grandTotalCaption", opt.grand_total_caption);
+  js_set_cstr_or_null(o, "altText", opt.alt_text);
+  js_set_cstr_or_null(o, "altTextSummary", opt.alt_text_summary);
+  js_set_cstr_or_null(o, "grandTotalCaption", opt.grand_total_caption);
   o.set("autoFormatting", opt.auto_formatting != 0);
   o.set("enableDrill", opt.enable_drill != 0);
   return o;
@@ -448,12 +450,14 @@ void JsWorkbook::pivotSetOptions(uint32_t sheet, uint32_t pivotIndex, emscripten
     const std::string field = std::string("pivotOptions.") + key;
     return reader.boolean(options, key, current != 0, field.c_str()) ? 1 : 0;
   };
+  // An omitted caption keeps the stored one; `null` removes it.
   const auto text = [&](const char* key, std::string& storage) {
-    std::string value;
     const std::string field = std::string("pivotOptions.") + key;
-    if (reader.optional_string(options, key, value, field.c_str()) != nullptr) {
-      storage = value;
+    const emscripten::val value = reader.value(options, key, field.c_str());
+    if (!reader.ok() || value.isUndefined()) {
+      return;
     }
+    storage = value.isNull() ? std::string() : reader.string_value(value, field.c_str());
   };
   opt.show_error = flag("showError", opt.show_error);
   text("errorCaption", error_caption);
@@ -601,9 +605,9 @@ void JsWorkbook::pivotFieldClearDateGroup(uint32_t sheet, uint32_t pivotIndex, u
 }
 
 void JsWorkbook::pivotFieldSetNumberFormat(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
-                                           const std::string& utf8) {
+                                           const std::string& formatCode) {
   succeeded(handle_ != nullptr
-                ? fm_sheet_set_pivot_field_number_format(handle_, sheet, pivotIndex, fieldIndex, utf8.c_str())
+                ? fm_sheet_set_pivot_field_number_format(handle_, sheet, pivotIndex, fieldIndex, formatCode.c_str())
                 : kBindingInvalidHandle);
 }
 
@@ -730,10 +734,10 @@ emscripten::val JsWorkbook::pivotDataFieldAt(uint32_t sheet, uint32_t pivotIndex
   js_set_cstr(o, "name", spec.name);
   o.set("fieldIndex", spec.field_index);
   o.set("aggregation", static_cast<int32_t>(spec.aggregation));
-  js_set_cstr(o, "numberFormat", spec.number_format);
+  js_set_cstr_or_null(o, "numberFormat", spec.number_format);
   o.set("showAs", static_cast<int32_t>(spec.show_as));
-  o.set("showAsBaseField", spec.show_as_base_field);
-  o.set("showAsBaseItem", spec.show_as_base_item);
+  js_set_index_or_null(o, "showAsBaseField", spec.show_as_base_field);
+  js_set_index_or_null(o, "showAsBaseItem", spec.show_as_base_item);
   return o;
 }
 
@@ -828,14 +832,14 @@ emscripten::val JsWorkbook::pivotFilterAt(uint32_t sheet, uint32_t pivotIndex, u
   js_set_cstr(o, "fieldName", spec.field_name);
   o.set("type", static_cast<int32_t>(spec.type));
   o.set("dataFieldIndex", spec.data_field_index);
-  o.set("valueKind", static_cast<int32_t>(spec.value_kind));
+  js_set_index_or_null(o, "valueKind", static_cast<int32_t>(spec.value_kind));
   o.set("valueInt", spec.value_int);
   o.set("valueDouble", spec.value_double);
   js_set_cstr(o, "valueText", spec.value_text);
-  o.set("valueHighKind", static_cast<int32_t>(spec.value_high_kind));
+  js_set_index_or_null(o, "valueHighKind", static_cast<int32_t>(spec.value_high_kind));
   o.set("valueHighInt", spec.value_high_int);
   o.set("valueHighDouble", spec.value_high_double);
-  js_set_cstr(o, "valueHighText", spec.value_high_text);
+  js_set_cstr_or_null(o, "valueHighText", spec.value_high_text);
   return o;
 }
 

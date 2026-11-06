@@ -1,5 +1,5 @@
 import test from 'node:test';
-import { assert, expectFailure, getModule, readAll } from './smoke_support.mjs';
+import { assert, expectFailure, getModule } from './smoke_support.mjs';
 
 // ---- Sheet-annotation surfaces -----------------------------------------
 //
@@ -78,21 +78,12 @@ test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
   const wb = Module.Workbook.createDefault();
   let bytes;
   try {
-    assert.equal(
-      readAll(
-        () => wb.getCfRuleCount(0),
-        (i) => wb.getCfRule(0, i),
-      ).length,
-      0,
-    );
+    assert.equal(wb.sheet(0).listCfRules().length, 0);
     for (const rule of [COLOR_SCALE_RULE, DATA_BAR_RULE, ICON_SET_RULE]) {
-      wb.addCfRule(0, rule);
+      wb.sheet(0).addCfRule(rule);
     }
 
-    const inSession = readAll(
-      () => wb.getCfRuleCount(0),
-      (i) => wb.getCfRule(0, i),
-    );
+    const inSession = wb.sheet(0).listCfRules();
     assert.equal(inSession.length, 3);
     assert.deepEqual(cfvoValues(inSession), EXPECTED_CFVO_VALUES);
     // The threshold types travel with the values; a type read back as 0
@@ -113,19 +104,16 @@ test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
     const saved = wb.save();
     bytes = saved;
   } finally {
-    wb.delete();
+    wb.dispose();
   }
 
   const reloaded = Module.Workbook.load(bytes);
   try {
-    const rules = readAll(
-      () => reloaded.getCfRuleCount(0),
-      (i) => reloaded.getCfRule(0, i),
-    );
+    const rules = reloaded.sheet(0).listCfRules();
     assert.equal(rules.length, 3);
     assert.deepEqual(cfvoValues(rules), EXPECTED_CFVO_VALUES);
   } finally {
-    reloaded.delete();
+    reloaded.dispose();
   }
 });
 
@@ -135,15 +123,12 @@ test('addValidation defaults every omitted boolean to false', async () => {
   try {
     // A list rule stating only what it needs: the booleans are left out
     // so the binding's own defaults are what is read back.
-    wb.addValidation(0, {
+    wb.sheet(0).addValidation({
       ranges: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
       type: 3,
       formula1: '"Yes,No"',
     });
-    const rules = readAll(
-      () => wb.getValidationCount(0),
-      (i) => wb.getValidation(0, i),
-    );
+    const rules = wb.sheet(0).listValidations();
     assert.equal(rules.length, 1);
     const rule = rules[0];
     assert.equal(typeof rule.allowBlank, 'boolean');
@@ -162,21 +147,15 @@ test('addValidation defaults every omitted boolean to false', async () => {
     assert.equal(rule.ranges[0].lastRow, 2);
 
     // An explicit `true` is not overwritten by the default.
-    wb.addValidation(0, {
+    wb.sheet(0).addValidation({
       ranges: [{ firstRow: 3, firstCol: 0, lastRow: 3, lastCol: 0 }],
       type: 3,
       allowBlank: true,
       formula1: '"A,B"',
     });
-    assert.equal(
-      readAll(
-        () => wb.getValidationCount(0),
-        (i) => wb.getValidation(0, i),
-      )[1].allowBlank,
-      true,
-    );
+    assert.equal(wb.sheet(0).listValidations()[1].allowBlank, true);
   } finally {
-    wb.delete();
+    wb.dispose();
   }
 });
 
@@ -185,46 +164,46 @@ test('merges, comments and hyperlinks round-trip through save and load', async (
   const wb = Module.Workbook.createDefault();
   let bytes;
   try {
-    wb.setText(0, 0, 0, '見出し');
-    wb.addMerge(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 3 });
-    wb.setComment(0, 2, 1, '校閲者', '要確認');
-    wb.addHyperlink(0, 3, 0, 'https://example.com/', '例', 'ツールチップ', '');
+    wb.sheet(0).setText(0, 0, '見出し');
+    wb.sheet(0).addMerge({ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 3 });
+    wb.sheet(0).setComment(2, 1, { author: '校閲者', text: '要確認' });
+    wb.sheet(0).addHyperlink(3, 0, { target: 'https://example.com/', display: '例', tooltip: 'ツールチップ' });
 
-    const merges = wb.listMerges(0);
+    const merges = wb.sheet(0).listMerges();
     assert.equal(merges.length, 1);
     assert.equal(merges[0].lastCol, 3);
 
-    const comment = wb.getComment(0, 2, 1);
+    const comment = wb.sheet(0).getComment(2, 1);
     assert.equal(comment.author, '校閲者');
     assert.equal(comment.text, '要確認');
     // An absent comment answers null; an unreadable sheet throws.
-    const none = wb.getComment(0, 9, 9);
+    const none = wb.sheet(0).getComment(9, 9);
     assert.equal(none, null);
-    expectFailure(() => wb.getComment(99, 0, 0), Module.StatusCode.SheetIndexOutOfRange);
+    expectFailure(() => wb.sheet(99).getComment(0, 0), Module.StatusCode.SheetIndexOutOfRange);
 
     const saved = wb.save();
     bytes = saved;
   } finally {
-    wb.delete();
+    wb.dispose();
   }
 
   const reloaded = Module.Workbook.load(bytes);
   try {
-    assert.equal(reloaded.listMerges(0).length, 1);
-    assert.equal(reloaded.listMerges(0)[0].lastCol, 3);
+    assert.equal(reloaded.sheet(0).listMerges().length, 1);
+    assert.equal(reloaded.sheet(0).listMerges()[0].lastCol, 3);
 
-    const comments = reloaded.listComments(0);
+    const comments = reloaded.sheet(0).listComments();
     assert.equal(comments.length, 1);
     assert.equal(comments[0].row, 2);
     assert.equal(comments[0].col, 1);
     assert.equal(comments[0].text, '要確認');
 
-    const links = reloaded.listHyperlinks(0);
+    const links = reloaded.sheet(0).listHyperlinks();
     assert.equal(links.length, 1);
     assert.equal(links[0].rect.firstRow, 3);
     assert.equal(links[0].target, 'https://example.com/');
     assert.equal(links[0].tooltip, 'ツールチップ');
   } finally {
-    reloaded.delete();
+    reloaded.dispose();
   }
 });

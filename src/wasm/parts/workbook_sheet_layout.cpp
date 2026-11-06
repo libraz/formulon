@@ -35,15 +35,11 @@ fm_status_t column_entry(const fm_workbook_t* handle, size_t sheet, size_t index
   *out = emscripten::val::object();
   out->set("first", entry.first);
   out->set("last", entry.last);
-  out->set("width", entry.width);
-  out->set("hidden", entry.hidden);
+  js_set_present_or_null(*out, "width", entry.has_width, entry.width);
+  out->set("hidden", entry.hidden != 0);
   out->set("outlineLevel", static_cast<int32_t>(entry.outline_level));
-  out->set("collapsed", entry.collapsed ? 1 : 0);
-  // Normalize legacy non-zero widths at the binding boundary as well as in
-  // the C getter, so a mixed-version host still sees logical presence.
-  out->set("hasWidth", (entry.has_width || entry.width != 0.0) ? 1 : 0);
-  out->set("hasStyle", entry.has_style ? 1 : 0);
-  out->set("styleXf", entry.style_xf);
+  out->set("collapsed", entry.collapsed != 0);
+  js_set_present_or_null(*out, "styleXf", entry.has_style, entry.style_xf);
   return 0;
 }
 
@@ -54,14 +50,12 @@ fm_status_t row_entry(const fm_workbook_t* handle, size_t sheet, size_t index, e
   }
   *out = emscripten::val::object();
   out->set("row", entry.row);
-  out->set("height", entry.height);
-  out->set("hidden", entry.hidden);
+  js_set_present_or_null(*out, "height", entry.has_height, entry.height);
+  out->set("hidden", entry.hidden != 0);
   out->set("outlineLevel", static_cast<int32_t>(entry.outline_level));
-  out->set("collapsed", entry.collapsed ? 1 : 0);
-  out->set("hasStyle", entry.has_style ? 1 : 0);
-  out->set("styleXf", entry.style_xf);
-  out->set("hasHeight", entry.has_height ? 1 : 0);
-  out->set("customHeight", entry.custom_height ? 1 : 0);
+  out->set("collapsed", entry.collapsed != 0);
+  js_set_present_or_null(*out, "styleXf", entry.has_style, entry.style_xf);
+  out->set("customHeight", entry.custom_height != 0);
   return 0;
 }
 
@@ -115,14 +109,7 @@ void set_pagination_detail(emscripten::val* result, const fm_pagination_t* pagin
   result->set("printable", js_rect_pt(printable));
   result->set("scale", scale);
   result->set("pageOrder", page_order);
-  emscripten::val titles_val = emscripten::val::object();
-  titles_val.set("hasRows", titles.has_rows != 0);
-  titles_val.set("firstRow", titles.first_row);
-  titles_val.set("lastRow", titles.last_row);
-  titles_val.set("hasCols", titles.has_cols != 0);
-  titles_val.set("firstCol", titles.first_col);
-  titles_val.set("lastCol", titles.last_col);
-  result->set("printTitles", titles_val);
+  result->set("printTitles", print_titles_to_val(titles));
   emscripten::val pages = emscripten::val::array();
   for (std::size_t i = 0; i < page_count; ++i) {
     fm_page_layout_t page{};
@@ -145,14 +132,14 @@ void set_pagination_detail(emscripten::val* result, const fm_pagination_t* pagin
     fm_pagination_is_row_break_manual(pagination, i, &manual);
     horizontal_manual.call<void>("push", manual != 0);
   }
-  result->set("horizontalBreakManual", horizontal_manual);
+  result->set("rowBreakManual", horizontal_manual);
   emscripten::val vertical_manual = emscripten::val::array();
   for (std::size_t i = 0; i < vertical_count; ++i) {
     int32_t manual = 0;
     fm_pagination_is_column_break_manual(pagination, i, &manual);
     vertical_manual.call<void>("push", manual != 0);
   }
-  result->set("verticalBreakManual", vertical_manual);
+  result->set("columnBreakManual", vertical_manual);
 }
 
 }  // namespace
@@ -192,8 +179,8 @@ emscripten::val JsWorkbook::paginate(uint32_t sheet) const {
     }
   }
   result.set("printArea", print_area);
-  result.set("horizontalBreaks", horizontal_breaks);
-  result.set("verticalBreaks", vertical_breaks);
+  result.set("rowBreaks", horizontal_breaks);
+  result.set("columnBreaks", vertical_breaks);
   std::size_t page_count = 0;
   fm_pagination_get_page_count(pagination, &page_count);
   result.set("pageCount", page_count);
@@ -211,22 +198,21 @@ JsSheetView JsWorkbook::getSheetView(uint32_t sheet) const {
   r.zoomScale = v.zoom_scale;
   r.freezeRows = v.freeze_rows;
   r.freezeCols = v.freeze_cols;
-  r.tabHidden = v.tab_hidden;
   r.visibility = v.visibility;
-  r.showGridLines = v.show_grid_lines;
-  r.showRowColHeaders = v.show_row_col_headers;
-  r.showZeros = v.show_zeros;
-  r.rightToLeft = v.right_to_left;
-  r.tabSelected = v.tab_selected;
-  r.viewMode = string_from_cstr(v.view_mode);
+  r.showGridLines = v.show_grid_lines != 0;
+  r.showRowColHeaders = v.show_row_col_headers != 0;
+  r.showZeros = v.show_zeros != 0;
+  r.rightToLeft = v.right_to_left != 0;
+  r.tabSelected = v.tab_selected != 0;
+  r.viewMode = v.view_mode;
   r.topLeftRow = v.top_left_row;
   r.topLeftCol = v.top_left_col;
   r.paneTopLeftRow = v.pane_top_left_row;
   r.paneTopLeftCol = v.pane_top_left_col;
   r.splitX = v.split_x;
   r.splitY = v.split_y;
-  r.showFormulas = v.show_formulas;
-  r.showOutlineSymbols = v.show_outline_symbols;
+  r.showFormulas = v.show_formulas != 0;
+  r.showOutlineSymbols = v.show_outline_symbols != 0;
   return r;
 }
 
@@ -236,28 +222,28 @@ JsSheetProtection JsWorkbook::getSheetProtection(uint32_t sheet) const {
   if (!succeeded(handle_ != nullptr ? fm_sheet_get_sheet_protection(handle_, sheet, &p) : kBindingInvalidHandle)) {
     return r;
   }
-  r.enabled = p.enabled;
-  r.algorithmName = string_from_cstr(p.algorithm_name);
-  r.hashValue = string_from_cstr(p.hash_value);
-  r.saltValue = string_from_cstr(p.salt_value);
+  r.enabled = p.enabled != 0;
+  r.algorithmName = cstr_or_null(p.algorithm_name);
+  r.hashValue = cstr_or_null(p.hash_value);
+  r.saltValue = cstr_or_null(p.salt_value);
   r.spinCount = p.spin_count;
-  r.legacyPassword = string_from_cstr(p.legacy_password);
-  r.sheet = p.sheet;
-  r.objects = p.objects;
-  r.scenarios = p.scenarios;
-  r.formatCells = p.format_cells;
-  r.formatColumns = p.format_columns;
-  r.formatRows = p.format_rows;
-  r.insertColumns = p.insert_columns;
-  r.insertRows = p.insert_rows;
-  r.insertHyperlinks = p.insert_hyperlinks;
-  r.deleteColumns = p.delete_columns;
-  r.deleteRows = p.delete_rows;
-  r.selectLockedCells = p.select_locked_cells;
-  r.selectUnlockedCells = p.select_unlocked_cells;
-  r.sort = p.sort;
-  r.autoFilter = p.auto_filter;
-  r.pivotTables = p.pivot_tables;
+  r.legacyPassword = cstr_or_null(p.legacy_password);
+  r.sheet = p.sheet != 0;
+  r.objects = p.objects != 0;
+  r.scenarios = p.scenarios != 0;
+  r.formatCells = p.format_cells != 0;
+  r.formatColumns = p.format_columns != 0;
+  r.formatRows = p.format_rows != 0;
+  r.insertColumns = p.insert_columns != 0;
+  r.insertRows = p.insert_rows != 0;
+  r.insertHyperlinks = p.insert_hyperlinks != 0;
+  r.deleteColumns = p.delete_columns != 0;
+  r.deleteRows = p.delete_rows != 0;
+  r.selectLockedCells = p.select_locked_cells != 0;
+  r.selectUnlockedCells = p.select_unlocked_cells != 0;
+  r.sort = p.sort != 0;
+  r.autoFilter = p.auto_filter != 0;
+  r.pivotTables = p.pivot_tables != 0;
   return r;
 }
 
@@ -266,56 +252,38 @@ void JsWorkbook::setSheetProtection(uint32_t sheet, emscripten::val input) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setSheetProtection");
-  JsSheetProtection in{};
-  in.enabled = reader.i32(input, "enabled", 0, "protection.enabled");
-  in.algorithmName = reader.string(input, "algorithmName", "protection.algorithmName");
-  in.hashValue = reader.string(input, "hashValue", "protection.hashValue");
-  in.saltValue = reader.string(input, "saltValue", "protection.saltValue");
-  in.spinCount = reader.u32(input, "spinCount", 0U, "protection.spinCount");
-  in.legacyPassword = reader.string(input, "legacyPassword", "protection.legacyPassword");
-  in.sheet = reader.i32(input, "sheet", 0, "protection.sheet");
-  in.objects = reader.i32(input, "objects", 0, "protection.objects");
-  in.scenarios = reader.i32(input, "scenarios", 0, "protection.scenarios");
-  in.formatCells = reader.i32(input, "formatCells", 0, "protection.formatCells");
-  in.formatColumns = reader.i32(input, "formatColumns", 0, "protection.formatColumns");
-  in.formatRows = reader.i32(input, "formatRows", 0, "protection.formatRows");
-  in.insertColumns = reader.i32(input, "insertColumns", 0, "protection.insertColumns");
-  in.insertRows = reader.i32(input, "insertRows", 0, "protection.insertRows");
-  in.insertHyperlinks = reader.i32(input, "insertHyperlinks", 0, "protection.insertHyperlinks");
-  in.deleteColumns = reader.i32(input, "deleteColumns", 0, "protection.deleteColumns");
-  in.deleteRows = reader.i32(input, "deleteRows", 0, "protection.deleteRows");
-  in.selectLockedCells = reader.i32(input, "selectLockedCells", 0, "protection.selectLockedCells");
-  in.selectUnlockedCells = reader.i32(input, "selectUnlockedCells", 0, "protection.selectUnlockedCells");
-  in.sort = reader.i32(input, "sort", 0, "protection.sort");
-  in.autoFilter = reader.i32(input, "autoFilter", 0, "protection.autoFilter");
-  in.pivotTables = reader.i32(input, "pivotTables", 0, "protection.pivotTables");
+  // A missing or `null` string is no stored value.
+  JsNarrowNumericReader reader("Sheet.setSheetProtection");
+  std::string algorithm_name;
+  std::string hash_value;
+  std::string salt_value;
+  std::string legacy_password;
+  fm_sheet_protection_t p{};
+  p.algorithm_name = reader.optional_string(input, "algorithmName", algorithm_name, "algorithmName");
+  p.hash_value = reader.optional_string(input, "hashValue", hash_value, "hashValue");
+  p.salt_value = reader.optional_string(input, "saltValue", salt_value, "saltValue");
+  p.spin_count = reader.u32(input, "spinCount", 0U, "spinCount");
+  p.legacy_password = reader.optional_string(input, "legacyPassword", legacy_password, "legacyPassword");
+  p.enabled = reader.boolean(input, "enabled", false, "enabled") ? 1 : 0;
+  p.sheet = reader.boolean(input, "sheet", false, "sheet") ? 1 : 0;
+  p.objects = reader.boolean(input, "objects", false, "objects") ? 1 : 0;
+  p.scenarios = reader.boolean(input, "scenarios", false, "scenarios") ? 1 : 0;
+  p.format_cells = reader.boolean(input, "formatCells", false, "formatCells") ? 1 : 0;
+  p.format_columns = reader.boolean(input, "formatColumns", false, "formatColumns") ? 1 : 0;
+  p.format_rows = reader.boolean(input, "formatRows", false, "formatRows") ? 1 : 0;
+  p.insert_columns = reader.boolean(input, "insertColumns", false, "insertColumns") ? 1 : 0;
+  p.insert_rows = reader.boolean(input, "insertRows", false, "insertRows") ? 1 : 0;
+  p.insert_hyperlinks = reader.boolean(input, "insertHyperlinks", false, "insertHyperlinks") ? 1 : 0;
+  p.delete_columns = reader.boolean(input, "deleteColumns", false, "deleteColumns") ? 1 : 0;
+  p.delete_rows = reader.boolean(input, "deleteRows", false, "deleteRows") ? 1 : 0;
+  p.select_locked_cells = reader.boolean(input, "selectLockedCells", false, "selectLockedCells") ? 1 : 0;
+  p.select_unlocked_cells = reader.boolean(input, "selectUnlockedCells", false, "selectUnlockedCells") ? 1 : 0;
+  p.sort = reader.boolean(input, "sort", false, "sort") ? 1 : 0;
+  p.auto_filter = reader.boolean(input, "autoFilter", false, "autoFilter") ? 1 : 0;
+  p.pivot_tables = reader.boolean(input, "pivotTables", false, "pivotTables") ? 1 : 0;
   if (!reader.ok()) {
     return;
   }
-  fm_sheet_protection_t p{};
-  p.enabled = in.enabled;
-  p.algorithm_name = in.algorithmName.c_str();
-  p.hash_value = in.hashValue.c_str();
-  p.salt_value = in.saltValue.c_str();
-  p.spin_count = in.spinCount;
-  p.legacy_password = in.legacyPassword.c_str();
-  p.sheet = in.sheet;
-  p.objects = in.objects;
-  p.scenarios = in.scenarios;
-  p.format_cells = in.formatCells;
-  p.format_columns = in.formatColumns;
-  p.format_rows = in.formatRows;
-  p.insert_columns = in.insertColumns;
-  p.insert_rows = in.insertRows;
-  p.insert_hyperlinks = in.insertHyperlinks;
-  p.delete_columns = in.deleteColumns;
-  p.delete_rows = in.deleteRows;
-  p.select_locked_cells = in.selectLockedCells;
-  p.select_unlocked_cells = in.selectUnlockedCells;
-  p.sort = in.sort;
-  p.auto_filter = in.autoFilter;
-  p.pivot_tables = in.pivotTables;
   fm_status_t rc = fm_sheet_set_sheet_protection(handle_, sheet, &p);
   succeeded(rc);
 }
@@ -326,10 +294,6 @@ void JsWorkbook::setSheetZoom(uint32_t sheet, uint32_t zoomScale) {
 
 void JsWorkbook::setSheetFreeze(uint32_t sheet, uint32_t freezeRows, uint32_t freezeCols) {
   succeeded(handle_ != nullptr ? fm_sheet_set_freeze(handle_, sheet, freezeRows, freezeCols) : kBindingInvalidHandle);
-}
-
-void JsWorkbook::setSheetTabHidden(uint32_t sheet, bool hidden) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_tab_hidden(handle_, sheet, hidden ? 1 : 0) : kBindingInvalidHandle);
 }
 
 void JsWorkbook::setSheetVisibility(uint32_t sheet, int32_t visibility) {
@@ -413,8 +377,8 @@ void JsWorkbook::setSheetTabSelected(uint32_t sheet, bool selected) {
   succeeded(handle_ != nullptr ? fm_sheet_set_tab_selected(handle_, sheet, selected ? 1 : 0) : kBindingInvalidHandle);
 }
 
-void JsWorkbook::setSheetViewMode(uint32_t sheet, std::string mode) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_view_mode(handle_, sheet, mode.c_str()) : kBindingInvalidHandle);
+void JsWorkbook::setSheetViewMode(uint32_t sheet, int32_t mode) {
+  succeeded(handle_ != nullptr ? fm_sheet_set_view_mode(handle_, sheet, mode) : kBindingInvalidHandle);
 }
 
 // ---- Column layout overrides --------------------------------------------
@@ -636,11 +600,9 @@ emscripten::val JsWorkbook::getSheetFormatDefaults(uint32_t sheet) const {
     return emscripten::val::undefined();
   }
   emscripten::val o = emscripten::val::object();
-  o.set("defaultColWidth", d.default_col_width);
-  o.set("defaultRowHeight", d.default_row_height);
+  js_set_present_or_null(o, "defaultColWidth", d.has_default_col_width, d.default_col_width);
+  js_set_present_or_null(o, "defaultRowHeight", d.has_default_row_height, d.default_row_height);
   o.set("baseColWidth", d.base_col_width);
-  o.set("hasDefaultColWidth", d.has_default_col_width != 0);
-  o.set("hasDefaultRowHeight", d.has_default_row_height != 0);
   o.set("customHeight", d.custom_height != 0);
   o.set("zeroHeight", d.zero_height != 0);
   o.set("effectiveDefaultColWidth", d.effective_default_col_width);
@@ -653,30 +615,53 @@ void JsWorkbook::setSheetFormatDefaults(uint32_t sheet, emscripten::val defaults
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setFormatDefaults");
-  const emscripten::val default_col_width = reader.value(defaults, "defaultColWidth", "format.defaultColWidth");
-  const emscripten::val default_row_height = reader.value(defaults, "defaultRowHeight", "format.defaultRowHeight");
-  const emscripten::val base_col_width = reader.value(defaults, "baseColWidth", "format.baseColWidth");
-  const emscripten::val has_default_col_width =
-      reader.value(defaults, "hasDefaultColWidth", "format.hasDefaultColWidth");
-  const emscripten::val has_default_row_height =
-      reader.value(defaults, "hasDefaultRowHeight", "format.hasDefaultRowHeight");
-  const bool default_col_width_present = js_value_present(default_col_width);
-  const bool default_row_height_present = js_value_present(default_row_height);
-  const emscripten::val custom_height = reader.value(defaults, "customHeight", "format.customHeight");
-  const emscripten::val zero_height = reader.value(defaults, "zeroHeight", "format.zeroHeight");
-  // An omitted flag keeps the stored one.
-  fm_sheet_format_defaults_t d{};
-  if (handle_ != nullptr && fm_sheet_get_format_defaults(handle_, sheet, &d) != 0) {
-    d = fm_sheet_format_defaults_t{};
+  // A patch: an omitted key keeps the stored value, `null` clears a nullable one.
+  JsNarrowNumericReader reader("Sheet.setFormatDefaults");
+  if (!reader.require_object(defaults, "defaults")) {
+    return;
   }
-  d.default_col_width = reader.number_value(default_col_width, 0.0, "format.defaultColWidth");
-  d.default_row_height = reader.number_value(default_row_height, 0.0, "format.defaultRowHeight");
-  d.base_col_width = reader.number_value(base_col_width, 8.0, "format.baseColWidth");
-  d.has_default_col_width = reader.boolean_value(has_default_col_width, default_col_width_present) ? 1 : 0;
-  d.has_default_row_height = reader.boolean_value(has_default_row_height, default_row_height_present) ? 1 : 0;
-  d.custom_height = reader.boolean_value(custom_height, d.custom_height != 0) ? 1 : 0;
-  d.zero_height = reader.boolean_value(zero_height, d.zero_height != 0) ? 1 : 0;
+  fm_sheet_format_defaults_t d{};
+  if (!succeeded(fm_sheet_get_format_defaults(handle_, sheet, &d))) {
+    return;
+  }
+  const emscripten::val col_width = reader.value(defaults, "defaultColWidth", "defaultColWidth");
+  switch (js_patch_key(reader, col_width, "defaultColWidth", true)) {
+    case JsPatchKey::kClear:
+      d.has_default_col_width = 0;
+      d.default_col_width = 0.0;
+      break;
+    case JsPatchKey::kSet:
+      d.has_default_col_width = 1;
+      d.default_col_width = reader.number_value(col_width, 0.0, "defaultColWidth");
+      break;
+    case JsPatchKey::kKeep:
+      break;
+  }
+  const emscripten::val row_height = reader.value(defaults, "defaultRowHeight", "defaultRowHeight");
+  switch (js_patch_key(reader, row_height, "defaultRowHeight", true)) {
+    case JsPatchKey::kClear:
+      d.has_default_row_height = 0;
+      d.default_row_height = 0.0;
+      break;
+    case JsPatchKey::kSet:
+      d.has_default_row_height = 1;
+      d.default_row_height = reader.number_value(row_height, 0.0, "defaultRowHeight");
+      break;
+    case JsPatchKey::kKeep:
+      break;
+  }
+  const emscripten::val base = reader.value(defaults, "baseColWidth", "baseColWidth");
+  if (js_patch_key(reader, base, "baseColWidth", false) == JsPatchKey::kSet) {
+    d.base_col_width = reader.number_value(base, d.base_col_width, "baseColWidth");
+  }
+  const emscripten::val custom_height = reader.value(defaults, "customHeight", "customHeight");
+  if (js_patch_key(reader, custom_height, "customHeight", false) == JsPatchKey::kSet) {
+    d.custom_height = reader.boolean_value(custom_height, false) ? 1 : 0;
+  }
+  const emscripten::val zero_height = reader.value(defaults, "zeroHeight", "zeroHeight");
+  if (js_patch_key(reader, zero_height, "zeroHeight", false) == JsPatchKey::kSet) {
+    d.zero_height = reader.boolean_value(zero_height, false) ? 1 : 0;
+  }
   if (!reader.ok()) {
     return;
   }

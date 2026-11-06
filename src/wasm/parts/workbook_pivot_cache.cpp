@@ -70,11 +70,12 @@ emscripten::val JsWorkbook::pivotCacheGetWorksheetSource(uint32_t cacheId) const
   if (!succeeded(rc)) {
     return emscripten::val::undefined();
   }
+  if (present == 0) {
+    return emscripten::val::null();
+  }
   emscripten::val o = emscripten::val::object();
-  o.set("present", present != 0);
-  js_set_cstr(o, "ref", ref);
-  js_set_cstr(o, "sheet", sheet);
-  js_set_cstr(o, "name", name);
+  o.set("present", true);
+  js_set_cstr_or_null_fields(o, {{"ref", ref}, {"sheet", sheet}, {"name", name}});
   return o;
 }
 
@@ -267,7 +268,7 @@ emscripten::val JsWorkbook::pivotCacheGetOptions(uint32_t cacheId) const {
   }
   emscripten::val o = emscripten::val::object();
   o.set("saveData", opt.save_data != 0);
-  o.set("missingItemsLimit", opt.missing_items_limit);
+  js_set_index_or_null(o, "missingItemsLimit", opt.missing_items_limit);
   o.set("refreshOnLoad", opt.refresh_on_load != 0);
   return o;
 }
@@ -287,8 +288,21 @@ void JsWorkbook::pivotCacheSetOptions(uint32_t cacheId, emscripten::val options)
   }
   JsNarrowNumericReader reader("setPivotCacheOptions");
   opt.save_data = reader.boolean(options, "saveData", opt.save_data != 0, "pivotCacheOptions.saveData") ? 1 : 0;
-  opt.missing_items_limit =
-      reader.i32(options, "missingItemsLimit", opt.missing_items_limit, "pivotCacheOptions.missingItemsLimit");
+  // `null` is the automatic limit (no attribute).
+  const emscripten::val limit = reader.value(options, "missingItemsLimit", "pivotCacheOptions.missingItemsLimit");
+  switch (js_patch_key(reader, limit, "pivotCacheOptions.missingItemsLimit", true)) {
+    case JsPatchKey::kClear:
+      opt.missing_items_limit = -1;
+      break;
+    case JsPatchKey::kSet:
+      opt.missing_items_limit = reader.i32_value(limit, -1, "pivotCacheOptions.missingItemsLimit");
+      if (reader.ok() && opt.missing_items_limit < 0) {
+        reader.fail_range("pivotCacheOptions.missingItemsLimit", "[0, 2147483647]");
+      }
+      break;
+    case JsPatchKey::kKeep:
+      break;
+  }
   opt.refresh_on_load =
       reader.boolean(options, "refreshOnLoad", opt.refresh_on_load != 0, "pivotCacheOptions.refreshOnLoad") ? 1 : 0;
   if (!reader.ok()) {
@@ -320,13 +334,13 @@ void JsWorkbook::pivotCacheCalculatedFieldRemove(uint32_t cacheId, uint32_t fiel
                                : kBindingInvalidHandle);
 }
 
-std::string JsWorkbook::pivotCacheFieldFormula(uint32_t cacheId, uint32_t fieldIndex) const {
+emscripten::val JsWorkbook::pivotCacheFieldFormula(uint32_t cacheId, uint32_t fieldIndex) const {
   const char* formula = nullptr;
   if (!succeeded(handle_ != nullptr ? fm_workbook_get_pivot_cache_field_formula(handle_, cacheId, fieldIndex, &formula)
                                     : kBindingInvalidHandle)) {
-    return std::string();
+    return emscripten::val::undefined();
   }
-  return string_from_cstr(formula);
+  return cstr_or_null(formula);
 }
 
 uint32_t JsWorkbook::pivotCacheCalculatedItemAdd(uint32_t cacheId, uint32_t fieldIndex, const std::string& name,

@@ -69,19 +69,21 @@ void LogSinkTrampoline(const char* record, std::size_t len, void* /*user_data*/)
   }
 }
 
-// Same contract as the Workbook registration guard: required, an integer in
-// int32 range.
-bool ReadInt32(const Napi::CallbackInfo& info, std::size_t idx, std::int32_t* out) {
-  const Napi::Value value = info[idx];
+// Same contract and wording as the Workbook registration guard: the first
+// argument of `name`, required, an integer in int32 range.
+bool ReadInt32(const Napi::CallbackInfo& info, const char* name, std::int32_t* out) {
+  const Napi::Value value = info[0];
   if (!value.IsNumber()) {
-    Napi::TypeError::New(info.Env(), "positional argument must be a number").ThrowAsJavaScriptException();
+    Napi::TypeError::New(info.Env(), std::string(name) + " argument 1 must be a primitive number")
+        .ThrowAsJavaScriptException();
     return false;
   }
   const double number = NumberValue(value, 0.0);
   if (!std::isfinite(number) || std::trunc(number) != number ||
       number < static_cast<double>(std::numeric_limits<std::int32_t>::min()) ||
       number > static_cast<double>(std::numeric_limits<std::int32_t>::max())) {
-    Napi::RangeError::New(info.Env(), "positional argument is outside int32 range").ThrowAsJavaScriptException();
+    Napi::RangeError::New(info.Env(), std::string(name) + " argument 1 is outside int32 range")
+        .ThrowAsJavaScriptException();
     return false;
   }
   *out = static_cast<std::int32_t>(number);
@@ -98,7 +100,7 @@ bool ReadInt32(const Napi::CallbackInfo& info, std::size_t idx, std::int32_t* ou
 Napi::Value EvalFormula(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!info[0].IsString()) {
-    Napi::TypeError::New(env, "formula must be a string").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "evalFormula argument 1 must be a primitive string").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   const std::string formula = StringArg(info, 0);
@@ -130,7 +132,7 @@ Napi::Value Version(const Napi::CallbackInfo& info) {
 Napi::Value StatusString(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   int32_t code = 0;
-  if (!ReadInt32(info, 0, &code)) {
+  if (!ReadInt32(info, "getStatusName", &code)) {
     return env.Undefined();
   }
   const char* s = fm_get_status_name(static_cast<fm_status_t>(code));
@@ -140,7 +142,7 @@ Napi::Value StatusString(const Napi::CallbackInfo& info) {
 Napi::Value ErrorDisplayName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   int32_t code = 0;
-  if (!ReadInt32(info, 0, &code)) {
+  if (!ReadInt32(info, "getErrorDisplayName", &code)) {
     return env.Undefined();
   }
   const char* s = fm_get_error_display_name(static_cast<fm_error_code_t>(code));
@@ -150,7 +152,7 @@ Napi::Value ErrorDisplayName(const Napi::CallbackInfo& info) {
 Napi::Value SetLogMinLevel(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   int32_t level = 0;
-  if (!ReadInt32(info, 0, &level)) {
+  if (!ReadInt32(info, "setLogMinLevel", &level)) {
     return env.Undefined();
   }
   return ValueOrThrow(env, fm_set_log_min_level(level), env.Undefined());

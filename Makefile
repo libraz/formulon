@@ -422,6 +422,11 @@ python-test: python-package
 	  echo "  $(PYTHON) -m pip install wasmtime"; \
 	  exit 1; \
 	fi
+	@if ! $(PYTHON) -c "import yaml" >/dev/null 2>&1; then \
+	  echo "python-test: PyYAML missing (the API-shape test reads tools/api/names.yaml); install with:"; \
+	  echo "  $(PYTHON) -m pip install pyyaml"; \
+	  exit 1; \
+	fi
 	@(cd $(PY_PKG_DIR) && $(PYTHON) -m unittest discover -v tests)
 	@# The oracle's print round-trip fixtures are authored through this
 	@# binding, so they belong to whatever interpreter can import it. The

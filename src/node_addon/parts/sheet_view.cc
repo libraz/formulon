@@ -53,30 +53,23 @@ Napi::Object ColumnLayoutToJs(Napi::Env env, const fm_column_layout_t& entry) {
   Napi::Object col = Napi::Object::New(env);
   col.Set("first", Napi::Number::New(env, entry.first));
   col.Set("last", Napi::Number::New(env, entry.last));
-  col.Set("width", Napi::Number::New(env, entry.width));
-  col.Set("hidden", Napi::Number::New(env, entry.hidden));
+  col.Set("width", JsNumberOrNull(env, entry.has_width, entry.width));
+  col.Set("hidden", JsBool(env, entry.hidden));
   col.Set("outlineLevel", Napi::Number::New(env, static_cast<int32_t>(entry.outline_level)));
-  col.Set("collapsed", Napi::Number::New(env, static_cast<int32_t>(entry.collapsed)));
-  // The C getter reports logical presence, including legacy aggregate
-  // layouts with a non-zero width but a clear raw presence bit. Keep the
-  // binding defensive in case an older ABI implementation is loaded.
-  col.Set("hasWidth", Napi::Number::New(env, entry.has_width || entry.width != 0.0));
-  col.Set("hasStyle", Napi::Number::New(env, entry.has_style));
-  col.Set("styleXf", Napi::Number::New(env, entry.style_xf));
+  col.Set("collapsed", JsBool(env, entry.collapsed));
+  col.Set("styleXf", JsNumberOrNull(env, entry.has_style, entry.style_xf));
   return col;
 }
 
 Napi::Object RowLayoutToJs(Napi::Env env, const fm_row_layout_t& entry) {
   Napi::Object row = Napi::Object::New(env);
   row.Set("row", Napi::Number::New(env, entry.row));
-  row.Set("height", Napi::Number::New(env, entry.height));
-  row.Set("hasHeight", Napi::Number::New(env, entry.has_height));
-  row.Set("customHeight", Napi::Number::New(env, entry.custom_height));
-  row.Set("hidden", Napi::Number::New(env, entry.hidden));
+  row.Set("height", JsNumberOrNull(env, entry.has_height, entry.height));
+  row.Set("hidden", JsBool(env, entry.hidden));
   row.Set("outlineLevel", Napi::Number::New(env, static_cast<int32_t>(entry.outline_level)));
-  row.Set("collapsed", Napi::Number::New(env, static_cast<int32_t>(entry.collapsed)));
-  row.Set("hasStyle", Napi::Number::New(env, entry.has_style));
-  row.Set("styleXf", Napi::Number::New(env, entry.style_xf));
+  row.Set("collapsed", JsBool(env, entry.collapsed));
+  row.Set("styleXf", JsNumberOrNull(env, entry.has_style, entry.style_xf));
+  row.Set("customHeight", JsBool(env, entry.custom_height));
   return row;
 }
 
@@ -120,22 +113,21 @@ Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
   view.Set("zoomScale", Napi::Number::New(env, v.zoom_scale));
   view.Set("freezeRows", Napi::Number::New(env, v.freeze_rows));
   view.Set("freezeCols", Napi::Number::New(env, v.freeze_cols));
-  view.Set("tabHidden", Napi::Number::New(env, v.tab_hidden));
   view.Set("visibility", Napi::Number::New(env, v.visibility));
-  view.Set("showGridLines", Napi::Number::New(env, v.show_grid_lines));
-  view.Set("showRowColHeaders", Napi::Number::New(env, v.show_row_col_headers));
-  view.Set("showZeros", Napi::Number::New(env, v.show_zeros));
-  view.Set("rightToLeft", Napi::Number::New(env, v.right_to_left));
-  view.Set("tabSelected", Napi::Number::New(env, v.tab_selected));
-  view.Set("viewMode", JsString(env, v.view_mode));
+  view.Set("showGridLines", JsBool(env, v.show_grid_lines));
+  view.Set("showRowColHeaders", JsBool(env, v.show_row_col_headers));
+  view.Set("showZeros", JsBool(env, v.show_zeros));
+  view.Set("rightToLeft", JsBool(env, v.right_to_left));
+  view.Set("tabSelected", JsBool(env, v.tab_selected));
+  view.Set("viewMode", Napi::Number::New(env, v.view_mode));
   view.Set("topLeftRow", Napi::Number::New(env, v.top_left_row));
   view.Set("topLeftCol", Napi::Number::New(env, v.top_left_col));
   view.Set("paneTopLeftRow", Napi::Number::New(env, v.pane_top_left_row));
   view.Set("paneTopLeftCol", Napi::Number::New(env, v.pane_top_left_col));
   view.Set("splitX", Napi::Number::New(env, v.split_x));
   view.Set("splitY", Napi::Number::New(env, v.split_y));
-  view.Set("showFormulas", Napi::Number::New(env, v.show_formulas));
-  view.Set("showOutlineSymbols", Napi::Number::New(env, v.show_outline_symbols));
+  view.Set("showFormulas", JsBool(env, v.show_formulas));
+  view.Set("showOutlineSymbols", JsBool(env, v.show_outline_symbols));
   return view;
 }
 
@@ -151,28 +143,28 @@ Napi::Value Workbook::GetSheetProtection(const Napi::CallbackInfo& info) {
     return ThrowStatus(env, rc);
   }
   Napi::Object pr = Napi::Object::New(env);
-  pr.Set("enabled", Napi::Number::New(env, p.enabled));
-  pr.Set("algorithmName", JsString(env, p.algorithm_name));
-  pr.Set("hashValue", JsString(env, p.hash_value));
-  pr.Set("saltValue", JsString(env, p.salt_value));
+  pr.Set("enabled", JsBool(env, p.enabled));
+  pr.Set("algorithmName", JsStringOrNull(env, p.algorithm_name));
+  pr.Set("hashValue", JsStringOrNull(env, p.hash_value));
+  pr.Set("saltValue", JsStringOrNull(env, p.salt_value));
   pr.Set("spinCount", Napi::Number::New(env, p.spin_count));
-  pr.Set("legacyPassword", JsString(env, p.legacy_password));
-  pr.Set("sheet", Napi::Number::New(env, p.sheet));
-  pr.Set("objects", Napi::Number::New(env, p.objects));
-  pr.Set("scenarios", Napi::Number::New(env, p.scenarios));
-  pr.Set("formatCells", Napi::Number::New(env, p.format_cells));
-  pr.Set("formatColumns", Napi::Number::New(env, p.format_columns));
-  pr.Set("formatRows", Napi::Number::New(env, p.format_rows));
-  pr.Set("insertColumns", Napi::Number::New(env, p.insert_columns));
-  pr.Set("insertRows", Napi::Number::New(env, p.insert_rows));
-  pr.Set("insertHyperlinks", Napi::Number::New(env, p.insert_hyperlinks));
-  pr.Set("deleteColumns", Napi::Number::New(env, p.delete_columns));
-  pr.Set("deleteRows", Napi::Number::New(env, p.delete_rows));
-  pr.Set("selectLockedCells", Napi::Number::New(env, p.select_locked_cells));
-  pr.Set("selectUnlockedCells", Napi::Number::New(env, p.select_unlocked_cells));
-  pr.Set("sort", Napi::Number::New(env, p.sort));
-  pr.Set("autoFilter", Napi::Number::New(env, p.auto_filter));
-  pr.Set("pivotTables", Napi::Number::New(env, p.pivot_tables));
+  pr.Set("legacyPassword", JsStringOrNull(env, p.legacy_password));
+  pr.Set("sheet", JsBool(env, p.sheet));
+  pr.Set("objects", JsBool(env, p.objects));
+  pr.Set("scenarios", JsBool(env, p.scenarios));
+  pr.Set("formatCells", JsBool(env, p.format_cells));
+  pr.Set("formatColumns", JsBool(env, p.format_columns));
+  pr.Set("formatRows", JsBool(env, p.format_rows));
+  pr.Set("insertColumns", JsBool(env, p.insert_columns));
+  pr.Set("insertRows", JsBool(env, p.insert_rows));
+  pr.Set("insertHyperlinks", JsBool(env, p.insert_hyperlinks));
+  pr.Set("deleteColumns", JsBool(env, p.delete_columns));
+  pr.Set("deleteRows", JsBool(env, p.delete_rows));
+  pr.Set("selectLockedCells", JsBool(env, p.select_locked_cells));
+  pr.Set("selectUnlockedCells", JsBool(env, p.select_unlocked_cells));
+  pr.Set("sort", JsBool(env, p.sort));
+  pr.Set("autoFilter", JsBool(env, p.auto_filter));
+  pr.Set("pivotTables", JsBool(env, p.pivot_tables));
   return pr;
 }
 
@@ -184,44 +176,40 @@ Napi::Value Workbook::SetSheetProtection(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   Napi::Object in = ArgObject(info, 1);
 
-  // Keep the std::string buffers alive until after the C ABI call so the
-  // borrowed `const char*` fields stay valid.
+  // A missing or `null` string is no stored value. The std::string buffers
+  // outlive the C ABI call, which borrows them.
   CheckedSpecReader reader(env);
   std::string algorithm_name;
   std::string hash_value;
   std::string salt_value;
   std::string legacy_password;
-  (void)reader.String(in, "algorithmName", &algorithm_name);
-  (void)reader.String(in, "hashValue", &hash_value);
-  (void)reader.String(in, "saltValue", &salt_value);
-  (void)reader.String(in, "legacyPassword", &legacy_password);
-  if (!reader.ok()) {
-    return env.Undefined();
-  }
-
+  const auto text = [&](const char* key, std::string* store) {
+    return reader.String(in, key, store) ? store->c_str() : nullptr;
+  };
+  const auto flag = [&](const char* key) { return reader.Bool(in, key, false) ? 1 : 0; };
   fm_sheet_protection_t p{};
-  p.enabled = reader.I32(in, "enabled", 0);
-  p.algorithm_name = algorithm_name.c_str();
-  p.hash_value = hash_value.c_str();
-  p.salt_value = salt_value.c_str();
+  p.algorithm_name = text("algorithmName", &algorithm_name);
+  p.hash_value = text("hashValue", &hash_value);
+  p.salt_value = text("saltValue", &salt_value);
   p.spin_count = reader.U32(in, "spinCount", 0U);
-  p.legacy_password = legacy_password.c_str();
-  p.sheet = reader.I32(in, "sheet", 0);
-  p.objects = reader.I32(in, "objects", 0);
-  p.scenarios = reader.I32(in, "scenarios", 0);
-  p.format_cells = reader.I32(in, "formatCells", 0);
-  p.format_columns = reader.I32(in, "formatColumns", 0);
-  p.format_rows = reader.I32(in, "formatRows", 0);
-  p.insert_columns = reader.I32(in, "insertColumns", 0);
-  p.insert_rows = reader.I32(in, "insertRows", 0);
-  p.insert_hyperlinks = reader.I32(in, "insertHyperlinks", 0);
-  p.delete_columns = reader.I32(in, "deleteColumns", 0);
-  p.delete_rows = reader.I32(in, "deleteRows", 0);
-  p.select_locked_cells = reader.I32(in, "selectLockedCells", 0);
-  p.select_unlocked_cells = reader.I32(in, "selectUnlockedCells", 0);
-  p.sort = reader.I32(in, "sort", 0);
-  p.auto_filter = reader.I32(in, "autoFilter", 0);
-  p.pivot_tables = reader.I32(in, "pivotTables", 0);
+  p.legacy_password = text("legacyPassword", &legacy_password);
+  p.enabled = flag("enabled");
+  p.sheet = flag("sheet");
+  p.objects = flag("objects");
+  p.scenarios = flag("scenarios");
+  p.format_cells = flag("formatCells");
+  p.format_columns = flag("formatColumns");
+  p.format_rows = flag("formatRows");
+  p.insert_columns = flag("insertColumns");
+  p.insert_rows = flag("insertRows");
+  p.insert_hyperlinks = flag("insertHyperlinks");
+  p.delete_columns = flag("deleteColumns");
+  p.delete_rows = flag("deleteRows");
+  p.select_locked_cells = flag("selectLockedCells");
+  p.select_unlocked_cells = flag("selectUnlockedCells");
+  p.sort = flag("sort");
+  p.auto_filter = flag("autoFilter");
+  p.pivot_tables = flag("pivotTables");
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -235,10 +223,6 @@ Napi::Value Workbook::SetSheetZoom(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::SetSheetFreeze(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_sheet_set_freeze);
-}
-
-Napi::Value Workbook::SetSheetTabHidden(const Napi::CallbackInfo& info) {
-  return InvokeSheetFlag(*this, info, &fm_sheet_set_tab_hidden);
 }
 
 Napi::Value Workbook::SetSheetVisibility(const Napi::CallbackInfo& info) {
@@ -349,8 +333,10 @@ Napi::Value Workbook::SetSheetTabSelected(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::SetSheetViewMode(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-    const std::string mode = ArgString(info, 1);
-    return fm_sheet_set_view_mode(handle, sheet, mode.c_str());
+    // An ordinal past int32 reaches the C ABI as -1, which it rejects like any unknown mode.
+    const uint32_t mode = ArgU32(info, 1);
+    return fm_sheet_set_view_mode(handle, sheet,
+                                  mode > static_cast<uint32_t>(INT32_MAX) ? -1 : static_cast<int32_t>(mode));
   });
 }
 
@@ -425,11 +411,9 @@ Napi::Value Workbook::GetSheetFormatDefaults(const Napi::CallbackInfo& info) {
     return ThrowStatus(env, rc);
   }
   Napi::Object out = Napi::Object::New(env);
-  out.Set("defaultColWidth", Napi::Number::New(env, d.default_col_width));
-  out.Set("defaultRowHeight", Napi::Number::New(env, d.default_row_height));
+  out.Set("defaultColWidth", JsNumberOrNull(env, d.has_default_col_width, d.default_col_width));
+  out.Set("defaultRowHeight", JsNumberOrNull(env, d.has_default_row_height, d.default_row_height));
   out.Set("baseColWidth", Napi::Number::New(env, d.base_col_width));
-  out.Set("hasDefaultColWidth", Napi::Boolean::New(env, d.has_default_col_width != 0));
-  out.Set("hasDefaultRowHeight", Napi::Boolean::New(env, d.has_default_row_height != 0));
   out.Set("customHeight", Napi::Boolean::New(env, d.custom_height != 0));
   out.Set("zeroHeight", Napi::Boolean::New(env, d.zero_height != 0));
   out.Set("effectiveDefaultColWidth", Napi::Number::New(env, d.effective_default_col_width));
@@ -442,22 +426,40 @@ Napi::Value Workbook::SetSheetFormatDefaults(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
+  // A patch: an omitted key keeps the stored value, `null` clears a nullable one.
   const Napi::Object spec = ArgObject(info, 1);
-  CheckedSpecReader reader(env);
-  bool has_default_col_width = false;
-  bool has_default_row_height = false;
-  // An omitted flag keeps the stored one.
   fm_sheet_format_defaults_t d{};
-  if (fm_sheet_get_format_defaults(handle_, ArgU32(info, 0), &d) != 0) {
-    d = fm_sheet_format_defaults_t{};
+  const fm_status_t read_rc = fm_sheet_get_format_defaults(handle_, ArgU32(info, 0), &d);
+  if (read_rc != 0) {
+    return ThrowStatus(env, read_rc);
   }
-  d.default_col_width = reader.Double(spec, "defaultColWidth", 0.0, &has_default_col_width);
-  d.default_row_height = reader.Double(spec, "defaultRowHeight", 0.0, &has_default_row_height);
-  d.base_col_width = reader.Double(spec, "baseColWidth", 8.0);
-  d.has_default_col_width = reader.Bool(spec, "hasDefaultColWidth", has_default_col_width) ? 1 : 0;
-  d.has_default_row_height = reader.Bool(spec, "hasDefaultRowHeight", has_default_row_height) ? 1 : 0;
-  d.custom_height = reader.Bool(spec, "customHeight", d.custom_height != 0) ? 1 : 0;
-  d.zero_height = reader.Bool(spec, "zeroHeight", d.zero_height != 0) ? 1 : 0;
+  CheckedSpecReader reader(env);
+  const auto optional_number = [&](const char* key, int32_t* has, double* value) {
+    const Napi::Value v = reader.Get(spec, key);
+    switch (ClassifyPatchKey(reader, v, key, true)) {
+      case PatchKey::kClear:
+        *has = 0;
+        *value = 0.0;
+        break;
+      case PatchKey::kSet:
+        *has = 1;
+        *value = reader.Double(v, key, 0.0);
+        break;
+      case PatchKey::kKeep:
+        break;
+    }
+  };
+  optional_number("defaultColWidth", &d.has_default_col_width, &d.default_col_width);
+  optional_number("defaultRowHeight", &d.has_default_row_height, &d.default_row_height);
+  if (ClassifyPatchKey(reader, reader.Get(spec, "baseColWidth"), "baseColWidth", false) == PatchKey::kSet) {
+    d.base_col_width = reader.Double(spec, "baseColWidth", d.base_col_width);
+  }
+  if (ClassifyPatchKey(reader, reader.Get(spec, "customHeight"), "customHeight", false) == PatchKey::kSet) {
+    d.custom_height = reader.Bool(spec, "customHeight", false) ? 1 : 0;
+  }
+  if (ClassifyPatchKey(reader, reader.Get(spec, "zeroHeight"), "zeroHeight", false) == PatchKey::kSet) {
+    d.zero_height = reader.Bool(spec, "zeroHeight", false) ? 1 : 0;
+  }
   if (!reader.ok()) {
     return env.Undefined();
   }

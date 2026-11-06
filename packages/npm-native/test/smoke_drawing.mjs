@@ -46,7 +46,9 @@ test('drawing enums keep their C ordinals', async () => {
   assert.equal(mod.DrawingObjectKind.Picture, 0);
   assert.equal(mod.DrawingObjectKind.Other, 6);
   assert.equal(mod.AnchorKind.Absolute, 2);
-  assert.equal(mod.AnchorEditAs.OneCell, 1);
+  assert.equal(mod.AnchorEditAs.OneCell, 0);
+  assert.equal(mod.AnchorEditAs.TwoCell, 1);
+  assert.equal(mod.AnchorEditAs.Absolute, 2);
 });
 
 test('images probe, insert, list, read back, survive save and load, and remove', async () => {
@@ -60,27 +62,31 @@ test('images probe, insert, list, read back, survive save and load, and remove',
     assert.equal(probe.pxHeight, 1);
     assert.throws(() => wb.getImageInfo(new Uint8Array([1, 2, 3])), isFormulonError);
 
-    const empty = wb.listDrawingObjects(0);
+    const empty = wb.sheet(0).listDrawingObjects();
     assert.equal(empty.length, 0);
 
-    const ins = wb.addImage(0, png, { name: 'logo', descr: 'alt', anchorKind: mod.AnchorKind.OneCell, row: 2, col: 3 });
+    const ins = wb.sheet(0).addImage(png, {
+      name: 'logo',
+      description: 'alt',
+      anchor: { anchorKind: mod.AnchorKind.OneCell, row: 2, col: 3 },
+    });
     assert.ok(ins > 0);
 
     const check = (book) => {
-      const list = book.listDrawingObjects(0);
+      const list = book.sheet(0).listDrawingObjects();
       assert.equal(list.length, 1);
       const o = list[0];
       assert.equal(o.kind, mod.DrawingObjectKind.Picture);
       assert.equal(o.anchorKind, mod.AnchorKind.OneCell);
       assert.equal(o.fromRow, 2);
       assert.equal(o.fromCol, 3);
-      assert.equal(o.cx, 4 * 9525);
-      assert.equal(o.cy, 9525);
+      assert.equal(o.widthEmu, 4 * 9525);
+      assert.equal(o.heightEmu, 9525);
       assert.equal(o.imageFormat, mod.ImageFormat.Png);
       assert.equal(o.name, 'logo');
-      assert.equal(o.descr, 'alt');
+      assert.equal(o.description, 'alt');
       assert.ok(o.mediaPath.length > 0);
-      const img = book.getImage(0, o.objectId);
+      const img = book.sheet(0).getImage(o.objectId);
       assert.ok(img.bytes instanceof Uint8Array);
       assert.deepEqual([...img.bytes], [...png]);
       assert.equal(img.format, mod.ImageFormat.Png);
@@ -94,22 +100,22 @@ test('images probe, insert, list, read back, survive save and load, and remove',
     const wb2 = mod.Workbook.load(saved ?? saved);
     try {
       const id = check(wb2);
-      wb2.removeDrawingObject(0, id);
-      assert.equal(wb2.listDrawingObjects(0).length, 0);
-      assert.equal(wb2.getImage(0, id), null);
-      assert.throws(() => wb2.removeDrawingObject(0, id), isFormulonError);
+      wb2.sheet(0).removeDrawingObject(id);
+      assert.equal(wb2.sheet(0).listDrawingObjects().length, 0);
+      assert.equal(wb2.sheet(0).getImage(id), null);
+      assert.throws(() => wb2.sheet(0).removeDrawingObject(id), isFormulonError);
     } finally {
       wb2.dispose();
     }
 
-    // `opts` is optional: defaults place the picture at A1.
-    const plain = wb.addImage(0, png);
+    // The input is optional: defaults place the picture at A1.
+    const plain = wb.sheet(0).addImage(png);
     assert.notEqual(plain, ins);
     assert.throws(
-      () => wb.getImage(99, 1),
+      () => wb.sheet(99).getImage(1),
       (e) => isFormulonError(e, mod.StatusCode.SheetIndexOutOfRange),
     );
-    assert.throws(() => wb.addImage(0, new Uint8Array([1, 2, 3]), {}), isFormulonError);
+    assert.throws(() => wb.sheet(0).addImage(new Uint8Array([1, 2, 3]), {}), isFormulonError);
   } finally {
     wb.dispose();
   }
@@ -119,8 +125,8 @@ test('setDrawingAnchor moves and resizes a picture and keeps its id', async () =
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const ins = wb.addImage(0, makePng(4), { name: 'logo', row: 1, col: 1 });
-    wb.setDrawingAnchor(0, ins, {
+    const ins = wb.sheet(0).addImage(makePng(4), { name: 'logo', anchor: { row: 1, col: 1 } });
+    wb.sheet(0).setDrawingAnchor(ins, {
       anchorKind: mod.AnchorKind.TwoCell,
       editAs: mod.AnchorEditAs.OneCell,
       row: 5,
@@ -129,19 +135,19 @@ test('setDrawingAnchor moves and resizes a picture and keeps its id', async () =
       colOffsetEmu: 2000,
       widthEmu: 200000,
     });
-    const o = wb.listDrawingObjects(0)[0];
+    const o = wb.sheet(0).listDrawingObjects()[0];
     assert.equal(o.objectId, ins);
     assert.equal(o.name, 'logo');
     assert.equal(o.anchorKind, mod.AnchorKind.TwoCell);
     assert.equal(o.editAs, mod.AnchorEditAs.OneCell);
     assert.equal(o.fromRow, 5);
     assert.equal(o.fromCol, 3);
-    assert.equal(o.fromRowOffset, 1000);
-    assert.equal(o.fromColOffset, 2000);
-    assert.equal(o.cx, 200000);
-    assert.equal(o.cy, 9525);
-    assert.throws(() => wb.setDrawingAnchor(0, ins, { anchorKind: mod.AnchorKind.Absolute }), isFormulonError);
-    assert.throws(() => wb.setDrawingAnchor(0, 9999, {}), isFormulonError);
+    assert.equal(o.fromRowOffsetEmu, 1000);
+    assert.equal(o.fromColOffsetEmu, 2000);
+    assert.equal(o.widthEmu, 200000);
+    assert.equal(o.heightEmu, 9525);
+    assert.throws(() => wb.sheet(0).setDrawingAnchor(ins, { anchorKind: mod.AnchorKind.Absolute }), isFormulonError);
+    assert.throws(() => wb.sheet(0).setDrawingAnchor(9999, {}), isFormulonError);
   } finally {
     wb.dispose();
   }
@@ -151,15 +157,15 @@ test('setDrawingZOrder reorders pictures in listDrawingObjects order', async () 
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const a = wb.addImage(0, makePng(2), { row: 0 });
-    const b = wb.addImage(0, makePng(2), { row: 3 });
-    const c = wb.addImage(0, makePng(2), { row: 6 });
-    const ids = () => Array.from(wb.listDrawingObjects(0), (o) => o.objectId);
+    const a = wb.sheet(0).addImage(makePng(2), { anchor: { row: 0 } });
+    const b = wb.sheet(0).addImage(makePng(2), { anchor: { row: 3 } });
+    const c = wb.sheet(0).addImage(makePng(2), { anchor: { row: 6 } });
+    const ids = () => Array.from(wb.sheet(0).listDrawingObjects(), (o) => o.objectId);
     assert.deepEqual(ids(), [a, b, c]);
-    wb.setDrawingZOrder(0, c, 0);
+    wb.sheet(0).setDrawingZOrder(c, 0);
     assert.deepEqual(ids(), [c, a, b]);
-    assert.throws(() => wb.setDrawingZOrder(0, c, 3), isFormulonError);
-    assert.throws(() => wb.setDrawingZOrder(0, 9999, 0), isFormulonError);
+    assert.throws(() => wb.sheet(0).setDrawingZOrder(c, 3), isFormulonError);
+    assert.throws(() => wb.sheet(0).setDrawingZOrder(9999, 0), isFormulonError);
   } finally {
     wb.dispose();
   }
@@ -170,31 +176,31 @@ test('snapshotDrawing and restoreDrawing bring back a removed, moved or copied p
   const wb = mod.Workbook.createDefault();
   try {
     const png = makePng(4);
-    const a = wb.addImage(0, png, { name: 'A', row: 1 });
-    const b = wb.addImage(0, makePng(2), { name: 'B', row: 4 });
-    const snap = wb.snapshotDrawing(0, a);
+    const a = wb.sheet(0).addImage(png, { name: 'A', anchor: { row: 1 } });
+    const b = wb.sheet(0).addImage(makePng(2), { name: 'B', anchor: { row: 4 } });
+    const snap = wb.sheet(0).snapshotDrawing(a);
     assert.ok(snap instanceof Uint8Array);
     assert.ok(snap.length > 0);
-    const ids = () => Array.from(wb.listDrawingObjects(0), (o) => o.objectId);
+    const ids = () => Array.from(wb.sheet(0).listDrawingObjects(), (o) => o.objectId);
 
-    wb.removeDrawingObject(0, a);
-    const restored = wb.restoreDrawing(0, snap);
+    wb.sheet(0).removeDrawingObject(a);
+    const restored = wb.sheet(0).restoreDrawing(snap);
     assert.equal(restored, a);
     assert.deepEqual(ids(), [a, b]);
-    assert.deepEqual([...wb.getImage(0, a).bytes], [...png]);
+    assert.deepEqual([...wb.sheet(0).getImage(a).bytes], [...png]);
 
-    wb.setDrawingAnchor(0, a, { row: 9 });
-    wb.setDrawingZOrder(0, a, 1);
-    wb.restoreDrawing(0, snap, {});
+    wb.sheet(0).setDrawingAnchor(a, { row: 9 });
+    wb.sheet(0).setDrawingZOrder(a, 1);
+    wb.sheet(0).restoreDrawing(snap, {});
     assert.deepEqual(ids(), [a, b]);
-    assert.equal(wb.listDrawingObjects(0)[0].fromRow, 1);
+    assert.equal(wb.sheet(0).listDrawingObjects()[0].fromRow, 1);
 
-    const copy = wb.restoreDrawing(0, snap, { newId: true });
+    const copy = wb.sheet(0).restoreDrawing(snap, { newId: true });
     assert.notEqual(copy, a);
     assert.deepEqual(ids(), [a, b, copy]);
 
-    assert.throws(() => wb.restoreDrawing(0, new Uint8Array([1, 2, 3, 4])), isFormulonError);
-    assert.throws(() => wb.snapshotDrawing(0, 9999), isFormulonError);
+    assert.throws(() => wb.sheet(0).restoreDrawing(new Uint8Array([1, 2, 3, 4])), isFormulonError);
+    assert.throws(() => wb.sheet(0).snapshotDrawing(9999), isFormulonError);
   } finally {
     wb.dispose();
   }
@@ -204,13 +210,13 @@ test('setDrawingName renames a picture and keeps its id', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    const ins = wb.addImage(0, makePng(4), { name: 'logo', row: 1, col: 1 });
-    wb.setDrawingName(0, ins, 'banner');
-    const o = wb.listDrawingObjects(0)[0];
+    const ins = wb.sheet(0).addImage(makePng(4), { name: 'logo', anchor: { row: 1, col: 1 } });
+    wb.sheet(0).setDrawingName(ins, 'banner');
+    const o = wb.sheet(0).listDrawingObjects()[0];
     assert.equal(o.objectId, ins);
     assert.equal(o.name, 'banner');
-    assert.throws(() => wb.setDrawingName(0, ins, ''), isFormulonError);
-    assert.throws(() => wb.setDrawingName(0, 9999, 'x'), isFormulonError);
+    assert.throws(() => wb.sheet(0).setDrawingName(ins, ''), isFormulonError);
+    assert.throws(() => wb.sheet(0).setDrawingName(9999, 'x'), isFormulonError);
   } finally {
     wb.dispose();
   }

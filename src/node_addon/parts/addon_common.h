@@ -150,6 +150,24 @@ Napi::Value JsNumber(Napi::Env env, double v);
 /// JS boolean from a C `int32_t` flag (non-zero is true).
 Napi::Value JsBool(Napi::Env env, int32_t v);
 
+/// JS string from a C string, or `null` when it is NULL or empty: the C ABI
+/// spells an absent string attribute as "".
+Napi::Value JsStringOrNull(Napi::Env env, const char* s);
+
+/// JS number `v`, or `null` when it is negative: the C ABI's sentinel for an
+/// absent index or member.
+Napi::Value JsIndexOrNull(Napi::Env env, int32_t v);
+
+/// JS number `v` when `present` is non-zero, else `null`.
+Napi::Value JsNumberOrNull(Napi::Env env, int32_t present, double v);
+
+/// JS boolean `v != 0` when `present` is non-zero, else `null`.
+Napi::Value JsBoolOrNull(Napi::Env env, int32_t present, int32_t v);
+
+/// Builds a `PrintTitles` `{ rows, columns }` object, each axis a
+/// `{ first, last }` span or `null`; `null` when neither axis repeats.
+Napi::Value PrintTitlesToJs(Napi::Env env, const fm_print_titles_t& titles);
+
 // ---------------------------------------------------------------------
 /// Per-call reader for nested binding object fields. It owns the pending-error
 /// bit for one binding invocation, so nested parsers stop touching JS objects
@@ -194,6 +212,15 @@ class CheckedSpecReader final {
   /// `Object` / `Array` for a required field: an absent one is a TypeError.
   bool RequiredObject(const Napi::Object& owner, const char* key, Napi::Object* out);
   bool RequiredArray(const Napi::Object& owner, const char* key, Napi::Array* out);
+  /// Reads a required string field: absent, `null` or a non-string is a TypeError.
+  std::string RequiredString(const Napi::Object& owner, const char* key);
+  /// `owner[key]` as stored, `undefined` when absent; unlike the typed
+  /// readers it keeps `null` apart from `undefined`.
+  Napi::Value Get(const Napi::Object& owner, const char* key);
+  /// Records a TypeError for `key` ("must be a `expected`") unless one is recorded already.
+  void FailType(const char* key, const char* expected) { ReportType(key, expected); }
+  /// Records a RangeError for `key` ("is outside `range_name` range").
+  void FailRange(const char* key, const char* range_name) { ReportRange(key, range_name); }
 
  private:
   bool ReadOptional(const Napi::Object& owner, const char* key, Napi::Value* out, bool* present = nullptr);
@@ -217,6 +244,17 @@ class CheckedSpecReader final {
   Napi::Env env_;
   bool failed_ = false;
 };
+
+/// The state of one key of a partial-update (patch) object.
+enum class PatchKey : int32_t {
+  kKeep = 0,   ///< `undefined` or omitted: the stored value stays.
+  kClear = 1,  ///< `null` on a nullable field: the stored value is removed.
+  kSet = 2,    ///< Any other value.
+};
+
+/// Classifies `value`, read from a patch, as `PatchKey`. When `nullable` is
+/// false a `null` records a TypeError on `reader` and reads as `kKeep`.
+PatchKey ClassifyPatchKey(CheckedSpecReader& reader, const Napi::Value& value, const char* key, bool nullable);
 
 /// Reads a `CellRect` `{ firstRow, firstCol, lastRow, lastCol }` object; every
 /// field is required.

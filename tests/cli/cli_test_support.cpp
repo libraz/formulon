@@ -2,10 +2,13 @@
 
 #include <dirent.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -107,12 +110,17 @@ std::vector<std::string> list_directory(const std::string& dir) {
 // stderr is folded into stdout via `2>&1`; otherwise stderr is
 // captured to a temp file via `2>` and read back. The temp-file path
 // avoids races with shell escaping.
-CliRun run_cli(const std::vector<std::string>& args, bool merge_streams, bool close_stdout) {
+CliRun run_cli(const std::vector<std::string>& args, bool merge_streams, bool close_stdout,
+               const std::string& stdin_path) {
   CliRun out;
   std::string cmd = sh_quote(FORMULON_CLI_PATH);
   for (const auto& a : args) {
     cmd.push_back(' ');
     cmd.append(sh_quote(a));
+  }
+  if (!stdin_path.empty()) {
+    cmd.append(" <");
+    cmd.append(sh_quote(stdin_path));
   }
   // Capture stderr separately to a temp file so we can assert on it
   // without ambiguity. The shell's `>` redirect is portable on macOS
@@ -142,8 +150,9 @@ CliRun run_cli(const std::vector<std::string>& args, bool merge_streams, bool cl
     return out;
   }
   char buf[4096];
-  while (std::fgets(buf, sizeof(buf), pipe) != nullptr) {
-    out.stdout_text.append(buf);
+  std::size_t got = 0;
+  while ((got = std::fread(buf, 1, sizeof(buf), pipe)) > 0) {
+    out.stdout_text.append(buf, got);
   }
   const int wait_rc = pclose(pipe);
   // `pclose` returns the wait status; on POSIX, `WEXITSTATUS` is in
@@ -167,6 +176,128 @@ CliRun run_cli(const std::vector<std::string>& args, bool merge_streams, bool cl
   }
   std::remove(tmpl.c_str());
   return out;
+}
+
+namespace {
+
+std::string slurp(const std::string& path) {
+  std::ifstream in(path, std::ios::binary);
+  return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+}
+
+// Opens the slave side of a fresh pseudo-terminal and keeps the master open
+// for the lifetime of the object, so the slave stays a live terminal.
+struct Pty {
+  int master = -1;
+  int slave = -1;
+  Pty() {
+    master = ::posix_openpt(O_RDWR | O_NOCTTY);
+    if (master < 0 || ::grantpt(master) != 0 || ::unlockpt(master) != 0) {
+      return;
+    }
+    const char* name = ::ptsname(master);
+    if (name != nullptr) {
+      slave = ::open(name, O_RDWR | O_NOCTTY);
+    }
+  }
+  Pty(const Pty&) = delete;
+  Pty& operator=(const Pty&) = delete;
+  ~Pty() {
+    if (slave >= 0) {
+      ::close(slave);
+    }
+    if (master >= 0) {
+      ::close(master);
+    }
+  }
+  bool ok() const { return slave >= 0; }
+};
+
+}  // namespace
+
+CliRun run_cli_spawn(const std::vector<std::string>& args, const SpawnOptions& options) {
+  CliRun out;
+  const std::string out_path = temp_path("spawn_out_" + std::to_string(::getpid()) + "_" +
+                                         std::to_string(reinterpret_cast<std::uintptr_t>(&out)));
+  const std::string err_path = out_path + ".err";
+  PathGuard out_guard(out_path);
+  PathGuard err_guard(err_path);
+
+  Pty in_pty;
+  Pty out_pty;
+  if ((options.stdin_tty && !in_pty.ok()) || (options.stdout_tty && !out_pty.ok())) {
+    out.exit_code = -2;
+    return out;
+  }
+  int broken[2] = {-1, -1};
+  if (options.stdout_broken_pipe) {
+    if (::pipe(broken) != 0) {
+      out.exit_code = -2;
+      return out;
+    }
+    ::close(broken[0]);
+  }
+
+  std::vector<std::string> storage;
+  storage.emplace_back(FORMULON_CLI_PATH);
+  storage.insert(storage.end(), args.begin(), args.end());
+  std::vector<char*> argv;
+  for (std::string& s : storage) {
+    argv.push_back(s.data());
+  }
+  argv.push_back(nullptr);
+
+  const pid_t pid = ::fork();
+  if (pid < 0) {
+    out.exit_code = -3;
+    return out;
+  }
+  if (pid == 0) {
+    const int devnull = ::open("/dev/null", O_RDONLY);
+    const int out_file = ::open(out_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    const int err_file = ::open(err_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    ::dup2(options.stdin_tty ? in_pty.slave : devnull, 0);
+    if (options.stdout_tty) {
+      ::dup2(out_pty.slave, 1);
+    } else if (options.stdout_broken_pipe) {
+      ::dup2(broken[1], 1);
+    } else {
+      ::dup2(out_file, 1);
+    }
+    ::dup2(err_file, 2);
+    ::execv(argv[0], argv.data());
+    ::_exit(127);
+  }
+  if (broken[1] >= 0) {
+    ::close(broken[1]);
+  }
+
+  constexpr int kPollMillis = 10;
+  constexpr int kMaxPolls = 500;
+  int status = 0;
+  bool reaped = false;
+  for (int i = 0; i < kMaxPolls && !reaped; ++i) {
+    reaped = ::waitpid(pid, &status, WNOHANG) == pid;
+    if (!reaped) {
+      ::usleep(kPollMillis * 1000);
+    }
+  }
+  if (!reaped) {
+    ::kill(pid, SIGKILL);
+    ::waitpid(pid, &status, 0);
+    out.exit_code = -5;
+  } else {
+    out.exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -6;
+  }
+  out.stdout_text = slurp(out_path);
+  out.stderr_text = slurp(err_path);
+  return out;
+}
+
+bool write_bytes(const std::string& path, std::string_view bytes) {
+  std::ofstream f(path, std::ios::binary | std::ios::trunc);
+  f.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+  return static_cast<bool>(f);
 }
 
 // The load-diagnostic warning lines in `text`, with the
@@ -222,7 +353,8 @@ bool write_fixture_workbook(const std::string& path, std::string_view extra_text
     fm_workbook_destroy(wb);
     return false;
   }
-  if (iterative && fm_workbook_set_iterative(wb, 1, max_iterations, max_change) != 0) {
+  const fm_iterative_settings_patch_t settings{1, max_iterations, max_change};
+  if (iterative && fm_workbook_set_iterative(wb, &settings) != 0) {
     fm_workbook_destroy(wb);
     return false;
   }

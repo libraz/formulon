@@ -255,7 +255,7 @@ TEST(FormulonCli, RecalcMissingInputExits64) {
 
 TEST(FormulonCli, RecalcNonexistentFileFailsCleanly) {
   CliRun r = run_cli({"recalc", temp_path("absent_input.xlsx"), "-o", temp_path("unused.xlsx")});
-  EXPECT_EQ(r.exit_code, 1);
+  EXPECT_EQ(r.exit_code, 66);
   EXPECT_EQ(r.stderr_text.find("warning:"), std::string::npos);
 }
 

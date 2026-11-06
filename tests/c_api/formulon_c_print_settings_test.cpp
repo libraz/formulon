@@ -104,14 +104,14 @@ TEST(FormulonCApiPrintSettings, EmptyStringRemovesElementAndResetsStructuredView
   ASSERT_EQ(fm_sheet_set_page_setup_xml(wb.handle, 0, "<pageSetup orientation=\"landscape\" scale=\"50\"/>"), 0);
   fm_page_setup_t before{};
   ASSERT_EQ(fm_sheet_get_page_setup(wb.handle, 0, &before), 0);
-  ASSERT_EQ(before.orientation, FM_ORIENTATION_LANDSCAPE);
+  ASSERT_EQ(before.orientation, FM_PAGE_ORIENTATION_LANDSCAPE);
   ASSERT_EQ(before.scale, 50U);
 
   ASSERT_EQ(fm_sheet_set_page_setup_xml(wb.handle, 0, ""), 0);
   EXPECT_EQ(GetPageSetupXml(wb.handle), "");
   fm_page_setup_t after{};
   ASSERT_EQ(fm_sheet_get_page_setup(wb.handle, 0, &after), 0);
-  EXPECT_EQ(after.orientation, FM_ORIENTATION_DEFAULT);
+  EXPECT_EQ(after.orientation, FM_PAGE_ORIENTATION_PORTRAIT);
   EXPECT_EQ(after.scale, 100U);
   EXPECT_EQ(after.orientation_engaged, 0);
   EXPECT_EQ(after.scale_engaged, 0);
@@ -344,44 +344,91 @@ TEST(FormulonCApiPrintSettings, GetPrintAreaSurfacesAMalformedDefinedName) {
 TEST(FormulonCApiPrintSettings, PrintTitlesRoundTripRowsBeforeColumns) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, "1:2", "A:A"), 0);
+  fm_print_titles_t titles{};
+  titles.has_rows = 1;
+  titles.first_row = 0;
+  titles.last_row = 1;
+  titles.has_cols = 1;
+  titles.first_col = 0;
+  titles.last_col = 0;
+  ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, &titles), 0);
   EXPECT_EQ(wb.handle->workbook().defined_names()[0].formula, "Sheet1!$1:$2,Sheet1!$A:$A");
 
-  const char* rows = nullptr;
-  const char* cols = nullptr;
-  ASSERT_EQ(fm_sheet_get_print_titles(wb.handle, 0, &rows, &cols), 0);
-  // Both pointers come from one scratch refresh and must stay valid
-  // together; reading the first after the second is written is the case
-  // that would dangle if the getter cleared between pushes.
-  EXPECT_STREQ(rows, "1:2");
-  EXPECT_STREQ(cols, "A:A");
+  fm_print_titles_t read{};
+  ASSERT_EQ(fm_sheet_get_print_titles(wb.handle, 0, &read), 0);
+  EXPECT_EQ(read.has_rows, 1);
+  EXPECT_EQ(read.first_row, 0U);
+  EXPECT_EQ(read.last_row, 1U);
+  EXPECT_EQ(read.has_cols, 1);
+  EXPECT_EQ(read.first_col, 0U);
+  EXPECT_EQ(read.last_col, 0U);
 }
 
-TEST(FormulonCApiPrintSettings, PrintTitlesAcceptOneAxisAndClearOnBothEmpty) {
+TEST(FormulonCApiPrintSettings, PrintTitlesAcceptOneAxisAndClearOnNull) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, "1:1", nullptr), 0);
+  fm_print_titles_t titles{};
+  titles.has_rows = 1;
+  // The span of an axis whose flag is zero is ignored.
+  titles.first_col = 7;
+  titles.last_col = 2;
+  ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, &titles), 0);
   EXPECT_EQ(wb.handle->workbook().defined_names()[0].formula, "Sheet1!$1:$1");
 
-  const char* rows = nullptr;
-  const char* cols = nullptr;
-  ASSERT_EQ(fm_sheet_get_print_titles(wb.handle, 0, &rows, &cols), 0);
-  EXPECT_STREQ(rows, "1:1");
-  EXPECT_STREQ(cols, "");
+  fm_print_titles_t read{};
+  ASSERT_EQ(fm_sheet_get_print_titles(wb.handle, 0, &read), 0);
+  EXPECT_EQ(read.has_rows, 1);
+  EXPECT_EQ(read.first_row, 0U);
+  EXPECT_EQ(read.last_row, 0U);
+  EXPECT_EQ(read.has_cols, 0);
+  EXPECT_EQ(read.first_col, 0U);
+  EXPECT_EQ(read.last_col, 0U);
 
-  ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, "", ""), 0);
+  ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, nullptr), 0);
+  EXPECT_TRUE(wb.handle->workbook().defined_names().empty());
+  ASSERT_EQ(fm_sheet_get_print_titles(wb.handle, 0, &read), 0);
+  EXPECT_EQ(read.has_rows, 0);
+  EXPECT_EQ(read.has_cols, 0);
+
+  // Both flags zero clears as NULL does.
+  ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, &titles), 0);
+  const fm_print_titles_t none{};
+  ASSERT_EQ(fm_sheet_set_print_titles(wb.handle, 0, &none), 0);
   EXPECT_TRUE(wb.handle->workbook().defined_names().empty());
 }
 
-TEST(FormulonCApiPrintSettings, PrintTitlesRejectMalformedSpans) {
+TEST(FormulonCApiPrintSettings, PrintTitlesRejectInvertedOrOutOfGridSpans) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  // A cell range is not a title span: Excel only repeats whole rows or
-  // whole columns.
-  EXPECT_EQ(fm_sheet_set_print_titles(wb.handle, 0, "A1:B2", ""), kPrintInvalidArea);
-  EXPECT_EQ(fm_sheet_set_print_titles(wb.handle, 0, "", "1:2"), kPrintInvalidArea);
-  EXPECT_EQ(fm_sheet_set_print_titles(wb.handle, 0, "0:2", ""), kPrintInvalidArea);
+  fm_print_titles_t inverted{};
+  inverted.has_rows = 1;
+  inverted.first_row = 2;
+  inverted.last_row = 1;
+  EXPECT_EQ(fm_sheet_set_print_titles(wb.handle, 0, &inverted), kInvalidArgument);
+  fm_print_titles_t past_rows{};
+  past_rows.has_rows = 1;
+  past_rows.last_row = 1048576U;
+  EXPECT_EQ(fm_sheet_set_print_titles(wb.handle, 0, &past_rows), kInvalidArgument);
+  fm_print_titles_t past_cols{};
+  past_cols.has_cols = 1;
+  past_cols.last_col = 16384U;
+  EXPECT_EQ(fm_sheet_set_print_titles(wb.handle, 0, &past_cols), kInvalidArgument);
   EXPECT_TRUE(wb.handle->workbook().defined_names().empty());
+  EXPECT_EQ(fm_sheet_get_print_titles(wb.handle, 0, nullptr), FM_STATUS_BINDING_NULL_POINTER);
+}
+
+// The enum has two members; the absent attribute is `orientation_engaged == 0`.
+TEST(FormulonCApiPrintSettings, PageSetupRejectsOrientationOutsideTheEnum) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const std::string before = GetPageSetupXml(wb.handle);
+  fm_page_setup_t setup{};
+  setup.orientation_engaged = 1;
+  for (const int32_t bad : {-1, 2}) {
+    setup.orientation = bad;
+    EXPECT_EQ(fm_sheet_set_page_setup(wb.handle, 0, &setup), kInvalidArgument) << bad;
+  }
+  EXPECT_EQ(GetPageSetupXml(wb.handle), before);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -596,7 +643,7 @@ TEST(FormulonCApiPrintSettings, PageSetupPatchPreservesUnmodelledAttributes) {
 
   fm_page_setup_t patch{};
   patch.orientation_engaged = 1;
-  patch.orientation = FM_ORIENTATION_LANDSCAPE;
+  patch.orientation = FM_PAGE_ORIENTATION_LANDSCAPE;
   ASSERT_EQ(fm_sheet_set_page_setup(wb.handle, 0, &patch), 0);
 
   const std::string xml = GetPageSetupXml(wb.handle);
@@ -776,13 +823,13 @@ TEST(FormulonCApiPrintSettings, OrientationChangeIsVisibleToPaginateImmediately)
 
   fm_page_setup_t portrait{};
   portrait.orientation_engaged = 1;
-  portrait.orientation = FM_ORIENTATION_PORTRAIT;
+  portrait.orientation = FM_PAGE_ORIENTATION_PORTRAIT;
   ASSERT_EQ(fm_sheet_set_page_setup(wb.handle, 0, &portrait), 0);
   const std::uint32_t portrait_pages = PageCount(wb.handle);
 
   fm_page_setup_t landscape{};
   landscape.orientation_engaged = 1;
-  landscape.orientation = FM_ORIENTATION_LANDSCAPE;
+  landscape.orientation = FM_PAGE_ORIENTATION_LANDSCAPE;
   ASSERT_EQ(fm_sheet_set_page_setup(wb.handle, 0, &landscape), 0);
   const std::uint32_t landscape_pages = PageCount(wb.handle);
 

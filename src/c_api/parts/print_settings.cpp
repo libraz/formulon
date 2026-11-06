@@ -45,6 +45,7 @@
 #include "utils/resource_budget.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
@@ -512,8 +513,10 @@ extern "C" fm_status_t fm_sheet_set_page_setup(fm_workbook_t* wb, size_t sheet_i
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  if (setup->orientation_engaged != 0 && setup->orientation > FM_ORIENTATION_LANDSCAPE) {
-    return invalid_argument("orientation is not a known value", "orientation=" + std::to_string(setup->orientation));
+  if (setup->orientation_engaged != 0) {
+    if (auto rc = check_enum_domain(setup->orientation, 0, FM_PAGE_ORIENTATION_LANDSCAPE, "orientation"); rc != 0) {
+      return rc;
+    }
   }
   if (setup->scale_engaged != 0 && (setup->scale < kMinPrintScalePercent || setup->scale > kMaxPrintScalePercent)) {
     return invalid_argument("scale is out of range", "scale=" + std::to_string(setup->scale));
@@ -523,11 +526,7 @@ extern "C" fm_status_t fm_sheet_set_page_setup(fm_workbook_t* wb, size_t sheet_i
   pugi::xml_document doc;
   pugi::xml_node root = load_or_create_root(doc, print.page_setup_xml, "pageSetup");
   if (setup->orientation_engaged != 0) {
-    if (setup->orientation == FM_ORIENTATION_DEFAULT) {
-      root.remove_attribute("orientation");
-    } else {
-      set_attr(root, "orientation", setup->orientation == FM_ORIENTATION_PORTRAIT ? "portrait" : "landscape");
-    }
+    set_attr(root, "orientation", setup->orientation == FM_PAGE_ORIENTATION_LANDSCAPE ? "landscape" : "portrait");
   }
   if (setup->paper_size_engaged != 0) {
     set_attr_u32(root, "paperSize", setup->paper_size);
@@ -669,17 +668,9 @@ extern "C" fm_status_t fm_sheet_get_page_setup(const fm_workbook_t* wb, size_t s
   const SheetPrintSettings& print = wb->workbook().sheet(sheet_index).print_settings();
   const PageSetup& view = print.page_setup;
   *out = fm_page_setup_t{};
-  switch (view.orientation) {
-    case Orientation::kPortrait:
-      out->orientation = FM_ORIENTATION_PORTRAIT;
-      break;
-    case Orientation::kLandscape:
-      out->orientation = FM_ORIENTATION_LANDSCAPE;
-      break;
-    case Orientation::kDefault:
-      out->orientation = FM_ORIENTATION_DEFAULT;
-      break;
-  }
+  // `default` and an absent attribute both print portrait.
+  out->orientation =
+      view.orientation == Orientation::kLandscape ? FM_PAGE_ORIENTATION_LANDSCAPE : FM_PAGE_ORIENTATION_PORTRAIT;
   out->paper_size = view.paper_size;
   out->scale = view.scale;
   out->fit_to_width = view.fit_to_width;

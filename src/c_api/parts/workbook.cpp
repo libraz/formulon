@@ -47,6 +47,7 @@ using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::saturate_index;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::text_or_empty;
 
 namespace {
 
@@ -421,65 +422,32 @@ extern "C" fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, size_t index,
   return finish_status(wb->workbook().rename_sheet(saturate_index(index), std::string(new_name)));
 }
 
-namespace {
-
-// Shared entry check of the defined-name setters: the name must be UTF-8, a
-// non-empty formula must parse, and is stored without its leading '='. An
-// empty one removes the name.
-fm_status_t check_defined_name_formula(const char* name, const char* formula, std::string* out) {
-  if (auto rc = check_utf8({name}); rc != 0) {
-    return rc;
-  }
-  return check_stored_formula(formula, "name=" + std::string(name), out);
-}
-
-}  // namespace
-
-extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const char* name, const char* formula) {
+extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_defined_name_input_t* input) {
   clear_last_error();
-  if (wb == nullptr || name == nullptr || formula == nullptr) {
+  if (wb == nullptr || input == nullptr || input->name == nullptr || input->formula == nullptr) {
     return null_argument();
+  }
+  if (auto rc = check_utf8({input->name, input->comment}); rc != 0) {
+    return rc;
   }
   std::string stored;
-  if (auto rc = check_defined_name_formula(name, formula, &stored); rc != 0) {
+  if (auto rc = check_stored_formula(input->formula, "name=" + std::string(input->name), &stored); rc != 0) {
     return rc;
   }
-  return finish_status(wb->workbook().set_defined_name(std::string(name), std::move(stored)));
-}
-
-extern "C" fm_status_t fm_workbook_set_defined_name_scoped(fm_workbook_t* wb, const char* name, const char* formula,
-                                                           int32_t local_sheet_id) {
-  clear_last_error();
-  if (wb == nullptr || name == nullptr || formula == nullptr) {
-    return null_argument();
+  // The model reads an empty formula as a removal; a name always has one.
+  if (stored.empty()) {
+    return invalid_argument("formula is empty", "name=" + std::string(input->name));
   }
-  std::string stored;
-  if (auto rc = check_defined_name_formula(name, formula, &stored); rc != 0) {
-    return rc;
+  auto& book = wb->workbook();
+  const std::int32_t scope = input->local_sheet_id;
+  if (auto result = book.set_defined_name_scoped(std::string(input->name), std::move(stored), scope); !result) {
+    return finish_status(std::move(result));
   }
-  return finish_status(wb->workbook().set_defined_name_scoped(std::string(name), std::move(stored), local_sheet_id));
-}
-
-extern "C" fm_status_t fm_workbook_set_defined_name_attrs(fm_workbook_t* wb, const char* name, int32_t local_sheet_id,
-                                                          const char* comment, int32_t hidden) {
-  clear_last_error();
-  if (wb == nullptr || name == nullptr) {
-    return null_argument();
+  // The record replaces the whole entry, so absent attributes reset to their defaults.
+  if (auto result = book.set_defined_name_comment(input->name, scope, text_or_empty(input->comment)); !result) {
+    return finish_status(std::move(result));
   }
-  if (auto rc = check_utf8({name, comment}); rc != 0) {
-    return rc;
-  }
-  // Both setters fail only on a missing name, so the first one reports it
-  // before anything is changed.
-  if (comment != nullptr) {
-    if (auto result = wb->workbook().set_defined_name_comment(name, local_sheet_id, comment); !result) {
-      return finish_status(std::move(result));
-    }
-  }
-  if (hidden >= 0) {
-    return finish_status(wb->workbook().set_defined_name_hidden(name, local_sheet_id, hidden != 0));
-  }
-  return 0;
+  return finish_status(book.set_defined_name_hidden(input->name, scope, input->hidden != 0));
 }
 
 extern "C" fm_status_t fm_sheet_insert_rows(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t count) {
@@ -542,39 +510,24 @@ extern "C" fm_status_t fm_workbook_get_defined_name_count(const fm_workbook_t* w
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_defined_name_at(const fm_workbook_t* wb, size_t idx, const char** out_name,
-                                                       const char** out_formula, int32_t* out_local_sheet_id) {
+extern "C" fm_status_t fm_workbook_get_defined_name_at(const fm_workbook_t* wb, size_t idx, fm_defined_name_t* out) {
   clear_last_error();
-  if (wb == nullptr || out_name == nullptr || out_formula == nullptr) {
+  if (wb == nullptr || out == nullptr) {
     return null_argument();
   }
   const auto& names = wb->workbook().defined_names();
   if (auto rc = check_index(idx, names.size(), "index"); rc != 0) {
     return rc;
   }
-  *out_name = names[idx].name.c_str();
+  const auto& entry = names[idx];
+  out->name = entry.name.c_str();
   // Read scratch holds a respelled formula; any other one is the model's.
-  *out_formula = may_respell_formula(names[idx].formula)
-                     ? display_formula(wb->workbook(), names[idx].formula, fresh_read_scratch(wb), {})
-                     : names[idx].formula.c_str();
-  if (out_local_sheet_id != nullptr) {
-    *out_local_sheet_id = names[idx].local_sheet_id;
-  }
-  return 0;
-}
-
-extern "C" fm_status_t fm_workbook_get_defined_name_attrs_at(const fm_workbook_t* wb, size_t idx,
-                                                             const char** out_comment, int32_t* out_hidden) {
-  clear_last_error();
-  if (wb == nullptr || out_comment == nullptr || out_hidden == nullptr) {
-    return null_argument();
-  }
-  const auto& names = wb->workbook().defined_names();
-  if (auto rc = check_index(idx, names.size(), "index"); rc != 0) {
-    return rc;
-  }
-  *out_comment = names[idx].comment.c_str();
-  *out_hidden = names[idx].hidden ? 1 : 0;
+  out->formula = may_respell_formula(entry.formula)
+                     ? display_formula(wb->workbook(), entry.formula, fresh_read_scratch(wb), {})
+                     : entry.formula.c_str();
+  out->local_sheet_id = entry.local_sheet_id;
+  out->comment = entry.comment.c_str();
+  out->hidden = entry.hidden ? 1 : 0;
   return 0;
 }
 
@@ -614,11 +567,16 @@ extern "C" fm_status_t fm_workbook_get_defined_name(const fm_workbook_t* wb, con
   if (idx == wb->workbook().defined_names().size()) {
     return 0;
   }
-  if (auto rc = fm_workbook_get_defined_name_at(wb, idx, out_name, out_formula, nullptr); rc != 0) {
+  fm_defined_name_t entry{};
+  if (auto rc = fm_workbook_get_defined_name_at(wb, idx, &entry); rc != 0) {
     return rc;
   }
   *out_present = 1;
-  return fm_workbook_get_defined_name_attrs_at(wb, idx, out_comment, out_hidden);
+  *out_name = entry.name;
+  *out_formula = entry.formula;
+  *out_comment = entry.comment;
+  *out_hidden = entry.hidden;
+  return 0;
 }
 
 extern "C" fm_status_t fm_workbook_remove_defined_name(fm_workbook_t* wb, const char* name, int32_t local_sheet_id) {

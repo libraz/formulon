@@ -219,7 +219,7 @@ fm_status_t check_array(const void* data, uint32_t count, const char* field) {
 }
 
 fm_status_t column_from_fm(const fm_filter_column_t& in, formulon::FilterColumn* out) {
-  if (auto rc = check_enum_domain(in.kind, static_cast<int64_t>(formulon::FilterKind::kIcon), "kind"); rc != 0) {
+  if (auto rc = check_enum_domain(in.kind, 0, static_cast<int64_t>(formulon::FilterKind::kIcon), "kind"); rc != 0) {
     return rc;
   }
   out->col_id = in.col_id;
@@ -240,7 +240,7 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, formulon::FilterColumn*
       }
       for (uint32_t i = 0; i < in.date_group_count; ++i) {
         const fm_date_group_item_t& g = in.date_groups[i];
-        if (auto rc = check_enum_domain(g.grouping, static_cast<int64_t>(formulon::DateTimeGrouping::kSecond),
+        if (auto rc = check_enum_domain(g.grouping, 0, static_cast<int64_t>(formulon::DateTimeGrouping::kSecond),
                                         "date_groups.grouping");
             rc != 0) {
           return rc;
@@ -266,14 +266,14 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, formulon::FilterColumn*
       constexpr auto kLastOp = static_cast<int64_t>(formulon::FilterOperator::kGreaterThan);
       out->custom.and_join = in.custom_and != 0;
       if (in.custom_count >= 1) {
-        if (auto rc = check_enum_domain(in.op1, kLastOp, "op1"); rc != 0) {
+        if (auto rc = check_enum_domain(in.op1, 0, kLastOp, "op1"); rc != 0) {
           return rc;
         }
         out->custom.filters.push_back(
             formulon::CustomFilter{static_cast<formulon::FilterOperator>(in.op1), text_or_empty(in.val1)});
       }
       if (in.custom_count == 2) {
-        if (auto rc = check_enum_domain(in.op2, kLastOp, "op2"); rc != 0) {
+        if (auto rc = check_enum_domain(in.op2, 0, kLastOp, "op2"); rc != 0) {
           return rc;
         }
         out->custom.filters.push_back(
@@ -290,7 +290,7 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, formulon::FilterColumn*
       }
       return 0;
     case formulon::FilterKind::kDynamic:
-      if (auto rc = check_enum_domain(in.dynamic_type, static_cast<int64_t>(formulon::DynamicFilterType::kM12),
+      if (auto rc = check_enum_domain(in.dynamic_type, 0, static_cast<int64_t>(formulon::DynamicFilterType::kM12),
                                       "dynamic_type");
           rc != 0) {
         return rc;
@@ -312,14 +312,14 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, formulon::FilterColumn*
       out->color.cell_color = in.cell_color != 0;
       return 0;
     case formulon::FilterKind::kIcon:
-      if (auto rc = check_enum_domain(in.icon_set, static_cast<int64_t>(formulon::cf::IconSetName::Five_Quarters),
+      if (auto rc = check_enum_domain(in.icon_set, 0, static_cast<int64_t>(formulon::cf::IconSetName::Five_Quarters),
                                       "icon_set");
           rc != 0) {
         return rc;
       }
       out->icon.icon_set = static_cast<formulon::cf::IconSetName>(in.icon_set);
       if (in.has_icon_id != 0) {
-        if (auto rc = check_enum_domain(in.icon_id, std::numeric_limits<int32_t>::max(), "icon_id"); rc != 0) {
+        if (auto rc = check_enum_domain(in.icon_id, 0, std::numeric_limits<int32_t>::max(), "icon_id"); rc != 0) {
           return rc;
         }
         out->icon.icon_id = static_cast<uint32_t>(in.icon_id);
@@ -332,10 +332,10 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, formulon::FilterColumn*
 }
 
 fm_status_t sort_condition_from_fm(const fm_sort_condition_t& in, formulon::SortCondition* out) {
-  if (auto rc = check_enum_domain(in.sort_by, static_cast<int64_t>(formulon::SortBy::kIcon), "sort_by"); rc != 0) {
+  if (auto rc = check_enum_domain(in.sort_by, 0, static_cast<int64_t>(formulon::SortBy::kIcon), "sort_by"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(in.icon_set, static_cast<int64_t>(formulon::cf::IconSetName::Five_Quarters),
+  if (auto rc = check_enum_domain(in.icon_set, 0, static_cast<int64_t>(formulon::cf::IconSetName::Five_Quarters),
                                   "conditions.icon_set");
       rc != 0) {
     return rc;
@@ -349,7 +349,8 @@ fm_status_t sort_condition_from_fm(const fm_sort_condition_t& in, formulon::Sort
   }
   out->icon_set = static_cast<formulon::cf::IconSetName>(in.icon_set);
   if (in.has_icon_id != 0) {
-    if (auto rc = check_enum_domain(in.icon_id, std::numeric_limits<int32_t>::max(), "conditions.icon_id"); rc != 0) {
+    if (auto rc = check_enum_domain(in.icon_id, 0, std::numeric_limits<int32_t>::max(), "conditions.icon_id");
+        rc != 0) {
       return rc;
     }
     out->icon_id = static_cast<uint32_t>(in.icon_id);
@@ -375,7 +376,8 @@ fm_status_t filter_from_fm(const fm_auto_filter_t& in, formulon::AutoFilter* out
   if (auto rc = check_array(in.conditions, in.condition_count, "conditions"); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(in.sort_method, static_cast<int64_t>(formulon::SortMethod::kStroke), "sort_method");
+  if (auto rc =
+          check_enum_domain(in.sort_method, 0, static_cast<int64_t>(formulon::SortMethod::kStroke), "sort_method");
       rc != 0) {
     return rc;
   }

@@ -9,10 +9,12 @@ from formulon import (
     CellRect,
     DataValidationInput,
     DefinedName,
+    DefinedNameInput,
     FormulonError,
     Person,
     ThemeScriptFont,
-    ThreadedComment,
+    ThemeScriptFontInput,
+    ThreadedCommentInput,
     Workbook,
 )
 
@@ -23,11 +25,11 @@ THREAD = "{6F1E0D2C-1111-4111-8111-000000000001}"
 class NaturalKeyLookupTests(unittest.TestCase):
     def test_defined_names_are_read_and_removed_by_name_and_scope(self) -> None:
         with Workbook.create_default() as wb:
-            wb.set_defined_name("Rate", "Sheet1!$A$1")
-            wb.set_defined_name_scoped("Rate", "Sheet1!$B$1", 0)
+            wb.set_defined_name(DefinedNameInput("Rate", "Sheet1!$A$1"))
+            wb.set_defined_name(DefinedNameInput("Rate", "Sheet1!$B$1", 0))
             self.assertEqual(
                 wb.get_defined_name("rate"),
-                DefinedName(name="Rate", formula="Sheet1!$A$1", local_sheet_id=-1, comment="", hidden=False),
+                DefinedName(name="Rate", formula="Sheet1!$A$1", local_sheet_id=None, comment=None, hidden=False),
             )
             scoped = wb.get_defined_name("Rate", 0)
             self.assertIsNotNone(scoped)
@@ -42,51 +44,52 @@ class NaturalKeyLookupTests(unittest.TestCase):
 
     def test_hyperlinks_people_and_threaded_comments_are_read_by_key(self) -> None:
         with Workbook.create_default() as wb:
-            wb.add_hyperlink(0, 2, 1, "https://example.com/")
-            link = wb.get_hyperlink(0, 2, 1)
+            wb.sheet(0).add_hyperlink(2, 1, target="https://example.com/")
+            link = wb.sheet(0).get_hyperlink(2, 1)
             self.assertIsNotNone(link)
             assert link is not None
             self.assertEqual(link.target, "https://example.com/")
-            self.assertIsNone(wb.get_hyperlink(0, 2, 2))
+            self.assertIsNone(wb.sheet(0).get_hyperlink(2, 2))
 
             wb.add_person(Person(id=ALICE, display_name="Alice", user_id="alice", provider_id="None"))
             self.assertEqual(wb.get_person(ALICE), Person(ALICE, "Alice", "alice", "None"))
             self.assertIsNone(wb.get_person(THREAD))
-            wb.add_threaded_comment(
-                0,
-                ThreadedComment(
+            wb.sheet(0).add_threaded_comment(
+                ThreadedCommentInput(
                     id=THREAD, row=4, col=2, person_id=ALICE, created="2026-01-02T03:04:05.67", text="Check this"
                 ),
             )
-            thread = wb.get_threaded_comment(0, THREAD)
+            thread = wb.sheet(0).get_threaded_comment(THREAD)
             self.assertIsNotNone(thread)
             assert thread is not None
             self.assertEqual((thread.row, thread.col, thread.text), (4, 2, "Check this"))
-            self.assertIsNone(wb.get_threaded_comment(0, ALICE))
+            self.assertIsNone(wb.sheet(0).get_threaded_comment(ALICE))
 
     def test_shapes_and_drawing_objects_are_read_by_object_id(self) -> None:
         with Workbook.create_default() as wb:
-            object_id = wb.add_shape(0, anchor_kind=AnchorKind.ONE_CELL, from_row=2, cx=914400, cy=457200, prst="rect")
-            shape = wb.get_shape(0, object_id)
+            object_id = wb.sheet(0).add_shape(
+                anchor_kind=AnchorKind.ONE_CELL, from_row=2, width_emu=914400, height_emu=457200, preset_geometry="rect"
+            )
+            shape = wb.sheet(0).get_shape(object_id)
             self.assertIsNotNone(shape)
             assert shape is not None
-            self.assertEqual(shape.prst, "rect")
-            drawing = wb.get_drawing_object(0, object_id)
+            self.assertEqual(shape.preset_geometry, "rect")
+            drawing = wb.sheet(0).get_drawing_object(object_id)
             self.assertIsNotNone(drawing)
             assert drawing is not None
             self.assertEqual(drawing.from_row, 2)
-            self.assertIsNone(wb.get_shape(0, object_id + 1))
-            self.assertIsNone(wb.get_drawing_object(0, object_id + 1))
+            self.assertIsNone(wb.sheet(0).get_shape(object_id + 1))
+            self.assertIsNone(wb.sheet(0).get_drawing_object(object_id + 1))
 
     def test_theme_script_fonts_and_passthrough_parts_are_read_by_key(self) -> None:
         with Workbook.create_default() as wb:
-            jpan = wb.get_theme_script_font(True, "Jpan")
+            jpan = wb.get_theme_script_font(major=True, script="Jpan")
             self.assertIsNotNone(jpan)
             assert jpan is not None
             self.assertTrue(jpan.typeface)
-            wb.set_theme_script_font(False, "Zzzz", "Test Face")
-            self.assertEqual(wb.get_theme_script_font(False, "Zzzz"), ThemeScriptFont("Zzzz", "Test Face"))
-            self.assertIsNone(wb.get_theme_script_font(True, "Zzzz"))
+            wb.set_theme_script_font(ThemeScriptFontInput(False, "Zzzz", "Test Face"))
+            self.assertEqual(wb.get_theme_script_font(major=False, script="Zzzz"), ThemeScriptFont("Zzzz", "Test Face"))
+            self.assertIsNone(wb.get_theme_script_font(major=True, script="Zzzz"))
             path = wb.list_passthroughs()[0].path
             self.assertEqual(wb.get_passthrough(path), path)
             self.assertIsNone(wb.get_passthrough("/" + path))
@@ -95,10 +98,10 @@ class NaturalKeyLookupTests(unittest.TestCase):
 class IndexKeyedAddTests(unittest.TestCase):
     def test_adds_return_the_index_they_allocate(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertEqual(wb.add_sheet("Second"), 1)
+            self.assertEqual(wb.add_sheet("Second").index, 1)
             rule = DataValidationInput(ranges=[CellRect(0, 0, 3, 0)], type=1, formula1="1", formula2="9")
-            self.assertEqual(wb.add_validation(1, rule), 0)
-            self.assertEqual(wb.add_validation(1, rule), 1)
+            self.assertEqual(wb.sheet(1).add_validation(rule), 0)
+            self.assertEqual(wb.sheet(1).add_validation(rule), 1)
 
 
 if __name__ == "__main__":

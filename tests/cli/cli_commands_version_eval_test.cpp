@@ -23,7 +23,7 @@ TEST(FormulonCli, VersionAndHelpFailWhenTheirOutputCannotBeWritten) {
   // their results.
   for (const char* flag : {"--version", "--help"}) {
     CliRun r = run_cli({flag}, /*merge_streams=*/false, /*close_stdout=*/true);
-    EXPECT_EQ(r.exit_code, 1) << flag;
+    EXPECT_EQ(r.exit_code, 74) << flag;
     EXPECT_NE(r.stderr_text.find("failed to write output"), std::string::npos) << flag << " stderr=" << r.stderr_text;
   }
 }
@@ -32,7 +32,7 @@ TEST(FormulonCli, SubcommandVersionAndHelpFailWhenTheirOutputCannotBeWritten) {
   for (const char* subcommand : {"eval", "recalc", "dump", "paginate"}) {
     for (const char* flag : {"--version", "--help"}) {
       CliRun r = run_cli({subcommand, flag}, /*merge_streams=*/false, /*close_stdout=*/true);
-      EXPECT_EQ(r.exit_code, 1) << subcommand << ' ' << flag;
+      EXPECT_EQ(r.exit_code, 74) << subcommand << ' ' << flag;
       EXPECT_NE(r.stderr_text.find("failed to write output"), std::string::npos)
           << subcommand << ' ' << flag << " stderr=" << r.stderr_text;
     }
@@ -192,8 +192,8 @@ TEST(FormulonCli, EvalDynamicArrayJsonPrintsNestedArrays) {
   CliRun r = run_cli({"eval", "--json", "=SEQUENCE(2,2)"});
   EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
   EXPECT_EQ(r.stdout_text,
-            "[[{\"kind\":\"number\",\"value\":1},{\"kind\":\"number\",\"value\":2}],"
-            "[{\"kind\":\"number\",\"value\":3},{\"kind\":\"number\",\"value\":4}]]\n");
+            "{\"format\":1,\"rows\":[[{\"kind\":\"number\",\"value\":1},{\"kind\":\"number\",\"value\":2}],"
+            "[{\"kind\":\"number\",\"value\":3},{\"kind\":\"number\",\"value\":4}]]}\n");
 }
 
 TEST(FormulonCli, EvalDivByZeroSurfacesAsExcelErrorString) {
@@ -264,14 +264,14 @@ TEST(FormulonCli, EvalWithoutRepeatFlagReportsNoTiming) {
 
 TEST(FormulonCli, EvalWriteFailureReturnsOutputError) {
   CliRun r = run_cli({"eval", "=SUM(1,2,3)"}, /*merge_streams=*/false, /*close_stdout=*/true);
-  EXPECT_EQ(r.exit_code, 1);
+  EXPECT_EQ(r.exit_code, 74);
   EXPECT_NE(r.stderr_text.find("failed to write output"), std::string::npos);
 }
 
 TEST(FormulonCli, EvalRepeatWriteFailureSkipsTimingOutput) {
   CliRun r = run_cli({"eval", "--repeat", "3", "=SUM(1,2,3)"}, /*merge_streams=*/false,
                      /*close_stdout=*/true);
-  EXPECT_EQ(r.exit_code, 1);
+  EXPECT_EQ(r.exit_code, 74);
   EXPECT_NE(r.stderr_text.find("failed to write output"), std::string::npos);
   EXPECT_EQ(r.stderr_text.find("iterations"), std::string::npos);
 }

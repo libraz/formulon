@@ -196,8 +196,7 @@ emscripten::val JsWorkbook::getTableStyleDefaults() const {
     return emscripten::val::undefined();
   }
   emscripten::val o = emscripten::val::object();
-  js_set_cstr(o, "tableStyle", table);
-  js_set_cstr(o, "pivotStyle", pivot);
+  js_set_cstr_or_null_fields(o, {{"tableStyle", table}, {"pivotStyle", pivot}});
   return o;
 }
 
@@ -206,11 +205,24 @@ void JsWorkbook::setTableStyleDefaults(emscripten::val defaults) {
     record_invalid_handle();
     return;
   }
-  JsNarrowNumericReader reader("setTableStyleDefaults");
+  // An omitted name keeps the default (NULL); `null` removes it ("").
+  JsNarrowNumericReader reader("Workbook.setTableStyleDefaults");
   std::string table;
   std::string pivot;
-  const char* table_ptr = reader.optional_string(defaults, "tableStyle", table, "defaults.tableStyle");
-  const char* pivot_ptr = reader.optional_string(defaults, "pivotStyle", pivot, "defaults.pivotStyle");
+  const auto name = [&](const char* key, std::string& storage) -> const char* {
+    const emscripten::val v = reader.value(defaults, key, key);
+    switch (js_patch_key(reader, v, key, true)) {
+      case JsPatchKey::kClear:
+        return "";
+      case JsPatchKey::kSet:
+        return reader.optional_string_value(v, storage, key);
+      case JsPatchKey::kKeep:
+        break;
+    }
+    return nullptr;
+  };
+  const char* table_ptr = name("tableStyle", table);
+  const char* pivot_ptr = name("pivotStyle", pivot);
   if (!reader.ok()) {
     return;
   }

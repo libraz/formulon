@@ -106,8 +106,8 @@ struct RoundtripHeaderFooter {
 /// our writer and must not be compared.
 struct RoundtripObservation {
   bool orientation_stated = false;
-  /// `FM_ORIENTATION_*`, which coincides with Excel's `XlPageOrientation`
-  /// (1 = portrait, 2 = landscape) so the golden needs no translation.
+  /// Excel's `XlPageOrientation` (1 = portrait, 2 = landscape), so the
+  /// golden needs no translation.
   std::uint32_t orientation = 0;
   bool paper_size_stated = false;
   std::uint32_t paper_size = 0;

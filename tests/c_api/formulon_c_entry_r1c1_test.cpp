@@ -12,6 +12,7 @@
 
 #include "c_api/formulon_c.h"
 #include "formulon_c_out_index.h"
+#include "formulon_c_setters.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
 
@@ -296,7 +297,7 @@ TEST(FormulonCApiEntryR1C1, TypedParamPrefixOnACellShapeIsRefused) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   EXPECT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=LET(_xlpm.B1,5,_xlpm.B1)"), kParserUnexpectedToken);
-  EXPECT_EQ(fm_workbook_set_defined_name(wb.handle, "Rate", "LET(_xlpm.B1,5,_xlpm.B1)"), kParserUnexpectedToken);
+  EXPECT_EQ(SetDefinedName(wb.handle, "Rate", "LET(_xlpm.B1,5,_xlpm.B1)"), kParserUnexpectedToken);
   EXPECT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=LET(_xlpm.x,5,_xlpm.x)"), 0) << fm_get_last_error_message();
   EXPECT_EQ(fm_sheet_set_formula(wb.handle, 0, 1, 0, "=\"_xlpm.B1\""), 0) << fm_get_last_error_message();
 }
