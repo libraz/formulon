@@ -28,10 +28,6 @@ inline constexpr std::uint16_t kStyleClientColumnStripes = 0x08U;
 inline constexpr std::uint16_t kStyleClientRowHeaders = 0x10U;
 inline constexpr std::uint16_t kStyleClientColumnHeaders = 0x20U;
 
-inline constexpr std::uint16_t kMargins = 476;
-inline constexpr std::uint16_t kPrintOptions = 477;
-inline constexpr std::uint16_t kPageSetup = 478;
-
 inline constexpr std::uint16_t kBeginSparklineGroup = 1041;
 inline constexpr std::uint16_t kEndSparklineGroup = 1042;
 inline constexpr std::uint16_t kSparkline = 1043;

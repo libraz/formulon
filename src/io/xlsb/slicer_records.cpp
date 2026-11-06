@@ -38,13 +38,13 @@ std::optional<std::string> RelId(ByteSpan p, std::size_t& rest) {
   if (p.size < 6U || load_u32(p.data) != kFrtRelId) {
     return std::nullopt;
   }
-  const std::size_t cch = static_cast<std::size_t>(p.data[4] | (p.data[5] << 8U));
+  const std::size_t cch = static_cast<std::size_t>(load_u16(p.data + 4));
   if (p.size - 6U < 2U * cch) {
     return std::nullopt;
   }
   std::string id;
   for (std::size_t i = 0; i < cch; ++i) {
-    const auto unit = static_cast<std::uint16_t>(p.data[6 + 2 * i] | (p.data[7 + 2 * i] << 8U));
+    const auto unit = load_u16(p.data + 6 + 2 * i);
     if (unit == 0U || unit > 0x7FU) {
       return std::nullopt;
     }

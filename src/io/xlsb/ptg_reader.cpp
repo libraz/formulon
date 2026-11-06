@@ -289,6 +289,18 @@ Expected<std::pair<parser::Reference, parser::Reference>, Error> read_checked_ar
   return area;
 }
 
+/// How an ExternSheet entry qualifies a 3-D reference token.
+struct IxtiTarget {
+  enum class Kind { External, DeadSheet, MultiSheet, SingleSheet };
+  Kind kind = Kind::SingleSheet;
+  /// External: supporting book's `[N]` index, 0 when the sheet cannot be bound.
+  std::uint32_t book = 0;
+  /// External: first/last sheet; MultiSheet: begin/end sheet. `sheet_end` is
+  /// empty for a single external sheet.
+  std::string_view sheet;
+  std::string_view sheet_end;
+};
+
 }  // namespace
 
 Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Arena& arena,
@@ -433,6 +445,28 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
     return true;
   };
 
+  // Classifies `ixti` for Ptg3d tokens: external, deleted sheet, multi-sheet
+  // range, or a single qualified sheet (checked in that order).
+  auto classify_ixti = [&](std::uint32_t ixti) -> IxtiTarget {
+    IxtiTarget t;
+    if (ixti_is_external(ixti)) {
+      t.kind = IxtiTarget::Kind::External;
+      t.book = external_sheet_for_ixti(ixti, t.sheet, t.sheet_end);
+    } else if (ixti_is_dead_sheet(ixti)) {
+      t.kind = IxtiTarget::Kind::DeadSheet;
+    } else if (sheet_range_for_ixti(ixti, t.sheet, t.sheet_end)) {
+      t.kind = IxtiTarget::Kind::MultiSheet;
+    }
+    return t;
+  };
+
+  // Interns the local sheet of a single-sheet 3-D reference and records
+  // whether it needs quoting.
+  auto qualify_local_sheet = [&arena](parser::Reference& ref) {
+    ref.sheet = arena.intern(ref.sheet);
+    ref.sheet_quoted = parser::local_sheet_needs_quoting_a1(ref.sheet);
+  };
+
   // `PtgName`'s `ilbl` is 1-based; out-of-range resolves to an empty
   // name (caller surfaces `kIoXlsbCorrupt`).
   auto resolve_name = [&name_table](std::uint32_t ilbl) -> std::string_view {
@@ -497,10 +531,6 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (LAMBDA call)", kCtx);
       }
       return n;
-    }
-    if (ops[0]->kind() != parser::NodeKind::NameRef) {
-      return make_error(FormulonErrorCode::kIoXlsbCorrupt,
-                        "xlsb PtgFuncVar(255): callee operand is not a name reference", kCtx);
     }
     const std::string_view callee = ops[0]->as_name();
     if (strings::case_insensitive_eq(callee, "_xlfn.LAMBDA")) {
@@ -988,40 +1018,40 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         // the single-sheet form. Build a `Ref3D` node when the range is
         // genuinely multi-sheet; otherwise the plain qualified `Ref`
         // this token already produced.
-        if (ixti_is_external(ixti)) {
-          std::string_view external_sheet;
-          std::string_view external_sheet_end;
-          const std::uint32_t book = external_sheet_for_ixti(ixti, external_sheet, external_sheet_end);
-          if (book == 0) {
-            return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
-                              "PtgRef3d qualifies a sheet of an external workbook this reader cannot bind", kCtx);
+        const IxtiTarget target = classify_ixti(ixti);
+        switch (target.kind) {
+          case IxtiTarget::Kind::External: {
+            if (target.book == 0) {
+              return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                                "PtgRef3d qualifies a sheet of an external workbook this reader cannot bind", kCtx);
+            }
+            ASSIGN_OR_RETURN(auto loc, read_checked_loc(cursor, {}, "PtgRef3d"));
+            parser::AstNode* n = parser::make_external_ref(arena, {}, std::to_string(target.book), target.sheet,
+                                                           target.sheet_end, loc, loc, /*is_range=*/false);
+            RETURN_IF_ERROR(push_node(stack, n, "PtgRef3d external"));
+            break;
           }
-          ASSIGN_OR_RETURN(auto loc, read_checked_loc(cursor, {}, "PtgRef3d"));
-          parser::AstNode* n =
-              parser::make_external_ref(arena, {}, std::to_string(book), external_sheet, external_sheet_end, loc, loc,
-                                        /*is_range=*/false);
-          RETURN_IF_ERROR(push_node(stack, n, "PtgRef3d external"));
-          break;
+          case IxtiTarget::Kind::DeadSheet: {
+            ASSIGN_OR_RETURN(auto loc, read_checked_loc(cursor, {}, "PtgRef3d", base));
+            parser::AstNode* n = parser::make_dead_sheet_ref_error(arena, &loc, nullptr);
+            RETURN_IF_ERROR(push_node(stack, n, "PtgRef3d deleted sheet"));
+            break;
+          }
+          case IxtiTarget::Kind::MultiSheet: {
+            ASSIGN_OR_RETURN(auto loc, read_checked_loc(cursor, {}, "PtgRef3d", base));
+            parser::AstNode* n =
+                parser::make_ref3d(arena, arena.intern(target.sheet), arena.intern(target.sheet_end), loc);
+            RETURN_IF_ERROR(push_node(stack, n, "PtgRef3d range"));
+            break;
+          }
+          case IxtiTarget::Kind::SingleSheet: {
+            ASSIGN_OR_RETURN(parser::Reference ref, read_checked_loc(cursor, sheet_for_ixti(ixti), "PtgRef3d", base));
+            qualify_local_sheet(ref);
+            parser::AstNode* n = parser::make_ref(arena, ref);
+            RETURN_IF_ERROR(push_node(stack, n, "PtgRef3d"));
+            break;
+          }
         }
-        if (ixti_is_dead_sheet(ixti)) {
-          ASSIGN_OR_RETURN(auto loc, read_checked_loc(cursor, {}, "PtgRef3d", base));
-          parser::AstNode* n = parser::make_dead_sheet_ref_error(arena, &loc, nullptr);
-          RETURN_IF_ERROR(push_node(stack, n, "PtgRef3d deleted sheet"));
-          break;
-        }
-        std::string_view begin_sheet;
-        std::string_view end_sheet;
-        if (sheet_range_for_ixti(ixti, begin_sheet, end_sheet)) {
-          ASSIGN_OR_RETURN(auto loc, read_checked_loc(cursor, {}, "PtgRef3d", base));
-          parser::AstNode* n = parser::make_ref3d(arena, arena.intern(begin_sheet), arena.intern(end_sheet), loc);
-          RETURN_IF_ERROR(push_node(stack, n, "PtgRef3d range"));
-          break;
-        }
-        ASSIGN_OR_RETURN(parser::Reference ref, read_checked_loc(cursor, sheet_for_ixti(ixti), "PtgRef3d", base));
-        ref.sheet = arena.intern(ref.sheet);
-        ref.sheet_quoted = parser::local_sheet_needs_quoting_a1(ref.sheet);
-        parser::AstNode* n = parser::make_ref(arena, ref);
-        RETURN_IF_ERROR(push_node(stack, n, "PtgRef3d"));
         break;
       }
       case PtgKind::Area3d: {
@@ -1030,42 +1060,41 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         // `Sheet1:Sheet2!A1:B2`) decodes into a range-tail `Ref3D`. A
         // single-sheet qualified area (`Sheet2!A1:B2`) keeps the plain
         // `RangeOp` of two qualified refs.
-        if (ixti_is_external(ixti)) {
-          std::string_view external_sheet;
-          std::string_view external_sheet_end;
-          const std::uint32_t book = external_sheet_for_ixti(ixti, external_sheet, external_sheet_end);
-          if (book == 0) {
-            return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
-                              "PtgArea3d qualifies a sheet of an external workbook this reader cannot bind", kCtx);
+        const IxtiTarget target = classify_ixti(ixti);
+        switch (target.kind) {
+          case IxtiTarget::Kind::External: {
+            if (target.book == 0) {
+              return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                                "PtgArea3d qualifies a sheet of an external workbook this reader cannot bind", kCtx);
+            }
+            ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, {}, "PtgArea3d"));
+            parser::AstNode* n = make_external_area(arena, std::to_string(target.book), target.sheet, target.sheet_end,
+                                                    area.first, area.second);
+            RETURN_IF_ERROR(push_node(stack, n, "PtgArea3d external"));
+            break;
           }
-          ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, {}, "PtgArea3d"));
-          parser::AstNode* n = make_external_area(arena, std::to_string(book), external_sheet, external_sheet_end,
-                                                  area.first, area.second);
-          RETURN_IF_ERROR(push_node(stack, n, "PtgArea3d external"));
-          break;
+          case IxtiTarget::Kind::DeadSheet: {
+            ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, {}, "PtgArea3d", base));
+            parser::AstNode* n = make_dead_sheet_area(arena, area.first, area.second);
+            RETURN_IF_ERROR(push_node(stack, n, "PtgArea3d deleted sheet"));
+            break;
+          }
+          case IxtiTarget::Kind::MultiSheet: {
+            ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, {}, "PtgArea3d", base));
+            parser::AstNode* n = parser::make_ref3d_range(arena, arena.intern(target.sheet),
+                                                          arena.intern(target.sheet_end), area.first, area.second);
+            RETURN_IF_ERROR(push_node(stack, n, "PtgArea3d range"));
+            break;
+          }
+          case IxtiTarget::Kind::SingleSheet: {
+            ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, sheet_for_ixti(ixti), "PtgArea3d", base));
+            parser::Reference first = area.first;
+            qualify_local_sheet(first);
+            parser::AstNode* n = make_area(arena, first, area.second);
+            RETURN_IF_ERROR(push_node(stack, n, "PtgArea3d range"));
+            break;
+          }
         }
-        if (ixti_is_dead_sheet(ixti)) {
-          ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, {}, "PtgArea3d", base));
-          parser::AstNode* n = make_dead_sheet_area(arena, area.first, area.second);
-          RETURN_IF_ERROR(push_node(stack, n, "PtgArea3d deleted sheet"));
-          break;
-        }
-        std::string_view begin_sheet;
-        std::string_view end_sheet;
-        if (sheet_range_for_ixti(ixti, begin_sheet, end_sheet)) {
-          ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, {}, "PtgArea3d", base));
-          parser::AstNode* n = parser::make_ref3d_range(arena, arena.intern(begin_sheet), arena.intern(end_sheet),
-                                                        area.first, area.second);
-          RETURN_IF_ERROR(push_node(stack, n, "PtgArea3d range"));
-          break;
-        }
-        const std::string_view sheet = sheet_for_ixti(ixti);
-        ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, sheet, "PtgArea3d", base));
-        parser::Reference first = area.first;
-        first.sheet = arena.intern(first.sheet);
-        first.sheet_quoted = parser::local_sheet_needs_quoting_a1(first.sheet);
-        parser::AstNode* n = make_area(arena, first, area.second);
-        RETURN_IF_ERROR(push_node(stack, n, "PtgArea3d range"));
         break;
       }
       case PtgKind::RefErr:

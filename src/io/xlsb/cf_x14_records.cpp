@@ -24,6 +24,7 @@
 #include "io/xlsb/frt_formula.h"
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/record_ids.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/tail_refs.h"
 #include "io/xml_utils.h"
@@ -386,11 +387,11 @@ std::vector<std::uint8_t> frt_container_block(const std::vector<FramedRecord>& r
                                               std::uint16_t close, const std::vector<std::uint8_t>& body) {
   std::vector<std::uint8_t> block;
   const bool has_print = std::any_of(recs.begin(), recs.end(), [](const FramedRecord& r) {
-    return r.type == kPrintOptions || r.type == kMargins || r.type == kPageSetup;
+    return r.type == kBrtPrintOptions || r.type == kBrtMargins || r.type == kBrtPageSetup;
   });
   if (!has_print) {
     const std::array<std::uint8_t, 2> default_print_options = {0x10, 0x00};
-    emit_record(block, kPrintOptions, ByteSpan{default_print_options.data(), default_print_options.size()});
+    emit_record(block, kBrtPrintOptions, ByteSpan{default_print_options.data(), default_print_options.size()});
   }
   emit_record(block, kFrtBegin, ByteSpan{kFrtVersion.data(), kFrtVersion.size()});
   emit_record(block, open, ByteSpan{});

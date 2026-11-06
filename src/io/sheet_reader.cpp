@@ -374,9 +374,6 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
     // Skip blank-blank cells to keep the row map sparse, unless a style
     // index or explicit style attribute exists: then the format metadata
     // is the payload and must materialise the cell below.
-    if (parsed.is_sst_index) {
-      ctx.pending_sst_cells.emplace_back(parsed.row, parsed.col, parsed.sst_index);
-    }
     if (xf_index == 0U && !parsed.has_explicit_xf && !parsed.show_phonetic) {
       return Expected<void, Error>::Ok();
     }

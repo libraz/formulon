@@ -30,9 +30,7 @@ Expected<std::string, Error> ReadHyperlinkWideString(ByteSpan& cursor, const cha
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
                       std::string("xlsb BrtHLink ") + field + " length truncated", "context=xlsb_reader");
   }
-  const std::uint32_t cch =
-      static_cast<std::uint32_t>(cursor.data[0]) | (static_cast<std::uint32_t>(cursor.data[1]) << 8U) |
-      (static_cast<std::uint32_t>(cursor.data[2]) << 16U) | (static_cast<std::uint32_t>(cursor.data[3]) << 24U);
+  const std::uint32_t cch = load_u32(cursor.data);
   if (cch > max_units) {
     return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt,
                       std::string("xlsb BrtHLink ") + field + " exceeds string limit",
@@ -45,9 +43,7 @@ Expected<void, Error> EmitBoundedHyperlinkWideString(std::vector<std::uint8_t>& 
                                                      std::uint32_t max_units, const char* field) {
   const std::size_t start = dst.size();
   emit_xlwidestring(dst, text);
-  const std::uint32_t cch =
-      static_cast<std::uint32_t>(dst[start]) | (static_cast<std::uint32_t>(dst[start + 1U]) << 8U) |
-      (static_cast<std::uint32_t>(dst[start + 2U]) << 16U) | (static_cast<std::uint32_t>(dst[start + 3U]) << 24U);
+  const std::uint32_t cch = load_u32(dst.data() + start);
   if (cch > max_units) {
     dst.resize(start);
     return make_error(FormulonErrorCode::kInvalidArgument,
@@ -83,9 +79,7 @@ Expected<void, Error> decode_hyperlink(const XlsbRecord& rec, Sheet& sheet) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtHLink relationship id truncated",
                       "context=xlsb_reader");
   }
-  const std::uint32_t rel_len = static_cast<std::uint32_t>(p.data[0]) | (static_cast<std::uint32_t>(p.data[1]) << 8U) |
-                                (static_cast<std::uint32_t>(p.data[2]) << 16U) |
-                                (static_cast<std::uint32_t>(p.data[3]) << 24U);
+  const std::uint32_t rel_len = load_u32(p.data);
   if (rel_len == 0xFFFFFFFFU) {
     return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtHLink relationship id is null",
                       "context=xlsb_reader");

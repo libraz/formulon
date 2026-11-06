@@ -56,7 +56,7 @@ inline std::optional<cf::Color> DecodeColor(ByteSpan p) {
     case kBrtColorTypeTheme: {
       out.spec.kind = ColorSpec::Kind::kTheme;
       out.spec.theme = index;
-      const auto raw = static_cast<std::int16_t>(static_cast<std::uint16_t>(p.data[2] | (p.data[3] << 8U)));
+      const auto raw = static_cast<std::int16_t>(load_u16(p.data + 2));
       out.spec.tint = static_cast<double>(raw) / kBrtColorTintScale;
       return out;
     }

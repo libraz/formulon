@@ -12,6 +12,7 @@
 #include "io/xlsb/frt_formula.h"
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/record_ids.h"
 #include "io/xlsb/record_writer.h"
 #include "utils/status_macros.h"
 #include "utils/structured_log.h"
@@ -21,7 +22,6 @@ namespace io {
 namespace xlsb {
 namespace {
 
-constexpr std::uint16_t kDVal = 64;
 constexpr std::array<std::uint8_t, 6> kAcBeginPayload = {0x01, 0x00, 0x00, 0x10, 0x00, 0x80};
 constexpr std::size_t kUidBytes = 16;
 constexpr std::size_t kHeaderZeroBytes = 14;
@@ -345,7 +345,7 @@ std::optional<std::vector<DataValidation>> decode_dv_block(ByteSpan block, const
       }
       continue;
     }
-    if (r.type != kDVal) {
+    if (r.type != kBrtDVal) {
       return std::nullopt;
     }
     auto dv = DecodeDVal(r.payload, ctx);
@@ -388,7 +388,7 @@ Expected<void, Error> emit_dv_block(std::vector<std::uint8_t>& dst, const std::v
       }
       p.insert(p.end(), encoded.value().bytes.begin(), encoded.value().bytes.end());
     }
-    emit_record(body, kDVal, p);
+    emit_record(body, kBrtDVal, p);
   }
   emit_record(body, kBrtEndDVals, ByteSpan{});
   dst.insert(dst.end(), body.begin(), body.end());

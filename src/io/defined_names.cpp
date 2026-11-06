@@ -2,7 +2,6 @@
 // Implementation of the defined-names reader. See defined_name.h for the
 // public contract.
 
-#include <cctype>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -18,27 +17,11 @@
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace io {
 namespace {
-
-/// Strips leading and trailing ASCII whitespace from `s` in place. We
-/// intentionally do NOT touch interior whitespace: a defined name like
-/// `"=SUM( A1, A2 )"` should round-trip unchanged.
-void TrimAsciiWhitespace(std::string& s) {
-  std::size_t start = 0;
-  while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start])) != 0) {
-    ++start;
-  }
-  std::size_t end = s.size();
-  while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1])) != 0) {
-    --end;
-  }
-  if (start > 0 || end < s.size()) {
-    s = s.substr(start, end - start);
-  }
-}
 
 /// Parses `localSheetId` if present. OOXML guarantees this is a non-
 /// negative integer when emitted; we still defend against malformed
@@ -102,7 +85,7 @@ Expected<std::vector<DefinedName>, Error> read_defined_names(const pugi::xml_doc
     // spaces is faithful.
     entry.formula.clear();
     AppendOoxmlTextUnescaped(entry.formula, dn.child_value());
-    TrimAsciiWhitespace(entry.formula);
+    entry.formula = std::string(strings::trim(entry.formula));
     // Canonicalise the storage prefixes Excel tags post-2007 / LET-LAMBDA
     // constructs with (`_xlfn.`, `_xlfn._xlws.`, `_xlws.`, `_xlpm.`) so a
     // defined name holding `_xlfn.LAMBDA(_xlpm.x, ...)` is stored and

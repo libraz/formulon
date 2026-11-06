@@ -19,6 +19,7 @@
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/record_ids.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xml_utils.h"
 #include "io/xsd_double.h"
@@ -35,16 +36,6 @@ namespace xlsb {
 namespace {
 
 // Record ids inside a block.
-constexpr std::uint16_t kBeginCfRule = 463;
-constexpr std::uint16_t kEndCfRule = 464;
-constexpr std::uint16_t kBeginIconSet = 465;
-constexpr std::uint16_t kEndIconSet = 466;
-constexpr std::uint16_t kBeginDataBar = 467;
-constexpr std::uint16_t kEndDataBar = 468;
-constexpr std::uint16_t kBeginColorScale = 469;
-constexpr std::uint16_t kEndColorScale = 470;
-constexpr std::uint16_t kCfvo = 471;
-constexpr std::uint16_t kColor = 564;
 constexpr std::uint16_t kCfRuleExt = 1146;
 
 constexpr std::uint8_t kLegacyMinLength = 10;
@@ -270,24 +261,24 @@ bool DecodeRuleBody(BlockCursor& blocks, cf::CFRule& rule, const MergeRange& bas
   bool visual = false;
   while (blocks.next(rec)) {
     switch (rec.type) {
-      case kEndCfRule: {
+      case kBrtEndCFRule: {
         const bool wants_visual = rule.type == cf::RuleType::ColorScale || rule.type == cf::RuleType::DataBar ||
                                   rule.type == cf::RuleType::IconSet;
         return rec.payload.size == 0U && visual == wants_visual;
       }
-      case kBeginColorScale: {
+      case kBrtBeginColorScale: {
         if (visual || rule.type != cf::RuleType::ColorScale || rec.payload.size != 0U) {
           return false;
         }
         cf::ColorScaleSpec spec;
-        while (blocks.next(rec) && rec.type != kEndColorScale) {
-          if (rec.type == kCfvo && spec.colors.empty()) {
+        while (blocks.next(rec) && rec.type != kBrtEndColorScale) {
+          if (rec.type == kBrtCFVO && spec.colors.empty()) {
             auto v = DecodeCfvo(rec.payload, false, base, ctx);
             if (!v) {
               return false;
             }
             spec.thresholds.push_back(std::move(*v));
-          } else if (rec.type == kColor) {
+          } else if (rec.type == kBrtColor) {
             auto c = DecodeColor(rec.payload);
             if (!c) {
               return false;
@@ -297,7 +288,7 @@ bool DecodeRuleBody(BlockCursor& blocks, cf::CFRule& rule, const MergeRange& bas
             return false;
           }
         }
-        if (rec.type != kEndColorScale || spec.colors.size() != spec.thresholds.size() || spec.colors.size() < 2U ||
+        if (rec.type != kBrtEndColorScale || spec.colors.size() != spec.thresholds.size() || spec.colors.size() < 2U ||
             spec.colors.size() > 3U) {
           return false;
         }
@@ -305,7 +296,7 @@ bool DecodeRuleBody(BlockCursor& blocks, cf::CFRule& rule, const MergeRange& bas
         visual = true;
         break;
       }
-      case kBeginDataBar: {
+      case kBrtBeginDataBar: {
         if (visual || rule.type != cf::RuleType::DataBar || rec.payload.size != 3U) {
           return false;
         }
@@ -320,16 +311,16 @@ bool DecodeRuleBody(BlockCursor& blocks, cf::CFRule& rule, const MergeRange& bas
         std::optional<cf::CfValueObject> lo;
         std::optional<cf::CfValueObject> hi;
         std::optional<cf::Color> fill;
-        if (blocks.next(rec) && rec.type == kCfvo) {
+        if (blocks.next(rec) && rec.type == kBrtCFVO) {
           lo = DecodeCfvo(rec.payload, false, base, ctx);
         }
-        if (lo && blocks.next(rec) && rec.type == kCfvo) {
+        if (lo && blocks.next(rec) && rec.type == kBrtCFVO) {
           hi = DecodeCfvo(rec.payload, false, base, ctx);
         }
-        if (hi && blocks.next(rec) && rec.type == kColor) {
+        if (hi && blocks.next(rec) && rec.type == kBrtColor) {
           fill = DecodeColor(rec.payload);
         }
-        if (!fill || !blocks.next(rec) || rec.type != kEndDataBar) {
+        if (!fill || !blocks.next(rec) || rec.type != kBrtEndDataBar) {
           return false;
         }
         spec.min = std::move(*lo);
@@ -342,7 +333,7 @@ bool DecodeRuleBody(BlockCursor& blocks, cf::CFRule& rule, const MergeRange& bas
         visual = true;
         break;
       }
-      case kBeginIconSet: {
+      case kBrtBeginIconSet: {
         ByteSpan p = rec.payload;
         auto set = read_u32(p);
         auto flags = read_u16(p);
@@ -356,7 +347,7 @@ bool DecodeRuleBody(BlockCursor& blocks, cf::CFRule& rule, const MergeRange& bas
         spec.show_value = (flags.value() & 0x02U) == 0U;
         spec.reverse = (flags.value() & 0x04U) != 0U;
         std::size_t index = 0;
-        while (blocks.next(rec) && rec.type == kCfvo) {
+        while (blocks.next(rec) && rec.type == kBrtCFVO) {
           auto v = DecodeCfvo(rec.payload, true, base, ctx);
           // Bits 3..6 repeat the gte of the first four cfvos.
           if (!v || (index < 4U && ((flags.value() >> (3U + index)) & 1U) != (v->gte ? 1U : 0U))) {
@@ -369,7 +360,7 @@ bool DecodeRuleBody(BlockCursor& blocks, cf::CFRule& rule, const MergeRange& bas
           }
           ++index;
         }
-        if (rec.type != kEndIconSet || index != cf::icon_count(spec.name) ||
+        if (rec.type != kBrtEndIconSet || index != cf::icon_count(spec.name) ||
             (index < 4U && (flags.value() >> (3U + index)) != 0U)) {
           return false;
         }
@@ -456,7 +447,7 @@ std::optional<cf::CFRule> DecodeRuleHeader(ByteSpan p, const MergeRange& base, c
 
 void EmitColor(std::vector<std::uint8_t>& dst, cf::Color c) {
   const auto bytes = EncodeColor(c);
-  emit_record(dst, kColor, ByteSpan{bytes.data(), bytes.size()});
+  emit_record(dst, kBrtColor, ByteSpan{bytes.data(), bytes.size()});
 }
 
 Expected<void, Error> EmitCfvo(std::vector<std::uint8_t>& dst, const cf::CfValueObject& v, bool in_icon_set,
@@ -484,7 +475,7 @@ Expected<void, Error> EmitCfvo(std::vector<std::uint8_t>& dst, const cf::CfValue
   emit_u32(p, in_icon_set && v.gte ? 1U : 0U);
   emit_u32(p, formula.cb_fmla);
   p.insert(p.end(), formula.bytes.begin(), formula.bytes.end());
-  emit_record(dst, kCfvo, p);
+  emit_record(dst, kBrtCFVO, p);
   return Expected<void, Error>::Ok();
 }
 
@@ -564,14 +555,14 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
       p.insert(p.end(), f.bytes.begin(), f.bytes.end());
     }
   }
-  emit_record(dst, kBeginCfRule, p);
+  emit_record(dst, kBrtBeginCFRule, p);
 
   if (rule.type == cf::RuleType::ColorScale) {
     if (!rule.color_scale || rule.color_scale->colors.size() != rule.color_scale->thresholds.size() ||
         rule.color_scale->colors.size() < 2U || rule.color_scale->colors.size() > 3U) {
       return refuse_write("xlsb colour scale needs two or three matched stops");
     }
-    emit_record(dst, kBeginColorScale, ByteSpan{});
+    emit_record(dst, kBrtBeginColorScale, ByteSpan{});
     for (const cf::CfValueObject& v : rule.color_scale->thresholds) {
       if (auto s = EmitCfvo(dst, v, false, base, ctx); !s) {
         return s;
@@ -580,7 +571,7 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
     for (cf::Color c : rule.color_scale->colors) {
       EmitColor(dst, c);
     }
-    emit_record(dst, kEndColorScale, ByteSpan{});
+    emit_record(dst, kBrtEndColorScale, ByteSpan{});
   } else if (rule.type == cf::RuleType::DataBar) {
     if (!rule.data_bar) {
       return refuse_write("xlsb data bar rule has no data bar");
@@ -591,14 +582,14 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
     const std::vector<std::uint8_t> head = {linked ? kLegacyMinLength : bar.min_length_pct,
                                             linked ? kLegacyMaxLength : bar.max_length_pct,
                                             static_cast<std::uint8_t>(bar.show_value ? 1U : 0U)};
-    emit_record(dst, kBeginDataBar, head);
+    emit_record(dst, kBrtBeginDataBar, head);
     for (const cf::CfValueObject* v : {&bar.min, &bar.max}) {
       if (auto s = EmitCfvo(dst, *v, false, base, ctx); !s) {
         return s;
       }
     }
     EmitColor(dst, bar.fill);
-    emit_record(dst, kEndDataBar, ByteSpan{});
+    emit_record(dst, kBrtEndDataBar, ByteSpan{});
   } else if (rule.type == cf::RuleType::IconSet) {
     if (!rule.icon_set || rule.icon_set->thresholds.size() + 1U != cf::icon_count(rule.icon_set->name)) {
       return refuse_write("xlsb icon set threshold count does not match its icons");
@@ -612,7 +603,7 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
     std::vector<std::uint8_t> head;
     emit_u32(head, static_cast<std::uint32_t>(set.name));
     emit_u16(head, set_flags);
-    emit_record(dst, kBeginIconSet, head);
+    emit_record(dst, kBrtBeginIconSet, head);
     if (auto s = EmitCfvo(dst, set.floor, true, base, ctx); !s) {
       return s;
     }
@@ -621,7 +612,7 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
         return s;
       }
     }
-    emit_record(dst, kEndIconSet, ByteSpan{});
+    emit_record(dst, kBrtEndIconSet, ByteSpan{});
   }
   if (!rule.id.empty()) {
     emit_record(dst, kFrtBegin, ByteSpan{kFrtVersion.data(), kFrtVersion.size()});
@@ -630,7 +621,7 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
     emit_record(dst, kCfRuleExt, ext);
     emit_record(dst, kFrtEnd, ByteSpan{});
   }
-  emit_record(dst, kEndCfRule, ByteSpan{});
+  emit_record(dst, kBrtEndCFRule, ByteSpan{});
   return Expected<void, Error>::Ok();
 }
 
@@ -804,7 +795,7 @@ std::optional<cf::ConditionalFormat> decode_cf_block(ByteSpan block, const Featu
       }
       return out;
     }
-    if (rec.type != kBeginCfRule) {
+    if (rec.type != kBrtBeginCFRule) {
       return std::nullopt;
     }
     auto rule = DecodeRuleHeader(rec.payload, base, ctx);

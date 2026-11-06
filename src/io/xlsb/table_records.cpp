@@ -17,6 +17,7 @@
 #include "io/xlsb/guid_text.h"
 #include "io/xlsb/ptg_list.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/record_ids.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/sheet_reader.h"
 #include "io/xlsb/table_records_internal.h"
@@ -49,7 +50,6 @@ enum : std::uint16_t {
   kBrtEndListCol = 348,
   kBrtListCCFmla = 351,
   kBrtListTrFmla = 352,
-  kBrtBeginSortState = 530,
   kBrtList14 = 1111,
 };
 

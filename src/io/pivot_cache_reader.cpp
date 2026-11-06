@@ -46,6 +46,12 @@ bool ParseBoolFlag(std::string_view text, bool* ok) {
   return false;
 }
 
+/// Overload for callers that do not need the recognised/unrecognised flag.
+bool ParseBoolFlag(std::string_view text) {
+  bool ok = false;
+  return ParseBoolFlag(text, &ok);
+}
+
 /// Decodes one value-bearing element (`<s>`, `<n>`, `<b>`, `<m>`, `<e>`)
 /// into a `Value`. Used both for `<sharedItems>` children and for
 /// inline-typed `<r>` cells in the records part. Text payloads are
@@ -129,8 +135,7 @@ void ReadSharedItemsHints(const pugi::xml_node& items, pivot::SharedItemsHints* 
   bool any = false;
   const auto read_flag = [&](const char* attr, bool* dst, bool* has) {
     if (pugi::xml_attribute a = items.attribute(attr); a) {
-      bool ok = false;
-      *dst = ParseBoolFlag(a.as_string(), &ok);
+      *dst = ParseBoolFlag(a.as_string());
       *has = true;
       any = true;
     }

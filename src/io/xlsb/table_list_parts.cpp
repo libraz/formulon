@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "io/xlsb/record.h"
+#include "io/xlsb/record_ids.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/sheet_reader.h"
 #include "io/xlsb/table_records.h"
@@ -28,23 +29,17 @@ namespace {
 using detail::FindListParts;
 using detail::ListPartsBlock;
 
-enum : std::uint16_t {
-  kBrtBeginListParts = 660,
-  kBrtListPart = 661,
-  kBrtEndListParts = 662,
-};
-
 /// Records the worksheet grammar places after the hyperlinks and before
 /// LISTPARTS.
 bool PrecedesListParts(std::uint16_t type) {
-  return is_after_hyperlinks(type) && type != kBrtBeginListParts && type != kBrtListPart && type != kBrtEndListParts;
+  return is_after_hyperlinks(type) && type != kBrtBeginTableParts && type != kBrtTablePart && type != kBrtEndTableParts;
 }
 
 std::vector<std::uint8_t> ListPartRecord(const std::string& rel_id) {
   std::vector<std::uint8_t> payload;
   emit_xlnullablewidestring(payload, std::string_view(rel_id));
   std::vector<std::uint8_t> out;
-  emit_record(out, kBrtListPart, payload);
+  emit_record(out, kBrtTablePart, payload);
   return out;
 }
 
@@ -54,17 +49,17 @@ namespace detail {
 
 std::optional<ListPartsBlock> FindListParts(const std::vector<FramedRecord>& recs) {
   for (std::size_t i = 0; i < recs.size(); ++i) {
-    if (recs[i].type != kBrtBeginListParts) {
+    if (recs[i].type != kBrtBeginTableParts) {
       continue;
     }
     ListPartsBlock block;
     block.begin = i;
     for (std::size_t j = i + 1U; j < recs.size(); ++j) {
-      if (recs[j].type == kBrtEndListParts) {
+      if (recs[j].type == kBrtEndTableParts) {
         block.end = j;
         return block;
       }
-      if (recs[j].type != kBrtListPart) {
+      if (recs[j].type != kBrtTablePart) {
         return std::nullopt;
       }
       ByteSpan payload = recs[j].payload;
@@ -103,12 +98,12 @@ void ReleaseSheetTables(Sheet& sheet, const std::vector<std::string>& rel_ids) {
       } else if (i == block->begin && !kept_ids.empty()) {
         std::vector<std::uint8_t> payload;
         emit_u32(payload, static_cast<std::uint32_t>(kept_ids.size()));
-        emit_record(kept, kBrtBeginListParts, payload);
+        emit_record(kept, kBrtBeginTableParts, payload);
         for (const std::string& id : kept_ids) {
           const std::vector<std::uint8_t> rec = ListPartRecord(id);
           kept.insert(kept.end(), rec.begin(), rec.end());
         }
-        emit_record(kept, kBrtEndListParts, ByteSpan{});
+        emit_record(kept, kBrtEndTableParts, ByteSpan{});
       }
     }
     tail.after_hyperlinks = std::move(kept);
@@ -141,7 +136,7 @@ void splice_list_parts(std::vector<std::uint8_t>& after_hyperlinks, const std::v
       if (i == block->begin) {
         std::vector<std::uint8_t> payload;
         emit_u32(payload, static_cast<std::uint32_t>(block->rel_ids.size() + rel_ids.size()));
-        emit_record(out, kBrtBeginListParts, payload);
+        emit_record(out, kBrtBeginTableParts, payload);
         continue;
       }
       if (i == block->end) {
@@ -161,9 +156,9 @@ void splice_list_parts(std::vector<std::uint8_t>& after_hyperlinks, const std::v
   std::vector<std::uint8_t> block;
   std::vector<std::uint8_t> payload;
   emit_u32(payload, static_cast<std::uint32_t>(rel_ids.size()));
-  emit_record(block, kBrtBeginListParts, payload);
+  emit_record(block, kBrtBeginTableParts, payload);
   block.insert(block.end(), parts.begin(), parts.end());
-  emit_record(block, kBrtEndListParts, ByteSpan{});
+  emit_record(block, kBrtEndTableParts, ByteSpan{});
   if (recs.empty()) {
     // Empty, or not whole records: append rather than split it.
     after_hyperlinks.insert(after_hyperlinks.end(), block.begin(), block.end());
