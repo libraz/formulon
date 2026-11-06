@@ -28,6 +28,7 @@
 #ifndef FORMULON_CLI_CLI_H_
 #define FORMULON_CLI_CLI_H_
 
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -109,6 +110,19 @@ inline bool parse_pinned_now(std::string_view text, fm_civil_time_t* out) {
     return false;
   }
   *out = t;
+  return true;
+}
+
+/// Parses `text` as a whole-string non-negative decimal integer: digits only,
+/// no sign or whitespace, no overflow of `T`. `*out` is written on success only.
+template <typename T>
+bool parse_unsigned(std::string_view text, T* out) {
+  T value{};
+  const auto [end, ec] = std::from_chars(text.data(), text.data() + text.size(), value);
+  if (ec != std::errc{} || end != text.data() + text.size()) {
+    return false;
+  }
+  *out = value;
   return true;
 }
 

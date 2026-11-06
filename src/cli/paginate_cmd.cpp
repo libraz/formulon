@@ -1,4 +1,3 @@
-#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <ostream>
@@ -28,16 +27,6 @@ void print_paginate_usage(std::ostream& out) {
   print_shared_options(out);
 }
 
-bool parse_sheet_index(std::string_view text, std::size_t& out) {
-  std::size_t value = 0;
-  const auto [end, ec] = std::from_chars(text.data(), text.data() + text.size(), value);
-  if (ec != std::errc{} || end != text.data() + text.size()) {
-    return false;
-  }
-  out = value;
-  return true;
-}
-
 }  // namespace
 
 int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
@@ -64,7 +53,7 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
       continue;
     }
     if (!options_ended && arg == "--sheet") {
-      if (i + 1 == args.size() || !parse_sheet_index(args[i + 1], sheet_index)) {
+      if (i + 1 == args.size() || !parse_unsigned(args[i + 1], &sheet_index)) {
         err << "formulon: paginate: --sheet requires a non-negative integer\n";
         return kExitUsage;
       }

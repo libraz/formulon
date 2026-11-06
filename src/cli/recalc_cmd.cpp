@@ -22,7 +22,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <limits>
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -61,21 +60,8 @@ void print_recalc_usage(std::ostream& out) {
 constexpr std::uint32_t kMaxRecalcThreads = 8U;
 
 bool parse_thread_count(std::string_view text, std::uint32_t* out) {
-  if (text.empty()) {
-    return false;
-  }
   std::uint32_t parsed = 0U;
-  for (const char c : text) {
-    if (c < '0' || c > '9') {
-      return false;
-    }
-    const std::uint32_t digit = static_cast<std::uint32_t>(c - '0');
-    if (parsed > (std::numeric_limits<std::uint32_t>::max() - digit) / 10U) {
-      return false;
-    }
-    parsed = parsed * 10U + digit;
-  }
-  if (parsed > kMaxRecalcThreads) {
+  if (!parse_unsigned(text, &parsed) || parsed > kMaxRecalcThreads) {
     return false;
   }
   *out = parsed;
